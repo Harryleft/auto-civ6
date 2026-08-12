@@ -513,6 +513,41 @@ class TestRouteCombatRiskGuardrail:
         assert engine.get("belief", "northern-expansion")["probability"] == 0.8
 
 
+class TestTurnBrief:
+    def test_turn_brief_reviews_and_exposes_decision_gates(self, engine):
+        engine.create(
+            "belief",
+            belief_payload(
+                impact="high",
+                urgency="high",
+                review_required=True,
+                review_reason="new combat evidence",
+            ),
+            turn=9,
+            entity_id="frontier",
+        )
+        engine.create(
+            "plan",
+            {
+                **plan_payload(
+                    status="needs_replan",
+                    review_required=True,
+                    status_reason="frontier belief changed",
+                ),
+            },
+            turn=9,
+            entity_id="frontier-plan",
+        )
+
+        brief = engine.turn_brief(turn=10)
+
+        assert brief["decision_gate"]["default_route"] == "slow"
+        assert brief["decision_gate"]["beliefs_requiring_review"] == ["frontier"]
+        assert brief["decision_gate"]["plans_requiring_review"] == ["frontier-plan"]
+        assert brief["beliefs"][0]["id"] == "frontier"
+        assert len(brief["guardrails"]) == 3
+
+
 class TestInvalidInput:
     def test_requires_bound_game_and_required_entity_fields(self):
         engine = BeliefEngine(run_id="unbound")

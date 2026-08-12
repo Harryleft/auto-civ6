@@ -1006,6 +1006,135 @@ class BeliefEngine:
             "plans_needing_replan": replans,
         }
 
+    def turn_brief(self, *, turn: int, limit: int = 12) -> dict[str, Any]:
+        """Return the decision-facing belief state for the current turn.
+
+        Automatic observations are useful only when they are put back in the
+        agent's decision context.  This method is the deliberately small
+        bridge between the event-sourced model and the turn loop: review due
+        entities first, then expose the active beliefs, predictions, plans,
+        surprises, and contradictions that should affect action selection.
+        """
+        review = self.review(turn=turn)
+        take = max(1, min(int(limit), 50))
+
+        beliefs = self.list("belief", status="active")
+        beliefs.sort(
+            key=lambda item: (
+                bool(item.get("review_required")),
+                _IMPACT_SCORE.get(str(item.get("impact", "medium")).lower(), 0.5),
+                _URGENCY_SCORE.get(str(item.get("urgency", "medium")).lower(), 0.5),
+                item.get("last_updated_turn", -1),
+            ),
+            reverse=True,
+        )
+        predictions = [
+            item
+            for item in self.list("prediction", status=None)
+            if item.get("status") in {"active", "overdue"}
+        ]
+        plans = [
+            item
+            for item in self.list("plan", status=None)
+            if item.get("status") in {"active", "needs_replan"}
+        ]
+        surprises = self.list("surprise", status="active")
+        contradictions = self.list("contradiction", status="active")
+
+        def compact(entity: dict[str, Any], fields: tuple[str, ...]) -> dict[str, Any]:
+            return {
+                key: deepcopy(entity[key])
+                for key in ("id", *fields)
+                if key in entity
+            }
+
+        gated_beliefs = [
+            item["id"] for item in beliefs if item.get("review_required")
+        ]
+        replan_plans = [
+            item["id"]
+            for item in plans
+            if item.get("status") == "needs_replan" or item.get("review_required")
+        ]
+        if replan_plans or contradictions or any(
+            item.get("severity") in {"high", "major"} for item in surprises
+        ):
+            default_route = "slow"
+        elif gated_beliefs or surprises:
+            default_route = "verify_then_fast"
+        else:
+            default_route = "fast"
+
+        return {
+            "game_id": self.game_id,
+            "turn": turn,
+            "review": review,
+            "current_metrics": self.current_metrics(),
+            "decision_gate": {
+                "default_route": default_route,
+                "beliefs_requiring_review": gated_beliefs[:take],
+                "plans_requiring_review": replan_plans[:take],
+                "active_surprises": [item["id"] for item in surprises[:take]],
+                "active_contradictions": [item["id"] for item in contradictions[:take]],
+            },
+            "beliefs": [
+                compact(
+                    item,
+                    (
+                        "statement",
+                        "category",
+                        "probability",
+                        "confidence",
+                        "impact",
+                        "urgency",
+                        "review_required",
+                        "review_reason",
+                    ),
+                )
+                for item in beliefs[:take]
+            ],
+            "predictions": [
+                compact(
+                    item,
+                    (
+                        "statement",
+                        "probability",
+                        "confidence",
+                        "deadline_turn",
+                        "review_required",
+                    ),
+                )
+                for item in predictions[:take]
+            ],
+            "plans": [
+                compact(
+                    item,
+                    (
+                        "goal",
+                        "horizon",
+                        "status",
+                        "review_turn",
+                        "review_required",
+                        "status_reason",
+                    ),
+                )
+                for item in plans[:take]
+            ],
+            "surprises": [
+                compact(item, ("statement", "severity", "prediction_id", "turn"))
+                for item in surprises[:take]
+            ],
+            "contradictions": [
+                compact(item, ("statement", "severity", "belief_id", "requires_slow_review"))
+                for item in contradictions[:take]
+            ],
+            "guardrails": [
+                "Nearby hostiles trigger verification; they do not lower route belief by themselves.",
+                "Use get_combat_estimate before assess_route_combat_risk when route safety is in question.",
+                "Use route_belief_decision before high-impact or irreversible actions.",
+            ],
+        }
+
     def route_decision(
         self,
         *,

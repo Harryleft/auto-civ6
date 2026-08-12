@@ -364,7 +364,12 @@ async def lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
 
 mcp = FastMCP(
     "Civilization VI",
-    instructions="Read game state and issue commands to a running Civ 6 game. Call get_game_overview first to orient yourself.",
+    instructions=(
+        "Read game state and issue commands to a running Civ 6 game. Call "
+        "get_game_overview first; its result includes the reviewed Belief "
+        "Engine turn brief. Call get_turn_brief again after material evidence "
+        "or action outcomes."
+    ),
     lifespan=lifespan,
 )
 
@@ -401,6 +406,80 @@ async def _flush_belief_events(ctx: Context) -> None:
     """Mirror locally persisted belief events into configured telemetry sinks."""
     for event in _get_beliefs(ctx).drain_events():
         await _get_logger(ctx)._emitter.emit(EVENT_BELIEF_EVENT, event)
+
+
+def _format_belief_turn_brief(brief: dict[str, Any]) -> str:
+    """Render the machine-generated belief state into the turn-loop context."""
+    gate = brief.get("decision_gate") or {}
+    review = brief.get("review") or {}
+    lines = [
+        "\n\n=== BELIEF ENGINE TURN BRIEF (决策输入) ===",
+        f"默认决策路由: {gate.get('default_route', 'fast')}",
+    ]
+    if review.get("predictions_resolved"):
+        lines.append(
+            "预测已验证: " + ", ".join(review["predictions_resolved"])
+        )
+    if review.get("predictions_overdue"):
+        lines.append(
+            "!! 预测逾期，必须复核: " + ", ".join(review["predictions_overdue"])
+        )
+    if review.get("plans_needing_replan"):
+        lines.append(
+            "!! 计划触发重规划: " + ", ".join(review["plans_needing_replan"])
+        )
+    if review.get("contradictions_created"):
+        lines.append(
+            "!! 新矛盾，禁止直接沿用旧假设: "
+            + ", ".join(review["contradictions_created"])
+        )
+
+    beliefs = brief.get("beliefs") or []
+    if beliefs:
+        lines.append("当前信念:")
+        for item in beliefs:
+            flags = []
+            if item.get("review_required"):
+                flags.append("REVIEW")
+            impact = item.get("impact", "medium")
+            urgency = item.get("urgency", "medium")
+            lines.append(
+                "  - {id}: p={p:.2f}, conf={c:.2f}, {impact}/{urgency}{flags} — {statement}".format(
+                    id=item.get("id", "?"),
+                    p=float(item.get("probability", 0)),
+                    c=float(item.get("confidence", 0)),
+                    impact=impact,
+                    urgency=urgency,
+                    flags=f" [{','.join(flags)}]" if flags else "",
+                    statement=item.get("statement", ""),
+                )
+            )
+    else:
+        lines.append("当前没有活动信念；对关键判断先建立可证伪信念再行动。")
+
+    predictions = brief.get("predictions") or []
+    if predictions:
+        lines.append("活动预测: " + "; ".join(
+            f"{item.get('id', '?')}@T{item.get('deadline_turn', '?')}: {item.get('statement', '')}"
+            for item in predictions
+        ))
+    plans = brief.get("plans") or []
+    if plans:
+        lines.append("活动计划: " + "; ".join(
+            f"{item.get('id', '?')}[{item.get('status', 'active')}]: {item.get('goal', '')}"
+            for item in plans
+        ))
+    if gate.get("active_surprises"):
+        lines.append("!! 活动 Surprise: " + ", ".join(gate["active_surprises"]))
+    if gate.get("active_contradictions"):
+        lines.append("!! 活动 Contradiction: " + ", ".join(gate["active_contradictions"]))
+    lines.append(
+        "执行约束: 附近敌对单位只触发验证，不自动降低路线信念；路线风险必须使用 get_combat_estimate 的真实 CS/HP/预期互伤后再更新。"
+    )
+    lines.append(
+        "高影响或不可逆行动前，必须调用 route_belief_decision，并在行动后核对结果。"
+    )
+    return "\n".join(lines)
 
 
 def _param_summary(params: dict[str, Any]) -> str:
@@ -651,6 +730,16 @@ async def get_game_overview(ctx: Context) -> str:
                 )
             except Exception:
                 log.warning("Failed to log game-over in overview", exc_info=True)
+        # The overview is the first mandatory query in the turn loop.  Attach
+        # the reviewed belief state here so the engine is decision input, not
+        # merely a background recorder even when the agent does not call a
+        # separate belief tool.
+        try:
+            belief_brief = _get_beliefs(ctx).turn_brief(turn=ov.turn)
+            await _flush_belief_events(ctx)
+            text += _format_belief_turn_brief(belief_brief)
+        except Exception:
+            log.warning("Belief Engine: failed to build turn brief", exc_info=True)
         return text
 
     return await _logged(ctx, "get_game_overview", {}, _run)
@@ -2734,6 +2823,25 @@ async def delete_belief_entity(
         lambda engine, turn: engine.delete(
             entity_type, entity_id, reason=reason, turn=turn
         ),
+    )
+
+
+@mcp.tool()
+async def get_turn_brief(ctx: Context, limit: int = 12) -> str:
+    """Return the reviewed Belief Engine state that must guide this turn.
+
+    ``get_game_overview`` includes the same brief automatically.  This tool is
+    provided for an explicit precheck or after a major action changes the
+    evidence; it is intentionally the single compact entry point instead of
+    requiring an agent to remember several separate belief calls.
+    """
+
+    params = {"limit": limit}
+    return await _belief_tool(
+        ctx,
+        "get_turn_brief",
+        params,
+        lambda engine, turn: engine.turn_brief(turn=turn, limit=limit),
     )
 
 

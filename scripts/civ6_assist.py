@@ -106,10 +106,63 @@ def hex_dist(x1, y1, x2, y2) -> int:
     return max(abs(x1 - x2), abs(y1 - y2))
 
 
+def print_belief_turn_brief(raw: str | None) -> None:
+    """Put the reviewed belief state at the top of every precheck."""
+    print("=== BELIEF ENGINE 回合简报 ===")
+    if not raw:
+        print("  !! 无法读取信念引擎；本回合不得把威胁扫描当作战力结论。")
+        return
+    if raw.startswith(("TOOL_ERR:", "BRIDGE_ERR:")):
+        print(f"  !! {raw}")
+        return
+    try:
+        brief = json.loads(raw)
+    except json.JSONDecodeError:
+        print("  !! 信念简报格式异常，先调用 get_turn_brief 重试。")
+        return
+
+    gate = brief.get("decision_gate") or {}
+    print(f"  默认路由: {gate.get('default_route', 'fast')}")
+    beliefs = brief.get("beliefs") or []
+    if beliefs:
+        for item in beliefs:
+            review = " [REVIEW]" if item.get("review_required") else ""
+            print(
+                f"  信念 {item.get('id', '?')}: p={float(item.get('probability', 0)):.2f} "
+                f"conf={float(item.get('confidence', 0)):.2f}{review} — "
+                f"{item.get('statement', '')}"
+            )
+    else:
+        print("  当前没有活动信念。")
+
+    predictions = brief.get("predictions") or []
+    if predictions:
+        print("  预测: " + "; ".join(
+            f"{item.get('id', '?')}@T{item.get('deadline_turn', '?')}"
+            for item in predictions
+        ))
+    plans = brief.get("plans") or []
+    if plans:
+        print("  计划: " + "; ".join(
+            f"{item.get('id', '?')}[{item.get('status', 'active')}]"
+            for item in plans
+        ))
+    if gate.get("active_surprises"):
+        print("  !! Surprise: " + ", ".join(gate["active_surprises"]))
+    if gate.get("active_contradictions"):
+        print("  !! Contradiction: " + ", ".join(gate["active_contradictions"]))
+    print("  约束: 附近敌对单位只触发验证；路线风险需用 get_combat_estimate 的真实数值更新。")
+    print("  约束: 高影响/不可逆行动前调用 route_belief_decision。")
+
+
 # ----------------------------- Commands -----------------------------
 
 def cmd_precheck() -> None:
     print("=== END_TURN 预检 ===\n")
+    # Make the belief model an explicit precheck input.  get_game_overview
+    # also carries this brief, but keeping it here protects the scripted path
+    # when an agent starts directly with the helper instead of overview.
+    print_belief_turn_brief(call("get_turn_brief"))
     issues = []
     opps = []
 

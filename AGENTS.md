@@ -25,17 +25,17 @@ Early choices compound. Each decision shapes what's available 20, 40, 60 turns l
 ## Turn Loop
 
 Each turn in order:
-0. `python3 scripts/civ6_assist.py precheck` — blockers (production/research/policy/envoy/diplo/WC) + opportunities (sell surplus, improve resources, Eureka) + unit state. Fix blockers before anything else.
-1. `get_game_overview` — turn, yields, research, score, era score, difficulty. If resuming after context compaction, call `get_diary` first.
-1b. `get_belief_state` after a new session/context compaction; revise important beliefs, predictions, and plans when new evidence materially changes them.
-2. `get_units` — positions, HP, moves, charges, nearby threats
+0. `python3 scripts/civ6_assist.py precheck` — its first section is the reviewed Belief Engine turn brief, followed by blockers (production/research/policy/envoy/diplo/WC), opportunities, and unit state. Fix belief gates and blockers before anything else.
+1. `get_game_overview` — turn, yields, research, score, era score, difficulty. It automatically appends the same Belief Engine turn brief. If resuming after context compaction, call `get_diary` first, then `get_turn_brief`.
+1b. Read the brief before choosing an action: active beliefs/predictions/plans are decision context, `review_required`/Surprise/Contradiction means re-evaluate, and `default_route` is the minimum reasoning route.
+2. `get_units` — positions, HP, moves, charges, nearby threats. A nearby hostile is only a verification trigger; call `get_combat_estimate` and then `assess_route_combat_risk` before changing a route belief.
 3. `get_map_area` around cities/units — terrain, resources, enemy units
-4. Move/action each unit
+4. Move/action each unit; before high-impact or irreversible actions call `route_belief_decision` with the relevant belief IDs, and after the result check whether the belief/plan still holds.
 5. `get_cities` — queues, growth, pillaged districts
 6. `get_district_advisor` if placing a new district
 7. `set_city_production` / `set_research` if needed
 8. Run **Strategic Checkpoints** if it's time
-9. `review_belief_engine`; route any high-impact/irreversible unresolved choice with `route_belief_decision`.
+9. Call `get_turn_brief` again after material evidence or an action outcome; resolve predictions, review contradictions, and replan invalidated plans before continuing.
 10. `skip_remaining_units` then `end_turn` — verify no blockers remain first (an end_turn failure costs 5-10 min of AI turns)
 
 ## Belief Engine
@@ -44,6 +44,9 @@ The diary records what happened and what the agent said. The Belief Engine is
 the mutable current world model. Successful `get_*` calls automatically create
 fact-only observations; do not copy every query manually.
 
+- `get_turn_brief`: mandatory per-turn decision input; reviews new evidence and
+  returns active beliefs, predictions, plans, surprises, contradictions, and
+  the minimum decision route. `get_game_overview` includes it automatically.
 - `upsert_belief`: interpretation with probability, confidence, evidence,
   counter-evidence, and falsifiers.
 - `upsert_hypothesis` + `rebalance_hypothesis_pool`: preserve competing
@@ -160,7 +163,7 @@ Periodic checks worth doing regularly. The game doesn't surface most of this pro
 - `threats` — 威胁排序(阵营+CS+HP+距城)
 - `cities` — 城市队列/增长/掠夺/城墙诊断
 
-**每回合流程**:precheck → 修阻塞 → threats+combat集火 → expansion选址+settle验证 → 处理机会(卖奢侈品/改良/Eureka) → units确认 → skip_remaining_units → end_turn。
+**每回合流程**: `precheck`（先读 Belief Engine 简报）→ `get_game_overview`/确认默认路由 → 修阻塞 → threats + **真实 combat estimate** → 必要时 `route_belief_decision` → 集火/行动 → expansion选址+settle验证 → 处理机会(卖奢侈品/改良/Eureka) → `get_turn_brief`复核 → units确认 → `skip_remaining_units` → `end_turn`。
 
 ### 已知工具坑(本次运行实测)
 - **end_turn神级AI回合5-10分钟**:必须一次通过,失败循环=巨量浪费。
