@@ -1,0 +1,42 @@
+#!/bin/bash
+# Call a tool on the persistent civ6 MCP session (parallel-safe).
+# Usage: civ6 <tool_name> [json_args]
+set -u
+FIFO=/tmp/civ6_in
+OUTDIR=/tmp/civ6_out
+mkdir -p "$OUTDIR"
+
+if [ ! -p "$FIFO" ]; then
+  echo "ERROR: MCP session not running." >&2
+  exit 1
+fi
+
+TOOL="${1:?tool name required}"
+if [ "$#" -ge 2 ]; then
+  ARGS="$2"
+else
+  ARGS="{}"
+fi
+
+OUT="$OUTDIR/$(date +%s%N)_$$"
+BEFORE=$(wc -l < "$OUT" 2>/dev/null || echo 0)
+
+# send command
+echo "{\"tool\": \"$TOOL\", \"args\": $ARGS, \"out\": \"$OUT\"}" > "$FIFO"
+
+# wait for result line (timeout 120s)
+END=$((SECONDS + 120))
+while [ "$SECONDS" -lt "$END" ]; do
+  if [ -f "$OUT" ]; then
+    NOW=$(wc -l < "$OUT")
+    if [ "$NOW" -gt "$BEFORE" ]; then
+      tail -n +$((BEFORE + 1)) "$OUT" | head -n $((NOW - BEFORE))
+      rm -f "$OUT"
+      exit 0
+    fi
+  fi
+  sleep 0.4
+done
+rm -f "$OUT"
+echo "ERROR: timeout waiting for tool result" >&2
+exit 1

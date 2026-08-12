@@ -54,9 +54,10 @@ for i = 0, 62 do
                 if pVis:IsRevealed(ecx, ecy) then
                     local ecName = Locale.Lookup(ec:GetName())
                     local ecPop = ec:GetPopulation()
-                    local ecLoy, ecLoyPT = 100, 0
-                    local ecCult = ec:GetCulturalIdentity()
-                    if ecCult then ecLoy = ecCult:GetLoyalty(); ecLoyPT = ecCult:GetLoyaltyPerTurn() end
+                        local ecLoy, ecLoyPT = 100, 0
+                        local ecCult = nil
+                        if ec.GetCulturalIdentity ~= nil then ecCult = ec:GetCulturalIdentity() end
+                        if ecCult and ecCult.GetLoyalty ~= nil then ecLoy = ecCult:GetLoyalty(); ecLoyPT = ecCult:GetLoyaltyPerTurn() end
                     local ecWalls, ecDef = 0, 0
                     pcall(function()
                         for _, d in ec:GetDistricts():Members() do

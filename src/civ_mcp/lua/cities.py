@@ -128,8 +128,9 @@ for i, c in Players[me]:GetCities():Members() do
     end end
     table.insert(cityCoords, {name=nm, x=c:GetX(), y=c:GetY()})
     local loy, loyMax, loyPT, loyFlip = 100, 100, 0, 0
-    local cult = c:GetCulturalIdentity()
-    if cult then
+    local cult = nil
+    if c.GetCulturalIdentity ~= nil then cult = c:GetCulturalIdentity() end
+    if cult and cult.GetLoyalty ~= nil then
         loy = cult:GetLoyalty()
         loyMax = cult:GetMaxLoyalty()
         loyPT = cult:GetLoyaltyPerTurn()

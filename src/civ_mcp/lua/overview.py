@@ -45,7 +45,8 @@ for i, u in p:GetUnits():Members() do
     end
 end
 local myScore = p:GetScore()
-local favor = p:GetFavor()
+local favor = 0
+if p.GetFavor ~= nil then favor = p:GetFavor() end
 local favorPerTurn = 0
 local pDiplo = p:GetDiplomacy()
 -- 1. Government tier bonus (govRow.Tier is a string like "GOVERNMENT_TIER_1")
@@ -122,13 +123,17 @@ for i = 0, 62 do
 end
 local maxRel = math.floor(nMajors / 2) + 1
 print("RELSLOTS|" .. nReligions .. "|" .. maxRel)
-local eraManager = Game.GetEras()
-local eraIdx = eraManager:GetCurrentEra()
-local eraEntry = GameInfo.Eras[eraIdx]
-local eraName = eraEntry and Locale.Lookup(eraEntry.Name) or "Unknown"
-local eraScore = eraManager:GetPlayerCurrentScore(id)
-local darkThresh = eraManager:GetPlayerDarkAgeThreshold(id)
-local goldenThresh = eraManager:GetPlayerGoldenAgeThreshold(id)
+local eraName = "Unknown"
+local eraScore, darkThresh, goldenThresh = 0, 0, 0
+if Game.GetEras ~= nil then
+    local eraManager = Game.GetEras()
+    local eraIdx = eraManager:GetCurrentEra()
+    local eraEntry = GameInfo.Eras[eraIdx]
+    eraName = eraEntry and Locale.Lookup(eraEntry.Name) or "Unknown"
+    eraScore = eraManager:GetPlayerCurrentScore(id)
+    darkThresh = eraManager:GetPlayerDarkAgeThreshold(id)
+    goldenThresh = eraManager:GetPlayerGoldenAgeThreshold(id)
+end
 print("ERA|" .. eraName .. "|" .. eraScore .. "|" .. darkThresh .. "|" .. goldenThresh)
 local maxTurns = GameConfiguration.GetValue("GAME_MAX_TURNS") or 0
 print("MAXTURNS|" .. maxTurns)
@@ -750,10 +755,13 @@ def build_diary_full_query() -> str:
     return (
         # --- Setup ---
         "local me = Game.GetLocalPlayer() "
-        "local eraManager = Game.GetEras() "
-        "local eraIdx = eraManager:GetCurrentEra() "
-        "local eraEntry = GameInfo.Eras[eraIdx] "
-        'local eraType = eraEntry and eraEntry.EraType or "UNKNOWN" '
+        'local eraType = "UNKNOWN" '
+        "if Game.GetEras ~= nil then "
+        "  local eraManager = Game.GetEras() "
+        "  local eraIdx = eraManager:GetCurrentEra() "
+        "  local eraEntry = GameInfo.Eras[eraIdx] "
+        '  eraType = eraEntry and eraEntry.EraType or "UNKNOWN" '
+        "end "
         # Pre-compute territory, improvement, and exploration counts per player
         # (single map scan — also counts revealed land tiles per player)
         "local ownerTerritory = {} "
@@ -817,7 +825,7 @@ def build_diary_full_query() -> str:
         "  local faithPT = 0 "
         "  pcall(function() faithPT = p:GetReligion():GetFaithYield() end) "
         "  local favor = 0 "
-        "  pcall(function() favor = p:GetFavor() end) "
+        "  if p.GetFavor ~= nil then favor = p:GetFavor() end "
         "  local favorPT = 0 "
         # Military & victory stats
         "  local st = p:GetStats() "

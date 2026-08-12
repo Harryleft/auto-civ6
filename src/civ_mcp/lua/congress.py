@@ -16,7 +16,8 @@ if not wc then {_bail("ERR:NO_WORLD_CONGRESS|World Congress not available yet")}
 local inSession = wc:IsInSession()
 local meeting = wc:GetMeetingStatus()
 local turnsLeft = meeting and meeting.TurnsLeft or -1
-local favor = Players[me]:GetFavor()
+local favor = 0
+if Players[me].GetFavor ~= nil then favor = Players[me]:GetFavor() end
 local costs = wc:GetVotesandFavorCost()
 local maxVotes = costs.MaxVotes or 5
 local costStr = ""
@@ -247,7 +248,8 @@ local function handler()
     local wc = Game.GetWorldCongress()
     if not wc or not wc:IsInSession() then return end
 
-    local favor = Players[me]:GetFavor()
+    local favor = 0
+    if Players[me].GetFavor ~= nil then favor = Players[me]:GetFavor() end
     local costs = wc:GetVotesandFavorCost()
     local maxV = costs.MaxVotes or 5
     local ress = wc:GetResolutions()
