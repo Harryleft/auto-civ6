@@ -8,6 +8,7 @@ believes, predicts, plans, and eventually verifies.
 
 ```text
 MCP query -> automatic Observation -> normalized metrics
+          -> get_turn_brief / get_game_overview decision context
           -> Belief / Hypothesis revision
           -> Prediction and dynamic-plan review
           -> Fast / verify / slow routing
@@ -78,25 +79,32 @@ use keys such as `diplomacy.player_3.at_war` and
 
 ## MCP workflow
 
-1. Call `get_game_overview`; this binds the Belief Engine to the live game and
-   records the first automatic observation.
-2. Call `get_belief_state` to restore the current world model after a new
+1. Start each turn with `get_turn_brief` (or
+   `python3 scripts/civ6_assist.py precheck`). `get_game_overview` also
+   appends this reviewed brief automatically, so the model is decision input
+   rather than a background recorder.
+2. Call `get_game_overview`; this binds the Belief Engine to the live game and
+   records the first automatic observation. Read the brief's `default_route`,
+   active gates, and review flags before selecting actions.
+3. Call `get_belief_state` to restore the full current world model after a new
    session or context compaction.
-3. Record important interpretations with `upsert_belief` and competing
+4. Record important interpretations with `upsert_belief` and competing
    explanations with `upsert_hypothesis`.
-4. Add falsifiable claims with `upsert_prediction` and explicit 5/10/20-turn
+5. Add falsifiable claims with `upsert_prediction` and explicit 5/10/20-turn
    commitments with `upsert_dynamic_plan`.
-5. Before high-impact or irreversible actions, call `route_belief_decision`.
-6. Treat nearby hostile units as a verification trigger, not as evidence that
+6. Before high-impact or irreversible actions, call `route_belief_decision` and
+   link the selected action to the relevant belief IDs.
+7. Treat nearby hostile units as a verification trigger, not as evidence that
    a route is unsafe. Call `get_combat_estimate`, then pass its effective
    strengths, HP, modifiers, and expected damage to `assess_route_combat_risk`.
    Without that complete quantitative assessment, the route belief is not
    changed.
-7. Call `review_belief_engine` after material new evidence. Overview queries
+8. Call `get_turn_brief` after material new evidence or an action outcome.
+   This runs the review and returns the next decision gate. Overview queries
    also run this review automatically.
-8. Link the selected decision to its real outcome with
+9. Link the selected decision to its real outcome with
    `record_action_verification` when the normal MCP result is insufficient.
-9. Read `get_belief_metrics` and `get_belief_trace` for calibration and
+10. Read `get_belief_metrics` and `get_belief_trace` for calibration and
    post-game analysis.
 
 Use `update_belief_entity` for corrections and `delete_belief_entity` for
