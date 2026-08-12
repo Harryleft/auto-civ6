@@ -2985,12 +2985,20 @@ async def assess_route_combat_risk(
     nearby_hostiles: str = "[]",
     assessment: str = "",
 ) -> str:
-    """Revise route viability only from a quantified combat estimate.
+    """仅依据量化战斗预估来修订路线信念。
 
-    A non-empty ``nearby_hostiles`` list without ``assessment`` leaves the
-    belief unchanged and returns ``verify_then_fast``. To update it, pass the
-    exact fields from ``get_combat_estimate`` as JSON: source, revised
-    probability, both CS/HP values, and expected damage to both sides.
+    - 若 nearby_hostiles 非空但未提供 assessment: 不修改信念, 返回 verify_then_fast。
+    - 若要修订信念: 先调用 get_combat_estimate(unit_id, target_x, target_y),
+      再将其结果作为 assessment 传入, 字段: source("combat_estimate"),
+      revised_probability, attacker_cs, defender_cs, attacker_hp, defender_hp,
+      expected_damage_to_attacker, expected_damage_to_defender。
+    - 下调概率必须被数值支持: defender_cs > attacker_cs 且 攻击方损失比例更大。
+
+    示例:
+      get_combat_estimate -> {source: "combat_estimate", attacker_cs: 20, ...}
+      assess_route_combat_risk(belief_id=...,
+        nearby_hostiles='[{"type":"UNIT_SCOUT","cs":10,"hp":100,"dist":2}]',
+        assessment='{"source":"combat_estimate","revised_probability":0.55,...}')
     """
 
     params = {
