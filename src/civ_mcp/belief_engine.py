@@ -823,25 +823,53 @@ class BeliefEngine:
             "expected_damage_to_attacker",
             "expected_damage_to_defender",
         }
-        missing = sorted(required.difference(assessment))
-        if missing or assessment.get("source") != "combat_estimate":
-            detail = f"; missing {', '.join(missing)}" if missing else ""
+        # 1. source 必须来自 get_combat_estimate 工具(单独报错,避免与缺字段混淆)
+        if assessment.get("source") != "combat_estimate":
             raise BeliefEngineError(
-                "A complete game-derived combat assessment is required" + detail
+                "combat assessment 校验失败: source 必须是 'combat_estimate' "
+                f"(即 get_combat_estimate 工具返回的 source 字段), 实际为 "
+                f"{assessment.get('source')!r}。\n"
+                "用法: 先调用 get_combat_estimate(unit_id, target_x, target_y) 获取"
+                "真实战斗预估, 再将其结果(含 source 字段)原样传给 assess_route_combat_risk。"
+            )
+        missing = sorted(required.difference(assessment))
+        if missing:
+            raise BeliefEngineError(
+                "combat assessment 校验失败: 缺少必填字段 "
+                f"{', '.join(missing)}。\n"
+                "完整字段: "
+                "source, revised_probability, attacker_cs, defender_cs, "
+                "attacker_hp, defender_hp, expected_damage_to_attacker, "
+                "expected_damage_to_defender。\n"
+                "提示: 这些值应来自 get_combat_estimate 工具的返回。"
             )
         revised_probability = assessment["revised_probability"]
-        _validate_probability("revised_probability", revised_probability)
+        try:
+            _validate_probability("revised_probability", revised_probability)
+        except BeliefEngineError as exc:
+            raise BeliefEngineError(
+                "combat assessment 校验失败: " + str(exc)
+            ) from exc
         numeric_fields = required - {"source", "revised_probability"}
-        if any(
-            isinstance(assessment[name], bool)
+        bad_fields = [
+            name
+            for name in numeric_fields
+            if isinstance(assessment[name], bool)
             or not isinstance(assessment[name], (int, float))
             or not math.isfinite(float(assessment[name]))
             or float(assessment[name]) < 0
-            for name in numeric_fields
-        ):
-            raise BeliefEngineError("combat assessment values must be finite non-negative numbers")
+        ]
+        if bad_fields:
+            raise BeliefEngineError(
+                "combat assessment 校验失败: 以下字段必须是有限非负数字: "
+                + ", ".join(bad_fields)
+            )
         if assessment["attacker_hp"] <= 0 or assessment["defender_hp"] <= 0:
-            raise BeliefEngineError("combat assessment HP values must be greater than zero")
+            raise BeliefEngineError(
+                "combat assessment 校验失败: attacker_hp/defender_hp 必须大于 0, "
+                f"当前 attacker_hp={assessment['attacker_hp']}, "
+                f"defender_hp={assessment['defender_hp']}"
+            )
 
         current_probability = float(belief["probability"])
         if float(revised_probability) < current_probability:
@@ -861,7 +889,15 @@ class BeliefEngine:
             )
             if not materially_disadvantaged:
                 raise BeliefEngineError(
-                    "combat assessment does not numerically justify lowering the route belief"
+                    "combat assessment 校验失败: 该战斗预估在数值上不支持下调路线信念。\n"
+                    f"  当前信念 p={current_probability:.2f}, 申请下调至 {revised_probability:.2f}。\n"
+                    f"  战力对比: defender_cs={assessment['defender_cs']} vs "
+                    f"attacker_cs={assessment['attacker_cs']} "
+                    f"({'防御方占优' if assessment['defender_cs'] > assessment['attacker_cs'] else '防御方未占优'})。\n"
+                    f"  预期互伤比例: 攻击方损失 {attacker_loss:.0%}, "
+                    f"防御方损失 {defender_loss:.0%} "
+                    f"({'攻击方更亏' if attacker_loss > defender_loss else '攻击方未更亏'})。\n"
+                    "  下调要求: 同时满足 defender_cs > attacker_cs 且 攻击方损失比例 > 防御方损失比例。"
                 )
 
         updated = self.update(
