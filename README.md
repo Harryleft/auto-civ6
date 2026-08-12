@@ -4,11 +4,16 @@ An MCP server that lets LLM agents play full games of Civilization VI.
 
 Connect any MCP-compatible client — Claude Code, Codex, Gemini CLI, or your own — to a running Civ 6 game. The agent reads game state, moves units, manages cities, conducts diplomacy, and ends turns, all through the game's own rule-enforcing APIs. No cheats, no vision model required.
 
+The built-in [Civ Belief Engine](docs/belief-engine.md) adds an event-sourced
+world model: observations remain separate from beliefs, predictions are checked
+against later evidence, plans carry invalidation rules, and high-risk decisions
+can be routed to slower review.
+
 <!-- TODO: Add screenshot or GIF of agent playing -->
 
 ## Capabilities
 
-76 tools covering the full gameplay loop:
+90+ tools covering the full gameplay loop:
 
 - **Units** — list, move, attack, fortify, found cities, build improvements, promote, upgrade
 - **Cities** — inspect, set production, purchase units/buildings with gold, manage focus
@@ -23,6 +28,12 @@ Connect any MCP-compatible client — Claude Code, Codex, Gemini CLI, or your ow
 - **World Congress** — vote on resolutions, manage diplomatic favor
 - **Victory** — track progress across all victory conditions
 - **Game lifecycle** — save, load, launch, restart, kill
+
+The active ruleset is detected at runtime. Under Standard Rules, expansion-only
+mechanics such as Governors, Ages/Dedications, Alliances, Diplomatic Favor,
+strategic stockpiles, and World Congress are reported as unavailable instead
+of being inferred from database rows that the base game still exposes. Shared
+features such as basic diplomacy and tile/resource scans continue to work.
 
 Every turn, `end_turn` takes before/after snapshots and reports what happened: units damaged, cities grew, production completed, threats spotted near your cities.
 
@@ -209,7 +220,7 @@ The MCP interface provides a clean abstraction: the model receives narrated game
 Claude / Any MCP Client
     |  stdio (JSON-RPC)
     v
-MCP Server (Python)    <- 70+ tools
+MCP Server (Python)    <- 90+ tools
     |
     |  Generates Lua code at runtime
     |  TCP :4318

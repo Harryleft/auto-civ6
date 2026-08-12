@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from civ_mcp.lua._helpers import SENTINEL, _bail, _bail_lua, _lua_close_diplo_session
+from civ_mcp.lua._helpers import (
+    SENTINEL,
+    _bail,
+    _bail_lua,
+    _lua_close_diplo_session,
+    _lua_require_ruleset,
+)
 from civ_mcp.lua.models import (
     AgendaInfo,
     CivInfo,
@@ -24,8 +30,11 @@ def build_diplomacy_query() -> str:
 local me = Game.GetLocalPlayer()
 local pDiplo = Players[me]:GetDiplomacy()
 local pVis = PlayersVisibility[me]
+local activeRuleset = GameConfiguration.GetValue("RULESET")
+pcall(function() activeRuleset = GameConfiguration.GetRuleSet() end)
 local states = {"ALLIED","DECLARED_FRIEND","FRIENDLY","NEUTRAL","UNFRIENDLY","DENOUNCED","WAR"}
-local checkActions = {"DIPLOACTION_DIPLOMATIC_DELEGATION","DIPLOACTION_DECLARE_FRIENDSHIP","DIPLOACTION_DENOUNCE","DIPLOACTION_RESIDENT_EMBASSY","DIPLOACTION_OPEN_BORDERS","DIPLOACTION_MAKE_ALLIANCE"}
+local checkActions = {"DIPLOACTION_DIPLOMATIC_DELEGATION","DIPLOACTION_DECLARE_FRIENDSHIP","DIPLOACTION_DENOUNCE","DIPLOACTION_RESIDENT_EMBASSY","DIPLOACTION_OPEN_BORDERS"}
+if activeRuleset ~= "RULESET_STANDARD" then table.insert(checkActions, "DIPLOACTION_MAKE_ALLIANCE") end
 for i = 0, 62 do
     if i ~= me and Players[i] and Players[i]:IsAlive() and Players[i]:IsMajor() then
         local cfg = PlayerConfigurations[i]
@@ -37,12 +46,15 @@ for i = 0, 62 do
             local ai = Players[i]:GetDiplomaticAI()
             local stateIdx = ai:GetDiplomaticStateIndex(me)
             local stateName = states[stateIdx + 1] or tostring(stateIdx)
-            local grievances = pDiplo:GetGrievancesAgainst(i)
-            local vis = pDiplo:GetVisibilityOn(i)
-            local hasDel = pDiplo:HasDelegationAt(i) and "1" or "0"
-            local hasEmb = pDiplo:HasEmbassyAt(i) and "1" or "0"
-            local theyDel = Players[i]:GetDiplomacy():HasDelegationAt(me) and "1" or "0"
-            local theyEmb = Players[i]:GetDiplomacy():HasEmbassyAt(me) and "1" or "0"
+            local grievances, vis = 0, 0
+            if pDiplo.GetGrievancesAgainst ~= nil then grievances = pDiplo:GetGrievancesAgainst(i) or 0 end
+            if pDiplo.GetVisibilityOn ~= nil then vis = pDiplo:GetVisibilityOn(i) or 0 end
+            local hasDel, hasEmb, theyDel, theyEmb = "0", "0", "0", "0"
+            if pDiplo.HasDelegationAt ~= nil then hasDel = pDiplo:HasDelegationAt(i) and "1" or "0" end
+            if pDiplo.HasEmbassyAt ~= nil then hasEmb = pDiplo:HasEmbassyAt(i) and "1" or "0" end
+            local theirDiplo = Players[i]:GetDiplomacy()
+            if theirDiplo.HasDelegationAt ~= nil then theyDel = theirDiplo:HasDelegationAt(me) and "1" or "0" end
+            if theirDiplo.HasEmbassyAt ~= nil then theyEmb = theirDiplo:HasEmbassyAt(me) and "1" or "0" end
             print("CIV|" .. i .. "|" .. civName .. "|" .. leaderName .. "|" .. met .. "|" .. war .. "|" .. stateName .. "|" .. grievances .. "|" .. vis .. "|" .. hasDel .. "|" .. hasEmb .. "|" .. theyDel .. "|" .. theyEmb)
             local okMil, milStr = pcall(function() return Players[i]:GetStats():GetMilitaryStrength() end)
             local okMyMil, myMilStr = pcall(function() return Players[me]:GetStats():GetMilitaryStrength() end)
@@ -80,7 +92,7 @@ for i = 0, 62 do
                     print("MOD|" .. i .. "|" .. mod.Score .. "|" .. txt)
                 end
             end
-            if stateIdx == 0 then
+            if activeRuleset ~= "RULESET_STANDARD" and stateIdx == 0 then
                 local ok3, aType = pcall(function() return pDiplo:GetAllianceType(i) end)
                 if ok3 and aType and aType >= 0 then
                     local aNames = {"RESEARCH","CULTURAL","ECONOMIC","MILITARY","RELIGIOUS"}
@@ -115,7 +127,8 @@ for i = 0, 62 do
                         if aDef then histSet[aDef.Index] = true end
                     end
                 end
-                local vis = pDiplo:GetVisibilityOn(i)
+                local vis = 0
+                if pDiplo.GetVisibilityOn ~= nil then vis = pDiplo:GetVisibilityOn(i) or 0 end
                 for _, agIdx in ipairs(agendas) do
                     local aDef = GameInfo.Agendas[agIdx]
                     if aDef then
@@ -506,6 +519,8 @@ def build_deal_options_query(other_player_id: int) -> str:
 local me = Game.GetLocalPlayer()
 local target = {other_player_id}
 local pDiplo = Players[me]:GetDiplomacy()
+local activeRuleset = GameConfiguration.GetValue("RULESET")
+pcall(function() activeRuleset = GameConfiguration.GetRuleSet() end)
 if not Players[target] or not Players[target]:IsAlive() then {_bail(f"ERR:INVALID_PLAYER|Player {other_player_id} not found")} end
 if not pDiplo:HasMet(target) then {_bail(f"ERR:NOT_MET|Have not met player {other_player_id}")} end
 local name = Locale.Lookup(PlayerConfigurations[target]:GetCivilizationShortDescription())
@@ -513,12 +528,13 @@ print("CIV|" .. target .. "|" .. name:gsub("|","/"))
 local ourGold = math.floor(Players[me]:GetTreasury():GetGoldBalance())
 local ourGPT = math.floor(Players[me]:GetTreasury():GetGoldYield() - Players[me]:GetTreasury():GetTotalMaintenance())
 local ourFavor = 0
-pcall(function() ourFavor = math.floor(Players[me]:GetFavor() or 0) end)
+if activeRuleset == "RULESET_EXPANSION_2" then pcall(function() ourFavor = math.floor(Players[me]:GetFavor() or 0) end) end
 local theirGold = math.floor(Players[target]:GetTreasury():GetGoldBalance())
 local theirGPT = math.floor(Players[target]:GetTreasury():GetGoldYield() - Players[target]:GetTreasury():GetTotalMaintenance())
 local theirFavor = 0
-pcall(function() theirFavor = math.floor(Players[target]:GetFavor() or 0) end)
+if activeRuleset == "RULESET_EXPANSION_2" then pcall(function() theirFavor = math.floor(Players[target]:GetFavor() or 0) end) end
 print("ECON|" .. ourGold .. "|" .. ourGPT .. "|" .. ourFavor .. "|" .. theirGold .. "|" .. theirGPT .. "|" .. theirFavor)
+print("RULESET|" .. tostring(activeRuleset or "UNKNOWN"))
 for row in GameInfo.Resources() do
     local ourAmt = Players[me]:GetResources():GetResourceAmount(row.Index)
     local theirAmt = Players[target]:GetResources():GetResourceAmount(row.Index)
@@ -539,9 +555,9 @@ pcall(function()
     local civic = GameInfo.Civics["CIVIC_DIPLOMATIC_SERVICE"]
     if civic then hasDiploService = Players[me]:GetCulture():HasCivic(civic.Index) end
 end)
-local allianceEligible = (stateIdx == 1 and hasDiploService)
+local allianceEligible = (activeRuleset ~= "RULESET_STANDARD" and stateIdx == 1 and hasDiploService)
 local currentAlliance = ""
-if stateIdx == 0 then
+if activeRuleset ~= "RULESET_STANDARD" and stateIdx == 0 then
     local ok3, aType = pcall(function() return pDiplo:GetAllianceType(target) end)
     if ok3 and aType and aType >= 0 then
         local aNames = {{"RESEARCH","CULTURAL","ECONOMIC","MILITARY","RELIGIOUS"}}
@@ -585,6 +601,8 @@ def parse_deal_options_response(lines: list[str]) -> DealOptions:
                 opts.their_gold = int(parts[4])
                 opts.their_gpt = int(parts[5])
                 opts.their_favor = int(parts[6])
+        elif line.startswith("RULESET|"):
+            opts.ruleset = line.split("|", 1)[1]
         elif line.startswith("RES|"):
             parts = line.split("|")
             if len(parts) >= 6:
@@ -973,6 +991,7 @@ def build_form_alliance(other_player_id: int, alliance_type: str) -> str:
     """
     alliance_key = f"ALLIANCE_{alliance_type.upper()}"
     return f"""
+{_lua_require_ruleset(("RULESET_EXPANSION_1", "RULESET_EXPANSION_2"), "ERR:NO_ALLIANCES_IN_RULESET")}
 local me = Game.GetLocalPlayer()
 local target = {other_player_id}
 local allianceRow = GameInfo.Alliances["{alliance_key}"]

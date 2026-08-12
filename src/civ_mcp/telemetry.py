@@ -37,6 +37,7 @@ EVENT_SPATIAL = "spatial"
 EVENT_MAP_STATIC = "map_static"
 EVENT_MAP_DELTA = "map_delta"
 EVENT_GAME_OVER = "game_over"
+EVENT_BELIEF_EVENT = "belief_event"
 
 
 # ── Sink protocol ────────────────────────────────────────────────────────
@@ -156,6 +157,8 @@ class LocalSink:
             path = self._path("spatial")
         elif event_type == EVENT_MAP_DELTA:
             path = self._path("mapturns")
+        elif event_type == EVENT_BELIEF_EVENT:
+            path = self._path("beliefs")
         else:
             log.warning("LocalSink: unknown event type %s", event_type)
             return
@@ -352,6 +355,7 @@ class CloudSink:
             EVENT_SPATIAL: "spatial.jsonl",
             EVENT_MAP_STATIC: "map_static.json",
             EVENT_MAP_DELTA: "map_turns.jsonl",
+            EVENT_BELIEF_EVENT: "beliefs.jsonl",
         }.get(event_type)
 
 
