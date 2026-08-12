@@ -25,6 +25,7 @@ Early choices compound. Each decision shapes what's available 20, 40, 60 turns l
 ## Turn Loop
 
 Each turn in order:
+0. `python3 scripts/civ6_assist.py precheck` — blockers (production/research/policy/envoy/diplo/WC) + opportunities (sell surplus, improve resources, Eureka) + unit state. Fix blockers before anything else.
 1. `get_game_overview` — turn, yields, research, score, era score, difficulty. If resuming after context compaction, call `get_diary` first.
 2. `get_units` — positions, HP, moves, charges, nearby threats
 3. `get_map_area` around cities/units — terrain, resources, enemy units
@@ -33,7 +34,7 @@ Each turn in order:
 6. `get_district_advisor` if placing a new district
 7. `set_city_production` / `set_research` if needed
 8. Run **Strategic Checkpoints** if it's time
-9. `end_turn`
+9. `skip_remaining_units` then `end_turn` — verify no blockers remain first (an end_turn failure costs 5-10 min of AI turns)
 
 ## Diary
 
@@ -73,6 +74,72 @@ Periodic checks worth doing regularly. The game doesn't surface most of this pro
 - Wonder scan: `get_city_production` in your best city — wonders that align with your victory path are worth considering
 - Victory path check: is your chosen path still viable? Is any rival close to winning something you haven't been tracking?
 - Civ kit check: are you building/using your unique units, buildings, or improvements? If not, you're playing a generic civ and giving up your structural advantage. The unique unit often requires a specific tech — if that tech isn't on your current research path, that's a problem.
+
+## Deity Strategy Playbook (神级生存与复利)
+
+**核心世界观**:文明6是有限回合内的资源配置与复利竞争,不是建漂亮帝国。每次行动问:当前最大瓶颈是什么?这个行动解决了吗?机会成本?它是否提高未来几十回合的资源生成?神级允许科技/文化/军力排名落后,但不允许浪费土地、生产力和时间。
+
+**每回合三问**:有没有便宜可占?有没有回合可偷?有没有资源闲置?
+
+**行动顺序**:优先生存 → 扩张 → 建立复利机器 → 围绕一个胜利条件集中资源。不要平均发展,不要生产无用单位,不要为收藏建奇观,不要为打赢战争而打战争。每10回合重新评估胜利方向/最大瓶颈/最大威胁/最大机会。
+
+### 生存(前期)
+- **城墙是最高性价比投资**:宣战前用~320金秒买城墙。无墙城市3回合沦陷,有墙城市顶住全部攻势。
+- **识别宣战前兆**:AI攻城武器(投石机/攻城车)+近战单位在边境集结3-5回合=战争信号,立即切产兵/买防御。
+- **不打高一级时代兵种**(如Man-at-Arms CS45):集火弱目标、弃城保单位、等己方科技升级。
+- **白和平比消耗战划算**:神级硬拼军力是下策;消耗对方攻城单位后主动求和。
+- **远程守城是核心,近战是炮灰**:弓/弩手留在城墙内集火,近战只堵路补刀。
+- **开放边境只给盟国(致命教训)**:德国多次提议"互开边境+金币"都被接受,结果德国借道把5个高级单位(线列步兵CS65/骑士/野战炮)集结到伦敦城下突袭宣战,2-3回合破城。对 UNFRIENDLY/军事强于己的 AI 一律拒绝开放边境。
+- **军事代差红线**:对方已解锁线列步兵/骑士(CS50-65),我方若只有弓/枪兵(CS25)就打不动。扩张期必须并行升级兵种(弓→弩手需机械,勇士→剑客需铁),边境城市一律先买城墙。
+- **首都丢失=忠诚雪崩**:首都(忠诚锚)丢失后,所有城市忠诚压力暴涨,连锁叛乱。防首都 > 一切;首都永远要有城墙+驻军+机动部队。
+- **识别"借道"真面目**:AI单位反复在边境集结(即使和平)就是宣战前兆,立即切军事生产+买墙(前次俄罗斯、本次德国都如此)。
+
+### 扩张(复利机器)
+- **英国Pax Britannica的复利=城市数**(每城+1商路容量)。扩张是第一优先级,没有之一。
+- **马格努斯(给养保障)+殖民政策=扩张引擎**:开拓者不耗人口+50%产力,伦敦可7回合/个连续产。
+- **建城前验证距离>(3格)**:距任何城市≤3格无法建城,开拓者白走是巨量浪费。
+- **新城瓶颈是生产力**:新城顺序=纪念碑(领土)→建造者(改良马/盐/石头)→自持。沙漠无食物点慎重。
+- **战略资源(铁/马)尽早占领改良**:铁=剑客,马=骑手,晚占=晚解锁整条兵线。
+- **200回合10城目标**:伦敦每7回合一个开拓者+偶尔买,成批生产(先上殖民政策再连产)。
+
+### 资源与金币
+- **金币不囤积**:买建造者/单位/建筑绕过生产时间;400金买建造者改良3块资源远胜躺着。
+- **过剩奢侈品(>1份)主动卖AI**:先`propose_trade mode=test`确认报价,再全额匹配send(注意首付金币也要带上)。
+- **战略资源改良后+2~3/回合**(骑士阶级政策再+1),长期复利。
+
+### 科技与市政
+- **科技落后是结果不是根因**:城市少→学院少→科研慢。扩张解决科技,而不是反过来。
+- **封建主义(农场+1食物)优先于军事科技**:粮食是人口瓶颈,人口是产力/科研/金币的根。
+- **Eureka/Inspiration主动触发**:改良资源/建区域/建城墙,顺手完成。
+
+## Toolkit (决策辅助工具)
+
+`scripts/civ6_tool.py`(纯计算,离线可用):
+- `dist X1 Y1 X2 Y2` — hex距离(建城>3、射程、移动判断)
+- `settle X Y` — 建城合法性(距所有城>3)+最近城
+- `combat CS1 HP1 CS2 HP2` — 战斗伤害估算+胜负预判
+- `status` / `plan` / `plan-save '[[x,y],...]'` — 帝国概览、扩张进度、记录建城目标
+
+`scripts/civ6_assist.py`(决策助手,直连MCP会话):
+- `precheck` — end_turn前预检:阻塞项(生产/研究/政策/使者/外交/WC)+机会项(卖奢侈品/改良/Eureka)+单位状态
+- `units` — 单位全景(可行动/已行动/可升级/可建)
+- `promotions` — 批量晋升检查(替代手动循环)
+- `expansion` — 城市/合法建城点/未改良资源
+- `threats` — 威胁排序(阵营+CS+HP+距城)
+- `cities` — 城市队列/增长/掠夺/城墙诊断
+
+**每回合流程**:precheck → 修阻塞 → threats+combat集火 → expansion选址+settle验证 → 处理机会(卖奢侈品/改良/Eureka) → units确认 → skip_remaining_units → end_turn。
+
+### 已知工具坑(本次运行实测)
+- **end_turn神级AI回合5-10分钟**:必须一次通过,失败循环=巨量浪费。
+- **AI交易/外交提议时效极短**:end_turn返回时立即响应,否则NO_DEAL/NO_SESSION。
+- **新生产/购买的单位当回合不能移动**(NO_MOVES),下一回合才行。
+- **军事单位不能与驻军同城堆叠**(STACKING_CONFLICT),城内已有驻军就移到邻格。
+- **攻击后立即重查get_units再补刀**:目标可能已被击杀(NO_ENEMY)。
+- **使者令牌死锁**:`send_envoy`在无UI环境可能不消耗令牌,`end_turn`被GIVE_INFLUENCE_TOKEN永久卡住;重启游戏(restart_and_load)可解(挂起的UI操作会在重启后执行)。
+- **升级单位后unit_id变化**:需重新get_units拿新id。
+- **建城通知显示"开拓者killed"是正常消耗**(单位变为城市),不是损失。
+- **地形移动成本**:洪泛区/丘陵/森林/丛林=2移动,易STOPPED_MID_PATH;远距离先get_pathing_estimate。
 
 ## Strategic Patterns
 

@@ -549,6 +549,7 @@ def build_dedications_query() -> str:
     """Read current era age, available dedications, and active ones."""
     return """
 local me = Game.GetLocalPlayer()
+if Game.GetEras == nil then {_bail("ERR:NO_ERAS|Era/age system not available in this ruleset")} end
 local pEras = Game.GetEras()
 local age = "Normal"
 if pEras:HasHeroicGoldenAge(me) then age = "Heroic"
@@ -589,6 +590,7 @@ def build_choose_dedication(dedication_index: int) -> str:
     """Select a dedication/commemoration by its index."""
     return f"""
 local me = Game.GetLocalPlayer()
+if Game.GetEras == nil then {_bail("ERR:NO_ERAS|Era/age system not available in this ruleset")} end
 local pEras = Game.GetEras()
 local allowed = pEras:GetPlayerNumAllowedCommemorations(me)
 if allowed <= 0 then {_bail("ERR:NO_DEDICATION_NEEDED|No dedication selection required (already chosen or not available)")} end
