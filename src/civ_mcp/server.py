@@ -20,6 +20,7 @@ import uvicorn
 from mcp.server.fastmcp import Context, FastMCP
 
 from civ_mcp import game_launcher, heartbeat
+from civ_mcp.belief_engine import BeliefEngine, BeliefEngineError
 from civ_mcp.game_over_watchdog import GameOverWatchdog
 from civ_mcp import narrate as nr
 from civ_mcp.connection import GameConnection, LuaError
@@ -37,6 +38,7 @@ from civ_mcp.spectator import CameraController, PopupWatcher
 from civ_mcp.telemetry import (
     EVENT_CITY_ROW,
     EVENT_DIARY_ROW,
+    EVENT_BELIEF_EVENT,
     AlertSink,
     CloudSink,
     LocalSink,
@@ -56,6 +58,7 @@ class AppContext:
     spatial: SpatialTracker
     map_capture: MapCapture
     watchdog: GameOverWatchdog
+    beliefs: BeliefEngine
 
 
 async def _auto_boot(conn: GameConnection, save_name: str) -> None:
@@ -315,6 +318,7 @@ async def lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
     spatial = SpatialTracker(emitter)
     map_capture = MapCapture(emitter)
     gs = GameState(conn)
+    beliefs = BeliefEngine(run_id=emitter.run_id)
     log.info("Game logger session: %s", logger.session_id)
 
     # Auto-boot: launch game + load save when running as eval
@@ -346,6 +350,7 @@ async def lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
             spatial=spatial,
             map_capture=map_capture,
             watchdog=watchdog,
+            beliefs=beliefs,
         )
     finally:
         await emitter.close()
@@ -388,6 +393,16 @@ def _get_watchdog(ctx: Context) -> GameOverWatchdog:
     return ctx.request_context.lifespan_context.watchdog
 
 
+def _get_beliefs(ctx: Context) -> BeliefEngine:
+    return ctx.request_context.lifespan_context.beliefs
+
+
+async def _flush_belief_events(ctx: Context) -> None:
+    """Mirror locally persisted belief events into configured telemetry sinks."""
+    for event in _get_beliefs(ctx).drain_events():
+        await _get_logger(ctx)._emitter.emit(EVENT_BELIEF_EVENT, event)
+
+
 def _param_summary(params: dict[str, Any]) -> str:
     """Compact one-line summary of tool params for console logging."""
     if not params:
@@ -405,6 +420,52 @@ def _result_summary(result: str) -> str:
     """First meaningful line of a result, truncated."""
     line = result.split("\n", 1)[0].strip()
     return line[:120] + "..." if len(line) > 120 else line
+
+
+async def _record_belief_tool_result(
+    ctx: Context,
+    tool_name: str,
+    params: dict[str, Any],
+    result: str,
+    turn: int | str,
+    duration_ms: int,
+    *,
+    success: bool,
+) -> None:
+    """Capture query facts and action verification without breaking gameplay."""
+    try:
+        engine = _get_beliefs(ctx)
+        logger = _get_logger(ctx)
+        if not engine.bound:
+            civ, seed = await _get_game(ctx).get_game_identity()
+            engine.bind_game(civ, seed)
+            logger.bind_game(civ, seed)
+        if logger._turn is None:
+            overview = await _get_game(ctx).get_game_overview()
+            logger.set_turn(overview.turn)
+        # get_game_overview learns and binds the turn inside its operation, so
+        # the value captured by _logged before the call can still be unknown.
+        current_turn = logger._turn
+        observed_turn = current_turn if current_turn is not None else turn
+        category = (
+            "turn"
+            if tool_name == "end_turn"
+            else "query"
+            if tool_name.startswith("get_") or tool_name == "screenshot"
+            else "action"
+        )
+        engine.record_tool_result(
+            tool=tool_name,
+            params=params,
+            result=result,
+            turn=int(observed_turn) if observed_turn != "?" else 0,
+            category=category,
+            success=success,
+            duration_ms=duration_ms,
+        )
+        await _flush_belief_events(ctx)
+    except Exception:
+        log.warning("Belief Engine: failed to record tool result", exc_info=True)
 
 
 async def _logged(
@@ -433,6 +494,9 @@ async def _logged(
             _result_summary(result),
         )
         await logger.log_error(tool_name, result)
+        await _record_belief_tool_result(
+            ctx, tool_name, params, result, turn, ms, success=False
+        )
         return result
     except ConnectionError as e:
         result = str(e)
@@ -446,6 +510,9 @@ async def _logged(
             _result_summary(result),
         )
         await logger.log_error(tool_name, result)
+        await _record_belief_tool_result(
+            ctx, tool_name, params, result, turn, ms, success=False
+        )
 
         # Connection-loss recovery: after consecutive failures,
         # the game has likely crashed. Auto-restart from autosave.
@@ -486,15 +553,29 @@ async def _logged(
     _logged._conn_errors = 0
     heartbeat.write("playing", turn=turn or 0)
     ms = int((time.monotonic() - start) * 1000)
+    reported_error = result.startswith(("Error", "ERR"))
     log.info(
-        "[T%s] %s(%s) OK %dms: %s",
+        "[T%s] %s(%s) %s %dms: %s",
         turn,
         tool_name,
         _param_summary(params),
+        "ERR" if reported_error else "OK",
         ms,
         _result_summary(result),
     )
-    await logger.log_tool_call(tool_name, params, result, ms)
+    if reported_error:
+        await logger.log_error(tool_name, result)
+    else:
+        await logger.log_tool_call(tool_name, params, result, ms)
+    await _record_belief_tool_result(
+        ctx,
+        tool_name,
+        params,
+        result,
+        turn,
+        ms,
+        success=not reported_error,
+    )
     try:
         await _get_spatial(ctx).record(tool_name, params, result, ms, tiles=tiles)
     except Exception:
@@ -526,6 +607,7 @@ async def get_game_overview(ctx: Context) -> str:
         try:
             civ, seed = await gs.get_game_identity()
             logger.bind_game(civ, seed)
+            _get_beliefs(ctx).bind_game(civ, seed)
             spatial.bind_game(civ, seed)
             heartbeat.bind_game(civ, seed)
             gs.spatial = spatial
@@ -779,6 +861,39 @@ async def get_pathing_estimate(
     return await _logged(
         ctx,
         "get_pathing_estimate",
+        {"unit_id": unit_id, "target_x": target_x, "target_y": target_y},
+        _run,
+    )
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_combat_estimate(
+    ctx: Context, unit_id: int, target_x: int, target_y: int
+) -> str:
+    """Quantify a unit matchup without executing an attack.
+
+    Returns effective combat strengths, current HP, terrain/fortification/
+    promotion/flanking/support modifiers, and estimated damage to both sides.
+    Use this after a proximity scan and before revising a route-safety belief;
+    merely seeing a hostile unit is not evidence that the route is unsafe.
+
+    Args:
+        unit_id: Attacking or escort unit composite ID from get_units
+        target_x: Hostile unit X coordinate
+        target_y: Hostile unit Y coordinate
+    """
+    gs = _get_game(ctx)
+    unit_index = unit_id % 65536
+
+    async def _run():
+        estimate = await gs.get_combat_estimate(unit_index, target_x, target_y)
+        if estimate is None:
+            return "No quantified combat estimate is available for this matchup."
+        return nr.narrate_combat_estimate(estimate)
+
+    return await _logged(
+        ctx,
+        "get_combat_estimate",
         {"unit_id": unit_id, "target_x": target_x, "target_y": target_y},
         _run,
     )
@@ -2207,6 +2322,688 @@ async def end_turn(
         _get_watchdog(ctx).arm()
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Belief Engine
+# ---------------------------------------------------------------------------
+
+
+def _belief_json_object(raw: str, label: str) -> dict[str, Any]:
+    try:
+        value = json.loads(raw or "{}")
+    except json.JSONDecodeError as exc:
+        raise BeliefEngineError(f"{label} must be valid JSON: {exc.msg}") from exc
+    if not isinstance(value, dict):
+        raise BeliefEngineError(f"{label} must be a JSON object")
+    return value
+
+
+def _belief_json_list(raw: str, label: str) -> list[Any]:
+    try:
+        value = json.loads(raw or "[]")
+    except json.JSONDecodeError as exc:
+        raise BeliefEngineError(f"{label} must be valid JSON: {exc.msg}") from exc
+    if not isinstance(value, list):
+        raise BeliefEngineError(f"{label} must be a JSON array")
+    return value
+
+
+async def _belief_context(ctx: Context) -> tuple[BeliefEngine, int]:
+    """Bind the world model to the live game and return its current turn."""
+    engine = _get_beliefs(ctx)
+    logger = _get_logger(ctx)
+    gs = _get_game(ctx)
+    if not engine.bound:
+        civ, seed = await gs.get_game_identity()
+        engine.bind_game(civ, seed)
+        logger.bind_game(civ, seed)
+    turn = logger._turn
+    if turn is None:
+        overview = await gs.get_game_overview()
+        turn = overview.turn
+        logger.set_turn(turn)
+    return engine, int(turn)
+
+
+async def _belief_tool(
+    ctx: Context,
+    tool_name: str,
+    params: dict[str, Any],
+    operation: Callable[[BeliefEngine, int], Any],
+) -> str:
+    """Run a belief operation with normal MCP logging and telemetry mirroring."""
+    started = time.monotonic()
+    try:
+        engine, turn = await _belief_context(ctx)
+        result = operation(engine, turn)
+        await _flush_belief_events(ctx)
+        text = json.dumps(result, ensure_ascii=False, indent=2)
+        await _get_logger(ctx).log_tool_call(
+            tool_name,
+            params,
+            text,
+            int((time.monotonic() - started) * 1000),
+        )
+        return text
+    except (BeliefEngineError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        message = f"Error: {exc}"
+        await _get_logger(ctx).log_error(tool_name, message)
+        return message
+    except ConnectionError as exc:
+        message = f"Error: {exc}"
+        await _get_logger(ctx).log_error(tool_name, message)
+        return message
+
+
+@mcp.tool()
+async def record_observation(
+    ctx: Context,
+    statement: str,
+    facts: str = "{}",
+    metrics: str = "{}",
+    source: str = "agent",
+    reliability: float = 1.0,
+    tags: str = "[]",
+) -> str:
+    """Record a factual observation without interpreting what it means.
+
+    ``facts`` and ``metrics`` are JSON objects.  Metrics use stable keys so
+    predictions, belief expectations, and plan exit conditions can evaluate
+    them later.  Important MCP query results are also captured automatically.
+    """
+
+    params = {
+        "statement": statement,
+        "facts": facts,
+        "metrics": metrics,
+        "source": source,
+        "reliability": reliability,
+        "tags": tags,
+    }
+
+    def _operation(engine: BeliefEngine, turn: int) -> dict[str, Any]:
+        return engine.create(
+            "observation",
+            {
+                "statement": statement,
+                "source": source,
+                "facts": _belief_json_object(facts, "facts"),
+                "metrics": _belief_json_object(metrics, "metrics"),
+                "reliability": reliability,
+                "tags": _belief_json_list(tags, "tags"),
+                "observed_turn": turn,
+            },
+            turn=turn,
+        )
+
+    return await _belief_tool(ctx, "record_observation", params, _operation)
+
+
+@mcp.tool()
+async def upsert_belief(
+    ctx: Context,
+    belief_id: str,
+    statement: str,
+    category: str,
+    probability: float,
+    confidence: float,
+    impact: str = "medium",
+    urgency: str = "medium",
+    evidence_ids: str = "[]",
+    counter_evidence_ids: str = "[]",
+    falsifiers: str = "[]",
+    expectations: str = "[]",
+    action_threshold: float = 0.65,
+    replan_threshold: float = 0.5,
+) -> str:
+    """Create or revise a belief while retaining its complete revision history."""
+
+    params = locals().copy()
+    params.pop("ctx")
+
+    def _operation(engine: BeliefEngine, turn: int) -> dict[str, Any]:
+        return engine.upsert(
+            "belief",
+            belief_id,
+            {
+                "statement": statement,
+                "category": category,
+                "probability": probability,
+                "confidence": confidence,
+                "impact": impact,
+                "urgency": urgency,
+                "evidence_ids": _belief_json_list(evidence_ids, "evidence_ids"),
+                "counter_evidence_ids": _belief_json_list(
+                    counter_evidence_ids, "counter_evidence_ids"
+                ),
+                "falsifiers": _belief_json_list(falsifiers, "falsifiers"),
+                "expectations": _belief_json_list(expectations, "expectations"),
+                "action_threshold": action_threshold,
+                "replan_threshold": replan_threshold,
+                "review_required": False,
+            },
+            turn=turn,
+        )
+
+    return await _belief_tool(ctx, "upsert_belief", params, _operation)
+
+
+@mcp.tool()
+async def upsert_hypothesis(
+    ctx: Context,
+    hypothesis_id: str,
+    topic_id: str,
+    statement: str,
+    probability: float,
+    confidence: float,
+    evidence_ids: str = "[]",
+    counter_evidence_ids: str = "[]",
+) -> str:
+    """Create or revise one competing explanation in a hypothesis pool."""
+
+    params = locals().copy()
+    params.pop("ctx")
+
+    def _operation(engine: BeliefEngine, turn: int) -> dict[str, Any]:
+        return engine.upsert(
+            "hypothesis",
+            hypothesis_id,
+            {
+                "topic_id": topic_id,
+                "statement": statement,
+                "probability": probability,
+                "confidence": confidence,
+                "evidence_ids": _belief_json_list(evidence_ids, "evidence_ids"),
+                "counter_evidence_ids": _belief_json_list(
+                    counter_evidence_ids, "counter_evidence_ids"
+                ),
+            },
+            turn=turn,
+        )
+
+    return await _belief_tool(ctx, "upsert_hypothesis", params, _operation)
+
+
+@mcp.tool()
+async def rebalance_hypothesis_pool(
+    ctx: Context, topic_id: str, probabilities: str
+) -> str:
+    """Atomically redistribute a topic's hypothesis probabilities.
+
+    ``probabilities`` is a JSON object mapping hypothesis IDs to probabilities;
+    the values must sum to one (within 0.001).
+    """
+
+    params = {"topic_id": topic_id, "probabilities": probabilities}
+    return await _belief_tool(
+        ctx,
+        "rebalance_hypothesis_pool",
+        params,
+        lambda engine, turn: engine.rebalance_hypotheses(
+            topic_id,
+            _belief_json_object(probabilities, "probabilities"),
+            turn=turn,
+        ),
+    )
+
+
+@mcp.tool()
+async def upsert_prediction(
+    ctx: Context,
+    prediction_id: str,
+    statement: str,
+    probability: float,
+    confidence: float,
+    deadline_turn: int,
+    evaluation: str = "{}",
+    belief_ids: str = "[]",
+) -> str:
+    """Create or revise a falsifiable prediction with a deadline.
+
+    ``evaluation`` may be a metric rule such as
+    ``{"metric":"science","operator":">=","value":60}``.
+    """
+
+    params = locals().copy()
+    params.pop("ctx")
+
+    def _operation(engine: BeliefEngine, turn: int) -> dict[str, Any]:
+        return engine.upsert(
+            "prediction",
+            prediction_id,
+            {
+                "statement": statement,
+                "probability": probability,
+                "confidence": confidence,
+                "deadline_turn": deadline_turn,
+                "evaluation": _belief_json_object(evaluation, "evaluation"),
+                "belief_ids": _belief_json_list(belief_ids, "belief_ids"),
+                "status": "active",
+            },
+            turn=turn,
+        )
+
+    return await _belief_tool(ctx, "upsert_prediction", params, _operation)
+
+
+@mcp.tool()
+async def resolve_prediction(
+    ctx: Context,
+    prediction_id: str,
+    outcome: bool,
+    actual: str,
+) -> str:
+    """Resolve a prediction manually when the outcome is not metric-evaluable."""
+
+    params = {"prediction_id": prediction_id, "outcome": outcome, "actual": actual}
+    return await _belief_tool(
+        ctx,
+        "resolve_prediction",
+        params,
+        lambda engine, turn: engine.resolve_prediction(
+            prediction_id,
+            outcome=outcome,
+            actual=actual,
+            turn=turn,
+        ),
+    )
+
+
+@mcp.tool()
+async def upsert_dynamic_plan(
+    ctx: Context,
+    plan_id: str,
+    horizon: int,
+    goal: str,
+    probability_of_success: float,
+    assumptions: str = "[]",
+    assumption_thresholds: str = "{}",
+    evidence_ids: str = "[]",
+    success_conditions: str = "[]",
+    exit_conditions: str = "[]",
+    review_turn: int = 0,
+) -> str:
+    """Create or revise a 5/10/20-turn plan with explicit invalidation rules."""
+
+    params = locals().copy()
+    params.pop("ctx")
+
+    def _operation(engine: BeliefEngine, turn: int) -> dict[str, Any]:
+        actual_review_turn = review_turn or turn + horizon
+        return engine.upsert(
+            "plan",
+            plan_id,
+            {
+                "horizon": horizon,
+                "goal": goal,
+                "probability_of_success": probability_of_success,
+                "assumptions": _belief_json_list(assumptions, "assumptions"),
+                "assumption_thresholds": _belief_json_object(
+                    assumption_thresholds, "assumption_thresholds"
+                ),
+                "evidence_ids": _belief_json_list(evidence_ids, "evidence_ids"),
+                "success_conditions": _belief_json_list(
+                    success_conditions, "success_conditions"
+                ),
+                "exit_conditions": _belief_json_list(exit_conditions, "exit_conditions"),
+                "review_turn": actual_review_turn,
+                "review_required": False,
+                "status": "active",
+            },
+            turn=turn,
+        )
+
+    return await _belief_tool(ctx, "upsert_dynamic_plan", params, _operation)
+
+
+@mcp.tool()
+async def set_plan_status(
+    ctx: Context,
+    plan_id: str,
+    status: str,
+    reason: str,
+) -> str:
+    """Mark a dynamic plan active, completed, abandoned, or needing replan."""
+
+    allowed = {"active", "completed", "abandoned", "needs_replan"}
+    params = {"plan_id": plan_id, "status": status, "reason": reason}
+
+    def _operation(engine: BeliefEngine, turn: int) -> dict[str, Any]:
+        if status not in allowed:
+            raise BeliefEngineError(f"status must be one of: {', '.join(sorted(allowed))}")
+        patch: dict[str, Any] = {
+            "status": status,
+            "status_reason": reason,
+            "review_required": status == "needs_replan",
+        }
+        if status == "active":
+            patch.update(
+                {
+                    "broken_assumptions": [],
+                    "triggered_exit_conditions": [],
+                }
+            )
+        return engine.update(
+            "plan",
+            plan_id,
+            patch,
+            turn=turn,
+        )
+
+    return await _belief_tool(ctx, "set_plan_status", params, _operation)
+
+
+@mcp.tool()
+async def update_belief_entity(
+    ctx: Context,
+    entity_type: str,
+    entity_id: str,
+    patch: str,
+) -> str:
+    """Patch any current Belief Engine entity; history remains append-only."""
+
+    params = {"entity_type": entity_type, "entity_id": entity_id, "patch": patch}
+    return await _belief_tool(
+        ctx,
+        "update_belief_entity",
+        params,
+        lambda engine, turn: engine.update(
+            entity_type,
+            entity_id,
+            _belief_json_object(patch, "patch"),
+            turn=turn,
+        ),
+    )
+
+
+@mcp.tool()
+async def delete_belief_entity(
+    ctx: Context,
+    entity_type: str,
+    entity_id: str,
+    reason: str,
+) -> str:
+    """Delete current state via a tombstone while retaining audit history."""
+
+    params = {"entity_type": entity_type, "entity_id": entity_id, "reason": reason}
+    return await _belief_tool(
+        ctx,
+        "delete_belief_entity",
+        params,
+        lambda engine, turn: engine.delete(
+            entity_type, entity_id, reason=reason, turn=turn
+        ),
+    )
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_belief_state(
+    ctx: Context,
+    entity_type: str = "",
+    status: str = "active",
+    last_n: int = 50,
+) -> str:
+    """Read the current world model without loading the entire raw trace.
+
+    With no ``entity_type``, returns decision-relevant entities and current
+    normalized metrics.  Use ``get_belief_trace`` for immutable history.
+    """
+
+    params = {"entity_type": entity_type, "status": status, "last_n": last_n}
+
+    def _operation(engine: BeliefEngine, turn: int) -> dict[str, Any]:
+        selected_status = None if status in {"", "all"} else status
+        limit = max(1, min(last_n, 200))
+        if entity_type:
+            return {
+                "game_id": engine.game_id,
+                "turn": turn,
+                "entity_type": entity_type,
+                "items": engine.list(entity_type, status=selected_status)[:limit],
+            }
+        visible_types = (
+            "belief",
+            "hypothesis",
+            "prediction",
+            "plan",
+            "surprise",
+            "contradiction",
+            "attribution",
+            "decision",
+        )
+        return {
+            "game_id": engine.game_id,
+            "turn": turn,
+            "current_metrics": engine.current_metrics(),
+            "entities": {
+                kind: engine.list(kind, status=selected_status)[:limit]
+                for kind in visible_types
+            },
+            "research_metrics": engine.metrics(),
+        }
+
+    return await _belief_tool(ctx, "get_belief_state", params, _operation)
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_belief_trace(
+    ctx: Context,
+    entity_type: str = "",
+    entity_id: str = "",
+    last_n: int = 100,
+) -> str:
+    """Read immutable create/update/delete history for audit and attribution."""
+
+    params = {
+        "entity_type": entity_type,
+        "entity_id": entity_id,
+        "last_n": last_n,
+    }
+    return await _belief_tool(
+        ctx,
+        "get_belief_trace",
+        params,
+        lambda engine, turn: {
+            "game_id": engine.game_id,
+            "turn": turn,
+            "events": engine.history(
+                entity_type=entity_type or None,
+                entity_id=entity_id or None,
+                last_n=last_n,
+            ),
+        },
+    )
+
+
+@mcp.tool()
+async def review_belief_engine(ctx: Context) -> str:
+    """Evaluate due predictions, contradictions, and plan invalidation triggers."""
+
+    return await _belief_tool(
+        ctx,
+        "review_belief_engine",
+        {},
+        lambda engine, turn: engine.review(turn=turn),
+    )
+
+
+@mcp.tool()
+async def route_belief_decision(
+    ctx: Context,
+    statement: str,
+    probability: float,
+    confidence: float,
+    impact: str,
+    urgency: str,
+    irreversibility: float,
+    belief_ids: str = "[]",
+    considered_actions: str = "[]",
+    selected_action: str = "",
+    reason: str = "",
+) -> str:
+    """Route a decision to fast, verify-then-fast, or slow reasoning."""
+
+    params = locals().copy()
+    params.pop("ctx")
+
+    def _operation(engine: BeliefEngine, turn: int) -> dict[str, Any]:
+        decision = engine.route_decision(
+            statement=statement,
+            probability=probability,
+            confidence=confidence,
+            impact=impact,
+            urgency=urgency,
+            irreversibility=irreversibility,
+            belief_ids=_belief_json_list(belief_ids, "belief_ids"),
+            turn=turn,
+        )
+        extras = {
+            "considered_actions": _belief_json_list(
+                considered_actions, "considered_actions"
+            ),
+            "selected_action": selected_action,
+            "reason": reason,
+        }
+        return engine.update("decision", decision["id"], extras, turn=turn)
+
+    return await _belief_tool(ctx, "route_belief_decision", params, _operation)
+
+
+@mcp.tool()
+async def assess_route_combat_risk(
+    ctx: Context,
+    belief_id: str,
+    nearby_hostiles: str = "[]",
+    assessment: str = "",
+) -> str:
+    """Revise route viability only from a quantified combat estimate.
+
+    A non-empty ``nearby_hostiles`` list without ``assessment`` leaves the
+    belief unchanged and returns ``verify_then_fast``. To update it, pass the
+    exact fields from ``get_combat_estimate`` as JSON: source, revised
+    probability, both CS/HP values, and expected damage to both sides.
+    """
+
+    params = {
+        "belief_id": belief_id,
+        "nearby_hostiles": nearby_hostiles,
+        "assessment": assessment,
+    }
+
+    def _operation(engine: BeliefEngine, turn: int) -> dict[str, Any]:
+        parsed_assessment = None
+        if assessment and assessment.strip() not in {"null", "None"}:
+            parsed_assessment = _belief_json_object(assessment, "assessment")
+        hostiles = _belief_json_list(nearby_hostiles, "nearby_hostiles")
+        if not all(isinstance(item, dict) for item in hostiles):
+            raise BeliefEngineError("nearby_hostiles must contain JSON objects")
+        return engine.assess_route_combat_risk(
+            belief_id,
+            nearby_hostiles=hostiles,
+            assessment=parsed_assessment,
+            turn=turn,
+        )
+
+    return await _belief_tool(ctx, "assess_route_combat_risk", params, _operation)
+
+
+@mcp.tool()
+async def record_action_verification(
+    ctx: Context,
+    decision_id: str,
+    tool: str,
+    expected: str,
+    actual: str,
+    success: bool,
+    belief_changes: str = "{}",
+) -> str:
+    """Link a selected decision to its observed execution result."""
+
+    params = locals().copy()
+    params.pop("ctx")
+
+    def _operation(engine: BeliefEngine, turn: int) -> dict[str, Any]:
+        if not engine.get("decision", decision_id):
+            raise BeliefEngineError(f"Unknown decision: {decision_id}")
+        return engine.create(
+            "action",
+            {
+                "statement": f"Verification for decision {decision_id}",
+                "decision_id": decision_id,
+                "tool": tool,
+                "expected": expected,
+                "actual": actual,
+                "success": success,
+                "belief_changes": _belief_json_object(
+                    belief_changes, "belief_changes"
+                ),
+                "verification": {"verified": True, "source": "agent"},
+            },
+            turn=turn,
+        )
+
+    return await _belief_tool(ctx, "record_action_verification", params, _operation)
+
+
+@mcp.tool()
+async def upsert_failure_attribution(
+    ctx: Context,
+    attribution_id: str,
+    failure: str,
+    candidates: str,
+) -> str:
+    """Create or revise candidate causes for a failure.
+
+    Candidates are JSON objects with ``id``, ``statement``, ``prior``, and
+    optional weighted ``evidence_for`` / ``evidence_against`` arrays.
+    """
+
+    params = {
+        "attribution_id": attribution_id,
+        "failure": failure,
+        "candidates": candidates,
+    }
+
+    def _operation(engine: BeliefEngine, turn: int) -> dict[str, Any]:
+        entity = engine.upsert(
+            "attribution",
+            attribution_id,
+            {
+                "failure": failure,
+                "candidates": _belief_json_list(candidates, "candidates"),
+            },
+            turn=turn,
+        )
+        return engine.update_attribution_posteriors(entity["id"], turn=turn)
+
+    return await _belief_tool(ctx, "upsert_failure_attribution", params, _operation)
+
+
+@mcp.tool()
+async def recompute_failure_attribution(ctx: Context, attribution_id: str) -> str:
+    """Recompute posterior candidate-cause weights after evidence changes."""
+
+    return await _belief_tool(
+        ctx,
+        "recompute_failure_attribution",
+        {"attribution_id": attribution_id},
+        lambda engine, turn: engine.update_attribution_posteriors(
+            attribution_id, turn=turn
+        ),
+    )
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_belief_metrics(ctx: Context) -> str:
+    """Return belief, prediction, plan, routing, and calibration metrics."""
+
+    return await _belief_tool(
+        ctx,
+        "get_belief_metrics",
+        {},
+        lambda engine, turn: {"turn": turn, **engine.metrics()},
+    )
 
 
 # ---------------------------------------------------------------------------

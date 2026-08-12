@@ -15,7 +15,7 @@ import re
 from typing import TYPE_CHECKING
 
 from civ_mcp import lua as lq
-from civ_mcp.connection import GameConnection
+from civ_mcp.connection import GameConnection, LuaError
 from civ_mcp.narrate import (
     narrate_combat_estimate,
     narrate_move_discoveries,
@@ -27,6 +27,13 @@ if TYPE_CHECKING:
     from civ_mcp.spatial import SpatialTracker
 
 log = logging.getLogger(__name__)
+
+
+def _raise_query_error(lines: list[str]) -> None:
+    """Promote printed Lua query guards into the normal MCP error path."""
+    for line in lines:
+        if line.startswith("ERR:"):
+            raise LuaError(line)
 
 
 class GameState:
@@ -179,6 +186,15 @@ class GameState:
             lq.build_pathing_estimate_query(unit_index, target_x, target_y)
         )
         return lq.parse_pathing_estimate(lines)
+
+    async def get_combat_estimate(
+        self, unit_index: int, target_x: int, target_y: int
+    ) -> lq.CombatEstimate | None:
+        """Read the same quantified matchup used by the pre-attack check."""
+        lines = await self.conn.execute_write(
+            lq.build_combat_estimate_query(unit_index, target_x, target_y)
+        )
+        return lq.parse_combat_estimate(lines, 0, 0)
 
     async def get_victory_progress(self) -> lq.VictoryProgress:
         lines = await self.conn.execute_write(lq.build_victory_progress_query())
@@ -982,6 +998,7 @@ class GameState:
     async def get_governors(self) -> lq.GovernorStatus:
         lua = lq.build_governors_query()
         lines = await self.conn.execute_write(lua)
+        _raise_query_error(lines)
         return lq.parse_governors_response(lines)
 
     async def appoint_governor(self, governor_type: str) -> str:
@@ -1184,6 +1201,7 @@ class GameState:
     async def get_dedications(self) -> lq.DedicationStatus:
         lua = lq.build_dedications_query()
         lines = await self.conn.execute_write(lua)
+        _raise_query_error(lines)
         return lq.parse_dedications_response(lines)
 
     async def choose_dedication(self, dedication_index: int) -> str:
@@ -1379,6 +1397,7 @@ class GameState:
     async def get_world_congress(self) -> lq.WorldCongressStatus:
         lua = lq.build_world_congress_query()
         lines = await self.conn.execute_write(lua)
+        _raise_query_error(lines)
         return lq.parse_world_congress_response(lines)
 
     async def vote_world_congress(

@@ -25,6 +25,8 @@ import {
 } from "lucide-react";
 import { SCENARIOS, DIFFICULTY_META } from "@/lib/scenarios";
 import { SkeletonBlock, SkeletonLine } from "./skeleton";
+import { BeliefEnginePanel } from "./belief-engine-panel";
+import { slugFromFilename } from "@/lib/diary-types";
 
 interface GameDiaryViewProps {
   filename: string;
@@ -238,6 +240,10 @@ export function GameDiaryView({ filename }: GameDiaryViewProps) {
                   </div>
                 </div>
               )}
+              <BeliefEnginePanel
+                gameId={slugFromFilename(filename)}
+                turn={selectedTurn}
+              />
               <AgentOverview
                 turnData={currentTurn}
                 prevTurnData={prevTurn ?? undefined}

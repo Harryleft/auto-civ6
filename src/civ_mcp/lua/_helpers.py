@@ -39,6 +39,26 @@ def _bail_lua(lua_expr: str) -> str:
     return f'print({lua_expr}); print("{SENTINEL}"); return'
 
 
+def _lua_require_ruleset(allowed: str | tuple[str, ...], error: str) -> str:
+    """Lua guard for mechanics whose tables exist even when the mode is off.
+
+    Civ VI Standard Rules can expose Rise & Fall / Gathering Storm database
+    rows and partial runtime objects. Capability probing alone therefore gives
+    false positives. The active ruleset is the authoritative feature switch;
+    a missing identifier falls through to the existing API capability checks.
+    """
+    rulesets = (allowed,) if isinstance(allowed, str) else allowed
+    condition = " and ".join(f'_civRuleset ~= "{item}"' for item in rulesets)
+    return (
+        'local _civRuleset = GameConfiguration.GetValue("RULESET") '
+        "if GameConfiguration.GetRuleSet ~= nil then "
+        "  local _rulesetOk, _rulesetValue = pcall(function() return GameConfiguration.GetRuleSet() end) "
+        "  if _rulesetOk and _rulesetValue ~= nil then _civRuleset = _rulesetValue end "
+        "end "
+        f"if _civRuleset ~= nil and {condition} then {_bail(error)} end"
+    )
+
+
 def _lua_close_diplo_session() -> str:
     """Lua snippet: close any open diplomacy session with ``target``, restore UI.
 

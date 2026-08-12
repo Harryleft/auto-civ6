@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from civ_mcp.lua._helpers import SENTINEL, _bail
+from civ_mcp.lua._helpers import SENTINEL, _bail, _lua_require_ruleset
 from civ_mcp.lua.models import CongressProposal, CongressResolution, WorldCongressStatus
 
 
@@ -10,9 +10,13 @@ def build_world_congress_query() -> str:
     """Get World Congress status, resolutions, and proposals (InGame context)."""
     return f"""
 local me = Game.GetLocalPlayer()
+{_lua_require_ruleset("RULESET_EXPANSION_2", "ERR:NO_WORLD_CONGRESS_IN_RULESET")}
 local pDiplo = Players[me]:GetDiplomacy()
-local wc = Game.GetWorldCongress()
-if not wc then {_bail("ERR:NO_WORLD_CONGRESS|World Congress not available yet")} end
+local wc = nil
+local gotCongress = pcall(function()
+    if Game.GetWorldCongress ~= nil then wc = Game.GetWorldCongress() end
+end)
+if not gotCongress or wc == nil or GameInfo.Resolutions == nil then {_bail("ERR:NO_WORLD_CONGRESS_IN_RULESET")} end
 local inSession = wc:IsInSession()
 local meeting = wc:GetMeetingStatus()
 local turnsLeft = meeting and meeting.TurnsLeft or -1
@@ -174,6 +178,12 @@ def build_congress_vote(
     """
     return f"""
 local me = Game.GetLocalPlayer()
+{_lua_require_ruleset("RULESET_EXPANSION_2", "ERR:NO_WORLD_CONGRESS_IN_RULESET")}
+local wc = nil
+local gotCongress = pcall(function()
+    if Game.GetWorldCongress ~= nil then wc = Game.GetWorldCongress() end
+end)
+if not gotCongress or wc == nil or PlayerOperations.WORLD_CONGRESS_RESOLUTION_VOTE == nil then {_bail("ERR:NO_WORLD_CONGRESS_IN_RULESET")} end
 local kParams = {{}}
 kParams[PlayerOperations.PARAM_RESOLUTION_TYPE] = {resolution_hash}
 kParams[PlayerOperations.PARAM_WORLD_CONGRESS_VOTES] = {num_votes}
@@ -191,17 +201,23 @@ def build_congress_submit() -> str:
     Mirrors WorldCongressPopup.lua OnAccept(): submit votes then ACTION_ENDTURN
     to resume turn-segment processing after the WC stage.
     """
-    return """
+    return f"""
 local me = Game.GetLocalPlayer()
+{_lua_require_ruleset("RULESET_EXPANSION_2", "ERR:NO_WORLD_CONGRESS_IN_RULESET")}
+local wc = nil
+local gotCongress = pcall(function()
+    if Game.GetWorldCongress ~= nil then wc = Game.GetWorldCongress() end
+end)
+if not gotCongress or wc == nil or PlayerOperations.WORLD_CONGRESS_SUBMIT_TURN == nil then {_bail("ERR:NO_WORLD_CONGRESS_IN_RULESET")} end
 local intro = ContextPtr:LookUpControl("/InGame/WorldCongressIntro")
 if intro then intro:SetHide(true) end
 local popup = ContextPtr:LookUpControl("/InGame/WorldCongressPopup")
 if popup then popup:SetHide(true) end
-UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_SUBMIT_TURN, {})
+UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_SUBMIT_TURN, {{}})
 UI.RequestAction(ActionTypes.ACTION_ENDTURN)
 print("OK:CONGRESS_SUBMITTED")
 print("{SENTINEL}")
-""".replace("{SENTINEL}", SENTINEL)
+"""
 
 
 def build_register_wc_voter(votes: list[dict] | None = None) -> str:
@@ -235,6 +251,12 @@ def build_register_wc_voter(votes: list[dict] | None = None) -> str:
         prefs_lua = "nil"
 
     return f"""
+{_lua_require_ruleset("RULESET_EXPANSION_2", "ERR:NO_WORLD_CONGRESS_IN_RULESET")}
+local _wc = nil
+local _wcOk = pcall(function()
+    if Game.GetWorldCongress ~= nil then _wc = Game.GetWorldCongress() end
+end)
+if not _wcOk or _wc == nil or Events == nil or Events.WorldCongressStage1 == nil or PlayerOperations.WORLD_CONGRESS_RESOLUTION_VOTE == nil or PlayerOperations.WORLD_CONGRESS_SUBMIT_TURN == nil then {_bail("ERR:NO_WORLD_CONGRESS_IN_RULESET")} end
 -- Clean up any stale handler
 if __civmcp_wc_handler then
     pcall(function() Events.WorldCongressStage1.Remove(__civmcp_wc_handler) end)

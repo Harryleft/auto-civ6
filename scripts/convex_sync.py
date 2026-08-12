@@ -54,6 +54,7 @@ import signal
 import sys
 import time
 from glob import glob
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
@@ -118,6 +119,10 @@ STATE_FILE = DIARY_DIR / ".sync_state.json"
 
 # How many recent diary lines to re-check for reflection merges
 DIARY_LOOKBACK = 12
+# Belief events are append-only too, but keep the final line in the next
+# upload.  This recovers cleanly when the watcher sees a partially-written
+# JSONL line and is harmless because Convex de-duplicates by eventId.
+BELIEF_LOOKBACK = 1
 # Batch size for Convex mutations
 BATCH_SIZE = 50
 # Idle timeout before marking a game as completed (seconds)
@@ -158,7 +163,7 @@ def save_state(state: dict[str, Any]) -> None:
 
 
 def classify_file(name: str) -> str | None:
-    """Return file type: 'diary', 'cities', 'spatial', 'mapturns', or None."""
+    """Return a supported telemetry file type, or ``None``."""
     if name.startswith("diary_") and name.endswith("_cities.jsonl"):
         return "cities"
     if name.startswith("diary_") and name.endswith(".jsonl"):
@@ -167,6 +172,8 @@ def classify_file(name: str) -> str | None:
         return "spatial"
     if name.startswith("mapturns_") and name.endswith(".jsonl"):
         return "mapturns"
+    if name.startswith("beliefs_") and name.endswith(".jsonl"):
+        return "beliefs"
     return None
 
 
@@ -175,7 +182,7 @@ def extract_game_id(name: str) -> str:
     name = (
         name.removesuffix("_cities.jsonl").removesuffix(".jsonl").removesuffix(".json")
     )
-    for prefix in ("diary_", "spatial_", "mapstatic_", "mapturns_"):
+    for prefix in ("diary_", "spatial_", "mapstatic_", "mapturns_", "beliefs_"):
         if name.startswith(prefix):
             name = name[len(prefix) :]
     return name
@@ -547,6 +554,7 @@ def _download_cloud_run(
         "spatial.jsonl": f"spatial_{game_id}.jsonl",
         "map_static.json": f"mapstatic_{game_id}.json",
         "map_turns.jsonl": f"mapturns_{game_id}.jsonl",
+        "beliefs.jsonl": f"beliefs_{game_id}.jsonl",
     }
 
     downloaded = 0
@@ -732,6 +740,254 @@ async def sync_cities(
 
     log.info("cities %s: synced %d new rows", game_id, len(rows))
     file_state["line_count"] = total
+    state["files"][name] = file_state
+    state["game_last_seen"][game_id] = time.time()
+
+
+def _belief_status(value: Any) -> str:
+    """Map engine-specific lifecycle states to the Convex projection schema."""
+    status = str(value or "active").lower()
+    if status == "deleted":
+        return "deleted"
+    if status == "archived":
+        return "archived"
+    # The engine uses confirmed/disconfirmed/completed for several different
+    # entities.  They are all terminal from the current-projection perspective
+    # while the full, more precise state remains in ``data``.
+    if status in {"resolved", "confirmed", "disconfirmed", "completed", "expired"}:
+        return "resolved"
+    return "active"
+
+
+def _belief_operation(event_type: Any, entity: dict[str, Any]) -> str:
+    """Translate the append-log lifecycle name to ingestBeliefBatch's union."""
+    kind = str(event_type or "").lower()
+    status = _belief_status(entity.get("status"))
+    if "delete" in kind or status == "deleted":
+        return "delete"
+    if "archive" in kind or status == "archived":
+        return "archive"
+    if "resolve" in kind or status == "resolved":
+        return "resolve"
+    if "verify" in kind:
+        return "verify"
+    if "create" in kind:
+        return "create"
+    return "update"
+
+
+def _epoch_millis(value: Any) -> int | None:
+    """Return a Convex-friendly epoch timestamp while accepting seconds or ms."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if not isfinite(value):
+        return None
+    # Python producers write time.time() seconds; browser producers sometimes
+    # already use Date.now() milliseconds.
+    return round(value * 1000) if abs(value) < 100_000_000_000 else round(value)
+
+
+def _event_turn(value: Any, fallback: int) -> int:
+    """Use a producer turn when valid, otherwise retain the event turn."""
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not isfinite(value)
+    ):
+        return fallback
+    return int(value)
+
+
+def _belief_metric_rows(event: dict[str, Any], entity: dict[str, Any]) -> list[dict[str, Any]]:
+    """Project normalized numeric observation metrics into a turn time series."""
+    source_metrics = entity.get("metrics")
+    if not isinstance(source_metrics, dict):
+        return []
+
+    event_id = str(event["event_id"])
+    updated_at = _epoch_millis(entity.get("updated_at")) or _epoch_millis(
+        event.get("timestamp")
+    )
+    dimensions = {
+        "eventId": event_id,
+        "entityType": event["entity_type"],
+        "entityId": event["entity_id"],
+        **({"runId": event["run_id"]} if event.get("run_id") else {}),
+    }
+    rows: list[dict[str, Any]] = []
+    for metric, value in source_metrics.items():
+        # Convex's metric value is float64.  Booleans are intentionally not
+        # coerced to 0/1: that would erase the producer's fact-vs-measurement
+        # distinction and make dashboards misleading.
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            continue
+        if not isfinite(value):
+            continue
+        row: dict[str, Any] = {
+            "metricId": f"{event_id}:{metric}",
+            "turn": event["turn"],
+            "metric": str(metric),
+            "value": float(value),
+            "dimensions": dimensions,
+        }
+        if updated_at is not None:
+            row["updatedAt"] = updated_at
+        rows.append(row)
+    return rows
+
+
+def _belief_batch_rows(lines: list[str]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Parse producer JSONL lines into one ingestBeliefBatch-compatible batch.
+
+    Invalid lines are skipped rather than preventing the remaining immutable
+    trace from uploading.  Required event identity fields are deliberately
+    validated here so a malformed producer line cannot make the complete
+    Convex mutation fail repeatedly.
+    """
+    events: list[dict[str, Any]] = []
+    entities_by_key: dict[tuple[str, str], dict[str, Any]] = {}
+    metrics: list[dict[str, Any]] = []
+
+    for line in lines:
+        try:
+            raw = json.loads(line)
+        except json.JSONDecodeError:
+            log.warning("Skipping malformed belief JSONL line")
+            continue
+        if not isinstance(raw, dict):
+            log.warning("Skipping non-object belief event")
+            continue
+
+        entity = raw.get("entity")
+        event_id = raw.get("event_id")
+        entity_type = raw.get("entity_type")
+        entity_id = raw.get("entity_id")
+        turn = raw.get("turn")
+        if (
+            not isinstance(entity, dict)
+            or not isinstance(event_id, str)
+            or not event_id
+            or not isinstance(entity_type, str)
+            or not entity_type
+            or not isinstance(entity_id, str)
+            or not entity_id
+            or isinstance(turn, bool)
+            or not isinstance(turn, (int, float))
+            or not isfinite(turn)
+        ):
+            log.warning("Skipping belief event with missing identity fields")
+            continue
+
+        event: dict[str, Any] = {
+            "eventId": event_id,
+            "turn": int(turn),
+            "eventType": str(raw.get("event_type") or "entity.updated"),
+            "entityType": entity_type,
+            "entityId": entity_id,
+            "operation": _belief_operation(raw.get("event_type"), entity),
+            # Preserve the complete snake_case producer event (including the
+            # full snapshot, field-level diff, game_id, and run_id).  This is
+            # the immutable evidence chain used in replay.
+            "payload": raw,
+            "source": "belief_engine",
+        }
+        if (
+            isinstance(raw.get("sequence"), (int, float))
+            and not isinstance(raw.get("sequence"), bool)
+            and isfinite(raw["sequence"])
+        ):
+            event["sequence"] = int(raw["sequence"])
+        recorded_at = _epoch_millis(raw.get("timestamp"))
+        if recorded_at is not None:
+            event["recordedAt"] = recorded_at
+
+        projection: dict[str, Any] = {
+            "entityType": entity_type,
+            "entityId": entity_id,
+            "status": _belief_status(entity.get("status")),
+            "createdTurn": _event_turn(entity.get("created_turn"), int(turn)),
+            "lastTurn": _event_turn(entity.get("last_updated_turn"), int(turn)),
+            "data": entity,
+            "lastEventId": event_id,
+        }
+        updated_at = _epoch_millis(entity.get("updated_at")) or recorded_at
+        if updated_at is not None:
+            projection["updatedAt"] = updated_at
+
+        event["current"] = {
+            "status": projection["status"],
+            "data": entity,
+            "createdTurn": projection["createdTurn"],
+        }
+        events.append(event)
+        # One explicit latest snapshot per identity per mutation batch.  The
+        # mutation also derives projections from events, but passing these
+        # makes a retry after a partial write deterministic.
+        entities_by_key[(entity_type, entity_id)] = projection
+        metrics.extend(_belief_metric_rows(raw, entity))
+
+    return events, list(entities_by_key.values()), metrics
+
+
+async def sync_beliefs(
+    path: Path, game_id: str, state: dict, client: ConvexClient
+) -> None:
+    """Sync a Belief Engine append-only JSONL trace to Convex projections."""
+    if not path.exists():
+        return
+    name = path.name
+    file_state = state["files"].get(name, {"line_count": 0, "tail_hash": ""})
+    lines = path.read_text().splitlines()
+    total = len(lines)
+    if total == 0:
+        return
+
+    old_count = int(file_state.get("line_count", 0))
+    start = max(0, old_count - BELIEF_LOOKBACK) if total >= old_count else 0
+    candidate_lines = lines[start:]
+    tail_hash = hash_lines(candidate_lines)
+    if old_count == total and tail_hash == file_state.get("tail_hash"):
+        return
+
+    events, entities, metrics = _belief_batch_rows(candidate_lines)
+    if events:
+        # Keep append order: later events in a file are the authoritative
+        # current projection for an entity.
+        for i in range(0, len(events), BATCH_SIZE):
+            event_batch = events[i : i + BATCH_SIZE]
+            ids = {event["eventId"] for event in event_batch}
+            entity_batch = [
+                entity
+                for entity in entities
+                if entity.get("lastEventId") in ids
+            ]
+            metric_batch = [
+                metric
+                for metric in metrics
+                if metric["dimensions"]["eventId"] in ids
+            ]
+            await client.mutation(
+                "ingest:ingestBeliefBatch",
+                {
+                    "gameId": game_id,
+                    "events": event_batch,
+                    "entities": entity_batch,
+                    "metrics": metric_batch,
+                },
+            )
+        log.info(
+            "beliefs %s: synced %d events, %d current entities, %d metrics",
+            game_id,
+            len(events),
+            len(entities),
+            len(metrics),
+        )
+
+    # Even a malformed line is remembered.  It will be reconsidered if the
+    # producer rewrites it or appends later events because the final line is
+    # always part of the lookback window.
+    file_state["line_count"] = total
+    file_state["tail_hash"] = tail_hash
     state["files"][name] = file_state
     state["game_last_seen"][game_id] = time.time()
 
@@ -1163,6 +1419,8 @@ async def sync_file(path: Path, state: dict, client: ConvexClient) -> None:
             await sync_spatial(path, game_id, state, client)
         elif ftype == "mapturns":
             await sync_map_data(path, game_id, state, client)
+        elif ftype == "beliefs":
+            await sync_beliefs(path, game_id, state, client)
     except Exception:
         log.exception("Error syncing %s", name)
 
@@ -1235,7 +1493,7 @@ async def batch_upload(directory: Path, client: ConvexClient) -> None:
         log.info("--- %s ---", gid)
 
         # Process diary first (creates the games row in Convex)
-        for ftype in ("diary", "cities", "spatial", "mapturns"):
+        for ftype in ("diary", "cities", "spatial", "mapturns", "beliefs"):
             if ftype in files:
                 await sync_file(files[ftype], state, client)
 
@@ -1348,6 +1606,7 @@ async def watch_loop(diary_dir: Path, client: ConvexClient) -> None:
             "diary_*.jsonl",
             "spatial_*.jsonl",
             "mapturns_*.jsonl",
+            "beliefs_*.jsonl",
         ):
             for filepath in sorted(glob(str(diary_dir / pattern))):
                 await sync_file(Path(filepath), state, client)

@@ -21,6 +21,10 @@ def build_overview_query() -> str:
 local id = Game.GetLocalPlayer()
 local p = Players[id]
 local cfg = PlayerConfigurations[id]
+local activeRuleset = GameConfiguration.GetValue("RULESET")
+if GameConfiguration.GetRuleSet ~= nil then
+    pcall(function() activeRuleset = GameConfiguration.GetRuleSet() end)
+end
 local tr = p:GetTreasury()
 local te = p:GetTechs()
 local cu = p:GetCulture()
@@ -46,9 +50,13 @@ for i, u in p:GetUnits():Members() do
 end
 local myScore = p:GetScore()
 local favor = 0
-if p.GetFavor ~= nil then favor = p:GetFavor() end
+local hasFavor = activeRuleset == "RULESET_EXPANSION_2" and p.GetFavor ~= nil
+if hasFavor then favor = p:GetFavor() end
 local favorPerTurn = 0
 local pDiplo = p:GetDiplomacy()
+-- Diplomatic Favor is a Gathering Storm resource.  Do not infer a value from
+-- government/alliance rules when the resource itself is absent.
+if hasFavor then
 -- 1. Government tier bonus (govRow.Tier is a string like "GOVERNMENT_TIER_1")
 local govIdx = cu:GetCurrentGovernment()
 if govIdx >= 0 then
@@ -83,6 +91,7 @@ for i = 0, 62 do
             if suzID == id then favorPerTurn = favorPerTurn + 1 end
         end
     end
+end
 end
 print(Game.GetCurrentGameTurn() .. "|" .. id .. "|" .. Locale.Lookup(cfg:GetCivilizationShortDescription()):gsub("|", "/") .. "|" .. Locale.Lookup(cfg:GetLeaderName()):gsub("|", "/") .. "|" .. string.format("%.1f", tr:GetGoldBalance()) .. "|" .. string.format("%.1f", tr:GetGoldYield() - tr:GetTotalMaintenance()) .. "|" .. string.format("%.1f", te:GetScienceYield()) .. "|" .. string.format("%.1f", cu:GetCultureYield()) .. "|" .. string.format("%.1f", re:GetFaithBalance()) .. "|" .. techName .. "|" .. civicName .. "|" .. nCities .. "|" .. nUnits .. "|" .. myScore .. "|" .. favor .. "|" .. favorPerTurn .. "|" .. totalPop .. "|" .. string.format("%.1f", tr:GetGoldYield()) .. "|" .. string.format("%.1f", tr:GetTotalMaintenance()))
 for i = 0, 62 do
@@ -125,7 +134,7 @@ local maxRel = math.floor(nMajors / 2) + 1
 print("RELSLOTS|" .. nReligions .. "|" .. maxRel)
 local eraName = "Unknown"
 local eraScore, darkThresh, goldenThresh = 0, 0, 0
-if Game.GetEras ~= nil then
+if activeRuleset ~= "RULESET_STANDARD" and Game.GetEras ~= nil then
     local eraManager = Game.GetEras()
     local eraIdx = eraManager:GetCurrentEra()
     local eraEntry = GameInfo.Eras[eraIdx]
@@ -134,7 +143,10 @@ if Game.GetEras ~= nil then
     darkThresh = eraManager:GetPlayerDarkAgeThreshold(id)
     goldenThresh = eraManager:GetPlayerGoldenAgeThreshold(id)
 end
-print("ERA|" .. eraName .. "|" .. eraScore .. "|" .. darkThresh .. "|" .. goldenThresh)
+if activeRuleset ~= "RULESET_STANDARD" then
+    print("ERA|" .. eraName .. "|" .. eraScore .. "|" .. darkThresh .. "|" .. goldenThresh)
+end
+print("RULESET|" .. tostring(activeRuleset or "UNKNOWN"))
 local maxTurns = GameConfiguration.GetValue("GAME_MAX_TURNS") or 0
 print("MAXTURNS|" .. maxTurns)
 local diffName = "Unknown"
@@ -514,6 +526,7 @@ def parse_overview_response(lines: list[str]) -> GameOverview:
     game_speed_name = ""
     speed_cost_multiplier = 100
     enabled_victories: set[str] = set()
+    ruleset = ""
     player_id_parsed = int(parts[1])
     for line in lines[1:]:
         if line.startswith("RANK|"):
@@ -571,6 +584,8 @@ def parse_overview_response(lines: list[str]) -> GameOverview:
                     pass
         elif line.startswith("VENABLED|"):
             enabled_victories = set(line.split("|", 1)[1].split(","))
+        elif line.startswith("RULESET|"):
+            ruleset = line.split("|", 1)[1]
         elif line.startswith("UNITBREAKDOWN|"):
             bp = line.split("|")
             if len(bp) >= 3:
@@ -625,6 +640,7 @@ def parse_overview_response(lines: list[str]) -> GameOverview:
         game_speed_name=game_speed_name,
         speed_cost_multiplier=speed_cost_multiplier,
         enabled_victories=enabled_victories,
+        ruleset=ruleset,
     )
 
 

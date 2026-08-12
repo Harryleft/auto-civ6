@@ -87,6 +87,13 @@ local me = Game.GetLocalPlayer()
 local pDiplo = Players[me]:GetDiplomacy()
 local pCul = Players[me]:GetCulture()
 
+local function safe0(obj, name, default)
+    if obj == nil or obj[name] == nil then return default end
+    local ok, value = pcall(obj[name], obj)
+    if ok and value ~= nil then return value end
+    return default
+end
+
 local dPop, dMil, dFood, dGold, dLand, dProd = {{}}, {{}}, {{}}, {{}}, {{}}, {{}}
 for i = 0, 62 do
     local p = Players[i]
@@ -96,16 +103,16 @@ for i = 0, 62 do
             local cfg = PlayerConfigurations[i]
             local name = Locale.Lookup(cfg:GetCivilizationShortDescription())
             local st = p:GetStats()
-            local sciVP = st:GetScienceVictoryPoints()
-            local sciNeeded = st:GetScienceVictoryPointsTotalNeeded()
-            local diploVP = st:GetDiplomaticVictoryPoints()
-            local tourism = st:GetTourism()
-            local milStr = st:GetMilitaryStrength()
-            local techs = st:GetNumTechsResearched()
-            local civics = st:GetNumCivicsCompleted()
-            local relCities = st:GetNumCitiesFollowingReligion()
-            local stay = p:GetCulture():GetStaycationers()
-            local hasRel = p:GetReligion():GetReligionTypeCreated() >= 0
+            local sciVP = safe0(st, "GetScienceVictoryPoints", 0)
+            local sciNeeded = safe0(st, "GetScienceVictoryPointsTotalNeeded", 3)
+            local diploVP = safe0(st, "GetDiplomaticVictoryPoints", 0)
+            local tourism = safe0(st, "GetTourism", 0)
+            local milStr = safe0(st, "GetMilitaryStrength", 0)
+            local techs = safe0(st, "GetNumTechsResearched", 0)
+            local civics = safe0(st, "GetNumCivicsCompleted", 0)
+            local relCities = safe0(st, "GetNumCitiesFollowingReligion", 0)
+            local stay = safe0(p:GetCulture(), "GetStaycationers", 0)
+            local hasRel = safe0(p:GetReligion(), "GetReligionTypeCreated", -1) >= 0
             local nCities = 0; for _ in p:GetCities():Members() do nCities = nCities + 1 end
             local pSci = p:GetTechs():GetScienceYield()
             local pCulYield = p:GetCulture():GetCultureYield()
@@ -197,9 +204,10 @@ for i = 0, 62 do
                 end
             end
             if i ~= me then
-                local ourTourists = pCul:GetTouristsFrom(i)
-                local theirStay = p:GetCulture():GetStaycationers()
-                local dominant = pCul:IsDominantOver(i)
+                local ourTourists, theirStay, dominant = 0, 0, false
+                if pCul.GetTouristsFrom ~= nil then ourTourists = pCul:GetTouristsFrom(i) or 0 end
+                if p:GetCulture().GetStaycationers ~= nil then theirStay = p:GetCulture():GetStaycationers() or 0 end
+                if pCul.IsDominantOver ~= nil then dominant = pCul:IsDominantOver(i) or false end
                 print("CULTURE|" .. name .. "|" .. ourTourists .. "|" .. theirStay .. "|" .. tostring(dominant))
             end
             local cap = p:GetCities():GetCapitalCity()

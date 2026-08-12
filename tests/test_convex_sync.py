@@ -1,5 +1,6 @@
 """Unit tests for pure helper functions in convex_sync.py."""
 
+import asyncio
 import json
 import sys
 from pathlib import Path
@@ -8,11 +9,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from convex_sync import (
+    _belief_batch_rows,
     _chunk_map_frames,
+    _download_cloud_run,
     _extract_outcome,
     _extract_outcome_from_tool_calls,
     classify_file,
     extract_game_id,
+    sync_beliefs,
 )
 
 
@@ -33,6 +37,9 @@ class TestClassifyFile:
 
     def test_mapturns(self):
         assert classify_file("mapturns_india_123.jsonl") == "mapturns"
+
+    def test_beliefs(self):
+        assert classify_file("beliefs_india_123_runabc.jsonl") == "beliefs"
 
     def test_unknown(self):
         assert classify_file("random_file.txt") is None
@@ -66,6 +73,9 @@ class TestExtractGameId:
 
     def test_mapstatic(self):
         assert extract_game_id("mapstatic_india_123.json") == "india_123"
+
+    def test_beliefs(self):
+        assert extract_game_id("beliefs_india_123_runabc.jsonl") == "india_123_runabc"
 
     def test_complex_game_id(self):
         """Game IDs with multiple underscores and hash suffixes."""
@@ -333,3 +343,195 @@ class TestChunkMapFrames:
             json.loads(chunk["ownerFrames"])
             json.loads(chunk["cityFrames"])
             json.loads(chunk["roadFrames"])
+
+
+# ---------------------------------------------------------------------------
+# Belief Engine telemetry
+# ---------------------------------------------------------------------------
+
+
+class TestBeliefBatchRows:
+    def test_projects_event_snapshot_and_numeric_observation_metrics(self):
+        events, entities, metrics = _belief_batch_rows(
+            [
+                json.dumps(
+                    {
+                        "event_id": "event-observation",
+                        "sequence": 4,
+                        "timestamp": 1_710_000_000.25,
+                        "game_id": "india_123",
+                        "run_id": "runabc",
+                        "turn": 17,
+                        "event_type": "entity.created",
+                        "entity_type": "observation",
+                        "entity_id": "observation_1",
+                        "entity": {
+                            "id": "observation_1",
+                            "status": "active",
+                            "created_turn": 17,
+                            "last_updated_turn": 17,
+                            "updated_at": 1_710_000_000.5,
+                            "metrics": {
+                                "score": 245,
+                                "exploration_pct": 36.5,
+                                "at_war": False,
+                                "summary": "not a metric",
+                            },
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "event_id": "event-prediction",
+                        "sequence": 5,
+                        "timestamp": 1_710_000_001,
+                        "turn": 18,
+                        "event_type": "entity.updated",
+                        "entity_type": "prediction",
+                        "entity_id": "prediction_1",
+                        "changes": {"status": {"from": "active", "to": "confirmed"}},
+                        "entity": {
+                            "id": "prediction_1",
+                            "status": "confirmed",
+                            "created_turn": 12,
+                            "last_updated_turn": 18,
+                        },
+                    }
+                ),
+            ]
+        )
+
+        assert [event["operation"] for event in events] == ["create", "resolve"]
+        assert events[0]["recordedAt"] == 1_710_000_000_250
+        assert events[0]["payload"]["entity"]["metrics"]["score"] == 245
+        assert events[1]["payload"]["changes"]["status"]["to"] == "confirmed"
+        assert events[1]["current"]["status"] == "resolved"
+
+        assert len(entities) == 2
+        assert entities[1]["status"] == "resolved"
+        assert entities[1]["createdTurn"] == 12
+        assert entities[1]["lastEventId"] == "event-prediction"
+
+        assert {metric["metric"] for metric in metrics} == {"score", "exploration_pct"}
+        assert {metric["metricId"] for metric in metrics} == {
+            "event-observation:score",
+            "event-observation:exploration_pct",
+        }
+        assert all(metric["dimensions"]["runId"] == "runabc" for metric in metrics)
+
+    def test_delete_is_tombstoned_and_invalid_lines_do_not_block_batch(self):
+        events, entities, metrics = _belief_batch_rows(
+            [
+                "not json",
+                json.dumps({"event_id": "missing-entity", "turn": 1}),
+                json.dumps(
+                    {
+                        "event_id": "event-delete",
+                        "timestamp": 1_710_000_000,
+                        "turn": 20,
+                        "event_type": "entity.deleted",
+                        "entity_type": "belief",
+                        "entity_id": "war-risk",
+                        "entity": {
+                            "id": "war-risk",
+                            "status": "deleted",
+                            "created_turn": "invalid-but-recoverable",
+                            "last_updated_turn": 20,
+                        },
+                    }
+                ),
+            ]
+        )
+
+        assert len(events) == 1
+        assert events[0]["operation"] == "delete"
+        assert events[0]["current"]["status"] == "deleted"
+        assert entities[0]["createdTurn"] == 20
+        assert metrics == []
+
+
+class _FakeConvexClient:
+    def __init__(self):
+        self.calls = []
+
+    async def mutation(self, path, args):
+        self.calls.append((path, args))
+
+
+class _FakeCloudFs:
+    def __init__(self, files):
+        self.files = files
+
+    def cat_file(self, path):
+        if path not in self.files:
+            raise FileNotFoundError(path)
+        return self.files[path]
+
+
+class TestBeliefSync:
+    def test_sync_is_incremental_but_replays_tail_idempotently(self, tmp_path):
+        path = tmp_path / "beliefs_india_123_runabc.jsonl"
+        first = {
+            "event_id": "event-1",
+            "timestamp": 1_710_000_000,
+            "turn": 7,
+            "event_type": "entity.created",
+            "entity_type": "belief",
+            "entity_id": "risk",
+            "entity": {"id": "risk", "status": "active", "created_turn": 7},
+        }
+        second = {
+            "event_id": "event-2",
+            "timestamp": 1_710_000_001,
+            "turn": 8,
+            "event_type": "entity.updated",
+            "entity_type": "belief",
+            "entity_id": "risk",
+            "entity": {"id": "risk", "status": "active", "created_turn": 7},
+        }
+        path.write_text(json.dumps(first) + "\n")
+        state = {"files": {}, "game_last_seen": {}}
+        client = _FakeConvexClient()
+
+        asyncio.run(sync_beliefs(path, "india_123_runabc", state, client))
+        assert len(client.calls) == 1
+        assert client.calls[0][0] == "ingest:ingestBeliefBatch"
+        assert [event["eventId"] for event in client.calls[0][1]["events"]] == ["event-1"]
+
+        # Re-running an unchanged watcher batch does not write again.
+        asyncio.run(sync_beliefs(path, "india_123_runabc", state, client))
+        assert len(client.calls) == 1
+
+        path.write_text(json.dumps(first) + "\n" + json.dumps(second) + "\n")
+        asyncio.run(sync_beliefs(path, "india_123_runabc", state, client))
+        # The tail event is intentionally retried with the new append; Convex
+        # de-duplicates event-1 and records event-2 by its stable eventId.
+        assert len(client.calls) == 2
+        assert [event["eventId"] for event in client.calls[1][1]["events"]] == [
+            "event-1",
+            "event-2",
+        ]
+
+    def test_missing_belief_file_is_a_noop(self, tmp_path):
+        state = {"files": {}, "game_last_seen": {}}
+        client = _FakeConvexClient()
+        asyncio.run(sync_beliefs(tmp_path / "missing.jsonl", "india_123", state, client))
+        assert client.calls == []
+
+    def test_cloud_download_includes_belief_trace_and_tolerates_absence(self, tmp_path):
+        fs = _FakeCloudFs(
+            {
+                "telemetry/runs/runabc/beliefs.jsonl": b'{"event_id":"event-1"}\n',
+            }
+        )
+        game_id = _download_cloud_run(
+            fs,
+            "telemetry",
+            "runabc",
+            {"civ": "india", "seed": 123},
+            tmp_path,
+        )
+        assert game_id == "india_123_runabc"
+        assert (tmp_path / "beliefs_india_123_runabc.jsonl").read_bytes() == (
+            b'{"event_id":"event-1"}\n'
+        )
