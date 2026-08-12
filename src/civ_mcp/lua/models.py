@@ -197,6 +197,8 @@ class GameOverview:
     speed_cost_multiplier: int = 100  # 67 for Quick, 100 for Standard, etc.
     # Victory conditions (empty = all enabled)
     enabled_victories: set[str] = field(default_factory=set)
+    # Active game ruleset; database rows alone are not reliable feature flags.
+    ruleset: str = ""
 
 
 @dataclass
@@ -788,6 +790,7 @@ class DealOptions:
     has_open_borders: bool = False
     alliance_eligible: bool = False
     current_alliance: str | None = None
+    ruleset: str = ""
 
 
 @dataclass

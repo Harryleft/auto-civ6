@@ -234,6 +234,213 @@ export const ingestCityRows = mutation({
   },
 });
 
+// ── Belief Engine ingestion ─────────────────────────────────────────────────
+//
+// Producers may send a batch after a turn, after a slow review, or after an
+// action verification. Events provide the immutable trace; entity projections
+// make the current world model cheap for the UI (and future MCP reads).
+
+const beliefStatus = v.union(
+  v.literal("active"),
+  v.literal("resolved"),
+  v.literal("archived"),
+  v.literal("deleted"),
+);
+
+const beliefOperation = v.union(
+  v.literal("create"),
+  v.literal("update"),
+  v.literal("resolve"),
+  v.literal("archive"),
+  v.literal("delete"),
+  v.literal("verify"),
+);
+
+const beliefProjection = v.object({
+  status: beliefStatus,
+  data: v.optional(v.any()),
+  createdTurn: v.optional(v.number()),
+});
+
+const beliefEvent = v.object({
+  eventId: v.string(),
+  turn: v.number(),
+  sequence: v.optional(v.number()),
+  eventType: v.string(),
+  entityType: v.string(),
+  entityId: v.string(),
+  operation: beliefOperation,
+  payload: v.optional(v.any()),
+  source: v.optional(v.string()),
+  recordedAt: v.optional(v.number()),
+  // If present, this event also updates the materialized current entity.
+  current: v.optional(beliefProjection),
+});
+
+const beliefEntity = v.object({
+  entityType: v.string(),
+  entityId: v.string(),
+  status: beliefStatus,
+  createdTurn: v.number(),
+  lastTurn: v.number(),
+  data: v.optional(v.any()),
+  lastEventId: v.optional(v.string()),
+  updatedAt: v.optional(v.number()),
+});
+
+const beliefMetric = v.object({
+  metricId: v.string(),
+  turn: v.number(),
+  metric: v.string(),
+  value: v.float64(),
+  dimensions: v.optional(v.any()),
+  updatedAt: v.optional(v.number()),
+});
+
+/**
+ * Idempotently persist one Belief Engine batch.
+ *
+ * `events` are never overwritten; retrying the same eventId is safe. A
+ * producer can still refresh a current projection in the same retry, which
+ * makes recovery from a partial write deterministic. `deleted` is a tombstone
+ * state rather than physical deletion so evidence and traces remain auditable.
+ */
+export const ingestBeliefBatch = mutation({
+  args: {
+    gameId: v.string(),
+    events: v.optional(v.array(beliefEvent)),
+    entities: v.optional(v.array(beliefEntity)),
+    metrics: v.optional(v.array(beliefMetric)),
+  },
+  handler: async (ctx, { gameId, events = [], entities = [], metrics = [] }) => {
+    let insertedEvents = 0;
+    let upsertedEntities = 0;
+    let upsertedMetrics = 0;
+
+    const upsertEntity = async (entity: {
+      entityType: string;
+      entityId: string;
+      status: "active" | "resolved" | "archived" | "deleted";
+      createdTurn: number;
+      lastTurn: number;
+      data?: unknown;
+      lastEventId?: string;
+      updatedAt?: number;
+    }) => {
+      const existing = await ctx.db
+        .query("beliefEntities")
+        .withIndex("by_game_entity", (q) =>
+          q.eq("gameId", gameId)
+            .eq("entityType", entity.entityType)
+            .eq("entityId", entity.entityId),
+        )
+        .unique();
+      const record = {
+        gameId,
+        entityType: entity.entityType,
+        entityId: entity.entityId,
+        status: entity.status,
+        createdTurn: existing ? Math.min(existing.createdTurn, entity.createdTurn) : entity.createdTurn,
+        lastTurn: entity.lastTurn,
+        updatedAt: entity.updatedAt ?? Date.now(),
+        data: entity.data ?? existing?.data ?? null,
+        ...(entity.lastEventId ? { lastEventId: entity.lastEventId } : {}),
+      };
+      if (existing) await ctx.db.replace(existing._id, record);
+      else await ctx.db.insert("beliefEntities", record);
+      upsertedEntities += 1;
+    };
+
+    for (const event of events) {
+      const existingEvent = await ctx.db
+        .query("beliefEvents")
+        .withIndex("by_game_eventId", (q) =>
+          q.eq("gameId", gameId).eq("eventId", event.eventId),
+        )
+        .unique();
+      const recordedAt = event.recordedAt ?? Date.now();
+      if (!existingEvent) {
+        await ctx.db.insert("beliefEvents", {
+          gameId,
+          eventId: event.eventId,
+          turn: event.turn,
+          ...(event.sequence !== undefined ? { sequence: event.sequence } : {}),
+          eventType: event.eventType,
+          entityType: event.entityType,
+          entityId: event.entityId,
+          operation: event.operation,
+          payload: event.payload ?? null,
+          ...(event.source ? { source: event.source } : {}),
+          recordedAt,
+        });
+        insertedEvents += 1;
+      }
+
+      if (event.current) {
+        await upsertEntity({
+          entityType: event.entityType,
+          entityId: event.entityId,
+          status: event.current.status,
+          createdTurn: event.current.createdTurn ?? event.turn,
+          lastTurn: event.turn,
+          data: event.current.data,
+          lastEventId: event.eventId,
+          updatedAt: recordedAt,
+        });
+      } else if (
+        event.operation === "resolve" ||
+        event.operation === "archive" ||
+        event.operation === "delete"
+      ) {
+        // Terminal operations must not depend on a caller remembering to send
+        // a second projection. This is the tombstone path for concise MCP
+        // delete/archive/resolve calls; if no entity exists yet it still
+        // records a traceable tombstone rather than silently losing the event.
+        await upsertEntity({
+          entityType: event.entityType,
+          entityId: event.entityId,
+          status: event.operation === "resolve"
+            ? "resolved"
+            : event.operation === "archive"
+              ? "archived"
+              : "deleted",
+          createdTurn: event.turn,
+          lastTurn: event.turn,
+          lastEventId: event.eventId,
+          updatedAt: recordedAt,
+        });
+      }
+    }
+
+    for (const entity of entities) {
+      await upsertEntity(entity);
+    }
+
+    for (const metric of metrics) {
+      const existing = await ctx.db
+        .query("beliefMetrics")
+        .withIndex("by_game_metricId", (q) =>
+          q.eq("gameId", gameId).eq("metricId", metric.metricId),
+        )
+        .unique();
+      const record = {
+        gameId,
+        metricId: metric.metricId,
+        turn: metric.turn,
+        metric: metric.metric,
+        value: metric.value,
+        ...(metric.dimensions !== undefined ? { dimensions: metric.dimensions } : {}),
+        updatedAt: metric.updatedAt ?? Date.now(),
+      };
+      if (existing) await ctx.db.replace(existing._id, record);
+      else await ctx.db.insert("beliefMetrics", record);
+      upsertedMetrics += 1;
+    }
+
+    return { insertedEvents, upsertedEntities, upsertedMetrics };
+  },
+});
+
 export const markGameCompleted = mutation({
   args: { gameId: v.string() },
   handler: async (ctx, { gameId }) => {

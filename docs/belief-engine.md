@@ -1,0 +1,104 @@
+# Civ Belief Engine
+
+The Belief Engine is the persistent world model between game observation and
+action.  It records what the agent observed separately from what the agent
+believes, predicts, plans, and eventually verifies.
+
+## Runtime loop
+
+```text
+MCP query -> automatic Observation -> normalized metrics
+          -> Belief / Hypothesis revision
+          -> Prediction and dynamic-plan review
+          -> Fast / verify / slow routing
+          -> game action -> automatic verification trace
+          -> Surprise / Contradiction -> replan
+```
+
+Every entity supports current-state CRUD.  Deletes are tombstones: the entity
+disappears from active state, but the append-only event remains available to
+`get_belief_trace` for prediction scoring and post-game attribution.
+
+Local state is stored per game at:
+
+```text
+~/.civ6-mcp/beliefs/belief_<civilization>_<seed>.jsonl
+```
+
+Telemetry mirrors the same events into each run's `beliefs.jsonl`, allowing
+the Convex sync pipeline and game-detail dashboard to materialize current
+entities without discarding the audit history.
+
+## Entity model
+
+- `observation`: directly observed fact, source, reliability, raw evidence, and
+  normalized metrics. Successful `get_*` MCP calls are captured automatically.
+- `belief`: an interpretation with probability, confidence, impact, urgency,
+  supporting evidence, counter-evidence, falsifiers, and expectations.
+- `hypothesis`: one competing explanation in a topic pool. Use
+  `rebalance_hypothesis_pool` to update the whole probability distribution.
+- `prediction`: falsifiable statement, probability, deadline, and optional
+  metric rule. False high-confidence predictions create Surprise entities.
+- `plan`: 5/10/20-turn goal with assumptions, success criteria, exit criteria,
+  and a scheduled review turn.
+- `contradiction`: generated when an observed metric violates a belief's
+  declared expectation.
+- `decision`: Fast/Slow routing result plus considered and selected actions.
+- `action`: automatic MCP action result or an explicit decision verification.
+- `attribution`: candidate failure causes with evidence-weighted posteriors.
+
+Probability describes the event; confidence describes the quality of the
+estimate. The first implementation measures revision direction and latency—it
+does not claim that model-generated percentages are statistically calibrated.
+
+## Ruleset compatibility
+
+The engine observes the active Civ VI ruleset rather than treating installed
+database rows as enabled mechanics. Standard Rules omits Governors,
+Ages/Dedications, Alliances, Diplomatic Favor, strategic-resource stockpiles,
+and World Congress. Their MCP queries return explicit ruleset errors and do
+not create successful observations. Basic diplomacy, owned/nearby resources,
+combat estimates, and all other shared systems remain available.
+
+## Declarative conditions
+
+Predictions, belief expectations, and plan exit conditions use the same JSON
+rule:
+
+```json
+{"metric":"science","operator":">=","value":60}
+```
+
+Supported operators are `>=`, `>`, `<=`, `<`, `==`, `!=`, `contains`, and
+`not_contains`. `get_game_overview` currently normalizes `turn`, `score`,
+`gold`, `gold_per_turn`, `science`, `culture`, `faith`, `favor`, `cities`,
+`population`, `units`, `exploration_pct`, and `era_score`. Diplomacy metrics
+use keys such as `diplomacy.player_3.at_war` and
+`diplomacy.player_3.military`.
+
+## MCP workflow
+
+1. Call `get_game_overview`; this binds the Belief Engine to the live game and
+   records the first automatic observation.
+2. Call `get_belief_state` to restore the current world model after a new
+   session or context compaction.
+3. Record important interpretations with `upsert_belief` and competing
+   explanations with `upsert_hypothesis`.
+4. Add falsifiable claims with `upsert_prediction` and explicit 5/10/20-turn
+   commitments with `upsert_dynamic_plan`.
+5. Before high-impact or irreversible actions, call `route_belief_decision`.
+6. Treat nearby hostile units as a verification trigger, not as evidence that
+   a route is unsafe. Call `get_combat_estimate`, then pass its effective
+   strengths, HP, modifiers, and expected damage to `assess_route_combat_risk`.
+   Without that complete quantitative assessment, the route belief is not
+   changed.
+7. Call `review_belief_engine` after material new evidence. Overview queries
+   also run this review automatically.
+8. Link the selected decision to its real outcome with
+   `record_action_verification` when the normal MCP result is insufficient.
+9. Read `get_belief_metrics` and `get_belief_trace` for calibration and
+   post-game analysis.
+
+Use `update_belief_entity` for corrections and `delete_belief_entity` for
+current-state deletion. Do not encode interpretation into Observation text;
+that destroys the fact/inference boundary the engine is intended to measure.

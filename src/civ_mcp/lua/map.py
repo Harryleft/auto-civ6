@@ -9,6 +9,7 @@ from civ_mcp.lua._helpers import (
     _bail_lua,
     _int,
     _lua_get_city,
+    _lua_require_ruleset,
     _lua_get_unit,
 )
 from civ_mcp.lua.models import (
@@ -489,12 +490,20 @@ def build_empire_resources_query() -> str:
 local me = Game.GetLocalPlayer()
 local vis = PlayersVisibility[me]
 local pRes = Players[me]:GetResources()
+local activeRuleset = GameConfiguration.GetValue("RULESET")
+if GameConfiguration.GetRuleSet ~= nil then
+    pcall(function() activeRuleset = GameConfiguration.GetRuleSet() end)
+end
+-- Strategic-resource accumulation and stockpile caps are Gathering Storm
+-- mechanics.  Keep the universal tile/resource scan below, but omit only
+-- the unavailable stockpile facts in the base ruleset.
+local hasStockpiles = activeRuleset == "RULESET_EXPANSION_2" and pRes ~= nil and pRes.GetResourceStockpileCap ~= nil and pRes.GetResourceAccumulationPerTurn ~= nil and pRes.GetUnitResourceDemandPerTurn ~= nil and pRes.GetResourceImportPerTurn ~= nil
 local classMap = {RESOURCECLASS_STRATEGIC="strategic", RESOURCECLASS_LUXURY="luxury", RESOURCECLASS_BONUS="bonus"}
 -- Stockpile info for strategic and luxury resources
 for row in GameInfo.Resources() do
     if pRes:IsResourceVisible(row.Index) then
         local cls = classMap[row.ResourceClassType]
-        if cls == "strategic" then
+        if cls == "strategic" and hasStockpiles then
             local amt = pRes:GetResourceAmount(row.Index)
             local cap = pRes:GetResourceStockpileCap(row.Index)
             local accum = pRes:GetResourceAccumulationPerTurn(row.Index)
@@ -977,8 +986,10 @@ def build_stockpile_query() -> str:
     Only emits STOCKPILE lines — no tile scanning. Used for turn snapshots.
     """
     return """
+{STOCKPILE_RULESET}
 local me = Game.GetLocalPlayer()
 local pRes = Players[me]:GetResources()
+if pRes == nil or pRes.GetResourceStockpileCap == nil or pRes.GetResourceAccumulationPerTurn == nil or pRes.GetUnitResourceDemandPerTurn == nil or pRes.GetResourceImportPerTurn == nil then {NO_STOCKPILES} end
 for row in GameInfo.Resources() do
     if row.ResourceClassType == "RESOURCECLASS_STRATEGIC" and pRes:IsResourceVisible(row.Index) then
         local amt = pRes:GetResourceAmount(row.Index)
@@ -991,7 +1002,12 @@ for row in GameInfo.Resources() do
     end
 end
 print("{SENTINEL}")
-""".replace("{SENTINEL}", SENTINEL)
+""".replace(
+        "{STOCKPILE_RULESET}",
+        _lua_require_ruleset(
+            "RULESET_EXPANSION_2", "ERR:NO_RESOURCE_STOCKPILES_IN_RULESET"
+        ),
+    ).replace("{NO_STOCKPILES}", _bail("ERR:NO_RESOURCE_STOCKPILES_IN_RULESET")).replace("{SENTINEL}", SENTINEL)
 
 
 def parse_stockpile_response(lines: list[str]) -> list[ResourceStockpile]:

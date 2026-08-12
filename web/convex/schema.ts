@@ -255,4 +255,69 @@ export default defineSchema({
     // Flat packed: [x, y, total, ds, da, sv, pe, re, firstTurn, lastTurn] × N
     tiles: v.array(v.number()),
   }).index("by_gameId", ["gameId"]),
+
+  // Append-only audit trail for the Belief Engine.  These are deliberately
+  // separate from playerRows: an observation is a fact, while this table
+  // records the agent's interpretation, prediction, verification, or action.
+  beliefEvents: defineTable({
+    gameId: v.string(),
+    eventId: v.string(), // stable producer id; makes retries idempotent
+    turn: v.number(),
+    sequence: v.optional(v.number()),
+    eventType: v.string(), // observation, evidence, prediction_check, action, ...
+    entityType: v.string(), // belief, hypothesis, prediction, plan, surprise, ...
+    entityId: v.string(),
+    operation: v.union(
+      v.literal("create"),
+      v.literal("update"),
+      v.literal("resolve"),
+      v.literal("archive"),
+      v.literal("delete"),
+      v.literal("verify"),
+    ),
+    // Source payload is intentionally extensible: the producer owns the
+    // domain-specific schema while Convex preserves the full evidence chain.
+    payload: v.any(),
+    source: v.optional(v.string()),
+    recordedAt: v.number(),
+  })
+    .index("by_game_eventId", ["gameId", "eventId"])
+    .index("by_game_turn", ["gameId", "turn"])
+    .index("by_game_entity", ["gameId", "entityType", "entityId"]),
+
+  // Materialized current state.  A delete is a tombstone here; the matching
+  // beliefEvents document remains available for trace and postmortem work.
+  beliefEntities: defineTable({
+    gameId: v.string(),
+    entityType: v.string(),
+    entityId: v.string(),
+    status: v.union(
+      v.literal("active"),
+      v.literal("resolved"),
+      v.literal("archived"),
+      v.literal("deleted"),
+    ),
+    createdTurn: v.number(),
+    lastTurn: v.number(),
+    updatedAt: v.number(),
+    data: v.any(),
+    lastEventId: v.optional(v.string()),
+  })
+    .index("by_gameId", ["gameId"])
+    .index("by_game_entity", ["gameId", "entityType", "entityId"])
+    .index("by_game_type_status", ["gameId", "entityType", "status"]),
+
+  // Time-series metrics are kept apart from entity snapshots so calibration,
+  // revision latency, and plan-completion views do not need to parse events.
+  beliefMetrics: defineTable({
+    gameId: v.string(),
+    metricId: v.string(), // producer-defined unique id, e.g. "surprise_rate:T80"
+    turn: v.number(),
+    metric: v.string(),
+    value: v.float64(),
+    dimensions: v.optional(v.any()),
+    updatedAt: v.number(),
+  })
+    .index("by_game_metricId", ["gameId", "metricId"])
+    .index("by_game_turn", ["gameId", "turn"]),
 });

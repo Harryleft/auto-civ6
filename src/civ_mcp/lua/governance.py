@@ -9,6 +9,7 @@ from civ_mcp.lua._helpers import (
     _bail_lua,
     _int,
     _lua_get_city,
+    _lua_require_ruleset,
     _lua_get_unit,
     _lua_get_unit_gamecore,
 )
@@ -156,7 +157,13 @@ def build_governors_query() -> str:
     """Read governor status, appointed governors, and available types (InGame context)."""
     return """
 local me = Game.GetLocalPlayer()
-local pGovs = Players[me]:GetGovernors()
+{GOVERNOR_RULESET}
+-- Governors were added by Rise and Fall.  The base ruleset can expose a
+-- partial player API, so verify both the database and runtime object before
+-- reading it rather than allowing a Lua method error to escape.
+local pGovs = nil
+local gotGovs = pcall(function() pGovs = Players[me]:GetGovernors() end)
+if not gotGovs or pGovs == nil or GameInfo.Governors == nil or GameInfo.Governors["GOVERNOR_MAGNUS"] == nil then {NO_GOVERNORS} end
 local pts = pGovs:GetGovernorPoints()
 local spent = pGovs:GetGovernorPointsSpent()
 local canAppoint = pGovs:CanAppoint() and "1" or "0"
@@ -215,14 +222,23 @@ for gov in GameInfo.Governors() do
     end
 end
 print("{SENTINEL}")
-""".replace("{SENTINEL}", SENTINEL)
+""".replace(
+        "{GOVERNOR_RULESET}",
+        _lua_require_ruleset(
+            ("RULESET_EXPANSION_1", "RULESET_EXPANSION_2"),
+            "ERR:NO_GOVERNORS_IN_RULESET",
+        ),
+    ).replace("{NO_GOVERNORS}", _bail("ERR:NO_GOVERNORS_IN_RULESET")).replace("{SENTINEL}", SENTINEL)
 
 
 def build_appoint_governor(governor_type: str) -> str:
     """Appoint a new governor (InGame context)."""
     return f"""
 local me = Game.GetLocalPlayer()
-local pGovs = Players[me]:GetGovernors()
+{_lua_require_ruleset(("RULESET_EXPANSION_1", "RULESET_EXPANSION_2"), "ERR:NO_GOVERNORS_IN_RULESET")}
+local pGovs = nil
+local gotGovs = pcall(function() pGovs = Players[me]:GetGovernors() end)
+if not gotGovs or pGovs == nil or GameInfo.Governors == nil or GameInfo.Governors["GOVERNOR_MAGNUS"] == nil then {_bail("ERR:NO_GOVERNORS_IN_RULESET")} end
 if not pGovs:CanAppoint() then {_bail("ERR:CANNOT_APPOINT|No governor points available")} end
 local gov = GameInfo.Governors["{governor_type}"]
 if gov == nil then {_bail(f"ERR:GOVERNOR_NOT_FOUND|{governor_type}")} end
@@ -245,7 +261,9 @@ print("{SENTINEL}")
 def build_assign_governor(governor_type: str, city_id: int) -> str:
     """Assign a governor to a city (InGame context)."""
     return f"""
+{_lua_require_ruleset(("RULESET_EXPANSION_1", "RULESET_EXPANSION_2"), "ERR:NO_GOVERNORS_IN_RULESET")}
 {_lua_get_city(city_id)}
+if GameInfo.Governors == nil or GameInfo.Governors["GOVERNOR_MAGNUS"] == nil then {_bail("ERR:NO_GOVERNORS_IN_RULESET")} end
 local gov = GameInfo.Governors["{governor_type}"]
 if gov == nil then {_bail(f"ERR:GOVERNOR_NOT_FOUND|{governor_type}")} end
 if PlayerOperations.ASSIGN_GOVERNOR == nil then {_bail("ERR:API_MISSING|PlayerOperations.ASSIGN_GOVERNOR is nil")} end
@@ -268,7 +286,10 @@ def build_promote_governor(governor_type: str, promotion_type: str) -> str:
     """
     return f"""
 local me = Game.GetLocalPlayer()
-local pGovs = Players[me]:GetGovernors()
+{_lua_require_ruleset(("RULESET_EXPANSION_1", "RULESET_EXPANSION_2"), "ERR:NO_GOVERNORS_IN_RULESET")}
+local pGovs = nil
+local gotGovs = pcall(function() pGovs = Players[me]:GetGovernors() end)
+if not gotGovs or pGovs == nil or GameInfo.Governors == nil or GameInfo.Governors["GOVERNOR_MAGNUS"] == nil then {_bail("ERR:NO_GOVERNORS_IN_RULESET")} end
 local gov = GameInfo.Governors["{governor_type}"]
 if gov == nil then {_bail(f"ERR:GOVERNOR_NOT_FOUND|{governor_type}")} end
 if not pGovs:HasGovernor(gov.Hash) then {_bail(f"ERR:NOT_APPOINTED|{governor_type} not appointed")} end
@@ -549,8 +570,12 @@ def build_dedications_query() -> str:
     """Read current era age, available dedications, and active ones."""
     return """
 local me = Game.GetLocalPlayer()
-if Game.GetEras == nil then {_bail("ERR:NO_ERAS|Era/age system not available in this ruleset")} end
-local pEras = Game.GetEras()
+{DEDICATION_RULESET}
+-- Ages and dedications were added by Rise and Fall.  Base Civ VI still has
+-- chronological eras, but not the commemoration APIs.
+local pEras = nil
+local gotEras = pcall(function() if Game.GetEras ~= nil then pEras = Game.GetEras() end end)
+if not gotEras or pEras == nil or pEras.GetPlayerNumAllowedCommemorations == nil or GameInfo.CommemorationTypes == nil or GameInfo.CommemorationTypes["COMMEMORATION_MONUMENTALITY"] == nil then {NO_DEDICATIONS} end
 local age = "Normal"
 if pEras:HasHeroicGoldenAge(me) then age = "Heroic"
 elseif pEras:HasGoldenAge(me) then age = "Golden"
@@ -583,15 +608,23 @@ if choices then
     end
 end
 print("{SENTINEL}")
-""".replace("{SENTINEL}", SENTINEL)
+""".replace(
+        "{DEDICATION_RULESET}",
+        _lua_require_ruleset(
+            ("RULESET_EXPANSION_1", "RULESET_EXPANSION_2"),
+            "ERR:NO_DEDICATIONS_IN_RULESET",
+        ),
+    ).replace("{NO_DEDICATIONS}", _bail("ERR:NO_DEDICATIONS_IN_RULESET")).replace("{SENTINEL}", SENTINEL)
 
 
 def build_choose_dedication(dedication_index: int) -> str:
     """Select a dedication/commemoration by its index."""
     return f"""
 local me = Game.GetLocalPlayer()
-if Game.GetEras == nil then {_bail("ERR:NO_ERAS|Era/age system not available in this ruleset")} end
-local pEras = Game.GetEras()
+{_lua_require_ruleset(("RULESET_EXPANSION_1", "RULESET_EXPANSION_2"), "ERR:NO_DEDICATIONS_IN_RULESET")}
+local pEras = nil
+local gotEras = pcall(function() if Game.GetEras ~= nil then pEras = Game.GetEras() end end)
+if not gotEras or pEras == nil or pEras.GetPlayerNumAllowedCommemorations == nil or GameInfo.CommemorationTypes == nil or GameInfo.CommemorationTypes["COMMEMORATION_MONUMENTALITY"] == nil then {_bail("ERR:NO_DEDICATIONS_IN_RULESET")} end
 local allowed = pEras:GetPlayerNumAllowedCommemorations(me)
 if allowed <= 0 then {_bail("ERR:NO_DEDICATION_NEEDED|No dedication selection required (already chosen or not available)")} end
 local row = GameInfo.CommemorationTypes[{dedication_index}]

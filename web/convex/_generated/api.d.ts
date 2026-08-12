@@ -10,6 +10,7 @@
 
 import type * as diary from "../diary.js";
 import type * as ingest from "../ingest.js";
+import type * as belief from "../belief.js";
 
 import type {
   ApiFromModules,
@@ -20,6 +21,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   diary: typeof diary;
   ingest: typeof ingest;
+  belief: typeof belief;
 }>;
 
 /**

@@ -27,6 +27,7 @@ Early choices compound. Each decision shapes what's available 20, 40, 60 turns l
 Each turn in order:
 0. `python3 scripts/civ6_assist.py precheck` — blockers (production/research/policy/envoy/diplo/WC) + opportunities (sell surplus, improve resources, Eureka) + unit state. Fix blockers before anything else.
 1. `get_game_overview` — turn, yields, research, score, era score, difficulty. If resuming after context compaction, call `get_diary` first.
+1b. `get_belief_state` after a new session/context compaction; revise important beliefs, predictions, and plans when new evidence materially changes them.
 2. `get_units` — positions, HP, moves, charges, nearby threats
 3. `get_map_area` around cities/units — terrain, resources, enemy units
 4. Move/action each unit
@@ -34,7 +35,38 @@ Each turn in order:
 6. `get_district_advisor` if placing a new district
 7. `set_city_production` / `set_research` if needed
 8. Run **Strategic Checkpoints** if it's time
-9. `skip_remaining_units` then `end_turn` — verify no blockers remain first (an end_turn failure costs 5-10 min of AI turns)
+9. `review_belief_engine`; route any high-impact/irreversible unresolved choice with `route_belief_decision`.
+10. `skip_remaining_units` then `end_turn` — verify no blockers remain first (an end_turn failure costs 5-10 min of AI turns)
+
+## Belief Engine
+
+The diary records what happened and what the agent said. The Belief Engine is
+the mutable current world model. Successful `get_*` calls automatically create
+fact-only observations; do not copy every query manually.
+
+- `upsert_belief`: interpretation with probability, confidence, evidence,
+  counter-evidence, and falsifiers.
+- `upsert_hypothesis` + `rebalance_hypothesis_pool`: preserve competing
+  explanations instead of locking onto the first story.
+- `upsert_prediction`: falsifiable claim with a deadline and optional metric
+  rule. Failed high-confidence predictions create Surprise records.
+- `upsert_dynamic_plan`: 5/10/20-turn goal with assumptions, exit conditions,
+  and a review turn.
+- `review_belief_engine`: checks prediction deadlines, belief contradictions,
+  and plan invalidation triggers.
+- `route_belief_decision`: returns `fast`, `verify_then_fast`, or `slow` from
+  uncertainty, consequence, urgency, irreversibility, and active surprises.
+- `get_combat_estimate` + `assess_route_combat_risk`: a nearby hostile only
+  triggers verification; revise route safety only from quantified CS, HP,
+  modifiers, and expected damage.
+- `update_belief_entity` / `delete_belief_entity`: correct or remove current
+  state without erasing the audit trace.
+- `get_belief_trace` / `get_belief_metrics`: postmortem and calibration data.
+
+Probability is the event likelihood; confidence is confidence in that estimate.
+Do not use precise-looking percentages as a substitute for evidence. Link
+beliefs to Observation IDs, state what would falsify them, and update promptly
+when reality conflicts with the current story.
 
 ## Diary
 

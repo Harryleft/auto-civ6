@@ -28,7 +28,12 @@ def narrate_overview(ov: lq.GameOverview) -> str:
                 if ov.gold_income > 0 or ov.total_maintenance > 0
                 else ""
             )
-            + f" | Science: {ov.science_yield:.1f} | Culture: {ov.culture_yield:.1f} | Faith: {ov.faith:.0f} | Favor: {ov.diplomatic_favor} ({ov.favor_per_turn:+d}/turn)",
+            + f" | Science: {ov.science_yield:.1f} | Culture: {ov.culture_yield:.1f} | Faith: {ov.faith:.0f}"
+            + (
+                f" | Favor: {ov.diplomatic_favor} ({ov.favor_per_turn:+d}/turn)"
+                if ov.ruleset == "RULESET_EXPANSION_2"
+                else ""
+            ),
             f"Research: {ov.current_research} | Civic: {ov.current_civic}",
             f"Cities: {ov.num_cities} | Population: {ov.total_population} | Units: {ov.num_units}"
             + (
@@ -976,11 +981,14 @@ def narrate_deal_options(opts: lq.DealOptions) -> str:
         f"Trade options with {opts.other_civ_name} (player {opts.other_player_id}):"
     ]
     lines.append("\nEconomy:")
+    favor_enabled = opts.ruleset == "RULESET_EXPANSION_2"
     lines.append(
-        f"  Our gold: {opts.our_gold} ({opts.our_gpt:+d}/turn) | Favor: {opts.our_favor}"
+        f"  Our gold: {opts.our_gold} ({opts.our_gpt:+d}/turn)"
+        + (f" | Favor: {opts.our_favor}" if favor_enabled else "")
     )
     lines.append(
-        f"  Their gold: {opts.their_gold} ({opts.their_gpt:+d}/turn) | Favor: {opts.their_favor}"
+        f"  Their gold: {opts.their_gold} ({opts.their_gpt:+d}/turn)"
+        + (f" | Favor: {opts.their_favor}" if favor_enabled else "")
     )
     if opts.our_luxuries or opts.our_strategics:
         lines.append("\nOur tradeable resources:")
@@ -1007,7 +1015,9 @@ def narrate_deal_options(opts: lq.DealOptions) -> str:
     lines.append("\nAgreements:")
     ob_status = "active" if opts.has_open_borders else "not active (available)"
     lines.append(f"  Open borders: {ob_status}")
-    if opts.current_alliance:
+    if opts.ruleset == "RULESET_STANDARD":
+        lines.append("  Alliance: unavailable under Standard Rules")
+    elif opts.current_alliance:
         lines.append(f"  Alliance: {opts.current_alliance} (active)")
     elif opts.alliance_eligible:
         lines.append(
