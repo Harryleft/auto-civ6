@@ -12,6 +12,9 @@ wheels/
 # Claude Code user settings
 .claude/
 
+# Project-scoped DeepSeek Harness state and credentials
+.dsh/
+
 # OS files
 .DS_Store
 **/.DS_Store

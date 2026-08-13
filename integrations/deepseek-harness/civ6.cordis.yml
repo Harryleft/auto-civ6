@@ -1,0 +1,23 @@
+# DeepSeek Harness overlay for the local civ6-mcp checkout.
+# Run DSH from the civ6-mcp repository root so process.cwd() resolves here.
+- insert:
+    - id: mcp-civ6
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: civ6
+        transport: stdio
+        command: uv
+        args: [run, civ-mcp]
+        cwd: !!js process.cwd()
+        env:
+          CIV_MCP_AGENT_MODEL: deepseek-harness
+          CIV_MCP_METADATA: '{}'
+          CIV_MCP_SAVE_FILE: ''
+          CIV_MCP_DISABLE_LUA: '1'
+        # Deity AI turns can take 5-10 minutes. The DSH default is 60 seconds.
+        toolCallTimeoutMs: 900000
+        failOnStartupError: true
+        # Avoid an automatic child restart chain around a single-client
+        # FireTuner connection. Restart the DSH host explicitly if civ-mcp exits.
+        reconnect:
+          enabled: false

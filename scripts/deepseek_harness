@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# Start DeepSeek Harness with civ6-mcp as its only game-domain tool provider.
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+project_root="$(cd "$script_dir/.." && pwd)"
+harness_dir="${DEEPSEEK_HARNESS_DIR:-$project_root/../deepseek-harness}"
+patch_file="$project_root/integrations/deepseek-harness/civ6.cordis.yml"
+dsh_home="${CIV6_DSH_HOME:-$project_root/.dsh}"
+
+if ! command -v node >/dev/null 2>&1; then
+  printf 'ERROR: node is required.\n' >&2
+  exit 1
+fi
+if ! command -v uv >/dev/null 2>&1; then
+  printf 'ERROR: uv is required.\n' >&2
+  exit 1
+fi
+if [ ! -d "$harness_dir" ]; then
+  printf 'ERROR: DeepSeek Harness checkout not found: %s\n' "$harness_dir" >&2
+  printf 'Set DEEPSEEK_HARNESS_DIR to its checkout directory.\n' >&2
+  exit 1
+fi
+
+harness_dir="$(cd "$harness_dir" && pwd)"
+dsh_bin="$harness_dir/apps/cli/lib/bin.js"
+if [ ! -f "$dsh_bin" ]; then
+  printf 'ERROR: DeepSeek Harness is not built: %s\n' "$dsh_bin" >&2
+  printf 'Run pnpm install && pnpm run build in %s.\n' "$harness_dir" >&2
+  exit 1
+fi
+
+mkdir -p "$dsh_home"
+cd "$project_root"
+
+if [ "${1:-}" = "check" ]; then
+  check_output="$(mktemp /tmp/civ6-dsh-config.XXXXXX)"
+  trap 'rm -f "$check_output"' EXIT
+  uv run python -c 'import civ_mcp'
+  DSH_HOME="$dsh_home" node "$dsh_bin" \
+    --profile web --patch "$patch_file" --dump-config > "$check_output"
+  if ! grep -q "id: mcp-civ6" "$check_output"; then
+    printf 'ERROR: Civ 6 MCP overlay was not composed.\n' >&2
+    exit 1
+  fi
+  printf 'DeepSeek Harness and the Civ 6 MCP overlay are ready.\n'
+  exit 0
+fi
+
+profile="${1:-web}"
+case "$profile" in
+  web|headless)
+    if [ "$#" -gt 0 ]; then
+      shift
+    fi
+    ;;
+  *)
+    profile=web
+    ;;
+esac
+
+if command -v lsof >/dev/null 2>&1; then
+  if lsof -nP -iTCP:8000 -sTCP:LISTEN >/dev/null 2>&1; then
+    printf 'ERROR: TCP 8000 is already in use; another civ-mcp host may be running.\n' >&2
+    exit 1
+  fi
+  if lsof -nP -iTCP:4318 -sTCP:ESTABLISHED >/dev/null 2>&1; then
+    printf 'ERROR: FireTuner already has an established client. Stop it before starting DSH.\n' >&2
+    exit 1
+  fi
+fi
+
+exec env DSH_HOME="$dsh_home" node "$dsh_bin" \
+  --profile "$profile" --patch "$patch_file" "$@"
