@@ -11,10 +11,16 @@ import pytest
 from civ_mcp.belief_engine import BeliefEngine, action_args_hash
 from civ_mcp.server import (
     _belief_action_preflight,
+    _canonical_action_params,
     _governance_payload,
+    _normalize_trade_mode,
     _governance_proposal_from_dict,
     _release_stale_budget_locks,
+    _reusable_typed_snapshot_for_turn,
+    _typed_snapshot_observation_for_turn,
     mcp,
+    propose_trade,
+    record_action_verification,
     resolve_governance_council,
     route_belief_decision,
     submit_governance_proposal,
@@ -85,6 +91,127 @@ def test_proposal_parser_keeps_probability_and_confidence_strictly_separate():
         _governance_proposal_from_dict(payload)
 
 
+def test_action_arguments_must_be_a_json_object():
+    with pytest.raises(ValueError, match="must be a JSON object"):
+        _canonical_action_params("set_research", [])
+
+    for field in ("arguments", "params"):
+        payload = _proposal_payload()
+        payload["action_intents"][0].pop("arguments")
+        payload["action_intents"][0][field] = []
+        with pytest.raises(ValueError, match="must be a JSON object"):
+            _governance_proposal_from_dict(payload)
+
+
+def test_trade_mode_is_case_normalized_and_rejects_unknown_values():
+    assert _normalize_trade_mode("TEST") == "test"
+    assert _normalize_trade_mode(" Send ") == "send"
+    with pytest.raises(ValueError, match="must be test or send"):
+        _normalize_trade_mode("preview")
+
+
+def test_uppercase_trade_test_mode_never_sends_a_deal(monkeypatch):
+    calls: list[str] = []
+
+    class _Game:
+        async def test_trade(self, *_args):
+            calls.append("test")
+            return "TESTED"
+
+        async def propose_trade(self, *_args):
+            calls.append("send")
+            return "SENT"
+
+    async def direct_logged(_ctx, _tool, _params, fn, **_kwargs):
+        return await fn()
+
+    monkeypatch.setattr("civ_mcp.server._logged", direct_logged)
+    ctx = SimpleNamespace(
+        request_context=SimpleNamespace(
+            lifespan_context=SimpleNamespace(game=_Game())
+        )
+    )
+
+    result = asyncio.run(
+        propose_trade(ctx, other_player_id=2, offer_gold=1, mode="TEST")
+    )
+
+    assert result == "TESTED"
+    assert calls == ["test"]
+
+
+@pytest.mark.parametrize("field", ["params", "arguments"])
+def test_route_rejects_non_object_action_params_without_crashing(tmp_path, field):
+    ctx, engine = _bare_loop_context(tmp_path)
+    engine.ingest_typed_snapshot(
+        {
+            "snapshot_id": "snapshot:42",
+            "turn_before": 42,
+            "turn_after": 42,
+            "capabilities": {"ruleset": "RULESET_STANDARD"},
+            "entities": [],
+            "relations": [],
+            "metrics": {},
+        },
+        turn=42,
+    )
+
+    result = asyncio.run(
+        route_belief_decision(
+            ctx,
+            statement="Malformed route",
+            probability=0.9,
+            confidence=0.9,
+            impact="low",
+            urgency="low",
+            irreversibility=0.1,
+            action_intent=json.dumps({"tool": "unit_action", field: []}),
+        )
+    )
+
+    assert result.startswith("Error: action arguments/params must be a JSON object")
+
+
+def test_current_turn_snapshot_lookup_reuses_latest_capture(tmp_path):
+    engine = BeliefEngine("snapshot-reuse", tmp_path)
+    engine.bind_game("CIVILIZATION_ROME", 123)
+    for snapshot_id in ("snapshot:old", "snapshot:new"):
+        engine.create(
+            "observation",
+            {
+                "statement": snapshot_id,
+                "source": "game_state:typed_snapshot",
+                "facts": {
+                    "snapshot_id": snapshot_id,
+                    "capabilities": {"ruleset": "RULESET_STANDARD"},
+                },
+                "observed_turn": 42,
+            },
+            turn=42,
+        )
+
+    cached = _typed_snapshot_observation_for_turn(engine, turn=42)
+
+    assert cached is not None
+    assert cached["facts"]["snapshot_id"] == "snapshot:new"
+    assert _reusable_typed_snapshot_for_turn(engine, turn=42) == cached
+
+    engine.create(
+        "action",
+        {
+            "statement": "A real game mutation happened after the snapshot",
+            "tool": "unit_action",
+            "params": {"unit_id": 7, "action": "move"},
+            "success": True,
+            "executed": True,
+            "selected_turn": 42,
+        },
+        turn=42,
+    )
+
+    assert _reusable_typed_snapshot_for_turn(engine, turn=42) is None
+
+
 def test_prior_turn_budget_locks_are_archived(tmp_path):
     engine = BeliefEngine("test-governance", tmp_path)
     engine.bind_game("CIVILIZATION_ROME", 123)
@@ -106,6 +233,26 @@ def test_prior_turn_budget_locks_are_archived(tmp_path):
     assert archived["status"] == "archived"
     assert archived["released_turn"] == 8
     assert _release_stale_budget_locks(engine, turn=8) == []
+
+
+def test_scheduled_action_lock_survives_through_its_allowed_turn(tmp_path):
+    engine = BeliefEngine("test-future-lock", tmp_path)
+    engine.bind_game("CIVILIZATION_ROME", 123)
+    engine.create(
+        "budget_lock",
+        {
+            "resource": "gold",
+            "amount": 50,
+            "proposal_id": "proposal:future",
+            "release_after_turn": 9,
+        },
+        turn=7,
+        entity_id="lock:future",
+    )
+
+    assert _release_stale_budget_locks(engine, turn=8) == []
+    assert _release_stale_budget_locks(engine, turn=9) == []
+    assert _release_stale_budget_locks(engine, turn=10) == ["lock:future"]
 
 
 def test_governance_mcp_tools_are_registered():
@@ -305,6 +452,19 @@ def test_council_clamps_declared_budget_to_typed_live_capacity(tmp_path):
     assert proposal["council_state"] == "approved"
 
 
+def test_council_extends_budget_lock_through_scheduled_action_turn(tmp_path):
+    ctx, engine, _approved_intent = _governed_context(tmp_path)
+    proposal = _proposal_payload()
+    proposal["action_intents"][0]["allowed_turn"] = 44
+    asyncio.run(submit_governance_proposal(ctx, json.dumps(proposal)))
+
+    result = asyncio.run(resolve_governance_council(ctx, budget_limits="{}"))
+
+    assert json.loads(result)["council_state"] == "approved"
+    lock = engine.list("budget_lock", status="active")[0]
+    assert lock["release_after_turn"] == 44
+
+
 def test_standard_ruleset_rejects_expansion_only_action_intent(tmp_path):
     ctx, _engine, _approved_intent = _governed_context(tmp_path)
     proposal = _proposal_payload()
@@ -378,3 +538,80 @@ def test_legacy_selected_action_cannot_authorize_execution(tmp_path):
     )
 
     assert result.startswith("Error: selected_action is audit-only")
+
+
+def test_national_action_cannot_route_without_council(tmp_path):
+    ctx, engine = _bare_loop_context(tmp_path)
+    engine.ingest_typed_snapshot(
+        {
+            "snapshot_id": "snapshot:42",
+            "turn_before": 42,
+            "turn_after": 42,
+            "capabilities": {"ruleset": "RULESET_STANDARD"},
+            "entities": [],
+            "relations": [],
+            "metrics": {},
+        },
+        turn=42,
+    )
+
+    result = asyncio.run(
+        route_belief_decision(
+            ctx,
+            statement="Research Writing without national arbitration",
+            probability=0.8,
+            confidence=0.8,
+            impact="low",
+            urgency="low",
+            irreversibility=0.1,
+            action_intent=json.dumps(
+                {
+                    "tool": "set_research",
+                    "params": {"tech_or_civic": "TECH_WRITING"},
+                }
+            ),
+        )
+    )
+
+    assert result.startswith("Error: This national, scarce-resource")
+    assert engine.list("decision", status=None) == []
+
+
+def test_action_verification_recovers_interrupted_executing_decision(tmp_path):
+    ctx, engine = _bare_loop_context(tmp_path)
+    params = {"unit_id": 7, "action": "attack", "target_x": 8, "target_y": 9}
+    decision = engine.route_decision(
+        statement="Attack the quantified target",
+        probability=0.99,
+        confidence=0.99,
+        impact="low",
+        urgency="low",
+        irreversibility=0.1,
+        action_intent={
+            "tool": "unit_action",
+            "params": params,
+            "args_hash": action_args_hash(params),
+        },
+        turn=42,
+    )
+    authorization = engine.authorize_action(
+        tool="unit_action", params=params, turn=42, required=True
+    )
+    assert authorization["authorized"] is True
+    assert engine.get("decision", decision["id"])["decision_state"] == "executing"
+
+    recovered = asyncio.run(
+        record_action_verification(
+            ctx,
+            decision_id=decision["id"],
+            tool="unit_action",
+            expected="target defeated",
+            actual="OK:TARGET_DEFEATED",
+            success=True,
+        )
+    )
+
+    assert json.loads(recovered)["verification"]["source"] == "agent_recovery"
+    assert engine.get("decision", decision["id"])["decision_state"] == "succeeded"
+    outcomes = engine.list("outcome", status="active")
+    assert outcomes[-1]["decision_id"] == decision["id"]

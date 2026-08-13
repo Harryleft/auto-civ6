@@ -67,6 +67,17 @@ submit structured advice but cannot execute its own proposal.
 9. If slow review invalidates the intent, or retrying is no longer rational,
    call `cancel_routed_action` with a concrete reason. The harness appends a
    cancelled, unexecuted Outcome; it never treats cancellation as success.
+10. National, scarce-resource, high-impact, highly irreversible, founding,
+    city-capture, and war-declaration intents require a council decision even
+    when the caller omitted a proposal. This classification is server-derived.
+11. If a client disconnects after authorization enters `executing`, reconcile
+    the observed result with `record_action_verification`. The hash-bound tool
+    must match; success closes the authorization and failure makes it retryable.
+
+An `allowed_turn` intent is dormant before that turn and becomes a hard
+obligation when due. Its budget locks remain reserved through the scheduled
+turn. Missing the execution window fails closed and requires an explicit
+re-proposal; the harness never silently executes it late.
 
 ## Proposal example
 
