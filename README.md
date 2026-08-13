@@ -7,7 +7,8 @@ Connect any MCP-compatible client — Claude Code, Codex, Gemini CLI, or your ow
 The built-in [Civ Belief Engine](docs/belief-engine.md) adds an event-sourced
 world model: observations remain separate from beliefs, predictions are checked
 against later evidence, plans carry invalidation rules, and high-risk decisions
-can be routed to slower review.
+are routed through the decision gate before the action is sent to Civ 6. Every
+successful action is also fed back as a factual observation and reviewed.
 
 <!-- TODO: Add screenshot or GIF of agent playing -->
 
