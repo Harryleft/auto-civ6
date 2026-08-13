@@ -528,6 +528,7 @@ class BeliefEngine:
         patch: dict[str, Any],
         *,
         turn: int,
+        _remove_fields: tuple[str, ...] = (),
     ) -> dict[str, Any]:
         current = self._entities.get(entity_type, {}).get(entity_id)
         if not current:
@@ -535,11 +536,21 @@ class BeliefEngine:
         if current.get("status") == "deleted":
             raise BeliefEngineError(f"Cannot update deleted {entity_type}: {entity_id}")
         protected = {"id", "entity_type", "created_turn", "created_at", "version"}
-        illegal = protected.intersection(patch)
+        remove_fields = set(_remove_fields)
+        illegal = protected.intersection(set(patch) | remove_fields)
         if illegal:
             raise BeliefEngineError(f"Cannot update protected fields: {', '.join(sorted(illegal))}")
+        overlap = set(patch).intersection(remove_fields)
+        if overlap:
+            raise BeliefEngineError(
+                f"Cannot update and remove the same fields: {', '.join(sorted(overlap))}"
+            )
         updated = deepcopy(current)
         changes: dict[str, Any] = {}
+        for key in remove_fields:
+            if key in updated:
+                changes[key] = {"from": deepcopy(updated[key]), "to": None}
+                del updated[key]
         for key, value in patch.items():
             if updated.get(key) != value:
                 changes[key] = {"from": updated.get(key), "to": deepcopy(value)}
@@ -879,7 +890,7 @@ class BeliefEngine:
             item
             for item in self.list("decision", status="active")
             if item.get("decision_state") in {"authorized", "retryable"}
-            and item.get("created_turn") == turn
+            and self._authorization_valid_on_turn(item, turn=turn)
             and self._action_matches(item.get("action_intent"), tool, params)
         ]
         decision = decisions[0] if decisions else None
@@ -1073,6 +1084,23 @@ class BeliefEngine:
         )
         return updated
 
+    @staticmethod
+    def _authorization_valid_on_turn(decision: dict[str, Any], *, turn: int) -> bool:
+        """Return whether a pending authorization may execute on ``turn``.
+
+        An intent with an explicit ``allowed_turn`` is dormant beforehand and
+        expires afterwards.  An intent without one keeps the legacy same-turn
+        authorization contract.  Stale pending decisions remain visible to the
+        governance turn gate and must be cancelled or replaced; they are never
+        silently executed against a later game state.
+        """
+
+        intent = decision.get("action_intent") or {}
+        allowed_turn = intent.get("allowed_turn") if isinstance(intent, dict) else None
+        if allowed_turn is not None:
+            return type(allowed_turn) is int and allowed_turn == turn
+        return decision.get("created_turn") == turn
+
     def ingest_typed_snapshot(
         self,
         snapshot: dict[str, Any],
@@ -1140,7 +1168,24 @@ class BeliefEngine:
                 "observed_turn": turn,
             }
             before = self.get("world_entity", entity_id)
-            after = self.upsert("world_entity", entity_id, payload, turn=turn)
+            if before and before.get("status") != "deleted":
+                # An entity may disappear from one authoritative snapshot and
+                # legitimately return later (for example a unit after a parser
+                # recovery, or a tile when a unit moves back). Reactivation must
+                # remove archival provenance rather than leave an active entity
+                # carrying stale tombstone fields.
+                tombstones = tuple(
+                    key for key in before if key.startswith("archived_")
+                )
+                after = self.update(
+                    "world_entity",
+                    entity_id,
+                    payload,
+                    turn=turn,
+                    _remove_fields=tombstones,
+                )
+            else:
+                after = self.upsert("world_entity", entity_id, payload, turn=turn)
             if before is None or after.get("version") != before.get("version"):
                 changed.append(entity_id)
         archived: list[str] = []
@@ -1715,18 +1760,33 @@ class BeliefEngine:
             None,
         )
         active_proposals = self.list("proposal", status="active")
-        current_decisions = [
-            item
-            for item in self.list("decision", status=None)
-            if item.get("created_turn") == turn
-        ]
+        all_decisions = self.list("decision", status=None)
+
+        def structured_action_intent(item: dict[str, Any]) -> dict[str, Any]:
+            intent = item.get("action_intent")
+            return intent if isinstance(intent, dict) else {}
+
+        def intent_due(item: dict[str, Any], *, fallback_turn: int) -> bool:
+            """Future intents are dormant until their allowed turn is reached."""
+
+            intent = structured_action_intent(item) or item
+            allowed_turn = (
+                intent.get("allowed_turn") if isinstance(intent, dict) else None
+            )
+            if allowed_turn is None:
+                return turn >= fallback_turn
+            return type(allowed_turn) is int and turn >= allowed_turn
+
         pending_authorizations = [
             {
                 "decision_id": item["id"],
                 "decision_state": item.get("decision_state"),
+                "created_turn": item.get("created_turn"),
+                "allowed_turn": structured_action_intent(item).get("allowed_turn"),
             }
-            for item in current_decisions
+            for item in all_decisions
             if item.get("decision_state") in {"authorized", "executing", "retryable"}
+            and intent_due(item, fallback_turn=int(item.get("created_turn", turn)))
         ]
 
         pending_council_intents: list[dict[str, Any]] = []
@@ -1734,37 +1794,46 @@ class BeliefEngine:
             item
             for item in self.list("proposal", status=None)
             if item.get("council_state") == "approved"
-            and item.get("last_updated_turn") == turn
         ]
         for proposal in approved_proposals:
             council_id = proposal.get("council_decision_id")
             for intent in proposal.get("action_intents") or []:
                 if not isinstance(intent, dict):
                     continue
+                due_turn = intent.get("allowed_turn")
+                fallback_turn = int(
+                    proposal.get("last_updated_turn", proposal.get("created_turn", turn))
+                )
+                if not intent_due(intent, fallback_turn=fallback_turn):
+                    continue
                 intent_id = str(intent.get("intent_id") or "")
-                matched = next(
+                matching = [
+                    decision
+                    for decision in all_decisions
+                    if decision.get("council_decision_id") == council_id
+                    and structured_action_intent(decision).get("proposal_id")
+                    == proposal["id"]
+                    and (
+                        not intent_id
+                        or structured_action_intent(decision).get("intent_id")
+                        == intent_id
+                    )
+                ]
+                terminal = next(
                     (
                         decision
-                        for decision in current_decisions
-                        if decision.get("council_decision_id") == council_id
-                        and (decision.get("action_intent") or {}).get("proposal_id")
-                        == proposal["id"]
-                        and (
-                            not intent_id
-                            or (decision.get("action_intent") or {}).get("intent_id")
-                            == intent_id
-                        )
+                        for decision in matching
+                        if decision.get("decision_state") in {"succeeded", "cancelled"}
                     ),
                     None,
                 )
-                if matched is None or matched.get("decision_state") not in {
-                    "succeeded",
-                    "cancelled",
-                }:
+                if terminal is None:
+                    matched = matching[0] if matching else None
                     pending_council_intents.append(
                         {
                             "proposal_id": proposal["id"],
                             "intent_id": intent_id or None,
+                            "allowed_turn": due_turn,
                             "decision_id": matched.get("id") if matched else None,
                             "decision_state": (
                                 matched.get("decision_state") if matched else "not_routed"
@@ -1815,6 +1884,19 @@ class BeliefEngine:
         _validate_probability("probability", probability)
         _validate_probability("confidence", confidence)
         _validate_probability("irreversibility", irreversibility)
+        if action_intent is not None:
+            if not isinstance(action_intent, dict):
+                raise BeliefEngineError("action_intent must be a JSON object")
+            allowed_turn = action_intent.get("allowed_turn")
+            if allowed_turn is not None:
+                if type(allowed_turn) is not int or allowed_turn < 0:
+                    raise BeliefEngineError(
+                        "action_intent allowed_turn must be a non-negative integer"
+                    )
+                if allowed_turn < turn:
+                    raise BeliefEngineError(
+                        f"action_intent allowed_turn {allowed_turn} has already expired"
+                    )
         impact_score = _IMPACT_SCORE.get(impact.lower())
         urgency_score = _URGENCY_SCORE.get(urgency.lower())
         if impact_score is None or urgency_score is None:

@@ -540,9 +540,85 @@ def _canonical_action_params(
 ) -> dict[str, Any]:
     """Use one public MCP action identity for proposal, route and execution."""
 
+    if not isinstance(params, Mapping):
+        raise BeliefEngineError("action arguments/params must be a JSON object")
+    if not all(isinstance(key, str) and key for key in params):
+        raise BeliefEngineError(
+            "action arguments/params keys must be non-empty strings"
+        )
     canonical = dict(_ACTION_PARAM_DEFAULTS.get(tool_name, {}))
     canonical.update({key: value for key, value in params.items() if value is not None})
     return canonical
+
+
+def _normalize_trade_mode(mode: Any) -> str:
+    normalized = str(mode or "send").strip().lower()
+    if normalized not in {"test", "send"}:
+        raise BeliefEngineError("trade mode must be test or send")
+    return normalized
+
+
+_COUNCIL_REQUIRED_TOOLS = {
+    "set_research",
+    "set_policies",
+    "change_government",
+    "choose_pantheon",
+    "found_religion",
+    "choose_dedication",
+    "appoint_governor",
+    "assign_governor",
+    "promote_governor",
+    "send_envoy",
+    "purchase_item",
+    "recruit_great_person",
+    "patronize_great_person",
+    "reject_great_person",
+    "propose_trade",
+    "propose_peace",
+    "form_alliance",
+    "queue_wc_votes",
+}
+
+
+def _governance_council_required(
+    *,
+    tool: str,
+    params: Mapping[str, Any],
+    impact: str,
+    irreversibility: float,
+) -> bool:
+    """Classify national/scarce-resource actions without trusting prose alone."""
+
+    if tool == "propose_trade" and _normalize_trade_mode(
+        params.get("mode", "send")
+    ) == "test":
+        return False
+    if tool in _COUNCIL_REQUIRED_TOOLS:
+        return True
+    if str(impact).strip().lower() in {"high", "critical"}:
+        return True
+    if (
+        not isinstance(irreversibility, bool)
+        and isinstance(irreversibility, (int, float))
+        and float(irreversibility) >= 0.7
+    ):
+        return True
+    action = str(params.get("action") or "").strip().upper()
+    if tool == "unit_action" and action in {
+        "FOUND_CITY",
+        "DELETE",
+        "SACRIFICE_CHARGES",
+    }:
+        return True
+    if tool == "city_action" and action in {
+        "KEEP",
+        "REJECT",
+        "RAZE",
+        "LIBERATE_FOUNDER",
+        "LIBERATE_PREVIOUS",
+    }:
+        return True
+    return tool == "send_diplomatic_action" and action == "DECLARE_WAR"
 
 
 _BELIEF_GATED_TOOLS = {
@@ -591,7 +667,9 @@ def _belief_route_required(tool_name: str, params: dict[str, Any]) -> bool:
         # GameCore Lua is the documented read-only escape hatch; InGame Lua
         # can mutate the world and therefore needs an explicit route.
         return str(params.get("context", "gamecore")).lower() == "ingame"
-    if tool_name == "propose_trade" and str(params.get("mode", "send")).lower() == "test":
+    if tool_name == "propose_trade" and _normalize_trade_mode(
+        params.get("mode", "send")
+    ) == "test":
         # Testing an offer only asks the game for acceptance; it does not send
         # a deal and is evidence for the eventual governed action.
         return False
@@ -722,7 +800,7 @@ async def _record_belief_tool_result(
         observed_turn = current_turn if current_turn is not None else turn
         is_read_only_variant = (
             tool_name == "propose_trade"
-            and str(params.get("mode", "send")).lower() == "test"
+            and _normalize_trade_mode(params.get("mode", "send")) == "test"
         ) or (
             tool_name == "run_lua"
             and str(params.get("context", "gamecore")).lower() == "gamecore"
@@ -1019,18 +1097,44 @@ async def get_game_overview(ctx: Context) -> str:
         # governance snapshot so that path cannot bypass the control plane.
         try:
             engine = _get_beliefs(ctx)
-            snapshot, world, projection, released, locks = (
-                await _capture_governance_snapshot(ctx, engine)
-            )
+            cached = _reusable_typed_snapshot_for_turn(engine, turn=ov.turn)
+            if cached is None:
+                snapshot, world, projection, released, locks = (
+                    await _capture_governance_snapshot(ctx, engine)
+                )
+                snapshot_id = snapshot.snapshot_id
+                ruleset = world["ruleset"]
+                changed_count = len(projection["world_entities_changed"])
+                archived_count = len(projection["world_entities_archived"])
+                lock_count = len(locks)
+                released_count = len(released)
+                snapshot_source = "captured"
+            else:
+                facts = cached.get("facts") or {}
+                capabilities = facts.get("capabilities") or {}
+                snapshot_id = str(facts.get("snapshot_id") or "unknown")
+                ruleset = str(capabilities.get("ruleset") or "unknown")
+                current_entities = [
+                    item
+                    for item in engine.list("world_entity", status="active")
+                    if item.get("snapshot_id") == snapshot_id
+                ]
+                changed_count = 0
+                archived_count = 0
+                lock_count = len(engine.list("budget_lock", status="active"))
+                released_count = 0
+                snapshot_source = "reused"
             belief_brief = engine.turn_brief(turn=ov.turn)
             await _flush_belief_events(ctx)
             text += (
                 "\n\n=== GOVERNANCE SNAPSHOT ===\n"
-                f"snapshot={snapshot.snapshot_id} ruleset={world['ruleset']} "
-                f"entities_changed={len(projection['world_entities_changed'])} "
-                f"entities_archived={len(projection['world_entities_archived'])} "
-                f"active_budget_locks={len(locks)} released_locks={len(released)}"
+                f"snapshot={snapshot_id} ruleset={ruleset} source={snapshot_source} "
+                f"entities_changed={changed_count} "
+                f"entities_archived={archived_count} "
+                f"active_budget_locks={lock_count} released_locks={released_count}"
             )
+            if cached is not None:
+                text += f" active_world_entities={len(current_entities)}"
             text += _format_belief_turn_brief(belief_brief)
         except Exception as exc:
             log.warning("Governance: failed to capture typed turn state", exc_info=True)
@@ -1822,6 +1926,10 @@ async def propose_trade(
     Test a deal first: mode="test" to see what the AI thinks is fair, then mode="send" to commit.
     """
     gs = _get_game(ctx)
+    try:
+        mode = _normalize_trade_mode(mode)
+    except BeliefEngineError as exc:
+        return f"Error: {exc}"
 
     offer_items: list[dict] = []
     request_items: list[dict] = []
@@ -2802,9 +2910,23 @@ def _governance_proposal_from_dict(raw: dict[str, Any]):
                 "action intent evidence_requirements must contain JSON objects"
             )
         intent_tool = str(item.get("tool") or "")
+        supplied_arguments = item.get("arguments")
+        supplied_params = item.get("params")
+        if (
+            supplied_arguments is not None
+            and supplied_params is not None
+            and supplied_arguments != supplied_params
+        ):
+            raise BeliefEngineError(
+                "action intent arguments and params must match when both are present"
+            )
         intent_arguments = _canonical_action_params(
             intent_tool,
-            item.get("arguments") or item.get("params") or {},
+            supplied_arguments
+            if supplied_arguments is not None
+            else supplied_params
+            if supplied_params is not None
+            else {},
         )
         intents.append(
             ActionIntent(
@@ -2859,11 +2981,14 @@ def _release_stale_budget_locks(
     *,
     turn: int,
 ) -> list[str]:
-    """Release prior-turn reservations before computing a new turn budget."""
+    """Release reservations after their last governed execution turn."""
 
     released: list[str] = []
     for lock in engine.list("budget_lock", status="active"):
-        if int(lock.get("created_turn", turn)) >= turn:
+        release_after_turn = int(
+            lock.get("release_after_turn", lock.get("created_turn", turn))
+        )
+        if release_after_turn >= turn:
             continue
         engine.update(
             "budget_lock",
@@ -2884,15 +3009,7 @@ def _typed_capabilities_for_turn(
     *,
     turn: int,
 ) -> dict[str, Any]:
-    snapshot = next(
-        (
-            item
-            for item in engine.list("observation", status="active")
-            if item.get("source") == "game_state:typed_snapshot"
-            and item.get("observed_turn") == turn
-        ),
-        None,
-    )
+    snapshot = _typed_snapshot_observation_for_turn(engine, turn=turn)
     if snapshot is None:
         raise BeliefEngineError(
             "A current-turn typed snapshot is required; call get_governance_brief first"
@@ -2901,6 +3018,52 @@ def _typed_capabilities_for_turn(
     if not isinstance(capabilities, dict) or not capabilities.get("ruleset"):
         raise BeliefEngineError("Typed snapshot is missing ruleset capabilities")
     return capabilities
+
+
+def _typed_snapshot_observation_for_turn(
+    engine: BeliefEngine,
+    *,
+    turn: int,
+) -> dict[str, Any] | None:
+    snapshots = [
+        item
+        for item in engine.list("observation", status="active")
+        if item.get("source") == "game_state:typed_snapshot"
+        and item.get("observed_turn") == turn
+    ]
+    return (
+        max(
+            snapshots,
+            key=lambda item: (
+                float(item.get("updated_at", 0)),
+                float(item.get("created_at", 0)),
+                str(item.get("id") or ""),
+            ),
+        )
+        if snapshots
+        else None
+    )
+
+
+def _reusable_typed_snapshot_for_turn(
+    engine: BeliefEngine,
+    *,
+    turn: int,
+) -> dict[str, Any] | None:
+    """Reuse the typed snapshot only while no successful action has changed state."""
+
+    snapshot = _typed_snapshot_observation_for_turn(engine, turn=turn)
+    if snapshot is None:
+        return None
+    captured_at = float(snapshot.get("created_at", 0))
+    has_later_mutation = any(
+        action.get("selected_turn") == turn
+        and action.get("success") is True
+        and action.get("executed") is True
+        and float(action.get("created_at", 0)) > captured_at
+        for action in engine.list("action", status="active")
+    )
+    return None if has_later_mutation else snapshot
 
 
 def _validate_ruleset_action_intent(
@@ -3700,15 +3863,7 @@ async def resolve_governance_council(
         _release_stale_budget_locks(engine, turn=turn)
         limits = _belief_json_object(budget_limits, "budget_limits")
         accepted = _belief_json_object(accepted_conditions, "accepted_conditions")
-        typed_snapshot = next(
-            (
-                item
-                for item in engine.list("observation", status="active")
-                if item.get("source") == "game_state:typed_snapshot"
-                and item.get("observed_turn") == turn
-            ),
-            None,
-        )
+        typed_snapshot = _typed_snapshot_observation_for_turn(engine, turn=turn)
         if typed_snapshot is None:
             raise BeliefEngineError(
                 "A current-turn typed snapshot is required; call get_governance_brief first"
@@ -3865,6 +4020,12 @@ async def resolve_governance_council(
                 turn=turn,
             )
             if approved:
+                scheduled_turns = [
+                    intent.allowed_turn
+                    for intent in proposal_typed.action_intents
+                    if intent.allowed_turn is not None
+                ]
+                release_after_turn = max(scheduled_turns, default=turn)
                 for index, lock in enumerate(proposal_typed.budget_locks):
                     engine.upsert(
                         "budget_lock",
@@ -3876,6 +4037,7 @@ async def resolve_governance_council(
                             **_governance_payload(lock),
                             "proposal_id": proposal_typed.proposal_id,
                             "council_decision_id": decision.decision_id,
+                            "release_after_turn": release_after_turn,
                         },
                         turn=turn,
                     )
@@ -4052,7 +4214,9 @@ async def route_belief_decision(
                 tool,
                 supplied_params
                 if supplied_params is not None
-                else supplied_arguments or {},
+                else supplied_arguments
+                if supplied_arguments is not None
+                else {},
             )
             if not tool or not isinstance(intent_params, dict):
                 raise BeliefEngineError(
@@ -4136,6 +4300,15 @@ async def route_belief_decision(
             return normalized
 
         parsed_requirements = normalize_requirements(parsed_requirements)
+        council_required = bool(
+            parsed_intent
+            and _governance_council_required(
+                tool=tool,
+                params=intent_params,
+                impact=impact,
+                irreversibility=irreversibility,
+            )
+        )
         if council_decision_id:
             council = engine.get("council_decision", council_decision_id)
             if not council:
@@ -4185,6 +4358,11 @@ async def route_belief_decision(
                     "evidence_requirements do not match the council-approved contract"
                 )
             parsed_requirements = approved_requirements
+        elif council_required:
+            raise BeliefEngineError(
+                "This national, scarce-resource, high-impact, or irreversible "
+                "action requires a governance proposal and council_decision_id"
+            )
         elif governance_gate["active_proposal_ids"]:
             raise BeliefEngineError(
                 "Active governance proposals must be resolved before direct routing; "
@@ -4301,14 +4479,59 @@ async def record_action_verification(
     success: bool,
     belief_changes: str = "{}",
 ) -> str:
-    """Link a selected decision to its observed execution result."""
+    """Link a decision to evidence, including recovery after an interrupted call.
+
+    When an authorization is persisted as ``executing`` but the normal MCP
+    response is lost, this is the explicit recovery path. The tool must match
+    the hash-bound intent; success closes it, while failure makes it retryable.
+    """
 
     params = locals().copy()
     params.pop("ctx")
 
     def _operation(engine: BeliefEngine, turn: int) -> dict[str, Any]:
-        if not engine.get("decision", decision_id):
+        decision = engine.get("decision", decision_id)
+        if not decision:
             raise BeliefEngineError(f"Unknown decision: {decision_id}")
+        if decision.get("decision_state") == "executing":
+            intent = decision.get("action_intent") or {}
+            expected_tool = str(intent.get("tool") or "")
+            if expected_tool != tool:
+                raise BeliefEngineError(
+                    f"Verification tool {tool} does not match executing intent "
+                    f"{expected_tool}"
+                )
+            intent_params = intent.get("params") or intent.get("arguments") or {}
+            canonical_params = _canonical_action_params(tool, intent_params)
+            action = engine.record_tool_result(
+                tool=tool,
+                params=canonical_params,
+                result=actual,
+                turn=turn,
+                category="action",
+                success=success,
+                duration_ms=0,
+                decision_id=decision_id,
+                decision_route=str(decision.get("route") or "recovery"),
+            )
+            if action is None:
+                raise BeliefEngineError("Unable to persist recovered action outcome")
+            return engine.update(
+                "action",
+                action["id"],
+                {
+                    "expected": expected,
+                    "actual": actual,
+                    "belief_changes": _belief_json_object(
+                        belief_changes, "belief_changes"
+                    ),
+                    "verification": {
+                        "verified": True,
+                        "source": "agent_recovery",
+                    },
+                },
+                turn=turn,
+            )
         return engine.create(
             "action",
             {
