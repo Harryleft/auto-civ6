@@ -637,6 +637,8 @@ class BeliefEngine:
         category: str,
         success: bool,
         duration_ms: int,
+        decision_id: str | None = None,
+        decision_route: str | None = None,
     ) -> dict[str, Any] | None:
         if not self.bound:
             return None
@@ -661,7 +663,7 @@ class BeliefEngine:
             self.review(turn=turn)
             return observation
         if category in {"action", "turn"}:
-            return self.create(
+            action = self.create(
                 "action",
                 {
                     "statement": f"{tool} {'succeeded' if success else 'failed'}",
@@ -671,6 +673,8 @@ class BeliefEngine:
                     "success": success,
                     "duration_ms": duration_ms,
                     "selected_turn": turn,
+                    "decision_id": decision_id,
+                    "decision_route": decision_route,
                     "verification": {
                         "source": "tool_result",
                         "verified": success,
@@ -679,7 +683,156 @@ class BeliefEngine:
                 },
                 turn=turn,
             )
+            # A successful action is factual evidence. Persist it as an
+            # observation so predictions and plan conditions can be reviewed
+            # without a second agent-side record_observation call.
+            if success:
+                normalized = normalize_tool_result(tool, result)
+                facts = deepcopy(normalized.get("facts") or {})
+                facts.update({"action_success": True, "action_id": action["id"]})
+                self.create(
+                    "observation",
+                    {
+                        "statement": f"Observed result from {tool}",
+                        "source": f"action:{tool}",
+                        "raw": result,
+                        "facts": facts,
+                        "metrics": deepcopy(normalized.get("metrics") or {}),
+                        "reliability": 1.0,
+                        "observed_turn": turn,
+                        "tags": ["automatic", "action", tool],
+                    },
+                    turn=turn,
+                )
+            self.review(turn=turn)
+            return action
         return None
+
+    @staticmethod
+    def _action_matches(selected_action: Any, tool: str, params: dict[str, Any]) -> bool:
+        """Match a decision's human-readable action to a concrete MCP call."""
+        if not isinstance(selected_action, str) or not selected_action.strip():
+            return False
+        selected = selected_action.strip().lower()
+        action = str(params.get("action", "")).strip().lower()
+        candidates = {
+            tool.strip().lower(),
+            action,
+            f"{tool}:{action}".strip(":").lower(),
+        }
+        if selected in candidates:
+            return True
+        return bool(
+            action
+            and (selected.startswith(action + " ") or selected.endswith(" " + action))
+        )
+
+    def authorize_action(
+        self,
+        *,
+        tool: str,
+        params: dict[str, Any],
+        turn: int,
+        required: bool,
+    ) -> dict[str, Any]:
+        """Consume an explicit routed decision before a key MCP action."""
+        brief = self.turn_brief(turn=turn)
+        gate = brief["decision_gate"]
+        if not required:
+            return {
+                "authorized": True,
+                "decision_id": None,
+                "route": "routine",
+                "decision_gate": gate,
+            }
+
+        if gate.get("default_route") == "slow":
+            return {
+                "authorized": False,
+                "decision_id": None,
+                "route": "slow",
+                "decision_gate": gate,
+                "reason": (
+                    "The current Belief Engine gate is slow: resolve active "
+                    "contradictions/surprises or replan before acting."
+                ),
+            }
+
+        decisions = [
+            item
+            for item in self.list("decision", status="active")
+            if item.get("decision_state") == "authorized"
+            and item.get("created_turn") == turn
+            and self._action_matches(item.get("selected_action"), tool, params)
+        ]
+        decision = decisions[0] if decisions else None
+        if decision is None:
+            return {
+                "authorized": False,
+                "decision_id": None,
+                "route": gate.get("default_route", "fast"),
+                "decision_gate": gate,
+                "reason": (
+                    f"No authorized belief decision for {tool}. Call "
+                    "route_belief_decision with selected_action set to this "
+                    "tool/action before retrying."
+                ),
+            }
+        if decision.get("route") == "slow":
+            return {
+                "authorized": False,
+                "decision_id": decision["id"],
+                "route": "slow",
+                "decision_gate": gate,
+                "reason": (
+                    "The routed decision is slow: gather the missing evidence "
+                    "and replan before executing this action."
+                ),
+            }
+        if decision.get("route") == "verify_then_fast":
+            decision_sequences = [
+                int(event.get("sequence", 0))
+                for event in self._events
+                if event.get("entity_type") == "decision"
+                and event.get("entity_id") == decision["id"]
+            ]
+            decision_sequence = max(decision_sequences, default=0)
+            verified = any(
+                event.get("entity_type") == "observation"
+                and int(event.get("sequence", 0)) > decision_sequence
+                and str((event.get("entity") or {}).get("source", "")).startswith("mcp:")
+                for event in self._events
+            )
+            if not verified:
+                return {
+                    "authorized": False,
+                    "decision_id": decision["id"],
+                    "route": "verify_then_fast",
+                    "decision_gate": gate,
+                    "reason": (
+                        "This decision requires fresh game evidence first. "
+                        "Run the relevant get_* query (combat estimates must "
+                        "use get_combat_estimate), then retry the action."
+                    ),
+                }
+
+        consumed = self.update(
+            "decision",
+            decision["id"],
+            {
+                "status": "consumed",
+                "decision_state": "consumed",
+                "consumed_action_tool": tool,
+                "consumed_turn": turn,
+            },
+            turn=turn,
+        )
+        return {
+            "authorized": True,
+            "decision_id": consumed["id"],
+            "route": consumed.get("route", "fast"),
+            "decision_gate": gate,
+        }
 
     def resolve_prediction(
         self,
@@ -1191,7 +1344,44 @@ class BeliefEngine:
         urgency_score = _URGENCY_SCORE.get(urgency.lower())
         if impact_score is None or urgency_score is None:
             raise BeliefEngineError("impact and urgency must be low, medium, high, or critical")
-        uncertainty = max(1 - abs(probability - 0.5) * 2, 1 - confidence)
+        referenced = []
+        for belief_id in belief_ids or []:
+            belief = self.get("belief", belief_id)
+            if not belief or belief.get("status") != "active":
+                raise BeliefEngineError(
+                    f"Referenced active belief not found: {belief_id}"
+                )
+            referenced.append(belief)
+
+        # Agent estimates remain explicit inputs, but the current world model
+        # now changes the route instead of serving as decorative provenance.
+        # Conflicting priors and beliefs awaiting review increase uncertainty;
+        # the engine never silently replaces the agent's probability.
+        belief_probability = (
+            sum(float(item.get("probability", 0.5)) for item in referenced)
+            / len(referenced)
+            if referenced
+            else None
+        )
+        belief_confidence = (
+            min(float(item.get("confidence", 0.0)) for item in referenced)
+            if referenced
+            else None
+        )
+        belief_disagreement = (
+            min(1.0, abs(float(probability) - belief_probability))
+            if belief_probability is not None
+            else 0.0
+        )
+        belief_review_required = any(
+            bool(item.get("review_required")) for item in referenced
+        )
+        uncertainty = max(
+            1 - abs(probability - 0.5) * 2,
+            1 - confidence,
+            1 - belief_confidence if belief_confidence is not None else 0.0,
+            belief_disagreement,
+        )
         expected_loss = probability * impact_score
         active_surprises = self.list("surprise", status="active")
         surprise_score = max(
@@ -1209,8 +1399,11 @@ class BeliefEngine:
             + uncertainty * impact_score * 0.25
             + urgency_score * 0.15
             + irreversibility * 0.2
-            + surprise_score * 0.05,
+            + surprise_score * 0.05
+            + belief_disagreement * 0.1,
         )
+        if belief_review_required:
+            score = max(score, 0.75)
         if score >= 0.55 or surprise_score >= 0.7:
             route = "slow"
             budget = "high" if score >= 0.75 or surprise_score >= 1 else "medium"
@@ -1233,6 +1426,12 @@ class BeliefEngine:
             "probability": probability,
             "confidence": confidence,
             "belief_ids": belief_ids or [],
+            "belief_context": {
+                "referenced_probability": belief_probability,
+                "referenced_confidence": belief_confidence,
+                "disagreement": round(belief_disagreement, 4),
+                "review_required": belief_review_required,
+            },
             "active_surprise_score": surprise_score,
         }
         if persist:

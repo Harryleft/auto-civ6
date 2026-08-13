@@ -501,6 +501,139 @@ def _result_summary(result: str) -> str:
     return line[:120] + "..." if len(line) > 120 else line
 
 
+# Key actions are routed centrally here instead of relying on every tool
+# implementation to remember the Belief Engine.  Routine maintenance actions
+# (fortify/skip/heal/etc.) remain executable without an explicit route, while
+# strategic, irreversible, or combat actions require one.
+_BELIEF_GATED_TOOLS = {
+    "spy_action",
+    "set_city_production",
+    "purchase_item",
+    "set_research",
+    "set_policies",
+    "purchase_tile",
+    "promote_unit",
+    "upgrade_unit",
+    "choose_pantheon",
+    "found_religion",
+    "choose_dedication",
+    "appoint_governor",
+    "assign_governor",
+    "promote_governor",
+    "send_envoy",
+    "propose_trade",
+    "respond_to_trade",
+    "propose_peace",
+    "respond_to_diplomacy",
+    "send_diplomatic_action",
+    "form_alliance",
+    "city_action",
+    "queue_wc_votes",
+    "change_government",
+    "recruit_great_person",
+    "patronize_great_person",
+    "reject_great_person",
+    "set_city_focus",
+    "run_lua",
+}
+_ROUTINE_UNIT_ACTIONS = {
+    "fortify",
+    "skip",
+    "heal",
+    "alert",
+    "sleep",
+    "automate",
+}
+
+
+def _belief_route_required(tool_name: str, params: dict[str, Any]) -> bool:
+    if tool_name == "run_lua":
+        # GameCore Lua is the documented read-only escape hatch; InGame Lua
+        # can mutate the world and therefore needs an explicit route.
+        return str(params.get("context", "gamecore")).lower() == "ingame"
+    if tool_name in _BELIEF_GATED_TOOLS:
+        return True
+    if tool_name != "unit_action":
+        return False
+    return str(params.get("action", "")).lower() not in _ROUTINE_UNIT_ACTIONS
+
+
+async def _belief_action_preflight(
+    ctx: Context, tool_name: str, params: dict[str, Any]
+) -> dict[str, Any]:
+    """Run the common pre-action decision gate before touching the game."""
+    required = _belief_route_required(tool_name, params)
+    if not required and tool_name != "end_turn":
+        return {"authorized": True, "decision_id": None, "route": "routine"}
+
+    engine, turn = await _belief_context(ctx)
+    if tool_name == "end_turn":
+        brief = engine.turn_brief(turn=turn)
+        gate = brief["decision_gate"]
+        if gate.get("default_route") == "slow":
+            return {
+                "authorized": False,
+                "decision_id": None,
+                "route": "slow",
+                "reason": (
+                    "The turn brief has an unresolved slow gate. Review active "
+                    "contradictions/surprises or replan before ending the turn."
+                ),
+            }
+        return {
+            "authorized": True,
+            "decision_id": None,
+            "route": gate.get("default_route", "fast"),
+        }
+
+    return engine.authorize_action(
+        tool=tool_name,
+        params=params,
+        turn=turn,
+        required=required,
+    )
+
+
+async def _append_belief_context(
+    ctx: Context, tool_name: str, result: str
+) -> str:
+    """Make the gate visible alongside every normal game query."""
+    if not tool_name.startswith("get_") or tool_name == "get_game_overview":
+        return result
+    try:
+        engine, turn = await _belief_context(ctx)
+        brief = engine.turn_brief(turn=turn)
+        await _flush_belief_events(ctx)
+        gate = brief["decision_gate"]
+        review = brief["review"]
+        flags = []
+        for key, label in (
+            ("beliefs_requiring_review", "beliefs"),
+            ("plans_requiring_review", "plans"),
+            ("active_surprises", "surprises"),
+            ("active_contradictions", "contradictions"),
+        ):
+            values = gate.get(key) or []
+            if values:
+                flags.append(f"{label}={','.join(values[:6])}")
+        review_events = []
+        for key in ("predictions_resolved", "predictions_overdue", "plans_needing_replan", "contradictions_created"):
+            values = review.get(key) or []
+            if values:
+                review_events.append(f"{key}={','.join(values[:6])}")
+        suffix = [
+            "\n\n=== BELIEF CONTEXT ===",
+            f"turn={turn} default_route={gate.get('default_route', 'fast')}",
+            "flags=" + ("; ".join(flags) if flags else "none"),
+            "review=" + ("; ".join(review_events) if review_events else "none"),
+            "Use get_turn_brief before a key action; nearby hostiles require quantified combat evidence.",
+        ]
+        return result + "\n" + "\n".join(suffix)
+    except Exception:
+        log.debug("Belief context append failed for %s", tool_name, exc_info=True)
+        return result
+
+
 async def _record_belief_tool_result(
     ctx: Context,
     tool_name: str,
@@ -510,6 +643,8 @@ async def _record_belief_tool_result(
     duration_ms: int,
     *,
     success: bool,
+    decision_id: str | None = None,
+    decision_route: str | None = None,
 ) -> None:
     """Capture query facts and action verification without breaking gameplay."""
     try:
@@ -541,6 +676,8 @@ async def _record_belief_tool_result(
             category=category,
             success=success,
             duration_ms=duration_ms,
+            decision_id=decision_id,
+            decision_route=decision_route,
         )
         await _flush_belief_events(ctx)
     except Exception:
@@ -559,6 +696,57 @@ async def _logged(
     logger = _get_logger(ctx)
     turn = logger._turn or "?"
     start = time.monotonic()
+    decision_context: dict[str, Any] = {
+        "authorized": True,
+        "decision_id": None,
+        "route": "routine",
+    }
+    try:
+        decision_context = await _belief_action_preflight(ctx, tool_name, params)
+    except Exception as exc:
+        result = f"Error: Belief preflight failed: {exc}"
+        ms = int((time.monotonic() - start) * 1000)
+        await logger.log_error(tool_name, result)
+        await _record_belief_tool_result(
+            ctx,
+            tool_name,
+            params,
+            result,
+            turn,
+            ms,
+            success=False,
+        )
+        return result
+
+    decision_id = decision_context.get("decision_id")
+    decision_route = decision_context.get("route")
+    if not decision_context.get("authorized", True):
+        result = "BELIEF_GATE_REQUIRED: " + str(
+            decision_context.get("reason") or "Resolve the Belief Engine gate before retrying."
+        )
+        ms = int((time.monotonic() - start) * 1000)
+        log.info(
+            "[T%s] %s(%s) BLOCKED %dms: %s",
+            turn,
+            tool_name,
+            _param_summary(params),
+            ms,
+            _result_summary(result),
+        )
+        await logger.log_error(tool_name, result)
+        await _record_belief_tool_result(
+            ctx,
+            tool_name,
+            params,
+            result,
+            turn,
+            ms,
+            success=False,
+            decision_id=decision_id,
+            decision_route=decision_route,
+        )
+        return result
+
     try:
         result = await fn()
     except (LuaError, ValueError) as e:
@@ -574,7 +762,15 @@ async def _logged(
         )
         await logger.log_error(tool_name, result)
         await _record_belief_tool_result(
-            ctx, tool_name, params, result, turn, ms, success=False
+            ctx,
+            tool_name,
+            params,
+            result,
+            turn,
+            ms,
+            success=False,
+            decision_id=decision_id,
+            decision_route=decision_route,
         )
         return result
     except ConnectionError as e:
@@ -590,7 +786,15 @@ async def _logged(
         )
         await logger.log_error(tool_name, result)
         await _record_belief_tool_result(
-            ctx, tool_name, params, result, turn, ms, success=False
+            ctx,
+            tool_name,
+            params,
+            result,
+            turn,
+            ms,
+            success=False,
+            decision_id=decision_id,
+            decision_route=decision_route,
         )
 
         # Connection-loss recovery: after consecutive failures,
@@ -631,6 +835,13 @@ async def _logged(
     # Success — reset connection error counter + refresh heartbeat
     _logged._conn_errors = 0
     heartbeat.write("playing", turn=turn or 0)
+    if not result.startswith(("Error", "ERR")):
+        result = await _append_belief_context(ctx, tool_name, result)
+        if decision_id:
+            result += (
+                f"\n\n[Belief decision consumed: {decision_id}; "
+                f"route={decision_route}]"
+            )
     ms = int((time.monotonic() - start) * 1000)
     reported_error = result.startswith(("Error", "ERR"))
     log.info(
@@ -654,6 +865,8 @@ async def _logged(
         turn,
         ms,
         success=not reported_error,
+        decision_id=decision_id,
+        decision_route=decision_route,
     )
     try:
         await _get_spatial(ctx).record(tool_name, params, result, ms, tiles=tiles)
@@ -2972,6 +3185,11 @@ async def route_belief_decision(
             ),
             "selected_action": selected_action,
             "reason": reason,
+            # The common action wrapper consumes this authorization exactly
+            # once.  An empty selected_action deliberately cannot authorize a
+            # game mutation, preventing unbound route records from becoming
+            # decorative telemetry.
+            "decision_state": "authorized" if str(selected_action or "").strip() else "unbound",
         }
         return engine.update("decision", decision["id"], extras, turn=turn)
 
