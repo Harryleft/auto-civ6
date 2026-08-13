@@ -11,6 +11,7 @@ Scenario-specific metrics are dispatched via state.metadata["scenario_id"].
 Each dimension gets mean() and stderr() aggregation across samples.
 """
 
+import json
 import re
 from collections import Counter
 from dataclasses import dataclass
@@ -176,10 +177,55 @@ def _count_end_turns(calls: list[ToolCall]) -> int:
     return sum(1 for c in calls if c.name == "end_turn")
 
 
+_COMPLETED_TURN_RE = re.compile(
+    r"(?m)^Turn\s+(\d+)\s*->\s*(\d+)(?:\s|$)"
+)
+
+
+def _completed_governance_turns(calls: list[ToolCall]) -> set[int]:
+    """Return unique turns that a successful end_turn actually advanced.
+
+    Application-level blockers such as ``Cannot end turn`` and ``Turn paused``
+    are often returned as normal tool text rather than Inspect errors.  The
+    advancement contract in the result is therefore authoritative; call count
+    and error flags alone are not evidence that a turn completed.
+    """
+
+    completed: set[int] = set()
+    for call in calls:
+        if call.name != "end_turn" or call.is_error:
+            continue
+        match = _COMPLETED_TURN_RE.search(call.result)
+        if not match:
+            continue
+        turn_before, turn_after = (int(value) for value in match.groups())
+        if turn_after > turn_before:
+            completed.add(turn_before)
+    return completed
+
+
+def _governance_brief_turns(calls: list[ToolCall]) -> set[int]:
+    """Parse unique turn IDs from successful structured governance briefs."""
+
+    turns: set[int] = set()
+    for call in calls:
+        if call.name != "get_governance_brief" or call.is_error:
+            continue
+        try:
+            payload = json.loads(call.result)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        turn = payload.get("turn")
+        if type(turn) is int and turn >= 0:
+            turns.add(turn)
+    return turns
+
+
 def _governance_metrics(calls: list[ToolCall]) -> dict[str, float]:
-    completed_turns = sum(
-        1 for call in calls if call.name == "end_turn" and not call.is_error
-    )
+    completed_turns = _completed_governance_turns(calls)
+    brief_turns = _governance_brief_turns(calls)
     briefs = sum(
         1
         for call in calls
@@ -197,8 +243,11 @@ def _governance_metrics(calls: list[ToolCall]) -> dict[str, float]:
         for call in calls
         if call.name == "resolve_governance_council" and not call.is_error
     )
+    covered_turns = completed_turns.intersection(brief_turns)
     return {
-        "governance_coverage": min(1.0, briefs / max(1, completed_turns)),
+        "governance_coverage": (
+            len(covered_turns) / len(completed_turns) if completed_turns else 0.0
+        ),
         "governance_briefs": float(briefs),
         "structured_routes": float(structured_routes),
         "council_resolutions": float(council_resolutions),

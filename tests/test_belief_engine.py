@@ -930,6 +930,91 @@ class TestTypedGovernanceGraph:
         assert result["world_entities_archived"] == ["unit:7"]
         assert engine.get("world_entity", "unit:7")["status"] == "archived"
 
+    def test_archived_unit_and_movement_tiles_reactivate_without_tombstones(
+        self, engine
+    ):
+        def ingest(turn, snapshot_id, entities, relations=()):
+            return engine.ingest_typed_snapshot(
+                {
+                    "snapshot_id": snapshot_id,
+                    "turn_before": turn,
+                    "turn_after": turn,
+                    "entities": entities,
+                    "relations": list(relations),
+                },
+                turn=turn,
+            )
+
+        unit = {
+            "entity_type": "unit",
+            "entity_id": "unit:7",
+            "attributes": {"health": 100},
+        }
+        tile_a = {
+            "entity_type": "tile",
+            "entity_id": "tile:1:1",
+            "attributes": {"x": 1, "y": 1},
+        }
+        tile_b = {
+            "entity_type": "tile",
+            "entity_id": "tile:2:1",
+            "attributes": {"x": 2, "y": 1},
+        }
+
+        ingest(
+            1,
+            "snapshot_1",
+            [unit, tile_a],
+            [
+                {
+                    "relation_type": "located_at",
+                    "source_id": "unit:7",
+                    "target_id": "tile:1:1",
+                }
+            ],
+        )
+        ingest(2, "snapshot_2", [])
+        archived_unit = engine.get("world_entity", "unit:7")
+        assert archived_unit["status"] == "archived"
+        assert archived_unit["archived_turn"] == 2
+
+        ingest(
+            3,
+            "snapshot_3",
+            [unit, tile_b],
+            [
+                {
+                    "relation_type": "located_at",
+                    "source_id": "unit:7",
+                    "target_id": "tile:2:1",
+                }
+            ],
+        )
+        reactivated_unit = engine.get("world_entity", "unit:7")
+        assert reactivated_unit["status"] == "active"
+        assert "archived_turn" not in reactivated_unit
+        assert "archived_reason" not in reactivated_unit
+        assert reactivated_unit["links"][0]["entity_id"] == "tile:2:1"
+        assert engine.get("world_entity", "tile:1:1")["status"] == "archived"
+
+        ingest(
+            4,
+            "snapshot_4",
+            [unit, tile_a],
+            [
+                {
+                    "relation_type": "located_at",
+                    "source_id": "unit:7",
+                    "target_id": "tile:1:1",
+                }
+            ],
+        )
+        reactivated_tile = engine.get("world_entity", "tile:1:1")
+        assert reactivated_tile["status"] == "active"
+        assert "archived_turn" not in reactivated_tile
+        assert "archived_reason" not in reactivated_tile
+        assert engine.get("world_entity", "tile:2:1")["status"] == "archived"
+
 
 class TestInvalidInput:
     def test_requires_bound_game_and_required_entity_fields(self):
@@ -1113,3 +1198,268 @@ class TestGovernanceTurnLoopGate:
         assert outcome["success"] is False
         assert outcome["executed"] is False
         assert outcome["cancelled"] is True
+
+    def test_future_council_intents_become_due_and_terminal_history_stays_satisfied(
+        self, engine
+    ):
+        self._typed_snapshot(engine, 20)
+        first_params = {"unit_id": 7, "action": "fortify"}
+        second_params = {"unit_id": 8, "action": "fortify"}
+        engine.create(
+            "proposal",
+            {
+                "status": "resolved",
+                "statement": "Stage the next two turns of defense",
+                "department": "military",
+                "action_intent": {
+                    "intent_id": "intent:fortify:7",
+                    "tool": "unit_action",
+                    "arguments": first_params,
+                    "allowed_turn": 21,
+                },
+                "action_intents": [
+                    {
+                        "intent_id": "intent:fortify:7",
+                        "proposal_id": "proposal:staged-defense",
+                        "tool": "unit_action",
+                        "arguments": first_params,
+                        "allowed_turn": 21,
+                    },
+                    {
+                        "intent_id": "intent:fortify:8",
+                        "proposal_id": "proposal:staged-defense",
+                        "tool": "unit_action",
+                        "arguments": second_params,
+                        "allowed_turn": 22,
+                    },
+                ],
+                "council_state": "approved",
+                "council_decision_id": "council:20:staged-defense",
+            },
+            turn=20,
+            entity_id="proposal:staged-defense",
+        )
+
+        # Neither future obligation may lock the council's approval turn.
+        assert engine.governance_turn_gate(turn=20)["ready"] is True
+
+        self._typed_snapshot(engine, 21)
+        due = engine.governance_turn_gate(turn=21)
+        assert due["blockers"] == ["council_action_intents_not_completed"]
+        assert due["pending_council_intents"] == [
+            {
+                "proposal_id": "proposal:staged-defense",
+                "intent_id": "intent:fortify:7",
+                "allowed_turn": 21,
+                "decision_id": None,
+                "decision_state": "not_routed",
+            }
+        ]
+
+        first_decision = engine.route_decision(
+            statement="Execute staged eastern defense",
+            probability=0.9,
+            confidence=0.9,
+            impact="low",
+            urgency="low",
+            irreversibility=0,
+            action_intent={
+                "intent_id": "intent:fortify:7",
+                "proposal_id": "proposal:staged-defense",
+                "tool": "unit_action",
+                "params": first_params,
+                "args_hash": action_args_hash(first_params),
+                "allowed_turn": 21,
+            },
+            council_decision_id="council:20:staged-defense",
+            turn=21,
+        )
+        authorized = engine.authorize_action(
+            tool="unit_action", params=first_params, turn=21, required=False
+        )
+        assert authorized["decision_id"] == first_decision["id"]
+        engine.record_tool_result(
+            tool="unit_action",
+            params=first_params,
+            result="OK:FORTIFIED",
+            turn=21,
+            category="action",
+            success=True,
+            duration_ms=1,
+            decision_id=first_decision["id"],
+            decision_route="fast",
+        )
+        assert engine.governance_turn_gate(turn=21)["ready"] is True
+
+        self._typed_snapshot(engine, 22)
+        next_due = engine.governance_turn_gate(turn=22)
+        assert len(next_due["pending_council_intents"]) == 1
+        assert next_due["pending_council_intents"][0]["intent_id"] == "intent:fortify:8"
+        second_decision = engine.route_decision(
+            statement="Cancel the second staged defense after new evidence",
+            probability=0.9,
+            confidence=0.9,
+            impact="low",
+            urgency="low",
+            irreversibility=0,
+            action_intent={
+                "intent_id": "intent:fortify:8",
+                "proposal_id": "proposal:staged-defense",
+                "tool": "unit_action",
+                "params": second_params,
+                "args_hash": action_args_hash(second_params),
+                "allowed_turn": 22,
+            },
+            council_decision_id="council:20:staged-defense",
+            turn=22,
+        )
+        engine.cancel_action_authorization(
+            second_decision["id"], reason="The western threat disappeared.", turn=22
+        )
+        assert engine.governance_turn_gate(turn=22)["ready"] is True
+
+        # Historical success and cancellation satisfy the old council forever;
+        # they must not be treated as missing merely because this is a new turn.
+        self._typed_snapshot(engine, 23)
+        later = engine.governance_turn_gate(turn=23)
+        assert later["ready"] is True
+        assert later["pending_council_intents"] == []
+
+    def test_pending_authorization_is_a_cross_turn_obligation_but_cannot_execute_stale(
+        self, engine
+    ):
+        self._typed_snapshot(engine, 30)
+        params = {"tech_or_civic": "TECH_WRITING", "category": "tech"}
+        decision = engine.route_decision(
+            statement="Research Writing",
+            probability=0.9,
+            confidence=0.9,
+            impact="low",
+            urgency="low",
+            irreversibility=0,
+            action_intent={
+                "tool": "set_research",
+                "params": params,
+                "args_hash": action_args_hash(params),
+            },
+            turn=30,
+        )
+        assert engine.governance_turn_gate(turn=30)["pending_authorizations"]
+
+        self._typed_snapshot(engine, 31)
+        stale = engine.governance_turn_gate(turn=31)
+        assert stale["blockers"] == ["routed_actions_not_completed"]
+        assert stale["pending_authorizations"][0]["decision_id"] == decision["id"]
+
+        denied = engine.authorize_action(
+            tool="set_research", params=params, turn=31, required=True
+        )
+        assert denied["authorized"] is False
+        engine.cancel_action_authorization(
+            decision["id"], reason="Authorization expired with the old turn.", turn=31
+        )
+        assert engine.governance_turn_gate(turn=31)["ready"] is True
+
+    def test_interrupted_executing_authorization_blocks_until_result_is_reconciled(
+        self, engine
+    ):
+        self._typed_snapshot(engine, 35)
+        params = {"unit_id": 7, "action": "fortify"}
+        decision = engine.route_decision(
+            statement="Fortify the eastern defender",
+            probability=0.9,
+            confidence=0.9,
+            impact="low",
+            urgency="low",
+            irreversibility=0,
+            action_intent={
+                "tool": "unit_action",
+                "params": params,
+                "args_hash": action_args_hash(params),
+            },
+            turn=35,
+        )
+        authorized = engine.authorize_action(
+            tool="unit_action", params=params, turn=35, required=True
+        )
+        assert authorized["decision_id"] == decision["id"]
+
+        # Simulate an interrupted caller: the game action returned, but its
+        # result was not persisted until the next turn's precheck.
+        self._typed_snapshot(engine, 36)
+        blocked = engine.governance_turn_gate(turn=36)
+        assert blocked["blockers"] == ["routed_actions_not_completed"]
+        assert blocked["pending_authorizations"][0]["decision_state"] == "executing"
+        with pytest.raises(BeliefEngineError, match="while it is executing"):
+            engine.cancel_action_authorization(
+                decision["id"], reason="Caller was interrupted.", turn=36
+            )
+
+        engine.record_tool_result(
+            tool="unit_action",
+            params=params,
+            result="OK:FORTIFIED",
+            turn=36,
+            category="action",
+            success=True,
+            duration_ms=1,
+            decision_id=decision["id"],
+            decision_route="fast",
+        )
+        assert engine.get("decision", decision["id"])["decision_state"] == "succeeded"
+        assert engine.governance_turn_gate(turn=36)["ready"] is True
+
+    def test_future_authorization_is_dormant_then_executable_only_on_allowed_turn(
+        self, engine
+    ):
+        self._typed_snapshot(engine, 40)
+        params = {"unit_id": 7, "action": "fortify"}
+        decision = engine.route_decision(
+            statement="Fortify after the reinforcement arrives",
+            probability=0.9,
+            confidence=0.9,
+            impact="low",
+            urgency="low",
+            irreversibility=0,
+            action_intent={
+                "tool": "unit_action",
+                "params": params,
+                "args_hash": action_args_hash(params),
+                "allowed_turn": 41,
+            },
+            turn=40,
+        )
+        assert engine.governance_turn_gate(turn=40)["ready"] is True
+        assert engine.authorize_action(
+            tool="unit_action", params=params, turn=40, required=True
+        )["authorized"] is False
+
+        self._typed_snapshot(engine, 41)
+        due = engine.governance_turn_gate(turn=41)
+        assert due["blockers"] == ["routed_actions_not_completed"]
+        assert due["pending_authorizations"][0]["allowed_turn"] == 41
+        authorized = engine.authorize_action(
+            tool="unit_action", params=params, turn=41, required=True
+        )
+        assert authorized["decision_id"] == decision["id"]
+
+    def test_route_rejects_invalid_or_already_expired_allowed_turn(self, engine):
+        common = {
+            "statement": "Invalid scheduled action",
+            "probability": 0.9,
+            "confidence": 0.9,
+            "impact": "low",
+            "urgency": "low",
+            "irreversibility": 0,
+            "turn": 50,
+        }
+        with pytest.raises(BeliefEngineError, match="non-negative integer"):
+            engine.route_decision(
+                **common,
+                action_intent={"tool": "unit_action", "params": {}, "allowed_turn": True},
+            )
+        with pytest.raises(BeliefEngineError, match="already expired"):
+            engine.route_decision(
+                **common,
+                action_intent={"tool": "unit_action", "params": {}, "allowed_turn": 49},
+            )
