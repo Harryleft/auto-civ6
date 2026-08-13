@@ -9,6 +9,7 @@ providing normal CRUD semantics to MCP clients.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import re
@@ -31,6 +32,13 @@ BELIEF_ENTITY_TYPES = frozenset(
         "decision",
         "action",
         "attribution",
+        "world_entity",
+        "goal",
+        "proposal",
+        "critic_review",
+        "council_decision",
+        "budget_lock",
+        "outcome",
     }
 )
 
@@ -295,6 +303,13 @@ def _validate_entity(entity_type: str, entity: dict[str, Any]) -> None:
         "decision": ("statement", "route"),
         "action": ("statement", "tool"),
         "attribution": ("failure", "candidates"),
+        "world_entity": ("node_type", "attributes"),
+        "goal": ("statement", "priority"),
+        "proposal": ("statement", "department", "action_intent"),
+        "critic_review": ("proposal_id", "verdict"),
+        "council_decision": ("statement", "selected_proposal_id"),
+        "budget_lock": ("resource", "amount", "proposal_id"),
+        "outcome": ("statement", "action_intent", "success"),
     }
     missing = [field for field in required[entity_type] if entity.get(field) in (None, "")]
     if missing:
@@ -307,6 +322,34 @@ def _validate_entity(entity_type: str, entity: dict[str, Any]) -> None:
         deadline = entity["deadline_turn"]
         if isinstance(deadline, bool) or not isinstance(deadline, int) or deadline < 0:
             raise BeliefEngineError("deadline_turn must be a non-negative integer")
+    if entity_type == "critic_review":
+        verdict = entity.get("verdict")
+        if verdict not in {"agree", "agree_with_conditions", "object"}:
+            raise BeliefEngineError(
+                "critic verdict must be agree, agree_with_conditions, or object"
+            )
+        if verdict == "object" and not any(
+            entity.get(field)
+            for field in (
+                "counterevidence",
+                "invalidated_assumptions",
+                "alternative",
+            )
+        ):
+            raise BeliefEngineError(
+                "critic objection requires counterevidence, an invalidated "
+                "assumption, or a concrete alternative"
+            )
+
+
+def _canonical_params(params: dict[str, Any]) -> str:
+    """Stable action/evidence identity without relying on prose matching."""
+
+    return json.dumps(params, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def action_args_hash(params: dict[str, Any]) -> str:
+    return hashlib.sha256(_canonical_params(params).encode("utf-8")).hexdigest()
 
 
 def evaluate_condition(rule: dict[str, Any], metrics: dict[str, Any]) -> bool | None:
@@ -663,6 +706,7 @@ class BeliefEngine:
             self.review(turn=turn)
             return observation
         if category in {"action", "turn"}:
+            executed = not result.startswith("BELIEF_GATE_REQUIRED")
             action = self.create(
                 "action",
                 {
@@ -675,6 +719,7 @@ class BeliefEngine:
                     "selected_turn": turn,
                     "decision_id": decision_id,
                     "decision_route": decision_route,
+                    "executed": executed,
                     "verification": {
                         "source": "tool_result",
                         "verified": success,
@@ -686,7 +731,7 @@ class BeliefEngine:
             # A successful action is factual evidence. Persist it as an
             # observation so predictions and plan conditions can be reviewed
             # without a second agent-side record_observation call.
-            if success:
+            if success and executed:
                 normalized = normalize_tool_result(tool, result)
                 facts = deepcopy(normalized.get("facts") or {})
                 facts.update({"action_success": True, "action_id": action["id"]})
@@ -704,13 +749,54 @@ class BeliefEngine:
                     },
                     turn=turn,
                 )
+            if decision_id and executed:
+                self.create(
+                    "outcome",
+                    {
+                        "statement": f"Outcome of {tool}: {'success' if success else 'failure'}",
+                        "action_intent": {
+                            "tool": tool,
+                            "params": deepcopy(params),
+                            "args_hash": action_args_hash(params),
+                        },
+                        "decision_id": decision_id,
+                        "action_id": action["id"],
+                        "success": success,
+                        "result": result,
+                        "observed_turn": turn,
+                    },
+                    turn=turn,
+                )
+                if self.get("decision", decision_id):
+                    self.complete_action_authorization(
+                        decision_id,
+                        tool=tool,
+                        success=success,
+                        result=result,
+                        turn=turn,
+                    )
             self.review(turn=turn)
             return action
         return None
 
     @staticmethod
     def _action_matches(selected_action: Any, tool: str, params: dict[str, Any]) -> bool:
-        """Match a decision's human-readable action to a concrete MCP call."""
+        """Match a decision to a concrete MCP call.
+
+        New governance decisions carry a structured action intent and therefore
+        compare tool, parameter subset, and optional canonical argument hash.
+        The string branch remains for existing clients during migration.
+        """
+        if isinstance(selected_action, dict):
+            if str(selected_action.get("tool", "")).strip().lower() != tool.lower():
+                return False
+            expected = selected_action.get("params") or {}
+            if not isinstance(expected, dict) or not all(
+                params.get(key) == value for key, value in expected.items()
+            ):
+                return False
+            expected_hash = selected_action.get("args_hash")
+            return not expected_hash or expected_hash == action_args_hash(params)
         if not isinstance(selected_action, str) or not selected_action.strip():
             return False
         selected = selected_action.strip().lower()
@@ -726,6 +812,72 @@ class BeliefEngine:
             action
             and (selected.startswith(action + " ") or selected.endswith(" " + action))
         )
+
+    @staticmethod
+    def _scope_conflicts(left: str, right: str) -> bool:
+        left = (left or "global").strip().lower()
+        right = (right or "global").strip().lower()
+        return (
+            "global" in {left, right}
+            or left == right
+            or left.startswith(right + ":")
+            or right.startswith(left + ":")
+        )
+
+    def _evidence_requirements_satisfied(
+        self,
+        requirements: list[dict[str, Any]],
+        *,
+        after_sequence: int,
+        turn: int,
+    ) -> tuple[bool, list[dict[str, Any]]]:
+        missing: list[dict[str, Any]] = []
+        events = [
+            event
+            for event in self._events
+            if event.get("entity_type") == "observation"
+            and int(event.get("sequence", 0)) > after_sequence
+        ]
+        for requirement in requirements:
+            tool = str(requirement.get("tool") or "").strip()
+            expected_params = requirement.get("params") or {}
+            metric_keys = (
+                requirement.get("metric_keys")
+                or requirement.get("required_metrics")
+                or []
+            )
+            fact_keys = requirement.get("required_facts") or []
+            minimum_sequence = max(
+                after_sequence,
+                int(requirement.get("min_observation_sequence", 0)),
+            )
+            max_age = requirement.get("max_age_turns", 0)
+            matched = False
+            for event in events:
+                if int(event.get("sequence", 0)) <= minimum_sequence:
+                    continue
+                observation = event.get("entity") or {}
+                if observation.get("source") != f"mcp:{tool}":
+                    continue
+                if not isinstance(expected_params, dict) or not all(
+                    (observation.get("source_params") or {}).get(key) == value
+                    for key, value in expected_params.items()
+                ):
+                    continue
+                observed_turn = int(observation.get("observed_turn", event.get("turn", 0)))
+                if isinstance(max_age, int) and max_age >= 0 and turn - observed_turn > max_age:
+                    continue
+                metrics = observation.get("metrics") or {}
+                if not all(key in metrics for key in metric_keys):
+                    continue
+                facts = observation.get("facts") or {}
+                if not all(key in facts for key in fact_keys):
+                    continue
+                matched = True
+                break
+            if not matched:
+                missing.append(deepcopy(requirement))
+        return not missing, missing
 
     def authorize_action(
         self,
@@ -746,24 +898,14 @@ class BeliefEngine:
                 "decision_gate": gate,
             }
 
-        if gate.get("default_route") == "slow":
-            return {
-                "authorized": False,
-                "decision_id": None,
-                "route": "slow",
-                "decision_gate": gate,
-                "reason": (
-                    "The current Belief Engine gate is slow: resolve active "
-                    "contradictions/surprises or replan before acting."
-                ),
-            }
-
         decisions = [
             item
             for item in self.list("decision", status="active")
-            if item.get("decision_state") == "authorized"
+            if item.get("decision_state") in {"authorized", "retryable"}
             and item.get("created_turn") == turn
-            and self._action_matches(item.get("selected_action"), tool, params)
+            and self._action_matches(
+                item.get("action_intent") or item.get("selected_action"), tool, params
+            )
         ]
         decision = decisions[0] if decisions else None
         if decision is None:
@@ -776,6 +918,24 @@ class BeliefEngine:
                     f"No authorized belief decision for {tool}. Call "
                     "route_belief_decision with selected_action set to this "
                     "tool/action before retrying."
+                ),
+            }
+        decision_scope = str(decision.get("gate_scope") or "global")
+        blocking_scopes = gate.get("blocking_scopes") or []
+        conflicting_scopes = [
+            scope
+            for scope in blocking_scopes
+            if self._scope_conflicts(decision_scope, str(scope))
+        ]
+        if conflicting_scopes:
+            return {
+                "authorized": False,
+                "decision_id": decision["id"],
+                "route": "slow",
+                "decision_gate": gate,
+                "reason": (
+                    "The action scope is blocked by unresolved governance gates: "
+                    + ", ".join(conflicting_scopes)
                 ),
             }
         if decision.get("route") == "slow":
@@ -797,11 +957,22 @@ class BeliefEngine:
                 and event.get("entity_id") == decision["id"]
             ]
             decision_sequence = max(decision_sequences, default=0)
-            verified = any(
-                event.get("entity_type") == "observation"
-                and int(event.get("sequence", 0)) > decision_sequence
-                and str((event.get("entity") or {}).get("source", "")).startswith("mcp:")
-                for event in self._events
+            requirements = decision.get("evidence_requirements") or []
+            if not requirements:
+                return {
+                    "authorized": False,
+                    "decision_id": decision["id"],
+                    "route": "verify_then_fast",
+                    "decision_gate": gate,
+                    "reason": (
+                        "This decision requires explicit relevant evidence; route it "
+                        "with evidence_requirements before executing."
+                    ),
+                }
+            verified, missing = self._evidence_requirements_satisfied(
+                requirements,
+                after_sequence=decision_sequence,
+                turn=turn,
             )
             if not verified:
                 return {
@@ -809,29 +980,156 @@ class BeliefEngine:
                     "decision_id": decision["id"],
                     "route": "verify_then_fast",
                     "decision_gate": gate,
+                    "missing_evidence": missing,
                     "reason": (
-                        "This decision requires fresh game evidence first. "
-                        "Run the relevant get_* query (combat estimates must "
-                        "use get_combat_estimate), then retry the action."
+                        "This decision requires fresh, relevant game evidence first. "
+                        "Run the exact get_* queries listed in missing_evidence, "
+                        "then retry the action."
                     ),
                 }
 
-        consumed = self.update(
+        executing = self.update(
             "decision",
             decision["id"],
             {
-                "status": "consumed",
-                "decision_state": "consumed",
-                "consumed_action_tool": tool,
-                "consumed_turn": turn,
+                "decision_state": "executing",
+                "executing_action_tool": tool,
+                "executing_args_hash": action_args_hash(params),
+                "execution_attempt": int(decision.get("execution_attempt", 0)) + 1,
+                "execution_started_turn": turn,
             },
             turn=turn,
         )
         return {
             "authorized": True,
-            "decision_id": consumed["id"],
-            "route": consumed.get("route", "fast"),
+            "decision_id": executing["id"],
+            "route": executing.get("route", "fast"),
             "decision_gate": gate,
+        }
+
+    def complete_action_authorization(
+        self,
+        decision_id: str,
+        *,
+        tool: str,
+        success: bool,
+        result: str,
+        turn: int,
+    ) -> dict[str, Any]:
+        """Finish an executing authorization after the game returns a result."""
+
+        decision = self.get("decision", decision_id)
+        if not decision:
+            raise BeliefEngineError(f"Unknown decision: {decision_id}")
+        if decision.get("decision_state") != "executing":
+            return decision
+        if success:
+            patch = {
+                "status": "resolved",
+                "decision_state": "succeeded",
+                "completed_action_tool": tool,
+                "completed_turn": turn,
+                "execution_result": result[:2000],
+            }
+        else:
+            patch = {
+                "decision_state": "retryable",
+                "last_failed_action_tool": tool,
+                "last_failed_turn": turn,
+                "last_failure": result[:2000],
+            }
+        return self.update("decision", decision_id, patch, turn=turn)
+
+    def ingest_typed_snapshot(
+        self,
+        snapshot: dict[str, Any],
+        *,
+        turn: int,
+    ) -> dict[str, Any]:
+        """Project a typed GameState snapshot into the existing event graph."""
+
+        snapshot_id = str(snapshot.get("snapshot_id") or "")
+        if not snapshot_id:
+            raise BeliefEngineError("typed snapshot requires snapshot_id")
+        if int(snapshot.get("turn_before", turn)) != int(snapshot.get("turn_after", turn)):
+            raise BeliefEngineError("typed snapshot spans multiple turns")
+        links_by_entity: dict[str, list[dict[str, Any]]] = {}
+        for relation in snapshot.get("relations") or []:
+            if not isinstance(relation, dict):
+                raise BeliefEngineError("typed snapshot relations must be JSON objects")
+            source_id = str(relation.get("source_id") or "")
+            target_id = str(relation.get("target_id") or "")
+            relation_type = str(relation.get("relation_type") or "")
+            if not source_id or not target_id or not relation_type:
+                raise BeliefEngineError(
+                    "typed snapshot relation requires source_id, target_id, and relation_type"
+                )
+            attributes = deepcopy(relation.get("attributes") or {})
+            links_by_entity.setdefault(source_id, []).append(
+                {
+                    "relation": relation_type,
+                    "direction": "outgoing",
+                    "entity_id": target_id,
+                    "attributes": attributes,
+                }
+            )
+            links_by_entity.setdefault(target_id, []).append(
+                {
+                    "relation": relation_type,
+                    "direction": "incoming",
+                    "entity_id": source_id,
+                    "attributes": attributes,
+                }
+            )
+        changed: list[str] = []
+        for node in snapshot.get("entities") or []:
+            if not isinstance(node, dict) or not (node.get("id") or node.get("entity_id")):
+                raise BeliefEngineError("typed snapshot entity requires a stable id")
+            entity_id = str(node.get("id") or node.get("entity_id"))
+            payload = {
+                "node_type": str(
+                    node.get("node_type") or node.get("entity_type") or "entity"
+                ),
+                "attributes": deepcopy(node.get("attributes") or {}),
+                "links": sorted(
+                    deepcopy(node.get("links") or links_by_entity.get(entity_id, [])),
+                    key=lambda item: (
+                        str(item.get("relation")),
+                        str(item.get("direction")),
+                        str(item.get("entity_id")),
+                    ),
+                ),
+                "snapshot_id": snapshot_id,
+                "source": "game_state:typed",
+                "observed_turn": turn,
+            }
+            before = self.get("world_entity", entity_id)
+            after = self.upsert("world_entity", entity_id, payload, turn=turn)
+            if before is None or after.get("version") != before.get("version"):
+                changed.append(entity_id)
+        observation = self.create(
+            "observation",
+            {
+                "statement": f"Typed GameState snapshot {snapshot_id}",
+                "source": "game_state:typed_snapshot",
+                "facts": {
+                    "snapshot_id": snapshot_id,
+                    "entity_count": len(snapshot.get("entities") or []),
+                    "relation_count": len(snapshot.get("relations") or []),
+                    "capabilities": deepcopy(snapshot.get("capabilities") or {}),
+                },
+                "metrics": deepcopy(snapshot.get("metrics") or {}),
+                "reliability": 1.0,
+                "observed_turn": turn,
+                "tags": ["automatic", "typed", "game_state"],
+            },
+            turn=turn,
+        )
+        self.review(turn=turn)
+        return {
+            "snapshot_id": snapshot_id,
+            "world_entities_changed": changed,
+            "observation_id": observation["id"],
         }
 
     def resolve_prediction(
@@ -1245,6 +1543,21 @@ class BeliefEngine:
             for item in plans
             if item.get("status") == "needs_replan" or item.get("review_required")
         ]
+        blocking_scopes: set[str] = set()
+        for item in beliefs:
+            if item.get("review_required"):
+                blocking_scopes.add(str(item.get("gate_scope") or "global"))
+        for item in plans:
+            if item.get("status") == "needs_replan" or item.get("review_required"):
+                blocking_scopes.add(str(item.get("gate_scope") or "global"))
+        for item in contradictions:
+            belief = self.get("belief", str(item.get("belief_id") or ""))
+            blocking_scopes.add(
+                str(item.get("gate_scope") or (belief or {}).get("gate_scope") or "global")
+            )
+        for item in surprises:
+            if item.get("severity") in {"high", "major"}:
+                blocking_scopes.add(str(item.get("gate_scope") or "global"))
         if replan_plans or contradictions or any(
             item.get("severity") in {"high", "major"} for item in surprises
         ):
@@ -1265,6 +1578,7 @@ class BeliefEngine:
                 "plans_requiring_review": replan_plans[:take],
                 "active_surprises": [item["id"] for item in surprises[:take]],
                 "active_contradictions": [item["id"] for item in contradictions[:take]],
+                "blocking_scopes": sorted(blocking_scopes),
             },
             "beliefs": [
                 compact(
@@ -1278,6 +1592,7 @@ class BeliefEngine:
                         "urgency",
                         "review_required",
                         "review_reason",
+                        "gate_scope",
                     ),
                 )
                 for item in beliefs[:take]
@@ -1305,6 +1620,7 @@ class BeliefEngine:
                         "review_turn",
                         "review_required",
                         "status_reason",
+                        "gate_scope",
                     ),
                 )
                 for item in plans[:take]
@@ -1335,6 +1651,10 @@ class BeliefEngine:
         irreversibility: float,
         turn: int,
         belief_ids: list[str] | None = None,
+        action_intent: dict[str, Any] | None = None,
+        evidence_requirements: list[dict[str, Any]] | None = None,
+        gate_scope: str = "global",
+        council_decision_id: str | None = None,
         persist: bool = True,
     ) -> dict[str, Any]:
         _validate_probability("probability", probability)
@@ -1433,6 +1753,11 @@ class BeliefEngine:
                 "review_required": belief_review_required,
             },
             "active_surprise_score": surprise_score,
+            "action_intent": deepcopy(action_intent),
+            "evidence_requirements": deepcopy(evidence_requirements or []),
+            "gate_scope": str(gate_scope or "global"),
+            "council_decision_id": council_decision_id,
+            "decision_state": "authorized" if action_intent else "unbound",
         }
         if persist:
             return self.create("decision", assessment, turn=turn)

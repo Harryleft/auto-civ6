@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import time
 
 from typing import TYPE_CHECKING
 
@@ -118,6 +119,64 @@ class GameState:
             except Exception:
                 log.debug("Failed to bootstrap snapshot", exc_info=True)
         return ov
+
+    async def get_governance_snapshot(self):
+        """Collect a same-turn typed snapshot for the governance control plane.
+
+        The snapshot adapter consumes the dataclasses returned by GameState
+        directly. It never reconstructs facts from narrated MCP text. A turn
+        read brackets the collection and one retry handles an AI/UI frame that
+        advances while the snapshot is being assembled.
+        """
+
+        from civ_mcp.governance.capabilities import capabilities_for_ruleset
+        from civ_mcp.governance.snapshot import (
+            SnapshotConsistencyError,
+            build_turn_snapshot,
+        )
+
+        last_error: Exception | None = None
+        for _attempt in range(2):
+            before_lines = await self.conn.execute_read(
+                'print(Game.GetCurrentGameTurn()); print("---END---")'
+            )
+            if not before_lines:
+                raise SnapshotConsistencyError("Unable to read snapshot start turn")
+            turn_before = int(before_lines[0])
+            overview = await self.get_game_overview()
+            cities, _city_warnings = await self.get_cities()
+            units = await self.get_units()
+            diplomacy = await self.get_diplomacy()
+            tech_civic = await self.get_tech_civics()
+            capabilities = capabilities_for_ruleset(overview.ruleset)
+            stockpiles: list[lq.ResourceStockpile] = []
+            if capabilities.resource_stockpiles:
+                stockpiles, _owned, _nearby, _classes = await self.get_empire_resources()
+            after_lines = await self.conn.execute_read(
+                'print(Game.GetCurrentGameTurn()); print("---END---")'
+            )
+            if not after_lines:
+                raise SnapshotConsistencyError("Unable to read snapshot end turn")
+            turn_after = int(after_lines[0])
+            try:
+                return build_turn_snapshot(
+                    turn_before=turn_before,
+                    turn_after=turn_after,
+                    captured_at=time.time(),
+                    overview=overview,
+                    cities=cities,
+                    units=units,
+                    diplomacy=diplomacy,
+                    tech_civic=tech_civic,
+                    resources=stockpiles,
+                    extra={"collector": "GameState.get_governance_snapshot"},
+                )
+            except SnapshotConsistencyError as exc:
+                last_error = exc
+                if turn_before == turn_after:
+                    raise
+        assert last_error is not None
+        raise last_error
 
     async def get_diary_snapshot(self) -> lq.DiarySnapshot:
         """Full per-turn snapshot for diary JSONL. InGame context."""
