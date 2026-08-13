@@ -11,16 +11,18 @@ import os
 import re
 import sys
 import time
+from collections.abc import Mapping
 from contextlib import asynccontextmanager
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields, is_dataclass
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Any, AsyncIterator, Awaitable, Callable, Optional
 
 import uvicorn
 from mcp.server.fastmcp import Context, FastMCP
 
 from civ_mcp import game_launcher, heartbeat
-from civ_mcp.belief_engine import BeliefEngine, BeliefEngineError
+from civ_mcp.belief_engine import BeliefEngine, BeliefEngineError, action_args_hash
 from civ_mcp.game_over_watchdog import GameOverWatchdog
 from civ_mcp import narrate as nr
 from civ_mcp.connection import GameConnection, LuaError
@@ -365,10 +367,14 @@ async def lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
 mcp = FastMCP(
     "Civilization VI",
     instructions=(
-        "Read game state and issue commands to a running Civ 6 game. Call "
-        "get_game_overview first; its result includes the reviewed Belief "
-        "Engine turn brief. Call get_turn_brief again after material evidence "
-        "or action outcomes."
+        "Read game state and issue commands to a running Civ 6 game. Start each "
+        "turn with get_governance_brief: it ingests a same-turn typed GameState "
+        "snapshot, capabilities, budgets and the reviewed Belief Engine state. "
+        "Departments submit structured proposals; the council applies hard "
+        "constraints, budget locks, priority, Pareto and opportunity cost. Route "
+        "selected exact action intents before acting. verify_then_fast requires "
+        "the specifically declared query parameters and facts/metrics, not any "
+        "unrelated get_* call. Call get_turn_brief after material outcomes."
     ),
     lifespan=lifespan,
 )
@@ -625,6 +631,8 @@ async def _append_belief_context(
             "\n\n=== BELIEF CONTEXT ===",
             f"turn={turn} default_route={gate.get('default_route', 'fast')}",
             "flags=" + ("; ".join(flags) if flags else "none"),
+            "blocking_scopes="
+            + (",".join(gate.get("blocking_scopes") or []) or "none"),
             "review=" + ("; ".join(review_events) if review_events else "none"),
             "Use get_turn_brief before a key action; nearby hostiles require quantified combat evidence.",
         ]
@@ -2651,6 +2659,131 @@ def _belief_json_list(raw: str, label: str) -> list[Any]:
     return value
 
 
+def _governance_payload(value: Any) -> Any:
+    """Serialize frozen governance contracts without losing typed boundaries."""
+
+    if isinstance(value, Enum):
+        return value.value
+    if is_dataclass(value) and not isinstance(value, type):
+        return {
+            field.name: _governance_payload(getattr(value, field.name))
+            for field in fields(value)
+        }
+    if isinstance(value, Mapping):
+        return {str(key): _governance_payload(item) for key, item in value.items()}
+    if isinstance(value, (tuple, list, set, frozenset)):
+        return [_governance_payload(item) for item in value]
+    return value
+
+
+def _governance_proposal_from_dict(raw: dict[str, Any]):
+    """Validate one ministerial proposal against the shared governance schema."""
+
+    from civ_mcp.governance import (
+        ActionIntent,
+        BudgetLock,
+        EvidenceRequirement,
+        ProbabilityConfidence,
+        Proposal,
+    )
+
+    proposal_id = str(raw.get("proposal_id") or "")
+
+    def evidence(item: dict[str, Any]) -> EvidenceRequirement:
+        return EvidenceRequirement(
+            requirement_id=str(item.get("requirement_id") or ""),
+            tool=str(item.get("tool") or ""),
+            target_entity_id=item.get("target_entity_id"),
+            params=item.get("params") or {},
+            min_observation_sequence=item.get("min_observation_sequence", 0),
+            max_age_turns=item.get("max_age_turns"),
+            required_facts=tuple(item.get("required_facts") or ()),
+            required_metrics=tuple(item.get("required_metrics") or ()),
+            description=str(item.get("description") or ""),
+        )
+
+    intents = []
+    for item in raw.get("action_intents") or []:
+        if not isinstance(item, dict):
+            raise BeliefEngineError("action_intents must contain JSON objects")
+        requirements = item.get("evidence_requirements") or []
+        if not all(isinstance(requirement, dict) for requirement in requirements):
+            raise BeliefEngineError(
+                "action intent evidence_requirements must contain JSON objects"
+            )
+        intents.append(
+            ActionIntent(
+                intent_id=str(item.get("intent_id") or ""),
+                tool=str(item.get("tool") or ""),
+                arguments=item.get("arguments") or item.get("params") or {},
+                proposal_id=proposal_id,
+                evidence_requirements=tuple(evidence(req) for req in requirements),
+                allowed_turn=item.get("allowed_turn"),
+                arguments_hash=str(item.get("arguments_hash") or ""),
+            )
+        )
+    locks = []
+    for item in raw.get("budget_locks") or []:
+        if not isinstance(item, dict):
+            raise BeliefEngineError("budget_locks must contain JSON objects")
+        locks.append(
+            BudgetLock(
+                resource=str(item.get("resource") or ""),
+                amount=item.get("amount", 1),
+                scope=str(item.get("scope") or "global"),
+                exclusive=item.get("exclusive", False),
+                reason=str(item.get("reason") or ""),
+            )
+        )
+    success = raw.get("success") or {}
+    if not isinstance(success, dict):
+        raise BeliefEngineError("proposal success must be a JSON object")
+    return Proposal(
+        proposal_id=proposal_id,
+        department=str(raw.get("department") or ""),
+        summary=str(raw.get("summary") or raw.get("statement") or ""),
+        goal_ids=tuple(raw.get("goal_ids") or ()),
+        success=ProbabilityConfidence(
+            success.get("probability"), success.get("confidence")
+        ),
+        priority=raw.get("priority"),
+        hard_constraints=raw.get("hard_constraints") or {},
+        budget_locks=tuple(locks),
+        benefits=raw.get("benefits") or {},
+        costs=raw.get("costs") or {},
+        opportunity_cost=raw.get("opportunity_cost", 0),
+        failure_cost=raw.get("failure_cost", 0),
+        action_intents=tuple(intents),
+        belief_ids=tuple(raw.get("belief_ids") or ()),
+        expires_turn=raw.get("expires_turn"),
+    )
+
+
+def _release_stale_budget_locks(
+    engine: BeliefEngine,
+    *,
+    turn: int,
+) -> list[str]:
+    """Release prior-turn reservations before computing a new turn budget."""
+
+    released: list[str] = []
+    for lock in engine.list("budget_lock", status="active"):
+        if int(lock.get("created_turn", turn)) >= turn:
+            continue
+        engine.update(
+            "budget_lock",
+            lock["id"],
+            {
+                "status": "archived",
+                "released_turn": turn,
+                "release_reason": "turn_advanced",
+            },
+            turn=turn,
+        )
+        released.append(lock["id"])
+    return released
+
+
 async def _belief_context(ctx: Context) -> tuple[BeliefEngine, int]:
     """Bind the world model to the live game and return its current turn."""
     engine = _get_beliefs(ctx)
@@ -2758,6 +2891,7 @@ async def upsert_belief(
     expectations: str = "[]",
     action_threshold: float = 0.65,
     replan_threshold: float = 0.5,
+    gate_scope: str = "global",
 ) -> str:
     """Create or revise a belief while retaining its complete revision history."""
 
@@ -2784,6 +2918,7 @@ async def upsert_belief(
                 "action_threshold": action_threshold,
                 "replan_threshold": replan_threshold,
                 "review_required": False,
+                "gate_scope": gate_scope,
             },
             turn=turn,
         )
@@ -2925,6 +3060,7 @@ async def upsert_dynamic_plan(
     success_conditions: str = "[]",
     exit_conditions: str = "[]",
     review_turn: int = 0,
+    gate_scope: str = "global",
 ) -> str:
     """Create or revise a 5/10/20-turn plan with explicit invalidation rules."""
 
@@ -2952,6 +3088,7 @@ async def upsert_dynamic_plan(
                 "review_turn": actual_review_turn,
                 "review_required": False,
                 "status": "active",
+                "gate_scope": gate_scope,
             },
             turn=turn,
         )
@@ -3058,6 +3195,540 @@ async def get_turn_brief(ctx: Context, limit: int = 12) -> str:
     )
 
 
+@mcp.tool()
+async def get_governance_brief(
+    ctx: Context,
+    limit: int = 12,
+    confidence_floor: float = 0.6,
+) -> str:
+    """Capture typed GameState facts and return the national governance agenda.
+
+    This is the preferred start-of-turn control-plane input. It collects one
+    same-turn typed snapshot, projects it into the existing event-sourced graph,
+    then combines capabilities, scarce-resource budgets, confidence gaps, and
+    current belief gates. No narrated game text is parsed for this snapshot.
+    """
+
+    started = time.monotonic()
+    params = {"limit": limit, "confidence_floor": confidence_floor}
+    try:
+        if not 0 <= confidence_floor <= 1:
+            raise BeliefEngineError("confidence_floor must be between 0 and 1")
+        from civ_mcp.governance.snapshot import snapshot_world_state
+
+        engine, _turn = await _belief_context(ctx)
+        snapshot = await _get_game(ctx).get_governance_snapshot()
+        world = snapshot_world_state(snapshot)
+        projection = engine.ingest_typed_snapshot(world, turn=snapshot.turn)
+        released_locks = _release_stale_budget_locks(engine, turn=snapshot.turn)
+        active_locks = engine.list("budget_lock", status="active")
+        belief_brief = engine.turn_brief(turn=snapshot.turn, limit=limit)
+        await _flush_belief_events(ctx)
+        low_confidence = [
+            {
+                "id": item["id"],
+                "statement": item.get("statement"),
+                "confidence": item.get("confidence"),
+                "gate_scope": item.get("gate_scope", "global"),
+            }
+            for item in engine.list("belief", status="active")
+            if float(item.get("confidence", 0)) < confidence_floor
+        ][: max(1, min(limit, 50))]
+        city_ids = [
+            item["entity_id"]
+            for item in world["entities"]
+            if item.get("entity_type") == "city"
+        ]
+        unit_ids = [
+            item["entity_id"]
+            for item in world["entities"]
+            if item.get("entity_type") == "unit"
+        ]
+        metrics = world.get("metrics") or {}
+        gold_capacity = float(metrics.get("player.gold", 0))
+        faith_capacity = float(metrics.get("player.faith", 0))
+
+        def locked_amount(resource: str) -> float:
+            return sum(
+                float(lock.get("amount", 0))
+                for lock in active_locks
+                if lock.get("resource") == resource
+            )
+
+        def available_scopes(resource: str, scopes: list[str]) -> list[str]:
+            held_scopes = {
+                str(lock.get("scope") or "global")
+                for lock in active_locks
+                if lock.get("resource") == resource and lock.get("exclusive")
+            }
+            if "global" in held_scopes:
+                return []
+            return [scope for scope in scopes if scope not in held_scopes]
+
+        result = {
+            "game_id": engine.game_id,
+            "turn": snapshot.turn,
+            "snapshot": {
+                "snapshot_id": snapshot.snapshot_id,
+                "turn_before": snapshot.turn_before,
+                "turn_after": snapshot.turn_after,
+                "ruleset": world["ruleset"],
+                "entity_count": len(world["entities"]),
+                "relation_count": len(world["relations"]),
+                **projection,
+            },
+            "capabilities": world["capabilities"],
+            "budget_capacity": {
+                "gold": gold_capacity,
+                "faith": faith_capacity,
+                "research": 1,
+                "civic": 1,
+                "city_production": len(city_ids),
+                "unit_action": len(unit_ids),
+            },
+            "available_budget": {
+                "gold": max(0.0, gold_capacity - locked_amount("gold")),
+                "faith": max(0.0, faith_capacity - locked_amount("faith")),
+                "research_slots": available_scopes("research", ["current"]),
+                "civic_slots": available_scopes("civic", ["current"]),
+                "city_production_slots": available_scopes(
+                    "city_production", city_ids
+                ),
+                "unit_action_slots": available_scopes("unit_action", unit_ids),
+            },
+            "confidence_gaps": low_confidence,
+            "belief_brief": belief_brief,
+            "governance": {
+                "goals": engine.list("goal", status="active")[:limit],
+                "proposals": engine.list("proposal", status="active")[:limit],
+                "critic_reviews": engine.list("critic_review", status="active")[:limit],
+                "council_decisions": engine.list("council_decision", status=None)[:limit],
+                "budget_locks": active_locks[:limit],
+                "released_budget_locks": released_locks,
+            },
+            "arbitration_order": [
+                "hard_constraints",
+                "budget_locks",
+                "strategic_priority",
+                "pareto_dominance",
+                "opportunity_cost",
+            ],
+        }
+        text = json.dumps(result, ensure_ascii=False, indent=2)
+        await _get_logger(ctx).log_tool_call(
+            "get_governance_brief",
+            params,
+            text,
+            int((time.monotonic() - started) * 1000),
+        )
+        return text
+    except (BeliefEngineError, TypeError, ValueError, ConnectionError) as exc:
+        message = f"Error: {exc}"
+        await _get_logger(ctx).log_error("get_governance_brief", message)
+        return message
+
+
+@mcp.tool()
+async def upsert_strategic_goal(
+    ctx: Context,
+    goal_id: str,
+    statement: str,
+    priority: int,
+    probability: float,
+    confidence: float,
+    hard_constraints: str = "[]",
+    deadline_turn: int = 0,
+    parent_goal_id: str = "",
+    tags: str = "[]",
+) -> str:
+    """Create or revise a national goal with separate likelihood/confidence."""
+
+    params = locals().copy()
+    params.pop("ctx")
+
+    def _operation(engine: BeliefEngine, turn: int) -> dict[str, Any]:
+        from civ_mcp.governance import ProbabilityConfidence, StrategicGoal
+
+        goal = StrategicGoal(
+            goal_id=goal_id,
+            statement=statement,
+            priority=priority,
+            success=ProbabilityConfidence(probability, confidence),
+            hard_constraints=tuple(
+                _belief_json_list(hard_constraints, "hard_constraints")
+            ),
+            deadline_turn=deadline_turn or None,
+            parent_goal_id=parent_goal_id or None,
+            tags=tuple(_belief_json_list(tags, "tags")),
+        )
+        payload = _governance_payload(goal)
+        payload.update(
+            {
+                "statement": statement,
+                "probability": probability,
+                "confidence": confidence,
+            }
+        )
+        return engine.upsert("goal", goal_id, payload, turn=turn)
+
+    return await _belief_tool(ctx, "upsert_strategic_goal", params, _operation)
+
+
+@mcp.tool()
+async def submit_governance_proposal(ctx: Context, proposal: str) -> str:
+    """Submit a structured ministerial proposal; departments cannot execute it.
+
+    The JSON proposal names goals, separate success probability/confidence,
+    hard constraints, budget locks, benefits, costs, opportunity cost and exact
+    action intents. It remains advisory until ``resolve_governance_council``.
+    """
+
+    params = {"proposal": proposal}
+
+    def _operation(engine: BeliefEngine, turn: int) -> dict[str, Any]:
+        parsed = _belief_json_object(proposal, "proposal")
+        typed = _governance_proposal_from_dict(parsed)
+        for goal_id in typed.goal_ids:
+            goal = engine.get("goal", goal_id)
+            if not goal or goal.get("status") != "active":
+                raise BeliefEngineError(f"Referenced active goal not found: {goal_id}")
+        for belief_id in typed.belief_ids:
+            belief = engine.get("belief", belief_id)
+            if not belief or belief.get("status") != "active":
+                raise BeliefEngineError(
+                    f"Referenced active belief not found: {belief_id}"
+                )
+        payload = _governance_payload(typed)
+        payload.update(
+            {
+                "status": "active",
+                "statement": typed.summary,
+                "action_intent": (
+                    _governance_payload(typed.action_intents[0])
+                    if typed.action_intents
+                    else {}
+                ),
+                "submitted_turn": turn,
+                "council_state": "proposed",
+                "council_decision_id": None,
+                "rejection_reasons": [],
+            }
+        )
+        return engine.upsert(
+            "proposal", typed.proposal_id, payload, turn=turn
+        )
+
+    return await _belief_tool(ctx, "submit_governance_proposal", params, _operation)
+
+
+@mcp.tool()
+async def review_governance_proposal(
+    ctx: Context,
+    review_id: str,
+    proposal_id: str,
+    verdict: str,
+    rationale: str,
+    probability: float,
+    confidence: float,
+    conditions: str = "[]",
+    counterevidence: str = "[]",
+    invalidated_assumptions: str = "[]",
+    alternative: str = "",
+) -> str:
+    """Persist an evidence-grounded Devil's Advocate review.
+
+    A review may agree, agree with concrete conditions, or object. Bare
+    objections are rejected: they need counterevidence or an invalidated
+    assumption plus a concrete alternative.
+    """
+
+    params = locals().copy()
+    params.pop("ctx")
+
+    def _operation(engine: BeliefEngine, turn: int) -> dict[str, Any]:
+        from civ_mcp.governance import (
+            CounterEvidence,
+            DevilsAdvocate,
+            DevilsAdvocateVerdict,
+            ProbabilityConfidence,
+        )
+
+        proposal_entity = engine.get("proposal", proposal_id)
+        if not proposal_entity or proposal_entity.get("status") != "active":
+            raise BeliefEngineError(f"Referenced active proposal not found: {proposal_id}")
+        proposal_typed = _governance_proposal_from_dict(proposal_entity)
+        evidence_items = _belief_json_list(counterevidence, "counterevidence")
+        if not all(isinstance(item, dict) for item in evidence_items):
+            raise BeliefEngineError(
+                "counterevidence must contain traceable JSON observation objects"
+            )
+        grounded_evidence = []
+        for item in evidence_items:
+            observation_id = str(item.get("observation_id") or "")
+            observation = engine.get("observation", observation_id)
+            if not observation:
+                raise BeliefEngineError(
+                    f"Counterevidence observation not found: {observation_id}"
+                )
+            grounded_evidence.append(
+                CounterEvidence(
+                    observation_id=observation_id,
+                    statement=str(item.get("statement") or observation.get("statement") or ""),
+                    source_tool=str(
+                        item.get("source_tool")
+                        or str(observation.get("source") or "").removeprefix("mcp:")
+                    ),
+                    observed_turn=item.get(
+                        "observed_turn", observation.get("observed_turn", turn)
+                    ),
+                )
+            )
+        review = DevilsAdvocate.review(
+            proposal_typed,
+            review_id=review_id,
+            verdict=DevilsAdvocateVerdict(verdict),
+            rationale=rationale,
+            assessment=ProbabilityConfidence(probability, confidence),
+            conditions=tuple(_belief_json_list(conditions, "conditions")),
+            counterevidence=tuple(grounded_evidence),
+            invalidated_assumptions=tuple(
+                _belief_json_list(
+                    invalidated_assumptions, "invalidated_assumptions"
+                )
+            ),
+            alternative=alternative or None,
+        )
+        payload = _governance_payload(review)
+        payload["proposal_version"] = proposal_entity["version"]
+        return engine.upsert("critic_review", review_id, payload, turn=turn)
+
+    return await _belief_tool(ctx, "review_governance_proposal", params, _operation)
+
+
+@mcp.tool()
+async def resolve_governance_council(
+    ctx: Context,
+    budget_limits: str,
+    accepted_conditions: str = "{}",
+) -> str:
+    """Arbitrate proposals without a weighted national-strategy score.
+
+    Order is fixed: hard constraints, grounded critic review, budget locks,
+    strategic priority, Pareto dominance, then opportunity cost. Selected
+    proposals become eligible for exact action routing; they do not execute.
+    """
+
+    params = {
+        "budget_limits": budget_limits,
+        "accepted_conditions": accepted_conditions,
+    }
+
+    def _operation(engine: BeliefEngine, turn: int) -> dict[str, Any]:
+        from civ_mcp.governance import (
+            BudgetLock,
+            CouncilDecision,
+            CouncilDecisionStatus,
+            GovernanceCouncil,
+        )
+
+        _release_stale_budget_locks(engine, turn=turn)
+        limits = _belief_json_object(budget_limits, "budget_limits")
+        accepted = _belief_json_object(accepted_conditions, "accepted_conditions")
+        typed_snapshot = next(
+            (
+                item
+                for item in engine.list("observation", status="active")
+                if item.get("source") == "game_state:typed_snapshot"
+                and item.get("observed_turn") == turn
+            ),
+            None,
+        )
+        if typed_snapshot is None:
+            raise BeliefEngineError(
+                "A current-turn typed snapshot is required; call get_governance_brief first"
+            )
+        snapshot_metrics = typed_snapshot.get("metrics") or {}
+        authoritative_capacity = {
+            "gold": max(0.0, float(snapshot_metrics.get("player.gold", 0))),
+            "faith": max(0.0, float(snapshot_metrics.get("player.faith", 0))),
+            "research": 1.0,
+            "civic": 1.0,
+            "city_production": max(
+                0.0, float(snapshot_metrics.get("player.cities", 0))
+            ),
+            "unit_action": max(
+                0.0, float(snapshot_metrics.get("player.units", 0))
+            ),
+        }
+        for resource, capacity in authoritative_capacity.items():
+            requested = limits.get(resource, capacity)
+            if isinstance(requested, bool) or not isinstance(requested, (int, float)):
+                raise BeliefEngineError(
+                    f"budget limit {resource!r} must be numeric, not bool"
+                )
+            limits[resource] = min(float(requested), capacity)
+            for key in tuple(limits):
+                if key.startswith(resource + ":"):
+                    scoped = limits[key]
+                    if isinstance(scoped, bool) or not isinstance(scoped, (int, float)):
+                        raise BeliefEngineError(
+                            f"budget limit {key!r} must be numeric, not bool"
+                        )
+                    limits[key] = min(float(scoped), capacity)
+        proposal_entities = engine.list("proposal", status="active")
+        proposals = [
+            _governance_proposal_from_dict(item) for item in proposal_entities
+        ]
+        proposal_versions = {
+            str(item["id"]): int(item["version"]) for item in proposal_entities
+        }
+        blocked_by_critic: dict[str, tuple[str, ...]] = {}
+        latest_reviews: dict[str, dict[str, Any]] = {}
+        for review in engine.list("critic_review", status="active"):
+            proposal_id = str(review.get("proposal_id") or "")
+            if (
+                proposal_id
+                and review.get("proposal_version") == proposal_versions.get(proposal_id)
+                and proposal_id not in latest_reviews
+            ):
+                latest_reviews[proposal_id] = review
+        eligible = []
+        for proposal_typed in proposals:
+            review = latest_reviews.get(proposal_typed.proposal_id)
+            if not review or review.get("verdict") == "agree":
+                eligible.append(proposal_typed)
+                continue
+            if review.get("verdict") == "object":
+                blocked_by_critic[proposal_typed.proposal_id] = (
+                    f"grounded critic objection: {review.get('rationale', '')}",
+                )
+                continue
+            required = set(review.get("conditions") or [])
+            supplied = set(accepted.get(proposal_typed.proposal_id) or [])
+            if required.issubset(supplied):
+                eligible.append(proposal_typed)
+            else:
+                missing = sorted(required - supplied)
+                blocked_by_critic[proposal_typed.proposal_id] = (
+                    "critic conditions not accepted: " + ", ".join(missing),
+                )
+
+        active_locks = tuple(
+            BudgetLock(
+                resource=str(item.get("resource") or ""),
+                amount=item.get("amount", 1),
+                scope=str(item.get("scope") or "global"),
+                exclusive=item.get("exclusive", False),
+                reason=str(item.get("reason") or ""),
+            )
+            for item in engine.list("budget_lock", status="active")
+        )
+        proposal_identity = {
+            "proposal_ids": sorted(item.proposal_id for item in proposals)
+        }
+        council_id = (
+            f"council:{turn}:"
+            f"{action_args_hash(proposal_identity)[:16]}"
+        )
+        base = GovernanceCouncil().decide(
+            turn=turn,
+            proposals=eligible,
+            budget_limits=limits,
+            held_locks=active_locks,
+            decision_id=council_id,
+        )
+        rejected = dict(base.rejected_reasons)
+        rejected.update(blocked_by_critic)
+        selected = base.selected_proposal_ids
+        if selected and rejected:
+            status = CouncilDecisionStatus.PARTIAL
+        elif selected:
+            status = CouncilDecisionStatus.APPROVED
+        else:
+            status = CouncilDecisionStatus.REJECTED
+        decision = CouncilDecision(
+            decision_id=base.decision_id,
+            turn=turn,
+            status=status,
+            selected_proposal_ids=selected,
+            considered_proposal_ids=tuple(
+                proposal_typed.proposal_id for proposal_typed in proposals
+            ),
+            rejected_reasons=rejected,
+            explanation=(
+                "critic: objections require evidence; conditions require explicit acceptance",
+                *base.explanation,
+            ),
+            budget_usage=base.budget_usage,
+        )
+        payload = _governance_payload(decision)
+        council_state = payload.pop("status")
+        payload.update(
+            {
+                "status": "resolved",
+                "council_state": council_state,
+                "statement": f"Governance council resolved {len(proposals)} proposals",
+                "selected_proposal_id": selected[0] if selected else "none",
+                "typed_snapshot_id": (typed_snapshot.get("facts") or {}).get(
+                    "snapshot_id"
+                ),
+                "effective_budget_limits": limits,
+            }
+        )
+        persisted = engine.upsert(
+            "council_decision",
+            decision.decision_id,
+            payload,
+            turn=turn,
+        )
+        selected_set = set(selected)
+        considered_set = {item.proposal_id for item in proposals}
+        for proposal_typed in proposals:
+            approved = proposal_typed.proposal_id in selected_set
+            engine.update(
+                "proposal",
+                proposal_typed.proposal_id,
+                {
+                    "status": "resolved",
+                    "council_state": "approved" if approved else "rejected",
+                    "council_decision_id": decision.decision_id,
+                    "rejection_reasons": list(
+                        rejected.get(proposal_typed.proposal_id, ())
+                    ),
+                },
+                turn=turn,
+            )
+            if approved:
+                for index, lock in enumerate(proposal_typed.budget_locks):
+                    engine.upsert(
+                        "budget_lock",
+                        (
+                            f"lock:{decision.decision_id}:"
+                            f"{proposal_typed.proposal_id}:{index}"
+                        ),
+                        {
+                            **_governance_payload(lock),
+                            "proposal_id": proposal_typed.proposal_id,
+                            "council_decision_id": decision.decision_id,
+                        },
+                        turn=turn,
+                    )
+        for review in engine.list("critic_review", status="active"):
+            if str(review.get("proposal_id") or "") in considered_set:
+                engine.update(
+                    "critic_review",
+                    review["id"],
+                    {
+                        "status": "resolved",
+                        "council_decision_id": decision.decision_id,
+                    },
+                    turn=turn,
+                )
+        return persisted
+
+    return await _belief_tool(ctx, "resolve_governance_council", params, _operation)
+
+
 @mcp.tool(annotations={"readOnlyHint": True})
 async def get_belief_state(
     ctx: Context,
@@ -3092,6 +3763,13 @@ async def get_belief_state(
             "contradiction",
             "attribution",
             "decision",
+            "goal",
+            "proposal",
+            "critic_review",
+            "council_decision",
+            "budget_lock",
+            "outcome",
+            "world_entity",
         )
         return {
             "game_id": engine.game_id,
@@ -3162,13 +3840,168 @@ async def route_belief_decision(
     considered_actions: str = "[]",
     selected_action: str = "",
     reason: str = "",
+    action_intent: str = "{}",
+    evidence_requirements: str = "[]",
+    gate_scope: str = "global",
+    council_decision_id: str = "",
 ) -> str:
-    """Route a decision to fast, verify-then-fast, or slow reasoning."""
+    """Route a decision and bind it to an exact action/evidence contract.
+
+    ``action_intent`` is preferred over the legacy ``selected_action`` string:
+    ``{"tool":"set_research","params":{"tech_or_civic":"TECH_WRITING",...}}``.
+    For ``verify_then_fast``, ``evidence_requirements`` names the exact fresh
+    queries that must follow the decision. The harness compares tool parameters,
+    not merely the presence of any query.
+    """
 
     params = locals().copy()
     params.pop("ctx")
 
     def _operation(engine: BeliefEngine, turn: int) -> dict[str, Any]:
+        parsed_intent = _belief_json_object(action_intent, "action_intent")
+        if parsed_intent:
+            tool = str(parsed_intent.get("tool") or "").strip()
+            supplied_params = parsed_intent.get("params")
+            supplied_arguments = parsed_intent.get("arguments")
+            if (
+                supplied_params is not None
+                and supplied_arguments is not None
+                and supplied_params != supplied_arguments
+            ):
+                raise BeliefEngineError(
+                    "action_intent params and arguments must match when both are present"
+                )
+            intent_params = (
+                supplied_params
+                if supplied_params is not None
+                else supplied_arguments or {}
+            )
+            if not tool or not isinstance(intent_params, dict):
+                raise BeliefEngineError(
+                    "action_intent requires a tool and JSON object arguments/params"
+                )
+            computed_hash = action_args_hash(intent_params)
+            supplied_hash = str(
+                parsed_intent.get("args_hash")
+                or parsed_intent.get("arguments_hash")
+                or ""
+            )
+            if supplied_hash and supplied_hash != computed_hash:
+                raise BeliefEngineError(
+                    "action_intent argument hash does not match its arguments"
+                )
+            parsed_intent["params"] = intent_params
+            parsed_intent["args_hash"] = computed_hash
+        else:
+            parsed_intent = None
+        parsed_requirements = _belief_json_list(
+            evidence_requirements, "evidence_requirements"
+        )
+
+        def normalize_requirements(items: list[Any]) -> list[dict[str, Any]]:
+            normalized: list[dict[str, Any]] = []
+            for item in items:
+                if not isinstance(item, dict) or not item.get("tool"):
+                    raise BeliefEngineError(
+                        "evidence_requirements must contain JSON objects with a tool"
+                    )
+                requirement_params = item.get("params") or {}
+                required_facts = item.get("required_facts") or []
+                required_metrics = (
+                    item.get("required_metrics") or item.get("metric_keys") or []
+                )
+                minimum_sequence = item.get("min_observation_sequence", 0)
+                max_age_turns = item.get("max_age_turns")
+                if not isinstance(requirement_params, dict):
+                    raise BeliefEngineError(
+                        "evidence requirement params must be a JSON object"
+                    )
+                if not isinstance(required_facts, list) or not all(
+                    isinstance(value, str) and value for value in required_facts
+                ):
+                    raise BeliefEngineError(
+                        "evidence required_facts must be a list of non-empty strings"
+                    )
+                if not isinstance(required_metrics, list) or not all(
+                    isinstance(value, str) and value for value in required_metrics
+                ):
+                    raise BeliefEngineError(
+                        "evidence required_metrics must be a list of non-empty strings"
+                    )
+                if type(minimum_sequence) is not int or minimum_sequence < 0:
+                    raise BeliefEngineError(
+                        "evidence min_observation_sequence must be a non-negative integer"
+                    )
+                if max_age_turns is not None and (
+                    type(max_age_turns) is not int or max_age_turns < 0
+                ):
+                    raise BeliefEngineError(
+                        "evidence max_age_turns must be a non-negative integer or null"
+                    )
+                normalized.append(
+                    {
+                        "requirement_id": str(item.get("requirement_id") or ""),
+                        "tool": str(item["tool"]),
+                        "target_entity_id": item.get("target_entity_id"),
+                        "params": requirement_params,
+                        "min_observation_sequence": minimum_sequence,
+                        "max_age_turns": max_age_turns,
+                        "required_facts": list(required_facts),
+                        "required_metrics": list(required_metrics),
+                    }
+                )
+            return normalized
+
+        parsed_requirements = normalize_requirements(parsed_requirements)
+        if council_decision_id:
+            council = engine.get("council_decision", council_decision_id)
+            if not council:
+                raise BeliefEngineError(
+                    f"Unknown council decision: {council_decision_id}"
+                )
+            if not parsed_intent:
+                raise BeliefEngineError(
+                    "a council-routed decision requires a structured action_intent"
+                )
+            proposal_id = str(parsed_intent.get("proposal_id") or "")
+            selected_ids = set(council.get("selected_proposal_ids") or [])
+            if proposal_id not in selected_ids:
+                raise BeliefEngineError(
+                    "action_intent proposal_id was not selected by the council"
+                )
+            proposal = engine.get("proposal", proposal_id)
+            if not proposal or proposal.get("council_decision_id") != council_decision_id:
+                raise BeliefEngineError(
+                    f"Council-selected proposal not found: {proposal_id}"
+                )
+            candidate_hash = action_args_hash(intent_params)
+            approved_intent = next(
+                (
+                    item
+                    for item in proposal.get("action_intents") or []
+                    if isinstance(item, dict)
+                    and item.get("tool") == tool
+                    and item.get("arguments_hash") == candidate_hash
+                ),
+                None,
+            )
+            if approved_intent is None:
+                raise BeliefEngineError(
+                    "action_intent does not match an action selected by the council"
+                )
+            allowed_turn = approved_intent.get("allowed_turn")
+            if allowed_turn is not None and allowed_turn != turn:
+                raise BeliefEngineError(
+                    f"action_intent is approved only for turn {allowed_turn}"
+                )
+            approved_requirements = normalize_requirements(
+                list(approved_intent.get("evidence_requirements") or [])
+            )
+            if parsed_requirements and parsed_requirements != approved_requirements:
+                raise BeliefEngineError(
+                    "evidence_requirements do not match the council-approved contract"
+                )
+            parsed_requirements = approved_requirements
         decision = engine.route_decision(
             statement=statement,
             probability=probability,
@@ -3177,6 +4010,10 @@ async def route_belief_decision(
             urgency=urgency,
             irreversibility=irreversibility,
             belief_ids=_belief_json_list(belief_ids, "belief_ids"),
+            action_intent=parsed_intent,
+            evidence_requirements=parsed_requirements,
+            gate_scope=gate_scope,
+            council_decision_id=council_decision_id or None,
             turn=turn,
         )
         extras = {
@@ -3189,7 +4026,11 @@ async def route_belief_decision(
             # once.  An empty selected_action deliberately cannot authorize a
             # game mutation, preventing unbound route records from becoming
             # decorative telemetry.
-            "decision_state": "authorized" if str(selected_action or "").strip() else "unbound",
+            "decision_state": (
+                "authorized"
+                if parsed_intent or str(selected_action or "").strip()
+                else "unbound"
+            ),
         }
         return engine.update("decision", decision["id"], extras, turn=turn)
 

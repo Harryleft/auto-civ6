@@ -10,6 +10,16 @@ against later evidence, plans carry invalidation rules, and high-risk decisions
 are routed through the decision gate before the action is sent to Civ 6. Every
 successful action is also fed back as a factual observation and reviewed.
 
+The governance control plane builds on that same event log rather than adding a
+second state store. `get_governance_brief` captures typed `GameState` results
+directly, exposes the active-ruleset capability profile and scarce-resource
+budgets, and restores current goals, proposals, critic reviews, council
+decisions, and locks. Ministerial proposals cannot write to the game. The
+council first applies hard constraints and budget locks, then strategic
+priority, Pareto dominance, and opportunity cost; only a selected, hash-bound
+`ActionIntent` can be routed to the single game writer. Probability and
+confidence remain separate throughout this process.
+
 <!-- TODO: Add screenshot or GIF of agent playing -->
 
 ## Capabilities
@@ -37,6 +47,9 @@ of being inferred from database rows that the base game still exposes. Shared
 features such as basic diplomacy and tile/resource scans continue to work.
 
 Every turn, `end_turn` takes before/after snapshots and reports what happened: units damaged, cities grew, production completed, threats spotted near your cities.
+
+For the complete governance workflow and JSON contracts, see
+[Civ Governance System](docs/governance-system.md).
 
 ## Quick start
 
