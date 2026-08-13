@@ -360,7 +360,12 @@ async def lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
         await camera.stop()
         await popup_watcher.stop()
         uvi_server.should_exit = True
-        await api_task
+        try:
+            await api_task
+        except asyncio.CancelledError:
+            # Host shutdown cancels background tasks before lifespan cleanup.
+            # Continue so the FireTuner socket is closed deliberately below.
+            pass
         await conn.disconnect()
 
 
@@ -5326,4 +5331,9 @@ def main():
     if os.environ.get("CIV_MCP_DISABLE_LUA"):
         mcp._tool_manager.remove_tool("run_lua")
 
-    mcp.run(transport="stdio")
+    try:
+        mcp.run(transport="stdio")
+    except KeyboardInterrupt:
+        # SIGTERM is intentionally remapped to SIGINT above so FastMCP runs
+        # lifespan cleanup. Treat the resulting interrupt as a normal stop.
+        pass
