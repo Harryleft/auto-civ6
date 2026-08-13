@@ -17,6 +17,23 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
+def _can_override_end_turn_blockers(
+    hard_blockers: list[tuple[str, str]],
+) -> bool:
+    """Return whether the UI's ``CanEndTurn`` result may override blockers.
+
+    Unit-order blockers are backed by live GameCore unit state.  Treating a
+    contradictory ``UI.CanEndTurn() == true`` as authoritative can start the
+    next-turn job while a unit task is still incomplete, which is unsafe for
+    the async game-core worker.  Other blocker types retain the existing
+    compatibility behavior for now.
+    """
+    return not any(
+        blocker_type == "ENDTURN_BLOCKING_UNITS"
+        for blocker_type, _ in hard_blockers
+    )
+
+
 async def _check_mid_turn_diplomacy(
     gs: GameState,
     lua: str,
@@ -1071,20 +1088,26 @@ async def execute_end_turn(gs: GameState) -> str:
 
                 # Ask the game if turn can actually end despite our blockers.
                 # Safe here — we haven't started AI processing yet (pre-end-turn phase).
-                try:
-                    can_end_lines = await gs.conn.execute_write(
-                        f"local can = UI.CanEndTurn(); "
-                        f'print(can and "CAN_END" or "CANNOT_END"); '
-                        f'print("{lq.SENTINEL}")'
-                    )
-                    if any(l == "CAN_END" for l in can_end_lines):
-                        log.info(
-                            "UI.CanEndTurn()=true despite blockers %s — proceeding",
-                            [bt for bt, _ in hard_blockers],
+                if _can_override_end_turn_blockers(hard_blockers):
+                    try:
+                        can_end_lines = await gs.conn.execute_write(
+                            f"local can = UI.CanEndTurn(); "
+                            f'print(can and "CAN_END" or "CANNOT_END"); '
+                            f'print("{lq.SENTINEL}")'
                         )
-                        break  # fall through to end_turn request
-                except Exception:
-                    log.debug("UI.CanEndTurn check failed", exc_info=True)
+                        if any(l == "CAN_END" for l in can_end_lines):
+                            log.info(
+                                "UI.CanEndTurn()=true despite blockers %s — proceeding",
+                                [bt for bt, _ in hard_blockers],
+                            )
+                            break  # fall through to end_turn request
+                    except Exception:
+                        log.debug("UI.CanEndTurn check failed", exc_info=True)
+                else:
+                    log.info(
+                        "Refusing UI.CanEndTurn() override because unit blockers remain: %s",
+                        [bt for bt, _ in hard_blockers],
+                    )
 
                 lines_out: list[str] = ["Cannot end turn — resolve these blockers:"]
                 for bt, bm in hard_blockers:
