@@ -246,6 +246,10 @@ The server maintains a persistent TCP connection to Civ 6 via the FireTuner debu
 
 The repo includes an [AGENTS.md](AGENTS.md) playbook (symlinked as `CLAUDE.md` for Claude Code) with detailed instructions for agents: turn loop, combat, diplomacy, common pitfalls. See the [devlog](docs/devlog/) for the full development story, including reverse-engineering the FireTuner protocol and the many API quirks discovered along the way.
 
+### DeepSeek Harness
+
+An opt-in [DeepSeek Harness integration](integrations/deepseek-harness/README.md) mounts this server through DSH's native MCP client while keeping `GameState`, governance, FireTuner, saves, and game telemetry authoritative in Python. With the official Harness checkout installed and built beside this repository, validate the composition with `./scripts/deepseek_harness check`, then start the Web profile with `./scripts/deepseek_harness web`.
+
 ## Requirements
 
 - **macOS, Windows, or Linux** with Civilization VI (Steam version, Gathering Storm DLC)
