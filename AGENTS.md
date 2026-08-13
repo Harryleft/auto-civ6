@@ -25,9 +25,10 @@ Early choices compound. Each decision shapes what's available 20, 40, 60 turns l
 ## Turn Loop
 
 Each turn in order:
-0. `python3 scripts/civ6_assist.py precheck` — its first section is the reviewed Belief Engine turn brief, followed by blockers (production/research/policy/envoy/diplo/WC), opportunities, and unit state. Fix belief gates and blockers before anything else.
+0. `get_governance_brief` — mandatory MCP entry point. It captures a same-turn typed GameState snapshot and returns ruleset capabilities, budgets, governance agenda, and the reviewed Belief Engine brief. A missing governance snapshot is a blocker, not an optional warning. Human operators with shell access may run `python3 scripts/civ6_assist.py precheck`, which starts with this same MCP call and adds blocker/opportunity checks; MCP-only agents must call the tool directly.
 1. `get_game_overview` — turn, yields, research, score, era score, difficulty. It automatically appends the same Belief Engine turn brief. If resuming after context compaction, call `get_diary` first, then `get_turn_brief`.
 1b. Read the brief before choosing an action: active beliefs/predictions/plans are decision context, `review_required`/Surprise/Contradiction means re-evaluate, and `default_route` is the minimum reasoning route.
+1c. If departments compete for a scarce resource or the choice changes national strategy, run `upsert_strategic_goal` → `submit_governance_proposal` → optional `review_governance_proposal` → `resolve_governance_council`. The critic may agree; objections need traceable evidence or a falsified assumption/alternative.
 2. `get_units` — positions, HP, moves, charges, nearby threats. A nearby hostile is only a verification trigger; call `get_combat_estimate` and then `assess_route_combat_risk` before changing a route belief.
 3. `get_map_area` around cities/units — terrain, resources, enemy units
 4. Move/action each unit; before high-impact or irreversible actions call `route_belief_decision` with the relevant belief IDs, and after the result check whether the belief/plan still holds.
@@ -44,6 +45,9 @@ The diary records what happened and what the agent said. The Belief Engine is
 the mutable current world model. Successful `get_*` calls automatically create
 fact-only observations; do not copy every query manually.
 
+- `get_governance_brief`: mandatory first call each turn; writes typed
+  `GameState` entities/relations/metrics into the governance graph and returns
+  capabilities, live budget capacities, locks, confidence gaps, and agenda.
 - `get_turn_brief`: mandatory per-turn decision input; reviews new evidence and
   returns active beliefs, predictions, plans, surprises, contradictions, and
   the minimum decision route. `get_game_overview` includes it automatically.
@@ -59,6 +63,13 @@ fact-only observations; do not copy every query manually.
   and plan invalidation triggers.
 - `route_belief_decision`: returns `fast`, `verify_then_fast`, or `slow` from
   uncertainty, consequence, urgency, irreversibility, and active surprises.
+- It requires the current turn's typed governance snapshot. When active
+  proposals exist, direct routing is forbidden: resolve the council and route
+  its selected hash-bound `ActionIntent` with `council_decision_id`.
+- `end_turn` is blocked while proposals remain unarbitrated, routed actions are
+  unconsumed/retryable, or selected council intents lack terminal Outcomes.
+  Use `cancel_routed_action` with a concrete reason when an unexecuted or
+  retryable intent is invalidated; cancellation is never counted as success.
 - `get_combat_estimate` + `assess_route_combat_risk`: a nearby hostile only
   triggers verification; revise route safety only from quantified CS, HP,
   modifiers, and expected damage.
@@ -163,7 +174,7 @@ Periodic checks worth doing regularly. The game doesn't surface most of this pro
 - `threats` — 威胁排序(阵营+CS+HP+距城)
 - `cities` — 城市队列/增长/掠夺/城墙诊断
 
-**每回合流程**: `precheck`（先读 Belief Engine 简报）→ `get_game_overview`/确认默认路由 → 修阻塞 → threats + **真实 combat estimate** → 必要时 `route_belief_decision` → 集火/行动 → expansion选址+settle验证 → 处理机会(卖奢侈品/改良/Eureka) → `get_turn_brief`复核 → units确认 → `skip_remaining_units` → `end_turn`。
+**每回合流程**: `precheck`（先写入类型化治理快照并读治理/信念简报）→ `get_game_overview` → 必要时目标/提案/反方/议会仲裁 → 修阻塞 → threats + **真实 combat estimate** → 路由议会选中的精确 ActionIntent → 执行动作并回写 Outcome → expansion/机会项 → `get_turn_brief`复核 → units确认 → `skip_remaining_units` → 通过治理门禁后 `end_turn`。
 
 ### 已知工具坑(本次运行实测)
 - **end_turn神级AI回合5-10分钟**:必须一次通过,失败循环=巨量浪费。

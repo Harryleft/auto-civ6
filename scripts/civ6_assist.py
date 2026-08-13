@@ -155,16 +155,69 @@ def print_belief_turn_brief(raw: str | None) -> None:
     print("  约束: 高影响/不可逆行动前调用 route_belief_decision。")
 
 
+def print_governance_brief(raw: str | None) -> bool:
+    """Print the typed governance agenda and its nested belief brief."""
+
+    print("=== GOVERNANCE 治理简报 ===")
+    if not raw:
+        print("  !! 无法读取治理快照；不得进入关键行动或结束回合。")
+        return False
+    if raw.startswith(("TOOL_ERR:", "BRIDGE_ERR:", "Error:")):
+        print(f"  !! {raw}")
+        return False
+    try:
+        governance = json.loads(raw)
+    except json.JSONDecodeError:
+        print("  !! 治理简报格式异常，请直接调用 get_governance_brief 重试。")
+        return False
+
+    snapshot = governance.get("snapshot") or {}
+    capabilities = governance.get("capabilities") or {}
+    agenda = governance.get("governance") or {}
+    print(
+        f"  回合 {governance.get('turn', '?')} | "
+        f"snapshot={snapshot.get('snapshot_id', '?')} | "
+        f"ruleset={snapshot.get('ruleset', '?')}"
+    )
+    unavailable = sorted(
+        name for name, enabled in capabilities.items() if enabled is False
+    )
+    if unavailable:
+        print("  规则集禁用: " + ", ".join(unavailable))
+    print(
+        "  议程: goals={goals} proposals={proposals} reviews={reviews} "
+        "decisions={decisions} locks={locks}".format(
+            goals=len(agenda.get("goals") or []),
+            proposals=len(agenda.get("proposals") or []),
+            reviews=len(agenda.get("critic_reviews") or []),
+            decisions=len(agenda.get("council_decisions") or []),
+            locks=len(agenda.get("budget_locks") or []),
+        )
+    )
+    confidence_gaps = governance.get("confidence_gaps") or []
+    if confidence_gaps:
+        print(
+            "  !! 低置信度: "
+            + ", ".join(str(item.get("id", "?")) for item in confidence_gaps)
+        )
+    print_belief_turn_brief(
+        json.dumps(governance.get("belief_brief") or {}, ensure_ascii=False)
+    )
+    return bool(snapshot.get("snapshot_id"))
+
+
 # ----------------------------- Commands -----------------------------
 
-def cmd_precheck() -> None:
+def cmd_precheck(governance_raw: str | None = None) -> None:
     print("=== END_TURN 预检 ===\n")
-    # Make the belief model an explicit precheck input.  get_game_overview
-    # also carries this brief, but keeping it here protects the scripted path
-    # when an agent starts directly with the helper instead of overview.
-    print_belief_turn_brief(call("get_turn_brief"))
     issues = []
     opps = []
+    # This is the mandatory control-plane entry. It captures typed GameState,
+    # updates the governance graph, and embeds the reviewed belief brief.
+    if governance_raw is None:
+        governance_raw = call("get_governance_brief")
+    if not print_governance_brief(governance_raw):
+        issues.append("[治理] 当前回合类型化治理快照缺失 -> get_governance_brief")
 
     # 1. 城市生产队列
     raw = call("get_cities") or ""
@@ -389,12 +442,18 @@ def cmd_cities() -> None:
 
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "precheck"
-    if cmd in ("precheck", "units", "promotions", "expansion", "threats", "cities"):
+    governance_raw = None
+    if cmd == "precheck":
+        governance_raw = call("get_governance_brief")
+        if not governance_raw or "Cannot connect" in str(governance_raw):
+            print("游戏未连接(FireTuner 4318)。先启动游戏再运行。")
+            sys.exit(1)
+    elif cmd in ("units", "promotions", "expansion", "threats", "cities"):
         if not game_online():
             print("游戏未连接(FireTuner 4318)。先启动游戏再运行。")
             sys.exit(1)
     if cmd == "precheck":
-        cmd_precheck()
+        cmd_precheck(governance_raw)
     elif cmd == "units":
         cmd_units()
     elif cmd == "promotions":

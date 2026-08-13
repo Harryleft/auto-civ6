@@ -47,7 +47,7 @@ class ToolCall:
         if self.inspect_error:
             return True
         text = self.result.strip()
-        return text.startswith("Error:") or text.startswith("ERR:")
+        return text.startswith(("Error:", "ERR:", "BELIEF_GATE_REQUIRED:"))
 
 
 def _extract_tool_calls(state: TaskState) -> list[ToolCall]:
@@ -176,6 +176,35 @@ def _count_end_turns(calls: list[ToolCall]) -> int:
     return sum(1 for c in calls if c.name == "end_turn")
 
 
+def _governance_metrics(calls: list[ToolCall]) -> dict[str, float]:
+    completed_turns = sum(
+        1 for call in calls if call.name == "end_turn" and not call.is_error
+    )
+    briefs = sum(
+        1
+        for call in calls
+        if call.name == "get_governance_brief" and not call.is_error
+    )
+    structured_routes = sum(
+        1
+        for call in calls
+        if call.name == "route_belief_decision"
+        and bool(call.arguments.get("action_intent"))
+        and not call.is_error
+    )
+    council_resolutions = sum(
+        1
+        for call in calls
+        if call.name == "resolve_governance_council" and not call.is_error
+    )
+    return {
+        "governance_coverage": min(1.0, briefs / max(1, completed_turns)),
+        "governance_briefs": float(briefs),
+        "structured_routes": float(structured_routes),
+        "council_resolutions": float(council_resolutions),
+    }
+
+
 def _find_last_turn_from_end_turns(calls: list[ToolCall]) -> int | None:
     """Extract the highest turn number from end_turn results.
 
@@ -276,6 +305,7 @@ def civbench_scorer():
     - cultural: Civic changes made
     - spatial: Map scans + cities founded (exploration & expansion)
     - diplomatic: Diplomatic actions taken
+    - governance_coverage: Current-turn typed governance briefs per completed turn
     - tool_fluency: 1 - error_rate (higher = better)
     - turns_played: Number of end_turn calls (progress measure)
     """
@@ -294,6 +324,7 @@ def civbench_scorer():
                     "cultural": 0.0,
                     "spatial": 0.0,
                     "diplomatic": 0.0,
+                    "governance_coverage": 0.0,
                     "tool_fluency": 0.0,
                     "turns_played": 0.0,
                 },
@@ -349,6 +380,9 @@ def civbench_scorer():
         # --- Diplomatic ---
         diplomatic = float(_count_diplomatic_actions(calls))
 
+        # --- Governance ---
+        governance = _governance_metrics(calls)
+
         # --- Tool fluency ---
         errors = _count_errors(calls)
         tool_fluency = 1.0 - (errors / total_calls) if total_calls > 0 else 0.0
@@ -402,6 +436,7 @@ def civbench_scorer():
             "cultural": cultural,
             "spatial": spatial,
             "diplomatic": diplomatic,
+            "governance_coverage": governance["governance_coverage"],
             "tool_fluency": tool_fluency,
             "turns_played": turns_played,
             **scenario_metrics,
@@ -428,6 +463,9 @@ def civbench_scorer():
                 "data_source": "store" if store_last else "messages",
                 "loop_terminated": bool(state.store.get("loop_terminated")),
                 "tool_distribution": dict(Counter(c.name for c in calls)),
+                "governance_briefs": int(governance["governance_briefs"]),
+                "structured_routes": int(governance["structured_routes"]),
+                "council_resolutions": int(governance["council_resolutions"]),
             },
         )
 
