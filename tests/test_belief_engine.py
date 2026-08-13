@@ -391,6 +391,33 @@ class TestReviewRoutingAttributionAndMetrics:
         assert escalated["route"] == "slow"
         assert escalated["slow_thinking_budget"] == "high"
 
+    def test_route_uses_referenced_belief_state_not_only_agent_supplied_numbers(self, engine):
+        engine.create(
+            "belief",
+            belief_payload(
+                probability=0.9,
+                confidence=0.9,
+                review_required=True,
+            ),
+            turn=1,
+            entity_id="frontier",
+        )
+
+        routed = engine.route_decision(
+            statement="Move through the northern frontier",
+            probability=0.1,
+            confidence=0.95,
+            impact="low",
+            urgency="low",
+            irreversibility=0,
+            belief_ids=["frontier"],
+            turn=1,
+        )
+
+        assert routed["route"] == "slow"
+        assert routed["belief_context"]["review_required"] is True
+        assert routed["belief_context"]["disagreement"] == 0.8
+
     def test_failure_attribution_and_research_metrics(self, engine):
         engine.create(
             "attribution",
@@ -511,6 +538,116 @@ class TestRouteCombatRiskGuardrail:
             )
 
         assert engine.get("belief", "northern-expansion")["probability"] == 0.8
+
+
+class TestHarnessActionLifecycle:
+    def test_key_action_requires_and_consumes_matching_routed_decision(self, engine):
+        blocked = engine.authorize_action(
+            tool="set_research",
+            params={"tech_or_civic": "TECH_WRITING"},
+            turn=1,
+            required=True,
+        )
+        assert blocked["authorized"] is False
+        assert "route_belief_decision" in blocked["reason"]
+
+        decision = engine.route_decision(
+            statement="Switch research to Writing",
+            probability=0.1,
+            confidence=0.95,
+            impact="low",
+            urgency="low",
+            irreversibility=0,
+            belief_ids=[],
+            turn=1,
+        )
+        engine.update(
+            "decision",
+            decision["id"],
+            {"selected_action": "set_research", "decision_state": "authorized"},
+            turn=1,
+        )
+
+        authorized = engine.authorize_action(
+            tool="set_research",
+            params={"tech_or_civic": "TECH_WRITING"},
+            turn=1,
+            required=True,
+        )
+        assert authorized["authorized"] is True
+        assert authorized["decision_id"] == decision["id"]
+        assert engine.get("decision", decision["id"])["status"] == "consumed"
+
+        second = engine.authorize_action(
+            tool="set_research",
+            params={"tech_or_civic": "TECH_POTTERY"},
+            turn=1,
+            required=True,
+        )
+        assert second["authorized"] is False
+
+    def test_successful_action_is_also_recorded_as_observation(self, engine):
+        action = engine.record_tool_result(
+            tool="set_research",
+            params={"tech_or_civic": "TECH_WRITING"},
+            result="Research set to TECH_WRITING",
+            turn=3,
+            category="action",
+            success=True,
+            duration_ms=5,
+            decision_id="decision_1",
+            decision_route="fast",
+        )
+
+        assert action is not None
+        assert action["decision_id"] == "decision_1"
+        observations = engine.list("observation", status="active")
+        assert len(observations) == 1
+        assert observations[0]["source"] == "action:set_research"
+        assert observations[0]["facts"]["action_success"] is True
+
+    def test_verify_then_fast_requires_fresh_game_observation(self, engine):
+        decision = engine.route_decision(
+            statement="Choose the next research target",
+            probability=0.5,
+            confidence=0.9,
+            impact="medium",
+            urgency="critical",
+            irreversibility=0.9,
+            turn=2,
+        )
+        engine.update(
+            "decision",
+            decision["id"],
+            {"selected_action": "set_research", "decision_state": "authorized"},
+            turn=2,
+        )
+
+        before_evidence = engine.authorize_action(
+            tool="set_research",
+            params={},
+            turn=2,
+            required=True,
+        )
+        assert before_evidence["authorized"] is False
+        assert before_evidence["route"] == "verify_then_fast"
+
+        engine.record_tool_result(
+            tool="get_tech_civics",
+            params={},
+            result="Researching: TECH_POTTERY (3 turns)",
+            turn=2,
+            category="query",
+            success=True,
+            duration_ms=3,
+        )
+        after_evidence = engine.authorize_action(
+            tool="set_research",
+            params={},
+            turn=2,
+            required=True,
+        )
+        assert after_evidence["authorized"] is True
 
 
 class TestTurnBrief:

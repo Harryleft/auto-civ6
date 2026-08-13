@@ -51,19 +51,19 @@ python3 scripts/civ6_assist.py cities       # 城市:队列/增长/掠夺/城墙
 ## 4. 推荐每回合流程(把工具嵌入回合循环)
 
 ```
-1. civ6_assist.py precheck     ← 一次看清:blocker + 机会 + 单位
-2. 按 precheck 顺序处理阻塞项:
+1. civ6_assist.py precheck     ← 先读 Belief Engine 简报，再看 blocker + 机会 + 单位
+2. 对关键行动先调用 route_belief_decision，selected_action 必须对应实际 MCP 工具；未授权行动会被 harness 拒绝。然后按 precheck 顺序处理阻塞项:
    - 生产空 → set_city_production
    - 研究/市政空 → set_research
    - 政策空 → set_policies
    - 使者令牌 → send_envoy
    - 外交会话 → respond_to_diplomacy/trade
    - 世界议会 → queue_wc_votes
-3. 战斗:threats 排序 → 用 civ6_tool.py combat 预判 → 集火
-4. 扩张:expansion 选点 → settle 验证距离 → 移动开拓者
-5. 机会:precheck 的"机会项"(卖奢侈品/改良资源/Eureka)逐条做
+3. 战斗:threats 排序 → get_combat_estimate 获取真实数值 → 必要时 assess_route_combat_risk → 集火
+4. 扩张:expansion 选点 → settle 验证距离 → route_belief_decision → 移动开拓者
+5. 机会:precheck 的"机会项"(卖奢侈品/改良资源/Eureka)逐条做；成功行动由 harness 自动写入 Observation 并触发复核
 6. 单位:units 确认无遗漏 → skip_remaining_units
-7. end_turn(一次性通过,避免 10 分钟失败循环)
+7. get_turn_brief 复核 gate 后再 end_turn(若存在 slow gate，end_turn 会被阻止)
 ```
 
 ---

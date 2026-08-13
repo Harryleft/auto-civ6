@@ -45,7 +45,8 @@ entities without discarding the audit history.
 - `contradiction`: generated when an observed metric violates a belief's
   declared expectation.
 - `decision`: Fast/Slow routing result plus considered and selected actions.
-- `action`: automatic MCP action result or an explicit decision verification.
+- `action`: automatic MCP action result linked to its consumed decision, or an
+  explicit decision verification.
 - `attribution`: candidate failure causes with evidence-weighted posteriors.
 
 Probability describes the event; confidence describes the quality of the
@@ -93,15 +94,21 @@ use keys such as `diplomacy.player_3.at_war` and
 5. Add falsifiable claims with `upsert_prediction` and explicit 5/10/20-turn
    commitments with `upsert_dynamic_plan`.
 6. Before high-impact or irreversible actions, call `route_belief_decision` and
-   link the selected action to the relevant belief IDs.
+   set `selected_action` to the concrete MCP tool/action. The common harness
+   wrapper consumes this authorization exactly once; calling a key action
+   without it is rejected, and a `slow` route remains blocked.
+   A `verify_then_fast` route additionally requires a fresh successful `get_*`
+   observation after the route call.
 7. Treat nearby hostile units as a verification trigger, not as evidence that
    a route is unsafe. Call `get_combat_estimate`, then pass its effective
    strengths, HP, modifiers, and expected damage to `assess_route_combat_risk`.
    Without that complete quantitative assessment, the route belief is not
    changed.
 8. Call `get_turn_brief` after material new evidence or an action outcome.
-   This runs the review and returns the next decision gate. Overview queries
-   also run this review automatically.
+   The harness already stores every successful action result as an
+   Observation and runs review automatically; this call exposes the next
+   decision gate. Overview and normal `get_*` queries include a compact gate
+   context in their output.
 9. Link the selected decision to its real outcome with
    `record_action_verification` when the normal MCP result is insufficient.
 10. Read `get_belief_metrics` and `get_belief_trace` for calibration and
