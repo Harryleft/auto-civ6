@@ -51,19 +51,22 @@ python3 scripts/civ6_assist.py cities       # 城市:队列/增长/掠夺/城墙
 ## 4. 推荐每回合流程(把工具嵌入回合循环)
 
 ```
-1. civ6_assist.py precheck     ← 先读 Belief Engine 简报，再看 blocker + 机会 + 单位
-2. 对关键行动先调用 route_belief_decision，selected_action 必须对应实际 MCP 工具；未授权行动会被 harness 拒绝。然后按 precheck 顺序处理阻塞项:
+1. get_governance_brief        ← 类型化 GameState 快照直接写入治理图，读取规则能力、预算、信念与既有提案
+2. civ6_assist.py precheck     ← 再看 blocker + 机会 + 单位
+3. 战略冲突时按顺序调用 upsert_strategic_goal → submit_governance_proposal → 可选 review_governance_proposal → resolve_governance_council。反方可以同意；反对必须引用 Observation 或给出失效假设和具体替代方案。
+4. 对关键行动调用 route_belief_decision，传入被中央选中的结构化 action_intent 与 council_decision_id；未授权或参数不一致的行动会被 harness 拒绝。然后按 precheck 顺序处理阻塞项:
    - 生产空 → set_city_production
    - 研究/市政空 → set_research
    - 政策空 → set_policies
    - 使者令牌 → send_envoy
    - 外交会话 → respond_to_diplomacy/trade
    - 世界议会 → queue_wc_votes
-3. 战斗:threats 排序 → get_combat_estimate 获取真实数值 → 必要时 assess_route_combat_risk → 集火
-4. 扩张:expansion 选点 → settle 验证距离 → route_belief_decision → 移动开拓者
-5. 机会:precheck 的"机会项"(卖奢侈品/改良资源/Eureka)逐条做；成功行动由 harness 自动写入 Observation 并触发复核
-6. 单位:units 确认无遗漏 → skip_remaining_units
-7. get_turn_brief 复核 gate 后再 end_turn(若存在 slow gate，end_turn 会被阻止)
+5. 战斗:threats 排序 → get_combat_estimate 获取真实数值 → 必要时 assess_route_combat_risk → 集火
+6. 扩张:expansion 选点 → settle 验证距离 → 治理提案/路由 → 移动开拓者
+7. 机会:precheck 的"机会项"逐条做；成功行动由 harness 自动写入 Outcome + Observation 并触发复核
+8. verify_then_fast 只接受路由后声明的具体查询、参数及事实/指标；无关 get_* 不能解锁行动
+9. 单位:units 确认无遗漏 → skip_remaining_units
+10. get_turn_brief 复核作用域 gate 后再 end_turn
 ```
 
 ---

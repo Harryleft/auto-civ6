@@ -44,7 +44,10 @@ entities without discarding the audit history.
   and a scheduled review turn.
 - `contradiction`: generated when an observed metric violates a belief's
   declared expectation.
-- `decision`: Fast/Slow routing result plus considered and selected actions.
+- `world_entity`: typed `GameState` node with stable identity and graph links.
+- `goal`, `proposal`, `critic_review`, `council_decision`, and `budget_lock`:
+  national-governance state using the same event log and tombstone semantics.
+- `decision`: Fast/Slow routing result plus a hash-bound structured action intent.
 - `action`: automatic MCP action result linked to its consumed decision, or an
   explicit decision verification.
 - `attribution`: candidate failure causes with evidence-weighted posteriors.
@@ -80,10 +83,11 @@ use keys such as `diplomacy.player_3.at_war` and
 
 ## MCP workflow
 
-1. Start each turn with `get_turn_brief` (or
-   `python3 scripts/civ6_assist.py precheck`). `get_game_overview` also
-   appends this reviewed brief automatically, so the model is decision input
-   rather than a background recorder.
+1. Start each turn with `get_governance_brief`. It brackets typed `GameState`
+   reads with turn numbers, retries once and rejects a still-cross-turn snapshot,
+   writes stable world entities and relationships, then returns capabilities,
+   resource budgets and the reviewed belief state. `get_turn_brief` remains the
+   smaller refresh call after material evidence or an action outcome.
 2. Call `get_game_overview`; this binds the Belief Engine to the live game and
    records the first automatic observation. Read the brief's `default_route`,
    active gates, and review flags before selecting actions.
@@ -93,25 +97,33 @@ use keys such as `diplomacy.player_3.at_war` and
    explanations with `upsert_hypothesis`.
 5. Add falsifiable claims with `upsert_prediction` and explicit 5/10/20-turn
    commitments with `upsert_dynamic_plan`.
-6. Before high-impact or irreversible actions, call `route_belief_decision` and
-   set `selected_action` to the concrete MCP tool/action. The common harness
+6. For governed strategic choices, use `upsert_strategic_goal`,
+   `submit_governance_proposal`, an optional `review_governance_proposal`, and
+   `resolve_governance_council`. Critics may agree; an objection is rejected
+   unless it cites a stored Observation or identifies an invalid assumption and
+   concrete alternative. The council uses hard constraints, budget locks,
+   priority, Pareto dominance, and opportunity cost without reducing national
+   strategy to one weighted score.
+7. Before high-impact or irreversible actions, call `route_belief_decision` and
+   pass the council-selected structured `action_intent`. The common harness
    wrapper consumes this authorization exactly once; calling a key action
    without it is rejected, and a `slow` route remains blocked.
-   A `verify_then_fast` route additionally requires a fresh successful `get_*`
-   observation after the route call.
-7. Treat nearby hostile units as a verification trigger, not as evidence that
+   A `verify_then_fast` route requires the declared fresh query with matching
+   parameters and required fact/metric keys. An unrelated `get_*` result cannot
+   satisfy the gate.
+8. Treat nearby hostile units as a verification trigger, not as evidence that
    a route is unsafe. Call `get_combat_estimate`, then pass its effective
    strengths, HP, modifiers, and expected damage to `assess_route_combat_risk`.
    Without that complete quantitative assessment, the route belief is not
    changed.
-8. Call `get_turn_brief` after material new evidence or an action outcome.
+9. Call `get_turn_brief` after material new evidence or an action outcome.
    The harness already stores every successful action result as an
    Observation and runs review automatically; this call exposes the next
    decision gate. Overview and normal `get_*` queries include a compact gate
    context in their output.
-9. Link the selected decision to its real outcome with
+10. Link the selected decision to its real outcome with
    `record_action_verification` when the normal MCP result is insufficient.
-10. Read `get_belief_metrics` and `get_belief_trace` for calibration and
+11. Read `get_belief_metrics` and `get_belief_trace` for calibration and
    post-game analysis.
 
 Use `update_belief_entity` for corrections and `delete_belief_entity` for

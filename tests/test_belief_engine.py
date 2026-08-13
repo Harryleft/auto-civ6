@@ -14,6 +14,7 @@ import pytest
 from civ_mcp.belief_engine import (
     BeliefEngine,
     BeliefEngineError,
+    action_args_hash,
     evaluate_condition,
     normalize_tool_result,
 )
@@ -559,12 +560,13 @@ class TestHarnessActionLifecycle:
             urgency="low",
             irreversibility=0,
             belief_ids=[],
-            turn=1,
-        )
-        engine.update(
-            "decision",
-            decision["id"],
-            {"selected_action": "set_research", "decision_state": "authorized"},
+            action_intent={
+                "tool": "set_research",
+                "params": {"tech_or_civic": "TECH_WRITING"},
+                "args_hash": action_args_hash(
+                    {"tech_or_civic": "TECH_WRITING"}
+                ),
+            },
             turn=1,
         )
 
@@ -576,7 +578,22 @@ class TestHarnessActionLifecycle:
         )
         assert authorized["authorized"] is True
         assert authorized["decision_id"] == decision["id"]
-        assert engine.get("decision", decision["id"])["status"] == "consumed"
+        assert engine.get("decision", decision["id"])["decision_state"] == "executing"
+
+        engine.record_tool_result(
+            tool="set_research",
+            params={"tech_or_civic": "TECH_WRITING"},
+            result="Research set to TECH_WRITING",
+            turn=1,
+            category="action",
+            success=True,
+            duration_ms=5,
+            decision_id=decision["id"],
+            decision_route="fast",
+        )
+        completed = engine.get("decision", decision["id"])
+        assert completed["status"] == "resolved"
+        assert completed["decision_state"] == "succeeded"
 
         second = engine.authorize_action(
             tool="set_research",
@@ -614,12 +631,14 @@ class TestHarnessActionLifecycle:
             impact="medium",
             urgency="critical",
             irreversibility=0.9,
-            turn=2,
-        )
-        engine.update(
-            "decision",
-            decision["id"],
-            {"selected_action": "set_research", "decision_state": "authorized"},
+            action_intent={
+                "tool": "set_research",
+                "params": {},
+                "args_hash": action_args_hash({}),
+            },
+            evidence_requirements=[
+                {"tool": "get_tech_civics", "params": {}, "max_age_turns": 0}
+            ],
             turn=2,
         )
 
@@ -648,6 +667,147 @@ class TestHarnessActionLifecycle:
             required=True,
         )
         assert after_evidence["authorized"] is True
+
+    def test_verify_then_fast_rejects_unrelated_query(self, engine):
+        decision = engine.route_decision(
+            statement="Attack the fortified target",
+            probability=0.5,
+            confidence=0.5,
+            impact="medium",
+            urgency="high",
+            irreversibility=0.2,
+            action_intent={
+                "tool": "unit_action",
+                "params": {
+                    "unit_id": 10,
+                    "action": "attack",
+                    "target_x": 4,
+                    "target_y": 5,
+                },
+                "args_hash": action_args_hash(
+                    {
+                        "unit_id": 10,
+                        "action": "attack",
+                        "target_x": 4,
+                        "target_y": 5,
+                    }
+                ),
+            },
+            evidence_requirements=[
+                {
+                    "tool": "get_combat_estimate",
+                    "params": {"unit_id": 10, "target_x": 4, "target_y": 5},
+                    "metric_keys": ["combat.attacker_cs", "combat.defender_cs"],
+                }
+            ],
+            turn=4,
+        )
+        assert decision["route"] == "verify_then_fast"
+        engine.record_tool_result(
+            tool="get_cities",
+            params={},
+            result="Cities: 2",
+            turn=4,
+            category="query",
+            success=True,
+            duration_ms=1,
+        )
+
+        blocked = engine.authorize_action(
+            tool="unit_action",
+            params={
+                "unit_id": 10,
+                "action": "attack",
+                "target_x": 4,
+                "target_y": 5,
+            },
+            turn=4,
+            required=True,
+        )
+
+        assert blocked["authorized"] is False
+        assert blocked["missing_evidence"][0]["tool"] == "get_combat_estimate"
+
+    def test_failed_execution_becomes_retryable_without_reauthoring_strategy(self, engine):
+        params = {"tech_or_civic": "TECH_WRITING"}
+        decision = engine.route_decision(
+            statement="Research Writing",
+            probability=0.1,
+            confidence=0.9,
+            impact="low",
+            urgency="low",
+            irreversibility=0,
+            action_intent={
+                "tool": "set_research",
+                "params": params,
+                "args_hash": action_args_hash(params),
+            },
+            turn=5,
+        )
+        first = engine.authorize_action(
+            tool="set_research", params=params, turn=5, required=True
+        )
+        assert first["authorized"] is True
+        engine.record_tool_result(
+            tool="set_research",
+            params=params,
+            result="ERR:BUSY",
+            turn=5,
+            category="action",
+            success=False,
+            duration_ms=2,
+            decision_id=decision["id"],
+            decision_route="fast",
+        )
+        assert engine.get("decision", decision["id"])["decision_state"] == "retryable"
+        retry = engine.authorize_action(
+            tool="set_research", params=params, turn=5, required=True
+        )
+        assert retry["authorized"] is True
+
+    def test_slow_gate_only_blocks_conflicting_scope(self, engine):
+        engine.create(
+            "belief",
+            belief_payload(
+                review_required=True,
+                gate_scope="military:east",
+            ),
+            turn=6,
+            entity_id="east-front",
+        )
+        engine.create(
+            "contradiction",
+            {
+                "statement": "Eastern military evidence conflicts.",
+                "severity": "high",
+                "belief_id": "east-front",
+                "requires_slow_review": True,
+            },
+            turn=6,
+        )
+        params = {"tech_or_civic": "TECH_WRITING"}
+        engine.route_decision(
+            statement="Research Writing",
+            probability=0.1,
+            confidence=0.9,
+            impact="low",
+            urgency="low",
+            irreversibility=0,
+            action_intent={
+                "tool": "set_research",
+                "params": params,
+                "args_hash": action_args_hash(params),
+            },
+            gate_scope="research",
+            turn=6,
+        )
+
+        allowed = engine.authorize_action(
+            tool="set_research", params=params, turn=6, required=True
+        )
+
+        assert engine.turn_brief(turn=6)["decision_gate"]["default_route"] == "slow"
+        assert allowed["authorized"] is True
 
 
 class TestTurnBrief:
@@ -683,6 +843,60 @@ class TestTurnBrief:
         assert brief["decision_gate"]["plans_requiring_review"] == ["frontier-plan"]
         assert brief["beliefs"][0]["id"] == "frontier"
         assert len(brief["guardrails"]) == 3
+
+
+class TestTypedGovernanceGraph:
+    def test_typed_snapshot_projects_world_entities_relations_and_metrics(self, engine):
+        result = engine.ingest_typed_snapshot(
+            {
+                "snapshot_id": "snapshot_42",
+                "turn_before": 42,
+                "turn_after": 42,
+                "capabilities": {"ruleset": "RULESET_STANDARD"},
+                "entities": [
+                    {
+                        "entity_type": "player",
+                        "entity_id": "player:0",
+                        "attributes": {"gold": 120},
+                    },
+                    {
+                        "entity_type": "city",
+                        "entity_id": "city:0:1",
+                        "attributes": {"name": "Capital"},
+                    },
+                ],
+                "relations": [
+                    {
+                        "relation_type": "owns",
+                        "source_id": "player:0",
+                        "target_id": "city:0:1",
+                        "attributes": {},
+                    }
+                ],
+                "metrics": {"player.gold": 120},
+            },
+            turn=42,
+        )
+
+        assert result["world_entities_changed"] == ["player:0", "city:0:1"]
+        player = engine.get("world_entity", "player:0")
+        city = engine.get("world_entity", "city:0:1")
+        assert player["node_type"] == "player"
+        assert player["links"][0]["direction"] == "outgoing"
+        assert city["links"][0]["direction"] == "incoming"
+        assert engine.current_metrics()["player.gold"] == 120
+
+    def test_typed_snapshot_rejects_cross_turn_state(self, engine):
+        with pytest.raises(BeliefEngineError, match="multiple turns"):
+            engine.ingest_typed_snapshot(
+                {
+                    "snapshot_id": "bad",
+                    "turn_before": 42,
+                    "turn_after": 43,
+                    "entities": [],
+                },
+                turn=42,
+            )
 
 
 class TestInvalidInput:
