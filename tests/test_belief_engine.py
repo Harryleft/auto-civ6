@@ -898,6 +898,38 @@ class TestTypedGovernanceGraph:
                 turn=42,
             )
 
+    def test_typed_snapshot_archives_entities_missing_from_next_authoritative_set(
+        self, engine
+    ):
+        engine.ingest_typed_snapshot(
+            {
+                "snapshot_id": "snapshot_1",
+                "turn_before": 1,
+                "turn_after": 1,
+                "entities": [
+                    {
+                        "entity_type": "unit",
+                        "entity_id": "unit:7",
+                        "attributes": {"health": 100},
+                    }
+                ],
+            },
+            turn=1,
+        )
+
+        result = engine.ingest_typed_snapshot(
+            {
+                "snapshot_id": "snapshot_2",
+                "turn_before": 2,
+                "turn_after": 2,
+                "entities": [],
+            },
+            turn=2,
+        )
+
+        assert result["world_entities_archived"] == ["unit:7"]
+        assert engine.get("world_entity", "unit:7")["status"] == "archived"
+
 
 class TestInvalidInput:
     def test_requires_bound_game_and_required_entity_fields(self):
@@ -927,3 +959,157 @@ class TestInvalidInput:
     def test_prediction_deadline_rejects_boolean_not_a_turn_number(self, engine):
         with pytest.raises(BeliefEngineError, match="deadline_turn"):
             engine.create("prediction", prediction_payload(deadline_turn=True), turn=1)
+
+
+class TestGovernanceTurnLoopGate:
+    @staticmethod
+    def _typed_snapshot(engine, turn: int) -> None:
+        engine.ingest_typed_snapshot(
+            {
+                "snapshot_id": f"snapshot_{turn}",
+                "turn_before": turn,
+                "turn_after": turn,
+                "capabilities": {"ruleset": "RULESET_STANDARD"},
+                "entities": [],
+                "relations": [],
+                "metrics": {"player.gold": 100},
+            },
+            turn=turn,
+        )
+
+    def test_current_turn_snapshot_is_a_hard_loop_prerequisite(self, engine):
+        missing = engine.governance_turn_gate(turn=9)
+        assert missing["ready"] is False
+        assert missing["blockers"] == ["current_turn_typed_snapshot_missing"]
+
+        self._typed_snapshot(engine, 9)
+        ready = engine.governance_turn_gate(turn=9)
+        assert ready["ready"] is True
+        assert ready["typed_snapshot_id"] == "snapshot_9"
+
+    def test_active_proposal_blocks_turn_until_council_action_succeeds(self, engine):
+        self._typed_snapshot(engine, 10)
+        intent_params = {"unit_id": 7, "action": "fortify"}
+        engine.create(
+            "proposal",
+            {
+                "statement": "Fortify the eastern defender",
+                "department": "military",
+                "action_intent": {
+                    "intent_id": "intent:fortify:7",
+                    "tool": "unit_action",
+                    "arguments": intent_params,
+                },
+                "action_intents": [
+                    {
+                        "intent_id": "intent:fortify:7",
+                        "tool": "unit_action",
+                        "arguments": intent_params,
+                        "proposal_id": "proposal:defend",
+                    }
+                ],
+            },
+            turn=10,
+            entity_id="proposal:defend",
+        )
+        proposed = engine.governance_turn_gate(turn=10)
+        assert proposed["blockers"] == ["governance_proposals_not_arbitrated"]
+
+        engine.update(
+            "proposal",
+            "proposal:defend",
+            {
+                "status": "resolved",
+                "council_state": "approved",
+                "council_decision_id": "council:10:defend",
+            },
+            turn=10,
+        )
+        engine.create(
+            "council_decision",
+            {
+                "status": "resolved",
+                "statement": "Approved eastern defense",
+                "selected_proposal_id": "proposal:defend",
+                "selected_proposal_ids": ["proposal:defend"],
+            },
+            turn=10,
+            entity_id="council:10:defend",
+        )
+        unrouted = engine.governance_turn_gate(turn=10)
+        assert unrouted["blockers"] == ["council_action_intents_not_completed"]
+        assert unrouted["pending_council_intents"][0]["decision_state"] == "not_routed"
+
+        decision = engine.route_decision(
+            statement="Execute the council defense",
+            probability=0.9,
+            confidence=0.9,
+            impact="low",
+            urgency="low",
+            irreversibility=0,
+            action_intent={
+                "intent_id": "intent:fortify:7",
+                "proposal_id": "proposal:defend",
+                "tool": "unit_action",
+                "params": intent_params,
+                "args_hash": action_args_hash(intent_params),
+            },
+            council_decision_id="council:10:defend",
+            turn=10,
+        )
+        pending = engine.governance_turn_gate(turn=10)
+        assert set(pending["blockers"]) == {
+            "council_action_intents_not_completed",
+            "routed_actions_not_completed",
+        }
+
+        authorized = engine.authorize_action(
+            tool="unit_action",
+            params=intent_params,
+            turn=10,
+            required=False,
+        )
+        assert authorized["decision_id"] == decision["id"]
+        engine.record_tool_result(
+            tool="unit_action",
+            params=intent_params,
+            result="OK:FORTIFIED",
+            turn=10,
+            category="action",
+            success=True,
+            duration_ms=1,
+            decision_id=decision["id"],
+            decision_route="fast",
+        )
+        assert engine.governance_turn_gate(turn=10)["ready"] is True
+
+    def test_explicit_cancellation_closes_intent_without_claiming_success(self, engine):
+        self._typed_snapshot(engine, 11)
+        params = {"tech_or_civic": "TECH_WRITING", "category": "tech"}
+        decision = engine.route_decision(
+            statement="Research Writing",
+            probability=0.4,
+            confidence=0.5,
+            impact="medium",
+            urgency="medium",
+            irreversibility=0.5,
+            action_intent={
+                "tool": "set_research",
+                "params": params,
+                "args_hash": action_args_hash(params),
+            },
+            turn=11,
+        )
+
+        cancelled = engine.cancel_action_authorization(
+            decision["id"],
+            reason="New typed evidence makes the research switch dominated.",
+            turn=11,
+        )
+
+        assert cancelled["decision_state"] == "cancelled"
+        assert engine.governance_turn_gate(turn=11)["ready"] is True
+        outcome = engine.list("outcome", status="active")[0]
+        assert outcome["success"] is False
+        assert outcome["executed"] is False
+        assert outcome["cancelled"] is True

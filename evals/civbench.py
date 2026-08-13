@@ -75,8 +75,9 @@ DEFAULT_TIME_LIMIT = 172800  # 48 hours
 
 CONTINUE_PLAYING = (
     "The game is still in progress. Continue playing — follow the turn loop "
-    "from the system prompt. Call `get_game_overview` to orient yourself, "
-    "then proceed with unit orders, city management, and `end_turn`."
+    "from the system prompt. Call `get_governance_brief` to refresh the typed "
+    "state and governance gates, then proceed with governed unit orders, city "
+    "management, and `end_turn`."
 )
 
 # Reasoning capture — JSONL sidecar for assistant message text

@@ -511,6 +511,40 @@ def _result_summary(result: str) -> str:
 # implementation to remember the Belief Engine.  Routine maintenance actions
 # (fortify/skip/heal/etc.) remain executable without an explicit route, while
 # strategic, irreversible, or combat actions require one.
+_ACTION_PARAM_DEFAULTS: dict[str, dict[str, Any]] = {
+    "set_research": {"category": "tech"},
+    "purchase_item": {"yield_type": "YIELD_GOLD"},
+    "patronize_great_person": {"yield_type": "YIELD_GOLD"},
+    "form_alliance": {"alliance_type": "MILITARY"},
+    "run_lua": {"context": "gamecore"},
+    "propose_trade": {
+        "offer_gold": 0,
+        "offer_gold_per_turn": 0,
+        "offer_resources": "",
+        "offer_favor": 0,
+        "offer_open_borders": False,
+        "request_gold": 0,
+        "request_gold_per_turn": 0,
+        "request_resources": "",
+        "request_favor": 0,
+        "request_open_borders": False,
+        "joint_war_target": 0,
+        "mode": "send",
+    },
+}
+
+
+def _canonical_action_params(
+    tool_name: str,
+    params: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Use one public MCP action identity for proposal, route and execution."""
+
+    canonical = dict(_ACTION_PARAM_DEFAULTS.get(tool_name, {}))
+    canonical.update({key: value for key, value in params.items() if value is not None})
+    return canonical
+
+
 _BELIEF_GATED_TOOLS = {
     "spy_action",
     "set_city_production",
@@ -557,6 +591,10 @@ def _belief_route_required(tool_name: str, params: dict[str, Any]) -> bool:
         # GameCore Lua is the documented read-only escape hatch; InGame Lua
         # can mutate the world and therefore needs an explicit route.
         return str(params.get("context", "gamecore")).lower() == "ingame"
+    if tool_name == "propose_trade" and str(params.get("mode", "send")).lower() == "test":
+        # Testing an offer only asks the game for acceptance; it does not send
+        # a deal and is evidence for the eventual governed action.
+        return False
     if tool_name in _BELIEF_GATED_TOOLS:
         return True
     if tool_name != "unit_action":
@@ -569,11 +607,24 @@ async def _belief_action_preflight(
 ) -> dict[str, Any]:
     """Run the common pre-action decision gate before touching the game."""
     required = _belief_route_required(tool_name, params)
-    if not required and tool_name != "end_turn":
+    if not required and tool_name not in {"unit_action", "end_turn"}:
         return {"authorized": True, "decision_id": None, "route": "routine"}
-
     engine, turn = await _belief_context(ctx)
     if tool_name == "end_turn":
+        governance_gate = engine.governance_turn_gate(turn=turn)
+        if not governance_gate["ready"]:
+            return {
+                "authorized": False,
+                "decision_id": None,
+                "route": "slow",
+                "governance_gate": governance_gate,
+                "reason": (
+                    "Governance turn gate is incomplete: "
+                    + ", ".join(governance_gate["blockers"])
+                    + ". Call get_governance_brief, resolve active proposals, "
+                    "and complete routed council actions before ending the turn."
+                ),
+            }
         brief = engine.turn_brief(turn=turn)
         gate = brief["decision_gate"]
         if gate.get("default_route") == "slow":
@@ -594,7 +645,7 @@ async def _belief_action_preflight(
 
     return engine.authorize_action(
         tool=tool_name,
-        params=params,
+        params=_canonical_action_params(tool_name, params),
         turn=turn,
         required=required,
     )
@@ -669,16 +720,29 @@ async def _record_belief_tool_result(
         # the value captured by _logged before the call can still be unknown.
         current_turn = logger._turn
         observed_turn = current_turn if current_turn is not None else turn
+        is_read_only_variant = (
+            tool_name == "propose_trade"
+            and str(params.get("mode", "send")).lower() == "test"
+        ) or (
+            tool_name == "run_lua"
+            and str(params.get("context", "gamecore")).lower() == "gamecore"
+        )
         category = (
             "turn"
             if tool_name == "end_turn"
             else "query"
-            if tool_name.startswith("get_") or tool_name == "screenshot"
+            if tool_name.startswith("get_")
+            or tool_name == "screenshot"
+            or is_read_only_variant
             else "action"
         )
         engine.record_tool_result(
             tool=tool_name,
-            params=params,
+            params=(
+                _canonical_action_params(tool_name, params)
+                if category in {"action", "turn"}
+                else params
+            ),
             result=result,
             turn=int(observed_turn) if observed_turn != "?" else 0,
             category=category,
@@ -951,16 +1015,30 @@ async def get_game_overview(ctx: Context) -> str:
                 )
             except Exception:
                 log.warning("Failed to log game-over in overview", exc_info=True)
-        # The overview is the first mandatory query in the turn loop.  Attach
-        # the reviewed belief state here so the engine is decision input, not
-        # merely a background recorder even when the agent does not call a
-        # separate belief tool.
+        # Older clients still begin with overview. Auto-capture the same typed
+        # governance snapshot so that path cannot bypass the control plane.
         try:
-            belief_brief = _get_beliefs(ctx).turn_brief(turn=ov.turn)
+            engine = _get_beliefs(ctx)
+            snapshot, world, projection, released, locks = (
+                await _capture_governance_snapshot(ctx, engine)
+            )
+            belief_brief = engine.turn_brief(turn=ov.turn)
             await _flush_belief_events(ctx)
+            text += (
+                "\n\n=== GOVERNANCE SNAPSHOT ===\n"
+                f"snapshot={snapshot.snapshot_id} ruleset={world['ruleset']} "
+                f"entities_changed={len(projection['world_entities_changed'])} "
+                f"entities_archived={len(projection['world_entities_archived'])} "
+                f"active_budget_locks={len(locks)} released_locks={len(released)}"
+            )
             text += _format_belief_turn_brief(belief_brief)
-        except Exception:
-            log.warning("Belief Engine: failed to build turn brief", exc_info=True)
+        except Exception as exc:
+            log.warning("Governance: failed to capture typed turn state", exc_info=True)
+            text += (
+                "\n\n=== GOVERNANCE SNAPSHOT ERROR ===\n"
+                f"{exc}\nKey actions and end_turn remain blocked until "
+                "get_governance_brief succeeds."
+            )
         return text
 
     return await _logged(ctx, "get_game_overview", {}, _run)
@@ -1783,26 +1861,33 @@ async def propose_trade(
     if not offer_items and not request_items:
         return "Error: must specify at least one offer or request item"
 
+    public_params = {
+        "other_player_id": other_player_id,
+        "offer_gold": offer_gold,
+        "offer_gold_per_turn": offer_gold_per_turn,
+        "offer_resources": offer_resources,
+        "offer_favor": offer_favor,
+        "offer_open_borders": offer_open_borders,
+        "request_gold": request_gold,
+        "request_gold_per_turn": request_gold_per_turn,
+        "request_resources": request_resources,
+        "request_favor": request_favor,
+        "request_open_borders": request_open_borders,
+        "joint_war_target": joint_war_target,
+        "mode": mode,
+    }
     if mode == "test":
         return await _logged(
             ctx,
-            "test_trade",
-            {
-                "other_player_id": other_player_id,
-                "offer_items": offer_items,
-                "request_items": request_items,
-            },
+            "propose_trade",
+            public_params,
             lambda: gs.test_trade(other_player_id, offer_items, request_items),
         )
 
     return await _logged(
         ctx,
         "propose_trade",
-        {
-            "other_player_id": other_player_id,
-            "offer_items": offer_items,
-            "request_items": request_items,
-        },
+        public_params,
         lambda: gs.propose_trade(other_player_id, offer_items, request_items),
     )
 
@@ -1964,8 +2049,13 @@ async def city_action(
                 return "Error: attack requires target_x and target_y"
             result = await _logged(
                 ctx,
-                "city_attack",
-                {"city_id": city_id, "x": target_x, "y": target_y},
+                "city_action",
+                {
+                    "city_id": city_id,
+                    "action": action,
+                    "target_x": target_x,
+                    "target_y": target_y,
+                },
                 lambda: gs.city_attack(city_id, target_x, target_y),
             )
             _get_camera(ctx).push(target_x, target_y, "city attack")
@@ -1973,8 +2063,8 @@ async def city_action(
         case "keep" | "reject" | "raze" | "liberate_founder" | "liberate_previous":
             return await _logged(
                 ctx,
-                "resolve_city_capture",
-                {"action": action},
+                "city_action",
+                {"city_id": city_id, "action": action},
                 lambda: gs.resolve_city_capture(action),
             )
         case _:
@@ -2711,11 +2801,16 @@ def _governance_proposal_from_dict(raw: dict[str, Any]):
             raise BeliefEngineError(
                 "action intent evidence_requirements must contain JSON objects"
             )
+        intent_tool = str(item.get("tool") or "")
+        intent_arguments = _canonical_action_params(
+            intent_tool,
+            item.get("arguments") or item.get("params") or {},
+        )
         intents.append(
             ActionIntent(
                 intent_id=str(item.get("intent_id") or ""),
-                tool=str(item.get("tool") or ""),
-                arguments=item.get("arguments") or item.get("params") or {},
+                tool=intent_tool,
+                arguments=intent_arguments,
                 proposal_id=proposal_id,
                 evidence_requirements=tuple(evidence(req) for req in requirements),
                 allowed_turn=item.get("allowed_turn"),
@@ -2784,6 +2879,58 @@ def _release_stale_budget_locks(
     return released
 
 
+def _typed_capabilities_for_turn(
+    engine: BeliefEngine,
+    *,
+    turn: int,
+) -> dict[str, Any]:
+    snapshot = next(
+        (
+            item
+            for item in engine.list("observation", status="active")
+            if item.get("source") == "game_state:typed_snapshot"
+            and item.get("observed_turn") == turn
+        ),
+        None,
+    )
+    if snapshot is None:
+        raise BeliefEngineError(
+            "A current-turn typed snapshot is required; call get_governance_brief first"
+        )
+    capabilities = (snapshot.get("facts") or {}).get("capabilities") or {}
+    if not isinstance(capabilities, dict) or not capabilities.get("ruleset"):
+        raise BeliefEngineError("Typed snapshot is missing ruleset capabilities")
+    return capabilities
+
+
+def _validate_ruleset_action_intent(
+    *,
+    tool: str,
+    arguments: Mapping[str, Any],
+    capabilities: Mapping[str, Any],
+) -> None:
+    requirements = {
+        "appoint_governor": "governors",
+        "assign_governor": "governors",
+        "promote_governor": "governors",
+        "choose_dedication": "dedications",
+        "form_alliance": "alliances",
+        "queue_wc_votes": "world_congress",
+    }
+    capability = requirements.get(tool)
+    if capability and not capabilities.get(capability, False):
+        raise BeliefEngineError(
+            f"Action {tool} requires unavailable ruleset capability: {capability}"
+        )
+    if tool == "propose_trade" and (
+        arguments.get("offer_favor") or arguments.get("request_favor")
+    ) and not capabilities.get("diplomatic_favor", False):
+        raise BeliefEngineError(
+            "Diplomatic favor trade requires unavailable ruleset capability: "
+            "diplomatic_favor"
+        )
+
+
 async def _belief_context(ctx: Context) -> tuple[BeliefEngine, int]:
     """Bind the world model to the live game and return its current turn."""
     engine = _get_beliefs(ctx)
@@ -2799,6 +2946,22 @@ async def _belief_context(ctx: Context) -> tuple[BeliefEngine, int]:
         turn = overview.turn
         logger.set_turn(turn)
     return engine, int(turn)
+
+
+async def _capture_governance_snapshot(
+    ctx: Context,
+    engine: BeliefEngine,
+) -> tuple[Any, dict[str, Any], dict[str, Any], list[str], list[dict[str, Any]]]:
+    """Capture and ingest the authoritative typed state for one turn."""
+
+    from civ_mcp.governance.snapshot import snapshot_world_state
+
+    snapshot = await _get_game(ctx).get_governance_snapshot()
+    world = snapshot_world_state(snapshot)
+    projection = engine.ingest_typed_snapshot(world, turn=snapshot.turn)
+    released_locks = _release_stale_budget_locks(engine, turn=snapshot.turn)
+    active_locks = engine.list("budget_lock", status="active")
+    return snapshot, world, projection, released_locks, active_locks
 
 
 async def _belief_tool(
@@ -3214,14 +3377,10 @@ async def get_governance_brief(
     try:
         if not 0 <= confidence_floor <= 1:
             raise BeliefEngineError("confidence_floor must be between 0 and 1")
-        from civ_mcp.governance.snapshot import snapshot_world_state
-
         engine, _turn = await _belief_context(ctx)
-        snapshot = await _get_game(ctx).get_governance_snapshot()
-        world = snapshot_world_state(snapshot)
-        projection = engine.ingest_typed_snapshot(world, turn=snapshot.turn)
-        released_locks = _release_stale_budget_locks(engine, turn=snapshot.turn)
-        active_locks = engine.list("budget_lock", status="active")
+        snapshot, world, projection, released_locks, active_locks = (
+            await _capture_governance_snapshot(ctx, engine)
+        )
         belief_brief = engine.turn_brief(turn=snapshot.turn, limit=limit)
         await _flush_belief_events(ctx)
         low_confidence = [
@@ -3388,6 +3547,13 @@ async def submit_governance_proposal(ctx: Context, proposal: str) -> str:
     def _operation(engine: BeliefEngine, turn: int) -> dict[str, Any]:
         parsed = _belief_json_object(proposal, "proposal")
         typed = _governance_proposal_from_dict(parsed)
+        capabilities = _typed_capabilities_for_turn(engine, turn=turn)
+        for intent in typed.action_intents:
+            _validate_ruleset_action_intent(
+                tool=intent.tool,
+                arguments=intent.arguments,
+                capabilities=capabilities,
+            )
         for goal_id in typed.goal_ids:
             goal = engine.get("goal", goal_id)
             if not goal or goal.get("status") != "active":
@@ -3847,7 +4013,8 @@ async def route_belief_decision(
 ) -> str:
     """Route a decision and bind it to an exact action/evidence contract.
 
-    ``action_intent`` is preferred over the legacy ``selected_action`` string:
+    ``action_intent`` is the authorization contract; the legacy
+    ``selected_action`` field is audit-only and cannot authorize execution:
     ``{"tool":"set_research","params":{"tech_or_civic":"TECH_WRITING",...}}``.
     For ``verify_then_fast``, ``evidence_requirements`` names the exact fresh
     queries that must follow the decision. The harness compares tool parameters,
@@ -3858,7 +4025,17 @@ async def route_belief_decision(
     params.pop("ctx")
 
     def _operation(engine: BeliefEngine, turn: int) -> dict[str, Any]:
+        governance_gate = engine.governance_turn_gate(turn=turn)
+        if governance_gate["typed_snapshot_id"] is None:
+            raise BeliefEngineError(
+                "A current-turn typed governance snapshot is required; "
+                "call get_governance_brief first"
+            )
         parsed_intent = _belief_json_object(action_intent, "action_intent")
+        if not parsed_intent and str(selected_action or "").strip():
+            raise BeliefEngineError(
+                "selected_action is audit-only; provide a structured action_intent"
+            )
         if parsed_intent:
             tool = str(parsed_intent.get("tool") or "").strip()
             supplied_params = parsed_intent.get("params")
@@ -3871,10 +4048,11 @@ async def route_belief_decision(
                 raise BeliefEngineError(
                     "action_intent params and arguments must match when both are present"
                 )
-            intent_params = (
+            intent_params = _canonical_action_params(
+                tool,
                 supplied_params
                 if supplied_params is not None
-                else supplied_arguments or {}
+                else supplied_arguments or {},
             )
             if not tool or not isinstance(intent_params, dict):
                 raise BeliefEngineError(
@@ -3892,6 +4070,11 @@ async def route_belief_decision(
                 )
             parsed_intent["params"] = intent_params
             parsed_intent["args_hash"] = computed_hash
+            _validate_ruleset_action_intent(
+                tool=tool,
+                arguments=intent_params,
+                capabilities=_typed_capabilities_for_turn(engine, turn=turn),
+            )
         else:
             parsed_intent = None
         parsed_requirements = _belief_json_list(
@@ -4002,6 +4185,11 @@ async def route_belief_decision(
                     "evidence_requirements do not match the council-approved contract"
                 )
             parsed_requirements = approved_requirements
+        elif governance_gate["active_proposal_ids"]:
+            raise BeliefEngineError(
+                "Active governance proposals must be resolved before direct routing; "
+                "supply the selected council_decision_id"
+            )
         decision = engine.route_decision(
             statement=statement,
             probability=probability,
@@ -4022,19 +4210,39 @@ async def route_belief_decision(
             ),
             "selected_action": selected_action,
             "reason": reason,
-            # The common action wrapper consumes this authorization exactly
-            # once.  An empty selected_action deliberately cannot authorize a
-            # game mutation, preventing unbound route records from becoming
-            # decorative telemetry.
-            "decision_state": (
-                "authorized"
-                if parsed_intent or str(selected_action or "").strip()
-                else "unbound"
-            ),
+            "governance_snapshot_id": governance_gate["typed_snapshot_id"],
+            # The common action wrapper consumes structured authorization once.
+            # Human-readable selected_action remains audit-only.
+            "decision_state": "authorized" if parsed_intent else "unbound",
         }
         return engine.update("decision", decision["id"], extras, turn=turn)
 
     return await _belief_tool(ctx, "route_belief_decision", params, _operation)
+
+
+@mcp.tool()
+async def cancel_routed_action(
+    ctx: Context,
+    decision_id: str,
+    reason: str,
+) -> str:
+    """Close an unexecuted/retryable routed action with an explicit Outcome.
+
+    Use this after a slow review changes the plan or when a retry is no longer
+    rational. It cannot cancel an executing or already successful action.
+    """
+
+    params = {"decision_id": decision_id, "reason": reason}
+    return await _belief_tool(
+        ctx,
+        "cancel_routed_action",
+        params,
+        lambda engine, turn: engine.cancel_action_authorization(
+            decision_id,
+            reason=reason,
+            turn=turn,
+        ),
+    )
 
 
 @mcp.tool()
@@ -4485,7 +4693,7 @@ async def recruit_great_person(ctx: Context, individual_id: int) -> str:
     return await _logged(
         ctx,
         "recruit_great_person",
-        {"id": individual_id},
+        {"individual_id": individual_id},
         lambda: gs.recruit_great_person(individual_id),
     )
 
@@ -4507,7 +4715,7 @@ async def patronize_great_person(
     return await _logged(
         ctx,
         "patronize_great_person",
-        {"id": individual_id, "yield": yield_type},
+        {"individual_id": individual_id, "yield_type": yield_type},
         lambda: gs.patronize_great_person(individual_id, yield_type),
     )
 
@@ -4526,7 +4734,7 @@ async def reject_great_person(ctx: Context, individual_id: int) -> str:
     return await _logged(
         ctx,
         "reject_great_person",
-        {"id": individual_id},
+        {"individual_id": individual_id},
         lambda: gs.reject_great_person(individual_id),
     )
 
@@ -4581,7 +4789,7 @@ async def queue_wc_votes(ctx: Context, votes: str) -> str:
     async def _run():
         return await gs.queue_wc_votes(vote_list)
 
-    return await _logged(ctx, "queue_wc_votes", {"votes": vote_list}, _run)
+    return await _logged(ctx, "queue_wc_votes", {"votes": votes}, _run)
 
 
 # ---------------------------------------------------------------------------
@@ -4689,7 +4897,10 @@ async def run_lua(ctx: Context, code: str, context: str = "gamecore") -> str:
     """
     gs = _get_game(ctx)
     return await _logged(
-        ctx, "run_lua", {"context": context}, lambda: gs.execute_lua(code, context)
+        ctx,
+        "run_lua",
+        {"code": code, "context": context},
+        lambda: gs.execute_lua(code, context),
     )
 
 

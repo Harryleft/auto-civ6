@@ -10,6 +10,7 @@ import pytest
 
 from civ_mcp.belief_engine import BeliefEngine, action_args_hash
 from civ_mcp.server import (
+    _belief_action_preflight,
     _governance_payload,
     _governance_proposal_from_dict,
     _release_stale_budget_locks,
@@ -117,6 +118,7 @@ def test_governance_mcp_tools_are_registered():
         "submit_governance_proposal",
         "review_governance_proposal",
         "resolve_governance_council",
+        "cancel_routed_action",
     }.issubset(names)
 
 
@@ -156,7 +158,17 @@ def _governed_context(tmp_path, *, turn: int = 42):
         {
             "statement": "Typed snapshot for the current turn",
             "source": "game_state:typed_snapshot",
-            "facts": {"snapshot_id": "snapshot:test:42"},
+            "facts": {
+                "snapshot_id": "snapshot:test:42",
+                "capabilities": {
+                    "ruleset": "RULESET_STANDARD",
+                    "governors": False,
+                    "dedications": False,
+                    "alliances": False,
+                    "diplomatic_favor": False,
+                    "world_congress": False,
+                },
+            },
             "metrics": {
                 "player.gold": 100,
                 "player.faith": 20,
@@ -291,3 +303,78 @@ def test_council_clamps_declared_budget_to_typed_live_capacity(tmp_path):
     proposal = engine.get("proposal", "production:east:walls")
     assert proposal["status"] == "resolved"
     assert proposal["council_state"] == "approved"
+
+
+def test_standard_ruleset_rejects_expansion_only_action_intent(tmp_path):
+    ctx, _engine, _approved_intent = _governed_context(tmp_path)
+    proposal = _proposal_payload()
+    proposal["proposal_id"] = "diplomacy:alliance"
+    proposal["action_intents"] = [
+        {
+            "intent_id": "intent:alliance:3",
+            "tool": "form_alliance",
+            "arguments": {"other_player_id": 3, "alliance_type": "MILITARY"},
+        }
+    ]
+
+    result = asyncio.run(submit_governance_proposal(ctx, json.dumps(proposal)))
+
+    assert result.startswith("Error: Action form_alliance requires unavailable")
+
+
+def _bare_loop_context(tmp_path, *, turn: int = 42):
+    engine = BeliefEngine("test-loop-gate", tmp_path)
+    engine.bind_game("CIVILIZATION_ROME", 789)
+    lifespan = SimpleNamespace(
+        beliefs=engine,
+        logger=_FakeLogger(turn),
+        game=SimpleNamespace(),
+    )
+    return (
+        SimpleNamespace(
+            request_context=SimpleNamespace(lifespan_context=lifespan)
+        ),
+        engine,
+    )
+
+
+def test_end_turn_preflight_requires_current_typed_governance_snapshot(tmp_path):
+    ctx, _engine = _bare_loop_context(tmp_path)
+
+    gate = asyncio.run(_belief_action_preflight(ctx, "end_turn", {}))
+
+    assert gate["authorized"] is False
+    assert gate["governance_gate"]["blockers"] == [
+        "current_turn_typed_snapshot_missing"
+    ]
+
+
+def test_legacy_selected_action_cannot_authorize_execution(tmp_path):
+    ctx, engine = _bare_loop_context(tmp_path)
+    engine.ingest_typed_snapshot(
+        {
+            "snapshot_id": "snapshot:42",
+            "turn_before": 42,
+            "turn_after": 42,
+            "capabilities": {"ruleset": "RULESET_STANDARD"},
+            "entities": [],
+            "relations": [],
+            "metrics": {},
+        },
+        turn=42,
+    )
+
+    result = asyncio.run(
+        route_belief_decision(
+            ctx,
+            statement="Legacy fuzzy research authorization",
+            probability=0.8,
+            confidence=0.8,
+            impact="low",
+            urgency="low",
+            irreversibility=0.1,
+            selected_action="set_research",
+        )
+    )
+
+    assert result.startswith("Error: selected_action is audit-only")
