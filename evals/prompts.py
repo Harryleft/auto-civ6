@@ -42,14 +42,20 @@ The hex grid uses (X, Y) where higher Y = visually south (down on screen).
 
 Follow this pattern every turn:
 
-1. `get_game_overview` — orient: turn, yields, research, score
-2. `get_units` — see all units, positions, HP, moves, charges
-3. `get_map_area` around your cities and units — see terrain, resources, \
+1. `get_governance_brief` — capture the current-turn typed state; read ruleset \
+capabilities, budgets, confidence gaps, proposals, and belief gates
+2. `get_game_overview` — orient: turn, yields, research, score
+3. `get_units` — see all units, positions, HP, moves, charges
+4. `get_map_area` around your cities and units — see terrain, resources, \
 enemy units. This is your ONLY source of threat information.
-4. For each unit: decide action based on context (threats, resources, terrain)
-5. `get_cities` — check production queues
-6. `set_city_production` / `set_research` if needed
-7. `end_turn` — auto-checks for blockers and reports events
+5. For strategic conflicts, submit proposals, allow evidence-grounded critic \
+review, and call `resolve_governance_council`
+6. Route the exact selected `ActionIntent` with `route_belief_decision`; run \
+the declared evidence query when the route is `verify_then_fast`
+7. Execute unit and city actions; nearby hostiles require a quantified \
+`get_combat_estimate`, not a guessed belief downgrade
+8. `get_turn_brief` — review outcomes and remaining scoped gates
+9. `end_turn` — succeeds only after governance and belief obligations are complete
 
 ## Blocker Resolution
 
@@ -57,14 +63,16 @@ enemy units. This is your ONLY source of threat information.
 - **Units** — unmoved units need orders (move, skip, or fortify)
 - **Production** — a city needs new build orders
 - **Research/Civic** — choose next tech or civic
-- **Governor** — appoint a governor
+- **Governor** — appoint a governor only when the capability is enabled
 - **Promotion** — promote a unit
 - **Pantheon** — choose a pantheon belief
 - **Envoys** — assign envoy tokens to city-states
 - **Diplomacy** — respond to AI diplomatic encounters
-- **Dedication** — choose a golden/dark age dedication
+- **Dedication** — choose one only when the capability is enabled
 
 Always resolve all blockers before calling `end_turn` again.
+An unresolved proposal, unconsumed routed decision, or selected council action \
+without a successful outcome is also a blocker.
 
 ## Combat
 
@@ -139,13 +147,15 @@ def build_scenario_prompt(
             f"### Getting Started\n\n"
             f'Call `load_game_save("{load_save}")` to load the autosave and '
             f"continue the game. Wait ~10 seconds for the save to load, then call "
-            f"`get_game_overview` to orient yourself and begin playing.\n\n"
+            f"`get_governance_brief` to capture the typed turn state and begin "
+            f"playing.\n\n"
         )
     else:
         parts.append(
             f"### Getting Started\n\n"
-            f"The scenario save is loaded automatically. Call `get_game_overview` "
-            f"to orient yourself and begin playing.\n\n"
+            f"The scenario save is loaded automatically. Call "
+            f"`get_governance_brief` to capture the typed turn state and begin "
+            f"playing.\n\n"
         )
 
     parts.append(

@@ -783,9 +783,8 @@ class BeliefEngine:
     def _action_matches(selected_action: Any, tool: str, params: dict[str, Any]) -> bool:
         """Match a decision to a concrete MCP call.
 
-        New governance decisions carry a structured action intent and therefore
-        compare tool, parameter subset, and optional canonical argument hash.
-        The string branch remains for existing clients during migration.
+        Only structured action intents can authorize execution. Tool, exact
+        parameter hash, and the parameter values must all match.
         """
         if isinstance(selected_action, dict):
             if str(selected_action.get("tool", "")).strip().lower() != tool.lower():
@@ -797,21 +796,7 @@ class BeliefEngine:
                 return False
             expected_hash = selected_action.get("args_hash")
             return not expected_hash or expected_hash == action_args_hash(params)
-        if not isinstance(selected_action, str) or not selected_action.strip():
-            return False
-        selected = selected_action.strip().lower()
-        action = str(params.get("action", "")).strip().lower()
-        candidates = {
-            tool.strip().lower(),
-            action,
-            f"{tool}:{action}".strip(":").lower(),
-        }
-        if selected in candidates:
-            return True
-        return bool(
-            action
-            and (selected.startswith(action + " ") or selected.endswith(" " + action))
-        )
+        return False
 
     @staticmethod
     def _scope_conflicts(left: str, right: str) -> bool:
@@ -890,24 +875,21 @@ class BeliefEngine:
         """Consume an explicit routed decision before a key MCP action."""
         brief = self.turn_brief(turn=turn)
         gate = brief["decision_gate"]
-        if not required:
+        decisions = [
+            item
+            for item in self.list("decision", status="active")
+            if item.get("decision_state") in {"authorized", "retryable"}
+            and item.get("created_turn") == turn
+            and self._action_matches(item.get("action_intent"), tool, params)
+        ]
+        decision = decisions[0] if decisions else None
+        if not required and decision is None:
             return {
                 "authorized": True,
                 "decision_id": None,
                 "route": "routine",
                 "decision_gate": gate,
             }
-
-        decisions = [
-            item
-            for item in self.list("decision", status="active")
-            if item.get("decision_state") in {"authorized", "retryable"}
-            and item.get("created_turn") == turn
-            and self._action_matches(
-                item.get("action_intent") or item.get("selected_action"), tool, params
-            )
-        ]
-        decision = decisions[0] if decisions else None
         if decision is None:
             return {
                 "authorized": False,
@@ -916,8 +898,8 @@ class BeliefEngine:
                 "decision_gate": gate,
                 "reason": (
                     f"No authorized belief decision for {tool}. Call "
-                    "route_belief_decision with selected_action set to this "
-                    "tool/action before retrying."
+                    "route_belief_decision with a structured action_intent "
+                    "matching this tool and its exact arguments before retrying."
                 ),
             }
         decision_scope = str(decision.get("gate_scope") or "global")
@@ -1040,6 +1022,57 @@ class BeliefEngine:
             }
         return self.update("decision", decision_id, patch, turn=turn)
 
+    def cancel_action_authorization(
+        self,
+        decision_id: str,
+        *,
+        reason: str,
+        turn: int,
+    ) -> dict[str, Any]:
+        """Explicitly close an unexecuted/retryable action with an audit outcome."""
+
+        decision = self.get("decision", decision_id)
+        if not decision:
+            raise BeliefEngineError(f"Unknown decision: {decision_id}")
+        if not isinstance(reason, str) or not reason.strip():
+            raise BeliefEngineError("Cancellation reason must be non-empty")
+        state = decision.get("decision_state")
+        if state == "executing":
+            raise BeliefEngineError("Cannot cancel an action while it is executing")
+        if state == "succeeded":
+            raise BeliefEngineError("Cannot cancel a succeeded action")
+        if state == "cancelled":
+            return decision
+        action_intent = decision.get("action_intent")
+        if not isinstance(action_intent, dict):
+            raise BeliefEngineError("Decision has no structured action intent to cancel")
+        updated = self.update(
+            "decision",
+            decision_id,
+            {
+                "status": "resolved",
+                "decision_state": "cancelled",
+                "cancelled_turn": turn,
+                "cancellation_reason": reason.strip(),
+            },
+            turn=turn,
+        )
+        self.create(
+            "outcome",
+            {
+                "statement": f"Action intent cancelled: {reason.strip()}",
+                "action_intent": deepcopy(action_intent),
+                "decision_id": decision_id,
+                "success": False,
+                "executed": False,
+                "cancelled": True,
+                "result": reason.strip(),
+                "observed_turn": turn,
+            },
+            turn=turn,
+        )
+        return updated
+
     def ingest_typed_snapshot(
         self,
         snapshot: dict[str, Any],
@@ -1082,11 +1115,14 @@ class BeliefEngine:
                 }
             )
         changed: list[str] = []
+        current_entity_ids: set[str] = set()
         for node in snapshot.get("entities") or []:
             if not isinstance(node, dict) or not (node.get("id") or node.get("entity_id")):
                 raise BeliefEngineError("typed snapshot entity requires a stable id")
             entity_id = str(node.get("id") or node.get("entity_id"))
+            current_entity_ids.add(entity_id)
             payload = {
+                "status": "active",
                 "node_type": str(
                     node.get("node_type") or node.get("entity_type") or "entity"
                 ),
@@ -1107,6 +1143,25 @@ class BeliefEngine:
             after = self.upsert("world_entity", entity_id, payload, turn=turn)
             if before is None or after.get("version") != before.get("version"):
                 changed.append(entity_id)
+        archived: list[str] = []
+        for entity in self.list("world_entity", status="active"):
+            if (
+                entity.get("source") != "game_state:typed"
+                or entity["id"] in current_entity_ids
+            ):
+                continue
+            self.update(
+                "world_entity",
+                entity["id"],
+                {
+                    "status": "archived",
+                    "archived_turn": turn,
+                    "archived_reason": "absent_from_authoritative_typed_snapshot",
+                    "snapshot_id": snapshot_id,
+                },
+                turn=turn,
+            )
+            archived.append(entity["id"])
         observation = self.create(
             "observation",
             {
@@ -1129,6 +1184,7 @@ class BeliefEngine:
         return {
             "snapshot_id": snapshot_id,
             "world_entities_changed": changed,
+            "world_entities_archived": archived,
             "observation_id": observation["id"],
         }
 
@@ -1638,6 +1694,105 @@ class BeliefEngine:
                 "Use get_combat_estimate before assess_route_combat_risk when route safety is in question.",
                 "Use route_belief_decision before high-impact or irreversible actions.",
             ],
+        }
+
+    def governance_turn_gate(self, *, turn: int) -> dict[str, Any]:
+        """Return the non-bypassable governance obligations for ``turn``.
+
+        A typed snapshot is the minimum decision context. Submitted proposals
+        must be arbitrated, selected action intents must reach a successful
+        outcome, and routed authorizations cannot be silently abandoned before
+        ending the turn.
+        """
+
+        typed_snapshot = next(
+            (
+                item
+                for item in self.list("observation", status="active")
+                if item.get("source") == "game_state:typed_snapshot"
+                and item.get("observed_turn") == turn
+            ),
+            None,
+        )
+        active_proposals = self.list("proposal", status="active")
+        current_decisions = [
+            item
+            for item in self.list("decision", status=None)
+            if item.get("created_turn") == turn
+        ]
+        pending_authorizations = [
+            {
+                "decision_id": item["id"],
+                "decision_state": item.get("decision_state"),
+            }
+            for item in current_decisions
+            if item.get("decision_state") in {"authorized", "executing", "retryable"}
+        ]
+
+        pending_council_intents: list[dict[str, Any]] = []
+        approved_proposals = [
+            item
+            for item in self.list("proposal", status=None)
+            if item.get("council_state") == "approved"
+            and item.get("last_updated_turn") == turn
+        ]
+        for proposal in approved_proposals:
+            council_id = proposal.get("council_decision_id")
+            for intent in proposal.get("action_intents") or []:
+                if not isinstance(intent, dict):
+                    continue
+                intent_id = str(intent.get("intent_id") or "")
+                matched = next(
+                    (
+                        decision
+                        for decision in current_decisions
+                        if decision.get("council_decision_id") == council_id
+                        and (decision.get("action_intent") or {}).get("proposal_id")
+                        == proposal["id"]
+                        and (
+                            not intent_id
+                            or (decision.get("action_intent") or {}).get("intent_id")
+                            == intent_id
+                        )
+                    ),
+                    None,
+                )
+                if matched is None or matched.get("decision_state") not in {
+                    "succeeded",
+                    "cancelled",
+                }:
+                    pending_council_intents.append(
+                        {
+                            "proposal_id": proposal["id"],
+                            "intent_id": intent_id or None,
+                            "decision_id": matched.get("id") if matched else None,
+                            "decision_state": (
+                                matched.get("decision_state") if matched else "not_routed"
+                            ),
+                        }
+                    )
+
+        blockers: list[str] = []
+        if typed_snapshot is None:
+            blockers.append("current_turn_typed_snapshot_missing")
+        if active_proposals:
+            blockers.append("governance_proposals_not_arbitrated")
+        if pending_council_intents:
+            blockers.append("council_action_intents_not_completed")
+        if pending_authorizations:
+            blockers.append("routed_actions_not_completed")
+        return {
+            "turn": turn,
+            "ready": not blockers,
+            "typed_snapshot_id": (
+                (typed_snapshot.get("facts") or {}).get("snapshot_id")
+                if typed_snapshot
+                else None
+            ),
+            "blockers": blockers,
+            "active_proposal_ids": [item["id"] for item in active_proposals],
+            "pending_council_intents": pending_council_intents,
+            "pending_authorizations": pending_authorizations,
         }
 
     def route_decision(

@@ -64,6 +64,9 @@ submit structured advice but cannot execute its own proposal.
 8. Execute the MCP action. Authorization moves through `authorized -> executing
    -> succeeded`, or `retryable` after a real failed attempt. Outcomes and
    factual observations are appended automatically.
+9. If slow review invalidates the intent, or retrying is no longer rational,
+   call `cancel_routed_action` with a concrete reason. The harness appends a
+   cancelled, unexecuted Outcome; it never treats cancellation as success.
 
 ## Proposal example
 
