@@ -110,6 +110,18 @@ def normalize_tool_result(tool: str, result: str) -> dict[str, Any]:
             match = re.search(pattern, result, re.MULTILINE)
             if match:
                 metrics[key] = _coerce_number(match.group(1))
+        # Game speed drives every cost multiplier (pantheon 25→17 on Quick,
+        # era thresholds, production costs). Expose it as a stable metric so
+        # beliefs/predictions never reason with standard-speed assumptions.
+        speed_match = re.search(
+            r"\|\s*(\w+)\s*speed(?:\s*\((\d+)% costs\))?", result
+        )
+        if speed_match:
+            metrics["game_speed"] = speed_match.group(1)
+            if speed_match.group(2):
+                metrics["speed_cost_multiplier"] = _coerce_number(
+                    speed_match.group(2)
+                )
 
     elif tool == "get_diplomacy":
         current_key: str | None = None
@@ -1097,6 +1109,27 @@ class BeliefEngine:
             },
             turn=turn,
         )
+        # Release budget locks reserved by the same council decision: a
+        # cancelled authorization must not leave exclusive reservations
+        # blocking later proposals until the next turn rolls over.
+        council_id = decision.get("council_decision_id")
+        if council_id:
+            for lock in self.list("budget_lock", status="active"):
+                if lock.get("council_decision_id") != council_id:
+                    continue
+                self.update(
+                    "budget_lock",
+                    lock["id"],
+                    {
+                        "status": "archived",
+                        "released_turn": turn,
+                        "release_reason": (
+                            "decision_cancelled: "
+                            + reason.strip()
+                        ),
+                    },
+                    turn=turn,
+                )
         self.create(
             "outcome",
             {

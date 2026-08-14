@@ -1245,6 +1245,52 @@ class TestGovernanceTurnLoopGate:
         assert outcome["executed"] is False
         assert outcome["cancelled"] is True
 
+    def test_cancelling_decision_releases_council_budget_locks(self, engine):
+        self._typed_snapshot(engine, 12)
+        params = {"tech_or_civic": "TECH_WRITING", "category": "tech"}
+        decision = engine.route_decision(
+            statement="Research Writing",
+            probability=0.4,
+            confidence=0.5,
+            impact="medium",
+            urgency="medium",
+            irreversibility=0.5,
+            action_intent={
+                "tool": "set_research",
+                "params": params,
+                "args_hash": action_args_hash(params),
+            },
+            council_decision_id="council:12:abcdef",
+            turn=12,
+        )
+        engine.create(
+            "budget_lock",
+            {
+                "resource": "research",
+                "amount": 1.0,
+                "scope": "global",
+                "exclusive": True,
+                "reason": "research reservation",
+                "proposal_id": "p1",
+                "council_decision_id": "council:12:abcdef",
+                "release_after_turn": 12,
+                "status": "active",
+            },
+            turn=12,
+        )
+
+        engine.cancel_action_authorization(
+            decision["id"],
+            reason="No longer rational; new evidence supersedes.",
+            turn=12,
+        )
+
+        locks = engine.list("budget_lock", status="active")
+        assert locks == [], f"cancellation should release council locks, got {locks}"
+        archived = engine.list("budget_lock", status="archived")
+        assert len(archived) == 1
+        assert "decision_cancelled" in archived[0].get("release_reason", "")
+
     def test_future_council_intents_become_due_and_terminal_history_stays_satisfied(
         self, engine
     ):
