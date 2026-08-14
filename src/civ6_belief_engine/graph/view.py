@@ -113,6 +113,23 @@ class GraphView:
             if node.node_type == node_type and (node.observed or not observed_only)
         )
 
+    def active_goals(self) -> tuple[Node, ...]:
+        """Return current goal nodes in deterministic strategic order."""
+
+        return tuple(
+            sorted(
+                (
+                    node
+                    for node in self.nodes_of_type("goal", observed_only=True)
+                    if node.source == "belief_engine:goal"
+                ),
+                key=lambda node: (
+                    -int(node.attributes.get("priority", 0)),
+                    str(node.attributes.get("goal_id") or node.node_id),
+                ),
+            )
+        )
+
     def edges_from(self, node_id: str, relation_type: str | None = None) -> tuple[Edge, ...]:
         relation = relation_type.upper() if relation_type else None
         return tuple(

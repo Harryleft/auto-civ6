@@ -1,9 +1,8 @@
 """Read-only military department for the pluggable strategy coordinator.
 
 The department turns one immutable :class:`TurnSnapshot` into a deterministic
-military assessment.  It deliberately stops at facts, support requests and a
-workstream: it does not create action intents, access the game, or persist
-anything.
+military assessment and may emit an exact proposal. It never accesses the game,
+persists state, or executes an action.
 """
 
 from __future__ import annotations
@@ -11,11 +10,9 @@ from __future__ import annotations
 import re
 from math import isfinite
 from numbers import Real
-from typing import Any, ClassVar, Iterable
+from typing import Any, ClassVar, Iterable, Protocol
 
-from ...graph import Edge
-from civ_mcp.lua.models import BarbarianCamp, BarbarianUnit, UnitInfo
-
+from ...graph import Edge, Node
 from ..models import (
     ActionIntent,
     BudgetLock,
@@ -35,6 +32,35 @@ from .base import (
 )
 
 
+class _UnitView(Protocol):
+    unit_id: int
+    unit_type: str
+    name: str
+    x: int
+    y: int
+    health: Any
+    max_health: Any
+    moves_remaining: Any
+    combat_strength: Any
+    ranged_strength: Any
+    fortify_turns: int
+    can_fortify: bool
+
+
+class _CampView(Protocol):
+    x: int
+    y: int
+    visibility: str
+    distance_to_city: int
+
+
+class _BarbarianUnitView(Protocol):
+    unit_id: int
+    unit_type: str
+    x: int
+    y: int
+
+
 class MilitaryDepartment:
     """Assess military readiness and known barbarian pressure.
 
@@ -47,7 +73,8 @@ class MilitaryDepartment:
     department: ClassVar[Department] = Department.MILITARY
 
     _AGENDA_SIGNAL = re.compile(
-        r"军事|军队|战斗|防御|蛮族|清剿|进攻|military|barbarian|combat|defen[cs]e|war|attack",
+        r"军事|军队|战斗|防御|蛮族|清剿|进攻|守住|保住|生存|存续|安全|"
+        r"military|barbarian|combat|defen[cs]e|war|attack|surviv|protect|preserv",
         re.IGNORECASE,
     )
     _NON_COMBAT_MARKERS = (
@@ -159,6 +186,7 @@ class MilitaryDepartment:
         barbarian_present = bool(camps or barbarian_units)
         nearby_threats = self._nearby_threats(context)
         threat_present = barbarian_present or bool(nearby_threats)
+        graph_current = self._graph_is_current(context)
 
         evidence_missing = self._missing_evidence(
             snapshot=snapshot,
@@ -166,7 +194,11 @@ class MilitaryDepartment:
             combat_units=combat_units,
             threat_present=threat_present,
         )
-        if context.graph is not None and not snapshot.threat_scan_available:
+        if context.graph is not None and not graph_current:
+            evidence_missing = self._dedupe(
+                (*evidence_missing, "图视图不是当前快照")
+            )
+        elif context.graph is not None and not snapshot.threat_scan_available:
             evidence_missing = self._dedupe(
                 (*evidence_missing, "城市周边敌军扫描")
             )
@@ -179,7 +211,9 @@ class MilitaryDepartment:
             camps=camps,
             barbarian_units=barbarian_units,
         )
-        if context.graph is not None and snapshot.threat_scan_available:
+        if context.graph is not None and not graph_current:
+            facts = (*facts, "图视图不是当前快照；不能据此判断当前城市威胁",)
+        elif context.graph is not None and snapshot.threat_scan_available:
             facts = (
                 *facts,
                 f"图查询确认城市三格内当前可见敌军: {len(nearby_threats)} 个",
@@ -282,14 +316,52 @@ class MilitaryDepartment:
 
     @staticmethod
     def _has_military_agenda(context: DepartmentContext) -> bool:
-        text_parts: list[str] = list(context.agenda)
-        for goal in context.goals:
-            text_parts.extend((goal.goal_id, goal.statement, *goal.tags))
+        if context.graph is not None:
+            text_parts: list[str] = []
+            for goal in MilitaryDepartment._active_graph_goals(context):
+                attributes = goal.attributes
+                text_parts.extend(
+                    (
+                        str(attributes.get("goal_id") or goal.node_id),
+                        str(attributes.get("statement") or ""),
+                        *(str(tag) for tag in attributes.get("tags") or ()),
+                    )
+                )
+        else:
+            text_parts = list(context.agenda)
+            for goal in context.goals:
+                text_parts.extend((goal.goal_id, goal.statement, *goal.tags))
         return bool(MilitaryDepartment._AGENDA_SIGNAL.search(" ".join(text_parts)))
 
     @staticmethod
+    def _graph_is_current(context: DepartmentContext) -> bool:
+        return bool(
+            context.graph is not None
+            and context.graph.snapshot_id == context.snapshot.snapshot_id
+            and context.graph.turn == context.snapshot.turn
+        )
+
+    @classmethod
+    def _goal_is_military(cls, goal: Node) -> bool:
+        attributes = goal.attributes
+        text = " ".join(
+            (
+                str(attributes.get("goal_id") or goal.node_id),
+                str(attributes.get("statement") or ""),
+                *(str(tag) for tag in attributes.get("tags") or ()),
+            )
+        )
+        return bool(cls._AGENDA_SIGNAL.search(text))
+
+    @staticmethod
+    def _active_graph_goals(context: DepartmentContext) -> tuple[Node, ...]:
+        if not MilitaryDepartment._graph_is_current(context):
+            return ()
+        return context.graph.active_goals()
+
+    @staticmethod
     def _nearby_threats(context: DepartmentContext) -> tuple[Edge, ...]:
-        if context.graph is None:
+        if not MilitaryDepartment._graph_is_current(context):
             return ()
         threats: dict[tuple[str, str, str], Edge] = {}
         for city in context.snapshot.cities:
@@ -308,7 +380,7 @@ class MilitaryDepartment:
         )
 
     @staticmethod
-    def _ordered_units(units: Iterable[UnitInfo]) -> tuple[UnitInfo, ...]:
+    def _ordered_units(units: Iterable[_UnitView]) -> tuple[_UnitView, ...]:
         return tuple(
             sorted(
                 units,
@@ -327,7 +399,7 @@ class MilitaryDepartment:
         cls,
         *,
         context: DepartmentContext,
-        combat_units: tuple[UnitInfo, ...],
+        combat_units: tuple[_UnitView, ...],
         nearby_threats: tuple[Edge, ...],
         evidence_missing: tuple[str, ...],
     ) -> tuple[Proposal, ...]:
@@ -338,11 +410,16 @@ class MilitaryDepartment:
             or context.graph.snapshot_id != context.snapshot.snapshot_id
             or not context.snapshot.threat_scan_available
             or not nearby_threats
-            or not context.goals
             or evidence_missing
         ):
             return ()
-        goals = tuple(sorted(context.goals, key=lambda goal: (-goal.priority, goal.goal_id)))
+        goals = tuple(
+            goal
+            for goal in cls._active_graph_goals(context)
+            if cls._goal_is_military(goal)
+        )
+        if not goals:
+            return ()
         for threat in nearby_threats:
             city = context.graph.node(threat.target_id)
             if city is None:
@@ -393,7 +470,7 @@ class MilitaryDepartment:
                         f"让单位 {defender.unit_id} 在受威胁城市 "
                         f"{threat.target_id} 原地设防"
                     ),
-                    goal_ids=(goals[0].goal_id,),
+                    goal_ids=(str(goals[0].attributes["goal_id"]),),
                     success=ProbabilityConfidence(probability=0.9, confidence=0.8),
                     priority=80,
                     hard_constraints={
@@ -423,7 +500,7 @@ class MilitaryDepartment:
     @staticmethod
     def _barbarian_rows(
         barbarians: Any,
-    ) -> tuple[tuple[BarbarianCamp, ...], tuple[BarbarianUnit, ...]]:
+    ) -> tuple[tuple[_CampView, ...], tuple[_BarbarianUnitView, ...]]:
         if barbarians is None:
             return (), ()
         camps = tuple(
@@ -453,7 +530,7 @@ class MilitaryDepartment:
         return numeric if isfinite(numeric) else None
 
     @classmethod
-    def _is_combat_unit(cls, unit: UnitInfo) -> bool:
+    def _is_combat_unit(cls, unit: _UnitView) -> bool:
         combat_strength = cls._number(unit.combat_strength)
         ranged_strength = cls._number(unit.ranged_strength)
         if (combat_strength is not None and combat_strength > 0) or (
@@ -466,7 +543,7 @@ class MilitaryDepartment:
         return any(marker in label for marker in cls._COMBAT_MARKERS)
 
     @classmethod
-    def _is_damaged(cls, unit: UnitInfo) -> bool:
+    def _is_damaged(cls, unit: _UnitView) -> bool:
         health = cls._number(unit.health)
         max_health = cls._number(unit.max_health)
         return (
@@ -477,7 +554,7 @@ class MilitaryDepartment:
         )
 
     @classmethod
-    def _is_actionable(cls, unit: UnitInfo) -> bool:
+    def _is_actionable(cls, unit: _UnitView) -> bool:
         moves_remaining = cls._number(unit.moves_remaining)
         return moves_remaining is not None and moves_remaining > 0
 
@@ -486,8 +563,8 @@ class MilitaryDepartment:
         cls,
         *,
         snapshot: Any,
-        units: tuple[UnitInfo, ...],
-        combat_units: tuple[UnitInfo, ...],
+        units: tuple[_UnitView, ...],
+        combat_units: tuple[_UnitView, ...],
         threat_present: bool,
     ) -> tuple[str, ...]:
         missing: list[str] = []
@@ -516,12 +593,12 @@ class MilitaryDepartment:
         cls,
         *,
         snapshot: Any,
-        units: tuple[UnitInfo, ...],
-        combat_units: tuple[UnitInfo, ...],
-        damaged_units: tuple[UnitInfo, ...],
-        actionable_units: tuple[UnitInfo, ...],
-        camps: tuple[BarbarianCamp, ...],
-        barbarian_units: tuple[BarbarianUnit, ...],
+        units: tuple[_UnitView, ...],
+        combat_units: tuple[_UnitView, ...],
+        damaged_units: tuple[_UnitView, ...],
+        actionable_units: tuple[_UnitView, ...],
+        camps: tuple[_CampView, ...],
+        barbarian_units: tuple[_BarbarianUnitView, ...],
     ) -> tuple[str, ...]:
         facts = [
             f"已评估己方单位总数: {len(units)}；全体单位仅用于筛选，不自动成为投入对象",
@@ -550,10 +627,10 @@ class MilitaryDepartment:
         cls,
         *,
         snapshot: Any,
-        combat_units: tuple[UnitInfo, ...],
-        damaged_units: tuple[UnitInfo, ...],
-        camps: tuple[BarbarianCamp, ...],
-        barbarian_units: tuple[BarbarianUnit, ...],
+        combat_units: tuple[_UnitView, ...],
+        damaged_units: tuple[_UnitView, ...],
+        camps: tuple[_CampView, ...],
+        barbarian_units: tuple[_BarbarianUnitView, ...],
     ) -> tuple[str, ...]:
         risks = ["进攻编组不得抽空城市周边防御，必须保留本土防御余量"]
         if camps or barbarian_units:
@@ -570,8 +647,8 @@ class MilitaryDepartment:
     def _opportunities(
         cls,
         *,
-        combat_units: tuple[UnitInfo, ...],
-        actionable_units: tuple[UnitInfo, ...],
+        combat_units: tuple[_UnitView, ...],
+        actionable_units: tuple[_UnitView, ...],
         threat_present: bool,
     ) -> tuple[str, ...]:
         if threat_present:
@@ -588,9 +665,9 @@ class MilitaryDepartment:
         cls,
         *,
         evidence_missing: tuple[str, ...],
-        units: tuple[UnitInfo, ...],
-        combat_units: tuple[UnitInfo, ...],
-        actionable_units: tuple[UnitInfo, ...],
+        units: tuple[_UnitView, ...],
+        combat_units: tuple[_UnitView, ...],
+        actionable_units: tuple[_UnitView, ...],
         threat_present: bool,
     ) -> tuple[str, ...]:
         gaps = list(evidence_missing)
@@ -689,16 +766,16 @@ class MilitaryDepartment:
         return tuple(result)
 
     @staticmethod
-    def _unit_ids(units: Iterable[UnitInfo]) -> str:
+    def _unit_ids(units: Iterable[_UnitView]) -> str:
         values = tuple(str(unit.unit_id) for unit in units)
         return ", ".join(values) if values else "无"
 
     @staticmethod
-    def _camp_positions(camps: Iterable[BarbarianCamp]) -> str:
+    def _camp_positions(camps: Iterable[_CampView]) -> str:
         values = tuple(f"({camp.x},{camp.y})" for camp in camps)
         return ", ".join(values) if values else "无"
 
     @staticmethod
-    def _barbarian_unit_ids(units: Iterable[BarbarianUnit]) -> str:
+    def _barbarian_unit_ids(units: Iterable[_BarbarianUnitView]) -> str:
         values = tuple(str(unit.unit_id) for unit in units)
         return ", ".join(values) if values else "无"

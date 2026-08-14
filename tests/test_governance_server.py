@@ -16,6 +16,7 @@ from civ_mcp.belief_engine import (
 from civ_mcp.server import (
     _belief_action_preflight,
     _canonical_action_params,
+    _governance_goal_from_dict,
     _governance_payload,
     _national_strategy_payload,
     _normalize_trade_mode,
@@ -100,6 +101,33 @@ def test_proposal_parser_keeps_probability_and_confidence_strictly_separate():
 
     with pytest.raises(TypeError, match="confidence must be a real number, not bool"):
         _governance_proposal_from_dict(payload)
+
+
+def test_goal_parser_restores_nested_and_legacy_probability_contracts():
+    nested = _governance_goal_from_dict(
+        {
+            "goal_id": "survive",
+            "statement": "守住首都",
+            "priority": 100,
+            "success": {"probability": 0.8, "confidence": 0.9},
+            "tags": ["military"],
+        }
+    )
+    legacy = _governance_goal_from_dict(
+        {
+            "id": "goal:legacy",
+            "statement": "保留旧记录兼容",
+            "priority": "50",
+        }
+    )
+
+    assert nested.goal_id == "survive"
+    assert nested.success.probability == 0.8
+    assert nested.success.confidence == 0.9
+    assert legacy.goal_id == "goal:legacy"
+    assert legacy.priority == 50
+    assert legacy.success.probability == 0.5
+    assert legacy.success.confidence == 0.0
 
 
 def test_action_arguments_must_be_a_json_object():

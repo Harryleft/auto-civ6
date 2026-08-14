@@ -192,7 +192,15 @@ Threat typed data
 - 只迁移 Military Department。
 - 等价测试通过后，删除该消费者的旧读取路径。
 
-当前 Military 的“城市三格内当前威胁”已读取 GraphView；蛮族营地、己方单位与其他军事事实仍走兼容 DTO，旧路径尚不能删除。
+当前已完成：
+
+- active Goal 在治理快照边界由 JSONL 投影进同一 GraphView；Goal 更新、归档和 replay 保持确定性，内容未变化时不追加 Goal delta。
+- Military 在有图时只读取同一 snapshot/turn 的 Graph Goal 与 `THREATENS`；不再回退 `context.agenda` 或 `context.goals`。
+- 陈旧图只能触发证据缺口，不能影响当前威胁判断、Proposal 或复盘结论。
+- 防御 Proposal 必须绑定一个语义相关的军事/防御 Goal，不能借用任意最高优先级 Goal。
+- Military 源码已移除对 `civ_mcp.lua.models` 的直接导入，先用窄 Protocol 固定所需字段。
+
+尚未迁移：蛮族营地、己方单位与其他军事事实仍来自兼容 TurnSnapshot；它们在模型层仍间接携带 Lua DTO。因此这里只能称为“Goal + Threat 单消费者迁移完成”，不能称为整个 Department 已解耦。
 
 ### 阶段四：逐步扩展
 
@@ -229,9 +237,9 @@ ETC 的判断标准只有一句：一个需求变化只修改拥有该知识的�
 仍未关闭的边界：
 
 - 当前真实存档没有可见城市威胁，不能替代带敌军场景的动作验收。
-- Department 仍依赖 `civ_mcp.lua.models`，尚未达到最终解耦标准。
+- TurnSnapshot 仍间接依赖 `civ_mcp.lua.models`；Military 的直接 import 已删除，但最终 DTO 边界尚未完成。
 - Proposal、Decision、Action 和 Outcome 仍由现有 JSONL 治理状态保存，尚未物化为图关系。
-- Claude Code 多次有界审查均未返回结论；不能把外部审查启动记录当成通过证据。
+- Claude Code 的整份 diff 审查多次超时；拆成可核验问题后发现“陈旧 Threat 污染只读评估”和“任意 Goal 为防御提案背书”两项共识缺陷，均已修复并通过定向复核。超时的审查不计为通过证据。
 
 ## 8. 验收标准
 
