@@ -9,11 +9,11 @@ Safety guardrails for automated agents:
 
 Platform support:
 - macOS: fully supported (process mgmt, OCR, window automation)
-  Install with: uv pip install 'civ6-mcp[launcher-macos]'
+  Install with: uv pip install 'civ6-belief-engine[launcher-macos]'
 - Windows: fully supported (process mgmt, OCR, window automation)
-  Install with: uv pip install 'civ6-mcp[launcher-windows]'
+  Install with: uv pip install 'civ6-belief-engine[launcher-windows]'
 - Linux: fully supported (process mgmt, OCR, window automation)
-  Install with: uv pip install 'civ6-mcp[launcher-linux]'
+  Install with: uv pip install 'civ6-belief-engine[launcher-linux]'
   System deps: sudo apt install xdotool tesseract-ocr
 """
 
@@ -118,7 +118,7 @@ def _require_gui_deps() -> None:
         except ImportError:
             raise RuntimeError(
                 "Game launcher requires Windows OCR support. "
-                "Install with: uv pip install 'civ6-mcp[launcher-windows]'"
+                "Install with: uv pip install 'civ6-belief-engine[launcher-windows]'"
             )
         return
     if sys.platform == "linux":
@@ -130,11 +130,11 @@ def _require_gui_deps() -> None:
         try:
             import mss  # noqa: F401
         except ImportError:
-            missing.append("python-mss (uv pip install 'civ6-mcp[launcher-linux]')")
+            missing.append("python-mss (uv pip install 'civ6-belief-engine[launcher-linux]')")
         try:
             import pytesseract  # noqa: F401
         except ImportError:
-            missing.append("pytesseract (uv pip install 'civ6-mcp[launcher-linux]')")
+            missing.append("pytesseract (uv pip install 'civ6-belief-engine[launcher-linux]')")
         if shutil.which("tesseract") is None:
             missing.append("tesseract-ocr (sudo apt install tesseract-ocr)")
         if missing:
@@ -148,7 +148,7 @@ def _require_gui_deps() -> None:
     except ImportError:
         raise RuntimeError(
             "Game launcher requires pyobjc GUI dependencies. "
-            "Install with: uv pip install 'civ6-mcp[launcher-macos]'"
+            "Install with: uv pip install 'civ6-belief-engine[launcher-macos]'"
         )
 
 
@@ -740,7 +740,7 @@ def _find_game_window_linux() -> WindowInfo | None:
     """Find the Civ 6 window via xdotool on Linux.
 
     Searches for windows whose title exactly matches "Civilization VI"
-    to avoid false positives (e.g. a browser tab showing civ6-mcp docs).
+    to avoid false positives (e.g. a browser tab showing civ6-belief-engine docs).
     When multiple windows match, prefers the one owned by a Civ6 process.
     """
     try:

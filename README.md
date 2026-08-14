@@ -1,6 +1,7 @@
-# civ6-mcp
+# civ6-belief-engine
 
-An MCP server that lets LLM agents play full games of Civilization VI.
+The Civilization VI Belief Engine, with an MCP adapter that lets LLM agents
+play full games of Civilization VI.
 
 Connect any MCP-compatible client — Claude Code, Codex, Gemini CLI, or your own — to a running Civ 6 game. The agent reads game state, moves units, manages cities, conducts diplomacy, and ends turns, all through the game's own rule-enforcing APIs. No cheats, no vision model required.
 
@@ -85,7 +86,7 @@ Enable the FireTuner debug interface and configure recommended settings:
 2. Find and install "Sid Meier's Civilization VI SDK"
 
 **Important notes:**
-- Close `FireTuner.exe` (the SDK's GUI tool) before running civ6-mcp — the game only allows **one** tuner connection at a time
+- Close `FireTuner.exe` (the SDK's GUI tool) before running the MCP adapter — the game only allows **one** tuner connection at a time
 - Do **not** run from WSL — the network bridging between WSL2 and Windows is unreliable and the tuner server locks up after failed connections
 - If the connection fails, **restart the game** — the tuner often hangs after a bad handshake and won't recover until the process is recycled
 </details>
@@ -112,14 +113,14 @@ For GUI automation features (screenshot, OCR-based menu navigation):
 
 ```bash
 # macOS
-uv pip install 'civ6-mcp[launcher-macos]'
+uv pip install 'civ6-belief-engine[launcher-macos]'
 
 # Windows (uses built-in Windows OCR — no external binaries needed)
-uv pip install 'civ6-mcp[launcher-windows]'
+uv pip install 'civ6-belief-engine[launcher-windows]'
 
 # Linux (Ubuntu/Debian)
 sudo apt install xdotool tesseract-ocr
-uv pip install 'civ6-mcp[launcher-linux]'
+uv pip install 'civ6-belief-engine[launcher-linux]'
 ```
 
 ### 3. Test the connection
@@ -244,7 +245,10 @@ Civilization VI        <- Game is the TCP server
 
 The server maintains a persistent TCP connection to Civ 6 via the FireTuner debug protocol. It generates Lua code, executes it inside the game's two Lua VMs (GameCore for reading state, InGame for issuing commands), parses the output, and returns narrated text to the LLM.
 
-The repo includes an [AGENTS.md](AGENTS.md) playbook (symlinked as `CLAUDE.md` for Claude Code) with detailed instructions for agents: turn loop, combat, diplomacy, common pitfalls. See the [devlog](docs/devlog/) for the full development story, including reverse-engineering the FireTuner protocol and the many API quirks discovered along the way.
+The repo includes an [AGENTS.md](AGENTS.md) routing playbook (symlinked as
+`CLAUDE.md` for Claude Code). Detailed turn-loop, strategy, recovery, and tool
+guidance lives in [docs/](docs/README.md). See the [devlog](docs/devlog/) for
+the development history, including FireTuner protocol research and API quirks.
 
 ### DeepSeek Harness
 
