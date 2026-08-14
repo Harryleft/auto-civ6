@@ -21,6 +21,14 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+from .graph import (
+    GRAPH_DELTA_EVENT,
+    GraphDelta,
+    GraphReplayError,
+    GraphView,
+    replay_graph_events,
+)
+
 log = logging.getLogger(__name__)
 
 
@@ -438,10 +446,28 @@ class BeliefEngine:
         # Events are grouped into epochs: each game reload (autosave rollback)
         # starts a new one so conflicting histories are never replayed as one.
         self._epoch: int = 1
+        self._graph_view = GraphView.empty()
+        self._graph_replay_error: str | None = None
 
     @property
     def bound(self) -> bool:
         return self.path is not None
+
+    @property
+    def epoch(self) -> int:
+        """Current game-history branch for derived read models."""
+
+        return self._epoch
+
+    @property
+    def graph_view(self) -> GraphView:
+        """Current derived graph, rebuilt from graph.delta journal events."""
+
+        return self._graph_view
+
+    @property
+    def graph_replay_error(self) -> str | None:
+        return self._graph_replay_error
 
     def bind_game(self, civ: str, seed: int) -> None:
         game_id = f"{civ}_{seed}"
@@ -466,6 +492,8 @@ class BeliefEngine:
         self._sequence = 0
         self._pending_events = []
         self._epoch = 1
+        self._graph_view = GraphView.empty()
+        self._graph_replay_error = None
         if not path.exists():
             return
         # errors="replace": a crash mid-write can also truncate a UTF-8
@@ -495,6 +523,14 @@ class BeliefEngine:
         )
         if bad_line_numbers:
             self._quarantine_corrupt_lines(path, good_lines, bad_line_numbers, raw_lines)
+        try:
+            self._graph_view = replay_graph_events(self._events, epoch=self._epoch)
+        except GraphReplayError as exc:
+            # The graph is a derived read model. A damaged graph event must be
+            # visible, but it must not make the existing belief model unusable.
+            self._graph_view = GraphView.empty(epoch=self._epoch)
+            self._graph_replay_error = str(exc)
+            log.error("Belief Engine: graph replay failed: %s", exc)
         self._recover_orphaned_executing_decisions()
 
     @staticmethod
@@ -678,6 +714,33 @@ class BeliefEngine:
         events = self._pending_events
         self._pending_events = []
         return events
+
+    def record_graph_delta(self, delta: GraphDelta) -> GraphView:
+        """Persist one derived delta and advance the current graph atomically."""
+
+        if not isinstance(delta, GraphDelta):
+            raise TypeError("delta must be GraphDelta")
+        if delta.epoch != self._epoch:
+            raise BeliefEngineError(
+                f"graph delta epoch {delta.epoch} does not match current epoch {self._epoch}"
+            )
+        base = self._graph_view
+        if base.epoch != self._epoch:
+            base = GraphView.empty(epoch=self._epoch, turn=delta.turn)
+        next_view = base.apply(delta)
+        self._append(
+            GRAPH_DELTA_EVENT,
+            "graph_delta",
+            {
+                "id": f"graph_delta:{self._epoch}:{delta.snapshot_id}",
+                "delta": delta.to_dict(),
+                "state_hash": next_view.state_hash,
+            },
+            turn=delta.turn,
+        )
+        self._graph_view = next_view
+        self._graph_replay_error = None
+        return next_view
 
     def create(
         self,
@@ -1351,6 +1414,8 @@ class BeliefEngine:
             if turn is not None
             else (prior_epoch_max_turn if prior_epoch_max_turn is not None else 0)
         )
+        self._graph_view = GraphView.empty(epoch=self._epoch, turn=marker_turn)
+        self._graph_replay_error = None
         # entity_type "epoch_marker" is intentionally outside
         # BELIEF_ENTITY_TYPES so the marker never enters the projected model.
         marker = self._append(

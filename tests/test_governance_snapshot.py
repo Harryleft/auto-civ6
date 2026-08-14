@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
+from types import SimpleNamespace
+
 import pytest
 
 from civ_mcp.belief_engine import BeliefEngine
+from civ_mcp.server import _capture_governance_snapshot
 from civ_mcp.governance.capabilities import (
     RULESET_EXPANSION_1,
     RULESET_EXPANSION_2,
@@ -32,6 +36,7 @@ from civ_mcp.lua.models import (
     TechCivicStatus,
     UnitInfo,
 )
+from civ6_belief_engine.graph import GraphView
 
 
 def _overview(
@@ -347,3 +352,93 @@ def test_world_projection_and_belief_payload_are_structured_typed_facts(tmp_path
     assert city_node is not None
     assert city_node["attributes"]["population"] == 4
     assert any(link["relation"] == "owns" for link in city_node["links"])
+
+
+def test_server_capture_runs_old_projection_and_shadow_graph_together(tmp_path):
+    snapshot = build_turn_snapshot(
+        turn_before=42,
+        turn_after=42,
+        captured_at=1_723_500_000.0,
+        overview=_overview(),
+        cities=[_city(1, 3, 4), _city(2, 6, 7)],
+        units=[_unit(11, 3, 5), _unit(22, 6, 8)],
+    )
+
+    class _Game:
+        async def get_governance_snapshot(self):
+            return snapshot
+
+    engine = BeliefEngine(run_id="shadow-graph-test", directory=tmp_path)
+    engine.bind_game("CIVILIZATION_INDIA", 123)
+    lifespan = SimpleNamespace(game=_Game(), beliefs=engine)
+    ctx = SimpleNamespace(request_context=SimpleNamespace(lifespan_context=lifespan))
+
+    _, world, projection, _, _ = asyncio.run(
+        _capture_governance_snapshot(ctx, engine)
+    )
+
+    assert projection["graph_shadow"]["status"] == "matched"
+    assert projection["graph_shadow"]["source_nodes"] == len(world["entities"])
+    assert projection["graph_shadow"]["source_edges"] == len(world["relations"])
+    assert engine.graph_view.snapshot_id == snapshot.snapshot_id
+    assert "city:3:4" in engine.graph_view.nodes
+    assert "city:0:1" not in engine.graph_view.nodes
+    assert engine.get("world_entity", "city:0:1") is not None
+
+    reloaded = BeliefEngine(run_id="shadow-graph-reload", directory=tmp_path)
+    reloaded.bind_game("CIVILIZATION_INDIA", 123)
+    assert reloaded.graph_view.state_hash == engine.graph_view.state_hash
+    assert reloaded.graph_replay_error is None
+
+    engine.record_game_reload(reason="test_reload", turn=40)
+    assert engine.graph_view.epoch == 2
+    assert not engine.graph_view.nodes
+    asyncio.run(_capture_governance_snapshot(ctx, engine))
+    assert engine.graph_view.epoch == 2
+    reloaded_after_epoch = BeliefEngine(
+        run_id="shadow-graph-epoch-reload",
+        directory=tmp_path,
+    )
+    reloaded_after_epoch.bind_game("CIVILIZATION_INDIA", 123)
+    assert reloaded_after_epoch.graph_view.state_hash == engine.graph_view.state_hash
+
+    engine.bind_game("CIVILIZATION_INDIA", 999)
+    assert engine.graph_view == GraphView.empty()
+
+
+def test_shadow_projection_failure_does_not_break_legacy_snapshot(tmp_path, monkeypatch):
+    malformed_world = {
+        "snapshot_id": "snapshot:legacy-only",
+        "turn": 1,
+        "turn_before": 1,
+        "turn_after": 1,
+        "entities": [
+            {
+                "entity_type": "city",
+                "entity_id": "city:0:7",
+                "attributes": {"city_id": 7, "name": "No coordinates"},
+            }
+        ],
+        "relations": [],
+        "metrics": {},
+    }
+    monkeypatch.setattr(
+        "civ6_belief_engine.governance.snapshot.snapshot_world_state",
+        lambda _snapshot: malformed_world,
+    )
+
+    class _Game:
+        async def get_governance_snapshot(self):
+            return SimpleNamespace(snapshot_id="snapshot:legacy-only", turn=1)
+
+    engine = BeliefEngine(run_id="shadow-fail-open", directory=tmp_path)
+    engine.bind_game("CIVILIZATION_INDIA", 456)
+    lifespan = SimpleNamespace(game=_Game(), beliefs=engine)
+    ctx = SimpleNamespace(request_context=SimpleNamespace(lifespan_context=lifespan))
+
+    _, _, projection, _, _ = asyncio.run(_capture_governance_snapshot(ctx, engine))
+
+    assert projection["graph_shadow"]["status"] == "error"
+    assert "requires integer x/y" in projection["graph_shadow"]["error"]
+    assert engine.get("world_entity", "city:0:7")["status"] == "active"
+    assert not engine.graph_view.nodes
