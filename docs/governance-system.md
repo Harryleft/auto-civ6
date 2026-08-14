@@ -82,6 +82,43 @@ obligation when due. Its budget locks remain reserved through the scheduled
 turn. Missing the execution window fails closed and requires an explicit
 re-proposal; the harness never silently executes it late.
 
+### Evidence contracts (`evidence_requirements`)
+
+`verify_then_fast` routes require an explicit evidence contract on the intent.
+Each requirement **must** carry a non-empty `requirement_id`; a contract
+without one is rejected by the server before the council meets. Only fresh
+observations created *after* `route_belief_decision` (by `sequence`) can
+satisfy the contract, so run the named query after routing, not before.
+
+```json
+"action_intents": [{
+  "intent_id": "intent:pantheon:1",
+  "tool": "choose_pantheon",
+  "arguments": {"belief_type": "BELIEF_DIVINE_SPARK"},
+  "proposal_id": "t75_pantheon",
+  "evidence_requirements": [{
+    "requirement_id": "req:pantheon:faith_check",
+    "tool": "get_pantheon_beliefs",
+    "params": {},
+    "required_facts": ["summary"],
+    "description": "Verify pantheon status and faith sufficiency before founding"
+  }]
+}]
+```
+
+The available `required_facts`/`required_metrics` keys are the ones the belief
+engine's normalizer actually emits for that tool (e.g. `get_units` emits
+`observed_unit_count` + `unit_ids`); inventing a key silently never matches.
+
+### Budget locks lifecycle
+
+A council-approved proposal's exclusive `budget_locks` stay reserved until
+either (a) the next turn rolls over (`release_after_turn < current turn`), or
+(b) the routed decision is cancelled — cancellation now archives the locks
+belonging to the same `council_decision_id` automatically. A rejected proposal
+becomes `resolved` and its ID cannot be resubmitted; re-propose under a new
+`proposal_id`.
+
 ## Proposal example
 
 ```json

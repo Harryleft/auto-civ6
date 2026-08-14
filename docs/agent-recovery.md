@@ -76,6 +76,12 @@ get_game_overview                      # 强制回合入口，验证回合与局
 
 **禁止**在残留 Civ6_Exe 僵尸进程存在时调用 `restart_and_load`（报 `MCP error -32001`）。先 `kill_game`，再单独 `launch_game` + `load_game_save`，不要一次重启干到底。
 
+### 工具列表同步竞态（首次调用 unknown tool）
+
+MCP 进程（civ-mcp）重启后，DSH 客户端需要先完成 `tools/list` 同步才注册工具。`civ6.cordis.yml` 设 `reconnect: disabled`，同步在连接建立后异步进行。**重启 civ-mcp 后第一次工具调用可能报 `unknown tool`，第二次同工具调用即成功**——这是客户端注册时序，不是工具缺失。对策：
+- 进程重启后第一调用用 `get_game_overview`（既符合回合入口，也自然等待同步完成）。
+- 若遇 `unknown tool`，重试一次同调用即可，不要误判为工具不存在而改走其他路径。
+
 ### 周期巡航（写入回合周期）
 
 - **每 20 回合**内存巡航一次（与 `get_diplomacy` 等 20 回合检查合并）。
