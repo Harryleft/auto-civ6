@@ -23,6 +23,8 @@ import asyncio
 import glob
 import logging
 import os
+import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -100,6 +102,9 @@ _KILL_SETTLE_SECONDS = 10
 _LAUNCH_TIMEOUT_SECONDS = 60
 # How long to wait for FireTuner port to open after game process starts
 _PORT_POLL_TIMEOUT = 180
+# Cold starts after a crash can take ~150s+; retry the whole launch
+# instead of giving up after one borderline window (see _launch_game_sync).
+_LAUNCH_ATTEMPTS = 3
 # Tuner TCP port
 _TUNER_PORT = 4318
 
@@ -502,6 +507,69 @@ def _find_game_exe_win32() -> str | None:
     return exe if os.path.exists(exe) else None
 
 
+def _issue_steam_launch() -> None:
+    """Ask Steam to start Civ 6 (one attempt, platform-appropriate)."""
+    _ensure_job_thread_cap()
+    if sys.platform == "darwin":
+        subprocess.run(["open", f"steam://run/{STEAM_APP_ID}"])
+    elif sys.platform == "linux":
+        # Use -applaunch (not steam:// URI) — the URI scheme is unreliable
+        # when Steam is already running (silently ignored by some builds).
+        subprocess.Popen(
+            ["steam", "-applaunch", str(STEAM_APP_ID)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    elif sys.platform == "win32":
+        os.startfile(f"steam://run/{STEAM_APP_ID}")  # noqa: S606 — hardcoded Steam URL
+    else:
+        raise NotImplementedError(f"launch not supported on {sys.platform}")
+
+
+def _ensure_job_thread_cap() -> None:
+    """Cap engine job threads in AppOptions.txt (crash avoidance, not a fix).
+
+    The macOS port's known crash class (TBB worker → __cxa_pure_virtual at
+    Civ6_Exe_Child+0x8cbbec, stale JobSet task use-after-destruction) fires
+    more often the more TBB workers race for jobs. ``MaxJobThreads -1``
+    lets the engine spawn one worker per core; capping it to a small pool
+    narrows the destructive race window. Community-verified in the same
+    direction (reddit "FIX: Crashing on Mac (Threading Fix)"): thread caps
+    stop the every-few-minutes crashes.
+
+    Idempotent, CRLF-safe, keeps the first dated backup it makes. Set
+    ``CIV_MCP_MAX_JOB_THREADS=0`` to leave the file untouched.
+    """
+    cap = os.environ.get("CIV_MCP_MAX_JOB_THREADS", "4")
+    if not cap.strip() or cap.strip() == "0":
+        return
+    candidates = [
+        os.path.expanduser(
+            "~/Library/Application Support/Sid Meier's Civilization VI/"
+            "Firaxis Games/Sid Meier's Civilization VI/AppOptions.txt"
+        )
+    ]
+    today = time.strftime("%Y%m%d")
+    for path in candidates:
+        try:
+            if not os.path.exists(path):
+                continue
+            text = open(path, encoding="utf-8", errors="replace").read()
+            pattern = re.compile(r"(?m)^MaxJobThreads -1\r?$")
+            if not pattern.search(text):
+                continue
+            backup = f"{path}.civ6-mcp.bak-{today}"
+            if not os.path.exists(backup):
+                shutil.copy2(path, backup)
+            patched = pattern.sub(f"MaxJobThreads {cap.strip()}\r", text, count=1)
+            with open(path, "w", encoding="utf-8", newline="") as handle:
+                handle.write(patched)
+            log.info("Crash mitigation: capped MaxJobThreads to %s (backup: %s)",
+                     cap.strip(), backup)
+        except OSError:
+            log.debug("Crash mitigation: could not patch %s", path, exc_info=True)
+
+
 def _launch_game_sync() -> str:
     """Launch Civ 6 and wait for the FireTuner port to open. Blocking.
 
@@ -510,6 +578,12 @@ def _launch_game_sync() -> str:
     deps are available.
 
     On Windows, falls back to direct EXE launch if steam://run fails.
+
+    Cold starts after a crash routinely take ~150s+ and a single 180s
+    window produced false "launch failed" verdicts (the recovery chain
+    then OCR-navigated a boot screen). Retry the launch instead: kill
+    the stale process, re-issue the Steam launch, and wait again, up to
+    ``_LAUNCH_ATTEMPTS`` times before declaring FAILED.
     """
     # Dismiss any crash reporter dialogs blocking relaunch
     _dismiss_crash_dialogs_sync()
@@ -528,51 +602,69 @@ def _launch_game_sync() -> str:
         _kill_game_sync()
         time.sleep(5)
 
-    # Launch via Steam
-    if sys.platform == "darwin":
-        subprocess.run(["open", f"steam://run/{STEAM_APP_ID}"])
-    elif sys.platform == "linux":
-        # Use -applaunch (not steam:// URI) — the URI scheme is unreliable
-        # when Steam is already running (silently ignored by some builds).
-        subprocess.Popen(
-            ["steam", "-applaunch", str(STEAM_APP_ID)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    elif sys.platform == "win32":
-        os.startfile(f"steam://run/{STEAM_APP_ID}")  # noqa: S606 — hardcoded Steam URL
-    else:
-        raise NotImplementedError(f"launch not supported on {sys.platform}")
-    log.info("Launched Civ 6 via Steam, waiting for process...")
+    waited: int | None = None
+    for attempt in range(1, _LAUNCH_ATTEMPTS + 1):
+        if attempt > 1:
+            # Previous attempt left a process without a usable tuner port.
+            _dismiss_crash_dialogs_sync()
+            if is_game_running():
+                log.warning(
+                    "Launch attempt %d/%d: tuner still closed — killing and retrying",
+                    attempt,
+                    _LAUNCH_ATTEMPTS,
+                )
+                _kill_game_sync()
+                time.sleep(5)
+            _issue_steam_launch()
+        else:
+            _issue_steam_launch()
+        log.info("Launched Civ 6 via Steam (attempt %d), waiting for process...", attempt)
 
-    # macOS: click through the Aspyr launcher if it appears
-    launcher_err = _click_aspyr_launcher_sync()
-    if launcher_err:
-        return f"WARNING: {launcher_err}"
+        # macOS: click through the Aspyr launcher if it appears
+        launcher_err = _click_aspyr_launcher_sync()
+        if launcher_err:
+            return f"WARNING: {launcher_err}"
 
-    # Wait for actual game process (Linux/Proton can be slow to start)
-    waited = _wait_for_game_process(timeout=60)
-    if waited is None and sys.platform == "win32":
-        # steam://run may have silently failed — try direct EXE launch
-        exe_path = _find_game_exe_win32()
-        if exe_path:
-            log.info(
-                "steam://run did not start game — launching EXE directly: %s", exe_path
+        # Wait for actual game process (Linux/Proton can be slow to start)
+        waited = _wait_for_game_process(timeout=60)
+        if waited is None and sys.platform == "win32":
+            # steam://run may have silently failed — try direct EXE launch
+            exe_path = _find_game_exe_win32()
+            if exe_path:
+                log.info(
+                    "steam://run did not start game — launching EXE directly: %s",
+                    exe_path,
+                )
+                subprocess.Popen([exe_path])  # noqa: S603 — hardcoded game path
+                waited = _wait_for_game_process()
+
+        if waited is None:
+            # No process at all — the Steam launch itself did not take;
+            # retrying with a fresh command is cheap and often works.
+            log.warning(
+                "Launch attempt %d/%d: no game process detected — retrying",
+                attempt,
+                _LAUNCH_ATTEMPTS,
             )
-            subprocess.Popen([exe_path])  # noqa: S603 — hardcoded game path
-            waited = _wait_for_game_process()
+            continue
+
+        # Wait for FireTuner port to open (replaces blind sleep)
+        log.info(
+            "Game process started after %ds, waiting for FireTuner port...", waited
+        )
+        if _wait_for_tuner_port():
+            return (
+                f"Game launched. Process started after {waited}s, FireTuner port is "
+                f"open (attempt {attempt})."
+            )
 
     if waited is None:
-        return "WARNING: Game process not detected after launch. Check Steam."
+        return "FAILED: Game process not detected after launch. Check Steam."
 
-    # Wait for FireTuner port to open (replaces blind sleep)
-    log.info("Game process started after %ds, waiting for FireTuner port...", waited)
-    if _wait_for_tuner_port():
-        return (
-            f"Game launched. Process started after {waited}s, FireTuner port is open."
-        )
-
-    return f"WARNING: Game launched (process after {waited}s) but FireTuner port did not open within {_PORT_POLL_TIMEOUT}s."
+    return (
+        f"FAILED: Game launched (process after {waited}s) but FireTuner port did not "
+        f"open within {_PORT_POLL_TIMEOUT}s across {_LAUNCH_ATTEMPTS} attempts."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -2359,17 +2451,23 @@ async def restart_and_load(save_name: str | None = None) -> str:
     kill_result = await kill_game()
     results.append(f"Kill: {kill_result}")
 
-    # Step 2: Launch
+    # Step 2: Launch (retries internally; returns FAILED: on exhausted attempts)
     launch_result = await launch_game()
     results.append(f"Launch: {launch_result}")
-    if "not detected" in launch_result:
+    if "not detected" in launch_result or launch_result.startswith("FAILED"):
         return " | ".join(results) + " | ABORTED: Game failed to launch."
 
     # Dismiss any lingering crash dialog from previous session (both platforms)
     await dismiss_crash_dialogs()
 
-    # Step 3: Load save via OCR
+    # Step 3: Load save via OCR. The tuner port opens before the main menu
+    # finishes rendering, so a first OCR pass can race a boot screen; back
+    # off once and retry instead of failing the whole recovery.
     load_result = await load_save_from_menu(save_name)
+    if "Could not find" in load_result:
+        log.warning("Main menu not ready for OCR — backing off 30s and retrying")
+        await asyncio.sleep(30)
+        load_result = await load_save_from_menu(save_name)
     results.append(f"Load: {load_result}")
 
     return " | ".join(results)
