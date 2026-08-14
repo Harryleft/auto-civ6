@@ -382,11 +382,10 @@ async def lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
 mcp = FastMCP(
     "Civilization VI",
     instructions=(
-        "Read game state and issue commands to a running Civ 6 game. Start each "
-        "turn with get_game_overview. When CIV_MCP_BELIEF_MODE=enforce, also use "
-        "get_governance_brief and route selected exact action intents before "
-        "governed actions. In observe/off mode the live turn loop stays lightweight "
-        "and normal game rules plus end-turn blockers remain authoritative."
+        "Read game state and issue commands to a running Civ 6 game. Start every "
+        "turn with get_game_overview and follow its machine-readable RUNTIME POLICY. "
+        "The server's reported policy, action gates, game rules, and end-turn "
+        "blockers are authoritative."
     ),
     lifespan=lifespan,
 )
@@ -427,6 +426,14 @@ def _get_belief_mode(ctx: Context) -> BeliefMode:
         ctx.request_context.lifespan_context,
         "belief_mode",
         BeliefMode.ENFORCE,
+    )
+
+
+def _format_runtime_policy(mode: BeliefMode) -> str:
+    return "=== RUNTIME POLICY ===\n" + json.dumps(
+        mode.runtime_policy(),
+        ensure_ascii=False,
+        separators=(",", ":"),
     )
 
 
@@ -1104,6 +1111,7 @@ async def get_game_overview(ctx: Context) -> str:
             except Exception:
                 log.debug("Failed to seed revealed tiles", exc_info=True)
         text = nr.narrate_overview(ov)
+        text += "\n\n" + _format_runtime_policy(_get_belief_mode(ctx))
         # Check for game-over state
         gameover = await gs.check_game_over()
         if gameover is not None:

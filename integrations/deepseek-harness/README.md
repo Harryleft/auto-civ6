@@ -9,7 +9,7 @@ This integration mounts `civ6-mcp` into DeepSeek Harness through DSH's built-in 
 | Model provider, streaming, agent loop, compaction | DeepSeek Harness | Use the shipped DeepSeek adapter and durable DSH session log. |
 | Tool discovery and execution history | DeepSeek Harness | `@deepseek-ai/dsh-mcp-client` exposes tools as `mcp__civ6__<tool>`. |
 | Typed game state | `GameState` in `civ6-mcp` | Do not mirror it into a second DSH state store. Query it through MCP. |
-| Strategic memory and governance | Belief Engine and governance modules in `civ6-mcp` | Keep the existing same-turn snapshot, proposal, council, and ActionIntent gates authoritative. |
+| Strategic memory and governance | Belief Engine and governance modules in `civ6-mcp` | `get_game_overview` reports the active policy; when enabled, its snapshot, proposal, council, and ActionIntent gates are authoritative. |
 | End-turn safety | `end_turn.py` in `civ6-mcp` | DSH supplies the call; Civ 6 validates blockers and advances the turn. |
 | Game connection and lifecycle | `GameConnection` and game lifecycle modules in `civ6-mcp` | Keep exactly one FireTuner client. DSH must not launch a second MCP host. |
 | Transcript, telemetry, and saves | DSH session log plus `TelemetryEmitter`, diary, autosave, and watchdog in `civ6-mcp` | DSH/telemetry own raw tool results; the Belief Engine stores normalized facts, fingerprints, and entity links instead of another raw copy. |
@@ -67,7 +67,7 @@ This imports the Python package and asks DSH to compose the Web profile with the
 ./scripts/deepseek_harness web
 ```
 
-Open `http://127.0.0.1:3080`. DSH loads this repository's `AGENTS.md` because the launcher keeps `civ6-mcp` as the working directory. Begin each game turn with `mcp__civ6__get_governance_brief` and follow the existing turn loop.
+Open `http://127.0.0.1:3080`. DSH loads this repository's `AGENTS.md` because the launcher keeps `civ6-mcp` as the working directory. Begin each game turn once with `mcp__civ6__get_game_overview`, then follow its `RUNTIME POLICY` instead of a duplicated mode-specific prompt.
 
 For a one-shot headless task:
 
@@ -90,8 +90,11 @@ For a one-shot headless task:
 
 1. Civilization VI is running and TCP 4318 is listening.
 2. The DSH host starts and discovers `mcp__civ6__*` tools.
-3. `mcp__civ6__get_governance_brief` succeeds against the current game.
-4. A harmless read such as `mcp__civ6__get_game_overview` succeeds.
-5. Only after those reads pass should the agent execute a governed action or call `end_turn`.
+3. `mcp__civ6__get_game_overview` succeeds and reports the expected
+   `belief_mode` in `RUNTIME POLICY`.
+4. In `enforce` mode, that overview also contains a current governance
+   snapshot; lightweight modes explicitly report governance as disabled.
+5. Only after this read passes should the agent execute an action or call
+   `end_turn`.
 
 Do not treat a DSH Web page, a Python process, or a TCP listener alone as proof that the game integration is usable.
