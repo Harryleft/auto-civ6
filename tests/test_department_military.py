@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from civ6_belief_engine.governance import RulesetCapabilities, TurnSnapshot
+from civ6_belief_engine.governance import (
+    GovernanceCouncil,
+    ProbabilityConfidence,
+    RulesetCapabilities,
+    StrategicGoal,
+    TurnSnapshot,
+)
 from civ6_belief_engine.governance.departments.base import (
     Department,
     DepartmentContext,
@@ -8,12 +14,15 @@ from civ6_belief_engine.governance.departments.base import (
 )
 from civ6_belief_engine.governance.departments.military import MilitaryDepartment
 from civ6_belief_engine.governance.models import Outcome, OutcomeStatus
+from civ6_belief_engine.governance.snapshot import snapshot_world_state
+from civ6_belief_engine.graph import GraphView, project_world_state
 from civ_mcp.lua.models import (
     BarbarianCamp,
     BarbarianOverview,
     BarbarianUnit,
     CityInfo,
     GameOverview,
+    ThreatInfo,
     UnitInfo,
 )
 
@@ -26,6 +35,7 @@ def _unit(
     moves_remaining: float = 1.0,
     combat_strength: int = 0,
     ranged_strength: int = 0,
+    can_fortify: bool = True,
 ) -> UnitInfo:
     return UnitInfo(
         unit_id=unit_id,
@@ -40,6 +50,7 @@ def _unit(
         max_health=100,
         combat_strength=combat_strength,
         ranged_strength=ranged_strength,
+        can_fortify=can_fortify,
     )
 
 
@@ -70,6 +81,8 @@ def _snapshot(
     units: tuple[UnitInfo, ...] = (),
     cities: tuple[CityInfo, ...] = (),
     barbarians: BarbarianOverview | None = None,
+    threats: tuple[ThreatInfo, ...] = (),
+    threat_scan_available: bool | None = None,
     overview_num_units: int | None = None,
 ) -> TurnSnapshot:
     overview = GameOverview(
@@ -100,11 +113,27 @@ def _snapshot(
         cities=cities,
         units=units,
         barbarians=barbarians,
+        threats=threats,
+        threat_scan_available=(
+            bool(threats)
+            if threat_scan_available is None
+            else threat_scan_available
+        ),
     )
 
 
-def _context(snapshot: TurnSnapshot, *agenda: str) -> DepartmentContext:
-    return DepartmentContext(snapshot=snapshot, agenda=agenda)
+def _context(
+    snapshot: TurnSnapshot,
+    *agenda: str,
+    graph: GraphView | None = None,
+    goals: tuple[StrategicGoal, ...] = (),
+) -> DepartmentContext:
+    return DepartmentContext(
+        snapshot=snapshot,
+        agenda=agenda,
+        goals=goals,
+        graph=graph,
+    )
 
 
 def _outcome(status: OutcomeStatus, *, error: str | None = None) -> Outcome:
@@ -199,9 +228,146 @@ def test_barbarian_assessment_requests_cross_department_support_and_reserve() ->
         for request in assessment.support_requests
     )
     workstream = assessment.workstreams[0]
-    assert workstream.objective == "清除已知蛮族威胁，同时保留本土防御"
+    assert workstream.objective == "处理已知城市周边威胁，同时保留本土防御"
     assert "仅从满足本土防御余量的单位中筛选清剿编组" in workstream.candidate_actions
     assert workstream.resource_claims["home_defense_reserve"] == 1.0
+
+
+def test_graph_threat_drives_military_assessment_and_stale_threat_does_not() -> None:
+    department = MilitaryDepartment()
+    threat = ThreatInfo(
+        unit_type="UNIT_ARCHER",
+        x=3,
+        y=2,
+        hp=80,
+        max_hp=100,
+        combat_strength=15,
+        ranged_strength=25,
+        distance=1,
+        owner_id=3,
+        owner_name="Persia",
+        unit_id=70,
+        nearest_city_id=1,
+        distance_to_city=2,
+        is_at_war=True,
+        city_distances=((1, 2),),
+    )
+    first_snapshot = _snapshot(
+        units=(_unit(1, "UNIT_WARRIOR", combat_strength=20),),
+        cities=(_city(),),
+        barbarians=BarbarianOverview(),
+        threats=(threat,),
+    )
+    first_graph = GraphView.empty().apply(
+        project_world_state(snapshot_world_state(first_snapshot))
+    )
+    goal = StrategicGoal(
+        goal_id="survive",
+        statement="保住首都",
+        priority=100,
+        success=ProbabilityConfidence(0.8, 0.9),
+    )
+    first_context = _context(first_snapshot, graph=first_graph, goals=(goal,))
+
+    assessment = department.assess(first_context)
+
+    assert assessment.relevance == 1.0
+    assert "图查询确认城市三格内当前可见敌军: 1 个" in assessment.facts
+    assert assessment.workstreams[0].workstream_id == "military:threat-response"
+    assert len(assessment.proposals) == 1
+    proposal = assessment.proposals[0]
+    assert proposal.goal_ids == ("survive",)
+    assert proposal.action_intents[0].arguments == {
+        "action": "fortify",
+        "unit_id": 1,
+    }
+    assert proposal.action_intents[0].allowed_turn == 12
+    assert proposal.action_intents[0].evidence_requirements[0].tool == "get_units"
+    decision = GovernanceCouncil().decide(
+        turn=12,
+        proposals=assessment.proposals,
+        budget_limits={"unit_action": 1},
+    )
+    assert decision.selected_proposal_ids == (proposal.proposal_id,)
+    assert department.review(
+        first_context, _outcome(OutcomeStatus.SUCCEEDED)
+    ) is ReviewDisposition.CONTINUE
+
+    next_snapshot = _snapshot(
+        units=(_unit(1, "UNIT_WARRIOR", combat_strength=20),),
+        cities=(_city(),),
+        barbarians=BarbarianOverview(),
+        threat_scan_available=True,
+    )
+    next_graph = first_graph.apply(
+        project_world_state(
+            snapshot_world_state(next_snapshot),
+            previous=first_graph,
+        )
+    )
+    next_context = _context(next_snapshot, graph=next_graph)
+
+    assert department.assess(next_context).support_requests == ()
+    assert department.review(
+        next_context, _outcome(OutcomeStatus.SUCCEEDED)
+    ) is ReviewDisposition.EXIT
+
+
+def test_peaceful_foreign_unit_does_not_become_threat_or_proposal() -> None:
+    snapshot = _snapshot(
+        units=(_unit(1, "UNIT_WARRIOR", combat_strength=20),),
+        cities=(_city(),),
+        barbarians=BarbarianOverview(),
+        threats=(
+            ThreatInfo(
+                unit_type="UNIT_ARCHER",
+                x=3,
+                y=2,
+                hp=80,
+                max_hp=100,
+                combat_strength=15,
+                ranged_strength=25,
+                distance=1,
+                owner_id=3,
+                owner_name="Persia",
+                unit_id=70,
+                nearest_city_id=1,
+                distance_to_city=2,
+                is_at_war=False,
+                city_distances=((1, 2),),
+            ),
+        ),
+    )
+    graph = GraphView.empty().apply(project_world_state(snapshot_world_state(snapshot)))
+    goal = StrategicGoal(
+        goal_id="survive",
+        statement="保住首都",
+        priority=100,
+        success=ProbabilityConfidence(0.8, 0.9),
+    )
+
+    assessment = MilitaryDepartment().assess(
+        _context(snapshot, graph=graph, goals=(goal,))
+    )
+
+    assert graph.threats_near_city("city:1:2") == ()
+    assert assessment.proposals == ()
+    assert assessment.support_requests == ()
+
+
+def test_unavailable_threat_scan_is_reported_as_missing_evidence() -> None:
+    snapshot = _snapshot(
+        units=(_unit(1, "UNIT_WARRIOR", combat_strength=20),),
+        cities=(_city(),),
+        barbarians=BarbarianOverview(),
+        threat_scan_available=False,
+    )
+    graph = GraphView.empty().apply(project_world_state(snapshot_world_state(snapshot)))
+
+    assessment = MilitaryDepartment().assess(_context(snapshot, graph=graph))
+
+    assert "城市周边敌军扫描" in assessment.evidence_missing
+    assert "不能据此认定城市安全" in assessment.facts[-1]
 
 
 def test_assessment_is_deterministic_and_review_is_conservative() -> None:

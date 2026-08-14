@@ -177,6 +177,8 @@ def narrate_units(
             status = f" [HP: {u.health}/{u.max_health}]"
         if u.moves_remaining < 0.01:
             status += " (no moves)"
+        if u.fortify_turns > 0:
+            status += f" (fortified {u.fortify_turns} turns)"
         # Annotate traders on active routes
         route_flag = ""
         if u.unit_id in trader_routes:
@@ -211,17 +213,22 @@ def narrate_units(
             lines.append(f"    >> Can build: {', '.join(u.valid_improvements)}")
     if threats:
         lines.append("")
-        lines.append(f"Nearby threats ({len(threats)}):")
+        lines.append(f"Visible foreign military ({len(threats)}):")
         # Group threats by owner
         from collections import defaultdict
 
         by_owner: dict[int, list[lq.ThreatInfo]] = defaultdict(list)
         for t in threats:
             by_owner[t.owner_id].append(t)
-        # Sort: at-war/barbarian owners first, then by unit count
+        # Sort actual hostiles before peaceful foreign units.
         for owner_id in sorted(
             by_owner.keys(),
-            key=lambda oid: (0 if oid == 63 else 1, -len(by_owner[oid])),
+            key=lambda oid: (
+                0
+                if oid == 63 or any(item.is_at_war for item in by_owner[oid])
+                else 1,
+                -len(by_owner[oid]),
+            ),
         ):
             owner_threats = by_owner[owner_id]
             owner_name = owner_threats[0].owner_name
@@ -229,7 +236,8 @@ def narrate_units(
                 label = f"Barbarian ({len(owner_threats)} unit{'s' if len(owner_threats) != 1 else ''}):"
             else:
                 cs_tag = " (city-state)" if owner_threats[0].is_city_state else ""
-                label = f"{owner_name}{cs_tag} ({len(owner_threats)} unit{'s' if len(owner_threats) != 1 else ''}):"
+                relation = "at war" if owner_threats[0].is_at_war else "peace"
+                label = f"{owner_name}{cs_tag} ({relation}; {len(owner_threats)} unit{'s' if len(owner_threats) != 1 else ''}):"
             lines.append(f"  {label}")
             for t in sorted(owner_threats, key=lambda t: t.distance):
                 rs_str = f" RS:{t.ranged_strength}" if t.ranged_strength > 0 else ""

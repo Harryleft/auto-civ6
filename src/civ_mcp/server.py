@@ -3054,6 +3054,9 @@ def _national_strategy_payload(value: Any, *, include_details: bool = False) -> 
                 "workstream_ids": [
                     workstream.workstream_id for workstream in assessment.workstreams
                 ],
+                "proposal_ids": [
+                    proposal.proposal_id for proposal in assessment.proposals
+                ],
                 "evidence_missing": list(assessment.evidence_missing),
             }
             for assessment in value.assessments
@@ -3824,6 +3827,7 @@ async def get_governance_brief(
                 for goal in active_goals
                 if str(goal.get("statement") or "").strip()
             ),
+            graph=engine.graph_view,
         )
         await _flush_belief_events(ctx)
         low_confidence = [
