@@ -1,5 +1,8 @@
 # Civ 6 决策辅助工具包
 
+> 本文保留为历史工具包入口；当前工具与动作规则以
+> [docs/agent-tools.md](docs/agent-tools.md) 为准。
+
 基于 T77→T131 运行的 772 次工具调用日志分析,把**重复、易错、依赖记忆**的操作自动化成两个工具。
 目标:减少失误、偷回合、提高决策质量。
 
@@ -26,7 +29,7 @@
 
 ```bash
 python3 scripts/civ6_tool.py dist 18 16 25 17     # hex距离(建城>3、射程、移动)
-python3 scripts/civ6_tool.py settle 25 17          # 建城合法性(距所有城>3)+最近城
+python3 scripts/civ6_tool.py settle 25 17          # 建城合法性(距所有城>3)+邻近城
 python3 scripts/civ6_tool.py combat 25 85 45 60    # 战斗伤害估算+胜负预判
 python3 scripts/civ6_tool.py status                # 帝国概览+城市数
 python3 scripts/civ6_tool.py plan                  # 扩张进度(4/10)
