@@ -23,6 +23,7 @@ from mcp.server.fastmcp import Context, FastMCP
 
 from civ_mcp import game_launcher, heartbeat
 from civ_mcp.belief_engine import BeliefEngine, BeliefEngineError, action_args_hash
+from civ_mcp.belief_mode import BeliefMode
 from civ_mcp.game_over_watchdog import GameOverWatchdog
 from civ_mcp import narrate as nr
 from civ_mcp.connection import GameConnection, LuaError
@@ -61,6 +62,7 @@ class AppContext:
     map_capture: MapCapture
     watchdog: GameOverWatchdog
     beliefs: BeliefEngine
+    belief_mode: BeliefMode = BeliefMode.ENFORCE
 
 
 async def _auto_boot(conn: GameConnection, save_name: str) -> None:
@@ -321,7 +323,9 @@ async def lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
     map_capture = MapCapture(emitter)
     gs = GameState(conn)
     beliefs = BeliefEngine(run_id=emitter.run_id)
+    belief_mode = BeliefMode.from_env()
     log.info("Game logger session: %s", logger.session_id)
+    log.info("Belief Engine mode: %s", belief_mode.value)
 
     # Auto-boot: launch game + load save when running as eval
     save_file = os.environ.get("CIV_MCP_SAVE_FILE")
@@ -353,6 +357,7 @@ async def lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
             map_capture=map_capture,
             watchdog=watchdog,
             beliefs=beliefs,
+            belief_mode=belief_mode,
         )
     finally:
         await emitter.close()
@@ -373,13 +378,10 @@ mcp = FastMCP(
     "Civilization VI",
     instructions=(
         "Read game state and issue commands to a running Civ 6 game. Start each "
-        "turn with get_governance_brief: it ingests a same-turn typed GameState "
-        "snapshot, capabilities, budgets and the reviewed Belief Engine state. "
-        "Departments submit structured proposals; the council applies hard "
-        "constraints, budget locks, priority, Pareto and opportunity cost. Route "
-        "selected exact action intents before acting. verify_then_fast requires "
-        "the specifically declared query parameters and facts/metrics, not any "
-        "unrelated get_* call. Call get_turn_brief after material outcomes."
+        "turn with get_game_overview. When CIV_MCP_BELIEF_MODE=enforce, also use "
+        "get_governance_brief and route selected exact action intents before "
+        "governed actions. In observe/off mode the live turn loop stays lightweight "
+        "and normal game rules plus end-turn blockers remain authoritative."
     ),
     lifespan=lifespan,
 )
@@ -413,8 +415,20 @@ def _get_beliefs(ctx: Context) -> BeliefEngine:
     return ctx.request_context.lifespan_context.beliefs
 
 
+def _get_belief_mode(ctx: Context) -> BeliefMode:
+    """Return the process mode, defaulting to legacy enforcement in tests."""
+
+    return getattr(
+        ctx.request_context.lifespan_context,
+        "belief_mode",
+        BeliefMode.ENFORCE,
+    )
+
+
 async def _flush_belief_events(ctx: Context) -> None:
     """Mirror locally persisted belief events into configured telemetry sinks."""
+    if not _get_belief_mode(ctx).records_events:
+        return
     for event in _get_beliefs(ctx).drain_events():
         await _get_logger(ctx)._emitter.emit(EVENT_BELIEF_EVENT, event)
 
@@ -689,6 +703,8 @@ async def _belief_action_preflight(
     ctx: Context, tool_name: str, params: dict[str, Any]
 ) -> dict[str, Any]:
     """Run the common pre-action decision gate before touching the game."""
+    if not _get_belief_mode(ctx).enforces_actions:
+        return {"authorized": True, "decision_id": None, "route": "routine"}
     required = _belief_route_required(tool_name, params)
     if not required and tool_name not in {"unit_action", "end_turn"}:
         return {"authorized": True, "decision_id": None, "route": "routine"}
@@ -738,6 +754,8 @@ async def _append_belief_context(
     ctx: Context, tool_name: str, result: str
 ) -> str:
     """Make the gate visible alongside every normal game query."""
+    if not _get_belief_mode(ctx).appends_context:
+        return result
     if not tool_name.startswith("get_") or tool_name == "get_game_overview":
         return result
     try:
@@ -789,6 +807,8 @@ async def _record_belief_tool_result(
     decision_route: str | None = None,
 ) -> None:
     """Capture query facts and action verification without breaking gameplay."""
+    if not _get_belief_mode(ctx).records_events:
+        return
     try:
         engine = _get_beliefs(ctx)
         logger = _get_logger(ctx)
@@ -1054,7 +1074,8 @@ async def get_game_overview(ctx: Context) -> str:
         try:
             civ, seed = await gs.get_game_identity()
             logger.bind_game(civ, seed)
-            _get_beliefs(ctx).bind_game(civ, seed)
+            if _get_belief_mode(ctx).records_events:
+                _get_beliefs(ctx).bind_game(civ, seed)
             spatial.bind_game(civ, seed)
             heartbeat.bind_game(civ, seed)
             gs.spatial = spatial
@@ -1098,56 +1119,57 @@ async def get_game_overview(ctx: Context) -> str:
                 )
             except Exception:
                 log.warning("Failed to log game-over in overview", exc_info=True)
-        # Older clients still begin with overview. Auto-capture the same typed
-        # governance snapshot so that path cannot bypass the control plane.
-        try:
-            engine = _get_beliefs(ctx)
-            cached = _reusable_typed_snapshot_for_turn(engine, turn=ov.turn)
-            if cached is None:
-                snapshot, world, projection, released, locks = (
-                    await _capture_governance_snapshot(ctx, engine)
+        # Governance is deliberately absent from the lightweight live modes.
+        # Enforcement retains the legacy snapshot and action-gate behavior.
+        if _get_belief_mode(ctx).captures_governance_snapshot:
+            try:
+                engine = _get_beliefs(ctx)
+                cached = _reusable_typed_snapshot_for_turn(engine, turn=ov.turn)
+                if cached is None:
+                    snapshot, world, projection, released, locks = (
+                        await _capture_governance_snapshot(ctx, engine)
+                    )
+                    snapshot_id = snapshot.snapshot_id
+                    ruleset = world["ruleset"]
+                    changed_count = len(projection["world_entities_changed"])
+                    archived_count = len(projection["world_entities_archived"])
+                    lock_count = len(locks)
+                    released_count = len(released)
+                    snapshot_source = "captured"
+                else:
+                    facts = cached.get("facts") or {}
+                    capabilities = facts.get("capabilities") or {}
+                    snapshot_id = str(facts.get("snapshot_id") or "unknown")
+                    ruleset = str(capabilities.get("ruleset") or "unknown")
+                    current_entities = [
+                        item
+                        for item in engine.list("world_entity", status="active")
+                        if item.get("snapshot_id") == snapshot_id
+                    ]
+                    changed_count = 0
+                    archived_count = 0
+                    lock_count = len(engine.list("budget_lock", status="active"))
+                    released_count = 0
+                    snapshot_source = "reused"
+                belief_brief = engine.turn_brief(turn=ov.turn)
+                await _flush_belief_events(ctx)
+                text += (
+                    "\n\n=== GOVERNANCE SNAPSHOT ===\n"
+                    f"snapshot={snapshot_id} ruleset={ruleset} source={snapshot_source} "
+                    f"entities_changed={changed_count} "
+                    f"entities_archived={archived_count} "
+                    f"active_budget_locks={lock_count} released_locks={released_count}"
                 )
-                snapshot_id = snapshot.snapshot_id
-                ruleset = world["ruleset"]
-                changed_count = len(projection["world_entities_changed"])
-                archived_count = len(projection["world_entities_archived"])
-                lock_count = len(locks)
-                released_count = len(released)
-                snapshot_source = "captured"
-            else:
-                facts = cached.get("facts") or {}
-                capabilities = facts.get("capabilities") or {}
-                snapshot_id = str(facts.get("snapshot_id") or "unknown")
-                ruleset = str(capabilities.get("ruleset") or "unknown")
-                current_entities = [
-                    item
-                    for item in engine.list("world_entity", status="active")
-                    if item.get("snapshot_id") == snapshot_id
-                ]
-                changed_count = 0
-                archived_count = 0
-                lock_count = len(engine.list("budget_lock", status="active"))
-                released_count = 0
-                snapshot_source = "reused"
-            belief_brief = engine.turn_brief(turn=ov.turn)
-            await _flush_belief_events(ctx)
-            text += (
-                "\n\n=== GOVERNANCE SNAPSHOT ===\n"
-                f"snapshot={snapshot_id} ruleset={ruleset} source={snapshot_source} "
-                f"entities_changed={changed_count} "
-                f"entities_archived={archived_count} "
-                f"active_budget_locks={lock_count} released_locks={released_count}"
-            )
-            if cached is not None:
-                text += f" active_world_entities={len(current_entities)}"
-            text += _format_belief_turn_brief(belief_brief)
-        except Exception as exc:
-            log.warning("Governance: failed to capture typed turn state", exc_info=True)
-            text += (
-                "\n\n=== GOVERNANCE SNAPSHOT ERROR ===\n"
-                f"{exc}\nKey actions and end_turn remain blocked until "
-                "get_governance_brief succeeds."
-            )
+                if cached is not None:
+                    text += f" active_world_entities={len(current_entities)}"
+                text += _format_belief_turn_brief(belief_brief)
+            except Exception as exc:
+                log.warning("Governance: failed to capture typed turn state", exc_info=True)
+                text += (
+                    "\n\n=== GOVERNANCE SNAPSHOT ERROR ===\n"
+                    f"{exc}\nKey actions and end_turn remain blocked until "
+                    "get_governance_brief succeeds."
+                )
         return text
 
     return await _logged(ctx, "get_game_overview", {}, _run)
@@ -3139,6 +3161,17 @@ async def _belief_tool(
     operation: Callable[[BeliefEngine, int], Any],
 ) -> str:
     """Run a belief operation with normal MCP logging and telemetry mirroring."""
+    mode = _get_belief_mode(ctx)
+    if not mode.records_events:
+        return json.dumps(
+            {
+                "belief_mode": mode.value,
+                "disabled": True,
+                "tool": tool_name,
+                "message": "Belief Engine persistence is disabled in off mode.",
+            },
+            ensure_ascii=False,
+        )
     started = time.monotonic()
     try:
         engine, turn = await _belief_context(ctx)
@@ -3539,6 +3572,20 @@ async def get_governance_brief(
     then combines capabilities, scarce-resource budgets, confidence gaps, and
     current belief gates. No narrated game text is parsed for this snapshot.
     """
+
+    mode = _get_belief_mode(ctx)
+    if not mode.captures_governance_snapshot:
+        return json.dumps(
+            {
+                "belief_mode": mode.value,
+                "disabled": True,
+                "message": (
+                    "Live governance snapshots are disabled outside enforce mode; "
+                    "use get_game_overview and targeted game queries."
+                ),
+            },
+            ensure_ascii=False,
+        )
 
     started = time.monotonic()
     params = {"limit": limit, "confidence_floor": confidence_floor}
@@ -4187,6 +4234,18 @@ async def route_belief_decision(
     queries that must follow the decision. The harness compares tool parameters,
     not merely the presence of any query.
     """
+
+    mode = _get_belief_mode(ctx)
+    if not mode.enforces_actions:
+        return json.dumps(
+            {
+                "belief_mode": mode.value,
+                "enforced": False,
+                "authorized": True,
+                "message": "Action routing is bypassed outside enforce mode.",
+            },
+            ensure_ascii=False,
+        )
 
     params = locals().copy()
     params.pop("ctx")

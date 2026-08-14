@@ -4,6 +4,19 @@ The Belief Engine is the persistent world model between game observation and
 action.  It records what the agent observed separately from what the agent
 believes, predicts, plans, and eventually verifies.
 
+## Runtime modes
+
+Set `CIV_MCP_BELIEF_MODE` before starting the MCP server:
+
+- `enforce` (default): preserves the existing governance snapshot, belief
+  context, action preflight, and event recording behavior.
+- `observe`: records observations, but removes governance snapshots, appended
+  belief context, and belief-based action gates from the gameplay hot path.
+- `off`: bypasses belief event recording as well as all `observe` bypasses.
+
+Use `off` for a minimal A/B run against the legacy path. Core game validation,
+end-turn safety, and autosave behavior remain independent of this setting.
+
 ## Runtime loop
 
 ```text
