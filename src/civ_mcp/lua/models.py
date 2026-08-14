@@ -649,6 +649,46 @@ class ThreatInfo:
 
 
 @dataclass
+class BarbarianCamp:
+    """A barbarian camp on a tile the player has revealed."""
+
+    x: int
+    y: int
+    visibility: str = "revealed"  # "visible" or "revealed"
+    distance_to_city: int = 999
+    distance_to_military: int = 999
+
+
+@dataclass
+class BarbarianUnit:
+    """A visible barbarian military unit."""
+
+    unit_id: int
+    unit_type: str
+    x: int
+    y: int
+    hp: int
+    max_hp: int
+    combat_strength: int
+    ranged_strength: int
+    distance_to_city: int = 999
+    distance_to_military: int = 999
+
+
+@dataclass
+class BarbarianOverview:
+    """Actionable barbarian intelligence for the current turn.
+
+    Camp locations are limited by revealed tiles; unit locations are limited
+    by current visibility. This distinction is intentional so the agent does
+    not mistake fog-of-war absence for a clean map.
+    """
+
+    camps: list[BarbarianCamp] = field(default_factory=list)
+    units: list[BarbarianUnit] = field(default_factory=list)
+
+
+@dataclass
 class VictoryPlayerProgress:
     """Victory progress for a single civilization."""
 
@@ -952,6 +992,7 @@ class PantheonStatus:
     current_belief: str | None  # belief type if has pantheon
     current_belief_name: str | None
     faith_balance: float
+    pantheon_cost: float = 0.0  # faith needed to found; 0 if unknown/unavailable
     available_beliefs: list[BeliefInfo] = field(default_factory=list)
 
 

@@ -22,13 +22,13 @@ import uvicorn
 from mcp.server.fastmcp import Context, FastMCP
 
 from civ_mcp import game_launcher, heartbeat
-from civ_mcp.belief_engine import (
+from civ6_belief_engine.belief_engine import (
     BeliefEngine,
     BeliefEngineError,
     action_args_hash,
     tool_result_reference,
 )
-from civ_mcp.belief_mode import BeliefMode
+from civ6_belief_engine.belief_mode import BeliefMode
 from civ_mcp.game_over_watchdog import GameOverWatchdog
 from civ_mcp import narrate as nr
 from civ_mcp.connection import GameConnection, LuaError
@@ -1136,6 +1136,32 @@ async def get_game_overview(ctx: Context) -> str:
                 )
             except Exception:
                 log.warning("Failed to log game-over in overview", exc_info=True)
+        else:
+            # Barbarian camps are the spawn source and are not included in the
+            # generic hostile-unit scan. Surface a compact scan at the
+            # canonical per-turn entry point so the agent cannot silently
+            # skip camp clearing while the standalone tool remains available
+            # for the full list and coordinates.
+            try:
+                barbarian_overview = await gs.get_barbarian_overview()
+                text += "\n\n" + nr.narrate_barbarian_overview(
+                    barbarian_overview, compact=True
+                )
+            except Exception:
+                log.debug("Barbarian overview failed", exc_info=True)
+            # Empty policy slots are a real opportunity cost, but the game
+            # does not emit a blocking notification for every empty slot
+            # (notably a newly available wildcard slot). Surface the
+            # authoritative policy state at the canonical per-turn entry
+            # point so the agent cannot overlook an available card.
+            try:
+                policy_status = await gs.get_policies()
+                if policy_status.available_policies and any(
+                    slot.current_policy is None for slot in policy_status.slots
+                ):
+                    text += "\n\n" + nr.narrate_policies(policy_status)
+            except Exception:
+                log.debug("Policy slot check failed", exc_info=True)
         # Governance is deliberately absent from the lightweight live modes.
         # Enforcement retains the legacy snapshot and action-gate behavior.
         if _get_belief_mode(ctx).captures_governance_snapshot:
@@ -1217,6 +1243,33 @@ async def get_units(ctx: Context) -> str:
         return nr.narrate_units(units, threats, trade_status)
 
     return await _logged(ctx, "get_units", {}, _run, tiles=unit_tiles)
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_barbarian_overview(ctx: Context) -> str:
+    """Query revealed barbarian camps and currently visible barbarian units.
+
+    Camps remain listed after leaving their tile's visibility as long as the
+    tile has been revealed. Barbarian unit locations require current vision.
+    Results include distance to the nearest own city and military unit so the
+    agent can clear the spawn source instead of reacting to endless waves.
+    """
+    gs = _get_game(ctx)
+    barbarian_tiles: set[tuple[int, int]] = set()
+
+    async def _run():
+        overview = await gs.get_barbarian_overview()
+        barbarian_tiles.update((camp.x, camp.y) for camp in overview.camps)
+        barbarian_tiles.update((unit.x, unit.y) for unit in overview.units)
+        return nr.narrate_barbarian_overview(overview)
+
+    return await _logged(
+        ctx,
+        "get_barbarian_overview",
+        {},
+        _run,
+        tiles=barbarian_tiles,
+    )
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
@@ -2921,7 +2974,7 @@ def _governance_payload(value: Any) -> Any:
 def _governance_proposal_from_dict(raw: dict[str, Any]):
     """Validate one ministerial proposal against the shared governance schema."""
 
-    from civ_mcp.governance import (
+    from civ6_belief_engine.governance import (
         ActionIntent,
         BudgetLock,
         EvidenceRequirement,
@@ -3161,7 +3214,7 @@ async def _capture_governance_snapshot(
 ) -> tuple[Any, dict[str, Any], dict[str, Any], list[str], list[dict[str, Any]]]:
     """Capture and ingest the authoritative typed state for one turn."""
 
-    from civ_mcp.governance.snapshot import snapshot_world_state
+    from civ6_belief_engine.governance.snapshot import snapshot_world_state
 
     snapshot = await _get_game(ctx).get_governance_snapshot()
     world = snapshot_world_state(snapshot)
@@ -3738,7 +3791,7 @@ async def upsert_strategic_goal(
     params.pop("ctx")
 
     def _operation(engine: BeliefEngine, turn: int) -> dict[str, Any]:
-        from civ_mcp.governance import ProbabilityConfidence, StrategicGoal
+        from civ6_belief_engine.governance import ProbabilityConfidence, StrategicGoal
 
         goal = StrategicGoal(
             goal_id=goal_id,
@@ -3844,7 +3897,7 @@ async def review_governance_proposal(
     params.pop("ctx")
 
     def _operation(engine: BeliefEngine, turn: int) -> dict[str, Any]:
-        from civ_mcp.governance import (
+        from civ6_belief_engine.governance import (
             CounterEvidence,
             DevilsAdvocate,
             DevilsAdvocateVerdict,
@@ -3922,7 +3975,7 @@ async def resolve_governance_council(
     }
 
     def _operation(engine: BeliefEngine, turn: int) -> dict[str, Any]:
-        from civ_mcp.governance import (
+        from civ6_belief_engine.governance import (
             BudgetLock,
             CouncilDecision,
             CouncilDecisionStatus,
