@@ -8,7 +8,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from civ_mcp.belief_engine import BeliefEngine, action_args_hash
+from civ_mcp.belief_engine import (
+    BeliefEngine,
+    action_args_hash,
+    tool_result_reference,
+)
 from civ_mcp.server import (
     _belief_action_preflight,
     _canonical_action_params,
@@ -611,7 +615,12 @@ def test_action_verification_recovers_interrupted_executing_decision(tmp_path):
         )
     )
 
-    assert json.loads(recovered)["verification"]["source"] == "agent_recovery"
+    recovered_action = json.loads(recovered)
+    assert recovered_action["verification"]["source"] == "agent_recovery"
+    assert "actual" not in recovered_action
+    assert recovered_action["actual_ref"] == tool_result_reference(
+        "OK:TARGET_DEFEATED"
+    )
     assert engine.get("decision", decision["id"])["decision_state"] == "succeeded"
     outcomes = engine.list("outcome", status="active")
     assert outcomes[-1]["decision_id"] == decision["id"]

@@ -43,10 +43,17 @@ Telemetry mirrors the same events into each run's `beliefs.jsonl`, allowing
 the Convex sync pipeline and game-detail dashboard to materialize current
 entities without discarding the audit history.
 
+Raw MCP results have one owner: the model-visible tool transcript and Civ 6
+tool telemetry. New Belief Engine events keep only normalized facts/metrics, a
+SHA-256 `result_ref`, and links between decisions, actions, outcomes, and
+observations. They do not copy the raw result into each entity. Existing event
+logs remain readable and are not rewritten in place.
+
 ## Entity model
 
-- `observation`: directly observed fact, source, reliability, raw evidence, and
-  normalized metrics. Successful `get_*` MCP calls are captured automatically.
+- `observation`: directly observed fact, source, reliability, result
+  fingerprint, and normalized metrics. Successful `get_*` MCP calls are
+  captured automatically; raw text remains in the transcript/telemetry owner.
 - `belief`: an interpretation with probability, confidence, impact, urgency,
   supporting evidence, counter-evidence, falsifiers, and expectations.
 - `hypothesis`: one competing explanation in a topic pool. Use
