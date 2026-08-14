@@ -25,6 +25,7 @@ from civ_mcp.lua.models import (
     GovernmentStatus,
     ResourceStockpile,
     TechCivicStatus,
+    ThreatInfo,
     UnitInfo,
     VictoryProgress,
 )
@@ -54,6 +55,8 @@ class TypedSnapshotSource(Protocol):
     async def get_policies(self) -> GovernmentStatus: ...
 
     async def get_barbarian_overview(self) -> BarbarianOverview: ...
+
+    async def get_threat_scan(self) -> list[ThreatInfo]: ...
 
 
 class BeliefObservation(TypedDict):
@@ -105,15 +108,15 @@ def _stable_snapshot_id(payload: Mapping[str, Any]) -> str:
     return f"snapshot_{hashlib.sha256(encoded).hexdigest()[:24]}"
 
 
-def _require_unique(values: Iterable[int], label: str) -> None:
-    seen: set[int] = set()
-    duplicates: set[int] = set()
+def _require_unique(values: Iterable[Any], label: str) -> None:
+    seen: set[Any] = set()
+    duplicates: set[Any] = set()
     for value in values:
         if value in seen:
             duplicates.add(value)
         seen.add(value)
     if duplicates:
-        joined = ", ".join(str(value) for value in sorted(duplicates))
+        joined = ", ".join(str(value) for value in sorted(duplicates, key=repr))
         raise SnapshotConsistencyError(f"Duplicate {label} IDs: {joined}")
 
 
@@ -132,6 +135,7 @@ def build_turn_snapshot(
     notifications: Sequence[GameNotification] = (),
     policies: GovernmentStatus | None = None,
     barbarians: BarbarianOverview | None = None,
+    threats: Sequence[ThreatInfo] | None = None,
     extra: Mapping[str, Any] | None = None,
 ) -> GovernanceTurnSnapshot:
     """Build one immutable, same-turn governance snapshot from typed results."""
@@ -161,10 +165,65 @@ def build_turn_snapshot(
             key=lambda item: (item.turn, item.type_name, item.x, item.y, item.message),
         )
     )
+    threat_scan_available = threats is not None
+    threat_rows = tuple(
+        sorted(
+            threats or (),
+            key=lambda item: (
+                item.owner_id,
+                item.unit_id,
+                item.x,
+                item.y,
+                item.unit_type,
+            ),
+        )
+    )
+    for threat in threat_rows:
+        if type(threat.owner_id) is not int or threat.owner_id < 0:
+            raise SnapshotConsistencyError("Threat owner_id must be non-negative")
+        if type(threat.unit_id) is not int or threat.unit_id < -1:
+            raise SnapshotConsistencyError("Threat unit_id must be -1 or non-negative")
+        if type(threat.is_at_war) is not bool or type(threat.is_city_state) is not bool:
+            raise SnapshotConsistencyError(
+                "Threat hostility and city-state flags must be booleans"
+            )
+        distances = tuple(threat.city_distances)
+        if any(
+            not isinstance(item, (tuple, list))
+            or len(item) != 2
+            or type(item[0]) is not int
+            or type(item[1]) is not int
+            or item[0] < 0
+            or item[1] < 0
+            for item in distances
+        ):
+            raise SnapshotConsistencyError(
+                "Threat city distances must contain non-negative integer pairs"
+            )
+        _require_unique((item[0] for item in distances), "threat city distance")
+        if distances:
+            expected_city_id, expected_distance = min(
+                distances, key=lambda item: (item[1], item[0])
+            )
+            if (
+                threat.nearest_city_id != expected_city_id
+                or threat.distance_to_city != expected_distance
+            ):
+                raise SnapshotConsistencyError(
+                    "Threat nearest-city fields disagree with city distances"
+                )
 
     _require_unique((city.city_id for city in city_rows), "city")
     _require_unique((unit.unit_id for unit in unit_rows), "unit")
     _require_unique((civ.player_id for civ in diplomacy_rows), "diplomacy player")
+    _require_unique(
+        (
+            (threat.owner_id, threat.unit_id)
+            for threat in threat_rows
+            if threat.unit_id >= 0
+        ),
+        "hostile unit",
+    )
     if len(city_rows) != overview.num_cities:
         raise SnapshotConsistencyError(
             f"Overview reports {overview.num_cities} cities but received {len(city_rows)}"
@@ -175,6 +234,27 @@ def build_turn_snapshot(
         )
     if any(civ.player_id == overview.player_id for civ in diplomacy_rows):
         raise SnapshotConsistencyError("Diplomacy results must not repeat the local player")
+    city_ids = {city.city_id for city in city_rows}
+    unknown_threat_cities = sorted(
+        {
+            city_id
+            for threat in threat_rows
+            for city_id, _distance in (
+                threat.city_distances
+                or (
+                    ((threat.nearest_city_id, threat.distance_to_city),)
+                    if threat.nearest_city_id >= 0
+                    else ()
+                )
+            )
+            if city_id not in city_ids
+        }
+    )
+    if unknown_threat_cities:
+        raise SnapshotConsistencyError(
+            "Threat scan references unknown city IDs: "
+            + ", ".join(str(city_id) for city_id in unknown_threat_cities)
+        )
     if tech_civic is not None and (
         tech_civic.current_research != overview.current_research
         or tech_civic.current_civic != overview.current_civic
@@ -217,6 +297,8 @@ def build_turn_snapshot(
         "notifications": notification_rows,
         "policies": policies,
         "barbarians": barbarians,
+        "threats": threat_rows,
+        "threat_scan_available": threat_scan_available,
         "extra": frozen_extra,
     }
     snapshot_id = _stable_snapshot_id(identity_payload)
@@ -238,6 +320,8 @@ def build_turn_snapshot(
         notifications=notification_rows,
         policies=policies,
         barbarians=barbarians,
+        threats=threat_rows,
+        threat_scan_available=threat_scan_available,
         extra=frozen_extra,
     )
 
@@ -519,6 +603,81 @@ def snapshot_world_state(snapshot: GovernanceTurnSnapshot) -> dict[str, Any]:
             _add_entity(entities, "barbarian_unit", unit_id, _canonical(unit))
             _add_relation(relations, "located_at", unit_id, tile_id)
 
+    if snapshot.threat_scan_available:
+        hostile_threats = tuple(
+            threat
+            for threat in snapshot.threats
+            if threat.owner_id == 63 or threat.is_at_war
+        )
+        metrics["threat.scan_available"] = 1
+        metrics["foreign_military.visible_units"] = len(snapshot.threats)
+        metrics["threat.visible_units"] = len(hostile_threats)
+        metrics["threat.within_three_of_city"] = sum(
+            any(
+                distance <= 3
+                for _city_id, distance in (
+                    threat.city_distances
+                    or (
+                        ((threat.nearest_city_id, threat.distance_to_city),)
+                        if threat.nearest_city_id >= 0
+                        else ()
+                    )
+                )
+            )
+            for threat in hostile_threats
+        )
+        for threat in snapshot.threats:
+            owner_id = f"player:{threat.owner_id}"
+            if owner_id not in entities:
+                _add_entity(
+                    entities,
+                    "civilization",
+                    owner_id,
+                    {
+                        "player_id": threat.owner_id,
+                        "civ_name": threat.owner_name,
+                        "is_city_state": threat.is_city_state,
+                    },
+                )
+            barbarian_id = f"barbarian_unit:{threat.unit_id}"
+            uses_barbarian_entity = (
+                threat.owner_id == 63
+                and threat.unit_id >= 0
+                and barbarian_id in entities
+            )
+            if uses_barbarian_entity:
+                threat_id = barbarian_id
+            else:
+                stable_suffix = (
+                    str(threat.unit_id)
+                    if threat.unit_id >= 0
+                    else f"{threat.unit_type}:{threat.x}:{threat.y}"
+                )
+                threat_id = f"foreign_unit:{threat.owner_id}:{stable_suffix}"
+                tile_id = f"tile:{threat.x}:{threat.y}"
+                _add_entity(entities, "tile", tile_id, {"x": threat.x, "y": threat.y})
+                _add_entity(entities, "foreign_unit", threat_id, _canonical(threat))
+                _add_relation(relations, "located_at", threat_id, tile_id)
+            _add_relation(relations, "owns", owner_id, threat_id)
+            if threat.owner_id == 63 or threat.is_at_war:
+                city_distances = threat.city_distances or (
+                    ((threat.nearest_city_id, threat.distance_to_city),)
+                    if threat.nearest_city_id >= 0
+                    else ()
+                )
+                for source_city_id, distance in city_distances:
+                    city_id = f"city:{snapshot.player_id}:{source_city_id}"
+                    _add_relation(
+                        relations,
+                        "threatens",
+                        threat_id,
+                        city_id,
+                        {
+                            "distance": distance,
+                            "visibility": "visible",
+                        },
+                    )
+
     if snapshot.victory is not None:
         for progress in snapshot.victory.players:
             prefix = f"victory.player_{progress.player_id}"
@@ -559,6 +718,8 @@ def snapshot_world_state(snapshot: GovernanceTurnSnapshot) -> dict[str, Any]:
         "notifications": _canonical(snapshot.notifications),
         "policies": _canonical(snapshot.policies),
         "barbarians": _canonical(snapshot.barbarians),
+        "threats": _canonical(snapshot.threats),
+        "threat_scan_available": snapshot.threat_scan_available,
         "extra": _canonical(snapshot.extra),
     }
 

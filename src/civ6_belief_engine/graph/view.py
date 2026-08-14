@@ -129,6 +129,41 @@ class GraphView:
             if relation is None or key[0] == relation
         )
 
+    def threats_near_city(
+        self,
+        city_id: str,
+        *,
+        max_distance: int = 3,
+        include_stale: bool = False,
+    ) -> tuple[Edge, ...]:
+        """Return visible hostile-unit edges near one city."""
+
+        if type(max_distance) is not int or max_distance < 0:
+            raise ValueError("max_distance must be a non-negative integer")
+        city = self.node(city_id)
+        if city is None or city.node_type != "city":
+            return ()
+        threats: list[Edge] = []
+        for edge in self.edges_to(city_id, "THREATENS"):
+            source = self.node(edge.source_id)
+            distance = edge.attributes.get("distance")
+            if type(distance) is not int or distance > max_distance:
+                continue
+            if not include_stale and (
+                not edge.observed or source is None or not source.observed
+            ):
+                continue
+            threats.append(edge)
+        return tuple(
+            sorted(
+                threats,
+                key=lambda edge: (
+                    edge.attributes["distance"],
+                    edge.source_id,
+                ),
+            )
+        )
+
     @property
     def state_hash(self) -> str:
         payload = {

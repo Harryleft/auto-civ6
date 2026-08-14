@@ -128,8 +128,8 @@ class TestParseOverview:
 
 
 class TestParseUnits:
-    # Fields: uid|index|name|type|x,y|moves/max|hp/max|cs|rs|charges|targets|promo|upgrade|upgrade_target|upgrade_cost|valid_imps|religion
-    WARRIOR = "0|0|Warrior|UNIT_WARRIOR|10,24|2.0/2.0|100/100|20|0|0||0|0|||"
+    # Fields: uid|index|name|type|x,y|moves/max|hp/max|cs|rs|charges|targets|promo|upgrade|upgrade_target|upgrade_cost|valid_imps|religion|fortify_turns|can_fortify
+    WARRIOR = "0|0|Warrior|UNIT_WARRIOR|10,24|2.0/2.0|100/100|20|0|0||0|0|||||2|1"
     BUILDER = "1|1|Builder|UNIT_BUILDER|12,22|2.0/2.0|100/100|0|0|3||0|0|||IMPROVEMENT_FARM;IMPROVEMENT_MINE|"
 
     def test_basic_warrior(self):
@@ -146,6 +146,8 @@ class TestParseUnits:
         assert u.combat_strength == 20
         assert u.ranged_strength == 0
         assert u.build_charges == 0
+        assert u.fortify_turns == 2
+        assert u.can_fortify is True
 
     def test_builder_with_improvements(self):
         units = parse_units_response([self.BUILDER])
@@ -209,7 +211,7 @@ class TestParseCombat:
 
 class TestParseThreatScan:
     def test_standard_threat(self):
-        line = "THREAT|63|Barbarian|UNIT_WARRIOR|15,30|100/100|CS:20|RS:0|dist:3|cs:0|uid:42"
+        line = "THREAT|63|Barbarian|UNIT_WARRIOR|15,30|100/100|CS:20|RS:0|dist:3|cs:0|uid:42|city:7|citydist:4|war:1|cities:7=4,8=6"
         threats = parse_threat_scan_response([line])
         assert len(threats) == 1
         t = threats[0]
@@ -222,17 +224,35 @@ class TestParseThreatScan:
         assert t.combat_strength == 20
         assert t.distance == 3
         assert t.unit_id == 42
+        assert t.nearest_city_id == 7
+        assert t.distance_to_city == 4
+        assert t.is_at_war is True
+        assert t.city_distances == ((7, 4), (8, 6))
 
     def test_city_state_threat(self):
         line = (
-            "THREAT|10|Zanzibar|UNIT_ARCHER|8,12|80/100|CS:25|RS:25|dist:2|cs:1|uid:5"
+            "THREAT|10|Zanzibar|UNIT_ARCHER|8,12|80/100|CS:25|RS:25|dist:2|cs:1|uid:5|city:2|citydist:2|war:1|cities:2=2"
         )
         threats = parse_threat_scan_response([line])
         assert threats[0].is_city_state is True
+        assert threats[0].nearest_city_id == 2
+        assert threats[0].distance_to_city == 2
 
-    def test_non_threat_lines_skipped(self):
-        threats = parse_threat_scan_response(["SOME_OTHER_LINE", "ALSO_NOT_THREAT"])
-        assert len(threats) == 0
+    def test_explicit_no_threats_is_empty(self):
+        assert parse_threat_scan_response(["NO_THREATS"]) == []
+
+    def test_missing_scan_status_is_not_treated_as_empty(self):
+        with pytest.raises(ValueError, match="neither THREAT nor NO_THREATS"):
+            parse_threat_scan_response(["SOME_OTHER_LINE", "ALSO_NOT_THREAT"])
+
+    def test_lua_error_is_not_treated_as_empty(self):
+        with pytest.raises(ValueError, match="threat scan failed"):
+            parse_threat_scan_response(["ERR:QUERY_FAILED"])
+
+    def test_conflicting_empty_and_threat_markers_are_rejected(self):
+        line = "THREAT|63|Barbarian|UNIT_WARRIOR|15,30|100/100|CS:20|RS:0|dist:3"
+        with pytest.raises(ValueError, match="both THREAT and NO_THREATS"):
+            parse_threat_scan_response(["NO_THREATS", line])
 
     def test_legacy_format(self):
         """Older format without owner_id/owner_name."""

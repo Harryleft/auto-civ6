@@ -25,6 +25,7 @@ from civ_mcp.lua.models import (
     GovernmentStatus,
     ResourceStockpile,
     TechCivicStatus,
+    ThreatInfo,
     UnitInfo,
     VictoryProgress,
 )
@@ -233,6 +234,8 @@ class TurnSnapshot:
     notifications: tuple[GameNotification, ...] = ()
     policies: GovernmentStatus | None = None
     barbarians: BarbarianOverview | None = None
+    threats: tuple[ThreatInfo, ...] = ()
+    threat_scan_available: bool = False
     extra: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -261,11 +264,16 @@ class TurnSnapshot:
             ("diplomacy", CivInfo),
             ("resources", ResourceStockpile),
             ("notifications", GameNotification),
+            ("threats", ThreatInfo),
         ):
             values = tuple(getattr(self, name))
             if not all(isinstance(value, item_type) for value in values):
                 raise TypeError(f"{name} must contain only {item_type.__name__} values")
             object.__setattr__(self, name, values)
+        if type(self.threat_scan_available) is not bool:
+            raise TypeError("threat_scan_available must be a bool")
+        if self.threats and not self.threat_scan_available:
+            raise ValueError("threat rows require an available threat scan")
         if not isinstance(self.extra, Mapping):
             raise TypeError("extra must be a mapping")
         if not all(isinstance(key, str) and key for key in self.extra):

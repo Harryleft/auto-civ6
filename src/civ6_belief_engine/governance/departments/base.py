@@ -7,7 +7,8 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Mapping, Protocol, runtime_checkable
 
-from ..models import Outcome, StrategicGoal, TurnSnapshot
+from ...graph import GraphView
+from ..models import Outcome, Proposal, StrategicGoal, TurnSnapshot
 
 
 class Department(StrEnum):
@@ -37,6 +38,7 @@ class DepartmentContext:
     snapshot: TurnSnapshot
     agenda: tuple[str, ...] = ()
     goals: tuple[StrategicGoal, ...] = ()
+    graph: GraphView | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.snapshot, TurnSnapshot):
@@ -46,6 +48,8 @@ class DepartmentContext:
         if not all(isinstance(goal, StrategicGoal) for goal in goals):
             raise TypeError("goals must contain StrategicGoal values")
         object.__setattr__(self, "goals", goals)
+        if self.graph is not None and not isinstance(self.graph, GraphView):
+            raise TypeError("graph must be GraphView or None")
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,6 +119,7 @@ class DepartmentAssessment:
     evidence_missing: tuple[str, ...] = ()
     support_requests: tuple[SupportRequest, ...] = ()
     workstreams: tuple[Workstream, ...] = ()
+    proposals: tuple[Proposal, ...] = ()
     degraded: bool = False
 
     def __post_init__(self) -> None:
@@ -149,6 +154,12 @@ class DepartmentAssessment:
         if any(item.department != self.department for item in workstreams):
             raise ValueError("workstream department must match assessment department")
         object.__setattr__(self, "workstreams", workstreams)
+        proposals = tuple(self.proposals)
+        if not all(isinstance(item, Proposal) for item in proposals):
+            raise TypeError("proposals must contain Proposal values")
+        if any(item.department != self.department.value for item in proposals):
+            raise ValueError("proposal department must match assessment department")
+        object.__setattr__(self, "proposals", proposals)
         if type(self.degraded) is not bool:
             raise TypeError("degraded must be a bool")
 

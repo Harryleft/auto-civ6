@@ -720,6 +720,42 @@ class TestHarnessActionLifecycle:
         )
         assert after_evidence["authorized"] is True
 
+    def test_explicit_evidence_contract_cannot_be_bypassed_by_low_risk_score(
+        self, engine
+    ):
+        decision = engine.route_decision(
+            statement="Fortify the city defender",
+            probability=0.99,
+            confidence=0.99,
+            impact="low",
+            urgency="low",
+            irreversibility=0.0,
+            action_intent={
+                "tool": "unit_action",
+                "params": {"unit_id": 7, "action": "fortify"},
+                "args_hash": action_args_hash(
+                    {"unit_id": 7, "action": "fortify"}
+                ),
+            },
+            evidence_requirements=[
+                {
+                    "tool": "get_units",
+                    "params": {},
+                    "required_facts": ["unit_ids"],
+                    "max_age_turns": 0,
+                }
+            ],
+            turn=2,
+        )
+
+        assert decision["route"] == "verify_then_fast"
+        assert engine.authorize_action(
+            tool="unit_action",
+            params={"unit_id": 7, "action": "fortify"},
+            turn=2,
+            required=False,
+        )["authorized"] is False
+
     def test_verify_then_fast_rejects_unrelated_query(self, engine):
         decision = engine.route_decision(
             statement="Attack the fortified target",

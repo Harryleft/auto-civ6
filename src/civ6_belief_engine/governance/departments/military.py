@@ -13,9 +13,18 @@ from math import isfinite
 from numbers import Real
 from typing import Any, ClassVar, Iterable
 
+from ...graph import Edge
 from civ_mcp.lua.models import BarbarianCamp, BarbarianUnit, UnitInfo
 
-from ..models import Outcome, OutcomeStatus
+from ..models import (
+    ActionIntent,
+    BudgetLock,
+    EvidenceRequirement,
+    Outcome,
+    OutcomeStatus,
+    ProbabilityConfidence,
+    Proposal,
+)
 from .base import (
     Department,
     DepartmentAssessment,
@@ -117,6 +126,8 @@ class MilitaryDepartment:
         snapshot = context.snapshot
         if self._has_military_agenda(context):
             return 1.0
+        if self._nearby_threats(context):
+            return 1.0
         if snapshot.barbarians is not None and (
             snapshot.barbarians.camps or snapshot.barbarians.units
         ):
@@ -146,13 +157,19 @@ class MilitaryDepartment:
         )
         camps, barbarian_units = self._barbarian_rows(snapshot.barbarians)
         barbarian_present = bool(camps or barbarian_units)
+        nearby_threats = self._nearby_threats(context)
+        threat_present = barbarian_present or bool(nearby_threats)
 
         evidence_missing = self._missing_evidence(
             snapshot=snapshot,
             units=units,
             combat_units=combat_units,
-            barbarian_present=barbarian_present,
+            threat_present=threat_present,
         )
+        if context.graph is not None and not snapshot.threat_scan_available:
+            evidence_missing = self._dedupe(
+                (*evidence_missing, "城市周边敌军扫描")
+            )
         facts = self._facts(
             snapshot=snapshot,
             units=units,
@@ -162,6 +179,13 @@ class MilitaryDepartment:
             camps=camps,
             barbarian_units=barbarian_units,
         )
+        if context.graph is not None and snapshot.threat_scan_available:
+            facts = (
+                *facts,
+                f"图查询确认城市三格内当前可见敌军: {len(nearby_threats)} 个",
+            )
+        elif context.graph is not None:
+            facts = (*facts, "城市周边敌军扫描不可用；不能据此认定城市安全",)
         risks = self._risks(
             snapshot=snapshot,
             combat_units=combat_units,
@@ -169,26 +193,37 @@ class MilitaryDepartment:
             camps=camps,
             barbarian_units=barbarian_units,
         )
+        if nearby_threats:
+            risks = self._dedupe(
+                (*risks, "城市周边存在当前可见敌军，防御动作必须绑定精确城市与单位证据")
+            )
         opportunities = self._opportunities(
             combat_units=combat_units,
             actionable_units=actionable_units,
-            barbarian_present=barbarian_present,
+            threat_present=threat_present,
         )
         capability_gaps = self._capability_gaps(
             evidence_missing=evidence_missing,
             units=units,
             combat_units=combat_units,
             actionable_units=actionable_units,
-            barbarian_present=barbarian_present,
+            threat_present=threat_present,
         )
         support_requests = self._support_requests(
-            barbarian_present=barbarian_present,
+            threat_present=threat_present,
             camp_count=len(camps),
             barbarian_unit_count=len(barbarian_units),
+            nearby_hostile_count=len(nearby_threats),
         )
         workstream = self._workstream(
-            barbarian_present=barbarian_present,
+            threat_present=threat_present,
             degraded=bool(evidence_missing),
+        )
+        proposals = self._defense_proposals(
+            context=context,
+            combat_units=combat_units,
+            nearby_threats=nearby_threats,
+            evidence_missing=evidence_missing,
         )
 
         if evidence_missing:
@@ -196,10 +231,11 @@ class MilitaryDepartment:
                 "军事评估退化：证据不足，已采取保守防御假设；"
                 + "、".join(evidence_missing)
             )
-        elif barbarian_present:
+        elif threat_present:
             summary = (
-                f"军事评估：发现 {len(camps)} 个已知蛮族营地和 "
-                f"{len(barbarian_units)} 个可见蛮族单位，需协调清剿并保留本土防御"
+                f"军事评估：城市三格内有 {len(nearby_threats)} 个当前可见敌军，"
+                f"另有 {len(camps)} 个已知蛮族营地和 "
+                f"{len(barbarian_units)} 个可见蛮族单位，需协调防御并保留本土兵力"
             )
         else:
             summary = (
@@ -219,6 +255,7 @@ class MilitaryDepartment:
             evidence_missing=evidence_missing,
             support_requests=support_requests,
             workstreams=(workstream,),
+            proposals=proposals,
             degraded=bool(evidence_missing),
         )
 
@@ -235,6 +272,8 @@ class MilitaryDepartment:
             return ReviewDisposition.REPLAN
         if outcome.status in (OutcomeStatus.FAILED, OutcomeStatus.RETRYABLE):
             return ReviewDisposition.REPLAN
+        if self._nearby_threats(context):
+            return ReviewDisposition.CONTINUE
         if context.snapshot.barbarians is None:
             return ReviewDisposition.REPLAN
         if context.snapshot.barbarians.camps or context.snapshot.barbarians.units:
@@ -247,6 +286,26 @@ class MilitaryDepartment:
         for goal in context.goals:
             text_parts.extend((goal.goal_id, goal.statement, *goal.tags))
         return bool(MilitaryDepartment._AGENDA_SIGNAL.search(" ".join(text_parts)))
+
+    @staticmethod
+    def _nearby_threats(context: DepartmentContext) -> tuple[Edge, ...]:
+        if context.graph is None:
+            return ()
+        threats: dict[tuple[str, str, str], Edge] = {}
+        for city in context.snapshot.cities:
+            city_id = f"city:{city.x}:{city.y}"
+            for edge in context.graph.threats_near_city(city_id, max_distance=3):
+                threats[edge.key] = edge
+        return tuple(
+            sorted(
+                threats.values(),
+                key=lambda edge: (
+                    edge.attributes["distance"],
+                    edge.target_id,
+                    edge.source_id,
+                ),
+            )
+        )
 
     @staticmethod
     def _ordered_units(units: Iterable[UnitInfo]) -> tuple[UnitInfo, ...]:
@@ -262,6 +321,101 @@ class MilitaryDepartment:
                 ),
             )
         )
+
+    @classmethod
+    def _defense_proposals(
+        cls,
+        *,
+        context: DepartmentContext,
+        combat_units: tuple[UnitInfo, ...],
+        nearby_threats: tuple[Edge, ...],
+        evidence_missing: tuple[str, ...],
+    ) -> tuple[Proposal, ...]:
+        """Build at most one exact, non-offensive defense proposal."""
+
+        if (
+            context.graph is None
+            or context.graph.snapshot_id != context.snapshot.snapshot_id
+            or not context.snapshot.threat_scan_available
+            or not nearby_threats
+            or not context.goals
+            or evidence_missing
+        ):
+            return ()
+        goals = tuple(sorted(context.goals, key=lambda goal: (-goal.priority, goal.goal_id)))
+        for threat in nearby_threats:
+            city = context.graph.node(threat.target_id)
+            if city is None:
+                continue
+            x = city.attributes.get("x")
+            y = city.attributes.get("y")
+            defenders = tuple(
+                unit
+                for unit in combat_units
+                if unit.x == x
+                and unit.y == y
+                and unit.fortify_turns == 0
+                and unit.can_fortify
+                and cls._is_actionable(unit)
+            )
+            if not defenders:
+                continue
+            defender = min(defenders, key=lambda unit: unit.unit_id)
+            proposal_id = (
+                f"military:defend:{context.snapshot.turn}:"
+                f"{threat.target_id}:{defender.unit_id}"
+            )
+            evidence = EvidenceRequirement(
+                requirement_id=f"defense-units:{context.snapshot.turn}:{defender.unit_id}",
+                tool="get_units",
+                params={},
+                max_age_turns=0,
+                required_facts=("unit_ids",),
+                required_metrics=("observed_unit_count",),
+                description="重新确认守军仍存在后再执行精确防御动作",
+            )
+            intent = ActionIntent(
+                intent_id=f"intent:fortify:{context.snapshot.turn}:{defender.unit_id}",
+                tool="unit_action",
+                arguments={"unit_id": defender.unit_id, "action": "fortify"},
+                proposal_id=proposal_id,
+                evidence_requirements=(evidence,),
+                allowed_turn=context.snapshot.turn,
+            )
+            return (
+                Proposal(
+                    proposal_id=proposal_id,
+                    department=cls.department.value,
+                    summary=(
+                        f"让单位 {defender.unit_id} 在受威胁城市 "
+                        f"{threat.target_id} 原地设防"
+                    ),
+                    goal_ids=(goals[0].goal_id,),
+                    success=ProbabilityConfidence(probability=0.9, confidence=0.8),
+                    priority=80,
+                    hard_constraints={
+                        "current_hostile_threat": True,
+                        "defender_on_city_center": True,
+                        "same_turn_graph": True,
+                    },
+                    budget_locks=(
+                        BudgetLock(
+                            resource="unit_action",
+                            amount=1,
+                            scope=f"unit:{defender.unit_id}",
+                            exclusive=True,
+                            reason="同一守军本回合只能执行一个治理动作",
+                        ),
+                    ),
+                    benefits={"city_defense": 1.0},
+                    costs={"unit_turn": 1.0},
+                    opportunity_cost=1.0,
+                    failure_cost=0.2,
+                    action_intents=(intent,),
+                    expires_turn=context.snapshot.turn,
+                ),
+            )
+        return ()
 
     @staticmethod
     def _barbarian_rows(
@@ -331,7 +485,7 @@ class MilitaryDepartment:
         snapshot: Any,
         units: tuple[UnitInfo, ...],
         combat_units: tuple[UnitInfo, ...],
-        barbarian_present: bool,
+        threat_present: bool,
     ) -> tuple[str, ...]:
         missing: list[str] = []
         if not units and (
@@ -340,7 +494,7 @@ class MilitaryDepartment:
             missing.append("己方单位明细")
         if snapshot.barbarians is None:
             missing.append("蛮族情报（已知营地与可见单位）")
-        if barbarian_present and not snapshot.cities:
+        if threat_present and not snapshot.cities:
             missing.append("城市防御与驻防信息")
         if combat_units and any(
             cls._number(unit.health) is None
@@ -415,12 +569,12 @@ class MilitaryDepartment:
         *,
         combat_units: tuple[UnitInfo, ...],
         actionable_units: tuple[UnitInfo, ...],
-        barbarian_present: bool,
+        threat_present: bool,
     ) -> tuple[str, ...]:
-        if barbarian_present:
+        if threat_present:
             return (
-                "从当前可行动战斗单位中筛选满足防御余量的清剿编组",
-                "将生产、经济和市政支援纳入同一蛮族响应方案",
+                "从当前可行动战斗单位中筛选满足防御余量的响应编组",
+                "将生产、经济和市政支援纳入同一威胁响应方案",
             )
         if combat_units and actionable_units:
             return ("利用可行动战斗单位维护防御态势，并持续核对蛮族情报",)
@@ -434,32 +588,36 @@ class MilitaryDepartment:
         units: tuple[UnitInfo, ...],
         combat_units: tuple[UnitInfo, ...],
         actionable_units: tuple[UnitInfo, ...],
-        barbarian_present: bool,
+        threat_present: bool,
     ) -> tuple[str, ...]:
         gaps = list(evidence_missing)
         if units and not combat_units:
             gaps.append("当前单位清单中未识别到具备战斗证据的单位")
-        if barbarian_present and not combat_units:
-            gaps.append("尚无已识别己方战斗单位，不能直接组织蛮族清剿")
-        elif barbarian_present and not actionable_units:
+        if threat_present and not combat_units:
+            gaps.append("尚无已识别己方战斗单位，不能直接组织威胁响应")
+        elif threat_present and not actionable_units:
             gaps.append("当前没有可行动己方战斗单位，需先恢复或补充兵力")
         return cls._dedupe(gaps)
 
     @staticmethod
     def _support_requests(
         *,
-        barbarian_present: bool,
+        threat_present: bool,
         camp_count: int,
         barbarian_unit_count: int,
+        nearby_hostile_count: int,
     ) -> tuple[SupportRequest, ...]:
-        if not barbarian_present:
+        if not threat_present:
             return ()
-        threat = f"已知 {camp_count} 个营地、{barbarian_unit_count} 个可见蛮族单位"
+        threat = (
+            f"城市三格内 {nearby_hostile_count} 个当前可见敌军、"
+            f"已知 {camp_count} 个营地、{barbarian_unit_count} 个可见蛮族单位"
+        )
         return (
             SupportRequest(
                 requester=Department.MILITARY,
                 target=Department.PRODUCTION,
-                objective="补充或升级应对蛮族威胁所需的战斗力量",
+                objective="补充或升级应对当前威胁所需的战斗力量",
                 reason=f"军事评估发现{threat}，需要评估生产补充方案",
             ),
             SupportRequest(
@@ -477,9 +635,9 @@ class MilitaryDepartment:
         )
 
     @staticmethod
-    def _workstream(*, barbarian_present: bool, degraded: bool) -> Workstream:
-        if barbarian_present:
-            objective = "清除已知蛮族威胁，同时保留本土防御"
+    def _workstream(*, threat_present: bool, degraded: bool) -> Workstream:
+        if threat_present:
+            objective = "处理已知城市周边威胁，同时保留本土防御"
             priority = 80
             candidate_actions = (
                 "评估全部己方战斗单位的伤势、行动点、位置和防御职责",
@@ -490,7 +648,7 @@ class MilitaryDepartment:
                 "已知营地与当前可见蛮族单位清零，并完成一次新情报确认",
                 "城市周边仍保留可验证的本土防御余量",
             )
-            workstream_id = "military:barbarian-response"
+            workstream_id = "military:threat-response"
         elif degraded:
             objective = "补齐军事态势证据并维持本土防御"
             priority = 60

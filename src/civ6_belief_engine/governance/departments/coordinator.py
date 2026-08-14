@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 
+from ...graph import GraphView
 from .base import (
     Department,
     DepartmentAssessment,
@@ -69,8 +70,14 @@ class NationalStrategyCoordinator:
         *,
         agenda: tuple[str, ...] = (),
         goals: tuple[StrategicGoal, ...] = (),
+        graph: GraphView | None = None,
     ) -> NationalStrategyBrief:
-        context = DepartmentContext(snapshot=snapshot, agenda=agenda, goals=goals)
+        context = DepartmentContext(
+            snapshot=snapshot,
+            agenda=agenda,
+            goals=goals,
+            graph=graph,
+        )
         assessments: list[DepartmentAssessment] = []
         for plugin in self.registry.plugins():
             try:
@@ -113,12 +120,21 @@ class NationalStrategyCoordinator:
             for department in Department
             if all(item.department != department for item in assessments)
         )
-        barbarian_count = 0
-        if snapshot.barbarians is not None:
-            barbarian_count = len(snapshot.barbarians.camps) + len(snapshot.barbarians.units)
-        if barbarian_count:
-            objective = "清除已知蛮族威胁，同时维持本土防御和国家发展"
-            trigger = f"发现 {len(snapshot.barbarians.camps)} 个营地和 {len(snapshot.barbarians.units)} 个可见蛮族单位"
+        military_threat_assessment = next(
+            (
+                assessment
+                for assessment in assessments
+                if assessment.department is Department.MILITARY
+                and any(
+                    workstream.workstream_id == "military:threat-response"
+                    for workstream in assessment.workstreams
+                )
+            ),
+            None,
+        )
+        if military_threat_assessment is not None:
+            objective = "处理已知军事威胁，同时维持本土防御和国家发展"
+            trigger = military_threat_assessment.summary
         elif agenda:
             objective = agenda[0]
             trigger = "显式国家议程"

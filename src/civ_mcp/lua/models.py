@@ -223,6 +223,8 @@ class UnitInfo:
     upgrade_cost: int = 0
     valid_improvements: list[str] = field(default_factory=list)
     religion: str = ""
+    fortify_turns: int = 0
+    can_fortify: bool = False
 
 
 @dataclass
@@ -632,7 +634,7 @@ class NearbyResource:
 
 @dataclass
 class ThreatInfo:
-    """A hostile military unit spotted near our empire."""
+    """A visible foreign military unit plus its explicit hostility context."""
 
     unit_type: str
     x: int
@@ -645,7 +647,11 @@ class ThreatInfo:
     owner_id: int = 63
     owner_name: str = "Barbarian"
     is_city_state: bool = False
-    unit_id: int = 0
+    unit_id: int = -1
+    nearest_city_id: int = -1
+    distance_to_city: int = 999
+    is_at_war: bool = False
+    city_distances: tuple[tuple[int, int], ...] = ()
 
 
 @dataclass

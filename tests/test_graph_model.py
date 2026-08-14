@@ -187,6 +187,64 @@ def test_reobserved_visible_unit_replaces_stale_location_edge():
     assert view.node("tile:8:8").observed is False
 
 
+def test_threats_near_city_returns_current_edges_and_hides_stale_units():
+    entities = [
+        _player(0),
+        _city(0, 7, 3, 4),
+        {
+            "entity_type": "civilization",
+            "entity_id": "player:3",
+            "attributes": {"player_id": 3},
+        },
+        {
+            "entity_type": "foreign_unit",
+            "entity_id": "foreign_unit:3:9",
+            "attributes": {"unit_id": 9, "x": 5, "y": 4},
+        },
+        {
+            "entity_type": "tile",
+            "entity_id": "tile:5:4",
+            "attributes": {"x": 5, "y": 4},
+        },
+    ]
+    relations = [
+        _owns(0, 7),
+        {
+            "relation_type": "owns",
+            "source_id": "player:3",
+            "target_id": "foreign_unit:3:9",
+        },
+        {
+            "relation_type": "located_at",
+            "source_id": "foreign_unit:3:9",
+            "target_id": "tile:5:4",
+        },
+        {
+            "relation_type": "threatens",
+            "source_id": "foreign_unit:3:9",
+            "target_id": "city:0:7",
+            "attributes": {"distance": 2, "visibility": "visible"},
+        },
+    ]
+    view = GraphView.empty().apply(
+        project_world_state(_world("snapshot:1", 1, entities, relations))
+    )
+
+    assert [edge.source_id for edge in view.threats_near_city("city:3:4")] == [
+        "unit:3:9"
+    ]
+    assert view.threats_near_city("city:3:4", max_distance=1) == ()
+
+    next_view = view.apply(
+        project_world_state(
+            _world("snapshot:2", 2, [_player(0), _city(0, 7, 3, 4)], [_owns(0, 7)]),
+            previous=view,
+        )
+    )
+    assert next_view.threats_near_city("city:3:4") == ()
+    assert len(next_view.threats_near_city("city:3:4", include_stale=True)) == 1
+
+
 def test_projection_rejects_dangling_relations():
     with pytest.raises(GraphProjectionError, match="dangling source relation"):
         project_world_state(
