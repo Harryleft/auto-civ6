@@ -24,6 +24,9 @@ local faith = pReligion:GetFaithBalance()
 local hasPantheon = currentPantheon >= 0
 local beliefName = "None"
 local beliefType = "None"
+local pantheonCost = -1
+local costOk, costVal = pcall(function() return pReligion:GetPantheonCost() end)
+if costOk and costVal then pantheonCost = costVal end
 if hasPantheon then
     local entry = GameInfo.Beliefs[currentPantheon]
     if entry then
@@ -31,7 +34,7 @@ if hasPantheon then
         beliefName = Locale.Lookup(entry.Name)
     end
 end
-print("STATUS|" .. (hasPantheon and "1" or "0") .. "|" .. beliefType .. "|" .. beliefName:gsub("|","/") .. "|" .. string.format("%.1f", faith))
+print("STATUS|" .. (hasPantheon and "1" or "0") .. "|" .. beliefType .. "|" .. beliefName:gsub("|","/") .. "|" .. string.format("%.1f", faith) .. "|" .. tostring(pantheonCost))
 if not hasPantheon then
     local taken = {}
     for i = 0, 62 do
@@ -60,10 +63,24 @@ local pReligion = Players[me]:GetReligion()
 if pReligion:GetPantheon() >= 0 then {_bail("ERR:ALREADY_HAS_PANTHEON|You already have a pantheon")} end
 local belief = GameInfo.Beliefs["{belief_type}"]
 if belief == nil then {_bail(f"ERR:BELIEF_NOT_FOUND|{belief_type}")} end
+-- Check faith sufficiency up front: founding a pantheon costs faith.
+local pantheonCost = 25
+local costOk, costVal = pcall(function() return pReligion:GetPantheonCost() end)
+if costOk and costVal then pantheonCost = costVal end
+local faithNow = pReligion:GetFaithBalance()
+if faithNow < pantheonCost then
+    {_bail_lua('"ERR:INSUFFICIENT_FAITH|Pantheon costs " .. pantheonCost .. " faith, you have " .. string.format("%.1f", faithNow) .. ". Earn more faith or wait."')}
+end
 local params = {{}}
 params[PlayerOperations.PARAM_BELIEF_TYPE] = belief.Hash
 UI.RequestPlayerOperation(me, PlayerOperations.FOUND_PANTHEON, params)
-print("OK:PANTHEON_FOUNDED|" .. Locale.Lookup(belief.Name))
+-- Read back to verify the pantheon actually changed (no false OK).
+local after = pReligion:GetPantheon()
+if after >= 0 then
+    print("OK:PANTHEON_FOUNDED|" .. Locale.Lookup(belief.Name) .. " (verified)")
+else
+    print("OK:PANTHEON_SUBMITTED|" .. Locale.Lookup(belief.Name) .. " requested but not yet reflected — re-check with get_pantheon_beliefs")
+end
 print("{SENTINEL}")
 """
 
@@ -258,6 +275,7 @@ def parse_pantheon_status_response(lines: list[str]) -> PantheonStatus:
     current_belief = None
     current_belief_name = None
     faith_balance = 0.0
+    pantheon_cost = 0.0
     beliefs: list[BeliefInfo] = []
 
     for line in lines:
@@ -268,6 +286,8 @@ def parse_pantheon_status_response(lines: list[str]) -> PantheonStatus:
                 current_belief = parts[2] if parts[2] != "None" else None
                 current_belief_name = parts[3] if parts[3] != "None" else None
                 faith_balance = float(parts[4])
+            if len(parts) >= 6 and parts[5] not in ("-1", ""):
+                pantheon_cost = float(parts[5])
         elif line.startswith("BELIEF|"):
             parts = line.split("|")
             if len(parts) >= 4:
@@ -284,6 +304,7 @@ def parse_pantheon_status_response(lines: list[str]) -> PantheonStatus:
         current_belief=current_belief,
         current_belief_name=current_belief_name,
         faith_balance=faith_balance,
+        pantheon_cost=pantheon_cost,
         available_beliefs=beliefs,
     )
 

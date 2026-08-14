@@ -18,6 +18,10 @@ works identically to the old monolithic ``lua_queries`` module.
 
 # Re-export helpers & sentinel
 from civ_mcp.lua._helpers import SENTINEL  # noqa: F401
+from civ_mcp.lua.barbarians import (  # noqa: F401
+    build_barbarian_overview_query,
+    parse_barbarian_overview_response,
+)
 from civ_mcp.lua.espionage import (  # noqa: F401
     build_get_spies_query,
     build_spy_escape_route,
@@ -145,6 +149,9 @@ from civ_mcp.lua.models import (  # noqa: F401
     AgendaInfo,
     AppointedGovernor,
     AgentExtras,
+    BarbarianCamp,
+    BarbarianOverview,
+    BarbarianUnit,
     BuilderInfo,
     BuilderTask,
     CityRow,
