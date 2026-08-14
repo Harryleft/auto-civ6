@@ -230,14 +230,14 @@ class GameState:
 
     async def spy_travel(self, unit_index: int, target_x: int, target_y: int) -> str:
         lua = lq.build_spy_travel(unit_index, target_x, target_y)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     async def spy_mission(
         self, unit_index: int, mission_type: str, target_x: int, target_y: int
     ) -> str:
         lua = lq.build_spy_mission(unit_index, mission_type, target_x, target_y)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     async def get_threat_scan(self) -> list[lq.ThreatInfo]:
@@ -318,7 +318,7 @@ class GameState:
         except Exception:
             pass
         lua = lq.build_move_unit(unit_index, target_x, target_y)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         result = _action_result(lines)
         # Post-move: read actual position from GameCore (move is async in InGame)
         if result.startswith("MOVING_TO") or result.startswith("CAPTURE_MOVE"):
@@ -415,7 +415,7 @@ class GameState:
         except Exception as e:
             log.debug("Combat estimate failed: %s", e)
         lua = lq.build_attack_unit(unit_index, target_x, target_y)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         result = _action_result(lines)
         # Combat followup: the game engine processes combat asynchronously
         # after RequestOperation.  Lua state within the same turn frame
@@ -483,7 +483,7 @@ class GameState:
 
     async def city_attack(self, city_id: int, target_x: int, target_y: int) -> str:
         lua = lq.build_city_attack(city_id, target_x, target_y)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         result = _action_result(lines)
         if result.startswith("CITY_RANGE_ATTACK"):
             pre_hp = _extract_pre_hp(result)
@@ -513,7 +513,7 @@ class GameState:
 
     async def resolve_city_capture(self, action: str) -> str:
         lua = lq.build_resolve_city_capture(action)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     async def found_city(self, unit_index: int) -> str:
@@ -524,7 +524,7 @@ class GameState:
             pass
 
         lua = lq.build_found_city(unit_index)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         result = _action_result(lines)
 
         if result.startswith("FOUNDED|"):
@@ -539,7 +539,7 @@ class GameState:
                 # Retry once — popup may have blocked the async operation
                 try:
                     await self.dismiss_popup()
-                    lines = await self.conn.execute_write(lua)
+                    lines = await self.conn.execute_mutation(lua)
                     retry_result = _action_result(lines)
                     if retry_result.startswith("FOUNDED|"):
                         verify_lines = await self.conn.execute_read(verify_lua)
@@ -590,7 +590,7 @@ class GameState:
 
     async def fortify_unit(self, unit_index: int) -> str:
         lua = lq.build_fortify_unit(unit_index)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         result = _action_result(lines)
         if result.startswith("SLEEPING"):
             return "Unit is sleeping (this unit type cannot fortify)"
@@ -598,7 +598,7 @@ class GameState:
 
     async def skip_unit(self, unit_index: int) -> str:
         lua = lq.build_skip_unit(unit_index)
-        lines = await self.conn.execute_read(lua)
+        lines = await self.conn.execute_mutation(lua, context="gamecore")
         return _action_result(lines)
 
     async def skip_remaining_units(self) -> str:
@@ -606,13 +606,13 @@ class GameState:
         fortify_result = ""
         try:
             lua_fort = lq.build_fortify_remaining_units()
-            fort_lines = await self.conn.execute_write(lua_fort)
+            fort_lines = await self.conn.execute_mutation(lua_fort)
             fortify_result = _action_result(fort_lines)
         except Exception as e:
             log.debug("Fortify remaining failed: %s", e)
         # Then skip anything still with moves (GameCore context)
         lua = lq.build_skip_remaining_units()
-        lines = await self.conn.execute_read(lua)
+        lines = await self.conn.execute_mutation(lua, context="gamecore")
         skip_result = _action_result(lines)
         if fortify_result and not fortify_result.startswith("Error"):
             return f"{fortify_result}\n{skip_result}"
@@ -620,57 +620,57 @@ class GameState:
 
     async def automate_explore(self, unit_index: int) -> str:
         lua = lq.build_automate_explore(unit_index)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     async def heal_unit(self, unit_index: int) -> str:
         lua = lq.build_heal_unit(unit_index)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     async def alert_unit(self, unit_index: int) -> str:
         lua = lq.build_alert_unit(unit_index)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     async def sleep_unit(self, unit_index: int) -> str:
         lua = lq.build_sleep_unit(unit_index)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     async def delete_unit(self, unit_index: int) -> str:
         lua = lq.build_delete_unit(unit_index)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     async def improve_tile(self, unit_index: int, improvement_name: str) -> str:
         lua = lq.build_improve_tile(unit_index, improvement_name)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     async def remove_feature(self, unit_index: int) -> str:
         lua = lq.build_remove_feature(unit_index)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     async def repair_improvement(self, unit_index: int) -> str:
         lua = lq.build_repair_improvement(unit_index)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     async def remove_improvement(self, unit_index: int) -> str:
         lua = lq.build_remove_improvement(unit_index)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     async def sacrifice_builder_charges(self, unit_index: int) -> str:
         lua = lq.build_sacrifice_builder_charges(unit_index)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     async def build_route(self, unit_index: int) -> str:
         lua = lq.build_build_route(unit_index)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     async def set_city_production(
@@ -684,7 +684,7 @@ class GameState:
         itype = item_type.upper()
 
         lua = lq.build_produce_item(city_id, item_type, item_name, target_x, target_y)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         result = _action_result(lines)
 
         # If CanStartOperation failed but CanProduce passed, verify via readback
@@ -775,7 +775,7 @@ class GameState:
         yield_type: str = "YIELD_GOLD",
     ) -> str:
         lua = lq.build_purchase_item(city_id, item_type, item_name, yield_type)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     async def list_city_production(self, city_id: int) -> list[lq.ProductionOption]:
@@ -786,7 +786,7 @@ class GameState:
 
     async def set_research(self, tech_name: str) -> str:
         lua = lq.build_set_research(tech_name)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         result = _action_result(lines)
         if "RESEARCHING" in result:
             # Verify InGame actually accepted it by comparing tech INDEX.
@@ -806,13 +806,15 @@ class GameState:
             if not matched:
                 # InGame silently failed — fall back to GameCore
                 gc_lua = lq.build_set_research_gamecore(tech_name)
-                gc_lines = await self.conn.execute_read(gc_lua)
+                gc_lines = await self.conn.execute_mutation(
+                    gc_lua, context="gamecore"
+                )
                 return _action_result(gc_lines)
         return result
 
     async def set_civic(self, civic_name: str) -> str:
         lua = lq.build_set_civic(civic_name)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         result = _action_result(lines)
         if "PROGRESSING" in result:
             # Verify InGame actually accepted it by comparing civic INDEX.
@@ -830,7 +832,9 @@ class GameState:
             if not matched:
                 # InGame silently failed — fall back to GameCore
                 lua_gc = lq.build_set_civic_gamecore(civic_name)
-                gc_lines = await self.conn.execute_read(lua_gc)
+                gc_lines = await self.conn.execute_mutation(
+                    lua_gc, context="gamecore"
+                )
                 return _action_result(gc_lines)
         return result
 
@@ -854,7 +858,7 @@ class GameState:
 
         # Phase 1: Send AddResponse only (no CloseSession — engine handles lifecycle)
         lua = lq.build_diplomacy_respond(other_player_id, response.upper())
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         result = _action_result(lines)
 
         # EXIT and error paths return immediately
@@ -891,7 +895,7 @@ class GameState:
                 other_player_id,
             )
             close_lua = lq.build_diplomacy_respond(other_player_id, "EXIT")
-            await self.conn.execute_write(close_lua)
+            await self.conn.execute_mutation(close_lua)
             return f"OK:RESPONDED|{response.upper()}|SESSION_CLOSED (auto-closed goodbye phase)"
 
         # Include the new dialogue text so the agent can see what the leader said
@@ -918,7 +922,7 @@ class GameState:
             "DECLARE_"
         )
         lua = lq.build_send_diplo_action(other_player_id, action.upper())
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         result = _action_result(lines)
 
         if is_war and not result.startswith("ERR:"):
@@ -941,14 +945,14 @@ class GameState:
         try:
             # Phase 1: close session → view goes to OVERVIEW_MODE
             lua1 = lq.build_war_close_session(other_player_id)
-            await self.conn.execute_write(lua1)
+            await self.conn.execute_mutation(lua1)
 
             # Let engine process OnDiplomacySessionClosed
             await asyncio.sleep(1)
 
             # Phase 2: force-dismiss the OVERVIEW_MODE view
             lua2 = lq.build_war_dismiss_view()
-            await self.conn.execute_write(lua2)
+            await self.conn.execute_mutation(lua2)
         except Exception as e:
             log.warning("War diplomacy cleanup failed: %s", e)
 
@@ -968,7 +972,7 @@ class GameState:
 
     async def respond_to_deal(self, other_player_id: int, accept: bool) -> str:
         lua = lq.build_respond_to_deal(other_player_id, accept)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     async def propose_trade(
@@ -978,7 +982,7 @@ class GameState:
         request_items: list[dict],
     ) -> str:
         lua = lq.build_propose_trade(other_player_id, offer_items, request_items)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         result = _action_result(lines)
         # Dismiss diplomacy UI left open by the trade session.
         # After CloseSession, the game transitions DiplomacyActionView to
@@ -986,7 +990,7 @@ class GameState:
         # state machine to settle, then dismiss it in a separate call.
         await asyncio.sleep(0.3)
         try:
-            await self.conn.execute_write(
+            await self.conn.execute_mutation(
                 'pcall(function() ContextPtr:LookUpControl("/InGame/DiplomacyActionView"):SetHide(true) end) '
                 "pcall(function() Events.HideLeaderScreen() end) "
                 "LuaEvents.DiplomacyActionView_ShowIngameUI() "
@@ -1009,7 +1013,7 @@ class GameState:
 
     async def propose_peace(self, other_player_id: int) -> str:
         lua = lq.build_propose_peace(other_player_id)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         result = _action_result(lines)
         if result.startswith("Error"):
             return result
@@ -1026,7 +1030,7 @@ class GameState:
 
     async def form_alliance(self, other_player_id: int, alliance_type: str) -> str:
         lua = lq.build_form_alliance(other_player_id, alliance_type.upper())
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     # ------------------------------------------------------------------
@@ -1040,7 +1044,7 @@ class GameState:
 
     async def set_policies(self, assignments: dict[int, str]) -> str:
         lua = lq.build_set_policies(assignments)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         result = _action_result(lines)
         if not result.startswith("Error"):
             # Post-verify: RequestPolicyChanges can silently no-op (e.g. during era transitions)
@@ -1073,17 +1077,17 @@ class GameState:
 
     async def appoint_governor(self, governor_type: str) -> str:
         lua = lq.build_appoint_governor(governor_type)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     async def assign_governor(self, governor_type: str, city_id: int) -> str:
         lua = lq.build_assign_governor(governor_type, city_id)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     async def promote_governor(self, governor_type: str, promotion_type: str) -> str:
         lua = lq.build_promote_governor(governor_type, promotion_type)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         result = _action_result(lines)
         if "PROMOTED" in result:
             # Verify promotion actually applied (RequestPlayerOperation is async)
@@ -1121,7 +1125,7 @@ class GameState:
     async def promote_unit(self, unit_id: int, promotion_type: str) -> str:
         unit_index = unit_id % 65536
         lua = lq.build_promote_unit(unit_index, promotion_type)
-        lines = await self.conn.execute_read(lua)  # GameCore context
+        lines = await self.conn.execute_mutation(lua, context="gamecore")
         result = _action_result(lines)
         # GameCore SetPromotion doesn't clear the InGame NEEDS_PROMOTION
         # notification, which blocks end_turn until dismissed.
@@ -1129,7 +1133,7 @@ class GameState:
         # whether any unit still genuinely needs a promotion before dismissing.
         if not result.startswith("Error"):
             try:
-                await self.conn.execute_write(
+                await self.conn.execute_mutation(
                     f"local me = Game.GetLocalPlayer(); "
                     f"local anyNeed = false; "
                     f"for i, u in Players[me]:GetUnits():Members() do "
@@ -1200,7 +1204,7 @@ class GameState:
 
     async def send_envoy(self, city_state_player_id: int) -> str:
         lua = lq.build_send_envoy(city_state_player_id)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         result = _action_result(lines)
         if result.startswith("OK:ENVOY_SENT"):
             # Verify token actually decremented (async race condition workaround)
@@ -1229,7 +1233,7 @@ class GameState:
 
     async def choose_pantheon(self, belief_type: str) -> str:
         lua = lq.build_choose_pantheon(belief_type)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     # ------------------------------------------------------------------
@@ -1245,7 +1249,7 @@ class GameState:
         self, religion_type: str, follower_belief: str, founder_belief: str
     ) -> str:
         lua = lq.build_found_religion(religion_type, follower_belief, founder_belief)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     # ------------------------------------------------------------------
@@ -1261,7 +1265,7 @@ class GameState:
     async def upgrade_unit(self, unit_id: int) -> str:
         unit_index = unit_id % 65536
         lua = lq.build_upgrade_unit(unit_index)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     # ------------------------------------------------------------------
@@ -1276,7 +1280,7 @@ class GameState:
 
     async def choose_dedication(self, dedication_index: int) -> str:
         lua = lq.build_choose_dedication(dedication_index)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     # ------------------------------------------------------------------
@@ -1363,7 +1367,7 @@ class GameState:
 
     async def purchase_tile(self, city_id: int, x: int, y: int) -> str:
         lua = lq.build_purchase_tile(city_id, x, y)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     # ------------------------------------------------------------------
@@ -1372,7 +1376,7 @@ class GameState:
 
     async def change_government(self, government_type: str) -> str:
         lua = lq.build_change_government(government_type)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     # ------------------------------------------------------------------
@@ -1391,14 +1395,14 @@ class GameState:
 
     async def recruit_great_person(self, individual_id: int) -> str:
         lua = lq.build_recruit_great_person(individual_id)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return lines[0] if lines else "No response"
 
     async def patronize_great_person(
         self, individual_id: int, yield_type: str = "YIELD_GOLD"
     ) -> str:
         lua = lq.build_patronize_great_person(individual_id, yield_type)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return lines[0] if lines else "No response"
 
     async def get_religion_status(self) -> lq.ReligionStatus:
@@ -1407,7 +1411,7 @@ class GameState:
 
     async def reject_great_person(self, individual_id: int) -> str:
         lua = lq.build_reject_great_person(individual_id)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return lines[0] if lines else "No response"
 
     # ------------------------------------------------------------------
@@ -1432,7 +1436,7 @@ class GameState:
         self, unit_index: int, target_x: int, target_y: int
     ) -> str:
         lua = lq.build_make_trade_route(unit_index, target_x, target_y)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     # ------------------------------------------------------------------
@@ -1441,12 +1445,12 @@ class GameState:
 
     async def activate_great_person(self, unit_index: int) -> str:
         lua = lq.build_activate_great_person(unit_index)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     async def spread_religion(self, unit_index: int) -> str:
         lua = lq.build_spread_religion(unit_index)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     # ------------------------------------------------------------------
@@ -1457,7 +1461,7 @@ class GameState:
         self, unit_index: int, target_x: int, target_y: int
     ) -> str:
         lua = lq.build_teleport_to_city(unit_index, target_x, target_y)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     # ------------------------------------------------------------------
@@ -1474,18 +1478,18 @@ class GameState:
         self, resolution_hash: int, option: int, target_index: int, num_votes: int
     ) -> str:
         lua = lq.build_congress_vote(resolution_hash, option, target_index, num_votes)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     async def submit_congress(self) -> str:
         lua = lq.build_congress_submit()
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     async def queue_wc_votes(self, votes: list[dict]) -> str:
         """Store agent voting preferences and register WC event handler."""
         lua = lq.build_register_wc_voter(votes=votes)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     # ------------------------------------------------------------------
@@ -1494,7 +1498,7 @@ class GameState:
 
     async def set_city_focus(self, city_id: int, focus: str) -> str:
         lua = lq.build_set_yield_focus(city_id, focus)
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
     # ------------------------------------------------------------------
@@ -1803,9 +1807,17 @@ class GameState:
 
     async def execute_lua(self, code: str, context: str = "gamecore") -> str:
         """Escape hatch: run arbitrary Lua code."""
-        from civ_mcp.game_lifecycle import execute_lua
-
-        return await execute_lua(self.conn, code, context)
+        # Arbitrary user code has no obligation to print the completion
+        # sentinel, so route leniently (require_sentinel=False) instead of
+        # going through game_lifecycle.execute_lua, whose default routing
+        # now enforces the sentinel on execute_read/execute_write.
+        if context == "ingame":
+            lines = await self.conn.execute_write(code, require_sentinel=False)
+        elif context.isdigit():
+            lines = await self.conn.execute_in_state(int(context), code)
+        else:
+            lines = await self.conn.execute_read(code, require_sentinel=False)
+        return "\n".join(lines) if lines else "(no output)"
 
 
 def _action_result(lines: list[str]) -> str:

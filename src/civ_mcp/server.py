@@ -1019,6 +1019,27 @@ async def _logged(
                 )
                 restart_result = await game_launcher.restart_and_load(save)
                 log.info("CONNECTION RECOVERY: %s", restart_result)
+                # The game state rolled back to an older save; events recorded
+                # after that point describe a future that no longer happened.
+                # Mark a new epoch so the append-only stream stays interpretable.
+                try:
+                    engine = _get_beliefs(ctx)
+                    if _get_belief_mode(ctx).records_events and engine.bound:
+                        engine.record_game_reload(
+                            reason="connection_recovery_restart_and_load",
+                            turn=(
+                                int(turn_num)
+                                if isinstance(turn_num, int)
+                                else None
+                            ),
+                            details={"save": str(save)},
+                        )
+                        await _flush_belief_events(ctx)
+                except Exception:
+                    log.error(
+                        "CONNECTION RECOVERY: failed to record game reload epoch",
+                        exc_info=True,
+                    )
                 gs = _get_game(ctx)
                 for rc_attempt in range(30):
                     try:
@@ -1032,6 +1053,36 @@ async def _logged(
             except Exception:
                 log.error("CONNECTION RECOVERY: restart failed", exc_info=True)
 
+        return result
+    except Exception as e:
+        # Any other failure (KeyError, RuntimeError, ...) previously escaped
+        # without an outcome, leaving the decision stuck in "executing" and
+        # deadlocking the governance turn gate. Record the failure so the
+        # decision becomes retryable. CancelledError derives from
+        # BaseException and keeps propagating; load-time/turn-gate recovery
+        # covers that path.
+        result = f"Error: {e}"
+        ms = int((time.monotonic() - start) * 1000)
+        log.info(
+            "[T%s] %s(%s) ERR %dms: %s",
+            turn,
+            tool_name,
+            _param_summary(params),
+            ms,
+            _result_summary(result),
+        )
+        await logger.log_error(tool_name, result)
+        await _record_belief_tool_result(
+            ctx,
+            tool_name,
+            params,
+            result,
+            turn,
+            ms,
+            success=False,
+            decision_id=decision_id,
+            decision_route=decision_route,
+        )
         return result
     # Success — reset connection error counter + refresh heartbeat
     _logged._conn_errors = 0
