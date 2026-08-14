@@ -17,10 +17,12 @@ from types import MappingProxyType
 from typing import Any, Mapping
 
 from civ_mcp.lua.models import (
+    BarbarianOverview,
     CityInfo,
     CivInfo,
     GameNotification,
     GameOverview,
+    GovernmentStatus,
     ResourceStockpile,
     TechCivicStatus,
     UnitInfo,
@@ -229,6 +231,8 @@ class TurnSnapshot:
     resources: tuple[ResourceStockpile, ...] = ()
     victory: VictoryProgress | None = None
     notifications: tuple[GameNotification, ...] = ()
+    policies: GovernmentStatus | None = None
+    barbarians: BarbarianOverview | None = None
     extra: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -249,6 +253,8 @@ class TurnSnapshot:
         self._typed_or_none(self.overview, GameOverview, "overview")
         self._typed_or_none(self.tech_civic, TechCivicStatus, "tech_civic")
         self._typed_or_none(self.victory, VictoryProgress, "victory")
+        self._typed_or_none(self.policies, GovernmentStatus, "policies")
+        self._typed_or_none(self.barbarians, BarbarianOverview, "barbarians")
         for name, item_type in (
             ("cities", CityInfo),
             ("units", UnitInfo),
