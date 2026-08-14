@@ -150,6 +150,7 @@ class GameState:
             tech_civic = await self.get_tech_civics()
             policies = await self.get_policies()
             barbarians = await self.get_barbarian_overview()
+            threats = await self.get_threat_scan()
             notifications = await self.get_notifications()
             capabilities = capabilities_for_ruleset(overview.ruleset)
             stockpiles: list[lq.ResourceStockpile] = []
@@ -174,6 +175,7 @@ class GameState:
                     resources=stockpiles,
                     policies=policies,
                     barbarians=barbarians,
+                    threats=threats,
                     notifications=notifications,
                     extra={"collector": "GameState.get_governance_snapshot"},
                 )

@@ -2416,6 +2416,12 @@ class BeliefEngine:
         else:
             route = "fast"
             budget = "none"
+        if evidence_requirements and route == "fast":
+            # An explicit evidence contract is mandatory, not advisory.  A low
+            # risk score may avoid slow deliberation but cannot bypass the
+            # proposal's required read-before-write query.
+            route = "verify_then_fast"
+            budget = "low"
         assessment = {
             "statement": statement,
             "route": route,

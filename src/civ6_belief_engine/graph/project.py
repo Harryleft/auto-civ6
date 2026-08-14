@@ -45,6 +45,10 @@ def _entity_identity(
     if raw_type == "barbarian_unit":
         suffix = raw_id.rsplit(":", 1)[-1]
         return "unit", f"unit:barbarian:{suffix}", Coverage.CURRENTLY_VISIBLE
+    if raw_type in {"foreign_unit", "hostile_unit"}:
+        prefix = "foreign_unit:" if raw_type == "foreign_unit" else "hostile_unit:"
+        suffix = raw_id.removeprefix(prefix)
+        return "unit", f"unit:{suffix}", Coverage.CURRENTLY_VISIBLE
     if raw_type in {"tile", "barbarian_camp"}:
         return raw_type, raw_id, Coverage.CURRENTLY_VISIBLE
     if raw_type == "player":

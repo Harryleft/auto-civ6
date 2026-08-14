@@ -176,13 +176,23 @@ Threat typed data
 → read-back Outcome
 ```
 
-当前 `get_threat_scan()` 尚未进入 governance snapshot，这是该切片的第一个数据前置条件。
+当前已完成离线闭环：
+
+- 威胁扫描显式区分失败、确认空结果和非空结果；和平单位不生成 `THREATENS`。
+- Lua 返回每座己方城市的六边格距离；`unit_id=0` 仍是有效身份。
+- `TurnSnapshot`、影子图和 `threats_near_city()` 已贯通，失去视野后默认不再作为当前威胁。
+- Military 只生成一个可验证的原地 `fortify` Proposal；Council、ActionIntent 和现有单写入器继续复用。
+- 显式 `EvidenceRequirement` 必定经过 `verify_then_fast`；fortify 无可观察状态变化时返回 `OUTCOME_UNKNOWN`。
+
+真实游戏已验证同回合快照、威胁空结果、影子图零差异和 fortify 状态读取。当前局面没有城市周边敌军，因此尚未完成真实的 Proposal → 动作 → Outcome 验收。
 
 ### 阶段三：迁移一个消费者
 
 - GraphView 先提供活动 Goal、priority 和 statement 查询。
 - 只迁移 Military Department。
 - 等价测试通过后，删除该消费者的旧读取路径。
+
+当前 Military 的“城市三格内当前威胁”已读取 GraphView；蛮族营地、己方单位与其他军事事实仍走兼容 DTO，旧路径尚不能删除。
 
 ### 阶段四：逐步扩展
 
@@ -214,7 +224,14 @@ ETC 的判断标准只有一句：一个需求变化只修改拥有该知识的�
 4. 变异结果未知时仍会自动重试。
 5. 一个动作无法 read-back，或无法解释其证据链。
 
-城市影子 ID 暂以城市中心坐标跨越 owner 变化；当前 DTO 无法区分“原城被夷平”与“同一地块后来重建”。阶段二真实切片前必须补充城市 lineage/销毁信号或用真实游戏证明可替代身份。
+城市影子 ID 暂以城市中心坐标跨越 owner 变化；当前 DTO 无法区分“原城被夷平”与“同一地块后来重建”。完成阶段二真实动作验收前，必须补充城市 lineage/销毁信号或用真实游戏证明可替代身份。
+
+仍未关闭的边界：
+
+- 当前真实存档没有可见城市威胁，不能替代带敌军场景的动作验收。
+- Department 仍依赖 `civ_mcp.lua.models`，尚未达到最终解耦标准。
+- Proposal、Decision、Action 和 Outcome 仍由现有 JSONL 治理状态保存，尚未物化为图关系。
+- Claude Code 多次有界审查均未返回结论；不能把外部审查启动记录当成通过证据。
 
 ## 8. 验收标准
 

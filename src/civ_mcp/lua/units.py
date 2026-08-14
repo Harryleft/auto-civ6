@@ -110,6 +110,12 @@ for i, u in Players[id]:GetUnits():Members() do
         -- All promotion handling is routed through the end_turn blocker (which
         -- uses CanPromote in GameCore — the only correct check).
         local promo = "0"
+        local canFortify = "0"
+        pcall(function()
+            if u:GetFortifyTurns() > 0 or UnitManager.CanStartOperation(u, UnitOperationTypes.FORTIFY, nil, true) then
+                canFortify = "1"
+            end
+        end)
         -- Upgrade info (InGame only: CanStartCommand)
         local canUp, upName, upCost = "0", "", "0"
         local ok1, _ = pcall(function()
@@ -179,7 +185,7 @@ for i, u in Players[id]:GetUnits():Members() do
             end
             if #meList > 0 then validImps = table.concat(meList, ";") end
         end
-        print(uid .. "|" .. (uid % 65536) .. "|" .. nm .. "|" .. ut .. "|" .. x .. "," .. y .. "|" .. u:GetMovesRemaining() .. "/" .. u:GetMaxMoves() .. "|" .. (u:GetMaxDamage() - u:GetDamage()) .. "/" .. u:GetMaxDamage() .. "|" .. cs .. "|" .. rs .. "|" .. charges .. "|" .. targets .. "|" .. promo .. "|" .. canUp .. "|" .. upName .. "|" .. upCost .. "|" .. validImps .. "|" .. relName)
+        print(uid .. "|" .. (uid % 65536) .. "|" .. nm .. "|" .. ut .. "|" .. x .. "," .. y .. "|" .. u:GetMovesRemaining() .. "/" .. u:GetMaxMoves() .. "|" .. (u:GetMaxDamage() - u:GetDamage()) .. "/" .. u:GetMaxDamage() .. "|" .. cs .. "|" .. rs .. "|" .. charges .. "|" .. targets .. "|" .. promo .. "|" .. canUp .. "|" .. upName .. "|" .. upCost .. "|" .. validImps .. "|" .. relName .. "|" .. u:GetFortifyTurns() .. "|" .. canFortify)
     end
 end
 print("{SENTINEL}")
@@ -748,9 +754,12 @@ local me = Game.GetLocalPlayer()
 local pDiplo = Players[me]:GetDiplomacy()
 local pVis = PlayersVisibility[me]
 local myPos = {}
+local myCities = {}
 for _, c in Players[me]:GetCities():Members() do
     table.insert(myPos, {c:GetX(), c:GetY()})
+    table.insert(myCities, {id=c:GetID(), x=c:GetX(), y=c:GetY()})
 end
+table.sort(myCities, function(a, b) return a.id < b.id end)
 for _, u in Players[me]:GetUnits():Members() do
     local ux, uy = u:GetX(), u:GetY()
     if ux ~= -9999 then table.insert(myPos, {ux, uy}) end
@@ -782,11 +791,23 @@ for pid = 0, 63 do
                             local d = Map.GetPlotDistance(pos[1], pos[2], bx, by)
                             if d < minDist then minDist = d end
                         end
+                        local nearestCityId = -1
+                        local cityDist = 999
+                        local cityDistances = {}
+                        for _, city in ipairs(myCities) do
+                            local d = Map.GetPlotDistance(city.x, city.y, bx, by)
+                            table.insert(cityDistances, tostring(city.id) .. "=" .. tostring(d))
+                            if d < cityDist or (d == cityDist and city.id < nearestCityId) then
+                                cityDist = d
+                                nearestCityId = city.id
+                            end
+                        end
                         local name = entry and entry.UnitType or "UNKNOWN"
                         local hp = bu:GetMaxDamage() - bu:GetDamage()
                         local brs = entry and entry.RangedCombat or 0
-                        local isCS = Players[pid]:IsMajor() and "0" or "1"
-                        print("THREAT|" .. pid .. "|" .. ownerName:gsub("|","/") .. "|" .. name .. "|" .. bx .. "," .. by .. "|" .. hp .. "/" .. bu:GetMaxDamage() .. "|CS:" .. bcs .. "|RS:" .. brs .. "|dist:" .. minDist .. "|cs:" .. isCS .. "|uid:" .. bu:GetID())
+                        local isCS = (not isMajor and not isBarbarian) and "1" or "0"
+                        local atWar = (isBarbarian or pDiplo:IsAtWarWith(pid)) and "1" or "0"
+                        print("THREAT|" .. pid .. "|" .. ownerName:gsub("|","/") .. "|" .. name .. "|" .. bx .. "," .. by .. "|" .. hp .. "/" .. bu:GetMaxDamage() .. "|CS:" .. bcs .. "|RS:" .. brs .. "|dist:" .. minDist .. "|cs:" .. isCS .. "|uid:" .. bu:GetID() .. "|city:" .. nearestCityId .. "|citydist:" .. cityDist .. "|war:" .. atWar .. "|cities:" .. table.concat(cityDistances, ","))
                         found = true
                     end
                 end
@@ -808,8 +829,15 @@ if unit:GetFortifyTurns() > 0 then
     print("{SENTINEL}"); return
 end
 if UnitManager.CanStartOperation(unit, UnitOperationTypes.FORTIFY, nil, true) then
+    local movesBefore = unit:GetMovesRemaining()
     UnitManager.RequestOperation(unit, UnitOperationTypes.FORTIFY)
-    print("OK:FORTIFIED")
+    local fortifyAfter = unit:GetFortifyTurns()
+    local movesAfter = unit:GetMovesRemaining()
+    if fortifyAfter > 0 or movesAfter < movesBefore then
+        print("OK:FORTIFIED|readback_fortify_turns:" .. fortifyAfter .. "|readback_moves:" .. movesAfter)
+    else
+        print("ERR:OUTCOME_UNKNOWN|Fortify request returned without an observable state change")
+    end
 else
     local sleepOp = GameInfo.UnitOperations["UNITOPERATION_SLEEP"]
     if sleepOp and UnitManager.CanStartOperation(unit, sleepOp.Hash, nil, true) then
@@ -1373,6 +1401,8 @@ def parse_units_response(lines: list[str]) -> list[UnitInfo]:
             [v for v in valid_imps_raw.split(";") if v] if valid_imps_raw else []
         )
         religion = parts[16] if len(parts) > 16 else ""
+        fortify_turns = int(parts[17]) if len(parts) > 17 and parts[17].isdigit() else 0
+        can_fortify = parts[18] == "1" if len(parts) > 18 else False
         units.append(
             UnitInfo(
                 unit_id=int(parts[0]),
@@ -1395,6 +1425,8 @@ def parse_units_response(lines: list[str]) -> list[UnitInfo]:
                 upgrade_cost=upgrade_cost,
                 valid_improvements=valid_imps,
                 religion=religion,
+                fortify_turns=fortify_turns,
+                can_fortify=can_fortify,
             )
         )
     return units
@@ -1402,7 +1434,13 @@ def parse_units_response(lines: list[str]) -> list[UnitInfo]:
 
 def parse_threat_scan_response(lines: list[str]) -> list[ThreatInfo]:
     threats: list[ThreatInfo] = []
+    saw_empty = False
     for line in lines:
+        if line == "NO_THREATS":
+            saw_empty = True
+            continue
+        if line.startswith(("ERR:", "Error:")):
+            raise ValueError(f"threat scan failed: {line}")
         if not line.startswith("THREAT|"):
             continue
         parts = line.split("|")
@@ -1417,9 +1455,30 @@ def parse_threat_scan_response(lines: list[str]) -> list[ThreatInfo]:
                 if parts[8].startswith("dist:")
                 else 0
             )
-            uid = 0
+            uid = -1
             if len(parts) > 10 and parts[10].startswith("uid:"):
                 uid = int(parts[10][4:])
+            nearest_city_id = -1
+            if len(parts) > 11 and parts[11].startswith("city:"):
+                nearest_city_id = int(parts[11][5:])
+            distance_to_city = 999
+            if len(parts) > 12 and parts[12].startswith("citydist:"):
+                distance_to_city = int(parts[12][9:])
+            is_at_war = int(parts[1]) == 63
+            if len(parts) > 13 and parts[13].startswith("war:"):
+                is_at_war = parts[13][4:] == "1"
+            city_distances: tuple[tuple[int, int], ...] = ()
+            if len(parts) > 14 and parts[14].startswith("cities:"):
+                rows = parts[14][7:]
+                if rows:
+                    city_distances = tuple(
+                        (int(city_id), int(city_distance))
+                        for city_id, city_distance in (
+                            item.split("=", 1) for item in rows.split(",")
+                        )
+                    )
+            elif nearest_city_id >= 0:
+                city_distances = ((nearest_city_id, distance_to_city),)
             threats.append(
                 ThreatInfo(
                     unit_type=parts[3],
@@ -1436,6 +1495,10 @@ def parse_threat_scan_response(lines: list[str]) -> list[ThreatInfo]:
                     and parts[9].startswith("cs:")
                     and parts[9][3:] == "1",
                     unit_id=uid,
+                    nearest_city_id=nearest_city_id,
+                    distance_to_city=distance_to_city,
+                    is_at_war=is_at_war,
+                    city_distances=city_distances,
                 )
             )
         elif len(parts) >= 7:
@@ -1459,8 +1522,13 @@ def parse_threat_scan_response(lines: list[str]) -> list[ThreatInfo]:
                     combat_strength=cs,
                     ranged_strength=rs,
                     distance=dist,
+                    is_at_war=True,
                 )
             )
+    if threats and saw_empty:
+        raise ValueError("threat scan returned both THREAT and NO_THREATS")
+    if not threats and not saw_empty:
+        raise ValueError("threat scan returned neither THREAT nor NO_THREATS")
     return threats
 
 

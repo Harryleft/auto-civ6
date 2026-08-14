@@ -34,9 +34,10 @@ from civ_mcp.lua.models import (
     PolicySlot,
     ResourceStockpile,
     TechCivicStatus,
+    ThreatInfo,
     UnitInfo,
 )
-from civ6_belief_engine.graph import GraphView
+from civ6_belief_engine.graph import GraphView, project_world_state
 
 
 def _overview(
@@ -240,6 +241,63 @@ def test_build_snapshot_rejects_cross_turn_and_inconsistent_typed_results():
             tech_civic=mismatched_progress,
         )
 
+    with pytest.raises(SnapshotConsistencyError, match="unknown city IDs: 99"):
+        build_turn_snapshot(
+            turn_before=42,
+            turn_after=42,
+            captured_at=1_723_500_000.0,
+            overview=overview,
+            cities=cities,
+            units=units,
+            threats=[
+                ThreatInfo(
+                    unit_type="UNIT_ARCHER",
+                    x=9,
+                    y=7,
+                    hp=80,
+                    max_hp=100,
+                    combat_strength=15,
+                    ranged_strength=25,
+                    distance=2,
+                    owner_id=3,
+                    unit_id=70,
+                    nearest_city_id=99,
+                    distance_to_city=2,
+                )
+            ],
+        )
+
+    with pytest.raises(
+        SnapshotConsistencyError,
+        match="nearest-city fields disagree",
+    ):
+        build_turn_snapshot(
+            turn_before=42,
+            turn_after=42,
+            captured_at=1_723_500_000.0,
+            overview=overview,
+            cities=cities,
+            units=units,
+            threats=[
+                ThreatInfo(
+                    unit_type="UNIT_ARCHER",
+                    x=9,
+                    y=7,
+                    hp=80,
+                    max_hp=100,
+                    combat_strength=15,
+                    ranged_strength=25,
+                    distance=2,
+                    owner_id=3,
+                    unit_id=70,
+                    nearest_city_id=1,
+                    distance_to_city=5,
+                    is_at_war=True,
+                    city_distances=((1, 5), (2, 2)),
+                )
+            ],
+        )
+
 
 def test_standard_rules_reject_expansion_only_typed_data():
     with pytest.raises(SnapshotConsistencyError, match="stockpiles are unavailable"):
@@ -307,6 +365,41 @@ def test_world_projection_and_belief_payload_are_structured_typed_facts(tmp_path
             camps=[BarbarianCamp(8, 9, distance_to_city=4, distance_to_military=2)],
             units=[BarbarianUnit(63, "UNIT_WARRIOR", 8, 8, 100, 100, 20, 0, 3, 1)],
         ),
+        threats=[
+            ThreatInfo(
+                unit_type="UNIT_WARRIOR",
+                x=8,
+                y=8,
+                hp=100,
+                max_hp=100,
+                combat_strength=20,
+                ranged_strength=0,
+                distance=1,
+                owner_id=63,
+                unit_id=63,
+                nearest_city_id=1,
+                distance_to_city=3,
+                is_at_war=True,
+                city_distances=((1, 3), (2, 5)),
+            ),
+            ThreatInfo(
+                unit_type="UNIT_ARCHER",
+                x=9,
+                y=7,
+                hp=80,
+                max_hp=100,
+                combat_strength=15,
+                ranged_strength=25,
+                distance=2,
+                owner_id=3,
+                owner_name="Persia",
+                unit_id=70,
+                nearest_city_id=2,
+                distance_to_city=2,
+                is_at_war=True,
+                city_distances=((1, 6), (2, 2)),
+            ),
+        ],
     )
 
     world = snapshot_world_state(snapshot)
@@ -322,16 +415,34 @@ def test_world_projection_and_belief_payload_are_structured_typed_facts(tmp_path
         "policy_slot:0:1",
         "barbarian_camp:8:9",
         "barbarian_unit:63",
+        "foreign_unit:3:70",
     } <= entity_ids
     assert {
         relation["relation_type"] for relation in world["relations"]
-    } >= {"owns", "located_at", "researching", "progressing", "diplomacy", "stockpiles"}
+    } >= {
+        "owns",
+        "located_at",
+        "researching",
+        "progressing",
+        "diplomacy",
+        "stockpiles",
+        "threatens",
+    }
     assert world["metrics"]["player.gold"] == 245.5
     assert world["metrics"]["diplomacy.player_3.military_strength"] == 240
     assert world["metrics"]["resource.iron.amount"] == 20
     assert world["metrics"]["government.empty_policy_slots"] == 1
     assert world["metrics"]["barbarian.known_camps"] == 1
     assert world["metrics"]["barbarian.visible_units"] == 1
+    assert world["metrics"]["threat.visible_units"] == 2
+    assert world["metrics"]["threat.within_three_of_city"] == 2
+    graph = GraphView.empty().apply(project_world_state(world))
+    assert [
+        edge.source_id for edge in graph.threats_near_city("city:3:4")
+    ] == ["unit:barbarian:63"]
+    assert [
+        edge.source_id for edge in graph.threats_near_city("city:6:7")
+    ] == ["unit:3:70"]
 
     observation = snapshot_to_belief_observation(snapshot)
     assert observation["source"] == "game_state:typed_snapshot"
