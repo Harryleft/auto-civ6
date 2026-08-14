@@ -274,3 +274,121 @@ DSH transcript 与 Telemetry 继续保存原始工具结果；图只保存规范
 - **P0-4**：事件携带 `epoch` 字段；`record_game_reload` 落 `game.reloaded` 标记、作废旧 epoch 未决授权（`invalidated_by_game_reload`）并归档关联预算锁；`ingest_typed_snapshot` 自动检测回合回退并开新 epoch；server.py 连接自动恢复路径在 `restart_and_load` 后显式记录标记。
 
 失败语义与 agent 处置已写入 [docs/agent-recovery.md](../docs/agent-recovery.md)「传输与审计底座的失败语义」。**未完成项**：完成标准 #6 要求的真实游戏验收（含一次崩溃/断线恢复演练）仍待执行——离线全绿不能替代该项，图阶段开工前必须补上。另注：`CommandTimeoutError` 对存量查询通道默认开启严格 sentinel，首次真实游戏会话应留意是否有旧查询路径误报超时。
+
+## E. 以 Easy to Change（ETC）约束图工程
+
+### E.1 ETC 的第一性原理
+
+ETC 不是“文件更小”或“抽象更多”，而是：**一个需求变化只需要修改拥有该知识的边界，不迫使无关层一起变化。**
+
+本项目的变更成本可以近似理解为：
+
+> 变更成本 ≈ 被穿透的语义边界数 + 兼容迁移数 + 必须重复验证的层数。
+
+图模型本身不会自动降低这个成本。只有稳定的所有权、单向依赖和可替换投影才能做到。因此图工程应优化“改变关系语义、决策规则和查询时要改多少处”，而不是优化“节点和边看起来是否完整”。
+
+### E.2 四条稳定边界
+
+| 变化轴 | 唯一所有者 | 不应被迫修改 | 最小验证 |
+|---|---|---|---|
+| Civ6 API、Lua 状态或协议变化 | `civ_mcp` 的 Lua builder/parser、`GameConnection`、`GameState` | 图 schema、Department、Council | adapter contract + parser 测试 |
+| 节点、边、稳定 ID 与时序语义变化 | 领域包内的 graph model/projector | MCP 工具签名、FireTuner、DSH | projector golden + replay 测试 |
+| 目标、提案、约束和决策政策变化 | Department / Council / Decision state machine | 事件存储格式、Lua 适配层 | GraphView 查询 + policy 测试 |
+| JSONL、内存索引或未来存储实现变化 | event journal / materializer | 游戏适配、决策规则、MCP 返回 | 同一事件流的重放等价测试 |
+
+稳定边界只有四个：
+
+1. `TypedSnapshot`：游戏适配层交给领域层的事实输入。
+2. `GraphEvent`：领域变化写入历史的版本化契约。
+3. `GraphView`：Department、Council 和查询消费者读取的最小接口。
+4. `ActionIntent`：决策层交给单一游戏写入器的授权契约。
+
+除这四处外，不预先制造通用 Repository、Hook、Workflow、Provider 或插件框架。第二个真实实现出现前，不为假想复用抽象。
+
+第 5 节中的 `GamePort` 目前只是 `GameState` 所承担的职责名，不要求立刻新增接口；只要 `TypedSnapshot` 输入契约稳定，单一 Civ6 实现继续使用具体类更简单。
+
+### E.3 最小目标职责，而不是一次性拆类
+
+当前 `BeliefEngine` 同时承担事件日志、物化投影、信念规则和动作授权状态机。第 5 节所述 `GraphEventStore + GraphMaterializer` 只覆盖前两项，不能让授权状态机失去明确所有者。
+
+| 职责 | 近期做法 | 满足什么条件后再抽离 |
+|---|---|---|
+| JSONL 追加、校验、epoch/replay | 继续由现有 `BeliefEngine` 承担，先锁定事件契约 | replay golden 稳定，且能从零重建同一视图 |
+| TypedSnapshot → 图增量 | 从 `ingest_typed_snapshot` 提取纯函数 projector | 同输入产生确定性 `GraphDelta`，无 I/O、无全局状态 |
+| 当前节点、边与邻接查询 | 先提供窄 `GraphView`，只实现已列明的消费者查询 | 至少两个消费者需要相同查询语义时再增加通用索引 |
+| Belief/Council/ActionIntent 状态机 | 保持独立领域行为，不塞进通用图 CRUD | 现有状态迁移、门禁和失败恢复已有 characterization tests |
+| MCP 文本与结果过滤 | 继续留在 adapter/presentation 边界 | 永远不进入图的事实与决策语义 |
+
+建议的最小目录只是职责提示，不是阶段一必须创建的脚手架：
+
+```text
+src/civ6_belief_engine/graph/
+  model.py       # Node / Edge / GraphEvent / GraphDelta
+  project.py     # TypedSnapshot -> GraphDelta（纯函数）
+  replay.py      # events -> current GraphView，含 epoch 规则
+  view.py        # 由真实消费者驱动的窄查询
+```
+
+如果其中某个文件在迁移阶段只有转发代码，就不要创建。
+
+图写入必须遵循 `domain decision → GraphEvent → reducer → GraphView`；任何业务路径都不能直接修改 `GraphView`。projector/reducer 不调用 FireTuner，读取 `GraphView` 也不反向触发游戏查询。
+
+首批只实现三个已知消费者查询：城市附近威胁、Goal 对应的活动 Proposal/Blocker/预算锁、Decision 到 Action/Outcome/Verification 的追溯。没有消费者的通用遍历 API 不进入第一版。
+
+### E.4 渐进替换顺序
+
+采用“表征现状 → 影子投影 → 单消费者切换 → 删除旧路径”，不做全量重写：
+
+1. **表征现状**：冻结 MCP schema、ActionIntent 状态迁移、epoch/replay 和三个真实图查询的 golden tests。
+2. **领域 DTO 归位**：让 `TypedSnapshot` 归领域包所有；`civ_mcp` 只负责把 Lua DTO 转成领域 DTO。
+3. **影子 projector**：同一 snapshot 同时进入旧投影与新纯函数，仅比较结果，不双写新的事实存储。
+4. **逐个迁移消费者**：先迁移一个 Department，再迁移 Council；每次用等价测试证明行为未漂移。
+5. **切换单一写路径**：新投影成为唯一写入者后立即删除旧投影；禁止永久双写。
+6. **最后瘦身入口**：只有职责已经有新所有者后，才从 `server.py`、`end_turn.py` 和 `BeliefEngine` 移除对应代码。
+
+阶段零不是“做完即可遗忘”的模块，而是后续每阶段的入口门禁：只要 executing、mutation outcome、JSONL 完整性或 epoch 投影仍有未闭环项，就不扩大图写入面。
+
+### E.5 用真实变化检验 ETC
+
+| 典型需求 | ETC 合格时的修改范围 |
+|---|---|
+| 新增 `THREATENS` 关系 | 一个 schema/构造位置、projector 和测试；不改 MCP/存储 |
+| 城市易主 | 更新稳定 ID/`OWNS` 边有效期规则；不重命名城市节点、不改 Department |
+| 新增军事部查询“敌军距城市两格内” | `GraphView` 增加一个领域查询及测试；不暴露底层邻接结构 |
+| 新增治理规则 | 一个 policy/constraint 模块及状态机测试；不改 Lua、JSONL writer |
+| JSONL 改 SQLite 或外部图存储 | 替换 journal/materializer 实现；同一 replay contract 下消费者零修改 |
+| 新增 MCP 展示字段 | adapter/renderer 修改；不向图事件复制原始返回全文 |
+
+如果一次正常需求同时要求修改 `server.py`、Lua parser、事件格式、全部 Department 和 DSH prompt，说明知识仍然散落，不能用“这是跨层功能”掩盖设计失败。
+
+### E.6 ETC 反模式
+
+- **通用图 CRUD**：让业务层到处拼字符串类型和属性名，会把 schema 知识扩散到所有消费者。
+- **永久双轨**：`TurnSnapshot` 与 `GraphView` 长期同时承载决策事实，会形成第二事实源。
+- **永久双写**：旧实体和新图事件同时写入且无删除日期，会使任何修改都要维护两套语义。
+- **框架先行**：在查询规模和瓶颈未测量前引入 Neo4j、LangGraph 或通用 DAG runtime。
+- **把状态机降格为边**：`authorized → executing → outcome_unknown → verified` 是行为与不变量，不是几条关系名就能替代。
+- **为了复用而复用**：Civ6 只有一个适配实现时，不设计跨游戏抽象；先保持依赖方向正确。
+
+### E.7 ETC 完成标准
+
+图工程每个阶段除功能正确外，还必须满足：
+
+1. 新关系或节点类型只修改一个领域定义点和对应 projector，不修改 MCP 兼容面。
+2. Department/Council 只依赖 `GraphView` 和领域 DTO，不 import `civ_mcp`。
+3. 事件 schema 版本化；旧 JSONL 通过 upcaster/兼容 reader 读取，不原地重写历史。
+4. 任一 snapshot 可重复投影，任一事件流可重复 replay，结果哈希一致。
+5. 切换消费者后删除旧路径；代码库中不存在无截止日期的双写/双读。
+6. 常见需求的差异应局限在一个领域模块、至多一个 adapter 和测试；超出时必须说明被穿透的边界。
+7. 外部图基础设施只有在实测出现内存、replay 时延或跨运行查询瓶颈后才进入决策，且必须能由现有 contract tests 替换验证。
+
+### E.8 仍需主动寻找的未知未知
+
+- **身份演化**：城市易主、单位升级/合并、玩家复活时，稳定 ID 是否仍代表同一对象。
+- **分支时间**：手动读档、自动恢复和重复回合号下，哪些知识跨 epoch 保留，哪些必须失效。
+- **观察缺失**：战争迷雾导致的“未观察”如何区别于“删除”，过期策略由谁拥有。
+- **热点与膨胀**：高连接实体、每回合全量 update、links 双向复制是否让 replay 成本重新线性增长。
+- **隐藏时序**：World Congress、外交弹窗和 end_turn 的不可并行步骤如何进入执行契约，而不是被普通 DAG 重排。
+- **逃生口**：`run_lua` 等高级通道如何遵守 mutation、授权和审计不变量，避免绕开图工程的安全边界。
+
+这些问题不要求现在全部抽象解决；要求的是每项都有明确所有者、验证信号和触发升级设计的阈值。
