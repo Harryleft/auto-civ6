@@ -85,6 +85,7 @@ def test_action_intent_binds_exact_arguments_and_relevant_evidence():
         max_age_turns=0,
         required_facts=("attacker_cs", "defender_cs", "est_damage_to_defender"),
         required_metrics=("combat.attacker_cs", "combat.defender_cs"),
+        expected_facts={"attacker_unit_id": 7},
     )
     intent = ActionIntent(
         intent_id="attack:7:9",
@@ -107,6 +108,7 @@ def test_action_intent_binds_exact_arguments_and_relevant_evidence():
         "combat.attacker_cs",
         "combat.defender_cs",
     )
+    assert evidence.expected_facts == {"attacker_unit_id": 7}
     nested = {"path": {"waypoints": [1, 2]}}
     frozen = ActionIntent(
         intent_id="move:7",

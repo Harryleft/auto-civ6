@@ -354,6 +354,7 @@ class EvidenceRequirement:
     required_facts: tuple[str, ...] = ()
     required_metrics: tuple[str, ...] = ()
     description: str = ""
+    expected_facts: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -381,6 +382,15 @@ class EvidenceRequirement:
             self,
             "required_metrics",
             _strings(self.required_metrics, "required_metrics"),
+        )
+        if not isinstance(self.expected_facts, Mapping) or not all(
+            isinstance(key, str) and key for key in self.expected_facts
+        ):
+            raise TypeError("expected_facts must be a mapping with non-empty string keys")
+        object.__setattr__(
+            self,
+            "expected_facts",
+            _freeze_value(self.expected_facts),
         )
         if not isinstance(self.description, str):
             raise TypeError("description must be a string")
