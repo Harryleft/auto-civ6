@@ -17,6 +17,7 @@ from civ_mcp.belief_engine import (
     action_args_hash,
     evaluate_condition,
     normalize_tool_result,
+    tool_result_reference,
 )
 
 
@@ -226,11 +227,38 @@ Era: Classical | Score: 18 (Dark: 12, Golden: 24)""",
         )
 
         assert observation is not None and observation["source"] == "mcp:get_game_overview"
+        assert "raw" not in observation
+        assert observation["result_ref"] == tool_result_reference(
+            "Turn 5 | Rome (Trajan) | Score: 123\nGold: 50 (+5/turn)"
+        )
         assert engine.current_metrics()["gold"] == 50
+        assert "result" not in action
+        assert "result" not in action["verification"]
+        assert action["result_ref"] == tool_result_reference("Research set")
         assert action["verification"]["verified"] is True
         assert engine.record_tool_result(
             tool="get_units", params={}, result="", turn=5, category="query", success=False, duration_ms=1
         ) is None
+
+    def test_large_raw_query_result_is_not_duplicated_into_belief_log(self, engine):
+        raw = "Turn 5 | Rome (Trajan) | Score: 123\n" + ("detail " * 100_000)
+
+        observation = engine.record_tool_result(
+            tool="get_game_overview",
+            params={},
+            result=raw,
+            turn=5,
+            category="query",
+            success=True,
+            duration_ms=4,
+        )
+
+        assert observation is not None
+        assert observation["result_ref"]["utf8_bytes"] == len(raw.encode("utf-8"))
+        assert observation["result_ref"]["sha256"] == tool_result_reference(raw)["sha256"]
+        assert "raw" not in observation
+        assert engine.path is not None
+        assert engine.path.stat().st_size < 10_000
 
     def test_current_metrics_use_only_latest_snapshot_from_each_tool(self, engine):
         engine.create(
@@ -569,6 +597,13 @@ class TestHarnessActionLifecycle:
             },
             turn=1,
         )
+        # Existing logs may still carry the pre-DRY raw result fields.
+        engine.update(
+            "decision",
+            decision["id"],
+            {"last_failure": "legacy raw failure"},
+            turn=1,
+        )
 
         authorized = engine.authorize_action(
             tool="set_research",
@@ -580,7 +615,7 @@ class TestHarnessActionLifecycle:
         assert authorized["decision_id"] == decision["id"]
         assert engine.get("decision", decision["id"])["decision_state"] == "executing"
 
-        engine.record_tool_result(
+        action = engine.record_tool_result(
             tool="set_research",
             params={"tech_or_civic": "TECH_WRITING"},
             result="Research set to TECH_WRITING",
@@ -594,6 +629,15 @@ class TestHarnessActionLifecycle:
         completed = engine.get("decision", decision["id"])
         assert completed["status"] == "resolved"
         assert completed["decision_state"] == "succeeded"
+        assert "execution_result" not in completed
+        assert "last_failure" not in completed
+        assert completed["execution_result_ref"] == tool_result_reference(
+            "Research set to TECH_WRITING"
+        )
+        assert action is not None and "result" not in action
+        outcome = engine.list("outcome", status="active")[0]
+        assert outcome["action_id"] == action["id"]
+        assert "result" not in outcome
 
         second = engine.authorize_action(
             tool="set_research",
@@ -622,6 +666,8 @@ class TestHarnessActionLifecycle:
         assert len(observations) == 1
         assert observations[0]["source"] == "action:set_research"
         assert observations[0]["facts"]["action_success"] is True
+        assert observations[0]["facts"]["action_id"] == action["id"]
+        assert "raw" not in observations[0]
 
     def test_verify_then_fast_requires_fresh_game_observation(self, engine):
         decision = engine.route_decision(

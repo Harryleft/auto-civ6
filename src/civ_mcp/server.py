@@ -22,7 +22,12 @@ import uvicorn
 from mcp.server.fastmcp import Context, FastMCP
 
 from civ_mcp import game_launcher, heartbeat
-from civ_mcp.belief_engine import BeliefEngine, BeliefEngineError, action_args_hash
+from civ_mcp.belief_engine import (
+    BeliefEngine,
+    BeliefEngineError,
+    action_args_hash,
+    tool_result_reference,
+)
 from civ_mcp.belief_mode import BeliefMode
 from civ_mcp.game_over_watchdog import GameOverWatchdog
 from civ_mcp import narrate as nr
@@ -1010,7 +1015,11 @@ async def _logged(
     # Success — reset connection error counter + refresh heartbeat
     _logged._conn_errors = 0
     heartbeat.write("playing", turn=turn or 0)
-    if not result.startswith(("Error", "ERR")):
+    # Keep the domain result separate from model-facing belief annotations.
+    # Telemetry owns the rendered transcript; the Belief Engine observes only
+    # the underlying game/tool result and never feeds its own context back in.
+    domain_result = result
+    if not domain_result.startswith(("Error", "ERR")):
         result = await _append_belief_context(ctx, tool_name, result)
         if decision_id:
             result += (
@@ -1018,7 +1027,7 @@ async def _logged(
                 f"route={decision_route}]"
             )
     ms = int((time.monotonic() - start) * 1000)
-    reported_error = result.startswith(("Error", "ERR"))
+    reported_error = domain_result.startswith(("Error", "ERR"))
     log.info(
         "[T%s] %s(%s) %s %dms: %s",
         turn,
@@ -1036,7 +1045,7 @@ async def _logged(
         ctx,
         tool_name,
         params,
-        result,
+        domain_result,
         turn,
         ms,
         success=not reported_error,
@@ -4585,7 +4594,7 @@ async def record_action_verification(
                 action["id"],
                 {
                     "expected": expected,
-                    "actual": actual,
+                    "actual_ref": tool_result_reference(actual),
                     "belief_changes": _belief_json_object(
                         belief_changes, "belief_changes"
                     ),
@@ -4603,7 +4612,7 @@ async def record_action_verification(
                 "decision_id": decision_id,
                 "tool": tool,
                 "expected": expected,
-                "actual": actual,
+                "actual_ref": tool_result_reference(actual),
                 "success": success,
                 "belief_changes": _belief_json_object(
                     belief_changes, "belief_changes"

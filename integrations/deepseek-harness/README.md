@@ -12,7 +12,7 @@ This integration mounts `civ6-mcp` into DeepSeek Harness through DSH's built-in 
 | Strategic memory and governance | Belief Engine and governance modules in `civ6-mcp` | Keep the existing same-turn snapshot, proposal, council, and ActionIntent gates authoritative. |
 | End-turn safety | `end_turn.py` in `civ6-mcp` | DSH supplies the call; Civ 6 validates blockers and advances the turn. |
 | Game connection and lifecycle | `GameConnection` and game lifecycle modules in `civ6-mcp` | Keep exactly one FireTuner client. DSH must not launch a second MCP host. |
-| Game telemetry and saves | `TelemetryEmitter`, diary, autosave, and watchdog in `civ6-mcp` | DSH records the model/tool transcript; Civ 6 records domain facts and recovery points. |
+| Transcript, telemetry, and saves | DSH session log plus `TelemetryEmitter`, diary, autosave, and watchdog in `civ6-mcp` | DSH/telemetry own raw tool results; the Belief Engine stores normalized facts, fingerprints, and entity links instead of another raw copy. |
 
 The resulting call path is:
 
@@ -82,7 +82,7 @@ For a one-shot headless task:
 - MCP tool calls allow 15 minutes because Deity AI turns can exceed DSH's one-minute default.
 - DSH child reconnection is disabled. If `civ-mcp` exits, stop and restart the DSH host after confirming no stale FireTuner client remains.
 - The launcher refuses to start when TCP 8000 already has a listener or TCP 4318 already has an established client. It never kills those processes automatically.
-- A DSH Web session log and the Civ 6 Belief Engine are complementary, not interchangeable. The session log reconstructs model-visible history; the Belief Engine remains the authoritative strategic and governance state.
+- A DSH Web session log and the Civ 6 Belief Engine are complementary, not interchangeable. The session log reconstructs model-visible history; the Belief Engine keeps only the normalized strategic/governance projection and references back to tool results.
 
 ## Verification boundary
 
