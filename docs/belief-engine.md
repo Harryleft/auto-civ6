@@ -4,6 +4,9 @@ The Belief Engine is the persistent world model between game observation and
 action.  It records what the agent observed separately from what the agent
 believes, predicts, plans, and eventually verifies.
 
+The implementation lives in `src/civ6_belief_engine/`; `civ_mcp` exposes the
+MCP adapter and keeps legacy imports as compatibility shims.
+
 ## Runtime modes
 
 Set `CIV_MCP_BELIEF_MODE` before starting the MCP server:

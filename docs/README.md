@@ -3,10 +3,20 @@
 ## For Users
 
 - [Getting Started](../README.md#quick-start) — Setup and first game
-- [Tool Reference](https://civbench.vercel.app/docs/tools) — All 76 MCP tools (web)
+- [Tool Reference](https://civbench.vercel.app/docs/tools) — MCP tool reference (web)
+
+## Agent Operations
+
+- [AGENTS.md](../AGENTS.md) — Short rules, hard boundaries, and document routing
+- [Civ 6 + DSH Startup](agent-startup.md) — FireTuner, port 4318, DSH launch, and live acceptance gates
+- [Turn Loop](agent-turn-loop.md) — Query order, governance gates, diary fields, and periodic checks
+- [Strategy](agent-strategy.md) — Deity survival, expansion, diplomacy, war, and victory paths
+- [Tool and Action Reference](agent-tools.md) — Offline helpers, actions, blockers, production, and World Congress
+- [Game Recovery](agent-recovery.md) — Autosaves, hung AI turns, and recovery commands
 
 ## For Developers
 
+- [Product architecture](product-architecture.md) — `civ6-belief-engine` product boundary and unchanged MCP compatibility surface
 - [Architecture](architecture-diagrams.md) — Full stack from tool call to game engine, wire protocol, Lua contexts
 - [Observability](observability.md) — Diary, tool logging, and spatial attention tracking
 - [Save File Format](save-file-format.md) — Reverse-engineered .Civ6Save structure

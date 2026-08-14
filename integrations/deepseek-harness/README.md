@@ -1,6 +1,6 @@
 # DeepSeek Harness integration
 
-This integration mounts `civ6-mcp` into DeepSeek Harness through DSH's built-in MCP client. It deliberately keeps the two runtimes separate: DeepSeek Harness owns the model session and agent loop, while `civ6-mcp` remains the sole owner of game state, rules, action authorization, FireTuner, saves, and game telemetry.
+This integration mounts the `civ6-belief-engine` product into DeepSeek Harness through DSH's built-in MCP client. Its unchanged `civ_mcp` adapter remains the sole owner of game state, rules, action authorization, FireTuner, saves, and game telemetry; the repository and MCP compatibility names still use `civ6-mcp`/`civ-mcp`.
 
 ## Architecture
 
@@ -9,7 +9,7 @@ This integration mounts `civ6-mcp` into DeepSeek Harness through DSH's built-in 
 | Model provider, streaming, agent loop, compaction | DeepSeek Harness | Use the shipped DeepSeek adapter and durable DSH session log. |
 | Tool discovery and execution history | DeepSeek Harness | `@deepseek-ai/dsh-mcp-client` exposes tools as `mcp__civ6__<tool>`. |
 | Typed game state | `GameState` in `civ6-mcp` | Do not mirror it into a second DSH state store. Query it through MCP. |
-| Strategic memory and governance | Belief Engine and governance modules in `civ6-mcp` | `get_game_overview` reports the active policy; when enabled, its snapshot, proposal, council, and ActionIntent gates are authoritative. |
+| Strategic memory and governance | `civ6_belief_engine` domain package | `get_game_overview` reports the active policy; when enabled, its snapshot, proposal, council, and ActionIntent gates are authoritative. |
 | End-turn safety | `end_turn.py` in `civ6-mcp` | DSH supplies the call; Civ 6 validates blockers and advances the turn. |
 | Game connection and lifecycle | `GameConnection` and game lifecycle modules in `civ6-mcp` | Keep exactly one FireTuner client. DSH must not launch a second MCP host. |
 | Transcript, telemetry, and saves | DSH session log plus `TelemetryEmitter`, diary, autosave, and watchdog in `civ6-mcp` | DSH/telemetry own raw tool results; the Belief Engine stores normalized facts, fingerprints, and entity links instead of another raw copy. |

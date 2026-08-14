@@ -1,6 +1,11 @@
-# CivBench System Architecture
+# civ6-belief-engine / CivBench System Architecture
 
-This document explains how an LLM agent plays Civilization VI through the civ6-mcp server. It covers the full stack from tool call to game engine and back, the two Lua execution contexts inside the game, and the hardest engineering problems: turn advancement, popup management, and asynchronous operations.
+This document explains how an LLM agent plays Civilization VI through the
+`civ6-belief-engine` product's `civ_mcp` adapter. It covers the full stack from
+tool call to game engine and back, the two Lua execution contexts inside the
+game, and the hardest engineering problems: turn advancement, popup
+management, and asynchronous operations. The current product/package boundary
+is documented in [Product architecture](product-architecture.md).
 
 Assumes familiarity with Civ 6 gameplay but not with the game's internals.
 
@@ -18,10 +23,10 @@ graph TB
     end
 
     subgraph MCP["MCP Server ‹server.py›"]
-        D["70 MCP Tools"]
-        D --> D1["26 Query Tools<br/><i>get_units, get_cities,<br/>get_map_area, get_diplomacy…</i>"]
-        D --> D2["38 Action Tools<br/><i>execute_unit_action,<br/>set_city_production,<br/>diplomacy_respond…</i>"]
-        D --> D3["6 Lifecycle Tools<br/><i>end_turn, quicksave,<br/>kill_game, launch_game…</i>"]
+        D["MCP tools"]
+        D --> D1["Query tools<br/><i>get_units, get_cities,<br/>get_map_area, get_diplomacy…</i>"]
+        D --> D2["Action tools<br/><i>execute_unit_action,<br/>set_city_production,<br/>diplomacy_respond…</i>"]
+        D --> D3["Lifecycle tools<br/><i>end_turn, quicksave,<br/>kill_game, launch_game…</i>"]
         E["_logged wrapper<br/><i>timing, error handling, logging</i>"]
     end
 
@@ -33,7 +38,7 @@ graph TB
         F --> F4["Popup Management<br/><i>3-phase dismiss algorithm</i>"]
     end
 
-    subgraph Lua["Lua Query Layer ‹lua_queries.py›"]
+    subgraph Lua["Lua Query Layer ‹civ_mcp/lua/›"]
         G["Build Functions<br/><i>build_* → Lua source code</i>"]
         H["Parse Functions<br/><i>parse_* → dataclasses</i>"]
         I["Narrate Functions<br/><i>narrate_* → LLM-readable text</i>"]
@@ -107,15 +112,15 @@ The remaining gap is structural, not informational: these tools exist but the ag
 
 ---
 
-## The 70 tools
+## Tool surface
 
 Tools break down into three categories:
 
-**Query tools** (26) are read-only. They ask the game "what's the state?" and return structured text. Examples: `get_units` returns every unit's position, HP, and available actions; `get_map_area` returns a radius of hex tiles with terrain, resources, and any visible units; `get_diplomacy` returns relationship states, modifiers, and available diplomatic actions for every known civilization.
+**Query tools** are read-only. They ask the game "what's the state?" and return structured text. Examples: `get_units` returns every unit's position, HP, and available actions; `get_map_area` returns a radius of hex tiles with terrain, resources, and any visible units; `get_diplomacy` returns relationship states, modifiers, and available diplomatic actions for every known civilization.
 
-**Action tools** (38) change game state. They correspond to things a human player would click: moving a unit, setting production, declaring friendship, proposing a trade deal. Every action tool validates preconditions before executing (can the unit reach that tile? does the city have that building available? is the diplomatic action valid?) and returns either `OK:` with a confirmation or `ERR:` with a reason.
+**Action tools** change game state. They correspond to things a human player would click: moving a unit, setting production, declaring friendship, proposing a trade deal. Every action tool validates preconditions before executing (can the unit reach that tile? does the city have that building available? is the diplomatic action valid?) and returns either `OK:` with a confirmation or `ERR:` with a reason.
 
-**Lifecycle tools** (6) manage the game session itself: advancing the turn, saving/loading, and crash recovery (kill the process, relaunch via Steam, reload a save using OCR-based menu navigation).
+**Lifecycle tools** manage the game session itself: advancing the turn, saving/loading, and crash recovery (kill the process, relaunch via Steam, reload a save using OCR-based menu navigation).
 
 ---
 
@@ -128,7 +133,7 @@ sequenceDiagram
     participant Agent as LLM Agent
     participant MCP as server.py
     participant GS as game_state.py
-    participant LQ as lua_queries.py
+    participant LQ as civ_mcp/lua/
     participant Conn as connection.py
     participant FT as FireTuner :4318
     participant Civ as Civ VI Engine
@@ -177,11 +182,11 @@ sequenceDiagram
 
 Every query follows this same four-step pattern:
 
-1. **Build**: `lua_queries.py` generates a Lua source code string. The Lua uses `print()` to output pipe-delimited fields (e.g. `print("WARRIOR|31|15|100|2")`) and terminates with `print("---END---")` as a sentinel.
+1. **Build**: modules under `src/civ_mcp/lua/` generate Lua source code strings. The Lua uses `print()` to output pipe-delimited fields (e.g. `print("WARRIOR|31|15|100|2")`) and terminates with `print("---END---")` as a sentinel.
 
 2. **Execute**: `connection.py` wraps the Lua in a binary frame — 4-byte little-endian length, 4-byte tag (3 = command), and the null-terminated payload `CMD:153:lua_code` — then sends it over TCP to port 4318. The game executes the Lua and streams back output lines prefixed with `O\0InGame:`. The connection collects lines until it sees the `---END---` sentinel.
 
-3. **Parse**: `lua_queries.py` splits each pipe-delimited line into fields and returns structured Python dataclasses (`UnitInfo`, `CityInfo`, `TileInfo`, etc.).
+3. **Parse**: parser modules under `src/civ_mcp/lua/` split each pipe-delimited line into fields and return structured Python dataclasses (`UnitInfo`, `CityInfo`, `TileInfo`, etc.).
 
 4. **Narrate**: `game_state.py` converts the dataclasses into human-readable text optimised for an LLM to consume. This is where raw data like `UNIT_WARRIOR|31|15|100|2|FORTIFIED` becomes `Warrior #65536 at (31,15) HP:100/100 moves:2 [FORTIFIED]`.
 
@@ -293,7 +298,7 @@ print("OK:MOVED|32|15")
 print("---END---")
 ```
 
-Every action follows this pattern: look up the entity, validate preconditions, execute, report result. The `_bail()` helper in `lua_queries.py` generates the `print("ERR:...")/print("---END---")/return` error pattern so that failures are always cleanly reported back to the agent.
+Every action follows this pattern: look up the entity, validate preconditions, execute, report result. The `_bail()` helper in `src/civ_mcp/lua/_helpers.py` generates the `print("ERR:...")/print("---END---")/return` error pattern so that failures are always cleanly reported back to the agent.
 
 **Asynchronous operations**: `RequestOperation` doesn't complete immediately. Moving a unit queues pathfinding — the unit's position updates on the next frame. Founding a city creates the city on the next frame. The response from a move tells you the *target*, not the unit's actual position. For critical operations like founding cities, the code does a second round-trip to GameCore to verify the action took effect.
 
