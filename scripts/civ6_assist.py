@@ -155,6 +155,14 @@ def print_belief_turn_brief(raw: str | None) -> None:
     print("  约束: 高影响/不可逆行动前调用 route_belief_decision。")
 
 
+def _brief_raw() -> str | None:
+    """Get governance brief with fallback to turn brief on older servers."""
+    raw = call("get_governance_brief")
+    if raw and "Unknown tool" not in raw and "TOOL_ERR" not in raw and "BRIDGE_ERR" not in raw:
+        return raw
+    return call("get_turn_brief", '{"limit": 12}')
+
+
 def print_governance_brief(raw: str | None) -> bool:
     """Print the typed governance agenda and its nested belief brief."""
 
@@ -170,6 +178,11 @@ def print_governance_brief(raw: str | None) -> bool:
     except json.JSONDecodeError:
         print("  !! 治理简报格式异常，请直接调用 get_governance_brief 重试。")
         return False
+    # Older server without get_governance_brief returns the turn brief format.
+    if governance.get("decision_gate") is not None:
+        print("  (服务器未提供治理快照，使用信念回合简报)")
+        print_belief_turn_brief(raw)
+        return True
 
     snapshot = governance.get("snapshot") or {}
     capabilities = governance.get("capabilities") or {}
@@ -215,7 +228,7 @@ def cmd_precheck(governance_raw: str | None = None) -> None:
     # This is the mandatory control-plane entry. It captures typed GameState,
     # updates the governance graph, and embeds the reviewed belief brief.
     if governance_raw is None:
-        governance_raw = call("get_governance_brief")
+        governance_raw = _brief_raw()
     if not print_governance_brief(governance_raw):
         issues.append("[治理] 当前回合类型化治理快照缺失 -> get_governance_brief")
 
@@ -444,7 +457,7 @@ if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "precheck"
     governance_raw = None
     if cmd == "precheck":
-        governance_raw = call("get_governance_brief")
+        governance_raw = _brief_raw()
         if not governance_raw or "Cannot connect" in str(governance_raw):
             print("游戏未连接(FireTuner 4318)。先启动游戏再运行。")
             sys.exit(1)
