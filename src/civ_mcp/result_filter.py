@@ -1,0 +1,334 @@
+"""Deterministic local filtering for oversized MCP tool results.
+
+The filter runs only on the model-facing copy of a result. Callers must persist
+the original result to local telemetry before invoking :func:`filter_tool_result`.
+Small results are returned byte-for-byte unchanged.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+from copy import deepcopy
+from dataclasses import dataclass
+from typing import Any, Mapping
+
+
+FILTER_ENV = "CIV_MCP_RESULT_FILTER"
+MAX_CHARS_ENV = "CIV_MCP_RESULT_MAX_CHARS"
+HISTORY_ITEMS_ENV = "CIV_MCP_RESULT_HISTORY_ITEMS"
+
+_DEFAULT_MAX_CHARS = 20_000
+_DEFAULT_HISTORY_ITEMS = 3
+_MIN_MAX_CHARS = 2_000
+_MAX_MAX_CHARS = 200_000
+_FILTERED_TOOLS = frozenset(
+    {"get_governance_brief", "get_belief_state", "get_belief_trace"}
+)
+_METRIC_PREFIXES = (
+    "player.",
+    "barbarian.",
+    "combat.",
+    "diplomacy.",
+    "government.",
+    "research.",
+    "civic.",
+    "resource.",
+)
+_METRIC_NAMES = frozenset(
+    {
+        "turn",
+        "score",
+        "gold",
+        "gold_per_turn",
+        "science",
+        "culture",
+        "faith",
+        "favor",
+        "cities",
+        "population",
+        "units",
+        "exploration_pct",
+        "era_score",
+        "game_speed",
+        "speed_cost_multiplier",
+        "observed_city_count",
+        "observed_unit_count",
+    }
+)
+
+
+@dataclass(frozen=True, slots=True)
+class ResultFilterConfig:
+    """Resolved local filtering policy."""
+
+    enabled: bool = True
+    max_chars: int = _DEFAULT_MAX_CHARS
+    history_items: int = _DEFAULT_HISTORY_ITEMS
+
+    @classmethod
+    def from_env(cls, environ: Mapping[str, str] | None = None) -> "ResultFilterConfig":
+        source = os.environ if environ is None else environ
+        enabled = str(source.get(FILTER_ENV, "1")).strip().lower() not in {
+            "0",
+            "false",
+            "off",
+            "no",
+        }
+        max_chars = _bounded_int(
+            source.get(MAX_CHARS_ENV),
+            default=_DEFAULT_MAX_CHARS,
+            minimum=_MIN_MAX_CHARS,
+            maximum=_MAX_MAX_CHARS,
+        )
+        history_items = _bounded_int(
+            source.get(HISTORY_ITEMS_ENV),
+            default=_DEFAULT_HISTORY_ITEMS,
+            minimum=1,
+            maximum=50,
+        )
+        return cls(
+            enabled=enabled,
+            max_chars=max_chars,
+            history_items=history_items,
+        )
+
+
+def _bounded_int(
+    raw: object,
+    *,
+    default: int,
+    minimum: int,
+    maximum: int,
+) -> int:
+    try:
+        value = int(str(raw))
+    except (TypeError, ValueError):
+        return default
+    return max(minimum, min(value, maximum))
+
+
+def filter_tool_result(
+    tool_name: str,
+    result: str,
+    *,
+    params: Mapping[str, Any] | None = None,
+    config: ResultFilterConfig | None = None,
+) -> str:
+    """Return a smaller model-facing result without changing local evidence.
+
+    Only known control-plane JSON is compacted. Unknown tools, targeted belief
+    queries, malformed JSON, and already-filtered results pass through unchanged
+    so action/control markers can never be damaged by a generic truncation.
+    """
+
+    policy = config or ResultFilterConfig.from_env()
+    if (
+        not policy.enabled
+        or len(result) <= policy.max_chars
+        or tool_name not in _FILTERED_TOOLS
+    ):
+        return result
+
+    digest = hashlib.sha256(result.encode("utf-8")).hexdigest()
+    request = params or {}
+    if tool_name == "get_governance_brief":
+        return _compact_governance_brief(
+            result,
+            digest=digest,
+            history_items=policy.history_items,
+        ) or result
+    if tool_name == "get_belief_state":
+        if str(request.get("entity_type") or "").strip():
+            return result
+        return _compact_belief_state(
+            result,
+            digest=digest,
+            history_items=policy.history_items,
+        ) or result
+    if str(request.get("entity_type") or "").strip() or str(
+        request.get("entity_id") or ""
+    ).strip():
+        return result
+    return _compact_belief_trace(
+        result,
+        digest=digest,
+        history_items=policy.history_items,
+    ) or result
+
+
+def _compact_governance_brief(
+    result: str,
+    *,
+    digest: str,
+    history_items: int,
+) -> str | None:
+    try:
+        parsed = json.loads(result)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    if _already_filtered(parsed):
+        return result
+
+    compacted = deepcopy(parsed)
+    omitted: dict[str, int] = {}
+    belief_brief = compacted.get("belief_brief")
+    if isinstance(belief_brief, dict):
+        current_metrics = belief_brief.get("current_metrics")
+        if isinstance(current_metrics, dict):
+            kept = _decision_metrics(current_metrics)
+            omitted["belief_brief.current_metrics"] = len(current_metrics) - len(kept)
+            belief_brief["current_metrics"] = kept
+        review = belief_brief.get("review")
+        if isinstance(review, dict) and isinstance(review.get("metrics"), dict):
+            review_metrics = review["metrics"]
+            kept = _decision_metrics(review_metrics)
+            omitted["belief_brief.review.metrics"] = len(review_metrics) - len(kept)
+            review["metrics"] = kept
+
+    governance = compacted.get("governance")
+    if isinstance(governance, dict):
+        for key in ("council_decisions", "released_budget_locks"):
+            values = governance.get(key)
+            if isinstance(values, list) and len(values) > history_items:
+                omitted[f"governance.{key}"] = len(values) - history_items
+                # Preserve the upstream relevance order (BeliefEngine.list is
+                # newest-first for council decisions).
+                governance[key] = values[:history_items]
+
+    _add_filter_metadata(
+        compacted,
+        result=result,
+        digest=digest,
+        policy="governance_semantic_v1",
+        omitted=omitted,
+    )
+    return _dump_compact(compacted)
+
+
+def _compact_belief_state(
+    result: str,
+    *,
+    digest: str,
+    history_items: int,
+) -> str | None:
+    parsed = _json_object(result)
+    if parsed is None or _already_filtered(parsed):
+        return result if parsed is not None else None
+
+    compacted = deepcopy(parsed)
+    omitted: dict[str, int] = {}
+    metrics = compacted.get("current_metrics")
+    if isinstance(metrics, dict):
+        kept = _decision_metrics(metrics)
+        omitted["current_metrics"] = len(metrics) - len(kept)
+        compacted["current_metrics"] = kept
+    entities = compacted.get("entities")
+    if isinstance(entities, dict):
+        for entity_type, values in entities.items():
+            if isinstance(values, list) and len(values) > history_items:
+                omitted[f"entities.{entity_type}"] = len(values) - history_items
+                entities[entity_type] = values[:history_items]
+    _add_filter_metadata(
+        compacted,
+        result=result,
+        digest=digest,
+        policy="belief_state_semantic_v1",
+        omitted=omitted,
+    )
+    return _dump_compact(compacted)
+
+
+def _compact_belief_trace(
+    result: str,
+    *,
+    digest: str,
+    history_items: int,
+) -> str | None:
+    parsed = _json_object(result)
+    if parsed is None or _already_filtered(parsed):
+        return result if parsed is not None else None
+
+    compacted = deepcopy(parsed)
+    events = compacted.get("events")
+    if not isinstance(events, list):
+        return None
+    kept_events = events[-history_items:]
+    compacted["events"] = [_event_header(event) for event in kept_events]
+    omitted = {"events": max(0, len(events) - len(kept_events))}
+    _add_filter_metadata(
+        compacted,
+        result=result,
+        digest=digest,
+        policy="belief_trace_headers_v1",
+        omitted=omitted,
+    )
+    return _dump_compact(compacted)
+
+
+def _event_header(event: Any) -> Any:
+    if not isinstance(event, dict):
+        return deepcopy(event)
+    keys = (
+        "v",
+        "event_id",
+        "sequence",
+        "timestamp",
+        "game_id",
+        "run_id",
+        "turn",
+        "epoch",
+        "event_type",
+        "entity_type",
+        "entity_id",
+        "changes",
+    )
+    return {key: deepcopy(event[key]) for key in keys if key in event}
+
+
+def _json_object(result: str) -> dict[str, Any] | None:
+    try:
+        parsed = json.loads(result)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _dump_compact(payload: Mapping[str, Any]) -> str:
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+
+
+def _already_filtered(payload: Mapping[str, Any]) -> bool:
+    metadata = payload.get("_local_filter")
+    return isinstance(metadata, dict) and metadata.get("applied") is True
+
+
+def _add_filter_metadata(
+    payload: dict[str, Any],
+    *,
+    result: str,
+    digest: str,
+    policy: str,
+    omitted: Mapping[str, int],
+) -> None:
+    payload["_local_filter"] = {
+        "applied": True,
+        "policy": policy,
+        "original_chars": len(result),
+        "original_lines": len(result.splitlines()),
+        "original_sha256": digest,
+        "omitted_counts": {key: value for key, value in omitted.items() if value > 0},
+        "raw_owner": "local_telemetry",
+    }
+
+
+def _decision_metrics(metrics: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        str(key): deepcopy(value)
+        for key, value in metrics.items()
+        if str(key) in _METRIC_NAMES
+        or any(str(key).startswith(prefix) for prefix in _METRIC_PREFIXES)
+    }

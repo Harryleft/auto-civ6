@@ -41,6 +41,7 @@ from civ_mcp.diary import (
 from civ_mcp.game_state import GameState
 from civ_mcp.logger import GameLogger
 from civ_mcp.map_capture import MapCapture
+from civ_mcp.result_filter import filter_tool_result
 from civ_mcp.spatial import SpatialTracker
 from civ_mcp.spectator import CameraController, PopupWatcher
 from civ_mcp.telemetry import (
@@ -536,6 +537,19 @@ def _result_summary(result: str) -> str:
     """First meaningful line of a result, truncated."""
     line = result.split("\n", 1)[0].strip()
     return line[:120] + "..." if len(line) > 120 else line
+
+
+def _filter_downstream_result(
+    tool_name: str,
+    params: Mapping[str, Any],
+    result: str,
+) -> str:
+    """Filter only the model-facing copy; fail open on local filter errors."""
+    try:
+        return filter_tool_result(tool_name, result, params=params)
+    except Exception:
+        log.warning("Local result filter failed for %s", tool_name, exc_info=True)
+        return result
 
 
 # Key actions are routed centrally here instead of relying on every tool
@@ -1063,7 +1077,7 @@ async def _logged(
         await _get_spatial(ctx).record(tool_name, params, result, ms, tiles=tiles)
     except Exception:
         pass
-    return result
+    return _filter_downstream_result(tool_name, params, result)
 
 
 # ---------------------------------------------------------------------------
@@ -3293,7 +3307,7 @@ async def _belief_tool(
             text,
             int((time.monotonic() - started) * 1000),
         )
-        return text
+        return _filter_downstream_result(tool_name, params, text)
     except (BeliefEngineError, json.JSONDecodeError, TypeError, ValueError) as exc:
         message = f"Error: {exc}"
         await _get_logger(ctx).log_error(tool_name, message)
@@ -3829,7 +3843,7 @@ async def get_governance_brief(
             text,
             int((time.monotonic() - started) * 1000),
         )
-        return text
+        return _filter_downstream_result("get_governance_brief", params, text)
     except (BeliefEngineError, TypeError, ValueError, ConnectionError) as exc:
         message = f"Error: {exc}"
         await _get_logger(ctx).log_error("get_governance_brief", message)
