@@ -6,10 +6,11 @@ from pathlib import Path
 
 
 def _get_version() -> str:
-    try:
-        return importlib.metadata.version("civ-mcp")
-    except importlib.metadata.PackageNotFoundError:
-        pass
+    for distribution_name in ("civ6-belief-engine", "civ6-mcp"):
+        try:
+            return importlib.metadata.version(distribution_name)
+        except importlib.metadata.PackageNotFoundError:
+            continue
     # Fallback: read from pyproject.toml (uv run doesn't install metadata)
     pyproject = Path(__file__).resolve().parent.parent.parent / "pyproject.toml"
     if pyproject.exists():

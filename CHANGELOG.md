@@ -4,6 +4,8 @@
 
 The focus shifted from running games to packaging the results. The dataset publisher pipeline exports all telemetry to HuggingFace with Croissant 1.1 metadata for the NeurIPS Evaluations & Datasets track submission. Several reliability features landed in parallel from ongoing eval runs across the fleet.
 
+- **Product boundary**: renamed the Python distribution to `civ6-belief-engine`, moved Belief Engine/governance implementations to `src/civ6_belief_engine/`, and preserved the `civ_mcp` package, `civ-mcp` CLI, and `mcp__civ6__*` tool surface for compatibility.
+
 - **HuggingFace dataset publisher**: End-to-end pipeline (`scripts/publish_hf/`) for staging, exporting parquet tables, generating Croissant 1.1 metadata, validating, and uploading to HuggingFace.
 - **NeurIPS anonymization**: RAI metadata fields, identity redaction in parquet exports, anonymous HF account.
 - **Game-over watchdog**: Detect victories even when the LLM stops calling tools — polls game state on a background timer.

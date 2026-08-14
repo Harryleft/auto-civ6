@@ -1,7 +1,7 @@
 [project]
-name = "civ6-mcp"
+name = "civ6-belief-engine"
 version = "1.1.11"
-description = "MCP server for Civilization VI — lets LLM agents read game state and play"
+description = "Civilization VI Belief Engine with an MCP game adapter"
 readme = "README.md"
 license = "MIT"
 authors = [
@@ -53,7 +53,7 @@ launcher-linux = [
     "pytesseract>=0.3.10",
     "Pillow>=10.0",
 ]
-launcher = ["civ6-mcp[launcher-macos]"]  # backward compat alias
+launcher = ["civ6-belief-engine[launcher-macos]"]  # backward compat alias
 analysis = [
     "matplotlib>=3.10.8",
     "pandas>=2.3.3",
@@ -75,7 +75,7 @@ Repository = "https://github.com/lmwilki/civ6-mcp"
 civ-mcp = "civ_mcp.server:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/civ_mcp"]
+packages = ["src/civ_mcp", "src/civ6_belief_engine"]
 
 [build-system]
 requires = ["hatchling"]
