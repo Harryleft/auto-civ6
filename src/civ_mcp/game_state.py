@@ -148,6 +148,9 @@ class GameState:
             units = await self.get_units()
             diplomacy = await self.get_diplomacy()
             tech_civic = await self.get_tech_civics()
+            policies = await self.get_policies()
+            barbarians = await self.get_barbarian_overview()
+            notifications = await self.get_notifications()
             capabilities = capabilities_for_ruleset(overview.ruleset)
             stockpiles: list[lq.ResourceStockpile] = []
             if capabilities.resource_stockpiles:
@@ -169,6 +172,9 @@ class GameState:
                     diplomacy=diplomacy,
                     tech_civic=tech_civic,
                     resources=stockpiles,
+                    policies=policies,
+                    barbarians=barbarians,
+                    notifications=notifications,
                     extra={"collector": "GameState.get_governance_snapshot"},
                 )
             except SnapshotConsistencyError as exc:
