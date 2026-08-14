@@ -19,9 +19,15 @@ from civ_mcp.governance.snapshot import (
     snapshot_world_state,
 )
 from civ_mcp.lua.models import (
+    BarbarianCamp,
+    BarbarianOverview,
+    BarbarianUnit,
     CityInfo,
     CivInfo,
     GameOverview,
+    GovernmentStatus,
+    PolicyInfo,
+    PolicySlot,
     ResourceStockpile,
     TechCivicStatus,
     UnitInfo,
@@ -281,6 +287,21 @@ def test_world_projection_and_belief_payload_are_structured_typed_facts(tmp_path
                 name="Iron", amount=20, cap=50, per_turn=2, demand=1, imported=0
             )
         ],
+        policies=GovernmentStatus(
+            government_name="Classical Republic",
+            government_type="GOVERNMENT_CLASSICAL_REPUBLIC",
+            slots=[
+                PolicySlot(0, "SLOT_ECONOMIC", "POLICY_URBAN_PLANNING", "Urban Planning"),
+                PolicySlot(1, "SLOT_WILDCARD", None, None),
+            ],
+            available_policies=[
+                PolicyInfo("POLICY_AGOGE", "Agoge", "Unit production", "SLOT_MILITARY")
+            ],
+        ),
+        barbarians=BarbarianOverview(
+            camps=[BarbarianCamp(8, 9, distance_to_city=4, distance_to_military=2)],
+            units=[BarbarianUnit(63, "UNIT_WARRIOR", 8, 8, 100, 100, 20, 0, 3, 1)],
+        ),
     )
 
     world = snapshot_world_state(snapshot)
@@ -292,6 +313,10 @@ def test_world_projection_and_belief_payload_are_structured_typed_facts(tmp_path
         "player:3",
         "technology:TECH_EDUCATION",
         "resource_stockpile:0:iron",
+        "government:0",
+        "policy_slot:0:1",
+        "barbarian_camp:8:9",
+        "barbarian_unit:63",
     } <= entity_ids
     assert {
         relation["relation_type"] for relation in world["relations"]
@@ -299,6 +324,9 @@ def test_world_projection_and_belief_payload_are_structured_typed_facts(tmp_path
     assert world["metrics"]["player.gold"] == 245.5
     assert world["metrics"]["diplomacy.player_3.military_strength"] == 240
     assert world["metrics"]["resource.iron.amount"] == 20
+    assert world["metrics"]["government.empty_policy_slots"] == 1
+    assert world["metrics"]["barbarian.known_camps"] == 1
+    assert world["metrics"]["barbarian.visible_units"] == 1
 
     observation = snapshot_to_belief_observation(snapshot)
     assert observation["source"] == "game_state:typed_snapshot"

@@ -2971,6 +2971,45 @@ def _governance_payload(value: Any) -> Any:
     return value
 
 
+def _national_strategy_payload(value: Any, *, include_details: bool = False) -> dict[str, Any]:
+    """Keep the six-module result visible before large governance history spills."""
+
+    campaign = value.campaign
+    payload: dict[str, Any] = {
+        "snapshot_id": value.snapshot_id,
+        "turn": value.turn,
+        "departments": [
+            {
+                "department": assessment.department.value,
+                "relevance": assessment.relevance,
+                "degraded": assessment.degraded,
+                "summary": assessment.summary,
+                "support_request_count": len(assessment.support_requests),
+                "workstream_ids": [
+                    workstream.workstream_id for workstream in assessment.workstreams
+                ],
+                "evidence_missing": list(assessment.evidence_missing),
+            }
+            for assessment in value.assessments
+        ],
+        "campaign": {
+            "campaign_id": campaign.campaign_id,
+            "objective": campaign.objective,
+            "trigger": campaign.trigger,
+            "ready_workstream_ids": list(campaign.ready_workstream_ids),
+            "blocked_workstream_ids": list(campaign.blocked_workstream_ids),
+            "coordination_link_count": len(campaign.coordination_links),
+            "unresolved_support_request_count": len(
+                campaign.unresolved_support_requests
+            ),
+            "blind_spots": list(campaign.blind_spots),
+        },
+    }
+    if include_details:
+        payload["details"] = _governance_payload(value)
+    return payload
+
+
 def _governance_proposal_from_dict(raw: dict[str, Any]):
     """Validate one ministerial proposal against the shared governance schema."""
 
@@ -3634,6 +3673,7 @@ async def get_governance_brief(
     ctx: Context,
     limit: int = 12,
     confidence_floor: float = 0.6,
+    include_department_details: bool = False,
 ) -> str:
     """Capture typed GameState facts and return the national governance agenda.
 
@@ -3658,7 +3698,11 @@ async def get_governance_brief(
         )
 
     started = time.monotonic()
-    params = {"limit": limit, "confidence_floor": confidence_floor}
+    params = {
+        "limit": limit,
+        "confidence_floor": confidence_floor,
+        "include_department_details": include_department_details,
+    }
     try:
         if not 0 <= confidence_floor <= 1:
             raise BeliefEngineError("confidence_floor must be between 0 and 1")
@@ -3667,6 +3711,22 @@ async def get_governance_brief(
             await _capture_governance_snapshot(ctx, engine)
         )
         belief_brief = engine.turn_brief(turn=snapshot.turn, limit=limit)
+        active_goals = engine.list("goal", status="active")
+        from civ6_belief_engine.governance.departments import (
+            NationalStrategyCoordinator,
+            default_department_registry,
+        )
+
+        national_strategy = NationalStrategyCoordinator(
+            default_department_registry()
+        ).run(
+            snapshot,
+            agenda=tuple(
+                str(goal.get("statement") or "").strip()
+                for goal in active_goals
+                if str(goal.get("statement") or "").strip()
+            ),
+        )
         await _flush_belief_events(ctx)
         low_confidence = [
             {
@@ -3722,6 +3782,10 @@ async def get_governance_brief(
                 **projection,
             },
             "capabilities": world["capabilities"],
+            "national_strategy": _national_strategy_payload(
+                national_strategy,
+                include_details=include_department_details,
+            ),
             "budget_capacity": {
                 "gold": gold_capacity,
                 "faith": faith_capacity,
@@ -3743,7 +3807,7 @@ async def get_governance_brief(
             "confidence_gaps": low_confidence,
             "belief_brief": belief_brief,
             "governance": {
-                "goals": engine.list("goal", status="active")[:limit],
+                "goals": active_goals[:limit],
                 "proposals": engine.list("proposal", status="active")[:limit],
                 "critic_reviews": engine.list("critic_review", status="active")[:limit],
                 "council_decisions": engine.list("council_decision", status=None)[:limit],

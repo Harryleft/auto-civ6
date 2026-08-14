@@ -17,6 +17,7 @@ from civ_mcp.server import (
     _belief_action_preflight,
     _canonical_action_params,
     _governance_payload,
+    _national_strategy_payload,
     _normalize_trade_mode,
     _governance_proposal_from_dict,
     _release_stale_budget_locks,
@@ -28,6 +29,12 @@ from civ_mcp.server import (
     resolve_governance_council,
     route_belief_decision,
     submit_governance_proposal,
+)
+from civ6_belief_engine.governance import RulesetCapabilities, TurnSnapshot
+from civ6_belief_engine.governance.departments import (
+    Department,
+    NationalStrategyCoordinator,
+    default_department_registry,
 )
 
 
@@ -271,6 +278,33 @@ def test_governance_mcp_tools_are_registered():
         "resolve_governance_council",
         "cancel_routed_action",
     }.issubset(names)
+
+
+def test_national_strategy_payload_runs_and_serializes_all_six_departments():
+    snapshot = TurnSnapshot(
+        snapshot_id="snapshot:modules",
+        turn=12,
+        turn_before=12,
+        turn_after=12,
+        player_id=0,
+        captured_at=1.0,
+        capabilities=RulesetCapabilities.standard(),
+    )
+
+    brief = NationalStrategyCoordinator(default_department_registry()).run(snapshot)
+    payload = _national_strategy_payload(brief)
+
+    assert [item["department"] for item in payload["departments"]] == [
+        department.value for department in Department
+    ]
+    assert len(payload["departments"]) == 6
+    assert "details" not in payload
+    assert json.loads(json.dumps(payload))["campaign"]["campaign_id"].startswith(
+        "campaign:12:"
+    )
+
+    detailed = _national_strategy_payload(brief, include_details=True)
+    assert len(detailed["details"]["assessments"]) == 6
 
 
 class _FakeEmitter:

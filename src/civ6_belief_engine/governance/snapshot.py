@@ -17,10 +17,12 @@ from typing import Any, Iterable, Mapping, Protocol, Sequence, TypedDict
 from .capabilities import capabilities_for_ruleset
 from .models import TurnSnapshot as GovernanceTurnSnapshot
 from civ_mcp.lua.models import (
+    BarbarianOverview,
     CityInfo,
     CivInfo,
     GameNotification,
     GameOverview,
+    GovernmentStatus,
     ResourceStockpile,
     TechCivicStatus,
     UnitInfo,
@@ -48,6 +50,10 @@ class TypedSnapshotSource(Protocol):
     async def get_diplomacy(self) -> list[CivInfo]: ...
 
     async def get_tech_civics(self) -> TechCivicStatus: ...
+
+    async def get_policies(self) -> GovernmentStatus: ...
+
+    async def get_barbarian_overview(self) -> BarbarianOverview: ...
 
 
 class BeliefObservation(TypedDict):
@@ -124,6 +130,8 @@ def build_turn_snapshot(
     resources: Sequence[ResourceStockpile] = (),
     victory: VictoryProgress | None = None,
     notifications: Sequence[GameNotification] = (),
+    policies: GovernmentStatus | None = None,
+    barbarians: BarbarianOverview | None = None,
     extra: Mapping[str, Any] | None = None,
 ) -> GovernanceTurnSnapshot:
     """Build one immutable, same-turn governance snapshot from typed results."""
@@ -207,6 +215,8 @@ def build_turn_snapshot(
         "resources": resource_rows,
         "victory": victory,
         "notifications": notification_rows,
+        "policies": policies,
+        "barbarians": barbarians,
         "extra": frozen_extra,
     }
     snapshot_id = _stable_snapshot_id(identity_payload)
@@ -226,6 +236,8 @@ def build_turn_snapshot(
         resources=resource_rows,
         victory=victory,
         notifications=notification_rows,
+        policies=policies,
+        barbarians=barbarians,
         extra=frozen_extra,
     )
 
@@ -466,6 +478,47 @@ def snapshot_world_state(snapshot: GovernanceTurnSnapshot) -> dict[str, Any]:
             }
         )
 
+    if snapshot.policies is not None:
+        government_id = f"government:{snapshot.player_id}"
+        _add_entity(
+            entities,
+            "government",
+            government_id,
+            {
+                "government_name": snapshot.policies.government_name,
+                "government_type": snapshot.policies.government_type,
+            },
+        )
+        _add_relation(relations, "uses_government", player_id, government_id)
+        empty_slots = 0
+        for slot in snapshot.policies.slots:
+            slot_id = f"policy_slot:{snapshot.player_id}:{slot.slot_index}"
+            _add_entity(entities, "policy_slot", slot_id, _canonical(slot))
+            _add_relation(relations, "has_policy_slot", government_id, slot_id)
+            if slot.current_policy is None:
+                empty_slots += 1
+        metrics["government.policy_slots"] = len(snapshot.policies.slots)
+        metrics["government.empty_policy_slots"] = empty_slots
+        metrics["government.available_policies"] = len(
+            snapshot.policies.available_policies
+        )
+
+    if snapshot.barbarians is not None:
+        metrics["barbarian.known_camps"] = len(snapshot.barbarians.camps)
+        metrics["barbarian.visible_units"] = len(snapshot.barbarians.units)
+        for camp in snapshot.barbarians.camps:
+            camp_id = f"barbarian_camp:{camp.x}:{camp.y}"
+            tile_id = f"tile:{camp.x}:{camp.y}"
+            _add_entity(entities, "tile", tile_id, {"x": camp.x, "y": camp.y})
+            _add_entity(entities, "barbarian_camp", camp_id, _canonical(camp))
+            _add_relation(relations, "located_at", camp_id, tile_id)
+        for unit in snapshot.barbarians.units:
+            unit_id = f"barbarian_unit:{unit.unit_id}"
+            tile_id = f"tile:{unit.x}:{unit.y}"
+            _add_entity(entities, "tile", tile_id, {"x": unit.x, "y": unit.y})
+            _add_entity(entities, "barbarian_unit", unit_id, _canonical(unit))
+            _add_relation(relations, "located_at", unit_id, tile_id)
+
     if snapshot.victory is not None:
         for progress in snapshot.victory.players:
             prefix = f"victory.player_{progress.player_id}"
@@ -504,6 +557,8 @@ def snapshot_world_state(snapshot: GovernanceTurnSnapshot) -> dict[str, Any]:
         "relations": relations,
         "metrics": dict(sorted(metrics.items())),
         "notifications": _canonical(snapshot.notifications),
+        "policies": _canonical(snapshot.policies),
+        "barbarians": _canonical(snapshot.barbarians),
         "extra": _canonical(snapshot.extra),
     }
 
