@@ -5,6 +5,9 @@ national decision process. It does not create another state store, model
 provider, or graph database. `GameState` remains the typed game boundary and the
 Belief Engine JSONL/telemetry stream remains the audit source of truth.
 
+The domain implementation is under `src/civ6_belief_engine/governance/`.
+`civ_mcp` remains the MCP-facing game adapter and compatibility surface.
+
 ## Control loop
 
 ```text

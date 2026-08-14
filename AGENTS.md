@@ -1,412 +1,93 @@
-# Civ 6 MCP — Agent Reference
-
-An MCP server connecting to a live Civilization VI game via FireTuner. You can read full game state and issue commands. All commands respect game rules.
-
-**You only know what you explicitly query.** A human player passively absorbs the score ticker, religion lens, unit health bars — you have none of that. Information you don't ask for simply doesn't enter your world model. The patterns below exist to compensate for this.
-
-`end_turn` now runs **empire warnings** automatically — alerts for loyalty crises, idle trade routes, gold deficits, resource caps, scoreboard position, and military imbalance. These compensate for the most common blind spots, but don't replace periodic deep checks (victory progress, religion spread, diplomacy).
-
-## Coordinate System
-
-**Hex grid: (X, Y) where higher Y = visually south.**
-- Y increases → south (down). Y decreases → north (up).
-- X increases → east. X decreases → west.
-- Moving from (9,24) to (9,26) is **south**, not north.
-
-## Game Start
-
-Before your first turn:
-1. Read your civ's unique abilities, units, and buildings — what is this civ designed to do?
-2. Identify the tech/civic that unlocks your unique unit; plan a research path to reach it.
-3. Form a working hypothesis for a victory path. Hold it loosely — geography and rivals will clarify things through the Classical era.
-
-Early choices compound. Each decision shapes what's available 20, 40, 60 turns later. A scout reveals the map early; a defensive unit lets your settlers move safely; more cities mean more districts which mean more everything. Religious civs often benefit from Holy Site infrastructure before the Great Prophet pool fills. What you don't build early, you pay for later.
-
-## Turn Loop
-
-Each turn in order:
-0. `get_game_overview` — the single mandatory entry point. Read its
-   machine-readable `RUNTIME POLICY`; never infer the Belief Engine mode from
-   this file. In enforce mode the same response already includes the current
-   governance snapshot, so do not duplicate it with a routine
-   `get_governance_brief` call.
-1. Query only information that can change the next decision: normally
-   `get_units`, targeted `get_map_area`, and `get_cities`. Run Strategic
-   Checkpoints only when due or triggered by new evidence.
-2. Act on units and cities. A nearby hostile triggers a quantified
-   `get_combat_estimate`; it is not evidence by itself.
-3. If the server returns `BELIEF_GATE_REQUIRED`, the attempted action had no
-   game side effect. Follow the returned gate, route the exact action intent,
-   and retry once. When the runtime policy says routing is bypassed, do not
-   call belief-routing or governance tools.
-4. Use `get_turn_brief` only after material new evidence, an action outcome, or
-   context recovery—not as a second copy of every ordinary query.
-5. `skip_remaining_units`, then `end_turn`; the server's game-rule and
-   end-turn blockers remain authoritative in every mode.
-
-## Belief Engine
-
-`CIV_MCP_BELIEF_MODE` is the single source of truth. Its capabilities are
-reported by `get_game_overview`; this document does not redefine them.
-
-- Successful game queries create normalized observations automatically. Do
-  not copy raw tool results into beliefs or the diary.
-- Create or revise a belief, hypothesis, prediction, or plan only when it adds
-  an interpretation, falsifiable claim, or future commitment that cannot be
-  reconstructed from current `GameState`.
-- When `action_routing` is `enforced`, follow the returned route and evidence
-  requirements. `slow` means stop; `verify_then_fast` means run the exact
-  requested query before retrying. When it is `bypassed`, skip these calls.
-- Use governance proposals/council resolution only for genuinely competing
-  national choices or scarce-resource conflicts. `get_governance_brief` is a
-  refresh/recovery tool, not a second start-of-turn query.
-- Raw tool history belongs to the DSH transcript and Civ telemetry. The Belief
-  Engine stores normalized facts, fingerprints, and decision/action links.
-
-## Diary
-
-The diary is your persistent memory across sessions. When context compacts or you return to a game, `get_diary` is how you reconstruct where you were and why you made the decisions you did. Entries with specific details — unit names, coordinates, yield numbers, reasoning — are far more useful to your future self than brief summaries.
-
-Reflections are recorded **before** AI processing begins — write what YOU observed and did this turn. Anything that surfaces after `end_turn` (a diplomacy proposal, AI units entering your territory, events in the turn result) belongs in the **next** turn's diary, not this one.
-
-Five reflection fields each turn (all required, non-empty):
-- **tactical**: What happened — specific units, tiles, outcomes.
-- **strategic**: Standings vs rivals — yields, city count, victory path viability with numbers.
-- **tooling**: Tool issues observed, or "No issues".
-- **planning**: Concrete actions for the next 5-10 turns — specific builds, moves, research targets with turn estimates.
-- **hypothesis**: Specific predictions — attack timing, milestone turns, biggest risks.
-
-## Strategic Checkpoints
-
-Periodic checks worth doing regularly. The game doesn't surface most of this proactively.
-
-### Around every 10 turns:
-- `get_empire_resources` — unimproved luxuries and nearby strategics
-- Surplus luxuries: duplicates beyond 1 copy provide zero amenity benefit. Trade them via `propose_trade` for GPT, strategic resources, or luxury types you don't own (each new type = +1 amenity to 4 cities). Even 5 GPT per surplus luxury adds up over 30 turns. Use `mode="test"` to check what the AI will accept before sending.
-- Gold/faith balance: if either is accumulating with no plan, spend it — `purchase_item`, `purchase_tile`, `patronize_great_person`
-- City count vs time in game — if expansion is behind, a settler tends to be the highest-leverage production choice
-- `get_trade_routes` — check for idle routes; idle routes are free yields going uncollected
-- Government tier — `change_government` when a new tier unlocks (free the first time)
-- Era score vs thresholds — shown in `get_game_overview`; a Dark Age is recoverable but costly
-- Great People — `get_great_people`; rivals will recruit what you don't
-
-### Around every 20 turns:
-- `get_diplomacy` — delegations to new civs, friendships with Friendly civs, alliances if eligible
-- `get_victory_progress` — check all 6 victory types, not just your own path
-- `get_religion_spread` — religious victory is invisible without active checking; a rival with majority in most civs is a serious threat
-
-### Around every 30 turns:
-- `get_strategic_map` — fog per city + unclaimed resources
-- `get_global_settle_advisor` — best remaining settle sites
-- Wonder scan: `get_city_production` in your best city — wonders that align with your victory path are worth considering
-- Victory path check: is your chosen path still viable? Is any rival close to winning something you haven't been tracking?
-- Civ kit check: are you building/using your unique units, buildings, or improvements? If not, you're playing a generic civ and giving up your structural advantage. The unique unit often requires a specific tech — if that tech isn't on your current research path, that's a problem.
-
-## Deity Strategy Playbook (神级生存与复利)
-
-**核心世界观**:文明6是有限回合内的资源配置与复利竞争,不是建漂亮帝国。每次行动问:当前最大瓶颈是什么?这个行动解决了吗?机会成本?它是否提高未来几十回合的资源生成?神级允许科技/文化/军力排名落后,但不允许浪费土地、生产力和时间。
-
-**每回合三问**:有没有便宜可占?有没有回合可偷?有没有资源闲置?
-
-**行动顺序**:优先生存 → 扩张 → 建立复利机器 → 围绕一个胜利条件集中资源。不要平均发展,不要生产无用单位,不要为收藏建奇观,不要为打赢战争而打战争。每10回合重新评估胜利方向/最大瓶颈/最大威胁/最大机会。
-
-### 生存(前期)
-- **城墙是最高性价比投资**:宣战前用~320金秒买城墙。无墙城市3回合沦陷,有墙城市顶住全部攻势。
-- **识别宣战前兆**:AI攻城武器(投石机/攻城车)+近战单位在边境集结3-5回合=战争信号,立即切产兵/买防御。
-- **不打高一级时代兵种**(如Man-at-Arms CS45):集火弱目标、弃城保单位、等己方科技升级。
-- **白和平比消耗战划算**:神级硬拼军力是下策;消耗对方攻城单位后主动求和。
-- **远程守城是核心,近战是炮灰**:弓/弩手留在城墙内集火,近战只堵路补刀。
-- **开放边境只给盟国(致命教训)**:德国多次提议"互开边境+金币"都被接受,结果德国借道把5个高级单位(线列步兵CS65/骑士/野战炮)集结到伦敦城下突袭宣战,2-3回合破城。对 UNFRIENDLY/军事强于己的 AI 一律拒绝开放边境。
-- **军事代差红线**:对方已解锁线列步兵/骑士(CS50-65),我方若只有弓/枪兵(CS25)就打不动。扩张期必须并行升级兵种(弓→弩手需机械,勇士→剑客需铁),边境城市一律先买城墙。
-- **首都丢失=忠诚雪崩**:首都(忠诚锚)丢失后,所有城市忠诚压力暴涨,连锁叛乱。防首都 > 一切;首都永远要有城墙+驻军+机动部队。
-- **识别"借道"真面目**:AI单位反复在边境集结(即使和平)就是宣战前兆,立即切军事生产+买墙(前次俄罗斯、本次德国都如此)。
-
-### 扩张(复利机器)
-- **英国Pax Britannica的复利=城市数**(每城+1商路容量)。扩张是第一优先级,没有之一。
-- **马格努斯(给养保障)+殖民政策=扩张引擎**:开拓者不耗人口+50%产力,伦敦可7回合/个连续产。
-- **建城前验证距离>(3格)**:距任何城市≤3格无法建城,开拓者白走是巨量浪费。
-- **新城瓶颈是生产力**:新城顺序=纪念碑(领土)→建造者(改良马/盐/石头)→自持。沙漠无食物点慎重。
-- **战略资源(铁/马)尽早占领改良**:铁=剑客,马=骑手,晚占=晚解锁整条兵线。
-- **200回合10城目标**:伦敦每7回合一个开拓者+偶尔买,成批生产(先上殖民政策再连产)。
-
-### 资源与金币
-- **金币不囤积**:买建造者/单位/建筑绕过生产时间;400金买建造者改良3块资源远胜躺着。
-- **过剩奢侈品(>1份)主动卖AI**:先`propose_trade mode=test`确认报价,再全额匹配send(注意首付金币也要带上)。
-- **战略资源改良后+2~3/回合**(骑士阶级政策再+1),长期复利。
-
-### 科技与市政
-- **科技落后是结果不是根因**:城市少→学院少→科研慢。扩张解决科技,而不是反过来。
-- **封建主义(农场+1食物)优先于军事科技**:粮食是人口瓶颈,人口是产力/科研/金币的根。
-- **Eureka/Inspiration主动触发**:改良资源/建区域/建城墙,顺手完成。
-
-## Toolkit (决策辅助工具)
-
-`scripts/civ6_tool.py`(纯计算,离线可用):
-- `dist X1 Y1 X2 Y2` — hex距离(建城>3、射程、移动判断)
-- `settle X Y` — 建城合法性(距所有城>3)+最近城
-- `combat CS1 HP1 CS2 HP2` — 战斗伤害估算+胜负预判
-- `status` / `plan` / `plan-save '[[x,y],...]'` — 帝国概览、扩张进度、记录建城目标
-
-`scripts/civ6_assist.py`(决策助手,直连MCP会话):
-- `precheck` — end_turn前预检:阻塞项(生产/研究/政策/使者/外交/WC)+机会项(卖奢侈品/改良/Eureka)+单位状态
-- `units` — 单位全景(可行动/已行动/可升级/可建)
-- `promotions` — 批量晋升检查(替代手动循环)
-- `expansion` — 城市/合法建城点/未改良资源
-- `threats` — 威胁排序(阵营+CS+HP+距城)
-- `cities` — 城市队列/增长/掠夺/城墙诊断
-
-**每回合流程**: `precheck`（先写入类型化治理快照并读治理/信念简报）→ `get_game_overview` → 必要时目标/提案/反方/议会仲裁 → 修阻塞 → threats + **真实 combat estimate** → 路由议会选中的精确 ActionIntent → 执行动作并回写 Outcome → expansion/机会项 → `get_turn_brief`复核 → units确认 → `skip_remaining_units` → 通过治理门禁后 `end_turn`。
-
-### 已知工具坑(本次运行实测)
-- **end_turn神级AI回合5-10分钟**:必须一次通过,失败循环=巨量浪费。
-- **AI交易/外交提议时效极短**:end_turn返回时立即响应,否则NO_DEAL/NO_SESSION。
-- **新生产/购买的单位当回合不能移动**(NO_MOVES),下一回合才行。
-- **军事单位不能与驻军同城堆叠**(STACKING_CONFLICT),城内已有驻军就移到邻格。
-- **攻击后立即重查get_units再补刀**:目标可能已被击杀(NO_ENEMY)。
-- **使者令牌死锁**:`send_envoy`在无UI环境可能不消耗令牌,`end_turn`被GIVE_INFLUENCE_TOKEN永久卡住;重启游戏(restart_and_load)可解(挂起的UI操作会在重启后执行)。
-- **升级单位后unit_id变化**:需重新get_units拿新id。
-- **建城通知显示"开拓者killed"是正常消耗**(单位变为城市),不是损失。
-- **地形移动成本**:洪泛区/丘陵/森林/丛林=2移动,易STOPPED_MID_PATH;远距离先get_pathing_estimate。
-
-## Strategic Patterns
-
-### Moving Civilians
-Before moving a builder, settler, or trader to a new tile, `get_map_area` (radius 2) around the destination is worth the query. Civilians have zero combat strength — a single barbarian scout captures them. The cost of losing a builder (5-7 turns of production + charges) is almost always worse than taking one extra turn to check or escort.
-
-Hills cost 2 movement, forests/jungles cost 2, and they stack (forest-hills = 3+). A settler or builder with 2 base moves arriving on forest-hills uses all movement and can't act until next turn. Route through flat terrain when possible, or plan to arrive one turn early.
-
-`get_pathing_estimate(unit_id, target_x, target_y)` estimates how many turns a unit needs to reach a destination, using the game's actual pathfinding. Use it before committing units to long marches.
-
-### Builder Management
-Idle builders are wasted production. `get_builder_tasks` shows all tiles needing improvements across your empire, prioritized (URGENT > HIGH > NORMAL), with the nearest idle builder for each task. Call it once per turn during the builder phase, then dispatch builders top-down by priority.
-
-Don't skip builders that are 3-4 tiles from a task — a few turns of walking is better than sitting idle forever. For long-distance dispatches, use `get_pathing_estimate` to verify the route. Map tiles now show movement cost (`[mv:2]`, `[mv:3]`) and road presence — route builders along roads when possible.
-
-After context compaction, call `get_builder_tasks` again to reconstruct your builder situation. The tool provides a fresh snapshot — no need to remember previous assignments.
-
-### Spending Gold & Faith
-Gold and faith sitting idle lose value over time. `purchase_item(city_id, item_type, item_name)` buys units/buildings instantly with gold (or faith via `yield_type="YIELD_FAITH"`). `purchase_tile(city_id, x, y)` buys a specific tile. `patronize_great_person` buys a GP outright. If you're saving, name the item and the turn — otherwise, deploy it.
-
-### Expansion
-Each city multiplies your districts, yields, and Great Person generation. The gap between a 3-city and 5-city empire by the Medieval era is hard to recover from. If city count is lagging, a settler is typically the highest-impact production choice — more so than most infrastructure in existing cities. Check loyalty before settling: negative-loyalty sites near rivals need a governor assigned immediately via `assign_governor(governor_type, city_id)` or they'll flip.
-
-### Growth
-Stagnant cities fall behind exponentially. If any city has food surplus ≤ 0, that's worth fixing this turn (Farm, Granary, domestic Trade Route, or `set_city_focus(city_id, "FOOD")`). Turns-to-growth over 15 is a signal the city needs food infrastructure.
-
-### Exploration
-You can't settle what you can't see, and you can't counter threats you don't know exist. A scout set to `automate` is one of the best investments in the early game. If a scout is lost or stuck, replacing it early keeps the information flow going.
-
-### Diplomacy
-Diplomacy generates yield: each alliance +1 favor/turn per alliance level, each suzerainty +1 favor/turn. Government tier also gives favor. This compounds. Friendships don't give favor directly but enable alliances (which do). Delegations (25g) are cheap on first meeting. Friendships open up when a civ is Friendly. Alliances require friendship (30+ turns) and Diplomatic Service civic. Embassies are available once Writing is researched.
-
-If favor is accumulating above 100 with no World Congress imminent, it's worth thinking about whether it could be better deployed in trade or alliance building.
-
-### War Declaration
-War declarations take effect for diplomacy immediately but the **combat engine does not sync until the next turn**. After declaring war via `send_diplomatic_action`, units cannot attack the new enemy until the following turn. Plan accordingly: declare war on turn N, position units adjacent to targets, then attack on turn N+1. Do not reload or retry if attacks return `NO_ENEMY` on the declaration turn — this is expected behavior.
-
-### Wartime
-During war, keeping a military unit garrisoned in or near each city is worth the tradeoff against offensive strength. Cities with walls can fire at enemies via `city_action(city_id, "attack", target_x, target_y)` (range 2). Cities that fall are expensive to recover — when you capture a city, `city_action` with `keep`, `raze`, or `liberate_founder`/`liberate_previous` resolves the decision. If your military strength is significantly below an enemy's and you're not making progress, `propose_peace(player_id)` — available after a 10-turn cooldown — is usually better than a war of attrition while the rest of the map moves on.
-
-### Military Readiness
-Check rival military strength in `get_diplomacy` periodically. A neighbor at 2x+ your strength who isn't a friend or ally is a risk worth taking seriously. Minimum useful peacetime: 1 garrison per city plus a mobile unit. Units become progressively weaker relative to rivals if not upgraded (Slinger→Archer with Archery, Warrior→Swordsman with Iron Working) — use `upgrade_unit`.
-
-### Barbarian Camps
-Camps upgrade with the era — an Ancient-era camp spawns Warriors; the same camp in the Medieval era spawns Man-at-Arms. Clearing a camp within a few turns of finding it is almost always easier than fighting the units it produces over many turns.
-
-### Religion
-Religious victory is the easiest win condition to miss because it produces no notifications and unfolds slowly. `get_religion_spread` shows the picture. If a rival religion reaches majority in most civs, the window for a response narrows quickly. Religious units bought from a city carry **that city's majority religion** — buy them from cities where your own religion is majority, not a converted city.
-
-To found a religion: build a Holy Site → earn a Great Prophet → `get_religion_beliefs()` to see available beliefs → `found_religion(name, beliefs)`. The Great Prophet pool fills early (roughly half the major civs).
-
-Trade routes spread the origin city's religion to the destination — worth factoring into routing decisions if conversion pressure is a concern.
-
-### Victory Path Viability
-Some paths close. It's worth checking periodically via `get_victory_progress`:
-
-- **Science**: Campuses → Universities → Spaceport → 4 space projects. Research Alliances and Great Scientists accelerate.
-- **Culture**: Tourism (offense) vs rival domestic tourists (defense). Theater Squares, Great Works, Wonders, Open Borders (+25%), Trade Routes (+25%). Late-game: National Parks, Rock Bands, Seaside Resorts.
-- **Religious**: Requires a founded religion (Great Prophet pool fills early). Missionaries spread; Apostles fight theological combat (killing = 250 pressure in 10-tile radius). Buy religious units only from cities where your religion is majority.
-- **Diplomatic**: 20 DVP. World Congress resolutions, scored competitions, wonders. Favor from government tier, alliances, suzerainties. If a DVP-stripping resolution targets you, vote Option B on yourself (net 0 vs -2).
-
-## Combat Quick Reference
-
-| Unit | CS | RS | Range |
-|------|----|----|-------|
-| Warrior | 20 | — | — |
-| Slinger | 5 | 15 | 1 |
-| Archer | 25 | 25 | 2 |
-| Barbarian Warrior | 20 | — | — |
-
-- Ranged attacks don't take damage; melee attacks do
-- Forests/mountains block ranged LOS — targets with blocked LOS are filtered from `get_units` attack lists
-- Fortified units: +4 defense, heal each turn
-- Combat estimates include promotion CS bonuses, flanking (+2 per adjacent friendly to defender), support (+2 per defender's adjacent friendly), and forest/jungle defense (+3)
-
-## Unit Actions Reference
-
-| Action | Effect | Notes |
-|--------|--------|-------|
-| `move` | Move to tile | target_x, target_y required |
-| `attack` | Attack enemy | Shows damage estimate; melee/ranged auto-detected |
-| `fortify` | +4 defense, heals | Military only |
-| `heal` | Fortify until full HP | Auto-wakes at full HP |
-| `alert` | Sleep, wake on enemy | Sentry use |
-| `sleep` | Sleep indefinitely | Manual wake required |
-| `skip` | End unit's turn | Always works |
-| `automate` | Auto-explore | Scouts only |
-| `delete` | Disband unit | Removes maintenance |
-| `found_city` | Settle | Settlers only |
-| `improve` | Build improvement | Builders and Military Engineers; see improvements below |
-| `remove_feature` | Chop/harvest feature | Builders only; removes forest, jungle, or marsh from tile |
-| `build_route` | Build road/railroad | Military Engineers only; on current tile; no charges used |
-| `trade_route` | Start route | Traders; target_x/y of destination city |
-| `teleport` | Move idle trader | Traders only; target_x/y of city |
-| `activate` | Use Great Person | Must be on completed matching district |
-| `spread_religion` | Spread religion | Missionaries/Apostles |
-
-Common improvements: `IMPROVEMENT_FARM`, `IMPROVEMENT_MINE`, `IMPROVEMENT_QUARRY`, `IMPROVEMENT_PLANTATION`, `IMPROVEMENT_PASTURE`, `IMPROVEMENT_CAMP`, `IMPROVEMENT_FISHING_BOATS`, `IMPROVEMENT_LUMBER_MILL`
-
-Feature removal: Forest, jungle, and marsh tiles block most improvements (e.g. Farm). Use `remove_feature` to chop/harvest the feature first, then `improve` to build. Lumber Mill and Camp work on forest/jungle without removal. Check `valid_improvements` in `get_units` output — if FARM isn't listed on a tile you expect it, the tile likely has a blocking feature.
-
-Builders repair tile improvements. Pillaged **district buildings** (Workshop, Arena, etc.) are repaired via `set_city_production`.
-
-`get_cities` shows unimproved resource tiles and pillaged improvements/districts per city — use this to prioritize builder work without needing to scan `get_map_area` manually.
-
-Military Engineers (requires Encampment + Armory): `build_route` builds a railroad on the current tile (no charges consumed; costs 1 Iron + 1 Coal per tile). `improve` with `IMPROVEMENT_FORT` or `IMPROVEMENT_AIRSTRIP` uses charges. Building a railroad consumes all movement — one tile per engineer per turn.
-
-| Other unit tools | |
-|--------|--------|
-| `skip_remaining_units` | Skip all units with remaining moves (useful after diplomacy) |
-| `upgrade_unit(unit_id)` | Upgrade to next type (requires tech + resources + gold) |
-
-## End Turn Blockers
-
-`end_turn` resolves blockers before advancing. If it returns a blocker:
-- **Units**: unmoved units need orders (move / skip / fortify)
-- **Production**: city queue empty — set new production
-- **Research/Civic**: completed — choose next
-- **Governor**: point available — `get_governors` → `appoint_governor` / `assign_governor(governor_type, city_id)` / `promote_governor(governor_type, promotion_type)`
-- **Promotion**: unit has XP — `get_unit_promotions` → `promote_unit`
-- **Policy Slot**: empty — `get_policies` → `set_policies`
-- **Pantheon/Religion**: faith threshold reached — `get_pantheon_beliefs` → `choose_pantheon`; for founding: `get_religion_beliefs` → `found_religion`
-- **Envoys**: tokens available — `get_city_states` → `send_envoy`
-- **Dedication**: new era — `get_dedications` → `choose_dedication`
-- **City Capture**: conquered or disloyal city — `city_action(city_id, "keep"/"raze"/"liberate_founder"/"liberate_previous")`
-- Move responses show the **target tile**, not arrival position (async pathfinding)
-
-## Diplomacy
-
-**Reactive (AI-initiated):** AI encounters block turn progression. Use `get_pending_diplomacy` to check for open sessions, then `respond_to_diplomacy` (POSITIVE/NEGATIVE, 2-3 rounds). Diplomacy sessions do not affect unit movement or orders — continue commanding units normally afterward.
-
-**Proactive:**
-- `send_diplomatic_action(action="DIPLOMATIC_DELEGATION")` — 25g, worth sending on first meeting
-- `send_diplomatic_action(action="DECLARE_FRIENDSHIP")` — requires Friendly status
-- `send_diplomatic_action(action="RESIDENT_EMBASSY")` — requires Writing tech
-- `form_alliance(player_id, type)` — types: MILITARY/RESEARCH/CULTURAL/ECONOMIC/RELIGIOUS; requires friendship 30t + Diplomatic Service civic
-- `propose_trade(player_id, ...)` — trade gold/GPT/resources/favor/open borders/cities. Use `mode="test"` first to see the AI's counter-offer without committing, then `mode="send"` to finalize. Cities use `city_id` from `get_trade_options`.
-- `propose_peace(player_id)` — white peace; 10t war cooldown required
-- `get_trade_options(other_player_id)` — see what a civ has available to trade (gold, resources, favor, cities, agreements)
-- `get_pending_trades` — check incoming trade offers; `respond_to_trade(player_id, accept)` to accept/reject
-- Check `get_diplomacy` for defensive pacts before declaring war
-- `get_diplomacy` shows leader agendas — historical agendas are always visible; random agendas require Secret diplomatic visibility (spy in their capital or alliance). Use agendas to predict AI behavior and avoid relationship penalties.
-
-**Espionage:** `get_spies` → `spy_action(spy_id, action, ...)`. Actions: `travel` to a city first, then run operations (steal tech, neutralize governors, etc.). Offensive missions only work after the spy arrives.
-
-**City-states:** `get_city_states` → `send_envoy`. Suzerainty = +1 favor/turn. Types: Scientific/Industrial/Trade/Cultural/Religious/Militaristic.
-
-**Diplomatic Favor:** earned from government tier (base +1, scales with tier), alliances (+1/t per level), suzerainties (+1/t). Spend in World Congress for Diplomatic Victory Points.
-
-## Production & Research
-
-Wonders — high-production cities can slot these between infrastructure. Use `get_wonder_advisor(city_id, wonder_name)` for placement, then `set_city_production` with target_x/y. Science: Great Library, Oxford University, Kilwa Kisiwani. Culture: Chichen Itza, Forbidden City. General: Ancestral Hall, Pyramids.
-
-**Research:** `get_tech_civics` sorts by turns ascending; items ≤ 2 turns are flagged `!! GRAB THIS` — cheap boosted techs are easy to miss and can unblock entire production chains.
-
-**Purchasing:** `purchase_item(city_id, item_type, item_name)` — buy units or buildings instantly with gold (default) or faith (`yield_type="YIELD_FAITH"`). `get_city_production` shows purchasable items and costs.
-
-**Tiles:** `get_purchasable_tiles(city_id)` → `purchase_tile(city_id, x, y)` — buy border tiles with gold for strategic resources or district placement.
-
-## District Placement
-
-Use `get_district_advisor(city_id, district_type)` for ranked tiles. Then `set_city_production` with target_x/y.
-
-| District | Adjacency bonuses |
-|----------|------------------|
-| Campus | +1 per mountain, +1 per 2 jungles, +2 geothermal/reef |
-| Holy Site | +1 per mountain, +1 per 2 forests, +2 natural wonder |
-| Industrial Zone | +1 per mine/quarry, +2 aqueduct |
-| Commercial Hub | +2 adjacent river, +2 harbor |
-| Theater Square | +1 per wonder, +2 Entertainment Complex |
-| Encampment | cannot be adjacent to city center |
-
-## Trade Routes
-
-- `get_trade_routes` — see all active routes and idle traders
-- `get_trade_destinations(unit_id)` → available destinations
-- `unit_action(action='trade_route', target_x, target_y)` → start route
-- Domestic routes: food + production to new cities. International: gold.
-- Capacity: 1 from Foreign Trade civic, +1 per Market/Lighthouse
-- Idle routes are free yields going uncollected
-
-## Great People
-
-- `get_great_people` — candidates, recruitment progress, and costs
-- `recruit_great_person(individual_id)` — recruit with accumulated GP points (check `[CAN RECRUIT]`)
-- `patronize_great_person(individual_id)` — buy instantly with gold or faith
-- `reject_great_person(individual_id)` — pass, advance to next candidate in that class
-- Rivals will recruit what you pass on — recruiting quickly tends to be worth it
-- Once recruited, move the GP to its matching completed district; `unit_action(action='activate')`
-- If activation fails, the error message includes the requirements (district type, buildings needed)
-- Don't delete GPs — they show 0 builder charges but that's a different system; they're not consumed until activated
-
-## World Congress
-
-WC fires synchronously inside `end_turn()` — register votes **before** calling end_turn.
-
-**Voting flow:**
-1. `get_world_congress()` — when `turns_until_next = 0`, WC fires this turn
-2. Review resolutions (options A/B, target list, favor costs)
-3. `queue_wc_votes(votes='[{"hash": H, "option": 1, "target": 0, "votes": N}]')`
-4. `end_turn()` — handler fires, votes deploy, turn advances
-
-- `hash`: from `get_world_congress`; `option`: 1=A / 2=B; `target`: player_id resolved to list index at runtime; `votes`: max to spend
-- 1 free vote per resolution (costs nothing — worth casting)
-- Extra votes cost 6/18/36/60/90/126... cumulative favor
-- Keeping 50-100 favor in reserve between sessions provides flexibility for the next session
-- DVP resolutions: read what each option actually awards before voting. Concentrate favor on the single most impactful resolution rather than spreading thin. Verify your vote blocks the rival, not accidentally helps them
-
-## Victory Conditions
-
-| Victory | Win Condition | Monitor Via |
-|---------|---------------|-------------|
-| Science | 4 space projects complete | `get_victory_progress` |
-| Domination | Own all rival original capitals | military strength in `get_diplomacy` |
-| Culture | Foreign tourists > every civ's domestic | tourism in `get_victory_progress` |
-| Religious | Your religion majority in ALL civs | `get_religion_spread` regularly |
-| Diplomatic | 20 diplomatic victory points | World Congress votes |
-| Score | Highest score at turn limit | fallback |
-
-All victories trigger immediately when the condition is met — they do not wait for a turn boundary or WC session. A rival reaching 20 DVP wins before your next turn. The only counter is stripping DVP at a World Congress *before* they reach 20.
-
-`end_turn` runs a victory proximity scan every turn and a full snapshot every 10 turns. These warnings are the primary signal for invisible victories — worth paying attention to.
-
-## Game Recovery
-
-**MCP autosaves:** `end_turn` automatically saves every turn as `0_MCP_NNNN` (last 5 kept). These are your primary recovery points.
-
-**Load by name** (preferred — no `list_saves` needed):
-```
-load_game_save("0_MCP_0079")  # load specific turn (~5s via Lua, ~90s via menu fallback)
-get_game_overview              # verify load
-```
-
-**When the game hangs** (AI turn loop):
-```
-restart_and_load("0_MCP_NNNN")   # kill + relaunch + load (~90s)
-get_game_overview                 # verify load
-```
-
-**Turn regression detection:** If you accidentally load a wrong save (e.g. the T1 scenario save instead of your autosave), `end_turn` will emit a CRITICAL warning with the correct autosave name to reload.
-
-Other tools: `list_saves`, `load_save(index)`, `kill_game`, `launch_game`, `load_save_from_menu(name)`.
-Save names omit extension: `"AutoSave_0221"` not `"AutoSave_0221.Civ6Save"`.
+# civ6-belief-engine — 文明 VI MCP 智能体规则入口
+
+这是通过 FireTuner 连接正在运行的《文明 VI》的 MCP 服务。智能体只能知道明确查询过的信息；所有游戏动作都必须经过当前游戏规则和 MCP 服务校验。
+
+## 不可违反的边界
+
+- 当前唯一运行链路是：`文明 VI → FireTuner 127.0.0.1:4318 → civ6-belief-engine 的 MCP 适配层 → DSH`。
+- DSH 不直接启动文明 VI。必须先进入一局游戏，再启动 DSH。
+- FireTuner 只允许一个客户端。不要并行运行 Pi、Codex、独立 `civ-mcp`、连接测试或第二个 DSH MCP 客户端。
+- Civ 6 进程、DSH 页面、Python 进程或 4318 监听单独存在，都不等于集成可用。
+- `CIV_MCP_BELIEF_MODE` 和 `get_game_overview` 返回的 `RUNTIME POLICY` 是信念/治理能力的唯一来源；不要从本文或旧会话猜测运行模式。
+- `get_game_overview` 是每回合唯一的强制入口；读取成功前不要执行游戏动作或 `end_turn`。
+- 如果返回 `BELIEF_GATE_REQUIRED`，按返回的精确 action intent 完成路由后只重试一次；`bypassed` 模式不要调用路由工具。
+- 原始工具结果归 DSH transcript/telemetry；信念引擎只保存规范化事实、指纹和决策/动作关联。
+
+## 最短启动顺序
+
+1. 在 macOS `AppOptions.txt` 中确认 `EnableTuner 1`。该设置会关闭成就统计。
+2. 启动游戏：
+
+   ```bash
+   open 'steam://run/289070'
+   ```
+
+   出现 Aspyr 启动器时点击“开始”，并进入单人游戏或载入存档。
+3. 验证端口：
+
+   ```bash
+   cd /Users/zhuanzmima0000/Documents/ChatGPT/civ6/civ6-mcp
+   lsof -nP -iTCP:4318 -sTCP:LISTEN
+   ```
+
+4. 首次安装或变更配置后运行 `./scripts/deepseek_harness check`。
+5. 启动 DSH：
+
+   ```bash
+   ./scripts/deepseek_harness web
+   ```
+
+   打开 <http://127.0.0.1:3080>。不要另外运行 `uv run civ-mcp`。
+6. DSH 第一条游戏请求调用 `mcp__civ6__get_game_overview`，确认 `RUNTIME POLICY` 和工具读取成功后，才进入回合流程。
+
+完整启动与验收步骤见 [启动与验收](docs/agent-startup.md)。
+
+## 每回合最小流程
+
+1. `get_game_overview`：读取当前回合、规则集、运行策略和治理状态。
+2. 立即调用 `get_barbarian_overview`；营地是刷兵源头，不能只看当前可见的蛮族单位。
+3. 有营地或蛮族单位时，先分配军事单位清剿；攻击前调用 `get_combat_estimate`，`move/attack` 的治理门禁按返回的精确 intent 处理。
+4. 再按下一步决策需要查询 `get_units`、目标区域的 `get_map_area`、`get_cities` 等，不复制原始结果到信念或日志。
+5. 处理治理/信念门禁，执行动作并确认结果；在可行动兵力存在时，不得把未清理的近城营地留到扩张之后。
+6. 重要新证据、动作结果或上下文恢复后才调用 `get_turn_brief`。
+7. `skip_remaining_units` → `end_turn`；服务器阻塞项和蛮族告警高于旧状态和提示词。
+
+回合顺序、Diary 字段和 10/20/30 回合检查见 [回合规则](docs/agent-turn-loop.md)。
+
+## 策略与工具路由
+
+按需读取，不要把所有文档全文复制进会话：
+
+| 任务 | 文档 |
+|---|---|
+| 启动 DSH、验证 FireTuner、判断是否真的可用 | [docs/agent-startup.md](docs/agent-startup.md) |
+| 回合顺序、坐标、信念/治理门禁、Diary、周期检查 | [docs/agent-turn-loop.md](docs/agent-turn-loop.md) |
+| 神级生存、扩张、外交、战争和胜利路线 | [docs/agent-strategy.md](docs/agent-strategy.md) |
+| 工具、单位动作、阻塞项、生产、区域、商路和世界议会 | [docs/agent-tools.md](docs/agent-tools.md) |
+| 自动存档、卡回合和恢复 | [docs/agent-recovery.md](docs/agent-recovery.md) |
+| 信念事件、运行模式、规范化事实和路由 | [docs/belief-engine.md](docs/belief-engine.md) |
+| 提案、批评、议会、预算锁和 ActionIntent | [docs/governance-system.md](docs/governance-system.md) |
+| MCP 到 Lua、FireTuner 单连接和游戏引擎架构 | [docs/architecture-diagrams.md](docs/architecture-diagrams.md) |
+| 产品名、领域包边界和 MCP 兼容命名 | [docs/product-architecture.md](docs/product-architecture.md) |
+| DSH overlay 配置和安全决策 | [integrations/deepseek-harness/README.md](integrations/deepseek-harness/README.md) |
+
+## 决策硬规则
+
+- 移动建造者、开拓者或商人前，先检查目的地及周围地块；长距离移动前使用 `get_pathing_estimate`。
+- 闲置建造者、商路、金币和信仰都是可见的机会成本；除非有明确目标和回合，不要无计划囤积。
+- 每座城市关注城市增长、生产、忠诚度、城墙和驻军；城市数量是长期复利的主要来源。
+- 对手达到 2 倍以上军力、在边境集结攻城单位或接近任何胜利条件时，提高检查频率。
+- `get_barbarian_overview` 返回的营地优先于泛化的“附近敌人”：近城营地先清剿，击杀波次不等于消除刷兵源。
+- 宣战回合不能攻击新敌人；战斗引擎下一回合才同步。
+- `end_turn` 可能在神级 AI 回合中耗时 5–10 分钟；失败时先读取错误和当前状态，不要盲目循环重试。
+- MCP 自动存档是主要恢复点；错误加载存档后以 `end_turn` 的 CRITICAL 警告为准。
+
+## 代码和文档边界
+
+- 当前游戏状态、规则和动作授权由产品的 `civ_mcp` MCP 适配层负责；不要在 DSH 中建立第二套 GameState 或生命周期。
+- `run_lua` 在 DSH 集成中不是支持的游戏接口；优先使用领域工具。
+- 修改游戏机制时同步阅读 [架构](docs/architecture-diagrams.md)、[信念引擎](docs/belief-engine.md) 和 [治理系统](docs/governance-system.md)。
+- 修改启动、连接或恢复行为时同步更新 `docs/agent-startup.md`、`docs/agent-recovery.md` 与 DSH 集成说明。
+- 运行验证时区分离线测试、FireTuner handshake、MCP 工具读取和真实回合动作；不能用前者冒充后者。
+
+项目文档总目录见 [docs/README.md](docs/README.md)，安装和基础用法见 [README.md](README.md)。
