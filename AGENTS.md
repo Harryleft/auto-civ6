@@ -25,62 +25,43 @@ Early choices compound. Each decision shapes what's available 20, 40, 60 turns l
 ## Turn Loop
 
 Each turn in order:
-0. `get_governance_brief` — mandatory MCP entry point. It captures a same-turn typed GameState snapshot and returns ruleset capabilities, budgets, governance agenda, and the reviewed Belief Engine brief. A missing governance snapshot is a blocker, not an optional warning. Human operators with shell access may run `python3 scripts/civ6_assist.py precheck`, which starts with this same MCP call and adds blocker/opportunity checks; MCP-only agents must call the tool directly.
-1. `get_game_overview` — turn, yields, research, score, era score, difficulty. It automatically appends the same Belief Engine turn brief. If resuming after context compaction, call `get_diary` first, then `get_turn_brief`.
-1b. Read the brief before choosing an action: active beliefs/predictions/plans are decision context, `review_required`/Surprise/Contradiction means re-evaluate, and `default_route` is the minimum reasoning route.
-1c. If departments compete for a scarce resource or the choice changes national strategy, run `upsert_strategic_goal` → `submit_governance_proposal` → optional `review_governance_proposal` → `resolve_governance_council`. The critic may agree; objections need traceable evidence or a falsified assumption/alternative.
-2. `get_units` — positions, HP, moves, charges, nearby threats. A nearby hostile is only a verification trigger; call `get_combat_estimate` and then `assess_route_combat_risk` before changing a route belief.
-3. `get_map_area` around cities/units — terrain, resources, enemy units
-4. Move/action each unit; before high-impact or irreversible actions call `route_belief_decision` with the relevant belief IDs, and after the result check whether the belief/plan still holds.
-5. `get_cities` — queues, growth, pillaged districts
-6. `get_district_advisor` if placing a new district
-7. `set_city_production` / `set_research` if needed
-8. Run **Strategic Checkpoints** if it's time
-9. Call `get_turn_brief` again after material evidence or an action outcome; resolve predictions, review contradictions, and replan invalidated plans before continuing.
-10. `skip_remaining_units` then `end_turn` — verify no blockers remain first (an end_turn failure costs 5-10 min of AI turns)
+0. `get_game_overview` — the single mandatory entry point. Read its
+   machine-readable `RUNTIME POLICY`; never infer the Belief Engine mode from
+   this file. In enforce mode the same response already includes the current
+   governance snapshot, so do not duplicate it with a routine
+   `get_governance_brief` call.
+1. Query only information that can change the next decision: normally
+   `get_units`, targeted `get_map_area`, and `get_cities`. Run Strategic
+   Checkpoints only when due or triggered by new evidence.
+2. Act on units and cities. A nearby hostile triggers a quantified
+   `get_combat_estimate`; it is not evidence by itself.
+3. If the server returns `BELIEF_GATE_REQUIRED`, the attempted action had no
+   game side effect. Follow the returned gate, route the exact action intent,
+   and retry once. When the runtime policy says routing is bypassed, do not
+   call belief-routing or governance tools.
+4. Use `get_turn_brief` only after material new evidence, an action outcome, or
+   context recovery—not as a second copy of every ordinary query.
+5. `skip_remaining_units`, then `end_turn`; the server's game-rule and
+   end-turn blockers remain authoritative in every mode.
 
 ## Belief Engine
 
-The diary records what happened and what the agent said. The Belief Engine is
-the mutable current world model. Successful `get_*` calls automatically create
-fact-only observations; do not copy every query manually.
+`CIV_MCP_BELIEF_MODE` is the single source of truth. Its capabilities are
+reported by `get_game_overview`; this document does not redefine them.
 
-- `get_governance_brief`: mandatory first call each turn; writes typed
-  `GameState` entities/relations/metrics into the governance graph and returns
-  capabilities, live budget capacities, locks, confidence gaps, and agenda.
-- `get_turn_brief`: mandatory per-turn decision input; reviews new evidence and
-  returns active beliefs, predictions, plans, surprises, contradictions, and
-  the minimum decision route. `get_game_overview` includes it automatically.
-- `upsert_belief`: interpretation with probability, confidence, evidence,
-  counter-evidence, and falsifiers.
-- `upsert_hypothesis` + `rebalance_hypothesis_pool`: preserve competing
-  explanations instead of locking onto the first story.
-- `upsert_prediction`: falsifiable claim with a deadline and optional metric
-  rule. Failed high-confidence predictions create Surprise records.
-- `upsert_dynamic_plan`: 5/10/20-turn goal with assumptions, exit conditions,
-  and a review turn.
-- `review_belief_engine`: checks prediction deadlines, belief contradictions,
-  and plan invalidation triggers.
-- `route_belief_decision`: returns `fast`, `verify_then_fast`, or `slow` from
-  uncertainty, consequence, urgency, irreversibility, and active surprises.
-- It requires the current turn's typed governance snapshot. When active
-  proposals exist, direct routing is forbidden: resolve the council and route
-  its selected hash-bound `ActionIntent` with `council_decision_id`.
-- `end_turn` is blocked while proposals remain unarbitrated, routed actions are
-  unconsumed/retryable, or selected council intents lack terminal Outcomes.
-  Use `cancel_routed_action` with a concrete reason when an unexecuted or
-  retryable intent is invalidated; cancellation is never counted as success.
-- `get_combat_estimate` + `assess_route_combat_risk`: a nearby hostile only
-  triggers verification; revise route safety only from quantified CS, HP,
-  modifiers, and expected damage.
-- `update_belief_entity` / `delete_belief_entity`: correct or remove current
-  state without erasing the audit trace.
-- `get_belief_trace` / `get_belief_metrics`: postmortem and calibration data.
-
-Probability is the event likelihood; confidence is confidence in that estimate.
-Do not use precise-looking percentages as a substitute for evidence. Link
-beliefs to Observation IDs, state what would falsify them, and update promptly
-when reality conflicts with the current story.
+- Successful game queries create normalized observations automatically. Do
+  not copy raw tool results into beliefs or the diary.
+- Create or revise a belief, hypothesis, prediction, or plan only when it adds
+  an interpretation, falsifiable claim, or future commitment that cannot be
+  reconstructed from current `GameState`.
+- When `action_routing` is `enforced`, follow the returned route and evidence
+  requirements. `slow` means stop; `verify_then_fast` means run the exact
+  requested query before retrying. When it is `bypassed`, skip these calls.
+- Use governance proposals/council resolution only for genuinely competing
+  national choices or scarce-resource conflicts. `get_governance_brief` is a
+  refresh/recovery tool, not a second start-of-turn query.
+- Raw tool history belongs to the DSH transcript and Civ telemetry. The Belief
+  Engine stores normalized facts, fingerprints, and decision/action links.
 
 ## Diary
 

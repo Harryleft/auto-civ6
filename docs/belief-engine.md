@@ -16,6 +16,9 @@ Set `CIV_MCP_BELIEF_MODE` before starting the MCP server:
 
 Use `off` for a minimal A/B run against the legacy path. Core game validation,
 end-turn safety, and autosave behavior remain independent of this setting.
+`get_game_overview` reports the resolved mode and capabilities as `RUNTIME
+POLICY`; Agent hosts should consume that contract instead of maintaining their
+own mode tables.
 
 ## Runtime loop
 
@@ -103,16 +106,15 @@ use keys such as `diplomacy.player_3.at_war` and
 
 ## MCP workflow
 
-1. Start each turn with `get_governance_brief`. It brackets typed `GameState`
-   reads with turn numbers, retries once and rejects a still-cross-turn snapshot,
-   writes stable world entities and relationships, then returns capabilities,
-   resource budgets and the reviewed belief state. `get_turn_brief` remains the
-   smaller refresh call after material evidence or an action outcome.
-2. Call `get_game_overview`; this binds the Belief Engine to the live game and
-   records the first automatic observation. Read the brief's `default_route`,
-   active gates, and review flags before selecting actions.
-3. Call `get_belief_state` to restore the full current world model after a new
-   session or context compaction.
+1. Start each turn once with `get_game_overview`. It returns the authoritative
+   `RUNTIME POLICY`; in `enforce` mode the same call also captures and returns
+   the typed governance snapshot. Do not immediately duplicate it with
+   `get_governance_brief`.
+2. Follow the policy capabilities. Use `get_governance_brief` only to refresh
+   or recover an enforce-mode snapshot, and use `get_turn_brief` only after
+   material evidence, an action outcome, or context recovery.
+3. Call `get_belief_state` only when the full current world model is needed;
+   the overview and targeted queries are the normal decision inputs.
 4. Record important interpretations with `upsert_belief` and competing
    explanations with `upsert_hypothesis`.
 5. Add falsifiable claims with `upsert_prediction` and explicit 5/10/20-turn
@@ -124,10 +126,11 @@ use keys such as `diplomacy.player_3.at_war` and
    concrete alternative. The council uses hard constraints, budget locks,
    priority, Pareto dominance, and opportunity cost without reducing national
    strategy to one weighted score.
-7. Before high-impact or irreversible actions, call `route_belief_decision` and
-   pass the council-selected structured `action_intent`. The common harness
-   wrapper consumes this authorization exactly once; calling a key action
-   without it is rejected, and a `slow` route remains blocked.
+7. When the runtime policy reports enforced routing, call
+   `route_belief_decision` for governed actions and pass the council-selected
+   structured `action_intent`. The common harness wrapper consumes this
+   authorization exactly once; calling a gated action without it is rejected
+   before touching the game, and a `slow` route remains blocked.
    A `verify_then_fast` route requires the declared fresh query with matching
    parameters and required fact/metric keys. An unrelated `get_*` result cannot
    satisfy the gate.
@@ -136,7 +139,8 @@ use keys such as `diplomacy.player_3.at_war` and
    strengths, HP, modifiers, and expected damage to `assess_route_combat_risk`.
    Without that complete quantitative assessment, the route belief is not
    changed.
-9. Call `get_turn_brief` after material new evidence or an action outcome.
+9. In a recording mode, call `get_turn_brief` after material new evidence or
+   an action outcome.
    The harness already stores every successful action result as an
    Observation and runs review automatically; this call exposes the next
    decision gate. Overview and normal `get_*` queries include a compact gate

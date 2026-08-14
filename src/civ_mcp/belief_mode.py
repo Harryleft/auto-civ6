@@ -68,3 +68,17 @@ class BeliefMode(StrEnum):
         """Whether the governance snapshot should be captured each turn."""
 
         return self is self.ENFORCE
+
+    def runtime_policy(self) -> dict[str, str]:
+        """Expose one machine-readable policy for every agent host."""
+
+        return {
+            "belief_mode": self.value,
+            "turn_entry_tool": "get_game_overview",
+            "belief_events": "recorded" if self.records_events else "disabled",
+            "governance": (
+                "enforced" if self.captures_governance_snapshot else "disabled"
+            ),
+            "action_routing": "enforced" if self.enforces_actions else "bypassed",
+            "belief_context": "appended" if self.appends_context else "disabled",
+        }

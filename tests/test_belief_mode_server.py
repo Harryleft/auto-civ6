@@ -13,6 +13,7 @@ from civ_mcp.belief_mode import BeliefMode
 from civ_mcp.server import (
     _append_belief_context,
     _belief_action_preflight,
+    _format_runtime_policy,
     _logged,
     _record_belief_tool_result,
     get_governance_brief,
@@ -69,6 +70,14 @@ def test_off_mode_does_not_record_tool_results():
     )
 
     assert result is None
+
+
+@pytest.mark.parametrize("mode", list(BeliefMode))
+def test_runtime_policy_output_is_derived_from_belief_mode(mode):
+    heading, payload = _format_runtime_policy(mode).split("\n", 1)
+
+    assert heading == "=== RUNTIME POLICY ==="
+    assert json.loads(payload) == mode.runtime_policy()
 
 
 @pytest.mark.parametrize("mode", [BeliefMode.OFF, BeliefMode.OBSERVE])

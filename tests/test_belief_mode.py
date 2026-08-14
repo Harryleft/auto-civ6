@@ -72,3 +72,24 @@ def test_from_env_with_explicit_mapping_does_not_mutate_it():
 
     assert BeliefMode.from_env(environ) is BeliefMode.OBSERVE
     assert environ == {BELIEF_MODE_ENV: " observe "}
+
+
+@pytest.mark.parametrize(
+    ("mode", "events", "governance", "routing", "context"),
+    [
+        (BeliefMode.OFF, "disabled", "disabled", "bypassed", "disabled"),
+        (BeliefMode.OBSERVE, "recorded", "disabled", "bypassed", "disabled"),
+        (BeliefMode.ENFORCE, "recorded", "enforced", "enforced", "appended"),
+    ],
+)
+def test_runtime_policy_is_the_single_agent_facing_capability_contract(
+    mode, events, governance, routing, context
+):
+    assert mode.runtime_policy() == {
+        "belief_mode": mode.value,
+        "turn_entry_tool": "get_game_overview",
+        "belief_events": events,
+        "governance": governance,
+        "action_routing": routing,
+        "belief_context": context,
+    }
