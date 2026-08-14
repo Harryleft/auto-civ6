@@ -240,6 +240,104 @@ def narrate_units(
     return "\n".join(lines)
 
 
+def narrate_barbarian_overview(
+    overview: lq.BarbarianOverview, *, compact: bool = False
+) -> str:
+    """Format barbarian camps and visible units as an action queue.
+
+    A camp is a persistent source of spawns, so it is listed before the units
+    it produces. ``compact`` is used by the per-turn overview; the standalone
+    MCP tool returns the complete list.
+    """
+
+    lines = ["=== BARBARIAN OVERVIEW ==="]
+    camps = sorted(
+        overview.camps,
+        key=lambda camp: (camp.distance_to_city, camp.distance_to_military),
+    )
+    units = sorted(
+        overview.units,
+        key=lambda unit: (unit.distance_to_city, unit.distance_to_military),
+    )
+    if not camps and not units:
+        lines.append("No revealed barbarian camps or visible barbarian military units.")
+        lines.append(
+            "Fog note: no result means only that no camp is revealed and no unit is currently visible."
+        )
+        return "\n".join(lines)
+
+    if camps:
+        lines.append(f"Camps ({len(camps)} revealed):")
+        displayed_camps = camps[:3] if compact else camps
+        for camp in displayed_camps:
+            if camp.distance_to_city <= 5:
+                priority = "CRITICAL"
+            elif camp.distance_to_city <= 10:
+                priority = "HIGH"
+            else:
+                priority = "WATCH"
+            city_dist = (
+                f"{camp.distance_to_city} tiles from nearest city"
+                if camp.distance_to_city < 999
+                else "no city distance"
+            )
+            military_dist = (
+                f"{camp.distance_to_military} from nearest military"
+                if camp.distance_to_military < 999
+                else "no nearby military"
+            )
+            lines.append(
+                f"  [{priority}] ({camp.x},{camp.y}) [{camp.visibility}] — "
+                f"{city_dist}; {military_dist}"
+            )
+        if len(displayed_camps) < len(camps):
+            lines.append(
+                f"  ... {len(camps) - len(displayed_camps)} more camps; "
+                "use get_barbarian_overview for all."
+            )
+
+    if units:
+        lines.append(f"Visible barbarian units ({len(units)}):")
+        displayed_units = units[:5] if compact else units
+        for unit in displayed_units:
+            if unit.distance_to_city <= 5:
+                priority = "DEFEND"
+            elif unit.distance_to_military <= 2:
+                priority = "ENGAGE"
+            else:
+                priority = "WATCH"
+            ranged = f" RS:{unit.ranged_strength}" if unit.ranged_strength > 0 else ""
+            lines.append(
+                f"  [{priority}] {unit.unit_type} at ({unit.x},{unit.y}) — "
+                f"CS:{unit.combat_strength}{ranged} HP:{unit.hp}/{unit.max_hp}; "
+                f"city:{unit.distance_to_city} military:{unit.distance_to_military} [id:{unit.unit_id}]"
+            )
+        if len(displayed_units) < len(units):
+            lines.append(
+                f"  ... {len(units) - len(displayed_units)} more visible units; "
+                "use get_barbarian_overview for all."
+            )
+
+    lines.append("")
+    if any(camp.distance_to_city <= 10 for camp in camps):
+        lines.append(
+            "ACTION REQUIRED: assign a combat unit to the nearest camp, use "
+            "get_combat_estimate when a garrison attack is possible; after the "
+            "garrison is gone, move onto the camp tile to clear the source."
+        )
+    elif camps:
+        lines.append(
+            "PRIORITY: camps are the spawn source; clear the nearest one when "
+            "a military unit can reach it without abandoning city defense."
+        )
+    if units:
+        lines.append(
+            "Do not treat a visible barbarian as a reason to wait indefinitely: "
+            "kill the wave, then move onto its camp tile and clear the source."
+        )
+    return "\n".join(lines)
+
+
 def narrate_builder_tasks(
     tasks: list[lq.BuilderTask], builders: list[lq.BuilderInfo]
 ) -> str:
@@ -1107,6 +1205,18 @@ def narrate_test_trade(result: lq.TestTradeResult) -> str:
 def narrate_policies(gov: lq.GovernmentStatus) -> str:
     lines = [f"Government: {gov.government_name} ({gov.government_type})"]
 
+    empty_slots = [s for s in gov.slots if s.current_policy is None]
+    if empty_slots and gov.available_policies:
+        slot_labels = ", ".join(
+            f"{s.slot_index} ({s.slot_type.replace('SLOT_', '').title()})"
+            for s in empty_slots
+        )
+        lines.append(
+            "\nACTION REQUIRED: empty policy slot(s): "
+            f"{slot_labels}. Fill these before ending the turn with "
+            "set_policies(assignments='...')."
+        )
+
     if gov.slots:
         lines.append(f"\n{len(gov.slots)} policy slots:")
         for s in gov.slots:
@@ -1231,6 +1341,12 @@ def narrate_pantheon_status(status: lq.PantheonStatus) -> str:
         lines.append(f"Faith: {status.faith_balance:.0f}")
     else:
         lines.append(f"No pantheon selected. Faith: {status.faith_balance:.0f}")
+        if status.pantheon_cost > 0:
+            short = max(0.0, status.pantheon_cost - status.faith_balance)
+            lines.append(
+                f"Pantheon costs {status.pantheon_cost:.0f} faith — "
+                f"need {short:.0f} more (Faith {status.faith_balance:.0f}/{status.pantheon_cost:.0f})."
+            )
         if status.available_beliefs:
             lines.append(f"\n{len(status.available_beliefs)} available beliefs:")
             for b in status.available_beliefs:

@@ -17,6 +17,24 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
+def _barbarian_attack_opportunities(
+    units: list[lq.UnitInfo], overview: lq.BarbarianOverview
+) -> list[tuple[int, int, int]]:
+    """Return own unit/target pairs that can attack a visible barbarian now."""
+
+    barbarian_positions = {(unit.x, unit.y) for unit in overview.units}
+    opportunities: list[tuple[int, int, int]] = []
+    for unit in units:
+        for target in unit.targets:
+            try:
+                target_x, target_y = (int(value) for value in target.split(",", 1))
+            except (TypeError, ValueError):
+                continue
+            if (target_x, target_y) in barbarian_positions:
+                opportunities.append((unit.unit_id, target_x, target_y))
+    return opportunities
+
+
 def _can_override_end_turn_blockers(
     hard_blockers: list[tuple[str, str]],
 ) -> bool:
@@ -561,6 +579,27 @@ async def execute_end_turn(gs: GameState) -> str:
             )
     except Exception:
         log.debug("Pending deal check failed", exc_info=True)
+
+    # Do not silently skip an immediately attackable barbarian. This is a
+    # narrow guard: it only blocks when the current unit scan says one of our
+    # units can attack a currently visible barbarian unit. It does not block a
+    # turn merely because a camp was revealed or because no combat unit is
+    # available; those cases remain advisory and recoverable.
+    try:
+        barbarian_now = await gs.get_barbarian_overview()
+        if barbarian_now.units:
+            own_units = await gs.get_units()
+            opportunities = _barbarian_attack_opportunities(own_units, barbarian_now)
+            if opportunities:
+                unit_id, target_x, target_y = opportunities[0]
+                return (
+                    "Cannot end turn: a visible barbarian can be attacked now. "
+                    f"Assess it with get_combat_estimate(unit_id={unit_id}, "
+                    f"target_x={target_x}, target_y={target_y}), then attack or "
+                    "move the unit before retrying end_turn."
+                )
+    except Exception:
+        log.debug("Immediate barbarian attack preflight failed", exc_info=True)
 
     # 2. Pre-dismiss any ExclusivePopupManager popups (wonder, disaster, era)
     # that may hold engine locks blocking turn advancement.
@@ -1536,6 +1575,30 @@ async def execute_end_turn(gs: GameState) -> str:
             )
     except Exception:
         log.debug("Threat scan failed", exc_info=True)
+
+    # Barbarian camps are the source of repeated spawns and are not covered by
+    # the generic hostile-unit scan. Keep this as a post-advance alert rather
+    # than a hard blocker: a camp may be revealed without a reachable or
+    # healthy combat unit, and end_turn must remain recoverable in that case.
+    try:
+        barbarian_overview = await gs.get_barbarian_overview()
+        if barbarian_overview.camps or barbarian_overview.units:
+            camp_priority = (
+                1
+                if any(camp.distance_to_city <= 10 for camp in barbarian_overview.camps)
+                else 2
+            )
+            events.append(
+                lq.TurnEvent(
+                    priority=camp_priority,
+                    category="barbarian",
+                    message=nr.narrate_barbarian_overview(
+                        barbarian_overview, compact=True
+                    ),
+                )
+            )
+    except Exception:
+        log.debug("Barbarian camp scan failed after turn advance", exc_info=True)
 
     # Fog-of-war direction tracking — diff pre/post threats
     if threats_before:

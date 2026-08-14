@@ -632,7 +632,19 @@ if not row then {_bail(f"ERR:INVALID_INDEX|Dedication index {dedication_index} n
 local params = {{}}
 params[PlayerOperations.PARAM_COMMEMORATION_TYPE] = {dedication_index}
 UI.RequestPlayerOperation(me, PlayerOperations.COMMEMORATE, params)
-print("OK:DEDICATION_CHOSEN|" .. row.CommemorationType)
+-- Read back to verify the commemoration actually became active (no false OK).
+local activeAfter = pEras:GetPlayerActiveCommemorations(me)
+local verified = false
+if activeAfter then
+    for _, a in ipairs(activeAfter) do
+        if a == {dedication_index} then verified = true break end
+    end
+end
+if verified then
+    print("OK:DEDICATION_CHOSEN|" .. row.CommemorationType .. " (verified)")
+else
+    print("OK:DEDICATION_SUBMITTED|" .. row.CommemorationType .. " requested but not yet reflected — re-check with get_dedications")
+end
 print("{SENTINEL}")
 """
 

@@ -129,8 +129,8 @@ class GameState:
         advances while the snapshot is being assembled.
         """
 
-        from civ_mcp.governance.capabilities import capabilities_for_ruleset
-        from civ_mcp.governance.snapshot import (
+        from civ6_belief_engine.governance.capabilities import capabilities_for_ruleset
+        from civ6_belief_engine.governance.snapshot import (
             SnapshotConsistencyError,
             build_turn_snapshot,
         )
@@ -237,6 +237,11 @@ class GameState:
     async def get_threat_scan(self) -> list[lq.ThreatInfo]:
         lines = await self.conn.execute_read(lq.build_threat_scan_query())
         return lq.parse_threat_scan_response(lines)
+
+    async def get_barbarian_overview(self) -> lq.BarbarianOverview:
+        """Return revealed camps and currently visible barbarian units."""
+        lines = await self.conn.execute_read(lq.build_barbarian_overview_query())
+        return lq.parse_barbarian_overview_response(lines)
 
     async def get_pathing_estimate(
         self, unit_index: int, target_x: int, target_y: int
