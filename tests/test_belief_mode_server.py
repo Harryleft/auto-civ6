@@ -8,10 +8,12 @@ from types import SimpleNamespace
 
 import pytest
 
+from civ_mcp import server as server_module
 from civ_mcp.belief_mode import BeliefMode
 from civ_mcp.server import (
     _append_belief_context,
     _belief_action_preflight,
+    _logged,
     _record_belief_tool_result,
     get_governance_brief,
     get_turn_brief,
@@ -107,3 +109,41 @@ def test_lightweight_modes_make_route_tool_an_explicit_noop(mode):
     assert result["belief_mode"] == mode.value
     assert result["enforced"] is False
     assert result["authorized"] is True
+
+
+def test_logged_keeps_model_annotations_out_of_belief_observations(monkeypatch):
+    captured: dict[str, str] = {}
+
+    class Logger:
+        _turn = 9
+
+        async def log_tool_call(self, _tool, _params, result, _duration_ms):
+            captured["telemetry"] = result
+
+    async def preflight(*_args, **_kwargs):
+        return {"authorized": True, "decision_id": None, "route": "routine"}
+
+    async def append_context(_ctx, _tool, result):
+        return result + "\n\n=== BELIEF CONTEXT ===\nmode=enforce"
+
+    async def record(_ctx, _tool, _params, result, *_args, **_kwargs):
+        captured["belief"] = result
+
+    async def operation():
+        return "GAME RESULT"
+
+    monkeypatch.setattr(server_module, "_belief_action_preflight", preflight)
+    monkeypatch.setattr(server_module, "_append_belief_context", append_context)
+    monkeypatch.setattr(server_module, "_record_belief_tool_result", record)
+    monkeypatch.setattr(server_module.heartbeat, "write", lambda *_args, **_kwargs: None)
+    ctx = SimpleNamespace(
+        request_context=SimpleNamespace(
+            lifespan_context=SimpleNamespace(logger=Logger())
+        )
+    )
+
+    result = asyncio.run(_logged(ctx, "get_units", {}, operation))
+
+    assert "BELIEF CONTEXT" in result
+    assert captured["telemetry"] == result
+    assert captured["belief"] == "GAME RESULT"

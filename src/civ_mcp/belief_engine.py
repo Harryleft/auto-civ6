@@ -50,6 +50,7 @@ _PROBABILITY_FIELDS = {
 }
 _IMPACT_SCORE = {"low": 0.25, "medium": 0.5, "high": 0.75, "critical": 1.0}
 _URGENCY_SCORE = {"low": 0.25, "medium": 0.5, "high": 0.75, "critical": 1.0}
+_RESULT_SUMMARY_CHARS = 500
 
 
 class BeliefEngineError(ValueError):
@@ -70,19 +71,24 @@ def _coerce_number(value: str) -> int | float:
     return int(number) if number.is_integer() else number
 
 
+def _result_summary(result: str) -> str:
+    match = re.search(r"(?m)^[ \t]*(\S[^\r\n]*)", result)
+    return match.group(1).strip()[:_RESULT_SUMMARY_CHARS] if match else ""
+
+
 def normalize_tool_result(tool: str, result: str) -> dict[str, Any]:
     """Extract stable facts/metrics from narrated MCP query results.
 
-    Raw text is always retained by the caller.  This normalizer intentionally
-    extracts only values with unambiguous textual contracts; interpretations
-    belong in beliefs, not observations.
+    Raw text remains owned by the tool transcript and telemetry. This
+    normalizer intentionally extracts only values with unambiguous textual
+    contracts; interpretations belong in beliefs, not observations.
     """
 
     metrics: dict[str, Any] = {}
     facts: dict[str, Any] = {"tool": tool}
-    first_line = next((line.strip() for line in result.splitlines() if line.strip()), "")
+    first_line = _result_summary(result)
     if first_line:
-        facts["summary"] = first_line[:500]
+        facts["summary"] = first_line
 
     if tool == "get_game_overview":
         patterns: tuple[tuple[str, str], ...] = (
@@ -271,6 +277,17 @@ def normalize_tool_result(tool: str, result: str) -> dict[str, Any]:
                 )
 
     return {"facts": facts, "metrics": metrics}
+
+
+def tool_result_reference(result: str) -> dict[str, Any]:
+    """Return a compact, stable pointer to a raw result owned by telemetry."""
+
+    encoded = result.encode("utf-8")
+    return {
+        "sha256": hashlib.sha256(encoded).hexdigest(),
+        "utf8_bytes": len(encoded),
+        "summary": _result_summary(result),
+    }
 
 
 def _validate_probability(name: str, value: Any) -> None:
@@ -698,6 +715,7 @@ class BeliefEngine:
             return None
         if category == "query" and success:
             normalized = normalize_tool_result(tool, result)
+            result_ref = tool_result_reference(result)
             observation = self.create(
                 "observation",
                 {
@@ -705,7 +723,7 @@ class BeliefEngine:
                     or f"Observed result from {tool}",
                     "source": f"mcp:{tool}",
                     "source_params": deepcopy(params),
-                    "raw": result,
+                    "result_ref": result_ref,
                     "facts": normalized["facts"],
                     "metrics": normalized["metrics"],
                     "reliability": 1.0,
@@ -718,13 +736,14 @@ class BeliefEngine:
             return observation
         if category in {"action", "turn"}:
             executed = not result.startswith("BELIEF_GATE_REQUIRED")
+            result_ref = tool_result_reference(result)
             action = self.create(
                 "action",
                 {
                     "statement": f"{tool} {'succeeded' if success else 'failed'}",
                     "tool": tool,
                     "params": deepcopy(params),
-                    "result": result,
+                    "result_ref": result_ref,
                     "success": success,
                     "duration_ms": duration_ms,
                     "selected_turn": turn,
@@ -734,7 +753,6 @@ class BeliefEngine:
                     "verification": {
                         "source": "tool_result",
                         "verified": success,
-                        "result": result[:2000],
                     },
                 },
                 turn=turn,
@@ -751,7 +769,6 @@ class BeliefEngine:
                     {
                         "statement": f"Observed result from {tool}",
                         "source": f"action:{tool}",
-                        "raw": result,
                         "facts": facts,
                         "metrics": deepcopy(normalized.get("metrics") or {}),
                         "reliability": 1.0,
@@ -773,7 +790,6 @@ class BeliefEngine:
                         "decision_id": decision_id,
                         "action_id": action["id"],
                         "success": success,
-                        "result": result,
                         "observed_turn": turn,
                     },
                     turn=turn,
@@ -1016,22 +1032,35 @@ class BeliefEngine:
             raise BeliefEngineError(f"Unknown decision: {decision_id}")
         if decision.get("decision_state") != "executing":
             return decision
+        result_ref = tool_result_reference(result)
         if success:
             patch = {
                 "status": "resolved",
                 "decision_state": "succeeded",
                 "completed_action_tool": tool,
                 "completed_turn": turn,
-                "execution_result": result[:2000],
+                "execution_result_ref": result_ref,
             }
+            obsolete_result_fields = (
+                "execution_result",
+                "last_failure",
+                "last_failure_ref",
+            )
         else:
             patch = {
                 "decision_state": "retryable",
                 "last_failed_action_tool": tool,
                 "last_failed_turn": turn,
-                "last_failure": result[:2000],
+                "last_failure_ref": result_ref,
             }
-        return self.update("decision", decision_id, patch, turn=turn)
+            obsolete_result_fields = ("execution_result", "last_failure")
+        return self.update(
+            "decision",
+            decision_id,
+            patch,
+            turn=turn,
+            _remove_fields=obsolete_result_fields,
+        )
 
     def cancel_action_authorization(
         self,
