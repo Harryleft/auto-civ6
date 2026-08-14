@@ -37,18 +37,28 @@ get_game_overview
 | 8/13 23:25 | TBB WinID 7 | 18.2 min | +0x8cbbec | 同上 |
 | 8/14 15:11 | TBB WinID 7 | 3h43m | +0x8cbbec | 同上 |
 | 8/14 17:21 | TBB WinID 9 | 1h44m | +0x8cbbec | 同上 |
+| 8/15 00:15 | TBB WinID 12 | ~25 min | +0x8cbbec | 同上（P1 验收中实录，第 6 份） |
 
 第一性原理判断（已被数据证实）：**并行任务访问了生命周期已结束的 C++ 多态对象**（stale task / use-after-destruction）。证据：
-- 5 次崩溃**同一可执行文件偏移 +0x8cbbec**、同一组 TBB 偏移——确定性代码路径，不是内存随机性
-- 触发线程从 WinID 6→7→9 轮换——谁抢到悬垂 task 谁崩
-- 进程存活 13 分钟到 3.7 小时差异巨大——**与会话时长无关**（修正早期"长会话内存泄漏"结论：15:11 那次内存低是伴生现象，非原因）
+- 6 次崩溃**同一可执行文件偏移 +0x8cbbec**、同一组 TBB 偏移——确定性代码路径，不是内存随机性
+- 触发线程从 WinID 6→7→9→12 轮换——谁抢到悬垂 task 谁崩
+- 进程存活 13 分钟到 3.7 小时差异巨大——**与会话时长无关**
 
 符号级定位（`nm`/`atos`）：
 - 崩溃点 `0x8cbbec` 位于 `Platform::JobManager::SpawnList` (0x8caf0c) 之后 0xce0 字节——JobManager 区域末尾未命名内联代码（worker 从 JobList 取 task 执行的内联路径）
 - 附近符号 `Localization::String::Empty`——任务可能涉及本地化文本（AI 回合中单位/城市名渲染）
 - 链路：**TBB worker → 从 Civ6 JobList 拉取 task → task 虚方法 execute() → 对象已析构（vtable 清空）→ `__cxa_pure_virtual` → abort**
 
-**结论：引擎存在 JobSet/JobList 生命周期管理 bug，外部无法修复。** 崩溃发生在 AI 回合处理期（TBB 并行任务最活跃时），与特定回合数/动作无确定关联。恢复成本已最小化：end_turn 自动存档（0_MCP_NNNN）在崩溃前完成，重启加载损失 0 回合。
+**结论：引擎存在 JobSet/JobList 生命周期管理 bug，外部无法修补闭源二进制。** 崩溃发生在 AI 回合处理期（TBB 并行任务最活跃时），与特定回合数/动作无确定关联。恢复成本已最小化：end_turn 自动存档（0_MCP_NNNN）在崩溃前完成，重启加载损失 0 回合。
+
+## 崩溃规避（2026-08-15 新增：已验证方向）
+
+崩溃概率与 TBB worker 数量正相关（谁抢到悬垂 task 谁崩，worker 越多竞态窗口越大）。规避按性价比排序：
+
+1. **引擎线程上限（已自动化）**：`AppOptions.txt [Performance] MaxJobThreads` 由 `-1`（每核一个 worker）改为 `4`。恢复链每次拉起游戏前由 `_ensure_job_thread_cap()` 幂等确保（CRLF 安全、首备份 `AppOptions.txt.civ6-mcp.bak-<date>`）；`CIV_MCP_MAX_JOB_THREADS=0` 可关闭。与社区结论同向：reddit "FIX: Crashing on Mac (Threading Fix)"（36 帖）即线程数修复。**生效时机：下次游戏启动**。若仍崩，降到 `2` 再观察。
+2. **游戏内"性能影响"选项全部最低（手动一次性）**：Apple Silicon 用户实测（gist，多人复验）：性能选项驱动的资源生成任务同样走 TBB，全最低后从"每几分钟崩一次"变为"数小时不崩"。路径：游戏内 图形设置 → 性能影响/Memory Impact → Minimum。
+3. **时序规避**：AI 回合处理期（end_turn 前后数秒）是 TBB 最活跃窗口，避免密集工具调用；批量查询放回合稳定期。
+4. **兜底（已加固）**：就算崩了——每回合 0_MCP 自动存档损失 0 回合；恢复链 `restart_and_load` 已修复（launch 重试 ×3、OCR 菜单未就绪退避 30s 重试、明确 FAILED 中止）。
 
 要点：
 - 崩溃是**进程级**，FireTuner 仅在本进程中，进程死亡即断连（报 `Cannot connect to Civ 6 at 127.0.0.1:4318`）。
