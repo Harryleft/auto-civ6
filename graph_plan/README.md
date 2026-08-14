@@ -303,6 +303,8 @@ ETC 不是“文件更小”或“抽象更多”，而是：**一个需求变�
 3. `GraphView`：Department、Council 和查询消费者读取的最小接口。
 4. `ActionIntent`：决策层交给单一游戏写入器的授权契约。
 
+`ActionIntent` 的规范形固定为 `governance/models.py` 中的不可变 dataclass；BeliefEngine 事件中的 dict 只是它的持久化投影，必须通过同一个 serializer/upcaster 往返，不能作为第二套授权模型继续演化。
+
 除这四处外，不预先制造通用 Repository、Hook、Workflow、Provider 或插件框架。第二个真实实现出现前，不为假想复用抽象。
 
 第 5 节中的 `GamePort` 目前只是 `GameState` 所承担的职责名，不要求立刻新增接口；只要 `TypedSnapshot` 输入契约稳定，单一 Civ6 实现继续使用具体类更简单。
@@ -314,7 +316,8 @@ ETC 不是“文件更小”或“抽象更多”，而是：**一个需求变�
 | 职责 | 近期做法 | 满足什么条件后再抽离 |
 |---|---|---|
 | JSONL 追加、校验、epoch/replay | 继续由现有 `BeliefEngine` 承担，先锁定事件契约 | replay golden 稳定，且能从零重建同一视图 |
-| TypedSnapshot → 图增量 | 从 `ingest_typed_snapshot` 提取纯函数 projector | 同输入产生确定性 `GraphDelta`，无 I/O、无全局状态 |
+| TypedSnapshot → 图增量 | 从 `ingest_typed_snapshot` 提取纯函数 projector | 同一 snapshot 与 prior view 产生确定性 `GraphDelta`，无 I/O、无全局状态 |
+| ingest 写入编排 | 新增窄 `IngestionOrchestrator`，接管回退检测、epoch 切换、归档、observation 及 review 触发 | projector 纯化后副作用有唯一所有者，故障恢复测试保持全绿 |
 | 当前节点、边与邻接查询 | 先提供窄 `GraphView`，只实现已列明的消费者查询 | 至少两个消费者需要相同查询语义时再增加通用索引 |
 | Belief/Council/ActionIntent 状态机 | 保持独立领域行为，不塞进通用图 CRUD | 现有状态迁移、门禁和失败恢复已有 characterization tests |
 | MCP 文本与结果过滤 | 继续留在 adapter/presentation 边界 | 永远不进入图的事实与决策语义 |
@@ -331,7 +334,7 @@ src/civ6_belief_engine/graph/
 
 如果其中某个文件在迁移阶段只有转发代码，就不要创建。
 
-图写入必须遵循 `domain decision → GraphEvent → reducer → GraphView`；任何业务路径都不能直接修改 `GraphView`。projector/reducer 不调用 FireTuner，读取 `GraphView` 也不反向触发游戏查询。
+图写入必须遵循 `domain decision → GraphEvent → reducer → GraphView`；任何业务路径都不能直接修改 `GraphView`。projector 接收 snapshot 与 prior view，reducer 接收事件；二者都不调用 FireTuner，读取 `GraphView` 也不反向触发游戏查询。
 
 首批只实现三个已知消费者查询：城市附近威胁、Goal 对应的活动 Proposal/Blocker/预算锁、Decision 到 Action/Outcome/Verification 的追溯。没有消费者的通用遍历 API 不进入第一版。
 
@@ -342,7 +345,7 @@ src/civ6_belief_engine/graph/
 1. **表征现状**：冻结 MCP schema、ActionIntent 状态迁移、epoch/replay 和三个真实图查询的 golden tests。
 2. **领域 DTO 归位**：让 `TypedSnapshot` 归领域包所有；`civ_mcp` 只负责把 Lua DTO 转成领域 DTO。
 3. **影子 projector**：同一 snapshot 同时进入旧投影与新纯函数，仅比较结果，不双写新的事实存储。
-4. **逐个迁移消费者**：先迁移一个 Department，再迁移 Council；每次用等价测试证明行为未漂移。
+4. **逐个迁移消费者**：先让 GraphView 提供活动 Goal、priority、statement 的议程查询，再迁移一个 Department 和 Council；每次用等价测试证明行为未漂移。
 5. **切换单一写路径**：新投影成为唯一写入者后立即删除旧投影；禁止永久双写。
 6. **最后瘦身入口**：只有职责已经有新所有者后，才从 `server.py`、`end_turn.py` 和 `BeliefEngine` 移除对应代码。
 
@@ -365,6 +368,7 @@ src/civ6_belief_engine/graph/
 
 - **通用图 CRUD**：让业务层到处拼字符串类型和属性名，会把 schema 知识扩散到所有消费者。
 - **永久双轨**：`TurnSnapshot` 与 `GraphView` 长期同时承载决策事实，会形成第二事实源。
+- **双观察源**：正则 `normalize_tool_result()` 与 typed snapshot 长期同时写入不同 metric 键空间；迁移期必须对照并给正则路径设退役条件。
 - **永久双写**：旧实体和新图事件同时写入且无删除日期，会使任何修改都要维护两套语义。
 - **框架先行**：在查询规模和瓶颈未测量前引入 Neo4j、LangGraph 或通用 DAG runtime。
 - **把状态机降格为边**：`authorized → executing → outcome_unknown → verified` 是行为与不变量，不是几条关系名就能替代。
@@ -377,7 +381,7 @@ src/civ6_belief_engine/graph/
 1. 新关系或节点类型只修改一个领域定义点和对应 projector，不修改 MCP 兼容面。
 2. Department/Council 只依赖 `GraphView` 和领域 DTO，不 import `civ_mcp`。
 3. 事件 schema 版本化；旧 JSONL 通过 upcaster/兼容 reader 读取，不原地重写历史。
-4. 任一 snapshot 可重复投影，任一事件流可重复 replay，结果哈希一致。
+4. 任一 snapshot 可重复投影；包含 reload 的事件流按 epoch 分组 replay 后，当前投影、归档结果和哈希一致。
 5. 切换消费者后删除旧路径；代码库中不存在无截止日期的双写/双读。
 6. 常见需求的差异应局限在一个领域模块、至多一个 adapter 和测试；超出时必须说明被穿透的边界。
 7. 外部图基础设施只有在实测出现内存、replay 时延或跨运行查询瓶颈后才进入决策，且必须能由现有 contract tests 替换验证。
@@ -389,6 +393,159 @@ src/civ6_belief_engine/graph/
 - **观察缺失**：战争迷雾导致的“未观察”如何区别于“删除”，过期策略由谁拥有。
 - **热点与膨胀**：高连接实体、每回合全量 update、links 双向复制是否让 replay 成本重新线性增长。
 - **隐藏时序**：World Congress、外交弹窗和 end_turn 的不可并行步骤如何进入执行契约，而不是被普通 DAG 重排。
-- **逃生口**：`run_lua` 等高级通道如何遵守 mutation、授权和审计不变量，避免绕开图工程的安全边界。
+- **逃生口**：`run_lua` 的授权和 mutation 传输契约已闭环；仍需确认 ingame 任意 Lua 的 action 事件分类、read-back 策略和审计语义。
 
 这些问题不要求现在全部抽象解决；要求的是每项都有明确所有者、验证信号和触发升级设计的阈值。
+
+### E.9 实体、关系、通信、流程与路由
+
+#### E.9.1 先区分“图中的实体”和“运行系统的组件”
+
+一个对象只有满足下列至少一项，才进入图：有跨回合稳定身份、有独立生命周期、需要被多个对象引用、需要单独查询或审计。否则优先作为属性、值对象或事件载荷。
+
+这意味着 `City`、`Goal`、`Decision` 是实体；人口、概率、工具参数不是实体。`GameState`、Department plugin、Council、projector 和 writer 是处理实体的组件，也不是图节点。
+
+第一版建议如下：
+
+| 分类 | 第一版实体 | 说明 |
+|---|---|---|
+| 世界 | `Player`、`City`、`Unit`、`Tile`、`Technology`、`Civic`、`ResourceStockpile`、`Government`、`PolicySlot`、`BarbarianCamp` | 只收录已观察且参与查询的对象；己方和对手统一为 `Player`，文明、领袖是属性 |
+| 认知 | `Observation`、`Belief`、`Hypothesis`、`Prediction` | Observation 是带来源和时效的证据；Belief 等是可被反证的解释 |
+| 目标与治理 | `Goal`、`Workstream`、`Proposal`、`CouncilDecision`、`ActionIntent`、`BudgetLock` | 都有独立状态或审计价值；状态迁移仍由领域服务控制 |
+| 执行 | `Action`、`Outcome` | Action 表示实际提交，Outcome 表示已知结果或结果未知 |
+
+以下内容第一版不建节点：
+
+- `TurnSnapshot`、`GraphDelta`、`GraphEvent`：它们是输入、变更集和事件信封。
+- Department 与 Council：它们是确定性策略组件；节点化的应是其产物与责任字段。
+- 金币、人口、战斗力、概率、置信度：作为实体属性或 Observation metric。
+- 简单 Constraint、EvidenceRequirement、SupportRequest：先作为类型化值对象；当它们拥有独立状态、被多个提案复用或需要单独审计时，再提升为实体。
+- Verification：第一版用 `Outcome -VERIFIED_BY-> Observation` 表达；只有出现多轮验证、超时和责任转移等独立生命周期时，才新增 Verification 实体。
+- `Game` 与 `Epoch`：先作为所有实体和事件的作用域，而不是普通节点；出现跨存档、跨分支查询后再节点化。
+
+实体键应使用 `EntityKey(game_id, kind, local_id)` 的统一规则。`epoch` 属于事实发生的时间分支，不放进世界实体 ID。特别需要修正当前城市 ID 中包含 owner 的做法：目标应为 `city:{game_id}:{city_id}`，所有权变化只关闭旧 `OWNS` 边并建立新边，不能制造一座“新城市”。同理，己方 `player` 与对手 `civilization` 不应因观察入口不同而拥有两种节点类型。
+
+#### E.9.2 关系是有来源、有时效的事实
+
+关系不是方便展示的字符串，而是两个实体之间可解释、可查询的事实。第一版只保留真实消费者需要的关系：
+
+| 关系族 | 关系 | 方向与语义 |
+|---|---|---|
+| 世界 | `OWNS`、`LOCATED_AT`、`RESEARCHING`、`PROGRESSING`、`DIPLOMACY_WITH`、`STOCKPILES` | 当前世界事实，通常随回合变化 |
+| 证据 | `OBSERVES`、`SUPPORTS`、`CONTRADICTS`、`DERIVED_FROM` | 从观察到判断的证据链 |
+| 目标 | `SERVES`、`DEPENDS_ON`、`BLOCKED_BY`、`RESERVES` | workstream/proposal 与目标、依赖、约束、预算的关系 |
+| 治理 | `SELECTS`、`REJECTS`、`AUTHORIZES` | 从提案到授权的可审计选择链；Department 先作为 Proposal 的责任字段 |
+| 执行 | `EXECUTES`、`PRODUCES`、`VERIFIED_BY`、`ATTRIBUTED_TO` | 从意图到动作、结果、验证和归因 |
+
+动态关系至少包含：`edge_id`、`relation_type`、`source_id`、`target_id`、`epoch`、`valid_from_turn`、`valid_to_turn`、`observed_by`、`attributes`。`valid_to_turn = null` 表示当前有效；未观察到不能自动关闭关系，只有权威快照、明确删除或过期策略才能关闭。
+
+距离、威胁分数、机会成本等派生值默认在 `GraphView` 查询时计算，不永久写边。只有当某次决策确实依赖它并需要复盘时，才将计算输入和结论记录为 Observation/Assessment。
+
+当前 `ingest_typed_snapshot()` 把同一关系分别复制进源节点和目标节点的 `links`。这使一个关系变化要维护两份数据。目标设计应只写一条规范 Edge，由 `GraphView` 构建 incoming/outgoing 索引；邻接索引是可重建缓存，不是第二事实源。
+
+#### E.9.3 实体不直接通信，组件通过三种消息协作
+
+领域实体保持被动和不可变，不持有网络连接，也不直接调用其他实体。运行时只有三种消息：
+
+| 消息 | 含义 | 约束 |
+|---|---|---|
+| Query | 请求当前视图或历史，不改变状态 | 可重试，只读 `GraphView`、event journal 或 `GameState` |
+| Command | 请求一个明确状态变化 | 只能有一个 handler；游戏变异最终只能进入 single writer |
+| Event | 已经发生的事实 | 过去式、不可变、可重放；可以驱动多个 projector |
+
+事件信封最少包含 `event_id`、`event_type`、`schema_version`、`game_id`、`epoch`、`turn`、`correlation_id`、`causation_id` 和 payload。`correlation_id` 串起一次完整决策，`causation_id` 指向直接原因，从而不用靠文本猜测 Action 为什么发生。
+
+第一版不引入消息队列。Command handler 同步产出领域事件，现有 JSONL 先落盘，reducer 随后更新内存 `GraphView`；失败时以“事件是否成功追加”为状态是否成立的边界。
+
+组件责任固定为：
+
+- `SnapshotCoordinator`：用 turn-before/turn-after 包住多项 GameState 查询，产出一个 `TypedSnapshot`。
+- `GraphProjector`：纯函数 `project(TypedSnapshot, previous GraphView) -> GraphDelta`，不访问 FireTuner。
+- `IngestionOrchestrator`：处理回合回退检测、epoch 切换、旧事实归档、事件追加和 review 触发；projector 纯化后，这些副作用不能继续成为无人负责的残余代码。
+- `EventJournal`：唯一历史写入口，负责 schema、顺序、epoch 和完整性。
+- `GraphMaterializer`：唯一 GraphView 更新入口，按事件重放。
+- `GraphView`：只提供领域查询，不暴露通用可写图。
+- Department：读取 GraphView，输出 Assessment/Workstream/Proposal；不得直接调用游戏。
+- Council：只做约束、预算与方案选择，输出 CouncilDecision；不得执行动作。
+- `RiskRouter`：只选择执行路径，不选择方案。
+- `ActionPipeline`：校验 ActionIntent，交给 single writer，记录 Outcome 并发起验证。
+
+`ActionIntent` 的唯一规范形采用 `governance/models.py` 中带 `intent_id`、`evidence_requirements`、`allowed_turn` 和 `arguments_hash` 的不可变类型；BeliefEngine 当前内嵌 dict 只作为 JSONL 序列化/兼容投影。进入 AuthorizationGate 前必须先还原并校验规范形，不能让两套 ActionIntent 各自演化。
+
+#### E.9.4 路由分为查询路由、决策路由和动作路由
+
+##### 查询路由
+
+| 问题 | 路由到 | 原因 |
+|---|---|---|
+| 当前决策上下文、邻接和依赖 | `GraphView` | 快、确定、无副作用 |
+| 游戏当前精确值或缺失证据 | `GameState -> TypedSnapshot/Observation` | Civ6 才是实时事实权威 |
+| 谁在何时做了什么 | `EventJournal` | 历史审计不能从当前视图反推 |
+| 原始工具返回 | Telemetry/result reference | 图中只保留规范事实和内容指纹 |
+
+GraphView 查询返回“已知事实 + 来源 + 新鲜度”，不能在内部偷偷调用 FireTuner。发现证据缺口时，应显式返回 `EvidenceRequirement`，由上层决定是否走新鲜查询。
+
+##### 决策路由
+
+```mermaid
+flowchart LR
+    GV["GraphView"] --> DEPT["Departments 独立评估"]
+    DEPT --> COORD["Coordinator 合并依赖"]
+    COORD --> PROP["Proposals"]
+    PROP --> COUNCIL["Council 约束、预算、Pareto"]
+    COUNCIL --> DEC["CouncilDecision"]
+    DEC --> RISK["RiskRouter"]
+    RISK --> FAST["fast"]
+    RISK --> VERIFY["verify_then_fast"]
+    RISK --> SLOW["slow / replan"]
+```
+
+这里必须维持两个不同职责：Council 决定“选哪个方案”；RiskRouter 只决定“选中的方案如何安全执行”。现有 `route_decision()` 的加权分只能用于 `fast / verify_then_fast / slow` 路径，不得参与 Proposal 选择，避免概率权重绕过硬约束和 Pareto。
+
+“独立评估”表示 Department 之间没有直接调用；第一版保持现有确定性顺序执行即可，不为没有实测瓶颈的纯函数评估引入并发调度。GraphView 必须先提供活动 Goal、priority 和 statement 查询，替代当前 coordinator 注入的自由文本 agenda，首个 Department 才能真正脱离 TurnSnapshot。
+
+路由语义固定为：
+
+- `routine`：只读或明确低影响动作，无需 Council，但仍记录。
+- `fast`：当前回合快照、授权和证据均满足，可进入 ActionPipeline。
+- `verify_then_fast`：先执行 ActionIntent 中精确声明的只读查询；证据事件落账后重新检查原意图。
+- `slow`：禁止执行，补证据、重规划或重新提交 Council。
+
+##### 动作路由
+
+```mermaid
+flowchart LR
+    INTENT["ActionIntent"] --> GATE["AuthorizationGate\nturn + args_hash + evidence + budget"]
+    GATE --> WRITER["Single Game Writer"]
+    WRITER --> RESULT{"执行结果"}
+    RESULT -->|确定成功/失败| OUT["Outcome"]
+    RESULT -->|超时或断线| UNKNOWN["outcome_unknown"]
+    UNKNOWN --> READBACK["专用只读验证"]
+    READBACK --> OUT
+    OUT --> EVENT["EventJournal"]
+    EVENT --> VIEW["GraphView"]
+```
+
+所有 MCP 入口先按能力分类为 `query` 或 `mutation`，不能只按工具名猜测。`run_lua` 必须由调用方显式声明；mutation 永不自动重发。动作参数、授权回合和证据要求必须与 ActionIntent 哈希绑定。
+
+#### E.9.5 一个完整回合的最小闭环
+
+1. `get_governance_brief` 触发 SnapshotCoordinator，获取同回合 TypedSnapshot。
+2. GraphProjector 计算 GraphDelta；EventJournal 先记录事实事件，Materializer 更新 GraphView。
+3. Departments 从 GraphView 读取各自的窄查询，输出 Assessment 和 Workstream；Coordinator 只解析结构化依赖。
+4. Proposal 进入 Council；硬约束失败先拒绝，再处理预算锁、优先级、Pareto 与机会成本。
+5. RiskRouter 为获选 Proposal 选择执行路径；需要补证据时回到步骤 1/2 的专用查询，不得带着旧判断继续执行。
+6. ActionPipeline 消费精确 ActionIntent，通过 single writer 恰好发送一次。
+7. 工具返回或 read-back 生成 Outcome 与 Observation，追加事件并刷新 GraphView。
+8. Workstream/Goal 根据结构化退出条件转为 completed、blocked 或 replan；存在未决授权、未知结果或缺失验证时，end_turn gate 保持关闭。
+9. end_turn 作为不可并行的特殊 command 执行；新回合重新开始。发生 reload 时创建新 epoch，旧 epoch 的待执行意图全部失效。
+
+#### E.9.6 先做一个纵向切片
+
+第一版只贯通“城市威胁响应”：
+
+> TypedSnapshot -> City/Unit/Tile 与位置关系 -> `threats_near_city()` -> Military Proposal -> CouncilDecision -> ActionIntent -> 一个防御动作 -> read-back Observation -> Outcome。
+
+这个切片能同时验证实体身份、空间关系、证据新鲜度、部门查询、Council、动作授权和结果闭环。完成前不扩建通用遍历 DSL、外部图数据库、异步消息总线或可视化平台。
+
+完成切片的最低验收：同一 snapshot 投影结果哈希稳定；关系只存一份；Department 不依赖 Lua DTO；mutation 只发送一次；断线后先 read-back；Decision 能沿关系追溯到 Observation、Goal、Proposal、ActionIntent、Action 和 Outcome。
