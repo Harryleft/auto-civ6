@@ -169,7 +169,9 @@ table.sort(ubParts, function(a, b)
 end)
 print("UNITBREAKDOWN|" .. table.concat(ubParts, ",") .. "|" .. unitMaint)
 pcall(function()
-    local gsIdx = Game.GetGameSpeedType()
+    -- Game.GetGameSpeedType() is nil in the InGame context; the front-end
+    -- and in-game UI both read the speed from GameConfiguration instead.
+    local gsIdx = GameConfiguration.GetGameSpeedType()
     local gsRow = GameInfo.GameSpeeds[gsIdx]
     if gsRow then
         local gsName = Locale.Lookup(gsRow.Name)

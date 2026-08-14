@@ -163,7 +163,7 @@ local me = Game.GetLocalPlayer()
 -- reading it rather than allowing a Lua method error to escape.
 local pGovs = nil
 local gotGovs = pcall(function() pGovs = Players[me]:GetGovernors() end)
-if not gotGovs or pGovs == nil or GameInfo.Governors == nil or GameInfo.Governors["GOVERNOR_MAGNUS"] == nil then {NO_GOVERNORS} end
+if not gotGovs or pGovs == nil or GameInfo.Governors == nil or GameInfo.Governors["GOVERNOR_THE_EDUCATOR"] == nil then {NO_GOVERNORS} end
 local pts = pGovs:GetGovernorPoints()
 local spent = pGovs:GetGovernorPointsSpent()
 local canAppoint = pGovs:CanAppoint() and "1" or "0"
@@ -238,7 +238,7 @@ local me = Game.GetLocalPlayer()
 {_lua_require_ruleset(("RULESET_EXPANSION_1", "RULESET_EXPANSION_2"), "ERR:NO_GOVERNORS_IN_RULESET")}
 local pGovs = nil
 local gotGovs = pcall(function() pGovs = Players[me]:GetGovernors() end)
-if not gotGovs or pGovs == nil or GameInfo.Governors == nil or GameInfo.Governors["GOVERNOR_MAGNUS"] == nil then {_bail("ERR:NO_GOVERNORS_IN_RULESET")} end
+if not gotGovs or pGovs == nil or GameInfo.Governors == nil or GameInfo.Governors["GOVERNOR_THE_EDUCATOR"] == nil then {_bail("ERR:NO_GOVERNORS_IN_RULESET")} end
 if not pGovs:CanAppoint() then {_bail("ERR:CANNOT_APPOINT|No governor points available")} end
 local gov = GameInfo.Governors["{governor_type}"]
 if gov == nil then {_bail(f"ERR:GOVERNOR_NOT_FOUND|{governor_type}")} end
@@ -248,9 +248,10 @@ local prePts = pGovs:GetGovernorPointsSpent()
 local params = {{}}
 params[PlayerOperations.PARAM_GOVERNOR_TYPE] = gov.Index
 UI.RequestPlayerOperation(me, PlayerOperations.APPOINT_GOVERNOR, params)
-local postPts = pGovs:GetGovernorPointsSpent()
-if postPts > prePts then
-    print("OK:APPOINTED|" .. Locale.Lookup(gov.Name) .. " (" .. Locale.Lookup(gov.Title) .. ")")
+-- Read back: the governor is appointed once pGovs:HasGovernor() returns true.
+local hasGov = pGovs:HasGovernor(gov.Hash)
+if hasGov then
+    print("OK:APPOINTED|" .. Locale.Lookup(gov.Name) .. " (" .. Locale.Lookup(gov.Title) .. ") (verified)")
 else
     print("OK:APPOINT_REQUESTED|" .. Locale.Lookup(gov.Name) .. " — verify with get_governors()")
 end
@@ -261,18 +262,34 @@ print("{SENTINEL}")
 def build_assign_governor(governor_type: str, city_id: int) -> str:
     """Assign a governor to a city (InGame context)."""
     return f"""
+local me = Game.GetLocalPlayer()
 {_lua_require_ruleset(("RULESET_EXPANSION_1", "RULESET_EXPANSION_2"), "ERR:NO_GOVERNORS_IN_RULESET")}
 {_lua_get_city(city_id)}
-if GameInfo.Governors == nil or GameInfo.Governors["GOVERNOR_MAGNUS"] == nil then {_bail("ERR:NO_GOVERNORS_IN_RULESET")} end
+local pGovs = nil
+local gotGovs = pcall(function() pGovs = Players[me]:GetGovernors() end)
+if not gotGovs or pGovs == nil or GameInfo.Governors == nil or GameInfo.Governors["GOVERNOR_THE_EDUCATOR"] == nil then {_bail("ERR:NO_GOVERNORS_IN_RULESET")} end
 local gov = GameInfo.Governors["{governor_type}"]
 if gov == nil then {_bail(f"ERR:GOVERNOR_NOT_FOUND|{governor_type}")} end
+if not pGovs:HasGovernor(gov.Hash) then {_bail(f"ERR:NOT_APPOINTED|{governor_type} not appointed")} end
 if PlayerOperations.ASSIGN_GOVERNOR == nil then {_bail("ERR:API_MISSING|PlayerOperations.ASSIGN_GOVERNOR is nil")} end
 local params = {{}}
 params[PlayerOperations.PARAM_GOVERNOR_TYPE] = gov.Index
 params[PlayerOperations.PARAM_CITY_DEST] = pCity:GetID()
 params[PlayerOperations.PARAM_PLAYER_ONE] = me
 UI.RequestPlayerOperation(me, PlayerOperations.ASSIGN_GOVERNOR, params)
-print("OK:ASSIGNED|" .. Locale.Lookup(gov.Name) .. " to " .. Locale.Lookup(pCity:GetName()))
+-- Read back: assignment is verified by the governor's assigned city id.
+local assignedOk = false
+local gCheck = nil
+local gotG = pcall(function() gCheck = pGovs:GetGovernor(gov.Hash) end)
+if gotG and gCheck then
+    local aCity = gCheck:GetAssignedCity()
+    if aCity and aCity:GetID() == pCity:GetID() then assignedOk = true end
+end
+if assignedOk then
+    print("OK:ASSIGNED|" .. Locale.Lookup(gov.Name) .. " to " .. Locale.Lookup(pCity:GetName()) .. " (verified)")
+else
+    print("OK:ASSIGN_REQUESTED|" .. Locale.Lookup(gov.Name) .. " to " .. Locale.Lookup(pCity:GetName()) .. " — verify with get_governors()")
+end
 print("{SENTINEL}")
 """
 
@@ -289,7 +306,7 @@ local me = Game.GetLocalPlayer()
 {_lua_require_ruleset(("RULESET_EXPANSION_1", "RULESET_EXPANSION_2"), "ERR:NO_GOVERNORS_IN_RULESET")}
 local pGovs = nil
 local gotGovs = pcall(function() pGovs = Players[me]:GetGovernors() end)
-if not gotGovs or pGovs == nil or GameInfo.Governors == nil or GameInfo.Governors["GOVERNOR_MAGNUS"] == nil then {_bail("ERR:NO_GOVERNORS_IN_RULESET")} end
+if not gotGovs or pGovs == nil or GameInfo.Governors == nil or GameInfo.Governors["GOVERNOR_THE_EDUCATOR"] == nil then {_bail("ERR:NO_GOVERNORS_IN_RULESET")} end
 local gov = GameInfo.Governors["{governor_type}"]
 if gov == nil then {_bail(f"ERR:GOVERNOR_NOT_FOUND|{governor_type}")} end
 if not pGovs:HasGovernor(gov.Hash) then {_bail(f"ERR:NOT_APPOINTED|{governor_type} not appointed")} end
@@ -323,7 +340,14 @@ local params = {{}}
 params[PlayerOperations.PARAM_GOVERNOR_TYPE] = gov.Index
 params[PlayerOperations.PARAM_GOVERNOR_PROMOTION_TYPE] = promo.Index
 UI.RequestPlayerOperation(me, PlayerOperations.PROMOTE_GOVERNOR, params)
-print("OK:PROMOTED|" .. Locale.Lookup(gov.Name) .. " with " .. Locale.Lookup(promo.Name))
+-- Read back: the promotion is verified once HasPromotion returns true.
+local promoted = false
+if g:HasPromotion(promo.Index) then promoted = true end
+if promoted then
+    print("OK:PROMOTED|" .. Locale.Lookup(gov.Name) .. " with " .. Locale.Lookup(promo.Name) .. " (verified)")
+else
+    print("OK:PROMOTE_REQUESTED|" .. Locale.Lookup(gov.Name) .. " with " .. Locale.Lookup(promo.Name) .. " — verify with get_governors()")
+end
 print("{SENTINEL}")
 """
 
@@ -481,9 +505,12 @@ local params = {{}}
 params[PlayerOperations.PARAM_PLAYER_ONE] = {city_state_player_id}
 params[PlayerOperations.PARAM_FLAGS] = 0
 UI.RequestPlayerOperation(me, PlayerOperations.GIVE_INFLUENCE_TOKEN, params)
+-- Read back: envoy count received by that city-state should increase by one.
 local cfg = PlayerConfigurations[{city_state_player_id}]
 local name = cfg and Locale.Lookup(cfg:GetPlayerName()) or "Unknown"
-print("OK:ENVOY_SENT|" .. name)
+local csInfl = Players[{city_state_player_id}]:GetInfluence()
+local receivedAfter = csInfl:GetTokensReceived(me)
+print("OK:ENVOY_SENT|" .. name .. " (received: " .. receivedAfter .. ")")
 print("{SENTINEL}")
 """
 
@@ -693,7 +720,13 @@ if not pCulture:IsGovernmentUnlocked(row.Index) then {_bail(f"ERR:GOV_LOCKED|{go
 if row.Index == pCulture:GetCurrentGovernment() then {_bail(f"ERR:ALREADY_CURRENT|{gov_type} is already your government")} end
 pCulture:SetGovernmentChangeConsidered(true)
 pCulture:RequestChangeGovernment(row.Index)
-print("OK:GOVERNMENT_CHANGED|{gov_type}|" .. Locale.Lookup(row.Name))
+-- Read back: the government is switched once GetCurrentGovernment matches.
+local curAfter = pCulture:GetCurrentGovernment()
+if curAfter == row.Index then
+    print("OK:GOVERNMENT_CHANGED|{gov_type}|" .. Locale.Lookup(row.Name) .. " (verified)")
+else
+    print("OK:GOVERNMENT_REQUESTED|{gov_type} requested, currently " .. tostring(curAfter) .. " — verify with get_policies()")
+end
 print("{SENTINEL}")
 """
 
