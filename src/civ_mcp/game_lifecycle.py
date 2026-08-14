@@ -98,7 +98,7 @@ async def dismiss_popup(conn: GameConnection) -> str:
     pending_diplomacy = False
     try:
         lua = " ".join(checks) + f' print("{lq.SENTINEL}")'
-        lines = await conn.execute_write(lua)
+        lines = await conn.execute_mutation(lua)
         for line in lines:
             if line.startswith("DISMISSED|"):
                 dismissed.append(line.split("|", 1)[1])
@@ -170,6 +170,7 @@ async def dismiss_popup(conn: GameConnection) -> str:
                         '  print("DISMISSED") '
                         "end; "
                         'print("---END---")',
+                        mutation=True,  # Close() mutates popup/engine state
                     )
                     if any("DISMISSED" in l for l in lines):
                         dismissed.append(name)
@@ -231,6 +232,7 @@ async def dismiss_popup(conn: GameConnection) -> str:
                             'print("DISMISSED"); '
                             'print("---END---")',
                             timeout=2.0,
+                            mutation=True,  # Close()/SetHide mutate popup state
                         )
                         if any("DISMISSED" in l for l in close_lines):
                             dismissed.append(f"{state_name} (probed state {probe_idx})")
@@ -276,7 +278,7 @@ async def dismiss_popup(conn: GameConnection) -> str:
 
 async def save_game(conn: GameConnection, name: str) -> str:
     """Create a named save. Used for MCP per-turn autosaves."""
-    lines = await conn.execute_write(
+    lines = await conn.execute_mutation(
         f"local gf = {{}}; "
         f'gf.Name = "{name}"; '
         f"gf.Location = SaveLocations.LOCAL_STORAGE; "
@@ -416,7 +418,7 @@ async def load_save(conn: GameConnection, save_index: int) -> str:
     The game will reload — the FireTuner connection stays alive but
     all Lua state is wiped. Wait a few seconds after calling this.
     """
-    lines = await conn.execute_write(
+    lines = await conn.execute_mutation(
         f"if not ExposedMembers or not ExposedMembers.MCPSaveList then "
         f'  print("ERR:NO_SAVE_LIST"); print("{lq.SENTINEL}"); return '
         f"end; "
@@ -460,7 +462,7 @@ async def load_game_save(conn: GameConnection, save_name: str) -> str:
     if sys.platform != "linux":
         # Tier 1: Lua query-match-load (Windows/macOS only)
         try:
-            await conn.execute_write(
+            await conn.execute_mutation(
                 f"if not ExposedMembers then ExposedMembers = {{}} end; "
                 f"ExposedMembers.MCPLoadResult = nil; "
                 f"ExposedMembers.MCPLoadDone = false; "
@@ -548,9 +550,9 @@ async def execute_lua(
 ) -> str:
     """Escape hatch: run arbitrary Lua code."""
     if context == "ingame":
-        lines = await conn.execute_write(code)
+        lines = await conn.execute_write(code, require_sentinel=False)
     elif context.isdigit():
         lines = await conn.execute_in_state(int(context), code)
     else:
-        lines = await conn.execute_read(code)
+        lines = await conn.execute_read(code, require_sentinel=False)
     return "\n".join(lines) if lines else "(no output)"

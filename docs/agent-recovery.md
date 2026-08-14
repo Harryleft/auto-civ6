@@ -26,45 +26,56 @@ get_game_overview
 
 其他恢复工具：`list_saves`、`load_save(index)`、`kill_game`、`launch_game`、`load_save_from_menu(name)`。存档名称不带 `.Civ6Save` 扩展名，例如使用 `AutoSave_0221`。
 
-## 崩溃根因（macOS ARM 内存泄漏）
+## 崩溃根因（JobSet use-after-destruction，单一崩溃类）
 
-经机读崩溃报告确认：`Civ6_Exe_Child` 反复 SIGABRT（非空指针崩溃），栈上 `__cxa_pure_virtual`，责任线程为 TBB worker（WinID 7）。直接触发条件不是某单一游戏事件，而是 **macOS ARM 移植版的长会话内存泄漏**：当系统空闲内存跌破危险水位（约 9145 页 ≈ 143MB）时，递归队列在分配失败路径上抛异常，TBB 线程错误地把纯虚函数当作可调用对象，进而 abort。
+经 5 份崩溃报告（.ips）字节级对比确认：`Civ6_Exe_Child` 反复 SIGABRT，栈上 `__cxa_pure_virtual`，责任线程为 TBB worker（WinID 6/7/9 轮换）。**这是单一崩溃类，不是随机崩溃**：
+
+| 崩溃时间 | 触发线程 | 进程存活 | Civ6 偏移 | libtbb 帧 |
+|---|---|---|---|---|
+| 8/13 22:49 | TBB WinID 6 | 49.8 min | +0x8cbbec | +0xc458→0xc580→0x11f14→0x126ac→0x18eb0 |
+| 8/13 23:04 | TBB WinID 6 | 13.1 min | +0x8cbbec | 同上 |
+| 8/13 23:25 | TBB WinID 7 | 18.2 min | +0x8cbbec | 同上 |
+| 8/14 15:11 | TBB WinID 7 | 3h43m | +0x8cbbec | 同上 |
+| 8/14 17:21 | TBB WinID 9 | 1h44m | +0x8cbbec | 同上 |
+
+第一性原理判断（已被数据证实）：**并行任务访问了生命周期已结束的 C++ 多态对象**（stale task / use-after-destruction）。证据：
+- 5 次崩溃**同一可执行文件偏移 +0x8cbbec**、同一组 TBB 偏移——确定性代码路径，不是内存随机性
+- 触发线程从 WinID 6→7→9 轮换——谁抢到悬垂 task 谁崩
+- 进程存活 13 分钟到 3.7 小时差异巨大——**与会话时长无关**（修正早期"长会话内存泄漏"结论：15:11 那次内存低是伴生现象，非原因）
+
+符号级定位（`nm`/`atos`）：
+- 崩溃点 `0x8cbbec` 位于 `Platform::JobManager::SpawnList` (0x8caf0c) 之后 0xce0 字节——JobManager 区域末尾未命名内联代码（worker 从 JobList 取 task 执行的内联路径）
+- 附近符号 `Localization::String::Empty`——任务可能涉及本地化文本（AI 回合中单位/城市名渲染）
+- 链路：**TBB worker → 从 Civ6 JobList 拉取 task → task 虚方法 execute() → 对象已析构（vtable 清空）→ `__cxa_pure_virtual` → abort**
+
+**结论：引擎存在 JobSet/JobList 生命周期管理 bug，外部无法修复。** 崩溃发生在 AI 回合处理期（TBB 并行任务最活跃时），与特定回合数/动作无确定关联。恢复成本已最小化：end_turn 自动存档（0_MCP_NNNN）在崩溃前完成，重启加载损失 0 回合。
 
 要点：
 - 崩溃是**进程级**，FireTuner 仅在本进程中，进程死亡即断连（报 `Cannot connect to Civ 6 at 127.0.0.1:4318`）。
-- 系统级内存被占满的罪魁是 Civ6 自身的常驻泄漏（3h+ 会话内单调上升），不是 DSH 或 belief 引擎构造的负载。
-- 关键观测：**杀进程重启（`kill_game` → `launch_game` → `load_game_save`）后，Pages free 从约 9145 恢复至约 120000 以上**，证明重启能彻底释放泄漏内存。
+- **识别崩溃类**：新 .ips 报告 + 栈上 `Civ6_Exe_Child+0x8cbbec` = 同一崩溃类，无需深度分析。
+- 崩溃与内存水位无因果关系；不要用 Pages free 阈值预测崩溃。
 
-## 崩溃预防设计（内存巡航合约）
+## 崩溃预防设计（风险窗口控制）
 
-目标：把崩溃从"猝死 + 事后恢复"改为"**可观测、可提前拦截、可安全落盘**"。设计不新增外部依赖，全部嵌入现有回合循环与 belief/metric 机制。
-
-### 信号源与量化
-
-每个回合在 `get_game_overview` 成功后，读取系统内存一次，作为持续指标（用 bash 的 `vm_stat`，page size 16384）：
-
-```text
-Pages free  < 30000                 → 警戒（约 <490MB）
-Pages free  < 15000                 → 危险（约 <245MB，接近 9145 崩溃点）
-Pages free  > 100000                → 健康
-```
+目标：把崩溃从"猝死 + 事后恢复"改为"**可预期、存档就绪、快速恢复**"。设计不新增外部依赖，全部嵌入现有回合循环与 belief/metric 机制。
 
 ### 时序：在崩溃发生前安全落盘
 
-关键原则：**永远不要在有未结束动作、或存档落后于游玩的时点冒险**。所有高危操作前，先确保最新回合已进入 `0_MCP_NNNN` 自动存档。
+关键原则：**永远不要在有未结束动作、或存档落后于游玩的时点冒险**。end_turn 自动保存 `0_MCP_NNNN` 在崩溃前完成——崩溃损失最多 0 回合，这是主要保障。
 
 ### 分层响应
 
 | 层 | 触发条件 | 动作 | 依赖审批 |
 |----|----------|------|----------|
-| L0 健康 | Pages free > 100000 | 不做任何事 | 无 |
-| L1 警戒 | 现回合 > 20 且 Pages free < 30000 | 记录 diary + 观察；把"半小时内重启"列入 planning；本回合避免一次性大批量造兵/建图/商人集中操作 | 无 |
-| L2 危险 | Pages free < 15000 | 结束本回合自然存档后，主动重启（见下），把内存水位作为首要任务 | **是** |
-| L3 崩溃 | 进程已断连/4318 不再监听 | 按崩溃恢复流程恢复 | **是** |
+| L0 稳定 | 回合正常推进 | 不做任何事 | 无 |
+| L1 警戒 | end_turn 返回 `Cannot connect` 或新 .ips 出现 | 确认存档（0_MCP_NNNN 存在）→ 按恢复流程重启 | **是** |
+| L2 崩溃 | 进程已断连/4318 不再监听 | 确认存档后重启加载（见下），损失 0 回合 | **是** |
 
-### 正确的主动重启流程（L2）
+崩溃窗口特征：AI 回合处理期（TBB 并行任务最活跃时）是最高风险窗口。**避免在 end_turn 后数秒内密集调用工具**（JobSet 生命周期更替窗口）；回合稳定期再执行批量查询/操作。
 
-仅当诊断确认 4318 已释放、无残根进程时才执行，且必须先落盘：
+### 正确的恢复流程（L2）
+
+仅当诊断确认 4318 已释放、无残根进程时才执行，且必须先确认存档：
 
 ```text
 （安全时点）end_turn                    # 确保最新回合进入 0_MCP_NNNN
@@ -84,22 +95,34 @@ MCP 进程（civ-mcp）重启后，DSH 客户端需要先完成 `tools/list` 同
 
 ### 周期巡航（写入回合周期）
 
-- **每 20 回合**内存巡航一次（与 `get_diplomacy` 等 20 回合检查合并）。
-- **每 25-30 回合主动重启一次**是安全的（存档每回合自动落盘，损失最多 1 回合），优于非预期崩溃。
-- 把上一轮的 Pages free 水位和重启动作写入下一回合 diary 的 `tooling` 字段，作为跨会话健康审计线。
-- 使用 `record_observation` 记录内存水位 metric（`metrics={"pages_free": N, "memory_cruise": "L0|L1|L2"}`），让 belief 预测能对健康趋势建模。
+- 崩溃识别：end_turn 报 `Cannot connect` 或 `lsof -iTCP:4318` 无监听 → 确认新 .ips（`Civ6_Exe_Child-*.ips`）→ 比对 `+0x8cbbec` 确认同一崩溃类。
+- 恢复后把崩溃时点与回合写入 diary 的 `tooling` 字段，作为跨会话崩溃频率审计线。
+- 使用 `record_observation` 记录崩溃事件 metric（`metrics={"crash_occurred": 1, "crash_class": "jobset_uad"}`），让 belief 预测能对崩溃频率建模。
 
 ### 审批策略约束
 
-当前审批策略可能为 `never`（`kill_game`/`launch_game` 不再走审批门）。此时**主动重启只能靠用户手动确认**，或因游戏自身崩溃而被动发生。在 `never` 策略下：
+当前审批策略可能为 `never`（`kill_game`/`launch_game` 不再走审批门）。此时**重启只能靠用户手动确认**，或因游戏自身崩溃而被动发生。在 `never` 策略下：
 - 不要反复自动尝试 `kill_game`（会被拒绝）。
-- 把 L1 警戒的信号写入 diary 与最终回复，明确提示用户"建议此刻手动重启游戏"，并给出精确的 `kill_game → launch_game → load_game_save("0_MCP_NNNN")` 命令序列。
+- 崩溃后把信号写入 diary 与最终回复，明确提示用户"请重启游戏并加载 0_MCP_NNNN"，或请用户手动执行 `kill_game → launch_game → load_game_save("0_MCP_NNNN")` 命令序列。
 
-### 与之配合的缓解（针对 mácOS ARM 泄漏本体）
+### 与之配合的缓解（针对引擎 JobSet 生命周期 bug）
 
-- 缩短单会话运行时长，避免连续数小时不重启。
-- 避免长回合内集中触发大内存峰值的操作组合（同时造大量单位 + 商人编队 + 全域修路），给分配器喘息。
-- 递归队列崩溃与 DSH 无关，不要通过改 DSH 试图"修复"引擎；能干预的是外部的内存水位与重启节奏。
+- 引擎 bug 无法从外部修复；能干预的是**触发概率**与**存档及时性**。
+- AI 回合处理期（end_turn 后）避免密集工具调用；批量操作放在回合稳定期。
+- 崩溃与 DSH 无关，不要通过改 DSH 试图"修复"引擎；能干预的是外部节奏与恢复流程。
+
+## 传输与审计底座的失败语义（P0 加固）
+
+底层行为由离线测试 `tests/test_connection_reliability.py` 与 `tests/test_belief_engine_p0.py` 锁定。崩溃/断线恢复时 agent 会遇到以下四类新行为：
+
+| 场景 | 行为 | agent 处置 |
+|---|---|---|
+| 变异命令（move/attack/购买/end_turn 等）发送时连接死亡 | 抛 `MutationOutcomeUnknownError`（ConnectionError 子类）；命令**恰好发送一次，绝不自动重发** | 不要立刻重试同一动作——先 `get_units`/`get_cities` 核实动作是否已实际生效，再决定重试或放弃 |
+| 命令超时未收到 `---END---` sentinel | 抛 `CommandTimeoutError`（LuaError 子类），携带已收部分行；不再静默返回截断输出 | 按普通错误处理并重试（查询可安全重发）；若发生在变异命令上，同样先核实再重试 |
+| 决策卡在 `executing`（进程崩溃/异常逃逸） | 三层自动回收为 `retryable`：进程重启加载时、跨回合的 governance turn gate、显式 `cancel_action_authorization` | 回收后照常取消或重新授权执行；`end_turn` 门禁不再被永久阻塞 |
+| 游戏回退到更早回合（autosave 重载/手动读档） | 事件流记录 `game.reloaded` epoch 标记（自动重启路径显式记录，手动读档由回合回退检测捕获）；旧 epoch 的未决授权被作废（`invalidated_by_game_reload`），关联预算锁归档 | 回滚后不要重放旧授权——它们已取消，需基于新局面重新提案。回放/重建历史时按 epoch 分组，同回合号的两套事实分属不同 epoch |
+
+事件流完整性：JSONL 追加带 fsync；加载时发现损坏行会原子重写为纯完好行并追加 `log.integrity` 标记（含坏行哈希与预览），后续事件不会再拼接到坏行上。若日志中出现 `log.integrity`，说明进程曾在写入中途崩溃。
 
 ## 相关文档
 

@@ -35,6 +35,7 @@ _METRIC_PREFIXES = (
     "research.",
     "civic.",
     "resource.",
+    "victory.",
 )
 _METRIC_NAMES = frozenset(
     {
@@ -270,6 +271,13 @@ def _compact_belief_trace(
 
 
 def _event_header(event: Any) -> Any:
+    """Reduce one event to its header fields.
+
+    ``changes`` keeps only the modified key names, not the from/to values:
+    a world_entity update's ``changes`` embeds full link arrays (KB-scale per
+    event). What changed stays visible; the values live in the untouched raw
+    result owned by telemetry and remain reachable via a targeted trace.
+    """
     if not isinstance(event, dict):
         return deepcopy(event)
     keys = (
@@ -286,7 +294,11 @@ def _event_header(event: Any) -> Any:
         "entity_id",
         "changes",
     )
-    return {key: deepcopy(event[key]) for key in keys if key in event}
+    header = {key: deepcopy(event[key]) for key in keys if key in event}
+    changes = header.get("changes")
+    if isinstance(changes, dict):
+        header["changes"] = sorted(changes)
+    return header
 
 
 def _json_object(result: str) -> dict[str, Any] | None:
@@ -314,12 +326,15 @@ def _add_filter_metadata(
     policy: str,
     omitted: Mapping[str, int],
 ) -> None:
+    # This block rides along on every filtered, model-facing result, so it
+    # stays minimal: the sha is truncated to 16 chars (collision-free within
+    # a game) and line counts were dropped as near-zero signal. The full
+    # digest remains in telemetry alongside the raw result.
     payload["_local_filter"] = {
         "applied": True,
         "policy": policy,
         "original_chars": len(result),
-        "original_lines": len(result.splitlines()),
-        "original_sha256": digest,
+        "original_sha256": digest[:16],
         "omitted_counts": {key: value for key, value in omitted.items() if value > 0},
         "raw_owner": "local_telemetry",
     }

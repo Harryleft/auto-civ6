@@ -11,13 +11,17 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import math
+import os
 import re
 import time
 import uuid
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
+
+log = logging.getLogger(__name__)
 
 
 BELIEF_ENTITY_TYPES = frozenset(
@@ -431,6 +435,9 @@ class BeliefEngine:
         }
         self._sequence = 0
         self._pending_events: list[dict[str, Any]] = []
+        # Events are grouped into epochs: each game reload (autosave rollback)
+        # starts a new one so conflicting histories are never replayed as one.
+        self._epoch: int = 1
 
     @property
     def bound(self) -> bool:
@@ -458,18 +465,142 @@ class BeliefEngine:
         self._entities = {entity_type: {} for entity_type in BELIEF_ENTITY_TYPES}
         self._sequence = 0
         self._pending_events = []
+        self._epoch = 1
         if not path.exists():
             return
-        for line in path.read_text().splitlines():
+        # errors="replace": a crash mid-write can also truncate a UTF-8
+        # sequence; a replacement character still fails JSON parsing and is
+        # quarantined instead of raising out of the whole load.
+        raw_lines = path.read_text(errors="replace").splitlines()
+        good_lines: list[str] = []
+        bad_line_numbers: list[int] = []
+        for line_number, line in enumerate(raw_lines, start=1):
             try:
                 event = json.loads(line)
             except json.JSONDecodeError:
+                bad_line_numbers.append(line_number)
                 continue
             if not isinstance(event, dict):
+                bad_line_numbers.append(line_number)
                 continue
+            good_lines.append(line)
             self._events.append(event)
             self._sequence = max(self._sequence, int(event.get("sequence", 0)))
             self._reduce(event)
+        # Events written before the epoch mechanism exist belong to epoch 1,
+        # and every game.reloaded marker starts exactly one new epoch after
+        # them, so the marker count recovers the current epoch on restart.
+        self._epoch = 1 + sum(
+            1 for event in self._events if event.get("event_type") == "game.reloaded"
+        )
+        if bad_line_numbers:
+            self._quarantine_corrupt_lines(path, good_lines, bad_line_numbers, raw_lines)
+        self._recover_orphaned_executing_decisions()
+
+    def _quarantine_corrupt_lines(
+        self,
+        path: Path,
+        good_lines: list[str],
+        bad_line_numbers: list[int],
+        raw_lines: list[str],
+    ) -> None:
+        """Isolate corrupt JSONL lines so future appends cannot fuse with them.
+
+        A crash can truncate the final line. Without repair the next append
+        concatenates onto that broken line, and every later event then
+        silently fails to parse on reload. Rewrite the log with only intact
+        lines (atomically, so a crash mid-repair cannot destroy history) and
+        append an auditable marker describing exactly what was dropped.
+        """
+        entries = [
+            {
+                "line_number": line_number,
+                "sha256": hashlib.sha256(
+                    raw_lines[line_number - 1].encode("utf-8", "replace")
+                ).hexdigest(),
+                "preview": raw_lines[line_number - 1][:80],
+            }
+            for line_number in bad_line_numbers
+        ]
+        try:
+            temp_path = path.with_name(f"{path.name}.repair-{uuid.uuid4().hex[:8]}")
+            with temp_path.open("w", encoding="utf-8") as handle:
+                for line in good_lines:
+                    handle.write(line + "\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temp_path, path)
+        except OSError:
+            # Keep the original file rather than losing history; the marker
+            # below still documents the damage and the next load retries.
+            log.exception(
+                "Belief Engine: failed to rewrite log %s with corrupt lines removed",
+                path,
+            )
+        marker_turn = int(self._events[-1].get("turn", 0)) if self._events else 0
+        fingerprint = hashlib.sha256(
+            "".join(entry["sha256"] for entry in entries).encode("utf-8")
+        ).hexdigest()[:12]
+        # entity_type "log_integrity" is intentionally outside
+        # BELIEF_ENTITY_TYPES: _reduce skips it, so the marker stays a pure
+        # log-level audit record that never enters the projected model.
+        self._append(
+            "log.integrity",
+            "log_integrity",
+            {
+                "id": f"log_integrity_{marker_turn}_{fingerprint}",
+                "quarantined_line_count": len(entries),
+                "quarantined_line_numbers": bad_line_numbers,
+                "quarantined_lines": entries,
+                "repaired_at": _now(),
+            },
+            turn=marker_turn,
+        )
+        log.warning(
+            "Belief Engine: quarantined %d corrupt line(s) %s in %s; "
+            "log rewritten atomically to %d intact line(s), "
+            "log.integrity marker appended at turn %d",
+            len(entries),
+            bad_line_numbers,
+            path,
+            len(good_lines),
+            marker_turn,
+        )
+
+    def _recover_orphaned_executing_decisions(self) -> None:
+        """Downgrade executing decisions found at load time to retryable.
+
+        "executing" means a caller is between authorize_action and the
+        outcome recording. If that state survives a restart, the caller is
+        gone and can never complete it, which used to deadlock the
+        governance turn gate. Recovering to retryable keeps the obligation
+        visible while making retry or cancellation possible again; the
+        recovery updates are persisted so the intervention is auditable.
+        """
+        orphan_ids: list[str] = []
+        last_event_turn = (
+            int(self._events[-1].get("turn", 0)) if self._events else 0
+        )
+        for decision in self.list("decision", status=None):
+            if decision.get("decision_state") != "executing":
+                continue
+            self.update(
+                "decision",
+                decision["id"],
+                {
+                    "decision_state": "retryable",
+                    "recovery_reason": "process_restarted_during_execution",
+                },
+                turn=int(decision.get("execution_started_turn", last_event_turn)),
+            )
+            orphan_ids.append(decision["id"])
+        if orphan_ids:
+            log.warning(
+                "Belief Engine: recovered %d orphaned executing decision(s) "
+                "to retryable after restart: %s",
+                len(orphan_ids),
+                orphan_ids,
+            )
 
     def _reduce(self, event: dict[str, Any]) -> None:
         entity = event.get("entity")
@@ -499,6 +630,7 @@ class BeliefEngine:
             "game_id": self.game_id,
             "run_id": self.run_id,
             "turn": turn,
+            "epoch": self._epoch,
             "event_type": event_type,
             "entity_type": entity_type,
             "entity_id": entity["id"],
@@ -508,6 +640,11 @@ class BeliefEngine:
             event["changes"] = changes
         with path.open("a") as handle:
             handle.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n")
+            # A crash between write() and fsync() can leave a truncated final
+            # line; flushing on every append shrinks that window and keeps the
+            # on-disk log usable without waiting for interpreter shutdown.
+            handle.flush()
+            os.fsync(handle.fileno())
         self._events.append(event)
         self._reduce(event)
         self._pending_events.append(deepcopy(event))
@@ -1090,7 +1227,11 @@ class BeliefEngine:
             raise BeliefEngineError("Cancellation reason must be non-empty")
         state = decision.get("decision_state")
         if state == "executing":
-            raise BeliefEngineError("Cannot cancel an action while it is executing")
+            # A same-turn execution may genuinely still be in flight; only a
+            # decision left executing across a turn boundary is provably
+            # orphaned, and refusing to cancel those deadlocked whole games.
+            if int(decision.get("execution_started_turn", turn)) >= turn:
+                raise BeliefEngineError("Cannot cancel an action while it is executing")
         if state == "succeeded":
             raise BeliefEngineError("Cannot cancel a succeeded action")
         if state == "cancelled":
@@ -1146,6 +1287,108 @@ class BeliefEngine:
         )
         return updated
 
+    def _current_epoch_max_turn(self) -> int | None:
+        """Highest turn recorded in the current epoch, or None if empty."""
+
+        return max(
+            (
+                int(event.get("turn", 0))
+                for event in self._events
+                if int(event.get("epoch", 1)) == self._epoch
+            ),
+            default=None,
+        )
+
+    def record_game_reload(
+        self,
+        *,
+        reason: str,
+        turn: int | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        """Mark the start of a new epoch after the game rolled back.
+
+        Loading an autosave moves the game to an earlier turn while the
+        append-only log still describes the abandoned future. The epoch
+        marker makes that boundary explicit so replays can separate the two
+        histories, and pending authorizations from the invalidated epoch are
+        voided instead of being retried against a game state that no longer
+        contains their motivation.
+        """
+
+        if self.path is None:
+            return None
+        prior_epoch_max_turn = self._current_epoch_max_turn()
+        self._epoch += 1
+        marker_turn = (
+            turn
+            if turn is not None
+            else (prior_epoch_max_turn if prior_epoch_max_turn is not None else 0)
+        )
+        # entity_type "epoch_marker" is intentionally outside
+        # BELIEF_ENTITY_TYPES so the marker never enters the projected model.
+        marker = self._append(
+            "game.reloaded",
+            "epoch_marker",
+            {
+                "id": f"epoch_{self._epoch}_{marker_turn}",
+                "epoch": self._epoch,
+                "reason": reason,
+                "turn": marker_turn,
+                "prior_epoch_max_turn": prior_epoch_max_turn,
+                "details": deepcopy(details or {}),
+            },
+            turn=marker_turn,
+        )
+        voided_ids: list[str] = []
+        for decision in self.list("decision", status=None):
+            if decision.get("decision_state") not in {
+                "authorized",
+                "executing",
+                "retryable",
+            }:
+                continue
+            self.update(
+                "decision",
+                decision["id"],
+                {
+                    "status": "resolved",
+                    "decision_state": "cancelled",
+                    "cancellation_reason": f"invalidated_by_game_reload:{reason}",
+                    "cancelled_turn": marker_turn,
+                },
+                turn=marker_turn,
+            )
+            voided_ids.append(decision["id"])
+            # Mirror cancel_action_authorization: a voided decision must not
+            # leave exclusive budget locks blocking later proposals.
+            council_id = decision.get("council_decision_id")
+            if not council_id:
+                continue
+            for lock in self.list("budget_lock", status="active"):
+                if lock.get("council_decision_id") != council_id:
+                    continue
+                self.update(
+                    "budget_lock",
+                    lock["id"],
+                    {
+                        "status": "archived",
+                        "released_turn": marker_turn,
+                        "release_reason": f"decision_voided_by_reload:{reason}",
+                    },
+                    turn=marker_turn,
+                )
+        if voided_ids:
+            log.warning(
+                "Belief Engine: game reload (epoch %d, %s) voided %d pending "
+                "authorization(s): %s",
+                self._epoch,
+                reason,
+                len(voided_ids),
+                voided_ids,
+            )
+        return marker
+
     @staticmethod
     def _authorization_valid_on_turn(decision: dict[str, Any], *, turn: int) -> bool:
         """Return whether a pending authorization may execute on ``turn``.
@@ -1176,6 +1419,20 @@ class BeliefEngine:
             raise BeliefEngineError("typed snapshot requires snapshot_id")
         if int(snapshot.get("turn_before", turn)) != int(snapshot.get("turn_after", turn)):
             raise BeliefEngineError("typed snapshot spans multiple turns")
+        # A snapshot older than anything already recorded in this epoch means
+        # the game itself rolled back (for example a manual autosave load that
+        # skipped record_game_reload). Start a new epoch before projecting so
+        # the two conflicting histories are never replayed as one.
+        prior_epoch_max_turn = self._current_epoch_max_turn()
+        if prior_epoch_max_turn is not None and prior_epoch_max_turn > int(turn):
+            self.record_game_reload(
+                reason="detected_turn_regression",
+                turn=int(turn),
+                details={
+                    "prior_epoch_max_turn": prior_epoch_max_turn,
+                    "observed_turn": int(turn),
+                },
+            )
         links_by_entity: dict[str, list[dict[str, Any]]] = {}
         for relation in snapshot.get("relations") or []:
             if not isinstance(relation, dict):
@@ -1822,6 +2079,24 @@ class BeliefEngine:
             None,
         )
         active_proposals = self.list("proposal", status="active")
+        # An executing decision from a previous turn can never be completed by
+        # its original caller: the action window has passed. Reclaim it to
+        # retryable so the gate still demands resolution, but cancellation and
+        # re-authorization become possible instead of deadlocking the turn.
+        for item in self.list("decision", status=None):
+            if item.get("decision_state") != "executing":
+                continue
+            if int(item.get("execution_started_turn", turn)) >= turn:
+                continue
+            self.update(
+                "decision",
+                item["id"],
+                {
+                    "decision_state": "retryable",
+                    "recovery_reason": "stale_executing_reclaimed_turn_boundary",
+                },
+                turn=turn,
+            )
         all_decisions = self.list("decision", status=None)
 
         def structured_action_intent(item: dict[str, Any]) -> dict[str, Any]:

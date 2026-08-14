@@ -41,6 +41,7 @@ def test_governance_filter_keeps_decision_metrics_and_limits_history():
             "current_metrics": {
                 "player.gold": 200,
                 "barbarian.known_camps": 1,
+                "victory.rival_science.science_vp": 12,
                 "city.1.production": 8,
                 "unit.7.health": 90,
                 **noisy_metrics,
@@ -71,6 +72,7 @@ def test_governance_filter_keeps_decision_metrics_and_limits_history():
     assert parsed["belief_brief"]["current_metrics"] == {
         "player.gold": 200,
         "barbarian.known_camps": 1,
+        "victory.rival_science.science_vp": 12,
     }
     assert parsed["belief_brief"]["review"]["metrics"] == {
         "turn": 80,
@@ -80,9 +82,11 @@ def test_governance_filter_keeps_decision_metrics_and_limits_history():
         "decision-0",
         "decision-1",
     ]
-    assert parsed["_local_filter"]["original_sha256"]
-    assert parsed["_local_filter"]["raw_owner"] == "local_telemetry"
-    assert parsed["_local_filter"]["omitted_counts"] == {
+    metadata = parsed["_local_filter"]
+    assert len(metadata["original_sha256"]) == 16
+    assert "original_lines" not in metadata
+    assert metadata["raw_owner"] == "local_telemetry"
+    assert metadata["omitted_counts"] == {
         "belief_brief.current_metrics": 301,
         "belief_brief.review.metrics": 1,
         "governance.council_decisions": 3,
@@ -160,6 +164,8 @@ def test_belief_trace_keeps_recent_headers_but_targeted_trace_is_raw():
 
     assert [event["event_id"] for event in parsed["events"]] == ["event-3", "event-4"]
     assert all("entity" not in event for event in parsed["events"])
+    # changes keep key names only — world_entity link diffs are KB-scale
+    assert all(event["changes"] == ["status"] for event in parsed["events"])
     assert filter_tool_result(
         "get_belief_trace",
         raw,

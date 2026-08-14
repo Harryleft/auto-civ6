@@ -129,7 +129,13 @@ class TestEventSourcingAndCrud:
         reloaded = BeliefEngine(run_id="other-run", directory=tmp_path)
         reloaded.bind_game("CIVILIZATION_TEST", 1)
         assert reloaded.get("belief", "valid")["statement"] == belief_payload()["statement"]
-        assert len(reloaded.history()) == 1
+        # Corrupt lines are now quarantined with an auditable log.integrity
+        # marker (and the file rewritten) instead of being silently dropped;
+        # full quarantine coverage lives in tests/test_belief_engine_p0.py.
+        assert [event["event_type"] for event in reloaded.history()] == [
+            "entity.created",
+            "log.integrity",
+        ]
 
 
 class TestNormalizationAndObservations:
@@ -1452,7 +1458,7 @@ class TestGovernanceTurnLoopGate:
         )
         assert engine.governance_turn_gate(turn=31)["ready"] is True
 
-    def test_interrupted_executing_authorization_blocks_until_result_is_reconciled(
+    def test_interrupted_executing_authorization_is_reconciled_by_result_or_reclaim(
         self, engine
     ):
         self._typed_snapshot(engine, 35)
@@ -1476,17 +1482,8 @@ class TestGovernanceTurnLoopGate:
         )
         assert authorized["decision_id"] == decision["id"]
 
-        # Simulate an interrupted caller: the game action returned, but its
-        # result was not persisted until the next turn's precheck.
-        self._typed_snapshot(engine, 36)
-        blocked = engine.governance_turn_gate(turn=36)
-        assert blocked["blockers"] == ["routed_actions_not_completed"]
-        assert blocked["pending_authorizations"][0]["decision_state"] == "executing"
-        with pytest.raises(BeliefEngineError, match="while it is executing"):
-            engine.cancel_action_authorization(
-                decision["id"], reason="Caller was interrupted.", turn=36
-            )
-
+        # A late result that arrives before the gate consults the decision
+        # still completes it normally.
         engine.record_tool_result(
             tool="unit_action",
             params=params,
@@ -1498,8 +1495,37 @@ class TestGovernanceTurnLoopGate:
             decision_id=decision["id"],
             decision_route="fast",
         )
+        self._typed_snapshot(engine, 36)
         assert engine.get("decision", decision["id"])["decision_state"] == "succeeded"
         assert engine.governance_turn_gate(turn=36)["ready"] is True
+
+        # But an execution orphaned across a turn boundary (crash, lost
+        # caller) is reclaimed to retryable by the gate instead of blocking
+        # forever, and can then be cancelled explicitly.
+        orphan = engine.route_decision(
+            statement="Fortify the western defender",
+            probability=0.9,
+            confidence=0.9,
+            impact="low",
+            urgency="low",
+            irreversibility=0,
+            action_intent={
+                "tool": "unit_action",
+                "params": params,
+                "args_hash": action_args_hash(params),
+                "allowed_turn": 37,
+            },
+            turn=35,
+        )
+        engine.authorize_action(tool="unit_action", params=params, turn=37, required=True)
+        self._typed_snapshot(engine, 38)
+        blocked = engine.governance_turn_gate(turn=38)
+        assert blocked["blockers"] == ["routed_actions_not_completed"]
+        assert blocked["pending_authorizations"][0]["decision_state"] == "retryable"
+        engine.cancel_action_authorization(
+            orphan["id"], reason="Caller was interrupted.", turn=38
+        )
+        assert engine.governance_turn_gate(turn=38)["ready"] is True
 
     def test_future_authorization_is_dormant_then_executable_only_on_allowed_turn(
         self, engine

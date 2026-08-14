@@ -85,7 +85,7 @@ async def _check_mid_turn_diplomacy(
             war_names = []
             for ws in war_sessions:
                 close_lua = lq.build_diplomacy_respond(ws.other_player_id, "EXIT")
-                await gs.conn.execute_write(close_lua)
+                await gs.conn.execute_mutation(close_lua)
                 war_names.append(f"{ws.other_civ_name} ({ws.other_leader_name})")
                 log.info(
                     "Auto-dismissed war declaration from %s",
@@ -655,7 +655,7 @@ async def execute_end_turn(gs: GameState) -> str:
                 # --- Auto-resolvable soft blockers ---
 
                 if blocking_type == "ENDTURN_BLOCKING_GOVERNOR_IDLE":
-                    await gs.conn.execute_write(
+                    await gs.conn.execute_mutation(
                         f"local me = Game.GetLocalPlayer(); "
                         f"local list = NotificationManager.GetList(me); "
                         f"if list then "
@@ -676,7 +676,7 @@ async def execute_end_turn(gs: GameState) -> str:
                     continue
 
                 if blocking_type == "ENDTURN_BLOCKING_CONSIDER_GOVERNMENT_CHANGE":
-                    await gs.conn.execute_write(
+                    await gs.conn.execute_mutation(
                         f"local me = Game.GetLocalPlayer(); "
                         f"Players[me]:GetCulture():SetGovernmentChangeConsidered(true); "
                         f'print("OK"); print("{lq.SENTINEL}")'
@@ -685,7 +685,7 @@ async def execute_end_turn(gs: GameState) -> str:
                     continue
 
                 if blocking_type == "ENDTURN_BLOCKING_WORLD_CONGRESS_LOOK":
-                    await gs.conn.execute_write(
+                    await gs.conn.execute_mutation(
                         f"local me = Game.GetLocalPlayer(); "
                         f"UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_LOOKED_AT_AVAILABLE, {{}}); "
                         f"local list = NotificationManager.GetList(me); "
@@ -724,7 +724,7 @@ async def execute_end_turn(gs: GameState) -> str:
                 # + dismiss all WC-related blocking notifications.
                 if "WORLD_CONGRESS" in blocking_type:
                     try:
-                        wc_dismiss_lines = await gs.conn.execute_write(
+                        wc_dismiss_lines = await gs.conn.execute_mutation(
                             f"local me = Game.GetLocalPlayer(); "
                             f"UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_LOOKED_AT_AVAILABLE, {{}}); "
                             f"local dismissed = 0; "
@@ -792,7 +792,7 @@ async def execute_end_turn(gs: GameState) -> str:
 
                 if blocking_type == "ENDTURN_BLOCKING_GIVE_INFLUENCE_TOKEN":
                     try:
-                        envoy_lines = await gs.conn.execute_write(
+                        envoy_lines = await gs.conn.execute_mutation(
                             f"local me = Game.GetLocalPlayer(); "
                             f"local inf = Players[me]:GetInfluence(); "
                             f"local tokens = inf:GetTokensToGive(); "
@@ -835,7 +835,7 @@ async def execute_end_turn(gs: GameState) -> str:
                                 for cl in corruption_lines
                                 if cl.startswith("CORRUPTED|")
                             )
-                            dismiss_lines = await gs.conn.execute_write(
+                            dismiss_lines = await gs.conn.execute_mutation(
                                 f"local me = Game.GetLocalPlayer(); "
                                 f"local dismissed = 0; "
                                 f"local list = NotificationManager.GetList(me); "
@@ -941,7 +941,7 @@ async def execute_end_turn(gs: GameState) -> str:
                             f'else print("NOT_SET") end '
                             f'print("{lq.SENTINEL}")'
                         )
-                        result_lines = await gs.conn.execute_write(dismiss_lua)
+                        result_lines = await gs.conn.execute_mutation(dismiss_lua)
                         if any("AUTO_CLEARED" in l for l in result_lines):
                             resolved_any = True
                             continue
@@ -978,7 +978,7 @@ async def execute_end_turn(gs: GameState) -> str:
                         # promotions on units that don't genuinely need one.
                         # ChangeStoredPromotions zeroes the engine counter that
                         # causes the blocker to regenerate after Dismiss().
-                        check_lines = await gs.conn.execute_read(
+                        check_lines = await gs.conn.execute_mutation(
                             f"local me = Game.GetLocalPlayer(); "
                             f"local anyNeed = false; "
                             f"local cleared = 0; "
@@ -1013,7 +1013,8 @@ async def execute_end_turn(gs: GameState) -> str:
                             f"  end "
                             f"end; "
                             f'print(anyNeed and "NEEDS_PROMO" or ("NO_PROMO_NEEDED|cleared=" .. cleared)); '
-                            f'print("{lq.SENTINEL}")'
+                            f'print("{lq.SENTINEL}")',
+                            context="gamecore",
                         )
                         needs_promo = any(
                             "NEEDS_PROMO" == l.strip() for l in check_lines
@@ -1028,7 +1029,7 @@ async def execute_end_turn(gs: GameState) -> str:
                             # Dismiss BOTH the end-turn blocker AND the regular notification
                             # (NOTIFICATION_UNIT_PROMOTION_AVAILABLE) which is a separate
                             # object that regenerates every turn due to stale CanPromote().
-                            await gs.conn.execute_write(
+                            await gs.conn.execute_mutation(
                                 f"local me = Game.GetLocalPlayer(); "
                                 f"local list = NotificationManager.GetList(me); "
                                 f"if list then "
@@ -1076,7 +1077,9 @@ async def execute_end_turn(gs: GameState) -> str:
                             f'else print("UNITS_NEED_ORDERS") end; '
                             f'print("{lq.SENTINEL}")'
                         )
-                        skip_lines = await gs.conn.execute_read(check_lua)
+                        skip_lines = await gs.conn.execute_mutation(
+                            check_lua, context="gamecore"
+                        )
                         if any("AUTO_SKIPPED" in l for l in skip_lines):
                             resolved_any = True
                             continue
@@ -1088,7 +1091,7 @@ async def execute_end_turn(gs: GameState) -> str:
                 # --- Spy escape route: auto-pick fastest district ---
                 if blocking_type == "ENDTURN_BLOCKING_SPY_CHOOSE_ESCAPE_ROUTE":
                     try:
-                        escape_lines = await gs.conn.execute_write(
+                        escape_lines = await gs.conn.execute_mutation(
                             lq.build_spy_escape_route()
                         )
                         if any("OK:ESCAPE_ROUTE" in l for l in escape_lines):
@@ -1213,7 +1216,7 @@ async def execute_end_turn(gs: GameState) -> str:
         if gs._pending_end_turn_from is not None:
             turn_before = gs._pending_end_turn_from
     else:
-        await gs.conn.execute_write(lua)
+        await gs.conn.execute_mutation(lua)
         gs._pending_end_turn = True
         gs._pending_end_turn_from = turn_before
 
@@ -1361,7 +1364,7 @@ async def execute_end_turn(gs: GameState) -> str:
             dismissed = await gs.dismiss_popup()
             if "Dismissed" in dismissed:
                 log.info("Post-timeout popup dismissed: %s", dismissed)
-                await gs.conn.execute_write(lua)
+                await gs.conn.execute_mutation(lua)
                 for _ in range(5):
                     await asyncio.sleep(2.0)
                     turn_after = await _get_turn_number(gs)

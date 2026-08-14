@@ -5,7 +5,7 @@ Wraps tuner_client.py into a stateful connection manager with:
 - asyncio lock for serializing commands
 - Sentinel-based multi-line response collection
 - Output prefix parsing (O\x00<context>: <value>)
-- Reconnection on connection loss
+- Reconnection on connection loss (queries only — mutations are never resent)
 """
 
 from __future__ import annotations
@@ -21,6 +21,60 @@ log = logging.getLogger(__name__)
 
 class LuaError(Exception):
     """Raised when Lua code execution returns an error."""
+
+
+class CommandTimeoutError(LuaError):
+    """Raised when a command times out before its completion sentinel arrives.
+
+    Subclassing LuaError keeps server.py's ``except (LuaError, ValueError)``
+    handler in play, so the error reaches the agent instead of the old
+    behavior of silently returning partial output that parsers then
+    misread. Carries the configured timeout and the lines received so far.
+    """
+
+    def __init__(self, timeout: float, lines: list[str]):
+        self.timeout = timeout
+        self.lines = list(lines)
+        super().__init__(timeout, lines)
+
+    def __str__(self) -> str:
+        preview = " | ".join(self.lines[:3])
+        if len(preview) > 200:
+            preview = preview[:200] + "..."
+        return (
+            f"Command timed out after {self.timeout:.1f}s without receiving "
+            f'the "{SENTINEL}" completion sentinel — output is incomplete '
+            f"and must not be parsed as a result. Received "
+            f"{len(self.lines)} partial line(s)"
+            + (f": [{preview}]" if preview else "")
+        )
+
+
+class MutationOutcomeUnknownError(ConnectionError):
+    """A game-mutating command was sent but its outcome is unknown.
+
+    The connection died around the send, so the game may already have
+    executed the command and merely lost its output. Resending would risk
+    double-executing a move/attack/purchase, so mutations are sent exactly
+    once and never retried here. Subclassing ConnectionError keeps
+    server.py's connection-loss recovery path in play.
+    """
+
+    def __init__(self, lua_code: str, original: BaseException | None = None):
+        self.lua_code = lua_code
+        self.original = original
+        super().__init__(lua_code, original)
+
+    def __str__(self) -> str:
+        first_line = self.lua_code.splitlines()[0][:120] if self.lua_code else ""
+        cause = f" ({self.original!r})" if self.original else ""
+        return (
+            "Command may have already been executed by the game — result "
+            f"unknown; connection lost mid-command{cause}. It was NOT "
+            "resent (resending a mutation can double-execute it). Verify "
+            "the current game state with a read query before retrying. "
+            f"Command started with: {first_line!r}"
+        )
 
 
 class GameConnection:
@@ -117,41 +171,108 @@ class GameConnection:
                 "Make sure a game is in progress (not at the main menu)."
             )
 
-    async def execute_read(self, lua_code: str, timeout: float = 5.0) -> list[str]:
+    async def execute_read(
+        self, lua_code: str, timeout: float = 5.0, require_sentinel: bool = True
+    ) -> list[str]:
         """Execute Lua in GameCore context (read state). Returns parsed output lines."""
         await self._ensure_game_states()
-        return await self._execute_and_collect(self.gamecore_index, lua_code, timeout)
+        return await self._execute_and_collect(
+            self.gamecore_index, lua_code, timeout, require_sentinel=require_sentinel
+        )
 
-    async def execute_write(self, lua_code: str, timeout: float = 5.0) -> list[str]:
+    async def execute_write(
+        self, lua_code: str, timeout: float = 5.0, require_sentinel: bool = True
+    ) -> list[str]:
         """Execute Lua in InGame context (issue commands). Returns parsed output lines."""
         await self._ensure_game_states()
-        return await self._execute_and_collect(self.ingame_index, lua_code, timeout)
+        return await self._execute_and_collect(
+            self.ingame_index, lua_code, timeout, require_sentinel=require_sentinel
+        )
+
+    async def execute_mutation(
+        self, lua_code: str, timeout: float = 5.0, context: str = "ingame"
+    ) -> list[str]:
+        """Execute a game-mutating command (moves, attacks, purchases, end_turn...).
+
+        Guarantees the command is sent at most once: on a dead socket the
+        query path may safely reconnect and resend, but a mutation may
+        already have run in the game — resending would double-execute it,
+        so we raise MutationOutcomeUnknownError instead. Also requires the
+        completion sentinel so a hung command surfaces as
+        CommandTimeoutError rather than silently truncated output.
+        """
+        await self._ensure_game_states()
+        if context == "ingame":
+            state_index = self.ingame_index
+        elif context == "gamecore":
+            state_index = self.gamecore_index
+        else:
+            raise ValueError(
+                f"Unknown mutation context {context!r} (expected 'ingame' or 'gamecore')"
+            )
+        return await self._execute_and_collect(
+            state_index, lua_code, timeout, mutation=True, require_sentinel=True
+        )
 
     async def execute_in_state(
-        self, state_index: int, lua_code: str, timeout: float = 5.0
+        self,
+        state_index: int,
+        lua_code: str,
+        timeout: float = 5.0,
+        mutation: bool = False,
+        require_sentinel: bool = False,
     ) -> list[str]:
-        """Execute Lua in an arbitrary state index. Returns parsed output lines."""
-        return await self._execute_and_collect(state_index, lua_code, timeout)
+        """Execute Lua in an arbitrary state index. Returns parsed output lines.
+
+        Lenient by default: state probing (game_lifecycle popup scans) and
+        arbitrary code must not depend on the sentinel convention. Pass
+        ``mutation=True`` for state-local commands that change game/UI state
+        (popup Close()) — they are then never resent on a dead socket.
+        """
+        return await self._execute_and_collect(
+            state_index,
+            lua_code,
+            timeout,
+            mutation=mutation,
+            require_sentinel=require_sentinel,
+        )
 
     async def _execute_and_collect(
-        self, state_index: int, lua_code: str, timeout: float
+        self,
+        state_index: int,
+        lua_code: str,
+        timeout: float,
+        mutation: bool = False,
+        require_sentinel: bool = True,
     ) -> list[str]:
         """Send Lua code and collect output lines until sentinel or timeout.
 
-        Auto-reconnects once on dead socket (e.g. after game crash/reload).
+        Auto-reconnects once on dead socket (e.g. after game crash/reload)
+        for queries only — mutations are never resent because the game may
+        have already executed the original send (MutationOutcomeUnknownError).
         """
         await self.ensure_connected()
         async with self._lock:
             try:
-                return await self._locked_execute(state_index, lua_code, timeout)
-            except (ConnectionError, OSError, asyncio.IncompleteReadError):
+                return await self._locked_execute(
+                    state_index, lua_code, timeout, require_sentinel=require_sentinel
+                )
+            except (ConnectionError, OSError, asyncio.IncompleteReadError) as e:
+                if mutation:
+                    raise MutationOutcomeUnknownError(lua_code, e) from e
                 # Dead socket — reconnect once and retry (still holding lock)
                 log.info("Connection lost, reconnecting...")
                 await self.reconnect()
-                return await self._locked_execute(state_index, lua_code, timeout)
+                return await self._locked_execute(
+                    state_index, lua_code, timeout, require_sentinel=require_sentinel
+                )
 
     async def _locked_execute(
-        self, state_index: int, lua_code: str, timeout: float
+        self,
+        state_index: int,
+        lua_code: str,
+        timeout: float,
+        require_sentinel: bool = True,
     ) -> list[str]:
         """Inner execute — must be called while holding self._lock."""
         assert self._reader is not None
@@ -165,6 +286,7 @@ class GameConnection:
         )
 
         lines: list[str] = []
+        saw_sentinel = False
         deadline = asyncio.get_running_loop().time() + timeout
 
         while True:
@@ -184,9 +306,16 @@ class GameConnection:
             text = _parse_output(msg.payload)
             if text is not None:
                 if text.strip() == SENTINEL:
+                    saw_sentinel = True
                     break
                 lines.append(text)
             # Ignore non-output messages (e.g. tag=3 empty ack)
+
+        if require_sentinel and not saw_sentinel:
+            # Timed out (or the stream went quiet) before the Lua sentinel
+            # arrived — the collected lines are partial/unreliable, so fail
+            # loudly instead of handing the caller a truncated result.
+            raise CommandTimeoutError(timeout, lines)
 
         # Drain any trailing unsolicited output
         await tuner_client.drain_messages(self._reader, timeout=0.2)
