@@ -190,7 +190,20 @@ kParams[PlayerOperations.PARAM_WORLD_CONGRESS_VOTES] = {num_votes}
 kParams[PlayerOperations.PARAM_RESOLUTION_OPTION] = {option}
 kParams[PlayerOperations.PARAM_RESOLUTION_SELECTION] = {target_index}
 UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_RESOLUTION_VOTE, kParams)
-print("OK:VOTED|res:{resolution_hash}|option:{option}|target:{target_index}|votes:{num_votes}")
+-- Read back: the resolution should now carry our committed votes for that option.
+local votesAfter = 0
+local votesOk, votesVal = pcall(function()
+    for _, r in ipairs(wc:GetResolutions() or {{}}) do
+        if r.Type == {resolution_hash} then
+            votesAfter = r.OptionVotes[{option}]
+        end
+    end
+end)
+if votesOk and votesAfter >= {num_votes} then
+    print("OK:VOTED|res:{resolution_hash}|option:{option}|target:{target_index}|votes:{num_votes} (verified)")
+else
+    print("OK:VOTE_SUBMITTED|res:{resolution_hash}|option:{option}|target:{target_index}|votes:{num_votes} — re-check with get_world_congress()")
+end
 print("{SENTINEL}")
 """
 
