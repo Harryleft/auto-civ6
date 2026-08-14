@@ -177,9 +177,17 @@ end
 local kParams = {{}}
 kParams[PlayerOperations.PARAM_GREAT_PERSON_INDIVIDUAL_TYPE] = {individual_id}
 UI.RequestPlayerOperation(me, PlayerOperations.RECRUIT_GREAT_PERSON, kParams)
+-- Read back to verify the great person was actually claimed (no false OK).
+local claimed = false
+local claimOk, claimVal = pcall(function() return gp:GetGreatPersonClaimingPlayer({individual_id}) end)
+if claimOk and claimVal == me then claimed = true end
 local ind = GameInfo.GreatPersonIndividuals[{individual_id}]
 local name = ind and Locale.Lookup(ind.Name) or "unknown"
-print("OK:RECRUITED|" .. name)
+if claimed then
+    print("OK:RECRUITED|" .. name .. " (verified)")
+else
+    print("OK:RECRUIT_SUBMITTED|" .. name .. " requested but not yet claimed by you — re-check with get_great_people")
+end
 print("{SENTINEL}")
 """
 
@@ -202,10 +210,18 @@ local kParams = {{}}
 kParams[PlayerOperations.PARAM_GREAT_PERSON_INDIVIDUAL_TYPE] = {individual_id}
 kParams[PlayerOperations.PARAM_YIELD_TYPE] = {yield_idx}
 UI.RequestPlayerOperation(me, PlayerOperations.PATRONIZE_GREAT_PERSON, kParams)
+-- Read back to verify the great person was actually claimed (no false OK).
+local claimed = false
+local claimOk, claimVal = pcall(function() return gp:GetGreatPersonClaimingPlayer({individual_id}) end)
+if claimOk and claimVal == me then claimed = true end
 local ind = GameInfo.GreatPersonIndividuals[{individual_id}]
 local name = ind and Locale.Lookup(ind.Name) or "unknown"
 local cost = gp:GetPatronizeCost(me, {individual_id}, {yield_idx})
-print("OK:PATRONIZED|" .. name .. "|cost:" .. cost .. " {yield_type.replace("YIELD_", "").lower()}")
+if claimed then
+    print("OK:PATRONIZED|" .. name .. "|cost:" .. cost .. " {yield_type.replace("YIELD_", "").lower()} (verified)")
+else
+    print("OK:PATRONIZE_SUBMITTED|" .. name .. " requested but not yet claimed by you — re-check with get_great_people")
+end
 print("{SENTINEL}")
 """
 
@@ -224,9 +240,17 @@ local cost = gp:GetRejectCost(me, {individual_id})
 local kParams = {{}}
 kParams[PlayerOperations.PARAM_GREAT_PERSON_INDIVIDUAL_TYPE] = {individual_id}
 UI.RequestPlayerOperation(me, PlayerOperations.REJECT_GREAT_PERSON, kParams)
+-- Read back: the claimed player should no longer be us after a rejection.
+local stillOurs = false
+local claimOk2, claimVal2 = pcall(function() return gp:GetGreatPersonClaimingPlayer({individual_id}) end)
+if claimOk2 and claimVal2 == me then stillOurs = true end
 local ind = GameInfo.GreatPersonIndividuals[{individual_id}]
 local name = ind and Locale.Lookup(ind.Name) or "unknown"
-print("OK:REJECTED|" .. name .. "|faith_cost:" .. cost)
+if stillOurs then
+    print("OK:REJECT_SUBMITTED|" .. name .. " still claimed by you — re-check with get_great_people")
+else
+    print("OK:REJECTED|" .. name .. "|faith_cost:" .. cost .. " (verified)")
+end
 print("{SENTINEL}")
 """
 

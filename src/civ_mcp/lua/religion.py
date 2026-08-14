@@ -231,7 +231,15 @@ local p3 = {{}}
 p3[PlayerOperations.PARAM_BELIEF_TYPE] = founder.Hash
 UI.RequestPlayerOperation(me, PlayerOperations.ADD_BELIEF, p3)
 
-print("OK:RELIGION_FOUNDED|" .. Locale.Lookup(relRow.Name) .. "|" .. Locale.Lookup(follower.Name) .. "|" .. Locale.Lookup(founder.Name))
+-- Read back to verify the religion actually changed (no false OK).
+local createdAfter = pRel:GetReligionTypeCreated()
+if createdAfter >= 0 then
+    local rAfter = GameInfo.Religions[createdAfter]
+    local rNameAfter = rAfter and Locale.Lookup(rAfter.Name) or tostring(createdAfter)
+    print("OK:RELIGION_FOUNDED|" .. rNameAfter .. "|" .. Locale.Lookup(follower.Name) .. "|" .. Locale.Lookup(founder.Name) .. " (verified)")
+else
+    print("OK:RELIGION_SUBMITTED|requested " .. Locale.Lookup(relRow.Name) .. " but religion not yet reflected — re-check with get_religion_beliefs")
+end
 print("{SENTINEL}")
 """
 

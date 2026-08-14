@@ -398,7 +398,13 @@ params[UnitOperationTypes.PARAM_X] = x
 params[UnitOperationTypes.PARAM_Y] = y
 pcall(function() LuaEvents.DiplomacyActionView_ShowIngameUI() end)
 UnitManager.RequestOperation(unit, UnitOperationTypes.FOUND_CITY, params)
-print("OK:FOUNDED|" .. x .. "," .. y)
+-- Read back: the settler is consumed and the plot becomes a city.
+local cityAfter = Map.GetPlot(x, y):IsCity()
+if cityAfter then
+    print("OK:FOUNDED|" .. x .. "," .. y .. " (verified)")
+else
+    print("OK:FOUND_REQUESTED|" .. x .. "," .. y .. " — city not yet present, verify with get_cities()")
+end
 print("{SENTINEL}")
 """
 
@@ -850,7 +856,18 @@ tParams[CityCommandTypes.PARAM_PLOT_PURCHASE] = 1
 tParams[CityCommandTypes.PARAM_X] = {x}
 tParams[CityCommandTypes.PARAM_Y] = {y}
 CityManager.RequestCommand(pCity, CityCommandTypes.PURCHASE, tParams)
-print("OK:TILE_PURCHASED|({x},{y})|cost:" .. cost)
+-- Read back: the tile is owned by us once GetOwner() matches.
+local plotAfter = Map.GetPlot({x}, {y})
+local owned = false
+if plotAfter then
+    local ownerId = plotAfter:GetOwner()
+    if ownerId == me then owned = true end
+end
+if owned then
+    print("OK:TILE_PURCHASED|({x},{y})|cost:" .. cost .. " (verified)")
+else
+    print("OK:TILE_PURCHASE_REQUESTED|({x},{y})|cost:" .. cost .. " — verify with get_purchasable_tiles()")
+end
 print("{SENTINEL}")
 """
 
