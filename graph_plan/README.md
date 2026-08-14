@@ -182,7 +182,7 @@ Threat typed data
 - Lua 返回每座己方城市的六边格距离；`unit_id=0` 仍是有效身份。
 - `TurnSnapshot`、影子图和 `threats_near_city()` 已贯通，失去视野后默认不再作为当前威胁。
 - Military 只生成一个可验证的原地 `fortify` Proposal；Council、ActionIntent 和现有单写入器继续复用。
-- 显式 `EvidenceRequirement` 必定经过 `verify_then_fast`；fortify 无可观察状态变化时返回 `OUTCOME_UNKNOWN`。
+- 显式 `EvidenceRequirement` 必定经过 `verify_then_fast`，并核对守军仍在原城市格；fortify 无可观察状态变化时返回 `OUTCOME_UNKNOWN`。
 
 真实游戏已验证同回合快照、威胁空结果、影子图零差异和 fortify 状态读取。当前局面没有城市周边敌军，因此尚未完成真实的 Proposal → 动作 → Outcome 验收。
 

@@ -370,8 +370,11 @@ class MilitaryDepartment:
                 tool="get_units",
                 params={},
                 max_age_turns=0,
-                required_facts=("unit_ids",),
+                required_facts=(f"unit_position:{defender.unit_id}",),
                 required_metrics=("observed_unit_count",),
+                expected_facts={
+                    f"unit_position:{defender.unit_id}": [defender.x, defender.y]
+                },
                 description="重新确认守军仍存在后再执行精确防御动作",
             )
             intent = ActionIntent(

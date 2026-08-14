@@ -3102,6 +3102,7 @@ def _governance_proposal_from_dict(raw: dict[str, Any]):
             max_age_turns=item.get("max_age_turns"),
             required_facts=tuple(item.get("required_facts") or ()),
             required_metrics=tuple(item.get("required_metrics") or ()),
+            expected_facts=item.get("expected_facts") or {},
             description=str(item.get("description") or ""),
         )
 
@@ -4557,6 +4558,7 @@ async def route_belief_decision(
                 required_metrics = (
                     item.get("required_metrics") or item.get("metric_keys") or []
                 )
+                expected_facts = item.get("expected_facts") or {}
                 minimum_sequence = item.get("min_observation_sequence", 0)
                 max_age_turns = item.get("max_age_turns")
                 if not isinstance(requirement_params, dict):
@@ -4574,6 +4576,12 @@ async def route_belief_decision(
                 ):
                     raise BeliefEngineError(
                         "evidence required_metrics must be a list of non-empty strings"
+                    )
+                if not isinstance(expected_facts, dict) or not all(
+                    isinstance(key, str) and key for key in expected_facts
+                ):
+                    raise BeliefEngineError(
+                        "evidence expected_facts must be a JSON object with non-empty keys"
                     )
                 if type(minimum_sequence) is not int or minimum_sequence < 0:
                     raise BeliefEngineError(
@@ -4595,6 +4603,7 @@ async def route_belief_decision(
                         "max_age_turns": max_age_turns,
                         "required_facts": list(required_facts),
                         "required_metrics": list(required_metrics),
+                        "expected_facts": expected_facts,
                     }
                 )
             return normalized

@@ -188,6 +188,11 @@ Era: Classical | Score: 18 (Dark: 12, Golden: 24)""",
         assert cities["facts"]["cities"][0]["x"] == 11
         assert units["metrics"]["observed_unit_count"] == 2
         assert units["facts"]["unit_ids"] == [7, 11]
+        positioned_units = normalize_tool_result(
+            "get_units",
+            "Archer at (3,4) [id:7, idx:1]\nWarrior at (8,9) [id:11, idx:2]",
+        )
+        assert positioned_units["facts"]["unit_position:7"] == [3, 4]
         assert victory["metrics"] == {
             "victory.rome.vp": 12,
             "victory.rome.vp_target": 20,
@@ -741,7 +746,8 @@ class TestHarnessActionLifecycle:
                 {
                     "tool": "get_units",
                     "params": {},
-                    "required_facts": ["unit_ids"],
+                    "required_facts": ["unit_position:7"],
+                    "expected_facts": {"unit_position:7": [3, 4]},
                     "max_age_turns": 0,
                 }
             ],
@@ -755,6 +761,38 @@ class TestHarnessActionLifecycle:
             turn=2,
             required=False,
         )["authorized"] is False
+
+        engine.record_tool_result(
+            tool="get_units",
+            params={},
+            result="Warrior at (5,6) [id:7, idx:1]",
+            turn=2,
+            category="query",
+            success=True,
+            duration_ms=1,
+        )
+        assert engine.authorize_action(
+            tool="unit_action",
+            params={"unit_id": 7, "action": "fortify"},
+            turn=2,
+            required=False,
+        )["authorized"] is False
+
+        engine.record_tool_result(
+            tool="get_units",
+            params={},
+            result="Warrior at (3,4) [id:7, idx:1]",
+            turn=2,
+            category="query",
+            success=True,
+            duration_ms=1,
+        )
+        assert engine.authorize_action(
+            tool="unit_action",
+            params={"unit_id": 7, "action": "fortify"},
+            turn=2,
+            required=False,
+        )["authorized"] is True
 
     def test_verify_then_fast_rejects_unrelated_query(self, engine):
         decision = engine.route_decision(
