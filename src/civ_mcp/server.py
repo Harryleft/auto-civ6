@@ -29,6 +29,7 @@ from civ6_belief_engine.belief_engine import (
     tool_result_reference,
 )
 from civ6_belief_engine.belief_mode import BeliefMode
+from civ6_belief_engine.graph import compare_shadow_projection, project_world_state
 from civ_mcp.game_over_watchdog import GameOverWatchdog
 from civ_mcp import narrate as nr
 from civ_mcp.connection import GameConnection, LuaError
@@ -3323,6 +3324,38 @@ async def _capture_governance_snapshot(
     snapshot = await _get_game(ctx).get_governance_snapshot()
     world = snapshot_world_state(snapshot)
     projection = engine.ingest_typed_snapshot(world, turn=snapshot.turn)
+    try:
+        graph_delta = project_world_state(
+            world,
+            previous=engine.graph_view,
+            epoch=engine.epoch,
+        )
+        next_graph = engine.record_graph_delta(graph_delta)
+        legacy_entities = tuple(
+            entity
+            for entity in engine.list("world_entity", status="active")
+            if entity.get("snapshot_id") == snapshot.snapshot_id
+        )
+        mismatches = compare_shadow_projection(world, legacy_entities, next_graph)
+        projection["graph_shadow"] = {
+            "status": "matched" if not mismatches else "mismatch",
+            "epoch": next_graph.epoch,
+            "state_hash": next_graph.state_hash,
+            "nodes": len(next_graph.nodes),
+            "edges": len(next_graph.edges),
+            "source_nodes": len(world.get("entities") or ()),
+            "source_edges": len(world.get("relations") or ()),
+            "mismatches": list(mismatches),
+        }
+    except Exception as exc:
+        # Phase one is a shadow read model. Its failure is observable but must
+        # not take down the established governance snapshot path.
+        log.exception("Graph shadow projection failed")
+        projection["graph_shadow"] = {
+            "status": "error",
+            "epoch": engine.epoch,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
     released_locks = _release_stale_budget_locks(engine, turn=snapshot.turn)
     active_locks = engine.list("budget_lock", status="active")
     return snapshot, world, projection, released_locks, active_locks

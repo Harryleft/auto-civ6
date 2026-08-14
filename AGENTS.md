@@ -69,7 +69,7 @@
 | 提案、批评、议会、预算锁和 ActionIntent | [docs/governance-system.md](docs/governance-system.md) |
 | MCP 到 Lua、FireTuner 单连接和游戏引擎架构 | [docs/architecture-diagrams.md](docs/architecture-diagrams.md) |
 | 产品名、领域包边界和 MCP 兼容命名 | [docs/product-architecture.md](docs/product-architecture.md) |
-| 图工程路线、对抗式审查与阶段零修复记录 | [graph_plan/README.md](graph_plan/README.md) |
+| 图工程当前方案与实施路线 | [graph_plan/README.md](graph_plan/README.md) |
 | DSH overlay 配置和安全决策 | [integrations/deepseek-harness/README.md](integrations/deepseek-harness/README.md) |
 
 ## 决策硬规则
