@@ -1808,13 +1808,18 @@ class GameState:
     async def execute_lua(self, code: str, context: str = "gamecore") -> str:
         """Escape hatch: run arbitrary Lua code."""
         # Arbitrary user code has no obligation to print the completion
-        # sentinel, so route leniently (require_sentinel=False) instead of
-        # going through game_lifecycle.execute_lua, whose default routing
-        # now enforces the sentinel on execute_read/execute_write.
+        # sentinel, so every branch stays lenient. The InGame context and
+        # raw state indexes are mutation-capable channels (the escape hatch
+        # exists precisely for actions the domain tools do not cover), so
+        # they carry the send-exactly-once mutation contract; the GameCore
+        # context is documented as read-only state access and keeps the
+        # query path's reconnect-and-resend recovery.
         if context == "ingame":
-            lines = await self.conn.execute_write(code, require_sentinel=False)
+            lines = await self.conn.execute_write(
+                code, require_sentinel=False, mutation=True
+            )
         elif context.isdigit():
-            lines = await self.conn.execute_in_state(int(context), code)
+            lines = await self.conn.execute_in_state(int(context), code, mutation=True)
         else:
             lines = await self.conn.execute_read(code, require_sentinel=False)
         return "\n".join(lines) if lines else "(no output)"
