@@ -36,7 +36,7 @@ cd "$project_root"
 if [ "${1:-}" = "check" ]; then
   check_output="$(mktemp /tmp/civ6-dsh-config.XXXXXX)"
   trap 'rm -f "$check_output"' EXIT
-  uv run python -c 'import civ_mcp'
+  uv run python -c 'import asyncio, sys; from civ_mcp.server import mcp; names = {tool.name for tool in asyncio.run(mcp.list_tools())}; required = {"get_barbarian_overview", "get_policies"}; missing = sorted(required - names); sys.exit(f"Missing MCP tools: {missing}" if missing else 0)'
   DSH_HOME="$dsh_home" node "$dsh_bin" \
     --profile web --patch "$patch_file" --dump-config > "$check_output"
   if ! grep -q "id: mcp-civ6" "$check_output"; then
