@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 from .model import Coverage, Edge, EdgeKey, GraphDelta, Node, canonical_json
 from .view import GraphView
@@ -11,6 +11,10 @@ from .view import GraphView
 
 class GraphProjectionError(ValueError):
     """Raised when a typed world payload cannot form a coherent graph."""
+
+
+WORLD_SOURCE = "game_state:typed_snapshot"
+GOAL_SOURCE = "belief_engine:goal"
 
 
 _RELATION_NAMES = {
@@ -117,6 +121,7 @@ def project_world_state(
             epoch=epoch,
             first_observed_turn=first_turn,
             last_observed_turn=turn,
+            source=WORLD_SOURCE,
             coverage=coverage,
             observed=True,
         )
@@ -151,6 +156,7 @@ def project_world_state(
             epoch=epoch,
             valid_from_turn=prior.valid_from_turn if prior is not None else turn,
             last_observed_turn=turn,
+            source=WORLD_SOURCE,
             coverage=_relation_coverage(relation_type, source_node, target_node),
             observed=True,
         )
@@ -159,6 +165,8 @@ def project_world_state(
     remove_node_ids: list[str] = []
     for node_id, prior in previous.nodes.items():
         if node_id in current_nodes:
+            continue
+        if prior.source != WORLD_SOURCE:
             continue
         if prior.coverage is Coverage.COMPLETE:
             remove_node_ids.append(node_id)
@@ -170,6 +178,8 @@ def project_world_state(
     removed_nodes = set(remove_node_ids)
     for key, prior in previous.edges.items():
         if key in current_edges:
+            continue
+        if prior.source != WORLD_SOURCE:
             continue
         if prior.source_id in removed_nodes or prior.target_id in removed_nodes:
             remove_edge_keys.append(key)
@@ -190,6 +200,82 @@ def project_world_state(
         upsert_edges=tuple(upsert_edges),
         remove_node_ids=tuple(remove_node_ids),
         remove_edge_keys=tuple(remove_edge_keys),
+    )
+
+
+def project_active_goals(
+    goals: Iterable[Mapping[str, Any]],
+    *,
+    previous: GraphView,
+    snapshot_id: str,
+    turn: int,
+    epoch: int,
+) -> GraphDelta:
+    """Project the complete active-goal set into the existing graph namespace."""
+
+    if not isinstance(previous, GraphView):
+        raise TypeError("previous must be GraphView")
+    if not isinstance(snapshot_id, str) or not snapshot_id.strip():
+        raise GraphProjectionError("active goals require snapshot_id")
+    if type(turn) is not int or turn < 0:
+        raise GraphProjectionError("active goals require a non-negative integer turn")
+    if type(epoch) is not int or epoch < 1:
+        raise GraphProjectionError("epoch must be a positive integer")
+    if previous.epoch != epoch:
+        raise GraphProjectionError("active goals must use the current graph epoch")
+
+    current: dict[str, Node] = {}
+    for raw in goals:
+        if not isinstance(raw, Mapping):
+            raise GraphProjectionError("active goals must be objects")
+        goal_id = str(raw.get("goal_id") or "").strip()
+        statement = str(raw.get("statement") or "").strip()
+        priority = raw.get("priority")
+        if (
+            not goal_id
+            or not statement
+            or type(priority) is not int
+            or priority < 0
+        ):
+            raise GraphProjectionError(
+                "active goal requires goal_id, statement, and non-negative integer priority"
+            )
+        node_id = goal_id if goal_id.startswith("goal:") else f"goal:{goal_id}"
+        if node_id in current:
+            raise GraphProjectionError(f"duplicate active goal: {goal_id}")
+        prior = previous.node(node_id)
+        current[node_id] = Node(
+            node_id=node_id,
+            node_type="goal",
+            attributes=raw,
+            epoch=epoch,
+            first_observed_turn=(
+                prior.first_observed_turn if prior is not None else turn
+            ),
+            last_observed_turn=turn,
+            source=GOAL_SOURCE,
+            coverage=Coverage.COMPLETE,
+            observed=True,
+        )
+    previous_goal_ids = {
+        node.node_id
+        for node in previous.nodes.values()
+        if node.node_type == "goal" and node.source == GOAL_SOURCE
+    }
+    return GraphDelta(
+        snapshot_id=snapshot_id,
+        turn=turn,
+        epoch=epoch,
+        upsert_nodes=tuple(
+            node
+            for node_id, node in current.items()
+            if (
+                previous.node(node_id) is None
+                or previous.node(node_id).attributes != node.attributes
+                or not previous.node(node_id).observed
+            )
+        ),
+        remove_node_ids=tuple(sorted(previous_goal_ids - set(current))),
     )
 
 
@@ -240,7 +326,9 @@ def compare_shadow_projection(
     observed_graph_ids = {
         node.node_id
         for node in graph.nodes.values()
-        if node.observed and node.last_observed_turn == world.get("turn")
+        if node.observed
+        and node.source == WORLD_SOURCE
+        and node.last_observed_turn == world.get("turn")
     }
     if observed_graph_ids != expected_graph_ids:
         issues.append("graph_observed_node_set")
@@ -294,7 +382,9 @@ def compare_shadow_projection(
     observed_edge_keys = {
         edge.key
         for edge in graph.edges.values()
-        if edge.observed and edge.last_observed_turn == world.get("turn")
+        if edge.observed
+        and edge.source == WORLD_SOURCE
+        and edge.last_observed_turn == world.get("turn")
     }
     if observed_edge_keys != expected_edge_keys:
         issues.append("graph_observed_edge_set")

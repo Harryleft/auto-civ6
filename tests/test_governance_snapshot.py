@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from types import SimpleNamespace
 
 import pytest
 
 from civ_mcp.belief_engine import BeliefEngine
-from civ_mcp.server import _capture_governance_snapshot
+from civ_mcp.server import _capture_governance_snapshot, get_governance_brief
 from civ_mcp.governance.capabilities import (
     RULESET_EXPANSION_1,
     RULESET_EXPANSION_2,
@@ -489,6 +490,8 @@ def test_server_capture_runs_old_projection_and_shadow_graph_together(tmp_path):
     )
 
     assert projection["graph_shadow"]["status"] == "matched"
+    assert projection["graph_goals"]["status"] == "projected"
+    assert projection["graph_goals"]["active"] == 0
     assert projection["graph_shadow"]["source_nodes"] == len(world["entities"])
     assert projection["graph_shadow"]["source_edges"] == len(world["relations"])
     assert engine.graph_view.snapshot_id == snapshot.snapshot_id
@@ -550,6 +553,129 @@ def test_shadow_projection_failure_does_not_break_legacy_snapshot(tmp_path, monk
     _, _, projection, _, _ = asyncio.run(_capture_governance_snapshot(ctx, engine))
 
     assert projection["graph_shadow"]["status"] == "error"
+    assert projection["graph_goals"]["status"] == "error"
     assert "requires integer x/y" in projection["graph_shadow"]["error"]
     assert engine.get("world_entity", "city:0:7")["status"] == "active"
     assert not engine.graph_view.nodes
+
+
+def test_invalid_legacy_goal_fails_closed_without_discarding_world_graph(tmp_path):
+    snapshot = build_turn_snapshot(
+        turn_before=42,
+        turn_after=42,
+        captured_at=1_723_500_000.0,
+        overview=_overview(),
+        cities=[_city(1, 3, 4), _city(2, 6, 7)],
+        units=[_unit(11, 3, 5), _unit(22, 6, 8)],
+    )
+
+    class _Game:
+        async def get_governance_snapshot(self):
+            return snapshot
+
+    engine = BeliefEngine(run_id="invalid-goal", directory=tmp_path)
+    engine.bind_game("CIVILIZATION_INDIA", 123)
+    engine.create(
+        "goal",
+        {"statement": "legacy malformed goal", "priority": "urgent"},
+        turn=42,
+        entity_id="legacy-malformed",
+    )
+    lifespan = SimpleNamespace(game=_Game(), beliefs=engine)
+    ctx = SimpleNamespace(request_context=SimpleNamespace(lifespan_context=lifespan))
+
+    _, _, projection, _, _ = asyncio.run(_capture_governance_snapshot(ctx, engine))
+
+    assert projection["graph_shadow"]["status"] == "matched"
+    assert projection["graph_goals"]["status"] == "error"
+    assert (
+        "priority must be a non-negative integer"
+        in projection["graph_goals"]["error"]
+    )
+    assert "city:3:4" in engine.graph_view.nodes
+    assert engine.graph_view.active_goals() == ()
+
+
+def test_governance_brief_materializes_goal_before_military_reads_graph(tmp_path):
+    city = _city(1, 3, 4)
+    unit = _unit(11, 3, 4)
+    unit.can_fortify = True
+    snapshot = build_turn_snapshot(
+        turn_before=42,
+        turn_after=42,
+        captured_at=1_723_500_000.0,
+        overview=_overview(num_cities=1, num_units=1),
+        cities=[city],
+        units=[unit],
+        barbarians=BarbarianOverview(),
+        threats=[
+            ThreatInfo(
+                unit_type="UNIT_ARCHER",
+                x=5,
+                y=4,
+                hp=80,
+                max_hp=100,
+                combat_strength=15,
+                ranged_strength=25,
+                distance=2,
+                owner_id=3,
+                owner_name="Persia",
+                unit_id=70,
+                nearest_city_id=1,
+                distance_to_city=2,
+                is_at_war=True,
+                city_distances=((1, 2),),
+            )
+        ],
+    )
+
+    class _Game:
+        async def get_governance_snapshot(self):
+            return snapshot
+
+    class _Emitter:
+        async def emit(self, _event_type, _payload):
+            return None
+
+    class _Logger:
+        _turn = 42
+        _emitter = _Emitter()
+
+        async def log_tool_call(self, *_args):
+            return None
+
+        async def log_error(self, *_args):
+            return None
+
+    engine = BeliefEngine(run_id="goal-graph-runtime", directory=tmp_path)
+    engine.bind_game("CIVILIZATION_INDIA", 123)
+    engine.create(
+        "goal",
+        {
+            "goal_id": "survive",
+            "statement": "守住首都",
+            "priority": 100,
+            "probability": 0.8,
+            "confidence": 0.9,
+        },
+        turn=42,
+        entity_id="survive",
+    )
+    lifespan = SimpleNamespace(game=_Game(), beliefs=engine, logger=_Logger())
+    ctx = SimpleNamespace(request_context=SimpleNamespace(lifespan_context=lifespan))
+
+    result = json.loads(asyncio.run(get_governance_brief(ctx)))
+
+    assert result["snapshot"]["graph_goals"]["active"] == 1
+    assert engine.graph_view.active_goals()[0].attributes["goal_id"] == "survive"
+    military = next(
+        item
+        for item in result["national_strategy"]["departments"]
+        if item["department"] == "military"
+    )
+    assert military["proposal_ids"] == ["military:defend:42:city:3:4:11"]
+
+    reloaded = BeliefEngine(run_id="goal-graph-reload", directory=tmp_path)
+    reloaded.bind_game("CIVILIZATION_INDIA", 123)
+    assert reloaded.graph_view.state_hash == engine.graph_view.state_hash
+    assert reloaded.graph_view.active_goals()[0].attributes["goal_id"] == "survive"

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import ast
+from dataclasses import replace
+from pathlib import Path
+
 from civ6_belief_engine.governance import (
     GovernanceCouncil,
     ProbabilityConfidence,
@@ -15,7 +19,11 @@ from civ6_belief_engine.governance.departments.base import (
 from civ6_belief_engine.governance.departments.military import MilitaryDepartment
 from civ6_belief_engine.governance.models import Outcome, OutcomeStatus
 from civ6_belief_engine.governance.snapshot import snapshot_world_state
-from civ6_belief_engine.graph import GraphView, project_world_state
+from civ6_belief_engine.graph import (
+    GraphView,
+    project_active_goals,
+    project_world_state,
+)
 from civ_mcp.lua.models import (
     BarbarianCamp,
     BarbarianOverview,
@@ -261,13 +269,16 @@ def test_graph_threat_drives_military_assessment_and_stale_threat_does_not() -> 
     first_graph = GraphView.empty().apply(
         project_world_state(snapshot_world_state(first_snapshot))
     )
-    goal = StrategicGoal(
-        goal_id="survive",
-        statement="保住首都",
-        priority=100,
-        success=ProbabilityConfidence(0.8, 0.9),
+    first_graph = first_graph.apply(
+        project_active_goals(
+            ({"goal_id": "survive", "statement": "保住首都", "priority": 100},),
+            previous=first_graph,
+            snapshot_id=first_snapshot.snapshot_id,
+            turn=first_snapshot.turn,
+            epoch=first_graph.epoch,
+        )
     )
-    first_context = _context(first_snapshot, graph=first_graph, goals=(goal,))
+    first_context = _context(first_snapshot, graph=first_graph)
 
     assessment = department.assess(first_context)
 
@@ -358,6 +369,158 @@ def test_peaceful_foreign_unit_does_not_become_threat_or_proposal() -> None:
     assert assessment.support_requests == ()
 
 
+def test_graph_context_does_not_fall_back_to_direct_goal_values() -> None:
+    threat = ThreatInfo(
+        unit_type="UNIT_ARCHER",
+        x=3,
+        y=2,
+        hp=80,
+        max_hp=100,
+        combat_strength=15,
+        ranged_strength=25,
+        distance=1,
+        owner_id=3,
+        owner_name="Persia",
+        unit_id=70,
+        nearest_city_id=1,
+        distance_to_city=2,
+        is_at_war=True,
+        city_distances=((1, 2),),
+    )
+    snapshot = _snapshot(
+        units=(_unit(1, "UNIT_WARRIOR", combat_strength=20),),
+        cities=(_city(),),
+        barbarians=BarbarianOverview(),
+        threats=(threat,),
+    )
+    graph_without_goals = GraphView.empty().apply(
+        project_world_state(snapshot_world_state(snapshot))
+    )
+    direct_goal = StrategicGoal(
+        goal_id="legacy-only",
+        statement="守住首都",
+        priority=100,
+        success=ProbabilityConfidence(0.8, 0.9),
+    )
+
+    assessment = MilitaryDepartment().assess(
+        _context(snapshot, graph=graph_without_goals, goals=(direct_goal,))
+    )
+
+    assert assessment.proposals == ()
+
+
+def test_graph_context_ignores_legacy_agenda_and_stale_graph_goals() -> None:
+    snapshot = _snapshot(barbarians=BarbarianOverview())
+    graph = GraphView.empty(turn=snapshot.turn).apply(
+        project_active_goals(
+            ({"goal_id": "survive", "statement": "守住首都", "priority": 100},),
+            previous=GraphView.empty(turn=snapshot.turn),
+            snapshot_id="snapshot:stale",
+            turn=snapshot.turn,
+            epoch=1,
+        )
+    )
+
+    context = _context(snapshot, "军事防御", graph=graph)
+
+    assert MilitaryDepartment().match(context) == 0.5
+
+
+def test_stale_graph_threats_degrade_without_affecting_current_assessment() -> None:
+    threat = ThreatInfo(
+        unit_type="UNIT_ARCHER",
+        x=3,
+        y=2,
+        hp=80,
+        max_hp=100,
+        combat_strength=15,
+        ranged_strength=25,
+        distance=1,
+        owner_id=3,
+        owner_name="Persia",
+        unit_id=70,
+        nearest_city_id=1,
+        distance_to_city=2,
+        is_at_war=True,
+        city_distances=((1, 2),),
+    )
+    stale_snapshot = _snapshot(
+        units=(_unit(1, "UNIT_WARRIOR", combat_strength=20),),
+        cities=(_city(),),
+        barbarians=BarbarianOverview(),
+        threats=(threat,),
+    )
+    stale_graph = GraphView.empty().apply(
+        project_world_state(snapshot_world_state(stale_snapshot))
+    )
+    current_snapshot = replace(
+        stale_snapshot,
+        snapshot_id="snapshot:current",
+        threats=(),
+    )
+    context = _context(current_snapshot, graph=stale_graph)
+
+    assessment = MilitaryDepartment().assess(context)
+
+    assert "图视图不是当前快照" in assessment.evidence_missing
+    assert "图视图不是当前快照；不能据此判断当前城市威胁" in assessment.facts
+    assert assessment.support_requests == ()
+    assert assessment.proposals == ()
+    assert MilitaryDepartment().review(
+        context, _outcome(OutcomeStatus.SUCCEEDED)
+    ) is ReviewDisposition.EXIT
+
+
+def test_defense_proposal_requires_a_relevant_graph_goal() -> None:
+    threat = ThreatInfo(
+        unit_type="UNIT_ARCHER",
+        x=3,
+        y=2,
+        hp=80,
+        max_hp=100,
+        combat_strength=15,
+        ranged_strength=25,
+        distance=1,
+        owner_id=3,
+        owner_name="Persia",
+        unit_id=70,
+        nearest_city_id=1,
+        distance_to_city=2,
+        is_at_war=True,
+        city_distances=((1, 2),),
+    )
+    snapshot = _snapshot(
+        units=(_unit(1, "UNIT_WARRIOR", combat_strength=20),),
+        cities=(_city(),),
+        barbarians=BarbarianOverview(),
+        threats=(threat,),
+    )
+    graph = GraphView.empty().apply(
+        project_world_state(snapshot_world_state(snapshot))
+    )
+    graph = graph.apply(
+        project_active_goals(
+            (
+                {
+                    "goal_id": "research",
+                    "statement": "完成当前科技",
+                    "priority": 100,
+                    "tags": ["science"],
+                },
+            ),
+            previous=graph,
+            snapshot_id=snapshot.snapshot_id,
+            turn=snapshot.turn,
+            epoch=graph.epoch,
+        )
+    )
+
+    assessment = MilitaryDepartment().assess(_context(snapshot, graph=graph))
+
+    assert assessment.proposals == ()
+
+
 def test_unavailable_threat_scan_is_reported_as_missing_evidence() -> None:
     snapshot = _snapshot(
         units=(_unit(1, "UNIT_WARRIOR", combat_strength=20),),
@@ -410,3 +573,23 @@ def test_assessment_is_deterministic_and_review_is_conservative() -> None:
         first_context,
         _outcome(OutcomeStatus.RETRYABLE, error="temporary failure"),
     ) is ReviewDisposition.REPLAN
+
+
+def test_military_department_does_not_import_the_mcp_adapter() -> None:
+    path = (
+        Path(__file__).parents[1]
+        / "src"
+        / "civ6_belief_engine"
+        / "governance"
+        / "departments"
+        / "military.py"
+    )
+    tree = ast.parse(path.read_text(), filename=str(path))
+    imported: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported.add(node.module)
+
+    assert not any(name == "civ_mcp" or name.startswith("civ_mcp.") for name in imported)

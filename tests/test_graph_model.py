@@ -15,6 +15,7 @@ from civ6_belief_engine.graph import (
     GraphProjectionError,
     GraphView,
     compare_shadow_projection,
+    project_active_goals,
     project_world_state,
     replay_deltas,
 )
@@ -288,6 +289,14 @@ def test_projection_requires_city_coordinates_and_delta_requires_real_edge_keys(
                 "remove_edge_keys": ["OWNS"],
             }
         )
+    with pytest.raises(GraphProjectionError, match="non-negative integer priority"):
+        project_active_goals(
+            ({"goal_id": "bad", "statement": "invalid", "priority": -1},),
+            previous=GraphView.empty(),
+            snapshot_id="snapshot:bad-goal",
+            turn=1,
+            epoch=1,
+        )
 
 
 def test_shadow_comparison_detects_legacy_attribute_drift():
@@ -328,6 +337,117 @@ def test_epoch_transition_resets_current_branch_and_replay_is_deterministic():
     assert reloaded.epoch == 2
     with pytest.raises(GraphInvariantError, match="cannot apply epoch"):
         reloaded.apply(first)
+
+
+def test_active_goals_survive_world_refresh_and_replay_deterministically():
+    world = _world("snapshot:12", 12, [_player(0)])
+    world_delta = project_world_state(world)
+    world_view = GraphView.empty().apply(world_delta)
+    goal_delta = project_active_goals(
+        (
+            {
+                "goal_id": "science",
+                "statement": "完成当前科技",
+                "priority": 40,
+            },
+            {
+                "goal_id": "survive",
+                "statement": "守住首都",
+                "priority": 100,
+            },
+        ),
+        previous=world_view,
+        snapshot_id="snapshot:12",
+        turn=12,
+        epoch=1,
+    )
+    goal_view = world_view.apply(goal_delta)
+
+    assert [node.attributes["goal_id"] for node in goal_view.active_goals()] == [
+        "survive",
+        "science",
+    ]
+
+    refreshed_world_delta = project_world_state(world, previous=goal_view)
+    refreshed = goal_view.apply(refreshed_world_delta)
+    assert [node.attributes["goal_id"] for node in refreshed.active_goals()] == [
+        "survive",
+        "science",
+    ]
+    assert compare_shadow_projection(
+        world,
+        (
+            {
+                "id": "player:0",
+                "node_type": "player",
+                "attributes": {"player_id": 0},
+                "links": [],
+            },
+        ),
+        refreshed,
+    ) == ()
+
+    replayed = replay_deltas((world_delta, goal_delta, refreshed_world_delta))
+    assert replayed.state_hash == refreshed.state_hash
+
+
+def test_projecting_complete_active_goal_set_removes_archived_goals():
+    base = GraphView.empty(turn=12)
+    with_goal = base.apply(
+        project_active_goals(
+            ({"goal_id": "survive", "statement": "守住首都", "priority": 100},),
+            previous=base,
+            snapshot_id="snapshot:12",
+            turn=12,
+            epoch=1,
+        )
+    )
+    without_goal = with_goal.apply(
+        project_active_goals(
+            (),
+            previous=with_goal,
+            snapshot_id="snapshot:12",
+            turn=12,
+            epoch=1,
+        )
+    )
+
+    assert without_goal.active_goals() == ()
+    assert "goal:survive" not in without_goal.nodes
+
+
+def test_goal_update_preserves_identity_and_unchanged_projection_is_empty():
+    base = GraphView.empty(turn=12)
+    first = base.apply(
+        project_active_goals(
+            ({"goal_id": "goal:survive", "statement": "守住首都", "priority": 80},),
+            previous=base,
+            snapshot_id="snapshot:12",
+            turn=12,
+            epoch=1,
+        )
+    )
+    update = project_active_goals(
+        ({"goal_id": "goal:survive", "statement": "守住首都", "priority": 100},),
+        previous=first,
+        snapshot_id="snapshot:13",
+        turn=13,
+        epoch=1,
+    )
+    updated = first.apply(update)
+    unchanged = project_active_goals(
+        ({"goal_id": "goal:survive", "statement": "守住首都", "priority": 100},),
+        previous=updated,
+        snapshot_id="snapshot:13",
+        turn=13,
+        epoch=1,
+    )
+
+    assert set(updated.nodes) == {"goal:survive"}
+    assert updated.node("goal:survive").first_observed_turn == 12
+    assert updated.node("goal:survive").last_observed_turn == 13
+    assert unchanged.upsert_nodes == ()
+    assert unchanged.remove_node_ids == ()
 
 
 def test_graph_values_and_indexes_are_immutable():

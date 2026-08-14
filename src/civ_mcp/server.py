@@ -29,7 +29,11 @@ from civ6_belief_engine.belief_engine import (
     tool_result_reference,
 )
 from civ6_belief_engine.belief_mode import BeliefMode
-from civ6_belief_engine.graph import compare_shadow_projection, project_world_state
+from civ6_belief_engine.graph import (
+    compare_shadow_projection,
+    project_active_goals,
+    project_world_state,
+)
 from civ_mcp.game_over_watchdog import GameOverWatchdog
 from civ_mcp import narrate as nr
 from civ_mcp.connection import GameConnection, LuaError
@@ -3182,6 +3186,60 @@ def _governance_proposal_from_dict(raw: dict[str, Any]):
     )
 
 
+def _goal_priority(raw: Mapping[str, Any]) -> int:
+    """Normalize legacy JSON numeric forms without accepting booleans/fractions."""
+
+    value = raw.get("priority")
+    if type(value) is int and value >= 0:
+        return value
+    if isinstance(value, float) and value >= 0 and value.is_integer():
+        return int(value)
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    raise BeliefEngineError("goal priority must be a non-negative integer")
+
+
+def _governance_goal_from_dict(raw: Mapping[str, Any]):
+    """Restore one active goal into the immutable governance contract."""
+
+    from civ6_belief_engine.governance import ProbabilityConfidence, StrategicGoal
+
+    if not isinstance(raw, Mapping):
+        raise BeliefEngineError("active goal must be a JSON object")
+    success = raw.get("success")
+    if success is None:
+        # Pre-typed Goal records only guaranteed statement and priority.
+        # Keep unknown likelihood explicit rather than rejecting old journals.
+        probability = raw.get("probability", 0.5)
+        confidence = raw.get("confidence", 0.0)
+    elif isinstance(success, Mapping):
+        probability = success.get("probability")
+        confidence = success.get("confidence")
+    else:
+        raise BeliefEngineError("goal success must be a JSON object")
+    return StrategicGoal(
+        goal_id=str(raw.get("goal_id") or raw.get("id") or ""),
+        statement=str(raw.get("statement") or ""),
+        priority=_goal_priority(raw),
+        success=ProbabilityConfidence(probability, confidence),
+        hard_constraints=tuple(raw.get("hard_constraints") or ()),
+        deadline_turn=raw.get("deadline_turn"),
+        parent_goal_id=raw.get("parent_goal_id") or None,
+        tags=tuple(raw.get("tags") or ()),
+    )
+
+
+def _goal_graph_payload(raw: Mapping[str, Any]) -> dict[str, Any]:
+    """Keep only the fields consumed by the first Goal graph query."""
+
+    return {
+        "goal_id": str(raw.get("goal_id") or raw.get("id") or ""),
+        "statement": str(raw.get("statement") or ""),
+        "priority": _goal_priority(raw),
+        "tags": list(raw.get("tags") or ()),
+    }
+
+
 def _release_stale_budget_locks(
     engine: BeliefEngine,
     *,
@@ -3351,14 +3409,45 @@ async def _capture_governance_snapshot(
             "source_edges": len(world.get("relations") or ()),
             "mismatches": list(mismatches),
         }
+        active_goals = engine.list("goal", status="active")
+        goal_delta = project_active_goals(
+            (_goal_graph_payload(goal) for goal in active_goals),
+            previous=engine.graph_view,
+            snapshot_id=snapshot.snapshot_id,
+            turn=snapshot.turn,
+            epoch=engine.epoch,
+        )
+        if (
+            goal_delta.upsert_nodes
+            or goal_delta.upsert_edges
+            or goal_delta.remove_node_ids
+            or goal_delta.remove_edge_keys
+        ):
+            goal_graph = engine.record_graph_delta(goal_delta)
+        else:
+            goal_graph = engine.graph_view
+        projection["graph_goals"] = {
+            "status": "projected",
+            "active": len(goal_graph.active_goals()),
+            "state_hash": goal_graph.state_hash,
+        }
     except Exception as exc:
-        # Phase one is a shadow read model. Its failure is observable but must
-        # not take down the established governance snapshot path.
-        log.exception("Graph shadow projection failed")
-        projection["graph_shadow"] = {
+        # A derived-read-model failure is observable but must not take down the
+        # legacy snapshot path. Preserve an already-proven world projection
+        # when only the Goal projection failed.
+        log.exception("Graph projection failed")
+        error = f"{type(exc).__name__}: {exc}"
+        projection.setdefault(
+            "graph_shadow",
+            {
+                "status": "error",
+                "epoch": engine.epoch,
+                "error": error,
+            },
+        )
+        projection["graph_goals"] = {
             "status": "error",
-            "epoch": engine.epoch,
-            "error": f"{type(exc).__name__}: {exc}",
+            "error": error,
         }
     released_locks = _release_stale_budget_locks(engine, turn=snapshot.turn)
     active_locks = engine.list("budget_lock", status="active")
@@ -3814,6 +3903,13 @@ async def get_governance_brief(
         )
         belief_brief = engine.turn_brief(turn=snapshot.turn, limit=limit)
         active_goals = engine.list("goal", status="active")
+        typed_goals = tuple(
+            _governance_goal_from_dict(goal) for goal in active_goals
+        )
+        graph_ready = (
+            projection.get("graph_shadow", {}).get("status") != "error"
+            and projection.get("graph_goals", {}).get("status") == "projected"
+        )
         from civ6_belief_engine.governance.departments import (
             NationalStrategyCoordinator,
             default_department_registry,
@@ -3823,12 +3919,9 @@ async def get_governance_brief(
             default_department_registry()
         ).run(
             snapshot,
-            agenda=tuple(
-                str(goal.get("statement") or "").strip()
-                for goal in active_goals
-                if str(goal.get("statement") or "").strip()
-            ),
-            graph=engine.graph_view,
+            agenda=tuple(goal.statement for goal in typed_goals),
+            goals=typed_goals,
+            graph=engine.graph_view if graph_ready else None,
         )
         await _flush_belief_events(ctx)
         low_confidence = [
