@@ -223,6 +223,11 @@ def normalize_tool_result(tool: str, result: str) -> dict[str, Any]:
         unit_ids = re.findall(r"\[id:(\d+)", result)
         metrics["observed_unit_count"] = len(unit_ids)
         facts["unit_ids"] = [int(unit_id) for unit_id in unit_ids]
+        for x, y, unit_id in re.findall(
+            r"at \((-?\d+),(-?\d+)\).*?\[id:(\d+)",
+            result,
+        ):
+            facts[f"unit_position:{unit_id}"] = [int(x), int(y)]
 
     elif tool == "get_victory_progress":
         section = ""
@@ -1095,6 +1100,7 @@ class BeliefEngine:
                 or []
             )
             fact_keys = requirement.get("required_facts") or []
+            expected_facts = requirement.get("expected_facts") or {}
             minimum_sequence = max(
                 after_sequence,
                 int(requirement.get("min_observation_sequence", 0)),
@@ -1120,6 +1126,11 @@ class BeliefEngine:
                     continue
                 facts = observation.get("facts") or {}
                 if not all(key in facts for key in fact_keys):
+                    continue
+                if not isinstance(expected_facts, dict) or not all(
+                    facts.get(key) == value
+                    for key, value in expected_facts.items()
+                ):
                     continue
                 matched = True
                 break

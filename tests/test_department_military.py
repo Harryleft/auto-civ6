@@ -283,6 +283,9 @@ def test_graph_threat_drives_military_assessment_and_stale_threat_does_not() -> 
     }
     assert proposal.action_intents[0].allowed_turn == 12
     assert proposal.action_intents[0].evidence_requirements[0].tool == "get_units"
+    assert proposal.action_intents[0].evidence_requirements[0].expected_facts == {
+        "unit_position:1": (1, 2)
+    }
     decision = GovernanceCouncil().decide(
         turn=12,
         proposals=assessment.proposals,
