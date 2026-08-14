@@ -480,7 +480,7 @@ class BeliefEngine:
             except json.JSONDecodeError:
                 bad_line_numbers.append(line_number)
                 continue
-            if not isinstance(event, dict):
+            if not isinstance(event, dict) or not self._valid_event_schema(event):
                 bad_line_numbers.append(line_number)
                 continue
             good_lines.append(line)
@@ -496,6 +496,30 @@ class BeliefEngine:
         if bad_line_numbers:
             self._quarantine_corrupt_lines(path, good_lines, bad_line_numbers, raw_lines)
         self._recover_orphaned_executing_decisions()
+
+    @staticmethod
+    def _valid_event_schema(event: dict[str, Any]) -> bool:
+        """Minimal structural contract every persisted event must satisfy.
+
+        A line can parse as valid JSON yet still break the replay loop: a
+        non-numeric ``sequence`` crashes ``int()`` during load, and a missing
+        ``event_type`` or ``entity.id`` silently corrupts the projection.
+        Such lines are quarantined like unreadable ones.
+        """
+
+        if not isinstance(event.get("event_type"), str) or not event["event_type"]:
+            return False
+        if not isinstance(event.get("entity_type"), str) or not event["entity_type"]:
+            return False
+        try:
+            int(event.get("sequence", 0))
+        except (TypeError, ValueError):
+            return False
+        entity = event.get("entity")
+        if not isinstance(entity, dict):
+            return False
+        entity_id = entity.get("id")
+        return isinstance(entity_id, str) and bool(entity_id)
 
     def _quarantine_corrupt_lines(
         self,
@@ -1226,12 +1250,14 @@ class BeliefEngine:
         if not isinstance(reason, str) or not reason.strip():
             raise BeliefEngineError("Cancellation reason must be non-empty")
         state = decision.get("decision_state")
-        if state == "executing":
-            # A same-turn execution may genuinely still be in flight; only a
-            # decision left executing across a turn boundary is provably
-            # orphaned, and refusing to cancel those deadlocked whole games.
-            if int(decision.get("execution_started_turn", turn)) >= turn:
-                raise BeliefEngineError("Cannot cancel an action while it is executing")
+        # Cancelling an executing decision is allowed even mid-turn: if the
+        # outcome recording path itself failed (record exceptions are
+        # swallowed by design), refusing here was the same-turn deadlock —
+        # nothing but a process restart could clear the gate. Cancelling is
+        # safe because complete_action_authorization no-ops once the decision
+        # is no longer executing: a late result from a genuinely in-flight
+        # action is still recorded as an action event, it just cannot
+        # resurrect the authorization or its budget locks.
         if state == "succeeded":
             raise BeliefEngineError("Cannot cancel a succeeded action")
         if state == "cancelled":
@@ -1387,6 +1413,24 @@ class BeliefEngine:
                 len(voided_ids),
                 voided_ids,
             )
+        # Old-epoch facts describe a future that no longer happened: the
+        # rolled-back game replays those turns differently. Archiving keeps
+        # them queryable through history() while every status="active" read —
+        # current_metrics, the turn gate's typed-snapshot lookup, and the
+        # server's snapshot-reuse check — stays epoch-clean instead of
+        # preferring pre-rollback observations with fresher observed_turn.
+        for entity_type in ("observation", "world_entity"):
+            for entity in self.list(entity_type, status="active"):
+                self.update(
+                    entity_type,
+                    entity["id"],
+                    {
+                        "status": "archived",
+                        "archived_turn": marker_turn,
+                        "archived_reason": f"epoch_superseded_by_reload:{reason}",
+                    },
+                    turn=marker_turn,
+                )
         return marker
 
     @staticmethod
