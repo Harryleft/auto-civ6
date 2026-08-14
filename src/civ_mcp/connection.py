@@ -181,12 +181,25 @@ class GameConnection:
         )
 
     async def execute_write(
-        self, lua_code: str, timeout: float = 5.0, require_sentinel: bool = True
+        self,
+        lua_code: str,
+        timeout: float = 5.0,
+        require_sentinel: bool = True,
+        mutation: bool = False,
     ) -> list[str]:
-        """Execute Lua in InGame context (issue commands). Returns parsed output lines."""
+        """Execute Lua in InGame context (issue commands). Returns parsed output lines.
+
+        ``mutation=True`` is for arbitrary InGame code that can change game
+        state (run_lua's escape hatch): it inherits the send-exactly-once
+        contract while keeping a caller-chosen sentinel requirement.
+        """
         await self._ensure_game_states()
         return await self._execute_and_collect(
-            self.ingame_index, lua_code, timeout, require_sentinel=require_sentinel
+            self.ingame_index,
+            lua_code,
+            timeout,
+            mutation=mutation,
+            require_sentinel=require_sentinel,
         )
 
     async def execute_mutation(
@@ -197,9 +210,11 @@ class GameConnection:
         Guarantees the command is sent at most once: on a dead socket the
         query path may safely reconnect and resend, but a mutation may
         already have run in the game — resending would double-execute it,
-        so we raise MutationOutcomeUnknownError instead. Also requires the
-        completion sentinel so a hung command surfaces as
-        CommandTimeoutError rather than silently truncated output.
+        so we raise MutationOutcomeUnknownError instead. The completion
+        sentinel is required, and a mutation that times out without it is
+        reported as MutationOutcomeUnknownError too: the command may have
+        executed, so the caller must verify game state before retrying
+        rather than treating it as a plain parse failure.
         """
         await self._ensure_game_states()
         if context == "ingame":
@@ -210,9 +225,12 @@ class GameConnection:
             raise ValueError(
                 f"Unknown mutation context {context!r} (expected 'ingame' or 'gamecore')"
             )
-        return await self._execute_and_collect(
-            state_index, lua_code, timeout, mutation=True, require_sentinel=True
-        )
+        try:
+            return await self._execute_and_collect(
+                state_index, lua_code, timeout, mutation=True, require_sentinel=True
+            )
+        except CommandTimeoutError as exc:
+            raise MutationOutcomeUnknownError(lua_code, exc) from exc
 
     async def execute_in_state(
         self,

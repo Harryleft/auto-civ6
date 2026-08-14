@@ -222,6 +222,44 @@ class TestMutationNoResend:
         assert len(sent) == 2
         assert reconnect_log == [True]
 
+    def test_mutation_timeout_reports_outcome_unknown(self, monkeypatch):
+        """A mutation that times out without its sentinel may already have
+        executed — it must carry the verify-before-retry guidance of
+        MutationOutcomeUnknownError, not plain timeout semantics."""
+        conn, sent, _rc = _make_conn(
+            monkeypatch,
+            send_behaviors=[None],
+            recv_script=[_out("PARTIAL"), None],
+        )
+        try:
+            asyncio.run(conn.execute_mutation("attack...", timeout=0.2))
+            raise AssertionError("expected MutationOutcomeUnknownError")
+        except MutationOutcomeUnknownError as e:
+            assert isinstance(e.__cause__, CommandTimeoutError)
+            assert e.__cause__.lines == ["PARTIAL"]
+            assert "Verify the current game state" in str(e)
+        assert len(sent) == 1
+
+    def test_execute_write_mutation_flag_never_resent(self, monkeypatch):
+        """execute_write(mutation=True) (run_lua's InGame escape hatch) is a
+        mutation-capable channel and must inherit send-exactly-once."""
+        conn, sent, reconnect_log = _make_conn(
+            monkeypatch,
+            send_behaviors=[OSError("socket dead")],
+            recv_script=[],
+        )
+        try:
+            asyncio.run(
+                conn.execute_write(
+                    "UI.RequestAction(...)", require_sentinel=False, mutation=True
+                )
+            )
+            raise AssertionError("expected MutationOutcomeUnknownError")
+        except MutationOutcomeUnknownError:
+            pass
+        assert len(sent) == 1
+        assert reconnect_log == []
+
 
 # ---------------------------------------------------------------------------
 # execute_mutation routing

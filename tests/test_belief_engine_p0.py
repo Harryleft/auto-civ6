@@ -50,7 +50,7 @@ def _typed_snapshot(engine: BeliefEngine, turn: int) -> None:
             "capabilities": {"ruleset": "RULESET_STANDARD"},
             "entities": [],
             "relations": [],
-            "metrics": {},
+            "metrics": {"player.gold": 100 + turn},
         },
         turn=turn,
     )
@@ -131,6 +131,28 @@ class TestJsonlIntegrity:
         assert len(markers) == 1
         assert markers[0]["entity"]["quarantined_line_numbers"] == [2]
 
+    def test_schema_invalid_json_lines_are_quarantined(self, tmp_path):
+        """Valid JSON that breaks the event schema must not crash the load
+        (a non-numeric sequence used to raise out of int()) or silently
+        corrupt the replay."""
+        first = _bind(tmp_path, "run-a")
+        first.create("belief", {"statement": "s", "category": "military", "probability": 0.7, "confidence": 0.8}, turn=1, entity_id="border")
+        bad_lines = [
+            {"v": 1, "event_id": "x1", "sequence": "not-a-number", "event_type": "entity.created", "entity": {"id": "b1"}},  # sequence non-numeric
+            {"v": 1, "event_id": "x2", "sequence": 5, "entity": {"id": "b2"}},  # missing event_type
+            {"v": 1, "event_id": "x3", "sequence": 6, "event_type": "entity.created", "entity": {"no_id": True}},  # entity without str id
+        ]
+        with first.path.open("a") as handle:
+            for bad in bad_lines:
+                handle.write(json.dumps(bad) + "\n")
+
+        reloaded = _bind(tmp_path, "run-b")
+
+        assert reloaded.get("belief", "border") is not None
+        markers = [e for e in reloaded.history() if e["event_type"] == "log.integrity"]
+        assert len(markers) == 1
+        assert markers[0]["entity"]["quarantined_line_numbers"] == [2, 3, 4]
+
 
 class TestOrphanedExecutingRecovery:
     def test_rebind_recovers_orphaned_executing_decision(self, tmp_path):
@@ -197,7 +219,48 @@ class TestOrphanedExecutingRecovery:
         assert gate["pending_authorizations"][0]["decision_state"] == "executing"
         assert engine.get("decision", decision["id"])["decision_state"] == "executing"
 
-    def test_stale_executing_can_be_cancelled_but_same_turn_cannot(self, engine):
+    def test_executing_can_be_cancelled_same_turn_and_late_result_is_noop(self, engine):
+        """Same-turn cancellation must not deadlock, and a late completion
+        from a genuinely in-flight action cannot resurrect the authorization."""
+        decision = _route_authorized_decision(engine, turn=5)
+        executing = engine.authorize_action(
+            tool="set_research",
+            params={"tech_or_civic": "TECH_WRITING"},
+            turn=5,
+            required=True,
+        )
+        assert executing["authorized"] is True
+        assert engine.get("decision", decision["id"])["decision_state"] == "executing"
+
+        # Same-turn cancel used to raise — the same-turn deadlock: if the
+        # record path also failed, nothing but a process restart cleared it.
+        cancelled = engine.cancel_action_authorization(
+            decision["id"], reason="recorder failed; outcome unknown", turn=5
+        )
+        assert cancelled["decision_state"] == "cancelled"
+
+        # A late result arrives after the cancellation: the action event is
+        # recorded, but complete_action_authorization no-ops on the
+        # cancelled decision and budget locks stay released.
+        engine.record_tool_result(
+            tool="set_research",
+            params={"tech_or_civic": "TECH_WRITING"},
+            result="OK",
+            turn=5,
+            category="action",
+            success=True,
+            duration_ms=10,
+            decision_id=decision["id"],
+            decision_route="fast",
+        )
+        assert engine.get("decision", decision["id"])["decision_state"] == "cancelled"
+
+        cancelled_again = engine.cancel_action_authorization(
+            decision["id"], reason="already cancelled", turn=6
+        )
+        assert cancelled_again["decision_state"] == "cancelled"
+
+    def test_stale_executing_can_be_cancelled_across_turns(self, engine):
         decision = _route_authorized_decision(engine, turn=5)
         engine.authorize_action(
             tool="set_research",
@@ -205,12 +268,6 @@ class TestOrphanedExecutingRecovery:
             turn=5,
             required=True,
         )
-
-        with pytest.raises(Exception, match="while it is executing"):
-            engine.cancel_action_authorization(
-                decision["id"], reason="still in flight", turn=5
-            )
-        assert engine.get("decision", decision["id"])["decision_state"] == "executing"
 
         cancelled = engine.cancel_action_authorization(
             decision["id"], reason="Action window passed without an outcome.", turn=6
@@ -344,6 +401,61 @@ class TestGameReloadEpochs:
             for event in engine.history(last_n=1000)
             if event["event_type"] == "game.reloaded"
         ] == []
+
+    def test_reload_archives_old_epoch_facts_until_refreshed(self, engine):
+        """After a rollback the projection must not mix epochs: pre-rollback
+        observations stop feeding current_metrics and the turn gate, and
+        world entities reactivate only when the new epoch re-observes them."""
+
+        def _snapshot_with_unit(turn: int) -> None:
+            engine.ingest_typed_snapshot(
+                {
+                    "snapshot_id": f"snapshot_unit_{turn}",
+                    "turn_before": turn,
+                    "turn_after": turn,
+                    "capabilities": {"ruleset": "RULESET_STANDARD"},
+                    "entities": [
+                        {
+                            "entity_id": "unit:7",
+                            "entity_type": "unit",
+                            "attributes": {"health": 90},
+                        }
+                    ],
+                    "relations": [],
+                    "metrics": {"player.gold": 100 + turn},
+                },
+                turn=turn,
+            )
+
+        _snapshot_with_unit(30)
+        assert engine.current_metrics()  # old-epoch metrics are live pre-reload
+        assert engine.list("world_entity", status="active")
+
+        engine.record_game_reload(reason="autosave_rollback", turn=28)
+
+        # Old-epoch facts are archived, not deleted — history keeps them.
+        assert engine.current_metrics() == {}
+        assert engine.list("observation", status="active") == []
+        assert engine.list("world_entity", status="active") == []
+        archived_reasons = {
+            entity["id"]: entity.get("archived_reason")
+            for entity in engine.list("world_entity", status=None)
+            if entity.get("status") == "archived"
+        }
+        assert archived_reasons
+        assert all(
+            reason == "epoch_superseded_by_reload:autosave_rollback"
+            for reason in archived_reasons.values()
+        )
+        # The turn gate demands a fresh typed snapshot for the rolled-back
+        # turn instead of being satisfied by the old epoch's snapshot.
+        gate = engine.governance_turn_gate(turn=28)
+        assert "current_turn_typed_snapshot_missing" in gate["blockers"]
+
+        # The new epoch re-observes the world: entities reactivate.
+        _snapshot_with_unit(28)
+        assert engine.list("world_entity", status="active")
+        assert engine.governance_turn_gate(turn=28)["ready"] is True
 
 
 class TestLoggedUnexpectedException:

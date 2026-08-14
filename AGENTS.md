@@ -69,6 +69,7 @@
 | 提案、批评、议会、预算锁和 ActionIntent | [docs/governance-system.md](docs/governance-system.md) |
 | MCP 到 Lua、FireTuner 单连接和游戏引擎架构 | [docs/architecture-diagrams.md](docs/architecture-diagrams.md) |
 | 产品名、领域包边界和 MCP 兼容命名 | [docs/product-architecture.md](docs/product-architecture.md) |
+| 图工程路线、对抗式审查与阶段零修复记录 | [graph_plan/README.md](graph_plan/README.md) |
 | DSH overlay 配置和安全决策 | [integrations/deepseek-harness/README.md](integrations/deepseek-harness/README.md) |
 
 ## 决策硬规则
@@ -81,6 +82,27 @@
 - 宣战回合不能攻击新敌人；战斗引擎下一回合才同步。
 - `end_turn` 可能在神级 AI 回合中耗时 5–10 分钟；失败时先读取错误和当前状态，不要盲目循环重试。
 - MCP 自动存档是主要恢复点；错误加载存档后以 `end_turn` 的 CRITICAL 警告为准。
+
+## 开发与验证命令
+
+```bash
+uv run pytest tests/ -q --ignore=tests/test_scorer.py     # 全量离线测试（test_scorer.py 是已知收集失败：根目录 evals 包未安装）
+uv run pytest tests/test_belief_engine.py -q -k "orphan"  # 按关键字跑单个测试
+./scripts/deepseek_harness check                          # 安装/配置变更后的环境检查
+```
+
+- 无独立 lint/format 配置；代码风格、注释密度跟随各文件现状。
+- 不要单独运行 `uv run civ-mcp`：DSH 负责拉起 MCP 进程，FireTuner 只允许一个客户端。
+- 新增游戏动作必须走 `execute_mutation` 通道（见下节），并配离线回归测试。
+
+## 架构大图（跨文件）
+
+- **双包布局**：`src/civ_mcp` 是 MCP 适配层（连接、Lua builder/parser、server.py 的 90+ 工具），`src/civ6_belief_engine` 是产品域包（belief engine + governance）。`civ_mcp.belief_engine` 和 `civ_mcp.governance` 只是兼容转发 shim。已知债务：域包 `governance/{snapshot,models}.py` 仍 import `civ_mcp.lua.models`，依赖方向待倒置（graph_plan 阶段一）。
+- **调用链**：FireTuner TCP 4318 → `GameConnection` → `GameState` → `server.py` 的 `_logged` 管道（授权预检 → 执行 → 信念记录 → 结果过滤）→ DSH。所有 MCP 工具必须经 `_logged`，不要绕开。
+- **命名陷阱**：`execute_read`/`execute_write` 指的是 Lua 上下文（GameCore/InGame），**不是**读写语义。真正的读写区分在 `execute_mutation`：变异命令恰好发送一次、死套接字不重发（抛 `MutationOutcomeUnknownError`，重试前必须先查询验证游戏状态）、未收到 sentinel 超时抛 `CommandTimeoutError`。
+- **BeliefEngine 是事件溯源**：append-only JSONL（`~/.civ6-mcp/beliefs/`），加载时 reduce 重放；实体用墓碑（deleted/archived）不物理删除；游戏重载（autosave 回滚/手动读档）产生 epoch 标记并作废旧授权；`governance_turn_gate` 对未完成授权 fail-closed。新代码不得绕过事件流直接改内存态。
+- **结果过滤只作用于模型面副本**：`result_filter` 在返回给 DSH 前压缩超大结果，遥测保留原始全文；阈值由 `CIV_MCP_RESULT_*` 环境变量控制。
+- **图工程路线图**（阶段零 P0 已完成，后续阶段见完成标准）在 [graph_plan/README.md](graph_plan/README.md)，动架构前先读它。
 
 ## 代码和文档边界
 

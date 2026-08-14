@@ -275,6 +275,15 @@ DSH transcript 与 Telemetry 继续保存原始工具结果；图只保存规范
 
 失败语义与 agent 处置已写入 [docs/agent-recovery.md](../docs/agent-recovery.md)「传输与审计底座的失败语义」。**未完成项**：完成标准 #6 要求的真实游戏验收（含一次崩溃/断线恢复演练）仍待执行——离线全绿不能替代该项，图阶段开工前必须补上。另注：`CommandTimeoutError` 对存量查询通道默认开启严格 sentinel，首次真实游戏会话应留意是否有旧查询路径误报超时。
 
+### 第二轮（同日）：对抗复审指出的残留缺口闭环
+
+复审指出四条"部分修复"，逐条核验属实并修复（307 passed）：
+
+1. **同回合取消死锁（P0-1 残留）**：原先只允许取消跨回合 executing——若记录路径自身失败（其异常被设计性吞掉），同回合既不能取消、不能 end_turn，唯一出路是重启进程。现在 `cancel_action_authorization` 允许取消任意时刻的 executing：迟到结果经 `complete_action_authorization` 对非 executing 状态天然 no-op，无法复活已取消的授权或其预算锁，故取消总是安全的。
+2. **run_lua 与变异超时未闭环（P0-2 残留）**：`run_lua` 的 ingame/state-index 通道是可变异的逃生舱（文档明说用于移动单位/设研究/外交），却仍走允许重发的查询通道——现在 `execute_write(mutation=True)` 与 `execute_in_state(mutation=True)` 使其继承恰好一次契约（gamecore 只读上下文保留查询重发）；`execute_mutation` 超时不再抛普通 `CommandTimeoutError`，而是包装为 `MutationOutcomeUnknownError`——命令可能已执行，必须先查询验证再重试。
+3. **schema 校验缺口（P0-3 残留）**：`_load` 原先只隔离 JSON 解析失败与非 dict 行；合法 JSON 但破坏事件 schema 的行（sequence 非数字会在 `int()` 处炸掉整个加载、缺 event_type/entity.id 会静默污染投影）现在同样被隔离修复。
+4. **投影混合旧 epoch（P0-4 残留）**：原先 `game.reloaded` 只作标记，`current_metrics`、回合门的 typed-snapshot 查找与快照复用仍按 observed_turn/updated_at 偏好回滚前的观察（"未来"数据胜出）。现在 `record_game_reload` 归档所有 active 的 observation 与 world_entity（`epoch_superseded_by_reload`，历史仍可查）：回滚后 current_metrics 清空、回合门强制要求新 epoch 的新鲜 typed snapshot，实体在新快照重新观察到时自然复活。
+
 ## E. 以 Easy to Change（ETC）约束图工程
 
 ### E.1 ETC 的第一性原理
@@ -549,3 +558,46 @@ flowchart LR
 这个切片能同时验证实体身份、空间关系、证据新鲜度、部门查询、Council、动作授权和结果闭环。完成前不扩建通用遍历 DSL、外部图数据库、异步消息总线或可视化平台。
 
 完成切片的最低验收：同一 snapshot 投影结果哈希稳定；关系只存一份；Department 不依赖 Lua DTO；mutation 只发送一次；断线后先 read-back；Decision 能沿关系追溯到 Observation、Goal、Proposal、ActionIntent、Action 和 Outcome。
+
+---
+
+## F. 对 E 节（Codex 的 ETC 约束）的审查（2026-08-15，基于代码核验）
+
+### 总评
+
+E 节质量高，可以接受为阶段一~四的约束框架。它做对了三件难事：把 A/B/C/D 审查中的发现收敛为可执行的边界表而不是复述问题；修正了主计划的两处过度设计（`GamePort` 不必先立接口、"图目录"只是职责提示而非脚手架）；给出了绞杀者模式（表征→影子→单消费者→删旧）的替换顺序，与"阶段零是入口门禁"的定位正确衔接。以下问题全部是缺口，不是错误。
+
+### 核验：E 节断言与代码事实
+
+| E 节断言 | 核验 |
+|---|---|
+| BeliefEngine 兼任事件日志、投影、信念规则、授权状态机 | ✅ 与 A 节 A.1 一致；E.3 表格闭合了该缺口（状态机不塞进图 CRUD，配 characterization tests 条件） |
+| E.5"城市易主不重命名城市节点" | ✅ 与 P1 发现互补：当前投影 `city:{player_id}:{city_id}` 内嵌归属者，E.5 的要求意味着阶段二 ID 规范必须先落地该修正 |
+| E.8"links 双向复制、每回合全量 update、replay 线性增长" | ✅ 即 P1 第 5 条写放大，已被 E.8 收编为待量化项 |
+| E.8"逃生口 run_lua" | ⚠️ **现状比 E.8 写的好**：`run_lua` ingame 上下文已在授权门禁内（`_belief_route_required` 仅 `context==ingame` 时 required），二轮修复后其传输层也继承了变异恰好一次契约。该项应从"未知"降级为"已部分闭环，剩审计语义（ingame run_lua 的 action 事件归类）" |
+| E.6 反模式与代码现实对应 | ✅ 六条均有真实对应物（双轨、双写、框架先行、状态机降格） |
+
+### 发现的缺口（按影响排序）
+
+**F.1 ActionIntent 双词汇未裁决（E.2 的硬伤）**。E.2 宣布 ActionIntent 为四条稳定边界之一，但代码里存在**两个** ActionIntent：`governance/models.py` 的冻结 dataclass（提案级，含 `evidence_requirements`、`allowed_turn`）和 decision 实体内嵌的 `action_intent` dict（工具级，经 `_action_matches` 子集匹配 + `args_hash` 绑定，belief_engine.py 中 26 处引用）。二者今天没有映射关系——治理议会选中的 intent 与信念路由授权的 intent 是两套形状。"ActionIntent 稳定"若不指名规范形与统一时点，是一条无法检验的边界。建议在 E.2 增补：规范形是哪一个、另一个降为投影/适配对象、统一发生在哪个阶段。
+
+**F.2 ingest 写编排的所有者缺失**。E.3 把 projector 提取为纯函数是对的，但 `ingest_typed_snapshot` 当前还承担事务性副作用：回合回退检测→epoch 开启、旧 epoch 归档、typed observation 创建、`review()` 触发、`archived_*` 字段清理。纯函数化后这些副作用必须有一个明确所有者（事件存储写入编排层），E.3 的职责表缺这一行——这恰是 P0 全部四条修复所依附的代码路径，无人认领就会留在 BeliefEngine 里成为新的暗物质。
+
+**F.3 正则规范化器双轨缺席于反模式清单**。E.6 只把 `TurnSnapshot`/`GraphView` 列为双轨反模式，但 `normalize_tool_result()`（正则从叙述文本提 facts/metrics，键空间 `gold`）与 `game_state:typed_snapshot`（键空间 `player.gold`）是同型风险且今天就并存于 `current_metrics`。无退役时点的双观察源正是 E.6 自己反对的"第二事实源"。建议反模式清单补一条，并在 E.4 步骤 3（影子投影）中顺带比较两种观察源的键空间差异。
+
+**F.4 Department 迁移的前置条件缺 agenda 等价物**。E.4 步骤 4"先迁移一个 Department"——但 `DepartmentContext` 读的是 `TurnSnapshot` + `agenda`（goal 的 statement 字符串列表，server.py:3720 一带）。`GraphView` 不提供议程等价物，第一个 Department 就迁不动。建议步骤 4 补前置：GraphView 需暴露"活动 goal 及其 statement/priority"的查询，或明确迁移期由 coordinator 继续注入 agenda。
+
+**F.5 E.7 第 4 条需要 epoch 感知的措辞**。"任一事件流可重复 replay，结果哈希一致"在含回滚的流上字面不成立（同回合号两套事实都是"结果"的一部分）。确定性仍然成立——重放全流得到的最终投影与归档动作可复现——但标准应写成"**按 epoch 分组的最终投影**哈希一致"，否则与二轮 P0-4 的归档语义字面冲突。
+
+### 修订清单（最小改动，均可在 E 节内就地补齐）
+
+1. E.2：ActionIntent 规范形 + 双词汇统一时点（对应 F.1）。
+2. E.3 表格：补"ingest 写编排（epoch 检测、归档、observation、review 触发）"一行及抽离条件（对应 F.2）。
+3. E.6：补正则观察源与 typed 快照的双轨反模式（对应 F.3）。
+4. E.4 步骤 4：补 agenda 等价物前置（对应 F.4）。
+5. E.7 第 4 条：改为按 epoch 分组的投影哈希（对应 F.5）。
+6. E.8：逃生口一项标注现状"授权与传输已闭环，剩审计归类"。
+
+### 结论
+
+E 节与 A~D 节构成完整的"计划 → 验尸 → 阶段零 → 变更约束"链路，六处补齐后可并入主线，作为阶段一开工的约束基线。E.4 的替换顺序与阶段零门禁是全文最有操作价值的新增；F.1 是唯一必须在动工前裁决的项——其余五项可在对应阶段落地时补。

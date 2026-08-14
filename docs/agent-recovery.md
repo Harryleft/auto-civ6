@@ -117,12 +117,12 @@ MCP 进程（civ-mcp）重启后，DSH 客户端需要先完成 `tools/list` 同
 
 | 场景 | 行为 | agent 处置 |
 |---|---|---|
-| 变异命令（move/attack/购买/end_turn 等）发送时连接死亡 | 抛 `MutationOutcomeUnknownError`（ConnectionError 子类）；命令**恰好发送一次，绝不自动重发** | 不要立刻重试同一动作——先 `get_units`/`get_cities` 核实动作是否已实际生效，再决定重试或放弃 |
-| 命令超时未收到 `---END---` sentinel | 抛 `CommandTimeoutError`（LuaError 子类），携带已收部分行；不再静默返回截断输出 | 按普通错误处理并重试（查询可安全重发）；若发生在变异命令上，同样先核实再重试 |
-| 决策卡在 `executing`（进程崩溃/异常逃逸） | 三层自动回收为 `retryable`：进程重启加载时、跨回合的 governance turn gate、显式 `cancel_action_authorization` | 回收后照常取消或重新授权执行；`end_turn` 门禁不再被永久阻塞 |
-| 游戏回退到更早回合（autosave 重载/手动读档） | 事件流记录 `game.reloaded` epoch 标记（自动重启路径显式记录，手动读档由回合回退检测捕获）；旧 epoch 的未决授权被作废（`invalidated_by_game_reload`），关联预算锁归档 | 回滚后不要重放旧授权——它们已取消，需基于新局面重新提案。回放/重建历史时按 epoch 分组，同回合号的两套事实分属不同 epoch |
+| 变异命令（move/attack/购买/end_turn 等，含 `run_lua` 的 ingame/state-index 通道）发送时连接死亡或超时未收到 sentinel | 抛 `MutationOutcomeUnknownError`（ConnectionError 子类）；命令**恰好发送一次，绝不自动重发**（超时同样视为结果未知，非普通失败） | 不要立刻重试同一动作——先 `get_units`/`get_cities` 核实动作是否已实际生效，再决定重试或放弃 |
+| 查询命令超时未收到 `---END---` sentinel | 抛 `CommandTimeoutError`（LuaError 子类），携带已收部分行；不再静默返回截断输出 | 按普通错误处理并重试（查询可安全重发） |
+| 决策卡在 `executing`（进程崩溃/异常逃逸/记录路径失败） | 跨回合自动回收为 `retryable`（进程重启加载、governance turn gate）；**任意时刻**可用 `cancel_action_authorization` 显式取消（迟到结果天然 no-op，不会复活授权） | 回收/取消后照常取消或重新授权执行；`end_turn` 门禁不再被永久阻塞 |
+| 游戏回退到更早回合（autosave 重载/手动读档） | 事件流记录 `game.reloaded` epoch 标记（自动重启路径显式记录，手动读档由回合回退检测捕获）；旧 epoch 的未决授权被作废（`invalidated_by_game_reload`）、关联预算锁归档，**旧 epoch 的 observations 与 world_entities 一并归档**（`epoch_superseded_by_reload`） | 回滚后不要重用旧事实——current_metrics 已清空、回合门要求新 epoch 的新鲜 typed snapshot；先 `get_governance_brief` 重建世界图，再基于新局面重新提案。回放/重建历史时按 epoch 分组，同回合号的两套事实分属不同 epoch |
 
-事件流完整性：JSONL 追加带 fsync；加载时发现损坏行会原子重写为纯完好行并追加 `log.integrity` 标记（含坏行哈希与预览），后续事件不会再拼接到坏行上。若日志中出现 `log.integrity`，说明进程曾在写入中途崩溃。
+事件流完整性：JSONL 追加带 fsync；加载时发现损坏行（无法解析、非 dict、或破坏事件 schema——如 sequence 非数字、缺 event_type/entity.id）会原子重写为纯完好行并追加 `log.integrity` 标记（含坏行哈希与预览），后续事件不会再拼接到坏行上。若日志中出现 `log.integrity`，说明进程曾在写入中途崩溃或日志被外部损坏。
 
 ## 相关文档
 
