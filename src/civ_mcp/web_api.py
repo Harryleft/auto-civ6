@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 def create_app(gs: GameState) -> FastAPI:
     """Create a FastAPI app wired to the given GameState."""
     app = FastAPI(
-        title="civ6-mcp API",
+        title="civ6-belief-engine API",
         description="Read-only game state API for the Civ 6 web dashboard",
     )
     app.state.gs = gs

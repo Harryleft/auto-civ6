@@ -485,7 +485,7 @@ wheels = [
 ]
 
 [[package]]
-name = "civ6-mcp"
+name = "civ6-belief-engine"
 version = "1.1.11"
 source = { editable = "." }
 dependencies = [
@@ -553,7 +553,7 @@ requires-dist = [
     { name = "adlfs", marker = "extra == 'cloud'", specifier = ">=2024.7" },
     { name = "adlfs", marker = "extra == 'publish'", specifier = ">=2024.7" },
     { name = "anthropic", specifier = ">=0.84.0" },
-    { name = "civ6-mcp", extras = ["launcher-macos"], marker = "extra == 'launcher'" },
+    { name = "civ6-belief-engine", extras = ["launcher-macos"], marker = "extra == 'launcher'" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.128" },
     { name = "fsspec", marker = "extra == 'cloud'", specifier = ">=2024.6" },
     { name = "fsspec", marker = "extra == 'publish'", specifier = ">=2024.6" },
