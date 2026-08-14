@@ -24,6 +24,10 @@ class _StubConnection:
     async def execute_read(self, lua):
         return self._read.pop(0)
 
+    async def execute_mutation(self, lua, timeout=5.0, context="ingame"):
+        # set_city_production's mutation goes to the InGame (write) channel
+        return self._write.pop(0)
+
 
 def _gs(write_lines, read_lines) -> GameState:
     gs = GameState.__new__(GameState)
@@ -75,6 +79,9 @@ class TestSetCityProductionVerification:
 
         class _ThrowingConn:
             async def execute_write(self, lua):
+                return ["OK:PRODUCING|UNIT_WARRIOR|2 turns"]
+
+            async def execute_mutation(self, lua, timeout=5.0, context="ingame"):
                 return ["OK:PRODUCING|UNIT_WARRIOR|2 turns"]
 
             async def execute_read(self, lua):
