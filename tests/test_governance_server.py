@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from civ_mcp.belief_engine import (
+from civ6_belief_engine.belief_engine import (
     BeliefEngine,
     action_args_hash,
     tool_result_reference,

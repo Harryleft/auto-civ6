@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from civ_mcp.belief_engine import (
+from civ6_belief_engine.belief_engine import (
     BeliefEngine,
     BeliefEngineError,
     action_args_hash,

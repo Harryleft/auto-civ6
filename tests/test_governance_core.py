@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from civ_mcp.governance.council import GovernanceCouncil, pareto_dominates
-from civ_mcp.governance.devils_advocate import (
+from civ6_belief_engine.governance.council import GovernanceCouncil, pareto_dominates
+from civ6_belief_engine.governance.devils_advocate import (
     CounterEvidence,
     DevilsAdvocate,
     DevilsAdvocateReview,
     DevilsAdvocateVerdict,
 )
-from civ_mcp.governance.models import (
+from civ6_belief_engine.governance.models import (
     ActionIntent,
     BudgetLock,
     EvidenceRequirement,

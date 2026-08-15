@@ -1,6 +1,6 @@
 """Contracts for the server-side Belief Engine action gate."""
 
-from civ_mcp.belief_engine import action_args_hash
+from civ6_belief_engine.belief_engine import action_args_hash
 from civ_mcp.server import _belief_route_required, _canonical_action_params
 
 
