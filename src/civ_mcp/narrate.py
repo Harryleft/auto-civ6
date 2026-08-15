@@ -346,6 +346,60 @@ def narrate_barbarian_overview(
     return "\n".join(lines)
 
 
+def narrate_village_overview(
+    overview: lq.VillageOverview, *, compact: bool = False
+) -> str:
+    """把已揭示的部落村落格式化为抢先取用队列。
+
+    村落是入场即消失的一次性奖励, 按到最近己方战斗/侦察单位的距离排序。
+    结果只反映当前仍存在的村落; 已被取用的村落不出现在这里, 工具也不
+    保留或虚构取用历史。
+    """
+
+    lines = ["=== 村落总览 ==="]
+    huts = sorted(
+        overview.huts,
+        key=lambda hut: (hut.distance_to_military, hut.distance_to_city),
+    )
+    if not huts:
+        lines.append("当前没有任何已揭示地块上存在部落村落。")
+        lines.append("迷雾说明: 空结果只表示没有可确认的村落, 不代表地图上没有村落。")
+        return "\n".join(lines)
+
+    lines.append(f"已揭示村落 ({len(huts)}):")
+    for hut in huts:
+        if hut.distance_to_military <= 5:
+            priority = "速取"
+        elif hut.distance_to_military <= 10:
+            priority = "可达"
+        else:
+            priority = "远端"
+        owner = hut.owner if hut.owner != "none" else "无主"
+        unit_dist = (
+            f"距最近战斗/侦察单位 {hut.distance_to_military}"
+            if hut.distance_to_military < 999
+            else "无己方战斗/侦察单位"
+        )
+        city_dist = (
+            f"距最近城市 {hut.distance_to_city}"
+            if hut.distance_to_city < 999
+            else "无城市"
+        )
+        lines.append(
+            f"  [{priority}] ({hut.x},{hut.y}) [{hut.visibility}] — "
+            f"{unit_dist}; {city_dist}; {owner}"
+        )
+    lines.append("")
+    lines.append(
+        "任一单位踏入村落即取用并使其消失; 奖励内容在取用后由游戏结算, 本查询不可见。"
+    )
+    lines.append(
+        "已揭示地块上的村落从结果中消失, 只说明它已被某方踏入取用, 取用者与时间不可确认。"
+        "侦察单位顺路取用优先; 村落会被其他文明抢走, 但不要为远端村落偏离战略路线。"
+    )
+    return "\n".join(lines)
+
+
 def narrate_builder_tasks(
     tasks: list[lq.BuilderTask], builders: list[lq.BuilderInfo]
 ) -> str:

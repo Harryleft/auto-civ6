@@ -695,6 +695,29 @@ class BarbarianOverview:
 
 
 @dataclass
+class Village:
+    """A tribal village (goody hut) on a tile the player has revealed."""
+
+    x: int
+    y: int
+    visibility: str = "revealed"  # "visible" or "revealed"
+    owner: str = "none"  # civ short name, or "none" when unowned
+    distance_to_city: int = 999
+    distance_to_military: int = 999
+
+
+@dataclass
+class VillageOverview:
+    """Revealed tribal villages for the current turn.
+
+    A village is removed the instant any unit enters its tile, so this only
+    reflects current presence; absence is not a claim about history.
+    """
+
+    huts: list[Village] = field(default_factory=list)
+
+
+@dataclass
 class VictoryPlayerProgress:
     """Victory progress for a single civilization."""
 

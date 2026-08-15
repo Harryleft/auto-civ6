@@ -22,6 +22,10 @@ from civ_mcp.lua.barbarians import (  # noqa: F401
     build_barbarian_overview_query,
     parse_barbarian_overview_response,
 )
+from civ_mcp.lua.villages import (  # noqa: F401
+    build_village_overview_query,
+    parse_village_overview_response,
+)
 from civ_mcp.lua.espionage import (  # noqa: F401
     build_get_spies_query,
     build_spy_escape_route,
@@ -152,6 +156,8 @@ from civ_mcp.lua.models import (  # noqa: F401
     BarbarianCamp,
     BarbarianOverview,
     BarbarianUnit,
+    Village,
+    VillageOverview,
     BuilderInfo,
     BuilderTask,
     CityRow,

@@ -263,6 +263,11 @@ class GameState:
         lines = await self.conn.execute_read(lq.build_barbarian_overview_query())
         return lq.parse_barbarian_overview_response(lines)
 
+    async def get_village_overview(self) -> lq.VillageOverview:
+        """已揭示的部落村落（一次性奖励，取用即消失）。"""
+        lines = await self.conn.execute_read(lq.build_village_overview_query())
+        return lq.parse_village_overview_response(lines)
+
     async def get_pathing_estimate(
         self, unit_index: int, target_x: int, target_y: int
     ) -> lq.PathingEstimate:
