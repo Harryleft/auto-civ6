@@ -84,6 +84,13 @@ _DECISION_STATES = frozenset(
     }
 )
 _TERMINAL_DECISION_STATES = frozenset({"succeeded", "cancelled"})
+# States that terminally close a council intent.  ``failed`` is not a
+# sanctioned lifecycle state (only pre-a0b487c journals contain it, written
+# out-of-band), but for those legacy records the failure IS final accounting:
+# nothing can re-open it through sanctioned paths, so the intent it bound is
+# closed.  ``retryable`` deliberately stays out — retry remains rational and
+# the agent must answer the gate (retry or cancel).
+_INTENT_CLOSING_STATES = frozenset({"succeeded", "cancelled", "failed"})
 
 
 class BeliefEngineError(ValueError):
@@ -884,7 +891,7 @@ class BeliefEngine:
     ) -> None:
         """Reject out-of-band ``decision_state`` writes.
 
-        Only ``succeeded``/``cancelled`` close a council intent, and the
+        Only ``succeeded``/``cancelled``/``failed`` close a council intent, and the
         recovery tools key on the exact lifecycle states. A generic entity
         patch writing any other value (the 2026-08-15 turn-97 deadlock wrote
         ``resolved`` over both live and already-cancelled decisions) makes the
@@ -2808,7 +2815,7 @@ class BeliefEngine:
                     (
                         decision
                         for decision in matching
-                        if decision.get("decision_state") in {"succeeded", "cancelled"}
+                        if decision.get("decision_state") in _INTENT_CLOSING_STATES
                     ),
                     None,
                 )
@@ -2903,7 +2910,7 @@ class BeliefEngine:
         """
 
         for decision in self.list("decision", status=None):
-            if decision.get("decision_state") not in {"succeeded", "cancelled"}:
+            if decision.get("decision_state") not in _INTENT_CLOSING_STATES:
                 continue
             decision_intent = decision.get("action_intent")
             if not isinstance(decision_intent, dict):
@@ -3040,9 +3047,15 @@ class BeliefEngine:
             route = "verify_then_fast" if evidence_requirements else "fast"
             budget = "low" if evidence_requirements else "none"
         else:
-            if score >= 0.55 or surprise_score >= 0.7:
+            # A hard ``surprise_score >= 0.7 -> slow`` rule made routing a
+            # function of global world noise, not of this action: the same
+            # args_hash flipped slow->fast as surprises churned, forcing the
+            # cancel-and-reroute loop. Surprise still weighs in via the 0.05
+            # term; scoped effects live in belief_review_required, which only
+            # fires when a referenced belief is under review.
+            if score >= 0.55:
                 route = "slow"
-                budget = "high" if score >= 0.75 or surprise_score >= 1 else "medium"
+                budget = "high" if score >= 0.75 else "medium"
             elif score >= 0.35:
                 route = "verify_then_fast"
                 budget = "low"
@@ -3081,6 +3094,15 @@ class BeliefEngine:
             "council_decision_id": council_decision_id,
             "decision_state": "authorized" if action_intent else "unbound",
         }
+        if route == "slow" and not council_decision_id:
+            # A slow route blocks execution and has no evidence contract to
+            # satisfy, so it must state its exits instead of being a dead end
+            # the caller can only escape by cancelling.
+            assessment["route_guidance"] = (
+                "slow 路由不可执行且无证据契约。出路：1) 修正评估后重新 route_belief_decision；"
+                "2) 经议会仲裁后路由（council_decision_id 复路由）；"
+                "3) cancel_routed_action 显式放弃。不要无变更地重复路由同一 intent。"
+            )
         if persist:
             return self.create("decision", assessment, turn=turn)
         return assessment

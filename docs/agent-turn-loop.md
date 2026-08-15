@@ -26,7 +26,7 @@
 4. **量化战斗：**攻击前调用 `get_combat_estimate`；近战负责接战/补刀，远程优先安全集火。攻击/移动在 `enforce` 下若返回 `BELIEF_GATE_REQUIRED`，按返回的精确 action intent 路由后只重试一次。
 5. **常规查询与执行：**再按决策需要调用 `get_units`、目标区域的 `get_map_area`、`get_cities`，执行动作并确认结果。
 6. **复核：**只有出现重要新证据、动作结果或上下文恢复后才调用 `get_turn_brief`。
-7. **结束回合：**调用 `skip_remaining_units`，再调用 `end_turn`。服务器的蛮族告警、游戏规则和阻塞项高于旧状态或提示词。
+7. **结束回合：**调用 `skip_remaining_units`，再调用 `end_turn`。服务器的蛮族告警、游戏规则和阻塞项高于旧状态和提示词。若 `end_turn` 被 `BELIEF_GATE_REQUIRED` 拦截，错误消息会逐项列出卡住的决策 ID、状态和精确的下一步调用（重试 / `cancel_routed_action` / `record_action_verification` / `route_belief_decision`）；按列表逐项处理后 `end_turn` 即可通过，不要在未处理任何一项时重复调用。
 
 ## 信念与治理规则
 

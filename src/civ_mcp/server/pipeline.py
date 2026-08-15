@@ -407,6 +407,57 @@ def _belief_route_required(tool_name: str, params: dict[str, Any]) -> bool:
     return str(params.get("action", "")).lower() not in _ROUTINE_UNIT_ACTIONS
 
 
+_NEXT_CALL_FOR_STATE = {
+    "authorized": "执行该决策绑定的动作（授权会被消费），或 cancel_routed_action 显式放弃",
+    "executing": "动作执行中；若结果已返回则 record_action_verification 结算，否则等待",
+    "retryable": "重试同一动作（重新调用即可再次消费授权），或 cancel_routed_action 显式放弃",
+    "outcome_unknown": "必须先 record_action_verification 用读回证据结算，此前不可取消/重试",
+    "not_routed": "route_belief_decision 传入 council_decision_id 与该已批准 action_intent",
+}
+
+
+def _format_governance_gate_reason(gate: dict[str, Any]) -> str:
+    """Turn the gate payload into one actionable line per blocker.
+
+    The old message named blocker categories only, which forced the caller to
+    jump out of its turn loop into get_governance_brief bookkeeping — the
+    measured pathology (40 no-op retries, end_turn 56% of blocks). Each line
+    now names the stuck decision and the exact next tool call.
+    """
+
+    lines = ["治理回合门禁未完成: " + ", ".join(gate.get("blockers") or []) + "。"]
+    pending = gate.get("pending_authorizations") or []
+    if pending:
+        lines.append("待清算授权（逐项处理后 end_turn 即可通过）:")
+        for item in pending[:4]:
+            state = str(item.get("decision_state") or "")
+            lines.append(
+                f"- {item.get('decision_id')} [{state}] → "
+                + _NEXT_CALL_FOR_STATE.get(state, "用 get_governance_brief 查看详情")
+            )
+        if len(pending) > 4:
+            lines.append(f"- …另有 {len(pending) - 4} 项，见 get_governance_brief")
+    intents = gate.get("pending_council_intents") or []
+    if intents:
+        lines.append("议会意图未闭环:")
+        for item in intents[:3]:
+            state = str(item.get("decision_state") or "")
+            lines.append(
+                f"- {item.get('proposal_id')}/{item.get('intent_id') or 'intent'} "
+                f"[{state}] → "
+                + _NEXT_CALL_FOR_STATE.get(state, _NEXT_CALL_FOR_STATE["not_routed"])
+            )
+        if len(intents) > 3:
+            lines.append(f"- …另有 {len(intents) - 3} 项，见 get_governance_brief")
+    proposals = gate.get("active_proposal_ids") or []
+    if proposals:
+        lines.append(
+            "未仲裁提案: " + ", ".join(proposals[:4]) + " → resolve_governance_council 仲裁"
+        )
+    lines.append("处理前不要重复调用 end_turn。")
+    return "\n".join(lines)
+
+
 async def _belief_action_preflight(
     ctx: Context, tool_name: str, params: dict[str, Any]
 ) -> dict[str, Any]:
@@ -425,12 +476,7 @@ async def _belief_action_preflight(
                 "decision_id": None,
                 "route": "slow",
                 "governance_gate": governance_gate,
-                "reason": (
-                    "Governance turn gate is incomplete: "
-                    + ", ".join(governance_gate["blockers"])
-                    + ". Call get_governance_brief, resolve active proposals, "
-                    "and complete routed council actions before ending the turn."
-                ),
+                "reason": _format_governance_gate_reason(governance_gate),
             }
         brief = engine.turn_brief(turn=turn)
         gate = brief["decision_gate"]
