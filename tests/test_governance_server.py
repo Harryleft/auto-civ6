@@ -358,6 +358,7 @@ def test_governance_mcp_tools_are_registered():
         "review_governance_proposal",
         "resolve_governance_council",
         "cancel_routed_action",
+        "get_climate_overview",
     }.issubset(names)
 
 

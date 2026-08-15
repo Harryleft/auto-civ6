@@ -140,6 +140,10 @@
 - `get_great_people` 查看候选人与成本；`recruit_great_person` 用点数招募，`patronize_great_person` 直接购买，`reject_great_person` 跳过。
 - 伟人招募后移动到匹配区域，用 `unit_action(action='activate')` 激活；不要把 0 个建造者次数误认为伟人可以删除。
 
+## 气候（GS）
+
+`get_climate_overview`（Gathering Storm 规则集专属，其他规则集显式报 `ERR:NO_CLIMATE_IN_RULESET`）：海平面阶段（不可逆，phase 4+ 触发沿海资产搬迁告警）、气候变化点数与下次上升倒计时、世界/己方 CO₂ 与最大排放文明、风暴/洪水/喷发/干旱风险百分比、本回合灾害及受影响城市、近期事件史（`history_turns` 默认 30，clamp 1-200）。建议每 ~10 回合或收到洪水/火山/暴雪通知后调用；核事故刻意保留在历史中（与官方历史页口径不同）。
+
 ## 世界议会
 
 世界议会在 `end_turn()` 内同步触发，必须先投票：

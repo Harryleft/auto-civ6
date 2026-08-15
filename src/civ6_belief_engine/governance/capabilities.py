@@ -39,6 +39,7 @@ CAPABILITY_NAMES = frozenset(
         "diplomatic_favor",
         "world_congress",
         "resource_stockpiles",
+        "climate",
         *_COMMON_CAPABILITIES,
     }
 )
@@ -54,6 +55,7 @@ RULESET_CAPABILITIES: Mapping[str, RulesetCapabilities] = MappingProxyType({
         diplomatic_favor=False,
         world_congress=False,
         resource_stockpiles=False,
+        climate=False,
         **_COMMON_CAPABILITIES,
     ),
     RULESET_EXPANSION_1: RulesetCapabilities(
@@ -65,6 +67,7 @@ RULESET_CAPABILITIES: Mapping[str, RulesetCapabilities] = MappingProxyType({
         diplomatic_favor=False,
         world_congress=False,
         resource_stockpiles=False,
+        climate=False,
         **_COMMON_CAPABILITIES,
     ),
     RULESET_EXPANSION_2: RulesetCapabilities(
@@ -76,6 +79,7 @@ RULESET_CAPABILITIES: Mapping[str, RulesetCapabilities] = MappingProxyType({
         diplomatic_favor=True,
         world_congress=True,
         resource_stockpiles=True,
+        climate=True,
         **_COMMON_CAPABILITIES,
     ),
 })

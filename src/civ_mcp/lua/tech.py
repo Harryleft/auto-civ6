@@ -90,7 +90,10 @@ for tech in GameInfo.Technologies() do
 end
 local completedCivics = 0
 for civic in GameInfo.Civics() do
-    if cu:HasCivic(civic.Index) then completedCivics = completedCivics + 1 end
+    if cu:HasCivic(civic.Index) then
+        completedCivics = completedCivics + 1
+        print("COMPLETED_CIVIC|" .. Locale.Lookup(civic.Name):gsub("|", "/"))
+    end
 end
 print("COMPLETED|" .. completedTechs .. "|" .. completedCivics)
 local curEra = 99
@@ -117,9 +120,13 @@ for civic in GameInfo.Civics() do
                 local cost = cu:GetCultureCost(civic.Index)
                 local currentProg = 0
                 pcall(function() currentProg = cu:GetCulturalProgress(civic.Index) end)
+                if type(currentProg) ~= "number" or currentProg < 0 then currentProg = 0 end
                 local pct2 = cost > 0 and math.floor(currentProg * 100 / cost) or 0
                 local cultureYield = Players[id]:GetCulture():GetCultureYield() or 1
-                local turns2 = cultureYield > 0 and math.ceil(cost / cultureYield) or -1
+                -- GetCultureCost is the full cost. ETA must use the remaining cost
+                -- after any progress already invested in this civic.
+                local remainingCost = math.max(cost - currentProg, 0)
+                local turns2 = cultureYield > 0 and math.ceil(remainingCost / cultureYield) or -1
                 local boosted2 = cu:HasBoostBeenTriggered(civic.Index)
                 local boostDesc2 = ""
                 local b2 = boostsByCivic[civic.CivicType]
@@ -131,7 +138,25 @@ for civic in GameInfo.Civics() do
                 if prereqs[civic.CivicType] then
                     civicPrereqStr = table.concat(prereqs[civic.CivicType], ",")
                 end
-                print("CIVIC|" .. Locale.Lookup(civic.Name) .. "|" .. civic.CivicType .. "|" .. cost .. "|" .. pct2 .. "|" .. turns2 .. "|" .. boostTag2 .. "|" .. boostDesc2 .. "|" .. civicPrereqStr .. "|" .. (civic.EraType or ""))
+                -- Policies and governments expose PrereqCivic in GameInfo. Keep
+                -- both stable type IDs and localized names for agent decisions.
+                local civicUnlocks = {}
+                pcall(function()
+                    for policy in GameInfo.Policies() do
+                        if policy.PrereqCivic == civic.CivicType then
+                            table.insert(civicUnlocks, "POLICY:" .. policy.PolicyType .. ":" .. Locale.Lookup(policy.Name))
+                        end
+                    end
+                end)
+                pcall(function()
+                    for government in GameInfo.Governments() do
+                        if government.PrereqCivic == civic.CivicType then
+                            table.insert(civicUnlocks, "GOVERNMENT:" .. government.GovernmentType .. ":" .. Locale.Lookup(government.Name))
+                        end
+                    end
+                end)
+                local unlockStr2 = table.concat(civicUnlocks, ", "):gsub("|", "/")
+                print("CIVIC|" .. Locale.Lookup(civic.Name) .. "|" .. civic.CivicType .. "|" .. cost .. "|" .. pct2 .. "|" .. turns2 .. "|" .. boostTag2 .. "|" .. boostDesc2 .. "|" .. civicPrereqStr .. "|" .. (civic.EraType or "") .. "|" .. unlockStr2)
             end
         end
     end
@@ -327,6 +352,7 @@ def parse_tech_civics_response(lines: list[str]) -> TechCivicStatus:
     completed_tech_count = 0
     completed_civic_count = 0
     completed_techs: list[str] = []
+    completed_civics: list[str] = []
 
     locked_civics: list[LockedCivic] = []
     locked_techs: list[LockedTech] = []
@@ -340,6 +366,10 @@ def parse_tech_civics_response(lines: list[str]) -> TechCivicStatus:
             name = line.split("|", 1)[1]
             if name:
                 completed_techs.append(name)
+        elif line.startswith("COMPLETED_CIVIC|"):
+            name = line.split("|", 1)[1]
+            if name:
+                completed_civics.append(name)
         elif line.startswith("CURRENT|"):
             parts = line.split("|")
             current_research = parts[1]
@@ -390,6 +420,7 @@ def parse_tech_civics_response(lines: list[str]) -> TechCivicStatus:
                         boost_desc=parts[7],
                         prereqs=parts[8] if len(parts) > 8 else "",
                         era=parts[9] if len(parts) > 9 else "",
+                        unlocks=parts[10] if len(parts) > 10 else "",
                     )
                 )
             elif len(parts) >= 3:
@@ -402,6 +433,7 @@ def parse_tech_civics_response(lines: list[str]) -> TechCivicStatus:
                         turns=0,
                         boosted=False,
                         boost_desc="",
+                        unlocks="",
                     )
                 )
         elif line.startswith("LOCKED_CIVIC|"):
@@ -441,6 +473,7 @@ def parse_tech_civics_response(lines: list[str]) -> TechCivicStatus:
         completed_tech_count=completed_tech_count,
         completed_civic_count=completed_civic_count,
         completed_techs=completed_techs,
+        completed_civics=completed_civics,
         locked_civics=locked_civics or None,
         locked_techs=locked_techs or None,
     )

@@ -1505,6 +1505,17 @@ class GameState:
         _raise_query_error(lines)
         return lq.parse_world_congress_response(lines)
 
+    # ------------------------------------------------------------------
+    # Climate (InGame context, Gathering Storm only)
+    # ------------------------------------------------------------------
+
+    async def get_climate_overview(self, history_turns: int = 30) -> lq.ClimateOverview:
+        """GS 气候报告：海平面阶段、CO2、灾害风险、近期事件。"""
+        lua = lq.build_climate_overview_query(history_turns)
+        lines = await self.conn.execute_write(lua)
+        _raise_query_error(lines)
+        return lq.parse_climate_response(lines)
+
     async def vote_world_congress(
         self, resolution_hash: int, option: int, target_index: int, num_votes: int
     ) -> str:

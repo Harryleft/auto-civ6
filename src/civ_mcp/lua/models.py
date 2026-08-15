@@ -436,6 +436,8 @@ class CivicOption:
     boost_desc: str  # trigger description, empty if none
     prereqs: str = ""  # comma-separated prereq civic type names
     era: str = ""  # e.g. "ERA_MEDIEVAL"
+    # Stable GameInfo-derived unlocks, e.g. POLICY:POLICY_AGOGE:Agoge.
+    unlocks: str = ""
 
 
 @dataclass
@@ -450,6 +452,8 @@ class TechCivicStatus:
     completed_civic_count: int = 0
     # Localized display names of every technology completed by the local player.
     completed_techs: list[str] = field(default_factory=list)
+    # Localized display names of every civic completed by the local player.
+    completed_civics: list[str] = field(default_factory=list)
     locked_civics: list[LockedCivic] | None = None
     locked_techs: list[LockedTech] | None = None
 
@@ -775,6 +779,80 @@ class EraProgress:
     players_as_or_less_advanced: int | None = None
     players: list[EraProgressPlayer] = field(default_factory=list)
     local_age: EraAgeDetail | None = None  # AGES-GATED
+
+
+@dataclass
+class ClimateContributor:
+    """Per-civ cumulative CO2 (includes extinct majors, official parity)."""
+
+    player_id: int
+    civ_name: str  # "Unmet Player" for unmet majors
+    co2: float
+
+
+@dataclass
+class ClimateEventRecord:
+    """One random event occurrence (storm/drought/volcano/flood/sea level/...)."""
+
+    turn: int
+    event_type: str  # e.g. RANDOM_EVENT_BLIZZARD_CRIPPLING
+    operator: str  # EffectOperatorType: STORM/DROUGHT/VOLCANO/SEA_LEVEL/...
+    name: str  # localized event name, "" if unnamed
+    is_global: bool
+    revealed: bool  # False = location in fog (coords unknown)
+    x: int = -1  # -1 when not revealed or global without location
+    y: int = -1
+    fertility_added: int = 0
+    tiles_damaged: int = 0
+    units_lost: int = 0
+    pop_lost: int = 0
+
+
+@dataclass
+class ClimateAffectedCity:
+    """A city hit by the current-turn event."""
+
+    owner_id: int
+    city_id: int
+    name: str  # "Unmet Player City" when owner unmet
+
+
+@dataclass
+class ClimateOverview:
+    """Full Gathering Storm climate report (World Climate screen parity)."""
+
+    phase: int  # sea-level phase 0-7
+    phase_name: str
+    climate_change_points: float
+    points_from_realism: float
+    points_from_temperature: float
+    last_sea_level_threshold: float  # negative = no rise yet
+    next_sea_level_rise_turns: int  # -1 = n/a
+    next_ice_loss_turns: int  # -1 = n/a
+    tiles_flooded: int
+    tiles_submerged: int
+    temperature_change: float  # Celsius vs baseline
+    co2_total: float
+    co2_self: float
+    co2_self_last_turn: float
+    co2_footprint_modifier: float
+    deforestation_level: str = ""  # "" when none
+    storm_chance: float = 0.0
+    storm_increase: float = 0.0
+    flood_chance: float = 0.0
+    flood_increase: float = 0.0
+    eruption_chance: float = 0.0
+    drought_chance: float = 0.0
+    drought_increase: float = 0.0
+    rivers_total: int = 0
+    rivers_floodable: int = 0
+    volcanoes_total: int = 0
+    volcanoes_active: int = 0
+    volcano_eruptions_total: int = 0
+    current_event: ClimateEventRecord | None = None
+    affected_cities: list[ClimateAffectedCity] = field(default_factory=list)
+    contributors: list[ClimateContributor] = field(default_factory=list)
+    event_history: list[ClimateEventRecord] = field(default_factory=list)
 
 
 @dataclass
