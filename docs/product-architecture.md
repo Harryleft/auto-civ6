@@ -27,10 +27,10 @@ src/
     └── ...                   # 生命周期、存档、遥测等运行时能力
 ```
 
-`civ_mcp/belief_engine.py`、`civ_mcp/belief_mode.py` 和
-`civ_mcp/governance/` 现在只是旧导入路径的兼容转发，实际实现已经位于
-`civ6_belief_engine/`。这样可以逐步迁移调用方，不需要同时修改 DSH 或
-MCP 客户端配置。
+实现位于 `civ6_belief_engine/`，`civ_mcp` 只保留适配层职责。旧的
+兼容转发 shim（`civ_mcp/belief_engine.py`、`civ_mcp/governance/`）
+已移除，测试与代码直接导入产品域包；`civ_mcp/belief_mode.py` 仍是
+MCP 侧真实的运行模式逻辑。
 
 Lua 数据模型目前仍由 MCP 工具层提供，治理层通过类型导入使用它们；这
 是下一阶段才适合拆分的边界，不在本次迁移中扩大范围。

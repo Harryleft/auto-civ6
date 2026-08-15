@@ -5,7 +5,8 @@ action.  It records what the agent observed separately from what the agent
 believes, predicts, plans, and eventually verifies.
 
 The implementation lives in `src/civ6_belief_engine/`; `civ_mcp` exposes the
-MCP adapter and keeps legacy imports as compatibility shims.
+MCP adapter. The legacy `civ_mcp.belief_engine` / `civ_mcp.governance`
+compatibility shims were removed; import the product package directly.
 
 ## Runtime modes
 

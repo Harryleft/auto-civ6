@@ -20,8 +20,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from civ6_belief_engine.belief_engine import BeliefEngine, BeliefEngineError, action_args_hash
 from civ_mcp import server as server_module
-from civ_mcp.belief_engine import BeliefEngine, action_args_hash
 from civ_mcp.server import _logged
 
 

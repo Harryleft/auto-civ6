@@ -13,6 +13,16 @@ get_game_overview
 
 通过 Lua 加载通常约 5 秒，菜单回退可能约 90 秒；加载后必须用 `get_game_overview` 验证回合和局面。
 
+## DSH 启动自动恢复（显式 opt-in）
+
+默认关闭。需要时从 `civ6-mcp` 根目录执行：
+
+```bash
+CIV_MCP_DSH_AUTO_RESUME=1 ./scripts/deepseek_harness web
+```
+
+MCP 启动时先通过 FireTuner 判断是否已经在对局；若只到主菜单或游戏尚未启动，则复用 GUI 的“单人游戏 → 加载游戏 → Continue”流程。恢复点优先选择最新的 `0_MCP_*.Civ6Save`，没有可用 MCP 存档时才回退到 `AutoSave_*.Civ6Save`。该路径与 eval 专用的 `CIV_MCP_SAVE_FILE` 自动启动完全分离，绝不清理 `0_MCP_*`；FireTuner 仍只允许一个客户端。
+
 ## AI 回合卡住
 
 ```text

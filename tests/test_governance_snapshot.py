@@ -8,16 +8,16 @@ from types import SimpleNamespace
 
 import pytest
 
-from civ_mcp.belief_engine import BeliefEngine
+from civ6_belief_engine.belief_engine import BeliefEngine
 from civ_mcp.server import _capture_governance_snapshot, get_governance_brief
-from civ_mcp.governance.capabilities import (
+from civ6_belief_engine.governance.capabilities import (
     RULESET_EXPANSION_1,
     RULESET_EXPANSION_2,
     RULESET_STANDARD,
     UnsupportedRulesetError,
     capabilities_for_ruleset,
 )
-from civ_mcp.governance.snapshot import (
+from civ6_belief_engine.governance.snapshot import (
     SnapshotConsistencyError,
     build_turn_snapshot,
     snapshot_to_belief_observation,

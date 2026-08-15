@@ -247,7 +247,7 @@ The server maintains a persistent TCP connection to Civ 6 via the FireTuner debu
 
 The repo includes an [AGENTS.md](AGENTS.md) routing playbook (symlinked as
 `CLAUDE.md` for Claude Code). Detailed turn-loop, strategy, recovery, and tool
-guidance lives in [docs/](docs/README.md). See the [devlog](docs/devlog/) for
+guidance lives in [docs/](docs/README.md). See the [devlog](devlog/) for
 the development history, including FireTuner protocol research and API quirks.
 
 ### DeepSeek Harness
