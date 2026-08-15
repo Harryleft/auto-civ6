@@ -3,7 +3,16 @@
 from __future__ import annotations
 
 from civ_mcp.lua._helpers import SENTINEL, _bail, _bail_lua, _int, _lua_get_unit
-from civ_mcp.lua.models import GPAdvisorCity, GPAdvisorResult, GreatPersonInfo
+from civ_mcp.lua.models import (
+    GPAdvisorCity,
+    GPAdvisorResult,
+    GPClassStanding,
+    GPHistoryEntry,
+    GPOwnUnit,
+    GPPlayerPoints,
+    GreatPersonInfo,
+    GreatPeopleOverview,
+)
 
 
 def build_great_people_query() -> str:
@@ -554,4 +563,175 @@ def parse_gp_advisor_response(lines: list[str]) -> GPAdvisorResult | None:
         gp_y=gp_y,
         charges=charges,
         cities=cities,
+    )
+
+
+def _gp_pool_scan_lua() -> str:
+    """Rendered pool-scan segment of build_great_people_query, reused verbatim.
+
+    Slicing the rendered output (not the f-string source) keeps the GP| row
+    format in the overview query byte-identical to the existing tool.
+    """
+
+    rendered = build_great_people_query()
+    start = rendered.index("local function getAbility")
+    end = rendered.index('print("---END---")', start)
+    return rendered[start:end]
+
+
+def build_great_people_overview_query() -> str:
+    """One-shot Great People report (InGame context).
+
+    Four sections in one round-trip: per-class points standings for every
+    alive major civ (unmet civs masked as "Unmet"), the current recruit pool
+    (same GP| rows as build_great_people_query), already-claimed history via
+    GetPastTimeline (pcall-guarded), and your own great person units with
+    activation charges.
+    """
+
+    head = f"""
+local me = Game.GetLocalPlayer()
+local gp = Game.GetGreatPeople()
+if gp == nil then {_bail("ERR:NO_GP_SYSTEM|Great People system not available")} end
+local timeline = gp:GetTimeline()
+if timeline == nil then {_bail("ERR:NO_TIMELINE|No great people timeline")} end
+local myDiplo = Players[me]:GetDiplomacy()
+
+-- Standings: per class, every alive major civ; self first (official order)
+for classInfo in GameInfo.GreatPersonClasses() do
+    local classID = classInfo.Index
+    local className = tostring(Locale.Lookup(classInfo.Name)):gsub("|", "/"):gsub("~", "-")
+    local classType = classInfo.GreatPersonClassType or ""
+    local standings = {{}}
+    for _, p in ipairs(Game.GetPlayers({{Major = true, Alive = true}})) do
+        local pid = p:GetID()
+        local pts, ppt, earned = -1, -1, -1
+        pcall(function() pts = p:GetGreatPeoplePoints():GetPointsTotal(classID) end)
+        pcall(function() ppt = p:GetGreatPeoplePoints():GetPointsPerTurn(classID) end)
+        pcall(function() earned = gp:CountPeopleReceivedByPlayer(classID, pid) end)
+        table.insert(standings, {{p = p, pid = pid, pts = pts, ppt = ppt, earned = earned}})
+    end
+    -- Official popup order: self always first, rest by total points descending
+    table.sort(standings, function(a, b)
+        if a.pid == me then return true end
+        if b.pid == me then return false end
+        return a.pts > b.pts
+    end)
+    for _, row in ipairs(standings) do
+        local p, pid = row.p, row.pid
+        local pts, ppt, earned = row.pts, row.ppt, row.earned
+        local name = "Unmet"
+        if pid == me or myDiplo:HasMet(pid) then
+            local cfg = PlayerConfigurations[pid]
+            if cfg then
+                local ok, res = pcall(Locale.Lookup, cfg:GetCivilizationShortDescription())
+                if ok and res then name = tostring(res):gsub("|", "/"):gsub("~", "-") end
+            end
+        end
+        print("GP_CLASS|" .. className .. "|" .. classType .. "|" .. pid .. "|" .. name .. "|" .. pts .. "|" .. ppt .. "|" .. earned)
+    end
+end
+{{ _GP_POOL_SCAN_LUA }}
+-- Claimed history (only entries actually claimed; claimant masked when unmet)
+local okH, past = pcall(function() return gp:GetPastTimeline() end)
+if okH and past then
+    for _, e in ipairs(past) do
+        if e.Claimant ~= nil then
+            local indivInfo = GameInfo.GreatPersonIndividuals[e.Individual]
+            local histClass = GameInfo.GreatPersonClasses[e.Class]
+            local histEra = GameInfo.Eras[e.Era]
+            local indivName = (indivInfo and tostring(Locale.Lookup(indivInfo.Name)) or "Unknown"):gsub("|", "/"):gsub("~", "-")
+            local histClassName = (histClass and tostring(Locale.Lookup(histClass.Name)) or "Unknown"):gsub("|", "/"):gsub("~", "-")
+            local histEraName = (histEra and tostring(Locale.Lookup(histEra.Name)) or "Unknown"):gsub("|", "/"):gsub("~", "-")
+            local cname = "Unmet"
+            if e.Claimant == me or myDiplo:HasMet(e.Claimant) then
+                local cfg = PlayerConfigurations[e.Claimant]
+                if cfg then
+                    local okc, cres = pcall(Locale.Lookup, cfg:GetCivilizationShortDescription())
+                    if okc and cres then cname = tostring(cres):gsub("|", "/"):gsub("~", "-") end
+                end
+            end
+            print("GP_HIST|" .. indivName .. "|" .. histClassName .. "|" .. histEraName
+                .. "|" .. cname .. "|" .. (e.TurnGranted or -1) .. "|" .. e.Individual)
+        end
+    end
+end
+
+-- Your great person units on the map (id feeds get_gp_advisor / unit_action)
+for _, u in Players[me]:GetUnits():Members() do
+    local uInfo = GameInfo.Units[u:GetType()]
+    if uInfo and uInfo.GreatPersonClass and uInfo.GreatPersonClass ~= "" then
+        local charges = -1
+        pcall(function() charges = u:GetGreatPerson():GetActionCharges() end)
+        local uName = tostring(Locale.Lookup(uInfo.Name)):gsub("|", "/"):gsub("~", "-")
+        print("GP_UNIT|" .. u:GetID() .. "|" .. uName .. "|" .. uInfo.GreatPersonClass
+            .. "|" .. u:GetX() .. "," .. u:GetY() .. "|" .. charges)
+    end
+end
+print("{SENTINEL}")
+"""
+    return head.replace("{ _GP_POOL_SCAN_LUA }", _gp_pool_scan_lua()).replace(
+        "{SENTINEL}", SENTINEL
+    )
+
+
+def parse_great_people_overview_response(lines: list[str]) -> GreatPeopleOverview:
+    """Parse GP_CLASS/GP_HIST/GP_UNIT rows plus GP| pool rows (via existing parser)."""
+
+    standings: dict[str, GPClassStanding] = {}
+    order: list[str] = []
+    history: list[GPHistoryEntry] = []
+    own_units: list[GPOwnUnit] = []
+    for line in lines:
+        parts = line.split("|")
+        try:
+            if line.startswith("GP_CLASS|") and len(parts) >= 8:
+                class_name = parts[1]
+                if class_name not in standings:
+                    standings[class_name] = GPClassStanding(
+                        class_name=class_name, class_type=parts[2]
+                    )
+                    order.append(class_name)
+                pid = _int(parts[3])
+                civ_name = parts[4]
+                standings[class_name].entries.append(
+                    GPPlayerPoints(
+                        player_id=pid,
+                        player_name=civ_name,
+                        points_total=_int(parts[5]),
+                        points_per_turn=_int(parts[6]),
+                        instances_earned=_int(parts[7]),
+                    )
+                )
+            elif line.startswith("GP_HIST|") and len(parts) >= 7:
+                history.append(
+                    GPHistoryEntry(
+                        individual_name=parts[1],
+                        class_name=parts[2],
+                        era_name=parts[3],
+                        claimant=parts[4],
+                        turn_granted=_int(parts[5]),
+                        individual_id=_int(parts[6]),
+                    )
+                )
+            elif line.startswith("GP_UNIT|") and len(parts) >= 6:
+                x, y = (int(value) for value in parts[4].split(","))
+                own_units.append(
+                    GPOwnUnit(
+                        unit_id=_int(parts[1]),
+                        name=parts[2],
+                        gp_class=parts[3],
+                        x=x,
+                        y=y,
+                        charges=_int(parts[5]),
+                    )
+                )
+        except (IndexError, TypeError, ValueError):
+            # Malformed rows must not discard valid records from the same scan.
+            continue
+    return GreatPeopleOverview(
+        standings=[standings[name] for name in order],
+        timeline=parse_great_people_response(lines),
+        history=history,
+        own_units=own_units,
     )

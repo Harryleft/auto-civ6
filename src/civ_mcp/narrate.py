@@ -1768,6 +1768,50 @@ def narrate_great_people(gp: list[lq.GreatPersonInfo]) -> str:
     return "\n".join(lines)
 
 
+def narrate_great_people_overview(ov: lq.GreatPeopleOverview) -> str:
+    lines = ["=== Great People Overview ==="]
+    if not ov.standings:
+        lines.append("No Great People.")
+        return "\n".join(lines)
+    lines.append("Standings (total points / per turn / received):")
+    for s in ov.standings:
+        if not s.entries:
+            continue
+        # Rows arrive in official order (self first, rest by points desc);
+        # keep self plus top-3 rivals so one hot class cannot bloat the report.
+        shown = s.entries[:4]
+        cells = []
+        for i, e in enumerate(shown):
+            who = "YOU" if i == 0 else e.player_name
+            cells.append(f"{who} {e.points_total}/{e.points_per_turn} ({e.instances_earned})")
+        more = " | ..." if len(s.entries) > len(shown) else ""
+        lines.append(f"  {s.class_name}: " + " | ".join(cells) + more)
+    lines.append("Current pool:")
+    lines.append(narrate_great_people(ov.timeline))
+    if ov.history:
+        lines.append("Claimed history (latest 5):")
+        for h in ov.history[-5:]:
+            turn = h.turn_granted if h.turn_granted >= 0 else "?"
+            lines.append(
+                f"  Turn {turn} — {h.individual_name} ({h.class_name}) claimed by {h.claimant}"
+            )
+    else:
+        lines.append("No history available.")
+    lines.append("Your great people on the map:")
+    if ov.own_units:
+        for u in ov.own_units:
+            class_short = u.gp_class.replace("GREAT_PERSON_CLASS_", "").replace("_", " ").title()
+            charges = f"{u.charges} charge" if u.charges >= 0 else "charges N/A"
+            lines.append(
+                f"  {u.name} ({class_short}) at ({u.x},{u.y}), {charges}"
+                f" — get_gp_advisor(unit_id={u.unit_id}) for placement"
+            )
+    else:
+        lines.append("  (none)")
+    return "\n".join(lines)
+
+
+
 def narrate_gp_advisor(result: lq.GPAdvisorResult) -> str:
     district_short = (
         result.target_district.replace("DISTRICT_", "").replace("_", " ").title()
