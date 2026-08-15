@@ -4,9 +4,9 @@ import asyncio
 import json
 from types import SimpleNamespace
 
-from civ_mcp import server as server_module
+from civ_mcp.server import pipeline as server_module
 from civ_mcp.result_filter import ResultFilterConfig, filter_tool_result
-from civ_mcp.server import _belief_tool, _filter_downstream_result
+from civ_mcp.server.pipeline import _belief_tool, _filter_downstream_result
 
 
 def _config(*, max_chars: int = 2_000, history_items: int = 2):

@@ -29,5 +29,5 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e . pytest
-      - run: python -m py_compile src/civ_mcp/server.py
+      - run: python -m compileall -q src/civ_mcp
       - run: python -m pytest tests/ -q --ignore=tests/test_scorer.py

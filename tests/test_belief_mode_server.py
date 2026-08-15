@@ -8,17 +8,19 @@ from types import SimpleNamespace
 
 import pytest
 
-from civ_mcp import server as server_module
 from civ_mcp.belief_mode import BeliefMode
 from civ_mcp.server import (
+    get_governance_brief,
+    get_turn_brief,
+    route_belief_decision,
+)
+from civ_mcp.server import pipeline as server_module
+from civ_mcp.server.pipeline import (
     _append_belief_context,
     _belief_action_preflight,
     _format_runtime_policy,
     _logged,
     _record_belief_tool_result,
-    get_governance_brief,
-    get_turn_brief,
-    route_belief_decision,
 )
 
 
