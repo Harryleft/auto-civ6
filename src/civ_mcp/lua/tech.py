@@ -83,7 +83,10 @@ for tech in GameInfo.Technologies() do
 end
 local completedTechs = 0
 for tech in GameInfo.Technologies() do
-    if te:HasTech(tech.Index) then completedTechs = completedTechs + 1 end
+    if te:HasTech(tech.Index) then
+        completedTechs = completedTechs + 1
+        print("COMPLETED_TECH|" .. Locale.Lookup(tech.Name):gsub("|", "/"))
+    end
 end
 local completedCivics = 0
 for civic in GameInfo.Civics() do
@@ -323,6 +326,7 @@ def parse_tech_civics_response(lines: list[str]) -> TechCivicStatus:
     available_civics: list[CivicOption] = []
     completed_tech_count = 0
     completed_civic_count = 0
+    completed_techs: list[str] = []
 
     locked_civics: list[LockedCivic] = []
     locked_techs: list[LockedTech] = []
@@ -332,6 +336,10 @@ def parse_tech_civics_response(lines: list[str]) -> TechCivicStatus:
             parts = line.split("|")
             completed_tech_count = int(parts[1]) if len(parts) > 1 else 0
             completed_civic_count = int(parts[2]) if len(parts) > 2 else 0
+        elif line.startswith("COMPLETED_TECH|"):
+            name = line.split("|", 1)[1]
+            if name:
+                completed_techs.append(name)
         elif line.startswith("CURRENT|"):
             parts = line.split("|")
             current_research = parts[1]
@@ -432,6 +440,7 @@ def parse_tech_civics_response(lines: list[str]) -> TechCivicStatus:
         available_civics=available_civics,
         completed_tech_count=completed_tech_count,
         completed_civic_count=completed_civic_count,
+        completed_techs=completed_techs,
         locked_civics=locked_civics or None,
         locked_techs=locked_techs or None,
     )

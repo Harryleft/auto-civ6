@@ -558,7 +558,8 @@ async def get_tech_civics(ctx: Context) -> str:
     """Get technology and civic research status.
 
     Shows current research, current civic, turns remaining,
-    and lists of available technologies and civics to choose from.
+    completed technology names, and lists of available technologies and civics
+    to choose from.
     """
     gs = pipeline._get_game(ctx)
     return await pipeline._logged(
