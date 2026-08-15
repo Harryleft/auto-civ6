@@ -1016,6 +1016,9 @@ def narrate_tech_civics(tc: lq.TechCivicStatus) -> str:
         )
     else:
         lines.append(f"No technology being researched!{completed}")
+    if tc.completed_techs:
+        lines.append("\n已完成科技（完整名称）：")
+        lines.extend(f"  {name}" for name in tc.completed_techs)
     if tc.current_civic != "None":
         lines.append(f"Civic: {tc.current_civic} ({tc.current_civic_turns} turns)")
     else:

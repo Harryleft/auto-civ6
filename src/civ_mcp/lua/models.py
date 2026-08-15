@@ -448,6 +448,8 @@ class TechCivicStatus:
     available_civics: list[CivicOption]
     completed_tech_count: int = 0
     completed_civic_count: int = 0
+    # Localized display names of every technology completed by the local player.
+    completed_techs: list[str] = field(default_factory=list)
     locked_civics: list[LockedCivic] | None = None
     locked_techs: list[LockedTech] | None = None
 
