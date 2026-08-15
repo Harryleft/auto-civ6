@@ -21,6 +21,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+from .forecast import bayes
 from .graph import (
     GRAPH_DELTA_EVENT,
     GraphDelta,
@@ -51,6 +52,7 @@ BELIEF_ENTITY_TYPES = frozenset(
         "council_decision",
         "budget_lock",
         "outcome",
+        "simulation",
     }
 )
 
@@ -440,6 +442,7 @@ def _validate_entity(entity_type: str, entity: dict[str, Any]) -> None:
         "council_decision": ("statement", "selected_proposal_id"),
         "budget_lock": ("resource", "amount", "proposal_id"),
         "outcome": ("statement", "action_intent", "success"),
+        "simulation": ("branch_label", "scenario", "projections"),
     }
     missing = [field for field in required[entity_type] if entity.get(field) in (None, "")]
     if missing:
@@ -2200,6 +2203,56 @@ class BeliefEngine:
             )
         return updated
 
+    def rebalance_hypotheses_bayesian(
+        self,
+        topic_id: str,
+        likelihood_ratios: dict[str, float],
+        *,
+        turn: int,
+        evidence_id: str = "",
+    ) -> list[dict[str, Any]]:
+        """Rebalance a hypothesis topic via deterministic Bayes.
+
+        The caller supplies one likelihood ratio per hypothesis (evidence
+        does not discriminate → omit it and the ratio defaults to 1.0).  The
+        posterior arithmetic runs here rather than in the caller's head, so
+        each redistribution is auditable from the event log.
+        """
+        members = [
+            hypothesis
+            for hypothesis in self.list("hypothesis", status="active")
+            if hypothesis.get("topic_id") == topic_id
+        ]
+        if not members:
+            raise BeliefEngineError(f"No active hypotheses for topic: {topic_id}")
+        prior = {hypothesis["id"]: float(hypothesis["probability"]) for hypothesis in members}
+        try:
+            updated_probabilities = bayes.posterior(prior, likelihood_ratios)
+        except ValueError as exc:
+            raise BeliefEngineError(str(exc)) from exc
+        if not math.isclose(sum(updated_probabilities.values()), 1.0, abs_tol=0.001):
+            raise BeliefEngineError("Bayesian posterior failed to normalize")
+        # Validate the whole pool before writing, mirroring
+        # rebalance_hypotheses: event sourcing cannot roll back a partial
+        # redistribution.
+        for hypothesis_id in updated_probabilities:
+            if hypothesis_id not in prior:
+                raise BeliefEngineError(
+                    f"Hypothesis {hypothesis_id} does not belong to topic {topic_id}"
+                )
+        updated: list[dict[str, Any]] = []
+        for hypothesis_id, probability in updated_probabilities.items():
+            patch: dict[str, Any] = {
+                "probability": probability,
+                "last_likelihood_ratio": likelihood_ratios.get(hypothesis_id, 1.0),
+            }
+            if evidence_id:
+                patch["last_evidence_id"] = evidence_id
+            updated.append(
+                self.update("hypothesis", hypothesis_id, patch, turn=turn)
+            )
+        return updated
+
     def assess_route_combat_risk(
         self,
         belief_id: str,
@@ -2367,13 +2420,40 @@ class BeliefEngine:
                     )
                     resolved.append(prediction["id"])
                 else:
+                    reason = (
+                        "metric_unavailable"
+                        if isinstance(rule, dict) and rule.get("metric") not in metrics
+                        else "no_evaluation_rule"
+                    )
                     self.update(
                         "prediction",
                         prediction["id"],
-                        {"status": "overdue", "review_required": True},
+                        {
+                            "status": "overdue",
+                            "review_required": True,
+                            "overdue_reason": reason,
+                        },
                         turn=turn,
                     )
                     overdue.append(prediction["id"])
+
+        # Overdue predictions stay under examination.  A rule that finally
+        # evaluates False once the metric arrives still settles the claim
+        # disconfirmed (the outcome demonstrably does not hold); a late True
+        # is ambiguous about *when* it became true and stays overdue.
+        for prediction in self.list("prediction", status="overdue"):
+            rule = prediction.get("evaluation")
+            if not isinstance(rule, dict):
+                continue
+            if evaluate_condition(rule, metrics) is False:
+                self.resolve_prediction(
+                    prediction["id"],
+                    outcome=False,
+                    actual=metrics.get(rule.get("metric")),
+                    turn=turn,
+                    source="automatic_late",
+                )
+                resolved.append(prediction["id"])
 
         existing_contradiction_keys = {
             entity.get("contradiction_key")

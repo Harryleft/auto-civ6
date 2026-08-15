@@ -53,6 +53,7 @@ _KINDS: dict[str, tuple[str, str]] = {
     "contradiction": ("矛盾", "CONTRADICTION"),
     "hypothesis": ("假说", "HYPOTHESIS"),
     "attribution": ("归因", "ATTRIBUTION"),
+    "simulation": ("模拟", "SIMULATION"),
 }
 
 _STAMPS: dict[tuple[str, str], tuple[str, str]] = {

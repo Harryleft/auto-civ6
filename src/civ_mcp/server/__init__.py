@@ -15,6 +15,7 @@ from civ_mcp.server.tools import (  # noqa: F401  import side effect: tool regis
     queries,
     system,
     world,
+    world_model,
 )
 
 from civ_mcp import heartbeat  # noqa: F401  stable binding for test monkeypatching
