@@ -1563,24 +1563,101 @@ def narrate_unit_promotions(status: lq.UnitPromotionStatus) -> str:
     return "\n".join(lines)
 
 
+_CITY_STATE_TYPE_NAMES = {
+    "Scientific": "科学",
+    "Cultural": "文化",
+    "Militaristic": "军事",
+    "Religious": "宗教",
+    "Trade": "贸易",
+    "Industrial": "工业",
+}
+
+
 def narrate_city_states(status: lq.EnvoyStatus) -> str:
-    lines = [f"Envoy tokens available: {status.tokens_available}"]
+    """Narrate city-state decision data in Chinese while retaining raw IDs/types."""
+    lines = [f"可用使者：{status.tokens_available}"]
     if not status.city_states:
-        lines.append("No known city-states.")
+        lines.append("已知城邦：无")
     else:
-        lines.append(f"\n{len(status.city_states)} known city-states:")
+        lines.append(f"\n已知城邦：{len(status.city_states)} 个")
         for cs in status.city_states:
-            suz = f" (Suzerain: {cs.suzerain_name})" if cs.suzerain_id >= 0 else ""
-            can = (
-                " [can send]"
-                if cs.can_send_envoy and status.tokens_available > 0
-                else ""
-            )
+            type_name = _CITY_STATE_TYPE_NAMES.get(cs.city_state_type, "未知")
             lines.append(
-                f"  {cs.name} ({cs.city_state_type}) — {cs.envoys_sent} envoys{suz}{can} [player {cs.player_id}]"
+                f"  {cs.name}（类型：{type_name} [{cs.city_state_type}]，ID：{cs.player_id}）"
+                f"— 我方使者：{cs.envoys_sent}"
             )
+
+            if cs.suzerain_id >= 0:
+                lines.append(
+                    f"    宗主国：{cs.suzerain_name}（ID：{cs.suzerain_id}）"
+                )
+            else:
+                lines.append("    宗主国：无")
+
+            if cs.can_send_envoy:
+                if status.tokens_available > 0:
+                    lines.append("    使者派遣：可用")
+                else:
+                    lines.append("    使者派遣：规则允许，但当前使者不足")
+            else:
+                lines.append("    使者派遣：当前不可用")
+
+            if cs.leading_envoys is not None:
+                lines.append(f"    已知最高使者数：{cs.leading_envoys}")
+            if cs.suzerain_tokens_needed is not None:
+                lines.append(f"    成为宗主国所需使者数：{cs.suzerain_tokens_needed}")
+            if not cs.competition_complete:
+                lines.append("    竞争信息：不完整，仍可能有未观测文明参与竞争")
+            if cs.influence:
+                standings = "；".join(
+                    f"{standing.player_name}（ID：{standing.player_id}）{standing.envoys}"
+                    for standing in cs.influence
+                )
+                lines.append(f"    已知竞争使者：{standings}")
+
+            bonuses = sorted(
+                cs.bonuses,
+                key=lambda bonus: (0 if not bonus.is_suzerain else 1, bonus.threshold),
+            )
+            for bonus in bonuses:
+                if bonus.is_suzerain:
+                    text = "；".join(
+                        value for value in (bonus.title, bonus.details) if value
+                    ) or "未提供详情"
+                    lines.append(f"    宗主国奖励：{text}")
+                else:
+                    text = "；".join(
+                        value for value in (bonus.title, bonus.details) if value
+                    ) or "未提供详情"
+                    lines.append(f"    {bonus.threshold} 使者奖励：{text}")
+
+            for quest in cs.quests:
+                quest_name = quest.name or "未命名任务"
+                lines.append(f"    活动任务：{quest_name}（类型：{quest.quest_type}）")
+                if quest.description:
+                    lines.append(f"      任务说明：{quest.description}")
+                if quest.reward:
+                    lines.append(f"      任务奖励：{quest.reward}")
+
+            if cs.can_levy_military is None:
+                lines.append("    军事征募：当前规则集/API未提供")
+            elif not cs.can_levy_military:
+                lines.append("    军事征募：当前不可用")
+            else:
+                levy = ["可用"]
+                if cs.levy_cost is not None:
+                    levy.append(f"费用：{cs.levy_cost}")
+                if cs.levy_turn_limit is not None:
+                    levy.append(f"持续上限：{cs.levy_turn_limit} 回合")
+                if cs.levy_active is True:
+                    levy.append("状态：进行中")
+                elif cs.levy_active is False:
+                    levy.append("状态：未进行")
+                if cs.levy_turns_remaining is not None:
+                    levy.append(f"剩余：{cs.levy_turns_remaining} 回合")
+                lines.append(f"    军事征募：{'；'.join(levy)}")
     if status.tokens_available > 0:
-        lines.append("\nUse send_envoy(player_id) to send an envoy.")
+        lines.append("\n如需执行，请调用 send_envoy(player_id) 派遣使者。")
     return "\n".join(lines)
 
 

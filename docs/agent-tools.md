@@ -117,7 +117,7 @@
 
 - 外交：`get_pending_diplomacy` → `respond_to_diplomacy`；主动外交使用 `send_diplomatic_action`、`form_alliance`、`propose_trade`、`propose_peace`。交易先 `mode="test"`，确认后才 `mode="send"`。
 - 间谍：`get_spies` → `spy_action`；先 `travel`，抵达后再执行任务。
-- 城邦：`get_city_states` → `send_envoy`；宗主国提供外交支持度。
+- 城邦：`get_city_states` → `send_envoy`。查询会同时给出我方和已知文明的使者竞争、1/3/6 档奖励、宗主国奖励、活动任务与军事征募可用性；未见面文明可能参与竞争时会明确标为信息不完整。先据此比较目标，再派使者；军事征募本期仅提供读取证据，不执行征募动作。
 - 奇观：用 `get_wonder_advisor(city_id, wonder_name)` 选址，再用 `set_city_production`。
 - 研究：`get_tech_civics` 按回合排序，≤ 2 回合项目的 `!! GRAB THIS` 标记不要漏掉。
 - 购买：`purchase_item` 购买单位/建筑，`purchase_tile` 购买边界地块，`patronize_great_person` 购买伟人。

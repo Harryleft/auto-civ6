@@ -1122,8 +1122,38 @@ class UnitPromotionStatus:
 
 
 @dataclass
+class CityStateInfluence:
+    """Known envoy standing for one major civilization at a city-state."""
+
+    player_id: int
+    player_name: str
+    envoys: int
+
+
+@dataclass
+class CityStateBonus:
+    """One envoy-threshold or suzerain bonus exposed by the game UI."""
+
+    threshold: int  # 1, 3, or 6 for envoy bonuses; 0 for suzerain
+    title: str
+    details: str
+    is_suzerain: bool = False
+
+
+@dataclass
+class CityStateQuest:
+    """An active quest offered by a known city-state."""
+
+    quest_type: str
+    name: str
+    description: str
+    reward: str
+    icon: str = ""
+
+
+@dataclass
 class CityStateInfo:
-    """A known city-state with envoy info."""
+    """A known city-state with envoy, quest, bonus, and levy intelligence."""
 
     player_id: int
     name: str
@@ -1132,6 +1162,21 @@ class CityStateInfo:
     suzerain_id: int  # player ID of suzerain (-1 = none)
     suzerain_name: str  # "None" or civ name
     can_send_envoy: bool
+    # Only civilizations visible to the local player are included.  When
+    # false, unseen civilizations may still be competing for suzerainty.
+    competition_complete: bool = True
+    leading_envoys: int | None = None
+    suzerain_tokens_needed: int | None = None
+    influence: list[CityStateInfluence] = field(default_factory=list)
+    bonuses: list[CityStateBonus] = field(default_factory=list)
+    quests: list[CityStateQuest] = field(default_factory=list)
+    # Optional Gathering Storm/FrontEnd capabilities.  None means that the
+    # current ruleset or Lua state did not expose the corresponding API.
+    can_levy_military: bool | None = None
+    levy_cost: int | None = None
+    levy_turn_limit: int | None = None
+    levy_active: bool | None = None
+    levy_turns_remaining: int | None = None
 
 
 @dataclass

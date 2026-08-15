@@ -101,7 +101,12 @@ async def load_recovery_save_from_frontend(
 
     if not _RECOVERY_SAVE_NAME.fullmatch(save_name):
         return f"Error: unsupported recovery save name: {save_name!r}"
-    return await load_save_from_frontend(conn, save_name)
+    result = await load_save_from_frontend(conn, save_name)
+    # Preserve the public recovery-tool wording while sharing the actual
+    # FrontEnd implementation with arbitrary named saves.
+    if result.startswith("Loading save "):
+        return result.replace("Loading save ", "Loading recovery save ", 1)
+    return result
 
 
 async def dismiss_popup(conn: GameConnection) -> str:
