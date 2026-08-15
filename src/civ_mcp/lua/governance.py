@@ -15,7 +15,10 @@ from civ_mcp.lua._helpers import (
 )
 from civ_mcp.lua.models import (
     AppointedGovernor,
+    CityStateBonus,
     CityStateInfo,
+    CityStateInfluence,
+    CityStateQuest,
     DedicationChoice,
     DedicationStatus,
     EnvoyStatus,
@@ -453,12 +456,50 @@ print("{SENTINEL}")
 
 
 def build_city_states_query() -> str:
-    """List known city-states with envoy info (InGame context)."""
+    """List known city-states with decision-grade envoy intelligence.
+
+    The base ``CS|`` row is intentionally backward compatible.  Optional
+    child rows carry known competition, the three envoy thresholds, the
+    suzerain bonus, active quests, and military-levy availability.  Every
+    expansion/UI-only call is isolated behind ``pcall`` so Standard rulesets
+    and partially loaded UI states return ``?``/empty sections instead of
+    making the whole city-state query fail.
+    """
     return """
 local me = Game.GetLocalPlayer()
 local pInfluence = Players[me]:GetInfluence()
 local pDiplo = Players[me]:GetDiplomacy()
-print("TOKENS|" .. pInfluence:GetTokensToGive())
+
+local function clean(value)
+    if value == nil then return "" end
+    local text = tostring(value)
+    text = text:gsub("|", "/")
+    text = text:gsub("\\r", " ")
+    text = text:gsub("\\n", " ")
+    return text
+end
+local function optional(fn)
+    local ok, value = pcall(fn)
+    if ok and value ~= nil then return value end
+    return nil
+end
+local function field(value)
+    if value == nil then return "?" end
+    return clean(value)
+end
+local function boolField(value)
+    if value == nil then return "?" end
+    return value and "1" or "0"
+end
+local function lookup(tag)
+    if tag == nil or tag == "" then return "" end
+    local value = optional(function() return Locale.Lookup(tag) end)
+    if value == nil then return "" end
+    return clean(value)
+end
+
+local tokens = optional(function() return pInfluence:GetTokensToGive() end) or 0
+print("TOKENS|" .. tokens)
 local csTypeMap = {}
 csTypeMap["LEADER_MINOR_CIV_SCIENTIFIC"] = "Scientific"
 csTypeMap["LEADER_MINOR_CIV_CULTURAL"] = "Cultural"
@@ -466,10 +507,116 @@ csTypeMap["LEADER_MINOR_CIV_MILITARISTIC"] = "Militaristic"
 csTypeMap["LEADER_MINOR_CIV_RELIGIOUS"] = "Religious"
 csTypeMap["LEADER_MINOR_CIV_TRADE"] = "Trade"
 csTypeMap["LEADER_MINOR_CIV_INDUSTRIAL"] = "Industrial"
+local bonusTitleTags = {
+    [1] = "LOC_MINOR_CIV_SMALL_INFLUENCE_ENVOYS",
+    [3] = "LOC_MINOR_CIV_MEDIUM_INFLUENCE_ENVOYS",
+    [6] = "LOC_MINOR_CIV_LARGE_INFLUENCE_ENVOYS",
+}
+local bonusTags = {
+    Scientific = {
+        [1] = "LOC_MINOR_CIV_SCIENTIFIC_TRAIT_SMALL_INFLUENCE_BONUS",
+        [3] = "LOC_MINOR_CIV_SCIENTIFIC_TRAIT_MEDIUM_INFLUENCE_BONUS",
+        [6] = "LOC_MINOR_CIV_SCIENTIFIC_TRAIT_LARGE_INFLUENCE_BONUS",
+    },
+    Cultural = {
+        [1] = "LOC_MINOR_CIV_CULTURAL_TRAIT_SMALL_INFLUENCE_BONUS",
+        [3] = "LOC_MINOR_CIV_CULTURAL_TRAIT_MEDIUM_INFLUENCE_BONUS",
+        [6] = "LOC_MINOR_CIV_CULTURAL_TRAIT_LARGE_INFLUENCE_BONUS",
+    },
+    Militaristic = {
+        [1] = "LOC_MINOR_CIV_MILITARISTIC_TRAIT_SMALL_INFLUENCE_BONUS",
+        [3] = "LOC_MINOR_CIV_MILITARISTIC_TRAIT_MEDIUM_INFLUENCE_BONUS",
+        [6] = "LOC_MINOR_CIV_MILITARISTIC_TRAIT_LARGE_INFLUENCE_BONUS",
+    },
+    Religious = {
+        [1] = "LOC_MINOR_CIV_RELIGIOUS_TRAIT_SMALL_INFLUENCE_BONUS",
+        [3] = "LOC_MINOR_CIV_RELIGIOUS_TRAIT_MEDIUM_INFLUENCE_BONUS",
+        [6] = "LOC_MINOR_CIV_RELIGIOUS_TRAIT_LARGE_INFLUENCE_BONUS",
+    },
+    Trade = {
+        [1] = "LOC_MINOR_CIV_TRADE_TRAIT_SMALL_INFLUENCE_BONUS",
+        [3] = "LOC_MINOR_CIV_TRADE_TRAIT_MEDIUM_INFLUENCE_BONUS",
+        [6] = "LOC_MINOR_CIV_TRADE_TRAIT_LARGE_INFLUENCE_BONUS",
+    },
+    Industrial = {
+        [1] = "LOC_MINOR_CIV_INDUSTRIAL_TRAIT_SMALL_INFLUENCE_BONUS",
+        [3] = "LOC_MINOR_CIV_INDUSTRIAL_TRAIT_MEDIUM_INFLUENCE_BONUS",
+        [6] = "LOC_MINOR_CIV_INDUSTRIAL_TRAIT_LARGE_INFLUENCE_BONUS",
+    },
+}
+local questsManager = optional(function() return Game.GetQuestsManager() end)
+
+local function bonusText(cityStateID, cityStateType, threshold)
+    local title = lookup(bonusTitleTags[threshold])
+    local details = lookup(bonusTags[cityStateType] and bonusTags[cityStateType][threshold])
+    -- The stock UI helper includes DLC-specific bonus wording.  Prefer it
+    -- when the UI context has loaded it, then retain the database-tag
+    -- fallback above for headless/partially loaded states.
+    local ok, uiTitle, uiDetails = pcall(function()
+        if type(GetBonusText) == "function" then
+            return GetBonusText(cityStateID, threshold)
+        end
+        return nil, nil
+    end)
+    if ok and uiTitle ~= nil and clean(uiTitle) ~= "" then title = clean(uiTitle) end
+    if ok and uiDetails ~= nil and clean(uiDetails) ~= "" then details = clean(uiDetails) end
+    return title, details
+end
+
+local function suzerainBonus(cityStateID)
+    local details = ""
+    local ok, value = pcall(function()
+        if type(GetSuzerainBonusText) == "function" then
+            return GetSuzerainBonusText(cityStateID)
+        end
+        return nil
+    end)
+    if ok and value ~= nil then details = clean(value) end
+    if details ~= "" then return details end
+    -- Minimal fallback: resolve the leader trait description directly from
+    -- GameInfo, which is available even when the partial screen helper is not.
+    pcall(function()
+        local cfg = PlayerConfigurations[cityStateID]
+        local leaderType = cfg and cfg:GetLeaderTypeName()
+        for pair in GameInfo.LeaderTraits() do
+            if pair.LeaderType == leaderType then
+                local trait = GameInfo.Traits[pair.TraitType]
+                if trait and trait.Description then
+                    details = lookup(trait.Description)
+                    if details ~= "" then break end
+                end
+            end
+        end
+    end)
+    return details
+end
+
+local function printQuests(cityStateID)
+    if questsManager == nil or GameInfo.Quests == nil then return end
+    pcall(function()
+        for questInfo in GameInfo.Quests() do
+            if questsManager:HasActiveQuestFromPlayer(me, cityStateID, questInfo.Index) then
+                local description = optional(function()
+                    return questsManager:GetActiveQuestDescription(me, cityStateID, questInfo.Index)
+                end)
+                local name = optional(function()
+                    return questsManager:GetActiveQuestName(me, cityStateID, questInfo.Index)
+                end)
+                local reward = optional(function()
+                    return questsManager:GetActiveQuestReward(me, cityStateID, questInfo.Index)
+                end)
+                print("CSQUEST|" .. cityStateID .. "|" .. field(questInfo.QuestType) .. "|" ..
+                    clean(name) .. "|" .. clean(description) .. "|" .. clean(reward) .. "|" ..
+                    field(questInfo.IconString))
+            end
+        end
+    end)
+end
+
 for i = 0, 62 do
     if Players[i] and Players[i]:IsAlive() and Players[i]:IsMajor() == false and Players[i]:IsBarbarian() == false and pDiplo:HasMet(i) then
         local cfg = PlayerConfigurations[i]
-        local name = Locale.Lookup(cfg:GetPlayerName())
+        local name = lookup(cfg:GetPlayerName())
         local leaderType = cfg:GetLeaderTypeName() or ""
         local csType = "Unknown"
         local leader = GameInfo.Leaders[leaderType]
@@ -477,15 +624,81 @@ for i = 0, 62 do
             csType = csTypeMap[leader.InheritFrom] or leader.InheritFrom
         end
         local csInfluence = Players[i]:GetInfluence()
-        local envoys = csInfluence:GetTokensReceived(me)
-        local suzID = csInfluence:GetSuzerain() or -1
+        local envoys = optional(function() return csInfluence:GetTokensReceived(me) end) or 0
+        local suzID = optional(function() return csInfluence:GetSuzerain() end) or -1
         local suzName = "None"
         if suzID >= 0 and suzID ~= 63 then
             local sCfg = PlayerConfigurations[suzID]
-            if sCfg then suzName = Locale.Lookup(sCfg:GetCivilizationShortDescription()) end
+            if sCfg then suzName = lookup(sCfg:GetCivilizationShortDescription()) end
         end
-        local canSend = pInfluence:CanGiveTokensToPlayer(i) and "1" or "0"
-        print("CS|" .. i .. "|" .. name:gsub("|","/") .. "|" .. csType .. "|" .. envoys .. "|" .. suzID .. "|" .. suzName:gsub("|","/") .. "|" .. canSend)
+        local canSend = optional(function() return pInfluence:CanGiveTokensToPlayer(i) end)
+
+        local knownCompetition = true
+        -- The official city-state panel exposes this count even when some
+        -- competitors have not been met.  It is useful for deciding whether
+        -- a visible rival can be overtaken, but its holder remains unknown
+        -- until every alive major civilization has been met.
+        local leadingEnvoys = optional(function()
+            return csInfluence:GetMostTokensReceived()
+        end)
+        if type(leadingEnvoys) ~= "number" then leadingEnvoys = 0 end
+        local knownInfluence = {}
+        for pid = 0, 62 do
+            if Players[pid] and Players[pid]:IsAlive() and Players[pid]:IsMajor() then
+                local visible = pid == me or (pDiplo and optional(function() return pDiplo:HasMet(pid) end))
+                if visible then
+                    local rivalInfluence = Players[i]:GetInfluence()
+                    local rivalEnvoys = optional(function() return rivalInfluence:GetTokensReceived(pid) end)
+                    if rivalEnvoys ~= nil then
+                        local rivalCfg = PlayerConfigurations[pid]
+                        local rivalName = "文明 " .. pid
+                        if rivalCfg then
+                            rivalName = lookup(rivalCfg:GetCivilizationShortDescription())
+                            if rivalName == "" then rivalName = "文明 " .. pid end
+                        end
+                        table.insert(knownInfluence, {pid=pid, name=rivalName, envoys=rivalEnvoys})
+                        if rivalEnvoys > leadingEnvoys then leadingEnvoys = rivalEnvoys end
+                    end
+                else
+                    knownCompetition = false
+                end
+            end
+        end
+        local suzNeeded = nil
+        if knownCompetition then
+            suzNeeded = math.max(3, leadingEnvoys + ((suzID ~= me) and 1 or 0))
+        end
+
+        local canLevy = optional(function() return pInfluence:CanLevyMilitary(i) end)
+        local levyCost = optional(function() return pInfluence:GetLevyMilitaryCost(i) end)
+        local levyLimit = optional(function() return pInfluence:GetLevyTurnLimit() end)
+        local levyCounter = optional(function() return csInfluence:GetLevyTurnCounter() end)
+        local levyActive = nil
+        local levyRemaining = nil
+        if type(levyCounter) == "number" then
+            levyActive = levyCounter >= 0
+            if levyActive and type(levyLimit) == "number" then
+                levyRemaining = math.max(0, levyLimit - levyCounter)
+            elseif not levyActive then
+                levyRemaining = 0
+            end
+        end
+
+        print("CS|" .. i .. "|" .. clean(name) .. "|" .. csType .. "|" .. envoys .. "|" ..
+            suzID .. "|" .. clean(suzName) .. "|" .. boolField(canSend) .. "|" ..
+            field(leadingEnvoys) .. "|" .. field(suzNeeded) .. "|" .. boolField(knownCompetition) .. "|" ..
+            boolField(canLevy) .. "|" .. field(levyCost) .. "|" .. field(levyLimit) .. "|" ..
+            boolField(levyActive) .. "|" .. field(levyRemaining))
+        for _, standing in ipairs(knownInfluence) do
+            print("CSCOMP|" .. i .. "|" .. standing.pid .. "|" .. clean(standing.name) .. "|" .. standing.envoys)
+        end
+        for _, threshold in ipairs({1, 3, 6}) do
+            local title, details = bonusText(i, csType, threshold)
+            print("CSBONUS|" .. i .. "|" .. threshold .. "|" .. clean(title) .. "|" .. clean(details))
+        end
+        local suzDetails = suzerainBonus(i)
+        print("CSSUZ|" .. i .. "|" .. lookup("LOC_CITY_STATES_SUZERAIN_ENVOYS") .. "|" .. clean(suzDetails))
+        printQuests(i)
     end
 end
 print("{SENTINEL}")
@@ -903,30 +1116,165 @@ def parse_unit_promotions_response(lines: list[str]) -> UnitPromotionStatus:
     )
 
 
-def parse_city_states_response(lines: list[str]) -> EnvoyStatus:
-    """Parse TOKENS| and CS| lines from build_city_states_query."""
-    tokens = 0
-    city_states: list[CityStateInfo] = []
+def _optional_int(value: str) -> int | None:
+    """Parse a nullable numeric field emitted by a Lua query."""
+    if value.strip().lower() in {"", "?", "nil", "none"}:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
-    for line in lines:
+
+def _optional_bool(value: str) -> bool | None:
+    """Parse a nullable boolean field emitted as 1/0 by Lua."""
+    normalized = value.strip().lower()
+    if normalized in {"", "?", "nil", "none"}:
+        return None
+    if normalized in {"1", "true", "yes"}:
+        return True
+    if normalized in {"0", "false", "no"}:
+        return False
+    return None
+
+
+def parse_city_states_response(lines: list[str]) -> EnvoyStatus:
+    """Parse the backward-compatible city-state rows and optional child rows.
+
+    Older Lua payloads contain only eight ``CS|`` fields.  Newer payloads add
+    nullable competition and levy fields plus ``CSCOMP|``, ``CSBONUS|``,
+    ``CSSUZ|``, and ``CSQUEST|`` rows.  Malformed or unavailable optional
+    values are ignored or represented as ``None`` so one missing ruleset API
+    cannot discard the other city-state data.
+    """
+    tokens = 0
+    city_states: dict[int, CityStateInfo] = {}
+
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line:
+            continue
         if line.startswith("TOKENS|"):
-            tokens = int(line.split("|")[1])
-        elif line.startswith("CS|"):
+            parsed_tokens = _optional_int(line.split("|", 1)[1])
+            if parsed_tokens is not None:
+                tokens = parsed_tokens
+            continue
+
+        if line.startswith("CS|"):
             parts = line.split("|")
-            if len(parts) >= 8:
-                city_states.append(
-                    CityStateInfo(
-                        player_id=int(parts[1]),
-                        name=parts[2],
-                        city_state_type=parts[3],
-                        envoys_sent=int(parts[4]),
-                        suzerain_id=int(parts[5]),
-                        suzerain_name=parts[6],
-                        can_send_envoy=parts[7] == "1",
+            if len(parts) < 8:
+                continue
+            player_id = _optional_int(parts[1])
+            envoys_sent = _optional_int(parts[4])
+            suzerain_id = _optional_int(parts[5])
+            if player_id is None or envoys_sent is None or suzerain_id is None:
+                continue
+            competition_complete = (
+                _optional_bool(parts[10]) if len(parts) > 10 else True
+            )
+            if competition_complete is None:
+                competition_complete = True
+            city_states[player_id] = CityStateInfo(
+                player_id=player_id,
+                name=parts[2],
+                city_state_type=parts[3],
+                envoys_sent=envoys_sent,
+                suzerain_id=suzerain_id,
+                suzerain_name=parts[6],
+                can_send_envoy=parts[7] == "1",
+                competition_complete=competition_complete,
+                leading_envoys=(
+                    _optional_int(parts[8]) if len(parts) > 8 else None
+                ),
+                suzerain_tokens_needed=(
+                    _optional_int(parts[9]) if len(parts) > 9 else None
+                ),
+                can_levy_military=(
+                    _optional_bool(parts[11]) if len(parts) > 11 else None
+                ),
+                levy_cost=_optional_int(parts[12]) if len(parts) > 12 else None,
+                levy_turn_limit=(
+                    _optional_int(parts[13]) if len(parts) > 13 else None
+                ),
+                levy_active=(
+                    _optional_bool(parts[14]) if len(parts) > 14 else None
+                ),
+                levy_turns_remaining=(
+                    _optional_int(parts[15]) if len(parts) > 15 else None
+                ),
+            )
+            continue
+
+        if line.startswith("CSCOMP|"):
+            parts = line.split("|")
+            if len(parts) < 5:
+                continue
+            city_state_id = _optional_int(parts[1])
+            player_id = _optional_int(parts[2])
+            envoys = _optional_int(parts[4])
+            city_state = city_states.get(city_state_id) if city_state_id is not None else None
+            if city_state is not None and player_id is not None and envoys is not None:
+                city_state.influence.append(
+                    CityStateInfluence(
+                        player_id=player_id,
+                        player_name=parts[3],
+                        envoys=envoys,
+                    )
+                )
+            continue
+
+        if line.startswith("CSBONUS|"):
+            parts = line.split("|")
+            if len(parts) < 5:
+                continue
+            city_state_id = _optional_int(parts[1])
+            threshold = _optional_int(parts[2])
+            city_state = city_states.get(city_state_id) if city_state_id is not None else None
+            if city_state is not None and threshold is not None:
+                city_state.bonuses.append(
+                    CityStateBonus(
+                        threshold=threshold,
+                        title=parts[3],
+                        details=parts[4],
+                    )
+                )
+            continue
+
+        if line.startswith("CSSUZ|"):
+            parts = line.split("|")
+            if len(parts) < 4:
+                continue
+            city_state_id = _optional_int(parts[1])
+            city_state = city_states.get(city_state_id) if city_state_id is not None else None
+            if city_state is not None:
+                city_state.bonuses.append(
+                    CityStateBonus(
+                        threshold=0,
+                        title=parts[2],
+                        details=parts[3],
+                        is_suzerain=True,
+                    )
+                )
+            continue
+
+        if line.startswith("CSQUEST|"):
+            parts = line.split("|")
+            if len(parts) < 6:
+                continue
+            city_state_id = _optional_int(parts[1])
+            city_state = city_states.get(city_state_id) if city_state_id is not None else None
+            if city_state is not None:
+                city_state.quests.append(
+                    CityStateQuest(
+                        quest_type=parts[2],
+                        name=parts[3],
+                        description=parts[4],
+                        reward=parts[5],
+                        icon=parts[6] if len(parts) > 6 else "",
                     )
                 )
 
-    return EnvoyStatus(tokens_available=tokens, city_states=city_states)
+    return EnvoyStatus(tokens_available=tokens, city_states=list(city_states.values()))
 
 
 def parse_dedications_response(lines: list[str]) -> DedicationStatus:
