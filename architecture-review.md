@@ -63,6 +63,14 @@ civ_mcp/governance/*（5 个转发文件）与 civ_mcp/belief_engine.py 在生�
 
 已按上文执行：devlog 移至根目录（链接已更新）、4 个死脚本归档至 scripts/_archive/（publish_hf_dataset.py 保留——它是 HF 数据集流水线的入口）、CI 补 pytest（344 测试）、兼容 shim 删除并改写 7 个测试（新增依赖方向守护测试）。全部通过离线回归。未动：server.py 拆分与 DTO 倒置（按 graph_plan 阶段三/四节奏推进）。
 
+## 6. server.py 拆分执行记录（2026-08-15，同日第二次）
+
+在拿到 server.py 内部结构图（banner 分节即天然拆分线；belief/governance 段 3200–5219 行是连续整删单元）后，用户裁决推翻第 1 节对"现在拆"的撤回：拆分为 move-only 单提交。依据：纯移动 + tokenize 级调用点限定不改变行为，104 个工具的 name/description/inputSchema 快照逐字节一致；belief/governance 适配层独立成 `server/tools/belief.py` 后，阶段四删除从"在 5939 行文件里做外科手术"变成"删一个模块加一行再导出"。
+
+- 结构：`server/assembly.py`（lifespan/入口/mcp 对象）、`server/pipeline.py`（`_logged` 管道 + 门禁表 + 预检三件套，未来 ActionPipeline 边界）、`server/tools/{queries,actions,end_turn,belief,world,system}.py`。
+- 契约保持：`civ-mcp` 入口、`from civ_mcp.server import mcp` 的注册副作用、工具 schema 逐字节不变；测试 patch 目标迁移至 `civ_mcp.server.pipeline` / `...assembly`。
+- graph_plan 阶段四对应条目已同步改写。
+
 ## 6. 一句话结论
 
 项目的臃肿感一半来自真实但已被计划的迁移债（server.py、DTO 边界，路线图正在处理），一半来自感知混杂（devlog 战报混进文档、死脚本、卫星仓库同住一仓）。真正现在该做的只有卫生类工作：devlog 搬家、死脚本归档、CI 补测试。代码结构的瘦身请交给 graph_plan 阶段四，别抢跑。

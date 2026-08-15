@@ -206,7 +206,7 @@ Threat typed data
 
 - 按真实需求增加关系和专用查询。
 - 新图成为唯一写路径后，立即删除旧双写。
-- 最后才拆 `server.py` 和 `end_turn.py`。
+- `server.py` 已于 2026-08-15 拆分为 `server/` 包（move-only）：`assembly.py` 装配、`pipeline.py` 运行管道（未来 ActionPipeline）、`tools/` 按域分组工具。阶段四删除旧 belief/governance 适配层 = 整删 `tools/belief.py` + `__init__.py` 对应再导出；`end_turn.py` 拆分仍留到本阶段。
 - 只有出现实测性能瓶颈，才评估外部图存储。
 
 ## 7. ETC 与风险门禁

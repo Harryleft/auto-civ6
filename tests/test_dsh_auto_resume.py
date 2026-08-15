@@ -9,7 +9,8 @@ from types import ModuleType
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
-from civ_mcp import game_launcher, server
+from civ_mcp import game_launcher, game_lifecycle
+from civ_mcp.server import assembly as server
 
 
 def test_macos_hidden_game_pid_is_found_from_ns_workspace(monkeypatch):

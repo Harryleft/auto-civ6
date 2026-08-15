@@ -233,7 +233,7 @@ All three systems share the same architecture:
 
 **JSONL format.** One JSON object per line, compact separators (`(",":")`), no array wrapper. Files can be tailed, grepped, or streamed without parsing the entire file.
 
-**Hook point.** All tool calls pass through `_logged()` in `server.py`, which:
+**Hook point.** All tool calls pass through `_logged()` in `server/pipeline.py`, which:
 1. Times the execution
 2. Catches errors
 3. Calls `logger.log_tool_call()` — writes to tool log

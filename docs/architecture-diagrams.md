@@ -22,7 +22,7 @@ graph TB
         B --> C["MCP Tool Calls"]
     end
 
-    subgraph MCP["MCP Server ‹server.py›"]
+    subgraph MCP["MCP Server ‹server/ package›"]
         D["MCP tools"]
         D --> D1["Query tools<br/><i>get_units, get_cities,<br/>get_map_area, get_diplomacy…</i>"]
         D --> D2["Action tools<br/><i>execute_unit_action,<br/>set_city_production,<br/>diplomacy_respond…</i>"]
@@ -131,7 +131,7 @@ When the agent calls a tool like `get_units`, here's the exact journey:
 ```mermaid
 sequenceDiagram
     participant Agent as LLM Agent
-    participant MCP as server.py
+    participant MCP as server/ package
     participant GS as game_state.py
     participant LQ as civ_mcp/lua/
     participant Conn as connection.py

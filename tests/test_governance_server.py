@@ -164,7 +164,7 @@ def test_uppercase_trade_test_mode_never_sends_a_deal(monkeypatch):
     async def direct_logged(_ctx, _tool, _params, fn, **_kwargs):
         return await fn()
 
-    monkeypatch.setattr("civ_mcp.server._logged", direct_logged)
+    monkeypatch.setattr("civ_mcp.server.pipeline._logged", direct_logged)
     ctx = SimpleNamespace(
         request_context=SimpleNamespace(
             lifespan_context=SimpleNamespace(game=_Game())
