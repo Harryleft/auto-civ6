@@ -208,7 +208,8 @@ def test_route_rejects_non_object_action_params_without_crashing(tmp_path, field
         )
     )
 
-    assert result.startswith("Error: action arguments/params must be a JSON object")
+    assert result.startswith("【中文运行信息】")
+    assert "错误： action arguments/params must be a JSON object" in result
 
 
 def test_route_accepts_native_json_values_from_mcp_tool_calls(tmp_path):
@@ -569,7 +570,8 @@ def test_council_route_rejects_weakened_evidence_contract(tmp_path):
         )
     )
 
-    assert result.startswith("Error: evidence_requirements do not match")
+    assert result.startswith("【中文运行信息】")
+    assert "错误： evidence_requirements do not match" in result
 
 
 def test_resubmitting_a_resolved_proposal_reactivates_it(tmp_path):
@@ -632,7 +634,8 @@ def test_standard_ruleset_rejects_expansion_only_action_intent(tmp_path):
 
     result = asyncio.run(submit_governance_proposal(ctx, json.dumps(proposal)))
 
-    assert result.startswith("Error: Action form_alliance requires unavailable")
+    assert result.startswith("【中文运行信息】")
+    assert "错误： Action form_alliance requires unavailable" in result
 
 
 def _bare_loop_context(tmp_path, *, turn: int = 42):
@@ -690,7 +693,8 @@ def test_legacy_selected_action_cannot_authorize_execution(tmp_path):
         )
     )
 
-    assert result.startswith("Error: selected_action is audit-only")
+    assert result.startswith("【中文运行信息】")
+    assert "错误： selected_action is audit-only" in result
 
 
 def test_national_action_cannot_route_without_council(tmp_path):
@@ -726,7 +730,8 @@ def test_national_action_cannot_route_without_council(tmp_path):
         )
     )
 
-    assert result.startswith("Error: This national, scarce-resource")
+    assert result.startswith("【中文运行信息】")
+    assert "错误： This national, scarce-resource" in result
     assert engine.list("decision", status=None) == []
 
 

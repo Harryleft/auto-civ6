@@ -512,7 +512,9 @@ class TestLoggedUnexpectedException:
         # The exception may arrive after the game already accepted the
         # mutation, so the decision is neither succeeded nor safe-to-retry:
         # it stays unknown until the agent reads the game back.
-        assert result == "Error: connection reader died mid-action"
+        assert result.startswith("【中文运行信息】")
+        assert "状态：失败" in result
+        assert "错误： connection reader died mid-action" in result
         assert (
             engine.get("decision", decision["id"])["decision_state"]
             == "outcome_unknown"
