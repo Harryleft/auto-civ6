@@ -556,3 +556,26 @@ class TestLoggedUnexpectedException:
 
         with pytest.raises(asyncio.CancelledError):
             asyncio.run(_logged(ctx, "get_units", {}, cancelled))
+
+
+def test_graph_delta_kinds_get_distinct_event_ids(tmp_path):
+    """World and goal deltas recorded for the same snapshot must not share
+    one event id — audit searches would conflate the two streams."""
+    from civ6_belief_engine.graph import GraphDelta
+
+    engine = _bind(tmp_path, "run-a")
+    empty = GraphDelta(snapshot_id="snapshot_x", turn=3, epoch=1)
+    engine.record_graph_delta(empty)
+    engine.record_graph_delta(empty, kind="goals")
+
+    ids = [
+        event["entity_id"]
+        for event in engine.history(last_n=10)
+        if event["event_type"] == "graph.delta"
+    ]
+    assert len(ids) == 2
+    assert len(set(ids)) == 2
+    assert ids == [
+        "graph_delta:world:1:snapshot_x",
+        "graph_delta:goals:1:snapshot_x",
+    ]

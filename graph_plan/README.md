@@ -258,3 +258,74 @@ ETC 的判断标准只有一句：一个需求变化只修改拥有该知识的�
 - 影子切片相对旧路径有可测量收益；否则不继续扩张。
 
 最终原则：**先证明一个最小闭环，再增加第二个实体、关系或消费者。**
+
+---
+
+# 对 Codex 图工程改造的对抗式审查（2026-08-15，基线 21ccb31 / 307 passed → 审查时 338 passed）
+
+审查范围：`8dc5b15`（影子图）、`96c8127`（威胁治理切片）、`f922cb5`（防御证据绑定）、`70c1a8c`（军事 Goal 迁移），共 25 文件 +3119/-105。方法：逐文件读穿 `graph/` 包与集成点，用真实游戏日志（`belief_france_2126806272.jsonl`，含 Codex 真机验证写入的 graph.delta）量化验尸假设，按"3 小时事前验尸"时间线组织发现。
+
+## 核验通过的关键声明
+
+| README 声明 | 代码证据 |
+|---|---|
+| 影子图失败只报告不阻断 | `_capture_governance_snapshot` try/except，legacy 路径不受影响 |
+| 未观察 ≠ 已删除 | `project.py`：COMPLETE→remove，CURRENTLY_VISIBLE/KNOWN_HISTORY→`observed=False` |
+| 城市 ID 不含 owner | `city:{x}:{y}` 中心坐标 + KNOWN_HISTORY；raze-resettle 缺口已诚实标注 |
+| Goal 内容不变不追加 delta | `project_active_goals` 内容哈希去重（真实日志零 goal delta ✓） |
+| Military 不再 import Lua DTO、不回退 agenda | Protocol 类型隔离；图在时只读 Graph Goal + THREATENS |
+| 陈旧图只触发证据缺口 | `_graph_is_current` 双条件（snapshot_id+turn），陈旧→评估退化不影响威胁判断 |
+| EvidenceRequirement 必经 verify_then_fast | `route_decision` 强制提升 + 真实提案以 `expected_facts` 绑定守军坐标 |
+| epoch 隔离 | reload 清空图视图、replay 按 epoch 过滤、`apply` 跨 epoch 重置 |
+| 基线测试诚实 | parsers 断言只增不减；MCP 工具签名零变更 |
+
+结论：**改造质量高、自我披露诚实**（README 的"尚未完成"账本与代码一致）。以下为验尸发现，按死亡时间排序。
+
+## 3 小时验尸发现
+
+### V1（T+1h~3h，高）：graph.delta 全量 upsert → 写放大翻倍 + 回放平方复杂度
+
+实测：turn 2 仅 16 实体，一个 graph.delta = **14,601 字节**；`project_world_state` 每回合 upsert **全部**当前节点（`upsert_nodes = list(current_nodes.values())`），与旧 world_entity 事件构成双份全量写。中局 ~100 实体时每次 `get_governance_brief` 额外 ~100KB 落盘；300 回合长局 JSONL 增长数十 MB。更隐蔽的是 `replay_graph_events` 对每个 delta 后的**全视图**做 `state_hash` 校验——N 个 delta × 递增视图 = **O(N²)** 重放成本，进程重启（崩溃恢复后必然发生）时显著变慢。Goal 投影已做内容去重，世界投影没有——对称性缺失。阶段三"事件增量化"本就是共识方向，此项应提前。
+
+### V2（T+10m~1h，中）：威胁扫描失败 = 整个治理快照失败
+
+`get_governance_snapshot` 中 `threats = await self.get_threat_scan()` **无独立降级**：扫描 Lua 一次超时（注意 `CommandTimeoutError` 现在对查询默认严格 sentinel）即整个快照抛错 → 每回合 `get_governance_brief` 全红，agent 完全失去治理视野。fail-closed 可辩护（不能谎称城市安全），但部门层已写好的 `threat_scan_available=False` 降级分支在真实采集路径下是**死代码**（build 侧 None 语义从未被采集路径触发）。一次 Lua 格式漂移的代价从"评估降级"放大为"视野全失"。
+
+### V3（T+0~10m，中低）：采集序列加长 + 新查询的 sentinel 脆弱性
+
+治理快照现为 11 个串行 FireTuner 往返（+threat scan），每回合 `get_governance_brief` 变慢；threat scan 经 `execute_read` 严格 sentinel——真机验证过一次空结果，但 Civ6 更新或 Lua 环境差异会让它与 V2 叠加成"开局即全红"。
+
+### V4（低）：graph.delta 事件 ID 可重复
+
+world delta 与 goal delta 共用 `graph_delta:{epoch}:{snapshot_id}`——同回合两个事件同 ID。`_reduce` 不消费该类型故无状态冲突，但审计检索会混淆。加 `:world`/`:goal` 后缀即可。
+
+### V5（低）：城市 ID 构造规则散落两处
+
+`project._entity_identity` 定义 `city:{x}:{y}`，`military._nearby_threats` 重复硬编码同一格式。按 §7 自己的 ETC 标准（新增关系只改一处），ID 构造应收敛为 graph 包导出的单一函数，否则未来改 ID 方案要同步改军事部。
+
+## 共识部分：融合优化方案（双方意见一致，可直接实施）
+
+1. **世界投影内容去重（修 V1 主体）**：把 `project_active_goals` 的去重模式移植到 `project_world_state`——attributes 与 observed 均未变的节点/边不进 upsert。不改 schema、不改 replay 语义，预期把每回合 graph.delta 从全量降到真实变化量（稳态回合可接近零）；replay 的 O(N²) 随之缓解。
+2. **威胁扫描独立降级（修 V2/V3）**：采集处 try/except → `threats=None`，激活部门层已存在的降级分支——fail-degraded 优于 fail-blind，军事评估退化为"不能认定安全"而非整个治理面消失。
+3. **ActionIntent 规范形落地路径**（README §4 已声明"规范形 = models.py 不可变类型"）：短期在 `route_belief_decision` 服务端将 action_intent dict 解析为 `ActionIntent` 类型校验后序列化回存（单一校验点）；长期授权状态机直接消费类型。列为阶段四前置，不阻塞当前切片。
+
+## 分歧项（留用户裁决）
+
+**威胁扫描的失败哲学**：Codex 的实现是"全有或全无"（扫描失败→快照失败→fail-closed）；本审查建议 fail-degraded（上面共识 2）。防御语义上两者都可辩护——前者绝不基于残缺扫描判断安全，后者保住治理视野但军事评估降级。裁决点：**一次 Lua 超时时，你希望 agent 看到什么**——完整的错误（被迫修复后继续），还是降级的治理简报（继续行动但军事结论保守）？
+
+## 审查结论
+
+方向、纪律、实现质量均属上乘；自我披露的"尚未完成"边界与代码事实一致。V1 是唯一必须在扩张前修复的项（它直接违背 §8"影子切片有可测量收益"的判据——当前收益为负值：双倍写放大换零消费者差异告警）；V2/V3 建议同批修复；V4/V5 顺手项。修复 V1-V3 后，阶段二的"真实动作验收"（README 自认未完成）应作为下一个门禁，而非继续扩张切片。
+
+## 审查后修复记录（2026-08-15，用户裁决 V2 采用 fail-degraded）
+
+全部共识项已实施，342 passed（338 + 4 新回归）：
+
+- **V1 写放大（修复）**：`project_world_state` 移植 Goal 投影的内容去重——attributes/coverage/observed 均未变的节点与边不再进 upsert（观察标志翻转始终写入）。稳态回合的 graph.delta 从全量实体降至接近零字节；replay 的 O(N²) 哈希成本随之缓解。配套：`compare_shadow_projection` 的观察集判定从 `last_observed_turn == turn` 改为纯 observed 集合等价（去重后未变实体保留较早的 last_observed_turn，该字段语义变为"最后写入回合"）。注意：世界 delta 仍无条件记录（空 delta 也推进 snapshot_id/turn 标记，否则军事部的同回合图判定会误报陈旧）。
+- **V2 威胁扫描 fail-degraded（修复，用户裁决 B）**：`get_governance_snapshot` 对 `get_threat_scan` 单独 try/except（LuaError/ValueError → `threats=None`，连接级失败仍快速失败）——激活部门层原有的 `threat_scan_available=False` 降级分支（原为死代码）。扫描失败时治理简报照常返回，军事评估降级为"不能认定城市安全"。
+- **V4 delta 事件 ID（修复）**：`record_graph_delta` 增加 `kind` 参数（world/goals），事件 ID 与 payload 均带流标识，同快照双 delta 不再同 ID。
+- **V5 城市 ID 单点（修复）**：`city_node_id()` 收敛进 `graph/project.py` 并导出；军事部改用该函数，不再本地拼接格式。
+- **共识项 3（ActionIntent 单点校验）**：核验发现 Codex 已在 `route_belief_decision` 完整实现（规范化参数 → 校验提供的哈希 → 回填计算哈希 → ruleset 能力校验），无需改动。
+- 新增回归：去重（含影子对比不依赖 last_observed_turn）、迷雾往返在去重下的 observed 恢复、扫描失败降级、kind ID 唯一性。
+
+V3（采集序列长度）未单独处理——威胁扫描降级后其失败模式已从"全红"降为"降级"，剩余影响只是每回合固定延迟，留待阶段四执行图化统一编排。
