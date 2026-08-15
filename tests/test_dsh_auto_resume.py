@@ -166,7 +166,41 @@ def test_dsh_auto_resume_skips_an_already_loaded_game(monkeypatch):
     assert load_calls == []
 
 
-def test_dsh_auto_resume_uses_gui_for_main_menu_and_reconnects(monkeypatch):
+def test_frontend_recovery_load_enables_builtin_continue_api():
+    class MainMenuConnection:
+        lua_states = {24: "MainMenu"}
+
+        async def execute_in_state(self, state, code, **kwargs):
+            assert state == 24
+            assert "Automation.SetAutoStartEnabled(true)" in code
+            assert 'loadGame.Name = "0_MCP_0012"' in code
+            assert "Network.LoadGame" in code
+            assert kwargs["mutation"] is True
+            return ["MCP_FRONTEND_AUTOSTART|true", "MCP_FRONTEND_LOAD|true"]
+
+    result = asyncio.run(
+        game_lifecycle.load_recovery_save_from_frontend(
+            MainMenuConnection(), "0_MCP_0012"
+        )
+    )
+
+    assert result.startswith("Loading recovery save")
+
+
+def test_frontend_recovery_load_refuses_unsafe_ui_fallback():
+    class NoMainMenuConnection:
+        lua_states = {3: "GameCore_Tuner"}
+
+    result = asyncio.run(
+        game_lifecycle.load_recovery_save_from_frontend(
+            NoMainMenuConnection(), "0_MCP_0012"
+        )
+    )
+
+    assert result.startswith("Error: MainMenu")
+
+
+def test_dsh_auto_resume_uses_frontend_api_for_main_menu_and_reconnects(monkeypatch):
     events: list[str] = []
 
     class MainMenuConnection:
@@ -180,13 +214,10 @@ def test_dsh_auto_resume_uses_gui_for_main_menu_and_reconnects(monkeypatch):
         async def connect(self):
             events.append("connect")
             # The first connection represents the main menu; the next one
-            # represents the loaded game after GUI navigation.
+            # represents the loaded game after FrontEnd API navigation.
             if events.count("connect") > 1:
                 self.gamecore_index = 10
                 self.ingame_index = 11
-
-        async def disconnect(self):
-            events.append("disconnected")
 
         async def reconnect(self):
             events.append("reconnect")
@@ -196,18 +227,17 @@ def test_dsh_auto_resume_uses_gui_for_main_menu_and_reconnects(monkeypatch):
     monkeypatch.setattr(game_launcher, "get_latest_recovery_save", lambda: "0_MCP_0012")
     loaded: list[str] = []
 
-    async def fake_load(save):
+    async def fake_load(_conn, save):
         loaded.append(save)
-        return "Save loading (GUI)"
+        return "Save loading (FrontEnd API)"
 
-    monkeypatch.setattr(game_launcher, "load_save_from_menu", fake_load)
+    monkeypatch.setattr(server, "load_recovery_save_from_frontend", fake_load)
     monkeypatch.setattr(game_launcher, "_is_tuner_port_open", lambda: False)
     monkeypatch.setattr(server.heartbeat, "write", lambda *_args, **_kwargs: None)
 
     asyncio.run(server._auto_resume(MainMenuConnection()))
 
     assert loaded == ["0_MCP_0012"]
-    assert "disconnected" in events
     assert "connect" in events
 
 
