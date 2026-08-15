@@ -257,11 +257,10 @@ async def upgrade_unit(ctx: Context, unit_id: int) -> str:
 
 @mcp.tool()
 async def get_dedications(ctx: Context) -> str:
-    """Get current era age, available dedications, and active ones.
+    """读取当前时代、可选时代着力点与已生效着力点。
 
-    Shows era score thresholds, whether you're in a Golden/Dark/Normal age,
-    and lists available dedication choices with their bonuses.
-    Use choose_dedication to select one when required.
+    返回时代分门槛、黄金/黑暗/普通时代状态，以及每个候选项在当前时代的
+    实际加成。若显示必须选择，直接调用 choose_dedication 完成本回合必办项。
     """
     gs = pipeline._get_game(ctx)
 
@@ -274,12 +273,13 @@ async def get_dedications(ctx: Context) -> str:
 
 @mcp.tool()
 async def choose_dedication(ctx: Context, dedication_index: int) -> str:
-    """Choose a dedication/commemoration for the current era.
+    """选择当前纪元的时代着力点（献礼）。
 
     Args:
-        dedication_index: The index of the dedication (from get_dedications output)
+        dedication_index: get_dedications 返回的候选索引。
 
-    Use get_dedications first to see available options and their bonuses.
+    先读取 get_dedications 中的候选项与加成。本操作只在游戏要求选择时可用，
+    会回读确认；不需要额外理事会审批，以免阻塞回合推进。
     """
     gs = pipeline._get_game(ctx)
     return await pipeline._logged(

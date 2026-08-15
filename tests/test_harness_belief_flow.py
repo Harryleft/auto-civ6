@@ -7,6 +7,10 @@ from civ_mcp.server import _belief_route_required, _canonical_action_params
 def test_key_tools_are_gated_but_routine_unit_maintenance_is_not():
     assert _belief_route_required("set_research", {}) is True
     assert _belief_route_required("set_city_production", {}) is True
+    # Era dedications are forced, current-turn UI selections.  The game still
+    # validates the candidate and reads back the result, but a council/action
+    # route must not prevent clearing the end-turn blocker.
+    assert _belief_route_required("choose_dedication", {"dedication_index": 0}) is False
     assert _belief_route_required("unit_action", {"action": "attack"}) is True
     assert _belief_route_required("unit_action", {"action": "found_city"}) is True
     assert _belief_route_required("unit_action", {"action": "fortify"}) is False

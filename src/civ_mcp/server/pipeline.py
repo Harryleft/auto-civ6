@@ -282,13 +282,15 @@ def _normalize_trade_mode(mode: Any) -> str:
     return normalized
 
 
+# ``choose_dedication`` is deliberately absent: it is a forced, current-turn
+# Civ VI UI selection. Its Lua builder validates the offered index and reads
+# back the result, while an extra council/action route would deadlock a turn.
 _COUNCIL_REQUIRED_TOOLS = {
     "set_research",
     "set_policies",
     "change_government",
     "choose_pantheon",
     "found_religion",
-    "choose_dedication",
     "appoint_governor",
     "assign_governor",
     "promote_governor",
@@ -345,6 +347,8 @@ def _governance_council_required(
     return tool == "send_diplomatic_action" and action == "DECLARE_WAR"
 
 
+# Dedications remain absent here for the same current-turn blocker reason;
+# all strategic and resource-changing actions below still require routing.
 _BELIEF_GATED_TOOLS = {
     "spy_action",
     "set_city_production",
@@ -356,7 +360,6 @@ _BELIEF_GATED_TOOLS = {
     "upgrade_unit",
     "choose_pantheon",
     "found_religion",
-    "choose_dedication",
     "appoint_governor",
     "assign_governor",
     "promote_governor",

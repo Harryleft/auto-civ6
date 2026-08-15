@@ -107,7 +107,7 @@
 - 政策槽为空：`get_policies` → `set_policies`。
 - 万神殿/宗教阈值达到：`get_pantheon_beliefs` → `choose_pantheon`，或 `get_religion_beliefs` → `found_religion`。
 - 使者可用：`get_city_states` → `send_envoy`。
-- 新时代献礼：`get_dedications` → `choose_dedication`。
+- 新时代着力点（献礼）：出现阻塞通知时先 `get_dedications`，比较当前时代的候选加成后立即 `choose_dedication(dedication_index=候选索引)`；这是回合必办界面选择，不走理事会审批，但必须以当回合查询到的候选索引为准。
 - 时代进度：`get_era_progress` 一次读世界纪元、各文明纪元与（RF/GS）时代分进度；Standard 规则集下时代块显式报告不可用。
 - 占领或不忠城市：`city_action(city_id, "keep"/"raze"/"liberate_founder"/"liberate_previous")`。
 
