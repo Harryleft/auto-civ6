@@ -69,6 +69,9 @@ logs remain readable and are not rewritten in place.
   metric rule. False high-confidence predictions create Surprise entities.
 - `plan`: 5/10/20-turn goal with assumptions, success criteria, exit criteria,
   and a scheduled review turn.
+- `simulation`: one projected future branch (scenario, assumptions, metric
+  projections) written by `run_trend_forecast`; superseded runs are
+  tombstoned and the audit history remains replayable.
 - `contradiction`: generated when an observed metric violates a belief's
   declared expectation.
 - `world_entity`: typed `GameState` node with stable identity and graph links.
@@ -152,7 +155,24 @@ use keys such as `diplomacy.player_3.at_war` and
 10. Link the selected decision to its real outcome with
    `record_action_verification` when the normal MCP result is insufficient.
 11. Read `get_belief_metrics` and `get_belief_trace` for calibration and
-   post-game analysis.
+   post-game analysis. `get_calibration_report` adds Brier score,
+   reliability buckets per claimed-probability band, and the observability
+   rate — how many predictions were checkable at deadline at all.
+
+Overdue predictions are not a dead end: `review()` records an
+`overdue_reason` (`metric_unavailable` vs `no_evaluation_rule`) and keeps
+re-examining them, so evidence arriving after the deadline that disproves
+the rule still resolves the prediction (`automatic_late`); a late
+confirmation cannot prove the claim held *by* the deadline and stays open.
+
+Forecasting is a pure layer over the same event log
+(`civ6_belief_engine.forecast`): `run_trend_forecast` projects metric
+futures under conservative/baseline/aggressive trend scenarios into
+`simulation` branches the council can cite, and
+`rebalance_hypotheses_bayesian` shifts a hypothesis pool from supplied
+likelihood ratios — the posterior arithmetic runs server-side and lands in
+the event log. Higher-fidelity forecasters (e.g. save-state replay) plug
+into the same `Forecaster` protocol.
 
 Use `update_belief_entity` for corrections and `delete_belief_entity` for
 current-state deletion. `decision_state` is exempt: writing it directly (the
