@@ -168,6 +168,7 @@ NOTIFICATION_TOOL_MAP: dict[str, str] = {
     "NOTIFICATION_WORLD_CONGRESS_RESULTS": "get_world_congress() (review results)",
     "NOTIFICATION_WORLD_CONGRESS_SPECIAL_SESSION_BLOCKING": "get_world_congress() then queue_wc_votes()",
     "NOTIFICATION_COMMAND_UNITS": "Units have moves remaining — move them or use skip_remaining_units()",
+    "NOTIFICATION_DISCOVER_GOODY_HUT": "get_village_overview() (one-shot reward, grab before rivals)",
 }
 
 

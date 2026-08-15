@@ -218,6 +218,32 @@ async def get_barbarian_overview(ctx: Context) -> str:
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
+async def get_village_overview(ctx: Context) -> str:
+    """查询已揭示的部落村落（一次性奖励）及取用优先级。
+
+    只返回当前仍存在的村落: 任一单位踏入村落即取用并使其消失, 已取用
+    村落不出现在结果中, 本工具不保留取用历史。每条结果包含坐标、当前
+    可见状态、所在领土归属, 以及到最近己方城市和最近己方战斗/侦察单位
+    的距离, 用于抢先取用决策。奖励内容在取用后由游戏结算, 不可查询。
+    """
+    gs = pipeline._get_game(ctx)
+    village_tiles: set[tuple[int, int]] = set()
+
+    async def _run():
+        overview = await gs.get_village_overview()
+        village_tiles.update((hut.x, hut.y) for hut in overview.huts)
+        return nr.narrate_village_overview(overview)
+
+    return await pipeline._logged(
+        ctx,
+        "get_village_overview",
+        {},
+        _run,
+        tiles=village_tiles,
+    )
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
 async def get_spies(ctx: Context) -> str:
     """List all your spy units with position, rank, city, and available missions.
 
