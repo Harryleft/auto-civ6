@@ -7,10 +7,13 @@ from civ_mcp.lua.models import (
     BeliefInfo,
     CityReligionInfo,
     PantheonStatus,
+    PlayerReligionState,
     ReligionBeliefOption,
     ReligionFoundingStatus,
+    ReligionOverview,
     ReligionStatus,
     ReligionSummary,
+    WorldReligionEntry,
 )
 
 
@@ -418,3 +421,234 @@ def parse_religion_status_response(lines: list[str]) -> ReligionStatus:
                     )
                 )
     return ReligionStatus(cities=cities, summary=summary)
+
+def build_religion_overview_query() -> str:
+    """InGame: world religion state in one round-trip.
+
+    Must run on execute_write (InGame): Locale.Lookup only exists there.
+    Aggregates founded religions with founder/holy city/beliefs, per-religion
+    follower counts over all alive players' cities (public information, the
+    official Religion Screen does the same), and each met major civ's
+    founded/majority/pantheon state. Unmet founders are masked to "Unmet".
+    """
+    return """
+local me = Game.GetLocalPlayer()
+local pDiplo = Players[me]:GetDiplomacy()
+local gRel = Game.GetReligion()
+local myRel = Players[me]:GetReligion()
+
+-- 已创宗教记录（过滤万神殿伪记录与未创立项）
+local recs = {}
+for _, rec in ipairs(gRel:GetReligions()) do
+    if rec.Pantheon == false and gRel:HasBeenFounded(rec.Religion) then
+        table.insert(recs, rec)
+    end
+end
+local nFounded = #recs
+local nMajors = 0
+for i = 0, 62 do
+    if Players[i] and Players[i]:IsMajor() and Players[i]:IsAlive() then nMajors = nMajors + 1 end
+end
+local maxRel = math.floor(nMajors / 2) + 1
+
+local function relTypeOf(idx)
+    local row = GameInfo.Religions[idx]
+    if row and row.ReligionType then return row.ReligionType end
+    return "RELIGION_" .. idx
+end
+local function relNameOf(idx)
+    local ok, key = pcall(function() return gRel:GetName(idx) end)
+    if ok and key then return Locale.Lookup(key):gsub("|", "/") end
+    local row = GameInfo.Religions[idx]
+    if row then return Locale.Lookup(row.Name):gsub("|", "/") end
+    return "Unknown"
+end
+
+-- SELF|pid|faith|faithPT|createdType|majorityType|panType|panCost|nFounded|maxRel
+local faith = myRel:GetFaithBalance()
+local faithPT = 0
+pcall(function() faithPT = myRel:GetFaithYield() end)
+local createdIdx = myRel:GetReligionTypeCreated()
+local createdType = createdIdx >= 0 and relTypeOf(createdIdx) or "None"
+local okMM, myMaj = pcall(function() return myRel:GetReligionInMajorityOfCities() end)
+local myMajType = (okMM and myMaj and myMaj >= 0) and relTypeOf(myMaj) or "None"
+local panIdx = myRel:GetPantheon()
+local panType = "None"
+if panIdx >= 0 then
+    local b = GameInfo.Beliefs[panIdx]
+    if b then panType = b.BeliefType end
+end
+local panCost = -1
+if panIdx < 0 then
+    local okC, c = pcall(function() return myRel:GetPantheonCost() end)
+    if okC and c then panCost = c end
+end
+print("SELF|" .. me .. "|" .. string.format("%.1f", faith) .. "|" .. string.format("%.1f", faithPT)
+    .. "|" .. createdType .. "|" .. myMajType .. "|" .. panType .. "|" .. panCost
+    .. "|" .. nFounded .. "|" .. maxRel)
+
+-- WREL|idx|type|name|founderPid|founderCiv|holyCity|pantheonType|belief;list
+for _, rec in ipairs(recs) do
+    local founderName, holyName = "Unmet", "unknown"
+    if rec.Founder == me or pDiplo:HasMet(rec.Founder) then
+        local fcfg = PlayerConfigurations[rec.Founder]
+        if fcfg then
+            founderName = Locale.Lookup(fcfg:GetCivilizationShortDescription()):gsub("|", "/")
+        end
+        local okH, hId = pcall(function() return Players[rec.Founder]:GetReligion():GetHolyCityID() end)
+        if okH and hId and hId >= 0 then
+            local okC, hc = pcall(function() return CityManager.GetCity(hId) end)
+            if not (okC and hc) then
+                okC, hc = pcall(function()
+                    return CityManager.GetCity(math.floor(hId / 65536), hId % 65536)
+                end)
+            end
+            if okC and hc then holyName = Locale.Lookup(hc:GetName()):gsub("|", "/") end
+        end
+    end
+    local wPanType = "None"
+    local okP, fp = pcall(function() return Players[rec.Founder]:GetReligion():GetPantheon() end)
+    if okP and fp and fp >= 0 then
+        local b = GameInfo.Beliefs[fp]
+        if b then wPanType = b.BeliefType end
+    end
+    local beliefList = {}
+    for _, bIdx in ipairs(rec.Beliefs) do
+        local bRow = GameInfo.Beliefs[bIdx]
+        if bRow then table.insert(beliefList, bRow.BeliefType) end
+    end
+    print("WREL|" .. rec.Religion .. "|" .. relTypeOf(rec.Religion) .. "|" .. relNameOf(rec.Religion)
+        .. "|" .. rec.Founder .. "|" .. founderName .. "|" .. holyName .. "|" .. wPanType
+        .. "|" .. table.concat(beliefList, ";"))
+end
+
+-- RSPAN|type|dominantCities|totalFollowers（全存活玩家城市聚合，官方 ReligionScreen 同口径）
+local foundedIdx = {}
+for _, rec in ipairs(recs) do foundedIdx[rec.Religion] = true end
+local domCities, followers = {}, {}
+for i = 0, 62 do
+    local p = Players[i]
+    if p and p:IsAlive() then
+        for _, c in p:GetCities():Members() do
+            local cr = c:GetReligion()
+            local okM, maj = pcall(function() return cr:GetMajorityReligion() end)
+            if okM and maj and foundedIdx[maj] then
+                domCities[maj] = (domCities[maj] or 0) + 1
+            end
+            local okR, rels = pcall(function() return cr:GetReligionsInCity() end)
+            if okR and rels then
+                for _, rd in ipairs(rels) do
+                    if foundedIdx[rd.Religion] then
+                        followers[rd.Religion] = (followers[rd.Religion] or 0) + rd.Followers
+                    end
+                end
+            end
+        end
+    end
+end
+for idx in pairs(foundedIdx) do
+    print("RSPAN|" .. relTypeOf(idx) .. "|" .. (domCities[idx] or 0) .. "|" .. (followers[idx] or 0))
+end
+
+-- PSTATE|pid|civ|createdType|createdName|majorityType|pantheonType（met 门控）
+for i = 0, 62 do
+    local p = Players[i]
+    if p and p:IsMajor() and p:IsAlive() and (i == me or pDiplo:HasMet(i)) then
+        local cfg = PlayerConfigurations[i]
+        local civName = Locale.Lookup(cfg:GetCivilizationShortDescription()):gsub("|", "/")
+        local pr = p:GetReligion()
+        local cIdx = pr:GetReligionTypeCreated()
+        local cType, cName = "None", "None"
+        if cIdx >= 0 then
+            cType = relTypeOf(cIdx)
+            cName = relNameOf(cIdx)
+        end
+        local okM2, maj2 = pcall(function() return pr:GetReligionInMajorityOfCities() end)
+        local mType = (okM2 and maj2 and maj2 >= 0) and relTypeOf(maj2) or "None"
+        local pIdx2 = pr:GetPantheon()
+        local pType = "None"
+        if pIdx2 >= 0 then
+            local b = GameInfo.Beliefs[pIdx2]
+            if b then pType = b.BeliefType end
+        end
+        print("PSTATE|" .. i .. "|" .. civName .. "|" .. cType .. "|" .. cName .. "|" .. mType .. "|" .. pType)
+    end
+end
+print("{SENTINEL}")
+""".replace("{SENTINEL}", SENTINEL)
+
+
+def _opt_type(value: str) -> str | None:
+    """Map the Lua "None" placeholder to Python None."""
+
+    return None if value == "None" else value
+
+
+def parse_religion_overview_response(lines: list[str]) -> ReligionOverview:
+    """Parse SELF/WREL/RSPAN/PSTATE rows; malformed lines are skipped."""
+
+    religions: list[WorldReligionEntry] = []
+    followers: list[tuple[str, int, int]] = []
+    players: list[PlayerReligionState] = []
+    overview: ReligionOverview | None = None
+    for line in lines:
+        parts = line.split("|")
+        try:
+            if line.startswith("SELF|") and len(parts) >= 10:
+                overview = ReligionOverview(
+                    player_id=int(parts[1]),
+                    faith_balance=float(parts[2]),
+                    faith_per_turn=float(parts[3]),
+                    my_created_religion_type=_opt_type(parts[4]),
+                    my_majority_religion_type=_opt_type(parts[5]),
+                    my_pantheon_belief_type=_opt_type(parts[6]),
+                    pantheon_cost=float(parts[7]),
+                    religions_founded=int(parts[8]),
+                    religions_max=int(parts[9]),
+                )
+            elif line.startswith("WREL|") and len(parts) >= 9:
+                religions.append(
+                    WorldReligionEntry(
+                        religion_index=int(parts[1]),
+                        religion_type=parts[2],
+                        name=parts[3],
+                        founder_player_id=int(parts[4]),
+                        founder_civ_name=parts[5],
+                        holy_city_name=_opt_type(parts[6]),
+                        pantheon_belief_type=_opt_type(parts[7]),
+                        belief_types=parts[8].split(";") if parts[8] else [],
+                    )
+                )
+            elif line.startswith("RSPAN|") and len(parts) >= 4:
+                followers.append((parts[1], int(parts[2]), int(parts[3])))
+            elif line.startswith("PSTATE|") and len(parts) >= 7:
+                players.append(
+                    PlayerReligionState(
+                        player_id=int(parts[1]),
+                        civ_name=parts[2],
+                        founded_religion_type=_opt_type(parts[3]),
+                        founded_religion_name=_opt_type(parts[4]),
+                        majority_religion_type=_opt_type(parts[5]),
+                        pantheon_belief_type=_opt_type(parts[6]),
+                    )
+                )
+        except (IndexError, TypeError, ValueError):
+            continue
+    if overview is None:
+        # No SELF row (e.g. engine error before the first print) — fall back
+        # to neutral defaults so callers still get the parsed sections.
+        overview = ReligionOverview(
+            player_id=-1,
+            faith_balance=0.0,
+            faith_per_turn=0.0,
+            my_created_religion_type=None,
+            my_majority_religion_type=None,
+            my_pantheon_belief_type=None,
+            pantheon_cost=-1,
+            religions_founded=len(religions),
+            religions_max=0,
+        )
+    overview.religions = religions
+    overview.followers = followers
+    overview.players = players
+    return overview

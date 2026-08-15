@@ -1428,6 +1428,11 @@ class GameState:
         lines = await self.conn.execute_write(lq.build_religion_status_query())
         return lq.parse_religion_status_response(lines)
 
+    async def get_religion_overview(self) -> lq.ReligionOverview:
+        """世界宗教总览：已创宗教、信徒聚合、各文明宗教对照（InGame：Locale.Lookup）。"""
+        lines = await self.conn.execute_write(lq.build_religion_overview_query())
+        return lq.parse_religion_overview_response(lines)
+
     async def reject_great_person(self, individual_id: int) -> str:
         lua = lq.build_reject_great_person(individual_id)
         lines = await self.conn.execute_mutation(lua)

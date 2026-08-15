@@ -1642,6 +1642,74 @@ def narrate_religion_status(rs: lq.ReligionStatus) -> str:
     return "\n".join(lines)
 
 
+def narrate_religion_overview(ro: lq.ReligionOverview) -> str:
+    """格式化世界宗教总览。
+
+    聚合视图: 已创宗教(创立者/圣城/信条构成)、各宗教信徒城市数与信徒总数、
+    各主要文明的己创/主流/万神殿对照、己方信仰值与创教名额。未见面创立者
+    遮蔽为 Unmet。逐城明细见 get_religion_spread, 可选信条见
+    get_religion_beliefs, 胜利逼近判断见 get_victory_progress。
+    """
+
+    lines = ["=== 宗教总览 ==="]
+    pantheon = ro.my_pantheon_belief_type or "none"
+    religion = ro.my_created_religion_type or "none"
+    lines.append(
+        f"信仰值: {ro.faith_balance:.1f} (+{ro.faith_per_turn:.1f}/回合) | "
+        f"万神殿: {pantheon} | 宗教: {religion}"
+    )
+    lines.append(
+        f"  (已用名额 {ro.religions_founded}/{ro.religions_max}"
+        + (" — 名额已满, 不可再创教" if ro.religions_max - ro.religions_founded <= 0
+           else " — 创教需要大先知")
+        + ")"
+    )
+    if ro.my_pantheon_belief_type is None and ro.pantheon_cost >= 0:
+        lines.append(f"现在选万神殿的成本: {ro.pantheon_cost:.0f} 信仰")
+
+    if not ro.religions:
+        lines.append("")
+        lines.append("尚未有任何宗教创立。优先积累信仰抢万神殿, 创教名额见上方。")
+        lines.append("逐城明细: get_religion_spread | 可选信条: get_religion_beliefs")
+        return "\n".join(lines)
+
+    followers_by_type = {entry_type: (cities, count) for entry_type, cities, count in ro.followers}
+    lines.append("已创立宗教:")
+    for index, religion_row in enumerate(ro.religions, start=1):
+        holy = (
+            f"圣城 {religion_row.holy_city_name}"
+            if religion_row.holy_city_name and religion_row.holy_city_name != "unknown"
+            else "圣城未知"
+        )
+        pantheon_part = (
+            f" — 万神殿 {religion_row.pantheon_belief_type}"
+            if religion_row.pantheon_belief_type
+            else ""
+        )
+        dominant_cities, total_followers = followers_by_type.get(religion_row.religion_type, (0, 0))
+        lines.append(
+            f"  {index}. {religion_row.name} ({religion_row.founder_civ_name}, {holy}){pantheon_part}"
+            f" — {dominant_cities} 座主流城市, {total_followers} 信徒"
+        )
+        if religion_row.belief_types:
+            lines.append(
+                f"     信条 x{len(religion_row.belief_types)}: "
+                + "; ".join(religion_row.belief_types)
+            )
+    if ro.players:
+        lines.append("玩家对照:")
+        for player in ro.players:
+            founded = player.founded_religion_name or player.founded_religion_type or "未创教"
+            majority = player.majority_religion_type or "无主流"
+            pantheon_state = player.pantheon_belief_type or "无"
+            lines.append(
+                f"  {player.civ_name}: 创立 {founded} | 主流 {majority} | 万神殿 {pantheon_state}"
+            )
+    lines.append("")
+    lines.append("逐城明细: get_religion_spread | 可选信条: get_religion_beliefs | 胜利逼近: get_victory_progress")
+    return "\n".join(lines)
+
+
 def narrate_trade_routes(status: lq.TradeRouteStatus) -> str:
     lines = [f"Trade Routes: {status.active_count}/{status.capacity} active"]
     on_route = [t for t in status.traders if t.on_route]

@@ -1340,6 +1340,52 @@ class ReligionStatus:
 
 
 @dataclass
+class WorldReligionEntry:
+    """One founded religion as the official Religion Screen presents it."""
+
+    religion_index: int
+    religion_type: str  # e.g. RELIGION_CATHOLICISM
+    name: str  # localized display name
+    founder_player_id: int
+    founder_civ_name: str  # "Unmet" for unmet founders
+    holy_city_name: str | None = None  # None/"unknown" = founder unmet or lookup failed
+    pantheon_belief_type: str | None = None  # founder's pantheon belief
+    belief_types: list[str] = field(default_factory=list)  # full composition
+
+
+@dataclass
+class PlayerReligionState:
+    """Founded/majority/pantheon religion state for one met major civ."""
+
+    player_id: int
+    civ_name: str
+    founded_religion_type: str | None = None
+    founded_religion_name: str | None = None
+    majority_religion_type: str | None = None  # None = no majority
+    pantheon_belief_type: str | None = None
+
+
+@dataclass
+class ReligionOverview:
+    """World religion aggregates for the current turn (one round-trip)."""
+
+    # SELF|
+    player_id: int = -1
+    faith_balance: float = 0.0
+    faith_per_turn: float = 0.0
+    my_created_religion_type: str | None = None
+    my_majority_religion_type: str | None = None
+    my_pantheon_belief_type: str | None = None
+    pantheon_cost: float = -1  # -1 = pantheon already chosen
+    religions_founded: int = 0
+    religions_max: int = 0
+    # WREL| / RSPAN| / PSTATE|
+    religions: list[WorldReligionEntry] = field(default_factory=list)
+    followers: list[tuple[str, int, int]] = field(default_factory=list)  # (type, dominant_cities, total_followers)
+    players: list[PlayerReligionState] = field(default_factory=list)
+
+
+@dataclass
 class BuilderTask:
     priority: str  # "urgent", "high", "normal"
     x: int
