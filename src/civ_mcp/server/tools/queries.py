@@ -244,6 +244,26 @@ async def get_village_overview(ctx: Context) -> str:
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
+async def get_era_progress(ctx: Context) -> str:
+    """Get chronological era progress for the game and every major civilization.
+
+    Always returns: current world era, the full era sequence of this game,
+    and each major civ's current era (who is ahead or behind).
+    Under Rise and Fall / Gathering Storm rules also returns the next-era
+    countdown clock and your era score vs dark/golden thresholds, with the
+    score source breakdown. Under Standard rules the age block is explicitly
+    reported as unavailable instead of being silently omitted.
+    """
+    gs = pipeline._get_game(ctx)
+
+    async def _run():
+        status = await gs.get_era_progress()
+        return nr.narrate_era_progress(status)
+
+    return await pipeline._logged(ctx, "get_era_progress", {}, _run)
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
 async def get_spies(ctx: Context) -> str:
     """List all your spy units with position, rank, city, and available missions.
 

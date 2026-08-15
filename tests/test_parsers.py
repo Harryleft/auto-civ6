@@ -406,3 +406,110 @@ def test_diary_query_uses_real_heroic_age_api() -> None:
     query = build_diary_full_query()
     assert "eraManager:HasHeroicGoldenAge(i)" in query
     assert "HasHeroicAge(" not in query
+
+
+class TestParseEraProgress:
+    def test_xp2_full_sample(self):
+        from civ_mcp.lua.eras import parse_era_progress_response
+
+        lines = ["RULESET|RULESET_EXPANSION_2", "LOCAL|0"]
+        lines += [f"ERAS|idx{i}|ERA_T{i}|Era {i}" for i in range(9)]
+        lines += [
+            "GAMEERA|2|ERA_MEDIEVAL|Medieval|false",
+            "CLOCK|45|7|85|105|3|5",
+            "PERA|0|Rome|2|ERA_MEDIEVAL|Medieval|Normal|15",
+            "PERA|1|Egypt|2|ERA_MEDIEVAL|Medieval|Normal|9",
+            "PERA|2|Kongo|1|ERA_CLASSICAL|Classical|Dark|2",
+            "AGE|15|12|24|0|5",
+            "AGEDETAIL|Built a wonder|5",
+            "AGEDETAIL|First to meet a city-state|3",
+            "---END---",
+        ]
+        ep = parse_era_progress_response(lines)
+
+        assert ep.ruleset == "RULESET_EXPANSION_2"
+        assert ep.ages_supported is True
+        assert ep.current_era_index == 2
+        assert ep.current_era_type == "ERA_MEDIEVAL"
+        assert ep.current_era_name == "Medieval"
+        assert ep.final_era is False
+        assert len(ep.era_sequence) == 9
+        assert ep.era_sequence[0].era_index == 0
+        assert ep.era_sequence[0].era_type == "ERA_T0"
+        assert ep.era_start_turn == 45
+        assert ep.next_era_countdown == 7
+        assert ep.min_end_turn == 85
+        assert ep.max_end_turn == 105
+        assert ep.players_more_advanced == 3
+        assert ep.players_as_or_less_advanced == 5
+        assert [p.is_local for p in ep.players] == [True, False, False]
+        assert ep.players[2].age == "Dark"
+        assert ep.players[2].era_score == 2
+        assert ep.local_age is not None
+        assert ep.local_age.era_score == 15
+        assert ep.local_age.dark_threshold == 12
+        assert ep.local_age.golden_threshold == 24
+        assert ep.local_age.threshold_baseline == 0
+        assert ep.local_age.previous_era_score == 5
+        assert ep.local_age.score_breakdown == [
+            ("Built a wonder", 5),
+            ("First to meet a city-state", 3),
+        ]
+
+    def test_standard_sample_has_no_xp1_rows(self):
+        from civ_mcp.lua.eras import parse_era_progress_response
+
+        lines = ["RULESET|RULESET_STANDARD", "LOCAL|0"]
+        lines += [f"ERAS|idx{i}|ERA_T{i}|Era {i}" for i in range(8)]
+        lines += [
+            "GAMEERA|1|ERA_CLASSICAL|Classical|false",
+            "PERA|0|Rome|1|ERA_CLASSICAL|Classical|-|-1",
+            "PERA|1|Egypt|1|ERA_CLASSICAL|Classical|-|-1",
+            "---END---",
+        ]
+        ep = parse_era_progress_response(lines)
+
+        assert ep.ruleset == "RULESET_STANDARD"
+        assert ep.ages_supported is False
+        assert len(ep.era_sequence) == 8
+        assert ep.era_start_turn is None
+        assert ep.next_era_countdown is None
+        assert ep.min_end_turn is None
+        assert ep.max_end_turn is None
+        assert ep.players_more_advanced is None
+        assert ep.players_as_or_less_advanced is None
+        assert ep.local_age is None
+        for player in ep.players:
+            assert player.age is None
+            assert player.era_score is None
+            assert player.era_type == "ERA_CLASSICAL"
+
+    def test_sentinels_malformed_lines_and_missing_ruleset(self):
+        from civ_mcp.lua.eras import parse_era_progress_response
+
+        ep = parse_era_progress_response(
+            [
+                "RULESET|RULESET_EXPANSION_2",
+                "CLOCK|-1|-1|-1|-1|-1|-1",
+                "GAMEERA|2|ERA_MEDIEVAL|Medieval|false",
+                "GAMEERA|bad",
+                "PERA|0|Rome|2|ERA_MEDIEVAL|Medieval|Normal|15",
+                "PERA|x|Rome|2|ERA_MEDIEVAL|Medieval|Normal|15",
+                "garbage",
+            ]
+        )
+        assert ep.era_start_turn is None
+        assert ep.next_era_countdown is None
+        assert ep.current_era_index == 2
+        assert len(ep.players) == 1
+
+        import pytest
+
+        with pytest.raises(ValueError, match="missing RULESET"):
+            parse_era_progress_response(["GAMEERA|1|ERA_CLASSICAL|Classical|false"])
+
+    def test_age_detail_source_text_is_sanitized_in_builder(self):
+        from civ_mcp.lua.eras import build_era_progress_query
+
+        query = build_era_progress_query()
+        assert 'gsub("[|,]","/")' in query

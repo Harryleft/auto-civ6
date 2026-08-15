@@ -720,6 +720,64 @@ class VillageOverview:
 
 
 @dataclass
+class EraTypeRow:
+    """One chronological era in this game's database."""
+
+    era_index: int  # GameInfo.Eras[Index]
+    era_type: str  # "ERA_CLASSICAL"
+    era_name: str  # localized
+    chronology_index: int = 99  # 1-based; 8 rows Standard, 9 with Gathering Storm
+
+
+@dataclass
+class EraProgressPlayer:
+    """One major civ's chronological era plus (ages-gated) age state."""
+
+    player_id: int
+    civ_name: str
+    is_local: bool
+    era_index: int  # Players[i]:GetEra(), 0-based, ALL RULESETS
+    era_type: str
+    era_name: str
+    age: str | None = None  # AGES-GATED ("Heroic"/"Golden"/"Dark"/"Normal")
+    era_score: int | None = None  # AGES-GATED
+
+
+@dataclass
+class EraAgeDetail:
+    """Local player's era-score progress. AGES-GATED as a whole."""
+
+    era_score: int
+    dark_threshold: int
+    golden_threshold: int
+    threshold_baseline: int
+    previous_era_score: int
+    score_breakdown: list[tuple[str, int]] = field(default_factory=list)
+
+
+@dataclass
+class EraProgress:
+    """Era progress snapshot for the game and every major civilization."""
+
+    ruleset: str
+    ages_supported: bool  # == capabilities.ages (False only for RULESET_STANDARD)
+    current_era_index: int | None = None  # None only when Game.GetEras() unavailable
+    current_era_type: str = ""
+    current_era_name: str = ""
+    final_era: bool = False
+    era_sequence: list[EraTypeRow] = field(default_factory=list)
+    # The six XP1 era clock fields below are AGES-GATED: None when not supported
+    era_start_turn: int | None = None
+    next_era_countdown: int | None = None
+    min_end_turn: int | None = None
+    max_end_turn: int | None = None
+    players_more_advanced: int | None = None
+    players_as_or_less_advanced: int | None = None
+    players: list[EraProgressPlayer] = field(default_factory=list)
+    local_age: EraAgeDetail | None = None  # AGES-GATED
+
+
+@dataclass
 class VictoryPlayerProgress:
     """Victory progress for a single civilization."""
 
