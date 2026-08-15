@@ -51,6 +51,11 @@ async def end_turn(
     """
     gs = pipeline._get_game(ctx)
 
+    def _render_result(raw_result: str) -> str:
+        """Render only after end-turn control flow has consumed raw markers."""
+
+        return pipeline._filter_downstream_result("end_turn", {}, raw_result)
+
     reflections = {
         "tactical": tactical,
         "strategic": strategic,
@@ -60,7 +65,7 @@ async def end_turn(
     }
     missing = [k for k, v in reflections.items() if not v.strip()]
     if missing:
-        return (
+        return _render_result(
             f"Empty reflections: {', '.join(missing)}. "
             "Provide non-empty entries for all 5 fields: "
             "tactical, strategic, tooling, planning, hypothesis."
@@ -185,7 +190,12 @@ async def end_turn(
                 log.warning("Diary: failed to write entry", exc_info=True)
 
     # Advance the turn
-    result = await pipeline._logged(ctx, "end_turn", {}, gs.end_turn)
+    # Keep the machine result raw while this wrapper handles HANG, turn
+    # advancement, blockers, watchdogs, and game-over logging.  Localize once
+    # at the final return so those branches do not lose their prefixes.
+    result = await pipeline._logged(
+        ctx, "end_turn", {}, gs.end_turn, localize=False
+    )
 
     # ---------------------------------------------------------------
     # Auto-recover from AI turn hangs (transparent to agent).
@@ -235,8 +245,10 @@ async def end_turn(
                         hang_save,
                     )
 
-                    # Step 1: Kill + relaunch + OCR load
-                    restart_result = await game_launcher.restart_and_load(hang_save)
+                    # Step 1: Kill + relaunch + FrontEnd API load
+                    restart_result = await game_launcher.restart_and_load(
+                        hang_save, conn=gs.conn
+                    )
                     log.info("HANG RECOVERY: restart_and_load: %s", restart_result)
 
                     # Step 2: Reconnect
@@ -329,7 +341,7 @@ async def end_turn(
                         _MAX_HANG_RETRIES,
                         hang_turn,
                     )
-                    return (
+                    return _render_result(
                         f"AI turn hung at T{hang_turn} after "
                         f"{_MAX_HANG_RETRIES} automatic restart attempts "
                         f"with escalating waits. The hang may be "
@@ -339,7 +351,7 @@ async def end_turn(
                     )
             except Exception:
                 log.error("HANG RECOVERY: failed", exc_info=True)
-                return (
+                return _render_result(
                     f"HANG RECOVERY FAILED at T{hang_turn}: "
                     f"restart_and_load threw an exception. "
                     f"Try restart_and_load('{hang_save}') manually."
@@ -455,4 +467,4 @@ async def end_turn(
     if "GAME OVER" not in result:
         pipeline._get_watchdog(ctx).arm()
 
-    return result
+    return _render_result(result)

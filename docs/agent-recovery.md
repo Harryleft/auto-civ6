@@ -11,7 +11,7 @@ load_game_save("0_MCP_0079")
 get_game_overview
 ```
 
-通过 Lua 加载通常约 5 秒，菜单回退可能约 90 秒；加载后必须用 `get_game_overview` 验证回合和局面。
+对局内 Lua 加载通常约 5 秒；若需要回到主菜单恢复，默认通过 Civ VI FrontEnd API 加载并完成内置“继续游戏”，不依赖 GUI 点击或视觉识别。加载后必须用 `get_game_overview` 验证回合和局面。
 
 ## DSH 启动自动恢复（显式 opt-in）
 
@@ -30,7 +30,9 @@ restart_and_load("0_MCP_NNNN")
 get_game_overview
 ```
 
-`restart_and_load` 会结束进程、重新启动并加载，通常约 90 秒。不要在 FireTuner 仍有旧客户端时并行启动恢复流程。
+`restart_and_load` 会结束进程、重新启动，并借助共享 FireTuner 连接在主菜单调用 FrontEnd API 加载存档，通常约 90 秒。不要在 FireTuner 仍有旧客户端时并行启动恢复流程。
+
+默认拒绝 OCR/GUI 菜单回退：它可能误点到其他窗口，也不能作为无人值守验证的可靠依据。仅在明确接受该风险时设置 `CIV_MCP_ENABLE_OCR_RECOVERY=1`；若 FrontEnd API 不可用且未设置该变量，恢复会返回明确错误而非尝试视觉操作。
 
 如果误加载了 T1 场景存档而不是自动存档，`end_turn` 会发出 CRITICAL 警告并指出正确的自动存档名称。
 
@@ -68,7 +70,7 @@ get_game_overview
 1. **引擎线程上限（已自动化）**：`AppOptions.txt [Performance] MaxJobThreads` 由 `-1`（每核一个 worker）改为 `4`。恢复链每次拉起游戏前由 `_ensure_job_thread_cap()` 幂等确保（CRLF 安全、首备份 `AppOptions.txt.civ6-mcp.bak-<date>`）；`CIV_MCP_MAX_JOB_THREADS=0` 可关闭。与社区结论同向：reddit "FIX: Crashing on Mac (Threading Fix)"（36 帖）即线程数修复。**生效时机：下次游戏启动**。若仍崩，降到 `2` 再观察。
 2. **游戏内"性能影响"选项全部最低（手动一次性）**：Apple Silicon 用户实测（gist，多人复验）：性能选项驱动的资源生成任务同样走 TBB，全最低后从"每几分钟崩一次"变为"数小时不崩"。路径：游戏内 图形设置 → 性能影响/Memory Impact → Minimum。
 3. **时序规避**：AI 回合处理期（end_turn 前后数秒）是 TBB 最活跃窗口，避免密集工具调用；批量查询放回合稳定期。
-4. **兜底（已加固）**：就算崩了——每回合 0_MCP 自动存档损失 0 回合；恢复链 `restart_and_load` 已修复（launch 重试 ×3、OCR 菜单未就绪退避 30s 重试、明确 FAILED 中止）。
+4. **兜底（已加固）**：就算崩了——每回合 0_MCP 自动存档损失 0 回合；恢复链 `restart_and_load` 已修复（launch 重试 ×3、FrontEnd API 自动加载和确认、失败明确中止）。OCR 仅可通过显式开关作为最后兜底。
 
 要点：
 - 崩溃是**进程级**，FireTuner 仅在本进程中，进程死亡即断连（报 `Cannot connect to Civ 6 at 127.0.0.1:4318`）。

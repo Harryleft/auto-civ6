@@ -95,8 +95,9 @@ async def load_game_save(ctx: Context, save_name: str) -> str:
                    "0A_GROUND_CONTROL", "AutoSave_0221", "quicksave").
 
     Tries Lua-based loading first (fast, ~5s). If the save isn't found
-    via Lua (common for autosaves/quicksaves), falls back to OCR menu
-    navigation (~90s) after verifying the file exists on disk.
+    via Lua (common for autosaves/quicksaves), restarts into Civ VI's
+    FrontEnd API path after verifying the file exists on disk. OCR is only
+    available with the explicit ``CIV_MCP_ENABLE_OCR_RECOVERY=1`` opt-in.
     """
     gs = pipeline._get_game(ctx)
     return await pipeline._logged(
@@ -140,20 +141,33 @@ async def launch_game(ctx: Context) -> str:
 
 @mcp.tool(annotations={"destructiveHint": True})
 async def load_save_from_menu(ctx: Context, save_name: str | None = None) -> str:
-    """Navigate the main menu to load a save via OCR-guided clicking.
+    """Load a save while at the main menu, preferring the FrontEnd API.
 
     Args:
         save_name: Autosave name (e.g. "AutoSave_0221"). If not provided,
                    loads the most recent autosave.
 
-    Requires the game to be running and at the main menu. Uses macOS Vision
-    OCR to find and click menu elements. Takes 30-90 seconds.
+    Requires the game to be running and at the main menu. Civ VI's native
+    FrontEnd API performs the load and built-in Continue action. OCR is only
+    an explicit fallback via ``CIV_MCP_ENABLE_OCR_RECOVERY=1``.
 
     After loading, wait ~10 seconds then call get_game_overview to verify.
 
     Requires pyobjc: uv pip install 'civ6-mcp[launcher]'
     """
-    return await game_launcher.load_save_from_menu(save_name)
+    gs = pipeline._get_game(ctx)
+    from civ_mcp.game_lifecycle import load_game_save
+
+    if save_name is None:
+        save_name = game_launcher.get_latest_autosave()
+        if save_name is None:
+            return "No autosaves found in save directory."
+    return await pipeline._logged(
+        ctx,
+        "load_save_from_menu",
+        {"save_name": save_name},
+        lambda: load_game_save(gs.conn, save_name),
+    )
 
 
 @mcp.tool(annotations={"destructiveHint": True})
@@ -169,14 +183,14 @@ async def restart_and_load(ctx: Context, save_name: str | None = None) -> str:
     1. Kills the game process
     2. Waits for Steam to deregister (~10s)
     3. Relaunches via Steam (~15-30s for process start + main menu)
-    4. Navigates menus via OCR to load the save (~30-60s)
+    4. Uses Civ VI FrontEnd API to load and confirm the save (~30-60s)
 
     After completion, wait ~10 seconds then call get_game_overview to verify.
     """
     gs = pipeline._get_game(ctx)
     identity_before = gs._game_identity
 
-    result = await game_launcher.restart_and_load(save_name)
+    result = await game_launcher.restart_and_load(save_name, conn=gs.conn)
 
     # Reconnect and verify correct game loaded
     conn = gs.conn
@@ -199,7 +213,7 @@ async def restart_and_load(ctx: Context, save_name: str | None = None) -> str:
                     identity_before,
                     actual,
                 )
-                result2 = await game_launcher.restart_and_load(save_name)
+                result2 = await game_launcher.restart_and_load(save_name, conn=gs.conn)
                 for attempt in range(30):
                     try:
                         await conn.reconnect()
