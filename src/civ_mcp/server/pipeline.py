@@ -29,7 +29,7 @@ from civ_mcp.game_over_watchdog import GameOverWatchdog
 from civ_mcp.game_state import GameState
 from civ_mcp.logger import GameLogger
 from civ_mcp.map_capture import MapCapture
-from civ_mcp.presentation import localize_model_result
+from civ_mcp.presentation import action_receipt_status, localize_model_result
 from civ_mcp.result_filter import filter_tool_result
 from civ_mcp.spatial import SpatialTracker
 from civ_mcp.spectator import CameraController, PopupWatcher
@@ -205,7 +205,30 @@ def _filter_downstream_result(
     except Exception:
         log.warning("Local result filter failed for %s", tool_name, exc_info=True)
         filtered = result
-    return localize_model_result(tool_name, filtered)
+    return localize_model_result(tool_name, filtered, params=dict(params))
+
+
+def _action_execution_status(
+    tool_name: str,
+    params: Mapping[str, Any],
+    result: str,
+    *,
+    fallback: str | None = None,
+) -> str | None:
+    """Map a model-facing action receipt to the existing audit status.
+
+    ``submitted`` is deliberately represented as ``unknown`` in the belief
+    engine.  The engine has a fail-closed four-state contract and must not
+    close a routed decision until a later read-back proves the postcondition;
+    the presentation layer still exposes the more useful Chinese distinction
+    between submitted and truly unknown (for example, a dead connection).
+    """
+
+    receipt = action_receipt_status(tool_name, result, params=dict(params))
+    if receipt is None:
+        return fallback
+    status = receipt[0]
+    return "unknown" if status == "submitted" else status
 
 
 # Key actions are routed centrally here instead of relying on every tool
@@ -550,8 +573,19 @@ async def _logged(
     fn: Callable[[], Awaitable[str]],
     *,
     tiles: set[tuple[int, int]] | None = None,
+    localize: bool = True,
 ) -> str:
     """Run a tool function with timing, error handling, and logging."""
+
+    def _return_result(raw_result: str) -> str:
+        """Keep internal callers on the raw contract when requested."""
+
+        return (
+            _filter_downstream_result(tool_name, params, raw_result)
+            if localize
+            else raw_result
+        )
+
     await _await_auto_resume_ready(ctx)
     logger = _get_logger(ctx)
     turn = logger._turn or "?"
@@ -577,7 +611,7 @@ async def _logged(
             success=False,
             execution_status="blocked",
         )
-        return _filter_downstream_result(tool_name, params, result)
+        return _return_result(result)
 
     decision_id = decision_context.get("decision_id")
     decision_route = decision_context.get("route")
@@ -607,7 +641,7 @@ async def _logged(
             decision_route=decision_route,
             execution_status="blocked",
         )
-        return _filter_downstream_result(tool_name, params, result)
+        return _return_result(result)
 
     try:
         result = await fn()
@@ -633,8 +667,11 @@ async def _logged(
             success=False,
             decision_id=decision_id,
             decision_route=decision_route,
+            execution_status=_action_execution_status(
+                tool_name, params, result, fallback="failed"
+            ),
         )
-        return _filter_downstream_result(tool_name, params, result)
+        return _return_result(result)
     except ConnectionError as e:
         result = str(e)
         ms = int((time.monotonic() - start) * 1000)
@@ -679,7 +716,9 @@ async def _logged(
                     if turn_num
                     else get_latest_autosave()
                 )
-                restart_result = await game_launcher.restart_and_load(save)
+                restart_result = await game_launcher.restart_and_load(
+                    save, conn=_get_game(ctx).conn
+                )
                 log.info("CONNECTION RECOVERY: %s", restart_result)
                 # The game state rolled back to an older save; events recorded
                 # after that point describe a future that no longer happened.
@@ -715,7 +754,7 @@ async def _logged(
             except Exception:
                 log.error("CONNECTION RECOVERY: restart failed", exc_info=True)
 
-        return _filter_downstream_result(tool_name, params, result)
+        return _return_result(result)
     except Exception as e:
         # An unexpected exception may happen after the game accepted a
         # mutation. Preserve that uncertainty and require read-back instead of
@@ -744,7 +783,7 @@ async def _logged(
             decision_route=decision_route,
             execution_status="unknown",
         )
-        return _filter_downstream_result(tool_name, params, result)
+        return _return_result(result)
     # Success — reset connection error counter + refresh heartbeat
     _logged._conn_errors = 0
     heartbeat.write("playing", turn=turn or 0)
@@ -760,7 +799,21 @@ async def _logged(
                 f"route={decision_route}]"
             )
     ms = int((time.monotonic() - start) * 1000)
-    reported_error = domain_result.startswith(("Error", "ERR"))
+    receipt = action_receipt_status(tool_name, domain_result, params=params)
+    if receipt is None:
+        reported_error = domain_result.startswith(("Error", "ERR"))
+        record_success = not reported_error
+        execution_status = None
+    else:
+        receipt_status = receipt[0]
+        # A submitted request has no postcondition yet. Keep it open in the
+        # event-sourced audit as ``unknown`` while showing
+        # ``已提交待验证`` to the model; only a later read-back can close it.
+        execution_status = (
+            "unknown" if receipt_status == "submitted" else receipt_status
+        )
+        record_success = receipt_status == "succeeded"
+        reported_error = receipt_status in {"failed", "blocked", "unknown"}
     log.info(
         "[T%s] %s(%s) %s %dms: %s",
         turn,
@@ -781,15 +834,16 @@ async def _logged(
         domain_result,
         turn,
         ms,
-        success=not reported_error,
+        success=record_success,
         decision_id=decision_id,
         decision_route=decision_route,
+        execution_status=execution_status,
     )
     try:
         await _get_spatial(ctx).record(tool_name, params, result, ms, tiles=tiles)
     except Exception:
         pass
-    return _filter_downstream_result(tool_name, params, result)
+    return _return_result(result)
 
 async def _belief_context(ctx: Context) -> tuple[BeliefEngine, int]:
     """Bind the world model to the live game and return its current turn."""

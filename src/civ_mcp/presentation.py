@@ -26,6 +26,58 @@ _TOOL_LABELS = {
     "skip_remaining_units": "跳过其余单位",
 }
 
+# These are game-changing tools whose textual result is an action receipt,
+# rather than a normal read/query.  Keep the list here deliberately explicit:
+# governance tools such as ``route_belief_decision`` return JSON about the
+# control plane and must not be mistaken for a game mutation.
+_ACTION_TOOL_NAMES = frozenset(
+    {
+        "appoint_governor",
+        "assign_governor",
+        "promote_governor",
+        "promote_unit",
+        "send_envoy",
+        "choose_pantheon",
+        "found_religion",
+        "upgrade_unit",
+        "choose_dedication",
+        "respond_to_trade",
+        "propose_trade",
+        "propose_peace",
+        "set_policies",
+        "respond_to_diplomacy",
+        "send_diplomatic_action",
+        "form_alliance",
+        "city_action",
+        "unit_action",
+        "skip_remaining_units",
+        "set_city_production",
+        "purchase_item",
+        "set_research",
+        "purchase_tile",
+        "change_government",
+        "recruit_great_person",
+        "patronize_great_person",
+        "reject_great_person",
+        "queue_wc_votes",
+        "set_city_focus",
+        "spy_action",
+        "end_turn",
+        "load_save",
+        "load_game_save",
+        "load_save_from_menu",
+        "restart_and_load",
+    }
+)
+
+_ACTION_RECEIPT_LABELS = {
+    "succeeded": "已验证成功",
+    "submitted": "已提交待验证",
+    "failed": "失败",
+    "blocked": "受阻",
+    "unknown": "结果未知",
+}
+
 _TEXT_REPLACEMENTS = (
     ("=== RUNTIME POLICY ===", "=== 运行策略 ==="),
     ("=== BELIEF ENGINE TURN BRIEF", "=== 信念引擎回合简报"),
@@ -58,7 +110,12 @@ _TEXT_REPLACEMENTS = (
 )
 
 
-def localize_model_result(tool_name: str, result: str) -> str:
+def localize_model_result(
+    tool_name: str,
+    result: str,
+    *,
+    params: dict[str, Any] | None = None,
+) -> str:
     """为 MCP 调用方和模型提供中文语义层。
 
     原始 JSON 的字段、ID、枚举及游戏值保持不变，避免将展示语言混入治理、
@@ -75,9 +132,9 @@ def localize_model_result(tool_name: str, result: str) -> str:
             return result
         localized = deepcopy(parsed)
         _localize_json_semantic_values(localized)
-        localized["中文说明"] = _json_summary(tool_name, parsed)
+        localized["中文说明"] = _json_summary(tool_name, parsed, params=params)
         return json.dumps(localized, ensure_ascii=False, separators=(",", ":"))
-    return _text_presentation(tool_name, result)
+    return _text_presentation(tool_name, result, params=params)
 
 
 def _json_object(result: str) -> dict[str, Any] | None:
@@ -88,8 +145,16 @@ def _json_object(result: str) -> dict[str, Any] | None:
     return value if isinstance(value, dict) else None
 
 
-def _json_summary(tool_name: str, payload: dict[str, Any]) -> dict[str, str]:
+def _json_summary(
+    tool_name: str,
+    payload: dict[str, Any],
+    *,
+    params: dict[str, Any] | None = None,
+) -> dict[str, str]:
     status = "成功"
+    receipt = action_receipt_status(tool_name, _json_semantic_text(payload), params=params)
+    if receipt is not None:
+        status = receipt[1]
     if payload.get("disabled"):
         status = "已禁用"
     elif any(key in payload for key in ("error", "errors")):
@@ -112,14 +177,23 @@ def _localize_json_semantic_values(payload: dict[str, Any]) -> None:
             payload[key] = _localize_text(value)
 
 
-def _text_presentation(tool_name: str, result: str) -> str:
+def _text_presentation(
+    tool_name: str,
+    result: str,
+    *,
+    params: dict[str, Any] | None = None,
+) -> str:
     if result.startswith("【中文运行信息】"):
         return result
-    status = "成功"
-    if "Error:" in result or result.startswith("ERR"):
-        status = "失败"
-    elif "BELIEF_GATE_REQUIRED:" in result or "Cannot end turn" in result:
-        status = "受阻"
+    receipt = action_receipt_status(tool_name, result, params=params)
+    if receipt is None:
+        status = "成功"
+        if "Error:" in result or result.startswith("ERR"):
+            status = "失败"
+        elif "BELIEF_GATE_REQUIRED:" in result or "Cannot end turn" in result:
+            status = "受阻"
+    else:
+        status = receipt[1]
     return "\n".join(
         (
             "【中文运行信息】",
@@ -130,6 +204,105 @@ def _text_presentation(tool_name: str, result: str) -> str:
             _localize_text(result),
         )
     )
+
+
+def action_receipt_status(
+    tool_name: str,
+    result: str,
+    *,
+    params: dict[str, Any] | None = None,
+) -> tuple[str, str] | None:
+    """Classify a game mutation without changing its raw marker.
+
+    The first tuple item is a stable internal receipt status.  The second is
+    its Chinese model-facing label.  ``submitted`` intentionally remains
+    distinct from ``unknown`` for presentation, while the pipeline records it
+    as the existing fail-closed ``unknown`` outcome until a read-back proves
+    the postcondition.
+    """
+
+    if not _is_action_tool(tool_name, params):
+        return None
+    text = str(result or "")
+    upper = text.upper()
+
+    # The order is important: a mutation can report an unknown outcome using
+    # an Error/ERR prefix, and a gate/blocker is not an ordinary failure.
+    if any(
+        marker in upper
+        for marker in (
+            "BELIEF_GATE_REQUIRED",
+            "CANNOT END TURN",
+            "END TURN BLOCKED",
+            "TURN PAUSED",
+            "ENDTURN_BLOCKING_",
+        )
+    ):
+        return "blocked", _ACTION_RECEIPT_LABELS["blocked"]
+    if any(
+        marker in upper
+        for marker in (
+            "OUTCOME_UNKNOWN",
+            "RESULT UNKNOWN",
+            "OUTCOME IS UNKNOWN",
+            "CONNECTION LOST MID-COMMAND",
+            "MAY HAVE ALREADY BEEN EXECUTED",
+            "HANG:",
+        )
+    ):
+        return "unknown", _ACTION_RECEIPT_LABELS["unknown"]
+    if (
+        text.startswith(("Error:", "错误："))
+        or "ERROR:" in upper
+        or "错误：" in text
+        or text.startswith("ERR")
+        or any(
+            marker in upper
+            for marker in ("SILENT_FAILURE", "CANNOT_", "FAILED|", "FAILED ")
+        )
+    ):
+        return "failed", _ACTION_RECEIPT_LABELS["failed"]
+
+    # A turn transition and explicit read-back markers are proof, not merely
+    # an acknowledgement from RequestOperation.
+    if (
+        tool_name == "end_turn"
+        and re.search(r"\bTURN\s+\d+\s*(?:->|→)\s*\d+", upper)
+    ) or any(
+        marker in upper
+        for marker in (
+            "(VERIFIED",
+            " VERIFIED",
+            "READBACK_",
+            "CONFIRMED",
+            "MATCH",
+            "(VERIFIED)",
+        )
+    ):
+        return "succeeded", _ACTION_RECEIPT_LABELS["succeeded"]
+
+    # Explicit requested/submitted markers are useful to callers, but they
+    # are not a postcondition.  Unmarked successful mutation text is also
+    # conservative by default: the game may have accepted an async request
+    # while the state query is still stale.
+    return "submitted", _ACTION_RECEIPT_LABELS["submitted"]
+
+
+def _is_action_tool(tool_name: str, params: dict[str, Any] | None) -> bool:
+    if tool_name == "run_lua":
+        return str((params or {}).get("context", "gamecore")).lower() == "ingame"
+    return tool_name in _ACTION_TOOL_NAMES
+
+
+def _json_semantic_text(payload: dict[str, Any]) -> str:
+    """Build only semantic text for receipt detection; keep JSON untouched."""
+
+    values: list[str] = []
+    for key in ("message", "reason", "warning", "status"):
+        value = payload.get(key)
+        if isinstance(value, str):
+            values.append(value)
+    return "\n".join(values)
 
 
 def _localize_text(result: str) -> str:
