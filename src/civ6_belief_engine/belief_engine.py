@@ -1044,6 +1044,152 @@ class BeliefEngine:
         except Exception:
             log.warning("Belief Engine: derivation failed", exc_info=True)
 
+    @staticmethod
+    def _action_target_from_result(action: dict[str, Any]) -> tuple[int, int] | None:
+        """Return the founded-city tile recorded by a successful action.
+
+        ``unit_action(found_city)`` consumes the settler, so a later city
+        observation cannot safely identify the original unit by id.  The
+        action result is the stable bridge: FireTuner records the requested
+        founding tile as ``FOUND_REQUESTED|x,y`` before the city is visible.
+        """
+
+        summary = str((action.get("result_ref") or {}).get("summary") or "")
+        match = re.search(r"(?:FOUNDED|FOUND_REQUESTED)\|(-?\d+),(-?\d+)", summary)
+        if not match:
+            return None
+        return int(match.group(1)), int(match.group(2))
+
+    def _entity_is_in_current_epoch(self, entity_type: str, entity_id: str) -> bool:
+        """Whether an entity's latest event belongs to the active game branch."""
+
+        for event in reversed(self._events):
+            if (
+                event.get("entity_type") == entity_type
+                and event.get("entity_id") == entity_id
+            ):
+                return int(event.get("epoch", 1)) == self._epoch
+        return False
+
+    def _reconcile_observed_action_effects(
+        self, observation: dict[str, Any], *, turn: int
+    ) -> None:
+        """Close superseded routed actions only when game state proves the effect.
+
+        This is intentionally a narrow, evidence-first reconciler.  At the
+        moment Civ VI gives us a complete, directly queryable postcondition
+        for city founding: a successful ``found_city`` call naming a tile and
+        a later ``get_cities`` observation containing a city at that tile.
+        When that proof exists, any still-open authorization with the exact
+        same founding action is a duplicate of an already completed action,
+        not a new obligation for the agent to rediscover and cancel manually.
+        """
+
+        facts = observation.get("facts") or {}
+        if facts.get("tool") != "get_cities":
+            return
+        city_tiles = {
+            (city.get("x"), city.get("y"))
+            for city in facts.get("cities") or []
+            if isinstance(city, dict)
+            and type(city.get("x")) is int
+            and type(city.get("y")) is int
+        }
+        if not city_tiles:
+            return
+
+        proven_actions = [
+            action
+            for action in self.list("action", status="active")
+            if action.get("tool") == "unit_action"
+            and action.get("success") is True
+            and action.get("outcome_status") == "succeeded"
+            and (action.get("params") or {}).get("action") == "found_city"
+            and self._entity_is_in_current_epoch("action", action["id"])
+            and self._action_target_from_result(action) in city_tiles
+        ]
+        if not proven_actions:
+            return
+
+        open_states = {"authorized", "executing", "retryable", "outcome_unknown"}
+        for action in proven_actions:
+            action_params = action.get("params") or {}
+            founded_tile = self._action_target_from_result(action)
+            source_decision_id = action.get("decision_id")
+            for decision in self.list("decision", status=None):
+                if decision.get("id") == source_decision_id:
+                    continue
+                if decision.get("decision_state") not in open_states:
+                    continue
+                intent = decision.get("action_intent") or {}
+                if intent.get("tool") != "unit_action":
+                    continue
+                intent_params = intent.get("params") or intent.get("arguments") or {}
+                candidate_x = intent_params.get("target_x")
+                candidate_y = intent_params.get("target_y")
+                if (
+                    intent_params.get("action") != "found_city"
+                    or intent_params.get("unit_id") != action_params.get("unit_id")
+                    or (
+                        (candidate_x is not None or candidate_y is not None)
+                        and (
+                            type(candidate_x) is not int
+                            or type(candidate_y) is not int
+                            or (candidate_x, candidate_y) != founded_tile
+                        )
+                    )
+                ):
+                    continue
+
+                source_id = str(action.get("id"))
+                if decision.get("decision_state") == "outcome_unknown":
+                    # A verified world-state postcondition settles the only
+                    # remaining uncertainty, so preserve that fact as a
+                    # successful completion instead of pretending it was an
+                    # unexecuted cancellation.
+                    resolved = self.complete_action_authorization(
+                        decision["id"],
+                        tool="unit_action",
+                        success=True,
+                        outcome_status="succeeded",
+                        result=(
+                            "Reconciled from get_cities observation "
+                            f"{observation['id']} after successful action {source_id}."
+                        ),
+                        turn=turn,
+                    )
+                    self.create(
+                        "outcome",
+                        {
+                            "statement": (
+                                "Unknown action outcome reconciled from verified "
+                                "game state."
+                            ),
+                            "action_intent": deepcopy(intent),
+                            "decision_id": decision["id"],
+                            "action_id": source_id,
+                            "success": True,
+                            "executed": True,
+                            "outcome_status": "succeeded",
+                            "reconciliation_observation_id": observation["id"],
+                            "reconciled_from_action_id": source_id,
+                            "result": resolved.get("execution_result_ref"),
+                            "observed_turn": turn,
+                        },
+                        turn=turn,
+                    )
+                    continue
+
+                self.cancel_action_authorization(
+                    decision["id"],
+                    reason=(
+                        "Superseded by verified game-state effect: get_cities "
+                        f"observation {observation['id']} confirms the city founded "
+                        f"by successful action {source_id}."
+                    ),
+                    turn=turn,
+                )
+
     def record_tool_result(
         self,
         *,
@@ -1079,6 +1225,7 @@ class BeliefEngine:
                 },
                 turn=turn,
             )
+            self._reconcile_observed_action_effects(observation, turn=turn)
             self._run_derivation_rules(observation, turn=turn)
             self.review(turn=turn)
             return observation
@@ -2444,6 +2591,37 @@ class BeliefEngine:
             intent = item.get("action_intent")
             return intent if isinstance(intent, dict) else {}
 
+        def intent_params(intent: dict[str, Any]) -> dict[str, Any]:
+            params = intent.get("params") or intent.get("arguments") or {}
+            return params if isinstance(params, dict) else {}
+
+        def matches_council_intent(
+            decision: dict[str, Any], proposal: dict[str, Any], intent: dict[str, Any]
+        ) -> bool:
+            """Match a routed decision to its approved council intent.
+
+            Current records use the immutable ``intent_id``.  Older event
+            streams predate that field on the routed decision, however, and
+            would keep an already-cancelled/succeeded action in the turn gate
+            forever.  For those legacy records only, the exact tool and
+            canonical arguments are an equally unambiguous migration key.
+            """
+
+            decision_intent = structured_action_intent(decision)
+            if decision.get("council_decision_id") != proposal.get("council_decision_id"):
+                return False
+            if decision_intent.get("proposal_id") != proposal["id"]:
+                return False
+            intent_id = str(intent.get("intent_id") or "")
+            decision_intent_id = str(decision_intent.get("intent_id") or "")
+            if not intent_id or decision_intent_id == intent_id:
+                return True
+            return not decision_intent_id and (
+                decision_intent.get("tool") == intent.get("tool")
+                and action_args_hash(intent_params(decision_intent))
+                == action_args_hash(intent_params(intent))
+            )
+
         def intent_due(item: dict[str, Any], *, fallback_turn: int) -> bool:
             """Future intents are dormant until their allowed turn is reached."""
 
@@ -2475,7 +2653,6 @@ class BeliefEngine:
             if item.get("council_state") == "approved"
         ]
         for proposal in approved_proposals:
-            council_id = proposal.get("council_decision_id")
             for intent in proposal.get("action_intents") or []:
                 if not isinstance(intent, dict):
                     continue
@@ -2485,19 +2662,12 @@ class BeliefEngine:
                 )
                 if not intent_due(intent, fallback_turn=fallback_turn):
                     continue
-                intent_id = str(intent.get("intent_id") or "")
                 matching = [
                     decision
                     for decision in all_decisions
-                    if decision.get("council_decision_id") == council_id
-                    and structured_action_intent(decision).get("proposal_id")
-                    == proposal["id"]
-                    and (
-                        not intent_id
-                        or structured_action_intent(decision).get("intent_id")
-                        == intent_id
-                    )
+                    if matches_council_intent(decision, proposal, intent)
                 ]
+                intent_id = str(intent.get("intent_id") or "")
                 terminal = next(
                     (
                         decision

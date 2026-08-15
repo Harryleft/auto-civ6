@@ -1297,6 +1297,83 @@ class TestGovernanceTurnLoopGate:
         )
         assert engine.governance_turn_gate(turn=10)["ready"] is True
 
+    @pytest.mark.parametrize("result_prefix", ["FOUND_REQUESTED", "FOUNDED"])
+    def test_verified_city_effect_closes_duplicate_found_city_authorizations(
+        self, engine, result_prefix
+    ):
+        """A later city query closes stale duplicate decisions without an agent cancel."""
+
+        params = {"unit_id": 65536, "action": "found_city"}
+        legacy_params = {**params, "target_x": 43, "target_y": 38}
+        source = engine.route_decision(
+            statement="Found the capital at (43,38)",
+            probability=0.9,
+            confidence=0.9,
+            impact="low",
+            urgency="low",
+            irreversibility=0,
+            action_intent={
+                "tool": "unit_action",
+                "params": legacy_params,
+                "args_hash": action_args_hash(legacy_params),
+            },
+            turn=2,
+        )
+        duplicate = engine.route_decision(
+            statement="Retry founding the capital at (43,38)",
+            probability=0.9,
+            confidence=0.9,
+            impact="low",
+            urgency="low",
+            irreversibility=0,
+            action_intent={
+                "tool": "unit_action",
+                "params": params,
+                "args_hash": action_args_hash(params),
+            },
+            turn=2,
+        )
+        authorization = engine.authorize_action(
+            tool="unit_action", params=params, turn=2, required=False
+        )
+        source_id = authorization["decision_id"]
+        duplicate_id = (
+            duplicate["id"] if source_id == source["id"] else source["id"]
+        )
+        engine.record_tool_result(
+            tool="unit_action",
+            params=params,
+            result=f"{result_prefix}|43,38 — city not yet present, verify with get_cities()",
+            turn=2,
+            category="action",
+            success=True,
+            duration_ms=1,
+            decision_id=source_id,
+            decision_route="fast",
+        )
+        assert engine.get("decision", duplicate_id)["decision_state"] == "authorized"
+
+        engine.record_tool_result(
+            tool="get_cities",
+            params={},
+            result="1 cities:\n  Paris (pop 1) at (43,38) — Food 4 Prod 6",
+            turn=2,
+            category="query",
+            success=True,
+            duration_ms=1,
+        )
+
+        reconciled = engine.get("decision", duplicate_id)
+        assert reconciled["decision_state"] == "cancelled"
+        assert reconciled["status"] == "resolved"
+        cancellation = next(
+            item
+            for item in engine.list("outcome", status="active")
+            if item["decision_id"] == duplicate_id
+        )
+        assert cancellation["cancelled"] is True
+        assert "verified game-state effect" in cancellation["result"]
+
     def test_explicit_cancellation_closes_intent_without_claiming_success(self, engine):
         self._typed_snapshot(engine, 11)
         params = {"tech_or_civic": "TECH_WRITING", "category": "tech"}
@@ -1327,6 +1404,59 @@ class TestGovernanceTurnLoopGate:
         assert outcome["success"] is False
         assert outcome["executed"] is False
         assert outcome["cancelled"] is True
+
+    def test_legacy_council_decision_without_intent_id_still_closes_gate(self, engine):
+        """Old routed records used proposal+arguments before intent_id existed."""
+
+        self._typed_snapshot(engine, 12)
+        params = {"unit_id": 7, "action": "fortify"}
+        engine.create(
+            "proposal",
+            {
+                "status": "resolved",
+                "statement": "Hold the eastern frontier",
+                "department": "military",
+                "action_intent": {
+                    "intent_id": "intent:fortify:7",
+                    "tool": "unit_action",
+                    "arguments": params,
+                },
+                "action_intents": [
+                    {
+                        "intent_id": "intent:fortify:7",
+                        "proposal_id": "proposal:legacy-defense",
+                        "tool": "unit_action",
+                        "arguments": params,
+                    }
+                ],
+                "council_state": "approved",
+                "council_decision_id": "council:12:legacy-defense",
+            },
+            turn=12,
+            entity_id="proposal:legacy-defense",
+        )
+        legacy = engine.route_decision(
+            statement="Legacy routed defense",
+            probability=0.9,
+            confidence=0.9,
+            impact="low",
+            urgency="low",
+            irreversibility=0,
+            action_intent={
+                "proposal_id": "proposal:legacy-defense",
+                "tool": "unit_action",
+                "params": params,
+                "args_hash": action_args_hash(params),
+            },
+            council_decision_id="council:12:legacy-defense",
+            turn=12,
+        )
+
+        engine.cancel_action_authorization(
+            legacy["id"], reason="Threat no longer exists.", turn=12
+        )
+
+        assert engine.governance_turn_gate(turn=12)["ready"] is True
 
     def test_cancelling_decision_releases_council_budget_locks(self, engine):
         self._typed_snapshot(engine, 12)
