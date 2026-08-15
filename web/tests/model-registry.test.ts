@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatModelName } from "./model-registry";
+import { formatModelName } from "../src/lib/model-registry";
 
 describe("formatModelName", () => {
   it("formats claude-opus-4-6", () => {
