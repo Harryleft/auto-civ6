@@ -120,6 +120,8 @@ def normalize_tool_result(tool: str, result: str) -> dict[str, Any]:
             ("units", r"\| Units:\s*(\d+)"),
             ("exploration_pct", r"^Explored:\s*(\d+)%"),
             ("era_score", r"^Era:[^\n]*?\| Score:\s*(-?[\d,.]+)"),
+            ("era.dark_threshold", r"\(Dark:\s*(\d+)"),
+            ("era.golden_threshold", r"Golden:\s*(\d+)"),
         )
         for key, pattern in patterns:
             match = re.search(pattern, result, re.MULTILINE)
@@ -137,6 +139,18 @@ def normalize_tool_result(tool: str, result: str) -> dict[str, Any]:
                 metrics["speed_cost_multiplier"] = _coerce_number(
                     speed_match.group(2)
                 )
+        # Research/civic names and era thresholds feed the derivation rules;
+        # overview-level names let timing predictions track subject switches
+        # without waiting for a dedicated get_tech_civics call.
+        research_match = re.search(r"^Research:\s*(.*?)\s*\|", result, re.MULTILINE)
+        if research_match:
+            metrics["research.current"] = research_match.group(1)
+        civic_match = re.search(r"\|\s*Civic:\s*(\S.*?)\s*$", result, re.MULTILINE)
+        if civic_match:
+            metrics["civic.current"] = civic_match.group(1)
+        era_match = re.search(r"^Era:\s*([^|]+?)\s*\|", result, re.MULTILINE)
+        if era_match:
+            metrics["era"] = era_match.group(1)
 
     elif tool == "get_diplomacy":
         current_key: str | None = None
@@ -181,8 +195,8 @@ def normalize_tool_result(tool: str, result: str) -> dict[str, Any]:
 
     elif tool == "get_combat_estimate":
         matchup = re.search(
-            r"^\s*(\S+) \(CS:(\d+), HP:(\d+)\) vs "
-            r"(\S+) \(CS:(\d+), HP:(\d+)\)",
+            r"^\s*(.+?) \(CS:(\d+), HP:(\d+)\) vs "
+            r"(.+?) \(CS:(\d+), HP:(\d+)\)",
             result,
             re.MULTILINE,
         )
@@ -231,6 +245,57 @@ def normalize_tool_result(tool: str, result: str) -> dict[str, Any]:
             result,
         ):
             facts[f"unit_position:{unit_id}"] = [int(x), int(y)]
+
+    elif tool == "get_tech_civics":
+        researching = re.search(
+            r"^Researching:\s*(.+?)\s*\((\d+)\s*turns\)", result, re.MULTILINE
+        )
+        if researching:
+            metrics["research.current"] = researching.group(1)
+            metrics["research.turns_remaining"] = int(researching.group(2))
+        civic = re.search(
+            r"^Civic:\s*(.+?)\s*\((\d+)\s*turns\)", result, re.MULTILINE
+        )
+        if civic:
+            metrics["civic.current"] = civic.group(1)
+            metrics["civic.turns_remaining"] = int(civic.group(2))
+        completed = re.search(
+            r"Completed:\s*(\d+)\s*techs,\s*(\d+)\s*civics", result
+        )
+        if completed:
+            metrics["research.completed_techs"] = int(completed.group(1))
+            metrics["civics.completed_civics"] = int(completed.group(2))
+
+    elif tool == "get_barbarian_overview":
+        camp_re = re.compile(
+            r"^ {2}\[(CRITICAL|HIGH|WATCH)\]\s+\((-?\d+),(-?\d+)\)\s+\[(\w+)\]\s+—\s+(.+)$",
+            re.MULTILINE,
+        )
+        camps: list[dict[str, Any]] = []
+        for match in camp_re.finditer(result):
+            priority, x, y, visibility, rest = match.groups()
+            city = re.match(r"(\d+) tiles from nearest city", rest)
+            military = re.search(r"(\d+) from nearest military", rest)
+            camps.append(
+                {
+                    "x": int(x),
+                    "y": int(y),
+                    "visibility": visibility,
+                    "priority": priority,
+                    "distance_to_city": int(city.group(1)) if city else None,
+                    "distance_to_military": int(military.group(1)) if military else None,
+                }
+            )
+        if camps:
+            facts["barbarian_camps"] = camps
+            metrics["barbarian.camp_count"] = len(camps)
+            distances = [
+                camp["distance_to_city"]
+                for camp in camps
+                if camp["distance_to_city"] is not None
+            ]
+            if distances:
+                metrics["barbarian.nearest_camp_distance"] = min(distances)
 
     elif tool == "get_victory_progress":
         section = ""
@@ -950,6 +1015,35 @@ class BeliefEngine:
             metrics.update(observation.get("metrics") or {})
         return metrics
 
+    def _run_derivation_rules(
+        self, observation: dict[str, Any], *, turn: int
+    ) -> None:
+        """Derive beliefs/predictions from a fresh query observation.
+
+        Rules run after the observation is durable and before ``review()`` so
+        precise evidence-driven resolution wins over the metric-based
+        evaluation safety net. A rule failure must never break recording.
+        """
+
+        from . import derivation
+
+        try:
+            context = derivation.RuleContext(
+                engine=self,
+                tool=str((observation.get("facts") or {}).get("tool") or ""),
+                facts=observation.get("facts") or {},
+                metrics=observation.get("metrics") or {},
+                turn=turn,
+                observation_id=str(observation.get("id")),
+            )
+            for op in derivation.run_rules(context):
+                try:
+                    op.apply(self, turn=turn)
+                except BeliefEngineError:
+                    log.debug("Derivation op rejected: %r", op, exc_info=True)
+        except Exception:
+            log.warning("Belief Engine: derivation failed", exc_info=True)
+
     def record_tool_result(
         self,
         *,
@@ -985,6 +1079,7 @@ class BeliefEngine:
                 },
                 turn=turn,
             )
+            self._run_derivation_rules(observation, turn=turn)
             self.review(turn=turn)
             return observation
         if category in {"action", "turn"}:
@@ -1271,7 +1366,17 @@ class BeliefEngine:
                     + ", ".join(conflicting_scopes)
                 ),
             }
-        if decision.get("route") == "slow":
+        # Persisted decisions created before council-aware route classification
+        # may still say ``slow``. A resolved council is the completed slow
+        # review, so derive the executable route from its evidence contract.
+        effective_route = str(decision.get("route") or "fast")
+        if decision.get("council_decision_id"):
+            effective_route = (
+                "verify_then_fast"
+                if decision.get("evidence_requirements")
+                else "fast"
+            )
+        if effective_route == "slow":
             return {
                 "authorized": False,
                 "decision_id": decision["id"],
@@ -1282,7 +1387,7 @@ class BeliefEngine:
                     "and replan before executing this action."
                 ),
             }
-        if decision.get("route") == "verify_then_fast":
+        if effective_route == "verify_then_fast":
             decision_sequences = [
                 int(event.get("sequence", 0))
                 for event in self._events
@@ -2535,21 +2640,31 @@ class BeliefEngine:
         )
         if belief_review_required:
             score = max(score, 0.75)
-        if score >= 0.55 or surprise_score >= 0.7:
-            route = "slow"
-            budget = "high" if score >= 0.75 or surprise_score >= 1 else "medium"
-        elif score >= 0.35:
-            route = "verify_then_fast"
-            budget = "low"
+        if council_decision_id:
+            # A resolved council decision is the completed slow deliberation
+            # for a high-impact action. Reclassifying it as ``slow`` here
+            # creates an unsatisfiable gate: ``slow`` carries no concrete
+            # evidence contract, so the caller cannot know what to gather.
+            # The selected proposal's explicit evidence contract remains the
+            # only post-council requirement.
+            route = "verify_then_fast" if evidence_requirements else "fast"
+            budget = "low" if evidence_requirements else "none"
         else:
-            route = "fast"
-            budget = "none"
-        if evidence_requirements and route == "fast":
-            # An explicit evidence contract is mandatory, not advisory.  A low
-            # risk score may avoid slow deliberation but cannot bypass the
-            # proposal's required read-before-write query.
-            route = "verify_then_fast"
-            budget = "low"
+            if score >= 0.55 or surprise_score >= 0.7:
+                route = "slow"
+                budget = "high" if score >= 0.75 or surprise_score >= 1 else "medium"
+            elif score >= 0.35:
+                route = "verify_then_fast"
+                budget = "low"
+            else:
+                route = "fast"
+                budget = "none"
+            if evidence_requirements and route == "fast":
+                # An explicit evidence contract is mandatory, not advisory. A
+                # low-risk action may avoid slow deliberation but cannot bypass
+                # the proposal's required read-before-write query.
+                route = "verify_then_fast"
+                budget = "low"
         assessment = {
             "statement": statement,
             "route": route,

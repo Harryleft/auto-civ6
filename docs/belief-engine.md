@@ -157,3 +157,45 @@ use keys such as `diplomacy.player_3.at_war` and
 Use `update_belief_entity` for corrections and `delete_belief_entity` for
 current-state deletion. Do not encode interpretation into Observation text;
 that destroys the fact/inference boundary the engine is intended to measure.
+
+## Coverage audit
+
+The pipeline auto-records Observations, Actions, and a routed Decision for
+every gated tool call, but Beliefs and Predictions only exist when they are
+explicitly written. That asymmetry is exactly what the coverage metrics
+measure — per game, not as an aggregate claim:
+
+```bash
+./scripts/belief_coverage.py            # table for ~/.civ6-mcp/beliefs/
+./scripts/belief_coverage.py --json     # machine-readable summaries + fleet totals
+```
+
+Key numbers: `belief_supported_decision_ratio` (decisions whose
+`belief_ids` resolve to recorded belief rows; tombstoned beliefs count,
+dangling ids do not), `predictions_resolved`, `beliefs_per_100_actions`.
+Journals are replayed read-only with last-write-wins on entity snapshots —
+the reducer never touches a live game. The same functions live in
+`civ6_belief_engine.coverage` for dataset/fleet audits.
+
+## Automatic derivation
+
+Beliefs and predictions no longer depend on the agent remembering to call
+`upsert_belief`/`upsert_prediction`. Every successful query observation is
+offered to a rule registry (`civ6_belief_engine.derivation`), and matching
+rules create, update, retire, and resolve entities with evidence references:
+
+| Rule | Tool | Produces | Resolves when |
+|---|---|---|---|
+| Barbarian camp threats | `get_barbarian_overview` | belief per camp (probability by distance) | camp unseen for 5 consecutive overviews (archived); re-seen camps resurrect the same entity |
+| Research/civic timing | `get_tech_civics` | prediction "X completes by T" | subject no longer researched: completed-counter moved → confirmed; deadline passed → disconfirmed; plus an `evaluation` metric safety net handled by `review()` |
+| Victory race ETA | `get_victory_progress` | rate-based ETA prediction per rival section (≥15% progress) | `review()` resolves on VP arrival via the `evaluation` rule |
+| Combat damage | `get_combat_estimate` | prediction "~D damage" with defender HP baseline | next estimate shows the HP drop; tolerance `max(3, 25%)` |
+
+Design invariants: facts stay facts (deterministic values become
+predictions, only genuine inference becomes belief); entity ids are stable
+per subject so repeated queries never duplicate journal events; every
+derived entity is tagged `derived` so the coverage audit separates
+system-generated beliefs from agent self-reports (`b_auto`/`p_auto`
+columns in `scripts/belief_coverage.py`); rule failures are logged and
+never break recording. A running game only picks the registry up after the
+MCP process restarts.

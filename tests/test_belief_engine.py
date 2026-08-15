@@ -163,6 +163,9 @@ Era: Classical | Score: 18 (Dark: 12, Golden: 24)""",
             "units": 9,
             "exploration_pct": 56,
             "era_score": 18,
+            "era.dark_threshold": 12,
+            "era.golden_threshold": 24,
+            "era": "Classical",
         }
 
         diplomacy = normalize_tool_result(

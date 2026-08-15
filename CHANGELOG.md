@@ -4,6 +4,10 @@
 
 The focus shifted from running games to packaging the results. The dataset publisher pipeline exports all telemetry to HuggingFace with Croissant 1.1 metadata for the NeurIPS Evaluations & Datasets track submission. Several reliability features landed in parallel from ongoing eval runs across the fleet.
 
+- **Belief coverage audit**: `civ6_belief_engine.coverage` + `scripts/belief_coverage.py` measure per-game and fleet `belief_supported_decision_ratio`, prediction resolution, and `beliefs_per_100_actions` from belief journals. Local replay shows the "belief-driven" claim is currently unsupported by data (0.8% of final decisions reference any belief) — decisions/actions/observations are pipeline-automatic, beliefs are opt-in tool calls.
+- **Automatic belief/prediction derivation**: `civ6_belief_engine.derivation` rule registry turns query observations into entities automatically — barbarian camp threat beliefs, research/civic completion timing predictions, victory-race ETA predictions, and combat damage predictions with resolution from later evidence (`review()`'s evaluation rules act as safety net). All derived entities are tagged `derived`; the coverage audit splits them from agent self-reports.
+- **Normalization**: `get_tech_civics` and `get_barbarian_overview` results are now normalized into facts/metrics; `get_game_overview` gains research/civic/era names and dark/golden thresholds. Fixed a pre-existing bug where `get_combat_estimate` matching failed for multi-word unit names ("Barbarian Warrior") — combat estimates were never normalized before.
+
 - **Product boundary**: renamed the Python distribution to `civ6-belief-engine`, moved Belief Engine/governance implementations to `src/civ6_belief_engine/`, and preserved the `civ_mcp` package, `civ-mcp` CLI, and `mcp__civ6__*` tool surface for compatibility.
 
 - **HuggingFace dataset publisher**: End-to-end pipeline (`scripts/publish_hf/`) for staging, exporting parquet tables, generating Croissant 1.1 metadata, validating, and uploading to HuggingFace.
