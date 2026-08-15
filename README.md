@@ -128,7 +128,7 @@ uv pip install 'civ6-belief-engine[launcher-linux]'
 With Civ 6 running and a game loaded:
 
 ```bash
-uv run python scripts/test_connection.py
+uv run python tests/manual/test_connection.py
 ```
 
 You should see a successful handshake and a list of Lua states (GameCore_Tuner, InGame, etc.).

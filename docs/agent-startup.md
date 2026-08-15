@@ -64,7 +64,7 @@ DSH 不直接负责启动文明 VI。必须先进入一局游戏，再启动 DSH
 在没有其他 FireTuner 客户端时，可以运行：
 
 ```bash
-uv run python scripts/test_connection.py
+uv run python tests/manual/test_connection.py
 ```
 
 成功的最低证据是 TCP 连接、FireTuner handshake 和 Lua state 列表。错误 Lua state 中的 `Game.GetCurrentGameTurn()` 返回 `nil`，可能是状态不匹配，不等于握手失败。

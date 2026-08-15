@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeElo, type GameResult } from "./elo";
+import { computeElo, type GameResult } from "../src/lib/elo";
 
 function makeParticipant(
   id: string,
