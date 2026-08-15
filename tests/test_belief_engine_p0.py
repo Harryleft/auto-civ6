@@ -459,7 +459,7 @@ class TestGameReloadEpochs:
 
 
 class TestLoggedUnexpectedException:
-    def test_unexpected_exception_records_failure_and_decision_becomes_retryable(
+    def test_unexpected_exception_records_unknown_outcome_requiring_verification(
         self, tmp_path
     ):
         class _Emitter:
@@ -510,21 +510,53 @@ class TestLoggedUnexpectedException:
             _logged(ctx, "unit_action", params, operation)
         )
 
+        # The exception may arrive after the game already accepted the
+        # mutation, so the decision is neither succeeded nor safe-to-retry:
+        # it stays unknown until the agent reads the game back.
         assert result == "Error: connection reader died mid-action"
-        assert engine.get("decision", decision["id"])["decision_state"] == "retryable"
+        assert (
+            engine.get("decision", decision["id"])["decision_state"]
+            == "outcome_unknown"
+        )
         actions = engine.list("action", status=None)
         assert actions[-1]["success"] is False
         assert actions[-1]["decision_id"] == decision["id"]
+        assert actions[-1]["outcome_status"] == "unknown"
         outcomes = engine.list("outcome", status=None)
         assert outcomes[-1]["decision_id"] == decision["id"]
         assert outcomes[-1]["success"] is False
-        # The failed outcome left a retryable obligation, which still gates
-        # the turn but can now be closed — that is the deadlock fix.
+        assert outcomes[-1]["outcome_status"] == "unknown"
+        # The unknown outcome still gates the turn and cannot be cancelled
+        # away — that is the deadlock fix without pretending to know what
+        # happened to the mutation.
         _typed_snapshot(engine, 42)
         gate = engine.governance_turn_gate(turn=42)
         assert gate["blockers"] == ["routed_actions_not_completed"]
+        with pytest.raises(
+            BeliefEngineError, match="verified before cancellation or retry"
+        ):
+            engine.cancel_action_authorization(
+                decision["id"], reason="RuntimeError killed the execution.", turn=42
+            )
+        # A verification read-back settles the unknown outcome: the game
+        # shows the attack never landed, so the decision becomes retryable
+        # and can now be cancelled to unblock the turn.
+        engine.record_tool_result(
+            tool="get_units",
+            params={},
+            result="Verified: unit 7 never attacked.",
+            turn=42,
+            category="action",
+            success=False,
+            duration_ms=5,
+            decision_id=decision["id"],
+            execution_status="failed",
+        )
+        assert (
+            engine.get("decision", decision["id"])["decision_state"] == "retryable"
+        )
         engine.cancel_action_authorization(
-            decision["id"], reason="RuntimeError killed the execution.", turn=42
+            decision["id"], reason="Verification showed the attack failed.", turn=42
         )
         assert engine.governance_turn_gate(turn=42)["ready"] is True
 

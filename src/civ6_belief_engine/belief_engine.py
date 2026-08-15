@@ -63,6 +63,9 @@ _PROBABILITY_FIELDS = {
 _IMPACT_SCORE = {"low": 0.25, "medium": 0.5, "high": 0.75, "critical": 1.0}
 _URGENCY_SCORE = {"low": 0.25, "medium": 0.5, "high": 0.75, "critical": 1.0}
 _RESULT_SUMMARY_CHARS = 500
+_ACTION_OUTCOME_STATUSES = frozenset(
+    {"succeeded", "failed", "unknown", "blocked"}
+)
 
 
 class BeliefEngineError(ValueError):
@@ -959,6 +962,7 @@ class BeliefEngine:
         duration_ms: int,
         decision_id: str | None = None,
         decision_route: str | None = None,
+        execution_status: str | None = None,
     ) -> dict[str, Any] | None:
         if not self.bound:
             return None
@@ -984,12 +988,56 @@ class BeliefEngine:
             self.review(turn=turn)
             return observation
         if category in {"action", "turn"}:
-            executed = not result.startswith("BELIEF_GATE_REQUIRED")
+            if execution_status is None:
+                if result.startswith("BELIEF_GATE_REQUIRED"):
+                    execution_status = "blocked"
+                elif result.startswith("ERR:OUTCOME_UNKNOWN"):
+                    execution_status = "unknown"
+                elif success:
+                    execution_status = "succeeded"
+                else:
+                    execution_status = "failed"
+            if execution_status not in _ACTION_OUTCOME_STATUSES:
+                raise BeliefEngineError(
+                    "execution_status must be succeeded, failed, unknown, or blocked"
+                )
+            if success != (execution_status == "succeeded"):
+                raise BeliefEngineError(
+                    "success must be true exactly when execution_status is succeeded"
+                )
+            executed = execution_status != "blocked"
+            decision = self.get("decision", decision_id) if decision_id else None
+            intent = (
+                deepcopy(decision.get("action_intent") or {})
+                if decision is not None
+                else {}
+            )
+            args_hash = action_args_hash(params)
+            intent_id = str(intent.get("intent_id") or "") or (
+                f"intent:{decision_id}:{args_hash}" if decision_id else None
+            )
+            linkage = {
+                "action_intent_id": intent_id,
+                "proposal_id": intent.get("proposal_id"),
+                "proposal_version": (
+                    intent.get("proposal_version")
+                    if decision
+                    else None
+                ),
+                "council_decision_id": (
+                    decision.get("council_decision_id")
+                    if decision
+                    else None
+                ),
+                "execution_attempt": (
+                    decision.get("execution_attempt") if decision else None
+                ),
+            }
             result_ref = tool_result_reference(result)
             action = self.create(
                 "action",
                 {
-                    "statement": f"{tool} {'succeeded' if success else 'failed'}",
+                    "statement": f"{tool} {execution_status}",
                     "tool": tool,
                     "params": deepcopy(params),
                     "result_ref": result_ref,
@@ -999,6 +1047,8 @@ class BeliefEngine:
                     "decision_id": decision_id,
                     "decision_route": decision_route,
                     "executed": executed,
+                    "outcome_status": execution_status,
+                    **linkage,
                     "verification": {
                         "source": "tool_result",
                         "verified": success,
@@ -1006,6 +1056,7 @@ class BeliefEngine:
                 },
                 turn=turn,
             )
+            verification_observation_ids: list[str] = []
             # A successful action is factual evidence. Persist it as an
             # observation so predictions and plan conditions can be reviewed
             # without a second agent-side record_observation call.
@@ -1013,7 +1064,7 @@ class BeliefEngine:
                 normalized = normalize_tool_result(tool, result)
                 facts = deepcopy(normalized.get("facts") or {})
                 facts.update({"action_success": True, "action_id": action["id"]})
-                self.create(
+                observation = self.create(
                     "observation",
                     {
                         "statement": f"Observed result from {tool}",
@@ -1026,19 +1077,36 @@ class BeliefEngine:
                     },
                     turn=turn,
                 )
+                verification_observation_ids.append(observation["id"])
+                action = self.update(
+                    "action",
+                    action["id"],
+                    {
+                        "verification_observation_ids": (
+                            verification_observation_ids
+                        )
+                    },
+                    turn=turn,
+                )
             if decision_id and executed:
                 self.create(
                     "outcome",
                     {
-                        "statement": f"Outcome of {tool}: {'success' if success else 'failure'}",
+                        "statement": f"Outcome of {tool}: {execution_status}",
                         "action_intent": {
                             "tool": tool,
                             "params": deepcopy(params),
-                            "args_hash": action_args_hash(params),
+                            "args_hash": args_hash,
                         },
                         "decision_id": decision_id,
                         "action_id": action["id"],
                         "success": success,
+                        "executed": True,
+                        "outcome_status": execution_status,
+                        "verification_observation_ids": (
+                            verification_observation_ids
+                        ),
+                        **linkage,
                         "observed_turn": turn,
                     },
                     turn=turn,
@@ -1048,6 +1116,7 @@ class BeliefEngine:
                         decision_id,
                         tool=tool,
                         success=success,
+                        outcome_status=execution_status,
                         result=result,
                         turn=turn,
                     )
@@ -1277,6 +1346,7 @@ class BeliefEngine:
         *,
         tool: str,
         success: bool,
+        outcome_status: str | None = None,
         result: str,
         turn: int,
     ) -> dict[str, Any]:
@@ -1285,10 +1355,22 @@ class BeliefEngine:
         decision = self.get("decision", decision_id)
         if not decision:
             raise BeliefEngineError(f"Unknown decision: {decision_id}")
-        if decision.get("decision_state") != "executing":
+        if decision.get("decision_state") not in {
+            "executing",
+            "outcome_unknown",
+        }:
             return decision
         result_ref = tool_result_reference(result)
-        if success:
+        resolved_status = outcome_status or ("succeeded" if success else "failed")
+        if resolved_status not in {"succeeded", "failed", "unknown"}:
+            raise BeliefEngineError(
+                "outcome_status must be succeeded, failed, or unknown"
+            )
+        if success != (resolved_status == "succeeded"):
+            raise BeliefEngineError(
+                "success must be true exactly when outcome_status is succeeded"
+            )
+        if resolved_status == "succeeded":
             patch = {
                 "status": "resolved",
                 "decision_state": "succeeded",
@@ -1301,7 +1383,7 @@ class BeliefEngine:
                 "last_failure",
                 "last_failure_ref",
             )
-        else:
+        elif resolved_status == "failed":
             patch = {
                 "decision_state": "retryable",
                 "last_failed_action_tool": tool,
@@ -1309,6 +1391,18 @@ class BeliefEngine:
                 "last_failure_ref": result_ref,
             }
             obsolete_result_fields = ("execution_result", "last_failure")
+        else:
+            patch = {
+                "decision_state": "outcome_unknown",
+                "last_unknown_action_tool": tool,
+                "last_unknown_turn": turn,
+                "unknown_result_ref": result_ref,
+            }
+            obsolete_result_fields = (
+                "execution_result",
+                "last_failure",
+                "last_failure_ref",
+            )
         return self.update(
             "decision",
             decision_id,
@@ -1344,6 +1438,10 @@ class BeliefEngine:
             raise BeliefEngineError("Cannot cancel a succeeded action")
         if state == "cancelled":
             return decision
+        if state == "outcome_unknown":
+            raise BeliefEngineError(
+                "Unknown action outcome must be verified before cancellation or retry"
+            )
         action_intent = decision.get("action_intent")
         if not isinstance(action_intent, dict):
             raise BeliefEngineError("Decision has no structured action intent to cancel")
@@ -1388,6 +1486,15 @@ class BeliefEngine:
                 "success": False,
                 "executed": False,
                 "cancelled": True,
+                "outcome_status": "cancelled",
+                "action_intent_id": (
+                    str(action_intent.get("intent_id") or "")
+                    or f"intent:{decision_id}:{action_args_hash(action_intent.get('arguments') or action_intent.get('params') or {})}"
+                ),
+                "proposal_id": action_intent.get("proposal_id"),
+                "proposal_version": action_intent.get("proposal_version"),
+                "council_decision_id": decision.get("council_decision_id"),
+                "execution_attempt": decision.get("execution_attempt", 0),
                 "result": reason.strip(),
                 "observed_turn": turn,
             },
@@ -1456,6 +1563,7 @@ class BeliefEngine:
                 "authorized",
                 "executing",
                 "retryable",
+                "outcome_unknown",
             }:
                 continue
             self.update(
@@ -2250,7 +2358,8 @@ class BeliefEngine:
                 "allowed_turn": structured_action_intent(item).get("allowed_turn"),
             }
             for item in all_decisions
-            if item.get("decision_state") in {"authorized", "executing", "retryable"}
+            if item.get("decision_state")
+            in {"authorized", "executing", "retryable", "outcome_unknown"}
             and intent_due(item, fallback_turn=int(item.get("created_turn", turn)))
         ]
 
