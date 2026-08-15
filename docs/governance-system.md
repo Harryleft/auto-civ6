@@ -76,6 +76,12 @@ submit structured advice but cannot execute its own proposal.
 11. If a client disconnects after authorization enters `executing`, reconcile
     the observed result with `record_action_verification`. The hash-bound tool
     must match; success closes the authorization and failure makes it retryable.
+    The same call settles `outcome_unknown` authorizations: a conservative
+    `submitted` receipt leaves the decision open until a read-back proves the
+    postcondition, and cancellation stays refused until that verification
+    exists. `decision_state` itself is not writable through
+    `update_belief_entity` — only the lifecycle tools move it, and
+    `succeeded`/`cancelled` outcomes are final.
 
 An `allowed_turn` intent is dormant before that turn and becomes a hard
 obligation when due. Its budget locks remain reserved through the scheduled
