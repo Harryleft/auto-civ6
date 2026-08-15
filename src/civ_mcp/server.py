@@ -74,6 +74,157 @@ class AppContext:
     watchdog: GameOverWatchdog
     beliefs: BeliefEngine
     belief_mode: BeliefMode = BeliefMode.ENFORCE
+    auto_resume_ready: asyncio.Event | None = None
+
+
+DSH_AUTO_RESUME_ENV = "CIV_MCP_DSH_AUTO_RESUME"
+
+
+def _dsh_auto_resume_enabled() -> bool:
+    """Return whether the DSH-only startup recovery path is explicitly enabled."""
+
+    return os.environ.get(DSH_AUTO_RESUME_ENV, "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+async def _auto_resume(conn: GameConnection) -> None:
+    """Optionally launch Civ 6 and load the latest known recovery save.
+
+    This path is deliberately separate from ``_auto_boot``.  The latter is
+    an eval-only flow keyed by ``CIV_MCP_SAVE_FILE`` and clears ``0_MCP_*``
+    files before loading its scenario.  DSH recovery must preserve those
+    files, use the existing GUI menu flow, and remain disabled by default.
+
+    A successful FireTuner handshake with both ``GameCore_Tuner`` and
+    ``InGame`` means the game is already in a playable session, so no GUI
+    action is attempted.  A handshake that reaches only the main menu is
+    disconnected before OCR navigation so the subsequent reconnect remains
+    the sole FireTuner client.
+    """
+
+    save_name = game_launcher.get_latest_recovery_save()
+    if save_name is None:
+        log.warning(
+            "DSH auto-resume enabled but no 0_MCP_* or AutoSave_* recovery save "
+            "was found; leaving the game untouched"
+        )
+        return
+
+    # First determine whether the running game is already in a session.  A
+    # refused connection is expected when Civ 6 is not running; a reachable
+    # tuner with a failed handshake is not safe to take over because another
+    # FireTuner client may own the single-client slot.
+    try:
+        await conn.connect()
+    except ConnectionError as exc:
+        if game_launcher._is_tuner_port_open():
+            log.error(
+                "DSH auto-resume cannot establish FireTuner handshake while "
+                "port 4318 is reachable; refusing GUI takeover (possible "
+                "second client): %s",
+                exc,
+            )
+            return
+        log.info("DSH auto-resume: FireTuner unavailable; GUI launch may be needed")
+    except Exception:
+        log.exception("DSH auto-resume: FireTuner probe failed; refusing recovery")
+        return
+    else:
+        if conn.gamecore_index is not None and conn.ingame_index is not None:
+            log.info(
+                "DSH auto-resume: game already in progress (GameCore=%s, InGame=%s); "
+                "skipping GUI recovery",
+                conn.gamecore_index,
+                conn.ingame_index,
+            )
+            return
+        log.info("DSH auto-resume: FireTuner reached the main menu; loading %s", save_name)
+        await conn.disconnect()
+
+    heartbeat.write("loading")
+    try:
+        # This is intentionally the OCR menu path, not load_game_save(): it
+        # performs the same Single Player → Load Game → Continue flow a user
+        # would perform and never invokes the eval auto-boot cleanup.
+        result = await game_launcher.load_save_from_menu(save_name)
+    except Exception:
+        log.exception("DSH auto-resume: GUI load failed for %s", save_name)
+        heartbeat.write("error")
+        return
+    log.info("DSH auto-resume: GUI load result: %s", result)
+    load_failed = result.startswith(("FAILED", "Error:", "No autosaves")) or (
+        "not found" in result.lower()
+    )
+    if load_failed:
+        log.error("DSH auto-resume: GUI load did not start: %s", result)
+        heartbeat.write("error")
+        return
+
+    # Loading a save tears down the old Lua states.  Reconnect until both
+    # states are visible; this is the same readiness boundary used by the
+    # normal connection path and avoids claiming success from a port alone.
+    for attempt in range(90):
+        try:
+            if conn.is_connected:
+                await conn.reconnect()
+            else:
+                await conn.connect()
+            if conn.gamecore_index is not None and conn.ingame_index is not None:
+                log.info(
+                    "DSH auto-resume: game ready after %ds (GameCore=%s, InGame=%s)",
+                    attempt,
+                    conn.gamecore_index,
+                    conn.ingame_index,
+                )
+                heartbeat.write("playing")
+                return
+        except ConnectionError:
+            if attempt % 15 == 0:
+                log.info("DSH auto-resume: waiting for loaded game (%ds)", attempt)
+        await asyncio.sleep(1)
+
+    log.error("DSH auto-resume: loaded save but GameCore/InGame never appeared")
+    heartbeat.write("error")
+    try:
+        await conn.disconnect()
+    except Exception:
+        log.debug("DSH auto-resume: cleanup disconnect failed", exc_info=True)
+
+
+async def _auto_resume_then_start_services(
+    conn: GameConnection,
+    camera: CameraController,
+    popup_watcher: PopupWatcher,
+    watchdog: GameOverWatchdog,
+    ready: asyncio.Event | None = None,
+) -> None:
+    """Run startup recovery before starting background FireTuner users.
+
+    Camera tracking and popup/game-over watchers share the same connection
+    with recovery.  They must remain stopped while OCR navigation and the
+    post-load reconnect are in progress.  This coroutine is scheduled after
+    the lifespan yields, so MCP ``tools/list`` can complete while the GUI is
+    still loading the game.
+    """
+
+    try:
+        try:
+            await _auto_resume(conn)
+        except asyncio.CancelledError:
+            # Do not start any watcher after a shutdown cancellation.
+            raise
+        except Exception:
+            log.exception("DSH auto-resume task failed")
+        camera.start()
+        popup_watcher.start()
+        watchdog.start()
+    finally:
+        if ready is not None:
+            ready.set()
 
 
 async def _auto_boot(conn: GameConnection, save_name: str) -> None:
@@ -338,18 +489,39 @@ async def lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
     log.info("Game logger session: %s", logger.session_id)
     log.info("Belief Engine mode: %s", belief_mode.value)
 
+    camera = CameraController(conn)
+    popup_watcher = PopupWatcher(conn)
+    watchdog = GameOverWatchdog(gs, logger)
+    auto_resume_task: asyncio.Task[None] | None = None
+    auto_resume_ready = asyncio.Event()
+
     # Auto-boot: launch game + load save when running as eval
     save_file = os.environ.get("CIV_MCP_SAVE_FILE")
     if save_file:
         await _auto_boot(conn, save_file)
-
-    # Spectator-mode background services (camera tracking + popup auto-dismiss)
-    camera = CameraController(conn)
-    popup_watcher = PopupWatcher(conn)
-    watchdog = GameOverWatchdog(gs, logger)
-    camera.start()
-    popup_watcher.start()
-    watchdog.start()
+    elif _dsh_auto_resume_enabled():
+        # DSH recovery is an explicit opt-in and intentionally does not reuse
+        # _auto_boot: that eval-only path deletes 0_MCP_* saves before loading.
+        # Schedule it after the first lifespan yield below.  GUI OCR can take
+        # minutes, while DSH must finish MCP tools/list within its startup
+        # timeout.  Watchers start only after recovery finishes.
+        auto_resume_task = asyncio.create_task(
+            _auto_resume_then_start_services(
+                conn,
+                camera,
+                popup_watcher,
+                watchdog,
+                auto_resume_ready,
+            )
+        )
+    else:
+        # Spectator-mode background services (camera tracking + popup
+        # auto-dismiss) are safe to start immediately when no recovery owns
+        # the connection.
+        camera.start()
+        popup_watcher.start()
+        watchdog.start()
+        auto_resume_ready.set()
 
     # Start the web dashboard API as a background task (port 8000)
     web_app = create_app(gs)
@@ -369,12 +541,20 @@ async def lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
             watchdog=watchdog,
             beliefs=beliefs,
             belief_mode=belief_mode,
+            auto_resume_ready=auto_resume_ready,
         )
     finally:
-        await emitter.close()
+        if auto_resume_task is not None:
+            auto_resume_task.cancel()
+            try:
+                await auto_resume_task
+            except asyncio.CancelledError:
+                log.info("DSH auto-resume task cancelled during shutdown")
+            auto_resume_ready.set()
         await watchdog.stop()
         await camera.stop()
         await popup_watcher.stop()
+        await emitter.close()
         uvi_server.should_exit = True
         try:
             await api_task
@@ -433,6 +613,19 @@ def _get_belief_mode(ctx: Context) -> BeliefMode:
         "belief_mode",
         BeliefMode.ENFORCE,
     )
+
+
+async def _await_auto_resume_ready(ctx: Context) -> None:
+    """Keep game tools off the shared connection during DSH GUI recovery."""
+
+    ready = getattr(
+        ctx.request_context.lifespan_context,
+        "auto_resume_ready",
+        None,
+    )
+    if ready is not None and not ready.is_set():
+        log.info("Waiting for DSH auto-resume before executing a game tool")
+        await ready.wait()
 
 
 def _format_runtime_policy(mode: BeliefMode) -> str:
@@ -901,6 +1094,7 @@ async def _logged(
     tiles: set[tuple[int, int]] | None = None,
 ) -> str:
     """Run a tool function with timing, error handling, and logging."""
+    await _await_auto_resume_ready(ctx)
     logger = _get_logger(ctx)
     turn = logger._turn or "?"
     start = time.monotonic()
