@@ -29,6 +29,7 @@ from civ_mcp.game_over_watchdog import GameOverWatchdog
 from civ_mcp.game_state import GameState
 from civ_mcp.logger import GameLogger
 from civ_mcp.map_capture import MapCapture
+from civ_mcp.presentation import localize_model_result
 from civ_mcp.result_filter import filter_tool_result
 from civ_mcp.spatial import SpatialTracker
 from civ_mcp.spectator import CameraController, PopupWatcher
@@ -200,10 +201,11 @@ def _filter_downstream_result(
 ) -> str:
     """Filter only the model-facing copy; fail open on local filter errors."""
     try:
-        return filter_tool_result(tool_name, result, params=params)
+        filtered = filter_tool_result(tool_name, result, params=params)
     except Exception:
         log.warning("Local result filter failed for %s", tool_name, exc_info=True)
-        return result
+        filtered = result
+    return localize_model_result(tool_name, filtered)
 
 
 # Key actions are routed centrally here instead of relying on every tool
@@ -575,7 +577,7 @@ async def _logged(
             success=False,
             execution_status="blocked",
         )
-        return result
+        return _filter_downstream_result(tool_name, params, result)
 
     decision_id = decision_context.get("decision_id")
     decision_route = decision_context.get("route")
@@ -605,7 +607,7 @@ async def _logged(
             decision_route=decision_route,
             execution_status="blocked",
         )
-        return result
+        return _filter_downstream_result(tool_name, params, result)
 
     try:
         result = await fn()
@@ -632,7 +634,7 @@ async def _logged(
             decision_id=decision_id,
             decision_route=decision_route,
         )
-        return result
+        return _filter_downstream_result(tool_name, params, result)
     except ConnectionError as e:
         result = str(e)
         ms = int((time.monotonic() - start) * 1000)
@@ -713,7 +715,7 @@ async def _logged(
             except Exception:
                 log.error("CONNECTION RECOVERY: restart failed", exc_info=True)
 
-        return result
+        return _filter_downstream_result(tool_name, params, result)
     except Exception as e:
         # An unexpected exception may happen after the game accepted a
         # mutation. Preserve that uncertainty and require read-back instead of
@@ -742,7 +744,7 @@ async def _logged(
             decision_route=decision_route,
             execution_status="unknown",
         )
-        return result
+        return _filter_downstream_result(tool_name, params, result)
     # Success — reset connection error counter + refresh heartbeat
     _logged._conn_errors = 0
     heartbeat.write("playing", turn=turn or 0)
@@ -814,7 +816,7 @@ async def _belief_tool(
     """Run a belief operation with normal MCP logging and telemetry mirroring."""
     mode = _get_belief_mode(ctx)
     if not mode.records_events:
-        return json.dumps(
+        text = json.dumps(
             {
                 "belief_mode": mode.value,
                 "disabled": True,
@@ -823,6 +825,7 @@ async def _belief_tool(
             },
             ensure_ascii=False,
         )
+        return _filter_downstream_result(tool_name, params, text)
     started = time.monotonic()
     try:
         engine, turn = await _belief_context(ctx)
@@ -839,11 +842,11 @@ async def _belief_tool(
     except (BeliefEngineError, json.JSONDecodeError, TypeError, ValueError) as exc:
         message = f"Error: {exc}"
         await _get_logger(ctx).log_error(tool_name, message)
-        return message
+        return _filter_downstream_result(tool_name, params, message)
     except ConnectionError as exc:
         message = f"Error: {exc}"
         await _get_logger(ctx).log_error(tool_name, message)
-        return message
+        return _filter_downstream_result(tool_name, params, message)
 
 async def _narrate(
     query_fn: Callable[[], Awaitable[Any]], narrate_fn: Callable[..., str]
