@@ -123,6 +123,48 @@ def _national_strategy_payload(value: Any, *, include_details: bool = False) -> 
     return payload
 
 
+def _score_value(value: Any, name: str) -> float:
+    """Coerce LLM score drift (bools, numeric strings) into real floats."""
+
+    if isinstance(value, bool):
+        return 1.0 if value else 0.0
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.strip())
+        except ValueError:
+            pass
+    raise BeliefEngineError(
+        f"{name} must be a real number (e.g. 0.8), not {type(value).__name__}"
+    )
+
+
+def _score_mapping(raw: Any, name: str) -> dict[str, float]:
+    """Coerce one benefits/costs mapping, tolerating null/empty pseudo-values."""
+
+    if raw is None or hasattr(raw, "__len__") and not len(raw):
+        return {}
+    if not isinstance(raw, Mapping):
+        raise BeliefEngineError(f"{name} must be a JSON object")
+    return {
+        key: _score_value(value, f"{name}[{key!r}]")
+        for key, value in raw.items()
+    }
+
+
+def _proposal_priority(value: Any) -> int:
+    """Normalize legacy JSON numeric forms without accepting booleans/fractions."""
+
+    if type(value) is int and value >= 0:
+        return value
+    if isinstance(value, float) and value >= 0 and value.is_integer():
+        return int(value)
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    raise BeliefEngineError("proposal priority must be a non-negative int")
+
+
 def _governance_proposal_from_dict(raw: dict[str, Any]):
     """Validate one ministerial proposal against the shared governance schema."""
 
@@ -213,13 +255,13 @@ def _governance_proposal_from_dict(raw: dict[str, Any]):
         success=ProbabilityConfidence(
             success.get("probability"), success.get("confidence")
         ),
-        priority=raw.get("priority"),
+        priority=_proposal_priority(raw.get("priority")),
         hard_constraints=raw.get("hard_constraints") or {},
         budget_locks=tuple(locks),
-        benefits=raw.get("benefits") or {},
-        costs=raw.get("costs") or {},
-        opportunity_cost=raw.get("opportunity_cost", 0),
-        failure_cost=raw.get("failure_cost", 0),
+        benefits=_score_mapping(raw.get("benefits"), "benefits"),
+        costs=_score_mapping(raw.get("costs"), "costs"),
+        opportunity_cost=_score_value(raw.get("opportunity_cost", 0), "opportunity_cost"),
+        failure_cost=_score_value(raw.get("failure_cost", 0), "failure_cost"),
         action_intents=tuple(intents),
         belief_ids=tuple(raw.get("belief_ids") or ()),
         expires_turn=raw.get("expires_turn"),
@@ -1072,6 +1114,8 @@ async def submit_governance_proposal(ctx: Context, proposal: str) -> str:
 
     ``success`` must be an object (not top-level ``success_probability``),
     ``hard_constraints``/``benefits``/``costs`` are objects, and
+    ``benefits``/``costs`` values must be real numbers (e.g. ``0.8``);
+    booleans coerce to ``1.0``/``0.0`` and numeric strings are parsed.
     ``budget_locks`` is an array. Every action intent needs a non-empty
     ``intent_id`` and the same ``proposal_id`` as its enclosing proposal. It
     remains advisory until ``resolve_governance_council``.

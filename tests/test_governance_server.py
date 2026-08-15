@@ -103,6 +103,22 @@ def test_proposal_parser_keeps_probability_and_confidence_strictly_separate():
         _governance_proposal_from_dict(payload)
 
 
+def test_proposal_parser_coerces_llm_boolean_and_string_scores():
+    payload = _proposal_payload()
+    payload["benefits"] = {"city_defense": True, "unit_synergy": "0.6"}
+    payload["costs"] = {"expansion_delay_turns": False}
+    payload["opportunity_cost"] = True
+    payload["priority"] = 90.0
+
+    proposal = _governance_proposal_from_dict(payload)
+
+    assert proposal.benefits == {"city_defense": 1.0, "unit_synergy": 0.6}
+    assert proposal.costs == {"expansion_delay_turns": 0.0}
+    assert proposal.opportunity_cost == 1.0
+    assert proposal.priority == 90
+    assert type(proposal.priority) is int
+
+
 def test_goal_parser_restores_nested_and_legacy_probability_contracts():
     nested = _governance_goal_from_dict(
         {
