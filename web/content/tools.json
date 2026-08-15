@@ -1,5 +1,107 @@
 [
   {
+    "name": "get_barbarian_overview",
+    "description": "Query revealed barbarian camps and currently visible barbarian units.\n\n    Camps remain listed after leaving their tile's visibility as long as the\n    tile has been revealed. Barbarian unit locations require current vision.\n    Results include distance to the nearest own city and military unit so the\n    agent can clear the spawn source instead of reacting to endless waves.\n    ",
+    "parameters": {
+      "properties": {},
+      "title": "get_barbarian_overviewArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false
+    },
+    "category": "query"
+  },
+  {
+    "name": "get_belief_metrics",
+    "description": "Return belief, prediction, plan, routing, and calibration metrics.",
+    "parameters": {
+      "properties": {},
+      "title": "get_belief_metricsArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false
+    },
+    "category": "query"
+  },
+  {
+    "name": "get_belief_state",
+    "description": "Read the current world model without loading the entire raw trace.\n\n    With no ``entity_type``, returns decision-relevant entities and current\n    normalized metrics.  Use ``get_belief_trace`` for immutable history.\n    ",
+    "parameters": {
+      "properties": {
+        "entity_type": {
+          "default": "",
+          "title": "Entity Type",
+          "type": "string"
+        },
+        "status": {
+          "default": "active",
+          "title": "Status",
+          "type": "string"
+        },
+        "last_n": {
+          "default": 50,
+          "title": "Last N",
+          "type": "integer"
+        }
+      },
+      "title": "get_belief_stateArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false
+    },
+    "category": "query"
+  },
+  {
+    "name": "get_belief_trace",
+    "description": "Read immutable create/update/delete history for audit and attribution.",
+    "parameters": {
+      "properties": {
+        "entity_type": {
+          "default": "",
+          "title": "Entity Type",
+          "type": "string"
+        },
+        "entity_id": {
+          "default": "",
+          "title": "Entity Id",
+          "type": "string"
+        },
+        "last_n": {
+          "default": 100,
+          "title": "Last N",
+          "type": "integer"
+        }
+      },
+      "title": "get_belief_traceArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false
+    },
+    "category": "query"
+  },
+  {
+    "name": "get_builder_tasks",
+    "description": "Get a prioritized task board for all your builders.\n\n    Scans your territory for tiles needing improvements and matches them\n    with idle builders. Like the builder lens in the UI \u2014 shows what to\n    build where and which builder is closest.\n\n    Priority tiers:\n    - URGENT: Pillaged improvements (yield loss), unimproved strategic resources\n    - HIGH: Unimproved luxury/bonus resources\n    - NORMAL: Empty tiles that could benefit from farms/mines/lumber mills\n\n    Call this before issuing builder orders each turn.\n    ",
+    "parameters": {
+      "properties": {},
+      "title": "get_builder_tasksArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false
+    },
+    "category": "query"
+  },
+  {
     "name": "get_cities",
     "description": "List all your cities with yields, population, production, growth, and loyalty.\n\n    Each city shows its id (needed for production commands).\n    Cities losing loyalty show warnings with flip timers.\n    ",
     "parameters": {
@@ -41,6 +143,38 @@
     "parameters": {
       "properties": {},
       "title": "get_city_statesArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false
+    },
+    "category": "query"
+  },
+  {
+    "name": "get_combat_estimate",
+    "description": "Quantify a unit matchup without executing an attack.\n\n    Returns effective combat strengths, current HP, terrain/fortification/\n    promotion/flanking/support modifiers, and estimated damage to both sides.\n    Use this after a proximity scan and before revising a route-safety belief;\n    merely seeing a hostile unit is not evidence that the route is unsafe.\n\n    Args:\n        unit_id: Attacking or escort unit composite ID from get_units\n        target_x: Hostile unit X coordinate\n        target_y: Hostile unit Y coordinate\n    ",
+    "parameters": {
+      "properties": {
+        "unit_id": {
+          "title": "Unit Id",
+          "type": "integer"
+        },
+        "target_x": {
+          "title": "Target X",
+          "type": "integer"
+        },
+        "target_y": {
+          "title": "Target Y",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "unit_id",
+        "target_x",
+        "target_y"
+      ],
+      "title": "get_combat_estimateArguments",
       "type": "object"
     },
     "annotations": {
@@ -268,6 +402,38 @@
     "parameters": {
       "properties": {},
       "title": "get_pantheon_beliefsArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false
+    },
+    "category": "query"
+  },
+  {
+    "name": "get_pathing_estimate",
+    "description": "Estimate how many turns a unit needs to reach a destination.\n\n    Args:\n        unit_id: The unit's composite ID (from get_units output)\n        target_x: Destination X coordinate\n        target_y: Destination Y coordinate\n\n    Returns estimated turns, path length, and reachable tiles this turn.\n    ",
+    "parameters": {
+      "properties": {
+        "unit_id": {
+          "title": "Unit Id",
+          "type": "integer"
+        },
+        "target_x": {
+          "title": "Target X",
+          "type": "integer"
+        },
+        "target_y": {
+          "title": "Target Y",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "unit_id",
+        "target_x",
+        "target_y"
+      ],
+      "title": "get_pathing_estimateArguments",
       "type": "object"
     },
     "annotations": {
@@ -555,7 +721,7 @@
   },
   {
     "name": "get_world_congress",
-    "description": "Get World Congress status, active resolutions, and voting options.\n\n    Shows whether congress is in session, resolutions to vote on (with options A/B\n    and possible targets), turns until next session, and your diplomatic favor.\n    When in session, use vote_world_congress to cast votes.\n    ",
+    "description": "Get World Congress status, active resolutions, and voting options.\n\n    Shows whether congress is in session, resolutions to vote on (with options A/B\n    and possible targets), turns until next session, and your diplomatic favor.\n    When in session, use queue_wc_votes to register votes before end_turn.\n    ",
     "parameters": {
       "properties": {},
       "title": "get_world_congressArguments",
@@ -569,24 +735,10 @@
   },
   {
     "name": "list_saves",
-    "description": "List available save files (normal, autosave, quicksave).\n\n    Returns indexed list of saves. Use load_save(save_index=N) to load one.\n    Call this before load_save to see what's available.\n    ",
+    "description": "List available save files (normal, autosave).\n\n    Returns indexed list of saves. Use load_save(save_index=N) to load one.\n    Call this before load_save to see what's available.\n    ",
     "parameters": {
       "properties": {},
       "title": "list_savesArguments",
-      "type": "object"
-    },
-    "annotations": {
-      "readOnlyHint": true,
-      "destructiveHint": false
-    },
-    "category": "query"
-  },
-  {
-    "name": "screenshot",
-    "description": "Capture a screenshot of the Civilization VI game window.\n\n    Returns the current game screen as an image for visual reasoning.\n    Useful for verifying game state, reading UI elements, or checking\n    map positions that are hard to describe with data alone.\n    ",
-    "parameters": {
-      "properties": {},
-      "title": "screenshotArguments",
       "type": "object"
     },
     "annotations": {
@@ -618,6 +770,38 @@
     "category": "action"
   },
   {
+    "name": "assess_route_combat_risk",
+    "description": "\u4ec5\u4f9d\u636e\u91cf\u5316\u6218\u6597\u9884\u4f30\u6765\u4fee\u8ba2\u8def\u7ebf\u4fe1\u5ff5\u3002\n\n    - \u82e5 nearby_hostiles \u975e\u7a7a\u4f46\u672a\u63d0\u4f9b assessment: \u4e0d\u4fee\u6539\u4fe1\u5ff5, \u8fd4\u56de verify_then_fast\u3002\n    - \u82e5\u8981\u4fee\u8ba2\u4fe1\u5ff5: \u5148\u8c03\u7528 get_combat_estimate(unit_id, target_x, target_y),\n      \u518d\u5c06\u5176\u7ed3\u679c\u4f5c\u4e3a assessment \u4f20\u5165, \u5b57\u6bb5: source(\"combat_estimate\"),\n      revised_probability, attacker_cs, defender_cs, attacker_hp, defender_hp,\n      expected_damage_to_attacker, expected_damage_to_defender\u3002\n    - \u4e0b\u8c03\u6982\u7387\u5fc5\u987b\u88ab\u6570\u503c\u652f\u6301: defender_cs > attacker_cs \u4e14 \u653b\u51fb\u65b9\u635f\u5931\u6bd4\u4f8b\u66f4\u5927\u3002\n\n    \u793a\u4f8b:\n      get_combat_estimate -> {source: \"combat_estimate\", attacker_cs: 20, ...}\n      assess_route_combat_risk(belief_id=...,\n        nearby_hostiles='[{\"type\":\"UNIT_SCOUT\",\"cs\":10,\"hp\":100,\"dist\":2}]',\n        assessment='{\"source\":\"combat_estimate\",\"revised_probability\":0.55,...}')\n    ",
+    "parameters": {
+      "properties": {
+        "belief_id": {
+          "title": "Belief Id",
+          "type": "string"
+        },
+        "nearby_hostiles": {
+          "default": "[]",
+          "title": "Nearby Hostiles",
+          "type": "string"
+        },
+        "assessment": {
+          "default": "",
+          "title": "Assessment",
+          "type": "string"
+        }
+      },
+      "required": [
+        "belief_id"
+      ],
+      "title": "assess_route_combat_riskArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    },
+    "category": "action"
+  },
+  {
     "name": "assign_governor",
     "description": "Assign an appointed governor to a city.\n\n    Args:\n        governor_type: The governor type (from get_governors output)\n        city_id: The city ID (from get_cities output)\n\n    Governor must already be appointed. Takes several turns to establish.\n    ",
     "parameters": {
@@ -636,6 +820,33 @@
         "city_id"
       ],
       "title": "assign_governorArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    },
+    "category": "action"
+  },
+  {
+    "name": "cancel_routed_action",
+    "description": "Close an unexecuted/retryable routed action with an explicit Outcome.\n\n    Use this after a slow review changes the plan or when a retry is no longer\n    rational. It cannot cancel an executing or already successful action.\n    ",
+    "parameters": {
+      "properties": {
+        "decision_id": {
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision_id",
+        "reason"
+      ],
+      "title": "cancel_routed_actionArguments",
       "type": "object"
     },
     "annotations": {
@@ -762,6 +973,38 @@
     "category": "action"
   },
   {
+    "name": "delete_belief_entity",
+    "description": "Delete current state via a tombstone while retaining audit history.",
+    "parameters": {
+      "properties": {
+        "entity_type": {
+          "title": "Entity Type",
+          "type": "string"
+        },
+        "entity_id": {
+          "title": "Entity Id",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "entity_type",
+        "entity_id",
+        "reason"
+      ],
+      "title": "delete_belief_entityArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    },
+    "category": "action"
+  },
+  {
     "name": "dismiss_popup",
     "description": "Dismiss any blocking popup in the game UI.\n\n    Call this if you suspect a popup (e.g. historic moment, boost notification)\n    is blocking interaction.\n    ",
     "parameters": {
@@ -849,11 +1092,83 @@
     "category": "action"
   },
   {
+    "name": "get_governance_brief",
+    "description": "Capture typed GameState facts and return the national governance agenda.\n\n    This is the preferred start-of-turn control-plane input. It collects one\n    same-turn typed snapshot, projects it into the existing event-sourced graph,\n    then combines capabilities, scarce-resource budgets, confidence gaps, and\n    current belief gates. No narrated game text is parsed for this snapshot.\n    ",
+    "parameters": {
+      "properties": {
+        "limit": {
+          "default": 12,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "confidence_floor": {
+          "default": 0.6,
+          "title": "Confidence Floor",
+          "type": "number"
+        },
+        "include_department_details": {
+          "default": false,
+          "title": "Include Department Details",
+          "type": "boolean"
+        }
+      },
+      "title": "get_governance_briefArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    },
+    "category": "action"
+  },
+  {
+    "name": "get_gp_advisor",
+    "description": "Show best cities to activate a Great Person, ranked by suitability.\n\n    Args:\n        unit_index: The Great Person unit's index (from get_units output).\n\n    Lists all cities with the matching district (e.g., campuses for Great Scientists),\n    showing which ones the GP can activate on, distance, city yield, and great work\n    slot availability for cultural GPs.\n    ",
+    "parameters": {
+      "properties": {
+        "unit_index": {
+          "title": "Unit Index",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "unit_index"
+      ],
+      "title": "get_gp_advisorArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    },
+    "category": "action"
+  },
+  {
     "name": "get_religion_beliefs",
     "description": "Get religion founding status, available religions, and available beliefs.\n\n    Shows whether you've founded a religion, available religion types to choose,\n    and beliefs grouped by class (Follower, Founder, Enhancer, Worship).\n    Use found_religion to found a religion after your Great Prophet activates.\n    ",
     "parameters": {
       "properties": {},
       "title": "get_religion_beliefsArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    },
+    "category": "action"
+  },
+  {
+    "name": "get_turn_brief",
+    "description": "Return the reviewed Belief Engine state that must guide this turn.\n\n    ``get_game_overview`` includes the same brief automatically.  This tool is\n    provided for an explicit precheck or after a major action changes the\n    evidence; it is intentionally the single compact entry point instead of\n    requiring an agent to remember several separate belief calls.\n    ",
+    "parameters": {
+      "properties": {
+        "limit": {
+          "default": 12,
+          "title": "Limit",
+          "type": "integer"
+        }
+      },
+      "title": "get_turn_briefArguments",
       "type": "object"
     },
     "annotations": {
@@ -967,7 +1282,7 @@
   },
   {
     "name": "propose_trade",
-    "description": "Propose a trade deal to another civilization.\n\n    Args:\n        other_player_id: The player ID (from get_diplomacy output)\n        offer_gold: Lump sum gold to give them\n        offer_gold_per_turn: Gold per turn to give them (30-turn duration)\n        offer_resources: Comma-separated resource types to offer, e.g. \"RESOURCE_SILK,RESOURCE_TEA\"\n        offer_favor: Diplomatic favor to offer\n        offer_open_borders: True to offer our open borders\n        request_gold: Lump sum gold to request from them\n        request_gold_per_turn: Gold per turn to request (30-turn duration)\n        request_resources: Comma-separated resource types to request\n        request_favor: Diplomatic favor to request from them\n        request_open_borders: True to request their open borders\n        joint_war_target: Player ID of a third civ to declare joint war against\n\n    Examples: Gift 100 gold: offer_gold=100. Trade silk for 3 gpt: offer_resources=\"RESOURCE_SILK\", request_gold_per_turn=3.\n    Mutual open borders: offer_open_borders=True, request_open_borders=True.\n    Trade favor for gold: offer_favor=20, request_gold=100.\n    ",
+    "description": "Propose a trade deal to another civilization.\n\n    Args:\n        other_player_id: The player ID (from get_diplomacy output)\n        offer_gold: Lump sum gold to give them\n        offer_gold_per_turn: Gold per turn to give them (30-turn duration)\n        offer_resources: Comma-separated resource types to offer, e.g. \"RESOURCE_SILK,RESOURCE_TEA\"\n        offer_favor: Diplomatic favor to offer\n        offer_open_borders: True to offer our open borders\n        request_gold: Lump sum gold to request from them\n        request_gold_per_turn: Gold per turn to request (30-turn duration)\n        request_resources: Comma-separated resource types to request\n        request_favor: Diplomatic favor to request from them\n        request_open_borders: True to request their open borders\n        joint_war_target: Player ID of a third civ to declare joint war against\n        mode: \"send\" to commit the deal, \"test\" to preview AI's counter-offer without committing\n\n    Examples: Gift 100 gold: offer_gold=100. Trade silk for 3 gpt: offer_resources=\"RESOURCE_SILK\", request_gold_per_turn=3.\n    Mutual open borders: offer_open_borders=True, request_open_borders=True.\n    Test a deal first: mode=\"test\" to see what the AI thinks is fair, then mode=\"send\" to commit.\n    ",
     "parameters": {
       "properties": {
         "other_player_id": {
@@ -1028,6 +1343,11 @@
           "default": 0,
           "title": "Joint War Target",
           "type": "integer"
+        },
+        "mode": {
+          "default": "send",
+          "title": "Mode",
+          "type": "string"
         }
       },
       "required": [
@@ -1134,6 +1454,149 @@
     "category": "action"
   },
   {
+    "name": "rebalance_hypothesis_pool",
+    "description": "Atomically redistribute a topic's hypothesis probabilities.\n\n    ``probabilities`` is a JSON object mapping hypothesis IDs to probabilities;\n    the values must sum to one (within 0.001).\n    ",
+    "parameters": {
+      "properties": {
+        "topic_id": {
+          "title": "Topic Id",
+          "type": "string"
+        },
+        "probabilities": {
+          "title": "Probabilities",
+          "type": "string"
+        }
+      },
+      "required": [
+        "topic_id",
+        "probabilities"
+      ],
+      "title": "rebalance_hypothesis_poolArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    },
+    "category": "action"
+  },
+  {
+    "name": "recompute_failure_attribution",
+    "description": "Recompute posterior candidate-cause weights after evidence changes.",
+    "parameters": {
+      "properties": {
+        "attribution_id": {
+          "title": "Attribution Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "attribution_id"
+      ],
+      "title": "recompute_failure_attributionArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    },
+    "category": "action"
+  },
+  {
+    "name": "record_action_verification",
+    "description": "Link a decision to evidence, including recovery after an interrupted call.\n\n    When an authorization is persisted as ``executing`` but the normal MCP\n    response is lost, this is the explicit recovery path. The tool must match\n    the hash-bound intent; success closes it, while failure makes it retryable.\n    ",
+    "parameters": {
+      "properties": {
+        "decision_id": {
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "tool": {
+          "title": "Tool",
+          "type": "string"
+        },
+        "expected": {
+          "title": "Expected",
+          "type": "string"
+        },
+        "actual": {
+          "title": "Actual",
+          "type": "string"
+        },
+        "success": {
+          "title": "Success",
+          "type": "boolean"
+        },
+        "belief_changes": {
+          "default": "{}",
+          "title": "Belief Changes",
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision_id",
+        "tool",
+        "expected",
+        "actual",
+        "success"
+      ],
+      "title": "record_action_verificationArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    },
+    "category": "action"
+  },
+  {
+    "name": "record_observation",
+    "description": "Record a factual observation without interpreting what it means.\n\n    ``facts`` and ``metrics`` are JSON objects.  Metrics use stable keys so\n    predictions, belief expectations, and plan exit conditions can evaluate\n    them later.  Important MCP query results are also captured automatically.\n    ",
+    "parameters": {
+      "properties": {
+        "statement": {
+          "title": "Statement",
+          "type": "string"
+        },
+        "facts": {
+          "default": "{}",
+          "title": "Facts",
+          "type": "string"
+        },
+        "metrics": {
+          "default": "{}",
+          "title": "Metrics",
+          "type": "string"
+        },
+        "source": {
+          "default": "agent",
+          "title": "Source",
+          "type": "string"
+        },
+        "reliability": {
+          "default": 1.0,
+          "title": "Reliability",
+          "type": "number"
+        },
+        "tags": {
+          "default": "[]",
+          "title": "Tags",
+          "type": "string"
+        }
+      },
+      "required": [
+        "statement"
+      ],
+      "title": "record_observationArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    },
+    "category": "action"
+  },
+  {
     "name": "recruit_great_person",
     "description": "Recruit a Great Person using accumulated GP points.\n\n    Args:\n        individual_id: The individual's ID (from get_great_people output, shown after ability)\n\n    Requires enough Great Person points for that class.\n    The GP spawns in your capital. Use get_great_people to check [CAN RECRUIT] status.\n    ",
     "parameters": {
@@ -1169,6 +1632,65 @@
         "individual_id"
       ],
       "title": "reject_great_personArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    },
+    "category": "action"
+  },
+  {
+    "name": "resolve_governance_council",
+    "description": "Arbitrate proposals without a weighted national-strategy score.\n\n    Order is fixed: hard constraints, grounded critic review, budget locks,\n    strategic priority, Pareto dominance, then opportunity cost. Selected\n    proposals become eligible for exact action routing; they do not execute.\n    ",
+    "parameters": {
+      "properties": {
+        "budget_limits": {
+          "title": "Budget Limits",
+          "type": "string"
+        },
+        "accepted_conditions": {
+          "default": "{}",
+          "title": "Accepted Conditions",
+          "type": "string"
+        }
+      },
+      "required": [
+        "budget_limits"
+      ],
+      "title": "resolve_governance_councilArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    },
+    "category": "action"
+  },
+  {
+    "name": "resolve_prediction",
+    "description": "Resolve a prediction manually when the outcome is not metric-evaluable.",
+    "parameters": {
+      "properties": {
+        "prediction_id": {
+          "title": "Prediction Id",
+          "type": "string"
+        },
+        "outcome": {
+          "title": "Outcome",
+          "type": "boolean"
+        },
+        "actual": {
+          "title": "Actual",
+          "type": "string"
+        }
+      },
+      "required": [
+        "prediction_id",
+        "outcome",
+        "actual"
+      ],
+      "title": "resolve_predictionArguments",
       "type": "object"
     },
     "annotations": {
@@ -1232,8 +1754,176 @@
     "category": "action"
   },
   {
+    "name": "review_belief_engine",
+    "description": "Evaluate due predictions, contradictions, and plan invalidation triggers.",
+    "parameters": {
+      "properties": {},
+      "title": "review_belief_engineArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    },
+    "category": "action"
+  },
+  {
+    "name": "review_governance_proposal",
+    "description": "Persist an evidence-grounded Devil's Advocate review.\n\n    A review may agree, agree with concrete conditions, or object. Bare\n    objections are rejected: they need counterevidence or an invalidated\n    assumption plus a concrete alternative.\n    ",
+    "parameters": {
+      "properties": {
+        "review_id": {
+          "title": "Review Id",
+          "type": "string"
+        },
+        "proposal_id": {
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "verdict": {
+          "title": "Verdict",
+          "type": "string"
+        },
+        "rationale": {
+          "title": "Rationale",
+          "type": "string"
+        },
+        "probability": {
+          "title": "Probability",
+          "type": "number"
+        },
+        "confidence": {
+          "title": "Confidence",
+          "type": "number"
+        },
+        "conditions": {
+          "default": "[]",
+          "title": "Conditions",
+          "type": "string"
+        },
+        "counterevidence": {
+          "default": "[]",
+          "title": "Counterevidence",
+          "type": "string"
+        },
+        "invalidated_assumptions": {
+          "default": "[]",
+          "title": "Invalidated Assumptions",
+          "type": "string"
+        },
+        "alternative": {
+          "default": "",
+          "title": "Alternative",
+          "type": "string"
+        }
+      },
+      "required": [
+        "review_id",
+        "proposal_id",
+        "verdict",
+        "rationale",
+        "probability",
+        "confidence"
+      ],
+      "title": "review_governance_proposalArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    },
+    "category": "action"
+  },
+  {
+    "name": "route_belief_decision",
+    "description": "Route a decision and bind it to an exact action/evidence contract.\n\n    ``action_intent`` is the authorization contract; the legacy\n    ``selected_action`` field is audit-only and cannot authorize execution:\n    ``{\"tool\":\"set_research\",\"params\":{\"tech_or_civic\":\"TECH_WRITING\",...}}``.\n    For ``verify_then_fast``, ``evidence_requirements`` names the exact fresh\n    queries that must follow the decision. The harness compares tool parameters,\n    not merely the presence of any query.\n    ",
+    "parameters": {
+      "properties": {
+        "statement": {
+          "title": "Statement",
+          "type": "string"
+        },
+        "probability": {
+          "title": "Probability",
+          "type": "number"
+        },
+        "confidence": {
+          "title": "Confidence",
+          "type": "number"
+        },
+        "impact": {
+          "title": "Impact",
+          "type": "string"
+        },
+        "urgency": {
+          "title": "Urgency",
+          "type": "string"
+        },
+        "irreversibility": {
+          "title": "Irreversibility",
+          "type": "number"
+        },
+        "belief_ids": {
+          "default": "[]",
+          "title": "Belief Ids",
+          "type": "string"
+        },
+        "considered_actions": {
+          "default": "[]",
+          "title": "Considered Actions",
+          "type": "string"
+        },
+        "selected_action": {
+          "default": "",
+          "title": "Selected Action",
+          "type": "string"
+        },
+        "reason": {
+          "default": "",
+          "title": "Reason",
+          "type": "string"
+        },
+        "action_intent": {
+          "default": "{}",
+          "title": "Action Intent",
+          "type": "string"
+        },
+        "evidence_requirements": {
+          "default": "[]",
+          "title": "Evidence Requirements",
+          "type": "string"
+        },
+        "gate_scope": {
+          "default": "global",
+          "title": "Gate Scope",
+          "type": "string"
+        },
+        "council_decision_id": {
+          "default": "",
+          "title": "Council Decision Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "statement",
+        "probability",
+        "confidence",
+        "impact",
+        "urgency",
+        "irreversibility"
+      ],
+      "title": "route_belief_decisionArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    },
+    "category": "action"
+  },
+  {
     "name": "send_diplomatic_action",
-    "description": "Send a proactive diplomatic action to another civilization.\n\n    Args:\n        other_player_id: The player ID (from get_diplomacy output)\n        action: One of: DIPLOMATIC_DELEGATION, DECLARE_FRIENDSHIP, DENOUNCE,\n                RESIDENT_EMBASSY, OPEN_BORDERS\n\n    Delegations cost 25 gold and can be rejected if the civ dislikes you.\n    Embassies require Writing tech. Use get_diplomacy to see available actions.\n    ",
+    "description": "Send a proactive diplomatic action to another civilization.\n\n    Args:\n        other_player_id: The player ID (from get_diplomacy output)\n        action: One of: DIPLOMATIC_DELEGATION, DECLARE_FRIENDSHIP, DENOUNCE,\n                RESIDENT_EMBASSY, OPEN_BORDERS,\n                DECLARE_SURPRISE_WAR, DECLARE_FORMAL_WAR, DECLARE_HOLY_WAR,\n                DECLARE_LIBERATION_WAR, DECLARE_RECONQUEST_WAR,\n                DECLARE_PROTECTORATE_WAR, DECLARE_COLONIAL_WAR,\n                DECLARE_TERRITORIAL_WAR\n\n    Delegations cost 25 gold and can be rejected if the civ dislikes you.\n    Embassies require Writing tech. Use get_diplomacy to see available actions.\n    Surprise war is always available if not allied/friends. Other war types\n    (casus belli) require specific civics and conditions.\n    ",
     "parameters": {
       "properties": {
         "other_player_id": {
@@ -1309,7 +1999,7 @@
   },
   {
     "name": "set_city_production",
-    "description": "Set what a city should produce.\n\n    Args:\n        city_id: City ID (from get_cities output)\n        item_type: UNIT, BUILDING, DISTRICT, or PROJECT\n        item_name: e.g. UNIT_WARRIOR, BUILDING_MONUMENT, DISTRICT_CAMPUS, PROJECT_LAUNCH_EARTH_SATELLITE\n        target_x: X coordinate for district placement (use get_district_advisor to find best tile)\n        target_y: Y coordinate for district placement\n\n    Tip: call get_cities first to see your cities and their IDs.\n    ",
+    "description": "Set what a city should produce.\n\n    Args:\n        city_id: City ID (from get_cities output)\n        item_type: UNIT, BUILDING, DISTRICT, or PROJECT\n        item_name: e.g. UNIT_WARRIOR, BUILDING_MONUMENT, DISTRICT_CAMPUS, PROJECT_LAUNCH_EARTH_SATELLITE\n        target_x: X coordinate for district/wonder placement (required for districts \u2014 use get_district_advisor to find best tile)\n        target_y: Y coordinate for district/wonder placement\n\n    Tip: call get_cities first to see your cities and their IDs.\n    ",
     "parameters": {
       "properties": {
         "city_id": {
@@ -1364,8 +2054,40 @@
     "category": "action"
   },
   {
+    "name": "set_plan_status",
+    "description": "Mark a dynamic plan active, completed, abandoned, or needing replan.",
+    "parameters": {
+      "properties": {
+        "plan_id": {
+          "title": "Plan Id",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "plan_id",
+        "status",
+        "reason"
+      ],
+      "title": "set_plan_statusArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    },
+    "category": "action"
+  },
+  {
     "name": "set_policies",
-    "description": "Set policy cards in government slots.\n\n    Args:\n        assignments: Comma-separated slot assignments, e.g.\n            \"0=POLICY_AGOGE,1=POLICY_URBAN_PLANNING\"\n            Slots not listed will be cleared. Use get_policies to see\n            available policies and slot indices.\n\n    Wildcard slots can accept any policy type. Military slots accept\n    military policies, economic slots accept economic policies, etc.\n    ",
+    "description": "Set policy cards in government slots.\n\n    Args:\n        assignments: Comma-separated slot assignments, e.g.\n            \"0=POLICY_AGOGE,1=POLICY_URBAN_PLANNING\"\n            Slots not listed keep their current policy. Use NONE to\n            explicitly clear a slot (e.g. \"2=NONE\"). Use get_policies to\n            see available policies and slot indices.\n\n    Wildcard slots can accept any policy type. Military slots accept\n    military policies, economic slots accept economic policies, etc.\n    ",
     "parameters": {
       "properties": {
         "assignments": {
@@ -1464,8 +2186,30 @@
     "category": "action"
   },
   {
+    "name": "submit_governance_proposal",
+    "description": "Submit a structured ministerial proposal; departments cannot execute it.\n\n    The JSON proposal names goals, separate success probability/confidence,\n    hard constraints, budget locks, benefits, costs, opportunity cost and exact\n    action intents. It remains advisory until ``resolve_governance_council``.\n    ",
+    "parameters": {
+      "properties": {
+        "proposal": {
+          "title": "Proposal",
+          "type": "string"
+        }
+      },
+      "required": [
+        "proposal"
+      ],
+      "title": "submit_governance_proposalArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    },
+    "category": "action"
+  },
+  {
     "name": "unit_action",
-    "description": "Issue a command to a unit.\n\n    Args:\n        unit_id: The unit's composite ID (from get_units output)\n        action: One of: move, attack, fortify, skip, found_city, improve, remove_feature, automate, heal, alert, sleep, delete, trade_route, activate, teleport, spread_religion\n        target_x: Target X coordinate (required for move/attack/trade_route/teleport)\n        target_y: Target Y coordinate (required for move/attack/trade_route/teleport)\n        improvement: Improvement type for builders (required for improve), e.g.\n            IMPROVEMENT_FARM, IMPROVEMENT_MINE, IMPROVEMENT_QUARRY,\n            IMPROVEMENT_PLANTATION, IMPROVEMENT_CAMP, IMPROVEMENT_PASTURE,\n            IMPROVEMENT_FISHING_BOATS, IMPROVEMENT_LUMBER_MILL\n\n    For move/attack: provide target_x and target_y.\n    For trade_route: provide target_x and target_y of destination city.\n    For teleport: provide target_x and target_y of destination city. Traders only, must be idle (not on active route).\n    For improve: provide improvement name. Builder must be on the tile.\n    For activate: activates a Great Person on their matching district.\n    For spread_religion: spreads religion at current tile. Missionaries/Apostles only.\n    For fortify/skip/found_city/automate/heal/alert/sleep/delete: no target needed.\n    heal = fortify until healed (auto-wake at full HP).\n    alert = sleep but auto-wake when enemy enters sight range.\n    delete = permanently disband the unit.\n    ",
+    "description": "Issue a command to a unit.\n\n    Args:\n        unit_id: The unit's composite ID (from get_units output)\n        action: One of: move, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion\n        target_x: Target X coordinate (required for move/attack/trade_route/teleport)\n        target_y: Target Y coordinate (required for move/attack/trade_route/teleport)\n        improvement: Improvement type for builders (required for improve), e.g.\n            IMPROVEMENT_FARM, IMPROVEMENT_MINE, IMPROVEMENT_QUARRY,\n            IMPROVEMENT_PLANTATION, IMPROVEMENT_CAMP, IMPROVEMENT_PASTURE,\n            IMPROVEMENT_FISHING_BOATS, IMPROVEMENT_LUMBER_MILL\n\n    For move/attack: provide target_x and target_y.\n    For trade_route: provide target_x and target_y of destination city.\n    For teleport: provide target_x and target_y of destination city. Traders only, must be idle (not on active route).\n    For improve: provide improvement name. Builder must be on the tile.\n    For repair: repairs a pillaged improvement on the builder's current tile. No improvement name needed.\n    For remove_improvement: demolishes an intact improvement on the builder's current tile (e.g. to replace a farm with a mine). Costs one charge.\n    For activate: activates a Great Person on their matching district.\n    For sacrifice_charges: Royal Society builder sacrifice \u2014 spends ALL builder charges to boost a district project (2% of cost per charge). Builder must be on the district tile.\n    For spread_religion: spreads religion at current tile. Missionaries/Apostles only.\n    For build_route: builds road/railroad on current tile. Military Engineers only. No charges used; costs 1 Iron + 1 Coal per railroad tile.\n    For fortify/skip/found_city/automate/heal/alert/sleep/delete: no target needed.\n    heal = fortify until healed (auto-wake at full HP).\n    alert = sleep but auto-wake when enemy enters sight range.\n    delete = permanently disband the unit.\n    ",
     "parameters": {
       "properties": {
         "unit_id": {
@@ -1527,6 +2271,38 @@
     "category": "action"
   },
   {
+    "name": "update_belief_entity",
+    "description": "Patch any current Belief Engine entity; history remains append-only.",
+    "parameters": {
+      "properties": {
+        "entity_type": {
+          "title": "Entity Type",
+          "type": "string"
+        },
+        "entity_id": {
+          "title": "Entity Id",
+          "type": "string"
+        },
+        "patch": {
+          "title": "Patch",
+          "type": "string"
+        }
+      },
+      "required": [
+        "entity_type",
+        "entity_id",
+        "patch"
+      ],
+      "title": "update_belief_entityArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    },
+    "category": "action"
+  },
+  {
     "name": "upgrade_unit",
     "description": "Upgrade a unit to its next type (e.g. Slinger -> Archer).\n\n    Args:\n        unit_id: The unit's composite ID (from get_units output)\n\n    Requires the right technology, enough gold, and the unit must have\n    moves remaining. The unit's movement is consumed by upgrading.\n    ",
     "parameters": {
@@ -1549,34 +2325,354 @@
     "category": "action"
   },
   {
-    "name": "vote_world_congress",
-    "description": "Vote on a World Congress resolution.\n\n    Args:\n        resolution_hash: Resolution type hash (from get_world_congress)\n        option: 1 for option A, 2 for option B\n        target_index: 0-based index into the resolution's possible targets list\n        num_votes: Number of votes (1 is free, extras cost diplomatic favor)\n\n    After voting on all resolutions, call end_turn() to submit and advance.\n    Use get_world_congress first to see available resolutions and targets.\n    ",
+    "name": "upsert_belief",
+    "description": "Create or revise a belief while retaining its complete revision history.",
     "parameters": {
       "properties": {
-        "resolution_hash": {
-          "title": "Resolution Hash",
-          "type": "integer"
+        "belief_id": {
+          "title": "Belief Id",
+          "type": "string"
         },
-        "option": {
-          "title": "Option",
-          "type": "integer"
+        "statement": {
+          "title": "Statement",
+          "type": "string"
         },
-        "target_index": {
-          "title": "Target Index",
-          "type": "integer"
+        "category": {
+          "title": "Category",
+          "type": "string"
         },
-        "num_votes": {
-          "default": 1,
-          "title": "Num Votes",
-          "type": "integer"
+        "probability": {
+          "title": "Probability",
+          "type": "number"
+        },
+        "confidence": {
+          "title": "Confidence",
+          "type": "number"
+        },
+        "impact": {
+          "default": "medium",
+          "title": "Impact",
+          "type": "string"
+        },
+        "urgency": {
+          "default": "medium",
+          "title": "Urgency",
+          "type": "string"
+        },
+        "evidence_ids": {
+          "default": "[]",
+          "title": "Evidence Ids",
+          "type": "string"
+        },
+        "counter_evidence_ids": {
+          "default": "[]",
+          "title": "Counter Evidence Ids",
+          "type": "string"
+        },
+        "falsifiers": {
+          "default": "[]",
+          "title": "Falsifiers",
+          "type": "string"
+        },
+        "expectations": {
+          "default": "[]",
+          "title": "Expectations",
+          "type": "string"
+        },
+        "action_threshold": {
+          "default": 0.65,
+          "title": "Action Threshold",
+          "type": "number"
+        },
+        "replan_threshold": {
+          "default": 0.5,
+          "title": "Replan Threshold",
+          "type": "number"
+        },
+        "gate_scope": {
+          "default": "global",
+          "title": "Gate Scope",
+          "type": "string"
         }
       },
       "required": [
-        "resolution_hash",
-        "option",
-        "target_index"
+        "belief_id",
+        "statement",
+        "category",
+        "probability",
+        "confidence"
       ],
-      "title": "vote_world_congressArguments",
+      "title": "upsert_beliefArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    },
+    "category": "action"
+  },
+  {
+    "name": "upsert_dynamic_plan",
+    "description": "Create or revise a 5/10/20-turn plan with explicit invalidation rules.",
+    "parameters": {
+      "properties": {
+        "plan_id": {
+          "title": "Plan Id",
+          "type": "string"
+        },
+        "horizon": {
+          "title": "Horizon",
+          "type": "integer"
+        },
+        "goal": {
+          "title": "Goal",
+          "type": "string"
+        },
+        "probability_of_success": {
+          "title": "Probability Of Success",
+          "type": "number"
+        },
+        "assumptions": {
+          "default": "[]",
+          "title": "Assumptions",
+          "type": "string"
+        },
+        "assumption_thresholds": {
+          "default": "{}",
+          "title": "Assumption Thresholds",
+          "type": "string"
+        },
+        "evidence_ids": {
+          "default": "[]",
+          "title": "Evidence Ids",
+          "type": "string"
+        },
+        "success_conditions": {
+          "default": "[]",
+          "title": "Success Conditions",
+          "type": "string"
+        },
+        "exit_conditions": {
+          "default": "[]",
+          "title": "Exit Conditions",
+          "type": "string"
+        },
+        "review_turn": {
+          "default": 0,
+          "title": "Review Turn",
+          "type": "integer"
+        },
+        "gate_scope": {
+          "default": "global",
+          "title": "Gate Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "plan_id",
+        "horizon",
+        "goal",
+        "probability_of_success"
+      ],
+      "title": "upsert_dynamic_planArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    },
+    "category": "action"
+  },
+  {
+    "name": "upsert_failure_attribution",
+    "description": "Create or revise candidate causes for a failure.\n\n    Candidates are JSON objects with ``id``, ``statement``, ``prior``, and\n    optional weighted ``evidence_for`` / ``evidence_against`` arrays.\n    ",
+    "parameters": {
+      "properties": {
+        "attribution_id": {
+          "title": "Attribution Id",
+          "type": "string"
+        },
+        "failure": {
+          "title": "Failure",
+          "type": "string"
+        },
+        "candidates": {
+          "title": "Candidates",
+          "type": "string"
+        }
+      },
+      "required": [
+        "attribution_id",
+        "failure",
+        "candidates"
+      ],
+      "title": "upsert_failure_attributionArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    },
+    "category": "action"
+  },
+  {
+    "name": "upsert_hypothesis",
+    "description": "Create or revise one competing explanation in a hypothesis pool.",
+    "parameters": {
+      "properties": {
+        "hypothesis_id": {
+          "title": "Hypothesis Id",
+          "type": "string"
+        },
+        "topic_id": {
+          "title": "Topic Id",
+          "type": "string"
+        },
+        "statement": {
+          "title": "Statement",
+          "type": "string"
+        },
+        "probability": {
+          "title": "Probability",
+          "type": "number"
+        },
+        "confidence": {
+          "title": "Confidence",
+          "type": "number"
+        },
+        "evidence_ids": {
+          "default": "[]",
+          "title": "Evidence Ids",
+          "type": "string"
+        },
+        "counter_evidence_ids": {
+          "default": "[]",
+          "title": "Counter Evidence Ids",
+          "type": "string"
+        }
+      },
+      "required": [
+        "hypothesis_id",
+        "topic_id",
+        "statement",
+        "probability",
+        "confidence"
+      ],
+      "title": "upsert_hypothesisArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    },
+    "category": "action"
+  },
+  {
+    "name": "upsert_prediction",
+    "description": "Create or revise a falsifiable prediction with a deadline.\n\n    ``evaluation`` may be a metric rule such as\n    ``{\"metric\":\"science\",\"operator\":\">=\",\"value\":60}``.\n    ",
+    "parameters": {
+      "properties": {
+        "prediction_id": {
+          "title": "Prediction Id",
+          "type": "string"
+        },
+        "statement": {
+          "title": "Statement",
+          "type": "string"
+        },
+        "probability": {
+          "title": "Probability",
+          "type": "number"
+        },
+        "confidence": {
+          "title": "Confidence",
+          "type": "number"
+        },
+        "deadline_turn": {
+          "title": "Deadline Turn",
+          "type": "integer"
+        },
+        "evaluation": {
+          "default": "{}",
+          "title": "Evaluation",
+          "type": "string"
+        },
+        "belief_ids": {
+          "default": "[]",
+          "title": "Belief Ids",
+          "type": "string"
+        }
+      },
+      "required": [
+        "prediction_id",
+        "statement",
+        "probability",
+        "confidence",
+        "deadline_turn"
+      ],
+      "title": "upsert_predictionArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    },
+    "category": "action"
+  },
+  {
+    "name": "upsert_strategic_goal",
+    "description": "Create or revise a national goal with separate likelihood/confidence.",
+    "parameters": {
+      "properties": {
+        "goal_id": {
+          "title": "Goal Id",
+          "type": "string"
+        },
+        "statement": {
+          "title": "Statement",
+          "type": "string"
+        },
+        "priority": {
+          "title": "Priority",
+          "type": "integer"
+        },
+        "probability": {
+          "title": "Probability",
+          "type": "number"
+        },
+        "confidence": {
+          "title": "Confidence",
+          "type": "number"
+        },
+        "hard_constraints": {
+          "default": "[]",
+          "title": "Hard Constraints",
+          "type": "string"
+        },
+        "deadline_turn": {
+          "default": 0,
+          "title": "Deadline Turn",
+          "type": "integer"
+        },
+        "parent_goal_id": {
+          "default": "",
+          "title": "Parent Goal Id",
+          "type": "string"
+        },
+        "tags": {
+          "default": "[]",
+          "title": "Tags",
+          "type": "string"
+        }
+      },
+      "required": [
+        "goal_id",
+        "statement",
+        "priority",
+        "probability",
+        "confidence"
+      ],
+      "title": "upsert_strategic_goalArguments",
       "type": "object"
     },
     "annotations": {
@@ -1587,7 +2683,7 @@
   },
   {
     "name": "end_turn",
-    "description": "End the current turn.\n\n    Make sure you've moved all units, set production, and chosen research\n    before ending the turn.\n\n    All 5 reflection parameters are required and must be non-empty.\n    These form the per-turn diary \u2014 your persistent memory across sessions:\n        tactical: What happened this turn \u2014 combat, movements, improvements.\n        strategic: Current standing vs rivals \u2014 yields, city count, victory path.\n        tooling: Tool issues or observations. Write \"No issues\" if none.\n        planning: Concrete actions for the next 5-10 turns.\n        hypothesis: Predictions \u2014 enemy behavior, resource needs, timelines.\n\n    agent_model: Your model identifier (e.g. \"claude-opus-4-6\", \"gpt-5\",\n        \"o3\"). This is recorded in the game diary and used for ELO rankings\n        across games. Always pass your exact model ID string every turn.\n\n    IMPORTANT: Reflections are recorded BEFORE the AI processes its turn.\n    Anything that surfaces after end_turn (diplomacy proposals, AI movements,\n    events reported in the turn result) belongs in the NEXT turn's diary.\n    If end_turn is blocked and you call it again after resolving the blocker,\n    the diary entry from the first call is kept \u2014 do not repeat reflections.\n    ",
+    "description": "End the current turn.\n\n    Make sure you've moved all units, set production, and chosen research\n    before ending the turn.\n\n    All 5 reflection parameters are required and must be non-empty.\n    These form the per-turn diary \u2014 your persistent memory across sessions:\n        tactical: What happened this turn \u2014 combat, movements, improvements.\n        strategic: Current standing vs rivals \u2014 yields, city count, victory path.\n        tooling: Tool issues or observations. Write \"No issues\" if none.\n        planning: Concrete actions for the next 5-10 turns.\n        hypothesis: Predictions \u2014 enemy behavior, resource needs, timelines.\n\n    IMPORTANT: Reflections are recorded BEFORE the AI processes its turn.\n    Anything that surfaces after end_turn (diplomacy proposals, AI movements,\n    events reported in the turn result) belongs in the NEXT turn's diary.\n    If end_turn is blocked and you call it again after resolving the blocker,\n    the diary entry from the first call is kept \u2014 do not repeat reflections.\n    ",
     "parameters": {
       "properties": {
         "tactical": {
@@ -1613,11 +2709,6 @@
         "hypothesis": {
           "default": "",
           "title": "Hypothesis",
-          "type": "string"
-        },
-        "agent_model": {
-          "default": "",
-          "title": "Agent Model",
           "type": "string"
         }
       },
@@ -1650,6 +2741,28 @@
     "parameters": {
       "properties": {},
       "title": "launch_gameArguments",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true
+    },
+    "category": "system"
+  },
+  {
+    "name": "load_game_save",
+    "description": "Load a save file by name. No need to call list_saves first.\n\n    Args:\n        save_name: Save name without extension (e.g. \"0_MCP_0079\",\n                   \"0A_GROUND_CONTROL\", \"AutoSave_0221\", \"quicksave\").\n\n    Tries Lua-based loading first (fast, ~5s). If the save isn't found\n    via Lua (common for autosaves/quicksaves), falls back to OCR menu\n    navigation (~90s) after verifying the file exists on disk.\n    ",
+    "parameters": {
+      "properties": {
+        "save_name": {
+          "title": "Save Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "save_name"
+      ],
+      "title": "load_game_saveArguments",
       "type": "object"
     },
     "annotations": {
@@ -1708,20 +2821,6 @@
     "category": "system"
   },
   {
-    "name": "quicksave",
-    "description": "Quicksave the current game.\n\n    Creates a quicksave that can be loaded later with load_save.\n    ",
-    "parameters": {
-      "properties": {},
-      "title": "quicksaveArguments",
-      "type": "object"
-    },
-    "annotations": {
-      "readOnlyHint": false,
-      "destructiveHint": true
-    },
-    "category": "system"
-  },
-  {
     "name": "restart_and_load",
     "description": "Full game recovery: kill, relaunch, and load a save.\n\n    Args:\n        save_name: Autosave name (e.g. \"AutoSave_0221\"). If not provided,\n                   loads the most recent autosave.\n\n    This is the recommended tool for recovering from game hangs (e.g. AI turn\n    processing stuck in infinite loop). Takes 60-120 seconds total:\n    1. Kills the game process\n    2. Waits for Steam to deregister (~10s)\n    3. Relaunches via Steam (~15-30s for process start + main menu)\n    4. Navigates menus via OCR to load the save (~30-60s)\n\n    After completion, wait ~10 seconds then call get_game_overview to verify.\n    ",
     "parameters": {
@@ -1750,7 +2849,7 @@
   },
   {
     "name": "run_lua",
-    "description": "Run arbitrary Lua code in the game. Advanced escape hatch.\n\n    Args:\n        code: Lua code to execute. Use print() for output, end with print(\"---END---\").\n        context: \"gamecore\" for simulation state, \"ingame\" for UI commands (default: gamecore)\n\n    The code runs in the game's Lua environment with full access to the\n    Civ 6 API. Always use print() for output (not return).\n    ",
+    "description": "Run arbitrary Lua code in the game. Advanced escape hatch \u2014 prefer built-in tools.\n\n    Args:\n        code: Lua code to execute. Use print() for output, end with print(\"---END---\").\n        context: \"gamecore\" (default) for read-only state queries.\n                 \"ingame\" for commands and UI-dependent queries.\n\n    Context differences:\n      gamecore: Players[], GameInfo.*, Map.*, Game.* \u2014 safe read-only access.\n                CANNOT use: UI.*, UnitManager.*, CityManager.*, notifications.\n      ingame:   All APIs including UI.*, UnitManager.*, CityManager.*.\n                Use for: moving units, setting research, diplomacy actions.\n\n    Always use print() for output (not return).\n    ",
     "parameters": {
       "properties": {
         "code": {
