@@ -13,22 +13,34 @@ log = logging.getLogger(__name__)
 
 
 _RECOVERY_SAVE_NAME = re.compile(r"^(?:0_MCP_\d+|AutoSave_\d+)$")
+_SAVE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 
 
-async def load_recovery_save_from_frontend(
+def _validate_save_name(save_name: str) -> str | None:
+    """Reject path/injection-like names before interpolating into Lua."""
+
+    if not isinstance(save_name, str) or not _SAVE_NAME.fullmatch(save_name):
+        return (
+            "Error: unsupported save name; use the Civ VI save filename "
+            "without extension (letters, digits, '.', '_' or '-')."
+        )
+    return None
+
+
+async def load_save_from_frontend(
     conn: GameConnection, save_name: str
 ) -> str:
-    """Load a recovery save without OCR, including the final Continue action.
+    """Load a save from MainMenu and let Civ VI finish Continue internally.
 
-    The call runs in Civ VI's ``MainMenu`` Lua state.  Its native
-    ``Automation.SetAutoStartEnabled`` switch tells the game's own
-    ``LoadScreen`` to call the same handler as the visible Continue Game
-    button once loading is complete.  It therefore needs no mouse, keyboard,
-    focused window, or visual recognition.
+    ``Automation.SetAutoStartEnabled`` is the same native post-load handler
+    used by Civ VI's Continue Game flow.  This is the shared API-first path
+    for DSH startup recovery and direct MCP lifecycle tools; it never clicks
+    a window or uses OCR.
     """
 
-    if not _RECOVERY_SAVE_NAME.fullmatch(save_name):
-        return f"Error: unsupported recovery save name: {save_name!r}"
+    validation_error = _validate_save_name(save_name)
+    if validation_error:
+        return validation_error
 
     main_menu_index = next(
         (idx for idx, name in conn.lua_states.items() if name == "MainMenu"),
@@ -52,24 +64,44 @@ print("MCP_FRONTEND_AUTOSTART|" .. tostring(automationOK));
 print("MCP_FRONTEND_LOAD|" .. tostring(loadOK));
 print("{lq.SENTINEL}");
 """
-    lines = await conn.execute_in_state(
-        main_menu_index,
-        code,
-        timeout=5.0,
-        mutation=True,
-        require_sentinel=False,
-    )
+    try:
+        lines = await conn.execute_in_state(
+            main_menu_index,
+            code,
+            timeout=5.0,
+            mutation=True,
+            require_sentinel=False,
+        )
+    except Exception as exc:
+        return f"Error: FrontEnd API failed for {save_name}: {exc}"
     if "MCP_FRONTEND_LOAD|true" not in lines:
-        return f"Error: FrontEnd refused recovery save {save_name}: {lines!r}"
+        return f"Error: FrontEnd refused save {save_name}: {lines!r}"
     if "MCP_FRONTEND_AUTOSTART|true" not in lines:
         return (
-            "Error: save loading began but Civ VI automation auto-start was unavailable; "
-            "refusing visual fallback."
+            "Error: save loading began but Civ VI automation auto-start was "
+            "unavailable; refusing visual fallback."
         )
     return (
-        f"Loading recovery save {save_name} via FrontEnd API; Civ VI will "
-        "confirm Continue Game through its built-in automation API."
+        f"Loading save {save_name} via FrontEnd API; Civ VI will confirm "
+        "Continue Game through its built-in automation API."
     )
+
+
+async def load_recovery_save_from_frontend(
+    conn: GameConnection, save_name: str
+) -> str:
+    """Load a recovery save without OCR, including the final Continue action.
+
+    The call runs in Civ VI's ``MainMenu`` Lua state.  Its native
+    ``Automation.SetAutoStartEnabled`` switch tells the game's own
+    ``LoadScreen`` to call the same handler as the visible Continue Game
+    button once loading is complete.  It therefore needs no mouse, keyboard,
+    focused window, or visual recognition.
+    """
+
+    if not _RECOVERY_SAVE_NAME.fullmatch(save_name):
+        return f"Error: unsupported recovery save name: {save_name!r}"
+    return await load_save_from_frontend(conn, save_name)
 
 
 async def dismiss_popup(conn: GameConnection) -> str:
@@ -512,15 +544,46 @@ async def load_game_save(conn: GameConnection, save_name: str) -> str:
 
     Two-tier approach:
     1. Lua: query save list, find by name, load in one async operation.
-    2. Filesystem: verify file exists, use OCR menu navigation (slow but
-       reliable — works for autosaves and quicksaves that Lua can't find).
+    2. Filesystem: verify the file exists, restart and use Civ VI's FrontEnd
+       API to load it. OCR is an explicit, opt-in last-resort fallback.
     """
     import asyncio
     import sys
 
+    validation_error = _validate_save_name(save_name)
+    if validation_error:
+        return validation_error
+
+    from . import game_launcher
+
+    # Refresh a stale/disconnected shared connection before inspecting Lua
+    # states. This prevents a crashed session's old ``gamecore_index`` from
+    # bypassing the MainMenu FrontEnd API path.
+    try:
+        await conn.ensure_connected()
+    except ConnectionError as exc:
+        return (
+            "Error: FireTuner connection unavailable; refusing OCR recovery "
+            f"to avoid taking over another client: {exc}"
+        )
+
+    # MainMenu is a distinct FrontEnd Lua state. Use the native load path so
+    # Civ VI itself performs the post-load Continue action; never click the
+    # menu while the shared tuner connection is unavailable.
+    if conn.gamecore_index is None:
+        frontend_result = await load_save_from_frontend(conn, save_name)
+        if not frontend_result.startswith("Error:"):
+            return frontend_result
+        if not game_launcher.ocr_recovery_enabled():
+            return (
+                f"{frontend_result} OCR fallback is disabled by default; set "
+                f"{game_launcher.OCR_RECOVERY_ENV}=1 to opt in."
+            )
+        return await game_launcher.load_save_from_menu(save_name)
+
     # On the Aspyr Linux port, Network.LoadGame silently does nothing
-    # (same as Network.SaveGame). Skip Lua tier and go straight to OCR
-    # menu navigation which actually works.
+    # (same as Network.SaveGame). Skip the in-game Lua tier and continue to
+    # the restart/FrontEnd API path below.
     if sys.platform != "linux":
         # Tier 1: Lua query-match-load (Windows/macOS only)
         try:
@@ -575,12 +638,9 @@ async def load_game_save(conn: GameConnection, save_name: str) -> str:
         except Exception:
             log.debug("Lua load_game_save failed", exc_info=True)
     else:
-        log.info(
-            "Linux: skipping Lua load (Aspyr port bug), using OCR nav for '%s'",
-            save_name,
-        )
+        log.info("Linux: skipping Lua load (Aspyr port bug) for '%s'", save_name)
 
-    # Tier 2: Filesystem verify + OCR menu load
+    # Tier 2: Filesystem verify + restart into the FrontEnd API path.
     import os
 
     from .game_launcher import SAVE_DIR, SINGLE_SAVE_DIR
@@ -594,17 +654,11 @@ async def load_game_save(conn: GameConnection, save_name: str) -> str:
             f"Check the name and try list_saves() to see available saves."
         )
 
-    # File exists but Lua couldn't find it — use OCR menu navigation.
-    # If we're at the main menu (no GameCore), navigate directly without
-    # restarting. Only restart_and_load if we're in-game.
-    from . import game_launcher
-
-    if conn.gamecore_index is None:
-        log.info("At main menu — loading '%s' via OCR menu nav", save_name)
-        return await game_launcher.load_save_from_menu(save_name)
-    else:
-        log.info("In-game — restart_and_load for '%s'", save_name)
-        return await game_launcher.restart_and_load(save_name)
+    # File exists but Lua couldn't find it. ``restart_and_load`` reuses the
+    # shared connection to invoke the FrontEnd API after the restart; it only
+    # permits OCR when the explicit environment opt-in is present.
+    log.info("In-game — restart_and_load for '%s'", save_name)
+    return await game_launcher.restart_and_load(save_name, conn=conn)
 
 
 async def execute_lua(

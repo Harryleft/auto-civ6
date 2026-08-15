@@ -29,7 +29,10 @@ import socket
 import subprocess
 import sys
 import time
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
+
+if TYPE_CHECKING:
+    from civ_mcp.connection import GameConnection
 
 log = logging.getLogger(__name__)
 
@@ -2722,7 +2725,20 @@ async def load_save_from_menu(save_name: str | None = None) -> str:
     appropriate tab in the Load Game screen.
 
     Requires the game to be at the main menu (launched but no game loaded).
+
+    This low-level GUI entry point is intentionally opt-in. MCP callers
+    should use ``game_lifecycle.load_game_save`` so the native FrontEnd API
+    is attempted first. OCR is retained only for a user-approved last resort,
+    because it can click an unrelated foreground window when FireTuner is
+    unavailable.
     """
+    if not ocr_recovery_enabled():
+        return (
+            "Error: OCR recovery is disabled by default. Use the Civ VI "
+            "FrontEnd API path, or explicitly set "
+            f"{OCR_RECOVERY_ENV}=1 for GUI fallback."
+        )
+
     if save_name is None:
         save_name = get_latest_autosave()
         if save_name is None:
@@ -2751,12 +2767,26 @@ async def load_save_from_menu(save_name: str | None = None) -> str:
     return await asyncio.to_thread(_navigate_to_save_sync, save_name, tab)
 
 
-async def restart_and_load(save_name: str | None = None) -> str:
+async def restart_and_load(
+    save_name: str | None = None,
+    *,
+    conn: GameConnection | None = None,
+) -> str:
     """Kill game, relaunch, and load a save. Full recovery sequence.
 
     This is the recommended tool for recovering from game hangs.
     Takes 60-120 seconds total.
+
+    When ``conn`` is supplied, the shared FireTuner connection is reused to
+    load the save through Civ VI's FrontEnd API. This avoids creating a
+    second tuner client and lets the game's built-in Continue handler finish
+    the transition. The OCR path is available only when explicitly enabled.
     """
+    if save_name is None:
+        save_name = get_latest_recovery_save() or get_latest_autosave()
+        if save_name is None:
+            return "Error: No recovery save found in the Civ VI save directories."
+
     results = []
 
     # Dismiss crash dialogs before kill — they block the process from exiting
@@ -2777,14 +2807,51 @@ async def restart_and_load(save_name: str | None = None) -> str:
     # Dismiss any lingering crash dialog from previous session (both platforms)
     await dismiss_crash_dialogs()
 
-    # Step 3: Load save via OCR. The tuner port opens before the main menu
-    # finishes rendering, so a first OCR pass can race a boot screen; back
-    # off once and retry instead of failing the whole recovery.
-    load_result = await load_save_from_menu(save_name)
-    if "Could not find" in load_result:
-        log.warning("Main menu not ready for OCR — backing off 30s and retrying")
-        await asyncio.sleep(30)
+    # Step 3: Prefer the native FrontEnd API over GUI automation. Reconnect
+    # the caller's existing FireTuner client after the process restart so a
+    # second client can never race for the single tuner slot.
+    if conn is not None:
+        for attempt in range(60):
+            try:
+                await conn.reconnect()
+                if conn.lua_states:
+                    break
+            except ConnectionError:
+                if attempt % 10 == 0:
+                    log.info(
+                        "Waiting for FireTuner after restart (%ds)", attempt
+                    )
+            await asyncio.sleep(1)
+
+        if not conn.lua_states:
+            load_result = (
+                "Error: FireTuner did not expose a Lua state after restart; "
+                "refusing OCR takeover."
+            )
+        else:
+            from civ_mcp.game_lifecycle import load_save_from_frontend
+
+            if conn.gamecore_index is None:
+                load_result = await load_save_from_frontend(conn, save_name)
+            else:
+                # A launcher unexpectedly restored an active session instead
+                # of presenting MainMenu. Do not recurse into restart or
+                # click the UI while that session owns the shared tuner.
+                load_result = (
+                    "Error: restart landed in an active game session instead "
+                    "of MainMenu; refusing unsafe recovery takeover."
+                )
+    elif ocr_recovery_enabled():
+        # Legacy callers without a shared connection must explicitly accept
+        # the unsafe GUI fallback.
         load_result = await load_save_from_menu(save_name)
+    else:
+        load_result = (
+            "Error: FrontEnd API recovery requires the shared FireTuner "
+            "connection. OCR fallback is disabled by default; set "
+            f"{OCR_RECOVERY_ENV}=1 to opt in."
+        )
+
     results.append(f"Load: {load_result}")
 
     return " | ".join(results)
