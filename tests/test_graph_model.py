@@ -471,3 +471,55 @@ def test_graph_package_does_not_import_the_mcp_adapter():
             elif isinstance(node, ast.ImportFrom) and node.module:
                 imported.add(node.module)
     assert not any(name == "civ_mcp" or name.startswith("civ_mcp.") for name in imported)
+
+
+def test_unchanged_world_projection_writes_no_full_upserts():
+    """Content dedup guard: an unchanged turn must not re-persist the whole
+    entity set (measured: a 16-entity turn-2 snapshot cost 14.6KB per delta,
+    doubling journal growth next to the legacy world-entity events)."""
+    entities = [_player(0), _city(0, 1, 10, 24)]
+    relations = [_owns(0, 1)]
+    first = project_world_state(_world("s1", 5, entities, relations))
+    view = GraphView.empty().apply(first)
+
+    second = project_world_state(_world("s2", 6, entities, relations), previous=view)
+
+    assert second.upsert_nodes == ()
+    assert second.upsert_edges == ()
+    assert second.remove_node_ids == ()
+    assert second.remove_edge_keys == ()
+
+    replayed = replay_deltas([first, second])
+    assert replayed.turn == 6 and replayed.snapshot_id == "s2"
+    assert {node.node_id for node in replayed.nodes.values()} == {
+        "player:0",
+        "city:10:24",
+    }
+    # Shadow comparison stays clean on the graph side against the deduplicated
+    # view: the observed-set check must not depend on per-turn
+    # last_observed_turn (legacy rows are absent here, so only graph_* issues
+    # are meaningful).
+    issues = compare_shadow_projection(_world("s2", 6, entities, relations), (), replayed)
+    assert not [issue for issue in issues if issue.startswith("graph_")]
+
+
+def test_unobserved_entity_returns_through_dedup_with_observed_restore():
+    """Fog round-trip under dedup: absent → observed=False; re-observed with
+    unchanged attributes → the delta must still carry the observed=True
+    restore (an observed-flag change always writes)."""
+    unit = {
+        "entity_type": "foreign_unit",
+        "entity_id": "foreign_unit:9",
+        "attributes": {"unit_id": 9, "x": 4, "y": 5},
+    }
+    seen = project_world_state(_world("s1", 5, [unit]))
+    view = GraphView.empty().apply(seen)
+
+    fogged = project_world_state(_world("s2", 6, []), previous=view)
+    view = view.apply(fogged)
+    assert view.node("unit:9").observed is False
+
+    restored = project_world_state(_world("s3", 7, [unit]), previous=view)
+    assert "unit:9" in {node.node_id for node in restored.upsert_nodes}
+    view = view.apply(restored)
+    assert view.node("unit:9").observed is True

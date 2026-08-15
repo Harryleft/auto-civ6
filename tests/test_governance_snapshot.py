@@ -679,3 +679,46 @@ def test_governance_brief_materializes_goal_before_military_reads_graph(tmp_path
     reloaded.bind_game("CIVILIZATION_INDIA", 123)
     assert reloaded.graph_view.state_hash == engine.graph_view.state_hash
     assert reloaded.graph_view.active_goals()[0].attributes["goal_id"] == "survive"
+
+
+def test_threat_scan_failure_degrades_snapshot_to_unavailable(monkeypatch):
+    """A broken threat scan must not blind the whole governance snapshot:
+    the collection converts the failure to threats=None so the military
+    department downgrades to "cannot consider cities safe" (fail-degraded)
+    instead of get_governance_brief erroring every turn (fail-closed)."""
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    from civ_mcp.connection import LuaError
+    from civ_mcp.game_state import GameState
+
+    gs = GameState.__new__(GameState)
+
+    class _Conn:
+        async def execute_read(self, _lua, **_kwargs):
+            return ["42"]
+
+    gs.conn = _Conn()
+    monkeypatch.setattr(gs, "get_game_overview", AsyncMock(return_value=_overview()))
+    monkeypatch.setattr(
+        gs, "get_cities", AsyncMock(return_value=([_city(1, 3, 4), _city(2, 6, 7)], []))
+    )
+    monkeypatch.setattr(
+        gs, "get_units", AsyncMock(return_value=[_unit(1, 3, 4), _unit(2, 6, 7)])
+    )
+    monkeypatch.setattr(gs, "get_diplomacy", AsyncMock(return_value=[]))
+    monkeypatch.setattr(gs, "get_tech_civics", AsyncMock(return_value=None))
+    monkeypatch.setattr(gs, "get_policies", AsyncMock(return_value=None))
+    monkeypatch.setattr(gs, "get_barbarian_overview", AsyncMock(return_value=None))
+    monkeypatch.setattr(gs, "get_notifications", AsyncMock(return_value=[]))
+
+    async def _broken_scan():
+        raise LuaError("ERR: threat scan failed")
+
+    monkeypatch.setattr(gs, "get_threat_scan", _broken_scan)
+
+    snapshot = asyncio.run(gs.get_governance_snapshot())
+
+    assert snapshot.turn == 42
+    assert snapshot.threat_scan_available is False
+    assert snapshot.threats == ()
