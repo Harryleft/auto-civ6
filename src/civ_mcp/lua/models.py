@@ -1321,6 +1321,60 @@ class GPAdvisorResult:
 
 
 @dataclass
+class GPPlayerPoints:
+    """One civ's standing in a great person class points race."""
+
+    player_id: int = -1
+    player_name: str = "Unmet"  # masked when the civ is unmet
+    points_total: int = -1
+    points_per_turn: int = -1
+    instances_earned: int = -1  # great people of this class already received
+
+
+@dataclass
+class GPClassStanding:
+    """Per-class points standings, official order (self first, rest desc)."""
+
+    class_name: str = ""
+    class_type: str = ""
+    entries: list[GPPlayerPoints] = field(default_factory=list)
+
+
+@dataclass
+class GPHistoryEntry:
+    """A great person already claimed by some civ."""
+
+    individual_name: str = ""
+    class_name: str = ""
+    era_name: str = ""
+    claimant: str = ""
+    turn_granted: int = -1
+    individual_id: int = 0
+
+
+@dataclass
+class GPOwnUnit:
+    """One of our great person units standing on the map."""
+
+    unit_id: int = -1  # = unit index, feeds get_gp_advisor / unit_action
+    name: str = ""
+    gp_class: str = ""
+    x: int = -1
+    y: int = -1
+    charges: int = -1
+
+
+@dataclass
+class GreatPeopleOverview:
+    """Full Great People report: standings, pool, history, own units."""
+
+    standings: list[GPClassStanding] = field(default_factory=list)
+    timeline: list[GreatPersonInfo] = field(default_factory=list)
+    history: list[GPHistoryEntry] = field(default_factory=list)
+    own_units: list[GPOwnUnit] = field(default_factory=list)
+
+
+@dataclass
 class TradeDestination:
     """A valid trade route destination city."""
 

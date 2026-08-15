@@ -283,6 +283,30 @@ async def get_great_people(ctx: Context) -> str:
     return await pipeline._logged(ctx, "get_great_people", {}, _run)
 
 
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_great_people_overview(ctx: Context) -> str:
+    """One-shot Great People report: standings, recruit pool, history, and your
+    idle great people. Returns four sections: 1. Points standings per great
+    person class for every major alive civ — total points, points per turn,
+    and great people already received. Civilizations you have not met are
+    masked as "Unmet". 2. Current recruit pool: each available individual
+    with era, recruit cost, ability, patronize gold/faith costs, and your
+    points toward that class (same rows as get_great_people; [CAN RECRUIT]
+    marks affordable ones). 3. History: already-claimed great people with
+    claimant and turn granted. 4. Your great person units on the map with
+    activation charges; pair with get_gp_advisor(unit_index) and
+    unit_action(action='activate'). Use this when deciding GP point
+    investment, patronage, or who will win a class race.
+    """
+    gs = pipeline._get_game(ctx)
+
+    async def _run():
+        ov = await gs.get_great_people_overview()
+        return nr.narrate_great_people_overview(ov)
+
+    return await pipeline._logged(ctx, "get_great_people_overview", {}, _run)
+
+
 @mcp.tool()
 async def get_gp_advisor(ctx: Context, unit_index: int) -> str:
     """Show best cities to activate a Great Person, ranked by suitability.
