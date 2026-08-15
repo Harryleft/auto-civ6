@@ -25,6 +25,7 @@ from civ_mcp.server.tools.belief import (  # noqa: F401  stable import surface
     _governance_payload,
     _governance_proposal_from_dict,
     _national_strategy_payload,
+    _normalize_impact_urgency,
     _release_stale_budget_locks,
     _reusable_typed_snapshot_for_turn,
     _typed_snapshot_observation_for_turn,

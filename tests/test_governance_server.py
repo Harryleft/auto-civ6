@@ -10,6 +10,7 @@ import pytest
 
 from civ6_belief_engine.belief_engine import (
     BeliefEngine,
+    BeliefEngineError,
     action_args_hash,
     tool_result_reference,
 )
@@ -19,6 +20,7 @@ from civ_mcp.server import (
     _governance_goal_from_dict,
     _governance_payload,
     _national_strategy_payload,
+    _normalize_impact_urgency,
     _normalize_trade_mode,
     _governance_proposal_from_dict,
     _release_stale_budget_locks,
@@ -117,6 +119,57 @@ def test_proposal_parser_coerces_llm_boolean_and_string_scores():
     assert proposal.opportunity_cost == 1.0
     assert proposal.priority == 90
     assert type(proposal.priority) is int
+
+
+def test_impact_urgency_normalizer_coerces_llm_enum_drift():
+    assert _normalize_impact_urgency("now", "urgency") == "critical"
+    assert _normalize_impact_urgency("紧急", "urgency") == "critical"
+    assert _normalize_impact_urgency("HIGH ", "impact") == "high"
+    assert _normalize_impact_urgency("中", "impact") == "medium"
+    assert _normalize_impact_urgency("Critical", "impact") == "critical"
+
+    with pytest.raises(
+        BeliefEngineError,
+        match=r"impact must be low, medium, high, or critical; got 'banana'",
+    ):
+        _normalize_impact_urgency("banana", "impact")
+
+    with pytest.raises(
+        BeliefEngineError, match=r"urgency must be low, medium, high, or critical; got 3"
+    ):
+        _normalize_impact_urgency(3, "urgency")
+
+
+def test_route_decision_accepts_normalized_impact_urgency_drift(tmp_path):
+    ctx, _engine = _bare_loop_context(tmp_path)
+    _engine.ingest_typed_snapshot(
+        {
+            "snapshot_id": "snapshot:42",
+            "turn_before": 42,
+            "turn_after": 42,
+            "capabilities": {"ruleset": "RULESET_STANDARD"},
+            "entities": [],
+            "relations": [],
+            "metrics": {},
+        },
+        turn=42,
+    )
+
+    result = asyncio.run(
+        route_belief_decision(
+            ctx,
+            statement="Clear the barbarian camp near the capital",
+            probability=0.9,
+            confidence=0.8,
+            impact="紧急",
+            urgency="now",
+            irreversibility=0.2,
+        )
+    )
+
+    routed = json.loads(result)
+    assert routed["impact"] == "critical"
+    assert routed["urgency"] == "critical"
 
 
 def test_goal_parser_restores_nested_and_legacy_probability_contracts():

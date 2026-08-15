@@ -165,6 +165,58 @@ def _proposal_priority(value: Any) -> int:
     raise BeliefEngineError("proposal priority must be a non-negative int")
 
 
+_IMPACT_URGENCY_LEVELS = frozenset({"low", "medium", "high", "critical"})
+
+# The four canonical levels the domain package scores (_IMPACT_SCORE /
+# _URGENCY_SCORE); LLMs routinely substitute plain-language temporal or
+# severity words for them.  critical ≈ immediate time pressure or top
+# severity (now/asap/紧急/立刻/最高), high ≈ prominent but deferrable
+# (high priority/important/重要/高), medium ≈ routine (med/normal/中/一般/普通),
+# low ≈ negligible (minor/低/轻微/小).
+_IMPACT_URGENCY_SYNONYMS = {
+    "now": "critical",
+    "immediate": "critical",
+    "immediately": "critical",
+    "asap": "critical",
+    "urgent": "critical",
+    "最高": "critical",
+    "紧急": "critical",
+    "立即": "critical",
+    "马上": "critical",
+    "立刻": "critical",
+    "high priority": "high",
+    "important": "high",
+    "significant": "high",
+    "major": "high",
+    "高": "high",
+    "重要": "high",
+    "med": "medium",
+    "normal": "medium",
+    "中": "medium",
+    "一般": "medium",
+    "普通": "medium",
+    "minor": "low",
+    "低": "low",
+    "轻微": "low",
+    "小": "low",
+}
+
+
+def _normalize_impact_urgency(value: Any, name: str) -> str:
+    """Coerce LLM enum drift (synonyms, case, whitespace) to canonical levels."""
+
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in _IMPACT_URGENCY_LEVELS:
+            return normalized
+        mapped = _IMPACT_URGENCY_SYNONYMS.get(normalized)
+        if mapped is not None:
+            return mapped
+    raise BeliefEngineError(
+        f"{name} must be low, medium, high, or critical; got {value!r}"
+    )
+
+
 def _governance_proposal_from_dict(raw: dict[str, Any]):
     """Validate one ministerial proposal against the shared governance schema."""
 
@@ -579,8 +631,13 @@ async def upsert_belief(
     replan_threshold: float = 0.5,
     gate_scope: str = "global",
 ) -> str:
-    """Create or revise a belief while retaining its complete revision history."""
+    """Create or revise a belief while retaining its complete revision history.
 
+    ``impact`` and ``urgency`` must be low, medium, high, or critical.
+    """
+
+    impact = _normalize_impact_urgency(impact, "impact")
+    urgency = _normalize_impact_urgency(urgency, "urgency")
     params = locals().copy()
     params.pop("ctx")
 
@@ -1605,6 +1662,7 @@ async def route_belief_decision(
 ) -> str:
     """Route a decision and bind it to an exact action/evidence contract.
 
+    ``impact`` and ``urgency`` must be low, medium, high, or critical.
     ``action_intent`` is the authorization contract; the legacy
     ``selected_action`` field is audit-only and cannot authorize execution:
     ``{"tool":"set_research","params":{"tech_or_civic":"TECH_WRITING",...}}``.
@@ -1625,6 +1683,8 @@ async def route_belief_decision(
             ensure_ascii=False,
         )
 
+    impact = _normalize_impact_urgency(impact, "impact")
+    urgency = _normalize_impact_urgency(urgency, "urgency")
     params = locals().copy()
     params.pop("ctx")
 
