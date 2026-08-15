@@ -1071,6 +1071,20 @@ async def submit_governance_proposal(ctx: Context, proposal: str) -> str:
                 arguments=intent.arguments,
                 capabilities=capabilities,
             )
+        for intent in typed.action_intents:
+            duplicate = engine.find_duplicate_pending_intent(
+                tool=intent.tool,
+                params=dict(intent.arguments or {}),
+                exclude_proposal_id=typed.proposal_id,
+            )
+            if duplicate is not None:
+                raise BeliefEngineError(
+                    f"Duplicate pending council intent for {intent.tool}: "
+                    f"already approved in proposal {duplicate['proposal_id']} "
+                    "without a terminal decision. Complete or cancel that "
+                    "authorization (or change the arguments) instead of "
+                    "re-authorizing the same action."
+                )
         for goal_id in typed.goal_ids:
             goal = engine.get("goal", goal_id)
             if not goal or goal.get("status") != "active":
