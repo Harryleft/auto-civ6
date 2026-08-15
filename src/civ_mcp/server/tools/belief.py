@@ -1999,6 +1999,11 @@ async def record_action_verification(
     When an authorization is persisted as ``executing`` but the normal MCP
     response is lost, this is the explicit recovery path. The tool must match
     the hash-bound intent; success closes it, while failure makes it retryable.
+
+    ``outcome_unknown`` decisions are settled here too: cancellation requires
+    prior verification, so without this branch a conservative ``submitted``
+    receipt leaves an authorization with no official exit and deadlocks
+    ``end_turn`` for the rest of the game.
     """
 
     params = locals().copy()
@@ -2008,6 +2013,17 @@ async def record_action_verification(
         decision = engine.get("decision", decision_id)
         if not decision:
             raise BeliefEngineError(f"Unknown decision: {decision_id}")
+        verification_patch = {
+            "expected": expected,
+            "actual_ref": tool_result_reference(actual),
+            "belief_changes": _belief_json_object(
+                belief_changes, "belief_changes"
+            ),
+            "verification": {
+                "verified": True,
+                "source": "agent_recovery",
+            },
+        }
         if decision.get("decision_state") == "executing":
             intent = decision.get("action_intent") or {}
             expected_tool = str(intent.get("tool") or "")
@@ -2034,19 +2050,50 @@ async def record_action_verification(
             return engine.update(
                 "action",
                 action["id"],
-                {
-                    "expected": expected,
-                    "actual_ref": tool_result_reference(actual),
-                    "belief_changes": _belief_json_object(
-                        belief_changes, "belief_changes"
-                    ),
-                    "verification": {
-                        "verified": True,
-                        "source": "agent_recovery",
-                    },
-                },
+                verification_patch,
                 turn=turn,
             )
+        if decision.get("decision_state") == "outcome_unknown":
+            # The mutation was already recorded with an unknown receipt; this
+            # verification is the read-back that settles it. Complete the
+            # authorization directly instead of appending a second action
+            # event for the same attempt.
+            intent = decision.get("action_intent") or {}
+            expected_tool = str(intent.get("tool") or "")
+            if expected_tool != tool:
+                raise BeliefEngineError(
+                    f"Verification tool {tool} does not match unverified intent "
+                    f"{expected_tool}"
+                )
+            engine.complete_action_authorization(
+                decision_id,
+                tool=tool,
+                success=success,
+                outcome_status="succeeded" if success else "failed",
+                result=actual,
+                turn=turn,
+            )
+            linked_actions = [
+                item
+                for item in engine.list("action", status=None)
+                if item.get("decision_id") == decision_id
+            ]
+            latest = max(
+                linked_actions,
+                key=lambda item: (
+                    item.get("version", 0),
+                    item.get("last_updated_turn", 0),
+                ),
+                default=None,
+            )
+            if latest is not None:
+                return engine.update(
+                    "action",
+                    latest["id"],
+                    verification_patch,
+                    turn=turn,
+                )
+            return engine.get("decision", decision_id) or {}
         return engine.create(
             "action",
             {

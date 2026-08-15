@@ -812,10 +812,13 @@ def build_dedications_query() -> str:
 local me = Game.GetLocalPlayer()
 {DEDICATION_RULESET}
 -- Ages and dedications were added by Rise and Fall.  Base Civ VI still has
--- chronological eras, but not the commemoration APIs.
+-- chronological eras, but not the commemoration APIs. Each guard names the
+-- exact reason in the bail so a ruleset/capability mismatch (the turn-97
+-- session saw RULESET_EXPANSION_2 + dedications capability true, yet this
+-- probe bailed with a bare NO_DEDICATIONS) is diagnosable from one call.
 local pEras = nil
 local gotEras = pcall(function() if Game.GetEras ~= nil then pEras = Game.GetEras() end end)
-if not gotEras or pEras == nil or pEras.GetPlayerNumAllowedCommemorations == nil or GameInfo.CommemorationTypes == nil or GameInfo.CommemorationTypes["COMMEMORATION_MONUMENTALITY"] == nil then {NO_DEDICATIONS} end
+{DEDICATION_GUARDS}
 local age = "Normal"
 if pEras:HasHeroicGoldenAge(me) then age = "Heroic"
 elseif pEras:HasGoldenAge(me) then age = "Golden"
@@ -854,7 +857,18 @@ print("{SENTINEL}")
             ("RULESET_EXPANSION_1", "RULESET_EXPANSION_2"),
             "ERR:NO_DEDICATIONS_IN_RULESET",
         ),
-    ).replace("{NO_DEDICATIONS}", _bail("ERR:NO_DEDICATIONS_IN_RULESET")).replace("{SENTINEL}", SENTINEL)
+    ).replace(
+        "{DEDICATION_GUARDS}",
+        "\n".join(
+            f"if {condition} then {_bail(f'ERR:NO_DEDICATIONS_IN_RULESET|guard={tag}')} end"
+            for condition, tag in (
+                ("not gotEras or pEras == nil", "GetEras"),
+                ("pEras.GetPlayerNumAllowedCommemorations == nil", "GetPlayerNumAllowedCommemorations"),
+                ("GameInfo.CommemorationTypes == nil", "CommemorationTypes"),
+                ('GameInfo.CommemorationTypes["COMMEMORATION_MONUMENTALITY"] == nil', "MONUMENTALITY_ROW"),
+            )
+        ),
+    ).replace("{SENTINEL}", SENTINEL)
 
 
 def build_choose_dedication(dedication_index: int) -> str:

@@ -894,6 +894,80 @@ class TestHarnessActionLifecycle:
         )
         assert retry["authorized"] is True
 
+    def test_out_of_vocabulary_decision_state_is_rejected(self, engine):
+        # The 2026-08-15 turn-97 deadlock: a blanket entity patch wrote
+        # decision_state="resolved", which the turn gate ignores (only
+        # succeeded/cancelled are terminal) while also blinding the official
+        # closure tools. Such writes must fail loudly instead.
+        decision = engine.route_decision(
+            statement="Research Writing",
+            probability=0.5,
+            confidence=0.9,
+            impact="low",
+            urgency="low",
+            irreversibility=0,
+            action_intent={"tool": "set_research", "params": {}},
+            turn=5,
+        )
+        with pytest.raises(BeliefEngineError, match="cancel_routed_action"):
+            engine.update(
+                "decision",
+                decision["id"],
+                {"decision_state": "resolved"},
+                turn=5,
+            )
+        # Unrelated field updates on the same decision stay allowed so
+        # recovery tooling is never locked out by validation.
+        engine.update(
+            "decision",
+            decision["id"],
+            {"last_failure_ref": "ref:legacy"},
+            turn=5,
+        )
+        assert engine.get("decision", decision["id"])["decision_state"] == "authorized"
+
+    def test_terminal_decision_state_cannot_be_reopened(self, engine):
+        params = {"tech_or_civic": "TECH_WRITING"}
+        decision = engine.route_decision(
+            statement="Research Writing",
+            probability=0.9,
+            confidence=0.9,
+            impact="low",
+            urgency="low",
+            irreversibility=0,
+            action_intent={
+                "tool": "set_research",
+                "params": params,
+                "args_hash": action_args_hash(params),
+            },
+            turn=5,
+        )
+        engine.authorize_action(
+            tool="set_research", params=params, turn=5, required=True
+        )
+        engine.record_tool_result(
+            tool="set_research",
+            params=params,
+            result="Research set to TECH_WRITING",
+            turn=5,
+            category="action",
+            success=True,
+            duration_ms=5,
+            decision_id=decision["id"],
+            decision_route="fast",
+        )
+        assert engine.get("decision", decision["id"])["decision_state"] == "succeeded"
+        # Overwriting a terminal outcome (the turn-97 patch destroyed four
+        # already-cancelled decisions this way) must be refused outright,
+        # even with an otherwise-legal lifecycle value.
+        with pytest.raises(BeliefEngineError, match="final"):
+            engine.update(
+                "decision",
+                decision["id"],
+                {"decision_state": "authorized"},
+                turn=5,
+            )
+
     def test_slow_gate_only_blocks_conflicting_scope(self, engine):
         engine.create(
             "belief",
