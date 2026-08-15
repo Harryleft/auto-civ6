@@ -98,6 +98,14 @@ uv run pytest tests/test_belief_engine.py -q -k "orphan"  # 按关键字跑单�
 - 不要单独运行 `uv run civ-mcp`：DSH 负责拉起 MCP 进程，FireTuner 只允许一个客户端。
 - 新增游戏动作必须走 `execute_mutation` 通道（见下节），并配离线回归测试。
 
+## Git 提交规则
+
+- 每次完成任何代码修改后，必须创建一条对应的 Git 提交；不得把已验证的代码改动留在工作区而不提交。
+- 提交前必须审查差异并运行与改动相称的验证；只暂存本次任务的文件或代码块，不得捆绑用户已有或并发产生的改动。
+- 提交信息采用 Conventional Commits 格式，且摘要使用中文：`<type>(<scope>): <中文摘要>`。例如：`fix(governance): 自动关闭已执行动作的旧决策`。
+- `type` 使用通用约定：`feat`、`fix`、`refactor`、`test`、`docs`、`chore`；`scope` 可省略，但涉及明确模块时应保留。
+- 默认在当前分支创建提交，不推送、不改写历史；只有用户明确要求时才推送或处理历史。
+
 ## 架构大图（跨文件）
 
 - **双包布局**：`src/civ_mcp` 是 MCP 适配层（连接、Lua builder/parser、`server/` 包内 104 个工具），`src/civ6_belief_engine` 是产品域包（belief engine + governance + graph）。旧兼容转发 shim 已删除，代码直接导入域包。已知债务：域包 3 处仍 import `civ_mcp.lua.models`（`governance/{models,snapshot}.py`、`governance/departments/diplomacy.py`）；Military 已改为窄 Protocol，剩余 DTO 边界倒置属图工程阶段三/四。
