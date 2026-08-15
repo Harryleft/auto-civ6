@@ -1584,6 +1584,7 @@ async def get_belief_state(
             "council_decision",
             "budget_lock",
             "outcome",
+            "simulation",
             "world_entity",
         )
         return {
