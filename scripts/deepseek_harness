@@ -6,6 +6,8 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 project_root="$(cd "$script_dir/.." && pwd)"
 harness_dir="${DEEPSEEK_HARNESS_DIR:-$project_root/../deepseek-harness}"
 patch_file="$project_root/integrations/deepseek-harness/civ6.cordis.yml"
+civ_agent_patch_file="$project_root/integrations/deepseek-harness/civ6-agent.cordis.yml"
+civ_agent_coding_patch_file="$project_root/integrations/deepseek-harness/civ6-agent-coding.cordis.yml"
 dsh_home="${CIV6_DSH_HOME:-$project_root/.dsh}"
 
 if ! command -v node >/dev/null 2>&1; then
@@ -38,12 +40,18 @@ if [ "${1:-}" = "check" ]; then
   trap 'rm -f "$check_output"' EXIT
   uv run python -c 'import asyncio, sys; from civ_mcp.server import mcp; names = {tool.name for tool in asyncio.run(mcp.list_tools())}; required = {"get_barbarian_overview", "get_policies"}; missing = sorted(required - names); sys.exit(f"Missing MCP tools: {missing}" if missing else 0)'
   DSH_HOME="$dsh_home" node "$dsh_bin" \
-    --profile web --patch "$patch_file" --dump-config > "$check_output"
+    --profile headless --patch "$patch_file" --patch "$civ_agent_patch_file" --dump-config > "$check_output"
   if ! grep -q "id: mcp-civ6" "$check_output"; then
     printf 'ERROR: Civ 6 MCP overlay was not composed.\n' >&2
     exit 1
   fi
-  printf 'DeepSeek Harness and the Civ 6 MCP overlay are ready.\n'
+  for disabled_tool in tool-bash tool-fs tool-fs-search tool-web tool-skill command-goal command-compact tool-goal code-runtime; do
+    if ! awk -v row="$disabled_tool" '$0 == "- id: " row { found=1; next } found && $0 == "  disabled: true" { ok=1; exit } found && /^- id: / { exit } END { exit ok ? 0 : 1 }' "$check_output"; then
+      printf 'ERROR: Civ-only profile did not disable %s.\n' "$disabled_tool" >&2
+      exit 1
+    fi
+  done
+  printf 'DeepSeek Harness Civ agent profile is ready (game MCP core; Coding is opt-in).\n'
   exit 0
 fi
 
@@ -54,8 +62,14 @@ case "$profile" in
       shift
     fi
     ;;
+  civ6-agent)
+    profile=headless
+    civ_agent_mode=1
+    shift
+    ;;
   *)
-    profile=web
+    printf 'ERROR: unknown profile: %s (expected web, headless, civ6-agent, or check)\n' "$profile" >&2
+    exit 2
     ;;
 esac
 
@@ -70,5 +84,13 @@ if command -v lsof >/dev/null 2>&1; then
   fi
 fi
 
+patch_args=(--patch "$patch_file")
+if [ "${civ_agent_mode:-0}" -eq 1 ]; then
+  patch_args+=(--patch "$civ_agent_patch_file")
+  if [ "${CIV6_DSH_ENABLE_CODING:-0}" = "1" ]; then
+    patch_args+=(--patch "$civ_agent_coding_patch_file")
+  fi
+fi
+
 exec env DSH_HOME="$dsh_home" node "$dsh_bin" \
-  --profile "$profile" --patch "$patch_file" "$@"
+  --profile "$profile" "${patch_args[@]}" "$@"

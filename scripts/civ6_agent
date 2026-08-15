@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# Run a bounded, Civ-only DSH agent session without the DSH Web UI.
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+turns=1
+dry_run=0
+with_coding=0
+
+usage() {
+  printf '%s\n' \
+    'Usage: ./scripts/civ6_agent [--turns N] [--with-coding] [--dry-run]' \
+    '' \
+    'Starts Civilization VI recovery when needed, then lets the Civ-only agent' \
+    'complete exactly N full turns (default: 1).'
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --turns)
+      if [ "$#" -lt 2 ]; then
+        printf 'ERROR: --turns requires a positive integer.\n' >&2
+        exit 2
+      fi
+      turns="$2"
+      shift 2
+      ;;
+    --dry-run)
+      dry_run=1
+      shift
+      ;;
+    --with-coding)
+      with_coding=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      printf 'ERROR: unknown argument: %s\n' "$1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+if ! [[ "$turns" =~ ^[1-9][0-9]*$ ]]; then
+  printf 'ERROR: --turns must be a positive integer, got: %s\n' "$turns" >&2
+  exit 2
+fi
+
+task="请启动并执行文明 VI 智能体回合循环。完整完成恰好 ${turns} 个回合，不多不少。\
+如果游戏尚未进入对局，等待 civ6-mcp 的受控恢复流程启动并载入最近恢复存档。\
+每回合必须遵循系统提示中的查询、蛮族优先、执行、核验和结束回合顺序。\
+记录开始时与每次 end_turn 后确认的回合号；遇到治理门禁、需人类决策、游戏结束或连接异常立即停止，\
+并在最终中文报告中说明已实际完成的回合数与原因。"
+
+if [ "$dry_run" -eq 1 ]; then
+  printf 'Civ agent dry run: turns=%s, auto_recovery=1, web_ui=disabled, coding_module=%s\n' "$turns" "$with_coding"
+  printf 'Task: %s\n' "$task"
+  exit 0
+fi
+
+# The MCP child reads this at startup. The wrapper leaves all process and
+# FireTuner single-client checks to scripts/deepseek_harness.
+exec env CIV_MCP_DSH_AUTO_RESUME=1 CIV6_DSH_ENABLE_CODING="$with_coding" \
+  "$script_dir/deepseek_harness" civ6-agent "$task"
