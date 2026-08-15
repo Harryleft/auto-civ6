@@ -96,11 +96,13 @@ from civ_mcp.lua.economy import (  # noqa: F401
 from civ_mcp.lua.great_people import (  # noqa: F401
     build_activate_great_person,
     build_gp_advisor_query,
+    build_great_people_overview_query,
     build_great_people_query,
     build_patronize_great_person,
     build_recruit_great_person,
     build_reject_great_person,
     parse_gp_advisor_response,
+    parse_great_people_overview_response,
     parse_great_people_response,
 )
 from civ_mcp.lua.governance import (  # noqa: F401

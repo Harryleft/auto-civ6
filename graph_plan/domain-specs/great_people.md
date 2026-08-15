@@ -62,6 +62,70 @@
 - 第 4 段己方在野：`for _,u in Players[me]:GetUnits():Members()`——`uInfo=GameInfo.Units[u:GetType()]`；`uInfo.GreatPersonClass~=nil` → pcall 取 `u:GetGreatPerson():GetActionCharges()`；`print("GP_UNIT|unitId|unitId|name|gpClass|x,y|charges")`。
 - `print("{SENTINEL}")`。
 
+完整源码：
+
+```python
+def build_great_people_overview_query() -> str:
+    """Full Great People report: standings, pool, history, own idle GPs (InGame context)."""
+    return f"""
+local me = Game.GetLocalPlayer()
+local gp = Game.GetGreatPeople()
+if gp == nil then {_bail("ERR:NO_GP_SYSTEM|Great People system not available")} end
+local myDiplo = Players[me] and Players[me]:GetDiplomacy() or nil
+-- 1) Per-class standings for all major alive players (mirrors popup L777-801)
+for classInfo in GameInfo.GreatPersonClasses() do
+    local classID = classInfo.Index
+    for _, p in ipairs(Game.GetPlayers{{Major = true, Alive = true}}) do
+        local pid = p:GetID()
+        local ok, pts, ppt, earned = pcall(function()
+            return p:GetGreatPeoplePoints():GetPointsTotal(classID),
+                   p:GetGreatPeoplePoints():GetPointsPerTurn(classID),
+                   gp:CountPeopleReceivedByPlayer(classID, pid)
+        end)
+        if not ok then pts, ppt, earned = -1, -1, -1 end
+        local name = Locale.Lookup(PlayerConfigurations[pid]:GetCivilizationShortDescription())
+        -- HasMet masking, same rule as the official popup (L783-788)
+        if pid ~= me and (myDiplo == nil or not myDiplo:HasMet(pid)) then name = "Unmet" end
+        print("GP_CLASS|" .. (Locale.Lookup(classInfo.Name):gsub("|", "/")) .. "|" .. classInfo.GreatPersonClassType
+              .. "|" .. pid .. "|" .. name .. "|" .. pts .. "|" .. ppt .. "|" .. earned)
+    end
+end
+-- 2) Current pool: reuse the existing GP| loop from build_great_people_query verbatim
+--    (timeline entries with class/name/era/cost/claimant/my points/ability/patronize costs/individual_id)
+-- 3) Claimed history (pcall: older binaries may lack GetPastTimeline)
+local okH, past = pcall(function() return gp:GetPastTimeline() end)
+if okH and past then
+    for _, e in ipairs(past) do
+        if e.Claimant ~= nil then
+            local ci = GameInfo.GreatPersonClasses[e.Class]; local ii = GameInfo.GreatPersonIndividuals[e.Individual]
+            local era = GameInfo.Eras[e.Era]
+            local cname = "Unmet"
+            if e.Claimant == me or (myDiplo and myDiplo:HasMet(e.Claimant)) then
+                cname = Locale.Lookup(PlayerConfigurations[e.Claimant]:GetCivilizationShortDescription())
+            end
+            print("GP_HIST|" .. Locale.Lookup(ii.Name) .. "|" .. Locale.Lookup(ci.Name) .. "|"
+                  .. (era and Locale.Lookup(era.Name) or "?") .. "|" .. cname
+                  .. "|" .. (e.TurnGranted or -1) .. "|" .. e.Individual)
+        end
+    end
+end
+-- 4) Own great people on the map (side-channel made first-class)
+for _, u in Players[me]:GetUnits():Members() do
+    local ui = GameInfo.Units[u:GetType()]
+    local gpc = ui and ui.GreatPersonClass or nil
+    if gpc then
+        local charges = -1
+        pcall(function() charges = u:GetGreatPerson():GetActionCharges() end)
+        print("GP_UNIT|" .. u:GetID() .. "|" .. u:GetID() .. "|" .. Locale.Lookup(u:GetName())
+              .. "|" .. gpc .. "|" .. u:GetX() .. "," .. u:GetY() .. "|" .. charges)
+    end
+end
+print("{SENTINEL}")
+"""
+```
+
+说明:第 2) 段直接复用现有 `GP|` 循环源文本(抽成局部常量或复制均可,以最小 diff 为准);`GP_UNIT` 的 `unit_index` 与 `get_gp_advisor`/`unit_action` 所需索引一致(现有代码 unit id 即 index)。
+
 ## ④ dataclass
 
 `lua/models.py` 新增，全默认值向后兼容：

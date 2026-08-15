@@ -113,7 +113,7 @@ uv run pytest tests/test_belief_engine.py -q -k "orphan"  # 按关键字跑单�
 
 ## 架构大图（跨文件）
 
-- **双包布局**：`src/civ_mcp` 是 MCP 适配层（连接、Lua builder/parser、`server/` 包内 104 个工具），`src/civ6_belief_engine` 是产品域包（belief engine + governance + graph）。旧兼容转发 shim 已删除，代码直接导入域包。已知债务：域包 3 处仍 import `civ_mcp.lua.models`（`governance/{models,snapshot}.py`、`governance/departments/diplomacy.py`）；Military 已改为窄 Protocol，剩余 DTO 边界倒置属图工程阶段三/四。
+- **双包布局**：`src/civ_mcp` 是 MCP 适配层（连接、Lua builder/parser、`server/` 包内 109 个工具），`src/civ6_belief_engine` 是产品域包（belief engine + governance + graph）。旧兼容转发 shim 已删除，代码直接导入域包。已知债务：域包 3 处仍 import `civ_mcp.lua.models`（`governance/{models,snapshot}.py`、`governance/departments/diplomacy.py`）；Military 已改为窄 Protocol，剩余 DTO 边界倒置属图工程阶段三/四。
 - **调用链**：FireTuner TCP 4318 → `GameConnection` → `GameState` → `server/pipeline.py` 的 `_logged` 管道（授权预检 → 执行 → 信念记录 → 结果过滤）→ DSH。所有 MCP 工具必须经 `_logged`，不要绕开。`server/` 包：`assembly.py`（lifespan/入口/auto-resume）、`pipeline.py`（运行管道）、`tools/`（工具按域分组；`tools/belief.py` 是阶段四整删单元）。
 - **命名陷阱**：`execute_read`/`execute_write` 指的是 Lua 上下文（GameCore/InGame），**不是**读写语义。真正的读写区分在 `execute_mutation`：变异命令恰好发送一次、死套接字不重发（抛 `MutationOutcomeUnknownError`，重试前必须先查询验证游戏状态）、未收到 sentinel 超时抛 `CommandTimeoutError`。
 - **BeliefEngine 是事件溯源**：append-only JSONL（`~/.civ6-mcp/beliefs/`），加载时 reduce 重放；实体用墓碑（deleted/archived）不物理删除；游戏重载（autosave 回滚/手动读档）产生 epoch 标记并作废旧授权；`governance_turn_gate` 对未完成授权 fail-closed。新代码不得绕过事件流直接改内存态。查询观察经 `derivation` 规则注册表自动派生信念/预测（带 `derived` 标签，coverage 审计区分系统产出与模型自报）。

@@ -138,6 +138,7 @@
 - `unit_action(action='trade_route', target_x, target_y)` 开始商路。
 - 国内商路提供食物和生产力，国际商路提供金币；外国贸易提供 1 条容量，市场/灯塔各提供 +1。
 - `get_great_people` 查看候选人与成本；`recruit_great_person` 用点数招募，`patronize_great_person` 直接购买，`reject_great_person` 跳过。
+- `get_great_people_overview` 伟人全景一次返回：各类别全体主要文明点数榜（未met 文明显示 Unmet）、当前候选池、已认领历史、己方在野伟人及激活次数。
 - 伟人招募后移动到匹配区域，用 `unit_action(action='activate')` 激活；不要把 0 个建造者次数误认为伟人可以删除。
 
 ## 气候（GS）
