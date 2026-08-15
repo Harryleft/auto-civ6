@@ -836,6 +836,7 @@ async def _record_belief_tool_result(
     success: bool,
     decision_id: str | None = None,
     decision_route: str | None = None,
+    execution_status: str | None = None,
 ) -> None:
     """Capture query facts and action verification without breaking gameplay."""
     if not _get_belief_mode(ctx).records_events:
@@ -884,6 +885,7 @@ async def _record_belief_tool_result(
             duration_ms=duration_ms,
             decision_id=decision_id,
             decision_route=decision_route,
+            execution_status=execution_status,
         )
         await _flush_belief_events(ctx)
     except Exception:
@@ -921,6 +923,7 @@ async def _logged(
             turn,
             ms,
             success=False,
+            execution_status="blocked",
         )
         return result
 
@@ -950,6 +953,7 @@ async def _logged(
             success=False,
             decision_id=decision_id,
             decision_route=decision_route,
+            execution_status="blocked",
         )
         return result
 
@@ -1001,6 +1005,7 @@ async def _logged(
             success=False,
             decision_id=decision_id,
             decision_route=decision_route,
+            execution_status="unknown",
         )
 
         # Connection-loss recovery: after consecutive failures,
@@ -1060,12 +1065,10 @@ async def _logged(
 
         return result
     except Exception as e:
-        # Any other failure (KeyError, RuntimeError, ...) previously escaped
-        # without an outcome, leaving the decision stuck in "executing" and
-        # deadlocking the governance turn gate. Record the failure so the
-        # decision becomes retryable. CancelledError derives from
-        # BaseException and keeps propagating; load-time/turn-gate recovery
-        # covers that path.
+        # An unexpected exception may happen after the game accepted a
+        # mutation. Preserve that uncertainty and require read-back instead of
+        # treating it as a safe-to-retry failure. CancelledError derives from
+        # BaseException; load-time/turn-gate recovery covers that path.
         result = f"Error: {e}"
         ms = int((time.monotonic() - start) * 1000)
         log.info(
@@ -1087,6 +1090,7 @@ async def _logged(
             success=False,
             decision_id=decision_id,
             decision_route=decision_route,
+            execution_status="unknown",
         )
         return result
     # Success — reset connection error counter + refresh heartbeat
@@ -4760,6 +4764,11 @@ async def route_belief_decision(
                     "evidence_requirements do not match the council-approved contract"
                 )
             parsed_requirements = approved_requirements
+            parsed_intent = {
+                **parsed_intent,
+                "proposal_version": int(proposal.get("version", 1)),
+                "council_decision_id": council_decision_id,
+            }
         elif council_required:
             raise BeliefEngineError(
                 "This national, scarce-resource, high-impact, or irreversible "
