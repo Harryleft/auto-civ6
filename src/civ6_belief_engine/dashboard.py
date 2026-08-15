@@ -76,7 +76,7 @@ _STAMPS: dict[tuple[str, str], tuple[str, str]] = {
     ("proposal", "proposed"): ("PROPOSED", "wait"),
 }
 
-_CHRONICLE_LIMIT = 80
+_CHRONICLE_LIMIT = 40
 
 
 def pick_live_journal(directory: Path = DEFAULT_JOURNAL_DIR) -> Path | None:
@@ -219,16 +219,25 @@ def _chronicle(events: list[dict]) -> list[dict[str, Any]]:
         )
         stamp, stamp_class = _STAMPS.get((str(entity_type), str(stamp_key)), (None, None))
         text = entity.get("cancellation_reason") or entity.get("statement") or ""
-        entries.append(
-            {
-                **_entry(event, entity_type, kind, stamp, stamp_class),
-                "text": str(text),
-                "meta": _meta(event, entity),
-                "updated": event.get("event_type") == "entity.updated",
-                "derived": "derived" in (entity.get("tags") or []),
-            }
-        )
+        entry = _entry(event, entity_type, kind, stamp, stamp_class)
+        entry["text"] = str(text)
+        # Consecutive observations from the same tool (the turn loop re-reads
+        # overview/units every turn) carry no new story: keep the latest only.
+        source = str(entity.get("source") or "")
+        if (
+            entity_type == "observation"
+            and entries
+            and entries[-1].get("entity_type") == "observation"
+            and entries[-1].get("_source") == source
+        ):
+            entry["_source"] = source
+            entries[-1] = entry
+            continue
+        entry["_source"] = source if entity_type == "observation" else None
+        entries.append(entry)
     entries.reverse()
+    for entry in entries:
+        entry.pop("_source", None)
     return entries[:_CHRONICLE_LIMIT]
 
 
@@ -242,18 +251,6 @@ def _entry(event: dict, entity_type: str, kind: tuple[str, str], stamp: str | No
         "stamp": stamp,
         "stamp_class": stamp_class,
     }
-
-
-def _meta(event: dict, entity: dict) -> str:
-    parts: list[str] = []
-    if entity.get("id"):
-        parts.append(str(entity["id"]))
-    source = entity.get("source") or entity.get("tool")
-    if source:
-        parts.append(str(source))
-    if entity.get("route"):
-        parts.append(f"route {entity['route']}")
-    return " · ".join(parts)
 
 
 def build_dashboard_state(path: str | Path) -> dict[str, Any]:
