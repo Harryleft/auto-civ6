@@ -2713,6 +2713,90 @@ class BeliefEngine:
             "pending_authorizations": pending_authorizations,
         }
 
+    def find_duplicate_pending_intent(
+        self,
+        *,
+        tool: str,
+        params: dict[str, Any],
+        exclude_proposal_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Return an approved-but-unfinished council intent matching tool+args.
+
+        Guards proposal submission against re-authorizing an action that is
+        already in flight. Matching mirrors ``governance_turn_gate``: an
+        intent stops being pending once a decision reaches ``succeeded`` or
+        ``cancelled``, so a cancelled duplicate never blocks a legitimate
+        retry. ``exclude_proposal_id`` lets a proposal resubmit itself —
+        editing one's own authorization is not a duplicate. Born from the
+        2026-08-15 duplicate-settle incident, where three parallel
+        settle-capital authorizations deadlocked ``end_turn`` for half an
+        hour.
+        """
+
+        wanted_hash = action_args_hash(params)
+        for proposal in self.list("proposal", status=None):
+            if proposal.get("council_state") != "approved":
+                continue
+            if exclude_proposal_id and proposal["id"] == exclude_proposal_id:
+                continue
+            for intent in proposal.get("action_intents") or []:
+                if not isinstance(intent, dict) or intent.get("tool") != tool:
+                    continue
+                intent_params = intent.get("params") or intent.get("arguments") or {}
+                if (
+                    not isinstance(intent_params, dict)
+                    or action_args_hash(intent_params) != wanted_hash
+                ):
+                    continue
+                if self._intent_has_terminal_decision(proposal, intent):
+                    continue
+                return {
+                    "proposal_id": proposal["id"],
+                    "intent_id": intent.get("intent_id") or None,
+                }
+        return None
+
+    def _intent_has_terminal_decision(
+        self, proposal: dict[str, Any], intent: dict[str, Any]
+    ) -> bool:
+        """Whether a decision already closed this council intent terminally.
+
+        Uses the same matching key as the turn gate: council decision id,
+        proposal id, then ``intent_id`` — falling back to tool + canonical
+        argument hash for legacy decisions that predate ``intent_id``.
+        """
+
+        for decision in self.list("decision", status=None):
+            if decision.get("decision_state") not in {"succeeded", "cancelled"}:
+                continue
+            decision_intent = decision.get("action_intent")
+            if not isinstance(decision_intent, dict):
+                continue
+            if decision.get("council_decision_id") != proposal.get("council_decision_id"):
+                continue
+            if decision_intent.get("proposal_id") != proposal["id"]:
+                continue
+            intent_id = str(intent.get("intent_id") or "")
+            decision_intent_id = str(decision_intent.get("intent_id") or "")
+            if not intent_id or decision_intent_id == intent_id:
+                return True
+            if not decision_intent_id:
+                decision_params = (
+                    decision_intent.get("params")
+                    or decision_intent.get("arguments")
+                    or {}
+                )
+                intent_params = intent.get("params") or intent.get("arguments") or {}
+                if (
+                    decision_intent.get("tool") == intent.get("tool")
+                    and isinstance(decision_params, dict)
+                    and isinstance(intent_params, dict)
+                    and action_args_hash(decision_params)
+                    == action_args_hash(intent_params)
+                ):
+                    return True
+        return False
+
     def route_decision(
         self,
         *,
