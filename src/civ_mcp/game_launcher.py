@@ -672,6 +672,79 @@ def _launch_game_sync() -> str:
 # ---------------------------------------------------------------------------
 
 
+def _find_running_game_pid() -> int | None:
+    """Find a running Civ 6 PID through macOS app registration.
+
+    A game process can be alive while its window is hidden from
+    ``CGWindowListCopyWindowInfo`` (for example, after Steam/Aspyr restores a
+    background session).  ``NSWorkspace`` still knows about the application,
+    so use the executable names guarded by ``_PROCESS_NAMES`` to find the
+    process we are allowed to activate.
+    """
+
+    if sys.platform != "darwin":
+        return None
+    try:
+        from AppKit import NSWorkspace
+    except ImportError:
+        log.debug("AppKit unavailable; cannot find a hidden Civ 6 application")
+        return None
+
+    try:
+        apps = NSWorkspace.sharedWorkspace().runningApplications()
+    except Exception:
+        log.debug("NSWorkspace runningApplications failed", exc_info=True)
+        return None
+
+    matches: list[tuple[int, int]] = []
+    for app in apps or []:
+        try:
+            names: list[str] = []
+            localized = getattr(app, "localizedName", None)
+            if callable(localized):
+                names.append(str(localized() or ""))
+            executable_url = getattr(app, "executableURL", None)
+            if callable(executable_url):
+                executable_url = executable_url()
+            path = getattr(executable_url, "path", "")
+            if callable(path):
+                path = path()
+            binary = os.path.basename(str(path or ""))
+            names.extend((binary, str(path or "")))
+
+            rank = None
+            for index, process_name in enumerate(_PROCESS_NAMES):
+                if any(process_name in candidate for candidate in names):
+                    rank = index
+                    break
+            if rank is None:
+                continue
+            pid = int(app.processIdentifier())
+            if pid > 0:
+                matches.append((rank, pid))
+        except Exception:
+            log.debug("Could not inspect a running macOS application", exc_info=True)
+
+    if not matches:
+        log.info("No registered Civ 6 application found while process is running")
+        return None
+    _rank, pid = min(matches)
+    log.info("Found registered Civ 6 application PID %d via NSWorkspace", pid)
+    return pid
+
+
+def _activate_running_game_app() -> bool:
+    """Activate a running Civ 6 app even when Quartz reports no window."""
+
+    if sys.platform != "darwin":
+        return False
+    pid = _find_running_game_pid()
+    if pid is None:
+        return False
+    _bring_to_front(pid=pid)
+    return True
+
+
 def _find_game_window() -> WindowInfo | None:
     """Find the Civ 6 game window.
 
@@ -1283,6 +1356,11 @@ def _ocr_winrt(
 # Used by _find_text as a fuzzy fallback when confident results don't match.
 _last_rejected_ocr: list[tuple[str, int, int, int, int]] = []
 
+# Window that produced the most recent successful OCR match.  A text match is
+# not safe to click unless it came from a currently identified Civ 6 window;
+# this also prevents a stale match from being sent to another desktop/app.
+_last_ocr_window: WindowInfo | None = None
+
 
 def _ocr_tesseract(
     pil_image: "PIL.Image.Image",
@@ -1676,6 +1754,59 @@ def _find_text(
     return matches[0]
 
 
+_UI_LABEL_CANDIDATES: dict[str, tuple[str, ...]] = {
+    # The installed macOS game uses the localized label first; English stays
+    # as a fallback for other installations.
+    "single_player": ("单人模式", "Single Player"),
+    "load_game": ("加载游戏", "Load Game"),
+    "autosaves": ("自动存档", "Autosaves"),
+    "continue": ("继续游戏", "CONTINUE"),
+}
+
+
+def _click_text_candidates(
+    candidates: tuple[str, ...], *, timeout: int = 30, **kwargs: object
+) -> str | None:
+    """Click the first matching localized label and return the label used.
+
+    The timeout is shared across candidates so a missing language does not
+    double the wait. Candidate order is deliberate: Chinese first for the
+    current installation, English remains a supported fallback.
+    """
+
+    if not candidates:
+        return None
+    per_candidate_timeout = max(2, timeout // len(candidates))
+    for candidate in candidates:
+        if _click_text(candidate, timeout=per_candidate_timeout, **kwargs):
+            return candidate
+    return None
+
+
+def _click_ui_label(label: str, **kwargs: object) -> str | None:
+    """Click a known Civ 6 UI label using Chinese/English candidates."""
+
+    try:
+        candidates = _UI_LABEL_CANDIDATES[label]
+    except KeyError as exc:
+        raise ValueError(f"Unknown Civ 6 UI label: {label}") from exc
+    return _click_text_candidates(candidates, **kwargs)
+
+
+def _find_text_candidates(
+    ocr_results: list[tuple[str, int, int, int, int]],
+    candidates: tuple[str, ...],
+    **kwargs: object,
+) -> tuple[str, int, int, int, int] | None:
+    """Find the first matching localized label in one OCR result set."""
+
+    for candidate in candidates:
+        match = _find_text(ocr_results, candidate, **kwargs)
+        if match:
+            return match
+    return None
+
+
 def _click(x: int, y: int) -> None:
     """Click at screen coordinates (points)."""
     if sys.platform == "win32":
@@ -1874,6 +2005,7 @@ def _bring_to_front(pid: int | None = None) -> None:
         raise NotImplementedError(f"Window focus not supported on {sys.platform}")
     try:
         from AppKit import (
+            NSApplicationActivateAllWindows,
             NSApplicationActivateIgnoringOtherApps,
             NSRunningApplication,
         )
@@ -1894,7 +2026,9 @@ def _bring_to_front(pid: int | None = None) -> None:
         return
 
     for attempt in range(3):
-        app.activateWithOptions_(NSApplicationActivateIgnoringOtherApps)
+        app.activateWithOptions_(
+            NSApplicationActivateAllWindows | NSApplicationActivateIgnoringOtherApps
+        )
         time.sleep(0.3)
         if app.isActive():
             return
@@ -1969,29 +2103,40 @@ def _wait_for_text(
 ) -> tuple[str, int, int, int, int] | None:
     """Wait until OCR finds target text in game window.
 
-    Captures only the game window (not the full screen). Falls back to
-    full-screen capture when no game window exists (e.g. Aspyr launcher).
+    Captures only a currently identified Civ 6 window.  The Aspyr launcher is
+    handled separately by _click_aspyr_launcher_sync; this function must never
+    use full-screen OCR because another app (or desktop space) could be
+    mistaken for the game.
     """
+    global _last_ocr_window
+
     _require_gui_deps()
+    _last_ocr_window = None
     start = time.time()
     focused = False
     last_results: list[tuple[str, int, int, int, int]] = []
     while time.time() - start < timeout:
         win = _find_game_window()
         if win is None:
-            log.debug("No game window found, using full-screen OCR")
-            results = _ocr_fullscreen()
-            focused = False
-        else:
-            if not focused:
-                _bring_to_front(pid=win.pid)
-                time.sleep(0.3)
-                focused = True
-            try:
-                results = _ocr_game_window(win)
-            except RuntimeError:
-                log.debug("Window capture failed, falling back to full-screen OCR")
-                results = _ocr_fullscreen()
+            log.error(
+                "_wait_for_text: Civ 6 WindowInfo unavailable; "
+                "refusing full-screen OCR/click for '%s'",
+                target,
+            )
+            return None
+        if not focused:
+            _bring_to_front(pid=win.pid)
+            time.sleep(0.3)
+            focused = True
+        try:
+            results = _ocr_game_window(win)
+        except RuntimeError:
+            log.error(
+                "_wait_for_text: Civ 6 window capture failed; "
+                "refusing full-screen OCR/click for '%s'",
+                target,
+            )
+            return None
 
         last_results = results
         match = _find_text(
@@ -2004,6 +2149,7 @@ def _wait_for_text(
         elapsed = time.time() - start
         if match:
             log.info("_wait_for_text: '%s' found after %.1fs", target, elapsed)
+            _last_ocr_window = win
             return match
         log.debug(
             "_wait_for_text: '%s' not found (%.1fs/%ds, %d results)",
@@ -2032,6 +2178,78 @@ def _wait_for_text(
             elapsed,
         )
     return None
+
+
+def _wait_for_text_candidates(
+    candidates: tuple[str, ...], *, timeout: int = 30, **kwargs: object
+) -> tuple[str, int, int, int, int] | None:
+    """Wait for the first matching localized label."""
+
+    if not candidates:
+        return None
+    per_candidate_timeout = max(2, timeout // len(candidates))
+    for candidate in candidates:
+        match = _wait_for_text(candidate, timeout=per_candidate_timeout, **kwargs)
+        if match:
+            return match
+    return None
+
+
+def _click_ocr_match(
+    match: tuple[str, int, int, int, int] | None,
+    window: WindowInfo | None,
+    *,
+    y_offset: int = 0,
+    post_delay: float = 0,
+) -> bool:
+    """Click an OCR match only while its Civ 6 window is still identified.
+
+    Coordinates from OCR are screen coordinates, so clicking after the window
+    disappears could send a Quartz/xdotool event to an unrelated application.
+    Re-check the exact window (PID and window ID) before and after activation;
+    a missing or changed window is an explicit safe failure.
+    """
+    if match is None or window is None:
+        log.error("Refusing OCR click: no Civ 6 WindowInfo for the match")
+        return False
+
+    current = _find_game_window()
+    if (
+        current is None
+        or current.pid != window.pid
+        or current.window_id != window.window_id
+    ):
+        log.error(
+            "Refusing OCR click: Civ 6 window changed or disappeared "
+            "(expected pid=%d wid=%d, current=%s)",
+            window.pid,
+            window.window_id,
+            current,
+        )
+        return False
+
+    _bring_to_front(pid=window.pid)
+    time.sleep(0.3)
+    current = _find_game_window()
+    if (
+        current is None
+        or current.pid != window.pid
+        or current.window_id != window.window_id
+    ):
+        log.error(
+            "Refusing OCR click after activation: Civ 6 WindowInfo unavailable "
+            "or changed (expected pid=%d wid=%d, current=%s)",
+            window.pid,
+            window.window_id,
+            current,
+        )
+        return False
+
+    _text, x, y, _w, _h = match
+    _click(x, y + y_offset)
+    if post_delay:
+        time.sleep(post_delay)
+    return True
 
 
 def _click_text(
@@ -2071,11 +2289,14 @@ def _click_text(
         x,
         click_y,
     )
-    _bring_to_front()
-    time.sleep(0.3)
-    _click(x, click_y)
-    time.sleep(post_delay)
-    return True
+    # _wait_for_text records the exact Civ 6 window used for this OCR result.
+    # Never fall back to a global Quartz click when that window is gone.
+    return _click_ocr_match(
+        match,
+        _last_ocr_window,
+        y_offset=y_offset,
+        post_delay=post_delay,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -2181,6 +2402,45 @@ def get_latest_autosave() -> str | None:
     return os.path.basename(saves[0]).replace(".Civ6Save", "")
 
 
+def get_latest_recovery_save() -> str | None:
+    """Return the newest safe save for an opt-in DSH startup recovery.
+
+    MCP's named saves are the primary recovery source because they are
+    written after a successful MCP turn.  The game's own ``AutoSave_*``
+    files are only a fallback (and live in the ``auto`` subdirectory).
+    The priority is intentional: an older MCP save still gives us a known
+    good checkpoint rather than silently selecting a newer, unrelated game
+    autosave.  Only the two hard-coded Civ 6 save locations and filename
+    families are considered.
+
+    Returns the save name without ``.Civ6Save`` or ``None`` when no usable
+    candidate exists.  A zero-byte or non-regular file is ignored because it
+    cannot be loaded by the game.
+    """
+
+    def _latest(pattern: str) -> str | None:
+        candidates: list[tuple[int, str]] = []
+        for path in glob.glob(pattern):
+            try:
+                stat = os.stat(path)
+            except OSError:
+                continue
+            if not os.path.isfile(path) or stat.st_size <= 0:
+                continue
+            # Use the name as a deterministic tie-breaker when two saves have
+            # the same filesystem timestamp (common on coarse filesystems).
+            candidates.append((stat.st_mtime_ns, os.path.basename(path)))
+        if not candidates:
+            return None
+        _mtime, filename = max(candidates)
+        return os.path.splitext(filename)[0]
+
+    mcp_save = _latest(os.path.join(SINGLE_SAVE_DIR, "0_MCP_*.Civ6Save"))
+    if mcp_save is not None:
+        return mcp_save
+    return _latest(os.path.join(SAVE_DIR, "AutoSave_*.Civ6Save"))
+
+
 def list_autosaves(limit: int = 10) -> list[str]:
     """List recent autosave names, newest first."""
     saves = glob.glob(os.path.join(SAVE_DIR, "AutoSave_*.Civ6Save"))
@@ -2214,30 +2474,46 @@ def _navigate_to_save_sync(save_name: str, tab: str | None = "Autosaves") -> str
         log.info("Launch result: %s", launch_result)
         # After launch, game should be at main menu (Aspyr launcher handled by _launch_game_sync)
     else:
+        # Steam/Aspyr can leave the game registered and running while Quartz
+        # reports no on-screen game window.  Activate the registered app
+        # before OCR so full-screen capture is not aimed at another app.
+        if sys.platform == "darwin":
+            _activate_running_game_app()
         # Dismiss crash dialog if present — it overlays the menu and blocks OCR
         _dismiss_crash_dialog()
         # Click through Aspyr launcher if present (macOS shows PLAY button before main menu)
         _click_aspyr_launcher_sync()
 
-    log.info("[1/7] Waiting for main menu (Single Player)...")
-    if not _click_text("Single Player", timeout=90, exact=True, post_delay=0.5):
-        return "FAILED: Could not find 'Single Player' on main menu. Is the game at the main menu?"
-    steps.append("Clicked Single Player")
+    log.info("[1/7] Waiting for main menu (Single Player / 单人模式)...")
+    single_player_label = _click_ui_label(
+        "single_player", timeout=90, exact=True, post_delay=0.5
+    )
+    if not single_player_label:
+        return "FAILED: Could not find 'Single Player / 单人模式' on main menu. Is the game at the main menu?"
+    steps.append(f"Clicked {single_player_label}")
 
-    log.info("[2/7] Clicking 'Load Game'...")
+    log.info("[2/7] Clicking 'Load Game / 加载游戏'...")
     # y_offset nudges the click down from bbox center to avoid hitting
     # "Resume Game" directly above in the tightly-packed single player menu.
-    if not _click_text("Load Game", timeout=5, exact=True, post_delay=0.5, y_offset=15):
-        return "FAILED: Could not find 'Load Game' button."
-    steps.append("Clicked Load Game")
+    load_label = _click_ui_label(
+        "load_game", timeout=5, exact=True, post_delay=0.5, y_offset=15
+    )
+    if not load_label:
+        return "FAILED: Could not find 'Load Game / 加载游戏' button."
+    steps.append(f"Clicked {load_label}")
 
     if tab is not None:
         log.info("[3/6] Clicking '%s' filter...", tab)
-        if not _click_text(tab, timeout=10, exact=True, post_delay=1):
+        tab_label = (
+            _click_ui_label("autosaves", timeout=10, exact=True, post_delay=1)
+            if tab == "Autosaves"
+            else _click_text_candidates((tab,), timeout=10, exact=True, post_delay=1)
+        )
+        if not tab_label:
             log.info("%s filter not found — may already be active", tab)
             steps.append(f"{tab} filter (may already be active)")
         else:
-            steps.append(f"Clicked {tab} filter")
+            steps.append(f"Clicked {tab_label} filter")
     else:
         log.info("[3/6] Using default save list (no filter needed)")
         steps.append("Default save list (regular saves)")
@@ -2249,15 +2525,20 @@ def _navigate_to_save_sync(save_name: str, tab: str | None = "Autosaves") -> str
         )
     steps.append(f"Selected save {save_name}")
 
-    log.info("[5/6] Clicking 'Load Game' button (bottom, not title)...")
+    log.info("[5/6] Clicking 'Load Game / 加载游戏' button (bottom, not title)...")
     # prefer_bottom picks the button over the page title. If the only match
     # is the title (y < 50% of screen), skip it — the button wasn't detected.
-    if not _click_text(
-        "Load Game", timeout=10, post_delay=1, prefer_bottom=True, min_y_fraction=0.7
-    ):
-        steps.append("Load Game button not found (may have loaded from double-click)")
+    bottom_load_label = _click_ui_label(
+        "load_game",
+        timeout=10,
+        post_delay=1,
+        prefer_bottom=True,
+        min_y_fraction=0.7,
+    )
+    if not bottom_load_label:
+        steps.append("Load Game / 加载游戏 button not found (may have loaded from double-click)")
     else:
-        steps.append("Clicked Load Game button")
+        steps.append(f"Clicked {bottom_load_label} button")
 
     # Wait for save to load, then click through the leader intro screen.
     #
@@ -2265,7 +2546,10 @@ def _navigate_to_save_sync(save_name: str, tab: str | None = "Autosaves") -> str
     # loading phase can crash the renderer.  macOS (Quartz) and Linux (mss)
     # are safe to poll during loading since they don't inject window messages.
 
-    log.info("[6/6] Waiting 15s for save to load, then looking for CONTINUE GAME...")
+    log.info(
+        "[6/6] Waiting 15s for save to load, then looking for "
+        "CONTINUE GAME / 继续游戏..."
+    )
     time.sleep(15)
 
     # Screen-aware CONTINUE detection: poll OCR and check WHAT we see.
@@ -2285,8 +2569,8 @@ def _navigate_to_save_sync(save_name: str, tab: str | None = "Autosaves") -> str
         except Exception:
             results = _ocr_fullscreen()
 
-        # Check for CONTINUE (leader screen — good)
-        match = _find_text(results, "CONTINUE")
+        # Check for CONTINUE (leader screen — good), in either UI language.
+        match = _find_text_candidates(results, _UI_LABEL_CANDIDATES["continue"])
         if match:
             text, x, y, w, h = match
             log.info(
@@ -2303,12 +2587,16 @@ def _navigate_to_save_sync(save_name: str, tab: str | None = "Autosaves") -> str
             steps.append("Clicked CONTINUE")
             break
 
-        # Check for main menu (wrong screen — save load failed)
-        menu_match = _find_text(results, "Single Player")
+        # Check for main menu (wrong screen — save load failed), in either UI
+        # language.
+        menu_match = _find_text_candidates(
+            results, _UI_LABEL_CANDIDATES["single_player"]
+        )
         if menu_match and elapsed > 20:  # give 20s grace for loading transition
             log.warning(
-                "CONTINUE wait: ABORT — detected main menu ('Single Player' visible) "
-                "after %.0fs. Save load likely failed. Will retry navigation.",
+                "CONTINUE wait: ABORT — detected main menu "
+                "('Single Player / 单人模式' visible) after %.0fs. Save load "
+                "likely failed. Will retry navigation.",
                 elapsed,
             )
             main_menu_detected = True
@@ -2326,12 +2614,14 @@ def _navigate_to_save_sync(save_name: str, tab: str | None = "Autosaves") -> str
     if main_menu_detected:
         # Save load failed — we're back at main menu. Redo from step 1.
         log.warning("Restarting save navigation from main menu")
-        if _click_text("Single Player", timeout=15, post_delay=2):
-            _click_text("Load Game", timeout=10, post_delay=1, prefer_bottom=False)
+        if _click_ui_label("single_player", timeout=15, post_delay=2):
+            _click_ui_label(
+                "load_game", timeout=10, post_delay=1, prefer_bottom=False
+            )
             time.sleep(1)
             if _click_text(save_name, timeout=15, post_delay=0.5):
-                _click_text(
-                    "Load Game",
+                _click_ui_label(
+                    "load_game",
                     timeout=10,
                     post_delay=1,
                     prefer_bottom=True,
@@ -2339,7 +2629,9 @@ def _navigate_to_save_sync(save_name: str, tab: str | None = "Autosaves") -> str
                 )
                 time.sleep(15)
                 # One more attempt at CONTINUE
-                retry_match = _wait_for_text("CONTINUE", timeout=60, interval=2.5)
+                retry_match = _wait_for_text_candidates(
+                    _UI_LABEL_CANDIDATES["continue"], timeout=60, interval=2.5
+                )
                 if retry_match:
                     text, x, y, w, h = retry_match
                     log.info("Retry: found CONTINUE at (%d,%d) — clicking", x, y)

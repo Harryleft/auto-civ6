@@ -67,6 +67,21 @@ This imports the Python package and asks DSH to compose the Web profile with the
 ./scripts/deepseek_harness web
 ```
 
+By default this assumes Civilization VI is already in a game. To explicitly
+let DSH start the game and load a recovery point through the existing GUI menu
+flow, opt in for that process:
+
+```bash
+CIV_MCP_DSH_AUTO_RESUME=1 ./scripts/deepseek_harness web
+```
+
+The recovery selector prefers the newest non-empty `0_MCP_*.Civ6Save` in the
+regular Single saves directory, then falls back to `AutoSave_*.Civ6Save` in
+the autosave directory. If FireTuner already reports both `GameCore_Tuner`
+and `InGame`, no menu click or save reload is attempted. The opt-in path is
+separate from the eval-only `CIV_MCP_SAVE_FILE` auto-boot and never removes MCP
+saves.
+
 Open `http://127.0.0.1:3080`. DSH loads this repository's `AGENTS.md` because the launcher keeps `civ6-mcp` as the working directory. Begin each game turn once with `mcp__civ6__get_game_overview`, then follow its `RUNTIME POLICY` instead of a duplicated mode-specific prompt.
 
 For a one-shot headless task:
@@ -78,7 +93,7 @@ For a one-shot headless task:
 ## Safety decisions
 
 - The raw `run_lua` tool is disabled for this integration. Domain tools remain the supported game interface.
-- `CIV_MCP_SAVE_FILE` is cleared so starting DSH cannot trigger eval auto-boot or load a save.
+- `CIV_MCP_SAVE_FILE` is cleared so starting DSH cannot trigger eval auto-boot or load a save. Startup recovery is separately controlled by `CIV_MCP_DSH_AUTO_RESUME` and defaults to off.
 - MCP tool calls allow 15 minutes because Deity AI turns can exceed DSH's one-minute default.
 - DSH child reconnection is disabled. If `civ-mcp` exits, stop and restart the DSH host after confirming no stale FireTuner client remains.
 - The launcher refuses to start when TCP 8000 already has a listener or TCP 4318 already has an established client. It never kills those processes automatically.

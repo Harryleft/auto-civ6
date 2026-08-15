@@ -15,6 +15,9 @@
           CIV_MCP_AGENT_MODEL: deepseek-harness
           CIV_MCP_METADATA: '{}'
           CIV_MCP_SAVE_FILE: ''
+          # Keep startup recovery disabled unless the caller explicitly
+          # exports CIV_MCP_DSH_AUTO_RESUME=1.
+          CIV_MCP_DSH_AUTO_RESUME: !!js "process.env.CIV_MCP_DSH_AUTO_RESUME ?? '0'"
           CIV_MCP_DISABLE_LUA: '1'
         # Deity AI turns can take 5-10 minutes. The DSH default is 60 seconds.
         toolCallTimeoutMs: 900000
