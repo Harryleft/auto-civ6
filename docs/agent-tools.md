@@ -108,6 +108,7 @@
 - 万神殿/宗教阈值达到：`get_pantheon_beliefs` → `choose_pantheon`，或 `get_religion_beliefs` → `found_religion`。
 - 使者可用：`get_city_states` → `send_envoy`。
 - 新时代献礼：`get_dedications` → `choose_dedication`。
+- 时代进度：`get_era_progress` 一次读世界纪元、各文明纪元与（RF/GS）时代分进度；Standard 规则集下时代块显式报告不可用。
 - 占领或不忠城市：`city_action(city_id, "keep"/"raze"/"liberate_founder"/"liberate_previous")`。
 
 移动响应显示目标地块而不是到达位置，这是异步寻路的表现。

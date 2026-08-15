@@ -346,6 +346,90 @@ def narrate_barbarian_overview(
     return "\n".join(lines)
 
 
+def narrate_era_progress(ep: lq.EraProgress) -> str:
+    """Format era progress: world era, per-player eras, and (XP1+) age state.
+
+    Age projection is derived in Python from score vs thresholds (same logic
+    as the overview era_score hint). Under Standard rules the age block is
+    explicitly reported as unavailable instead of silently omitted.
+    """
+
+    lines: list[str] = []
+    world_era = (
+        f"{ep.current_era_name} ({ep.current_era_type})"
+        if ep.current_era_index is not None
+        else "unknown (no GameEras)"
+    )
+    head = f"World Era: {world_era} | final era: {'yes' if ep.final_era else 'no'}"
+    if ep.era_start_turn is not None:
+        head += f" | started turn {ep.era_start_turn}"
+    lines.append(head)
+
+    if ep.next_era_countdown is not None:
+        window = ""
+        if ep.min_end_turn is not None and ep.max_end_turn is not None:
+            window = f" | window turns {ep.min_end_turn}-{ep.max_end_turn}"
+        advanced = ""
+        if ep.players_more_advanced is not None and ep.players_as_or_less_advanced is not None:
+            advanced = (
+                f" | advanced {ep.players_more_advanced}, "
+                f"remaining {ep.players_as_or_less_advanced}"
+            )
+        lines.append(
+            f"Era clock: countdown {ep.next_era_countdown}{window}{advanced}"
+        )
+
+    if ep.era_sequence:
+        sequence = " > ".join(row.era_name for row in ep.era_sequence)
+        lines.append(f"Era sequence: {sequence} ({len(ep.era_sequence)} eras)")
+
+    player_parts = []
+    for player in ep.players:
+        you = " (you)" if player.is_local else ""
+        if player.age is not None:
+            player_parts.append(
+                f"{player.civ_name}{you} {player.era_name} [{player.age}]"
+                + (f" score {player.era_score}" if player.era_score is not None else "")
+            )
+        else:
+            player_parts.append(f"{player.civ_name}{you} {player.era_name}")
+    if player_parts:
+        lines.append("Players: " + " | ".join(player_parts))
+
+    if not ep.ages_supported:
+        lines.append(
+            "Age mechanics: not available in RULESET_STANDARD "
+            "(no era score, dark or golden ages)"
+        )
+        return "\n".join(lines)
+
+    if ep.local_age is not None:
+        age = ep.local_age
+        if age.dark_threshold == age.golden_threshold:
+            projection = " Dramatic Ages mode threshold detected"
+        elif age.era_score >= age.golden_threshold:
+            projection = " -> GOLDEN AGE projected"
+        elif age.era_score < age.dark_threshold:
+            deficit = age.dark_threshold - age.era_score
+            projection = f" !! {deficit} short of avoiding Dark Age"
+        else:
+            projection = " -> NORMAL AGE projected"
+        lines.append(
+            f"Your age progress: {age.era_score} "
+            f"(Dark {age.dark_threshold}, Golden {age.golden_threshold}, "
+            f"baseline {age.threshold_baseline}, previous era {age.previous_era_score})"
+            f"{projection}"
+        )
+        if age.score_breakdown:
+            sources = ", ".join(
+                f"{source}: {value}" for source, value in age.score_breakdown
+            )
+            lines.append(f"  Score sources: {sources}")
+        else:
+            lines.append("  Score sources: (no score sources yet)")
+    return "\n".join(lines)
+
+
 def narrate_village_overview(
     overview: lq.VillageOverview, *, compact: bool = False
 ) -> str:

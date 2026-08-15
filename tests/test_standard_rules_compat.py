@@ -20,6 +20,7 @@ from civ_mcp.lua.governance import (
     build_promote_governor,
 )
 from civ_mcp.lua.map import build_empire_resources_query, build_stockpile_query
+from civ_mcp.lua.eras import build_era_progress_query
 from civ_mcp.lua.overview import build_overview_query
 
 
@@ -92,3 +93,21 @@ def test_standard_rules_suppress_expansion_diplomacy_and_era_claims():
     assert 'activeRuleset ~= "RULESET_STANDARD"' in overview_lua
     assert 'activeRuleset == "RULESET_EXPANSION_2"' in overview_lua
     assert 'print("RULESET|"' in overview_lua
+
+
+def test_era_progress_builder_gates_xp1_sections():
+    """Era basics are ungated; the XP1 clock/age blocks carry the ruleset guard."""
+
+    lua = build_era_progress_query()
+    # XP1 块守卫 (与 overview.py 现行写法一致)
+    assert 'activeRuleset ~= "RULESET_STANDARD"' in lua
+    # 基础层不得被规则集门控: 每玩家纪元与 GameInfo.Eras 在守卫之外
+    assert "p:GetEra()" in lua
+    assert "GameInfo.Eras" in lua
+    # 不设硬错误路径 (与 dedications 的行为差异即契约)
+    import re
+
+    assert not re.search(r"ERR:NO_[A-Z_]*IN_RULESET", lua)
+    assert "{_bail" not in lua
+    # RULESET 回显契约
+    assert 'print("RULESET|"' in lua

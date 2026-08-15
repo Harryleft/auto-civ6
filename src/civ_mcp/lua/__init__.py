@@ -26,6 +26,10 @@ from civ_mcp.lua.villages import (  # noqa: F401
     build_village_overview_query,
     parse_village_overview_response,
 )
+from civ_mcp.lua.eras import (  # noqa: F401
+    build_era_progress_query,
+    parse_era_progress_response,
+)
 from civ_mcp.lua.espionage import (  # noqa: F401
     build_get_spies_query,
     build_spy_escape_route,
@@ -156,6 +160,10 @@ from civ_mcp.lua.models import (  # noqa: F401
     BarbarianCamp,
     BarbarianOverview,
     BarbarianUnit,
+    EraAgeDetail,
+    EraProgress,
+    EraProgressPlayer,
+    EraTypeRow,
     Village,
     VillageOverview,
     BuilderInfo,
