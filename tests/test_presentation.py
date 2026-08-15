@@ -33,9 +33,13 @@ def test_action_receipt_status_distinguishes_machine_and_chinese_semantics(
     )
     rendered = localize_model_result("unit_action", raw)
     assert f"状态：{expected_label}" in rendered
-    # The raw status marker remains available below the Chinese summary for
-    # exact parser/audit correlation.
-    assert raw.replace("Error:", "错误：") in rendered
+    # 机器标记保留；Error 前缀与人类可读描述可被中文语义层翻译。
+    marker = (
+        raw.split(":", 1)[1].strip().split("|", 1)[0]
+        if raw.startswith("Error:")
+        else raw.split(":", 1)[0]
+    )
+    assert marker in rendered
 
 
 def test_non_mutating_query_keeps_the_normal_success_semantics() -> None:
