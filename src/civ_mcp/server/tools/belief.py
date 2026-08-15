@@ -36,7 +36,11 @@ from civ_mcp.server.assembly import mcp
 # ---------------------------------------------------------------------------
 
 
-def _belief_json_object(raw: str, label: str) -> dict[str, Any]:
+def _belief_json_object(raw: str | dict[str, Any], label: str) -> dict[str, Any]:
+    if isinstance(raw, dict):
+        return raw
+    if not isinstance(raw, str):
+        raise BeliefEngineError(f"{label} must be a JSON object")
     try:
         value = json.loads(raw or "{}")
     except json.JSONDecodeError as exc:
@@ -46,7 +50,11 @@ def _belief_json_object(raw: str, label: str) -> dict[str, Any]:
     return value
 
 
-def _belief_json_list(raw: str, label: str) -> list[Any]:
+def _belief_json_list(raw: str | list[Any], label: str) -> list[Any]:
+    if isinstance(raw, list):
+        return raw
+    if not isinstance(raw, str):
+        raise BeliefEngineError(f"{label} must be a JSON array")
     try:
         value = json.loads(raw or "[]")
     except json.JSONDecodeError as exc:
@@ -1054,9 +1062,19 @@ async def upsert_strategic_goal(
 async def submit_governance_proposal(ctx: Context, proposal: str) -> str:
     """Submit a structured ministerial proposal; departments cannot execute it.
 
-    The JSON proposal names goals, separate success probability/confidence,
-    hard constraints, budget locks, benefits, costs, opportunity cost and exact
-    action intents. It remains advisory until ``resolve_governance_council``.
+    ``proposal`` is a JSON string. Its required canonical shape is:
+    ``{"proposal_id":"p","department":"production","summary":"...",``
+    ``"goal_ids":[],"success":{"probability":0.8,"confidence":0.8},``
+    ``"priority":50,"hard_constraints":{},"budget_locks":[],``
+    ``"benefits":{},"costs":{},"opportunity_cost":0.0,``
+    ``"action_intents":[{"intent_id":"i","tool":"unit_action",``
+    ``"arguments":{},"proposal_id":"p"}]}``.
+
+    ``success`` must be an object (not top-level ``success_probability``),
+    ``hard_constraints``/``benefits``/``costs`` are objects, and
+    ``budget_locks`` is an array. Every action intent needs a non-empty
+    ``intent_id`` and the same ``proposal_id`` as its enclosing proposal. It
+    remains advisory until ``resolve_governance_council``.
     """
 
     params = {"proposal": proposal}
@@ -1532,12 +1550,12 @@ async def route_belief_decision(
     impact: str,
     urgency: str,
     irreversibility: float,
-    belief_ids: str = "[]",
-    considered_actions: str = "[]",
+    belief_ids: str | list[str] = "[]",
+    considered_actions: str | list[str] = "[]",
     selected_action: str = "",
     reason: str = "",
-    action_intent: str = "{}",
-    evidence_requirements: str = "[]",
+    action_intent: str | dict[str, Any] = "{}",
+    evidence_requirements: str | list[dict[str, Any]] = "[]",
     gate_scope: str = "global",
     council_decision_id: str = "",
 ) -> str:
