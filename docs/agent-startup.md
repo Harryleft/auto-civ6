@@ -10,7 +10,7 @@
 文明 VI → FireTuner 127.0.0.1:4318 → civ6-belief-engine 的 MCP 适配层 → DSH MCP 客户端
 ```
 
-DSH 不直接负责启动文明 VI。必须先进入一局游戏，再启动 DSH；不要把 DSH Web 页面、Python 进程或 Civ 6 进程单独当成集成成功。
+默认情况下 DSH 不负责启动文明 VI，必须先进入一局游戏；不要把 DSH Web 页面、Python 进程或 Civ 6 进程单独当成集成成功。若明确设置 `CIV_MCP_DSH_AUTO_RESUME=1`，DSH 才会在 MCP 启动时检查是否已进入对局，并通过现有 GUI 菜单流加载恢复存档。
 
 ## 标准启动步骤
 
@@ -56,6 +56,14 @@ DSH 不直接负责启动文明 VI。必须先进入一局游戏，再启动 DSH
    ```
 
    打开 <http://127.0.0.1:3080>。不要另外执行 `uv run civ-mcp`；wrapper 会在 DSH 中挂载唯一的 Civ MCP 服务。
+
+   如果希望由 DSH 自动启动游戏并进入最近恢复点，使用显式 opt-in：
+
+   ```bash
+   CIV_MCP_DSH_AUTO_RESUME=1 ./scripts/deepseek_harness web
+   ```
+
+   它优先加载 `0_MCP_*.Civ6Save`，没有可用文件时才加载 `AutoSave_*.Civ6Save`；若已经发现 `GameCore_Tuner` 和 `InGame`，则不会点击菜单或重载当前对局。该路径不使用 `CIV_MCP_SAVE_FILE` eval auto-boot，也不会清理 MCP 存档。
 
 7. DSH 会话的第一条游戏请求必须是 `mcp__civ6__get_game_overview`，先读取局面和机器可读的 `RUNTIME POLICY`，确认成功后再执行查询或动作。
 

@@ -27,6 +27,13 @@ The focus shifted from running games to packaging the results. The dataset publi
 - **Sync safety**: Don't regress completed games to live when sync watcher delivers late rows.
 - **Web**: Next.js 16.2.3, clickable model names, SEO (OG metadata, sitemap, llms.txt), UI polish (shimmer skeletons, victory glow, map playback 10x default).
 
+### Repository hygiene
+
+- **Removed legacy compatibility shims**: `civ_mcp/belief_engine.py` and `civ_mcp/governance/` were deleted; tests and code now import `civ6_belief_engine` directly. `test_product_package_boundary.py` now guards dependency direction instead of asserting shim forwarding.
+- **Devlogs moved out of `docs/`**: `docs/devlog/` → top-level `devlog/` (12 game reports); docs now contain only operational/architecture documentation.
+- **Archived dead scripts**: `generate_sas_token.py`, `scrape_wiki_images.py`, `split_game_log.py`, `menu_audit.py` moved to `scripts/_archive/` (zero references). `publish_hf_dataset.py` stays — it backs the HF dataset pipeline.
+- **CI now runs the offline test suite**: the Python job previously only `py_compile`d `server.py`; it now installs pytest and runs `pytest tests/ -q --ignore=tests/test_scorer.py` (344 tests).
+
 ## v1.1.10 — Orchestrator Hardening (2026-04-15)
 
 Final round of stability fixes before handing the fleet over to unattended overnight runs. The main theme is making the orchestrator less aggressive — it now reports problems rather than trying to auto-fix them, which caused more damage than it prevented.
