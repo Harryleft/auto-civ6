@@ -1297,6 +1297,13 @@ class GameState:
         _raise_query_error(lines)
         return lq.parse_dedications_response(lines)
 
+    async def get_era_progress(self) -> lq.EraProgress:
+        """纪元进度：世界纪元、各文明纪元、（XP1+）时代分与门槛。"""
+        lua = lq.build_era_progress_query()
+        lines = await self.conn.execute_write(lua)
+        _raise_query_error(lines)
+        return lq.parse_era_progress_response(lines)
+
     async def choose_dedication(self, dedication_index: int) -> str:
         lua = lq.build_choose_dedication(dedication_index)
         lines = await self.conn.execute_mutation(lua)
