@@ -2,12 +2,74 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 
 from civ_mcp import lua as lq
 from civ_mcp.connection import GameConnection
 
 log = logging.getLogger(__name__)
+
+
+_RECOVERY_SAVE_NAME = re.compile(r"^(?:0_MCP_\d+|AutoSave_\d+)$")
+
+
+async def load_recovery_save_from_frontend(
+    conn: GameConnection, save_name: str
+) -> str:
+    """Load a recovery save without OCR, including the final Continue action.
+
+    The call runs in Civ VI's ``MainMenu`` Lua state.  Its native
+    ``Automation.SetAutoStartEnabled`` switch tells the game's own
+    ``LoadScreen`` to call the same handler as the visible Continue Game
+    button once loading is complete.  It therefore needs no mouse, keyboard,
+    focused window, or visual recognition.
+    """
+
+    if not _RECOVERY_SAVE_NAME.fullmatch(save_name):
+        return f"Error: unsupported recovery save name: {save_name!r}"
+
+    main_menu_index = next(
+        (idx for idx, name in conn.lua_states.items() if name == "MainMenu"),
+        None,
+    )
+    if main_menu_index is None:
+        return "Error: MainMenu Lua state is unavailable; refusing unsafe UI fallback."
+
+    code = f"""
+local loadGame = {{}};
+loadGame.Location = SaveLocations.LOCAL_STORAGE;
+loadGame.Type = SaveTypes.SINGLE_PLAYER;
+loadGame.IsAutosave = false;
+loadGame.IsQuicksave = false;
+loadGame.Directory = SaveDirectories.DEFAULT;
+loadGame.Name = {json.dumps(save_name)};
+local automationOK = pcall(function() Automation.SetAutoStartEnabled(true); end);
+Network.LeaveGame();
+local loadOK = Network.LoadGame(loadGame, ServerType.SERVER_TYPE_NONE);
+print("MCP_FRONTEND_AUTOSTART|" .. tostring(automationOK));
+print("MCP_FRONTEND_LOAD|" .. tostring(loadOK));
+print("{lq.SENTINEL}");
+"""
+    lines = await conn.execute_in_state(
+        main_menu_index,
+        code,
+        timeout=5.0,
+        mutation=True,
+        require_sentinel=False,
+    )
+    if "MCP_FRONTEND_LOAD|true" not in lines:
+        return f"Error: FrontEnd refused recovery save {save_name}: {lines!r}"
+    if "MCP_FRONTEND_AUTOSTART|true" not in lines:
+        return (
+            "Error: save loading began but Civ VI automation auto-start was unavailable; "
+            "refusing visual fallback."
+        )
+    return (
+        f"Loading recovery save {save_name} via FrontEnd API; Civ VI will "
+        "confirm Continue Game through its built-in automation API."
+    )
 
 
 async def dismiss_popup(conn: GameConnection) -> str:

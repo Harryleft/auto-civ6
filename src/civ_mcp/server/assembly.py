@@ -17,6 +17,7 @@ from mcp.server.fastmcp import FastMCP
 from civ6_belief_engine.belief_engine import BeliefEngine
 from civ6_belief_engine.belief_mode import BeliefMode
 from civ_mcp import game_launcher, heartbeat
+from civ_mcp.game_lifecycle import load_recovery_save_from_frontend
 from civ_mcp.connection import GameConnection
 from civ_mcp.game_over_watchdog import GameOverWatchdog
 from civ_mcp.game_state import GameState
@@ -120,24 +121,23 @@ async def _auto_resume(conn: GameConnection) -> None:
             )
             return
         log.info("DSH auto-resume: FireTuner reached the main menu; loading %s", save_name)
-        await conn.disconnect()
 
     heartbeat.write("loading")
     try:
-        # This is intentionally the OCR menu path, not load_game_save(): it
-        # performs the same Single Player → Load Game → Continue flow a user
-        # would perform and never invokes the eval auto-boot cleanup.
-        result = await game_launcher.load_save_from_menu(save_name)
+        # Civ VI's official FrontEnd API starts the save load and enables its
+        # own post-load Continue Game handler.  Do not fall back to OCR: an
+        # unrelated desktop window can contain the same localized text.
+        result = await load_recovery_save_from_frontend(conn, save_name)
     except Exception:
-        log.exception("DSH auto-resume: GUI load failed for %s", save_name)
+        log.exception("DSH auto-resume: FrontEnd load failed for %s", save_name)
         heartbeat.write("error")
         return
-    log.info("DSH auto-resume: GUI load result: %s", result)
+    log.info("DSH auto-resume: FrontEnd load result: %s", result)
     load_failed = result.startswith(("FAILED", "Error:", "No autosaves")) or (
         "not found" in result.lower()
     )
     if load_failed:
-        log.error("DSH auto-resume: GUI load did not start: %s", result)
+        log.error("DSH auto-resume: FrontEnd load did not start: %s", result)
         heartbeat.write("error")
         return
 
