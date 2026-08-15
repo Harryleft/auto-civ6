@@ -392,3 +392,17 @@ class TestParseEndTurnBlocking:
 
     def test_empty_lines(self):
         assert parse_end_turn_blocking([]) == []
+
+
+def test_diary_query_uses_real_heroic_age_api() -> None:
+    """Diary PLAYER 行的英雄时代语义回归。
+
+    build_diary_full_query 曾用不存在的方法名 HasHeroicAge(i), pcall 吞错
+    后英雄黄金时代在 diary 中恒记为 NORMAL。正确 API 是 HasHeroicGoldenAge
+    (lua/governance.py 同款), 修复后 HEROIC 才可能被记录。
+    """
+    from civ_mcp.lua.overview import build_diary_full_query
+
+    query = build_diary_full_query()
+    assert "eraManager:HasHeroicGoldenAge(i)" in query
+    assert "HasHeroicAge(" not in query
