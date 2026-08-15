@@ -2564,10 +2564,19 @@ def _navigate_to_save_sync(save_name: str, tab: str | None = "Autosaves") -> str
     while time.time() - poll_start < poll_timeout:
         elapsed = time.time() - poll_start
         win = _find_game_window()
+        if win is None:
+            # A global screenshot can belong to another macOS desktop space
+            # (or a different foreground app).  Never infer/click a Civ 6
+            # menu from it: wait for the identified game window instead.
+            log.warning("CONTINUE wait: Civ 6 window unavailable; refusing global OCR")
+            time.sleep(2.5)
+            continue
         try:
-            results = _ocr_game_window(win) if win else _ocr_fullscreen()
+            results = _ocr_game_window(win)
         except Exception:
-            results = _ocr_fullscreen()
+            log.warning("CONTINUE wait: Civ 6 window capture failed; retrying")
+            time.sleep(2.5)
+            continue
 
         # Check for CONTINUE (leader screen — good), in either UI language.
         match = _find_text_candidates(results, _UI_LABEL_CANDIDATES["continue"])
