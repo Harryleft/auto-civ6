@@ -150,7 +150,19 @@ class GameState:
             tech_civic = await self.get_tech_civics()
             policies = await self.get_policies()
             barbarians = await self.get_barbarian_overview()
-            threats = await self.get_threat_scan()
+            try:
+                threats = await self.get_threat_scan()
+            except (LuaError, ValueError) as exc:
+                # Fail-degraded, not fail-closed: a broken scan must not blind
+                # the whole governance snapshot. threats=None flips
+                # threat_scan_available to False and the military department
+                # downgrades to "cannot consider cities safe" instead of the
+                # brief erroring every turn. Connection-level failures still
+                # propagate — the next query would fail anyway.
+                log.warning(
+                    "Threat scan failed; governance snapshot degrades: %s", exc
+                )
+                threats = None
             notifications = await self.get_notifications()
             capabilities = capabilities_for_ruleset(overview.ruleset)
             stockpiles: list[lq.ResourceStockpile] = []

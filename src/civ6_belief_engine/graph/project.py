@@ -24,19 +24,26 @@ _RELATION_NAMES = {
 }
 
 
+def city_node_id(x: int, y: int) -> str:
+    """Owner-independent city identity for phase one (centre coordinates).
+
+    Civ VI exposes a per-owner City.GetID(); the centre coordinate survives
+    ownership changes. Raze-and-resettle still needs a future lineage signal
+    from the adapter. Keep this the single construction point — departments
+    must not re-format city IDs locally.
+    """
+    return f"city:{x}:{y}"
+
+
 def _entity_identity(
     raw_type: str,
     raw_id: str,
     attributes: Mapping[str, Any],
 ) -> tuple[str, str, Coverage]:
     if raw_type == "city" and type(attributes.get("x")) is int and type(attributes.get("y")) is int:
-        # Civ VI exposes a per-owner City.GetID(), not a proven global city ID.
-        # The city-centre coordinate survives ownership changes and is the best
-        # available phase-one identity. Raze-and-resettle still requires a
-        # future lineage signal from the adapter.
         return (
             "city",
-            f"city:{attributes['x']}:{attributes['y']}",
+            city_node_id(attributes["x"], attributes["y"]),
             Coverage.KNOWN_HISTORY,
         )
     if raw_type == "city":
@@ -161,7 +168,22 @@ def project_world_state(
             observed=True,
         )
 
-    upsert_nodes = list(current_nodes.values())
+    # Content-deduplicated upserts (same rule as project_active_goals): a
+    # node whose attributes, coverage, or observed flag are unchanged is not
+    # re-written. Without this every turn persisted the full entity set,
+    # doubling journal growth next to the legacy world-entity events and
+    # making replay cost quadratic (one state-hash per full-view delta).
+    upsert_nodes: list[Node] = []
+    for node in current_nodes.values():
+        prior = previous.node(node.node_id)
+        if (
+            prior is None
+            or not prior.observed
+            or prior.attributes != node.attributes
+            or prior.coverage is not node.coverage
+            or prior.node_type != node.node_type
+        ):
+            upsert_nodes.append(node)
     remove_node_ids: list[str] = []
     for node_id, prior in previous.nodes.items():
         if node_id in current_nodes:
@@ -173,7 +195,16 @@ def project_world_state(
         elif prior.observed:
             upsert_nodes.append(replace(prior, observed=False))
 
-    upsert_edges = list(current_edges.values())
+    upsert_edges: list[Edge] = []
+    for edge in current_edges.values():
+        prior_edge = previous.edges.get(edge.key)
+        if (
+            prior_edge is None
+            or not prior_edge.observed
+            or prior_edge.attributes != edge.attributes
+            or prior_edge.coverage is not edge.coverage
+        ):
+            upsert_edges.append(edge)
     remove_edge_keys: list[EdgeKey] = []
     removed_nodes = set(remove_node_ids)
     for key, prior in previous.edges.items():
@@ -323,12 +354,14 @@ def compare_shadow_projection(
         elif canonical_json(graph_node.attributes) != canonical_json(attributes):
             issues.append(f"graph_attributes:{graph_id}")
 
+    # The projection flips absent world entities to observed=False inside
+    # every delta, so the view's observed world set equals the current
+    # snapshot's entity set exactly — no turn-equality check needed (content
+    # dedup means unchanged nodes keep an older last_observed_turn).
     observed_graph_ids = {
         node.node_id
         for node in graph.nodes.values()
-        if node.observed
-        and node.source == WORLD_SOURCE
-        and node.last_observed_turn == world.get("turn")
+        if node.observed and node.source == WORLD_SOURCE
     }
     if observed_graph_ids != expected_graph_ids:
         issues.append("graph_observed_node_set")
@@ -382,9 +415,7 @@ def compare_shadow_projection(
     observed_edge_keys = {
         edge.key
         for edge in graph.edges.values()
-        if edge.observed
-        and edge.source == WORLD_SOURCE
-        and edge.last_observed_turn == world.get("turn")
+        if edge.observed and edge.source == WORLD_SOURCE
     }
     if observed_edge_keys != expected_edge_keys:
         issues.append("graph_observed_edge_set")

@@ -720,11 +720,18 @@ class BeliefEngine:
         self._pending_events = []
         return events
 
-    def record_graph_delta(self, delta: GraphDelta) -> GraphView:
-        """Persist one derived delta and advance the current graph atomically."""
+    def record_graph_delta(self, delta: GraphDelta, *, kind: str = "world") -> GraphView:
+        """Persist one derived delta and advance the current graph atomically.
+
+        ``kind`` distinguishes the delta stream (``world``/``goals``) so two
+        deltas recorded for the same snapshot cannot share one event id —
+        audit searches would otherwise conflate them.
+        """
 
         if not isinstance(delta, GraphDelta):
             raise TypeError("delta must be GraphDelta")
+        if not isinstance(kind, str) or not kind.strip():
+            raise ValueError("kind must be a non-empty string")
         if delta.epoch != self._epoch:
             raise BeliefEngineError(
                 f"graph delta epoch {delta.epoch} does not match current epoch {self._epoch}"
@@ -737,7 +744,8 @@ class BeliefEngine:
             GRAPH_DELTA_EVENT,
             "graph_delta",
             {
-                "id": f"graph_delta:{self._epoch}:{delta.snapshot_id}",
+                "id": f"graph_delta:{kind.strip()}:{self._epoch}:{delta.snapshot_id}",
+                "kind": kind.strip(),
                 "delta": delta.to_dict(),
                 "state_hash": next_view.state_hash,
             },

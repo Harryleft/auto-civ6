@@ -3,6 +3,7 @@
 from .model import Coverage, Edge, EdgeKey, GraphDelta, Node
 from .project import (
     GraphProjectionError,
+    city_node_id,
     compare_shadow_projection,
     project_active_goals,
     project_world_state,
@@ -12,6 +13,7 @@ from .view import GraphInvariantError, GraphView
 
 __all__ = [
     "Coverage",
+    "city_node_id",
     "Edge",
     "EdgeKey",
     "GRAPH_DELTA_EVENT",

@@ -3423,7 +3423,7 @@ async def _capture_governance_snapshot(
             or goal_delta.remove_node_ids
             or goal_delta.remove_edge_keys
         ):
-            goal_graph = engine.record_graph_delta(goal_delta)
+            goal_graph = engine.record_graph_delta(goal_delta, kind="goals")
         else:
             goal_graph = engine.graph_view
         projection["graph_goals"] = {

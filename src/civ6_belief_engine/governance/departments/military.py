@@ -12,7 +12,7 @@ from math import isfinite
 from numbers import Real
 from typing import Any, ClassVar, Iterable, Protocol
 
-from ...graph import Edge, Node
+from ...graph import Edge, Node, city_node_id
 from ..models import (
     ActionIntent,
     BudgetLock,
@@ -365,7 +365,7 @@ class MilitaryDepartment:
             return ()
         threats: dict[tuple[str, str, str], Edge] = {}
         for city in context.snapshot.cities:
-            city_id = f"city:{city.x}:{city.y}"
+            city_id = city_node_id(city.x, city.y)
             for edge in context.graph.threats_near_city(city_id, max_distance=3):
                 threats[edge.key] = edge
         return tuple(
