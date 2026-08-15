@@ -416,6 +416,17 @@ _NEXT_CALL_FOR_STATE = {
 }
 
 
+_BLOCKER_HINTS = {
+    "current_turn_typed_snapshot_missing": (
+        "本回合缺少 typed snapshot：调用 get_governance_brief（或 get_game_overview）"
+        "捕获后重试 end_turn"
+    ),
+    "governance_proposals_not_arbitrated": (
+        "存在未仲裁提案：resolve_governance_council 完成仲裁"
+    ),
+}
+
+
 def _format_governance_gate_reason(gate: dict[str, Any]) -> str:
     """Turn the gate payload into one actionable line per blocker.
 
@@ -426,6 +437,10 @@ def _format_governance_gate_reason(gate: dict[str, Any]) -> str:
     """
 
     lines = ["治理回合门禁未完成: " + ", ".join(gate.get("blockers") or []) + "。"]
+    for blocker in gate.get("blockers") or []:
+        hint = _BLOCKER_HINTS.get(blocker)
+        if hint:
+            lines.append(f"- {blocker}: {hint}")
     pending = gate.get("pending_authorizations") or []
     if pending:
         lines.append("待清算授权（逐项处理后 end_turn 即可通过）:")

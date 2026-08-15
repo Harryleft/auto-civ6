@@ -11,7 +11,9 @@ import json
 import uuid
 from pathlib import Path
 
-from civ6_belief_engine.belief_engine import BeliefEngine
+import pytest
+
+from civ6_belief_engine.belief_engine import BeliefEngine, BeliefEngineError
 from civ_mcp.server import pipeline
 
 
@@ -141,8 +143,96 @@ class TestGateReasonFormatting:
         assert "route_belief_decision" in reason
         assert "不要重复调用 end_turn" in reason
 
-    def test_blockers_only_gate_stays_readable(self):
+
+
+class TestReviewFollowUps:
+    def test_legacy_failed_decision_cannot_be_reopened(self, tmp_path):
+        engine = _legacy_journal(tmp_path, "failed")
+        with pytest.raises(BeliefEngineError, match="Cannot reopen a failed"):
+            engine.update(
+                "decision", "decision_legacy", {"decision_state": "authorized"}, turn=6
+            )
+
+    def test_reroute_supersedes_stale_authorization_for_same_intent(self):
+        instance = BeliefEngine(run_id="test-run")
+        instance.bind_game("CIVILIZATION_TEST", 42)
+        intent = {
+            "tool": "unit_action",
+            "params": {"unit_id": 1, "action": "move", "target_x": 3, "target_y": 3},
+        }
+        first = instance.route_decision(
+            statement="Move warrior",
+            probability=0.9,
+            confidence=0.9,
+            impact="high",
+            urgency="critical",
+            irreversibility=0.99,
+            turn=1,
+            action_intent=dict(intent),
+        )
+        assert first["route"] == "slow"
+        # Documented exit 2: re-route through a resolved council.
+        second = instance.route_decision(
+            statement="Move warrior",
+            probability=0.9,
+            confidence=0.9,
+            impact="high",
+            urgency="critical",
+            irreversibility=0.99,
+            turn=1,
+            action_intent=dict(intent),
+            council_decision_id="council_1",
+        )
+        assert second["route"] == "fast"
+        stored_first = instance.get("decision", first["id"])
+        assert stored_first["decision_state"] == "cancelled"
+        assert stored_first["cancellation_reason"] == "superseded_by_reroute"
+        # Exactly one non-terminal decision remains for this intent.
+        non_terminal = [
+            item
+            for item in instance.list("decision", status="active")
+            if item.get("decision_state") in {"authorized", "retryable"}
+        ]
+        assert [item["id"] for item in non_terminal] == [second["id"]]
+
+    def test_reroute_never_supersedes_in_flight_authorization(self):
+        instance = BeliefEngine(run_id="test-run")
+        instance.bind_game("CIVILIZATION_TEST", 42)
+        intent = {
+            "tool": "unit_action",
+            "params": {"unit_id": 1, "action": "move", "target_x": 3, "target_y": 3},
+        }
+        first = instance.route_decision(
+            statement="Move warrior",
+            probability=0.9,
+            confidence=0.9,
+            impact="high",
+            urgency="critical",
+            irreversibility=0.99,
+            turn=1,
+            action_intent=dict(intent),
+            council_decision_id="council_1",
+        )
+        instance.update(
+            "decision", first["id"], {"decision_state": "executing"}, turn=1
+        )
+        second = instance.route_decision(
+            statement="Move warrior",
+            probability=0.9,
+            confidence=0.9,
+            impact="high",
+            urgency="critical",
+            irreversibility=0.99,
+            turn=1,
+            action_intent=dict(intent),
+            council_decision_id="council_1",
+        )
+        assert instance.get("decision", first["id"])["decision_state"] == "executing"
+        assert instance.get("decision", second["id"])["decision_state"] == "authorized"
+
+    def test_snapshot_missing_blocker_carries_recovery_hint(self):
         gate = {"blockers": ["current_turn_typed_snapshot_missing"]}
         reason = pipeline._format_governance_gate_reason(gate)
         assert "current_turn_typed_snapshot_missing" in reason
+        assert "get_governance_brief" in reason
         assert "待清算授权" not in reason
