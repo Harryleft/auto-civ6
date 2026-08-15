@@ -184,6 +184,7 @@ class RulesetCapabilities:
     diplomatic_favor: bool = False
     world_congress: bool = False
     resource_stockpiles: bool = False
+    climate: bool = False
     basic_diplomacy: bool = True
     trade: bool = True
     city_states: bool = True
@@ -200,6 +201,7 @@ class RulesetCapabilities:
             "diplomatic_favor",
             "world_congress",
             "resource_stockpiles",
+            "climate",
             "basic_diplomacy",
             "trade",
             "city_states",
