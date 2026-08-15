@@ -97,7 +97,12 @@ def test_off_mode_disables_belief_persistence_tools_without_game_access():
         "belief_mode": "off",
         "disabled": True,
         "tool": "get_turn_brief",
-        "message": "Belief Engine persistence is disabled in off mode.",
+        "message": "off 模式下，信念引擎持久化已禁用。",
+        "中文说明": {
+            "工具": "执行工具 get_turn_brief",
+            "状态": "已禁用",
+            "说明": "以下原有字段为机器契约和游戏证据，字段名、ID、枚举及原始值保持不变。",
+        },
     }
 
 
@@ -155,6 +160,8 @@ def test_logged_keeps_model_annotations_out_of_belief_observations(monkeypatch):
 
     result = asyncio.run(_logged(ctx, "get_units", {}, operation))
 
-    assert "BELIEF CONTEXT" in result
-    assert captured["telemetry"] == result
+    assert "信念上下文" in result
+    # Telemetry keeps the unmodified result as audit evidence; only the
+    # model/caller-facing return is localized.
+    assert captured["telemetry"] == "GAME RESULT\n\n=== BELIEF CONTEXT ===\nmode=enforce"
     assert captured["belief"] == "GAME RESULT"

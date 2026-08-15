@@ -227,4 +227,6 @@ def test_filter_boundary_fails_open(monkeypatch):
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("broken")),
     )
 
-    assert _filter_downstream_result("get_belief_state", {}, "RAW") == "RAW"
+    result = _filter_downstream_result("get_belief_state", {}, "RAW")
+    assert result.startswith("【中文运行信息】")
+    assert result.endswith("\n\nRAW")
