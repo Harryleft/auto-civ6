@@ -1720,34 +1720,39 @@ def narrate_religion_founding_status(status: lq.ReligionFoundingStatus) -> str:
 
 def narrate_dedications(status: lq.DedicationStatus) -> str:
     era_names = {
-        0: "Ancient",
-        1: "Classical",
-        2: "Medieval",
-        3: "Renaissance",
-        4: "Industrial",
-        5: "Modern",
-        6: "Atomic",
-        7: "Information",
+        0: "远古",
+        1: "古典",
+        2: "中世纪",
+        3: "文艺复兴",
+        4: "工业",
+        5: "现代",
+        6: "原子能",
+        7: "信息",
     }
-    era_name = era_names.get(status.era, f"Era {status.era}")
+    age_names = {"Normal": "普通", "Golden": "黄金", "Dark": "黑暗", "Heroic": "英雄"}
+    era_name = era_names.get(status.era, f"未知纪元（索引 {status.era}）")
+    age_name = age_names.get(status.age_type, status.age_type)
     lines = [
-        f"{status.age_type} Age — {era_name} Era",
-        f"Era Score: {status.era_score} (Dark: {status.dark_threshold}, Golden: {status.golden_threshold})",
+        f"当前时代：{age_name}时代 · {era_name}纪元",
+        f"时代分：{status.era_score}（黑暗门槛：{status.dark_threshold}；黄金门槛：{status.golden_threshold}）",
     ]
     if status.active:
-        lines.append(f"\nActive dedications: {', '.join(status.active)}")
+        lines.append(f"\n已生效着力点：{', '.join(status.active)}")
     if status.selections_allowed > 0:
-        lines.append(f"\n{status.selections_allowed} dedication(s) to choose:")
+        lines.append(f"\n本纪元必须选择 {status.selections_allowed} 个时代着力点：")
         for c in status.choices:
             desc = (
                 c.golden_desc
                 if status.age_type in ("Golden", "Heroic")
                 else (c.dark_desc if status.age_type == "Dark" else c.normal_desc)
             )
-            lines.append(f"  [{c.index}] {c.name}: {desc}")
-        lines.append("\nUse choose_dedication(dedication_index=N) to select.")
+            lines.append(f"  [{c.index}] {c.name}：{desc}")
+        lines.append(
+            "\n选择后直接调用 choose_dedication(dedication_index=候选索引)；"
+            "该选择是当前回合的必办项，工具会回读确认。"
+        )
     elif not status.active:
-        lines.append("\nNo dedications available or required.")
+        lines.append("\n当前没有可选或必须选择的时代着力点。")
     return "\n".join(lines)
 
 
