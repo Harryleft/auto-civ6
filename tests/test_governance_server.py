@@ -848,3 +848,114 @@ def test_action_verification_recovers_interrupted_executing_decision(tmp_path):
     assert engine.get("decision", decision["id"])["decision_state"] == "succeeded"
     outcomes = engine.list("outcome", status="active")
     assert outcomes[-1]["decision_id"] == decision["id"]
+
+
+def test_action_verification_settles_outcome_unknown_decision(tmp_path):
+    # A conservative "submitted" receipt lands the authorization in
+    # outcome_unknown; cancel_routed_action refuses it until verified, so
+    # without this settlement path the turn gate has no official exit.
+    ctx, engine = _bare_loop_context(tmp_path)
+    params = {"unit_id": 7, "action": "move", "target_x": 8, "target_y": 9}
+    decision = engine.route_decision(
+        statement="Step onto the hill tile",
+        probability=0.99,
+        confidence=0.99,
+        impact="low",
+        urgency="low",
+        irreversibility=0.1,
+        action_intent={
+            "tool": "unit_action",
+            "params": params,
+            "args_hash": action_args_hash(params),
+        },
+        turn=42,
+    )
+    engine.authorize_action(
+        tool="unit_action", params=params, turn=42, required=True
+    )
+    engine.record_tool_result(
+        tool="unit_action",
+        params=params,
+        result="OK:MOVE_SUBMITTED",
+        turn=42,
+        category="action",
+        success=False,
+        duration_ms=0,
+        decision_id=decision["id"],
+        decision_route="fast",
+        execution_status="unknown",
+    )
+    assert (
+        engine.get("decision", decision["id"])["decision_state"]
+        == "outcome_unknown"
+    )
+
+    recovered = asyncio.run(
+        record_action_verification(
+            ctx,
+            decision_id=decision["id"],
+            tool="unit_action",
+            expected="unit on (8,9)",
+            actual="OK:UNIT_AT_8_9",
+            success=True,
+        )
+    )
+
+    assert engine.get("decision", decision["id"])["decision_state"] == "succeeded"
+    recovered_action = json.loads(recovered)
+    assert recovered_action["verification"]["source"] == "agent_recovery"
+    assert recovered_action["decision_id"] == decision["id"]
+    # Settling must not duplicate the mutation's own action record.
+    linked = [
+        item
+        for item in engine.list("action", status=None)
+        if item.get("decision_id") == decision["id"]
+    ]
+    assert len(linked) == 1
+    assert linked[0]["id"] == recovered_action["id"]
+
+
+def test_action_verification_rejects_wrong_tool_for_outcome_unknown(tmp_path):
+    ctx, engine = _bare_loop_context(tmp_path)
+    params = {"unit_id": 7, "action": "move", "target_x": 8, "target_y": 9}
+    decision = engine.route_decision(
+        statement="Step onto the hill tile",
+        probability=0.99,
+        confidence=0.99,
+        impact="low",
+        urgency="low",
+        irreversibility=0.1,
+        action_intent={
+            "tool": "unit_action",
+            "params": params,
+            "args_hash": action_args_hash(params),
+        },
+        turn=42,
+    )
+    engine.authorize_action(
+        tool="unit_action", params=params, turn=42, required=True
+    )
+    engine.complete_action_authorization(
+        decision["id"],
+        tool="unit_action",
+        success=False,
+        outcome_status="unknown",
+        result="OK:MOVE_SUBMITTED",
+        turn=42,
+    )
+    rejected = asyncio.run(
+        record_action_verification(
+            ctx,
+            decision_id=decision["id"],
+            tool="set_research",
+            expected="irrelevant",
+            actual="irrelevant",
+            success=True,
+        )
+    )
+    # _belief_tool converts engine errors into a returned error string.
+    assert "unverified intent" in rejected
+    assert (
+        engine.get("decision", decision["id"])["decision_state"]
+        == "outcome_unknown"
+    )

@@ -155,8 +155,14 @@ use keys such as `diplomacy.player_3.at_war` and
    post-game analysis.
 
 Use `update_belief_entity` for corrections and `delete_belief_entity` for
-current-state deletion. Do not encode interpretation into Observation text;
-that destroys the fact/inference boundary the engine is intended to measure.
+current-state deletion. `decision_state` is exempt: writing it directly (the
+2026-08-15 turn-97 incident wrote `resolved` over live and cancelled decisions
+alike) both leaves the turn gate blocked and removes the official closure
+paths, so the engine rejects such writes and only the lifecycle tools —
+`record_action_verification`, `cancel_routed_action`, and the routed-action
+pipeline itself — may move it. Do not encode interpretation into Observation
+text; that destroys the fact/inference boundary the engine is intended to
+measure.
 
 ## Coverage audit
 

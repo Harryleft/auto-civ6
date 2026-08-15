@@ -66,6 +66,22 @@ _RESULT_SUMMARY_CHARS = 500
 _ACTION_OUTCOME_STATUSES = frozenset(
     {"succeeded", "failed", "unknown", "blocked"}
 )
+# The decision authorization lifecycle. ``governance_turn_gate`` treats only
+# succeeded/cancelled as terminal, and every internal transition writes one of
+# these values; anything else in ``decision_state`` came from an out-of-band
+# patch and silently breaks both the gate and the recovery tools.
+_DECISION_STATES = frozenset(
+    {
+        "unbound",
+        "authorized",
+        "executing",
+        "succeeded",
+        "retryable",
+        "outcome_unknown",
+        "cancelled",
+    }
+)
+_TERMINAL_DECISION_STATES = frozenset({"succeeded", "cancelled"})
 
 
 class BeliefEngineError(ValueError):
@@ -852,8 +868,43 @@ class BeliefEngine:
             }
         )
         _validate_entity(entity_type, entity)
+        if entity_type == "decision" and entity.get("decision_state") is not None:
+            self._validate_decision_state_patch(
+                current_state=None, new_state=entity["decision_state"]
+            )
         self._append("entity.created", entity_type, entity, turn=turn)
         return deepcopy(entity)
+
+    @staticmethod
+    def _validate_decision_state_patch(
+        *, current_state: Any, new_state: Any
+    ) -> None:
+        """Reject out-of-band ``decision_state`` writes.
+
+        Only ``succeeded``/``cancelled`` close a council intent, and the
+        recovery tools key on the exact lifecycle states. A generic entity
+        patch writing any other value (the 2026-08-15 turn-97 deadlock wrote
+        ``resolved`` over both live and already-cancelled decisions) makes the
+        turn gate refuse ``end_turn`` while also removing every official
+        closure path.
+        """
+
+        if new_state not in _DECISION_STATES:
+            raise BeliefEngineError(
+                "decision_state must be one of "
+                f"{', '.join(sorted(_DECISION_STATES))}; close the "
+                "authorization with cancel_routed_action or settle it with "
+                "record_action_verification instead of writing the field "
+                "directly"
+            )
+        if (
+            current_state in _TERMINAL_DECISION_STATES
+            and new_state != current_state
+        ):
+            raise BeliefEngineError(
+                f"Cannot reopen a {current_state} decision; the audit "
+                "outcome is final. Route a new decision for further attempts"
+            )
 
     def update(
         self,
@@ -881,6 +932,11 @@ class BeliefEngine:
             )
         updated = deepcopy(current)
         changes: dict[str, Any] = {}
+        if entity_type == "decision" and "decision_state" in patch:
+            self._validate_decision_state_patch(
+                current_state=current.get("decision_state"),
+                new_state=patch["decision_state"],
+            )
         for key in remove_fields:
             if key in updated:
                 changes[key] = {"from": deepcopy(updated[key]), "to": None}
