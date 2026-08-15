@@ -90,6 +90,39 @@ For a one-shot headless task:
 ./scripts/deepseek_harness headless "Inspect the current turn; do not end it."
 ```
 
+### 一站式文明智能体入口
+
+不需要 DSH Web UI 时，使用下面唯一的入口：
+
+```bash
+./scripts/civ6_agent --turns 1
+```
+
+它会开启受控恢复（仅在游戏尚未进入对局时），启动无网页的 DSH headless
+会话，并让同一个 DSH 会话连续完成指定数量的完整回合。默认只执行 1 回合；先验证
+`--turns 1`，再逐步提高到 3 或更多。该入口默认叠加精简的
+`civ6-agent.cordis.yml`：`mcp__civ6__*` 是唯一的游戏控制路径，Coding 工具不会进入
+普通回合循环。用户明确需要局势可视化、日志分析、策略推演或报告时，再显式启用模块：
+
+```bash
+./scripts/civ6_agent --turns 1 --with-coding
+```
+
+`--with-coding` 叠加 `civ6-agent-coding.cordis.yml`，只恢复本地 Coding 能力，仍不能
+读取或伪造游戏状态、调用 FireTuner，或绕过治理门禁。普通回合中，MCP/治理错误是明确
+阻塞项，不能回退为读取项目源码来猜测解决。网页、技能、命令与目标类工具仍被禁用。
+
+启动前的无副作用检查：
+
+```bash
+./scripts/deepseek_harness check
+./scripts/civ6_agent --turns 1 --dry-run
+```
+
+仍然只能保留一个 FireTuner 客户端；已有 DSH、Codex、Pi 或测试客户端连接 TCP 4318
+时，入口会明确失败而不会自动终止其他进程。达到指定回合数、遇到治理/人类决策门禁、
+游戏结束或连接异常时，智能体会停止并给出中文结果，而不是无限运行。
+
 ## Safety decisions
 
 - The raw `run_lua` tool is disabled for this integration. Domain tools remain the supported game interface.
@@ -97,6 +130,9 @@ For a one-shot headless task:
 - MCP tool calls allow 15 minutes because Deity AI turns can exceed DSH's one-minute default.
 - DSH child reconnection is disabled. If `civ-mcp` exits, stop and restart the DSH host after confirming no stale FireTuner client remains.
 - The launcher refuses to start when TCP 8000 already has a listener or TCP 4318 already has an established client. It never kills those processes automatically.
+- `scripts/civ6_agent` is intentionally bounded by `--turns`; a bounded run makes a
+  crash, policy gate, or model mistake observable and recoverable before another
+  game turn is committed.
 - A DSH Web session log and the Civ 6 Belief Engine are complementary, not interchangeable. The session log reconstructs model-visible history; the Belief Engine keeps only the normalized strategic/governance projection and references back to tool results.
 
 ## Verification boundary
