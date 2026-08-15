@@ -28,6 +28,16 @@ def _outcome(prediction: Mapping[str, Any]) -> float:
     return 1.0 if prediction.get("status") == "confirmed" else 0.0
 
 
+def _resolved_late(prediction: Mapping[str, Any]) -> bool:
+    resolved_turn = prediction.get("resolved_turn")
+    deadline = prediction.get("deadline_turn")
+    if isinstance(resolved_turn, bool) or isinstance(deadline, bool):
+        return False
+    if not isinstance(resolved_turn, int) or not isinstance(deadline, int):
+        return False
+    return resolved_turn > deadline
+
+
 def _bucket_index(probability: float) -> int | None:
     for index, (low, high) in enumerate(RELIABILITY_BUCKETS):
         if low <= probability < high:
@@ -59,6 +69,11 @@ def calibration_report(predictions: Sequence[Mapping[str, Any]]) -> dict[str, An
     resolved = [item for item in predictions if _resolved(item)]
     overdue = [item for item in predictions if item.get("status") == "overdue"]
     active = [item for item in predictions if item.get("status") == "active"]
+    # A prediction resolved after its deadline was NOT checkable when it
+    # mattered; its outcome still scores calibration, but observability
+    # counts the deadline-time miss. Source-agnostic: judged by turns.
+    late_resolved = [item for item in resolved if _resolved_late(item)]
+    on_time_resolved = [item for item in resolved if not _resolved_late(item)]
 
     buckets: list[dict[str, Any]] = []
     for index, (low, high) in enumerate(RELIABILITY_BUCKETS):
@@ -85,7 +100,6 @@ def calibration_report(predictions: Sequence[Mapping[str, Any]]) -> dict[str, An
             }
         )
 
-    judged = resolved and overdue
     by_source: dict[str, dict[str, Any]] = {}
     for item in resolved:
         source = str(item.get("resolution_source") or "unknown")
@@ -115,13 +129,16 @@ def calibration_report(predictions: Sequence[Mapping[str, Any]]) -> dict[str, An
     return {
         "total_predictions": len(predictions),
         "resolved": len(resolved),
+        "late_resolved": len(late_resolved),
         "overdue": len(overdue),
         "active": len(active),
-        # Of the predictions that reached their deadline, how many could be
-        # checked against observed metrics — the Sensorium Effect, measured.
+        # Of the predictions that reached their check window, how many could
+        # be verified against evidence by the deadline — the Sensorium
+        # Effect, measured.  Late resolutions count in the denominator (the
+        # deadline-time miss) but not the numerator.
         "observability_rate": (
-            round(len(resolved) / (len(resolved) + len(overdue)), 4)
-            if judged
+            round(len(on_time_resolved) / (len(on_time_resolved) + len(late_resolved) + len(overdue)), 4)
+            if (on_time_resolved or late_resolved or overdue)
             else None
         ),
         "brier_score": _brier(resolved),

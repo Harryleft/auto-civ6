@@ -100,6 +100,41 @@ class TestCalibrationReport:
         assert report["overall_bias"] == -0.9
         assert report["calibration_hint"] == "overconfident"
 
+    def test_single_sided_samples_report_full_or_zero(self, engine):
+        # All deadline-reached predictions resolved -> perfectly observable.
+        _resolved(engine, probability=0.8, outcome=True)
+        report = _report(engine)
+        assert report["observability_rate"] == 1.0
+        # All deadline-reached predictions overdue -> nothing observable.
+        engine.create(
+            "prediction",
+            _prediction(statement="Fog metric will double.", deadline_turn=2),
+            turn=1,
+        )
+        engine.update(
+            "prediction",
+            engine.list("prediction", status="active")[0]["id"],
+            {"status": "overdue"},
+            turn=3,
+        )
+        report = _report(engine)
+        assert report["observability_rate"] == 0.5  # 1 on-time / (1 + 0 + 1)
+
+    def test_late_resolution_counts_as_deadline_time_miss(self, engine):
+        late = engine.create(
+            "prediction", _prediction(deadline_turn=10), turn=1
+        )
+        engine.resolve_prediction(
+            late["id"], outcome=False, actual=10, turn=15, source="automatic_late"
+        )
+        report = _report(engine)
+        assert report["resolved"] == 1
+        assert report["late_resolved"] == 1
+        # The outcome still scores calibration...
+        assert report["brier_score"] == pytest.approx((0.8 - 0.0) ** 2, abs=1e-4)
+        # ...but the deadline-time checkability was a miss.
+        assert report["observability_rate"] == 0.0
+
     def test_by_resolution_source_splits_scores(self, engine):
         manual = engine.create("prediction", _prediction(probability=0.8), turn=1)
         engine.resolve_prediction(
