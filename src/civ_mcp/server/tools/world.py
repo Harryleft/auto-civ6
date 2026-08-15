@@ -462,6 +462,25 @@ async def get_religion_spread(ctx: Context) -> str:
     return await pipeline._logged(ctx, "get_religion_spread", {}, _run)
 
 
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_religion_overview(ctx: Context) -> str:
+    """世界宗教状态总览：已创宗教及其创立者、圣城、信条构成；各宗教的信徒
+    城市数与信徒总数；各主要文明的己创/主流宗教与万神殿对照；己方信仰值
+    存量与创教名额余量。未见面创立者遮蔽为 Unmet。
+
+    聚合视图。逐城明细见 get_religion_spread，信条候选见
+    get_pantheon_beliefs / get_religion_beliefs。用于决定万神殿时机、
+    创教竞速与传教目标。
+    """
+    gs = pipeline._get_game(ctx)
+
+    async def _run():
+        ro = await gs.get_religion_overview()
+        return nr.narrate_religion_overview(ro)
+
+    return await pipeline._logged(ctx, "get_religion_overview", {}, _run)
+
+
 # ---------------------------------------------------------------------------
 # City yield focus
 # ---------------------------------------------------------------------------
