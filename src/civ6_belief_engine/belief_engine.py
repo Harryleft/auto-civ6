@@ -907,8 +907,11 @@ class BeliefEngine:
                 "record_action_verification instead of writing the field "
                 "directly"
             )
+        # ``failed`` is frozen like the sanctioned terminal states: the gate
+        # already counts it as final accounting for its council intent, so
+        # reopening it would resurrect a closed intent as pending state.
         if (
-            current_state in _TERMINAL_DECISION_STATES
+            current_state in _INTENT_CLOSING_STATES
             and new_state != current_state
         ):
             raise BeliefEngineError(
@@ -3103,6 +3106,45 @@ class BeliefEngine:
                 "2) 经议会仲裁后路由（council_decision_id 复路由）；"
                 "3) cancel_routed_action 显式放弃。不要无变更地重复路由同一 intent。"
             )
+        if persist and action_intent:
+            # Re-routing the same intent (the documented slow-route exits 1/2)
+            # supersedes the stale authorization instead of stacking a second
+            # one: a lingering ``authorized`` decision would keep blocking
+            # end_turn and fight the new decision for consumption. In-flight
+            # states (executing/outcome_unknown) are never superseded — that
+            # is the duplicate-authorization hazard the gate exists to stop.
+            # Budget locks stay reserved: superseding is replacement, not
+            # abandonment, so the council's single-execution reservation
+            # carries over to the new decision.
+            new_hash = action_args_hash(
+                action_intent.get("params") or action_intent.get("arguments") or {}
+            )
+            for stale in self.list("decision", status="active"):
+                if stale.get("decision_state") not in {"authorized", "retryable"}:
+                    continue
+                if not self._entity_is_in_current_epoch("decision", stale["id"]):
+                    continue
+                stale_intent = stale.get("action_intent")
+                if not isinstance(stale_intent, dict):
+                    continue
+                if stale_intent.get("tool") != action_intent.get("tool"):
+                    continue
+                stale_params = stale_intent.get("params") or stale_intent.get("arguments") or {}
+                if not isinstance(stale_params, dict):
+                    continue
+                if action_args_hash(stale_params) != new_hash:
+                    continue
+                self.update(
+                    "decision",
+                    stale["id"],
+                    {
+                        "status": "resolved",
+                        "decision_state": "cancelled",
+                        "cancelled_turn": turn,
+                        "cancellation_reason": "superseded_by_reroute",
+                    },
+                    turn=turn,
+                )
         if persist:
             return self.create("decision", assessment, turn=turn)
         return assessment
