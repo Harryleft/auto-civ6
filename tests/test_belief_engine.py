@@ -427,12 +427,24 @@ class TestReviewRoutingAttributionAndMetrics:
             statement="Declare war", probability=0.9, confidence=0.9, impact="high", urgency="critical", irreversibility=0.99, turn=1
         )
         assert slow["route"] == "slow"
+        assert "route_guidance" in slow
+        # A global major surprise must not flip a trivial move to slow by
+        # itself: that hard rule made routing track world noise instead of
+        # the action (T61: same args_hash slow at score 0.31 with
+        # surprise=1.0, then fast once the surprise cleared). Surprise now
+        # only weighs in via the small additive term.
         engine.create("surprise", {"statement": "Capital attacked", "severity": "major"}, turn=2)
         escalated = engine.route_decision(
             statement="Move warrior", probability=0.1, confidence=0.99, impact="low", urgency="low", irreversibility=0, turn=2, persist=False
         )
-        assert escalated["route"] == "slow"
-        assert escalated["slow_thinking_budget"] == "high"
+        assert escalated["route"] == "fast"
+        assert escalated["active_surprise_score"] == 1.0
+        # It still nudges borderline high-impact actions over the threshold.
+        borderline = engine.route_decision(
+            statement="Declare war", probability=0.9, confidence=0.9, impact="high", urgency="critical", irreversibility=0.99, turn=2, persist=False
+        )
+        assert borderline["route"] == "slow"
+        assert borderline["priority_score"] > slow["priority_score"]
 
     def test_route_uses_referenced_belief_state_not_only_agent_supplied_numbers(self, engine):
         engine.create(
