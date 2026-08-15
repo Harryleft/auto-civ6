@@ -430,6 +430,105 @@ def narrate_era_progress(ep: lq.EraProgress) -> str:
     return "\n".join(lines)
 
 
+def _roman_phase(n: int) -> str:
+    """Roman numeral I..VII for sea-level phases (local display helper)."""
+
+    numerals = ("", "I", "II", "III", "IV", "V", "VI", "VII")
+    return numerals[n] if 0 <= n < len(numerals) else str(n)
+
+
+def narrate_climate_overview(status: lq.ClimateOverview) -> str:
+    """Format the climate report: phase first (irreversible!), then CO2, risks, events."""
+
+    lines = ["=== CLIMATE REPORT ==="]
+    # Phase header — the one thing the agent cannot undo
+    if status.phase >= 4:
+        lines.append(
+            f"!! SEA LEVEL PHASE {_roman_phase(status.phase)} ({status.phase_name}) — "
+            "storm/flood fertility bonuses GONE; move coastal assets NOW"
+        )
+    elif status.phase >= 1:
+        lines.append(
+            f"Sea level phase {_roman_phase(status.phase)} ({status.phase_name})"
+        )
+    else:
+        lines.append("Sea level phase 0 — no rise yet")
+    lines.append(
+        f"Points: {status.climate_change_points:.1f} "
+        f"(realism {status.points_from_realism:.1f} + temp {status.points_from_temperature:.1f})"
+    )
+    if status.next_sea_level_rise_turns >= 0:
+        ice_note = (
+            f" | polar ice loss in ~{status.next_ice_loss_turns}"
+            if status.next_ice_loss_turns >= 0
+            else ""
+        )
+        lines.append(
+            f"Next sea-level rise in ~{status.next_sea_level_rise_turns} turns{ice_note}"
+        )
+    if status.tiles_flooded or status.tiles_submerged:
+        lines.append(
+            f"Coastal loss so far: {status.tiles_flooded} flooded, "
+            f"{status.tiles_submerged} submerged"
+        )
+
+    # CO2 with our own share and trend vs last turn
+    own_share = status.co2_self / status.co2_total * 100 if status.co2_total > 0 else 0.0
+    trend = status.co2_self - status.co2_self_last_turn
+    trend_note = f" ({trend:+.1f} vs last turn)" if abs(trend) >= 0.05 else ""
+    lines.append(
+        f"CO2: world {status.co2_total:.1f} | you {status.co2_self:.1f} "
+        f"({own_share:.0f}% of world){trend_note} | temp +{status.temperature_change:.1f}C"
+    )
+    if status.contributors:
+        top = status.contributors[0]
+        top_name = "YOU" if top.civ_name == "You" else top.civ_name
+        lines.append(f"Top emitter: {top_name} {top.co2:.1f}")
+
+    lines.append(
+        f"Risks: storms {status.storm_chance:.0f}% (+{status.storm_increase:.0f}), "
+        f"floods {status.flood_chance:.0f}% (+{status.flood_increase:.0f}), "
+        f"eruptions {status.eruption_chance:.0f}%, "
+        f"droughts {status.drought_chance:.0f}% (+{status.drought_increase:.0f})"
+    )
+    if status.deforestation_level:
+        lines.append(f"Deforestation: {status.deforestation_level}")
+
+    if status.current_event is not None:
+        event = status.current_event
+        location = (
+            f" at ({event.x},{event.y})" if event.revealed and event.x >= 0 else ""
+        )
+        lines.append(f"This turn: {event.name}{location} [{event.operator}]")
+        damages = []
+        if event.tiles_damaged:
+            damages.append(f"{event.tiles_damaged} tiles damaged")
+        if event.units_lost:
+            damages.append(f"{event.units_lost} units lost")
+        if event.pop_lost:
+            damages.append(f"{event.pop_lost} pop lost")
+        if event.fertility_added:
+            damages.append(f"+{event.fertility_added} fertility")
+        if damages:
+            lines.append("  " + ", ".join(damages))
+        if status.affected_cities:
+            city_names = ", ".join(city.name for city in status.affected_cities)
+            lines.append(f"  Affected cities: {city_names}")
+
+    if status.event_history:
+        tail = status.event_history[:5]
+        history_parts = []
+        for event in tail:
+            note = f" — {event.tiles_damaged} tiles damaged" if event.tiles_damaged else ""
+            if event.units_lost:
+                note += f", {event.units_lost} unit lost"
+            history_parts.append(f"T{event.turn} {event.name}{note}")
+        lines.append("Recent events (newest first): " + "; ".join(history_parts))
+    elif status.current_event is None:
+        lines.append("No weather events in recent history.")
+    return "\n".join(lines)
+
+
 def narrate_village_overview(
     overview: lq.VillageOverview, *, compact: bool = False
 ) -> str:
@@ -1103,6 +1202,9 @@ def narrate_tech_civics(tc: lq.TechCivicStatus) -> str:
     if tc.completed_techs:
         lines.append("\n已完成科技（完整名称）：")
         lines.extend(f"  {name}" for name in tc.completed_techs)
+    if tc.completed_civics:
+        lines.append("\n已完成市政（完整名称）：")
+        lines.extend(f"  {name}" for name in tc.completed_civics)
     if tc.current_civic != "None":
         lines.append(f"Civic: {tc.current_civic} ({tc.current_civic_turns} turns)")
     else:
@@ -1124,11 +1226,12 @@ def narrate_tech_civics(tc: lq.TechCivicStatus) -> str:
         for c in sorted(tc.available_civics, key=lambda x: x.turns):
             boost_str = " BOOSTED" if c.boosted else ""
             boost_desc = f" [Boost: {c.boost_desc}]" if c.boost_desc else ""
+            unlocks = f" -> {c.unlocks}" if c.unlocks else ""
             era_str = f" [{c.era.replace('ERA_', '')}]" if c.era else ""
             prereq_str = f" (needs: {c.prereqs})" if c.prereqs else ""
             flag = " !! GRAB THIS" if c.turns <= 2 else ""
             lines.append(
-                f"  {c.name} ({c.civic_type}){era_str} — {c.progress_pct}%, {c.turns} turns{boost_str}{boost_desc}{prereq_str}{flag}"
+                f"  {c.name} ({c.civic_type}){era_str} — {c.progress_pct}%, {c.turns} turns{boost_str}{boost_desc}{unlocks}{prereq_str}{flag}"
             )
     era_order = [
         "ERA_ANCIENT",

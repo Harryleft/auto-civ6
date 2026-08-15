@@ -20,6 +20,7 @@ from civ_mcp.lua.governance import (
     build_promote_governor,
 )
 from civ_mcp.lua.map import build_empire_resources_query, build_stockpile_query
+from civ_mcp.lua.climate import build_climate_overview_query
 from civ_mcp.lua.eras import build_era_progress_query
 from civ_mcp.lua.overview import build_overview_query
 
@@ -111,3 +112,16 @@ def test_era_progress_builder_gates_xp1_sections():
     assert "{_bail" not in lua
     # RULESET 回显契约
     assert 'print("RULESET|"' in lua
+
+
+def test_climate_builder_has_a_ruleset_guard_and_clamped_history():
+    lua = build_climate_overview_query()
+    assert "ERR:NO_CLIMATE_IN_RULESET" in lua
+    assert "GameConfiguration.GetRuleSet" in lua
+    assert "RULESET_EXPANSION_2" in lua
+    assert "{_bail" not in lua
+
+    # history_turns clamp 到 [1, 200], 杜绝负数/超大扫描
+    assert "curTurn - 1)" in build_climate_overview_query(-5)
+    assert "curTurn - 200)" in build_climate_overview_query(9999)
+    assert "curTurn - 30)" in build_climate_overview_query(30)

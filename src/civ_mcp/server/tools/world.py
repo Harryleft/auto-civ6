@@ -481,6 +481,30 @@ async def get_religion_overview(ctx: Context) -> str:
     return await pipeline._logged(ctx, "get_religion_overview", {}, _run)
 
 
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_climate_overview(ctx: Context, history_turns: int = 30) -> str:
+    """Get the Gathering Storm climate report: sea-level phase, CO2, disaster
+    risks, and recent weather events (Gathering Storm ruleset only).
+
+    Args:
+        history_turns: How many turns of event history to include (1-200, default 30).
+
+    Shows: sea-level phase and points to next rise, world/your CO2 and top
+    contributors, storm/flood/eruption/drought risk percentages, this turn's
+    disaster with affected cities, and recent event history with damage.
+    Call every ~10 turns, or after any flood/volcano/blizzard notification.
+    """
+    gs = pipeline._get_game(ctx)
+
+    async def _run():
+        overview = await gs.get_climate_overview(history_turns)
+        return nr.narrate_climate_overview(overview)
+
+    return await pipeline._logged(
+        ctx, "get_climate_overview", {"history_turns": history_turns}, _run
+    )
+
+
 # ---------------------------------------------------------------------------
 # City yield focus
 # ---------------------------------------------------------------------------

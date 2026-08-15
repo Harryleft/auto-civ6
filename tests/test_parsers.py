@@ -513,3 +513,113 @@ class TestParseEraProgress:
 
         query = build_era_progress_query()
         assert 'gsub("[|,]","/")' in query
+
+
+CLIMATE_FIXTURE = [
+    "CLIMATE|2|Phase 2|15.5|3.0|12.5|10.0|8|-1|3|1|0.9|220.0|40.0|38.0|0.0|Light",
+    "CLIMATE_RISK|12.0|8.0|9.0|4.0|20.0|7.0|3.0|18|6|4|1|3.0",
+    "CLIMATE_CO2|0|You|40.0",
+    "CLIMATE_CO2|1|France|80.0",
+    "CLIMATE_CO2|2|Unmet Player|25.0",
+    "CLIMATE_CO2|3|Egypt|0.0",
+    "CLIMATE_CUR|85|RANDOM_EVENT_RIVER_FLOOD|FLOODPLAIN|River Flood|0|1|34|21|1|3|1|2",
+    "CLIMATE_CITY|0|4|Ravenna",
+    "CLIMATE_CITY|1|7|Unmet Player City",
+    "CLIMATE_EV|84|RANDOM_EVENT_BLIZZARD|STORM|Blizzard|0|1|10|12|0|4|0|0",
+    "CLIMATE_EV|80|RANDOM_EVENT_VOLCANO_ERUPTION|VOLCANO|Eruption|0|0|-1|-1|2|9|0|1",
+    "CLIMATE_EV|60|RANDOM_EVENT_SEA_LEVEL|SEA_LEVEL|Sea Rise|1|1|-1|-1|0|0|0|0",
+    "---END---",
+]
+
+
+class TestParseClimate:
+    def test_full_fixture(self):
+        from civ_mcp.lua.climate import parse_climate_response
+
+        ov = parse_climate_response(CLIMATE_FIXTURE)
+
+        assert ov.phase == 2
+        assert ov.phase_name == "Phase 2"
+        assert ov.climate_change_points == 15.5
+        assert ov.points_from_realism == 3.0
+        assert ov.points_from_temperature == 12.5
+        assert ov.last_sea_level_threshold == 10.0
+        assert ov.next_sea_level_rise_turns == 8
+        assert ov.next_ice_loss_turns == -1
+        assert ov.tiles_flooded == 3
+        assert ov.tiles_submerged == 1
+        assert ov.temperature_change == 0.9
+        assert ov.co2_total == 220.0
+        assert ov.co2_self == 40.0
+        assert ov.co2_self_last_turn == 38.0
+        assert ov.deforestation_level == "Light"
+        # "3.0" 等浮点计数必须经 _int 归一 (Lua 整数打印为 3.0)
+        assert ov.volcano_eruptions_total == 3
+        assert ov.storm_chance == 12.0
+        assert ov.volcanoes_active == 1
+
+        # contributors 按 CO2 降序 (单一事实源, narrate 取首项)
+        assert [c.civ_name for c in ov.contributors] == [
+            "France",
+            "You",
+            "Unmet Player",
+            "Egypt",
+        ]
+        assert ov.contributors[0].co2 == 80.0
+
+        assert ov.current_event is not None
+        assert ov.current_event.turn == 85
+        assert ov.current_event.operator == "FLOODPLAIN"
+        assert ov.current_event.revealed is True
+        assert (ov.current_event.x, ov.current_event.y) == (34, 21)
+        assert ov.current_event.pop_lost == 2
+        assert [c.name for c in ov.affected_cities] == [
+            "Ravenna",
+            "Unmet Player City",
+        ]
+
+        assert len(ov.event_history) == 3
+        # revealed=0 → 坐标 -1
+        fogged = ov.event_history[1]
+        assert fogged.revealed is False
+        assert (fogged.x, fogged.y) == (-1, -1)
+        assert fogged.fertility_added == 2
+        # global 事件恒可报告
+        assert ov.event_history[2].is_global is True
+
+    def test_early_game_no_events(self):
+        from civ_mcp.lua.climate import parse_climate_response
+
+        ov = parse_climate_response(
+            [
+                "CLIMATE|0|Phase 0|0.0|0.0|0.0|-1.0|-1|-1|0|0|0.0|0.0|0.0|0.0|0.0|",
+                "CLIMATE_RISK|1.0|0.0|1.0|0.0|1.0|1.0|0.0|10|2|1|0|0.0",
+                "---END---",
+            ]
+        )
+        assert ov.phase == 0
+        assert ov.current_event is None
+        assert ov.affected_cities == []
+        assert ov.contributors == []
+        assert ov.event_history == []
+
+    def test_malformed_lines_skipped(self):
+        from civ_mcp.lua.climate import parse_climate_response
+
+        import pytest
+
+        ov = parse_climate_response(
+            [
+                "CLIMATE|0|Phase 0|0.0|0.0|0.0|-1.0|-1|-1|0|0|0.0|0.0|0.0|0.0|0.0|",
+                "CLIMATE_RISK|x|8.0|9.0|4.0|20.0|7.0|3.0|18|6|4|1|3",
+                "CLIMATE_CO2|not-an-int|You|40.0",
+                "CLIMATE_EV|garbage",
+                "garbage",
+            ]
+        )
+        assert ov.phase == 0
+        assert ov.contributors == []
+        assert ov.event_history == []
+
+        with pytest.raises(ValueError, match="missing CLIMATE"):
+            parse_climate_response(["CLIMATE_RISK|1|1|1|1|1|1|1|1|1|1|1|1"])

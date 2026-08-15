@@ -374,3 +374,28 @@ def test_outcome_state_requires_an_error_for_non_success():
             status=OutcomeStatus.RETRYABLE,
             turn=42,
         )
+
+
+def test_climate_capability_gated_to_expansion_2():
+    from civ6_belief_engine.governance.capabilities import (
+        CAPABILITY_NAMES,
+        capabilities_for_ruleset,
+        capability_enabled,
+    )
+
+    assert "climate" in CAPABILITY_NAMES
+    assert capabilities_for_ruleset("RULESET_EXPANSION_2").climate is True
+    assert capabilities_for_ruleset("RULESET_STANDARD").climate is False
+    assert capabilities_for_ruleset("RULESET_EXPANSION_1").climate is False
+    assert capability_enabled("RULESET_STANDARD", "climate") is False
+    assert capability_enabled("RULESET_EXPANSION_2", "climate") is True
+
+    # 补 _strict_bool 元组项的证据: climate=1 必须像 governors 一样被拒绝
+    with pytest.raises(TypeError, match="climate must be a bool"):
+        RulesetCapabilities(climate=1)  # type: ignore[arg-type]
+
+
+def test_climate_appears_in_canonical_capabilities_payload():
+    from civ6_belief_engine.governance.snapshot import _canonical
+
+    assert _canonical(RulesetCapabilities.standard())["climate"] is False

@@ -108,6 +108,22 @@ _LAUNCH_ATTEMPTS = 3
 # Tuner TCP port
 _TUNER_PORT = 4318
 
+# OCR can click an unrelated window when FireTuner is unavailable.  Keep it
+# disabled for normal MCP recovery; callers must explicitly opt in when they
+# accept GUI automation as a last-resort fallback.
+OCR_RECOVERY_ENV = "CIV_MCP_ENABLE_OCR_RECOVERY"
+
+
+def ocr_recovery_enabled() -> bool:
+    """Return whether the unsafe OCR recovery fallback was explicitly enabled."""
+
+    return os.environ.get(OCR_RECOVERY_ENV, "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
 
 def _require_gui_deps() -> None:
     """Validate GUI dependencies are available, raising clear error if missing."""
