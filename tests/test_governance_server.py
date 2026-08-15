@@ -211,6 +211,42 @@ def test_route_rejects_non_object_action_params_without_crashing(tmp_path, field
     assert result.startswith("Error: action arguments/params must be a JSON object")
 
 
+def test_route_accepts_native_json_values_from_mcp_tool_calls(tmp_path):
+    ctx, engine = _bare_loop_context(tmp_path)
+    engine.ingest_typed_snapshot(
+        {
+            "snapshot_id": "snapshot:42",
+            "turn_before": 42,
+            "turn_after": 42,
+            "capabilities": {"ruleset": "RULESET_STANDARD"},
+            "entities": [],
+            "relations": [],
+            "metrics": {},
+        },
+        turn=42,
+    )
+
+    result = asyncio.run(
+        route_belief_decision(
+            ctx,
+            statement="Record a routine scouting decision",
+            probability=0.8,
+            confidence=0.7,
+            impact="low",
+            urgency="low",
+            irreversibility=0.1,
+            belief_ids=[],
+            considered_actions=["move scout"],
+            action_intent={},
+            evidence_requirements=[],
+        )
+    )
+
+    routed = json.loads(result)
+    assert routed["belief_ids"] == []
+    assert routed["considered_actions"] == ["move scout"]
+
+
 def test_current_turn_snapshot_lookup_reuses_latest_capture(tmp_path):
     engine = BeliefEngine("snapshot-reuse", tmp_path)
     engine.bind_game("CIVILIZATION_ROME", 123)
@@ -455,11 +491,62 @@ def test_council_action_intent_routes_verbatim_and_keeps_approved_evidence(tmp_p
 
     routed = json.loads(result)
     assert routed["council_decision_id"] == "council:42:test"
+    assert routed["route"] == "verify_then_fast"
     assert routed["action_intent"]["params"] == approved_intent["arguments"]
     assert routed["evidence_requirements"][0]["required_metrics"] == [
         "observed_city_count"
     ]
     assert engine.get("decision", routed["id"])["decision_state"] == "authorized"
+
+    authorization = engine.authorize_action(
+        tool=approved_intent["tool"],
+        params=approved_intent["arguments"],
+        turn=42,
+        required=True,
+    )
+    assert authorization["authorized"] is False
+    assert authorization["route"] == "verify_then_fast"
+    assert authorization["missing_evidence"][0]["tool"] == "get_cities"
+
+
+def test_council_route_without_evidence_contract_is_immediately_executable(tmp_path):
+    ctx, engine, approved_intent = _governed_context(tmp_path)
+    proposal = engine.get("proposal", "production:east:walls")
+    proposal["action_intents"][0]["evidence_requirements"] = []
+    engine.update(
+        "proposal",
+        proposal["id"],
+        {"action_intents": proposal["action_intents"]},
+        turn=42,
+    )
+
+    result = asyncio.run(
+        route_belief_decision(
+            ctx,
+            statement="Build the council-approved walls without an evidence contract",
+            probability=0.8,
+            confidence=0.7,
+            impact="high",
+            urgency="high",
+            irreversibility=0.5,
+            action_intent=json.dumps(approved_intent),
+            council_decision_id="council:42:test",
+            gate_scope="city:0:4",
+        )
+    )
+
+    routed = json.loads(result)
+    assert routed["route"] == "fast"
+    # A restarted agent may read an older persisted record whose route was
+    # computed before council-aware classification existed.
+    engine.update("decision", routed["id"], {"route": "slow"}, turn=42)
+    authorization = engine.authorize_action(
+        tool=approved_intent["tool"],
+        params=approved_intent["arguments"],
+        turn=42,
+        required=True,
+    )
+    assert authorization["authorized"] is True
 
 
 def test_council_route_rejects_weakened_evidence_contract(tmp_path):
