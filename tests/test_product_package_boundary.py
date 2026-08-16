@@ -4,10 +4,9 @@ The legacy ``civ_mcp.belief_engine`` / ``civ_mcp.governance`` compatibility
 shims were removed; tests and production code import the product domain
 package (``civ6_belief_engine``) directly.
 
-The only tolerated adapter reference left is the typed Lua DTO
-(``civ_mcp.lua.models``) used by the governance snapshot layer — known debt
-being inverted by the graph plan (phases 3–4). Tighten this guard when that
-debt is paid off.
+Adapter types are allowed only at the calling ``GameState`` boundary. The
+domain package receives adapter-neutral inputs and must not import any
+``civ_mcp`` module at runtime.
 """
 
 from __future__ import annotations
@@ -19,8 +18,8 @@ import pytest
 
 PACKAGE = pathlib.Path(__file__).resolve().parents[1] / "src" / "civ6_belief_engine"
 
-# Known, in-flight debt: typed Lua DTOs leaking into governance models/snapshot.
-ALLOWED_ADAPTER_MODULES = {"civ_mcp.lua.models"}
+# The adapter namespace belongs only to the calling GameState boundary.
+ADAPTER_IMPORT_PREFIX = "civ_mcp"
 
 
 def _adapter_imports() -> set[str]:
@@ -31,13 +30,15 @@ def _adapter_imports() -> set[str]:
         text = path.read_text(encoding="utf-8")
         for line in text.splitlines():
             stripped = line.strip()
-            if stripped.startswith("import civ_mcp") or stripped.startswith("from civ_mcp"):
+            if stripped.startswith(f"import {ADAPTER_IMPORT_PREFIX}") or stripped.startswith(
+                f"from {ADAPTER_IMPORT_PREFIX}"
+            ):
                 imports.add(stripped.split()[1])
     return imports
 
 
-def test_domain_package_imports_no_adapter_module_beyond_allowed_dto():
-    unexpected = _adapter_imports() - ALLOWED_ADAPTER_MODULES
+def test_domain_package_imports_no_adapter_modules():
+    unexpected = _adapter_imports()
     assert unexpected == set(), (
         "civ6_belief_engine must not import adapter modules:",
         sorted(unexpected),
