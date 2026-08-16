@@ -83,6 +83,9 @@ class _FakeConn:
 
     async def execute_write(self, lua: str, **_kwargs):
         self.calls.append(lua)
+        if "GAMESEED" in lua:
+            seed = getattr(self, "_identity_seed", 4242)
+            return [f"GAMESEED|CIVILIZATION_FRANCE|{seed}", "---END---"]
         if "NotificationManager" in lua:
             return [
                 "NOTIF|NOTIFICATION_COMMEMORATION_AVAILABLE|选择着力点|56|-1,-1",
@@ -103,6 +106,10 @@ class _FakeConn:
     async def execute_read(self, lua: str, **_kwargs):
         self.calls.append(lua)
         return ["1"]
+
+    async def execute_game_identity(self, seed: int):
+        self.calls.append("GAMESEED")
+        self._identity_seed = seed
 
     async def execute_mutation(self, lua: str, **_kwargs):
         self.calls.append(lua)
@@ -157,3 +164,43 @@ class TestGameStateArbitration:
         with pytest.raises(LuaError, match="NO_DEDICATIONS_IN_RULESET"):
             await gs.get_dedications()
         assert any("CommemorationTypes" in c or "gotEras" in c for c in conn.calls)
+
+
+class TestReviewFollowUps:
+    def test_arbitration_covers_turn_report_path(self):
+        """P1 regression: end_turn's report routes through the same helper."""
+
+        conn = _FakeConn(_overview_lines("RULESET_STANDARD"))
+        gs = GameState(conn)
+        asyncio.run(gs.get_game_overview())  # warm the ruleset cache
+        parsed = lq.parse_notifications_response(
+            ["NOTIF|NOTIFICATION_COMMEMORATION_AVAILABLE|选择着力点|56|-1,-1"]
+        )
+        arbitrated = gs._arbitrate_notifications(parsed)
+        assert arbitrated[0].is_action_required is False
+        assert arbitrated[0].resolution_hint is None
+
+    def test_cold_cache_passes_through_unarbitrated(self):
+        gs = GameState(_FakeConn(_overview_lines("RULESET_STANDARD")))
+        parsed = lq.parse_notifications_response(
+            ["NOTIF|NOTIFICATION_COMMEMORATION_AVAILABLE|选择着力点|56|-1,-1"]
+        )
+        assert gs._arbitrate_notifications(parsed) is parsed
+
+    def test_game_identity_change_clears_ruleset_cache(self):
+        """P2 regression: the ruleset belongs to the game, not the process."""
+
+        async def flow():
+            conn = _FakeConn(_overview_lines("RULESET_EXPANSION_2"))
+            gs = GameState(conn)
+            await gs.get_game_overview()
+            assert gs._ruleset_caps is not None and gs._ruleset_caps.dedications
+            await gs.get_game_identity()  # first call just sets identity
+            conn._identity_seed = 999  # a different game loads
+            await gs.get_game_identity()
+            assert gs._ruleset_caps is None
+            # The next overview re-warms with the new game's ruleset.
+            await gs.get_game_overview()
+            assert gs._ruleset_caps is not None
+
+        asyncio.run(flow())

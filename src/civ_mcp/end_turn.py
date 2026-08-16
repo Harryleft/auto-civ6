@@ -1544,7 +1544,9 @@ async def execute_end_turn(gs: GameState) -> str:
     notifications: list[lq.GameNotification] = []
     try:
         notif_lines = await gs.conn.execute_write(lq.build_notifications_query())
-        notifications = lq.parse_notifications_response(notif_lines)
+        notifications = gs._arbitrate_notifications(
+            lq.parse_notifications_response(notif_lines)
+        )
     except Exception:
         log.debug("Notification query failed", exc_info=True)
 
