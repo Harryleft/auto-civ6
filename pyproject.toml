@@ -86,3 +86,31 @@ dev = [
     "matplotlib>=3.10.8",
     "pytest>=8.0",
 ]
+
+[tool.mutmut]
+source_paths = [
+    "src/civ6_belief_engine/belief_engine.py",
+    "src/civ6_belief_engine/derivation.py",
+    "src/civ6_belief_engine/ids.py",
+]
+# 包内其余模块只复制（供 import）不变异。
+also_copy = [
+    "src/civ_mcp",
+    "src/civ6_belief_engine/__init__.py",
+    "src/civ6_belief_engine/belief_mode.py",
+    "src/civ6_belief_engine/coverage.py",
+    "src/civ6_belief_engine/dashboard.py",
+    "src/civ6_belief_engine/forecast",
+    "src/civ6_belief_engine/governance",
+    "src/civ6_belief_engine/graph",
+    "src/civ6_belief_engine/py.typed",
+]
+pytest_add_cli_args_test_selection = [
+    "tests/test_belief_engine.py",
+    "tests/test_belief_engine_p0.py",
+    "tests/test_derivation.py",
+    "tests/test_belief_mode.py",
+    "tests/test_belief_coverage.py",
+    "tests/test_harness_belief_flow.py",
+    "tests/test_belief_mode_server.py",
+]
