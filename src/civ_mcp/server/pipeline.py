@@ -21,6 +21,7 @@ from civ6_belief_engine.belief_engine import (
 )
 from civ6_belief_engine.belief_mode import BeliefMode
 from civ_mcp import game_launcher, heartbeat
+from civ_mcp.facts import parse_envelope as _parse_fact_envelope
 from civ_mcp.telemetry import EVENT_BELIEF_EVENT
 
 log = logging.getLogger(__name__)
@@ -548,16 +549,33 @@ async def _append_belief_context(
             values = review.get(key) or []
             if values:
                 review_events.append(f"{key}={','.join(values[:6])}")
-        suffix = [
-            "\n\n=== BELIEF CONTEXT ===",
-            f"turn={turn} default_route={gate.get('default_route', 'fast')}",
-            "flags=" + ("; ".join(flags) if flags else "none"),
-            "blocking_scopes="
-            + (",".join(gate.get("blocking_scopes") or []) or "none"),
-            "review=" + ("; ".join(review_events) if review_events else "none"),
-            "Use get_turn_brief before a key action; nearby hostiles require quantified combat evidence.",
-        ]
-        return result + "\n" + "\n".join(suffix)
+        context = {
+            "turn": turn,
+            "default_route": gate.get("default_route", "fast"),
+            "flags": flags,
+            "blocking_scopes": gate.get("blocking_scopes") or [],
+            "review": review_events,
+            "note": (
+                "Use get_turn_brief before a key action; nearby hostiles "
+                "require quantified combat evidence."
+            ),
+        }
+        # 双轨信封结果：信念上下文合并进 JSON 结构，而不是破坏可解析性的尾部追加。
+        parsed = _parse_fact_envelope(result)
+        if parsed is not None:
+            parsed["belief_context"] = context
+            return json.dumps(parsed, ensure_ascii=False)
+        return result + "\n" + "\n".join(
+            [
+                "\n\n=== BELIEF CONTEXT ===",
+                f"turn={turn} default_route={gate.get('default_route', 'fast')}",
+                "flags=" + ("; ".join(flags) if flags else "none"),
+                "blocking_scopes="
+                + (",".join(gate.get("blocking_scopes") or []) or "none"),
+                "review=" + ("; ".join(review_events) if review_events else "none"),
+                "Use get_turn_brief before a key action; nearby hostiles require quantified combat evidence.",
+            ]
+        )
     except Exception:
         log.debug("Belief context append failed for %s", tool_name, exc_info=True)
         return result

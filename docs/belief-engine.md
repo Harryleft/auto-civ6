@@ -56,6 +56,36 @@ SHA-256 `result_ref`, and links between decisions, actions, outcomes, and
 observations. They do not copy the raw result into each entity. Existing event
 logs remain readable and are not rewritten in place.
 
+## Double-track tool results
+
+High-frequency query tools (`get_units`, `get_cities`, `get_map_area`,
+`get_barbarian_overview`) return a double-track JSON envelope built by
+`civ_mcp.facts`:
+
+```json
+{
+  "v": 1,
+  "tool": "get_units",
+  "turn": 56,
+  "source": "civ_mcp:GameState",
+  "coverage": {"own_units": "COMPLETE", "foreign_units": "CURRENTLY_VISIBLE"},
+  "facts": {"own_units": [{"unit_id": 131073, "x": 32, "y": 37, ...}]},
+  "narrated": "10 units:\n  侦察兵 (UNIT_SCOUT) at (37,32) ..."
+}
+```
+
+The model consumes `facts` (field-level schema, no free-text parsing);
+`narrated` keeps the legacy human-readable view for logs, the observation
+normalizer, and manual fallback. `coverage` uses the graph-plan three-value
+semantics — `COMPLETE` (absence is real), `CURRENTLY_VISIBLE` (absence only
+means not currently seen), `KNOWN_HISTORY` (revealed history; unobserved is
+not deleted). Belief-engine context is merged into the envelope as a
+`belief_context` key instead of a trailing text block, so the JSON stays
+parseable.
+
+`normalize_tool_result` detects the envelope and keeps the narrated-regex
+path for metrics while overwriting facts with the exact structured values.
+
 ## Entity model
 
 - `observation`: directly observed fact, source, reliability, result

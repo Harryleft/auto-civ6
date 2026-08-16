@@ -116,13 +116,92 @@ def _result_summary(result: str) -> str:
     return match.group(1).strip()[:_RESULT_SUMMARY_CHARS] if match else ""
 
 
+def _parse_fact_envelope(result: str) -> dict[str, Any] | None:
+    """若结果为 civ_mcp.facts 双轨信封则返回其 dict，否则返回 None。"""
+    try:
+        payload = json.loads(result)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("v") != 1 or not isinstance(payload.get("facts"), dict):
+        return None
+    if not isinstance(payload.get("narrated"), str):
+        return None
+    return payload
+
+
+def _envelope_observation_facts(
+    tool: str, envelope: dict[str, Any]
+) -> dict[str, Any]:
+    """从双轨信封的结构化事实生成 observation facts（保持既有键名）。
+
+    与 narrated 正则路径产出相同的键，但值来自字段级 schema，不依赖
+    文本格式；正则路径的解析损失（例如 999 距离被叙述成 "no city
+    distance" 而丢失）在这里不存在。
+    """
+    payload = envelope.get("facts") or {}
+    facts: dict[str, Any] = {}
+    if tool == "get_units":
+        own = payload.get("own_units") or []
+        facts["unit_ids"] = [int(u["unit_id"]) for u in own if "unit_id" in u]
+        for u in own:
+            if "unit_id" in u and "x" in u and "y" in u:
+                facts[f"unit_position:{int(u['unit_id'])}"] = [
+                    int(u["x"]),
+                    int(u["y"]),
+                ]
+    elif tool == "get_cities":
+        cities = payload.get("cities") or []
+        facts["cities"] = [
+            {
+                "name": c.get("name", ""),
+                "population": int(c.get("population", 0)),
+                "x": int(c.get("x", 0)),
+                "y": int(c.get("y", 0)),
+            }
+            for c in cities
+        ]
+    elif tool == "get_barbarian_overview":
+        camps = payload.get("camps") or []
+        if camps:
+            facts["barbarian_camps"] = [
+                {
+                    "x": int(c["x"]),
+                    "y": int(c["y"]),
+                    "visibility": c.get("visibility", "revealed"),
+                    "priority": (
+                        "CRITICAL"
+                        if c.get("distance_to_city", 999) <= 5
+                        else "HIGH"
+                        if c.get("distance_to_city", 999) <= 10
+                        else "WATCH"
+                    ),
+                    "distance_to_city": c.get("distance_to_city"),
+                    "distance_to_military": c.get("distance_to_military"),
+                }
+                for c in camps
+            ]
+    return facts
+
+
 def normalize_tool_result(tool: str, result: str) -> dict[str, Any]:
     """Extract stable facts/metrics from narrated MCP query results.
 
     Raw text remains owned by the tool transcript and telemetry. This
     normalizer intentionally extracts only values with unambiguous textual
     contracts; interpretations belong in beliefs, not observations.
+
+    Double-track envelope results (civ_mcp.facts) keep the narrated-regex
+    path for metrics and overwrite facts with exact structured values.
     """
+
+    envelope = _parse_fact_envelope(result)
+    if envelope is not None and envelope.get("tool") == tool:
+        base = normalize_tool_result(tool, envelope.get("narrated") or "")
+        facts = base["facts"]
+        facts.update(_envelope_observation_facts(tool, envelope))
+        return {"facts": facts, "metrics": base["metrics"]}
 
     metrics: dict[str, Any] = {}
     facts: dict[str, Any] = {"tool": tool}
