@@ -144,7 +144,7 @@ sequenceDiagram
 ```mermaid
 flowchart TD
     A["回合开始"] --> B["get_game_overview<br/>唯一强制入口 · 返回 RUNTIME POLICY<br/>+ enforce 模式下治理快照"]
-    B --> C["get_barbarian_overview<br/>营地 = 刷兵源头，优先清剿"]
+    B --> C["威胁评估（摘要/告警触发）<br/>get_barbarian_overview · 营地 = 刷兵源头<br/>敌方军力 2 倍 / 边境集结 → get_units 核对"]
     C --> D{"有营地 / 蛮族单位？"}
     D -->|是| E["get_combat_estimate<br/>→ assess_route_combat_risk<br/>（完整量化评估才允许改路由信念）"]
     E --> F["按需查询 get_units / get_map_area / get_cities<br/>原始结果不入信念，只入遥测"]
