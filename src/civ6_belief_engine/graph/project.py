@@ -29,6 +29,13 @@ _GOVERNANCE_ENTITY_TYPES = frozenset(
         "decision",
         "action",
         "outcome",
+        "hypothesis",
+        "prediction",
+        "plan",
+        "surprise",
+        "contradiction",
+        "attribution",
+        "simulation",
     }
 )
 

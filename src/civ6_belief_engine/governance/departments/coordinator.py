@@ -6,6 +6,7 @@ import hashlib
 from dataclasses import dataclass
 
 from ...graph import GraphView
+from ..graph_snapshot import GraphSnapshotView
 from .base import (
     Department,
     DepartmentAssessment,
@@ -14,7 +15,7 @@ from .base import (
     SupportRequest,
     Workstream,
 )
-from ..models import StrategicGoal, TurnSnapshot
+from ..models import StrategicGoal
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,7 +67,7 @@ class NationalStrategyCoordinator:
 
     def run(
         self,
-        snapshot: TurnSnapshot,
+        snapshot: GraphSnapshotView,
         *,
         agenda: tuple[str, ...] = (),
         goals: tuple[StrategicGoal, ...] = (),
@@ -78,6 +79,7 @@ class NationalStrategyCoordinator:
             goals=goals,
             graph=graph,
         )
+        snapshot = context.snapshot
         assessments: list[DepartmentAssessment] = []
         for plugin in self.registry.plugins():
             try:

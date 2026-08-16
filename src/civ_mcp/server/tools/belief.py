@@ -43,6 +43,13 @@ _GRAPH_GOVERNANCE_ENTITY_TYPES = frozenset(
         "decision",
         "action",
         "outcome",
+        "hypothesis",
+        "prediction",
+        "plan",
+        "surprise",
+        "contradiction",
+        "attribution",
+        "simulation",
     }
 )
 
@@ -1037,15 +1044,22 @@ async def get_governance_brief(
             _governance_goal_from_dict(dict(node.attributes))
             for node in engine.graph_view.active_goals()
         )
+        from civ6_belief_engine.governance import GraphSnapshotView
         from civ6_belief_engine.governance.departments import (
             NationalStrategyCoordinator,
             default_department_registry,
+        )
+        department_snapshot = GraphSnapshotView.from_graph(
+            engine.graph_view,
+            snapshot_id=snapshot.snapshot_id,
+            turn=snapshot.turn,
+            player_id=snapshot.player_id,
         )
 
         national_strategy = NationalStrategyCoordinator(
             default_department_registry()
         ).run(
-            snapshot,
+            department_snapshot,
             agenda=tuple(goal.statement for goal in typed_goals),
             goals=typed_goals,
             # Departments always receive the materialized graph.  A stale or

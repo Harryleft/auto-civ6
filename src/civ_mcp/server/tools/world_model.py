@@ -42,7 +42,9 @@ async def get_calibration_report(ctx: Context) -> str:
         ctx,
         "get_calibration_report",
         {},
-        lambda engine, turn: calibration_report(engine.list("prediction", status=None)),
+        lambda engine, turn: calibration_report(
+            engine.current_governance_entities("prediction", status=None)
+        ),
     )
 
 
@@ -82,7 +84,8 @@ async def run_trend_forecast(
             else list(DEFAULT_FORECAST_METRICS)
         )
         series = numeric_metric_series(
-            engine.list("observation", status="active"), metrics=selected
+            engine.current_governance_entities("observation", status="active"),
+            metrics=selected,
         )
         forecaster = TrendExtrapolator()
         branches = forecaster.forecast(
@@ -100,7 +103,7 @@ async def run_trend_forecast(
                     "Query get_game_overview for a few turns first."
                 ),
             }
-        for stale in engine.list("simulation", status="active"):
+        for stale in engine.current_governance_entities("simulation", status="active"):
             if stale.get("forecaster") == _FORECASTER_TAG:
                 engine.delete(
                     "simulation", stale["id"], turn=turn, reason="superseded forecast"
