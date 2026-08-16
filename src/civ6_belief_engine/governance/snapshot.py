@@ -29,7 +29,7 @@ from .inputs import (
     UnitInput,
     VictoryInput,
 )
-from .models import TurnSnapshot as GovernanceTurnSnapshot
+from .models import TypedTurnSnapshot as GovernanceTypedTurnSnapshot
 from ..ids import slugify
 
 
@@ -142,7 +142,7 @@ def build_turn_snapshot(
     great_people: GreatPeopleInput | None = None,
     threats: Sequence[ThreatInput] | None = None,
     extra: Mapping[str, Any] | None = None,
-) -> GovernanceTurnSnapshot:
+) -> GovernanceTypedTurnSnapshot:
     """Build one immutable, same-turn governance snapshot from typed results."""
 
     if isinstance(turn_before, bool) or not isinstance(turn_before, int):
@@ -308,7 +308,7 @@ def build_turn_snapshot(
         "extra": frozen_extra,
     }
     snapshot_id = _stable_snapshot_id(identity_payload)
-    return GovernanceTurnSnapshot(
+    return GovernanceTypedTurnSnapshot(
         snapshot_id=snapshot_id,
         turn_before=turn_before,
         turn_after=turn_after,
@@ -363,7 +363,7 @@ def _add_relation(
     )
 
 
-def snapshot_world_state(snapshot: GovernanceTurnSnapshot) -> dict[str, Any]:
+def snapshot_world_state(snapshot: GovernanceTypedTurnSnapshot) -> dict[str, Any]:
     """Project a typed snapshot into stable world entities, relations, metrics."""
 
     overview = snapshot.overview
@@ -781,7 +781,7 @@ def snapshot_world_state(snapshot: GovernanceTurnSnapshot) -> dict[str, Any]:
 
 
 def snapshot_to_belief_observation(
-    snapshot: GovernanceTurnSnapshot,
+    snapshot: GovernanceTypedTurnSnapshot,
 ) -> BeliefObservation:
     """Return a structured Observation payload ready for BeliefEngine ingest."""
 

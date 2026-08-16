@@ -217,8 +217,8 @@ class RulesetCapabilities:
 
 
 @dataclass(frozen=True, slots=True)
-class TurnSnapshot:
-    """Immutable same-turn state assembled directly from typed ``GameState`` calls."""
+class TypedTurnSnapshot:
+    """Immutable typed input used only at the GameState-to-Graph adapter boundary."""
 
     snapshot_id: str
     turn: int

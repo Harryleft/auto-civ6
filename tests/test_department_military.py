@@ -9,7 +9,7 @@ from civ6_belief_engine.governance import (
     ProbabilityConfidence,
     RulesetCapabilities,
     StrategicGoal,
-    TurnSnapshot,
+    TypedTurnSnapshot,
 )
 from civ6_belief_engine.governance.departments.base import (
     Department,
@@ -93,7 +93,7 @@ def _snapshot(
     threats: tuple[ThreatInfo, ...] = (),
     threat_scan_available: bool | None = None,
     overview_num_units: int | None = None,
-) -> TurnSnapshot:
+) -> TypedTurnSnapshot:
     overview = GameOverview(
         turn=12,
         player_id=0,
@@ -110,7 +110,7 @@ def _snapshot(
         num_units=len(units) if overview_num_units is None else overview_num_units,
         ruleset="Standard",
     )
-    return TurnSnapshot(
+    return TypedTurnSnapshot(
         snapshot_id="snapshot:military:12",
         turn=12,
         turn_before=12,
@@ -132,7 +132,7 @@ def _snapshot(
 
 
 def _context(
-    snapshot: TurnSnapshot,
+    snapshot: TypedTurnSnapshot,
     *agenda: str,
     graph: GraphView | None = None,
     goals: tuple[StrategicGoal, ...] = (),
