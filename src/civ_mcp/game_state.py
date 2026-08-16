@@ -29,6 +29,10 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+# InGame RequestOperation is asynchronous.  Keep the read-back window short
+# and bounded: a fortify call is never re-submitted by this confirmation loop.
+_FORTIFY_READBACK_DELAYS = (0.05, 0.1, 0.2, 0.3)
+
 
 def _raise_query_error(lines: list[str]) -> None:
     """Promote printed Lua query guards into the normal MCP error path."""
@@ -659,6 +663,33 @@ class GameState:
         result = _action_result(lines)
         if result.startswith("SLEEPING"):
             return "Unit is sleeping (this unit type cannot fortify)"
+        if "OUTCOME_UNKNOWN" in result:
+            # RequestOperation may still be queued when build_fortify_unit
+            # performs its same-frame read-back.  Query the InGame unit list
+            # for a short, finite window so the mutation remains exactly once.
+            for delay in _FORTIFY_READBACK_DELAYS:
+                await asyncio.sleep(delay)
+                try:
+                    readback_lines = await self.conn.execute_write(
+                        lq.build_units_query()
+                    )
+                    unit = next(
+                        (
+                            candidate
+                            for candidate in lq.parse_units_response(readback_lines)
+                            if candidate.unit_index == unit_index
+                        ),
+                        None,
+                    )
+                    if unit is not None and unit.fortify_turns > 0:
+                        return (
+                            "FORTIFIED|readback_fortify_turns:"
+                            f"{unit.fortify_turns}|readback_moves:"
+                            f"{unit.moves_remaining:g}"
+                        )
+                except Exception:
+                    log.debug("Fortify read-back failed", exc_info=True)
+            # Do not turn an unconfirmed asynchronous submission into success.
         return result
 
     async def skip_unit(self, unit_index: int) -> str:
