@@ -1888,6 +1888,7 @@ def test_invalid_probability_values_are_rejected(engine):
                 "category": "test",
                 "probability": 0.5,
                 "confidence": 0.5,
+                "unknown_basis": True,
                 "tags": [],
             }
             payload[field] = bad
@@ -1903,6 +1904,7 @@ def test_invalid_probability_values_are_rejected(engine):
                 "category": "test",
                 "probability": 0.0 if field == "probability" else 0.5,
                 "confidence": 0.5 if field == "probability" else 1.0,
+                "unknown_basis": True,
                 "tags": [],
             },
             turn=5,
@@ -1977,7 +1979,12 @@ _REQUIRED_BY_TYPE = {
 def _minimal_entity_payload(entity_type: str) -> dict:
     extra = {
         "observation": {"source": "tool:get_units"},
-        "belief": {"category": "test", "probability": 0.5, "confidence": 0.5},
+        "belief": {
+            "category": "test",
+            "probability": 0.5,
+            "confidence": 0.5,
+            "unknown_basis": True,
+        },
         "hypothesis": {"topic_id": "topic:1", "probability": 0.5, "confidence": 0.5},
         "prediction": {"probability": 0.5, "confidence": 0.5, "deadline_turn": 10},
         "plan": {"goal": "goal:1", "horizon": 10, "probability_of_success": 0.5},
