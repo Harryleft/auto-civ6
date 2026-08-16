@@ -18,6 +18,7 @@ from civ_mcp.lua.models import (
     TechCivicStatus,
 )
 from civ6_belief_engine.governance.models import Outcome, OutcomeStatus
+from graph_test_helpers import graph_for_snapshot
 
 
 def _snapshot(
@@ -111,6 +112,7 @@ def test_normal_assessment_is_deterministic_and_wildcard_is_candidate_only() -> 
     context = DepartmentContext(
         snapshot=_snapshot(tech_civic=_tech_civic(), policies=_policies()),
         agenda=("review civics and policy options",),
+        graph=graph_for_snapshot(_snapshot(tech_civic=_tech_civic(), policies=_policies())),
     )
     department = CivicsDepartment()
 
@@ -169,7 +171,15 @@ def test_barbarians_emit_military_support_signal_without_military_action() -> No
                     )
                 ],
             ),
-        )
+        ),
+        graph=graph_for_snapshot(_snapshot(
+            tech_civic=_tech_civic(),
+            policies=_policies(),
+            barbarians=BarbarianOverview(
+                camps=[BarbarianCamp(8, 9, distance_to_city=4, distance_to_military=2)],
+                units=[BarbarianUnit(63, "UNIT_WARRIOR", 8, 8, 100, 100, 20, 0, 3, 1)],
+            ),
+        )),
     )
 
     assessment = CivicsDepartment().assess(context)
