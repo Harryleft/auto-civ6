@@ -66,7 +66,7 @@ from .models import (
     StrategicGoal,
     TurnSnapshot,
 )
-from .graph_snapshot import GraphSnapshotView, graph_goals, graph_snapshot
+from .graph_snapshot import GraphSnapshotView, graph_agenda, graph_goals, graph_snapshot
 from .snapshot import (
     BeliefObservation,
     SnapshotConsistencyError,
@@ -142,5 +142,6 @@ __all__ = [
     "snapshot_to_belief_observation",
     "snapshot_world_state",
     "graph_goals",
+    "graph_agenda",
     "graph_snapshot",
 ]

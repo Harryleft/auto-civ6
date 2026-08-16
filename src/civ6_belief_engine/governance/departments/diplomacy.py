@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Protocol
 
-from ..graph_snapshot import graph_goals, graph_snapshot
+from ..graph_snapshot import graph_agenda, graph_goals, graph_snapshot
 from ..models import Outcome
 from .base import (
     BaseDepartment,
@@ -65,13 +65,13 @@ def _goal_texts(context: DepartmentContext) -> tuple[str, ...]:
 
 def _explicit_diplomacy_request(context: DepartmentContext) -> bool:
     return _contains_marker(
-        (*context.agenda, *_goal_texts(context)), _DIPLOMACY_MARKERS
+        (*graph_agenda(context), *_goal_texts(context)), _DIPLOMACY_MARKERS
     )
 
 
 def _barbarian_request(context: DepartmentContext) -> bool:
     return _contains_marker(
-        (*context.agenda, *_goal_texts(context)), _BARBARIAN_MARKERS
+        (*graph_agenda(context), *_goal_texts(context)), _BARBARIAN_MARKERS
     )
 
 

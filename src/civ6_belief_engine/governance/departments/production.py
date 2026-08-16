@@ -6,7 +6,7 @@ import math
 from collections.abc import Iterable
 from typing import Any
 
-from ..graph_snapshot import graph_goals, graph_snapshot
+from ..graph_snapshot import graph_agenda, graph_goals, graph_snapshot
 from ..models import Outcome, OutcomeStatus
 from .base import (
     Department,
@@ -216,7 +216,7 @@ class ProductionDepartment:
 
     @classmethod
     def _has_agenda_signal(cls, context: DepartmentContext) -> bool:
-        statements = [*context.agenda]
+        statements = [*graph_agenda(context)]
         goals = graph_goals(context)
         statements.extend(goal.statement for goal in goals)
         for goal in goals:
