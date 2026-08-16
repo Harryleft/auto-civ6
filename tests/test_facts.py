@@ -725,3 +725,193 @@ class TestThirdBatchEnvelopes:
         )
         assert env["facts"]["promotions"][0]["promotion_type"] == "PROMOTION_BATTLECRY"
         assert env["coverage"] == {"promotions": "COMPLETE"}
+
+
+class TestFourthBatchEnvelopes:
+    """第四批（全部剩余核心查询工具）的双轨信封。"""
+
+    def test_governors_and_city_states_envelopes(self):
+        gov = lq.GovernorStatus(points_available=2, points_spent=1, can_appoint=True)
+        env = fact_view.governors_envelope(
+            turn=5, status=gov, narrated=nr.narrate_governors(gov)
+        )
+        assert env["facts"]["points_available"] == 2
+        assert env["coverage"] == {"governors": "COMPLETE"}
+
+        envoys = lq.EnvoyStatus(tokens_available=3)
+        env = fact_view.city_states_envelope(
+            turn=5, status=envoys, narrated=nr.narrate_city_states(envoys)
+        )
+        assert env["facts"]["tokens_available"] == 3
+        assert env["coverage"] == {
+            "envoy_tokens": "COMPLETE",
+            "city_states": "COMPLETE",
+        }
+
+    def test_pantheon_and_religion_founding_envelopes(self):
+        pantheon = lq.PantheonStatus(
+            has_pantheon=False, current_belief=None, current_belief_name=None,
+            faith_balance=12.5,
+        )
+        env = fact_view.pantheon_envelope(
+            turn=5, status=pantheon, narrated=nr.narrate_pantheon_status(pantheon)
+        )
+        assert env["facts"]["faith_balance"] == 12.5
+        assert env["coverage"] == {
+            "pantheon": "COMPLETE",
+            "beliefs": "COMPLETE",
+        }
+
+        founding = lq.ReligionFoundingStatus(
+            has_religion=False, religion_type=None, religion_name=None,
+            pantheon_index=-1, faith_balance=12.5,
+        )
+        env = fact_view.religion_founding_envelope(
+            turn=5, status=founding, narrated=nr.narrate_religion_founding_status(founding)
+        )
+        assert env["facts"]["has_religion"] is False
+        assert env["coverage"] == {
+            "religion": "COMPLETE",
+            "beliefs": "COMPLETE",
+        }
+
+    def test_dedications_and_trade_options_envelopes(self):
+        ded = lq.DedicationStatus(
+            age_type="Normal", era=3, era_score=10, dark_threshold=5,
+            golden_threshold=20, selections_allowed=1,
+        )
+        env = fact_view.dedications_envelope(
+            turn=5, status=ded, narrated=nr.narrate_dedications(ded)
+        )
+        assert env["facts"]["era_score"] == 10
+        assert env["coverage"] == {"dedications": "COMPLETE"}
+
+        opts = lq.DealOptions(other_player_id=2, other_civ_name="Germany")
+        env = fact_view.trade_options_envelope(
+            turn=5, other_player_id=2, options=opts,
+            narrated=nr.narrate_deal_options(opts),
+        )
+        assert env["facts"]["options"]["other_civ_name"] == "Germany"
+        assert env["coverage"] == {"deal_options": "COMPLETE"}
+
+    def test_diary_envelope(self):
+        entries = [
+            {"v": 2, "turn": 5, "is_agent": True, "text": "Founded Paris"},
+            {"v": 2, "turn": 6, "is_agent": True, "text": "Met Germany"},
+        ]
+        narrated = "\n\n".join(f"回合 {e['turn']}: {e['text']}" for e in entries)
+        env = fact_view.diary_envelope(turn=5, entries=entries, narrated=narrated)
+        assert env["facts"]["entries"][0]["turn"] == 5
+        assert env["coverage"] == {"entries": "COMPLETE"}
+        # 条目为浅拷贝，不共享引用
+        assert env["facts"]["entries"][0] is not entries[0]
+
+    def test_advisor_envelopes_with_warning(self):
+        placement = lq.DistrictPlacement(
+            x=1, y=2, adjacency={"science": 3}, total_adjacency=3,
+            terrain_desc="Plains",
+        )
+        env = fact_view.district_advisor_envelope(
+            turn=5, city_id=7, district_type="DISTRICT_CAMPUS",
+            placements=[placement], narrated=nr.narrate_district_advisor(
+                [placement], "DISTRICT_CAMPUS"
+            ),
+            warning="调用预算已耗尽",
+        )
+        assert env["facts"]["placements"][0]["total_adjacency"] == 3
+        assert env["warning"] == "调用预算已耗尽"
+        assert env["coverage"] == {"placements": "COMPLETE"}
+        # 无警告时 warning 键不出现
+        bare = fact_view.district_advisor_envelope(
+            turn=5, city_id=7, district_type="DISTRICT_CAMPUS",
+            placements=[placement], narrated="narrated",
+        )
+        assert "warning" not in bare
+
+        wonder = lq.WonderPlacement(
+            x=3, y=4, terrain="TERRAIN_GRASS", feature="none", has_river=False,
+            is_coastal=False, resource="none", improvement="none",
+            displacement_score=0,
+        )
+        env = fact_view.wonder_advisor_envelope(
+            turn=5, city_id=7, wonder_name="BUILDING_ORSZAGHAZ",
+            placements=[wonder], narrated=nr.narrate_wonder_advisor(
+                [wonder], "BUILDING_ORSZAGHAZ"
+            ),
+        )
+        assert env["facts"]["placements"][0]["displacement_score"] == 0
+
+    def test_purchasable_and_gp_advisor_envelopes(self):
+        tile = lq.PurchasableTile(
+            x=1, y=2, cost=100, terrain="Plains", resource=None, resource_class=None
+        )
+        env = fact_view.purchasable_tiles_envelope(
+            turn=5, city_id=7, tiles=[tile],
+            narrated=nr.narrate_purchasable_tiles([tile]),
+        )
+        assert env["facts"]["tiles"][0]["cost"] == 100
+        assert env["coverage"] == {"tiles": "COMPLETE"}
+
+        result = lq.GPAdvisorResult(
+            gp_name="Hypatia", gp_class="Great Scientist",
+            target_district="DISTRICT_CAMPUS", gp_x=1, gp_y=2, charges=1, cities=[],
+        )
+        env = fact_view.gp_advisor_envelope(
+            turn=5, unit_index=3, result=result, narrated=nr.narrate_gp_advisor(result)
+        )
+        assert env["facts"]["available"] is True
+        assert env["facts"]["result"]["gp_name"] == "Hypatia"
+        # 非伟人单位：available=False，无 result
+        env = fact_view.gp_advisor_envelope(
+            turn=5, unit_index=9, result=None,
+            narrated="Could not get GP advisor info. Is this a Great Person unit?",
+        )
+        assert env["facts"]["available"] is False
+        assert "result" not in env["facts"]
+
+    def test_world_congress_envelope(self):
+        wc = lq.WorldCongressStatus(
+            is_in_session=False, turns_until_next=5, favor=10, max_votes=3,
+            favor_costs=[0, 10, 30], resolutions=[], proposals=[],
+        )
+        env = fact_view.world_congress_envelope(
+            turn=5, status=wc, narrated=nr.narrate_world_congress(wc)
+        )
+        assert env["facts"]["favor"] == 10
+        assert env["coverage"] == {"congress": "COMPLETE"}
+
+    def test_religion_and_climate_envelopes(self):
+        spread = lq.ReligionStatus(cities=[], summary=[])
+        env = fact_view.religion_spread_envelope(
+            turn=5, status=spread, narrated=nr.narrate_religion_status(spread)
+        )
+        assert env["coverage"] == {
+            "cities": "CURRENTLY_VISIBLE",
+            "summary": "COMPLETE",
+        }
+
+        overview = lq.ReligionOverview()
+        env = fact_view.religion_overview_envelope(
+            turn=5, status=overview, narrated=nr.narrate_religion_overview(overview)
+        )
+        assert env["coverage"] == {
+            "religions": "COMPLETE",
+            "players": "KNOWN_HISTORY",
+        }
+
+        climate = lq.ClimateOverview(
+            phase=0, phase_name="Phase 0", climate_change_points=0.0,
+            points_from_realism=0.0, points_from_temperature=0.0,
+            last_sea_level_threshold=-1.0, next_sea_level_rise_turns=-1,
+            next_ice_loss_turns=-1, tiles_flooded=0, tiles_submerged=0,
+            temperature_change=0.0, co2_total=0.0, co2_self=0.0,
+            co2_self_last_turn=0.0, co2_footprint_modifier=0.0,
+        )
+        env = fact_view.climate_envelope(
+            turn=5, status=climate, narrated=nr.narrate_climate_overview(climate)
+        )
+        assert env["facts"]["phase"] == 0
+        assert env["coverage"] == {
+            "climate": "COMPLETE",
+            "event_history": "KNOWN_HISTORY",
+        }

@@ -70,8 +70,10 @@ def _envelope(
     facts: dict[str, Any],
     coverage: dict[str, str],
     narrated: str,
+    *,
+    warning: str | None = None,
 ) -> dict[str, Any]:
-    return {
+    payload: dict[str, Any] = {
         "v": ENVELOPE_VERSION,
         "tool": tool,
         "turn": turn if isinstance(turn, int) else "?",
@@ -80,6 +82,9 @@ def _envelope(
         "facts": facts,
         "narrated": narrated,
     }
+    if warning:
+        payload["warning"] = warning
+    return payload
 
 
 def units_envelope(
@@ -661,5 +666,333 @@ def unit_promotions_envelope(
         turn,
         asdict(status),
         {"promotions": COVERAGE_COMPLETE},
+        narrated,
+    )
+
+
+def governors_envelope(
+    *,
+    turn: int | None,
+    status: lq.GovernorStatus,
+    narrated: str,
+) -> dict[str, Any]:
+    """get_governors 双轨信封。总督点数与任免状态为全集事实。"""
+    return _envelope(
+        "get_governors",
+        turn,
+        asdict(status),
+        {"governors": COVERAGE_COMPLETE},
+        narrated,
+    )
+
+
+def city_states_envelope(
+    *,
+    turn: int | None,
+    status: lq.EnvoyStatus,
+    narrated: str,
+) -> dict[str, Any]:
+    """get_city_states 双轨信封。
+
+    使者令牌为己方全集；城邦的 ``competition_complete`` 字段标注竞争
+    信息是否完整（未见面文明仍可能竞争宗主地位）。
+    """
+    return _envelope(
+        "get_city_states",
+        turn,
+        asdict(status),
+        {
+            "envoy_tokens": COVERAGE_COMPLETE,
+            "city_states": COVERAGE_COMPLETE,
+        },
+        narrated,
+    )
+
+
+def pantheon_envelope(
+    *,
+    turn: int | None,
+    status: lq.PantheonStatus,
+    narrated: str,
+) -> dict[str, Any]:
+    """get_pantheon_beliefs 双轨信封。万神殿状态与可选信条为全集。"""
+    return _envelope(
+        "get_pantheon_beliefs",
+        turn,
+        asdict(status),
+        {
+            "pantheon": COVERAGE_COMPLETE,
+            "beliefs": COVERAGE_COMPLETE,
+        },
+        narrated,
+    )
+
+
+def religion_founding_envelope(
+    *,
+    turn: int | None,
+    status: lq.ReligionFoundingStatus,
+    narrated: str,
+) -> dict[str, Any]:
+    """get_religion_beliefs 双轨信封。创教状态与可用信条为全集。"""
+    return _envelope(
+        "get_religion_beliefs",
+        turn,
+        asdict(status),
+        {
+            "religion": COVERAGE_COMPLETE,
+            "beliefs": COVERAGE_COMPLETE,
+        },
+        narrated,
+    )
+
+
+def dedications_envelope(
+    *,
+    turn: int | None,
+    status: lq.DedicationStatus,
+    narrated: str,
+) -> dict[str, Any]:
+    """get_dedications 双轨信封。时代着力点状态与候选项为全集。"""
+    return _envelope(
+        "get_dedications",
+        turn,
+        asdict(status),
+        {"dedications": COVERAGE_COMPLETE},
+        narrated,
+    )
+
+
+def trade_options_envelope(
+    *,
+    turn: int | None,
+    other_player_id: int,
+    options: lq.DealOptions,
+    narrated: str,
+) -> dict[str, Any]:
+    """get_trade_options 双轨信封。双方可交易项为全集（COMPLETE）。"""
+    facts: dict[str, Any] = {
+        "other_player_id": other_player_id,
+        "options": asdict(options),
+    }
+    return _envelope(
+        "get_trade_options",
+        turn,
+        facts,
+        {"deal_options": COVERAGE_COMPLETE},
+        narrated,
+    )
+
+
+def diary_envelope(
+    *,
+    turn: int | None,
+    entries: list[dict[str, Any]],
+    narrated: str,
+) -> dict[str, Any]:
+    """get_diary 双轨信封。
+
+    日记是本地事件日志（非游戏世界事实），``entries`` 保留原始条目
+    字段；覆盖语义 COMPLETE 表示按查询条件完整读取。
+    """
+    facts: dict[str, Any] = {
+        "entries": [dict(e) for e in entries],
+    }
+    return _envelope(
+        "get_diary",
+        turn,
+        facts,
+        {"entries": COVERAGE_COMPLETE},
+        narrated,
+    )
+
+
+def district_advisor_envelope(
+    *,
+    turn: int | None,
+    city_id: int,
+    district_type: str,
+    placements: list[lq.DistrictPlacement],
+    narrated: str,
+    warning: str | None = None,
+) -> dict[str, Any]:
+    """get_district_advisor 双轨信封。
+
+    有效地块按相邻加成排序（COMPLETE）；调用预算警告放入顶层
+    ``warning`` 而非文本前缀。
+    """
+    facts: dict[str, Any] = {
+        "city_id": city_id,
+        "district_type": district_type,
+        "placements": [asdict(p) for p in placements],
+    }
+    return _envelope(
+        "get_district_advisor",
+        turn,
+        facts,
+        {"placements": COVERAGE_COMPLETE},
+        narrated,
+        warning=warning,
+    )
+
+
+def wonder_advisor_envelope(
+    *,
+    turn: int | None,
+    city_id: int,
+    wonder_name: str,
+    placements: list[lq.WonderPlacement],
+    narrated: str,
+    warning: str | None = None,
+) -> dict[str, Any]:
+    """get_wonder_advisor 双轨信封。
+
+    有效地块按位移成本排序（COMPLETE）；调用预算警告放入顶层
+    ``warning`` 而非文本前缀。
+    """
+    facts: dict[str, Any] = {
+        "city_id": city_id,
+        "wonder_name": wonder_name,
+        "placements": [asdict(p) for p in placements],
+    }
+    return _envelope(
+        "get_wonder_advisor",
+        turn,
+        facts,
+        {"placements": COVERAGE_COMPLETE},
+        narrated,
+        warning=warning,
+    )
+
+
+def purchasable_tiles_envelope(
+    *,
+    turn: int | None,
+    city_id: int,
+    tiles: list[lq.PurchasableTile],
+    narrated: str,
+) -> dict[str, Any]:
+    """get_purchasable_tiles 双轨信封。该城市可购地块为全集（COMPLETE）。"""
+    facts: dict[str, Any] = {
+        "city_id": city_id,
+        "tiles": [asdict(t) for t in tiles],
+    }
+    return _envelope(
+        "get_purchasable_tiles",
+        turn,
+        facts,
+        {"tiles": COVERAGE_COMPLETE},
+        narrated,
+    )
+
+
+def gp_advisor_envelope(
+    *,
+    turn: int | None,
+    unit_index: int,
+    result: lq.GPAdvisorResult | None,
+    narrated: str,
+) -> dict[str, Any]:
+    """get_gp_advisor 双轨信封。
+
+    ``available=false`` 表示该单位不是伟人单位；``result`` 为激活候选
+    城市全集（COMPLETE）。
+    """
+    facts: dict[str, Any] = {
+        "unit": unit_index,
+        "available": result is not None,
+    }
+    if result is not None:
+        facts["result"] = asdict(result)
+    return _envelope(
+        "get_gp_advisor",
+        turn,
+        facts,
+        {"cities": COVERAGE_COMPLETE},
+        narrated,
+    )
+
+
+def world_congress_envelope(
+    *,
+    turn: int | None,
+    status: lq.WorldCongressStatus,
+    narrated: str,
+) -> dict[str, Any]:
+    """get_world_congress 双轨信封。议会状态、决议与提案为全集。"""
+    return _envelope(
+        "get_world_congress",
+        turn,
+        asdict(status),
+        {"congress": COVERAGE_COMPLETE},
+        narrated,
+    )
+
+
+def religion_spread_envelope(
+    *,
+    turn: int | None,
+    status: lq.ReligionStatus,
+    narrated: str,
+) -> dict[str, Any]:
+    """get_religion_spread 双轨信封。
+
+    ``cities`` 只含当前可见城市（CURRENTLY_VISIBLE）；``summary`` 为
+    已知聚合（COMPLETE）。
+    """
+    return _envelope(
+        "get_religion_spread",
+        turn,
+        asdict(status),
+        {
+            "cities": COVERAGE_CURRENTLY_VISIBLE,
+            "summary": COVERAGE_COMPLETE,
+        },
+        narrated,
+    )
+
+
+def religion_overview_envelope(
+    *,
+    turn: int | None,
+    status: lq.ReligionOverview,
+    narrated: str,
+) -> dict[str, Any]:
+    """get_religion_overview 双轨信封。
+
+    ``religions`` 为已创建宗教全集；``players`` 只含已见面主要文明
+    （未见面创始者遮蔽为 Unmet，KNOWN_HISTORY）。
+    """
+    return _envelope(
+        "get_religion_overview",
+        turn,
+        asdict(status),
+        {
+            "religions": COVERAGE_COMPLETE,
+            "players": COVERAGE_KNOWN_HISTORY,
+        },
+        narrated,
+    )
+
+
+def climate_envelope(
+    *,
+    turn: int | None,
+    status: lq.ClimateOverview,
+    narrated: str,
+) -> dict[str, Any]:
+    """get_climate_overview 双轨信封。
+
+    当前气候状态为全集；``event_history`` 为已发生事实（KNOWN_HISTORY，
+    仅含已揭示事件，迷雾中的事件坐标未知）。
+    """
+    return _envelope(
+        "get_climate_overview",
+        turn,
+        asdict(status),
+        {
+            "climate": COVERAGE_COMPLETE,
+            "event_history": COVERAGE_KNOWN_HISTORY,
+        },
         narrated,
     )

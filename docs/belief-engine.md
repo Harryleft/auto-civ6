@@ -58,20 +58,30 @@ logs remain readable and are not rewritten in place.
 
 ## Double-track tool results
 
-Core query tools return a double-track JSON envelope built by
+All read-only query tools return a double-track JSON envelope built by
 `civ_mcp.facts`:
 
 - 世界状态：`get_units`, `get_cities`, `get_map_area`, `get_barbarian_overview`,
   `get_village_overview`, `get_strategic_map`, `get_empire_resources`
 - 军事与移动：`get_combat_estimate`, `get_pathing_estimate`,
   `get_unit_promotions`, `get_spies`
-- 科研与胜利：`get_tech_civics`, `get_victory_progress`, `get_era_progress`
+- 科研与胜利：`get_tech_civics`, `get_victory_progress`, `get_era_progress`,
+  `get_dedications`
 - 经济与扩张：`get_city_production`, `get_settle_advisor`,
   `get_global_settle_advisor`, `get_trade_routes`, `get_trade_destinations`,
-  `get_builder_tasks`
+  `get_builder_tasks`, `get_trade_options`, `get_purchasable_tiles`
 - 治理与外交：`get_policies`, `get_notifications`, `get_pending_trades`,
-  `get_pending_diplomacy`
-- 伟人：`get_great_people`, `get_great_people_overview`
+  `get_pending_diplomacy`, `get_governors`, `get_city_states`
+- 宗教与气候：`get_pantheon_beliefs`, `get_religion_beliefs`,
+  `get_religion_spread`, `get_religion_overview`, `get_climate_overview`,
+  `get_world_congress`
+- 伟人与顾问：`get_great_people`, `get_great_people_overview`,
+  `get_gp_advisor`, `get_district_advisor`, `get_wonder_advisor`
+- 记忆：`get_diary`（本地事件日志，非游戏事实）
+
+Exceptions（保持原契约）：`get_game_overview`（回合强制入口，自身即 JSON
+摘要 + RUNTIME POLICY）、`propose_trade`（动作工具，其 test 模式是只读
+变体但结果走动作回执检测）、信念/治理控制面工具与 `run_lua`。
 
 Example (`get_units`):
 
