@@ -4,6 +4,7 @@ from mcp.server.fastmcp import Context
 
 import logging
 
+from civ_mcp import facts as fact_view
 from civ_mcp import heartbeat, lua as lq, narrate as nr
 
 log = logging.getLogger(__name__)
@@ -169,6 +170,10 @@ async def get_units(ctx: Context) -> str:
 
     Each unit shows its id and idx (needed for action commands).
     Consumed units (e.g. settlers that founded cities) are excluded.
+
+    Returns a double-track JSON envelope: structured ``facts``
+    (own_units / foreign_units / trade_routes with per-set ``coverage``)
+    plus the legacy human-readable ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
     unit_tiles: set[tuple[int, int]] = set()
@@ -185,7 +190,16 @@ async def get_units(ctx: Context) -> str:
             trade_status = await gs.get_trade_routes()
         except Exception:
             pass
-        return nr.narrate_units(units, threats, trade_status)
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.units_envelope(
+                turn=turn,
+                units=units,
+                threats=threats,
+                trade_status=trade_status,
+                narrated=nr.narrate_units(units, threats, trade_status),
+            )
+        )
 
     return await pipeline._logged(ctx, "get_units", {}, _run, tiles=unit_tiles)
 
@@ -198,6 +212,10 @@ async def get_barbarian_overview(ctx: Context) -> str:
     tile has been revealed. Barbarian unit locations require current vision.
     Results include distance to the nearest own city and military unit so the
     agent can clear the spawn source instead of reacting to endless waves.
+
+    Returns a double-track JSON envelope: structured ``facts`` (camps with
+    KNOWN_HISTORY coverage, units with CURRENTLY_VISIBLE coverage) plus the
+    legacy human-readable ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
     barbarian_tiles: set[tuple[int, int]] = set()
@@ -206,7 +224,14 @@ async def get_barbarian_overview(ctx: Context) -> str:
         overview = await gs.get_barbarian_overview()
         barbarian_tiles.update((camp.x, camp.y) for camp in overview.camps)
         barbarian_tiles.update((unit.x, unit.y) for unit in overview.units)
-        return nr.narrate_barbarian_overview(overview)
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.barbarian_envelope(
+                turn=turn,
+                overview=overview,
+                narrated=nr.narrate_barbarian_overview(overview),
+            )
+        )
 
     return await pipeline._logged(
         ctx,
@@ -338,12 +363,23 @@ async def get_cities(ctx: Context) -> str:
 
     Each city shows its id (needed for production commands).
     Cities losing loyalty show warnings with flip timers.
+
+    Returns a double-track JSON envelope: structured ``facts`` (cities with
+    COMPLETE coverage) plus the legacy human-readable ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
 
     async def _run():
         cities, distances = await gs.get_cities()
-        return nr.narrate_cities(cities, distances)
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.cities_envelope(
+                turn=turn,
+                cities=cities,
+                distances=distances,
+                narrated=nr.narrate_cities(cities, distances),
+            )
+        )
 
     return await pipeline._logged(ctx, "get_cities", {}, _run)
 
@@ -377,6 +413,10 @@ async def get_map_area(
         center_x: X coordinate of center tile
         center_y: Y coordinate of center tile
         radius: How many tiles out from center (default 2, max 4)
+
+    Returns a double-track JSON envelope: structured ``facts`` (requested
+    tile set is COMPLETE; each tile's own coverage is its ``visibility``
+    field) plus the legacy human-readable ``narrated`` view.
     """
     radius = min(radius, 4)
     gs = pipeline._get_game(ctx)
@@ -385,7 +425,17 @@ async def get_map_area(
     async def _run():
         tiles = await gs.get_map_area(center_x, center_y, radius)
         tile_coords.update((t.x, t.y) for t in tiles)
-        return nr.narrate_map(tiles)
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.map_area_envelope(
+                turn=turn,
+                center_x=center_x,
+                center_y=center_y,
+                radius=radius,
+                tiles=tiles,
+                narrated=nr.narrate_map(tiles),
+            )
+        )
 
     result = await pipeline._logged(
         ctx,
