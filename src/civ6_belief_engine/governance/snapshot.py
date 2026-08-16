@@ -15,22 +15,22 @@ from math import isfinite
 from typing import Any, Iterable, Mapping, Protocol, Sequence, TypedDict
 
 from .capabilities import capabilities_for_ruleset
+from .inputs import (
+    BarbarianOverviewInput,
+    CityInput,
+    DiplomacyInput,
+    GameOverviewInput,
+    GovernmentInput,
+    GreatPeopleInput,
+    NotificationInput,
+    ResourceStockpileInput,
+    TechCivicInput,
+    ThreatInput,
+    UnitInput,
+    VictoryInput,
+)
 from .models import TurnSnapshot as GovernanceTurnSnapshot
 from ..ids import slugify
-from civ_mcp.lua.models import (
-    BarbarianOverview,
-    CityInfo,
-    CivInfo,
-    GameNotification,
-    GameOverview,
-    GovernmentStatus,
-    GreatPeopleOverview,
-    ResourceStockpile,
-    TechCivicStatus,
-    ThreatInfo,
-    UnitInfo,
-    VictoryProgress,
-)
 
 
 class SnapshotConsistencyError(ValueError):
@@ -44,23 +44,23 @@ class TypedSnapshotSource(Protocol):
     to GameState's connection or scheduling implementation.
     """
 
-    async def get_game_overview(self) -> GameOverview: ...
+    async def get_game_overview(self) -> GameOverviewInput: ...
 
-    async def get_cities(self) -> tuple[list[CityInfo], list[str]]: ...
+    async def get_cities(self) -> tuple[list[CityInput], list[str]]: ...
 
-    async def get_units(self) -> list[UnitInfo]: ...
+    async def get_units(self) -> list[UnitInput]: ...
 
-    async def get_diplomacy(self) -> list[CivInfo]: ...
+    async def get_diplomacy(self) -> list[DiplomacyInput]: ...
 
-    async def get_tech_civics(self) -> TechCivicStatus: ...
+    async def get_tech_civics(self) -> TechCivicInput: ...
 
-    async def get_policies(self) -> GovernmentStatus: ...
+    async def get_policies(self) -> GovernmentInput: ...
 
-    async def get_barbarian_overview(self) -> BarbarianOverview: ...
+    async def get_barbarian_overview(self) -> BarbarianOverviewInput: ...
 
-    async def get_great_people_overview(self) -> GreatPeopleOverview: ...
+    async def get_great_people_overview(self) -> GreatPeopleInput: ...
 
-    async def get_threat_scan(self) -> list[ThreatInfo]: ...
+    async def get_threat_scan(self) -> list[ThreatInput]: ...
 
 
 class BeliefObservation(TypedDict):
@@ -129,18 +129,18 @@ def build_turn_snapshot(
     turn_before: int,
     turn_after: int,
     captured_at: float,
-    overview: GameOverview,
-    cities: Sequence[CityInfo],
-    units: Sequence[UnitInfo],
-    diplomacy: Sequence[CivInfo] = (),
-    tech_civic: TechCivicStatus | None = None,
-    resources: Sequence[ResourceStockpile] = (),
-    victory: VictoryProgress | None = None,
-    notifications: Sequence[GameNotification] = (),
-    policies: GovernmentStatus | None = None,
-    barbarians: BarbarianOverview | None = None,
-    great_people: GreatPeopleOverview | None = None,
-    threats: Sequence[ThreatInfo] | None = None,
+    overview: GameOverviewInput,
+    cities: Sequence[CityInput],
+    units: Sequence[UnitInput],
+    diplomacy: Sequence[DiplomacyInput] = (),
+    tech_civic: TechCivicInput | None = None,
+    resources: Sequence[ResourceStockpileInput] = (),
+    victory: VictoryInput | None = None,
+    notifications: Sequence[NotificationInput] = (),
+    policies: GovernmentInput | None = None,
+    barbarians: BarbarianOverviewInput | None = None,
+    great_people: GreatPeopleInput | None = None,
+    threats: Sequence[ThreatInput] | None = None,
     extra: Mapping[str, Any] | None = None,
 ) -> GovernanceTurnSnapshot:
     """Build one immutable, same-turn governance snapshot from typed results."""
