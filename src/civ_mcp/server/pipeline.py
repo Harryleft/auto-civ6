@@ -574,7 +574,7 @@ async def _append_belief_context(
                 "require quantified combat evidence."
             ),
         }
-        # 双轨信封结果：信念上下文合并进 JSON 结构，而不是破坏可解析性的尾部追加。
+        # 信封结果：信念上下文合并进 JSON 结构，而不是破坏可解析性的尾部追加。
         parsed = _parse_fact_envelope(result)
         if parsed is not None:
             parsed["belief_context"] = context

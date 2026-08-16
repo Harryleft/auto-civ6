@@ -179,9 +179,8 @@ async def get_units(ctx: Context) -> str:
     Each unit shows its id and idx (needed for action commands).
     Consumed units (e.g. settlers that founded cities) are excluded.
 
-    Returns a double-track JSON envelope: structured ``facts``
-    (own_units / foreign_units / trade_routes with per-set ``coverage``)
-    plus the legacy human-readable ``narrated`` view.
+    Returns a JSON envelope with structured ``facts``
+    (own_units / foreign_units / trade_routes with per-set ``coverage``).
     """
     gs = pipeline._get_game(ctx)
     unit_tiles: set[tuple[int, int]] = set()
@@ -205,7 +204,6 @@ async def get_units(ctx: Context) -> str:
                 units=units,
                 threats=threats,
                 trade_status=trade_status,
-                narrated=nr.narrate_units(units, threats, trade_status),
             )
         )
 
@@ -221,9 +219,8 @@ async def get_barbarian_overview(ctx: Context) -> str:
     Results include distance to the nearest own city and military unit so the
     agent can clear the spawn source instead of reacting to endless waves.
 
-    Returns a double-track JSON envelope: structured ``facts`` (camps with
-    KNOWN_HISTORY coverage, units with CURRENTLY_VISIBLE coverage) plus the
-    legacy human-readable ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (camps with
+    KNOWN_HISTORY coverage, units with CURRENTLY_VISIBLE coverage).
     """
     gs = pipeline._get_game(ctx)
     barbarian_tiles: set[tuple[int, int]] = set()
@@ -237,7 +234,6 @@ async def get_barbarian_overview(ctx: Context) -> str:
             fact_view.barbarian_envelope(
                 turn=turn,
                 overview=overview,
-                narrated=nr.narrate_barbarian_overview(overview),
             )
         )
 
@@ -259,8 +255,8 @@ async def get_village_overview(ctx: Context) -> str:
     可见状态、所在领土归属, 以及到最近己方城市和最近己方战斗/侦察单位
     的距离, 用于抢先取用决策。奖励内容在取用后由游戏结算, 不可查询。
 
-    返回双轨 JSON 信封：结构化 ``facts``（huts 覆盖语义为 KNOWN_HISTORY，
-    消失只说明已被取用）＋原有叙述 ``narrated`` 视图。
+    返回 JSON 信封：结构化 ``facts``（huts 覆盖语义为 KNOWN_HISTORY，
+    消失只说明已被取用）。
     """
     gs = pipeline._get_game(ctx)
     village_tiles: set[tuple[int, int]] = set()
@@ -273,7 +269,6 @@ async def get_village_overview(ctx: Context) -> str:
             fact_view.village_envelope(
                 turn=turn,
                 overview=overview,
-                narrated=nr.narrate_village_overview(overview),
             )
         )
 
@@ -297,9 +292,8 @@ async def get_era_progress(ctx: Context) -> str:
     score source breakdown. Under Standard rules the age block is explicitly
     reported as unavailable instead of being silently omitted.
 
-    Returns a double-track JSON envelope: structured ``facts`` (eras/players/
-    local_age with COMPLETE coverage) plus the legacy human-readable
-    ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (eras/players/
+    local_age with COMPLETE coverage).
     """
     gs = pipeline._get_game(ctx)
 
@@ -310,7 +304,6 @@ async def get_era_progress(ctx: Context) -> str:
             fact_view.era_progress_envelope(
                 turn=turn,
                 status=status,
-                narrated=nr.narrate_era_progress(status),
             )
         )
 
@@ -328,8 +321,8 @@ async def get_spies(ctx: Context) -> str:
     Note: offensive missions only become available once the spy has physically
     arrived in the target city. Use spy_action with action='travel' first.
 
-    Returns a double-track JSON envelope: structured ``facts`` (spies with
-    COMPLETE coverage) plus the legacy human-readable ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (spies with
+    COMPLETE coverage).
     """
     gs = pipeline._get_game(ctx)
 
@@ -340,7 +333,6 @@ async def get_spies(ctx: Context) -> str:
             fact_view.spies_envelope(
                 turn=turn,
                 spies=spies,
-                narrated=nr.narrate_spies(spies),
             )
         )
 
@@ -403,8 +395,8 @@ async def get_cities(ctx: Context) -> str:
     Each city shows its id (needed for production commands).
     Cities losing loyalty show warnings with flip timers.
 
-    Returns a double-track JSON envelope: structured ``facts`` (cities with
-    COMPLETE coverage) plus the legacy human-readable ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (cities with
+    COMPLETE coverage).
     """
     gs = pipeline._get_game(ctx)
 
@@ -416,7 +408,6 @@ async def get_cities(ctx: Context) -> str:
                 turn=turn,
                 cities=cities,
                 distances=distances,
-                narrated=nr.narrate_cities(cities, distances),
             )
         )
 
@@ -433,8 +424,8 @@ async def get_city_production(ctx: Context, city_id: int) -> str:
     Returns available units, buildings, and districts with production costs.
     Call this when a city finishes building or to decide what to produce next.
 
-    Returns a double-track JSON envelope: structured ``facts`` (options with
-    COMPLETE coverage) plus the legacy human-readable ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (options with
+    COMPLETE coverage).
     """
     gs = pipeline._get_game(ctx)
 
@@ -446,7 +437,6 @@ async def get_city_production(ctx: Context, city_id: int) -> str:
                 turn=turn,
                 city_id=city_id,
                 options=options,
-                narrated=nr.narrate_city_production(options),
             )
         )
 
@@ -464,9 +454,9 @@ async def get_map_area(
         center_y: Y coordinate of center tile
         radius: How many tiles out from center (default 2, max 4)
 
-    Returns a double-track JSON envelope: structured ``facts`` (requested
+    Returns a JSON envelope with structured ``facts`` (requested
     tile set is COMPLETE; each tile's own coverage is its ``visibility``
-    field) plus the legacy human-readable ``narrated`` view.
+    field).
     """
     radius = min(radius, 4)
     gs = pipeline._get_game(ctx)
@@ -483,7 +473,6 @@ async def get_map_area(
                 center_y=center_y,
                 radius=radius,
                 tiles=tiles,
-                narrated=nr.narrate_map(tiles),
             )
         )
 
@@ -509,24 +498,14 @@ async def get_settle_advisor(ctx: Context, unit_id: int) -> str:
     Returns top 5 candidates sorted by score. When no candidate exists
     within 5 tiles, falls back to the best sites on the revealed map.
 
-    Returns a double-track JSON envelope: structured ``facts`` (candidates
-    with KNOWN_HISTORY coverage and a ``source`` field) plus the legacy
-    human-readable ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (candidates
+    with KNOWN_HISTORY coverage and a ``source`` field).
     """
     gs = pipeline._get_game(ctx)
     unit_index = unit_id % 65536
 
     async def _run():
         candidates, source = await gs.get_settle_candidates(unit_index)
-        if source == "local":
-            narrated = nr.narrate_settle_candidates(candidates)
-        elif source == "global":
-            narrated = (
-                "No valid settle locations within 5 tiles. Best sites on "
-                "revealed map:\n" + nr.narrate_settle_candidates(candidates)
-            )
-        else:
-            narrated = "No valid settle locations found within 5 tiles or on revealed map."
         turn = pipeline._get_logger(ctx)._turn
         return fact_view.dumps(
             fact_view.settle_envelope(
@@ -535,7 +514,6 @@ async def get_settle_advisor(ctx: Context, unit_id: int) -> str:
                 unit_id=unit_id,
                 candidates=candidates,
                 source=source,
-                narrated=narrated,
             )
         )
 
@@ -560,8 +538,8 @@ async def get_pathing_estimate(
 
     Returns estimated turns, path length, and reachable tiles this turn.
 
-    Returns a double-track JSON envelope: structured ``facts`` (estimate
-    with COMPLETE coverage) plus the legacy human-readable ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (estimate
+    with COMPLETE coverage).
     """
     gs = pipeline._get_game(ctx)
     unit_index = unit_id % 65536
@@ -576,7 +554,6 @@ async def get_pathing_estimate(
                 target_x=target_x,
                 target_y=target_y,
                 estimate=est,
-                narrated=nr.narrate_pathing_estimate(est),
             )
         )
 
@@ -604,26 +581,19 @@ async def get_combat_estimate(
         target_x: Hostile unit X coordinate
         target_y: Hostile unit Y coordinate
 
-    Returns a double-track JSON envelope: structured ``facts`` (available /
-    estimate with COMPLETE coverage) plus the legacy human-readable
-    ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (available /
+    estimate with COMPLETE coverage).
     """
     gs = pipeline._get_game(ctx)
     unit_index = unit_id % 65536
 
     async def _run():
         estimate = await gs.get_combat_estimate(unit_index, target_x, target_y)
-        narrated = (
-            "No quantified combat estimate is available for this matchup."
-            if estimate is None
-            else nr.narrate_combat_estimate(estimate)
-        )
         turn = pipeline._get_logger(ctx)._turn
         return fact_view.dumps(
             fact_view.combat_estimate_envelope(
                 turn=turn,
                 estimate=estimate,
-                narrated=narrated,
             )
         )
 
@@ -643,20 +613,14 @@ async def get_global_settle_advisor(ctx: Context) -> str:
     this scans all revealed land for the top 10 settle candidates.
     Use this when deciding WHERE to send a settler, not just where to settle.
 
-    Returns a double-track JSON envelope: structured ``facts`` (candidates
-    with KNOWN_HISTORY coverage and source="global") plus the legacy
-    human-readable ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (candidates
+    with KNOWN_HISTORY coverage and source="global").
     """
     gs = pipeline._get_game(ctx)
 
     async def _run():
         candidates = await gs.get_global_settle_scan()
         source = "global" if candidates else "none"
-        narrated = (
-            "No valid settle locations found on revealed map."
-            if not candidates
-            else nr.narrate_settle_candidates(candidates)
-        )
         turn = pipeline._get_logger(ctx)._turn
         return fact_view.dumps(
             fact_view.settle_envelope(
@@ -665,7 +629,6 @@ async def get_global_settle_advisor(ctx: Context) -> str:
                 unit_id=-1,
                 candidates=candidates,
                 source=source,
-                narrated=narrated,
             )
         )
 
@@ -687,9 +650,8 @@ async def get_builder_tasks(ctx: Context) -> str:
 
     Call this before issuing builder orders each turn.
 
-    Returns a double-track JSON envelope: structured ``facts`` (tasks/
-    builders with COMPLETE coverage) plus the legacy human-readable
-    ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (tasks/
+    builders with COMPLETE coverage).
     """
     gs = pipeline._get_game(ctx)
 
@@ -701,7 +663,6 @@ async def get_builder_tasks(ctx: Context) -> str:
                 turn=turn,
                 tasks=tasks,
                 builders=builders,
-                narrated=nr.narrate_builder_tasks(tasks, builders),
             )
         )
 
@@ -715,9 +676,8 @@ async def get_empire_resources(ctx: Context) -> str:
     Shows owned resources (improved/unimproved) grouped by type,
     and unclaimed resources near your cities.
 
-    Returns a double-track JSON envelope: structured ``facts`` (stockpiles/
-    owned COMPLETE, nearby KNOWN_HISTORY) plus the legacy human-readable
-    ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (stockpiles/
+    owned COMPLETE, nearby KNOWN_HISTORY).
     """
     gs = pipeline._get_game(ctx)
 
@@ -731,9 +691,6 @@ async def get_empire_resources(ctx: Context) -> str:
                 owned=owned,
                 nearby=nearby,
                 luxuries=luxuries,
-                narrated=nr.narrate_empire_resources(
-                    stockpiles, owned, nearby, luxuries
-                ),
             )
         )
 
@@ -748,9 +705,8 @@ async def get_strategic_map(ctx: Context) -> str:
     highlighting directions that need exploration. Also lists unclaimed luxury
     and strategic resources on revealed but unowned land.
 
-    Returns a double-track JSON envelope: structured ``facts`` (fog_boundaries
-    COMPLETE, unclaimed_resources KNOWN_HISTORY) plus the legacy
-    human-readable ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (fog_boundaries
+    COMPLETE, unclaimed_resources KNOWN_HISTORY).
     """
     gs = pipeline._get_game(ctx)
 
@@ -761,7 +717,6 @@ async def get_strategic_map(ctx: Context) -> str:
             fact_view.strategic_map_envelope(
                 turn=turn,
                 data=data,
-                narrated=nr.narrate_strategic_map(data),
             )
         )
 
@@ -777,9 +732,8 @@ async def get_diplomacy(ctx: Context) -> str:
     diplomatic actions you can take. Also shows visible enemy city details
     (name, population, loyalty, walls).
 
-    Returns a double-track JSON envelope: structured ``facts`` (civs with
-    COMPLETE coverage; per-civ intelligence is visibility-limited) plus the
-    legacy human-readable ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (civs with
+    COMPLETE coverage; per-civ intelligence is visibility-limited).
     """
     gs = pipeline._get_game(ctx)
 
@@ -790,7 +744,6 @@ async def get_diplomacy(ctx: Context) -> str:
             fact_view.diplomacy_envelope(
                 turn=turn,
                 civs=civs,
-                narrated=nr.narrate_diplomacy(civs),
             )
         )
 
@@ -805,9 +758,8 @@ async def get_tech_civics(ctx: Context) -> str:
     completed technology names, and lists of available technologies and civics
     to choose from.
 
-    Returns a double-track JSON envelope: structured ``facts`` (research/
-    civics with COMPLETE coverage) plus the legacy human-readable
-    ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (research/
+    civics with COMPLETE coverage).
     """
     gs = pipeline._get_game(ctx)
 
@@ -818,7 +770,6 @@ async def get_tech_civics(ctx: Context) -> str:
             fact_view.tech_civics_envelope(
                 turn=turn,
                 status=status,
-                narrated=nr.narrate_tech_civics(status),
             )
         )
 
@@ -832,8 +783,8 @@ async def get_pending_trades(ctx: Context) -> str:
     Shows what each civ is offering and what they want in return.
     Use respond_to_trade to accept or reject.
 
-    Returns a double-track JSON envelope: structured ``facts`` (deals with
-    COMPLETE coverage) plus the legacy human-readable ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (deals with
+    COMPLETE coverage).
     """
     gs = pipeline._get_game(ctx)
 
@@ -844,7 +795,6 @@ async def get_pending_trades(ctx: Context) -> str:
             fact_view.pending_trades_envelope(
                 turn=turn,
                 deals=deals,
-                narrated=nr.narrate_pending_deals(deals),
             )
         )
 
@@ -859,9 +809,8 @@ async def get_policies(ctx: Context) -> str:
     policy (if any), and all unlocked policies grouped by compatible slot type.
     Wildcard slots accept any policy type.
 
-    Returns a double-track JSON envelope: structured ``facts`` (government/
-    policies with COMPLETE coverage) plus the legacy human-readable
-    ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (government/
+    policies with COMPLETE coverage).
     """
     gs = pipeline._get_game(ctx)
 
@@ -872,7 +821,6 @@ async def get_policies(ctx: Context) -> str:
             fact_view.policies_envelope(
                 turn=turn,
                 status=status,
-                narrated=nr.narrate_policies(status),
             )
         )
 
@@ -888,9 +836,8 @@ async def get_notifications(ctx: Context) -> str:
     to resolve them. Call this to check what needs attention without
     ending the turn.
 
-    Returns a double-track JSON envelope: structured ``facts``
-    (notifications with COMPLETE coverage) plus the legacy human-readable
-    ``narrated`` view.
+    Returns a JSON envelope with structured ``facts``
+    (notifications with COMPLETE coverage).
     """
     gs = pipeline._get_game(ctx)
 
@@ -901,7 +848,6 @@ async def get_notifications(ctx: Context) -> str:
             fact_view.notifications_envelope(
                 turn=turn,
                 notifications=notifications,
-                narrated=nr.narrate_notifications(notifications),
             )
         )
 
@@ -916,8 +862,8 @@ async def get_pending_diplomacy(ctx: Context) -> str:
     reports the turn didn't advance. Returns any open sessions with their
     dialogue text, visible buttons, and response guidance.
 
-    Returns a double-track JSON envelope: structured ``facts`` (sessions
-    with COMPLETE coverage) plus the legacy human-readable ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (sessions
+    with COMPLETE coverage).
     """
     gs = pipeline._get_game(ctx)
 
@@ -928,7 +874,6 @@ async def get_pending_diplomacy(ctx: Context) -> str:
             fact_view.pending_diplomacy_envelope(
                 turn=turn,
                 sessions=sessions,
-                narrated=nr.narrate_diplomacy_sessions(sessions),
             )
         )
 
