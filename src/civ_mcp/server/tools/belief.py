@@ -576,6 +576,10 @@ async def _capture_governance_snapshot(
                 )
             ),
         }
+        # This is the validation input for the dedicated Goal projection, not
+        # a Department read. Keep the event-source records here so malformed
+        # legacy goals remain observable as ``graph_goals: error`` instead of
+        # being silently filtered by the governance GraphView materializer.
         active_goals = engine.list("goal", status="active")
         goal_delta = project_active_goals(
             (_goal_graph_payload(goal) for goal in active_goals),

@@ -137,7 +137,11 @@ async def get_game_overview(ctx: Context) -> str:
                     ]
                     changed_count = 0
                     archived_count = 0
-                    lock_count = len(engine.list("budget_lock", status="active"))
+                    lock_count = len(
+                        engine.current_governance_entities(
+                            "budget_lock", status="active"
+                        )
+                    )
                     released_count = 0
                     snapshot_source = "reused"
                 belief_brief = engine.turn_brief(turn=ov.turn)
