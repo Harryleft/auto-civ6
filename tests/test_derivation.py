@@ -337,3 +337,22 @@ def test_great_people_race_belief_lifecycle(engine):
     observe(engine, tool="get_great_people_overview", result=GP_RACE_T15_GAP_WIDENS, turn=15)
     assert engine.get("belief", "auto:belief:gp_race:scientist")["status"] == "archived"
     assert "50%" in engine.get("belief", "auto:belief:gp_race:scientist")["resolution"]
+
+
+DIPLO_FIRST_ZERO = """3 civilizations:
+  Germany (Frederick) — UNFRIENDLY (-12) **AT WAR** [player 2]
+    Cities: 3 (all in fog)
+    Military: 0 vs our 100
+  Rome (Trajan) — FRIENDLY (+8) [player 5]
+    Cities: 4 (all in fog)
+    Military: 220 vs our 100
+"""
+
+
+def test_rival_threat_skips_zero_military_without_stopping_scan(engine):
+    """Zero-military rivals are skipped, but later rivals are still scanned."""
+    observe(engine, tool="get_diplomacy", result=DIPLO_FIRST_ZERO, turn=10)
+    assert engine.get("belief", "auto:belief:rival_threat:2") is None
+    rome = engine.get("belief", "auto:belief:rival_threat:5")
+    assert rome is not None and rome["status"] == "active"
+    assert rome["probability"] == 0.6

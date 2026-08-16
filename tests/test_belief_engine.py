@@ -1874,3 +1874,54 @@ class TestGovernanceTurnLoopGate:
                 **common,
                 action_intent={"tool": "unit_action", "params": {}, "allowed_turn": 49},
             )
+
+
+def test_invalid_probability_values_are_rejected(engine):
+    """Probability and confidence must be finite numbers in [0, 1]."""
+    from civ6_belief_engine.belief_engine import _parse_fact_envelope
+
+    for field in ("probability", "confidence"):
+        for index, bad in enumerate((1.5, -0.1, True, "0.7", None)):
+            payload = {
+                "entity_type": "belief",
+                "statement": "Invalid probability test",
+                "category": "test",
+                "probability": 0.5,
+                "confidence": 0.5,
+                "tags": [],
+            }
+            payload[field] = bad
+            entity_id = f"belief:invalid-prob-{field}-{index}"
+            with pytest.raises(BeliefEngineError):
+                engine.create("belief", payload, turn=5, entity_id=entity_id)
+        # Valid boundary values still accepted.
+        engine.create(
+            "belief",
+            {
+                "entity_type": "belief",
+                "statement": "Valid probability test",
+                "category": "test",
+                "probability": 0.0 if field == "probability" else 0.5,
+                "confidence": 0.5 if field == "probability" else 1.0,
+                "tags": [],
+            },
+            turn=5,
+            entity_id=f"belief:valid-prob-{field}",
+        )
+
+
+def test_parse_fact_envelope_accepts_only_valid_envelopes():
+    """The dual-track fact envelope must parse strictly: JSON dict with v==1 and facts dict."""
+    from civ6_belief_engine.belief_engine import _parse_fact_envelope
+
+    valid = json.dumps({"v": 1, "facts": {"unit_ids": [1, 2]}, "narrated": "text"})
+    assert _parse_fact_envelope(valid)["facts"]["unit_ids"] == [1, 2]
+    assert _parse_fact_envelope(valid)["narrated"] == "text"
+
+    assert _parse_fact_envelope("not json at all") is None
+    assert _parse_fact_envelope(json.dumps([1, 2, 3])) is None
+    assert _parse_fact_envelope(json.dumps({"v": 2, "facts": {}})) is None
+    assert _parse_fact_envelope(json.dumps({"v": 1, "facts": []})) is None
+    assert _parse_fact_envelope(json.dumps({"v": 1})) is None
+    assert _parse_fact_envelope(json.dumps({"facts": {}})) is None
+    assert _parse_fact_envelope(json.dumps(None)) is None
