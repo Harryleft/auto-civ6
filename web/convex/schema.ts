@@ -1,6 +1,30 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+// Shared shape for the mapData table — also used as ingestMapData mutation
+// args in ingest.ts so the doc schema and its writer cannot drift apart.
+export const mapDataFields = {
+  gameId: v.string(),
+  gridW: v.number(),
+  gridH: v.number(),
+  // Large numeric arrays stored as JSON strings — Convex caps arrays at 8192 elements
+  terrain: v.string(), // stride-6, row-major [terrain, feature, hills, river, coastal, resource]
+  initialOwners: v.string(), // one owner per tile (-1 = unowned), row-major
+  initialRoutes: v.optional(v.string()), // one route type per tile (-1 = none), row-major
+  initialTurn: v.number(),
+  // Legacy: frames inline (old games). New games use mapFrames table.
+  ownerFrames: v.optional(v.string()),
+  cityFrames: v.optional(v.string()),
+  roadFrames: v.optional(v.string()),
+  cityNames: v.optional(v.string()), // JSON object {"x,y": "CityName"}
+  // Player→civ mapping for territory coloring
+  players: v.array(
+    v.object({ pid: v.number(), civ: v.string(), csType: v.optional(v.string()) }),
+  ),
+  maxTurn: v.number(),
+  frameChunks: v.optional(v.number()), // number of mapFrames docs for this game
+};
+
 export default defineSchema({
   // One doc per game session — used for listing and lifecycle
   games: defineTable({
@@ -215,25 +239,7 @@ export default defineSchema({
 
   // One doc per game — strategic map static data + terrain
   // Replay frames stored in mapFrames table (chunked for large games)
-  mapData: defineTable({
-    gameId: v.string(),
-    gridW: v.number(),
-    gridH: v.number(),
-    // Large numeric arrays stored as JSON strings — Convex caps arrays at 8192 elements
-    terrain: v.string(),       // stride-6, row-major [terrain, feature, hills, river, coastal, resource]
-    initialOwners: v.string(), // one owner per tile (-1 = unowned), row-major
-    initialRoutes: v.optional(v.string()), // one route type per tile (-1 = none), row-major
-    initialTurn: v.number(),
-    // Legacy: frames inline (old games). New games use mapFrames table.
-    ownerFrames: v.optional(v.string()),
-    cityFrames: v.optional(v.string()),
-    roadFrames: v.optional(v.string()),
-    cityNames: v.optional(v.string()), // JSON object {"x,y": "CityName"}
-    // Player→civ mapping for territory coloring
-    players: v.array(v.object({ pid: v.number(), civ: v.string(), csType: v.optional(v.string()) })),
-    maxTurn: v.number(),
-    frameChunks: v.optional(v.number()), // number of mapFrames docs for this game
-  }).index("by_gameId", ["gameId"]),
+  mapData: defineTable(mapDataFields).index("by_gameId", ["gameId"]),
 
   // Chunked replay frames — multiple docs per game for large replays
   mapFrames: defineTable({
