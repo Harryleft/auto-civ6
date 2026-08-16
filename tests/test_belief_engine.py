@@ -2272,3 +2272,184 @@ def test_normalize_ignores_envelope_with_wrong_tool():
     assert "unit_ids" not in out["facts"]
     # 信封不匹配时按叙述文本走正则路径：计数键仍会写入（0）。
     assert out["metrics"] == {"observed_city_count": 0}
+
+
+# ---------------------------------------------------------------------------
+# 剩余无覆盖函数：贝叶斯再平衡 / 重复待办授权检测 / intent 终态判定
+# ---------------------------------------------------------------------------
+
+
+def _hypothesis(engine, entity_id: str, topic_id: str, probability: float) -> None:
+    engine.create(
+        "hypothesis",
+        {
+            "entity_type": "hypothesis",
+            "statement": f"Hypothesis {entity_id}",
+            "topic_id": topic_id,
+            "probability": probability,
+            "confidence": 0.7,
+            "tags": [],
+        },
+        turn=1,
+        entity_id=entity_id,
+    )
+
+
+def test_rebalance_hypotheses_bayesian_updates_pool(engine):
+    _hypothesis(engine, "h:war:1", "topic:war", 0.5)
+    _hypothesis(engine, "h:war:2", "topic:war", 0.3)
+    _hypothesis(engine, "h:war:3", "topic:war", 0.2)
+    updated = engine.rebalance_hypotheses_bayesian(
+        "topic:war", {"h:war:1": 2.0, "h:war:2": 0.5}, turn=2, evidence_id="obs:1"
+    )
+    assert len(updated) == 3
+    total = sum(item["probability"] for item in updated)
+    assert total == pytest.approx(1.0, abs=0.001)
+    h1 = engine.get("hypothesis", "h:war:1")
+    assert h1["last_likelihood_ratio"] == 2.0
+    assert h1["last_evidence_id"] == "obs:1"
+    # 未提供 ratio 的假设按 1.0 记录。
+    h3 = engine.get("hypothesis", "h:war:3")
+    assert h3["last_likelihood_ratio"] == 1.0
+    assert h3["probability"] == pytest.approx(0.2 / 1.35, abs=0.001)
+    # weighted: 1.0 / 0.15 / 0.2，total 1.35。
+    assert h1["probability"] == pytest.approx(1.0 / 1.35, abs=0.001)
+    assert h3["probability"] == pytest.approx(0.2 / 1.35, abs=0.001)
+
+
+def test_rebalance_hypotheses_bayesian_rejects_empty_topic(engine):
+    with pytest.raises(BeliefEngineError, match="No active hypotheses"):
+        engine.rebalance_hypotheses_bayesian("topic:none", {}, turn=1)
+
+
+def test_rebalance_hypotheses_bayesian_rejects_bad_ratios(engine):
+    _hypothesis(engine, "h:war:1", "topic:war", 0.5)
+    _hypothesis(engine, "h:war:2", "topic:war", 0.5)
+    for bad in (0.0, -1.0, float("nan"), float("inf"), "2"):
+        with pytest.raises(BeliefEngineError):
+            engine.rebalance_hypotheses_bayesian(
+                "topic:war", {"h:war:1": bad}, turn=1
+            )
+    # 未知假设的 ratio 同样拒绝。
+    with pytest.raises(BeliefEngineError, match="unknown hypotheses"):
+        engine.rebalance_hypotheses_bayesian("topic:war", {"h:other": 2.0}, turn=1)
+
+
+def test_rebalance_hypotheses_bayesian_rejects_zero_prior(engine):
+    _hypothesis(engine, "h:war:1", "topic:war", 0.0)
+    _hypothesis(engine, "h:war:2", "topic:war", 1.0)
+    with pytest.raises(BeliefEngineError, match="zero prior"):
+        engine.rebalance_hypotheses_bayesian("topic:war", {}, turn=1)
+
+
+def _approved_proposal(engine, proposal_id: str, *, intents: list[dict]) -> None:
+    engine.create(
+        "proposal",
+        {
+            "entity_type": "proposal",
+            "statement": f"Proposal {proposal_id}",
+            "department": "military",
+            "action_intent": intents[0],
+            "council_state": "approved",
+            "action_intents": intents,
+        },
+        turn=1,
+        entity_id=proposal_id,
+    )
+
+
+def _terminal_decision(engine, *, proposal_id: str, intent: dict) -> None:
+    engine.create(
+        "decision",
+        {
+            "entity_type": "decision",
+            "statement": "Decision",
+            "route": "fast",
+            "decision_state": "succeeded",
+            "council_decision_id": "council:1",
+            "action_intent": {
+                "proposal_id": proposal_id,
+                "intent_id": intent.get("intent_id"),
+                "tool": intent.get("tool"),
+                "params": intent.get("params") or intent.get("arguments"),
+            },
+        },
+        turn=1,
+        entity_id=f"decision:{proposal_id}",
+    )
+
+
+def test_find_duplicate_pending_intent_matches_approved_proposal(engine):
+    intent = {"intent_id": "i:1", "tool": "unit_action", "params": {"unit_id": 3}}
+    _approved_proposal(engine, "proposal:1", intents=[intent])
+    duplicate = engine.find_duplicate_pending_intent(
+        tool="unit_action", params={"unit_id": 3}
+    )
+    assert duplicate == {"proposal_id": "proposal:1", "intent_id": "i:1"}
+    # 参数 hash 不匹配 -> 无重复。
+    assert engine.find_duplicate_pending_intent(
+        tool="unit_action", params={"unit_id": 4}
+    ) is None
+    # 工具不匹配 -> 无重复。
+    assert engine.find_duplicate_pending_intent(
+        tool="set_city_production", params={"unit_id": 3}
+    ) is None
+    # exclude 自己 -> 无重复。
+    assert engine.find_duplicate_pending_intent(
+        tool="unit_action", params={"unit_id": 3}, exclude_proposal_id="proposal:1"
+    ) is None
+
+
+def test_find_duplicate_pending_intent_ignores_terminal_decisions(engine):
+    intent = {"intent_id": "i:1", "tool": "unit_action", "params": {"unit_id": 3}}
+    _approved_proposal(engine, "proposal:1", intents=[intent])
+    # 提案自己的 council_decision_id 要与决策一致才视为终态。
+    engine.update("proposal", "proposal:1", {"council_decision_id": "council:1"}, turn=1)
+    _terminal_decision(engine, proposal_id="proposal:1", intent=intent)
+    assert engine.find_duplicate_pending_intent(
+        tool="unit_action", params={"unit_id": 3}
+    ) is None
+
+
+def test_find_duplicate_pending_intent_matches_legacy_decision_by_hash(engine):
+    intent = {"intent_id": "i:1", "tool": "unit_action", "params": {"unit_id": 3}}
+    _approved_proposal(engine, "proposal:1", intents=[intent])
+    engine.update("proposal", "proposal:1", {"council_decision_id": "council:1"}, turn=1)
+    # 旧决策无 intent_id：按 tool + 参数 hash 判定终态。
+    _terminal_decision(
+        engine,
+        proposal_id="proposal:1",
+        intent={"tool": "unit_action", "params": {"unit_id": 3}},
+    )
+    assert engine.find_duplicate_pending_intent(
+        tool="unit_action", params={"unit_id": 3}
+    ) is None
+    # 参数不同既不匹配该 intent，也不受旧决策影响。
+    assert engine.find_duplicate_pending_intent(
+        tool="unit_action", params={"unit_id": 99}
+    ) is None
+
+
+def test_find_duplicate_pending_intent_ignores_unapproved_and_bad_intents(engine):
+    # 未批准提案不参与。
+    engine.create(
+        "proposal",
+        {
+            "entity_type": "proposal",
+            "statement": "Pending",
+            "department": "military",
+            "action_intent": {"tool": "unit_action", "params": {"unit_id": 3}},
+            "council_state": "pending",
+            "action_intents": [{"tool": "unit_action", "params": {"unit_id": 3}}],
+        },
+        turn=1,
+        entity_id="proposal:unapproved",
+    )
+    assert engine.find_duplicate_pending_intent(
+        tool="unit_action", params={"unit_id": 3}
+    ) is None
+    # 非 dict 的 intent 条目被跳过。
+    _approved_proposal(engine, "proposal:2", intents=[{"tool": "unit_action", "params": {"unit_id": 3}}, "not-a-dict"])
+    assert engine.find_duplicate_pending_intent(
+        tool="unit_action", params={"unit_id": 3}
+    ) == {"proposal_id": "proposal:2", "intent_id": None}
