@@ -1,10 +1,10 @@
-"""双轨输出契约（civ_mcp.facts）与观测正常化器信封路径的回归测试。
+"""单轨输出契约（civ_mcp.facts）与观测正常化器信封路径的回归测试。
 
 验证：
-1. 信封构造：v/tool/turn/source/coverage/facts/narrated 齐备，JSON 可解析。
-2. parse_envelope 只认双轨信封，不误认普通 JSON 或叙述文本。
-3. normalize_tool_result 对信封：metrics 与旧叙述路径一致，facts 用
-   结构化精确值覆盖（999 距离不再被叙述格式吞掉）。
+1. 信封构造：v/tool/turn/source/coverage/facts 齐备，JSON 可解析（无叙述轨）。
+2. parse_envelope 只认信封，不误认普通 JSON 或叙述文本。
+3. normalize_tool_result 对信封：facts 与 metrics 全部来自字段级 schema
+   （999 距离不再被叙述格式吞掉）。
 4. _append_belief_context 对信封结果合并进 belief_context 结构，不再
    尾部追加文本（保持 JSON 可解析）；纯文本结果仍走旧追加路径。
 """
@@ -20,7 +20,6 @@ import pytest
 from civ6_belief_engine.belief_engine import normalize_tool_result
 from civ_mcp import facts as fact_view
 from civ_mcp import lua as lq
-from civ_mcp import narrate as nr
 from civ_mcp.belief_mode import BeliefMode
 from civ_mcp.lua.models import GPClassStanding, GPPlayerPoints, GreatPeopleOverview
 from civ_mcp.server import pipeline as server_module
@@ -102,7 +101,6 @@ class TestEnvelopeBuilders:
             units=[_unit()],
             threats=[threat],
             trade_status=None,
-            narrated=nr.narrate_units([_unit()], [threat], None),
         )
         assert envelope["v"] == 1
         assert envelope["tool"] == "get_units"
@@ -115,10 +113,10 @@ class TestEnvelopeBuilders:
         }
         assert envelope["facts"]["own_units"][0]["unit_id"] == 131073
         assert envelope["facts"]["foreign_units"][0]["owner_id"] == 63
-        assert "1 units:" in envelope["narrated"]
+        assert "narrated" not in envelope
         # 无威胁时 foreign_units 不出现
         bare = fact_view.units_envelope(
-            turn=56, units=[], threats=None, trade_status=None, narrated="No units."
+            turn=56, units=[], threats=None, trade_status=None,
         )
         assert "foreign_units" not in bare["facts"]
         # JSON 往返可解析（asdict 会把嵌套 tuple 变 list，故与 dumps 后结果比较）
@@ -143,9 +141,7 @@ class TestEnvelopeBuilders:
                 )
             ],
         )
-        envelope = fact_view.barbarian_envelope(
-            turn=12, overview=overview, narrated=nr.narrate_barbarian_overview(overview)
-        )
+        envelope = fact_view.barbarian_envelope(turn=12, overview=overview)
         assert envelope["coverage"] == {
             "camps": "KNOWN_HISTORY",
             "units": "CURRENTLY_VISIBLE",
@@ -160,7 +156,6 @@ class TestEnvelopeBuilders:
             center_y=33,
             radius=2,
             tiles=[_tile()],
-            narrated=nr.narrate_map([_tile()]),
         )
         assert map_env["facts"]["center"] == [31, 33]
         assert map_env["facts"]["tiles"][0]["visibility"] == "revealed"
@@ -170,7 +165,6 @@ class TestEnvelopeBuilders:
             turn=3,
             cities=[_city()],
             distances=["巴黎 <-> 里昂: 8 tiles"],
-            narrated=nr.narrate_cities([_city()]),
         )
         assert city_env["facts"]["cities"][0]["population"] == 4
         assert city_env["facts"]["city_distances"] == ["巴黎 <-> 里昂: 8 tiles"]
@@ -178,7 +172,7 @@ class TestEnvelopeBuilders:
 
     def test_turn_placeholder_when_unknown(self):
         envelope = fact_view.units_envelope(
-            turn=None, units=[], threats=None, trade_status=None, narrated="No units."
+            turn=None, units=[], threats=None, trade_status=None,
         )
         assert envelope["turn"] == "?"
 
@@ -190,6 +184,21 @@ class TestParseEnvelope:
         assert fact_view.parse_envelope('{"a": 1}') is None
         assert fact_view.parse_envelope("not json") is None
 
+    def test_accepts_envelope_without_narrated(self):
+        envelope = fact_view.dumps(
+            fact_view.units_envelope(turn=1, units=[], threats=None, trade_status=None)
+        )
+        parsed = fact_view.parse_envelope(envelope)
+        assert parsed is not None
+        assert parsed["tool"] == "get_units"
+
+    def test_accepts_legacy_envelope_with_narrated(self):
+        # 历史日志里的旧信封仍带 narrated；解析必须宽松（忽略多余键）。
+        legacy = json.dumps(
+            {"v": 1, "tool": "get_units", "facts": {}, "narrated": "old text"}
+        )
+        assert fact_view.parse_envelope(legacy) is not None
+
 
 class TestNormalizerEnvelopePath:
     def test_units_envelope_exact_facts_and_metric_parity(self):
@@ -197,25 +206,21 @@ class TestNormalizerEnvelopePath:
             _unit(unit_id=131073, x=32, y=37),
             _unit(unit_id=131074, x=43, y=40, name="建造者", unit_type="UNIT_BUILDER"),
         ]
-        narrated = nr.narrate_units(units)
         envelope = fact_view.dumps(
             fact_view.units_envelope(
-                turn=56, units=units, threats=None, trade_status=None, narrated=narrated
+                turn=56, units=units, threats=None, trade_status=None
             )
         )
         normalized = normalize_tool_result("get_units", envelope)
         assert normalized["metrics"]["observed_unit_count"] == 2
         assert normalized["facts"]["unit_ids"] == [131073, 131074]
         assert normalized["facts"]["unit_position:131073"] == [32, 37]
-        # 叙述路径回归：同样输入产出相同 metrics
-        legacy = normalize_tool_result("get_units", narrated)
-        assert normalized["metrics"] == legacy["metrics"]
+        assert normalized["reliability"] == 1.0
 
     def test_cities_envelope_keeps_legacy_fact_keys(self):
         cities = [_city(), _city(city_id=131073, name="里昂", x=36, y=35, population=3)]
-        narrated = nr.narrate_cities(cities)
         envelope = fact_view.dumps(
-            fact_view.cities_envelope(turn=56, cities=cities, distances=None, narrated=narrated)
+            fact_view.cities_envelope(turn=56, cities=cities, distances=None)
         )
         normalized = normalize_tool_result("get_cities", envelope)
         assert normalized["metrics"]["observed_city_count"] == 2
@@ -225,8 +230,6 @@ class TestNormalizerEnvelopePath:
             "x": 43,
             "y": 38,
         }
-        legacy = normalize_tool_result("get_cities", narrated)
-        assert normalized["metrics"] == legacy["metrics"]
 
     def test_barbarian_envelope_preserves_999_distance(self):
         # 叙述路径把 999 渲染成 "no city distance"，正则提取丢失数值；
@@ -244,9 +247,8 @@ class TestNormalizerEnvelopePath:
             ],
             units=[],
         )
-        narrated = nr.narrate_barbarian_overview(overview)
         envelope = fact_view.dumps(
-            fact_view.barbarian_envelope(turn=12, overview=overview, narrated=narrated)
+            fact_view.barbarian_envelope(turn=12, overview=overview)
         )
         normalized = normalize_tool_result("get_barbarian_overview", envelope)
         camps = normalized["facts"]["barbarian_camps"]
@@ -261,9 +263,7 @@ class TestNormalizerEnvelopePath:
     def test_non_matching_tool_envelope_falls_back_to_text(self):
         # 信封 tool 与调用方不符时走普通文本路径，不误用结构。
         envelope = fact_view.dumps(
-            fact_view.units_envelope(
-                turn=1, units=[], threats=None, trade_status=None, narrated="No units."
-            )
+            fact_view.units_envelope(turn=1, units=[], threats=None, trade_status=None)
         )
         normalized = normalize_tool_result("get_cities", envelope)
         assert normalized["facts"]["tool"] == "get_cities"
@@ -303,7 +303,6 @@ class TestBeliefContextMerge:
         envelope = fact_view.dumps(
             fact_view.units_envelope(
                 turn=3, units=[_unit()], threats=None, trade_status=None,
-                narrated=nr.narrate_units([_unit()]),
             )
         )
         result = asyncio.run(
@@ -314,7 +313,7 @@ class TestBeliefContextMerge:
         assert parsed["belief_context"]["turn"] == 3
         assert parsed["belief_context"]["default_route"] == "fast"
         assert parsed["facts"]["own_units"][0]["unit_id"] == 131073
-        # 合并后仍是可解析的双轨信封
+        # 合并后仍是可解析的信封
         assert fact_view.parse_envelope(result) is not None
 
     def test_text_result_keeps_legacy_append(self, fake_brief_context):
@@ -327,7 +326,7 @@ class TestBeliefContextMerge:
 
 
 class TestCoreQueryEnvelopes:
-    """第二批核心查询工具的双轨信封与正常化器精确覆盖。"""
+    """核心查询工具的单轨信封与正常化器精确覆盖。"""
 
     def test_combat_estimate_envelope_exact_matchup(self):
         est = lq.CombatEstimate(
@@ -342,8 +341,7 @@ class TestCoreQueryEnvelopes:
             defender_hp=100,
             attacker_hp=100,
         )
-        narrated = nr.narrate_combat_estimate(est)
-        env = fact_view.combat_estimate_envelope(turn=5, estimate=est, narrated=narrated)
+        env = fact_view.combat_estimate_envelope(turn=5, estimate=est)
         assert env["facts"]["available"] is True
         assert env["facts"]["estimate"]["attacker_cs"] == 20
         assert env["coverage"] == {"estimate": "COMPLETE"}
@@ -353,18 +351,12 @@ class TestCoreQueryEnvelopes:
             "attacker_type": "UNIT_WARRIOR",
             "defender_type": "UNIT_BARBARIAN_WARRIOR",
         }
-        # metrics 与旧叙述路径一致（含 combat.* 指标）
-        legacy = normalize_tool_result("get_combat_estimate", narrated)
-        assert normalized["metrics"] == legacy["metrics"]
-        assert legacy["metrics"]["combat.attacker_cs"] == 20
-        assert legacy["metrics"]["combat.expected_damage_to_defender"] == 8
+        assert normalized["metrics"]["combat.attacker_cs"] == 20
+        assert normalized["metrics"]["combat.expected_damage_to_defender"] == 8
+        assert normalized["metrics"]["combat.expected_damage_to_attacker"] == 4
 
     def test_combat_estimate_unavailable(self):
-        env = fact_view.combat_estimate_envelope(
-            turn=5,
-            estimate=None,
-            narrated="No quantified combat estimate is available for this matchup.",
-        )
+        env = fact_view.combat_estimate_envelope(turn=5, estimate=None)
         assert env["facts"]["available"] is False
         assert "estimate" not in env["facts"]
 
@@ -383,8 +375,7 @@ class TestCoreQueryEnvelopes:
         unmet = lq.CivInfo(
             player_id=3, civ_name="China", leader_name="Qin", has_met=False, is_at_war=False
         )
-        narrated = nr.narrate_diplomacy([met, unmet])
-        env = fact_view.diplomacy_envelope(turn=5, civs=[met, unmet], narrated=narrated)
+        env = fact_view.diplomacy_envelope(turn=5, civs=[met, unmet])
         assert len(env["facts"]["civs"]) == 2
 
         normalized = normalize_tool_result("get_diplomacy", fact_view.dumps(env))
@@ -396,14 +387,14 @@ class TestCoreQueryEnvelopes:
             "at_war": True,
             "military": 150,
             "cities": 3,
-            # known-gap：测试未提供可见城市 → 叙述为 all in fog
+            # known-gap：测试未提供可见城市 → 全部未观测
             "visible_cities": 0,
             "unobserved_cities": 3,
         }
         assert "player_3" not in normalized["facts"]["rivals"]
-        legacy = normalize_tool_result("get_diplomacy", narrated)
-        assert normalized["facts"]["rivals"] == legacy["facts"]["rivals"]
-        assert normalized["metrics"] == legacy["metrics"]
+        assert normalized["metrics"]["diplomacy.player_2.at_war"] is True
+        assert normalized["metrics"]["diplomacy.player_2.unobserved_cities"] == 3
+        assert "our_military" not in normalized["metrics"]
 
     def test_great_people_envelope_exact_classes(self):
         standing = GPClassStanding(
@@ -421,8 +412,7 @@ class TestCoreQueryEnvelopes:
             ],
         )
         ov = GreatPeopleOverview(standings=[standing])
-        narrated = nr.narrate_great_people_overview(ov)
-        env = fact_view.great_people_overview_envelope(turn=5, overview=ov, narrated=narrated)
+        env = fact_view.great_people_overview_envelope(turn=5, overview=ov)
         assert env["facts"]["standings"][0]["class_name"] == "Great Scientist"
         assert env["coverage"]["history"] == "KNOWN_HISTORY"
 
@@ -446,9 +436,7 @@ class TestCoreQueryEnvelopes:
                 )
             ]
         )
-        env_lone = fact_view.great_people_overview_envelope(
-            turn=5, overview=lone, narrated=nr.narrate_great_people_overview(lone)
-        )
+        env_lone = fact_view.great_people_overview_envelope(turn=5, overview=lone)
         lone_normalized = normalize_tool_result(
             "get_great_people_overview", fact_view.dumps(env_lone)
         )
@@ -464,14 +452,13 @@ class TestCoreQueryEnvelopes:
             available_techs=[],
             available_civics=[],
         )
-        narrated = nr.narrate_tech_civics(tc)
-        env = fact_view.tech_civics_envelope(turn=5, status=tc, narrated=narrated)
+        env = fact_view.tech_civics_envelope(turn=5, status=tc)
         assert env["facts"]["current_research"] == "TECHNOLOGY_WRITING"
         normalized = normalize_tool_result("get_tech_civics", fact_view.dumps(env))
         assert normalized["metrics"]["research.current"] == "TECHNOLOGY_WRITING"
+        assert normalized["metrics"]["research.turns_remaining"] == 5
         assert normalized["metrics"]["civic.turns_remaining"] == 2
-        legacy = normalize_tool_result("get_tech_civics", narrated)
-        assert normalized["metrics"] == legacy["metrics"]
+        assert normalized["facts"]["current_research"] == "TECHNOLOGY_WRITING"
 
     def test_victory_production_settle_era_trade_pathing_envelopes(self):
         vp = lq.VictoryProgress(
@@ -484,9 +471,7 @@ class TestCoreQueryEnvelopes:
                 )
             ]
         )
-        env = fact_view.victory_progress_envelope(
-            turn=5, progress=vp, narrated=nr.narrate_victory_progress(vp)
-        )
+        env = fact_view.victory_progress_envelope(turn=5, progress=vp)
         assert env["facts"]["players"][0]["science_vp"] == 5
         assert env["coverage"] == {"players": "COMPLETE", "demographics": "COMPLETE"}
 
@@ -495,7 +480,6 @@ class TestCoreQueryEnvelopes:
         )
         env = fact_view.city_production_envelope(
             turn=5, city_id=7, options=[option],
-            narrated=nr.narrate_city_production([option]),
         )
         assert env["facts"]["city_id"] == 7
         assert env["facts"]["options"][0]["item_name"] == "UNIT_WARRIOR"
@@ -506,38 +490,33 @@ class TestCoreQueryEnvelopes:
         )
         env = fact_view.settle_envelope(
             turn=5, tool="get_settle_advisor", unit_id=9, candidates=[candidate],
-            source="local", narrated=nr.narrate_settle_candidates([candidate]),
+            source="local",
         )
         assert env["facts"]["source"] == "local"
         assert env["facts"]["candidates"][0]["water_type"] == "fresh"
         assert env["coverage"] == {"candidates": "KNOWN_HISTORY"}
 
         era = lq.EraProgress(ruleset="RULESET_EXPANSION_2", ages_supported=True)
-        env = fact_view.era_progress_envelope(
-            turn=5, status=era, narrated=nr.narrate_era_progress(era)
-        )
+        env = fact_view.era_progress_envelope(turn=5, status=era)
         assert env["facts"]["ages_supported"] is True
 
         routes = lq.TradeRouteStatus(
             capacity=3, active_count=1,
             traders=[lq.TraderInfo(unit_id=5, x=1, y=2, has_moves=False)],
         )
-        env = fact_view.trade_routes_envelope(
-            turn=5, status=routes, narrated=nr.narrate_trade_routes(routes)
-        )
+        env = fact_view.trade_routes_envelope(turn=5, status=routes)
         assert env["facts"]["capacity"] == 3
         assert env["facts"]["traders"][0]["unit_id"] == 5
 
         pathing = lq.PathingEstimate(turns=2, total_tiles=5, reachable_this_turn=3)
         env = fact_view.pathing_envelope(
             turn=5, unit_id=9, target_x=8, target_y=8, estimate=pathing,
-            narrated=nr.narrate_pathing_estimate(pathing),
         )
         assert env["facts"]["estimate"]["turns"] == 2
 
 
 class TestThirdBatchEnvelopes:
-    """第三批核心查询工具的双轨信封。"""
+    """第三批核心查询工具的单轨信封。"""
 
     def test_village_envelope_known_history_coverage(self):
         overview = lq.VillageOverview(
@@ -548,8 +527,7 @@ class TestThirdBatchEnvelopes:
                 )
             ]
         )
-        narrated = nr.narrate_village_overview(overview)
-        env = fact_view.village_envelope(turn=5, overview=overview, narrated=narrated)
+        env = fact_view.village_envelope(turn=5, overview=overview)
         assert env["facts"]["huts"][0]["x"] == 3
         assert env["coverage"] == {"huts": "KNOWN_HISTORY"}
         normalized = normalize_tool_result("get_village_overview", fact_view.dumps(env))
@@ -564,8 +542,7 @@ class TestThirdBatchEnvelopes:
                 available_ops=["TRAVEL"],
             )
         ]
-        narrated = nr.narrate_spies(spies)
-        env = fact_view.spies_envelope(turn=5, spies=spies, narrated=narrated)
+        env = fact_view.spies_envelope(turn=5, spies=spies)
         assert env["facts"]["spies"][0]["rank"] == 1
         assert env["coverage"] == {"spies": "COMPLETE"}
 
@@ -580,9 +557,8 @@ class TestThirdBatchEnvelopes:
         builders = [
             lq.BuilderInfo(unit_id=3, unit_index=3, x=7, y=8, charges=2, moves=1.0)
         ]
-        narrated = nr.narrate_builder_tasks(tasks, builders)
         env = fact_view.builder_tasks_envelope(
-            turn=5, tasks=tasks, builders=builders, narrated=narrated
+            turn=5, tasks=tasks, builders=builders
         )
         assert env["facts"]["tasks"][0]["resource"] == "IRON"
         assert env["facts"]["builders"][0]["charges"] == 2
@@ -602,12 +578,9 @@ class TestThirdBatchEnvelopes:
             name="Horses", resource_class="strategic", x=9, y=9,
             nearest_city="巴黎", distance=4,
         )
-        narrated = nr.narrate_empire_resources(
-            [stockpile], [owned], [nearby], {"Diamonds": 1}
-        )
         env = fact_view.empire_resources_envelope(
             turn=5, stockpiles=[stockpile], owned=[owned], nearby=[nearby],
-            luxuries={"Diamonds": 1}, narrated=narrated,
+            luxuries={"Diamonds": 1},
         )
         assert env["facts"]["stockpiles"][0]["amount"] == 12
         assert env["facts"]["luxuries"] == {"Diamonds": 1}
@@ -628,7 +601,7 @@ class TestThirdBatchEnvelopes:
             resolution_hint="get_barbarian_overview",
         )
         env = fact_view.notifications_envelope(
-            turn=5, notifications=[notif], narrated=nr.narrate_notifications([notif])
+            turn=5, notifications=[notif]
         )
         assert env["facts"]["notifications"][0]["is_action_required"] is True
         assert env["coverage"] == {"notifications": "COMPLETE"}
@@ -637,7 +610,7 @@ class TestThirdBatchEnvelopes:
             government_name="Oligarchy", government_type="GOVERNMENT_OLIGARCHY"
         )
         env = fact_view.policies_envelope(
-            turn=5, status=gov, narrated=nr.narrate_policies(gov)
+            turn=5, status=gov
         )
         assert env["facts"]["government_name"] == "Oligarchy"
         assert env["coverage"] == {
@@ -655,8 +628,7 @@ class TestThirdBatchEnvelopes:
                 )
             ],
         )
-        narrated = nr.narrate_strategic_map(data)
-        env = fact_view.strategic_map_envelope(turn=5, data=data, narrated=narrated)
+        env = fact_view.strategic_map_envelope(turn=5, data=data)
         assert env["facts"]["unclaimed_resources"][0]["x"] == 5
         assert env["coverage"] == {
             "fog_boundaries": "COMPLETE",
@@ -675,7 +647,7 @@ class TestThirdBatchEnvelopes:
             ],
         )
         env = fact_view.pending_trades_envelope(
-            turn=5, deals=[deal], narrated=nr.narrate_pending_deals([deal])
+            turn=5, deals=[deal]
         )
         assert env["facts"]["deals"][0]["items_from_them"][0]["amount"] == 50
         assert env["coverage"] == {"deals": "COMPLETE"}
@@ -687,7 +659,6 @@ class TestThirdBatchEnvelopes:
         )
         env = fact_view.pending_diplomacy_envelope(
             turn=5, sessions=[session],
-            narrated=nr.narrate_diplomacy_sessions([session]),
         )
         assert env["facts"]["sessions"][0]["dialogue_text"] == "Greetings!"
         assert env["coverage"] == {"sessions": "COMPLETE"}
@@ -699,7 +670,6 @@ class TestThirdBatchEnvelopes:
         )
         env = fact_view.trade_destinations_envelope(
             turn=5, unit_id=9, destinations=[dest],
-            narrated=nr.narrate_trade_destinations([dest]),
         )
         assert env["facts"]["unit_id"] == 9
         assert env["facts"]["destinations"][0]["city_name"] == "柏林"
@@ -710,7 +680,7 @@ class TestThirdBatchEnvelopes:
             era_name="Classical", cost=60, claimant="Unclaimed", player_points=30,
         )
         env = fact_view.great_people_envelope(
-            turn=5, people=[gp], narrated=nr.narrate_great_people([gp])
+            turn=5, people=[gp]
         )
         assert env["facts"]["people"][0]["individual_name"] == "Hypatia"
         assert env["coverage"] == {"people": "COMPLETE"}
@@ -724,26 +694,26 @@ class TestThirdBatchEnvelopes:
             xp=30, xp_needed=10, promotion_count=1,
         )
         env = fact_view.unit_promotions_envelope(
-            turn=5, status=promo, narrated=nr.narrate_unit_promotions(promo)
+            turn=5, status=promo
         )
         assert env["facts"]["promotions"][0]["promotion_type"] == "PROMOTION_BATTLECRY"
         assert env["coverage"] == {"promotions": "COMPLETE"}
 
 
 class TestFourthBatchEnvelopes:
-    """第四批（全部剩余核心查询工具）的双轨信封。"""
+    """第四批（全部剩余核心查询工具）的单轨信封。"""
 
     def test_governors_and_city_states_envelopes(self):
         gov = lq.GovernorStatus(points_available=2, points_spent=1, can_appoint=True)
         env = fact_view.governors_envelope(
-            turn=5, status=gov, narrated=nr.narrate_governors(gov)
+            turn=5, status=gov
         )
         assert env["facts"]["points_available"] == 2
         assert env["coverage"] == {"governors": "COMPLETE"}
 
         envoys = lq.EnvoyStatus(tokens_available=3)
         env = fact_view.city_states_envelope(
-            turn=5, status=envoys, narrated=nr.narrate_city_states(envoys)
+            turn=5, status=envoys
         )
         assert env["facts"]["tokens_available"] == 3
         assert env["coverage"] == {
@@ -757,7 +727,7 @@ class TestFourthBatchEnvelopes:
             faith_balance=12.5,
         )
         env = fact_view.pantheon_envelope(
-            turn=5, status=pantheon, narrated=nr.narrate_pantheon_status(pantheon)
+            turn=5, status=pantheon
         )
         assert env["facts"]["faith_balance"] == 12.5
         assert env["coverage"] == {
@@ -770,7 +740,7 @@ class TestFourthBatchEnvelopes:
             pantheon_index=-1, faith_balance=12.5,
         )
         env = fact_view.religion_founding_envelope(
-            turn=5, status=founding, narrated=nr.narrate_religion_founding_status(founding)
+            turn=5, status=founding
         )
         assert env["facts"]["has_religion"] is False
         assert env["coverage"] == {
@@ -784,7 +754,7 @@ class TestFourthBatchEnvelopes:
             golden_threshold=20, selections_allowed=1,
         )
         env = fact_view.dedications_envelope(
-            turn=5, status=ded, narrated=nr.narrate_dedications(ded)
+            turn=5, status=ded
         )
         assert env["facts"]["era_score"] == 10
         assert env["coverage"] == {"dedications": "COMPLETE"}
@@ -792,7 +762,6 @@ class TestFourthBatchEnvelopes:
         opts = lq.DealOptions(other_player_id=2, other_civ_name="Germany")
         env = fact_view.trade_options_envelope(
             turn=5, other_player_id=2, options=opts,
-            narrated=nr.narrate_deal_options(opts),
         )
         assert env["facts"]["options"]["other_civ_name"] == "Germany"
         assert env["coverage"] == {"deal_options": "COMPLETE"}
@@ -802,8 +771,7 @@ class TestFourthBatchEnvelopes:
             {"v": 2, "turn": 5, "is_agent": True, "text": "Founded Paris"},
             {"v": 2, "turn": 6, "is_agent": True, "text": "Met Germany"},
         ]
-        narrated = "\n\n".join(f"回合 {e['turn']}: {e['text']}" for e in entries)
-        env = fact_view.diary_envelope(turn=5, entries=entries, narrated=narrated)
+        env = fact_view.diary_envelope(turn=5, entries=entries)
         assert env["facts"]["entries"][0]["turn"] == 5
         assert env["coverage"] == {"entries": "COMPLETE"}
         # 条目为浅拷贝，不共享引用
@@ -816,9 +784,7 @@ class TestFourthBatchEnvelopes:
         )
         env = fact_view.district_advisor_envelope(
             turn=5, city_id=7, district_type="DISTRICT_CAMPUS",
-            placements=[placement], narrated=nr.narrate_district_advisor(
-                [placement], "DISTRICT_CAMPUS"
-            ),
+            placements=[placement],
             warning="调用预算已耗尽",
         )
         assert env["facts"]["placements"][0]["total_adjacency"] == 3
@@ -827,7 +793,7 @@ class TestFourthBatchEnvelopes:
         # 无警告时 warning 键不出现
         bare = fact_view.district_advisor_envelope(
             turn=5, city_id=7, district_type="DISTRICT_CAMPUS",
-            placements=[placement], narrated="narrated",
+            placements=[placement],
         )
         assert "warning" not in bare
 
@@ -838,9 +804,7 @@ class TestFourthBatchEnvelopes:
         )
         env = fact_view.wonder_advisor_envelope(
             turn=5, city_id=7, wonder_name="BUILDING_ORSZAGHAZ",
-            placements=[wonder], narrated=nr.narrate_wonder_advisor(
-                [wonder], "BUILDING_ORSZAGHAZ"
-            ),
+            placements=[wonder],
         )
         assert env["facts"]["placements"][0]["displacement_score"] == 0
 
@@ -850,7 +814,6 @@ class TestFourthBatchEnvelopes:
         )
         env = fact_view.purchasable_tiles_envelope(
             turn=5, city_id=7, tiles=[tile],
-            narrated=nr.narrate_purchasable_tiles([tile]),
         )
         assert env["facts"]["tiles"][0]["cost"] == 100
         assert env["coverage"] == {"tiles": "COMPLETE"}
@@ -860,14 +823,13 @@ class TestFourthBatchEnvelopes:
             target_district="DISTRICT_CAMPUS", gp_x=1, gp_y=2, charges=1, cities=[],
         )
         env = fact_view.gp_advisor_envelope(
-            turn=5, unit_index=3, result=result, narrated=nr.narrate_gp_advisor(result)
+            turn=5, unit_index=3, result=result
         )
         assert env["facts"]["available"] is True
         assert env["facts"]["result"]["gp_name"] == "Hypatia"
         # 非伟人单位：available=False，无 result
         env = fact_view.gp_advisor_envelope(
             turn=5, unit_index=9, result=None,
-            narrated="Could not get GP advisor info. Is this a Great Person unit?",
         )
         assert env["facts"]["available"] is False
         assert "result" not in env["facts"]
@@ -878,7 +840,7 @@ class TestFourthBatchEnvelopes:
             favor_costs=[0, 10, 30], resolutions=[], proposals=[],
         )
         env = fact_view.world_congress_envelope(
-            turn=5, status=wc, narrated=nr.narrate_world_congress(wc)
+            turn=5, status=wc
         )
         assert env["facts"]["favor"] == 10
         assert env["coverage"] == {"congress": "COMPLETE"}
@@ -886,7 +848,7 @@ class TestFourthBatchEnvelopes:
     def test_religion_and_climate_envelopes(self):
         spread = lq.ReligionStatus(cities=[], summary=[])
         env = fact_view.religion_spread_envelope(
-            turn=5, status=spread, narrated=nr.narrate_religion_status(spread)
+            turn=5, status=spread
         )
         assert env["coverage"] == {
             "cities": "CURRENTLY_VISIBLE",
@@ -895,7 +857,7 @@ class TestFourthBatchEnvelopes:
 
         overview = lq.ReligionOverview()
         env = fact_view.religion_overview_envelope(
-            turn=5, status=overview, narrated=nr.narrate_religion_overview(overview)
+            turn=5, status=overview
         )
         assert env["coverage"] == {
             "religions": "COMPLETE",
@@ -911,7 +873,7 @@ class TestFourthBatchEnvelopes:
             co2_self_last_turn=0.0, co2_footprint_modifier=0.0,
         )
         env = fact_view.climate_envelope(
-            turn=5, status=climate, narrated=nr.narrate_climate_overview(climate)
+            turn=5, status=climate
         )
         assert env["facts"]["phase"] == 0
         assert env["coverage"] == {

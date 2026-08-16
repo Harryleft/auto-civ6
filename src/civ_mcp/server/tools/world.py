@@ -7,10 +7,8 @@ from typing import Optional
 from mcp.server.fastmcp import Context
 
 from civ_mcp import facts as fact_view
-from civ_mcp import narrate as nr
 from civ_mcp.diary import (
     diary_path as _diary_path,
-    format_diary_entry as _format_diary_entry,
     read_diary_entries as _read_diary_entries,
 )
 from civ_mcp.server import pipeline
@@ -44,8 +42,8 @@ async def get_diary(
     Call this at the start of a session or after context compaction to
     restore strategic memory from previous turns.
 
-    Returns a double-track JSON envelope: structured ``facts`` (entries with
-    COMPLETE coverage) plus the legacy human-readable ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (entries with
+    COMPLETE coverage).
     """
     gs = pipeline._get_game(ctx)
     try:
@@ -80,12 +78,10 @@ async def get_diary(
     if not entries:
         return "No diary entries match the query."
 
-    narrated = "\n\n".join(_format_diary_entry(e) for e in entries)
     return fact_view.dumps(
         fact_view.diary_envelope(
             turn=pipeline._get_logger(ctx)._turn,
             entries=entries,
-            narrated=narrated,
         )
     )
 
@@ -102,9 +98,8 @@ async def get_trade_routes(ctx: Context) -> str:
     Shows how many routes are active vs capacity, and lists all trader
     units with their positions and whether they're idle or on a route.
 
-    Returns a double-track JSON envelope: structured ``facts`` (routes/
-    traders with COMPLETE coverage) plus the legacy human-readable
-    ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (routes/
+    traders with COMPLETE coverage).
     """
     gs = pipeline._get_game(ctx)
 
@@ -115,7 +110,6 @@ async def get_trade_routes(ctx: Context) -> str:
             fact_view.trade_routes_envelope(
                 turn=turn,
                 status=status,
-                narrated=nr.narrate_trade_routes(status),
             )
         )
 
@@ -132,8 +126,8 @@ async def get_trade_destinations(ctx: Context, unit_id: int) -> str:
     Shows domestic and international destinations. Use unit_action
     with action='trade_route' and target_x/target_y to start a route.
 
-    Returns a double-track JSON envelope: structured ``facts`` (destinations
-    with COMPLETE coverage) plus the legacy human-readable ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (destinations
+    with COMPLETE coverage).
     """
     gs = pipeline._get_game(ctx)
     unit_index = unit_id % 65536
@@ -146,7 +140,6 @@ async def get_trade_destinations(ctx: Context, unit_id: int) -> str:
                 turn=turn,
                 unit_id=unit_id,
                 destinations=dests,
-                narrated=nr.narrate_trade_destinations(dests),
             )
         )
 
@@ -169,9 +162,8 @@ async def get_district_advisor(ctx: Context, city_id: int, district_type: str) -
     Returns valid placement tiles ranked by adjacency bonus.
     Use set_city_production with target_x/target_y to build the district.
 
-    Returns a double-track JSON envelope: structured ``facts`` (placements
-    with COMPLETE coverage; advisor budget warning in ``warning``) plus the
-    legacy human-readable ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (placements
+    with COMPLETE coverage; advisor budget warning in ``warning``).
     """
     gs = pipeline._get_game(ctx)
 
@@ -183,7 +175,6 @@ async def get_district_advisor(ctx: Context, city_id: int, district_type: str) -
         if gs._advisor_budget_warning:
             warning = gs._advisor_budget_warning
             gs._advisor_budget_warning = None
-        narrated = nr.narrate_district_advisor(result, district_type)
         turn = pipeline._get_logger(ctx)._turn
         return fact_view.dumps(
             fact_view.district_advisor_envelope(
@@ -191,7 +182,6 @@ async def get_district_advisor(ctx: Context, city_id: int, district_type: str) -
                 city_id=city_id,
                 district_type=district_type,
                 placements=result,
-                narrated=narrated,
                 warning=warning,
             )
         )
@@ -218,9 +208,8 @@ async def get_wonder_advisor(ctx: Context, city_id: int, wonder_name: str) -> st
     that would be removed by placing the wonder there.
     Use set_city_production with target_x/target_y to build the wonder.
 
-    Returns a double-track JSON envelope: structured ``facts`` (placements
-    with COMPLETE coverage; advisor budget warning in ``warning``) plus the
-    legacy human-readable ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (placements
+    with COMPLETE coverage; advisor budget warning in ``warning``).
     """
     gs = pipeline._get_game(ctx)
 
@@ -232,7 +221,6 @@ async def get_wonder_advisor(ctx: Context, city_id: int, wonder_name: str) -> st
         if gs._advisor_budget_warning:
             warning = gs._advisor_budget_warning
             gs._advisor_budget_warning = None
-        narrated = nr.narrate_wonder_advisor(placements, wonder_name)
         turn = pipeline._get_logger(ctx)._turn
         return fact_view.dumps(
             fact_view.wonder_advisor_envelope(
@@ -240,7 +228,6 @@ async def get_wonder_advisor(ctx: Context, city_id: int, wonder_name: str) -> st
                 city_id=city_id,
                 wonder_name=wonder_name,
                 placements=placements,
-                narrated=narrated,
                 warning=warning,
             )
         )
@@ -268,8 +255,8 @@ async def get_purchasable_tiles(ctx: Context, city_id: int) -> str:
     Shows cost, terrain, and resources for each purchasable tile.
     Tiles with luxury/strategic resources are listed first.
 
-    Returns a double-track JSON envelope: structured ``facts`` (tiles with
-    COMPLETE coverage) plus the legacy human-readable ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (tiles with
+    COMPLETE coverage).
     """
     gs = pipeline._get_game(ctx)
 
@@ -281,7 +268,6 @@ async def get_purchasable_tiles(ctx: Context, city_id: int) -> str:
                 turn=turn,
                 city_id=city_id,
                 tiles=tiles,
-                narrated=nr.narrate_purchasable_tiles(tiles),
             )
         )
 
@@ -346,8 +332,8 @@ async def get_great_people(ctx: Context) -> str:
     Shows which Great People are available, their recruitment cost,
     and which civilization (if any) is recruiting them.
 
-    Returns a double-track JSON envelope: structured ``facts`` (people with
-    COMPLETE coverage) plus the legacy human-readable ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (people with
+    COMPLETE coverage).
     """
     gs = pipeline._get_game(ctx)
 
@@ -358,7 +344,6 @@ async def get_great_people(ctx: Context) -> str:
             fact_view.great_people_envelope(
                 turn=turn,
                 people=gp,
-                narrated=nr.narrate_great_people(gp),
             )
         )
 
@@ -389,7 +374,6 @@ async def get_great_people_overview(ctx: Context) -> str:
             fact_view.great_people_overview_envelope(
                 turn=turn,
                 overview=ov,
-                narrated=nr.narrate_great_people_overview(ov),
             )
         )
 
@@ -411,18 +395,12 @@ async def get_gp_advisor(ctx: Context, unit_index: int) -> str:
 
     async def _run():
         result = await gs.get_gp_advisor(unit_index)
-        narrated = (
-            "Could not get GP advisor info. Is this a Great Person unit?"
-            if result is None
-            else nr.narrate_gp_advisor(result)
-        )
         turn = pipeline._get_logger(ctx)._turn
         return fact_view.dumps(
             fact_view.gp_advisor_envelope(
                 turn=turn,
                 unit_index=unit_index,
                 result=result,
-                narrated=narrated,
             )
         )
 
@@ -502,8 +480,8 @@ async def get_world_congress(ctx: Context) -> str:
     and possible targets), turns until next session, and your diplomatic favor.
     When in session, use queue_wc_votes to register votes before end_turn.
 
-    Returns a double-track JSON envelope: structured ``facts`` (congress with
-    COMPLETE coverage) plus the legacy human-readable ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (congress with
+    COMPLETE coverage).
     """
     gs = pipeline._get_game(ctx)
 
@@ -514,7 +492,6 @@ async def get_world_congress(ctx: Context) -> str:
             fact_view.world_congress_envelope(
                 turn=turn,
                 status=status,
-                narrated=nr.narrate_world_congress(status),
             )
         )
 
@@ -566,9 +543,8 @@ async def get_victory_progress(ctx: Context) -> str:
     tourism vs domestic tourists, religion spread, capital ownership,
     and military strength. Call every 20-30 turns to track the race.
 
-    Returns a double-track JSON envelope: structured ``facts`` (players/
-    demographics with COMPLETE coverage) plus the legacy human-readable
-    ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (players/
+    demographics with COMPLETE coverage).
     """
     gs = pipeline._get_game(ctx)
 
@@ -579,7 +555,6 @@ async def get_victory_progress(ctx: Context) -> str:
             fact_view.victory_progress_envelope(
                 turn=turn,
                 progress=vp,
-                narrated=nr.narrate_victory_progress(vp),
             )
         )
 
@@ -598,9 +573,8 @@ async def get_religion_spread(ctx: Context) -> str:
     Shows which religion is majority in each city, follower counts,
     and which religions are closest to religious victory.
 
-    Returns a double-track JSON envelope: structured ``facts`` (cities
-    CURRENTLY_VISIBLE, summary COMPLETE) plus the legacy human-readable
-    ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (cities
+    CURRENTLY_VISIBLE, summary COMPLETE).
     """
     gs = pipeline._get_game(ctx)
 
@@ -611,7 +585,6 @@ async def get_religion_spread(ctx: Context) -> str:
             fact_view.religion_spread_envelope(
                 turn=turn,
                 status=rs,
-                narrated=nr.narrate_religion_status(rs),
             )
         )
 
@@ -628,8 +601,8 @@ async def get_religion_overview(ctx: Context) -> str:
     get_pantheon_beliefs / get_religion_beliefs。用于决定万神殿时机、
     创教竞速与传教目标。
 
-    返回双轨 JSON 信封：结构化 ``facts``（religions COMPLETE、players
-    KNOWN_HISTORY）加原叙述 ``narrated`` 视图。
+    返回 JSON 信封：结构化 ``facts``（religions COMPLETE、players
+    KNOWN_HISTORY）。
     """
     gs = pipeline._get_game(ctx)
 
@@ -640,7 +613,6 @@ async def get_religion_overview(ctx: Context) -> str:
             fact_view.religion_overview_envelope(
                 turn=turn,
                 status=ro,
-                narrated=nr.narrate_religion_overview(ro),
             )
         )
 
@@ -669,7 +641,6 @@ async def get_climate_overview(ctx: Context, history_turns: int = 30) -> str:
             fact_view.climate_envelope(
                 turn=turn,
                 status=overview,
-                narrated=nr.narrate_climate_overview(overview),
             )
         )
 

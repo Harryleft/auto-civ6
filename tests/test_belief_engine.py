@@ -2126,7 +2126,7 @@ def test_critic_verdict_and_objection_evidence_rules(engine):
 
 
 # ---------------------------------------------------------------------------
-# 双轨 JSON 信封：字段级事实提取（变异测试暴露的 442 无覆盖缺口）
+# 单轨 JSON 信封：字段级事实提取（变异测试暴露的 442 无覆盖缺口）
 # ---------------------------------------------------------------------------
 
 
@@ -2258,7 +2258,7 @@ def test_normalize_uses_envelope_facts_when_tool_matches():
     out = normalize_tool_result("get_units", envelope)
     assert out["facts"]["unit_ids"] == [7, 11]
     assert out["facts"]["unit_position:7"] == [3, 4]
-    # metrics 仍来自 narrated 正则路径。
+    # metrics 来自信封 facts 字段级提取（信封仍带 narrated 也能解析，向后兼容）。
     assert out["metrics"]["observed_unit_count"] == 2
 
 

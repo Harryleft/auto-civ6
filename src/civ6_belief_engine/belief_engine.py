@@ -147,7 +147,7 @@ def _result_summary(result: str) -> str:
 
 
 def _parse_fact_envelope(result: str) -> dict[str, Any] | None:
-    """若结果为 civ_mcp.facts 双轨信封则返回其 dict，否则返回 None。"""
+    """若结果为 civ_mcp.facts 单轨信封则返回其 dict，否则返回 None。"""
     try:
         payload = json.loads(result)
     except (json.JSONDecodeError, TypeError):
@@ -156,12 +156,11 @@ def _parse_fact_envelope(result: str) -> dict[str, Any] | None:
         return None
     if payload.get("v") != 1 or not isinstance(payload.get("facts"), dict):
         return None
-    if not isinstance(payload.get("narrated"), str):
-        return None
     return payload
 
 
-# 有字段级正则提取分支的工具（观测可靠性 0.9）；其余纯摘要工具为 0.8。
+# 仍保留纯文本正则分支的工具只有 get_game_overview（观测可靠性 0.9）；
+# 其余工具走信封字段级提取（1.0）或纯摘要（0.8）。
 _RELIABLE_TOOLS = frozenset(
     {
         "get_game_overview",
@@ -180,11 +179,10 @@ _RELIABLE_TOOLS = frozenset(
 def _envelope_observation_facts(
     tool: str, envelope: dict[str, Any]
 ) -> dict[str, Any]:
-    """从双轨信封的结构化事实生成 observation facts（保持既有键名）。
+    """从单轨信封的结构化 facts 生成 observation facts（保持既有键名）。
 
-    与 narrated 正则路径产出相同的键，但值来自字段级 schema，不依赖
-    文本格式；正则路径的解析损失（例如 999 距离被叙述成 "no city
-    distance" 而丢失）在这里不存在。
+    值来自字段级 schema，不依赖任何文本格式；叙述正则路径的解析损失
+    （例如 999 距离被叙述成 "no city distance" 而丢失）在这里不存在。
     """
     payload = envelope.get("facts") or {}
     facts: dict[str, Any] = {}
@@ -311,28 +309,196 @@ def _envelope_observation_facts(
             classes.append(entry)
         if classes:
             facts["great_people_classes"] = classes
+    elif tool == "get_tech_civics":
+        # 结构化信封携带当前研究/市政与完成数（字段级，无解析损失）。
+        if payload.get("current_research"):
+            facts["current_research"] = payload["current_research"]
+        if payload.get("current_civic"):
+            facts["current_civic"] = payload["current_civic"]
+        if isinstance(payload.get("completed_tech_count"), int):
+            facts["completed_tech_count"] = payload["completed_tech_count"]
+        if isinstance(payload.get("completed_civic_count"), int):
+            facts["completed_civic_count"] = payload["completed_civic_count"]
+    elif tool == "get_victory_progress":
+        enabled = payload.get("enabled_victories")
+        if isinstance(enabled, list):
+            facts["enabled_victories"] = [str(item) for item in enabled if item]
     return facts
 
 
+def _envelope_observation_metrics(
+    tool: str, envelope: dict[str, Any]
+) -> dict[str, Any]:
+    """从信封的结构化 facts 直接产出 observation metrics。
+
+    键名与旧叙述正则路径保持一致，避免派生规则（derivation）与覆盖审计
+    的既有消费者感知到差异。
+    """
+    payload = envelope.get("facts") or {}
+    metrics: dict[str, Any] = {}
+    if tool == "get_units":
+        own = payload.get("own_units") or []
+        metrics["observed_unit_count"] = len(own)
+    elif tool == "get_cities":
+        cities = payload.get("cities") or []
+        metrics["observed_city_count"] = len(cities)
+    elif tool == "get_diplomacy":
+        our_military = payload.get("our_military")
+        if isinstance(our_military, int):
+            metrics["our_military"] = our_military
+        for civ in payload.get("civs") or []:
+            if not civ.get("has_met"):
+                continue
+            key = f"player_{civ.get('player_id')}"
+            metrics[f"diplomacy.{key}.relationship_score"] = int(
+                civ.get("relationship_score", 0)
+            )
+            metrics[f"diplomacy.{key}.at_war"] = bool(civ.get("is_at_war", False))
+            if civ.get("military_strength"):
+                metrics[f"diplomacy.{key}.military"] = int(
+                    civ["military_strength"]
+                )
+            if civ.get("num_cities"):
+                metrics[f"diplomacy.{key}.cities"] = int(civ["num_cities"])
+                visible = civ.get("visible_cities") or []
+                visible_count = len(visible) if isinstance(visible, list) else 0
+                metrics[f"diplomacy.{key}.visible_cities"] = visible_count
+                # known-gap：已知存在但未观测的城市数（迷雾盲区）。
+                metrics[f"diplomacy.{key}.unobserved_cities"] = max(
+                    0, int(civ["num_cities"]) - visible_count
+                )
+    elif tool == "get_combat_estimate":
+        estimate = payload.get("estimate") or {}
+        if estimate:
+            for metric_key, field in (
+                ("combat.attacker_cs", "attacker_cs"),
+                ("combat.attacker_hp", "attacker_hp"),
+                ("combat.defender_cs", "defender_cs"),
+                ("combat.defender_hp", "defender_hp"),
+                ("combat.expected_damage_to_defender", "est_damage_to_defender"),
+                ("combat.expected_damage_to_attacker", "est_damage_to_attacker"),
+            ):
+                value = estimate.get(field)
+                if isinstance(value, int):
+                    metrics[metric_key] = value
+            # Ranged estimates intentionally omit retaliation damage; zero is
+            # an observed property of a valid preview, not missing evidence.
+            metrics.setdefault("combat.expected_damage_to_attacker", 0)
+    elif tool == "get_tech_civics":
+        if payload.get("current_research"):
+            metrics["research.current"] = payload["current_research"]
+        if isinstance(payload.get("current_research_turns"), int):
+            metrics["research.turns_remaining"] = payload[
+                "current_research_turns"
+            ]
+        if payload.get("current_civic"):
+            metrics["civic.current"] = payload["current_civic"]
+        if isinstance(payload.get("current_civic_turns"), int):
+            metrics["civic.turns_remaining"] = payload["current_civic_turns"]
+        if isinstance(payload.get("completed_tech_count"), int):
+            metrics["research.completed_techs"] = payload["completed_tech_count"]
+        if isinstance(payload.get("completed_civic_count"), int):
+            metrics["civics.completed_civics"] = payload[
+                "completed_civic_count"
+            ]
+    elif tool == "get_barbarian_overview":
+        camps = payload.get("camps") or []
+        if camps:
+            metrics["barbarian.camp_count"] = len(camps)
+            distances = [
+                camp["distance_to_city"]
+                for camp in camps
+                if isinstance(camp.get("distance_to_city"), int)
+            ]
+            if distances:
+                metrics["barbarian.nearest_camp_distance"] = min(distances)
+    elif tool == "get_victory_progress":
+        for player in payload.get("players") or []:
+            slug = _slug(str(player.get("name") or "")).lower()
+            if not slug:
+                continue
+            science_vp = player.get("science_vp")
+            science_vp_needed = player.get("science_vp_needed")
+            if isinstance(science_vp, int) and isinstance(
+                science_vp_needed, int
+            ):
+                metrics[f"victory.{slug}.science_vp"] = science_vp
+                metrics[f"victory.{slug}.science_vp_target"] = science_vp_needed
+            diplomatic_vp = player.get("diplomatic_vp")
+            if isinstance(diplomatic_vp, int):
+                metrics[f"victory.{slug}.diplomatic_vp"] = diplomatic_vp
+                metrics[f"victory.{slug}.diplomatic_vp_target"] = 20
+            for suffix, field in (
+                ("tourism", "tourism"),
+                ("military", "military_strength"),
+                ("techs", "techs_researched"),
+                ("cities", "num_cities"),
+                ("science", "science_yield"),
+                ("culture", "culture_yield"),
+                ("gold_per_turn", "gold_yield"),
+                ("score", "score"),
+            ):
+                value = player.get(field)
+                if isinstance(value, (int, float)):
+                    metrics[f"victory.{slug}.{suffix}"] = value
+    elif tool == "get_great_people_overview":
+        for standing in payload.get("standings") or []:
+            entries = standing.get("entries") or []
+            if not entries:
+                continue
+            slug = _slug(str(standing.get("class_name") or "")).lower()
+            if not slug:
+                continue
+            ours = entries[0]
+            metrics[f"great_people.{slug}.our_points"] = int(
+                ours.get("points_total", -1)
+            )
+            metrics[f"great_people.{slug}.our_per_turn"] = int(
+                ours.get("points_per_turn", -1)
+            )
+            leader = max(
+                (
+                    e
+                    for e in entries[1:]
+                    if str(e.get("player_name", "")) != "YOU"
+                ),
+                key=lambda e: int(e.get("points_total", -1)),
+                default=None,
+            )
+            if (
+                leader is not None
+                and int(leader.get("points_total", -1))
+                > int(ours.get("points_total", -1))
+            ):
+                metrics[f"great_people.{slug}.leader_points"] = int(
+                    leader.get("points_total", -1)
+                )
+                metrics[f"great_people.{slug}.lead_gap"] = (
+                    int(leader.get("points_total", -1))
+                    - int(ours.get("points_total", -1))
+                )
+    return metrics
+
+
 def normalize_tool_result(tool: str, result: str) -> dict[str, Any]:
-    """Extract stable facts/metrics from narrated MCP query results.
+    """Extract stable facts/metrics from MCP query results.
 
     Raw text remains owned by the tool transcript and telemetry. This
-    normalizer intentionally extracts only values with unambiguous textual
-    contracts; interpretations belong in beliefs, not observations.
+    normalizer intentionally extracts only values with unambiguous contracts;
+    interpretations belong in beliefs, not observations.
 
-    Double-track envelope results (civ_mcp.facts) keep the narrated-regex
-    path for metrics and overwrite facts with exact structured values.
+    Envelope results (civ_mcp.facts) feed both facts and metrics from the
+    structured payload (reliability 1.0); the only live plain-text result
+    (get_game_overview) falls back to the regex path below.
     """
 
     envelope = _parse_fact_envelope(result)
     if envelope is not None and envelope.get("tool") == tool:
-        base = normalize_tool_result(tool, envelope.get("narrated") or "")
-        facts = base["facts"]
+        facts = {"tool": tool}
         facts.update(_envelope_observation_facts(tool, envelope))
         return {
             "facts": facts,
-            "metrics": base["metrics"],
+            "metrics": _envelope_observation_metrics(tool, envelope),
             "reliability": 1.0,  # 字段级 schema，无解析损失
         }
 
@@ -389,6 +555,9 @@ def normalize_tool_result(tool: str, result: str) -> dict[str, Any]:
         if era_match:
             metrics["era"] = era_match.group(1)
 
+    # --- 以下为纯文本结果的兼容解析（回退路径）---
+    # 实时工具结果全部是信封；纯文本只出现在 get_game_overview（主路径）与
+    # 历史/降级场景。解析结果与原叙述轨保持相同键，供派生规则与覆盖审计消费。
     elif tool == "get_diplomacy":
         current_key: str | None = None
         rivals: dict[str, dict[str, Any]] = {}

@@ -2,6 +2,11 @@
 
 本文是工具层速查。参数、可用能力和规则集差异以当前 MCP schema 与 `get_game_overview` 的 `RUNTIME POLICY` 为准。
 
+> **结果格式**：只读查询工具返回单轨 JSON 信封 `{v, tool, turn, source, coverage, facts}`，
+> 优先读取字段级 `facts`（无歧义、无需文本解析）；`coverage` 说明缺项语义
+> （COMPLETE=全集 / CURRENTLY_VISIBLE=仅视野内 / KNOWN_HISTORY=已揭示历史）。
+> 叙述文本轨已移除；`get_game_overview` 等少数复合入口仍为文本/JSON 摘要。
+
 ## 离线决策助手
 
 ### `scripts/civ6_tool.py`

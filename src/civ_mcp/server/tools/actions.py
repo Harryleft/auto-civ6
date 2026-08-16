@@ -7,7 +7,6 @@ from mcp.server.fastmcp import Context
 from civ6_belief_engine.belief_engine import BeliefEngineError
 
 from civ_mcp import facts as fact_view
-from civ_mcp import narrate as nr
 from civ_mcp.server import pipeline
 from civ_mcp.server.assembly import mcp
 
@@ -23,8 +22,8 @@ async def get_governors(ctx: Context) -> str:
     Shows governor points, currently appointed governors with assignments,
     and governors available to appoint. Use appoint_governor to appoint one.
 
-    Returns a double-track JSON envelope: structured ``facts`` (governors
-    with COMPLETE coverage) plus the legacy human-readable ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (governors
+    with COMPLETE coverage).
     """
     gs = pipeline._get_game(ctx)
 
@@ -35,7 +34,6 @@ async def get_governors(ctx: Context) -> str:
             fact_view.governors_envelope(
                 turn=turn,
                 status=status,
-                narrated=nr.narrate_governors(status),
             )
         )
 
@@ -110,8 +108,8 @@ async def get_unit_promotions(ctx: Context, unit_id: int) -> str:
     Shows promotions filtered by the unit's promotion class.
     Only units with enough XP will have promotions available.
 
-    Returns a double-track JSON envelope: structured ``facts`` (promotions
-    with COMPLETE coverage) plus the legacy human-readable ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (promotions
+    with COMPLETE coverage).
     """
     gs = pipeline._get_game(ctx)
 
@@ -122,7 +120,6 @@ async def get_unit_promotions(ctx: Context, unit_id: int) -> str:
             fact_view.unit_promotions_envelope(
                 turn=turn,
                 status=status,
-                narrated=nr.narrate_unit_promotions(status),
             )
         )
 
@@ -156,9 +153,8 @@ async def get_city_states(ctx: Context) -> str:
     Industrial, etc.), how many envoys you've sent, and who is suzerain.
     Use send_envoy to send an envoy.
 
-    Returns a double-track JSON envelope: structured ``facts`` (envoy_tokens/
-    city_states with COMPLETE coverage) plus the legacy human-readable
-    ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (envoy_tokens/
+    city_states with COMPLETE coverage).
     """
     gs = pipeline._get_game(ctx)
 
@@ -169,7 +165,6 @@ async def get_city_states(ctx: Context) -> str:
             fact_view.city_states_envelope(
                 turn=turn,
                 status=status,
-                narrated=nr.narrate_city_states(status),
             )
         )
 
@@ -198,9 +193,8 @@ async def get_pantheon_beliefs(ctx: Context) -> str:
     Shows current pantheon (if any), faith balance, and all available
     pantheon beliefs with their bonuses. Use choose_pantheon to found one.
 
-    Returns a double-track JSON envelope: structured ``facts`` (pantheon/
-    beliefs with COMPLETE coverage) plus the legacy human-readable
-    ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (pantheon/
+    beliefs with COMPLETE coverage).
     """
     gs = pipeline._get_game(ctx)
 
@@ -211,7 +205,6 @@ async def get_pantheon_beliefs(ctx: Context) -> str:
             fact_view.pantheon_envelope(
                 turn=turn,
                 status=status,
-                narrated=nr.narrate_pantheon_status(status),
             )
         )
 
@@ -245,9 +238,8 @@ async def get_religion_beliefs(ctx: Context) -> str:
     and beliefs grouped by class (Follower, Founder, Enhancer, Worship).
     Use found_religion to found a religion after your Great Prophet activates.
 
-    Returns a double-track JSON envelope: structured ``facts`` (religion/
-    beliefs with COMPLETE coverage) plus the legacy human-readable
-    ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (religion/
+    beliefs with COMPLETE coverage).
     """
     gs = pipeline._get_game(ctx)
 
@@ -258,7 +250,6 @@ async def get_religion_beliefs(ctx: Context) -> str:
             fact_view.religion_founding_envelope(
                 turn=turn,
                 status=status,
-                narrated=nr.narrate_religion_founding_status(status),
             )
         )
 
@@ -316,8 +307,7 @@ async def get_dedications(ctx: Context) -> str:
     返回时代分门槛、黄金/黑暗/普通时代状态，以及每个候选项在当前时代的
     实际加成。若显示必须选择，直接调用 choose_dedication 完成本回合必办项。
 
-    返回双轨 JSON 信封：结构化 ``facts``（dedications 覆盖语义 COMPLETE）
-    加原叙述 ``narrated`` 视图。
+    返回 JSON 信封：结构化 ``facts``（dedications 覆盖语义 COMPLETE）。
     """
     gs = pipeline._get_game(ctx)
 
@@ -328,7 +318,6 @@ async def get_dedications(ctx: Context) -> str:
             fact_view.dedications_envelope(
                 turn=turn,
                 status=status,
-                narrated=nr.narrate_dedications(status),
             )
         )
 
@@ -365,8 +354,8 @@ async def get_trade_options(ctx: Context, other_player_id: int) -> str:
     for both you and the other civilization. Use before propose_trade to see
     what's available.
 
-    Returns a double-track JSON envelope: structured ``facts`` (deal_options
-    with COMPLETE coverage) plus the legacy human-readable ``narrated`` view.
+    Returns a JSON envelope with structured ``facts`` (deal_options
+    with COMPLETE coverage).
     """
     gs = pipeline._get_game(ctx)
 
@@ -378,7 +367,6 @@ async def get_trade_options(ctx: Context, other_player_id: int) -> str:
                 turn=turn,
                 other_player_id=other_player_id,
                 options=opts,
-                narrated=nr.narrate_deal_options(opts),
             )
         )
 

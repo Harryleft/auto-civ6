@@ -56,9 +56,9 @@ SHA-256 `result_ref`, and links between decisions, actions, outcomes, and
 observations. They do not copy the raw result into each entity. Existing event
 logs remain readable and are not rewritten in place.
 
-## Double-track tool results
+## Single-track tool results
 
-All read-only query tools return a double-track JSON envelope built by
+All read-only query tools return a single-track JSON envelope built by
 `civ_mcp.facts`:
 
 - 世界状态：`get_units`, `get_cities`, `get_map_area`, `get_barbarian_overview`,
@@ -71,7 +71,7 @@ All read-only query tools return a double-track JSON envelope built by
   `get_global_settle_advisor`, `get_trade_routes`, `get_trade_destinations`,
   `get_builder_tasks`, `get_trade_options`, `get_purchasable_tiles`
 - 治理与外交：`get_policies`, `get_notifications`, `get_pending_trades`,
-  `get_pending_diplomacy`, `get_governors`, `get_city_states`
+  `get_pending_diplomacy`, `get_diplomacy`, `get_governors`, `get_city_states`
 - 宗教与气候：`get_pantheon_beliefs`, `get_religion_beliefs`,
   `get_religion_spread`, `get_religion_overview`, `get_climate_overview`,
   `get_world_congress`
@@ -92,22 +92,20 @@ Example (`get_units`):
   "turn": 56,
   "source": "civ_mcp:GameState",
   "coverage": {"own_units": "COMPLETE", "foreign_units": "CURRENTLY_VISIBLE"},
-  "facts": {"own_units": [{"unit_id": 131073, "x": 32, "y": 37, ...}]},
-  "narrated": "10 units:\n  侦察兵 (UNIT_SCOUT) at (37,32) ..."
+  "facts": {"own_units": [{"unit_id": 131073, "x": 32, "y": 37, ...}]}
 }
 ```
 
-The model consumes `facts` (field-level schema, no free-text parsing);
-`narrated` keeps the legacy human-readable view for logs, the observation
-normalizer, and manual fallback. `coverage` uses the graph-plan three-value
+The model and the observation normalizer both consume `facts` (field-level
+schema, no free-text parsing). `coverage` uses the graph-plan three-value
 semantics — `COMPLETE` (absence is real), `CURRENTLY_VISIBLE` (absence only
 means not currently seen), `KNOWN_HISTORY` (revealed history; unobserved is
 not deleted). Belief-engine context is merged into the envelope as a
 `belief_context` key instead of a trailing text block, so the JSON stays
-parseable.
+parseable. 历史日志中的旧信封（仍带 `narrated` 键）解析宽松，只读 `facts`。
 
-`normalize_tool_result` detects the envelope and keeps the narrated-regex
-path for metrics while overwriting facts with the exact structured values.
+`normalize_tool_result` 对信封直接从 `facts` 提取 facts/metrics（reliability
+1.0）；纯文本结果（目前只有 `get_game_overview` 实时出现）走兼容正则回退。
 
 ## Entity model
 

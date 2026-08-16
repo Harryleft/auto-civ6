@@ -45,7 +45,7 @@ The `get_diary` tool reads these back for context reconstruction when the agent'
 
 Every MCP tool call is logged with full timing, parameters, and results — the authoritative record of what the agent did.
 
-Each entry includes: tool name, category (query/action/turn), input parameters, narrated result, success/failure, wall-clock duration, turn number, and session ID.
+Each entry includes: tool name, category (query/action/turn), input parameters, full result (信封 JSON 或文本), success/failure, wall-clock duration, turn number, and session ID.
 
 ```json
 {
@@ -58,7 +58,7 @@ Each entry includes: tool name, category (query/action/turn), input parameters, 
 }
 ```
 
-Typical size: 10–50 MB per full game (the `result` field with complete narrated text dominates).
+Typical size: 10–50 MB per full game (the `result` field stores the complete 信封 JSON, sized by query data).
 
 ---
 

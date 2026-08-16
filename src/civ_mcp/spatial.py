@@ -4,8 +4,8 @@ Writes per-game JSONL to ~/.civ6-mcp/spatial_{civ}_{seed}.jsonl.
 This is research instrumentation only — data does NOT feed back to the agent.
 
 Each tool call that surfaces coordinate data is classified by attention type.
-Tile coordinates are passed structurally when available, with regex extraction
-from narrated text as a fallback for tools that haven't been updated.
+Tile coordinates are passed structurally when available (envelope facts expose
+"x"/"y" fields); the regex path is a fallback for plain-text results.
 
 The tracker also maintains a revealed-tile set for computing visibility diffs
 after unit moves — enabling post-move discovery feedback to the agent.
@@ -88,7 +88,7 @@ def _classify_attention(tool_name: str) -> str | None:
 
 
 def _extract_tiles_from_text(text: str) -> set[tuple[int, int]]:
-    """Extract all (x,y) coordinate pairs from narrated result text."""
+    """Extract all (x,y) coordinate pairs from plain-text result fallback."""
     return {(int(m.group(1)), int(m.group(2))) for m in _COORD_RE.finditer(text)}
 
 
