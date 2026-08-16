@@ -398,6 +398,59 @@ def normalize_tool_result(tool: str, result: str) -> dict[str, Any]:
                     score.group(2)
                 )
 
+    elif tool == "get_great_people_overview":
+        # Standings rows: "  {class}: YOU {pts}/{ppt} ({n}) | {rival} {pts}/{ppt} ({n}) | ..."
+        # First entry is self; the rest are rivals sorted by points desc.
+        cell_re = re.compile(r"^(.+?) (\d+)/(\d+) \((\d+)\)$")
+        for line in result.splitlines():
+            header = re.match(r"^  ([^:]+): (.*)$", line)
+            if not header:
+                continue
+            cells: list[dict[str, Any]] = []
+            for cell in header.group(2).split(" | "):
+                match = cell_re.match(cell.strip())
+                if match:
+                    cells.append(
+                        {
+                            "who": match.group(1),
+                            "points": int(match.group(2)),
+                            "per_turn": int(match.group(3)),
+                            "instances": int(match.group(4)),
+                        }
+                    )
+            if not cells:
+                continue
+            ours = cells[0]  # official order: self first
+            leader = max(
+                (c for c in cells[1:] if c["who"] != "YOU"),
+                key=lambda c: c["points"],
+                default=None,
+            )
+            slug = _slug(header.group(1)).lower()
+            metrics[f"great_people.{slug}.our_points"] = ours["points"]
+            metrics[f"great_people.{slug}.our_per_turn"] = ours["per_turn"]
+            class_fact: dict[str, Any] = {
+                "class": header.group(1).strip(),
+                "our_points": ours["points"],
+                "our_per_turn": ours["per_turn"],
+            }
+            if leader is not None and leader["points"] > ours["points"]:
+                gap = leader["points"] - ours["points"]
+                class_fact.update(
+                    {
+                        "leader_name": leader["who"],
+                        "leader_points": leader["points"],
+                        "lead_gap": gap,
+                    }
+                )
+                metrics[f"great_people.{slug}.leader_points"] = leader["points"]
+                metrics[f"great_people.{slug}.lead_gap"] = gap
+            else:
+                class_fact.update(
+                    {"leader_name": "YOU", "leader_points": ours["points"], "lead_gap": 0}
+                )
+            facts.setdefault("great_people_classes", []).append(class_fact)
+
     return {"facts": facts, "metrics": metrics}
 
 
