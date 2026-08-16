@@ -20,7 +20,7 @@
 - `threats`：按阵营、CS、HP 和距离排序威胁。
 - `cities`：城市队列、增长、掠夺和城墙诊断。
 
-建议顺序：`precheck` → `get_game_overview` → `get_barbarian_overview` → 必要时治理/提案/反方 → 修复阻塞 → `threats` + 真实 `get_combat_estimate` → 路由 ActionIntent → 动作与 Outcome → `get_turn_brief` → 单位确认 → `skip_remaining_units` → `end_turn`。
+建议顺序：`precheck` → `get_game_overview`（含压缩蛮族摘要）→ 威胁评估（摘要/告警触发 `get_barbarian_overview`；敌方集结核对 `get_units`）→ 必要时治理/提案/反方 → 修复阻塞 → `threats` + 真实 `get_combat_estimate` → 路由 ActionIntent → 动作与 Outcome → `get_turn_brief` → 单位确认 → `skip_remaining_units` → `end_turn`。
 
 ## 蛮族态势与清剿
 
@@ -29,7 +29,7 @@
 - `Camps`：所有已经揭示的 `IMPROVEMENT_BARBARIAN_CAMP`，即使当前离开视野仍会保留；包含到最近己方城市和军事单位的距离。
 - `Visible barbarian units`：当前视野内的蛮族军事单位；包含坐标、HP、CS/RS 和到己方城市/军队的距离。迷雾中的单位不会伪造为已知。
 
-处理顺序固定为：`get_barbarian_overview` → 选择最近且可安全抵达的军事单位 → `get_combat_estimate`（有驻守单位时）→ 必要时路由 `move/attack` → 复核单位 → 移动到营地格清除营地。只击杀营地生成的一个单位不能算完成蛮族处理；没有可见单位时也要按营地位置安排清剿。
+完整查询由摘要/告警触发，不每回合无条件调用；触发后清剿顺序固定为：`get_barbarian_overview` → 选择最近且可安全抵达的军事单位 → `get_combat_estimate`（有驻守单位时）→ 必要时路由 `move/attack` → 复核单位 → 移动到营地格清除营地。只击杀营地生成的一个单位不能算完成蛮族处理；没有可见单位时也要按营地位置安排清剿。
 
 `get_game_overview` 会附带一份压缩蛮族摘要，`end_turn` 在推进后也会再次发出营地告警；这两处是防止 AI 因只调用通用威胁扫描而漏掉营地的兜底，不替代独立查询的完整坐标列表。
 
