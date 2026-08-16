@@ -16,6 +16,7 @@ from typing import Any, Iterable, Mapping, Protocol, Sequence, TypedDict
 
 from .capabilities import capabilities_for_ruleset
 from .models import TurnSnapshot as GovernanceTurnSnapshot
+from ..ids import slugify
 from civ_mcp.lua.models import (
     BarbarianOverview,
     CityInfo,
@@ -614,10 +615,7 @@ def snapshot_world_state(snapshot: GovernanceTurnSnapshot) -> dict[str, Any]:
         for standing in snapshot.great_people.standings:
             if not standing.class_name or not standing.entries:
                 continue
-            slug = (
-                "".join(c if c.isalnum() else "-" for c in standing.class_name.lower()).strip("-")
-                or "unknown"
-            )
+            slug = slugify(standing.class_name).lower()
             entries = standing.entries
             ours = next(
                 (e for e in entries if e.player_id == snapshot.player_id),
