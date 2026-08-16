@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
-from ..graph_snapshot import graph_goals, graph_snapshot
+from ..graph_snapshot import graph_agenda, graph_goals, graph_snapshot
 from ..models import Outcome, OutcomeStatus
 from .base import (
     Department,
@@ -135,7 +135,7 @@ def _barbarian_counts(context: DepartmentContext) -> tuple[int, int] | None:
 
 
 def _science_agenda(context: DepartmentContext) -> bool:
-    texts = list(context.agenda)
+    texts = list(graph_agenda(context))
     for goal in graph_goals(context):
         texts.append(goal.statement)
         texts.extend(goal.tags)

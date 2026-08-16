@@ -1,6 +1,6 @@
 """Deterministic, read-only great people department for the national strategy loop.
 
-The department consumes only the immutable typed ``TurnSnapshot`` (the
+The department consumes only the immutable ``GraphSnapshotView`` (the
 ``great_people`` overview). It never calls external services and never chooses
 a concrete individual. Race pressure produces one workstream; the faith budget
 for patronizing stays with the economy department via a support request, so
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from ..graph_snapshot import graph_goals, graph_snapshot
+from ..graph_snapshot import graph_agenda, graph_goals, graph_snapshot
 from .base import (
     BaseDepartment,
     Department,
@@ -49,7 +49,7 @@ def _contains_keyword(values: Iterable[str], keywords: tuple[str, ...]) -> bool:
 
 
 def _context_text(context: DepartmentContext) -> tuple[str, ...]:
-    values = list(context.agenda)
+    values = list(graph_agenda(context))
     for goal in graph_goals(context):
         values.append(goal.statement)
         values.extend(goal.tags)

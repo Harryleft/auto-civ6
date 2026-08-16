@@ -1,6 +1,6 @@
 """Read-only military department for the pluggable strategy coordinator.
 
-The department turns one immutable :class:`TurnSnapshot` into a deterministic
+The department turns one immutable :class:`GraphSnapshotView` into a deterministic
 military assessment and may emit an exact proposal. It never accesses the game,
 persists state, or executes an action.
 """
@@ -13,7 +13,7 @@ from numbers import Real
 from typing import Any, ClassVar, Iterable, Protocol
 
 from ...graph import Edge, Node, city_node_id
-from ..graph_snapshot import graph_goals, graph_snapshot
+from ..graph_snapshot import graph_agenda, graph_goals, graph_snapshot
 from ..models import (
     ActionIntent,
     BudgetLock,
@@ -330,7 +330,7 @@ class MilitaryDepartment:
                     )
                 )
         else:
-            text_parts = list(context.agenda)
+            text_parts = list(graph_agenda(context))
             for goal in graph_goals(context):
                 text_parts.extend((goal.goal_id, goal.statement, *goal.tags))
         return bool(MilitaryDepartment._AGENDA_SIGNAL.search(" ".join(text_parts)))
