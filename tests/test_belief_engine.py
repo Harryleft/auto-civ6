@@ -2121,3 +2121,154 @@ def test_critic_verdict_and_objection_evidence_rules(engine):
     payload = _minimal_entity_payload("critic_review")
     payload["verdict"] = "agree_with_conditions"
     engine.create("critic_review", payload, turn=1, entity_id="verdict:conditions")
+
+
+# ---------------------------------------------------------------------------
+# 双轨 JSON 信封：字段级事实提取（变异测试暴露的 442 无覆盖缺口）
+# ---------------------------------------------------------------------------
+
+
+def _env_facts(tool: str, facts: dict) -> dict:
+    from civ6_belief_engine.belief_engine import _envelope_observation_facts
+
+    return _envelope_observation_facts(tool, {"v": 1, "facts": facts})
+
+
+def test_envelope_units_facts():
+    out = _env_facts(
+        "get_units",
+        {"own_units": [{"unit_id": 7, "x": 3, "y": 4}, {"unit_id": 11, "x": 8, "y": 9}]},
+    )
+    assert out["unit_ids"] == [7, 11]
+    assert out["unit_position:7"] == [3, 4]
+    assert out["unit_position:11"] == [8, 9]
+    # 缺 unit_id 的条目跳过；缺坐标不生成 position。
+    out = _env_facts(
+        "get_units",
+        {"own_units": [{"x": 1, "y": 1}, {"unit_id": 3}]},
+    )
+    assert out["unit_ids"] == [3]
+    assert "unit_position:3" not in out
+    # 空 own_units 仍是有效事实（unit_ids 恒存在）。
+    assert _env_facts("get_units", {}) == {"unit_ids": []}
+
+
+def test_envelope_cities_facts_defaults():
+    out = _env_facts(
+        "get_cities",
+        {"cities": [{"name": "Rome", "population": 7, "x": 11, "y": 24}, {"name": "Antium"}]},
+    )
+    assert out["cities"][0] == {"name": "Rome", "population": 7, "x": 11, "y": 24}
+    assert out["cities"][1] == {"name": "Antium", "population": 0, "x": 0, "y": 0}
+    # 空列表仍是有效事实（cities 键恒存在）。
+    assert _env_facts("get_cities", {"cities": []}) == {"cities": []}
+
+
+def test_envelope_barbarian_camp_priority_bands():
+    camps = [
+        {"x": 1, "y": 1, "distance_to_city": 3},   # <= 5 -> CRITICAL
+        {"x": 2, "y": 2, "distance_to_city": 5},   # 边界 5 -> CRITICAL
+        {"x": 3, "y": 3, "distance_to_city": 8},   # <= 10 -> HIGH
+        {"x": 4, "y": 4, "distance_to_city": 10},  # 边界 10 -> HIGH
+        {"x": 5, "y": 5, "distance_to_city": 20},  # > 10 -> WATCH
+        {"x": 6, "y": 6},  # 缺距离 -> 按 999 处理 -> WATCH
+    ]
+    out = _env_facts("get_barbarian_overview", {"camps": camps})
+    bands = [camp["priority"] for camp in out["barbarian_camps"]]
+    assert bands == ["CRITICAL", "CRITICAL", "HIGH", "HIGH", "WATCH", "WATCH"]
+    assert out["barbarian_camps"][0]["distance_to_city"] == 3
+    assert out["barbarian_camps"][5]["distance_to_city"] is None
+    assert _env_facts("get_barbarian_overview", {"camps": []}) == {}
+
+
+def test_envelope_diplomacy_facts_skips_unmet_and_zero_values():
+    civs = [
+        {"player_id": 2, "civ_name": "Germany", "leader_name": "Frederick",
+         "has_met": True, "diplomatic_state": "UNFRIENDLY", "relationship_score": -12,
+         "is_at_war": True, "military_strength": 150, "num_cities": 3},
+        {"player_id": 5, "has_met": False},  # 未遇见 -> 跳过
+        {"player_id": 7, "civ_name": "Persia", "has_met": True,
+         "diplomatic_state": "FRIENDLY", "relationship_score": 4,
+         "is_at_war": False, "military_strength": 0, "num_cities": 0},
+    ]
+    out = _env_facts("get_diplomacy", {"civs": civs})
+    assert set(out["rivals"]) == {"player_2", "player_7"}
+    assert out["rivals"]["player_2"]["at_war"] is True
+    assert out["rivals"]["player_2"]["military"] == 150
+    # 零值军力/城市数不写入字段（真值判断）。
+    assert "military" not in out["rivals"]["player_7"]
+    assert "cities" not in out["rivals"]["player_7"]
+    assert _env_facts("get_diplomacy", {"civs": []}) == {}
+
+
+def test_envelope_combat_estimate_facts():
+    out = _env_facts(
+        "get_combat_estimate",
+        {"estimate": {"attacker_type": "Warrior", "defender_type": "Barbarian Warrior"}},
+    )
+    assert out["matchup"] == {
+        "attacker_type": "Warrior",
+        "defender_type": "Barbarian Warrior",
+    }
+    assert _env_facts("get_combat_estimate", {"estimate": {}}) == {}
+    assert _env_facts("get_combat_estimate", {}) == {}
+
+
+def test_envelope_great_people_facts():
+    standings = [
+        {
+            "class_name": "Great Scientist",
+            "entries": [
+                {"player_name": "India", "points_total": 40, "points_per_turn": 3},
+                {"player_name": "Babylon", "points_total": 48, "points_per_turn": 2},
+            ],
+        },
+        {"class_name": "Great Writer", "entries": []},  # 无条目 -> 跳过
+        {
+            "class_name": "Great General",
+            "entries": [{"player_name": "India", "points_total": 25, "points_per_turn": 1}],
+        },
+    ]
+    out = _env_facts("get_great_people_overview", {"standings": standings})
+    assert len(out["great_people_classes"]) == 2
+    scientist = next(c for c in out["great_people_classes"] if c["class"] == "Great Scientist")
+    assert scientist["our_points"] == 40
+    assert scientist["leader_name"] == "Babylon"
+    assert scientist["lead_gap"] == 8
+    general = next(c for c in out["great_people_classes"] if c["class"] == "Great General")
+    assert general["leader_name"] == "YOU"
+    assert general["lead_gap"] == 0
+    assert _env_facts("get_great_people_overview", {"standings": []}) == {}
+
+
+def test_normalize_uses_envelope_facts_when_tool_matches():
+    envelope = json.dumps({
+        "v": 1,
+        "tool": "get_units",
+        "facts": {
+            "own_units": [
+                {"unit_id": 7, "x": 3, "y": 4},
+                {"unit_id": 11, "x": 8, "y": 9},
+            ]
+        },
+        "narrated": "Archer at (3,4) [id:7]\nWarrior at (8,9) [id:11]",
+    })
+    out = normalize_tool_result("get_units", envelope)
+    assert out["facts"]["unit_ids"] == [7, 11]
+    assert out["facts"]["unit_position:7"] == [3, 4]
+    # metrics 仍来自 narrated 正则路径。
+    assert out["metrics"]["observed_unit_count"] == 2
+
+
+def test_normalize_ignores_envelope_with_wrong_tool():
+    envelope = json.dumps({
+        "v": 1,
+        "tool": "get_units",
+        "facts": {"own_units": [{"unit_id": 7}]},
+        "narrated": "Archer [id:7]",
+    })
+    out = normalize_tool_result("get_cities", envelope)
+    assert out["facts"]["tool"] == "get_cities"
+    assert "unit_ids" not in out["facts"]
+    # 信封不匹配时按叙述文本走正则路径：计数键仍会写入（0）。
+    assert out["metrics"] == {"observed_city_count": 0}
