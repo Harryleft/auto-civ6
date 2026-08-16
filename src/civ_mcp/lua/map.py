@@ -1027,24 +1027,28 @@ print("{SENTINEL}")
     ).replace("{NO_STOCKPILES}", _bail("ERR:NO_RESOURCE_STOCKPILES_IN_RULESET")).replace("{SENTINEL}", SENTINEL)
 
 
+def _stockpile_from_parts(parts: list[str]) -> ResourceStockpile | None:
+    """Build a ResourceStockpile from a STOCKPILE| line split on '|'."""
+    if len(parts) < 7:
+        return None
+    return ResourceStockpile(
+        name=parts[1],
+        amount=int(parts[2]),
+        cap=int(parts[3]),
+        per_turn=int(parts[4]),
+        demand=int(parts[5]),
+        imported=int(parts[6]),
+    )
+
+
 def parse_stockpile_response(lines: list[str]) -> list[ResourceStockpile]:
     """Parse STOCKPILE lines into ResourceStockpile objects."""
     stockpiles = []
     for line in lines:
         if line.startswith("STOCKPILE|"):
-            parts = line.split("|")
-            if len(parts) < 7:
-                continue
-            stockpiles.append(
-                ResourceStockpile(
-                    name=parts[1],
-                    amount=int(parts[2]),
-                    cap=int(parts[3]),
-                    per_turn=int(parts[4]),
-                    demand=int(parts[5]),
-                    imported=int(parts[6]),
-                )
-            )
+            stockpile = _stockpile_from_parts(line.split("|"))
+            if stockpile is not None:
+                stockpiles.append(stockpile)
     return stockpiles
 
 
@@ -1060,19 +1064,9 @@ def parse_empire_resources_response(
     luxuries: dict[str, int] = {}
     for line in lines:
         if line.startswith("STOCKPILE|"):
-            parts = line.split("|")
-            if len(parts) < 7:
-                continue
-            stockpiles.append(
-                ResourceStockpile(
-                    name=parts[1],
-                    amount=int(parts[2]),
-                    cap=int(parts[3]),
-                    per_turn=int(parts[4]),
-                    demand=int(parts[5]),
-                    imported=int(parts[6]),
-                )
-            )
+            stockpile = _stockpile_from_parts(line.split("|"))
+            if stockpile is not None:
+                stockpiles.append(stockpile)
         elif line.startswith("LUXURY_OWNED|"):
             parts = line.split("|")
             if len(parts) >= 3:
@@ -1269,13 +1263,22 @@ print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
 
 
+def _city_from_parts(parts: list[str]) -> tuple[int, int, int, int, str] | None:
+    """Build a (x, y, pid, pop, name) tuple from a CITY| line split on '|'."""
+    if len(parts) < 4:
+        return None
+    xy = parts[1].split(",")
+    name = parts[4] if len(parts) >= 5 else ""
+    return (int(xy[0]), int(xy[1]), int(parts[2]), int(parts[3]), name)
+
+
 def parse_static_map_dump(lines: list[str]) -> StaticMapDump:
     """Parse SIZE|, ROW|, CITY|, PLAYER| lines from build_static_map_dump."""
     grid_w, grid_h = 0, 0
     tiles: list[StaticMapTile] = []
     initial_owners: list[int] = []
     initial_routes: list[int] = []
-    cities: list[tuple[int, int, int, int]] = []
+    cities: list[tuple[int, int, int, int, str]] = []
     players: list[tuple[int, str, str | None]] = []
 
     for line in lines:
@@ -1301,13 +1304,9 @@ def parse_static_map_dump(lines: list[str]) -> StaticMapDump:
                     initial_owners.append(int(vals[6]))
                     initial_routes.append(int(vals[7]))
         elif line.startswith("CITY|"):
-            parts = line.split("|")
-            if len(parts) >= 4:
-                xy = parts[1].split(",")
-                name = parts[4] if len(parts) >= 5 else ""
-                cities.append(
-                    (int(xy[0]), int(xy[1]), int(parts[2]), int(parts[3]), name)
-                )
+            city = _city_from_parts(line.split("|"))
+            if city is not None:
+                cities.append(city)
         elif line.startswith("PLAYER|"):
             parts = line.split("|")
             if len(parts) >= 3:
@@ -1377,7 +1376,7 @@ def parse_ownership_delta(lines: list[str]) -> OwnershipDelta:
     """Parse OWNERS|, ROADS|, CITY| lines from build_ownership_delta."""
     owner_changes: list[tuple[int, int]] = []
     road_changes: list[tuple[int, int]] = []
-    cities: list[tuple[int, int, int, int]] = []
+    cities: list[tuple[int, int, int, int, str]] = []
 
     for line in lines:
         if line.startswith("OWNERS|"):
@@ -1391,13 +1390,9 @@ def parse_ownership_delta(lines: list[str]) -> OwnershipDelta:
                 if len(vals) == 2:
                     road_changes.append((int(vals[0]), int(vals[1])))
         elif line.startswith("CITY|"):
-            parts = line.split("|")
-            if len(parts) >= 4:
-                xy = parts[1].split(",")
-                name = parts[4] if len(parts) >= 5 else ""
-                cities.append(
-                    (int(xy[0]), int(xy[1]), int(parts[2]), int(parts[3]), name)
-                )
+            city = _city_from_parts(line.split("|"))
+            if city is not None:
+                cities.append(city)
 
     return OwnershipDelta(
         owner_changes=owner_changes,
