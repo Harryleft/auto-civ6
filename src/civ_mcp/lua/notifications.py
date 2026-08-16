@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+from typing import Any
+
 from civ_mcp.lua._helpers import SENTINEL
 from civ_mcp.lua.models import GameNotification
 
@@ -170,6 +173,70 @@ NOTIFICATION_TOOL_MAP: dict[str, str] = {
     "NOTIFICATION_COMMAND_UNITS": "Units have moves remaining — move them or use skip_remaining_units()",
     "NOTIFICATION_DISCOVER_GOODY_HUT": "get_village_overview() (one-shot reward, grab before rivals)",
 }
+
+
+#: Expansion-only mechanics whose notifications must be arbitrated against
+#: the active ruleset.  The engine emits some of these events even when the
+#: data rows behind the mechanic (e.g. ``CommemorationTypes``) do not exist
+#: in the loaded ruleset — an event-stream/capability-surface contradiction
+#: observed live (T56+ "选择着力点" under Standard Rules, 2026-08-15
+#: hidden-jet-steppe-78 run).  A notification is evidence that the engine
+#: emitted an event, not proof of a satisfiable obligation: when the
+#: capability surface says the mechanic is absent, the notification
+#: downgrades to an annotated informational row instead of directing the
+#: caller into an unsatisfiable tool call.
+_EXPANSION_ONLY_NOTIFICATIONS: dict[str, str] = {
+    "NOTIFICATION_COMMEMORATION_AVAILABLE": "dedications",
+    "NOTIFICATION_WORLD_CONGRESS_BLOCKING": "world_congress",
+    "NOTIFICATION_WORLD_CONGRESS_RESULTS": "world_congress",
+    "NOTIFICATION_WORLD_CONGRESS_SPECIAL_SESSION_BLOCKING": "world_congress",
+    "NOTIFICATION_GOVERNOR_APPOINTMENT_AVAILABLE": "governors",
+    "NOTIFICATION_GOVERNOR_PROMOTION_AVAILABLE": "governors",
+}
+
+_CAPABILITY_ABSENT_NOTES: dict[str, str] = {
+    "dedications": "当前规则集无时代着力点机制",
+    "world_congress": "当前规则集无世界议会机制",
+    "governors": "当前规则集无总督机制",
+}
+
+
+def downgrade_unsatisfiable_notifications(
+    notifications: list[GameNotification],
+    capabilities: Any,
+) -> list[GameNotification]:
+    """Downgrade notifications whose mechanic the ruleset does not provide.
+
+    Pure arbitration over parsed notifications: an expansion-only notice
+    whose capability flag is off keeps its evidence (the message) but loses
+    its action semantics — ``is_action_required`` cleared, ``resolution_hint``
+    dropped, and an explicit "engine leftover, ignore" note appended.  An
+    unknown capability object (``None`` attributes) disables arbitration
+    rather than guessing: capability silence must not create obligations,
+    but it must not erase them either.
+    """
+
+    arbitrated: list[GameNotification] = []
+    for notification in notifications:
+        capability = _EXPANSION_ONLY_NOTIFICATIONS.get(notification.type_name)
+        available = (
+            getattr(capabilities, capability, None) if capability is not None else None
+        )
+        if capability is None or available is None or available:
+            arbitrated.append(notification)
+            continue
+        arbitrated.append(
+            replace(
+                notification,
+                message=(
+                    f"{notification.message} "
+                    f"[引擎残留：{_CAPABILITY_ABSENT_NOTES[capability]}，忽略即可]"
+                ),
+                is_action_required=False,
+                resolution_hint=None,
+            )
+        )
+    return arbitrated
 
 
 _ACTION_KEYWORDS = (

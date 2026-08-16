@@ -270,6 +270,7 @@ from civ_mcp.lua.models import (  # noqa: F401
 from civ_mcp.lua.notifications import (  # noqa: F401
     BLOCKING_TOOL_MAP,
     NOTIFICATION_TOOL_MAP,
+    downgrade_unsatisfiable_notifications,
     build_end_turn,
     build_end_turn_blocking_query,
     build_notifications_query,
