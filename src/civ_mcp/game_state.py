@@ -45,6 +45,11 @@ class GameState:
         self.spatial: SpatialTracker | None = None
         self._last_snapshot: lq.TurnSnapshot | None = None
         self._game_identity: tuple[str, int] | None = None  # (civ_type, seed)
+        # Ruleset capabilities, cached after the first successful overview
+        # read — immutable within a game, so every expansion-only probe and
+        # notification arbitration consumes the cache instead of a fresh
+        # Lua roundtrip (fix D of the dedication-notification analysis).
+        self._ruleset_caps: Any | None = None
         self._diary_written_turn: int | None = (
             None  # guard against double-write per turn
         )
@@ -112,6 +117,15 @@ class GameState:
         # InGame context needed for GetFavor() (nil in GameCore)
         lines = await self.conn.execute_write(lq.build_overview_query())
         ov = lq.parse_overview_response(lines)
+        if ov.ruleset and self._ruleset_caps is None:
+            from civ6_belief_engine.governance.capabilities import (
+                capabilities_for_ruleset,
+            )
+
+            try:
+                self._ruleset_caps = capabilities_for_ruleset(ov.ruleset)
+            except Exception:
+                log.debug("Ruleset capability probe failed", exc_info=True)
         # Bootstrap: capture baseline snapshot for first end_turn diff
         if self._last_snapshot is None:
             try:
@@ -1292,6 +1306,18 @@ class GameState:
     # ------------------------------------------------------------------
 
     async def get_dedications(self) -> lq.DedicationStatus:
+        # Python-side ruleset short-circuit: the capability is immutable
+        # within a game, so once known there is no reason to re-run the Lua
+        # guard probe every call (T97/98/99 each paid a roundtrip for the
+        # same immutable answer).  Cold cache falls through to the Lua
+        # guard, which remains the ground truth.
+        if self._ruleset_caps is not None and not self._ruleset_caps.dedications:
+            raise ValueError(
+                "ERR:NO_DEDICATIONS_IN_RULESET|python-guard "
+                "当前规则集没有时代着力点机制。若通知中出现“选择着力点”，"
+                "属引擎残留条目（get_notifications 已降级标注），忽略即可，"
+                "无需选择也无法选择。"
+            )
         lua = lq.build_dedications_query()
         lines = await self.conn.execute_write(lua)
         _raise_query_error(lines)
@@ -1305,6 +1331,12 @@ class GameState:
         return lq.parse_era_progress_response(lines)
 
     async def choose_dedication(self, dedication_index: int) -> str:
+        if self._ruleset_caps is not None and not self._ruleset_caps.dedications:
+            raise ValueError(
+                "ERR:NO_DEDICATIONS_IN_RULESET|python-guard "
+                "当前规则集没有时代着力点机制，无法选择。"
+                "相关通知为引擎残留，忽略即可。"
+            )
         lua = lq.build_choose_dedication(dedication_index)
         lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
@@ -1555,7 +1587,24 @@ class GameState:
     async def get_notifications(self) -> list[lq.GameNotification]:
         lua = lq.build_notifications_query()
         lines = await self.conn.execute_write(lua)
-        return lq.parse_notifications_response(lines)
+        notifications = lq.parse_notifications_response(lines)
+        # Capability arbitration: the engine event stream and its capability
+        # surface can contradict each other (expansion-only notifications
+        # emitted under Standard Rules).  The capability surface wins — an
+        # unsatisfiable notice must not direct the caller into an erroring
+        # tool call.  Warm the cache once if notifications were read before
+        # any overview (the turn loop reads the overview first, so this is
+        # the rare path).
+        if self._ruleset_caps is None:
+            try:
+                await self.get_game_overview()
+            except Exception:
+                log.debug("Notification arbitration warm-up failed", exc_info=True)
+        if self._ruleset_caps is not None:
+            notifications = lq.downgrade_unsatisfiable_notifications(
+                notifications, self._ruleset_caps
+            )
+        return notifications
 
     # ------------------------------------------------------------------
     # Snapshot-diff for turn event detection
