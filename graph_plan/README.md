@@ -189,7 +189,7 @@ Threat typed data
 - `GraphSnapshotView` 已从 GraphView 提供各 Department 所需的窄事实视图；Science、Civics、Economy、Production、Great People、Diplomacy、Military 均已切换到该入口。
 - `BeliefEngine.sync_governance_graph()` 已将 Observation、Belief、Goal、Proposal、CriticReview、CouncilDecision、BudgetLock、Decision、Action、Outcome 和 ActionIntent 物化到 GraphView，并保留 JSONL 作为历史审计与兼容输入。
 - 管道在治理工具操作前后同步图；授权、取消、完成、重复意图、Council 评议和提案引用的关键读取已使用当前 GraphView。直接 BeliefEngine 当前态读取会先完成内存物化，显式管道同步再持久化 `graph.delta`；JSONL 只作为事件源、审计和物化输入，不再作为当前态回退。
-- 已覆盖治理生命周期关系、删除语义、投影失败隔离和 BeliefEngine 重载后的 `state_hash` 一致性；全量离线测试当前为 `656 passed`。
+- 已覆盖治理生命周期关系、删除语义、投影失败隔离和 BeliefEngine 重载后的 `state_hash` 一致性；全量离线测试当前为 `653 passed`。
 
 真实游戏已完成两类治理验收：通用 `unit_action(skip)` 闭环，以及带临时敌军的军事切片。后者在 `0_MCP_0108`、T108 的里昂 `(36,35)` 实测：敌军 `(35,35)` → 1 条 `THREATENS` → Military Proposal → Council approved → `verify_then_fast` → `unit_action(fortify)` → `fortify_turns=1` read-back → `Action/Outcome` → Graph（82 节点、100 条边）；随后重新加载基准存档并验证 T108、GameCore/InGame 和原始守军状态。
 
@@ -216,7 +216,7 @@ Threat typed data
 - 按真实需求增加关系和专用查询。
 - 新图成为唯一写路径后，立即删除旧双写。
 - `server.py` 已于 2026-08-15 拆分为 `server/` 包（move-only）：`assembly.py` 装配、`pipeline.py` 运行管道（未来 ActionPipeline）、`tools/` 按域分组工具。
-- 2026-08-16 已完成旧治理适配层迁移：旧 `tools/belief.py` 物理删除；25 个 MCP 工具迁至 `tools/belief_tools.py`，纯合同适配迁至 `tools/governance_adapters.py`，typed snapshot 生命周期迁至 `server/governance_snapshot.py`；`server/__init__.py` 保留原稳定导出，MCP 工具名和签名不变。
+- 2026-08-16 已完成旧治理适配层迁移：旧 `tools/belief.py` 物理删除；26 个 MCP 工具迁至 `tools/belief_tools.py`，纯合同适配迁至 `tools/governance_adapters.py`，typed snapshot 生命周期迁至 `server/governance_snapshot.py`；`server/__init__.py` 保留原稳定导出，MCP 工具名和签名不变。
 - `end_turn.py` 现在只负责 MCP 注册，回合日记、挂起恢复和 game-over 编排位于 `end_turn_flow.py`；运行管道仍由 `pipeline.py` 统一负责日志、门禁、事件记录和 flush。
 - 只有出现实测性能瓶颈，才评估外部图存储。
 

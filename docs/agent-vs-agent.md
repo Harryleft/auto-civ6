@@ -165,7 +165,7 @@ if unit == nil then {_bail("ERR:UNIT_NOT_FOUND")} end
 Then propagate `player_id: int | None = None` through:
 - All `build_*` functions (66 call sites across 11 modules)
 - All `GameState` methods
-- All MCP tool definitions in `server.py`
+- All MCP tool definitions in the `server/` package
 
 **Scope:** This is a large but mechanical refactor. Each builder gets `player_id=None` as a parameter, and replaces `Game.GetLocalPlayer()` with `{_lua_player_expr(player_id)}`.
 
