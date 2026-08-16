@@ -107,10 +107,12 @@ def test_leading_every_class_produces_no_race_workstream():
     assessment = department.assess(_context(_snapshot(overview=_overview(), great_people=gp)))
     assert assessment.degraded is False
     assert assessment.workstreams == ()
-    assert any("我们领先" in fact for fact in assessment.facts)
+    # Leading classes collapse into one summary fact, not one fact per class.
+    assert len(assessment.facts) == 1
+    assert assessment.facts[0].startswith("great_people: 我们领先 Scientist(60)、Writer(25)")
 
 
-def test_rival_lead_creates_race_workstream_with_faith_claim():
+def test_rival_lead_creates_race_workstream_and_requests_economy_budget():
     department = GreatPeopleDepartment()
     # Babylon leads Scientist by 8/48 (gap ratio ~0.17) -> pressure, priority 75.
     gp = _gp(_standing("Scientist", 40, ("Babylon", 48), ("Rome", 25)))
@@ -122,10 +124,15 @@ def test_rival_lead_creates_race_workstream_with_faith_claim():
     workstream = assessment.workstreams[0]
     assert workstream.department == Department.GREAT_PEOPLE
     assert workstream.priority == 75
-    # Half of the 100 faith treasury is claimed as a conservative ceiling.
-    assert workstream.resource_claims["faith"] == 50.0
-    assert any("Babylon" in fact for fact in assessment.facts)
-    assert any("竞争" in opportunity for opportunity in assessment.opportunities)
+    # The faith budget is economy's call: no self-computed claim, just a request.
+    assert workstream.resource_claims == {}
+    assert len(assessment.support_requests) == 1
+    request = assessment.support_requests[0]
+    assert request.requester == Department.GREAT_PEOPLE
+    assert request.target == Department.ECONOMY
+    # Race details live in the opportunity/workstream, not repeated in facts.
+    assert any("Scientist" in opportunity for opportunity in assessment.opportunities)
+    assert all("Babylon" not in fact for fact in assessment.facts)
 
 
 def test_large_gap_is_not_a_race():
