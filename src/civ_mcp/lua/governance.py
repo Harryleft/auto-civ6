@@ -861,11 +861,15 @@ print("{SENTINEL}")
         "{DEDICATION_GUARDS}",
         "\n".join(
             f"if {condition} then {_bail(f'ERR:NO_DEDICATIONS_IN_RULESET|guard={tag}')} end"
+            # NOTE: no COMMEMORATION_MONUMENTALITY row guard on purpose — some
+            # expansion rulesets ship a different commemoration row set while
+            # still reporting a pending choice (ENDTURN_BLOCKING_COMMEMORATION_AVAILABLE),
+            # so the probe must enumerate whatever rows GetPlayerCommemorateChoices
+            # actually returns instead of bailing on one specific row name.
             for condition, tag in (
                 ("not gotEras or pEras == nil", "GetEras"),
                 ("pEras.GetPlayerNumAllowedCommemorations == nil", "GetPlayerNumAllowedCommemorations"),
                 ("GameInfo.CommemorationTypes == nil", "CommemorationTypes"),
-                ('GameInfo.CommemorationTypes["COMMEMORATION_MONUMENTALITY"] == nil', "MONUMENTALITY_ROW"),
             )
         ),
     ).replace("{SENTINEL}", SENTINEL)
@@ -878,7 +882,7 @@ local me = Game.GetLocalPlayer()
 {_lua_require_ruleset(("RULESET_EXPANSION_1", "RULESET_EXPANSION_2"), "ERR:NO_DEDICATIONS_IN_RULESET")}
 local pEras = nil
 local gotEras = pcall(function() if Game.GetEras ~= nil then pEras = Game.GetEras() end end)
-if not gotEras or pEras == nil or pEras.GetPlayerNumAllowedCommemorations == nil or GameInfo.CommemorationTypes == nil or GameInfo.CommemorationTypes["COMMEMORATION_MONUMENTALITY"] == nil then {_bail("ERR:NO_DEDICATIONS_IN_RULESET")} end
+if not gotEras or pEras == nil or pEras.GetPlayerNumAllowedCommemorations == nil or GameInfo.CommemorationTypes == nil then {_bail("ERR:NO_DEDICATIONS_IN_RULESET")} end
 local allowed = pEras:GetPlayerNumAllowedCommemorations(me)
 if allowed <= 0 then {_bail("ERR:NO_DEDICATION_NEEDED|No dedication selection required (already chosen or not available)")} end
 local row = GameInfo.CommemorationTypes[{dedication_index}]

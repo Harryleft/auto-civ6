@@ -1,6 +1,6 @@
 # DeepSeek Harness overlay for the local civ6-mcp checkout.
 # Run DSH from the civ6-mcp repository root so process.cwd() resolves here.
-# HMR touch: 2026-08-14 — reload mcp-civ6 to pick up Lua builder fixes
+# HMR touch: 2026-08-16b — reload mcp-civ6 (commemoration guard fix)
 # (pantheon cost readback, governor type probe, game-speed reporting).
 - insert:
     - id: mcp-civ6
