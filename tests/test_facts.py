@@ -22,6 +22,7 @@ from civ_mcp import facts as fact_view
 from civ_mcp import lua as lq
 from civ_mcp import narrate as nr
 from civ_mcp.belief_mode import BeliefMode
+from civ_mcp.lua.models import GPClassStanding, GPPlayerPoints, GreatPeopleOverview
 from civ_mcp.server import pipeline as server_module
 from civ_mcp.server.pipeline import _append_belief_context
 
@@ -323,3 +324,210 @@ class TestBeliefContextMerge:
         assert result.startswith("one unit")
         assert "=== BELIEF CONTEXT ===" in result
         assert "default_route=fast" in result
+
+
+class TestCoreQueryEnvelopes:
+    """第二批核心查询工具的双轨信封与正常化器精确覆盖。"""
+
+    def test_combat_estimate_envelope_exact_matchup(self):
+        est = lq.CombatEstimate(
+            attacker_type="UNIT_WARRIOR",
+            defender_type="UNIT_BARBARIAN_WARRIOR",
+            attacker_cs=20,
+            defender_cs=10,
+            is_ranged=False,
+            modifiers=["fortified +6"],
+            est_damage_to_defender=8,
+            est_damage_to_attacker=4,
+            defender_hp=100,
+            attacker_hp=100,
+        )
+        narrated = nr.narrate_combat_estimate(est)
+        env = fact_view.combat_estimate_envelope(turn=5, estimate=est, narrated=narrated)
+        assert env["facts"]["available"] is True
+        assert env["facts"]["estimate"]["attacker_cs"] == 20
+        assert env["coverage"] == {"estimate": "COMPLETE"}
+
+        normalized = normalize_tool_result("get_combat_estimate", fact_view.dumps(env))
+        assert normalized["facts"]["matchup"] == {
+            "attacker_type": "UNIT_WARRIOR",
+            "defender_type": "UNIT_BARBARIAN_WARRIOR",
+        }
+        # metrics 与旧叙述路径一致（含 combat.* 指标）
+        legacy = normalize_tool_result("get_combat_estimate", narrated)
+        assert normalized["metrics"] == legacy["metrics"]
+        assert legacy["metrics"]["combat.attacker_cs"] == 20
+        assert legacy["metrics"]["combat.expected_damage_to_defender"] == 8
+
+    def test_combat_estimate_unavailable(self):
+        env = fact_view.combat_estimate_envelope(
+            turn=5,
+            estimate=None,
+            narrated="No quantified combat estimate is available for this matchup.",
+        )
+        assert env["facts"]["available"] is False
+        assert "estimate" not in env["facts"]
+
+    def test_diplomacy_envelope_exact_rivals(self):
+        met = lq.CivInfo(
+            player_id=2,
+            civ_name="Germany",
+            leader_name="Frederick",
+            has_met=True,
+            is_at_war=True,
+            diplomatic_state="UNFRIENDLY",
+            relationship_score=-12,
+            military_strength=150,
+            num_cities=3,
+        )
+        unmet = lq.CivInfo(
+            player_id=3, civ_name="China", leader_name="Qin", has_met=False, is_at_war=False
+        )
+        narrated = nr.narrate_diplomacy([met, unmet])
+        env = fact_view.diplomacy_envelope(turn=5, civs=[met, unmet], narrated=narrated)
+        assert len(env["facts"]["civs"]) == 2
+
+        normalized = normalize_tool_result("get_diplomacy", fact_view.dumps(env))
+        assert normalized["facts"]["rivals"]["player_2"] == {
+            "civilization": "Germany",
+            "leader": "Frederick",
+            "state": "UNFRIENDLY",
+            "relationship_score": -12,
+            "at_war": True,
+            "military": 150,
+            "cities": 3,
+        }
+        assert "player_3" not in normalized["facts"]["rivals"]
+        legacy = normalize_tool_result("get_diplomacy", narrated)
+        assert normalized["facts"]["rivals"] == legacy["facts"]["rivals"]
+        assert normalized["metrics"] == legacy["metrics"]
+
+    def test_great_people_envelope_exact_classes(self):
+        standing = GPClassStanding(
+            class_name="Great Scientist",
+            class_type="GREAT_SCIENTIST",
+            entries=[
+                GPPlayerPoints(
+                    player_id=0, player_name="YOU", points_total=12,
+                    points_per_turn=3, instances_earned=0,
+                ),
+                GPPlayerPoints(
+                    player_id=2, player_name="Germany", points_total=18,
+                    points_per_turn=2, instances_earned=1,
+                ),
+            ],
+        )
+        ov = GreatPeopleOverview(standings=[standing])
+        narrated = nr.narrate_great_people_overview(ov)
+        env = fact_view.great_people_overview_envelope(turn=5, overview=ov, narrated=narrated)
+        assert env["facts"]["standings"][0]["class_name"] == "Great Scientist"
+        assert env["coverage"]["history"] == "KNOWN_HISTORY"
+
+        normalized = normalize_tool_result("get_great_people_overview", fact_view.dumps(env))
+        classes = normalized["facts"]["great_people_classes"]
+        assert classes[0]["class"] == "Great Scientist"
+        assert classes[0]["our_points"] == 12
+        assert classes[0]["our_per_turn"] == 3
+        assert classes[0]["leader_name"] == "Germany"
+        assert classes[0]["leader_points"] == 18
+        assert classes[0]["lead_gap"] == 6
+        # 无对手领先时 leader 为 YOU
+        lone = GreatPeopleOverview(
+            standings=[
+                GPClassStanding(
+                    class_name="Great Writer", class_type="GREAT_WRITER",
+                    entries=[GPPlayerPoints(
+                        player_id=0, player_name="YOU", points_total=5,
+                        points_per_turn=1, instances_earned=0,
+                    )],
+                )
+            ]
+        )
+        env_lone = fact_view.great_people_overview_envelope(
+            turn=5, overview=lone, narrated=nr.narrate_great_people_overview(lone)
+        )
+        lone_normalized = normalize_tool_result(
+            "get_great_people_overview", fact_view.dumps(env_lone)
+        )
+        assert lone_normalized["facts"]["great_people_classes"][0]["leader_name"] == "YOU"
+        assert lone_normalized["facts"]["great_people_classes"][0]["lead_gap"] == 0
+
+    def test_tech_civics_envelope_metric_parity(self):
+        tc = lq.TechCivicStatus(
+            current_research="TECHNOLOGY_WRITING",
+            current_research_turns=5,
+            current_civic="CIVIC_CODE_OF_LAWS",
+            current_civic_turns=2,
+            available_techs=[],
+            available_civics=[],
+        )
+        narrated = nr.narrate_tech_civics(tc)
+        env = fact_view.tech_civics_envelope(turn=5, status=tc, narrated=narrated)
+        assert env["facts"]["current_research"] == "TECHNOLOGY_WRITING"
+        normalized = normalize_tool_result("get_tech_civics", fact_view.dumps(env))
+        assert normalized["metrics"]["research.current"] == "TECHNOLOGY_WRITING"
+        assert normalized["metrics"]["civic.turns_remaining"] == 2
+        legacy = normalize_tool_result("get_tech_civics", narrated)
+        assert normalized["metrics"] == legacy["metrics"]
+
+    def test_victory_production_settle_era_trade_pathing_envelopes(self):
+        vp = lq.VictoryProgress(
+            players=[
+                lq.VictoryPlayerProgress(
+                    player_id=0, name="France", score=100, science_vp=5,
+                    science_vp_needed=50, diplomatic_vp=2, tourism=10,
+                    military_strength=80, techs_researched=20,
+                    civics_completed=15, religion_cities=2,
+                )
+            ]
+        )
+        env = fact_view.victory_progress_envelope(
+            turn=5, progress=vp, narrated=nr.narrate_victory_progress(vp)
+        )
+        assert env["facts"]["players"][0]["science_vp"] == 5
+        assert env["coverage"] == {"players": "COMPLETE", "demographics": "COMPLETE"}
+
+        option = lq.ProductionOption(
+            category="UNIT", item_name="UNIT_WARRIOR", cost=40, turns=3, gold_cost=100
+        )
+        env = fact_view.city_production_envelope(
+            turn=5, city_id=7, options=[option],
+            narrated=nr.narrate_city_production([option]),
+        )
+        assert env["facts"]["city_id"] == 7
+        assert env["facts"]["options"][0]["item_name"] == "UNIT_WARRIOR"
+
+        candidate = lq.SettleCandidate(
+            x=3, y=4, score=12.5, total_food=4, total_prod=3,
+            water_type="fresh", resources=["L:DIAMONDS"],
+        )
+        env = fact_view.settle_envelope(
+            turn=5, tool="get_settle_advisor", unit_id=9, candidates=[candidate],
+            source="local", narrated=nr.narrate_settle_candidates([candidate]),
+        )
+        assert env["facts"]["source"] == "local"
+        assert env["facts"]["candidates"][0]["water_type"] == "fresh"
+        assert env["coverage"] == {"candidates": "KNOWN_HISTORY"}
+
+        era = lq.EraProgress(ruleset="RULESET_EXPANSION_2", ages_supported=True)
+        env = fact_view.era_progress_envelope(
+            turn=5, status=era, narrated=nr.narrate_era_progress(era)
+        )
+        assert env["facts"]["ages_supported"] is True
+
+        routes = lq.TradeRouteStatus(
+            capacity=3, active_count=1,
+            traders=[lq.TraderInfo(unit_id=5, x=1, y=2, has_moves=False)],
+        )
+        env = fact_view.trade_routes_envelope(
+            turn=5, status=routes, narrated=nr.narrate_trade_routes(routes)
+        )
+        assert env["facts"]["capacity"] == 3
+        assert env["facts"]["traders"][0]["unit_id"] == 5
+
+        pathing = lq.PathingEstimate(turns=2, total_tiles=5, reachable_this_turn=3)
+        env = fact_view.pathing_envelope(
+            turn=5, unit_id=9, target_x=8, target_y=8, estimate=pathing,
+            narrated=nr.narrate_pathing_estimate(pathing),
+        )
+        assert env["facts"]["estimate"]["turns"] == 2

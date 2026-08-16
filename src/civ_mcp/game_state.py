@@ -616,20 +616,36 @@ class GameState:
                 log.debug("Settle advisor failed: %s", e)
         return result
 
-    async def get_settle_advisor(self, unit_index: int) -> str:
+    async def get_settle_candidates(
+        self, unit_index: int
+    ) -> tuple[list[lq.SettleCandidate], str]:
+        """Return (candidates, source): source is "local"/"global"/"none".
+
+        local = scan within 5 tiles of the settler; global = revealed-map
+        fallback capped at 5; none = nothing found.  The narration wrapper
+        (get_settle_advisor) keeps the old header text for the fallback case.
+        """
         lua = lq.build_settle_advisor_query(unit_index)
         lines = await self.conn.execute_read(lua)
         candidates = lq.parse_settle_advisor_response(lines)
         if candidates:
-            return narrate_settle_candidates(candidates)
+            return candidates, "local"
         # Auto-fallback to global scan when no local candidates
         try:
             global_candidates = await self.get_global_settle_scan()
             if global_candidates:
-                header = "No valid settle locations within 5 tiles. Best sites on revealed map:\n"
-                return header + narrate_settle_candidates(global_candidates[:5])
+                return global_candidates[:5], "global"
         except Exception:
             log.debug("Global settle fallback failed", exc_info=True)
+        return [], "none"
+
+    async def get_settle_advisor(self, unit_index: int) -> str:
+        candidates, source = await self.get_settle_candidates(unit_index)
+        if source == "local":
+            return narrate_settle_candidates(candidates)
+        if source == "global":
+            header = "No valid settle locations within 5 tiles. Best sites on revealed map:\n"
+            return header + narrate_settle_candidates(candidates)
         return "No valid settle locations found within 5 tiles or on revealed map."
 
     async def get_global_settle_scan(self) -> list[lq.SettleCandidate]:

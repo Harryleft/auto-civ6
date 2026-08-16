@@ -6,6 +6,7 @@ from typing import Optional
 
 from mcp.server.fastmcp import Context
 
+from civ_mcp import facts as fact_view
 from civ_mcp import narrate as nr
 from civ_mcp.diary import (
     diary_path as _diary_path,
@@ -90,14 +91,25 @@ async def get_trade_routes(ctx: Context) -> str:
 
     Shows how many routes are active vs capacity, and lists all trader
     units with their positions and whether they're idle or on a route.
+
+    Returns a double-track JSON envelope: structured ``facts`` (routes/
+    traders with COMPLETE coverage) plus the legacy human-readable
+    ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
-    return await pipeline._logged(
-        ctx,
-        "get_trade_routes",
-        {},
-        lambda: pipeline._narrate(gs.get_trade_routes, nr.narrate_trade_routes),
-    )
+
+    async def _run():
+        status = await gs.get_trade_routes()
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.trade_routes_envelope(
+                turn=turn,
+                status=status,
+                narrated=nr.narrate_trade_routes(status),
+            )
+        )
+
+    return await pipeline._logged(ctx, "get_trade_routes", {}, _run)
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
@@ -302,7 +314,14 @@ async def get_great_people_overview(ctx: Context) -> str:
 
     async def _run():
         ov = await gs.get_great_people_overview()
-        return nr.narrate_great_people_overview(ov)
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.great_people_overview_envelope(
+                turn=turn,
+                overview=ov,
+                narrated=nr.narrate_great_people_overview(ov),
+            )
+        )
 
     return await pipeline._logged(ctx, "get_great_people_overview", {}, _run)
 
@@ -455,12 +474,23 @@ async def get_victory_progress(ctx: Context) -> str:
     Diplomatic, and Score victories. Includes space race VP, diplomatic VP,
     tourism vs domestic tourists, religion spread, capital ownership,
     and military strength. Call every 20-30 turns to track the race.
+
+    Returns a double-track JSON envelope: structured ``facts`` (players/
+    demographics with COMPLETE coverage) plus the legacy human-readable
+    ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
 
     async def _run():
         vp = await gs.get_victory_progress()
-        return nr.narrate_victory_progress(vp)
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.victory_progress_envelope(
+                turn=turn,
+                progress=vp,
+                narrated=nr.narrate_victory_progress(vp),
+            )
+        )
 
     return await pipeline._logged(ctx, "get_victory_progress", {}, _run)
 

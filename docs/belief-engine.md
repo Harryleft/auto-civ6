@@ -58,9 +58,17 @@ logs remain readable and are not rewritten in place.
 
 ## Double-track tool results
 
-High-frequency query tools (`get_units`, `get_cities`, `get_map_area`,
-`get_barbarian_overview`) return a double-track JSON envelope built by
+Core query tools return a double-track JSON envelope built by
 `civ_mcp.facts`:
+
+- 世界状态：`get_units`, `get_cities`, `get_map_area`, `get_barbarian_overview`
+- 军事与移动：`get_combat_estimate`, `get_pathing_estimate`
+- 科研与胜利：`get_tech_civics`, `get_victory_progress`, `get_era_progress`
+- 经济与扩张：`get_city_production`, `get_settle_advisor`,
+  `get_global_settle_advisor`, `get_trade_routes`
+- 伟人：`get_great_people_overview`
+
+Example (`get_units`):
 
 ```json
 {
@@ -243,7 +251,7 @@ rules create, update, retire, and resolve entities with evidence references:
 | Rule | Tool | Produces | Resolves when |
 |---|---|---|---|
 | Barbarian camp threats | `get_barbarian_overview` | belief per camp (probability by distance) | camp unseen for 5 consecutive overviews (archived); re-seen camps resurrect the same entity |
-| Rival military threat | `get_diplomacy` | belief per rival at war or ≥2× our military (probability by war+ratio) | peace + ratio < 1.5×, or rival absent 10 turns → archived; re-escalation resurrects |
+| Rival military threat | `get_diplomacy` | belief per rival at war or ≥2× our military (probability by war+ratio); a slow-variable trend refreshed only by the periodic diplomacy check, not a real-time alert | peace + ratio < 1.5×, or rival absent 10 turns → archived; re-escalation resurrects |
 | Great people race pressure | `get_great_people_overview` | belief per class where a rival leads (probability by gap ratio) | we take the lead, or gap > 50% of leader points → archived |
 | Research/civic timing | `get_tech_civics` | prediction "X completes by T" | subject no longer researched: completed-counter moved → confirmed; deadline passed → disconfirmed; plus an `evaluation` metric safety net handled by `review()` |
 | Victory race ETA | `get_victory_progress` | rate-based ETA prediction per rival section (≥15% progress) | `review()` resolves on VP arrival via the `evaluation` rule |

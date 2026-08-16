@@ -191,3 +191,228 @@ def barbarian_envelope(
         },
         narrated,
     )
+
+
+def combat_estimate_envelope(
+    *,
+    turn: int | None,
+    estimate: lq.CombatEstimate | None,
+    narrated: str,
+) -> dict[str, Any]:
+    """get_combat_estimate 双轨信封。
+
+    ``available=false`` 表示游戏无法为这组单位给出量化评估（如目标不可攻击）；
+    ``estimate`` 为该特定对阵的权威预览，覆盖语义为 COMPLETE。
+    """
+    facts: dict[str, Any] = {"available": estimate is not None}
+    if estimate is not None:
+        facts["estimate"] = asdict(estimate)
+    return _envelope(
+        "get_combat_estimate",
+        turn,
+        facts,
+        {"estimate": COVERAGE_COMPLETE},
+        narrated,
+    )
+
+
+def diplomacy_envelope(
+    *,
+    turn: int | None,
+    civs: list[lq.CivInfo],
+    narrated: str,
+) -> dict[str, Any]:
+    """get_diplomacy 双轨信封。
+
+    ``civs`` 为所有已知文明（含未见面者，以 ``has_met`` 标注）；每方可见
+    城市等情报字段只反映当前可见度。
+    """
+    facts: dict[str, Any] = {"civs": [asdict(c) for c in civs]}
+    return _envelope(
+        "get_diplomacy",
+        turn,
+        facts,
+        {"civs": COVERAGE_COMPLETE},
+        narrated,
+    )
+
+
+def tech_civics_envelope(
+    *,
+    turn: int | None,
+    status: lq.TechCivicStatus,
+    narrated: str,
+) -> dict[str, Any]:
+    """get_tech_civics 双轨信封。己方科技/市政状态为全集事实。"""
+    return _envelope(
+        "get_tech_civics",
+        turn,
+        asdict(status),
+        {
+            "research": COVERAGE_COMPLETE,
+            "civics": COVERAGE_COMPLETE,
+        },
+        narrated,
+    )
+
+
+def victory_progress_envelope(
+    *,
+    turn: int | None,
+    progress: lq.VictoryProgress,
+    narrated: str,
+) -> dict[str, Any]:
+    """get_victory_progress 双轨信封。
+
+    ``players`` 覆盖全部已知文明（未见面者字段为默认占位）；敌方情报字段
+    只反映当前可见度。
+    """
+    return _envelope(
+        "get_victory_progress",
+        turn,
+        asdict(progress),
+        {
+            "players": COVERAGE_COMPLETE,
+            "demographics": COVERAGE_COMPLETE,
+        },
+        narrated,
+    )
+
+
+def great_people_overview_envelope(
+    *,
+    turn: int | None,
+    overview: lq.GreatPeopleOverview,
+    narrated: str,
+) -> dict[str, Any]:
+    """get_great_people_overview 双轨信封。
+
+    ``standings``/``timeline`` 为当前全集；``history`` 为已发生事实
+    （KNOWN_HISTORY）。
+    """
+    return _envelope(
+        "get_great_people_overview",
+        turn,
+        asdict(overview),
+        {
+            "standings": COVERAGE_COMPLETE,
+            "timeline": COVERAGE_COMPLETE,
+            "history": COVERAGE_KNOWN_HISTORY,
+            "own_units": COVERAGE_COMPLETE,
+        },
+        narrated,
+    )
+
+
+def city_production_envelope(
+    *,
+    turn: int | None,
+    city_id: int,
+    options: list[lq.ProductionOption],
+    narrated: str,
+) -> dict[str, Any]:
+    """get_city_production 双轨信封。``options`` 为该城市当前可生产全集。"""
+    facts: dict[str, Any] = {
+        "city_id": city_id,
+        "options": [asdict(o) for o in options],
+    }
+    return _envelope(
+        "get_city_production",
+        turn,
+        facts,
+        {"options": COVERAGE_COMPLETE},
+        narrated,
+    )
+
+
+def settle_envelope(
+    *,
+    turn: int | None,
+    tool: str,
+    unit_id: int,
+    candidates: list[lq.SettleCandidate],
+    source: str,
+    narrated: str,
+) -> dict[str, Any]:
+    """get_settle_advisor / get_global_settle_advisor 双轨信封。
+
+    ``source`` 为候选来源：``local``（定居者周边 5 格）/ ``global``
+    （已揭示地图回退扫描）/ ``none``（无候选）。候选基于已揭示地块，
+    覆盖语义为 KNOWN_HISTORY。
+    """
+    facts: dict[str, Any] = {
+        "unit_id": unit_id,
+        "source": source,
+        "candidates": [asdict(c) for c in candidates],
+    }
+    return _envelope(
+        tool,
+        turn,
+        facts,
+        {"candidates": COVERAGE_KNOWN_HISTORY},
+        narrated,
+    )
+
+
+def era_progress_envelope(
+    *,
+    turn: int | None,
+    status: lq.EraProgress,
+    narrated: str,
+) -> dict[str, Any]:
+    """get_era_progress 双轨信封。纪元序列与各文明当前纪元为全集事实。"""
+    return _envelope(
+        "get_era_progress",
+        turn,
+        asdict(status),
+        {
+            "eras": COVERAGE_COMPLETE,
+            "players": COVERAGE_COMPLETE,
+            "local_age": COVERAGE_COMPLETE,
+        },
+        narrated,
+    )
+
+
+def trade_routes_envelope(
+    *,
+    turn: int | None,
+    status: lq.TradeRouteStatus,
+    narrated: str,
+) -> dict[str, Any]:
+    """get_trade_routes 双轨信封。商路容量与商人状态为全集事实。"""
+    return _envelope(
+        "get_trade_routes",
+        turn,
+        asdict(status),
+        {
+            "routes": COVERAGE_COMPLETE,
+            "traders": COVERAGE_COMPLETE,
+        },
+        narrated,
+    )
+
+
+def pathing_envelope(
+    *,
+    turn: int | None,
+    unit_id: int,
+    target_x: int,
+    target_y: int,
+    estimate: lq.PathingEstimate,
+    narrated: str,
+) -> dict[str, Any]:
+    """get_pathing_estimate 双轨信封。针对给定单位与目的地的权威评估。"""
+    facts: dict[str, Any] = {
+        "unit_id": unit_id,
+        "target_x": target_x,
+        "target_y": target_y,
+        "estimate": asdict(estimate),
+    }
+    return _envelope(
+        "get_pathing_estimate",
+        turn,
+        facts,
+        {"estimate": COVERAGE_COMPLETE},
+        narrated,
+    )
