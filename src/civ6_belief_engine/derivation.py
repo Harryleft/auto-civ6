@@ -322,25 +322,25 @@ def _research_timing(ctx: RuleContext) -> Iterator[Op]:
     if ctx.tool != "get_tech_civics":
         return
     research = ctx.metrics.get("research.current")
-    if isinstance(research, str) and research not in ("", "None"):
+    if isinstance(research, str) and research.strip() not in ("", "None"):
         turns = ctx.metrics.get("research.turns_remaining")
         if isinstance(turns, (int, float)):
             yield from _timing_prediction(
                 ctx,
                 kind="tech",
-                subject=research,
+                subject=research.strip(),
                 turns_remaining=int(turns),
                 completed_metric="research.completed_techs",
                 completed_now=_as_int(ctx.metrics.get("research.completed_techs")),
             )
     civic = ctx.metrics.get("civic.current")
-    if isinstance(civic, str) and civic not in ("", "None"):
+    if isinstance(civic, str) and civic.strip() not in ("", "None"):
         turns = ctx.metrics.get("civic.turns_remaining")
         if isinstance(turns, (int, float)):
             yield from _timing_prediction(
                 ctx,
                 kind="civic",
-                subject=civic,
+                subject=civic.strip(),
                 turns_remaining=int(turns),
                 completed_metric="civics.completed_civics",
                 completed_now=_as_int(ctx.metrics.get("civics.completed_civics")),
