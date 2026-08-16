@@ -53,9 +53,14 @@ class RuleContext:
     observation_id: str
 
     def active(self, entity_type: str, id_prefix: str = "") -> list[dict[str, Any]]:
+        reader = getattr(
+            self.engine,
+            "current_governance_entities",
+            self.engine.list,
+        )
         return [
             entity
-            for entity in self.engine.list(entity_type, status="active")
+            for entity in reader(entity_type, status="active")
             if entity["id"].startswith(id_prefix)
         ]
 

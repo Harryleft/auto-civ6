@@ -1,7 +1,60 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from civ6_belief_engine.belief_engine import BeliefEngine
 from civ6_belief_engine.graph import GraphView, project_governance_state
+from civ6_belief_engine.governance.graph_snapshot import graph_agenda
+
+
+def _agenda_context(
+    *, graph: GraphView | None, agenda: tuple[str, ...]
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        graph=graph,
+        agenda=agenda,
+        snapshot=SimpleNamespace(snapshot_id="snapshot:10", turn=10),
+    )
+
+
+def _goal_graph(*, snapshot_id: str = "snapshot:10", turn: int = 10) -> GraphView:
+    entities = {
+        "goal": ({
+            "id": "goal:graph",
+            "status": "active",
+            "goal_id": "graph",
+            "statement": "Graph Goal statement",
+            "priority": 100,
+        },),
+    }
+    delta = project_governance_state(
+        entities,
+        previous=GraphView.empty(turn=turn),
+        snapshot_id=snapshot_id,
+        turn=turn,
+    )
+    return GraphView.empty(turn=turn).apply(delta)
+
+
+def test_graph_agenda_prefers_same_turn_graph_goal_over_legacy_agenda() -> None:
+    context = _agenda_context(graph=_goal_graph(), agenda=("legacy agenda",))
+
+    assert graph_agenda(context) == ("Graph Goal statement",)
+
+
+def test_graph_agenda_does_not_read_legacy_agenda_when_graph_is_stale() -> None:
+    context = _agenda_context(
+        graph=_goal_graph(snapshot_id="snapshot:9", turn=9),
+        agenda=("legacy agenda",),
+    )
+
+    assert graph_agenda(context) == ()
+
+
+def test_graph_agenda_falls_back_to_legacy_agenda_without_graph() -> None:
+    context = _agenda_context(graph=None, agenda=("legacy agenda",))
+
+    assert graph_agenda(context) == ("legacy agenda",)
 
 
 def _lifecycle_entities() -> dict[str, tuple[dict, ...]]:
@@ -216,3 +269,39 @@ def test_belief_engine_governance_graph_replays_and_reads_current_state(tmp_path
     assert reloaded.graph_replay_error is None
     assert reloaded.graph_view.state_hash == view.state_hash
     assert reloaded.current_governance_entities("decision", status="active")[0]["id"] == "decision:1"
+
+
+def test_direct_graph_read_materializes_legacy_journal_without_read_write(
+    tmp_path,
+) -> None:
+    engine = BeliefEngine(run_id="lazy-governance-materialization", directory=tmp_path)
+    engine.bind_game("CIVILIZATION_INDIA", 123)
+    engine.create(
+        "belief",
+        {
+            "statement": "首都需要防御",
+            "category": "military",
+            "probability": 0.8,
+            "confidence": 0.7,
+            "unknown_basis": True,
+        },
+        turn=10,
+        entity_id="belief:threat",
+    )
+    sequence_before_read = engine.snapshot(include_deleted=True)["last_sequence"]
+
+    current = engine.current_governance_entity("belief", "belief:threat")
+
+    assert current is not None
+    assert current["id"] == "belief:threat"
+    assert engine.governance_graph_current() is True
+    assert engine.snapshot(include_deleted=True)["last_sequence"] == sequence_before_read
+
+    persisted = engine.sync_governance_graph(turn=10)
+    reloaded = BeliefEngine(
+        run_id="lazy-governance-materialization-reloaded", directory=tmp_path
+    )
+    reloaded.bind_game("CIVILIZATION_INDIA", 123)
+
+    assert reloaded.graph_replay_error is None
+    assert reloaded.graph_view.state_hash == persisted.state_hash

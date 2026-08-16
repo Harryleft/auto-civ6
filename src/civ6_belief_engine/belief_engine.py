@@ -851,6 +851,12 @@ class BeliefEngine:
         self._epoch: int = 1
         self._graph_view = GraphView.empty()
         self._graph_replay_error: str | None = None
+        # Sequence through which the in-memory graph has been materialized.
+        # Lazy compatibility migration must not append a journal event merely
+        # because a caller performs a read; explicit pipeline syncs still
+        # persist graph.delta events for replay and audit.
+        self._graph_materialized_sequence = 0
+        self._graph_persisted_sequence = 0
 
     @property
     def bound(self) -> bool:
@@ -897,6 +903,8 @@ class BeliefEngine:
         self._epoch = 1
         self._graph_view = GraphView.empty()
         self._graph_replay_error = None
+        self._graph_materialized_sequence = 0
+        self._graph_persisted_sequence = 0
         if not path.exists():
             return
         # errors="replace": a crash mid-write can also truncate a UTF-8
@@ -928,11 +936,22 @@ class BeliefEngine:
             self._quarantine_corrupt_lines(path, good_lines, bad_line_numbers, raw_lines)
         try:
             self._graph_view = replay_graph_events(self._events, epoch=self._epoch)
+            self._graph_materialized_sequence = max(
+                (
+                    int(event.get("sequence", 0))
+                    for event in self._events
+                    if event.get("event_type") == GRAPH_DELTA_EVENT
+                ),
+                default=0,
+            )
+            self._graph_persisted_sequence = self._graph_materialized_sequence
         except GraphReplayError as exc:
             # The graph is a derived read model. A damaged graph event must be
             # visible, but it must not make the existing belief model unusable.
             self._graph_view = GraphView.empty(epoch=self._epoch)
             self._graph_replay_error = str(exc)
+            self._graph_materialized_sequence = 0
+            self._graph_persisted_sequence = 0
             log.error("Belief Engine: graph replay failed: %s", exc)
         self._recover_orphaned_executing_decisions()
 
@@ -1134,29 +1153,102 @@ class BeliefEngine:
             raise BeliefEngineError(
                 f"graph delta epoch {delta.epoch} does not match current epoch {self._epoch}"
             )
+        normalized_kind = kind.strip()
+        # A lazy read may have materialized governance nodes in memory without
+        # writing a graph.delta. Persist that derived state before appending a
+        # world/goal delta; otherwise the latter's state_hash would depend on
+        # in-memory nodes that a fresh replay cannot reconstruct.
+        if (
+            not normalized_kind.startswith("governance:")
+            and self.governance_graph_materialized()
+            and self._graph_persisted_sequence < self._latest_governance_sequence()
+        ):
+            self._persist_current_governance_graph(turn=delta.turn)
         base = self._graph_view
         if base.epoch != self._epoch:
             base = GraphView.empty(epoch=self._epoch, turn=delta.turn)
         next_view = base.apply(delta)
-        self._append(
+        event = self._append(
             GRAPH_DELTA_EVENT,
             "graph_delta",
             {
-                "id": f"graph_delta:{kind.strip()}:{self._epoch}:{delta.snapshot_id}",
-                "kind": kind.strip(),
+                "id": f"graph_delta:{normalized_kind}:{self._epoch}:{delta.snapshot_id}",
+                "kind": normalized_kind,
                 "delta": delta.to_dict(),
                 "state_hash": next_view.state_hash,
             },
             turn=delta.turn,
         )
         self._graph_view = next_view
+        self._graph_materialized_sequence = int(event["sequence"])
+        self._graph_persisted_sequence = int(event["sequence"])
         self._graph_replay_error = None
         return next_view
 
-    def sync_governance_graph(self, *, turn: int) -> GraphView:
-        """Materialize current governance entities into the canonical graph."""
+    def _persist_current_governance_graph(self, *, turn: int) -> GraphView:
+        """Persist governance state that was materialized only in memory."""
+
+        try:
+            persisted_base = replay_graph_events(self._events, epoch=self._epoch)
+        except GraphReplayError as exc:
+            raise BeliefEngineError(
+                "cannot persist governance GraphView after replay failure: " + str(exc)
+            ) from exc
+        snapshot_id = (
+            persisted_base.snapshot_id
+            or self._graph_view.snapshot_id
+            or f"belief:{self.game_id}:{turn}"
+        )
+        graph_turn = (
+            max(persisted_base.turn, turn)
+            if persisted_base.snapshot_id
+            else turn
+        )
+        entities = {
+            entity_type: self.list(entity_type, status=None)
+            for entity_type in _GOVERNANCE_GRAPH_ENTITY_TYPES
+        }
+        delta = project_governance_state(
+            entities,
+            previous=persisted_base,
+            snapshot_id=snapshot_id,
+            turn=graph_turn,
+            epoch=self._epoch,
+        )
+        if not (
+            delta.upsert_nodes
+            or delta.upsert_edges
+            or delta.remove_node_ids
+            or delta.remove_edge_keys
+        ):
+            self._graph_persisted_sequence = self._latest_governance_sequence()
+            return self._graph_view
+        return self.record_graph_delta(
+            delta,
+            kind=f"governance:{self._sequence + 1}",
+        )
+
+    def sync_governance_graph(
+        self,
+        *,
+        turn: int,
+        persist: bool = True,
+    ) -> GraphView:
+        """Materialize current governance entities into the canonical graph.
+
+        ``persist=False`` is reserved for lazy migration of an old journal
+        during a read. It updates the in-memory read model without turning a
+        read into a journal write; the next explicit pipeline sync persists a
+        replayable ``graph.delta`` event.
+        """
 
         self._require_bound()
+        if (
+            persist
+            and self.governance_graph_materialized()
+            and self._graph_persisted_sequence < self._latest_governance_sequence()
+        ):
+            self._persist_current_governance_graph(turn=turn)
         base = self._graph_view
         snapshot_id = base.snapshot_id or f"belief:{self.game_id}:{turn}"
         graph_turn = max(base.turn, turn) if base.snapshot_id else turn
@@ -1177,10 +1269,28 @@ class BeliefEngine:
             or delta.remove_node_ids
             or delta.remove_edge_keys
         ):
+            self._graph_materialized_sequence = self._latest_governance_sequence()
+            if persist:
+                self._graph_persisted_sequence = self._latest_governance_sequence()
             return base
+        if not persist:
+            next_view = base.apply(delta)
+            self._graph_view = next_view
+            self._graph_materialized_sequence = self._latest_governance_sequence()
+            return next_view
         return self.record_graph_delta(
             delta,
             kind=f"governance:{self._sequence + 1}",
+        )
+
+    def _latest_governance_sequence(self) -> int:
+        return max(
+            (
+                int(event.get("sequence", 0))
+                for event in self._events
+                if event.get("entity_type") in _GOVERNANCE_GRAPH_ENTITY_TYPES
+            ),
+            default=0,
         )
 
     def create(
@@ -1384,10 +1494,11 @@ class BeliefEngine:
         *,
         status: str | None = "active",
     ) -> list[dict[str, Any]]:
-        """Read current governance entities from GraphView when materialized."""
+        """Read current governance entities from the materialized GraphView."""
 
         if entity_type not in _GOVERNANCE_GRAPH_ENTITY_TYPES:
             return []
+        self._ensure_governance_graph_current()
         nodes = self._graph_view.nodes_of_type(entity_type)
         entities: list[dict[str, Any]] = []
         for node in nodes:
@@ -1426,23 +1537,7 @@ class BeliefEngine:
 
         if not self.governance_graph_materialized():
             return False
-        latest_graph_sequence = max(
-            (
-                int(event.get("sequence", 0))
-                for event in self._events
-                if event.get("event_type") == GRAPH_DELTA_EVENT
-            ),
-            default=0,
-        )
-        latest_governance_sequence = max(
-            (
-                int(event.get("sequence", 0))
-                for event in self._events
-                if event.get("entity_type") in _GOVERNANCE_GRAPH_ENTITY_TYPES
-            ),
-            default=0,
-        )
-        return latest_governance_sequence <= latest_graph_sequence
+        return self._latest_governance_sequence() <= self._graph_materialized_sequence
 
     def current_governance_entities(
         self,
@@ -1450,20 +1545,46 @@ class BeliefEngine:
         *,
         status: str | None = "active",
     ) -> list[dict[str, Any]]:
-        """Read governance state from GraphView, with legacy compatibility only before materialization.
-
-        Direct BeliefEngine callers may load an old JSONL journal without a
-        graph delta.  Until the first graph materialization, the journal is
-        the only available current-state source.  Once the graph contains a
-        governance node, an empty GraphView result is authoritative and must
-        not silently fall back to the legacy reducer.
-        """
+        """Read governance state from GraphView after ensuring materialization."""
 
         if entity_type not in _GOVERNANCE_GRAPH_ENTITY_TYPES:
             return self.list(entity_type, status=status)
+        self._ensure_governance_graph_current()
+        return self.graph_entities(entity_type, status=status)
+
+    def _ensure_governance_graph_current(self) -> None:
+        """Materialize the event source before any governance current-state read.
+
+        JSONL is retained as the append-only event source and as input to the
+        materializer. It is deliberately not a fallback current-state model:
+        a stale or damaged GraphView must surface an explicit error instead of
+        silently reintroducing the old read path.
+        """
+
+        if self._graph_replay_error:
+            raise BeliefEngineError(
+                "governance GraphView replay failed: " + self._graph_replay_error
+            )
         if self.governance_graph_current():
-            return self.graph_entities(entity_type, status=status)
-        return self.list(entity_type, status=status)
+            return
+        if not any(
+            self._entities.get(entity_type)
+            for entity_type in _GOVERNANCE_GRAPH_ENTITY_TYPES
+        ):
+            return
+        turn = max(
+            (
+                int(event.get("turn", 0))
+                for event in self._events
+                if int(event.get("epoch", 1)) == self._epoch
+            ),
+            default=0,
+        )
+        self.sync_governance_graph(turn=turn, persist=False)
+        if not self.governance_graph_current():
+            raise BeliefEngineError(
+                "governance GraphView is not current after materialization"
+            )
 
     def current_governance_entity(
         self,
@@ -2303,6 +2424,8 @@ class BeliefEngine:
             else (prior_epoch_max_turn if prior_epoch_max_turn is not None else 0)
         )
         self._graph_view = GraphView.empty(epoch=self._epoch, turn=marker_turn)
+        self._graph_persisted_sequence = 0
+        self._graph_materialized_sequence = 0
         self._graph_replay_error = None
         # entity_type "epoch_marker" is intentionally outside
         # BELIEF_ENTITY_TYPES so the marker never enters the projected model.
