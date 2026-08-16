@@ -356,3 +356,104 @@ def test_rival_threat_skips_zero_military_without_stopping_scan(engine):
     rome = engine.get("belief", "auto:belief:rival_threat:5")
     assert rome is not None and rome["status"] == "active"
     assert rome["probability"] == 0.6
+
+
+# ---------------------------------------------------------------------------
+# 边界与分支盲区矩阵（变异测试暴露）
+# ---------------------------------------------------------------------------
+
+
+def test_victory_race_ignores_below_noise_floor(engine):
+    low = """Enabled: Science, Domination, Culture, Religion, Score
+Disabled: none
+
+SCIENCE VICTORY
+  Korea: 5/50 VP | 1 techs
+
+VICTORY ASSESSMENT
+  No victory imminent.
+"""
+    observe(engine, tool="get_victory_progress", result=low, turn=10)
+    assert engine.list("prediction", status="active") == []
+
+
+def test_victory_race_survives_vp_regression(engine):
+    # T10 建立速率后 T20 到达 20/50，随后回落到 19/50：
+    # rate 不可算，ETA 保持原预测。
+    observe(engine, tool="get_victory_progress", result=VICTORY_T10, turn=10)
+    observe(engine, tool="get_victory_progress", result=VICTORY_T20, turn=20)
+    regressed = VICTORY_T10.replace("Korea: 10/50", "Korea: 19/50")
+    observe(engine, tool="get_victory_progress", result=regressed, turn=25)
+    race = engine.get("prediction", "auto:pred:victory:korea:science")
+    assert race["status"] == "active"
+    assert race["predicted_turn"] == 50
+    assert race["last_vp"] == 19
+
+
+def test_combat_damage_skips_absent_matchup(engine):
+    no_matchup = """Combat Estimate (Ranged):
+  No quantified combat estimate is available for this matchup.
+"""
+    observe(engine, tool="get_combat_estimate", result=no_matchup, turn=10)
+    assert engine.list("prediction", status="active") == []
+
+
+def test_combat_damage_same_turn_reestimate_updates(engine):
+    # 同回合第二次估计：更新 expected_damage，不产生第二条预测。
+    observe(engine, tool="get_combat_estimate", result=COMBAT_T10, turn=10)
+    reestimate = COMBAT_T10.replace("~40", "~42")  # HP 不变：不触发解析，走更新分支
+    observe(engine, tool="get_combat_estimate", result=reestimate, turn=10)
+    prediction = engine.get("prediction", "auto:pred:combat:Barbarian-Warrior:10")
+    assert prediction["expected_damage"] == 42
+    assert prediction["hp_at_estimate"] == 80
+    assert len(engine.list("prediction", status="active")) == 1
+
+
+def test_timing_skips_empty_research_and_civic(engine):
+    empty = """Researching:  (0 turns) | Completed: 4 techs, 2 civics
+Civic:  (0 turns)"""
+    observe(engine, tool="get_tech_civics", result=empty, turn=5)
+    assert engine.list("prediction", status="active") == []
+
+
+def test_camp_threat_unknown_distance_uses_mid_probability(engine):
+    camp_no_distance = """=== BARBARIAN OVERVIEW ===
+Camps (1 revealed):
+  [WATCH] (12,24) [revealed] — unknown city distance; 3 from nearest military
+"""
+    observe(engine, tool="get_barbarian_overview", result=camp_no_distance, turn=10)
+    belief = engine.get("belief", "auto:belief:camp_threat:12_24")
+    assert belief is not None
+    assert belief["distance_to_city"] is None
+    assert belief["probability"] == 0.5
+
+
+def test_camp_threat_distance_bands(engine):
+    # 概率在创建时按距离分档确定，之后不随距离变化改写；
+    # 三个不同营地各自验证档位。
+    for x, distance, expected in ((12, 3, 0.9), (14, 8, 0.7), (16, 20, 0.5)):
+        text = f"""=== BARBARIAN OVERVIEW ===
+Camps (1 revealed):
+  [WATCH] ({x},24) [revealed] — {distance} tiles from nearest city; 3 from nearest military
+"""
+        observe(engine, tool="get_barbarian_overview", result=text, turn=10)
+        belief = engine.get("belief", f"auto:belief:camp_threat:{x}_24")
+        assert belief["probability"] == expected, f"distance {distance}"
+
+
+def test_gp_race_tight_gap_uses_high_probability(engine):
+    tight = GP_RACE_T10.replace("YOU 40/3 (1) | Babylon 48/2 (1)", "YOU 45/3 (1) | Babylon 48/2 (1)")
+    observe(engine, tool="get_great_people_overview", result=tight, turn=10)
+    belief = engine.get("belief", "auto:belief:gp_race:scientist")
+    assert belief["probability"] == 0.8  # gap 3/48 ≈ 0.06 <= 0.1
+
+
+def test_gp_race_gap_widening_updates_probability(engine):
+    observe(engine, tool="get_great_people_overview", result=GP_RACE_T10, turn=10)
+    assert engine.get("belief", "auto:belief:gp_race:scientist")["probability"] == 0.65
+    wider = GP_RACE_T10.replace("YOU 40/3 (1) | Babylon 48/2 (1)", "YOU 20/2 (0) | Babylon 48/2 (1)")
+    observe(engine, tool="get_great_people_overview", result=wider, turn=12)
+    belief = engine.get("belief", "auto:belief:gp_race:scientist")
+    # gap 28/48 ≈ 0.58 > 0.5：竞争放弃，信念归档。
+    assert belief["status"] == "archived"
+    assert "50%" in belief["resolution"]
