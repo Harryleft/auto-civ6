@@ -323,7 +323,7 @@ async def get_religion_overview(self) -> lq.ReligionOverview:
 
 供后续 snapshot/graph 投影直接取用的命名（对齐现有 `diplomacy.player_{N}.X`、`resource.{key}.X` 惯例，`snapshot.py:525/554`）：
 
-- **TurnSnapshot 扩展**：`governance/models.py` 的 `TurnSnapshot` 增加可选段 `religion: ReligionOverview | None = None`（模式同 `barbarians: BarbarianOverview | None`，`models.py:236`）；类型校验加入 `_typed_or_none` 清单。
+- **TypedTurnSnapshot 扩展**：`governance/models.py` 的 `TypedTurnSnapshot` 增加可选段 `religion: ReligionOverview | None = None`（模式同 `barbarians: BarbarianOverview | None`，`models.py:236`）；类型校验加入 `_typed_or_none` 清单。
 - **能力门控**：投影时读 `capabilities.religion`（恒 True，但保持模式统一）；False 时整段跳过，不产生半空 metric。
 - **metrics（数值）**：
   - `religion.founded_count`、`religion.slots_max`（对齐已有 `player.religions_founded/max` 但归 religion 域，二选一，避免双写——建议沿用 `player.religions_*` 并只新增 religion 域新键）。

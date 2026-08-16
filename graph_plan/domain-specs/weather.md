@@ -483,7 +483,7 @@ RULESET_CAPABILITIES = MappingProxyType({
 
 - **不把气候采集加进 `get_governance_snapshot` 的 11 连环**（README 审查 V3 的教训：采集序列
   只许缩短）。气候是按需查询工具，治理快照零改动。
-- 不做 `TurnSnapshot.climate` 字段；不建气候图实体（无消费者）。department 若未来要用，
+- 不做 `TypedTurnSnapshot.climate` 字段；不建气候图实体（无消费者）。department 若未来要用，
   走 `get_climate_overview` + Observation 显式补查。
 
 ## ⑧ 测试计划

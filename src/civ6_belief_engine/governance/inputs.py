@@ -4,7 +4,7 @@ The MCP adapter currently returns dataclasses from ``civ_mcp.lua.models``.
 Governance should not import those concrete adapter types: a future game
 adapter must be able to provide the same fields without importing MCP code.
 These structural contracts keep that seam explicit while preserving the
-current immutable ``TurnSnapshot`` validation.
+current immutable ``TypedTurnSnapshot`` validation.
 """
 
 from __future__ import annotations
