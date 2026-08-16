@@ -10,7 +10,7 @@ from civ_mcp.server.assembly import AppContext, lifespan, main, mcp
 from civ_mcp.server import pipeline
 from civ_mcp.server.tools import (  # noqa: F401  import side effect: tool registration
     actions,
-    belief,
+    belief_tools,
     end_turn,
     queries,
     system,
@@ -20,22 +20,26 @@ from civ_mcp.server.tools import (  # noqa: F401  import side effect: tool regis
 
 from civ_mcp import heartbeat  # noqa: F401  stable binding for test monkeypatching
 from civ_mcp.server.tools.actions import propose_trade  # noqa: F401  stable import surface
-from civ_mcp.server.tools.belief import (  # noqa: F401  stable import surface
-    _capture_governance_snapshot,
-    _governance_goal_from_dict,
-    _governance_payload,
-    _governance_proposal_from_dict,
-    _national_strategy_payload,
-    _normalize_impact_urgency,
-    _release_stale_budget_locks,
-    _reusable_typed_snapshot_for_turn,
-    _typed_snapshot_observation_for_turn,
+from civ_mcp.server.tools.belief_tools import (  # noqa: F401  stable import surface
     get_governance_brief,
     get_turn_brief,
     record_action_verification,
     resolve_governance_council,
     route_belief_decision,
     submit_governance_proposal,
+)
+from civ_mcp.server.tools.governance_adapters import (  # noqa: F401 stable import surface
+    _governance_goal_from_dict,
+    _governance_payload,
+    _governance_proposal_from_dict,
+    _national_strategy_payload,
+    _normalize_impact_urgency,
+)
+from civ_mcp.server.governance_snapshot import (  # noqa: F401 stable import surface
+    _capture_governance_snapshot,
+    _release_stale_budget_locks,
+    _reusable_typed_snapshot_for_turn,
+    _typed_snapshot_observation_for_turn,
 )
 from civ_mcp.server.pipeline import (  # noqa: F401  stable import surface
     _append_belief_context,

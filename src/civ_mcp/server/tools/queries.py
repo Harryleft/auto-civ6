@@ -10,7 +10,10 @@ from civ_mcp import heartbeat, lua as lq, narrate as nr
 log = logging.getLogger(__name__)
 from civ_mcp.server import pipeline
 from civ_mcp.server.assembly import mcp
-from civ_mcp.server.tools import belief
+from civ_mcp.server.governance_snapshot import (
+    _capture_governance_snapshot,
+    _reusable_typed_snapshot_for_turn,
+)
 from civ6_belief_engine.graph.project import WORLD_SOURCE
 
 # ---------------------------------------------------------------------------
@@ -114,10 +117,10 @@ async def get_game_overview(ctx: Context) -> str:
         if pipeline._get_belief_mode(ctx).captures_governance_snapshot:
             try:
                 engine = pipeline._get_beliefs(ctx)
-                cached = belief._reusable_typed_snapshot_for_turn(engine, turn=ov.turn)
+                cached = _reusable_typed_snapshot_for_turn(engine, turn=ov.turn)
                 if cached is None:
                     snapshot, world, projection, released, locks = (
-                        await belief._capture_governance_snapshot(ctx, engine)
+                        await _capture_governance_snapshot(ctx, engine)
                     )
                     snapshot_id = snapshot.snapshot_id
                     ruleset = world["ruleset"]

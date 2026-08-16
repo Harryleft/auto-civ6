@@ -215,8 +215,9 @@ Threat typed data
 
 - 按真实需求增加关系和专用查询。
 - 新图成为唯一写路径后，立即删除旧双写。
-- `server.py` 已于 2026-08-15 拆分为 `server/` 包（move-only）：`assembly.py` 装配、`pipeline.py` 运行管道（未来 ActionPipeline）、`tools/` 按域分组工具。阶段四删除旧 belief/governance 适配层 = 整删 `tools/belief.py` + `__init__.py` 对应再导出；`end_turn.py` 拆分仍留到本阶段。
-- 当前治理工具仍集中在 `tools/belief.py`，但其运行时读路径已改为 Graph-first；下一步才是把纯兼容入口和 `end_turn` 拆出，再删除旧适配层。
+- `server.py` 已于 2026-08-15 拆分为 `server/` 包（move-only）：`assembly.py` 装配、`pipeline.py` 运行管道（未来 ActionPipeline）、`tools/` 按域分组工具。
+- 2026-08-16 已完成旧治理适配层迁移：旧 `tools/belief.py` 物理删除；25 个 MCP 工具迁至 `tools/belief_tools.py`，纯合同适配迁至 `tools/governance_adapters.py`，typed snapshot 生命周期迁至 `server/governance_snapshot.py`；`server/__init__.py` 保留原稳定导出，MCP 工具名和签名不变。
+- `end_turn.py` 现在只负责 MCP 注册，回合日记、挂起恢复和 game-over 编排位于 `end_turn_flow.py`；运行管道仍由 `pipeline.py` 统一负责日志、门禁、事件记录和 flush。
 - 只有出现实测性能瓶颈，才评估外部图存储。
 
 ## 7. ETC 与风险门禁

@@ -50,3 +50,15 @@ def test_legacy_compatibility_shims_are_removed():
         importlib.import_module("civ_mcp.belief_engine")
     with pytest.raises(ImportError):
         importlib.import_module("civ_mcp.governance")
+
+
+def test_phase4_server_tool_boundaries_are_migrated():
+    with pytest.raises(ImportError):
+        importlib.import_module("civ_mcp.server.tools.belief")
+
+    belief_tools = importlib.import_module("civ_mcp.server.tools.belief_tools")
+    end_turn = importlib.import_module("civ_mcp.server.tools.end_turn")
+    end_turn_flow = importlib.import_module("civ_mcp.server.tools.end_turn_flow")
+    assert callable(belief_tools.get_governance_brief)
+    assert callable(end_turn.end_turn)
+    assert callable(end_turn_flow.run_end_turn)
