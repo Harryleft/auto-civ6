@@ -630,10 +630,15 @@ async def upsert_belief(
     action_threshold: float = 0.65,
     replan_threshold: float = 0.5,
     gate_scope: str = "global",
+    unknown_basis: bool = False,
 ) -> str:
     """Create or revise a belief while retaining its complete revision history.
 
     ``impact`` and ``urgency`` must be low, medium, high, or critical.
+    A belief must cite ``evidence_ids`` (observation references); if it has
+    no observable basis at all, set ``unknown_basis=true`` to explicitly
+    declare an unverified basis. Evidence-less beliefs without that
+    declaration are rejected.
     """
 
     impact = _normalize_impact_urgency(impact, "impact")
@@ -662,6 +667,7 @@ async def upsert_belief(
                 "replan_threshold": replan_threshold,
                 "review_required": False,
                 "gate_scope": gate_scope,
+                "unknown_basis": bool(unknown_basis),
             },
             turn=turn,
         )

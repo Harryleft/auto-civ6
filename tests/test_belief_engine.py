@@ -34,6 +34,8 @@ def belief_payload(**overrides):
         "category": "military",
         "probability": 0.7,
         "confidence": 0.8,
+        # 测试夹具不关注证据链；显式声明未知基础以通过证据强制校验。
+        "unknown_basis": True,
     }
     payload.update(overrides)
     return payload
