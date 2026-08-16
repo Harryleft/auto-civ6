@@ -180,7 +180,7 @@ Threat typed data
 
 - 威胁扫描显式区分失败、确认空结果和非空结果；和平单位不生成 `THREATENS`。
 - Lua 返回每座己方城市的六边格距离；`unit_id=0` 仍是有效身份。
-- `TurnSnapshot`、影子图和 `threats_near_city()` 已贯通，失去视野后默认不再作为当前威胁。
+- `TypedTurnSnapshot`、影子图和 `threats_near_city()` 已贯通，失去视野后默认不再作为当前威胁。
 - Military 只生成一个可验证的原地 `fortify` Proposal；Council、ActionIntent 和现有单写入器继续复用。
 - 显式 `EvidenceRequirement` 必定经过 `verify_then_fast`，并核对守军仍在原城市格；fortify 无可观察状态变化时返回 `OUTCOME_UNKNOWN`。
 
@@ -206,10 +206,10 @@ Threat typed data
 - 陈旧图只能触发证据缺口，不能影响当前威胁判断、Proposal 或复盘结论。
 - 防御 Proposal 必须绑定一个语义相关的军事/防御 Goal，不能借用任意最高优先级 Goal。
 - Military 源码已移除对 `civ_mcp.lua.models` 的直接导入，先用窄 Protocol 固定所需字段。
-- 其余六个 Department 也已移除对 `TurnSnapshot` 的业务读取，统一消费 `GraphSnapshotView`；同一 snapshot/turn 的陈旧图仍按证据缺口保守处理。
-- `DepartmentContext` 已拒绝 typed `TurnSnapshot` 的隐式转换；图缺失/陈旧时只返回降级视图，不再把旧快照字段带入部门判断。
+- 其余六个 Department 也已移除对 `TypedTurnSnapshot` 的业务读取，统一消费 `GraphSnapshotView`；同一 snapshot/turn 的陈旧图仍按证据缺口保守处理。
+- `DepartmentContext` 已拒绝 `TypedTurnSnapshot` 的隐式转换；图缺失/陈旧时只返回降级视图，不再把旧快照字段带入部门判断。
 
-尚未完全关闭：GameState 类型化适配层仍间接依赖 Lua DTO，`TurnSnapshot` 仍作为采集→图投影的边界类型存在；因此这里可以称为“七部门运行时读取与旧 DTO 隐式部门边界已迁移”，但不能称为“最终 DTO 适配层已删除”。
+尚未完全关闭：GameState 类型化适配层仍间接依赖 Lua DTO，`TypedTurnSnapshot` 仍作为采集→图投影的边界类型存在；因此这里可以称为“七部门运行时读取与旧 DTO 隐式部门边界已迁移”，但不能称为“最终 DTO 适配层已删除”。
 
 ### 阶段四：逐步扩展
 
@@ -247,7 +247,7 @@ ETC 的判断标准只有一句：一个需求变化只修改拥有该知识的�
 仍未关闭的边界：
 
 - 当前真实存档没有可见城市威胁，不能替代带敌军场景的军事动作验收；本次已通过的是通用治理动作闭环与回合推进。
-- TurnSnapshot 仍间接依赖 `civ_mcp.lua.models`；Military 的直接 import 已删除，但最终 DTO 边界尚未完成。
+- `TypedTurnSnapshot` 仍间接依赖 `civ_mcp.lua.models`；Military 的直接 import 已删除，但最终 DTO 边界尚未完成。
 - Proposal、Decision、Action 和 Outcome 已物化为 GraphView 节点与关系；JSONL 仍作为不可删除的历史审计源，不再作为已同步治理请求的首选运行时读模型。
 - 当前治理当前态读取已移除 JSONL 回退；原始 `list()` 仍保留给事件源物化、reload 异常恢复和历史/兼容 API，不能被当作新的治理当前态入口。`graph_view` 仍是显式派生视图，变异后由管道或 `sync_governance_graph()` 持久化。
 - Claude Code 的整份 diff 审查多次超时；拆成可核验问题后发现“陈旧 Threat 污染只读评估”和“任意 Goal 为防御提案背书”两项共识缺陷，均已修复并通过定向复核。超时的审查不计为通过证据。

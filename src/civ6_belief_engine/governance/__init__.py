@@ -64,7 +64,7 @@ from .models import (
     Proposal,
     RulesetCapabilities,
     StrategicGoal,
-    TurnSnapshot,
+    TypedTurnSnapshot,
 )
 from .graph_snapshot import GraphSnapshotView, graph_agenda, graph_goals, graph_snapshot
 from .snapshot import (
@@ -128,7 +128,7 @@ __all__ = [
     "TechCivicInput",
     "ThreatInput",
     "TypedSnapshotSource",
-    "TurnSnapshot",
+    "TypedTurnSnapshot",
     "UnitInput",
     "UnsupportedRulesetError",
     "VictoryInput",

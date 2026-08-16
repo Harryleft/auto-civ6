@@ -2,7 +2,8 @@
 
 from types import SimpleNamespace
 
-from civ6_belief_engine.governance import RulesetCapabilities, TurnSnapshot
+import civ6_belief_engine.governance as governance
+from civ6_belief_engine.governance import RulesetCapabilities, TypedTurnSnapshot
 
 
 def _overview() -> SimpleNamespace:
@@ -36,7 +37,7 @@ def _overview() -> SimpleNamespace:
     )
 
 
-def test_turn_snapshot_accepts_adapter_neutral_structural_inputs() -> None:
+def test_typed_turn_snapshot_accepts_adapter_neutral_structural_inputs() -> None:
     rival = SimpleNamespace(
         player_id=1,
         civ_name="Rival",
@@ -56,7 +57,7 @@ def test_turn_snapshot_accepts_adapter_neutral_structural_inputs() -> None:
         num_cities=0,
     )
 
-    snapshot = TurnSnapshot(
+    snapshot = TypedTurnSnapshot(
         snapshot_id="snapshot:adapter-neutral",
         turn=12,
         turn_before=12,
@@ -71,3 +72,8 @@ def test_turn_snapshot_accepts_adapter_neutral_structural_inputs() -> None:
     assert snapshot.overview is not None
     assert snapshot.overview.player_id == 0
     assert snapshot.diplomacy[0].civ_name == "Rival"
+
+
+def test_governance_public_api_names_typed_adapter_explicitly() -> None:
+    assert governance.TypedTurnSnapshot is TypedTurnSnapshot
+    assert not hasattr(governance, "TurnSnapshot")
