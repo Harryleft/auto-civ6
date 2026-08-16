@@ -553,6 +553,11 @@ async def _append_belief_context(
             values = gate.get(key) or []
             if values:
                 flags.append(f"{label}={','.join(values[:6])}")
+        stale = gate.get("knowledge_stale") or []
+        if stale:
+            flags.append(
+                "stale=" + ",".join(str(item.get("id")) for item in stale[:6])
+            )
         review_events = []
         for key in ("predictions_resolved", "predictions_overdue", "plans_needing_replan", "contradictions_created"):
             values = review.get(key) or []
