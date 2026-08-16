@@ -88,6 +88,47 @@ def test_restart_reuses_shared_connection_for_frontend_api(monkeypatch):
     assert "Loading save 0_MCP_0012 via FrontEnd API" in result
 
 
+def test_restart_waits_for_main_menu_not_just_any_lua_state(monkeypatch):
+    monkeypatch.delenv(game_launcher.OCR_RECOVERY_ENV, raising=False)
+    monkeypatch.setattr(game_launcher, "dismiss_crash_dialogs", _empty_dismiss)
+    monkeypatch.setattr(game_launcher, "kill_game", _done("killed"))
+    monkeypatch.setattr(game_launcher, "launch_game", _done("launched"))
+
+    class BootingConnection:
+        lua_states = {}
+        gamecore_index = None
+
+        def __init__(self):
+            self.reconnects = 0
+
+        async def reconnect(self):
+            self.reconnects += 1
+            self.lua_states = (
+                {3: "GameCore_Tuner"}
+                if self.reconnects == 1
+                else {24: "MainMenu"}
+            )
+
+    conn = BootingConnection()
+    loaded: list[str] = []
+
+    async def fake_frontend(_conn, save_name):
+        loaded.append(save_name)
+        return "Loading save 0_MCP_0012 via FrontEnd API"
+
+    async def no_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr(game_lifecycle, "load_save_from_frontend", fake_frontend)
+    monkeypatch.setattr(game_launcher.asyncio, "sleep", no_sleep)
+
+    result = asyncio.run(game_launcher.restart_and_load("0_MCP_0012", conn=conn))
+
+    assert conn.reconnects == 2
+    assert loaded == ["0_MCP_0012"]
+    assert "Loading save 0_MCP_0012 via FrontEnd API" in result
+
+
 async def _empty_dismiss():
     return []
 
