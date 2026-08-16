@@ -518,10 +518,211 @@ def _combat_damage(ctx: RuleContext) -> Iterator[Op]:
 
 
 # ---------------------------------------------------------------------------
+# Rule: rival military superiority / at-war threat (belief)
+# ---------------------------------------------------------------------------
+
+_RIVAL_MILITARY_ALERT_RATIO = 2.0
+_RIVAL_MILITARY_RETIRE_RATIO = 1.5
+_RIVAL_UNSEEN_RETIRE_TURNS = 10
+
+
+def _rival_military_threats(ctx: RuleContext) -> Iterator[Op]:
+    """Belief per rival whose military is at least 2x ours or that is at war."""
+    if ctx.tool != "get_diplomacy":
+        return
+    rivals = ctx.facts.get("rivals") or {}
+    our_military = ctx.metrics.get("our_military")
+    observed_ids: set[str] = set()
+    for player_id, info in rivals.items():
+        military = info.get("military")
+        if not isinstance(military, int) or military <= 0:
+            continue
+        at_war = bool(info.get("at_war"))
+        ratio = (
+            military / our_military
+            if isinstance(our_military, int) and our_military > 0
+            else None
+        )
+        if not at_war and (ratio is None or ratio < _RIVAL_MILITARY_ALERT_RATIO):
+            continue
+        player_n = player_id.removeprefix("player_")
+        entity_id = f"auto:belief:rival_threat:{player_n}"
+        observed_ids.add(entity_id)
+        if at_war and ratio is not None and ratio >= _RIVAL_MILITARY_ALERT_RATIO:
+            probability = 0.85
+        elif at_war:
+            probability = 0.7
+        else:
+            probability = 0.6
+        ratio_text = f"{ratio:.1f}x" if ratio is not None else "unknown ratio"
+        state_text = "and at war" if at_war else "without war"
+        statement = (
+            f"Player {player_n} ({info.get('civilization')}) military {military} "
+            f"is {ratio_text} ours, {state_text}."
+        )
+        yield CreateBelief(
+            entity_id,
+            {
+                "statement": statement,
+                "category": "military",
+                "probability": probability,
+                "confidence": 0.7,
+                "evidence_ids": [ctx.observation_id],
+                "falsifiers": [
+                    "rival military drops below 1.5x ours",
+                    "war ends",
+                ],
+                "tags": ["automatic", DERIVED_TAG, "military", "diplomacy"],
+                "player_id": player_n,
+                "civilization": info.get("civilization"),
+                "rival_military": military,
+                "our_military": our_military,
+                "military_ratio": ratio,
+                "at_war": at_war,
+                "first_seen_turn": ctx.turn,
+                "last_seen_turn": ctx.turn,
+            },
+        )
+
+    # Retire: threat resolved (below 1.5x and at peace) or the rival dropped
+    # out of the diplomacy list entirely (defeated / never met again).
+    for belief in ctx.active("belief", "auto:belief:rival_threat:"):
+        if belief["id"] in observed_ids:
+            continue
+        player_n = belief["id"].rsplit(":", 1)[-1]
+        rival = rivals.get(f"player_{player_n}")
+        if rival is None:
+            unseen = ctx.turn - int(belief.get("last_seen_turn") or ctx.turn)
+            if unseen >= _RIVAL_UNSEEN_RETIRE_TURNS:
+                yield ArchiveEntity(
+                    "belief",
+                    belief["id"],
+                    f"player {player_n} absent from diplomacy list for {unseen} turns",
+                )
+            continue
+        military = rival.get("military")
+        if not isinstance(military, int):
+            continue
+        at_war = bool(rival.get("at_war"))
+        ratio = (
+            military / our_military
+            if isinstance(our_military, int) and our_military > 0
+            else None
+        )
+        if not at_war and (ratio is None or ratio < _RIVAL_MILITARY_RETIRE_RATIO):
+            yield ArchiveEntity(
+                "belief",
+                belief["id"],
+                f"threat resolved: rival {military} vs our {our_military}",
+            )
+
+
+# ---------------------------------------------------------------------------
+# Rule: great people race pressure (belief, retired when we lead)
+# ---------------------------------------------------------------------------
+
+_GP_RACE_MAX_GAP_RATIO = 0.5
+
+
+def _great_people_race(ctx: RuleContext) -> Iterator[Op]:
+    """Belief per great-person class where a rival leads us by a small gap.
+
+    A large gap (leader >50% ahead of their own points) means the race is
+    effectively over — no belief is created and existing ones are retired.
+    """
+    if ctx.tool != "get_great_people_overview":
+        return
+    classes = ctx.facts.get("great_people_classes") or []
+    observed_ids: set[str] = set()
+    for cls in classes:
+        if cls.get("leader_name") in (None, "YOU"):
+            continue
+        leader_points = int(cls.get("leader_points") or 0)
+        gap = int(cls.get("lead_gap") or 0)
+        entity_id = f"auto:belief:gp_race:{_slug(cls.get('class', 'unknown')).lower()}"
+        observed_ids.add(entity_id)
+        if leader_points <= 0 or gap <= 0:
+            continue
+        gap_ratio = gap / leader_points
+        if gap_ratio > _GP_RACE_MAX_GAP_RATIO:
+            existing = ctx.engine.get("belief", entity_id)
+            if existing is not None and existing.get("status") == "active":
+                yield ArchiveEntity(
+                    "belief",
+                    entity_id,
+                    "leader's lead exceeds 50% of their points; race abandoned",
+                )
+            continue
+        yield CreateBelief(entity_id, _gp_race_belief_payload(cls, ctx))
+
+    for belief in ctx.active("belief", "auto:belief:gp_race:"):
+        if belief["id"] in observed_ids:
+            continue
+        row = next(
+            (c for c in classes if str(c.get("class")) == belief.get("gp_class")),
+            None,
+        )
+        if row is not None:
+            if row.get("leader_name") == "YOU":
+                yield ArchiveEntity("belief", belief["id"], "we now lead the race")
+            continue
+        unseen = ctx.turn - int(belief.get("last_seen_turn") or ctx.turn)
+        if unseen >= _RIVAL_UNSEEN_RETIRE_TURNS:
+            yield ArchiveEntity(
+                "belief",
+                belief["id"],
+                f"class absent from overview for {unseen} turns",
+            )
+
+
+def _gp_race_belief_payload(cls: dict[str, Any], ctx: RuleContext) -> dict[str, Any]:
+    leader_points = int(cls.get("leader_points") or 0)
+    our_points = int(cls.get("our_points") or 0)
+    gap = int(cls.get("lead_gap") or 0)
+    gap_ratio = gap / leader_points if leader_points > 0 else 0.0
+    if gap_ratio <= 0.1:
+        probability = 0.8
+    elif gap_ratio <= 0.25:
+        probability = 0.65
+    else:
+        probability = 0.5
+    class_name = str(cls.get("class") or "unknown")
+    return {
+        "statement": (
+            f"{cls.get('leader_name')} leads {class_name} race "
+            f"{gap} pts ahead ({our_points} vs {leader_points})."
+        ),
+        "category": "culture",
+        "probability": probability,
+        "confidence": 0.7,
+        "evidence_ids": [ctx.observation_id],
+        "falsifiers": [
+            "we overtake the leader in this class",
+            "leader's lead grows beyond 50% of their points",
+        ],
+        "tags": ["automatic", DERIVED_TAG, "great_people", "culture"],
+        "gp_class": class_name,
+        "leader_name": cls.get("leader_name"),
+        "leader_points": leader_points,
+        "our_points": our_points,
+        "lead_gap": gap,
+        "first_seen_turn": ctx.turn,
+        "last_seen_turn": ctx.turn,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
-RULES = (_camp_threats, _research_timing, _victory_race, _combat_damage)
+RULES = (
+    _camp_threats,
+    _research_timing,
+    _victory_race,
+    _combat_damage,
+    _rival_military_threats,
+    _great_people_race,
+)
 
 
 def run_rules(ctx: RuleContext) -> list[Op]:

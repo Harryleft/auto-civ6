@@ -230,3 +230,110 @@ def test_derivation_never_breaks_on_foreign_tools(engine):
     assert observation is not None
     assert engine.list("belief", status="active") == []
     assert engine.list("prediction", status="active") == []
+
+
+DIPLO_ALERT = """3 civilizations:
+  Germany (Frederick) — UNFRIENDLY (-12) **AT WAR** [player 2]
+    Cities: 3 (all in fog)
+    Military: 150 vs our 100
+  Rome (Trajan) — FRIENDLY (+8) [player 5]
+    Cities: 4 (all in fog)
+    Military: 220 vs our 100
+  Persia (Cyrus) — FRIENDLY (+4) [player 7]
+    Cities: 2 (all in fog)
+    Military: 80 vs our 100
+"""
+
+DIPLO_CALM = """3 civilizations:
+  Germany (Frederick) — FRIENDLY (+5) [player 2]
+    Cities: 3 (all in fog)
+    Military: 90 vs our 120
+  Rome (Trajan) — FRIENDLY (+8) [player 5]
+    Cities: 4 (all in fog)
+    Military: 130 vs our 120
+  Persia (Cyrus) — FRIENDLY (+4) [player 7]
+    Cities: 2 (all in fog)
+    Military: 80 vs our 120
+"""
+
+
+def test_rival_military_threat_belief_lifecycle(engine):
+    observe(engine, tool="get_diplomacy", result=DIPLO_ALERT, turn=10)
+
+    # At war with 1.5x military -> probability 0.7 (not 0.85: ratio < 2x).
+    germany = engine.get("belief", "auto:belief:rival_threat:2")
+    assert germany is not None and germany["status"] == "active"
+    assert germany["probability"] == 0.7
+    assert germany["military_ratio"] == pytest.approx(1.5)
+    assert "derived" in germany["tags"]
+
+    # 2.2x military without war -> 0.6.
+    rome = engine.get("belief", "auto:belief:rival_threat:5")
+    assert rome["probability"] == 0.6
+    assert rome["military_ratio"] == pytest.approx(2.2)
+
+    # Below threshold -> no belief.
+    assert engine.get("belief", "auto:belief:rival_threat:7") is None
+
+    # Threat resolved (peace + ratio < 1.5x) retires the beliefs.
+    observe(engine, tool="get_diplomacy", result=DIPLO_CALM, turn=12)
+    assert engine.get("belief", "auto:belief:rival_threat:2")["status"] == "archived"
+    assert engine.get("belief", "auto:belief:rival_threat:5")["status"] == "archived"
+    assert "resolved" in engine.get("belief", "auto:belief:rival_threat:2")["resolution"]
+
+    # A re-escalation resurrects the same entity.
+    observe(engine, tool="get_diplomacy", result=DIPLO_ALERT, turn=13)
+    assert engine.get("belief", "auto:belief:rival_threat:2")["status"] == "active"
+
+
+GP_RACE_T10 = """=== Great People Overview ===
+Standings (total points / per turn / received):
+  Scientist: YOU 40/3 (1) | Babylon 48/2 (1) | Rome 25/1 (0)
+  Writer: YOU 20/1 (0)
+Current pool:
+  No Great People in timeline.
+"""
+
+GP_RACE_T12_WE_LEAD = """=== Great People Overview ===
+Standings (total points / per turn / received):
+  Scientist: YOU 60/3 (1) | Babylon 48/2 (1) | Rome 25/1 (0)
+  Writer: YOU 22/1 (0)
+Current pool:
+  No Great People in timeline.
+"""
+
+GP_RACE_T15_GAP_WIDENS = """=== Great People Overview ===
+Standings (total points / per turn / received):
+  Scientist: YOU 30/2 (0) | Babylon 90/2 (1) | Rome 25/1 (0)
+  Writer: YOU 25/1 (0)
+Current pool:
+  No Great People in timeline.
+"""
+
+
+def test_great_people_race_belief_lifecycle(engine):
+    observe(engine, tool="get_great_people_overview", result=GP_RACE_T10, turn=10)
+
+    # Babylon leads Scientist by 8/48 (gap ratio ~0.17) -> 0.65.
+    scientist = engine.get("belief", "auto:belief:gp_race:scientist")
+    assert scientist is not None and scientist["status"] == "active"
+    assert scientist["leader_name"] == "Babylon"
+    assert scientist["lead_gap"] == 8
+    assert scientist["probability"] == 0.65
+
+    # Writer class has no rival leader -> no belief.
+    assert engine.get("belief", "auto:belief:gp_race:writer") is None
+
+    # We take the lead -> archived.
+    observe(engine, tool="get_great_people_overview", result=GP_RACE_T12_WE_LEAD, turn=12)
+    assert engine.get("belief", "auto:belief:gp_race:scientist")["status"] == "archived"
+    assert "lead" in engine.get("belief", "auto:belief:gp_race:scientist")["resolution"]
+
+    # A rival leads again after we fall behind -> resurrected.
+    observe(engine, tool="get_great_people_overview", result=GP_RACE_T10, turn=13)
+    assert engine.get("belief", "auto:belief:gp_race:scientist")["status"] == "active"
+
+    # Gap beyond 50% of leader points -> race abandoned, belief archived.
+    observe(engine, tool="get_great_people_overview", result=GP_RACE_T15_GAP_WIDENS, turn=15)
+    assert engine.get("belief", "auto:belief:gp_race:scientist")["status"] == "archived"
+    assert "50%" in engine.get("belief", "auto:belief:gp_race:scientist")["resolution"]
