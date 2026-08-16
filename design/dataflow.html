@@ -6,16 +6,16 @@
 <title>Civ6 Belief Engine · 架构总览</title>
 <style>
   :root {
-    --bg: #0b0f16; --panel: #141a24; --panel2: #1b2431; --border: #2b3545;
-    --text: #e8eef7; --muted: #8fa0b5; --gold: #d4a94a; --gold2: #f2cd7a;
-    --blue: #5aa2ff; --purple: #a37df5; --green: #46c07a;
+    --bg: #f5f7fa; --panel: #ffffff; --panel2: #eef1f5; --border: #d8dee8;
+    --text: #1c2532; --muted: #5c6a7d; --gold: #b98a2e; --gold2: #8a6a1d;
+    --blue: #2b6fd4; --purple: #7b4fd0; --green: #23924f;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; }
   body {
     background:
-      radial-gradient(1200px 500px at 80% -10%, rgba(212,169,74,.07), transparent 60%),
-      radial-gradient(900px 500px at 10% 20%, rgba(90,162,255,.05), transparent 60%),
+      radial-gradient(1200px 500px at 80% -10%, rgba(185,138,46,.08), transparent 60%),
+      radial-gradient(900px 500px at 10% 20%, rgba(43,111,212,.05), transparent 60%),
       var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
@@ -24,9 +24,9 @@
   }
 
   header { padding: 26px 24px 14px; max-width: 1440px; margin: 0 auto; }
-  header h1 { font-size: 26px; font-weight: 800; letter-spacing: .5px; }
-  header h1 .accent { color: var(--gold); }
-  header .sub { font-size: 13.5px; color: var(--muted); margin-top: 6px; max-width: 980px; }
+  header h1 { font-size: 24px; font-weight: 800; letter-spacing: .5px; }
+  header h1 .accent { color: var(--gold2); }
+  header .sub { font-size: 13.5px; color: var(--muted); margin-top: 6px; max-width: 900px; }
   header .sub b { color: var(--gold2); }
   .mininav { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
   .mininav a {
@@ -43,46 +43,42 @@
     font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 10px;
   }
   section h2 .no {
-    font-size: 12px; color: #1a1306; background: linear-gradient(180deg, var(--gold2), var(--gold));
+    font-size: 12px; color: #fff; background: linear-gradient(180deg, var(--gold), var(--gold2));
     border-radius: 8px; padding: 2px 10px; font-weight: 800;
   }
   section h2 .tag { font-size: 13px; color: var(--muted); font-weight: 400; }
-  section .desc { font-size: 13px; color: var(--muted); margin-top: 4px; }
 
   /* ---------- 主图画布 ---------- */
   .canvas {
     margin-top: 16px; background: var(--panel);
     border: 1px solid var(--border); border-radius: 16px; padding: 10px;
-    box-shadow: 0 18px 40px rgba(0,0,0,.35);
+    box-shadow: 0 14px 34px rgba(30,40,60,.08);
   }
   .canvas svg { width: 100%; height: auto; display: block; }
 
-  /* 卡片（foreignObject 内） */
   .card {
     height: 100%; display: flex; flex-direction: column; gap: 5px;
     border-radius: 14px; padding: 13px 16px;
-    background: linear-gradient(180deg, var(--panel2), #10161f);
+    background: linear-gradient(180deg, #ffffff, #f0f3f8);
     border: 1px solid var(--border);
-    box-shadow: 0 8px 20px rgba(0,0,0,.35);
+    box-shadow: 0 6px 16px rgba(30,40,60,.07);
     transition: transform .18s ease, border-color .18s ease;
   }
   .card:hover { transform: translateY(-3px); border-color: var(--gold); }
   .card .ico { font-size: 24px; line-height: 1; }
   .card h3 { font-size: 14.5px; font-weight: 700; }
   .card h3 .en { color: var(--muted); font-weight: 400; font-size: 12px; }
-  .card p { font-size: 11.5px; color: var(--muted); line-height: 1.5; }
-  .card p code { color: var(--gold2); font-size: 10.5px; background: rgba(255,255,255,.05); padding: 0 4px; border-radius: 4px; }
+  .card p { font-size: 12px; color: var(--muted); line-height: 1.5; }
   .card .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: auto; }
   .card .chip2 {
-    font-size: 10px; padding: 2px 9px; border-radius: 10px;
-    border: 1px solid var(--border); color: var(--muted); background: rgba(255,255,255,.03);
+    font-size: 10.5px; padding: 2px 9px; border-radius: 10px;
+    border: 1px solid var(--border); color: var(--muted); background: rgba(0,0,0,.02);
   }
   .card.c-gold h3 { color: var(--gold2); }
   .card.c-blue h3 { color: var(--blue); }
   .card.c-purple h3 { color: var(--purple); }
   .card.c-green h3 { color: var(--green); }
 
-  /* 连线 */
   .flow-gold { stroke: var(--gold); stroke-width: 3; }
   .flow-blue { stroke: var(--blue); stroke-width: 3; }
   .flow-purple { stroke: var(--purple); stroke-width: 2; stroke-dasharray: 9 7; }
@@ -99,23 +95,22 @@
   .cards3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 16px; }
   @media (max-width: 900px) { .cards3 { grid-template-columns: 1fr; } }
   .pcard {
-    background: linear-gradient(180deg, var(--panel2), #10161f);
+    background: linear-gradient(180deg, #ffffff, #f0f3f8);
     border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px;
     transition: transform .18s ease, border-color .18s ease;
   }
   .pcard:hover { transform: translateY(-3px); border-color: var(--gold); }
   .pcard .ico { font-size: 26px; }
   .pcard h3 { font-size: 15px; margin-top: 8px; }
-  .pcard p { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+  .pcard p { font-size: 13px; color: var(--muted); margin-top: 6px; }
   .pcard ul { list-style: none; margin-top: 10px; }
-  .pcard li { font-size: 12px; color: var(--muted); padding: 3px 0 3px 16px; position: relative; }
+  .pcard li { font-size: 12.5px; color: var(--muted); padding: 3px 0 3px 16px; position: relative; }
   .pcard li::before { content: "▸"; position: absolute; left: 0; color: var(--gold); }
 
   footer {
     max-width: 1440px; margin: 0 auto; padding: 16px 24px 30px;
     font-size: 12px; color: var(--muted); border-top: 1px solid var(--border);
   }
-  footer code { color: var(--blue); font-size: 11.5px; }
 </style>
 </head>
 <body>
@@ -123,12 +118,12 @@
 <header>
   <h1>🏛️ Civ6 Belief Engine · <span class="accent">架构总览</span></h1>
   <div class="sub">
-    一条主链路：<b>智能体 ⇄ MCP 适配层 ⇄ 文明 VI 游戏</b>；两条旁挂：<b>信念引擎（记录与推理）</b>与<b>治理门禁（动作把关）</b>，
-    全部证据最终落盘为可重放的 JSONL 事件流。唯一运行链路：文明 VI → FireTuner 127.0.0.1:4318 → civ_mcp → DSH。
+    唯一链路：<b>Civ6 → FireTuner :4318 → civ_mcp → DSH</b>。
+    主链路两侧旁挂<b>信念引擎</b>与<b>治理门禁</b>，证据全部落盘 JSONL。
   </div>
   <nav class="mininav">
     <a href="#overview">① 宏观总览</a>
-    <a href="#side">② 旁路：记录 · 把关 · 落盘</a>
+    <a href="#side">② 旁路</a>
     <a href="#turn">③ 回合循环</a>
   </nav>
 </header>
@@ -137,17 +132,16 @@
 
 <!-- ============ ① 宏观总览 ============ -->
 <section id="overview">
-  <h2><span class="no">1</span>宏观总览 <span class="tag">数据怎么走：一条主链路 + 两路旁挂</span></h2>
+  <h2><span class="no">1</span>宏观总览 <span class="tag">一条主链路 + 两路旁挂</span></h2>
   <div class="canvas">
     <svg viewBox="0 0 1400 790" role="img" aria-label="宏观数据流总览">
       <defs>
-        <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d4a94a"/></marker>
-        <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5aa2ff"/></marker>
-        <marker id="ap" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#a37df5"/></marker>
-        <marker id="agr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#46c07a"/></marker>
+        <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b98a2e"/></marker>
+        <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2b6fd4"/></marker>
+        <marker id="ap" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7b4fd0"/></marker>
+        <marker id="agr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#23924f"/></marker>
       </defs>
 
-      <!-- 连线（先画，卡片盖在上面部分） -->
       <!-- ① 工具调用：决策 → 适配 -->
       <path class="flow-gold dashflow" d="M340,195 L552,195" marker-end="url(#ag)"/>
       <text class="flowlabel" x="446" y="180"><tspan class="n">①</tspan> 工具调用 · JSON-RPC</text>
@@ -163,14 +157,14 @@
 
       <!-- ⑤ 自动记录：适配 → 域 -->
       <path class="flow-purple dashflow" d="M672,290 L672,462" marker-end="url(#ap)"/>
-      <text class="flowlabel purple" x="596" y="384" text-anchor="start"><tspan class="n">⑤</tspan> 自动记录观察</text>
+      <text class="flowlabel purple" x="596" y="384" text-anchor="start"><tspan class="n">⑤</tspan> 自动记录</text>
       <!-- ⑥ 门禁授权：域 → 适配 -->
       <path class="flow-purple dashflow" d="M728,462 L728,290" marker-end="url(#ap)"/>
       <text class="flowlabel purple" x="766" y="384" text-anchor="start"><tspan class="n">⑥</tspan> 门禁授权</text>
 
       <!-- ⑦ 信念落盘：域 → 存储 -->
       <path class="flow-green dashflow" d="M840,545 L1052,545" marker-end="url(#agr)"/>
-      <text class="flowlabel green" x="946" y="530"><tspan class="n">⑦</tspan> 信念事件落盘</text>
+      <text class="flowlabel green" x="946" y="530"><tspan class="n">⑦</tspan> 信念落盘</text>
       <!-- ⑧ 日志/存档：适配 → 存储（绕行） -->
       <path class="flow-green dashflow" d="M800,292 Q1002,368 1050,464" marker-end="url(#agr)"/>
       <text class="flowlabel green" x="932" y="362"><tspan class="n">⑧</tspan> 日志 · 日记 · 存档</text>
@@ -179,9 +173,9 @@
       <foreignObject x="60" y="140" width="280" height="150">
         <div xmlns="http://www.w3.org/1999/xhtml" class="card c-gold">
           <div class="ico">🧠</div>
-          <h3>决策层 <span class="en">DSH / LLM 智能体</span></h3>
-          <p>发出工具调用、阅读叙述文本、做出回合决策；每回合以 <code>get_game_overview</code> 强制入口开局。</p>
-          <div class="chips"><span class="chip2">RUNTIME POLICY</span><span class="chip2">回合循环</span></div>
+          <h3>决策层 <span class="en">DSH</span></h3>
+          <p>每回合 <code>get_game_overview</code> 开局</p>
+          <div class="chips"><span class="chip2">RUNTIME POLICY</span></div>
         </div>
       </foreignObject>
 
@@ -189,8 +183,8 @@
         <div xmlns="http://www.w3.org/1999/xhtml" class="card c-blue">
           <div class="ico">🔌</div>
           <h3>适配层 <span class="en">civ_mcp</span></h3>
-          <p>工具 ↔ Lua 翻译的唯一通道；查询读 GameCore、动作经 InGame 规则校验；写游戏只有单一写者。</p>
-          <div class="chips"><span class="chip2">109+ 工具</span><span class="chip2">结果过滤</span><span class="chip2">execute_mutation</span></div>
+          <p>工具 ↔ Lua 唯一通道</p>
+          <div class="chips"><span class="chip2">单一写者</span><span class="chip2">结果过滤</span></div>
         </div>
       </foreignObject>
 
@@ -198,17 +192,17 @@
         <div xmlns="http://www.w3.org/1999/xhtml" class="card c-gold">
           <div class="ico">🎮</div>
           <h3>游戏层 <span class="en">文明 VI</span></h3>
-          <p>规则权威与状态真相：所有动作由游戏自身校验，无法作弊；FireTuner 双 Lua 世界。</p>
-          <div class="chips"><span class="chip2">GameCore 读</span><span class="chip2">InGame 写</span><span class="chip2">TCP :4318</span></div>
+          <p>规则权威 · 无法作弊</p>
+          <div class="chips"><span class="chip2">GameCore 读</span><span class="chip2">InGame 写</span></div>
         </div>
       </foreignObject>
 
       <foreignObject x="560" y="470" width="280" height="150">
         <div xmlns="http://www.w3.org/1999/xhtml" class="card c-purple">
           <div class="ico">🏛️</div>
-          <h3>域层 <span class="en">信念引擎 + 治理</span></h3>
-          <p>观察 ≠ 信念：观察自动入账，信念/预测可被后续证据结算；高影响动作须议会决议 + ActionIntent 授权。</p>
-          <div class="chips"><span class="chip2">事件溯源</span><span class="chip2">推导规则</span><span class="chip2">门禁</span></div>
+          <h3>域层 <span class="en">信念 + 治理</span></h3>
+          <p>观察 ≠ 信念 · 动作须授权</p>
+          <div class="chips"><span class="chip2">事件溯源</span><span class="chip2">ActionIntent</span></div>
         </div>
       </foreignObject>
 
@@ -216,8 +210,8 @@
         <div xmlns="http://www.w3.org/1999/xhtml" class="card c-green">
           <div class="ico">💾</div>
           <h3>存储层 <span class="en">~/.civ6-mcp</span></h3>
-          <p>append-only JSONL 事件流，可重放、可审计；按 {civ}_{seed} 分键，多局游戏互不干扰。</p>
-          <div class="chips"><span class="chip2">信念</span><span class="chip2">日记</span><span class="chip2">日志</span><span class="chip2">存档</span><span class="chip2">遥测</span></div>
+          <p>append-only · 可重放</p>
+          <div class="chips"><span class="chip2">信念</span><span class="chip2">日记</span><span class="chip2">日志</span><span class="chip2">存档</span></div>
         </div>
       </foreignObject>
     </svg>
@@ -226,36 +220,35 @@
 
 <!-- ============ ② 旁路 ============ -->
 <section id="side">
-  <h2><span class="no">2</span>旁路 <span class="tag">记录 · 把关 · 落盘——不改变游戏，只围绕游戏</span></h2>
+  <h2><span class="no">2</span>旁路 <span class="tag">不改变游戏，只围绕游戏</span></h2>
   <div class="cards3">
     <div class="pcard">
       <div class="ico">📝</div>
-      <h3>信念引擎 · 记录与推理</h3>
-      <p>每次成功的查询/动作自动入账为 Observation（只存规范化事实 + 指纹，原文归遥测）；信念、预测、计划可被后续证据结算或推翻；事件日志 append-only，删除即墓碑。</p>
+      <h3>信念引擎</h3>
+      <p>成功调用自动入账 Observation，信念与预测可被证据结算。</p>
       <ul>
-        <li>derivation 规则自动派生信念与预测</li>
-        <li>预测按到期结算：确认 / 否定 / 迟到</li>
-        <li>coverage 审计区分系统产出与模型自报</li>
+        <li>自动派生信念与预测</li>
+        <li>预测到期结算</li>
+        <li>可重放审计</li>
       </ul>
     </div>
     <div class="pcard">
       <div class="ico">🛡️</div>
-      <h3>治理门禁 · 动作把关</h3>
-      <p>高影响 / 高不可逆动作必须先走：目标 → 提案 → 批评 → 议会仲裁 → hash-bound ActionIntent；未授权调用在触碰游戏前即被拒绝。</p>
+      <h3>治理门禁</h3>
+      <p>高影响动作须议会决议 + ActionIntent 授权。</p>
       <ul>
-        <li>概率与置信度始终分离，不合成单一分数</li>
-        <li>议会顺序：硬约束 → 预算锁 → 优先级 → Pareto → 机会成本</li>
-        <li>写游戏仅单一通道，部门只能建议不能执行</li>
+        <li>概率与置信分离</li>
+        <li>预算锁</li>
+        <li>部门只能建议，不能执行</li>
       </ul>
     </div>
     <div class="pcard">
       <div class="ico">💾</div>
-      <h3>持久化 · 可重放证据</h3>
-      <p>五类数据全部按 {civ}_{seed} 分键落盘：信念事件、工具日志（全部调用+耗时+结果）、回合日记（快照+五段反思）、空间注意力（研究用）、存档（恢复点）。</p>
+      <h3>持久化</h3>
+      <p>按 {civ}_{seed} 分键，多局互不干扰。</p>
       <ul>
-        <li>读档产生 epoch 标记，作废旧授权</li>
-        <li>遥测镜像事件 → Convex 成绩站点</li>
-        <li>崩溃可经存档 + 自动恢复继续</li>
+        <li>读档作废旧授权</li>
+        <li>遥测镜像 → 成绩站</li>
       </ul>
     </div>
   </div>
@@ -263,36 +256,32 @@
 
 <!-- ============ ③ 回合循环 ============ -->
 <section id="turn">
-  <h2><span class="no">3</span>回合循环 <span class="tag">每回合四步，300+ 回合的复利决策</span></h2>
+  <h2><span class="no">3</span>回合循环 <span class="tag">每回合 × 300+ 回合</span></h2>
   <div class="canvas">
     <svg viewBox="0 0 900 420" role="img" aria-label="回合循环">
       <defs>
-        <marker id="aw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8fa0b5"/></marker>
+        <marker id="aw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5c6a7d"/></marker>
       </defs>
 
-      <!-- 环形箭头（顺时针） -->
       <path class="flow-gold dashflow" d="M530,69 C690,69 770,100 770,161" fill="none" marker-end="url(#aw)"/>
       <path class="flow-gold dashflow" d="M850,239 C850,310 640,331 530,331" fill="none" marker-end="url(#aw)"/>
       <path class="flow-gold dashflow" d="M370,331 C220,331 80,310 80,239" fill="none" marker-end="url(#aw)"/>
       <path class="flow-gold dashflow" d="M80,161 C80,100 220,69 370,69" fill="none" marker-end="url(#aw)"/>
 
-      <!-- 弧线标签 -->
       <text class="flowlabel" x="672" y="112">评估局面</text>
       <text class="flowlabel" x="716" y="298">门禁放行</text>
       <text class="flowlabel" x="170" y="298">回合简报</text>
       <text class="flowlabel" x="160" y="112">新一轮</text>
 
-      <!-- 中心 -->
-      <circle cx="450" cy="200" r="58" fill="none" stroke="#2b3545" stroke-width="1.5" stroke-dasharray="4 6"/>
-      <text x="450" y="194" text-anchor="middle" fill="#8fa0b5" font-size="13">每回合</text>
-      <text x="450" y="213" text-anchor="middle" fill="#f2cd7a" font-size="14" font-weight="700">× 300+ 回合</text>
+      <circle cx="450" cy="200" r="58" fill="none" stroke="#d8dee8" stroke-width="1.5" stroke-dasharray="4 6"/>
+      <text x="450" y="194" text-anchor="middle" fill="#5c6a7d" font-size="13">每回合</text>
+      <text x="450" y="213" text-anchor="middle" fill="#8a6a1d" font-size="14" font-weight="700">× 300+ 回合</text>
 
-      <!-- 节点 -->
       <foreignObject x="370" y="30" width="160" height="78">
         <div xmlns="http://www.w3.org/1999/xhtml" class="card c-gold" style="padding:10px 14px; gap:3px">
           <div class="ico">👁️</div>
           <h3 style="font-size:13px">观察</h3>
-          <p>总览 · 蛮族清剿</p>
+          <p>总览 · 蛮族优先</p>
         </div>
       </foreignObject>
       <foreignObject x="770" y="161" width="160" height="78">
@@ -322,11 +311,7 @@
 
 </main>
 
-<footer>
-  依据 <code>AGENTS.md</code> · <code>docs/architecture-diagrams.md</code> · <code>docs/belief-engine.md</code> ·
-  <code>docs/governance-system.md</code> · <code>docs/observability.md</code> 绘制 ·
-  纯 HTML/CSS/SVG 手绘（无 Mermaid 依赖）· 悬停卡片高亮 · 虚线为数据流动动画
-</footer>
+<footer>依据 AGENTS.md 与 docs/ 绘制</footer>
 
 </body>
 </html>
