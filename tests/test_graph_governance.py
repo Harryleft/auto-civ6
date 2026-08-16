@@ -58,10 +58,31 @@ def test_graph_agenda_does_not_read_legacy_agenda_when_graph_is_stale() -> None:
     assert graph_agenda(context) == ()
 
 
-def test_graph_agenda_falls_back_to_legacy_agenda_without_graph() -> None:
+def test_graph_agenda_is_empty_without_graph() -> None:
     context = _agenda_context(graph=None, agenda=("legacy agenda",))
 
-    assert graph_agenda(context) == ("legacy agenda",)
+    assert graph_agenda(context) == ()
+
+
+def test_department_context_degrades_without_graph_instead_of_leaking_snapshot() -> None:
+    snapshot = GraphSnapshotView(
+        snapshot_id="snapshot:10",
+        turn=10,
+        player_id=0,
+        ready=True,
+        source="typed_fixture",
+        overview=SimpleNamespace(civ_name="must not leak"),
+    )
+    context = DepartmentContext(
+        snapshot=snapshot,
+        agenda=("legacy agenda",),
+        graph=None,
+    )
+
+    assert context.snapshot.ready is False
+    assert context.snapshot.source == "graph_missing"
+    assert graph_snapshot(context).overview is None
+    assert graph_agenda(context) == ()
 
 
 def test_department_context_rejects_typed_snapshot_at_graph_boundary() -> None:

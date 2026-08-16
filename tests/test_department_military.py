@@ -25,6 +25,7 @@ from civ6_belief_engine.graph import (
     project_active_goals,
     project_world_state,
 )
+from graph_test_helpers import graph_for_snapshot
 from civ_mcp.lua.models import (
     BarbarianCamp,
     BarbarianOverview,
@@ -159,7 +160,7 @@ def _context(
         snapshot=department_snapshot,
         agenda=agenda,
         goals=goals,
-        graph=graph,
+        graph=graph or graph_for_snapshot(department_snapshot, goals=goals),
     )
 
 

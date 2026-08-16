@@ -45,6 +45,22 @@ class DepartmentContext:
     def __post_init__(self) -> None:
         if not isinstance(self.snapshot, GraphSnapshotView):
             raise TypeError("snapshot must be GraphSnapshotView")
+        if self.graph is None:
+            snapshot = self.snapshot
+            object.__setattr__(
+                self,
+                "snapshot",
+                GraphSnapshotView(
+                    snapshot_id=snapshot.snapshot_id,
+                    turn=snapshot.turn,
+                    player_id=snapshot.player_id,
+                    ready=False,
+                    source="graph_missing",
+                ),
+            )
+            object.__setattr__(self, "agenda", ())
+            object.__setattr__(self, "goals", ())
+            return
         object.__setattr__(self, "agenda", _texts(tuple(self.agenda), "agenda"))
         goals = tuple(self.goals)
         if not all(isinstance(goal, StrategicGoal) for goal in goals):

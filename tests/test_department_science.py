@@ -13,6 +13,7 @@ from civ6_belief_engine.governance.models import (
     Outcome,
     OutcomeStatus,
 )
+from graph_test_helpers import graph_for_snapshot
 from civ_mcp.lua.models import (
     BarbarianCamp,
     BarbarianOverview,
@@ -101,7 +102,7 @@ def _snapshot(
 
 
 def _context(snapshot: GraphSnapshotView, *agenda: str) -> DepartmentContext:
-    return DepartmentContext(snapshot=snapshot, agenda=agenda)
+    return DepartmentContext(snapshot=snapshot, agenda=agenda, graph=graph_for_snapshot(snapshot))
 
 
 def _outcome(status: OutcomeStatus, *, error: str | None = None) -> Outcome:

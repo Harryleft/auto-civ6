@@ -8,6 +8,7 @@ from civ6_belief_engine.governance.departments.base import (
 )
 from civ6_belief_engine.governance.departments.economy import EconomyDepartment
 from civ6_belief_engine.governance.models import Outcome, OutcomeStatus
+from graph_test_helpers import graph_for_snapshot
 from civ_mcp.lua.models import (
     BarbarianCamp,
     BarbarianOverview,
@@ -84,22 +85,19 @@ def _snapshot(
 
 
 def _normal_context(*, barbarians: BarbarianOverview | None = None) -> DepartmentContext:
-    return DepartmentContext(
-        snapshot=_snapshot(
-            overview=_overview(),
-            units=(_unit(2, can_upgrade=True, cost=80), _unit(1)),
-            resources=(
-                ResourceStockpile(
-                    name="Iron",
-                    amount=20,
-                    cap=50,
-                    per_turn=2,
-                    demand=1,
-                    imported=0,
-                ),
+    snapshot = _snapshot(
+        overview=_overview(),
+        units=(_unit(2, can_upgrade=True, cost=80), _unit(1)),
+        resources=(
+            ResourceStockpile(
+                name="Iron", amount=20, cap=50, per_turn=2, demand=1, imported=0
             ),
-            barbarians=barbarians,
         ),
+        barbarians=barbarians,
+    )
+    return DepartmentContext(
+        snapshot=snapshot,
+        graph=graph_for_snapshot(snapshot),
         agenda=("maintain economic stability",),
     )
 
@@ -158,17 +156,16 @@ def test_missing_evidence_fails_closed_and_reports_degradation() -> None:
 
 def test_invalid_upgrade_evidence_does_not_claim_affordability() -> None:
     department = EconomyDepartment()
-    context = DepartmentContext(
-        snapshot=_snapshot(
-            overview=_overview(num_units=1),
-            units=(_unit(7, can_upgrade=True, cost=0),),
-            resources=(
-                ResourceStockpile(
-                    name="Iron", amount=10, cap=20, per_turn=1, demand=0, imported=0
-                ),
+    snapshot = _snapshot(
+        overview=_overview(num_units=1),
+        units=(_unit(7, can_upgrade=True, cost=0),),
+        resources=(
+            ResourceStockpile(
+                name="Iron", amount=10, cap=20, per_turn=1, demand=0, imported=0
             ),
-        )
+        ),
     )
+    context = DepartmentContext(snapshot=snapshot, graph=graph_for_snapshot(snapshot))
 
     assessment = department.assess(context)
 
