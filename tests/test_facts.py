@@ -531,3 +531,197 @@ class TestCoreQueryEnvelopes:
             narrated=nr.narrate_pathing_estimate(pathing),
         )
         assert env["facts"]["estimate"]["turns"] == 2
+
+
+class TestThirdBatchEnvelopes:
+    """第三批核心查询工具的双轨信封。"""
+
+    def test_village_envelope_known_history_coverage(self):
+        overview = lq.VillageOverview(
+            huts=[
+                lq.Village(
+                    x=3, y=4, visibility="visible", owner="none",
+                    distance_to_city=2, distance_to_military=1,
+                )
+            ]
+        )
+        narrated = nr.narrate_village_overview(overview)
+        env = fact_view.village_envelope(turn=5, overview=overview, narrated=narrated)
+        assert env["facts"]["huts"][0]["x"] == 3
+        assert env["coverage"] == {"huts": "KNOWN_HISTORY"}
+        normalized = normalize_tool_result("get_village_overview", fact_view.dumps(env))
+        assert normalized["facts"]["tool"] == "get_village_overview"
+        assert normalized["metrics"] == {}
+
+    def test_spies_envelope(self):
+        spies = [
+            lq.SpyInfo(
+                unit_id=100, unit_index=100, name="Artimpasa", x=5, y=6, rank=1,
+                xp=10, moves=2, city_name="none", city_owner=-1,
+                available_ops=["TRAVEL"],
+            )
+        ]
+        narrated = nr.narrate_spies(spies)
+        env = fact_view.spies_envelope(turn=5, spies=spies, narrated=narrated)
+        assert env["facts"]["spies"][0]["rank"] == 1
+        assert env["coverage"] == {"spies": "COMPLETE"}
+
+    def test_builder_tasks_envelope(self):
+        tasks = [
+            lq.BuilderTask(
+                priority="urgent", x=7, y=8, improvement="IMPROVEMENT_MINE",
+                resource="IRON", resource_class="strategic", city_name="巴黎",
+                nearest_builder_id=3, distance=2,
+            )
+        ]
+        builders = [
+            lq.BuilderInfo(unit_id=3, unit_index=3, x=7, y=8, charges=2, moves=1.0)
+        ]
+        narrated = nr.narrate_builder_tasks(tasks, builders)
+        env = fact_view.builder_tasks_envelope(
+            turn=5, tasks=tasks, builders=builders, narrated=narrated
+        )
+        assert env["facts"]["tasks"][0]["resource"] == "IRON"
+        assert env["facts"]["builders"][0]["charges"] == 2
+        assert env["coverage"] == {
+            "tasks": "COMPLETE",
+            "builders": "COMPLETE",
+        }
+
+    def test_empire_resources_envelope_coverage(self):
+        stockpile = lq.ResourceStockpile(
+            name="Iron", amount=12, cap=20, per_turn=1, demand=2, imported=0
+        )
+        owned = lq.OwnedResource(
+            name="Diamonds", resource_class="luxury", improved=False, x=3, y=4
+        )
+        nearby = lq.NearbyResource(
+            name="Horses", resource_class="strategic", x=9, y=9,
+            nearest_city="巴黎", distance=4,
+        )
+        narrated = nr.narrate_empire_resources(
+            [stockpile], [owned], [nearby], {"Diamonds": 1}
+        )
+        env = fact_view.empire_resources_envelope(
+            turn=5, stockpiles=[stockpile], owned=[owned], nearby=[nearby],
+            luxuries={"Diamonds": 1}, narrated=narrated,
+        )
+        assert env["facts"]["stockpiles"][0]["amount"] == 12
+        assert env["facts"]["luxuries"] == {"Diamonds": 1}
+        assert env["coverage"] == {
+            "stockpiles": "COMPLETE",
+            "owned": "COMPLETE",
+            "nearby": "KNOWN_HISTORY",
+        }
+
+    def test_notifications_and_policies_envelopes(self):
+        notif = lq.GameNotification(
+            type_name="NOTIFICATION_BARBARIAN_CAMP",
+            message="Barbarian camp spotted",
+            turn=5,
+            x=3,
+            y=4,
+            is_action_required=True,
+            resolution_hint="get_barbarian_overview",
+        )
+        env = fact_view.notifications_envelope(
+            turn=5, notifications=[notif], narrated=nr.narrate_notifications([notif])
+        )
+        assert env["facts"]["notifications"][0]["is_action_required"] is True
+        assert env["coverage"] == {"notifications": "COMPLETE"}
+
+        gov = lq.GovernmentStatus(
+            government_name="Oligarchy", government_type="GOVERNMENT_OLIGARCHY"
+        )
+        env = fact_view.policies_envelope(
+            turn=5, status=gov, narrated=nr.narrate_policies(gov)
+        )
+        assert env["facts"]["government_name"] == "Oligarchy"
+        assert env["coverage"] == {
+            "government": "COMPLETE",
+            "policies": "COMPLETE",
+        }
+
+    def test_strategic_map_envelope_coverage(self):
+        data = lq.StrategicMapData(
+            fog_boundaries=[],
+            unclaimed_resources=[
+                lq.UnclaimedResource(
+                    resource_type="RESOURCE_IRON", x=5, y=6,
+                    resource_class="RESOURCECLASS_STRATEGIC",
+                )
+            ],
+        )
+        narrated = nr.narrate_strategic_map(data)
+        env = fact_view.strategic_map_envelope(turn=5, data=data, narrated=narrated)
+        assert env["facts"]["unclaimed_resources"][0]["x"] == 5
+        assert env["coverage"] == {
+            "fog_boundaries": "COMPLETE",
+            "unclaimed_resources": "KNOWN_HISTORY",
+        }
+
+    def test_pending_trades_and_diplomacy_envelopes(self):
+        deal = lq.PendingDeal(
+            other_player_id=2, other_player_name="Germany",
+            other_leader_name="Frederick",
+            items_from_them=[
+                lq.DealItem(
+                    from_player_id=2, from_player_name="Germany", item_type="GOLD",
+                    name="Gold", amount=50, duration=0, is_from_us=False,
+                )
+            ],
+        )
+        env = fact_view.pending_trades_envelope(
+            turn=5, deals=[deal], narrated=nr.narrate_pending_deals([deal])
+        )
+        assert env["facts"]["deals"][0]["items_from_them"][0]["amount"] == 50
+        assert env["coverage"] == {"deals": "COMPLETE"}
+
+        session = lq.DiplomacySession(
+            session_id=1, other_player_id=2, other_civ_name="Germany",
+            other_leader_name="Frederick", choices=[],
+            dialogue_text="Greetings!", buttons="GOODBYE",
+        )
+        env = fact_view.pending_diplomacy_envelope(
+            turn=5, sessions=[session],
+            narrated=nr.narrate_diplomacy_sessions([session]),
+        )
+        assert env["facts"]["sessions"][0]["dialogue_text"] == "Greetings!"
+        assert env["coverage"] == {"sessions": "COMPLETE"}
+
+    def test_trade_destinations_great_people_unit_promotions(self):
+        dest = lq.TradeDestination(
+            city_name="柏林", owner_name="Germany", x=10, y=12,
+            is_domestic=False, is_city_state=False,
+        )
+        env = fact_view.trade_destinations_envelope(
+            turn=5, unit_id=9, destinations=[dest],
+            narrated=nr.narrate_trade_destinations([dest]),
+        )
+        assert env["facts"]["unit_id"] == 9
+        assert env["facts"]["destinations"][0]["city_name"] == "柏林"
+        assert env["coverage"] == {"destinations": "COMPLETE"}
+
+        gp = lq.GreatPersonInfo(
+            class_name="Great Scientist", individual_name="Hypatia",
+            era_name="Classical", cost=60, claimant="Unclaimed", player_points=30,
+        )
+        env = fact_view.great_people_envelope(
+            turn=5, people=[gp], narrated=nr.narrate_great_people([gp])
+        )
+        assert env["facts"]["people"][0]["individual_name"] == "Hypatia"
+        assert env["coverage"] == {"people": "COMPLETE"}
+
+        promo = lq.UnitPromotionStatus(
+            unit_id=131073, unit_index=1, unit_type="UNIT_WARRIOR",
+            promotions=[lq.PromotionOption(
+                promotion_type="PROMOTION_BATTLECRY", name="Battlecry",
+                description="+7 CS",
+            )],
+            xp=30, xp_needed=10, promotion_count=1,
+        )
+        env = fact_view.unit_promotions_envelope(
+            turn=5, status=promo, narrated=nr.narrate_unit_promotions(promo)
+        )
+        assert env["facts"]["promotions"][0]["promotion_type"] == "PROMOTION_BATTLECRY"
+        assert env["coverage"] == {"promotions": "COMPLETE"}
