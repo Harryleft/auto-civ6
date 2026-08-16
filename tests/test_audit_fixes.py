@@ -25,13 +25,6 @@ from civ_mcp import lua as lq
 from civ_mcp import narrate as nr
 
 
-@pytest.fixture
-def engine(tmp_path):
-    instance = BeliefEngine(run_id="test-run", directory=tmp_path)
-    instance.bind_game("CIVILIZATION_TEST", 42)
-    return instance
-
-
 def _diplomacy_narration() -> str:
     civ = lq.CivInfo(
         player_id=2,

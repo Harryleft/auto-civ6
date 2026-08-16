@@ -8,13 +8,6 @@ from civ6_belief_engine.belief_engine import BeliefEngine
 from civ6_belief_engine.forecast import calibration_report
 
 
-@pytest.fixture
-def engine(tmp_path):
-    instance = BeliefEngine(run_id="test-run", directory=tmp_path)
-    instance.bind_game("CIVILIZATION_TEST", 42)
-    return instance
-
-
 def _prediction(**overrides):
     payload = {
         "statement": "Gold will exceed 100.",
