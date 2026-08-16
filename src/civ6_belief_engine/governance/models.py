@@ -23,6 +23,7 @@ from civ_mcp.lua.models import (
     GameNotification,
     GameOverview,
     GovernmentStatus,
+    GreatPeopleOverview,
     ResourceStockpile,
     TechCivicStatus,
     ThreatInfo,
@@ -236,6 +237,7 @@ class TurnSnapshot:
     notifications: tuple[GameNotification, ...] = ()
     policies: GovernmentStatus | None = None
     barbarians: BarbarianOverview | None = None
+    great_people: GreatPeopleOverview | None = None
     threats: tuple[ThreatInfo, ...] = ()
     threat_scan_available: bool = False
     extra: Mapping[str, Any] = field(default_factory=dict)
@@ -260,6 +262,7 @@ class TurnSnapshot:
         self._typed_or_none(self.victory, VictoryProgress, "victory")
         self._typed_or_none(self.policies, GovernmentStatus, "policies")
         self._typed_or_none(self.barbarians, BarbarianOverview, "barbarians")
+        self._typed_or_none(self.great_people, GreatPeopleOverview, "great_people")
         for name, item_type in (
             ("cities", CityInfo),
             ("units", UnitInfo),

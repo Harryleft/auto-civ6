@@ -18,6 +18,7 @@ class Department(StrEnum):
     PRODUCTION = "production"
     ECONOMY = "economy"
     DIPLOMACY = "diplomacy"
+    GREAT_PEOPLE = "great_people"
 
 
 def _text(value: str, name: str) -> str:

@@ -23,6 +23,7 @@ from civ_mcp.lua.models import (
     GameNotification,
     GameOverview,
     GovernmentStatus,
+    GreatPeopleOverview,
     ResourceStockpile,
     TechCivicStatus,
     ThreatInfo,
@@ -55,6 +56,8 @@ class TypedSnapshotSource(Protocol):
     async def get_policies(self) -> GovernmentStatus: ...
 
     async def get_barbarian_overview(self) -> BarbarianOverview: ...
+
+    async def get_great_people_overview(self) -> GreatPeopleOverview: ...
 
     async def get_threat_scan(self) -> list[ThreatInfo]: ...
 
@@ -135,6 +138,7 @@ def build_turn_snapshot(
     notifications: Sequence[GameNotification] = (),
     policies: GovernmentStatus | None = None,
     barbarians: BarbarianOverview | None = None,
+    great_people: GreatPeopleOverview | None = None,
     threats: Sequence[ThreatInfo] | None = None,
     extra: Mapping[str, Any] | None = None,
 ) -> GovernanceTurnSnapshot:
@@ -297,6 +301,7 @@ def build_turn_snapshot(
         "notifications": notification_rows,
         "policies": policies,
         "barbarians": barbarians,
+        "great_people": great_people,
         "threats": threat_rows,
         "threat_scan_available": threat_scan_available,
         "extra": frozen_extra,
@@ -320,6 +325,7 @@ def build_turn_snapshot(
         notifications=notification_rows,
         policies=policies,
         barbarians=barbarians,
+        great_people=great_people,
         threats=threat_rows,
         threat_scan_available=threat_scan_available,
         extra=frozen_extra,
@@ -602,6 +608,48 @@ def snapshot_world_state(snapshot: GovernanceTurnSnapshot) -> dict[str, Any]:
             _add_entity(entities, "tile", tile_id, {"x": unit.x, "y": unit.y})
             _add_entity(entities, "barbarian_unit", unit_id, _canonical(unit))
             _add_relation(relations, "located_at", unit_id, tile_id)
+
+    if snapshot.great_people is not None:
+        metrics["great_people.classes_known"] = len(snapshot.great_people.standings)
+        for standing in snapshot.great_people.standings:
+            if not standing.class_name or not standing.entries:
+                continue
+            slug = (
+                "".join(c if c.isalnum() else "-" for c in standing.class_name.lower()).strip("-")
+                or "unknown"
+            )
+            entries = standing.entries
+            ours = next(
+                (e for e in entries if e.player_id == snapshot.player_id),
+                entries[0],
+            )
+            leader = max(
+                (e for e in entries if e.player_id != snapshot.player_id),
+                key=lambda e: e.points_total,
+                default=None,
+            )
+            rival_leads = leader is not None and leader.points_total > ours.points_total
+            entity_id = f"great_person_class:{slug}"
+            _add_entity(
+                entities,
+                "great_person_class",
+                entity_id,
+                {
+                    "class_name": standing.class_name,
+                    "class_type": standing.class_type,
+                    "our_points": ours.points_total,
+                    "our_per_turn": ours.points_per_turn,
+                    "leader_name": leader.player_name if rival_leads else "self",
+                    "leader_points": leader.points_total if rival_leads else ours.points_total,
+                    "lead_gap": leader.points_total - ours.points_total if rival_leads else 0,
+                },
+            )
+            metrics[f"great_people.{slug}.our_points"] = ours.points_total
+            if rival_leads:
+                metrics[f"great_people.{slug}.leader_points"] = leader.points_total
+                metrics[f"great_people.{slug}.lead_gap"] = (
+                    leader.points_total - ours.points_total
+                )
 
     if snapshot.threat_scan_available:
         hostile_threats = tuple(

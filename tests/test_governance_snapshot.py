@@ -722,3 +722,60 @@ def test_threat_scan_failure_degrades_snapshot_to_unavailable(monkeypatch):
     assert snapshot.turn == 42
     assert snapshot.threat_scan_available is False
     assert snapshot.threats == ()
+
+
+def test_world_projection_projects_great_people_standings():
+    overview = _overview()
+    from civ_mcp.lua.models import (
+        GPClassStanding,
+        GPPlayerPoints,
+        GreatPeopleOverview,
+    )
+
+    gp = GreatPeopleOverview(
+        standings=[
+            GPClassStanding(
+                class_name="Great Scientist",
+                class_type="GREAT_PERSON_CLASS_SCIENTIST",
+                entries=[
+                    GPPlayerPoints(player_id=0, player_name="India", points_total=40, points_per_turn=3, instances_earned=1),
+                    GPPlayerPoints(player_id=1, player_name="Babylon", points_total=48, points_per_turn=2, instances_earned=1),
+                ],
+            ),
+            GPClassStanding(
+                class_name="Great Writer",
+                class_type="GREAT_PERSON_CLASS_WRITER",
+                entries=[
+                    GPPlayerPoints(player_id=0, player_name="India", points_total=25, points_per_turn=1, instances_earned=0),
+                ],
+            ),
+        ]
+    )
+    snapshot = build_turn_snapshot(
+        turn_before=42,
+        turn_after=42,
+        captured_at=1_723_500_000.0,
+        overview=overview,
+        cities=[_city(1, 3, 4), _city(2, 6, 7)],
+        units=[_unit(11, 3, 5), _unit(22, 6, 8)],
+        great_people=gp,
+    )
+    world = snapshot_world_state(snapshot)
+
+    scientist = next(
+        e for e in world["entities"]
+        if e["entity_id"] == "great_person_class:great-scientist"
+    )
+    assert scientist["attributes"]["our_points"] == 40
+    assert scientist["attributes"]["leader_name"] == "Babylon"
+    assert scientist["attributes"]["lead_gap"] == 8
+
+    writer = next(
+        e for e in world["entities"]
+        if e["entity_id"] == "great_person_class:great-writer"
+    )
+    assert writer["attributes"]["leader_name"] == "self"
+    assert writer["attributes"]["lead_gap"] == 0
+
+    assert world["metrics"]["great_people.classes_known"] == 2
+    assert world["metrics"]["great_people.great-scientist.lead_gap"] == 8

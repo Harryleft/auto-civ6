@@ -415,7 +415,7 @@ def test_governance_mcp_tools_are_registered():
     }.issubset(names)
 
 
-def test_national_strategy_payload_runs_and_serializes_all_six_departments():
+def test_national_strategy_payload_runs_and_serializes_all_seven_departments():
     snapshot = TurnSnapshot(
         snapshot_id="snapshot:modules",
         turn=12,
@@ -432,14 +432,14 @@ def test_national_strategy_payload_runs_and_serializes_all_six_departments():
     assert [item["department"] for item in payload["departments"]] == [
         department.value for department in Department
     ]
-    assert len(payload["departments"]) == 6
+    assert len(payload["departments"]) == 7
     assert "details" not in payload
     assert json.loads(json.dumps(payload))["campaign"]["campaign_id"].startswith(
         "campaign:12:"
     )
 
     detailed = _national_strategy_payload(brief, include_details=True)
-    assert len(detailed["details"]["assessments"]) == 6
+    assert len(detailed["details"]["assessments"]) == 7
 
 
 class _FakeEmitter:
