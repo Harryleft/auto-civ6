@@ -206,6 +206,7 @@ def test_dsh_auto_resume_uses_frontend_api_for_main_menu_and_reconnects(monkeypa
     class MainMenuConnection:
         gamecore_index = None
         ingame_index = None
+        lua_states = {24: "MainMenu"}
 
         @property
         def is_connected(self):
@@ -239,6 +240,89 @@ def test_dsh_auto_resume_uses_frontend_api_for_main_menu_and_reconnects(monkeypa
 
     assert loaded == ["0_MCP_0012"]
     assert "connect" in events
+
+
+def test_dsh_auto_resume_waits_for_main_menu_state_during_game_boot(monkeypatch):
+    """Auto-resume started while the game is still booting must wait for the
+    MainMenu Lua state before attempting the FrontEnd load."""
+
+    events: list[str] = []
+
+    class BootingConnection:
+        gamecore_index = None
+        ingame_index = None
+        lua_states: dict[int, str] = {}
+        ticks = 0
+
+        @property
+        def is_connected(self):
+            return True
+
+        async def connect(self):
+            events.append("connect")
+            self.ticks += 1
+            if self.ticks >= 2:
+                self.lua_states = {24: "MainMenu"}
+
+        async def reconnect(self):
+            events.append("reconnect")
+            self.ticks += 1
+            if self.ticks >= 2:
+                self.lua_states = {24: "MainMenu"}
+            if self.ticks >= 3:
+                self.gamecore_index = 10
+                self.ingame_index = 11
+
+    monkeypatch.setattr(game_launcher, "get_latest_recovery_save", lambda: "0_MCP_0012")
+    loaded: list[str] = []
+
+    async def fake_load(_conn, save):
+        loaded.append(save)
+        return "Save loading (FrontEnd API)"
+
+    monkeypatch.setattr(server, "load_recovery_save_from_frontend", fake_load)
+    monkeypatch.setattr(game_launcher, "_is_tuner_port_open", lambda: False)
+    monkeypatch.setattr(server.heartbeat, "write", lambda *_args, **_kwargs: None)
+
+    asyncio.run(server._auto_resume(BootingConnection()))
+
+    assert loaded == ["0_MCP_0012"]
+    assert events == ["connect", "reconnect", "reconnect"]
+
+
+def test_dsh_auto_resume_gives_up_when_main_menu_never_appears(monkeypatch):
+    """A bounded wait must not hang or load anything when the MainMenu Lua
+    state never appears (e.g. the game is stuck before the menu)."""
+
+    class NoMenuConnection:
+        gamecore_index = None
+        ingame_index = None
+        lua_states: dict[int, str] = {3: "GameCore_Tuner"}
+
+        @property
+        def is_connected(self):
+            return True
+
+        async def connect(self):
+            pass
+
+        async def reconnect(self):
+            pass
+
+    monkeypatch.setattr(server, "_AUTO_RESUME_MAIN_MENU_WAIT_SECONDS", 2)
+    monkeypatch.setattr(game_launcher, "get_latest_recovery_save", lambda: "0_MCP_0012")
+    loaded: list[str] = []
+    monkeypatch.setattr(
+        server,
+        "load_recovery_save_from_frontend",
+        lambda _conn, save: loaded.append(save) or "Loading recovery save",
+    )
+    monkeypatch.setattr(game_launcher, "_is_tuner_port_open", lambda: False)
+    monkeypatch.setattr(server.heartbeat, "write", lambda *_args, **_kwargs: None)
+
+    asyncio.run(server._auto_resume(NoMenuConnection()))
+
+    assert loaded == []
 
 
 def test_auto_resume_background_does_not_start_watchers_until_recovery_finishes(

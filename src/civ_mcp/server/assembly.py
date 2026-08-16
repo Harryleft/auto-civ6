@@ -52,6 +52,10 @@ class AppContext:
 
 DSH_AUTO_RESUME_ENV = "CIV_MCP_DSH_AUTO_RESUME"
 
+# 从 FireTuner 可达（启动初期）到主菜单 Lua state 就绪的最长等待秒数。
+# 游戏冷启动时 state 列表逐步增长，载档必须等 MainMenu state 真正出现。
+_AUTO_RESUME_MAIN_MENU_WAIT_SECONDS = 120
+
 
 def _dsh_auto_resume_enabled() -> bool:
     """Return whether the DSH-only startup recovery path is explicitly enabled."""
@@ -64,6 +68,32 @@ def _dsh_auto_resume_enabled() -> bool:
     }
 
 
+async def _wait_for_main_menu_state(conn: GameConnection) -> bool:
+    """Wait (bounded) until Civ VI exposes its ``MainMenu`` Lua state.
+
+    The FireTuner state list grows while the game boots; a handshake during
+    boot reports GameCore/InGame absent before the menu is actually usable.
+    Loading through the FrontEnd API requires the ``MainMenu`` state to
+    exist, so waiting here prevents racing a fresh game launch and keeps
+    the refusal of unsafe UI fallbacks instead of retrying a doomed load.
+    """
+
+    for attempt in range(_AUTO_RESUME_MAIN_MENU_WAIT_SECONDS):
+        try:
+            if conn.is_connected:
+                await conn.reconnect()
+            else:
+                await conn.connect()
+            if "MainMenu" in conn.lua_states.values():
+                return True
+        except ConnectionError:
+            pass
+        if attempt % 15 == 0:
+            log.info("DSH auto-resume: waiting for main menu (%ds)", attempt)
+        await asyncio.sleep(1)
+    return False
+
+
 async def _auto_resume(conn: GameConnection) -> None:
     """Optionally launch Civ 6 and load the latest known recovery save.
 
@@ -74,8 +104,9 @@ async def _auto_resume(conn: GameConnection) -> None:
 
     A successful FireTuner handshake with both ``GameCore_Tuner`` and
     ``InGame`` means the game is already in a playable session, so no action
-    is attempted.  A handshake that reaches only the main menu uses the same
-    native FrontEnd/LoadScreen calls as the normal UI, without OCR clicks.
+    is attempted.  A handshake that reaches the main menu (waited for, since
+    the state list still grows while the game boots) uses the same native
+    FrontEnd/LoadScreen calls as the normal UI, without OCR clicks.
     """
 
     save_name = game_launcher.get_latest_recovery_save()
@@ -118,6 +149,16 @@ async def _auto_resume(conn: GameConnection) -> None:
                 "skipping GUI recovery",
                 conn.gamecore_index,
                 conn.ingame_index,
+            )
+            return
+        # GameCore/InGame absent does not prove the menu is usable: the
+        # state list still grows while the game boots.  Wait for the
+        # MainMenu state before attempting the FrontEnd load.
+        if not await _wait_for_main_menu_state(conn):
+            log.error(
+                "DSH auto-resume: MainMenu Lua state never appeared within %ds; "
+                "leaving the game untouched",
+                _AUTO_RESUME_MAIN_MENU_WAIT_SECONDS,
             )
             return
         log.info("DSH auto-resume: FireTuner reached the main menu; loading %s", save_name)

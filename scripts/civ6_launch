@@ -65,8 +65,18 @@ usage() {
 
 tuner_listening() { lsof -nP -iTCP:4318 -sTCP:LISTEN >/dev/null 2>&1; }
 tuner_has_client() { lsof -nP -iTCP:4318 -sTCP:ESTABLISHED >/dev/null 2>&1; }
+# FireTuner 单客户端：客户端连上后游戏会关闭 LISTEN，只剩 ESTABLISHED，
+# 所以"端口可达"必须同时考虑两种状态
+tuner_available() { lsof -nP -iTCP:4318 >/dev/null 2>&1; }
 port_used() { lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; }
-game_running() { pgrep -x Civ6 >/dev/null 2>&1; }
+# macOS 实际进程名为 Civ6_Exe_Child / Civ6_Exe（与 game_launcher._PROCESS_NAMES 一致）
+game_running() {
+  local name
+  for name in Civ6_Exe_Child Civ6_Exe Civ6; do
+    pgrep -x "$name" >/dev/null 2>&1 && return 0
+  done
+  return 1
+}
 
 preflight() {
   # macOS Homebrew 装在 /opt/homebrew/bin，可能不在当前 PATH（如最小环境启动）
@@ -131,10 +141,10 @@ launch_game() {
 wait_for_tuner() {
   local deadline=$(( $(date +%s) + game_timeout ))
   local waited=0
-  printf '等待 FireTuner（127.0.0.1:4318）监听，最长 %ss ...\n' "$game_timeout"
+  printf '等待 FireTuner（127.0.0.1:4318）可达，最长 %ss ...\n' "$game_timeout"
   while [ "$(date +%s)" -lt "$deadline" ]; do
-    if tuner_listening; then
-      printf '  [ok] FireTuner 已在 127.0.0.1:4318 监听。\n'
+    if tuner_available; then
+      printf '  [ok] FireTuner 已在 127.0.0.1:4318 就绪。\n'
       return 0
     fi
     sleep 5
@@ -156,10 +166,10 @@ do_check() {
   check_tuner_config || exit 1
   printf '%s\n' '--- 端口状态 ---'
   if command -v lsof >/dev/null 2>&1; then
-    if tuner_listening; then
-      printf '  [ok] 4318 监听中（游戏 FireTuner 可达）\n'
+    if tuner_available; then
+      printf '  [ok] 4318 可达（游戏 FireTuner 已就绪）\n'
     else
-      printf '  [warn] 4318 未监听（游戏未运行，或未开启 Tuner）\n'
+      printf '  [warn] 4318 不可达（游戏未运行，或未开启 Tuner）\n'
     fi
     if tuner_has_client; then
       printf '  [fail] 4318 已有已连接客户端（FireTuner 单客户端限制）\n' >&2
@@ -193,8 +203,10 @@ do_status() {
       else
         printf '  4318       : 监听中，无客户端（可接入）\n'
       fi
+    elif tuner_has_client; then
+      printf '  4318       : 已连接（FireTuner 单客户端被持有；客户端连上后无 LISTEN）\n'
     else
-      printf '  4318       : 未监听\n'
+      printf '  4318       : 未监听（游戏未运行，或未开启 Tuner）\n'
     fi
   fi
   local dsh_pids mcp_pids
@@ -270,9 +282,16 @@ do_down() {
         osascript -e 'tell application "Civilization VI" to quit' >/dev/null 2>&1 || true
       sleep 5
       if game_running; then
-        pkill -TERM -x Civ6 2>/dev/null || true
+        local name
+        for name in Civ6_Exe_Child Civ6_Exe Civ6; do
+          pkill -TERM -x "$name" 2>/dev/null || true
+        done
         sleep 5
-        pkill -KILL -x Civ6 2>/dev/null || true
+        if game_running; then
+          for name in Civ6_Exe_Child Civ6_Exe Civ6; do
+            pkill -KILL -x "$name" 2>/dev/null || true
+          done
+        fi
       fi
     else
       printf '  [skip] 文明 VI：未运行。\n'
@@ -328,7 +347,7 @@ start_stack() {
     fi
   fi
   if [ "$launch_game" -eq 1 ]; then
-    if tuner_listening; then
+    if tuner_available; then
       printf '  [ok] 游戏已在运行且 FireTuner 可访问，跳过游戏启动。\n'
     else
       launch_game
@@ -342,8 +361,8 @@ start_stack() {
     fi
   else
     printf '  [skip] 已指定 --no-game，不主动启动/等待游戏。\n'
-    if ! tuner_listening; then
-      printf '  [warn] 4318 未监听；若未叠加 --no-resume，MCP 层仍可能自行启动游戏。\n'
+    if ! tuner_available; then
+      printf '  [warn] 4318 不可达；若未叠加 --no-resume，MCP 层仍可能自行启动游戏。\n'
     fi
   fi
   if [ "$run_check" -eq 1 ]; then
