@@ -6,8 +6,9 @@ from collections.abc import Iterable
 
 from civ_mcp.lua.models import CivInfo
 
-from ..models import Outcome, OutcomeStatus
+from ..models import Outcome
 from .base import (
+    BaseDepartment,
     Department,
     DepartmentAssessment,
     DepartmentContext,
@@ -95,7 +96,7 @@ def _uncontacted_civs(context: DepartmentContext) -> tuple[CivInfo, ...]:
     )
 
 
-class DiplomacyDepartment:
+class DiplomacyDepartment(BaseDepartment):
     """Assess diplomatic exposure without issuing game actions.
 
     The module treats an absent or uncontacted diplomatic row as unknown
@@ -289,14 +290,9 @@ class DiplomacyDepartment:
     ) -> ReviewDisposition:
         """Replan failed/stale work; continue while diplomatic pressure remains."""
 
-        if not isinstance(context, DepartmentContext):
-            raise TypeError("context must be DepartmentContext")
-        if not isinstance(outcome, Outcome):
-            raise TypeError("outcome must be Outcome")
-        if outcome.turn != context.snapshot.turn:
-            return ReviewDisposition.REPLAN
-        if outcome.status is not OutcomeStatus.SUCCEEDED:
-            return ReviewDisposition.REPLAN
+        precheck = self._review_precheck(context, outcome)
+        if precheck is not None:
+            return precheck
         assessment = self.assess(context)
         if assessment.degraded:
             return ReviewDisposition.REPLAN

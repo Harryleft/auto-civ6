@@ -8,7 +8,7 @@ from types import MappingProxyType
 from typing import Mapping, Protocol, runtime_checkable
 
 from ...graph import GraphView
-from ..models import Outcome, Proposal, StrategicGoal, TurnSnapshot
+from ..models import Outcome, OutcomeStatus, Proposal, StrategicGoal, TurnSnapshot
 
 
 class Department(StrEnum):
@@ -169,6 +169,42 @@ class ReviewDisposition(StrEnum):
     CONTINUE = "continue"
     REPLAN = "replan"
     EXIT = "exit"
+
+
+class BaseDepartment:
+    """Shared deterministic outcome-review logic for strategy departments."""
+
+    #: Outcome result keys whose True value marks the workstream complete (EXIT).
+    completion_flags: tuple[str, ...] = ()
+
+    def _review_precheck(
+        self, context: DepartmentContext, outcome: Outcome
+    ) -> ReviewDisposition | None:
+        """Common guards; returns a disposition for stale/invalid outcomes."""
+
+        if not isinstance(context, DepartmentContext):
+            raise TypeError("context must be DepartmentContext")
+        if not isinstance(outcome, Outcome):
+            raise TypeError("outcome must be Outcome")
+        if outcome.turn != context.snapshot.turn:
+            return ReviewDisposition.REPLAN
+        if outcome.status is not OutcomeStatus.SUCCEEDED:
+            return ReviewDisposition.REPLAN
+        return None
+
+    def review(
+        self, context: DepartmentContext, outcome: Outcome
+    ) -> ReviewDisposition:
+        """Review an outcome and choose a deterministic next disposition."""
+
+        precheck = self._review_precheck(context, outcome)
+        if precheck is not None:
+            return precheck
+        if any(outcome.result.get(flag) is True for flag in self.completion_flags):
+            return ReviewDisposition.EXIT
+        if self.assess(context).degraded:
+            return ReviewDisposition.REPLAN
+        return ReviewDisposition.CONTINUE
 
 
 @runtime_checkable
