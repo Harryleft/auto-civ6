@@ -114,6 +114,13 @@ _GOVERNANCE_GRAPH_ENTITY_TYPES = frozenset(
         "decision",
         "action",
         "outcome",
+        "hypothesis",
+        "prediction",
+        "plan",
+        "surprise",
+        "contradiction",
+        "attribution",
+        "simulation",
     }
 )
 
@@ -1489,7 +1496,7 @@ class BeliefEngine:
         return deepcopy(events[-max(1, min(last_n, 1000)) :])
 
     def current_metrics(self) -> dict[str, Any]:
-        observations = self.list("observation", status="active")
+        observations = self.current_governance_entities("observation", status="active")
         # Metrics are snapshots per source tool. Keeping every historical key
         # would make removed/schema-corrected fields live forever. Select the
         # newest successful observation from each source, then merge sources.
@@ -1599,7 +1606,7 @@ class BeliefEngine:
 
         proven_actions = [
             action
-            for action in self.list("action", status="active")
+            for action in self.current_governance_entities("action", status="active")
             if action.get("tool") == "unit_action"
             and action.get("success") is True
             and action.get("outcome_status") == "succeeded"
@@ -1615,7 +1622,7 @@ class BeliefEngine:
             action_params = action.get("params") or {}
             founded_tile = self._action_target_from_result(action)
             source_decision_id = action.get("decision_id")
-            for decision in self.list("decision", status=None):
+            for decision in self.current_governance_entities("decision", status=None):
                 if decision.get("id") == source_decision_id:
                     continue
                 if decision.get("decision_state") not in open_states:
@@ -2553,7 +2560,7 @@ class BeliefEngine:
         turn: int,
         source: str = "manual",
     ) -> dict[str, Any]:
-        prediction = self.get("prediction", prediction_id)
+        prediction = self.current_governance_entity("prediction", prediction_id)
         if not prediction:
             raise BeliefEngineError(f"Unknown prediction: {prediction_id}")
         probability = float(prediction["probability"])
@@ -2586,7 +2593,7 @@ class BeliefEngine:
             "major" if unexpectedness >= 0.75 else "high" if unexpectedness >= 0.6 else "medium"
         )
         surprise_id = f"surprise_{prediction['id']}_{turn}"
-        existing = self.get("surprise", surprise_id)
+        existing = self.current_governance_entity("surprise", surprise_id)
         if existing and existing.get("status") != "deleted":
             return existing
         surprise = self.create(
@@ -2630,7 +2637,7 @@ class BeliefEngine:
         # Validate the complete pool before appending any event.  Event sourcing
         # cannot roll back a partially written redistribution.
         for hypothesis_id in probabilities:
-            hypothesis = self.get("hypothesis", hypothesis_id)
+            hypothesis = self.current_governance_entity("hypothesis", hypothesis_id)
             if not hypothesis or hypothesis.get("topic_id") != topic_id:
                 raise BeliefEngineError(
                     f"Hypothesis {hypothesis_id} does not belong to topic {topic_id}"
@@ -2665,7 +2672,7 @@ class BeliefEngine:
         """
         members = [
             hypothesis
-            for hypothesis in self.list("hypothesis", status="active")
+            for hypothesis in self.current_governance_entities("hypothesis", status="active")
             if hypothesis.get("topic_id") == topic_id
         ]
         if not members:
@@ -2844,7 +2851,7 @@ class BeliefEngine:
         # stale-knowledge：自动信念超过阈值回合未刷新 → 提示（不阻断）。
         # 引擎无法感知"应该查而没查"，这是对观测新鲜度的最低限度告警。
         stale_knowledge: list[dict[str, Any]] = []
-        for belief in self.list("belief", status="active"):
+        for belief in self.current_governance_entities("belief", status="active"):
             belief_id = str(belief.get("id") or "")
             stale_turns = next(
                 (
@@ -2879,7 +2886,7 @@ class BeliefEngine:
                     }
                 )
 
-        for prediction in self.list("prediction", status="active"):
+        for prediction in self.current_governance_entities("prediction", status="active"):
             rule = prediction.get("evaluation")
             evaluation = evaluate_condition(rule, metrics) if isinstance(rule, dict) else None
             if evaluation is True:
@@ -2923,7 +2930,7 @@ class BeliefEngine:
         # evaluates False once the metric arrives still settles the claim
         # disconfirmed (the outcome demonstrably does not hold); a late True
         # is ambiguous about *when* it became true and stays overdue.
-        for prediction in self.list("prediction", status="overdue"):
+        for prediction in self.current_governance_entities("prediction", status="overdue"):
             rule = prediction.get("evaluation")
             if not isinstance(rule, dict):
                 continue
@@ -2939,9 +2946,9 @@ class BeliefEngine:
 
         existing_contradiction_keys = {
             entity.get("contradiction_key")
-            for entity in self.list("contradiction", status="active")
+            for entity in self.current_governance_entities("contradiction", status="active")
         }
-        for belief in self.list("belief", status="active"):
+        for belief in self.current_governance_entities("belief", status="active"):
             for index, expectation in enumerate(belief.get("expectations") or []):
                 if not isinstance(expectation, dict):
                     continue
@@ -2975,7 +2982,7 @@ class BeliefEngine:
                         turn=turn,
                     )
 
-        for plan in self.list("plan", status="active"):
+        for plan in self.current_governance_entities("plan", status="active"):
             triggered = []
             for condition in plan.get("exit_conditions") or []:
                 if isinstance(condition, dict) and evaluate_condition(condition, metrics) is True:
@@ -3032,7 +3039,7 @@ class BeliefEngine:
         review = self.review(turn=turn)
         take = max(1, min(int(limit), 50))
 
-        beliefs = self.list("belief", status="active")
+        beliefs = self.current_governance_entities("belief", status="active")
         beliefs.sort(
             key=lambda item: (
                 bool(item.get("review_required")),
@@ -3044,16 +3051,16 @@ class BeliefEngine:
         )
         predictions = [
             item
-            for item in self.list("prediction", status=None)
+            for item in self.current_governance_entities("prediction", status=None)
             if item.get("status") in {"active", "overdue"}
         ]
         plans = [
             item
-            for item in self.list("plan", status=None)
+            for item in self.current_governance_entities("plan", status=None)
             if item.get("status") in {"active", "needs_replan"}
         ]
-        surprises = self.list("surprise", status="active")
-        contradictions = self.list("contradiction", status="active")
+        surprises = self.current_governance_entities("surprise", status="active")
+        contradictions = self.current_governance_entities("contradiction", status="active")
 
         def compact(entity: dict[str, Any], fields: tuple[str, ...]) -> dict[str, Any]:
             return {
@@ -3495,7 +3502,7 @@ class BeliefEngine:
             belief_disagreement,
         )
         expected_loss = probability * impact_score
-        active_surprises = self.list("surprise", status="active")
+        active_surprises = self.current_governance_entities("surprise", status="active")
         surprise_score = max(
             (
                 {"medium": 0.4, "high": 0.7, "major": 1.0}.get(
@@ -3628,7 +3635,7 @@ class BeliefEngine:
     def update_attribution_posteriors(
         self, attribution_id: str, *, turn: int
     ) -> dict[str, Any]:
-        attribution = self.get("attribution", attribution_id)
+        attribution = self.current_governance_entity("attribution", attribution_id)
         if not attribution:
             raise BeliefEngineError(f"Unknown attribution: {attribution_id}")
         weighted: list[tuple[dict[str, Any], float]] = []
@@ -3659,7 +3666,7 @@ class BeliefEngine:
     def metrics(self) -> dict[str, Any]:
         predictions = [
             item
-            for item in self.list("prediction", status=None)
+            for item in self.current_governance_entities("prediction", status=None)
             if item.get("status") in {"confirmed", "disconfirmed"}
         ]
         errors = [float(item.get("prediction_error", 0)) for item in predictions]
@@ -3669,20 +3676,20 @@ class BeliefEngine:
             if float(item.get("probability", 0)) >= 0.75
             and item.get("status") == "disconfirmed"
         ]
-        plans = self.list("plan", status=None)
+        plans = self.current_governance_entities("plan", status=None)
         completed_plans = [item for item in plans if item.get("status") == "completed"]
         decisions = self.current_governance_entities("decision", status=None)
         return {
-            "belief_count": len(self.list("belief", status="active")),
-            "hypothesis_count": len(self.list("hypothesis", status="active")),
-            "prediction_count": len(self.list("prediction", status=None)),
+            "belief_count": len(self.current_governance_entities("belief", status="active")),
+            "hypothesis_count": len(self.current_governance_entities("hypothesis", status="active")),
+            "prediction_count": len(self.current_governance_entities("prediction", status=None)),
             "resolved_prediction_count": len(predictions),
             "mean_prediction_error": round(sum(errors) / len(errors), 4) if errors else None,
             "overconfidence_rate": round(len(overconfident) / len(predictions), 4)
             if predictions
             else None,
-            "surprise_frequency": len(self.list("surprise", status=None)),
-            "contradiction_count": len(self.list("contradiction", status=None)),
+            "surprise_frequency": len(self.current_governance_entities("surprise", status=None)),
+            "contradiction_count": len(self.current_governance_entities("contradiction", status=None)),
             "plan_completion_rate": round(len(completed_plans) / len(plans), 4)
             if plans
             else None,
@@ -3708,7 +3715,11 @@ class BeliefEngine:
             "run_id": self.run_id,
             "current_metrics": self.current_metrics(),
             "entities": {
-                entity_type: self.list(entity_type, status=status)
+                entity_type: (
+                    self.current_governance_entities(entity_type, status=status)
+                    if entity_type in _GOVERNANCE_GRAPH_ENTITY_TYPES
+                    else self.list(entity_type, status=status)
+                )
                 for entity_type in sorted(BELIEF_ENTITY_TYPES)
             },
             "research_metrics": self.metrics(),

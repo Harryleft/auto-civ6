@@ -8,7 +8,8 @@ from types import MappingProxyType
 from typing import Mapping, Protocol, runtime_checkable
 
 from ...graph import GraphView
-from ..models import Outcome, OutcomeStatus, Proposal, StrategicGoal, TurnSnapshot
+from ..graph_snapshot import GraphSnapshotView
+from ..models import Outcome, OutcomeStatus, Proposal, StrategicGoal
 
 
 class Department(StrEnum):
@@ -36,14 +37,18 @@ def _texts(values: tuple[str, ...], name: str) -> tuple[str, ...]:
 
 @dataclass(frozen=True, slots=True)
 class DepartmentContext:
-    snapshot: TurnSnapshot
+    snapshot: GraphSnapshotView
     agenda: tuple[str, ...] = ()
     goals: tuple[StrategicGoal, ...] = ()
     graph: GraphView | None = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.snapshot, TurnSnapshot):
-            raise TypeError("snapshot must be TurnSnapshot")
+        if not isinstance(self.snapshot, GraphSnapshotView):
+            # The old typed snapshot is accepted only at this compatibility
+            # boundary. Departments never receive or inspect that DTO.
+            object.__setattr__(
+                self, "snapshot", GraphSnapshotView.from_legacy(self.snapshot)
+            )
         object.__setattr__(self, "agenda", _texts(tuple(self.agenda), "agenda"))
         goals = tuple(self.goals)
         if not all(isinstance(goal, StrategicGoal) for goal in goals):
