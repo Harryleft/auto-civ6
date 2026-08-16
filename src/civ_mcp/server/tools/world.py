@@ -121,13 +121,24 @@ async def get_trade_destinations(ctx: Context, unit_id: int) -> str:
 
     Shows domestic and international destinations. Use unit_action
     with action='trade_route' and target_x/target_y to start a route.
+
+    Returns a double-track JSON envelope: structured ``facts`` (destinations
+    with COMPLETE coverage) plus the legacy human-readable ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
     unit_index = unit_id % 65536
 
     async def _run():
         dests = await gs.get_trade_destinations(unit_index)
-        return nr.narrate_trade_destinations(dests)
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.trade_destinations_envelope(
+                turn=turn,
+                unit_id=unit_id,
+                destinations=dests,
+                narrated=nr.narrate_trade_destinations(dests),
+            )
+        )
 
     return await pipeline._logged(ctx, "get_trade_destinations", {"unit_id": unit_id}, _run)
 
@@ -285,12 +296,22 @@ async def get_great_people(ctx: Context) -> str:
 
     Shows which Great People are available, their recruitment cost,
     and which civilization (if any) is recruiting them.
+
+    Returns a double-track JSON envelope: structured ``facts`` (people with
+    COMPLETE coverage) plus the legacy human-readable ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
 
     async def _run():
         gp = await gs.get_great_people()
-        return nr.narrate_great_people(gp)
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.great_people_envelope(
+                turn=turn,
+                people=gp,
+                narrated=nr.narrate_great_people(gp),
+            )
+        )
 
     return await pipeline._logged(ctx, "get_great_people", {}, _run)
 
