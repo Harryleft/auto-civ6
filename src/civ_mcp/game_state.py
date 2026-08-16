@@ -105,6 +105,11 @@ class GameState:
                     self._run_aborted = False
                     self._advisor_calls_this_turn = 0
                     self._advisor_budget_warning = None
+                    # The ruleset belongs to the game, not the process: a
+                    # new game may load a different one, and a stale
+                    # capability cache would mis-arbitrate notifications
+                    # and wrongly short-circuit dedication tools.
+                    self._ruleset_caps = None
                 self._game_identity = new_id
                 return self._game_identity
         return ("unknown", 0)
@@ -1600,11 +1605,24 @@ class GameState:
                 await self.get_game_overview()
             except Exception:
                 log.debug("Notification arbitration warm-up failed", exc_info=True)
-        if self._ruleset_caps is not None:
-            notifications = lq.downgrade_unsatisfiable_notifications(
-                notifications, self._ruleset_caps
-            )
-        return notifications
+        return self._arbitrate_notifications(notifications)
+
+    def _arbitrate_notifications(
+        self, notifications: list[lq.GameNotification]
+    ) -> list[lq.GameNotification]:
+        """Single arbitration choke point for every parsed notification list.
+
+        Both consumers — ``get_notifications`` and the ``end_turn`` turn
+        report — route through here, so a stale engine notice (e.g. a
+        Standard-Rules dedication leftover) is downgraded everywhere it
+        could otherwise resurface as an Action Required directive.
+        """
+
+        if self._ruleset_caps is None:
+            return notifications
+        return lq.downgrade_unsatisfiable_notifications(
+            notifications, self._ruleset_caps
+        )
 
     # ------------------------------------------------------------------
     # Snapshot-diff for turn event detection
