@@ -110,6 +110,12 @@ _PORT_POLL_TIMEOUT = 180
 _LAUNCH_ATTEMPTS = 3
 # Tuner TCP port
 _TUNER_PORT = 4318
+# Post-load leader introduction can remain visible after the FrontEnd API has
+# accepted a save.  Keep this bounded: a recovery call must not claim success
+# merely because the native load request returned.
+_POST_LOAD_SETTLE_SECONDS = 15
+_POST_LOAD_VERIFY_ATTEMPTS = 45
+_POST_LOAD_RETRY_INTERVAL_SECONDS = 1
 
 # OCR can click an unrelated window when FireTuner is unavailable.  Keep it
 # disabled for normal MCP recovery; callers must explicitly opt in when they
@@ -2767,6 +2773,91 @@ async def load_save_from_menu(save_name: str | None = None) -> str:
     return await asyncio.to_thread(_navigate_to_save_sync, save_name, tab)
 
 
+def _game_states_ready(conn: GameConnection) -> bool:
+    """Return whether the shared FireTuner connection sees playable game state."""
+
+    return (
+        getattr(conn, "gamecore_index", None) is not None
+        and getattr(conn, "ingame_index", None) is not None
+    )
+
+
+async def _finish_frontend_load(conn: GameConnection) -> bool:
+    """Wait for a native save load, optionally dismissing its leader screen.
+
+    ``load_save_from_frontend`` returns as soon as Civ VI accepts the load
+    request.  Civ VI may then show the leader introduction before exposing
+    ``GameCore_Tuner``/``InGame``.  Reuse the existing, window-bound OCR and
+    positional helpers only after the caller explicitly opts into OCR
+    recovery; otherwise this function only reconnects and verifies state.
+    """
+
+    await asyncio.sleep(_POST_LOAD_SETTLE_SECONDS)
+
+    # First give Civ VI's native Automation auto-start a chance to finish.
+    # This also refreshes the shared connection after FrontEnd tears down the
+    # old Lua states, without creating a second FireTuner client.
+    try:
+        await conn.reconnect()
+    except ConnectionError:
+        pass
+    if _game_states_ready(conn):
+        return True
+
+    if not ocr_recovery_enabled():
+        log.warning(
+            "FrontEnd save load did not reach GameCore/InGame; refusing "
+            "leader-screen OCR because %s is not enabled",
+            OCR_RECOVERY_ENV,
+        )
+        return False
+
+    # Both helpers are deliberately gated above.  _click_text itself verifies
+    # the Civ 6 window before clicking; the positional fallback is retained
+    # for the low-contrast CONTINUE ribbon that OCR may miss.
+    try:
+        clicked = await asyncio.to_thread(
+            lambda: _click_text("CONTINUE", timeout=105, post_delay=1),
+        )
+    except Exception as exc:
+        log.warning("Post-load CONTINUE OCR failed safely: %s", exc)
+        clicked = False
+    if clicked:
+        log.info("Post-load: clicked CONTINUE GAME via OCR")
+    else:
+        log.warning("Post-load: OCR missed CONTINUE; trying positional click")
+        try:
+            await asyncio.to_thread(_click_continue_positional)
+        except Exception as exc:
+            log.warning("Post-load positional CONTINUE failed safely: %s", exc)
+
+    await asyncio.sleep(3)
+    for attempt in range(_POST_LOAD_VERIFY_ATTEMPTS):
+        try:
+            await conn.reconnect()
+            if _game_states_ready(conn):
+                log.info(
+                    "Post-load: GameCore/InGame ready after CONTINUE (%ds)",
+                    attempt,
+                )
+                return True
+        except ConnectionError:
+            if attempt % 10 == 0:
+                log.info("Post-load: waiting for GameCore/InGame (%ds)", attempt)
+
+        # Match the existing assembly recovery behavior when the positional
+        # click was needed: retry it while still remaining explicitly opt-in.
+        if not clicked and attempt > 0 and attempt % 10 == 0:
+            try:
+                await asyncio.to_thread(_click_continue_positional)
+            except Exception as exc:
+                log.warning("Post-load positional retry failed safely: %s", exc)
+        await asyncio.sleep(_POST_LOAD_RETRY_INTERVAL_SECONDS)
+
+    log.error("Post-load: GameCore/InGame never appeared after CONTINUE")
+    return False
+
+
 async def restart_and_load(
     save_name: str | None = None,
     *,
@@ -2841,6 +2932,20 @@ async def restart_and_load(
                     "Error: restart landed in an active game session instead "
                     "of MainMenu; refusing unsafe recovery takeover."
                 )
+
+            if load_result.startswith("Loading save "):
+                if await _finish_frontend_load(conn):
+                    load_result = f"{load_result}; GameCore/InGame ready"
+                else:
+                    load_result = (
+                        "Error: FrontEnd load started but GameCore/InGame was "
+                        f"not verified ({load_result}). "
+                        + (
+                            "OCR post-load recovery is disabled by default."
+                            if not ocr_recovery_enabled()
+                            else "Post-load CONTINUE could not be verified."
+                        )
+                    )
     elif ocr_recovery_enabled():
         # Legacy callers without a shared connection must explicitly accept
         # the unsafe GUI fallback.
