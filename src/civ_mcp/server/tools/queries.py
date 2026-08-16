@@ -130,11 +130,6 @@ async def get_game_overview(ctx: Context) -> str:
                     capabilities = facts.get("capabilities") or {}
                     snapshot_id = str(facts.get("snapshot_id") or "unknown")
                     ruleset = str(capabilities.get("ruleset") or "unknown")
-                    current_entities = [
-                        item
-                        for item in engine.list("world_entity", status="active")
-                        if item.get("snapshot_id") == snapshot_id
-                    ]
                     changed_count = 0
                     archived_count = 0
                     lock_count = len(
