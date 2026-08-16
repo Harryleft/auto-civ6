@@ -169,6 +169,16 @@ class GameState:
             tech_civic = await self.get_tech_civics()
             policies = await self.get_policies()
             barbarians = await self.get_barbarian_overview()
+            great_people = None
+            try:
+                great_people = await self.get_great_people_overview()
+            except (LuaError, ValueError) as exc:
+                # Fail-degraded like the threat scan: a broken great people
+                # query must not blind the whole governance snapshot.
+                log.warning(
+                    "Great people overview failed; snapshot degrades: %s", exc
+                )
+                great_people = None
             try:
                 threats = await self.get_threat_scan()
             except (LuaError, ValueError) as exc:
@@ -206,6 +216,7 @@ class GameState:
                     resources=stockpiles,
                     policies=policies,
                     barbarians=barbarians,
+                    great_people=great_people,
                     threats=threats,
                     notifications=notifications,
                     extra={"collector": "GameState.get_governance_snapshot"},

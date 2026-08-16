@@ -710,6 +710,7 @@ def test_threat_scan_failure_degrades_snapshot_to_unavailable(monkeypatch):
     monkeypatch.setattr(gs, "get_tech_civics", AsyncMock(return_value=None))
     monkeypatch.setattr(gs, "get_policies", AsyncMock(return_value=None))
     monkeypatch.setattr(gs, "get_barbarian_overview", AsyncMock(return_value=None))
+    monkeypatch.setattr(gs, "get_great_people_overview", AsyncMock(return_value=None))
     monkeypatch.setattr(gs, "get_notifications", AsyncMock(return_value=[]))
 
     async def _broken_scan():
