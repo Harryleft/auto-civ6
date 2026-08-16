@@ -1,0 +1,406 @@
+#!/usr/bin/env bash
+# civ6_launch — 一键启动与运行「文明 VI + DSH」整条链路。
+#
+# 链路: 文明 VI → FireTuner 127.0.0.1:4318 → civ6-mcp MCP 适配层 → DSH
+#
+# 用法:
+#   ./scripts/civ6_launch [命令] [选项] [任务提示词...]
+#
+# 命令（默认 web）:
+#   web       启动游戏（未运行时）并前台运行 DSH Web（就绪后访问
+#             http://127.0.0.1:3080，Ctrl-C 退出）
+#   headless  同上，但运行一次性 DSH headless 会话；其余参数作为任务提示词
+#   agent     受控回合循环（等价 ./scripts/civ6_agent，默认 1 回合；
+#             该模式始终开启受控恢复，--no-resume 对其无效）
+#   check     环境与 overlay 就绪检查（不启动游戏、不连接 FireTuner）
+#   status    当前链路各部分状态（只读，不改变任何进程）
+#   down      停止 DSH 及其 MCP 子进程；默认保留游戏进程
+#
+# 选项:
+#   --no-game        不主动启动/等待游戏。注意：默认 auto-resume 开启时，
+#                    MCP 层仍可能在启动时自行拉起游戏；如需完全不让任何
+#                    一方启动游戏，请叠加 --no-resume
+#   --no-resume      不设置 CIV_MCP_DSH_AUTO_RESUME（默认开启：MCP 启动时
+#                    探测是否已在对局，仅到主菜单才经 Civ VI FrontEnd API
+#                    载入最近恢复存档，不依赖 OCR 点击）
+#   --skip-check     跳过 ./scripts/deepseek_harness check
+#   --timeout N      等待 FireTuner 端口的最长秒数（默认 240）
+#   --turns N        仅 agent：完整回合数（默认 1）
+#   --with-coding    仅 agent：叠加 Coding 模块
+#   --game           仅 down：一并退出文明 VI（先尝试优雅退出）
+#   -h|--help        显示帮助
+#
+# 安全约束（与 scripts/deepseek_harness 一致）:
+#   - FireTuner 只允许一个客户端；4318 已有已连接客户端或 8000 被占用时
+#     直接失败，不自动杀任何进程
+#   - 停止请用 down（只杀本链路进程）；关闭游戏需显式 --game
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+project_root="$(cd "$script_dir/.." && pwd)"
+harness_dir="${DEEPSEEK_HARNESS_DIR:-$project_root/../deepseek-harness}"
+if [ -d "$harness_dir" ]; then
+  # status/down 不经过 preflight，这里统一转成绝对路径，
+  # 否则 pgrep -f 的相对路径模式匹配不到实际进程命令行
+  harness_dir="$(cd "$harness_dir" && pwd)"
+fi
+dsh_home="${CIV6_DSH_HOME:-$project_root/.dsh}"
+wrapper="$script_dir/deepseek_harness"
+
+command="web"
+launch_game=1
+auto_resume=1
+run_check=1
+game_timeout=240
+agent_turns=1
+with_coding=0
+kill_game=0
+task_prompt=()
+
+usage() {
+  sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+# ---------- 基础工具 ----------
+
+tuner_listening() { lsof -nP -iTCP:4318 -sTCP:LISTEN >/dev/null 2>&1; }
+tuner_has_client() { lsof -nP -iTCP:4318 -sTCP:ESTABLISHED >/dev/null 2>&1; }
+port_used() { lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; }
+game_running() { pgrep -x Civ6 >/dev/null 2>&1; }
+
+preflight() {
+  # macOS Homebrew 装在 /opt/homebrew/bin，可能不在当前 PATH（如最小环境启动）
+  if ! command -v node >/dev/null 2>&1 && [ -x /opt/homebrew/bin/node ]; then
+    export PATH="/opt/homebrew/bin:$PATH"
+  fi
+  command -v node >/dev/null 2>&1 || { printf 'ERROR: 缺少 node。\n' >&2; exit 1; }
+  command -v uv >/dev/null 2>&1 || { printf 'ERROR: 缺少 uv。\n' >&2; exit 1; }
+  if [ ! -d "$harness_dir" ]; then
+    printf 'ERROR: 未找到 DeepSeek Harness checkout: %s\n' "$harness_dir" >&2
+    printf '可用 DEEPSEEK_HARNESS_DIR 指定其目录。\n' >&2
+    exit 1
+  fi
+  harness_dir="$(cd "$harness_dir" && pwd)"
+  dsh_bin="$harness_dir/apps/cli/lib/bin.js"
+  if [ ! -f "$dsh_bin" ]; then
+    printf 'ERROR: DeepSeek Harness 未构建: %s\n' "$dsh_bin" >&2
+    printf '请先在 %s 执行 pnpm install && pnpm run build。\n' "$harness_dir" >&2
+    exit 1
+  fi
+  if ! command -v lsof >/dev/null 2>&1; then
+    printf 'WARN: 未找到 lsof，跳过端口检查（仍会尝试启动）。\n' >&2
+  fi
+}
+
+# 核对 FireTuner 开关（macOS/Linux 为 AppOptions.txt；Windows 在游戏内菜单）
+check_tuner_config() {
+  local opts=""
+  case "$(uname -s)" in
+    Darwin)
+      opts="$HOME/Library/Application Support/Sid Meier's Civilization VI/Firaxis Games/Sid Meier's Civilization VI/AppOptions.txt"
+      ;;
+    Linux)
+      opts="$HOME/.local/share/aspyr-media/Sid Meier's Civilization VI/AppOptions.txt"
+      ;;
+  esac
+  if [ -z "$opts" ] || [ ! -f "$opts" ]; then
+    printf '  [warn] 未找到 AppOptions.txt（%s），无法核对 EnableTuner 1；\n' "$opts"
+    printf '         请确认游戏调试接口已开启。\n'
+    return 0
+  fi
+  if grep -q '^EnableTuner[[:space:]]*1' "$opts"; then
+    printf '  [ok] AppOptions.txt 已开启 EnableTuner 1（成就统计会关闭）\n'
+  else
+    printf '  [fail] AppOptions.txt 未设置 EnableTuner 1：%s\n' "$opts" >&2
+    printf '         请改为 EnableTuner 1 后重启游戏，再运行本脚本。\n' >&2
+    return 1
+  fi
+}
+
+# ---------- 游戏 ----------
+
+launch_game() {
+  printf '启动文明 VI（Steam app 289070）...\n'
+  case "$(uname -s)" in
+    Darwin) open 'steam://run/289070' ;;
+    Linux) steam -applaunch 289070 >/dev/null 2>&1 || nohup steam -applaunch 289070 >/dev/null 2>&1 & ;;
+    *) printf 'WARN: 当前平台请自行通过 Steam 启动文明 VI。\n' >&2 ;;
+  esac
+}
+
+wait_for_tuner() {
+  local deadline=$(( $(date +%s) + game_timeout ))
+  local waited=0
+  printf '等待 FireTuner（127.0.0.1:4318）监听，最长 %ss ...\n' "$game_timeout"
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    if tuner_listening; then
+      printf '  [ok] FireTuner 已在 127.0.0.1:4318 监听。\n'
+      return 0
+    fi
+    sleep 5
+    waited=$((waited + 5))
+    if [ $((waited % 30)) -eq 0 ]; then
+      printf '  ... 已等待 %ss；冷启动通常需要 2-3 分钟。\n' "$waited"
+      printf '      若出现 Aspyr 启动器，请点击「开始」；并进入单人游戏或载入存档。\n'
+    fi
+  done
+  return 1
+}
+
+# ---------- 检查 / 状态 / 停止 ----------
+
+do_check() {
+  printf '=== civ6 + DSH 环境检查 ===\n'
+  preflight
+  printf '%s\n' '--- FireTuner 配置 ---'
+  check_tuner_config || exit 1
+  printf '%s\n' '--- 端口状态 ---'
+  if command -v lsof >/dev/null 2>&1; then
+    if tuner_listening; then
+      printf '  [ok] 4318 监听中（游戏 FireTuner 可达）\n'
+    else
+      printf '  [warn] 4318 未监听（游戏未运行，或未开启 Tuner）\n'
+    fi
+    if tuner_has_client; then
+      printf '  [fail] 4318 已有已连接客户端（FireTuner 单客户端限制）\n' >&2
+      exit 1
+    fi
+    if port_used 8000; then
+      printf '  [fail] 8000 端口被占用，可能有旧 civ-mcp host\n' >&2
+      exit 1
+    fi
+  fi
+  printf '%s\n' '--- DSH overlay ---'
+  ( cd "$project_root" && "$wrapper" check )
+}
+
+do_status() {
+  printf '=== 链路状态 ===\n'
+  if pgrep -x steam_osx >/dev/null 2>&1 || pgrep -x steam >/dev/null 2>&1; then
+    printf '  Steam      : 运行中\n'
+  else
+    printf '  Steam      : 未运行\n'
+  fi
+  if game_running; then
+    printf '  文明 VI    : 进程存在\n'
+  else
+    printf '  文明 VI    : 未运行\n'
+  fi
+  if command -v lsof >/dev/null 2>&1; then
+    if tuner_listening; then
+      if tuner_has_client; then
+        printf '  4318       : 监听中，且已有已连接客户端\n'
+      else
+        printf '  4318       : 监听中，无客户端（可接入）\n'
+      fi
+    else
+      printf '  4318       : 未监听\n'
+    fi
+  fi
+  local dsh_pids mcp_pids
+  dsh_pids="$(pgrep -f "$harness_dir/apps/cli/lib/bin.js" 2>/dev/null || true)"
+  mcp_pids="$(pgrep -f 'run civ-mcp' 2>/dev/null || true; pgrep -f 'bin/civ-mcp' 2>/dev/null || true)"
+  if command -v lsof >/dev/null 2>&1; then
+    if port_used 8000; then
+      if [ -n "$mcp_pids" ]; then
+        printf '  8000       : 被本链路 civ-mcp 的 Web API 占用（正常）\n'
+      else
+        printf '  8000       : 被占用（可能有其他 civ-mcp host）\n'
+      fi
+    else
+      printf '  8000       : 空闲\n'
+    fi
+  fi
+  if [ -n "$dsh_pids" ]; then
+    printf '  DSH 进程   : %s\n' "$(printf '%s\n' "$dsh_pids" | sort -nu | tr '\n' ' ')"
+  else
+    printf '  DSH 进程   : 无\n'
+  fi
+  if [ -n "$mcp_pids" ]; then
+    printf '  MCP 子进程 : %s\n' "$(printf '%s\n' "$mcp_pids" | sort -nu | tr '\n' ' ')"
+  else
+    printf '  MCP 子进程 : 无\n'
+  fi
+  if curl -sS -o /dev/null --max-time 2 http://127.0.0.1:3080 >/dev/null 2>&1; then
+    printf '  DSH Web    : http://127.0.0.1:3080 可访问\n'
+  else
+    printf '  DSH Web    : 未运行\n'
+  fi
+}
+
+_kill_pids() {
+  local pids="$1" desc="$2" pid
+  if [ -z "$pids" ]; then
+    printf '  [skip] %s：无进程。\n' "$desc"
+    return 0
+  fi
+  printf '  [stop] %s：' "$desc"
+  # shellcheck disable=SC2013
+  for pid in $(printf '%s\n' "$pids" | sort -nu); do
+    kill -TERM "$pid" 2>/dev/null && printf '%s ' "$pid"
+  done
+  printf '\n'
+  # uv 监督进程可能延迟转发 TERM，给最长 10s 的退出窗口
+  local alive="" i
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    alive=""
+    for pid in $(printf '%s\n' "$pids" | sort -nu); do
+      kill -0 "$pid" 2>/dev/null && alive="$alive $pid"
+    done
+    [ -z "$alive" ] && break
+    sleep 1
+  done
+  if [ -n "$alive" ]; then
+    printf '  [kill] 10s 内未退出（TERM 无效）: %s\n' "$alive"
+    for pid in $alive; do
+      kill -KILL "$pid" 2>/dev/null || true
+    done
+    sleep 1
+  fi
+}
+
+do_down() {
+  printf '=== 停止链路 ===\n'
+  _kill_pids "$(pgrep -f "$harness_dir/apps/cli/lib/bin.js" 2>/dev/null || true)" 'DSH host'
+  _kill_pids "$(pgrep -f 'run civ-mcp' 2>/dev/null || true; pgrep -f 'bin/civ-mcp' 2>/dev/null || true)" 'MCP 子进程'
+  if [ "$kill_game" -eq 1 ]; then
+    if game_running; then
+      printf '  [stop] 文明 VI：先尝试优雅退出 ...\n'
+      osascript -e 'tell application "Sid Meier'"'"'s Civilization VI" to quit' >/dev/null 2>&1 ||
+        osascript -e 'tell application "Civilization VI" to quit' >/dev/null 2>&1 || true
+      sleep 5
+      if game_running; then
+        pkill -TERM -x Civ6 2>/dev/null || true
+        sleep 5
+        pkill -KILL -x Civ6 2>/dev/null || true
+      fi
+    else
+      printf '  [skip] 文明 VI：未运行。\n'
+    fi
+  else
+    printf '  [keep] 保留文明 VI 进程（如需一并退出请加 --game）。\n'
+  fi
+  printf '  完成。若还有残留 MCP 进程，请用 ps 检查后手动处理。\n'
+}
+
+# ---------- DSH ----------
+
+start_dsh() {
+  local resume="0"
+  if [ "$auto_resume" -eq 1 ]; then
+    resume="1"
+  fi
+  case "$command" in
+    web)
+      printf '== 启动 DSH Web ==\n'
+      printf '  就绪后访问 http://127.0.0.1:3080（首次加载约需 10-30s；Ctrl-C 退出）\n'
+      exec env CIV_MCP_DSH_AUTO_RESUME="$resume" "$wrapper" web
+      ;;
+    headless)
+      printf '== 启动 DSH headless ==\n'
+      if [ "${#task_prompt[@]}" -gt 0 ]; then
+        exec env CIV_MCP_DSH_AUTO_RESUME="$resume" "$wrapper" headless "${task_prompt[@]}"
+      else
+        exec env CIV_MCP_DSH_AUTO_RESUME="$resume" "$wrapper" headless
+      fi
+      ;;
+    agent)
+      # civ6_agent 语义：受控恢复始终开启，回合数有界
+      printf '== 启动受控回合循环（%s 回合%s）==\n' "$agent_turns" "$( [ "$with_coding" -eq 1 ] && printf '，含 Coding 模块' || true)"
+      exec "$script_dir/civ6_agent" --turns "$agent_turns" $( [ "$with_coding" -eq 1 ] && printf -- '--with-coding' || true)
+      ;;
+  esac
+}
+
+start_stack() {
+  printf '=== 预检 ===\n'
+  preflight
+  check_tuner_config || exit 1
+  if command -v lsof >/dev/null 2>&1; then
+    if tuner_has_client; then
+      printf '  [fail] TCP 4318 已有已连接的 FireTuner 客户端（单客户端限制）。\n' >&2
+      printf '         请先停止其他 civ-mcp / Codex / Pi / 测试客户端，再重试。\n' >&2
+      exit 1
+    fi
+    if port_used 8000; then
+      printf '  [fail] TCP 8000 已被占用，可能有旧 civ-mcp host 在运行。\n' >&2
+      exit 1
+    fi
+  fi
+  if [ "$launch_game" -eq 1 ]; then
+    if tuner_listening; then
+      printf '  [ok] 游戏已在运行且 FireTuner 可访问，跳过游戏启动。\n'
+    else
+      launch_game
+      wait_for_tuner || {
+        printf '  [fail] %ss 内 FireTuner 未监听，可能原因：\n' "$game_timeout" >&2
+        printf '         - Aspyr 启动器弹窗未点「开始」；\n' >&2
+        printf '         - 游戏启动失败（冷启动通常需要 2-3 分钟）；\n' >&2
+        printf '         - AppOptions.txt 未开启 EnableTuner 1。\n' >&2
+        exit 1
+      }
+    fi
+  else
+    printf '  [skip] 已指定 --no-game，不主动启动/等待游戏。\n'
+    if ! tuner_listening; then
+      printf '  [warn] 4318 未监听；若未叠加 --no-resume，MCP 层仍可能自行启动游戏。\n'
+    fi
+  fi
+  if [ "$run_check" -eq 1 ]; then
+    printf '=== DSH overlay 检查 ===\n'
+    "$wrapper" check
+  fi
+  if [ "${#task_prompt[@]}" -gt 0 ]; then
+    start_dsh "${task_prompt[@]}"
+  else
+    start_dsh
+  fi
+}
+
+# ---------- 参数解析 ----------
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    web|headless|agent|check|status|down) command="$1"; shift ;;
+    --no-game) launch_game=0; shift ;;
+    --no-resume) auto_resume=0; shift ;;
+    --skip-check) run_check=0; shift ;;
+    --timeout)
+      if [ "$#" -lt 2 ]; then
+        printf 'ERROR: --timeout 需要一个秒数。\n' >&2
+        exit 2
+      fi
+      game_timeout="$2"
+      shift 2
+      ;;
+    --turns)
+      if [ "$#" -lt 2 ]; then
+        printf 'ERROR: --turns 需要一个正整数。\n' >&2
+        exit 2
+      fi
+      agent_turns="$2"
+      shift 2
+      ;;
+    --with-coding) with_coding=1; shift ;;
+    --game) kill_game=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    -*) printf 'ERROR: 未知参数: %s\n' "$1" >&2; usage >&2; exit 2 ;;
+    *) task_prompt+=("$1"); shift ;;
+  esac
+done
+
+if ! [[ "$game_timeout" =~ ^[1-9][0-9]*$ ]]; then
+  printf 'ERROR: --timeout 必须是正整数，得到: %s\n' "$game_timeout" >&2
+  exit 2
+fi
+if ! [[ "$agent_turns" =~ ^[1-9][0-9]*$ ]]; then
+  printf 'ERROR: --turns 必须是正整数，得到: %s\n' "$agent_turns" >&2
+  exit 2
+fi
+
+case "$command" in
+  check) do_check ;;
+  status) do_status ;;
+  down) do_down ;;
+  web|headless|agent) start_stack ;;
+esac

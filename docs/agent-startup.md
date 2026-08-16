@@ -12,6 +12,26 @@
 
 默认情况下 DSH 不负责启动文明 VI，必须先进入一局游戏；不要把 DSH Web 页面、Python 进程或 Civ 6 进程单独当成集成成功。若明确设置 `CIV_MCP_DSH_AUTO_RESUME=1`，DSH 才会在 MCP 启动时检查是否已进入对局，并通过 Civ VI 的 FrontEnd API 加载恢复存档和确认“继续游戏”，不依赖 GUI 点击或视觉识别。
 
+## 一键启动脚本
+
+日常启动可直接使用 `scripts/civ6_launch`，它会按顺序完成：预检（node/uv/DSH 构建、
+`EnableTuner 1`、端口占用、单客户端限制）→ 启动游戏并等待 FireTuner → DSH overlay
+检查 → 启动 DSH：
+
+```bash
+./scripts/civ6_launch          # 启动游戏（如未运行）并前台运行 DSH Web
+./scripts/civ6_launch headless "查看当前回合，不要结束回合"   # 一次性 headless 会话
+./scripts/civ6_launch agent --turns 1       # 受控回合循环（等价 scripts/civ6_agent）
+./scripts/civ6_launch check    # 只做环境/overlay 检查，不启动任何进程
+./scripts/civ6_launch status   # 只读查看链路各部分状态
+./scripts/civ6_launch down     # 停止 DSH 及其 MCP 子进程（默认保留游戏；--game 一并退出）
+```
+
+该脚本是显式的游戏启动 opt-in：默认开启受控恢复（`CIV_MCP_DSH_AUTO_RESUME=1`），
+游戏已在运行且 FireTuner 可访问时会跳过启动；`--no-game --no-resume` 可完全禁止
+任何一方拉起游戏。`--timeout N` 调整 FireTuner 等待秒数。与 `deepseek_harness`
+wrapper 相同，4318 已有已连接客户端或 8000 被占用时直接失败，不自动杀进程。
+
 ## 标准启动步骤
 
 1. 确认 macOS 配置文件中的 FireTuner 已开启：

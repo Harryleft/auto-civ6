@@ -21,6 +21,9 @@ get_game_overview
 CIV_MCP_DSH_AUTO_RESUME=1 ./scripts/deepseek_harness web
 ```
 
+一键启动脚本 `scripts/civ6_launch` 默认就带该 opt-in（`--no-resume` 关闭）；
+它还会在 DSH 启动前代为拉起游戏并等待 FireTuner 监听。
+
 MCP 启动时先通过 FireTuner 判断是否已经在对局；若只到主菜单或游戏尚未启动，则复用 GUI 的“单人游戏 → 加载游戏 → Continue”流程。恢复点优先选择最新的 `0_MCP_*.Civ6Save`，没有可用 MCP 存档时才回退到 `AutoSave_*.Civ6Save`。该路径与 eval 专用的 `CIV_MCP_SAVE_FILE` 自动启动完全分离，绝不清理 `0_MCP_*`；FireTuner 仍只允许一个客户端。
 
 ## AI 回合卡住
