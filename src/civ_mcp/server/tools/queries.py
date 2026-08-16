@@ -278,12 +278,23 @@ async def get_era_progress(ctx: Context) -> str:
     countdown clock and your era score vs dark/golden thresholds, with the
     score source breakdown. Under Standard rules the age block is explicitly
     reported as unavailable instead of being silently omitted.
+
+    Returns a double-track JSON envelope: structured ``facts`` (eras/players/
+    local_age with COMPLETE coverage) plus the legacy human-readable
+    ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
 
     async def _run():
         status = await gs.get_era_progress()
-        return nr.narrate_era_progress(status)
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.era_progress_envelope(
+                turn=turn,
+                status=status,
+                narrated=nr.narrate_era_progress(status),
+            )
+        )
 
     return await pipeline._logged(ctx, "get_era_progress", {}, _run)
 
@@ -393,12 +404,23 @@ async def get_city_production(ctx: Context, city_id: int) -> str:
 
     Returns available units, buildings, and districts with production costs.
     Call this when a city finishes building or to decide what to produce next.
+
+    Returns a double-track JSON envelope: structured ``facts`` (options with
+    COMPLETE coverage) plus the legacy human-readable ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
 
     async def _run():
         options = await gs.list_city_production(city_id)
-        return nr.narrate_city_production(options)
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.city_production_envelope(
+                turn=turn,
+                city_id=city_id,
+                options=options,
+                narrated=nr.narrate_city_production(options),
+            )
+        )
 
     return await pipeline._logged(ctx, "get_city_production", {"city_id": city_id}, _run)
 
@@ -456,15 +478,44 @@ async def get_settle_advisor(ctx: Context, unit_id: int) -> str:
         unit_id: The settler's composite ID (from get_units output)
 
     Scores locations by yields, water, defense, and resource value.
-    Returns top 5 candidates sorted by score.
+    Returns top 5 candidates sorted by score. When no candidate exists
+    within 5 tiles, falls back to the best sites on the revealed map.
+
+    Returns a double-track JSON envelope: structured ``facts`` (candidates
+    with KNOWN_HISTORY coverage and a ``source`` field) plus the legacy
+    human-readable ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
     unit_index = unit_id % 65536
+
+    async def _run():
+        candidates, source = await gs.get_settle_candidates(unit_index)
+        if source == "local":
+            narrated = nr.narrate_settle_candidates(candidates)
+        elif source == "global":
+            narrated = (
+                "No valid settle locations within 5 tiles. Best sites on "
+                "revealed map:\n" + nr.narrate_settle_candidates(candidates)
+            )
+        else:
+            narrated = "No valid settle locations found within 5 tiles or on revealed map."
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.settle_envelope(
+                turn=turn,
+                tool="get_settle_advisor",
+                unit_id=unit_id,
+                candidates=candidates,
+                source=source,
+                narrated=narrated,
+            )
+        )
+
     return await pipeline._logged(
         ctx,
         "get_settle_advisor",
         {"unit_id": unit_id},
-        lambda: gs.get_settle_advisor(unit_index),
+        _run,
     )
 
 
@@ -480,13 +531,26 @@ async def get_pathing_estimate(
         target_y: Destination Y coordinate
 
     Returns estimated turns, path length, and reachable tiles this turn.
+
+    Returns a double-track JSON envelope: structured ``facts`` (estimate
+    with COMPLETE coverage) plus the legacy human-readable ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
     unit_index = unit_id % 65536
 
     async def _run():
         est = await gs.get_pathing_estimate(unit_index, target_x, target_y)
-        return nr.narrate_pathing_estimate(est)
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.pathing_envelope(
+                turn=turn,
+                unit_id=unit_id,
+                target_x=target_x,
+                target_y=target_y,
+                estimate=est,
+                narrated=nr.narrate_pathing_estimate(est),
+            )
+        )
 
     return await pipeline._logged(
         ctx,
@@ -511,15 +575,29 @@ async def get_combat_estimate(
         unit_id: Attacking or escort unit composite ID from get_units
         target_x: Hostile unit X coordinate
         target_y: Hostile unit Y coordinate
+
+    Returns a double-track JSON envelope: structured ``facts`` (available /
+    estimate with COMPLETE coverage) plus the legacy human-readable
+    ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
     unit_index = unit_id % 65536
 
     async def _run():
         estimate = await gs.get_combat_estimate(unit_index, target_x, target_y)
-        if estimate is None:
-            return "No quantified combat estimate is available for this matchup."
-        return nr.narrate_combat_estimate(estimate)
+        narrated = (
+            "No quantified combat estimate is available for this matchup."
+            if estimate is None
+            else nr.narrate_combat_estimate(estimate)
+        )
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.combat_estimate_envelope(
+                turn=turn,
+                estimate=estimate,
+                narrated=narrated,
+            )
+        )
 
     return await pipeline._logged(
         ctx,
@@ -536,14 +614,32 @@ async def get_global_settle_advisor(ctx: Context) -> str:
     Unlike get_settle_advisor (which searches near a specific settler),
     this scans all revealed land for the top 10 settle candidates.
     Use this when deciding WHERE to send a settler, not just where to settle.
+
+    Returns a double-track JSON envelope: structured ``facts`` (candidates
+    with KNOWN_HISTORY coverage and source="global") plus the legacy
+    human-readable ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
 
     async def _run():
         candidates = await gs.get_global_settle_scan()
-        if not candidates:
-            return "No valid settle locations found on revealed map."
-        return nr.narrate_settle_candidates(candidates)
+        source = "global" if candidates else "none"
+        narrated = (
+            "No valid settle locations found on revealed map."
+            if not candidates
+            else nr.narrate_settle_candidates(candidates)
+        )
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.settle_envelope(
+                turn=turn,
+                tool="get_global_settle_advisor",
+                unit_id=-1,
+                candidates=candidates,
+                source=source,
+                narrated=narrated,
+            )
+        )
 
     return await pipeline._logged(ctx, "get_global_settle_advisor", {}, _run)
 
@@ -613,14 +709,25 @@ async def get_diplomacy(ctx: Context) -> str:
     with scores and reasons, grievances, delegations/embassies, and available
     diplomatic actions you can take. Also shows visible enemy city details
     (name, population, loyalty, walls).
+
+    Returns a double-track JSON envelope: structured ``facts`` (civs with
+    COMPLETE coverage; per-civ intelligence is visibility-limited) plus the
+    legacy human-readable ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
-    return await pipeline._logged(
-        ctx,
-        "get_diplomacy",
-        {},
-        lambda: pipeline._narrate(gs.get_diplomacy, nr.narrate_diplomacy),
-    )
+
+    async def _run():
+        civs = await gs.get_diplomacy()
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.diplomacy_envelope(
+                turn=turn,
+                civs=civs,
+                narrated=nr.narrate_diplomacy(civs),
+            )
+        )
+
+    return await pipeline._logged(ctx, "get_diplomacy", {}, _run)
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
@@ -630,14 +737,25 @@ async def get_tech_civics(ctx: Context) -> str:
     Shows current research, current civic, turns remaining,
     completed technology names, and lists of available technologies and civics
     to choose from.
+
+    Returns a double-track JSON envelope: structured ``facts`` (research/
+    civics with COMPLETE coverage) plus the legacy human-readable
+    ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
-    return await pipeline._logged(
-        ctx,
-        "get_tech_civics",
-        {},
-        lambda: pipeline._narrate(gs.get_tech_civics, nr.narrate_tech_civics),
-    )
+
+    async def _run():
+        status = await gs.get_tech_civics()
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.tech_civics_envelope(
+                turn=turn,
+                status=status,
+                narrated=nr.narrate_tech_civics(status),
+            )
+        )
+
+    return await pipeline._logged(ctx, "get_tech_civics", {}, _run)
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
