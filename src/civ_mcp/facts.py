@@ -416,3 +416,250 @@ def pathing_envelope(
         {"estimate": COVERAGE_COMPLETE},
         narrated,
     )
+
+
+def village_envelope(
+    *,
+    turn: int | None,
+    overview: lq.VillageOverview,
+    narrated: str,
+) -> dict[str, Any]:
+    """get_village_overview 双轨信封。
+
+    只反映当前仍存在的村落：任一单位踏入即消失。已揭示地块上的村落从
+    结果中消失只说明已被取用，覆盖语义为 KNOWN_HISTORY。
+    """
+    facts: dict[str, Any] = {"huts": [asdict(h) for h in overview.huts]}
+    return _envelope(
+        "get_village_overview",
+        turn,
+        facts,
+        {"huts": COVERAGE_KNOWN_HISTORY},
+        narrated,
+    )
+
+
+def spies_envelope(
+    *,
+    turn: int | None,
+    spies: list[lq.SpyInfo],
+    narrated: str,
+) -> dict[str, Any]:
+    """get_spies 双轨信封。己方间谍为当前全集（COMPLETE）。"""
+    facts: dict[str, Any] = {"spies": [asdict(s) for s in spies]}
+    return _envelope(
+        "get_spies",
+        turn,
+        facts,
+        {"spies": COVERAGE_COMPLETE},
+        narrated,
+    )
+
+
+def builder_tasks_envelope(
+    *,
+    turn: int | None,
+    tasks: list[lq.BuilderTask],
+    builders: list[lq.BuilderInfo],
+    narrated: str,
+) -> dict[str, Any]:
+    """get_builder_tasks 双轨信封。
+
+    任务板来自己方领土（当前可见）的改进需求扫描，任务与建造者为全集。
+    """
+    facts: dict[str, Any] = {
+        "tasks": [asdict(t) for t in tasks],
+        "builders": [asdict(b) for b in builders],
+    }
+    return _envelope(
+        "get_builder_tasks",
+        turn,
+        facts,
+        {
+            "tasks": COVERAGE_COMPLETE,
+            "builders": COVERAGE_COMPLETE,
+        },
+        narrated,
+    )
+
+
+def empire_resources_envelope(
+    *,
+    turn: int | None,
+    stockpiles: list[lq.ResourceStockpile],
+    owned: list[lq.OwnedResource],
+    nearby: list[lq.NearbyResource],
+    luxuries: dict[str, int],
+    narrated: str,
+) -> dict[str, Any]:
+    """get_empire_resources 双轨信封。
+
+    ``stockpiles``/``owned`` 为己方全集（COMPLETE）；``nearby`` 只含已揭示
+    地块上的未认领资源（KNOWN_HISTORY，未观察 ≠ 不存在）。
+    """
+    facts: dict[str, Any] = {
+        "stockpiles": [asdict(s) for s in stockpiles],
+        "owned": [asdict(o) for o in owned],
+        "nearby": [asdict(n) for n in nearby],
+        "luxuries": dict(luxuries),
+    }
+    return _envelope(
+        "get_empire_resources",
+        turn,
+        facts,
+        {
+            "stockpiles": COVERAGE_COMPLETE,
+            "owned": COVERAGE_COMPLETE,
+            "nearby": COVERAGE_KNOWN_HISTORY,
+        },
+        narrated,
+    )
+
+
+def notifications_envelope(
+    *,
+    turn: int | None,
+    notifications: list[lq.GameNotification],
+    narrated: str,
+) -> dict[str, Any]:
+    """get_notifications 双轨信封。当前活动通知为全集（COMPLETE）。"""
+    facts: dict[str, Any] = {
+        "notifications": [asdict(n) for n in notifications]
+    }
+    return _envelope(
+        "get_notifications",
+        turn,
+        facts,
+        {"notifications": COVERAGE_COMPLETE},
+        narrated,
+    )
+
+
+def policies_envelope(
+    *,
+    turn: int | None,
+    status: lq.GovernmentStatus,
+    narrated: str,
+) -> dict[str, Any]:
+    """get_policies 双轨信封。政府与政策配置为全集事实。"""
+    return _envelope(
+        "get_policies",
+        turn,
+        asdict(status),
+        {
+            "government": COVERAGE_COMPLETE,
+            "policies": COVERAGE_COMPLETE,
+        },
+        narrated,
+    )
+
+
+def strategic_map_envelope(
+    *,
+    turn: int | None,
+    data: lq.StrategicMapData,
+    narrated: str,
+) -> dict[str, Any]:
+    """get_strategic_map 双轨信封。
+
+    ``fog_boundaries`` 来自己方城市（COMPLETE）；``unclaimed_resources``
+    以已揭示地块为限（KNOWN_HISTORY）。
+    """
+    return _envelope(
+        "get_strategic_map",
+        turn,
+        asdict(data),
+        {
+            "fog_boundaries": COVERAGE_COMPLETE,
+            "unclaimed_resources": COVERAGE_KNOWN_HISTORY,
+        },
+        narrated,
+    )
+
+
+def pending_trades_envelope(
+    *,
+    turn: int | None,
+    deals: list[lq.PendingDeal],
+    narrated: str,
+) -> dict[str, Any]:
+    """get_pending_trades 双轨信封。当前待处理交易为全集（COMPLETE）。"""
+    facts: dict[str, Any] = {"deals": [asdict(d) for d in deals]}
+    return _envelope(
+        "get_pending_trades",
+        turn,
+        facts,
+        {"deals": COVERAGE_COMPLETE},
+        narrated,
+    )
+
+
+def pending_diplomacy_envelope(
+    *,
+    turn: int | None,
+    sessions: list[lq.DiplomacySession],
+    narrated: str,
+) -> dict[str, Any]:
+    """get_pending_diplomacy 双轨信封。当前外交会话为全集（COMPLETE）。"""
+    facts: dict[str, Any] = {"sessions": [asdict(s) for s in sessions]}
+    return _envelope(
+        "get_pending_diplomacy",
+        turn,
+        facts,
+        {"sessions": COVERAGE_COMPLETE},
+        narrated,
+    )
+
+
+def trade_destinations_envelope(
+    *,
+    turn: int | None,
+    unit_id: int,
+    destinations: list[lq.TradeDestination],
+    narrated: str,
+) -> dict[str, Any]:
+    """get_trade_destinations 双轨信封。给定商人的可选目的地全集。"""
+    facts: dict[str, Any] = {
+        "unit_id": unit_id,
+        "destinations": [asdict(d) for d in destinations],
+    }
+    return _envelope(
+        "get_trade_destinations",
+        turn,
+        facts,
+        {"destinations": COVERAGE_COMPLETE},
+        narrated,
+    )
+
+
+def great_people_envelope(
+    *,
+    turn: int | None,
+    people: list[lq.GreatPersonInfo],
+    narrated: str,
+) -> dict[str, Any]:
+    """get_great_people 双轨信封。当前招募池为全集（COMPLETE）。"""
+    facts: dict[str, Any] = {"people": [asdict(p) for p in people]}
+    return _envelope(
+        "get_great_people",
+        turn,
+        facts,
+        {"people": COVERAGE_COMPLETE},
+        narrated,
+    )
+
+
+def unit_promotions_envelope(
+    *,
+    turn: int | None,
+    status: lq.UnitPromotionStatus,
+    narrated: str,
+) -> dict[str, Any]:
+    """get_unit_promotions 双轨信封。该单位可用晋升为全集事实。"""
+    return _envelope(
+        "get_unit_promotions",
+        turn,
+        asdict(status),
+        {"promotions": COVERAGE_COMPLETE},
+        narrated,
+    )

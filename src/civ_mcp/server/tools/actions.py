@@ -6,6 +6,7 @@ from mcp.server.fastmcp import Context
 
 from civ6_belief_engine.belief_engine import BeliefEngineError
 
+from civ_mcp import facts as fact_view
 from civ_mcp import narrate as nr
 from civ_mcp.server import pipeline
 from civ_mcp.server.assembly import mcp
@@ -98,12 +99,22 @@ async def get_unit_promotions(ctx: Context, unit_id: int) -> str:
 
     Shows promotions filtered by the unit's promotion class.
     Only units with enough XP will have promotions available.
+
+    Returns a double-track JSON envelope: structured ``facts`` (promotions
+    with COMPLETE coverage) plus the legacy human-readable ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
 
     async def _run():
         status = await gs.get_unit_promotions(unit_id)
-        return nr.narrate_unit_promotions(status)
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.unit_promotions_envelope(
+                turn=turn,
+                status=status,
+                narrated=nr.narrate_unit_promotions(status),
+            )
+        )
 
     return await pipeline._logged(ctx, "get_unit_promotions", {"unit_id": unit_id}, _run)
 

@@ -250,6 +250,9 @@ async def get_village_overview(ctx: Context) -> str:
     村落不出现在结果中, 本工具不保留取用历史。每条结果包含坐标、当前
     可见状态、所在领土归属, 以及到最近己方城市和最近己方战斗/侦察单位
     的距离, 用于抢先取用决策。奖励内容在取用后由游戏结算, 不可查询。
+
+    返回双轨 JSON 信封：结构化 ``facts``（huts 覆盖语义为 KNOWN_HISTORY，
+    消失只说明已被取用）＋原有叙述 ``narrated`` 视图。
     """
     gs = pipeline._get_game(ctx)
     village_tiles: set[tuple[int, int]] = set()
@@ -257,7 +260,14 @@ async def get_village_overview(ctx: Context) -> str:
     async def _run():
         overview = await gs.get_village_overview()
         village_tiles.update((hut.x, hut.y) for hut in overview.huts)
-        return nr.narrate_village_overview(overview)
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.village_envelope(
+                turn=turn,
+                overview=overview,
+                narrated=nr.narrate_village_overview(overview),
+            )
+        )
 
     return await pipeline._logged(
         ctx,
@@ -309,12 +319,22 @@ async def get_spies(ctx: Context) -> str:
 
     Note: offensive missions only become available once the spy has physically
     arrived in the target city. Use spy_action with action='travel' first.
+
+    Returns a double-track JSON envelope: structured ``facts`` (spies with
+    COMPLETE coverage) plus the legacy human-readable ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
 
     async def _run():
         spies = await gs.get_spies()
-        return nr.narrate_spies(spies)
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.spies_envelope(
+                turn=turn,
+                spies=spies,
+                narrated=nr.narrate_spies(spies),
+            )
+        )
 
     return await pipeline._logged(ctx, "get_spies", {}, _run)
 
@@ -658,12 +678,24 @@ async def get_builder_tasks(ctx: Context) -> str:
     - NORMAL: Empty tiles that could benefit from farms/mines/lumber mills
 
     Call this before issuing builder orders each turn.
+
+    Returns a double-track JSON envelope: structured ``facts`` (tasks/
+    builders with COMPLETE coverage) plus the legacy human-readable
+    ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
 
     async def _run():
         tasks, builders = await gs.get_builder_tasks()
-        return nr.narrate_builder_tasks(tasks, builders)
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.builder_tasks_envelope(
+                turn=turn,
+                tasks=tasks,
+                builders=builders,
+                narrated=nr.narrate_builder_tasks(tasks, builders),
+            )
+        )
 
     return await pipeline._logged(ctx, "get_builder_tasks", {}, _run)
 
@@ -674,12 +706,28 @@ async def get_empire_resources(ctx: Context) -> str:
 
     Shows owned resources (improved/unimproved) grouped by type,
     and unclaimed resources near your cities.
+
+    Returns a double-track JSON envelope: structured ``facts`` (stockpiles/
+    owned COMPLETE, nearby KNOWN_HISTORY) plus the legacy human-readable
+    ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
 
     async def _run():
         stockpiles, owned, nearby, luxuries = await gs.get_empire_resources()
-        return nr.narrate_empire_resources(stockpiles, owned, nearby, luxuries)
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.empire_resources_envelope(
+                turn=turn,
+                stockpiles=stockpiles,
+                owned=owned,
+                nearby=nearby,
+                luxuries=luxuries,
+                narrated=nr.narrate_empire_resources(
+                    stockpiles, owned, nearby, luxuries
+                ),
+            )
+        )
 
     return await pipeline._logged(ctx, "get_empire_resources", {}, _run)
 
@@ -691,14 +739,25 @@ async def get_strategic_map(ctx: Context) -> str:
     Shows how far explored territory extends from each city (in 6 directions),
     highlighting directions that need exploration. Also lists unclaimed luxury
     and strategic resources on revealed but unowned land.
+
+    Returns a double-track JSON envelope: structured ``facts`` (fog_boundaries
+    COMPLETE, unclaimed_resources KNOWN_HISTORY) plus the legacy
+    human-readable ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
-    return await pipeline._logged(
-        ctx,
-        "get_strategic_map",
-        {},
-        lambda: pipeline._narrate(gs.get_strategic_map, nr.narrate_strategic_map),
-    )
+
+    async def _run():
+        data = await gs.get_strategic_map()
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.strategic_map_envelope(
+                turn=turn,
+                data=data,
+                narrated=nr.narrate_strategic_map(data),
+            )
+        )
+
+    return await pipeline._logged(ctx, "get_strategic_map", {}, _run)
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
@@ -764,14 +823,24 @@ async def get_pending_trades(ctx: Context) -> str:
 
     Shows what each civ is offering and what they want in return.
     Use respond_to_trade to accept or reject.
+
+    Returns a double-track JSON envelope: structured ``facts`` (deals with
+    COMPLETE coverage) plus the legacy human-readable ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
-    return await pipeline._logged(
-        ctx,
-        "get_pending_trades",
-        {},
-        lambda: pipeline._narrate(gs.get_pending_deals, nr.narrate_pending_deals),
-    )
+
+    async def _run():
+        deals = await gs.get_pending_deals()
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.pending_trades_envelope(
+                turn=turn,
+                deals=deals,
+                narrated=nr.narrate_pending_deals(deals),
+            )
+        )
+
+    return await pipeline._logged(ctx, "get_pending_trades", {}, _run)
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
@@ -781,11 +850,25 @@ async def get_policies(ctx: Context) -> str:
     Shows current government type, each policy slot with its type and current
     policy (if any), and all unlocked policies grouped by compatible slot type.
     Wildcard slots accept any policy type.
+
+    Returns a double-track JSON envelope: structured ``facts`` (government/
+    policies with COMPLETE coverage) plus the legacy human-readable
+    ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
-    return await pipeline._logged(
-        ctx, "get_policies", {}, lambda: pipeline._narrate(gs.get_policies, nr.narrate_policies)
-    )
+
+    async def _run():
+        status = await gs.get_policies()
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.policies_envelope(
+                turn=turn,
+                status=status,
+                narrated=nr.narrate_policies(status),
+            )
+        )
+
+    return await pipeline._logged(ctx, "get_policies", {}, _run)
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
@@ -796,14 +879,25 @@ async def get_notifications(ctx: Context) -> str:
     notifications. Action-required items include which MCP tool to use
     to resolve them. Call this to check what needs attention without
     ending the turn.
+
+    Returns a double-track JSON envelope: structured ``facts``
+    (notifications with COMPLETE coverage) plus the legacy human-readable
+    ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
-    return await pipeline._logged(
-        ctx,
-        "get_notifications",
-        {},
-        lambda: pipeline._narrate(gs.get_notifications, nr.narrate_notifications),
-    )
+
+    async def _run():
+        notifications = await gs.get_notifications()
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.notifications_envelope(
+                turn=turn,
+                notifications=notifications,
+                narrated=nr.narrate_notifications(notifications),
+            )
+        )
+
+    return await pipeline._logged(ctx, "get_notifications", {}, _run)
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
@@ -813,11 +907,21 @@ async def get_pending_diplomacy(ctx: Context) -> str:
     Diplomacy encounters block turn progression. Call this if end_turn
     reports the turn didn't advance. Returns any open sessions with their
     dialogue text, visible buttons, and response guidance.
+
+    Returns a double-track JSON envelope: structured ``facts`` (sessions
+    with COMPLETE coverage) plus the legacy human-readable ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
-    return await pipeline._logged(
-        ctx,
-        "get_pending_diplomacy",
-        {},
-        lambda: pipeline._narrate(gs.get_diplomacy_sessions, nr.narrate_diplomacy_sessions),
-    )
+
+    async def _run():
+        sessions = await gs.get_diplomacy_sessions()
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.pending_diplomacy_envelope(
+                turn=turn,
+                sessions=sessions,
+                narrated=nr.narrate_diplomacy_sessions(sessions),
+            )
+        )
+
+    return await pipeline._logged(ctx, "get_pending_diplomacy", {}, _run)

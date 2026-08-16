@@ -61,12 +61,17 @@ logs remain readable and are not rewritten in place.
 Core query tools return a double-track JSON envelope built by
 `civ_mcp.facts`:
 
-- 世界状态：`get_units`, `get_cities`, `get_map_area`, `get_barbarian_overview`
-- 军事与移动：`get_combat_estimate`, `get_pathing_estimate`
+- 世界状态：`get_units`, `get_cities`, `get_map_area`, `get_barbarian_overview`,
+  `get_village_overview`, `get_strategic_map`, `get_empire_resources`
+- 军事与移动：`get_combat_estimate`, `get_pathing_estimate`,
+  `get_unit_promotions`, `get_spies`
 - 科研与胜利：`get_tech_civics`, `get_victory_progress`, `get_era_progress`
 - 经济与扩张：`get_city_production`, `get_settle_advisor`,
-  `get_global_settle_advisor`, `get_trade_routes`
-- 伟人：`get_great_people_overview`
+  `get_global_settle_advisor`, `get_trade_routes`, `get_trade_destinations`,
+  `get_builder_tasks`
+- 治理与外交：`get_policies`, `get_notifications`, `get_pending_trades`,
+  `get_pending_diplomacy`
+- 伟人：`get_great_people`, `get_great_people_overview`
 
 Example (`get_units`):
 
