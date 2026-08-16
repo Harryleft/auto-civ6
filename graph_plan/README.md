@@ -189,7 +189,7 @@ Threat typed data
 - `GraphSnapshotView` 已从 GraphView 提供各 Department 所需的窄事实视图；Science、Civics、Economy、Production、Great People、Diplomacy、Military 均已切换到该入口。
 - `BeliefEngine.sync_governance_graph()` 已将 Observation、Belief、Goal、Proposal、CriticReview、CouncilDecision、BudgetLock、Decision、Action、Outcome 和 ActionIntent 物化到 GraphView，并保留 JSONL 作为历史审计与兼容输入。
 - 管道在治理工具操作前后同步图；授权、取消、完成、重复意图、Council 评议和提案引用的关键读取已使用当前 GraphView。直接 BeliefEngine 当前态读取会先完成内存物化，显式管道同步再持久化 `graph.delta`；JSONL 只作为事件源、审计和物化输入，不再作为当前态回退。
-- 已覆盖治理生命周期关系、删除语义、投影失败隔离和 BeliefEngine 重载后的 `state_hash` 一致性；全量离线测试当前为 `649 passed`。
+- 已覆盖治理生命周期关系、删除语义、投影失败隔离和 BeliefEngine 重载后的 `state_hash` 一致性；全量离线测试当前为 `651 passed`。
 
 真实游戏已完成一次通用治理动作闭环：同回合快照、威胁空结果、影子图零差异、`route_belief_decision` 授权、`unit_action(skip)`、read-back、`Action/Outcome` 终态和 Graph 增量均已通过；随后第 109→110 回合推进成功，`graph_shadow` 保持 `matched` 且无 mismatch。DSH 还从主菜单自动恢复 `0_MCP_0108`，并完成 FireTuner 重连验证。当前局面没有城市周边敌军，因此“敌军威胁 Proposal → fortify → Outcome”的特定场景仍未实测，不能用通用 `skip` 验收替代。
 

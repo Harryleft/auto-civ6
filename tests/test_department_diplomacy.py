@@ -10,6 +10,7 @@ from civ6_belief_engine.governance.departments.base import (
 from civ6_belief_engine.governance.departments.diplomacy import DiplomacyDepartment
 from civ_mcp.lua.models import BarbarianCamp, BarbarianOverview, BarbarianUnit, CivInfo
 from civ6_belief_engine.governance.models import Outcome, OutcomeStatus
+from graph_test_helpers import graph_for_snapshot
 
 
 def _snapshot(
@@ -89,7 +90,8 @@ def test_normal_assessment_reads_contact_war_relationship_and_military() -> None
         relationship_score=42,
         military_strength=120,
     )
-    context = DepartmentContext(snapshot=_snapshot(diplomacy=(civ,)))
+    snapshot = _snapshot(diplomacy=(civ,))
+    context = DepartmentContext(snapshot=snapshot, graph=graph_for_snapshot(snapshot))
     department = DiplomacyDepartment()
 
     assessment = department.assess(context)
@@ -141,7 +143,8 @@ def test_missing_or_uncontacted_evidence_degrades_and_never_claims_safety() -> N
         is_at_war=False,
         military_strength=999,
     )
-    context = DepartmentContext(snapshot=_snapshot(diplomacy=(unknown,)))
+    snapshot = _snapshot(diplomacy=(unknown,))
+    context = DepartmentContext(snapshot=snapshot, graph=graph_for_snapshot(snapshot))
     department = DiplomacyDepartment()
 
     assessment = department.assess(context)
@@ -184,6 +187,16 @@ def test_barbarian_activity_emits_military_coordination_signal() -> None:
     context = DepartmentContext(
         snapshot=_snapshot(barbarians=barbarian_overview),
         agenda=("外交评估", "处理蛮族边境"),
+        graph=graph_for_snapshot(
+            _snapshot(barbarians=barbarian_overview),
+            goals=(
+                {
+                    "goal_id": "diplomacy",
+                    "statement": "外交评估",
+                    "priority": 10,
+                },
+            ),
+        ),
     )
     department = DiplomacyDepartment()
 

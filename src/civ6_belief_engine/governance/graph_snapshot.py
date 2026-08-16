@@ -70,7 +70,13 @@ class GraphSnapshotView:
         if graph is None:
             if not isinstance(snapshot, cls):
                 raise TypeError("department context requires GraphSnapshotView")
-            return snapshot
+            return cls(
+                snapshot_id=snapshot.snapshot_id,
+                turn=snapshot.turn,
+                player_id=snapshot.player_id,
+                ready=False,
+                source="graph_missing",
+            )
         return cls.from_graph(
             graph,
             snapshot_id=snapshot.snapshot_id,
@@ -247,11 +253,11 @@ def graph_snapshot(context: Any) -> GraphSnapshotView:
 
 
 def graph_goals(context: Any) -> tuple[Any, ...]:
-    """Return active goals from the same-turn graph, or legacy goals without a graph."""
+    """Return active goals from the same-turn graph only."""
 
     graph = getattr(context, "graph", None)
     if graph is None:
-        return tuple(getattr(context, "goals", ()) or ())
+        return ()
     snapshot = context.snapshot
     if graph.snapshot_id != snapshot.snapshot_id or graph.turn != snapshot.turn:
         return ()
@@ -265,11 +271,11 @@ def graph_goals(context: Any) -> tuple[Any, ...]:
 
 
 def graph_agenda(context: Any) -> tuple[str, ...]:
-    """Return agenda statements from the current graph, with legacy fallback only without one."""
+    """Return agenda statements from the same-turn graph only."""
 
     graph = getattr(context, "graph", None)
     if graph is None:
-        return tuple(getattr(context, "agenda", ()) or ())
+        return ()
     return tuple(
         statement
         for goal in graph_goals(context)
