@@ -127,6 +127,15 @@ def _format_belief_turn_brief(brief: dict[str, Any]) -> str:
             "!! 新矛盾，禁止直接沿用旧假设: "
             + ", ".join(review["contradictions_created"])
         )
+    if review.get("knowledge_stale"):
+        lines.append(
+            "!! 知识过期（N 回合未刷新，先补查再决策）: "
+            + "; ".join(
+                f"{item.get('id')} 未刷新 {item.get('unseen_turns')} 回合"
+                + f"（建议 {item.get('refresh_tool')}）"
+                for item in review["knowledge_stale"]
+            )
+        )
 
     beliefs = brief.get("beliefs") or []
     if beliefs:
@@ -668,6 +677,32 @@ async def _logged(
             else raw_result
         )
 
+    async def _fail(result: str, execution_status: str) -> None:
+        """Shared error tail: timing, log, belief record (caller returns)."""
+
+        ms = int((time.monotonic() - start) * 1000)
+        log.info(
+            "[T%s] %s(%s) ERR %dms: %s",
+            turn,
+            tool_name,
+            _param_summary(params),
+            ms,
+            _result_summary(result),
+        )
+        await logger.log_error(tool_name, result)
+        await _record_belief_tool_result(
+            ctx,
+            tool_name,
+            params,
+            result,
+            turn,
+            ms,
+            success=False,
+            decision_id=decision_id,
+            decision_route=decision_route,
+            execution_status=execution_status,
+        )
+
     await _await_auto_resume_ready(ctx)
     logger = _get_logger(ctx)
     turn = logger._turn or "?"
@@ -729,55 +764,14 @@ async def _logged(
         result = await fn()
     except (LuaError, ValueError) as e:
         result = f"Error: {e}"
-        ms = int((time.monotonic() - start) * 1000)
-        log.info(
-            "[T%s] %s(%s) ERR %dms: %s",
-            turn,
-            tool_name,
-            _param_summary(params),
-            ms,
-            _result_summary(result),
-        )
-        await logger.log_error(tool_name, result)
-        await _record_belief_tool_result(
-            ctx,
-            tool_name,
-            params,
+        await _fail(
             result,
-            turn,
-            ms,
-            success=False,
-            decision_id=decision_id,
-            decision_route=decision_route,
-            execution_status=_action_execution_status(
-                tool_name, params, result, fallback="failed"
-            ),
+            _action_execution_status(tool_name, params, result, fallback="failed"),
         )
         return _return_result(result)
     except ConnectionError as e:
         result = str(e)
-        ms = int((time.monotonic() - start) * 1000)
-        log.info(
-            "[T%s] %s(%s) ERR %dms: %s",
-            turn,
-            tool_name,
-            _param_summary(params),
-            ms,
-            _result_summary(result),
-        )
-        await logger.log_error(tool_name, result)
-        await _record_belief_tool_result(
-            ctx,
-            tool_name,
-            params,
-            result,
-            turn,
-            ms,
-            success=False,
-            decision_id=decision_id,
-            decision_route=decision_route,
-            execution_status="unknown",
-        )
+        await _fail(result, "unknown")
 
         # Connection-loss recovery: after consecutive failures,
         # the game has likely crashed. Auto-restart from autosave.
@@ -843,28 +837,7 @@ async def _logged(
         # treating it as a safe-to-retry failure. CancelledError derives from
         # BaseException; load-time/turn-gate recovery covers that path.
         result = f"Error: {e}"
-        ms = int((time.monotonic() - start) * 1000)
-        log.info(
-            "[T%s] %s(%s) ERR %dms: %s",
-            turn,
-            tool_name,
-            _param_summary(params),
-            ms,
-            _result_summary(result),
-        )
-        await logger.log_error(tool_name, result)
-        await _record_belief_tool_result(
-            ctx,
-            tool_name,
-            params,
-            result,
-            turn,
-            ms,
-            success=False,
-            decision_id=decision_id,
-            decision_route=decision_route,
-            execution_status="unknown",
-        )
+        await _fail(result, "unknown")
         return _return_result(result)
     # Success — reset connection error counter + refresh heartbeat
     _logged._conn_errors = 0
