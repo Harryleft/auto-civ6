@@ -25,6 +25,7 @@ from civ6_belief_engine.belief_engine import BeliefEngine, action_args_hash
 from civ6_belief_engine.governance.council import GovernanceCouncil
 from civ6_belief_engine.governance.departments.base import DepartmentContext
 from civ6_belief_engine.governance.departments.military import MilitaryDepartment
+from civ6_belief_engine.governance.graph_snapshot import GraphSnapshotView
 from civ6_belief_engine.governance.models import ProbabilityConfidence, StrategicGoal
 from civ6_belief_engine.governance.snapshot import (
     build_turn_snapshot,
@@ -149,8 +150,18 @@ def test_phase2_threat_chain_from_lua_text_to_verified_outcome(tmp_path):
         success=ProbabilityConfidence(0.8, 0.7),
         tags=("military", "defense"),
     )
+    department_snapshot = GraphSnapshotView.from_graph(
+        view,
+        snapshot_id=snapshot.snapshot_id,
+        turn=TURN,
+        player_id=snapshot.player_id,
+    )
     assessment = MilitaryDepartment().assess(
-        DepartmentContext(snapshot=snapshot, goals=(typed_goal,), graph=view)
+        DepartmentContext(
+            snapshot=department_snapshot,
+            goals=(typed_goal,),
+            graph=view,
+        )
     )
 
     assert assessment.proposals, assessment.summary

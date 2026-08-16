@@ -1,14 +1,13 @@
 """Canonical current-state views assembled from ``GraphView``.
 
 Departments consume this module instead of reaching into the adapter-shaped
-``TurnSnapshot`` fields.  The legacy constructor exists only for old unit
-callers that do not provide a graph; the production coordinator supplies the
-same-turn materialized graph.
+typed snapshot. A department invocation must receive this view explicitly;
+there is no implicit conversion or legacy fallback at the runtime boundary.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, Mapping
 
@@ -69,42 +68,14 @@ class GraphSnapshotView:
         graph = getattr(context, "graph", None)
         snapshot = context.snapshot
         if graph is None:
-            return cls.from_legacy(snapshot)
-        view = cls.from_graph(
+            if not isinstance(snapshot, cls):
+                raise TypeError("department context requires GraphSnapshotView")
+            return snapshot
+        return cls.from_graph(
             graph,
             snapshot_id=snapshot.snapshot_id,
             turn=snapshot.turn,
             player_id=snapshot.player_id,
-        )
-        if view.ready:
-            return view
-        # The typed snapshot is still the current adapter input when a
-        # derived graph is stale. Keep current non-graph facts available for
-        # conservative assessment, while ``ready=False`` prevents graph-only
-        # threats/goals from influencing decisions.
-        return replace(cls.from_legacy(snapshot), ready=False, source=view.source)
-
-    @classmethod
-    def from_legacy(cls, snapshot: Any) -> GraphSnapshotView:
-        """Compatibility-only view for tests and callers before graph wiring."""
-
-        return cls(
-            snapshot_id=snapshot.snapshot_id,
-            turn=snapshot.turn,
-            player_id=snapshot.player_id,
-            ready=True,
-            source="legacy_compat",
-            overview=snapshot.overview,
-            cities=tuple(snapshot.cities),
-            units=tuple(snapshot.units),
-            diplomacy=tuple(snapshot.diplomacy),
-            tech_civic=snapshot.tech_civic,
-            resources=tuple(snapshot.resources),
-            policies=snapshot.policies,
-            barbarians=snapshot.barbarians,
-            great_people=snapshot.great_people,
-            threats=tuple(snapshot.threats),
-            threat_scan_available=snapshot.threat_scan_available,
         )
 
     @classmethod

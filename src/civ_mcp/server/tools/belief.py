@@ -1044,10 +1044,6 @@ async def get_governance_brief(
         )
         belief_brief = engine.turn_brief(turn=snapshot.turn, limit=limit)
         active_goals = engine.graph_entities("goal", status="active")
-        typed_goals = tuple(
-            _governance_goal_from_dict(dict(node.attributes))
-            for node in engine.graph_view.active_goals()
-        )
         from civ6_belief_engine.governance import GraphSnapshotView
         from civ6_belief_engine.governance.departments import (
             NationalStrategyCoordinator,
@@ -1064,8 +1060,6 @@ async def get_governance_brief(
             default_department_registry()
         ).run(
             department_snapshot,
-            agenda=tuple(goal.statement for goal in typed_goals),
-            goals=typed_goals,
             # Departments always receive the materialized graph.  A stale or
             # failed projection remains visible to their conservative gates;
             # silently switching the whole coordinator back to the legacy

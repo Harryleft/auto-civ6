@@ -8,11 +8,10 @@ from civ6_belief_engine.governance.departments.base import (
     ReviewDisposition,
 )
 from civ6_belief_engine.governance.departments.science import ScienceDepartment
+from civ6_belief_engine.governance import GraphSnapshotView
 from civ6_belief_engine.governance.models import (
     Outcome,
     OutcomeStatus,
-    RulesetCapabilities,
-    TurnSnapshot,
 )
 from civ_mcp.lua.models import (
     BarbarianCamp,
@@ -88,22 +87,20 @@ def _snapshot(
     tech_civic: TechCivicStatus | None = None,
     barbarians: BarbarianOverview | None = None,
     turn: int = 42,
-) -> TurnSnapshot:
-    return TurnSnapshot(
+) -> GraphSnapshotView:
+    return GraphSnapshotView(
         snapshot_id=f"snapshot_test_{turn}",
         turn=turn,
-        turn_before=turn,
-        turn_after=turn,
         player_id=0,
-        captured_at=1_723_500_000.0,
-        capabilities=RulesetCapabilities.standard(),
+        ready=True,
+        source="test",
         overview=overview,
         tech_civic=tech_civic,
         barbarians=barbarians,
     )
 
 
-def _context(snapshot: TurnSnapshot, *agenda: str) -> DepartmentContext:
+def _context(snapshot: GraphSnapshotView, *agenda: str) -> DepartmentContext:
     return DepartmentContext(snapshot=snapshot, agenda=agenda)
 
 

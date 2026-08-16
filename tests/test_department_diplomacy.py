@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from civ6_belief_engine.graph import Edge, GraphDelta, GraphView, Node
-from civ6_belief_engine.governance import RulesetCapabilities, TurnSnapshot
+from civ6_belief_engine.governance import GraphSnapshotView
 from civ6_belief_engine.governance.departments.base import (
     Department,
     DepartmentContext,
@@ -17,15 +17,13 @@ def _snapshot(
     diplomacy: tuple[CivInfo, ...] = (),
     barbarians: BarbarianOverview | None = None,
     units: tuple = (),
-) -> TurnSnapshot:
-    return TurnSnapshot(
+) -> GraphSnapshotView:
+    return GraphSnapshotView(
         snapshot_id="snapshot:diplomacy:9",
         turn=9,
-        turn_before=9,
-        turn_after=9,
         player_id=0,
-        captured_at=1.0,
-        capabilities=RulesetCapabilities.standard(),
+        ready=True,
+        source="test",
         diplomacy=diplomacy,
         barbarians=barbarians,
         units=units,

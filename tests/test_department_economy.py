@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from civ6_belief_engine.governance import RulesetCapabilities, TurnSnapshot
+from civ6_belief_engine.governance import GraphSnapshotView
 from civ6_belief_engine.governance.departments.base import (
     Department,
     DepartmentContext,
@@ -69,15 +69,13 @@ def _snapshot(
     units: tuple[UnitInfo, ...] = (),
     resources: tuple[ResourceStockpile, ...] = (),
     barbarians: BarbarianOverview | None = None,
-) -> TurnSnapshot:
-    return TurnSnapshot(
+) -> GraphSnapshotView:
+    return GraphSnapshotView(
         snapshot_id="snapshot:economy:42",
         turn=42,
-        turn_before=42,
-        turn_after=42,
         player_id=0,
-        captured_at=1.0,
-        capabilities=RulesetCapabilities(resource_stockpiles=True),
+        ready=True,
+        source="test",
         overview=overview,
         units=units,
         resources=resources,
