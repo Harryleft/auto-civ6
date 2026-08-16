@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from civ6_belief_engine.graph import Edge, GraphDelta, GraphView, Node
 from civ6_belief_engine.governance import RulesetCapabilities, TurnSnapshot
 from civ6_belief_engine.governance.departments.base import (
     Department,
@@ -43,6 +44,42 @@ def _outcome(*, status: OutcomeStatus = OutcomeStatus.SUCCEEDED, turn: int = 9) 
     )
 
 
+def _diplomacy_graph() -> GraphView:
+    return GraphView.empty(turn=9).apply(
+        GraphDelta(
+            snapshot_id="snapshot:diplomacy:graph",
+            turn=9,
+            epoch=1,
+            upsert_nodes=(
+                Node(node_id="player:0", node_type="player"),
+                Node(
+                    node_id="player:2",
+                    node_type="player",
+                    attributes={
+                        "player_id": 2,
+                        "civ_name": "新轨罗马",
+                        "leader_name": "图拉真",
+                        "has_met": True,
+                        "military_strength": 120,
+                    },
+                ),
+            ),
+            upsert_edges=(
+                Edge(
+                    relation_type="DIPLOMACY_WITH",
+                    source_id="player:0",
+                    target_id="player:2",
+                    attributes={
+                        "is_at_war": False,
+                        "diplomatic_state": "FRIENDLY",
+                        "relationship_score": 42,
+                    },
+                ),
+            ),
+        )
+    )
+
+
 def test_normal_assessment_reads_contact_war_relationship_and_military() -> None:
     civ = CivInfo(
         player_id=2,
@@ -70,6 +107,31 @@ def test_normal_assessment_reads_contact_war_relationship_and_military() -> None
     assert "relationship=42" in fact
     assert "military_strength=120" in fact
     assert assessment.workstreams[0].department is Department.DIPLOMACY
+
+
+def test_graph_view_is_authoritative_when_present() -> None:
+    legacy = CivInfo(
+        player_id=2,
+        civ_name="旧轨罗马",
+        leader_name="旧领袖",
+        has_met=False,
+        is_at_war=True,
+        diplomatic_state="HOSTILE",
+        relationship_score=-99,
+        military_strength=999,
+    )
+    context = DepartmentContext(
+        snapshot=_snapshot(diplomacy=(legacy,)),
+        graph=_diplomacy_graph(),
+    )
+
+    assessment = DiplomacyDepartment().assess(context)
+
+    assert assessment.degraded is False
+    assert assessment.relevance == 0.45
+    assert any("新轨罗马" in fact and "war=no" in fact for fact in assessment.facts)
+    assert all("旧轨罗马" not in fact for fact in assessment.facts)
+    assert all("HOSTILE" not in risk for risk in assessment.risks)
 
 
 def test_missing_or_uncontacted_evidence_degrades_and_never_claims_safety() -> None:
