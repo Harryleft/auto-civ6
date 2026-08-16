@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
+from ..graph_snapshot import graph_goals, graph_snapshot
 from ..models import Outcome, OutcomeStatus
 from .base import (
     Department,
@@ -73,7 +74,7 @@ def _option_sort_key(option: Any) -> tuple[str, str, str, str, str]:
 
 
 def _available_techs(context: DepartmentContext) -> tuple[Any, ...]:
-    status = context.snapshot.tech_civic
+    status = graph_snapshot(context).tech_civic
     if status is None:
         return ()
     raw_options = getattr(status, "available_techs", None)
@@ -87,8 +88,9 @@ def _available_techs(context: DepartmentContext) -> tuple[Any, ...]:
 
 
 def _current_research(context: DepartmentContext) -> str | None:
-    status = context.snapshot.tech_civic
-    overview = context.snapshot.overview
+    snapshot = graph_snapshot(context)
+    status = snapshot.tech_civic
+    overview = snapshot.overview
     for source in (status, overview):
         if source is None:
             continue
@@ -99,7 +101,7 @@ def _current_research(context: DepartmentContext) -> str | None:
 
 
 def _current_research_turns(context: DepartmentContext) -> str | None:
-    status = context.snapshot.tech_civic
+    status = graph_snapshot(context).tech_civic
     if status is None:
         return None
     value = getattr(status, "current_research_turns", None)
@@ -121,7 +123,7 @@ def _option_label(option: Any) -> str:
 
 
 def _barbarian_counts(context: DepartmentContext) -> tuple[int, int] | None:
-    barbarians = context.snapshot.barbarians
+    barbarians = graph_snapshot(context).barbarians
     if barbarians is None:
         return None
     camps = getattr(barbarians, "camps", ()) or ()
@@ -134,7 +136,7 @@ def _barbarian_counts(context: DepartmentContext) -> tuple[int, int] | None:
 
 def _science_agenda(context: DepartmentContext) -> bool:
     texts = list(context.agenda)
-    for goal in context.goals:
+    for goal in graph_goals(context):
         texts.append(goal.statement)
         texts.extend(goal.tags)
     return any(
@@ -186,7 +188,7 @@ class ScienceDepartment:
             missing.append(_MISSING_CURRENT)
         if current_turns is None:
             missing.append(_MISSING_CURRENT_PROGRESS)
-        status = context.snapshot.tech_civic
+        status = graph_snapshot(context).tech_civic
         raw_options = getattr(status, "available_techs", None) if status else None
         if status is None or raw_options is None or not options:
             missing.append(_MISSING_AVAILABLE)
@@ -195,7 +197,7 @@ class ScienceDepartment:
             missing.append(_MISSING_UNLOCKS)
         elif len(unlocks) != len(options):
             missing.append("technology unlock text for one or more available technologies")
-        if context.snapshot.barbarians is None:
+        if graph_snapshot(context).barbarians is None:
             missing.append(_MISSING_BARBARIANS)
         return _unique(missing)
 
@@ -207,7 +209,7 @@ class ScienceDepartment:
     def assess(self, context: DepartmentContext) -> DepartmentAssessment:
         """Assess research evidence without proposing or executing an action."""
 
-        snapshot = context.snapshot
+        snapshot = graph_snapshot(context)
         relevance = self.match(context)
         current = _current_research(context)
         current_turns = _current_research_turns(context)

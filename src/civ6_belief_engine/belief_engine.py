@@ -27,6 +27,7 @@ from .graph import (
     GraphDelta,
     GraphReplayError,
     GraphView,
+    project_governance_state,
     replay_graph_events,
 )
 
@@ -101,6 +102,20 @@ _TERMINAL_DECISION_STATES = frozenset({"succeeded", "cancelled"})
 # closed.  ``retryable`` deliberately stays out — retry remains rational and
 # the agent must answer the gate (retry or cancel).
 _INTENT_CLOSING_STATES = frozenset({"succeeded", "cancelled", "failed"})
+_GOVERNANCE_GRAPH_ENTITY_TYPES = frozenset(
+    {
+        "observation",
+        "belief",
+        "goal",
+        "proposal",
+        "critic_review",
+        "council_decision",
+        "budget_lock",
+        "decision",
+        "action",
+        "outcome",
+    }
+)
 
 
 class BeliefEngineError(ValueError):
@@ -1131,6 +1146,36 @@ class BeliefEngine:
         self._graph_replay_error = None
         return next_view
 
+    def sync_governance_graph(self, *, turn: int) -> GraphView:
+        """Materialize current governance entities into the canonical graph."""
+
+        self._require_bound()
+        base = self._graph_view
+        snapshot_id = base.snapshot_id or f"belief:{self.game_id}:{turn}"
+        graph_turn = max(base.turn, turn) if base.snapshot_id else turn
+        entities = {
+            entity_type: self.list(entity_type, status=None)
+            for entity_type in _GOVERNANCE_GRAPH_ENTITY_TYPES
+        }
+        delta = project_governance_state(
+            entities,
+            previous=base,
+            snapshot_id=snapshot_id,
+            turn=graph_turn,
+            epoch=self._epoch,
+        )
+        if not (
+            delta.upsert_nodes
+            or delta.upsert_edges
+            or delta.remove_node_ids
+            or delta.remove_edge_keys
+        ):
+            return base
+        return self.record_graph_delta(
+            delta,
+            kind=f"governance:{self._sequence + 1}",
+        )
+
     def create(
         self,
         entity_type: str,
@@ -1324,6 +1369,109 @@ class BeliefEngine:
             entities,
             key=lambda item: (item.get("last_updated_turn", -1), item.get("updated_at", 0)),
             reverse=True,
+        )
+
+    def graph_entities(
+        self,
+        entity_type: str,
+        *,
+        status: str | None = "active",
+    ) -> list[dict[str, Any]]:
+        """Read current governance entities from GraphView when materialized."""
+
+        if entity_type not in _GOVERNANCE_GRAPH_ENTITY_TYPES:
+            return []
+        nodes = self._graph_view.nodes_of_type(entity_type)
+        entities: list[dict[str, Any]] = []
+        for node in nodes:
+            if not node.observed and status not in (None, "all", "deleted"):
+                continue
+            payload = node.to_dict()["attributes"]
+            if not isinstance(payload, dict):
+                continue
+            item = deepcopy(payload)
+            item.setdefault("id", node.node_id)
+            item.setdefault("entity_type", entity_type)
+            if status and status not in {"all", ""} and item.get("status") != status:
+                continue
+            item.setdefault("last_updated_turn", node.last_observed_turn)
+            entities.append(item)
+        return sorted(
+            entities,
+            key=lambda item: (
+                item.get("last_updated_turn", -1),
+                item.get("updated_at", 0),
+                str(item.get("id") or ""),
+            ),
+            reverse=True,
+        )
+
+    def governance_graph_materialized(self) -> bool:
+        """Whether the current GraphView contains a governance read model."""
+
+        return any(
+            node.node_type in _GOVERNANCE_GRAPH_ENTITY_TYPES
+            for node in self._graph_view.nodes.values()
+        )
+
+    def governance_graph_current(self) -> bool:
+        """Whether no governance journal event is newer than the last graph delta."""
+
+        if not self.governance_graph_materialized():
+            return False
+        latest_graph_sequence = max(
+            (
+                int(event.get("sequence", 0))
+                for event in self._events
+                if event.get("event_type") == GRAPH_DELTA_EVENT
+            ),
+            default=0,
+        )
+        latest_governance_sequence = max(
+            (
+                int(event.get("sequence", 0))
+                for event in self._events
+                if event.get("entity_type") in _GOVERNANCE_GRAPH_ENTITY_TYPES
+            ),
+            default=0,
+        )
+        return latest_governance_sequence <= latest_graph_sequence
+
+    def current_governance_entities(
+        self,
+        entity_type: str,
+        *,
+        status: str | None = "active",
+    ) -> list[dict[str, Any]]:
+        """Read governance state from GraphView, with legacy compatibility only before materialization.
+
+        Direct BeliefEngine callers may load an old JSONL journal without a
+        graph delta.  Until the first graph materialization, the journal is
+        the only available current-state source.  Once the graph contains a
+        governance node, an empty GraphView result is authoritative and must
+        not silently fall back to the legacy reducer.
+        """
+
+        if entity_type not in _GOVERNANCE_GRAPH_ENTITY_TYPES:
+            return self.list(entity_type, status=status)
+        if self.governance_graph_current():
+            return self.graph_entities(entity_type, status=status)
+        return self.list(entity_type, status=status)
+
+    def current_governance_entity(
+        self,
+        entity_type: str,
+        entity_id: str,
+    ) -> dict[str, Any] | None:
+        """Look up one governance record in the current graph read model."""
+
+        return next(
+            (
+                item
+                for item in self.current_governance_entities(entity_type, status=None)
+                if str(item.get("id") or "") == str(entity_id)
+            ),
+            None,
         )
 
     def history(
@@ -1599,7 +1747,11 @@ class BeliefEngine:
                     "success must be true exactly when execution_status is succeeded"
                 )
             executed = execution_status != "blocked"
-            decision = self.get("decision", decision_id) if decision_id else None
+            decision = (
+                self.current_governance_entity("decision", decision_id)
+                if decision_id
+                else None
+            )
             intent = (
                 deepcopy(decision.get("action_intent") or {})
                 if decision is not None
@@ -1704,7 +1856,7 @@ class BeliefEngine:
                     },
                     turn=turn,
                 )
-                if self.get("decision", decision_id):
+                if self.current_governance_entity("decision", decision_id):
                     self.complete_action_authorization(
                         decision_id,
                         tool=tool,
@@ -1821,7 +1973,7 @@ class BeliefEngine:
         gate = brief["decision_gate"]
         decisions = [
             item
-            for item in self.list("decision", status="active")
+            for item in self.current_governance_entities("decision", status="active")
             if item.get("decision_state") in {"authorized", "retryable"}
             and self._authorization_valid_on_turn(item, turn=turn)
             and self._action_matches(item.get("action_intent"), tool, params)
@@ -1955,7 +2107,7 @@ class BeliefEngine:
     ) -> dict[str, Any]:
         """Finish an executing authorization after the game returns a result."""
 
-        decision = self.get("decision", decision_id)
+        decision = self.current_governance_entity("decision", decision_id)
         if not decision:
             raise BeliefEngineError(f"Unknown decision: {decision_id}")
         if decision.get("decision_state") not in {
@@ -2023,7 +2175,7 @@ class BeliefEngine:
     ) -> dict[str, Any]:
         """Explicitly close an unexecuted/retryable action with an audit outcome."""
 
-        decision = self.get("decision", decision_id)
+        decision = self.current_governance_entity("decision", decision_id)
         if not decision:
             raise BeliefEngineError(f"Unknown decision: {decision_id}")
         if not isinstance(reason, str) or not reason.strip():
@@ -2064,7 +2216,7 @@ class BeliefEngine:
         # blocking later proposals until the next turn rolls over.
         council_id = decision.get("council_decision_id")
         if council_id:
-            for lock in self.list("budget_lock", status="active"):
+            for lock in self.current_governance_entities("budget_lock", status="active"):
                 if lock.get("council_decision_id") != council_id:
                     continue
                 self.update(
@@ -2452,7 +2604,7 @@ class BeliefEngine:
             entity_id=surprise_id,
         )
         for belief_id in prediction.get("belief_ids") or []:
-            belief = self.get("belief", belief_id)
+            belief = self.current_governance_entity("belief", belief_id)
             if belief and belief.get("status") == "active":
                 self.update(
                     "belief",
@@ -2561,7 +2713,7 @@ class BeliefEngine:
         change the probability.  A downward revision must also agree with the
         numerical matchup instead of merely carrying a `combat_estimate` label.
         """
-        belief = self.get("belief", belief_id)
+        belief = self.current_governance_entity("belief", belief_id)
         if not belief or belief.get("status") != "active":
             raise BeliefEngineError(f"Unknown active belief: {belief_id}")
         if assessment is None:
@@ -2830,7 +2982,7 @@ class BeliefEngine:
                     triggered.append(condition)
             broken_assumptions = []
             for belief_id, threshold in (plan.get("assumption_thresholds") or {}).items():
-                belief = self.get("belief", belief_id)
+                belief = self.current_governance_entity("belief", belief_id)
                 if not belief or belief.get("status") != "active":
                     broken_assumptions.append(belief_id)
                 elif float(belief.get("probability", 0)) < float(threshold):
@@ -2926,7 +3078,9 @@ class BeliefEngine:
             if item.get("status") == "needs_replan" or item.get("review_required"):
                 blocking_scopes.add(str(item.get("gate_scope") or "global"))
         for item in contradictions:
-            belief = self.get("belief", str(item.get("belief_id") or ""))
+            belief = self.current_governance_entity(
+                "belief", str(item.get("belief_id") or "")
+            )
             blocking_scopes.add(
                 str(item.get("gate_scope") or (belief or {}).get("gate_scope") or "global")
             )
@@ -3028,18 +3182,18 @@ class BeliefEngine:
         typed_snapshot = next(
             (
                 item
-                for item in self.list("observation", status="active")
+                for item in self.current_governance_entities("observation", status="active")
                 if item.get("source") == "game_state:typed_snapshot"
                 and item.get("observed_turn") == turn
             ),
             None,
         )
-        active_proposals = self.list("proposal", status="active")
+        active_proposals = self.current_governance_entities("proposal", status="active")
         # An executing decision from a previous turn can never be completed by
         # its original caller: the action window has passed. Reclaim it to
         # retryable so the gate still demands resolution, but cancellation and
         # re-authorization become possible instead of deadlocking the turn.
-        for item in self.list("decision", status=None):
+        for item in self.current_governance_entities("decision", status=None):
             if item.get("decision_state") != "executing":
                 continue
             if int(item.get("execution_started_turn", turn)) >= turn:
@@ -3053,7 +3207,7 @@ class BeliefEngine:
                 },
                 turn=turn,
             )
-        all_decisions = self.list("decision", status=None)
+        all_decisions = self.current_governance_entities("decision", status=None)
 
         def structured_action_intent(item: dict[str, Any]) -> dict[str, Any]:
             intent = item.get("action_intent")
@@ -3117,7 +3271,7 @@ class BeliefEngine:
         pending_council_intents: list[dict[str, Any]] = []
         approved_proposals = [
             item
-            for item in self.list("proposal", status=None)
+            for item in self.current_governance_entities("proposal", status=None)
             if item.get("council_state") == "approved"
         ]
         for proposal in approved_proposals:
@@ -3202,7 +3356,7 @@ class BeliefEngine:
         """
 
         wanted_hash = action_args_hash(params)
-        for proposal in self.list("proposal", status=None):
+        for proposal in self.current_governance_entities("proposal", status=None):
             if proposal.get("council_state") != "approved":
                 continue
             if exclude_proposal_id and proposal["id"] == exclude_proposal_id:
@@ -3234,7 +3388,7 @@ class BeliefEngine:
         argument hash for legacy decisions that predate ``intent_id``.
         """
 
-        for decision in self.list("decision", status=None):
+        for decision in self.current_governance_entities("decision", status=None):
             if decision.get("decision_state") not in _INTENT_CLOSING_STATES:
                 continue
             decision_intent = decision.get("action_intent")
@@ -3304,7 +3458,7 @@ class BeliefEngine:
             raise BeliefEngineError("impact and urgency must be low, medium, high, or critical")
         referenced = []
         for belief_id in belief_ids or []:
-            belief = self.get("belief", belief_id)
+            belief = self.current_governance_entity("belief", belief_id)
             if not belief or belief.get("status") != "active":
                 raise BeliefEngineError(
                     f"Referenced active belief not found: {belief_id}"
@@ -3441,7 +3595,7 @@ class BeliefEngine:
             new_hash = action_args_hash(
                 action_intent.get("params") or action_intent.get("arguments") or {}
             )
-            for stale in self.list("decision", status="active"):
+            for stale in self.current_governance_entities("decision", status="active"):
                 if stale.get("decision_state") not in {"authorized", "retryable"}:
                     continue
                 if not self._entity_is_in_current_epoch("decision", stale["id"]):
@@ -3517,7 +3671,7 @@ class BeliefEngine:
         ]
         plans = self.list("plan", status=None)
         completed_plans = [item for item in plans if item.get("status") == "completed"]
-        decisions = self.list("decision", status=None)
+        decisions = self.current_governance_entities("decision", status=None)
         return {
             "belief_count": len(self.list("belief", status="active")),
             "hypothesis_count": len(self.list("hypothesis", status="active")),

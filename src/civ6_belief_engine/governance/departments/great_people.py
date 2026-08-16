@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from ..models import TurnSnapshot
+from ..graph_snapshot import graph_goals, graph_snapshot
 from .base import (
     BaseDepartment,
     Department,
@@ -50,7 +50,7 @@ def _contains_keyword(values: Iterable[str], keywords: tuple[str, ...]) -> bool:
 
 def _context_text(context: DepartmentContext) -> tuple[str, ...]:
     values = list(context.agenda)
-    for goal in context.goals:
+    for goal in graph_goals(context):
         values.append(goal.statement)
         values.extend(goal.tags)
     return tuple(values)
@@ -65,7 +65,7 @@ class GreatPeopleDepartment(BaseDepartment):
     def match(self, context: DepartmentContext) -> float:
         """Deterministic relevance: evidence presence + agenda keywords."""
 
-        snapshot: TurnSnapshot = context.snapshot
+        snapshot = graph_snapshot(context)
         relevance = 0.0
         if snapshot.great_people is not None and snapshot.great_people.standings:
             relevance += 0.55
@@ -76,7 +76,7 @@ class GreatPeopleDepartment(BaseDepartment):
         return round(min(1.0, relevance), 6)
 
     @staticmethod
-    def _race_pressure(snapshot: TurnSnapshot) -> bool:
+    def _race_pressure(snapshot: object) -> bool:
         gp = snapshot.great_people
         if gp is None:
             return False
@@ -104,7 +104,7 @@ class GreatPeopleDepartment(BaseDepartment):
     def assess(self, context: DepartmentContext) -> DepartmentAssessment:
         """Build a stable assessment; race pressure yields one workstream."""
 
-        snapshot: TurnSnapshot = context.snapshot
+        snapshot = graph_snapshot(context)
         relevance = self.match(context)
         missing: list[str] = []
         facts: list[str] = []
@@ -228,4 +228,3 @@ class GreatPeopleDepartment(BaseDepartment):
             workstreams=tuple(workstreams),
             degraded=False,
         )
-
