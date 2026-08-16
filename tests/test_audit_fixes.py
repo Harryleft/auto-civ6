@@ -1,8 +1,8 @@
 """未知的未知审计修复的回归测试。
 
 覆盖 2026-08 审计（docs/audit-unknown-unknowns.md）确认的缺陷修复：
-1. known-gap：diplomacy 观测显式携带 visible/unobserved 城市数（正则与
-   信封双路径），"已知存在但未观测"不再只活在叙述文本里。
+1. known-gap：diplomacy 观测显式携带 visible/unobserved 城市数（信封路径），
+   "已知存在但未观测"不再只活在叙述文本里。
 2. belief 证据强制：无 evidence_ids 的信念必须显式 unknown_basis=true。
 3. stale-knowledge：review() 对超时未刷新的自动信念输出提示（不阻断）。
 4. reliability 分级：信封=1.0 / 正则提取=0.9 / 纯摘要=0.8 / 快照=0.85。
@@ -22,10 +22,9 @@ from civ6_belief_engine.belief_engine import (
 )
 from civ_mcp import facts as fact_view
 from civ_mcp import lua as lq
-from civ_mcp import narrate as nr
 
 
-def _diplomacy_narration() -> str:
+def _diplomacy_civ() -> lq.CivInfo:
     civ = lq.CivInfo(
         player_id=2,
         civ_name="Germany",
@@ -45,11 +44,10 @@ def _diplomacy_narration() -> str:
 
 
 class TestKnownGap:
-    def test_regex_path_extracts_visible_and_unobserved_cities(self):
-        civ = _diplomacy_narration()
-        narrated = nr.narrate_diplomacy([civ])
-        assert "+ 2 in fog" in narrated
-        normalized = normalize_tool_result("get_diplomacy", narrated)
+    def test_envelope_path_exact_known_gap(self):
+        civ = _diplomacy_civ()
+        env = fact_view.dumps(fact_view.diplomacy_envelope(turn=5, civs=[civ]))
+        normalized = normalize_tool_result("get_diplomacy", env)
         rivals = normalized["facts"]["rivals"]["player_2"]
         assert rivals["cities"] == 4
         assert rivals["visible_cities"] == 2
@@ -58,31 +56,16 @@ class TestKnownGap:
         assert (
             normalized["metrics"]["diplomacy.player_2.unobserved_cities"] == 2
         )
+        assert normalized["reliability"] == 1.0
 
-    def test_regex_path_all_in_fog(self):
-        civ = _diplomacy_narration()
+    def test_envelope_path_all_in_fog(self):
+        civ = _diplomacy_civ()
         civ.visible_cities = []
-        narrated = nr.narrate_diplomacy([civ])
-        assert "all in fog" in narrated
-        normalized = normalize_tool_result("get_diplomacy", narrated)
+        env = fact_view.dumps(fact_view.diplomacy_envelope(turn=5, civs=[civ]))
+        normalized = normalize_tool_result("get_diplomacy", env)
         rivals = normalized["facts"]["rivals"]["player_2"]
         assert rivals["visible_cities"] == 0
         assert rivals["unobserved_cities"] == 4
-
-    def test_envelope_path_exact_known_gap(self):
-        civ = _diplomacy_narration()
-        narrated = nr.narrate_diplomacy([civ])
-        env = fact_view.dumps(
-            fact_view.diplomacy_envelope(turn=5, civs=[civ], narrated=narrated)
-        )
-        normalized = normalize_tool_result("get_diplomacy", env)
-        rivals = normalized["facts"]["rivals"]["player_2"]
-        assert rivals["cities"] == 4
-        assert rivals["visible_cities"] == 2
-        assert rivals["unobserved_cities"] == 2
-        # 信封路径 metrics 与叙述正则路径一致
-        legacy = normalize_tool_result("get_diplomacy", narrated)
-        assert normalized["metrics"] == legacy["metrics"]
 
 
 class TestBeliefEvidenceRequirement:
@@ -213,17 +196,18 @@ class TestReliabilityGrading:
         env = fact_view.dumps(
             fact_view.units_envelope(
                 turn=5, units=[], threats=None, trade_status=None,
-                narrated="No units.",
             )
         )
         normalized = normalize_tool_result("get_units", env)
         assert normalized["reliability"] == 1.0
 
-    def test_regex_path_reliability(self):
+    def test_plain_text_fallback_reliability(self):
+        # 纯文本结果走兼容正则回退路径（可靠工具 0.9），字段级提取仍生效。
         normalized = normalize_tool_result(
             "get_units", "Archer at (3,4) [id:7, idx:1]\nWarrior at (8,9) [id:11, idx:2]"
         )
         assert normalized["reliability"] == 0.9
+        assert normalized["facts"]["unit_ids"] == [7, 11]
 
     def test_summary_only_reliability(self):
         normalized = normalize_tool_result("get_notifications", "No notifications.")

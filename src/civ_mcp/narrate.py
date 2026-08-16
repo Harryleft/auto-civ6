@@ -115,43 +115,6 @@ def narrate_overview(ov: lq.GameOverview) -> str:
 _RANK_NAMES = {1: "Recruit", 2: "Agent", 3: "Special Agent", 4: "Senior Agent"}
 
 
-def narrate_spies(spies: list[lq.SpyInfo]) -> str:
-    if not spies:
-        return "No spies available yet."
-    lines = [f"Spies ({len(spies)}):"]
-    for s in spies:
-        rank_name = _RANK_NAMES.get(s.rank, f"Rank {s.rank}")
-        loc = f"({s.x},{s.y})"
-        if s.city_name != "none":
-            owner_tag = " [own]" if s.city_owner == 0 else ""
-            loc = f"{s.city_name}{owner_tag} ({s.x},{s.y})"
-        ops = ", ".join(s.available_ops) if s.available_ops else "none"
-        mission_tag = (
-            f" | mission: {s.current_mission}" if s.current_mission != "none" else ""
-        )
-        escape_tag = " ** [ESCAPING — needs escape route] **" if s.is_escaping else ""
-        lines.append(
-            f"  id:{s.unit_id} [{rank_name}] {s.name} — at {loc} | moves:{s.moves}"
-            f" | xp:{s.xp}{mission_tag} | ops: {ops}{escape_tag}"
-        )
-    lines.append("")
-    lines.append("Actions:")
-    lines.append(
-        "  Travel: spy_action(unit_id, action='travel', target_x, target_y)"
-        " — send spy to own city or city-state"
-    )
-    lines.append(
-        "  Mission: spy_action(unit_id, action=MISSION_TYPE, target_x, target_y)"
-        " — spy must already be in target city"
-    )
-    lines.append(
-        "  Mission types: COUNTERSPY, GAIN_SOURCES, SIPHON_FUNDS, STEAL_TECH_BOOST,"
-        " SABOTAGE_PRODUCTION, GREAT_WORK_HEIST, RECRUIT_PARTISANS,"
-        " NEUTRALIZE_GOVERNOR, FABRICATE_SCANDAL"
-    )
-    return "\n".join(lines)
-
-
 def narrate_units(
     units: list[lq.UnitInfo],
     threats: list[lq.ThreatInfo] | None = None,
@@ -583,77 +546,6 @@ def narrate_village_overview(
     return "\n".join(lines)
 
 
-def narrate_builder_tasks(
-    tasks: list[lq.BuilderTask], builders: list[lq.BuilderInfo]
-) -> str:
-    if not builders:
-        return "No builders with charges available."
-    idle = [b for b in builders if b.moves > 0]
-    lines = [f"=== BUILDER TASKS ({len(tasks)} tasks, {len(idle)} idle builders) ==="]
-    if not tasks:
-        lines.append("")
-        lines.append("No tiles need improvement in your territory.")
-        lines.append("")
-        _append_builder_list(lines, builders)
-        return "\n".join(lines)
-
-    # Group by priority
-    by_priority: dict[str, list[lq.BuilderTask]] = {
-        "urgent": [],
-        "high": [],
-        "normal": [],
-    }
-    for t in tasks:
-        by_priority.setdefault(t.priority, []).append(t)
-
-    for pri, label in [("urgent", "URGENT"), ("high", "HIGH"), ("normal", "NORMAL")]:
-        group = by_priority.get(pri, [])
-        if not group:
-            continue
-        lines.append("")
-        lines.append(f"{label}:")
-        # Sort by distance so nearest tasks come first
-        for t in sorted(group, key=lambda t: t.distance):
-            if t.resource_class == "pillaged":
-                action = f"repair {t.resource}"
-            else:
-                imp_label = t.improvement.replace("IMPROVEMENT_", "")
-                suffix = ""
-                if t.resource_class == "luxury":
-                    suffix = "+"
-                elif t.resource_class == "strategic":
-                    suffix = "*"
-                res_prefix = f"{t.resource}{suffix} — " if t.resource else ""
-                action = f"{res_prefix}build {imp_label}"
-
-            builder_str = ""
-            if t.nearest_builder_id >= 0:
-                builder_str = f" — nearest builder id:{t.nearest_builder_id}, {t.distance} tile{'s' if t.distance != 1 else ''}"
-            lines.append(
-                f"  ({t.x},{t.y}): {action} [city: {t.city_name}]{builder_str}"
-            )
-
-    lines.append("")
-    _append_builder_list(lines, builders)
-    return "\n".join(lines)
-
-
-def _append_builder_list(lines: list[str], builders: list[lq.BuilderInfo]) -> None:
-    idle = [b for b in builders if b.moves > 0]
-    busy = [b for b in builders if b.moves <= 0]
-    lines.append(f"IDLE BUILDERS ({len(idle)}):")
-    for b in idle:
-        lines.append(
-            f"  id:{b.unit_id} at ({b.x},{b.y}) — {b.charges} charges, {b.moves:.0f} moves"
-        )
-    if busy:
-        lines.append(f"BUSY BUILDERS ({len(busy)}):")
-        for b in busy:
-            lines.append(
-                f"  id:{b.unit_id} at ({b.x},{b.y}) — {b.charges} charges (no moves)"
-            )
-
-
 def narrate_cities(
     cities: list[lq.CityInfo], distances: list[str] | None = None
 ) -> str:
@@ -764,25 +656,6 @@ def narrate_cities(
     return "\n".join(lines)
 
 
-def narrate_pathing_estimate(est: lq.PathingEstimate) -> str:
-    if est.turns == -2:
-        return "Unit has no moves remaining this turn."
-    if est.turns < 0:
-        return (
-            "Unreachable — no path found. Destination may be in fog, "
-            "behind foreign borders, or blocked by impassable terrain."
-        )
-    if est.turns == 0:
-        return f"Reachable this turn ({est.total_tiles} tiles in path, all within movement range)."
-    wp_str = ""
-    if est.waypoints and len(est.waypoints) > 2:
-        wp_str = f"\n  Path: {est.waypoints[0]} -> ... -> {est.waypoints[-1]}"
-    return (
-        f"~{est.turns} turns ({est.total_tiles} tiles total, "
-        f"{est.reachable_this_turn} reachable this turn){wp_str}"
-    )
-
-
 def narrate_combat_estimate(est: lq.CombatEstimate) -> str:
     atk_type = "Ranged" if est.is_ranged else "Melee"
     mods_str = ", ".join(est.modifiers) if est.modifiers else "none"
@@ -799,48 +672,6 @@ def narrate_combat_estimate(est: lq.CombatEstimate) -> str:
         lines.append("  -> LIKELY KILL")
     elif not est.is_ranged and est.est_damage_to_attacker >= est.attacker_hp:
         lines.append("  -> WARNING: attacker likely dies!")
-    return "\n".join(lines)
-
-
-def narrate_city_production(options: list[lq.ProductionOption]) -> str:
-    if not options:
-        return "No production options available."
-    units = [o for o in options if o.category == "UNIT" and not o.is_repair]
-    buildings = [o for o in options if o.category == "BUILDING" and not o.is_repair]
-    districts = [o for o in options if o.category == "DISTRICT" and not o.is_repair]
-    projects = [o for o in options if o.category == "PROJECT"]
-    repairs = [o for o in options if o.is_repair]
-
-    def _fmt(o: lq.ProductionOption) -> str:
-        t = f", {o.turns} turns" if o.turns > 0 else ""
-        buy = f", buy: {o.gold_cost}g" if o.gold_cost > 0 else ""
-        tag = " [REPAIR]" if o.is_repair else ""
-        coords = ""
-        if o.is_repair and o.repair_x is not None:
-            coords = f" at ({o.repair_x},{o.repair_y})"
-        return f"  {o.item_name}{tag}{coords} (cost {o.cost}{t}{buy})"
-
-    lines = []
-    if units:
-        lines.append("Units:")
-        for o in units:
-            lines.append(_fmt(o))
-    if buildings:
-        lines.append("Buildings:")
-        for o in buildings:
-            lines.append(_fmt(o))
-    if districts:
-        lines.append("Districts:")
-        for o in districts:
-            lines.append(_fmt(o))
-    if projects:
-        lines.append("Projects:")
-        for o in projects:
-            lines.append(_fmt(o))
-    if repairs:
-        lines.append("Repairs (pillaged — queue to fix):")
-        for o in repairs:
-            lines.append(_fmt(o))
     return "\n".join(lines)
 
 
@@ -917,50 +748,6 @@ def narrate_map(tiles: list[lq.TileInfo]) -> str:
     return "\n".join(lines)
 
 
-def narrate_strategic_map(data: lq.StrategicMapData) -> str:
-    dir_names = ["N", "NE", "SE", "S", "SW", "NW"]
-    lines = ["=== STRATEGIC MAP ===", ""]
-
-    # Fog boundaries
-    lines.append("FOG BOUNDARIES (distance to unexplored, -1 = fully explored):")
-    for fb in data.fog_boundaries:
-        dir_strs = []
-        explore_dirs = []
-        for i, d in enumerate(fb.fog_distances):
-            label = dir_names[i] if i < len(dir_names) else f"D{i}"
-            if d == -1:
-                dir_strs.append(f"{label}:clear")
-            else:
-                dir_strs.append(f"{label}:{d}")
-                if d <= 5:
-                    explore_dirs.append(label)
-        suffix = ""
-        if explore_dirs:
-            suffix = f" <- EXPLORE {'/'.join(explore_dirs)}!"
-        lines.append(
-            f"  {fb.city_name} ({fb.city_x},{fb.city_y}): {' '.join(dir_strs)}{suffix}"
-        )
-
-    # Unclaimed resources
-    luxuries = [r for r in data.unclaimed_resources if "LUXURY" in r.resource_class]
-    strategics = [
-        r for r in data.unclaimed_resources if "STRATEGIC" in r.resource_class
-    ]
-    if luxuries or strategics:
-        lines.append("")
-        lines.append("UNCLAIMED RESOURCES (revealed, unowned):")
-        for r in luxuries:
-            name = r.resource_type.replace("RESOURCE_", "")
-            lines.append(f"  {name}+ at ({r.x},{r.y}) — luxury")
-        for r in strategics:
-            name = r.resource_type.replace("RESOURCE_", "")
-            lines.append(f"  {name}* at ({r.x},{r.y}) — strategic")
-    elif not data.fog_boundaries:
-        lines.append("\nNo data available.")
-
-    return "\n".join(lines)
-
-
 def narrate_settle_candidates(candidates: list[lq.SettleCandidate]) -> str:
     if not candidates:
         return "No valid settle locations found within 5 tiles."
@@ -985,70 +772,6 @@ def narrate_settle_candidates(candidates: list[lq.SettleCandidate]) -> str:
                 else:
                     res_parts.append(r)
             lines.append(f"     {', '.join(res_parts)}")
-    return "\n".join(lines)
-
-
-def narrate_empire_resources(
-    stockpiles: list[lq.ResourceStockpile],
-    owned: list[lq.OwnedResource],
-    nearby: list[lq.NearbyResource],
-    luxuries: dict[str, int],
-) -> str:
-    if not stockpiles and not owned and not nearby and not luxuries:
-        return "No resources found in or near your empire."
-    _CLASS_PREFIX = {"strategic": "S", "luxury": "L", "bonus": "B"}
-    lines = ["Empire Resources:"]
-    # Strategic stockpiles
-    visible_strats = [s for s in stockpiles]
-    if visible_strats:
-        lines.append("\nStrategic Stockpiles:")
-        for s in visible_strats:
-            net = s.per_turn - s.demand
-            net_str = f"+{net}" if net >= 0 else str(net)
-            parts = [f"  {s.name}: {s.amount}/{s.cap} ({net_str}/turn)"]
-            details = []
-            if s.per_turn > 0:
-                details.append(f"income {s.per_turn}")
-            if s.imported > 0:
-                details.append(f"import {s.imported}")
-            if s.demand > 0:
-                details.append(f"demand {s.demand}")
-            if details:
-                parts.append(f" [{', '.join(details)}]")
-            lines.append("".join(parts))
-    # Luxury summary
-    if luxuries:
-        lines.append("\nLuxury Resources:")
-        for name, count in sorted(luxuries.items()):
-            extra = f" ({count - 1} tradeable)" if count > 1 else ""
-            lines.append(f"  {name}: {count}{extra}")
-    # Owned tile resources grouped by class
-    for cls, label in [
-        ("strategic", "Strategic Tiles"),
-        ("luxury", "Luxury Tiles"),
-        ("bonus", "Bonus Tiles"),
-    ]:
-        items = [r for r in owned if r.resource_class == cls]
-        if not items:
-            continue
-        lines.append(f"\n{label}:")
-        for r in items:
-            if r.improved:
-                lines.append(f"  {r.name} — improved at ({r.x},{r.y})")
-            elif cls in ("luxury", "strategic"):
-                lines.append(
-                    f"  !! {r.name} — UNIMPROVED at ({r.x},{r.y}) — needs builder!"
-                )
-            else:
-                lines.append(f"  {r.name} — UNIMPROVED at ({r.x},{r.y})")
-    # Nearby unclaimed
-    if nearby:
-        lines.append("\nNearby Unclaimed:")
-        for r in nearby:
-            prefix = _CLASS_PREFIX.get(r.resource_class, "?")
-            lines.append(
-                f"  [{prefix}] {r.name} at ({r.x},{r.y}) — {r.distance} tiles from {r.nearest_city}"
-            )
     return "\n".join(lines)
 
 
@@ -1155,36 +878,6 @@ def narrate_diplomacy(civs: list[lq.CivInfo]) -> str:
                 a.replace("_", " ").title() for a in c.available_actions
             )
             lines.append(f"    Can: {actions_str}")
-    return "\n".join(lines)
-
-
-def narrate_diplomacy_sessions(sessions: list[lq.DiplomacySession]) -> str:
-    if not sessions:
-        return "No pending diplomacy sessions."
-    lines = [f"{len(sessions)} pending diplomacy session(s):"]
-    for s in sessions:
-        lines.append(
-            f"  {s.other_civ_name} ({s.other_leader_name}) — "
-            f"session {s.session_id}, player {s.other_player_id}"
-        )
-        if s.dialogue_text:
-            lines.append(f'  Says: "{s.dialogue_text}"')
-        if s.reason_text:
-            lines.append(f"  Reason: {s.reason_text}")
-        if s.buttons:
-            lines.append(f"  Buttons: {s.buttons}")
-        # Phase-appropriate guidance
-        if s.deal_summary:
-            lines.append(f"  Deal: {s.deal_summary}")
-            lines.append(
-                f"  This is a DEAL proposal — use respond_to_trade(other_player_id={s.other_player_id}, accept=True/False)"
-            )
-        elif s.buttons == "GOODBYE":
-            lines.append(
-                "  Phase: GOODBYE — respond with POSITIVE or NEGATIVE (auto-closes)"
-            )
-        else:
-            lines.append("  Respond with: POSITIVE (friendly) or NEGATIVE (dismissive)")
     return "\n".join(lines)
 
 
@@ -1326,81 +1019,6 @@ def narrate_pending_deals(deals: list[lq.PendingDeal]) -> str:
     return "\n".join(lines)
 
 
-def narrate_deal_options(opts: lq.DealOptions) -> str:
-    lines = [
-        f"Trade options with {opts.other_civ_name} (player {opts.other_player_id}):"
-    ]
-    lines.append("\nEconomy:")
-    favor_enabled = opts.ruleset == "RULESET_EXPANSION_2"
-    lines.append(
-        f"  Our gold: {opts.our_gold} ({opts.our_gpt:+d}/turn)"
-        + (f" | Favor: {opts.our_favor}" if favor_enabled else "")
-    )
-    lines.append(
-        f"  Their gold: {opts.their_gold} ({opts.their_gpt:+d}/turn)"
-        + (f" | Favor: {opts.their_favor}" if favor_enabled else "")
-    )
-    if opts.our_luxuries or opts.our_strategics:
-        lines.append("\nOur tradeable resources:")
-        if opts.our_luxuries:
-            lines.append(f"  Luxuries: {', '.join(opts.our_luxuries)}")
-        if opts.our_strategics:
-            lines.append(f"  Strategics: {', '.join(opts.our_strategics)}")
-    if opts.their_luxuries or opts.their_strategics:
-        lines.append("\nTheir tradeable resources:")
-        if opts.their_luxuries:
-            lines.append(f"  Luxuries: {', '.join(opts.their_luxuries)}")
-        if opts.their_strategics:
-            lines.append(f"  Strategics: {', '.join(opts.their_strategics)}")
-    if opts.our_cities:
-        lines.append(f"\nOur cities ({len(opts.our_cities)}):")
-        for c in opts.our_cities:
-            cap = " (CAPITAL)" if c.is_capital else ""
-            lines.append(f"  {c.name} (id={c.city_id}, pop {c.population}){cap}")
-    if opts.their_cities:
-        lines.append(f"\nTheir cities ({len(opts.their_cities)}):")
-        for c in opts.their_cities:
-            cap = " (CAPITAL)" if c.is_capital else ""
-            lines.append(f"  {c.name} (id={c.city_id}, pop {c.population}){cap}")
-    lines.append("\nAgreements:")
-    ob_status = "active" if opts.has_open_borders else "not active (available)"
-    lines.append(f"  Open borders: {ob_status}")
-    if opts.ruleset == "RULESET_STANDARD":
-        lines.append("  Alliance: unavailable under Standard Rules")
-    elif opts.current_alliance:
-        lines.append(f"  Alliance: {opts.current_alliance} (active)")
-    elif opts.alliance_eligible:
-        lines.append(
-            "  Alliance: eligible (MILITARY, RESEARCH, CULTURAL, ECONOMIC, RELIGIOUS)"
-        )
-    else:
-        lines.append(
-            "  Alliance: not eligible (requires declared friendship + Diplomatic Service civic)"
-        )
-    return "\n".join(lines)
-
-
-def _describe_trade_item(item: lq.TestTradeItem) -> str:
-    """Human-readable description of a trade deal item."""
-    if item.item_type == "GOLD":
-        if item.duration > 0:
-            return f"{item.amount} gold/turn ({item.duration} turns)"
-        return f"{item.amount} gold"
-    elif item.item_type == "RESOURCE":
-        name = item.value_id.replace("RESOURCE_", "").replace("_", " ").title()
-        dur = f" ({item.duration} turns)" if item.duration > 0 else ""
-        amt = f" x{item.amount}" if item.amount > 1 else ""
-        return f"{name}{amt}{dur}"
-    elif item.item_type == "AGREEMENT":
-        sub = item.subtype_id.replace("DIPLOACTION_", "").replace("_", " ").title()
-        return sub
-    elif item.item_type == "FAVOR":
-        return f"{item.amount} diplomatic favor"
-    elif item.item_type == "CITY":
-        return f"City (id={item.value_id})"
-    return f"{item.item_type} ({item.amount})"
-
-
 def narrate_test_trade(result: lq.TestTradeResult) -> str:
     lines = [
         f"Trade test with {result.other_civ_name} (player {result.other_player_id}):"
@@ -1505,64 +1123,6 @@ def narrate_policies(gov: lq.GovernmentStatus) -> str:
     return "\n".join(lines)
 
 
-def narrate_governors(gov: lq.GovernorStatus) -> str:
-    lines = [
-        f"Governor Points: {gov.points_available} available, {gov.points_spent} spent"
-    ]
-    if gov.can_appoint:
-        lines.append("** Can appoint a new governor! **")
-
-    if gov.appointed:
-        lines.append(f"\nAppointed ({len(gov.appointed)}):")
-        for g in gov.appointed:
-            if g.assigned_city_id >= 0:
-                est = (
-                    " (established)"
-                    if g.is_established
-                    else f" ({g.turns_to_establish} turns to establish)"
-                )
-                lines.append(
-                    f"  {g.name} ({g.governor_type}) — {g.assigned_city_name}{est}"
-                )
-            else:
-                lines.append(f"  {g.name} ({g.governor_type}) — Unassigned")
-            if g.available_promotions:
-                lines.append("    Available promotions:")
-                for p in g.available_promotions:
-                    lines.append(
-                        f"      {p.name} ({p.promotion_type}): {p.description}"
-                    )
-
-    if gov.available_to_appoint:
-        lines.append(f"\nAvailable to appoint ({len(gov.available_to_appoint)}):")
-        for g in gov.available_to_appoint:
-            lines.append(f"  {g.name} — {g.title} ({g.governor_type})")
-            if g.description:
-                lines.append(f"    {g.description}")
-            if g.base_ability:
-                lines.append(f"    Base: {g.base_ability} — {g.base_ability_desc}")
-            if g.promotions:
-                for p in sorted(g.promotions, key=lambda x: (x.level, x.column)):
-                    lines.append(
-                        f"    L{p.level}: {p.name} ({p.promotion_type}) — {p.description}"
-                    )
-
-    lines.append(
-        "\nUse appoint_governor/assign_governor/promote_governor(governor_type, promotion_type)."
-    )
-    return "\n".join(lines)
-
-
-def narrate_unit_promotions(status: lq.UnitPromotionStatus) -> str:
-    if not status.promotions:
-        return f"No promotions available for {status.unit_type} (id:{status.unit_id})."
-    lines = [f"Promotions for {status.unit_type} (id:{status.unit_id}):"]
-    for p in status.promotions:
-        lines.append(f"  {p.name} ({p.promotion_type}): {p.description}")
-    lines.append("\nUse promote_unit(unit_id, promotion_type) to apply.")
-    return "\n".join(lines)
-
-
 _CITY_STATE_TYPE_NAMES = {
     "Scientific": "科学",
     "Cultural": "文化",
@@ -1661,63 +1221,6 @@ def narrate_city_states(status: lq.EnvoyStatus) -> str:
     return "\n".join(lines)
 
 
-def narrate_pantheon_status(status: lq.PantheonStatus) -> str:
-    lines = []
-    if status.has_pantheon:
-        lines.append(
-            f"Pantheon: {status.current_belief_name} ({status.current_belief})"
-        )
-        lines.append(f"Faith: {status.faith_balance:.0f}")
-    else:
-        lines.append(f"No pantheon selected. Faith: {status.faith_balance:.0f}")
-        if status.pantheon_cost > 0:
-            short = max(0.0, status.pantheon_cost - status.faith_balance)
-            lines.append(
-                f"Pantheon costs {status.pantheon_cost:.0f} faith — "
-                f"need {short:.0f} more (Faith {status.faith_balance:.0f}/{status.pantheon_cost:.0f})."
-            )
-        if status.available_beliefs:
-            lines.append(f"\n{len(status.available_beliefs)} available beliefs:")
-            for b in status.available_beliefs:
-                lines.append(f"  {b.name} ({b.belief_type}): {b.description}")
-            lines.append("\nUse choose_pantheon(belief_type) to found a pantheon.")
-        else:
-            lines.append("No beliefs available (all taken or insufficient faith).")
-    return "\n".join(lines)
-
-
-def narrate_religion_founding_status(status: lq.ReligionFoundingStatus) -> str:
-    lines = []
-    if status.has_religion:
-        lines.append(f"Religion: {status.religion_name} ({status.religion_type})")
-        lines.append(f"Faith: {status.faith_balance:.0f}")
-        lines.append("You have already founded a religion.")
-    else:
-        lines.append(f"No religion founded. Faith: {status.faith_balance:.0f}")
-        if status.pantheon_index >= 0:
-            lines.append(f"Pantheon: index {status.pantheon_index}")
-        else:
-            lines.append("No pantheon selected.")
-
-        if status.available_religions:
-            lines.append(f"\nAvailable religions ({len(status.available_religions)}):")
-            for rtype, rname in status.available_religions:
-                lines.append(f"  {rname} ({rtype})")
-
-        for cls_name, beliefs in status.beliefs_by_class.items():
-            short = cls_name.replace("BELIEF_CLASS_", "").title()
-            lines.append(f"\n{short} beliefs ({len(beliefs)}):")
-            for b in beliefs:
-                lines.append(f"  {b.name} ({b.belief_type}): {b.description}")
-
-        if status.available_religions and status.beliefs_by_class:
-            lines.append(
-                "\nUse found_religion(religion_type, follower_belief, founder_belief) "
-                "after your Great Prophet has activated on a Holy Site."
-            )
-    return "\n".join(lines)
-
-
 def narrate_dedications(status: lq.DedicationStatus) -> str:
     era_names = {
         0: "远古",
@@ -1756,77 +1259,6 @@ def narrate_dedications(status: lq.DedicationStatus) -> str:
     return "\n".join(lines)
 
 
-def narrate_district_advisor(
-    placements: list[lq.DistrictPlacement], district_type: str
-) -> str:
-    if not placements:
-        return f"No valid placement tiles for {district_type}."
-    lines = [f"{district_type} placement options ({len(placements)} tiles):"]
-    for i, p in enumerate(placements, 1):
-        adj_parts = [f"{v} {k}" for k, v in p.adjacency.items()]
-        adj_str = ", ".join(adj_parts) if adj_parts else "no adjacency"
-        lines.append(
-            f"  #{i} ({p.x},{p.y}) Adj: +{p.total_adjacency} ({adj_str}) — {p.terrain_desc}"
-        )
-    return "\n".join(lines)
-
-
-def narrate_wonder_advisor(
-    placements: list[lq.WonderPlacement], wonder_name: str
-) -> str:
-    if not placements:
-        return f"No valid placement tiles for {wonder_name} in this city."
-    short_name = wonder_name.replace("BUILDING_", "").replace("_", " ").title()
-    lines = [f"{wonder_name} placement options ({len(placements)} tiles):"]
-    for i, p in enumerate(placements, 1):
-        # Build terrain description
-        terrain = p.terrain.replace("TERRAIN_", "").replace("_", " ").lower()
-        feat = ""
-        if p.feature != "none":
-            feat = " " + p.feature.replace("FEATURE_", "").replace("_", " ").lower()
-        tags = []
-        if p.has_river:
-            tags.append("river")
-        if p.is_coastal:
-            tags.append("coastal")
-        tag_str = f" [{', '.join(tags)}]" if tags else ""
-        warn_parts = []
-        if p.improvement != "none":
-            imp = p.improvement.replace("IMPROVEMENT_", "").replace("_", " ").lower()
-            warn_parts.append(f"⚠ REMOVES {imp}")
-        if p.resource != "none":
-            res = p.resource.replace("RESOURCE_", "").replace("_", " ").lower()
-            warn_parts.append(f"⚠ DISPLACES {res}")
-        warn_str = f" — {', '.join(warn_parts)}" if warn_parts else ""
-        prefix = "!!" if warn_parts else "  "
-        lines.append(
-            f"{prefix} #{i} ({p.x},{p.y}) {terrain}{feat}{tag_str}"
-            f" — score:{p.displacement_score}{warn_str}"
-        )
-    best = placements[0]
-    lines.append(f"\nRecommended: ({best.x},{best.y}) — lowest displacement")
-    lines.append(
-        f'Use: set_city_production(city_id=<id>, item_type="BUILDING",'
-        f' item_name="{wonder_name}", target_x={best.x}, target_y={best.y})'
-    )
-    return "\n".join(lines)
-
-
-def narrate_purchasable_tiles(tiles: list[lq.PurchasableTile]) -> str:
-    if not tiles:
-        return "No purchasable tiles."
-    lines = [f"{len(tiles)} purchasable tiles:"]
-    for t in tiles:
-        res_str = ""
-        if t.resource:
-            cls_tag = {"strategic": "*", "luxury": "+", "bonus": ""}.get(
-                t.resource_class or "", ""
-            )
-            res_str = f" [{t.resource}{cls_tag}]"
-        lines.append(f"  ({t.x},{t.y}): {t.cost}g — {t.terrain}{res_str}")
-    return "\n".join(lines)
-
-
 def narrate_great_people(gp: list[lq.GreatPersonInfo]) -> str:
     if not gp:
         return "No Great People in timeline."
@@ -1848,6 +1280,8 @@ def narrate_great_people(gp: list[lq.GreatPersonInfo]) -> str:
         entry += f"\n    (individual_id: {g.individual_id})"
         lines.append(entry)
     return "\n".join(lines)
+
+
 
 
 def narrate_great_people_overview(ov: lq.GreatPeopleOverview) -> str:
@@ -1892,70 +1326,6 @@ def narrate_great_people_overview(ov: lq.GreatPeopleOverview) -> str:
         lines.append("  (none)")
     return "\n".join(lines)
 
-
-
-def narrate_gp_advisor(result: lq.GPAdvisorResult) -> str:
-    district_short = (
-        result.target_district.replace("DISTRICT_", "").replace("_", " ").title()
-    )
-    class_short = (
-        result.gp_class.replace("GREAT_PERSON_CLASS_", "").replace("_", " ").title()
-    )
-    lines = [
-        f"Best activation cities for {result.gp_name} ({class_short} -> {district_short}):"
-    ]
-    if result.charges > 0:
-        lines[0] += f" [{result.charges} charge(s)]"
-    if not result.cities:
-        lines.append("  No cities with a completed matching district found.")
-        return "\n".join(lines)
-    # Sort: can_activate first, then by city_yield descending
-    ranked = sorted(result.cities, key=lambda c: (not c.can_activate, -c.city_yield))
-    for i, c in enumerate(ranked, 1):
-        status = "CAN ACTIVATE" if c.can_activate else f"needs move (dist {c.distance})"
-        yield_str = f", yield {c.city_yield}" if c.city_yield > 0 else ""
-        slots_str = ""
-        if c.slots_free >= 0:
-            slots_str = f", {c.slots_free}/{c.slots_total} great work slots free"
-        lines.append(
-            f"  {i}. {c.city_name} ({c.district_x},{c.district_y}) — {status}{yield_str}{slots_str}"
-        )
-    return "\n".join(lines)
-
-
-def narrate_religion_status(rs: lq.ReligionStatus) -> str:
-    if not rs.cities and not rs.summary:
-        return "No religion data available."
-    lines: list[str] = []
-    # Summary — religious victory proximity
-    if rs.summary:
-        lines.append("Religious Victory Tracker:")
-        for s in rs.summary:
-            warning = ""
-            if s.civs_with_majority >= s.total_majors:
-                warning = " !! VICTORY ACHIEVED"
-            elif s.civs_with_majority >= s.total_majors - 1:
-                warning = " !! IMMINENT"
-            lines.append(
-                f"  {s.religion_name}: majority in {s.civs_with_majority}/{s.total_majors} civilizations{warning}"
-            )
-    # Per-civ city breakdown
-    if rs.cities:
-        by_civ: dict[str, list[lq.CityReligionInfo]] = {}
-        for c in rs.cities:
-            by_civ.setdefault(c.civ_name, []).append(c)
-        lines.append("")
-        for civ_name, cities in by_civ.items():
-            lines.append(f"{civ_name}:")
-            for c in cities:
-                follower_str = ""
-                if c.followers:
-                    parts = [f"{name}:{count}" for name, count in c.followers.items()]
-                    follower_str = f" ({', '.join(parts)})"
-                lines.append(
-                    f"  {c.city_name} (pop {c.population}) — {c.majority_religion}{follower_str}"
-                )
-    return "\n".join(lines)
 
 
 def narrate_religion_overview(ro: lq.ReligionOverview) -> str:
@@ -2023,213 +1393,6 @@ def narrate_religion_overview(ro: lq.ReligionOverview) -> str:
             )
     lines.append("")
     lines.append("逐城明细: get_religion_spread | 可选信条: get_religion_beliefs | 胜利逼近: get_victory_progress")
-    return "\n".join(lines)
-
-
-def narrate_trade_routes(status: lq.TradeRouteStatus) -> str:
-    lines = [f"Trade Routes: {status.active_count}/{status.capacity} active"]
-    on_route = [t for t in status.traders if t.on_route]
-    idle = [t for t in status.traders if not t.on_route]
-    if on_route:
-        lines.append(f"\nOn route ({len(on_route)}):")
-        for t in on_route:
-            origin = t.route_origin or "?"
-            dest = t.route_dest or "?"
-            # Owner label
-            if t.is_domestic:
-                label = "Domestic"
-            elif t.is_city_state:
-                label = "City-State"
-            else:
-                label = t.route_owner or "?"
-            parts = [f"  Trader (id:{t.unit_id}) {origin} -> {dest} ({label})"]
-            # Yields
-            yields = []
-            if t.origin_yields:
-                yields.append(t.origin_yields)
-            if t.dest_yields:
-                yields.append(f"-> dest: {t.dest_yields}")
-            if yields:
-                parts.append(" | " + " ".join(yields))
-            # Flags
-            flags = []
-            if t.has_quest:
-                flags.append("[QUEST]")
-            if t.pressure_out > 0 and t.religion_out:
-                flags.append(f"{t.religion_out} -> {t.pressure_out}")
-            if t.pressure_in > 0 and t.religion_in:
-                flags.append(f"{t.religion_in} <- {t.pressure_in}")
-            if flags:
-                parts.append(" | " + " ".join(flags))
-            lines.append("".join(parts))
-    if idle:
-        lines.append(f"\nIdle ({len(idle)}):")
-        for t in idle:
-            lines.append(
-                f"  Trader (id:{t.unit_id}) at ({t.x},{t.y}) — needs trade_route or teleport"
-            )
-    if not status.traders:
-        lines.append("\nNo trader units.")
-    free_slots = status.capacity - status.active_count
-    if free_slots > 0:
-        lines.append(f"\n{free_slots} free route slot(s) — build/buy a Trader to fill.")
-    if status.ghost_count > 0:
-        engine_total = status.active_count + status.ghost_count
-        lines.append(
-            f"\nWARNING: {status.ghost_count} ghost route record(s) in engine "
-            f"(engine reports {engine_total}, only {status.active_count} have living traders)."
-        )
-    return "\n".join(lines)
-
-
-def narrate_trade_destinations(dests: list[lq.TradeDestination]) -> str:
-    if not dests:
-        return "No valid trade route destinations. Check that your trader is in a city and has moves."
-    domestic = [d for d in dests if d.is_domestic]
-    foreign = [d for d in dests if not d.is_domestic]
-    lines = [f"{len(dests)} trade route destinations:"]
-
-    def _fmt_dest(d: lq.TradeDestination, show_owner: bool = False) -> str:
-        owner = f" ({d.owner_name})" if show_owner and d.owner_name else ""
-        parts = [f"  {d.city_name}{owner} at ({d.x},{d.y})"]
-        # Yields
-        yields = []
-        if d.origin_yields:
-            yields.append(d.origin_yields)
-        if d.dest_yields:
-            yields.append(f"-> dest: {d.dest_yields}")
-        if yields:
-            parts.append(" | " + " ".join(yields))
-        # Flags
-        flags = []
-        if d.has_quest:
-            flags.append("[QUEST]")
-        if d.has_trading_post:
-            flags.append("Trading Post")
-        if d.pressure_out > 0 and d.religion_out:
-            flags.append(f"{d.religion_out} -> {d.pressure_out}")
-        if d.pressure_in > 0 and d.religion_in:
-            flags.append(f"{d.religion_in} <- {d.pressure_in}")
-        if flags:
-            parts.append(" | " + " ".join(flags))
-        return "".join(parts)
-
-    if domestic:
-        lines.append("\nDomestic (food + production to destination):")
-        for d in domestic:
-            lines.append(_fmt_dest(d))
-    if foreign:
-        lines.append("\nInternational (gold to origin):")
-        for d in foreign:
-            lines.append(_fmt_dest(d, show_owner=True))
-    # Summarize city-state quests
-    quest_cs = [d.city_name for d in dests if d.has_quest]
-    if quest_cs:
-        lines.append(
-            f"\nCity-state quests (send trade route for envoy): {', '.join(quest_cs)}"
-        )
-    lines.append("\nUse unit_action with action='trade_route', target_x=X, target_y=Y")
-    return "\n".join(lines)
-
-
-def narrate_world_congress(status: lq.WorldCongressStatus) -> str:
-    lines = []
-    imminent = not status.is_in_session and status.turns_until_next <= 0
-
-    if status.is_in_session or imminent:
-        if status.is_in_session:
-            lines.append("World Congress: IN SESSION (vote required!)")
-        else:
-            lines.append(
-                "World Congress: FIRES THIS TURN — use queue_wc_votes() before end_turn()!"
-            )
-        # Build clear cost table: "N votes = X favor total"
-        costs = status.favor_costs
-        if costs and len(costs) > 1:
-            cost_entries = []
-            for i, c in enumerate(costs):
-                n = i + 1  # 1-indexed vote count
-                if n == 1:
-                    cost_entries.append("1 vote=free")
-                else:
-                    cost_entries.append(f"{n}={c}")
-                if c > status.favor:
-                    break  # stop showing costs we can't afford
-            costs_str = ", ".join(cost_entries)
-        else:
-            costs_str = "1 vote=free, 2=10, 3=30, 4=60, 5=100, 6=150, 7=210, 8=280, 9=360, 10=450, 11=550"
-        lines.append(f"Favor: {status.favor} | Vote costs (cumulative): {costs_str}")
-    else:
-        if status.turns_until_next >= 0:
-            lines.append(
-                f"World Congress: Next session in {status.turns_until_next} turns"
-            )
-        else:
-            lines.append("World Congress: Not yet convened")
-        lines.append(f"Favor: {status.favor}")
-
-    if status.resolutions:
-        lines.append("")
-        for i, r in enumerate(status.resolutions, 1):
-            if status.is_in_session:
-                # Active session — show full voting details
-                lines.append(f"Resolution #{i}: {r.name} (hash: {r.resolution_hash})")
-                lines.append(f"  Target type: {r.target_kind}")
-                if r.effect_a:
-                    lines.append(f"  Option A: {r.effect_a}")
-                if r.effect_b:
-                    lines.append(f"  Option B: {r.effect_b}")
-                if r.possible_targets:
-                    tgt_strs = []
-                    for t in r.possible_targets:
-                        if ":" in t:
-                            tid, tname = t.split(":", 1)
-                            tgt_strs.append(f"[target={tid}] {tname}")
-                        else:
-                            tgt_strs.append(t)
-                    lines.append(f"  Targets: {', '.join(tgt_strs)}")
-                lines.append(
-                    f'  -> queue_wc_votes(votes=\'[{{"hash": {r.resolution_hash}, "option": 1or2, "target": 0, "votes": 1}}]\')'
-                )
-            elif imminent:
-                # Imminent but not yet in session — resolutions are LAST SESSION's passed outcomes
-                # Show as active effects, not as upcoming votes
-                outcome = "A" if r.winner == 0 else "B" if r.winner == 1 else "?"
-                effect = (
-                    r.effect_a if r.winner == 0 else r.effect_b if r.winner == 1 else ""
-                )
-                chosen = f" ({r.chosen_thing})" if r.chosen_thing else ""
-                lines.append(f"  {r.name} — Outcome {outcome}{chosen}: {effect}")
-            else:
-                outcome = "A" if r.winner == 0 else "B" if r.winner == 1 else "?"
-                effect = (
-                    r.effect_a if r.winner == 0 else r.effect_b if r.winner == 1 else ""
-                )
-                chosen = f" ({r.chosen_thing})" if r.chosen_thing else ""
-                lines.append(f"  {r.name} — Outcome {outcome}{chosen}: {effect}")
-
-        if imminent:
-            lines.append("")
-            lines.append(
-                "NOTE: Above are ACTIVE EFFECTS from last session. Upcoming resolutions will be different."
-            )
-            lines.append(
-                "The handler resolves targets at runtime during the WC session."
-            )
-            lines.append("")
-            lines.append(
-                'To vote: queue_wc_votes(votes=\'[{"hash": <hash>, "option": 1or2, "target": <player_id>, "votes": N}, ...]\')'
-            )
-            lines.append(
-                "Common hashes: Diplomatic Victory = 334823573. Use get_diplomacy for player IDs."
-            )
-            lines.append("Then call end_turn() — handler fires during WC processing.")
-
-    if status.proposals:
-        lines.append("\nProposals:")
-        for p in status.proposals:
-            lines.append(f"  {p.sender_name} -> {p.target_name}: {p.description}")
-
     return "\n".join(lines)
 
 
@@ -2585,33 +1748,6 @@ def narrate_victory_progress(vp: lq.VictoryProgress) -> str:
             bar = "#" * (viability // 10) + "-" * (10 - viability // 10)
             rec = " ** RECOMMENDED **" if vtype == best[0] and viability >= 30 else ""
             lines.append(f"  {vtype:12s} [{bar}] {viability}% — {reason}{rec}")
-
-    return "\n".join(lines)
-
-
-def narrate_notifications(notifs: list[lq.GameNotification]) -> str:
-    if not notifs:
-        return "No active notifications."
-
-    action_required = [n for n in notifs if n.is_action_required]
-    info_notifs = [n for n in notifs if not n.is_action_required]
-
-    lines = []
-    if action_required:
-        lines.append(f"== Action Required ({len(action_required)}) ==")
-        for n in action_required:
-            hint = f"  -> Use: {n.resolution_hint}" if n.resolution_hint else ""
-            loc = f" at ({n.x},{n.y})" if n.x >= 0 else ""
-            lines.append(f"  * {n.message}{loc}{hint}")
-
-    if info_notifs:
-        if lines:
-            lines.append("")
-        lines.append(f"== Notifications ({len(info_notifs)}) ==")
-        for n in info_notifs:
-            hint = f"  -> {n.resolution_hint}" if n.resolution_hint else ""
-            loc = f" at ({n.x},{n.y})" if n.x >= 0 else ""
-            lines.append(f"  - {n.message}{loc}{hint}")
 
     return "\n".join(lines)
 

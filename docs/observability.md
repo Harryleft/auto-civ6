@@ -118,7 +118,7 @@ Every MCP tool call is logged with full timing, parameters, and results. This is
 Each entry:
 - Tool name and category (`query` / `action` / `turn`)
 - Input parameters
-- Full narrated result text
+- Full result (信封 JSON 或文本)
 - Result summary (first 200 chars, for quick analysis)
 - Success/failure flag
 - Wall-clock duration in milliseconds
@@ -151,7 +151,8 @@ Game-over entries include an `outcome` object with winner, victory type, and whe
 
 ### Typical size
 
-10-50 MB per full game (400 turns). The `result` field stores complete narrated text, which dominates file size.
+10-50 MB per full game (400 turns). The `result` field stores the complete
+信封 JSON（结构化 facts），体积由查询数据量决定；叙述文本轨已移除。
 
 ---
 
@@ -169,7 +170,9 @@ A human player glances at the minimap and notices territory changing color. They
 
 Two sources per tool call:
 
-1. **Result text** — A regex `\((\d+),(\d+)\)` extracts all coordinate pairs from the narrated output. This format is used consistently by every narration function.
+1. **结果** — 信封 JSON 的 `facts` 携带结构化坐标（`"x"`/`"y"` 字段），工具
+   调用时也通过 `tiles=` 参数显式上报；`\((\d+),(\d+)\)` 正则仅作为旧文本
+   结果的回退。
 2. **Input parameters** — `target_x`/`target_y`, `x`/`y`, or computed from `center_x`/`center_y`/`radius` for `get_map_area`.
 
 ### Attention types
@@ -238,10 +241,10 @@ All three systems share the same architecture:
 2. Catches errors
 3. Calls `logger.log_tool_call()` — writes to tool log
 4. Calls `spatial.record()` — writes to spatial log (try/except, never breaks gameplay)
-5. Returns the narrated result to the agent
+5. Returns the result to the agent
 
 ```
-Agent ─── MCP Tool Call ──→ _logged() ──→ fn() ──→ narrated result
+Agent ─── MCP Tool Call ──→ _logged() ──→ fn() ──→ result (信封/文本)
                                │                        │
                                ├─ logger.log_tool_call() ← result + timing
                                └─ spatial.record()       ← result + params
