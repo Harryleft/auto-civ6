@@ -87,6 +87,14 @@ dev = [
     "pytest>=8.0",
 ]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "property: hypothesis 属性测试（随机化不变量）",
+    "golden: Lua 生成黄金契约测试",
+    "manual: 需要真实游戏实例的手动冒烟测试",
+]
+
 [tool.mutmut]
 source_paths = [
     "src/civ6_belief_engine/belief_engine.py",

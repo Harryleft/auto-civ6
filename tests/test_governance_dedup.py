@@ -13,13 +13,6 @@ import pytest
 from civ6_belief_engine.belief_engine import BeliefEngine
 
 
-@pytest.fixture
-def engine(tmp_path):
-    instance = BeliefEngine(run_id="dedup-test", directory=tmp_path)
-    instance.bind_game("CIVILIZATION_TEST", 42)
-    return instance
-
-
 SETTLE_ARGS = {"unit_id": 65536, "action": "found_city", "target_x": 43, "target_y": 38}
 
 

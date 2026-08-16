@@ -27,13 +27,6 @@ from civ_mcp.server import _logged
 GAME = ("CIVILIZATION_TEST", 7)
 
 
-@pytest.fixture
-def engine(tmp_path):
-    instance = BeliefEngine(run_id="p0-test", directory=tmp_path)
-    instance.bind_game(*GAME)
-    return instance
-
-
 def _bind(tmp_path, run_id: str) -> BeliefEngine:
     instance = BeliefEngine(run_id=run_id, directory=tmp_path)
     instance.bind_game(*GAME)

@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import pytest
 
+pytestmark = pytest.mark.golden
+
 from civ_mcp.lua import cities, congress, diplomacy, units
 from civ_mcp.lua.barbarians import build_barbarian_overview_query
 from civ_mcp.lua.tech import build_tech_civics_query

@@ -17,7 +17,10 @@ import string
 import tempfile
 from pathlib import Path
 
+import pytest
 from hypothesis import given, settings, strategies as st
+
+pytestmark = pytest.mark.property
 
 from civ6_belief_engine.belief_engine import BeliefEngine, BeliefEngineError
 
