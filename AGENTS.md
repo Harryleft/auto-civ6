@@ -113,12 +113,12 @@ uv run pytest tests/test_belief_engine.py -q -k "orphan"  # 按关键字跑单�
 
 ## 架构大图（跨文件）
 
-- **双包布局**：`src/civ_mcp` 是 MCP 适配层（连接、Lua builder/parser、`server/` 包内 109 个工具），`src/civ6_belief_engine` 是产品域包（belief engine + governance + graph）。旧兼容转发 shim 已删除，代码直接导入域包。已知债务：域包 3 处仍 import `civ_mcp.lua.models`（`governance/{models,snapshot}.py`、`governance/departments/diplomacy.py`）；Military 已改为窄 Protocol，剩余 DTO 边界倒置属图工程阶段三/四。
-- **调用链**：FireTuner TCP 4318 → `GameConnection` → `GameState` → `server/pipeline.py` 的 `_logged` 管道（授权预检 → 执行 → 信念记录 → 结果过滤）→ DSH。所有 MCP 工具必须经 `_logged`，不要绕开。`server/` 包：`assembly.py`（lifespan/入口/auto-resume）、`pipeline.py`（运行管道）、`tools/`（工具按域分组；`tools/belief.py` 是阶段四整删单元）。
+- **双包布局**：`src/civ_mcp` 是 MCP 适配层（连接、Lua builder/parser、`server/` 包内 112 个工具），`src/civ6_belief_engine` 是产品域包（belief engine + governance + graph）。旧兼容转发 shim 已删除，代码直接导入域包；域包对 `civ_mcp` 已零导入，`TypedTurnSnapshot` 是 domain 侧边界类型，具体 Lua DTO 只由 `GameState` 采集端转换为该类型。
+- **调用链**：FireTuner TCP 4318 → `GameConnection` → `GameState` → `server/pipeline.py` 的 `_logged` 管道（授权预检 → 执行 → 信念记录 → 结果过滤）→ DSH。所有 MCP 工具必须经 `_logged`，不要绕开。`server/` 包：`assembly.py`（lifespan/入口/auto-resume）、`pipeline.py`（运行管道：日志、门禁、事件记录和 flush）、`tools/`（按域分组的 MCP 工具注册；治理工具在 `belief_tools.py`，纯合同适配在 `governance_adapters.py`）、`governance_snapshot.py`（typed snapshot 生命周期）；`end_turn.py` 只负责 MCP 注册，回合日记、挂起恢复和 game-over 编排在 `end_turn_flow.py`。
 - **命名陷阱**：`execute_read`/`execute_write` 指的是 Lua 上下文（GameCore/InGame），**不是**读写语义。真正的读写区分在 `execute_mutation`：变异命令恰好发送一次、死套接字不重发（抛 `MutationOutcomeUnknownError`，重试前必须先查询验证游戏状态）、未收到 sentinel 超时抛 `CommandTimeoutError`。
 - **BeliefEngine 是事件溯源**：append-only JSONL（`~/.civ6-mcp/beliefs/`），加载时 reduce 重放；实体用墓碑（deleted/archived）不物理删除；游戏重载（autosave 回滚/手动读档）产生 epoch 标记并作废旧授权；`governance_turn_gate` 对未完成授权 fail-closed。新代码不得绕过事件流直接改内存态。查询观察经 `derivation` 规则注册表自动派生信念/预测（带 `derived` 标签，coverage 审计区分系统产出与模型自报）。
 - **结果过滤只作用于模型面副本**：`result_filter` 在返回给 DSH 前压缩超大结果，遥测保留原始全文；阈值由 `CIV_MCP_RESULT_*` 环境变量控制。
-- **图工程进度**（全量方案与验收门禁见 [graph_plan/README.md](graph_plan/README.md)，动架构前先读）：阶段一影子图已完成（离线投影比较、replay、epoch 隔离）；阶段二“城市周边威胁”切片离线闭环完成，真实游戏的 Proposal → 动作 → Outcome 验收未完成（当前局面无近城敌军）；阶段三 Military 已只读 GraphView 的 Goal + `THREATENS`，但蛮族营地等军事事实仍走兼容 TurnSnapshot；阶段四 `server.py` 已 move-only 拆为 `server/` 包，`end_turn.py` 拆分与旧 belief/governance 适配层删除留待本阶段。
+- **图工程进度**（全量方案与验收门禁见 [graph_plan/README.md](graph_plan/README.md)，动架构前先读）：阶段一影子图已完成（离线投影比较、replay、epoch 隔离）；阶段二“城市周边威胁”切片离线闭环与真实游戏验收均已完成（`0_MCP_0108` T108 里昂：敌军 → `THREATENS` → Proposal → Council approved → `fortify` → read-back → Graph）；阶段三七个 Department 已统一消费 `GraphSnapshotView`，图缺失/陈旧时按证据缺口保守处理，不再回退旧快照字段；阶段四 `server.py` 已拆为 `server/` 包，`end_turn.py` 拆分与旧治理适配层迁移已于 2026-08-16 完成（旧 `tools/belief.py` 物理删除，MCP 工具名和签名不变）。
 - **评测与站点**：`evals/` 是 inspect-ai civbench 基准，`web/` 是 Next.js + Convex 成绩站点，`scripts/publish_hf/` 是 HuggingFace 数据集发布管线；三者独立于游戏运行链路。
 
 ## 代码和文档边界

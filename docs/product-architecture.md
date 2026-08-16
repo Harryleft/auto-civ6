@@ -18,10 +18,11 @@ Civilization VI 的一个适配模块。
 
 ```text
 src/
-├── civ6_belief_engine/       # 产品领域层：信念、治理、策略状态
-│   └── governance/
+├── civ6_belief_engine/       # 产品领域层：信念、治理、图、策略状态
+│   ├── governance/
+│   └── graph/
 └── civ_mcp/                  # MCP 适配层 + 游戏运行时
-    ├── server.py             # MCP 工具注册与协议入口
+    ├── server/               # MCP 入口包：assembly 装配、pipeline 运行管道、tools/ 按域工具
     ├── lua/                  # Civ 6 Lua 查询/动作工具
     ├── connection.py         # FireTuner 连接
     └── ...                   # 生命周期、存档、遥测等运行时能力
@@ -32,8 +33,9 @@ src/
 已移除，测试与代码直接导入产品域包；`civ_mcp/belief_mode.py` 仍是
 MCP 侧真实的运行模式逻辑。
 
-Lua 数据模型目前仍由 MCP 工具层提供，治理层通过类型导入使用它们；这
-是下一阶段才适合拆分的边界，不在本次迁移中扩大范围。
+域包对 `civ_mcp` 已零运行时导入：`TypedTurnSnapshot` 是 domain 侧边界
+类型，具体 Lua DTO 只由 `GameState` 采集端转换为该类型；Department 通过
+窄 `GraphSnapshotView` 消费治理快照，不再读取旧快照字段。
 
 ## 产品名与技术名
 

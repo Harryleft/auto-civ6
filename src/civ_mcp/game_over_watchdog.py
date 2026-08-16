@@ -1,7 +1,7 @@
 """Background game-over watchdog — detects victories independent of tool calls.
 
 The LLM might stop calling tools (context exhaustion, API error, model hang).
-All 5 game-over check sites in end_turn.py require a tool call to fire.
+All 5 game-over check sites in end_turn_flow.py require a tool call to fire.
 This watchdog polls check_game_over() on a timer so the orchestrator and
 telemetry pipeline still detect the outcome.
 """
