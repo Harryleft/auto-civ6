@@ -6,7 +6,7 @@ import hashlib
 from dataclasses import dataclass
 
 from ...graph import GraphView
-from ..graph_snapshot import GraphSnapshotView
+from ..graph_snapshot import GraphSnapshotView, graph_agenda
 from .base import (
     Department,
     DepartmentAssessment,
@@ -80,6 +80,7 @@ class NationalStrategyCoordinator:
             graph=graph,
         )
         snapshot = context.snapshot
+        agenda = graph_agenda(context)
         assessments: list[DepartmentAssessment] = []
         for plugin in self.registry.plugins():
             try:
@@ -113,7 +114,7 @@ class NationalStrategyCoordinator:
 
     @staticmethod
     def _synthesize(
-        snapshot: TurnSnapshot,
+        snapshot: GraphSnapshotView,
         assessments: tuple[DepartmentAssessment, ...],
         agenda: tuple[str, ...],
     ) -> CampaignDraft:

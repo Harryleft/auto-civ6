@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from ..graph_snapshot import graph_goals, graph_snapshot
+from ..graph_snapshot import graph_agenda, graph_goals, graph_snapshot
 from ..models import Outcome, OutcomeStatus
 from .base import (
     Department,
@@ -148,7 +148,7 @@ def _barbarian_pressure(snapshot: object) -> bool:
 
 
 def _civic_agenda(context: DepartmentContext) -> bool:
-    texts = list(context.agenda)
+    texts = list(graph_agenda(context))
     texts.extend(getattr(goal, "statement", "") for goal in graph_goals(context))
     normalized = tuple(_clean(text).casefold() for text in texts)
     return any(term.casefold() in text for text in normalized for term in _CIVIC_TERMS)

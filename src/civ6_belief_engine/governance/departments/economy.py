@@ -5,7 +5,7 @@ from __future__ import annotations
 from math import isfinite
 from typing import Any
 
-from ..graph_snapshot import graph_goals, graph_snapshot
+from ..graph_snapshot import graph_agenda, graph_goals, graph_snapshot
 from .base import (
     BaseDepartment,
     Department,
@@ -45,7 +45,7 @@ def _contains_keyword(values: tuple[str, ...], keywords: tuple[str, ...]) -> boo
 
 
 def _context_text(context: DepartmentContext) -> tuple[str, ...]:
-    values = list(context.agenda)
+    values = list(graph_agenda(context))
     for goal in graph_goals(context):
         values.append(goal.statement)
         values.extend(goal.tags)
@@ -95,7 +95,7 @@ def _safe_gold_budget(gold: float, gold_per_turn: float, maintenance: float) -> 
 class EconomyDepartment(BaseDepartment):
     """Assess treasury capacity and provide abstract budget support signals.
 
-    The department only consumes an immutable :class:`TurnSnapshot`. It never
+    The department only consumes an immutable :class:`GraphSnapshotView`. It never
     calls external services, mutates state, or chooses a concrete unit/item.
     """
 

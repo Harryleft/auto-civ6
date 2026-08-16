@@ -293,4 +293,18 @@ def graph_goals(context: Any) -> tuple[Any, ...]:
     return tuple(goals)
 
 
-__all__ = ["GraphSnapshotView", "graph_goals", "graph_snapshot"]
+def graph_agenda(context: Any) -> tuple[str, ...]:
+    """Return agenda statements from the current graph, with legacy fallback only without one."""
+
+    graph = getattr(context, "graph", None)
+    if graph is None:
+        return tuple(getattr(context, "agenda", ()) or ())
+    return tuple(
+        statement
+        for goal in graph_goals(context)
+        if isinstance(statement := getattr(goal, "statement", None), str)
+        and statement.strip()
+    )
+
+
+__all__ = ["GraphSnapshotView", "graph_agenda", "graph_goals", "graph_snapshot"]
