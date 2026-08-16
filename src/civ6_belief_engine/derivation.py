@@ -33,9 +33,7 @@ from typing import Any
 DERIVED_TAG = "derived"
 
 
-def _slug(value: str) -> str:
-    cleaned = "".join(c if c.isalnum() or c in "-_." else "-" for c in value)
-    return cleaned.strip("-.") or "unknown"
+from .ids import slugify as _slug
 
 
 # ---------------------------------------------------------------------------
