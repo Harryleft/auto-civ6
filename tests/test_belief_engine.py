@@ -1925,3 +1925,199 @@ def test_parse_fact_envelope_accepts_only_valid_envelopes():
     assert _parse_fact_envelope(json.dumps({"v": 1})) is None
     assert _parse_fact_envelope(json.dumps({"facts": {}})) is None
     assert _parse_fact_envelope(json.dumps(None)) is None
+
+
+# ---------------------------------------------------------------------------
+# validate_entity 测试矩阵（变异测试暴露的核心校验盲区）
+# ---------------------------------------------------------------------------
+
+_ALL_ENTITY_TYPES = (
+    "observation",
+    "belief",
+    "hypothesis",
+    "prediction",
+    "plan",
+    "surprise",
+    "contradiction",
+    "decision",
+    "action",
+    "attribution",
+    "world_entity",
+    "goal",
+    "proposal",
+    "critic_review",
+    "council_decision",
+    "budget_lock",
+    "outcome",
+    "simulation",
+)
+
+_REQUIRED_BY_TYPE = {
+    "observation": ("statement", "source"),
+    "belief": ("statement", "category", "probability", "confidence"),
+    "hypothesis": ("statement", "topic_id", "probability", "confidence"),
+    "prediction": ("statement", "probability", "confidence", "deadline_turn"),
+    "plan": ("goal", "horizon", "probability_of_success"),
+    "surprise": ("statement", "severity"),
+    "contradiction": ("statement", "severity"),
+    "decision": ("statement", "route"),
+    "action": ("statement", "tool"),
+    "attribution": ("failure", "candidates"),
+    "world_entity": ("node_type", "attributes"),
+    "goal": ("statement", "priority"),
+    "proposal": ("statement", "department", "action_intent"),
+    "critic_review": ("proposal_id", "verdict"),
+    "council_decision": ("statement", "selected_proposal_id"),
+    "budget_lock": ("resource", "amount", "proposal_id"),
+    "outcome": ("statement", "action_intent", "success"),
+    "simulation": ("branch_label", "scenario", "projections"),
+}
+
+
+def _minimal_entity_payload(entity_type: str) -> dict:
+    extra = {
+        "observation": {"source": "tool:get_units"},
+        "belief": {"category": "test", "probability": 0.5, "confidence": 0.5},
+        "hypothesis": {"topic_id": "topic:1", "probability": 0.5, "confidence": 0.5},
+        "prediction": {"probability": 0.5, "confidence": 0.5, "deadline_turn": 10},
+        "plan": {"goal": "goal:1", "horizon": 10, "probability_of_success": 0.5},
+        "surprise": {"severity": "medium"},
+        "contradiction": {"severity": "medium"},
+        "decision": {"route": "fast"},
+        "action": {"tool": "unit_action"},
+        "attribution": {"failure": "f", "candidates": [{"cause": "c", "posterior": 0.5}]},
+        "world_entity": {"node_type": "unit", "attributes": {"x": 1}},
+        "goal": {"priority": 50},
+        "proposal": {"department": "military", "action_intent": {"tool": "unit_action"}},
+        "critic_review": {"proposal_id": "proposal:1", "verdict": "agree"},
+        "council_decision": {"selected_proposal_id": "proposal:1"},
+        "budget_lock": {"resource": "gold", "amount": 10, "proposal_id": "proposal:1"},
+        "outcome": {"action_intent": {"tool": "unit_action"}, "success": True},
+        "simulation": {"branch_label": "b1", "scenario": "baseline", "projections": {"science": 10}},
+    }
+    return {"entity_type": entity_type, "statement": "s", **extra.get(entity_type, {})}
+
+
+def test_unknown_entity_type_is_rejected(engine):
+    from civ6_belief_engine.belief_engine import _validate_entity
+
+    with pytest.raises(BeliefEngineError, match="Unsupported entity_type"):
+        engine.create(
+            "nonexistent",
+            {"entity_type": "nonexistent", "statement": "x"},
+            turn=1,
+            entity_id="x:1",
+        )
+    # _validate_entity 自身的分支（绕过 create 的先行检查）。
+    with pytest.raises(BeliefEngineError, match="Unsupported entity_type"):
+        _validate_entity("nonexistent", {"entity_type": "nonexistent"})
+
+
+def test_valid_payload_accepted_for_every_entity_type(engine):
+    for entity_type in _ALL_ENTITY_TYPES:
+        engine.create(
+            entity_type,
+            _minimal_entity_payload(entity_type),
+            turn=1,
+            entity_id=f"ok:{entity_type}",
+        )
+        assert engine.get(entity_type, f"ok:{entity_type}") is not None
+
+
+def test_missing_required_field_rejected_for_every_type(engine):
+    for entity_type, required in _REQUIRED_BY_TYPE.items():
+        for field in required:
+            payload = _minimal_entity_payload(entity_type)
+            del payload[field]
+            with pytest.raises(BeliefEngineError, match="Missing required"):
+                engine.create(
+                    entity_type,
+                    payload,
+                    turn=1,
+                    entity_id=f"missing:{entity_type}:{field}",
+                )
+        # 空字符串同样被拒绝：非概率字段报 Missing required，
+        # 概率字段先被概率校验拦下（两者都是拒绝语义）。
+        for field in required:
+            payload = _minimal_entity_payload(entity_type)
+            payload[field] = ""
+            with pytest.raises(BeliefEngineError):
+                engine.create(
+                    entity_type,
+                    payload,
+                    turn=1,
+                    entity_id=f"empty:{entity_type}:{field}",
+                )
+
+
+def test_probability_like_fields_validated_across_entity_types(engine):
+    cases = (
+        ("belief", "probability", 1.5),
+        ("belief", "confidence", -0.1),
+        ("belief", "probability", True),
+        ("belief", "confidence", "0.7"),
+        ("belief", "probability", float("nan")),
+        ("observation", "reliability", 2.0),
+        ("plan", "probability_of_success", -1),
+    )
+    for entity_type, field, bad in cases:
+        payload = _minimal_entity_payload(entity_type)
+        payload[field] = bad
+        with pytest.raises(BeliefEngineError):
+            engine.create(
+                entity_type,
+                payload,
+                turn=1,
+                entity_id=f"badprob:{entity_type}:{field}:{bad}",
+            )
+
+
+def test_plan_horizon_must_be_5_10_or_20(engine):
+    for bad in (0, 3, 21, True, "10", None):
+        payload = _minimal_entity_payload("plan")
+        payload["horizon"] = bad
+        with pytest.raises(BeliefEngineError, match="horizon"):
+            engine.create("plan", payload, turn=1, entity_id=f"horizon:{bad}")
+    for good in (5, 10, 20):
+        payload = _minimal_entity_payload("plan")
+        payload["horizon"] = good
+        engine.create("plan", payload, turn=1, entity_id=f"horizon-ok:{good}")
+
+
+def test_prediction_deadline_must_be_non_negative_integer(engine):
+    for bad in (-1, True, 1.5, "5", None):
+        payload = _minimal_entity_payload("prediction")
+        payload["deadline_turn"] = bad
+        with pytest.raises(BeliefEngineError, match="deadline_turn"):
+            engine.create("prediction", payload, turn=1, entity_id=f"deadline:{bad}")
+    for good in (0, 100):
+        payload = _minimal_entity_payload("prediction")
+        payload["deadline_turn"] = good
+        engine.create("prediction", payload, turn=1, entity_id=f"deadline-ok:{good}")
+
+
+def test_critic_verdict_and_objection_evidence_rules(engine):
+    for bad in ("disagree", "", None, 1):
+        payload = _minimal_entity_payload("critic_review")
+        payload["verdict"] = bad
+        with pytest.raises(BeliefEngineError, match="verdict"):
+            engine.create("critic_review", payload, turn=1, entity_id=f"verdict:{bad}")
+    # object 必须附带证据或替代方案。
+    payload = _minimal_entity_payload("critic_review")
+    payload["verdict"] = "object"
+    with pytest.raises(BeliefEngineError, match="objection requires"):
+        engine.create("critic_review", payload, turn=1, entity_id="object:bare")
+    for evidence_field in ("counterevidence", "invalidated_assumptions", "alternative"):
+        payload = _minimal_entity_payload("critic_review")
+        payload["verdict"] = "object"
+        payload[evidence_field] = "obs:1"
+        engine.create(
+            "critic_review",
+            payload,
+            turn=1,
+            entity_id=f"object:{evidence_field}",
+        )
+    # 条件同意同样合法。
+    payload = _minimal_entity_payload("critic_review")
+    payload["verdict"] = "agree_with_conditions"
+    engine.create("critic_review", payload, turn=1, entity_id="verdict:conditions")
