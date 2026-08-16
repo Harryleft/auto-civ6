@@ -33,7 +33,7 @@ from civ_mcp.server import (
     route_belief_decision,
     submit_governance_proposal,
 )
-from civ6_belief_engine.governance import RulesetCapabilities, TurnSnapshot
+from civ6_belief_engine.governance import GraphSnapshotView
 from civ6_belief_engine.governance.departments import (
     Department,
     NationalStrategyCoordinator,
@@ -416,14 +416,12 @@ def test_governance_mcp_tools_are_registered():
 
 
 def test_national_strategy_payload_runs_and_serializes_all_seven_departments():
-    snapshot = TurnSnapshot(
+    snapshot = GraphSnapshotView(
         snapshot_id="snapshot:modules",
         turn=12,
-        turn_before=12,
-        turn_after=12,
         player_id=0,
-        captured_at=1.0,
-        capabilities=RulesetCapabilities.standard(),
+        ready=True,
+        source="test",
     )
 
     brief = NationalStrategyCoordinator(default_department_registry()).run(snapshot)

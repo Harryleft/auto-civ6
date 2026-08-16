@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from civ6_belief_engine.governance import RulesetCapabilities, TurnSnapshot
+from civ6_belief_engine.governance import GraphSnapshotView
 from civ6_belief_engine.governance.departments.base import (
     Department,
     DepartmentAssessment,
@@ -17,15 +17,13 @@ from civ6_belief_engine.governance.departments.coordinator import (
 )
 
 
-def _snapshot() -> TurnSnapshot:
-    return TurnSnapshot(
+def _snapshot() -> GraphSnapshotView:
+    return GraphSnapshotView(
         snapshot_id="snapshot:9",
         turn=9,
-        turn_before=9,
-        turn_after=9,
         player_id=0,
-        captured_at=1.0,
-        capabilities=RulesetCapabilities.standard(),
+        ready=True,
+        source="test",
     )
 
 

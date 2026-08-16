@@ -17,6 +17,7 @@ from civ6_belief_engine.governance.departments.base import (
     ReviewDisposition,
 )
 from civ6_belief_engine.governance.departments.military import MilitaryDepartment
+from civ6_belief_engine.governance.graph_snapshot import GraphSnapshotView
 from civ6_belief_engine.governance.models import Outcome, OutcomeStatus
 from civ6_belief_engine.governance.snapshot import snapshot_world_state
 from civ6_belief_engine.graph import (
@@ -136,8 +137,26 @@ def _context(
     graph: GraphView | None = None,
     goals: tuple[StrategicGoal, ...] = (),
 ) -> DepartmentContext:
+    department_snapshot = GraphSnapshotView(
+        snapshot_id=snapshot.snapshot_id,
+        turn=snapshot.turn,
+        player_id=snapshot.player_id,
+        ready=True,
+        source="test",
+        overview=snapshot.overview,
+        cities=snapshot.cities,
+        units=snapshot.units,
+        diplomacy=snapshot.diplomacy,
+        tech_civic=snapshot.tech_civic,
+        resources=snapshot.resources,
+        policies=snapshot.policies,
+        barbarians=snapshot.barbarians,
+        great_people=snapshot.great_people,
+        threats=snapshot.threats,
+        threat_scan_available=snapshot.threat_scan_available,
+    )
     return DepartmentContext(
-        snapshot=snapshot,
+        snapshot=department_snapshot,
         agenda=agenda,
         goals=goals,
         graph=graph,
@@ -424,7 +443,7 @@ def test_graph_context_ignores_legacy_agenda_and_stale_graph_goals() -> None:
 
     context = _context(snapshot, "军事防御", graph=graph)
 
-    assert MilitaryDepartment().match(context) == 0.5
+    assert MilitaryDepartment().match(context) == 0.0
 
 
 def test_stale_graph_threats_degrade_without_affecting_current_assessment() -> None:
@@ -469,7 +488,7 @@ def test_stale_graph_threats_degrade_without_affecting_current_assessment() -> N
     assert assessment.proposals == ()
     assert MilitaryDepartment().review(
         context, _outcome(OutcomeStatus.SUCCEEDED)
-    ) is ReviewDisposition.EXIT
+    ) is ReviewDisposition.REPLAN
 
 
 def test_defense_proposal_requires_a_relevant_graph_goal() -> None:

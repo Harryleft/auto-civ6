@@ -2,9 +2,16 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from civ6_belief_engine.belief_engine import BeliefEngine
 from civ6_belief_engine.graph import GraphView, project_governance_state
-from civ6_belief_engine.governance.graph_snapshot import graph_agenda
+from civ6_belief_engine.governance.departments.base import DepartmentContext
+from civ6_belief_engine.governance.graph_snapshot import (
+    GraphSnapshotView,
+    graph_agenda,
+    graph_snapshot,
+)
 
 
 def _agenda_context(
@@ -55,6 +62,32 @@ def test_graph_agenda_falls_back_to_legacy_agenda_without_graph() -> None:
     context = _agenda_context(graph=None, agenda=("legacy agenda",))
 
     assert graph_agenda(context) == ("legacy agenda",)
+
+
+def test_department_context_rejects_typed_snapshot_at_graph_boundary() -> None:
+    with pytest.raises(TypeError, match="GraphSnapshotView"):
+        DepartmentContext(snapshot=SimpleNamespace(snapshot_id="s", turn=1, player_id=0))
+
+
+def test_stale_graph_does_not_reuse_view_snapshot_facts() -> None:
+    snapshot = GraphSnapshotView(
+        snapshot_id="snapshot:10",
+        turn=10,
+        player_id=0,
+        ready=True,
+        source="test",
+        overview=SimpleNamespace(civ_name="must not leak"),
+    )
+    context = SimpleNamespace(
+        graph=GraphView.empty(turn=9),
+        snapshot=snapshot,
+    )
+
+    view = graph_snapshot(context)
+
+    assert view.ready is False
+    assert view.source == "graph_stale"
+    assert view.overview is None
 
 
 def _lifecycle_entities() -> dict[str, tuple[dict, ...]]:
