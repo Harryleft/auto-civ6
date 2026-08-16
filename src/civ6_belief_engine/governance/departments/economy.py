@@ -5,8 +5,9 @@ from __future__ import annotations
 from math import isfinite
 from typing import Any
 
-from ..models import Outcome, OutcomeStatus, TurnSnapshot
+from ..models import TurnSnapshot
 from .base import (
+    BaseDepartment,
     Department,
     DepartmentAssessment,
     DepartmentContext,
@@ -91,7 +92,7 @@ def _safe_gold_budget(gold: float, gold_per_turn: float, maintenance: float) -> 
     return round(max(0.0, treasury - protected), 2)
 
 
-class EconomyDepartment:
+class EconomyDepartment(BaseDepartment):
     """Assess treasury capacity and provide abstract budget support signals.
 
     The department only consumes an immutable :class:`TurnSnapshot`. It never
@@ -99,6 +100,7 @@ class EconomyDepartment:
     """
 
     department = Department.ECONOMY
+    completion_flags = ("campaign_complete", "economy_goal_complete")
 
     def match(self, context: DepartmentContext) -> float:
         """Return deterministic relevance for the current national context."""
@@ -342,23 +344,3 @@ class EconomyDepartment:
             degraded=degraded,
         )
 
-    def review(
-        self, context: DepartmentContext, outcome: Outcome
-    ) -> ReviewDisposition:
-        """Review an outcome and choose a deterministic next disposition."""
-
-        if not isinstance(context, DepartmentContext):
-            raise TypeError("context must be DepartmentContext")
-        if not isinstance(outcome, Outcome):
-            raise TypeError("outcome must be Outcome")
-        if outcome.turn != context.snapshot.turn:
-            return ReviewDisposition.REPLAN
-        if outcome.status is not OutcomeStatus.SUCCEEDED:
-            return ReviewDisposition.REPLAN
-        if outcome.result.get("campaign_complete") is True:
-            return ReviewDisposition.EXIT
-        if outcome.result.get("economy_goal_complete") is True:
-            return ReviewDisposition.EXIT
-        if self.assess(context).degraded:
-            return ReviewDisposition.REPLAN
-        return ReviewDisposition.CONTINUE

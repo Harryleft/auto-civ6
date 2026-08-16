@@ -11,8 +11,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from ..models import Outcome, OutcomeStatus, TurnSnapshot
+from ..models import TurnSnapshot
 from .base import (
+    BaseDepartment,
     Department,
     DepartmentAssessment,
     DepartmentContext,
@@ -55,10 +56,11 @@ def _context_text(context: DepartmentContext) -> tuple[str, ...]:
     return tuple(values)
 
 
-class GreatPeopleDepartment:
+class GreatPeopleDepartment(BaseDepartment):
     """Assess great people race pressure and request a faith budget from economy."""
 
     department = Department.GREAT_PEOPLE
+    completion_flags = ("campaign_complete",)
 
     def match(self, context: DepartmentContext) -> float:
         """Deterministic relevance: evidence presence + agenda keywords."""
@@ -227,21 +229,3 @@ class GreatPeopleDepartment:
             degraded=False,
         )
 
-    def review(
-        self, context: DepartmentContext, outcome: Outcome
-    ) -> ReviewDisposition:
-        """Review an outcome and choose a deterministic next disposition."""
-
-        if not isinstance(context, DepartmentContext):
-            raise TypeError("context must be DepartmentContext")
-        if not isinstance(outcome, Outcome):
-            raise TypeError("outcome must be Outcome")
-        if outcome.turn != context.snapshot.turn:
-            return ReviewDisposition.REPLAN
-        if outcome.status is not OutcomeStatus.SUCCEEDED:
-            return ReviewDisposition.REPLAN
-        if outcome.result.get("campaign_complete") is True:
-            return ReviewDisposition.EXIT
-        if self.assess(context).degraded:
-            return ReviewDisposition.REPLAN
-        return ReviewDisposition.CONTINUE
