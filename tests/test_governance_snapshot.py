@@ -23,6 +23,7 @@ from civ6_belief_engine.governance.snapshot import (
     snapshot_to_belief_observation,
     snapshot_world_state,
 )
+from civ6_belief_engine.governance.graph_snapshot import GraphSnapshotView
 from civ_mcp.lua.models import (
     BarbarianCamp,
     BarbarianOverview,
@@ -438,6 +439,23 @@ def test_world_projection_and_belief_payload_are_structured_typed_facts(tmp_path
     assert world["metrics"]["threat.visible_units"] == 2
     assert world["metrics"]["threat.within_three_of_city"] == 2
     graph = GraphView.empty().apply(project_world_state(world))
+    graph_snapshot = GraphSnapshotView.from_graph(
+        graph,
+        snapshot_id=snapshot.snapshot_id,
+        turn=snapshot.turn,
+        player_id=snapshot.player_id,
+    )
+    assert graph_snapshot.ready is True
+    assert graph_snapshot.overview.gold == overview.gold
+    assert len(graph_snapshot.cities) == 2
+    assert len(graph_snapshot.units) == 2
+    assert graph_snapshot.diplomacy[0].military_strength == 240
+    assert graph_snapshot.tech_civic.current_research == "TECH_EDUCATION"
+    assert graph_snapshot.tech_civic.current_research_turns == 4
+    assert graph_snapshot.policies.available_policies[0].policy_type == "POLICY_AGOGE"
+    assert len(graph_snapshot.barbarians.camps) == 1
+    assert graph_snapshot.great_people is None
+    assert graph_snapshot.threat_scan_available is True
     assert [
         edge.source_id for edge in graph.threats_near_city("city:3:4")
     ] == ["unit:barbarian:63"]
@@ -509,6 +527,14 @@ def test_server_capture_runs_old_projection_and_shadow_graph_together(tmp_path):
     assert not engine.graph_view.nodes
     asyncio.run(_capture_governance_snapshot(ctx, engine))
     assert engine.graph_view.epoch == 2
+    assert any(
+        node.source == "belief_engine:governance"
+        for node in engine.graph_view.nodes.values()
+    )
+    assert any(
+        node.source == "game_state:typed_snapshot"
+        for node in engine.graph_view.nodes.values()
+    )
     reloaded_after_epoch = BeliefEngine(
         run_id="shadow-graph-epoch-reload",
         directory=tmp_path,
@@ -556,7 +582,14 @@ def test_shadow_projection_failure_does_not_break_legacy_snapshot(tmp_path, monk
     assert projection["graph_goals"]["status"] == "error"
     assert "requires integer x/y" in projection["graph_shadow"]["error"]
     assert engine.get("world_entity", "city:0:7")["status"] == "active"
-    assert not engine.graph_view.nodes
+    assert any(
+        node.source == "belief_engine:governance"
+        for node in engine.graph_view.nodes.values()
+    )
+    assert not any(
+        node.source == "game_state:typed_snapshot"
+        for node in engine.graph_view.nodes.values()
+    )
 
 
 def test_invalid_legacy_goal_fails_closed_without_discarding_world_graph(tmp_path):

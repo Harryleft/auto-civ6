@@ -403,6 +403,14 @@ def snapshot_world_state(snapshot: GovernanceTurnSnapshot) -> dict[str, Any]:
 
     player_attributes = _canonical(overview)
     player_attributes["ruleset"] = capabilities.ruleset
+    player_attributes["tech_civic_available"] = snapshot.tech_civic is not None
+    player_attributes["policies_available"] = snapshot.policies is not None
+    player_attributes["barbarian_overview_available"] = snapshot.barbarians is not None
+    player_attributes["great_people_available"] = snapshot.great_people is not None
+    player_attributes["resource_stockpiles_available"] = bool(snapshot.resources)
+    player_attributes["threat_scan_available"] = snapshot.threat_scan_available
+    if snapshot.tech_civic is not None:
+        player_attributes["tech_civic"] = _canonical(snapshot.tech_civic)
     if not capabilities.ages:
         for field_name in (
             "era_name",
@@ -578,6 +586,7 @@ def snapshot_world_state(snapshot: GovernanceTurnSnapshot) -> dict[str, Any]:
             {
                 "government_name": snapshot.policies.government_name,
                 "government_type": snapshot.policies.government_type,
+                "available_policies": _canonical(snapshot.policies.available_policies),
             },
         )
         _add_relation(relations, "uses_government", player_id, government_id)
@@ -635,6 +644,7 @@ def snapshot_world_state(snapshot: GovernanceTurnSnapshot) -> dict[str, Any]:
                 {
                     "class_name": standing.class_name,
                     "class_type": standing.class_type,
+                    "entries": _canonical(entries),
                     "our_points": ours.points_total,
                     "our_per_turn": ours.points_per_turn,
                     "leader_name": leader.player_name if rival_leads else "self",

@@ -44,10 +44,10 @@ def _outcome(*, status: OutcomeStatus = OutcomeStatus.SUCCEEDED, turn: int = 9) 
     )
 
 
-def _diplomacy_graph() -> GraphView:
+def _diplomacy_graph(*, snapshot_id: str = "snapshot:diplomacy:9") -> GraphView:
     return GraphView.empty(turn=9).apply(
         GraphDelta(
-            snapshot_id="snapshot:diplomacy:graph",
+            snapshot_id=snapshot_id,
             turn=9,
             epoch=1,
             upsert_nodes=(

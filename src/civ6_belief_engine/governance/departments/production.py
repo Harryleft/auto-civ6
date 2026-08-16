@@ -6,6 +6,7 @@ import math
 from collections.abc import Iterable
 from typing import Any
 
+from ..graph_snapshot import graph_goals, graph_snapshot
 from ..models import Outcome, OutcomeStatus
 from .base import (
     Department,
@@ -44,7 +45,7 @@ class ProductionDepartment:
     def match(self, context: DepartmentContext) -> float:
         """Return a stable relevance value for the current typed snapshot."""
 
-        snapshot = context.snapshot
+        snapshot = graph_snapshot(context)
         if not snapshot.cities:
             return 0.0
 
@@ -63,7 +64,7 @@ class ProductionDepartment:
     def assess(self, context: DepartmentContext) -> DepartmentAssessment:
         """Build an immutable assessment from evidence already in ``context``."""
 
-        snapshot = context.snapshot
+        snapshot = graph_snapshot(context)
         relevance = self.match(context)
         cities = self._ordered_cities(snapshot.cities)
 
@@ -216,8 +217,9 @@ class ProductionDepartment:
     @classmethod
     def _has_agenda_signal(cls, context: DepartmentContext) -> bool:
         statements = [*context.agenda]
-        statements.extend(goal.statement for goal in context.goals)
-        for goal in context.goals:
+        goals = graph_goals(context)
+        statements.extend(goal.statement for goal in goals)
+        for goal in goals:
             statements.extend(goal.tags)
         haystack = " ".join(statements).casefold()
         return any(signal.casefold() in haystack for signal in cls._AGENDA_SIGNALS)

@@ -657,9 +657,20 @@ async def _record_belief_tool_result(
             decision_route=decision_route,
             execution_status=execution_status,
         )
+        _sync_governance_graph(
+            engine, turn=int(observed_turn) if observed_turn != "?" else 0
+        )
         await _flush_belief_events(ctx)
     except Exception:
         log.warning("Belief Engine: failed to record tool result", exc_info=True)
+
+
+def _sync_governance_graph(engine: Any, *, turn: int) -> None:
+    """Synchronize the optional graph read model when the engine supports it."""
+
+    sync = getattr(engine, "sync_governance_graph", None)
+    if callable(sync):
+        sync(turn=turn)
 
 
 async def _logged(
@@ -943,7 +954,9 @@ async def _belief_tool(
     started = time.monotonic()
     try:
         engine, turn = await _belief_context(ctx)
+        _sync_governance_graph(engine, turn=turn)
         result = operation(engine, turn)
+        _sync_governance_graph(engine, turn=turn)
         await _flush_belief_events(ctx)
         text = json.dumps(result, ensure_ascii=False, indent=2)
         await _get_logger(ctx).log_tool_call(

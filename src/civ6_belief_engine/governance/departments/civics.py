@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
+from ..graph_snapshot import graph_goals, graph_snapshot
 from ..models import Outcome, OutcomeStatus
 from .base import (
     Department,
@@ -148,7 +149,7 @@ def _barbarian_pressure(snapshot: object) -> bool:
 
 def _civic_agenda(context: DepartmentContext) -> bool:
     texts = list(context.agenda)
-    texts.extend(getattr(goal, "statement", "") for goal in context.goals)
+    texts.extend(getattr(goal, "statement", "") for goal in graph_goals(context))
     normalized = tuple(_clean(text).casefold() for text in texts)
     return any(term.casefold() in text for text in normalized for term in _CIVIC_TERMS)
 
@@ -161,7 +162,7 @@ class CivicsDepartment:
     def match(self, context: DepartmentContext) -> float:
         """Return a fixed relevance score derived only from the shared snapshot."""
 
-        snapshot = context.snapshot
+        snapshot = graph_snapshot(context)
         relevance = 0.0
         if snapshot.tech_civic is not None:
             relevance += 0.45
@@ -180,7 +181,7 @@ class CivicsDepartment:
     def assess(self, context: DepartmentContext) -> DepartmentAssessment:
         """Build a stable assessment from typed evidence; never mutate or execute."""
 
-        snapshot = context.snapshot
+        snapshot = graph_snapshot(context)
         relevance = self.match(context)
         tech_civic = snapshot.tech_civic
         government = snapshot.policies
