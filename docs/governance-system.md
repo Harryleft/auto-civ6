@@ -127,6 +127,19 @@ belonging to the same `council_decision_id` automatically. A rejected proposal
 becomes `resolved` and its ID cannot be resubmitted; re-propose under a new
 `proposal_id`.
 
+### End-turn gate
+
+`end_turn` fails closed while any governance decision is still open: pending
+authorizations and unfinished council intents block the turn, and each
+rejection lists the decision id, its state, and the exact next tool call.
+Today the gate requires **all** decisions to reach a terminal state — the
+conjunctive cost grows with every stacked decision (the 2026-08-15
+cross-journal analysis traced 330 blocked actions across 107 runs to this
+shape). Known evolution, **not yet implemented**: settle only in-flight
+decisions and let approved-but-unexecuted intents expire explicitly, instead
+of demanding a full terminal-state conjunction; changing the gate semantics
+requires real-game A/B validation first.
+
 ## Proposal example
 
 ```json
