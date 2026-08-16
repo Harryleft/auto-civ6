@@ -188,7 +188,7 @@ Threat typed data
 
 - `GraphSnapshotView` 已从 GraphView 提供各 Department 所需的窄事实视图；Science、Civics、Economy、Production、Great People、Diplomacy、Military 均已切换到该入口。
 - `BeliefEngine.sync_governance_graph()` 已将 Observation、Belief、Goal、Proposal、CriticReview、CouncilDecision、BudgetLock、Decision、Action、Outcome 和 ActionIntent 物化到 GraphView，并保留 JSONL 作为历史审计与兼容输入。
-- 管道在治理工具操作前后同步图；授权、取消、完成、重复意图、Council 评议和提案引用的关键读取已优先使用当前 GraphView。图尚未追平最新 JSONL 事件时只做短暂兼容回退，避免直接调用旧客户端漏读刚写入的事实。
+- 管道在治理工具操作前后同步图；授权、取消、完成、重复意图、Council 评议和提案引用的关键读取已使用当前 GraphView。直接 BeliefEngine 当前态读取会先完成内存物化，显式管道同步再持久化 `graph.delta`；JSONL 只作为事件源、审计和物化输入，不再作为当前态回退。
 - 已覆盖治理生命周期关系、删除语义、投影失败隔离和 BeliefEngine 重载后的 `state_hash` 一致性；全量离线测试当前为 `643 passed`。
 
 真实游戏已完成一次通用治理动作闭环：同回合快照、威胁空结果、影子图零差异、`route_belief_decision` 授权、`unit_action(skip)`、read-back、`Action/Outcome` 终态和 Graph 增量均已通过；随后第 109→110 回合推进成功，`graph_shadow` 保持 `matched` 且无 mismatch。DSH 还从主菜单自动恢复 `0_MCP_0108`，并完成 FireTuner 重连验证。当前局面没有城市周边敌军，因此“敌军威胁 Proposal → fortify → Outcome”的特定场景仍未实测，不能用通用 `skip` 验收替代。
@@ -248,7 +248,7 @@ ETC 的判断标准只有一句：一个需求变化只修改拥有该知识的�
 - 当前真实存档没有可见城市威胁，不能替代带敌军场景的军事动作验收；本次已通过的是通用治理动作闭环与回合推进。
 - TurnSnapshot 仍间接依赖 `civ_mcp.lua.models`；Military 的直接 import 已删除，但最终 DTO 边界尚未完成。
 - Proposal、Decision、Action 和 Outcome 已物化为 GraphView 节点与关系；JSONL 仍作为不可删除的历史审计源，不再作为已同步治理请求的首选运行时读模型。
-- 尚未关闭的是“所有直接 BeliefEngine 调用都自动同步图”这一兼容边界；当前采用管道前后同步，旧直调用仅在图未追平时回退，待兼容窗口收窄后再删除回退。
+- 当前治理当前态读取已移除 JSONL 回退；原始 `list()` 仍保留给事件源物化、reload 异常恢复和历史/兼容 API，不能被当作新的治理当前态入口。`graph_view` 仍是显式派生视图，变异后由管道或 `sync_governance_graph()` 持久化。
 - Claude Code 的整份 diff 审查多次超时；拆成可核验问题后发现“陈旧 Threat 污染只读评估”和“任意 Goal 为防御提案背书”两项共识缺陷，均已修复并通过定向复核。超时的审查不计为通过证据。
 
 ## 8. 验收标准
