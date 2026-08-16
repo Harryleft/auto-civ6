@@ -11,6 +11,7 @@ log = logging.getLogger(__name__)
 from civ_mcp.server import pipeline
 from civ_mcp.server.assembly import mcp
 from civ_mcp.server.tools import belief
+from civ6_belief_engine.graph.project import WORLD_SOURCE
 
 # ---------------------------------------------------------------------------
 # Query tools (read-only)
@@ -130,6 +131,11 @@ async def get_game_overview(ctx: Context) -> str:
                     capabilities = facts.get("capabilities") or {}
                     snapshot_id = str(facts.get("snapshot_id") or "unknown")
                     ruleset = str(capabilities.get("ruleset") or "unknown")
+                    active_world_entities = sum(
+                        1
+                        for node in engine.graph_view.nodes.values()
+                        if node.source == WORLD_SOURCE and node.observed
+                    )
                     changed_count = 0
                     archived_count = 0
                     lock_count = len(
@@ -149,7 +155,7 @@ async def get_game_overview(ctx: Context) -> str:
                     f"active_budget_locks={lock_count} released_locks={released_count}"
                 )
                 if cached is not None:
-                    text += f" active_world_entities={len(current_entities)}"
+                    text += f" active_world_entities={active_world_entities}"
                 text += pipeline._format_belief_turn_brief(belief_brief)
             except Exception as exc:
                 log.warning("Governance: failed to capture typed turn state", exc_info=True)
