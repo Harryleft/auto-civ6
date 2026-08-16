@@ -97,9 +97,7 @@ class BeliefEngineError(ValueError):
     """Raised when an invalid belief-engine operation is requested."""
 
 
-def _slug(value: str) -> str:
-    clean = re.sub(r"[^\w.-]+", "-", value, flags=re.UNICODE).strip("-.")
-    return clean or "unknown"
+from .ids import slugify as _slug
 
 
 def _now() -> float:
@@ -182,6 +180,79 @@ def _envelope_observation_facts(
                 }
                 for c in camps
             ]
+    elif tool == "get_diplomacy":
+        civs = payload.get("civs") or []
+        rivals: dict[str, dict[str, Any]] = {}
+        for civ in civs:
+            if not civ.get("has_met"):
+                continue
+            key = f"player_{civ.get('player_id')}"
+            rivals[key] = {
+                "civilization": civ.get("civ_name", ""),
+                "leader": civ.get("leader_name", ""),
+                "state": civ.get("diplomatic_state", "UNKNOWN"),
+                "relationship_score": int(civ.get("relationship_score", 0)),
+                "at_war": bool(civ.get("is_at_war", False)),
+            }
+            if civ.get("military_strength"):
+                rivals[key]["military"] = int(civ["military_strength"])
+            if civ.get("num_cities"):
+                rivals[key]["cities"] = int(civ["num_cities"])
+        if rivals:
+            facts["rivals"] = rivals
+    elif tool == "get_combat_estimate":
+        estimate = payload.get("estimate") or {}
+        if estimate:
+            facts["matchup"] = {
+                "attacker_type": estimate.get("attacker_type", ""),
+                "defender_type": estimate.get("defender_type", ""),
+            }
+    elif tool == "get_great_people_overview":
+        standings = payload.get("standings") or []
+        classes: list[dict[str, Any]] = []
+        for standing in standings:
+            entries = standing.get("entries") or []
+            if not entries:
+                continue
+            ours = entries[0]  # official order: self first
+            entry: dict[str, Any] = {
+                "class": standing.get("class_name", ""),
+                "our_points": int(ours.get("points_total", -1)),
+                "our_per_turn": int(ours.get("points_per_turn", -1)),
+            }
+            leader = max(
+                (
+                    e
+                    for e in entries[1:]
+                    if str(e.get("player_name", "")) != "YOU"
+                ),
+                key=lambda e: int(e.get("points_total", -1)),
+                default=None,
+            )
+            if (
+                leader is not None
+                and int(leader.get("points_total", -1))
+                > int(ours.get("points_total", -1))
+            ):
+                entry.update(
+                    {
+                        "leader_name": leader.get("player_name", ""),
+                        "leader_points": int(leader.get("points_total", -1)),
+                        "lead_gap": int(leader.get("points_total", -1))
+                        - int(ours.get("points_total", -1)),
+                    }
+                )
+            else:
+                entry.update(
+                    {
+                        "leader_name": "YOU",
+                        "leader_points": int(ours.get("points_total", -1)),
+                        "lead_gap": 0,
+                    }
+                )
+            classes.append(entry)
+        if classes:
+            facts["great_people_classes"] = classes
     return facts
 
 
