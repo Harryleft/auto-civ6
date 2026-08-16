@@ -16,19 +16,19 @@ from numbers import Real
 from types import MappingProxyType
 from typing import Any, Mapping
 
-from civ_mcp.lua.models import (
-    BarbarianOverview,
-    CityInfo,
-    CivInfo,
-    GameNotification,
-    GameOverview,
-    GovernmentStatus,
-    GreatPeopleOverview,
-    ResourceStockpile,
-    TechCivicStatus,
-    ThreatInfo,
-    UnitInfo,
-    VictoryProgress,
+from .inputs import (
+    BarbarianOverviewInput,
+    CityInput,
+    DiplomacyInput,
+    GameOverviewInput,
+    GovernmentInput,
+    GreatPeopleInput,
+    NotificationInput,
+    ResourceStockpileInput,
+    TechCivicInput,
+    ThreatInput,
+    UnitInput,
+    VictoryInput,
 )
 
 
@@ -227,18 +227,18 @@ class TurnSnapshot:
     player_id: int
     captured_at: float
     capabilities: RulesetCapabilities
-    overview: GameOverview | None = None
-    cities: tuple[CityInfo, ...] = ()
-    units: tuple[UnitInfo, ...] = ()
-    diplomacy: tuple[CivInfo, ...] = ()
-    tech_civic: TechCivicStatus | None = None
-    resources: tuple[ResourceStockpile, ...] = ()
-    victory: VictoryProgress | None = None
-    notifications: tuple[GameNotification, ...] = ()
-    policies: GovernmentStatus | None = None
-    barbarians: BarbarianOverview | None = None
-    great_people: GreatPeopleOverview | None = None
-    threats: tuple[ThreatInfo, ...] = ()
+    overview: GameOverviewInput | None = None
+    cities: tuple[CityInput, ...] = ()
+    units: tuple[UnitInput, ...] = ()
+    diplomacy: tuple[DiplomacyInput, ...] = ()
+    tech_civic: TechCivicInput | None = None
+    resources: tuple[ResourceStockpileInput, ...] = ()
+    victory: VictoryInput | None = None
+    notifications: tuple[NotificationInput, ...] = ()
+    policies: GovernmentInput | None = None
+    barbarians: BarbarianOverviewInput | None = None
+    great_people: GreatPeopleInput | None = None
+    threats: tuple[ThreatInput, ...] = ()
     threat_scan_available: bool = False
     extra: Mapping[str, Any] = field(default_factory=dict)
 
@@ -257,19 +257,19 @@ class TurnSnapshot:
         )
         if not isinstance(self.capabilities, RulesetCapabilities):
             raise TypeError("capabilities must be RulesetCapabilities")
-        self._typed_or_none(self.overview, GameOverview, "overview")
-        self._typed_or_none(self.tech_civic, TechCivicStatus, "tech_civic")
-        self._typed_or_none(self.victory, VictoryProgress, "victory")
-        self._typed_or_none(self.policies, GovernmentStatus, "policies")
-        self._typed_or_none(self.barbarians, BarbarianOverview, "barbarians")
-        self._typed_or_none(self.great_people, GreatPeopleOverview, "great_people")
+        self._typed_or_none(self.overview, GameOverviewInput, "overview")
+        self._typed_or_none(self.tech_civic, TechCivicInput, "tech_civic")
+        self._typed_or_none(self.victory, VictoryInput, "victory")
+        self._typed_or_none(self.policies, GovernmentInput, "policies")
+        self._typed_or_none(self.barbarians, BarbarianOverviewInput, "barbarians")
+        self._typed_or_none(self.great_people, GreatPeopleInput, "great_people")
         for name, item_type in (
-            ("cities", CityInfo),
-            ("units", UnitInfo),
-            ("diplomacy", CivInfo),
-            ("resources", ResourceStockpile),
-            ("notifications", GameNotification),
-            ("threats", ThreatInfo),
+            ("cities", CityInput),
+            ("units", UnitInput),
+            ("diplomacy", DiplomacyInput),
+            ("resources", ResourceStockpileInput),
+            ("notifications", NotificationInput),
+            ("threats", ThreatInput),
         ):
             values = tuple(getattr(self, name))
             if not all(isinstance(value, item_type) for value in values):

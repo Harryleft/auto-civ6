@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-
-from civ_mcp.lua.models import CivInfo
+from typing import Protocol
 
 from ..models import Outcome
 from .base import (
@@ -32,6 +31,19 @@ _DIPLOMACY_MARKERS = (
 )
 _BARBARIAN_MARKERS = ("蛮族", "边境", "barbarian", "frontier")
 _HOSTILE_STATES = frozenset({"HOSTILE", "UNFRIENDLY", "DENOUNCED"})
+
+
+class _DiplomacyCivView(Protocol):
+    """Minimum rival fields required by the diplomacy department."""
+
+    player_id: int
+    civ_name: str
+    leader_name: str
+    has_met: bool
+    is_at_war: bool
+    diplomatic_state: str
+    relationship_score: int
+    military_strength: int
 
 
 def _contains_marker(values: Iterable[str], markers: tuple[str, ...]) -> bool:
@@ -78,7 +90,7 @@ def _unique_sorted(values: Iterable[str]) -> tuple[str, ...]:
     return tuple(sorted(set(values)))
 
 
-def _contacted_civs(context: DepartmentContext) -> tuple[CivInfo, ...]:
+def _contacted_civs(context: DepartmentContext) -> tuple[_DiplomacyCivView, ...]:
     return tuple(
         sorted(
             (civ for civ in context.snapshot.diplomacy if civ.has_met),
@@ -87,7 +99,7 @@ def _contacted_civs(context: DepartmentContext) -> tuple[CivInfo, ...]:
     )
 
 
-def _uncontacted_civs(context: DepartmentContext) -> tuple[CivInfo, ...]:
+def _uncontacted_civs(context: DepartmentContext) -> tuple[_DiplomacyCivView, ...]:
     return tuple(
         sorted(
             (civ for civ in context.snapshot.diplomacy if not civ.has_met),
