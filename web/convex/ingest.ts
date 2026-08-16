@@ -1,5 +1,6 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { mapDataFields } from "./schema";
 
 // Eval metadata: JSONL snake_case → Convex camelCase field mapping
 const EVAL_FIELD_MAP = [
@@ -1027,24 +1028,7 @@ export const ingestSpatialMap = mutation({
 });
 
 export const ingestMapData = mutation({
-  args: {
-    gameId: v.string(),
-    gridW: v.number(),
-    gridH: v.number(),
-    // JSON-encoded number[] strings — Convex caps arrays at 8192 elements
-    terrain: v.string(),
-    initialOwners: v.string(),
-    initialRoutes: v.optional(v.string()),
-    initialTurn: v.number(),
-    // Legacy: inline frames for small games that fit in one doc
-    ownerFrames: v.optional(v.string()),
-    cityFrames: v.optional(v.string()),
-    roadFrames: v.optional(v.string()),
-    cityNames: v.optional(v.string()),
-    players: v.array(v.object({ pid: v.number(), civ: v.string(), csType: v.optional(v.string()) })),
-    maxTurn: v.number(),
-    frameChunks: v.optional(v.number()),
-  },
+  args: { ...mapDataFields },
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("mapData")
