@@ -22,7 +22,9 @@ typed GameState snapshot
 ```
 
 Only the common MCP action wrapper writes to Civ VI. A department or critic can
-submit structured advice but cannot execute its own proposal.
+submit structured advice but cannot execute its own proposal. Built-in
+departments: military, science, civics, production, economy, diplomacy, and
+great people (race pressure with a conservative faith budget claim).
 
 ## Six engineering constraints
 
