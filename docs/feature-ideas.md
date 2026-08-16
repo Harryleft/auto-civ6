@@ -71,7 +71,7 @@ Agent 0 (Player 0)  Agent 1 (Player 1)  Agent N (Player N)
 
 ### Phase 6: Agent Interface + CLI
 - Create `agent.py` — Claude conversation loop via Anthropic API with tool-use
-- Create `tool_schemas.py` — tool definitions mirroring `server.py`
+- Create `tool_schemas.py` — tool definitions mirroring the `server/` package
 - Create `arena.py` — CLI entry point: `civ-arena --players 0:model-a,1:model-b --max-turns 200`
 - Per-player diary, context window management (sliding window + diary summaries)
 
