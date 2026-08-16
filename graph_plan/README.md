@@ -182,16 +182,16 @@ Threat typed data
 - Lua 返回每座己方城市的六边格距离；`unit_id=0` 仍是有效身份。
 - `TypedTurnSnapshot`、影子图和 `threats_near_city()` 已贯通，失去视野后默认不再作为当前威胁。
 - Military 只生成一个可验证的原地 `fortify` Proposal；Council、ActionIntent 和现有单写入器继续复用。
-- 显式 `EvidenceRequirement` 必定经过 `verify_then_fast`，并核对守军仍在原城市格；fortify 无可观察状态变化时返回 `OUTCOME_UNKNOWN`。
+- 显式 `EvidenceRequirement` 必定经过 `verify_then_fast`，并核对守军仍在原城市格；fortify 无可观察状态变化时返回 `OUTCOME_UNKNOWN`。由于 Civ6 `RequestOperation` 可能跨帧提交，`GameState.fortify_unit()` 只在原 mutation 返回未知后做有限只读轮询，确认成功才收口，绝不重发 mutation。
 
 本阶段迁移补充：
 
 - `GraphSnapshotView` 已从 GraphView 提供各 Department 所需的窄事实视图；Science、Civics、Economy、Production、Great People、Diplomacy、Military 均已切换到该入口。
 - `BeliefEngine.sync_governance_graph()` 已将 Observation、Belief、Goal、Proposal、CriticReview、CouncilDecision、BudgetLock、Decision、Action、Outcome 和 ActionIntent 物化到 GraphView，并保留 JSONL 作为历史审计与兼容输入。
 - 管道在治理工具操作前后同步图；授权、取消、完成、重复意图、Council 评议和提案引用的关键读取已使用当前 GraphView。直接 BeliefEngine 当前态读取会先完成内存物化，显式管道同步再持久化 `graph.delta`；JSONL 只作为事件源、审计和物化输入，不再作为当前态回退。
-- 已覆盖治理生命周期关系、删除语义、投影失败隔离和 BeliefEngine 重载后的 `state_hash` 一致性；全量离线测试当前为 `654 passed`。
+- 已覆盖治理生命周期关系、删除语义、投影失败隔离和 BeliefEngine 重载后的 `state_hash` 一致性；全量离线测试当前为 `656 passed`。
 
-真实游戏已完成一次通用治理动作闭环：同回合快照、威胁空结果、影子图零差异、`route_belief_decision` 授权、`unit_action(skip)`、read-back、`Action/Outcome` 终态和 Graph 增量均已通过；随后第 109→110 回合推进成功，`graph_shadow` 保持 `matched` 且无 mismatch。DSH 还从主菜单自动恢复 `0_MCP_0108`，并完成 FireTuner 重连验证。当前局面没有城市周边敌军，因此“敌军威胁 Proposal → fortify → Outcome”的特定场景仍未实测，不能用通用 `skip` 验收替代。
+真实游戏已完成两类治理验收：通用 `unit_action(skip)` 闭环，以及带临时敌军的军事切片。后者在 `0_MCP_0108`、T108 的里昂 `(36,35)` 实测：敌军 `(35,35)` → 1 条 `THREATENS` → Military Proposal → Council approved → `verify_then_fast` → `unit_action(fortify)` → `fortify_turns=1` read-back → `Action/Outcome` → Graph（82 节点、100 条边）；随后重新加载基准存档并验证 T108、GameCore/InGame 和原始守军状态。
 
 ### 阶段三：迁移一个消费者
 
@@ -242,11 +242,11 @@ ETC 的判断标准只有一句：一个需求变化只修改拥有该知识的�
 4. 变异结果未知时仍会自动重试。
 5. 一个动作无法 read-back，或无法解释其证据链。
 
-城市影子 ID 暂以城市中心坐标跨越 owner 变化；当前 DTO 无法区分“原城被夷平”与“同一地块后来重建”。通用真实动作验收已完成，但城市 lineage/销毁信号仍需在敌军威胁场景中补充验证，不能把本次 `skip` 结果扩大解释为军事 fortify 场景已完成。
+城市影子 ID 暂以城市中心坐标跨越 owner 变化；当前 DTO 无法区分“原城被夷平”与“同一地块后来重建”。军事威胁切片已完成真实动作验收，城市 lineage/销毁信号仍是独立边界。
 
 仍未关闭的边界：
 
-- 当前真实存档没有可见城市威胁，不能替代带敌军场景的军事动作验收；本次已通过的是通用治理动作闭环与回合推进。
+- 仍需按真实需求扩展其他非军事切片；本次不把军事 fortify 的真实验收外推为所有动作类型均已实测。
 - domain 包与 Lua DTO 的运行时依赖已关闭；`TypedTurnSnapshot` 已是 domain 侧边界类型，尚保留的只是 `GameState` 采集端将具体 Lua DTO 转为该类型的调用方适配职责。
 - Proposal、Decision、Action 和 Outcome 已物化为 GraphView 节点与关系；JSONL 仍作为不可删除的历史审计源，不再作为已同步治理请求的首选运行时读模型。
 - 当前治理当前态读取已移除 JSONL 回退；原始 `list()` 仍保留给事件源物化、reload 异常恢复和历史/兼容 API，不能被当作新的治理当前态入口。`graph_view` 仍是显式派生视图，变异后由管道或 `sync_governance_graph()` 持久化。
@@ -258,7 +258,7 @@ ETC 的判断标准只有一句：一个需求变化只修改拥有该知识的�
 
 1. **离线**：投影确定性、replay hash、epoch、悬空边、失败注入和旧 JSONL 兼容。
 2. **组合**：MCP 工具 schema、DSH 配置、兼容导入和结果过滤保持可用。
-3. **真实游戏**：已完成读取、授权、动作、read-back、end_turn 和自动恢复/FireTuner 重连；Proposal 关系与军事威胁切片仍以离线闭环为证，待真实敌军场景补齐。
+3. **真实游戏**：已完成读取、授权、动作、read-back、end_turn、自动恢复/FireTuner 重连，以及真实敌军 Proposal → fortify → Outcome 军事切片。
 
 第一版完成的判据：
 
