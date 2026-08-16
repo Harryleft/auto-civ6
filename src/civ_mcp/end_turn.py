@@ -172,6 +172,20 @@ async def _get_turn_number(gs: GameState) -> int | None:
     return None
 
 
+def _game_over_message(gs: GameState, gameover: lq.GameOverStatus) -> str:
+    """Record a finished game and return the GAME OVER result message."""
+    gs._pending_end_turn = False
+    gs._pending_end_turn_from = None
+    gs._last_game_over = gameover
+    vtype = gameover.victory_type.replace("VICTORY_", "").replace("_", " ").title()
+    if gameover.is_defeat:
+        return (
+            f"GAME OVER — DEFEAT. {gameover.winner_leader} of {gameover.winner_name} "
+            f"won a {vtype} victory. The game has ended. No further actions are possible."
+        )
+    return f"GAME OVER — VICTORY! You won a {vtype} victory! The game has ended."
+
+
 async def _check_victory_proximity(gs: GameState) -> list[lq.TurnEvent]:
     """Lightweight per-turn check for foreign victory threats."""
     events: list[lq.TurnEvent] = []
@@ -1296,25 +1310,7 @@ async def execute_end_turn(gs: GameState) -> str:
             if delay >= 10.0:
                 gameover = await gs.check_game_over()
                 if gameover is not None:
-                    gs._pending_end_turn = False
-                    gs._pending_end_turn_from = None
-                    gs._last_game_over = gameover
-                    vtype = (
-                        gameover.victory_type.replace("VICTORY_", "")
-                        .replace("_", " ")
-                        .title()
-                    )
-                    if gameover.is_defeat:
-                        return (
-                            f"GAME OVER — DEFEAT. {gameover.winner_leader} "
-                            f"of {gameover.winner_name} won a {vtype} victory. "
-                            f"The game has ended. No further actions are possible."
-                        )
-                    else:
-                        return (
-                            f"GAME OVER — VICTORY! You won a {vtype} victory! "
-                            f"The game has ended."
-                        )
+                    return _game_over_message(gs, gameover)
             # Early diplomacy probe — ONE InGame query after ~45s of silence.
             # The CRITICAL constraint (Games 1-5) was about REPEATED InGame
             # queries in a tight loop. A single probe after 45s is safe: if
@@ -1393,22 +1389,7 @@ async def execute_end_turn(gs: GameState) -> str:
         # Check if game ended during turn transition (victory/defeat)
         gameover = await gs.check_game_over()
         if gameover is not None:
-            gs._pending_end_turn = False
-            gs._pending_end_turn_from = None
-            gs._last_game_over = gameover
-            vtype = (
-                gameover.victory_type.replace("VICTORY_", "").replace("_", " ").title()
-            )
-            if gameover.is_defeat:
-                return (
-                    f"GAME OVER — DEFEAT. {gameover.winner_leader} of {gameover.winner_name} won a {vtype} victory. "
-                    f"The game has ended. No further actions are possible."
-                )
-            else:
-                return (
-                    f"GAME OVER — VICTORY! You won a {vtype} victory! "
-                    f"The game has ended."
-                )
+            return _game_over_message(gs, gameover)
 
         # Provide specific blocker info instead of generic message
         details: list[str] = []
@@ -1437,21 +1418,7 @@ async def execute_end_turn(gs: GameState) -> str:
             # victory can trigger during AI processing while blockers coexist
             gameover = await gs.check_game_over()
             if gameover is not None:
-                gs._pending_end_turn = False
-                gs._pending_end_turn_from = None
-                gs._last_game_over = gameover
-                vtype = (
-                    gameover.victory_type.replace("VICTORY_", "")
-                    .replace("_", " ")
-                    .title()
-                )
-                if gameover.is_defeat:
-                    return (
-                        f"GAME OVER — DEFEAT. {gameover.winner_leader} of {gameover.winner_name} won a {vtype} victory. "
-                        f"The game has ended. No further actions are possible."
-                    )
-                else:
-                    return f"GAME OVER — VICTORY! You won a {vtype} victory! The game has ended."
+                return _game_over_message(gs, gameover)
             return f"End turn blocked (turn {turn_after or turn_before}): {'; '.join(details)}"
         # No blockers, no diplomacy, no game over — true AI turn hang.
         # Return structured HANG: prefix so server.py can auto-recover.
