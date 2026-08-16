@@ -15,6 +15,22 @@ class GraphProjectionError(ValueError):
 
 WORLD_SOURCE = "game_state:typed_snapshot"
 GOAL_SOURCE = "belief_engine:goal"
+GOVERNANCE_SOURCE = "belief_engine:governance"
+
+_GOVERNANCE_ENTITY_TYPES = frozenset(
+    {
+        "observation",
+        "belief",
+        "goal",
+        "proposal",
+        "critic_review",
+        "council_decision",
+        "budget_lock",
+        "decision",
+        "action",
+        "outcome",
+    }
+)
 
 
 _RELATION_NAMES = {
@@ -307,6 +323,244 @@ def project_active_goals(
             )
         ),
         remove_node_ids=tuple(sorted(previous_goal_ids - set(current))),
+    )
+
+
+def _governance_node_id(entity_type: str, entity_id: str) -> str:
+    prefix = f"{entity_type}:"
+    return entity_id if entity_id.startswith(prefix) else f"{prefix}{entity_id}"
+
+
+def _intent_node_id(intent_id: str) -> str:
+    return _governance_node_id("action_intent", intent_id)
+
+
+def _as_ids(value: Any) -> tuple[str, ...]:
+    if not isinstance(value, (tuple, list, set, frozenset)):
+        return ()
+    return tuple(str(item) for item in value if str(item).strip())
+
+
+def _embedded_intent(entity: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    intent = entity.get("action_intent")
+    return intent if isinstance(intent, Mapping) else None
+
+
+def project_governance_state(
+    entities: Mapping[str, Iterable[Mapping[str, Any]]],
+    *,
+    previous: GraphView | None,
+    snapshot_id: str,
+    turn: int,
+    epoch: int = 1,
+) -> GraphDelta:
+    """Materialize governance lifecycle entities and their current relations.
+
+    JSONL remains the append-only audit history. This projector makes the
+    current Observation -> Goal -> Proposal -> Decision -> Action -> Outcome
+    chain queryable in the same immutable GraphView as world facts.
+    """
+
+    if not snapshot_id:
+        raise GraphProjectionError("governance state requires snapshot_id")
+    if type(turn) is not int or turn < 0:
+        raise GraphProjectionError("governance state requires a non-negative turn")
+    if type(epoch) is not int or epoch < 1:
+        raise GraphProjectionError("governance state requires a positive epoch")
+    if previous is None or previous.epoch != epoch:
+        previous = GraphView.empty(epoch=epoch, turn=turn)
+
+    current_nodes: dict[str, Node] = {}
+    raw_by_type: dict[str, tuple[Mapping[str, Any], ...]] = {}
+
+    def add_intent_node(
+        intent: Mapping[str, Any], *, observed: bool, turn: int
+    ) -> None:
+        intent_id = str(intent.get("intent_id") or "").strip()
+        if not intent_id:
+            return
+        node_id = _intent_node_id(intent_id)
+        prior = previous.node(node_id)
+        current_nodes[node_id] = Node(
+            node_id=node_id,
+            node_type="action_intent",
+            attributes=dict(intent),
+            epoch=epoch,
+            first_observed_turn=(
+                prior.first_observed_turn if prior is not None else turn
+            ),
+            last_observed_turn=turn,
+            source=GOVERNANCE_SOURCE,
+            coverage=Coverage.COMPLETE,
+            observed=observed,
+        )
+
+    for entity_type, raw_entities in entities.items():
+        if entity_type not in _GOVERNANCE_ENTITY_TYPES:
+            continue
+        normalized = tuple(raw_entities)
+        raw_by_type[entity_type] = normalized
+        for entity in normalized:
+            if not isinstance(entity, Mapping):
+                raise GraphProjectionError("governance entities must be objects")
+            entity_id = str(entity.get("id") or entity.get("goal_id") or "").strip()
+            if not entity_id:
+                raise GraphProjectionError(
+                    f"governance {entity_type} requires a stable id"
+                )
+            if entity_type == "goal" and (
+                type(entity.get("priority")) is not int
+                or entity.get("priority", 0) < 0
+                or not str(entity.get("statement") or "").strip()
+            ):
+                # A malformed legacy goal must not poison GraphView.active_goals.
+                # The compatibility goal projector reports the validation error
+                # to the caller on the same capture cycle.
+                continue
+            node_id = _governance_node_id(entity_type, entity_id)
+            prior = previous.node(node_id)
+            observed = entity.get("status") != "deleted"
+            current_nodes[node_id] = Node(
+                node_id=node_id,
+                node_type=entity_type,
+                attributes=dict(entity),
+                epoch=epoch,
+                first_observed_turn=(
+                    prior.first_observed_turn if prior is not None else turn
+                ),
+                last_observed_turn=turn,
+                source=GOAL_SOURCE if entity_type == "goal" else GOVERNANCE_SOURCE,
+                coverage=Coverage.COMPLETE,
+                observed=observed,
+            )
+            embedded = _embedded_intent(entity)
+            if embedded is not None:
+                add_intent_node(embedded, observed=observed, turn=turn)
+            for intent in entity.get("action_intents") or ():
+                if isinstance(intent, Mapping):
+                    add_intent_node(intent, observed=observed, turn=turn)
+
+    edge_specs: dict[EdgeKey, Edge] = {}
+
+    def add_edge(
+        relation_type: str,
+        source_id: str,
+        target_id: str,
+        attributes: Mapping[str, Any] | None = None,
+    ) -> None:
+        if source_id not in current_nodes or target_id not in current_nodes:
+            return
+        source = current_nodes[source_id]
+        target = current_nodes[target_id]
+        if not source.observed or not target.observed:
+            return
+        edge = Edge(
+            relation_type=relation_type,
+            source_id=source_id,
+            target_id=target_id,
+            attributes=attributes or {},
+            epoch=epoch,
+            valid_from_turn=turn,
+            last_observed_turn=turn,
+            source=GOVERNANCE_SOURCE,
+            coverage=Coverage.COMPLETE,
+            observed=True,
+        )
+        edge_specs[edge.key] = edge
+
+    for entity_type, raw_entities in raw_by_type.items():
+        for entity in raw_entities:
+            if entity.get("status") == "deleted":
+                continue
+            entity_id = str(entity.get("id") or entity.get("goal_id") or "")
+            source_id = _governance_node_id(entity_type, entity_id)
+            for goal_id in _as_ids(entity.get("goal_ids")):
+                add_edge("SERVES_GOAL", source_id, _governance_node_id("goal", goal_id))
+            for belief_id in _as_ids(entity.get("belief_ids")):
+                add_edge("GROUNDED_BY", source_id, _governance_node_id("belief", belief_id))
+            for intent in entity.get("action_intents") or ():
+                if isinstance(intent, Mapping) and intent.get("intent_id"):
+                    add_edge(
+                        "HAS_ACTION_INTENT",
+                        source_id,
+                        _intent_node_id(str(intent["intent_id"])),
+                    )
+            embedded = _embedded_intent(entity)
+            if embedded and embedded.get("intent_id"):
+                add_edge(
+                    "USES_ACTION_INTENT",
+                    source_id,
+                    _intent_node_id(str(embedded["intent_id"])),
+                )
+            for proposal_id in _as_ids(entity.get("selected_proposal_ids")):
+                add_edge(
+                    "SELECTS",
+                    source_id,
+                    _governance_node_id("proposal", proposal_id),
+                )
+            for proposal_id in _as_ids(entity.get("considered_proposal_ids")):
+                add_edge(
+                    "CONSIDERS",
+                    source_id,
+                    _governance_node_id("proposal", proposal_id),
+                )
+            for field_name, relation in (
+                ("proposal_id", "REFERENCES_PROPOSAL"),
+                ("council_decision_id", "REFERENCES_COUNCIL"),
+                ("decision_id", "REFERENCES_DECISION"),
+                ("action_id", "REFERENCES_ACTION"),
+                ("action_intent_id", "REFERENCES_ACTION_INTENT"),
+            ):
+                reference = entity.get(field_name)
+                if reference:
+                    target_type = field_name.removesuffix("_id")
+                    target_id = (
+                        _intent_node_id(str(reference))
+                        if target_type == "action_intent"
+                        else _governance_node_id(target_type, str(reference))
+                    )
+                    add_edge(relation, source_id, target_id)
+            for observation_id in _as_ids(entity.get("verification_observation_ids")):
+                add_edge(
+                    "VERIFIED_BY",
+                    source_id,
+                    _governance_node_id("observation", observation_id),
+                )
+
+    upsert_nodes = tuple(
+        node
+        for node_id, node in current_nodes.items()
+        if (
+            previous.node(node_id) is None
+            or previous.node(node_id).attributes != node.attributes
+            or previous.node(node_id).observed != node.observed
+            or previous.node(node_id).source != node.source
+        )
+    )
+    current_edge_keys = set(edge_specs)
+    remove_edge_keys = tuple(
+        sorted(
+            key
+            for key, edge in previous.edges.items()
+            if edge.source == GOVERNANCE_SOURCE and key not in current_edge_keys
+        )
+    )
+    upsert_edges = tuple(
+        edge
+        for key, edge in edge_specs.items()
+        if (
+            previous.edges.get(key) is None
+            or previous.edges[key].attributes != edge.attributes
+            or not previous.edges[key].observed
+        )
+    )
+    return GraphDelta(
+        snapshot_id=snapshot_id,
+        turn=turn,
+        epoch=epoch,
+        upsert_nodes=upsert_nodes,
+        upsert_edges=upsert_edges,
+        remove_edge_keys=remove_edge_keys,
     )
 
 

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
 from typing import Protocol
 
+from ..graph_snapshot import graph_goals, graph_snapshot
 from ..models import Outcome
 from .base import (
     BaseDepartment,
@@ -47,20 +47,6 @@ class _DiplomacyCivView(Protocol):
     military_strength: int
 
 
-@dataclass(frozen=True, slots=True)
-class _GraphDiplomacyCiv:
-    """Department-local view assembled from one observed graph relation."""
-
-    player_id: int
-    civ_name: str
-    leader_name: str
-    has_met: bool
-    is_at_war: bool
-    diplomatic_state: str
-    relationship_score: int
-    military_strength: int
-
-
 def _contains_marker(values: Iterable[str], markers: tuple[str, ...]) -> bool:
     return any(
         marker in value.casefold()
@@ -72,7 +58,7 @@ def _contains_marker(values: Iterable[str], markers: tuple[str, ...]) -> bool:
 def _goal_texts(context: DepartmentContext) -> tuple[str, ...]:
     return tuple(
         text
-        for goal in context.goals
+        for goal in graph_goals(context)
         for text in (goal.statement, *goal.tags)
     )
 
@@ -90,7 +76,7 @@ def _barbarian_request(context: DepartmentContext) -> bool:
 
 
 def _barbarian_counts(context: DepartmentContext) -> tuple[int, int] | None:
-    overview = context.snapshot.barbarians
+    overview = graph_snapshot(context).barbarians
     if overview is None:
         return None
     return len(overview.camps), len(overview.units)
@@ -105,106 +91,10 @@ def _unique_sorted(values: Iterable[str]) -> tuple[str, ...]:
     return tuple(sorted(set(values)))
 
 
-def _legacy_diplomacy_civs(
-    context: DepartmentContext,
-) -> tuple[_DiplomacyCivView, ...]:
-    """Compatibility reader for callers that have not supplied a graph yet."""
-
-    return tuple(
-        sorted(
-            context.snapshot.diplomacy,
-            key=lambda civ: (civ.player_id, civ.civ_name, civ.leader_name),
-        )
-    )
-
-
-def _graph_diplomacy_civs(
-    context: DepartmentContext,
-) -> tuple[_DiplomacyCivView, ...]:
-    """Read current diplomatic relations from the canonical decision graph.
-
-    A supplied graph is authoritative for this department.  Stale or malformed
-    relations are ignored; an empty result is handled by ``assess`` as missing
-    evidence instead of falling back to the legacy snapshot.
-    """
-
-    graph = context.graph
-    if graph is None:
-        return ()
-    player_id = f"player:{context.snapshot.player_id}"
-    source = graph.node(player_id)
-    if source is None or not source.observed:
-        return ()
-
-    rivals: list[_GraphDiplomacyCiv] = []
-    for edge in graph.edges_from(player_id, "DIPLOMACY_WITH"):
-        if not edge.observed:
-            continue
-        rival = graph.node(edge.target_id)
-        if rival is None or not rival.observed:
-            continue
-        attributes = {**dict(rival.attributes), **dict(edge.attributes)}
-        rival_id = attributes.get("player_id")
-        if type(rival_id) is not int:
-            suffix = rival.node_id.rsplit(":", 1)[-1]
-            if not suffix.isdigit():
-                continue
-            rival_id = int(suffix)
-
-        complete = (
-            type(attributes.get("has_met")) is bool
-            and type(attributes.get("is_at_war")) is bool
-            and isinstance(attributes.get("diplomatic_state"), str)
-            and type(attributes.get("relationship_score")) is int
-            and type(attributes.get("military_strength")) is int
-        )
-        rivals.append(
-            _GraphDiplomacyCiv(
-                player_id=rival_id,
-                civ_name=(
-                    attributes["civ_name"].strip()
-                    if isinstance(attributes.get("civ_name"), str)
-                    and attributes["civ_name"].strip()
-                    else f"player_{rival_id}"
-                ),
-                leader_name=(
-                    attributes["leader_name"].strip()
-                    if isinstance(attributes.get("leader_name"), str)
-                    and attributes["leader_name"].strip()
-                    else "UNKNOWN"
-                ),
-                # An incomplete graph row is represented as uncontacted with
-                # neutral defaults so no missing field can create a peace or
-                # low-risk conclusion.
-                has_met=attributes["has_met"] if complete else False,
-                is_at_war=attributes["is_at_war"] if complete else False,
-                diplomatic_state=(
-                    attributes["diplomatic_state"].strip() or "UNKNOWN"
-                    if complete
-                    else "UNKNOWN"
-                ),
-                relationship_score=(
-                    attributes["relationship_score"] if complete else 0
-                ),
-                military_strength=(
-                    attributes["military_strength"] if complete else 0
-                ),
-            )
-        )
-    return tuple(
-        sorted(
-            rivals,
-            key=lambda civ: (civ.player_id, civ.civ_name, civ.leader_name),
-        )
-    )
-
-
 def _diplomacy_civs(context: DepartmentContext) -> tuple[_DiplomacyCivView, ...]:
     """Return the one authoritative source for this department's civ rows."""
 
-    if context.graph is not None:
-        return _graph_diplomacy_civs(context)
-    return _legacy_diplomacy_civs(context)
+    return tuple(graph_snapshot(context).diplomacy)
 
 
 def _contacted_civs(context: DepartmentContext) -> tuple[_DiplomacyCivView, ...]:
@@ -270,7 +160,7 @@ class DiplomacyDepartment(BaseDepartment):
         if not isinstance(context, DepartmentContext):
             raise TypeError("context must be DepartmentContext")
 
-        snapshot = context.snapshot
+        snapshot = graph_snapshot(context)
         relevance = self.match(context)
         civs = _diplomacy_civs(context)
         contacted = _contacted_civs(context)

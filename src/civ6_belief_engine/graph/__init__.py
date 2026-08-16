@@ -6,6 +6,7 @@ from .project import (
     city_node_id,
     compare_shadow_projection,
     project_active_goals,
+    project_governance_state,
     project_world_state,
 )
 from .replay import GRAPH_DELTA_EVENT, GraphReplayError, replay_deltas, replay_graph_events
@@ -26,6 +27,7 @@ __all__ = [
     "compare_shadow_projection",
     "project_world_state",
     "project_active_goals",
+    "project_governance_state",
     "replay_deltas",
     "replay_graph_events",
 ]

@@ -13,6 +13,7 @@ from numbers import Real
 from typing import Any, ClassVar, Iterable, Protocol
 
 from ...graph import Edge, Node, city_node_id
+from ..graph_snapshot import graph_goals, graph_snapshot
 from ..models import (
     ActionIntent,
     BudgetLock,
@@ -150,7 +151,7 @@ class MilitaryDepartment:
 
         if not isinstance(context, DepartmentContext):
             raise TypeError("context must be DepartmentContext")
-        snapshot = context.snapshot
+        snapshot = graph_snapshot(context)
         if self._has_military_agenda(context):
             return 1.0
         if self._nearby_threats(context):
@@ -172,7 +173,7 @@ class MilitaryDepartment:
 
         if not isinstance(context, DepartmentContext):
             raise TypeError("context must be DepartmentContext")
-        snapshot = context.snapshot
+        snapshot = graph_snapshot(context)
         relevance = self.match(context)
         units = self._ordered_units(snapshot.units)
         combat_units = tuple(unit for unit in units if self._is_combat_unit(unit))
@@ -302,15 +303,16 @@ class MilitaryDepartment:
             raise TypeError("outcome must be Outcome")
         if not isinstance(context, DepartmentContext):
             raise TypeError("context must be DepartmentContext")
+        snapshot = graph_snapshot(context)
         if outcome.turn != context.snapshot.turn:
             return ReviewDisposition.REPLAN
         if outcome.status in (OutcomeStatus.FAILED, OutcomeStatus.RETRYABLE):
             return ReviewDisposition.REPLAN
         if self._nearby_threats(context):
             return ReviewDisposition.CONTINUE
-        if context.snapshot.barbarians is None:
+        if snapshot.barbarians is None:
             return ReviewDisposition.REPLAN
-        if context.snapshot.barbarians.camps or context.snapshot.barbarians.units:
+        if snapshot.barbarians.camps or snapshot.barbarians.units:
             return ReviewDisposition.CONTINUE
         return ReviewDisposition.EXIT
 
@@ -329,7 +331,7 @@ class MilitaryDepartment:
                 )
         else:
             text_parts = list(context.agenda)
-            for goal in context.goals:
+            for goal in graph_goals(context):
                 text_parts.extend((goal.goal_id, goal.statement, *goal.tags))
         return bool(MilitaryDepartment._AGENDA_SIGNAL.search(" ".join(text_parts)))
 
@@ -364,7 +366,7 @@ class MilitaryDepartment:
         if not MilitaryDepartment._graph_is_current(context):
             return ()
         threats: dict[tuple[str, str, str], Edge] = {}
-        for city in context.snapshot.cities:
+        for city in graph_snapshot(context).cities:
             city_id = city_node_id(city.x, city.y)
             for edge in context.graph.threats_near_city(city_id, max_distance=3):
                 threats[edge.key] = edge
@@ -405,10 +407,11 @@ class MilitaryDepartment:
     ) -> tuple[Proposal, ...]:
         """Build at most one exact, non-offensive defense proposal."""
 
+        snapshot = graph_snapshot(context)
         if (
             context.graph is None
-            or context.graph.snapshot_id != context.snapshot.snapshot_id
-            or not context.snapshot.threat_scan_available
+            or not snapshot.ready
+            or not snapshot.threat_scan_available
             or not nearby_threats
             or evidence_missing
         ):
@@ -439,11 +442,11 @@ class MilitaryDepartment:
                 continue
             defender = min(defenders, key=lambda unit: unit.unit_id)
             proposal_id = (
-                f"military:defend:{context.snapshot.turn}:"
+                f"military:defend:{snapshot.turn}:"
                 f"{threat.target_id}:{defender.unit_id}"
             )
             evidence = EvidenceRequirement(
-                requirement_id=f"defense-units:{context.snapshot.turn}:{defender.unit_id}",
+                requirement_id=f"defense-units:{snapshot.turn}:{defender.unit_id}",
                 tool="get_units",
                 params={},
                 max_age_turns=0,
@@ -455,12 +458,12 @@ class MilitaryDepartment:
                 description="重新确认守军仍存在后再执行精确防御动作",
             )
             intent = ActionIntent(
-                intent_id=f"intent:fortify:{context.snapshot.turn}:{defender.unit_id}",
+                intent_id=f"intent:fortify:{snapshot.turn}:{defender.unit_id}",
                 tool="unit_action",
                 arguments={"unit_id": defender.unit_id, "action": "fortify"},
                 proposal_id=proposal_id,
                 evidence_requirements=(evidence,),
-                allowed_turn=context.snapshot.turn,
+                allowed_turn=snapshot.turn,
             )
             return (
                 Proposal(
@@ -492,7 +495,7 @@ class MilitaryDepartment:
                     opportunity_cost=1.0,
                     failure_cost=0.2,
                     action_intents=(intent,),
-                    expires_turn=context.snapshot.turn,
+                    expires_turn=snapshot.turn,
                 ),
             )
         return ()

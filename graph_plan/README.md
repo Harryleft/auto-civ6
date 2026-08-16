@@ -184,6 +184,13 @@ Threat typed data
 - Military 只生成一个可验证的原地 `fortify` Proposal；Council、ActionIntent 和现有单写入器继续复用。
 - 显式 `EvidenceRequirement` 必定经过 `verify_then_fast`，并核对守军仍在原城市格；fortify 无可观察状态变化时返回 `OUTCOME_UNKNOWN`。
 
+本阶段迁移补充：
+
+- `GraphSnapshotView` 已从 GraphView 提供各 Department 所需的窄事实视图；Science、Civics、Economy、Production、Great People、Diplomacy、Military 均已切换到该入口。
+- `BeliefEngine.sync_governance_graph()` 已将 Observation、Belief、Goal、Proposal、CriticReview、CouncilDecision、BudgetLock、Decision、Action、Outcome 和 ActionIntent 物化到 GraphView，并保留 JSONL 作为历史审计与兼容输入。
+- 管道在治理工具操作前后同步图；授权、取消、完成、重复意图、Council 评议和提案引用的关键读取已优先使用当前 GraphView。图尚未追平最新 JSONL 事件时只做短暂兼容回退，避免直接调用旧客户端漏读刚写入的事实。
+- 已覆盖治理生命周期关系、删除语义、投影失败隔离和 BeliefEngine 重载后的 `state_hash` 一致性；全量离线测试当前为 `643 passed`。
+
 真实游戏已验证同回合快照、威胁空结果、影子图零差异和 fortify 状态读取。当前局面没有城市周边敌军，因此尚未完成真实的 Proposal → 动作 → Outcome 验收。
 
 ### 阶段三：迁移一个消费者
@@ -199,14 +206,16 @@ Threat typed data
 - 陈旧图只能触发证据缺口，不能影响当前威胁判断、Proposal 或复盘结论。
 - 防御 Proposal 必须绑定一个语义相关的军事/防御 Goal，不能借用任意最高优先级 Goal。
 - Military 源码已移除对 `civ_mcp.lua.models` 的直接导入，先用窄 Protocol 固定所需字段。
+- 其余六个 Department 也已移除对 `TurnSnapshot` 的业务读取，统一消费 `GraphSnapshotView`；同一 snapshot/turn 的陈旧图仍按证据缺口保守处理。
 
-尚未迁移：蛮族营地、己方单位与其他军事事实仍来自兼容 TurnSnapshot；它们在模型层仍间接携带 Lua DTO。因此这里只能称为“Goal + Threat 单消费者迁移完成”，不能称为整个 Department 已解耦。
+尚未完全关闭：GraphSnapshotView 为旧 JSONL/旧调用方保留兼容构造，GameState 类型化适配层仍间接依赖 Lua DTO；因此这里可以称为“七部门运行时读取已迁移”，但不能称为“旧 DTO 适配层已删除”。
 
 ### 阶段四：逐步扩展
 
 - 按真实需求增加关系和专用查询。
 - 新图成为唯一写路径后，立即删除旧双写。
 - `server.py` 已于 2026-08-15 拆分为 `server/` 包（move-only）：`assembly.py` 装配、`pipeline.py` 运行管道（未来 ActionPipeline）、`tools/` 按域分组工具。阶段四删除旧 belief/governance 适配层 = 整删 `tools/belief.py` + `__init__.py` 对应再导出；`end_turn.py` 拆分仍留到本阶段。
+- 当前治理工具仍集中在 `tools/belief.py`，但其运行时读路径已改为 Graph-first；下一步才是把纯兼容入口和 `end_turn` 拆出，再删除旧适配层。
 - 只有出现实测性能瓶颈，才评估外部图存储。
 
 ## 7. ETC 与风险门禁
@@ -238,7 +247,8 @@ ETC 的判断标准只有一句：一个需求变化只修改拥有该知识的�
 
 - 当前真实存档没有可见城市威胁，不能替代带敌军场景的动作验收。
 - TurnSnapshot 仍间接依赖 `civ_mcp.lua.models`；Military 的直接 import 已删除，但最终 DTO 边界尚未完成。
-- Proposal、Decision、Action 和 Outcome 仍由现有 JSONL 治理状态保存，尚未物化为图关系。
+- Proposal、Decision、Action 和 Outcome 已物化为 GraphView 节点与关系；JSONL 仍作为不可删除的历史审计源，不再作为已同步治理请求的首选运行时读模型。
+- 尚未关闭的是“所有直接 BeliefEngine 调用都自动同步图”这一兼容边界；当前采用管道前后同步，旧直调用仅在图未追平时回退，待兼容窗口收窄后再删除回退。
 - Claude Code 的整份 diff 审查多次超时；拆成可核验问题后发现“陈旧 Threat 污染只读评估”和“任意 Goal 为防御提案背书”两项共识缺陷，均已修复并通过定向复核。超时的审查不计为通过证据。
 
 ## 8. 验收标准

@@ -31,6 +31,21 @@ from civ_mcp.server import pipeline
 log = logging.getLogger(__name__)
 from civ_mcp.server.assembly import mcp
 
+_GRAPH_GOVERNANCE_ENTITY_TYPES = frozenset(
+    {
+        "observation",
+        "belief",
+        "goal",
+        "proposal",
+        "critic_review",
+        "council_decision",
+        "budget_lock",
+        "decision",
+        "action",
+        "outcome",
+    }
+)
+
 # ---------------------------------------------------------------------------
 # Belief Engine
 # ---------------------------------------------------------------------------
@@ -364,12 +379,20 @@ def _governance_goal_from_dict(raw: Mapping[str, Any]):
 
 
 def _goal_graph_payload(raw: Mapping[str, Any]) -> dict[str, Any]:
-    """Keep only the fields consumed by the first Goal graph query."""
+    """Project the complete typed goal contract into the current graph."""
 
     return {
         "goal_id": str(raw.get("goal_id") or raw.get("id") or ""),
         "statement": str(raw.get("statement") or ""),
         "priority": _goal_priority(raw),
+        "success": raw.get("success")
+        or {
+            "probability": raw.get("probability", 0.5),
+            "confidence": raw.get("confidence", 0.0),
+        },
+        "hard_constraints": list(raw.get("hard_constraints") or ()),
+        "deadline_turn": raw.get("deadline_turn"),
+        "parent_goal_id": raw.get("parent_goal_id"),
         "tags": list(raw.get("tags") or ()),
     }
 
@@ -382,7 +405,7 @@ def _release_stale_budget_locks(
     """Release reservations after their last governed execution turn."""
 
     released: list[str] = []
-    for lock in engine.list("budget_lock", status="active"):
+    for lock in engine.current_governance_entities("budget_lock", status="active"):
         release_after_turn = int(
             lock.get("release_after_turn", lock.get("created_turn", turn))
         )
@@ -425,7 +448,7 @@ def _typed_snapshot_observation_for_turn(
 ) -> dict[str, Any] | None:
     snapshots = [
         item
-        for item in engine.list("observation", status="active")
+        for item in engine.current_governance_entities("observation", status="active")
         if item.get("source") == "game_state:typed_snapshot"
         and item.get("observed_turn") == turn
     ]
@@ -459,7 +482,7 @@ def _reusable_typed_snapshot_for_turn(
         and action.get("success") is True
         and action.get("executed") is True
         and float(action.get("created_at", 0)) > captured_at
-        for action in engine.list("action", status="active")
+        for action in engine.current_governance_entities("action", status="active")
     )
     return None if has_later_mutation else snapshot
 
@@ -509,6 +532,7 @@ async def _capture_governance_snapshot(
             epoch=engine.epoch,
         )
         next_graph = engine.record_graph_delta(graph_delta)
+        governance_graph = engine.sync_governance_graph(turn=snapshot.turn)
         legacy_entities = tuple(
             entity
             for entity in engine.list("world_entity", status="active")
@@ -524,6 +548,26 @@ async def _capture_governance_snapshot(
             "source_nodes": len(world.get("entities") or ()),
             "source_edges": len(world.get("relations") or ()),
             "mismatches": list(mismatches),
+        }
+        projection["graph_governance"] = {
+            "status": "projected",
+            "nodes": len(
+                tuple(
+                    node
+                    for node in governance_graph.nodes.values()
+                    if node.source in {
+                        "belief_engine:goal",
+                        "belief_engine:governance",
+                    }
+                )
+            ),
+            "edges": len(
+                tuple(
+                    edge
+                    for edge in governance_graph.edges.values()
+                    if edge.source == "belief_engine:governance"
+                )
+            ),
         }
         active_goals = engine.list("goal", status="active")
         goal_delta = project_active_goals(
@@ -566,7 +610,8 @@ async def _capture_governance_snapshot(
             "error": error,
         }
     released_locks = _release_stale_budget_locks(engine, turn=snapshot.turn)
-    active_locks = engine.list("budget_lock", status="active")
+    engine.sync_governance_graph(turn=snapshot.turn)
+    active_locks = engine.graph_entities("budget_lock", status="active")
     return snapshot, world, projection, released_locks, active_locks
 
 @mcp.tool()
@@ -987,13 +1032,10 @@ async def get_governance_brief(
             await _capture_governance_snapshot(ctx, engine)
         )
         belief_brief = engine.turn_brief(turn=snapshot.turn, limit=limit)
-        active_goals = engine.list("goal", status="active")
+        active_goals = engine.graph_entities("goal", status="active")
         typed_goals = tuple(
-            _governance_goal_from_dict(goal) for goal in active_goals
-        )
-        graph_ready = (
-            projection.get("graph_shadow", {}).get("status") != "error"
-            and projection.get("graph_goals", {}).get("status") == "projected"
+            _governance_goal_from_dict(dict(node.attributes))
+            for node in engine.graph_view.active_goals()
         )
         from civ6_belief_engine.governance.departments import (
             NationalStrategyCoordinator,
@@ -1006,7 +1048,11 @@ async def get_governance_brief(
             snapshot,
             agenda=tuple(goal.statement for goal in typed_goals),
             goals=typed_goals,
-            graph=engine.graph_view if graph_ready else None,
+            # Departments always receive the materialized graph.  A stale or
+            # failed projection remains visible to their conservative gates;
+            # silently switching the whole coordinator back to the legacy
+            # snapshot would hide a broken new-track read path.
+            graph=engine.graph_view,
         )
         await pipeline._flush_belief_events(ctx)
         low_confidence = [
@@ -1016,7 +1062,7 @@ async def get_governance_brief(
                 "confidence": item.get("confidence"),
                 "gate_scope": item.get("gate_scope", "global"),
             }
-            for item in engine.list("belief", status="active")
+            for item in engine.graph_entities("belief", status="active")
             if float(item.get("confidence", 0)) < confidence_floor
         ][: max(1, min(limit, 50))]
         city_ids = [
@@ -1089,10 +1135,10 @@ async def get_governance_brief(
             "belief_brief": belief_brief,
             "governance": {
                 "goals": active_goals[:limit],
-                "proposals": engine.list("proposal", status="active")[:limit],
-                "critic_reviews": engine.list("critic_review", status="active")[:limit],
-                "council_decisions": engine.list("council_decision", status=None)[:limit],
-                "budget_locks": active_locks[:limit],
+                "proposals": engine.graph_entities("proposal", status="active")[:limit],
+                "critic_reviews": engine.graph_entities("critic_review", status="active")[:limit],
+                "council_decisions": engine.graph_entities("council_decision", status=None)[:limit],
+                "budget_locks": engine.graph_entities("budget_lock", status="active")[:limit],
                 "released_budget_locks": released_locks,
             },
             "arbitration_order": [
@@ -1211,11 +1257,11 @@ async def submit_governance_proposal(ctx: Context, proposal: str) -> str:
                     "re-authorizing the same action."
                 )
         for goal_id in typed.goal_ids:
-            goal = engine.get("goal", goal_id)
+            goal = engine.current_governance_entity("goal", goal_id)
             if not goal or goal.get("status") != "active":
                 raise BeliefEngineError(f"Referenced active goal not found: {goal_id}")
         for belief_id in typed.belief_ids:
-            belief = engine.get("belief", belief_id)
+            belief = engine.current_governance_entity("belief", belief_id)
             if not belief or belief.get("status") != "active":
                 raise BeliefEngineError(
                     f"Referenced active belief not found: {belief_id}"
@@ -1275,7 +1321,7 @@ async def review_governance_proposal(
             ProbabilityConfidence,
         )
 
-        proposal_entity = engine.get("proposal", proposal_id)
+        proposal_entity = engine.current_governance_entity("proposal", proposal_id)
         if not proposal_entity or proposal_entity.get("status") != "active":
             raise BeliefEngineError(f"Referenced active proposal not found: {proposal_id}")
         proposal_typed = _governance_proposal_from_dict(proposal_entity)
@@ -1287,7 +1333,7 @@ async def review_governance_proposal(
         grounded_evidence = []
         for item in evidence_items:
             observation_id = str(item.get("observation_id") or "")
-            observation = engine.get("observation", observation_id)
+            observation = engine.current_governance_entity("observation", observation_id)
             if not observation:
                 raise BeliefEngineError(
                     f"Counterevidence observation not found: {observation_id}"
@@ -1389,7 +1435,7 @@ async def resolve_governance_council(
                             f"budget limit {key!r} must be numeric, not bool"
                         )
                     limits[key] = min(float(scoped), capacity)
-        proposal_entities = engine.list("proposal", status="active")
+        proposal_entities = engine.current_governance_entities("proposal", status="active")
         proposals = [
             _governance_proposal_from_dict(item) for item in proposal_entities
         ]
@@ -1398,7 +1444,7 @@ async def resolve_governance_council(
         }
         blocked_by_critic: dict[str, tuple[str, ...]] = {}
         latest_reviews: dict[str, dict[str, Any]] = {}
-        for review in engine.list("critic_review", status="active"):
+        for review in engine.current_governance_entities("critic_review", status="active"):
             proposal_id = str(review.get("proposal_id") or "")
             if (
                 proposal_id
@@ -1435,7 +1481,7 @@ async def resolve_governance_council(
                 exclusive=item.get("exclusive", False),
                 reason=str(item.get("reason") or ""),
             )
-            for item in engine.list("budget_lock", status="active")
+            for item in engine.current_governance_entities("budget_lock", status="active")
         )
         proposal_identity = {
             "proposal_ids": sorted(item.proposal_id for item in proposals)
@@ -1534,7 +1580,7 @@ async def resolve_governance_council(
                         },
                         turn=turn,
                     )
-        for review in engine.list("critic_review", status="active"):
+        for review in engine.current_governance_entities("critic_review", status="active"):
             if str(review.get("proposal_id") or "") in considered_set:
                 engine.update(
                     "critic_review",
@@ -1569,11 +1615,16 @@ async def get_belief_state(
         selected_status = None if status in {"", "all"} else status
         limit = max(1, min(last_n, 200))
         if entity_type:
+            graph_items = engine.graph_entities(entity_type, status=selected_status)
             return {
                 "game_id": engine.game_id,
                 "turn": turn,
                 "entity_type": entity_type,
-                "items": engine.list(entity_type, status=selected_status)[:limit],
+                "items": (
+                    graph_items
+                    if entity_type in _GRAPH_GOVERNANCE_ENTITY_TYPES
+                    else engine.list(entity_type, status=selected_status)
+                )[:limit],
             }
         visible_types = (
             "belief",
@@ -1598,7 +1649,11 @@ async def get_belief_state(
             "turn": turn,
             "current_metrics": engine.current_metrics(),
             "entities": {
-                kind: engine.list(kind, status=selected_status)[:limit]
+                kind: (
+                    engine.graph_entities(kind, status=selected_status)
+                    if kind in _GRAPH_GOVERNANCE_ENTITY_TYPES
+                    else engine.list(kind, status=selected_status)
+                )[:limit]
                 for kind in visible_types
             },
             "research_metrics": engine.metrics(),
@@ -1827,7 +1882,9 @@ async def route_belief_decision(
             )
         )
         if council_decision_id:
-            council = engine.get("council_decision", council_decision_id)
+            council = engine.current_governance_entity(
+                "council_decision", council_decision_id
+            )
             if not council:
                 raise BeliefEngineError(
                     f"Unknown council decision: {council_decision_id}"
@@ -1842,7 +1899,7 @@ async def route_belief_decision(
                 raise BeliefEngineError(
                     "action_intent proposal_id was not selected by the council"
                 )
-            proposal = engine.get("proposal", proposal_id)
+            proposal = engine.current_governance_entity("proposal", proposal_id)
             if not proposal or proposal.get("council_decision_id") != council_decision_id:
                 raise BeliefEngineError(
                     f"Council-selected proposal not found: {proposal_id}"
@@ -2017,7 +2074,7 @@ async def record_action_verification(
     params.pop("ctx")
 
     def _operation(engine: BeliefEngine, turn: int) -> dict[str, Any]:
-        decision = engine.get("decision", decision_id)
+        decision = engine.current_governance_entity("decision", decision_id)
         if not decision:
             raise BeliefEngineError(f"Unknown decision: {decision_id}")
         verification_patch = {
@@ -2082,7 +2139,7 @@ async def record_action_verification(
             )
             linked_actions = [
                 item
-                for item in engine.list("action", status=None)
+                for item in engine.current_governance_entities("action", status=None)
                 if item.get("decision_id") == decision_id
             ]
             latest = max(
@@ -2100,7 +2157,7 @@ async def record_action_verification(
                     verification_patch,
                     turn=turn,
                 )
-            return engine.get("decision", decision_id) or {}
+            return engine.current_governance_entity("decision", decision_id) or {}
         return engine.create(
             "action",
             {

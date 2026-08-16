@@ -5,7 +5,7 @@ from __future__ import annotations
 from math import isfinite
 from typing import Any
 
-from ..models import TurnSnapshot
+from ..graph_snapshot import graph_goals, graph_snapshot
 from .base import (
     BaseDepartment,
     Department,
@@ -46,14 +46,14 @@ def _contains_keyword(values: tuple[str, ...], keywords: tuple[str, ...]) -> boo
 
 def _context_text(context: DepartmentContext) -> tuple[str, ...]:
     values = list(context.agenda)
-    for goal in context.goals:
+    for goal in graph_goals(context):
         values.append(goal.statement)
         values.extend(goal.tags)
     return tuple(values)
 
 
 def _barbarian_signal(context: DepartmentContext) -> bool:
-    barbarians = context.snapshot.barbarians
+    barbarians = graph_snapshot(context).barbarians
     if barbarians is not None and (barbarians.camps or barbarians.units):
         return True
     return _contains_keyword(_context_text(context), _BARBARIAN_KEYWORDS)
@@ -105,7 +105,7 @@ class EconomyDepartment(BaseDepartment):
     def match(self, context: DepartmentContext) -> float:
         """Return deterministic relevance for the current national context."""
 
-        snapshot = context.snapshot
+        snapshot = graph_snapshot(context)
         if snapshot.overview is None:
             return 0.0
 
@@ -127,7 +127,7 @@ class EconomyDepartment(BaseDepartment):
     def assess(self, context: DepartmentContext) -> DepartmentAssessment:
         """Build a stable assessment without producing executable actions."""
 
-        snapshot: TurnSnapshot = context.snapshot
+        snapshot = graph_snapshot(context)
         relevance = self.match(context)
         missing: list[str] = []
         facts: list[str] = []
@@ -343,4 +343,3 @@ class EconomyDepartment(BaseDepartment):
             workstreams=tuple(workstreams),
             degraded=degraded,
         )
-
