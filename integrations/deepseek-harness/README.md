@@ -75,6 +75,15 @@ flow, opt in for that process:
 CIV_MCP_DSH_AUTO_RESUME=1 ./scripts/deepseek_harness web
 ```
 
+For a full one-command bring-up that also launches the game and waits for
+FireTuner, use the launcher (game startup is its explicit opt-in; it enables
+controlled recovery by default and can be disabled with `--no-resume`):
+
+```bash
+./scripts/civ6_launch                # game + DSH Web (http://127.0.0.1:3080)
+./scripts/civ6_launch check|status|down   # readiness, read-only status, teardown
+```
+
 The recovery selector prefers the newest non-empty `0_MCP_*.Civ6Save` in the
 regular Single saves directory, then falls back to `AutoSave_*.Civ6Save` in
 the autosave directory. If FireTuner already reports both `GameCore_Tuner`
