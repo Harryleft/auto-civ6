@@ -213,6 +213,8 @@ rules create, update, retire, and resolve entities with evidence references:
 | Rule | Tool | Produces | Resolves when |
 |---|---|---|---|
 | Barbarian camp threats | `get_barbarian_overview` | belief per camp (probability by distance) | camp unseen for 5 consecutive overviews (archived); re-seen camps resurrect the same entity |
+| Rival military threat | `get_diplomacy` | belief per rival at war or ≥2× our military (probability by war+ratio) | peace + ratio < 1.5×, or rival absent 10 turns → archived; re-escalation resurrects |
+| Great people race pressure | `get_great_people_overview` | belief per class where a rival leads (probability by gap ratio) | we take the lead, or gap > 50% of leader points → archived |
 | Research/civic timing | `get_tech_civics` | prediction "X completes by T" | subject no longer researched: completed-counter moved → confirmed; deadline passed → disconfirmed; plus an `evaluation` metric safety net handled by `review()` |
 | Victory race ETA | `get_victory_progress` | rate-based ETA prediction per rival section (≥15% progress) | `review()` resolves on VP arrival via the `evaluation` rule |
 | Combat damage | `get_combat_estimate` | prediction "~D damage" with defender HP baseline | next estimate shows the HP drop; tolerance `max(3, 25%)` |
