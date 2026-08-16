@@ -82,7 +82,7 @@ def _route_authorized_decision(
 class TestJsonlIntegrity:
     def test_truncated_tail_is_quarantined_and_log_stays_appendable(self, tmp_path):
         first = _bind(tmp_path, "run-a")
-        first.create("belief", {"statement": "s", "category": "military", "probability": 0.7, "confidence": 0.8}, turn=1, entity_id="border")
+        first.create("belief", {"statement": "s", "category": "military", "probability": 0.7, "confidence": 0.8, "unknown_basis": True}, turn=1, entity_id="border")
         first.update("belief", "border", {"probability": 0.5}, turn=2)
         assert first.path is not None
         with first.path.open("a") as handle:
@@ -110,7 +110,7 @@ class TestJsonlIntegrity:
         # marker references the last intact event's turn
         assert markers[0]["turn"] == 2
 
-        reloaded.create("belief", {"statement": "after repair", "category": "military", "probability": 0.7, "confidence": 0.8}, turn=3, entity_id="after")
+        reloaded.create("belief", {"statement": "after repair", "category": "military", "probability": 0.7, "confidence": 0.8, "unknown_basis": True}, turn=3, entity_id="after")
         final = _bind(tmp_path, "run-c")
         assert final.get("belief", "border") is not None
         assert final.get("belief", "after") is not None
@@ -119,7 +119,7 @@ class TestJsonlIntegrity:
 
     def test_non_dict_lines_are_quarantined_too(self, tmp_path):
         first = _bind(tmp_path, "run-a")
-        first.create("belief", {"statement": "s", "category": "military", "probability": 0.7, "confidence": 0.8}, turn=1, entity_id="border")
+        first.create("belief", {"statement": "s", "category": "military", "probability": 0.7, "confidence": 0.8, "unknown_basis": True}, turn=1, entity_id="border")
         with first.path.open("a") as handle:
             handle.write(json.dumps(["also-not-an-event"]) + "\n")
 
@@ -135,7 +135,7 @@ class TestJsonlIntegrity:
         (a non-numeric sequence used to raise out of int()) or silently
         corrupt the replay."""
         first = _bind(tmp_path, "run-a")
-        first.create("belief", {"statement": "s", "category": "military", "probability": 0.7, "confidence": 0.8}, turn=1, entity_id="border")
+        first.create("belief", {"statement": "s", "category": "military", "probability": 0.7, "confidence": 0.8, "unknown_basis": True}, turn=1, entity_id="border")
         bad_lines = [
             {"v": 1, "event_id": "x1", "sequence": "not-a-number", "event_type": "entity.created", "entity": {"id": "b1"}},  # sequence non-numeric
             {"v": 1, "event_id": "x2", "sequence": 5, "entity": {"id": "b2"}},  # missing event_type
@@ -328,11 +328,11 @@ class TestGameReloadEpochs:
         )
 
         # Events after the marker carry the new epoch...
-        engine.create("belief", {"statement": "post reload", "category": "military", "probability": 0.7, "confidence": 0.8}, turn=8, entity_id="post")
+        engine.create("belief", {"statement": "post reload", "category": "military", "probability": 0.7, "confidence": 0.8, "unknown_basis": True}, turn=8, entity_id="post")
         assert engine.history(entity_id="post")[-1]["epoch"] == 2
         # ...and a restart recomputes the epoch from the marker count.
         reloaded = _bind(tmp_path, "run-b")
-        reloaded.create("belief", {"statement": "after restart", "category": "military", "probability": 0.7, "confidence": 0.8}, turn=8, entity_id="restart")
+        reloaded.create("belief", {"statement": "after restart", "category": "military", "probability": 0.7, "confidence": 0.8, "unknown_basis": True}, turn=8, entity_id="restart")
         assert reloaded.history(entity_id="restart")[-1]["epoch"] == 2
 
     def test_unbound_engine_records_nothing(self):

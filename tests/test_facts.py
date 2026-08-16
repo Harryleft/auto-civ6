@@ -396,6 +396,9 @@ class TestCoreQueryEnvelopes:
             "at_war": True,
             "military": 150,
             "cities": 3,
+            # known-gap：测试未提供可见城市 → 叙述为 all in fog
+            "visible_cities": 0,
+            "unobserved_cities": 3,
         }
         assert "player_3" not in normalized["facts"]["rivals"]
         legacy = normalize_tool_result("get_diplomacy", narrated)

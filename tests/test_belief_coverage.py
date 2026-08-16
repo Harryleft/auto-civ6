@@ -189,6 +189,7 @@ def test_real_engine_journal_round_trip(tmp_path):
             "category": "military",
             "probability": 0.8,
             "confidence": 0.7,
+            "unknown_basis": True,
         },
         turn=1,
         entity_id="b1",

@@ -65,6 +65,16 @@ _PROBABILITY_FIELDS = {
 _IMPACT_SCORE = {"low": 0.25, "medium": 0.5, "high": 0.75, "critical": 1.0}
 _URGENCY_SCORE = {"low": 0.25, "medium": 0.5, "high": 0.75, "critical": 1.0}
 _RESULT_SUMMARY_CHARS = 500
+# stale-knowledge：自动信念超过 N 回合未刷新时进入 turn_brief 提示
+# （不阻断）。阈值取 derivation 归档阈值的一半：camp 5 → 3，rival 10 → 5。
+_STALE_AUTO_BELIEF_TURNS = {
+    "auto:belief:camp_threat:": 3,
+    "auto:belief:rival_threat:": 5,
+}
+_STALE_REFRESH_TOOLS = {
+    "auto:belief:camp_threat:": "get_barbarian_overview",
+    "auto:belief:rival_threat:": "get_diplomacy",
+}
 _ACTION_OUTCOME_STATUSES = frozenset(
     {"succeeded", "failed", "unknown", "blocked"}
 )
@@ -127,6 +137,22 @@ def _parse_fact_envelope(result: str) -> dict[str, Any] | None:
     if not isinstance(payload.get("narrated"), str):
         return None
     return payload
+
+
+# 有字段级正则提取分支的工具（观测可靠性 0.9）；其余纯摘要工具为 0.8。
+_RELIABLE_TOOLS = frozenset(
+    {
+        "get_game_overview",
+        "get_diplomacy",
+        "get_combat_estimate",
+        "get_cities",
+        "get_units",
+        "get_tech_civics",
+        "get_barbarian_overview",
+        "get_victory_progress",
+        "get_great_people_overview",
+    }
+)
 
 
 def _envelope_observation_facts(
@@ -198,6 +224,16 @@ def _envelope_observation_facts(
                 rivals[key]["military"] = int(civ["military_strength"])
             if civ.get("num_cities"):
                 rivals[key]["cities"] = int(civ["num_cities"])
+                # known-gap：已知存在但未观测的城市数（迷雾盲区占位）。
+                # visible_cities 为空列表 → 全部未观测（与叙述 "all in fog" 一致）。
+                visible = civ.get("visible_cities") or []
+                visible_count = (
+                    len(visible) if isinstance(visible, list) else 0
+                )
+                rivals[key]["visible_cities"] = visible_count
+                rivals[key]["unobserved_cities"] = max(
+                    0, int(civ["num_cities"]) - visible_count
+                )
         if rivals:
             facts["rivals"] = rivals
     elif tool == "get_combat_estimate":
@@ -272,7 +308,11 @@ def normalize_tool_result(tool: str, result: str) -> dict[str, Any]:
         base = normalize_tool_result(tool, envelope.get("narrated") or "")
         facts = base["facts"]
         facts.update(_envelope_observation_facts(tool, envelope))
-        return {"facts": facts, "metrics": base["metrics"]}
+        return {
+            "facts": facts,
+            "metrics": base["metrics"],
+            "reliability": 1.0,  # 字段级 schema，无解析损失
+        }
 
     metrics: dict[str, Any] = {}
     facts: dict[str, Any] = {"tool": tool}
@@ -365,6 +405,28 @@ def normalize_tool_result(tool: str, result: str) -> dict[str, Any]:
                     city_count = int(cities.group(1) or cities.group(2))
                     rivals[current_key]["cities"] = city_count
                     metrics[f"diplomacy.{current_key}.cities"] = city_count
+                    # known-gap：从叙述行的 "+ N in fog" / "(all in fog)" 提取
+                    # 未观测城市数，让"已知存在但未见"成为显式事实。
+                    fog = re.search(r"\+ (\d+) in fog", line)
+                    if fog:
+                        hidden = int(fog.group(1))
+                        visible = max(0, city_count - hidden)
+                        rivals[current_key]["unobserved_cities"] = hidden
+                        metrics[
+                            f"diplomacy.{current_key}.unobserved_cities"
+                        ] = hidden
+                    elif "all in fog" in line:
+                        rivals[current_key]["unobserved_cities"] = city_count
+                        metrics[
+                            f"diplomacy.{current_key}.unobserved_cities"
+                        ] = city_count
+                        visible = 0
+                    else:
+                        visible = city_count
+                    rivals[current_key]["visible_cities"] = visible
+                    metrics[
+                        f"diplomacy.{current_key}.visible_cities"
+                    ] = visible
         if rivals:
             facts["rivals"] = rivals
 
@@ -601,7 +663,13 @@ def normalize_tool_result(tool: str, result: str) -> dict[str, Any]:
                 )
             facts.setdefault("great_people_classes", []).append(class_fact)
 
-    return {"facts": facts, "metrics": metrics}
+    return {
+        "facts": facts,
+        "metrics": metrics,
+        "reliability": (
+            0.9 if tool in _RELIABLE_TOOLS else 0.8  # 正则提取 vs 纯摘要
+        ),
+    }
 
 
 def tool_result_reference(result: str) -> dict[str, Any]:
@@ -659,6 +727,17 @@ def _validate_entity(entity_type: str, entity: dict[str, Any]) -> None:
         raise BeliefEngineError(
             f"Missing required {entity_type} fields: {', '.join(missing)}"
         )
+    if entity_type == "belief":
+        # 信念必须有事实基础：要么引用观测证据，要么显式声明未知基础
+        # （unknown_basis）。拒绝"既无证据又无声明"的信念——引擎无法
+        # 验证其语义，必须让调用方承认这一点。
+        if not (entity.get("evidence_ids") or []) and not entity.get(
+            "unknown_basis"
+        ):
+            raise BeliefEngineError(
+                "belief requires evidence_ids (observation references) or "
+                "unknown_basis=true to declare an unverified basis"
+            )
     if entity_type == "plan" and entity["horizon"] not in (5, 10, 20):
         raise BeliefEngineError("plan horizon must be 5, 10, or 20 turns")
     if entity_type == "prediction":
@@ -1491,7 +1570,7 @@ class BeliefEngine:
                     "result_ref": result_ref,
                     "facts": normalized["facts"],
                     "metrics": normalized["metrics"],
-                    "reliability": 1.0,
+                    "reliability": normalized.get("reliability", 0.8),
                     "observed_turn": turn,
                     "tags": ["automatic", "mcp", tool],
                 },
@@ -1585,7 +1664,7 @@ class BeliefEngine:
                         "source": f"action:{tool}",
                         "facts": facts,
                         "metrics": deepcopy(normalized.get("metrics") or {}),
-                        "reliability": 1.0,
+                        "reliability": normalized.get("reliability", 0.8),
                         "observed_turn": turn,
                         "tags": ["automatic", "action", tool],
                     },
@@ -2298,7 +2377,8 @@ class BeliefEngine:
                     "capabilities": deepcopy(snapshot.get("capabilities") or {}),
                 },
                 "metrics": deepcopy(snapshot.get("metrics") or {}),
-                "reliability": 1.0,
+                # 引擎结构化聚合的间接观测：可靠但非原始查询。
+                "reliability": 0.85,
                 "observed_turn": turn,
                 "tags": ["automatic", "typed", "game_state"],
             },
@@ -2609,6 +2689,43 @@ class BeliefEngine:
         overdue: list[str] = []
         contradictions: list[str] = []
         replans: list[str] = []
+        # stale-knowledge：自动信念超过阈值回合未刷新 → 提示（不阻断）。
+        # 引擎无法感知"应该查而没查"，这是对观测新鲜度的最低限度告警。
+        stale_knowledge: list[dict[str, Any]] = []
+        for belief in self.list("belief", status="active"):
+            belief_id = str(belief.get("id") or "")
+            stale_turns = next(
+                (
+                    turns
+                    for prefix, turns in _STALE_AUTO_BELIEF_TURNS.items()
+                    if belief_id.startswith(prefix)
+                ),
+                None,
+            )
+            if stale_turns is None:
+                continue
+            last_seen = int(belief.get("last_seen_turn") or turn)
+            unseen = turn - last_seen
+            if unseen >= stale_turns:
+                refresh_tool = _STALE_REFRESH_TOOLS.get(
+                    next(
+                        (
+                            prefix
+                            for prefix in _STALE_AUTO_BELIEF_TURNS
+                            if belief_id.startswith(prefix)
+                        ),
+                        "",
+                    ),
+                    "get_turn_brief",
+                )
+                stale_knowledge.append(
+                    {
+                        "id": belief_id,
+                        "subject": belief.get("statement", "")[:80],
+                        "unseen_turns": unseen,
+                        "refresh_tool": refresh_tool,
+                    }
+                )
 
         for prediction in self.list("prediction", status="active"):
             rule = prediction.get("evaluation")
@@ -2748,6 +2865,7 @@ class BeliefEngine:
             "predictions_overdue": overdue,
             "contradictions_created": contradictions,
             "plans_needing_replan": replans,
+            "knowledge_stale": stale_knowledge,
         }
 
     def turn_brief(self, *, turn: int, limit: int = 12) -> dict[str, Any]:
@@ -2835,6 +2953,7 @@ class BeliefEngine:
                 "plans_requiring_review": replan_plans[:take],
                 "active_surprises": [item["id"] for item in surprises[:take]],
                 "active_contradictions": [item["id"] for item in contradictions[:take]],
+                "knowledge_stale": review.get("knowledge_stale") or [],
                 "blocking_scopes": sorted(blocking_scopes),
             },
             "beliefs": [

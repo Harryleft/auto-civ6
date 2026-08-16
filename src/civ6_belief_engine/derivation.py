@@ -105,12 +105,16 @@ class ArchiveEntity:
     entity_type: str
     entity_id: str
     note: str
+    # 归档原因分类：unknown = 无法区分（如营地被清 vs 失去视野）、
+    # resolved = 威胁/竞争已明确解除。audit 与 stale 分析依赖该字段，
+    # 避免把"未知"归档成"已解决"。
+    kind: str = "unknown"
 
     def apply(self, engine: Any, *, turn: int) -> None:
         engine.update(
             self.entity_type,
             self.entity_id,
-            {"status": "archived", "resolution": self.note},
+            {"status": "archived", "resolution": self.note, "resolution_kind": self.kind},
             turn=turn,
         )
 
@@ -241,6 +245,7 @@ def _camp_threats(ctx: RuleContext) -> Iterator[Op]:
                 "belief",
                 belief["id"],
                 f"camp not observed for {unseen} turns (cleared or lost to fog)",
+                kind="unknown",  # 无法区分清除与失去视野
             )
 
 
@@ -596,6 +601,7 @@ def _rival_military_threats(ctx: RuleContext) -> Iterator[Op]:
                     "belief",
                     belief["id"],
                     f"player {player_n} absent from diplomacy list for {unseen} turns",
+                    kind="unknown",  # 可能是战败、断交或未再见面
                 )
             continue
         military = rival.get("military")
@@ -612,6 +618,7 @@ def _rival_military_threats(ctx: RuleContext) -> Iterator[Op]:
                 "belief",
                 belief["id"],
                 f"threat resolved: rival {military} vs our {our_military}",
+                kind="resolved",  # 军力比明确回落到阈值以下
             )
 
 
@@ -649,6 +656,7 @@ def _great_people_race(ctx: RuleContext) -> Iterator[Op]:
                     "belief",
                     entity_id,
                     "leader's lead exceeds 50% of their points; race abandoned",
+                    kind="resolved",  # 差距过大，竞争明确结束
                 )
             continue
         yield CreateBelief(entity_id, _gp_race_belief_payload(cls, ctx))
@@ -662,7 +670,12 @@ def _great_people_race(ctx: RuleContext) -> Iterator[Op]:
         )
         if row is not None:
             if row.get("leader_name") == "YOU":
-                yield ArchiveEntity("belief", belief["id"], "we now lead the race")
+                yield ArchiveEntity(
+                    "belief",
+                    belief["id"],
+                    "we now lead the race",
+                    kind="resolved",  # 竞争已由我方领先结束
+                )
             continue
         unseen = ctx.turn - int(belief.get("last_seen_turn") or ctx.turn)
         if unseen >= _RIVAL_UNSEEN_RETIRE_TURNS:
@@ -670,6 +683,7 @@ def _great_people_race(ctx: RuleContext) -> Iterator[Op]:
                 "belief",
                 belief["id"],
                 f"class absent from overview for {unseen} turns",
+                kind="unknown",  # 类别从总览消失，无法区分结束与盲区
             )
 
 
