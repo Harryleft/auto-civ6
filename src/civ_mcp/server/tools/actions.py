@@ -22,14 +22,24 @@ async def get_governors(ctx: Context) -> str:
 
     Shows governor points, currently appointed governors with assignments,
     and governors available to appoint. Use appoint_governor to appoint one.
+
+    Returns a double-track JSON envelope: structured ``facts`` (governors
+    with COMPLETE coverage) plus the legacy human-readable ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
-    return await pipeline._logged(
-        ctx,
-        "get_governors",
-        {},
-        lambda: pipeline._narrate(gs.get_governors, nr.narrate_governors),
-    )
+
+    async def _run():
+        status = await gs.get_governors()
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.governors_envelope(
+                turn=turn,
+                status=status,
+                narrated=nr.narrate_governors(status),
+            )
+        )
+
+    return await pipeline._logged(ctx, "get_governors", {}, _run)
 
 
 @mcp.tool()
@@ -145,14 +155,25 @@ async def get_city_states(ctx: Context) -> str:
     Shows envoy tokens available, each city-state's type (Scientific,
     Industrial, etc.), how many envoys you've sent, and who is suzerain.
     Use send_envoy to send an envoy.
+
+    Returns a double-track JSON envelope: structured ``facts`` (envoy_tokens/
+    city_states with COMPLETE coverage) plus the legacy human-readable
+    ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
-    return await pipeline._logged(
-        ctx,
-        "get_city_states",
-        {},
-        lambda: pipeline._narrate(gs.get_city_states, nr.narrate_city_states),
-    )
+
+    async def _run():
+        status = await gs.get_city_states()
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.city_states_envelope(
+                turn=turn,
+                status=status,
+                narrated=nr.narrate_city_states(status),
+            )
+        )
+
+    return await pipeline._logged(ctx, "get_city_states", {}, _run)
 
 
 @mcp.tool()
@@ -176,12 +197,23 @@ async def get_pantheon_beliefs(ctx: Context) -> str:
 
     Shows current pantheon (if any), faith balance, and all available
     pantheon beliefs with their bonuses. Use choose_pantheon to found one.
+
+    Returns a double-track JSON envelope: structured ``facts`` (pantheon/
+    beliefs with COMPLETE coverage) plus the legacy human-readable
+    ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
 
     async def _run():
         status = await gs.get_pantheon_status()
-        return nr.narrate_pantheon_status(status)
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.pantheon_envelope(
+                turn=turn,
+                status=status,
+                narrated=nr.narrate_pantheon_status(status),
+            )
+        )
 
     return await pipeline._logged(ctx, "get_pantheon_beliefs", {}, _run)
 
@@ -212,12 +244,23 @@ async def get_religion_beliefs(ctx: Context) -> str:
     Shows whether you've founded a religion, available religion types to choose,
     and beliefs grouped by class (Follower, Founder, Enhancer, Worship).
     Use found_religion to found a religion after your Great Prophet activates.
+
+    Returns a double-track JSON envelope: structured ``facts`` (religion/
+    beliefs with COMPLETE coverage) plus the legacy human-readable
+    ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
 
     async def _run():
         status = await gs.get_religion_founding_status()
-        return nr.narrate_religion_founding_status(status)
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.religion_founding_envelope(
+                turn=turn,
+                status=status,
+                narrated=nr.narrate_religion_founding_status(status),
+            )
+        )
 
     return await pipeline._logged(ctx, "get_religion_beliefs", {}, _run)
 
@@ -272,12 +315,22 @@ async def get_dedications(ctx: Context) -> str:
 
     返回时代分门槛、黄金/黑暗/普通时代状态，以及每个候选项在当前时代的
     实际加成。若显示必须选择，直接调用 choose_dedication 完成本回合必办项。
+
+    返回双轨 JSON 信封：结构化 ``facts``（dedications 覆盖语义 COMPLETE）
+    加原叙述 ``narrated`` 视图。
     """
     gs = pipeline._get_game(ctx)
 
     async def _run():
         status = await gs.get_dedications()
-        return nr.narrate_dedications(status)
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.dedications_envelope(
+                turn=turn,
+                status=status,
+                narrated=nr.narrate_dedications(status),
+            )
+        )
 
     return await pipeline._logged(ctx, "get_dedications", {}, _run)
 
@@ -311,12 +364,23 @@ async def get_trade_options(ctx: Context, other_player_id: int) -> str:
     Shows gold, resources, favor, open borders status, and alliance eligibility
     for both you and the other civilization. Use before propose_trade to see
     what's available.
+
+    Returns a double-track JSON envelope: structured ``facts`` (deal_options
+    with COMPLETE coverage) plus the legacy human-readable ``narrated`` view.
     """
     gs = pipeline._get_game(ctx)
 
     async def _run():
         opts = await gs.get_deal_options(other_player_id)
-        return nr.narrate_deal_options(opts)
+        turn = pipeline._get_logger(ctx)._turn
+        return fact_view.dumps(
+            fact_view.trade_options_envelope(
+                turn=turn,
+                other_player_id=other_player_id,
+                options=opts,
+                narrated=nr.narrate_deal_options(opts),
+            )
+        )
 
     return await pipeline._logged(
         ctx, "get_trade_options", {"other_player_id": other_player_id}, _run
