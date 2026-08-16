@@ -2814,18 +2814,18 @@ async def restart_and_load(
         for attempt in range(60):
             try:
                 await conn.reconnect()
-                if conn.lua_states:
+                if any(name == "MainMenu" for name in conn.lua_states.values()):
                     break
             except ConnectionError:
                 if attempt % 10 == 0:
                     log.info(
-                        "Waiting for FireTuner after restart (%ds)", attempt
+                        "Waiting for MainMenu after restart (%ds)", attempt
                     )
             await asyncio.sleep(1)
 
-        if not conn.lua_states:
+        if not any(name == "MainMenu" for name in conn.lua_states.values()):
             load_result = (
-                "Error: FireTuner did not expose a Lua state after restart; "
+                "Error: FireTuner did not expose MainMenu after restart; "
                 "refusing OCR takeover."
             )
         else:
