@@ -1,9 +1,8 @@
 """World-model tools: calibration, forecasting, Bayesian rebalancing.
 
-Adapters over the pure ``civ6_belief_engine.forecast`` functions.  Unlike
-``tools/belief.py`` (the graph_plan phase-4 deletion unit), this module is a
-long-lived surface: the pure functions it exposes survive projection
-changes.
+Adapters over the pure ``civ6_belief_engine.forecast`` functions.  Unlike the
+governance tool registration module, this is a long-lived surface: the pure
+functions it exposes survive projection changes.
 """
 
 from __future__ import annotations

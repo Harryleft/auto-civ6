@@ -181,7 +181,7 @@ def test_phase2_threat_chain_from_lua_text_to_verified_outcome(tmp_path):
     # Production seam: the department's typed proposals are surfaced in the
     # governance brief; the AGENT then submits proposal JSON (there is no
     # typed->asdict serializer on purpose). Mirror that submission here.
-    from civ_mcp.server.tools import belief as belief_tools
+    from civ_mcp.server.tools import belief_tools
 
     def _submission_json(typed) -> dict:
         return {
