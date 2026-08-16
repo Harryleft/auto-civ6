@@ -44,11 +44,7 @@ class DepartmentContext:
 
     def __post_init__(self) -> None:
         if not isinstance(self.snapshot, GraphSnapshotView):
-            # The old typed snapshot is accepted only at this compatibility
-            # boundary. Departments never receive or inspect that DTO.
-            object.__setattr__(
-                self, "snapshot", GraphSnapshotView.from_legacy(self.snapshot)
-            )
+            raise TypeError("snapshot must be GraphSnapshotView")
         object.__setattr__(self, "agenda", _texts(tuple(self.agenda), "agenda"))
         goals = tuple(self.goals)
         if not all(isinstance(goal, StrategicGoal) for goal in goals):

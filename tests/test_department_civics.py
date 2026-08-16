@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from civ6_belief_engine.governance import RulesetCapabilities, TurnSnapshot
+from civ6_belief_engine.governance import GraphSnapshotView
 from civ6_belief_engine.governance.departments.base import (
     Department,
     DepartmentContext,
@@ -25,15 +25,13 @@ def _snapshot(
     tech_civic: TechCivicStatus | None = None,
     policies: GovernmentStatus | None = None,
     barbarians: BarbarianOverview | None = None,
-) -> TurnSnapshot:
-    return TurnSnapshot(
+) -> GraphSnapshotView:
+    return GraphSnapshotView(
         snapshot_id="snapshot:civics:12",
         turn=12,
-        turn_before=12,
-        turn_after=12,
         player_id=0,
-        captured_at=1.0,
-        capabilities=RulesetCapabilities.standard(),
+        ready=True,
+        source="test",
         tech_civic=tech_civic,
         policies=policies,
         barbarians=barbarians,
