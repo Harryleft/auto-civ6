@@ -69,23 +69,126 @@ def test_restart_reuses_shared_connection_for_frontend_api(monkeypatch):
     class RestartConnection:
         lua_states = {}
         gamecore_index = None
+        ingame_index = None
+
+        def __init__(self):
+            self.loaded = False
 
         async def reconnect(self):
-            self.lua_states = {24: "MainMenu"}
+            if self.loaded:
+                self.lua_states = {3: "GameCore_Tuner", 4: "InGame"}
+                self.gamecore_index = 3
+                self.ingame_index = 4
+            else:
+                self.lua_states = {24: "MainMenu"}
 
     async def fake_frontend(_conn, save_name):
         assert save_name == "0_MCP_0012"
+        _conn.loaded = True
         return "Loading save 0_MCP_0012 via FrontEnd API"
 
     monkeypatch.setattr(game_lifecycle, "load_save_from_frontend", fake_frontend)
+    monkeypatch.setattr(game_launcher.asyncio, "sleep", _no_sleep)
 
+    conn = RestartConnection()
     result = asyncio.run(
         game_launcher.restart_and_load(
-            "0_MCP_0012", conn=RestartConnection()
+            "0_MCP_0012", conn=conn
         )
     )
 
     assert "Loading save 0_MCP_0012 via FrontEnd API" in result
+    assert "GameCore/InGame ready" in result
+
+
+def test_restart_finishes_leader_screen_with_opt_in_continue(monkeypatch):
+    monkeypatch.setenv(game_launcher.OCR_RECOVERY_ENV, "1")
+    monkeypatch.setattr(game_launcher, "dismiss_crash_dialogs", _empty_dismiss)
+    monkeypatch.setattr(game_launcher, "kill_game", _done("killed"))
+    monkeypatch.setattr(game_launcher, "launch_game", _done("launched"))
+    monkeypatch.setattr(game_launcher.asyncio, "sleep", _no_sleep)
+
+    class LeaderScreenConnection:
+        def __init__(self):
+            self.reconnects = 0
+            self.loaded = False
+            self.lua_states = {}
+            self.gamecore_index = None
+            self.ingame_index = None
+
+        async def reconnect(self):
+            self.reconnects += 1
+            if not self.loaded:
+                self.lua_states = {24: "MainMenu"}
+            elif self.reconnects == 2:
+                self.lua_states = {7: "LeaderScene"}
+                self.gamecore_index = None
+                self.ingame_index = None
+            else:
+                self.lua_states = {3: "GameCore_Tuner", 4: "InGame"}
+                self.gamecore_index = 3
+                self.ingame_index = 4
+
+    conn = LeaderScreenConnection()
+    continue_calls: list[tuple[str, dict[str, object]]] = []
+
+    async def fake_frontend(_conn, save_name):
+        assert save_name == "0_MCP_0012"
+        _conn.loaded = True
+        return "Loading save 0_MCP_0012 via FrontEnd API"
+
+    def fake_click(target, **kwargs):
+        continue_calls.append((target, kwargs))
+        return True
+
+    monkeypatch.setattr(game_lifecycle, "load_save_from_frontend", fake_frontend)
+    monkeypatch.setattr(game_launcher, "_click_text", fake_click)
+
+    result = asyncio.run(game_launcher.restart_and_load("0_MCP_0012", conn=conn))
+
+    assert continue_calls == [("CONTINUE", {"timeout": 105, "post_delay": 1})]
+    assert conn.reconnects == 3
+    assert "GameCore/InGame ready" in result
+
+
+def test_restart_does_not_claim_success_without_gui_or_opt_in_ocr(monkeypatch):
+    monkeypatch.delenv(game_launcher.OCR_RECOVERY_ENV, raising=False)
+    monkeypatch.setattr(game_launcher, "dismiss_crash_dialogs", _empty_dismiss)
+    monkeypatch.setattr(game_launcher, "kill_game", _done("killed"))
+    monkeypatch.setattr(game_launcher, "launch_game", _done("launched"))
+    monkeypatch.setattr(game_launcher.asyncio, "sleep", _no_sleep)
+
+    class LeaderScreenConnection:
+        def __init__(self):
+            self.loaded = False
+            self.lua_states = {}
+            self.gamecore_index = None
+            self.ingame_index = None
+
+        async def reconnect(self):
+            self.lua_states = (
+                {7: "LeaderScene"} if self.loaded else {24: "MainMenu"}
+            )
+
+    conn = LeaderScreenConnection()
+
+    async def fake_frontend(_conn, save_name):
+        assert save_name == "0_MCP_0012"
+        _conn.loaded = True
+        return "Loading save 0_MCP_0012 via FrontEnd API"
+
+    def unexpected_ocr(*_args, **_kwargs):
+        raise AssertionError("OCR must remain disabled without explicit opt-in")
+
+    monkeypatch.setattr(game_lifecycle, "load_save_from_frontend", fake_frontend)
+    monkeypatch.setattr(game_launcher, "_click_text", unexpected_ocr)
+    monkeypatch.setattr(game_launcher, "_click_continue_positional", unexpected_ocr)
+
+    result = asyncio.run(game_launcher.restart_and_load("0_MCP_0012", conn=conn))
+
+    assert "Error: FrontEnd load started" in result
+    assert "OCR post-load recovery is disabled by default" in result
+    assert "GameCore/InGame ready" not in result
 
 
 def test_restart_waits_for_main_menu_not_just_any_lua_state(monkeypatch):
@@ -97,23 +200,29 @@ def test_restart_waits_for_main_menu_not_just_any_lua_state(monkeypatch):
     class BootingConnection:
         lua_states = {}
         gamecore_index = None
+        ingame_index = None
 
         def __init__(self):
             self.reconnects = 0
+            self.loaded = False
 
         async def reconnect(self):
             self.reconnects += 1
-            self.lua_states = (
-                {3: "GameCore_Tuner"}
-                if self.reconnects == 1
-                else {24: "MainMenu"}
-            )
+            if self.reconnects == 1:
+                self.lua_states = {3: "GameCore_Tuner"}
+            elif not self.loaded:
+                self.lua_states = {24: "MainMenu"}
+            else:
+                self.lua_states = {3: "GameCore_Tuner", 4: "InGame"}
+                self.gamecore_index = 3
+                self.ingame_index = 4
 
     conn = BootingConnection()
     loaded: list[str] = []
 
     async def fake_frontend(_conn, save_name):
         loaded.append(save_name)
+        _conn.loaded = True
         return "Loading save 0_MCP_0012 via FrontEnd API"
 
     async def no_sleep(_seconds):
@@ -124,13 +233,17 @@ def test_restart_waits_for_main_menu_not_just_any_lua_state(monkeypatch):
 
     result = asyncio.run(game_launcher.restart_and_load("0_MCP_0012", conn=conn))
 
-    assert conn.reconnects == 2
+    assert conn.reconnects == 3
     assert loaded == ["0_MCP_0012"]
     assert "Loading save 0_MCP_0012 via FrontEnd API" in result
 
 
 async def _empty_dismiss():
     return []
+
+
+async def _no_sleep(_seconds):
+    return None
 
 
 def _done(result: str):
