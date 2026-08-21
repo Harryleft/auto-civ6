@@ -7,6 +7,7 @@
 >
 > 来源：由 docs/agent-turn-loop.md、docs/agent-strategy.md 的回合决策规则蒸馏而成。
 > 清单是防遗漏的唯一载体；发现清单与规则冲突时，按更严格者执行并向用户报告，待修订清单。
+> 机制细节按需读取 [docs/wiki/README.md](docs/wiki/README.md) 对应领域文档（先读 L0 决策速查）。
 
 ## A. 安全（最先查）
 
