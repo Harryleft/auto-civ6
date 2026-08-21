@@ -79,6 +79,7 @@
 | Diary、工具日志和空间注意力数据流 | [docs/observability.md](docs/observability.md) |
 | 多智能体对战（提案，未实现） | [docs/agent-vs-agent.md](docs/agent-vs-agent.md) |
 | 图工程当前方案与实施路线 | [graph_plan/README.md](graph_plan/README.md) |
+| 游戏机制知识库（官方百科蒸馏，渐进式披露：先读 L0 决策速查） | [docs/wiki/README.md](docs/wiki/README.md) |
 | DSH overlay 配置和安全决策 | [integrations/deepseek-harness/README.md](integrations/deepseek-harness/README.md) |
 
 ## 决策硬规则

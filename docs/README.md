@@ -13,6 +13,7 @@
 - [Strategy](agent-strategy.md) — Deity survival, expansion, diplomacy, war, and victory paths
 - [Tool and Action Reference](agent-tools.md) — Offline helpers, actions, blockers, production, and World Congress
 - [Game Recovery](agent-recovery.md) — Autosaves, hung AI turns, and recovery commands
+- [Game Mechanics Knowledge Base (Wiki)](wiki/README.md) — Official-wiki distilled mechanics per domain, progressive disclosure (L0 decision cheat-sheet → L1 mechanics → L2 data)
 
 ## For Developers
 
