@@ -65,6 +65,12 @@ _PROBABILITY_FIELDS = {
 }
 _IMPACT_SCORE = {"low": 0.25, "medium": 0.5, "high": 0.75, "critical": 1.0}
 _URGENCY_SCORE = {"low": 0.25, "medium": 0.5, "high": 0.75, "critical": 1.0}
+
+# Fields of a ``decision`` that carry its authorization contract. They are set
+# once by route_decision and are not patchable afterwards; see BeliefEngine.update.
+_PROTECTED_DECISION_FIELDS = frozenset(
+    {"action_intent", "council_decision_id", "args_hash"}
+)
 _RESULT_SUMMARY_CHARS = 500
 # stale-knowledge：自动信念超过 N 回合未刷新时进入 turn_brief 提示
 # （不阻断）。阈值取 derivation 归档阈值的一半：camp 5 → 3，rival 10 → 5。
@@ -1558,6 +1564,13 @@ class BeliefEngine:
         if current.get("status") == "deleted":
             raise BeliefEngineError(f"Cannot update deleted {entity_type}: {entity_id}")
         protected = {"id", "entity_type", "created_turn", "created_at", "version"}
+        if entity_type == "decision":
+            # A decision's authorization contract is fixed when the decision is
+            # created. Allowing a generic update to rewrite it would re-point an
+            # approval at a different action — the exact thing the council pin
+            # and the args_hash check exist to prevent. Lifecycle fields
+            # (decision_state, route, cancellation_reason, ...) stay updatable.
+            protected |= _PROTECTED_DECISION_FIELDS
         remove_fields = set(_remove_fields)
         illegal = protected.intersection(set(patch) | remove_fields)
         if illegal:

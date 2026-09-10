@@ -14,6 +14,7 @@ from civ6_belief_engine.belief_engine import (
     action_args_hash,
     tool_result_reference,
 )
+from civ_mcp.server.tools.belief_tools import _intents_fingerprint
 from civ_mcp.server import (
     _belief_action_preflight,
     _canonical_action_params,
@@ -525,6 +526,11 @@ def _governed_context(tmp_path, *, turn: int = 42):
             "statement": "Council approved one proposal",
             "selected_proposal_id": typed.proposal_id,
             "selected_proposal_ids": [typed.proposal_id],
+            # Mirrors resolve_governance_council: routing compares the
+            # proposal's current intents against this pin.
+            "approved_intents": {
+                typed.proposal_id: _intents_fingerprint(payload["action_intents"])
+            },
         },
         turn=turn,
         entity_id="council:42:test",
@@ -588,6 +594,22 @@ def test_council_route_without_evidence_contract_is_immediately_executable(tmp_p
         {"action_intents": proposal["action_intents"]},
         turn=42,
     )
+    # The council approved the proposal as it now stands. Refresh the pin so the
+    # route reflects an approval of this version rather than of the earlier one
+    # (rewriting intents after the vote is rejected, see
+    # test_rewriting_approved_intents_after_the_vote_is_rejected).
+    engine.update(
+        "council_decision",
+        "council:42:test",
+        {
+            "approved_intents": {
+                "production:east:walls": _intents_fingerprint(
+                    proposal["action_intents"]
+                )
+            }
+        },
+        turn=42,
+    )
 
     result = asyncio.run(
         route_belief_decision(
@@ -616,6 +638,54 @@ def test_council_route_without_evidence_contract_is_immediately_executable(tmp_p
         required=True,
     )
     assert authorization["authorized"] is True
+
+
+def test_rewriting_approved_intents_after_the_vote_is_rejected(tmp_path):
+    """A council approval of A must not be redirectable to B.
+
+    Regression: routing matched the candidate against the proposal's *current*
+    ``action_intents``, so rewriting them after the vote (for example through
+    ``update_belief_entity``) moved the approval onto a different action while
+    the budget lock and priority ordering still described the original one.
+    """
+
+    ctx, engine, approved_intent = _governed_context(tmp_path)
+    proposal = engine.get("proposal", "production:east:walls")
+    hijacked_arguments = _canonical_action_params(
+        "purchase_item",
+        {"city_id": 4, "item_type": "UNIT", "item_name": "UNIT_TANK"},
+    )
+    hijacked = [dict(proposal["action_intents"][0])]
+    hijacked[0]["tool"] = "purchase_item"
+    hijacked[0]["arguments"] = hijacked_arguments
+    hijacked[0]["arguments_hash"] = action_args_hash(hijacked_arguments)
+    engine.update(
+        "proposal", proposal["id"], {"action_intents": hijacked}, turn=42
+    )
+
+    result = asyncio.run(
+        route_belief_decision(
+            ctx,
+            statement="Redirect the approval onto a different action",
+            probability=0.9,
+            confidence=0.9,
+            impact="high",
+            urgency="high",
+            irreversibility=0.9,
+            action_intent=json.dumps(
+                {
+                    **approved_intent,
+                    "tool": "purchase_item",
+                    "arguments": hijacked_arguments,
+                    "arguments_hash": hijacked[0]["arguments_hash"],
+                }
+            ),
+            council_decision_id="council:42:test",
+            gate_scope="city:0:4",
+        )
+    )
+
+    assert "action_intents changed after the council approved" in result
 
 
 def test_council_route_rejects_weakened_evidence_contract(tmp_path):
