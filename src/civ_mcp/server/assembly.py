@@ -48,6 +48,8 @@ class AppContext:
     beliefs: BeliefEngine
     belief_mode: BeliefMode = BeliefMode.ENFORCE
     auto_resume_ready: asyncio.Event | None = None
+    # Serializes the one-time journal replay in pipeline._bind_belief_engine.
+    belief_bind_lock: asyncio.Lock | None = None
 
 
 DSH_AUTO_RESUME_ENV = "CIV_MCP_DSH_AUTO_RESUME"
@@ -565,6 +567,7 @@ async def lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
             beliefs=beliefs,
             belief_mode=belief_mode,
             auto_resume_ready=auto_resume_ready,
+            belief_bind_lock=asyncio.Lock(),
         )
     finally:
         if auto_resume_task is not None:

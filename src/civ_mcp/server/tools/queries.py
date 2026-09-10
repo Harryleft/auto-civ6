@@ -41,7 +41,9 @@ async def get_game_overview(ctx: Context) -> str:
             civ, seed = await gs.get_game_identity()
             logger.bind_game(civ, seed)
             if pipeline._get_belief_mode(ctx).records_events:
-                pipeline._get_beliefs(ctx).bind_game(civ, seed)
+                await pipeline._bind_belief_engine(
+                    ctx, pipeline._get_beliefs(ctx), civ=civ, seed=seed
+                )
             spatial.bind_game(civ, seed)
             heartbeat.bind_game(civ, seed)
             gs.spatial = spatial
