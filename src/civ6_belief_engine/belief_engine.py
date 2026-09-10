@@ -1018,6 +1018,54 @@ def default_beliefs_directory() -> Path:
     return Path.home() / ".civ6-mcp" / "beliefs"
 
 
+try:  # POSIX
+    import fcntl
+except ImportError:  # pragma: no cover - Windows
+    fcntl = None  # type: ignore[assignment]
+
+try:  # Windows
+    import msvcrt
+except ImportError:  # pragma: no cover - POSIX
+    msvcrt = None  # type: ignore[assignment]
+
+
+# One exclusive OS lock per journal, per process. Keyed by path because
+# reloading a journal inside one process (a restart, or a test rebinding the
+# same directory) is legitimate; a *second process* appending to the same
+# append-only file is not — it would interleave sequence numbers and, because
+# the loader rewrites the file when it meets a torn line, could drop events.
+_JOURNAL_LOCKS: dict[Path, Any] = {}
+
+
+def _acquire_journal_lock(path: Path) -> None:
+    """Take an exclusive advisory lock, or raise if another process holds it."""
+
+    if path in _JOURNAL_LOCKS:
+        return
+    lock_path = path.with_name(path.name + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = lock_path.open("a+b")
+    try:
+        if fcntl is not None:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        elif msvcrt is not None:  # pragma: no cover - Windows
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:  # pragma: no cover - no locking primitive available
+            log.warning(
+                "No file-locking primitive available; concurrent writers to %s "
+                "cannot be detected",
+                path,
+            )
+    except OSError as exc:
+        handle.close()
+        raise BeliefEngineError(
+            "another process is already writing this belief journal "
+            f"({path}); FireTuner and the belief journal both allow only one "
+            "writer — stop the other client first"
+        ) from exc
+    _JOURNAL_LOCKS[path] = handle
+
+
 class BeliefEngine:
     """Persistent current-world model backed by an append-only event log."""
 
@@ -1071,6 +1119,10 @@ class BeliefEngine:
         self.game_id = game_id
         self.directory.mkdir(parents=True, exist_ok=True)
         self.path = self.directory / f"belief_{_slug(game_id)}.jsonl"
+        # Fail loudly if another process already owns this journal, instead of
+        # interleaving sequence numbers and losing events to the loader's
+        # repair rewrite.
+        _acquire_journal_lock(self.path)
         self._load()
 
     def _require_bound(self) -> Path:
