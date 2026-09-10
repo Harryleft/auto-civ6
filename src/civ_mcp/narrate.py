@@ -1019,6 +1019,21 @@ def narrate_pending_deals(deals: list[lq.PendingDeal]) -> str:
     return "\n".join(lines)
 
 
+def _describe_trade_item(item: lq.TestTradeItem) -> str:
+    """One compact line for a trade-test item.
+
+    ``TestTradeItem`` carries ids rather than display names: ``value_id`` is the
+    yield or resource (``YIELD_GOLD``) and ``subtype_id`` the agreement
+    (``DIPLOACTION_OPEN_BORDERS``). Strip the enum prefixes so the line reads
+    like the rest of the narration.
+    """
+
+    label = (item.value_id or item.subtype_id or item.item_type).replace("_", " ").title()
+    amount = f" x{item.amount}" if item.amount > 1 else ""
+    duration = f" for {item.duration} turns" if item.duration > 0 else ""
+    return f"{label}{amount}{duration}"
+
+
 def narrate_test_trade(result: lq.TestTradeResult) -> str:
     lines = [
         f"Trade test with {result.other_civ_name} (player {result.other_player_id}):"
