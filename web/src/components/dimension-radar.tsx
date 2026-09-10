@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactElement } from "react";
+
 import {
   RadarChart,
   PolarGrid,
@@ -50,15 +52,26 @@ export const DIMENSIONS: {
 ];
 
 // Custom tick renderer: icon at each axis endpoint
+type IconTickProps = {
+  payload: { value: string };
+  x: number;
+  y: number;
+};
+
+// What recharts actually hands a tick render prop: the same payload, but the
+// coordinates are typed `string | number` because a tick may be positioned by
+// percentage. PolarAngleAxis always passes numbers at runtime.
+type IconTickRenderProps = {
+  payload: { value: string };
+  x: string | number;
+  y: string | number;
+};
+
 function IconTick({
   payload,
   x,
   y,
-}: {
-  payload: { value: string };
-  x: number;
-  y: number;
-}) {
+}: IconTickProps) {
   const dim = DIMENSIONS.find((d) => d.label === payload.value);
   if (!dim) return null;
   const Icon = dim.icon;
@@ -100,7 +113,10 @@ export function DimensionRadar({
         <PolarGrid stroke="var(--color-marble-200, #d4cfc3)" />
         <PolarAngleAxis
           dataKey="dimension"
-          tick={IconTick as any}
+          // recharts types `tick` from its own props bag, so the component
+          // reference needs an explicit render-prop signature. Narrow it here
+          // instead of widening the whole expression to `any`.
+          tick={IconTick as unknown as (props: IconTickRenderProps) => ReactElement}
         />
         <PolarRadiusAxis
           domain={[0, 100]}
