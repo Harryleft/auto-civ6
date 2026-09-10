@@ -96,7 +96,7 @@
 ## 开发与验证命令
 
 ```bash
-uv run pytest tests/ -q --ignore=tests/test_scorer.py     # 全量离线测试（test_scorer.py 是已知收集失败：根目录 evals 包未安装）；CI 跑同一命令
+uv run pytest tests/ -q                                   # 全量离线测试（662）；CI 跑同一命令
 uv run pytest tests/test_belief_engine.py -q -k "orphan"  # 按关键字跑单个测试
 ./scripts/deepseek_harness check                          # 安装/配置变更后的环境检查
 ./scripts/belief_coverage.py                              # 信念覆盖审计：决策支持率/预测结算（见 docs/belief-engine.md）

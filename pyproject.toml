@@ -90,6 +90,10 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The console script does not put the invocation directory on sys.path, so
+# `pytest` and `python -m pytest` disagreed about whether `evals` (a repo-root
+# package consumed by tests/test_scorer.py) was importable. Pin it explicitly.
+pythonpath = ["."]
 markers = [
     "property: hypothesis 属性测试（随机化不变量）",
     "golden: Lua 生成黄金契约测试",

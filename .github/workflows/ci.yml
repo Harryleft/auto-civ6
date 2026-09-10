@@ -30,4 +30,4 @@ jobs:
           python-version: "3.12"
       - run: pip install -e . pytest
       - run: python -m compileall -q src/civ_mcp
-      - run: python -m pytest tests/ -q --ignore=tests/test_scorer.py
+      - run: python -m pytest tests/ -q
