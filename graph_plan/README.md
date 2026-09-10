@@ -317,7 +317,7 @@ world delta 与 goal delta 共用 `graph_delta:{epoch}:{snapshot_id}`——同�
 
 ## 共识部分：融合优化方案（双方意见一致，可直接实施）
 
-1. **世界投影内容去重（修 V1 主体）**：把 `project_active_goals` 的去重模式移植到 `project_world_state`——attributes 与 observed 均未变的节点/边不进 upsert。不改 schema、不改 replay 语义，预期把每回合 graph.delta 从全量降到真实变化量（稳态回合可接近零）；replay 的 O(N²) 随之缓解。
+1. **世界投影内容去重（修 V1 主体）**：把 `project_active_goals` 的去重模式移植到 `project_world_state`——attributes 与 observed 均未变的节点/边不进 upsert。不改 schema、不改 replay 语义，预期把每回合 graph.delta 从全量降到真实变化量（稳态回合可接近零）。注意去重只减少写放大，**不会**降低 replay 成本——后者来自逐 delta 的全视图 `state_hash`，需独立修复（见 §执行记录 V1 的更正）。
 2. **威胁扫描独立降级（修 V2/V3）**：采集处 try/except → `threats=None`，激活部门层已存在的降级分支——fail-degraded 优于 fail-blind，军事评估退化为"不能认定安全"而非整个治理面消失。
 3. **ActionIntent 规范形落地路径**（README §4 已声明"规范形 = models.py 不可变类型"）：短期在 `route_belief_decision` 服务端将 action_intent dict 解析为 `ActionIntent` 类型校验后序列化回存（单一校验点）；长期授权状态机直接消费类型。列为阶段四前置，不阻塞当前切片。
 
@@ -333,7 +333,8 @@ world delta 与 goal delta 共用 `graph_delta:{epoch}:{snapshot_id}`——同�
 
 全部共识项已实施，342 passed（338 + 4 新回归）：
 
-- **V1 写放大（修复）**：`project_world_state` 移植 Goal 投影的内容去重——attributes/coverage/observed 均未变的节点与边不再进 upsert（观察标志翻转始终写入）。稳态回合的 graph.delta 从全量实体降至接近零字节；replay 的 O(N²) 哈希成本随之缓解。配套：`compare_shadow_projection` 的观察集判定从 `last_observed_turn == turn` 改为纯 observed 集合等价（去重后未变实体保留较早的 last_observed_turn，该字段语义变为"最后写入回合"）。注意：世界 delta 仍无条件记录（空 delta 也推进 snapshot_id/turn 标记，否则军事部的同回合图判定会误报陈旧）。
+- **V1 写放大（修复）**：`project_world_state` 移植 Goal 投影的内容去重——attributes/coverage/observed 均未变的节点与边不再进 upsert（观察标志翻转始终写入）。稳态回合的 graph.delta 从全量实体降至接近零字节。配套：`compare_shadow_projection` 的观察集判定从 `last_observed_turn == turn` 改为纯 observed 集合等价（去重后未变实体保留较早的 last_observed_turn，该字段语义变为"最后写入回合"）。注意：世界 delta 仍无条件记录（空 delta 也推进 snapshot_id/turn 标记，否则军事部的同回合图判定会误报陈旧）。
+  - **更正（2026-09）**：原文称"replay 的 O(N²) 哈希成本随之缓解"不成立。内容去重只降低**写入字节**；`replay_graph_events` 每个 delta 后的**全视图** `state_hash` 是与"delta 里装多少"无关的固定 O(V) × D 次。真实日志（43.0MB / 14,772 事件 / 420 个 graph.delta）实测 `bind_game()` 48.4s、峰值 RSS 990MB，其中 148 次 `state_hash` 占 46.7s（96%）。已由 `replay_graph_events(verify="final")` 修复：仅校验最新 checkpoint，实测 **2.37s（20 倍）**，节点/边数与重放结果一致。`verify="all"` 保留逐 delta 校验用于定位分歧点。
 - **V2 威胁扫描 fail-degraded（修复，用户裁决 B）**：`get_governance_snapshot` 对 `get_threat_scan` 单独 try/except（LuaError/ValueError → `threats=None`，连接级失败仍快速失败）——激活部门层原有的 `threat_scan_available=False` 降级分支（原为死代码）。扫描失败时治理简报照常返回，军事评估降级为"不能认定城市安全"。
 - **V4 delta 事件 ID（修复）**：`record_graph_delta` 增加 `kind` 参数（world/goals），事件 ID 与 payload 均带流标识，同快照双 delta 不再同 ID。
 - **V5 城市 ID 单点（修复）**：`city_node_id()` 收敛进 `graph/project.py` 并导出；军事部改用该函数，不再本地拼接格式。
