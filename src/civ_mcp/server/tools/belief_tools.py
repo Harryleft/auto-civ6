@@ -60,6 +60,25 @@ _GRAPH_GOVERNANCE_ENTITY_TYPES = frozenset(
     }
 )
 
+
+def _intents_fingerprint(intents: Any) -> str:
+    """Content identity of an intent set the council approved.
+
+    Routing compares the proposal's *current* ``action_intents`` against what
+    was approved. Without this, rewriting the proposal after the vote (for
+    example through ``update_belief_entity``) silently redirects an approval
+    from intent A to intent B — the budget lock and the council's priority
+    ordering were both computed for A.
+    """
+
+    canonical = sorted(
+        json.dumps(item, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+        for item in (intents or [])
+        if isinstance(item, dict)
+    )
+    return action_args_hash({"intents": canonical})
+
+
 # ---------------------------------------------------------------------------
 # Belief Engine
 # ---------------------------------------------------------------------------
@@ -975,6 +994,18 @@ async def resolve_governance_council(
         )
         payload = _governance_payload(decision)
         council_state = payload.pop("status")
+        selected_set = set(selected)
+        # Pin the approved intent content. Routing must reject a proposal whose
+        # action_intents were rewritten after the vote, otherwise a council
+        # approval of A can be redirected to execute B while the budget lock and
+        # priority ordering were both computed for A.
+        approved_intents = {
+            item.proposal_id: _intents_fingerprint(
+                _governance_payload(item.action_intents)
+            )
+            for item in proposals
+            if item.proposal_id in selected_set
+        }
         payload.update(
             {
                 "status": "resolved",
@@ -985,6 +1016,7 @@ async def resolve_governance_council(
                     "snapshot_id"
                 ),
                 "effective_budget_limits": limits,
+                "approved_intents": approved_intents,
             }
         )
         persisted = engine.upsert(
@@ -993,7 +1025,6 @@ async def resolve_governance_council(
             payload,
             turn=turn,
         )
-        selected_set = set(selected)
         considered_set = {item.proposal_id for item in proposals}
         for proposal_typed in proposals:
             approved = proposal_typed.proposal_id in selected_set
@@ -1355,6 +1386,19 @@ async def route_belief_decision(
             if not proposal or proposal.get("council_decision_id") != council_decision_id:
                 raise BeliefEngineError(
                     f"Council-selected proposal not found: {proposal_id}"
+                )
+            # The council approved a specific intent set; a later rewrite of the
+            # proposal must invalidate the approval rather than redirect it.
+            pinned = (council.get("approved_intents") or {}).get(proposal_id)
+            if pinned is None:
+                raise BeliefEngineError(
+                    "council decision did not pin approved intents for this "
+                    "proposal; re-run resolve_governance_council"
+                )
+            if pinned != _intents_fingerprint(proposal.get("action_intents")):
+                raise BeliefEngineError(
+                    "proposal action_intents changed after the council approved "
+                    "them; re-run resolve_governance_council"
                 )
             candidate_hash = action_args_hash(intent_params)
             approved_intent = next(
