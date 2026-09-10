@@ -153,8 +153,8 @@ class TestReviewFollowUps:
                 "decision", "decision_legacy", {"decision_state": "authorized"}, turn=6
             )
 
-    def test_reroute_supersedes_stale_authorization_for_same_intent(self):
-        instance = BeliefEngine(run_id="test-run")
+    def test_reroute_supersedes_stale_authorization_for_same_intent(self, tmp_path):
+        instance = BeliefEngine(run_id="test-run", directory=tmp_path)
         instance.bind_game("CIVILIZATION_TEST", 42)
         intent = {
             "tool": "unit_action",
@@ -195,8 +195,8 @@ class TestReviewFollowUps:
         ]
         assert [item["id"] for item in non_terminal] == [second["id"]]
 
-    def test_reroute_never_supersedes_in_flight_authorization(self):
-        instance = BeliefEngine(run_id="test-run")
+    def test_reroute_never_supersedes_in_flight_authorization(self, tmp_path):
+        instance = BeliefEngine(run_id="test-run", directory=tmp_path)
         instance.bind_game("CIVILIZATION_TEST", 42)
         intent = {
             "tool": "unit_action",
