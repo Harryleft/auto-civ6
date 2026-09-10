@@ -516,7 +516,12 @@ async def lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
     # Auto-boot: launch game + load save when running as eval
     save_file = os.environ.get("CIV_MCP_SAVE_FILE")
     if save_file:
+        # Eval mode loads the scenario save inline, so by the time _auto_boot
+        # returns no background recovery owns the connection. Release the tool
+        # gate that pipeline._logged awaits first: leaving it unset makes every
+        # gate-passing tool wait forever on an event nobody will ever set.
         await _auto_boot(conn, save_file)
+        auto_resume_ready.set()
     elif _dsh_auto_resume_enabled():
         # DSH recovery is an explicit opt-in and intentionally does not reuse
         # _auto_boot: that eval-only path deletes 0_MCP_* saves before loading.

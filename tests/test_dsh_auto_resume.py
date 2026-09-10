@@ -395,11 +395,12 @@ def test_auto_resume_background_cancellation_does_not_start_watchers(monkeypatch
     watchdog.start.assert_not_called()
 
 
-def test_lifespan_yields_before_dsh_recovery_finishes(monkeypatch):
-    """A slow GUI recovery must not block the MCP server handshake."""
+def _install_lifespan_fakes(monkeypatch):
+    """Install the collaborators ``lifespan`` touches and return the watchers.
 
-    monkeypatch.setenv(server.DSH_AUTO_RESUME_ENV, "1")
-    monkeypatch.delenv("CIV_MCP_SAVE_FILE", raising=False)
+    Shared by the startup-branch tests so each one only expresses its own
+    precondition (which env var selects the branch) and its own assertion.
+    """
 
     class FakeEmitter:
         run_id = "test-run"
@@ -425,9 +426,11 @@ def test_lifespan_yields_before_dsh_recovery_finishes(monkeypatch):
             while not self.should_exit:
                 await asyncio.sleep(0)
 
-    fake_camera = SimpleNamespace(start=MagicMock(), stop=AsyncMock())
-    fake_popup = SimpleNamespace(start=MagicMock(), stop=AsyncMock())
-    fake_watchdog = SimpleNamespace(start=MagicMock(), stop=AsyncMock())
+    fakes = SimpleNamespace(
+        camera=SimpleNamespace(start=MagicMock(), stop=AsyncMock()),
+        popup=SimpleNamespace(start=MagicMock(), stop=AsyncMock()),
+        watchdog=SimpleNamespace(start=MagicMock(), stop=AsyncMock()),
+    )
 
     monkeypatch.setattr(server, "TelemetryEmitter", FakeEmitter)
     monkeypatch.setattr(server, "LocalSink", lambda: object())
@@ -441,12 +444,12 @@ def test_lifespan_yields_before_dsh_recovery_finishes(monkeypatch):
     monkeypatch.setattr(server, "MapCapture", lambda _emitter: object())
     monkeypatch.setattr(server, "GameState", lambda _conn: object())
     monkeypatch.setattr(server, "BeliefEngine", lambda run_id: object())
-    monkeypatch.setattr(server, "CameraController", lambda _conn: fake_camera)
-    monkeypatch.setattr(server, "PopupWatcher", lambda _conn: fake_popup)
+    monkeypatch.setattr(server, "CameraController", lambda _conn: fakes.camera)
+    monkeypatch.setattr(server, "PopupWatcher", lambda _conn: fakes.popup)
     monkeypatch.setattr(
         server,
         "GameOverWatchdog",
-        lambda _gs, _logger: fake_watchdog,
+        lambda _gs, _logger: fakes.watchdog,
     )
     monkeypatch.setattr(server, "create_app", lambda _gs: object())
     monkeypatch.setattr(server.uvicorn, "Config", lambda *args, **kwargs: object())
@@ -454,6 +457,16 @@ def test_lifespan_yields_before_dsh_recovery_finishes(monkeypatch):
     monkeypatch.setattr(server.heartbeat, "init", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(server.heartbeat, "bind_eval", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(server.heartbeat, "write", lambda *_args, **_kwargs: None)
+    return fakes
+
+
+def test_lifespan_yields_before_dsh_recovery_finishes(monkeypatch):
+    """A slow GUI recovery must not block the MCP server handshake."""
+
+    monkeypatch.setenv(server.DSH_AUTO_RESUME_ENV, "1")
+    monkeypatch.delenv("CIV_MCP_SAVE_FILE", raising=False)
+
+    fakes = _install_lifespan_fakes(monkeypatch)
 
     async def blocked_recovery(*_args):
         try:
@@ -468,15 +481,47 @@ def test_lifespan_yields_before_dsh_recovery_finishes(monkeypatch):
         manager = server.lifespan(server.mcp)
         context = await asyncio.wait_for(manager.__aenter__(), timeout=0.25)
         observed_context.append(context)
-        assert context.camera is fake_camera
+        assert context.camera is fakes.camera
         assert context.auto_resume_ready.is_set() is False
-        assert fake_camera.start.call_count == 0
-        assert fake_popup.start.call_count == 0
-        assert fake_watchdog.start.call_count == 0
+        assert fakes.camera.start.call_count == 0
+        assert fakes.popup.start.call_count == 0
+        assert fakes.watchdog.start.call_count == 0
         await manager.__aexit__(None, None, None)
 
     asyncio.run(exercise_lifespan())
     assert observed_context[0].auto_resume_ready.is_set() is True
-    assert fake_camera.stop.await_count == 1
-    assert fake_popup.stop.await_count == 1
-    assert fake_watchdog.stop.await_count == 1
+    assert fakes.camera.stop.await_count == 1
+    assert fakes.popup.stop.await_count == 1
+    assert fakes.watchdog.stop.await_count == 1
+
+
+def test_lifespan_releases_tool_gate_in_eval_mode(monkeypatch):
+    """CIV_MCP_SAVE_FILE must not leave ``auto_resume_ready`` unset.
+
+    ``pipeline._logged`` awaits that event before every gate-passing tool, so a
+    branch that never sets it hangs the whole eval run on its first tool call.
+    """
+
+    monkeypatch.setenv("CIV_MCP_SAVE_FILE", "0_MCP_0001")
+    monkeypatch.delenv(server.DSH_AUTO_RESUME_ENV, raising=False)
+
+    fakes = _install_lifespan_fakes(monkeypatch)
+    booted: list[str] = []
+
+    async def fake_auto_boot(_conn, save_file):
+        booted.append(save_file)
+
+    monkeypatch.setattr(server, "_auto_boot", fake_auto_boot)
+    observed_context = []
+
+    async def exercise_lifespan():
+        manager = server.lifespan(server.mcp)
+        context = await asyncio.wait_for(manager.__aenter__(), timeout=0.25)
+        observed_context.append(context)
+        assert context.auto_resume_ready.is_set() is True
+        await manager.__aexit__(None, None, None)
+
+    asyncio.run(exercise_lifespan())
+    assert booted == ["0_MCP_0001"]
+    assert fakes.watchdog.stop.await_count == 1
+
