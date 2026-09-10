@@ -1001,12 +1001,23 @@ def evaluate_condition(rule: dict[str, Any], metrics: dict[str, Any]) -> bool | 
     raise BeliefEngineError(f"Unsupported condition operator: {operator}")
 
 
+def default_beliefs_directory() -> Path:
+    """Where journals live when a caller does not pick a directory.
+
+    A seam rather than an inline expression: tests redirect it so that an
+    engine constructed without ``directory=`` can never append to the user's
+    real evidence journal.
+    """
+
+    return Path.home() / ".civ6-mcp" / "beliefs"
+
+
 class BeliefEngine:
     """Persistent current-world model backed by an append-only event log."""
 
     def __init__(self, run_id: str, directory: Path | None = None) -> None:
         self.run_id = run_id
-        self.directory = directory or Path.home() / ".civ6-mcp" / "beliefs"
+        self.directory = directory or default_beliefs_directory()
         self.game_id: str | None = None
         self.path: Path | None = None
         self._events: list[dict[str, Any]] = []
