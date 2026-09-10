@@ -16,7 +16,7 @@ import time
 from typing import TYPE_CHECKING
 
 from civ_mcp import lua as lq
-from civ_mcp.connection import GameConnection, LuaError
+from civ_mcp.connection import SLOW_MUTATION_TIMEOUT, GameConnection, LuaError
 from civ_mcp.narrate import (
     narrate_combat_estimate,
     narrate_move_discoveries,
@@ -702,13 +702,17 @@ class GameState:
         fortify_result = ""
         try:
             lua_fort = lq.build_fortify_remaining_units()
-            fort_lines = await self.conn.execute_mutation(lua_fort)
+            fort_lines = await self.conn.execute_mutation(
+                lua_fort, timeout=SLOW_MUTATION_TIMEOUT
+            )
             fortify_result = _action_result(fort_lines)
         except Exception as e:
             log.debug("Fortify remaining failed: %s", e)
         # Then skip anything still with moves (GameCore context)
         lua = lq.build_skip_remaining_units()
-        lines = await self.conn.execute_mutation(lua, context="gamecore")
+        lines = await self.conn.execute_mutation(
+            lua, context="gamecore", timeout=SLOW_MUTATION_TIMEOUT
+        )
         skip_result = _action_result(lines)
         if fortify_result and not fortify_result.startswith("Error"):
             return f"{fortify_result}\n{skip_result}"
@@ -1140,7 +1144,7 @@ class GameState:
 
     async def set_policies(self, assignments: dict[int, str]) -> str:
         lua = lq.build_set_policies(assignments)
-        lines = await self.conn.execute_mutation(lua)
+        lines = await self.conn.execute_mutation(lua, timeout=SLOW_MUTATION_TIMEOUT)
         result = _action_result(lines)
         if not result.startswith("Error"):
             # Post-verify: RequestPolicyChanges can silently no-op (e.g. during era transitions)
@@ -1625,13 +1629,13 @@ class GameState:
 
     async def submit_congress(self) -> str:
         lua = lq.build_congress_submit()
-        lines = await self.conn.execute_mutation(lua)
+        lines = await self.conn.execute_mutation(lua, timeout=SLOW_MUTATION_TIMEOUT)
         return _action_result(lines)
 
     async def queue_wc_votes(self, votes: list[dict]) -> str:
         """Store agent voting preferences and register WC event handler."""
         lua = lq.build_register_wc_voter(votes=votes)
-        lines = await self.conn.execute_mutation(lua)
+        lines = await self.conn.execute_mutation(lua, timeout=SLOW_MUTATION_TIMEOUT)
         return _action_result(lines)
 
     # ------------------------------------------------------------------

@@ -18,6 +18,17 @@ from civ_mcp.lua._helpers import SENTINEL
 
 log = logging.getLogger(__name__)
 
+# Default per-command ceiling. It is sized for reads and light commands.
+DEFAULT_TIMEOUT = 5.0
+
+# Some mutations make the game do real work inline — fortifying or skipping the
+# whole army, swapping policy cards (yields are recomputed), resolving a World
+# Congress round. Those legitimately exceed the read timeout, and a timeout is
+# reported as MutationOutcomeUnknownError, which tells the caller the command
+# may already have run. That is a false positive for a command that is merely
+# slow: it costs the agent a verification round and invites duplicate actions.
+SLOW_MUTATION_TIMEOUT = 30.0
+
 
 class LuaError(Exception):
     """Raised when Lua code execution returns an error."""
@@ -172,7 +183,7 @@ class GameConnection:
             )
 
     async def execute_read(
-        self, lua_code: str, timeout: float = 5.0, require_sentinel: bool = True
+        self, lua_code: str, timeout: float = DEFAULT_TIMEOUT, require_sentinel: bool = True
     ) -> list[str]:
         """Execute Lua in GameCore context (read state). Returns parsed output lines."""
         await self._ensure_game_states()
@@ -183,7 +194,7 @@ class GameConnection:
     async def execute_write(
         self,
         lua_code: str,
-        timeout: float = 5.0,
+        timeout: float = DEFAULT_TIMEOUT,
         require_sentinel: bool = True,
         mutation: bool = False,
     ) -> list[str]:
@@ -203,7 +214,7 @@ class GameConnection:
         )
 
     async def execute_mutation(
-        self, lua_code: str, timeout: float = 5.0, context: str = "ingame"
+        self, lua_code: str, timeout: float = DEFAULT_TIMEOUT, context: str = "ingame"
     ) -> list[str]:
         """Execute a game-mutating command (moves, attacks, purchases, end_turn...).
 
@@ -236,7 +247,7 @@ class GameConnection:
         self,
         state_index: int,
         lua_code: str,
-        timeout: float = 5.0,
+        timeout: float = DEFAULT_TIMEOUT,
         mutation: bool = False,
         require_sentinel: bool = False,
     ) -> list[str]:
