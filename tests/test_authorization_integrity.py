@@ -137,3 +137,65 @@ def test_intents_fingerprint_ignores_non_mapping_entries():
     assert _intents_fingerprint([{"tool": "a"}, "not-a-dict", None]) == (
         _intents_fingerprint([{"tool": "a"}])
     )
+
+
+def test_authorization_from_a_pre_rollback_epoch_is_not_consumable(tmp_path):
+    """Crash window: the reload marker is durable, the sweep is not.
+
+    ``record_game_reload`` appends the epoch marker first and then cancels the
+    pending authorizations one by one. A crash in between leaves a journal
+    whose epoch counter advanced while its authorizations still look live.
+    ``authorize_action`` must reject them structurally rather than relying on a
+    sweep that may never have completed.
+    """
+
+    intent_params = {"unit_id": 1, "action": "move", "target_x": 4, "target_y": 4}
+    engine = BeliefEngine(run_id="epoch-auth", directory=tmp_path)
+    engine.bind_game("CIVILIZATION_TEST", 42)
+    engine.create(
+        "decision",
+        {
+            "statement": "Move the warrior",
+            "route": "fast",
+            "decision_state": "authorized",
+            "action_intent": {"tool": "unit_action", "params": intent_params},
+        },
+        turn=3,
+        entity_id="decision:epoch",
+    )
+    assert (
+        engine.authorize_action(
+            tool="unit_action", params=intent_params, turn=3, required=True
+        )["authorized"]
+        is True
+    )
+
+    # Marker written at epoch 2; the process died before the sweep ran.
+    engine._append(
+        "game.reloaded",
+        "epoch_marker",
+        {
+            "id": "epoch_2_3",
+            "epoch": 2,
+            "reason": "crash_after_marker",
+            "turn": 3,
+            "prior_epoch_max_turn": 3,
+            "details": {},
+        },
+        turn=3,
+    )
+
+    reloaded = BeliefEngine(run_id="epoch-auth", directory=tmp_path)
+    reloaded.bind_game("CIVILIZATION_TEST", 42)
+    assert reloaded.epoch == 2
+    stored = reloaded.get("decision", "decision:epoch")
+    # Both states are consumable by authorize_action; load-time recovery may
+    # have moved authorized -> retryable, which does not make it safe.
+    assert stored["decision_state"] in {"authorized", "retryable"}
+    assert stored["status"] == "active", "the reload sweep never ran"
+
+    result = reloaded.authorize_action(
+        tool="unit_action", params=intent_params, turn=3, required=True
+    )
+    assert result["authorized"] is False
+    assert result["decision_id"] is None

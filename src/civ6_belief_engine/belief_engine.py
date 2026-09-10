@@ -1891,6 +1891,24 @@ class BeliefEngine:
                 return int(event.get("epoch", 1)) == self._epoch
         return False
 
+    def _entity_created_in_current_epoch(self, entity_type: str, entity_id: str) -> bool:
+        """Whether an entity was *created* in the active game branch.
+
+        Unlike :meth:`_entity_is_in_current_epoch`, this inspects the first
+        event rather than the latest. Load-time recovery (for example
+        ``_recover_orphaned_executing_decisions``) rewrites an entity and, in
+        doing so, stamps a fresh event at the current epoch — which would make a
+        decision from an abandoned branch look current again.
+        """
+
+        for event in self._events:
+            if (
+                event.get("entity_type") == entity_type
+                and event.get("entity_id") == entity_id
+            ):
+                return int(event.get("epoch", 1)) == self._epoch
+        return False
+
     def _reconcile_observed_action_effects(
         self, observation: dict[str, Any], *, turn: int
     ) -> None:
@@ -2298,6 +2316,11 @@ class BeliefEngine:
             if item.get("decision_state") in {"authorized", "retryable"}
             and self._authorization_valid_on_turn(item, turn=turn)
             and self._action_matches(item.get("action_intent"), tool, params)
+            # An authorization minted in a game branch that no longer exists
+            # must not be consumable. record_game_reload normally invalidates
+            # them, but that depends on the rollback being detected (a manual
+            # load can skip it), so make the guarantee structural instead.
+            and self._entity_created_in_current_epoch("decision", item["id"])
         ]
         decision = decisions[0] if decisions else None
         if not required and decision is None:
