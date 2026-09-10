@@ -191,6 +191,14 @@ async def restart_and_load(ctx: Context, save_name: str | None = None) -> str:
     identity_before = gs._game_identity
 
     result = await game_launcher.restart_and_load(save_name, conn=gs.conn)
+    # Loading a save rewinds the world; mark the branch boundary so the
+    # authorizations recorded for the abandoned future stop being consumable.
+    await pipeline._record_game_reload_epoch(
+        ctx,
+        reason="restart_and_load_tool",
+        turn=pipeline._get_logger(ctx)._turn,
+        details={"save": save_name},
+    )
 
     # Reconnect and verify correct game loaded
     conn = gs.conn
@@ -214,6 +222,12 @@ async def restart_and_load(ctx: Context, save_name: str | None = None) -> str:
                     actual,
                 )
                 result2 = await game_launcher.restart_and_load(save_name, conn=gs.conn)
+                await pipeline._record_game_reload_epoch(
+                    ctx,
+                    reason="restart_and_load_tool_retry",
+                    turn=pipeline._get_logger(ctx)._turn,
+                    details={"save": save_name},
+                )
                 for attempt in range(30):
                     try:
                         await conn.reconnect()
