@@ -33,6 +33,9 @@ from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
     from civ_mcp.connection import GameConnection
+    # Optional launcher extra; imported lazily inside the platform paths that
+    # need it, so it is annotation-only at module scope.
+    import PIL.Image
 
 log = logging.getLogger(__name__)
 

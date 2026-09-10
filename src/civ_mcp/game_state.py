@@ -13,7 +13,7 @@ import logging
 import re
 import time
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from civ_mcp import lua as lq
 from civ_mcp.connection import SLOW_MUTATION_TIMEOUT, GameConnection, LuaError
