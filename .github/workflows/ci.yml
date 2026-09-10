@@ -8,7 +8,7 @@ on:
 
 jobs:
   web:
-    name: Web — lint & typecheck
+    name: Web — lint, typecheck & tests
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -16,18 +16,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
-      - run: bun install
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('web/bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+      - run: bun install --frozen-lockfile
       - run: bun run lint
       - run: bunx tsc --noEmit
+      # vitest was configured but never invoked here, so 20 tests were dead.
+      - run: bun run test
 
   python:
-    name: Python — typecheck & tests
+    name: Python — compile & tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -e . pytest
-      - run: python -m compileall -q src/civ_mcp
-      - run: python -m pytest tests/ -q
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
+          restore-keys: ${{ runner.os }}-uv-
+      - run: pip install uv
+      # Install from the lockfile, not from a hand-written package list: the
+      # old `pip install -e . pytest` omitted hypothesis, which three test
+      # modules import, so pytest aborted collection and ran zero tests.
+      - run: uv sync --locked
+      - run: uv run python -m compileall -q src/civ_mcp
+      - run: uv run pytest tests/ -q
