@@ -196,12 +196,16 @@ def test_belief_tool_logs_raw_result_before_filtering(monkeypatch):
     async def flush(_ctx):
         return None
 
+    async def ready(_ctx):
+        return None
+
     monkeypatch.setenv("CIV_MCP_RESULT_MAX_CHARS", "2000")
     monkeypatch.setattr(
         server_module,
         "_get_belief_mode",
         lambda _ctx: SimpleNamespace(records_events=True),
     )
+    monkeypatch.setattr(server_module, "_await_auto_resume_ready", ready)
     monkeypatch.setattr(server_module, "_belief_context", belief_context)
     monkeypatch.setattr(server_module, "_flush_belief_events", flush)
     monkeypatch.setattr(server_module, "_get_logger", lambda _ctx: Logger())
