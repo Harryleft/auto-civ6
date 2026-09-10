@@ -86,7 +86,20 @@ dev = [
     "hypothesis>=6.100",
     "matplotlib>=3.10.8",
     "pytest>=8.0",
+    "ruff>=0.16",
 ]
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+# Only rules that catch real defects, not style: undefined names, redefinitions,
+# assert/exception misuse, and syntax errors. The default rule set reports ~330
+# findings here, most of them cosmetic; widening should be incremental so the
+# gate stays green and therefore useful.
+# F821 already found a reachable NameError in narrate.py (`_describe_trade_item`
+# was never defined) and a missing `Any` import in game_state.py.
+select = ["E9", "F63", "F7", "F82", "F811", "F821"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
