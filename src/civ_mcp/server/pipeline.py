@@ -616,7 +616,7 @@ async def _record_belief_tool_result(
         logger = _get_logger(ctx)
         if not engine.bound:
             civ, seed = await _get_game(ctx).get_game_identity()
-            engine.bind_game(civ, seed)
+            await _bind_belief_engine(ctx, engine, civ=civ, seed=seed)
             logger.bind_game(civ, seed)
         if logger._turn is None:
             overview = await _get_game(ctx).get_game_overview()
@@ -916,6 +916,41 @@ async def _logged(
         pass
     return _return_result(result)
 
+
+async def _bind_belief_engine(
+    ctx: Context,
+    engine: BeliefEngine,
+    *,
+    civ: str,
+    seed: int,
+) -> None:
+    """Bind the world model without stalling the event loop.
+
+    ``bind_game`` replays the whole append-only journal. On a real 110-turn
+    game that measured 2.4s after the replay-verification fix (48s before it),
+    so running it inline stalls every other concurrent MCP request.
+
+    Two tool handlers can both observe ``not engine.bound``, and the thread hop
+    is a real interleaving point that the previous synchronous call did not
+    have: without the lock they would replay the same journal at once and
+    double-append the orphaned-decision recovery events. Contexts built by
+    tests may omit the lock; fall back to the inline call there.
+    """
+
+    if engine.bound:
+        return
+    lock = getattr(
+        ctx.request_context.lifespan_context, "belief_bind_lock", None
+    )
+    if lock is None:
+        engine.bind_game(civ, seed)
+        return
+    async with lock:
+        if engine.bound:
+            return
+        await asyncio.to_thread(engine.bind_game, civ, seed)
+
+
 async def _belief_context(ctx: Context) -> tuple[BeliefEngine, int]:
     """Bind the world model to the live game and return its current turn."""
     engine = _get_beliefs(ctx)
@@ -923,7 +958,7 @@ async def _belief_context(ctx: Context) -> tuple[BeliefEngine, int]:
     gs = _get_game(ctx)
     if not engine.bound:
         civ, seed = await gs.get_game_identity()
-        engine.bind_game(civ, seed)
+        await _bind_belief_engine(ctx, engine, civ=civ, seed=seed)
         logger.bind_game(civ, seed)
     turn = logger._turn
     if turn is None:
