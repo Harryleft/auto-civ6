@@ -102,6 +102,31 @@ async def _flush_belief_events(ctx: Context) -> None:
         await _get_logger(ctx)._emitter.emit(EVENT_BELIEF_EVENT, event)
 
 
+async def _record_game_reload_epoch(
+    ctx: Context,
+    *,
+    reason: str,
+    turn: int | None = None,
+    details: dict[str, Any] | None = None,
+) -> None:
+    """Mark a world rollback so the abandoned branch stops authorizing actions.
+
+    Every path that loads a save must call this: the append-only journal still
+    describes a future the game no longer has, and the authorizations recorded
+    in it would otherwise stay consumable. Never raises — a bookkeeping failure
+    must not break the recovery the caller is performing.
+    """
+
+    try:
+        engine = _get_beliefs(ctx)
+        if not _get_belief_mode(ctx).records_events or not engine.bound:
+            return
+        engine.record_game_reload(reason=reason, turn=turn, details=details or {})
+        await _flush_belief_events(ctx)
+    except Exception:
+        log.error("Failed to record game reload epoch (%s)", reason, exc_info=True)
+
+
 def _format_belief_turn_brief(brief: dict[str, Any]) -> str:
     """Render the machine-generated belief state into the turn-loop context."""
     gate = brief.get("decision_gate") or {}
@@ -874,24 +899,12 @@ async def _logged(
                 # The game state rolled back to an older save; events recorded
                 # after that point describe a future that no longer happened.
                 # Mark a new epoch so the append-only stream stays interpretable.
-                try:
-                    engine = _get_beliefs(ctx)
-                    if _get_belief_mode(ctx).records_events and engine.bound:
-                        engine.record_game_reload(
-                            reason="connection_recovery_restart_and_load",
-                            turn=(
-                                int(turn_num)
-                                if isinstance(turn_num, int)
-                                else None
-                            ),
-                            details={"save": str(save)},
-                        )
-                        await _flush_belief_events(ctx)
-                except Exception:
-                    log.error(
-                        "CONNECTION RECOVERY: failed to record game reload epoch",
-                        exc_info=True,
-                    )
+                await _record_game_reload_epoch(
+                    ctx,
+                    reason="connection_recovery_restart_and_load",
+                    turn=int(turn_num) if isinstance(turn_num, int) else None,
+                    details={"save": str(save)},
+                )
                 gs = _get_game(ctx)
                 for rc_attempt in range(30):
                     try:
