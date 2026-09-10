@@ -33,18 +33,31 @@ evals/.env
 civbench_sas_token.txt
 notebooks/.env
 
-# Paper (LaTeX source, figures, build artifacts — kept locally)
-docs/paper/
+# Paper (LaTeX source, figures, build artifacts — kept locally).
+# The scenario spec is a tracked deliverable; excluding the directory itself
+# would stop git from descending into it, so exclude its contents and
+# re-include that one file.
+docs/paper/*
+!docs/paper/scenario-spec.md
 
 # Save files
 /saves/
 
-# CivBench eval artifacts
-evals/saves/*.Civ6Save  # benchmark saves are tracked
+# CivBench eval artifacts.
+# Benchmark saves under evals/saves/ are tracked fixtures, so no pattern here
+# may cover them. (A previous line read
+# `evals/saves/*.Civ6Save  # benchmark saves are tracked`; gitignore has no
+# trailing comments, so the whole line became a literal pattern that matched
+# nothing.)
 evals/.resume_context.md
 eval-logs/
 .vercel
 scripts/mission_control.sh
-docs/agent-essays/
+docs/agent-essays/*
+!docs/agent-essays/the-hallucination-of-competence.md
 mission-control/
 docs/analysis/
+
+# Mutation testing (tool.mutmut)
+mutants/
+.mutmut-cache
