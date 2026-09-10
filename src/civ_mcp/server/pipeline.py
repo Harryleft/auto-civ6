@@ -398,6 +398,62 @@ _ROUTINE_UNIT_ACTIONS = {
     "automate",
 }
 
+# Tools that execute without a belief route. Every registered MCP tool must be
+# classified exactly once: in _BELIEF_GATED_TOOLS, in _ROUTINE_TOOLS, or by one
+# of the parameter-dependent branches below (unit_action / run_lua /
+# propose_trade). tests/test_tool_gate_coverage.py fails when a newly
+# registered tool is in none of them, and _belief_route_required fails closed
+# in the meantime, so a forgotten classification cannot silently grant an
+# ungoverned execution path.
+_ROUTINE_TOOLS = frozenset({
+    # Read-only queries: no route needed.
+    "get_barbarian_overview", "get_belief_metrics", "get_belief_state",
+    "get_belief_trace", "get_builder_tasks", "get_calibration_report",
+    "get_cities", "get_city_production", "get_city_states",
+    "get_climate_overview", "get_combat_estimate", "get_dedications",
+    "get_diary", "get_diplomacy", "get_district_advisor",
+    "get_empire_resources", "get_era_progress", "get_game_overview",
+    "get_global_settle_advisor", "get_governance_brief",
+    "get_governors", "get_gp_advisor", "get_great_people",
+    "get_great_people_overview", "get_map_area", "get_notifications",
+    "get_pantheon_beliefs", "get_pathing_estimate",
+    "get_pending_diplomacy", "get_pending_trades", "get_policies",
+    "get_purchasable_tiles", "get_religion_beliefs",
+    "get_religion_overview", "get_religion_spread",
+    "get_settle_advisor", "get_spies", "get_strategic_map",
+    "get_tech_civics", "get_trade_destinations", "get_trade_options",
+    "get_trade_routes", "get_turn_brief", "get_unit_promotions",
+    "get_units", "get_victory_progress", "get_village_overview",
+    "get_wonder_advisor", "get_world_congress",
+
+    # Belief/governance control plane: mutates the journal, never the game.
+    "cancel_routed_action", "delete_belief_entity",
+    "rebalance_hypotheses_bayesian", "rebalance_hypothesis_pool",
+    "recompute_failure_attribution", "record_action_verification",
+    "record_observation", "resolve_governance_council",
+    "resolve_prediction", "review_belief_engine",
+    "review_governance_proposal", "route_belief_decision",
+    "submit_governance_proposal", "update_belief_entity",
+    "upsert_belief", "upsert_dynamic_plan",
+    "upsert_failure_attribution", "upsert_hypothesis",
+    "upsert_prediction", "upsert_strategic_goal",
+
+    # Process and save-file lifecycle: outside the game write path.
+    "kill_game", "launch_game", "list_saves", "load_game_save",
+    "load_save", "load_save_from_menu", "restart_and_load",
+
+    # Routine actions, plus tools the preflight handles separately.
+    "assess_route_combat_risk", "choose_dedication", "dismiss_popup",
+    "end_turn", "run_trend_forecast", "set_plan_status",
+    "skip_remaining_units",
+})
+
+# Tools whose need for a route depends on their arguments, so they are decided
+# by _belief_route_required rather than by a static set. run_lua and
+# propose_trade are the mirror case: listed as gated, with a parameter branch
+# that can exempt a read-only variant.
+_CONDITIONAL_GATE_TOOLS = frozenset({"unit_action"})
+
 
 def _belief_route_required(tool_name: str, params: dict[str, Any]) -> bool:
     if tool_name == "run_lua":
@@ -412,9 +468,12 @@ def _belief_route_required(tool_name: str, params: dict[str, Any]) -> bool:
         return False
     if tool_name in _BELIEF_GATED_TOOLS:
         return True
-    if tool_name != "unit_action":
+    if tool_name == "unit_action":
+        return str(params.get("action", "")).lower() not in _ROUTINE_UNIT_ACTIONS
+    if tool_name in _ROUTINE_TOOLS:
         return False
-    return str(params.get("action", "")).lower() not in _ROUTINE_UNIT_ACTIONS
+    # Unclassified tool: fail closed rather than granting an ungoverned path.
+    return True
 
 
 _NEXT_CALL_FOR_STATE = {
