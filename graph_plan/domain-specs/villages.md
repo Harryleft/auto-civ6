@@ -390,7 +390,7 @@ def test_narrate_village_overview_lists_priority_and_ownership() -> None:
 
 配套核验：
 
-- 全量 `uv run pytest tests/ -q --ignore=tests/test_scorer.py` 须全绿。工具注册测试 `test_governance_mcp_tools_are_registered` 用 `issubset` 断言，新增工具不破坏。
+- 全量 `uv run pytest tests/ -q` 须全绿。工具注册测试 `test_governance_mcp_tools_are_registered` 用 `issubset` 断言，新增工具不破坏。
 - `result_filter` 无需注册：`_FILTERED_TOOLS` 只压缩治理类大结果，村落输出为小结果。
 - 真机验收（阶段二真机场景内完成，非本规格交付物）：见 §9 风险 1 的验证实验。
 

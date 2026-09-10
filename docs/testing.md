@@ -26,7 +26,7 @@ pytest 标记（注册于 `pyproject.toml [tool.pytest.ini_options]`）：
 
 ```bash
 # 全量离线测试（CI 同款）
-.venv/bin/python -m pytest tests/ -q --ignore=tests/test_scorer.py
+.venv/bin/python -m pytest tests/ -q
 
 # 分类子集
 .venv/bin/python -m pytest -m property          # 属性测试
