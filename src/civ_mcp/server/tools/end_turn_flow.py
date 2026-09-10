@@ -253,6 +253,14 @@ async def run_end_turn(
                         hang_save, conn=gs.conn
                     )
                     log.info("HANG RECOVERY: restart_and_load: %s", restart_result)
+                    # The save loads an earlier world; the journal still holds
+                    # the abandoned branch's authorizations until marked.
+                    await pipeline._record_game_reload_epoch(
+                        ctx,
+                        reason="hang_recovery_restart_and_load",
+                        turn=hang_turn_int,
+                        details={"save": hang_save, "attempt": attempt},
+                    )
 
                     # Step 2: Reconnect
                     conn = gs.conn
