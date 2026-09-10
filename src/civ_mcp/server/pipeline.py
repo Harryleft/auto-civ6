@@ -1047,6 +1047,9 @@ async def _belief_tool(
         return _filter_downstream_result(tool_name, params, text)
     started = time.monotonic()
     try:
+        # Mirror _logged: during DSH auto-resume the GUI owns the connection,
+        # and a belief tool that reads the game would race the recovery.
+        await _await_auto_resume_ready(ctx)
         engine, turn = await _belief_context(ctx)
         _sync_governance_graph(engine, turn=turn)
         result = operation(engine, turn)
@@ -1065,6 +1068,14 @@ async def _belief_tool(
         await _get_logger(ctx).log_error(tool_name, message)
         return _filter_downstream_result(tool_name, params, message)
     except ConnectionError as exc:
+        message = f"Error: {exc}"
+        await _get_logger(ctx).log_error(tool_name, message)
+        return _filter_downstream_result(tool_name, params, message)
+    except Exception as exc:
+        # Without this, an unexpected error escapes as a protocol-level failure
+        # while the same class of error through _logged becomes an "Error: ..."
+        # text result — one server, two error shapes for the caller.
+        log.warning("Belief tool %s failed", tool_name, exc_info=True)
         message = f"Error: {exc}"
         await _get_logger(ctx).log_error(tool_name, message)
         return _filter_downstream_result(tool_name, params, message)
