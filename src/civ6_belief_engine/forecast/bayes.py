@@ -51,6 +51,15 @@ def posterior(
         for name in prior
     }
     total = sum(weighted.values())
+    # Each factor is finite, but their product is not bounded. On overflow the
+    # division below would return all-zero posteriors while claiming to have
+    # normalized to 1 — and 0.0 passes the probability validator, so the zeros
+    # could be persisted and silently kill every hypothesis.
+    if not isfinite(total) or total <= 0:
+        raise ValueError(
+            f"posterior weights summed to {total}, which cannot be normalized; "
+            "the likelihood ratios span too many orders of magnitude"
+        )
     return {name: value / total for name, value in weighted.items()}
 
 
