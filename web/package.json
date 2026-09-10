@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "generate-docs": "cd .. && python scripts/extract_tool_docs.py",
+    "postinstall": "fumadocs-mdx",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
