@@ -44,6 +44,17 @@ great people (race pressure with a conservative faith budget claim).
    weighted national-strategy total.
 6. Budget locks cover consumables and exclusive slots such as gold, faith,
    `city_production:city:<id>`, research, civic, and unit actions.
+7. **An approval cannot be redirected after the vote.** The council records a
+   content fingerprint of the intents it selected in
+   `council_decision.approved_intents`; routing requires the proposal's current
+   `action_intents` to match it, so rewriting the proposal afterwards invalidates
+   the approval instead of moving it onto a different action. A content
+   fingerprint is used rather than a version number because the council itself
+   updates the proposal after deciding (status, `council_state`), which bumps the
+   version. `BeliefEngine.update` additionally refuses to patch a decision's
+   `action_intent`, `council_decision_id`, or `args_hash`; lifecycle fields
+   (`decision_state`, `route`, `cancellation_reason`, …) stay writable.
+   Regression coverage lives in `tests/test_authorization_integrity.py`.
 
 ## MCP workflow
 

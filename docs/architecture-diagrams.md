@@ -171,8 +171,8 @@ sequenceDiagram
     LQ-->>GS: list[UnitInfo] dataclasses
     deactivate LQ
 
-    GS->>GS: narrate_units(units) → human-readable text
-    GS-->>MCP: formatted string
+    GS->>GS: fact_view.units_envelope(...) → JSON envelope
+    GS-->>MCP: structured facts
     deactivate GS
 
     MCP->>MCP: _logged() records timing + log
@@ -204,7 +204,7 @@ Civ 6 ships with a built-in debug interface called FireTuner. It's a TCP server 
 | Tag | 4 bytes LE int32 | Message type: 4=handshake, 3=command, 1=help |
 | Payload | Variable, null-terminated | For commands: `CMD:state_index:lua_code` |
 
-On connect, the server sends a handshake exchange. Our client sends `APP:civ6-mcp` and the game responds with `LSQ:` followed by alternating lines of state index numbers and names. This tells us which Lua contexts are available — critically, the indexes for `GameCore_Tuner` and `InGame`.
+On connect, the server sends a handshake exchange. Our client sends `APP:` and the game responds with `LSQ:` followed by alternating lines of state index numbers and names. This tells us which Lua contexts are available — critically, the indexes for `GameCore_Tuner` and `InGame`.
 
 Output from Lua `print()` calls comes back as `O\0context_name: value` — a literal null byte between `O` and the context name. The connection layer strips this prefix and collects lines until it sees the `---END---` sentinel that every query appends.
 
@@ -455,7 +455,11 @@ This matters because the agent processes text, not structured data. Making threa
 
 ## Key design constraints
 
-**Single-threaded serialisation.** One TCP connection, one Lua execution at a time. Every tool call is a synchronous round-trip. In a 300-turn game with ~30 tool calls per turn, that's ~9,000 serial round-trips. Latency per call is typically 50-200ms for queries, 200-500ms for actions, and 2-10 seconds for end-turn (waiting for AI players).
+**Single-threaded serialisation.** One TCP connection, one Lua execution at a time. Every tool call is a synchronous round-trip. In a 300-turn game with ~30 tool calls per turn, that's ~9,000 serial round-trips.
+
+Latency floor, measured: `GameConnection._locked_execute` drains the socket before sending and again afterwards (`drain_messages(timeout=0.1)` / `0.2`), and each drain runs to its timeout when no message arrives. That is a **fixed ~302ms per Lua command** regardless of the query — so a 3-command tool such as `get_units` costs ~0.9s in pure waiting, and the per-command floor is well above the "50-200ms" this section previously claimed. Mutations use two timeout tiers: `DEFAULT_TIMEOUT` (5s) for queries and light commands, `SLOW_MUTATION_TIMEOUT` (30s) for commands that make the game do real inline work (army-wide fortify/skip, policy swap, World Congress).
+
+`end_turn` is the outlier by two orders of magnitude: its polling ladder runs up to ~550s, plus popup-dismissal probes and up to three `restart_and_load` attempts, so a single call can reach ~15 minutes in the worst case. Budget client timeouts accordingly.
 
 **No game modification.** The server uses only the stock FireTuner protocol. No mods, no DLL injection, no memory editing. This means we're constrained to whatever APIs the game's Lua layer exposes — and some things it exposes are broken (skip turn, promote unit, some notification types), requiring workarounds through the other Lua context.
 
