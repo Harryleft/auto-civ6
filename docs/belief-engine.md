@@ -107,6 +107,30 @@ parseable. 历史日志中的旧信封（仍带 `narrated` 键）解析宽松，
 `normalize_tool_result` 对信封直接从 `facts` 提取 facts/metrics（reliability
 1.0）；纯文本结果（目前只有 `get_game_overview` 实时出现）走兼容正则回退。
 
+## Journal durability
+
+The journal is the system of record, so three properties are enforced rather than
+assumed:
+
+- **Single writer.** `bind_game` takes an exclusive advisory lock on
+  `<journal>.lock` (`LOCK_EX|LOCK_NB`; `fcntl` on POSIX, `msvcrt` on Windows) and
+  raises `BeliefEngineError` if another process holds it. Without it a second
+  writer would interleave sequence numbers, and — because `_load` rewrites the
+  file when it meets a torn line — could lose events outright. The lock is held
+  per process, so reloading a journal inside one process stays legal.
+- **Bounded replay cost.** `replay_graph_events(events, verify=...)` defaults to
+  `"final"`, checking only the newest recorded `state_hash`. `GraphView.state_hash`
+  serializes the whole node/edge set, so per-delta verification is O(D×V): on a
+  real 110-turn journal (420 deltas, 4,269 nodes / 5,854 edges) it cost 46.7s of a
+  48.4s load. Use `"all"` to locate the exact diverging delta; `"none"` skips hash
+  comparison while still raising structural `GraphInvariantError`s.
+- **Reload marking.** Loading a save rewinds the world while the append-only log
+  still describes the abandoned future. `pipeline._record_game_reload_epoch` is
+  the single entry point and **every** save-loading path must call it — the
+  connection-recovery branch, the `restart_and_load` tool, and end-turn hang
+  recovery. It bumps the epoch, voids the abandoned branch's authorizations, and
+  never raises: a bookkeeping failure must not break the recovery in progress.
+
 ## Entity model
 
 - `observation`: directly observed fact, source, reliability, result

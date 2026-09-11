@@ -189,7 +189,7 @@ Threat typed data
 - `GraphSnapshotView` 已从 GraphView 提供各 Department 所需的窄事实视图；Science、Civics、Economy、Production、Great People、Diplomacy、Military 均已切换到该入口。
 - `BeliefEngine.sync_governance_graph()` 已将 Observation、Belief、Goal、Proposal、CriticReview、CouncilDecision、BudgetLock、Decision、Action、Outcome 和 ActionIntent 物化到 GraphView，并保留 JSONL 作为历史审计与兼容输入。
 - 管道在治理工具操作前后同步图；授权、取消、完成、重复意图、Council 评议和提案引用的关键读取已使用当前 GraphView。直接 BeliefEngine 当前态读取会先完成内存物化，显式管道同步再持久化 `graph.delta`；JSONL 只作为事件源、审计和物化输入，不再作为当前态回退。
-- 已覆盖治理生命周期关系、删除语义、投影失败隔离和 BeliefEngine 重载后的 `state_hash` 一致性；全量离线测试当前为 `653 passed`。
+- 已覆盖治理生命周期关系、删除语义、投影失败隔离和 BeliefEngine 重载后的 `state_hash` 一致性；全量离线测试须全绿（数量会随开发变化，以 `uv run pytest tests/ -q` 实际输出为准）。
 
 真实游戏已完成两类治理验收：通用 `unit_action(skip)` 闭环，以及带临时敌军的军事切片。后者在 `0_MCP_0108`、T108 的里昂 `(36,35)` 实测：敌军 `(35,35)` → 1 条 `THREATENS` → Military Proposal → Council approved → `verify_then_fast` → `unit_action(fortify)` → `fortify_turns=1` read-back → `Action/Outcome` → Graph（82 节点、100 条边）；随后重新加载基准存档并验证 T108、GameCore/InGame 和原始守军状态。
 
