@@ -145,9 +145,9 @@ MCP 进程（civ-mcp）重启后，DSH 客户端需要先完成 `tools/list` 同
 | 变异命令（move/attack/购买/end_turn 等，含 `run_lua` 的 ingame/state-index 通道）发送时连接死亡或超时未收到 sentinel | 抛 `MutationOutcomeUnknownError`（ConnectionError 子类）；命令**恰好发送一次，绝不自动重发**（超时同样视为结果未知，非普通失败） | 不要立刻重试同一动作——先 `get_units`/`get_cities` 核实动作是否已实际生效，再决定重试或放弃 |
 | 查询命令超时未收到 `---END---` sentinel | 抛 `CommandTimeoutError`（LuaError 子类），携带已收部分行；不再静默返回截断输出 | 按普通错误处理并重试（查询可安全重发） |
 | 决策卡在 `executing`（进程崩溃/异常逃逸/记录路径失败） | 跨回合自动回收为 `retryable`（进程重启加载、governance turn gate）；**任意时刻**可用 `cancel_action_authorization` 显式取消（迟到结果天然 no-op，不会复活授权） | 回收/取消后照常取消或重新授权执行；`end_turn` 门禁不再被永久阻塞 |
-| 游戏回退到更早回合（autosave 重载/手动读档） | 事件流记录 `game.reloaded` epoch 标记（自动重启路径显式记录，手动读档由回合回退检测捕获）；旧 epoch 的未决授权被作废（`invalidated_by_game_reload`）、关联预算锁归档，**旧 epoch 的 observations 与 world_entities 一并归档**（`epoch_superseded_by_reload`） | 回滚后不要重用旧事实——current_metrics 已清空、回合门要求新 epoch 的新鲜 typed snapshot；先 `get_governance_brief` 重建世界图，再基于新局面重新提案。回放/重建历史时按 epoch 分组，同回合号的两套事实分属不同 epoch |
+| 游戏回退到更早回合（autosave 重载/手动读档） | 事件流记录 `game.reloaded` epoch 标记：**所有读档路径都经 `pipeline._record_game_reload_epoch`**（连接恢复、`restart_and_load` 工具、end_turn 挂起恢复），手动读档另由回合回退检测捕获；旧 epoch 的未决授权被作废（`invalidated_by_game_reload`）、关联预算锁归档，**旧 epoch 的 observations 与 world_entities 一并归档**（`epoch_superseded_by_reload`）。消费授权时另按 decision 的**创建 epoch** 兜底——即使标记已落盘而作废清扫未跑完（进程在两者之间崩溃），陈旧授权也不会被消费 | 回滚后不要重用旧事实——current_metrics 已清空、回合门要求新 epoch 的新鲜 typed snapshot；先 `get_governance_brief` 重建世界图，再基于新局面重新提案。回放/重建历史时按 epoch 分组，同回合号的两套事实分属不同 epoch |
 
-事件流完整性：JSONL 追加带 fsync；加载时发现损坏行（无法解析、非 dict、或破坏事件 schema——如 sequence 非数字、缺 event_type/entity.id）会原子重写为纯完好行并追加 `log.integrity` 标记（含坏行哈希与预览），后续事件不会再拼接到坏行上。若日志中出现 `log.integrity`，说明进程曾在写入中途崩溃或日志被外部损坏。
+事件流完整性：JSONL 追加带 fsync；**同一账本同时只允许一个进程写入**——`bind_game` 取 `<journal>.lock` 的 `LOCK_EX|LOCK_NB`，第二个进程会明确报错而不是静默交错序列号；加载时发现损坏行（无法解析、非 dict、或破坏事件 schema——如 sequence 非数字、缺 event_type/entity.id）会原子重写为纯完好行并追加 `log.integrity` 标记（含坏行哈希与预览），后续事件不会再拼接到坏行上。若日志中出现 `log.integrity`，说明进程曾在写入中途崩溃或日志被外部损坏。注意该重写发生在**加载路径**上，正是单写者锁存在的理由：没有它，一个写入者正在追加时发生的读取竞争会被误判为数据损坏并丢弃对方刚写入的事件。
 
 ## 相关文档
 

@@ -111,7 +111,9 @@ Output is formatted as readable markdown with yields, resources, and all five re
 
 **File:** `log_{civ}_{seed}.jsonl`
 
-Every MCP tool call is logged with full timing, parameters, and results. This is the authoritative record of what the agent did and how long it took.
+MCP tool calls are logged with full timing, parameters, and results. For game actions this is the authoritative record of what the agent did and how long it took.
+
+**Coverage caveat.** Game tools reach the log through `pipeline._logged` and belief/governance control-plane tools through `pipeline._belief_tool`. Five process-level tools bypass both and therefore log nothing: `kill_game`, `launch_game`, `restart_and_load`, `get_diary`, `get_governance_brief`. Treat the tool log as authoritative for game actions, not as a complete audit of every MCP call.
 
 ### What's recorded
 
@@ -151,8 +153,10 @@ Game-over entries include an `outcome` object with winner, victory type, and whe
 
 ### Typical size
 
-10-50 MB per full game (400 turns). The `result` field stores the complete
-信封 JSON（结构化 facts），体积由查询数据量决定；叙述文本轨已移除。
+10-50 MB per full game (400 turns). 多数只读查询的 `result` 是信封 JSON（结构化
+facts），体积由查询数据量决定。**叙述文本并未完全移除**：`get_game_overview` 仍是
+纯文本，`get_barbarian_overview` / `get_policies` 等少数工具在信封之外附加叙述
+片段，`end_turn` 的回合报告也仍是文本。
 
 ---
 
@@ -236,17 +240,20 @@ All three systems share the same architecture:
 
 **JSONL format.** One JSON object per line, compact separators (`(",":")`), no array wrapper. Files can be tailed, grepped, or streamed without parsing the entire file.
 
-**Hook point.** All tool calls pass through `_logged()` in `server/pipeline.py`, which:
-1. Times the execution
-2. Catches errors
-3. Calls `logger.log_tool_call()` — writes to tool log
-4. Calls `spatial.record()` — writes to spatial log (try/except, never breaks gameplay)
-5. Returns the result to the agent
+**Hook point.** 游戏工具经 `server/pipeline.py` 的 `_logged()`，信念/治理控制面工具
+经同模块的 `_belief_tool()`（见上方 Coverage caveat 中列出 5 个两者都不经的工具）。
+`_logged()` 会：
+1. 等待 `auto_resume_ready`（DSH 自动恢复期间不抢连接）
+2. 记录耗时
+3. 捕获错误
+4. 调用 `logger.log_tool_call()` —— 写工具日志
+5. 调用 `spatial.record()` —— 写空间日志（try/except，绝不打断游戏流程）
+6. 把过滤后的模型面副本返回给 agent（遥测保留原始全文）
 
 ```
 Agent ─── MCP Tool Call ──→ _logged() ──→ fn() ──→ result (信封/文本)
                                │                        │
-                               ├─ logger.log_tool_call() ← result + timing
+                               ├─ logger.log_tool_call() ← 原始 result + timing
                                └─ spatial.record()       ← result + params
                                                           ↓
                                Diary written separately by end_turn()

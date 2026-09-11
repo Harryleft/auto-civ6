@@ -96,15 +96,28 @@
 ## 开发与验证命令
 
 ```bash
-uv run pytest tests/ -q                                   # 全量离线测试（662）；CI 跑同一命令
+uv run pytest tests/ -q                                   # 全量离线测试；CI 跑同一命令
+uv run ruff check src tests                               # 静态检查；CI 跑同一命令
 uv run pytest tests/test_belief_engine.py -q -k "orphan"  # 按关键字跑单个测试
 ./scripts/deepseek_harness check                          # 安装/配置变更后的环境检查
 ./scripts/belief_coverage.py                              # 信念覆盖审计：决策支持率/预测结算（见 docs/belief-engine.md）
 ```
 
-- 无独立 lint/format 配置；代码风格、注释密度跟随各文件现状。
+- 静态检查用 `ruff`，配置在 `pyproject.toml [tool.ruff.lint]`。当前只启用能查出真实
+  缺陷的窄规则集（未定义名、重复定义、assert/异常误用、语法错误）；默认规则集约
+  330 项，多为风格问题，**增量放宽**而非一次性打开，否则门禁长期为红即失去意义。
+  首次接入即查出 `narrate.py` 一处可达的 `NameError` 与一处缺失导入。
+- 测试不得写入 `~/.civ6-mcp/beliefs/`。`tests/conftest.py` 的 autouse 夹具把默认
+  账本目录重定向到 `tmp_path`；新增测试构造 `BeliefEngine` 时仍应显式传 `directory=`。
+- 测试引用的第三方依赖必须在 `pyproject.toml` 中声明，否则新克隆上 pytest 会因收集
+  失败整批不执行。`tests/test_test_dependencies.py` 会守护这一点。
 - 不要单独运行 `uv run civ-mcp`：DSH 负责拉起 MCP 进程，FireTuner 只允许一个客户端。
-- 新增游戏动作必须走 `execute_mutation` 通道（见下节），并配离线回归测试。
+- 新增游戏动作必须走 `execute_mutation` 通道（见下节），并配离线回归测试。重命令
+  （例如 `skip_remaining_units` / `set_policies` / `submit_congress`）应显式传
+  `timeout=SLOW_MUTATION_TIMEOUT`，否则慢命令会被误报为「结果未知」。
+- 新增 MCP 工具必须显式归类到 `pipeline._BELIEF_GATED_TOOLS`、`_ROUTINE_TOOLS` 或
+  `_CONDITIONAL_GATE_TOOLS`；未归类会 fail-closed，且 `tests/test_tool_gate_coverage.py`
+  会失败。
 
 ## 返回语言规则
 
@@ -122,10 +135,13 @@ uv run pytest tests/test_belief_engine.py -q -k "orphan"  # 按关键字跑单�
 ## 架构大图（跨文件）
 
 - **双包布局**：`src/civ_mcp` 是 MCP 适配层（连接、Lua builder/parser、`server/` 包内 112 个工具），`src/civ6_belief_engine` 是产品域包（belief engine + governance + graph）。旧兼容转发 shim 已删除，代码直接导入域包；域包对 `civ_mcp` 已零导入，`TypedTurnSnapshot` 是 domain 侧边界类型，具体 Lua DTO 只由 `GameState` 采集端转换为该类型。
-- **调用链**：FireTuner TCP 4318 → `GameConnection` → `GameState` → `server/pipeline.py` 的 `_logged` 管道（授权预检 → 执行 → 信念记录 → 结果过滤）→ DSH。所有 MCP 工具必须经 `_logged`，不要绕开。`server/` 包：`assembly.py`（lifespan/入口/auto-resume）、`pipeline.py`（运行管道：日志、门禁、事件记录和 flush）、`tools/`（按域分组的 MCP 工具注册；治理工具在 `belief_tools.py`，纯合同适配在 `governance_adapters.py`）、`governance_snapshot.py`（typed snapshot 生命周期）；`end_turn.py` 只负责 MCP 注册，回合日记、挂起恢复和 game-over 编排在 `end_turn_flow.py`。
-- **命名陷阱**：`execute_read`/`execute_write` 指的是 Lua 上下文（GameCore/InGame），**不是**读写语义。真正的读写区分在 `execute_mutation`：变异命令恰好发送一次、死套接字不重发（抛 `MutationOutcomeUnknownError`，重试前必须先查询验证游戏状态）、未收到 sentinel 超时抛 `CommandTimeoutError`。
-- **BeliefEngine 是事件溯源**：append-only JSONL（`~/.civ6-mcp/beliefs/`），加载时 reduce 重放；实体用墓碑（deleted/archived）不物理删除；游戏重载（autosave 回滚/手动读档）产生 epoch 标记并作废旧授权；`governance_turn_gate` 对未完成授权 fail-closed。新代码不得绕过事件流直接改内存态。查询观察经 `derivation` 规则注册表自动派生信念/预测（带 `derived` 标签，coverage 审计区分系统产出与模型自报）。
-- **结果过滤只作用于模型面副本**：`result_filter` 在返回给 DSH 前压缩超大结果，遥测保留原始全文；阈值由 `CIV_MCP_RESULT_*` 环境变量控制。
+- **调用链**：FireTuner TCP 4318 → `GameConnection` → `GameState` → `server/pipeline.py` 的 `_logged` 管道（授权预检 → 执行 → 信念记录 → 结果过滤）→ DSH。**游戏工具**必须经 `_logged`，不要绕开；**信念/治理控制面工具**（读写的是账本而非游戏状态）经 `pipeline._belief_tool`，两条管道都先等待 `auto_resume_ready` 并兜底异常。少数进程级工具（`kill_game` / `launch_game` / `restart_and_load` / `get_diary` / `get_governance_brief`）目前不经任何一条，改动它们时优先接入。`server/` 包：`assembly.py`（lifespan/入口/auto-resume）、`pipeline.py`（运行管道：日志、门禁、事件记录和 flush）、`tools/`（按域分组的 MCP 工具注册；治理工具在 `belief_tools.py`，纯合同适配在 `governance_adapters.py`）、`governance_snapshot.py`（typed snapshot 生命周期）；`end_turn.py` 只负责 MCP 注册，回合日记、挂起恢复和 game-over 编排在 `end_turn_flow.py`。
+- **门禁是显式分类的**：`pipeline._BELIEF_GATED_TOOLS`（需路由）/ `_ROUTINE_TOOLS`（无需路由）/ `_CONDITIONAL_GATE_TOOLS`（按参数判定）必须覆盖全部注册工具。未归类的工具 fail-closed，`tests/test_tool_gate_coverage.py` 会失败。新增工具时三处都要看。
+- **命名陷阱**：`execute_read`/`execute_write` 指的是 Lua 上下文（GameCore/InGame），**不是**读写语义。真正的读写区分在 `execute_mutation`：变异命令恰好发送一次、死套接字不重发（抛 `MutationOutcomeUnknownError`，重试前必须先查询验证游戏状态）、未收到 sentinel 超时抛 `CommandTimeoutError`。超时分两档：`DEFAULT_TIMEOUT`(5s) 给查询与轻命令，`SLOW_MUTATION_TIMEOUT`(30s) 给会让游戏同步做实际工作的重命令。
+- **BeliefEngine 是事件溯源**：append-only JSONL（`~/.civ6-mcp/beliefs/`），加载时 reduce 重放；**同一账本同时只允许一个进程写入**（`bind_game` 取 `LOCK_EX|LOCK_NB`，第二个进程显式报错而非静默交错序列号）；实体用墓碑（deleted/archived）不物理删除；游戏重载（autosave 回滚/手动读档）产生 epoch 标记并作废旧授权——**所有读档路径都必须调用 `pipeline._record_game_reload_epoch`**；`governance_turn_gate` 对未完成授权 fail-closed，`authorize_action` 另按 decision 的**创建 epoch** 兜底（加载期恢复会以当前 epoch 重新盖戳，故不能用最新事件判定）。新代码不得绕过事件流直接改内存态。查询观察经 `derivation` 规则注册表自动派生信念/预测（带 `derived` 标签，coverage 审计区分系统产出与模型自报）。
+- **授权契约不可改写**：议会决议时把选中提案的意图集合指纹写入 `council_decision.approved_intents`，路由时要求提案当前内容与之相等；`engine.update` 另拒绝改写 decision 的 `action_intent` / `council_decision_id` / `args_hash`。改动路由或提案结构时同步看 `tests/test_authorization_integrity.py`。
+- **图重放只校验最新 checkpoint**：`replay_graph_events(verify=...)` 默认 `"final"`——全视图 `state_hash` 是 O(V)，逐 delta 校验会退化为 O(D×V)（实测 43MB 日志 48.4s → 2.37s）。需要定位分歧点时用 `verify="all"`；`verify="none"` 只跳过哈希校验，结构错误仍会抛。
+- **结果过滤只作用于模型面副本**：`result_filter` 在返回给 DSH 前压缩超大结果，遥测保留原始全文；阈值由 `CIV_MCP_RESULT_*` 环境变量控制。注意它目前只覆盖 `_FILTERED_TOOLS` 里的 3 个控制面工具，其余工具没有体积上限。
 - **图工程进度**（全量方案与验收门禁见 [graph_plan/README.md](graph_plan/README.md)，动架构前先读）：阶段一影子图已完成（离线投影比较、replay、epoch 隔离）；阶段二“城市周边威胁”切片离线闭环与真实游戏验收均已完成（`0_MCP_0108` T108 里昂：敌军 → `THREATENS` → Proposal → Council approved → `fortify` → read-back → Graph）；阶段三七个 Department 已统一消费 `GraphSnapshotView`，图缺失/陈旧时按证据缺口保守处理，不再回退旧快照字段；阶段四 `server.py` 已拆为 `server/` 包，`end_turn.py` 拆分与旧治理适配层迁移已于 2026-08-16 完成（旧 `tools/belief.py` 物理删除，MCP 工具名和签名不变）。
 - **评测与站点**：`evals/` 是 inspect-ai civbench 基准，`web/` 是 Next.js + Convex 成绩站点，`scripts/publish_hf/` 是 HuggingFace 数据集发布管线；三者独立于游戏运行链路。
 

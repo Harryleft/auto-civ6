@@ -4,7 +4,33 @@
 
 The focus shifted from running games to packaging the results. The dataset publisher pipeline exports all telemetry to HuggingFace with Croissant 1.1 metadata for the NeurIPS Evaluations & Datasets track submission. Several reliability features landed in parallel from ongoing eval runs across the fleet.
 
-- **双轨工具结果合并为单轨（信封 facts）**: 只读查询工具的信封移除了叙述文本轨 `narrated` —— 41 个信封 builder 与全部工具调用点不再生成/携带叙述文本；信封格式收敛为 `{v, tool, turn, source, coverage, facts}`。`normalize_tool_result` 对信封直接从字段级 `facts` 提取 observation facts 与 metrics（reliability 1.0），不再对叙述文本做正则解析；仅 `get_game_overview` 保留纯文本正则路径（其余 8 个工具的正则分支降级为纯文本兼容回退，供历史/降级场景）。配套：`parse_envelope` 不再要求 `narrated`（旧日志带 `narrated` 的信封仍可解析，向后兼容）；diplomacy 信封新增 `our_military` 字段（原叙述文本 "vs our N" 的唯一事实来源，rival 威胁派生规则依赖它）；修复 `victory_progress_envelope` 对 `enabled_victories` set 的 JSON 序列化崩溃（预存 bug）；删除 22 个无引用的叙述函数（约 900 行）；观察 statement 对信封结果回退为 "Observed result from {tool}"。全量离线测试 654 passed。
+- **架构评审修复（21 个提交）**：一次只读评审驱动，每项独立验证并做反向验证（撤掉修复后回归测试必须转红）。分四类：
+
+  **P0（阻断级）**
+  - `assembly.lifespan` 的 `CIV_MCP_SAVE_FILE` 分支既不启动后台服务也不置位 `auto_resume_ready`，而 `pipeline._logged` 首行就 await 它——eval 启动路径上**所有**经 `_logged` 的工具永久挂死（`evals/civbench.py` 恰好走这条分支）。由 29630ba 引入，此后无分支测试覆盖。
+  - `hypothesis` 被 3 个测试模块导入却未声明在任何依赖组，也未进 `uv.lock`。pytest 遇收集错误会中断整个运行，故全新克隆与 CI 上「一个测试都不跑」，而作者本机因手工装过而全绿。
+  - `[tool.pytest.ini_options] pythonpath = ["."]`：`pytest` 控制台脚本不加 CWD 到 `sys.path`，与 `python -m pytest` 行为不一致，`tests/test_scorer.py` 的 4 个回归测试被无效的 `--ignore` 掩盖。
+  - 测试写用户真实账本：`test_gate_fixes.py` 构造 `BeliefEngine` 时省略 `directory=`，把夹具记录追加进 `~/.civ6-mcp/beliefs/`。新增 autouse 夹具重定向默认目录，并抽出 `default_beliefs_directory()` 作为可注入接缝。
+  - 图重放 Θ(T²) → **实测 43MB 日志加载 48.4s 降到 2.37s（20 倍）**。`replay_graph_events` 每个 delta 后重算全视图 `state_hash`（O(D×V)）；新增 `verify` 参数，默认只校验最新 checkpoint，`"all"` 保留逐 delta 模式用于定位分歧点。同时把 `bind_game` 移出事件循环（thread + double-checked lock）。
+
+  **授权与账本完整性**
+  - **关闭议会批准后可改写意图的越权路径**。此前路由拿 candidate_hash 对比提案的**当前** `action_intents`，从不校验版本；改写提案即可把对 A 的批准重定向到 B（而预算锁与优先级都是按 A 算的）。现在议会决议写入 `approved_intents` 内容指纹，路由要求提案内容与之相等；`engine.update` 另拒绝改写 decision 的 `action_intent` / `council_decision_id` / `args_hash`。
+  - `authorize_action` 按 decision 的**创建 epoch** 兜底：`record_game_reload` 会作废被放弃分支上的授权，但进程可能在写入标记后、逐条作废前崩溃。用创建期而非最新事件，是因为加载期恢复会以当前 epoch 重新盖戳。
+  - 所有读档路径补记 epoch：`restart_and_load` 工具与 end_turn 挂起恢复此前都不记，账本仍描述游戏已不存在的未来。
+  - 账本加单写者文件锁（`LOCK_EX|LOCK_NB`）：此前无锁，第二个写入者会交错序列号，且 `_load` 遇撕裂行时的重写可能永久丢弃另一写者的事件。
+
+  **门禁与静态检查**
+  - 门禁分类显式化：112 个工具中 84 个此前走「不在集合里就放行」的隐式默认，新增工具即自动获得未受治理的执行路径。现在未归类一律 fail-closed，`test_tool_gate_coverage.py` 守护完整性。
+  - 接入 `ruff` 窄规则集（未定义名/重复定义/assert 与异常误用/语法错误）。首次即查出 `narrate.py` 一处**可达的 `NameError`**（`_describe_trade_item` 在全仓从未定义，而 `narrate_test_trade` 经 `test_trade` 工具可达）与 `game_state.py` 缺失的 `Any` 导入。
+  - 重命令使用 `SLOW_MUTATION_TIMEOUT`(30s) 而非 5s 默认值：`skip_remaining_units` / `set_policies` / `submit_congress` / `queue_wc_votes` 会让游戏同步做实际工作，超时被包装成 `MutationOutcomeUnknownError` 属假阳性。
+  - `bayes.posterior` 溢出时报错而非静默返回全 0（0.0 能通过概率校验并落盘，等于一次证据更新抹掉整个假设池）。
+  - `_belief_tool` 补齐 `auto_resume_ready` 等待与兜底 `except`，与 `_logged` 对齐。
+
+  **CI**
+  - CI 此前**从未运行过**（fork 上 Actions 默认关闭，且 `origin` 落后 138 个提交）。启用后依次暴露并修复了三个只在干净环境失败的问题：改用 `uv sync --locked` 安装（否则缺 hypothesis）、web job 从未跑过 vitest（20 个测试）、`bun run lint` 的 55 项既有积压与 `tsc` 因缺 fumadocs 生成的 `.source/` 必失败（改用 `postinstall: fumadocs-mdx`）。当前两个 job 全绿。
+  - CI 补 `uv run ruff check src tests`、`bun run test`、依赖缓存。
+
+- **双轨工具结果合并为单轨（信封 facts）**: 只读查询工具的信封移除了叙述文本轨 `narrated` —— 41 个信封 builder 与全部工具调用点不再生成/携带叙述文本；信封格式收敛为 `{v, tool, turn, source, coverage, facts}`。`normalize_tool_result` 对信封直接从字段级 `facts` 提取 observation facts 与 metrics（reliability 1.0），不再对叙述文本做正则解析；仅 `get_game_overview` 保留纯文本正则路径（其余 8 个工具的正则分支降级为纯文本兼容回退，供历史/降级场景）。配套：`parse_envelope` 不再要求 `narrated`（旧日志带 `narrated` 的信封仍可解析，向后兼容）；diplomacy 信封新增 `our_military` 字段（原叙述文本 "vs our N" 的唯一事实来源，rival 威胁派生规则依赖它）；修复 `victory_progress_envelope` 对 `enabled_victories` set 的 JSON 序列化崩溃（预存 bug）；删除 22 个无引用的叙述函数（约 900 行）；观察 statement 对信封结果回退为 "Observed result from {tool}"。
 
 - **Server package split & governance adapter migration**: `server.py` was split move-only into the `server/` package (2026-08-15: `assembly.py` lifespan/entry/auto-resume, `pipeline.py` runtime pipeline, `tools/` domain-grouped tool registration). The legacy `tools/belief.py` was then physically deleted (2026-08-16): 26 MCP tools moved to `tools/belief_tools.py`, pure contract adapters to `tools/governance_adapters.py`, typed snapshot lifecycle to `server/governance_snapshot.py`; `end_turn.py` now only registers the MCP tool — diary merge, pending-recovery, and game-over orchestration live in `end_turn_flow.py`. `server/__init__.py` preserves the stable import surface; MCP tool names and signatures unchanged. The domain package now imports nothing from `civ_mcp` (residual DTO debt closed); all seven departments consume the narrow `GraphSnapshotView`.
 - **Gate friction fixes**: born from the 2026-08-15 cross-journal analysis (21/107 runs hit gate blocks; 330 blocked actions, 56% on `end_turn`; 40 no-op retries). ① Council-intent closure now accepts legacy `failed` decisions (pre-a0b487c out-of-band writes) as terminal accounting — they no longer demand a follow-up cancel; `retryable` still requires an explicit answer by design. ② Removed the `surprise_score >= 0.7 -> slow` hard rule: routing had become a function of global world noise, not of the action (T61 evidence: same args_hash routed slow at score 0.31 with an active major surprise, then fast once it cleared); surprise still weighs in via the additive term, and slow routes now carry `route_guidance` naming their exits. ③ `end_turn` gate rejections are self-describing: each pending authorization/council intent is listed with its decision id, state, and the exact next tool call, replacing the old category-name-only message that forced callers into `get_governance_brief` bookkeeping loops.
