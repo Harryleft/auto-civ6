@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from types import MappingProxyType
@@ -9,8 +10,31 @@ from typing import Mapping, Protocol, runtime_checkable
 
 from ...graph import GraphView
 from ...validation import require_text, require_texts
-from ..graph_snapshot import GraphSnapshotView
+from ..graph_snapshot import GraphSnapshotView, graph_agenda, graph_goals
 from ..models import Outcome, OutcomeStatus, Proposal, StrategicGoal
+
+
+def contains_keyword(values: Iterable[str], keywords: tuple[str, ...]) -> bool:
+    """Whether any keyword appears (case-insensitively) in the joined values."""
+
+    haystack = " ".join(values).casefold()
+    return any(keyword.casefold() in haystack for keyword in keywords)
+
+
+def context_text(context: DepartmentContext) -> tuple[str, ...]:
+    """Agenda plus every goal statement and tag, as the departments' text corpus.
+
+    Two departments had copied this verbatim (differing only in whether the
+    parameter was annotated ``tuple`` or ``Iterable``). It is the shared notion
+    of "what the strategy layer is currently saying", so it lives with the
+    contracts rather than in one of its consumers.
+    """
+
+    values = list(graph_agenda(context))
+    for goal in graph_goals(context):
+        values.append(goal.statement)
+        values.extend(goal.tags)
+    return tuple(values)
 
 
 class Department(StrEnum):
