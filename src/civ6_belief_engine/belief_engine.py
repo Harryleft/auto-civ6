@@ -25,6 +25,7 @@ from typing import Any
 from .canonical import arguments_hash
 from .forecast import bayes
 from .graph import (
+    GOVERNANCE_ENTITY_TYPES,
     GRAPH_DELTA_EVENT,
     GraphDelta,
     GraphReplayError,
@@ -111,28 +112,6 @@ _TERMINAL_DECISION_STATES = frozenset({"succeeded", "cancelled"})
 # closed.  ``retryable`` deliberately stays out — retry remains rational and
 # the agent must answer the gate (retry or cancel).
 _INTENT_CLOSING_STATES = frozenset({"succeeded", "cancelled", "failed"})
-_GOVERNANCE_GRAPH_ENTITY_TYPES = frozenset(
-    {
-        "observation",
-        "belief",
-        "goal",
-        "proposal",
-        "critic_review",
-        "council_decision",
-        "budget_lock",
-        "decision",
-        "action",
-        "outcome",
-        "hypothesis",
-        "prediction",
-        "plan",
-        "surprise",
-        "contradiction",
-        "attribution",
-        "simulation",
-    }
-)
-
 
 class BeliefEngineError(ValueError):
     """Raised when an invalid belief-engine operation is requested."""
@@ -1359,7 +1338,7 @@ class BeliefEngine:
         # track every governance-typed event, including ones whose payload is
         # not a reducible entity. Keeping it incremental turns what used to be
         # an O(events) scan on the hot path into a comparison.
-        if entity_type in _GOVERNANCE_GRAPH_ENTITY_TYPES:
+        if entity_type in GOVERNANCE_ENTITY_TYPES:
             try:
                 sequence = int(event.get("sequence", 0))
             except (TypeError, ValueError):
@@ -1493,7 +1472,7 @@ class BeliefEngine:
         )
         entities = {
             entity_type: self.list(entity_type, status=None)
-            for entity_type in _GOVERNANCE_GRAPH_ENTITY_TYPES
+            for entity_type in GOVERNANCE_ENTITY_TYPES
         }
         delta = project_governance_state(
             entities,
@@ -1561,7 +1540,7 @@ class BeliefEngine:
         graph_turn = max(base.turn, turn) if base.snapshot_id else turn
         entities = {
             entity_type: self.list(entity_type, status=None)
-            for entity_type in _GOVERNANCE_GRAPH_ENTITY_TYPES
+            for entity_type in GOVERNANCE_ENTITY_TYPES
         }
         delta = project_governance_state(
             entities,
@@ -1809,7 +1788,7 @@ class BeliefEngine:
     ) -> list[dict[str, Any]]:
         """Read current governance entities from the materialized GraphView."""
 
-        if entity_type not in _GOVERNANCE_GRAPH_ENTITY_TYPES:
+        if entity_type not in GOVERNANCE_ENTITY_TYPES:
             return []
         self._ensure_governance_graph_current()
         nodes = self._graph_view.nodes_of_type(entity_type)
@@ -1849,7 +1828,7 @@ class BeliefEngine:
         """Whether the current GraphView contains a governance read model."""
 
         return any(
-            node.node_type in _GOVERNANCE_GRAPH_ENTITY_TYPES
+            node.node_type in GOVERNANCE_ENTITY_TYPES
             for node in self._graph_view.nodes.values()
         )
 
@@ -1868,7 +1847,7 @@ class BeliefEngine:
     ) -> list[dict[str, Any]]:
         """Read governance state from GraphView after ensuring materialization."""
 
-        if entity_type not in _GOVERNANCE_GRAPH_ENTITY_TYPES:
+        if entity_type not in GOVERNANCE_ENTITY_TYPES:
             return self.list(entity_type, status=status)
         self._ensure_governance_graph_current()
         return self.graph_entities(entity_type, status=status)
@@ -1890,7 +1869,7 @@ class BeliefEngine:
             return
         if not any(
             self._entities.get(entity_type)
-            for entity_type in _GOVERNANCE_GRAPH_ENTITY_TYPES
+            for entity_type in GOVERNANCE_ENTITY_TYPES
         ):
             return
         turn = max(
@@ -4234,7 +4213,7 @@ class BeliefEngine:
             "entities": {
                 entity_type: (
                     self.current_governance_entities(entity_type, status=status)
-                    if entity_type in _GOVERNANCE_GRAPH_ENTITY_TYPES
+                    if entity_type in GOVERNANCE_ENTITY_TYPES
                     else self.list(entity_type, status=status)
                 )
                 for entity_type in sorted(BELIEF_ENTITY_TYPES)
