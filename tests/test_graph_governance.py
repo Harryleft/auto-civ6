@@ -359,3 +359,64 @@ def test_direct_graph_read_materializes_legacy_journal_without_read_write(
 
     assert reloaded.graph_replay_error is None
     assert reloaded.graph_view.state_hash == persisted.state_hash
+
+
+def _belief(statement: str) -> dict:
+    return {
+        "statement": statement,
+        "category": "military",
+        "probability": 0.8,
+        "confidence": 0.7,
+        "unknown_basis": True,
+    }
+
+
+def test_repeated_sync_is_a_no_op_but_still_detects_later_changes(tmp_path) -> None:
+    """The no-change fast path must not swallow a real governance update.
+
+    ``sync_governance_graph`` runs after every tool result and short-circuits
+    when the read model already covers every governance event. That shortcut is
+    only sound if a genuinely new event still goes down the full path.
+    """
+
+    engine = BeliefEngine(run_id="sync-fast-path", directory=tmp_path)
+    engine.bind_game("CIVILIZATION_INDIA", 123)
+    engine.create("belief", _belief("首都需要防御"), turn=10, entity_id="belief:one")
+
+    first = engine.sync_governance_graph(turn=10)
+    assert "belief:one" in first.nodes
+
+    # Same state, asked again: identical view, no extra journal write.
+    sequence_after_first = engine.snapshot(include_deleted=True)["last_sequence"]
+    repeated = engine.sync_governance_graph(turn=10)
+    assert repeated.state_hash == first.state_hash
+    assert engine.snapshot(include_deleted=True)["last_sequence"] == sequence_after_first
+
+    # A new governance entity must still be projected and persisted.
+    engine.create("belief", _belief("边境需要巡逻"), turn=11, entity_id="belief:two")
+    after = engine.sync_governance_graph(turn=11)
+    assert after.state_hash != first.state_hash
+    assert "belief:two" in after.nodes
+
+    reloaded = BeliefEngine(run_id="sync-fast-path-reloaded", directory=tmp_path)
+    reloaded.bind_game("CIVILIZATION_INDIA", 123)
+    assert reloaded.graph_replay_error is None
+    assert reloaded.graph_view.state_hash == after.state_hash
+
+
+def test_sync_without_persist_does_not_write_the_journal(tmp_path) -> None:
+    """``persist=False`` is the lazy-read path: it must stay read-only."""
+
+    engine = BeliefEngine(run_id="sync-lazy", directory=tmp_path)
+    engine.bind_game("CIVILIZATION_INDIA", 123)
+    engine.create("belief", _belief("首都需要防御"), turn=10, entity_id="belief:one")
+    before = engine.snapshot(include_deleted=True)["last_sequence"]
+
+    lazy = engine.sync_governance_graph(turn=10, persist=False)
+    assert "belief:one" in lazy.nodes
+    assert engine.snapshot(include_deleted=True)["last_sequence"] == before
+
+    # The next persisting sync still writes what the lazy read materialized.
+    persisted = engine.sync_governance_graph(turn=10)
+    assert persisted.state_hash == lazy.state_hash
+    assert engine.snapshot(include_deleted=True)["last_sequence"] > before

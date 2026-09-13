@@ -1481,10 +1481,30 @@ class BeliefEngine:
         """
 
         self._require_bound()
+        # Fast path: the read model already reflects every governance event and,
+        # when the caller wants persistence, so does the journal. The projection
+        # below can then only produce an empty delta — and that branch returns
+        # ``base`` untouched after setting these same cursors — so skipping it
+        # is equivalent. This runs on every tool result and re-read the whole
+        # governance entity set plus a full re-projection: ~292ms per call on a
+        # 110-turn journal (~4.2k entities / 4.3k nodes).
+        #
+        # Both cursors must be checked. A lazy read materializes the graph
+        # without writing a graph.delta, so a materialized-but-unpersisted graph
+        # still has to go down the full path to persist (see
+        # test_direct_graph_read_materializes_legacy_journal_without_read_write).
+        latest_sequence = self._latest_governance_sequence()
+        if self._graph_materialized_sequence >= latest_sequence and (
+            not persist or self._graph_persisted_sequence >= latest_sequence
+        ):
+            self._graph_materialized_sequence = latest_sequence
+            if persist:
+                self._graph_persisted_sequence = latest_sequence
+            return self._graph_view
         if (
             persist
             and self.governance_graph_materialized()
-            and self._graph_persisted_sequence < self._latest_governance_sequence()
+            and self._graph_persisted_sequence < latest_sequence
         ):
             self._persist_current_governance_graph(turn=turn)
         base = self._graph_view
