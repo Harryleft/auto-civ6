@@ -17,7 +17,6 @@ from .base import (
     Department,
     DepartmentAssessment,
     DepartmentContext,
-    ReviewDisposition,
     SupportRequest,
     Workstream,
 )
