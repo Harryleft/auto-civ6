@@ -517,6 +517,10 @@ async def queue_wc_votes(ctx: Context, votes: str) -> str:
     session. Registers an event handler that fires during WC processing and
     casts your votes with the specified preferences.
 
+    未在 votes 里出现的决议只投 1 票（第 1 票成本为 0），不会消耗 favor。
+    get_world_congress 在开会前的预览可能给出与实际开会不同的决议集合，
+    因此"未匹配"是正常情况，不会被当成默认策略去按最大票数盲投。
+
     If you don't call this, end_turn will pause at the World Congress session
     and return control to you for interactive voting.
     """
