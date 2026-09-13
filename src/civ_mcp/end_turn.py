@@ -52,6 +52,41 @@ def _can_override_end_turn_blockers(
     )
 
 
+def _wc_popup_probe_needed(blockers: list[tuple[str, str]]) -> bool:
+    """Return whether a World Congress screen may be dismissed early.
+
+    The World Congress opens and closes inside ``ACTION_ENDTURN``; the game
+    parks on a congress screen until that screen is looked at.  The wait loop
+    can only observe the turn number, so without this probe a congress turn
+    burns the full ~9-minute timeout before the post-timeout dismissal runs.
+    Only congress blockers qualify — unit, production and research screens
+    are never touched.
+    """
+
+    return any(
+        "WORLD_CONGRESS" in blocker_type for blocker_type, _ in blockers
+    )
+
+
+async def _probe_world_congress_popup(gs: GameState) -> bool:
+    """Dismiss a visible World Congress screen once, during the wait loop.
+
+    Returns True only when a congress blocker was present *and* the single
+    dismissal call reported a real dismissal.  The single attempt is
+    deliberate: the module history shows that repeatedly dismissing UI
+    overlays while the AI is still processing can wedge the game.
+    """
+
+    blocking_lines = await gs.conn.execute_write(
+        lq.build_end_turn_blocking_query()
+    )
+    blockers = lq.parse_end_turn_blocking(blocking_lines)
+    if not _wc_popup_probe_needed(blockers):
+        return False
+    dismissed = await gs.dismiss_popup()
+    return "Dismissed" in dismissed
+
+
 async def _check_mid_turn_diplomacy(
     gs: GameState,
     lua: str,
@@ -1248,6 +1283,7 @@ async def execute_end_turn(gs: GameState) -> str:
         # 10 min total: AI can take several minutes on large maps with wars.
         # Quick polls early (catch fast turns), then escalate to 30s intervals.
         diplomacy_probed = False
+        wc_probed = False
         cumulative_wait = 4.0  # Phase 1 already waited ~4s
         for delay in [
             2.0,
@@ -1314,6 +1350,26 @@ async def execute_end_turn(gs: GameState) -> str:
                 if diplo_advanced:
                     advanced = True
                     break
+            # World Congress turns park on a congress screen that only needs
+            # to be looked at; waiting the full timeout for it wastes most of
+            # the turn budget.  Probe once per turn, well after the congress
+            # segment can still be processing, and never in a loop.
+            if not wc_probed and cumulative_wait >= 60:
+                wc_probed = True
+                try:
+                    if await _probe_world_congress_popup(gs):
+                        log.info("Early World Congress screen dismissed")
+                        await asyncio.sleep(2.0)
+                        turn_after = await _get_turn_number(gs)
+                        if (
+                            turn_after is not None
+                            and turn_before is not None
+                            and turn_after > turn_before
+                        ):
+                            advanced = True
+                            break
+                except Exception:
+                    log.debug("Early World Congress probe failed", exc_info=True)
 
     # Phase 3: After ~5 min, now safe to check InGame state.
     # AI processing either completed (blocker is on our side) or is
