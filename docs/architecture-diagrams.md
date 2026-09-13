@@ -457,7 +457,11 @@ This matters because the agent processes text, not structured data. Making threa
 
 **Single-threaded serialisation.** One TCP connection, one Lua execution at a time. Every tool call is a synchronous round-trip. In a 300-turn game with ~30 tool calls per turn, that's ~9,000 serial round-trips.
 
-Latency floor, measured: `GameConnection._locked_execute` drains the socket before sending and again afterwards (`drain_messages(timeout=0.1)` / `0.2`), and each drain runs to its timeout when no message arrives. That is a **fixed ~302ms per Lua command** regardless of the query — so a 3-command tool such as `get_units` costs ~0.9s in pure waiting, and the per-command floor is well above the "50-200ms" this section previously claimed. Mutations use two timeout tiers: `DEFAULT_TIMEOUT` (5s) for queries and light commands, `SLOW_MUTATION_TIMEOUT` (30s) for commands that make the game do real inline work (army-wide fortify/skip, policy swap, World Congress).
+Latency floor, measured: `GameConnection._locked_execute` drains the socket before sending and again afterwards, because FireTuner pushes unsolicited LuaEvent output alongside command responses. Each drain runs to its timeout when no message arrives, so the per-command floor is `2 × CIV_MCP_DRAIN_TIMEOUT`.
+
+That constant used to be 0.1s + 0.2s — a **fixed ~302ms per Lua command**, which made a 3-command tool such as `get_units` cost ~0.9s in pure waiting and put the floor well above the "50-200ms" this section previously claimed. What the drains actually collect is data already buffered when they run (the pre-send drain clears whatever accumulated while the agent was thinking; the post-command drain catches output emitted with the response just read), and a fresh reader consumes every buffered message within 0.5ms. `DRAIN_TIMEOUT` is therefore 20ms, giving ~42ms per command; raise it via `CIV_MCP_DRAIN_TIMEOUT` if a real game shows output leaking between commands.
+
+Mutations use two timeout tiers: `DEFAULT_TIMEOUT` (5s) for queries and light commands, `SLOW_MUTATION_TIMEOUT` (30s) for commands that make the game do real inline work (army-wide fortify/skip, policy swap, World Congress).
 
 `end_turn` is the outlier by two orders of magnitude: its polling ladder runs up to ~550s, plus popup-dismissal probes and up to three `restart_and_load` attempts, so a single call can reach ~15 minutes in the worst case. Budget client timeouts accordingly.
 

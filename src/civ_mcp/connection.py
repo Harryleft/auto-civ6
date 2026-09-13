@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 
 from civ_mcp import tuner_client
 from civ_mcp.lua._helpers import SENTINEL
@@ -28,6 +29,24 @@ DEFAULT_TIMEOUT = 5.0
 # may already have run. That is a false positive for a command that is merely
 # slow: it costs the agent a verification round and invites duplicate actions.
 SLOW_MUTATION_TIMEOUT = 30.0
+
+# FireTuner pushes unsolicited output (LuaEvent callbacks such as ShowIngameUI
+# debug prints) alongside command responses, so `_locked_execute` drains the
+# socket before sending and again after the sentinel — otherwise that output
+# would be attributed to the wrong command. Both drains run to their timeout
+# when nothing is pending, so the previous values (0.1s + 0.2s) cost 300ms of
+# pure waiting per Lua command: ~25 minutes across a 110-turn game, and a
+# measured floor of 302ms that no latency figure in the docs could beat.
+#
+# What the drains actually collect is data already buffered by the time they
+# run: the pre-send drain clears whatever accumulated while the agent was
+# thinking (seconds to minutes), and the post-command drain catches output
+# emitted alongside the response it just read. A fresh reader consumes every
+# buffered message within 0.5ms, so the multi-hundred-ms windows were far more
+# conservative than the mechanism needs. This value keeps a 20ms grace window;
+# raise CIV_MCP_DRAIN_TIMEOUT if a real game shows output leaking between
+# commands (the symptom is stray lines prepended to a tool result).
+DRAIN_TIMEOUT = float(os.environ.get("CIV_MCP_DRAIN_TIMEOUT", "0.02"))
 
 
 class LuaError(Exception):
@@ -308,7 +327,7 @@ class GameConnection:
         assert self._writer is not None
 
         # Drain any stale messages
-        await tuner_client.drain_messages(self._reader, timeout=0.1)
+        await tuner_client.drain_messages(self._reader, timeout=DRAIN_TIMEOUT)
 
         await tuner_client.send_message(
             self._writer, tuner_client.TAG_COMMAND, f"CMD:{state_index}:{lua_code}"
@@ -347,7 +366,7 @@ class GameConnection:
             raise CommandTimeoutError(timeout, lines)
 
         # Drain any trailing unsolicited output
-        await tuner_client.drain_messages(self._reader, timeout=0.2)
+        await tuner_client.drain_messages(self._reader, timeout=DRAIN_TIMEOUT)
         return lines
 
 
