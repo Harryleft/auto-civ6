@@ -119,6 +119,8 @@ class GameConnection:
         self.lua_states: dict[int, str] = {}  # index -> name
         self.gamecore_index: int | None = None
         self.ingame_index: int | None = None
+        self.generation = 0
+        self.mutation_revision = 0
 
     @property
     def is_connected(self) -> bool:
@@ -126,6 +128,7 @@ class GameConnection:
 
     async def connect(self) -> None:
         """Connect to Civ 6 and discover Lua state indexes."""
+        self.generation += 1
         log.info("Connecting to Civ 6 at %s:%d", self.host, self.port)
         try:
             self._reader, self._writer = await tuner_client.connect(
@@ -167,6 +170,7 @@ class GameConnection:
         )
 
     async def disconnect(self) -> None:
+        self.generation += 1
         if self._writer and not self._writer.is_closing():
             self._writer.close()
             await self._writer.wait_closed()
@@ -301,6 +305,9 @@ class GameConnection:
         """
         await self.ensure_connected()
         async with self._lock:
+            if mutation:
+                # Invalidate before the one send, including unknown outcomes.
+                self.mutation_revision += 1
             try:
                 return await self._locked_execute(
                     state_index, lua_code, timeout, require_sentinel=require_sentinel

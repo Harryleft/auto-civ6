@@ -24,6 +24,7 @@ from typing import Any
 
 from .canonical import arguments_hash
 from .forecast import bayes
+from .forecast.history import summarize_history
 from .graph import (
     GOVERNANCE_ENTITY_TYPES,
     GRAPH_DELTA_EVENT,
@@ -3586,6 +3587,17 @@ class BeliefEngine:
             "turn": turn,
             "review": review,
             "current_metrics": self.current_metrics(),
+            "history_summary": summarize_history(
+                # The summary is a pure read over frozen attributes. Avoid
+                # thawing and copying every historical observation just to
+                # retain eight metrics from the last twenty actual turns.
+                (
+                    node.attributes
+                    for node in self.graph_view.nodes_of_type("observation")
+                    if node.observed and node.attributes.get("status") == "active"
+                ),
+                current_turn=turn,
+            ),
             "decision_gate": {
                 "default_route": default_route,
                 "beliefs_requiring_review": gated_beliefs[:take],

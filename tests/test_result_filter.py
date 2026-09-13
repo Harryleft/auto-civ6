@@ -105,6 +105,35 @@ def test_unknown_and_malformed_results_are_never_truncated():
     )
 
 
+def test_governance_compaction_preserves_gates_and_self_contained_evidence():
+    metrics = {"player.gold": 100, "science": 20}
+    changes = {"affected_domains": ["military"], "checks_required": ["check resource visibility"]}
+    history = {"kind": "observed_history", "windows": [{"window_turns": 5, "coverage": 0.4}]}
+    gate = {"default_route": "slow", "blocking_scopes": ["military"]}
+    payload = {
+        "snapshot": {"world_entities_changed": [f"unit:{i}" for i in range(1000)],
+                     "world_changes": changes},
+        "belief_brief": {"current_metrics": metrics, "review": {"metrics": metrics},
+                         "decision_gate": gate, "history_summary": history},
+        "available_budget": {"gold": 50},
+        "confidence_gaps": [{"id": "threat", "confidence": 0.3}],
+    }
+    raw = json.dumps(payload)
+    filtered = filter_tool_result("get_governance_brief", raw, config=_config())
+    result = json.loads(filtered)
+    assert len(filtered) < len(raw) / 2
+    assert result["belief_brief"]["review"] == {"metrics_ref": "belief_brief.current_metrics"}
+    assert result["belief_brief"]["current_metrics"] == metrics
+    assert result["belief_brief"]["decision_gate"] == gate
+    assert result["belief_brief"]["history_summary"] == history
+    assert result["snapshot"]["world_changes"] == changes
+    assert result["snapshot"]["world_entities_changed_count"] == 1000
+    assert result["available_budget"] == payload["available_budget"]
+    assert result["confidence_gaps"] == payload["confidence_gaps"]
+    assert filter_tool_result("get_governance_brief", filtered, config=_config()) == filtered
+    assert payload["belief_brief"]["review"]["metrics"] == metrics
+
+
 def test_belief_state_filters_only_broad_queries_and_is_idempotent():
     payload = {
         "game_id": "game-1",

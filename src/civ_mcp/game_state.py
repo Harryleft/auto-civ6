@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING, Any
 
 from civ_mcp import lua as lq
 from civ_mcp.connection import SLOW_MUTATION_TIMEOUT, GameConnection, LuaError
+from civ_mcp.read_cache import ReadCache, scoped_collection, scoped_read
+from civ_mcp.research_cache import ResearchCache
 from civ_mcp.narrate import (
     narrate_combat_estimate,
     narrate_move_discoveries,
@@ -46,6 +48,9 @@ class GameState:
 
     def __init__(self, connection: GameConnection):
         self.conn = connection
+        self._cache_epoch = 0
+        self._reads = ReadCache(self._read_stamp)
+        self._research_cache = ResearchCache()
         self.spatial: SpatialTracker | None = None
         self._last_snapshot: lq.TurnSnapshot | None = None
         self._game_identity: tuple[str, int] | None = None  # (civ_type, seed)
@@ -80,6 +85,30 @@ class GameState:
         # cleared by the server wrapper.
         self._advisor_budget_warning: str | None = None
 
+    def _read_stamp(self) -> tuple[int, int, int] | None:
+        generation = getattr(self.conn, "generation", None)
+        revision = getattr(self.conn, "mutation_revision", None)
+        if type(generation) is not int or type(revision) is not int:
+            return None
+        return (generation, revision, getattr(self, "_cache_epoch", 0))
+
+    def _read_cache(self) -> ReadCache:
+        if not hasattr(self, "_reads"):
+            self._reads = ReadCache(self._read_stamp)
+        return self._reads
+
+    def read_collection(self):
+        return self._read_cache().collection()
+
+    def invalidate_cached_state(self) -> None:
+        """Abandon cached evidence even when a load stays on the same turn."""
+        self._cache_epoch = getattr(self, "_cache_epoch", 0) + 1
+        self._read_cache().invalidate()
+        if hasattr(self, "_research_cache"):
+            self._research_cache.clear()
+        self._ruleset_caps = None
+        self._last_snapshot = None
+
     async def get_game_identity(self) -> tuple[str, int]:
         """Return (civ_type_lower, random_seed) for the current game.
 
@@ -102,6 +131,7 @@ class GameState:
                 new_id = (civ, seed)
                 if self._game_identity is not None and new_id != self._game_identity:
                     log.info("Game changed: %s → %s", self._game_identity, new_id)
+                    self.invalidate_cached_state()
                     self._last_snapshot = None
                     self._diary_written_turn = None
                     self._last_game_over = None
@@ -122,10 +152,12 @@ class GameState:
     # Query methods
     # ------------------------------------------------------------------
 
+    @scoped_read
     async def get_game_overview(self) -> lq.GameOverview:
         # InGame context needed for GetFavor() (nil in GameCore)
         lines = await self.conn.execute_write(lq.build_overview_query())
         ov = lq.parse_overview_response(lines)
+        self._read_cache().set_turn(ov.turn)
         if ov.ruleset and self._ruleset_caps is None:
             from civ6_belief_engine.governance.capabilities import (
                 capabilities_for_ruleset,
@@ -143,6 +175,7 @@ class GameState:
                 log.debug("Failed to bootstrap snapshot", exc_info=True)
         return ov
 
+    @scoped_collection
     async def get_governance_snapshot(self):
         """Collect a same-turn typed snapshot for the governance control plane.
 
@@ -166,6 +199,8 @@ class GameState:
             if not before_lines:
                 raise SnapshotConsistencyError("Unable to read snapshot start turn")
             turn_before = int(before_lines[0])
+            self._read_cache().set_turn(turn_before)
+            stamp_before = self._read_stamp()
             overview = await self.get_game_overview()
             cities, _city_warnings = await self.get_cities()
             units = await self.get_units()
@@ -207,6 +242,10 @@ class GameState:
             if not after_lines:
                 raise SnapshotConsistencyError("Unable to read snapshot end turn")
             turn_after = int(after_lines[0])
+            if stamp_before != self._read_stamp():
+                self._read_cache().invalidate()
+                last_error = SnapshotConsistencyError("采集期间发生了动作或重连，请重新采集")
+                continue
             try:
                 return build_turn_snapshot(
                     turn_before=turn_before,
@@ -226,6 +265,7 @@ class GameState:
                     extra={"collector": "GameState.get_governance_snapshot"},
                 )
             except SnapshotConsistencyError as exc:
+                self._read_cache().invalidate()
                 last_error = exc
                 if turn_before == turn_after:
                     raise
@@ -262,6 +302,7 @@ class GameState:
             log.debug("Game-over check failed in GameCore too", exc_info=True)
             return None
 
+    @scoped_read
     async def get_units(self) -> list[lq.UnitInfo]:
         lines = await self.conn.execute_write(lq.build_units_query())
         return lq.parse_units_response(lines)
@@ -288,10 +329,12 @@ class GameState:
         lines = await self.conn.execute_mutation(lua)
         return _action_result(lines)
 
+    @scoped_read
     async def get_threat_scan(self) -> list[lq.ThreatInfo]:
         lines = await self.conn.execute_read(lq.build_threat_scan_query())
         return lq.parse_threat_scan_response(lines)
 
+    @scoped_read
     async def get_barbarian_overview(self) -> lq.BarbarianOverview:
         """Return revealed camps and currently visible barbarian units."""
         lines = await self.conn.execute_read(lq.build_barbarian_overview_query())
@@ -323,10 +366,12 @@ class GameState:
         lines = await self.conn.execute_write(lq.build_victory_progress_query())
         return lq.parse_victory_progress_response(lines)
 
+    @scoped_read
     async def get_cities(self) -> tuple[list[lq.CityInfo], list[str]]:
         lines = await self.conn.execute_write(lq.build_cities_query())
         return lq.parse_cities_response(lines)
 
+    @scoped_read
     async def get_map_area(
         self, center_x: int, center_y: int, radius: int = 2
     ) -> list[lq.TileInfo]:
@@ -339,15 +384,24 @@ class GameState:
         lines = await self.conn.execute_read(lq.build_strategic_map_query())
         return lq.parse_strategic_map_response(lines)
 
+    @scoped_read
     async def get_diplomacy(self) -> list[lq.CivInfo]:
         # Uses InGame context for GetDiplomaticAI access
         lines = await self.conn.execute_write(lq.build_diplomacy_query())
         return lq.parse_diplomacy_response(lines)
 
+    @scoped_read
     async def get_tech_civics(self) -> lq.TechCivicStatus:
-        lines = await self.conn.execute_read(lq.build_tech_civics_query())
-        return lq.parse_tech_civics_response(lines)
+        if not hasattr(self, "_research_cache"):
+            self._research_cache = ResearchCache()
+        generation = getattr(self.conn, "generation", None)
+        token = (
+            (generation, getattr(self, "_cache_epoch", 0))
+            if type(generation) is int else None
+        )
+        return await self._research_cache.read(self.conn, generation=token)
 
+    @scoped_read
     async def get_empire_resources(
         self,
     ) -> tuple[
@@ -1137,6 +1191,7 @@ class GameState:
     # Policy methods (InGame context)
     # ------------------------------------------------------------------
 
+    @scoped_read
     async def get_policies(self) -> lq.GovernmentStatus:
         lua = lq.build_policies_query()
         lines = await self.conn.execute_write(lua)

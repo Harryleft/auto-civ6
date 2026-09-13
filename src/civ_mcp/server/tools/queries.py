@@ -12,9 +12,7 @@ from civ_mcp.server import pipeline
 from civ_mcp.server.assembly import mcp
 from civ_mcp.server.governance_snapshot import (
     _capture_governance_snapshot,
-    _reusable_typed_snapshot_for_turn,
 )
-from civ6_belief_engine.graph.project import WORLD_SOURCE
 
 # ---------------------------------------------------------------------------
 # Query tools (read-only)
@@ -119,48 +117,24 @@ async def get_game_overview(ctx: Context) -> str:
         if pipeline._get_belief_mode(ctx).captures_governance_snapshot:
             try:
                 engine = pipeline._get_beliefs(ctx)
-                cached = _reusable_typed_snapshot_for_turn(engine, turn=ov.turn)
-                if cached is None:
-                    snapshot, world, projection, released, locks = (
-                        await _capture_governance_snapshot(ctx, engine)
-                    )
-                    snapshot_id = snapshot.snapshot_id
-                    ruleset = world["ruleset"]
-                    changed_count = len(projection["world_entities_changed"])
-                    archived_count = len(projection["world_entities_archived"])
-                    lock_count = len(locks)
-                    released_count = len(released)
-                    snapshot_source = "captured"
-                else:
-                    facts = cached.get("facts") or {}
-                    capabilities = facts.get("capabilities") or {}
-                    snapshot_id = str(facts.get("snapshot_id") or "unknown")
-                    ruleset = str(capabilities.get("ruleset") or "unknown")
-                    active_world_entities = sum(
-                        1
-                        for node in engine.graph_view.nodes.values()
-                        if node.source == WORLD_SOURCE and node.observed
-                    )
-                    changed_count = 0
-                    archived_count = 0
-                    lock_count = len(
-                        engine.current_governance_entities(
-                            "budget_lock", status="active"
-                        )
-                    )
-                    released_count = 0
-                    snapshot_source = "reused"
-                belief_brief = engine.turn_brief(turn=ov.turn)
+                # An async action may take effect after an earlier read-back.
+                # Journal timestamps cannot prove freshness across requests;
+                # only this request's bounded collection can share reads.
+                snapshot, world, projection, released, locks = (
+                    await _capture_governance_snapshot(ctx, engine)
+                )
+                belief_brief = engine.turn_brief(turn=snapshot.turn)
                 await pipeline._flush_belief_events(ctx)
                 text += (
                     "\n\n=== GOVERNANCE SNAPSHOT ===\n"
-                    f"snapshot={snapshot_id} ruleset={ruleset} source={snapshot_source} "
-                    f"entities_changed={changed_count} "
-                    f"entities_archived={archived_count} "
-                    f"active_budget_locks={lock_count} released_locks={released_count}"
+                    f"snapshot={snapshot.snapshot_id} ruleset={world['ruleset']} source=captured "
+                    f"entities_changed={len(projection['world_entities_changed'])} "
+                    f"entities_archived={len(projection['world_entities_archived'])} "
+                    f"active_budget_locks={len(locks)} released_locks={len(released)}"
                 )
-                if cached is not None:
-                    text += f" active_world_entities={active_world_entities}"
+                changes = projection.get("world_changes")
+                if changes:
+                    text += "\n" + pipeline._format_world_changes(changes)
                 text += pipeline._format_belief_turn_brief(belief_brief)
             except Exception as exc:
                 log.warning("Governance: failed to capture typed turn state", exc_info=True)

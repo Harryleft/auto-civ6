@@ -23,6 +23,7 @@
 - [Belief Engine](belief-engine.md) — Event-sourced world model: events, run modes, derivation rules, coverage audit
 - [Governance System](governance-system.md) — Control loop, engineering constraints, proposals/council/budget locks, end-turn gate
 - [Testing](testing.md) — Test taxonomy, shared fixtures, and unified pytest configuration
+- [状态分类与缓存](cache-policy.md) — 规则复用、采集失效、图变化与 5／10／20 回合历史窗口
 - [Observability](observability.md) — Diary, tool logging, and spatial attention tracking
 - [Save File Format](save-file-format.md) — Reverse-engineered .Civ6Save structure
 - [Bypassing the Aspyr Launcher](research/bypassing_aspyr_launcher.md) — macOS launch automation

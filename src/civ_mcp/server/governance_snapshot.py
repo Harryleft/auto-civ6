@@ -16,6 +16,7 @@ from civ6_belief_engine.graph import (
     project_active_goals,
     project_world_state,
 )
+from civ6_belief_engine.graph.context import summarize_world_changes
 from civ_mcp.server import pipeline
 from civ_mcp.server.tools.governance_adapters import _goal_graph_payload
 
@@ -96,7 +97,11 @@ def _reusable_typed_snapshot_for_turn(
     *,
     turn: int,
 ) -> dict[str, Any] | None:
-    """Reuse the typed snapshot only while no successful action has changed state."""
+    """Historical candidate without a known later submission, not fresh evidence.
+
+    Kept for internal compatibility. An earlier async action can still take
+    effect after capture, so authoritative overview requests always recapture.
+    """
 
     snapshot = _typed_snapshot_observation_for_turn(engine, turn=turn)
     if snapshot is None:
@@ -104,7 +109,6 @@ def _reusable_typed_snapshot_for_turn(
     captured_at = float(snapshot.get("created_at", 0))
     has_later_mutation = any(
         action.get("selected_turn") == turn
-        and action.get("success") is True
         and action.get("executed") is True
         and float(action.get("created_at", 0)) > captured_at
         for action in engine.current_governance_entities("action", status="active")
@@ -156,7 +160,9 @@ async def _capture_governance_snapshot(
             previous=engine.graph_view,
             epoch=engine.epoch,
         )
+        world_changes = summarize_world_changes(engine.graph_view, graph_delta)
         next_graph = engine.record_graph_delta(graph_delta)
+        projection["world_changes"] = world_changes
         governance_graph = engine.sync_governance_graph(turn=snapshot.turn)
         event_source_entities = tuple(
             entity

@@ -10,6 +10,7 @@ import json
 import logging
 import time
 from collections.abc import Mapping
+from contextlib import nullcontext
 from typing import Any, Awaitable, Callable
 
 from mcp.server.fastmcp import Context
@@ -34,6 +35,9 @@ from civ_mcp.presentation import action_receipt_status, localize_model_result
 from civ_mcp.result_filter import filter_tool_result
 from civ_mcp.spatial import SpatialTracker
 from civ_mcp.spectator import CameraController, PopupWatcher
+
+_SAVE_LOADING_TOOLS = frozenset({"load_save", "load_game_save", "load_save_from_menu"})
+
 
 def _get_game(ctx: Context) -> GameState:
     return ctx.request_context.lifespan_context.game
@@ -118,6 +122,12 @@ async def _record_game_reload_epoch(
     """
 
     try:
+        invalidate = getattr(_get_game(ctx), "invalidate_cached_state", None)
+        if callable(invalidate):
+            invalidate()
+    except Exception:
+        log.error("Failed to clear game read caches (%s)", reason, exc_info=True)
+    try:
         engine = _get_beliefs(ctx)
         if not _get_belief_mode(ctx).records_events or not engine.bound:
             return
@@ -201,6 +211,20 @@ def _format_belief_turn_brief(brief: dict[str, Any]) -> str:
         lines.append("!! 活动 Surprise: " + ", ".join(gate["active_surprises"]))
     if gate.get("active_contradictions"):
         lines.append("!! 活动 Contradiction: " + ", ".join(gate["active_contradictions"]))
+    history = brief.get("history_summary") or {}
+    if any(window.get("metrics") for window in history.get("windows", [])):
+        lines.append("历史窗口只汇总已观测回合，缺测不补值，也不代表当前事实或未来预测。")
+    for window in history.get("windows", []):
+        changes = []
+        for metric, item in window.get("metrics", {}).items():
+            change = item.get("change")
+            if change is not None:
+                changes.append(
+                    f"{metric} {change:+g}（{item['sample_count']}/{window['available_turns']} 回合有观测，"
+                    f"末次 T{item['last']['turn']}）"
+                )
+        if changes:
+            lines.append(f"近 {window['window_turns']} 回合历史变化: " + "; ".join(changes))
     lines.append(
         "执行约束: 附近敌对单位只触发验证，不自动降低路线信念；路线风险必须使用 get_combat_estimate 的真实 CS/HP/预期互伤后再更新。"
     )
@@ -208,6 +232,26 @@ def _format_belief_turn_brief(brief: dict[str, Any]) -> str:
         "高影响或不可逆行动前，必须调用 route_belief_decision，并在行动后核对结果。"
     )
     return "\n".join(lines)
+
+
+def _format_world_changes(changes: Mapping[str, Any]) -> str:
+    if changes.get("mode") == "baseline":
+        return "世界变化：本次建立观测基线，后续采集再比较变化。"
+    counts = changes.get("counts") or {}
+    domains = changes.get("affected_domains") or []
+    labels = {
+        "science": "科研", "culture": "文化", "production": "生产",
+        "economy": "经济", "military": "军事", "diplomacy": "外交", "map": "地图",
+    }
+    text = (
+        f"世界变化：{counts.get('node_changes', 0)} 个对象、"
+        f"{counts.get('edge_changes', 0)} 条关系；建议重评："
+        + ("、".join(labels.get(domain, domain) for domain in domains) or "无新增领域")
+        + "。范围限于本次观测，未观测对象需另行核实。"
+    )
+    for check in changes.get("checks_required", []):
+        text += "\n待核实：" + str(check.get("reason", ""))
+    return text
 
 
 def _param_summary(params: dict[str, Any]) -> str:
@@ -780,6 +824,10 @@ async def _logged(
     async def _fail(result: str, execution_status: str) -> None:
         """Shared error tail: timing, log, belief record (caller returns)."""
 
+        if tool_name in _SAVE_LOADING_TOOLS and (
+            execution_status == "unknown" or _load_was_submitted()
+        ):
+            await _record_game_reload_epoch(ctx, reason=f"{tool_name}_unknown")
         ms = int((time.monotonic() - start) * 1000)
         log.info(
             "[T%s] %s(%s) ERR %dms: %s",
@@ -860,8 +908,49 @@ async def _logged(
         )
         return _return_result(result)
 
+    game = None
+    load_revision = None
+
+    def _load_was_submitted() -> bool:
+        revision = getattr(getattr(game, "conn", None), "mutation_revision", None)
+        return (
+            type(load_revision) is int and type(revision) is int
+            and revision != load_revision
+        )
+
     try:
-        result = await fn()
+        try:
+            game = _get_game(ctx)
+        except AttributeError:
+            game = None
+        collection = getattr(game, "read_collection", None)
+        if tool_name in _SAVE_LOADING_TOOLS:
+            load_revision = getattr(getattr(game, "conn", None), "mutation_revision", None)
+            invalidate = getattr(game, "invalidate_cached_state", None)
+            if callable(invalidate):
+                invalidate()
+        # Collection reuse ends before belief recording; a later evidence
+        # request always reads the game, even on the same turn.
+        read_scope = (
+            collection()
+            if tool_name.startswith("get_") and callable(collection)
+            else nullcontext()
+        )
+        with read_scope:
+            result = await fn()
+        if tool_name in _SAVE_LOADING_TOOLS:
+            receipt = action_receipt_status(tool_name, result, params=params)
+            status = receipt[0] if receipt else "unknown"
+            if status in {"succeeded", "submitted", "unknown"} or _load_was_submitted():
+                # FrontEnd can start loading successfully then return Error
+                # when its auto-continue step fails. Submission still abandons
+                # the old world branch, even if the final receipt is a failure.
+                reason = "submitted" if status in {"succeeded", "submitted"} else "unknown"
+                await _record_game_reload_epoch(ctx, reason=f"{tool_name}_{reason}")
+    except asyncio.CancelledError:
+        if tool_name in _SAVE_LOADING_TOOLS and _load_was_submitted():
+            await _record_game_reload_epoch(ctx, reason=f"{tool_name}_unknown")
+        raise
     except (LuaError, ValueError) as e:
         result = f"Error: {e}"
         await _fail(
