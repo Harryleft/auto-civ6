@@ -1687,6 +1687,19 @@ class GameState:
         lines = await self.conn.execute_mutation(lua, timeout=SLOW_MUTATION_TIMEOUT)
         return _action_result(lines)
 
+    async def drive_world_congress(self) -> str:
+        """Vote the open World Congress session and submit it, from Lua.
+
+        Program-side replacement for a human clicking the congress screen.
+        Applies the registered policy (``queue_wc_votes``) to the *live*
+        resolution list — the only list that matches what the session actually
+        votes on — then submits.  A no-op (``WC_DRIVE|no_session``) when no
+        session is open, so callers may invoke it speculatively.
+        """
+        lua = lq.build_wc_drive_and_submit()
+        lines = await self.conn.execute_mutation(lua, timeout=SLOW_MUTATION_TIMEOUT)
+        return _action_result(lines)
+
     async def queue_wc_votes(self, votes: list[dict]) -> str:
         """Store agent voting preferences and register WC event handler."""
         lua = lq.build_register_wc_voter(votes=votes)

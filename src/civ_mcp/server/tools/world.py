@@ -505,17 +505,29 @@ async def queue_wc_votes(ctx: Context, votes: str) -> str:
     Args:
         votes: JSON array of vote objects, e.g.
             '[{"hash": -513644209, "option": 1, "target": 2, "votes": 5}]'
+            也可用决议类型名代替 hash，例如
+            '[{"type": "WC_RES_WORLD_RELIGION", "option": 1, "votes": 4}]'。
+            **推荐用 type**：开会前的 get_world_congress 预览列出的是上一届
+            决议，hash 到真正开会时经常对不上；type 是稳定标识，处理器会在
+            议会真正打开、拿到真实决议清单时再匹配。
             hash = resolution type hash (from get_world_congress)
+            type = resolution type name, e.g. WC_RES_LUXURY / WC_RES_WORLD_RELIGION
             option = 1 for A, 2 for B
             target = player ID for PlayerType resolutions (from get_world_congress
                      target list, e.g. [target=2] Portugal), or target value for
                      non-player resolutions. The handler resolves to the correct
                      0-based index at runtime.
-            votes = max votes to allocate (will use as many as favor allows)
+            votes = max votes to allocate (default 1 = 免费的第一票；未列出的
+                     决议也按 1 票处理，不会消耗 favor)
 
     Call this BEFORE end_turn when get_world_congress shows 0 turns until next
     session. Registers an event handler that fires during WC processing and
     casts your votes with the specified preferences.
+
+    投票与提交都由本程序完成（无需玩家点界面）：处理器在议会打开时按上述
+    策略投票并提交；若事件处理器因引擎时序没有触发，end_turn 的等待循环会
+    在议会回合自行驱动一次——读取**真实**决议清单、套用同一策略、投票并提交
+    （见 `build_wc_drive_and_submit`），随后把实际票型写入 `__civmcp_wc_report`。
 
     未在 votes 里出现的决议只投 1 票（第 1 票成本为 0），不会消耗 favor。
     get_world_congress 在开会前的预览可能给出与实际开会不同的决议集合，
