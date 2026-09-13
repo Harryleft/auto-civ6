@@ -17,6 +17,7 @@ import os
 import re
 import time
 import uuid
+from collections.abc import Mapping
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -30,6 +31,7 @@ from .graph import (
     project_governance_state,
     replay_graph_events,
 )
+from .graph.model import thaw_json as _thaw_json
 
 log = logging.getLogger(__name__)
 
@@ -1095,6 +1097,11 @@ class BeliefEngine:
         # ``_sequence`` (and a load recomputes it), so a write invalidates both
         # caches without any explicit bookkeeping. ``review()`` appends events,
         # which is exactly why the turn-brief cache is keyed *after* it runs.
+        # Newest governance-typed event sequence, maintained incrementally by
+        # _reduce so _latest_governance_sequence stays O(1).
+        self._governance_sequence = 0
+        # (entity_type, entity_id) -> epoch of that entity's first event.
+        self._entity_creation_epoch: dict[tuple[str, str], int] = {}
         self._metrics_sequence: int | None = None
         self._metrics_cache: dict[str, Any] | None = None
         self._review_key: tuple[int, int] | None = None
@@ -1155,6 +1162,8 @@ class BeliefEngine:
         self._graph_replay_error = None
         self._graph_materialized_sequence = 0
         self._graph_persisted_sequence = 0
+        self._governance_sequence = 0
+        self._entity_creation_epoch = {}
         self._metrics_sequence = None
         self._metrics_cache = None
         self._review_key = None
@@ -1345,10 +1354,29 @@ class BeliefEngine:
     def _reduce(self, event: dict[str, Any]) -> None:
         entity = event.get("entity")
         entity_type = event.get("entity_type")
+        # Advance the governance cursor before the entity-store check: it must
+        # track every governance-typed event, including ones whose payload is
+        # not a reducible entity. Keeping it incremental turns what used to be
+        # an O(events) scan on the hot path into a comparison.
+        if entity_type in _GOVERNANCE_GRAPH_ENTITY_TYPES:
+            try:
+                sequence = int(event.get("sequence", 0))
+            except (TypeError, ValueError):
+                sequence = 0
+            if sequence > self._governance_sequence:
+                self._governance_sequence = sequence
         if entity_type not in self._entities or not isinstance(entity, dict):
             return
         entity_id = entity.get("id")
         if entity_id:
+            # First event wins: events stream in file order, so the first write
+            # for a key records the epoch the entity was created in.
+            key = (entity_type, entity_id)
+            if key not in self._entity_creation_epoch:
+                try:
+                    self._entity_creation_epoch[key] = int(event.get("epoch", 1))
+                except (TypeError, ValueError):
+                    self._entity_creation_epoch[key] = 1
             self._entities[entity_type][entity_id] = deepcopy(entity)
 
     def _append(
@@ -1562,14 +1590,13 @@ class BeliefEngine:
         )
 
     def _latest_governance_sequence(self) -> int:
-        return max(
-            (
-                int(event.get("sequence", 0))
-                for event in self._events
-                if event.get("entity_type") in _GOVERNANCE_GRAPH_ENTITY_TYPES
-            ),
-            default=0,
-        )
+        """Sequence of the newest governance-typed event, maintained by _reduce.
+
+        Scanning for this cost ~3.2ms per call against a 14.7k-event journal and
+        ran on every tool result via the sync guard.
+        """
+
+        return self._governance_sequence
 
     def create(
         self,
@@ -1785,18 +1812,26 @@ class BeliefEngine:
             return []
         self._ensure_governance_graph_current()
         nodes = self._graph_view.nodes_of_type(entity_type)
+        # ``status`` lives inside the frozen attributes, so the filter can run
+        # before the thaw. Most nodes of a type are filtered out (e.g. 614
+        # decisions of which few are active), and thawing dominates this loop.
+        wanted_status = status if status and status not in {"all", ""} else None
         entities: list[dict[str, Any]] = []
         for node in nodes:
             if not node.observed and status not in (None, "all", "deleted"):
                 continue
-            payload = node.to_dict()["attributes"]
-            if not isinstance(payload, dict):
+            attributes = node.attributes
+            if not isinstance(attributes, Mapping):
                 continue
-            item = deepcopy(payload)
+            if wanted_status is not None and attributes.get("status") != wanted_status:
+                continue
+            # ``thaw_json`` already returns a fresh mutable tree, so the extra
+            # deepcopy that used to follow node.to_dict() was a second full copy.
+            item = _thaw_json(attributes)
+            if not isinstance(item, dict):
+                continue
             item.setdefault("id", node.node_id)
             item.setdefault("entity_type", entity_type)
-            if status and status not in {"all", ""} and item.get("status") != status:
-                continue
             item.setdefault("last_updated_turn", node.last_observed_turn)
             entities.append(item)
         return sorted(
@@ -2000,15 +2035,12 @@ class BeliefEngine:
         ``_recover_orphaned_executing_decisions``) rewrites an entity and, in
         doing so, stamps a fresh event at the current epoch — which would make a
         decision from an abandoned branch look current again.
+
+        The first-event epoch is recorded by ``_reduce`` as events stream in, so
+        this is a lookup rather than a scan of the whole journal.
         """
 
-        for event in self._events:
-            if (
-                event.get("entity_type") == entity_type
-                and event.get("entity_id") == entity_id
-            ):
-                return int(event.get("epoch", 1)) == self._epoch
-        return False
+        return self._entity_creation_epoch.get((entity_type, entity_id)) == self._epoch
 
     def _reconcile_observed_action_effects(
         self, observation: dict[str, Any], *, turn: int
