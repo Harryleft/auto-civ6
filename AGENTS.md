@@ -37,6 +37,22 @@
 
 结束回合前必须逐项核对主清单：任何一项为「否」= 该领域存在未完成决策，先处理，或显式记录推迟原因（写入 Diary.planning），不得假装已处理；冲突时按更严格者执行并报告。回复末尾报告 `回合清单核对：通过 x/16，N/A y`。
 
+### 退出游戏后直接进对局：`scripts/launch_save.py`
+
+需要「先退出游戏 → 重新拉起并直接读到对局」时用这个脚本。它按 Steam → 主菜单 → 单人游戏 → 加载游戏 → 选档 → `CONTINUE GAME` 的顺序做 OCR 导航，不需要人手点菜单：
+
+```bash
+cd civ6-mcp
+uv run python scripts/launch_save.py --kill-first              # 杀掉当前游戏并重新拉起，载入最近的自动存档
+uv run python scripts/launch_save.py AutoSave_0221             # 指定存档（名字不带 .Civ6Save 后缀）
+uv run python scripts/launch_save.py --no-launch AutoSave_0221 # 游戏已在运行，只做菜单导航
+```
+
+- 依赖：`uv pip install 'civ6-belief-engine[launcher-macos]'`（pyobjc 的 Quartz/Vision）；本仓库 `.venv` 已具备。
+- 权限：macOS 必须给**调用方**「屏幕录制」（`screencapture` + OCR）与「辅助功能」（`CGEvent` 点击、`osascript System Events`）。从 Terminal 运行通常已授权；从其它 App（例如 DSH Desktop）代跑可能被系统拒绝，届时改由人工在 Terminal 执行。
+- 存档位置：脚本默认在 `Saves/Single/auto/AutoSave_*.Civ6Save` 里找，并会点进「Autosaves」页；`0_MCP_*.Civ6Save` 位于 `Saves/Single/`（普通存档列表），所以**优先传 `AutoSave_*`**。要回到 MCP 存档请用受控恢复：`CIV_MCP_DSH_AUTO_RESUME=1 ./scripts/civ6_launch web|agent`（经 Civ VI FrontEnd API 直接载入最新 `0_MCP_*.Civ6Save`，不点菜单）。
+- 脚本结束后不要用它去探 `4318`：FireTuner 只允许一个客户端，连接与工具调用一律交给 DSH/MCP。
+
 ## 开发：验证与提交
 
 ```bash
