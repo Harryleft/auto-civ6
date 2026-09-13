@@ -2,11 +2,10 @@
 
 import asyncio
 
-from civ_mcp import lua as lq
 from civ_mcp.end_turn import (
     _can_override_end_turn_blockers,
     _probe_world_congress_popup,
-    _wc_popup_probe_needed,
+    _wc_early_dismiss_due,
 )
 
 
@@ -40,18 +39,8 @@ def test_unit_blocker_wins_when_mixed_with_other_blockers() -> None:
     )
 
 
-class _FakeConn:
-    def __init__(self) -> None:
-        self.write_calls = 0
-
-    async def execute_write(self, lua: str) -> list[str]:
-        self.write_calls += 1
-        return ["BLOCKER"]
-
-
 class _FakeGameState:
     def __init__(self, dismissed: str) -> None:
-        self.conn = _FakeConn()
         self.dismiss_calls = 0
         self._dismissed = dismissed
 
@@ -60,54 +49,38 @@ class _FakeGameState:
         return self._dismissed
 
 
-def test_wc_probe_needed_for_congress_blockers() -> None:
+def test_early_dismiss_only_on_congress_turns() -> None:
     assert (
-        _wc_popup_probe_needed(
-            [("ENDTURN_BLOCKING_WORLD_CONGRESS_SESSION", "继续议会")]
-        )
-        is True
-    )
-    assert (
-        _wc_popup_probe_needed(
-            [("ENDTURN_BLOCKING_WORLD_CONGRESS_LOOK", "查看议会结果")]
-        )
-        is True
-    )
-
-
-def test_wc_probe_not_needed_for_other_blockers() -> None:
-    assert (
-        _wc_popup_probe_needed(
-            [("ENDTURN_BLOCKING_PRODUCTION", "London needs production")]
-        )
+        _wc_early_dismiss_due(wc_turn=False, cumulative_wait=300.0, probed=False)
         is False
     )
-    assert _wc_popup_probe_needed([]) is False
 
 
-def test_wc_probe_dismisses_once_when_congress_blocker_present(
-    monkeypatch,
-) -> None:
-    monkeypatch.setattr(lq, "build_end_turn_blocking_query", lambda: "Q")
-    monkeypatch.setattr(
-        lq,
-        "parse_end_turn_blocking",
-        lambda lines: [("ENDTURN_BLOCKING_WORLD_CONGRESS_LOOK", "look")],
+def test_early_dismiss_waits_for_the_grace_period() -> None:
+    assert (
+        _wc_early_dismiss_due(wc_turn=True, cumulative_wait=30.0, probed=False)
+        is False
     )
-    gs = _FakeGameState("Dismissed: WorldCongressIntro")
+    assert (
+        _wc_early_dismiss_due(wc_turn=True, cumulative_wait=61.0, probed=False)
+        is True
+    )
 
+
+def test_early_dismiss_runs_at_most_once_per_turn() -> None:
+    assert (
+        _wc_early_dismiss_due(wc_turn=True, cumulative_wait=300.0, probed=True)
+        is False
+    )
+
+
+def test_wc_probe_reports_a_real_dismissal() -> None:
+    gs = _FakeGameState("Dismissed: WorldCongressIntro")
     assert asyncio.run(_probe_world_congress_popup(gs)) is True
     assert gs.dismiss_calls == 1
 
 
-def test_wc_probe_skips_dismiss_without_congress_blocker(monkeypatch) -> None:
-    monkeypatch.setattr(lq, "build_end_turn_blocking_query", lambda: "Q")
-    monkeypatch.setattr(
-        lq,
-        "parse_end_turn_blocking",
-        lambda lines: [("ENDTURN_BLOCKING_UNITS", "Scout needs orders")],
-    )
-    gs = _FakeGameState("Dismissed: Something")
-
+def test_wc_probe_reports_nothing_to_dismiss() -> None:
+    gs = _FakeGameState("No popups to dismiss.")
     assert asyncio.run(_probe_world_congress_popup(gs)) is False
-    assert gs.dismiss_calls == 0
+    assert gs.dismiss_calls == 1
