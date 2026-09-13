@@ -16,6 +16,10 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+# Seconds to wait after sending ACTION_ENDTURN before the one-shot early
+# World Congress screen dismissal is attempted.
+_WC_EARLY_DISMISS_AFTER = 60.0
+
 
 def _barbarian_attack_opportunities(
     units: list[lq.UnitInfo], overview: lq.BarbarianOverview
@@ -52,37 +56,34 @@ def _can_override_end_turn_blockers(
     )
 
 
-def _wc_popup_probe_needed(blockers: list[tuple[str, str]]) -> bool:
-    """Return whether a World Congress screen may be dismissed early.
+def _wc_early_dismiss_due(
+    *,
+    wc_turn: bool,
+    cumulative_wait: float,
+    probed: bool,
+) -> bool:
+    """Return whether the one-shot early World Congress dismissal should run.
 
-    The World Congress opens and closes inside ``ACTION_ENDTURN``; the game
-    parks on a congress screen until that screen is looked at.  The wait loop
-    can only observe the turn number, so without this probe a congress turn
-    burns the full ~9-minute timeout before the post-timeout dismissal runs.
-    Only congress blockers qualify — unit, production and research screens
-    are never touched.
+    The World Congress opens and closes inside ``ACTION_ENDTURN``.  While that
+    segment runs, the end-turn blocker query reports nothing (the game is not
+    waiting on our side), so a blocker-gated probe can never fire; the wait
+    loop would burn the full ~9-minute timeout before the post-timeout
+    dismissal runs.  Gating on the earlier ``get_world_congress`` result
+    instead keeps the dismissal limited to congress turns.
     """
 
-    return any(
-        "WORLD_CONGRESS" in blocker_type for blocker_type, _ in blockers
-    )
+    return wc_turn and not probed and cumulative_wait >= _WC_EARLY_DISMISS_AFTER
 
 
 async def _probe_world_congress_popup(gs: GameState) -> bool:
     """Dismiss a visible World Congress screen once, during the wait loop.
 
-    Returns True only when a congress blocker was present *and* the single
-    dismissal call reported a real dismissal.  The single attempt is
-    deliberate: the module history shows that repeatedly dismissing UI
-    overlays while the AI is still processing can wedge the game.
+    Returns True only when the single dismissal call reported a real
+    dismissal.  The single attempt is deliberate: the module history shows
+    that repeatedly dismissing UI overlays while the AI is still processing
+    can wedge the game.
     """
 
-    blocking_lines = await gs.conn.execute_write(
-        lq.build_end_turn_blocking_query()
-    )
-    blockers = lq.parse_end_turn_blocking(blocking_lines)
-    if not _wc_popup_probe_needed(blockers):
-        return False
     dismissed = await gs.dismiss_popup()
     return "Dismissed" in dismissed
 
@@ -651,6 +652,7 @@ async def execute_end_turn(gs: GameState) -> str:
     #     registered, block end_turn and tell the agent to vote first.
     #     The WC session opens+closes within ACTION_ENDTURN synchronously,
     #     so we MUST register a handler BEFORE sending ACTION_ENDTURN.
+    wc_turn = False
     try:
         wc_status = await gs.get_world_congress()
         if wc_status.turns_until_next <= 0 or wc_status.is_in_session:
@@ -659,6 +661,7 @@ async def execute_end_turn(gs: GameState) -> str:
             if n_res == 0 and not wc_status.is_in_session:
                 log.info("WC fires this turn with 0 resolutions — auto-proceeding")
             else:
+                wc_turn = True
                 handler_lines = await gs.conn.execute_write(
                     f'print(__civmcp_wc_handler and "HANDLER_SET" or "NO_HANDLER"); '
                     f'print("{lq.SENTINEL}")'
@@ -1352,9 +1355,12 @@ async def execute_end_turn(gs: GameState) -> str:
                     break
             # World Congress turns park on a congress screen that only needs
             # to be looked at; waiting the full timeout for it wastes most of
-            # the turn budget.  Probe once per turn, well after the congress
-            # segment can still be processing, and never in a loop.
-            if not wc_probed and cumulative_wait >= 60:
+            # the turn budget.  Probe once per turn, on congress turns only.
+            if _wc_early_dismiss_due(
+                wc_turn=wc_turn,
+                cumulative_wait=cumulative_wait,
+                probed=wc_probed,
+            ):
                 wc_probed = True
                 try:
                     if await _probe_world_congress_popup(gs):
