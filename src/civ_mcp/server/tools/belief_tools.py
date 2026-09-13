@@ -12,6 +12,7 @@ from typing import Any
 
 from mcp.server.fastmcp import Context
 
+from civ6_belief_engine.graph import GOVERNANCE_ENTITY_TYPES
 from civ6_belief_engine.belief_engine import (
     BeliefEngine,
     BeliefEngineError,
@@ -37,28 +38,6 @@ from civ_mcp.server.tools.governance_adapters import (
 )
 
 log = logging.getLogger(__name__)
-
-_GRAPH_GOVERNANCE_ENTITY_TYPES = frozenset(
-    {
-        "observation",
-        "belief",
-        "goal",
-        "proposal",
-        "critic_review",
-        "council_decision",
-        "budget_lock",
-        "decision",
-        "action",
-        "outcome",
-        "hypothesis",
-        "prediction",
-        "plan",
-        "surprise",
-        "contradiction",
-        "attribution",
-        "simulation",
-    }
-)
 
 
 def _intents_fingerprint(intents: Any) -> str:
@@ -1105,7 +1084,7 @@ async def get_belief_state(
                 "entity_type": entity_type,
                 "items": (
                     graph_items
-                    if entity_type in _GRAPH_GOVERNANCE_ENTITY_TYPES
+                    if entity_type in GOVERNANCE_ENTITY_TYPES
                     else engine.list(entity_type, status=selected_status)
                 )[:limit],
             }
@@ -1134,7 +1113,7 @@ async def get_belief_state(
             "entities": {
                 kind: (
                     engine.graph_entities(kind, status=selected_status)
-                    if kind in _GRAPH_GOVERNANCE_ENTITY_TYPES
+                    if kind in GOVERNANCE_ENTITY_TYPES
                     else engine.list(kind, status=selected_status)
                 )[:limit]
                 for kind in visible_types

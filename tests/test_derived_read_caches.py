@@ -13,10 +13,8 @@ call would then see an identical store and write nothing again.
 
 from __future__ import annotations
 
-from civ6_belief_engine.belief_engine import (
-    _GOVERNANCE_GRAPH_ENTITY_TYPES,
-    BeliefEngine,
-)
+from civ6_belief_engine.belief_engine import BeliefEngine
+from civ6_belief_engine.graph import GOVERNANCE_ENTITY_TYPES
 
 
 def _belief(statement: str) -> dict:
@@ -173,7 +171,7 @@ def _brute_force_governance_sequence(engine: BeliefEngine) -> int:
         (
             int(event.get("sequence", 0))
             for event in engine._events
-            if event.get("entity_type") in _GOVERNANCE_GRAPH_ENTITY_TYPES
+            if event.get("entity_type") in GOVERNANCE_ENTITY_TYPES
         ),
         default=0,
     )
