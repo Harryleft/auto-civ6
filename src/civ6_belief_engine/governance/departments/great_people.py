@@ -19,6 +19,8 @@ from .base import (
     DepartmentContext,
     SupportRequest,
     Workstream,
+    contains_keyword,
+    context_text,
 )
 
 _GREAT_PEOPLE_KEYWORDS = (
@@ -42,19 +44,6 @@ _GREAT_PEOPLE_KEYWORDS = (
 _GP_MAX_RACE_GAP_RATIO = 0.5
 
 
-def _contains_keyword(values: Iterable[str], keywords: tuple[str, ...]) -> bool:
-    haystack = " ".join(values).casefold()
-    return any(keyword.casefold() in haystack for keyword in keywords)
-
-
-def _context_text(context: DepartmentContext) -> tuple[str, ...]:
-    values = list(graph_agenda(context))
-    for goal in graph_goals(context):
-        values.append(goal.statement)
-        values.extend(goal.tags)
-    return tuple(values)
-
-
 class GreatPeopleDepartment(BaseDepartment):
     """Assess great people race pressure and request a faith budget from economy."""
 
@@ -68,7 +57,7 @@ class GreatPeopleDepartment(BaseDepartment):
         relevance = 0.0
         if snapshot.great_people is not None and snapshot.great_people.standings:
             relevance += 0.55
-        if _contains_keyword(_context_text(context), _GREAT_PEOPLE_KEYWORDS):
+        if contains_keyword(context_text(context), _GREAT_PEOPLE_KEYWORDS):
             relevance += 0.30
         if self._race_pressure(snapshot):
             relevance += 0.15

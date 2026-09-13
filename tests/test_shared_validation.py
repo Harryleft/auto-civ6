@@ -70,3 +70,35 @@ def test_the_helpers_are_used_by_every_module_that_once_copied_them():
     for relative, symbol in users.items():
         source = (DOMAIN / relative).read_text(encoding="utf-8")
         assert "validation import" in source and symbol in source, relative
+
+
+# The department-level helpers were also duplicated; keep them in one place too.
+_DEPARTMENT_HELPERS = {"_contains_keyword", "_context_text"}
+
+
+def test_department_text_helpers_are_not_reimplemented():
+    """``contains_keyword`` / ``context_text`` live in ``departments/base.py``.
+
+    Economy and GreatPeople each had a copy — identical apart from annotating
+    the parameter ``tuple`` in one and ``Iterable`` in the other.
+    """
+
+    offenders: dict[str, list[str]] = {}
+    for path in sorted(DOMAIN.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in _DEPARTMENT_HELPERS:
+                offenders.setdefault(node.name, []).append(str(path.relative_to(DOMAIN)))
+    assert not offenders, (
+        "这两个部门助手已上提到 governance/departments/base.py，请改为导入：\n  "
+        + "\n  ".join(f"{n}: {p}" for n, p in offenders.items())
+    )
+
+
+def test_departments_share_the_base_helpers():
+    from civ6_belief_engine.governance.departments import base, economy, great_people
+
+    assert economy.contains_keyword is base.contains_keyword
+    assert economy.context_text is base.context_text
+    assert great_people.contains_keyword is base.contains_keyword
+    assert great_people.context_text is base.context_text
