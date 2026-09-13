@@ -764,16 +764,24 @@ class MilitaryDepartment(BaseDepartment):
         return tuple(result)
 
     @staticmethod
-    def _unit_ids(units: Iterable[_UnitView]) -> str:
-        values = tuple(str(unit.unit_id) for unit in units)
-        return ", ".join(values) if values else "无"
+    def _joined(values: Iterable[str]) -> str:
+        """Comma-join, or ``无`` when there is nothing.
 
-    @staticmethod
-    def _camp_positions(camps: Iterable[_CampView]) -> str:
-        values = tuple(f"({camp.x},{camp.y})" for camp in camps)
-        return ", ".join(values) if values else "无"
+        Three helpers encoded this convention separately (unit ids, barbarian
+        unit ids, camp positions); the empty case is the part worth sharing.
+        """
 
-    @staticmethod
-    def _barbarian_unit_ids(units: Iterable[_BarbarianUnitView]) -> str:
-        values = tuple(str(unit.unit_id) for unit in units)
-        return ", ".join(values) if values else "无"
+        materialized = tuple(values)
+        return ", ".join(materialized) if materialized else "无"
+
+    @classmethod
+    def _unit_ids(cls, units: Iterable[_UnitView]) -> str:
+        return cls._joined(str(unit.unit_id) for unit in units)
+
+    @classmethod
+    def _camp_positions(cls, camps: Iterable[_CampView]) -> str:
+        return cls._joined(f"({camp.x},{camp.y})" for camp in camps)
+
+    @classmethod
+    def _barbarian_unit_ids(cls, units: Iterable[_BarbarianUnitView]) -> str:
+        return cls._joined(str(unit.unit_id) for unit in units)

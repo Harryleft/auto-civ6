@@ -1154,10 +1154,13 @@ print("{SENTINEL}")
 """
 
 
-def build_repair_improvement(unit_index: int) -> str:
-    """Repair a pillaged improvement at the builder's current tile (InGame context).
+def _lua_builder_at_current_tile(unit_index: int) -> str:
+    """Resolve the builder's tile and the improvement type on it.
 
-    Auto-detects the pillaged improvement — no improvement name needed.
+    Shared precondition of the repair and remove builders: both need ``ux``,
+    ``uy`` and ``impType`` in scope, and both bail with the same
+    ``ERR:NO_MOVES`` / ``ERR:NO_PLOT`` codes. Only the "no improvement here"
+    message differs, so that stays with each caller.
     """
     return f"""
 {_lua_get_unit(unit_index)}
@@ -1167,7 +1170,15 @@ if unit:GetMovesRemaining() <= 0 then
 end
 local plot = Map.GetPlot(ux, uy)
 if not plot then {_bail("ERR:NO_PLOT|Invalid plot")} end
-local impType = plot:GetImprovementType()
+local impType = plot:GetImprovementType()"""
+
+
+def build_repair_improvement(unit_index: int) -> str:
+    """Repair a pillaged improvement at the builder's current tile (InGame context).
+
+    Auto-detects the pillaged improvement — no improvement name needed.
+    """
+    return f"""{_lua_builder_at_current_tile(unit_index)}
 if impType < 0 then
     {_bail_lua('"ERR:NO_IMPROVEMENT|No improvement on tile (" .. ux .. "," .. uy .. ") to repair"')}
 end
@@ -1203,15 +1214,7 @@ def build_remove_improvement(unit_index: int) -> str:
     Uses UNITOPERATION_REMOVE_IMPROVEMENT. The game auto-detects which
     improvement is present; no improvement param needed. Costs one builder charge.
     """
-    return f"""
-{_lua_get_unit(unit_index)}
-local ux, uy = unit:GetX(), unit:GetY()
-if unit:GetMovesRemaining() <= 0 then
-    {_bail("ERR:NO_MOVES|Builder has no moves remaining this turn")}
-end
-local plot = Map.GetPlot(ux, uy)
-if not plot then {_bail("ERR:NO_PLOT|Invalid plot")} end
-local impType = plot:GetImprovementType()
+    return f"""{_lua_builder_at_current_tile(unit_index)}
 if impType < 0 then
     {_bail_lua('"ERR:NO_IMPROVEMENT|No improvement on tile (" .. ux .. "," .. uy .. ") to remove"')}
 end
