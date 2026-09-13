@@ -13,6 +13,8 @@ from .base import (
     DepartmentContext,
     SupportRequest,
     Workstream,
+    contains_keyword,
+    context_text,
 )
 
 
@@ -38,24 +40,11 @@ _ECONOMIC_KEYWORDS = (
 _BARBARIAN_KEYWORDS = ("barbar", "camp", "蛮族", "营地")
 
 
-def _contains_keyword(values: tuple[str, ...], keywords: tuple[str, ...]) -> bool:
-    haystack = " ".join(values).casefold()
-    return any(keyword.casefold() in haystack for keyword in keywords)
-
-
-def _context_text(context: DepartmentContext) -> tuple[str, ...]:
-    values = list(graph_agenda(context))
-    for goal in graph_goals(context):
-        values.append(goal.statement)
-        values.extend(goal.tags)
-    return tuple(values)
-
-
 def _barbarian_signal(context: DepartmentContext) -> bool:
     barbarians = graph_snapshot(context).barbarians
     if barbarians is not None and (barbarians.camps or barbarians.units):
         return True
-    return _contains_keyword(_context_text(context), _BARBARIAN_KEYWORDS)
+    return contains_keyword(context_text(context), _BARBARIAN_KEYWORDS)
 
 
 def _finite(value: Any) -> bool:
@@ -113,7 +102,7 @@ class EconomyDepartment(BaseDepartment):
             relevance += 0.15
         if snapshot.overview.num_units == 0 or snapshot.units:
             relevance += 0.15
-        if _contains_keyword(_context_text(context), _ECONOMIC_KEYWORDS):
+        if contains_keyword(context_text(context), _ECONOMIC_KEYWORDS):
             relevance += 0.20
         if _barbarian_signal(context):
             relevance += 0.10
@@ -283,8 +272,8 @@ class EconomyDepartment(BaseDepartment):
             )
             risks.append("蛮族行动会与常规升级/购买竞争有限预算，需要军事与经济联合排序")
 
-        has_budget_signal = bool(upgrade_candidates) or barbarian_signal or _contains_keyword(
-            _context_text(context), ("budget", "purchase", "upgrade", "购买", "升级", "预算")
+        has_budget_signal = bool(upgrade_candidates) or barbarian_signal or contains_keyword(
+            context_text(context), ("budget", "purchase", "upgrade", "购买", "升级", "预算")
         )
         if not degraded and has_budget_signal and safe_budget <= 0:
             risks.append("当前没有可安全动用的黄金预算，升级或购买只能作为待补充支援")
