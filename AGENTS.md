@@ -1,156 +1,69 @@
-# civ6-belief-engine — 文明 VI MCP 智能体规则入口
+# civ6-belief-engine — 仓库入口
 
-这是通过 FireTuner 连接正在运行的《文明 VI》的 MCP 服务。智能体只能知道明确查询过的信息；所有游戏动作都必须经过当前游戏规则和 MCP 服务校验。
+这是通过 FireTuner 连接正在运行的《文明 VI》的 MCP 服务（产品边界见 [产品架构](docs/product-architecture.md)）。
+仓库有两条互不相同的任务线——**游戏回合**和**开发改动**——先判断当前属于哪一条，再读对应文档。
+本文只放硬规则、完成定义和文档路由；细节一律在被路由的文档里，不要凭本文或旧会话推断机制。
 
-## 完成检查（清单思维，PDCA 的 C 环节）
+## 完成定义（先定终点，再开工）
 
-- **游戏回合（主清单）**：每回合在 `skip_remaining_units` / `end_turn` 之前，读取 [CHECKLIST.md](CHECKLIST.md) 逐项核对各领域决策（安全 / 科技 / 市政 / 经济 / 军事 / 城市 / 外交 / 文化 / 宗教）。任何一项为「否」= 该领域存在未完成决策：先处理，或显式记录推迟原因（写入 Diary.planning），不得假装已处理。回复末尾报告：`回合清单核对：通过 x/16，N/A y`。
-- **开发任务**：交付前按本文「开发与验证命令 / Git 提交规则 / 代码和文档边界」逐条自查，并在回复中报告验证与提交结果。
+- **开发改动**：完成的标志是**改动已落地、验证通过、已提交**，不是「第一版写完」。除非用户明确要求先停下来评审，否则一路做到上述状态再汇报；中途不要为「请确认下一步」而停。
+- **游戏回合**：完成的标志是**本回合决策已处理或显式记录推迟**，并且已调用 `skip_remaining_units` → `end_turn`。不要停在「给出建议」或「报告发现」上；没有阻塞就继续把本回合走完。
+- 两种情况都要在回复末尾报告证据：改了什么、跑了什么验证、结果如何；做了什么、结果如何、哪些事项被推迟及原因。
 
-不得在未核对清单的情况下结束回合或宣布任务完成。清单是防遗漏的唯一载体；发现清单与本文冲突时，按更严格者执行并向用户报告，待修订清单。
+## 硬边界
 
-## 不可违反的边界
-
-- 当前唯一运行链路是：`文明 VI → FireTuner 127.0.0.1:4318 → civ6-belief-engine 的 MCP 适配层 → DSH`。
-- 默认 DSH 不启动文明 VI，必须先进入一局游戏再启动 DSH（唯一例外：opt-in 自动恢复，见启动节）。
 - FireTuner 只允许一个客户端。不要并行运行 Pi、Codex、独立 `civ-mcp`、连接测试或第二个 DSH MCP 客户端。
-- Civ 6 进程、DSH 页面、Python 进程或 4318 监听单独存在，都不等于集成可用。
-- `CIV_MCP_BELIEF_MODE` 和 `get_game_overview` 返回的 `RUNTIME POLICY` 是信念/治理能力的唯一来源；不要从本文或旧会话猜测运行模式。
-- `get_game_overview` 是每回合唯一的强制入口；读取成功前不要执行游戏动作或 `end_turn`。
-- 如果返回 `BELIEF_GATE_REQUIRED`，按返回的精确 action intent 完成路由后只重试一次；`bypassed` 模式不要调用路由工具。
+- DSH 不负责启动文明 VI：必须先进入一局游戏再启动 DSH。Civ 6 进程、DSH 页面、Python 进程或 4318 监听单独存在，都不等于集成可用。
+- 不要单独运行 `uv run civ-mcp`；DSH wrapper 负责拉起唯一的 MCP 进程。
+- `CIV_MCP_BELIEF_MODE` 与 `get_game_overview` 返回的 `RUNTIME POLICY` 是运行模式的唯一来源。返回 `BELIEF_GATE_REQUIRED` 时，按返回的精确 action intent 完成路由后只重试一次；`bypassed` 模式不要调用路由工具。
 - 原始工具结果归 DSH transcript/telemetry；信念引擎只保存规范化事实、指纹和决策/动作关联。
+- 面向用户、DSH 模型或 MCP 工具调用方的可读语义信息必须使用中文（说明、摘要、状态、阻塞原因、建议、验证结论）。协议字段名、工具名、参数名、错误码、ID、枚举值、文件路径、命令和原始游戏数据不翻译，可在其周围用中文解释。
 
-## 最短启动顺序
+## 游戏回合：入口与路由
 
-1. 在 macOS `AppOptions.txt` 中确认 `EnableTuner 1`。该设置会关闭成就统计。
-2. 启动游戏：
+进入游戏后，每回合第一条游戏请求必须是 `mcp__civ6__get_game_overview`；读取成功前不要执行游戏动作或 `end_turn`。之后按需读取，不要全文搬进会话：
 
-   ```bash
-   open 'steam://run/289070'
-   ```
-
-   出现 Aspyr 启动器时点击“开始”，并进入单人游戏或载入存档。
-3. 验证端口：
-
-   ```bash
-   cd /Users/zhuanzmima0000/Documents/ChatGPT/civ6/civ6-mcp
-   lsof -nP -iTCP:4318 -sTCP:LISTEN
-   ```
-
-4. 首次安装或变更配置后运行 `./scripts/deepseek_harness check`。
-5. 启动 DSH：
-
-   ```bash
-   ./scripts/deepseek_harness web
-   ```
-
-   打开 <http://127.0.0.1:3080>。不要另外运行 `uv run civ-mcp`。崩溃后无人值守恢复可显式开启：`CIV_MCP_DSH_AUTO_RESUME=1` 时 MCP 启动先探测是否已在对局，只到主菜单才经 Civ VI FrontEnd API（非 OCR 点击）加载最新 `0_MCP_*` 存档，无 MCP 存档回退 `AutoSave_*`；端口可达但握手失败时拒绝接管，防止抢走第二客户端。
-6. DSH 第一条游戏请求调用 `mcp__civ6__get_game_overview`，确认 `RUNTIME POLICY` 和工具读取成功后，才进入回合流程。
-
-完整启动与验收步骤见 [启动与验收](docs/agent-startup.md)。
-
-## 每回合最小流程
-
-1. `get_game_overview`：读取当前回合、规则集、运行策略、治理状态和摘要信息。
-2. 建立本回合决策面：识别服务器阻塞项、即时生存风险、时间窗口、不可逆动作、长期复利机会和可行动资源。
-3. 按当前目标、约束、风险、时效性和机会成本综合排序；任何单一信号不得自动决定优先级。
-4. 按当前最高优先级事项补充查询所需信息，执行动作前确认目标、机会成本和治理门禁。
-5. 执行动作并确认结果；推迟事项必须记录原因、后续条件和计划回合。
-6. 重要新证据、动作结果或上下文恢复后，才调用 `get_turn_brief`。
-7. 在 `skip_remaining_units` / `end_turn` 前核对 [CHECKLIST.md](CHECKLIST.md)；所有未完成项必须处理或显式记录推迟原因。随后调用 `skip_remaining_units` → `end_turn`。
-
-回合顺序、Diary 字段和 10/20/30 回合检查见 [回合规则](docs/agent-turn-loop.md)。
-
-## 策略与工具路由
-
-按需读取，不要把所有文档全文复制进会话：
-
-| 任务 | 文档 |
+| 情形 | 读什么 |
 |---|---|
-| 启动 DSH、验证 FireTuner、判断是否真的可用 | [docs/agent-startup.md](docs/agent-startup.md) |
-| 回合顺序、坐标、信念/治理门禁、Diary、周期检查 | [docs/agent-turn-loop.md](docs/agent-turn-loop.md) |
-| 神级生存、扩张、外交、战争和胜利路线 | [docs/agent-strategy.md](docs/agent-strategy.md) |
-| 工具、单位动作、阻塞项、生产、区域、商路和世界议会 | [docs/agent-tools.md](docs/agent-tools.md) |
-| 自动存档、卡回合和恢复 | [docs/agent-recovery.md](docs/agent-recovery.md) |
-| 信念事件、运行模式、规范化事实和路由 | [docs/belief-engine.md](docs/belief-engine.md) |
-| 提案、批评、议会、预算锁和 ActionIntent | [docs/governance-system.md](docs/governance-system.md) |
-| MCP 到 Lua、FireTuner 单连接和游戏引擎架构 | [docs/architecture-diagrams.md](docs/architecture-diagrams.md) |
-| 产品名、领域包边界和 MCP 兼容命名 | [docs/product-architecture.md](docs/product-architecture.md) |
-| Diary、工具日志和空间注意力数据流 | [docs/observability.md](docs/observability.md) |
-| 多智能体对战（提案，未实现） | [docs/agent-vs-agent.md](docs/agent-vs-agent.md) |
-| 图工程当前方案与实施路线 | [graph_plan/README.md](graph_plan/README.md) |
-| 游戏机制知识库（官方百科蒸馏，渐进式披露：先读 L0 决策速查） | [docs/wiki/README.md](docs/wiki/README.md) |
-| DSH overlay 配置和安全决策 | [integrations/deepseek-harness/README.md](integrations/deepseek-harness/README.md) |
+| 启动、验证 FireTuner 与 DSH、判断集成是否真的可用 | [启动与验收](docs/agent-startup.md) |
+| 每回合的查询顺序、信念/治理门禁、Diary 字段、10/20/30 回合检查 | [回合规则](docs/agent-turn-loop.md) |
+| 结束回合前的**主清单**：逐领域核对安全/科技/市政/经济/军事/城市/外交/文化/宗教 | [CHECKLIST.md](CHECKLIST.md) |
+| 具体工具、单位动作、阻塞项、生产、区域、商路、世界议会 | [工具与动作](docs/agent-tools.md) |
+| 神级生存、扩张、外交、战争、胜利路线 | [策略](docs/agent-strategy.md) |
+| 卡回合、自动存档、崩溃与恢复 | [游戏恢复](docs/agent-recovery.md) |
+| 某条游戏机制的具体数值与规则 | [机制百科](docs/wiki/README.md)（先读 L0 决策速查） |
+| 信念事件、派生规则、覆盖审计 | [信念引擎](docs/belief-engine.md) |
+| 提案、批评、议会、预算锁、ActionIntent | [治理系统](docs/governance-system.md) |
 
-## 通用决策约束
+结束回合前必须逐项核对主清单：任何一项为「否」= 该领域存在未完成决策，先处理，或显式记录推迟原因（写入 Diary.planning），不得假装已处理；冲突时按更严格者执行并报告。回复末尾报告 `回合清单核对：通过 x/16，N/A y`。
 
-- 移动建造者、开拓者或商人前，先检查目的地及周围地块；长距离移动前使用 `get_pathing_estimate`。
-- 对闲置单位、可用资源和未完成事项，评估立即使用、保留和替代用途；不得仅因“闲置”或“有余额”自动执行，也不得无理由长期囤积。
-- 关注各城市的增长、生产、忠诚度、防御和驻军；城市数量只是长期结果变量之一，其权重取决于当前目标、阶段、地图和风险。
-- 军事力量、边境集结和胜利进度都是风险信号，应结合时间、位置、可用防御和当前目标评估，不用单一固定阈值替代判断。
-- 各类威胁查询结果应与其他敌情、城市状态和战略机会统一评估，不因单个工具结果或告警自动获得优先级。
-- 宣战回合不能攻击新敌人；战斗引擎下一回合才同步。
-- `end_turn` 可能在神级 AI 回合中耗时 5–10 分钟；失败时先读取错误和当前状态，不要盲目循环重试。
-- MCP 自动存档是主要恢复点；错误加载存档后以 `end_turn` 的 CRITICAL 警告为准。
-
-## 开发与验证命令
+## 开发：验证与提交
 
 ```bash
-uv run pytest tests/ -q                                   # 全量离线测试；CI 跑同一命令
-uv run ruff check src tests                               # 静态检查；CI 跑同一命令
-uv run pytest tests/test_belief_engine.py -q -k "orphan"  # 按关键字跑单个测试
-./scripts/deepseek_harness check                          # 安装/配置变更后的环境检查
-./scripts/belief_coverage.py                              # 信念覆盖审计：决策支持率/预测结算（见 docs/belief-engine.md）
+uv run pytest tests/ -q            # 全量离线测试（CI 同款）
+uv run ruff check src tests        # 静态检查（CI 同款）
+uv run pytest tests/test_belief_engine.py -q -k "orphan"   # 单文件 / 按关键字
+./scripts/deepseek_harness check   # 安装或配置变更后的环境检查
+./scripts/belief_coverage.py       # 信念覆盖审计：决策支持率 / 预测结算
 ```
 
-- 静态检查用 `ruff`，配置在 `pyproject.toml [tool.ruff.lint]`。当前只启用能查出真实
-  缺陷的窄规则集（未定义名、重复定义、assert/异常误用、语法错误）；默认规则集约
-  330 项，多为风格问题，**增量放宽**而非一次性打开，否则门禁长期为红即失去意义。
-  首次接入即查出 `narrate.py` 一处可达的 `NameError` 与一处缺失导入。
-- 测试不得写入 `~/.civ6-mcp/beliefs/`。`tests/conftest.py` 的 autouse 夹具把默认
-  账本目录重定向到 `tmp_path`；新增测试构造 `BeliefEngine` 时仍应显式传 `directory=`。
-- 测试引用的第三方依赖必须在 `pyproject.toml` 中声明，否则新克隆上 pytest 会因收集
-  失败整批不执行。`tests/test_test_dependencies.py` 会守护这一点。
-- 不要单独运行 `uv run civ-mcp`：DSH 负责拉起 MCP 进程，FireTuner 只允许一个客户端。
-- 新增游戏动作必须走 `execute_mutation` 通道（见下节），并配离线回归测试。重命令
-  （例如 `skip_remaining_units` / `set_policies` / `submit_congress`）应显式传
-  `timeout=SLOW_MUTATION_TIMEOUT`，否则慢命令会被误报为「结果未知」。
-- 新增 MCP 工具必须显式归类到 `pipeline._BELIEF_GATED_TOOLS`、`_ROUTINE_TOOLS` 或
-  `_CONDITIONAL_GATE_TOOLS`；未归类会 fail-closed，且 `tests/test_tool_gate_coverage.py`
-  会失败。
+- 测试隔离与账本是硬约束：测试不得写入 `~/.civ6-mcp/beliefs/`（autouse 夹具已重定向到 `tmp_path`，新增 `BeliefEngine` 仍要显式传 `directory=`）；测试引用的第三方依赖必须在 `pyproject.toml` 中声明。
+- 本地测试用一次性夹具、不触碰生产数据：跑测试、修由本次改动引起的失败、重跑受影响用例，都不必逐步征求同意。这是唯一授权的自主验证范围；真实游戏动作不在此列。
+- 静态检查用 `ruff`，只启用能查出真实缺陷的窄规则集（配置在 `pyproject.toml [tool.ruff.lint]`）。放宽规则要增量做，不要一次性打开数百项风格规则。
+- 交付前按改动范围自查本节的验证要求；新增/修改的机制细节同步更新对应文档，不要把设计说明留在提交信息里。
+- 每次完成代码修改后必须创建一条 Git 提交，不要留下已验证但未提交的改动。提交前审查差异、只暂存本次任务的文件（不得捆绑用户已有或并发改动），信息用 Conventional Commits 格式的 `<type>(<scope>): <中文摘要>`（`feat`/`fix`/`refactor`/`test`/`docs`/`chore`）。默认只在当前分支提交，不推送、不改写历史，除非用户明确要求。
 
-## 返回语言规则
+## 开发：设计不变量
 
-- 面向用户、DSH 模型或 MCP 工具调用方的可读语义信息必须使用中文，包括说明、摘要、状态、阻塞原因、建议和验证结论。
-- 不翻译机器可解析或需与原始证据精确对应的内容：协议字段名、工具名、参数名、错误码、ID、枚举值、文件路径、命令和原始游戏数据；可在其周围用中文解释。
+动架构前先读 [架构](docs/architecture-diagrams.md)、[信念引擎](docs/belief-engine.md)、[治理系统](docs/governance-system.md)；测试分类与夹具约定见 [测试体系](docs/testing.md)。以下是改代码时最容易踩空、且测试会拦住的几条：
 
-## Git 提交规则
+- **单一写入通道**：游戏工具必须经 `server/pipeline.py` 的 `_logged` 管道，信念/治理控制面工具经 `_belief_tool`，不要绕开；少数进程级工具（`kill_game` / `launch_game` / `restart_and_load` / `get_diary` / `get_governance_brief`）目前两条都不经，改动它们时优先接入。新增游戏动作必须走 `execute_mutation`（恰好发送一次、失败即结果未知，语义见 [游戏恢复](docs/agent-recovery.md)），并配离线回归测试；重命令显式传 `timeout=SLOW_MUTATION_TIMEOUT`。
+- **门禁分类必须显式**：新增 MCP 工具必须归类到 `pipeline._BELIEF_GATED_TOOLS`、`_ROUTINE_TOOLS` 或 `_CONDITIONAL_GATE_TOOLS` 之一；未归类 fail-closed，`tests/test_tool_gate_coverage.py` 会失败。`src/civ_mcp/server/` 包内 112 个工具（`tests/test_tool_surface.py` 会核对本文这个数字）。
+- **命名陷阱**：`execute_read` / `execute_write` 指 Lua 上下文（GameCore/InGame），不是读写语义；真正的读写区分在 `execute_mutation`。
+- **事件溯源不可绕过**：账本 append-only，同一账本同时只允许一个进程写入，实体用墓碑（`deleted`/`archived`）不物理删除，新代码不得直接改内存态；所有读档路径都必须调用 `pipeline._record_game_reload_epoch`。未完成授权会让回合门禁 fail-closed（细节见 [治理系统](docs/governance-system.md)）。
+- **授权契约不可改写**：路由时要求提案当前内容与 `council_decision.approved_intents` 相等，`engine.update` 拒绝改写 decision 的 `action_intent` / `council_decision_id` / `args_hash`；改动路由或提案结构时同步看 `tests/test_authorization_integrity.py`。
+- **图重放默认只校验最新 checkpoint**（`verify="final"`）：逐 delta 校验会退化成 O(D×V)，定位分歧点时才用 `verify="all"`。
+- **结果过滤只作用于模型面副本**：`civ_mcp/result_filter.py` 目前只覆盖 `get_governance_brief` / `get_belief_state` / `get_belief_trace` 三个控制面工具，其余工具没有体积上限；阈值由 `CIV_MCP_RESULT_*` 控制，遥测保留原始全文。
+- **验证分层**：离线测试、FireTuner handshake、MCP 工具读取和真实回合动作是四个不同的证据层，不能用前者冒充后者。
 
-- 每次完成任何代码修改后，必须创建一条对应的 Git 提交；不得把已验证的代码改动留在工作区而不提交。
-- 提交前必须审查差异并运行与改动相称的验证；只暂存本次任务的文件或代码块，不得捆绑用户已有或并发产生的改动。
-- 提交信息采用 Conventional Commits 格式，且摘要使用中文：`<type>(<scope>): <中文摘要>`。例如：`fix(governance): 自动关闭已执行动作的旧决策`。
-- `type` 使用通用约定：`feat`、`fix`、`refactor`、`test`、`docs`、`chore`；`scope` 可省略，但涉及明确模块时应保留。
-- 默认在当前分支创建提交，不推送、不改写历史；只有用户明确要求时才推送或处理历史。
-
-## 架构大图（跨文件）
-
-- **双包布局**：`src/civ_mcp` 是 MCP 适配层（连接、Lua builder/parser、`server/` 包内 112 个工具），`src/civ6_belief_engine` 是产品域包（belief engine + governance + graph）。旧兼容转发 shim 已删除，代码直接导入域包；域包对 `civ_mcp` 已零导入，`TypedTurnSnapshot` 是 domain 侧边界类型，具体 Lua DTO 只由 `GameState` 采集端转换为该类型。
-- **调用链**：FireTuner TCP 4318 → `GameConnection` → `GameState` → `server/pipeline.py` 的 `_logged` 管道（授权预检 → 执行 → 信念记录 → 结果过滤）→ DSH。**游戏工具**必须经 `_logged`，不要绕开；**信念/治理控制面工具**（读写的是账本而非游戏状态）经 `pipeline._belief_tool`，两条管道都先等待 `auto_resume_ready` 并兜底异常。少数进程级工具（`kill_game` / `launch_game` / `restart_and_load` / `get_diary` / `get_governance_brief`）目前不经任何一条，改动它们时优先接入。`server/` 包：`assembly.py`（lifespan/入口/auto-resume）、`pipeline.py`（运行管道：日志、门禁、事件记录和 flush）、`tools/`（按域分组的 MCP 工具注册；治理工具在 `belief_tools.py`，纯合同适配在 `governance_adapters.py`）、`governance_snapshot.py`（typed snapshot 生命周期）；`end_turn.py` 只负责 MCP 注册，回合日记、挂起恢复和 game-over 编排在 `end_turn_flow.py`。
-- **门禁是显式分类的**：`pipeline._BELIEF_GATED_TOOLS`（需路由）/ `_ROUTINE_TOOLS`（无需路由）/ `_CONDITIONAL_GATE_TOOLS`（按参数判定）必须覆盖全部注册工具。未归类的工具 fail-closed，`tests/test_tool_gate_coverage.py` 会失败。新增工具时三处都要看。
-- **命名陷阱**：`execute_read`/`execute_write` 指的是 Lua 上下文（GameCore/InGame），**不是**读写语义。真正的读写区分在 `execute_mutation`：变异命令恰好发送一次、死套接字不重发（抛 `MutationOutcomeUnknownError`，重试前必须先查询验证游戏状态）、未收到 sentinel 超时抛 `CommandTimeoutError`。超时分两档：`DEFAULT_TIMEOUT`(5s) 给查询与轻命令，`SLOW_MUTATION_TIMEOUT`(30s) 给会让游戏同步做实际工作的重命令。
-- **BeliefEngine 是事件溯源**：append-only JSONL（`~/.civ6-mcp/beliefs/`），加载时 reduce 重放；**同一账本同时只允许一个进程写入**（`bind_game` 取 `LOCK_EX|LOCK_NB`，第二个进程显式报错而非静默交错序列号）；实体用墓碑（deleted/archived）不物理删除；游戏重载（autosave 回滚/手动读档）产生 epoch 标记并作废旧授权——**所有读档路径都必须调用 `pipeline._record_game_reload_epoch`**；`governance_turn_gate` 对未完成授权 fail-closed，`authorize_action` 另按 decision 的**创建 epoch** 兜底（加载期恢复会以当前 epoch 重新盖戳，故不能用最新事件判定）。新代码不得绕过事件流直接改内存态。查询观察经 `derivation` 规则注册表自动派生信念/预测（带 `derived` 标签，coverage 审计区分系统产出与模型自报）。
-- **授权契约不可改写**：议会决议时把选中提案的意图集合指纹写入 `council_decision.approved_intents`，路由时要求提案当前内容与之相等；`engine.update` 另拒绝改写 decision 的 `action_intent` / `council_decision_id` / `args_hash`。改动路由或提案结构时同步看 `tests/test_authorization_integrity.py`。
-- **图重放只校验最新 checkpoint**：`replay_graph_events(verify=...)` 默认 `"final"`——全视图 `state_hash` 是 O(V)，逐 delta 校验会退化为 O(D×V)（实测 43MB 日志 48.4s → 2.37s）。需要定位分歧点时用 `verify="all"`；`verify="none"` 只跳过哈希校验，结构错误仍会抛。
-- **结果过滤只作用于模型面副本**：`result_filter` 在返回给 DSH 前压缩超大结果，遥测保留原始全文；阈值由 `CIV_MCP_RESULT_*` 环境变量控制。注意它目前只覆盖 `_FILTERED_TOOLS` 里的 3 个控制面工具，其余工具没有体积上限。
-- **图工程进度**（全量方案与验收门禁见 [graph_plan/README.md](graph_plan/README.md)，动架构前先读）：阶段一影子图已完成（离线投影比较、replay、epoch 隔离）；阶段二“城市周边威胁”切片离线闭环与真实游戏验收均已完成（`0_MCP_0108` T108 里昂：敌军 → `THREATENS` → Proposal → Council approved → `fortify` → read-back → Graph）；阶段三七个 Department 已统一消费 `GraphSnapshotView`，图缺失/陈旧时按证据缺口保守处理，不再回退旧快照字段；阶段四 `server.py` 已拆为 `server/` 包，`end_turn.py` 拆分与旧治理适配层迁移已于 2026-08-16 完成（旧 `tools/belief.py` 物理删除，MCP 工具名和签名不变）。
-- **评测与站点**：`evals/` 是 inspect-ai civbench 基准，`web/` 是 Next.js + Convex 成绩站点，`scripts/publish_hf/` 是 HuggingFace 数据集发布管线；三者独立于游戏运行链路。
-
-## 代码和文档边界
-
-- 当前游戏状态、规则和动作授权由产品的 `civ_mcp` MCP 适配层负责；不要在 DSH 中建立第二套 GameState 或生命周期。
-- `run_lua` 在 DSH 集成中不是支持的游戏接口；优先使用领域工具。
-- 修改游戏机制时同步阅读 [架构](docs/architecture-diagrams.md)、[信念引擎](docs/belief-engine.md) 和 [治理系统](docs/governance-system.md)。
-- 修改启动、连接或恢复行为时同步更新 `docs/agent-startup.md`、`docs/agent-recovery.md` 与 DSH 集成说明。
-- 运行验证时区分离线测试、FireTuner handshake、MCP 工具读取和真实回合动作；不能用前者冒充后者。
-
-项目文档总目录见 [docs/README.md](docs/README.md)（含评测、战报与研究），安装和基础用法见 [README.md](README.md)。
+其他文档：仓库文档总览 [docs/README.md](docs/README.md)，Diary / 工具日志 / 空间注意力数据流 [可观测性](docs/observability.md)，图工程当前方案与验收门禁 [graph_plan/README.md](graph_plan/README.md)，DSH overlay 配置与安全决策 [DSH 集成](integrations/deepseek-harness/README.md)，安装与基础用法 [README.md](README.md)，历史变更 [CHANGELOG.md](CHANGELOG.md)。

@@ -26,7 +26,7 @@ submit structured advice but cannot execute its own proposal. Built-in
 departments: military, science, civics, production, economy, diplomacy, and
 great people (race pressure with a conservative faith budget claim).
 
-## Six engineering constraints
+## Engineering constraints
 
 1. Probability is the estimated likelihood of success; confidence is the
    quality of the supporting evidence. Both are strict finite values in `[0,1]`
@@ -55,6 +55,13 @@ great people (race pressure with a conservative faith budget claim).
    `action_intent`, `council_decision_id`, or `args_hash`; lifecycle fields
    (`decision_state`, `route`, `cancellation_reason`, …) stay writable.
    Regression coverage lives in `tests/test_authorization_integrity.py`.
+8. **The end-turn gate fails closed.** `governance_turn_gate` refuses to advance
+   the turn while an authorization is still unfinished, rather than letting the
+   turn end with a half-executed decision. `authorize_action` applies a second
+   check against the decision's **creation epoch**: a game reload (autosave
+   rollback or manual load) bumps the epoch and voids authorizations from the
+   abandoned branch, and recovery during loading re-stamps them with the current
+   epoch — so judging by the latest event alone is wrong.
 
 ## MCP workflow
 
