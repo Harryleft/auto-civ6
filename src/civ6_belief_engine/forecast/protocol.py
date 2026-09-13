@@ -11,6 +11,7 @@ replaceable and testable in isolation.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isfinite
 from typing import Any, Iterable, Mapping, Protocol, Sequence, TypeAlias
 
 # metric name -> ordered (turn, value) points
@@ -63,34 +64,68 @@ def numeric_metric_series(
     observations: Iterable[Mapping[str, Any]],
     *,
     metrics: Sequence[str] | None = None,
+    current_turn: int | None = None,
+    min_points: int = 2,
 ) -> dict[str, list[tuple[int, float]]]:
     """Build numeric metric time series from observation entities.
 
-    Later observations win when the same (metric, turn) pair repeats; turns
-    are kept in ascending order.  Non-numeric values are skipped rather
+    The last valid observation wins per (metric, turn), ordered by
+    ``updated_at`` and then input order. Turns are kept in ascending order.
+    ``current_turn`` excludes future observations; ``min_points=1`` also
+    exposes isolated observations for history summaries, never a trend.
+    Non-numeric and non-finite values are skipped rather
     than coerced — a forecast must not silently invent a numeric trend from
     a boolean or string metric.
     """
+    if min_points < 1:
+        raise ValueError("min_points must be at least 1")
     allowed = set(metrics) if metrics is not None else None
-    points_by_metric: dict[str, dict[int, float]] = {}
-    for observation in sorted(
-        observations,
-        key=lambda item: (
-            int(item.get("observed_turn", -1) or -1),
-            float(item.get("updated_at", 0) or 0),
-        ),
-    ):
-        turn = int(observation.get("observed_turn", -1) or -1)
-        if turn < 0:
+    points_by_metric: dict[str, dict[int, tuple[float, int, float]]] = {}
+    for index, observation in enumerate(observations):
+        turn = observation_turn(observation)
+        if turn is None or (current_turn is not None and turn > current_turn):
             continue
-        for key, value in (observation.get("metrics") or {}).items():
+        stamp = finite_number(observation.get("updated_at")) or 0.0
+        metric_values = observation.get("metrics")
+        if not isinstance(metric_values, Mapping):
+            continue
+        for key, value in metric_values.items():
             if allowed is not None and key not in allowed:
                 continue
-            if isinstance(value, bool) or not isinstance(value, (int, float)):
+            number = finite_number(value)
+            if number is None:
                 continue
-            points_by_metric.setdefault(key, {})[turn] = float(value)
+            points = points_by_metric.setdefault(key, {})
+            candidate = (stamp, index, number)
+            if turn not in points or candidate[:2] > points[turn][:2]:
+                points[turn] = candidate
     return {
-        key: sorted(points.items())
+        key: [(turn, ranked[2]) for turn, ranked in sorted(points.items())]
         for key, points in points_by_metric.items()
-        if len(points) >= 2
+        if len(points) >= min_points
     }
+
+
+def finite_number(value: Any) -> float | None:
+    """Accept actual finite numbers, excluding booleans and numeric strings."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    try:
+        number = float(value)
+    except OverflowError:
+        return None
+    return number if isfinite(number) else None
+
+
+def observation_turn(observation: Mapping[str, Any]) -> int | None:
+    """Read a valid non-negative turn without treating turn zero as absent."""
+    value = observation.get("observed_turn")
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        turn = int(value)
+    except (ValueError, TypeError, OverflowError):
+        return None
+    if turn < 0 or (not isinstance(value, str) and turn != value):
+        return None
+    return turn

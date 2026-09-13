@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from civ_mcp.lua._helpers import SENTINEL, _bail
 from civ_mcp.lua.models import (
     CivicOption,
@@ -12,8 +14,80 @@ from civ_mcp.lua.models import (
 )
 
 
-def build_tech_civics_query() -> str:
-    return """
+def _lua_string(value: str) -> str:
+    """Quote a wire-protocol value without letting it become Lua source."""
+    return (
+        '"'
+        + "".join(
+            "\\\\"
+            if char == "\\"
+            else '\\"'
+            if char == '"'
+            else f"\\{ord(char):03d}"
+            if ord(char) < 32 or ord(char) == 127
+            else char
+            for char in value
+        )
+        + '"'
+    )
+
+
+def _research_cache_prelude(identity: str | None, known_rules: Iterable[str]) -> str:
+    known = ",".join(f"[{_lua_string(key)}]=true" for key in sorted(known_rules))
+    expected = _lua_string(identity) if identity is not None else "nil"
+    scope = """
+-- Cache scope is also bounded by Python's connection/reload generation.
+-- A missing mode flag is unknown, never evidence that shuffle is disabled.
+local ruleIdentity = nil
+pcall(function()
+    local shuffle = GameConfiguration.GetValue("GAMEMODE_TREE_RANDOMIZER")
+    local ruleset = GameConfiguration.GetValue("RULESET")
+    if GameConfiguration.GetRuleSet ~= nil then ruleset = GameConfiguration.GetRuleSet() end
+    local seed = GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")
+    local speed = GameConfiguration.GetGameSpeedType()
+    if (shuffle == false or shuffle == 0) and ruleset ~= nil and seed ~= nil and speed ~= nil then
+        local pieces = {ruleset, seed, speed, Game.GetLocalPlayer(), Locale.Lookup("LOC_TECH_MINING_NAME")}
+        local encoded = {}
+        for _, piece in ipairs(pieces) do
+            local value = tostring(piece):gsub("|", "/"):gsub("[\\r\\n]", " ")
+            table.insert(encoded, tostring(#value) .. ":" .. value)
+        end
+        ruleIdentity = table.concat(encoded, ";")
+    end
+end)
+print("RESEARCH_RULES|" .. (ruleIdentity or ""))
+"""
+    return (
+        scope
+        + f"local knownRules = {{{known}}}\n"
+        + f"local reuseRules = ruleIdentity ~= nil and ruleIdentity == {expected}\n"
+        + """
+local function hasCachedRule(kind, typeId)
+    return reuseRules and knownRules[kind .. ":" .. typeId] == true
+end
+"""
+    )
+
+
+def build_tech_civics_query(
+    *,
+    cache_identity: str | None = None,
+    known_rules: Iterable[str] | None = None,
+) -> str:
+    """Read live research state, optionally omitting previously observed rules.
+
+    The default wire format is unchanged. Compact responses are private to
+    ResearchCache, which restores the original DTO before returning to callers.
+    Only the same options the ordinary query exposes are eligible for reuse.
+    """
+    prelude = (
+        _research_cache_prelude(cache_identity, known_rules)
+        if known_rules is not None
+        else "local function hasCachedRule(kind, typeId) return false end\n"
+    )
+    return (
+        prelude
+        + """
 local id = Game.GetLocalPlayer()
 local te = Players[id]:GetTechs()
 local cu = Players[id]:GetCulture()
@@ -54,31 +128,35 @@ for tech in GameInfo.Technologies() do
         local turns = te:GetTurnsToResearch(tech.Index)
         local pct = cost > 0 and math.floor(progress * 100 / cost) or 0
         local boosted = te:HasBoostBeenTriggered(tech.Index)
-        local boostDesc = ""
-        local b = boostsByTech[tech.TechnologyType]
-        if b and b.TriggerDescription then
-            boostDesc = Locale.Lookup(b.TriggerDescription):gsub("|", "/")
-        end
-        local unlocks = {}
-        for u in GameInfo.Units() do if u.PrereqTech == tech.TechnologyType then table.insert(unlocks, Locale.Lookup(u.Name)) end end
-        for bld in GameInfo.Buildings() do if bld.PrereqTech == tech.TechnologyType then table.insert(unlocks, Locale.Lookup(bld.Name)) end end
-        for d in GameInfo.Districts() do if d.PrereqTech == tech.TechnologyType then table.insert(unlocks, Locale.Lookup(d.Name)) end end
-        for imp in GameInfo.Improvements() do if imp.PrereqTech == tech.TechnologyType then table.insert(unlocks, Locale.Lookup(imp.Name)) end end
-        for r in GameInfo.Resources() do
-            if r.PrereqTech == tech.TechnologyType then table.insert(unlocks, "Reveals " .. Locale.Lookup(r.Name)) end
-        end
-        pcall(function()
-            for proj in GameInfo.Projects() do
-                if proj.PrereqTech == tech.TechnologyType then table.insert(unlocks, "Project: " .. Locale.Lookup(proj.Name)) end
-            end
-        end)
-        local unlockStr = table.concat(unlocks, ", "):gsub("|", "/")
         local boostTag = boosted and "BOOSTED" or "UNBOOSTED"
-        local prereqStr = ""
-        if techPrereqs[tech.TechnologyType] then
-            prereqStr = table.concat(techPrereqs[tech.TechnologyType], ",")
+        if hasCachedRule("TECH", tech.TechnologyType) then
+            print("TECH_STATE|" .. tech.TechnologyType .. "|" .. cost .. "|" .. pct .. "|" .. turns .. "|" .. boostTag)
+        else
+            local boostDesc = ""
+            local b = boostsByTech[tech.TechnologyType]
+            if b and b.TriggerDescription then
+                boostDesc = Locale.Lookup(b.TriggerDescription):gsub("|", "/")
+            end
+            local unlocks = {}
+            for u in GameInfo.Units() do if u.PrereqTech == tech.TechnologyType then table.insert(unlocks, Locale.Lookup(u.Name)) end end
+            for bld in GameInfo.Buildings() do if bld.PrereqTech == tech.TechnologyType then table.insert(unlocks, Locale.Lookup(bld.Name)) end end
+            for d in GameInfo.Districts() do if d.PrereqTech == tech.TechnologyType then table.insert(unlocks, Locale.Lookup(d.Name)) end end
+            for imp in GameInfo.Improvements() do if imp.PrereqTech == tech.TechnologyType then table.insert(unlocks, Locale.Lookup(imp.Name)) end end
+            for r in GameInfo.Resources() do
+                if r.PrereqTech == tech.TechnologyType then table.insert(unlocks, "Reveals " .. Locale.Lookup(r.Name)) end
+            end
+            pcall(function()
+                for proj in GameInfo.Projects() do
+                    if proj.PrereqTech == tech.TechnologyType then table.insert(unlocks, "Project: " .. Locale.Lookup(proj.Name)) end
+                end
+            end)
+            local unlockStr = table.concat(unlocks, ", "):gsub("|", "/")
+            local prereqStr = ""
+            if techPrereqs[tech.TechnologyType] then
+                prereqStr = table.concat(techPrereqs[tech.TechnologyType], ",")
+            end
+            print("TECH|" .. Locale.Lookup(tech.Name) .. "|" .. tech.TechnologyType .. "|" .. cost .. "|" .. pct .. "|" .. turns .. "|" .. boostTag .. "|" .. boostDesc .. "|" .. unlockStr .. "|" .. prereqStr .. "|" .. (tech.EraType or ""))
         end
-        print("TECH|" .. Locale.Lookup(tech.Name) .. "|" .. tech.TechnologyType .. "|" .. cost .. "|" .. pct .. "|" .. turns .. "|" .. boostTag .. "|" .. boostDesc .. "|" .. unlockStr .. "|" .. prereqStr .. "|" .. (tech.EraType or ""))
     end
 end
 local completedTechs = 0
@@ -128,35 +206,39 @@ for civic in GameInfo.Civics() do
                 local remainingCost = math.max(cost - currentProg, 0)
                 local turns2 = cultureYield > 0 and math.ceil(remainingCost / cultureYield) or -1
                 local boosted2 = cu:HasBoostBeenTriggered(civic.Index)
-                local boostDesc2 = ""
-                local b2 = boostsByCivic[civic.CivicType]
-                if b2 and b2.TriggerDescription then
-                    boostDesc2 = Locale.Lookup(b2.TriggerDescription):gsub("|", "/")
-                end
                 local boostTag2 = boosted2 and "BOOSTED" or "UNBOOSTED"
-                local civicPrereqStr = ""
-                if prereqs[civic.CivicType] then
-                    civicPrereqStr = table.concat(prereqs[civic.CivicType], ",")
+                if hasCachedRule("CIVIC", civic.CivicType) then
+                    print("CIVIC_STATE|" .. civic.CivicType .. "|" .. cost .. "|" .. pct2 .. "|" .. turns2 .. "|" .. boostTag2)
+                else
+                    local boostDesc2 = ""
+                    local b2 = boostsByCivic[civic.CivicType]
+                    if b2 and b2.TriggerDescription then
+                        boostDesc2 = Locale.Lookup(b2.TriggerDescription):gsub("|", "/")
+                    end
+                    local civicPrereqStr = ""
+                    if prereqs[civic.CivicType] then
+                        civicPrereqStr = table.concat(prereqs[civic.CivicType], ",")
+                    end
+                    -- Policies and governments expose PrereqCivic in GameInfo. Keep
+                    -- both stable type IDs and localized names for agent decisions.
+                    local civicUnlocks = {}
+                    pcall(function()
+                        for policy in GameInfo.Policies() do
+                            if policy.PrereqCivic == civic.CivicType then
+                                table.insert(civicUnlocks, "POLICY:" .. policy.PolicyType .. ":" .. Locale.Lookup(policy.Name))
+                            end
+                        end
+                    end)
+                    pcall(function()
+                        for government in GameInfo.Governments() do
+                            if government.PrereqCivic == civic.CivicType then
+                                table.insert(civicUnlocks, "GOVERNMENT:" .. government.GovernmentType .. ":" .. Locale.Lookup(government.Name))
+                            end
+                        end
+                    end)
+                    local unlockStr2 = table.concat(civicUnlocks, ", "):gsub("|", "/")
+                    print("CIVIC|" .. Locale.Lookup(civic.Name) .. "|" .. civic.CivicType .. "|" .. cost .. "|" .. pct2 .. "|" .. turns2 .. "|" .. boostTag2 .. "|" .. boostDesc2 .. "|" .. civicPrereqStr .. "|" .. (civic.EraType or "") .. "|" .. unlockStr2)
                 end
-                -- Policies and governments expose PrereqCivic in GameInfo. Keep
-                -- both stable type IDs and localized names for agent decisions.
-                local civicUnlocks = {}
-                pcall(function()
-                    for policy in GameInfo.Policies() do
-                        if policy.PrereqCivic == civic.CivicType then
-                            table.insert(civicUnlocks, "POLICY:" .. policy.PolicyType .. ":" .. Locale.Lookup(policy.Name))
-                        end
-                    end
-                end)
-                pcall(function()
-                    for government in GameInfo.Governments() do
-                        if government.PrereqCivic == civic.CivicType then
-                            table.insert(civicUnlocks, "GOVERNMENT:" .. government.GovernmentType .. ":" .. Locale.Lookup(government.Name))
-                        end
-                    end
-                end)
-                local unlockStr2 = table.concat(civicUnlocks, ", "):gsub("|", "/")
-                print("CIVIC|" .. Locale.Lookup(civic.Name) .. "|" .. civic.CivicType .. "|" .. cost .. "|" .. pct2 .. "|" .. turns2 .. "|" .. boostTag2 .. "|" .. boostDesc2 .. "|" .. civicPrereqStr .. "|" .. (civic.EraType or "") .. "|" .. unlockStr2)
             end
         end
     end
@@ -175,11 +257,15 @@ for civic in GameInfo.Civics() do
             end
         end
         if #missing > 0 then
-            local boostDesc = ""
-            local b = boostsByCivic[civic.CivicType]
-            if b and b.TriggerDescription then boostDesc = Locale.Lookup(b.TriggerDescription):gsub("|", "/") end
             local boostTag = cu:HasBoostBeenTriggered(civic.Index) and "BOOSTED" or "UNBOOSTED"
-            print("LOCKED_CIVIC|" .. Locale.Lookup(civic.Name):gsub("|", "/") .. "|" .. civic.CivicType .. "|" .. table.concat(missing, ",") .. "|" .. (civic.EraType or "") .. "|" .. boostTag .. "|" .. boostDesc)
+            if hasCachedRule("LOCKED_CIVIC", civic.CivicType) then
+                print("LOCKED_CIVIC_STATE|" .. civic.CivicType .. "|" .. table.concat(missing, ",") .. "|" .. boostTag)
+            else
+                local boostDesc = ""
+                local b = boostsByCivic[civic.CivicType]
+                if b and b.TriggerDescription then boostDesc = Locale.Lookup(b.TriggerDescription):gsub("|", "/") end
+                print("LOCKED_CIVIC|" .. Locale.Lookup(civic.Name):gsub("|", "/") .. "|" .. civic.CivicType .. "|" .. table.concat(missing, ",") .. "|" .. (civic.EraType or "") .. "|" .. boostTag .. "|" .. boostDesc)
+            end
         end
     end
 end
@@ -197,16 +283,21 @@ for tech in GameInfo.Technologies() do
             end
         end
         if #missing > 0 then
-            local boostDesc = ""
-            local b = boostsByTech[tech.TechnologyType]
-            if b and b.TriggerDescription then boostDesc = Locale.Lookup(b.TriggerDescription):gsub("|", "/") end
             local boostTag = te:HasBoostBeenTriggered(tech.Index) and "BOOSTED" or "UNBOOSTED"
-            print("LOCKED_TECH|" .. Locale.Lookup(tech.Name):gsub("|", "/") .. "|" .. tech.TechnologyType .. "|" .. table.concat(missing, ",") .. "|" .. (tech.EraType or "") .. "|" .. boostTag .. "|" .. boostDesc)
+            if hasCachedRule("LOCKED_TECH", tech.TechnologyType) then
+                print("LOCKED_TECH_STATE|" .. tech.TechnologyType .. "|" .. table.concat(missing, ",") .. "|" .. boostTag)
+            else
+                local boostDesc = ""
+                local b = boostsByTech[tech.TechnologyType]
+                if b and b.TriggerDescription then boostDesc = Locale.Lookup(b.TriggerDescription):gsub("|", "/") end
+                print("LOCKED_TECH|" .. Locale.Lookup(tech.Name):gsub("|", "/") .. "|" .. tech.TechnologyType .. "|" .. table.concat(missing, ",") .. "|" .. (tech.EraType or "") .. "|" .. boostTag .. "|" .. boostDesc)
+            end
         end
     end
 end
 print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
+    )
 
 
 def _build_set_ingame(

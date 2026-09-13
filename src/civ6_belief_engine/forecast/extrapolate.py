@@ -15,6 +15,7 @@ from math import isfinite
 from typing import Sequence
 
 from .protocol import Branch, Forecaster, MetricSeries
+from .history import recent_metric_points
 
 #: scenario name -> share of the fitted slope carried into the future
 SCENARIO_SLOPE_FACTORS: tuple[tuple[str, float], ...] = (
@@ -60,6 +61,8 @@ class TrendExtrapolator:
         self._slope_factors = tuple(
             (str(name), float(factor)) for name, factor in slope_factors
         )
+        if any(not isfinite(factor) for _, factor in self._slope_factors):
+            raise ValueError("slope factors must be finite")
 
     def forecast(
         self,
@@ -73,42 +76,48 @@ class TrendExtrapolator:
         horizons = sorted(
             {offset for offset in (horizon_turns // 2, horizon_turns) if offset > 0}
         )
-        trends: dict[str, tuple[tuple[int, float], float]] = {}
+        trends: dict[str, tuple[tuple[int, float], float, bool]] = {}
         for metric, points in sorted(series.items()):
-            recent = points[-self._window :]
+            recent = recent_metric_points(
+                points, current_turn=current_turn, window_turns=self._window,
+            )
             if len(recent) < self._min_points:
                 continue
             slope = _linear_slope(recent)
             if slope is None:
                 continue
             last_turn, last_value = recent[-1]
-            trends[metric] = ((last_turn, last_value), slope)
+            trends[metric] = (
+                (last_turn, last_value), slope,
+                all(value >= 0 for _, value in recent),
+            )
 
         branches: list[Branch] = []
         for scenario, factor in self._slope_factors:
             projections: dict[str, tuple[tuple[int, float], ...]] = {}
-            for metric, ((last_turn, last_value), slope) in trends.items():
-                non_negative = all(
-                    value >= 0 for _, value in series[metric][-self._window :]
-                )
+            for metric, ((last_turn, last_value), slope, non_negative) in trends.items():
                 projected: list[tuple[int, float]] = []
                 for offset in horizons:
                     future_turn = current_turn + offset
                     value = last_value + slope * factor * (future_turn - last_turn)
+                    if not isfinite(value):
+                        projected = []
+                        break
                     if non_negative:
                         value = max(0.0, value)
                     projected.append(
                         (future_turn, round(value, 2))
                     )
-                projections[metric] = tuple(projected)
+                if projected:
+                    projections[metric] = tuple(projected)
             branches.append(
                 Branch(
-                    label=f"{scenario}: trend x{factor:g}",
+                    label=f"{scenario}: 趋势系数 {factor:g}",
                     scenario=scenario,
                     horizon_turns=horizon_turns,
                     assumptions=(
-                        f"recent {self._window}-turn trends persist",
-                        f"slope scaled by {factor:g} for the {scenario} scenario",
+                        f"按最近 {self._window} 个实际回合的有效观测外推；缺测未补值",
+                        f"假设观测趋势持续，{scenario} 情景采用 {factor:g} 倍斜率；不代表当前事实",
                     ),
                     projections=projections,
                 )
