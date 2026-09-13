@@ -43,6 +43,7 @@ _BUILDERS = [
     lambda: congress.build_world_congress_query(),
     lambda: congress.build_congress_submit(),
     lambda: congress.build_register_wc_voter(),
+    lambda: congress.build_wc_drive_and_submit(),
 ]
 
 
@@ -175,6 +176,35 @@ def test_wc_voter_defaults_unlisted_resolutions_to_one_free_vote():
     _assert_sentinel(query)
     assert "pref and pref.v or 1" in query
     assert "pref and pref.v or maxV" not in query
+
+
+def test_wc_voter_matches_policy_by_resolution_type_name():
+    """策略可用决议类型名注册：开会前拿不到真实 hash，类型名才是稳定键。"""
+
+    query = congress.build_register_wc_voter(
+        votes=[{"type": "WC_RES_WORLD_RELIGION", "option": 2, "votes": 4}]
+    )
+    _assert_sentinel(query)
+    assert '__civmcp_wc_by_type = {["WC_RES_WORLD_RELIGION"]' in query
+    assert "byType[typeName]" in query
+
+
+def test_wc_driver_votes_and_submits_without_a_player():
+    """end_turn 的等待循环可自行投票并提交，不需要玩家点议会界面。"""
+
+    query = congress.build_wc_drive_and_submit()
+    _assert_sentinel(query)
+    # 只在议会真的开会时动手，否则保持无副作用
+    assert "wc:IsInSession()" in query
+    assert "WC_DRIVE|no_session" in query
+    # 套用同一策略（hash 优先、类型名兜底、未列出=1 免费票）
+    assert "__civmcp_wc_by_type" in query
+    assert "WORLD_CONGRESS_RESOLUTION_VOTE" in query
+    # 提交并恢复回合处理，等价于玩家点“提交”
+    assert "WORLD_CONGRESS_SUBMIT_TURN" in query
+    assert "ACTION_ENDTURN" in query
+    # 把真实票型回报出来，便于遥测核对
+    assert "__civmcp_wc_report" in query
 
 
 def test_barbarian_query_scans_camps_and_units():
