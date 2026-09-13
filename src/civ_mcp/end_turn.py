@@ -20,6 +20,11 @@ log = logging.getLogger(__name__)
 # World Congress screen dismissal is attempted.
 _WC_EARLY_DISMISS_AFTER = 60.0
 
+# How many times a single turn may drive/probe the congress screen.  Bounded
+# on purpose: repeated InGame calls while the AI is still processing is the
+# documented cause of wedged AI turns.
+_WC_MAX_DRIVE_PROBES = 3
+
 # Poll cadence for the end_turn wait loop (quick polls first, then 30s).
 _END_TURN_POLL_DELAYS = (
     2.0,
@@ -112,30 +117,44 @@ def _wc_early_dismiss_due(
     *,
     wc_turn: bool,
     cumulative_wait: float,
-    probed: bool,
+    probes: int,
 ) -> bool:
-    """Return whether the one-shot early World Congress dismissal should run.
+    """Return whether another World Congress drive/probe should run.
 
     The World Congress opens and closes inside ``ACTION_ENDTURN``.  While that
     segment runs, the end-turn blocker query reports nothing (the game is not
     waiting on our side), so a blocker-gated probe can never fire; the wait
-    loop would burn the full ~9-minute timeout before the post-timeout
-    dismissal runs.  Gating on the earlier ``get_world_congress`` result
-    instead keeps the dismissal limited to congress turns.
+    loop would burn the full timeout before anything touches the session.
+    Gating on the earlier ``get_world_congress`` result instead keeps the
+    interference limited to congress turns, and the probe count bounds it.
     """
 
-    return wc_turn and not probed and cumulative_wait >= _WC_EARLY_DISMISS_AFTER
+    return (
+        wc_turn
+        and probes < _WC_MAX_DRIVE_PROBES
+        and cumulative_wait >= _WC_EARLY_DISMISS_AFTER + probes * 60.0
+    )
 
 
 async def _probe_world_congress_popup(gs: GameState) -> bool:
-    """Dismiss a visible World Congress screen once, during the wait loop.
+    """Drive an open congress session, or clear a stale congress screen.
 
-    Returns True only when the single dismissal call reported a real
-    dismissal.  The single attempt is deliberate: the module history shows
-    that repeatedly dismissing UI overlays while the AI is still processing
-    can wedge the game.
+    The session opens inside ``ACTION_ENDTURN``, so this probe is the only
+    place the *live* resolution list can be seen and voted on: it applies the
+    already-registered policy and submits the turn, which is exactly what a
+    human clicking the congress screen would do.  When no session is open the
+    probe falls back to one generic popup dismissal.
+
+    Returns True when something was actually done (votes submitted or a popup
+    dismissed), so the caller can re-check the turn immediately.
     """
 
+    try:
+        result = await gs.drive_world_congress()
+    except Exception:
+        result = ""
+    if "submitted" in result:
+        return True
     dismissed = await gs.dismiss_popup()
     return "Dismissed" in dismissed
 
@@ -1337,7 +1356,7 @@ async def execute_end_turn(gs: GameState) -> str:
     # GameCore-only queries.
     if not advanced:
         diplomacy_probed = False
-        wc_probed = False
+        wc_probes = 0
         cumulative_wait = 4.0  # Phase 1 already waited ~4s
         for delay in _end_turn_poll_delays(wc_turn):
             await asyncio.sleep(delay)
@@ -1372,18 +1391,23 @@ async def execute_end_turn(gs: GameState) -> str:
                 if diplo_advanced:
                     advanced = True
                     break
-            # World Congress turns park on a congress screen that only needs
-            # to be looked at; waiting the full timeout for it wastes most of
-            # the turn budget.  Probe once per turn, on congress turns only.
+            # World Congress turns park on a congress screen.  The session
+            # opens inside ACTION_ENDTURN, so nobody else can vote it: drive it
+            # here (apply the registered policy to the live resolutions and
+            # submit), bounded to a few attempts per turn.
             if _wc_early_dismiss_due(
                 wc_turn=wc_turn,
                 cumulative_wait=cumulative_wait,
-                probed=wc_probed,
+                probes=wc_probes,
             ):
-                wc_probed = True
+                wc_probes += 1
                 try:
                     if await _probe_world_congress_popup(gs):
-                        log.info("Early World Congress screen dismissed")
+                        log.info(
+                            "World Congress drive/probe %d acted (t+%.0fs)",
+                            wc_probes,
+                            cumulative_wait,
+                        )
                         await asyncio.sleep(2.0)
                         turn_after = await _get_turn_number(gs)
                         if (
@@ -1394,7 +1418,7 @@ async def execute_end_turn(gs: GameState) -> str:
                             advanced = True
                             break
                 except Exception:
-                    log.debug("Early World Congress probe failed", exc_info=True)
+                    log.debug("World Congress drive/probe failed", exc_info=True)
 
     # Phase 3: After ~5 min, now safe to check InGame state.
     # AI processing either completed (blocker is on our side) or is

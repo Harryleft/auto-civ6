@@ -240,28 +240,45 @@ def build_register_wc_voter(votes: list[dict] | None = None) -> str:
     casts votes using the player's diplomatic favor, and submits.
 
     Args:
-        votes: Optional list of agent preferences, each dict with keys:
-            hash (int) — resolution type hash
+        votes: Optional list of preferences, each dict with keys:
+            hash (int) — resolution type hash (only trustworthy *inside* the
+                session; the pre-session preview lists the previous session)
+            type (str) — resolution type name, e.g. ``WC_RES_WORLD_RELIGION``.
+                This is the durable key: it is matched against the resolutions
+                the handler actually sees when the session opens, so a policy
+                registered before the session still applies to the real list.
             option (int) — 1 for A, 2 for B
             target (int) — player ID for PlayerType resolutions, or raw value
                            for non-player targets. The handler resolves this
                            to the correct 0-based index at runtime.
-            votes (int) — max votes to allocate
+            votes (int) — max votes to allocate (default 1: the free vote)
             If None, handler uses default strategy: spread favor evenly,
             option A, target 0.
+        Entries carrying both ``hash`` and ``type`` are registered in both
+        tables; the hash table wins when it matches.
     """
-    # Build the Lua table literal for agent vote preferences
+    # Build the Lua table literals for agent vote preferences.  The by-type
+    # table is what makes a pre-session policy survive the fact that the real
+    # resolution set is only assigned when the session opens.
     if votes:
-        entries = []
+        hash_entries = []
+        type_entries = []
         for v in votes:
-            h = v.get("hash", v.get("resolution_hash", 0))
+            h = v.get("hash", v.get("resolution_hash"))
+            type_name = v.get("type", v.get("resolution_type"))
             o = v.get("option", 1)
             t = v.get("target", v.get("target_index", 0))
-            n = v.get("votes", v.get("num_votes", 5))
-            entries.append(f'["{h}"] = {{o={o}, t={t}, v={n}}}')
-        prefs_lua = "{" + ", ".join(entries) + "}"
+            n = v.get("votes", v.get("num_votes", 1))
+            entry = f"{{o={o}, t={t}, v={n}}}"
+            if type_name:
+                type_entries.append(f'["{type_name}"] = {entry}')
+            if h is not None:
+                hash_entries.append(f'["{h}"] = {entry}')
+        prefs_lua = "{" + ", ".join(hash_entries) + "}" if hash_entries else "nil"
+        by_type_lua = "{" + ", ".join(type_entries) + "}" if type_entries else "nil"
     else:
         prefs_lua = "nil"
+        by_type_lua = "nil"
 
     return f"""
 {_lua_require_ruleset("RULESET_EXPANSION_2", "ERR:NO_WORLD_CONGRESS_IN_RULESET")}
@@ -277,6 +294,16 @@ if __civmcp_wc_handler then
 end
 
 __civmcp_wc_votes = {prefs_lua}
+__civmcp_wc_by_type = {by_type_lua}
+__civmcp_wc_voted = false
+__civmcp_wc_report = nil
+
+local function _type_name(rHash)
+    for row in GameInfo.Resolutions() do
+        if row.Hash == rHash then return row.ResolutionType end
+    end
+    return nil
+end
 
 local function handler()
     local me = Game.GetLocalPlayer()
@@ -297,11 +324,21 @@ local function handler()
     end
 
     local prefs = __civmcp_wc_votes
+    local byType = __civmcp_wc_by_type
     local nRes = #ress
+    local report = {{}}
 
     for ri, res in ipairs(ress) do
         local rHash = res.Type
+        local typeName = _type_name(rHash)
         local pref = prefs and prefs[tostring(rHash)]
+        local matched = "hash"
+        if pref == nil and byType and typeName then
+            pref = byType[typeName]
+            matched = pref and "type" or "none"
+        elseif pref == nil then
+            matched = "none"
+        end
         local option = pref and pref.o or 1
         -- A resolution the caller never mentioned gets exactly one free vote.
         -- Defaulting to maxV here spent the whole favor stock on resolutions
@@ -329,7 +366,7 @@ local function handler()
 
         -- costs[i] is CUMULATIVE cost for (i+1) total votes
         -- So for v total votes, total cost = costs[v-1]
-        if prefs then
+        if prefs or byType then
             for v = 2, math.min(maxWanted, maxV) do
                 local totalCost = costs[v - 1] or 99999
                 if totalCost <= favor then
@@ -357,11 +394,19 @@ local function handler()
         kParams[PlayerOperations.PARAM_RESOLUTION_OPTION] = option
         kParams[PlayerOperations.PARAM_RESOLUTION_SELECTION] = targetIdx
         UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_RESOLUTION_VOTE, kParams)
+
+        report[#report + 1] = tostring(rHash) .. ":" .. tostring(typeName or "?")
+            .. ":" .. tostring(option) .. ":" .. tostring(targetIdx)
+            .. ":" .. tostring(votesForThis) .. ":" .. tostring(costForThis)
+            .. ":" .. matched
     end
 
     UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_SUBMIT_TURN, {{}})
 
+    __civmcp_wc_voted = true
+    __civmcp_wc_report = table.concat(report, "|")
     __civmcp_wc_votes = nil
+    __civmcp_wc_by_type = nil
     pcall(function() Events.WorldCongressStage1.Remove(__civmcp_wc_handler) end)
     __civmcp_wc_handler = nil
 end
@@ -369,5 +414,123 @@ end
 __civmcp_wc_handler = handler
 Events.WorldCongressStage1.Add(handler)
 print("OK:WC_VOTER_REGISTERED")
+print("{SENTINEL}")
+"""
+
+
+def build_wc_drive_and_submit() -> str:
+    """Vote the open World Congress session from Lua and submit it (InGame).
+
+    This is the program-side replacement for a human clicking the congress
+    screen.  It exists because the session opens *inside* ``ACTION_ENDTURN``:
+    the pre-session preview lists the previous session's resolutions, so a
+    policy registered before the turn can only be applied by code that sees
+    the real list.  The driver therefore:
+
+    1. re-reads the live session state and resolutions,
+    2. applies the registered policy (``__civmcp_wc_votes`` by hash,
+       ``__civmcp_wc_by_type`` by resolution type name; default = one free
+       vote, which costs no favor),
+    3. submits the turn (``WORLD_CONGRESS_SUBMIT_TURN`` + ``ACTION_ENDTURN``),
+    4. records what it did in ``__civmcp_wc_report`` for the caller to read.
+
+    Safe to call when no session is open: it reports ``WC_DRIVE|no_session``
+    and changes nothing.
+    """
+
+    return f"""
+{_lua_require_ruleset("RULESET_EXPANSION_2", "ERR:NO_WORLD_CONGRESS_IN_RULESET")}
+local me = Game.GetLocalPlayer()
+local wc = nil
+local gotCongress = pcall(function()
+    if Game.GetWorldCongress ~= nil then wc = Game.GetWorldCongress() end
+end)
+if not gotCongress or wc == nil or PlayerOperations.WORLD_CONGRESS_RESOLUTION_VOTE == nil or PlayerOperations.WORLD_CONGRESS_SUBMIT_TURN == nil then {_bail("ERR:NO_WORLD_CONGRESS_IN_RULESET")} end
+if not wc:IsInSession() then
+    print("WC_DRIVE|no_session")
+    print("{SENTINEL}")
+    return
+end
+
+local function _type_name(rHash)
+    for row in GameInfo.Resolutions() do
+        if row.Hash == rHash then return row.ResolutionType end
+    end
+    return nil
+end
+
+local prefs = __civmcp_wc_votes
+local byType = __civmcp_wc_by_type
+local favor = 0
+if Players[me].GetFavor ~= nil then favor = Players[me]:GetFavor() end
+local costs = wc:GetVotesandFavorCost()
+local maxV = costs.MaxVotes or 5
+local ress = wc:GetResolutions() or {{}}
+local report = {{}}
+local spent = 0
+
+for _, res in ipairs(ress) do
+    local rHash = res.Type
+    local typeName = _type_name(rHash)
+    local pref = prefs and prefs[tostring(rHash)]
+    local matched = "hash"
+    if pref == nil and byType and typeName then
+        pref = byType[typeName]
+        matched = pref and "type" or "none"
+    elseif pref == nil then
+        matched = "none"
+    end
+    local option = pref and pref.o or 1
+    local maxWanted = pref and pref.v or 1
+    local targetIdx = 0
+    if pref and pref.t and res.PossibleTargets then
+        local isPlayerType = (res.TargetType == "PlayerType")
+        for ti, tgt in ipairs(res.PossibleTargets) do
+            if isPlayerType then
+                if tonumber(tgt) == pref.t then targetIdx = ti - 1 end
+            else
+                if tostring(tgt) == tostring(pref.t) then targetIdx = ti - 1 end
+            end
+        end
+    end
+
+    local votesForThis = 1
+    local costForThis = 0
+    for v = 2, math.min(maxWanted, maxV) do
+        local totalCost = costs[v - 1] or 99999
+        if totalCost <= favor then
+            costForThis = totalCost
+            votesForThis = v
+        else break end
+    end
+    favor = favor - costForThis
+    spent = spent + costForThis
+
+    local kParams = {{}}
+    kParams[PlayerOperations.PARAM_RESOLUTION_TYPE] = rHash
+    kParams[PlayerOperations.PARAM_WORLD_CONGRESS_VOTES] = votesForThis
+    kParams[PlayerOperations.PARAM_RESOLUTION_OPTION] = option
+    kParams[PlayerOperations.PARAM_RESOLUTION_SELECTION] = targetIdx
+    UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_RESOLUTION_VOTE, kParams)
+
+    report[#report + 1] = tostring(rHash) .. ":" .. tostring(typeName or "?")
+        .. ":" .. tostring(option) .. ":" .. tostring(targetIdx)
+        .. ":" .. tostring(votesForThis) .. ":" .. tostring(costForThis)
+        .. ":" .. matched
+end
+
+local intro = ContextPtr:LookUpControl("/InGame/WorldCongressIntro")
+if intro then intro:SetHide(true) end
+local popup = ContextPtr:LookUpControl("/InGame/WorldCongressPopup")
+if popup then popup:SetHide(true) end
+UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_SUBMIT_TURN, {{}})
+UI.RequestAction(ActionTypes.ACTION_ENDTURN)
+
+__civmcp_wc_voted = true
+__civmcp_wc_report = table.concat(report, "|")
+__civmcp_wc_votes = nil
+__civmcp_wc_by_type = nil
+
+print("WC_DRIVE|submitted|spent:" .. tostring(spent) .. "|" .. table.concat(report, "|"))
 print("{SENTINEL}")
 """
