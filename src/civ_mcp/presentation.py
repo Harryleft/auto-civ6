@@ -6,6 +6,7 @@ import json
 import re
 from copy import deepcopy
 from typing import Any
+from civ_mcp.result_json import json_object
 
 
 _TOOL_LABELS = {
@@ -163,7 +164,7 @@ def localize_model_result(
 
     if not result:
         return result
-    parsed = _json_object(result)
+    parsed = json_object(result)
     if parsed is not None:
         if "中文说明" in parsed:
             return result
@@ -172,14 +173,6 @@ def localize_model_result(
         localized["中文说明"] = _json_summary(tool_name, parsed, params=params)
         return json.dumps(localized, ensure_ascii=False, separators=(",", ":"))
     return _text_presentation(tool_name, result, params=params)
-
-
-def _json_object(result: str) -> dict[str, Any] | None:
-    try:
-        value = json.loads(result)
-    except json.JSONDecodeError:
-        return None
-    return value if isinstance(value, dict) else None
 
 
 def _json_summary(
