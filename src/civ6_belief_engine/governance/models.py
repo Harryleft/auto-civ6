@@ -31,11 +31,8 @@ from .inputs import (
     VictoryInput,
 )
 
+from ..validation import require_text, require_texts
 
-def _nonempty(value: str, name: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{name} must be a non-empty string")
-    return value.strip()
 
 
 def _strict_bool(value: bool, name: str) -> bool:
@@ -71,14 +68,6 @@ def _finite_number(
     return numeric
 
 
-def _strings(values: tuple[str, ...], name: str) -> tuple[str, ...]:
-    if not isinstance(values, tuple):
-        values = tuple(values)
-    normalized = tuple(_nonempty(value, name) for value in values)
-    if len(set(normalized)) != len(normalized):
-        raise ValueError(f"{name} must not contain duplicates")
-    return normalized
-
 
 def _numeric_mapping(
     values: Mapping[str, float], name: str, *, minimum: float | None = None
@@ -87,7 +76,7 @@ def _numeric_mapping(
         raise TypeError(f"{name} must be a mapping")
     normalized: dict[str, float] = {}
     for key, value in values.items():
-        normalized[_nonempty(key, f"{name} key")] = _finite_number(
+        normalized[require_text(key, f"{name} key")] = _finite_number(
             value, f"{name}[{key!r}]", minimum=minimum
         )
     return MappingProxyType(normalized)
@@ -98,7 +87,7 @@ def _bool_mapping(values: Mapping[str, bool], name: str) -> Mapping[str, bool]:
         raise TypeError(f"{name} must be a mapping")
     normalized: dict[str, bool] = {}
     for key, value in values.items():
-        normalized[_nonempty(key, f"{name} key")] = _strict_bool(
+        normalized[require_text(key, f"{name} key")] = _strict_bool(
             value, f"{name}[{key!r}]"
         )
     return MappingProxyType(normalized)
@@ -193,7 +182,7 @@ class RulesetCapabilities:
     combat_estimate: bool = True
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "ruleset", _nonempty(self.ruleset, "ruleset"))
+        object.__setattr__(self, "ruleset", require_text(self.ruleset, "ruleset"))
         for name in (
             "governors",
             "ages",
@@ -243,7 +232,7 @@ class TypedTurnSnapshot:
     extra: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "snapshot_id", _nonempty(self.snapshot_id, "snapshot_id"))
+        object.__setattr__(self, "snapshot_id", require_text(self.snapshot_id, "snapshot_id"))
         turn = _strict_int(self.turn, "turn")
         before = _strict_int(self.turn_before, "turn_before")
         after = _strict_int(self.turn_after, "turn_after")
@@ -303,22 +292,22 @@ class StrategicGoal:
     tags: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "goal_id", _nonempty(self.goal_id, "goal_id"))
-        object.__setattr__(self, "statement", _nonempty(self.statement, "statement"))
+        object.__setattr__(self, "goal_id", require_text(self.goal_id, "goal_id"))
+        object.__setattr__(self, "statement", require_text(self.statement, "statement"))
         _strict_int(self.priority, "priority")
         if not isinstance(self.success, ProbabilityConfidence):
             raise TypeError("success must be ProbabilityConfidence")
         object.__setattr__(
             self,
             "hard_constraints",
-            _strings(self.hard_constraints, "hard_constraints"),
+            require_texts(self.hard_constraints, "hard_constraints"),
         )
-        object.__setattr__(self, "tags", _strings(self.tags, "tags"))
+        object.__setattr__(self, "tags", require_texts(self.tags, "tags"))
         if self.deadline_turn is not None:
             _strict_int(self.deadline_turn, "deadline_turn")
         if self.parent_goal_id is not None:
             object.__setattr__(
-                self, "parent_goal_id", _nonempty(self.parent_goal_id, "parent_goal_id")
+                self, "parent_goal_id", require_text(self.parent_goal_id, "parent_goal_id")
             )
 
 
@@ -333,8 +322,8 @@ class BudgetLock:
     reason: str = ""
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "resource", _nonempty(self.resource, "resource"))
-        object.__setattr__(self, "scope", _nonempty(self.scope, "scope"))
+        object.__setattr__(self, "resource", require_text(self.resource, "resource"))
+        object.__setattr__(self, "scope", require_text(self.scope, "scope"))
         object.__setattr__(
             self, "amount", _finite_number(self.amount, "amount", minimum=0.0000001)
         )
@@ -363,9 +352,9 @@ class EvidenceRequirement:
 
     def __post_init__(self) -> None:
         object.__setattr__(
-            self, "requirement_id", _nonempty(self.requirement_id, "requirement_id")
+            self, "requirement_id", require_text(self.requirement_id, "requirement_id")
         )
-        object.__setattr__(self, "tool", _nonempty(self.tool, "tool"))
+        object.__setattr__(self, "tool", require_text(self.tool, "tool"))
         if not isinstance(self.params, Mapping):
             raise TypeError("params must be a mapping")
         if not all(isinstance(key, str) and key for key in self.params):
@@ -378,15 +367,15 @@ class EvidenceRequirement:
             object.__setattr__(
                 self,
                 "target_entity_id",
-                _nonempty(self.target_entity_id, "target_entity_id"),
+                require_text(self.target_entity_id, "target_entity_id"),
             )
         object.__setattr__(
-            self, "required_facts", _strings(self.required_facts, "required_facts")
+            self, "required_facts", require_texts(self.required_facts, "required_facts")
         )
         object.__setattr__(
             self,
             "required_metrics",
-            _strings(self.required_metrics, "required_metrics"),
+            require_texts(self.required_metrics, "required_metrics"),
         )
         if not isinstance(self.expected_facts, Mapping) or not all(
             isinstance(key, str) and key for key in self.expected_facts
@@ -415,10 +404,10 @@ class ActionIntent:
     arguments_hash: str = ""
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "intent_id", _nonempty(self.intent_id, "intent_id"))
-        object.__setattr__(self, "tool", _nonempty(self.tool, "tool"))
+        object.__setattr__(self, "intent_id", require_text(self.intent_id, "intent_id"))
+        object.__setattr__(self, "tool", require_text(self.tool, "tool"))
         object.__setattr__(
-            self, "proposal_id", _nonempty(self.proposal_id, "proposal_id")
+            self, "proposal_id", require_text(self.proposal_id, "proposal_id")
         )
         if not isinstance(self.arguments, Mapping):
             raise TypeError("arguments must be a mapping")
@@ -458,11 +447,11 @@ class Proposal:
 
     def __post_init__(self) -> None:
         object.__setattr__(
-            self, "proposal_id", _nonempty(self.proposal_id, "proposal_id")
+            self, "proposal_id", require_text(self.proposal_id, "proposal_id")
         )
-        object.__setattr__(self, "department", _nonempty(self.department, "department"))
-        object.__setattr__(self, "summary", _nonempty(self.summary, "summary"))
-        object.__setattr__(self, "goal_ids", _strings(self.goal_ids, "goal_ids"))
+        object.__setattr__(self, "department", require_text(self.department, "department"))
+        object.__setattr__(self, "summary", require_text(self.summary, "summary"))
+        object.__setattr__(self, "goal_ids", require_texts(self.goal_ids, "goal_ids"))
         if not self.goal_ids:
             raise ValueError("goal_ids must contain at least one goal")
         if not isinstance(self.success, ProbabilityConfidence):
@@ -497,7 +486,7 @@ class Proposal:
         if any(intent.proposal_id != self.proposal_id for intent in intents):
             raise ValueError("every action intent must reference this proposal")
         object.__setattr__(self, "action_intents", intents)
-        object.__setattr__(self, "belief_ids", _strings(self.belief_ids, "belief_ids"))
+        object.__setattr__(self, "belief_ids", require_texts(self.belief_ids, "belief_ids"))
         if self.expires_turn is not None:
             _strict_int(self.expires_turn, "expires_turn")
 
@@ -521,7 +510,7 @@ class CouncilDecision:
 
     def __post_init__(self) -> None:
         object.__setattr__(
-            self, "decision_id", _nonempty(self.decision_id, "decision_id")
+            self, "decision_id", require_text(self.decision_id, "decision_id")
         )
         _strict_int(self.turn, "turn")
         if not isinstance(self.status, CouncilDecisionStatus):
@@ -529,24 +518,24 @@ class CouncilDecision:
         object.__setattr__(
             self,
             "selected_proposal_ids",
-            _strings(self.selected_proposal_ids, "selected_proposal_ids"),
+            require_texts(self.selected_proposal_ids, "selected_proposal_ids"),
         )
         object.__setattr__(
             self,
             "considered_proposal_ids",
-            _strings(self.considered_proposal_ids, "considered_proposal_ids"),
+            require_texts(self.considered_proposal_ids, "considered_proposal_ids"),
         )
         if not set(self.selected_proposal_ids).issubset(self.considered_proposal_ids):
             raise ValueError("selected proposals must be present in considered proposals")
         if not isinstance(self.rejected_reasons, Mapping):
             raise TypeError("rejected_reasons must be a mapping")
         reasons = {
-            _nonempty(key, "rejected proposal id"): _strings(tuple(value), "rejection reason")
+            require_text(key, "rejected proposal id"): require_texts(tuple(value), "rejection reason")
             for key, value in self.rejected_reasons.items()
         }
         object.__setattr__(self, "rejected_reasons", MappingProxyType(reasons))
         object.__setattr__(
-            self, "explanation", _strings(self.explanation, "explanation")
+            self, "explanation", require_texts(self.explanation, "explanation")
         )
         object.__setattr__(
             self,
@@ -575,20 +564,20 @@ class Outcome:
 
     def __post_init__(self) -> None:
         for name in ("outcome_id", "intent_id", "proposal_id", "decision_id"):
-            object.__setattr__(self, name, _nonempty(getattr(self, name), name))
+            object.__setattr__(self, name, require_text(getattr(self, name), name))
         if not isinstance(self.status, OutcomeStatus):
             raise TypeError("status must be OutcomeStatus")
         _strict_int(self.turn, "turn")
         object.__setattr__(
             self,
             "observation_ids",
-            _strings(self.observation_ids, "observation_ids"),
+            require_texts(self.observation_ids, "observation_ids"),
         )
         if not isinstance(self.result, Mapping):
             raise TypeError("result must be a mapping")
         object.__setattr__(self, "result", _freeze_value(self.result))
         if self.error is not None:
-            object.__setattr__(self, "error", _nonempty(self.error, "error"))
+            object.__setattr__(self, "error", require_text(self.error, "error"))
         if self.status is OutcomeStatus.SUCCEEDED and self.error is not None:
             raise ValueError("a succeeded outcome cannot contain an error")
         if self.status is not OutcomeStatus.SUCCEEDED and self.error is None:
