@@ -303,7 +303,12 @@ local function handler()
         local rHash = res.Type
         local pref = prefs and prefs[tostring(rHash)]
         local option = pref and pref.o or 1
-        local maxWanted = pref and pref.v or maxV
+        -- A resolution the caller never mentioned gets exactly one free vote.
+        -- Defaulting to maxV here spent the whole favor stock on resolutions
+        -- the caller did not choose: the pre-session preview can name a
+        -- different resolution set than the session that actually opens, so
+        -- an unmatched hash is the normal case, not an error.
+        local maxWanted = pref and pref.v or 1
 
         -- Resolve target: pref.t is a player ID (for PlayerType) or raw value
         -- Find the matching 0-based index in PossibleTargets

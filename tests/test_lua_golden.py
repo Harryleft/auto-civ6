@@ -162,6 +162,21 @@ def test_congress_vote_injects_resolution_hash_and_options():
     assert "4" in query and "1" in query
 
 
+def test_wc_voter_defaults_unlisted_resolutions_to_one_free_vote():
+    """未在票型里出现的决议只投 1 票，不得按最大票数盲投。
+
+    回归：开会前的 get_world_congress 预览可能给出与实际开会不同的决议
+    集合（T116/T141 实测），未匹配的决议曾退回 maxV，把 favor 一次花光。
+    """
+
+    query = congress.build_register_wc_voter(
+        votes=[{"hash": 1, "option": 1, "target": 0, "votes": 3}]
+    )
+    _assert_sentinel(query)
+    assert "pref and pref.v or 1" in query
+    assert "pref and pref.v or maxV" not in query
+
+
 def test_barbarian_query_scans_camps_and_units():
     query = build_barbarian_overview_query()
     _assert_sentinel(query)
