@@ -11,19 +11,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from .models import ProbabilityConfidence, Proposal
-
-
-def _nonempty(value: str, name: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{name} must be a non-empty string")
-    return value.strip()
-
-
-def _strings(values: tuple[str, ...], name: str) -> tuple[str, ...]:
-    normalized = tuple(_nonempty(value, name) for value in values)
-    if len(set(normalized)) != len(normalized):
-        raise ValueError(f"{name} must not contain duplicates")
-    return normalized
+from ..validation import require_text, require_texts
 
 
 class DevilsAdvocateVerdict(StrEnum):
@@ -43,11 +31,11 @@ class CounterEvidence:
 
     def __post_init__(self) -> None:
         object.__setattr__(
-            self, "observation_id", _nonempty(self.observation_id, "observation_id")
+            self, "observation_id", require_text(self.observation_id, "observation_id")
         )
-        object.__setattr__(self, "statement", _nonempty(self.statement, "statement"))
+        object.__setattr__(self, "statement", require_text(self.statement, "statement"))
         object.__setattr__(
-            self, "source_tool", _nonempty(self.source_tool, "source_tool")
+            self, "source_tool", require_text(self.source_tool, "source_tool")
         )
         if type(self.observed_turn) is not int:
             raise TypeError("observed_turn must be an int")
@@ -68,24 +56,24 @@ class DevilsAdvocateReview:
     alternative: str | None = None
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "review_id", _nonempty(self.review_id, "review_id"))
+        object.__setattr__(self, "review_id", require_text(self.review_id, "review_id"))
         object.__setattr__(
-            self, "proposal_id", _nonempty(self.proposal_id, "proposal_id")
+            self, "proposal_id", require_text(self.proposal_id, "proposal_id")
         )
         if not isinstance(self.verdict, DevilsAdvocateVerdict):
             raise TypeError("verdict must be DevilsAdvocateVerdict")
-        object.__setattr__(self, "rationale", _nonempty(self.rationale, "rationale"))
+        object.__setattr__(self, "rationale", require_text(self.rationale, "rationale"))
         if not isinstance(self.assessment, ProbabilityConfidence):
             raise TypeError("assessment must be ProbabilityConfidence")
         for name in ("conditions", "invalidated_assumptions"):
-            object.__setattr__(self, name, _strings(tuple(getattr(self, name)), name))
+            object.__setattr__(self, name, require_texts(tuple(getattr(self, name)), name))
         evidence = tuple(self.counterevidence)
         if not all(isinstance(item, CounterEvidence) for item in evidence):
             raise TypeError("counterevidence must contain CounterEvidence values")
         object.__setattr__(self, "counterevidence", evidence)
         if self.alternative is not None:
             object.__setattr__(
-                self, "alternative", _nonempty(self.alternative, "alternative")
+                self, "alternative", require_text(self.alternative, "alternative")
             )
 
         if self.verdict is DevilsAdvocateVerdict.AGREE:

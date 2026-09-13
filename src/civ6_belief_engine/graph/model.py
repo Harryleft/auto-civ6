@@ -1,5 +1,4 @@
 """Small immutable contracts for the derived decision graph."""
-
 from __future__ import annotations
 
 import hashlib
@@ -10,6 +9,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from types import MappingProxyType
 from typing import Any, TypeAlias
+
+from ..validation import require_text
 
 
 JsonMapping: TypeAlias = Mapping[str, Any]
@@ -24,11 +25,6 @@ class Coverage(StrEnum):
     KNOWN_HISTORY = "known_history"
     SUMMARY = "summary"
 
-
-def _nonempty(value: str, name: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{name} must be a non-empty string")
-    return value.strip()
 
 
 def freeze_json(value: Any) -> Any:
@@ -97,9 +93,9 @@ class Node:
     observed: bool = True
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "node_id", _nonempty(self.node_id, "node_id"))
-        object.__setattr__(self, "node_type", _nonempty(self.node_type, "node_type"))
-        object.__setattr__(self, "source", _nonempty(self.source, "source"))
+        object.__setattr__(self, "node_id", require_text(self.node_id, "node_id"))
+        object.__setattr__(self, "node_type", require_text(self.node_type, "node_type"))
+        object.__setattr__(self, "source", require_text(self.source, "source"))
         if type(self.epoch) is not int or self.epoch < 1:
             raise ValueError("epoch must be a positive integer")
         if type(self.first_observed_turn) is not int or self.first_observed_turn < 0:
@@ -155,11 +151,11 @@ class Edge:
     observed: bool = True
 
     def __post_init__(self) -> None:
-        relation_type = _nonempty(self.relation_type, "relation_type").upper()
+        relation_type = require_text(self.relation_type, "relation_type").upper()
         object.__setattr__(self, "relation_type", relation_type)
-        object.__setattr__(self, "source_id", _nonempty(self.source_id, "source_id"))
-        object.__setattr__(self, "target_id", _nonempty(self.target_id, "target_id"))
-        object.__setattr__(self, "source", _nonempty(self.source, "source"))
+        object.__setattr__(self, "source_id", require_text(self.source_id, "source_id"))
+        object.__setattr__(self, "target_id", require_text(self.target_id, "target_id"))
+        object.__setattr__(self, "source", require_text(self.source, "source"))
         if type(self.epoch) is not int or self.epoch < 1:
             raise ValueError("epoch must be a positive integer")
         if type(self.valid_from_turn) is not int or self.valid_from_turn < 0:
@@ -218,7 +214,7 @@ class GraphDelta:
     remove_edge_keys: tuple[EdgeKey, ...] = ()
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "snapshot_id", _nonempty(self.snapshot_id, "snapshot_id"))
+        object.__setattr__(self, "snapshot_id", require_text(self.snapshot_id, "snapshot_id"))
         if type(self.turn) is not int or self.turn < 0:
             raise ValueError("turn must be a non-negative integer")
         if type(self.epoch) is not int or self.epoch < 1:
@@ -226,7 +222,7 @@ class GraphDelta:
         nodes = tuple(sorted(self.upsert_nodes, key=lambda node: node.node_id))
         edges = tuple(sorted(self.upsert_edges, key=lambda edge: edge.key))
         remove_nodes = tuple(
-            sorted(_nonempty(item, "remove_node_id") for item in self.remove_node_ids)
+            sorted(require_text(item, "remove_node_id") for item in self.remove_node_ids)
         )
         remove_edges = tuple(sorted(_edge_key(item) for item in self.remove_edge_keys))
         if len({node.node_id for node in nodes}) != len(nodes):

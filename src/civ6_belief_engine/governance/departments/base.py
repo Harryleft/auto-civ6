@@ -8,6 +8,7 @@ from types import MappingProxyType
 from typing import Mapping, Protocol, runtime_checkable
 
 from ...graph import GraphView
+from ...validation import require_text, require_texts
 from ..graph_snapshot import GraphSnapshotView
 from ..models import Outcome, OutcomeStatus, Proposal, StrategicGoal
 
@@ -22,17 +23,6 @@ class Department(StrEnum):
     GREAT_PEOPLE = "great_people"
 
 
-def _text(value: str, name: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{name} must be a non-empty string")
-    return value.strip()
-
-
-def _texts(values: tuple[str, ...], name: str) -> tuple[str, ...]:
-    normalized = tuple(_text(item, name) for item in values)
-    if len(normalized) != len(set(normalized)):
-        raise ValueError(f"{name} must not contain duplicates")
-    return normalized
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,7 +51,7 @@ class DepartmentContext:
             object.__setattr__(self, "agenda", ())
             object.__setattr__(self, "goals", ())
             return
-        object.__setattr__(self, "agenda", _texts(tuple(self.agenda), "agenda"))
+        object.__setattr__(self, "agenda", require_texts(tuple(self.agenda), "agenda"))
         goals = tuple(self.goals)
         if not all(isinstance(goal, StrategicGoal) for goal in goals):
             raise TypeError("goals must contain StrategicGoal values")
@@ -84,8 +74,8 @@ class SupportRequest:
             raise TypeError("requester and target must be Department values")
         if self.requester == self.target:
             raise ValueError("a department cannot request support from itself")
-        object.__setattr__(self, "objective", _text(self.objective, "objective"))
-        object.__setattr__(self, "reason", _text(self.reason, "reason"))
+        object.__setattr__(self, "objective", require_text(self.objective, "objective"))
+        object.__setattr__(self, "reason", require_text(self.reason, "reason"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,27 +90,27 @@ class Workstream:
     exit_conditions: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "workstream_id", _text(self.workstream_id, "workstream_id"))
+        object.__setattr__(self, "workstream_id", require_text(self.workstream_id, "workstream_id"))
         if not isinstance(self.department, Department):
             raise TypeError("department must be Department")
-        object.__setattr__(self, "objective", _text(self.objective, "objective"))
+        object.__setattr__(self, "objective", require_text(self.objective, "objective"))
         if type(self.priority) is not int or not 0 <= self.priority <= 100:
             raise ValueError("priority must be an integer between 0 and 100")
         object.__setattr__(
-            self, "dependencies", _texts(tuple(self.dependencies), "dependencies")
+            self, "dependencies", require_texts(tuple(self.dependencies), "dependencies")
         )
         claims: dict[str, float] = {}
         for key, value in self.resource_claims.items():
-            name = _text(key, "resource claim")
+            name = require_text(key, "resource claim")
             if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
                 raise ValueError(f"resource claim {name!r} must be non-negative")
             claims[name] = float(value)
         object.__setattr__(self, "resource_claims", MappingProxyType(claims))
         object.__setattr__(
-            self, "candidate_actions", _texts(tuple(self.candidate_actions), "candidate_actions")
+            self, "candidate_actions", require_texts(tuple(self.candidate_actions), "candidate_actions")
         )
         object.__setattr__(
-            self, "exit_conditions", _texts(tuple(self.exit_conditions), "exit_conditions")
+            self, "exit_conditions", require_texts(tuple(self.exit_conditions), "exit_conditions")
         )
 
 
@@ -143,7 +133,7 @@ class DepartmentAssessment:
     def __post_init__(self) -> None:
         if not isinstance(self.department, Department):
             raise TypeError("department must be Department")
-        object.__setattr__(self, "snapshot_id", _text(self.snapshot_id, "snapshot_id"))
+        object.__setattr__(self, "snapshot_id", require_text(self.snapshot_id, "snapshot_id"))
         if (
             isinstance(self.relevance, bool)
             or not isinstance(self.relevance, (int, float))
@@ -151,7 +141,7 @@ class DepartmentAssessment:
         ):
             raise ValueError("relevance must be between 0 and 1")
         object.__setattr__(self, "relevance", float(self.relevance))
-        object.__setattr__(self, "summary", _text(self.summary, "summary"))
+        object.__setattr__(self, "summary", require_text(self.summary, "summary"))
         for name in (
             "facts",
             "risks",
@@ -159,7 +149,7 @@ class DepartmentAssessment:
             "capability_gaps",
             "evidence_missing",
         ):
-            object.__setattr__(self, name, _texts(tuple(getattr(self, name)), name))
+            object.__setattr__(self, name, require_texts(tuple(getattr(self, name)), name))
         requests = tuple(self.support_requests)
         if not all(isinstance(item, SupportRequest) for item in requests):
             raise TypeError("support_requests must contain SupportRequest values")
