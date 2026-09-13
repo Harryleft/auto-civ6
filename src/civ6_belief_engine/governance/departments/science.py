@@ -11,8 +11,9 @@ from __future__ import annotations
 from typing import Any, ClassVar
 
 from ..graph_snapshot import graph_agenda, graph_goals, graph_snapshot
-from ..models import Outcome, OutcomeStatus
+from ..models import Outcome
 from .base import (
+    BaseDepartment,
     Department,
     DepartmentAssessment,
     DepartmentContext,
@@ -150,7 +151,7 @@ def _unique(values: list[str]) -> tuple[str, ...]:
     return tuple(dict.fromkeys(value for value in values if value))
 
 
-class ScienceDepartment:
+class ScienceDepartment(BaseDepartment):
     """Science specialist that only reads a typed ``DepartmentContext``."""
 
     department: ClassVar[Department] = Department.SCIENCE
@@ -345,8 +346,9 @@ class ScienceDepartment:
     def review(self, context: DepartmentContext, outcome: Outcome) -> ReviewDisposition:
         """Review an outcome without observing the game or mutating state."""
 
-        if outcome.status is not OutcomeStatus.SUCCEEDED:
-            return ReviewDisposition.REPLAN
+        precheck = self._review_precheck(context, outcome)
+        if precheck is not None:
+            return precheck
         assessment = self.assess(context)
         if assessment.degraded:
             return ReviewDisposition.REPLAN

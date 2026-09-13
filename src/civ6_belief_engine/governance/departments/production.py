@@ -7,8 +7,9 @@ from collections.abc import Iterable
 from typing import Any
 
 from ..graph_snapshot import graph_agenda, graph_goals, graph_snapshot
-from ..models import Outcome, OutcomeStatus
+from ..models import Outcome
 from .base import (
+    BaseDepartment,
     Department,
     DepartmentAssessment,
     DepartmentContext,
@@ -18,7 +19,7 @@ from .base import (
 )
 
 
-class ProductionDepartment:
+class ProductionDepartment(BaseDepartment):
     """Assess city production without owning game state or executing actions.
 
     The department deliberately produces planning signals instead of exact
@@ -192,10 +193,9 @@ class ProductionDepartment:
     def review(self, context: DepartmentContext, outcome: Outcome) -> ReviewDisposition:
         """Review an outcome without changing state or issuing a new action."""
 
-        if not isinstance(outcome, Outcome):
-            raise TypeError("outcome must be Outcome")
-        if outcome.status in (OutcomeStatus.FAILED, OutcomeStatus.RETRYABLE):
-            return ReviewDisposition.REPLAN
+        precheck = self._review_precheck(context, outcome)
+        if precheck is not None:
+            return precheck
 
         result = outcome.result
         if result.get("needs_replan") is True or result.get("production_queue_invalid") is True:

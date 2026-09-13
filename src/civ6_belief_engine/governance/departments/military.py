@@ -19,11 +19,11 @@ from ..models import (
     BudgetLock,
     EvidenceRequirement,
     Outcome,
-    OutcomeStatus,
     ProbabilityConfidence,
     Proposal,
 )
 from .base import (
+    BaseDepartment,
     Department,
     DepartmentAssessment,
     DepartmentContext,
@@ -62,7 +62,7 @@ class _BarbarianUnitView(Protocol):
     y: int
 
 
-class MilitaryDepartment:
+class MilitaryDepartment(BaseDepartment):
     """Assess military readiness and known barbarian pressure.
 
     Unit rows are all inspected, but only rows with explicit combat evidence or
@@ -299,15 +299,10 @@ class MilitaryDepartment:
     ) -> ReviewDisposition:
         """Review an outcome without assuming that fog-of-war means safety."""
 
-        if not isinstance(outcome, Outcome):
-            raise TypeError("outcome must be Outcome")
-        if not isinstance(context, DepartmentContext):
-            raise TypeError("context must be DepartmentContext")
+        precheck = self._review_precheck(context, outcome)
+        if precheck is not None:
+            return precheck
         snapshot = graph_snapshot(context)
-        if outcome.turn != context.snapshot.turn:
-            return ReviewDisposition.REPLAN
-        if outcome.status in (OutcomeStatus.FAILED, OutcomeStatus.RETRYABLE):
-            return ReviewDisposition.REPLAN
         if self._nearby_threats(context):
             return ReviewDisposition.CONTINUE
         if snapshot.barbarians is None:

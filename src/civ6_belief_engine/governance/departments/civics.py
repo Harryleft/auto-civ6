@@ -5,8 +5,9 @@ from __future__ import annotations
 from typing import Iterable
 
 from ..graph_snapshot import graph_agenda, graph_goals, graph_snapshot
-from ..models import Outcome, OutcomeStatus
+from ..models import Outcome
 from .base import (
+    BaseDepartment,
     Department,
     DepartmentAssessment,
     DepartmentContext,
@@ -154,7 +155,7 @@ def _civic_agenda(context: DepartmentContext) -> bool:
     return any(term.casefold() in text for text in normalized for term in _CIVIC_TERMS)
 
 
-class CivicsDepartment:
+class CivicsDepartment(BaseDepartment):
     """Evaluate civic progression and policy support without game-side effects."""
 
     department = Department.CIVICS
@@ -319,8 +320,7 @@ class CivicsDepartment:
     def review(self, context: DepartmentContext, outcome: Outcome) -> ReviewDisposition:
         """Map a typed outcome to a fixed disposition without interpreting free text."""
 
-        if not isinstance(context, DepartmentContext):
-            raise TypeError("context must be DepartmentContext")
-        if outcome.status is OutcomeStatus.SUCCEEDED:
-            return ReviewDisposition.CONTINUE
-        return ReviewDisposition.REPLAN
+        precheck = self._review_precheck(context, outcome)
+        if precheck is not None:
+            return precheck
+        return ReviewDisposition.CONTINUE
