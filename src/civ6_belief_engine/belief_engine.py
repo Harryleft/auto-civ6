@@ -1091,6 +1091,18 @@ class BeliefEngine:
         # persist graph.delta events for replay and audit.
         self._graph_materialized_sequence = 0
         self._graph_persisted_sequence = 0
+        # Derived read models keyed by journal sequence. Every append advances
+        # ``_sequence`` (and a load recomputes it), so a write invalidates both
+        # caches without any explicit bookkeeping. ``review()`` appends events,
+        # which is exactly why the turn-brief cache is keyed *after* it runs.
+        self._metrics_sequence: int | None = None
+        self._metrics_cache: dict[str, Any] | None = None
+        self._review_key: tuple[int, int] | None = None
+        self._review_cache: dict[str, Any] | None = None
+        self._gate_key: tuple[int, int] | None = None
+        self._gate_cache: dict[str, Any] | None = None
+        self._turn_brief_key: tuple[int, int, int] | None = None
+        self._turn_brief_cache: dict[str, Any] | None = None
 
     @property
     def bound(self) -> bool:
@@ -1143,6 +1155,14 @@ class BeliefEngine:
         self._graph_replay_error = None
         self._graph_materialized_sequence = 0
         self._graph_persisted_sequence = 0
+        self._metrics_sequence = None
+        self._metrics_cache = None
+        self._review_key = None
+        self._review_cache = None
+        self._gate_key = None
+        self._gate_cache = None
+        self._turn_brief_key = None
+        self._turn_brief_cache = None
         if not path.exists():
             return
         # errors="replace": a crash mid-write can also truncate a UTF-8
@@ -1882,6 +1902,13 @@ class BeliefEngine:
         return deepcopy(events[-max(1, min(last_n, 1000)) :])
 
     def current_metrics(self) -> dict[str, Any]:
+        # Called by review() on every turn_brief, i.e. several times per tool
+        # call. It scans every active observation (~1.1k at T110) and groups by
+        # source, which measured ~61ms — over half of review()'s cost. The
+        # result depends only on the entity store, and every mutation appends an
+        # event, so keying on the journal sequence is a sound invalidation.
+        if self._metrics_cache is not None and self._metrics_sequence == self._sequence:
+            return deepcopy(self._metrics_cache)
         observations = self.current_governance_entities("observation", status="active")
         # Metrics are snapshots per source tool. Keeping every historical key
         # would make removed/schema-corrected fields live forever. Select the
@@ -1905,6 +1932,8 @@ class BeliefEngine:
         metrics: dict[str, Any] = {}
         for observation in observations:
             metrics.update(observation.get("metrics") or {})
+        self._metrics_sequence = self._sequence
+        self._metrics_cache = deepcopy(metrics)
         return metrics
 
     def _run_derivation_rules(
@@ -3252,7 +3281,20 @@ class BeliefEngine:
         }
 
     def review(self, *, turn: int) -> dict[str, Any]:
-        """Evaluate predictions, belief expectations, and plan triggers."""
+        """Evaluate predictions, belief expectations, and plan triggers.
+
+        Has side effects: resolving a prediction or recording a contradiction
+        appends events. The memo below is therefore only populated when a run
+        wrote nothing — in that case the entity store is byte-identical to what
+        the next call would read, and ``review`` depends on nothing else (no
+        wall clock), so repeating it would again write nothing and return the
+        same value. Skipping it is equivalent, not merely similar.
+        """
+
+        cache_key = (int(turn), self._sequence)
+        if self._review_cache is not None and self._review_key == cache_key:
+            return deepcopy(self._review_cache)
+        sequence_before = self._sequence
 
         metrics = self.current_metrics()
         resolved: list[str] = []
@@ -3428,7 +3470,7 @@ class BeliefEngine:
                     turn=turn,
                 )
 
-        return {
+        result = {
             "turn": turn,
             "metrics": metrics,
             "predictions_resolved": resolved,
@@ -3437,6 +3479,10 @@ class BeliefEngine:
             "plans_needing_replan": replans,
             "knowledge_stale": stale_knowledge,
         }
+        if self._sequence == sequence_before:
+            self._review_key = cache_key
+            self._review_cache = deepcopy(result)
+        return result
 
     def turn_brief(self, *, turn: int, limit: int = 12) -> dict[str, Any]:
         """Return the decision-facing belief state for the current turn.
@@ -3449,6 +3495,15 @@ class BeliefEngine:
         """
         review = self.review(turn=turn)
         take = max(1, min(int(limit), 50))
+        # review() can append events (resolving predictions, recording
+        # contradictions), so the cache key is taken *after* it runs: any write
+        # advances the journal sequence and therefore misses the cache. Without
+        # that ordering a memoized brief would skip review's side effects
+        # entirely. Several call sites ask for the same turn within one tool
+        # call (pipeline._append_belief_context, authorize_action, ...).
+        cache_key = (int(turn), take, self._sequence)
+        if self._turn_brief_cache is not None and self._turn_brief_key == cache_key:
+            return deepcopy(self._turn_brief_cache)
 
         beliefs = self.current_governance_entities("belief", status="active")
         beliefs.sort(
@@ -3514,7 +3569,7 @@ class BeliefEngine:
         else:
             default_route = "fast"
 
-        return {
+        brief = {
             "game_id": self.game_id,
             "turn": turn,
             "review": review,
@@ -3587,6 +3642,9 @@ class BeliefEngine:
                 "Use route_belief_decision before high-impact or irreversible actions.",
             ],
         }
+        self._turn_brief_key = cache_key
+        self._turn_brief_cache = deepcopy(brief)
+        return brief
 
     def governance_turn_gate(self, *, turn: int) -> dict[str, Any]:
         """Return the non-bypassable governance obligations for ``turn``.
@@ -3595,7 +3653,18 @@ class BeliefEngine:
         must be arbitrated, selected action intents must reach a successful
         outcome, and routed authorizations cannot be silently abandoned before
         ending the turn.
+
+        Like :meth:`review`, this reclaims stale decisions and therefore appends
+        events. The memo below is only populated when a run wrote nothing, in
+        which case the entity store is unchanged and a repeat call would write
+        nothing again. The gate runs on every ``end_turn`` preflight and walks
+        five entity collections (~193ms at T110).
         """
+
+        cache_key = (int(turn), self._sequence)
+        if self._gate_cache is not None and self._gate_key == cache_key:
+            return deepcopy(self._gate_cache)
+        sequence_before = self._sequence
 
         typed_snapshot = next(
             (
@@ -3739,7 +3808,7 @@ class BeliefEngine:
             blockers.append("council_action_intents_not_completed")
         if pending_authorizations:
             blockers.append("routed_actions_not_completed")
-        return {
+        gate = {
             "turn": turn,
             "ready": not blockers,
             "typed_snapshot_id": (
@@ -3752,6 +3821,10 @@ class BeliefEngine:
             "pending_council_intents": pending_council_intents,
             "pending_authorizations": pending_authorizations,
         }
+        if self._sequence == sequence_before:
+            self._gate_key = cache_key
+            self._gate_cache = deepcopy(gate)
+        return gate
 
     def find_duplicate_pending_intent(
         self,
