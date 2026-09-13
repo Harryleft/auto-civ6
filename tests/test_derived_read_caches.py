@@ -13,7 +13,10 @@ call would then see an identical store and write nothing again.
 
 from __future__ import annotations
 
-from civ6_belief_engine.belief_engine import BeliefEngine
+from civ6_belief_engine.belief_engine import (
+    _GOVERNANCE_GRAPH_ENTITY_TYPES,
+    BeliefEngine,
+)
 
 
 def _belief(statement: str) -> dict:
@@ -163,3 +166,88 @@ def test_direct_reload_on_the_same_instance_resets_caches(tmp_path):
 
     engine.bind_game("CIVILIZATION_OTHER", 7)
     assert engine.turn_brief(turn=10)["beliefs"] != before["beliefs"]
+
+
+def _brute_force_governance_sequence(engine: BeliefEngine) -> int:
+    return max(
+        (
+            int(event.get("sequence", 0))
+            for event in engine._events
+            if event.get("entity_type") in _GOVERNANCE_GRAPH_ENTITY_TYPES
+        ),
+        default=0,
+    )
+
+
+def test_governance_sequence_cursor_matches_a_brute_force_scan(tmp_path):
+    """The cursor is maintained incrementally, so pin it against the scan.
+
+    ``_latest_governance_sequence`` used to walk every event; it now reads a
+    value that ``_reduce`` advances. A drift would make ``sync_governance_graph``
+    skip a projection it owes, or redo one it does not.
+    """
+
+    engine = _engine(tmp_path)
+    assert engine._latest_governance_sequence() == _brute_force_governance_sequence(engine)
+
+    engine.create("belief", _belief("首都需要防御"), turn=10, entity_id="belief:one")
+    assert engine._latest_governance_sequence() == _brute_force_governance_sequence(engine)
+
+    # A graph.delta is not a governance-typed event and must not advance it.
+    before = engine._latest_governance_sequence()
+    engine.sync_governance_graph(turn=10)
+    assert engine._latest_governance_sequence() == _brute_force_governance_sequence(engine)
+    assert engine._latest_governance_sequence() >= before
+
+    engine.create("plan", {"goal": "expand", "horizon": 10, "probability_of_success": 0.6},
+                  turn=11, entity_id="plan:one")
+    assert engine._latest_governance_sequence() == _brute_force_governance_sequence(engine)
+
+    reloaded = BeliefEngine(run_id="cursor-reload", directory=tmp_path)
+    reloaded.bind_game("CIVILIZATION_TEST", 42)
+    assert reloaded._latest_governance_sequence() == _brute_force_governance_sequence(reloaded)
+
+
+def test_creation_epoch_index_matches_a_brute_force_scan(tmp_path):
+    """``_entity_created_in_current_epoch`` is indexed; pin it against the scan.
+
+    It gates whether an authorization minted before a rollback can still be
+    consumed, so a drift here would silently re-enable a stale approval.
+    """
+
+    def brute_force(engine: BeliefEngine, entity_type: str, entity_id: str) -> bool:
+        for event in engine._events:
+            if (
+                event.get("entity_type") == entity_type
+                and event.get("entity_id") == entity_id
+            ):
+                return int(event.get("epoch", 1)) == engine.epoch
+        return False
+
+    engine = _engine(tmp_path)
+    engine.create("belief", _belief("首都需要防御"), turn=10, entity_id="belief:one")
+    engine.create("plan", {"goal": "expand", "horizon": 10, "probability_of_success": 0.6},
+                  turn=10, entity_id="plan:one")
+
+    for entity_type, entity_id in (
+        ("belief", "belief:one"),
+        ("plan", "plan:one"),
+        ("belief", "never-seen"),
+    ):
+        assert engine._entity_created_in_current_epoch(entity_type, entity_id) == (
+            brute_force(engine, entity_type, entity_id)
+        )
+
+    # A new epoch must flip the answer for entities created before it.
+    engine.record_game_reload(reason="unit-test", turn=10)
+    for entity_type, entity_id in (("belief", "belief:one"), ("plan", "plan:one")):
+        assert engine._entity_created_in_current_epoch(entity_type, entity_id) == (
+            brute_force(engine, entity_type, entity_id)
+        )
+        assert engine._entity_created_in_current_epoch(entity_type, entity_id) is False
+
+    reloaded = BeliefEngine(run_id="creation-epoch-reload", directory=tmp_path)
+    reloaded.bind_game("CIVILIZATION_TEST", 42)
+    assert reloaded._entity_created_in_current_epoch("belief", "belief:one") == (
+        brute_force(reloaded, "belief", "belief:one")
+    )

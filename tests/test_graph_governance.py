@@ -420,3 +420,30 @@ def test_sync_without_persist_does_not_write_the_journal(tmp_path) -> None:
     persisted = engine.sync_governance_graph(turn=10)
     assert persisted.state_hash == lazy.state_hash
     assert engine.snapshot(include_deleted=True)["last_sequence"] > before
+
+
+def test_graph_entities_status_filter_matches_manual_filtering(tmp_path) -> None:
+    """The status filter now runs on frozen attributes, before the thaw.
+
+    Pin that it still selects exactly what filtering the thawed payloads did.
+    """
+
+    engine = BeliefEngine(run_id="graph-entities-status", directory=tmp_path)
+    engine.bind_game("CIVILIZATION_INDIA", 123)
+    engine.create("belief", _belief("首都需要防御"), turn=10, entity_id="belief:one")
+    engine.create("belief", _belief("边境需要巡逻"), turn=10, entity_id="belief:two")
+    engine.create("belief", _belief("已撤销的旧判断"), turn=10, entity_id="belief:gone")
+    engine.update("belief", "belief:gone", {"status": "archived"}, turn=10)
+    engine.sync_governance_graph(turn=10)
+
+    everything = engine.graph_entities("belief", status=None)
+    active = engine.graph_entities("belief", status="active")
+
+    expected = [item for item in everything if item.get("status") == "active"]
+    assert [item["id"] for item in active] == [item["id"] for item in expected]
+    assert "belief:gone" not in {item["id"] for item in active}
+    assert "belief:gone" in {item["id"] for item in everything}
+
+    # Returned payloads are caller-owned copies, not the frozen graph state.
+    active[0]["status"] = "mutated"
+    assert engine.graph_entities("belief", status="active")[0]["status"] == "active"
