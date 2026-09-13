@@ -7,7 +7,6 @@ and produces immutable values that can be appended to the existing event log.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 from dataclasses import asdict, dataclass, field, is_dataclass
@@ -31,6 +30,7 @@ from .inputs import (
     VictoryInput,
 )
 
+from ..canonical import arguments_hash, json_value
 from ..validation import require_text, require_texts
 
 
@@ -93,22 +93,6 @@ def _bool_mapping(values: Mapping[str, bool], name: str) -> Mapping[str, bool]:
     return MappingProxyType(normalized)
 
 
-def _json_value(value: Any) -> Any:
-    """Convert supported typed values to a stable JSON-compatible structure."""
-
-    if is_dataclass(value):
-        return _json_value(asdict(value))
-    if isinstance(value, Mapping):
-        return {str(key): _json_value(item) for key, item in sorted(value.items())}
-    if isinstance(value, (tuple, list)):
-        return [_json_value(item) for item in value]
-    if isinstance(value, set):
-        return sorted(_json_value(item) for item in value)
-    if value is None or isinstance(value, (str, int, float, bool)):
-        return value
-    raise TypeError(f"unsupported action argument type: {type(value).__name__}")
-
-
 def _freeze_value(value: Any) -> Any:
     """Recursively detach and freeze JSON-compatible governance payloads."""
 
@@ -123,19 +107,12 @@ def _freeze_value(value: Any) -> Any:
             _freeze_value(item)
             for item in sorted(
                 value,
-                key=lambda item: json.dumps(_json_value(item), sort_keys=True),
+                key=lambda item: json.dumps(json_value(item), sort_keys=True),
             )
         )
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
     raise TypeError(f"unsupported governance payload type: {type(value).__name__}")
-
-
-def _arguments_hash(arguments: Mapping[str, Any]) -> str:
-    canonical = json.dumps(
-        _json_value(arguments), sort_keys=True, separators=(",", ":"), ensure_ascii=False
-    )
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -414,7 +391,7 @@ class ActionIntent:
         if not all(isinstance(key, str) and key for key in self.arguments):
             raise TypeError("argument keys must be non-empty strings")
         frozen_arguments = _freeze_value(self.arguments)
-        computed_hash = _arguments_hash(frozen_arguments)
+        computed_hash = arguments_hash(frozen_arguments)
         if self.arguments_hash and self.arguments_hash != computed_hash:
             raise ValueError("arguments_hash does not match arguments")
         object.__setattr__(self, "arguments", frozen_arguments)
