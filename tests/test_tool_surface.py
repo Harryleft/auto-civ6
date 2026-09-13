@@ -4,6 +4,10 @@
 112 个工具"). A hand-maintained count drifts the moment a tool is added or
 removed, and the operating instructions built on it quietly stop being true.
 Pin the claim to the registry instead.
+
+The pattern intentionally matches the *claim* (``server/`` … N 个工具) rather
+than one exact sentence, so rewording the surrounding prose never silently
+disarms this guard.
 """
 
 from __future__ import annotations
@@ -15,7 +19,7 @@ from civ_mcp.server import mcp
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
-_TOOL_COUNT_CLAIM = re.compile(r"`server/` 包内 (\d+) 个工具")
+_TOOL_COUNT_CLAIM = re.compile(r"server/\S*[^0-9\n]{0,20}?(\d+) 个工具")
 
 
 def registered_tools() -> frozenset[str]:
