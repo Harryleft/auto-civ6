@@ -4,6 +4,7 @@ import asyncio
 
 from civ_mcp.end_turn import (
     _can_override_end_turn_blockers,
+    _end_turn_poll_delays,
     _probe_world_congress_popup,
     _wc_early_dismiss_due,
 )
@@ -84,3 +85,17 @@ def test_wc_probe_reports_nothing_to_dismiss() -> None:
     gs = _FakeGameState("No popups to dismiss.")
     assert asyncio.run(_probe_world_congress_popup(gs)) is False
     assert gs.dismiss_calls == 1
+
+
+def test_plain_turn_poll_budget_is_unchanged() -> None:
+    delays = _end_turn_poll_delays(wc_turn=False)
+    assert sum(delays) == 550.0
+    assert all(delay > 0 for delay in delays)
+
+
+def test_congress_turn_gets_a_bounded_extra_poll_budget() -> None:
+    plain = _end_turn_poll_delays(wc_turn=False)
+    congress = _end_turn_poll_delays(wc_turn=True)
+
+    assert sum(congress) == 1210.0  # ~20 min, bounded
+    assert congress[: len(plain)] == plain

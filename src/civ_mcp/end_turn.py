@@ -20,6 +20,58 @@ log = logging.getLogger(__name__)
 # World Congress screen dismissal is attempted.
 _WC_EARLY_DISMISS_AFTER = 60.0
 
+# Poll cadence for the end_turn wait loop (quick polls first, then 30s).
+_END_TURN_POLL_DELAYS = (
+    2.0,
+    2.0,
+    3.0,
+    3.0,
+    5.0,
+    5.0,  # 20s: catch fast turns
+    10.0,
+    10.0,
+    10.0,
+    10.0,
+    10.0,
+    10.0,  # 80s: mid wait
+    15.0,
+    15.0,
+    15.0,
+    15.0,  # 140s
+    20.0,
+    20.0,
+    20.0,
+    20.0,  # 220s
+    30.0,
+    30.0,
+    30.0,
+    30.0,
+    30.0,
+    30.0,
+    30.0,  # 430s
+    30.0,
+    30.0,
+    30.0,
+    30.0,  # 550s (~9 min)
+)
+
+# Extra budget for congress/emergency turns: the World Congress stage runs
+# inside ACTION_ENDTURN and, on the Mac port, can outlast a plain AI turn.
+# Retrying costs a full game restart, so waiting longer is the cheaper bet.
+_WC_EXTRA_POLL_DELAYS = (30.0,) * 22  # +660s (~20 min total)
+
+
+def _end_turn_poll_delays(wc_turn: bool) -> tuple[float, ...]:
+    """Return the poll cadence used while waiting for the turn to advance.
+
+    Congress and emergency turns get a bounded extra budget; a plain turn
+    keeps the original cadence so a genuine hang is still reported quickly.
+    """
+
+    if wc_turn:
+        return _END_TURN_POLL_DELAYS + _WC_EXTRA_POLL_DELAYS
+    return _END_TURN_POLL_DELAYS
+
 
 def _barbarian_attack_opportunities(
     units: list[lq.UnitInfo], overview: lq.BarbarianOverview
@@ -1280,47 +1332,14 @@ async def execute_end_turn(gs: GameState) -> str:
             advanced = True
             break
 
-    # Phase 2: Slow polling (5 min) — AI can take 1-5 min on large maps,
-    # especially during wars with many units. GameCore-only queries.
+    # Phase 2: Slow polling — AI can take 1-5 min on large maps, especially
+    # during wars with many units; congress turns get a longer budget.
+    # GameCore-only queries.
     if not advanced:
-        # 10 min total: AI can take several minutes on large maps with wars.
-        # Quick polls early (catch fast turns), then escalate to 30s intervals.
         diplomacy_probed = False
         wc_probed = False
         cumulative_wait = 4.0  # Phase 1 already waited ~4s
-        for delay in [
-            2.0,
-            2.0,
-            3.0,
-            3.0,
-            5.0,
-            5.0,  # 20s: catch fast turns
-            10.0,
-            10.0,
-            10.0,
-            10.0,
-            10.0,
-            10.0,  # 80s: mid wait
-            15.0,
-            15.0,
-            15.0,
-            15.0,  # 140s
-            20.0,
-            20.0,
-            20.0,
-            20.0,  # 220s
-            30.0,
-            30.0,
-            30.0,
-            30.0,
-            30.0,
-            30.0,
-            30.0,  # 430s
-            30.0,
-            30.0,
-            30.0,
-            30.0,  # 550s (~9 min)
-        ]:
+        for delay in _end_turn_poll_delays(wc_turn):
             await asyncio.sleep(delay)
             cumulative_wait += delay
             turn_after = await _get_turn_number(gs)
