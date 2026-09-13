@@ -2,6 +2,7 @@
 
 from .model import Coverage, Edge, EdgeKey, GraphDelta, Node
 from .project import (
+    GOVERNANCE_ENTITY_TYPES,
     GraphProjectionError,
     city_node_id,
     compare_shadow_projection,
@@ -13,6 +14,7 @@ from .replay import GRAPH_DELTA_EVENT, GraphReplayError, replay_deltas, replay_g
 from .view import GraphInvariantError, GraphView
 
 __all__ = [
+    "GOVERNANCE_ENTITY_TYPES",
     "Coverage",
     "city_node_id",
     "Edge",

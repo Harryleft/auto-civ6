@@ -17,7 +17,7 @@ WORLD_SOURCE = "game_state:typed_snapshot"
 GOAL_SOURCE = "belief_engine:goal"
 GOVERNANCE_SOURCE = "belief_engine:governance"
 
-_GOVERNANCE_ENTITY_TYPES = frozenset(
+GOVERNANCE_ENTITY_TYPES = frozenset(
     {
         "observation",
         "belief",
@@ -403,7 +403,7 @@ def project_governance_state(
         )
 
     for entity_type, raw_entities in entities.items():
-        if entity_type not in _GOVERNANCE_ENTITY_TYPES:
+        if entity_type not in GOVERNANCE_ENTITY_TYPES:
             continue
         normalized = tuple(raw_entities)
         raw_by_type[entity_type] = normalized
