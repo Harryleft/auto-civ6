@@ -130,21 +130,30 @@ class GraphView:
             )
         )
 
-    def edges_from(self, node_id: str, relation_type: str | None = None) -> tuple[Edge, ...]:
+    def _edges_of(
+        self,
+        adjacency: Mapping[EdgeKey, tuple[str, ...]],
+        node_id: str,
+        relation_type: str | None,
+    ) -> tuple[Edge, ...]:
+        """Shared body of :meth:`edges_from` and :meth:`edges_to`.
+
+        The two stay separate public names: a direction parameter would read
+        worse at every call site than the direction being in the name.
+        """
+
         relation = relation_type.upper() if relation_type else None
         return tuple(
             self.edges[key]
-            for key in self._outgoing.get(node_id, ())
+            for key in adjacency.get(node_id, ())
             if relation is None or key[0] == relation
         )
 
+    def edges_from(self, node_id: str, relation_type: str | None = None) -> tuple[Edge, ...]:
+        return self._edges_of(self._outgoing, node_id, relation_type)
+
     def edges_to(self, node_id: str, relation_type: str | None = None) -> tuple[Edge, ...]:
-        relation = relation_type.upper() if relation_type else None
-        return tuple(
-            self.edges[key]
-            for key in self._incoming.get(node_id, ())
-            if relation is None or key[0] == relation
-        )
+        return self._edges_of(self._incoming, node_id, relation_type)
 
     def threats_near_city(
         self,
