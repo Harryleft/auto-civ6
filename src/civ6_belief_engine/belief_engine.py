@@ -22,6 +22,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+from .canonical import arguments_hash
 from .forecast import bayes
 from .graph import (
     GRAPH_DELTA_EVENT,
@@ -963,14 +964,14 @@ def _validate_entity(entity_type: str, entity: dict[str, Any]) -> None:
             )
 
 
-def _canonical_params(params: dict[str, Any]) -> str:
-    """Stable action/evidence identity without relying on prose matching."""
-
-    return json.dumps(params, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-
-
 def action_args_hash(params: dict[str, Any]) -> str:
-    return hashlib.sha256(_canonical_params(params).encode("utf-8")).hexdigest()
+    """Stable identity of an action's arguments.
+
+    Delegates to the domain-wide canonical hash so the value the council
+    approves and the value execution verifies can never drift apart.
+    """
+
+    return arguments_hash(params)
 
 
 def evaluate_condition(rule: dict[str, Any], metrics: dict[str, Any]) -> bool | None:
