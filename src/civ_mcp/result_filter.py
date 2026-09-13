@@ -190,6 +190,23 @@ def _compact_governance_brief(
             kept = _decision_metrics(review_metrics)
             omitted["belief_brief.review.metrics"] = len(review_metrics) - len(kept)
             review["metrics"] = kept
+            if kept and kept == belief_brief.get("current_metrics"):
+                # The reference is local to this self-contained response;
+                # it never assumes the model retained an earlier baseline.
+                del review["metrics"]
+                review["metrics_ref"] = "belief_brief.current_metrics"
+                omitted["belief_brief.review.metrics"] += len(kept)
+
+    snapshot = compacted.get("snapshot")
+    if isinstance(snapshot, dict):
+        # Changed object details and all affected domains live in the bounded
+        # world_changes view. Keep counts and a few IDs for these audit lists.
+        for key in ("world_entities_changed", "world_entities_archived"):
+            values = snapshot.get(key)
+            if isinstance(values, list) and len(values) > history_items:
+                snapshot[f"{key}_count"] = len(values)
+                snapshot[key] = values[:history_items]
+                omitted[f"snapshot.{key}"] = len(values) - history_items
 
     governance = compacted.get("governance")
     if isinstance(governance, dict):
@@ -205,7 +222,7 @@ def _compact_governance_brief(
         compacted,
         result=result,
         digest=digest,
-        policy="governance_semantic_v1",
+        policy="governance_semantic_v2",
         omitted=omitted,
     )
     return _dump_compact(compacted)
