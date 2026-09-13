@@ -13,6 +13,7 @@ import os
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Mapping
+from civ_mcp.result_json import json_object
 
 
 FILTER_ENV = "CIV_MCP_RESULT_FILTER"
@@ -216,7 +217,7 @@ def _compact_belief_state(
     digest: str,
     history_items: int,
 ) -> str | None:
-    parsed = _json_object(result)
+    parsed = json_object(result)
     if parsed is None or _already_filtered(parsed):
         return result if parsed is not None else None
 
@@ -249,7 +250,7 @@ def _compact_belief_trace(
     digest: str,
     history_items: int,
 ) -> str | None:
-    parsed = _json_object(result)
+    parsed = json_object(result)
     if parsed is None or _already_filtered(parsed):
         return result if parsed is not None else None
 
@@ -299,14 +300,6 @@ def _event_header(event: Any) -> Any:
     if isinstance(changes, dict):
         header["changes"] = sorted(changes)
     return header
-
-
-def _json_object(result: str) -> dict[str, Any] | None:
-    try:
-        parsed = json.loads(result)
-    except json.JSONDecodeError:
-        return None
-    return parsed if isinstance(parsed, dict) else None
 
 
 def _dump_compact(payload: Mapping[str, Any]) -> str:
