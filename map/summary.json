@@ -1,0 +1,80 @@
+{
+  "game": "sumeria_-1162067840",
+  "civ": "CIVILIZATION_SUMERIA",
+  "turn": 141,
+  "grid": {
+    "w": 60,
+    "h": 38,
+    "tiles": 2280
+  },
+  "players": [
+    "CIVILIZATION_SUMERIA",
+    "CIVILIZATION_CANADA",
+    "CIVILIZATION_BRAZIL",
+    "CIVILIZATION_SWEDEN",
+    "CIVILIZATION_CAHOKIA",
+    "CIVILIZATION_KUMASI",
+    "CIVILIZATION_ZANZIBAR",
+    "CIVILIZATION_BABYLON",
+    "CIVILIZATION_RAPA_NUI",
+    "CIVILIZATION_MEXICO_CITY",
+    "CIVILIZATION_FREE_CITIES"
+  ],
+  "our_cities": [
+    {
+      "name": "LOC_CITY_NAME_URUK",
+      "x": 14,
+      "y": 17,
+      "pop": 9
+    },
+    {
+      "name": "LOC_CITY_NAME_KISH",
+      "x": 24,
+      "y": 18,
+      "pop": 12
+    },
+    {
+      "name": "LOC_CITY_NAME_UR",
+      "x": 27,
+      "y": 16,
+      "pop": 6
+    },
+    {
+      "name": "LOC_CITY_NAME_NIPPUR",
+      "x": 20,
+      "y": 17,
+      "pop": 10
+    },
+    {
+      "name": "LOC_CITY_NAME_SIPPAR",
+      "x": 18,
+      "y": 20,
+      "pop": 9
+    },
+    {
+      "name": "LOC_CITY_NAME_ERIDU",
+      "x": 11,
+      "y": 18,
+      "pop": 6
+    },
+    {
+      "name": "LOC_CITY_NAME_ADAB",
+      "x": 19,
+      "y": 13,
+      "pop": 6
+    },
+    {
+      "name": "LOC_CITY_NAME_LARAK",
+      "x": 13,
+      "y": 21,
+      "pop": 3
+    }
+  ],
+  "our_city_count": 8,
+  "merged_turns": 138,
+  "turn_range": [
+    2,
+    141
+  ],
+  "generated_at": "2026-09-14T08:03:02"
+}
