@@ -154,8 +154,14 @@ async def _probe_world_congress_popup(gs: GameState) -> bool:
     except Exception:
         result = ""
     if "submitted" in result:
+        log.info("World Congress driven from Lua: %s", result[:240])
         return True
     dismissed = await gs.dismiss_popup()
+    log.info(
+        "World Congress probe: %s | dismiss=%s",
+        result[:120] or "<no result>",
+        dismissed[:80],
+    )
     return "Dismissed" in dismissed
 
 
