@@ -1,0 +1,10 @@
+[21:30:52] --- 回合 175 得分 131 (第 1/40 次推进)
+[21:31:05]   波士顿 排产 -> UNIT_BUILDER
+[21:31:40]   注册议会投票器 (2 条策略) ok=True WC_VOTER_REGISTERED
+[21:35:24]   end_turn ok=True
+[21:35:26] ABORT: get_game_overview 失败: 【中文运行信息】
+工具：读取游戏概览（get_game_overview）
+状态：成功
+说明：下方保留机器标记、枚举或游戏原始文本，供精确调用与证据核验。
+
+Cannot connect to Civ 6 at 127.0.0.1:4318. Is the game running with EnableTuner=1?

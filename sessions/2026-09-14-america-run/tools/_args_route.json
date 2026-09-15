@@ -1,0 +1,15 @@
+{
+  "statement": "波士顿 pop2 仅 1 个区域槽且已被圣地占用，无法再放区域；在 5 产能下用建造者改良地块（如 11,33 的牛）可长期提升该城产出，优于只加 1 点文化的纪念碑。",
+  "probability": 0.8,
+  "confidence": 0.85,
+  "impact": "medium",
+  "urgency": "medium",
+  "irreversibility": 0.1,
+  "belief_ids": "[]",
+  "considered_actions": "[\"继续造神谕（290 产能/55 回合，本时代内不可能完成）\", \"造纪念碑（60 产能/12 回合，仅 +1 文化）\", \"造建造者（50 产能/13 回合，3 次改良机会）\"]",
+  "selected_action": "build_builder",
+  "reason": "波士顿区域槽已满且产能极低，提升地块产出是唯一能复利的投入。",
+  "action_intent": "{\"tool\":\"set_city_production\",\"params\":{\"city_id\":196610,\"item_type\":\"UNIT\",\"item_name\":\"UNIT_BUILDER\"}}",
+  "evidence_requirements": "[]",
+  "gate_scope": "global"
+}

@@ -1,0 +1,16 @@
+{"tool": "get_game_overview", "args": {}}
+{"tool": "get_tech_civics", "args": {}}
+{"tool": "get_cities", "args": {}}
+{"tool": "get_city_production", "args": {"city_id": 196610}}
+{"tool": "set_city_production", "args": {"city_id": 196610, "item_type": "UNIT", "item_name": "UNIT_BUILDER"}}
+{"tool": "get_pending_trades", "args": {}}
+{"tool": "get_pending_diplomacy", "args": {}}
+{"tool": "get_diplomacy", "args": {}}
+{"tool": "get_dedications", "args": {}}
+{"tool": "get_city_states", "args": {}}
+{"tool": "get_world_congress", "args": {}}
+{"tool": "queue_wc_votes", "args": {"votes": "[{\"hash\": -2026419498, \"type\": \"WC_RES_BORDER_CONTROL\", \"option\": 1, \"target\": 0, \"votes\": 3}, {\"hash\": -1934671345, \"type\": \"WC_RES_PATRONAGE\", \"option\": 1, \"target\": 0, \"votes\": 3}]"}}
+{"tool": "skip_remaining_units", "args": {}}
+{"tool": "dismiss_popup", "args": {}}
+{"tool": "end_turn", "args": {"tactical": "自动执政官回合：跳过其余单位并结束回合。", "strategic": "维持研究/市政不断档，城市持续排产。", "planning": "由 play.py 自动推进，人工在关键节点介入。", "tooling": "常驻 MCP 守护进程，调用前自动聚焦游戏窗口。", "hypothesis": "持续排产与不断档研究能稳定提升得分。"}}
+{"tool": "get_game_overview", "args": {}}

@@ -1,0 +1,391 @@
+   0  CIV6
+   1  5j255&
+   2  B](B]
+   3  t4.1Z
+   4  g~ x
+   5  =ttt
+   6  8loo
+   7  m2**
+   8  MMoo
+   9  I:EEE
+  10  fff>
+  11  >""B
+  12  Z%zL
+  13  Mz644
+  14  rD6dgKK
+  15  eZ3?b}innN
+  16  Bvq3
+  17  )L'11
+  18  3000
+  19  .k$kjj
+  20  p!XYY
+  21  -}>]]]
+  22  O[[[
+  23  ,$$D
+  24  AuII
+  25  0.'|O
+  26  UUU}\]
+  27  Q,3N
+  28  ~5--
+  29  skkk
+  30  1.0.12.54 (951533)
+  31  '`LX
+  32  {"LOC_MAP_PANGAEA":[{"locale":"en_US","text":"Pangaea"},{"locale":"fr_FR","text":"Pang
+  33  e"},{"locale":"de_DE","text":"Pang
+  34  a"},{"locale":"it_IT","text":"Pangea"},{"locale":"es_ES","text":"Pangea"},{"locale":"ja_JP","text":"
+  35  "},{"locale":"ru_RU","text":"
+  36  "},{"locale":"pl_PL","text":"Pangea"},{"locale":"ko_KR","text":"
+  37  "},{"locale":"zh_Hant_HK","text":"
+  38  "},{"locale":"zh_Hans_CN","text":"
+  39  "},{"locale":"pt_BR","text":"Pangeia"}]}
+  40  LEADER_GILGAMESH
+  41  02A8BDDE-67EA-4D38-9540-26E685E3156E
+  42  {"LOC_AZTEC_MONTEZUMA_MOD_TITLE":[]}
+  43  0c0c1169-cc34-44a6-9db9-52ca4499a2cf
+  44  {"LOC_MOD_SCOUT_CAT_TITLE":[]}
+  45  19ED1A36-D744-4A58-8F8B-0376C2BA86E5
+  46  {"LOC_BARBARIAN_CLANS_MODE_TITLE":[{"locale":"de_DE", "text":"Barbarenclans-Spielmodus"}, {"locale":"en_US", "text":"Barbarian Clans Game Mode"}, {"locale":"es_ES", "text":"Modo de juego Clanes b
+  47  rbaros"}, {"locale":"fr_FR", "text":"Mode de jeu Clans barbares"}, {"locale":"it_IT", "text":"Modalit
+  48   di gioco Clan di Barbari"}, {"locale":"ja_JP", "text":"
+  49  "}, {"locale":"ko_KR", "text":"
+  50  "}, {"locale":"pl_PL", "text":"Tryb barbarzy
+  51  skich klan
+  52  w|Trybu barbarzy
+  53  skich klan
+  54  w|Trybowi barbarzy
+  55  skich klan
+  56  w|Tryb barbarzy
+  57  skich klan
+  58  w|Trybem barbarzy
+  59  skich klan
+  60  w|Trybie barbarzy
+  61  skich klan
+  62  w|tryb barbarzy
+  63  skich klan
+  64  w|trybu barbarzy
+  65  skich klan
+  66  w|trybowi barbarzy
+  67  skich klan
+  68  w|tryb barbarzy
+  69  skich klan
+  70  w|trybem barbarzy
+  71  skich klan
+  72  w|trybie barbarzy
+  73  skich klan
+  74  w"}, {"locale":"pt_BR", "text":"Modo de jogo Cl
+  75  rbaros"}, {"locale":"ru_RU", "text":"
+  76  "}, {"locale":"zh_Hans_CN", "text":"
+  77  "}, {"locale":"zh_Hant_HK", "text":"
+  78  "}]}
+  79  19d1c7ec-54de-11ea-a2e3-2e728ce88125
+  80  {"LOC_TREE_RANDOMIZER_MOD_TITLE":[{"locale":"de_DE", "text":"Tech- und Ausrichtungs-Mix-Spielmodus"}, {"locale":"en_US", "text":"Tech and Civic Shuffle Game Mode"}, {"locale":"es_ES", "text":"Modo de juego Barajar Tecnolog
+  81  as y Principios"}, {"locale":"fr_FR", "text":"Mode Technologies Et Dogmes Al
+  82  atoires"}, {"locale":"it_IT", "text":"Modalit
+  83   di gioco Tecnologie e Progressi civici misti"}, {"locale":"ja_JP", "text":"
+  84  "}, {"locale":"ko_KR", "text":"
+  85  "}, {"locale":"pl_PL", "text":"Tryb mieszania technologii i idei"}, {"locale":"pt_BR", "text":"Modo de Jogo Tecnologias e C
+  86  vicos Aleat
+  87  rios"}, {"locale":"ru_RU", "text":"
+  88  "}, {"locale":"zh_Hans_CN", "text":"
+  89  "}, {"locale":"zh_Hant_HK", "text":"
+  90  "}]}
+  91  4873eb62-8ccc-4574-b784-dda455e74e68
+  92  {"LOC_EXPANSION2_MOD_TITLE":[]}
+  93  5B0445C9-1376-45AD-9B51-C96A83A8F17D
+  94  {"LOC_WARMACHINE_MOD_TITLE":[]}
+  95  648CD2A8-057A-4EB5-9E41-E1F7D86B5443
+  96  {"LOC_COLDWAR_MOD_TITLE":[]}
+  97  9ED63236-617C-45A6-BB70-8CB6B0BE8ED2
+  98  {"LOC_JULIUS_CAESAR_MOD_TITLE":[]}
+  99  A55FAFB4-9070-4597-9453-B28A99910CDA
+ 100  {"LOC_MOD_PIRATES_SCENARIO_TITLE":[{"locale":"de_DE", "text":"Multiplayer-Szenario: Piraten"}, {"locale":"en_US", "text":"Multiplayer Scenario: Pirates"}, {"locale":"es_ES", "text":"Escenario multijugador: Piratas"}, {"locale":"fr_FR", "text":"Sc
+ 101  nario multijoueur
+ 102  : Pirates"}, {"locale":"it_IT", "text":"Scenario multigiocatore: Pirati"}, {"locale":"ja_JP", "text":"
+ 103  "}, {"locale":"ko_KR", "text":"
+ 104  "}, {"locale":"pl_PL", "text":"Scenariusz gry wieloosobowej: Piraci"}, {"locale":"pt_BR", "text":"Cen
+ 105  rio Multijogador: Piratas"}, {"locale":"ru_RU", "text":"
+ 106  "}, {"locale":"zh_Hans_CN", "text":"
+ 107  "}, {"locale":"zh_Hant_HK", "text":"
+ 108  "}]}
+ 109  C1F775D8-59B5-401B-B86D-78FAF3446EC7
+ 110  {"LOC_BLACKDEATH_MOD_TITLE":[]}
+ 111  F264EE10-F21B-4A9A-BBCD-D534E9843E90
+ 112  {"LOC_CIV_ROYALE_MOD_TITLE":[]}
+ 113  F653805E-F7C8-44E1-8CBD-FB48D7AABCBA
+ 114  {"LOC_ANCIENT_RIVALS_MOD_TITLE":[]}
+ 115  {455B6E2D-821D-4D49-9FCD-FC950AC6A521}
+ 116  {"LOC_RELIGIOUS_COMBAT_MOD_TITLE":[]}
+ 117  {5E991A08-08FD-4774-968B-A85377ECF60D}
+ 118  {"LOC_NAPOLEON_MOD_TITLE":[]}
+ 119  {"LOC_LEADER_GILGAMESH_NAME":[{"locale":"en_US","text":"Gilgamesh"},{"locale":"fr_FR","text":"Gilgamesh","plurality":"1","gender":"masculine:no_article"},{"locale":"de_DE","text":"Gilgamesch","plurality":"1","gender":"masculine:no_article"},{"locale":"it_IT","text":"Gilgamesh|di Gilgamesh|a Gilgamesh|Gilgamesh|da Gilgamesh","plurality":"1","gender":"masculine"},{"locale":"es_ES","text":"Gilgamesh","plurality":"1","gender":"masculine"},{"locale":"ja_JP","text":"
+ 120  "},{"locale":"ru_RU","text":"
+ 121  ","plurality":"1","gender":"masculine"},{"locale":"pl_PL","text":"Gilgamesz|Gilgamesza|Gilgameszowi|Gilgamesza|Gilgameszem|Gilgameszu|Gilgamesz|Gilgamesza|Gilgameszowi|Gilgamesza|Gilgameszem|Gilgameszu","plurality":"1","gender":"masculine"},{"locale":"ko_KR","text":"
+ 122  "},{"locale":"zh_Hant_HK","text":"
+ 123  "},{"locale":"zh_Hans_CN","text":"
+ 124  "},{"locale":"pt_BR","text":"Gilgamesh","plurality":"1","gender":"masculine"}]}
+ 125  CIVILIZATION_SUMERIA
+ 126  RULESET_EXPANSION_2
+ 127  {"LOC_EXPANSION2_NAME":[{"locale":"en_US","text":"Expansion: Gathering Storm"},{"locale":"fr_FR","text":"Extension
+ 128  : Gathering Storm"},{"locale":"de_DE","text":"Erweiterung: Gathering Storm"},{"locale":"it_IT","text":"Espansione: Gathering Storm"},{"locale":"es_ES","text":"Expansi
+ 129  n: Gathering Storm"},{"locale":"ja_JP","text":"
+ 130  "},{"locale":"ru_RU","text":"
+ 131  : Gathering Storm"},{"locale":"pl_PL","text":"Rozszerzenie: Gathering Storm"},{"locale":"ko_KR","text":"
+ 132  "},{"locale":"zh_Hant_HK","text":"
+ 133  "},{"locale":"zh_Hans_CN","text":"
+ 134  "},{"locale":"pt_BR","text":"Expans
+ 135  o: Gathering Storm"}]}
+ 136  Xil\
+ 137  HP E
+ 138  fmz~
+ 139  SGKx
+ 140  v1l|
+ 141  RhqX
+ 142  ]88n
+ 143  i`&%
+ 144  DE#GN
+ 145  W[E\
+ 146  /2XzD
+ 147  lxre
+ 148  "L&$
+ 149  .N$q
+ 150  F,F]8?
+ 151  $>2Y
+ 152  s+82SC
+ 153  &|fk
+ 154  F<u`
+ 155  =^/`*
+ 156  Pc:c
+ 157  )pA.
+ 158  N7cX#
+ 159  e\Yj
+ 160  q,Kg
+ 161  sxp>
+ 162  !<Fx
+ 163  dqO3
+ 164  B8I^Wt
+ 165  ;1K_okY&7w
+ 166  B!S`$d
+ 167  \Fdc^
+ 168   G8+
+ 169  "CD!
+ 170  k)4\f
+ 171  "+">;
+ 172  g>pENh4
+ 173  q}k7
+ 174  /cf0
+ 175  0D`4
+ 176  *yq~8
+ 177  ,VqiO
+ 178  a'iE
+ 179  J&<&
+ 180  yYPQ
+ 181  'C(SM8
+ 182  4N>Sp*
+ 183  aw$ U
+ 184  .CV5
+ 185  GF0C<
+ 186  1`$E=
+ 187  A|Z5
+ 188   i&I~
+ 189  F<gCt
+ 190  SO^%
+ 191  f2Y5>
+ 192  00000000-0000-0000-0000-000000000000
+ 193  Players:Expansion2_Players
+ 194  7%/\^
+ 195  CIVILIZATION_CANADA
+ 196  CIVILIZATION_LEVEL_FULL_CIV
+ 197  Players:Expansion2_Players
+ 198  3eV1
+ 199  Players:*::RANDOM,Players:*::RANDOM_POOL1,Players:*::RANDOM_POOL2,Players:Expansion2_Players::LEADER_ELEANOR_FRANCE,Players:Expansion2_Players::LEADER_ELEANOR_ENGLAND,Players:Expansion2_Players::LEADER_HOJO,Players:Expansion2_Players::LEADER_PETER_GREAT,Players:Expansion2_Players::LEADER_PERICLES,Players:Expansion2_Players::LEADER_DIDO,Players:Expansion2_Players::LEADER_PHILIP_II,Players:Expansion2_Players::LEADER_BARBAROSSA,Players:Expansion2_Players::LEADER_GANDHI,Players:Expansion2_Players::LEADER_GORGO,Players:Expansion2_Players::LEADER_HARDRADA,Players:Expansion2_Players::LEADER_CATHERINE_DE_MEDICI,Players:Expansion2_Players::LEADER_CLEOPATRA,Players:Expansion2_Players::LEADER_KUPE,Players:Expansion2_Players::LEADER_MANSA_MUSA,Players:Expansion2_Players::LEADER_MONTEZUMA,Players:Expansion2_Players::LEADER_MVEMBA,Players:Expansion2_Players::LEADER_PACHACUTI,Players:Expansion2_Players::LEADER_QIN,Players:Expansion2_Players::LEADER_SALADIN,Players:Expansion2_Players::LEADER_SULEIMAN,Players:Expansion2_Players::LEADER_T_ROOSEVELT,Players:Expansion2_Players::LEADER_TRAJAN,Players:Expansion2_Players::LEADER_TOMYRIS,Players:Expansion2_Players::LEADER_LAURIER,Players:Expansion2_Players::LEADER_VICTORIA,Players:Expansion2_Players::LEADER_MATTHIAS_CORVINUS,Players:Expansion2_Players::LEADER_JULIUS_CAESAR
+ 200  rs:Expansion2_Players::LEADER_JULIUS_CAESAR
+ 201  Expansion2_Players::LEADER_JULIUS_CAESAR
+ 202  rs:Expansion2_Players::LEADER_JULIUS_CAESAR
+ 203  LEADER_LAURIER
+ 204  LOC_LEADER_LAURIER_NAME
+ 205  3el#
+ 206  3eNE
+ 207  3eSD
+ 208  Players:Expansion2_Players
+ 209  7%/\^
+ 210  CIVILIZATION_SUMERIA
+ 211  CIVILIZATION_LEVEL_FULL_CIV
+ 212  Players:Expansion2_Players
+ 213  3eV1
+ 214  Players:*::RANDOM,Players:*::RANDOM_POOL1,Players:*::RANDOM_POOL2,Players:Expansion2_Players::LEADER_ELEANOR_FRANCE,Players:Expansion2_Players::LEADER_ELEANOR_ENGLAND,Players:Expansion2_Players::LEADER_HOJO,Players:Expansion2_Players::LEADER_PETER_GREAT,Players:Expansion2_Players::LEADER_PERICLES,Players:Expansion2_Players::LEADER_DIDO,Players:Expansion2_Players::LEADER_PHILIP_II,Players:Expansion2_Players::LEADER_BARBAROSSA,Players:Expansion2_Players::LEADER_GANDHI,Players:Expansion2_Players::LEADER_GORGO,Players:Expansion2_Players::LEADER_HARDRADA,Players:Expansion2_Players::LEADER_GILGAMESH,Players:Expansion2_Players::LEADER_CATHERINE_DE_MEDICI,Players:Expansion2_Players::LEADER_CLEOPATRA,Players:Expansion2_Players::LEADER_KUPE,Players:Expansion2_Players::LEADER_MANSA_MUSA,Players:Expansion2_Players::LEADER_MONTEZUMA,Players:Expansion2_Players::LEADER_MVEMBA,Players:Expansion2_Players::LEADER_PACHACUTI,Players:Expansion2_Players::LEADER_QIN,Players:Expansion2_Players::LEADER_SALADIN,Players:Expansion2_Players::LEADER_SULEIMAN,Players:Expansion2_Players::LEADER_T_ROOSEVELT,Players:Expansion2_Players::LEADER_TRAJAN,Players:Expansion2_Players::LEADER_TOMYRIS,Players:Expansion2_Players::LEADER_VICTORIA,Players:Expansion2_Players::LEADER_MATTHIAS_CORVINUS,Players:Expansion2_Players::LEADER_JULIUS_CAESAR
+ 215  rs:Expansion2_Players::LEADER_JULIUS_CAESAR
+ 216  Expansion2_Players::LEADER_JULIUS_CAESAR
+ 217  s:Expansion2_Players::LEADER_JULIUS_CAESAR
+ 218  LEADER_GILGAMESH
+ 219  LOC_LEADER_GILGAMESH_NAME
+ 220  {"LOC_MAP_PANGAEA":[{"locale":"en_US","text":"Pangaea"},{"locale":"fr_FR","text":"Pang
+ 221  e"},{"locale":"de_DE","text":"Pang
+ 222  a"},{"locale":"it_IT","text":"Pangea"},{"locale":"es_ES","text":"Pangea"},{"locale":"ja_JP","text":"
+ 223  "},{"locale":"ru_RU","text":"
+ 224  "},{"locale":"pl_PL","text":"Pangea"},{"locale":"ko_KR","text":"
+ 225  "},{"locale":"zh_Hant_HK","text":"
+ 226  "},{"locale":"zh_Hans_CN","text":"
+ 227  "},{"locale":"pt_BR","text":"Pangeia"}]}
+ 228  Continentes"}]}
+ 229  }+Yc
+ 230  Pangaea.lua
+ 231  StandardMaps
+ 232  3ec[
+ 233  02A8BDDE-67EA-4D38-9540-26E685E3156E
+ 234  {"LOC_AZTEC_MONTEZUMA_MOD_TITLE":[]}
+ 235  0c0c1169-cc34-44a6-9db9-52ca4499a2cf
+ 236  {"LOC_MOD_SCOUT_CAT_TITLE":[]}
+ 237  19ED1A36-D744-4A58-8F8B-0376C2BA86E5
+ 238  {"LOC_BARBARIAN_CLANS_MODE_TITLE":[{"locale":"de_DE", "text":"Barbarenclans-Spielmodus"}, {"locale":"en_US", "text":"Barbarian Clans Game Mode"}, {"locale":"es_ES", "text":"Modo de juego Clanes b
+ 239  rbaros"}, {"locale":"fr_FR", "text":"Mode de jeu Clans barbares"}, {"locale":"it_IT", "text":"Modalit
+ 240   di gioco Clan di Barbari"}, {"locale":"ja_JP", "text":"
+ 241  "}, {"locale":"ko_KR", "text":"
+ 242  "}, {"locale":"pl_PL", "text":"Tryb barbarzy
+ 243  skich klan
+ 244  w|Trybu barbarzy
+ 245  skich klan
+ 246  w|Trybowi barbarzy
+ 247  skich klan
+ 248  w|Tryb barbarzy
+ 249  skich klan
+ 250  w|Trybem barbarzy
+ 251  skich klan
+ 252  w|Trybie barbarzy
+ 253  skich klan
+ 254  w|tryb barbarzy
+ 255  skich klan
+ 256  w|trybu barbarzy
+ 257  skich klan
+ 258  w|trybowi barbarzy
+ 259  skich klan
+ 260  w|tryb barbarzy
+ 261  skich klan
+ 262  w|trybem barbarzy
+ 263  skich klan
+ 264  w|trybie barbarzy
+ 265  skich klan
+ 266  w"}, {"locale":"pt_BR", "text":"Modo de jogo Cl
+ 267  rbaros"}, {"locale":"ru_RU", "text":"
+ 268  "}, {"locale":"zh_Hans_CN", "text":"
+ 269  "}, {"locale":"zh_Hant_HK", "text":"
+ 270  "}]}
+ 271  19d1c7ec-54de-11ea-a2e3-2e728ce88125
+ 272  {"LOC_TREE_RANDOMIZER_MOD_TITLE":[{"locale":"de_DE", "text":"Tech- und Ausrichtungs-Mix-Spielmodus"}, {"locale":"en_US", "text":"Tech and Civic Shuffle Game Mode"}, {"locale":"es_ES", "text":"Modo de juego Barajar Tecnolog
+ 273  as y Principios"}, {"locale":"fr_FR", "text":"Mode Technologies Et Dogmes Al
+ 274  atoires"}, {"locale":"it_IT", "text":"Modalit
+ 275   di gioco Tecnologie e Progressi civici misti"}, {"locale":"ja_JP", "text":"
+ 276  "}, {"locale":"ko_KR", "text":"
+ 277  "}, {"locale":"pl_PL", "text":"Tryb mieszania technologii i idei"}, {"locale":"pt_BR", "text":"Modo de Jogo Tecnologias e C
+ 278  vicos Aleat
+ 279  rios"}, {"locale":"ru_RU", "text":"
+ 280  "}, {"locale":"zh_Hans_CN", "text":"
+ 281  "}, {"locale":"zh_Hant_HK", "text":"
+ 282  "}]}
+ 283  4873eb62-8ccc-4574-b784-dda455e74e68
+ 284  {"LOC_EXPANSION2_MOD_TITLE":[]}
+ 285  5B0445C9-1376-45AD-9B51-C96A83A8F17D
+ 286  {"LOC_WARMACHINE_MOD_TITLE":[]}
+ 287  648CD2A8-057A-4EB5-9E41-E1F7D86B5443
+ 288  {"LOC_COLDWAR_MOD_TITLE":[]}
+ 289  9ED63236-617C-45A6-BB70-8CB6B0BE8ED2
+ 290  {"LOC_JULIUS_CAESAR_MOD_TITLE":[]}
+ 291  A55FAFB4-9070-4597-9453-B28A99910CDA
+ 292  {"LOC_MOD_PIRATES_SCENARIO_TITLE":[{"locale":"de_DE", "text":"Multiplayer-Szenario: Piraten"}, {"locale":"en_US", "text":"Multiplayer Scenario: Pirates"}, {"locale":"es_ES", "text":"Escenario multijugador: Piratas"}, {"locale":"fr_FR", "text":"Sc
+ 293  nario multijoueur
+ 294  : Pirates"}, {"locale":"it_IT", "text":"Scenario multigiocatore: Pirati"}, {"locale":"ja_JP", "text":"
+ 295  "}, {"locale":"ko_KR", "text":"
+ 296  "}, {"locale":"pl_PL", "text":"Scenariusz gry wieloosobowej: Piraci"}, {"locale":"pt_BR", "text":"Cen
+ 297  rio Multijogador: Piratas"}, {"locale":"ru_RU", "text":"
+ 298  "}, {"locale":"zh_Hans_CN", "text":"
+ 299  "}, {"locale":"zh_Hant_HK", "text":"
+ 300  "}]}
+ 301  C1F775D8-59B5-401B-B86D-78FAF3446EC7
+ 302  {"LOC_BLACKDEATH_MOD_TITLE":[]}
+ 303  F264EE10-F21B-4A9A-BBCD-D534E9843E90
+ 304  {"LOC_CIV_ROYALE_MOD_TITLE":[]}
+ 305  F653805E-F7C8-44E1-8CBD-FB48D7AABCBA
+ 306  {"LOC_ANCIENT_RIVALS_MOD_TITLE":[]}
+ 307  {455B6E2D-821D-4D49-9FCD-FC950AC6A521}
+ 308  {"LOC_RELIGIOUS_COMBAT_MOD_TITLE":[]}
+ 309  {5E991A08-08FD-4774-968B-A85377ECF60D}
+ 310  {"LOC_NAPOLEON_MOD_TITLE":[]}
+ 311  T9r$
+ 312  {"LOC_GAMESPEED_QUICK_NAME":[{"locale":"en_US","text":"Quick"},{"locale":"fr_FR","text":"Rapide"},{"locale":"de_DE","text":"Schnell"},{"locale":"it_IT","text":"Veloce"},{"locale":"es_ES","text":"R
+ 313  pida"},{"locale":"ja_JP","text":"
+ 314  "},{"locale":"ru_RU","text":"
+ 315  "},{"locale":"pl_PL","text":"Szybka"},{"locale":"ko_KR","text":"
+ 316  "},{"locale":"zh_Hant_HK","text":"
+ 317  "},{"locale":"zh_Hans_CN","text":"
+ 318  "},{"locale":"pt_BR","text":"R
+ 319  pida"}]}
+ 320  RULESET_EXPANSION_2
+ 321  {"LOC_ERA_ANCIENT_NAME":[{"locale":"en_US","text":"Ancient Era"},{"locale":"fr_FR","text":"
+ 322  re antique","plurality":"1","gender":"feminine:vowel"},{"locale":"de_DE","text":"Antike|Antike|Antike|Antike|Antike","plurality":"1","gender":"feminine"},{"locale":"it_IT","text":"Epoca antica"},{"locale":"es_ES","text":"Antig
+ 323  edad","plurality":"1","gender":"feminine"},{"locale":"ja_JP","text":"
+ 324  "},{"locale":"ru_RU","text":"
+ 325  ","plurality":"1","gender":"feminine"},{"locale":"pl_PL","text":"Staro
+ 326  ytno
+ 327  |Staro
+ 328  ytno
+ 329  ci|Staro
+ 330  ytno
+ 331  ci|Staro
+ 332  ytno
+ 333  |Staro
+ 334  ytno
+ 335  |Staro
+ 336  ytno
+ 337  ci|staro
+ 338  ytno
+ 339  |staro
+ 340  ytno
+ 341  ci|staro
+ 342  ytno
+ 343  ci|staro
+ 344  ytno
+ 345  |staro
+ 346  ytno
+ 347  |staro
+ 348  ytno
+ 349  ci","plurality":"1","gender":"feminine"},{"locale":"ko_KR","text":"
+ 350  "},{"locale":"zh_Hant_HK","text":"
+ 351  "},{"locale":"zh_Hans_CN","text":"
+ 352  "},{"locale":"pt_BR","text":"Era Antiga","plurality":"1","gender":"feminine"}]}
+ 353  Shen
+ 354  {"LOC_EXPANSION2_NAME":[{"locale":"en_US","text":"Expansion: Gathering Storm"},{"locale":"fr_FR","text":"Extension
+ 355  : Gathering Storm"},{"locale":"de_DE","text":"Erweiterung: Gathering Storm"},{"locale":"it_IT","text":"Espansione: Gathering Storm"},{"locale":"es_ES","text":"Expansi
+ 356  n: Gathering Storm"},{"locale":"ja_JP","text":"
+ 357  "},{"locale":"ru_RU","text":"
+ 358  : Gathering Storm"},{"locale":"pl_PL","text":"Rozszerzenie: Gathering Storm"},{"locale":"ko_KR","text":"
+ 359  "},{"locale":"zh_Hant_HK","text":"
+ 360  "},{"locale":"zh_Hans_CN","text":"
+ 361  "},{"locale":"pt_BR","text":"Expans
+ 362  o: Gathering Storm"}]}
+ 363  Players:Expansion2_Players
+ 364  7%/\^
+ 365  CIVILIZATION_BRAZIL
+ 366  CIVILIZATION_LEVEL_FULL_CIV
+ 367  Players:Expansion2_Players
+ 368  3eV1
+ 369  Players:*::RANDOM,Players:*::RANDOM_POOL1,Players:*::RANDOM_POOL2,Players:Expansion2_Players::LEADER_ELEANOR_FRANCE,Players:Expansion2_Players::LEADER_ELEANOR_ENGLAND,Players:Expansion2_Players::LEADER_HOJO,Players:Expansion2_Players::LEADER_PETER_GREAT,Players:Expansion2_Players::LEADER_PERICLES,Players:Expansion2_Players::LEADER_DIDO,Players:Expansion2_Players::LEADER_PHILIP_II,Players:Expansion2_Players::LEADER_BARBAROSSA,Players:Expansion2_Players::LEADER_GANDHI,Players:Expansion2_Players::LEADER_GORGO,Players:Expansion2_Players::LEADER_HARDRADA,Players:Expansion2_Players::LEADER_CATHERINE_DE_MEDICI,Players:Expansion2_Players::LEADER_CLEOPATRA,Players:Expansion2_Players::LEADER_KUPE,Players:Expansion2_Players::LEADER_MANSA_MUSA,Players:Expansion2_Players::LEADER_MONTEZUMA,Players:Expansion2_Players::LEADER_MVEMBA,Players:Expansion2_Players::LEADER_PACHACUTI,Players:Expansion2_Players::LEADER_PEDRO,Players:Expansion2_Players::LEADER_QIN,Players:Expansion2_Players::LEADER_SALADIN,Players:Expansion2_Players::LEADER_SULEIMAN,Players:Expansion2_Players::LEADER_T_ROOSEVELT,Players:Expansion2_Players::LEADER_TRAJAN,Players:Expansion2_Players::LEADER_TOMYRIS,Players:Expansion2_Players::LEADER_VICTORIA,Players:Expansion2_Players::LEADER_MATTHIAS_CORVINUS,Players:Expansion2_Players::LEADER_JULIUS_CAESAR
+ 370  rs:Expansion2_Players::LEADER_JULIUS_CAESAR
+ 371  s:Expansion2_Players::LEADER_JULIUS_CAESAR
+ 372  rs:Expansion2_Players::LEADER_JULIUS_CAESAR
+ 373  LEADER_PEDRO
+ 374  LOC_LEADER_PEDRO_NAME
+ 375  3evv.
+ 376  3eTi
+ 377  3eb$
+ 378  Players:Expansion2_Players
+ 379  7%/\^
+ 380  CIVILIZATION_SWEDEN
+ 381  CIVILIZATION_LEVEL_FULL_CIV
+ 382  Players:Expansion2_Players
+ 383  3eV1
+ 384  Players:*::RANDOM,Players:*::RANDOM_POOL1,Players:*::RANDOM_POOL2,Players:Expansion2_Players::LEADER_ELEANOR_FRANCE,Players:Expansion2_Players::LEADER_ELEANOR_ENGLAND,Players:Expansion2_Players::LEADER_HOJO,Players:Expansion2_Players::LEADER_PETER_GREAT,Players:Expansion2_Players::LEADER_PERICLES,Players:Expansion2_Players::LEADER_DIDO,Players:Expansion2_Players::LEADER_PHILIP_II,Players:Expansion2_Players::LEADER_BARBAROSSA,Players:Expansion2_Players::LEADER_GANDHI,Players:Expansion2_Players::LEADER_GORGO,Players:Expansion2_Players::LEADER_HARDRADA,Players:Expansion2_Players::LEADER_CATHERINE_DE_MEDICI,Players:Expansion2_Players::LEADER_KRISTINA,Players:Expansion2_Players::LEADER_CLEOPATRA,Players:Expansion2_Players::LEADER_KUPE,Players:Expansion2_Players::LEADER_MANSA_MUSA,Players:Expansion2_Players::LEADER_MONTEZUMA,Players:Expansion2_Players::LEADER_MVEMBA,Players:Expansion2_Players::LEADER_PACHACUTI,Players:Expansion2_Players::LEADER_QIN,Players:Expansion2_Players::LEADER_SALADIN,Players:Expansion2_Players::LEADER_SULEIMAN,Players:Expansion2_Players::LEADER_T_ROOSEVELT,Players:Expansion2_Players::LEADER_TRAJAN,Players:Expansion2_Players::LEADER_TOMYRIS,Players:Expansion2_Players::LEADER_VICTORIA,Players:Expansion2_Players::LEADER_MATTHIAS_CORVINUS,Players:Expansion2_Players::LEADER_JULIUS_CAESAR
+ 385  Expansion2_Players::LEADER_JULIUS_CAESAR
+ 386  s:Expansion2_Players::LEADER_JULIUS_CAESAR
+ 387  rs:Expansion2_Players::LEADER_JULIUS_CAESAR
+ 388  LEADER_KRISTINA
+ 389  LOC_LEADER_KRISTINA_NAME
+ 390  >N7+
