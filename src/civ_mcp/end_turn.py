@@ -18,14 +18,40 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-# Seconds to wait after sending ACTION_ENDTURN before the one-shot early
-# World Congress screen dismissal is attempted.
-_WC_EARLY_DISMISS_AFTER = 60.0
+# ---------------------------------------------------------------------------
+# World Congress: drive it, do not wait it out
+# ---------------------------------------------------------------------------
+# The congress opens *inside* ACTION_ENDTURN and parks on its screen. Waiting
+# passively for it is what makes a congress turn look like a 10-20 minute hang:
+# a human opens the congress, picks a side and submits, and the turn resolves in
+# seconds. The driver does exactly that from Lua, so it is the fast path and it
+# has to run *early* and keep trying across the whole session-opening window.
+#
+# An earlier revision drove at most three times, starting a full minute in. A
+# session that opened after t+180s was therefore never driven at all, and the
+# turn fell into the passive tail this schedule exists to avoid.
+#
+# The two operations carry very different risk and are bounded separately:
+#
+# * ``drive_world_congress`` is a **no-op while no session is open** — it reports
+#   ``WC_DRIVE|no_session`` and changes nothing — so a speculative call cannot
+#   close UI or disturb AI processing. It can therefore run on a real schedule.
+# * Blind popup dismissal *does* close UI while the AI may still be processing,
+#   which is the documented cause of wedged AI turns. It keeps a small bound and
+#   starts late.
+_WC_FIRST_DRIVE_AFTER = 5.0
+# Burst: catch a session that opens promptly, which is the common case.
+_WC_DRIVE_BURST_INTERVAL = 15.0
+_WC_DRIVE_BURST_PROBES = 6
+# Then sparse coverage for the rest of the window, so a session that opens late
+# is still driven instead of being waited out. Sized to finish inside the
+# congress poll window (see tests/test_end_turn_budget.py).
+_WC_DRIVE_SPARSE_INTERVAL = 60.0
+_WC_DRIVE_SPARSE_PROBES = 12
 
-# How many times a single turn may drive/probe the congress screen.  Bounded
-# on purpose: repeated InGame calls while the AI is still processing is the
-# documented cause of wedged AI turns.
-_WC_MAX_DRIVE_PROBES = 3
+_WC_FIRST_DISMISS_AFTER = 60.0
+_WC_DISMISS_INTERVAL = 120.0
+_WC_MAX_DISMISS_PROBES = 2
 
 # Poll cadence for the end_turn wait loop (quick polls first, then 30s).
 _END_TURN_POLL_DELAYS = (
@@ -65,7 +91,15 @@ _END_TURN_POLL_DELAYS = (
 # Extra budget for congress/emergency turns: the World Congress stage runs
 # inside ACTION_ENDTURN and, on the Mac port, can outlast a plain AI turn.
 # Retrying costs a full game restart, so waiting longer is the cheaper bet.
-_WC_EXTRA_POLL_DELAYS = (30.0,) * 22  # +660s (~20 min total)
+# Extra budget for congress/emergency turns. This used to be +660s (~20 min
+# total), which existed only to accommodate *passive* waiting for a congress
+# screen nobody was operating. Now that the driver submits the session itself,
+# the extra covers the slack between submitting and the game settling the
+# congress round — the same order as an ordinary AI turn, which the plain
+# cadence above already covers. A congress turn that still does not advance is a
+# genuine hang and is reported as one, so recovery can restart the game instead
+# of the caller sitting silent for twenty minutes.
+_WC_EXTRA_POLL_DELAYS = (30.0,) * 6  # +180s
 
 
 def _end_turn_poll_delays(wc_turn: bool) -> tuple[float, ...]:
@@ -101,8 +135,11 @@ _PHASE1_SLEEP_SECONDS = 8 * 0.5
 _POPUP_REPOLL_SLEEP_SECONDS = 5 * 2.0
 _FINAL_VERIFY_SLEEP_SECONDS = 2.0
 _PHASE3_SLEEP_SECONDS = _POPUP_REPOLL_SLEEP_SECONDS + _FINAL_VERIFY_SLEEP_SECONDS
-# Extra sleep the World Congress drive/probe performs, bounded per turn.
-_WC_PROBE_SLEEP_SECONDS = _WC_MAX_DRIVE_PROBES * 2.0
+# Extra sleep a congress turn performs: each drive/dismiss that actually acted
+# is followed by a 2 s re-check. Bounded by the schedule above.
+_WC_PROBE_SLEEP_SECONDS = (
+    _WC_DRIVE_BURST_PROBES + _WC_DRIVE_SPARSE_PROBES + _WC_MAX_DISMISS_PROBES
+) * 2.0
 # `_check_mid_turn_diplomacy` may sleep once to let a just-opened session
 # populate its dialogue, then up to 10 x 2 s waiting for a war declaration to
 # clear. It runs at most twice per pass: the Phase 2 early probe and the Phase 3
@@ -241,55 +278,91 @@ def _can_override_end_turn_blockers(
     )
 
 
-def _wc_early_dismiss_due(
+def _wc_drive_due(
     *,
     wc_turn: bool,
     cumulative_wait: float,
-    probes: int,
+    drives: int,
 ) -> bool:
-    """Return whether another World Congress drive/probe should run.
+    """Return whether another congress *drive* attempt should run.
 
-    The World Congress opens and closes inside ``ACTION_ENDTURN``.  While that
-    segment runs, the end-turn blocker query reports nothing (the game is not
-    waiting on our side), so a blocker-gated probe can never fire; the wait
-    loop would burn the full timeout before anything touches the session.
-    Gating on the earlier ``get_world_congress`` result instead keeps the
-    interference limited to congress turns, and the probe count bounds it.
+    Gated on the earlier ``get_world_congress`` result rather than on the
+    end-turn blocker query, because while the congress segment runs that query
+    reports nothing — the game is not waiting on our side.
+
+    The schedule is burst-then-sparse: a session that opens promptly is driven
+    within seconds, and one that opens late is still driven instead of being
+    waited out. It is bounded in total, so a session that never opens cannot
+    turn this into a dense loop of InGame calls during AI processing.
+    """
+
+    if not wc_turn:
+        return False
+    if drives < _WC_DRIVE_BURST_PROBES:
+        return cumulative_wait >= _WC_FIRST_DRIVE_AFTER + drives * _WC_DRIVE_BURST_INTERVAL
+    sparse = drives - _WC_DRIVE_BURST_PROBES
+    if sparse >= _WC_DRIVE_SPARSE_PROBES:
+        return False
+    burst_span = _WC_DRIVE_BURST_PROBES * _WC_DRIVE_BURST_INTERVAL
+    return cumulative_wait >= (
+        _WC_FIRST_DRIVE_AFTER + burst_span + sparse * _WC_DRIVE_SPARSE_INTERVAL
+    )
+
+
+def _wc_dismiss_due(
+    *,
+    wc_turn: bool,
+    cumulative_wait: float,
+    dismissals: int,
+) -> bool:
+    """Return whether another blind congress popup dismissal should run.
+
+    Separate from the drive on purpose. Closing UI while the AI may still be
+    processing is the documented cause of wedged turns, so this stays late and
+    tightly bounded; the driver does its own screen cleanup when it submits.
     """
 
     return (
         wc_turn
-        and probes < _WC_MAX_DRIVE_PROBES
-        and cumulative_wait >= _WC_EARLY_DISMISS_AFTER + probes * 60.0
+        and dismissals < _WC_MAX_DISMISS_PROBES
+        and cumulative_wait
+        >= _WC_FIRST_DISMISS_AFTER + dismissals * _WC_DISMISS_INTERVAL
     )
 
 
-async def _probe_world_congress_popup(gs: GameState) -> bool:
-    """Drive an open congress session, or clear a stale congress screen.
+async def _drive_congress(gs: GameState) -> bool:
+    """Vote and submit an *open* congress session. No-op without one.
 
-    The session opens inside ``ACTION_ENDTURN``, so this probe is the only
-    place the *live* resolution list can be seen and voted on: it applies the
-    already-registered policy and submits the turn, which is exactly what a
-    human clicking the congress screen would do.  When no session is open the
-    probe falls back to one generic popup dismissal.
+    Reads the live resolution list, applies the registered policy (defaulting to
+    one free vote per resolution, which costs no favor), votes, submits the turn
+    and clears the congress screens — the program-side equivalent of a human
+    opening the congress, choosing a side and clicking vote.
 
-    Returns True when something was actually done (votes submitted or a popup
-    dismissed), so the caller can re-check the turn immediately.
+    Returns True only when votes were actually submitted, so the caller can
+    re-check the turn immediately instead of continuing to poll.
     """
 
     try:
         result = await gs.drive_world_congress()
     except Exception:
-        result = ""
+        log.debug("World Congress drive failed", exc_info=True)
+        return False
     if "submitted" in result:
         log.info("World Congress driven from Lua: %s", result[:240])
         return True
-    dismissed = await gs.dismiss_popup()
-    log.info(
-        "World Congress probe: %s | dismiss=%s",
-        result[:120] or "<no result>",
-        dismissed[:80],
-    )
+    log.debug("World Congress drive had no session: %s", result[:120] or "<no result>")
+    return False
+
+
+async def _dismiss_congress_popup(gs: GameState) -> bool:
+    """Clear a stale congress screen when no session can be driven."""
+
+    try:
+        dismissed = await gs.dismiss_popup()
+    except Exception:
+        log.debug("Congress popup dismissal failed", exc_info=True)
+        return False
+    log.info("World Congress popup dismissal: %s", dismissed[:80])
     return "Dismissed" in dismissed
 
 
@@ -1498,7 +1571,8 @@ async def execute_end_turn(
     # GameCore-only queries.
     if not advanced:
         diplomacy_probed = False
-        wc_probes = 0
+        wc_drives = 0
+        wc_dismissals = 0
         cumulative_wait = 4.0  # Phase 1 already waited ~4s
         for delay in _end_turn_poll_delays(wc_turn):
             if poll_deadline is not None and _now() >= poll_deadline:
@@ -1540,34 +1614,56 @@ async def execute_end_turn(
                 if diplo_advanced:
                     advanced = True
                     break
-            # World Congress turns park on a congress screen.  The session
-            # opens inside ACTION_ENDTURN, so nobody else can vote it: drive it
-            # here (apply the registered policy to the live resolutions and
-            # submit), bounded to a few attempts per turn.
-            if _wc_early_dismiss_due(
+            # World Congress turns park on a congress screen. The session opens
+            # inside ACTION_ENDTURN, so nobody else can vote it: we drive it
+            # here — vote the live resolutions and submit — which is what a
+            # human would do and is orders of magnitude faster than waiting the
+            # screen out. Tried from t+5s and kept up across the whole opening
+            # window, because only driving makes the turn advance.
+            if _wc_drive_due(
                 wc_turn=wc_turn,
                 cumulative_wait=cumulative_wait,
-                probes=wc_probes,
+                drives=wc_drives,
             ):
-                wc_probes += 1
-                try:
-                    if await _probe_world_congress_popup(gs):
-                        log.info(
-                            "World Congress drive/probe %d acted (t+%.0fs)",
-                            wc_probes,
-                            cumulative_wait,
-                        )
-                        await _sleep(2.0)
-                        turn_after = await _get_turn_number(gs)
-                        if (
-                            turn_after is not None
-                            and turn_before is not None
-                            and turn_after > turn_before
-                        ):
-                            advanced = True
-                            break
-                except Exception:
-                    log.debug("World Congress drive/probe failed", exc_info=True)
+                wc_drives += 1
+                if await _drive_congress(gs):
+                    log.info(
+                        "World Congress drive %d submitted (t+%.0fs)",
+                        wc_drives,
+                        cumulative_wait,
+                    )
+                    await _sleep(2.0)
+                    turn_after = await _get_turn_number(gs)
+                    if (
+                        turn_after is not None
+                        and turn_before is not None
+                        and turn_after > turn_before
+                    ):
+                        advanced = True
+                        break
+            # Only when no session can be driven: clear a stale congress screen.
+            # Kept late and tight on purpose (see _wc_dismiss_due).
+            if not advanced and _wc_dismiss_due(
+                wc_turn=wc_turn,
+                cumulative_wait=cumulative_wait,
+                dismissals=wc_dismissals,
+            ):
+                wc_dismissals += 1
+                if await _dismiss_congress_popup(gs):
+                    log.info(
+                        "World Congress popup cleared (t+%.0fs, dismissal %d)",
+                        cumulative_wait,
+                        wc_dismissals,
+                    )
+                    await _sleep(2.0)
+                    turn_after = await _get_turn_number(gs)
+                    if (
+                        turn_after is not None
+                        and turn_before is not None
+                        and turn_after > turn_before
+                    ):
+                        advanced = True
+                        break
 
     # Phase 3: After ~5 min, now safe to check InGame state.
     # AI processing either completed (blocker is on our side) or is
