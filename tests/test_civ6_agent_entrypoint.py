@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -56,8 +57,13 @@ def test_dry_run_reports_the_effective_lean_configuration() -> None:
     assert "belief_mode=off" in result.stdout
     assert "hidden_control_plane=29" in result.stdout
     assert "reflections_required=no" in result.stdout
-    # The host deadline is printed as the effective value, not the requested one.
-    assert "3600000 ms" in result.stdout
+    # The previewed host deadline must be the real one, and it must clear the
+    # derived worst-case budget rather than merely being printed.
+    shown = re.search(r"Host tool deadline: (\d+) ms", result.stdout)
+    assert shown, result.stdout
+    from civ_mcp.end_turn import end_turn_budget
+
+    assert int(shown.group(1)) > end_turn_budget().total_seconds * 1000
 
 
 def test_lean_and_an_explicit_governance_mode_are_rejected() -> None:
