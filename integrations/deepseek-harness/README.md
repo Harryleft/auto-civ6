@@ -136,7 +136,15 @@ For a one-shot headless task:
 
 - The raw `run_lua` tool is disabled for this integration. Domain tools remain the supported game interface.
 - `CIV_MCP_SAVE_FILE` is cleared so starting DSH cannot trigger eval auto-boot or load a save. Startup recovery is separately controlled by `CIV_MCP_DSH_AUTO_RESUME` and defaults to off.
-- MCP tool calls allow 15 minutes because Deity AI turns can exceed DSH's one-minute default.
+- MCP tool calls allow 60 minutes. That number is not a comfort margin: a World
+  Congress `end_turn` legitimately runs ~20 minutes, and one call may also pay
+  for bounded hang recovery (kill, relaunch, reload). `civ_mcp.end_turn` derives
+  the worst case (poll 1276s + query reserve 300s + recovery reserve 1845s =
+  3421s) and `tests/test_end_turn_budget.py` fails if this overlay value ever
+  drops to or below that total. The flow also enforces the ceiling from the
+  inside and returns an `UNKNOWN:END_TURN_BUDGET_EXHAUSTED` receipt instead of
+  letting the host kill the call mid-advance. The previous 15-minute value was
+  already shorter than a congress turn's own poll budget.
 - DSH child reconnection is disabled. If `civ-mcp` exits, stop and restart the DSH host after confirming no stale FireTuner client remains.
 - The launcher refuses to start when TCP 8000 already has a listener or TCP 4318 already has an established client. It never kills those processes automatically.
 - `scripts/civ6_agent` is intentionally bounded by `--turns`; a bounded run makes a
