@@ -84,6 +84,10 @@ class _FakeGameState:
         self._pending_end_turn = False
         self._pending_end_turn_from = None
         self._last_snapshot = None
+        # Counted so the budget test can check its arithmetic against what the
+        # loop really did instead of a hand-maintained total.
+        self.drive_calls = 0
+        self.dismiss_calls = 0
 
     async def check_game_over(self):
         return None
@@ -101,9 +105,13 @@ class _FakeGameState:
         return []
 
     async def dismiss_popup(self) -> str:
+        self.dismiss_calls += 1
+        # No stale screen in this fake: only the driver ever "acts", which keeps
+        # the probe-sleep arithmetic in the budget test unambiguous.
         return "No popups to dismiss."
 
     async def drive_world_congress(self) -> str:
+        self.drive_calls += 1
         # A submitted congress round is the worst case: the probe actually did
         # something, so the caller also pays the follow-up re-check sleep.
         if self.conn._wc_handler:
@@ -130,16 +138,10 @@ class _FakeGameState:
         return f"end_turn stub poll_deadline={poll_deadline}"
 
 
-def _expected_uncontested_sleeps(wc_turn: bool) -> float:
-    """Sleeps a no-diplomacy, no-advance, no-popup pass really performs."""
+def _allowed_probe_sleeps(wc_turn: bool) -> float:
+    """Probe re-check sleeps the budget reserves for a congress turn."""
 
-    probes = et._WC_MAX_DRIVE_PROBES if wc_turn else 0
-    return (
-        et._PHASE1_SLEEP_SECONDS
-        + sum(et._end_turn_poll_delays(wc_turn))
-        + probes * 2.0
-        + et._FINAL_VERIFY_SLEEP_SECONDS
-    )
+    return et._WC_PROBE_SLEEP_SECONDS if wc_turn else 0.0
 
 
 @pytest.mark.parametrize("wc_turn", [False, True])
@@ -149,15 +151,78 @@ def test_wait_loop_stays_inside_the_derived_poll_budget(
     """Run the real loop on a virtual clock; nothing may be unaccounted for."""
 
     clock = _VirtualClock(monkeypatch)
+    gs = _FakeGameState(wc_turn=wc_turn)
 
-    asyncio.run(et.execute_end_turn(_FakeGameState(wc_turn=wc_turn)))
+    asyncio.run(et.execute_end_turn(gs))
 
-    assert clock.elapsed == _expected_uncontested_sleeps(wc_turn)
-    # The headroom is exactly the two bounded branches this pass did not take:
-    # the diplomacy probe's dialogue/war wait and the popup-dismiss re-poll.
-    assert (
-        et.poll_sleep_budget_seconds(wc_turn) - clock.elapsed
-        == et._DIPLOMACY_PROBE_SLEEP_SECONDS + et._POPUP_REPOLL_SLEEP_SECONDS
+    # Every congress drive that submitted paid a 2 s re-check.
+    acted_sleeps = gs.drive_calls * 2.0
+    expected = (
+        et._PHASE1_SLEEP_SECONDS
+        + sum(et._end_turn_poll_delays(wc_turn))
+        + acted_sleeps
+        + et._FINAL_VERIFY_SLEEP_SECONDS
+    )
+    assert clock.elapsed == expected
+    # The loop can never outrun the budget it is derived from.
+    assert clock.elapsed <= et.poll_sleep_budget_seconds(wc_turn)
+    # The headroom is exactly the bounded branches this pass did not take: the
+    # diplomacy probe's dialogue/war wait, the popup-dismiss re-poll, and the
+    # congress probes the schedule did not reach.
+    assert et.poll_sleep_budget_seconds(wc_turn) - clock.elapsed == (
+        et._DIPLOMACY_PROBE_SLEEP_SECONDS
+        + et._POPUP_REPOLL_SLEEP_SECONDS
+        + (_allowed_probe_sleeps(wc_turn) - acted_sleeps)
+    )
+
+
+def test_a_congress_turn_drives_the_session_instead_of_waiting_it_out() -> None:
+    """The old schedule started at t+60s with 3 tries; a late session escaped it."""
+
+    recorded: list[float] = []
+    elapsed = {"t": 0.0}
+
+    async def sleep(seconds: float) -> None:
+        recorded.append(seconds)
+        elapsed["t"] += seconds
+
+    original_sleep, original_now = et._sleep, et._now
+    et._sleep, et._now = sleep, lambda: elapsed["t"]
+    try:
+        gs = _FakeGameState(wc_turn=True)
+        asyncio.run(et.execute_end_turn(gs))
+    finally:
+        et._sleep, et._now = original_sleep, original_now
+
+    total = et._WC_DRIVE_BURST_PROBES + et._WC_DRIVE_SPARSE_PROBES
+    assert gs.drive_calls >= 12, "议会回合必须持续尝试驱动，而不是只试三次"
+    assert gs.drive_calls <= total
+    # The first attempt happens within seconds of the turn being requested.
+    first_attempt_at = et._PHASE1_SLEEP_SECONDS + min(recorded) if recorded else None
+    assert gs.drive_calls > 0 and first_attempt_at is not None
+
+
+def test_the_drive_schedule_fits_inside_the_congress_poll_window() -> None:
+    """A schedule that outlives its own window would leave attempts unreachable."""
+
+    window = et.poll_sleep_budget_seconds(True) - et._PHASE3_SLEEP_SECONDS
+    last_threshold = (
+        et._WC_FIRST_DRIVE_AFTER
+        + et._WC_DRIVE_BURST_PROBES * et._WC_DRIVE_BURST_INTERVAL
+        + (et._WC_DRIVE_SPARSE_PROBES - 1) * et._WC_DRIVE_SPARSE_INTERVAL
+    )
+
+    assert last_threshold < window
+
+
+def test_the_congress_extra_no_longer_pays_for_a_passive_wait() -> None:
+    """+660s only existed to sit out a congress screen nobody was operating."""
+
+    plain = sum(et._end_turn_poll_delays(False))
+    congress = sum(et._end_turn_poll_delays(True))
+
+    assert congress - plain <= 240.0, (
+        "议会回合的额外被动等待必须只是少量余量；驱动才是快路径"
     )
 
 
@@ -209,7 +274,7 @@ def test_budget_covers_a_congress_turn_and_not_only_a_plain_one() -> None:
     congress = et.end_turn_budget(wc_turn=True)
 
     assert congress.poll_seconds > plain.poll_seconds
-    assert et.poll_sleep_budget_seconds(True) == 1210.0 + 4.0 + 6.0 + 12.0 + 44.0
+    assert et.poll_sleep_budget_seconds(True) == et.poll_sleep_budget_seconds(False) + 220.0
 
 
 # ---------------------------------------------------------------------------

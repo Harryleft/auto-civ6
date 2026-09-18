@@ -463,7 +463,9 @@ That constant used to be 0.1s + 0.2s — a **fixed ~302ms per Lua command**, whi
 
 Mutations use two timeout tiers: `DEFAULT_TIMEOUT` (5s) for queries and light commands, `SLOW_MUTATION_TIMEOUT` (30s) for commands that make the game do real inline work (army-wide fortify/skip, policy swap, World Congress).
 
-`end_turn` is the outlier by two orders of magnitude: its polling ladder runs up to ~550s, plus popup-dismissal probes and up to three `restart_and_load` attempts, so a single call can reach ~15 minutes in the worst case. Budget client timeouts accordingly.
+`end_turn` is the outlier by two orders of magnitude: its polling ladder runs up to ~830s on a congress turn (550s plain + 180s congress slack), the congress driver adds a bounded number of probes, and up to three `restart_and_load` attempts may follow, so a single call can reach tens of minutes in the worst case. The declared ceiling is derived in `civ_mcp.end_turn` (`end_turn_budget().total_seconds`) and the client timeout in `integrations/deepseek-harness/civ6.cordis.yml` must exceed it; `tests/test_end_turn_budget.py` enforces that. Budget client timeouts accordingly.
+
+A congress turn is not inherently long: the congress opens inside `ACTION_ENDTURN`, and *waiting passively* for its screen is what used to cost 10-20 minutes. The wait loop now drives the session itself (vote the live resolutions, submit) from t+5s, so those turns normally resolve in seconds and the passive tail is only a fallback for a genuine hang.
 
 **No game modification.** The server uses only the stock FireTuner protocol. No mods, no DLL injection, no memory editing. This means we're constrained to whatever APIs the game's Lua layer exposes — and some things it exposes are broken (skip turn, promote unit, some notification types), requiring workarounds through the other Lua context.
 
