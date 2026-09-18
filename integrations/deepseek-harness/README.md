@@ -160,28 +160,38 @@ For a one-shot headless task:
 
 - The raw `run_lua` tool is disabled for this integration. Domain tools remain the supported game interface.
 - `CIV_MCP_SAVE_FILE` is cleared so starting DSH cannot trigger eval auto-boot or load a save. Startup recovery is separately controlled by `CIV_MCP_DSH_AUTO_RESUME` and defaults to off.
-- MCP tool calls allow 20 minutes. That is an envelope for one slow Deity AI
-  turn, not a typical duration and not a vote: `civ_mcp.end_turn` derives
-  poll 830s + query reserve 300s = 1130s, and the timeout applies per call so it
-  must exceed the *longest single call*. `tests/test_end_turn_budget.py` fails if
-  this value ever drops to or below that ceiling. The flow also enforces it from
-  the inside and returns an `UNKNOWN:END_TURN_BUDGET_EXHAUSTED` receipt instead
-  of letting the host kill the call mid-advance.
-- **Recovery is a separate step, never part of `end_turn`.** A wedged AI turn
-  needs a relaunch and an autosave reload, and running up to three of those
-  inside `end_turn` is what used to force a ~50-minute deadline — while also
-  hiding whether a turn had merely been slow or had been wedged and restarted.
-  On a hang, `end_turn` now returns `HANG:<turn>:<save>` plus an explicit next
-  step (`restart_and_load`, then verify with `get_game_overview`), and refuses to
-  invite a resend. A "hang" is never inferred on a congress turn.
+- MCP tool calls allow **3 minutes**, and that is sized from measurements rather
+  than from a guess about the AI. Across 710 recorded `end_turn` calls the real
+  distribution was median 15.5s, p90 26.3s, p97.6 90s — every call over 180s had
+  burnt a longer cadence to exhaustion. `civ_mcp.end_turn` therefore derives
+  poll 148s + query 25s = 173s for one call, and
+  `tests/test_end_turn_budget.py` fails if this overlay value drops to or below
+  that ceiling or rises above three minutes.
+- Waiting beyond one call **continues across calls**: when the turn is still
+  being played out, `end_turn` returns `TURN_PENDING` and the caller simply calls
+  `end_turn` again. Repeated calls do **not** re-send `ACTION_ENDTURN` (the
+  in-flight flag survives), so this is cheap and cannot skip a turn. A turn is
+  only called a hang after 600s of cumulative waiting on the same pending turn —
+  ~7x the measured p90 and past the worst turn ever recorded.
+- **Recovery is out of the loop.** A relaunch waits on the game itself (up to 60s
+  for the process and 180s for FireTuner's port), so it cannot fit a three-minute
+  loop. `end_turn` never relaunches; on a hang it returns `HANG:<turn>:<save>`
+  with `HANG_RECOVERY_IS_A_SEPARATE_STEP` and hands the relaunch to the host or
+  operator as `kill_game → launch_game → load_game_save`, one call each.
 - A World Congress `end_turn` is **not** inherently a long call. The congress
   opens inside `ACTION_ENDTURN` and parks on its screen; waiting passively for it
   was what made those turns take 10-20 minutes, and — worse — an undriven
   congress used to be misread as a wedged AI turn, which killed and reloaded a
   healthy game up to three times over a missing vote. The driver votes the live
-  resolutions and submits the session from Lua (what a human does), running from
-  t+5s and covering the whole session-opening window, so those turns normally
-  resolve in seconds.
+  resolutions and submits the session from Lua (what a human does), starting at
+  t+5s and covering the whole session-opening window across calls, so those turns
+  normally resolve in seconds. An undriven congress reports
+  `CONGRESS_NOT_DRIVEN`, never a hang.
+
+## Safety decisions
+
+- The raw `run_lua` tool is disabled for this integration. Domain tools remain the supported game interface.
+- `CIV_MCP_SAVE_FILE` is cleared so starting DSH cannot trigger eval auto-boot or load a save. Startup recovery is separately controlled by `CIV_MCP_DSH_AUTO_RESUME` and defaults to off.
 - DSH child reconnection is disabled. If `civ-mcp` exits, stop and restart the DSH host after confirming no stale FireTuner client remains.
 - The launcher refuses to start when TCP 8000 already has a listener or TCP 4318 already has an established client. It never kills those processes automatically.
 - `scripts/civ6_agent` is intentionally bounded by `--turns`; a bounded run makes a

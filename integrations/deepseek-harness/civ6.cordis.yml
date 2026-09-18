@@ -31,19 +31,18 @@
           # and an explicit lean+enforce/observe contradiction still fails
           # loudly in the child instead of being silently overridden here.
           CIV_MCP_BELIEF_MODE: !!js "process.env.CIV_MCP_BELIEF_MODE ?? ''"
-        # Deity AI turns can take 5-10 minutes, which is the only thing this has
-        # to cover: `civ_mcp.end_turn` derives poll 830s + query reserve 300s =
-        # 1130s, and the timeout applies per call, so it must exceed the longest
-        # single call — not the sum of a turn plus recovery. Recovery left this
-        # call (see RESTART_AND_LOAD_CEILING_SECONDS): keeping three relaunches
-        # inside it is what used to force a ~50-minute deadline for an operation
-        # whose normal case is seconds, and it hid whether a turn had merely been
-        # slow or had been wedged and restarted.
-        # tests/test_end_turn_budget.py fails if this ever drops to or below the
-        # longest call's ceiling. The flow also enforces that ceiling from the
-        # inside and returns a machine-readable "outcome unknown" receipt instead
-        # of letting the host kill the call mid-advance.
-        toolCallTimeoutMs: 1200000
+        # Sized from measured turns, not from an assumption about the AI. Across
+        # 710 recorded end_turn calls the real distribution was median 15.5s,
+        # p90 26.3s, p97.6 90s; every call over 180s had burnt a longer cadence
+        # to exhaustion. So civ_mcp.end_turn derives poll 148s + query reserve
+        # 25s = 173s for one call — under three minutes — and waiting beyond that
+        # continues across calls (calling end_turn again does not re-send the
+        # end-turn request). tests/test_end_turn_budget.py fails if this value
+        # ever drops to or below that ceiling, or rises above three minutes.
+        # Relaunch-shaped calls (restart_and_load / launch_game / load_game_save's
+        # FrontEnd path) are NOT covered here: they wait on the game's own launch
+        # and are operator steps outside the turn loop.
+        toolCallTimeoutMs: 180000
         failOnStartupError: true
         # Avoid an automatic child restart chain around a single-client
         # FireTuner connection. Restart the DSH host explicitly if civ-mcp exits.

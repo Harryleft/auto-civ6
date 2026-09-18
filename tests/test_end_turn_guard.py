@@ -3,6 +3,7 @@
 import asyncio
 
 from civ_mcp.end_turn import (
+    _END_TURN_POLL_WINDOW_SECONDS,
     _WC_DRIVE_BURST_PROBES,
     _WC_DRIVE_SPARSE_PROBES,
     _WC_MAX_DISMISS_PROBES,
@@ -99,7 +100,7 @@ def test_the_driver_keeps_trying_across_the_whole_opening_window() -> None:
 
     total = _WC_DRIVE_BURST_PROBES + _WC_DRIVE_SPARSE_PROBES
 
-    assert total >= 12, "驱动次数太少会让议会回合重新退回被动等待"
+    assert total >= 10, "驱动次数太少会让议会回合重新退回被动等待"
     # The schedule must still be a bounded number of InGame calls.
     assert total <= 30, "密集 InGame 调用是历史卡死的成因，必须保持有界"
 
@@ -179,19 +180,27 @@ def test_popup_dismissal_is_a_separate_fallback() -> None:
     assert asyncio.run(_dismiss_congress_popup(gs2)) is False
 
 
-def test_plain_turn_poll_budget_is_unchanged() -> None:
+def test_the_ladder_finishes_inside_one_call_window() -> None:
+    """A ladder longer than the window would make its own tail dead code."""
+
     delays = _end_turn_poll_delays(wc_turn=False)
-    assert sum(delays) == 550.0
+    inside = 8 * 0.5 + sum(delays) + (5 * 2.0 + 2.0)
+
     assert all(delay > 0 for delay in delays)
+    assert inside == _END_TURN_POLL_WINDOW_SECONDS
 
 
-def test_congress_turn_gets_a_bounded_extra_poll_budget() -> None:
-    plain = _end_turn_poll_delays(wc_turn=False)
-    congress = _end_turn_poll_delays(wc_turn=True)
+def test_the_ladder_is_sized_from_measured_turns() -> None:
+    """Measured: median 15.5s, p90 26.3s, p97.6 90s. The old ladder ran to 550s."""
 
-    # 550s plain + 180s congress slack. The slack used to be +660s, which only
-    # existed to wait out a congress screen nobody was operating; the driver now
-    # submits the session itself, so a longer silent wait buys nothing and only
-    # delays an honest hang report.
-    assert sum(congress) == 730.0
-    assert congress[: len(plain)] == plain
+    delays = _end_turn_poll_delays(wc_turn=False)
+    reach = 8 * 0.5 + sum(delays)
+
+    assert sum(delays) <= 100.0, "阶梯必须落回三分钟以内的调用窗口"
+    assert reach >= 90.0, "阶梯至少要覆盖到实测 p97.6（90 秒），否则尾巴没有意义"
+
+
+def test_congress_turns_no_longer_get_a_longer_single_call() -> None:
+    """Congress coverage moved to the cumulative drive schedule across calls."""
+
+    assert _end_turn_poll_delays(wc_turn=True) == _end_turn_poll_delays(wc_turn=False)

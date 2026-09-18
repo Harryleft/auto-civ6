@@ -28,31 +28,37 @@ MCP 启动时先通过 FireTuner 判断是否已经在对局；若只到主菜�
 
 ## AI 回合卡住
 
+先分清三种结局，它们需要的动作完全不同：
+
+| `end_turn` 返回 | 含义 | 该做什么 |
+|---|---|---|
+| `TURN_PENDING` | 回合**仍在正常处理**中，只是本次调用用完了自己的等待窗口 | 再次调用 `end_turn` 继续等。重复调用**不会**重发结束回合请求，因此不会跳过回合 |
+| `CONGRESS_NOT_DRIVEN` | 议会开着但程序没能投票提交 | `get_world_congress` → 用决议**类型名**注册 `queue_wc_votes` → 重新 `end_turn`。**禁止重启游戏** |
+| `HANG` | 同一个待推进回合累计等待超过 600 秒，判定为真卡死 | 停止本回合循环并原样报告；重启交给宿主机/操作者 |
+
+判据是**累计等待时长**（同一个待推进回合跨多次调用的总和），不是单次调用开了多久：
+实测 710 次 `end_turn` 的中位数只有 15.5 秒、p90 26.3 秒，所以单次窗口的长短说明不了
+游戏是否卡住。单次调用窗口 102 秒，累计 600 秒（约实测 p90 的 7 倍，也超过历史最慢
+的约 590 秒）才判挂起。
+
+### 重启是循环之外的动作
+
 ```text
-restart_and_load("0_MCP_NNNN")
-get_game_overview
+kill_game → launch_game → load_game_save("0_MCP_NNNN")
 ```
 
-**恢复是独立一步，`end_turn` 自己绝不重启游戏。** 挂起时 `end_turn` 返回
-`HANG:<回合>:<存档>` 加一条明确的下一步说明（`HANG_RECOVERY_IS_A_SEPARATE_STEP`），
-并且不会诱导重发。之所以这样拆：以前 `end_turn` 会在自己内部最多重启三次，
-结果一次调用的期限必须覆盖「等待 + 三次重启」（约 50 分钟），而且调用方再也分不清
-这一回合只是慢，还是卡死过并被重启过。现在单次调用只需要覆盖一轮回合。
+**`end_turn` 自己绝不重启游戏。** 以前它会在一次调用内最多重启三次，于是单次调用期限
+必须覆盖「等待 + 三次重启」（约 50 分钟），而调用方再也分不清这一回合只是慢、还是卡死过
+并被重启过。现在这三步各自是一个独立调用（挂起回执里的
+`HANG_RECOVERY_IS_A_SEPARATE_STEP` 会这么说明），不要把它们塞回回合循环。
 
 **议会回合永远不会被判成挂起。** 议会界面挂着时回合号不动，而阻塞项查询在议会期间
 返回空——过去的判定逻辑因此把「没人投票」误判成「AI 卡死」，进而杀掉并重启一个完全
-健康的游戏，最多三次。现在这种情况返回
-`CONGRESS_NOT_DRIVEN`（带 `CONGRESS_NOT_DRIVEN_IS_NOT_A_HANG`），
-明确禁止重启，并给出下一步：`get_world_congress` → 用决议类型名注册 `queue_wc_votes`
-→ 重新 `end_turn`。
+健康的游戏，最多三次。
 
-`restart_and_load` 会结束进程、重新启动，并借助共享 FireTuner 连接在主菜单调用 FrontEnd API 加载存档，通常约 90 秒。不要在 FireTuner 仍有旧客户端时并行启动恢复流程。
-
-默认拒绝 OCR/GUI 菜单回退：它可能误点到其他窗口，也不能作为无人值守验证的可靠依据。仅在明确接受该风险时设置 `CIV_MCP_ENABLE_OCR_RECOVERY=1`；若 FrontEnd API 不可用且未设置该变量，恢复会返回明确错误而非尝试视觉操作。
-
-如果误加载了 T1 场景存档而不是自动存档，`end_turn` 会发出 CRITICAL 警告并指出正确的自动存档名称。
-
-其他恢复工具：`list_saves`、`load_save(index)`、`kill_game`、`launch_game`、`load_save_from_menu(name)`。存档名称不带 `.Civ6Save` 扩展名，例如使用 `AutoSave_0221`。
+`load_game_save` 走 Lua 路径时很快（约 5 秒）；它的 FrontEnd 路径与 `launch_game` 一样
+要等游戏自己启动（进程最多 60 秒、FireTuner 端口最多 180 秒），所以也被归为循环外的
+恢复动作，不纳入回合循环的期限。
 
 ## 崩溃根因（JobSet use-after-destruction，单一崩溃类）
 
