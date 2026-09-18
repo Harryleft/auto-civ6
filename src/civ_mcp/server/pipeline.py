@@ -36,6 +36,13 @@ from civ_mcp.presentation import action_receipt_status, localize_model_result
 from civ_mcp.result_filter import filter_tool_result
 from civ_mcp.spatial import SpatialTracker
 from civ_mcp.spectator import CameraController, PopupWatcher
+from civ_mcp.turn_context import (
+    GATE_EXEMPT_TOOLS,
+    TurnContext,
+    TurnContextState,
+    build_turn_context,
+    turn_context_from_identity,
+)
 
 _SAVE_LOADING_TOOLS = frozenset({"load_save", "load_game_save", "load_save_from_menu"})
 
@@ -110,6 +117,138 @@ def _hidden_tool_refusal(ctx: Context, tool_name: str) -> str | None:
     if tool_name not in hidden_tool_names(_get_play_profile(ctx)):
         return None
     return _HIDDEN_TOOL_REFUSAL.format(tool=tool_name)
+
+
+def _get_turn_context_state(ctx: Context) -> TurnContextState:
+    """Return the per-session briefing bookkeeping, creating it if absent."""
+
+    lifespan = ctx.request_context.lifespan_context
+    state = getattr(lifespan, "turn_context_state", None)
+    if not isinstance(state, TurnContextState):
+        state = TurnContextState()
+        try:
+            lifespan.turn_context_state = state
+        except (AttributeError, TypeError):  # pragma: no cover - defensive
+            pass
+    return state
+
+
+def _turn_context_enabled(ctx: Context) -> bool:
+    """Whether this process attaches the standing situation brief."""
+
+    from civ_mcp.server.assembly import turn_context_enabled
+
+    return turn_context_enabled(_get_play_profile(ctx))
+
+
+def _tool_requires_briefing(tool_name: str) -> bool:
+    """Return whether executing this tool needs the session to be oriented first.
+
+    Derived from the MCP annotations the tools already carry, so a new tool is
+    classified by its own declaration instead of a second hand-kept list.
+
+    * registered and declared ``readOnlyHint`` -> no briefing needed;
+    * registered and not declared read-only -> treated as a write;
+    * not registered at all -> not gated. It is not part of the served surface,
+      so the router (or the caller) owns that error, and gating an unknown name
+      would only hide it behind a briefing.
+    """
+
+    from civ_mcp.server.assembly import mcp
+
+    tool = mcp._tool_manager._tools.get(tool_name)
+    if tool is None:
+        return False
+    annotations = getattr(tool, "annotations", None)
+    return not bool(annotations and getattr(annotations, "readOnlyHint", False))
+
+
+async def build_and_record_turn_context(ctx: Context) -> TurnContext | None:
+    """Collect the briefing, record it as delivered, and return it.
+
+    Returns ``None`` when collection fails. Callers decide what to do about it:
+    ``get_game_overview`` degrades to a visible note, while the write gate
+    refuses the write. Never raises, because a briefing failure must not turn a
+    game tool into a protocol-level error.
+    """
+
+    gs = _get_game(ctx)
+    try:
+        context = await build_turn_context(gs)
+    except Exception:
+        log.warning("Failed to build the turn context briefing", exc_info=True)
+        return None
+    _get_turn_context_state(ctx).record(context, cache_epoch=_cache_epoch(gs))
+    log.info(
+        "Turn context: turn=%s consistency=%s write_allowed=%s calls=%d elapsed_ms=%d",
+        context.turn,
+        context.consistency,
+        context.write_allowed,
+        context.query_calls,
+        context.elapsed_ms,
+    )
+    return context
+
+
+def _cache_epoch(gs: Any) -> int | None:
+    """Return the game's cache epoch, which bumps on every load/new game."""
+
+    epoch = getattr(gs, "_cache_epoch", None)
+    return epoch if type(epoch) is int else None
+
+
+_TURN_CONTEXT_GATE_MARKER = "GATE:TURN_CONTEXT_REQUIRED"
+
+
+async def _turn_context_gate(ctx: Context, tool_name: str) -> str | None:
+    """Return a read-only briefing instead of executing a gated call.
+
+    Two distinct reasons can hold a write back in the lean loop:
+
+    * this session has not yet shown the model the current game's situation, so
+      the first change would be made blind;
+    * the last briefing could not confirm the game identity or the live state,
+      so writing would act on an unconfirmed world.
+
+    Reads are never gated, and neither are the tools needed to get *into* a
+    game. A gate that cannot be satisfied is a permanent lockout, which the plan
+    forbids: a single optional query failure may leave a gap, but it must not
+    freeze every operation.
+
+    The steady-state cost is O(1): the game's cache epoch bumps on every save
+    load or new game, so a matching epoch plus a write-allowing briefing means
+    the session is already oriented and no extra query is needed.
+    """
+
+    if not _get_play_profile(ctx).requires_entry_material:
+        return None
+    if tool_name in GATE_EXEMPT_TOOLS or not _tool_requires_briefing(tool_name):
+        return None
+
+    gs = _get_game(ctx)
+    state = _get_turn_context_state(ctx)
+    epoch = _cache_epoch(gs)
+    if state.write_allowed and state.delivered_epoch == epoch and state.brief:
+        return None
+
+    reason = (
+        "本会话尚未取得当前对局的入口材料，先只读返回局面，不执行原变更。"
+        if not state.brief
+        else "上一次局面简报未能确认对局身份或本国实时状态，写操作已停止；先只读核验。"
+    )
+    context = await build_and_record_turn_context(ctx)
+    if context is None:
+        log.warning("Turn context gate: briefing failed for %s", tool_name)
+        return turn_context_from_identity(None)
+    log.warning(
+        "Turn context gate held back %s (write_allowed=%s)", tool_name, context.write_allowed
+    )
+    return (
+        f"{reason}\n"
+        f"请依据下面的局面重新决定，确认后再重新调用 {tool_name}；"
+        "不要重复提交可能已经生效的改动。\n"
+        f"{_TURN_CONTEXT_GATE_MARKER}\n\n{context.brief}"
+    )
 
 
 async def _await_auto_resume_ready(ctx: Context) -> None:
@@ -890,6 +1029,10 @@ async def _logged(
     if refusal is not None:
         log.warning("Refused control-plane tool %s under the lean profile", tool_name)
         return _return_result(refusal)
+
+    gate = await _turn_context_gate(ctx, tool_name)
+    if gate is not None:
+        return _return_result(gate)
 
     await _await_auto_resume_ready(ctx)
     logger = _get_logger(ctx)
