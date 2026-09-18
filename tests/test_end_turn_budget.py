@@ -30,6 +30,7 @@ import pytest
 from civ_mcp import end_turn as et
 from civ_mcp.server.tools import end_turn_flow
 from civ_mcp.server import pipeline
+from civ_mcp.server.assembly import PlayProfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OVERLAY = ROOT / "integrations" / "deepseek-harness" / "civ6.cordis.yml"
@@ -515,3 +516,55 @@ def test_end_turn_flow_no_longer_restarts_the_game() -> None:
 
     assert "await game_launcher.restart_and_load(" not in source
     assert "HANG_RECOVERY_IS_A_SEPARATE_STEP" in source
+
+
+def test_a_continuation_call_does_not_demand_the_essays_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Waiting now spans calls; re-writing five reflections each time is ceremony.
+
+    The first call already wrote this turn's diary entry, so a legacy-profile
+    "keep waiting" retry must not be refused for empty reflections.
+    """
+
+    async def fake_logged(*_args, **_kwargs) -> str:
+        return "TURN_PENDING:57|still processing"
+
+    noop = lambda *_: None  # noqa: E731
+    monkeypatch.setattr(pipeline, "_get_play_profile", lambda _ctx: PlayProfile.LEGACY)
+    monkeypatch.setattr(pipeline, "_turn_context_enabled", lambda _ctx: False)
+    monkeypatch.setattr(pipeline, "_logged", fake_logged)
+    monkeypatch.setattr(
+        pipeline, "_get_logger",
+        lambda _ctx: SimpleNamespace(session_id="t", set_agent_model=noop, set_turn=noop),
+    )
+    monkeypatch.setattr(
+        pipeline, "_get_spatial", lambda _ctx: SimpleNamespace(set_turn=noop)
+    )
+    monkeypatch.setattr(
+        pipeline, "_get_camera", lambda _ctx: SimpleNamespace(clear=noop)
+    )
+    monkeypatch.setattr(
+        pipeline, "_get_watchdog", lambda _ctx: SimpleNamespace(arm=noop)
+    )
+
+    ctx = SimpleNamespace(
+        request_context=SimpleNamespace(
+            lifespan_context=SimpleNamespace(
+                game=_FakeGameState(wc_turn=False), play_profile=PlayProfile.LEGACY
+            )
+        )
+    )
+
+    # First call with no reflections and nothing in flight: still refused.
+    fresh = _FakeGameState(wc_turn=False)
+    ctx.request_context.lifespan_context.game = fresh
+    first = asyncio.run(end_turn_flow._run_end_turn_impl(ctx))
+    assert "Empty reflections" in first
+
+    # A continuation call (request already in flight) is not.
+    continuing = _FakeGameState(wc_turn=False)
+    continuing._pending_end_turn = True
+    ctx.request_context.lifespan_context.game = continuing
+    second = asyncio.run(end_turn_flow._run_end_turn_impl(ctx))
+    assert "Empty reflections" not in second
