@@ -8,7 +8,7 @@ import json
 import logging
 import os
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, AsyncIterator
 
@@ -32,6 +32,7 @@ from civ_mcp.telemetry import (
     LocalSink,
     TelemetryEmitter,
 )
+from civ_mcp.turn_context import TurnContextState
 from civ_mcp.web_api import create_app
 
 log = logging.getLogger(__name__)
@@ -138,6 +139,23 @@ class PlayProfile(StrEnum):
 
         return self is PlayProfile.LEGACY
 
+    @property
+    def uses_turn_context(self) -> bool:
+        """Whether the standing situation brief is attached to the turn input."""
+
+        return self is PlayProfile.LEAN
+
+    @property
+    def requires_entry_material(self) -> bool:
+        """Whether a write must be preceded by a delivered briefing.
+
+        Lean only. The legacy path already fails closed through its governance
+        turn gate (``current_turn_typed_snapshot_missing``), so adding a second
+        gate there would change the comparison arm rather than protect it.
+        """
+
+        return self is PlayProfile.LEAN
+
     def effective_belief_mode(self, environ: dict[str, str] | None = None) -> BeliefMode:
         """Return the belief mode this profile runs, or raise on a conflict.
 
@@ -171,6 +189,30 @@ def resolve_play_profile(environ: dict[str, str] | None = None) -> PlayProfile:
     # the first end_turn.
     profile.effective_belief_mode(environ)
     return profile
+
+
+TURN_CONTEXT_ENV = "CIV_MCP_TURN_CONTEXT"
+
+
+def turn_context_enabled(
+    profile: PlayProfile, environ: dict[str, str] | None = None
+) -> bool:
+    """Return whether the standing situation brief is attached to turn input.
+
+    Defaults to the play profile (lean attaches it, legacy does not). The
+    environment override exists **only** for the C5 comparison fixture, where
+    arm B is "the original path plus the same brief". It is deliberately not a
+    user-facing mode: the plan forbids composable feature flags, and the
+    supported contract is ``CIV_MCP_PLAY_PROFILE``.
+    """
+
+    source = os.environ if environ is None else environ
+    raw = str(source.get(TURN_CONTEXT_ENV, "")).strip().lower()
+    if raw in {"1", "on", "true", "yes"}:
+        return True
+    if raw in {"0", "off", "false", "no"}:
+        return False
+    return profile.uses_turn_context
 
 
 def registered_control_plane_tool_names() -> frozenset[str]:
@@ -301,6 +343,7 @@ class AppContext:
     beliefs: BeliefEngine
     belief_mode: BeliefMode = BeliefMode.ENFORCE
     play_profile: PlayProfile = PlayProfile.LEGACY
+    turn_context_state: TurnContextState = field(default_factory=TurnContextState)
     auto_resume_ready: asyncio.Event | None = None
     # Serializes the one-time journal replay in pipeline._bind_belief_engine.
     belief_bind_lock: asyncio.Lock | None = None

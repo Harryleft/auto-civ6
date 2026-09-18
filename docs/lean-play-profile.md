@@ -91,6 +91,9 @@ upsert_strategic_goal
 `belief_events=disabled`、`belief_context=disabled`，与 `--dry-run` 预览来自同一份
 解析结果（`play_profile_report()` / `play_profile_summary()`）。
 
+关闭治理后进入模型的每回合输入由独立的局面简报承担，字段白名单、缺失语义与
+首次变更门槛见 [回合局面简报](turn-context.md)。
+
 ## end_turn 的反思字段
 
 五个反思字段（`tactical`/`strategic`/`tooling`/`planning`/`hypothesis`）的**签名保持不变**。

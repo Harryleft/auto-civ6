@@ -143,6 +143,20 @@ async def get_game_overview(ctx: Context) -> str:
                     f"{exc}\nKey actions and end_turn remain blocked until "
                     "get_governance_brief succeeds."
                 )
+        # The standing situation brief replaces the governance snapshot as the
+        # lean loop's turn input. It is collected from typed GameState only and
+        # never calls the governance snapshot to pick up data along the way.
+        if pipeline._turn_context_enabled(ctx):
+            context = await pipeline.build_and_record_turn_context(ctx)
+            if context is None:
+                text += (
+                    "\n\n=== TURN CONTEXT ERROR ===\n"
+                    "回合局面简报采集失败。本次不执行写操作；先只读核验："
+                    "重试 get_game_overview，必要时分别查询"
+                    " get_units / get_cities / get_threat_scan / get_notifications。"
+                )
+            else:
+                text += "\n\n" + context.brief
         return text
 
     return await pipeline._logged(ctx, "get_game_overview", {}, _run)

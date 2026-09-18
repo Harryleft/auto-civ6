@@ -600,4 +600,32 @@ async def _run_end_turn_impl(
     if "GAME OVER" not in result:
         pipeline._get_watchdog(ctx).arm()
 
+    # A confirmed advance means the game is back on our turn, so the returned
+    # brief *is* the next turn's entry material: the model should decide from it
+    # instead of mechanically re-querying. Blocked turns, unknown outcomes and
+    # finished games must not fabricate a next turn, so they never get a brief.
+    if turn_advanced and "GAME OVER" not in result and pipeline._turn_context_enabled(ctx):
+        confirmed = re.search(r"Turn \d+ -> (\d+)", result)
+        expected_turn = int(confirmed.group(1)) if confirmed else None
+        brief_context = await pipeline.build_and_record_turn_context(ctx)
+        if brief_context is None:
+            # The action succeeded and only the briefing failed. Reporting this
+            # as a plain failure would invite a resend of an end_turn that
+            # already took effect, so say exactly which half succeeded.
+            result += (
+                "\n\n=== 推进已确认，简报待重取 ===\n"
+                f"回合推进已经确认（T{_diary_turn or '?'} → T{expected_turn}），"
+                "但下一回合局面简报采集失败。\n"
+                "只允许重新读取局面：调用 get_game_overview。"
+                "不要再次调用 end_turn，也不要重复本回合已经发出的任何改动。\n"
+                "BRIEF_PENDING:RE_READ_OVERVIEW_ONLY"
+            )
+        else:
+            result += "\n\n" + brief_context.brief
+            if expected_turn is not None and brief_context.turn != expected_turn:
+                result += (
+                    f"\n\n注意: end_turn 确认推进到 T{expected_turn}，"
+                    f"但简报读到 T{brief_context.turn}。以只读复核为准，不要重发 end_turn。"
+                )
+
     return _render_result(result)
