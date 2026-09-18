@@ -43,7 +43,7 @@ _DSH_TIMEOUT = re.compile(r"^\s*toolCallTimeoutMs:\s*(\d+)\s*$", re.MULTILINE)
 
 
 class _VirtualClock:
-    """Replace ``end_turn._sleep``/``_now`` so no test waits for real minutes."""
+    """Replace ``end_turn._sleep`` so no test waits for real minutes."""
 
     def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
         self.elapsed = 0.0
@@ -54,7 +54,6 @@ class _VirtualClock:
             self.elapsed += seconds
 
         monkeypatch.setattr(et, "_sleep", sleep)
-        monkeypatch.setattr(et, "_now", lambda: self.elapsed)
 
 
 class _FakeConnection:
@@ -63,7 +62,11 @@ class _FakeConnection:
     def __init__(self, *, wc_handler: bool) -> None:
         self._wc_handler = wc_handler
 
-    async def execute_read(self, _code: str, **_kwargs) -> list[str]:
+    async def execute_read(self, code: str, **_kwargs) -> list[str]:
+        if "GetCurrentGameTurn" in code:
+            # A readable turn number is what makes the HANG branch reachable at
+            # all; without it the loop cannot report "still on turn N".
+            return ["57"]
         return ["NO_THREATS"]
 
     async def execute_write(self, _code: str, **_kwargs) -> list[str]:
@@ -132,10 +135,10 @@ class _FakeGameState:
         # this fake to the polling path and leaves turn_before unknown.
         raise RuntimeError("no snapshot in the budget test")
 
-    async def end_turn(self, *, poll_deadline=None) -> str:  # pragma: no cover
+    async def end_turn(self) -> str:  # pragma: no cover
         # Only referenced (never awaited) by the budget tests, which stub
         # pipeline._logged; kept so the attribute lookup cannot fail.
-        return f"end_turn stub poll_deadline={poll_deadline}"
+        return "end_turn stub"
 
 
 def _allowed_probe_sleeps(wc_turn: bool) -> float:
@@ -186,13 +189,13 @@ def test_a_congress_turn_drives_the_session_instead_of_waiting_it_out() -> None:
         recorded.append(seconds)
         elapsed["t"] += seconds
 
-    original_sleep, original_now = et._sleep, et._now
-    et._sleep, et._now = sleep, lambda: elapsed["t"]
+    original_sleep = et._sleep
+    et._sleep = sleep
     try:
         gs = _FakeGameState(wc_turn=True)
         asyncio.run(et.execute_end_turn(gs))
     finally:
-        et._sleep, et._now = original_sleep, original_now
+        et._sleep = original_sleep
 
     total = et._WC_DRIVE_BURST_PROBES + et._WC_DRIVE_SPARSE_PROBES
     assert gs.drive_calls >= 12, "议会回合必须持续尝试驱动，而不是只试三次"
@@ -226,27 +229,6 @@ def test_the_congress_extra_no_longer_pays_for_a_passive_wait() -> None:
     )
 
 
-def test_poll_deadline_stops_the_loop_early() -> None:
-    """A bounded retry must not be able to run the whole cadence again."""
-
-    recorded: list[float] = []
-
-    async def sleep(seconds: float) -> None:
-        recorded.append(seconds)
-
-    async def now() -> float:  # pragma: no cover - replaced below
-        return 0.0
-
-    original_sleep, original_now = et._sleep, et._now
-    et._sleep, et._now = sleep, lambda: sum(recorded)
-    try:
-        asyncio.run(
-            et.execute_end_turn(_FakeGameState(wc_turn=False), poll_deadline=100.0)
-        )
-    finally:
-        et._sleep, et._now = original_sleep, original_now
-
-    assert sum(recorded) < et.poll_sleep_budget_seconds(False)
 
 
 # ---------------------------------------------------------------------------
@@ -259,14 +241,18 @@ def test_host_deadline_covers_the_whole_end_turn_budget() -> None:
 
     assert match, "civ6.cordis.yml no longer sets an explicit toolCallTimeoutMs"
     host_ms = int(match.group(1))
-    total = et.end_turn_budget(wc_turn=True)
+    longest = et.longest_mcp_call_seconds()
+    budget = et.end_turn_budget(wc_turn=True)
 
-    assert host_ms > total.total_seconds * 1000, (
-        f"DSH 允许 {host_ms / 1000:.0f}s，但最坏单次 end_turn 预算为 "
-        f"{total.total_seconds:.0f}s（轮询 {total.poll_seconds:.0f}s + "
-        f"查询 {total.query_seconds:.0f}s + 恢复 {total.recovery_seconds:.0f}s）；"
-        "宿主期限必须大于总预算，否则议会回合会在推进中途被杀死"
+    assert host_ms > longest * 1000, (
+        f"DSH 允许 {host_ms / 1000:.0f}s，但最长单次调用为 {longest:.0f}s"
+        f"（end_turn 轮询 {budget.poll_seconds:.0f}s + 查询 "
+        f"{budget.query_seconds:.0f}s；恢复单独一步 "
+        f"{et.restart_and_load_budget_seconds():.0f}s）；"
+        "宿主期限必须大于最长单次调用，否则会在推进中途被杀死"
     )
+    # 20 minutes, not 50: the ceiling covers a slow AI turn, not three relaunches.
+    assert host_ms <= 20 * 60 * 1000
 
 
 def test_budget_covers_a_congress_turn_and_not_only_a_plain_one() -> None:
@@ -282,15 +268,41 @@ def test_budget_covers_a_congress_turn_and_not_only_a_plain_one() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_recovery_reserve_covers_every_declared_retry() -> None:
-    assert et.hang_recovery_budget_seconds() == (
-        et.hang_attempt_ceiling_seconds() * et.MAX_HANG_RETRIES
+def test_recovery_is_not_part_of_the_end_turn_budget() -> None:
+    """Restarts used to live inside this call, which is what forced ~50 minutes."""
+
+    budget = et.end_turn_budget(wc_turn=True)
+
+    assert budget.total_seconds == budget.poll_seconds + budget.query_seconds
+    assert not hasattr(budget, "recovery_seconds")
+
+
+def test_the_host_deadline_covers_the_longest_single_call() -> None:
+    """The timeout is per call, so end_turn and recovery must not be summed."""
+
+    longest = et.longest_mcp_call_seconds()
+    separately_summed = (
+        et.end_turn_budget(wc_turn=True).total_seconds
+        + et.restart_and_load_budget_seconds()
     )
-    assert end_turn_flow._MAX_HANG_RETRIES == et.MAX_HANG_RETRIES
-    assert end_turn_flow._HANG_EXTRA_WAIT == list(et.HANG_EXTRA_WAITS)
-    # The escalating waits are part of the per-attempt ceiling, so a larger
-    # wait cannot silently outgrow the reserve.
-    assert et.HANG_EXTRA_WAITS[-1] <= et.hang_attempt_ceiling_seconds()
+
+    assert longest == et.end_turn_budget(wc_turn=True).total_seconds
+    assert longest < separately_summed
+    # A vote is a seconds-long operation; the ceiling exists for a slow AI turn.
+    assert longest < 20 * 60, (
+        "单次调用期限必须回到“等一轮慢回合”的量级，而不是被重启次数撑高"
+    )
+
+
+def test_the_recovery_call_ceiling_is_itself_bounded() -> None:
+    ceiling = et.restart_and_load_budget_seconds()
+
+    assert ceiling == (
+        et.RESTART_AND_LOAD_CEILING_SECONDS
+        + et.RESTART_RECONNECT_CEILING_SECONDS
+        + et.RESTART_IDENTITY_CEILING_SECONDS
+    )
+    assert ceiling < et.end_turn_budget(wc_turn=True).total_seconds
 
 
 def test_query_reserve_is_expressed_in_per_query_ceilings() -> None:
@@ -340,76 +352,101 @@ def test_exhausted_budget_returns_unknown_and_forbids_a_resend(
     assert "Turn " not in result
 
 
-def test_hang_recovery_is_not_started_when_the_budget_cannot_pay_for_it(
+def _hang_verdict(monkeypatch: pytest.MonkeyPatch, *, wc_turn: bool, driven: bool):
+    """Run one exhausted pass and return (verdict, game, clock)."""
+
+    class _GS(_FakeGameState):
+        async def drive_world_congress(self) -> str:
+            self.drive_calls += 1
+            if driven:
+                return "WC_DRIVE|submitted|spent:0|1:WC_RES_LUXURY:1:0:1:0:type"
+            return "WC_DRIVE|no_session"
+
+    gs = _GS(wc_turn=wc_turn)
+    clock = _VirtualClock(monkeypatch)
+    return asyncio.run(et.execute_end_turn(gs)), gs, clock
+
+
+def test_an_undriven_congress_is_never_reported_as_a_hang(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    restarts: list[str] = []
+    """The blocker query reports nothing during congress; that is not a wedge.
 
-    async def fake_restart(save_name, conn=None):  # pragma: no cover
-        restarts.append(save_name)
-        return "restarted"
+    Misreading it as a wedge used to kill and reload a perfectly healthy game up
+    to three times — over a missing vote.
+    """
 
-    monkeypatch.setattr(
-        end_turn_flow.game_launcher, "restart_and_load", fake_restart
-    )
-    # _run_end_turn_impl must reach the recovery branch.
+    result, gs, _ = _hang_verdict(monkeypatch, wc_turn=True, driven=False)
+
+    assert result.startswith("CONGRESS_NOT_DRIVEN:")
+    assert not result.startswith("HANG:")
+    assert "CONGRESS_NOT_DRIVEN_IS_NOT_A_HANG" in result
+    assert "禁止重启游戏" in result
+    assert gs.drive_calls > 0
+
+
+def test_a_plain_turn_that_never_advances_is_still_a_hang(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result, _, _ = _hang_verdict(monkeypatch, wc_turn=False, driven=False)
+
+    assert result.startswith("HANG:")
+
+
+def test_a_congress_turn_that_was_driven_can_still_be_a_hang(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Driving removes the *false* hang; a real wedge after submitting is real."""
+
+    result, gs, _ = _hang_verdict(monkeypatch, wc_turn=True, driven=True)
+
+    assert gs.drive_calls > 0
+    assert result.startswith("HANG:")
+
+
+def test_a_hang_result_never_invites_a_resend(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Recovery moved out, so the receipt must say exactly what to do next."""
+
     async def fake_logged(*_args, **_kwargs) -> str:
         return "HANG:57:AutoSave_0057|AI turn processing appears stuck."
 
+    noop = lambda *_: None  # noqa: E731
     monkeypatch.setattr(pipeline, "_logged", fake_logged)
+    monkeypatch.setattr(pipeline, "_turn_context_enabled", lambda _ctx: False)
     monkeypatch.setattr(
         pipeline,
         "_get_logger",
         lambda _ctx: SimpleNamespace(
-            session_id="budget-test",
-            set_agent_model=lambda *_: None,
-            set_turn=lambda *_: None,
+            session_id="t", set_agent_model=noop, set_turn=noop
         ),
     )
     monkeypatch.setattr(
-        pipeline,
-        "_get_spatial",
-        lambda _ctx: SimpleNamespace(set_turn=lambda *_: None),
-    )
-    monkeypatch.setattr(
-        end_turn_flow, "_clock", lambda: 10_000.0
-    )
-    monkeypatch.setattr(
-        end_turn_flow.os.path,
-        "exists",
-        lambda _path: True,
+        pipeline, "_get_spatial", lambda _ctx: SimpleNamespace(set_turn=noop)
     )
 
     gs = _FakeGameState(wc_turn=False)
     gs._game_identity = ("test", 1)
-
     result = asyncio.run(
         end_turn_flow._run_end_turn_impl(
-            _context(gs),
-            deadline=10_000.0 + end_turn_flow.hang_attempt_ceiling_seconds() - 1.0,
-            tactical="t",
-            strategic="s",
-            tooling="o",
-            planning="p",
-            hypothesis="h",
+            _context(gs), tactical="t", strategic="s", tooling="o",
+            planning="p", hypothesis="h",
         )
     )
 
-    assert restarts == [], "a restart must not start when it cannot finish"
-    assert "UNKNOWN:HANG_RECOVERY_UNAFFORDABLE" in result
-    assert "不要再次调用 end_turn" in result
+    assert "HANG_RECOVERY_IS_A_SEPARATE_STEP" in result
+    assert "restart_and_load" in result
+    assert "get_game_overview" in result
+    assert "重复发送 end_turn" in result
 
 
-def test_recovery_budget_is_not_consumed_by_an_unaffordable_retry_loop() -> None:
-    """The refusal is the same at the first attempt and mid-loop."""
+def test_end_turn_flow_no_longer_restarts_the_game() -> None:
+    """Guard the invariant at the source: a reload inside end_turn was the bug."""
 
-    needed = et.hang_attempt_ceiling_seconds()
-    assert needed == (
-        et.HANG_RESTART_CEILING_SECONDS
-        + et.HANG_RECONNECT_CEILING_SECONDS
-        + et.HANG_IDENTITY_CEILING_SECONDS
-        + max(et.HANG_EXTRA_WAITS)
-        + et.HANG_RETRY_POLL_CEILING_SECONDS
-    )
-    # A retried turn polls less than a first pass, so the ceiling is a real bound.
-    assert et.HANG_RETRY_POLL_CEILING_SECONDS < et.poll_sleep_budget_seconds(True)
+    source = (
+        ROOT / "src" / "civ_mcp" / "server" / "tools" / "end_turn_flow.py"
+    ).read_text(encoding="utf-8")
+
+    assert "await game_launcher.restart_and_load(" not in source
+    assert "HANG_RECOVERY_IS_A_SEPARATE_STEP" in source

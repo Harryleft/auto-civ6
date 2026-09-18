@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -146,19 +145,24 @@ _WC_PROBE_SLEEP_SECONDS = (
 # fallback.
 _DIPLOMACY_PROBE_SLEEP_SECONDS = 2 * (2.0 + 10 * 2.0)
 
-# Automatic hang recovery lives in server/tools/end_turn_flow.py; its ceilings
-# are declared here because they are part of one end_turn's budget. One attempt
-# is kill + relaunch + FrontEnd load (restart_and_load documents 60-120 s, so
-# 300 s is the ceiling), a reconnect loop of 30 x 1 s, an identity re-check of
-# 3 x 5 s, the escalating extra wait, and a bounded re-poll of the retried turn.
-MAX_HANG_RETRIES = 3
-HANG_EXTRA_WAITS = (0.0, 15.0, 30.0)
-HANG_RESTART_CEILING_SECONDS = 300.0
-HANG_RECONNECT_CEILING_SECONDS = 30.0
-HANG_IDENTITY_CEILING_SECONDS = 15.0
-# Deliberately shorter than a first-pass congress poll: the retry starts from a
-# freshly loaded autosave, and one call must stay inside its own budget.
-HANG_RETRY_POLL_CEILING_SECONDS = 240.0
+# ---------------------------------------------------------------------------
+# Recovery is a separate call, not part of this one
+# ---------------------------------------------------------------------------
+# A genuinely wedged AI turn needs a reload: the game's own background job stops
+# making progress and Lua cannot wake it, so the only known escape is to relaunch
+# and load an autosave. That repair used to run *inside* end_turn, up to three
+# times. Two things were wrong with that:
+#
+# * it made one call's ceiling cover the wait *plus* three relaunches, so the
+#   deadline had to be ~50 minutes for an operation whose normal case is seconds;
+# * the caller could no longer tell "the turn was slow" from "the turn was wedged
+#   and the game got restarted", because both came back as one result.
+#
+# Recovery is therefore an explicit step now, and this ceiling is what the host
+# deadline has to cover for that step.
+RESTART_AND_LOAD_CEILING_SECONDS = 300.0  # kill + relaunch + FrontEnd load
+RESTART_RECONNECT_CEILING_SECONDS = 60.0  # restart_and_load's reconnect loop
+RESTART_IDENTITY_CEILING_SECONDS = 15.0  # post-load identity re-check
 
 # Per-query ceiling. A query that exceeds the connection timeout raises instead
 # of returning, so no single query can cost more than this.
@@ -170,28 +174,28 @@ QUERY_CEILING_SECONDS = DEFAULT_TIMEOUT
 # against it rather than leaving it unaccounted.
 QUERY_RESERVE_SECONDS = 300.0
 
-# Injectable time seam. The wait loop reads its clock and sleeps through these
-# two functions so a test can drive it with a virtual clock and verify the
-# budget without waiting for real minutes.
+# Injectable time seam: the wait loop sleeps through this function so a test can
+# drive it with a virtual clock and verify the budget without waiting for real
+# minutes. There is no clock function any more — bounding a retried poll was the
+# only thing that needed one, and recovery is no longer retried in this call.
 async def _sleep(seconds: float) -> None:
     await asyncio.sleep(seconds)
 
 
-def _now() -> float:
-    return time.monotonic()
-
-
 @dataclass(frozen=True)
 class EndTurnBudget:
-    """Named parts of the worst-case wall time one end_turn call may consume."""
+    """Named parts of the worst-case wall time one end_turn call may consume.
+
+    Recovery is deliberately absent: it is a separate call now, so folding it in
+    here would once again size the deadline for restarts rather than for a turn.
+    """
 
     poll_seconds: float
     query_seconds: float
-    recovery_seconds: float
 
     @property
     def total_seconds(self) -> float:
-        return self.poll_seconds + self.query_seconds + self.recovery_seconds
+        return self.poll_seconds + self.query_seconds
 
 
 def poll_sleep_budget_seconds(wc_turn: bool) -> float:
@@ -210,22 +214,30 @@ def poll_sleep_budget_seconds(wc_turn: bool) -> float:
     )
 
 
-def hang_attempt_ceiling_seconds() -> float:
-    """Return the ceiling for one automatic hang-recovery attempt."""
+def restart_and_load_budget_seconds() -> float:
+    """Return the ceiling for the explicit recovery call.
+
+    ``restart_and_load`` is one kill/relaunch/load, not a retry loop: recovery
+    became a deliberate step, so there is no longer a per-attempt × retries
+    product to account for.
+    """
 
     return (
-        HANG_RESTART_CEILING_SECONDS
-        + HANG_RECONNECT_CEILING_SECONDS
-        + HANG_IDENTITY_CEILING_SECONDS
-        + max(HANG_EXTRA_WAITS)
-        + HANG_RETRY_POLL_CEILING_SECONDS
+        RESTART_AND_LOAD_CEILING_SECONDS
+        + RESTART_RECONNECT_CEILING_SECONDS
+        + RESTART_IDENTITY_CEILING_SECONDS
     )
 
 
-def hang_recovery_budget_seconds() -> float:
-    """Return the ceiling for every automatic hang-recovery attempt."""
+def longest_mcp_call_seconds() -> float:
+    """Return the ceiling the host deadline must cover.
 
-    return hang_attempt_ceiling_seconds() * MAX_HANG_RETRIES
+    The host timeout applies per call, so it must exceed the longest single
+    call — not the sum of end_turn plus recovery, which is what used to force a
+    ~50-minute deadline for an operation whose normal case is seconds.
+    """
+
+    return max(end_turn_budget(wc_turn=True).total_seconds, restart_and_load_budget_seconds())
 
 
 def end_turn_budget(*, wc_turn: bool = True) -> EndTurnBudget:
@@ -239,7 +251,6 @@ def end_turn_budget(*, wc_turn: bool = True) -> EndTurnBudget:
     return EndTurnBudget(
         poll_seconds=poll_sleep_budget_seconds(wc_turn),
         query_seconds=QUERY_RESERVE_SECONDS,
-        recovery_seconds=hang_recovery_budget_seconds(),
     )
 
 
@@ -852,16 +863,8 @@ def _check_save_scumming(gs: GameState) -> tuple[list[lq.TurnEvent], bool]:
     return events, False
 
 
-async def execute_end_turn(
-    gs: GameState, *, poll_deadline: float | None = None
-) -> str:
-    """End the turn with snapshot-diff event detection.
-
-    ``poll_deadline`` is an absolute deadline on the same clock as
-    ``civ_mcp.end_turn._now``. Hang recovery passes one so a retried turn cannot
-    consume another full poll budget; ``None`` keeps the original behavior of
-    polling the whole cadence before reporting a hang.
-    """
+async def execute_end_turn(gs: GameState) -> str:
+    """End the turn with snapshot-diff event detection."""
     # 0a. Run aborted due to save scumming — refuse to advance
     if gs._run_aborted:
         return (
@@ -1569,19 +1572,13 @@ async def execute_end_turn(
     # Phase 2: Slow polling — AI can take 1-5 min on large maps, especially
     # during wars with many units; congress turns get a longer budget.
     # GameCore-only queries.
+    wc_driven = False
     if not advanced:
         diplomacy_probed = False
         wc_drives = 0
         wc_dismissals = 0
         cumulative_wait = 4.0  # Phase 1 already waited ~4s
         for delay in _end_turn_poll_delays(wc_turn):
-            if poll_deadline is not None and _now() >= poll_deadline:
-                log.warning(
-                    "end_turn poll budget exhausted at t+%.0fs; reporting a hang "
-                    "instead of polling the rest of the cadence",
-                    cumulative_wait,
-                )
-                break
             await _sleep(delay)
             cumulative_wait += delay
             turn_after = await _get_turn_number(gs)
@@ -1627,6 +1624,7 @@ async def execute_end_turn(
             ):
                 wc_drives += 1
                 if await _drive_congress(gs):
+                    wc_driven = True
                     log.info(
                         "World Congress drive %d submitted (t+%.0fs)",
                         wc_drives,
@@ -1758,9 +1756,32 @@ async def execute_end_turn(
             if gameover is not None:
                 return _game_over_message(gs, gameover)
             return f"End turn blocked (turn {turn_after or turn_before}): {'; '.join(details)}"
-        # No blockers, no diplomacy, no game over — true AI turn hang.
-        # Return structured HANG: prefix so server.py can auto-recover.
+        # No blockers, no diplomacy, no game over. Before calling this a wedged
+        # AI turn, rule out the congress: the game parks on the congress screen
+        # waiting for a vote only we can cast, and the blocker query reports
+        # *nothing* while that segment runs. An undriven congress therefore used
+        # to fall straight through to HANG, which killed and reloaded a
+        # perfectly healthy game up to three times — over a missing vote. That
+        # is never a hang.
         turn_num = turn_after or turn_before
+        if wc_turn and not wc_driven:
+            log.error(
+                "Congress turn T%s never driven after %d attempt(s); not a hang",
+                turn_num,
+                wc_drives,
+            )
+            return (
+                f"CONGRESS_NOT_DRIVEN:{turn_num}|"
+                "议会已开会，但本次未能由程序投票并提交（尝试 "
+                f"{wc_drives} 次）。这不是 AI 卡死，禁止重启游戏。\n"
+                "下一步：调用 get_world_congress 查看当前决议，用 queue_wc_votes "
+                "按决议类型名（type）注册票型，然后重新调用 end_turn；"
+                "驱动器会在开会时套用该票型并提交。\n"
+                "CONGRESS_NOT_DRIVEN_IS_NOT_A_HANG"
+            )
+        # No blockers, no diplomacy, no game over — true AI turn hang.
+        # Return structured HANG: prefix so the caller can start the explicit
+        # recovery step. Recovery is deliberately NOT attempted inside this call.
         if turn_num is not None:
             from .autosave import get_autosave_for_turn
 

@@ -145,7 +145,7 @@ def test_restart_and_load_tool_records_the_epoch(monkeypatch):
 
 @pytest.mark.parametrize(
     "path",
-    ["src/civ_mcp/server/tools/system.py", "src/civ_mcp/server/tools/end_turn_flow.py"],
+    ["src/civ_mcp/server/tools/system.py"],
 )
 def test_every_save_loading_path_marks_the_epoch(path):
     """Guard the invariant at the source: no restart_and_load without a marker."""
@@ -161,4 +161,25 @@ def test_every_save_loading_path_marks_the_epoch(path):
     assert markers >= restarts, (
         f"{path}: {restarts} 处 restart_and_load 但只有 {markers} 处 epoch 标记；"
         "加载存档必须同时记录 epoch，否则被放弃分支上的授权仍可被消费"
+    )
+
+
+def test_end_turn_never_reloads_the_game():
+    """A reload inside end_turn is what forced a ~50-minute call deadline.
+
+    Recovery is an explicit separate step now. If someone puts a relaunch back
+    into the end-turn flow, this fails so the deadline and the accounting are
+    revisited deliberately rather than by accident.
+    """
+
+    import pathlib
+
+    source = (
+        pathlib.Path(__file__).resolve().parents[1]
+        / "src" / "civ_mcp" / "server" / "tools" / "end_turn_flow.py"
+    ).read_text(encoding="utf-8")
+
+    assert "await game_launcher.restart_and_load(" not in source, (
+        "end_turn 不得重启游戏：恢复必须是独立一步，否则单次调用期限会再次被"
+        "重启次数撑高，且调用方无法区分“慢”与“卡死并已重启”"
     )

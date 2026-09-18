@@ -312,7 +312,7 @@ class _FakeGame:
         self.calls.append("get_diary_snapshot")
         return SimpleNamespace(players=[], cities=[], agent=None)
 
-    async def end_turn(self, *, poll_deadline=None) -> str:  # pragma: no cover
+    async def end_turn(self) -> str:  # pragma: no cover
         # Referenced (never awaited) because pipeline._logged is stubbed here.
         return "stub"
 
@@ -976,7 +976,7 @@ def test_confirmed_advance_returns_the_next_turn_brief(
     _stub_end_turn_io(monkeypatch, "Turn 14 -> 15")
     gs = _FakeGame(turns=[15, 15])
 
-    result = asyncio.run(end_turn_flow._run_end_turn_impl(_end_turn_ctx(gs), deadline=1e12))
+    result = asyncio.run(end_turn_flow._run_end_turn_impl(_end_turn_ctx(gs)))
 
     assert "回合局面简报" in result
     assert "turn=15" in result
@@ -993,7 +993,7 @@ def test_advance_with_a_failed_brief_forbids_a_resend(
     monkeypatch.setattr(pipeline, "build_and_record_turn_context", broken)
 
     result = asyncio.run(
-        end_turn_flow._run_end_turn_impl(_end_turn_ctx(_FakeGame()), deadline=1e12)
+        end_turn_flow._run_end_turn_impl(_end_turn_ctx(_FakeGame()))
     )
 
     assert "推进已确认，简报待重取" in result
@@ -1008,7 +1008,7 @@ def test_a_blocked_turn_does_not_fabricate_a_next_turn(
     _stub_end_turn_io(monkeypatch, "End turn blocked (turn 14): Blocker: X")
 
     result = asyncio.run(
-        end_turn_flow._run_end_turn_impl(_end_turn_ctx(_FakeGame()), deadline=1e12)
+        end_turn_flow._run_end_turn_impl(_end_turn_ctx(_FakeGame()))
     )
 
     assert "回合局面简报" not in result
@@ -1023,7 +1023,7 @@ def test_a_finished_game_does_not_get_a_next_turn_brief(
     )
 
     result = asyncio.run(
-        end_turn_flow._run_end_turn_impl(_end_turn_ctx(_FakeGame()), deadline=1e12)
+        end_turn_flow._run_end_turn_impl(_end_turn_ctx(_FakeGame()))
     )
 
     assert "回合局面简报" not in result
@@ -1038,11 +1038,9 @@ def test_unknown_outcome_does_not_get_a_next_turn_brief(
         return "restarted"
 
     monkeypatch.setattr(end_turn_flow.game_launcher, "restart_and_load", noop_restart)
-    monkeypatch.setattr(end_turn_flow, "_clock", lambda: 0.0)
-
     result = asyncio.run(
         end_turn_flow._run_end_turn_impl(
-            _end_turn_ctx(_FakeGame()), deadline=1e12
+            _end_turn_ctx(_FakeGame())
         )
     )
 
