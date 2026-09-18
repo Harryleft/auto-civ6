@@ -19,22 +19,11 @@ from civ_mcp.diary import (
     diary_path as _diary_path,
     merge_agent_reflections as _merge_agent_reflections,
 )
-from civ_mcp.end_turn import (
-    HANG_EXTRA_WAITS,
-    MAX_HANG_RETRIES,
-    _now,
-    end_turn_budget,
-    hang_attempt_ceiling_seconds,
-)
+from civ_mcp.end_turn import end_turn_budget
 from civ_mcp.server import pipeline
 from civ_mcp.telemetry import EVENT_CITY_ROW, EVENT_DIARY_ROW
 
 log = logging.getLogger(__name__)
-
-# Sourced from civ_mcp.end_turn so the retry count, the escalating waits, and
-# the declared end_turn budget can never drift apart.
-_MAX_HANG_RETRIES = MAX_HANG_RETRIES
-_HANG_EXTRA_WAIT = list(HANG_EXTRA_WAITS)
 
 
 def _budget_seconds() -> float:
@@ -45,12 +34,6 @@ def _budget_seconds() -> float:
     """
 
     return end_turn_budget(wc_turn=True).total_seconds
-
-
-def _clock() -> float:
-    """Return the monotonic clock used for deadline arithmetic."""
-
-    return _now()
 
 
 # Returned when the call runs out of its own time budget. The turn may still
@@ -64,18 +47,6 @@ _BUDGET_EXHAUSTED_RECEIPT = (
     "回合号比较。回合号已推进说明本回合已经完成；回合号未变才需要检查阻塞项"
     "（get_pending_diplomacy / get_notifications）并另行决定。\n"
     "UNKNOWN:END_TURN_BUDGET_EXHAUSTED"
-)
-
-# Returned when the remaining budget cannot pay for another hang-recovery
-# attempt. Distinct from the message above so a reader can tell "we ran out of
-# time waiting" from "we chose not to start a restart we could not finish".
-_HANG_RECOVERY_UNAFFORDABLE_RECEIPT = (
-    "结果未知 — 检测到 AI 回合疑似挂起，但本次调用剩余预算（{remaining:.0f} 秒）"
-    "不足以完成一次自动恢复（每次约需 {needed:.0f} 秒），因此没有重启游戏。"
-    "游戏可能仍在处理，也可能已经结束回合。\n"
-    "下一步只读核验：调用 get_game_overview 确认当前回合号；不要再次调用 end_turn，"
-    "也不要重复可能已发出的改动。如确认回合确实未推进，再在独立调用中处理挂起。\n"
-    "UNKNOWN:HANG_RECOVERY_UNAFFORDABLE"
 )
 
 
@@ -98,12 +69,10 @@ async def run_end_turn(
     """
 
     budget_seconds = _budget_seconds()
-    deadline = _clock() + budget_seconds
     try:
         async with asyncio.timeout(budget_seconds):
             return await _run_end_turn_impl(
                 ctx,
-                deadline=deadline,
                 tactical=tactical,
                 strategic=strategic,
                 tooling=tooling,
@@ -125,14 +94,13 @@ async def run_end_turn(
 async def _run_end_turn_impl(
     ctx: Context,
     *,
-    deadline: float,
     tactical: str = "",
     strategic: str = "",
     tooling: str = "",
     planning: str = "",
     hypothesis: str = "",
 ) -> str:
-    """Run the end-turn flow. ``deadline`` bounds polling and recovery."""
+    """Run the end-turn flow."""
     gs = pipeline._get_game(ctx)
 
     def _render_result(raw_result: str) -> str:
@@ -287,210 +255,36 @@ async def _run_end_turn_impl(
     )
 
     # ---------------------------------------------------------------
-    # Auto-recover from AI turn hangs (transparent to agent).
-    # end_turn returns "HANG:{turn}:{save}|..." when AI processing is
-    # stuck with no blockers found.
-    # Recovery: restart_and_load the MCP autosave, reconnect, retry
-    # up to _MAX_HANG_RETRIES times with escalating waits.
-    # A restart is never *started* unless the remaining budget can pay for
-    # it: beginning a kill/relaunch we cannot finish is worse than reporting
-    # the hang, because the host would then have to kill the call mid-reload.
+    # A wedged AI turn is *reported*, not repaired here.
+    #
+    # Recovery (kill, relaunch, reload an autosave) used to run inside this call
+    # up to three times. That made one call's ceiling cover the wait plus three
+    # relaunches — which is why the deadline had to be ~50 minutes for an
+    # operation whose normal case is seconds — and it also hid from the caller
+    # whether the turn had merely been slow or had been wedged and restarted.
+    # Recovery is now a deliberate separate step, so the deadline only has to
+    # cover a turn.
     # ---------------------------------------------------------------
     if result.startswith("HANG:") and not gs._hang_retry_active:
-        parts = result.split("|", 1)
-        hang_info = parts[
-            0
-        ]  # "HANG:57:AutoSave_0057" (Linux) or "HANG:57:0_MCP_0057" (Windows)
+        hang_info = result.split("|", 1)[0]
         _, hang_turn, hang_save = hang_info.split(":")
-        hang_turn_int = int(hang_turn)
+        log.error(
+            "AI turn hang reported at T%s (save %s); recovery is a separate step",
+            hang_turn,
+            hang_save,
+        )
+        return _render_result(
+            f"HANG:{hang_turn}:{hang_save}|"
+            "结果未知 — 本回合疑似卡在 AI 处理阶段，本次调用没有重启游戏。\n"
+            f"待核验存档: {hang_save}（升级/读取前先用 get_game_overview 确认当前回合号）。\n"
+            "下一步（显式恢复，一次一步）：\n"
+            f"1. restart_and_load('{hang_save}') 走受控重启并读回该存档；\n"
+            "2. 读回后先用 get_game_overview 核对回合号与对局身份；\n"
+            "3. 确认无误再重新执行本回合。\n"
+            "禁止在未核对结果前重复发送 end_turn 或重复已发出的改动。\n"
+            "HANG_RECOVERY_IS_A_SEPARATE_STEP"
+        )
 
-        # Check save file exists before attempting recovery.
-        # MCP saves (0_MCP_*) are in SINGLE_SAVE_DIR; game autosaves
-        # (AutoSave_*) are in SAVE_DIR (auto/ subdir).
-        save_path = os.path.join(game_launcher.SINGLE_SAVE_DIR, f"{hang_save}.Civ6Save")
-        if not os.path.exists(save_path):
-            save_path = os.path.join(game_launcher.SAVE_DIR, f"{hang_save}.Civ6Save")
-        if not os.path.exists(save_path):
-            log.error(
-                "HANG RECOVERY: Save file %s not found, cannot auto-recover",
-                save_path,
-            )
-            # Fall through — return the hang message to agent
-        elif deadline - _clock() < hang_attempt_ceiling_seconds():
-            remaining = deadline - _clock()
-            log.error(
-                "HANG RECOVERY: not started at T%s — %.0fs left of the end_turn "
-                "budget cannot pay for an attempt (needs %.0fs)",
-                hang_turn,
-                remaining,
-                hang_attempt_ceiling_seconds(),
-            )
-            return _render_result(
-                _HANG_RECOVERY_UNAFFORDABLE_RECEIPT.format(
-                    remaining=max(remaining, 0.0),
-                    needed=hang_attempt_ceiling_seconds(),
-                )
-            )
-        else:
-            identity_before = gs._game_identity
-            gs._hang_retry_active = True
-            try:
-                for attempt in range(1, _MAX_HANG_RETRIES + 1):
-                    remaining = deadline - _clock()
-                    if remaining < hang_attempt_ceiling_seconds():
-                        log.error(
-                            "HANG RECOVERY: stopping before attempt %d/%d — "
-                            "%.0fs left cannot pay for an attempt (needs %.0fs)",
-                            attempt,
-                            _MAX_HANG_RETRIES,
-                            remaining,
-                            hang_attempt_ceiling_seconds(),
-                        )
-                        return _render_result(
-                            _HANG_RECOVERY_UNAFFORDABLE_RECEIPT.format(
-                                remaining=max(remaining, 0.0),
-                                needed=hang_attempt_ceiling_seconds(),
-                            )
-                        )
-                    extra_wait = _HANG_EXTRA_WAIT[
-                        min(attempt - 1, len(_HANG_EXTRA_WAIT) - 1)
-                    ]
-                    log.warning(
-                        "HANG RECOVERY: attempt %d/%d for T%s "
-                        "(extra wait: %ds, save: %s)",
-                        attempt,
-                        _MAX_HANG_RETRIES,
-                        hang_turn,
-                        extra_wait,
-                        hang_save,
-                    )
-
-                    # Step 1: Kill + relaunch + FrontEnd API load
-                    restart_result = await game_launcher.restart_and_load(
-                        hang_save, conn=gs.conn
-                    )
-                    log.info("HANG RECOVERY: restart_and_load: %s", restart_result)
-                    # The save loads an earlier world; the journal still holds
-                    # the abandoned branch's authorizations until marked.
-                    await pipeline._record_game_reload_epoch(
-                        ctx,
-                        reason="hang_recovery_restart_and_load",
-                        turn=hang_turn_int,
-                        details={"save": hang_save, "attempt": attempt},
-                    )
-
-                    # Step 2: Reconnect
-                    conn = gs.conn
-                    reconnected = False
-                    for rc_attempt in range(30):
-                        try:
-                            await conn.reconnect()
-                            if conn.gamecore_index is not None:
-                                reconnected = True
-                                break
-                        except ConnectionError:
-                            pass
-                        await asyncio.sleep(1)
-
-                    if not reconnected:
-                        log.error(
-                            "HANG RECOVERY: could not reconnect (attempt %d)",
-                            attempt,
-                        )
-                        continue  # try the whole cycle again
-
-                    # Step 2b: Verify correct game loaded (with retries).
-                    # The game may still be on the leader screen after
-                    # restart — Lua states exist but game APIs aren't
-                    # fully initialized. Retry the check rather than
-                    # restarting the entire recovery cycle.
-                    if identity_before is not None:
-                        identity_ok = False
-                        for id_check in range(3):
-                            try:
-                                actual = await gs.get_game_identity()
-                                if actual == identity_before:
-                                    identity_ok = True
-                                    break
-                                log.warning(
-                                    "HANG RECOVERY: wrong identity %s vs %s "
-                                    "(check %d/3)",
-                                    actual,
-                                    identity_before,
-                                    id_check + 1,
-                                )
-                            except Exception:
-                                log.debug(
-                                    "HANG RECOVERY: identity check failed "
-                                    "(check %d/3), waiting...",
-                                    id_check + 1,
-                                )
-                            await asyncio.sleep(5)
-                        if not identity_ok:
-                            log.warning(
-                                "HANG RECOVERY: identity check inconclusive "
-                                "— proceeding anyway (attempt %d)",
-                                attempt,
-                            )
-
-                    # Step 3: Reset state flags
-                    gs._pending_end_turn = False
-                    gs._pending_end_turn_from = None
-                    gs._end_turn_blocked = False
-
-                    # Step 4: Extra wait to give AI more processing time
-                    if extra_wait > 0:
-                        log.info(
-                            "HANG RECOVERY: waiting %ds before retry...",
-                            extra_wait,
-                        )
-                        await asyncio.sleep(extra_wait)
-
-                    # Step 5: Retry end_turn. Bound the retry's own poll so a
-                    # second hung attempt cannot consume the whole budget.
-                    log.info(
-                        "HANG RECOVERY: retrying end_turn for T%s...",
-                        hang_turn,
-                    )
-                    result = await gs.end_turn(
-                        poll_deadline=min(
-                            deadline, _clock() + hang_attempt_ceiling_seconds()
-                        )
-                    )
-                    log.info("HANG RECOVERY: retry result: %s", result[:200])
-
-                    if not result.startswith("HANG:"):
-                        log.info(
-                            "HANG RECOVERY: T%s resolved on attempt %d",
-                            hang_turn,
-                            attempt,
-                        )
-                        break  # success — fall through to normal processing
-                else:
-                    # All retries exhausted
-                    earlier = max(1, hang_turn_int - 3)
-                    log.error(
-                        "HANG RECOVERY: all %d attempts failed for T%s",
-                        _MAX_HANG_RETRIES,
-                        hang_turn,
-                    )
-                    return _render_result(
-                        f"AI turn hung at T{hang_turn} after "
-                        f"{_MAX_HANG_RETRIES} automatic restart attempts "
-                        f"with escalating waits. The hang may be "
-                        f"probabilistic — another attempt could work. "
-                        f"Try restart_and_load('{hang_save.replace(hang_turn, str(earlier))}') "
-                        f"to skip back a few turns."
-                    )
-            except Exception:
-                log.error("HANG RECOVERY: failed", exc_info=True)
-                return _render_result(
-                    f"HANG RECOVERY FAILED at T{hang_turn}: "
-                    f"restart_and_load threw an exception. "
-                    f"Try restart_and_load('{hang_save}') manually."
-                )
-            finally:
-                gs._hang_retry_active = False
 
     # Clear stale camera events on successful turn advance
     turn_advanced = (

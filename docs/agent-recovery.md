@@ -33,6 +33,19 @@ restart_and_load("0_MCP_NNNN")
 get_game_overview
 ```
 
+**恢复是独立一步，`end_turn` 自己绝不重启游戏。** 挂起时 `end_turn` 返回
+`HANG:<回合>:<存档>` 加一条明确的下一步说明（`HANG_RECOVERY_IS_A_SEPARATE_STEP`），
+并且不会诱导重发。之所以这样拆：以前 `end_turn` 会在自己内部最多重启三次，
+结果一次调用的期限必须覆盖「等待 + 三次重启」（约 50 分钟），而且调用方再也分不清
+这一回合只是慢，还是卡死过并被重启过。现在单次调用只需要覆盖一轮回合。
+
+**议会回合永远不会被判成挂起。** 议会界面挂着时回合号不动，而阻塞项查询在议会期间
+返回空——过去的判定逻辑因此把「没人投票」误判成「AI 卡死」，进而杀掉并重启一个完全
+健康的游戏，最多三次。现在这种情况返回
+`CONGRESS_NOT_DRIVEN`（带 `CONGRESS_NOT_DRIVEN_IS_NOT_A_HANG`），
+明确禁止重启，并给出下一步：`get_world_congress` → 用决议类型名注册 `queue_wc_votes`
+→ 重新 `end_turn`。
+
 `restart_and_load` 会结束进程、重新启动，并借助共享 FireTuner 连接在主菜单调用 FrontEnd API 加载存档，通常约 90 秒。不要在 FireTuner 仍有旧客户端时并行启动恢复流程。
 
 默认拒绝 OCR/GUI 菜单回退：它可能误点到其他窗口，也不能作为无人值守验证的可靠依据。仅在明确接受该风险时设置 `CIV_MCP_ENABLE_OCR_RECOVERY=1`；若 FrontEnd API 不可用且未设置该变量，恢复会返回明确错误而非尝试视觉操作。

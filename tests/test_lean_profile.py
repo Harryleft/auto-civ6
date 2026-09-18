@@ -346,7 +346,7 @@ def _stub_game_state() -> SimpleNamespace:
     """Minimal game object: ``_run_end_turn_impl`` reads ``gs.end_turn`` before
     the patched pipeline runs, even though it never awaits it here."""
 
-    async def end_turn(*, poll_deadline=None) -> str:
+    async def end_turn(self) -> str:
         return "stub"
 
     return SimpleNamespace(end_turn=end_turn)
@@ -393,7 +393,7 @@ def test_reflection_requirement_follows_the_profile(
     )
     _stub_pipeline_io(monkeypatch, profile)
 
-    result = asyncio.run(end_turn_flow._run_end_turn_impl(ctx, deadline=1e12))
+    result = asyncio.run(end_turn_flow._run_end_turn_impl(ctx))
 
     if expect_refusal:
         assert "Empty reflections" in result

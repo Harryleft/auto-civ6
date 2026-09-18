@@ -31,16 +31,19 @@
           # and an explicit lean+enforce/observe contradiction still fails
           # loudly in the child instead of being silently overridden here.
           CIV_MCP_BELIEF_MODE: !!js "process.env.CIV_MCP_BELIEF_MODE ?? ''"
-        # Deity AI turns can take 5-10 minutes, and a World Congress turn used to
-        # add another ~10 on top of that because the wait loop sat passively on a
-        # congress screen nobody was operating. The driver now votes and submits
-        # the session itself, so the congress extra was cut from +660s to +180s:
-        # poll 830s + query reserve 300s + hang-recovery reserve 1845s = 2975s.
-        # tests/test_end_turn_budget.py fails if this number ever drops to or
-        # below that total. The flow also enforces the ceiling from the inside
-        # and returns a machine-readable "outcome unknown" receipt instead of
-        # letting the host kill the call mid-advance.
-        toolCallTimeoutMs: 3300000
+        # Deity AI turns can take 5-10 minutes, which is the only thing this has
+        # to cover: `civ_mcp.end_turn` derives poll 830s + query reserve 300s =
+        # 1130s, and the timeout applies per call, so it must exceed the longest
+        # single call — not the sum of a turn plus recovery. Recovery left this
+        # call (see RESTART_AND_LOAD_CEILING_SECONDS): keeping three relaunches
+        # inside it is what used to force a ~50-minute deadline for an operation
+        # whose normal case is seconds, and it hid whether a turn had merely been
+        # slow or had been wedged and restarted.
+        # tests/test_end_turn_budget.py fails if this ever drops to or below the
+        # longest call's ceiling. The flow also enforces that ceiling from the
+        # inside and returns a machine-readable "outcome unknown" receipt instead
+        # of letting the host kill the call mid-advance.
+        toolCallTimeoutMs: 1200000
         failOnStartupError: true
         # Avoid an automatic child restart chain around a single-client
         # FireTuner connection. Restart the DSH host explicitly if civ-mcp exits.
