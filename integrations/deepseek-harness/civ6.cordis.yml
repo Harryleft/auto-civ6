@@ -19,8 +19,15 @@
           # exports CIV_MCP_DSH_AUTO_RESUME=1.
           CIV_MCP_DSH_AUTO_RESUME: !!js "process.env.CIV_MCP_DSH_AUTO_RESUME ?? '0'"
           CIV_MCP_DISABLE_LUA: '1'
-        # Deity AI turns can take 5-10 minutes. The DSH default is 60 seconds.
-        toolCallTimeoutMs: 900000
+        # Deity AI turns can take 5-10 minutes, and a World Congress turn can
+        # legitimately run ~20. This ceiling must exceed the *whole* worst-case
+        # end_turn budget, not just the wait loop: civ_mcp.end_turn derives
+        # poll 1276s + query reserve 300s + hang-recovery reserve 1845s
+        # = 3421s, and tests/test_end_turn_budget.py fails if this number ever
+        # drops to or below that total. The flow also enforces the ceiling from
+        # the inside and returns a machine-readable "outcome unknown" receipt
+        # instead of letting the host kill the call mid-advance.
+        toolCallTimeoutMs: 3600000
         failOnStartupError: true
         # Avoid an automatic child restart chain around a single-client
         # FireTuner connection. Restart the DSH host explicitly if civ-mcp exits.

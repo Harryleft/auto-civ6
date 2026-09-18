@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import civ_mcp.narrate as nr
 from civ_mcp import lua as lq
-from civ_mcp.connection import LuaError
+from civ_mcp.connection import DEFAULT_TIMEOUT, LuaError
 from civ_mcp.game_lifecycle import cleanup_old_autosaves, save_game
 
 if TYPE_CHECKING:
@@ -76,6 +78,132 @@ def _end_turn_poll_delays(wc_turn: bool) -> tuple[float, ...]:
     if wc_turn:
         return _END_TURN_POLL_DELAYS + _WC_EXTRA_POLL_DELAYS
     return _END_TURN_POLL_DELAYS
+
+
+# ---------------------------------------------------------------------------
+# One end_turn call's time budget
+# ---------------------------------------------------------------------------
+# A single end_turn MCP call blocks inside the host's tool-call deadline while
+# the AI civilizations play. That deadline used to be a hand-picked 900 s while
+# the wait-loop constants above already summed to 1210 s on congress turns, so
+# a congress turn could outlive its host deadline and be killed mid-advance —
+# an outcome the agent cannot distinguish from "the turn never advanced".
+#
+# The budget below is *derived* from the constants the wait loop actually
+# consumes, so editing a poll cadence re-checks the host-deadline invariant in
+# tests/test_end_turn_budget.py instead of silently invalidating it. The host
+# deadline is asserted against `end_turn_budget().total_seconds`, and the flow
+# in server/tools/end_turn_flow.py enforces that ceiling from the inside.
+
+# Phase 1 quick check: 8 polls at 0.5 s.
+_PHASE1_SLEEP_SECONDS = 8 * 0.5
+# Phase 3: popup-dismiss re-poll (up to 5 x 2 s) + final verification (2 s).
+_POPUP_REPOLL_SLEEP_SECONDS = 5 * 2.0
+_FINAL_VERIFY_SLEEP_SECONDS = 2.0
+_PHASE3_SLEEP_SECONDS = _POPUP_REPOLL_SLEEP_SECONDS + _FINAL_VERIFY_SLEEP_SECONDS
+# Extra sleep the World Congress drive/probe performs, bounded per turn.
+_WC_PROBE_SLEEP_SECONDS = _WC_MAX_DRIVE_PROBES * 2.0
+# `_check_mid_turn_diplomacy` may sleep once to let a just-opened session
+# populate its dialogue, then up to 10 x 2 s waiting for a war declaration to
+# clear. It runs at most twice per pass: the Phase 2 early probe and the Phase 3
+# fallback.
+_DIPLOMACY_PROBE_SLEEP_SECONDS = 2 * (2.0 + 10 * 2.0)
+
+# Automatic hang recovery lives in server/tools/end_turn_flow.py; its ceilings
+# are declared here because they are part of one end_turn's budget. One attempt
+# is kill + relaunch + FrontEnd load (restart_and_load documents 60-120 s, so
+# 300 s is the ceiling), a reconnect loop of 30 x 1 s, an identity re-check of
+# 3 x 5 s, the escalating extra wait, and a bounded re-poll of the retried turn.
+MAX_HANG_RETRIES = 3
+HANG_EXTRA_WAITS = (0.0, 15.0, 30.0)
+HANG_RESTART_CEILING_SECONDS = 300.0
+HANG_RECONNECT_CEILING_SECONDS = 30.0
+HANG_IDENTITY_CEILING_SECONDS = 15.0
+# Deliberately shorter than a first-pass congress poll: the retry starts from a
+# freshly loaded autosave, and one call must stay inside its own budget.
+HANG_RETRY_POLL_CEILING_SECONDS = 240.0
+
+# Per-query ceiling. A query that exceeds the connection timeout raises instead
+# of returning, so no single query can cost more than this.
+QUERY_CEILING_SECONDS = DEFAULT_TIMEOUT
+# Allowance for the queries one end_turn performs outside the wait loop
+# (overview, identity, diary snapshot, pre/post snapshot diff, blocker detail,
+# game-over probes). Declared rather than derived: it is a chosen ceiling at
+# QUERY_CEILING_SECONDS, and the invariant test checks the host deadline
+# against it rather than leaving it unaccounted.
+QUERY_RESERVE_SECONDS = 300.0
+
+# Injectable time seam. The wait loop reads its clock and sleeps through these
+# two functions so a test can drive it with a virtual clock and verify the
+# budget without waiting for real minutes.
+async def _sleep(seconds: float) -> None:
+    await asyncio.sleep(seconds)
+
+
+def _now() -> float:
+    return time.monotonic()
+
+
+@dataclass(frozen=True)
+class EndTurnBudget:
+    """Named parts of the worst-case wall time one end_turn call may consume."""
+
+    poll_seconds: float
+    query_seconds: float
+    recovery_seconds: float
+
+    @property
+    def total_seconds(self) -> float:
+        return self.poll_seconds + self.query_seconds + self.recovery_seconds
+
+
+def poll_sleep_budget_seconds(wc_turn: bool) -> float:
+    """Return the sleep seconds one full wait pass can consume.
+
+    Derived from the same constants the loop iterates, so a cadence change is
+    reflected here without a second hand-maintained total.
+    """
+
+    return (
+        _PHASE1_SLEEP_SECONDS
+        + sum(_end_turn_poll_delays(wc_turn))
+        + (_WC_PROBE_SLEEP_SECONDS if wc_turn else 0.0)
+        + _DIPLOMACY_PROBE_SLEEP_SECONDS
+        + _PHASE3_SLEEP_SECONDS
+    )
+
+
+def hang_attempt_ceiling_seconds() -> float:
+    """Return the ceiling for one automatic hang-recovery attempt."""
+
+    return (
+        HANG_RESTART_CEILING_SECONDS
+        + HANG_RECONNECT_CEILING_SECONDS
+        + HANG_IDENTITY_CEILING_SECONDS
+        + max(HANG_EXTRA_WAITS)
+        + HANG_RETRY_POLL_CEILING_SECONDS
+    )
+
+
+def hang_recovery_budget_seconds() -> float:
+    """Return the ceiling for every automatic hang-recovery attempt."""
+
+    return hang_attempt_ceiling_seconds() * MAX_HANG_RETRIES
+
+
+def end_turn_budget(*, wc_turn: bool = True) -> EndTurnBudget:
+    """Return the worst-case budget for one end_turn call.
+
+    ``wc_turn=True`` is the conservative default: the caller cannot know in
+    advance whether the turn will open a World Congress, and a deadline that
+    only covers plain turns is exactly the bug this model fixes.
+    """
+
+    return EndTurnBudget(
+        poll_seconds=poll_sleep_budget_seconds(wc_turn),
+        query_seconds=QUERY_RESERVE_SECONDS,
+        recovery_seconds=hang_recovery_budget_seconds(),
+    )
 
 
 def _barbarian_attack_opportunities(
@@ -188,7 +316,7 @@ async def _check_mid_turn_diplomacy(
         # DiplomacyActionView text can take 1-2s to populate after session
         # opens during AI processing. If text is empty, retry once.
         if any(not s.dialogue_text for s in mid_sessions):
-            await asyncio.sleep(2.0)
+            await _sleep(2.0)
             mid_sessions = await gs.get_diplomacy_sessions()
 
         # Auto-dismiss war declarations — these are informational only
@@ -212,7 +340,7 @@ async def _check_mid_turn_diplomacy(
                 war_msg = ", ".join(war_names)
                 advanced = False
                 for _ in range(10):
-                    await asyncio.sleep(2.0)
+                    await _sleep(2.0)
                     turn_after = await _get_turn_number(gs)
                     if (
                         turn_after is not None
@@ -651,8 +779,16 @@ def _check_save_scumming(gs: GameState) -> tuple[list[lq.TurnEvent], bool]:
     return events, False
 
 
-async def execute_end_turn(gs: GameState) -> str:
-    """End the turn with snapshot-diff event detection."""
+async def execute_end_turn(
+    gs: GameState, *, poll_deadline: float | None = None
+) -> str:
+    """End the turn with snapshot-diff event detection.
+
+    ``poll_deadline`` is an absolute deadline on the same clock as
+    ``civ_mcp.end_turn._now``. Hang recovery passes one so a retried turn cannot
+    consume another full poll budget; ``None`` keeps the original behavior of
+    polling the whole cadence before reporting a hang.
+    """
     # 0a. Run aborted due to save scumming — refuse to advance
     if gs._run_aborted:
         return (
@@ -1347,7 +1483,7 @@ async def execute_end_turn(gs: GameState) -> str:
 
     # Phase 1: Quick check (4s) — turn sometimes advances within 1-2s
     for _ in range(8):
-        await asyncio.sleep(0.5)
+        await _sleep(0.5)
         turn_after = await _get_turn_number(gs)
         if (
             turn_after is not None
@@ -1365,7 +1501,14 @@ async def execute_end_turn(gs: GameState) -> str:
         wc_probes = 0
         cumulative_wait = 4.0  # Phase 1 already waited ~4s
         for delay in _end_turn_poll_delays(wc_turn):
-            await asyncio.sleep(delay)
+            if poll_deadline is not None and _now() >= poll_deadline:
+                log.warning(
+                    "end_turn poll budget exhausted at t+%.0fs; reporting a hang "
+                    "instead of polling the rest of the cadence",
+                    cumulative_wait,
+                )
+                break
+            await _sleep(delay)
             cumulative_wait += delay
             turn_after = await _get_turn_number(gs)
             if (
@@ -1414,7 +1557,7 @@ async def execute_end_turn(gs: GameState) -> str:
                             wc_probes,
                             cumulative_wait,
                         )
-                        await asyncio.sleep(2.0)
+                        await _sleep(2.0)
                         turn_after = await _get_turn_number(gs)
                         if (
                             turn_after is not None
@@ -1461,7 +1604,7 @@ async def execute_end_turn(gs: GameState) -> str:
                 log.info("Post-timeout popup dismissed: %s", dismissed)
                 await gs.conn.execute_mutation(lua)
                 for _ in range(5):
-                    await asyncio.sleep(2.0)
+                    await _sleep(2.0)
                     turn_after = await _get_turn_number(gs)
                     if (
                         turn_after is not None
@@ -1475,7 +1618,7 @@ async def execute_end_turn(gs: GameState) -> str:
 
     if not advanced:
         # Final verification — turn may have slipped through
-        await asyncio.sleep(2.0)
+        await _sleep(2.0)
         turn_after = await _get_turn_number(gs)
         if (
             turn_after is not None
