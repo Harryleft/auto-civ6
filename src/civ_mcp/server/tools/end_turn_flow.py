@@ -148,7 +148,12 @@ async def _run_end_turn_impl(
         "hypothesis": hypothesis,
     }
     missing = [k for k, v in reflections.items() if not v.strip()]
-    if missing:
+    # The legacy profile keeps the five-field diary requirement. The lean
+    # profile drops it: five mandatory essays per turn were part of the
+    # governance ceremony this refactor removes. Empty fields are recorded as
+    # empty rather than filled with invented "no issues" / "done" text, so the
+    # diary never claims the model observed something it did not.
+    if missing and pipeline._get_play_profile(ctx).requires_reflections:
         return _render_result(
             f"Empty reflections: {', '.join(missing)}. "
             "Provide non-empty entries for all 5 fields: "

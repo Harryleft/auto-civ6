@@ -6,7 +6,19 @@ assembly holds lifespan/entry, pipeline holds the _logged runtime, tools/
 holds the MCP tool definitions grouped by domain.
 """
 
-from civ_mcp.server.assembly import AppContext, lifespan, main, mcp
+from civ_mcp.server.assembly import (
+    LEAN_HIDDEN_CONTROL_TOOLS,
+    AppContext,
+    PlayProfile,
+    PlayProfileConflictError,
+    apply_play_profile,
+    hidden_tool_names,
+    lifespan,
+    main,
+    mcp,
+    registered_control_plane_tool_names,
+    resolve_play_profile,
+)
 from civ_mcp.server import pipeline
 from civ_mcp.server.tools import (  # noqa: F401  import side effect: tool registration
     actions,
@@ -17,6 +29,13 @@ from civ_mcp.server.tools import (  # noqa: F401  import side effect: tool regis
     world,
     world_model,
 )
+
+# Tool exposure is decided once, after every tool module has registered. DSH
+# has no MCP allowlist, so withholding the belief/governance control plane from
+# the model can only happen here. A contradictory configuration raises instead
+# of starting with a surface nobody chose.
+PLAY_PROFILE = resolve_play_profile()
+TOOL_SURFACE_CHANGE = apply_play_profile(PLAY_PROFILE)
 
 from civ_mcp import heartbeat  # noqa: F401  stable binding for test monkeypatching
 from civ_mcp.server.tools.actions import propose_trade  # noqa: F401  stable import surface

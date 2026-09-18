@@ -15,6 +15,7 @@ from civ_mcp.server import (
     route_belief_decision,
 )
 from civ_mcp.server import pipeline as server_module
+from civ_mcp.server.assembly import PlayProfile
 from civ_mcp.server.pipeline import (
     _append_belief_context,
     _belief_action_preflight,
@@ -104,6 +105,22 @@ def test_off_mode_disables_belief_persistence_tools_without_game_access():
             "说明": "以下原有字段为机器契约和游戏证据，字段名、ID、枚举及原始值保持不变。",
         },
     }
+
+
+def test_lean_play_profile_lands_on_the_off_mode_guarantees():
+    """The lean path is defined by off-mode behavior, not by the prompt alone."""
+
+    profile_mode = PlayProfile.LEAN.effective_belief_mode({})
+
+    assert profile_mode is BeliefMode.OFF
+    assert profile_mode.records_events is False
+    assert profile_mode.enforces_actions is False
+    assert profile_mode.appends_context is False
+    assert profile_mode.captures_governance_snapshot is False
+    policy = profile_mode.runtime_policy()
+    assert policy["governance"] == "disabled"
+    assert policy["action_routing"] == "bypassed"
+    assert policy["belief_context"] == "disabled"
 
 
 @pytest.mark.parametrize("mode", [BeliefMode.OFF, BeliefMode.OBSERVE])

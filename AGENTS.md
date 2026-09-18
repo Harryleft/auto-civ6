@@ -16,6 +16,7 @@
 - DSH 不负责启动文明 VI：必须先进入一局游戏再启动 DSH。Civ 6 进程、DSH 页面、Python 进程或 4318 监听单独存在，都不等于集成可用。
 - 不要单独运行 `uv run civ-mcp`；DSH wrapper 负责拉起唯一的 MCP 进程。
 - `CIV_MCP_BELIEF_MODE` 与 `get_game_overview` 返回的 `RUNTIME POLICY` 是运行模式的唯一来源。返回 `BELIEF_GATE_REQUIRED` 时，按返回的精确 action intent 完成路由后只重试一次；`bypassed` 模式不要调用路由工具。
+- `CIV_MCP_PLAY_PROFILE=legacy|lean`（默认 `legacy`）选择部署哪条游玩路径：`lean` 固定治理 `off`、移走 29 个信念/治理控制面工具并叠加精简角色。它与显式 `observe`/`enforce` 冲突时启动报错，不静默覆盖；控制面工具在 `lean` 下既不可见于 `tools/list`，也不能靠手写工具名执行。契约与回退见 [精简游玩配置](docs/lean-play-profile.md)。
 - 原始工具结果归 DSH transcript/telemetry；信念引擎只保存规范化事实、指纹和决策/动作关联。
 - 面向用户、DSH 模型或 MCP 工具调用方的可读语义信息必须使用中文（说明、摘要、状态、阻塞原因、建议、验证结论）。协议字段名、工具名、参数名、错误码、ID、枚举值、文件路径、命令和原始游戏数据不翻译，可在其周围用中文解释。
 

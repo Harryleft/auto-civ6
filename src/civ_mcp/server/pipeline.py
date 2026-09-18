@@ -23,6 +23,7 @@ from civ6_belief_engine.belief_engine import (
 from civ6_belief_engine.belief_mode import BeliefMode
 from civ_mcp import game_launcher, heartbeat
 from civ_mcp.facts import parse_envelope as _parse_fact_envelope
+from civ_mcp.server.assembly import PlayProfile, hidden_tool_names
 from civ_mcp.telemetry import EVENT_BELIEF_EVENT
 
 log = logging.getLogger(__name__)
@@ -75,6 +76,40 @@ def _get_belief_mode(ctx: Context) -> BeliefMode:
         "belief_mode",
         BeliefMode.ENFORCE,
     )
+
+
+def _get_play_profile(ctx: Context) -> PlayProfile:
+    """Return the process play profile, defaulting to legacy in tests."""
+
+    return getattr(
+        ctx.request_context.lifespan_context,
+        "play_profile",
+        PlayProfile.LEGACY,
+    )
+
+
+_HIDDEN_TOOL_REFUSAL = (
+    "工具不可用 — {tool} 属于信念/治理控制面，已从精简游玩模式"
+    f"（{PlayProfile.LEAN.value}）的工具面移走。该模式只保留游戏领域工具。\n"
+    "这不是参数错误：重试、改写参数或换用其它治理工具都不会改变结果，"
+    "也不要尝试绕过治理边界。\n"
+    "如果需要治理/信念能力，请让启动方改用 --play-profile legacy 重新开始会话。\n"
+    "TOOL_NOT_AVAILABLE_IN_PLAY_PROFILE"
+)
+
+
+def _hidden_tool_refusal(ctx: Context, tool_name: str) -> str | None:
+    """Refuse a control-plane tool that the lean profile withheld.
+
+    Removing a tool from the served surface stops the MCP router from reaching
+    it, but a direct in-process call — or a client that hand-writes the tool
+    name — would still invoke the function. Visibility and execution permission
+    are separate guarantees, so this is checked independently of the surface.
+    """
+
+    if tool_name not in hidden_tool_names(_get_play_profile(ctx)):
+        return None
+    return _HIDDEN_TOOL_REFUSAL.format(tool=tool_name)
 
 
 async def _await_auto_resume_ready(ctx: Context) -> None:
@@ -851,6 +886,11 @@ async def _logged(
             execution_status=execution_status,
         )
 
+    refusal = _hidden_tool_refusal(ctx, tool_name)
+    if refusal is not None:
+        log.warning("Refused control-plane tool %s under the lean profile", tool_name)
+        return _return_result(refusal)
+
     await _await_auto_resume_ready(ctx)
     logger = _get_logger(ctx)
     turn = logger._turn or "?"
@@ -1135,6 +1175,10 @@ async def _belief_tool(
     operation: Callable[[BeliefEngine, int], Any],
 ) -> str:
     """Run a belief operation with normal MCP logging and telemetry mirroring."""
+    refusal = _hidden_tool_refusal(ctx, tool_name)
+    if refusal is not None:
+        log.warning("Refused control-plane tool %s under the lean profile", tool_name)
+        return _filter_downstream_result(tool_name, params, refusal)
     mode = _get_belief_mode(ctx)
     if not mode.records_events:
         text = json.dumps(

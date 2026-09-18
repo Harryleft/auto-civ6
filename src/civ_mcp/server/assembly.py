@@ -9,13 +9,14 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any, AsyncIterator
 
 import uvicorn
 from mcp.server.fastmcp import FastMCP
 
 from civ6_belief_engine.belief_engine import BeliefEngine
-from civ6_belief_engine.belief_mode import BeliefMode
+from civ6_belief_engine.belief_mode import BELIEF_MODE_ENV, BeliefMode
 from civ_mcp import game_launcher, heartbeat
 from civ_mcp.game_lifecycle import load_recovery_save_from_frontend
 from civ_mcp.connection import GameConnection
@@ -35,6 +36,258 @@ from civ_mcp.web_api import create_app
 
 log = logging.getLogger(__name__)
 
+PLAY_PROFILE_ENV = "CIV_MCP_PLAY_PROFILE"
+
+# The belief/governance control plane, by tool name. The list is explicit rather
+# than derived at runtime because the execution guard in ``pipeline`` must
+# recognise these names *after* they have been removed from the served surface.
+#
+# Drift is covered from the other side: tests/test_lean_profile.py asserts this
+# set equals the tools actually declared by the modules below, so adding a new
+# control-plane tool there fails the build instead of quietly joining the lean
+# profile.
+LEAN_HIDDEN_CONTROL_TOOLS = frozenset(
+    {
+        "assess_route_combat_risk",
+        "cancel_routed_action",
+        "delete_belief_entity",
+        "get_belief_metrics",
+        "get_belief_state",
+        "get_belief_trace",
+        "get_calibration_report",
+        "get_governance_brief",
+        "get_turn_brief",
+        "rebalance_hypotheses_bayesian",
+        "rebalance_hypothesis_pool",
+        "recompute_failure_attribution",
+        "record_action_verification",
+        "record_observation",
+        "resolve_governance_council",
+        "resolve_prediction",
+        "review_belief_engine",
+        "review_governance_proposal",
+        "route_belief_decision",
+        "run_trend_forecast",
+        "set_plan_status",
+        "submit_governance_proposal",
+        "update_belief_entity",
+        "upsert_belief",
+        "upsert_dynamic_plan",
+        "upsert_failure_attribution",
+        "upsert_hypothesis",
+        "upsert_prediction",
+        "upsert_strategic_goal",
+    }
+)
+
+# Modules that own those tools; the drift test compares them to the list above.
+_CONTROL_PLANE_MODULES = (
+    "civ_mcp.server.tools.belief_tools",
+    "civ_mcp.server.tools.world_model",
+)
+
+
+class PlayProfileConflictError(RuntimeError):
+    """Raised when an explicit play profile contradicts an explicit belief mode."""
+
+
+class PlayProfile(StrEnum):
+    """Which play loop this process serves.
+
+    ``legacy`` keeps the historical behavior exactly: the Belief Engine modes,
+    the governance gates, and the full 112-tool surface. ``lean`` is the
+    experimental minimal player: governance-``off``, no control-plane tools, and
+    a role prompt that does not ask for proposals or probabilities.
+
+    The two profiles are a *deployment* choice, not a set of composable feature
+    flags — combining them can produce states that were never tested, so the
+    contradiction between an explicit ``lean`` and an explicit ``observe`` /
+    ``enforce`` is rejected instead of resolved silently.
+    """
+
+    LEGACY = "legacy"
+    LEAN = "lean"
+
+    @classmethod
+    def parse(cls, value: str) -> "PlayProfile":
+        if not isinstance(value, str):
+            raise ValueError(
+                f"{PLAY_PROFILE_ENV} must be one of legacy, lean; got {value!r}"
+            )
+        try:
+            return cls(value.strip().lower())
+        except ValueError as exc:
+            raise ValueError(
+                f"{PLAY_PROFILE_ENV} must be one of legacy, lean; got {value!r}"
+            ) from exc
+
+    @classmethod
+    def from_env(cls, environ: dict[str, str] | None = None) -> "PlayProfile":
+        source = os.environ if environ is None else environ
+        return cls.parse(source.get(PLAY_PROFILE_ENV, cls.LEGACY.value))
+
+    @property
+    def hides_control_plane(self) -> bool:
+        """Whether belief/governance tools must leave the model's tool list."""
+
+        return self is PlayProfile.LEAN
+
+    @property
+    def requires_reflections(self) -> bool:
+        """Whether the five end_turn reflection fields must be non-empty."""
+
+        return self is PlayProfile.LEGACY
+
+    def effective_belief_mode(self, environ: dict[str, str] | None = None) -> BeliefMode:
+        """Return the belief mode this profile runs, or raise on a conflict.
+
+        ``lean`` pins the engine off. An *explicit* ``observe``/``enforce`` in
+        the environment would otherwise be silently overridden, which is exactly
+        the kind of configuration lie this refactor must not introduce.
+        """
+
+        source = os.environ if environ is None else environ
+        explicit = str(source.get(BELIEF_MODE_ENV, "")).strip()
+        if self is PlayProfile.LEGACY:
+            return BeliefMode.from_env(source)
+        if explicit:
+            mode = BeliefMode.parse(explicit)
+            if mode is not BeliefMode.OFF:
+                raise PlayProfileConflictError(
+                    f"{PLAY_PROFILE_ENV}=lean 要求 {BELIEF_MODE_ENV}=off，"
+                    f"但环境显式设置为 {mode.value!r}。"
+                    "精简游玩与治理 enforce/observe 不能同时生效；"
+                    "请显式选择其一："
+                    f"{PLAY_PROFILE_ENV}=legacy 保留治理，或取消 {BELIEF_MODE_ENV} 设置。"
+                )
+        return BeliefMode.OFF
+
+
+def resolve_play_profile(environ: dict[str, str] | None = None) -> PlayProfile:
+    """Resolve and validate the process play profile from the environment."""
+
+    profile = PlayProfile.from_env(environ)
+    # Validates the lean/observe/enforce contradiction at startup rather than at
+    # the first end_turn.
+    profile.effective_belief_mode(environ)
+    return profile
+
+
+def registered_control_plane_tool_names() -> frozenset[str]:
+    """Return the control-plane tools currently registered in this process.
+
+    Registry-derived on purpose: the drift test compares this against
+    ``LEAN_HIDDEN_CONTROL_TOOLS`` so the two can never disagree.
+    """
+
+    return frozenset(
+        name
+        for name, tool in mcp._tool_manager._tools.items()
+        if getattr(getattr(tool, "fn", None), "__module__", "") in _CONTROL_PLANE_MODULES
+    )
+
+
+def hidden_tool_names(profile: PlayProfile) -> frozenset[str]:
+    """Return the tool names ``profile`` withholds from the model."""
+
+    return LEAN_HIDDEN_CONTROL_TOOLS if profile.hides_control_plane else frozenset()
+
+
+@dataclass(frozen=True)
+class ToolSurfaceChange:
+    """The tools one profile application removed, plus how to put them back."""
+
+    profile: PlayProfile
+    removed: tuple[str, ...]
+
+    def restore(self) -> None:
+        """Re-register the removed tools (used by tests and profile switching)."""
+
+        for name in self.removed:
+            mcp._tool_manager._tools.setdefault(name, _REMOVED_TOOLS[name])
+
+
+_REMOVED_TOOLS: dict[str, Any] = {}
+
+
+def apply_play_profile(profile: PlayProfile) -> ToolSurfaceChange:
+    """Remove the control-plane tools from the served surface when lean.
+
+    DSH has no MCP tool allowlist (its client registers every tool a server
+    advertises), so the only place a tool can be withheld from the model is
+    here, before ``tools/list`` is answered. Prompt-only instructions were
+    explicitly rejected by the refactor plan: "不要仅在提示词中说'不使用'".
+    """
+
+    if not profile.hides_control_plane:
+        return ToolSurfaceChange(profile=profile, removed=())
+    removed: list[str] = []
+    for name in sorted(hidden_tool_names(profile)):
+        tool = mcp._tool_manager._tools.get(name)
+        if tool is None:
+            # Already removed (or never registered in this process); nothing to
+            # do. The execution guard still refuses the name.
+            continue
+        _REMOVED_TOOLS[name] = tool
+        mcp._tool_manager.remove_tool(name)
+        removed.append(name)
+    # Debug, not info: importing the MCP SDK installs a root handler at INFO,
+    # so an info line here would print on every `--dry-run` and `check` before
+    # their own output. `lifespan` logs the active profile during a real run.
+    log.debug(
+        "Play profile %s: removed %d control-plane tools from the served surface",
+        profile.value,
+        len(removed),
+    )
+    return ToolSurfaceChange(profile=profile, removed=tuple(removed))
+
+
+def play_profile_summary() -> str:
+    """Return a one-line effective-config summary for the launch preview.
+
+    Deliberately short: the preview must be readable at a glance, while
+    ``play_profile_report`` stays the complete machine-readable form used by
+    ``deepseek_harness check`` and the tests.
+    """
+
+    profile = resolve_play_profile()
+    mode = profile.effective_belief_mode()
+    return (
+        f"play_profile={profile.value} belief_mode={mode.value} "
+        f"tools={len(mcp._tool_manager._tools)} "
+        f"hidden_control_plane={len(hidden_tool_names(profile))} "
+        f"reflections_required={'yes' if profile.requires_reflections else 'no'}"
+    )
+
+
+def play_profile_report() -> str:
+    """Return the effective play configuration as one JSON object.
+
+    The launch preview (``scripts/civ6_agent --dry-run``), the environment check
+    (``scripts/deepseek_harness check``), the MCP child and the ``RUNTIME POLICY``
+    block all derive from this one resolution path, so they cannot disagree
+    about which profile, belief mode, or tool surface actually applies.
+    """
+
+    profile = resolve_play_profile()
+    mode = profile.effective_belief_mode()
+    served = sorted(mcp._tool_manager._tools)
+    hidden = sorted(hidden_tool_names(profile))
+    return json.dumps(
+        {
+            "play_profile": profile.value,
+            "belief_mode": mode.value,
+            "runtime_policy": mode.runtime_policy(),
+            "tool_count": len(served),
+            "hidden_tool_count": len(hidden),
+            "hidden_tools": hidden,
+            "hidden_tools_still_served": sorted(set(hidden) & set(served)),
+            "requires_reflections": profile.requires_reflections,
+            "control_plane_registered": sorted(registered_control_plane_tool_names()),
+        },
+        ensure_ascii=False,
+    )
+
 
 @dataclass
 class AppContext:
@@ -47,6 +300,7 @@ class AppContext:
     watchdog: GameOverWatchdog
     beliefs: BeliefEngine
     belief_mode: BeliefMode = BeliefMode.ENFORCE
+    play_profile: PlayProfile = PlayProfile.LEGACY
     auto_resume_ready: asyncio.Event | None = None
     # Serializes the one-time journal replay in pipeline._bind_belief_engine.
     belief_bind_lock: asyncio.Lock | None = None
@@ -505,8 +759,10 @@ async def lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
     map_capture = MapCapture(emitter)
     gs = GameState(conn)
     beliefs = BeliefEngine(run_id=emitter.run_id)
-    belief_mode = BeliefMode.from_env()
+    play_profile = resolve_play_profile()
+    belief_mode = play_profile.effective_belief_mode()
     log.info("Game logger session: %s", logger.session_id)
+    log.info("Play profile: %s", play_profile.value)
     log.info("Belief Engine mode: %s", belief_mode.value)
 
     camera = CameraController(conn)
@@ -566,6 +822,7 @@ async def lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
             watchdog=watchdog,
             beliefs=beliefs,
             belief_mode=belief_mode,
+            play_profile=play_profile,
             auto_resume_ready=auto_resume_ready,
             belief_bind_lock=asyncio.Lock(),
         )

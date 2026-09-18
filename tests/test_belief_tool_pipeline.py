@@ -16,6 +16,7 @@ from types import SimpleNamespace
 import pytest
 
 from civ_mcp.server import pipeline
+from civ_mcp.server.assembly import PlayProfile
 
 
 class _Logger:
@@ -50,6 +51,11 @@ def _install(monkeypatch, logger, order: list[str]):
         lambda _ctx: SimpleNamespace(records_events=True),
     )
     monkeypatch.setattr(pipeline, "_get_logger", lambda _ctx: logger)
+    # The lean profile guard consults the play profile; these tests describe
+    # the legacy pipeline, where no tool is withheld.
+    monkeypatch.setattr(
+        pipeline, "_get_play_profile", lambda _ctx: PlayProfile.LEGACY
+    )
     monkeypatch.setattr(pipeline, "_await_auto_resume_ready", ready)
     monkeypatch.setattr(pipeline, "_belief_context", context)
     monkeypatch.setattr(pipeline, "_flush_belief_events", noop)
@@ -117,6 +123,9 @@ def test_disabled_mode_short_circuits_without_touching_the_game(
         lambda _ctx: SimpleNamespace(records_events=False, value="off"),
     )
     monkeypatch.setattr(pipeline, "_get_logger", lambda _ctx: logger)
+    monkeypatch.setattr(
+        pipeline, "_get_play_profile", lambda _ctx: PlayProfile.LEGACY
+    )
     monkeypatch.setattr(pipeline, "_await_auto_resume_ready", ready)
 
     result = asyncio.run(

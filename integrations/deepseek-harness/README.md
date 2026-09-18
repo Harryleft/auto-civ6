@@ -132,6 +132,30 @@ For a one-shot headless task:
 时，入口会明确失败而不会自动终止其他进程。达到指定回合数、遇到治理/人类决策门禁、
 游戏结束或连接异常时，智能体会停止并给出中文结果，而不是无限运行。
 
+### 游玩配置（play profile）
+
+`--play-profile legacy|lean` 选择运行哪条游玩路径，默认 `legacy`：
+
+```bash
+./scripts/civ6_agent --play-profile lean --turns 1 --dry-run   # 预览实际生效配置
+./scripts/civ6_agent --play-profile lean --turns 1              # 操作游戏，需现场授权
+./scripts/civ6_agent --play-profile legacy --turns 1           # 回到原路径
+```
+
+`lean` 使 MCP 子进程在 `CIV_MCP_BELIEF_MODE=off` 下运行、移走 29 个信念/治理控制面
+工具（112 → 83），并叠加 `civ6-lean.cordis.yml` 的精简角色。`--play-profile lean`
+与显式 `CIV_MCP_BELIEF_MODE=observe|enforce` 冲突时以退出码 2 报错，不静默覆盖。
+详细契约、工具名单、反思字段语义与回退方式见
+[精简游玩配置](../../docs/lean-play-profile.md)。
+
+工具面的收窄**必须在 MCP 子进程内完成**：`@deepseek-ai/dsh-mcp-client` 的配置字段只有
+`transport`/`serverName`/`command`/`args`/`env`/`cwd`/`url`/`headers`/`toolCallTimeoutMs`/
+`failOnStartupError`/`reconnect`，没有任何 allowlist 或 denylist，`syncTools()` 会注册服务端
+广告的每一个工具。因此 `civ6.cordis.yml` 只负责把 `CIV_MCP_PLAY_PROFILE` 与
+`CIV_MCP_BELIEF_MODE` 传进子进程，由子进程在自己回答 `tools/list` 之前完成删减。
+注意 DSH 的 `config` 补丁是整体替换而非深合并，且 Schemastery 会静默接受未知键——
+写一个不存在的 `toolFilter:` 不会报错，也不会有任何效果。
+
 ## Safety decisions
 
 - The raw `run_lua` tool is disabled for this integration. Domain tools remain the supported game interface.
