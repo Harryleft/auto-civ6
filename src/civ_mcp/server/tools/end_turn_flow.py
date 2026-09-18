@@ -19,10 +19,64 @@ from civ_mcp.diary import (
     diary_path as _diary_path,
     merge_agent_reflections as _merge_agent_reflections,
 )
+from civ_mcp.end_turn import (
+    HANG_EXTRA_WAITS,
+    MAX_HANG_RETRIES,
+    _now,
+    end_turn_budget,
+    hang_attempt_ceiling_seconds,
+)
 from civ_mcp.server import pipeline
 from civ_mcp.telemetry import EVENT_CITY_ROW, EVENT_DIARY_ROW
 
 log = logging.getLogger(__name__)
+
+# Sourced from civ_mcp.end_turn so the retry count, the escalating waits, and
+# the declared end_turn budget can never drift apart.
+_MAX_HANG_RETRIES = MAX_HANG_RETRIES
+_HANG_EXTRA_WAIT = list(HANG_EXTRA_WAITS)
+
+
+def _budget_seconds() -> float:
+    """Return the enforced wall-clock ceiling for one end_turn call.
+
+    Read through this function (not a captured constant) so a test can shrink
+    the ceiling and exercise the expiry path without waiting for real minutes.
+    """
+
+    return end_turn_budget(wc_turn=True).total_seconds
+
+
+def _clock() -> float:
+    """Return the monotonic clock used for deadline arithmetic."""
+
+    return _now()
+
+
+# Returned when the call runs out of its own time budget. The turn may still
+# advance inside the game after the cancellation, so the only safe next step is
+# a read-only confirmation: never another end_turn.
+_BUDGET_EXHAUSTED_RECEIPT = (
+    "结果未知 — end_turn 已超过本次调用的时间预算（{budget:.0f} 秒）。"
+    "结束回合请求很可能已经送达游戏，因此不要再次调用 end_turn，也不要重复任何"
+    "可能已发出的购买/移动/生产改动。\n"
+    "下一步只读核验：调用 get_game_overview 读取当前回合号，与本回合开始前记录的"
+    "回合号比较。回合号已推进说明本回合已经完成；回合号未变才需要检查阻塞项"
+    "（get_pending_diplomacy / get_notifications）并另行决定。\n"
+    "UNKNOWN:END_TURN_BUDGET_EXHAUSTED"
+)
+
+# Returned when the remaining budget cannot pay for another hang-recovery
+# attempt. Distinct from the message above so a reader can tell "we ran out of
+# time waiting" from "we chose not to start a restart we could not finish".
+_HANG_RECOVERY_UNAFFORDABLE_RECEIPT = (
+    "结果未知 — 检测到 AI 回合疑似挂起，但本次调用剩余预算（{remaining:.0f} 秒）"
+    "不足以完成一次自动恢复（每次约需 {needed:.0f} 秒），因此没有重启游戏。"
+    "游戏可能仍在处理，也可能已经结束回合。\n"
+    "下一步只读核验：调用 get_game_overview 确认当前回合号；不要再次调用 end_turn，"
+    "也不要重复可能已发出的改动。如确认回合确实未推进，再在独立调用中处理挂起。\n"
+    "UNKNOWN:HANG_RECOVERY_UNAFFORDABLE"
+)
 
 
 async def run_end_turn(
@@ -33,25 +87,52 @@ async def run_end_turn(
     planning: str = "",
     hypothesis: str = "",
 ) -> str:
-    """End the current turn.
+    """End the current turn inside an enforced time budget.
 
-    Make sure you've moved all units, set production, and chosen research
-    before ending the turn.
-
-    All 5 reflection parameters are required and must be non-empty.
-    These form the per-turn diary — your persistent memory across sessions:
-        tactical: What happened this turn — combat, movements, improvements.
-        strategic: Current standing vs rivals — yields, city count, victory path.
-        tooling: Tool issues or observations. Write "No issues" if none.
-        planning: Concrete actions for the next 5-10 turns.
-        hypothesis: Predictions — enemy behavior, resource needs, timelines.
-
-    IMPORTANT: Reflections are recorded BEFORE the AI processes its turn.
-    Anything that surfaces after end_turn (diplomacy proposals, AI movements,
-    events reported in the turn result) belongs in the NEXT turn's diary.
-    If end_turn is blocked and you call it again after resolving the blocker,
-    the diary entry from the first call is kept — do not repeat reflections.
+    One end_turn blocks inside the DSH tool-call deadline while the AI civs
+    play. The budget is derived in ``civ_mcp.end_turn`` and asserted against the
+    host deadline by ``tests/test_end_turn_budget.py``; enforcing it here as
+    well means an unexpectedly slow game returns a machine-readable "outcome
+    unknown" receipt instead of being killed by the host, which the agent could
+    not tell apart from "the turn never advanced".
     """
+
+    budget_seconds = _budget_seconds()
+    deadline = _clock() + budget_seconds
+    try:
+        async with asyncio.timeout(budget_seconds):
+            return await _run_end_turn_impl(
+                ctx,
+                deadline=deadline,
+                tactical=tactical,
+                strategic=strategic,
+                tooling=tooling,
+                planning=planning,
+                hypothesis=hypothesis,
+            )
+    except TimeoutError:
+        log.error(
+            "end_turn exceeded its %.0fs budget; reporting an unknown outcome",
+            budget_seconds,
+        )
+        return pipeline._filter_downstream_result(
+            "end_turn",
+            {},
+            _BUDGET_EXHAUSTED_RECEIPT.format(budget=budget_seconds),
+        )
+
+
+async def _run_end_turn_impl(
+    ctx: Context,
+    *,
+    deadline: float,
+    tactical: str = "",
+    strategic: str = "",
+    tooling: str = "",
+    planning: str = "",
+    hypothesis: str = "",
+) -> str:
+    """Run the end-turn flow. ``deadline`` bounds polling and recovery."""
     gs = pipeline._get_game(ctx)
 
     def _render_result(raw_result: str) -> str:
@@ -203,13 +284,13 @@ async def run_end_turn(
     # ---------------------------------------------------------------
     # Auto-recover from AI turn hangs (transparent to agent).
     # end_turn returns "HANG:{turn}:{save}|..." when AI processing is
-    # stuck after ~39s of polling with no blockers found.
+    # stuck with no blockers found.
     # Recovery: restart_and_load the MCP autosave, reconnect, retry
     # up to _MAX_HANG_RETRIES times with escalating waits.
+    # A restart is never *started* unless the remaining budget can pay for
+    # it: beginning a kill/relaunch we cannot finish is worse than reporting
+    # the hang, because the host would then have to kill the call mid-reload.
     # ---------------------------------------------------------------
-    _MAX_HANG_RETRIES = 3
-    _HANG_EXTRA_WAIT = [0, 15, 30]  # extra seconds before retry per attempt
-
     if result.startswith("HANG:") and not gs._hang_retry_active:
         parts = result.split("|", 1)
         hang_info = parts[
@@ -230,11 +311,42 @@ async def run_end_turn(
                 save_path,
             )
             # Fall through — return the hang message to agent
+        elif deadline - _clock() < hang_attempt_ceiling_seconds():
+            remaining = deadline - _clock()
+            log.error(
+                "HANG RECOVERY: not started at T%s — %.0fs left of the end_turn "
+                "budget cannot pay for an attempt (needs %.0fs)",
+                hang_turn,
+                remaining,
+                hang_attempt_ceiling_seconds(),
+            )
+            return _render_result(
+                _HANG_RECOVERY_UNAFFORDABLE_RECEIPT.format(
+                    remaining=max(remaining, 0.0),
+                    needed=hang_attempt_ceiling_seconds(),
+                )
+            )
         else:
             identity_before = gs._game_identity
             gs._hang_retry_active = True
             try:
                 for attempt in range(1, _MAX_HANG_RETRIES + 1):
+                    remaining = deadline - _clock()
+                    if remaining < hang_attempt_ceiling_seconds():
+                        log.error(
+                            "HANG RECOVERY: stopping before attempt %d/%d — "
+                            "%.0fs left cannot pay for an attempt (needs %.0fs)",
+                            attempt,
+                            _MAX_HANG_RETRIES,
+                            remaining,
+                            hang_attempt_ceiling_seconds(),
+                        )
+                        return _render_result(
+                            _HANG_RECOVERY_UNAFFORDABLE_RECEIPT.format(
+                                remaining=max(remaining, 0.0),
+                                needed=hang_attempt_ceiling_seconds(),
+                            )
+                        )
                     extra_wait = _HANG_EXTRA_WAIT[
                         min(attempt - 1, len(_HANG_EXTRA_WAIT) - 1)
                     ]
@@ -329,12 +441,17 @@ async def run_end_turn(
                         )
                         await asyncio.sleep(extra_wait)
 
-                    # Step 5: Retry end_turn
+                    # Step 5: Retry end_turn. Bound the retry's own poll so a
+                    # second hung attempt cannot consume the whole budget.
                     log.info(
                         "HANG RECOVERY: retrying end_turn for T%s...",
                         hang_turn,
                     )
-                    result = await gs.end_turn()
+                    result = await gs.end_turn(
+                        poll_deadline=min(
+                            deadline, _clock() + hang_attempt_ceiling_seconds()
+                        )
+                    )
                     log.info("HANG RECOVERY: retry result: %s", result[:200])
 
                     if not result.startswith("HANG:"):
