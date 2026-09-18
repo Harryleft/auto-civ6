@@ -5,6 +5,7 @@ import json
 from types import SimpleNamespace
 
 from civ_mcp.server import pipeline as server_module
+from civ_mcp.server.assembly import PlayProfile
 from civ_mcp.result_filter import ResultFilterConfig, filter_tool_result
 from civ_mcp.server.pipeline import _belief_tool, _filter_downstream_result
 
@@ -238,6 +239,11 @@ def test_belief_tool_logs_raw_result_before_filtering(monkeypatch):
     monkeypatch.setattr(server_module, "_belief_context", belief_context)
     monkeypatch.setattr(server_module, "_flush_belief_events", flush)
     monkeypatch.setattr(server_module, "_get_logger", lambda _ctx: Logger())
+    # The lean profile guard consults the play profile; this test describes the
+    # legacy pipeline, where no tool is withheld from the model.
+    monkeypatch.setattr(
+        server_module, "_get_play_profile", lambda _ctx: PlayProfile.LEGACY
+    )
 
     returned = asyncio.run(
         _belief_tool(

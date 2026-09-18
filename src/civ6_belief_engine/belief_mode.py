@@ -40,10 +40,20 @@ class BeliefMode(StrEnum):
     def from_env(
         cls, environ: Mapping[str, str] | None = None
     ) -> "BeliefMode":
-        """Read the configured mode without modifying the environment."""
+        """Read the configured mode without modifying the environment.
+
+        A blank value counts as "not configured" and yields the default. Both a
+        shell ``VAR=`` and a process launcher that forwards a variable with an
+        empty fallback produce that case, and it means "unset" rather than "an
+        invalid mode"; treating it as an error would make an unrelated empty
+        variable break startup.
+        """
 
         source = os.environ if environ is None else environ
-        return cls.parse(source.get(BELIEF_MODE_ENV, cls.ENFORCE.value))
+        raw = str(source.get(BELIEF_MODE_ENV, "")).strip()
+        if not raw:
+            return cls.ENFORCE
+        return cls.parse(raw)
 
     @property
     def records_events(self) -> bool:

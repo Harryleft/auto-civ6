@@ -8,7 +8,17 @@ harness_dir="${DEEPSEEK_HARNESS_DIR:-$project_root/../deepseek-harness}"
 patch_file="$project_root/integrations/deepseek-harness/civ6.cordis.yml"
 civ_agent_patch_file="$project_root/integrations/deepseek-harness/civ6-agent.cordis.yml"
 civ_agent_coding_patch_file="$project_root/integrations/deepseek-harness/civ6-agent-coding.cordis.yml"
+civ_lean_patch_file="$project_root/integrations/deepseek-harness/civ6-lean.cordis.yml"
 dsh_home="${CIV6_DSH_HOME:-$project_root/.dsh}"
+
+play_profile="${CIV_MCP_PLAY_PROFILE:-legacy}"
+case "$play_profile" in
+  legacy|lean) ;;
+  *)
+    printf 'ERROR: CIV_MCP_PLAY_PROFILE must be legacy or lean, got: %s\n' "$play_profile" >&2
+    exit 2
+    ;;
+esac
 
 if ! command -v node >/dev/null 2>&1; then
   printf 'ERROR: node is required.\n' >&2
@@ -35,14 +45,71 @@ fi
 mkdir -p "$dsh_home"
 cd "$project_root"
 
+# One reader for the effective play configuration: the launch preview, this
+# check, the MCP child, and the RUNTIME POLICY block all resolve the profile
+# through the same code, so none of them can describe a different surface.
+profile_surface_check() {
+  CIV_MCP_PLAY_PROFILE="$play_profile" uv run python -c '
+import asyncio, json, sys
+
+from civ_mcp.server import mcp
+from civ_mcp.server.assembly import (
+    play_profile_report,
+    registered_control_plane_tool_names,
+    resolve_play_profile,
+)
+
+report = json.loads(play_profile_report())
+served = {tool.name for tool in asyncio.run(mcp.list_tools())}
+problems = []
+if report["hidden_tools_still_served"]:
+    problems.append(
+        "精简模式仍暴露控制面工具: " + ", ".join(report["hidden_tools_still_served"])
+    )
+if resolve_play_profile().hides_control_plane and registered_control_plane_tool_names():
+    problems.append(
+        "精简模式仍有控制面工具注册在案: "
+        + ", ".join(sorted(registered_control_plane_tool_names()))
+    )
+reported = report["tool_count"]
+if len(served) != reported:
+    problems.append(
+        "tools/list 返回 %d 个工具，但配置报告为 %d 个" % (len(served), reported)
+    )
+for required in ("get_game_overview", "end_turn", "get_barbarian_overview", "get_policies"):
+    if required not in served:
+        problems.append("缺少必需的游戏工具: " + required)
+if problems:
+    sys.exit("\n".join(problems))
+print(
+    "play_profile={profile} belief_mode={mode} tools={count} hidden={hidden}".format(
+        profile=report["play_profile"],
+        mode=report["belief_mode"],
+        count=report["tool_count"],
+        hidden=report["hidden_tool_count"],
+    )
+)
+'
+}
+
 if [ "${1:-}" = "check" ]; then
   check_output="$(mktemp /tmp/civ6-dsh-config.XXXXXX)"
   trap 'rm -f "$check_output"' EXIT
-  uv run python -c 'import asyncio, sys; from civ_mcp.server import mcp; names = {tool.name for tool in asyncio.run(mcp.list_tools())}; required = {"get_barbarian_overview", "get_policies"}; missing = sorted(required - names); sys.exit(f"Missing MCP tools: {missing}" if missing else 0)'
-  DSH_HOME="$dsh_home" node "$dsh_bin" \
-    --profile headless --patch "$patch_file" --patch "$civ_agent_patch_file" --dump-config > "$check_output"
+  profile_surface_check
+  # Order matters: a `config` patch replaces its target's config wholesale, so
+  # the lean role must be applied after the agent overlay that it overrides.
+  check_patch_args=(--patch "$patch_file" --patch "$civ_agent_patch_file")
+  if [ "$play_profile" = "lean" ]; then
+    check_patch_args+=(--patch "$civ_lean_patch_file")
+  fi
+  DSH_HOME="$dsh_home" CIV_MCP_PLAY_PROFILE="$play_profile" node "$dsh_bin" \
+    --profile headless "${check_patch_args[@]}" --dump-config > "$check_output"
   if ! grep -q "id: mcp-civ6" "$check_output"; then
     printf 'ERROR: Civ 6 MCP overlay was not composed.\n' >&2
+    exit 1
+  fi
+  if ! grep -q "CIV_MCP_PLAY_PROFILE" "$check_output"; then
+    printf 'ERROR: the play profile is not forwarded to the MCP child.\n' >&2
     exit 1
   fi
   for disabled_tool in tool-bash tool-fs tool-fs-search tool-web tool-skill command-goal command-compact tool-goal code-runtime; do
@@ -51,7 +118,7 @@ if [ "${1:-}" = "check" ]; then
       exit 1
     fi
   done
-  printf 'DeepSeek Harness Civ agent profile is ready (game MCP core; Coding is opt-in).\n'
+  printf 'DeepSeek Harness Civ agent profile is ready (game MCP core; Coding is opt-in; play_profile=%s).\n' "$play_profile"
   exit 0
 fi
 
@@ -87,10 +154,13 @@ fi
 patch_args=(--patch "$patch_file")
 if [ "${civ_agent_mode:-0}" -eq 1 ]; then
   patch_args+=(--patch "$civ_agent_patch_file")
+  if [ "$play_profile" = "lean" ]; then
+    patch_args+=(--patch "$civ_lean_patch_file")
+  fi
   if [ "${CIV6_DSH_ENABLE_CODING:-0}" = "1" ]; then
     patch_args+=(--patch "$civ_agent_coding_patch_file")
   fi
 fi
 
-exec env DSH_HOME="$dsh_home" node "$dsh_bin" \
+exec env DSH_HOME="$dsh_home" CIV_MCP_PLAY_PROFILE="$play_profile" node "$dsh_bin" \
   --profile "$profile" "${patch_args[@]}" "$@"
