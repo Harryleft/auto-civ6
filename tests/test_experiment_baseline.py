@@ -133,7 +133,7 @@ def test_disabled_modules_are_detected() -> None:
 
 
 def test_overlay_timeout_is_read_from_the_shipped_overlay() -> None:
-    assert baseline._overlay_timeout_ms() == 1_200_000
+    assert baseline._overlay_timeout_ms() == 180_000
 
 
 # ---------------------------------------------------------------------------
@@ -210,7 +210,7 @@ def test_manifest_records_the_tool_surface_and_unverified_items(tmp_path) -> Non
     assert manifest["run_id"] == "unit-run"
     assert manifest["tools"]["count"] > 0
     assert manifest["tools"]["surface_sha256"]
-    assert manifest["dsh"]["tool_call_timeout_ms"] == 1_200_000
+    assert manifest["dsh"]["tool_call_timeout_ms"] == 180_000
     assert manifest["dsh"]["unavailable"], "缺少 checkout 时必须显式标注不可用"
     assert manifest["live_only_unverified"], "现场未验证项必须显式列出"
     assert manifest["save"]["sha256"]

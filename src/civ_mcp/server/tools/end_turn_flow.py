@@ -276,11 +276,10 @@ async def _run_end_turn_impl(
         return _render_result(
             f"HANG:{hang_turn}:{hang_save}|"
             "结果未知 — 本回合疑似卡在 AI 处理阶段，本次调用没有重启游戏。\n"
-            f"待核验存档: {hang_save}（升级/读取前先用 get_game_overview 确认当前回合号）。\n"
-            "下一步（显式恢复，一次一步）：\n"
-            f"1. restart_and_load('{hang_save}') 走受控重启并读回该存档；\n"
-            "2. 读回后先用 get_game_overview 核对回合号与对局身份；\n"
-            "3. 确认无误再重新执行本回合。\n"
+            f"待核验存档: {hang_save}（读取前先用 get_game_overview 确认当前回合号）。\n"
+            "下一步：停止本回合循环并原样报告。重启游戏是宿主机/操作者的动作，"
+            "按 kill_game → launch_game → load_game_save 分开执行（每次一个独立调用），"
+            "不要在本回合循环里尝试重启，也不要等待重启结果。\n"
             "禁止在未核对结果前重复发送 end_turn 或重复已发出的改动。\n"
             "HANG_RECOVERY_IS_A_SEPARATE_STEP"
         )

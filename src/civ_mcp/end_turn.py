@@ -41,75 +41,62 @@ log = logging.getLogger(__name__)
 _WC_FIRST_DRIVE_AFTER = 5.0
 # Burst: catch a session that opens promptly, which is the common case.
 _WC_DRIVE_BURST_INTERVAL = 15.0
-_WC_DRIVE_BURST_PROBES = 6
-# Then sparse coverage for the rest of the window, so a session that opens late
-# is still driven instead of being waited out. Sized to finish inside the
-# congress poll window (see tests/test_end_turn_budget.py).
+_WC_DRIVE_BURST_PROBES = 5
+# Then sparse coverage. Measured against total time since ACTION_ENDTURN was sent,
+# so it continues across calls and still reaches a session that opens late.
 _WC_DRIVE_SPARSE_INTERVAL = 60.0
-_WC_DRIVE_SPARSE_PROBES = 12
+_WC_DRIVE_SPARSE_PROBES = 5
 
 _WC_FIRST_DISMISS_AFTER = 60.0
 _WC_DISMISS_INTERVAL = 120.0
 _WC_MAX_DISMISS_PROBES = 2
 
-# Poll cadence for the end_turn wait loop (quick polls first, then 30s).
+# Poll cadence for the end_turn wait loop, sized from measured turns rather than
+# from an assumption about how slow the AI is. Across 710 recorded end_turn calls
+# on this machine the real distribution was median 15.5s, p90 26.3s, p97.6 90s —
+# and every one of the 17 calls over 180s had burnt a much longer cadence to
+# exhaustion, 8 of them on a blocker that was there from the start. The old
+# ladder ran to 550s (and congress to 1210s), so it was almost never useful and
+# turned a 15-second operation into a ten-minute wait.
 _END_TURN_POLL_DELAYS = (
     2.0,
     2.0,
     3.0,
     3.0,
     5.0,
-    5.0,  # 20s: catch fast turns
+    5.0,
+    8.0,
+    8.0,
+    8.0,  # ~44s
     10.0,
     10.0,
     10.0,
-    10.0,
-    10.0,
-    10.0,  # 80s: mid wait
-    15.0,
-    15.0,
-    15.0,
-    15.0,  # 140s
-    20.0,
-    20.0,
-    20.0,
-    20.0,  # 220s
-    30.0,
-    30.0,
-    30.0,
-    30.0,
-    30.0,
-    30.0,
-    30.0,  # 430s
-    30.0,
-    30.0,
-    30.0,
-    30.0,  # 550s (~9 min)
+    12.0,  # ~86s: reach 90s with the quick phase
 )
 
-# Extra budget for congress/emergency turns: the World Congress stage runs
-# inside ACTION_ENDTURN and, on the Mac port, can outlast a plain AI turn.
-# Retrying costs a full game restart, so waiting longer is the cheaper bet.
-# Extra budget for congress/emergency turns. This used to be +660s (~20 min
-# total), which existed only to accommodate *passive* waiting for a congress
-# screen nobody was operating. Now that the driver submits the session itself,
-# the extra covers the slack between submitting and the game settling the
-# congress round — the same order as an ordinary AI turn, which the plain
-# cadence above already covers. A congress turn that still does not advance is a
-# genuine hang and is reported as one, so recovery can restart the game instead
-# of the caller sitting silent for twenty minutes.
-_WC_EXTRA_POLL_DELAYS = (30.0,) * 6  # +180s
+# One call polls for at most this long, then reports. Waiting out a genuinely
+# slow turn is handled across calls instead: calling end_turn again while a
+# request is already in flight does NOT re-send ACTION_ENDTURN (see
+# ``_pending_end_turn``), it just keeps polling. That is what lets a single call
+# stay inside a three-minute ceiling without giving up on the turn.
+_END_TURN_POLL_WINDOW_SECONDS = 102.0
+
+# How long the same pending turn may go without progress across all calls before
+# this is called a wedged AI turn. 600s is ~7x the measured p90 and comfortably
+# past the worst turn ever recorded (~590s), so it bounds the waiting without
+# reclassifying a slow-but-working turn.
+PENDING_TURN_HANG_AFTER_SECONDS = 600.0
 
 
 def _end_turn_poll_delays(wc_turn: bool) -> tuple[float, ...]:
     """Return the poll cadence used while waiting for the turn to advance.
 
-    Congress and emergency turns get a bounded extra budget; a plain turn
-    keeps the original cadence so a genuine hang is still reported quickly.
+    Congress turns no longer get a longer *single-call* window: their extra
+    coverage comes from the cumulative drive schedule, which is measured against
+    total time since ACTION_ENDTURN was sent and therefore continues across
+    calls. The parameter is kept because callers and tests still ask by kind.
     """
 
-    if wc_turn:
-        return _END_TURN_POLL_DELAYS + _WC_EXTRA_POLL_DELAYS
     return _END_TURN_POLL_DELAYS
 
 
@@ -140,10 +127,11 @@ _WC_PROBE_SLEEP_SECONDS = (
     _WC_DRIVE_BURST_PROBES + _WC_DRIVE_SPARSE_PROBES + _WC_MAX_DISMISS_PROBES
 ) * 2.0
 # `_check_mid_turn_diplomacy` may sleep once to let a just-opened session
-# populate its dialogue, then up to 10 x 2 s waiting for a war declaration to
+# populate its dialogue, then up to 5 x 2 s waiting for a war declaration to
 # clear. It runs at most twice per pass: the Phase 2 early probe and the Phase 3
 # fallback.
-_DIPLOMACY_PROBE_SLEEP_SECONDS = 2 * (2.0 + 10 * 2.0)
+_WAR_DECLARATION_POLL_ATTEMPTS = 5
+_DIPLOMACY_PROBE_SLEEP_SECONDS = 2 * (2.0 + _WAR_DECLARATION_POLL_ATTEMPTS * 2.0)
 
 # ---------------------------------------------------------------------------
 # Recovery is a separate call, not part of this one
@@ -169,10 +157,10 @@ RESTART_IDENTITY_CEILING_SECONDS = 15.0  # post-load identity re-check
 QUERY_CEILING_SECONDS = DEFAULT_TIMEOUT
 # Allowance for the queries one end_turn performs outside the wait loop
 # (overview, identity, diary snapshot, pre/post snapshot diff, blocker detail,
-# game-over probes). Declared rather than derived: it is a chosen ceiling at
-# QUERY_CEILING_SECONDS, and the invariant test checks the host deadline
-# against it rather than leaving it unaccounted.
-QUERY_RESERVE_SECONDS = 300.0
+# game-over probes, next-turn brief). Declared rather than derived. It is small
+# on purpose: the median recorded call was 15.5s *including* this work, because
+# the poll almost always ends within seconds.
+QUERY_RESERVE_SECONDS = 25.0
 
 # Injectable time seam: the wait loop sleeps through this function so a test can
 # drive it with a virtual clock and verify the budget without waiting for real
@@ -199,18 +187,16 @@ class EndTurnBudget:
 
 
 def poll_sleep_budget_seconds(wc_turn: bool) -> float:
-    """Return the sleep seconds one full wait pass can consume.
+    """Return the sleep seconds one call's wait phase can consume.
 
-    Derived from the same constants the loop iterates, so a cadence change is
-    reflected here without a second hand-maintained total.
+    Bounded by the per-call window, plus the two conditional reserves that run
+    inside an iteration (congress probes, the diplomacy probe).
     """
 
     return (
-        _PHASE1_SLEEP_SECONDS
-        + sum(_end_turn_poll_delays(wc_turn))
+        _END_TURN_POLL_WINDOW_SECONDS
         + (_WC_PROBE_SLEEP_SECONDS if wc_turn else 0.0)
         + _DIPLOMACY_PROBE_SLEEP_SECONDS
-        + _PHASE3_SLEEP_SECONDS
     )
 
 
@@ -229,15 +215,19 @@ def restart_and_load_budget_seconds() -> float:
     )
 
 
-def longest_mcp_call_seconds() -> float:
+def longest_agent_call_seconds() -> float:
     """Return the ceiling the host deadline must cover.
 
-    The host timeout applies per call, so it must exceed the longest single
-    call — not the sum of end_turn plus recovery, which is what used to force a
-    ~50-minute deadline for an operation whose normal case is seconds.
+    This is the longest call the *turn loop* makes, which is ``end_turn``. It
+    deliberately excludes the relaunch-shaped operations (``restart_and_load``,
+    ``launch_game``, and ``load_game_save``'s FrontEnd path): a relaunch waits on
+    the game itself — up to 60 s for the process and 180 s for FireTuner's port —
+    so it cannot fit inside a three-minute loop, and the documented recovery
+    procedure is an operator sequence rather than an in-loop call. Their ceiling
+    is declared separately by :func:`restart_and_load_budget_seconds`.
     """
 
-    return max(end_turn_budget(wc_turn=True).total_seconds, restart_and_load_budget_seconds())
+    return end_turn_budget(wc_turn=True).total_seconds
 
 
 def end_turn_budget(*, wc_turn: bool = True) -> EndTurnBudget:
@@ -1548,6 +1538,11 @@ async def execute_end_turn(gs: GameState) -> str:
         await gs.conn.execute_mutation(lua)
         gs._pending_end_turn = True
         gs._pending_end_turn_from = turn_before
+        # A newly sent request starts a fresh window and drive schedule.
+        gs._pending_end_turn_wait = 0.0
+        gs._wc_driven = False
+        gs._wc_drives = 0
+        gs._wc_dismissals = 0
 
     # Poll for turn advancement using GameCore-only queries.
     # CRITICAL: Do NOT send InGame queries while AI civs are processing
@@ -1557,9 +1552,20 @@ async def execute_end_turn(gs: GameState) -> str:
     turn_after = None
     advanced = False
 
+    # Waiting spans calls, not just this one: a call polls for a bounded window
+    # and then reports, and calling end_turn again while a request is in flight
+    # keeps polling without re-sending ACTION_ENDTURN. So elapsed waiting and
+    # congress drive progress are carried on the game state, not on the stack.
+    pass_start_wait = getattr(gs, "_pending_end_turn_wait", 0.0)
+    wc_driven = bool(getattr(gs, "_wc_driven", False))
+    cumulative_wait = pass_start_wait
+    wc_drives = int(getattr(gs, "_wc_drives", 0))
+    wc_dismissals = int(getattr(gs, "_wc_dismissals", 0))
+
     # Phase 1: Quick check (4s) — turn sometimes advances within 1-2s
     for _ in range(8):
         await _sleep(0.5)
+        cumulative_wait += 0.5
         turn_after = await _get_turn_number(gs)
         if (
             turn_after is not None
@@ -1569,16 +1575,20 @@ async def execute_end_turn(gs: GameState) -> str:
             advanced = True
             break
 
-    # Phase 2: Slow polling — AI can take 1-5 min on large maps, especially
-    # during wars with many units; congress turns get a longer budget.
-    # GameCore-only queries.
-    wc_driven = False
+    # Phase 2: bounded polling. GameCore-only queries.
     if not advanced:
         diplomacy_probed = False
-        wc_drives = 0
-        wc_dismissals = 0
-        cumulative_wait = 4.0  # Phase 1 already waited ~4s
         for delay in _end_turn_poll_delays(wc_turn):
+            if cumulative_wait - pass_start_wait >= _END_TURN_POLL_WINDOW_SECONDS:
+                # This call has spent its window. Report rather than keep the
+                # host call open; the caller can continue the wait cheaply.
+                log.info(
+                    "end_turn window reached (t+%.0fs this call, %.0fs total on T%s)",
+                    cumulative_wait - pass_start_wait,
+                    cumulative_wait,
+                    turn_before,
+                )
+                break
             await _sleep(delay)
             cumulative_wait += delay
             turn_after = await _get_turn_number(gs)
@@ -1623,8 +1633,10 @@ async def execute_end_turn(gs: GameState) -> str:
                 drives=wc_drives,
             ):
                 wc_drives += 1
+                gs._wc_drives = wc_drives
                 if await _drive_congress(gs):
                     wc_driven = True
+                    gs._wc_driven = True
                     log.info(
                         "World Congress drive %d submitted (t+%.0fs)",
                         wc_drives,
@@ -1647,6 +1659,7 @@ async def execute_end_turn(gs: GameState) -> str:
                 dismissals=wc_dismissals,
             ):
                 wc_dismissals += 1
+                gs._wc_dismissals = wc_dismissals
                 if await _dismiss_congress_popup(gs):
                     log.info(
                         "World Congress popup cleared (t+%.0fs, dismissal %d)",
@@ -1663,9 +1676,13 @@ async def execute_end_turn(gs: GameState) -> str:
                         advanced = True
                         break
 
-    # Phase 3: After ~5 min, now safe to check InGame state.
-    # AI processing either completed (blocker is on our side) or is
-    # truly hung.  Do ONE round of InGame checks, not a loop.
+    # Carry this pass's waiting forward so the next call continues the schedule
+    # instead of restarting it (and, on a congress turn, re-driving from zero).
+    gs._pending_end_turn_wait = cumulative_wait
+
+    # Phase 3: The poll window is spent, so it is now safe to check InGame state.
+    # AI processing either completed (the blocker is on our side) or the turn is
+    # genuinely wedged. Do ONE round of InGame checks, not a loop.
     if not advanced:
         # Check for AI diplomatic proposals (reuses the same helper
         # as the early Phase 2 probe — Phase 3 is the fallback if the
@@ -1746,15 +1763,24 @@ async def execute_end_turn(gs: GameState) -> str:
                 details.append(f"Blocker: {display}" + (f" ({bm})" if bm else ""))
         except Exception:
             pass
-        # Turn didn't advance — clear the pending flag so next call re-sends
-        gs._pending_end_turn = False
-        gs._pending_end_turn_from = None
+        # Whether the in-flight flag survives decides what the *next* call does,
+        # so it is set per verdict rather than cleared up front:
+        #   blocked / hang  -> the request was consumed or the turn is dead, so
+        #                      the next call must send ACTION_ENDTURN again;
+        #   pending / congress-not-driven -> the request is *still parked in the
+        #                      game*, so re-sending would skip a turn (the
+        #                      documented 412 -> 415 failure). Keep it.
+        def _clear_pending() -> None:
+            gs._pending_end_turn = False
+            gs._pending_end_turn_from = None
+
         if details:
             # Before returning blocker, check if game actually ended —
             # victory can trigger during AI processing while blockers coexist
             gameover = await gs.check_game_over()
             if gameover is not None:
                 return _game_over_message(gs, gameover)
+            _clear_pending()
             return f"End turn blocked (turn {turn_after or turn_before}): {'; '.join(details)}"
         # No blockers, no diplomacy, no game over. Before calling this a wedged
         # AI turn, rule out the congress: the game parks on the congress screen
@@ -1779,23 +1805,51 @@ async def execute_end_turn(gs: GameState) -> str:
                 "驱动器会在开会时套用该票型并提交。\n"
                 "CONGRESS_NOT_DRIVEN_IS_NOT_A_HANG"
             )
-        # No blockers, no diplomacy, no game over — true AI turn hang.
+        # No blockers, no diplomacy, no game over. Whether this is a hang or
+        # merely a turn that is still being played out is decided by how long the
+        # *same* pending turn has been waited on in total, not by how long one
+        # call has been open: measured turns are median 15s / p90 26s, so a
+        # single call's window says nothing about whether the game is stuck.
+        if cumulative_wait < PENDING_TURN_HANG_AFTER_SECONDS:
+            log.info(
+                "Turn T%s still processing after %.0fs total; reporting pending",
+                turn_num,
+                cumulative_wait,
+            )
+            # The request is still parked in the game: keep the flag and the
+            # accumulated wait so the next call continues instead of restarting.
+            return (
+                f"TURN_PENDING:{turn_num}|"
+                f"回合仍在处理中（本次已等待累计 {cumulative_wait:.0f} 秒，"
+                "超过阈值的回合才判定为挂起）。\n"
+                "这不是错误，也没有改动丢失：再次调用 end_turn 即可继续等待，"
+                "重复调用不会重发结束回合请求。\n"
+                "若同时有需要决策的通知或阻塞项，先处理它们。\n"
+                "TURN_PENDING_KEEP_WAITING"
+            )
+        # True AI turn hang, after the full cumulative threshold.
         # Return structured HANG: prefix so the caller can start the explicit
         # recovery step. Recovery is deliberately NOT attempted inside this call.
+        _clear_pending()
         if turn_num is not None:
             from .autosave import get_autosave_for_turn
 
             hang_save = get_autosave_for_turn(turn_num)
             return (
                 f"HANG:{turn_num}:{hang_save}|"
-                f"End turn requested (turn is still {turn_num}). "
-                f"AI turn processing appears stuck."
+                f"End turn requested (turn is still {turn_num}) after "
+                f"{cumulative_wait:.0f}s. AI turn processing appears stuck."
             )
         return f"End turn requested (turn is still {turn_num}). Check get_pending_diplomacy or dismiss_popup."
 
-    # Turn advanced — clear the pending flag
+    # Turn advanced — clear the pending flag and the carried waiting state, so
+    # the next turn starts its own window and its own drive schedule.
     gs._pending_end_turn = False
     gs._pending_end_turn_from = None
+    gs._pending_end_turn_wait = 0.0
+    gs._wc_driven = False
+    gs._wc_drives = 0
+    gs._wc_dismissals = 0
 
     # Turn regression detection — catch accidental wrong-save loads
     if turn_after is not None and gs._high_water_turn > 0:
