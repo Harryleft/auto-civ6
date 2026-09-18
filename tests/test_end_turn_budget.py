@@ -61,6 +61,7 @@ class _FakeConnection:
 
     def __init__(self, *, wc_handler: bool) -> None:
         self._wc_handler = wc_handler
+        self.sends = 0
 
     async def execute_read(self, code: str, **_kwargs) -> list[str]:
         if "GetCurrentGameTurn" in code:
@@ -72,7 +73,9 @@ class _FakeConnection:
     async def execute_write(self, _code: str, **_kwargs) -> list[str]:
         return ["HANDLER_SET"] if self._wc_handler else ["NO_THREATS"]
 
-    async def execute_mutation(self, _code: str, **_kwargs) -> list[str]:
+    async def execute_mutation(self, code: str, **_kwargs) -> list[str]:
+        if "ACTION_ENDTURN" in code:
+            self.sends += 1
         return ["OK"]
 
 
@@ -198,24 +201,11 @@ def test_a_congress_turn_drives_the_session_instead_of_waiting_it_out() -> None:
         et._sleep = original_sleep
 
     total = et._WC_DRIVE_BURST_PROBES + et._WC_DRIVE_SPARSE_PROBES
-    assert gs.drive_calls >= 12, "议会回合必须持续尝试驱动，而不是只试三次"
+    assert gs.drive_calls >= 5, "议会回合必须持续尝试驱动，而不是只试三次"
     assert gs.drive_calls <= total
     # The first attempt happens within seconds of the turn being requested.
     first_attempt_at = et._PHASE1_SLEEP_SECONDS + min(recorded) if recorded else None
     assert gs.drive_calls > 0 and first_attempt_at is not None
-
-
-def test_the_drive_schedule_fits_inside_the_congress_poll_window() -> None:
-    """A schedule that outlives its own window would leave attempts unreachable."""
-
-    window = et.poll_sleep_budget_seconds(True) - et._PHASE3_SLEEP_SECONDS
-    last_threshold = (
-        et._WC_FIRST_DRIVE_AFTER
-        + et._WC_DRIVE_BURST_PROBES * et._WC_DRIVE_BURST_INTERVAL
-        + (et._WC_DRIVE_SPARSE_PROBES - 1) * et._WC_DRIVE_SPARSE_INTERVAL
-    )
-
-    assert last_threshold < window
 
 
 def test_the_congress_extra_no_longer_pays_for_a_passive_wait() -> None:
@@ -241,26 +231,41 @@ def test_host_deadline_covers_the_whole_end_turn_budget() -> None:
 
     assert match, "civ6.cordis.yml no longer sets an explicit toolCallTimeoutMs"
     host_ms = int(match.group(1))
-    longest = et.longest_mcp_call_seconds()
+    longest = et.longest_agent_call_seconds()
     budget = et.end_turn_budget(wc_turn=True)
 
     assert host_ms > longest * 1000, (
         f"DSH 允许 {host_ms / 1000:.0f}s，但最长单次调用为 {longest:.0f}s"
         f"（end_turn 轮询 {budget.poll_seconds:.0f}s + 查询 "
-        f"{budget.query_seconds:.0f}s；恢复单独一步 "
-        f"{et.restart_and_load_budget_seconds():.0f}s）；"
-        "宿主期限必须大于最长单次调用，否则会在推进中途被杀死"
+        f"{budget.query_seconds:.0f}s）；"
+        "宿主期限必须大于最长单次回合调用，否则会在推进中途被杀死"
     )
-    # 20 minutes, not 50: the ceiling covers a slow AI turn, not three relaunches.
-    assert host_ms <= 20 * 60 * 1000
+    # Three minutes, not fifty: measured turns are median 15.5s / p97.6 90s.
+    assert host_ms <= 3 * 60 * 1000
 
 
-def test_budget_covers_a_congress_turn_and_not_only_a_plain_one() -> None:
+def test_budget_stays_inside_the_three_minute_window() -> None:
     plain = et.end_turn_budget(wc_turn=False)
     congress = et.end_turn_budget(wc_turn=True)
 
+    # Congress costs a little more (the bounded drive/dismiss re-checks) but no
+    # longer buys a longer single call.
     assert congress.poll_seconds > plain.poll_seconds
-    assert et.poll_sleep_budget_seconds(True) == et.poll_sleep_budget_seconds(False) + 220.0
+    assert congress.total_seconds <= 3 * 60
+    assert et.longest_agent_call_seconds() == congress.total_seconds
+
+
+def test_the_drive_schedule_fits_inside_the_cumulative_hang_threshold() -> None:
+    """The schedule spans calls, so it is bounded by total waiting, not a window."""
+
+    window = et.PENDING_TURN_HANG_AFTER_SECONDS
+    last_threshold = (
+        et._WC_FIRST_DRIVE_AFTER
+        + et._WC_DRIVE_BURST_PROBES * et._WC_DRIVE_BURST_INTERVAL
+        + (et._WC_DRIVE_SPARSE_PROBES - 1) * et._WC_DRIVE_SPARSE_INTERVAL
+    )
+
+    assert last_threshold < window
 
 
 # ---------------------------------------------------------------------------
@@ -277,32 +282,39 @@ def test_recovery_is_not_part_of_the_end_turn_budget() -> None:
     assert not hasattr(budget, "recovery_seconds")
 
 
-def test_the_host_deadline_covers_the_longest_single_call() -> None:
-    """The timeout is per call, so end_turn and recovery must not be summed."""
+def test_the_host_deadline_covers_the_longest_loop_call() -> None:
+    """The budget covers the turn loop; a game relaunch is an out-of-loop step."""
 
-    longest = et.longest_mcp_call_seconds()
-    separately_summed = (
-        et.end_turn_budget(wc_turn=True).total_seconds
-        + et.restart_and_load_budget_seconds()
-    )
+    longest = et.longest_agent_call_seconds()
 
     assert longest == et.end_turn_budget(wc_turn=True).total_seconds
-    assert longest < separately_summed
-    # A vote is a seconds-long operation; the ceiling exists for a slow AI turn.
-    assert longest < 20 * 60, (
-        "单次调用期限必须回到“等一轮慢回合”的量级，而不是被重启次数撑高"
+    # Measured turns are median 15.5s / p90 26.3s / p97.6 90s, so a three-minute
+    # ceiling is generous for the loop. Anything larger is a relaunch, not a turn.
+    assert longest <= 3 * 60, (
+        "单次回合调用期限必须落在三分钟以内；更长的只可能是重启游戏"
     )
 
 
-def test_the_recovery_call_ceiling_is_itself_bounded() -> None:
-    ceiling = et.restart_and_load_budget_seconds()
+def test_the_relaunch_ceiling_is_declared_but_out_of_the_loop_budget() -> None:
+    """The relaunch waits on the game, so it is its own out-of-loop step."""
 
-    assert ceiling == (
+    relaunch = et.restart_and_load_budget_seconds()
+
+    assert relaunch == (
         et.RESTART_AND_LOAD_CEILING_SECONDS
         + et.RESTART_RECONNECT_CEILING_SECONDS
         + et.RESTART_IDENTITY_CEILING_SECONDS
     )
-    assert ceiling < et.end_turn_budget(wc_turn=True).total_seconds
+    assert relaunch > et.longest_agent_call_seconds(), (
+        "重启游戏比一轮回合慢，正因如此它必须留在回合循环之外"
+    )
+    # And the hang receipt must not send the model into that call.
+    receipt = (
+        ROOT / "src" / "civ_mcp" / "server" / "tools" / "end_turn_flow.py"
+    ).read_text(encoding="utf-8")
+    assert "restart_and_load" not in receipt.split("HANG_RECOVERY_IS_A_SEPARATE_STEP")[0].split("HANG:")[-1], (
+        "挂起回执不得指示模型在本回合循环内调用 restart_and_load"
+    )
 
 
 def test_query_reserve_is_expressed_in_per_query_ceilings() -> None:
@@ -352,8 +364,15 @@ def test_exhausted_budget_returns_unknown_and_forbids_a_resend(
     assert "Turn " not in result
 
 
-def _hang_verdict(monkeypatch: pytest.MonkeyPatch, *, wc_turn: bool, driven: bool):
-    """Run one exhausted pass and return (verdict, game, clock)."""
+def _hang_verdict(
+    monkeypatch: pytest.MonkeyPatch, *, wc_turn: bool, driven: bool
+) -> tuple[str, "_FakeGameState", "_VirtualClock"]:
+    """Keep calling end_turn until it stops saying "still pending".
+
+    One call now polls for a bounded window and reports; the verdict that says
+    "stuck" only appears once the *same* pending turn has been waited on past the
+    cumulative threshold, which is exactly the behaviour under test.
+    """
 
     class _GS(_FakeGameState):
         async def drive_world_congress(self) -> str:
@@ -364,7 +383,12 @@ def _hang_verdict(monkeypatch: pytest.MonkeyPatch, *, wc_turn: bool, driven: boo
 
     gs = _GS(wc_turn=wc_turn)
     clock = _VirtualClock(monkeypatch)
-    return asyncio.run(et.execute_end_turn(gs)), gs, clock
+    result = ""
+    for _ in range(12):
+        result = asyncio.run(et.execute_end_turn(gs))
+        if not result.startswith("TURN_PENDING:"):
+            break
+    return result, gs, clock
 
 
 def test_an_undriven_congress_is_never_reported_as_a_hang(
@@ -385,12 +409,50 @@ def test_an_undriven_congress_is_never_reported_as_a_hang(
     assert gs.drive_calls > 0
 
 
+def test_a_single_call_reports_pending_not_stuck(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One window is ~100s; measured turns reach 90s, so one call proves nothing."""
+
+    clock = _VirtualClock(monkeypatch)
+    result = asyncio.run(et.execute_end_turn(_FakeGameState(wc_turn=False)))
+
+    assert result.startswith("TURN_PENDING:")
+    assert "TURN_PENDING_KEEP_WAITING" in result
+    assert "重复调用不会重发结束回合请求" in result
+    assert not result.startswith("HANG:")
+    # And the window really bounded the call.
+    assert clock.elapsed <= et._END_TURN_POLL_WINDOW_SECONDS + max(
+        et._END_TURN_POLL_DELAYS
+    )
+
+
+def test_waiting_continues_across_calls_without_resending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The whole point: short calls, cumulative waiting, no duplicate request."""
+
+    clock = _VirtualClock(monkeypatch)
+    gs = _FakeGameState(wc_turn=False)
+
+    first = asyncio.run(et.execute_end_turn(gs))
+    sends_after_first = gs.conn.sends
+    second = asyncio.run(et.execute_end_turn(gs))
+
+    assert first.startswith("TURN_PENDING:") and second.startswith("TURN_PENDING:")
+    assert gs.conn.sends == sends_after_first, (
+        "第二次调用不得重发 ACTION_ENDTURN，否则会跳过回合"
+    )
+    assert gs._pending_end_turn_wait > et._END_TURN_POLL_WINDOW_SECONDS
+
+
 def test_a_plain_turn_that_never_advances_is_still_a_hang(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    result, _, _ = _hang_verdict(monkeypatch, wc_turn=False, driven=False)
+    result, gs, _ = _hang_verdict(monkeypatch, wc_turn=False, driven=False)
 
     assert result.startswith("HANG:")
+    assert gs._pending_end_turn_wait >= et.PENDING_TURN_HANG_AFTER_SECONDS
 
 
 def test_a_congress_turn_that_was_driven_can_still_be_a_hang(
@@ -436,8 +498,11 @@ def test_a_hang_result_never_invites_a_resend(
     )
 
     assert "HANG_RECOVERY_IS_A_SEPARATE_STEP" in result
-    assert "restart_and_load" in result
-    assert "get_game_overview" in result
+    assert "宿主机/操作者" in result
+    # The relaunch is an out-of-loop operator sequence, never an in-loop call:
+    # it waits on the game's own launch and cannot fit the loop's deadline.
+    assert "kill_game → launch_game → load_game_save" in result
+    assert "不要在本回合循环里尝试重启" in result
     assert "重复发送 end_turn" in result
 
 
