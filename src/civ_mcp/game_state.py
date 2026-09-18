@@ -2001,16 +2001,11 @@ class GameState:
     # Turn management
     # ------------------------------------------------------------------
 
-    async def end_turn(self, *, poll_deadline: float | None = None) -> str:
-        """End the turn with snapshot-diff event detection.
-
-        ``poll_deadline`` is an absolute deadline on ``civ_mcp.end_turn._now``'s
-        clock; hang recovery passes one so a retried turn cannot burn another
-        full poll budget. ``None`` polls the whole cadence as before.
-        """
+    async def end_turn(self) -> str:
+        """End the turn with snapshot-diff event detection."""
         from civ_mcp.end_turn import execute_end_turn
 
-        return await execute_end_turn(self, poll_deadline=poll_deadline)
+        return await execute_end_turn(self)
 
     async def dismiss_popup(self) -> str:
         """Dismiss any blocking popup or UI overlay."""

@@ -160,21 +160,28 @@ For a one-shot headless task:
 
 - The raw `run_lua` tool is disabled for this integration. Domain tools remain the supported game interface.
 - `CIV_MCP_SAVE_FILE` is cleared so starting DSH cannot trigger eval auto-boot or load a save. Startup recovery is separately controlled by `CIV_MCP_DSH_AUTO_RESUME` and defaults to off.
-- MCP tool calls allow 55 minutes. That is an envelope, not a typical duration:
-  `civ_mcp.end_turn` derives the worst case (poll 830s + query reserve 300s +
-  hang-recovery reserve 1845s = 2975s) and `tests/test_end_turn_budget.py` fails
-  if this overlay value ever drops to or below that total. The flow also enforces
-  the ceiling from the inside and returns an `UNKNOWN:END_TURN_BUDGET_EXHAUSTED`
-  receipt instead of letting the host kill the call mid-advance.
+- MCP tool calls allow 20 minutes. That is an envelope for one slow Deity AI
+  turn, not a typical duration and not a vote: `civ_mcp.end_turn` derives
+  poll 830s + query reserve 300s = 1130s, and the timeout applies per call so it
+  must exceed the *longest single call*. `tests/test_end_turn_budget.py` fails if
+  this value ever drops to or below that ceiling. The flow also enforces it from
+  the inside and returns an `UNKNOWN:END_TURN_BUDGET_EXHAUSTED` receipt instead
+  of letting the host kill the call mid-advance.
+- **Recovery is a separate step, never part of `end_turn`.** A wedged AI turn
+  needs a relaunch and an autosave reload, and running up to three of those
+  inside `end_turn` is what used to force a ~50-minute deadline — while also
+  hiding whether a turn had merely been slow or had been wedged and restarted.
+  On a hang, `end_turn` now returns `HANG:<turn>:<save>` plus an explicit next
+  step (`restart_and_load`, then verify with `get_game_overview`), and refuses to
+  invite a resend. A "hang" is never inferred on a congress turn.
 - A World Congress `end_turn` is **not** inherently a long call. The congress
   opens inside `ACTION_ENDTURN` and parks on its screen; waiting passively for it
-  was what made those turns take 10-20 minutes. The driver votes the live
-  resolutions and submits the session from Lua, which is what a human does and
-  resolves the turn in seconds, so it now runs from t+5s and keeps trying across
-  the whole session-opening window. The congress poll extra was cut from +660s to
-  +180s accordingly: a congress turn that still will not advance is a genuine
-  hang, and reporting it promptly lets recovery restart the game instead of the
-  caller sitting silent for twenty minutes.
+  was what made those turns take 10-20 minutes, and — worse — an undriven
+  congress used to be misread as a wedged AI turn, which killed and reloaded a
+  healthy game up to three times over a missing vote. The driver votes the live
+  resolutions and submits the session from Lua (what a human does), running from
+  t+5s and covering the whole session-opening window, so those turns normally
+  resolve in seconds.
 - DSH child reconnection is disabled. If `civ-mcp` exits, stop and restart the DSH host after confirming no stale FireTuner client remains.
 - The launcher refuses to start when TCP 8000 already has a listener or TCP 4318 already has an established client. It never kills those processes automatically.
 - `scripts/civ6_agent` is intentionally bounded by `--turns`; a bounded run makes a
