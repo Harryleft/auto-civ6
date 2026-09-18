@@ -10,6 +10,7 @@
 - [AGENTS.md](../AGENTS.md) — Short rules, hard boundaries, and document routing
 - [Civ 6 + DSH Startup](agent-startup.md) — FireTuner, port 4318, DSH launch, and live acceptance gates
 - [Turn Loop](agent-turn-loop.md) — Query order, governance gates, diary fields, and periodic checks
+- [精简游玩配置](lean-play-profile.md) — `--play-profile legacy|lean`：治理关闭、控制面工具边界、反思字段与回退方式
 - [Strategy](agent-strategy.md) — Deity survival, expansion, diplomacy, war, and victory paths
 - [Tool and Action Reference](agent-tools.md) — Offline helpers, actions, blockers, production, and World Congress
 - [Game Recovery](agent-recovery.md) — Autosaves, hung AI turns, and recovery commands

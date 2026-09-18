@@ -48,3 +48,29 @@ def test_every_tool_is_reachable_through_the_server():
 
     listed = {tool.name for tool in mcp._tool_manager.list_tools()}
     assert listed == set(registered_tools())
+
+
+def test_the_lean_surface_is_the_legacy_surface_minus_the_control_plane():
+    """The lean profile narrows one documented axis and nothing else.
+
+    ``AGENTS.md`` states the tool count for the default (legacy) profile. The
+    lean profile is the same game surface with the belief/governance control
+    plane withheld, so no game capability may disappear with it.
+    """
+
+    from civ_mcp.server.assembly import (
+        LEAN_HIDDEN_CONTROL_TOOLS,
+        PlayProfile,
+        apply_play_profile,
+    )
+
+    legacy = set(registered_tools())
+    change = apply_play_profile(PlayProfile.LEAN)
+    try:
+        lean = set(registered_tools())
+    finally:
+        change.restore()
+
+    assert legacy - lean == set(LEAN_HIDDEN_CONTROL_TOOLS)
+    assert lean < legacy, "精简模式不应新增任何工具"
+    assert set(registered_tools()) == legacy

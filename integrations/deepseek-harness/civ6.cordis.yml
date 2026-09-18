@@ -19,6 +19,18 @@
           # exports CIV_MCP_DSH_AUTO_RESUME=1.
           CIV_MCP_DSH_AUTO_RESUME: !!js "process.env.CIV_MCP_DSH_AUTO_RESUME ?? '0'"
           CIV_MCP_DISABLE_LUA: '1'
+          # The play profile is chosen by the caller (scripts/civ6_agent
+          # --play-profile) and must reach the MCP child, which is where the
+          # decision has to be applied: DSH has no MCP tool allowlist and
+          # registers every tool the server advertises, so the child removes
+          # the belief/governance control plane from its own surface before
+          # answering tools/list.
+          CIV_MCP_PLAY_PROFILE: !!js "process.env.CIV_MCP_PLAY_PROFILE ?? 'legacy'"
+          # Forwarded unconditionally: blank means "not configured", so the
+          # play profile decides the default (legacy -> enforce, lean -> off)
+          # and an explicit lean+enforce/observe contradiction still fails
+          # loudly in the child instead of being silently overridden here.
+          CIV_MCP_BELIEF_MODE: !!js "process.env.CIV_MCP_BELIEF_MODE ?? ''"
         # Deity AI turns can take 5-10 minutes, and a World Congress turn can
         # legitimately run ~20. This ceiling must exceed the *whole* worst-case
         # end_turn budget, not just the wait loop: civ_mcp.end_turn derives
