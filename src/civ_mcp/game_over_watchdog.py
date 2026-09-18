@@ -50,6 +50,11 @@ class GameOverWatchdog:
         await self._armed.wait()
         while True:
             await asyncio.sleep(INTERVAL)
+            # check_game_over tries the InGame context first. Skip while a turn
+            # is processing: the wait loop already probes game-over there, and an
+            # extra InGame query during AI processing is the documented hazard.
+            if getattr(self._gs.conn, "turn_in_progress", False):
+                continue
             try:
                 result = await self._gs.check_game_over()
                 if result is None:

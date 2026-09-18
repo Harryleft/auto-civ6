@@ -108,6 +108,28 @@ class GameState:
             self._research_cache.clear()
         self._ruleset_caps = None
         self._last_snapshot = None
+        self._reset_pending_end_turn()
+
+    def _reset_pending_end_turn(self) -> None:
+        """Forget an end-turn request that belonged to the abandoned branch.
+
+        Every load and every new game lands here. Leaving the in-flight flag set
+        across a reload makes the next ``end_turn`` skip sending ACTION_ENDTURN
+        and poll a turn that will never advance — a self-inflicted wedge. The
+        turn-position flags are cleared for the same reason.
+        """
+
+        self._pending_end_turn = False
+        self._pending_end_turn_from = None
+        self._end_turn_blocked = False
+        self._pending_end_turn_wait = 0.0
+        self._wc_driven = False
+        self._wc_drives = 0
+        self._wc_dismissals = 0
+        try:
+            self.conn.turn_in_progress = False
+        except AttributeError:  # pragma: no cover - connection stub in tests
+            pass
 
     async def get_game_identity(self) -> tuple[str, int]:
         """Return (civ_type_lower, random_seed) for the current game.
