@@ -166,9 +166,15 @@ class CameraController:
     async def _run(self) -> None:
         while True:
             event = await self._queue.get()
-            # Hold until diplomacy screen closes.
+            # Hold until the AI finishes, then until any diplomacy screen closes.
             while True:
                 try:
+                    if getattr(self._conn, "turn_in_progress", False):
+                        # Do not move focus while the AI plays: the lookup below
+                        # is an InGame query and a camera jump during processing
+                        # is the same hazard the wait loop avoids. Hold the event.
+                        await asyncio.sleep(0.5)
+                        continue
                     if not await self._is_diplomacy_active():
                         break
                 except Exception:
@@ -232,6 +238,12 @@ class PopupWatcher:
         while True:
             await asyncio.sleep(POPUP_POLL_INTERVAL)
             _iteration += 1
+            # Stay off the InGame context while the AI civs are processing their
+            # turn. This poll runs at 2 Hz and every tick is an InGame query;
+            # during a turn that is ~200 context switches in a 100-second wait,
+            # which is precisely what wedges the AI's diplomacy job.
+            if getattr(self._conn, "turn_in_progress", False):
+                continue
             try:
                 status = await self._poll()
                 now = asyncio.get_running_loop().time()

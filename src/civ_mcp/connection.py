@@ -121,6 +121,14 @@ class GameConnection:
         self.ingame_index: int | None = None
         self.generation = 0
         self.mutation_revision = 0
+        # True while an ACTION_ENDTURN request is in flight and the AI civs are
+        # processing. Background pollers read it to stay off the InGame context
+        # during that window: InGame queries force context switches that can
+        # stall the AI's diplomacy job and wedge the turn (the documented cause
+        # of the Games 1-5 hangs). The wait loop itself already sticks to
+        # GameCore-only queries for the same reason; this puts the 2 Hz popup
+        # poller and the camera on the same rule.
+        self.turn_in_progress = False
 
     @property
     def is_connected(self) -> bool:
