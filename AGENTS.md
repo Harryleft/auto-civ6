@@ -59,11 +59,15 @@ uv run python scripts/launch_save.py --no-launch AutoSave_0221 # 游戏已在运
 ```bash
 uv run pytest tests/ -q            # 全量离线测试（CI 同款）
 uv run ruff check src tests        # 静态检查（CI 同款）
-uv run pytest tests/test_belief_engine.py -q -k "orphan"   # 单文件 / 按关键字
-./scripts/deepseek_harness check   # 安装或配置变更后的环境检查
+uv run pytest tests/test_belief_engine.py -q -k "tombstone"   # 单文件 / 按关键字
+DEEPSEEK_HARNESS_DIR=<checkout> ./scripts/deepseek_harness check   # 安装或配置变更后的环境检查
 ./scripts/belief_coverage.py       # 信念覆盖审计：决策支持率 / 预测结算
 ```
 
+- `deepseek_harness check` 需要 `DEEPSEEK_HARNESS_DIR` 指向实际 checkout；默认的
+  `../deepseek-harness` 在本机并不存在，裸跑只会打印 "checkout not found"。
+- 按关键字筛选用真实存在的关键词：`-k "orphan"` 之类的写法会静默选中 0 个测试，
+  看着像通过，实际上什么都没验证。筛选后确认 collected 数不为 0。
 - 测试隔离与账本是硬约束：测试不得写入 `~/.civ6-mcp/beliefs/`（autouse 夹具已重定向到 `tmp_path`，新增 `BeliefEngine` 仍要显式传 `directory=`）；测试引用的第三方依赖必须在 `pyproject.toml` 中声明。
 - 本地测试用一次性夹具、不触碰生产数据：跑测试、修由本次改动引起的失败、重跑受影响用例，都不必逐步征求同意。这是唯一授权的自主验证范围；真实游戏动作不在此列。
 - 静态检查用 `ruff`，只启用能查出真实缺陷的窄规则集（配置在 `pyproject.toml [tool.ruff.lint]`）。放宽规则要增量做，不要一次性打开数百项风格规则。

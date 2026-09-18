@@ -29,6 +29,7 @@ import pytest
 
 from civ_mcp import end_turn as et
 from civ_mcp.server.tools import end_turn_flow
+from civ_mcp.read_cache import ReadCache
 from civ_mcp.server import pipeline
 from civ_mcp.server.assembly import PlayProfile
 
@@ -85,6 +86,10 @@ class _FakeGameState:
 
     def __init__(self, *, wc_turn: bool) -> None:
         self.conn = _FakeConnection(wc_handler=wc_turn)
+        self._cache_epoch = 0
+        # A real cache object so GameState.invalidate_cached_state() runs for
+        # real: the reload path is what resets the in-flight end-turn request.
+        self._reads = ReadCache(lambda: None)
         self._run_aborted = False
         self._hang_retry_active = False
         self._high_water_turn = 0
@@ -143,6 +148,21 @@ class _FakeGameState:
         # Only referenced (never awaited) by the budget tests, which stub
         # pipeline._logged; kept so the attribute lookup cannot fail.
         return "end_turn stub"
+
+    def _build_turn_report(self, turn_before, turn_after, *_a, **_k) -> str:
+        # Reached only when a test makes the turn actually advance.
+        return f"Turn {turn_before} -> {turn_after}"
+
+    def _read_cache(self):
+        # GameState.invalidate_cached_state() calls this; the fake carries a real
+        # ReadCache so the reload path can be exercised for real.
+        return self._reads
+
+    async def get_notifications(self) -> list:
+        return []
+
+    async def get_empire_resources(self):
+        return [], [], [], []
 
 
 def _allowed_probe_sleeps(wc_turn: bool) -> float:

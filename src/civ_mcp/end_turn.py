@@ -1543,6 +1543,9 @@ async def execute_end_turn(gs: GameState) -> str:
         gs._wc_driven = False
         gs._wc_drives = 0
         gs._wc_dismissals = 0
+    # Tell the background pollers to stay off the InGame context while the AI
+    # processes: their 2 Hz queries are exactly what the wait loop avoids.
+    gs.conn.turn_in_progress = gs._pending_end_turn
 
     # Poll for turn advancement using GameCore-only queries.
     # CRITICAL: Do NOT send InGame queries while AI civs are processing
@@ -1773,6 +1776,7 @@ async def execute_end_turn(gs: GameState) -> str:
         def _clear_pending() -> None:
             gs._pending_end_turn = False
             gs._pending_end_turn_from = None
+            gs.conn.turn_in_progress = False
 
         if details:
             # Before returning blocker, check if game actually ended —
@@ -1850,6 +1854,7 @@ async def execute_end_turn(gs: GameState) -> str:
     gs._wc_driven = False
     gs._wc_drives = 0
     gs._wc_dismissals = 0
+    gs.conn.turn_in_progress = False
 
     # Turn regression detection — catch accidental wrong-save loads
     if turn_after is not None and gs._high_water_turn > 0:
