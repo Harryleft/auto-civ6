@@ -121,7 +121,13 @@ async def _run_end_turn_impl(
     # governance ceremony this refactor removes. Empty fields are recorded as
     # empty rather than filled with invented "no issues" / "done" text, so the
     # diary never claims the model observed something it did not.
-    if missing and pipeline._get_play_profile(ctx).requires_reflections:
+    #
+    # A continuation call is exempt: waiting for a slow turn now spans calls, and
+    # this turn's diary entry was already written by the first one. Demanding the
+    # same five essays again on every "keep waiting" would be pure ceremony.
+    continuing = bool(getattr(gs, "_pending_end_turn", False))
+    requires_reflections = pipeline._get_play_profile(ctx).requires_reflections
+    if missing and not continuing and requires_reflections:
         return _render_result(
             f"Empty reflections: {', '.join(missing)}. "
             "Provide non-empty entries for all 5 fields: "
