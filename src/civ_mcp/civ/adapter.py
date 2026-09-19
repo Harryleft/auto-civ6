@@ -26,6 +26,7 @@ from civ_mcp.lua.models import (
     CivInfo,
     DiplomacySession,
     GameOverview,
+    PantheonStatus,
     PendingCityCapture,
     TechCivicStatus,
     UnitInfo,
@@ -37,6 +38,7 @@ from civ_mcp.lua.overview import (
     parse_game_identity_response,
     parse_overview_response,
 )
+from civ_mcp.lua.religion import build_pantheon_status_query, parse_pantheon_status_response
 from civ_mcp.lua.tech import build_tech_civics_query, parse_tech_civics_response
 from civ_mcp.lua.units import build_units_query, parse_units_response
 from civ_mcp.lua.victory import build_victory_progress_query, parse_victory_progress_response
@@ -248,6 +250,21 @@ class CivAdapter:
                 lua_code=build_tech_civics_query(),
                 decode=lambda lines: parse_tech_civics_response(list(lines)),
                 coverage="RESEARCH_AND_CIVICS:COMPLETE",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
+    async def read_pantheon_status(
+        self, *, observed_turn: int
+    ) -> CivReadResult[PantheonStatus]:
+        """Read the current pantheon and game-legal beliefs as a typed fact."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_pantheon_status",
+                lua_code=build_pantheon_status_query(),
+                decode=lambda lines: parse_pantheon_status_response(list(lines)),
+                coverage="PANTHEON:COMPLETE",
                 context="ingame",
             ),
             observed_turn=observed_turn,

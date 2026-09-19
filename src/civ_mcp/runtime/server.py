@@ -193,6 +193,22 @@ async def set_civic(
 
 
 @mcp.tool()
+async def choose_pantheon(
+    ctx: Context, operation_id: str, belief_type: str, decision_turn: int
+) -> dict[str, object]:
+    """Found one legal pantheon; readback must match its stable BELIEF_* ID."""
+    assembly = _runtime(ctx).assembly
+    execution = assembly.mutations.choose_pantheon(
+        operation_id=OperationId(operation_id),
+        belief_type=belief_type,
+        observed_turn=decision_turn,
+    )
+    return _operation_payload(
+        await assembly.surface.execute_mutation(execution, decision_turn=decision_turn)
+    )
+
+
+@mcp.tool()
 async def found_city(
     ctx: Context,
     operation_id: str,
