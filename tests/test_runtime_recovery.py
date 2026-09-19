@@ -58,6 +58,21 @@ def test_recovery_identity_mismatch_fails_safe_without_creating_branch() -> None
     assert result.new_branch is None
 
 
+def test_recovery_cannot_reuse_the_original_branch() -> None:
+    game = GameIdentity("game-a")
+
+    async def driver(_request):
+        return RecoveredBinding(game, "main")
+
+    result = asyncio.run(RecoverySupervisor(driver).recover(
+        RecoveryInput(game, BranchIdentity(game, "main"), _unknown(), True, True, ("auto-10",))
+    ))
+
+    assert result.outcome is RecoveryOutcome.FAILED_SAFE
+    assert result.new_branch is None
+    assert "branch_id" in result.reason
+
+
 def test_port_busy_or_bad_save_requires_operator_without_declaring_crash() -> None:
     game = GameIdentity("game-a")
 
