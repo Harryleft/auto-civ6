@@ -35,6 +35,9 @@
   激活的 `COMMEMORATION_*` 类型；大人物读取提供 individual ID 与本地认领状态。
 - `SessionKernel` 是 mutation 的唯一入口：发送后取消、连接中断、跨局回读
   都只会留下 `UNKNOWN`，同一 `operation_id` 的并发调用只会实际发送一次。
+- `runtime.telemetry` 只接受 host 已知的 immutable operation 或游戏观察并追加本地 JSONL；
+  它不导入 SessionKernel、CivAdapter、MCP surface 或 OperationStore，日志成功与否不能改变
+  游戏执行事实或成为 action 成功依据。
 - `ContextBuilder` 只组合 CivAdapter 的 typed reads、当前 Session operation、handoff
   与 TurnLoop 的只读待决快照；组合前后均核验同一 game/branch，不能把切档后的事实与
   旧 branch operation 混入同一模型上下文。
