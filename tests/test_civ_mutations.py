@@ -489,10 +489,9 @@ def test_remaining_domain_mutations_use_explicit_readback_contracts() -> None:
         return Evidence("domain_read", 13, "verified")
 
     factory = CivMutationFactory(Adapter())
-    person = factory.recruit_great_person(operation_id=OperationId("gp-1"), individual_id=5, readback=evidence)
     spy = factory.spy_travel(operation_id=OperationId("spy-1"), unit_index=2, target_x=4, target_y=5, readback=evidence)
     vote = factory.congress_vote(operation_id=OperationId("vote-1"), resolution_hash=1, option=0, target_index=2, num_votes=3, readback=evidence)
-    assert [person.intent.tool, spy.intent.tool, vote.intent.tool] == ["recruit_great_person", "spy_travel", "congress_vote"]
+    assert [spy.intent.tool, vote.intent.tool] == ["spy_travel", "congress_vote"]
     assert asyncio.run(vote.verify()).source == "domain_read"
 
 
@@ -626,3 +625,29 @@ def test_dedication_rejects_an_unavailable_choice() -> None:
 
     with pytest.raises(MutationPreconditionError, match="不是当前可选"):
         asyncio.run(execution.precheck())
+
+
+def test_great_person_recruitment_requires_current_candidate_and_local_claim_readback() -> None:
+    before = SimpleNamespace(individual_id=17, can_recruit=True, claimed_by_local=False)
+    after = SimpleNamespace(individual_id=17, can_recruit=False, claimed_by_local=True)
+
+    class Adapter:
+        calls = 0
+
+        async def read_great_people(self, *, observed_turn):
+            self.calls += 1
+            return SimpleNamespace(
+                value=[before] if self.calls == 1 else [after],
+                observed_turn=observed_turn,
+            )
+
+    execution = CivMutationFactory(Adapter()).recruit_great_person(
+        operation_id=OperationId("gp-17"), individual_id=17, observed_turn=12
+    )
+
+    asyncio.run(execution.precheck())
+    evidence = asyncio.run(execution.verify())
+
+    assert execution.intent.tool == execution.request.tool == "recruit_great_person"
+    assert "RECRUIT_GREAT_PERSON" in execution.request.lua_code
+    assert evidence.source == "read_great_people"

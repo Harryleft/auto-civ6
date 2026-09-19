@@ -37,6 +37,9 @@ def test_context_keeps_failed_domain_reads_explicitly_unknown() -> None:
         async def read_dedications(self, **_kwargs):
             return SimpleNamespace(value=[])
 
+        async def read_great_people(self, **_kwargs):
+            return SimpleNamespace(value=[])
+
         async def read_victory_progress(self, **_kwargs):
             return SimpleNamespace(value=[])
 

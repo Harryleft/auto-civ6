@@ -23,6 +23,7 @@ local gp = Game.GetGreatPeople()
 if gp == nil then {_bail("ERR:NO_GP_SYSTEM|Great People system not available")} end
 local timeline = gp:GetTimeline()
 if timeline == nil then {_bail("ERR:NO_TIMELINE|No great people timeline")} end
+print("GP_STATUS|" .. me)
 local function getAbility(ind)
     if ind.ActionEffectTextOverride and ind.ActionEffectTextOverride ~= "" then
         local ok, t = pcall(Locale.Lookup, ind.ActionEffectTextOverride)
@@ -165,7 +166,7 @@ for _, entry in ipairs(timeline) do
             canRecruit = gp:CanRecruitPerson(me, entry.Individual)
         end)
         local costStr = "gold:" .. goldCost .. ",faith:" .. faithCost .. ",recruit:" .. tostring(canRecruit)
-        print("GP|" .. className .. "|" .. indivName .. "|" .. eraName .. "|" .. threshold .. "|" .. claimant .. "|" .. myPoints .. "|" .. ability .. "|" .. costStr .. "|" .. entry.Individual)
+        print("GP|" .. className .. "|" .. indivName .. "|" .. eraName .. "|" .. threshold .. "|" .. claimant .. "|" .. myPoints .. "|" .. ability .. "|" .. costStr .. "|" .. entry.Individual .. "|" .. ((entry.Claimant == me) and "1" or "0"))
     end
     end
 end
@@ -388,6 +389,7 @@ def parse_great_people_response(lines: list[str]) -> list[GreatPersonInfo]:
                         elif k == "recruit":
                             can_recruit = v == "true"
                     individual_id = _int(parts[9])
+                claimed_by_local = len(parts) >= 11 and parts[10] == "1"
                 results.append(
                     GreatPersonInfo(
                         class_name=parts[1],
@@ -401,6 +403,7 @@ def parse_great_people_response(lines: list[str]) -> list[GreatPersonInfo]:
                         faith_cost=faith_cost,
                         can_recruit=can_recruit,
                         individual_id=individual_id,
+                        claimed_by_local=claimed_by_local,
                     )
                 )
     return results
