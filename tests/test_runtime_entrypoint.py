@@ -24,6 +24,16 @@ def test_python_module_starts_the_runtime_core() -> None:
     assert "from civ_mcp.server import main" not in entrypoint
 
 
+def test_formal_dsh_overlay_forwards_runtime_binding() -> None:
+    overlay = (
+        ROOT / "integrations" / "deepseek-harness" / "civ6.cordis.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "args: [run, civ-mcp]" in overlay
+    assert "CIV_MCP_RUNTIME_BRANCH" in overlay
+    assert "CIV_MCP_RUNTIME_STORE" in overlay
+
+
 def test_runtime_main_uses_stdio(monkeypatch) -> None:
     calls: list[dict[str, str]] = []
     monkeypatch.setattr(runtime_server.mcp, "run", lambda **kwargs: calls.append(kwargs))

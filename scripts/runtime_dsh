@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start DSH against only the isolated Runtime Core MCP surface.
+# Start DSH against only the formal Runtime Core MCP surface.
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -16,7 +16,7 @@ usage() {
   printf '%s\n' \
     'Usage: ./scripts/runtime_dsh --branch <host-token> [--store <sqlite-path>] [--headless] [--dry-run]' \
     '' \
-    'Starts the experimental Runtime Core DSH adapter only; it never launches Civ6,' \
+    'Starts the Runtime Core DSH adapter only; it never launches Civ6,' \
     'loads a save, chooses a recovery checkpoint, or starts the legacy civ-mcp server.' \
     '' \
     'The branch is a host token for the currently loaded save timeline, for example' \
@@ -71,7 +71,7 @@ if [[ "$branch" == *:* ]]; then
 fi
 
 if [ "$dry_run" -eq 1 ]; then
-  printf 'Experimental Runtime DSH dry run: profile=%s branch=%s store=%s\n' \
+  printf 'Runtime DSH dry run: profile=%s branch=%s store=%s\n' \
     "$profile" "$branch" "${store:-<runtime-default>}"
   printf 'Overlay: %s\n' "$patch_file"
   exit 0

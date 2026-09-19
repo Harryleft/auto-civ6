@@ -12,6 +12,11 @@
         args: [run, civ-mcp]
         cwd: !!js process.cwd()
         env:
+          # The formal civ-mcp entry point is the Runtime Core. A host must
+          # supply this stable token for the currently loaded save timeline;
+          # Runtime rejects a blank value before it opens FireTuner.
+          CIV_MCP_RUNTIME_BRANCH: !!js "process.env.CIV_MCP_RUNTIME_BRANCH ?? ''"
+          CIV_MCP_RUNTIME_STORE: !!js "process.env.CIV_MCP_RUNTIME_STORE ?? ''"
           CIV_MCP_AGENT_MODEL: deepseek-harness
           CIV_MCP_METADATA: '{}'
           CIV_MCP_SAVE_FILE: ''
