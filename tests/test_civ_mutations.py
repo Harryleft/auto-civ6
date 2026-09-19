@@ -119,3 +119,18 @@ def test_end_turn_is_a_single_hash_bound_mutation() -> None:
     assert execution.intent.tool == execution.request.tool == "end_turn"
     assert "ACTION_ENDTURN" in execution.request.lua_code
     assert asyncio.run(execution.verify()).observed_turn == 13
+
+
+def test_governance_mutations_are_hash_bound_and_need_readback() -> None:
+    class Adapter:
+        pass
+
+    async def evidence():
+        return Evidence("read_governors", 13, "governance state observed")
+
+    factory = CivMutationFactory(Adapter())
+    governor = factory.assign_governor(operation_id=OperationId("gov-1"), governor_type="GOVERNOR_MAGNUS", city_id=4, readback=evidence)
+    promotion = factory.promote_unit(operation_id=OperationId("unit-promo-1"), unit_index=2, promotion_type="PROMOTION_BATTLECRY", readback=evidence)
+    assert governor.intent.tool == "assign_governor"
+    assert promotion.request.context == "gamecore"
+    assert asyncio.run(governor.verify()).source == "read_governors"
