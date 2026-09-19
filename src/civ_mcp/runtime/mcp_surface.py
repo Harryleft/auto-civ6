@@ -46,6 +46,10 @@ class RuntimeMcpSurface:
         """Return only current district coordinates accepted by the game operation."""
         return await self._context.read_district_placements(city_id, district_type)
 
+    async def get_builder_improvement_candidates(self, unit_index: int):
+        """Return only improvements legal on the builder's current tile."""
+        return await self._context.read_builder_improvement_candidates(unit_index)
+
     async def get_city_states(self):
         """Return envoy facts without exposing CivAdapter to MCP routing."""
         return await self._context.read_city_states()

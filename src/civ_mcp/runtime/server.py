@@ -136,6 +136,16 @@ async def get_district_placements(
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
+async def get_builder_improvement_candidates(
+    ctx: Context, unit_index: int
+) -> dict[str, object]:
+    """Return only improvements legal on a builder's current tile."""
+    return _json_value(
+        await _runtime(ctx).assembly.surface.get_builder_improvement_candidates(unit_index)
+    )
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
 async def get_city_states(ctx: Context) -> dict[str, object]:
     """Return current envoy tokens and every met city-state's send eligibility."""
     return _json_value(await _runtime(ctx).assembly.surface.get_city_states())
@@ -272,6 +282,27 @@ async def attack_city(
         city_id=city_id,
         target_x=target_x,
         target_y=target_y,
+        observed_turn=decision_turn,
+    )
+    return _operation_payload(
+        await assembly.surface.execute_mutation(execution, decision_turn=decision_turn)
+    )
+
+
+@mcp.tool()
+async def build_improvement(
+    ctx: Context,
+    operation_id: str,
+    unit_index: int,
+    improvement_type: str,
+    decision_turn: int,
+) -> dict[str, object]:
+    """Build one current-tile improvement; exact candidate and tile readback are required."""
+    assembly = _runtime(ctx).assembly
+    execution = assembly.mutations.build_improvement(
+        operation_id=OperationId(operation_id),
+        unit_index=unit_index,
+        improvement_type=improvement_type,
         observed_turn=decision_turn,
     )
     return _operation_payload(

@@ -11,12 +11,14 @@ from civ_mcp.lua._helpers import (
     _lua_get_unit_gamecore,
 )
 from civ_mcp.lua.models import (
+    BuilderImprovementCandidate,
     BuilderInfo,
     BuilderTask,
     CombatTarget,
     CombatEstimate,
     PathingEstimate,
     ThreatInfo,
+    TileImprovementState,
     UnitInfo,
 )
 
@@ -1214,6 +1216,140 @@ UnitManager.RequestOperation(unit, UnitOperationTypes.BUILD_IMPROVEMENT, params)
 print("OK:IMPROVING|{improvement_name}|" .. unit:GetX() .. "," .. unit:GetY())
 print("{SENTINEL}")
 """
+
+
+def build_builder_improvement_candidates_query(unit_index: int) -> str:
+    """List new improvements a builder may start on its current tile only.
+
+    Remote-tile ``CanStartOperation`` probes are intentionally excluded: they
+    have a known history of destabilizing the game.  This query always probes
+    the builder's present coordinate and performs no request.
+    """
+    return f"""
+{_lua_get_unit(unit_index)}
+local entry = GameInfo.Units[unit:GetType()]
+if not entry or entry.UnitType ~= "UNIT_BUILDER" then {_bail("ERR:NOT_A_BUILDER")} end
+local x, y = unit:GetX(), unit:GetY()
+local plot = Map.GetPlot(x, y)
+if not plot then {_bail("ERR:NO_PLOT")} end
+if plot:GetOwner() ~= me then {_bail("ERR:NOT_YOUR_TERRITORY")} end
+if unit:GetMovesRemaining() <= 0 or unit:GetBuildCharges() <= 0 then
+    print("{SENTINEL}")
+    return
+end
+local currentImprovement = plot:GetImprovementType()
+local pillaged = false
+pcall(function() pillaged = plot:IsImprovementPillaged() end)
+if currentImprovement >= 0 or pillaged then
+    print("{SENTINEL}")
+    return
+end
+for improvement in GameInfo.Improvements() do
+    if improvement.Buildable then
+        local params = {{}}
+        params[UnitOperationTypes.PARAM_X] = x
+        params[UnitOperationTypes.PARAM_Y] = y
+        params[UnitOperationTypes.PARAM_IMPROVEMENT_TYPE] = improvement.Hash
+        if UnitManager.CanStartOperation(
+            unit, UnitOperationTypes.BUILD_IMPROVEMENT, nil, params, true
+        ) then
+            print(
+                "BUILDER_IMPROVEMENT|{unit_index}|" .. improvement.ImprovementType
+                .. "|" .. x .. "|" .. y .. "|" .. unit:GetBuildCharges()
+            )
+        end
+    end
+end
+print("{SENTINEL}")
+"""
+
+
+def build_builder_improvement(unit_index: int, improvement_name: str) -> str:
+    """Build one game-approved new improvement on the builder's current tile."""
+    return f"""
+{_lua_get_unit(unit_index)}
+local entry = GameInfo.Units[unit:GetType()]
+if not entry or entry.UnitType ~= "UNIT_BUILDER" then {_bail("ERR:NOT_A_BUILDER")} end
+if unit:GetMovesRemaining() <= 0 then {_bail("ERR:NO_MOVES")} end
+if unit:GetBuildCharges() <= 0 then {_bail("ERR:NO_CHARGES")} end
+local x, y = unit:GetX(), unit:GetY()
+local plot = Map.GetPlot(x, y)
+if not plot then {_bail("ERR:NO_PLOT")} end
+if plot:GetOwner() ~= me then {_bail("ERR:NOT_YOUR_TERRITORY")} end
+local existing = plot:GetImprovementType()
+if existing >= 0 then {_bail("ERR:IMPROVEMENT_ALREADY_PRESENT")} end
+local improvement = GameInfo.Improvements["{improvement_name}"]
+if improvement == nil then {_bail("ERR:IMPROVEMENT_NOT_FOUND|" + improvement_name)} end
+local params = {{}}
+params[UnitOperationTypes.PARAM_X] = x
+params[UnitOperationTypes.PARAM_Y] = y
+params[UnitOperationTypes.PARAM_IMPROVEMENT_TYPE] = improvement.Hash
+if not UnitManager.CanStartOperation(
+    unit, UnitOperationTypes.BUILD_IMPROVEMENT, nil, params, true
+) then {_bail("ERR:CANNOT_BUILD_IMPROVEMENT|" + improvement_name)} end
+UnitManager.RequestOperation(unit, UnitOperationTypes.BUILD_IMPROVEMENT, params)
+print("OK:BUILDING_IMPROVEMENT|{improvement_name}|" .. x .. "," .. y)
+print("{SENTINEL}")
+"""
+
+
+def build_tile_improvement_state_query(x: int, y: int) -> str:
+    """Read the direct improvement state for one fixed coordinate."""
+    return f"""
+local plot = Map.GetPlot({x}, {y})
+if not plot then {_bail("ERR:NO_PLOT")} end
+local improvementType = "NONE"
+local improvementIndex = plot:GetImprovementType()
+if improvementIndex >= 0 then
+    local improvement = GameInfo.Improvements[improvementIndex]
+    if improvement then improvementType = improvement.ImprovementType end
+end
+local pillaged = false
+pcall(function() pillaged = plot:IsImprovementPillaged() end)
+print("TILE_IMPROVEMENT|{x}|{y}|" .. improvementType .. "|" .. tostring(pillaged))
+print("{SENTINEL}")
+"""
+
+
+def parse_builder_improvement_candidates_response(
+    lines: list[str],
+) -> list[BuilderImprovementCandidate]:
+    """Decode current-tile builder candidates without extrapolating remotely."""
+    candidates: list[BuilderImprovementCandidate] = []
+    for line in lines:
+        if line.startswith("ERR:"):
+            raise ValueError(line[4:])
+        parts = line.split("|")
+        if len(parts) != 6 or parts[0] != "BUILDER_IMPROVEMENT":
+            continue
+        candidates.append(
+            BuilderImprovementCandidate(
+                unit_index=int(parts[1]),
+                improvement_type=parts[2],
+                x=int(parts[3]),
+                y=int(parts[4]),
+                charges=int(parts[5]),
+            )
+        )
+    return candidates
+
+
+def parse_tile_improvement_state_response(lines: list[str]) -> TileImprovementState:
+    """Decode one direct post-mutation improvement observation."""
+    for line in lines:
+        if line.startswith("ERR:"):
+            raise ValueError(line[4:])
+        parts = line.split("|")
+        if len(parts) != 5 or parts[0] != "TILE_IMPROVEMENT":
+            continue
+        improvement_type = None if parts[3] == "NONE" else parts[3]
+        return TileImprovementState(
+            x=int(parts[1]),
+            y=int(parts[2]),
+            improvement_type=improvement_type,
+            is_pillaged=parts[4] == "true",
+        )
+    raise ValueError("缺少 TILE_IMPROVEMENT 响应。")
 
 
 def build_remove_feature(unit_index: int) -> str:

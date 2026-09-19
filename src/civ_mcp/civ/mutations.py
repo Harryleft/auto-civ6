@@ -39,6 +39,7 @@ from civ_mcp.lua.notifications import build_end_turn
 from civ_mcp.lua.tech import build_set_civic, build_set_research
 from civ_mcp.lua.units import (
     build_attack_unit,
+    build_builder_improvement,
     build_build_route,
     build_improve_tile,
     build_move_unit,
@@ -251,6 +252,67 @@ class CivMutationFactory:
                 {"city_id": city_id, "target_x": target_x, "target_y": target_y},
             ),
             request=CivMutationRequest("attack_city", build_city_attack(city_id, target_x, target_y)),
+            verify=verify,
+            operation_id=operation_id,
+            precheck=precheck,
+        )
+
+    def build_improvement(
+        self,
+        *,
+        operation_id: OperationId,
+        unit_index: int,
+        improvement_type: str,
+        observed_turn: int,
+    ) -> MutationExecution:
+        """Build a current-tile improvement with direct candidate and tile proof."""
+        candidate = None
+
+        async def precheck() -> None:
+            nonlocal candidate
+            try:
+                candidates = await self._adapter.read_builder_improvement_candidates(
+                    unit_index=unit_index,
+                    observed_turn=observed_turn,
+                )
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取建设者当前格的改良候选。") from exc
+            matches = [
+                item
+                for item in candidates.value
+                if item.unit_index == unit_index and item.improvement_type == improvement_type
+            ]
+            if len(matches) != 1:
+                raise MutationPreconditionError("目标不在建设者当前格的游戏允许候选中。")
+            candidate = matches[0]
+
+        async def verify() -> Evidence | None:
+            if candidate is None:
+                return None
+            try:
+                tile = await self._adapter.read_tile_improvement_state(
+                    x=candidate.x,
+                    y=candidate.y,
+                    observed_turn=observed_turn,
+                )
+            except Exception:
+                return None
+            if tile.value.improvement_type != improvement_type or tile.value.is_pillaged:
+                return None
+            return Evidence(
+                "read_tile_improvement_state",
+                tile.observed_turn,
+                f"unit_index={unit_index} built {improvement_type} at ({candidate.x},{candidate.y})",
+            )
+
+        return MutationExecution(
+            intent=OperationIntent.create(
+                "build_improvement",
+                {"unit_index": unit_index, "improvement_type": improvement_type},
+            ),
+            request=CivMutationRequest(
+                "build_improvement", build_builder_improvement(unit_index, improvement_type)
+            ),
             verify=verify,
             operation_id=operation_id,
             precheck=precheck,
