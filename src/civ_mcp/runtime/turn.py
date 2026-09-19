@@ -42,12 +42,32 @@ class TurnResult:
 Continuation = Callable[[str], Awaitable[TurnResult]]
 
 
+@dataclass(frozen=True, slots=True)
+class TurnObservation:
+    """A phase-safe read during AI processing; it has no write capability."""
+
+    advanced: bool = False
+    interrupt: DecisionInterrupt | None = None
+
+
+TurnObserver = Callable[[], Awaitable[TurnObservation]]
+Sleep = Callable[[float], Awaitable[None]]
+
+
 class TurnLoop:
     """Turn progression owns no transport, game process, or strategic policy."""
 
-    def __init__(self, session: SessionKernel) -> None:
+    def __init__(
+        self,
+        session: SessionKernel,
+        *,
+        observer: TurnObserver | None = None,
+        sleep: Sleep | None = None,
+    ) -> None:
         self._session = session
         self._continuations: dict[OperationId, tuple[DecisionInterrupt, Continuation]] = {}
+        self._observer = observer
+        self._sleep = sleep or _sleep
 
     async def end_turn(
         self, execution: MutationExecution, *, decision_turn: int
@@ -94,3 +114,43 @@ class TurnLoop:
             self._continuations[operation_id] = (interrupt, continuation)
             raise ValueError("choice 不属于该 interrupt 的 allowed_choices。")
         return await continuation(choice)
+
+    async def wait_for_turn(
+        self,
+        operation: OperationRecord,
+        *,
+        poll_interval: float = 1.0,
+        diagnostic_polls: int = 10,
+    ) -> TurnResult:
+        """Wait with reads only; a long wait is never proof of a game crash."""
+        if self._observer is None:
+            raise RuntimeError("TurnLoop 没有配置只读 turn observer。")
+        if diagnostic_polls < 1:
+            raise ValueError("diagnostic_polls 必须大于 0。")
+        for attempt in range(diagnostic_polls):
+            observed = await self._observer()
+            if observed.advanced:
+                return TurnResult(TurnOutcome.ADVANCED, operation)
+            if observed.interrupt is not None:
+                if observed.interrupt.continuation_operation_id != operation.operation_id:
+                    return TurnResult(
+                        TurnOutcome.RECOVERY_REQUIRED,
+                        operation,
+                        "turn interrupt 归属另一条 operation，拒绝接管。",
+                    )
+                return TurnResult(
+                    TurnOutcome.NEEDS_DECISION, operation, decision=observed.interrupt
+                )
+            if attempt + 1 < diagnostic_polls:
+                await self._sleep(poll_interval)
+        return TurnResult(
+            TurnOutcome.RECOVERY_REQUIRED,
+            operation,
+            "AI 回合在诊断阈值内未出现可验证进展；需显式恢复，不代表已崩溃。",
+        )
+
+
+async def _sleep(seconds: float) -> None:
+    import asyncio
+
+    await asyncio.sleep(seconds)
