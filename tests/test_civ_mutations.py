@@ -719,6 +719,41 @@ def test_trade_proposal_preserves_the_exact_hash_bound_terms() -> None:
     assert asyncio.run(execution.verify()) is None
 
 
+def test_trade_response_requires_the_observed_pending_deal_to_change() -> None:
+    deal = SimpleNamespace(
+        other_player_id=2,
+        items_from_them=[
+            SimpleNamespace(
+                is_from_us=False,
+                item_type="GOLD",
+                name="Gold (lump sum)",
+                amount=50,
+                duration=0,
+            )
+        ],
+        items_from_us=[],
+    )
+
+    class Adapter:
+        calls = 0
+
+        async def read_pending_deals(self, **_kwargs):
+            self.calls += 1
+            deals = [deal] if self.calls == 1 else []
+            return SimpleNamespace(value=deals, observed_turn=12)
+
+    execution = CivMutationFactory(Adapter()).respond_to_trade_offer(
+        operation_id=OperationId("trade-response-2"),
+        other_player_id=2,
+        choice="accept",
+        observed_turn=12,
+    )
+    asyncio.run(execution.precheck())
+    evidence = asyncio.run(execution.verify())
+    assert evidence.source == "read_pending_deals"
+    assert "DealProposalAction.ACCEPTED" in execution.request.lua_code
+
+
 def test_diplomacy_response_requires_a_fresh_session_transition() -> None:
     initial = SimpleNamespace(
         session_id=9,

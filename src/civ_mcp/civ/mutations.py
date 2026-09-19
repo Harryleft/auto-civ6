@@ -17,7 +17,11 @@ from civ_mcp.lua.cities import (
     build_resolve_city_capture,
     build_set_yield_focus,
 )
-from civ_mcp.lua.diplomacy import build_diplomacy_respond, build_propose_trade
+from civ_mcp.lua.diplomacy import (
+    build_diplomacy_respond,
+    build_propose_trade,
+    build_respond_to_deal,
+)
 from civ_mcp.lua.economy import build_make_trade_route
 from civ_mcp.lua.governance import (
     build_appoint_governor,
@@ -34,6 +38,7 @@ from civ_mcp.lua.great_people import build_recruit_great_person
 from civ_mcp.lua.espionage import build_spy_mission, build_spy_travel
 from civ_mcp.lua.congress import build_congress_submit, build_congress_vote
 from civ_mcp.lua.map import build_found_city, build_purchase_tile
+from civ_mcp.lua.models import PendingDeal
 from civ_mcp.lua.religion import build_choose_pantheon, build_found_religion, build_spread_religion
 from civ_mcp.lua.notifications import build_end_turn
 from civ_mcp.lua.tech import build_set_civic, build_set_research
@@ -52,6 +57,20 @@ from civ_mcp.runtime.session import MutationExecution, MutationPreconditionError
 
 
 AttackReadback = Callable[[], Awaitable[Evidence | None]]
+
+
+def _trade_terms(deal: PendingDeal) -> tuple[tuple[bool, str, str, int, int], ...]:
+    """Create a stable comparison key for the exact pending deal terms."""
+    return tuple(
+        (
+            item.is_from_us,
+            item.item_type,
+            item.name,
+            item.amount,
+            item.duration,
+        )
+        for item in (*deal.items_from_them, *deal.items_from_us)
+    )
 
 
 class CivMutationFactory:
@@ -929,6 +948,80 @@ class CivMutationFactory:
             ),
             verify=readback,
             operation_id=operation_id,
+        )
+
+    def respond_to_trade_offer(
+        self,
+        *,
+        operation_id: OperationId,
+        other_player_id: int,
+        choice: str,
+        observed_turn: int,
+    ) -> MutationExecution:
+        """Resolve one exact pending deal; closure, not Lua prose, is evidence.
+
+        A closed deal proves only that the selected response resolved this
+        observed offer.  It does not invent a broader diplomatic outcome.
+        """
+        normalized_choice = choice.upper()
+        if normalized_choice not in {"ACCEPT", "REJECT"}:
+            raise ValueError("交易回应只能是 ACCEPT 或 REJECT。")
+        baseline = None
+
+        async def precheck() -> None:
+            nonlocal baseline
+            try:
+                deals = await self._adapter.read_pending_deals(observed_turn=observed_turn)
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取待决交易的实际条款。") from exc
+            matches = [
+                deal for deal in deals.value if deal.other_player_id == other_player_id
+            ]
+            if len(matches) != 1:
+                raise MutationPreconditionError("当前不存在唯一匹配的待决交易，不提交回应。")
+            deal = matches[0]
+            if not deal.items_from_them and not deal.items_from_us:
+                raise MutationPreconditionError("待决交易缺少可验证条款，不提交回应。")
+            baseline = _trade_terms(deal)
+
+        async def verify() -> Evidence | None:
+            if baseline is None:
+                return None
+            try:
+                deals = await self._adapter.read_pending_deals(observed_turn=observed_turn)
+            except Exception:
+                return None
+            matches = [
+                deal for deal in deals.value if deal.other_player_id == other_player_id
+            ]
+            if not matches:
+                return Evidence(
+                    "read_pending_deals",
+                    deals.observed_turn,
+                    f"player_id={other_player_id} pending deal resolved after {normalized_choice}",
+                )
+            if len(matches) == 1 and _trade_terms(matches[0]) != baseline:
+                return Evidence(
+                    "read_pending_deals",
+                    deals.observed_turn,
+                    f"player_id={other_player_id} pending deal terms changed after {normalized_choice}",
+                )
+            return None
+
+        return MutationExecution(
+            intent=OperationIntent.create(
+                "respond_to_trade_offer",
+                {"other_player_id": other_player_id, "choice": normalized_choice},
+            ),
+            request=CivMutationRequest(
+                "respond_to_trade_offer",
+                build_respond_to_deal(
+                    other_player_id, accept=normalized_choice == "ACCEPT"
+                ),
+            ),
+            verify=verify,
+            operation_id=operation_id,
+            precheck=precheck,
         )
 
     def respond_to_diplomacy(
