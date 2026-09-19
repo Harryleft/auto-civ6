@@ -60,6 +60,11 @@ class RecoverySupervisor:
             return RecoveryResult(RecoveryOutcome.NEEDS_OPERATOR, "恢复驱动未确认稳定 game identity。")
         if recovered.game_id != request.game_id:
             return RecoveryResult(RecoveryOutcome.FAILED_SAFE, "恢复后的 game identity 与请求不一致。")
+        if recovered.branch_id == request.current_branch.value:
+            return RecoveryResult(
+                RecoveryOutcome.FAILED_SAFE,
+                "恢复不得复用原 branch_id；必须创建新的时间线。",
+            )
         return RecoveryResult(
             RecoveryOutcome.RECOVERED,
             "恢复完成；必须以新 branch 重新绑定 SessionKernel。",
