@@ -305,6 +305,72 @@ def test_bootstrap_returns_exact_trade_counter_offer_terms_to_the_model(tmp_path
     asyncio.run(run())
 
 
+def test_bootstrap_allows_only_explicit_congress_abstention_until_vote_readback_exists(tmp_path) -> None:
+    class Adapter:
+        def __init__(self) -> None:
+            self.game = GameIdentity("civilization_france_42")
+            self.overview_calls = 0
+            self.congress_calls = 0
+            self.submissions: list[str] = []
+
+        async def read_game_identity(self):
+            return SimpleNamespace(value=self.game)
+
+        async def read_overview(self):
+            self.overview_calls += 1
+            turn = 11 if self.overview_calls >= 6 else 10
+            return SimpleNamespace(value=SimpleNamespace(turn=turn))
+
+        async def read_world_congress(self, *, observed_turn):
+            self.congress_calls += 1
+            return SimpleNamespace(
+                value=SimpleNamespace(
+                    is_in_session=self.congress_calls < 3,
+                    favor=25,
+                    max_votes=3,
+                    favor_costs=[0, 5, 10, 15],
+                    resolutions=[],
+                    proposals=[],
+                ),
+                observed_turn=observed_turn,
+            )
+
+        async def submit(self, request):
+            self.submissions.append(request.tool)
+            return TransportReceipt(SendState.MAYBE_SENT, True, (), True)
+
+    async def run() -> None:
+        adapter = Adapter()
+        assembly = await assemble_runtime(
+            adapter,
+            OperationStore(tmp_path / "operations.sqlite3"),
+            branch_token="save-0001",
+        )
+
+        async def no_immediate_evidence():
+            return None
+
+        interrupted = await assembly.surface.end_turn(
+            assembly.mutations.end_turn(
+                operation_id=OperationId("end-turn-congress"),
+                readback=no_immediate_evidence,
+            ),
+            decision_turn=10,
+        )
+        resumed = await assembly.surface.resume_turn_decision(
+            OperationId("end-turn-congress"), "SUBMIT_ABSTAIN"
+        )
+
+        assert interrupted.outcome is TurnOutcome.NEEDS_DECISION
+        assert interrupted.decision.decision_type == "WORLD_CONGRESS"
+        assert interrupted.decision.allowed_choices == ("SUBMIT_ABSTAIN",)
+        assert interrupted.decision.facts["favor"] == 25
+        assert resumed.outcome is TurnOutcome.ADVANCED
+        assert adapter.submissions == ["end_turn", "submit_congress"]
+
+    asyncio.run(run())
+
+
 def test_bootstrap_resumes_a_city_capture_interrupt_without_a_second_end_turn(tmp_path) -> None:
     pending_capture = SimpleNamespace(
         city_id=9,

@@ -22,6 +22,7 @@ from civ_mcp.lua.cities import (
     parse_city_purchase_response,
     parse_pending_city_capture_response,
 )
+from civ_mcp.lua.congress import build_world_congress_query, parse_world_congress_response
 from civ_mcp.lua.diplomacy import (
     build_diplomacy_query,
     build_diplomacy_session_query,
@@ -78,6 +79,7 @@ from civ_mcp.lua.models import (
     UnitInfo,
     UnitPromotionStatus,
     VictoryProgress,
+    WorldCongressStatus,
 )
 from civ_mcp.lua.overview import (
     build_game_identity_query,
@@ -461,6 +463,21 @@ class CivAdapter:
                 lua_code=build_pending_deals_query(),
                 decode=lambda lines: parse_pending_deals_response(list(lines)),
                 coverage="PENDING_DEALS:COMPLETE",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
+    async def read_world_congress(
+        self, *, observed_turn: int
+    ) -> CivReadResult[WorldCongressStatus]:
+        """Read the current World Congress state without casting a vote."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_world_congress",
+                lua_code=build_world_congress_query(),
+                decode=lambda lines: parse_world_congress_response(list(lines)),
+                coverage="WORLD_CONGRESS:COMPLETE",
                 context="ingame",
             ),
             observed_turn=observed_turn,

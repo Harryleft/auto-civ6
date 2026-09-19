@@ -1024,6 +1024,46 @@ class CivMutationFactory:
             precheck=precheck,
         )
 
+    def submit_congress(
+        self, *, operation_id: OperationId, observed_turn: int
+    ) -> MutationExecution:
+        """Submit an explicitly abstaining congress session without ending turn anew."""
+
+        async def precheck() -> None:
+            try:
+                status = await self._adapter.read_world_congress(
+                    observed_turn=observed_turn
+                )
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取世界议会当前状态。") from exc
+            if not status.value.is_in_session:
+                raise MutationPreconditionError("当前没有可提交的世界议会会话。")
+
+        async def verify() -> Evidence | None:
+            try:
+                status = await self._adapter.read_world_congress(
+                    observed_turn=observed_turn
+                )
+            except Exception:
+                return None
+            if status.value.is_in_session:
+                return None
+            return Evidence(
+                "read_world_congress",
+                status.observed_turn,
+                "world congress session closed after abstaining submission",
+            )
+
+        return MutationExecution(
+            intent=OperationIntent.create("submit_congress", {"choice": "SUBMIT_ABSTAIN"}),
+            request=CivMutationRequest(
+                "submit_congress", build_congress_submit(resume_pending=True)
+            ),
+            verify=verify,
+            operation_id=operation_id,
+            precheck=precheck,
+        )
+
     def respond_to_diplomacy(
         self,
         *,
