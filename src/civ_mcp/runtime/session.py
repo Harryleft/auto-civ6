@@ -80,6 +80,18 @@ class SessionKernel:
     def binding(self) -> SessionBinding | None:
         return self._binding
 
+    async def current_binding(self) -> SessionBinding:
+        """Return a binding only when Civ6 still identifies as that game."""
+        binding = self._require_binding()
+        if await self._identity_probe() != binding.game_id:
+            raise SessionIdentityMismatchError("Civ6 当前对局已不属于 Runtime session binding。")
+        return binding
+
+    async def assert_binding_current(self, binding: SessionBinding) -> None:
+        """Reject a multi-read composition that crossed a game/branch boundary."""
+        if self._binding != binding or await self._identity_probe() != binding.game_id:
+            raise StaleSessionRequestError("读取期间 Civ6 game/branch 已变化，拒绝混合上下文。")
+
     def current_operations(self) -> list[OperationRecord]:
         return self._store.list_operations_for_branch(self._require_binding().branch_id)
 
