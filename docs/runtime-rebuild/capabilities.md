@@ -11,12 +11,14 @@
 
 | 类别 | 工具 | 运行时保证 |
 | --- | --- | --- |
-| 局面读取 | `get_runtime_context`、`get_unit_promotions`、`get_unit_attack_target`、`get_city_attack_target`、`get_district_placements`、`get_builder_improvement_candidates`、`get_pending_deals`、`get_city_states`、`get_governors`、`get_governments`、`get_policies`、`get_city_purchases`、`get_city_production`、`get_trade_destinations`、`get_trade_routes` | 前者一次读取 overview、城市、待决城市占领、单位、外交/会话、科技/市政、万神殿、时代着力点、大人物和胜利进度；两种攻击目标读取只确认一个由坐标指定、游戏当前允许的实时目标；`get_district_placements` 只返回实际 `BUILD` 操作接受的格点，不自行过滤水格；`get_builder_improvement_candidates` 仅检查建设者当前格，绝不探测远程格点；`get_pending_deals` 返回双方结构化实际条款；其余细粒度读取按工具名返回当前领域事实，单项失败在 `unknown` 中显式保留。 |
+| 局面读取 | `get_runtime_context`、`get_unit_promotions`、`get_unit_attack_target`、`get_city_attack_target`、`get_district_placements`、`get_builder_improvement_candidates`、`get_pending_deals`、`get_city_states`、`get_governors`、`get_governments`、`get_policies`、`get_city_purchases`、`get_city_production`、`get_trade_destinations`、`get_trade_routes` | 前者一次读取 overview、城市、待决城市占领、单位、外交/会话、科技/市政、万神殿、时代着力点、大人物和胜利进度；同时返回 `pending_decisions`（仅当前进程、可恢复的 turn blocker 的事实快照）、`unfinished_intents` 与 handoff。两种攻击目标读取只确认一个由坐标指定、游戏当前允许的实时目标；`get_district_placements` 只返回实际 `BUILD` 操作接受的格点，不自行过滤水格；`get_builder_improvement_candidates` 仅检查建设者当前格，绝不探测远程格点；`get_pending_deals` 返回双方结构化实际条款；其余细粒度读取按工具名返回当前领域事实，单项失败在 `unknown` 中显式保留。 |
 | 战略连续性 | `save_handoff` | 仅写当前 branch 的战略重点、已有安排、理由和改变条件；不修改游戏事实或 operation。 |
 | 常规 mutation | `move_unit`、`attack_unit`、`attack_city`、`build_improvement`、`upgrade_unit`、`promote_unit`、`send_envoy`、`appoint_governor`、`assign_governor`、`promote_governor`、`change_government`、`set_policies`、`set_city_production`、`purchase_item`、`make_trade_route`、`propose_trade`、`set_research`、`set_civic`、`found_city`、`choose_pantheon`、`choose_dedication`、`recruit_great_person` | 每次请求绑定 game/branch/operation/decision turn，经 `SessionKernel` 单次发送，且仅由领域 readback 确认。两种攻击都只提交实时合法目标，且只在指定目标减血或消失时确认；目标读回缺失或血量未变均为 `UNKNOWN`。`build_improvement` 仅允许建设者在当前格执行，且只以该固定格的新改良设施读回确认。`set_city_production` 的区域类型必须带一个 `get_district_placements` 返回的格点，写入前的 `CanStartOperation` 失败时不发送，并要求城市回读同时出现该区域类型与指定格点。`propose_trade` 严格校验插入 Lua 的参数；新回价会以事实确认，未观察到回价时保持 `UNKNOWN`，不得自动接受。其余 mutation 保持各自候选与领域读回契约。 |
 | 回合 | `end_turn`、`resume_turn_decision` | 原 end-turn 只发送一次；等待期只读轮询。当前可恢复的 blocker 是单一城市占领选择、单一且条款完整的待决交易回价、世界议会、单一普通外交会话，以及有可用使者时的城邦选择。交易回价的 `choice` 仅为 `ACCEPT` 或 `REJECT`，会把实际双方条款返回模型；世界议会当前只有模型显式选择的 `SUBMIT_ABSTAIN`，不投票；使者的 `choice` 为返回的城邦 player ID。 |
 
 `UNKNOWN`、`RECOVERY_REQUIRED` 与 `NEEDS_DECISION` 都不是成功，也不会触发重试。
+`pending_decisions` 不持有 continuation；进程重启后它会为空，原 operation 仍保留在
+`unfinished_intents` 中并进入显式 Recovery 边界，绝不伪造可恢复的决策。
 
 ## 明确不支持
 
