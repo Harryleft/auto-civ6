@@ -18,6 +18,7 @@ from civ_mcp.lua.cities import (
     parse_pending_city_capture_response,
 )
 from civ_mcp.lua.religion import parse_pantheon_status_response
+from civ_mcp.lua.governance import parse_dedications_response
 from civ_mcp.lua.map import parse_map_response
 from civ_mcp.lua.notifications import parse_end_turn_blocking
 
@@ -334,6 +335,11 @@ def test_city_capture_parsers_require_explicit_pending_and_post_state_markers() 
 def test_pantheon_parser_rejects_a_missing_status_marker() -> None:
     with pytest.raises(ValueError, match="STATUS"):
         parse_pantheon_status_response(["BELIEF|BELIEF_DIVINE_SPARK|Divine Spark|Points"])
+
+
+def test_dedications_parser_rejects_a_missing_status_marker() -> None:
+    with pytest.raises(ValueError, match="STATUS"):
+        parse_dedications_response(["CHOICE|4|COMMEMORATION_FREE_INQUIRY|N|G|D"])
 
 
 # ---------------------------------------------------------------------------
