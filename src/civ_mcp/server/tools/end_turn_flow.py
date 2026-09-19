@@ -8,7 +8,7 @@ import asyncio
 import logging
 import os
 import re
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 
 from mcp.server.fastmcp import Context
@@ -19,7 +19,7 @@ from civ_mcp.diary import (
     diary_path as _diary_path,
     merge_agent_reflections as _merge_agent_reflections,
 )
-from civ_mcp.end_turn import end_turn_budget
+from civ_mcp.end_turn import end_turn_budget, end_turn_confirmation
 from civ_mcp.server import pipeline
 from civ_mcp.telemetry import EVENT_CITY_ROW, EVENT_DIARY_ROW
 
@@ -36,18 +36,56 @@ def _budget_seconds() -> float:
     return end_turn_budget(wc_turn=True).total_seconds
 
 
-# Returned when the call runs out of its own time budget. The turn may still
-# advance inside the game after the cancellation, so the only safe next step is
-# a read-only confirmation: never another end_turn.
+# An expired waiter cannot cancel a request inside Civ VI. Re-enter the
+# pending-aware end_turn path; ordinary InGame overview queries may be blocked
+# until the game returns control, and must not be prescribed as the only exit.
 _BUDGET_EXHAUSTED_RECEIPT = (
     "结果未知 — end_turn 已超过本次调用的时间预算（{budget:.0f} 秒）。"
-    "结束回合请求很可能已经送达游戏，因此不要再次调用 end_turn，也不要重复任何"
-    "可能已发出的购买/移动/生产改动。\n"
-    "下一步只读核验：调用 get_game_overview 读取当前回合号，与本回合开始前记录的"
-    "回合号比较。回合号已推进说明本回合已经完成；回合号未变才需要检查阻塞项"
-    "（get_pending_diplomacy / get_notifications）并另行决定。\n"
+    "游戏可能仍在处理本次结束回合请求，不要重复任何可能已发出的购买/移动/生产改动。\n"
+    "下一步可调用 end_turn 做只读续等：已在途请求不会重发 ACTION_ENDTURN；"
+    "只有明确尚未提交的请求才允许首次提交。"
+    "回合推进得到确认后，再调用 get_game_overview 补取局面。"
+    "等待到期不代表游戏已经停止，也不授权自动重启。\n"
     "UNKNOWN:END_TURN_BUDGET_EXHAUSTED"
 )
+
+
+def _confirmed_turns(result: str) -> tuple[int, int] | None:
+    match = re.search(r"(?:^|\n)Turn (\d+) -> (\d+)", result)
+    if match and int(match.group(2)) > int(match.group(1)):
+        return int(match.group(1)), int(match.group(2))
+    return None
+
+
+@dataclass
+class _EndTurnReceipt:
+    # Per-call state: overlapping callers must never inherit one another's
+    # receipt. Save it before telemetry/briefing can suspend or be cancelled.
+    confirmed_result: str | None = None
+
+    def record(self, result: str) -> None:
+        if _confirmed_turns(result) is not None:
+            self.confirmed_result = result
+
+
+def _brief_pending_result(result: str) -> str:
+    turns = _confirmed_turns(result)
+    assert turns is not None
+    return result + (
+        "\n\n=== 推进已确认，简报待重取 ===\n"
+        f"回合推进已经确认（T{turns[0]} → T{turns[1]}），"
+        "但后处理或下一回合局面简报尚未完成。\n"
+        "只允许重新读取局面：调用 get_game_overview。"
+        "不要再次调用 end_turn，也不要重复本回合已经发出的任何改动。\n"
+        "CONFIRMED:END_TURN_ADVANCED\n"
+        "BRIEF_PENDING:RE_READ_OVERVIEW_ONLY"
+    )
+
+
+@dataclass
+class _SharedEndTurnFlow:
+    task: asyncio.Task[str]
+    waiters: int = 0
 
 
 async def run_end_turn(
@@ -58,17 +96,60 @@ async def run_end_turn(
     planning: str = "",
     hypothesis: str = "",
 ) -> str:
-    """End the current turn inside an enforced time budget.
+    """Coalesce the whole call, including diary preparation and post-processing.
 
-    One end_turn blocks inside the DSH tool-call deadline while the AI civs
-    play. The budget is derived in ``civ_mcp.end_turn`` and asserted against the
-    host deadline by ``tests/test_end_turn_budget.py``; enforcing it here as
-    well means an unexpectedly slow game returns a machine-readable "outcome
-    unknown" receipt instead of being killed by the host, which the agent could
-    not tell apart from "the turn never advanced".
+    Coalescing only the core action is too late: a second caller can still be
+    gathering its diary when the first advances, then accidentally end the new
+    turn. All overlapping callers therefore share one bounded operation. A
+    cancelled waiter cannot cancel other waiters' request; when the final
+    waiter leaves, cancellation still reaches the core and releases I/O.
     """
+    gs = pipeline._get_game(ctx)
+    operation = getattr(gs, "_end_turn_flow_operation", None)
+    if operation is None or operation.task.done():
+        operation = _SharedEndTurnFlow(
+            asyncio.create_task(
+                _run_end_turn_bounded(
+                    ctx,
+                    tactical=tactical,
+                    strategic=strategic,
+                    tooling=tooling,
+                    planning=planning,
+                    hypothesis=hypothesis,
+                )
+            )
+        )
+        gs._end_turn_flow_operation = operation
+    operation.waiters += 1
+    try:
+        # This task owns its own deadline; shielding it never creates an
+        # unbounded background operation.
+        return await asyncio.shield(operation.task)
+    finally:
+        operation.waiters -= 1
+        if operation.waiters == 0 and not operation.task.done():
+            operation.task.cancel()
+            try:
+                await operation.task
+            except (asyncio.CancelledError, Exception):
+                pass
+        if getattr(gs, "_end_turn_flow_operation", None) is operation and operation.task.done():
+            gs._end_turn_flow_operation = None
+
+
+async def _run_end_turn_bounded(
+    ctx: Context,
+    tactical: str = "",
+    strategic: str = "",
+    tooling: str = "",
+    planning: str = "",
+    hypothesis: str = "",
+) -> str:
+    """Enforce one operation deadline without downgrading confirmed execution."""
 
     budget_seconds = _budget_seconds()
+    receipt = _EndTurnReceipt()
+    token = end_turn_confirmation.set(receipt.record)
     try:
         async with asyncio.timeout(budget_seconds):
             return await _run_end_turn_impl(
@@ -78,8 +159,14 @@ async def run_end_turn(
                 tooling=tooling,
                 planning=planning,
                 hypothesis=hypothesis,
+                _receipt=receipt,
             )
     except TimeoutError:
+        if receipt.confirmed_result is not None:
+            log.warning("end_turn confirmed; post-processing exceeded the call budget")
+            return pipeline._filter_downstream_result(
+                "end_turn", {}, _brief_pending_result(receipt.confirmed_result)
+            )
         log.error(
             "end_turn exceeded its %.0fs budget; reporting an unknown outcome",
             budget_seconds,
@@ -89,6 +176,15 @@ async def run_end_turn(
             {},
             _BUDGET_EXHAUSTED_RECEIPT.format(budget=budget_seconds),
         )
+    except Exception:
+        if receipt.confirmed_result is None:
+            raise
+        log.warning("end_turn confirmed; post-processing failed", exc_info=True)
+        return pipeline._filter_downstream_result(
+            "end_turn", {}, _brief_pending_result(receipt.confirmed_result)
+        )
+    finally:
+        end_turn_confirmation.reset(token)
 
 
 async def _run_end_turn_impl(
@@ -99,6 +195,7 @@ async def _run_end_turn_impl(
     tooling: str = "",
     planning: str = "",
     hypothesis: str = "",
+    _receipt: _EndTurnReceipt | None = None,
 ) -> str:
     """Run the end-turn flow."""
     gs = pipeline._get_game(ctx)
@@ -107,6 +204,18 @@ async def _run_end_turn_impl(
         """Render only after end-turn control flow has consumed raw markers."""
 
         return pipeline._filter_downstream_result("end_turn", {}, raw_result)
+
+    # Continuation is observation of the existing request. Avoid the diary's
+    # InGame queries before reaching the pending-aware state machine.
+    if getattr(gs, "_pending_end_turn", False):
+        identity = getattr(gs, "_game_identity", None)
+        return await _complete_end_turn(
+            ctx,
+            _diary_turn=getattr(gs, "_pending_end_turn_from", None) or 0,
+            _diary_civ_type=identity[0] if identity else None,
+            _diary_seed=identity[1] if identity else None,
+            _receipt=_receipt,
+        )
 
     reflections = {
         "tactical": tactical,
@@ -122,12 +231,9 @@ async def _run_end_turn_impl(
     # empty rather than filled with invented "no issues" / "done" text, so the
     # diary never claims the model observed something it did not.
     #
-    # A continuation call is exempt: waiting for a slow turn now spans calls, and
-    # this turn's diary entry was already written by the first one. Demanding the
-    # same five essays again on every "keep waiting" would be pure ceremony.
-    continuing = bool(getattr(gs, "_pending_end_turn", False))
+    # Continuations already branched above and never re-run this preparation.
     requires_reflections = pipeline._get_play_profile(ctx).requires_reflections
-    if missing and not continuing and requires_reflections:
+    if missing and requires_reflections:
         return _render_result(
             f"Empty reflections: {', '.join(missing)}. "
             "Provide non-empty entries for all 5 fields: "
@@ -252,13 +358,47 @@ async def _run_end_turn_impl(
             except Exception:
                 log.warning("Diary: failed to write entry", exc_info=True)
 
+    return await _complete_end_turn(
+        ctx,
+        _diary_turn=_diary_turn,
+        _diary_civ_type=_diary_civ_type,
+        _diary_seed=_diary_seed,
+        _receipt=_receipt,
+    )
+
+
+async def _complete_end_turn(
+    ctx: Context,
+    *,
+    _diary_turn: int = 0,
+    _diary_civ_type: str | None = None,
+    _diary_seed: int | None = None,
+    _receipt: _EndTurnReceipt | None = None,
+) -> str:
+    """Execute/observe once, then use the remaining call budget for extras."""
+    gs = pipeline._get_game(ctx)
+    receipt = _receipt if _receipt is not None else _EndTurnReceipt()
+
+    def _render_result(raw_result: str) -> str:
+        return pipeline._filter_downstream_result("end_turn", {}, raw_result)
+
+    async def execute_and_record() -> str:
+        raw = await gs.end_turn()
+        receipt.record(raw)
+        return raw
+
     # Advance the turn
     # Keep the machine result raw while this wrapper handles HANG, turn
     # advancement, blockers, watchdogs, and game-over logging.  Localize once
     # at the final return so those branches do not lose their prefixes.
     result = await pipeline._logged(
-        ctx, "end_turn", {}, gs.end_turn, localize=False
+        ctx, "end_turn", {}, execute_and_record, localize=False
     )
+    receipt.record(result)
+    if receipt.confirmed_result is not None and _confirmed_turns(result) is None:
+        # The pipeline can turn a failure after the core confirmation into an
+        # error receipt. Preserve the stronger evidence already recorded.
+        return _render_result(_brief_pending_result(receipt.confirmed_result))
 
     # ---------------------------------------------------------------
     # A wedged AI turn is *reported*, not repaired here.
@@ -280,9 +420,9 @@ async def _run_end_turn_impl(
             hang_save,
         )
         return _render_result(
-            f"HANG:{hang_turn}:{hang_save}|"
-            "结果未知 — 本回合疑似卡在 AI 处理阶段，本次调用没有重启游戏。\n"
-            f"待核验存档: {hang_save}（读取前先用 get_game_overview 确认当前回合号）。\n"
+            result + "\n"
+            "等待已达到诊断阈值，推进结果尚未确认，本次调用没有重启游戏。\n"
+            f"待核验存档: {hang_save}。在途期间诊断使用 GameCore 或明确的外交/议会查询。\n"
             "下一步：停止本回合循环并原样报告。重启游戏是宿主机/操作者的动作，"
             "按 kill_game → launch_game → load_game_save 分开执行（每次一个独立调用），"
             "不要在本回合循环里尝试重启，也不要等待重启结果。\n"
@@ -292,9 +432,7 @@ async def _run_end_turn_impl(
 
 
     # Clear stale camera events on successful turn advance
-    turn_advanced = (
-        "->" in result and "Cannot end turn" not in result and "Error" not in result
-    )
+    turn_advanced = _confirmed_turns(result) is not None
     if turn_advanced:
         pipeline._get_camera(ctx).clear()
         gs._end_turn_blocked = False
@@ -316,27 +454,8 @@ async def _run_end_turn_impl(
                 log.debug("Map capture failed", exc_info=True)
     elif "Turn paused" in result or "World Congress fires" in result:
         gs._end_turn_blocked = True
-        # Safety net: if WC blocker fires repeatedly on the same turn,
-        # auto-submit to break infinite loops (agent used wrong voting tool)
-        if "World Congress fires" in result:
-            wc_turn = getattr(gs, "_wc_blocker_turn", -1)
-            wc_count = getattr(gs, "_wc_blocker_count", 0)
-            current = _diary_turn or 0
-            if wc_turn == current:
-                gs._wc_blocker_count = wc_count + 1
-                if gs._wc_blocker_count >= 3:
-                    log.warning(
-                        "WC blocker repeated %d times on T%d — auto-submitting",
-                        gs._wc_blocker_count,
-                        current,
-                    )
-                    try:
-                        await gs.submit_congress()
-                    except Exception:
-                        log.debug("WC auto-submit failed", exc_info=True)
-            else:
-                gs._wc_blocker_turn = current
-                gs._wc_blocker_count = 1
+        # Repeated observations do not authorize submitting a congress vote.
+        # Leave the blocker visible for the explicit resolution path.
 
     # Log structured game-over entry.
     # Also check on HANG — the game may have ended during AI processing but
@@ -411,14 +530,7 @@ async def _run_end_turn_impl(
             # The action succeeded and only the briefing failed. Reporting this
             # as a plain failure would invite a resend of an end_turn that
             # already took effect, so say exactly which half succeeded.
-            result += (
-                "\n\n=== 推进已确认，简报待重取 ===\n"
-                f"回合推进已经确认（T{_diary_turn or '?'} → T{expected_turn}），"
-                "但下一回合局面简报采集失败。\n"
-                "只允许重新读取局面：调用 get_game_overview。"
-                "不要再次调用 end_turn，也不要重复本回合已经发出的任何改动。\n"
-                "BRIEF_PENDING:RE_READ_OVERVIEW_ONLY"
-            )
+            result = _brief_pending_result(result)
         else:
             result += "\n\n" + brief_context.brief
             if expected_turn is not None and brief_context.turn != expected_turn:

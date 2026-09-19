@@ -78,11 +78,13 @@ def _make_conn(monkeypatch, send_behaviors, recv_script):
 
     async def fake_reconnect(self):
         reconnect_log.append(True)
+        self._reader = object()
+        self._writer = _FakeWriter()
 
     monkeypatch.setattr(tuner_client, "send_message", fake_send)
     monkeypatch.setattr(tuner_client, "recv_message_timeout", fake_recv)
     monkeypatch.setattr(tuner_client, "drain_messages", fake_drain)
-    monkeypatch.setattr(GameConnection, "reconnect", fake_reconnect)
+    monkeypatch.setattr(GameConnection, "_reconnect", fake_reconnect)
     return conn, sent, reconnect_log
 
 

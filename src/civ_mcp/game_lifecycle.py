@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 import logging
 import re
+import uuid
 
 from civ_mcp import lua as lq
-from civ_mcp.connection import GameConnection
+from civ_mcp.connection import CommandNotSentError, GameConnection
 
 log = logging.getLogger(__name__)
 
@@ -25,6 +26,60 @@ def _validate_save_name(save_name: str) -> str | None:
             "without extension (letters, digits, '.', '_' or '-')."
         )
     return None
+
+
+async def _prepare_load_probe(conn: GameConnection) -> None:
+    """Install an acknowledged UI-session marker before attempting a load.
+
+    Reconnecting alone does not prove a reload. This marker survives a tuner
+    reconnect but disappears when Civ VI replaces the InGame Lua world, so a
+    same-seed, same-turn save can still be verified without resending the load.
+    """
+    token = uuid.uuid4().hex
+    lines = await conn.execute_mutation(
+        'if not ExposedMembers then ExposedMembers = {} end; '
+        f'ExposedMembers.MCPReloadProbe = "{token}"; '
+        f'print("RELOAD_PROBE|{token}"); print("{lq.SENTINEL}")',
+        turn_action="load",
+    )
+    if f"RELOAD_PROBE|{token}" not in lines:
+        raise ValueError("无法确认读档前的局面标记，未发送加载请求")
+    conn._load_probe_token = token
+    conn._load_probe_from_menu = False
+
+
+async def verify_loaded_world(conn: GameConnection) -> bool:
+    """Read-only proof that an attempted load reached a different Lua world."""
+    token = getattr(conn, "_load_probe_token", None)
+    from_menu = getattr(conn, "_load_probe_from_menu", False) is True
+    revision = getattr(conn, "load_revision", None)
+    if not isinstance(token, str) and not from_menu:
+        return False
+    try:
+        await conn.reconnect()
+        if conn.gamecore_index is None or conn.ingame_index is None:
+            return False
+        lines = await conn.execute_write(
+            'local me = Game.GetLocalPlayer(); '
+            'if me ~= nil and me >= 0 and Players[me] ~= nil then '
+            'print("RELOAD_WORLD|" .. tostring(Game.GetCurrentGameTurn()) '
+            '.. "|" .. tostring(ExposedMembers and ExposedMembers.MCPReloadProbe)); '
+            f'end; print("{lq.SENTINEL}")',
+            turn_action="load",
+        )
+        for line in lines:
+            if line.startswith("RELOAD_WORLD|"):
+                parts = line.split("|")
+                if len(parts) == 3 and int(parts[1]) >= 0:
+                    return (
+                        (from_menu or parts[2] == "nil")
+                        and getattr(conn, "load_revision", None) == revision
+                        and getattr(conn, "_load_probe_token", None) == token
+                        and (getattr(conn, "_load_probe_from_menu", False) is True) == from_menu
+                    )
+    except Exception:
+        log.debug("读档后的新局面尚未确认", exc_info=True)
+    return False
 
 
 async def load_save_from_frontend(
@@ -58,12 +113,16 @@ loadGame.IsQuicksave = false;
 loadGame.Directory = SaveDirectories.DEFAULT;
 loadGame.Name = {json.dumps(save_name)};
 local automationOK = pcall(function() Automation.SetAutoStartEnabled(true); end);
-Network.LeaveGame();
 local loadOK = Network.LoadGame(loadGame, ServerType.SERVER_TYPE_NONE);
 print("MCP_FRONTEND_AUTOSTART|" .. tostring(automationOK));
 print("MCP_FRONTEND_LOAD|" .. tostring(loadOK));
 print("{lq.SENTINEL}");
 """
+    was_pending = getattr(conn, "reload_pending", False) is True
+    conn._load_probe_token = None
+    conn._load_probe_from_menu = True
+    conn.reload_pending = True
+    conn.load_revision = getattr(conn, "load_revision", 0) + 1
     try:
         lines = await conn.execute_in_state(
             main_menu_index,
@@ -71,11 +130,18 @@ print("{lq.SENTINEL}");
             timeout=5.0,
             mutation=True,
             require_sentinel=False,
+            turn_action="load",
         )
+    except CommandNotSentError as exc:
+        conn.reload_pending = was_pending
+        return f"Error: {exc} LOAD_NOT_SUBMITTED"
     except Exception as exc:
         return f"Error: FrontEnd API failed for {save_name}: {exc}"
+    if "MCP_FRONTEND_LOAD|false" in lines:
+        conn.reload_pending = was_pending
+        return f"Error: FrontEnd refused save {save_name}: {lines!r} LOAD_NOT_SUBMITTED"
     if "MCP_FRONTEND_LOAD|true" not in lines:
-        return f"Error: FrontEnd refused save {save_name}: {lines!r}"
+        return f"ERR:OUTCOME_UNKNOWN|无法确认 {save_name} 的加载结果：{lines!r}"
     if "MCP_FRONTEND_AUTOSTART|true" not in lines:
         return (
             "Error: save loading began but Civ VI automation auto-start was "
@@ -517,27 +583,38 @@ async def load_save(conn: GameConnection, save_index: int) -> str:
     The game will reload — the FireTuner connection stays alive but
     all Lua state is wiped. Wait a few seconds after calling this.
     """
-    lines = await conn.execute_mutation(
-        f"if not ExposedMembers or not ExposedMembers.MCPSaveList then "
-        f'  print("ERR:NO_SAVE_LIST"); print("{lq.SENTINEL}"); return '
-        f"end; "
-        f"local fl = ExposedMembers.MCPSaveList; "
-        f"local idx = {save_index}; "
-        f"if idx < 1 or idx > #fl then "
-        f'  print("ERR:INDEX_OUT_OF_RANGE|" .. #fl); print("{lq.SENTINEL}"); return '
-        f"end; "
-        f"local save = fl[idx]; "
-        f'print("LOADING|" .. tostring(save.Name)); '
-        f'print("{lq.SENTINEL}"); '
-        f"Network.LeaveGame(); "
-        f"Network.LoadGame(save, ServerType.SERVER_TYPE_NONE)"
-    )
+    await _prepare_load_probe(conn)
+    was_pending = getattr(conn, "reload_pending", False) is True
+    conn.reload_pending = True
+    conn.load_revision = getattr(conn, "load_revision", 0) + 1
+    try:
+        lines = await conn.execute_mutation(
+            f"if not ExposedMembers or not ExposedMembers.MCPSaveList then "
+            f'  print("ERR:NO_SAVE_LIST"); print("{lq.SENTINEL}"); return '
+            f"end; "
+            f"local fl = ExposedMembers.MCPSaveList; "
+            f"local idx = {save_index}; "
+            f"if idx < 1 or idx > #fl then "
+            f'  print("ERR:INDEX_OUT_OF_RANGE|" .. #fl); print("{lq.SENTINEL}"); return '
+            f"end; "
+            f"local save = fl[idx]; "
+            f'print("LOADING|" .. tostring(save.Name)); '
+            f'print("{lq.SENTINEL}"); '
+            f"Network.LeaveGame(); "
+            f"Network.LoadGame(save, ServerType.SERVER_TYPE_NONE)",
+            turn_action="load",
+        )
+    except CommandNotSentError as exc:
+        conn.reload_pending = was_pending
+        return f"Error: {exc} LOAD_NOT_SUBMITTED"
     for line in lines:
         if line.startswith("ERR:NO_SAVE_LIST"):
-            return "Error: No save list cached. Call list_saves() first."
+            conn.reload_pending = was_pending
+            return "Error: No save list cached. Call list_saves() first. LOAD_NOT_SUBMITTED"
         if line.startswith("ERR:INDEX_OUT_OF_RANGE"):
             count = line.split("|")[1] if "|" in line else "?"
-            return f"Error: Index {save_index} out of range (1-{count}). Call list_saves() to see available saves."
+            conn.reload_pending = was_pending
+            return f"Error: Index {save_index} out of range (1-{count}). Call list_saves() to see available saves. LOAD_NOT_SUBMITTED"
         if line.startswith("LOADING|"):
             name = line.split("|", 1)[1]
             return f"Loading save: {name}. Game will reload — wait ~10 seconds then call get_game_overview to verify."
@@ -547,10 +624,9 @@ async def load_save(conn: GameConnection, save_index: int) -> str:
 async def load_game_save(conn: GameConnection, save_name: str) -> str:
     """Load a save by name — no list_saves() prerequisite.
 
-    Two-tier approach:
-    1. Lua: query save list, find by name, load in one async operation.
-    2. Filesystem: verify the file exists, restart and use Civ VI's FrontEnd
-       API to load it. OCR is an explicit, opt-in last-resort fallback.
+    Use native FrontEnd loading at the menu, or one asynchronous in-game
+    query-and-load. An unconfirmed request is never followed by a restart or
+    another load; only read-back or the explicit recovery tool can resolve it.
     """
     import asyncio
     import sys
@@ -579,6 +655,8 @@ async def load_game_save(conn: GameConnection, save_name: str) -> str:
         frontend_result = await load_save_from_frontend(conn, save_name)
         if not frontend_result.startswith("Error:"):
             return frontend_result
+        if "LOAD_NOT_SUBMITTED" not in frontend_result:
+            return frontend_result
         if not game_launcher.ocr_recovery_enabled():
             return (
                 f"{frontend_result} OCR fallback is disabled by default; set "
@@ -586,11 +664,15 @@ async def load_game_save(conn: GameConnection, save_name: str) -> str:
             )
         return await game_launcher.load_save_from_menu(save_name)
 
-    # On the Aspyr Linux port, Network.LoadGame silently does nothing
-    # (same as Network.SaveGame). Skip the in-game Lua tier and continue to
-    # the restart/FrontEnd API path below.
+    # The Linux port cannot use in-game loading. Report the explicit recovery
+    # path below instead of hiding a process restart inside this tool.
     if sys.platform != "linux":
         # Tier 1: Lua query-match-load (Windows/macOS only)
+        await _prepare_load_probe(conn)
+        was_pending = getattr(conn, "reload_pending", False) is True
+        conn.reload_pending = True
+        conn.load_revision = getattr(conn, "load_revision", 0) + 1
+        load_sent = False
         try:
             await conn.execute_mutation(
                 f"if not ExposedMembers then ExposedMembers = {{}} end; "
@@ -616,8 +698,10 @@ async def load_game_save(conn: GameConnection, save_name: str) -> str:
                 f"  + SaveLocationOptions.QUICKSAVE + SaveLocationOptions.LOAD_METADATA; "
                 f"UI.QuerySaveGameList(SaveLocations.LOCAL_STORAGE, SaveTypes.SINGLE_PLAYER, opts); "
                 f'print("QUERY_SENT"); '
-                f'print("{lq.SENTINEL}")'
+                f'print("{lq.SENTINEL}")',
+                turn_action="load",
             )
+            load_sent = True
 
             for _ in range(20):
                 await asyncio.sleep(0.25)
@@ -625,7 +709,8 @@ async def load_game_save(conn: GameConnection, save_name: str) -> str:
                     f"if ExposedMembers.MCPLoadDone then "
                     f'  print("RESULT|" .. tostring(ExposedMembers.MCPLoadResult)) '
                     f'else print("PENDING") end; '
-                    f'print("{lq.SENTINEL}")'
+                    f'print("{lq.SENTINEL}")',
+                    turn_action="load",
                 )
                 for line in check:
                     if line == "RESULT|FOUND":
@@ -634,18 +719,31 @@ async def load_game_save(conn: GameConnection, save_name: str) -> str:
                             f"wait ~10 seconds then call get_game_overview to verify."
                         )
                     if line == "RESULT|NOT_FOUND":
-                        break  # fall through to Tier 2
+                        conn.reload_pending = was_pending
+                        return f"Error: Save '{save_name}' not found. LOAD_NOT_SUBMITTED"
                 else:
                     continue
                 break  # NOT_FOUND — try filesystem
 
-            log.info("Lua query did not find '%s', trying filesystem", save_name)
-        except Exception:
-            log.debug("Lua load_game_save failed", exc_info=True)
+            return (
+                "ERR:OUTCOME_UNKNOWN|加载查询已提交，尚未确认结果；"
+                "只读核验 get_game_overview，不自动重发或重启。"
+            )
+        except CommandNotSentError as exc:
+            if not load_sent:
+                conn.reload_pending = was_pending
+                return f"Error: {exc} LOAD_NOT_SUBMITTED"
+            return f"ERR:OUTCOME_UNKNOWN|加载已提交，但核验查询未发送：{exc}"
+        except Exception as exc:
+            log.debug("Lua load_game_save outcome unknown", exc_info=True)
+            return (
+                f"ERR:OUTCOME_UNKNOWN|加载可能已执行：{exc}。"
+                "只读核验 get_game_overview，不自动重发或重启。"
+            )
     else:
         log.info("Linux: skipping Lua load (Aspyr port bug) for '%s'", save_name)
 
-    # Tier 2: Filesystem verify + restart into the FrontEnd API path.
+    # Unsupported in-game platform: check the name before advising recovery.
     import os
 
     from .game_launcher import SAVE_DIR, SINGLE_SAVE_DIR
@@ -659,11 +757,11 @@ async def load_game_save(conn: GameConnection, save_name: str) -> str:
             f"Check the name and try list_saves() to see available saves."
         )
 
-    # File exists but Lua couldn't find it. ``restart_and_load`` reuses the
-    # shared connection to invoke the FrontEnd API after the restart; it only
-    # permits OCR when the explicit environment opt-in is present.
-    log.info("In-game — restart_and_load for '%s'", save_name)
-    return await game_launcher.restart_and_load(save_name, conn=conn)
+    # Restarting remains a separate explicit lifecycle operation.
+    return (
+        "Error: 当前平台的对局内加载路径不可用；需要由操作者显式调用 "
+        f"restart_and_load('{save_name}')。LOAD_NOT_SUBMITTED"
+    )
 
 
 async def execute_lua(

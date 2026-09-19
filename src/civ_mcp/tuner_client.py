@@ -13,6 +13,7 @@ import asyncio
 import struct
 import sys
 from dataclasses import dataclass
+from weakref import WeakSet
 
 # Wire format constants
 HEADER_FMT = "<Ii"  # little-endian: unsigned 32-bit length, signed 32-bit tag
@@ -26,6 +27,16 @@ TAG_HELP = 1
 # Default connection
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 4318
+
+
+class FrameReadInterrupted(ConnectionError):
+    """The header was consumed but its body was interrupted; reconnect first."""
+
+
+# Cancellation of StreamReader.readexactly leaves its own partial read buffered,
+# but cannot put a previously consumed header back. Never parse that body as a
+# new header. Weak references avoid retaining closed streams.
+_interrupted_readers: WeakSet[asyncio.StreamReader] = WeakSet()
 
 
 @dataclass
@@ -43,11 +54,19 @@ async def send_message(writer: asyncio.StreamWriter, tag: int, payload: str) -> 
 
 
 async def recv_message(reader: asyncio.StreamReader) -> Message:
-    """Read a single framed message from the game."""
-    header = await reader.readexactly(HEADER_SIZE)
-    length, tag = struct.unpack(HEADER_FMT, header)
-    data = await reader.readexactly(length)
-    # Strip trailing null bytes and decode
+    """Read one frame; a cancelled body permanently invalidates this reader."""
+    if reader in _interrupted_readers:
+        raise FrameReadInterrupted("消息帧读取已中断，必须重新连接。")
+    header_read = False
+    try:
+        header = await reader.readexactly(HEADER_SIZE)
+        header_read = True
+        length, tag = struct.unpack(HEADER_FMT, header)
+        data = await reader.readexactly(length)
+    except BaseException:
+        if header_read:
+            _interrupted_readers.add(reader)
+        raise
     payload = data.rstrip(b"\x00").decode("utf-8", errors="replace")
     return Message(tag=tag, payload=payload)
 
@@ -55,10 +74,12 @@ async def recv_message(reader: asyncio.StreamReader) -> Message:
 async def recv_message_timeout(
     reader: asyncio.StreamReader, timeout: float = 2.0
 ) -> Message | None:
-    """Read a message with a timeout. Returns None on timeout."""
+    """Return None only for an idle timeout that has not consumed a header."""
     try:
         return await asyncio.wait_for(recv_message(reader), timeout=timeout)
-    except asyncio.TimeoutError:
+    except asyncio.TimeoutError as exc:
+        if reader in _interrupted_readers:
+            raise FrameReadInterrupted("消息体等待超时，必须重新连接。") from exc
         return None
 
 
@@ -92,11 +113,15 @@ async def handshake(
     # APP: — get game identity
     await send_message(writer, TAG_HANDSHAKE, "APP:")
     app_msg = await recv_message_timeout(reader, timeout=5.0)
-    app_identity = app_msg.payload if app_msg else "<no response>"
+    if app_msg is None:
+        raise TimeoutError("FireTuner APP 握手超时。")
+    app_identity = app_msg.payload
 
     # LSQ: — list Lua states
     await send_message(writer, TAG_HANDSHAKE, "LSQ:")
     lsq_msg = await recv_message_timeout(reader, timeout=5.0)
+    if lsq_msg is None:
+        raise TimeoutError("FireTuner LSQ 握手超时。")
     lua_states = []
     if lsq_msg:
         # States come as null-separated or newline-separated entries

@@ -56,6 +56,7 @@ class _VirtualClock:
             self.elapsed += seconds
 
         monkeypatch.setattr(et, "_sleep", sleep)
+        monkeypatch.setattr(et, "_monotonic", lambda: self.elapsed)
 
 
 class _FakeConnection:
@@ -104,7 +105,7 @@ class _FakeGameState:
     async def check_game_over(self):
         return None
 
-    async def get_diplomacy_sessions(self) -> list:
+    async def get_diplomacy_sessions(self, **_kwargs) -> list:
         return []
 
     async def get_pending_deals(self) -> list:
@@ -122,7 +123,7 @@ class _FakeGameState:
         # the probe-sleep arithmetic in the budget test unambiguous.
         return "No popups to dismiss."
 
-    async def drive_world_congress(self) -> str:
+    async def drive_world_congress(self, **_kwargs) -> str:
         self.drive_calls += 1
         # A submitted congress round is the worst case: the probe actually did
         # something, so the caller also pays the follow-up re-check sleep.
@@ -203,7 +204,7 @@ def test_wait_loop_stays_inside_the_derived_poll_budget(
     )
 
 
-def test_a_congress_turn_drives_the_session_instead_of_waiting_it_out() -> None:
+def test_a_congress_turn_drives_the_session_instead_of_waiting_it_out(monkeypatch) -> None:
     """The old schedule started at t+60s with 3 tries; a late session escaped it."""
 
     recorded: list[float] = []
@@ -213,10 +214,16 @@ def test_a_congress_turn_drives_the_session_instead_of_waiting_it_out() -> None:
         recorded.append(seconds)
         elapsed["t"] += seconds
 
+    monkeypatch.setattr(et, "_monotonic", lambda: elapsed["t"])
     original_sleep = et._sleep
     et._sleep = sleep
     try:
-        gs = _FakeGameState(wc_turn=True)
+        class LateCongress(_FakeGameState):
+            async def drive_world_congress(self, **_kwargs):
+                self.drive_calls += 1
+                return "WC_DRIVE|submitted" if self.drive_calls >= 5 else "WC_DRIVE|no_session"
+
+        gs = LateCongress(wc_turn=True)
         asyncio.run(et.execute_end_turn(gs))
     finally:
         et._sleep = original_sleep
@@ -358,7 +365,7 @@ def test_query_reserve_is_expressed_in_per_query_ceilings() -> None:
 def _context(game=None) -> SimpleNamespace:
     return SimpleNamespace(
         request_context=SimpleNamespace(
-            lifespan_context=SimpleNamespace(game=game or object())
+            lifespan_context=SimpleNamespace(game=game or SimpleNamespace())
         )
     )
 
@@ -377,7 +384,8 @@ def test_exhausted_budget_returns_unknown_and_forbids_a_resend(
 
     assert "UNKNOWN:END_TURN_BUDGET_EXHAUSTED" in result
     assert "结果未知" in result
-    assert "不要再次调用 end_turn" in result
+    assert "只读续等" in result
+    assert "不会重发" in result
     assert "get_game_overview" in result
     # It must not read as an advance, and it must not invite a retry of the
     # action whose outcome is unknown.
@@ -396,7 +404,7 @@ def _hang_verdict(
     """
 
     class _GS(_FakeGameState):
-        async def drive_world_congress(self) -> str:
+        async def drive_world_congress(self, **_kwargs) -> str:
             self.drive_calls += 1
             if driven:
                 return "WC_DRIVE|submitted|spent:0|1:WC_RES_LUXURY:1:0:1:0:type"
@@ -412,22 +420,16 @@ def _hang_verdict(
     return result, gs, clock
 
 
-def test_an_undriven_congress_is_never_reported_as_a_hang(
+def test_expected_congress_without_a_session_reaches_bounded_diagnosis(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The blocker query reports nothing during congress; that is not a wedge.
-
-    Misreading it as a wedge used to kill and reload a perfectly healthy game up
-    to three times — over a missing vote.
-    """
-
     result, gs, _ = _hang_verdict(monkeypatch, wc_turn=True, driven=False)
 
-    assert result.startswith("CONGRESS_NOT_DRIVEN:")
-    assert not result.startswith("HANG:")
-    assert "CONGRESS_NOT_DRIVEN_IS_NOT_A_HANG" in result
-    assert "禁止重启游戏" in result
-    assert gs.drive_calls > 0
+    assert result.startswith("HANG:")
+    assert gs._pending_end_turn is True
+    assert gs.conn.sends == 1
+    assert gs.drive_calls <= et._WC_DRIVE_BURST_PROBES + et._WC_DRIVE_SPARSE_PROBES
+    assert gs._pending_end_turn_wait >= et.PENDING_TURN_HANG_AFTER_SECONDS
 
 
 def test_a_single_call_reports_pending_not_stuck(
@@ -588,3 +590,343 @@ def test_a_continuation_call_does_not_demand_the_essays_again(
     ctx.request_context.lifespan_context.game = continuing
     second = asyncio.run(end_turn_flow._run_end_turn_impl(ctx))
     assert "Empty reflections" not in second
+
+
+def test_lost_end_turn_ack_keeps_submission_pending(monkeypatch):
+    from civ_mcp.connection import MutationOutcomeUnknownError
+
+    _VirtualClock(monkeypatch)
+    gs = _FakeGameState(wc_turn=False)
+    send = gs.conn.execute_mutation
+
+    async def lose_ack(code, **kwargs):
+        await send(code, **kwargs)
+        raise MutationOutcomeUnknownError(code, TimeoutError())
+
+    gs.conn.execute_mutation = lose_ack
+    with pytest.raises(MutationOutcomeUnknownError):
+        asyncio.run(et.execute_end_turn(gs))
+    assert gs._pending_end_turn and gs.conn.turn_in_progress
+    gs.conn.execute_mutation = send
+    asyncio.run(et.execute_end_turn(gs))
+    assert gs.conn.sends == 1
+
+
+def test_cancelled_send_stays_pending_and_is_not_resent(monkeypatch):
+    _VirtualClock(monkeypatch)
+    gs = _FakeGameState(wc_turn=False)
+    original = gs.conn.execute_mutation
+
+    async def scenario():
+        sending = asyncio.Event()
+
+        async def waiting_ack(code, **kwargs):
+            await original(code, **kwargs)
+            sending.set()
+            await asyncio.Event().wait()
+
+        gs.conn.execute_mutation = waiting_ack
+        task = asyncio.create_task(et.execute_end_turn(gs))
+        await sending.wait()
+        assert gs._pending_end_turn and gs.conn.turn_in_progress
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        gs.conn.execute_mutation = original
+        await et.execute_end_turn(gs)
+
+    asyncio.run(scenario())
+    assert gs.conn.sends == 1
+    assert gs._pending_end_turn
+
+
+def test_concurrent_end_turn_calls_share_one_submission(monkeypatch):
+    _VirtualClock(monkeypatch)
+    gs = _FakeGameState(wc_turn=False)
+    original = gs.conn.execute_mutation
+
+    async def scenario():
+        sending = asyncio.Event()
+        release = asyncio.Event()
+
+        async def waiting_ack(code, **kwargs):
+            await original(code, **kwargs)
+            sending.set()
+            await release.wait()
+            return ["OK"]
+
+        gs.conn.execute_mutation = waiting_ack
+        first = asyncio.create_task(et.execute_end_turn(gs))
+        await sending.wait()
+        second = asyncio.create_task(et.execute_end_turn(gs))
+        await asyncio.sleep(0)
+        release.set()
+        assert await first == await second
+
+    asyncio.run(scenario())
+    assert gs.conn.sends == 1
+
+
+def test_pending_popup_and_hang_never_enable_another_submission(monkeypatch):
+    clock = _VirtualClock(monkeypatch)
+    gs = _FakeGameState(wc_turn=False)
+
+    async def dismiss():
+        gs.dismiss_calls += 1
+        return "Dismissed popup"
+
+    gs.dismiss_popup = dismiss
+    asyncio.run(et.execute_end_turn(gs))
+    clock.elapsed += et.PENDING_TURN_HANG_AFTER_SECONDS
+    result = asyncio.run(et.execute_end_turn(gs))
+    asyncio.run(et.execute_end_turn(gs))
+    assert result.startswith("HANG:")
+    assert gs._pending_end_turn and gs.conn.turn_in_progress
+    assert gs.conn.sends == 1
+    assert gs.dismiss_calls == 1  # Only the original preflight may close a popup.
+
+
+def test_wait_time_includes_queries_and_gaps_between_calls(monkeypatch):
+    clock = _VirtualClock(monkeypatch)
+    gs = _FakeGameState(wc_turn=False)
+    original = gs.conn.execute_read
+
+    async def slow_read(code, **kwargs):
+        if gs._pending_end_turn:
+            clock.elapsed += 9.0
+        return await original(code, **kwargs)
+
+    gs.conn.execute_read = slow_read
+    asyncio.run(et.execute_end_turn(gs))
+    first_wait = gs._pending_end_turn_wait
+    assert first_wait > sum(clock.slept)
+    clock.elapsed += 700.0
+    result = asyncio.run(et.execute_end_turn(gs))
+    assert gs._pending_end_turn_wait >= first_wait + 700.0
+    assert result.startswith("HANG:")
+    assert gs.conn.sends == 1
+
+
+def test_pending_continuation_skips_preflight_and_ordinary_ingame(monkeypatch):
+    _VirtualClock(monkeypatch)
+    gs = _FakeGameState(wc_turn=False)
+    asyncio.run(et.execute_end_turn(gs))
+
+    calls = []
+
+    async def forbidden(*args, **kwargs):
+        calls.append(args)
+        raise AssertionError("Pending path attempted normal InGame/preflight work")
+
+    gs.conn.execute_write = forbidden
+    gs.get_world_congress = forbidden
+    gs._take_snapshot = forbidden
+    gs.get_barbarian_overview = forbidden
+    gs.dismiss_popup = forbidden
+    result = asyncio.run(et.execute_end_turn(gs))
+    assert result.startswith("TURN_PENDING:")
+    assert gs.conn.sends == 1
+    assert calls == []
+
+
+def test_diplomacy_early_return_keeps_request_clock_and_submission(monkeypatch):
+    clock = _VirtualClock(monkeypatch)
+    gs = _FakeGameState(wc_turn=False)
+
+    async def sessions(**_kwargs):
+        if not gs._pending_end_turn:
+            return []
+        clock.elapsed += 11.0
+        return [SimpleNamespace(dialogue_text="hello", is_at_war=False,
+                                deal_summary="", buttons="", other_civ_name="test",
+                                other_leader_name="leader", reason_text="")]
+
+    gs.get_diplomacy_sessions = sessions
+    asyncio.run(et.execute_end_turn(gs))
+    assert gs._pending_end_turn_wait == clock.elapsed
+    clock.elapsed += 20.0
+    asyncio.run(et.execute_end_turn(gs))
+    assert gs._pending_end_turn_wait == clock.elapsed
+    assert gs.conn.sends == 1
+
+
+def test_explicit_not_sent_failure_releases_submission(monkeypatch):
+    from civ_mcp.connection import CommandNotSentError
+
+    _VirtualClock(monkeypatch)
+    gs = _FakeGameState(wc_turn=False)
+    original = gs.conn.execute_mutation
+
+    async def reject_before_send(*args, **kwargs):
+        raise CommandNotSentError("blocked before write")
+
+    gs.conn.execute_mutation = reject_before_send
+    with pytest.raises(CommandNotSentError):
+        asyncio.run(et.execute_end_turn(gs))
+    assert not gs._pending_end_turn and not gs.conn.turn_in_progress
+    assert gs.conn.sends == 0
+    gs.conn.execute_mutation = original
+    asyncio.run(et.execute_end_turn(gs))
+    assert gs.conn.sends == 1
+
+
+def test_confirmed_advance_notifies_all_waiters_before_snapshot_finishes(monkeypatch):
+    _VirtualClock(monkeypatch)
+    gs = _FakeGameState(wc_turn=False)
+    original = gs.conn.execute_mutation
+    receipts = [[], []]
+
+    async def scenario():
+        sending = asyncio.Event()
+        release_send = asyncio.Event()
+        snapshot_started = asyncio.Event()
+        release_snapshot = asyncio.Event()
+
+        async def waiting_ack(code, **kwargs):
+            await original(code, **kwargs)
+            sending.set()
+            await release_send.wait()
+            return ["OK"]
+
+        async def read_turn(_gs):
+            return 58 if gs.conn.sends else 57
+
+        async def snapshot():
+            if not gs.conn.sends:
+                raise RuntimeError("preflight has no snapshot")
+            snapshot_started.set()
+            await release_snapshot.wait()
+            return None
+
+        async def request(index):
+            token = et.end_turn_confirmation.set(receipts[index].append)
+            try:
+                return await et.execute_end_turn(gs)
+            finally:
+                et.end_turn_confirmation.reset(token)
+
+        gs.conn.execute_mutation = waiting_ack
+        gs._take_snapshot = snapshot
+        monkeypatch.setattr(et, "_get_turn_number", read_turn)
+        first = asyncio.create_task(request(0))
+        await sending.wait()
+        second = asyncio.create_task(request(1))
+        await asyncio.sleep(0)
+        release_send.set()
+        await snapshot_started.wait()
+        assert receipts == [["Turn 57 -> 58"], ["Turn 57 -> 58"]]
+        assert not first.done() and not second.done()
+        assert gs.conn.sends == 1
+        release_snapshot.set()
+        assert await first == await second
+
+    asyncio.run(scenario())
+
+
+def test_reload_during_observation_cannot_confirm_old_request(monkeypatch):
+    clock = _VirtualClock(monkeypatch)
+    gs = _FakeGameState(wc_turn=False)
+    asyncio.run(et.execute_end_turn(gs))
+    receipts = []
+
+    async def loaded_world(_gs):
+        gs._world_epoch = 1
+        return 58
+
+    monkeypatch.setattr(et, "_get_turn_number", loaded_world)
+    token = et.end_turn_confirmation.set(receipts.append)
+    try:
+        result = asyncio.run(et.execute_end_turn(gs))
+    finally:
+        et.end_turn_confirmation.reset(token)
+    assert result.startswith("UNKNOWN:RELOAD_PENDING")
+    assert receipts == []
+    assert gs.conn.sends == 1
+    assert clock.elapsed > 0
+
+
+def test_confirmed_congress_submission_is_not_driven_again(monkeypatch):
+    _VirtualClock(monkeypatch)
+    gs = _FakeGameState(wc_turn=True)
+    asyncio.run(et.execute_end_turn(gs))
+    asyncio.run(et.execute_end_turn(gs))
+    assert gs.drive_calls == 1
+    assert gs._wc_driven
+    assert gs.conn.sends == 1
+
+
+def test_unknown_congress_submission_is_not_driven_again(monkeypatch):
+    from civ_mcp.connection import MutationOutcomeUnknownError
+
+    _VirtualClock(monkeypatch)
+    gs = _FakeGameState(wc_turn=True)
+
+    async def lost_ack(**_kwargs):
+        gs.drive_calls += 1
+        raise MutationOutcomeUnknownError("congress input", TimeoutError())
+
+    gs.drive_world_congress = lost_ack
+    asyncio.run(et.execute_end_turn(gs))
+    asyncio.run(et.execute_end_turn(gs))
+    assert gs.drive_calls == 1
+    assert gs._wc_drive_uncertain
+    assert gs.conn.sends == 1
+
+
+@pytest.mark.parametrize("crossing", ["game_over", "diplomacy_query", "diplomacy_sleep"])
+def test_world_change_across_await_rejects_old_evidence_and_war_response(monkeypatch, crossing):
+    clock = _VirtualClock(monkeypatch)
+    gs = _FakeGameState(wc_turn=False)
+    asyncio.run(et.execute_end_turn(gs))
+    calls = []
+    original_send = gs.conn.execute_mutation
+
+    async def record_send(code, **kwargs):
+        calls.append(code)
+        return await original_send(code, **kwargs)
+
+    async def gameover():
+        gs._world_epoch = 1
+        return SimpleNamespace(victory_type="VICTORY_SCIENCE", is_defeat=True,
+                               winner_name="new world", winner_leader="new leader")
+
+    async def sessions(**_kwargs):
+        if crossing == "diplomacy_query":
+            gs._world_epoch = 1
+        return [SimpleNamespace(dialogue_text="" if crossing == "diplomacy_sleep" else "war",
+                                is_at_war=True, other_player_id=1,
+                                other_civ_name="old world", other_leader_name="old leader")]
+
+    async def cross_during_sleep(seconds):
+        clock.elapsed += seconds
+        gs._world_epoch = 1
+
+    gs.conn.execute_mutation = record_send
+    if crossing == "game_over":
+        gs.check_game_over = gameover
+        result = asyncio.run(et.execute_end_turn(gs))
+    else:
+        gs.get_diplomacy_sessions = sessions
+        if crossing == "diplomacy_sleep":
+            monkeypatch.setattr(et, "_sleep", cross_during_sleep)
+        result, advanced = asyncio.run(et._check_mid_turn_diplomacy(
+            gs, "unused", 57, expected_world_epoch=0))
+        assert advanced is False
+    assert result.startswith("UNKNOWN:RELOAD_PENDING")
+    assert calls == []
+    assert gs._pending_end_turn
+    assert gs.conn.sends == 1
+
+
+def test_world_change_during_preflight_does_not_submit_a_new_end_turn(monkeypatch):
+    _VirtualClock(monkeypatch)
+    gs = _FakeGameState(wc_turn=False)
+
+    async def snapshot():
+        gs._world_epoch = 1
+        return None
+
+    gs._take_snapshot = snapshot
+    result = asyncio.run(et.execute_end_turn(gs))
+    assert result.startswith("UNKNOWN:RELOAD_PENDING")
+    assert gs.conn.sends == 0

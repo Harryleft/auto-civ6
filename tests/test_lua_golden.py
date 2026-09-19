@@ -212,3 +212,12 @@ def test_barbarian_query_scans_camps_and_units():
     _assert_sentinel(query)
     assert "IMPROVEMENT_BARBARIAN_CAMP" in query
     assert "BARB_CAMP|" in query and "BARB_UNIT|" in query
+
+
+@pytest.mark.parametrize("builder", [congress.build_congress_submit, congress.build_wc_drive_and_submit])
+def test_pending_congress_input_never_resubmits_action_endturn(builder):
+    query = builder(resume_pending=True)
+    _assert_sentinel(query)
+    assert "WORLD_CONGRESS_SUBMIT_TURN" in query
+    assert "UI.RequestAction(ActionTypes.ACTION_ENDTURN)" not in query
+    assert "UI.RequestAction(ActionTypes.ACTION_ENDTURN)" in builder()
