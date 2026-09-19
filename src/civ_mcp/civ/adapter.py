@@ -25,8 +25,10 @@ from civ_mcp.lua.cities import (
 from civ_mcp.lua.diplomacy import (
     build_diplomacy_query,
     build_diplomacy_session_query,
+    build_pending_deals_query,
     parse_diplomacy_response,
     parse_diplomacy_sessions,
+    parse_pending_deals_response,
 )
 from civ_mcp.lua.economy import (
     build_trade_destinations_query,
@@ -66,6 +68,7 @@ from civ_mcp.lua.models import (
     GovernorStatus,
     PantheonStatus,
     PendingCityCapture,
+    PendingDeal,
     ProductionOption,
     PurchaseOption,
     TechCivicStatus,
@@ -443,6 +446,21 @@ class CivAdapter:
                 lua_code=build_diplomacy_query(),
                 decode=lambda lines: parse_diplomacy_response(list(lines)),
                 coverage="MET_CIVILIZATIONS:COMPLETE;UNMET_CIVILIZATIONS:UNOBSERVED",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
+    async def read_pending_deals(
+        self, *, observed_turn: int
+    ) -> CivReadResult[list[PendingDeal]]:
+        """Read exact incoming deal terms that still await a player decision."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_pending_deals",
+                lua_code=build_pending_deals_query(),
+                decode=lambda lines: parse_pending_deals_response(list(lines)),
+                coverage="PENDING_DEALS:COMPLETE",
                 context="ingame",
             ),
             observed_turn=observed_turn,

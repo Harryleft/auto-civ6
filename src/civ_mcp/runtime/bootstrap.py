@@ -87,6 +87,27 @@ async def assemble_runtime(
             )
         return await turn_loop.wait_for_turn(operation)
 
+    async def continue_trade_offer(
+        operation: OperationRecord, other_player_id: int, choice: str
+    ) -> TurnResult:
+        """Resolve one model-selected pending deal, then await the original turn."""
+        response = await session.execute(
+            mutations.respond_to_trade_offer(
+                operation_id=OperationId.new(),
+                other_player_id=other_player_id,
+                choice=choice,
+                observed_turn=operation.decision_turn,
+            ),
+            decision_turn=operation.decision_turn,
+        )
+        if response.outcome_state is not OutcomeState.CONFIRMED:
+            return TurnResult(
+                TurnOutcome.RECOVERY_REQUIRED,
+                response,
+                "交易回应未由待决交易状态确认；不得重发，需重新读取或恢复。",
+            )
+        return await turn_loop.wait_for_turn(operation)
+
     async def continue_city_capture(
         operation: OperationRecord, city_id: int, choice: str
     ) -> TurnResult:
@@ -187,8 +208,69 @@ async def assemble_runtime(
             )
         except Exception:
             return TurnObservation()
+        if len(sessions.value) > 1:
+            # A model must not have a session silently selected for it.  The
+            # multi-session arbitrator remains outside this Runtime surface.
+            return TurnObservation()
         if sessions.value:
             active = sessions.value[0]
+            try:
+                pending_deals = await adapter.read_pending_deals(
+                    observed_turn=overview.value.turn
+                )
+            except Exception:
+                pending_deals = None
+            if pending_deals is not None:
+                matching_deals = [
+                    deal
+                    for deal in pending_deals.value
+                    if deal.other_player_id == active.other_player_id
+                ]
+                if matching_deals:
+                    if len(matching_deals) != 1:
+                        return TurnObservation()
+                    deal = matching_deals[0]
+                    if not deal.items_from_them and not deal.items_from_us:
+                        return TurnObservation()
+                    interrupt = DecisionInterrupt(
+                        decision_type="TRADE_COUNTER_OFFER",
+                        facts={
+                            "state": "COUNTER_OFFER",
+                            "session_id": active.session_id,
+                            "other_player_id": deal.other_player_id,
+                            "civilization": deal.other_player_name,
+                            "leader": deal.other_leader_name,
+                            "items_from_them": [
+                                {
+                                    "item_type": item.item_type,
+                                    "name": item.name,
+                                    "amount": item.amount,
+                                    "duration": item.duration,
+                                }
+                                for item in deal.items_from_them
+                            ],
+                            "items_from_us": [
+                                {
+                                    "item_type": item.item_type,
+                                    "name": item.name,
+                                    "amount": item.amount,
+                                    "duration": item.duration,
+                                }
+                                for item in deal.items_from_us
+                            ],
+                        },
+                        allowed_choices=("ACCEPT", "REJECT"),
+                        continuation_operation_id=operation.operation_id,
+                    )
+
+                    async def trade_continuation(choice: str) -> TurnResult:
+                        return await continue_trade_offer(
+                            operation, deal.other_player_id, choice
+                        )
+
+                    return TurnObservation(
+                        interrupt=interrupt, continuation=trade_continuation
+                    )
             allowed_choices = (
                 ("EXIT",)
                 if "GOODBYE" in active.buttons.split(";")

@@ -188,6 +188,24 @@ def test_builder_current_tile_candidates_and_tile_state_are_typed_facts() -> Non
     assert tile.coverage == "TILE_IMPROVEMENT_COORDINATE:COMPLETE"
 
 
+def test_pending_deals_preserve_exact_structured_terms() -> None:
+    transport = _Transport(
+        _complete(
+            "DEAL|2|Germany|Frederick",
+            "ITEM|2|THEM|GOLD|Gold (lump sum)|50|0",
+            "ITEM|2|US|RESOURCE|Iron|2|30",
+        )
+    )
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    deals = asyncio.run(civ.read_pending_deals(observed_turn=42))
+
+    assert deals.value[0].other_player_id == 2
+    assert deals.value[0].items_from_them[0].amount == 50
+    assert deals.value[0].items_from_us[0].name == "Iron"
+    assert deals.coverage == "PENDING_DEALS:COMPLETE"
+
+
 def test_city_purchase_candidate_error_is_not_coerced_to_an_empty_result() -> None:
     transport = _Transport(_complete("ERR:CITY_NOT_FOUND"))
     civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
