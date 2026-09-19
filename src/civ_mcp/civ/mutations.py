@@ -21,6 +21,10 @@ from civ_mcp.lua.governance import (
     build_send_envoy,
     build_set_policies,
 )
+from civ_mcp.lua.great_people import build_recruit_great_person
+from civ_mcp.lua.espionage import build_spy_mission, build_spy_travel
+from civ_mcp.lua.congress import build_congress_submit, build_congress_vote
+from civ_mcp.lua.religion import build_choose_pantheon, build_found_religion, build_spread_religion
 from civ_mcp.lua.notifications import build_end_turn
 from civ_mcp.lua.tech import build_set_civic, build_set_research
 from civ_mcp.lua.units import build_attack_unit, build_move_unit
@@ -293,6 +297,46 @@ class CivMutationFactory:
         self, *, operation_id: OperationId, dedication_index: int, readback: AttackReadback
     ) -> MutationExecution:
         return self._readback_action(operation_id=operation_id, tool="choose_dedication", arguments={"dedication_index": dedication_index}, lua_code=build_choose_dedication(dedication_index), readback=readback)
+
+    def choose_pantheon(
+        self, *, operation_id: OperationId, belief_type: str, readback: AttackReadback
+    ) -> MutationExecution:
+        return self._readback_action(operation_id=operation_id, tool="choose_pantheon", arguments={"belief_type": belief_type}, lua_code=build_choose_pantheon(belief_type), readback=readback)
+
+    def found_religion(
+        self, *, operation_id: OperationId, religion_type: str, follower_belief: str, founder_belief: str, readback: AttackReadback
+    ) -> MutationExecution:
+        return self._readback_action(operation_id=operation_id, tool="found_religion", arguments={"religion_type": religion_type, "follower_belief": follower_belief, "founder_belief": founder_belief}, lua_code=build_found_religion(religion_type, follower_belief, founder_belief), readback=readback)
+
+    def spread_religion(
+        self, *, operation_id: OperationId, unit_index: int, readback: AttackReadback
+    ) -> MutationExecution:
+        return self._readback_action(operation_id=operation_id, tool="spread_religion", arguments={"unit_index": unit_index}, lua_code=build_spread_religion(unit_index), readback=readback)
+
+    def recruit_great_person(
+        self, *, operation_id: OperationId, individual_id: int, readback: AttackReadback
+    ) -> MutationExecution:
+        return self._readback_action(operation_id=operation_id, tool="recruit_great_person", arguments={"individual_id": individual_id}, lua_code=build_recruit_great_person(individual_id), readback=readback)
+
+    def spy_travel(
+        self, *, operation_id: OperationId, unit_index: int, target_x: int, target_y: int, readback: AttackReadback
+    ) -> MutationExecution:
+        return self._readback_action(operation_id=operation_id, tool="spy_travel", arguments={"unit_index": unit_index, "target_x": target_x, "target_y": target_y}, lua_code=build_spy_travel(unit_index, target_x, target_y), readback=readback)
+
+    def spy_mission(
+        self, *, operation_id: OperationId, unit_index: int, mission_type: str, target_x: int, target_y: int, readback: AttackReadback
+    ) -> MutationExecution:
+        return self._readback_action(operation_id=operation_id, tool="spy_mission", arguments={"unit_index": unit_index, "mission_type": mission_type, "target_x": target_x, "target_y": target_y}, lua_code=build_spy_mission(unit_index, mission_type, target_x, target_y), readback=readback)
+
+    def congress_vote(
+        self, *, operation_id: OperationId, resolution_hash: int, option: int, target_index: int, num_votes: int, readback: AttackReadback
+    ) -> MutationExecution:
+        return self._readback_action(operation_id=operation_id, tool="congress_vote", arguments={"resolution_hash": resolution_hash, "option": option, "target_index": target_index, "num_votes": num_votes}, lua_code=build_congress_vote(resolution_hash, option, target_index, num_votes), readback=readback)
+
+    def congress_submit(
+        self, *, operation_id: OperationId, readback: AttackReadback
+    ) -> MutationExecution:
+        return self._readback_action(operation_id=operation_id, tool="congress_submit", arguments={}, lua_code=build_congress_submit(resume_pending=True), readback=readback)
 
     @staticmethod
     def _readback_action(
