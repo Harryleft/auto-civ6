@@ -861,9 +861,74 @@ class CivMutationFactory:
         )
 
     def send_envoy(
-        self, *, operation_id: OperationId, city_state_player_id: int, readback: AttackReadback
+        self,
+        *,
+        operation_id: OperationId,
+        city_state_player_id: int,
+        observed_turn: int,
     ) -> MutationExecution:
-        return self._readback_action(operation_id=operation_id, tool="send_envoy", arguments={"city_state_player_id": city_state_player_id}, lua_code=build_send_envoy(city_state_player_id), readback=readback)
+        """Send one currently available envoy and prove both resulting deltas."""
+        intent = OperationIntent.create(
+            "send_envoy", {"city_state_player_id": city_state_player_id}
+        )
+        baseline_tokens: int | None = None
+        baseline_envoys: int | None = None
+
+        async def precheck() -> None:
+            nonlocal baseline_tokens, baseline_envoys
+            try:
+                status = await self._adapter.read_city_states(observed_turn=observed_turn)
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取派遣使者 baseline。") from exc
+            if status.value.tokens_available <= 0:
+                raise MutationPreconditionError("当前没有可用使者，不提交派遣。")
+            matches = [
+                city_state
+                for city_state in status.value.city_states
+                if city_state.player_id == city_state_player_id
+            ]
+            if len(matches) != 1 or not matches[0].can_send_envoy:
+                raise MutationPreconditionError("目标城邦当前不可接收使者，不提交派遣。")
+            baseline_tokens = status.value.tokens_available
+            baseline_envoys = matches[0].envoys_sent
+
+        async def verify() -> Evidence | None:
+            if baseline_tokens is None or baseline_envoys is None:
+                return None
+            try:
+                status = await self._adapter.read_city_states(observed_turn=observed_turn)
+            except Exception:
+                return None
+            matches = [
+                city_state
+                for city_state in status.value.city_states
+                if city_state.player_id == city_state_player_id
+            ]
+            if (
+                len(matches) != 1
+                or status.value.tokens_available != baseline_tokens - 1
+                or matches[0].envoys_sent != baseline_envoys + 1
+            ):
+                return None
+            return Evidence(
+                "read_city_states",
+                status.observed_turn,
+                (
+                    f"player_id={city_state_player_id} envoys "
+                    f"{baseline_envoys}->{matches[0].envoys_sent}; tokens "
+                    f"{baseline_tokens}->{status.value.tokens_available}"
+                ),
+            )
+
+        return MutationExecution(
+            intent=intent,
+            request=CivMutationRequest(
+                "send_envoy", build_send_envoy(city_state_player_id)
+            ),
+            verify=verify,
+            operation_id=operation_id,
+            precheck=precheck,
+        )
 
     def choose_dedication(
         self, *, operation_id: OperationId, dedication_index: int, observed_turn: int

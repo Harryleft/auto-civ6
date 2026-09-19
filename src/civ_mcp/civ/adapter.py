@@ -21,8 +21,10 @@ from civ_mcp.lua.diplomacy import (
     parse_diplomacy_sessions,
 )
 from civ_mcp.lua.governance import (
+    build_city_states_query,
     build_dedications_query,
     build_unit_promotions_query,
+    parse_city_states_response,
     parse_dedications_response,
     parse_unit_promotions_response,
 )
@@ -33,6 +35,7 @@ from civ_mcp.lua.models import (
     CivInfo,
     DiplomacySession,
     DedicationStatus,
+    EnvoyStatus,
     GameOverview,
     GreatPersonInfo,
     PantheonStatus,
@@ -310,6 +313,24 @@ class CivAdapter:
             observed_turn=observed_turn,
         )
 
+    async def read_city_states(
+        self, *, observed_turn: int
+    ) -> CivReadResult[EnvoyStatus]:
+        """Read local envoy tokens and every met city-state's send eligibility."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_city_states",
+                lua_code=build_city_states_query(),
+                decode=_decode_city_states,
+                coverage=(
+                    "ENVOY_TOKENS:COMPLETE;MET_CITY_STATES:COMPLETE;"
+                    "UNMET_CITY_STATES:UNOBSERVED"
+                ),
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
     async def read_great_people(
         self, *, observed_turn: int
     ) -> CivReadResult[list[GreatPersonInfo]]:
@@ -396,3 +417,9 @@ def _decode_unit_promotions(lines: tuple[str, ...]) -> UnitPromotionStatus:
     if not any(line.startswith("UNIT|") for line in lines):
         raise ValueError("缺少 unit promotion UNIT 响应。")
     return parse_unit_promotions_response(list(lines))
+
+
+def _decode_city_states(lines: tuple[str, ...]) -> EnvoyStatus:
+    if not any(line.startswith("TOKENS|") for line in lines):
+        raise ValueError("缺少 city-state TOKENS 响应。")
+    return parse_city_states_response(list(lines))

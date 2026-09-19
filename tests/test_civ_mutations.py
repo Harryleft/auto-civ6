@@ -553,6 +553,99 @@ def test_unit_upgrade_rejects_an_ineligible_baseline() -> None:
         asyncio.run(execution.precheck())
 
 
+def test_send_envoy_requires_legal_target_and_proves_both_envoy_deltas() -> None:
+    before = SimpleNamespace(
+        tokens_available=2,
+        city_states=[
+            SimpleNamespace(player_id=3, envoys_sent=1, can_send_envoy=True)
+        ],
+    )
+    after = SimpleNamespace(
+        tokens_available=1,
+        city_states=[
+            SimpleNamespace(player_id=3, envoys_sent=2, can_send_envoy=True)
+        ],
+    )
+
+    class Adapter:
+        calls = 0
+
+        async def read_city_states(self, *, observed_turn):
+            self.calls += 1
+            return SimpleNamespace(
+                value=before if self.calls == 1 else after,
+                observed_turn=observed_turn,
+            )
+
+    execution = CivMutationFactory(Adapter()).send_envoy(
+        operation_id=OperationId("envoy-3"),
+        city_state_player_id=3,
+        observed_turn=12,
+    )
+
+    asyncio.run(execution.precheck())
+    evidence = asyncio.run(execution.verify())
+
+    assert execution.intent.tool == execution.request.tool == "send_envoy"
+    assert "GIVE_INFLUENCE_TOKEN" in execution.request.lua_code
+    assert evidence.source == "read_city_states"
+    assert "envoys 1->2" in evidence.detail
+    assert "tokens 2->1" in evidence.detail
+
+
+def test_send_envoy_does_not_confirm_a_partial_readback_delta() -> None:
+    before = SimpleNamespace(
+        tokens_available=2,
+        city_states=[
+            SimpleNamespace(player_id=3, envoys_sent=1, can_send_envoy=True)
+        ],
+    )
+    after = SimpleNamespace(
+        tokens_available=1,
+        city_states=[
+            SimpleNamespace(player_id=3, envoys_sent=1, can_send_envoy=True)
+        ],
+    )
+
+    class Adapter:
+        calls = 0
+
+        async def read_city_states(self, *, observed_turn):
+            self.calls += 1
+            return SimpleNamespace(
+                value=before if self.calls == 1 else after,
+                observed_turn=observed_turn,
+            )
+
+    execution = CivMutationFactory(Adapter()).send_envoy(
+        operation_id=OperationId("envoy-partial"),
+        city_state_player_id=3,
+        observed_turn=12,
+    )
+
+    asyncio.run(execution.precheck())
+
+    assert asyncio.run(execution.verify()) is None
+
+
+def test_send_envoy_rejects_an_ineligible_baseline() -> None:
+    class Adapter:
+        async def read_city_states(self, *, observed_turn):
+            return SimpleNamespace(
+                value=SimpleNamespace(tokens_available=0, city_states=[]),
+                observed_turn=observed_turn,
+            )
+
+    execution = CivMutationFactory(Adapter()).send_envoy(
+        operation_id=OperationId("envoy-none"),
+        city_state_player_id=3,
+        observed_turn=12,
+    )
+
+    with pytest.raises(MutationPreconditionError, match="没有可用使者"):
+        asyncio.run(execution.precheck())
+
+
 def test_remaining_domain_mutations_use_explicit_readback_contracts() -> None:
     class Adapter:
         pass

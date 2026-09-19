@@ -11,9 +11,9 @@
 
 | 类别 | 工具 | 运行时保证 |
 | --- | --- | --- |
-| 局面读取 | `get_runtime_context`、`get_unit_promotions` | 前者一次读取 overview、城市、待决城市占领、单位、外交/会话、科技/市政、万神殿、时代着力点、大人物和胜利进度；后者读取一个单位的可选与已拥有晋升；单项失败在 `unknown` 中显式保留。 |
+| 局面读取 | `get_runtime_context`、`get_unit_promotions`、`get_city_states` | 前者一次读取 overview、城市、待决城市占领、单位、外交/会话、科技/市政、万神殿、时代着力点、大人物和胜利进度；`get_unit_promotions` 读取一个单位的可选与已拥有晋升；`get_city_states` 读取全部可用使者及所有已会面的城邦。未会面的城邦不在结果中，城邦竞争信息是否完整由每行的 `competition_complete` 标注；单项失败在 `unknown` 中显式保留。 |
 | 战略连续性 | `save_handoff` | 仅写当前 branch 的战略重点、已有安排、理由和改变条件；不修改游戏事实或 operation。 |
-| 常规 mutation | `move_unit`、`upgrade_unit`、`promote_unit`、`set_city_production`、`set_research`、`set_civic`、`found_city`、`choose_pantheon`、`choose_dedication`、`recruit_great_person` | 每次请求绑定 game/branch/operation/decision turn，经 `SessionKernel` 单次发送，且仅由领域 readback 确认。 |
+| 常规 mutation | `move_unit`、`upgrade_unit`、`promote_unit`、`send_envoy`、`set_city_production`、`set_research`、`set_civic`、`found_city`、`choose_pantheon`、`choose_dedication`、`recruit_great_person` | 每次请求绑定 game/branch/operation/decision turn，经 `SessionKernel` 单次发送，且仅由领域 readback 确认。`send_envoy` 还要求同一城邦使者数恰好增加一、可用使者数恰好减少一。 |
 | 回合 | `end_turn`、`resume_turn_decision` | 原 end-turn 只发送一次；等待期只读轮询。当前可恢复的 blocker 是单一外交会话和单一城市占领选择。 |
 
 `UNKNOWN`、`RECOVERY_REQUIRED` 与 `NEEDS_DECISION` 都不是成功，也不会触发重试。
@@ -28,7 +28,7 @@
 - `get_runtime_context` 未包含的细粒度读取，例如地图/视野、战斗或路径估算、生产与
   购买候选、商路目的地、外交交易选项、单位/间谍/宗教详情、世界议会详情和气候。
 - 尚未暴露的写操作：单位/城市攻击、购买、建设者、商路、交易提议或
-  接受、政策/政府/总督/使者、宗教（万神殿除外）、间谍、世界议会、城市邦、奇观及
+  接受、政策/政府/总督、宗教（万神殿除外）、间谍、世界议会、奇观及
   任何未列在上表的 mutation。
 - F2 尚未覆盖交易回价、世界议会和多会话仲裁。Runtime 不会自动接受不同条款、
   自动投票、自动保留城市或自动重发 end-turn。

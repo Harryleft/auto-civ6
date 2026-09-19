@@ -54,3 +54,4 @@ def test_context_keeps_failed_domain_reads_explicitly_unknown() -> None:
     assert "overview" in context.facts
     assert context.unknown == ("units: TimeoutError",)
     assert context.unfinished_intents == ()
+    assert context.further_queries == ("get_unit_promotions", "get_city_states")
