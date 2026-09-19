@@ -9,6 +9,7 @@ import civ_mcp.runtime.context as context
 import civ_mcp.runtime.connection as connection
 import civ_mcp.runtime.bootstrap as bootstrap
 import civ_mcp.runtime.mcp_surface as surface
+import civ_mcp.runtime.server as server
 
 
 def _import_modules(module) -> set[str]:
@@ -45,6 +46,12 @@ def test_runtime_bootstrap_has_no_legacy_server_or_game_state_dependency() -> No
     imports = _import_modules(bootstrap)
     assert "civ_mcp.server" not in imports
     assert "civ_mcp.game_state" not in imports
+
+
+def test_runtime_server_does_not_import_legacy_server_or_belief_engine() -> None:
+    imports = _import_modules(server)
+    assert "civ_mcp.server" not in imports
+    assert "civ6_belief_engine" not in imports
 
 
 def test_new_runtime_has_no_belief_engine_imports() -> None:
