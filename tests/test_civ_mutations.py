@@ -309,19 +309,72 @@ def test_diplomacy_response_does_not_confirm_an_unchanged_session() -> None:
     assert asyncio.run(execution.verify()) is None
 
 
-def test_research_and_civic_require_fresh_domain_evidence() -> None:
+def test_research_and_civic_require_fresh_typed_selection_evidence() -> None:
+    before = SimpleNamespace(
+        current_research_type="TECH_MINING",
+        current_civic_type="CIVIC_CODE_OF_LAWS",
+        available_techs=[SimpleNamespace(tech_type="TECH_WRITING")],
+        available_civics=[SimpleNamespace(civic_type="CIVIC_CRAFTSMANSHIP")],
+    )
+    after_research = SimpleNamespace(
+        current_research_type="TECH_WRITING",
+        current_civic_type="CIVIC_CODE_OF_LAWS",
+        available_techs=[SimpleNamespace(tech_type="TECH_WRITING")],
+        available_civics=[SimpleNamespace(civic_type="CIVIC_CRAFTSMANSHIP")],
+    )
+    after_civic = SimpleNamespace(
+        current_research_type="TECH_WRITING",
+        current_civic_type="CIVIC_CRAFTSMANSHIP",
+        available_techs=[SimpleNamespace(tech_type="TECH_WRITING")],
+        available_civics=[SimpleNamespace(civic_type="CIVIC_CRAFTSMANSHIP")],
+    )
+
     class Adapter:
-        pass
+        calls = 0
 
-    async def evidence():
-        return Evidence("read_tech_civics", 12, "research/civic selection observed")
+        async def read_tech_civics(self, *, observed_turn):
+            self.calls += 1
+            value = (before, after_research, after_research, after_civic)[self.calls - 1]
+            return SimpleNamespace(value=value, observed_turn=observed_turn)
 
-    factory = CivMutationFactory(Adapter())
-    research = factory.set_research(operation_id=OperationId("tech-1"), tech_name="TECH_WRITING", readback=evidence)
-    civic = factory.set_civic(operation_id=OperationId("civic-1"), civic_name="CIVIC_CODE_OF_LAWS", readback=evidence)
+    adapter = Adapter()
+    factory = CivMutationFactory(adapter)
+    research = factory.set_research(
+        operation_id=OperationId("tech-1"), tech_name="TECH_WRITING", observed_turn=12
+    )
+    civic = factory.set_civic(
+        operation_id=OperationId("civic-1"), civic_name="CIVIC_CRAFTSMANSHIP", observed_turn=12
+    )
+    asyncio.run(research.precheck())
+    assert asyncio.run(research.verify()).source == "read_tech_civics"
+    asyncio.run(civic.precheck())
+    assert asyncio.run(civic.verify()).source == "read_tech_civics"
     assert research.intent.tool == "set_research"
     assert civic.intent.tool == "set_civic"
-    assert asyncio.run(research.verify()).source == "read_tech_civics"
+
+
+def test_research_baseline_rejects_an_already_selected_or_illegal_target() -> None:
+    status = SimpleNamespace(
+        current_research_type="TECH_WRITING",
+        current_civic_type="CIVIC_CODE_OF_LAWS",
+        available_techs=[],
+        available_civics=[],
+    )
+
+    class Adapter:
+        async def read_tech_civics(self, *, observed_turn):
+            return SimpleNamespace(value=status, observed_turn=observed_turn)
+
+    selected = CivMutationFactory(Adapter()).set_research(
+        operation_id=OperationId("same-tech"), tech_name="TECH_WRITING", observed_turn=12
+    )
+    illegal = CivMutationFactory(Adapter()).set_civic(
+        operation_id=OperationId("illegal-civic"), civic_name="CIVIC_CRAFTSMANSHIP", observed_turn=12
+    )
+    with pytest.raises(MutationPreconditionError, match="当前已在研究"):
+        asyncio.run(selected.precheck())
+    with pytest.raises(MutationPreconditionError, match="不是当前可推进候选"):
+        asyncio.run(illegal.precheck())
 
 
 def test_end_turn_is_a_single_hash_bound_mutation() -> None:

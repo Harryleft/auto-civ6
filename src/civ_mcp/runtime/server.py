@@ -142,6 +142,38 @@ async def set_city_production(
 
 
 @mcp.tool()
+async def set_research(
+    ctx: Context, operation_id: str, tech_name: str, decision_turn: int
+) -> dict[str, object]:
+    """Set one currently legal technology; confirmation uses its stable type ID."""
+    assembly = _runtime(ctx).assembly
+    execution = assembly.mutations.set_research(
+        operation_id=OperationId(operation_id),
+        tech_name=tech_name,
+        observed_turn=decision_turn,
+    )
+    return _operation_payload(
+        await assembly.surface.execute_mutation(execution, decision_turn=decision_turn)
+    )
+
+
+@mcp.tool()
+async def set_civic(
+    ctx: Context, operation_id: str, civic_name: str, decision_turn: int
+) -> dict[str, object]:
+    """Set one currently legal civic; confirmation uses its stable type ID."""
+    assembly = _runtime(ctx).assembly
+    execution = assembly.mutations.set_civic(
+        operation_id=OperationId(operation_id),
+        civic_name=civic_name,
+        observed_turn=decision_turn,
+    )
+    return _operation_payload(
+        await assembly.surface.execute_mutation(execution, decision_turn=decision_turn)
+    )
+
+
+@mcp.tool()
 async def end_turn(
     ctx: Context, operation_id: str, decision_turn: int
 ) -> dict[str, object]:
