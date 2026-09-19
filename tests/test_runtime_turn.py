@@ -156,6 +156,31 @@ def test_interrupt_resumes_the_original_operation_without_another_end_turn() -> 
     assert session.calls == 0
 
 
+def test_pending_decisions_expose_facts_but_not_continuations() -> None:
+    class Session:
+        pass
+
+    loop = TurnLoop(Session())
+    operation = _record(OutcomeState.UNKNOWN)
+
+    async def continuation(_choice: str):
+        raise AssertionError("context inspection must not invoke a continuation")
+
+    loop.needs_decision(
+        operation,
+        decision_type="DIPLOMACY",
+        facts={"leader": "Catherine"},
+        allowed_choices=("POSITIVE",),
+        continuation=continuation,
+    )
+
+    assert loop.pending_decisions() == (
+        DecisionInterrupt(
+            "DIPLOMACY", {"leader": "Catherine"}, ("POSITIVE",), operation.operation_id
+        ),
+    )
+
+
 async def _advanced(operation: OperationRecord) -> TurnResult:
     return TurnResult(TurnOutcome.ADVANCED, operation)
 

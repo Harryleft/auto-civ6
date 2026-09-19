@@ -401,8 +401,12 @@ async def assemble_runtime(
 
         return TurnObservation(interrupt=interrupt, continuation=envoy_continuation)
 
-    context = ContextBuilder(adapter, session)
     turn_loop = TurnLoop(session, observer=observe_turn)
+    context = ContextBuilder(
+        adapter,
+        session,
+        pending_decisions=turn_loop.pending_decisions,
+    )
     return RuntimeAssembly(
         binding=binding,
         adapter=adapter,

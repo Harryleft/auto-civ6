@@ -114,6 +114,19 @@ class TurnLoop:
         self._continuations[operation.operation_id] = (interrupt, continuation)
         return TurnResult(TurnOutcome.NEEDS_DECISION, operation, decision=interrupt)
 
+    def pending_decisions(self) -> tuple[DecisionInterrupt, ...]:
+        """Expose resumable blockers as read-only model context facts.
+
+        Continuations deliberately remain private: only ``resume`` may use
+        one after it checks the original operation ID and allowed choice.
+        """
+        return tuple(
+            interrupt
+            for _, (interrupt, _) in sorted(
+                self._continuations.items(), key=lambda item: item[0].value
+            )
+        )
+
     async def resume(self, operation_id: OperationId, choice: str) -> TurnResult:
         """Apply one allowed choice to the original turn continuation only."""
         try:
