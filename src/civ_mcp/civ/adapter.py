@@ -27,9 +27,11 @@ from civ_mcp.lua.diplomacy import (
     build_diplomacy_query,
     build_diplomacy_session_query,
     build_pending_deals_query,
+    build_trade_negotiation_query,
     parse_diplomacy_response,
     parse_diplomacy_sessions,
     parse_pending_deals_response,
+    parse_trade_negotiation_response,
 )
 from civ_mcp.lua.economy import (
     build_trade_destinations_query,
@@ -70,6 +72,7 @@ from civ_mcp.lua.models import (
     PantheonStatus,
     PendingCityCapture,
     PendingDeal,
+    TradeNegotiation,
     ProductionOption,
     PurchaseOption,
     TechCivicStatus,
@@ -463,6 +466,21 @@ class CivAdapter:
                 lua_code=build_pending_deals_query(),
                 decode=lambda lines: parse_pending_deals_response(list(lines)),
                 coverage="PENDING_DEALS:COMPLETE",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
+    async def read_trade_negotiation(
+        self, *, other_player_id: int, observed_turn: int
+    ) -> CivReadResult[TradeNegotiation]:
+        """Read one outstanding proposal/counter-offer from the live deal manager."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_trade_negotiation",
+                lua_code=build_trade_negotiation_query(other_player_id),
+                decode=lambda lines: parse_trade_negotiation_response(list(lines)),
+                coverage="TRADE_NEGOTIATION:COMPLETE",
                 context="ingame",
             ),
             observed_turn=observed_turn,

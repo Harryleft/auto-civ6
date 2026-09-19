@@ -29,6 +29,7 @@ def test_experimental_runtime_surface_exposes_only_new_core_tools() -> None:
         "get_district_placements",
         "get_builder_improvement_candidates",
         "get_pending_deals",
+        "get_trade_negotiation",
         "get_city_states",
         "get_governors",
         "get_governments",

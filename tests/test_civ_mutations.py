@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from civ_mcp.civ.mutations import CivMutationFactory
+from civ_mcp.lua.models import TradeNegotiationState
 from civ_mcp.runtime.contracts import Evidence, OperationId
 from civ_mcp.runtime.session import MutationPreconditionError
 
@@ -752,12 +753,18 @@ def test_trade_proposal_confirms_only_an_observed_counter_offer() -> None:
     )
 
     class Adapter:
-        calls = 0
+        pending_deal_calls = 0
+
+        async def read_trade_negotiation(self, **_kwargs):
+            return SimpleNamespace(
+                value=SimpleNamespace(state=TradeNegotiationState.COUNTER_OFFER),
+                observed_turn=12,
+            )
 
         async def read_pending_deals(self, **_kwargs):
-            self.calls += 1
+            self.pending_deal_calls += 1
             return SimpleNamespace(
-                value=[] if self.calls == 1 else [counter_offer], observed_turn=12
+                value=[] if self.pending_deal_calls == 1 else [counter_offer], observed_turn=12
             )
 
     execution = CivMutationFactory(Adapter()).propose_trade(
@@ -771,6 +778,31 @@ def test_trade_proposal_confirms_only_an_observed_counter_offer() -> None:
     evidence = asyncio.run(execution.verify())
     assert evidence.source == "read_pending_deals"
     assert evidence.detail.startswith("COUNTER_OFFER")
+
+
+def test_trade_proposal_confirms_only_a_direct_pending_proposal() -> None:
+    class Adapter:
+        async def read_pending_deals(self, **_kwargs):
+            return SimpleNamespace(value=[], observed_turn=12)
+
+        async def read_trade_negotiation(self, **_kwargs):
+            return SimpleNamespace(
+                value=SimpleNamespace(state=TradeNegotiationState.PROPOSED),
+                observed_turn=12,
+            )
+
+    execution = CivMutationFactory(Adapter()).propose_trade(
+        operation_id=OperationId("trade-proposed"),
+        other_player_id=2,
+        offer_items=[{"type": "GOLD", "amount": 40}],
+        request_items=[],
+        observed_turn=12,
+    )
+    asyncio.run(execution.precheck())
+    evidence = asyncio.run(execution.verify())
+
+    assert evidence.source == "read_trade_negotiation"
+    assert evidence.detail.startswith("PROPOSED")
 
 
 def test_trade_response_requires_the_observed_pending_deal_to_change() -> None:
@@ -805,7 +837,45 @@ def test_trade_response_requires_the_observed_pending_deal_to_change() -> None:
     asyncio.run(execution.precheck())
     evidence = asyncio.run(execution.verify())
     assert evidence.source == "read_pending_deals"
+    assert evidence.detail.startswith("ACCEPT")
     assert "DealProposalAction.ACCEPTED" in execution.request.lua_code
+
+
+def test_trade_rejection_records_the_selected_terminal_response() -> None:
+    deal = SimpleNamespace(
+        other_player_id=2,
+        items_from_them=[
+            SimpleNamespace(
+                is_from_us=False,
+                item_type="GOLD",
+                name="Gold (lump sum)",
+                amount=50,
+                duration=0,
+            )
+        ],
+        items_from_us=[],
+    )
+
+    class Adapter:
+        calls = 0
+
+        async def read_pending_deals(self, **_kwargs):
+            self.calls += 1
+            return SimpleNamespace(
+                value=[deal] if self.calls == 1 else [], observed_turn=12
+            )
+
+    execution = CivMutationFactory(Adapter()).respond_to_trade_offer(
+        operation_id=OperationId("trade-rejection-2"),
+        other_player_id=2,
+        choice="reject",
+        observed_turn=12,
+    )
+    asyncio.run(execution.precheck())
+    evidence = asyncio.run(execution.verify())
+
+    assert evidence.detail.startswith("REJECT")
+    assert "DealProposalAction.REJECTED" in execution.request.lua_code
 
 
 def test_congress_submission_requires_closed_session_readback() -> None:
