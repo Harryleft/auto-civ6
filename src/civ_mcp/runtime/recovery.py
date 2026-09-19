@@ -32,7 +32,13 @@ class RecoveryResult:
     new_branch: BranchIdentity | None = None
 
 
-RecoveryDriver = Callable[[RecoveryInput], Awaitable[str | None]]
+@dataclass(frozen=True, slots=True)
+class RecoveredBinding:
+    game_id: GameIdentity
+    branch_id: str
+
+
+RecoveryDriver = Callable[[RecoveryInput], Awaitable[RecoveredBinding | None]]
 
 
 class RecoverySupervisor:
@@ -47,13 +53,15 @@ class RecoverySupervisor:
         if not request.checkpoints:
             return RecoveryResult(RecoveryOutcome.NEEDS_OPERATOR, "没有可验证的 checkpoint。")
         try:
-            branch_suffix = await self._driver(request)
+            recovered = await self._driver(request)
         except Exception as exc:
             return RecoveryResult(RecoveryOutcome.FAILED_SAFE, f"恢复驱动失败：{type(exc).__name__}")
-        if not branch_suffix:
+        if recovered is None:
             return RecoveryResult(RecoveryOutcome.NEEDS_OPERATOR, "恢复驱动未确认稳定 game identity。")
+        if recovered.game_id != request.game_id:
+            return RecoveryResult(RecoveryOutcome.FAILED_SAFE, "恢复后的 game identity 与请求不一致。")
         return RecoveryResult(
             RecoveryOutcome.RECOVERED,
             "恢复完成；必须以新 branch 重新绑定 SessionKernel。",
-            BranchIdentity(request.game_id, branch_suffix),
+            BranchIdentity(request.game_id, recovered.branch_id),
         )
