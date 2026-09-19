@@ -20,6 +20,9 @@
 `Civ6_Runtime_Core_Replacement_DSM_Execution_Plan.md`；本目录只记录实际
 落地的边界与迁移状态，而不以计划文本替代验收证据。
 
+实验入口当前可支持及明确不支持的能力见
+[`capabilities.md`](capabilities.md)。未在该清单中逐项列出的能力一律不支持。
+
 ## 已落地的独立核心
 
 - Operation contract、SQLite operation store、完整 frame transport，以及独立的
@@ -87,7 +90,8 @@ Belief/Governance 链路。
 
 - F2 已接入单一活跃外交会话和单一待决城市占领；交易回价、世界议会和多会话仲裁
   仍未迁移；
-- 新实验 surface 尚未覆盖全部原有公开能力，也尚未逐项声明 unsupported；
+- 新实验 surface 只支持能力清单中的最小集合；虽已逐项声明 unsupported，仍未覆盖
+  旧入口的大部分读写能力；
 - 尚未在真实单机游戏中完成新 surface 的 read → mutation → end-turn smoke，
   或真实 recovery 验证；
 - `pyproject.toml` 仍会打包 `civ6_belief_engine`，旧 server/pipeline 与
