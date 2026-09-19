@@ -33,11 +33,16 @@
   `RECOVERY_REQUIRED`。它在 end-turn 发送后只读轮询，并且仅以新的 turn
   Evidence 关闭原 operation；不补发 end-turn，也不启动恢复。明确 `NOT_SENT`
   的请求直接要求新决策，不进入等待或恢复。
+- Runtime 可以只读识别一个活跃外交会话并返回带会话事实的 `DIPLOMACY`
+  interrupt。模型经 `resume_turn_decision` 选择 `POSITIVE`、`NEGATIVE` 或仅
+  goodbye 阶段的 `EXIT`；运行时只发送一次明确响应，随后继续原 end-turn，
+  不会补发 end-turn。会话未关闭或未推进时仍保留 `UNKNOWN`。
 - 已迁移到 `CivMutationFactory` 的领域包括移动、单位/城市攻击、升级、晋升、
   生产、购买、商路、建设单元、研究/市政、治理/总督、宗教、大人物、间谍、
   世界议会和 end-turn。每个 factory 都绑定 intent，并要求领域 Evidence。
 - `civ_mcp.runtime.server` 是独立的实验 FastMCP 入口，当前仅注册
-  `get_runtime_context`、`move_unit`、`set_city_production` 与 `end_turn`。
+  `get_runtime_context`、`move_unit`、`set_city_production`、`end_turn` 与
+  `resume_turn_decision`。
   它要求 host 显式提供 `CIV_MCP_RUNTIME_BRANCH`，不会自行猜测读档分支。
   server 只负责工具装配；end-turn 的等待和证据关闭属于 `TurnLoop`，而非 MCP
   路由函数。
@@ -68,8 +73,8 @@ Belief/Governance 链路。
 正式切换尚未发生，`civ-mcp` 仍指向旧 server。以下条件尚无完成证据，因此
 不得执行 K1--K4 删除/切换：
 
-- F2 的外交、交易回价、世界议会和城市占领 blocker 尚未全部接到新的
-  decision interrupt/resume 流程；
+- F2 目前只有单一活跃外交会话接到新的 decision interrupt/resume 流程；交易
+  回价、世界议会、城市占领和多会话仲裁仍未迁移；
 - 新实验 surface 尚未覆盖全部原有公开能力，也尚未逐项声明 unsupported；
 - 尚未在真实单机游戏中完成新 surface 的 read → mutation → end-turn smoke，
   或真实 recovery 验证；

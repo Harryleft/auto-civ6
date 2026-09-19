@@ -86,6 +86,21 @@ def test_cities_read_is_bound_to_the_ingame_domain_context() -> None:
     assert transport.commands[0].startswith("CMD:153:")
 
 
+def test_diplomacy_sessions_are_typed_read_only_facts() -> None:
+    transport = _Transport(
+        _complete("SESSION|9|2|Germany|Frederick|Greetings|First meeting|Accept;Reject|0")
+    )
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    result = asyncio.run(civ.read_diplomacy_sessions(observed_turn=42))
+
+    assert result.value[0].session_id == 9
+    assert result.value[0].other_player_id == 2
+    assert result.value[0].dialogue_text == "Greetings"
+    assert result.coverage == "OPEN_DIPLOMACY_SESSIONS:COMPLETE"
+    assert transport.commands[0].startswith("CMD:153:")
+
+
 def test_adapter_can_resolve_lua_state_when_a_new_runtime_connection_refreshes_it() -> None:
     transport = _Transport(_complete())
     indexes = {"gamecore": 8, "ingame": 153}

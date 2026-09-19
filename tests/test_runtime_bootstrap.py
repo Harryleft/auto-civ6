@@ -110,3 +110,82 @@ def test_bootstrap_wires_end_turn_waiting_to_a_fresh_turn_observation(tmp_path) 
         assert adapter.submit_calls == 1
 
     asyncio.run(run())
+
+
+def test_bootstrap_resumes_a_diplomacy_interrupt_without_sending_a_second_end_turn(tmp_path) -> None:
+    initial_session = SimpleNamespace(
+        session_id=9,
+        other_player_id=2,
+        other_civ_name="Germany",
+        other_leader_name="Frederick",
+        dialogue_text="Greetings",
+        reason_text="First meeting",
+        buttons="Accept;Reject",
+        deal_summary="",
+        is_at_war=False,
+    )
+    advanced_session = SimpleNamespace(
+        session_id=9,
+        other_player_id=2,
+        other_civ_name="Germany",
+        other_leader_name="Frederick",
+        dialogue_text="Our meeting continues",
+        reason_text="First meeting",
+        buttons="Accept;Reject",
+        deal_summary="",
+        is_at_war=False,
+    )
+
+    class Adapter:
+        def __init__(self) -> None:
+            self.game = GameIdentity("civilization_france_42")
+            self.overview_calls = 0
+            self.session_calls = 0
+            self.submissions: list[str] = []
+
+        async def read_game_identity(self):
+            return SimpleNamespace(value=self.game)
+
+        async def read_overview(self):
+            self.overview_calls += 1
+            turn = 11 if self.overview_calls >= 6 else 10
+            return SimpleNamespace(value=SimpleNamespace(turn=turn))
+
+        async def read_diplomacy_sessions(self, *, observed_turn):
+            self.session_calls += 1
+            session = initial_session if self.session_calls < 3 else advanced_session
+            return SimpleNamespace(value=[session], observed_turn=observed_turn)
+
+        async def submit(self, request):
+            self.submissions.append(request.tool)
+            return TransportReceipt(SendState.MAYBE_SENT, True, (), True)
+
+    async def run() -> None:
+        adapter = Adapter()
+        assembly = await assemble_runtime(
+            adapter,
+            OperationStore(tmp_path / "operations.sqlite3"),
+            branch_token="save-0001",
+        )
+
+        async def no_immediate_evidence():
+            return None
+
+        interrupted = await assembly.surface.end_turn(
+            assembly.mutations.end_turn(
+                operation_id=OperationId("end-turn-diplomacy"),
+                readback=no_immediate_evidence,
+            ),
+            decision_turn=10,
+        )
+        resumed = await assembly.surface.resume_turn_decision(
+            OperationId("end-turn-diplomacy"), "POSITIVE"
+        )
+
+        assert interrupted.outcome is TurnOutcome.NEEDS_DECISION
+        assert interrupted.decision.decision_type == "DIPLOMACY"
+        assert resumed.outcome is TurnOutcome.ADVANCED
+        assert resumed.operation.outcome_state is OutcomeState.CONFIRMED
+        assert adapter.submissions == ["end_turn", "respond_to_diplomacy"]
+
+    asyncio.run(run())
