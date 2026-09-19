@@ -9,6 +9,8 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 
 from civ_mcp.civ.adapter import CivAdapter, CivMutationRequest
+from civ_mcp.lua.cities import build_produce_item, build_purchase_item
+from civ_mcp.lua.economy import build_make_trade_route
 from civ_mcp.lua.units import build_attack_unit, build_move_unit
 from civ_mcp.runtime.contracts import Evidence, OperationId, OperationIntent
 from civ_mcp.runtime.session import MutationExecution
@@ -74,6 +76,111 @@ class CivMutationFactory:
                 {"unit_index": unit_index, "target_x": target_x, "target_y": target_y},
             ),
             request=CivMutationRequest("attack_unit", build_attack_unit(unit_index, target_x, target_y)),
+            verify=readback,
+            operation_id=operation_id,
+        )
+
+    def set_production(
+        self,
+        *,
+        operation_id: OperationId,
+        city_id: int,
+        item_type: str,
+        item_name: str,
+        observed_turn: int,
+        target_x: int | None = None,
+        target_y: int | None = None,
+    ) -> MutationExecution:
+        """Confirm production by the city's current queue, never Lua's OK text."""
+        intent = OperationIntent.create(
+            "set_city_production",
+            {
+                "city_id": city_id,
+                "item_type": item_type,
+                "item_name": item_name,
+                "target_x": target_x,
+                "target_y": target_y,
+            },
+        )
+
+        async def verify() -> Evidence | None:
+            try:
+                cities = await self._adapter.read_cities(observed_turn=observed_turn)
+            except Exception:
+                return None
+            for city in cities.value:
+                if city.city_id == city_id and city.currently_building == item_name:
+                    return Evidence("read_cities", cities.observed_turn, f"city_id={city_id} producing {item_name}")
+            return None
+
+        return MutationExecution(
+            intent=intent,
+            request=CivMutationRequest(
+                "set_city_production",
+                build_produce_item(city_id, item_type, item_name, target_x, target_y),
+            ),
+            verify=verify,
+            operation_id=operation_id,
+        )
+
+    def purchase_item(
+        self,
+        *,
+        operation_id: OperationId,
+        city_id: int,
+        item_type: str,
+        item_name: str,
+        yield_type: str,
+        currency_before: float,
+        observed_turn: int,
+        known_unit_ids: frozenset[int] = frozenset(),
+    ) -> MutationExecution:
+        """Confirm purchase with both resource decrease and a new owned object."""
+        intent = OperationIntent.create(
+            "purchase_item",
+            {"city_id": city_id, "item_type": item_type, "item_name": item_name, "yield_type": yield_type},
+        )
+
+        async def verify() -> Evidence | None:
+            try:
+                overview = await self._adapter.read_overview()
+                balance = overview.value.faith if yield_type == "YIELD_FAITH" else overview.value.gold
+                if balance >= currency_before:
+                    return None
+                if item_type.upper() == "UNIT":
+                    units = await self._adapter.read_units(observed_turn=observed_turn)
+                    if any(unit.unit_id not in known_unit_ids and unit.unit_type == item_name for unit in units.value):
+                        return Evidence("read_overview+read_units", overview.observed_turn, f"purchased {item_name}")
+                else:
+                    cities = await self._adapter.read_cities(observed_turn=observed_turn)
+                    if any(city.city_id == city_id and item_name in city.buildings for city in cities.value):
+                        return Evidence("read_overview+read_cities", overview.observed_turn, f"purchased {item_name}")
+            except Exception:
+                return None
+            return None
+
+        return MutationExecution(
+            intent=intent,
+            request=CivMutationRequest("purchase_item", build_purchase_item(city_id, item_type, item_name, yield_type)),
+            verify=verify,
+            operation_id=operation_id,
+        )
+
+    def make_trade_route(
+        self,
+        *,
+        operation_id: OperationId,
+        unit_index: int,
+        target_x: int,
+        target_y: int,
+        readback: AttackReadback,
+    ) -> MutationExecution:
+        """A route is confirmed only by a domain route readback supplied by caller."""
+        return MutationExecution(
+            intent=OperationIntent.create(
+                "make_trade_route", {"unit_index": unit_index, "target_x": target_x, "target_y": target_y},
+            ),
+            request=CivMutationRequest("make_trade_route", build_make_trade_route(unit_index, target_x, target_y)),
             verify=readback,
             operation_id=operation_id,
         )
