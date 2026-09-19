@@ -250,6 +250,28 @@ def test_governments_read_marks_one_current_unlocked_choice() -> None:
     assert transport.commands[0].startswith("CMD:153:")
 
 
+def test_policies_read_exposes_current_slots_and_per_slot_candidates() -> None:
+    transport = _Transport(
+        _complete(
+            "GOV|GOVERNMENT_CHIEFDOM|Chiefdom|2",
+            "SLOT|0|SLOT_MILITARY|NONE|Empty",
+            "SLOT|1|SLOT_ECONOMIC|POLICY_URBAN_PLANNING|Urban Planning",
+            "POLICY_SLOT|POLICY_AGOGE|0",
+            "AVAIL|POLICY_AGOGE|Agoge|Unit production|SLOT_MILITARY",
+        )
+    )
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    result = asyncio.run(civ.read_policies(observed_turn=42))
+
+    assert result.value.slots[0].current_policy is None
+    assert result.value.slots[1].current_policy == "POLICY_URBAN_PLANNING"
+    assert result.value.available_policies[0].policy_type == "POLICY_AGOGE"
+    assert result.value.available_policies[0].eligible_slots == [0]
+    assert result.coverage == "POLICY_SLOTS:COMPLETE;POLICY_CANDIDATES:COMPLETE"
+    assert transport.commands[0].startswith("CMD:153:")
+
+
 def test_great_people_read_exposes_individual_and_local_claim_state() -> None:
     transport = _Transport(
         _complete(
