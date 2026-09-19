@@ -72,7 +72,7 @@ Homepage = "https://github.com/lmwilki/civ6-mcp"
 Repository = "https://github.com/lmwilki/civ6-mcp"
 
 [project.scripts]
-civ-mcp = "civ_mcp.server:main"
+civ-mcp = "civ_mcp.runtime.server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/civ_mcp", "src/civ6_belief_engine"]
