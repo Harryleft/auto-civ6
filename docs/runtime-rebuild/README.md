@@ -52,9 +52,11 @@
   世界议会和 end-turn。每个 factory 都绑定 intent，并要求领域 Evidence。
 - 实验入口已把单位升级接入独立执行路径：提交前核对当前单位可升级与目标
   `UNIT_*` 类型，提交后仅以同一单位读回该目标类型确认。
+- 单位晋升读取同时返回当前可选与已拥有的 `PROMOTION_*` 类型；实验入口以它们分别
+  作为发送前资格与发送后证据。
 - `civ_mcp.runtime.server` 是独立的实验 FastMCP 入口，当前仅注册
   `get_runtime_context`、`save_handoff`、`move_unit`、`upgrade_unit`、
-  `set_city_production`、
+  `promote_unit`、`set_city_production`，
   `end_turn` 与 `resume_turn_decision`，以及 `set_research`、`set_civic`、
   `choose_pantheon`、`choose_dedication`、`found_city`。`save_handoff` 仅保存当前
   branch 的战略重点、已有安排、理由和改变条件，不能修改游戏事实或 operation record。

@@ -370,6 +370,11 @@ print("UNIT|" .. {unit_index} .. "|" .. (unit:GetID() % 65536) .. "|" .. ut)
 local exp = unit:GetExperience()
 {_LUA_XP_THRESHOLD}
 print("XP|" .. xp .. "|" .. xpNeeded .. "|" .. xpPromoCount)
+for promo in GameInfo.UnitPromotions() do
+    if promo.PromotionClass == promClass and exp:HasPromotion(promo.Index) then
+        print("OWNED|" .. promo.UnitPromotionType)
+    end
+end
 if xp < xpNeeded then
     print("{SENTINEL}")
     return
@@ -1096,6 +1101,7 @@ def parse_unit_promotions_response(lines: list[str]) -> UnitPromotionStatus:
     xp = 0
     xp_needed = 0
     promotion_count = 0
+    owned_promotions: list[str] = []
 
     for line in lines:
         if line.startswith("ERR:"):
@@ -1122,6 +1128,10 @@ def parse_unit_promotions_response(lines: list[str]) -> UnitPromotionStatus:
                         description=parts[3],
                     )
                 )
+        elif line.startswith("OWNED|"):
+            promotion_type = line.split("|", 1)[1]
+            if promotion_type:
+                owned_promotions.append(promotion_type)
 
     return UnitPromotionStatus(
         unit_id=unit_id,
@@ -1131,6 +1141,7 @@ def parse_unit_promotions_response(lines: list[str]) -> UnitPromotionStatus:
         xp=xp,
         xp_needed=xp_needed,
         promotion_count=promotion_count,
+        owned_promotions=owned_promotions,
     )
 
 

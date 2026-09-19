@@ -20,7 +20,12 @@ from civ_mcp.lua.diplomacy import (
     parse_diplomacy_response,
     parse_diplomacy_sessions,
 )
-from civ_mcp.lua.governance import build_dedications_query, parse_dedications_response
+from civ_mcp.lua.governance import (
+    build_dedications_query,
+    build_unit_promotions_query,
+    parse_dedications_response,
+    parse_unit_promotions_response,
+)
 from civ_mcp.lua.great_people import build_great_people_query, parse_great_people_response
 from civ_mcp.lua.models import (
     CityCaptureState,
@@ -34,6 +39,7 @@ from civ_mcp.lua.models import (
     PendingCityCapture,
     TechCivicStatus,
     UnitInfo,
+    UnitPromotionStatus,
     VictoryProgress,
 )
 from civ_mcp.lua.overview import (
@@ -217,6 +223,21 @@ class CivAdapter:
             observed_turn=observed_turn,
         )
 
+    async def read_unit_promotions(
+        self, *, unit_index: int, observed_turn: int
+    ) -> CivReadResult[UnitPromotionStatus]:
+        """Read one unit's legal and owned promotions from GameCore."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_unit_promotions",
+                lua_code=build_unit_promotions_query(unit_index),
+                decode=_decode_unit_promotions,
+                coverage="UNIT_PROMOTIONS:COMPLETE",
+                context="gamecore",
+            ),
+            observed_turn=observed_turn,
+        )
+
     async def read_diplomacy(self, *, observed_turn: int) -> CivReadResult[list[CivInfo]]:
         return await self.read(
             CivReadRequest(
@@ -369,3 +390,9 @@ def _decode_great_people(lines: tuple[str, ...]) -> list[GreatPersonInfo]:
     if not any(line.startswith("GP_STATUS|") for line in lines):
         raise ValueError("缺少 Great People GP_STATUS 响应。")
     return parse_great_people_response(list(lines))
+
+
+def _decode_unit_promotions(lines: tuple[str, ...]) -> UnitPromotionStatus:
+    if not any(line.startswith("UNIT|") for line in lines):
+        raise ValueError("缺少 unit promotion UNIT 响应。")
+    return parse_unit_promotions_response(list(lines))

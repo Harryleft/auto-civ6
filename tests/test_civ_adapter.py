@@ -197,6 +197,26 @@ def test_great_people_read_exposes_individual_and_local_claim_state() -> None:
     assert transport.commands[0].startswith("CMD:153:")
 
 
+def test_unit_promotions_read_exposes_legal_and_owned_types() -> None:
+    transport = _Transport(
+        _complete(
+            "UNIT|2|2|UNIT_WARRIOR",
+            "XP|10|5|1",
+            "OWNED|PROMOTION_BATTLECRY",
+            "PROMO|PROMOTION_TORTOISE|Tortoise|Ranged defense",
+        )
+    )
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    result = asyncio.run(civ.read_unit_promotions(unit_index=2, observed_turn=42))
+
+    assert result.value.unit_index == 2
+    assert result.value.owned_promotions == ["PROMOTION_BATTLECRY"]
+    assert result.value.promotions[0].promotion_type == "PROMOTION_TORTOISE"
+    assert result.coverage == "UNIT_PROMOTIONS:COMPLETE"
+    assert transport.commands[0].startswith("CMD:8:")
+
+
 def test_adapter_can_resolve_lua_state_when_a_new_runtime_connection_refreshes_it() -> None:
     transport = _Transport(_complete())
     indexes = {"gamecore": 8, "ingame": 153}
