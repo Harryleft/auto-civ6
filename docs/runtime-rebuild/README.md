@@ -26,7 +26,8 @@
   FireTuner 握手/Lua-state 发现都位于 `civ_mcp.runtime`；它们不依赖旧
   `GameConnection`、`GameState` 或 `civ6_belief_engine`。
 - `CivAdapter` 已提供 game identity、overview、cities、units、diplomacy 和
-  victory progress 的 typed read，并只提交一次 mutation。
+  victory progress 的 typed read，并只提交一次 mutation。科技/市政读取另外提供
+  当前选择的稳定 `TECH_*` / `CIVIC_*` ID，而不是依赖本地化名称。
 - `SessionKernel` 是 mutation 的唯一入口：发送后取消、连接中断、跨局回读
   都只会留下 `UNKNOWN`，同一 `operation_id` 的并发调用只会实际发送一次。
 - 新的 `TurnLoop` 只输出 `ADVANCED`、`NEEDS_DECISION` 或
@@ -42,7 +43,7 @@
   世界议会和 end-turn。每个 factory 都绑定 intent，并要求领域 Evidence。
 - `civ_mcp.runtime.server` 是独立的实验 FastMCP 入口，当前仅注册
   `get_runtime_context`、`move_unit`、`set_city_production`、`end_turn` 与
-  `resume_turn_decision`。
+  `resume_turn_decision`，以及 `set_research`、`set_civic`。
   它要求 host 显式提供 `CIV_MCP_RUNTIME_BRANCH`，不会自行猜测读档分支。
   server 只负责工具装配；end-turn 的等待和证据关闭属于 `TurnLoop`，而非 MCP
   路由函数。

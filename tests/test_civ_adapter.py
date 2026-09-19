@@ -101,6 +101,20 @@ def test_diplomacy_sessions_are_typed_read_only_facts() -> None:
     assert transport.commands[0].startswith("CMD:153:")
 
 
+def test_tech_civics_read_exposes_stable_current_selection_ids() -> None:
+    transport = _Transport(
+        _complete("CURRENT|Writing|3|Code of Laws|2|TECH_WRITING|CIVIC_CODE_OF_LAWS")
+    )
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    result = asyncio.run(civ.read_tech_civics(observed_turn=42))
+
+    assert result.value.current_research_type == "TECH_WRITING"
+    assert result.value.current_civic_type == "CIVIC_CODE_OF_LAWS"
+    assert result.coverage == "RESEARCH_AND_CIVICS:COMPLETE"
+    assert transport.commands[0].startswith("CMD:153:")
+
+
 def test_adapter_can_resolve_lua_state_when_a_new_runtime_connection_refreshes_it() -> None:
     transport = _Transport(_complete())
     indexes = {"gamecore": 8, "ingame": 153}

@@ -448,6 +448,10 @@ class TechCivicStatus:
     current_civic_turns: int
     available_techs: list[TechOption]
     available_civics: list[CivicOption]
+    # Stable GameInfo type IDs for the active selections. Older query output
+    # lacks them, in which case these remain empty rather than guessed.
+    current_research_type: str = ""
+    current_civic_type: str = ""
     completed_tech_count: int = 0
     completed_civic_count: int = 0
     # Localized display names of every technology completed by the local player.

@@ -13,13 +13,14 @@ from civ_mcp.lua.diplomacy import (
     parse_diplomacy_response,
     parse_diplomacy_sessions,
 )
-from civ_mcp.lua.models import CityInfo, CivInfo, DiplomacySession, GameOverview, UnitInfo, VictoryProgress
+from civ_mcp.lua.models import CityInfo, CivInfo, DiplomacySession, GameOverview, TechCivicStatus, UnitInfo, VictoryProgress
 from civ_mcp.lua.overview import (
     build_game_identity_query,
     build_overview_query,
     parse_game_identity_response,
     parse_overview_response,
 )
+from civ_mcp.lua.tech import build_tech_civics_query, parse_tech_civics_response
 from civ_mcp.lua.units import build_units_query, parse_units_response
 from civ_mcp.lua.victory import build_victory_progress_query, parse_victory_progress_response
 from civ_mcp.runtime.contracts import GameIdentity
@@ -185,6 +186,21 @@ class CivAdapter:
                 lua_code=build_diplomacy_session_query(),
                 decode=lambda lines: parse_diplomacy_sessions(list(lines)),
                 coverage="OPEN_DIPLOMACY_SESSIONS:COMPLETE",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
+    async def read_tech_civics(
+        self, *, observed_turn: int
+    ) -> CivReadResult[TechCivicStatus]:
+        """Read active research/civic selections and legal choices as game facts."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_tech_civics",
+                lua_code=build_tech_civics_query(),
+                decode=lambda lines: parse_tech_civics_response(list(lines)),
+                coverage="RESEARCH_AND_CIVICS:COMPLETE",
                 context="ingame",
             ),
             observed_turn=observed_turn,
