@@ -28,7 +28,15 @@ from civ_mcp.lua.congress import build_congress_submit, build_congress_vote
 from civ_mcp.lua.religion import build_choose_pantheon, build_found_religion, build_spread_religion
 from civ_mcp.lua.notifications import build_end_turn
 from civ_mcp.lua.tech import build_set_civic, build_set_research
-from civ_mcp.lua.units import build_attack_unit, build_move_unit
+from civ_mcp.lua.units import (
+    build_attack_unit,
+    build_build_route,
+    build_improve_tile,
+    build_move_unit,
+    build_remove_feature,
+    build_remove_improvement,
+    build_repair_improvement,
+)
 from civ_mcp.runtime.contracts import Evidence, OperationId, OperationIntent
 from civ_mcp.runtime.session import MutationExecution
 
@@ -234,6 +242,74 @@ class CivMutationFactory:
             request=CivMutationRequest("make_trade_route", build_make_trade_route(unit_index, target_x, target_y)),
             verify=readback,
             operation_id=operation_id,
+        )
+
+    def improve_tile(
+        self,
+        *,
+        operation_id: OperationId,
+        unit_index: int,
+        improvement_name: str,
+        readback: AttackReadback,
+    ) -> MutationExecution:
+        """Build one improvement and require a later observed tile state."""
+        return self._readback_action(
+            operation_id=operation_id,
+            tool="improve_tile",
+            arguments={
+                "unit_index": unit_index,
+                "improvement_name": improvement_name,
+            },
+            lua_code=build_improve_tile(unit_index, improvement_name),
+            readback=readback,
+        )
+
+    def repair_improvement(
+        self, *, operation_id: OperationId, unit_index: int, readback: AttackReadback
+    ) -> MutationExecution:
+        """Repair one tile only when a later map read proves it is restored."""
+        return self._readback_action(
+            operation_id=operation_id,
+            tool="repair_improvement",
+            arguments={"unit_index": unit_index},
+            lua_code=build_repair_improvement(unit_index),
+            readback=readback,
+        )
+
+    def remove_improvement(
+        self, *, operation_id: OperationId, unit_index: int, readback: AttackReadback
+    ) -> MutationExecution:
+        """Demolish one improvement; a send receipt cannot prove the tile changed."""
+        return self._readback_action(
+            operation_id=operation_id,
+            tool="remove_improvement",
+            arguments={"unit_index": unit_index},
+            lua_code=build_remove_improvement(unit_index),
+            readback=readback,
+        )
+
+    def remove_feature(
+        self, *, operation_id: OperationId, unit_index: int, readback: AttackReadback
+    ) -> MutationExecution:
+        """Harvest/chop a feature, closing only with a factual map readback."""
+        return self._readback_action(
+            operation_id=operation_id,
+            tool="remove_feature",
+            arguments={"unit_index": unit_index},
+            lua_code=build_remove_feature(unit_index),
+            readback=readback,
+        )
+
+    def build_route(
+        self, *, operation_id: OperationId, unit_index: int, readback: AttackReadback
+    ) -> MutationExecution:
+        """Build a road or railroad only with a later observed route state."""
+        return self._readback_action(
+            operation_id=operation_id,
+            tool="build_route",
+            arguments={"unit_index": unit_index},
+            lua_code=build_build_route(unit_index),
+            readback=readback,
         )
 
     def propose_trade(
