@@ -58,4 +58,5 @@ def test_context_keeps_failed_domain_reads_explicitly_unknown() -> None:
         "get_unit_promotions",
         "get_city_states",
         "get_governors",
+        "get_governments",
     )

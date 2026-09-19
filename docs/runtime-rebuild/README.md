@@ -60,12 +60,13 @@
 - 总督读取区分已拥有和当前合法的晋升；实验入口仅在任命/晋升后点数恰好减少一，或
   派驻后同一总督的目标城市 ID 精确匹配时确认操作。
 - `civ_mcp.runtime.server` 是独立的实验 FastMCP 入口，当前仅注册
-  `get_runtime_context`、`get_unit_promotions`、`get_city_states`、`get_governors`、`save_handoff`、`move_unit`、`upgrade_unit`、
+  `get_runtime_context`、`get_unit_promotions`、`get_city_states`、`get_governors`、`get_governments`、`save_handoff`、`move_unit`、`upgrade_unit`、
   `promote_unit`、`send_envoy`、`appoint_governor`、`assign_governor`、`promote_governor`、`set_city_production`，
   `end_turn` 与 `resume_turn_decision`，以及 `set_research`、`set_civic`、
   `choose_pantheon`、`choose_dedication`、`found_city`。`save_handoff` 仅保存当前
   branch 的战略重点、已有安排、理由和改变条件，不能修改游戏事实或 operation record。
-  另有 `recruit_great_person` 可招募当前候选、`send_envoy` 可派遣一个已验证合法的使者。
+  另有 `recruit_great_person` 可招募当前候选、`send_envoy` 可派遣一个已验证合法的使者、
+  `change_government` 可切换至一个已验证解锁的政府。
   它要求 host 显式提供 `CIV_MCP_RUNTIME_BRANCH`，不会自行猜测读档分支。
   server 只负责工具装配；end-turn 的等待和证据关闭属于 `TurnLoop`，而非 MCP
   路由函数。

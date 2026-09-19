@@ -22,10 +22,12 @@ from civ_mcp.lua.diplomacy import (
 )
 from civ_mcp.lua.governance import (
     build_city_states_query,
+    build_available_governments_query,
     build_dedications_query,
     build_governors_query,
     build_unit_promotions_query,
     parse_city_states_response,
+    parse_available_governments_response,
     parse_dedications_response,
     parse_governors_response,
     parse_unit_promotions_response,
@@ -40,6 +42,7 @@ from civ_mcp.lua.models import (
     EnvoyStatus,
     GameOverview,
     GreatPersonInfo,
+    GovernmentChoice,
     GovernorStatus,
     PantheonStatus,
     PendingCityCapture,
@@ -349,6 +352,21 @@ class CivAdapter:
             observed_turn=observed_turn,
         )
 
+    async def read_governments(
+        self, *, observed_turn: int
+    ) -> CivReadResult[list[GovernmentChoice]]:
+        """Read every unlocked government and mark the exact active choice."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_governments",
+                lua_code=build_available_governments_query(),
+                decode=_decode_governments,
+                coverage="UNLOCKED_GOVERNMENTS:COMPLETE",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
     async def read_great_people(
         self, *, observed_turn: int
     ) -> CivReadResult[list[GreatPersonInfo]]:
@@ -449,3 +467,10 @@ def _decode_governors(lines: tuple[str, ...]) -> GovernorStatus:
     if not any(line.startswith("STATUS|") for line in lines):
         raise ValueError("缺少 governor STATUS 响应。")
     return parse_governors_response(list(lines))
+
+
+def _decode_governments(lines: tuple[str, ...]) -> list[GovernmentChoice]:
+    governments = parse_available_governments_response(list(lines))
+    if sum(government.is_current for government in governments) != 1:
+        raise ValueError("缺少唯一当前政府响应。")
+    return governments

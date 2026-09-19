@@ -225,6 +225,31 @@ def test_governors_read_distinguishes_owned_and_currently_eligible_promotions() 
     assert transport.commands[0].startswith("CMD:153:")
 
 
+def test_governments_read_marks_one_current_unlocked_choice() -> None:
+    transport = _Transport(
+        _complete(
+            "GOV|GOVERNMENT_CHIEFDOM|0|CURRENT|Chiefdom|SLOT_MILITARY,SLOT_ECONOMIC|",
+            "GOV|GOVERNMENT_AUTOCRACY|1|AVAILABLE|Autocracy|SLOT_MILITARY,SLOT_ECONOMIC,SLOT_WILDCARD|Wonder production",
+        )
+    )
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    result = asyncio.run(civ.read_governments(observed_turn=42))
+
+    assert [government.government_type for government in result.value] == [
+        "GOVERNMENT_CHIEFDOM",
+        "GOVERNMENT_AUTOCRACY",
+    ]
+    assert result.value[0].is_current is True
+    assert result.value[1].slots == (
+        "SLOT_MILITARY",
+        "SLOT_ECONOMIC",
+        "SLOT_WILDCARD",
+    )
+    assert result.coverage == "UNLOCKED_GOVERNMENTS:COMPLETE"
+    assert transport.commands[0].startswith("CMD:153:")
+
+
 def test_great_people_read_exposes_individual_and_local_claim_state() -> None:
     transport = _Transport(
         _complete(
