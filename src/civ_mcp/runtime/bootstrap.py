@@ -45,9 +45,6 @@ async def assemble_runtime(
     boundary.  The Runtime never guesses that a newly loaded timeline belongs
     to a previous branch.
     """
-    if not branch_token.strip():
-        raise ValueError("branch_token 不能为空；host 必须显式标识当前存档分支。")
-
     async def identity_probe():
         return (await adapter.read_game_identity()).value
 
@@ -61,7 +58,7 @@ async def assemble_runtime(
         turn_probe=turn_probe,
     )
     game_id = await identity_probe()
-    branch_id = BranchIdentity(game_id, f"{game_id.value}:{branch_token}")
+    branch_id = BranchIdentity.from_token(game_id, branch_token)
     binding = await session.bind(game_id, branch_id)
     mutations = CivMutationFactory(adapter)
     turn_loop: TurnLoop

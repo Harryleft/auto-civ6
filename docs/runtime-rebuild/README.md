@@ -93,7 +93,8 @@ Belief/Governance 链路。
 新核心的手工验收使用 [`tests/manual/test_runtime_core_smoke.py`](../../tests/manual/test_runtime_core_smoke.py)，
 不使用旧 `GameConnection` / `GameState` 手工脚本。先进入单机对局、确认
 `EnableTuner=1`、`4318` 正在监听且没有其他客户端；再由 host 选择当前存档对应的稳定
-branch token 和一个保留 operation evidence 的 SQLite 路径：
+branch token（例如 `save-0001`，**不是** `game_id:save-0001`）和一个保留 operation evidence
+的 SQLite 路径：
 
 ```bash
 .venv/bin/python tests/manual/test_runtime_core_smoke.py \

@@ -92,3 +92,14 @@ def test_branch_must_belong_to_the_operation_game() -> None:
             decision_turn=42,
             intent=OperationIntent.create("move_unit", {"unit_id": 7}),
         )
+
+
+def test_runtime_owned_branch_identity_is_scoped_and_rejects_full_ids() -> None:
+    game = GameIdentity("game-france-001")
+
+    assert BranchIdentity.from_token(game, "save-0001") == BranchIdentity(
+        game, "game-france-001:save-0001"
+    )
+
+    with pytest.raises(ValueError, match="branch_token"):
+        BranchIdentity.from_token(game, "game-france-001:save-0001")
