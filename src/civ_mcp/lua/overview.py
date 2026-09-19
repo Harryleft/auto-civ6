@@ -163,19 +163,33 @@ for i = 0, 62 do
 end
 local maxRel = math.floor(nMajors / 2) + 1
 print("RELSLOTS|" .. nReligions .. "|" .. maxRel)
-local eraName = "Unknown"
-local eraScore, darkThresh, goldenThresh = 0, 0, 0
-if activeRuleset ~= "RULESET_STANDARD" and Game.GetEras ~= nil then
-    local eraManager = Game.GetEras()
-    local eraIdx = eraManager:GetCurrentEra()
-    local eraEntry = GameInfo.Eras[eraIdx]
-    eraName = eraEntry and Locale.Lookup(eraEntry.Name) or "Unknown"
-    eraScore = eraManager:GetPlayerCurrentScore(id)
-    darkThresh = eraManager:GetPlayerDarkAgeThreshold(id)
-    goldenThresh = eraManager:GetPlayerGoldenAgeThreshold(id)
-end
-if activeRuleset ~= "RULESET_STANDARD" then
-    print("ERA|" .. eraName .. "|" .. eraScore .. "|" .. darkThresh .. "|" .. goldenThresh)
+-- Some runtime variants expose GameEras but omit XP1 age-score methods.  Do
+-- not let those optional fields abort the core overview or masquerade as 0.
+local eraManager = nil
+pcall(function()
+    if activeRuleset ~= "RULESET_STANDARD" and Game.GetEras ~= nil then
+        eraManager = Game.GetEras()
+    end
+end)
+if eraManager ~= nil then
+    local eraName = "Unknown"
+    pcall(function()
+        local eraIdx = eraManager:GetCurrentEra()
+        local eraEntry = GameInfo.Eras[eraIdx]
+        eraName = eraEntry and Locale.Lookup(eraEntry.Name) or "Unknown"
+    end)
+    local scoreOK, eraScore = pcall(function()
+        return eraManager:GetPlayerCurrentScore(id)
+    end)
+    local darkOK, darkThresh = pcall(function()
+        return eraManager:GetPlayerDarkAgeThreshold(id)
+    end)
+    local goldenOK, goldenThresh = pcall(function()
+        return eraManager:GetPlayerGoldenAgeThreshold(id)
+    end)
+    if scoreOK and darkOK and goldenOK then
+        print("ERA|" .. eraName .. "|" .. eraScore .. "|" .. darkThresh .. "|" .. goldenThresh)
+    end
 end
 print("RULESET|" .. tostring(activeRuleset or "UNKNOWN"))
 local maxTurns = GameConfiguration.GetValue("GAME_MAX_TURNS") or 0

@@ -93,6 +93,8 @@ def test_standard_rules_suppress_expansion_diplomacy_and_era_claims():
     overview_lua = build_overview_query()
     assert 'activeRuleset ~= "RULESET_STANDARD"' in overview_lua
     assert 'activeRuleset == "RULESET_EXPANSION_2"' in overview_lua
+    assert "local scoreOK, eraScore = pcall" in overview_lua
+    assert "if scoreOK and darkOK and goldenOK then" in overview_lua
     assert 'print("RULESET|"' in overview_lua
 
 
