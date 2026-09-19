@@ -326,6 +326,29 @@ def test_barbarian_overview_allows_an_empty_fog_limited_snapshot() -> None:
     assert barbarians.value.units == []
 
 
+def test_village_overview_preserves_revealed_live_facts() -> None:
+    transport = _Transport(
+        _complete("VILLAGE|12,24|revealed|none|6|3")
+    )
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    villages = asyncio.run(civ.read_village_overview(observed_turn=42))
+
+    assert villages.value.huts[0].visibility == "revealed"
+    assert villages.value.huts[0].distance_to_city == 6
+    assert villages.coverage == "VILLAGES:REVEALED"
+    assert transport.commands[0].startswith("CMD:8:")
+
+
+def test_village_overview_allows_an_empty_revealed_snapshot() -> None:
+    transport = _Transport(_complete())
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    villages = asyncio.run(civ.read_village_overview(observed_turn=42))
+
+    assert villages.value.huts == []
+
+
 def test_city_purchase_candidate_error_is_not_coerced_to_an_empty_result() -> None:
     transport = _Transport(_complete("ERR:CITY_NOT_FOUND"))
     civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)

@@ -98,6 +98,7 @@ class ContextBuilder:
                 "get_spies",
                 "get_religion_overview",
                 "get_barbarian_overview",
+                "get_village_overview",
             ),
         )
 
@@ -232,5 +233,12 @@ class ContextBuilder:
         """Read only camps revealed by exploration and units visible this turn."""
         overview = await self._adapter.read_overview()
         return await self._adapter.read_barbarian_overview(
+            observed_turn=overview.observed_turn
+        )
+
+    async def read_village_overview(self):
+        """Read only tribal villages currently present on revealed tiles."""
+        overview = await self._adapter.read_overview()
+        return await self._adapter.read_village_overview(
             observed_turn=overview.observed_turn
         )

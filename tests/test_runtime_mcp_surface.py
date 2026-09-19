@@ -297,3 +297,17 @@ def test_surface_reads_barbarian_overview_only_through_context() -> None:
     )
 
     assert asyncio.run(surface.get_barbarian_overview()) is expected
+
+
+def test_surface_reads_village_overview_only_through_context() -> None:
+    expected = SimpleNamespace(huts=[])
+
+    class Context:
+        async def read_village_overview(self):
+            return expected
+
+    surface = RuntimeMcpSurface(
+        context=Context(), session=SimpleNamespace(), turn_loop=SimpleNamespace()
+    )
+
+    assert asyncio.run(surface.get_village_overview()) is expected

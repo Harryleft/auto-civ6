@@ -252,6 +252,12 @@ async def get_barbarian_overview(ctx: Context) -> dict[str, object]:
     return _json_value(await _runtime(ctx).assembly.surface.get_barbarian_overview())
 
 
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_village_overview(ctx: Context) -> dict[str, object]:
+    """Return revealed tribal villages; this tool never enters a village tile."""
+    return _json_value(await _runtime(ctx).assembly.surface.get_village_overview())
+
+
 @mcp.tool()
 async def save_handoff(
     ctx: Context,
