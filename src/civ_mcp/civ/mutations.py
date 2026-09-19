@@ -7,6 +7,7 @@ SessionKernel.  They never submit, retry, restart, or infer combat success.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+import re
 
 from civ_mcp.civ.adapter import CivAdapter, CivMutationRequest
 from civ_mcp.lua.cities import (
@@ -570,26 +571,79 @@ class CivMutationFactory:
         )
 
     def set_research(
-        self, *, operation_id: OperationId, tech_name: str, readback: AttackReadback
+        self, *, operation_id: OperationId, tech_name: str, observed_turn: int
     ) -> MutationExecution:
-        """Set research only after a fresh tech/civic readback can confirm it."""
-        return self._readback_action(
+        """Set one legal technology with a typed pre/post research observation."""
+        self._require_gameinfo_type(tech_name, "TECH_")
+        intent = OperationIntent.create("set_research", {"tech_name": tech_name})
+
+        async def precheck() -> None:
+            try:
+                status = await self._adapter.read_tech_civics(observed_turn=observed_turn)
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取科研选择 baseline。") from exc
+            if status.value.current_research_type == tech_name:
+                raise MutationPreconditionError("当前已在研究该科技，不提交重复设定。")
+            if tech_name not in {tech.tech_type for tech in status.value.available_techs}:
+                raise MutationPreconditionError("目标科技不是当前可研究候选，不提交设定。")
+
+        async def verify() -> Evidence | None:
+            try:
+                status = await self._adapter.read_tech_civics(observed_turn=observed_turn)
+            except Exception:
+                return None
+            if status.value.current_research_type != tech_name:
+                return None
+            return Evidence(
+                "read_tech_civics",
+                status.observed_turn,
+                f"current_research_type={tech_name}",
+            )
+
+        return MutationExecution(
+            intent=intent,
+            request=CivMutationRequest("set_research", build_set_research(tech_name)),
+            verify=verify,
             operation_id=operation_id,
-            tool="set_research",
-            arguments={"tech_name": tech_name},
-            lua_code=build_set_research(tech_name),
-            readback=readback,
+            precheck=precheck,
         )
 
     def set_civic(
-        self, *, operation_id: OperationId, civic_name: str, readback: AttackReadback
+        self, *, operation_id: OperationId, civic_name: str, observed_turn: int
     ) -> MutationExecution:
-        return self._readback_action(
+        """Set one legal civic with a typed pre/post civic observation."""
+        self._require_gameinfo_type(civic_name, "CIVIC_")
+        intent = OperationIntent.create("set_civic", {"civic_name": civic_name})
+
+        async def precheck() -> None:
+            try:
+                status = await self._adapter.read_tech_civics(observed_turn=observed_turn)
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取市政选择 baseline。") from exc
+            if status.value.current_civic_type == civic_name:
+                raise MutationPreconditionError("当前已在推进该市政，不提交重复设定。")
+            if civic_name not in {civic.civic_type for civic in status.value.available_civics}:
+                raise MutationPreconditionError("目标市政不是当前可推进候选，不提交设定。")
+
+        async def verify() -> Evidence | None:
+            try:
+                status = await self._adapter.read_tech_civics(observed_turn=observed_turn)
+            except Exception:
+                return None
+            if status.value.current_civic_type != civic_name:
+                return None
+            return Evidence(
+                "read_tech_civics",
+                status.observed_turn,
+                f"current_civic_type={civic_name}",
+            )
+
+        return MutationExecution(
+            intent=intent,
+            request=CivMutationRequest("set_civic", build_set_civic(civic_name)),
+            verify=verify,
             operation_id=operation_id,
-            tool="set_civic",
-            arguments={"civic_name": civic_name},
-            lua_code=build_set_civic(civic_name),
-            readback=readback,
+            precheck=precheck,
         )
 
     def set_policies(
@@ -678,6 +732,11 @@ class CivMutationFactory:
         self, *, operation_id: OperationId, readback: AttackReadback
     ) -> MutationExecution:
         return self._readback_action(operation_id=operation_id, tool="congress_submit", arguments={}, lua_code=build_congress_submit(resume_pending=True), readback=readback)
+
+    @staticmethod
+    def _require_gameinfo_type(value: str, prefix: str) -> None:
+        if not re.fullmatch(rf"{prefix}[A-Z0-9_]+", value):
+            raise ValueError(f"{prefix} 目标必须是稳定的 GameInfo type ID。")
 
     @staticmethod
     def _readback_action(

@@ -76,9 +76,11 @@ def build_tech_civics_query(
 ) -> str:
     """Read live research state, optionally omitting previously observed rules.
 
-    The default wire format is unchanged. Compact responses are private to
-    ResearchCache, which restores the original DTO before returning to callers.
-    Only the same options the ordinary query exposes are eligible for reuse.
+    ``CURRENT`` appends stable GameInfo type IDs after its existing display
+    fields, so older parsers can still read its original prefix. Compact
+    responses are private to ResearchCache, which restores the original DTO
+    before returning to callers. Only the same options the ordinary query
+    exposes are eligible for reuse.
     """
     prelude = (
         _research_cache_prelude(cache_identity, known_rules)
@@ -95,17 +97,21 @@ local techIdx = te:GetResearchingTech()
 local civicIdx = cu:GetProgressingCivic()
 local techName = "None"
 local techTurns = -1
+local techType = ""
 if techIdx >= 0 then
     techName = Locale.Lookup(GameInfo.Technologies[techIdx].Name)
     techTurns = te:GetTurnsToResearch(techIdx)
+    techType = GameInfo.Technologies[techIdx].TechnologyType or ""
 end
 local civicName = "None"
 local civicTurns = -1
+local civicType = ""
 if civicIdx >= 0 then
     civicName = Locale.Lookup(GameInfo.Civics[civicIdx].Name)
     civicTurns = cu:GetTurnsLeftOnCurrentCivic()
+    civicType = GameInfo.Civics[civicIdx].CivicType or ""
 end
-print("CURRENT|" .. techName .. "|" .. techTurns .. "|" .. civicName .. "|" .. civicTurns)
+print("CURRENT|" .. techName .. "|" .. techTurns .. "|" .. civicName .. "|" .. civicTurns .. "|" .. techType .. "|" .. civicType)
 -- Build boost lookup
 local boostsByTech = {}
 local boostsByCivic = {}
@@ -438,6 +444,8 @@ def parse_tech_civics_response(lines: list[str]) -> TechCivicStatus:
     current_research_turns = -1
     current_civic = "None"
     current_civic_turns = -1
+    current_research_type = ""
+    current_civic_type = ""
     available_techs: list[TechOption] = []
     available_civics: list[CivicOption] = []
     completed_tech_count = 0
@@ -467,6 +475,8 @@ def parse_tech_civics_response(lines: list[str]) -> TechCivicStatus:
             current_research_turns = int(parts[2])
             current_civic = parts[3]
             current_civic_turns = int(parts[4])
+            current_research_type = parts[5] if len(parts) > 5 else ""
+            current_civic_type = parts[6] if len(parts) > 6 else ""
         elif line.startswith("TECH|"):
             parts = line.split("|")
             if len(parts) >= 9:
@@ -561,6 +571,8 @@ def parse_tech_civics_response(lines: list[str]) -> TechCivicStatus:
         current_civic_turns=current_civic_turns,
         available_techs=available_techs,
         available_civics=available_civics,
+        current_research_type=current_research_type,
+        current_civic_type=current_civic_type,
         completed_tech_count=completed_tech_count,
         completed_civic_count=completed_civic_count,
         completed_techs=completed_techs,
