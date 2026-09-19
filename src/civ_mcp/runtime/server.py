@@ -112,6 +112,18 @@ async def get_unit_attack_target(
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
+async def get_city_attack_target(
+    ctx: Context, city_id: int, target_x: int, target_y: int
+) -> dict[str, object]:
+    """Validate one city target against the live ranged-attack command without sending it."""
+    return _json_value(
+        await _runtime(ctx).assembly.surface.get_city_attack_target(
+            city_id, target_x, target_y
+        )
+    )
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
 async def get_city_states(ctx: Context) -> dict[str, object]:
     """Return current envoy tokens and every met city-state's send eligibility."""
     return _json_value(await _runtime(ctx).assembly.surface.get_city_states())
@@ -223,6 +235,29 @@ async def attack_unit(
     execution = assembly.mutations.attack_unit(
         operation_id=OperationId(operation_id),
         unit_index=unit_index,
+        target_x=target_x,
+        target_y=target_y,
+        observed_turn=decision_turn,
+    )
+    return _operation_payload(
+        await assembly.surface.execute_mutation(execution, decision_turn=decision_turn)
+    )
+
+
+@mcp.tool()
+async def attack_city(
+    ctx: Context,
+    operation_id: str,
+    city_id: int,
+    target_x: int,
+    target_y: int,
+    decision_turn: int,
+) -> dict[str, object]:
+    """Attack one city-approved target; only observed HP loss/removal confirms it."""
+    assembly = _runtime(ctx).assembly
+    execution = assembly.mutations.attack_city(
+        operation_id=OperationId(operation_id),
+        city_id=city_id,
         target_x=target_x,
         target_y=target_y,
         observed_turn=decision_turn,

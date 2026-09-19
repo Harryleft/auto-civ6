@@ -86,23 +86,48 @@ def test_attack_does_not_confirm_when_the_target_hp_is_unchanged() -> None:
     assert asyncio.run(execution.verify()) is None
 
 
-def test_city_attack_requires_explicit_domain_readback() -> None:
+def test_city_attack_requires_a_game_approved_target_and_observed_hp_loss() -> None:
     class Adapter:
-        pass
+        async def read_city_attack_target(self, **_kwargs):
+            target = SimpleNamespace(owner_id=2, unit_index=9, health=100)
+            return SimpleNamespace(value=target, observed_turn=12)
 
-    async def readback() -> Evidence:
-        return Evidence("read_units", 12, "target has an observed post-combat state")
+        async def read_combat_targets(self, **_kwargs):
+            target = SimpleNamespace(owner_id=2, unit_index=9, health=80)
+            return SimpleNamespace(value=[target], observed_turn=12)
 
     execution = CivMutationFactory(Adapter()).attack_city(
         operation_id=OperationId("city-attack-4"),
         city_id=4,
         target_x=5,
         target_y=7,
-        readback=readback,
+        observed_turn=12,
     )
-    assert execution.intent.tool == execution.request.tool == "city_attack"
+    asyncio.run(execution.precheck())
+    assert execution.intent.tool == execution.request.tool == "attack_city"
     assert "CityCommandTypes.RANGE_ATTACK" in execution.request.lua_code
-    assert asyncio.run(execution.verify()).source == "read_units"
+    assert asyncio.run(execution.verify()).source == "read_combat_targets"
+
+
+def test_city_attack_does_not_confirm_when_the_target_hp_is_unchanged() -> None:
+    class Adapter:
+        async def read_city_attack_target(self, **_kwargs):
+            target = SimpleNamespace(owner_id=2, unit_index=9, health=100)
+            return SimpleNamespace(value=target, observed_turn=12)
+
+        async def read_combat_targets(self, **_kwargs):
+            target = SimpleNamespace(owner_id=2, unit_index=9, health=100)
+            return SimpleNamespace(value=[target], observed_turn=12)
+
+    execution = CivMutationFactory(Adapter()).attack_city(
+        operation_id=OperationId("city-attack-unchanged"),
+        city_id=4,
+        target_x=5,
+        target_y=7,
+        observed_turn=12,
+    )
+    asyncio.run(execution.precheck())
+    assert asyncio.run(execution.verify()) is None
 
 
 def test_production_requires_city_queue_readback() -> None:

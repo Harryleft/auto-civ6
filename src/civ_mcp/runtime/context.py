@@ -62,6 +62,7 @@ class ContextBuilder:
             further_queries=(
                 "get_unit_promotions",
                 "get_unit_attack_target",
+                "get_city_attack_target",
                 "get_city_states",
                 "get_governors",
                 "get_governments",
@@ -85,6 +86,16 @@ class ContextBuilder:
         overview = await self._adapter.read_overview()
         return await self._adapter.read_attack_target(
             unit_index=unit_index,
+            target_x=target_x,
+            target_y=target_y,
+            observed_turn=overview.observed_turn,
+        )
+
+    async def read_city_attack_target(self, city_id: int, target_x: int, target_y: int):
+        """Read one game-approved city attack target through the context boundary."""
+        overview = await self._adapter.read_overview()
+        return await self._adapter.read_city_attack_target(
+            city_id=city_id,
             target_x=target_x,
             target_y=target_y,
             observed_turn=overview.observed_turn,

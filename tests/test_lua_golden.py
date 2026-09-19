@@ -162,6 +162,16 @@ def test_city_attack_injects_coordinates():
     assert "5" in query and "3" in query and "4" in query
 
 
+def test_city_attack_target_query_is_read_only_and_uses_live_command_validation():
+    query = cities.build_city_attack_target_query(5, 3, 4)
+
+    _assert_sentinel(query)
+    assert "CityManager.GetCommandTargets" in query
+    assert "CityManager.CanStartCommand" in query
+    assert "CityManager.RequestCommand" not in query
+    assert "CITY_ATTACK_TARGET" in query
+
+
 def test_diplomacy_respond_injects_player_and_response():
     query = diplomacy.build_diplomacy_respond(3, "ACCEPT")
     _assert_sentinel(query)

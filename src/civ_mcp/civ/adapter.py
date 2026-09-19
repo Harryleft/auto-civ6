@@ -9,10 +9,12 @@ from typing import Generic, TypeVar
 from civ_mcp.lua.cities import (
     build_cities_query,
     build_city_capture_state_query,
+    build_city_attack_target_query,
     build_city_production_query,
     build_city_purchase_query,
     build_pending_city_capture_query,
     parse_cities_response,
+    parse_city_attack_target_response,
     parse_city_capture_state_response,
     parse_city_production_response,
     parse_city_purchase_response,
@@ -330,6 +332,21 @@ class CivAdapter:
                 lua_code=build_attack_target_query(unit_index, target_x, target_y),
                 decode=lambda lines: parse_attack_target_response(list(lines)),
                 coverage="UNIT_ATTACK_TARGET:COMPLETE",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
+    async def read_city_attack_target(
+        self, *, city_id: int, target_x: int, target_y: int, observed_turn: int
+    ) -> CivReadResult[CombatTarget]:
+        """Validate one exact city attack target without sending a command."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_city_attack_target",
+                lua_code=build_city_attack_target_query(city_id, target_x, target_y),
+                decode=lambda lines: parse_city_attack_target_response(list(lines)),
+                coverage="CITY_ATTACK_TARGET:COMPLETE",
                 context="ingame",
             ),
             observed_turn=observed_turn,

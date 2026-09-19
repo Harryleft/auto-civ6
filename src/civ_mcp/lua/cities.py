@@ -13,6 +13,7 @@ from civ_mcp.lua._helpers import (
 from civ_mcp.lua.models import (
     CityCaptureState,
     CityInfo,
+    CombatTarget,
     PendingCityCapture,
     ProductionOption,
     PurchaseOption,
@@ -175,18 +176,30 @@ print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
 
 
-def build_city_attack(city_id: int, target_x: int, target_y: int) -> str:
-    """InGame context: fire city ranged attack at a target tile."""
+def _build_city_attack_validation(city_id: int, target_x: int, target_y: int) -> str:
+    """Return the shared, side-effect-free validation prefix for city attacks."""
     return f"""
 {_lua_get_city(city_id)}
 local cx, cy = pCity:GetX(), pCity:GetY()
 local dist = Map.GetPlotDistance(cx, cy, {target_x}, {target_y})
-local enemy = nil
+local enemy, enemyName = nil, "UNKNOWN"
 local pu = Map.GetUnitsAt({target_x}, {target_y})
-if pu then for other in pu:Units() do if other:GetOwner() ~= me then enemy = other end end end
+if pu then
+    local fallback, fallbackName = nil, "UNKNOWN"
+    for other in pu:Units() do
+        if other:GetOwner() ~= me then
+            local eInfo = GameInfo.Units[other:GetType()]
+            local name = eInfo and eInfo.UnitType or "UNKNOWN"
+            if eInfo and (eInfo.Combat or 0) > 0 then
+                enemy, enemyName = other, name
+                break
+            end
+            if fallback == nil then fallback, fallbackName = other, name end
+        end
+    end
+    if enemy == nil then enemy, enemyName = fallback, fallbackName end
+end
 if not enemy then {_bail("ERR:NO_ENEMY|No hostile unit at target tile")} end
-local eInfo = GameInfo.Units[enemy:GetType()]
-local eName = eInfo and eInfo.UnitType or "UNKNOWN"
 local eHP = enemy:GetMaxDamage() - enemy:GetDamage()
 local params = {{}}
 params[CityCommandTypes.PARAM_X] = {target_x}
@@ -239,10 +252,44 @@ local canAttack = CityManager.CanStartCommand(pCity, CityCommandTypes.RANGE_ATTA
 if not canAttack then
     {_bail("ERR:CANNOT_ATTACK|City cannot attack this target (unknown reason)")}
 end
-CityManager.RequestCommand(pCity, CityCommandTypes.RANGE_ATTACK, params)
-print("OK:CITY_RANGE_ATTACK|" .. Locale.Lookup(pCity:GetName()) .. " -> " .. eName .. "@{target_x},{target_y}|pre_hp:" .. eHP .. "/" .. enemy:GetMaxDamage())
+"""
+
+
+def build_city_attack_target_query(city_id: int, target_x: int, target_y: int) -> str:
+    """Validate one exact city ranged-attack target without sending a command."""
+    return f"""
+{_build_city_attack_validation(city_id, target_x, target_y)}
+print("CITY_ATTACK_TARGET|" .. enemy:GetOwner() .. "|" .. enemy:GetID() .. "|" .. enemyName .. "|" .. eHP .. "|" .. enemy:GetMaxDamage())
 print("{SENTINEL}")
 """
+
+
+def build_city_attack(city_id: int, target_x: int, target_y: int) -> str:
+    """InGame context: fire one previously validated city ranged attack."""
+    return f"""
+{_build_city_attack_validation(city_id, target_x, target_y)}
+CityManager.RequestCommand(pCity, CityCommandTypes.RANGE_ATTACK, params)
+print("OK:CITY_RANGE_ATTACK|" .. Locale.Lookup(pCity:GetName()) .. " -> " .. enemyName .. "@{target_x},{target_y}|pre_hp:" .. eHP .. "/" .. enemy:GetMaxDamage())
+print("{SENTINEL}")
+"""
+
+
+def parse_city_attack_target_response(lines: list[str]) -> CombatTarget:
+    """Decode one game-approved city ranged-attack target."""
+    for line in lines:
+        if line.startswith("ERR:"):
+            raise ValueError(line[4:])
+        parts = line.split("|")
+        if len(parts) != 6 or parts[0] != "CITY_ATTACK_TARGET":
+            continue
+        return CombatTarget(
+            owner_id=int(parts[1]),
+            unit_index=int(parts[2]),
+            unit_type=parts[3],
+            health=int(parts[4]),
+            max_health=int(parts[5]),
+        )
+    raise ValueError("缺少 CITY_ATTACK_TARGET 响应。")
 
 
 def build_resolve_city_capture(action: str) -> str:
