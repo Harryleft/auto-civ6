@@ -1,5 +1,5 @@
-"""Entry point: python -m civ_mcp"""
+"""Entry point: python -m civ_mcp."""
 
-from civ_mcp.server import main
+from civ_mcp.runtime.server import main
 
 main()

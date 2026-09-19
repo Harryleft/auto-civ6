@@ -20,7 +20,7 @@
 `Civ6_Runtime_Core_Replacement_DSM_Execution_Plan.md`；本目录只记录实际
 落地的边界与迁移状态，而不以计划文本替代验收证据。
 
-实验入口当前可支持及明确不支持的能力见
+正式 Runtime 入口当前可支持及明确不支持的能力见
 [`capabilities.md`](capabilities.md)。未在该清单中逐项列出的能力一律不支持。
 
 ## 已落地的独立核心
@@ -89,24 +89,25 @@
   派驻后同一总督的目标城市 ID 精确匹配时确认操作。
 - 政策读取为每张候选卡提供当前合法的槽位；实验入口拒绝跨槽或重复配置，并仅在每个
   请求槽位读回指定政策后确认。
-- `civ_mcp.runtime.server` 是独立的实验 FastMCP 入口。注册工具的精确集合由
+- `civ_mcp.runtime.server` 是正式的 FastMCP 入口。注册工具的精确集合由
   `tests/test_runtime_server.py` 与 [`capabilities.md`](capabilities.md) 共同约束；
   `save_handoff` 仅保存当前 branch 的战略重点、已有安排、理由和改变条件，不能修改
   游戏事实或 operation record。host 必须显式提供 `CIV_MCP_RUNTIME_BRANCH`，不会自行
   猜测读档分支。server 只负责工具装配；end-turn 的等待和证据关闭属于 `TurnLoop`，而非
   MCP 路由函数。
 
-可用下列方式启动实验入口（它仍不是正式 `civ-mcp` 命令）：
+`civ-mcp` 与 `python -m civ_mcp` 均启动该入口。host 必须提供当前存档的稳定 branch
+token；空值会在连接 FireTuner 前明确失败：
 
 ```bash
 CIV_MCP_RUNTIME_BRANCH=<稳定存档分支标识> \
-  .venv/bin/python -m civ_mcp.runtime.server
+  .venv/bin/python -m civ_mcp
 ```
 
 该入口不会启动游戏、加载存档、自动重连后重发 mutation，或调用旧的
 Belief/Governance 链路。
 
-## M9 DSH 实验适配器（尚未用于正式游玩）
+## M9 DSH Runtime 适配器
 
 [`scripts/runtime_dsh`](../../scripts/runtime_dsh) 配合
 [`civ6-runtime.cordis.yml`](../../integrations/deepseek-harness/civ6-runtime.cordis.yml)
@@ -121,7 +122,7 @@ Belief/Governance 链路。
 ./scripts/runtime_dsh --branch save-0001 --dry-run
 ```
 
-真正启动前仍须完成 K1，且确认 `4318` 正在监听、没有其他已连接的 FireTuner client：
+真正启动前须确认 `4318` 正在监听、没有其他已连接的 FireTuner client：
 
 ```bash
 ./scripts/runtime_dsh --branch save-0001
@@ -229,8 +230,8 @@ host 诊断。
 工作树已有未跟踪的 `design/graph-idea-visual.html`，它不是本次重构产物，不能
 作为“工作树干净”的验收证据，也不会被纳入本重构的提交。
 
-正式切换尚未发生，`civ-mcp` 仍指向旧 server。真实 K1 smoke、J2 recovery 与 M11
-证据格式核验均已通过，但以下删除前置条件仍未满足，因此不得执行 K2--K4：
+K1 已将 `civ-mcp` 和 `python -m civ_mcp` 切到 Runtime server。真实 K1 smoke、J2 recovery
+与 M11 证据格式核验均已通过，但以下删除前置条件仍未满足，因此不得执行 K2--K4：
 
 - F2 已接入城市占领、单一条款完整交易回价、世界议会弃权、单一普通外交会话和使者
   决策；多会话仲裁仍明确不支持，世界议会投票也尚未迁移；
