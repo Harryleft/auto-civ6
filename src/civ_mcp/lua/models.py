@@ -227,6 +227,17 @@ class UnitInfo:
     can_fortify: bool = False
 
 
+@dataclass(frozen=True)
+class CombatTarget:
+    """One unit observed at a combat target tile."""
+
+    owner_id: int
+    unit_index: int
+    unit_type: str
+    health: int
+    max_health: int
+
+
 @dataclass
 class SpyInfo:
     unit_id: int  # composite ID (use with spy_action)

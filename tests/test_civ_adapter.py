@@ -115,6 +115,22 @@ def test_city_production_candidates_are_typed_live_ingame_facts() -> None:
     assert transport.commands[0].startswith("CMD:153:")
 
 
+def test_attack_target_and_combat_readback_are_typed_ingame_facts() -> None:
+    target_transport = _Transport(
+        _complete("ATTACK_TARGET|2|9|UNIT_WARRIOR|100|100|RANGE")
+    )
+    civ = adapter.CivAdapter(target_transport, gamecore_state=8, ingame_state=153)
+    target = asyncio.run(
+        civ.read_attack_target(unit_index=4, target_x=5, target_y=7, observed_turn=42)
+    )
+    assert (target.value[0].owner_id, target.value[0].unit_index, target.value[1]) == (2, 9, "RANGE")
+
+    readback_transport = _Transport(_complete("UNIT|2|9|UNIT_WARRIOR|80/100"))
+    civ = adapter.CivAdapter(readback_transport, gamecore_state=8, ingame_state=153)
+    observed = asyncio.run(civ.read_combat_targets(target_x=5, target_y=7, observed_turn=42))
+    assert observed.value[0].health == 80
+
+
 def test_city_purchase_candidate_error_is_not_coerced_to_an_empty_result() -> None:
     transport = _Transport(_complete("ERR:CITY_NOT_FOUND"))
     civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)

@@ -127,17 +127,65 @@ class CivMutationFactory:
         unit_index: int,
         target_x: int,
         target_y: int,
-        readback: AttackReadback,
+        observed_turn: int,
     ) -> MutationExecution:
-        """Create an attack whose caller supplies a factual postcondition probe."""
+        """Attack a game-approved target and verify only a factual HP transition."""
+        target = None
+
+        async def precheck() -> None:
+            nonlocal target
+            try:
+                result = await self._adapter.read_attack_target(
+                    unit_index=unit_index,
+                    target_x=target_x,
+                    target_y=target_y,
+                    observed_turn=observed_turn,
+                )
+            except Exception as exc:
+                raise MutationPreconditionError("目标不是当前游戏允许的攻击对象。") from exc
+            target = result.value[0]
+
+        async def verify() -> Evidence | None:
+            if target is None:
+                return None
+            try:
+                observed = await self._adapter.read_combat_targets(
+                    target_x=target_x, target_y=target_y, observed_turn=observed_turn
+                )
+            except Exception:
+                return None
+            current = next(
+                (
+                    item
+                    for item in observed.value
+                    if item.owner_id == target.owner_id
+                    and item.unit_index == target.unit_index
+                ),
+                None,
+            )
+            if current is None:
+                return Evidence(
+                    "read_combat_targets",
+                    observed.observed_turn,
+                    f"target owner={target.owner_id} unit={target.unit_index} removed",
+                )
+            if current.health < target.health:
+                return Evidence(
+                    "read_combat_targets",
+                    observed.observed_turn,
+                    f"target owner={target.owner_id} unit={target.unit_index} hp {target.health}->{current.health}",
+                )
+            return None
+
         return MutationExecution(
             intent=OperationIntent.create(
                 "attack_unit",
                 {"unit_index": unit_index, "target_x": target_x, "target_y": target_y},
             ),
             request=CivMutationRequest("attack_unit", build_attack_unit(unit_index, target_x, target_y)),
-            verify=readback,
+            verify=verify,
             operation_id=operation_id,
+            precheck=precheck,
         )
 
     def attack_city(
