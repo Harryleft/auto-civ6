@@ -64,6 +64,17 @@ def test_overview_is_a_typed_game_fact_with_an_observed_turn() -> None:
     assert transport.commands[0].startswith("CMD:8:")
 
 
+def test_game_identity_is_a_typed_runtime_identity_not_a_legacy_game_state_value() -> None:
+    transport = _Transport(_complete("GAMESEED|CIVILIZATION_FRANCE|425675776"))
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    result = asyncio.run(civ.read_game_identity())
+
+    assert result.value.value == "civilization_france_425675776"
+    assert result.observed_turn is None
+    assert transport.commands[0].startswith("CMD:8:")
+
+
 def test_cities_read_is_bound_to_the_ingame_domain_context() -> None:
     transport = _Transport(_complete())
     civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
@@ -87,6 +98,19 @@ def test_adapter_can_resolve_lua_state_when_a_new_runtime_connection_refreshes_i
     assert len(transport.commands) == 2
     assert transport.commands[0].startswith("CMD:153:")
     assert transport.commands[1].startswith("CMD:154:")
+
+
+def test_adapter_state_resolver_also_applies_to_direct_identity_reads() -> None:
+    transport = _Transport(_complete("GAMESEED|CIVILIZATION_FRANCE|42"))
+    indexes = {"gamecore": 8, "ingame": 153}
+    civ = adapter.CivAdapter(transport, state_resolver=indexes.__getitem__)
+
+    asyncio.run(civ.read_game_identity())
+    indexes["gamecore"] = 9
+    asyncio.run(civ.read_game_identity())
+
+    assert transport.commands[0].startswith("CMD:8:")
+    assert transport.commands[1].startswith("CMD:9:")
 
 
 def test_incomplete_query_is_not_converted_to_an_empty_domain_result() -> None:

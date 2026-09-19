@@ -16,6 +16,37 @@ from civ_mcp.lua.models import (
 )
 
 
+def build_game_identity_query() -> str:
+    """Return the stable civilization type and synchronized game seed."""
+    return """
+local me = Game.GetLocalPlayer()
+local cfg = PlayerConfigurations[me]
+local civ = cfg and cfg:GetCivilizationTypeName() or nil
+local seed = GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")
+if civ == nil or seed == nil then
+    print("ERR:GAME_IDENTITY_UNAVAILABLE")
+else
+    print("GAMESEED|" .. tostring(civ) .. "|" .. tostring(seed))
+end
+print("---END---")
+"""
+
+
+def parse_game_identity_response(lines: list[str]) -> tuple[str, int]:
+    """Parse a complete identity response; a missing seed is never anonymous."""
+    for line in lines:
+        if not line.startswith("GAMESEED|"):
+            continue
+        parts = line.split("|", 2)
+        if len(parts) != 3 or not parts[1].strip():
+            break
+        try:
+            return parts[1].strip().lower(), int(parts[2])
+        except ValueError:
+            break
+    raise ValueError("Game identity response is missing a valid GAMESEED row")
+
+
 def build_overview_query() -> str:
     return """
 local id = Game.GetLocalPlayer()
