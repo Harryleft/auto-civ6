@@ -179,19 +179,85 @@ def test_production_rejects_a_value_not_in_the_live_candidate_set() -> None:
         asyncio.run(execution.precheck())
 
 
-def test_production_declines_districts_until_exact_placement_candidates_exist() -> None:
-    execution = CivMutationFactory(SimpleNamespace()).set_production(
+def test_production_accepts_only_exact_game_approved_district_placements() -> None:
+    class Adapter:
+        async def read_district_placements(self, **_kwargs):
+            return SimpleNamespace(
+                value=[SimpleNamespace(district_type="DISTRICT_HARBOR", x=8, y=5)],
+                observed_turn=12,
+            )
+
+    execution = CivMutationFactory(Adapter()).set_production(
         operation_id=OperationId("production-district"),
         city_id=4,
         item_type="DISTRICT",
-        item_name="DISTRICT_CAMPUS",
+        item_name="DISTRICT_HARBOR",
         target_x=8,
+        target_y=5,
+        observed_turn=12,
+    )
+    asyncio.run(execution.precheck())
+
+
+def test_production_rejects_district_coordinates_outside_live_candidates() -> None:
+    class Adapter:
+        async def read_district_placements(self, **_kwargs):
+            return SimpleNamespace(
+                value=[SimpleNamespace(district_type="DISTRICT_CAMPUS", x=8, y=5)],
+                observed_turn=12,
+            )
+
+    execution = CivMutationFactory(Adapter()).set_production(
+        operation_id=OperationId("production-district-invalid"),
+        city_id=4,
+        item_type="DISTRICT",
+        item_name="DISTRICT_CAMPUS",
+        target_x=7,
         target_y=5,
         observed_turn=12,
     )
 
     with pytest.raises(MutationPreconditionError, match="区域格点候选"):
         asyncio.run(execution.precheck())
+
+
+def test_district_production_requires_the_selected_coordinate_in_city_readback() -> None:
+    class Adapter:
+        calls = 0
+
+        async def read_district_placements(self, **_kwargs):
+            return SimpleNamespace(
+                value=[SimpleNamespace(district_type="DISTRICT_HARBOR", x=8, y=5)],
+                observed_turn=12,
+            )
+
+        async def read_cities(self, **_kwargs):
+            self.calls += 1
+            districts = ["DISTRICT_HARBOR@8,5"] if self.calls == 1 else ["DISTRICT_HARBOR@7,5"]
+            return SimpleNamespace(
+                value=[
+                    SimpleNamespace(
+                        city_id=4,
+                        currently_building="DISTRICT_HARBOR",
+                        districts=districts,
+                    )
+                ],
+                observed_turn=12,
+            )
+
+    adapter = Adapter()
+    execution = CivMutationFactory(adapter).set_production(
+        operation_id=OperationId("production-district-readback"),
+        city_id=4,
+        item_type="DISTRICT",
+        item_name="DISTRICT_HARBOR",
+        target_x=8,
+        target_y=5,
+        observed_turn=12,
+    )
+    asyncio.run(execution.precheck())
+    assert asyncio.run(execution.verify()).source == "read_cities"
+    assert asyncio.run(execution.verify()) is None
 
 
 def test_founding_requires_a_new_city_at_the_observed_settler_tile() -> None:

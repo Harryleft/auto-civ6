@@ -172,6 +172,17 @@ def test_city_attack_target_query_is_read_only_and_uses_live_command_validation(
     assert "CITY_ATTACK_TARGET" in query
 
 
+def test_district_placements_use_exact_operation_candidates_without_land_filtering():
+    query = cities.build_district_placement_query(5, "DISTRICT_HARBOR")
+
+    _assert_sentinel(query)
+    assert "CityManager.GetOperationTargets" in query
+    assert "CityManager.CanStartOperation" in query
+    assert "CityManager.RequestOperation" not in query
+    assert "DISTRICT_PLACEMENT" in query
+    assert "IsWater" not in query
+
+
 def test_diplomacy_respond_injects_player_and_response():
     query = diplomacy.build_diplomacy_respond(3, "ACCEPT")
     _assert_sentinel(query)

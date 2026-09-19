@@ -11,9 +11,9 @@
 
 | 类别 | 工具 | 运行时保证 |
 | --- | --- | --- |
-| 局面读取 | `get_runtime_context`、`get_unit_promotions`、`get_unit_attack_target`、`get_city_attack_target`、`get_city_states`、`get_governors`、`get_governments`、`get_policies`、`get_city_purchases`、`get_city_production`、`get_trade_destinations`、`get_trade_routes` | 前者一次读取 overview、城市、待决城市占领、单位、外交/会话、科技/市政、万神殿、时代着力点、大人物和胜利进度；两种攻击目标读取只确认一个由坐标指定、游戏当前允许的实时目标；其余细粒度读取按工具名返回当前领域事实，单项失败在 `unknown` 中显式保留。 |
+| 局面读取 | `get_runtime_context`、`get_unit_promotions`、`get_unit_attack_target`、`get_city_attack_target`、`get_district_placements`、`get_city_states`、`get_governors`、`get_governments`、`get_policies`、`get_city_purchases`、`get_city_production`、`get_trade_destinations`、`get_trade_routes` | 前者一次读取 overview、城市、待决城市占领、单位、外交/会话、科技/市政、万神殿、时代着力点、大人物和胜利进度；两种攻击目标读取只确认一个由坐标指定、游戏当前允许的实时目标；`get_district_placements` 只返回实际 `BUILD` 操作接受的格点，不自行过滤水格；其余细粒度读取按工具名返回当前领域事实，单项失败在 `unknown` 中显式保留。 |
 | 战略连续性 | `save_handoff` | 仅写当前 branch 的战略重点、已有安排、理由和改变条件；不修改游戏事实或 operation。 |
-| 常规 mutation | `move_unit`、`attack_unit`、`attack_city`、`upgrade_unit`、`promote_unit`、`send_envoy`、`appoint_governor`、`assign_governor`、`promote_governor`、`change_government`、`set_policies`、`set_city_production`、`purchase_item`、`make_trade_route`、`set_research`、`set_civic`、`found_city`、`choose_pantheon`、`choose_dedication`、`recruit_great_person` | 每次请求绑定 game/branch/operation/decision turn，经 `SessionKernel` 单次发送，且仅由领域 readback 确认。两种攻击都只提交实时合法目标，且只在指定目标减血或消失时确认；目标读回缺失或血量未变均为 `UNKNOWN`。其余 mutation 保持各自候选与领域读回契约。 |
+| 常规 mutation | `move_unit`、`attack_unit`、`attack_city`、`upgrade_unit`、`promote_unit`、`send_envoy`、`appoint_governor`、`assign_governor`、`promote_governor`、`change_government`、`set_policies`、`set_city_production`、`purchase_item`、`make_trade_route`、`set_research`、`set_civic`、`found_city`、`choose_pantheon`、`choose_dedication`、`recruit_great_person` | 每次请求绑定 game/branch/operation/decision turn，经 `SessionKernel` 单次发送，且仅由领域 readback 确认。两种攻击都只提交实时合法目标，且只在指定目标减血或消失时确认；目标读回缺失或血量未变均为 `UNKNOWN`。`set_city_production` 的区域类型必须带一个 `get_district_placements` 返回的格点，写入前的 `CanStartOperation` 失败时不发送，并要求城市回读同时出现该区域类型与指定格点。其余 mutation 保持各自候选与领域读回契约。 |
 | 回合 | `end_turn`、`resume_turn_decision` | 原 end-turn 只发送一次；等待期只读轮询。当前可恢复的 blocker 是单一外交会话、单一城市占领选择，以及有可用使者时的城邦选择；最后一类的 `choice` 为返回的城邦 player ID。 |
 
 `UNKNOWN`、`RECOVERY_REQUIRED` 与 `NEEDS_DECISION` 都不是成功，也不会触发重试。
@@ -25,10 +25,9 @@
   新 branch identity 下显式调度。
 - 旧 `civ-mcp` 的 Belief/Governance、PlayProfile、pipeline、Web/Convex、世界模型、
   后台 watcher、自动弹窗处理与任何自动策略。
-- `get_runtime_context` 未包含的细粒度读取，例如地图/视野、战斗或路径估算、生产候选、
+- `get_runtime_context` 未包含的细粒度读取，例如地图/视野、战斗或路径估算、奇观格点候选、
   外交交易选项、单位/间谍/宗教详情、世界议会详情和气候。
-- 尚未暴露的写操作：建设者、区域生产、交易提议或接受、宗教（万神殿除外）、
-  间谍、世界议会、奇观及
+- 尚未暴露的写操作：建设者、交易提议或接受、宗教（万神殿除外）、间谍、世界议会、奇观及
   任何未列在上表的 mutation。
 - F2 尚未覆盖交易回价、世界议会和多会话仲裁。Runtime 不会自动接受不同条款、
   自动投票、自动保留城市或自动重发 end-turn。
