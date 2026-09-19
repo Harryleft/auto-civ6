@@ -256,6 +256,20 @@ def test_climate_ruleset_error_is_not_coerced_to_an_empty_fact() -> None:
         asyncio.run(civ.read_climate_overview(observed_turn=42))
 
 
+def test_spies_are_typed_live_ingame_facts_without_starting_a_mission() -> None:
+    transport = _Transport(
+        _complete("65536|Artimpasa|4|5|2|30|2|Berlin|1|TRAVEL,COUNTERSPY|none|idle")
+    )
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    spies = asyncio.run(civ.read_spies(observed_turn=42))
+
+    assert spies.value[0].unit_index == 0
+    assert spies.value[0].available_ops == ["TRAVEL", "COUNTERSPY"]
+    assert spies.coverage == "SPIES:COMPLETE"
+    assert transport.commands[0].startswith("CMD:153:")
+
+
 def test_city_purchase_candidate_error_is_not_coerced_to_an_empty_result() -> None:
     transport = _Transport(_complete("ERR:CITY_NOT_FOUND"))
     civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
