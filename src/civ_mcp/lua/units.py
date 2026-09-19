@@ -13,6 +13,7 @@ from civ_mcp.lua._helpers import (
 from civ_mcp.lua.models import (
     BuilderInfo,
     BuilderTask,
+    CombatTarget,
     CombatEstimate,
     PathingEstimate,
     ThreatInfo,
@@ -456,7 +457,7 @@ for i = 0, 63 do
                 local hp = u:GetMaxDamage() - u:GetDamage()
                 local entry = GameInfo.Units[u:GetType()]
                 local name = entry and entry.UnitType or "UNKNOWN"
-                print("UNIT|" .. name .. "|" .. hp .. "/" .. u:GetMaxDamage() .. "|owner:" .. i)
+                print("UNIT|" .. i .. "|" .. u:GetID() .. "|" .. name .. "|" .. hp .. "/" .. u:GetMaxDamage())
                 found = true
             end
         end
@@ -486,6 +487,102 @@ end
 if not found then print("EMPTY") end
 print("{SENTINEL}")
 """
+
+
+def build_attack_target_query(unit_index: int, target_x: int, target_y: int) -> str:
+    """Validate one exact unit attack without sending an operation."""
+    return f"""
+{_lua_get_unit(unit_index)}
+local enemy, enemyName = nil, "UNKNOWN"
+local targetUnits = Map.GetUnitsAt({target_x}, {target_y})
+if targetUnits then
+    local fallback = nil
+    for other in targetUnits:Units() do
+        if other:GetOwner() ~= me then
+            local info = GameInfo.Units[other:GetType()]
+            local name = info and info.UnitType or "UNKNOWN"
+            if info and (info.Combat or 0) > 0 then enemy = other; enemyName = name; break end
+            if fallback == nil then fallback = other; enemyName = name end
+        end
+    end
+    if enemy == nil then enemy = fallback end
+end
+if enemy == nil then {_bail("ERR:NO_ENEMY")} end
+if enemy:GetOwner() ~= 63 and not Players[me]:GetDiplomacy():IsAtWarWith(enemy:GetOwner()) then {_bail("ERR:NOT_AT_WAR")} end
+local params = {{}}
+params[UnitOperationTypes.PARAM_X] = {target_x}
+params[UnitOperationTypes.PARAM_Y] = {target_y}
+local action = ""
+local dist = Map.GetPlotDistance(unit:GetX(), unit:GetY(), {target_x}, {target_y})
+local unitInfo = GameInfo.Units[unit:GetType()]
+local isRanged = UnitManager.CanStartOperation(unit, UnitOperationTypes.RANGE_ATTACK, nil, true)
+if isRanged then
+    if unit:GetMovesRemaining() <= 0 then {_bail("ERR:NO_MOVES")} end
+    local range = unitInfo and unitInfo.Range or 1
+    if dist > range then {_bail("ERR:OUT_OF_RANGE")} end
+    local canRanged = UnitManager.CanStartOperation(unit, UnitOperationTypes.RANGE_ATTACK, nil, params, true)
+    if canRanged then action = "RANGE" end
+    if action == "" and dist > 1 then {_bail("ERR:NO_LOS")} end
+    if action == "" then isRanged = false end
+end
+local isAir = (not isRanged) and UnitManager.CanStartOperation(unit, UnitOperationTypes.AIR_ATTACK, nil, params, true)
+if isAir then
+    local range = unitInfo and unitInfo.Range or 1
+    if dist > range then {_bail("ERR:OUT_OF_RANGE")} end
+    local canAir = UnitManager.CanStartOperation(unit, UnitOperationTypes.AIR_ATTACK, nil, params, true)
+    if canAir then action = "AIR" end
+end
+if action == "" and not isAir then
+    if unit:GetMovesRemaining() <= 0 then {_bail("ERR:NO_MOVES")} end
+    if unit:HasMovedIntoZOC() then {_bail("ERR:ZOC")} end
+    params[UnitOperationTypes.PARAM_MODIFIERS] = UnitOperationMoveModifiers.ATTACK
+    local canMelee = UnitManager.CanStartOperation(unit, UnitOperationTypes.MOVE_TO, nil, params, true)
+    if canMelee then action = "MELEE" end
+end
+if action == "" then {_bail("ERR:CANNOT_ATTACK")} end
+local hp = enemy:GetMaxDamage() - enemy:GetDamage()
+print("ATTACK_TARGET|" .. enemy:GetOwner() .. "|" .. enemy:GetID() .. "|" .. enemyName .. "|" .. hp .. "|" .. enemy:GetMaxDamage() .. "|" .. action)
+print("{SENTINEL}")
+"""
+
+
+def parse_combat_targets_response(lines: list[str]) -> list[CombatTarget]:
+    """Decode the direct target-tile observation used as combat evidence."""
+    targets: list[CombatTarget] = []
+    for line in lines:
+        if line == "EMPTY":
+            continue
+        if line.startswith("ERR:"):
+            raise ValueError(line[4:])
+        parts = line.split("|")
+        if len(parts) != 5 or parts[0] != "UNIT":
+            continue
+        health, max_health = parts[4].split("/", 1)
+        targets.append(
+            CombatTarget(
+                owner_id=int(parts[1]), unit_index=int(parts[2]), unit_type=parts[3],
+                health=int(health), max_health=int(max_health),
+            )
+        )
+    return targets
+
+
+def parse_attack_target_response(lines: list[str]) -> tuple[CombatTarget, str]:
+    """Decode one game-approved attack target and the operation it permits."""
+    for line in lines:
+        if line.startswith("ERR:"):
+            raise ValueError(line[4:])
+        parts = line.split("|")
+        if len(parts) != 7 or parts[0] != "ATTACK_TARGET":
+            continue
+        return (
+            CombatTarget(
+                owner_id=int(parts[1]), unit_index=int(parts[2]), unit_type=parts[3],
+                health=int(parts[4]), max_health=int(parts[5]),
+            ),
+            parts[6],
+        )
+    raise ValueError("缺少 ATTACK_TARGET 响应。")
 
 
 def parse_blocked_diagnostic(lines: list[str]) -> str:

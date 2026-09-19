@@ -100,6 +100,18 @@ async def get_unit_promotions(ctx: Context, unit_index: int) -> dict[str, object
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
+async def get_unit_attack_target(
+    ctx: Context, unit_index: int, target_x: int, target_y: int
+) -> dict[str, object]:
+    """Validate one target against the live attack operation without sending it."""
+    return _json_value(
+        await _runtime(ctx).assembly.surface.get_unit_attack_target(
+            unit_index, target_x, target_y
+        )
+    )
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
 async def get_city_states(ctx: Context) -> dict[str, object]:
     """Return current envoy tokens and every met city-state's send eligibility."""
     return _json_value(await _runtime(ctx).assembly.surface.get_city_states())
@@ -186,6 +198,29 @@ async def move_unit(
     """Submit one hash-bound move; confirmation requires a fresh unit readback."""
     assembly = _runtime(ctx).assembly
     execution = assembly.mutations.move_unit(
+        operation_id=OperationId(operation_id),
+        unit_index=unit_index,
+        target_x=target_x,
+        target_y=target_y,
+        observed_turn=decision_turn,
+    )
+    return _operation_payload(
+        await assembly.surface.execute_mutation(execution, decision_turn=decision_turn)
+    )
+
+
+@mcp.tool()
+async def attack_unit(
+    ctx: Context,
+    operation_id: str,
+    unit_index: int,
+    target_x: int,
+    target_y: int,
+    decision_turn: int,
+) -> dict[str, object]:
+    """Attack one game-approved target; only observed HP loss/removal confirms it."""
+    assembly = _runtime(ctx).assembly
+    execution = assembly.mutations.attack_unit(
         operation_id=OperationId(operation_id),
         unit_index=unit_index,
         target_x=target_x,
