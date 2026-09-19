@@ -44,7 +44,7 @@ from civ_mcp.lua.units import (
     build_repair_improvement,
 )
 from civ_mcp.runtime.contracts import Evidence, OperationId, OperationIntent
-from civ_mcp.runtime.session import MutationExecution
+from civ_mcp.runtime.session import MutationExecution, MutationPreconditionError
 
 
 AttackReadback = Callable[[], Awaitable[Evidence | None]]
@@ -84,11 +84,25 @@ class CivMutationFactory:
                     )
             return None
 
+        async def precheck() -> None:
+            try:
+                units = await self._adapter.read_units(observed_turn=observed_turn)
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取移动前的单位 baseline。") from exc
+            for unit in units.value:
+                if unit.unit_index != unit_index:
+                    continue
+                if (unit.x, unit.y) == (target_x, target_y):
+                    raise MutationPreconditionError("单位已在目标坐标，不提交重复移动。")
+                return
+            raise MutationPreconditionError("移动前找不到目标单位。")
+
         return MutationExecution(
             intent=intent,
             request=CivMutationRequest("move_unit", build_move_unit(unit_index, target_x, target_y)),
             verify=verify,
             operation_id=operation_id,
+            precheck=precheck,
         )
 
     def end_turn(
@@ -178,6 +192,19 @@ class CivMutationFactory:
                     return Evidence("read_cities", cities.observed_turn, f"city_id={city_id} producing {item_name}")
             return None
 
+        async def precheck() -> None:
+            try:
+                cities = await self._adapter.read_cities(observed_turn=observed_turn)
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取生产队列 baseline。") from exc
+            for city in cities.value:
+                if city.city_id != city_id:
+                    continue
+                if city.currently_building == item_name:
+                    raise MutationPreconditionError("城市已在生产该项目，不提交重复设定。")
+                return
+            raise MutationPreconditionError("生产前找不到目标城市。")
+
         return MutationExecution(
             intent=intent,
             request=CivMutationRequest(
@@ -186,6 +213,7 @@ class CivMutationFactory:
             ),
             verify=verify,
             operation_id=operation_id,
+            precheck=precheck,
         )
 
     def found_city(
@@ -196,7 +224,6 @@ class CivMutationFactory:
         target_x: int,
         target_y: int,
         observed_turn: int,
-        known_city_ids: frozenset[int],
     ) -> MutationExecution:
         """Found at the observed settler tile, proving a newly created city exists."""
         intent = OperationIntent.create(
@@ -208,7 +235,11 @@ class CivMutationFactory:
             },
         )
 
+        known_city_ids: frozenset[int] | None = None
+
         async def verify() -> Evidence | None:
+            if known_city_ids is None:
+                return None
             try:
                 cities = await self._adapter.read_cities(observed_turn=observed_turn)
             except Exception:
@@ -225,11 +256,31 @@ class CivMutationFactory:
                 )
             return None
 
+        async def precheck() -> None:
+            nonlocal known_city_ids
+            try:
+                cities = await self._adapter.read_cities(observed_turn=observed_turn)
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取建城前的城市 baseline。") from exc
+            if any((city.x, city.y) == (target_x, target_y) for city in cities.value):
+                raise MutationPreconditionError("目标坐标已有城市，不提交建城。")
+            try:
+                units = await self._adapter.read_units(observed_turn=observed_turn)
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取建城前的单位 baseline。") from exc
+            if not any(
+                unit.unit_index == unit_index and (unit.x, unit.y) == (target_x, target_y)
+                for unit in units.value
+            ):
+                raise MutationPreconditionError("定居者不在决策时的目标坐标，不提交建城。")
+            known_city_ids = frozenset(city.city_id for city in cities.value)
+
         return MutationExecution(
             intent=intent,
             request=CivMutationRequest("found_city", build_found_city(unit_index)),
             verify=verify,
             operation_id=operation_id,
+            precheck=precheck,
         )
 
     def purchase_item(
