@@ -117,6 +117,12 @@ async def get_governments(ctx: Context) -> dict[str, object]:
     return _json_value(await _runtime(ctx).assembly.surface.get_governments())
 
 
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_policies(ctx: Context) -> dict[str, object]:
+    """Return policy slots and the exact replacement slots legal for each card."""
+    return _json_value(await _runtime(ctx).assembly.surface.get_policies())
+
+
 @mcp.tool()
 async def save_handoff(
     ctx: Context,
@@ -282,6 +288,25 @@ async def change_government(
     execution = assembly.mutations.change_government(
         operation_id=OperationId(operation_id),
         government_type=government_type,
+        observed_turn=decision_turn,
+    )
+    return _operation_payload(
+        await assembly.surface.execute_mutation(execution, decision_turn=decision_turn)
+    )
+
+
+@mcp.tool()
+async def set_policies(
+    ctx: Context,
+    operation_id: str,
+    assignments: dict[int, str],
+    decision_turn: int,
+) -> dict[str, object]:
+    """Set named slots only when each card is currently legal for that slot."""
+    assembly = _runtime(ctx).assembly
+    execution = assembly.mutations.set_policies(
+        operation_id=OperationId(operation_id),
+        assignments=assignments,
         observed_turn=decision_turn,
     )
     return _operation_payload(

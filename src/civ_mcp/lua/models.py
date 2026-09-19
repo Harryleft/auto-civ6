@@ -1067,6 +1067,7 @@ class PolicyInfo:
     name: str
     description: str
     slot_type: str  # compatible slot type
+    eligible_slots: list[int] = field(default_factory=list)
 
 
 @dataclass
