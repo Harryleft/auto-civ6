@@ -6,6 +6,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Generic, TypeVar
 
+from civ_mcp.lua.cities import build_cities_query, parse_cities_response
+from civ_mcp.lua.diplomacy import build_diplomacy_query, parse_diplomacy_response
+from civ_mcp.lua.models import CityInfo, CivInfo, GameOverview, UnitInfo, VictoryProgress
+from civ_mcp.lua.overview import build_overview_query, parse_overview_response
+from civ_mcp.lua.units import build_units_query, parse_units_response
+from civ_mcp.lua.victory import build_victory_progress_query, parse_victory_progress_response
 from civ_mcp.runtime.transport import FireTunerTransport, Frame, TransportReceipt
 
 
@@ -25,6 +31,7 @@ class CivReadRequest(Generic[T]):
     lua_code: str
     decode: Callable[[tuple[str, ...]], T]
     coverage: str
+    context: str = "gamecore"
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,11 +67,12 @@ class CivAdapter:
         self._gamecore_state = gamecore_state
         self._ingame_state = ingame_state
 
-    async def read(
-        self, request: CivReadRequest[T], *, observed_turn: int | None = None
-    ) -> CivReadResult[T]:
+    async def read(self, request: CivReadRequest[T], *, observed_turn: int) -> CivReadResult[T]:
+        if request.context not in {"gamecore", "ingame"}:
+            raise ValueError("CivReadRequest.context 必须是 gamecore 或 ingame。")
+        state = self._gamecore_state if request.context == "gamecore" else self._ingame_state
         receipt = await self._transport.execute_read(
-            self._command(self._gamecore_state, request.lua_code),
+            self._command(state, request.lua_code),
             is_complete=_is_sentinel,
         )
         if not receipt.complete:
@@ -80,6 +88,70 @@ class CivAdapter:
             coverage=request.coverage,
         )
 
+    async def read_overview(self) -> CivReadResult[GameOverview]:
+        """Read the current game identity and turn without starting GameState."""
+        receipt = await self._read_receipt(
+            "get_game_overview", build_overview_query(), context="gamecore"
+        )
+        overview = parse_overview_response(_receipt_lines(receipt))
+        return CivReadResult(
+            value=overview,
+            source="civ6:FireTuner",
+            observed_turn=overview.turn,
+            coverage="CURRENT_GAME:COMPLETE",
+        )
+
+    async def read_cities(self, *, observed_turn: int) -> CivReadResult[list[CityInfo]]:
+        result = await self.read(
+            CivReadRequest(
+                tool="get_cities",
+                lua_code=build_cities_query(),
+                decode=lambda lines: parse_cities_response(list(lines))[0],
+                coverage="OWN_CITIES:COMPLETE",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+        return result
+
+    async def read_units(self, *, observed_turn: int) -> CivReadResult[list[UnitInfo]]:
+        return await self.read(
+            CivReadRequest(
+                tool="get_units",
+                lua_code=build_units_query(),
+                decode=lambda lines: parse_units_response(list(lines)),
+                coverage="OWN_UNITS:COMPLETE;FOREIGN_UNITS:CURRENTLY_VISIBLE",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
+    async def read_diplomacy(self, *, observed_turn: int) -> CivReadResult[list[CivInfo]]:
+        return await self.read(
+            CivReadRequest(
+                tool="get_diplomacy",
+                lua_code=build_diplomacy_query(),
+                decode=lambda lines: parse_diplomacy_response(list(lines)),
+                coverage="MET_CIVILIZATIONS:COMPLETE;UNMET_CIVILIZATIONS:UNOBSERVED",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
+    async def read_victory_progress(
+        self, *, observed_turn: int
+    ) -> CivReadResult[VictoryProgress]:
+        return await self.read(
+            CivReadRequest(
+                tool="get_victory_progress",
+                lua_code=build_victory_progress_query(),
+                decode=lambda lines: parse_victory_progress_response(list(lines)),
+                coverage="MET_CIVILIZATIONS:CURRENTLY_VISIBLE",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
     async def submit(self, request: CivMutationRequest) -> TransportReceipt:
         state = self._ingame_state if request.context == "ingame" else self._gamecore_state
         return await self._transport.execute_mutation(
@@ -89,6 +161,17 @@ class CivAdapter:
     @staticmethod
     def _command(state: int, lua_code: str) -> str:
         return f"CMD:{state}:{lua_code}"
+
+    async def _read_receipt(
+        self, tool: str, lua_code: str, *, context: str
+    ) -> TransportReceipt:
+        state = self._gamecore_state if context == "gamecore" else self._ingame_state
+        receipt = await self._transport.execute_read(
+            self._command(state, lua_code), is_complete=_is_sentinel
+        )
+        if not receipt.complete:
+            raise CivReadError(f"{tool} 未得到完整游戏响应：{receipt.error!r}")
+        return receipt
 
 
 def _is_sentinel(frame: Frame) -> bool:
@@ -100,3 +183,10 @@ def _output_value(frame: Frame) -> str | None:
         return None
     separator = frame.payload.find(": ", 2)
     return frame.payload[separator + 2 :] if separator >= 0 else frame.payload.lstrip("O\x00").strip()
+
+
+def _receipt_lines(receipt: TransportReceipt) -> list[str]:
+    return [
+        value for frame in receipt.frames
+        if (value := _output_value(frame)) is not None and value != SENTINEL
+    ]
