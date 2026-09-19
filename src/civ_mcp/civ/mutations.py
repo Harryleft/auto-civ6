@@ -744,9 +744,88 @@ class CivMutationFactory:
         )
 
     def set_policies(
-        self, *, operation_id: OperationId, assignments: dict[int, str], readback: AttackReadback
+        self,
+        *,
+        operation_id: OperationId,
+        assignments: dict[int, str],
+        observed_turn: int,
     ) -> MutationExecution:
-        return self._readback_action(operation_id=operation_id, tool="set_policies", arguments={"assignments": assignments}, lua_code=build_set_policies(assignments), readback=readback)
+        """Set only currently legal policy candidates and prove every touched slot."""
+        if not assignments:
+            raise ValueError("assignments 不能为空。")
+        normalized_assignments = {
+            slot_index: policy_type.upper()
+            for slot_index, policy_type in assignments.items()
+        }
+        for policy_type in normalized_assignments.values():
+            if policy_type != "NONE":
+                self._require_gameinfo_type(policy_type, "POLICY_")
+        requested_policies = [
+            policy_type
+            for policy_type in normalized_assignments.values()
+            if policy_type != "NONE"
+        ]
+        if len(requested_policies) != len(set(requested_policies)):
+            raise ValueError("同一政策不能同时放入多个槽位。")
+        intent = OperationIntent.create(
+            "set_policies", {"assignments": normalized_assignments}
+        )
+
+        async def precheck() -> None:
+            try:
+                status = await self._adapter.read_policies(observed_turn=observed_turn)
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取政策配置 baseline。") from exc
+            slots = {slot.slot_index: slot for slot in status.value.slots}
+            candidates = {
+                policy.policy_type: policy for policy in status.value.available_policies
+            }
+            changed = False
+            for slot_index, policy_type in normalized_assignments.items():
+                slot = slots.get(slot_index)
+                if slot is None:
+                    raise MutationPreconditionError("目标不是当前政府的政策槽位。")
+                expected = None if policy_type == "NONE" else policy_type
+                if slot.current_policy != expected:
+                    changed = True
+                if expected is None:
+                    continue
+                candidate = candidates.get(expected)
+                if candidate is None or slot_index not in candidate.eligible_slots:
+                    raise MutationPreconditionError("目标政策不是该槽位当前的合法候选。")
+            if not changed:
+                raise MutationPreconditionError("所有目标槽位已是请求状态，不提交重复配置。")
+
+        async def verify() -> Evidence | None:
+            try:
+                status = await self._adapter.read_policies(observed_turn=observed_turn)
+            except Exception:
+                return None
+            slots = {slot.slot_index: slot for slot in status.value.slots}
+            for slot_index, policy_type in normalized_assignments.items():
+                slot = slots.get(slot_index)
+                expected = None if policy_type == "NONE" else policy_type
+                if slot is None or slot.current_policy != expected:
+                    return None
+            assignment_detail = ", ".join(
+                f"{slot_index}={policy_type}"
+                for slot_index, policy_type in sorted(normalized_assignments.items())
+            )
+            return Evidence(
+                "read_policies",
+                status.observed_turn,
+                f"policy_slots={assignment_detail}",
+            )
+
+        return MutationExecution(
+            intent=intent,
+            request=CivMutationRequest(
+                "set_policies", build_set_policies(normalized_assignments)
+            ),
+            verify=verify,
+            operation_id=operation_id,
+            precheck=precheck,
+        )
 
     def change_government(
         self, *, operation_id: OperationId, government_type: str, observed_turn: int

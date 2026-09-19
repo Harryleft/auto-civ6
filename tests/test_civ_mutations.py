@@ -797,6 +797,71 @@ def test_change_government_requires_unlocked_target_and_current_type_readback() 
     assert "GOVERNMENT_CHIEFDOM->GOVERNMENT_AUTOCRACY" in evidence.detail
 
 
+def test_set_policies_requires_per_slot_candidates_and_exact_slot_readback() -> None:
+    before = SimpleNamespace(
+        slots=[
+            SimpleNamespace(slot_index=0, current_policy=None),
+            SimpleNamespace(slot_index=1, current_policy="POLICY_URBAN_PLANNING"),
+        ],
+        available_policies=[
+            SimpleNamespace(policy_type="POLICY_AGOGE", eligible_slots=[0])
+        ],
+    )
+    after = SimpleNamespace(
+        slots=[
+            SimpleNamespace(slot_index=0, current_policy="POLICY_AGOGE"),
+            SimpleNamespace(slot_index=1, current_policy="POLICY_URBAN_PLANNING"),
+        ],
+        available_policies=[],
+    )
+
+    class Adapter:
+        calls = 0
+
+        async def read_policies(self, *, observed_turn):
+            self.calls += 1
+            return SimpleNamespace(
+                value=before if self.calls == 1 else after,
+                observed_turn=observed_turn,
+            )
+
+    execution = CivMutationFactory(Adapter()).set_policies(
+        operation_id=OperationId("policy-agoge"),
+        assignments={0: "POLICY_AGOGE"},
+        observed_turn=12,
+    )
+
+    asyncio.run(execution.precheck())
+    evidence = asyncio.run(execution.verify())
+
+    assert execution.intent.tool == execution.request.tool == "set_policies"
+    assert "RequestPolicyChanges" in execution.request.lua_code
+    assert evidence.source == "read_policies"
+    assert evidence.detail == "policy_slots=0=POLICY_AGOGE"
+
+
+def test_set_policies_rejects_a_candidate_for_the_wrong_slot() -> None:
+    status = SimpleNamespace(
+        slots=[SimpleNamespace(slot_index=0, current_policy=None)],
+        available_policies=[
+            SimpleNamespace(policy_type="POLICY_AGOGE", eligible_slots=[1])
+        ],
+    )
+
+    class Adapter:
+        async def read_policies(self, *, observed_turn):
+            return SimpleNamespace(value=status, observed_turn=observed_turn)
+
+    execution = CivMutationFactory(Adapter()).set_policies(
+        operation_id=OperationId("policy-wrong-slot"),
+        assignments={0: "POLICY_AGOGE"},
+        observed_turn=12,
+    )
+
+    with pytest.raises(MutationPreconditionError, match="不是该槽位当前的合法候选"):
+        asyncio.run(execution.precheck())
+
+
 def test_remaining_domain_mutations_use_explicit_readback_contracts() -> None:
     class Adapter:
         pass

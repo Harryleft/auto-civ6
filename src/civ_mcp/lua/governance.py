@@ -70,9 +70,10 @@ for policy in GameInfo.Policies() do
     if pCulture:IsPolicyUnlocked(policy.Index) then
         local canSlot = false
         for s = 0, numSlots - 1 do
-            if pCulture:CanSlotPolicy(policy.Index, s) then
+            local alreadyThere = pCulture:GetSlotPolicy(s) == policy.Index
+            if pCulture:CanSlotPolicy(policy.Index, s) or alreadyThere then
                 canSlot = true
-                break
+                print("POLICY_SLOT|" .. policy.PolicyType .. "|" .. s)
             end
         end
         if canSlot then
@@ -1025,6 +1026,7 @@ def parse_policies_response(lines: list[str]) -> GovernmentStatus:
     gov_type = "NONE"
     slots: list[PolicySlot] = []
     available: list[PolicyInfo] = []
+    eligible_slots_by_policy: dict[str, list[int]] = {}
 
     for line in lines:
         if line.startswith("GOV|"):
@@ -1056,6 +1058,18 @@ def parse_policies_response(lines: list[str]) -> GovernmentStatus:
                         slot_type=parts[4],
                     )
                 )
+        elif line.startswith("POLICY_SLOT|"):
+            parts = line.split("|")
+            if len(parts) >= 3:
+                try:
+                    eligible_slots_by_policy.setdefault(parts[1], []).append(
+                        int(parts[2])
+                    )
+                except ValueError:
+                    continue
+
+    for policy in available:
+        policy.eligible_slots = eligible_slots_by_policy.get(policy.policy_type, [])
 
     return GovernmentStatus(
         government_name=gov_name,

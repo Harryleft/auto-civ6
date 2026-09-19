@@ -46,6 +46,10 @@ class RuntimeMcpSurface:
         """Return government facts without exposing CivAdapter to MCP routing."""
         return await self._context.read_governments()
 
+    async def get_policies(self):
+        """Return policy facts without exposing CivAdapter to MCP routing."""
+        return await self._context.read_policies()
+
     def save_handoff(
         self,
         *,
