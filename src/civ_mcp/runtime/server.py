@@ -8,7 +8,6 @@ the FireTuner transport directly.
 
 from __future__ import annotations
 
-import asyncio
 from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass, is_dataclass
 from datetime import datetime
@@ -22,17 +21,13 @@ from mcp.server.fastmcp import Context, FastMCP
 from civ_mcp.civ.adapter import CivAdapter
 from civ_mcp.runtime.bootstrap import RuntimeAssembly, assemble_runtime
 from civ_mcp.runtime.connection import RuntimeConnection
-from civ_mcp.runtime.contracts import Evidence, OperationId, OperationRecord
+from civ_mcp.runtime.contracts import OperationId, OperationRecord
 from civ_mcp.runtime.store import OperationStore
 from civ_mcp.runtime.turn import TurnResult
 
 
 RUNTIME_BRANCH_ENV = "CIV_MCP_RUNTIME_BRANCH"
 RUNTIME_STORE_ENV = "CIV_MCP_RUNTIME_STORE"
-TURN_POLL_INTERVAL_SECONDS = 1.0
-TURN_POLL_ATTEMPTS = 10
-
-
 class RuntimeServerConfigurationError(RuntimeError):
     """The host omitted a stable branch or persistence location."""
 
@@ -150,27 +145,14 @@ async def set_city_production(
 async def end_turn(
     ctx: Context, operation_id: str, decision_turn: int
 ) -> dict[str, object]:
-    """Advance a turn once, polling reads only for a verified advancement."""
+    """Advance a turn once; TurnLoop owns its read-only wait and evidence."""
     assembly = _runtime(ctx).assembly
 
-    async def readback() -> Evidence | None:
-        for attempt in range(TURN_POLL_ATTEMPTS):
-            identity = await assembly.adapter.read_game_identity()
-            if identity.value != assembly.binding.game_id:
-                return None
-            overview = await assembly.adapter.read_overview()
-            if overview.value.turn > decision_turn:
-                return Evidence(
-                    source="read_overview",
-                    observed_turn=overview.value.turn,
-                    detail=f"turn {decision_turn} -> {overview.value.turn}",
-                )
-            if attempt + 1 < TURN_POLL_ATTEMPTS:
-                await asyncio.sleep(TURN_POLL_INTERVAL_SECONDS)
+    async def no_immediate_evidence() -> None:
         return None
 
     execution = assembly.mutations.end_turn(
-        operation_id=OperationId(operation_id), readback=readback
+        operation_id=OperationId(operation_id), readback=no_immediate_evidence
     )
     return _turn_payload(
         await assembly.surface.end_turn(execution, decision_turn=decision_turn)

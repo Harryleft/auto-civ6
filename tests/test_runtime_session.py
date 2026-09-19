@@ -7,7 +7,7 @@ import asyncio
 import pytest
 
 from civ_mcp.civ.adapter import CivMutationRequest, CivReadRequest, CivReadResult
-from civ_mcp.runtime.contracts import BranchIdentity, Evidence, GameIdentity, OperationId, OperationIntent, OutcomeState, SendState
+from civ_mcp.runtime.contracts import BranchIdentity, Evidence, GameIdentity, OperationId, OperationIntent, OperationRecord, OutcomeState, SendState
 from civ_mcp.runtime.session import (
     MutationExecution,
     MutationPreconditionError,
@@ -420,6 +420,37 @@ def test_mutation_is_confirmed_only_by_domain_readback(tmp_path) -> None:
         assert record.outcome_state is OutcomeState.CONFIRMED
         assert adapter.calls == 1
         assert store.get_operation(record.operation_id).evidence == record.evidence
+
+    asyncio.run(run())
+
+
+def test_new_evidence_can_close_an_unknown_operation_on_the_current_binding(tmp_path) -> None:
+    async def run() -> None:
+        game = GameIdentity("game-a")
+
+        async def probe() -> GameIdentity:
+            return game
+
+        store = OperationStore(tmp_path / "operations.sqlite3")
+        kernel = SessionKernel(_Adapter(), store, identity_probe=probe, turn_probe=lambda: _turn(10))
+        branch = BranchIdentity(game, "main")
+        await kernel.bind(game, branch)
+        operation = OperationRecord.create(
+            game_id=game,
+            branch_id=branch,
+            decision_turn=10,
+            intent=OperationIntent.create("end_turn", {}),
+            operation_id=OperationId("observed-end-turn"),
+        ).prechecked().sending().maybe_sent().unknown()
+        store.save_operation(operation)
+
+        confirmed = await kernel.confirm_observed(
+            operation,
+            Evidence("read_overview", 11, "turn 10 -> 11"),
+        )
+
+        assert confirmed.outcome_state is OutcomeState.CONFIRMED
+        assert store.get_operation(operation.operation_id) == confirmed
 
     asyncio.run(run())
 
