@@ -130,6 +130,74 @@ def test_city_attack_does_not_confirm_when_the_target_hp_is_unchanged() -> None:
     assert asyncio.run(execution.verify()) is None
 
 
+def test_builder_improvement_requires_current_tile_candidate_and_tile_readback() -> None:
+    class Adapter:
+        async def read_builder_improvement_candidates(self, **_kwargs):
+            return SimpleNamespace(
+                value=[
+                    SimpleNamespace(
+                        unit_index=4,
+                        improvement_type="IMPROVEMENT_FARM",
+                        x=5,
+                        y=7,
+                    )
+                ],
+                observed_turn=12,
+            )
+
+        async def read_tile_improvement_state(self, **_kwargs):
+            return SimpleNamespace(
+                value=SimpleNamespace(
+                    improvement_type="IMPROVEMENT_FARM", is_pillaged=False
+                ),
+                observed_turn=12,
+            )
+
+    execution = CivMutationFactory(Adapter()).build_improvement(
+        operation_id=OperationId("builder-improvement-4"),
+        unit_index=4,
+        improvement_type="IMPROVEMENT_FARM",
+        observed_turn=12,
+    )
+    asyncio.run(execution.precheck())
+    assert execution.intent.tool == execution.request.tool == "build_improvement"
+    assert "BUILD_IMPROVEMENT" in execution.request.lua_code
+    assert asyncio.run(execution.verify()).source == "read_tile_improvement_state"
+
+
+def test_builder_improvement_does_not_confirm_a_pillaged_readback() -> None:
+    class Adapter:
+        async def read_builder_improvement_candidates(self, **_kwargs):
+            return SimpleNamespace(
+                value=[
+                    SimpleNamespace(
+                        unit_index=4,
+                        improvement_type="IMPROVEMENT_FARM",
+                        x=5,
+                        y=7,
+                    )
+                ],
+                observed_turn=12,
+            )
+
+        async def read_tile_improvement_state(self, **_kwargs):
+            return SimpleNamespace(
+                value=SimpleNamespace(
+                    improvement_type="IMPROVEMENT_FARM", is_pillaged=True
+                ),
+                observed_turn=12,
+            )
+
+    execution = CivMutationFactory(Adapter()).build_improvement(
+        operation_id=OperationId("builder-improvement-pillage"),
+        unit_index=4,
+        improvement_type="IMPROVEMENT_FARM",
+        observed_turn=12,
+    )
+    asyncio.run(execution.precheck())
+    assert asyncio.run(execution.verify()) is None
+
+
 def test_production_requires_city_queue_readback() -> None:
     class Adapter:
         calls = 0
