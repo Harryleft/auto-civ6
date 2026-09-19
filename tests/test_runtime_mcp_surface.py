@@ -255,3 +255,17 @@ def test_surface_reads_climate_only_through_context() -> None:
     )
 
     assert asyncio.run(surface.get_climate_overview()) is expected
+
+
+def test_surface_reads_spies_only_through_context() -> None:
+    expected = [SimpleNamespace(unit_index=7, available_ops=["TRAVEL"])]
+
+    class Context:
+        async def read_spies(self):
+            return expected
+
+    surface = RuntimeMcpSurface(
+        context=Context(), session=SimpleNamespace(), turn_loop=SimpleNamespace()
+    )
+
+    assert asyncio.run(surface.get_spies()) is expected

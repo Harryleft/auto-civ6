@@ -95,6 +95,7 @@ class ContextBuilder:
                 "get_trade_routes",
                 "get_world_congress",
                 "get_climate_overview",
+                "get_spies",
             ),
         )
 
@@ -212,3 +213,8 @@ class ContextBuilder:
         """Read Gathering Storm climate facts without changing the world state."""
         overview = await self._adapter.read_overview()
         return await self._adapter.read_climate_overview(observed_turn=overview.observed_turn)
+
+    async def read_spies(self):
+        """Read spy state and current legal missions without submitting one."""
+        overview = await self._adapter.read_overview()
+        return await self._adapter.read_spies(observed_turn=overview.observed_turn)

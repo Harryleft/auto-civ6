@@ -234,6 +234,12 @@ async def get_climate_overview(ctx: Context) -> dict[str, object]:
     return _json_value(await _runtime(ctx).assembly.surface.get_climate_overview())
 
 
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_spies(ctx: Context) -> dict[str, object]:
+    """Return current spies and legal missions; this tool never starts an operation."""
+    return _json_value(await _runtime(ctx).assembly.surface.get_spies())
+
+
 @mcp.tool()
 async def save_handoff(
     ctx: Context,

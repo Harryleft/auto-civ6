@@ -40,6 +40,7 @@ from civ_mcp.lua.economy import (
     parse_trade_destinations_response,
     parse_trade_routes_response,
 )
+from civ_mcp.lua.espionage import build_get_spies_query, parse_spies_response
 from civ_mcp.lua.governance import (
     build_city_states_query,
     build_available_governments_query,
@@ -74,6 +75,7 @@ from civ_mcp.lua.models import (
     PantheonStatus,
     PendingCityCapture,
     PendingDeal,
+    SpyInfo,
     TradeNegotiation,
     ProductionOption,
     PurchaseOption,
@@ -513,6 +515,19 @@ class CivAdapter:
                 lua_code=build_climate_overview_query(),
                 decode=lambda lines: parse_climate_response(list(lines)),
                 coverage="CLIMATE:COMPLETE",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
+    async def read_spies(self, *, observed_turn: int) -> CivReadResult[list[SpyInfo]]:
+        """Read current spy state and legal missions without submitting one."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_spies",
+                lua_code=build_get_spies_query(),
+                decode=lambda lines: parse_spies_response(list(lines)),
+                coverage="SPIES:COMPLETE",
                 context="ingame",
             ),
             observed_turn=observed_turn,

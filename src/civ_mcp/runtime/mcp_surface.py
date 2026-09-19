@@ -98,6 +98,10 @@ class RuntimeMcpSurface:
         """Return current climate facts without exposing any game mutation."""
         return await self._context.read_climate_overview()
 
+    async def get_spies(self):
+        """Return current spy facts without exposing a spy operation."""
+        return await self._context.read_spies()
+
     def save_handoff(
         self,
         *,
