@@ -9,6 +9,7 @@ from __future__ import annotations
 from civ_mcp.runtime.context import ContextBuilder, RuntimeContext
 from civ_mcp.runtime.contracts import OperationId, OperationRecord
 from civ_mcp.runtime.session import MutationExecution, SessionKernel
+from civ_mcp.runtime.store import HandoffNote
 from civ_mcp.runtime.turn import TurnLoop, TurnResult
 
 
@@ -28,6 +29,22 @@ class RuntimeMcpSurface:
 
     async def get_context(self) -> RuntimeContext:
         return await self._context.build()
+
+    def save_handoff(
+        self,
+        *,
+        strategic_focus: str,
+        existing_arrangements: str,
+        rationale: str,
+        change_conditions: str,
+    ) -> HandoffNote:
+        """Persist strategy-only continuity for the currently bound branch."""
+        return self._session.save_handoff(
+            strategic_focus=strategic_focus,
+            existing_arrangements=existing_arrangements,
+            rationale=rationale,
+            change_conditions=change_conditions,
+        )
 
     async def execute_mutation(
         self, execution: MutationExecution, *, decision_turn: int
