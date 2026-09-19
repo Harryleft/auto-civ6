@@ -1,0 +1,43 @@
+"""Model-facing façade for the new Runtime Core.
+
+This is deliberately framework-neutral: the eventual FastMCP registration is
+an outer adapter.  Every callable here has exactly one downstream authority.
+"""
+
+from __future__ import annotations
+
+from civ_mcp.runtime.context import ContextBuilder, RuntimeContext
+from civ_mcp.runtime.contracts import OperationId, OperationRecord
+from civ_mcp.runtime.session import MutationExecution, SessionKernel
+from civ_mcp.runtime.turn import TurnLoop, TurnResult
+
+
+class RuntimeMcpSurface:
+    """Expose Runtime Core capabilities without leaking implementation layers."""
+
+    def __init__(
+        self,
+        *,
+        context: ContextBuilder,
+        session: SessionKernel,
+        turn_loop: TurnLoop,
+    ) -> None:
+        self._context = context
+        self._session = session
+        self._turn_loop = turn_loop
+
+    async def get_context(self) -> RuntimeContext:
+        return await self._context.build()
+
+    async def execute_mutation(
+        self, execution: MutationExecution, *, decision_turn: int
+    ) -> OperationRecord:
+        return await self._session.execute(execution, decision_turn=decision_turn)
+
+    async def end_turn(
+        self, execution: MutationExecution, *, decision_turn: int
+    ) -> TurnResult:
+        return await self._turn_loop.end_turn(execution, decision_turn=decision_turn)
+
+    async def resume_turn_decision(self, operation_id: OperationId, choice: str) -> TurnResult:
+        return await self._turn_loop.resume(operation_id, choice)
