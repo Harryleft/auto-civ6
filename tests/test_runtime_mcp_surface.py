@@ -311,3 +311,18 @@ def test_surface_reads_village_overview_only_through_context() -> None:
     )
 
     assert asyncio.run(surface.get_village_overview()) is expected
+
+
+def test_surface_reads_wonder_placements_only_through_context() -> None:
+    expected = [SimpleNamespace(x=5, y=7)]
+
+    class Context:
+        async def read_wonder_placements(self, city_id: int, wonder_name: str):
+            assert (city_id, wonder_name) == (4, "BUILDING_PYRAMIDS")
+            return expected
+
+    surface = RuntimeMcpSurface(
+        context=Context(), session=SimpleNamespace(), turn_loop=SimpleNamespace()
+    )
+
+    assert asyncio.run(surface.get_wonder_placements(4, "BUILDING_PYRAMIDS")) is expected

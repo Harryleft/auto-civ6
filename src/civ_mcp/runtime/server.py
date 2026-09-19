@@ -258,6 +258,16 @@ async def get_village_overview(ctx: Context) -> dict[str, object]:
     return _json_value(await _runtime(ctx).assembly.surface.get_village_overview())
 
 
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_wonder_placements(
+    ctx: Context, city_id: int, wonder_name: str
+) -> dict[str, object]:
+    """Return live legal placements for one wonder; this tool never starts production."""
+    return _json_value(
+        await _runtime(ctx).assembly.surface.get_wonder_placements(city_id, wonder_name)
+    )
+
+
 @mcp.tool()
 async def save_handoff(
     ctx: Context,
