@@ -108,6 +108,23 @@ async def assemble_runtime(
             )
         return await turn_loop.wait_for_turn(operation)
 
+    async def continue_congress_abstention(operation: OperationRecord) -> TurnResult:
+        """Submit a model-selected abstention, then await the original turn."""
+        response = await session.execute(
+            mutations.submit_congress(
+                operation_id=OperationId.new(),
+                observed_turn=operation.decision_turn,
+            ),
+            decision_turn=operation.decision_turn,
+        )
+        if response.outcome_state is not OutcomeState.CONFIRMED:
+            return TurnResult(
+                TurnOutcome.RECOVERY_REQUIRED,
+                response,
+                "世界议会提交未由新会议状态确认；不得重发，需重新读取或恢复。",
+            )
+        return await turn_loop.wait_for_turn(operation)
+
     async def continue_city_capture(
         operation: OperationRecord, city_id: int, choice: str
     ) -> TurnResult:
@@ -202,6 +219,52 @@ async def assemble_runtime(
                 return await continue_city_capture(operation, active_capture.city_id, choice)
 
             return TurnObservation(interrupt=interrupt, continuation=capture_continuation)
+        try:
+            congress = await adapter.read_world_congress(observed_turn=overview.value.turn)
+        except Exception:
+            congress = None
+        if congress is not None and congress.value.is_in_session:
+            status = congress.value
+            interrupt = DecisionInterrupt(
+                decision_type="WORLD_CONGRESS",
+                facts={
+                    "favor": status.favor,
+                    "max_votes": status.max_votes,
+                    "favor_costs": status.favor_costs,
+                    "resolutions": [
+                        {
+                            "resolution_hash": resolution.resolution_hash,
+                            "resolution_type": resolution.resolution_type,
+                            "name": resolution.name,
+                            "target_kind": resolution.target_kind,
+                            "effect_a": resolution.effect_a,
+                            "effect_b": resolution.effect_b,
+                            "possible_targets": resolution.possible_targets,
+                        }
+                        for resolution in status.resolutions
+                    ],
+                    "proposals": [
+                        {
+                            "sender_id": proposal.sender_id,
+                            "sender_name": proposal.sender_name,
+                            "target_id": proposal.target_id,
+                            "target_name": proposal.target_name,
+                            "proposal_type": proposal.proposal_type,
+                            "description": proposal.description,
+                        }
+                        for proposal in status.proposals
+                    ],
+                },
+                allowed_choices=("SUBMIT_ABSTAIN",),
+                continuation_operation_id=operation.operation_id,
+            )
+
+            async def congress_continuation(choice: str) -> TurnResult:
+                if choice != "SUBMIT_ABSTAIN":
+                    raise ValueError("世界议会当前仅支持 SUBMIT_ABSTAIN。")
+                return await continue_congress_abstention(operation)
+
+            return TurnObservation(interrupt=interrupt, continuation=congress_continuation)
         try:
             sessions = await adapter.read_diplomacy_sessions(
                 observed_turn=overview.value.turn

@@ -206,6 +206,17 @@ def test_pending_deals_preserve_exact_structured_terms() -> None:
     assert deals.coverage == "PENDING_DEALS:COMPLETE"
 
 
+def test_world_congress_is_a_typed_live_ingame_fact() -> None:
+    transport = _Transport(_complete("WC_STATUS|true|0|25|3|0,5,10,15"))
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    congress = asyncio.run(civ.read_world_congress(observed_turn=42))
+
+    assert congress.value.is_in_session is True
+    assert congress.value.favor == 25
+    assert congress.coverage == "WORLD_CONGRESS:COMPLETE"
+
+
 def test_city_purchase_candidate_error_is_not_coerced_to_an_empty_result() -> None:
     transport = _Transport(_complete("ERR:CITY_NOT_FOUND"))
     civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
