@@ -146,6 +146,25 @@ def test_city_attack_target_is_a_typed_live_ingame_fact() -> None:
     assert transport.commands[0].startswith("CMD:153:")
 
 
+def test_district_placements_are_typed_live_ingame_facts() -> None:
+    transport = _Transport(
+        _complete("DISTRICT_PLACEMENT|DISTRICT_HARBOR|5|7")
+    )
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    placements = asyncio.run(
+        civ.read_district_placements(
+            city_id=4, district_type="DISTRICT_HARBOR", observed_turn=42
+        )
+    )
+
+    assert [(item.district_type, item.x, item.y) for item in placements.value] == [
+        ("DISTRICT_HARBOR", 5, 7)
+    ]
+    assert placements.coverage == "DISTRICT_PLACEMENT_CANDIDATES:COMPLETE"
+    assert transport.commands[0].startswith("CMD:153:")
+
+
 def test_city_purchase_candidate_error_is_not_coerced_to_an_empty_result() -> None:
     transport = _Transport(_complete("ERR:CITY_NOT_FOUND"))
     civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)

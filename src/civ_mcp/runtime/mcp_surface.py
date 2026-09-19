@@ -42,6 +42,10 @@ class RuntimeMcpSurface:
         """Return one live city target without exposing CivAdapter to routing."""
         return await self._context.read_city_attack_target(city_id, target_x, target_y)
 
+    async def get_district_placements(self, city_id: int, district_type: str):
+        """Return only current district coordinates accepted by the game operation."""
+        return await self._context.read_district_placements(city_id, district_type)
+
     async def get_city_states(self):
         """Return envoy facts without exposing CivAdapter to MCP routing."""
         return await self._context.read_city_states()

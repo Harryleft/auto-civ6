@@ -63,6 +63,7 @@ class ContextBuilder:
                 "get_unit_promotions",
                 "get_unit_attack_target",
                 "get_city_attack_target",
+                "get_district_placements",
                 "get_city_states",
                 "get_governors",
                 "get_governments",
@@ -98,6 +99,15 @@ class ContextBuilder:
             city_id=city_id,
             target_x=target_x,
             target_y=target_y,
+            observed_turn=overview.observed_turn,
+        )
+
+    async def read_district_placements(self, city_id: int, district_type: str):
+        """Read current game-approved placement coordinates for one district."""
+        overview = await self._adapter.read_overview()
+        return await self._adapter.read_district_placements(
+            city_id=city_id,
+            district_type=district_type,
             observed_turn=overview.observed_turn,
         )
 

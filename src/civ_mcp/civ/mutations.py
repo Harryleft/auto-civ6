@@ -286,17 +286,47 @@ class CivMutationFactory:
             except Exception:
                 return None
             for city in cities.value:
-                if city.city_id == city_id and city.currently_building == item_name:
-                    return Evidence("read_cities", cities.observed_turn, f"city_id={city_id} producing {item_name}")
+                if city.city_id != city_id or city.currently_building != item_name:
+                    continue
+                if normalized_type == "DISTRICT":
+                    if target_x is None or target_y is None:
+                        return None
+                    location = f"{item_name}@{target_x},{target_y}"
+                    if location not in city.districts:
+                        return None
+                    return Evidence(
+                        "read_cities",
+                        cities.observed_turn,
+                        f"city_id={city_id} producing {item_name} at ({target_x},{target_y})",
+                    )
+                return Evidence(
+                    "read_cities",
+                    cities.observed_turn,
+                    f"city_id={city_id} producing {item_name}",
+                )
             return None
 
         async def precheck() -> None:
             if normalized_type == "DISTRICT":
-                raise MutationPreconditionError(
-                    "区域格点候选尚未安全迁移，实验 Runtime 不提交区域生产。"
-                )
+                if target_x is None or target_y is None:
+                    raise MutationPreconditionError("区域生产必须提供游戏认可的格点坐标。")
+                try:
+                    placements = await self._adapter.read_district_placements(
+                        city_id=city_id,
+                        district_type=item_name,
+                        observed_turn=observed_turn,
+                    )
+                except Exception as exc:
+                    raise MutationPreconditionError("无法获取当前区域格点候选。") from exc
+                if not any(
+                    placement.district_type == item_name
+                    and (placement.x, placement.y) == (target_x, target_y)
+                    for placement in placements.value
+                ):
+                    raise MutationPreconditionError("目标不在当前游戏允许的区域格点候选中。")
+                return
             if normalized_type not in {"UNIT", "BUILDING", "PROJECT"}:
-                raise MutationPreconditionError("生产类型必须是 UNIT、BUILDING 或 PROJECT。")
+                raise MutationPreconditionError("生产类型必须是 UNIT、BUILDING、DISTRICT 或 PROJECT。")
             if target_x is not None or target_y is not None:
                 raise MutationPreconditionError("当前生产契约不接受格点坐标。")
             try:

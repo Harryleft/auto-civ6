@@ -14,6 +14,7 @@ from civ_mcp.lua.models import (
     CityCaptureState,
     CityInfo,
     CombatTarget,
+    DistrictPlacementCandidate,
     PendingCityCapture,
     ProductionOption,
     PurchaseOption,
@@ -290,6 +291,66 @@ def parse_city_attack_target_response(lines: list[str]) -> CombatTarget:
             max_health=int(parts[5]),
         )
     raise ValueError("缺少 CITY_ATTACK_TARGET 响应。")
+
+
+def build_district_placement_query(city_id: int, district_type: str) -> str:
+    """List only tiles the live city BUILD operation accepts for one district.
+
+    This deliberately does not apply a generic land or terrain filter.  The
+    game's operation target set is authoritative, including water placements
+    such as a Harbor.
+    """
+    return f"""
+{_lua_get_city(city_id)}
+local district = GameInfo.Districts["{district_type}"]
+if district == nil then {_bail("ERR:DISTRICT_NOT_FOUND|" + district_type)} end
+local bq = pCity:GetBuildQueue()
+if not bq:CanProduce(district.Hash, true) then {_bail("ERR:CANNOT_PRODUCE|" + district_type)} end
+local baseParams = {{}}
+baseParams[CityOperationTypes.PARAM_DISTRICT_TYPE] = district.Hash
+local targetGroups = CityManager.GetOperationTargets(pCity, CityOperationTypes.BUILD, baseParams)
+local seen = {{}}
+if targetGroups then
+    for _, group in pairs(targetGroups) do
+        if type(group) == "table" then
+            for _, plotIndex in ipairs(group) do
+                if not seen[plotIndex] then
+                    seen[plotIndex] = true
+                    local plot = Map.GetPlotByIndex(plotIndex)
+                    if plot then
+                        local x, y = plot:GetX(), plot:GetY()
+                        local params = {{}}
+                        params[CityOperationTypes.PARAM_DISTRICT_TYPE] = district.Hash
+                        params[CityOperationTypes.PARAM_X] = x
+                        params[CityOperationTypes.PARAM_Y] = y
+                        if CityManager.CanStartOperation(pCity, CityOperationTypes.BUILD, params, true) then
+                            print("DISTRICT_PLACEMENT|" .. district.DistrictType .. "|" .. x .. "|" .. y)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+print("{SENTINEL}")
+"""
+
+
+def parse_district_placement_response(lines: list[str]) -> list[DistrictPlacementCandidate]:
+    """Decode the exact legal district placements for the requested city."""
+    candidates: list[DistrictPlacementCandidate] = []
+    for line in lines:
+        if line.startswith("ERR:"):
+            raise ValueError(line[4:])
+        parts = line.split("|")
+        if len(parts) != 4 or parts[0] != "DISTRICT_PLACEMENT":
+            continue
+        candidates.append(
+            DistrictPlacementCandidate(
+                district_type=parts[1], x=int(parts[2]), y=int(parts[3])
+            )
+        )
+    return candidates
 
 
 def build_resolve_city_capture(action: str) -> str:
@@ -613,27 +674,10 @@ tParams[CityOperationTypes.{param_key}] = item.Hash
 -- and writes one item, avoiding silent no-ops that hit REPLACE_AT when the
 -- queue is in a degenerate state.
 tParams[CityOperationTypes.PARAM_INSERT_MODE] = CityOperationTypes.VALUE_EXCLUSIVE
+if not canStart then {_bail("ERR:CANNOT_START|" + item_name)} end
 CityManager.RequestOperation(pCity, CityOperationTypes.BUILD, tParams)
-if canStart then
-    local turnsLeft = bq:GetTurnsLeft(item.Hash)
-    print("OK:PRODUCING|{item_name}|" .. turnsLeft .. " turns")
-else
-    -- Check for pillaged districts to give actionable error
-    local pillaged = {{}}
-    for _, d in pCity:GetDistricts():Members() do
-        if d:IsPillaged() then
-            local dInfo = GameInfo.Districts[d:GetType()]
-            if dInfo then table.insert(pillaged, dInfo.DistrictType) end
-        end
-    end
-    if #pillaged > 0 then
-        print("MAYBE:PRODUCING|{
-        item_name
-    }|canStart=false|PILLAGED:" .. table.concat(pillaged, ","))
-    else
-        print("MAYBE:PRODUCING|{item_name}|canStart=false")
-    end
-end
+local turnsLeft = bq:GetTurnsLeft(item.Hash)
+print("OK:PRODUCING|{item_name}|" .. turnsLeft .. " turns")
 print("{SENTINEL}")
 """
 

@@ -81,6 +81,20 @@ def test_surface_reads_city_attack_target_only_through_context() -> None:
     assert asyncio.run(surface.get_city_attack_target(4, 5, 7)) is expected
 
 
+def test_surface_reads_district_placements_only_through_context() -> None:
+    expected = [SimpleNamespace(district_type="DISTRICT_HARBOR", x=5, y=7)]
+
+    class Context:
+        async def read_district_placements(self, city_id: int, district_type: str):
+            assert (city_id, district_type) == (4, "DISTRICT_HARBOR")
+            return expected
+
+    surface = RuntimeMcpSurface(
+        context=Context(), session=SimpleNamespace(), turn_loop=SimpleNamespace()
+    )
+    assert asyncio.run(surface.get_district_placements(4, "DISTRICT_HARBOR")) is expected
+
+
 def test_surface_reads_governors_only_through_context() -> None:
     expected = SimpleNamespace(points_available=1)
 
