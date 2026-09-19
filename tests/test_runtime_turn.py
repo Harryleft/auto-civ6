@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
 from civ_mcp.runtime.contracts import BranchIdentity, Evidence, GameIdentity, OperationId, OperationIntent, OperationRecord, OutcomeState, SendState
 from civ_mcp.runtime.session import MutationExecution
 from civ_mcp.runtime.turn import DecisionInterrupt, TurnLoop, TurnObservation, TurnOutcome, TurnResult
@@ -215,6 +217,58 @@ def test_wait_returns_only_an_interrupt_bound_to_the_original_operation() -> Non
     result = asyncio.run(TurnLoop(Session(), observer=observe).wait_for_turn(operation))
     assert result.outcome is TurnOutcome.NEEDS_DECISION
     assert result.decision is interrupt
+
+
+def test_observed_interrupt_registers_its_continuation_for_resume() -> None:
+    class Session:
+        pass
+
+    operation = _record(OutcomeState.UNKNOWN)
+    interrupt = DecisionInterrupt("DIPLOMACY", {"leader": "Catherine"}, ("POSITIVE",), operation.operation_id)
+    choices: list[str] = []
+
+    async def continuation(choice: str):
+        choices.append(choice)
+        return TurnResult(TurnOutcome.ADVANCED, operation)
+
+    async def observe(_operation):
+        return TurnObservation(interrupt=interrupt, continuation=continuation)
+
+    loop = TurnLoop(Session(), observer=observe)
+    observed = asyncio.run(loop.wait_for_turn(operation))
+    resumed = asyncio.run(loop.resume(operation.operation_id, "POSITIVE"))
+
+    assert observed.outcome is TurnOutcome.NEEDS_DECISION
+    assert resumed.outcome is TurnOutcome.ADVANCED
+    assert choices == ["POSITIVE"]
+
+
+def test_failed_continuation_remains_resumable() -> None:
+    class Session:
+        pass
+
+    loop = TurnLoop(Session())
+    operation = _record(OutcomeState.UNKNOWN)
+    attempts = 0
+
+    async def continuation(_choice: str):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise RuntimeError("temporary precheck failure")
+        return TurnResult(TurnOutcome.ADVANCED, operation)
+
+    loop.needs_decision(
+        operation,
+        decision_type="DIPLOMACY",
+        facts={},
+        allowed_choices=("POSITIVE",),
+        continuation=continuation,
+    )
+    with pytest.raises(RuntimeError, match="temporary"):
+        asyncio.run(loop.resume(operation.operation_id, "POSITIVE"))
+    assert asyncio.run(loop.resume(operation.operation_id, "POSITIVE")).outcome is TurnOutcome.ADVANCED
+    assert attempts == 2
 
 
 def test_wait_rejects_an_identity_change_without_closing_the_operation() -> None:

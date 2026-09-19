@@ -22,6 +22,9 @@ def test_context_keeps_failed_domain_reads_explicitly_unknown() -> None:
         async def read_diplomacy(self, **_kwargs):
             return SimpleNamespace(value=[])
 
+        async def read_diplomacy_sessions(self, **_kwargs):
+            return SimpleNamespace(value=[])
+
         async def read_victory_progress(self, **_kwargs):
             return SimpleNamespace(value=[])
 

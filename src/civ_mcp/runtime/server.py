@@ -159,6 +159,18 @@ async def end_turn(
     )
 
 
+@mcp.tool()
+async def resume_turn_decision(
+    ctx: Context, operation_id: str, choice: str
+) -> dict[str, object]:
+    """Apply one listed blocker choice and continue its original end-turn only."""
+    return _turn_payload(
+        await _runtime(ctx).assembly.surface.resume_turn_decision(
+            OperationId(operation_id), choice
+        )
+    )
+
+
 def _operation_payload(operation: OperationRecord) -> dict[str, object]:
     return _json_value(operation)
 

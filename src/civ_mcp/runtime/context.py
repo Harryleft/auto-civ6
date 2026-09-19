@@ -37,6 +37,7 @@ class ContextBuilder:
             ("cities", self._adapter.read_cities),
             ("units", self._adapter.read_units),
             ("diplomacy", self._adapter.read_diplomacy),
+            ("pending_diplomacy", self._adapter.read_diplomacy_sessions),
             ("victory_progress", self._adapter.read_victory_progress),
         ):
             try:
