@@ -40,6 +40,7 @@ class ContextBuilder:
             ("diplomacy", self._adapter.read_diplomacy),
             ("pending_diplomacy", self._adapter.read_diplomacy_sessions),
             ("tech_civics", self._adapter.read_tech_civics),
+            ("pantheon", self._adapter.read_pantheon_status),
             ("victory_progress", self._adapter.read_victory_progress),
         ):
             try:

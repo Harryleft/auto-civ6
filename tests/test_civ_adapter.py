@@ -142,6 +142,24 @@ def test_tech_civics_read_exposes_stable_current_selection_ids() -> None:
     assert transport.commands[0].startswith("CMD:153:")
 
 
+def test_pantheon_read_exposes_current_and_legal_stable_belief_ids() -> None:
+    transport = _Transport(
+        _complete(
+            "STATUS|0|None|None|30.0|25",
+            "BELIEF|BELIEF_DIVINE_SPARK|Divine Spark|Great people points",
+        )
+    )
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    result = asyncio.run(civ.read_pantheon_status(observed_turn=42))
+
+    assert result.value.has_pantheon is False
+    assert result.value.pantheon_cost == 25
+    assert result.value.available_beliefs[0].belief_type == "BELIEF_DIVINE_SPARK"
+    assert result.coverage == "PANTHEON:COMPLETE"
+    assert transport.commands[0].startswith("CMD:153:")
+
+
 def test_adapter_can_resolve_lua_state_when_a_new_runtime_connection_refreshes_it() -> None:
     transport = _Transport(_complete())
     indexes = {"gamecore": 8, "ingame": 153}

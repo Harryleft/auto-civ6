@@ -288,11 +288,13 @@ def parse_pantheon_status_response(lines: list[str]) -> PantheonStatus:
     faith_balance = 0.0
     pantheon_cost = 0.0
     beliefs: list[BeliefInfo] = []
+    saw_status = False
 
     for line in lines:
         if line.startswith("STATUS|"):
             parts = line.split("|")
             if len(parts) >= 5:
+                saw_status = True
                 has_pantheon = parts[1] == "1"
                 current_belief = parts[2] if parts[2] != "None" else None
                 current_belief_name = parts[3] if parts[3] != "None" else None
@@ -310,6 +312,8 @@ def parse_pantheon_status_response(lines: list[str]) -> PantheonStatus:
                     )
                 )
 
+    if not saw_status:
+        raise ValueError("缺少万神殿 STATUS 响应。")
     return PantheonStatus(
         has_pantheon=has_pantheon,
         current_belief=current_belief,

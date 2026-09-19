@@ -17,6 +17,7 @@ from civ_mcp.lua.cities import (
     parse_city_capture_state_response,
     parse_pending_city_capture_response,
 )
+from civ_mcp.lua.religion import parse_pantheon_status_response
 from civ_mcp.lua.map import parse_map_response
 from civ_mcp.lua.notifications import parse_end_turn_blocking
 
@@ -328,6 +329,11 @@ def test_city_capture_parsers_require_explicit_pending_and_post_state_markers() 
     assert absent.city_id is None
     with pytest.raises(ValueError, match="缺少"):
         parse_pending_city_capture_response([])
+
+
+def test_pantheon_parser_rejects_a_missing_status_marker() -> None:
+    with pytest.raises(ValueError, match="STATUS"):
+        parse_pantheon_status_response(["BELIEF|BELIEF_DIVINE_SPARK|Divine Spark|Points"])
 
 
 # ---------------------------------------------------------------------------

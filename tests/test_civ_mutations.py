@@ -489,9 +489,86 @@ def test_remaining_domain_mutations_use_explicit_readback_contracts() -> None:
         return Evidence("domain_read", 13, "verified")
 
     factory = CivMutationFactory(Adapter())
-    pantheon = factory.choose_pantheon(operation_id=OperationId("pantheon-1"), belief_type="BELIEF_DIVINE_SPARK", readback=evidence)
     person = factory.recruit_great_person(operation_id=OperationId("gp-1"), individual_id=5, readback=evidence)
     spy = factory.spy_travel(operation_id=OperationId("spy-1"), unit_index=2, target_x=4, target_y=5, readback=evidence)
     vote = factory.congress_vote(operation_id=OperationId("vote-1"), resolution_hash=1, option=0, target_index=2, num_votes=3, readback=evidence)
-    assert [pantheon.intent.tool, person.intent.tool, spy.intent.tool, vote.intent.tool] == ["choose_pantheon", "recruit_great_person", "spy_travel", "congress_vote"]
+    assert [person.intent.tool, spy.intent.tool, vote.intent.tool] == ["recruit_great_person", "spy_travel", "congress_vote"]
     assert asyncio.run(vote.verify()).source == "domain_read"
+
+
+def test_pantheon_requires_a_legal_baseline_and_stable_belief_readback() -> None:
+    before = SimpleNamespace(
+        has_pantheon=False,
+        current_belief=None,
+        pantheon_cost=25,
+        faith_balance=30,
+        available_beliefs=[SimpleNamespace(belief_type="BELIEF_DIVINE_SPARK")],
+    )
+    after = SimpleNamespace(
+        has_pantheon=True,
+        current_belief="BELIEF_DIVINE_SPARK",
+        pantheon_cost=0,
+        faith_balance=5,
+        available_beliefs=[],
+    )
+
+    class Adapter:
+        calls = 0
+
+        async def read_pantheon_status(self, *, observed_turn):
+            self.calls += 1
+            return SimpleNamespace(
+                value=before if self.calls == 1 else after,
+                observed_turn=observed_turn,
+            )
+
+    execution = CivMutationFactory(Adapter()).choose_pantheon(
+        operation_id=OperationId("pantheon-1"),
+        belief_type="BELIEF_DIVINE_SPARK",
+        observed_turn=12,
+    )
+
+    asyncio.run(execution.precheck())
+    evidence = asyncio.run(execution.verify())
+
+    assert execution.intent.tool == execution.request.tool == "choose_pantheon"
+    assert "FOUND_PANTHEON" in execution.request.lua_code
+    assert evidence.source == "read_pantheon_status"
+
+
+def test_pantheon_rejects_an_unavailable_belief_or_insufficient_faith() -> None:
+    unavailable = SimpleNamespace(
+        has_pantheon=False,
+        pantheon_cost=25,
+        faith_balance=30,
+        available_beliefs=[],
+    )
+    insufficient = SimpleNamespace(
+        has_pantheon=False,
+        pantheon_cost=25,
+        faith_balance=24,
+        available_beliefs=[SimpleNamespace(belief_type="BELIEF_DIVINE_SPARK")],
+    )
+
+    class Adapter:
+        def __init__(self, status):
+            self.status = status
+
+        async def read_pantheon_status(self, *, observed_turn):
+            return SimpleNamespace(value=self.status, observed_turn=observed_turn)
+
+    unavailable_execution = CivMutationFactory(Adapter(unavailable)).choose_pantheon(
+        operation_id=OperationId("pantheon-unavailable"),
+        belief_type="BELIEF_DIVINE_SPARK",
+        observed_turn=12,
+    )
+    insufficient_execution = CivMutationFactory(Adapter(insufficient)).choose_pantheon(
+        operation_id=OperationId("pantheon-insufficient"),
+        belief_type="BELIEF_DIVINE_SPARK",
+        observed_turn=12,
+    )
+
+    with pytest.raises(MutationPreconditionError, match="不是当前可选"):
+        asyncio.run(unavailable_execution.precheck())
+    with pytest.raises(MutationPreconditionError, match="信仰不足"):
+        asyncio.run(insufficient_execution.precheck())

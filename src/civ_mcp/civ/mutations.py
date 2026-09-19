@@ -790,9 +790,55 @@ class CivMutationFactory:
         return self._readback_action(operation_id=operation_id, tool="choose_dedication", arguments={"dedication_index": dedication_index}, lua_code=build_choose_dedication(dedication_index), readback=readback)
 
     def choose_pantheon(
-        self, *, operation_id: OperationId, belief_type: str, readback: AttackReadback
+        self, *, operation_id: OperationId, belief_type: str, observed_turn: int
     ) -> MutationExecution:
-        return self._readback_action(operation_id=operation_id, tool="choose_pantheon", arguments={"belief_type": belief_type}, lua_code=build_choose_pantheon(belief_type), readback=readback)
+        """Found one currently legal pantheon, proved by its stable belief ID."""
+        self._require_gameinfo_type(belief_type, "BELIEF_")
+        intent = OperationIntent.create("choose_pantheon", {"belief_type": belief_type})
+
+        async def precheck() -> None:
+            try:
+                status = await self._adapter.read_pantheon_status(
+                    observed_turn=observed_turn
+                )
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取万神殿选择 baseline。") from exc
+            if status.value.has_pantheon:
+                raise MutationPreconditionError("当前已拥有万神殿，不提交重复选择。")
+            if belief_type not in {
+                belief.belief_type for belief in status.value.available_beliefs
+            }:
+                raise MutationPreconditionError("目标信条不是当前可选的万神殿候选。")
+            if (
+                status.value.pantheon_cost > 0
+                and status.value.faith_balance < status.value.pantheon_cost
+            ):
+                raise MutationPreconditionError("当前信仰不足以创立万神殿。")
+
+        async def verify() -> Evidence | None:
+            try:
+                status = await self._adapter.read_pantheon_status(
+                    observed_turn=observed_turn
+                )
+            except Exception:
+                return None
+            if status.value.current_belief != belief_type:
+                return None
+            return Evidence(
+                "read_pantheon_status",
+                status.observed_turn,
+                f"current_belief={belief_type}",
+            )
+
+        return MutationExecution(
+            intent=intent,
+            request=CivMutationRequest(
+                "choose_pantheon", build_choose_pantheon(belief_type)
+            ),
+            verify=verify,
+            operation_id=operation_id,
+            precheck=precheck,
+        )
 
     def found_religion(
         self, *, operation_id: OperationId, religion_type: str, follower_belief: str, founder_belief: str, readback: AttackReadback
