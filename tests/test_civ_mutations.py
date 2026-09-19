@@ -466,19 +466,55 @@ def test_governance_mutations_are_hash_bound_and_need_readback() -> None:
     assert asyncio.run(governor.verify()).source == "read_governors"
 
 
-def test_unit_upgrade_is_hash_bound_and_requires_domain_readback() -> None:
-    class Adapter:
-        pass
+def test_unit_upgrade_requires_current_eligibility_and_target_type_readback() -> None:
+    before = SimpleNamespace(
+        unit_index=2, unit_type="UNIT_SLINGER", can_upgrade=True, upgrade_target="UNIT_ARCHER"
+    )
+    after = SimpleNamespace(
+        unit_index=2, unit_type="UNIT_ARCHER", can_upgrade=False, upgrade_target=""
+    )
 
-    async def readback() -> Evidence:
-        return Evidence("read_units", 13, "unit type changed from UNIT_SLINGER")
+    class Adapter:
+        calls = 0
+
+        async def read_units(self, *, observed_turn):
+            self.calls += 1
+            return SimpleNamespace(
+                value=[before] if self.calls == 1 else [after],
+                observed_turn=observed_turn,
+            )
 
     execution = CivMutationFactory(Adapter()).upgrade_unit(
-        operation_id=OperationId("upgrade-1"), unit_index=2, readback=readback
+        operation_id=OperationId("upgrade-1"), unit_index=2, observed_turn=12
     )
+
+    asyncio.run(execution.precheck())
     assert execution.intent.tool == execution.request.tool == "upgrade_unit"
     assert "UnitCommandTypes.UPGRADE" in execution.request.lua_code
     assert asyncio.run(execution.verify()).source == "read_units"
+
+
+def test_unit_upgrade_rejects_an_ineligible_baseline() -> None:
+    class Adapter:
+        async def read_units(self, *, observed_turn):
+            return SimpleNamespace(
+                value=[
+                    SimpleNamespace(
+                        unit_index=2,
+                        unit_type="UNIT_SLINGER",
+                        can_upgrade=False,
+                        upgrade_target="",
+                    )
+                ],
+                observed_turn=observed_turn,
+            )
+
+    execution = CivMutationFactory(Adapter()).upgrade_unit(
+        operation_id=OperationId("upgrade-ineligible"), unit_index=2, observed_turn=12
+    )
+
+    with pytest.raises(MutationPreconditionError, match="当前不可升级"):
+        asyncio.run(execution.precheck())
 
 
 def test_remaining_domain_mutations_use_explicit_readback_contracts() -> None:
