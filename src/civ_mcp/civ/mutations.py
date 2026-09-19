@@ -785,9 +785,56 @@ class CivMutationFactory:
         return self._readback_action(operation_id=operation_id, tool="send_envoy", arguments={"city_state_player_id": city_state_player_id}, lua_code=build_send_envoy(city_state_player_id), readback=readback)
 
     def choose_dedication(
-        self, *, operation_id: OperationId, dedication_index: int, readback: AttackReadback
+        self, *, operation_id: OperationId, dedication_index: int, observed_turn: int
     ) -> MutationExecution:
-        return self._readback_action(operation_id=operation_id, tool="choose_dedication", arguments={"dedication_index": dedication_index}, lua_code=build_choose_dedication(dedication_index), readback=readback)
+        """Choose one currently legal commemoration, proved by its active type."""
+        intent = OperationIntent.create(
+            "choose_dedication", {"dedication_index": dedication_index}
+        )
+        selected_name: str | None = None
+
+        async def precheck() -> None:
+            nonlocal selected_name
+            try:
+                status = await self._adapter.read_dedications(observed_turn=observed_turn)
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取时代着力点 baseline。") from exc
+            if status.value.selections_allowed <= 0:
+                raise MutationPreconditionError("当前不需要选择时代着力点。")
+            choices = {
+                choice.index: choice.name for choice in status.value.choices
+            }
+            try:
+                selected_name = choices[dedication_index]
+            except KeyError as exc:
+                raise MutationPreconditionError("目标不是当前可选的时代着力点。") from exc
+            if selected_name in status.value.active:
+                raise MutationPreconditionError("该时代着力点已经生效，不提交重复选择。")
+
+        async def verify() -> Evidence | None:
+            if selected_name is None:
+                return None
+            try:
+                status = await self._adapter.read_dedications(observed_turn=observed_turn)
+            except Exception:
+                return None
+            if selected_name not in status.value.active:
+                return None
+            return Evidence(
+                "read_dedications",
+                status.observed_turn,
+                f"active commemoration={selected_name}",
+            )
+
+        return MutationExecution(
+            intent=intent,
+            request=CivMutationRequest(
+                "choose_dedication", build_choose_dedication(dedication_index)
+            ),
+            verify=verify,
+            operation_id=operation_id,
+            precheck=precheck,
+        )
 
     def choose_pantheon(
         self, *, operation_id: OperationId, belief_type: str, observed_turn: int

@@ -28,7 +28,8 @@
 - `CivAdapter` 已提供 game identity、overview、cities、units、diplomacy 和
   victory progress 的 typed read，并只提交一次 mutation。科技/市政读取另外提供
   当前选择的稳定 `TECH_*` / `CIVIC_*` ID，而不是依赖本地化名称；万神殿读取同样
-  提供稳定 `BELIEF_*` ID 与当前可选候选。
+  提供稳定 `BELIEF_*` ID 与当前可选候选；时代着力点读取则提供当前允许的索引和
+  激活的 `COMMEMORATION_*` 类型。
 - `SessionKernel` 是 mutation 的唯一入口：发送后取消、连接中断、跨局回读
   都只会留下 `UNKNOWN`，同一 `operation_id` 的并发调用只会实际发送一次。
 - 新的 `TurnLoop` 只输出 `ADVANCED`、`NEEDS_DECISION` 或
@@ -49,8 +50,8 @@
 - `civ_mcp.runtime.server` 是独立的实验 FastMCP 入口，当前仅注册
   `get_runtime_context`、`save_handoff`、`move_unit`、`set_city_production`、
   `end_turn` 与 `resume_turn_decision`，以及 `set_research`、`set_civic`、
-  `choose_pantheon`、`found_city`。`save_handoff` 仅保存当前 branch 的战略重点、
-  已有安排、理由和改变条件，不能修改游戏事实或 operation record。
+  `choose_pantheon`、`choose_dedication`、`found_city`。`save_handoff` 仅保存当前
+  branch 的战略重点、已有安排、理由和改变条件，不能修改游戏事实或 operation record。
   它要求 host 显式提供 `CIV_MCP_RUNTIME_BRANCH`，不会自行猜测读档分支。
   server 只负责工具装配；end-turn 的等待和证据关闭属于 `TurnLoop`，而非 MCP
   路由函数。

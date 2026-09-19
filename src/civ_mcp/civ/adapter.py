@@ -20,11 +20,13 @@ from civ_mcp.lua.diplomacy import (
     parse_diplomacy_response,
     parse_diplomacy_sessions,
 )
+from civ_mcp.lua.governance import build_dedications_query, parse_dedications_response
 from civ_mcp.lua.models import (
     CityCaptureState,
     CityInfo,
     CivInfo,
     DiplomacySession,
+    DedicationStatus,
     GameOverview,
     PantheonStatus,
     PendingCityCapture,
@@ -265,6 +267,21 @@ class CivAdapter:
                 lua_code=build_pantheon_status_query(),
                 decode=lambda lines: parse_pantheon_status_response(list(lines)),
                 coverage="PANTHEON:COMPLETE",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
+    async def read_dedications(
+        self, *, observed_turn: int
+    ) -> CivReadResult[DedicationStatus]:
+        """Read current era choices and active commemorations as game facts."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_dedications",
+                lua_code=build_dedications_query(),
+                decode=lambda lines: parse_dedications_response(list(lines)),
+                coverage="DEDICATIONS:COMPLETE",
                 context="ingame",
             ),
             observed_turn=observed_turn,

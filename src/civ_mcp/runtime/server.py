@@ -209,6 +209,22 @@ async def choose_pantheon(
 
 
 @mcp.tool()
+async def choose_dedication(
+    ctx: Context, operation_id: str, dedication_index: int, decision_turn: int
+) -> dict[str, object]:
+    """Choose one legal commemoration; confirmation requires it to become active."""
+    assembly = _runtime(ctx).assembly
+    execution = assembly.mutations.choose_dedication(
+        operation_id=OperationId(operation_id),
+        dedication_index=dedication_index,
+        observed_turn=decision_turn,
+    )
+    return _operation_payload(
+        await assembly.surface.execute_mutation(execution, decision_turn=decision_turn)
+    )
+
+
+@mcp.tool()
 async def found_city(
     ctx: Context,
     operation_id: str,

@@ -1305,11 +1305,13 @@ def parse_dedications_response(lines: list[str]) -> DedicationStatus:
     selections_allowed = 0
     active: list[str] = []
     choices: list[DedicationChoice] = []
+    saw_status = False
 
     for line in lines:
         if line.startswith("STATUS|"):
             parts = line.split("|")
             if len(parts) >= 7:
+                saw_status = True
                 age_type = parts[1]
                 era = int(parts[2])
                 era_score = int(parts[3])
@@ -1331,6 +1333,8 @@ def parse_dedications_response(lines: list[str]) -> DedicationStatus:
                     )
                 )
 
+    if not saw_status:
+        raise ValueError("缺少时代着力点 STATUS 响应。")
     return DedicationStatus(
         age_type=age_type,
         era=era,

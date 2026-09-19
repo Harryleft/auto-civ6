@@ -572,3 +572,57 @@ def test_pantheon_rejects_an_unavailable_belief_or_insufficient_faith() -> None:
         asyncio.run(unavailable_execution.precheck())
     with pytest.raises(MutationPreconditionError, match="信仰不足"):
         asyncio.run(insufficient_execution.precheck())
+
+
+def test_dedication_requires_a_legal_choice_and_active_readback() -> None:
+    before = SimpleNamespace(
+        selections_allowed=1,
+        active=[],
+        choices=[SimpleNamespace(index=4, name="COMMEMORATION_FREE_INQUIRY")],
+    )
+    after = SimpleNamespace(
+        selections_allowed=0,
+        active=["COMMEMORATION_FREE_INQUIRY"],
+        choices=[],
+    )
+
+    class Adapter:
+        calls = 0
+
+        async def read_dedications(self, *, observed_turn):
+            self.calls += 1
+            return SimpleNamespace(
+                value=before if self.calls == 1 else after,
+                observed_turn=observed_turn,
+            )
+
+    execution = CivMutationFactory(Adapter()).choose_dedication(
+        operation_id=OperationId("dedication-4"),
+        dedication_index=4,
+        observed_turn=12,
+    )
+
+    asyncio.run(execution.precheck())
+    evidence = asyncio.run(execution.verify())
+
+    assert execution.intent.tool == execution.request.tool == "choose_dedication"
+    assert "COMMEMORATE" in execution.request.lua_code
+    assert evidence.source == "read_dedications"
+
+
+def test_dedication_rejects_an_unavailable_choice() -> None:
+    class Adapter:
+        async def read_dedications(self, *, observed_turn):
+            return SimpleNamespace(
+                value=SimpleNamespace(selections_allowed=1, active=[], choices=[]),
+                observed_turn=observed_turn,
+            )
+
+    execution = CivMutationFactory(Adapter()).choose_dedication(
+        operation_id=OperationId("dedication-missing"),
+        dedication_index=4,
+        observed_turn=12,
+    )
+
+    with pytest.raises(MutationPreconditionError, match="不是当前可选"):
+        asyncio.run(execution.precheck())

@@ -160,6 +160,25 @@ def test_pantheon_read_exposes_current_and_legal_stable_belief_ids() -> None:
     assert transport.commands[0].startswith("CMD:153:")
 
 
+def test_dedications_read_exposes_current_choices_and_active_types() -> None:
+    transport = _Transport(
+        _complete(
+            "STATUS|Golden|2|48|24|40|1",
+            "ACTIVE|COMMEMORATION_MONUMENTALITY",
+            "CHOICE|4|COMMEMORATION_FREE_INQUIRY|Normal|Golden|Dark",
+        )
+    )
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    result = asyncio.run(civ.read_dedications(observed_turn=42))
+
+    assert result.value.selections_allowed == 1
+    assert result.value.active == ["COMMEMORATION_MONUMENTALITY"]
+    assert result.value.choices[0].name == "COMMEMORATION_FREE_INQUIRY"
+    assert result.coverage == "DEDICATIONS:COMPLETE"
+    assert transport.commands[0].startswith("CMD:153:")
+
+
 def test_adapter_can_resolve_lua_state_when_a_new_runtime_connection_refreshes_it() -> None:
     transport = _Transport(_complete())
     indexes = {"gamecore": 8, "ingame": 153}
