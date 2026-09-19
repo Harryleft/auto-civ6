@@ -98,6 +98,10 @@ for _, city in Players[me]:GetCities():Members() do
                 local origName = origCity and Locale.Lookup(origCity:GetName()) or "?"
                 local destCity = Players[r.DestinationCityPlayer]:GetCities():FindID(r.DestinationCityID)
                 local destName = destCity and Locale.Lookup(destCity:GetName()) or "?"
+                local destX, destY = -1, -1
+                if destCity then
+                    destX, destY = destCity:GetX(), destCity:GetY()
+                end
                 local isDom = r.DestinationCityPlayer == me
                 local ownerName = "Domestic"
                 if not isDom then
@@ -138,7 +142,7 @@ for _, city in Players[me]:GetCities():Members() do
                 -- Yields
                 local oy = fmtY(r.OriginYields)
                 local dy = fmtY(r.DestinationYields)
-                print("ROUTE|" .. tid .. "|" .. origName .. "|" .. destName .. "|" .. ownerName .. "|" .. (isDom and "1" or "0") .. "|" .. (isCS and "1" or "0") .. "|" .. (hasQ and "1" or "0") .. "|" .. (hasTP and "1" or "0") .. "|" .. pOut .. "|" .. relOut .. "|" .. pIn .. "|" .. relIn .. "|" .. oy .. "|" .. dy)
+                print("ROUTE|" .. tid .. "|" .. origName .. "|" .. destName .. "|" .. ownerName .. "|" .. (isDom and "1" or "0") .. "|" .. (isCS and "1" or "0") .. "|" .. (hasQ and "1" or "0") .. "|" .. (hasTP and "1" or "0") .. "|" .. pOut .. "|" .. relOut .. "|" .. pIn .. "|" .. relIn .. "|" .. oy .. "|" .. dy .. "|" .. r.DestinationCityPlayer .. "|" .. r.DestinationCityID .. "|" .. destX .. "," .. destY)
             end
         end
     end)
@@ -173,8 +177,9 @@ print("{SENTINEL}")
 def build_trade_destinations_query(unit_index: int) -> str:
     """List valid trade route destinations with yields, quests, and pressure.
 
-    Tries CanStartOperation first.  If ALL destinations fail (capacity bug
-    from stale route counts), falls back to listing reachable cities directly.
+    Uses ``CanStartOperation`` for every returned destination.  A stale route
+    count can leave the candidate set empty, but an unverified reachable city
+    must never be presented as a legal Runtime Core action target.
     Enriches each destination with yield preview, religious pressure,
     city-state quest status, and trading post info.
     """
@@ -271,25 +276,6 @@ if found == 0 then
     else
         print("WARN:CANNOT_START|CanStartOperation blocked all destinations.")
     end
-    for i = 0, 62 do
-        if Players[i]:IsAlive() and i ~= 63 then
-            local atWar = false
-            if i ~= me then
-                pcall(function()
-                    local pDiplo = Players[me]:GetDiplomacy()
-                    if pDiplo then atWar = pDiplo:IsAtWarWith(i) end
-                end)
-            end
-            if not atWar then
-                for _, city in Players[i]:GetCities():Members() do
-                    local cx, cy = city:GetX(), city:GetY()
-                    if cx ~= ux or cy ~= uy then
-                        enrichDest(i, city, cx, cy, i == me)
-                    end
-                end
-            end
-        end
-    end
 end
 print("{SENTINEL}")
 """
@@ -336,7 +322,7 @@ def _parse_compact_yields(s: str) -> str:
 def parse_trade_routes_response(lines: list[str]) -> TradeRouteStatus:
     """Parse ROUTE|, IDLE_TRADER|, and TRADE_STATUS| lines.
 
-    ROUTE format: ROUTE|uid|orig|dest|owner|isDom|isCS|hasQ|hasTP|pOut|relOut|pIn|relIn|origY|destY
+    ROUTE format: ROUTE|uid|orig|dest|owner|isDom|isCS|hasQ|hasTP|pOut|relOut|pIn|relIn|origY|destY|destPlayer|destCity|x,y
     IDLE format:  IDLE_TRADER|uid|x,y
     STATUS:       TRADE_STATUS|cap|active|ghosts
     """
@@ -374,6 +360,14 @@ def parse_trade_routes_response(lines: list[str]) -> TradeRouteStatus:
                         religion_out=parts[10],
                         pressure_in=float(parts[11]) if parts[11] else 0.0,
                         religion_in=parts[12],
+                        destination_player_id=int(parts[15]) if len(parts) >= 18 else None,
+                        destination_city_id=int(parts[16]) if len(parts) >= 18 else None,
+                        destination_x=(
+                            int(parts[17].split(",")[0]) if len(parts) >= 18 else None
+                        ),
+                        destination_y=(
+                            int(parts[17].split(",")[1]) if len(parts) >= 18 else None
+                        ),
                     )
                 )
         elif line.startswith("IDLE_TRADER|"):
@@ -457,7 +451,7 @@ tParams[UnitOperationTypes.PARAM_X0] = {target_x}
 tParams[UnitOperationTypes.PARAM_Y0] = {target_y}
 tParams[UnitOperationTypes.PARAM_X1] = unit:GetX()
 tParams[UnitOperationTypes.PARAM_Y1] = unit:GetY()
-if not UnitManager.CanStartOperation(unit, opHash, nil, tParams) then
+if not UnitManager.CanStartOperation(unit, opHash, nil, tParams, true) then
     local pTrade = Players[me]:GetTrade()
     local nOut = pTrade:GetNumOutgoingRoutes()
     local cap = pTrade:GetOutgoingRouteCapacity()

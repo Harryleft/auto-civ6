@@ -15,7 +15,7 @@ import pytest
 
 pytestmark = pytest.mark.golden
 
-from civ_mcp.lua import cities, congress, diplomacy, units
+from civ_mcp.lua import cities, congress, diplomacy, economy, units
 from civ_mcp.lua.barbarians import build_barbarian_overview_query
 from civ_mcp.lua.tech import build_tech_civics_query
 
@@ -36,6 +36,7 @@ _BUILDERS = [
     lambda: units.build_fortify_remaining_units(),
     lambda: cities.build_city_production_query(5),
     lambda: cities.build_city_yield_focus_query(5),
+    lambda: economy.build_trade_destinations_query(7),
     lambda: diplomacy.build_pending_deals_query(),
     lambda: diplomacy.build_diplomacy_session_query(),
     lambda: diplomacy.build_war_dismiss_view(),
@@ -144,6 +145,15 @@ def test_purchase_candidates_use_the_actual_purchase_command_and_are_complete():
     assert "CityCommandTypes.PURCHASE" in query
     assert "PURCHASE|UNIT|" in query
     assert "PURCHASE|BUILDING|" in query
+
+
+def test_trade_destinations_never_fall_back_to_unverified_reachable_cities():
+    query = economy.build_trade_destinations_query(7)
+
+    _assert_sentinel(query)
+    assert "UnitManager.CanStartOperation" in query
+    assert query.count("for i = 0, 62 do") == 1
+    assert "WARN:CANNOT_START" in query
 
 
 def test_city_attack_injects_coordinates():

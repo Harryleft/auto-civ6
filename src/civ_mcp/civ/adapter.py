@@ -22,6 +22,12 @@ from civ_mcp.lua.diplomacy import (
     parse_diplomacy_response,
     parse_diplomacy_sessions,
 )
+from civ_mcp.lua.economy import (
+    build_trade_destinations_query,
+    build_trade_routes_query,
+    parse_trade_destinations_response,
+    parse_trade_routes_response,
+)
 from civ_mcp.lua.governance import (
     build_city_states_query,
     build_available_governments_query,
@@ -53,6 +59,8 @@ from civ_mcp.lua.models import (
     PendingCityCapture,
     PurchaseOption,
     TechCivicStatus,
+    TradeDestination,
+    TradeRouteStatus,
     UnitInfo,
     UnitPromotionStatus,
     VictoryProgress,
@@ -209,6 +217,36 @@ class CivAdapter:
                     list(lines), yield_type=normalized_yield
                 ),
                 coverage="CITY_PURCHASE_CANDIDATES:COMPLETE",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
+    async def read_trade_destinations(
+        self, *, unit_index: int, observed_turn: int
+    ) -> CivReadResult[list[TradeDestination]]:
+        """Read only destinations the live trade-route operation accepts."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_trade_destinations",
+                lua_code=build_trade_destinations_query(unit_index),
+                decode=_decode_trade_destinations,
+                coverage="TRADE_ROUTE_DESTINATIONS:COMPLETE",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
+    async def read_trade_routes(
+        self, *, observed_turn: int
+    ) -> CivReadResult[TradeRouteStatus]:
+        """Read active routes so a submitted route can be verified by identity."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_trade_routes",
+                lua_code=build_trade_routes_query(),
+                decode=lambda lines: parse_trade_routes_response(list(lines)),
+                coverage="TRADE_ROUTES:COMPLETE",
                 context="ingame",
             ),
             observed_turn=observed_turn,
@@ -519,3 +557,9 @@ def _decode_policies(lines: tuple[str, ...]) -> GovernmentStatus:
     if not any(line.startswith("GOV|") for line in lines):
         raise ValueError("缺少 policies GOV 响应。")
     return parse_policies_response(list(lines))
+
+
+def _decode_trade_destinations(lines: tuple[str, ...]) -> list[TradeDestination]:
+    if error := next((line for line in lines if line.startswith("ERR:")), None):
+        raise ValueError(error[4:])
+    return parse_trade_destinations_response(list(lines))

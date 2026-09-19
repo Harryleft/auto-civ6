@@ -66,6 +66,8 @@ class ContextBuilder:
                 "get_governments",
                 "get_policies",
                 "get_city_purchases",
+                "get_trade_destinations",
+                "get_trade_routes",
             ),
         )
 
@@ -104,3 +106,15 @@ class ContextBuilder:
             yield_type=yield_type,
             observed_turn=overview.observed_turn,
         )
+
+    async def read_trade_destinations(self, unit_index: int):
+        """Read one trader's live destination candidates through the context boundary."""
+        overview = await self._adapter.read_overview()
+        return await self._adapter.read_trade_destinations(
+            unit_index=unit_index, observed_turn=overview.observed_turn
+        )
+
+    async def read_trade_routes(self):
+        """Read active trade routes through the context boundary only."""
+        overview = await self._adapter.read_overview()
+        return await self._adapter.read_trade_routes(observed_turn=overview.observed_turn)

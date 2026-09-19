@@ -54,6 +54,14 @@ class RuntimeMcpSurface:
         """Return live purchase candidates without exposing CivAdapter to routing."""
         return await self._context.read_city_purchases(city_id, yield_type)
 
+    async def get_trade_destinations(self, unit_index: int):
+        """Return live trade candidates without exposing CivAdapter to routing."""
+        return await self._context.read_trade_destinations(unit_index)
+
+    async def get_trade_routes(self):
+        """Return active routes without exposing CivAdapter to MCP routing."""
+        return await self._context.read_trade_routes()
+
     def save_handoff(
         self,
         *,

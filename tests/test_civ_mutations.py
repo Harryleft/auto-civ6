@@ -344,6 +344,70 @@ def test_purchase_building_confirms_only_after_the_city_gains_the_building() -> 
     assert asyncio.run(execution.verify()).source == "read_overview+read_cities"
 
 
+def test_trade_route_requires_a_live_destination_and_exact_route_readback() -> None:
+    class Adapter:
+        route_calls = 0
+
+        async def read_trade_destinations(self, *, unit_index, observed_turn):
+            assert (unit_index, observed_turn) == (7, 12)
+            return SimpleNamespace(
+                value=[SimpleNamespace(x=8, y=5)], observed_turn=observed_turn
+            )
+
+        async def read_trade_routes(self, *, observed_turn):
+            self.route_calls += 1
+            traders = (
+                [
+                    SimpleNamespace(
+                        unit_id=7,
+                        on_route=False,
+                        destination_x=None,
+                        destination_y=None,
+                    )
+                ]
+                if self.route_calls == 1
+                else [
+                    SimpleNamespace(
+                        unit_id=7,
+                        on_route=True,
+                        destination_x=8,
+                        destination_y=5,
+                    )
+                ]
+            )
+            return SimpleNamespace(
+                value=SimpleNamespace(traders=traders), observed_turn=observed_turn
+            )
+
+    execution = CivMutationFactory(Adapter()).make_trade_route(
+        operation_id=OperationId("route-7"),
+        unit_index=7,
+        target_x=8,
+        target_y=5,
+        observed_turn=12,
+    )
+    asyncio.run(execution.precheck())
+
+    assert asyncio.run(execution.verify()).source == "read_trade_routes"
+
+
+def test_trade_route_rejects_a_destination_not_in_the_live_candidate_set() -> None:
+    class Adapter:
+        async def read_trade_destinations(self, **_kwargs):
+            return SimpleNamespace(value=[], observed_turn=12)
+
+    execution = CivMutationFactory(Adapter()).make_trade_route(
+        operation_id=OperationId("route-invalid"),
+        unit_index=7,
+        target_x=8,
+        target_y=5,
+        observed_turn=12,
+    )
+
+    with pytest.raises(MutationPreconditionError, match="允许的商路目的地"):
+        asyncio.run(execution.precheck())
+
+
 def test_builder_mutations_are_hash_bound_and_need_tile_readback() -> None:
     class Adapter:
         pass
