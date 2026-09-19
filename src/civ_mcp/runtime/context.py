@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from civ_mcp.civ.adapter import CivAdapter
@@ -16,17 +17,31 @@ class RuntimeContext:
 
     facts: dict[str, object]
     unknown: tuple[str, ...]
+    pending_decisions: tuple[object, ...]
     unfinished_intents: tuple[OperationRecord, ...]
     handoff: HandoffNote | None
     further_queries: tuple[str, ...]
 
 
 class ContextBuilder:
-    """Build model context from fresh Civ reads and Runtime execution facts only."""
+    """Build model context from fresh Civ reads and Runtime execution facts only.
 
-    def __init__(self, adapter: CivAdapter, session: SessionKernel) -> None:
+    ``pending_decisions`` is a read-only view of the TurnLoop's currently
+    resumable interrupts.  It carries no continuation and cannot mutate the
+    game; after a host restart it is intentionally empty and the persisted
+    unfinished operation remains the recovery boundary.
+    """
+
+    def __init__(
+        self,
+        adapter: CivAdapter,
+        session: SessionKernel,
+        *,
+        pending_decisions: Callable[[], tuple[object, ...]] | None = None,
+    ) -> None:
         self._adapter = adapter
         self._session = session
+        self._pending_decisions = pending_decisions or (lambda: ())
 
     async def build(self) -> RuntimeContext:
         overview = await self._adapter.read_overview()
@@ -57,6 +72,7 @@ class ContextBuilder:
         return RuntimeContext(
             facts=facts,
             unknown=tuple(unknown),
+            pending_decisions=self._pending_decisions(),
             unfinished_intents=unfinished,
             handoff=self._session.handoff_note(),
             further_queries=(
