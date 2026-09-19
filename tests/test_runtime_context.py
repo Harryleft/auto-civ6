@@ -82,6 +82,7 @@ def test_context_keeps_failed_domain_reads_explicitly_unknown() -> None:
         "get_world_congress",
         "get_climate_overview",
         "get_spies",
+        "get_religion_overview",
     )
 
 

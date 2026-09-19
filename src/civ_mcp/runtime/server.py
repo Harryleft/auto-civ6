@@ -240,6 +240,12 @@ async def get_spies(ctx: Context) -> dict[str, object]:
     return _json_value(await _runtime(ctx).assembly.surface.get_spies())
 
 
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_religion_overview(ctx: Context) -> dict[str, object]:
+    """Return world religion facts; this tool never selects or spreads a religion."""
+    return _json_value(await _runtime(ctx).assembly.surface.get_religion_overview())
+
+
 @mcp.tool()
 async def save_handoff(
     ctx: Context,

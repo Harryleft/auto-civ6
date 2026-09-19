@@ -75,6 +75,7 @@ from civ_mcp.lua.models import (
     PantheonStatus,
     PendingCityCapture,
     PendingDeal,
+    ReligionOverview,
     SpyInfo,
     TradeNegotiation,
     ProductionOption,
@@ -94,7 +95,12 @@ from civ_mcp.lua.overview import (
     parse_game_identity_response,
     parse_overview_response,
 )
-from civ_mcp.lua.religion import build_pantheon_status_query, parse_pantheon_status_response
+from civ_mcp.lua.religion import (
+    build_pantheon_status_query,
+    build_religion_overview_query,
+    parse_pantheon_status_response,
+    parse_religion_overview_response,
+)
 from civ_mcp.lua.tech import build_tech_civics_query, parse_tech_civics_response
 from civ_mcp.lua.units import (
     build_attack_followup_query,
@@ -533,6 +539,21 @@ class CivAdapter:
             observed_turn=observed_turn,
         )
 
+    async def read_religion_overview(
+        self, *, observed_turn: int
+    ) -> CivReadResult[ReligionOverview]:
+        """Read world religion facts without founding, spreading, or enhancing one."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_religion_overview",
+                lua_code=build_religion_overview_query(),
+                decode=_decode_religion_overview,
+                coverage="RELIGION_OVERVIEW:COMPLETE",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
     async def read_diplomacy_sessions(
         self, *, observed_turn: int
     ) -> CivReadResult[list[DiplomacySession]]:
@@ -736,6 +757,13 @@ def _decode_great_people(lines: tuple[str, ...]) -> list[GreatPersonInfo]:
     if not any(line.startswith("GP_STATUS|") for line in lines):
         raise ValueError("缺少 Great People GP_STATUS 响应。")
     return parse_great_people_response(list(lines))
+
+
+def _decode_religion_overview(lines: tuple[str, ...]) -> ReligionOverview:
+    """Require the overview's primary row instead of accepting neutral defaults."""
+    if not any(line.startswith("SELF|") for line in lines):
+        raise CivReadError("religion overview query missing SELF row")
+    return parse_religion_overview_response(list(lines))
 
 
 def _decode_unit_promotions(lines: tuple[str, ...]) -> UnitPromotionStatus:

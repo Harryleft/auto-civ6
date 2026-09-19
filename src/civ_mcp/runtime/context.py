@@ -96,6 +96,7 @@ class ContextBuilder:
                 "get_world_congress",
                 "get_climate_overview",
                 "get_spies",
+                "get_religion_overview",
             ),
         )
 
@@ -218,3 +219,10 @@ class ContextBuilder:
         """Read spy state and current legal missions without submitting one."""
         overview = await self._adapter.read_overview()
         return await self._adapter.read_spies(observed_turn=overview.observed_turn)
+
+    async def read_religion_overview(self):
+        """Read world religion facts without selecting a belief or using a unit."""
+        overview = await self._adapter.read_overview()
+        return await self._adapter.read_religion_overview(
+            observed_turn=overview.observed_turn
+        )
