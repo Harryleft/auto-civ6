@@ -7,11 +7,12 @@ import asyncio
 import pytest
 
 from civ_mcp.civ.adapter import CivMutationRequest, CivReadRequest, CivReadResult
-from civ_mcp.runtime.contracts import BranchIdentity, Evidence, GameIdentity, OperationIntent, OutcomeState, SendState
+from civ_mcp.runtime.contracts import BranchIdentity, Evidence, GameIdentity, OperationId, OperationIntent, OutcomeState, SendState
 from civ_mcp.runtime.session import (
     MutationExecution,
     SessionIdentityMismatchError,
     SessionKernel,
+    StaleIntentError,
     StaleSessionRequestError,
 )
 from civ_mcp.runtime.store import OperationStore
@@ -55,6 +56,75 @@ def test_can_switch_a_to_b_then_back_to_a() -> None:
         assert (await kernel.bind(b_game, b)).generation == 2
         current = a.game_id
         assert (await kernel.bind(a.game_id, a)).generation == 3
+
+    asyncio.run(run())
+
+
+def test_stale_precheck_creates_no_operation_and_sends_nothing(tmp_path) -> None:
+    async def run() -> None:
+        game = GameIdentity("game-a")
+
+        async def probe() -> GameIdentity:
+            return game
+
+        class MutationAdapter(_Adapter):
+            calls = 0
+
+            async def submit(self, _request):
+                self.calls += 1
+
+        store = OperationStore(tmp_path / "operations.sqlite3")
+        kernel = SessionKernel(MutationAdapter(), store, identity_probe=probe, turn_probe=lambda: _turn(11))
+        await kernel.bind(game, BranchIdentity(game, "main"))
+        operation_id = OperationId("stale-move")
+
+        async def verify() -> None:
+            return None
+
+        with pytest.raises(StaleIntentError):
+            await kernel.execute(
+                MutationExecution(
+                    OperationIntent.create("move_unit", {"unit_id": 1}),
+                    CivMutationRequest("move_unit", "move()"), verify, operation_id,
+                ),
+                decision_turn=10,
+            )
+        assert store.get_operation(operation_id) is None
+
+    asyncio.run(run())
+
+
+def test_same_operation_id_never_submits_twice_after_unknown_transport_failure(tmp_path) -> None:
+    async def run() -> None:
+        game = GameIdentity("game-a")
+
+        async def probe() -> GameIdentity:
+            return game
+
+        class MutationAdapter(_Adapter):
+            calls = 0
+
+            async def submit(self, _request):
+                self.calls += 1
+                raise ConnectionError("post-send connection lost")
+
+        adapter = MutationAdapter()
+        kernel = SessionKernel(adapter, OperationStore(tmp_path / "operations.sqlite3"), identity_probe=probe, turn_probe=lambda: _turn(10))
+        await kernel.bind(game, BranchIdentity(game, "main"))
+        operation_id = OperationId("maybe-sent-move")
+
+        async def verify() -> None:
+            return None
+
+        execution = MutationExecution(
+            OperationIntent.create("move_unit", {"unit_id": 1}),
+            CivMutationRequest("move_unit", "move()"), verify, operation_id,
+        )
+        first = await kernel.execute(execution, decision_turn=10)
+        second = await kernel.execute(execution, decision_turn=10)
+        assert first.outcome_state is OutcomeState.UNKNOWN
+        assert second.operation_id == operation_id
+        assert adapter.calls == 1
 
     asyncio.run(run())
 
@@ -128,6 +198,7 @@ def test_mutation_is_confirmed_only_by_domain_readback(tmp_path) -> None:
                 OperationIntent.create("move_unit", {"unit_id": 1, "x": 3, "y": 4}),
                 CivMutationRequest("move_unit", "move()"),
                 verify,
+                OperationId("move-1"),
             ),
             decision_turn=10,
         )
