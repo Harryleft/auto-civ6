@@ -128,6 +128,17 @@ class OperationStore:
             )
         return record
 
+    def list_operations_for_branch(self, branch_id: BranchIdentity) -> list[OperationRecord]:
+        """Return execution facts for one branch; never mix abandoned branches."""
+        rows = self._require_connection().execute(
+            "SELECT * FROM operations WHERE branch_id = ? ORDER BY created_at, operation_id",
+            (branch_id.value,),
+        ).fetchall()
+        records = [self._record_from_row(row) for row in rows]
+        if any(record.game_id != branch_id.game_id for record in records):
+            raise OperationBranchMismatchError("branch_id 的 operation game identity 不匹配。")
+        return records
+
     def save_handoff_note(self, note: HandoffNote) -> None:
         """Save strategy-only context without touching operation facts."""
         connection = self._require_connection()
