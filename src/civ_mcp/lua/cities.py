@@ -10,7 +10,13 @@ from civ_mcp.lua._helpers import (
     _bail_lua,
     _lua_get_city,
 )
-from civ_mcp.lua.models import CityCaptureState, CityInfo, PendingCityCapture, ProductionOption
+from civ_mcp.lua.models import (
+    CityCaptureState,
+    CityInfo,
+    PendingCityCapture,
+    ProductionOption,
+    PurchaseOption,
+)
 
 
 def build_cities_query() -> str:
@@ -606,6 +612,74 @@ print("{SENTINEL}")
 """
 
 
+def build_city_purchase_query(city_id: int, yield_type: str) -> str:
+    """List immediate purchases legal under the exact ``PURCHASE`` command.
+
+    Production eligibility is not enough: the actual purchase command also
+    applies currency, placement and ruleset restrictions.  This query is the
+    candidate source for the Runtime Core, not an advisory cost list.
+    """
+    normalized_yield = yield_type.upper()
+    if normalized_yield not in {"YIELD_GOLD", "YIELD_FAITH"}:
+        return _bail(f"ERR:INVALID_YIELD|{yield_type}")
+    return f"""
+{_lua_get_city(city_id)}
+local yieldRow = GameInfo.Yields["{normalized_yield}"]
+if yieldRow == nil then {_bail(f"ERR:YIELD_NOT_FOUND|{normalized_yield}")} end
+local formation = MilitaryFormationTypes.STANDARD_MILITARY_FORMATION
+
+local function canPlaceUnit(item)
+    local existing = Map.GetUnitsAt(pCity:GetX(), pCity:GetY())
+    if existing then
+        for u in existing:Units() do
+            if u:GetOwner() == me then
+                local uDef = GameInfo.Units[u:GetType()]
+                if uDef and uDef.FormationClass == item.FormationClass then
+                    return false
+                end
+            end
+        end
+    end
+    return true
+end
+
+local function canPurchase(params)
+    local canBuy = CityManager.CanStartCommand(
+        pCity, CityCommandTypes.PURCHASE, false, params, true
+    )
+    return canBuy == true
+end
+
+for unit in GameInfo.Units() do
+    if canPlaceUnit(unit) then
+        local params = {{}}
+        params[CityCommandTypes.PARAM_UNIT_TYPE] = unit.Hash
+        params[CityCommandTypes.PARAM_YIELD_TYPE] = yieldRow.Index
+        params[CityCommandTypes.PARAM_MILITARY_FORMATION_TYPE] = formation
+        if canPurchase(params) then
+            local cost = pCity:GetGold():GetPurchaseCost(yieldRow.Index, unit.Hash, formation)
+            if cost and cost > 0 then
+                print("PURCHASE|UNIT|" .. unit.UnitType .. "|" .. math.floor(cost))
+            end
+        end
+    end
+end
+
+for building in GameInfo.Buildings() do
+    local params = {{}}
+    params[CityCommandTypes.PARAM_BUILDING_TYPE] = building.Hash
+    params[CityCommandTypes.PARAM_YIELD_TYPE] = yieldRow.Index
+    if canPurchase(params) then
+        local cost = pCity:GetGold():GetPurchaseCost(yieldRow.Index, building.Hash, -1)
+        if cost and cost > 0 then
+            print("PURCHASE|BUILDING|" .. building.BuildingType .. "|" .. math.floor(cost))
+        end
+    end
+end
+print("{SENTINEL}")
+"""
+
+
 def build_purchase_item(
     city_id: int, item_type: str, item_name: str, yield_type: str = "YIELD_GOLD"
 ) -> str:
@@ -643,7 +717,8 @@ if "{itype}" == "UNIT" then
         end
     end
 end
-local cost = pCity:GetGold():GetPurchaseCost(yieldRow.Index, item.Hash, MilitaryFormationTypes.STANDARD_MILITARY_FORMATION)
+local formation = ("{itype}" == "UNIT") and MilitaryFormationTypes.STANDARD_MILITARY_FORMATION or -1
+local cost = pCity:GetGold():GetPurchaseCost(yieldRow.Index, item.Hash, formation)
 local isFaith = ("{yield_type}" == "YIELD_FAITH")
 local balance
 if isFaith then
@@ -915,4 +990,31 @@ def parse_city_production_response(lines: list[str]) -> list[ProductionOption]:
                     repair_y=repair_y,
                 )
             )
+    return options
+
+
+def parse_city_purchase_response(
+    lines: list[str], *, yield_type: str
+) -> list[PurchaseOption]:
+    """Decode only candidates accepted by the live ``PURCHASE`` command."""
+    options: list[PurchaseOption] = []
+    for line in lines:
+        if line == "NOT_FOUND" or line.startswith("ERR:"):
+            raise ValueError(f"无法读取购买候选：{line}")
+        parts = line.split("|")
+        if len(parts) != 4 or parts[0] != "PURCHASE":
+            continue
+        if parts[1] not in {"UNIT", "BUILDING"}:
+            raise ValueError(f"购买候选类型无效：{parts[1]}")
+        cost = int(parts[3])
+        if cost <= 0:
+            raise ValueError(f"购买候选成本无效：{line}")
+        options.append(
+            PurchaseOption(
+                item_type=parts[1],
+                item_name=parts[2],
+                yield_type=yield_type,
+                cost=cost,
+            )
+        )
     return options

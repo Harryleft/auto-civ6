@@ -389,39 +389,131 @@ class CivMutationFactory:
         item_type: str,
         item_name: str,
         yield_type: str,
-        currency_before: float,
         observed_turn: int,
-        known_unit_ids: frozenset[int] = frozenset(),
     ) -> MutationExecution:
-        """Confirm purchase with both resource decrease and a new owned object."""
+        """Purchase one live candidate with resource and object-state evidence.
+
+        Candidate eligibility, currency baseline and object baseline are captured
+        inside the precheck.  A caller cannot manufacture any of those facts.
+        """
+        normalized_type = item_type.upper()
+        normalized_yield = yield_type.upper()
         intent = OperationIntent.create(
             "purchase_item",
-            {"city_id": city_id, "item_type": item_type, "item_name": item_name, "yield_type": yield_type},
+            {
+                "city_id": city_id,
+                "item_type": normalized_type,
+                "item_name": item_name,
+                "yield_type": normalized_yield,
+            },
         )
+        currency_before: float | None = None
+        known_unit_ids: frozenset[int] = frozenset()
+        building_was_owned = False
 
-        async def verify() -> Evidence | None:
+        async def precheck() -> None:
+            nonlocal currency_before, known_unit_ids, building_was_owned
+            if normalized_type not in {"UNIT", "BUILDING"}:
+                raise MutationPreconditionError("购买类型必须是 UNIT 或 BUILDING。")
+            if normalized_yield not in {"YIELD_GOLD", "YIELD_FAITH"}:
+                raise MutationPreconditionError("购买货币必须是 YIELD_GOLD 或 YIELD_FAITH。")
+            try:
+                purchases = await self._adapter.read_city_purchases(
+                    city_id=city_id,
+                    yield_type=normalized_yield,
+                    observed_turn=observed_turn,
+                )
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取购买候选。") from exc
+
+            candidates = [
+                option
+                for option in purchases.value
+                if option.item_type == normalized_type and option.item_name == item_name
+            ]
+            if len(candidates) != 1:
+                raise MutationPreconditionError("目标不在当前游戏允许的购买候选中。")
+            candidate = candidates[0]
             try:
                 overview = await self._adapter.read_overview()
-                balance = overview.value.faith if yield_type == "YIELD_FAITH" else overview.value.gold
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取购买货币 baseline。") from exc
+            balance = (
+                overview.value.faith
+                if normalized_yield == "YIELD_FAITH"
+                else overview.value.gold
+            )
+            if balance < candidate.cost:
+                raise MutationPreconditionError("当前货币不足以完成该购买。")
+            currency_before = balance
+
+            if normalized_type == "UNIT":
+                try:
+                    units = await self._adapter.read_units(observed_turn=observed_turn)
+                except Exception as exc:
+                    raise MutationPreconditionError("无法获取购买前的单位 baseline。") from exc
+                known_unit_ids = frozenset(unit.unit_id for unit in units.value)
+                return
+
+            try:
+                cities = await self._adapter.read_cities(observed_turn=observed_turn)
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取购买前的城市建筑 baseline。") from exc
+            target_city = next((city for city in cities.value if city.city_id == city_id), None)
+            if target_city is None:
+                raise MutationPreconditionError("购买前找不到目标城市。")
+            building_was_owned = item_name.removeprefix("BUILDING_") in target_city.buildings
+            if building_was_owned:
+                raise MutationPreconditionError("目标建筑已拥有，不提交重复购买。")
+
+        async def verify() -> Evidence | None:
+            if currency_before is None:
+                return None
+            try:
+                overview = await self._adapter.read_overview()
+                balance = (
+                    overview.value.faith
+                    if normalized_yield == "YIELD_FAITH"
+                    else overview.value.gold
+                )
                 if balance >= currency_before:
                     return None
-                if item_type.upper() == "UNIT":
+                if normalized_type == "UNIT":
                     units = await self._adapter.read_units(observed_turn=observed_turn)
-                    if any(unit.unit_id not in known_unit_ids and unit.unit_type == item_name for unit in units.value):
-                        return Evidence("read_overview+read_units", overview.observed_turn, f"purchased {item_name}")
+                    if any(
+                        unit.unit_id not in known_unit_ids and unit.unit_type == item_name
+                        for unit in units.value
+                    ):
+                        return Evidence(
+                            "read_overview+read_units",
+                            overview.observed_turn,
+                            f"purchased {item_name}",
+                        )
                 else:
                     cities = await self._adapter.read_cities(observed_turn=observed_turn)
-                    if any(city.city_id == city_id and item_name in city.buildings for city in cities.value):
-                        return Evidence("read_overview+read_cities", overview.observed_turn, f"purchased {item_name}")
+                    building_name = item_name.removeprefix("BUILDING_")
+                    if not building_was_owned and any(
+                        city.city_id == city_id and building_name in city.buildings
+                        for city in cities.value
+                    ):
+                        return Evidence(
+                            "read_overview+read_cities",
+                            overview.observed_turn,
+                            f"purchased {item_name}",
+                        )
             except Exception:
                 return None
             return None
 
         return MutationExecution(
             intent=intent,
-            request=CivMutationRequest("purchase_item", build_purchase_item(city_id, item_type, item_name, yield_type)),
+            request=CivMutationRequest(
+                "purchase_item",
+                build_purchase_item(city_id, normalized_type, item_name, normalized_yield),
+            ),
             verify=verify,
             operation_id=operation_id,
+            precheck=precheck,
         )
 
     def purchase_tile(
