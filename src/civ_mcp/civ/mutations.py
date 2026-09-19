@@ -12,6 +12,15 @@ from civ_mcp.civ.adapter import CivAdapter, CivMutationRequest
 from civ_mcp.lua.cities import build_produce_item, build_purchase_item
 from civ_mcp.lua.diplomacy import build_propose_trade
 from civ_mcp.lua.economy import build_make_trade_route
+from civ_mcp.lua.governance import (
+    build_appoint_governor,
+    build_assign_governor,
+    build_choose_dedication,
+    build_promote_governor,
+    build_promote_unit,
+    build_send_envoy,
+    build_set_policies,
+)
 from civ_mcp.lua.notifications import build_end_turn
 from civ_mcp.lua.tech import build_set_civic, build_set_research
 from civ_mcp.lua.units import build_attack_unit, build_move_unit
@@ -250,6 +259,41 @@ class CivMutationFactory:
             readback=readback,
         )
 
+    def set_policies(
+        self, *, operation_id: OperationId, assignments: dict[int, str], readback: AttackReadback
+    ) -> MutationExecution:
+        return self._readback_action(operation_id=operation_id, tool="set_policies", arguments={"assignments": assignments}, lua_code=build_set_policies(assignments), readback=readback)
+
+    def appoint_governor(
+        self, *, operation_id: OperationId, governor_type: str, readback: AttackReadback
+    ) -> MutationExecution:
+        return self._readback_action(operation_id=operation_id, tool="appoint_governor", arguments={"governor_type": governor_type}, lua_code=build_appoint_governor(governor_type), readback=readback)
+
+    def assign_governor(
+        self, *, operation_id: OperationId, governor_type: str, city_id: int, readback: AttackReadback
+    ) -> MutationExecution:
+        return self._readback_action(operation_id=operation_id, tool="assign_governor", arguments={"governor_type": governor_type, "city_id": city_id}, lua_code=build_assign_governor(governor_type, city_id), readback=readback)
+
+    def promote_governor(
+        self, *, operation_id: OperationId, governor_type: str, promotion_type: str, readback: AttackReadback
+    ) -> MutationExecution:
+        return self._readback_action(operation_id=operation_id, tool="promote_governor", arguments={"governor_type": governor_type, "promotion_type": promotion_type}, lua_code=build_promote_governor(governor_type, promotion_type), readback=readback)
+
+    def promote_unit(
+        self, *, operation_id: OperationId, unit_index: int, promotion_type: str, readback: AttackReadback
+    ) -> MutationExecution:
+        return self._readback_action(operation_id=operation_id, tool="promote_unit", arguments={"unit_index": unit_index, "promotion_type": promotion_type}, lua_code=build_promote_unit(unit_index, promotion_type), readback=readback, context="gamecore")
+
+    def send_envoy(
+        self, *, operation_id: OperationId, city_state_player_id: int, readback: AttackReadback
+    ) -> MutationExecution:
+        return self._readback_action(operation_id=operation_id, tool="send_envoy", arguments={"city_state_player_id": city_state_player_id}, lua_code=build_send_envoy(city_state_player_id), readback=readback)
+
+    def choose_dedication(
+        self, *, operation_id: OperationId, dedication_index: int, readback: AttackReadback
+    ) -> MutationExecution:
+        return self._readback_action(operation_id=operation_id, tool="choose_dedication", arguments={"dedication_index": dedication_index}, lua_code=build_choose_dedication(dedication_index), readback=readback)
+
     @staticmethod
     def _readback_action(
         *,
@@ -258,11 +302,12 @@ class CivMutationFactory:
         arguments: dict[str, object],
         lua_code: str,
         readback: AttackReadback,
+        context: str = "ingame",
     ) -> MutationExecution:
         """Shared wiring only; each caller owns its domain-specific evidence."""
         return MutationExecution(
             intent=OperationIntent.create(tool, arguments),
-            request=CivMutationRequest(tool, lua_code),
+            request=CivMutationRequest(tool, lua_code, context=context),
             verify=readback,
             operation_id=operation_id,
         )
