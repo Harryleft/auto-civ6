@@ -54,13 +54,16 @@
   `UNIT_*` 类型，提交后仅以同一单位读回该目标类型确认。
 - 单位晋升读取同时返回当前可选与已拥有的 `PROMOTION_*` 类型；实验入口以它们分别
   作为发送前资格与发送后证据。
+- 城邦读取返回可用使者及已会面城邦的精确使者数和派遣资格；实验入口仅在目标城邦
+  使者数恰好增加一、可用使者数恰好减少一时确认 `send_envoy`，不能以 Lua 的成功文本
+  代替领域证据。
 - `civ_mcp.runtime.server` 是独立的实验 FastMCP 入口，当前仅注册
-  `get_runtime_context`、`save_handoff`、`move_unit`、`upgrade_unit`、
+  `get_runtime_context`、`get_unit_promotions`、`get_city_states`、`save_handoff`、`move_unit`、`upgrade_unit`、
   `promote_unit`、`set_city_production`，
   `end_turn` 与 `resume_turn_decision`，以及 `set_research`、`set_civic`、
   `choose_pantheon`、`choose_dedication`、`found_city`。`save_handoff` 仅保存当前
   branch 的战略重点、已有安排、理由和改变条件，不能修改游戏事实或 operation record。
-  另有 `recruit_great_person` 可招募当前候选。
+  另有 `recruit_great_person` 可招募当前候选、`send_envoy` 可派遣一个已验证合法的使者。
   它要求 host 显式提供 `CIV_MCP_RUNTIME_BRANCH`，不会自行猜测读档分支。
   server 只负责工具装配；end-turn 的等待和证据关闭属于 `TurnLoop`，而非 MCP
   路由函数。

@@ -24,10 +24,12 @@ def test_experimental_runtime_surface_exposes_only_new_core_tools() -> None:
     assert names == {
         "get_runtime_context",
         "get_unit_promotions",
+        "get_city_states",
         "save_handoff",
         "move_unit",
         "upgrade_unit",
         "promote_unit",
+        "send_envoy",
         "set_city_production",
         "set_research",
         "set_civic",

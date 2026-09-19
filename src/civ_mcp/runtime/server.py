@@ -99,6 +99,12 @@ async def get_unit_promotions(ctx: Context, unit_index: int) -> dict[str, object
     )
 
 
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_city_states(ctx: Context) -> dict[str, object]:
+    """Return current envoy tokens and every met city-state's send eligibility."""
+    return _json_value(await _runtime(ctx).assembly.surface.get_city_states())
+
+
 @mcp.tool()
 async def save_handoff(
     ctx: Context,
@@ -171,6 +177,25 @@ async def promote_unit(
         operation_id=OperationId(operation_id),
         unit_index=unit_index,
         promotion_type=promotion_type,
+        observed_turn=decision_turn,
+    )
+    return _operation_payload(
+        await assembly.surface.execute_mutation(execution, decision_turn=decision_turn)
+    )
+
+
+@mcp.tool()
+async def send_envoy(
+    ctx: Context,
+    operation_id: str,
+    city_state_player_id: int,
+    decision_turn: int,
+) -> dict[str, object]:
+    """Send one legal envoy; both envoy and token deltas must be freshly proven."""
+    assembly = _runtime(ctx).assembly
+    execution = assembly.mutations.send_envoy(
+        operation_id=OperationId(operation_id),
+        city_state_player_id=city_state_player_id,
         observed_turn=decision_turn,
     )
     return _operation_payload(

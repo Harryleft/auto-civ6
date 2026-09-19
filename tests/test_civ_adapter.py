@@ -179,6 +179,25 @@ def test_dedications_read_exposes_current_choices_and_active_types() -> None:
     assert transport.commands[0].startswith("CMD:153:")
 
 
+def test_city_states_read_exposes_envoy_tokens_and_send_eligibility() -> None:
+    transport = _Transport(
+        _complete("TOKENS|2", "CS|3|Auckland|Trade|1|-1|None|1")
+    )
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    result = asyncio.run(civ.read_city_states(observed_turn=42))
+
+    assert result.value.tokens_available == 2
+    assert result.value.city_states[0].player_id == 3
+    assert result.value.city_states[0].envoys_sent == 1
+    assert result.value.city_states[0].can_send_envoy is True
+    assert result.coverage == (
+        "ENVOY_TOKENS:COMPLETE;MET_CITY_STATES:COMPLETE;"
+        "UNMET_CITY_STATES:UNOBSERVED"
+    )
+    assert transport.commands[0].startswith("CMD:153:")
+
+
 def test_great_people_read_exposes_individual_and_local_claim_state() -> None:
     transport = _Transport(
         _complete(

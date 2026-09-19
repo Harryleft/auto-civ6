@@ -60,9 +60,8 @@ class ContextBuilder:
             unfinished_intents=unfinished,
             handoff=self._session.handoff_note(),
             further_queries=(
-                "get_map_area",
-                "get_combat_estimate",
-                "get_trade_options",
+                "get_unit_promotions",
+                "get_city_states",
             ),
         )
 
@@ -72,3 +71,8 @@ class ContextBuilder:
         return await self._adapter.read_unit_promotions(
             unit_index=unit_index, observed_turn=overview.observed_turn
         )
+
+    async def read_city_states(self):
+        """Read envoy decisions through the context boundary only."""
+        overview = await self._adapter.read_overview()
+        return await self._adapter.read_city_states(observed_turn=overview.observed_turn)
