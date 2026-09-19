@@ -145,12 +145,11 @@ class SessionKernel:
             self._store.save_operation(record)
             try:
                 receipt = await self._adapter.submit(execution.request)
+            except asyncio.CancelledError:
+                self._persist_unknown_after_submit_interruption(record)
+                raise
             except Exception:
-                record = record.maybe_sent()
-                self._store.save_operation(record)
-                record = record.unknown()
-                self._store.save_operation(record)
-                return record
+                return self._persist_unknown_after_submit_interruption(record)
             if receipt.send_state is SendState.NOT_SENT:
                 record = record.not_sent()
                 self._store.save_operation(record)
@@ -163,11 +162,25 @@ class SessionKernel:
                 return record
             try:
                 evidence = await execution.verify()
+            except asyncio.CancelledError:
+                record = record.unknown()
+                self._store.save_operation(record)
+                raise
             except Exception:
                 evidence = None
             record = record.confirmed(evidence) if evidence is not None else record.unknown()
             self._store.save_operation(record)
             return record
+
+    def _persist_unknown_after_submit_interruption(
+        self, record: OperationRecord
+    ) -> OperationRecord:
+        """Close a post-submit interruption conservatively before returning."""
+        record = record.maybe_sent()
+        self._store.save_operation(record)
+        record = record.unknown()
+        self._store.save_operation(record)
+        return record
 
     def _require_binding(self) -> SessionBinding:
         if self._binding is None:
