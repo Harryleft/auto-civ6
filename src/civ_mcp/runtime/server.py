@@ -92,6 +92,25 @@ async def get_runtime_context(ctx: Context) -> dict[str, object]:
 
 
 @mcp.tool()
+async def save_handoff(
+    ctx: Context,
+    strategic_focus: str,
+    existing_arrangements: str,
+    rationale: str,
+    change_conditions: str,
+) -> dict[str, object]:
+    """Save strategic continuity only; game facts and operation records stay immutable."""
+    return _json_value(
+        _runtime(ctx).assembly.surface.save_handoff(
+            strategic_focus=strategic_focus,
+            existing_arrangements=existing_arrangements,
+            rationale=rationale,
+            change_conditions=change_conditions,
+        )
+    )
+
+
+@mcp.tool()
 async def move_unit(
     ctx: Context,
     operation_id: str,
