@@ -93,6 +93,7 @@ class ContextBuilder:
                 "get_city_production",
                 "get_trade_destinations",
                 "get_trade_routes",
+                "get_world_congress",
             ),
         )
 
@@ -200,3 +201,8 @@ class ContextBuilder:
         """Read active trade routes through the context boundary only."""
         overview = await self._adapter.read_overview()
         return await self._adapter.read_trade_routes(observed_turn=overview.observed_turn)
+
+    async def read_world_congress(self):
+        """Read current World Congress facts without submitting a vote."""
+        overview = await self._adapter.read_overview()
+        return await self._adapter.read_world_congress(observed_turn=overview.observed_turn)

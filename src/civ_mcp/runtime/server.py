@@ -222,6 +222,12 @@ async def get_trade_routes(ctx: Context) -> dict[str, object]:
     return _json_value(await _runtime(ctx).assembly.surface.get_trade_routes())
 
 
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_world_congress(ctx: Context) -> dict[str, object]:
+    """Return actual World Congress status, resolutions, and proposals; never vote."""
+    return _json_value(await _runtime(ctx).assembly.surface.get_world_congress())
+
+
 @mcp.tool()
 async def save_handoff(
     ctx: Context,

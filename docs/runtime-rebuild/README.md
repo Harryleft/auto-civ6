@@ -60,6 +60,8 @@
   模型只能选 `ACCEPT` 或 `REJECT`。主动提议只有在 DealManager 的独立读取仍显示
   `PROPOSED` 或出现结构化 `COUNTER_OFFER` 时才确认；其余情况保留 `UNKNOWN`，绝不根据
   Lua 成功文本自动接受不同条款。世界议会仅支持模型显式的 `SUBMIT_ABSTAIN`；不支持自动投票。
+- `get_world_congress` 已迁入实验 surface，返回当前世界议会的 session、决议、候选目标与
+  提案事实；它是只读工具，不能投票、提交或替代 F2 的 `SUBMIT_ABSTAIN` blocker continuation。
 - 已通过实验入口暴露的 mutation 仅限 [`capabilities.md`](capabilities.md) 表中列出的
   项目，并各自有 precheck 与领域 Evidence。`CivMutationFactory` 内未由该入口注册的
   旧构造函数不是 Runtime 支持能力，不能据此推断宗教、间谍、奇观或世界议会投票已迁移。

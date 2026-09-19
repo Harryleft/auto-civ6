@@ -41,6 +41,7 @@ def test_experimental_runtime_surface_exposes_only_new_core_tools() -> None:
         "get_city_production",
         "get_trade_destinations",
         "get_trade_routes",
+        "get_world_congress",
         "save_handoff",
         "move_unit",
         "attack_unit",

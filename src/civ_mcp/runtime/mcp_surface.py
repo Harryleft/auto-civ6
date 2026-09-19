@@ -90,6 +90,10 @@ class RuntimeMcpSurface:
         """Return active routes without exposing CivAdapter to MCP routing."""
         return await self._context.read_trade_routes()
 
+    async def get_world_congress(self):
+        """Return current World Congress facts without exposing a vote operation."""
+        return await self._context.read_world_congress()
+
     def save_handoff(
         self,
         *,

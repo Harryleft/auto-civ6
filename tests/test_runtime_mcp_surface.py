@@ -227,3 +227,17 @@ def test_surface_reads_trade_facts_only_through_context() -> None:
 
     assert asyncio.run(surface.get_trade_destinations(7)) is destinations
     assert asyncio.run(surface.get_trade_routes()) is routes
+
+
+def test_surface_reads_world_congress_only_through_context() -> None:
+    expected = SimpleNamespace(is_in_session=True, favor=25)
+
+    class Context:
+        async def read_world_congress(self):
+            return expected
+
+    surface = RuntimeMcpSurface(
+        context=Context(), session=SimpleNamespace(), turn_loop=SimpleNamespace()
+    )
+
+    assert asyncio.run(surface.get_world_congress()) is expected
