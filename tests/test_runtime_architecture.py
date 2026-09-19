@@ -6,6 +6,7 @@ import ast
 from pathlib import Path
 
 import civ_mcp.runtime.context as context
+import civ_mcp.runtime.connection as connection
 import civ_mcp.runtime.mcp_surface as surface
 
 
@@ -31,6 +32,12 @@ def test_context_builder_has_no_mutation_sender_dependency() -> None:
     source = Path(context.__file__).read_text()
     assert ".execute(" not in source
     assert "MutationExecution" not in source
+
+
+def test_runtime_connection_does_not_reuse_the_legacy_connection_or_tuner_client() -> None:
+    imports = _import_modules(connection)
+    assert "civ_mcp.connection" not in imports
+    assert "civ_mcp.tuner_client" not in imports
 
 
 def test_new_runtime_has_no_belief_engine_imports() -> None:
