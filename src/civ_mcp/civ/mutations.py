@@ -10,6 +10,7 @@ from collections.abc import Awaitable, Callable
 
 from civ_mcp.civ.adapter import CivAdapter, CivMutationRequest
 from civ_mcp.lua.cities import build_produce_item, build_purchase_item
+from civ_mcp.lua.diplomacy import build_propose_trade
 from civ_mcp.lua.economy import build_make_trade_route
 from civ_mcp.lua.units import build_attack_unit, build_move_unit
 from civ_mcp.runtime.contracts import Evidence, OperationId, OperationIntent
@@ -181,6 +182,33 @@ class CivMutationFactory:
                 "make_trade_route", {"unit_index": unit_index, "target_x": target_x, "target_y": target_y},
             ),
             request=CivMutationRequest("make_trade_route", build_make_trade_route(unit_index, target_x, target_y)),
+            verify=readback,
+            operation_id=operation_id,
+        )
+
+    def propose_trade(
+        self,
+        *,
+        operation_id: OperationId,
+        other_player_id: int,
+        offer_items: list[dict[str, object]],
+        request_items: list[dict[str, object]],
+        readback: AttackReadback,
+    ) -> MutationExecution:
+        """Submit exactly these terms; a counter-offer is never auto-accepted."""
+        return MutationExecution(
+            intent=OperationIntent.create(
+                "propose_trade",
+                {
+                    "other_player_id": other_player_id,
+                    "offer_items": offer_items,
+                    "request_items": request_items,
+                },
+            ),
+            request=CivMutationRequest(
+                "propose_trade",
+                build_propose_trade(other_player_id, offer_items, request_items),
+            ),
             verify=readback,
             operation_id=operation_id,
         )

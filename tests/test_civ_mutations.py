@@ -74,3 +74,18 @@ def test_purchase_requires_gold_change_and_new_unit() -> None:
         operation_id=OperationId("purchase-4"), city_id=4, item_type="UNIT", item_name="UNIT_ARCHER", yield_type="YIELD_GOLD", currency_before=100, observed_turn=12, known_unit_ids=frozenset({1})
     )
     assert asyncio.run(execution.verify()).source == "read_overview+read_units"
+
+
+def test_trade_proposal_preserves_the_exact_hash_bound_terms() -> None:
+    class Adapter:
+        pass
+
+    async def no_acceptance_evidence():
+        return None
+
+    execution = CivMutationFactory(Adapter()).propose_trade(
+        operation_id=OperationId("trade-4"), other_player_id=2,
+        offer_items=[{"type": "GOLD", "amount": 50}], request_items=[], readback=no_acceptance_evidence,
+    )
+    assert "DealProposalAction.ACCEPTED" not in execution.request.lua_code
+    assert asyncio.run(execution.verify()) is None
