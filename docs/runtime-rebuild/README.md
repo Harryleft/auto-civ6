@@ -64,6 +64,8 @@ Belief/Governance 链路。
 - 每个 mutation 均绑定 `game_id`、`branch_id`、`operation_id`；读档产生新 branch。
 - 模型工具只能经 SessionKernel 提交 mutation，不能直接连接 FireTuner。
 - Recovery、Telemetry、Context 和 UI 不能修改操作执行事实。
+- Recovery 在稳定 identity 验证后也必须创建新的 `branch_id`；不能把恢复后的
+  世界重新绑定为旧时间线。
 
 ## 当前限制
 
