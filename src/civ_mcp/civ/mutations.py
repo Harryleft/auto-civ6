@@ -9,7 +9,12 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 
 from civ_mcp.civ.adapter import CivAdapter, CivMutationRequest
-from civ_mcp.lua.cities import build_city_attack, build_produce_item, build_purchase_item
+from civ_mcp.lua.cities import (
+    build_city_attack,
+    build_produce_item,
+    build_purchase_item,
+    build_set_yield_focus,
+)
 from civ_mcp.lua.diplomacy import build_propose_trade
 from civ_mcp.lua.economy import build_make_trade_route
 from civ_mcp.lua.governance import (
@@ -25,6 +30,7 @@ from civ_mcp.lua.governance import (
 from civ_mcp.lua.great_people import build_recruit_great_person
 from civ_mcp.lua.espionage import build_spy_mission, build_spy_travel
 from civ_mcp.lua.congress import build_congress_submit, build_congress_vote
+from civ_mcp.lua.map import build_found_city, build_purchase_tile
 from civ_mcp.lua.religion import build_choose_pantheon, build_found_religion, build_spread_religion
 from civ_mcp.lua.notifications import build_end_turn
 from civ_mcp.lua.tech import build_set_civic, build_set_research
@@ -182,6 +188,50 @@ class CivMutationFactory:
             operation_id=operation_id,
         )
 
+    def found_city(
+        self,
+        *,
+        operation_id: OperationId,
+        unit_index: int,
+        target_x: int,
+        target_y: int,
+        observed_turn: int,
+        known_city_ids: frozenset[int],
+    ) -> MutationExecution:
+        """Found at the observed settler tile, proving a newly created city exists."""
+        intent = OperationIntent.create(
+            "found_city",
+            {
+                "unit_index": unit_index,
+                "target_x": target_x,
+                "target_y": target_y,
+            },
+        )
+
+        async def verify() -> Evidence | None:
+            try:
+                cities = await self._adapter.read_cities(observed_turn=observed_turn)
+            except Exception:
+                return None
+            if any(
+                city.city_id not in known_city_ids
+                and (city.x, city.y) == (target_x, target_y)
+                for city in cities.value
+            ):
+                return Evidence(
+                    "read_cities",
+                    cities.observed_turn,
+                    f"new city at ({target_x},{target_y})",
+                )
+            return None
+
+        return MutationExecution(
+            intent=intent,
+            request=CivMutationRequest("found_city", build_found_city(unit_index)),
+            verify=verify,
+            operation_id=operation_id,
+        )
+
     def purchase_item(
         self,
         *,
@@ -223,6 +273,41 @@ class CivMutationFactory:
             request=CivMutationRequest("purchase_item", build_purchase_item(city_id, item_type, item_name, yield_type)),
             verify=verify,
             operation_id=operation_id,
+        )
+
+    def purchase_tile(
+        self,
+        *,
+        operation_id: OperationId,
+        city_id: int,
+        x: int,
+        y: int,
+        readback: AttackReadback,
+    ) -> MutationExecution:
+        """Buy one tile only when a fresh map/ownership readback proves it."""
+        return self._readback_action(
+            operation_id=operation_id,
+            tool="purchase_tile",
+            arguments={"city_id": city_id, "x": x, "y": y},
+            lua_code=build_purchase_tile(city_id, x, y),
+            readback=readback,
+        )
+
+    def set_city_focus(
+        self,
+        *,
+        operation_id: OperationId,
+        city_id: int,
+        focus: str,
+        readback: AttackReadback,
+    ) -> MutationExecution:
+        """Change city focus only with a factual citizen-focus readback."""
+        return self._readback_action(
+            operation_id=operation_id,
+            tool="set_city_focus",
+            arguments={"city_id": city_id, "focus": focus},
+            lua_code=build_set_yield_focus(city_id, focus),
+            readback=readback,
         )
 
     def make_trade_route(
