@@ -1515,6 +1515,10 @@ class TraderInfo:
     religion_in: str = ""
     has_quest: bool = False
     is_city_state: bool = False
+    destination_player_id: int | None = None
+    destination_city_id: int | None = None
+    destination_x: int | None = None
+    destination_y: int | None = None
 
 
 @dataclass
