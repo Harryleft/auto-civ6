@@ -108,6 +108,26 @@ async def assemble_runtime(
             )
         return await turn_loop.wait_for_turn(operation)
 
+    async def continue_envoy(
+        operation: OperationRecord, city_state_player_id: int
+    ) -> TurnResult:
+        """Send one model-selected envoy, then await the original turn only."""
+        response = await session.execute(
+            mutations.send_envoy(
+                operation_id=OperationId.new(),
+                city_state_player_id=city_state_player_id,
+                observed_turn=operation.decision_turn,
+            ),
+            decision_turn=operation.decision_turn,
+        )
+        if response.outcome_state is not OutcomeState.CONFIRMED:
+            return TurnResult(
+                TurnOutcome.RECOVERY_REQUIRED,
+                response,
+                "使者派遣未由新城邦事实确认；不得重发，需重新读取或恢复。",
+            )
+        return await turn_loop.wait_for_turn(operation)
+
     async def observe_turn(operation: OperationRecord) -> TurnObservation:
         """Poll fresh game facts only; this never submits or resumes a turn."""
         try:
@@ -161,6 +181,48 @@ async def assemble_runtime(
                 return await continue_city_capture(operation, active_capture.city_id, choice)
 
             return TurnObservation(interrupt=interrupt, continuation=capture_continuation)
+        try:
+            envoy_status = await adapter.read_city_states(
+                observed_turn=overview.value.turn
+            )
+        except Exception:
+            envoy_status = None
+        if envoy_status is not None and envoy_status.value.tokens_available > 0:
+            eligible_city_states = tuple(
+                city_state
+                for city_state in envoy_status.value.city_states
+                if city_state.can_send_envoy
+            )
+            if eligible_city_states:
+                choices = tuple(
+                    str(city_state.player_id) for city_state in eligible_city_states
+                )
+                interrupt = DecisionInterrupt(
+                    decision_type="ENVOY",
+                    facts={
+                        "tokens_available": envoy_status.value.tokens_available,
+                        "city_states": [
+                            {
+                                "player_id": city_state.player_id,
+                                "name": city_state.name,
+                                "city_state_type": city_state.city_state_type,
+                                "envoys_sent": city_state.envoys_sent,
+                                "suzerain_id": city_state.suzerain_id,
+                                "leading_envoys": city_state.leading_envoys,
+                            }
+                            for city_state in eligible_city_states
+                        ],
+                    },
+                    allowed_choices=choices,
+                    continuation_operation_id=operation.operation_id,
+                )
+
+                async def envoy_continuation(choice: str) -> TurnResult:
+                    return await continue_envoy(operation, int(choice))
+
+                return TurnObservation(
+                    interrupt=interrupt, continuation=envoy_continuation
+                )
         try:
             sessions = await adapter.read_diplomacy_sessions(
                 observed_turn=overview.value.turn
