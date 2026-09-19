@@ -706,17 +706,71 @@ def test_city_controls_require_their_own_domain_readback() -> None:
 
 def test_trade_proposal_preserves_the_exact_hash_bound_terms() -> None:
     class Adapter:
-        pass
-
-    async def no_acceptance_evidence():
-        return None
+        async def read_pending_deals(self, **_kwargs):
+            return SimpleNamespace(value=[], observed_turn=12)
 
     execution = CivMutationFactory(Adapter()).propose_trade(
         operation_id=OperationId("trade-4"), other_player_id=2,
-        offer_items=[{"type": "GOLD", "amount": 50}], request_items=[], readback=no_acceptance_evidence,
+        offer_items=[{"type": "GOLD", "amount": 50}], request_items=[], observed_turn=12,
     )
+    asyncio.run(execution.precheck())
     assert "DealProposalAction.ACCEPTED" not in execution.request.lua_code
     assert asyncio.run(execution.verify()) is None
+
+
+def test_trade_proposal_rejects_lua_injection_in_resource_name() -> None:
+    with pytest.raises(ValueError, match="RESOURCE"):
+        CivMutationFactory(SimpleNamespace()).propose_trade(
+            operation_id=OperationId("trade-injection"),
+            other_player_id=2,
+            offer_items=[
+                {
+                    "type": "RESOURCE",
+                    "name": 'RESOURCE_IRON"]]; os.execute("bad") --',
+                    "amount": 1,
+                    "duration": 30,
+                }
+            ],
+            request_items=[],
+            observed_turn=12,
+        )
+
+
+def test_trade_proposal_confirms_only_an_observed_counter_offer() -> None:
+    counter_offer = SimpleNamespace(
+        other_player_id=2,
+        items_from_them=[
+            SimpleNamespace(
+                is_from_us=False,
+                item_type="GOLD",
+                name="Gold (lump sum)",
+                amount=50,
+                duration=0,
+            )
+        ],
+        items_from_us=[],
+    )
+
+    class Adapter:
+        calls = 0
+
+        async def read_pending_deals(self, **_kwargs):
+            self.calls += 1
+            return SimpleNamespace(
+                value=[] if self.calls == 1 else [counter_offer], observed_turn=12
+            )
+
+    execution = CivMutationFactory(Adapter()).propose_trade(
+        operation_id=OperationId("trade-counter-offer"),
+        other_player_id=2,
+        offer_items=[{"type": "GOLD", "amount": 40}],
+        request_items=[],
+        observed_turn=12,
+    )
+    asyncio.run(execution.precheck())
+    evidence = asyncio.run(execution.verify())
+    assert evidence.source == "read_pending_deals"
+    assert evidence.detail.startswith("COUNTER_OFFER")
 
 
 def test_trade_response_requires_the_observed_pending_deal_to_change() -> None:
