@@ -7,6 +7,7 @@ from pathlib import Path
 
 import civ_mcp.runtime.context as context
 import civ_mcp.runtime.connection as connection
+import civ_mcp.runtime.bootstrap as bootstrap
 import civ_mcp.runtime.mcp_surface as surface
 
 
@@ -38,6 +39,12 @@ def test_runtime_connection_does_not_reuse_the_legacy_connection_or_tuner_client
     imports = _import_modules(connection)
     assert "civ_mcp.connection" not in imports
     assert "civ_mcp.tuner_client" not in imports
+
+
+def test_runtime_bootstrap_has_no_legacy_server_or_game_state_dependency() -> None:
+    imports = _import_modules(bootstrap)
+    assert "civ_mcp.server" not in imports
+    assert "civ_mcp.game_state" not in imports
 
 
 def test_new_runtime_has_no_belief_engine_imports() -> None:
