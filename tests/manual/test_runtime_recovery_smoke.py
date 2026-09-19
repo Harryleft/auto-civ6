@@ -1,9 +1,10 @@
-"""Manual J2 recovery verification for a checkpoint already loaded by the host.
+"""J2 recovery verification for a checkpoint already loaded by the host.
 
 This script never starts Civ6, loads a save, sends a mutation, or retries an
-operation.  The operator performs those host-owned actions first; the script
-then uses the new Runtime connection to prove that the loaded checkpoint has a
-stable identity and the expected turn before a new branch may be bound.
+operation.  A human operator or approved host automation performs those
+host-owned actions first; the script then uses the new Runtime connection to
+prove that the loaded checkpoint has a stable identity and the expected turn
+before a new branch may be bound.
 
 Example:
 

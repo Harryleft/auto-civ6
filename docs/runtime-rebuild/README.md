@@ -130,7 +130,7 @@ Belief/Governance 链路。
 该适配器将模型限制为实验 Runtime 工具；`UNKNOWN`、`NEEDS_DECISION` 或
 `RECOVERY_REQUIRED` 一律停止并报告，不能通过 DSH 重发操作、执行读档或启动 recovery。
 
-## M11 现场证据核验（尚未执行）
+## M11 现场证据核验（已执行，尚未切换正式入口）
 
 K1/J2 必须由真实单机环境分别运行，且只把各自 stdout 保存为证据文件。完成 K1 的
 `--confirm-end-turn` 命令时可重定向 stdout；完成 host 读档后的 J2 验证同样保存 stdout：
@@ -150,10 +150,19 @@ K1/J2 必须由真实单机环境分别运行，且只把各自 stdout 保存为
 
 最后一个命令不连接游戏，只校验 K1 是否有无 unknown 的 context、一次 `MAYBE_SENT` →
 `CONFIRMED` 的 end-turn Evidence 和回合推进，以及 J2 是否使用同一 game、不同 branch 和
-已记录的 checkpoint。它输出 `approved` 只表示现场证据格式与运行时契约齐备；仍须由人工
-审阅后才可决定 K1 切换，脚本绝不改动入口或删除旧链路。
+已记录的 checkpoint。它输出 `approved` 只表示现场证据格式与运行时契约齐备；它不改动
+入口或删除旧链路。
 
-## K1 现场冒烟入口（尚未执行）
+2026-09-20 的真实单机证据已通过：K1 在
+`civilization_sumeria_-1843604224` 的
+`benchmark-k1-20260920` branch 上从第 1 回合推进到第 2 回合，operation 从
+`MAYBE_SENT` 以 `read_overview` Evidence 确认。host 自动化随后写入并加载实际存档
+`吉尔伽美什 2 公k1-turn-2-runtim元前3940年.Civ6Save`；J2 对同一 game 的第 2 回合
+连续读取成功，并创建
+`civilization_sumeria_-1843604224:benchmark-k1-recovery-20260920`。M11 输出
+`approved: true` 且没有 blocker。
+
+## K1 现场冒烟入口（真实 smoke 已执行，正式切换未执行）
 
 新核心的手工验收使用 [`tests/manual/test_runtime_core_smoke.py`](../../tests/manual/test_runtime_core_smoke.py)，
 不使用旧 `GameConnection` / `GameState` 手工脚本。先进入单机对局、确认
@@ -178,13 +187,14 @@ branch token（例如 `save-0001`，**不是** `game_id:save-0001`）和一个�
 
 脚本输出 game/branch/turn、未知读取、operation send/outcome 与 Evidence。任何
 `NEEDS_DECISION`、`RECOVERY_REQUIRED` 或 `UNKNOWN` 都以非零退出，且不自动恢复、重发或
-处理 decision；保存输出和 SQLite 后再进行明确诊断。这是 K1 的准备入口，尚不是一次已
-完成的真实 smoke。
+处理 decision；保存输出和 SQLite 后再进行明确诊断。2026-09-20 的真实 smoke 结果见上节，
+但该证明不等同于把 `civ-mcp` 正式入口切到新 Runtime。
 
-## J2 现场恢复验证入口（尚未执行）
+## J2 现场恢复验证入口（已执行）
 
-Recovery 的启动、存档选择和读档始终由 host/操作者完成，不能通过模型工具或这个脚本触发。
-在操作者已加载一个 checkpoint、确认 `4318` 由当前脚本独占后，使用
+Recovery 的启动、存档选择和读档始终由 host 完成，不能通过模型工具或这个脚本触发。host
+可以由操作者执行，也可以由经过授权的 UI 自动化执行；无论哪种方式，J2 脚本本身只读。
+在 host 已加载一个 checkpoint、确认 `4318` 由当前脚本独占后，使用
 [`tests/manual/test_runtime_recovery_smoke.py`](../../tests/manual/test_runtime_recovery_smoke.py)
 验证加载结果。`game_id` 和 checkpoint turn 应在恢复前的 K1 输出中记录；两条 branch 参数
 都是 host token，不能传 `game_id:token`：
@@ -201,7 +211,7 @@ Recovery 的启动、存档选择和读档始终由 host/操作者完成，不�
 脚本只通过新 Runtime 连续读取两次 identity 与 turn；二者稳定且与 checkpoint inventory
 相符时才输出 `RECOVERED` 和新的完整 branch_id。它不会写入游戏、创建 SessionKernel、改变
 已有 operation，或将 `UNKNOWN` 升级。读取不稳定、读档错误或回合不一致均以非零退出并要求
-人工诊断。
+host 诊断。
 
 ## 不变量
 
@@ -219,15 +229,15 @@ Recovery 的启动、存档选择和读档始终由 host/操作者完成，不�
 工作树已有未跟踪的 `design/graph-idea-visual.html`，它不是本次重构产物，不能
 作为“工作树干净”的验收证据，也不会被纳入本重构的提交。
 
-正式切换尚未发生，`civ-mcp` 仍指向旧 server。以下条件尚无完成证据，因此
-不得执行 K1--K4 删除/切换：
+正式切换尚未发生，`civ-mcp` 仍指向旧 server。真实 K1 smoke、J2 recovery 与 M11
+证据格式核验均已通过，但以下删除前置条件仍未满足，因此不得执行 K2--K4：
 
 - F2 已接入城市占领、单一条款完整交易回价、世界议会弃权、单一普通外交会话和使者
   决策；多会话仲裁仍明确不支持，世界议会投票也尚未迁移；
 - 新实验 surface 只支持能力清单中逐项声明的集合。其余领域必须保持 unsupported，
   不能因为旧入口或未注册的 factory 仍存在而被当作已迁移；
-- 尚未在真实单机游戏中完成新 surface 的 read → mutation → end-turn smoke，
-  或真实 recovery 验证；
+- 完整真实对局尚未从启动运行到自然结束或明确的游戏引擎失败；这是执行计划第 11 节对
+  删除旧系统的硬前置条件，不能由本次短 smoke 或离线测试替代；
 - `pyproject.toml` 仍会打包 `civ6_belief_engine`，旧 server/pipeline 与
   play-profile 双轨也仍存在。
 
