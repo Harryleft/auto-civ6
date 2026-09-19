@@ -61,6 +61,7 @@ def test_context_keeps_failed_domain_reads_explicitly_unknown() -> None:
         "get_governments",
         "get_policies",
         "get_city_purchases",
+        "get_city_production",
         "get_trade_destinations",
         "get_trade_routes",
     )

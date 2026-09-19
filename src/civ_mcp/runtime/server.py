@@ -134,6 +134,14 @@ async def get_city_purchases(
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
+async def get_city_production(ctx: Context, city_id: int) -> dict[str, object]:
+    """Return current unit, building and project candidates for one city."""
+    return _json_value(
+        await _runtime(ctx).assembly.surface.get_city_production(city_id)
+    )
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
 async def get_trade_destinations(ctx: Context, unit_index: int) -> dict[str, object]:
     """Return only destinations the current trader may legally route to now."""
     return _json_value(
