@@ -23,9 +23,11 @@ from civ_mcp.lua.diplomacy import (
 from civ_mcp.lua.governance import (
     build_city_states_query,
     build_dedications_query,
+    build_governors_query,
     build_unit_promotions_query,
     parse_city_states_response,
     parse_dedications_response,
+    parse_governors_response,
     parse_unit_promotions_response,
 )
 from civ_mcp.lua.great_people import build_great_people_query, parse_great_people_response
@@ -38,6 +40,7 @@ from civ_mcp.lua.models import (
     EnvoyStatus,
     GameOverview,
     GreatPersonInfo,
+    GovernorStatus,
     PantheonStatus,
     PendingCityCapture,
     TechCivicStatus,
@@ -331,6 +334,21 @@ class CivAdapter:
             observed_turn=observed_turn,
         )
 
+    async def read_governors(
+        self, *, observed_turn: int
+    ) -> CivReadResult[GovernorStatus]:
+        """Read appointment, placement, and promotion eligibility as game facts."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_governors",
+                lua_code=build_governors_query(),
+                decode=_decode_governors,
+                coverage="GOVERNORS:COMPLETE;RULESET:EXPANSION_ONLY",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
     async def read_great_people(
         self, *, observed_turn: int
     ) -> CivReadResult[list[GreatPersonInfo]]:
@@ -423,3 +441,11 @@ def _decode_city_states(lines: tuple[str, ...]) -> EnvoyStatus:
     if not any(line.startswith("TOKENS|") for line in lines):
         raise ValueError("缺少 city-state TOKENS 响应。")
     return parse_city_states_response(list(lines))
+
+
+def _decode_governors(lines: tuple[str, ...]) -> GovernorStatus:
+    if error := next((line for line in lines if line.startswith("ERR:")), None):
+        raise ValueError(error[4:])
+    if not any(line.startswith("STATUS|") for line in lines):
+        raise ValueError("缺少 governor STATUS 响应。")
+    return parse_governors_response(list(lines))
