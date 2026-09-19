@@ -179,6 +179,24 @@ def test_dedications_read_exposes_current_choices_and_active_types() -> None:
     assert transport.commands[0].startswith("CMD:153:")
 
 
+def test_great_people_read_exposes_individual_and_local_claim_state() -> None:
+    transport = _Transport(
+        _complete(
+            "GP_STATUS|0",
+            "GP|Great Scientist|Hypatia|Classical|60|Unclaimed|80|Libraries|gold:0,faith:0,recruit:true|17|0",
+        )
+    )
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    result = asyncio.run(civ.read_great_people(observed_turn=42))
+
+    assert result.value[0].individual_id == 17
+    assert result.value[0].can_recruit is True
+    assert result.value[0].claimed_by_local is False
+    assert result.coverage == "GREAT_PERSON_TIMELINE:COMPLETE"
+    assert transport.commands[0].startswith("CMD:153:")
+
+
 def test_adapter_can_resolve_lua_state_when_a_new_runtime_connection_refreshes_it() -> None:
     transport = _Transport(_complete())
     indexes = {"gamecore": 8, "ingame": 153}

@@ -1363,6 +1363,7 @@ class GreatPersonInfo:
     faith_cost: int = 0  # faith patronize cost
     can_recruit: bool = False  # have enough GP points
     individual_id: int = 0  # GameInfo index for recruit/patronize actions
+    claimed_by_local: bool = False
 
 
 @dataclass

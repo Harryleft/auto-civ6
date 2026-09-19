@@ -30,6 +30,7 @@ def test_experimental_runtime_surface_exposes_only_new_core_tools() -> None:
         "set_civic",
         "choose_pantheon",
         "choose_dedication",
+        "recruit_great_person",
         "found_city",
         "end_turn",
         "resume_turn_decision",

@@ -21,6 +21,7 @@ from civ_mcp.lua.diplomacy import (
     parse_diplomacy_sessions,
 )
 from civ_mcp.lua.governance import build_dedications_query, parse_dedications_response
+from civ_mcp.lua.great_people import build_great_people_query, parse_great_people_response
 from civ_mcp.lua.models import (
     CityCaptureState,
     CityInfo,
@@ -28,6 +29,7 @@ from civ_mcp.lua.models import (
     DiplomacySession,
     DedicationStatus,
     GameOverview,
+    GreatPersonInfo,
     PantheonStatus,
     PendingCityCapture,
     TechCivicStatus,
@@ -287,6 +289,21 @@ class CivAdapter:
             observed_turn=observed_turn,
         )
 
+    async def read_great_people(
+        self, *, observed_turn: int
+    ) -> CivReadResult[list[GreatPersonInfo]]:
+        """Read the recruit pool and local-player claims without strategy logic."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_great_people",
+                lua_code=build_great_people_query(),
+                decode=_decode_great_people,
+                coverage="GREAT_PERSON_TIMELINE:COMPLETE",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
     async def read_victory_progress(
         self, *, observed_turn: int
     ) -> CivReadResult[VictoryProgress]:
@@ -346,3 +363,9 @@ def _receipt_lines(receipt: TransportReceipt) -> list[str]:
         value for frame in receipt.frames
         if (value := _output_value(frame)) is not None and value != SENTINEL
     ]
+
+
+def _decode_great_people(lines: tuple[str, ...]) -> list[GreatPersonInfo]:
+    if not any(line.startswith("GP_STATUS|") for line in lines):
+        raise ValueError("缺少 Great People GP_STATUS 响应。")
+    return parse_great_people_response(list(lines))

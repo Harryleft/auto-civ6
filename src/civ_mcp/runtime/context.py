@@ -42,6 +42,7 @@ class ContextBuilder:
             ("tech_civics", self._adapter.read_tech_civics),
             ("pantheon", self._adapter.read_pantheon_status),
             ("dedications", self._adapter.read_dedications),
+            ("great_people", self._adapter.read_great_people),
             ("victory_progress", self._adapter.read_victory_progress),
         ):
             try:
