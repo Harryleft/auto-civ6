@@ -451,17 +451,133 @@ def test_end_turn_is_a_single_hash_bound_mutation() -> None:
     assert asyncio.run(execution.verify()).observed_turn == 13
 
 
-def test_governance_mutations_are_hash_bound_and_need_readback() -> None:
+def test_appoint_governor_requires_current_candidate_and_point_delta_readback() -> None:
+    before = SimpleNamespace(
+        points_available=1,
+        can_appoint=True,
+        appointed=[],
+        available_to_appoint=[SimpleNamespace(governor_type="GOVERNOR_MAGNUS")],
+    )
+    after = SimpleNamespace(
+        points_available=0,
+        can_appoint=False,
+        appointed=[SimpleNamespace(governor_type="GOVERNOR_MAGNUS")],
+        available_to_appoint=[],
+    )
+
     class Adapter:
-        pass
+        calls = 0
 
-    async def evidence():
-        return Evidence("read_governors", 13, "governance state observed")
+        async def read_governors(self, *, observed_turn):
+            self.calls += 1
+            return SimpleNamespace(
+                value=before if self.calls == 1 else after,
+                observed_turn=observed_turn,
+            )
 
-    factory = CivMutationFactory(Adapter())
-    governor = factory.assign_governor(operation_id=OperationId("gov-1"), governor_type="GOVERNOR_MAGNUS", city_id=4, readback=evidence)
-    assert governor.intent.tool == "assign_governor"
-    assert asyncio.run(governor.verify()).source == "read_governors"
+    execution = CivMutationFactory(Adapter()).appoint_governor(
+        operation_id=OperationId("appoint-magnus"),
+        governor_type="GOVERNOR_MAGNUS",
+        observed_turn=12,
+    )
+
+    asyncio.run(execution.precheck())
+    evidence = asyncio.run(execution.verify())
+
+    assert execution.intent.tool == execution.request.tool == "appoint_governor"
+    assert "APPOINT_GOVERNOR" in execution.request.lua_code
+    assert evidence.source == "read_governors"
+    assert "points 1->0" in evidence.detail
+
+
+def test_assign_governor_requires_local_city_and_assigned_city_readback() -> None:
+    before = SimpleNamespace(
+        appointed=[SimpleNamespace(governor_type="GOVERNOR_MAGNUS", assigned_city_id=-1)]
+    )
+    after = SimpleNamespace(
+        appointed=[SimpleNamespace(governor_type="GOVERNOR_MAGNUS", assigned_city_id=4)]
+    )
+
+    class Adapter:
+        governor_calls = 0
+
+        async def read_governors(self, *, observed_turn):
+            self.governor_calls += 1
+            return SimpleNamespace(
+                value=before if self.governor_calls == 1 else after,
+                observed_turn=observed_turn,
+            )
+
+        async def read_cities(self, *, observed_turn):
+            return SimpleNamespace(
+                value=[SimpleNamespace(city_id=4)], observed_turn=observed_turn
+            )
+
+    execution = CivMutationFactory(Adapter()).assign_governor(
+        operation_id=OperationId("assign-magnus"),
+        governor_type="GOVERNOR_MAGNUS",
+        city_id=4,
+        observed_turn=12,
+    )
+
+    asyncio.run(execution.precheck())
+    evidence = asyncio.run(execution.verify())
+
+    assert execution.intent.tool == execution.request.tool == "assign_governor"
+    assert "ASSIGN_GOVERNOR" in execution.request.lua_code
+    assert evidence.source == "read_governors"
+
+
+def test_promote_governor_requires_eligible_candidate_and_owned_point_delta() -> None:
+    before = SimpleNamespace(
+        points_available=1,
+        appointed=[
+            SimpleNamespace(
+                governor_type="GOVERNOR_MAGNUS",
+                eligible_promotions=[
+                    SimpleNamespace(
+                        promotion_type="GOVERNOR_PROMOTION_SURPLUS_LOGISTICS"
+                    )
+                ],
+                owned_promotions=[],
+            )
+        ],
+    )
+    after = SimpleNamespace(
+        points_available=0,
+        appointed=[
+            SimpleNamespace(
+                governor_type="GOVERNOR_MAGNUS",
+                eligible_promotions=[],
+                owned_promotions=["GOVERNOR_PROMOTION_SURPLUS_LOGISTICS"],
+            )
+        ],
+    )
+
+    class Adapter:
+        calls = 0
+
+        async def read_governors(self, *, observed_turn):
+            self.calls += 1
+            return SimpleNamespace(
+                value=before if self.calls == 1 else after,
+                observed_turn=observed_turn,
+            )
+
+    execution = CivMutationFactory(Adapter()).promote_governor(
+        operation_id=OperationId("promote-magnus"),
+        governor_type="GOVERNOR_MAGNUS",
+        promotion_type="GOVERNOR_PROMOTION_SURPLUS_LOGISTICS",
+        observed_turn=12,
+    )
+
+    asyncio.run(execution.precheck())
+    evidence = asyncio.run(execution.verify())
+
+    assert execution.intent.tool == execution.request.tool == "promote_governor"
+    assert "PROMOTE_GOVERNOR" in execution.request.lua_code
+    assert evidence.source == "read_governors"
+    assert "owns=GOVERNOR_PROMOTION_SURPLUS_LOGISTICS" in evidence.detail
 
 
 def test_unit_promotion_requires_legal_candidate_and_owned_readback() -> None:

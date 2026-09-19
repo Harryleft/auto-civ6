@@ -62,6 +62,7 @@ class ContextBuilder:
             further_queries=(
                 "get_unit_promotions",
                 "get_city_states",
+                "get_governors",
             ),
         )
 
@@ -76,3 +77,8 @@ class ContextBuilder:
         """Read envoy decisions through the context boundary only."""
         overview = await self._adapter.read_overview()
         return await self._adapter.read_city_states(observed_turn=overview.observed_turn)
+
+    async def read_governors(self):
+        """Read governor decisions through the context boundary only."""
+        overview = await self._adapter.read_overview()
+        return await self._adapter.read_governors(observed_turn=overview.observed_turn)

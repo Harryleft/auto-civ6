@@ -198,6 +198,33 @@ def test_city_states_read_exposes_envoy_tokens_and_send_eligibility() -> None:
     assert transport.commands[0].startswith("CMD:153:")
 
 
+def test_governors_read_distinguishes_owned_and_currently_eligible_promotions() -> None:
+    transport = _Transport(
+        _complete(
+            "STATUS|2|1|1",
+            "APPOINTED|GOVERNOR_MAGNUS|Magnus|Steward|4|Paris|1|0",
+            "GOV_OWNED|GOVERNOR_MAGNUS|GOVERNOR_PROMOTION_PROVISION",
+            "GOV_PROMO|GOVERNOR_MAGNUS|GOVERNOR_PROMOTION_SURPLUS_LOGISTICS|Surplus Logistics|Growth|1|0",
+            "GOV_PROMO_CANDIDATE|GOVERNOR_MAGNUS|GOVERNOR_PROMOTION_SURPLUS_LOGISTICS|Surplus Logistics|Growth|1|0",
+            "AVAILABLE|GOVERNOR_PINGALA|Pingala|Educator|Science and culture",
+        )
+    )
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    result = asyncio.run(civ.read_governors(observed_turn=42))
+
+    magnus = result.value.appointed[0]
+    assert result.value.points_available == 1
+    assert magnus.assigned_city_id == 4
+    assert magnus.owned_promotions == ["GOVERNOR_PROMOTION_PROVISION"]
+    assert magnus.eligible_promotions[0].promotion_type == (
+        "GOVERNOR_PROMOTION_SURPLUS_LOGISTICS"
+    )
+    assert result.value.available_to_appoint[0].governor_type == "GOVERNOR_PINGALA"
+    assert result.coverage == "GOVERNORS:COMPLETE;RULESET:EXPANSION_ONLY"
+    assert transport.commands[0].startswith("CMD:153:")
+
+
 def test_great_people_read_exposes_individual_and_local_claim_state() -> None:
     transport = _Transport(
         _complete(

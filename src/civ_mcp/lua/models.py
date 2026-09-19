@@ -1114,6 +1114,8 @@ class AppointedGovernor:
     is_established: bool
     turns_to_establish: int = 0
     available_promotions: list[GovernorPromotion] = field(default_factory=list)
+    eligible_promotions: list[GovernorPromotion] = field(default_factory=list)
+    owned_promotions: list[str] = field(default_factory=list)
 
 
 @dataclass

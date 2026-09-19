@@ -57,9 +57,11 @@
 - 城邦读取返回可用使者及已会面城邦的精确使者数和派遣资格；实验入口仅在目标城邦
   使者数恰好增加一、可用使者数恰好减少一时确认 `send_envoy`，不能以 Lua 的成功文本
   代替领域证据。
+- 总督读取区分已拥有和当前合法的晋升；实验入口仅在任命/晋升后点数恰好减少一，或
+  派驻后同一总督的目标城市 ID 精确匹配时确认操作。
 - `civ_mcp.runtime.server` 是独立的实验 FastMCP 入口，当前仅注册
-  `get_runtime_context`、`get_unit_promotions`、`get_city_states`、`save_handoff`、`move_unit`、`upgrade_unit`、
-  `promote_unit`、`set_city_production`，
+  `get_runtime_context`、`get_unit_promotions`、`get_city_states`、`get_governors`、`save_handoff`、`move_unit`、`upgrade_unit`、
+  `promote_unit`、`send_envoy`、`appoint_governor`、`assign_governor`、`promote_governor`、`set_city_production`，
   `end_turn` 与 `resume_turn_decision`，以及 `set_research`、`set_civic`、
   `choose_pantheon`、`choose_dedication`、`found_city`。`save_handoff` 仅保存当前
   branch 的战略重点、已有安排、理由和改变条件，不能修改游戏事实或 operation record。

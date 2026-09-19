@@ -748,19 +748,197 @@ class CivMutationFactory:
         return self._readback_action(operation_id=operation_id, tool="set_policies", arguments={"assignments": assignments}, lua_code=build_set_policies(assignments), readback=readback)
 
     def appoint_governor(
-        self, *, operation_id: OperationId, governor_type: str, readback: AttackReadback
+        self, *, operation_id: OperationId, governor_type: str, observed_turn: int
     ) -> MutationExecution:
-        return self._readback_action(operation_id=operation_id, tool="appoint_governor", arguments={"governor_type": governor_type}, lua_code=build_appoint_governor(governor_type), readback=readback)
+        """Appoint one currently eligible governor with a point-delta readback."""
+        self._require_gameinfo_type(governor_type, "GOVERNOR_")
+        intent = OperationIntent.create("appoint_governor", {"governor_type": governor_type})
+        baseline_points: int | None = None
+
+        async def precheck() -> None:
+            nonlocal baseline_points
+            try:
+                status = await self._adapter.read_governors(observed_turn=observed_turn)
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取任命总督 baseline。") from exc
+            if not status.value.can_appoint or status.value.points_available <= 0:
+                raise MutationPreconditionError("当前没有可用于任命总督的点数。")
+            if any(
+                governor.governor_type == governor_type
+                for governor in status.value.appointed
+            ):
+                raise MutationPreconditionError("目标总督已经任命，不提交重复任命。")
+            if governor_type not in {
+                governor.governor_type for governor in status.value.available_to_appoint
+            }:
+                raise MutationPreconditionError("目标不是当前可任命的总督。")
+            baseline_points = status.value.points_available
+
+        async def verify() -> Evidence | None:
+            if baseline_points is None:
+                return None
+            try:
+                status = await self._adapter.read_governors(observed_turn=observed_turn)
+            except Exception:
+                return None
+            if (
+                status.value.points_available != baseline_points - 1
+                or not any(
+                    governor.governor_type == governor_type
+                    for governor in status.value.appointed
+                )
+            ):
+                return None
+            return Evidence(
+                "read_governors",
+                status.observed_turn,
+                f"governor_type={governor_type} appointed; points {baseline_points}->{status.value.points_available}",
+            )
+
+        return MutationExecution(
+            intent=intent,
+            request=CivMutationRequest(
+                "appoint_governor", build_appoint_governor(governor_type)
+            ),
+            verify=verify,
+            operation_id=operation_id,
+            precheck=precheck,
+        )
 
     def assign_governor(
-        self, *, operation_id: OperationId, governor_type: str, city_id: int, readback: AttackReadback
+        self,
+        *,
+        operation_id: OperationId,
+        governor_type: str,
+        city_id: int,
+        observed_turn: int,
     ) -> MutationExecution:
-        return self._readback_action(operation_id=operation_id, tool="assign_governor", arguments={"governor_type": governor_type, "city_id": city_id}, lua_code=build_assign_governor(governor_type, city_id), readback=readback)
+        """Assign an appointed governor to one current local city."""
+        self._require_gameinfo_type(governor_type, "GOVERNOR_")
+        intent = OperationIntent.create(
+            "assign_governor", {"governor_type": governor_type, "city_id": city_id}
+        )
+
+        async def precheck() -> None:
+            try:
+                status = await self._adapter.read_governors(observed_turn=observed_turn)
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取派驻总督 baseline。") from exc
+            matches = [
+                governor
+                for governor in status.value.appointed
+                if governor.governor_type == governor_type
+            ]
+            if len(matches) != 1:
+                raise MutationPreconditionError("目标总督当前未任命或 identity 不唯一。")
+            if matches[0].assigned_city_id == city_id:
+                raise MutationPreconditionError("目标总督已派驻在该城市，不提交重复派驻。")
+            try:
+                cities = await self._adapter.read_cities(observed_turn=observed_turn)
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取派驻目标城市 baseline。") from exc
+            if not any(city.city_id == city_id for city in cities.value):
+                raise MutationPreconditionError("目标不是当前本地城市，不提交派驻。")
+
+        async def verify() -> Evidence | None:
+            try:
+                status = await self._adapter.read_governors(observed_turn=observed_turn)
+            except Exception:
+                return None
+            if not any(
+                governor.governor_type == governor_type
+                and governor.assigned_city_id == city_id
+                for governor in status.value.appointed
+            ):
+                return None
+            return Evidence(
+                "read_governors",
+                status.observed_turn,
+                f"governor_type={governor_type} assigned_city_id={city_id}",
+            )
+
+        return MutationExecution(
+            intent=intent,
+            request=CivMutationRequest(
+                "assign_governor", build_assign_governor(governor_type, city_id)
+            ),
+            verify=verify,
+            operation_id=operation_id,
+            precheck=precheck,
+        )
 
     def promote_governor(
-        self, *, operation_id: OperationId, governor_type: str, promotion_type: str, readback: AttackReadback
+        self,
+        *,
+        operation_id: OperationId,
+        governor_type: str,
+        promotion_type: str,
+        observed_turn: int,
     ) -> MutationExecution:
-        return self._readback_action(operation_id=operation_id, tool="promote_governor", arguments={"governor_type": governor_type, "promotion_type": promotion_type}, lua_code=build_promote_governor(governor_type, promotion_type), readback=readback)
+        """Promote one currently legal governor choice with a point-delta readback."""
+        self._require_gameinfo_type(governor_type, "GOVERNOR_")
+        self._require_gameinfo_type(promotion_type, "GOVERNOR_PROMOTION_")
+        intent = OperationIntent.create(
+            "promote_governor",
+            {"governor_type": governor_type, "promotion_type": promotion_type},
+        )
+        baseline_points: int | None = None
+
+        async def precheck() -> None:
+            nonlocal baseline_points
+            try:
+                status = await self._adapter.read_governors(observed_turn=observed_turn)
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取总督晋升 baseline。") from exc
+            matches = [
+                governor
+                for governor in status.value.appointed
+                if governor.governor_type == governor_type
+            ]
+            if len(matches) != 1:
+                raise MutationPreconditionError("目标总督当前未任命或 identity 不唯一。")
+            if promotion_type not in {
+                promotion.promotion_type for promotion in matches[0].eligible_promotions
+            }:
+                raise MutationPreconditionError("目标不是当前可选的总督晋升。")
+            baseline_points = status.value.points_available
+
+        async def verify() -> Evidence | None:
+            if baseline_points is None:
+                return None
+            try:
+                status = await self._adapter.read_governors(observed_turn=observed_turn)
+            except Exception:
+                return None
+            matches = [
+                governor
+                for governor in status.value.appointed
+                if governor.governor_type == governor_type
+            ]
+            if (
+                len(matches) != 1
+                or status.value.points_available != baseline_points - 1
+                or promotion_type not in matches[0].owned_promotions
+            ):
+                return None
+            return Evidence(
+                "read_governors",
+                status.observed_turn,
+                (
+                    f"governor_type={governor_type} owns={promotion_type}; points "
+                    f"{baseline_points}->{status.value.points_available}"
+                ),
+            )
+
+        return MutationExecution(
+            intent=intent,
+            request=CivMutationRequest(
+                "promote_governor", build_promote_governor(governor_type, promotion_type)
+            ),
+            verify=verify,
+            operation_id=operation_id,
+            precheck=precheck,
+        )
 
     def promote_unit(
         self, *, operation_id: OperationId, unit_index: int, promotion_type: str, observed_turn: int

@@ -51,3 +51,17 @@ def test_surface_reads_city_states_only_through_context() -> None:
     )
 
     assert asyncio.run(surface.get_city_states()) is expected
+
+
+def test_surface_reads_governors_only_through_context() -> None:
+    expected = SimpleNamespace(points_available=1)
+
+    class Context:
+        async def read_governors(self):
+            return expected
+
+    surface = RuntimeMcpSurface(
+        context=Context(), session=SimpleNamespace(), turn_loop=SimpleNamespace()
+    )
+
+    assert asyncio.run(surface.get_governors()) is expected

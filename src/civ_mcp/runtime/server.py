@@ -105,6 +105,12 @@ async def get_city_states(ctx: Context) -> dict[str, object]:
     return _json_value(await _runtime(ctx).assembly.surface.get_city_states())
 
 
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_governors(ctx: Context) -> dict[str, object]:
+    """Return current governor appointment, placement, and legal promotion facts."""
+    return _json_value(await _runtime(ctx).assembly.surface.get_governors())
+
+
 @mcp.tool()
 async def save_handoff(
     ctx: Context,
@@ -196,6 +202,64 @@ async def send_envoy(
     execution = assembly.mutations.send_envoy(
         operation_id=OperationId(operation_id),
         city_state_player_id=city_state_player_id,
+        observed_turn=decision_turn,
+    )
+    return _operation_payload(
+        await assembly.surface.execute_mutation(execution, decision_turn=decision_turn)
+    )
+
+
+@mcp.tool()
+async def appoint_governor(
+    ctx: Context, operation_id: str, governor_type: str, decision_turn: int
+) -> dict[str, object]:
+    """Appoint one legal governor; confirmation requires the governor and point delta."""
+    assembly = _runtime(ctx).assembly
+    execution = assembly.mutations.appoint_governor(
+        operation_id=OperationId(operation_id),
+        governor_type=governor_type,
+        observed_turn=decision_turn,
+    )
+    return _operation_payload(
+        await assembly.surface.execute_mutation(execution, decision_turn=decision_turn)
+    )
+
+
+@mcp.tool()
+async def assign_governor(
+    ctx: Context,
+    operation_id: str,
+    governor_type: str,
+    city_id: int,
+    decision_turn: int,
+) -> dict[str, object]:
+    """Assign one appointed governor; confirmation requires its target city ID."""
+    assembly = _runtime(ctx).assembly
+    execution = assembly.mutations.assign_governor(
+        operation_id=OperationId(operation_id),
+        governor_type=governor_type,
+        city_id=city_id,
+        observed_turn=decision_turn,
+    )
+    return _operation_payload(
+        await assembly.surface.execute_mutation(execution, decision_turn=decision_turn)
+    )
+
+
+@mcp.tool()
+async def promote_governor(
+    ctx: Context,
+    operation_id: str,
+    governor_type: str,
+    promotion_type: str,
+    decision_turn: int,
+) -> dict[str, object]:
+    """Promote one legal governor choice; proof requires ownership and point delta."""
+    assembly = _runtime(ctx).assembly
+    execution = assembly.mutations.promote_governor(
+        operation_id=OperationId(operation_id),
+        governor_type=governor_type,
+        promotion_type=promotion_type,
         observed_turn=decision_turn,
     )
     return _operation_payload(
