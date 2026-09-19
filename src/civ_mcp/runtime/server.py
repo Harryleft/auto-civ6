@@ -134,6 +134,22 @@ async def move_unit(
 
 
 @mcp.tool()
+async def upgrade_unit(
+    ctx: Context, operation_id: str, unit_index: int, decision_turn: int
+) -> dict[str, object]:
+    """Upgrade one eligible unit; confirmation requires its target UNIT_* type."""
+    assembly = _runtime(ctx).assembly
+    execution = assembly.mutations.upgrade_unit(
+        operation_id=OperationId(operation_id),
+        unit_index=unit_index,
+        observed_turn=decision_turn,
+    )
+    return _operation_payload(
+        await assembly.surface.execute_mutation(execution, decision_turn=decision_turn)
+    )
+
+
+@mcp.tool()
 async def set_city_production(
     ctx: Context,
     operation_id: str,

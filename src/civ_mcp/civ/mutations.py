@@ -768,15 +768,50 @@ class CivMutationFactory:
         return self._readback_action(operation_id=operation_id, tool="promote_unit", arguments={"unit_index": unit_index, "promotion_type": promotion_type}, lua_code=build_promote_unit(unit_index, promotion_type), readback=readback, context="gamecore")
 
     def upgrade_unit(
-        self, *, operation_id: OperationId, unit_index: int, readback: AttackReadback
+        self, *, operation_id: OperationId, unit_index: int, observed_turn: int
     ) -> MutationExecution:
-        """Upgrade through the game command; never trust its acknowledgement alone."""
-        return self._readback_action(
+        """Upgrade one eligible unit, confirmed by its observed target type."""
+        intent = OperationIntent.create("upgrade_unit", {"unit_index": unit_index})
+        expected_type: str | None = None
+
+        async def precheck() -> None:
+            nonlocal expected_type
+            try:
+                units = await self._adapter.read_units(observed_turn=observed_turn)
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取单位升级 baseline。") from exc
+            matches = [unit for unit in units.value if unit.unit_index == unit_index]
+            if len(matches) != 1:
+                raise MutationPreconditionError("升级前找不到唯一目标单位。")
+            unit = matches[0]
+            if not unit.can_upgrade or not unit.upgrade_target:
+                raise MutationPreconditionError("目标单位当前不可升级，不提交操作。")
+            expected_type = unit.upgrade_target
+
+        async def verify() -> Evidence | None:
+            if expected_type is None:
+                return None
+            try:
+                units = await self._adapter.read_units(observed_turn=observed_turn)
+            except Exception:
+                return None
+            if not any(
+                unit.unit_index == unit_index and unit.unit_type == expected_type
+                for unit in units.value
+            ):
+                return None
+            return Evidence(
+                "read_units",
+                units.observed_turn,
+                f"unit_index={unit_index} upgraded_to={expected_type}",
+            )
+
+        return MutationExecution(
+            intent=intent,
+            request=CivMutationRequest("upgrade_unit", build_upgrade_unit(unit_index)),
+            verify=verify,
             operation_id=operation_id,
-            tool="upgrade_unit",
-            arguments={"unit_index": unit_index},
-            lua_code=build_upgrade_unit(unit_index),
-            readback=readback,
+            precheck=precheck,
         )
 
     def send_envoy(
