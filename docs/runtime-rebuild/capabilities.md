@@ -1,11 +1,11 @@
-# 实验 Runtime Surface 能力清单
+# Runtime Surface 能力清单
 
 本清单是 `civ_mcp.runtime.server` 的唯一能力声明。**未在“已支持”中逐项
-列出的任何能力均为 unsupported**；模型不得从旧 `civ-mcp` 的工具名、旧文档或
-`CivMutationFactory` 中推断实验入口也支持该能力。
+列出的任何能力均为 unsupported**；模型不得从旧 server 的工具名、旧文档或
+`CivMutationFactory` 中推断 Runtime 入口也支持该能力。
 
-它描述的是当前隔离实验入口，不代表正式 `civ-mcp`。正式切换仍须满足 K1 的真实
-单机 smoke 与 recovery 验收。
+它描述正式 `civ-mcp` 入口的隔离 Runtime surface。K1 的真实单机 smoke 与 recovery
+验收已记录；K2--K4 的旧链删除仍须满足完整对局验证等后续前置条件。
 
 ## 已支持
 

@@ -1,9 +1,8 @@
-"""Experimental FastMCP entry point for the isolated Runtime Core.
+"""FastMCP entry point for the isolated Runtime Core.
 
-This is intentionally separate from the production ``civ-mcp`` command until
-the K1 live-game and recovery gates are met.  Its tools call RuntimeAssembly
-only; neither a model-visible tool nor this module's normal tool path reaches
-the FireTuner transport directly.
+``civ-mcp`` resolves here after K1. Its tools call ``RuntimeAssembly`` only;
+neither a model-visible tool nor this module's normal tool path reaches the
+FireTuner transport directly.
 """
 
 from __future__ import annotations
@@ -781,7 +780,7 @@ def _json_value(value: Any) -> Any:
 
 
 def main() -> None:
-    """Run the experimental server over stdio; it is not the civ-mcp default."""
+    """Run the formal Runtime Core server over stdio."""
     mcp.run(transport="stdio")
 
 
