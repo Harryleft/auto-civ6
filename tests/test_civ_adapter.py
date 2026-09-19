@@ -297,6 +297,35 @@ def test_religion_overview_missing_primary_row_is_not_an_empty_fact() -> None:
         asyncio.run(civ.read_religion_overview(observed_turn=42))
 
 
+def test_barbarian_overview_preserves_fog_limited_live_facts() -> None:
+    transport = _Transport(
+        _complete(
+            "BARB_CAMP|12,24|revealed|6|3",
+            "BARB_UNIT|42|UNIT_WARRIOR|13,25|80/100|20|0|7|2",
+        )
+    )
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    barbarians = asyncio.run(civ.read_barbarian_overview(observed_turn=42))
+
+    assert barbarians.value.camps[0].visibility == "revealed"
+    assert barbarians.value.units[0].unit_type == "UNIT_WARRIOR"
+    assert barbarians.coverage == (
+        "BARBARIAN_CAMPS:REVEALED;BARBARIAN_UNITS:CURRENTLY_VISIBLE"
+    )
+    assert transport.commands[0].startswith("CMD:8:")
+
+
+def test_barbarian_overview_allows_an_empty_fog_limited_snapshot() -> None:
+    transport = _Transport(_complete())
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    barbarians = asyncio.run(civ.read_barbarian_overview(observed_turn=42))
+
+    assert barbarians.value.camps == []
+    assert barbarians.value.units == []
+
+
 def test_city_purchase_candidate_error_is_not_coerced_to_an_empty_result() -> None:
     transport = _Transport(_complete("ERR:CITY_NOT_FOUND"))
     civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
