@@ -94,6 +94,7 @@ class ContextBuilder:
                 "get_trade_destinations",
                 "get_trade_routes",
                 "get_world_congress",
+                "get_climate_overview",
             ),
         )
 
@@ -206,3 +207,8 @@ class ContextBuilder:
         """Read current World Congress facts without submitting a vote."""
         overview = await self._adapter.read_overview()
         return await self._adapter.read_world_congress(observed_turn=overview.observed_turn)
+
+    async def read_climate_overview(self):
+        """Read Gathering Storm climate facts without changing the world state."""
+        overview = await self._adapter.read_overview()
+        return await self._adapter.read_climate_overview(observed_turn=overview.observed_turn)

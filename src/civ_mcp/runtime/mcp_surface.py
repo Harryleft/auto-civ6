@@ -94,6 +94,10 @@ class RuntimeMcpSurface:
         """Return current World Congress facts without exposing a vote operation."""
         return await self._context.read_world_congress()
 
+    async def get_climate_overview(self):
+        """Return current climate facts without exposing any game mutation."""
+        return await self._context.read_climate_overview()
+
     def save_handoff(
         self,
         *,
