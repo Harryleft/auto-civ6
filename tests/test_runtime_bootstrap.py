@@ -141,6 +141,7 @@ def test_bootstrap_resumes_a_diplomacy_interrupt_without_sending_a_second_end_tu
             self.game = GameIdentity("civilization_france_42")
             self.overview_calls = 0
             self.session_calls = 0
+            self.city_state_calls = 0
             self.submissions: list[str] = []
 
         async def read_game_identity(self):
@@ -155,6 +156,26 @@ def test_bootstrap_resumes_a_diplomacy_interrupt_without_sending_a_second_end_tu
             self.session_calls += 1
             session = initial_session if self.session_calls < 3 else advanced_session
             return SimpleNamespace(value=[session], observed_turn=observed_turn)
+
+        async def read_city_states(self, *, observed_turn):
+            self.city_state_calls += 1
+            return SimpleNamespace(
+                value=SimpleNamespace(
+                    tokens_available=1,
+                    city_states=[
+                        SimpleNamespace(
+                            player_id=3,
+                            name="Auckland",
+                            city_state_type="Trade",
+                            envoys_sent=0,
+                            can_send_envoy=True,
+                            suzerain_id=-1,
+                            leading_envoys=0,
+                        )
+                    ],
+                ),
+                observed_turn=observed_turn,
+            )
 
         async def submit(self, request):
             self.submissions.append(request.tool)
@@ -187,6 +208,7 @@ def test_bootstrap_resumes_a_diplomacy_interrupt_without_sending_a_second_end_tu
         assert resumed.outcome is TurnOutcome.ADVANCED
         assert resumed.operation.outcome_state is OutcomeState.CONFIRMED
         assert adapter.submissions == ["end_turn", "respond_to_diplomacy"]
+        assert adapter.city_state_calls == 0
 
     asyncio.run(run())
 
@@ -321,6 +343,9 @@ def test_bootstrap_resumes_an_envoy_interrupt_without_a_second_end_turn(tmp_path
                 value=before if self.city_state_calls < 3 else after,
                 observed_turn=observed_turn,
             )
+
+        async def read_diplomacy_sessions(self, *, observed_turn):
+            return SimpleNamespace(value=[], observed_turn=observed_turn)
 
         async def submit(self, request):
             self.submissions.append(request.tool)

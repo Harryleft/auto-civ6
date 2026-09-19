@@ -182,82 +182,79 @@ async def assemble_runtime(
 
             return TurnObservation(interrupt=interrupt, continuation=capture_continuation)
         try:
-            envoy_status = await adapter.read_city_states(
-                observed_turn=overview.value.turn
-            )
-        except Exception:
-            envoy_status = None
-        if envoy_status is not None and envoy_status.value.tokens_available > 0:
-            eligible_city_states = tuple(
-                city_state
-                for city_state in envoy_status.value.city_states
-                if city_state.can_send_envoy
-            )
-            if eligible_city_states:
-                choices = tuple(
-                    str(city_state.player_id) for city_state in eligible_city_states
-                )
-                interrupt = DecisionInterrupt(
-                    decision_type="ENVOY",
-                    facts={
-                        "tokens_available": envoy_status.value.tokens_available,
-                        "city_states": [
-                            {
-                                "player_id": city_state.player_id,
-                                "name": city_state.name,
-                                "city_state_type": city_state.city_state_type,
-                                "envoys_sent": city_state.envoys_sent,
-                                "suzerain_id": city_state.suzerain_id,
-                                "leading_envoys": city_state.leading_envoys,
-                            }
-                            for city_state in eligible_city_states
-                        ],
-                    },
-                    allowed_choices=choices,
-                    continuation_operation_id=operation.operation_id,
-                )
-
-                async def envoy_continuation(choice: str) -> TurnResult:
-                    return await continue_envoy(operation, int(choice))
-
-                return TurnObservation(
-                    interrupt=interrupt, continuation=envoy_continuation
-                )
-        try:
             sessions = await adapter.read_diplomacy_sessions(
                 observed_turn=overview.value.turn
             )
         except Exception:
             return TurnObservation()
-        if not sessions.value:
+        if sessions.value:
+            active = sessions.value[0]
+            allowed_choices = (
+                ("EXIT",)
+                if "GOODBYE" in active.buttons.split(";")
+                else ("POSITIVE", "NEGATIVE")
+            )
+            interrupt = DecisionInterrupt(
+                decision_type="DIPLOMACY",
+                facts={
+                    "session_id": active.session_id,
+                    "other_player_id": active.other_player_id,
+                    "civilization": active.other_civ_name,
+                    "leader": active.other_leader_name,
+                    "dialogue": active.dialogue_text,
+                    "reason": active.reason_text,
+                    "visible_buttons": active.buttons,
+                    "deal_summary": active.deal_summary,
+                    "is_at_war": active.is_at_war,
+                },
+                allowed_choices=allowed_choices,
+                continuation_operation_id=operation.operation_id,
+            )
+
+            async def continuation(choice: str) -> TurnResult:
+                return await continue_diplomacy(operation, active.other_player_id, choice)
+
+            return TurnObservation(interrupt=interrupt, continuation=continuation)
+        try:
+            envoy_status = await adapter.read_city_states(
+                observed_turn=overview.value.turn
+            )
+        except Exception:
             return TurnObservation()
-        active = sessions.value[0]
-        allowed_choices = (
-            ("EXIT",)
-            if "GOODBYE" in active.buttons.split(";")
-            else ("POSITIVE", "NEGATIVE")
+        if envoy_status.value.tokens_available <= 0:
+            return TurnObservation()
+        eligible_city_states = tuple(
+            city_state
+            for city_state in envoy_status.value.city_states
+            if city_state.can_send_envoy
         )
+        if not eligible_city_states:
+            return TurnObservation()
+        choices = tuple(str(city_state.player_id) for city_state in eligible_city_states)
         interrupt = DecisionInterrupt(
-            decision_type="DIPLOMACY",
+            decision_type="ENVOY",
             facts={
-                "session_id": active.session_id,
-                "other_player_id": active.other_player_id,
-                "civilization": active.other_civ_name,
-                "leader": active.other_leader_name,
-                "dialogue": active.dialogue_text,
-                "reason": active.reason_text,
-                "visible_buttons": active.buttons,
-                "deal_summary": active.deal_summary,
-                "is_at_war": active.is_at_war,
+                "tokens_available": envoy_status.value.tokens_available,
+                "city_states": [
+                    {
+                        "player_id": city_state.player_id,
+                        "name": city_state.name,
+                        "city_state_type": city_state.city_state_type,
+                        "envoys_sent": city_state.envoys_sent,
+                        "suzerain_id": city_state.suzerain_id,
+                        "leading_envoys": city_state.leading_envoys,
+                    }
+                    for city_state in eligible_city_states
+                ],
             },
-            allowed_choices=allowed_choices,
+            allowed_choices=choices,
             continuation_operation_id=operation.operation_id,
         )
 
-        async def continuation(choice: str) -> TurnResult:
-            return await continue_diplomacy(operation, active.other_player_id, choice)
+        async def envoy_continuation(choice: str) -> TurnResult:
+            return await continue_envoy(operation, int(choice))
 
-        return TurnObservation(interrupt=interrupt, continuation=continuation)
+        return TurnObservation(interrupt=interrupt, continuation=envoy_continuation)
 
     context = ContextBuilder(adapter, session)
     turn_loop = TurnLoop(session, observer=observe_turn)
