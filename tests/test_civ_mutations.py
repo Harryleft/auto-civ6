@@ -80,6 +80,41 @@ def test_production_requires_city_queue_readback() -> None:
     assert asyncio.run(execution.verify()).source == "read_cities"
 
 
+def test_founding_requires_a_new_city_at_the_observed_settler_tile() -> None:
+    class Adapter:
+        async def read_cities(self, *, observed_turn):
+            city = SimpleNamespace(city_id=8, x=5, y=7)
+            return SimpleNamespace(value=[city], observed_turn=observed_turn)
+
+    execution = CivMutationFactory(Adapter()).found_city(
+        operation_id=OperationId("found-city-1"),
+        unit_index=2,
+        target_x=5,
+        target_y=7,
+        observed_turn=12,
+        known_city_ids=frozenset({4}),
+    )
+    assert execution.intent.tool == execution.request.tool == "found_city"
+    assert asyncio.run(execution.verify()).source == "read_cities"
+
+
+def test_founding_does_not_confirm_an_already_known_city() -> None:
+    class Adapter:
+        async def read_cities(self, *, observed_turn):
+            city = SimpleNamespace(city_id=4, x=5, y=7)
+            return SimpleNamespace(value=[city], observed_turn=observed_turn)
+
+    execution = CivMutationFactory(Adapter()).found_city(
+        operation_id=OperationId("found-city-known"),
+        unit_index=2,
+        target_x=5,
+        target_y=7,
+        observed_turn=12,
+        known_city_ids=frozenset({4}),
+    )
+    assert asyncio.run(execution.verify()) is None
+
+
 def test_purchase_requires_gold_change_and_new_unit() -> None:
     class Adapter:
         async def read_overview(self):
@@ -140,6 +175,27 @@ def test_builder_mutations_are_hash_bound_and_need_tile_readback() -> None:
     assert "REMOVE_FEATURE" in harvest.request.lua_code
     assert "BUILD_ROUTE" in route.request.lua_code
     assert asyncio.run(route.verify()).source == "read_map"
+
+
+def test_city_controls_require_their_own_domain_readback() -> None:
+    class Adapter:
+        pass
+
+    async def readback() -> Evidence:
+        return Evidence("read_map", 12, "city ownership/focus state observed")
+
+    factory = CivMutationFactory(Adapter())
+    tile = factory.purchase_tile(
+        operation_id=OperationId("tile-1"), city_id=4, x=5, y=7, readback=readback
+    )
+    focus = factory.set_city_focus(
+        operation_id=OperationId("focus-1"), city_id=4, focus="production", readback=readback
+    )
+    assert tile.intent.tool == "purchase_tile"
+    assert focus.intent.tool == "set_city_focus"
+    assert "PURCHASE" in tile.request.lua_code
+    assert "SET_FOCUS" in focus.request.lua_code
+    assert asyncio.run(focus.verify()).source == "read_map"
 
 
 def test_trade_proposal_preserves_the_exact_hash_bound_terms() -> None:
