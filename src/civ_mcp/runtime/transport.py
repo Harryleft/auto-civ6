@@ -107,6 +107,10 @@ class FireTunerTransport:
     def is_usable(self) -> bool:
         return not self._retired and not self._writer.is_closing()
 
+    async def close(self) -> None:
+        """Retire the owned stream during Runtime shutdown."""
+        await self._retire()
+
     async def submit_command(
         self,
         payload: str,

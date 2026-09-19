@@ -75,6 +75,20 @@ def test_cities_read_is_bound_to_the_ingame_domain_context() -> None:
     assert transport.commands[0].startswith("CMD:153:")
 
 
+def test_adapter_can_resolve_lua_state_when_a_new_runtime_connection_refreshes_it() -> None:
+    transport = _Transport(_complete())
+    indexes = {"gamecore": 8, "ingame": 153}
+    civ = adapter.CivAdapter(transport, state_resolver=indexes.__getitem__)
+
+    asyncio.run(civ.read_cities(observed_turn=42))
+    indexes["ingame"] = 154
+    asyncio.run(civ.read_cities(observed_turn=43))
+
+    assert len(transport.commands) == 2
+    assert transport.commands[0].startswith("CMD:153:")
+    assert transport.commands[1].startswith("CMD:154:")
+
+
 def test_incomplete_query_is_not_converted_to_an_empty_domain_result() -> None:
     transport = _Transport(
         TransportReceipt(
