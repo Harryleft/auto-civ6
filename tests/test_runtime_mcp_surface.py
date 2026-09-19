@@ -269,3 +269,17 @@ def test_surface_reads_spies_only_through_context() -> None:
     )
 
     assert asyncio.run(surface.get_spies()) is expected
+
+
+def test_surface_reads_religion_overview_only_through_context() -> None:
+    expected = SimpleNamespace(religions_founded=2, faith_balance=123.0)
+
+    class Context:
+        async def read_religion_overview(self):
+            return expected
+
+    surface = RuntimeMcpSurface(
+        context=Context(), session=SimpleNamespace(), turn_loop=SimpleNamespace()
+    )
+
+    assert asyncio.run(surface.get_religion_overview()) is expected

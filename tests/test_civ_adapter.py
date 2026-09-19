@@ -270,6 +270,33 @@ def test_spies_are_typed_live_ingame_facts_without_starting_a_mission() -> None:
     assert transport.commands[0].startswith("CMD:153:")
 
 
+def test_religion_overview_is_a_typed_live_ingame_fact() -> None:
+    transport = _Transport(
+        _complete(
+            "SELF|0|412.0|18.0|RELIGION_CATHOLICISM|RELIGION_CATHOLICISM|BELIEF_RELIGIOUS_IDOLS|-1|2|6",
+            "WREL|1|RELIGION_CATHOLICISM|Catholicism|1|France|Paris|BELIEF_GOD_KING|BELIEF_TITHE",
+            "RSPAN|RELIGION_CATHOLICISM|24|310",
+            "PSTATE|0|Rome|RELIGION_CATHOLICISM|Catholicism|RELIGION_CATHOLICISM|BELIEF_RELIGIOUS_IDOLS",
+        )
+    )
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    religion = asyncio.run(civ.read_religion_overview(observed_turn=42))
+
+    assert religion.value.religions[0].holy_city_name == "Paris"
+    assert religion.value.followers == [("RELIGION_CATHOLICISM", 24, 310)]
+    assert religion.coverage == "RELIGION_OVERVIEW:COMPLETE"
+    assert transport.commands[0].startswith("CMD:153:")
+
+
+def test_religion_overview_missing_primary_row_is_not_an_empty_fact() -> None:
+    transport = _Transport(_complete("WREL|1|RELIGION_CATHOLICISM|Catholicism|1|France|Paris|None|"))
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    with pytest.raises(adapter.CivReadError, match="missing SELF row"):
+        asyncio.run(civ.read_religion_overview(observed_turn=42))
+
+
 def test_city_purchase_candidate_error_is_not_coerced_to_an_empty_result() -> None:
     transport = _Transport(_complete("ERR:CITY_NOT_FOUND"))
     civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)

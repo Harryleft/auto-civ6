@@ -66,6 +66,9 @@
   风险与近期事件；非 Gathering Storm 规则集明确失败，不会被伪装成空事实或成功。
 - `get_spies` 已迁入实验 surface，返回特工位置、状态和此刻合法的任务；旅行、执行任务和
   逃脱路线仍未迁移，不能由此读取工具触发。
+- `get_religion_overview` 已迁入实验 surface，返回已创宗教、信徒聚合、已见面大文明的
+  宗教/万神殿状态以及己方信仰收支；缺少主记录会明确失败，创教、信条选择、传播和增强
+  宗教仍未迁移。
 - 已通过实验入口暴露的 mutation 仅限 [`capabilities.md`](capabilities.md) 表中列出的
   项目，并各自有 precheck 与领域 Evidence。`CivMutationFactory` 内未由该入口注册的
   旧构造函数不是 Runtime 支持能力，不能据此推断宗教、间谍、奇观或世界议会投票已迁移。

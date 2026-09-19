@@ -102,6 +102,10 @@ class RuntimeMcpSurface:
         """Return current spy facts without exposing a spy operation."""
         return await self._context.read_spies()
 
+    async def get_religion_overview(self):
+        """Return world religion facts without exposing a religion operation."""
+        return await self._context.read_religion_overview()
+
     def save_handoff(
         self,
         *,
