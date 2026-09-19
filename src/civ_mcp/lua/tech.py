@@ -100,7 +100,9 @@ local techTurns = -1
 local techType = ""
 if techIdx >= 0 then
     techName = Locale.Lookup(GameInfo.Technologies[techIdx].Name)
-    techTurns = te:GetTurnsToResearch(techIdx)
+    -- ETA helpers are absent in some game builds; -1 remains the protocol's
+    -- explicit unknown value rather than aborting the whole research snapshot.
+    pcall(function() techTurns = te:GetTurnsToResearch(techIdx) end)
     techType = GameInfo.Technologies[techIdx].TechnologyType or ""
 end
 local civicName = "None"
@@ -108,7 +110,7 @@ local civicTurns = -1
 local civicType = ""
 if civicIdx >= 0 then
     civicName = Locale.Lookup(GameInfo.Civics[civicIdx].Name)
-    civicTurns = cu:GetTurnsLeftOnCurrentCivic()
+    pcall(function() civicTurns = cu:GetTurnsLeftOnCurrentCivic() end)
     civicType = GameInfo.Civics[civicIdx].CivicType or ""
 end
 print("CURRENT|" .. techName .. "|" .. techTurns .. "|" .. civicName .. "|" .. civicTurns .. "|" .. techType .. "|" .. civicType)

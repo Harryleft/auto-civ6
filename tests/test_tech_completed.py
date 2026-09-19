@@ -51,6 +51,13 @@ def test_query_emits_each_completed_technology_name() -> None:
     assert 'print("COMPLETED_TECH|" .. Locale.Lookup(tech.Name)' in query
 
 
+def test_query_keeps_missing_eta_helpers_as_explicit_unknowns() -> None:
+    query = build_tech_civics_query()
+
+    assert "pcall(function() techTurns = te:GetTurnsToResearch(techIdx) end)" in query
+    assert "pcall(function() civicTurns = cu:GetTurnsLeftOnCurrentCivic() end)" in query
+
+
 def test_query_emits_completed_civics_unlocks_and_remaining_cost_eta() -> None:
     query = build_tech_civics_query()
 
