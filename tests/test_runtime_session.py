@@ -334,6 +334,43 @@ def test_mutation_is_confirmed_only_by_domain_readback(tmp_path) -> None:
     asyncio.run(run())
 
 
+def test_evidence_from_a_game_loaded_during_readback_cannot_confirm_old_operation(tmp_path) -> None:
+    async def run() -> None:
+        current = GameIdentity("game-a")
+
+        async def probe() -> GameIdentity:
+            return current
+
+        class MutationAdapter(_Adapter):
+            async def submit(self, _request):
+                return TransportReceipt(SendState.MAYBE_SENT, True, (), True)
+
+        store = OperationStore(tmp_path / "operations.sqlite3")
+        kernel = SessionKernel(
+            MutationAdapter(), store, identity_probe=probe, turn_probe=lambda: _turn(10)
+        )
+        await kernel.bind(current, BranchIdentity(current, "main"))
+
+        async def verify() -> Evidence:
+            nonlocal current
+            current = GameIdentity("game-b")
+            return Evidence("read_units", 10, "a matching unit exists in the loaded game")
+
+        record = await kernel.execute(
+            MutationExecution(
+                OperationIntent.create("move_unit", {"unit_id": 1}),
+                CivMutationRequest("move_unit", "move()"),
+                verify,
+                OperationId("cross-game-readback"),
+            ),
+            decision_turn=10,
+        )
+        assert record.outcome_state is OutcomeState.UNKNOWN
+        assert store.get_operation(record.operation_id).evidence == ()
+
+    asyncio.run(run())
+
+
 def test_handoff_can_change_strategy_without_changing_operation_facts(tmp_path) -> None:
     async def run() -> None:
         game = GameIdentity("game-a")
