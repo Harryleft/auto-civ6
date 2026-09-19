@@ -22,6 +22,7 @@ from civ_mcp.lua.cities import (
     parse_city_purchase_response,
     parse_pending_city_capture_response,
 )
+from civ_mcp.lua.climate import build_climate_overview_query, parse_climate_response
 from civ_mcp.lua.congress import build_world_congress_query, parse_world_congress_response
 from civ_mcp.lua.diplomacy import (
     build_diplomacy_query,
@@ -57,6 +58,7 @@ from civ_mcp.lua.great_people import build_great_people_query, parse_great_peopl
 from civ_mcp.lua.models import (
     CityCaptureState,
     CityInfo,
+    ClimateOverview,
     CivInfo,
     CombatTarget,
     BuilderImprovementCandidate,
@@ -496,6 +498,21 @@ class CivAdapter:
                 lua_code=build_world_congress_query(),
                 decode=lambda lines: parse_world_congress_response(list(lines)),
                 coverage="WORLD_CONGRESS:COMPLETE",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
+    async def read_climate_overview(
+        self, *, observed_turn: int
+    ) -> CivReadResult[ClimateOverview]:
+        """Read Gathering Storm climate facts without changing the world state."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_climate_overview",
+                lua_code=build_climate_overview_query(),
+                decode=lambda lines: parse_climate_response(list(lines)),
+                coverage="CLIMATE:COMPLETE",
                 context="ingame",
             ),
             observed_turn=observed_turn,

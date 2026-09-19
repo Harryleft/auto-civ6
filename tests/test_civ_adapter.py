@@ -231,6 +231,31 @@ def test_world_congress_is_a_typed_live_ingame_fact() -> None:
     assert congress.coverage == "WORLD_CONGRESS:COMPLETE"
 
 
+def test_climate_is_a_typed_live_ingame_fact() -> None:
+    transport = _Transport(
+        _complete(
+            "CLIMATE|4|Phase IV|31.0|3.0|28.0|28.0|5|-1|12|4|1.4|410.0|60.0|55.0|0.0|Heavy",
+            "CLIMATE_RISK|22.0|10.0|15.0|6.0|30.0|12.0|5.0|18|6|4|2|3.0",
+        )
+    )
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    climate = asyncio.run(civ.read_climate_overview(observed_turn=42))
+
+    assert climate.value.phase == 4
+    assert climate.value.co2_total == 410.0
+    assert climate.coverage == "CLIMATE:COMPLETE"
+    assert transport.commands[0].startswith("CMD:153:")
+
+
+def test_climate_ruleset_error_is_not_coerced_to_an_empty_fact() -> None:
+    transport = _Transport(_complete("ERR:NO_CLIMATE_IN_RULESET"))
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    with pytest.raises(ValueError, match="climate query"):
+        asyncio.run(civ.read_climate_overview(observed_turn=42))
+
+
 def test_city_purchase_candidate_error_is_not_coerced_to_an_empty_result() -> None:
     transport = _Transport(_complete("ERR:CITY_NOT_FOUND"))
     civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)

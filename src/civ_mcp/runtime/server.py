@@ -228,6 +228,12 @@ async def get_world_congress(ctx: Context) -> dict[str, object]:
     return _json_value(await _runtime(ctx).assembly.surface.get_world_congress())
 
 
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_climate_overview(ctx: Context) -> dict[str, object]:
+    """Return Gathering Storm climate facts; this tool never changes the game."""
+    return _json_value(await _runtime(ctx).assembly.surface.get_climate_overview())
+
+
 @mcp.tool()
 async def save_handoff(
     ctx: Context,
