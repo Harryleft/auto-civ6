@@ -195,19 +195,65 @@ class CivMutationFactory:
         city_id: int,
         target_x: int,
         target_y: int,
-        readback: AttackReadback,
+        observed_turn: int,
     ) -> MutationExecution:
-        """Request one city attack; combat outcome still needs factual readback."""
-        return self._readback_action(
+        """Attack a game-approved city target and verify only HP loss/removal."""
+        target = None
+
+        async def precheck() -> None:
+            nonlocal target
+            try:
+                result = await self._adapter.read_city_attack_target(
+                    city_id=city_id,
+                    target_x=target_x,
+                    target_y=target_y,
+                    observed_turn=observed_turn,
+                )
+            except Exception as exc:
+                raise MutationPreconditionError("目标不是当前城市允许的攻击对象。") from exc
+            target = result.value
+
+        async def verify() -> Evidence | None:
+            if target is None:
+                return None
+            try:
+                observed = await self._adapter.read_combat_targets(
+                    target_x=target_x, target_y=target_y, observed_turn=observed_turn
+                )
+            except Exception:
+                return None
+            current = next(
+                (
+                    item
+                    for item in observed.value
+                    if item.owner_id == target.owner_id
+                    and item.unit_index == target.unit_index
+                ),
+                None,
+            )
+            if current is None:
+                return Evidence(
+                    "read_combat_targets",
+                    observed.observed_turn,
+                    f"target owner={target.owner_id} unit={target.unit_index} removed",
+                )
+            if current.health < target.health:
+                return Evidence(
+                    "read_combat_targets",
+                    observed.observed_turn,
+                    f"target owner={target.owner_id} unit={target.unit_index} hp {target.health}->{current.health}",
+                )
+            return None
+
+        return MutationExecution(
+            intent=OperationIntent.create(
+                "attack_city",
+                {"city_id": city_id, "target_x": target_x, "target_y": target_y},
+            ),
+            request=CivMutationRequest("attack_city", build_city_attack(city_id, target_x, target_y)),
+            verify=verify,
             operation_id=operation_id,
-            tool="city_attack",
-            arguments={
-                "city_id": city_id,
-                "target_x": target_x,
-                "target_y": target_y,
-            },
-            lua_code=build_city_attack(city_id, target_x, target_y),
-            readback=readback,
+            precheck=precheck,
         )
 
     def set_production(
