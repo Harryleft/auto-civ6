@@ -207,3 +207,25 @@ def test_mutation_is_confirmed_only_by_domain_readback(tmp_path) -> None:
         assert store.get_operation(record.operation_id).evidence == record.evidence
 
     asyncio.run(run())
+
+
+def test_handoff_can_change_strategy_without_changing_operation_facts(tmp_path) -> None:
+    async def run() -> None:
+        game = GameIdentity("game-a")
+
+        async def probe() -> GameIdentity:
+            return game
+
+        store = OperationStore(tmp_path / "operations.sqlite3")
+        kernel = SessionKernel(_Adapter(), store, identity_probe=probe, turn_probe=lambda: _turn(10))
+        await kernel.bind(game, BranchIdentity(game, "main"))
+        note = kernel.save_handoff(
+            strategic_focus="secure the frontier",
+            existing_arrangements="warrior watches the pass",
+            rationale="barbarian camp nearby",
+            change_conditions="camp removed",
+        )
+        assert kernel.handoff_note() == note
+        assert kernel.current_operations() == []
+
+    asyncio.run(run())
