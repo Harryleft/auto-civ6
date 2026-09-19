@@ -131,7 +131,7 @@ Belief/Governance 链路。
 该适配器将模型限制为实验 Runtime 工具；`UNKNOWN`、`NEEDS_DECISION` 或
 `RECOVERY_REQUIRED` 一律停止并报告，不能通过 DSH 重发操作、执行读档或启动 recovery。
 
-## M11 现场证据核验（已执行，尚未切换正式入口）
+## M11 现场证据核验（已执行）
 
 K1/J2 必须由真实单机环境分别运行，且只把各自 stdout 保存为证据文件。完成 K1 的
 `--confirm-end-turn` 命令时可重定向 stdout；完成 host 读档后的 J2 验证同样保存 stdout：
@@ -163,7 +163,7 @@ K1/J2 必须由真实单机环境分别运行，且只把各自 stdout 保存为
 `civilization_sumeria_-1843604224:benchmark-k1-recovery-20260920`。M11 输出
 `approved: true` 且没有 blocker。
 
-## K1 现场冒烟入口（真实 smoke 已执行，正式切换未执行）
+## K1 现场冒烟入口（真实 direct smoke 已执行）
 
 新核心的手工验收使用 [`tests/manual/test_runtime_core_smoke.py`](../../tests/manual/test_runtime_core_smoke.py)，
 不使用旧 `GameConnection` / `GameState` 手工脚本。先进入单机对局、确认
@@ -189,7 +189,29 @@ branch token（例如 `save-0001`，**不是** `game_id:save-0001`）和一个�
 脚本输出 game/branch/turn、未知读取、operation send/outcome 与 Evidence。任何
 `NEEDS_DECISION`、`RECOVERY_REQUIRED` 或 `UNKNOWN` 都以非零退出，且不自动恢复、重发或
 处理 decision；保存输出和 SQLite 后再进行明确诊断。2026-09-20 的真实 smoke 结果见上节，
-但该证明不等同于把 `civ-mcp` 正式入口切到新 Runtime。
+该证明覆盖 Runtime assembly 的直连路径；正式 `civ-mcp` MCP 进程的现场只读验证
+使用下一节的入口 smoke。
+
+## 正式 `civ-mcp` 入口现场验证
+
+[`tests/manual/test_runtime_entry_smoke.py`](../../tests/manual/test_runtime_entry_smoke.py)
+通过子进程启动正式 `civ-mcp` console entry，完成 MCP initialize、工具列举和一次
+`get_runtime_context`。它不发送 mutation、不读档、不自动恢复；未知读取以非零退出：
+
+```bash
+uv run python tests/manual/test_runtime_entry_smoke.py \
+  --branch <stable-save-branch> \
+  --store <operation-store.sqlite3>
+```
+
+成功输出记录 Runtime 工具数、必需工具、出现的旧工具名（必须为空）、回合与 unknown。
+这项检查证明正式 MCP transport 使用 Runtime server；它不替代完整对局验收，也不授权
+删除旧源码或旧 wheel package。
+
+2026-09-20 已在实际单机对局运行该入口 smoke：
+`benchmark-k1-recovery-20260920` branch 由正式 `civ-mcp` 返回 48 个工具，
+`legacy_tools_present` 为空，`get_runtime_context` 读取到第 3 回合且 `unknown` 为空。
+原始 stdout 保存在 `/tmp/civ6-runtime-entry-k1-20260920.stdout`。
 
 ## J2 现场恢复验证入口（已执行）
 
@@ -242,5 +264,6 @@ K1 已将 `civ-mcp` 和 `python -m civ_mcp` 切到 Runtime server。真实 K1 sm
 - `pyproject.toml` 仍会打包 `civ6_belief_engine`，旧 server/pipeline 与
   play-profile 双轨也仍存在。
 
-这些不是可由离线测试替代的条件。达到它们前，旧核心只作为正式入口，新的
-Runtime 只作为隔离的实验实现。
+这些不是可由离线测试替代的条件。达到它们前，旧源码、旧 wheel package 与历史 DSH
+资产仍需保留为冻结基线和回退材料；它们不再是 `civ-mcp` 或 `python -m civ_mcp` 的
+正式执行入口。

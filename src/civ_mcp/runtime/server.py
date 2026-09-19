@@ -35,7 +35,7 @@ class RuntimeServerConfigurationError(RuntimeError):
 
 @dataclass(slots=True)
 class RuntimeAppContext:
-    """Resources owned for one experimental Runtime MCP process."""
+    """Resources owned for one formal Runtime MCP process."""
 
     assembly: RuntimeAssembly
     connection: RuntimeConnection
@@ -75,9 +75,9 @@ async def lifespan(_server: FastMCP) -> AsyncIterator[RuntimeAppContext]:
 
 
 mcp = FastMCP(
-    "Civilization VI Runtime Core (experimental)",
+    "Civilization VI Runtime Core",
     instructions=(
-        "This experimental surface exposes only the isolated Runtime Core. "
+        "This surface exposes only the isolated Runtime Core. "
         "Read current context before a mutation; retain the same operation_id "
         "when checking an uncertain result, and never assume UNKNOWN succeeded."
     ),
