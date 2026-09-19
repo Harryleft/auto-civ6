@@ -9,9 +9,15 @@ from typing import Generic, TypeVar
 from civ_mcp.lua.cities import build_cities_query, parse_cities_response
 from civ_mcp.lua.diplomacy import build_diplomacy_query, parse_diplomacy_response
 from civ_mcp.lua.models import CityInfo, CivInfo, GameOverview, UnitInfo, VictoryProgress
-from civ_mcp.lua.overview import build_overview_query, parse_overview_response
+from civ_mcp.lua.overview import (
+    build_game_identity_query,
+    build_overview_query,
+    parse_game_identity_response,
+    parse_overview_response,
+)
 from civ_mcp.lua.units import build_units_query, parse_units_response
 from civ_mcp.lua.victory import build_victory_progress_query, parse_victory_progress_response
+from civ_mcp.runtime.contracts import GameIdentity
 from civ_mcp.runtime.transport import FireTunerTransport, Frame, TransportReceipt
 
 
@@ -114,6 +120,19 @@ class CivAdapter:
             coverage="CURRENT_GAME:COMPLETE",
         )
 
+    async def read_game_identity(self) -> CivReadResult[GameIdentity]:
+        """Read a stable game identity without instantiating legacy GameState."""
+        receipt = await self._read_receipt(
+            "get_game_identity", build_game_identity_query(), context="gamecore"
+        )
+        civilization, seed = parse_game_identity_response(_receipt_lines(receipt))
+        return CivReadResult(
+            value=GameIdentity(f"{civilization}_{seed}"),
+            source="civ6:FireTuner",
+            observed_turn=None,
+            coverage="CURRENT_GAME:COMPLETE",
+        )
+
     async def read_cities(self, *, observed_turn: int) -> CivReadResult[list[CityInfo]]:
         result = await self.read(
             CivReadRequest(
@@ -185,7 +204,7 @@ class CivAdapter:
     async def _read_receipt(
         self, tool: str, lua_code: str, *, context: str
     ) -> TransportReceipt:
-        state = self._gamecore_state if context == "gamecore" else self._ingame_state
+        state = self._state_for(context)
         receipt = await self._transport.execute_read(
             self._command(state, lua_code), is_complete=_is_sentinel
         )
