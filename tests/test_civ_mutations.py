@@ -5,21 +5,34 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
+import pytest
+
 from civ_mcp.civ.mutations import CivMutationFactory
 from civ_mcp.runtime.contracts import Evidence, OperationId
+from civ_mcp.runtime.session import MutationPreconditionError
 
 
 def test_move_uses_unit_position_readback_as_confirmation() -> None:
     class Adapter:
+        calls = 0
+
         async def read_units(self, *, observed_turn):
-            unit = SimpleNamespace(unit_index=3, x=5, y=7)
+            self.calls += 1
+            unit = (
+                SimpleNamespace(unit_index=3, x=4, y=6)
+                if self.calls == 1
+                else SimpleNamespace(unit_index=3, x=5, y=7)
+            )
             return SimpleNamespace(value=[unit], observed_turn=observed_turn)
 
-    execution = CivMutationFactory(Adapter()).move_unit(
+    adapter = Adapter()
+    execution = CivMutationFactory(adapter).move_unit(
         operation_id=OperationId("move-3"), unit_index=3, target_x=5, target_y=7, observed_turn=12
     )
+    asyncio.run(execution.precheck())
     evidence = asyncio.run(execution.verify())
     assert evidence.source == "read_units"
+    assert adapter.calls == 2
     assert execution.intent.tool == execution.request.tool == "move_unit"
 
 
@@ -70,35 +83,54 @@ def test_city_attack_requires_explicit_domain_readback() -> None:
 
 def test_production_requires_city_queue_readback() -> None:
     class Adapter:
+        calls = 0
+
         async def read_cities(self, *, observed_turn):
-            city = SimpleNamespace(city_id=4, currently_building="UNIT_ARCHER")
+            self.calls += 1
+            building = "UNIT_WARRIOR" if self.calls == 1 else "UNIT_ARCHER"
+            city = SimpleNamespace(city_id=4, currently_building=building)
             return SimpleNamespace(value=[city], observed_turn=observed_turn)
 
-    execution = CivMutationFactory(Adapter()).set_production(
+    adapter = Adapter()
+    execution = CivMutationFactory(adapter).set_production(
         operation_id=OperationId("production-4"), city_id=4, item_type="UNIT", item_name="UNIT_ARCHER", observed_turn=12
     )
+    asyncio.run(execution.precheck())
     assert asyncio.run(execution.verify()).source == "read_cities"
+    assert adapter.calls == 2
 
 
 def test_founding_requires_a_new_city_at_the_observed_settler_tile() -> None:
     class Adapter:
-        async def read_cities(self, *, observed_turn):
-            city = SimpleNamespace(city_id=8, x=5, y=7)
-            return SimpleNamespace(value=[city], observed_turn=observed_turn)
+        city_calls = 0
 
-    execution = CivMutationFactory(Adapter()).found_city(
+        async def read_cities(self, *, observed_turn):
+            self.city_calls += 1
+            old_city = SimpleNamespace(city_id=4, x=1, y=1)
+            cities = [old_city]
+            if self.city_calls > 1:
+                cities.append(SimpleNamespace(city_id=8, x=5, y=7))
+            return SimpleNamespace(value=cities, observed_turn=observed_turn)
+
+        async def read_units(self, *, observed_turn):
+            settler = SimpleNamespace(unit_index=2, x=5, y=7)
+            return SimpleNamespace(value=[settler], observed_turn=observed_turn)
+
+    adapter = Adapter()
+    execution = CivMutationFactory(adapter).found_city(
         operation_id=OperationId("found-city-1"),
         unit_index=2,
         target_x=5,
         target_y=7,
         observed_turn=12,
-        known_city_ids=frozenset({4}),
     )
+    asyncio.run(execution.precheck())
     assert execution.intent.tool == execution.request.tool == "found_city"
     assert asyncio.run(execution.verify()).source == "read_cities"
+    assert adapter.city_calls == 2
 
 
-def test_founding_does_not_confirm_an_already_known_city() -> None:
+def test_founding_rejects_a_tile_that_already_has_a_city() -> None:
     class Adapter:
         async def read_cities(self, *, observed_turn):
             city = SimpleNamespace(city_id=4, x=5, y=7)
@@ -110,9 +142,9 @@ def test_founding_does_not_confirm_an_already_known_city() -> None:
         target_x=5,
         target_y=7,
         observed_turn=12,
-        known_city_ids=frozenset({4}),
     )
-    assert asyncio.run(execution.verify()) is None
+    with pytest.raises(MutationPreconditionError, match="已有城市"):
+        asyncio.run(execution.precheck())
 
 
 def test_purchase_requires_gold_change_and_new_unit() -> None:
