@@ -174,6 +174,29 @@ async def set_civic(
 
 
 @mcp.tool()
+async def found_city(
+    ctx: Context,
+    operation_id: str,
+    unit_index: int,
+    target_x: int,
+    target_y: int,
+    decision_turn: int,
+) -> dict[str, object]:
+    """Found a city only from a verified settler tile and a new city readback."""
+    assembly = _runtime(ctx).assembly
+    execution = assembly.mutations.found_city(
+        operation_id=OperationId(operation_id),
+        unit_index=unit_index,
+        target_x=target_x,
+        target_y=target_y,
+        observed_turn=decision_turn,
+    )
+    return _operation_payload(
+        await assembly.surface.execute_mutation(execution, decision_turn=decision_turn)
+    )
+
+
+@mcp.tool()
 async def end_turn(
     ctx: Context, operation_id: str, decision_turn: int
 ) -> dict[str, object]:
