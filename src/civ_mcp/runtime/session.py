@@ -198,6 +198,29 @@ class SessionKernel:
             self._store.save_operation(record)
             return record
 
+    async def confirm_observed(
+        self, operation: OperationRecord, evidence: Evidence
+    ) -> OperationRecord:
+        """Close a submitted operation only with later fresh domain evidence.
+
+        TurnLoop uses this after a read-only wait.  It may close ``UNKNOWN``
+        because the evidence is new; it never retries or reclassifies an
+        operation merely because a connection or process recovered.
+        """
+        async with self._mutation_lock:
+            binding = self._require_binding()
+            current = self._store.get_operation(operation.operation_id)
+            if current is None:
+                raise ValueError("无法确认未保存的 operation。")
+            current.assert_same_intent(operation.intent)
+            if current.game_id != binding.game_id or current.branch_id != binding.branch_id:
+                raise StaleIntentError("operation 不属于当前 game/branch，拒绝写入观察证据。")
+            if await self._identity_probe() != binding.game_id:
+                raise StaleIntentError("当前 Civ6 对局已变化，拒绝写入观察证据。")
+            confirmed = current.confirmed(evidence)
+            self._store.save_operation(confirmed)
+            return confirmed
+
     def _persist_unknown_after_submit_interruption(
         self, record: OperationRecord
     ) -> OperationRecord:

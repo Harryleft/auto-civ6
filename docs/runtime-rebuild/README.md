@@ -30,13 +30,17 @@
 - `SessionKernel` 是 mutation 的唯一入口：发送后取消、连接中断、跨局回读
   都只会留下 `UNKNOWN`，同一 `operation_id` 的并发调用只会实际发送一次。
 - 新的 `TurnLoop` 只输出 `ADVANCED`、`NEEDS_DECISION` 或
-  `RECOVERY_REQUIRED`，不补发 end-turn，也不启动恢复。
+  `RECOVERY_REQUIRED`。它在 end-turn 发送后只读轮询，并且仅以新的 turn
+  Evidence 关闭原 operation；不补发 end-turn，也不启动恢复。明确 `NOT_SENT`
+  的请求直接要求新决策，不进入等待或恢复。
 - 已迁移到 `CivMutationFactory` 的领域包括移动、单位/城市攻击、升级、晋升、
   生产、购买、商路、建设单元、研究/市政、治理/总督、宗教、大人物、间谍、
   世界议会和 end-turn。每个 factory 都绑定 intent，并要求领域 Evidence。
 - `civ_mcp.runtime.server` 是独立的实验 FastMCP 入口，当前仅注册
   `get_runtime_context`、`move_unit`、`set_city_production` 与 `end_turn`。
   它要求 host 显式提供 `CIV_MCP_RUNTIME_BRANCH`，不会自行猜测读档分支。
+  server 只负责工具装配；end-turn 的等待和证据关闭属于 `TurnLoop`，而非 MCP
+  路由函数。
 
 可用下列方式启动实验入口（它仍不是正式 `civ-mcp` 命令）：
 

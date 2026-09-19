@@ -1,8 +1,8 @@
 """The new, narrow end-turn state machine.
 
-It sends one hash-bound end-turn operation through SessionKernel.  Waiting,
-popup guessing, automatic resubmission, and recovery remain outside this
-normal path; F2/F3 add explicit decision and recovery boundaries later.
+It sends one hash-bound end-turn operation through SessionKernel, then waits
+with read-only observations that can supply fresh Evidence. Popup guessing,
+automatic resubmission, and recovery remain outside this normal path.
 """
 
 from __future__ import annotations
@@ -11,8 +11,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import StrEnum
 
-from civ_mcp.runtime.contracts import OperationId, OperationRecord, OutcomeState
-from civ_mcp.runtime.session import MutationExecution, SessionKernel
+from civ_mcp.runtime.contracts import Evidence, OperationId, OperationRecord, OutcomeState, SendState
+from civ_mcp.runtime.session import MutationExecution, SessionKernel, StaleIntentError
 
 
 class TurnOutcome(StrEnum):
@@ -46,11 +46,12 @@ Continuation = Callable[[str], Awaitable[TurnResult]]
 class TurnObservation:
     """A phase-safe read during AI processing; it has no write capability."""
 
-    advanced: bool = False
+    evidence: Evidence | None = None
     interrupt: DecisionInterrupt | None = None
+    identity_changed: bool = False
 
 
-TurnObserver = Callable[[], Awaitable[TurnObservation]]
+TurnObserver = Callable[[OperationRecord], Awaitable[TurnObservation]]
 Sleep = Callable[[float], Awaitable[None]]
 
 
@@ -77,6 +78,14 @@ class TurnLoop:
             return TurnResult(TurnOutcome.ADVANCED, record)
         if record.outcome_state is OutcomeState.REJECTED:
             return TurnResult(TurnOutcome.NEEDS_DECISION, record, "游戏拒绝结束回合请求。")
+        if record.send_state is SendState.NOT_SENT:
+            return TurnResult(
+                TurnOutcome.NEEDS_DECISION,
+                record,
+                "结束回合命令未越过发送边界；必须以新的 operation 重新决策。",
+            )
+        if self._observer is not None:
+            return await self.wait_for_turn(record)
         return TurnResult(
             TurnOutcome.RECOVERY_REQUIRED,
             record,
@@ -128,9 +137,23 @@ class TurnLoop:
         if diagnostic_polls < 1:
             raise ValueError("diagnostic_polls 必须大于 0。")
         for attempt in range(diagnostic_polls):
-            observed = await self._observer()
-            if observed.advanced:
-                return TurnResult(TurnOutcome.ADVANCED, operation)
+            observed = await self._observer(operation)
+            if observed.identity_changed:
+                return TurnResult(
+                    TurnOutcome.RECOVERY_REQUIRED,
+                    operation,
+                    "等待期间 Civ6 对局 identity 已变化，拒绝关闭原 operation。",
+                )
+            if observed.evidence is not None:
+                try:
+                    confirmed = await self._session.confirm_observed(operation, observed.evidence)
+                except StaleIntentError:
+                    return TurnResult(
+                        TurnOutcome.RECOVERY_REQUIRED,
+                        operation,
+                        "观察证据归属的 Civ6 对局已变化，拒绝关闭原 operation。",
+                    )
+                return TurnResult(TurnOutcome.ADVANCED, confirmed)
             if observed.interrupt is not None:
                 if observed.interrupt.continuation_operation_id != operation.operation_id:
                     return TurnResult(

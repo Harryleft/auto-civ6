@@ -12,11 +12,11 @@ from dataclasses import dataclass
 from civ_mcp.civ.adapter import CivAdapter
 from civ_mcp.civ.mutations import CivMutationFactory
 from civ_mcp.runtime.context import ContextBuilder
-from civ_mcp.runtime.contracts import BranchIdentity
+from civ_mcp.runtime.contracts import BranchIdentity, Evidence, OperationRecord
 from civ_mcp.runtime.mcp_surface import RuntimeMcpSurface
 from civ_mcp.runtime.session import SessionBinding, SessionKernel
 from civ_mcp.runtime.store import OperationStore
-from civ_mcp.runtime.turn import TurnLoop
+from civ_mcp.runtime.turn import TurnLoop, TurnObservation
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,8 +63,31 @@ async def assemble_runtime(
     game_id = await identity_probe()
     branch_id = BranchIdentity(game_id, f"{game_id.value}:{branch_token}")
     binding = await session.bind(game_id, branch_id)
+
+    async def observe_turn(operation: OperationRecord) -> TurnObservation:
+        """Poll fresh game facts only; this never submits or resumes a turn."""
+        try:
+            identity = await adapter.read_game_identity()
+        except Exception:
+            return TurnObservation()
+        if identity.value != binding.game_id:
+            return TurnObservation(identity_changed=True)
+        try:
+            overview = await adapter.read_overview()
+        except Exception:
+            return TurnObservation()
+        if overview.value.turn > operation.decision_turn:
+            return TurnObservation(
+                evidence=Evidence(
+                    source="read_overview",
+                    observed_turn=overview.value.turn,
+                    detail=f"turn {operation.decision_turn} -> {overview.value.turn}",
+                )
+            )
+        return TurnObservation()
+
     context = ContextBuilder(adapter, session)
-    turn_loop = TurnLoop(session)
+    turn_loop = TurnLoop(session, observer=observe_turn)
     return RuntimeAssembly(
         binding=binding,
         adapter=adapter,
