@@ -16,6 +16,11 @@ T = TypeVar("T")
 IdentityProbe = Callable[[], Awaitable[GameIdentity]]
 TurnProbe = Callable[[], Awaitable[int]]
 EvidenceProbe = Callable[[], Awaitable[Evidence | None]]
+MutationPrecheck = Callable[[], Awaitable[None]]
+
+
+async def _no_precheck() -> None:
+    """Default for mutations whose domain has no additional baseline contract."""
 
 
 class SessionIdentityMismatchError(RuntimeError):
@@ -28,6 +33,10 @@ class StaleSessionRequestError(RuntimeError):
 
 class StaleIntentError(RuntimeError):
     """The model's decision turn or game identity is no longer current."""
+
+
+class MutationPreconditionError(RuntimeError):
+    """A fresh domain baseline makes the requested mutation inapplicable."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +54,7 @@ class MutationExecution:
     request: CivMutationRequest
     verify: EvidenceProbe
     operation_id: OperationId
+    precheck: MutationPrecheck = _no_precheck
 
 
 class SessionKernel:
@@ -131,6 +141,13 @@ class SessionKernel:
                 if existing.game_id != binding.game_id or existing.branch_id != binding.branch_id:
                     raise StaleIntentError("operation 属于另一条 game/branch，未发送。")
                 return existing
+            await execution.precheck()
+            if (
+                self._binding != binding
+                or await self._identity_probe() != binding.game_id
+                or await self._turn_probe() != decision_turn
+            ):
+                raise StaleIntentError("采集领域 baseline 后对局或回合已变化，模型意图未发送。")
             record = OperationRecord.create(
                 game_id=binding.game_id,
                 branch_id=binding.branch_id,

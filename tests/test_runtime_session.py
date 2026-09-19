@@ -10,6 +10,7 @@ from civ_mcp.civ.adapter import CivMutationRequest, CivReadRequest, CivReadResul
 from civ_mcp.runtime.contracts import BranchIdentity, Evidence, GameIdentity, OperationId, OperationIntent, OutcomeState, SendState
 from civ_mcp.runtime.session import (
     MutationExecution,
+    MutationPreconditionError,
     SessionIdentityMismatchError,
     SessionKernel,
     StaleIntentError,
@@ -90,6 +91,95 @@ def test_stale_precheck_creates_no_operation_and_sends_nothing(tmp_path) -> None
                 decision_turn=10,
             )
         assert store.get_operation(operation_id) is None
+
+    asyncio.run(run())
+
+
+def test_domain_precheck_failure_creates_no_operation_and_sends_nothing(tmp_path) -> None:
+    async def run() -> None:
+        game = GameIdentity("game-a")
+
+        async def probe() -> GameIdentity:
+            return game
+
+        class MutationAdapter(_Adapter):
+            calls = 0
+
+            async def submit(self, _request):
+                self.calls += 1
+
+        adapter = MutationAdapter()
+        store = OperationStore(tmp_path / "operations.sqlite3")
+        kernel = SessionKernel(adapter, store, identity_probe=probe, turn_probe=lambda: _turn(10))
+        await kernel.bind(game, BranchIdentity(game, "main"))
+        operation_id = OperationId("invalid-domain-baseline")
+
+        async def precheck() -> None:
+            raise MutationPreconditionError("unit is already at the requested tile")
+
+        async def verify() -> None:
+            return None
+
+        with pytest.raises(MutationPreconditionError, match="already"):
+            await kernel.execute(
+                MutationExecution(
+                    OperationIntent.create("move_unit", {"unit_id": 1}),
+                    CivMutationRequest("move_unit", "move()"),
+                    verify,
+                    operation_id,
+                    precheck,
+                ),
+                decision_turn=10,
+            )
+        assert store.get_operation(operation_id) is None
+        assert adapter.calls == 0
+
+    asyncio.run(run())
+
+
+def test_turn_change_during_domain_precheck_creates_no_operation_and_sends_nothing(tmp_path) -> None:
+    async def run() -> None:
+        game = GameIdentity("game-a")
+        turn = 10
+
+        async def probe() -> GameIdentity:
+            return game
+
+        async def turn_probe() -> int:
+            return turn
+
+        class MutationAdapter(_Adapter):
+            calls = 0
+
+            async def submit(self, _request):
+                self.calls += 1
+
+        adapter = MutationAdapter()
+        store = OperationStore(tmp_path / "operations.sqlite3")
+        kernel = SessionKernel(adapter, store, identity_probe=probe, turn_probe=turn_probe)
+        await kernel.bind(game, BranchIdentity(game, "main"))
+        operation_id = OperationId("turn-changed-during-baseline")
+
+        async def precheck() -> None:
+            nonlocal turn
+            turn = 11
+
+        async def verify() -> None:
+            return None
+
+        with pytest.raises(StaleIntentError, match="baseline"):
+            await kernel.execute(
+                MutationExecution(
+                    OperationIntent.create("move_unit", {"unit_id": 1}),
+                    CivMutationRequest("move_unit", "move()"),
+                    verify,
+                    operation_id,
+                    precheck,
+                ),
+                decision_turn=10,
+            )
+        assert store.get_operation(operation_id) is None
+        assert adapter.calls == 0
 
     asyncio.run(run())
 
