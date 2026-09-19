@@ -22,6 +22,7 @@ from civ_mcp.lua.economy import build_make_trade_route
 from civ_mcp.lua.governance import (
     build_appoint_governor,
     build_assign_governor,
+    build_change_government,
     build_choose_dedication,
     build_promote_governor,
     build_promote_unit,
@@ -746,6 +747,64 @@ class CivMutationFactory:
         self, *, operation_id: OperationId, assignments: dict[int, str], readback: AttackReadback
     ) -> MutationExecution:
         return self._readback_action(operation_id=operation_id, tool="set_policies", arguments={"assignments": assignments}, lua_code=build_set_policies(assignments), readback=readback)
+
+    def change_government(
+        self, *, operation_id: OperationId, government_type: str, observed_turn: int
+    ) -> MutationExecution:
+        """Change to one unlocked government, confirmed by its active-state readback."""
+        self._require_gameinfo_type(government_type, "GOVERNMENT_")
+        intent = OperationIntent.create(
+            "change_government", {"government_type": government_type}
+        )
+        baseline_type: str | None = None
+
+        async def precheck() -> None:
+            nonlocal baseline_type
+            try:
+                governments = await self._adapter.read_governments(
+                    observed_turn=observed_turn
+                )
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取切换政府 baseline。") from exc
+            current = [government for government in governments.value if government.is_current]
+            targets = [
+                government
+                for government in governments.value
+                if government.government_type == government_type
+            ]
+            if len(current) != 1 or len(targets) != 1:
+                raise MutationPreconditionError("当前政府或目标政府 identity 不唯一。")
+            if targets[0].is_current:
+                raise MutationPreconditionError("目标已经是当前政府，不提交重复切换。")
+            baseline_type = current[0].government_type
+
+        async def verify() -> Evidence | None:
+            if baseline_type is None:
+                return None
+            try:
+                governments = await self._adapter.read_governments(
+                    observed_turn=observed_turn
+                )
+            except Exception:
+                return None
+            current = [government for government in governments.value if government.is_current]
+            if len(current) != 1 or current[0].government_type != government_type:
+                return None
+            return Evidence(
+                "read_governments",
+                governments.observed_turn,
+                f"government_type={baseline_type}->{government_type}",
+            )
+
+        return MutationExecution(
+            intent=intent,
+            request=CivMutationRequest(
+                "change_government", build_change_government(government_type)
+            ),
+            verify=verify,
+            operation_id=operation_id,
+            precheck=precheck,
+        )
 
     def appoint_governor(
         self, *, operation_id: OperationId, governor_type: str, observed_turn: int

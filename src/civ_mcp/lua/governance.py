@@ -22,6 +22,7 @@ from civ_mcp.lua.models import (
     DedicationChoice,
     DedicationStatus,
     EnvoyStatus,
+    GovernmentChoice,
     GovernmentStatus,
     GovernorInfo,
     GovernorPromotion,
@@ -938,6 +939,11 @@ def build_available_governments_query() -> str:
 local me = Game.GetLocalPlayer()
 local pCulture = Players[me]:GetCulture()
 local curGov = pCulture:GetCurrentGovernment()
+local function clean(value)
+    if value == nil then return "" end
+    local text = tostring(value)
+    return text:gsub("|", "/"):gsub("\\r", " "):gsub("\\n", " ")
+end
 for row in GameInfo.Governments() do
     local unlocked = pCulture:IsGovernmentUnlocked(row.Index)
     if unlocked then
@@ -958,11 +964,37 @@ for row in GameInfo.Governments() do
             if bRow then bonus = Locale.Lookup(bRow.Description or "") end
         end
         local tag = isCurrent and "CURRENT" or "AVAILABLE"
-        print("GOV|" .. row.GovernmentType .. "|" .. row.Index .. "|" .. tag .. "|" .. name .. "|" .. slotStr .. "|" .. bonus)
+        print("GOV|" .. row.GovernmentType .. "|" .. row.Index .. "|" .. tag .. "|" .. clean(name) .. "|" .. clean(slotStr) .. "|" .. clean(bonus))
     end
 end
 print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
+
+
+def parse_available_governments_response(lines: list[str]) -> list[GovernmentChoice]:
+    """Parse unlocked government rows without inferring any absent choices."""
+    governments: list[GovernmentChoice] = []
+    for line in lines:
+        if not line.startswith("GOV|"):
+            continue
+        parts = line.split("|")
+        if len(parts) < 7:
+            continue
+        try:
+            index = int(parts[2])
+        except ValueError:
+            continue
+        governments.append(
+            GovernmentChoice(
+                government_type=parts[1],
+                index=index,
+                is_current=parts[3] == "CURRENT",
+                name=parts[4],
+                slots=tuple(slot for slot in parts[5].split(",") if slot),
+                bonus=parts[6],
+            )
+        )
+    return governments
 
 
 def build_change_government(gov_type: str) -> str:

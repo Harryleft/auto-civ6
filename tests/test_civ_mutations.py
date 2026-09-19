@@ -762,6 +762,41 @@ def test_send_envoy_rejects_an_ineligible_baseline() -> None:
         asyncio.run(execution.precheck())
 
 
+def test_change_government_requires_unlocked_target_and_current_type_readback() -> None:
+    before = [
+        SimpleNamespace(government_type="GOVERNMENT_CHIEFDOM", is_current=True),
+        SimpleNamespace(government_type="GOVERNMENT_AUTOCRACY", is_current=False),
+    ]
+    after = [
+        SimpleNamespace(government_type="GOVERNMENT_CHIEFDOM", is_current=False),
+        SimpleNamespace(government_type="GOVERNMENT_AUTOCRACY", is_current=True),
+    ]
+
+    class Adapter:
+        calls = 0
+
+        async def read_governments(self, *, observed_turn):
+            self.calls += 1
+            return SimpleNamespace(
+                value=before if self.calls == 1 else after,
+                observed_turn=observed_turn,
+            )
+
+    execution = CivMutationFactory(Adapter()).change_government(
+        operation_id=OperationId("government-autocracy"),
+        government_type="GOVERNMENT_AUTOCRACY",
+        observed_turn=12,
+    )
+
+    asyncio.run(execution.precheck())
+    evidence = asyncio.run(execution.verify())
+
+    assert execution.intent.tool == execution.request.tool == "change_government"
+    assert "RequestChangeGovernment" in execution.request.lua_code
+    assert evidence.source == "read_governments"
+    assert "GOVERNMENT_CHIEFDOM->GOVERNMENT_AUTOCRACY" in evidence.detail
+
+
 def test_remaining_domain_mutations_use_explicit_readback_contracts() -> None:
     class Adapter:
         pass

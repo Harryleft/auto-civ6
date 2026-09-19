@@ -1079,6 +1079,18 @@ class GovernmentStatus:
     available_policies: list[PolicyInfo] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class GovernmentChoice:
+    """One currently unlocked government and its exact current-state marker."""
+
+    government_type: str
+    index: int
+    is_current: bool
+    name: str
+    slots: tuple[str, ...]
+    bonus: str
+
+
 @dataclass
 class GovernorInfo:
     """An available governor type."""
