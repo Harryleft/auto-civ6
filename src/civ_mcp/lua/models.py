@@ -289,6 +289,30 @@ class CityInfo:
     )  # completed buildings (BUILDING_ prefix stripped)
 
 
+@dataclass(frozen=True)
+class PendingCityCapture:
+    """One city occupation choice that is currently blocking turn progress."""
+
+    city_id: int
+    name: str
+    x: int
+    y: int
+    population: int
+    source: str
+    owner_id: int
+    original_owner_id: int
+    previous_owner_id: int
+    allowed_choices: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class CityCaptureState:
+    """The city ownership observed at one occupied city's fixed coordinates."""
+
+    city_id: int | None
+    owner_id: int | None
+
+
 @dataclass
 class ProductionOption:
     category: str  # "UNIT", "BUILDING", "DISTRICT"
