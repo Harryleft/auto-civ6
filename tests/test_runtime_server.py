@@ -26,6 +26,7 @@ def test_experimental_runtime_surface_exposes_only_new_core_tools() -> None:
         "get_unit_promotions",
         "get_unit_attack_target",
         "get_city_attack_target",
+        "get_district_placements",
         "get_city_states",
         "get_governors",
         "get_governments",

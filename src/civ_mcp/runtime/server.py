@@ -124,6 +124,18 @@ async def get_city_attack_target(
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
+async def get_district_placements(
+    ctx: Context, city_id: int, district_type: str
+) -> dict[str, object]:
+    """Return only current coordinates accepted for this city and district type."""
+    return _json_value(
+        await _runtime(ctx).assembly.surface.get_district_placements(
+            city_id, district_type
+        )
+    )
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
 async def get_city_states(ctx: Context) -> dict[str, object]:
     """Return current envoy tokens and every met city-state's send eligibility."""
     return _json_value(await _runtime(ctx).assembly.surface.get_city_states())

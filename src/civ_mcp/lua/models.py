@@ -337,6 +337,15 @@ class ProductionOption:
 
 
 @dataclass(frozen=True)
+class DistrictPlacementCandidate:
+    """One district tile the current city BUILD operation accepts now."""
+
+    district_type: str
+    x: int
+    y: int
+
+
+@dataclass(frozen=True)
 class PurchaseOption:
     """One currently legal immediate city purchase and its current cost."""
 
