@@ -116,6 +116,28 @@ branch token（例如 `save-0001`，**不是** `game_id:save-0001`）和一个�
 处理 decision；保存输出和 SQLite 后再进行明确诊断。这是 K1 的准备入口，尚不是一次已
 完成的真实 smoke。
 
+## J2 现场恢复验证入口（尚未执行）
+
+Recovery 的启动、存档选择和读档始终由 host/操作者完成，不能通过模型工具或这个脚本触发。
+在操作者已加载一个 checkpoint、确认 `4318` 由当前脚本独占后，使用
+[`tests/manual/test_runtime_recovery_smoke.py`](../../tests/manual/test_runtime_recovery_smoke.py)
+验证加载结果。`game_id` 和 checkpoint turn 应在恢复前的 K1 输出中记录；两条 branch 参数
+都是 host token，不能传 `game_id:token`：
+
+```bash
+.venv/bin/python tests/manual/test_runtime_recovery_smoke.py \
+  --game-id <recorded-game-id> \
+  --old-branch <abandoned-branch-token> \
+  --checkpoint <loaded-checkpoint-id> \
+  --checkpoint-turn <recorded-turn> \
+  --new-branch <new-branch-token>
+```
+
+脚本只通过新 Runtime 连续读取两次 identity 与 turn；二者稳定且与 checkpoint inventory
+相符时才输出 `RECOVERED` 和新的完整 branch_id。它不会写入游戏、创建 SessionKernel、改变
+已有 operation，或将 `UNKNOWN` 升级。读取不稳定、读档错误或回合不一致均以非零退出并要求
+人工诊断。
+
 ## 不变量
 
 - 同一对局在任意时刻只有一个写入 owner。
@@ -125,7 +147,7 @@ branch token（例如 `save-0001`，**不是** `game_id:save-0001`）和一个�
 - Recovery、Telemetry、Context 和 UI 不能修改操作执行事实。
 - Recovery 在稳定 identity 验证后也必须创建新的 `branch_id`；不能把恢复后的
   世界重新绑定为旧时间线。Recovery driver 还必须回报其实际使用的 checkpoint，且该
-  checkpoint 必须属于请求开始时捕获的 inventory。
+  checkpoint 必须属于请求开始时捕获的 inventory，并匹配记录的 game/turn。
 
 ## 当前限制
 
