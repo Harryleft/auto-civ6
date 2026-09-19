@@ -91,6 +91,7 @@ from civ_mcp.lua.models import (
     TileImprovementState,
     UnitInfo,
     UnitPromotionStatus,
+    VillageOverview,
     VictoryProgress,
     WorldCongressStatus,
 )
@@ -120,6 +121,7 @@ from civ_mcp.lua.units import (
     parse_units_response,
 )
 from civ_mcp.lua.victory import build_victory_progress_query, parse_victory_progress_response
+from civ_mcp.lua.villages import build_village_overview_query, parse_village_overview_response
 from civ_mcp.runtime.contracts import GameIdentity
 from civ_mcp.runtime.transport import FireTunerTransport, Frame, TransportReceipt
 
@@ -572,6 +574,20 @@ class CivAdapter:
                     "BARBARIAN_CAMPS:REVEALED;"
                     "BARBARIAN_UNITS:CURRENTLY_VISIBLE"
                 ),
+            ),
+            observed_turn=observed_turn,
+        )
+
+    async def read_village_overview(
+        self, *, observed_turn: int
+    ) -> CivReadResult[VillageOverview]:
+        """Read revealed tribal villages without entering a tile or claiming a reward."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_village_overview",
+                lua_code=build_village_overview_query(),
+                decode=lambda lines: parse_village_overview_response(list(lines)),
+                coverage="VILLAGES:REVEALED",
             ),
             observed_turn=observed_turn,
         )
