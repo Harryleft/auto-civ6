@@ -225,6 +225,22 @@ async def choose_dedication(
 
 
 @mcp.tool()
+async def recruit_great_person(
+    ctx: Context, operation_id: str, individual_id: int, decision_turn: int
+) -> dict[str, object]:
+    """Recruit one currently legal individual; confirmation requires local claim state."""
+    assembly = _runtime(ctx).assembly
+    execution = assembly.mutations.recruit_great_person(
+        operation_id=OperationId(operation_id),
+        individual_id=individual_id,
+        observed_turn=decision_turn,
+    )
+    return _operation_payload(
+        await assembly.surface.execute_mutation(execution, decision_turn=decision_turn)
+    )
+
+
+@mcp.tool()
 async def found_city(
     ctx: Context,
     operation_id: str,

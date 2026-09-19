@@ -898,9 +898,49 @@ class CivMutationFactory:
         return self._readback_action(operation_id=operation_id, tool="spread_religion", arguments={"unit_index": unit_index}, lua_code=build_spread_religion(unit_index), readback=readback)
 
     def recruit_great_person(
-        self, *, operation_id: OperationId, individual_id: int, readback: AttackReadback
+        self, *, operation_id: OperationId, individual_id: int, observed_turn: int
     ) -> MutationExecution:
-        return self._readback_action(operation_id=operation_id, tool="recruit_great_person", arguments={"individual_id": individual_id}, lua_code=build_recruit_great_person(individual_id), readback=readback)
+        """Recruit one game-legal individual, confirmed by its local claim state."""
+        intent = OperationIntent.create(
+            "recruit_great_person", {"individual_id": individual_id}
+        )
+
+        async def precheck() -> None:
+            try:
+                people = await self._adapter.read_great_people(observed_turn=observed_turn)
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取大人物招募 baseline。") from exc
+            matches = [
+                person for person in people.value if person.individual_id == individual_id
+            ]
+            if len(matches) != 1 or not matches[0].can_recruit:
+                raise MutationPreconditionError("目标大人物当前不可招募，不提交操作。")
+
+        async def verify() -> Evidence | None:
+            try:
+                people = await self._adapter.read_great_people(observed_turn=observed_turn)
+            except Exception:
+                return None
+            if not any(
+                person.individual_id == individual_id and person.claimed_by_local
+                for person in people.value
+            ):
+                return None
+            return Evidence(
+                "read_great_people",
+                people.observed_turn,
+                f"individual_id={individual_id} claimed_by_local=true",
+            )
+
+        return MutationExecution(
+            intent=intent,
+            request=CivMutationRequest(
+                "recruit_great_person", build_recruit_great_person(individual_id)
+            ),
+            verify=verify,
+            operation_id=operation_id,
+            precheck=precheck,
+        )
 
     def spy_travel(
         self, *, operation_id: OperationId, unit_index: int, target_x: int, target_y: int, readback: AttackReadback
