@@ -47,6 +47,9 @@
   `KEEP`、`RAZE`、`REJECT` 或解放选项。恢复时只发送模型选定的单一指令，再以待决
   状态消失与目标坐标的城市归属/不存在作为领域 Evidence；它不会沿用旧核心的自动
   保留城市逻辑，且不会补发原 end-turn。
+- Runtime 在结束回合受可用使者阻塞时返回 `ENVOY` interrupt，候选是可接收使者的
+  城邦 player ID；模型选择一个 ID 后仅发送一次 `send_envoy`，再继续等待原 end-turn，
+  绝不自动选城邦或补发 end-turn。
 - 已迁移到 `CivMutationFactory` 的领域包括移动、单位/城市攻击、升级、晋升、
   生产、购买、商路、建设单元、研究/市政、治理/总督、宗教、大人物、间谍、
   世界议会和 end-turn。每个 factory 都绑定 intent，并要求领域 Evidence。
