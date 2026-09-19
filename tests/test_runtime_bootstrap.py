@@ -268,3 +268,92 @@ def test_bootstrap_resumes_a_city_capture_interrupt_without_a_second_end_turn(tm
         assert adapter.submissions == ["end_turn", "resolve_city_capture"]
 
     asyncio.run(run())
+
+
+def test_bootstrap_resumes_an_envoy_interrupt_without_a_second_end_turn(tmp_path) -> None:
+    before = SimpleNamespace(
+        tokens_available=1,
+        city_states=[
+            SimpleNamespace(
+                player_id=3,
+                name="Auckland",
+                city_state_type="Trade",
+                envoys_sent=0,
+                can_send_envoy=True,
+                suzerain_id=-1,
+                leading_envoys=0,
+            )
+        ],
+    )
+    after = SimpleNamespace(
+        tokens_available=0,
+        city_states=[
+            SimpleNamespace(
+                player_id=3,
+                name="Auckland",
+                city_state_type="Trade",
+                envoys_sent=1,
+                can_send_envoy=False,
+                suzerain_id=-1,
+                leading_envoys=1,
+            )
+        ],
+    )
+
+    class Adapter:
+        def __init__(self) -> None:
+            self.game = GameIdentity("civilization_france_42")
+            self.overview_calls = 0
+            self.city_state_calls = 0
+            self.submissions: list[str] = []
+
+        async def read_game_identity(self):
+            return SimpleNamespace(value=self.game)
+
+        async def read_overview(self):
+            self.overview_calls += 1
+            turn = 11 if self.overview_calls >= 6 else 10
+            return SimpleNamespace(value=SimpleNamespace(turn=turn))
+
+        async def read_city_states(self, *, observed_turn):
+            self.city_state_calls += 1
+            return SimpleNamespace(
+                value=before if self.city_state_calls < 3 else after,
+                observed_turn=observed_turn,
+            )
+
+        async def submit(self, request):
+            self.submissions.append(request.tool)
+            return TransportReceipt(SendState.MAYBE_SENT, True, (), True)
+
+    async def run() -> None:
+        adapter = Adapter()
+        assembly = await assemble_runtime(
+            adapter,
+            OperationStore(tmp_path / "operations.sqlite3"),
+            branch_token="save-0001",
+        )
+
+        async def no_immediate_evidence():
+            return None
+
+        interrupted = await assembly.surface.end_turn(
+            assembly.mutations.end_turn(
+                operation_id=OperationId("end-turn-envoy"),
+                readback=no_immediate_evidence,
+            ),
+            decision_turn=10,
+        )
+        resumed = await assembly.surface.resume_turn_decision(
+            OperationId("end-turn-envoy"), "3"
+        )
+
+        assert interrupted.outcome is TurnOutcome.NEEDS_DECISION
+        assert interrupted.decision.decision_type == "ENVOY"
+        assert interrupted.decision.allowed_choices == ("3",)
+        assert interrupted.decision.facts["tokens_available"] == 1
+        assert resumed.outcome is TurnOutcome.ADVANCED
+        assert resumed.operation.outcome_state is OutcomeState.CONFIRMED
+        assert adapter.submissions == ["end_turn", "send_envoy"]
+
+    asyncio.run(run())
