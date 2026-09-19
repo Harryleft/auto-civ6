@@ -91,6 +91,13 @@ def test_production_requires_city_queue_readback() -> None:
             city = SimpleNamespace(city_id=4, currently_building=building)
             return SimpleNamespace(value=[city], observed_turn=observed_turn)
 
+        async def read_city_production(self, *, city_id, observed_turn):
+            assert (city_id, observed_turn) == (4, 12)
+            return SimpleNamespace(
+                value=[SimpleNamespace(category="UNIT", item_name="UNIT_ARCHER")],
+                observed_turn=observed_turn,
+            )
+
     adapter = Adapter()
     execution = CivMutationFactory(adapter).set_production(
         operation_id=OperationId("production-4"), city_id=4, item_type="UNIT", item_name="UNIT_ARCHER", observed_turn=12
@@ -98,6 +105,44 @@ def test_production_requires_city_queue_readback() -> None:
     asyncio.run(execution.precheck())
     assert asyncio.run(execution.verify()).source == "read_cities"
     assert adapter.calls == 2
+
+
+def test_production_rejects_a_value_not_in_the_live_candidate_set() -> None:
+    class Adapter:
+        async def read_cities(self, *, observed_turn):
+            return SimpleNamespace(
+                value=[SimpleNamespace(city_id=4, currently_building="UNIT_WARRIOR")],
+                observed_turn=observed_turn,
+            )
+
+        async def read_city_production(self, *, city_id, observed_turn):
+            return SimpleNamespace(value=[], observed_turn=observed_turn)
+
+    execution = CivMutationFactory(Adapter()).set_production(
+        operation_id=OperationId("production-invalid"),
+        city_id=4,
+        item_type="UNIT",
+        item_name="UNIT_ARCHER",
+        observed_turn=12,
+    )
+
+    with pytest.raises(MutationPreconditionError, match="允许的生产候选"):
+        asyncio.run(execution.precheck())
+
+
+def test_production_declines_districts_until_exact_placement_candidates_exist() -> None:
+    execution = CivMutationFactory(SimpleNamespace()).set_production(
+        operation_id=OperationId("production-district"),
+        city_id=4,
+        item_type="DISTRICT",
+        item_name="DISTRICT_CAMPUS",
+        target_x=8,
+        target_y=5,
+        observed_turn=12,
+    )
+
+    with pytest.raises(MutationPreconditionError, match="区域格点候选"):
+        asyncio.run(execution.precheck())
 
 
 def test_founding_requires_a_new_city_at_the_observed_settler_tile() -> None:

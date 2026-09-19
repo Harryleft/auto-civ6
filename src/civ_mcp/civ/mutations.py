@@ -174,11 +174,12 @@ class CivMutationFactory:
         target_y: int | None = None,
     ) -> MutationExecution:
         """Confirm production by the city's current queue, never Lua's OK text."""
+        normalized_type = item_type.upper()
         intent = OperationIntent.create(
             "set_city_production",
             {
                 "city_id": city_id,
-                "item_type": item_type,
+                "item_type": normalized_type,
                 "item_name": item_name,
                 "target_x": target_x,
                 "target_y": target_y,
@@ -196,23 +197,40 @@ class CivMutationFactory:
             return None
 
         async def precheck() -> None:
+            if normalized_type == "DISTRICT":
+                raise MutationPreconditionError(
+                    "区域格点候选尚未安全迁移，实验 Runtime 不提交区域生产。"
+                )
+            if normalized_type not in {"UNIT", "BUILDING", "PROJECT"}:
+                raise MutationPreconditionError("生产类型必须是 UNIT、BUILDING 或 PROJECT。")
+            if target_x is not None or target_y is not None:
+                raise MutationPreconditionError("当前生产契约不接受格点坐标。")
             try:
                 cities = await self._adapter.read_cities(observed_turn=observed_turn)
             except Exception as exc:
                 raise MutationPreconditionError("无法获取生产队列 baseline。") from exc
-            for city in cities.value:
-                if city.city_id != city_id:
-                    continue
-                if city.currently_building == item_name:
-                    raise MutationPreconditionError("城市已在生产该项目，不提交重复设定。")
-                return
-            raise MutationPreconditionError("生产前找不到目标城市。")
+            target_city = next((city for city in cities.value if city.city_id == city_id), None)
+            if target_city is None:
+                raise MutationPreconditionError("生产前找不到目标城市。")
+            if target_city.currently_building == item_name:
+                raise MutationPreconditionError("城市已在生产该项目，不提交重复设定。")
+            try:
+                candidates = await self._adapter.read_city_production(
+                    city_id=city_id, observed_turn=observed_turn
+                )
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取当前生产候选。") from exc
+            if not any(
+                option.category == normalized_type and option.item_name == item_name
+                for option in candidates.value
+            ):
+                raise MutationPreconditionError("目标不在当前游戏允许的生产候选中。")
 
         return MutationExecution(
             intent=intent,
             request=CivMutationRequest(
                 "set_city_production",
-                build_produce_item(city_id, item_type, item_name, target_x, target_y),
+                build_produce_item(city_id, normalized_type, item_name, target_x, target_y),
             ),
             verify=verify,
             operation_id=operation_id,

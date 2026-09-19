@@ -110,6 +110,21 @@ def test_surface_reads_city_purchases_only_through_context() -> None:
     assert asyncio.run(surface.get_city_purchases(4, "YIELD_GOLD")) is expected
 
 
+def test_surface_reads_city_production_only_through_context() -> None:
+    expected = [SimpleNamespace(item_name="UNIT_ARCHER")]
+
+    class Context:
+        async def read_city_production(self, city_id: int):
+            assert city_id == 4
+            return expected
+
+    surface = RuntimeMcpSurface(
+        context=Context(), session=SimpleNamespace(), turn_loop=SimpleNamespace()
+    )
+
+    assert asyncio.run(surface.get_city_production(4)) is expected
+
+
 def test_surface_reads_trade_facts_only_through_context() -> None:
     destinations = [SimpleNamespace(city_name="Berlin")]
     routes = SimpleNamespace(active_count=1)

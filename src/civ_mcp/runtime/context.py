@@ -66,6 +66,7 @@ class ContextBuilder:
                 "get_governments",
                 "get_policies",
                 "get_city_purchases",
+                "get_city_production",
                 "get_trade_destinations",
                 "get_trade_routes",
             ),
@@ -105,6 +106,13 @@ class ContextBuilder:
             city_id=city_id,
             yield_type=yield_type,
             observed_turn=overview.observed_turn,
+        )
+
+    async def read_city_production(self, city_id: int):
+        """Read one city's current production candidates through the boundary."""
+        overview = await self._adapter.read_overview()
+        return await self._adapter.read_city_production(
+            city_id=city_id, observed_turn=overview.observed_turn
         )
 
     async def read_trade_destinations(self, unit_index: int):

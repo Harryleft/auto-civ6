@@ -9,10 +9,12 @@ from typing import Generic, TypeVar
 from civ_mcp.lua.cities import (
     build_cities_query,
     build_city_capture_state_query,
+    build_city_production_query,
     build_city_purchase_query,
     build_pending_city_capture_query,
     parse_cities_response,
     parse_city_capture_state_response,
+    parse_city_production_response,
     parse_city_purchase_response,
     parse_pending_city_capture_response,
 )
@@ -57,6 +59,7 @@ from civ_mcp.lua.models import (
     GovernorStatus,
     PantheonStatus,
     PendingCityCapture,
+    ProductionOption,
     PurchaseOption,
     TechCivicStatus,
     TradeDestination,
@@ -217,6 +220,21 @@ class CivAdapter:
                     list(lines), yield_type=normalized_yield
                 ),
                 coverage="CITY_PURCHASE_CANDIDATES:COMPLETE",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
+    async def read_city_production(
+        self, *, city_id: int, observed_turn: int
+    ) -> CivReadResult[list[ProductionOption]]:
+        """Read the exact non-placement items the city may begin building."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_city_production",
+                lua_code=build_city_production_query(city_id),
+                decode=_decode_city_production,
+                coverage="CITY_PRODUCTION_CANDIDATES:COMPLETE",
                 context="ingame",
             ),
             observed_turn=observed_turn,
@@ -563,3 +581,9 @@ def _decode_trade_destinations(lines: tuple[str, ...]) -> list[TradeDestination]
     if error := next((line for line in lines if line.startswith("ERR:")), None):
         raise ValueError(error[4:])
     return parse_trade_destinations_response(list(lines))
+
+
+def _decode_city_production(lines: tuple[str, ...]) -> list[ProductionOption]:
+    if error := next((line for line in lines if line.startswith("ERR:")), None):
+        raise ValueError(error[4:])
+    return parse_city_production_response(list(lines))

@@ -54,6 +54,10 @@ class RuntimeMcpSurface:
         """Return live purchase candidates without exposing CivAdapter to routing."""
         return await self._context.read_city_purchases(city_id, yield_type)
 
+    async def get_city_production(self, city_id: int):
+        """Return live production candidates without exposing CivAdapter to routing."""
+        return await self._context.read_city_production(city_id)
+
     async def get_trade_destinations(self, unit_index: int):
         """Return live trade candidates without exposing CivAdapter to routing."""
         return await self._context.read_trade_destinations(unit_index)
