@@ -104,3 +104,18 @@ def test_research_and_civic_require_fresh_domain_evidence() -> None:
     assert research.intent.tool == "set_research"
     assert civic.intent.tool == "set_civic"
     assert asyncio.run(research.verify()).source == "read_tech_civics"
+
+
+def test_end_turn_is_a_single_hash_bound_mutation() -> None:
+    class Adapter:
+        pass
+
+    async def turn_advanced():
+        return Evidence("read_overview", 13, "turn 12 -> 13")
+
+    execution = CivMutationFactory(Adapter()).end_turn(
+        operation_id=OperationId("end-turn-12"), readback=turn_advanced
+    )
+    assert execution.intent.tool == execution.request.tool == "end_turn"
+    assert "ACTION_ENDTURN" in execution.request.lua_code
+    assert asyncio.run(execution.verify()).observed_turn == 13

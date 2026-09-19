@@ -12,6 +12,7 @@ from civ_mcp.civ.adapter import CivAdapter, CivMutationRequest
 from civ_mcp.lua.cities import build_produce_item, build_purchase_item
 from civ_mcp.lua.diplomacy import build_propose_trade
 from civ_mcp.lua.economy import build_make_trade_route
+from civ_mcp.lua.notifications import build_end_turn
 from civ_mcp.lua.tech import build_set_civic, build_set_research
 from civ_mcp.lua.units import build_attack_unit, build_move_unit
 from civ_mcp.runtime.contracts import Evidence, OperationId, OperationIntent
@@ -60,6 +61,18 @@ class CivMutationFactory:
             request=CivMutationRequest("move_unit", build_move_unit(unit_index, target_x, target_y)),
             verify=verify,
             operation_id=operation_id,
+        )
+
+    def end_turn(
+        self, *, operation_id: OperationId, readback: AttackReadback
+    ) -> MutationExecution:
+        """Build one end-turn request; TurnLoop owns waiting and interrupts."""
+        return self._readback_action(
+            operation_id=operation_id,
+            tool="end_turn",
+            arguments={},
+            lua_code=build_end_turn(),
+            readback=readback,
         )
 
     def attack_unit(
