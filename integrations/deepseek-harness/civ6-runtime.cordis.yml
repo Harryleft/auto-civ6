@@ -1,0 +1,84 @@
+# Isolated DSH adapter for the experimental Runtime Core.
+#
+# This is intentionally separate from civ6.cordis.yml.  It never starts the
+# legacy civ-mcp server, never selects a PlayProfile, and never owns save/load
+# or FireTuner lifecycle.  The caller must pass one host-selected branch token.
+- insert:
+    - id: mcp-civ6runtime
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: civ6runtime
+        transport: stdio
+        command: uv
+        args: [run, python, -m, civ_mcp.runtime.server]
+        cwd: !!js process.cwd()
+        env:
+          CIV_MCP_RUNTIME_BRANCH: !!js "process.env.CIV_MCP_RUNTIME_BRANCH ?? ''"
+          # Blank is intentionally accepted: Runtime resolves it to its own
+          # SQLite default instead of interpreting it as the working directory.
+          CIV_MCP_RUNTIME_STORE: !!js "process.env.CIV_MCP_RUNTIME_STORE ?? ''"
+        toolCallTimeoutMs: 60000
+        failOnStartupError: true
+        # A reconnect could accidentally compete for the single FireTuner
+        # client.  The operator must explicitly restart this experimental DSH
+        # session after inspecting an UNKNOWN or recovery boundary.
+        reconnect:
+          enabled: false
+
+- id: system-prompt
+  config:
+    includeHarnessIdentity: false
+    includeRuntimeContext: false
+    persona: |-
+      你是《文明 VI》实验 Runtime Core 的策略智能体。只能使用
+      mcp__civ6runtime__* 工具读取或操作游戏；不能运行本地命令、直接连接 FireTuner、
+      启动/终止游戏、读档、保存、重试或执行 Recovery。
+
+      每次决策先调用 get_runtime_context。仅使用该上下文和 Runtime 明确返回的候选；
+      不要从旧 civ-mcp 的工具名、文档或惯例推断可用能力。
+
+      一次 mutation 只提交一次。若结果是 UNKNOWN、RECOVERY_REQUIRED 或 NEEDS_DECISION，
+      停止并报告 operation_id、事实和阻塞原因；不得重发原操作或自动恢复。只有在
+      pending_decisions 返回同一 operation_id 与 allowed_choices 时，才可调用
+      resume_turn_decision 继续原 end_turn。
+
+      完成时用中文简要说明已读取的事实、实际提交的操作及其 Evidence，或明确的阻塞项。
+
+- id: tool-bash
+  disabled: true
+- id: tool-pwsh
+  disabled: true
+- id: tool-jobs
+  disabled: true
+- id: tool-fs
+  disabled: true
+- id: tool-fs-search
+  disabled: true
+- id: tool-web
+  disabled: true
+- id: tool-skill
+  disabled: true
+- id: commands
+  disabled: true
+- id: command-feedback
+  disabled: true
+- id: command-compact
+  disabled: true
+- id: command-goal
+  disabled: true
+- id: goal
+  disabled: true
+- id: goal-round-driver
+  disabled: true
+- id: plan-mode
+  disabled: true
+- id: tool-goal
+  disabled: true
+- id: code-runtime
+  disabled: true
+- id: agent-instructions
+  disabled: true
+- id: skill
+  disabled: true
+- id: skill-filesystem
+  disabled: true

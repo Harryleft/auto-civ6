@@ -88,6 +88,30 @@ CIV_MCP_RUNTIME_BRANCH=<稳定存档分支标识> \
 该入口不会启动游戏、加载存档、自动重连后重发 mutation，或调用旧的
 Belief/Governance 链路。
 
+## M9 DSH 实验适配器（尚未用于正式游玩）
+
+[`scripts/runtime_dsh`](../../scripts/runtime_dsh) 配合
+[`civ6-runtime.cordis.yml`](../../integrations/deepseek-harness/civ6-runtime.cordis.yml)
+只启动 `civ_mcp.runtime.server`。它要求 host 显式传入当前存档的 branch token，并使用
+独立的 DSH session 目录；不透传 `PlayProfile`、Belief mode、自动恢复或旧 `civ-mcp`
+配置。现有 `scripts/deepseek_harness` 与 legacy/lean overlay 保持正式路径不变，直到 K1
+和 J2 的现场证据齐备。
+
+先可用无副作用预览核对配置：
+
+```bash
+./scripts/runtime_dsh --branch save-0001 --dry-run
+```
+
+真正启动前仍须完成 K1，且确认 `4318` 正在监听、没有其他已连接的 FireTuner client：
+
+```bash
+./scripts/runtime_dsh --branch save-0001
+```
+
+该适配器将模型限制为实验 Runtime 工具；`UNKNOWN`、`NEEDS_DECISION` 或
+`RECOVERY_REQUIRED` 一律停止并报告，不能通过 DSH 重发操作、执行读档或启动 recovery。
+
 ## K1 现场冒烟入口（尚未执行）
 
 新核心的手工验收使用 [`tests/manual/test_runtime_core_smoke.py`](../../tests/manual/test_runtime_core_smoke.py)，
