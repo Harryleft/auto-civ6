@@ -57,6 +57,8 @@ from civ_mcp.runtime.session import MutationExecution, MutationPreconditionError
 
 
 AttackReadback = Callable[[], Awaitable[Evidence | None]]
+_TRADE_IDENTIFIER = re.compile(r"^[A-Z][A-Z0-9_]*$")
+_TRADE_AGREEMENTS = frozenset({"OPEN_BORDERS", "JOINT_WAR", "ALLIANCE"})
 
 
 def _trade_terms(deal: PendingDeal) -> tuple[tuple[bool, str, str, int, int], ...]:
@@ -71,6 +73,61 @@ def _trade_terms(deal: PendingDeal) -> tuple[tuple[bool, str, str, int, int], ..
         )
         for item in (*deal.items_from_them, *deal.items_from_us)
     )
+
+
+def _normalize_trade_items(items: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Validate and copy model input before it is interpolated into Lua."""
+    normalized: list[dict[str, object]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            raise ValueError("交易条目必须是对象。")
+        item_type = item.get("type")
+        if not isinstance(item_type, str):
+            raise ValueError("交易条目必须提供 type。")
+        kind = item_type.upper()
+        if kind not in {"GOLD", "RESOURCE", "FAVOR", "AGREEMENT", "CITY"}:
+            raise ValueError(f"不支持的交易条目类型：{item_type}。")
+        amount = item.get("amount", 0)
+        duration = item.get("duration", 0)
+        if (
+            isinstance(amount, bool)
+            or not isinstance(amount, int)
+            or amount < 0
+            or amount > 1_000_000
+            or isinstance(duration, bool)
+            or not isinstance(duration, int)
+            or duration < 0
+            or duration > 100
+        ):
+            raise ValueError("交易数量和持续回合必须是合理的非负整数。")
+        clean: dict[str, object] = {"type": kind, "amount": amount, "duration": duration}
+        if kind == "RESOURCE":
+            name = item.get("name")
+            if (
+                not isinstance(name, str)
+                or not name.startswith("RESOURCE_")
+                or not _TRADE_IDENTIFIER.fullmatch(name)
+                or amount < 1
+                or duration < 1
+            ):
+                raise ValueError("资源交易需要 RESOURCE_* 名称、正数量和正持续回合。")
+            clean["name"] = name
+        elif kind == "AGREEMENT":
+            subtype = item.get("subtype")
+            if not isinstance(subtype, str) or subtype not in _TRADE_AGREEMENTS:
+                raise ValueError("协议交易 subtype 必须是 OPEN_BORDERS、JOINT_WAR 或 ALLIANCE。")
+            clean["subtype"] = subtype
+        elif kind == "CITY":
+            city_id = item.get("city_id")
+            if isinstance(city_id, bool) or not isinstance(city_id, int) or city_id < 0:
+                raise ValueError("城市交易需要非负整数 city_id。")
+            clean["city_id"] = city_id
+        elif amount < 1:
+            raise ValueError(f"{kind} 交易需要正数量。")
+        normalized.append(clean)
+    if not normalized:
+        raise ValueError("交易至少需要一项给予或索取条目。")
+    return normalized
 
 
 class CivMutationFactory:
@@ -930,24 +987,55 @@ class CivMutationFactory:
         other_player_id: int,
         offer_items: list[dict[str, object]],
         request_items: list[dict[str, object]],
-        readback: AttackReadback,
+        observed_turn: int,
     ) -> MutationExecution:
-        """Submit exactly these terms; a counter-offer is never auto-accepted."""
+        """Submit exact terms; absent direct counter-offer evidence stays UNKNOWN."""
+        normalized_offer = _normalize_trade_items(offer_items) if offer_items else []
+        normalized_request = _normalize_trade_items(request_items) if request_items else []
+        if not normalized_offer and not normalized_request:
+            raise ValueError("交易至少需要一项给予或索取条目。")
+
+        async def precheck() -> None:
+            try:
+                deals = await self._adapter.read_pending_deals(observed_turn=observed_turn)
+            except Exception as exc:
+                raise MutationPreconditionError("无法确认当前没有同对象的待决交易。") from exc
+            if any(deal.other_player_id == other_player_id for deal in deals.value):
+                raise MutationPreconditionError("该文明已有待决交易，不覆盖或自动处理。")
+
+        async def verify() -> Evidence | None:
+            try:
+                deals = await self._adapter.read_pending_deals(observed_turn=observed_turn)
+            except Exception:
+                return None
+            matches = [deal for deal in deals.value if deal.other_player_id == other_player_id]
+            if len(matches) != 1:
+                return None
+            deal = matches[0]
+            if not deal.items_from_them and not deal.items_from_us:
+                return None
+            return Evidence(
+                "read_pending_deals",
+                deals.observed_turn,
+                f"COUNTER_OFFER from player_id={other_player_id}; model must inspect exact terms",
+            )
+
         return MutationExecution(
             intent=OperationIntent.create(
                 "propose_trade",
                 {
                     "other_player_id": other_player_id,
-                    "offer_items": offer_items,
-                    "request_items": request_items,
+                    "offer_items": normalized_offer,
+                    "request_items": normalized_request,
                 },
             ),
             request=CivMutationRequest(
                 "propose_trade",
-                build_propose_trade(other_player_id, offer_items, request_items),
+                build_propose_trade(other_player_id, normalized_offer, normalized_request),
             ),
-            verify=readback,
+            verify=verify,
             operation_id=operation_id,
+            precheck=precheck,
         )
 
     def respond_to_trade_offer(
