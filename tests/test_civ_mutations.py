@@ -36,30 +36,54 @@ def test_move_uses_unit_position_readback_as_confirmation() -> None:
     assert execution.intent.tool == execution.request.tool == "move_unit"
 
 
-def test_attack_without_factual_readback_remains_unconfirmed() -> None:
+def test_attack_requires_a_game_approved_target_and_observed_hp_loss() -> None:
     class Adapter:
-        pass
+        reads = 0
 
-    async def missing_readback():
-        return None
+        async def read_attack_target(self, **_kwargs):
+            target = SimpleNamespace(owner_id=2, unit_index=9, health=100)
+            return SimpleNamespace(value=(target, "RANGE"), observed_turn=12)
+
+        async def read_combat_targets(self, **_kwargs):
+            self.reads += 1
+            health = 80 if self.reads == 1 else 100
+            target = SimpleNamespace(owner_id=2, unit_index=9, health=health)
+            return SimpleNamespace(value=[target], observed_turn=12)
 
     execution = CivMutationFactory(Adapter()).attack_unit(
-        operation_id=OperationId("attack-3"), unit_index=3, target_x=5, target_y=7, readback=missing_readback
+        operation_id=OperationId("attack-4"),
+        unit_index=4,
+        target_x=5,
+        target_y=7,
+        observed_turn=12,
     )
+    asyncio.run(execution.precheck())
+    assert asyncio.run(execution.verify()).source == "read_combat_targets"
+
+
+def test_attack_does_not_confirm_when_the_target_hp_is_unchanged() -> None:
+    class Adapter:
+        async def read_attack_target(self, **_kwargs):
+            return SimpleNamespace(
+                value=(SimpleNamespace(owner_id=2, unit_index=9, health=100), "MELEE"),
+                observed_turn=12,
+            )
+
+        async def read_combat_targets(self, **_kwargs):
+            return SimpleNamespace(
+                value=[SimpleNamespace(owner_id=2, unit_index=9, health=100)],
+                observed_turn=12,
+            )
+
+    execution = CivMutationFactory(Adapter()).attack_unit(
+        operation_id=OperationId("attack-unchanged"),
+        unit_index=4,
+        target_x=5,
+        target_y=7,
+        observed_turn=12,
+    )
+    asyncio.run(execution.precheck())
     assert asyncio.run(execution.verify()) is None
-
-
-def test_attack_accepts_explicit_domain_evidence_only() -> None:
-    class Adapter:
-        pass
-
-    async def confirmed_readback():
-        return Evidence("read_units", 12, "target has a confirmed state transition")
-
-    execution = CivMutationFactory(Adapter()).attack_unit(
-        operation_id=OperationId("attack-4"), unit_index=4, target_x=5, target_y=7, readback=confirmed_readback
-    )
-    assert asyncio.run(execution.verify()).source == "read_units"
 
 
 def test_city_attack_requires_explicit_domain_readback() -> None:

@@ -49,6 +49,7 @@ from civ_mcp.lua.models import (
     CityCaptureState,
     CityInfo,
     CivInfo,
+    CombatTarget,
     DiplomacySession,
     DedicationStatus,
     EnvoyStatus,
@@ -76,7 +77,14 @@ from civ_mcp.lua.overview import (
 )
 from civ_mcp.lua.religion import build_pantheon_status_query, parse_pantheon_status_response
 from civ_mcp.lua.tech import build_tech_civics_query, parse_tech_civics_response
-from civ_mcp.lua.units import build_units_query, parse_units_response
+from civ_mcp.lua.units import (
+    build_attack_followup_query,
+    build_attack_target_query,
+    build_units_query,
+    parse_attack_target_response,
+    parse_combat_targets_response,
+    parse_units_response,
+)
 from civ_mcp.lua.victory import build_victory_progress_query, parse_victory_progress_response
 from civ_mcp.runtime.contracts import GameIdentity
 from civ_mcp.runtime.transport import FireTunerTransport, Frame, TransportReceipt
@@ -307,6 +315,36 @@ class CivAdapter:
                 lua_code=build_units_query(),
                 decode=lambda lines: parse_units_response(list(lines)),
                 coverage="OWN_UNITS:COMPLETE;FOREIGN_UNITS:CURRENTLY_VISIBLE",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
+    async def read_attack_target(
+        self, *, unit_index: int, target_x: int, target_y: int, observed_turn: int
+    ) -> CivReadResult[tuple[CombatTarget, str]]:
+        """Validate one exact attack target without sending an operation."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_unit_attack_target",
+                lua_code=build_attack_target_query(unit_index, target_x, target_y),
+                decode=lambda lines: parse_attack_target_response(list(lines)),
+                coverage="UNIT_ATTACK_TARGET:COMPLETE",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
+    async def read_combat_targets(
+        self, *, target_x: int, target_y: int, observed_turn: int
+    ) -> CivReadResult[list[CombatTarget]]:
+        """Read target-tile units by stable owner/unit IDs after combat."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_combat_targets",
+                lua_code=build_attack_followup_query(target_x, target_y),
+                decode=lambda lines: parse_combat_targets_response(list(lines)),
+                coverage="COMBAT_TARGET_TILE:CURRENTLY_VISIBLE",
                 context="ingame",
             ),
             observed_turn=observed_turn,

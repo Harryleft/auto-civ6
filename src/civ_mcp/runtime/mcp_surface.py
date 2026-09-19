@@ -34,6 +34,10 @@ class RuntimeMcpSurface:
         """Return promotion facts without exposing CivAdapter to MCP routing."""
         return await self._context.read_unit_promotions(unit_index)
 
+    async def get_unit_attack_target(self, unit_index: int, target_x: int, target_y: int):
+        """Return one live attack target without exposing CivAdapter to routing."""
+        return await self._context.read_attack_target(unit_index, target_x, target_y)
+
     async def get_city_states(self):
         """Return envoy facts without exposing CivAdapter to MCP routing."""
         return await self._context.read_city_states()

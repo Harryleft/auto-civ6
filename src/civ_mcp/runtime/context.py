@@ -61,6 +61,7 @@ class ContextBuilder:
             handoff=self._session.handoff_note(),
             further_queries=(
                 "get_unit_promotions",
+                "get_unit_attack_target",
                 "get_city_states",
                 "get_governors",
                 "get_governments",
@@ -77,6 +78,16 @@ class ContextBuilder:
         overview = await self._adapter.read_overview()
         return await self._adapter.read_unit_promotions(
             unit_index=unit_index, observed_turn=overview.observed_turn
+        )
+
+    async def read_attack_target(self, unit_index: int, target_x: int, target_y: int):
+        """Read one game-approved attack target through the context boundary."""
+        overview = await self._adapter.read_overview()
+        return await self._adapter.read_attack_target(
+            unit_index=unit_index,
+            target_x=target_x,
+            target_y=target_y,
+            observed_turn=overview.observed_turn,
         )
 
     async def read_city_states(self):
