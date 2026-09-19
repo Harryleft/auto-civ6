@@ -89,3 +89,18 @@ def test_trade_proposal_preserves_the_exact_hash_bound_terms() -> None:
     )
     assert "DealProposalAction.ACCEPTED" not in execution.request.lua_code
     assert asyncio.run(execution.verify()) is None
+
+
+def test_research_and_civic_require_fresh_domain_evidence() -> None:
+    class Adapter:
+        pass
+
+    async def evidence():
+        return Evidence("read_tech_civics", 12, "research/civic selection observed")
+
+    factory = CivMutationFactory(Adapter())
+    research = factory.set_research(operation_id=OperationId("tech-1"), tech_name="TECH_WRITING", readback=evidence)
+    civic = factory.set_civic(operation_id=OperationId("civic-1"), civic_name="CIVIC_CODE_OF_LAWS", readback=evidence)
+    assert research.intent.tool == "set_research"
+    assert civic.intent.tool == "set_civic"
+    assert asyncio.run(research.verify()).source == "read_tech_civics"
