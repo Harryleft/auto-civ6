@@ -238,6 +238,27 @@ class CombatTarget:
     max_health: int
 
 
+@dataclass(frozen=True)
+class BuilderImprovementCandidate:
+    """One improvement a builder may start on its current tile now."""
+
+    unit_index: int
+    x: int
+    y: int
+    improvement_type: str
+    charges: int
+
+
+@dataclass(frozen=True)
+class TileImprovementState:
+    """Direct improvement state for one fixed map coordinate."""
+
+    x: int
+    y: int
+    improvement_type: str | None
+    is_pillaged: bool
+
+
 @dataclass
 class SpyInfo:
     unit_id: int  # composite ID (use with spy_action)

@@ -165,6 +165,29 @@ def test_district_placements_are_typed_live_ingame_facts() -> None:
     assert transport.commands[0].startswith("CMD:153:")
 
 
+def test_builder_current_tile_candidates_and_tile_state_are_typed_facts() -> None:
+    candidate_transport = _Transport(
+        _complete("BUILDER_IMPROVEMENT|4|IMPROVEMENT_FARM|5|7|2")
+    )
+    civ = adapter.CivAdapter(candidate_transport, gamecore_state=8, ingame_state=153)
+    candidates = asyncio.run(
+        civ.read_builder_improvement_candidates(unit_index=4, observed_turn=42)
+    )
+    assert [(item.improvement_type, item.x, item.y) for item in candidates.value] == [
+        ("IMPROVEMENT_FARM", 5, 7)
+    ]
+    assert candidates.coverage == "BUILDER_CURRENT_TILE_IMPROVEMENTS:COMPLETE"
+
+    tile_transport = _Transport(
+        _complete("TILE_IMPROVEMENT|5|7|IMPROVEMENT_FARM|false")
+    )
+    civ = adapter.CivAdapter(tile_transport, gamecore_state=8, ingame_state=153)
+    tile = asyncio.run(civ.read_tile_improvement_state(x=5, y=7, observed_turn=42))
+    assert tile.value.improvement_type == "IMPROVEMENT_FARM"
+    assert tile.value.is_pillaged is False
+    assert tile.coverage == "TILE_IMPROVEMENT_COORDINATE:COMPLETE"
+
+
 def test_city_purchase_candidate_error_is_not_coerced_to_an_empty_result() -> None:
     transport = _Transport(_complete("ERR:CITY_NOT_FOUND"))
     civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)

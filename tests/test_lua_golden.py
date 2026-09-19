@@ -183,6 +183,17 @@ def test_district_placements_use_exact_operation_candidates_without_land_filteri
     assert "IsWater" not in query
 
 
+def test_builder_current_tile_candidates_never_probe_or_request_remote_tiles():
+    query = units.build_builder_improvement_candidates_query(7)
+
+    _assert_sentinel(query)
+    assert "UnitManager.GetUnit(me, 7)" in query
+    assert "unit:GetX()" in query and "unit:GetY()" in query
+    assert "UnitManager.CanStartOperation" in query
+    assert "UnitManager.RequestOperation" not in query
+    assert "BUILDER_IMPROVEMENT" in query
+
+
 def test_diplomacy_respond_injects_player_and_response():
     query = diplomacy.build_diplomacy_respond(3, "ACCEPT")
     _assert_sentinel(query)

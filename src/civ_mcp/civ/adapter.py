@@ -54,6 +54,7 @@ from civ_mcp.lua.models import (
     CityInfo,
     CivInfo,
     CombatTarget,
+    BuilderImprovementCandidate,
     DistrictPlacementCandidate,
     DiplomacySession,
     DedicationStatus,
@@ -70,6 +71,7 @@ from civ_mcp.lua.models import (
     TechCivicStatus,
     TradeDestination,
     TradeRouteStatus,
+    TileImprovementState,
     UnitInfo,
     UnitPromotionStatus,
     VictoryProgress,
@@ -85,9 +87,13 @@ from civ_mcp.lua.tech import build_tech_civics_query, parse_tech_civics_response
 from civ_mcp.lua.units import (
     build_attack_followup_query,
     build_attack_target_query,
+    build_builder_improvement_candidates_query,
+    build_tile_improvement_state_query,
     build_units_query,
     parse_attack_target_response,
+    parse_builder_improvement_candidates_response,
     parse_combat_targets_response,
+    parse_tile_improvement_state_response,
     parse_units_response,
 )
 from civ_mcp.lua.victory import build_victory_progress_query, parse_victory_progress_response
@@ -350,6 +356,36 @@ class CivAdapter:
                 lua_code=build_city_attack_target_query(city_id, target_x, target_y),
                 decode=lambda lines: parse_city_attack_target_response(list(lines)),
                 coverage="CITY_ATTACK_TARGET:COMPLETE",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
+    async def read_builder_improvement_candidates(
+        self, *, unit_index: int, observed_turn: int
+    ) -> CivReadResult[list[BuilderImprovementCandidate]]:
+        """Read only new improvements legal on a builder's current tile."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_builder_improvement_candidates",
+                lua_code=build_builder_improvement_candidates_query(unit_index),
+                decode=lambda lines: parse_builder_improvement_candidates_response(list(lines)),
+                coverage="BUILDER_CURRENT_TILE_IMPROVEMENTS:COMPLETE",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
+    async def read_tile_improvement_state(
+        self, *, x: int, y: int, observed_turn: int
+    ) -> CivReadResult[TileImprovementState]:
+        """Read one tile's improvement state for a factual builder readback."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_tile_improvement_state",
+                lua_code=build_tile_improvement_state_query(x, y),
+                decode=lambda lines: parse_tile_improvement_state_response(list(lines)),
+                coverage="TILE_IMPROVEMENT_COORDINATE:COMPLETE",
                 context="ingame",
             ),
             observed_turn=observed_turn,
