@@ -106,6 +106,10 @@ class RuntimeMcpSurface:
         """Return world religion facts without exposing a religion operation."""
         return await self._context.read_religion_overview()
 
+    async def get_barbarian_overview(self):
+        """Return fog-limited barbarian facts without exposing a combat operation."""
+        return await self._context.read_barbarian_overview()
+
     def save_handoff(
         self,
         *,

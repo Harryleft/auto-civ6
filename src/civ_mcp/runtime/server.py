@@ -246,6 +246,12 @@ async def get_religion_overview(ctx: Context) -> dict[str, object]:
     return _json_value(await _runtime(ctx).assembly.surface.get_religion_overview())
 
 
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_barbarian_overview(ctx: Context) -> dict[str, object]:
+    """Return revealed barbarian camps and visible units; this tool never fights."""
+    return _json_value(await _runtime(ctx).assembly.surface.get_barbarian_overview())
+
+
 @mcp.tool()
 async def save_handoff(
     ctx: Context,
