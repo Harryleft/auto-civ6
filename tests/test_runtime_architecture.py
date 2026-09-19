@@ -13,6 +13,8 @@ import civ_mcp.runtime.bootstrap as bootstrap
 import civ_mcp.runtime.mcp_surface as surface
 import civ_mcp.runtime.server as server
 import civ_mcp.runtime.session as session
+import civ_mcp.civ.mutations as mutations
+from civ_mcp.civ.mutations import CivMutationFactory
 
 
 RUNTIME_DIR = Path(surface.__file__).parent
@@ -118,6 +120,33 @@ def test_only_session_kernel_submits_civ_mutations() -> None:
             if node.func.attr == "submit" and receiver and receiver.endswith("adapter"):
                 submit_callers.append(source_file)
     assert submit_callers == [Path(session.__file__)]
+
+
+def test_domain_mutation_factory_cannot_submit_directly() -> None:
+    """Factories may read and construct requests, but cannot bypass SessionKernel."""
+    source_file = Path(mutations.__file__)
+    calls = [
+        node
+        for node in ast.walk(_tree(source_file))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "submit"
+        and _attribute_name(node.func.value)
+        and _attribute_name(node.func.value).endswith("adapter")
+    ]
+    assert calls == []
+
+
+def test_model_visible_server_mutations_go_through_the_mcp_surface() -> None:
+    calls = [
+        _attribute_name(node.func.value)
+        for node in ast.walk(_tree(Path(server.__file__)))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "execute_mutation"
+    ]
+    assert calls
+    assert set(calls) == {"assembly.surface"}
 
 
 def test_runtime_import_graph_is_acyclic() -> None:
