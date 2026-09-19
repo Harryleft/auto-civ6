@@ -110,6 +110,10 @@ class RuntimeMcpSurface:
         """Return fog-limited barbarian facts without exposing a combat operation."""
         return await self._context.read_barbarian_overview()
 
+    async def get_village_overview(self):
+        """Return revealed village facts without exposing a tile-entry operation."""
+        return await self._context.read_village_overview()
+
     def save_handoff(
         self,
         *,
