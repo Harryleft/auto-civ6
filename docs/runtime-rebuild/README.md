@@ -35,6 +35,9 @@
   激活的 `COMMEMORATION_*` 类型；大人物读取提供 individual ID 与本地认领状态。
 - `SessionKernel` 是 mutation 的唯一入口：发送后取消、连接中断、跨局回读
   都只会留下 `UNKNOWN`，同一 `operation_id` 的并发调用只会实际发送一次。
+- `ContextBuilder` 只组合 CivAdapter 的 typed reads、当前 Session operation、handoff
+  与 TurnLoop 的只读待决快照；组合前后均核验同一 game/branch，不能把切档后的事实与
+  旧 branch operation 混入同一模型上下文。
 - 新的 `TurnLoop` 只输出 `ADVANCED`、`NEEDS_DECISION` 或
   `RECOVERY_REQUIRED`。它在 end-turn 发送后只读轮询，并且仅以新的 turn
   Evidence 关闭原 operation；不补发 end-turn，也不启动恢复。明确 `NOT_SENT`
@@ -50,9 +53,13 @@
 - Runtime 在结束回合受可用使者阻塞时返回 `ENVOY` interrupt，候选是可接收使者的
   城邦 player ID；模型选择一个 ID 后仅发送一次 `send_envoy`，再继续等待原 end-turn，
   绝不自动选城邦或补发 end-turn。
-- 已迁移到 `CivMutationFactory` 的领域包括移动、单位/城市攻击、升级、晋升、
-  生产、购买、商路、建设单元、研究/市政、治理/总督、宗教、大人物、间谍、
-  世界议会和 end-turn。每个 factory 都绑定 intent，并要求领域 Evidence。
+- 单一、条款完整的待决交易会以 `TRADE_COUNTER_OFFER` interrupt 返回双方实际条款；
+  模型只能选 `ACCEPT` 或 `REJECT`。主动提议若无新的结构化回价证据会保留 `UNKNOWN`，
+  绝不根据 Lua 成功文本自动接受不同条款。世界议会仅支持模型显式的
+  `SUBMIT_ABSTAIN`；不支持自动投票。
+- 已通过实验入口暴露的 mutation 仅限 [`capabilities.md`](capabilities.md) 表中列出的
+  项目，并各自有 precheck 与领域 Evidence。`CivMutationFactory` 内未由该入口注册的
+  旧构造函数不是 Runtime 支持能力，不能据此推断宗教、间谍、奇观或世界议会投票已迁移。
 - 实验入口已把单位升级接入独立执行路径：提交前核对当前单位可升级与目标
   `UNIT_*` 类型，提交后仅以同一单位读回该目标类型确认。
 - 单位晋升读取同时返回当前可选与已拥有的 `PROMOTION_*` 类型；实验入口以它们分别
@@ -64,17 +71,12 @@
   派驻后同一总督的目标城市 ID 精确匹配时确认操作。
 - 政策读取为每张候选卡提供当前合法的槽位；实验入口拒绝跨槽或重复配置，并仅在每个
   请求槽位读回指定政策后确认。
-- `civ_mcp.runtime.server` 是独立的实验 FastMCP 入口，当前仅注册
-  `get_runtime_context`、`get_unit_promotions`、`get_city_states`、`get_governors`、`get_governments`、`get_policies`、`save_handoff`、`move_unit`、`upgrade_unit`、
-  `promote_unit`、`send_envoy`、`appoint_governor`、`assign_governor`、`promote_governor`、`set_city_production`，
-  `end_turn` 与 `resume_turn_decision`，以及 `set_research`、`set_civic`、
-  `choose_pantheon`、`choose_dedication`、`found_city`。`save_handoff` 仅保存当前
-  branch 的战略重点、已有安排、理由和改变条件，不能修改游戏事实或 operation record。
-  另有 `recruit_great_person` 可招募当前候选、`send_envoy` 可派遣一个已验证合法的使者、
-  `change_government` 可切换至一个已验证解锁的政府、`set_policies` 可配置已验证合法的政策槽位。
-  它要求 host 显式提供 `CIV_MCP_RUNTIME_BRANCH`，不会自行猜测读档分支。
-  server 只负责工具装配；end-turn 的等待和证据关闭属于 `TurnLoop`，而非 MCP
-  路由函数。
+- `civ_mcp.runtime.server` 是独立的实验 FastMCP 入口。注册工具的精确集合由
+  `tests/test_runtime_server.py` 与 [`capabilities.md`](capabilities.md) 共同约束；
+  `save_handoff` 仅保存当前 branch 的战略重点、已有安排、理由和改变条件，不能修改
+  游戏事实或 operation record。host 必须显式提供 `CIV_MCP_RUNTIME_BRANCH`，不会自行
+  猜测读档分支。server 只负责工具装配；end-turn 的等待和证据关闭属于 `TurnLoop`，而非
+  MCP 路由函数。
 
 可用下列方式启动实验入口（它仍不是正式 `civ-mcp` 命令）：
 
@@ -104,10 +106,10 @@ Belief/Governance 链路。
 正式切换尚未发生，`civ-mcp` 仍指向旧 server。以下条件尚无完成证据，因此
 不得执行 K1--K4 删除/切换：
 
-- F2 已接入单一活跃外交会话和单一待决城市占领；交易回价、世界议会和多会话仲裁
-  仍未迁移；
-- 新实验 surface 只支持能力清单中的最小集合；虽已逐项声明 unsupported，仍未覆盖
-  旧入口的大部分读写能力；
+- F2 已接入城市占领、单一条款完整交易回价、世界议会弃权、单一普通外交会话和使者
+  决策；多会话仲裁仍明确不支持，世界议会投票也尚未迁移；
+- 新实验 surface 只支持能力清单中逐项声明的集合。其余领域必须保持 unsupported，
+  不能因为旧入口或未注册的 factory 仍存在而被当作已迁移；
 - 尚未在真实单机游戏中完成新 surface 的 read → mutation → end-turn smoke，
   或真实 recovery 验证；
 - `pyproject.toml` 仍会打包 `civ6_belief_engine`，旧 server/pipeline 与
