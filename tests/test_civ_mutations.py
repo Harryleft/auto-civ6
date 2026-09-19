@@ -95,6 +95,53 @@ def test_purchase_requires_gold_change_and_new_unit() -> None:
     assert asyncio.run(execution.verify()).source == "read_overview+read_units"
 
 
+def test_builder_mutations_are_hash_bound_and_need_tile_readback() -> None:
+    class Adapter:
+        pass
+
+    async def readback() -> Evidence:
+        return Evidence("read_map", 12, "tile state transition observed")
+
+    factory = CivMutationFactory(Adapter())
+    improvement = factory.improve_tile(
+        operation_id=OperationId("improvement-1"),
+        unit_index=2,
+        improvement_name="IMPROVEMENT_FARM",
+        readback=readback,
+    )
+    repair = factory.repair_improvement(
+        operation_id=OperationId("repair-1"), unit_index=2, readback=readback
+    )
+    demolition = factory.remove_improvement(
+        operation_id=OperationId("demolish-1"), unit_index=2, readback=readback
+    )
+    harvest = factory.remove_feature(
+        operation_id=OperationId("harvest-1"), unit_index=2, readback=readback
+    )
+    route = factory.build_route(
+        operation_id=OperationId("route-1"), unit_index=2, readback=readback
+    )
+    assert [
+        improvement.intent.tool,
+        repair.intent.tool,
+        demolition.intent.tool,
+        harvest.intent.tool,
+        route.intent.tool,
+    ] == [
+        "improve_tile",
+        "repair_improvement",
+        "remove_improvement",
+        "remove_feature",
+        "build_route",
+    ]
+    assert "BUILD_IMPROVEMENT" in improvement.request.lua_code
+    assert "REPAIR" in repair.request.lua_code
+    assert "REMOVE_IMPROVEMENT" in demolition.request.lua_code
+    assert "REMOVE_FEATURE" in harvest.request.lua_code
+    assert "BUILD_ROUTE" in route.request.lua_code
+    assert asyncio.run(route.verify()).source == "read_map"
+
+
 def test_trade_proposal_preserves_the_exact_hash_bound_terms() -> None:
     class Adapter:
         pass
