@@ -12,7 +12,11 @@ from civ_mcp.lua.units import (
     parse_threat_scan_response,
     parse_units_response,
 )
-from civ_mcp.lua.cities import parse_cities_response
+from civ_mcp.lua.cities import (
+    parse_cities_response,
+    parse_city_capture_state_response,
+    parse_pending_city_capture_response,
+)
 from civ_mcp.lua.map import parse_map_response
 from civ_mcp.lua.notifications import parse_end_turn_blocking
 
@@ -310,6 +314,20 @@ class TestParseCities:
     def test_short_line_skipped(self):
         cities, _ = parse_cities_response(["too|short"])
         assert len(cities) == 0
+
+
+def test_city_capture_parsers_require_explicit_pending_and_post_state_markers() -> None:
+    pending = parse_pending_city_capture_response(
+        ["PENDING_CITY_CAPTURE|captured|9|Berlin|4|5|7|0|2|3|KEEP;RAZE"]
+    )
+    absent = parse_city_capture_state_response(["CITY_CAPTURE_ABSENT"])
+
+    assert pending is not None
+    assert pending.city_id == 9
+    assert pending.allowed_choices == ("KEEP", "RAZE")
+    assert absent.city_id is None
+    with pytest.raises(ValueError, match="缺少"):
+        parse_pending_city_capture_response([])
 
 
 # ---------------------------------------------------------------------------

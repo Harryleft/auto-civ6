@@ -38,6 +38,10 @@
   interrupt。模型经 `resume_turn_decision` 选择 `POSITIVE`、`NEGATIVE` 或仅
   goodbye 阶段的 `EXIT`；运行时只发送一次明确响应，随后继续原 end-turn，
   不会补发 end-turn。会话未关闭或未推进时仍保留 `UNKNOWN`。
+- Runtime 也会把待决城市占领读为 `CITY_CAPTURE` interrupt，提供 Civ6 此刻允许的
+  `KEEP`、`RAZE`、`REJECT` 或解放选项。恢复时只发送模型选定的单一指令，再以待决
+  状态消失与目标坐标的城市归属/不存在作为领域 Evidence；它不会沿用旧核心的自动
+  保留城市逻辑，且不会补发原 end-turn。
 - 已迁移到 `CivMutationFactory` 的领域包括移动、单位/城市攻击、升级、晋升、
   生产、购买、商路、建设单元、研究/市政、治理/总督、宗教、大人物、间谍、
   世界议会和 end-turn。每个 factory 都绑定 intent，并要求领域 Evidence。
@@ -78,8 +82,8 @@ Belief/Governance 链路。
 正式切换尚未发生，`civ-mcp` 仍指向旧 server。以下条件尚无完成证据，因此
 不得执行 K1--K4 删除/切换：
 
-- F2 目前只有单一活跃外交会话接到新的 decision interrupt/resume 流程；交易
-  回价、世界议会、城市占领和多会话仲裁仍未迁移；
+- F2 已接入单一活跃外交会话和单一待决城市占领；交易回价、世界议会和多会话仲裁
+  仍未迁移；
 - 新实验 surface 尚未覆盖全部原有公开能力，也尚未逐项声明 unsupported；
 - 尚未在真实单机游戏中完成新 surface 的 read → mutation → end-turn smoke，
   或真实 recovery 验证；

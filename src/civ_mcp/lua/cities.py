@@ -10,7 +10,7 @@ from civ_mcp.lua._helpers import (
     _bail_lua,
     _lua_get_city,
 )
-from civ_mcp.lua.models import CityInfo, ProductionOption
+from civ_mcp.lua.models import CityCaptureState, CityInfo, PendingCityCapture, ProductionOption
 
 
 def build_cities_query() -> str:
@@ -278,6 +278,67 @@ CityManager.RequestCommand(city, CityCommandTypes.DESTROY, params)
 print("OK:{action.upper()}|" .. name .. " (pop " .. pop .. ", id:" .. cid .. ", " .. source .. ")")
 print("{SENTINEL}")
 """
+
+
+def build_pending_city_capture_query() -> str:
+    """Read a turn-blocking city occupation choice without resolving it."""
+    return """
+local me = Game.GetLocalPlayer()
+local player = Players[me]
+local city = player:GetCities():GetNextRebelledCity()
+local source = "rebelled"
+if city == nil then
+    city = player:GetCities():GetNextCapturedCity()
+    source = "captured"
+end
+if city == nil then
+    print("NO_PENDING_CITY_CAPTURE")
+    print("{SENTINEL}")
+    return
+end
+local choices = {}
+local candidates = {
+    {choice="KEEP", directive=CityDestroyDirectives.KEEP},
+    {choice="REJECT", directive=CityDestroyDirectives.REJECT},
+    {choice="RAZE", directive=CityDestroyDirectives.RAZE},
+    {choice="LIBERATE_FOUNDER", directive=CityDestroyDirectives.LIBERATE_FOUNDER},
+    {choice="LIBERATE_PREVIOUS", directive=CityDestroyDirectives.LIBERATE_PREVIOUS_OWNER},
+}
+for _, candidate in ipairs(candidates) do
+    if candidate.directive ~= nil then
+        local params = {}
+        params[UnitOperationTypes.PARAM_FLAGS] = candidate.directive
+        local ok, canStart = pcall(function()
+            return CityManager.CanStartCommand(city, CityCommandTypes.DESTROY, params)
+        end)
+        if ok and canStart then table.insert(choices, candidate.choice) end
+    end
+end
+local originalOwner, previousOwner = -1, -1
+pcall(function() originalOwner = city:GetOriginalOwner() end)
+pcall(function() previousOwner = city:GetPreviousOwner() end)
+local name = Locale.Lookup(city:GetName()):gsub("|", "/"):gsub(";", ",")
+print(
+    "PENDING_CITY_CAPTURE|" .. source .. "|" .. city:GetID() .. "|" .. name
+    .. "|" .. city:GetX() .. "|" .. city:GetY() .. "|" .. city:GetPopulation()
+    .. "|" .. city:GetOwner() .. "|" .. originalOwner .. "|" .. previousOwner
+    .. "|" .. table.concat(choices, ";")
+)
+print("{SENTINEL}")
+""".replace("{SENTINEL}", SENTINEL)
+
+
+def build_city_capture_state_query(x: int, y: int) -> str:
+    """Read the city at the fixed capture coordinates after a choice."""
+    return f"""
+local city = CityManager.GetCityAt({x}, {y})
+if city == nil then
+    print("CITY_CAPTURE_ABSENT")
+else
+    print("CITY_CAPTURE_STATE|" .. city:GetID() .. "|" .. city:GetOwner())
+end
+print("{SENTINEL}")
+""".replace("{SENTINEL}", SENTINEL)
 
 
 def build_city_production_query(city_id: int) -> str:
@@ -785,6 +846,44 @@ def parse_cities_response(lines: list[str]) -> tuple[list[CityInfo], list[str]]:
         )
         city_by_id[cities[-1].city_id] = cities[-1]
     return cities, distances
+
+
+def parse_pending_city_capture_response(lines: list[str]) -> PendingCityCapture | None:
+    """Decode exactly one pending occupation choice, or an explicit empty result."""
+    for line in lines:
+        if line == "NO_PENDING_CITY_CAPTURE":
+            return None
+        if not line.startswith("PENDING_CITY_CAPTURE|"):
+            continue
+        parts = line.split("|")
+        if len(parts) != 11:
+            raise ValueError("PENDING_CITY_CAPTURE 响应字段不完整。")
+        return PendingCityCapture(
+            source=parts[1],
+            city_id=int(parts[2]),
+            name=parts[3],
+            x=int(parts[4]),
+            y=int(parts[5]),
+            population=int(parts[6]),
+            owner_id=int(parts[7]),
+            original_owner_id=int(parts[8]),
+            previous_owner_id=int(parts[9]),
+            allowed_choices=tuple(choice for choice in parts[10].split(";") if choice),
+        )
+    raise ValueError("缺少 PENDING_CITY_CAPTURE 响应。")
+
+
+def parse_city_capture_state_response(lines: list[str]) -> CityCaptureState:
+    """Decode the post-decision city ownership at one fixed coordinate."""
+    for line in lines:
+        if line == "CITY_CAPTURE_ABSENT":
+            return CityCaptureState(city_id=None, owner_id=None)
+        if line.startswith("CITY_CAPTURE_STATE|"):
+            parts = line.split("|")
+            if len(parts) != 3:
+                raise ValueError("CITY_CAPTURE_STATE 响应字段不完整。")
+            return CityCaptureState(city_id=int(parts[1]), owner_id=int(parts[2]))
+    raise ValueError("缺少 CITY_CAPTURE_STATE 响应。")
 
 
 def parse_city_production_response(lines: list[str]) -> list[ProductionOption]:

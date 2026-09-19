@@ -16,6 +16,9 @@ def test_context_keeps_failed_domain_reads_explicitly_unknown() -> None:
         async def read_cities(self, **_kwargs):
             return SimpleNamespace(value=[])
 
+        async def read_pending_city_capture(self, **_kwargs):
+            return SimpleNamespace(value=None)
+
         async def read_units(self, **_kwargs):
             raise TimeoutError("no response")
 

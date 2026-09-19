@@ -189,3 +189,82 @@ def test_bootstrap_resumes_a_diplomacy_interrupt_without_sending_a_second_end_tu
         assert adapter.submissions == ["end_turn", "respond_to_diplomacy"]
 
     asyncio.run(run())
+
+
+def test_bootstrap_resumes_a_city_capture_interrupt_without_a_second_end_turn(tmp_path) -> None:
+    pending_capture = SimpleNamespace(
+        city_id=9,
+        name="Berlin",
+        x=4,
+        y=5,
+        population=7,
+        source="captured",
+        owner_id=0,
+        original_owner_id=2,
+        previous_owner_id=3,
+        allowed_choices=("KEEP", "RAZE"),
+    )
+
+    class Adapter:
+        def __init__(self) -> None:
+            self.game = GameIdentity("civilization_france_42")
+            self.overview_calls = 0
+            self.capture_calls = 0
+            self.submissions: list[str] = []
+
+        async def read_game_identity(self):
+            return SimpleNamespace(value=self.game)
+
+        async def read_overview(self):
+            self.overview_calls += 1
+            turn = 11 if self.overview_calls >= 6 else 10
+            return SimpleNamespace(value=SimpleNamespace(turn=turn))
+
+        async def read_pending_city_capture(self, *, observed_turn):
+            self.capture_calls += 1
+            return SimpleNamespace(
+                value=pending_capture if self.capture_calls < 3 else None,
+                observed_turn=observed_turn,
+            )
+
+        async def read_city_capture_state(self, *, x, y, observed_turn):
+            assert (x, y) == (4, 5)
+            return SimpleNamespace(
+                value=SimpleNamespace(city_id=9, owner_id=0),
+                observed_turn=observed_turn,
+            )
+
+        async def submit(self, request):
+            self.submissions.append(request.tool)
+            return TransportReceipt(SendState.MAYBE_SENT, True, (), True)
+
+    async def run() -> None:
+        adapter = Adapter()
+        assembly = await assemble_runtime(
+            adapter,
+            OperationStore(tmp_path / "operations.sqlite3"),
+            branch_token="save-0001",
+        )
+
+        async def no_immediate_evidence():
+            return None
+
+        interrupted = await assembly.surface.end_turn(
+            assembly.mutations.end_turn(
+                operation_id=OperationId("end-turn-city-capture"),
+                readback=no_immediate_evidence,
+            ),
+            decision_turn=10,
+        )
+        resumed = await assembly.surface.resume_turn_decision(
+            OperationId("end-turn-city-capture"), "KEEP"
+        )
+
+        assert interrupted.outcome is TurnOutcome.NEEDS_DECISION
+        assert interrupted.decision.decision_type == "CITY_CAPTURE"
+        assert interrupted.decision.allowed_choices == ("KEEP", "RAZE")
+        assert resumed.outcome is TurnOutcome.ADVANCED
+        assert resumed.operation.outcome_state is OutcomeState.CONFIRMED
+        assert adapter.submissions == ["end_turn", "resolve_city_capture"]
+
+    asyncio.run(run())
