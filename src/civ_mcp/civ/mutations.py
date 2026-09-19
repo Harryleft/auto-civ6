@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 
 from civ_mcp.civ.adapter import CivAdapter, CivMutationRequest
-from civ_mcp.lua.cities import build_produce_item, build_purchase_item
+from civ_mcp.lua.cities import build_city_attack, build_produce_item, build_purchase_item
 from civ_mcp.lua.diplomacy import build_propose_trade
 from civ_mcp.lua.economy import build_make_trade_route
 from civ_mcp.lua.governance import (
@@ -20,6 +20,7 @@ from civ_mcp.lua.governance import (
     build_promote_unit,
     build_send_envoy,
     build_set_policies,
+    build_upgrade_unit,
 )
 from civ_mcp.lua.great_people import build_recruit_great_person
 from civ_mcp.lua.espionage import build_spy_mission, build_spy_travel
@@ -106,6 +107,28 @@ class CivMutationFactory:
             request=CivMutationRequest("attack_unit", build_attack_unit(unit_index, target_x, target_y)),
             verify=readback,
             operation_id=operation_id,
+        )
+
+    def attack_city(
+        self,
+        *,
+        operation_id: OperationId,
+        city_id: int,
+        target_x: int,
+        target_y: int,
+        readback: AttackReadback,
+    ) -> MutationExecution:
+        """Request one city attack; combat outcome still needs factual readback."""
+        return self._readback_action(
+            operation_id=operation_id,
+            tool="city_attack",
+            arguments={
+                "city_id": city_id,
+                "target_x": target_x,
+                "target_y": target_y,
+            },
+            lua_code=build_city_attack(city_id, target_x, target_y),
+            readback=readback,
         )
 
     def set_production(
@@ -287,6 +310,18 @@ class CivMutationFactory:
         self, *, operation_id: OperationId, unit_index: int, promotion_type: str, readback: AttackReadback
     ) -> MutationExecution:
         return self._readback_action(operation_id=operation_id, tool="promote_unit", arguments={"unit_index": unit_index, "promotion_type": promotion_type}, lua_code=build_promote_unit(unit_index, promotion_type), readback=readback, context="gamecore")
+
+    def upgrade_unit(
+        self, *, operation_id: OperationId, unit_index: int, readback: AttackReadback
+    ) -> MutationExecution:
+        """Upgrade through the game command; never trust its acknowledgement alone."""
+        return self._readback_action(
+            operation_id=operation_id,
+            tool="upgrade_unit",
+            arguments={"unit_index": unit_index},
+            lua_code=build_upgrade_unit(unit_index),
+            readback=readback,
+        )
 
     def send_envoy(
         self, *, operation_id: OperationId, city_state_player_id: int, readback: AttackReadback
