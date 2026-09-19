@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import TypeVar
 
 from civ_mcp.civ.adapter import CivAdapter, CivMutationRequest, CivReadRequest, CivReadResult
-from civ_mcp.runtime.contracts import BranchIdentity, Evidence, GameIdentity, OperationIntent, OperationRecord, SendState
+from civ_mcp.runtime.contracts import BranchIdentity, Evidence, GameIdentity, OperationId, OperationIntent, OperationRecord, SendState
 from civ_mcp.runtime.store import OperationStore
 
 
@@ -44,6 +44,7 @@ class MutationExecution:
     intent: OperationIntent
     request: CivMutationRequest
     verify: EvidenceProbe
+    operation_id: OperationId
 
 
 class SessionKernel:
@@ -95,22 +96,34 @@ class SessionKernel:
             raise ValueError("OperationIntent 与 CivMutationRequest 的 tool 必须一致。")
         async with self._mutation_lock:
             binding = self._require_binding()
+            if await self._identity_probe() != binding.game_id or await self._turn_probe() != decision_turn:
+                raise StaleIntentError("对局或回合已变化，模型意图未发送。")
+            existing = self._store.get_operation(execution.operation_id)
+            if existing is not None:
+                existing.assert_same_intent(execution.intent)
+                if existing.game_id != binding.game_id or existing.branch_id != binding.branch_id:
+                    raise StaleIntentError("operation 属于另一条 game/branch，未发送。")
+                return existing
             record = OperationRecord.create(
                 game_id=binding.game_id,
                 branch_id=binding.branch_id,
                 decision_turn=decision_turn,
                 intent=execution.intent,
+                operation_id=execution.operation_id,
             )
             self._store.save_operation(record)
             record = record.prechecked()
             self._store.save_operation(record)
-            if await self._identity_probe() != binding.game_id or await self._turn_probe() != decision_turn:
-                record = record.stale_intent()
-                self._store.save_operation(record)
-                raise StaleIntentError("对局或回合已变化，模型意图未发送。")
             record = record.sending()
             self._store.save_operation(record)
-            receipt = await self._adapter.submit(execution.request)
+            try:
+                receipt = await self._adapter.submit(execution.request)
+            except Exception:
+                record = record.maybe_sent()
+                self._store.save_operation(record)
+                record = record.unknown()
+                self._store.save_operation(record)
+                return record
             if receipt.send_state is SendState.NOT_SENT:
                 record = record.not_sent()
                 self._store.save_operation(record)
