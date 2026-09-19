@@ -99,6 +99,7 @@ class ContextBuilder:
                 "get_religion_overview",
                 "get_barbarian_overview",
                 "get_village_overview",
+                "get_wonder_placements",
             ),
         )
 
@@ -241,4 +242,13 @@ class ContextBuilder:
         overview = await self._adapter.read_overview()
         return await self._adapter.read_village_overview(
             observed_turn=overview.observed_turn
+        )
+
+    async def read_wonder_placements(self, city_id: int, wonder_name: str):
+        """Read game-approved placement candidates without starting production."""
+        overview = await self._adapter.read_overview()
+        return await self._adapter.read_wonder_placements(
+            city_id=city_id,
+            wonder_name=wonder_name,
+            observed_turn=overview.observed_turn,
         )

@@ -349,6 +349,49 @@ def test_village_overview_allows_an_empty_revealed_snapshot() -> None:
     assert villages.value.huts == []
 
 
+def test_wonder_placements_are_typed_live_ingame_facts() -> None:
+    transport = _Transport(
+        _complete(
+            "WPLOT|5,7|TERRAIN_DESERT|none|false|false|none|none|0"
+        )
+    )
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    placements = asyncio.run(
+        civ.read_wonder_placements(
+            city_id=4, wonder_name="BUILDING_PYRAMIDS", observed_turn=42
+        )
+    )
+
+    assert (placements.value[0].x, placements.value[0].y) == (5, 7)
+    assert placements.coverage == "WONDER_PLACEMENTS:COMPLETE"
+    assert transport.commands[0].startswith("CMD:153:")
+
+
+@pytest.mark.parametrize("wonder_name", ["Pyramids", "BUILDING_bad", "BUILDING_X\"; x=1"])
+def test_wonder_placements_reject_untrusted_lua_identifiers(wonder_name: str) -> None:
+    civ = adapter.CivAdapter(_Transport(_complete()), gamecore_state=8, ingame_state=153)
+
+    with pytest.raises(ValueError, match="BUILDING_\\*"):
+        asyncio.run(
+            civ.read_wonder_placements(
+                city_id=4, wonder_name=wonder_name, observed_turn=42
+            )
+        )
+
+
+def test_wonder_placements_keep_game_rejection_explicit() -> None:
+    transport = _Transport(_complete("ERR:CANNOT_PRODUCE|BUILDING_PYRAMIDS"))
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    with pytest.raises(ValueError, match="CANNOT_PRODUCE"):
+        asyncio.run(
+            civ.read_wonder_placements(
+                city_id=4, wonder_name="BUILDING_PYRAMIDS", observed_turn=42
+            )
+        )
+
+
 def test_city_purchase_candidate_error_is_not_coerced_to_an_empty_result() -> None:
     transport = _Transport(_complete("ERR:CITY_NOT_FOUND"))
     civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
