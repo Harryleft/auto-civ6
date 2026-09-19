@@ -14,6 +14,7 @@ from civ_mcp.lua.cities import (
     build_city_attack,
     build_produce_item,
     build_purchase_item,
+    build_resolve_city_capture,
     build_set_yield_focus,
 )
 from civ_mcp.lua.diplomacy import build_diplomacy_respond, build_propose_trade
@@ -279,6 +280,101 @@ class CivMutationFactory:
         return MutationExecution(
             intent=intent,
             request=CivMutationRequest("found_city", build_found_city(unit_index)),
+            verify=verify,
+            operation_id=operation_id,
+            precheck=precheck,
+        )
+
+    def resolve_city_capture(
+        self,
+        *,
+        operation_id: OperationId,
+        city_id: int,
+        choice: str,
+        observed_turn: int,
+    ) -> MutationExecution:
+        """Resolve one observed occupation choice with a domain postcondition."""
+        normalized_choice = choice.upper()
+        baseline = None
+        intent = OperationIntent.create(
+            "resolve_city_capture",
+            {"city_id": city_id, "choice": normalized_choice},
+        )
+
+        async def precheck() -> None:
+            nonlocal baseline
+            try:
+                capture = await self._adapter.read_pending_city_capture(
+                    observed_turn=observed_turn
+                )
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取城市占领选择 baseline。") from exc
+            if capture.value is None or capture.value.city_id != city_id:
+                raise MutationPreconditionError("当前没有匹配的城市占领选择，不提交操作。")
+            if normalized_choice not in capture.value.allowed_choices:
+                raise MutationPreconditionError("choice 不是游戏当前允许的城市占领选项。")
+            baseline = capture.value
+
+        async def verify() -> Evidence | None:
+            if baseline is None:
+                return None
+            try:
+                pending = await self._adapter.read_pending_city_capture(
+                    observed_turn=observed_turn
+                )
+                if pending.value is not None and pending.value.city_id == city_id:
+                    return None
+                state = await self._adapter.read_city_capture_state(
+                    x=baseline.x,
+                    y=baseline.y,
+                    observed_turn=observed_turn,
+                )
+            except Exception:
+                return None
+            if normalized_choice == "KEEP":
+                if (
+                    state.value.city_id == city_id
+                    and state.value.owner_id == baseline.owner_id
+                ):
+                    return Evidence(
+                        "read_pending_city_capture+read_city_capture_state",
+                        state.observed_turn,
+                        f"city_id={city_id} kept by player_id={baseline.owner_id}",
+                    )
+                return None
+            if normalized_choice == "RAZE":
+                if state.value.city_id is None:
+                    return Evidence(
+                        "read_pending_city_capture+read_city_capture_state",
+                        state.observed_turn,
+                        f"city_id={city_id} absent after raze",
+                    )
+                return None
+            expected_owner = {
+                "LIBERATE_FOUNDER": baseline.original_owner_id,
+                "LIBERATE_PREVIOUS": baseline.previous_owner_id,
+            }.get(normalized_choice)
+            if expected_owner is not None and expected_owner >= 0:
+                if state.value.city_id == city_id and state.value.owner_id == expected_owner:
+                    return Evidence(
+                        "read_pending_city_capture+read_city_capture_state",
+                        state.observed_turn,
+                        f"city_id={city_id} transferred to player_id={expected_owner}",
+                    )
+                return None
+            if normalized_choice == "REJECT":
+                return Evidence(
+                    "read_pending_city_capture",
+                    pending.observed_turn,
+                    f"city_id={city_id} occupation choice closed after REJECT",
+                )
+            return None
+
+        return MutationExecution(
+            intent=intent,
+            request=CivMutationRequest(
+                "resolve_city_capture", build_resolve_city_capture(normalized_choice.lower())
+            ),
             verify=verify,
             operation_id=operation_id,
             precheck=precheck,

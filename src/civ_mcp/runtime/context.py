@@ -35,6 +35,7 @@ class ContextBuilder:
         unknown: list[str] = []
         for name, read in (
             ("cities", self._adapter.read_cities),
+            ("pending_city_capture", self._adapter.read_pending_city_capture),
             ("units", self._adapter.read_units),
             ("diplomacy", self._adapter.read_diplomacy),
             ("pending_diplomacy", self._adapter.read_diplomacy_sessions),

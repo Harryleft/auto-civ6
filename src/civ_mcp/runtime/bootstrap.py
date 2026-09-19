@@ -87,6 +87,27 @@ async def assemble_runtime(
             )
         return await turn_loop.wait_for_turn(operation)
 
+    async def continue_city_capture(
+        operation: OperationRecord, city_id: int, choice: str
+    ) -> TurnResult:
+        """Resolve one model-selected occupation choice, then await the same turn."""
+        response = await session.execute(
+            mutations.resolve_city_capture(
+                operation_id=OperationId.new(),
+                city_id=city_id,
+                choice=choice,
+                observed_turn=operation.decision_turn,
+            ),
+            decision_turn=operation.decision_turn,
+        )
+        if response.outcome_state is not OutcomeState.CONFIRMED:
+            return TurnResult(
+                TurnOutcome.RECOVERY_REQUIRED,
+                response,
+                "城市占领选择未由新游戏事实确认；不得重发，需重新读取或恢复。",
+            )
+        return await turn_loop.wait_for_turn(operation)
+
     async def observe_turn(operation: OperationRecord) -> TurnObservation:
         """Poll fresh game facts only; this never submits or resumes a turn."""
         try:
@@ -107,6 +128,39 @@ async def assemble_runtime(
                     detail=f"turn {operation.decision_turn} -> {overview.value.turn}",
                 )
             )
+        try:
+            capture = await adapter.read_pending_city_capture(
+                observed_turn=overview.value.turn
+            )
+        except Exception:
+            capture = None
+        if (
+            capture is not None
+            and capture.value is not None
+            and capture.value.allowed_choices
+        ):
+            active_capture = capture.value
+            interrupt = DecisionInterrupt(
+                decision_type="CITY_CAPTURE",
+                facts={
+                    "city_id": active_capture.city_id,
+                    "city_name": active_capture.name,
+                    "x": active_capture.x,
+                    "y": active_capture.y,
+                    "population": active_capture.population,
+                    "source": active_capture.source,
+                    "owner_id": active_capture.owner_id,
+                    "original_owner_id": active_capture.original_owner_id,
+                    "previous_owner_id": active_capture.previous_owner_id,
+                },
+                allowed_choices=active_capture.allowed_choices,
+                continuation_operation_id=operation.operation_id,
+            )
+
+            async def capture_continuation(choice: str) -> TurnResult:
+                return await continue_city_capture(operation, active_capture.city_id, choice)
+
+            return TurnObservation(interrupt=interrupt, continuation=capture_continuation)
         try:
             sessions = await adapter.read_diplomacy_sessions(
                 observed_turn=overview.value.turn

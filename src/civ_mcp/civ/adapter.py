@@ -6,14 +6,31 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Generic, TypeVar
 
-from civ_mcp.lua.cities import build_cities_query, parse_cities_response
+from civ_mcp.lua.cities import (
+    build_cities_query,
+    build_city_capture_state_query,
+    build_pending_city_capture_query,
+    parse_cities_response,
+    parse_city_capture_state_response,
+    parse_pending_city_capture_response,
+)
 from civ_mcp.lua.diplomacy import (
     build_diplomacy_query,
     build_diplomacy_session_query,
     parse_diplomacy_response,
     parse_diplomacy_sessions,
 )
-from civ_mcp.lua.models import CityInfo, CivInfo, DiplomacySession, GameOverview, TechCivicStatus, UnitInfo, VictoryProgress
+from civ_mcp.lua.models import (
+    CityCaptureState,
+    CityInfo,
+    CivInfo,
+    DiplomacySession,
+    GameOverview,
+    PendingCityCapture,
+    TechCivicStatus,
+    UnitInfo,
+    VictoryProgress,
+)
 from civ_mcp.lua.overview import (
     build_game_identity_query,
     build_overview_query,
@@ -151,6 +168,36 @@ class CivAdapter:
             observed_turn=observed_turn,
         )
         return result
+
+    async def read_pending_city_capture(
+        self, *, observed_turn: int
+    ) -> CivReadResult[PendingCityCapture | None]:
+        """Read a current city occupation blocker without choosing for the model."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_pending_city_capture",
+                lua_code=build_pending_city_capture_query(),
+                decode=lambda lines: parse_pending_city_capture_response(list(lines)),
+                coverage="PENDING_CITY_CAPTURE:COMPLETE",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
+    async def read_city_capture_state(
+        self, *, x: int, y: int, observed_turn: int
+    ) -> CivReadResult[CityCaptureState]:
+        """Read one occupied coordinate to verify an explicit decision outcome."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_city_capture_state",
+                lua_code=build_city_capture_state_query(x, y),
+                decode=lambda lines: parse_city_capture_state_response(list(lines)),
+                coverage="CITY_CAPTURE_COORDINATE:COMPLETE",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
 
     async def read_units(self, *, observed_turn: int) -> CivReadResult[list[UnitInfo]]:
         return await self.read(

@@ -101,6 +101,33 @@ def test_diplomacy_sessions_are_typed_read_only_facts() -> None:
     assert transport.commands[0].startswith("CMD:153:")
 
 
+def test_pending_city_capture_and_its_coordinate_state_are_typed_facts() -> None:
+    pending_transport = _Transport(
+        _complete("PENDING_CITY_CAPTURE|captured|9|Berlin|4|5|7|0|2|3|KEEP;RAZE")
+    )
+    civ = adapter.CivAdapter(pending_transport, gamecore_state=8, ingame_state=153)
+
+    pending = asyncio.run(civ.read_pending_city_capture(observed_turn=42))
+
+    assert pending.value is not None
+    assert pending.value.city_id == 9
+    assert pending.value.allowed_choices == ("KEEP", "RAZE")
+    assert pending.coverage == "PENDING_CITY_CAPTURE:COMPLETE"
+    assert pending_transport.commands[0].startswith("CMD:153:")
+
+    state_transport = _Transport(_complete("CITY_CAPTURE_STATE|9|0"))
+    state_civ = adapter.CivAdapter(state_transport, gamecore_state=8, ingame_state=153)
+
+    state = asyncio.run(
+        state_civ.read_city_capture_state(x=4, y=5, observed_turn=42)
+    )
+
+    assert state.value.city_id == 9
+    assert state.value.owner_id == 0
+    assert state.coverage == "CITY_CAPTURE_COORDINATE:COMPLETE"
+    assert state_transport.commands[0].startswith("CMD:153:")
+
+
 def test_tech_civics_read_exposes_stable_current_selection_ids() -> None:
     transport = _Transport(
         _complete("CURRENT|Writing|3|Code of Laws|2|TECH_WRITING|CIVIC_CODE_OF_LAWS")

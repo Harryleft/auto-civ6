@@ -147,6 +147,65 @@ def test_founding_rejects_a_tile_that_already_has_a_city() -> None:
         asyncio.run(execution.precheck())
 
 
+def test_city_capture_requires_a_current_choice_and_post_decision_ownership() -> None:
+    pending = SimpleNamespace(
+        city_id=9,
+        x=4,
+        y=5,
+        owner_id=0,
+        original_owner_id=2,
+        previous_owner_id=3,
+        allowed_choices=("KEEP", "RAZE"),
+    )
+
+    class Adapter:
+        calls = 0
+
+        async def read_pending_city_capture(self, *, observed_turn):
+            self.calls += 1
+            return SimpleNamespace(
+                value=pending if self.calls == 1 else None,
+                observed_turn=observed_turn,
+            )
+
+        async def read_city_capture_state(self, *, x, y, observed_turn):
+            assert (x, y) == (4, 5)
+            return SimpleNamespace(
+                value=SimpleNamespace(city_id=9, owner_id=0),
+                observed_turn=observed_turn,
+            )
+
+    execution = CivMutationFactory(Adapter()).resolve_city_capture(
+        operation_id=OperationId("capture-9"), city_id=9, choice="KEEP", observed_turn=12
+    )
+
+    asyncio.run(execution.precheck())
+    evidence = asyncio.run(execution.verify())
+
+    assert execution.intent.tool == execution.request.tool == "resolve_city_capture"
+    assert "CityDestroyDirectives.KEEP" in execution.request.lua_code
+    assert evidence.source == "read_pending_city_capture+read_city_capture_state"
+
+
+def test_city_capture_rejects_choices_not_allowed_by_current_game_state() -> None:
+    class Adapter:
+        async def read_pending_city_capture(self, *, observed_turn):
+            return SimpleNamespace(
+                value=SimpleNamespace(city_id=9, allowed_choices=("KEEP",)),
+                observed_turn=observed_turn,
+            )
+
+    execution = CivMutationFactory(Adapter()).resolve_city_capture(
+        operation_id=OperationId("capture-invalid"),
+        city_id=9,
+        choice="RAZE",
+        observed_turn=12,
+    )
+
+    with pytest.raises(MutationPreconditionError, match="当前允许"):
+        asyncio.run(execution.precheck())
+
+
 def test_purchase_requires_gold_change_and_new_unit() -> None:
     class Adapter:
         async def read_overview(self):
