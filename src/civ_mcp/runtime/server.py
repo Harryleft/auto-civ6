@@ -111,6 +111,12 @@ async def get_governors(ctx: Context) -> dict[str, object]:
     return _json_value(await _runtime(ctx).assembly.surface.get_governors())
 
 
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_governments(ctx: Context) -> dict[str, object]:
+    """Return every unlocked government and mark the current one."""
+    return _json_value(await _runtime(ctx).assembly.surface.get_governments())
+
+
 @mcp.tool()
 async def save_handoff(
     ctx: Context,
@@ -260,6 +266,22 @@ async def promote_governor(
         operation_id=OperationId(operation_id),
         governor_type=governor_type,
         promotion_type=promotion_type,
+        observed_turn=decision_turn,
+    )
+    return _operation_payload(
+        await assembly.surface.execute_mutation(execution, decision_turn=decision_turn)
+    )
+
+
+@mcp.tool()
+async def change_government(
+    ctx: Context, operation_id: str, government_type: str, decision_turn: int
+) -> dict[str, object]:
+    """Change government once; confirmation requires the new current type."""
+    assembly = _runtime(ctx).assembly
+    execution = assembly.mutations.change_government(
+        operation_id=OperationId(operation_id),
+        government_type=government_type,
         observed_turn=decision_turn,
     )
     return _operation_payload(
