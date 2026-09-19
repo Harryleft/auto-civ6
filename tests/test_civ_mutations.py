@@ -754,6 +754,27 @@ def test_trade_response_requires_the_observed_pending_deal_to_change() -> None:
     assert "DealProposalAction.ACCEPTED" in execution.request.lua_code
 
 
+def test_congress_submission_requires_closed_session_readback() -> None:
+    class Adapter:
+        calls = 0
+
+        async def read_world_congress(self, **_kwargs):
+            self.calls += 1
+            return SimpleNamespace(
+                value=SimpleNamespace(is_in_session=self.calls == 1),
+                observed_turn=12,
+            )
+
+    execution = CivMutationFactory(Adapter()).submit_congress(
+        operation_id=OperationId("congress-submit-1"), observed_turn=12
+    )
+    asyncio.run(execution.precheck())
+    evidence = asyncio.run(execution.verify())
+    assert evidence.source == "read_world_congress"
+    assert "WORLD_CONGRESS_SUBMIT_TURN" in execution.request.lua_code
+    assert "ACTION_ENDTURN" not in execution.request.lua_code
+
+
 def test_diplomacy_response_requires_a_fresh_session_transition() -> None:
     initial = SimpleNamespace(
         session_id=9,
