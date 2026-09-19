@@ -816,9 +816,11 @@ if sid and sid >= 0 then
         return DealManager.GetWorkingDeal(DealDirection.INCOMING, me, target)
     end)
     if ok and respDeal and respDeal:GetItemCount() and respDeal:GetItemCount() > 0 then
-        DealManager.SendWorkingDeal(DealProposalAction.ACCEPTED, me, target)
-        result = "ACCEPTED"
-        -- Report the actual deal terms (AI may have counter-offered different terms)
+        -- A received deal may differ from the proposed terms.  Never accept it
+        -- here: the caller must surface a structured counter-offer and obtain
+        -- a new model decision for these exact terms.
+        result = "COUNTER_OFFER"
+        -- Report the actual counter-offer terms for that next decision.
         local weGive = {{}}
         local theyGive = {{}}
         for item in respDeal:Items() do
@@ -856,7 +858,7 @@ if sid and sid >= 0 then
     else
         result = "REJECTED"
     end
-    {_lua_close_diplo_session()}
+    if result ~= "COUNTER_OFFER" then {_lua_close_diplo_session()} end
 end
 print("OK:" .. result .. "|Trade " .. result:lower() .. " with " .. name .. termsStr)
 print("{SENTINEL}")
