@@ -10,6 +10,7 @@ from pathlib import Path
 import civ_mcp.runtime.context as context
 import civ_mcp.runtime.connection as connection
 import civ_mcp.runtime.bootstrap as bootstrap
+import civ_mcp.runtime.eval_harness as eval_harness
 import civ_mcp.runtime.mcp_surface as surface
 import civ_mcp.runtime.server as server
 import civ_mcp.runtime.session as session
@@ -214,3 +215,17 @@ def test_telemetry_has_no_runtime_control_dependency() -> None:
     assert ".submit(" not in source
     assert ".execute(" not in source
     assert "save_operation" not in source
+
+
+def test_eval_harness_is_not_part_of_the_model_or_runtime_control_path() -> None:
+    imports = _import_modules(eval_harness)
+    for forbidden in (
+        "civ_mcp.civ.adapter",
+        "civ_mcp.runtime.connection",
+        "civ_mcp.runtime.session",
+        "civ_mcp.runtime.turn",
+        "civ_mcp.runtime.mcp_surface",
+        "civ_mcp.runtime.server",
+    ):
+        assert not _has_import(imports, forbidden)
+    assert not _has_import(_import_modules(server), "civ_mcp.runtime.eval_harness")
