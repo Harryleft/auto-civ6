@@ -21,7 +21,7 @@ def test_experimental_runtime_surface_exposes_only_new_core_tools() -> None:
     tools = asyncio.run(mcp.list_tools())
     names = {tool.name for tool in tools}
 
-    assert {
+    assert names == {
         "get_runtime_context",
         "save_handoff",
         "move_unit",
@@ -34,9 +34,7 @@ def test_experimental_runtime_surface_exposes_only_new_core_tools() -> None:
         "found_city",
         "end_turn",
         "resume_turn_decision",
-    } <= names
-    assert "run_lua" not in names
-    assert "route_belief_decision" not in names
+    }
 
 
 def test_runtime_server_requires_explicit_branch_before_opening_a_connection(
