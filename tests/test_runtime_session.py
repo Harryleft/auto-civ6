@@ -129,6 +129,81 @@ def test_same_operation_id_never_submits_twice_after_unknown_transport_failure(t
     asyncio.run(run())
 
 
+def test_cancelled_submit_is_persisted_as_unknown_and_never_resent(tmp_path) -> None:
+    async def run() -> None:
+        game = GameIdentity("game-a")
+
+        async def probe() -> GameIdentity:
+            return game
+
+        class MutationAdapter(_Adapter):
+            calls = 0
+
+            async def submit(self, _request):
+                self.calls += 1
+                raise asyncio.CancelledError()
+
+        adapter = MutationAdapter()
+        store = OperationStore(tmp_path / "operations.sqlite3")
+        kernel = SessionKernel(adapter, store, identity_probe=probe, turn_probe=lambda: _turn(10))
+        await kernel.bind(game, BranchIdentity(game, "main"))
+        operation_id = OperationId("cancelled-move")
+
+        async def verify() -> None:
+            return None
+
+        execution = MutationExecution(
+            OperationIntent.create("move_unit", {"unit_id": 1}),
+            CivMutationRequest("move_unit", "move()"), verify, operation_id,
+        )
+        with pytest.raises(asyncio.CancelledError):
+            await kernel.execute(execution, decision_turn=10)
+        persisted = store.get_operation(operation_id)
+        assert persisted is not None
+        assert persisted.outcome_state is OutcomeState.UNKNOWN
+        assert (await kernel.execute(execution, decision_turn=10)).operation_id == operation_id
+        assert adapter.calls == 1
+
+    asyncio.run(run())
+
+
+def test_cancelled_evidence_readback_is_persisted_as_unknown(tmp_path) -> None:
+    async def run() -> None:
+        game = GameIdentity("game-a")
+
+        async def probe() -> GameIdentity:
+            return game
+
+        class MutationAdapter(_Adapter):
+            async def submit(self, _request):
+                return TransportReceipt(SendState.MAYBE_SENT, True, (), True)
+
+        store = OperationStore(tmp_path / "operations.sqlite3")
+        kernel = SessionKernel(
+            MutationAdapter(), store, identity_probe=probe, turn_probe=lambda: _turn(10)
+        )
+        await kernel.bind(game, BranchIdentity(game, "main"))
+        operation_id = OperationId("cancelled-readback")
+
+        async def verify() -> None:
+            raise asyncio.CancelledError()
+
+        with pytest.raises(asyncio.CancelledError):
+            await kernel.execute(
+                MutationExecution(
+                    OperationIntent.create("move_unit", {"unit_id": 1}),
+                    CivMutationRequest("move_unit", "move()"), verify, operation_id,
+                ),
+                decision_turn=10,
+            )
+        persisted = store.get_operation(operation_id)
+        assert persisted is not None
+        assert persisted.outcome_state is OutcomeState.UNKNOWN
+        assert persisted.evidence == ()
+
+    asyncio.run(run())
+
+
 def test_identity_mismatch_is_rejected_before_binding() -> None:
     async def probe() -> GameIdentity:
         return GameIdentity("game-live")
