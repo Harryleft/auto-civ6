@@ -43,7 +43,7 @@
   世界议会和 end-turn。每个 factory 都绑定 intent，并要求领域 Evidence。
 - `civ_mcp.runtime.server` 是独立的实验 FastMCP 入口，当前仅注册
   `get_runtime_context`、`move_unit`、`set_city_production`、`end_turn` 与
-  `resume_turn_decision`，以及 `set_research`、`set_civic`。
+  `resume_turn_decision`，以及 `set_research`、`set_civic`、`found_city`。
   它要求 host 显式提供 `CIV_MCP_RUNTIME_BRANCH`，不会自行猜测读档分支。
   server 只负责工具装配；end-turn 的等待和证据关闭属于 `TurnLoop`，而非 MCP
   路由函数。
