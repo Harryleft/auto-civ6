@@ -109,6 +109,19 @@ def test_surface_reads_builder_improvements_only_through_context() -> None:
     assert asyncio.run(surface.get_builder_improvement_candidates(4)) is expected
 
 
+def test_surface_reads_pending_deals_only_through_context() -> None:
+    expected = [SimpleNamespace(other_player_id=2)]
+
+    class Context:
+        async def read_pending_deals(self):
+            return expected
+
+    surface = RuntimeMcpSurface(
+        context=Context(), session=SimpleNamespace(), turn_loop=SimpleNamespace()
+    )
+    assert asyncio.run(surface.get_pending_deals()) is expected
+
+
 def test_surface_reads_governors_only_through_context() -> None:
     expected = SimpleNamespace(points_available=1)
 

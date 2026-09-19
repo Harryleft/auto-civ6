@@ -50,6 +50,10 @@ class RuntimeMcpSurface:
         """Return only improvements legal on the builder's current tile."""
         return await self._context.read_builder_improvement_candidates(unit_index)
 
+    async def get_pending_deals(self):
+        """Return exact terms of trade offers that still require a decision."""
+        return await self._context.read_pending_deals()
+
     async def get_city_states(self):
         """Return envoy facts without exposing CivAdapter to MCP routing."""
         return await self._context.read_city_states()
