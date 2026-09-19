@@ -67,6 +67,18 @@ def test_bootstrap_requires_a_host_provided_branch_token(tmp_path) -> None:
     asyncio.run(run())
 
 
+def test_bootstrap_rejects_a_full_branch_id_where_a_host_token_is_required(tmp_path) -> None:
+    async def run() -> None:
+        with pytest.raises(ValueError, match="branch_token"):
+            await assemble_runtime(
+                _Adapter([GameIdentity("game-a")]),
+                OperationStore(tmp_path / "operations.sqlite3"),
+                branch_token="game-a:save-0001",
+            )
+
+    asyncio.run(run())
+
+
 def test_bootstrap_wires_end_turn_waiting_to_a_fresh_turn_observation(tmp_path) -> None:
     class Adapter:
         def __init__(self) -> None:

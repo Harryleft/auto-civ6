@@ -83,6 +83,19 @@ class BranchIdentity:
     def __post_init__(self) -> None:
         _required_text(self.value, "branch_id")
 
+    @classmethod
+    def from_token(cls, game_id: GameIdentity, branch_token: str) -> Self:
+        """Construct the only Runtime-owned branch-ID encoding.
+
+        Hosts name a save timeline with a token.  The Runtime owns the full
+        game-scoped identity so bootstrap and recovery cannot produce
+        incompatible branch values for the same token.
+        """
+        _required_text(branch_token, "branch_token")
+        if ":" in branch_token:
+            raise ContractViolation("branch_token 不能包含 ':'；请只传入 host token。")
+        return cls(game_id, f"{game_id.value}:{branch_token}")
+
 
 @dataclass(frozen=True, slots=True)
 class OperationId:
