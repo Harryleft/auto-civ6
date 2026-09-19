@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import StrEnum
 
 
 @dataclass
@@ -1045,6 +1046,24 @@ class PendingDeal:
     other_leader_name: str
     items_from_them: list[DealItem] = field(default_factory=list)
     items_from_us: list[DealItem] = field(default_factory=list)
+
+
+class TradeNegotiationState(StrEnum):
+    """The observed state of one Civ6 trade negotiation."""
+
+    PROPOSED = "PROPOSED"
+    COUNTER_OFFER = "COUNTER_OFFER"
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+    UNKNOWN = "UNKNOWN"
+
+
+@dataclass(frozen=True, slots=True)
+class TradeNegotiation:
+    """A direct game read; terminal response states live in operation evidence."""
+
+    other_player_id: int
+    state: TradeNegotiationState
 
 
 @dataclass

@@ -54,6 +54,10 @@ class RuntimeMcpSurface:
         """Return exact terms of trade offers that still require a decision."""
         return await self._context.read_pending_deals()
 
+    async def get_trade_negotiation(self, other_player_id: int):
+        """Return one direct deal-manager state without creating a proposal."""
+        return await self._context.read_trade_negotiation(other_player_id)
+
     async def get_city_states(self):
         """Return envoy facts without exposing CivAdapter to MCP routing."""
         return await self._context.read_city_states()

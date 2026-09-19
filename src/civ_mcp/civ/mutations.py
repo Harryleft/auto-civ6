@@ -38,7 +38,7 @@ from civ_mcp.lua.great_people import build_recruit_great_person
 from civ_mcp.lua.espionage import build_spy_mission, build_spy_travel
 from civ_mcp.lua.congress import build_congress_submit, build_congress_vote
 from civ_mcp.lua.map import build_found_city, build_purchase_tile
-from civ_mcp.lua.models import PendingDeal
+from civ_mcp.lua.models import PendingDeal, TradeNegotiationState
 from civ_mcp.lua.religion import build_choose_pantheon, build_found_religion, build_spread_religion
 from civ_mcp.lua.notifications import build_end_turn
 from civ_mcp.lua.tech import build_set_civic, build_set_research
@@ -1005,6 +1005,21 @@ class CivMutationFactory:
 
         async def verify() -> Evidence | None:
             try:
+                negotiation = await self._adapter.read_trade_negotiation(
+                    other_player_id=other_player_id,
+                    observed_turn=observed_turn,
+                )
+            except Exception:
+                return None
+            if negotiation.value.state is TradeNegotiationState.PROPOSED:
+                return Evidence(
+                    "read_trade_negotiation",
+                    negotiation.observed_turn,
+                    f"PROPOSED to player_id={other_player_id}; awaiting direct response evidence",
+                )
+            if negotiation.value.state is not TradeNegotiationState.COUNTER_OFFER:
+                return None
+            try:
                 deals = await self._adapter.read_pending_deals(observed_turn=observed_turn)
             except Exception:
                 return None
@@ -1086,7 +1101,7 @@ class CivMutationFactory:
                 return Evidence(
                     "read_pending_deals",
                     deals.observed_turn,
-                    f"player_id={other_player_id} pending deal resolved after {normalized_choice}",
+                    f"{normalized_choice} player_id={other_player_id} pending deal closed",
                 )
             if len(matches) == 1 and _trade_terms(matches[0]) != baseline:
                 return Evidence(

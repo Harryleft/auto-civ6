@@ -70,6 +70,7 @@ def test_context_keeps_failed_domain_reads_explicitly_unknown() -> None:
         "get_district_placements",
         "get_builder_improvement_candidates",
         "get_pending_deals",
+        "get_trade_negotiation",
         "get_city_states",
         "get_governors",
         "get_governments",

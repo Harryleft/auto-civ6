@@ -38,6 +38,7 @@ _BUILDERS = [
     lambda: cities.build_city_yield_focus_query(5),
     lambda: economy.build_trade_destinations_query(7),
     lambda: diplomacy.build_pending_deals_query(),
+    lambda: diplomacy.build_trade_negotiation_query(2),
     lambda: diplomacy.build_diplomacy_session_query(),
     lambda: diplomacy.build_war_dismiss_view(),
     lambda: build_tech_civics_query(),

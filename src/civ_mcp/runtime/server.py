@@ -152,6 +152,16 @@ async def get_pending_deals(ctx: Context) -> dict[str, object]:
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
+async def get_trade_negotiation(
+    ctx: Context, other_player_id: int
+) -> dict[str, object]:
+    """Read an actual proposal/counter-offer state for one civilization."""
+    return _json_value(
+        await _runtime(ctx).assembly.surface.get_trade_negotiation(other_player_id)
+    )
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
 async def get_city_states(ctx: Context) -> dict[str, object]:
     """Return current envoy tokens and every met city-state's send eligibility."""
     return _json_value(await _runtime(ctx).assembly.surface.get_city_states())

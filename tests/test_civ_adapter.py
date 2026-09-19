@@ -206,6 +206,20 @@ def test_pending_deals_preserve_exact_structured_terms() -> None:
     assert deals.coverage == "PENDING_DEALS:COMPLETE"
 
 
+def test_trade_negotiation_is_a_typed_live_deal_manager_fact() -> None:
+    transport = _Transport(_complete("TRADE_STATE|2|PROPOSED"))
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    negotiation = asyncio.run(
+        civ.read_trade_negotiation(other_player_id=2, observed_turn=42)
+    )
+
+    assert negotiation.value.other_player_id == 2
+    assert negotiation.value.state.value == "PROPOSED"
+    assert negotiation.coverage == "TRADE_NEGOTIATION:COMPLETE"
+    assert transport.commands[0].startswith("CMD:153:")
+
+
 def test_world_congress_is_a_typed_live_ingame_fact() -> None:
     transport = _Transport(_complete("WC_STATUS|true|0|25|3|0,5,10,15"))
     civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)

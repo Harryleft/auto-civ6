@@ -84,6 +84,7 @@ class ContextBuilder:
                 "get_district_placements",
                 "get_builder_improvement_candidates",
                 "get_pending_deals",
+                "get_trade_negotiation",
                 "get_city_states",
                 "get_governors",
                 "get_governments",
@@ -143,6 +144,14 @@ class ContextBuilder:
         """Read exact terms of current pending trade offers."""
         overview = await self._adapter.read_overview()
         return await self._adapter.read_pending_deals(observed_turn=overview.observed_turn)
+
+    async def read_trade_negotiation(self, other_player_id: int):
+        """Read one live trade proposal/counter-offer without sending a deal."""
+        overview = await self._adapter.read_overview()
+        return await self._adapter.read_trade_negotiation(
+            other_player_id=other_player_id,
+            observed_turn=overview.observed_turn,
+        )
 
     async def read_city_states(self):
         """Read envoy decisions through the context boundary only."""

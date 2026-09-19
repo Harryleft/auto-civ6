@@ -74,6 +74,7 @@ from civ_mcp.lua.diplomacy import (  # noqa: F401
     build_diplomacy_session_query,
     build_form_alliance,
     build_pending_deals_query,
+    build_trade_negotiation_query,
     build_propose_peace,
     build_propose_trade,
     build_respond_to_deal,
@@ -86,6 +87,7 @@ from civ_mcp.lua.diplomacy import (  # noqa: F401
     parse_diplomacy_response,
     parse_diplomacy_sessions,
     parse_pending_deals_response,
+    parse_trade_negotiation_response,
 )
 from civ_mcp.lua.congress import (  # noqa: F401
     build_congress_submit,
@@ -239,6 +241,8 @@ from civ_mcp.lua.models import (  # noqa: F401
     PathingEstimate,
     PendingCityCapture,
     PendingDeal,
+    TradeNegotiation,
+    TradeNegotiationState,
     PlayerRow,
     PolicyInfo,
     PolicySlot,

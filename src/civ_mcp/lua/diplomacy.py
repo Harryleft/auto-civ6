@@ -19,6 +19,8 @@ from civ_mcp.lua.models import (
     PendingDeal,
     TestTradeItem,
     TestTradeResult,
+    TradeNegotiation,
+    TradeNegotiationState,
     TradeableCity,
     VisibleCity,
 )
@@ -713,6 +715,53 @@ for i = 0, 62 do
 end
 print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
+
+
+def build_trade_negotiation_query(other_player_id: int) -> str:
+    """Read one actual outgoing negotiation state without sending a deal.
+
+    Civ6 only exposes an outstanding proposal or an incoming counter-offer as
+    durable negotiation facts.  An accepted/rejected response is instead
+    proven by the fresh disappearance of that observed pending deal.
+    """
+    return f"""
+local me = Game.GetLocalPlayer()
+local target = {other_player_id}
+local state = "UNKNOWN"
+local pDiplo = Players[me] and Players[me]:GetDiplomacy()
+if Players[target] and Players[target]:IsAlive() and pDiplo and pDiplo:HasMet(target) then
+    local sid = DiplomacyManager.FindOpenSessionID(me, target)
+    if sid and sid >= 0 then
+        local ok, incoming = pcall(function()
+            return DealManager.GetWorkingDeal(DealDirection.INCOMING, me, target)
+        end)
+        if ok and incoming and incoming:GetItemCount() and incoming:GetItemCount() > 0 then
+            state = "COUNTER_OFFER"
+        end
+    end
+    if state == "UNKNOWN" then
+        local ok, pending = pcall(function() return DealManager.HasPendingDeal(me, target) end)
+        if ok and pending then state = "PROPOSED" end
+    end
+end
+print("TRADE_STATE|" .. target .. "|" .. state)
+print("{SENTINEL}")
+""".replace("{SENTINEL}", SENTINEL)
+
+
+def parse_trade_negotiation_response(lines: list[str]) -> TradeNegotiation:
+    """Parse exactly one direct negotiation-state response."""
+    states = [line.split("|", 2) for line in lines if line.startswith("TRADE_STATE|")]
+    if len(states) != 1 or len(states[0]) != 3:
+        raise ValueError("交易协商状态响应不完整。")
+    _, raw_player_id, raw_state = states[0]
+    try:
+        return TradeNegotiation(
+            other_player_id=int(raw_player_id),
+            state=TradeNegotiationState(raw_state),
+        )
+    except (TypeError, ValueError) as exc:
+        raise ValueError("交易协商状态响应非法。") from exc
 
 
 def build_respond_to_deal(other_player_id: int, accept: bool) -> str:
