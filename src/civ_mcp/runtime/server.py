@@ -133,6 +133,20 @@ async def get_city_purchases(
     )
 
 
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_trade_destinations(ctx: Context, unit_index: int) -> dict[str, object]:
+    """Return only destinations the current trader may legally route to now."""
+    return _json_value(
+        await _runtime(ctx).assembly.surface.get_trade_destinations(unit_index)
+    )
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_trade_routes(ctx: Context) -> dict[str, object]:
+    """Return active/idle traders and exact active-route destinations."""
+    return _json_value(await _runtime(ctx).assembly.surface.get_trade_routes())
+
+
 @mcp.tool()
 async def save_handoff(
     ctx: Context,
@@ -369,6 +383,29 @@ async def purchase_item(
         item_type=item_type,
         item_name=item_name,
         yield_type=yield_type,
+        observed_turn=decision_turn,
+    )
+    return _operation_payload(
+        await assembly.surface.execute_mutation(execution, decision_turn=decision_turn)
+    )
+
+
+@mcp.tool()
+async def make_trade_route(
+    ctx: Context,
+    operation_id: str,
+    unit_index: int,
+    target_x: int,
+    target_y: int,
+    decision_turn: int,
+) -> dict[str, object]:
+    """Route one trader to a live destination; exact route readback confirms it."""
+    assembly = _runtime(ctx).assembly
+    execution = assembly.mutations.make_trade_route(
+        operation_id=OperationId(operation_id),
+        unit_index=unit_index,
+        target_x=target_x,
+        target_y=target_y,
         observed_turn=decision_turn,
     )
     return _operation_payload(

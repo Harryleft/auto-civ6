@@ -558,16 +558,78 @@ class CivMutationFactory:
         unit_index: int,
         target_x: int,
         target_y: int,
-        readback: AttackReadback,
+        observed_turn: int,
     ) -> MutationExecution:
-        """A route is confirmed only by a domain route readback supplied by caller."""
+        """Start one live route candidate and confirm its exact trader/destination."""
+        route_was_active = False
+
+        async def precheck() -> None:
+            nonlocal route_was_active
+            try:
+                destinations = await self._adapter.read_trade_destinations(
+                    unit_index=unit_index, observed_turn=observed_turn
+                )
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取商路目的地候选。") from exc
+            if not any(
+                destination.x == target_x and destination.y == target_y
+                for destination in destinations.value
+            ):
+                raise MutationPreconditionError("目标不在当前游戏允许的商路目的地中。")
+            try:
+                routes = await self._adapter.read_trade_routes(
+                    observed_turn=observed_turn
+                )
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取商路 baseline。") from exc
+            route_was_active = any(
+                trader.unit_id == unit_index
+                and trader.on_route
+                and (trader.destination_x, trader.destination_y)
+                == (target_x, target_y)
+                for trader in routes.value.traders
+            )
+            if route_was_active:
+                raise MutationPreconditionError("商人已在该目标城市运行商路，不重复提交。")
+
+        async def verify() -> Evidence | None:
+            if route_was_active:
+                return None
+            try:
+                routes = await self._adapter.read_trade_routes(
+                    observed_turn=observed_turn
+                )
+            except Exception:
+                return None
+            if any(
+                trader.unit_id == unit_index
+                and trader.on_route
+                and (trader.destination_x, trader.destination_y)
+                == (target_x, target_y)
+                for trader in routes.value.traders
+            ):
+                return Evidence(
+                    "read_trade_routes",
+                    routes.observed_turn,
+                    f"trader={unit_index} routed to ({target_x},{target_y})",
+                )
+            return None
+
         return MutationExecution(
             intent=OperationIntent.create(
-                "make_trade_route", {"unit_index": unit_index, "target_x": target_x, "target_y": target_y},
+                "make_trade_route",
+                {
+                    "unit_index": unit_index,
+                    "target_x": target_x,
+                    "target_y": target_y,
+                },
             ),
-            request=CivMutationRequest("make_trade_route", build_make_trade_route(unit_index, target_x, target_y)),
-            verify=readback,
+            request=CivMutationRequest(
+                "make_trade_route", build_make_trade_route(unit_index, target_x, target_y)
+            ),
+            verify=verify,
             operation_id=operation_id,
+            precheck=precheck,
         )
 
     def improve_tile(

@@ -114,6 +114,44 @@ def test_city_purchase_candidate_error_is_not_coerced_to_an_empty_result() -> No
         )
 
 
+def test_trade_reads_preserve_live_destination_and_exact_route_identity() -> None:
+    destinations_transport = _Transport(
+        _complete(
+            "TDEST|Berlin|Germany|8,5|0|0|0|0|0|Religion|0|Religion|F0|G0"
+        )
+    )
+    civ = adapter.CivAdapter(destinations_transport, gamecore_state=8, ingame_state=153)
+
+    destinations = asyncio.run(
+        civ.read_trade_destinations(unit_index=7, observed_turn=42)
+    )
+
+    assert [(item.city_name, item.x, item.y) for item in destinations.value] == [
+        ("Berlin", 8, 5)
+    ]
+    assert destinations.coverage == "TRADE_ROUTE_DESTINATIONS:COMPLETE"
+    assert destinations_transport.commands[0].startswith("CMD:153:")
+
+    routes_transport = _Transport(
+        _complete(
+            "ROUTE|7|Paris|Berlin|Germany|0|0|0|0|0|Religion|0|Religion|F0|G0|2|13|8,5",
+            "TRADE_STATUS|2|1|0",
+        )
+    )
+    civ = adapter.CivAdapter(routes_transport, gamecore_state=8, ingame_state=153)
+
+    routes = asyncio.run(civ.read_trade_routes(observed_turn=42))
+
+    trader = routes.value.traders[0]
+    assert (trader.unit_id, trader.destination_player_id, trader.destination_city_id) == (
+        7,
+        2,
+        13,
+    )
+    assert (trader.destination_x, trader.destination_y) == (8, 5)
+    assert routes.coverage == "TRADE_ROUTES:COMPLETE"
+
+
 def test_diplomacy_sessions_are_typed_read_only_facts() -> None:
     transport = _Transport(
         _complete("SESSION|9|2|Germany|Frederick|Greetings|First meeting|Accept;Reject|0")
