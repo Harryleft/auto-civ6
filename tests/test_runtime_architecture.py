@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import ast
+from collections.abc import Iterable
+from importlib.util import resolve_name
 from pathlib import Path
 
 import civ_mcp.runtime.context as context
@@ -10,51 +12,158 @@ import civ_mcp.runtime.connection as connection
 import civ_mcp.runtime.bootstrap as bootstrap
 import civ_mcp.runtime.mcp_surface as surface
 import civ_mcp.runtime.server as server
+import civ_mcp.runtime.session as session
+
+
+RUNTIME_DIR = Path(surface.__file__).parent
+
+
+def _source_files() -> tuple[Path, ...]:
+    return tuple(sorted(RUNTIME_DIR.rglob("*.py")))
+
+
+def _module_name(source_file: Path) -> str:
+    relative = source_file.relative_to(RUNTIME_DIR).with_suffix("")
+    if relative.name == "__init__":
+        relative = relative.parent
+    suffix = ".".join(relative.parts)
+    return "civ_mcp.runtime" if not suffix else f"civ_mcp.runtime.{suffix}"
+
+
+def _tree(source_file: Path) -> ast.Module:
+    return ast.parse(source_file.read_text(), filename=str(source_file))
+
+
+def _import_from(node: ast.ImportFrom, *, package: str) -> str | None:
+    if node.level == 0:
+        return node.module
+    relative_name = "." * node.level + (node.module or "")
+    return resolve_name(relative_name, package)
 
 
 def _import_modules(module) -> set[str]:
-    tree = ast.parse(Path(module.__file__).read_text())
-    return {
-        node.module
-        for node in ast.walk(tree)
-        if isinstance(node, ast.ImportFrom) and node.module is not None
-    }
+    source_file = Path(module.__file__)
+    package = _module_name(source_file).rpartition(".")[0]
+    imports: set[str] = set()
+    for node in ast.walk(_tree(source_file)):
+        if isinstance(node, ast.Import):
+            imports.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            imported = _import_from(node, package=package)
+            if imported is not None:
+                imports.add(imported)
+    return imports
+
+
+def _has_import(imports: Iterable[str], forbidden: str) -> bool:
+    return any(item == forbidden or item.startswith(f"{forbidden}.") for item in imports)
+
+
+def _attribute_name(node: ast.expr) -> str | None:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        parent = _attribute_name(node.value)
+        return f"{parent}.{node.attr}" if parent is not None else None
+    return None
 
 
 def test_mcp_surface_cannot_import_transport_or_civ_adapter() -> None:
     imports = _import_modules(surface)
-    assert "civ_mcp.runtime.transport" not in imports
-    assert "civ_mcp.civ.adapter" not in imports
-    assert "civ6_belief_engine" not in imports
+    assert not _has_import(imports, "civ_mcp.runtime.transport")
+    assert not _has_import(imports, "civ_mcp.civ.adapter")
+    assert not _has_import(imports, "civ6_belief_engine")
 
 
 def test_context_builder_has_no_mutation_sender_dependency() -> None:
     imports = _import_modules(context)
-    assert "civ_mcp.runtime.transport" not in imports
+    assert not _has_import(imports, "civ_mcp.runtime.transport")
     source = Path(context.__file__).read_text()
     assert ".execute(" not in source
     assert "MutationExecution" not in source
+    assert "CivMutationRequest" not in source
 
 
 def test_runtime_connection_does_not_reuse_the_legacy_connection_or_tuner_client() -> None:
     imports = _import_modules(connection)
-    assert "civ_mcp.connection" not in imports
-    assert "civ_mcp.tuner_client" not in imports
+    assert not _has_import(imports, "civ_mcp.connection")
+    assert not _has_import(imports, "civ_mcp.tuner_client")
 
 
 def test_runtime_bootstrap_has_no_legacy_server_or_game_state_dependency() -> None:
     imports = _import_modules(bootstrap)
-    assert "civ_mcp.server" not in imports
-    assert "civ_mcp.game_state" not in imports
+    assert not _has_import(imports, "civ_mcp.server")
+    assert not _has_import(imports, "civ_mcp.game_state")
 
 
 def test_runtime_server_does_not_import_legacy_server_or_belief_engine() -> None:
     imports = _import_modules(server)
-    assert "civ_mcp.server" not in imports
-    assert "civ6_belief_engine" not in imports
+    assert not _has_import(imports, "civ_mcp.server")
+    assert not _has_import(imports, "civ6_belief_engine")
 
 
 def test_new_runtime_has_no_belief_engine_imports() -> None:
-    runtime_dir = Path(surface.__file__).parent
-    for source_file in runtime_dir.glob("*.py"):
+    for source_file in _source_files():
         assert "civ6_belief_engine" not in source_file.read_text(), source_file
+
+
+def test_only_session_kernel_submits_civ_mutations() -> None:
+    """The adapter is the game-write boundary, and SessionKernel owns it."""
+    submit_callers: list[Path] = []
+    for source_file in _source_files():
+        for node in ast.walk(_tree(source_file)):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            receiver = _attribute_name(node.func.value)
+            if node.func.attr == "submit" and receiver and receiver.endswith("adapter"):
+                submit_callers.append(source_file)
+    assert submit_callers == [Path(session.__file__)]
+
+
+def test_runtime_import_graph_is_acyclic() -> None:
+    """A reverse Runtime dependency must fail before it becomes a second core."""
+    modules = {_module_name(source_file): source_file for source_file in _source_files()}
+    graph = {
+        module: {dependency for dependency in _import_modules_from(source_file) if dependency in modules}
+        for module, source_file in modules.items()
+    }
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(module: str) -> None:
+        assert module not in visiting, f"Runtime import cycle at {module}"
+        if module in visited:
+            return
+        visiting.add(module)
+        for dependency in graph[module]:
+            visit(dependency)
+        visiting.remove(module)
+        visited.add(module)
+
+    for module in graph:
+        visit(module)
+
+
+def _import_modules_from(source_file: Path) -> set[str]:
+    package = _module_name(source_file).rpartition(".")[0]
+    imports: set[str] = set()
+    for node in ast.walk(_tree(source_file)):
+        if isinstance(node, ast.Import):
+            imports.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            imported = _import_from(node, package=package)
+            if imported is not None:
+                imports.add(imported)
+    return imports
+
+
+def test_runtime_has_no_play_profile_or_belief_mode_branch() -> None:
+    for source_file in _source_files():
+        source = source_file.read_text()
+        assert "PlayProfile" not in source, source_file
+        assert "BeliefMode" not in source, source_file
+
+
+def test_recovery_is_not_imported_by_the_model_tool_path() -> None:
+    for module in (server, surface):
+        assert not _has_import(_import_modules(module), "civ_mcp.runtime.recovery")
