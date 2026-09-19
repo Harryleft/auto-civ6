@@ -1147,6 +1147,7 @@ class UnitPromotionStatus:
     xp: int = 0
     xp_needed: int = 0
     promotion_count: int = 0
+    owned_promotions: list[str] = field(default_factory=list)
 
 
 @dataclass

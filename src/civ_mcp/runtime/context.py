@@ -65,3 +65,10 @@ class ContextBuilder:
                 "get_trade_options",
             ),
         )
+
+    async def read_unit_promotions(self, unit_index: int):
+        """Read promotion candidates through the context boundary only."""
+        overview = await self._adapter.read_overview()
+        return await self._adapter.read_unit_promotions(
+            unit_index=unit_index, observed_turn=overview.observed_turn
+        )

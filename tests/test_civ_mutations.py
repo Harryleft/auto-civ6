@@ -460,10 +460,46 @@ def test_governance_mutations_are_hash_bound_and_need_readback() -> None:
 
     factory = CivMutationFactory(Adapter())
     governor = factory.assign_governor(operation_id=OperationId("gov-1"), governor_type="GOVERNOR_MAGNUS", city_id=4, readback=evidence)
-    promotion = factory.promote_unit(operation_id=OperationId("unit-promo-1"), unit_index=2, promotion_type="PROMOTION_BATTLECRY", readback=evidence)
     assert governor.intent.tool == "assign_governor"
-    assert promotion.request.context == "gamecore"
     assert asyncio.run(governor.verify()).source == "read_governors"
+
+
+def test_unit_promotion_requires_legal_candidate_and_owned_readback() -> None:
+    before = SimpleNamespace(
+        unit_index=2,
+        promotions=[SimpleNamespace(promotion_type="PROMOTION_BATTLECRY")],
+        owned_promotions=[],
+    )
+    after = SimpleNamespace(
+        unit_index=2,
+        promotions=[],
+        owned_promotions=["PROMOTION_BATTLECRY"],
+    )
+
+    class Adapter:
+        calls = 0
+
+        async def read_unit_promotions(self, *, unit_index, observed_turn):
+            assert unit_index == 2
+            self.calls += 1
+            return SimpleNamespace(
+                value=before if self.calls == 1 else after,
+                observed_turn=observed_turn,
+            )
+
+    execution = CivMutationFactory(Adapter()).promote_unit(
+        operation_id=OperationId("unit-promo-1"),
+        unit_index=2,
+        promotion_type="PROMOTION_BATTLECRY",
+        observed_turn=12,
+    )
+
+    asyncio.run(execution.precheck())
+    evidence = asyncio.run(execution.verify())
+
+    assert execution.intent.tool == execution.request.tool == "promote_unit"
+    assert execution.request.context == "gamecore"
+    assert evidence.source == "read_unit_promotions"
 
 
 def test_unit_upgrade_requires_current_eligibility_and_target_type_readback() -> None:

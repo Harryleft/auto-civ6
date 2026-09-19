@@ -763,9 +763,55 @@ class CivMutationFactory:
         return self._readback_action(operation_id=operation_id, tool="promote_governor", arguments={"governor_type": governor_type, "promotion_type": promotion_type}, lua_code=build_promote_governor(governor_type, promotion_type), readback=readback)
 
     def promote_unit(
-        self, *, operation_id: OperationId, unit_index: int, promotion_type: str, readback: AttackReadback
+        self, *, operation_id: OperationId, unit_index: int, promotion_type: str, observed_turn: int
     ) -> MutationExecution:
-        return self._readback_action(operation_id=operation_id, tool="promote_unit", arguments={"unit_index": unit_index, "promotion_type": promotion_type}, lua_code=build_promote_unit(unit_index, promotion_type), readback=readback, context="gamecore")
+        """Promote one eligible unit, confirmed by its owned promotion type."""
+        self._require_gameinfo_type(promotion_type, "PROMOTION_")
+        intent = OperationIntent.create(
+            "promote_unit",
+            {"unit_index": unit_index, "promotion_type": promotion_type},
+        )
+
+        async def precheck() -> None:
+            try:
+                status = await self._adapter.read_unit_promotions(
+                    unit_index=unit_index, observed_turn=observed_turn
+                )
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取单位晋升 baseline。") from exc
+            if status.value.unit_index != unit_index:
+                raise MutationPreconditionError("晋升前读取的单位 identity 不匹配。")
+            if promotion_type not in {
+                promotion.promotion_type for promotion in status.value.promotions
+            }:
+                raise MutationPreconditionError("目标不是当前可选的单位晋升。")
+
+        async def verify() -> Evidence | None:
+            try:
+                status = await self._adapter.read_unit_promotions(
+                    unit_index=unit_index, observed_turn=observed_turn
+                )
+            except Exception:
+                return None
+            if promotion_type not in status.value.owned_promotions:
+                return None
+            return Evidence(
+                "read_unit_promotions",
+                status.observed_turn,
+                f"unit_index={unit_index} owns={promotion_type}",
+            )
+
+        return MutationExecution(
+            intent=intent,
+            request=CivMutationRequest(
+                "promote_unit",
+                build_promote_unit(unit_index, promotion_type),
+                context="gamecore",
+            ),
+            verify=verify,
+            operation_id=operation_id,
+            precheck=precheck,
+        )
 
     def upgrade_unit(
         self, *, operation_id: OperationId, unit_index: int, observed_turn: int
