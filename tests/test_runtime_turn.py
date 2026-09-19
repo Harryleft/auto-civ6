@@ -6,7 +6,7 @@ import asyncio
 
 from civ_mcp.runtime.contracts import BranchIdentity, GameIdentity, OperationId, OperationIntent, OperationRecord, OutcomeState
 from civ_mcp.runtime.session import MutationExecution
-from civ_mcp.runtime.turn import TurnLoop, TurnOutcome
+from civ_mcp.runtime.turn import TurnLoop, TurnOutcome, TurnResult
 
 
 def _record(outcome: OutcomeState) -> OperationRecord:
@@ -61,3 +61,38 @@ def test_unknown_end_turn_requires_recovery_without_resubmission() -> None:
     ))
     assert result.outcome is TurnOutcome.RECOVERY_REQUIRED
     assert session.calls == 1
+
+
+def test_interrupt_resumes_the_original_operation_without_another_end_turn() -> None:
+    class Session:
+        calls = 0
+
+        async def execute(self, *_args, **_kwargs):
+            self.calls += 1
+            return _record(OutcomeState.CONFIRMED)
+
+    session = Session()
+    loop = TurnLoop(session)
+    operation = _record(OutcomeState.CONFIRMED)
+    choices: list[str] = []
+
+    async def continuation(choice: str):
+        choices.append(choice)
+        return await _advanced(operation)
+
+    result = loop.needs_decision(
+        operation,
+        decision_type="WORLD_CONGRESS",
+        facts={"turn": 10},
+        allowed_choices=("vote_a", "vote_b"),
+        continuation=continuation,
+    )
+    assert result.decision.continuation_operation_id == operation.operation_id
+    resumed = asyncio.run(loop.resume(operation.operation_id, "vote_a"))
+    assert resumed.outcome is TurnOutcome.ADVANCED
+    assert choices == ["vote_a"]
+    assert session.calls == 0
+
+
+async def _advanced(operation: OperationRecord) -> TurnResult:
+    return TurnResult(TurnOutcome.ADVANCED, operation)
