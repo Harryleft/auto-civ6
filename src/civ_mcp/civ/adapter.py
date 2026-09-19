@@ -9,9 +9,11 @@ from typing import Generic, TypeVar
 from civ_mcp.lua.cities import (
     build_cities_query,
     build_city_capture_state_query,
+    build_city_purchase_query,
     build_pending_city_capture_query,
     parse_cities_response,
     parse_city_capture_state_response,
+    parse_city_purchase_response,
     parse_pending_city_capture_response,
 )
 from civ_mcp.lua.diplomacy import (
@@ -49,6 +51,7 @@ from civ_mcp.lua.models import (
     GovernorStatus,
     PantheonStatus,
     PendingCityCapture,
+    PurchaseOption,
     TechCivicStatus,
     UnitInfo,
     UnitPromotionStatus,
@@ -192,6 +195,24 @@ class CivAdapter:
             observed_turn=observed_turn,
         )
         return result
+
+    async def read_city_purchases(
+        self, *, city_id: int, yield_type: str, observed_turn: int
+    ) -> CivReadResult[list[PurchaseOption]]:
+        """Read only immediate purchases the game currently accepts."""
+        normalized_yield = yield_type.upper()
+        return await self.read(
+            CivReadRequest(
+                tool="get_city_purchases",
+                lua_code=build_city_purchase_query(city_id, normalized_yield),
+                decode=lambda lines: parse_city_purchase_response(
+                    list(lines), yield_type=normalized_yield
+                ),
+                coverage="CITY_PURCHASE_CANDIDATES:COMPLETE",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
 
     async def read_pending_city_capture(
         self, *, observed_turn: int

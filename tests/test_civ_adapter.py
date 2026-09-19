@@ -86,6 +86,34 @@ def test_cities_read_is_bound_to_the_ingame_domain_context() -> None:
     assert transport.commands[0].startswith("CMD:153:")
 
 
+def test_city_purchase_candidates_are_typed_live_ingame_facts() -> None:
+    transport = _Transport(_complete("PURCHASE|UNIT|UNIT_ARCHER|60"))
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    result = asyncio.run(
+        civ.read_city_purchases(
+            city_id=4, yield_type="YIELD_GOLD", observed_turn=42
+        )
+    )
+
+    assert result.value[0].item_name == "UNIT_ARCHER"
+    assert result.value[0].cost == 60
+    assert result.coverage == "CITY_PURCHASE_CANDIDATES:COMPLETE"
+    assert transport.commands[0].startswith("CMD:153:")
+
+
+def test_city_purchase_candidate_error_is_not_coerced_to_an_empty_result() -> None:
+    transport = _Transport(_complete("ERR:CITY_NOT_FOUND"))
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    with pytest.raises(ValueError, match="无法读取购买候选"):
+        asyncio.run(
+            civ.read_city_purchases(
+                city_id=4, yield_type="YIELD_GOLD", observed_turn=42
+            )
+        )
+
+
 def test_diplomacy_sessions_are_typed_read_only_facts() -> None:
     transport = _Transport(
         _complete("SESSION|9|2|Germany|Frederick|Greetings|First meeting|Accept;Reject|0")
