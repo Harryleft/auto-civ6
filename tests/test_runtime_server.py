@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import AsyncExitStack
+from pathlib import Path
 
 import pytest
 
 from civ_mcp.runtime.contracts import BranchIdentity, Evidence, GameIdentity, OperationId, OperationIntent, OperationRecord
 from civ_mcp.runtime.server import (
     RUNTIME_BRANCH_ENV,
+    RUNTIME_STORE_ENV,
     RuntimeServerConfigurationError,
     _json_value,
+    _runtime_store_path,
     lifespan,
     mcp,
 )
@@ -77,6 +80,16 @@ def test_runtime_server_requires_explicit_branch_before_opening_a_connection(
                 await stack.enter_async_context(lifespan(mcp))
 
     asyncio.run(run())
+
+
+def test_runtime_server_uses_its_default_store_when_host_forwards_an_empty_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(RUNTIME_STORE_ENV, "   ")
+
+    assert _runtime_store_path() == (
+        Path.home() / ".civ6-mcp" / "runtime" / "operations.sqlite3"
+    )
 
 
 def test_runtime_payload_serializes_operation_facts_without_reclassifying_them() -> None:

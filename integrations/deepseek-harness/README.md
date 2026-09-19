@@ -25,7 +25,11 @@ DeepSeek model
   -> Civilization VI
 ```
 
-There is no custom Cordis game runtime in this version. The official MCP bridge already provides the required extension seam, and duplicating the Python state and lifecycle logic would create two authorities for one live game.
+The legacy configuration has no custom Cordis game runtime. The official MCP bridge already provides the required extension seam, and duplicating the Python state and lifecycle logic would create two authorities for one live game. The isolated Runtime Core experiment instead has its own
+[`civ6-runtime.cordis.yml`](civ6-runtime.cordis.yml) and
+[`scripts/runtime_dsh`](../../scripts/runtime_dsh) entry: it starts only
+`civ_mcp.runtime.server`, requires a host-selected branch token, and never
+becomes the default `civ-mcp`/DSH route before K1 and J2 live evidence.
 
 ## Installed layout
 

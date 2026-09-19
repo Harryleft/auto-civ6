@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# Start DSH against only the isolated Runtime Core MCP surface.
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+project_root="$(cd "$script_dir/.." && pwd)"
+harness_dir="${DEEPSEEK_HARNESS_DIR:-$project_root/../deepseek-harness}"
+patch_file="$project_root/integrations/deepseek-harness/civ6-runtime.cordis.yml"
+dsh_home="${CIV6_RUNTIME_DSH_HOME:-$project_root/.dsh-runtime}"
+branch=""
+store="${CIV_MCP_RUNTIME_STORE:-}"
+profile="web"
+dry_run=0
+
+usage() {
+  printf '%s\n' \
+    'Usage: ./scripts/runtime_dsh --branch <host-token> [--store <sqlite-path>] [--headless] [--dry-run]' \
+    '' \
+    'Starts the experimental Runtime Core DSH adapter only; it never launches Civ6,' \
+    'loads a save, chooses a recovery checkpoint, or starts the legacy civ-mcp server.' \
+    '' \
+    'The branch is a host token for the currently loaded save timeline, for example' \
+    'save-0001. Do not prefix it with game_id:.'
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --branch)
+      if [ "$#" -lt 2 ]; then
+        printf 'ERROR: --branch requires a non-empty host token.\n' >&2
+        exit 2
+      fi
+      branch="$2"
+      shift 2
+      ;;
+    --store)
+      if [ "$#" -lt 2 ]; then
+        printf 'ERROR: --store requires a SQLite path.\n' >&2
+        exit 2
+      fi
+      store="$2"
+      shift 2
+      ;;
+    --headless)
+      profile="headless"
+      shift
+      ;;
+    --dry-run)
+      dry_run=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      printf 'ERROR: unknown argument: %s\n' "$1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+if [ -z "${branch//[[:space:]]/}" ]; then
+  printf 'ERROR: --branch must be a non-empty host token.\n' >&2
+  exit 2
+fi
+if [[ "$branch" == *:* ]]; then
+  printf 'ERROR: --branch must be a host token, not game_id:token.\n' >&2
+  exit 2
+fi
+
+if [ "$dry_run" -eq 1 ]; then
+  printf 'Experimental Runtime DSH dry run: profile=%s branch=%s store=%s\n' \
+    "$profile" "$branch" "${store:-<runtime-default>}"
+  printf 'Overlay: %s\n' "$patch_file"
+  exit 0
+fi
+
+if ! command -v node >/dev/null 2>&1; then
+  printf 'ERROR: node is required.\n' >&2
+  exit 1
+fi
+if ! command -v uv >/dev/null 2>&1; then
+  printf 'ERROR: uv is required.\n' >&2
+  exit 1
+fi
+if [ ! -d "$harness_dir" ]; then
+  printf 'ERROR: DeepSeek Harness checkout not found: %s\n' "$harness_dir" >&2
+  printf 'Set DEEPSEEK_HARNESS_DIR to its checkout directory.\n' >&2
+  exit 1
+fi
+
+harness_dir="$(cd "$harness_dir" && pwd)"
+dsh_bin="$harness_dir/apps/cli/lib/bin.js"
+if [ ! -f "$dsh_bin" ]; then
+  printf 'ERROR: DeepSeek Harness is not built: %s\n' "$dsh_bin" >&2
+  printf 'Run pnpm install && pnpm run build in %s.\n' "$harness_dir" >&2
+  exit 1
+fi
+
+if command -v lsof >/dev/null 2>&1; then
+  if ! lsof -nP -iTCP:4318 -sTCP:LISTEN >/dev/null 2>&1; then
+    printf 'ERROR: FireTuner TCP 4318 is not listening; enter a Civ6 game with EnableTuner=1 first.\n' >&2
+    exit 1
+  fi
+  if lsof -nP -iTCP:4318 -sTCP:ESTABLISHED >/dev/null 2>&1; then
+    printf 'ERROR: FireTuner already has an established client. Stop it before starting Runtime DSH.\n' >&2
+    exit 1
+  fi
+fi
+
+mkdir -p "$dsh_home"
+cd "$project_root"
+exec env DSH_HOME="$dsh_home" CIV_MCP_RUNTIME_BRANCH="$branch" \
+  CIV_MCP_RUNTIME_STORE="$store" node "$dsh_bin" \
+  --profile "$profile" --patch "$patch_file"

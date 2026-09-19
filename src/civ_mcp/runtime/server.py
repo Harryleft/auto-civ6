@@ -28,6 +28,8 @@ from civ_mcp.runtime.turn import TurnResult
 
 RUNTIME_BRANCH_ENV = "CIV_MCP_RUNTIME_BRANCH"
 RUNTIME_STORE_ENV = "CIV_MCP_RUNTIME_STORE"
+
+
 class RuntimeServerConfigurationError(RuntimeError):
     """The host omitted a stable branch or persistence location."""
 
@@ -40,6 +42,14 @@ class RuntimeAppContext:
     connection: RuntimeConnection
 
 
+def _runtime_store_path() -> Path:
+    """Resolve an optional host path without treating an empty env var as '.'."""
+    configured = os.environ.get(RUNTIME_STORE_ENV, "").strip()
+    if configured:
+        return Path(configured)
+    return Path.home() / ".civ6-mcp" / "runtime" / "operations.sqlite3"
+
+
 @asynccontextmanager
 async def lifespan(_server: FastMCP) -> AsyncIterator[RuntimeAppContext]:
     """Open and bind the new Runtime Core without legacy background services."""
@@ -48,12 +58,7 @@ async def lifespan(_server: FastMCP) -> AsyncIterator[RuntimeAppContext]:
         raise RuntimeServerConfigurationError(
             f"{RUNTIME_BRANCH_ENV} 必须指向当前存档的稳定分支标识。"
         )
-    store_path = Path(
-        os.environ.get(
-            RUNTIME_STORE_ENV,
-            str(Path.home() / ".civ6-mcp" / "runtime" / "operations.sqlite3"),
-        )
-    )
+    store_path = _runtime_store_path()
     store_path.parent.mkdir(parents=True, exist_ok=True)
     connection: RuntimeConnection | None = None
     store: OperationStore | None = None
