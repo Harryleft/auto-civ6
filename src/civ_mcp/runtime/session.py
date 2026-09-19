@@ -76,6 +76,27 @@ class SessionKernel:
     def handoff_note(self) -> HandoffNote | None:
         return self._store.get_handoff_note(self._require_binding().branch_id)
 
+    def save_handoff(
+        self,
+        *,
+        strategic_focus: str,
+        existing_arrangements: str,
+        rationale: str,
+        change_conditions: str,
+    ) -> HandoffNote:
+        """Save only strategic continuity; this cannot modify operation facts."""
+        binding = self._require_binding()
+        note = HandoffNote(
+            game_id=binding.game_id,
+            branch_id=binding.branch_id,
+            strategic_focus=strategic_focus,
+            existing_arrangements=existing_arrangements,
+            rationale=rationale,
+            change_conditions=change_conditions,
+        )
+        self._store.save_handoff_note(note)
+        return note
+
     async def bind(self, game_id: GameIdentity, branch_id: BranchIdentity) -> SessionBinding:
         if branch_id.game_id != game_id:
             raise SessionIdentityMismatchError("branch_id 不属于待绑定的 game_id。")
