@@ -25,11 +25,12 @@ DeepSeek model
   -> Civilization VI
 ```
 
-The legacy configuration has no custom Cordis game runtime. The official MCP bridge already provides the required extension seam, and duplicating the Python state and lifecycle logic would create two authorities for one live game. The isolated Runtime Core experiment instead has its own
-[`civ6-runtime.cordis.yml`](civ6-runtime.cordis.yml) and
-[`scripts/runtime_dsh`](../../scripts/runtime_dsh) entry: it starts only
-`civ_mcp.runtime.server`, requires a host-selected branch token, and never
-becomes the default `civ-mcp`/DSH route before K1 and J2 live evidence.
+K1 已切换正式 MCP 命令到 Runtime Core。正式 DSH 路径使用
+[`civ6-runtime.cordis.yml`](civ6-runtime.cordis.yml) 和
+[`scripts/runtime_dsh`](../../scripts/runtime_dsh)：它只启动
+`civ_mcp.runtime.server`，要求 host 提供稳定 branch token，且不拥有存档、读档或
+FireTuner 生命周期。`civ6.cordis.yml` 同样把该 token 转交给正式 `civ-mcp` 命令；其中
+遗留的 PlayProfile 配置只作为 K2 前的冻结资产，Runtime 不会读取它。
 
 ## Installed layout
 

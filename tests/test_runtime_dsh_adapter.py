@@ -21,7 +21,7 @@ def _run(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_runtime_dsh_overlay_starts_only_the_experimental_runtime_server() -> None:
+def test_runtime_dsh_overlay_starts_only_the_runtime_server() -> None:
     overlay = OVERLAY.read_text(encoding="utf-8")
 
     assert "id: mcp-civ6runtime" in overlay
@@ -57,7 +57,7 @@ def test_runtime_dsh_dry_run_requires_no_dsh_checkout_or_game_connection() -> No
     result = _run("--branch", "save-0001", "--store", "/tmp/runtime.sqlite3", "--dry-run")
 
     assert result.returncode == 0
-    assert "Experimental Runtime DSH dry run" in result.stdout
+    assert "Runtime DSH dry run" in result.stdout
     assert "branch=save-0001" in result.stdout
     assert "store=/tmp/runtime.sqlite3" in result.stdout
 
