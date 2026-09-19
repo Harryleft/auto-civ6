@@ -12,6 +12,7 @@ from civ_mcp.civ.adapter import CivAdapter, CivMutationRequest
 from civ_mcp.lua.cities import build_produce_item, build_purchase_item
 from civ_mcp.lua.diplomacy import build_propose_trade
 from civ_mcp.lua.economy import build_make_trade_route
+from civ_mcp.lua.tech import build_set_civic, build_set_research
 from civ_mcp.lua.units import build_attack_unit, build_move_unit
 from civ_mcp.runtime.contracts import Evidence, OperationId, OperationIntent
 from civ_mcp.runtime.session import MutationExecution
@@ -209,6 +210,46 @@ class CivMutationFactory:
                 "propose_trade",
                 build_propose_trade(other_player_id, offer_items, request_items),
             ),
+            verify=readback,
+            operation_id=operation_id,
+        )
+
+    def set_research(
+        self, *, operation_id: OperationId, tech_name: str, readback: AttackReadback
+    ) -> MutationExecution:
+        """Set research only after a fresh tech/civic readback can confirm it."""
+        return self._readback_action(
+            operation_id=operation_id,
+            tool="set_research",
+            arguments={"tech_name": tech_name},
+            lua_code=build_set_research(tech_name),
+            readback=readback,
+        )
+
+    def set_civic(
+        self, *, operation_id: OperationId, civic_name: str, readback: AttackReadback
+    ) -> MutationExecution:
+        return self._readback_action(
+            operation_id=operation_id,
+            tool="set_civic",
+            arguments={"civic_name": civic_name},
+            lua_code=build_set_civic(civic_name),
+            readback=readback,
+        )
+
+    @staticmethod
+    def _readback_action(
+        *,
+        operation_id: OperationId,
+        tool: str,
+        arguments: dict[str, object],
+        lua_code: str,
+        readback: AttackReadback,
+    ) -> MutationExecution:
+        """Shared wiring only; each caller owns its domain-specific evidence."""
+        return MutationExecution(
+            intent=OperationIntent.create(tool, arguments),
+            request=CivMutationRequest(tool, lua_code),
             verify=readback,
             operation_id=operation_id,
         )
