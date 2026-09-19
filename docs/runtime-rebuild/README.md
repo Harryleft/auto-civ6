@@ -124,7 +124,8 @@ branch token（例如 `save-0001`，**不是** `game_id:save-0001`）和一个�
 - 模型工具只能经 SessionKernel 提交 mutation，不能直接连接 FireTuner。
 - Recovery、Telemetry、Context 和 UI 不能修改操作执行事实。
 - Recovery 在稳定 identity 验证后也必须创建新的 `branch_id`；不能把恢复后的
-  世界重新绑定为旧时间线。
+  世界重新绑定为旧时间线。Recovery driver 还必须回报其实际使用的 checkpoint，且该
+  checkpoint 必须属于请求开始时捕获的 inventory。
 
 ## 当前限制
 

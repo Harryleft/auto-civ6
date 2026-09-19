@@ -4,7 +4,17 @@ from __future__ import annotations
 
 import asyncio
 
-from civ_mcp.runtime.contracts import BranchIdentity, GameIdentity, OperationId, OperationIntent, OperationRecord, OutcomeState
+import pytest
+
+from civ_mcp.runtime.contracts import (
+    BranchIdentity,
+    ContractViolation,
+    GameIdentity,
+    OperationId,
+    OperationIntent,
+    OperationRecord,
+    OutcomeState,
+)
 from civ_mcp.runtime.recovery import RecoveredBinding, RecoveryInput, RecoveryOutcome, RecoverySupervisor
 
 
@@ -23,13 +33,14 @@ def test_recovery_creates_a_new_branch_without_reclassifying_unknown() -> None:
     async def driver(_request):
         nonlocal calls
         calls += 1
-        return RecoveredBinding(operation.game_id, "after-recovery")
+        return RecoveredBinding(operation.game_id, "auto-10", "after-recovery")
 
     result = asyncio.run(RecoverySupervisor(driver).recover(
         RecoveryInput(operation.game_id, operation.branch_id, operation, False, False, ("auto-10",))
     ))
     assert result.outcome is RecoveryOutcome.RECOVERED
     assert result.new_branch == BranchIdentity.from_token(operation.game_id, "after-recovery")
+    assert result.checkpoint == "auto-10"
     assert operation.outcome_state is OutcomeState.UNKNOWN
     assert calls == 1
 
@@ -49,7 +60,7 @@ def test_recovery_identity_mismatch_fails_safe_without_creating_branch() -> None
     game = GameIdentity("game-a")
 
     async def driver(_request):
-        return RecoveredBinding(GameIdentity("game-b"), "wrong-game")
+        return RecoveredBinding(GameIdentity("game-b"), "auto-10", "wrong-game")
 
     result = asyncio.run(RecoverySupervisor(driver).recover(
         RecoveryInput(game, BranchIdentity.from_token(game, "main"), None, True, True, ("auto-10",))
@@ -62,7 +73,7 @@ def test_recovery_cannot_reuse_the_original_branch() -> None:
     game = GameIdentity("game-a")
 
     async def driver(_request):
-        return RecoveredBinding(game, "main")
+        return RecoveredBinding(game, "auto-10", "main")
 
     result = asyncio.run(RecoverySupervisor(driver).recover(
         RecoveryInput(game, BranchIdentity.from_token(game, "main"), _unknown(), True, True, ("auto-10",))
@@ -90,7 +101,7 @@ def test_recovery_rejects_a_full_branch_id_from_the_host_driver() -> None:
     game = GameIdentity("game-a")
 
     async def driver(_request):
-        return RecoveredBinding(game, "game-a:after-recovery")
+        return RecoveredBinding(game, "auto-10", "game-a:after-recovery")
 
     result = asyncio.run(RecoverySupervisor(driver).recover(
         RecoveryInput(
@@ -105,3 +116,42 @@ def test_recovery_rejects_a_full_branch_id_from_the_host_driver() -> None:
 
     assert result.outcome is RecoveryOutcome.FAILED_SAFE
     assert result.new_branch is None
+
+
+def test_recovery_rejects_a_checkpoint_outside_the_captured_inventory() -> None:
+    game = GameIdentity("game-a")
+
+    async def driver(_request):
+        return RecoveredBinding(game, "unrelated-save", "after-recovery")
+
+    result = asyncio.run(
+        RecoverySupervisor(driver).recover(
+            RecoveryInput(
+                game,
+                BranchIdentity.from_token(game, "main"),
+                _unknown(),
+                False,
+                True,
+                ("auto-10",),
+            )
+        )
+    )
+
+    assert result.outcome is RecoveryOutcome.FAILED_SAFE
+    assert result.new_branch is None
+    assert result.checkpoint is None
+    assert "inventory" in result.reason
+
+
+def test_recovery_input_rejects_an_operation_from_another_branch() -> None:
+    game = GameIdentity("game-a")
+
+    with pytest.raises(ContractViolation, match="operation"):
+        RecoveryInput(
+            game,
+            BranchIdentity.from_token(game, "another-branch"),
+            _unknown(),
+            True,
+            False,
+            ("auto-10",),
+        )
