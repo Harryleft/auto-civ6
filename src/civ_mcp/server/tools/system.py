@@ -187,67 +187,44 @@ async def restart_and_load(ctx: Context, save_name: str | None = None) -> str:
 
     After completion, wait ~10 seconds then call get_game_overview to verify.
     """
-    gs = pipeline._get_game(ctx)
-    identity_before = gs._game_identity
+    from pathlib import Path
+    from civ_mcp.game_lifecycle import _validate_save_name, verify_loaded_world
 
-    result = await game_launcher.restart_and_load(save_name, conn=gs.conn)
-    # Loading a save rewinds the world; mark the branch boundary so the
-    # authorizations recorded for the abandoned future stop being consumable.
+    # Resolve and validate the recovery target before changing runtime state or
+    # killing anything. A missing save cannot abandon the pending turn.
+    save_name = save_name or game_launcher.get_latest_recovery_save() or game_launcher.get_latest_autosave()
+    if save_name is None:
+        return "Error: 没有可用恢复存档。LOAD_NOT_SUBMITTED"
+    validation = _validate_save_name(save_name)
+    if validation:
+        return validation + " LOAD_NOT_SUBMITTED"
+    if not any(
+        (Path(directory) / f"{save_name}.Civ6Save").is_file()
+        for directory in (game_launcher.SAVE_DIR, game_launcher.SINGLE_SAVE_DIR)
+    ):
+        return f"Error: 恢复存档 {save_name} 不存在。LOAD_NOT_SUBMITTED"
+
+    gs = pipeline._get_game(ctx)
+    mark_uncertain = getattr(gs, "mark_reload_uncertain", None)
+    if callable(mark_uncertain):
+        mark_uncertain()
+    try:
+        result = await game_launcher.restart_and_load(save_name, conn=gs.conn)
+    except BaseException:
+        await pipeline._record_game_reload_epoch(ctx, reason="restart_and_load_interrupted")
+        raise
     await pipeline._record_game_reload_epoch(
         ctx,
         reason="restart_and_load_tool",
         turn=pipeline._get_logger(ctx)._turn,
         details={"save": save_name},
     )
-
-    # Reconnect and verify correct game loaded
-    conn = gs.conn
-    for attempt in range(30):
-        try:
-            await conn.reconnect()
-            if conn.gamecore_index is not None:
-                break
-        except ConnectionError:
-            pass
-        await asyncio.sleep(1)
-
-    if conn.gamecore_index is not None and identity_before is not None:
-        try:
-            actual = await gs.get_game_identity()
-            if actual != identity_before:
-                log.warning(
-                    "restart_and_load: wrong game loaded "
-                    "(expected %s, got %s) — retrying",
-                    identity_before,
-                    actual,
-                )
-                result2 = await game_launcher.restart_and_load(save_name, conn=gs.conn)
-                await pipeline._record_game_reload_epoch(
-                    ctx,
-                    reason="restart_and_load_tool_retry",
-                    turn=pipeline._get_logger(ctx)._turn,
-                    details={"save": save_name},
-                )
-                for attempt in range(30):
-                    try:
-                        await conn.reconnect()
-                        if conn.gamecore_index is not None:
-                            break
-                    except ConnectionError:
-                        pass
-                    await asyncio.sleep(1)
-                try:
-                    actual2 = await gs.get_game_identity()
-                    if actual2 != identity_before:
-                        return (
-                            f"{result2} | WARNING: Wrong game loaded "
-                            f"(expected {identity_before[0]}, "
-                            f"got {actual2[0]}). Manual recovery needed."
-                        )
-                except Exception:
-                    pass
-                return f"{result2} | Reloaded after wrong-game detection."
-        except Exception:
-            log.debug("Post-load identity check failed", exc_info=True)
-
-    return result
+    # The launcher owns one explicit restart. Keep writes blocked until the
+    # resulting world is read back; failure never starts a second restart.
+    if "GameCore/InGame ready" in result and "Error:" not in result:
+        if await verify_loaded_world(gs.conn):
+            confirm = getattr(gs, "confirm_world_changed", None)
+            if callable(confirm):
+                confirm()
+            return result + " | CONFIRMED: 新局面已只读核验"
+    return result + " | OUTCOME_UNKNOWN: 新局面尚未确认，保留写入阻断。"

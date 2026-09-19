@@ -113,7 +113,7 @@ def test_game_state_collection_saves_reads_and_reload_discards_them(monkeypatch)
 def test_mutation_revision_changes_before_unknown_send(monkeypatch):
     async def run():
         conn = GameConnection()
-        monkeypatch.setattr(conn, "ensure_connected", AsyncMock())
+        monkeypatch.setattr(conn, "_ensure_connected", AsyncMock())
         observed = []
 
         async def send(*args, **kwargs):

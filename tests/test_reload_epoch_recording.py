@@ -103,8 +103,11 @@ def test_never_raises_so_recovery_is_not_broken(monkeypatch):
     )
 
 
-def test_restart_and_load_tool_records_the_epoch(monkeypatch):
+def test_restart_and_load_tool_records_the_epoch(monkeypatch, tmp_path):
     recorded: list[dict] = []
+    (tmp_path / "0_MCP_0057.Civ6Save").touch()
+    monkeypatch.setattr(system.game_launcher, "SAVE_DIR", str(tmp_path))
+    monkeypatch.setattr(system.game_launcher, "SINGLE_SAVE_DIR", str(tmp_path))
 
     async def fake_restart(save_name, conn=None):
         return f"restarted {save_name}"

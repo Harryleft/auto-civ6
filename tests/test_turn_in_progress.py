@@ -67,7 +67,7 @@ def test_a_reload_forgets_the_in_flight_request() -> None:
     state = _bare_state()
     state.conn.turn_in_progress = True
 
-    state.invalidate_cached_state()
+    state.confirm_world_changed()
 
     assert state._pending_end_turn is False
     assert state._pending_end_turn_from is None
@@ -83,7 +83,7 @@ def test_a_stub_connection_without_the_flag_does_not_break_the_reset() -> None:
     state = _bare_state()
     state.conn = SimpleNamespace()  # no turn_in_progress attribute at all
 
-    state.invalidate_cached_state()
+    state.confirm_world_changed()
 
     assert state._pending_end_turn is False
 
@@ -113,8 +113,8 @@ def test_the_next_end_turn_sends_action_endturn_again_after_a_reload(
     assert gs.conn.sends == 1
     assert gs.conn.turn_in_progress is True, "在途期间必须让后台轮询器让开"
 
-    # A load abandons the branch, and the real reload path is
-    # invalidate_cached_state() -> _reset_pending_end_turn(). That pair is
+    # A confirmed load abandons the branch. confirm_world_changed() invokes
+    # _reset_pending_end_turn(); invalidating read caches alone does not. This is
     # covered on a real GameState above; here we exercise what the flow depends
     # on, using the same function the reload path calls.
     GameState._reset_pending_end_turn(gs)
@@ -248,3 +248,32 @@ def test_watchdog_skips_its_ingame_game_over_check_during_a_turn(
         await watchdog.stop()
 
     asyncio.run(scenario())
+
+
+def test_cache_invalidation_does_not_cancel_pending_request():
+    state = _bare_state()
+    state.conn.turn_in_progress = True
+    state.invalidate_cached_state()
+    assert state._pending_end_turn is True
+    assert state._pending_end_turn_from == 12
+    assert state._pending_end_turn_wait == 321.0
+    assert state.conn.turn_in_progress is True
+
+
+def test_unknown_reload_preserves_old_request_until_world_change_confirmed():
+    state = _bare_state()
+    state.conn.turn_in_progress = True
+    state.mark_reload_uncertain()
+    assert state._pending_end_turn is True
+    assert state._reload_uncertain and state.conn.reload_pending
+    state.confirm_world_changed()
+    assert not state._pending_end_turn
+    assert not state._reload_uncertain and not state.conn.reload_pending
+
+
+def test_pending_game_over_probe_uses_only_gamecore():
+    state = _bare_state()
+    state.conn.turn_in_progress = True
+    asyncio.run(state.check_game_over())
+    assert state.conn.reads == 1
+    assert state.conn.writes == 0

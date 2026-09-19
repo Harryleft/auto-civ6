@@ -266,6 +266,7 @@ def action_receipt_status(
             "END TURN BLOCKED",
             "TURN PAUSED",
             "ENDTURN_BLOCKING_",
+            "GATE:RELOAD_UNCONFIRMED",
         )
     ):
         return "blocked", _ACTION_RECEIPT_LABELS["blocked"]
@@ -278,6 +279,8 @@ def action_receipt_status(
             "CONNECTION LOST MID-COMMAND",
             "MAY HAVE ALREADY BEEN EXECUTED",
             "HANG:",
+            "UNKNOWN:RELOAD_PENDING",
+            "UNKNOWN:END_TURN",
         )
     ):
         return "unknown", _ACTION_RECEIPT_LABELS["unknown"]

@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+import time
+from contextvars import ContextVar
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Callable
 
 import civ_mcp.narrate as nr
 from civ_mcp import lua as lq
-from civ_mcp.connection import DEFAULT_TIMEOUT, LuaError
+from civ_mcp.connection import DEFAULT_TIMEOUT, CommandNotSentError, LuaError
 from civ_mcp.game_lifecycle import cleanup_old_autosaves, save_game
 
 if TYPE_CHECKING:
@@ -162,12 +164,24 @@ QUERY_CEILING_SECONDS = DEFAULT_TIMEOUT
 # the poll almost always ends within seconds.
 QUERY_RESERVE_SECONDS = 25.0
 
-# Injectable time seam: the wait loop sleeps through this function so a test can
-# drive it with a virtual clock and verify the budget without waiting for real
-# minutes. There is no clock function any more — bounding a retried poll was the
-# only thing that needed one, and recovery is no longer retried in this call.
+# The clock includes transport/query time and gaps between continuation calls.
+# Tests replace both seams, so timing assertions do not require a live game.
+_monotonic = time.monotonic
+
+
 async def _sleep(seconds: float) -> None:
     await asyncio.sleep(seconds)
+
+
+def _pending_elapsed(gs: GameState) -> float:
+    started = getattr(gs, "_pending_end_turn_started", None)
+    if started is None:
+        # Compatibility for an in-memory request created before this field exists.
+        started = _monotonic() - getattr(gs, "_pending_end_turn_wait", 0.0)
+        gs._pending_end_turn_started = started
+    elapsed = max(0.0, _monotonic() - started)
+    gs._pending_end_turn_wait = elapsed
+    return elapsed
 
 
 @dataclass(frozen=True)
@@ -331,7 +345,7 @@ def _wc_dismiss_due(
     )
 
 
-async def _drive_congress(gs: GameState) -> bool:
+async def _drive_congress(gs: GameState, *, expected_world_epoch: int | None = None) -> bool:
     """Vote and submit an *open* congress session. No-op without one.
 
     Reads the live resolution list, applies the registered policy (defaulting to
@@ -343,11 +357,18 @@ async def _drive_congress(gs: GameState) -> bool:
     re-check the turn immediately instead of continuing to poll.
     """
 
+    gs._wc_drive_uncertain = True
     try:
-        result = await gs.drive_world_congress()
+        result = await gs.drive_world_congress(**({"expected_world_epoch": expected_world_epoch} if expected_world_epoch is not None else {}))
+        if expected_world_epoch is not None and _world_changed_while_waiting(gs, expected_world_epoch):
+            return False
+    except CommandNotSentError:
+        gs._wc_drive_uncertain = False
+        return False
     except Exception:
         log.debug("World Congress drive failed", exc_info=True)
         return False
+    gs._wc_drive_uncertain = False
     if "submitted" in result:
         log.info("World Congress driven from Lua: %s", result[:240])
         return True
@@ -371,6 +392,7 @@ async def _check_mid_turn_diplomacy(
     gs: GameState,
     lua: str,
     turn_before: int | None,
+    *, expected_world_epoch: int | None = None,
 ) -> tuple[str | None, bool]:
     """Probe for AI diplomatic proposals during end_turn polling.
 
@@ -382,8 +404,13 @@ async def _check_mid_turn_diplomacy(
     from the Phase 3 inline logic so both the early probe (Phase 2, ~45s)
     and the full-timeout fallback (Phase 3) can share the same code.
     """
+    epoch = getattr(gs, "_world_epoch", 0) if expected_world_epoch is None else expected_world_epoch
     try:
-        mid_sessions = await gs.get_diplomacy_sessions()
+        if _world_changed_while_waiting(gs, epoch):
+            return _RELOAD_INTERRUPTED, False
+        mid_sessions = await gs.get_diplomacy_sessions(expected_world_epoch=epoch)
+        if _world_changed_while_waiting(gs, epoch):
+            return _RELOAD_INTERRUPTED, False
         if not mid_sessions:
             return None, False
 
@@ -391,7 +418,11 @@ async def _check_mid_turn_diplomacy(
         # opens during AI processing. If text is empty, retry once.
         if any(not s.dialogue_text for s in mid_sessions):
             await _sleep(2.0)
-            mid_sessions = await gs.get_diplomacy_sessions()
+            if _world_changed_while_waiting(gs, epoch):
+                return _RELOAD_INTERRUPTED, False
+            mid_sessions = await gs.get_diplomacy_sessions(expected_world_epoch=epoch)
+            if _world_changed_while_waiting(gs, epoch):
+                return _RELOAD_INTERRUPTED, False
 
         # Auto-dismiss war declarations — these are informational only
         # (you can't decline a war). Dismiss and report to the agent.
@@ -400,7 +431,11 @@ async def _check_mid_turn_diplomacy(
             war_names = []
             for ws in war_sessions:
                 close_lua = lq.build_diplomacy_respond(ws.other_player_id, "EXIT")
-                await gs.conn.execute_mutation(close_lua)
+                if _world_changed_while_waiting(gs, epoch):
+                    return _RELOAD_INTERRUPTED, False
+                await gs.conn.execute_mutation(close_lua, turn_action="diplomacy", expected_world_epoch=epoch)
+                if _world_changed_while_waiting(gs, epoch):
+                    return _RELOAD_INTERRUPTED, False
                 war_names.append(f"{ws.other_civ_name} ({ws.other_leader_name})")
                 log.info(
                     "Auto-dismissed war declaration from %s",
@@ -413,9 +448,13 @@ async def _check_mid_turn_diplomacy(
             if not mid_sessions:
                 war_msg = ", ".join(war_names)
                 advanced = False
-                for _ in range(10):
+                for _ in range(_WAR_DECLARATION_POLL_ATTEMPTS):
                     await _sleep(2.0)
+                    if _world_changed_while_waiting(gs, epoch):
+                        return _RELOAD_INTERRUPTED, False
                     turn_after = await _get_turn_number(gs)
+                    if _world_changed_while_waiting(gs, epoch):
+                        return _RELOAD_INTERRUPTED, False
                     if (
                         turn_after is not None
                         and turn_before is not None
@@ -425,12 +464,10 @@ async def _check_mid_turn_diplomacy(
                         break
                 if advanced:
                     return None, True  # turn advanced, caller handles snapshot
-                # Original ACTION_ENDTURN was consumed — next call must re-send
-                gs._pending_end_turn = False
-                gs._pending_end_turn_from = None
+                # Closing the input does not cancel the original request.
                 return (
                     f"WAR DECLARED by {war_msg}! Session dismissed.\n"
-                    f"Turn did not advance — call end_turn again.\n"
+                    f"回合尚未确认推进；再次调用 end_turn 只继续观察，不重发。\n"
                     f"Reassess: check unit positions, city defenses, and military strength."
                 ), False
 
@@ -470,6 +507,8 @@ async def _check_mid_turn_diplomacy(
             lines.append("Use respond_to_diplomacy to handle it, then end_turn again.")
         return "\n".join(lines), False
     except Exception:
+        if _world_changed_while_waiting(gs, epoch):
+            return _RELOAD_INTERRUPTED, False
         log.debug("Mid-turn diplomacy check failed", exc_info=True)
         return None, False
 
@@ -491,6 +530,8 @@ def _game_over_message(gs: GameState, gameover: lq.GameOverStatus) -> str:
     """Record a finished game and return the GAME OVER result message."""
     gs._pending_end_turn = False
     gs._pending_end_turn_from = None
+    gs.conn.turn_in_progress = False
+    gs._pending_end_turn_started = None
     gs._last_game_over = gameover
     vtype = gameover.victory_type.replace("VICTORY_", "").replace("_", " ").title()
     if gameover.is_defeat:
@@ -853,8 +894,60 @@ def _check_save_scumming(gs: GameState) -> tuple[list[lq.TurnEvent], bool]:
     return events, False
 
 
+end_turn_confirmation: ContextVar[Callable[[str], None] | None] = ContextVar(
+    "end_turn_confirmation", default=None
+)
+
+
+@dataclass
+class _TurnReceipt:
+    confirmed: str | None = None
+    subscribers: list[Callable[[str], None]] = field(default_factory=list)
+
+    def confirm(self, result: str) -> None:
+        self.confirmed = result
+        for callback in list(self.subscribers):
+            callback(result)
+
+
 async def execute_end_turn(gs: GameState) -> str:
-    """End the turn with snapshot-diff event detection."""
+    """Coalesce overlapping calls into one logical operation and submission.
+
+    The owner may be cancelled, but once sending is possible its pending state
+    survives. A cancelled follower must not cancel the owner's operation.
+    """
+    active = getattr(gs, "_end_turn_task", None)
+    follower = active is not None and not active.done()
+    if follower:
+        receipt = gs._end_turn_receipt
+    else:
+        receipt = _TurnReceipt()
+        gs._end_turn_receipt = receipt
+        active = asyncio.create_task(_execute_end_turn(gs, receipt))
+        gs._end_turn_task = active
+    callback = end_turn_confirmation.get()
+    if callback is not None:
+        receipt.subscribers.append(callback)
+        if receipt.confirmed is not None:
+            callback(receipt.confirmed)
+    try:
+        return await asyncio.shield(active) if follower else await active
+    finally:
+        if callback is not None:
+            receipt.subscribers.remove(callback)
+        if gs._pending_end_turn:
+            _pending_elapsed(gs)
+        if not follower and getattr(gs, "_end_turn_task", None) is active:
+            gs._end_turn_task = None
+
+
+async def _execute_end_turn(gs: GameState, receipt: _TurnReceipt) -> str:
+    entry_epoch = getattr(gs, "_world_epoch", 0)
+    if getattr(gs, "_reload_uncertain", False) or getattr(gs.conn, "reload_pending", False):
+        return "UNKNOWN:RELOAD_PENDING|读档结果尚未确认；暂停游戏操作，先确认新局面。"
+    if gs._pending_end_turn:
+        gs.conn.turn_in_progress = True
+        return await _observe_pending_end_turn(gs, receipt)
     # 0a. Run aborted due to save scumming — refuse to advance
     if gs._run_aborted:
         return (
@@ -1520,33 +1613,55 @@ async def execute_end_turn(gs: GameState) -> str:
 
     turn_before = snap_before.turn if snap_before else await _get_turn_number(gs)
 
-    # Request end turn — but skip if a previous ACTION_ENDTURN is still in flight.
-    # This prevents duplicate requests that cause turns to skip (e.g. 412 → 415).
-    # After mid-turn diplomacy/deals, the game auto-continues AI processing
-    # with the original request, so we only need to poll for advancement.
-    lua = lq.build_end_turn()
-    if gs._pending_end_turn:
-        log.info(
-            "Skipping ACTION_ENDTURN — previous request still in flight (from turn %s)",
-            gs._pending_end_turn_from,
-        )
-        # Use the original turn number as baseline for advancement detection.
-        # The current turn_before may already be advanced if the game auto-continued.
-        if gs._pending_end_turn_from is not None:
-            turn_before = gs._pending_end_turn_from
-    else:
-        await gs.conn.execute_mutation(lua)
-        gs._pending_end_turn = True
-        gs._pending_end_turn_from = turn_before
-        # A newly sent request starts a fresh window and drive schedule.
-        gs._pending_end_turn_wait = 0.0
-        gs._wc_driven = False
-        gs._wc_drives = 0
-        gs._wc_dismissals = 0
-    # Tell the background pollers to stay off the InGame context while the AI
-    # processes: their 2 Hz queries are exactly what the wait loop avoids.
-    gs.conn.turn_in_progress = gs._pending_end_turn
+    if _world_changed_while_waiting(gs, entry_epoch):
+        return _RELOAD_INTERRUPTED
 
+    # Reserve the logical operation before the first await that may send it.
+    # Missing acknowledgements and cancellation never prove it was not accepted.
+    gs._pending_end_turn = True
+    gs._pending_end_turn_from = turn_before
+    gs._pending_end_turn_started = _monotonic()
+    gs._pending_end_turn_wait = 0.0
+    gs._pending_wc_turn = wc_turn
+    gs._pending_world_epoch = entry_epoch
+    gs._pending_snap_before = snap_before
+    gs._pending_threats_before = threats_before
+    gs._wc_driven = False
+    gs._wc_drive_uncertain = False
+    gs._wc_drives = 0
+    gs._wc_dismissals = 0
+    gs.conn.turn_in_progress = True
+    try:
+        await gs.conn.execute_mutation(lq.build_end_turn(), turn_action="end_turn", expected_world_epoch=gs._pending_world_epoch)
+    except CommandNotSentError:
+        # This transport classification is emitted only before a command write.
+        gs._pending_end_turn = False
+        gs._pending_end_turn_from = None
+        gs._pending_end_turn_started = None
+        gs.conn.turn_in_progress = False
+        raise
+    return await _observe_pending_end_turn(gs, receipt)
+
+
+def _world_changed_while_waiting(gs: GameState, epoch: int) -> bool:
+    return (
+        getattr(gs, "_reload_uncertain", False)
+        or getattr(gs.conn, "reload_pending", False)
+        or getattr(gs, "_world_epoch", 0) != epoch
+    )
+
+
+_RELOAD_INTERRUPTED = "UNKNOWN:RELOAD_PENDING|等待期间发生读档；原回合推进结果不可用于新局面。"
+
+
+async def _observe_pending_end_turn(gs: GameState, receipt: _TurnReceipt) -> str:
+    """Continue one request without preflight, generic popups, or another send."""
+    epoch = getattr(gs, "_pending_world_epoch", getattr(gs, "_world_epoch", 0))
+    turn_before = gs._pending_end_turn_from
+    snap_before = getattr(gs, "_pending_snap_before", gs._last_snapshot)
+    threats_before = getattr(gs, "_pending_threats_before", [])
+    wc_turn = bool(getattr(gs, "_pending_wc_turn", False))
+    lua = lq.build_end_turn()
     # Poll for turn advancement using GameCore-only queries.
     # CRITICAL: Do NOT send InGame queries while AI civs are processing
     # their turns.  InGame queries (diplomacy sessions, UI.CanEndTurn,
@@ -1559,17 +1674,18 @@ async def execute_end_turn(gs: GameState) -> str:
     # and then reports, and calling end_turn again while a request is in flight
     # keeps polling without re-sending ACTION_ENDTURN. So elapsed waiting and
     # congress drive progress are carried on the game state, not on the stack.
-    pass_start_wait = getattr(gs, "_pending_end_turn_wait", 0.0)
+    pass_start_wait = _pending_elapsed(gs)
     wc_driven = bool(getattr(gs, "_wc_driven", False))
     cumulative_wait = pass_start_wait
     wc_drives = int(getattr(gs, "_wc_drives", 0))
-    wc_dismissals = int(getattr(gs, "_wc_dismissals", 0))
 
     # Phase 1: Quick check (4s) — turn sometimes advances within 1-2s
     for _ in range(8):
         await _sleep(0.5)
-        cumulative_wait += 0.5
+        cumulative_wait = _pending_elapsed(gs)
         turn_after = await _get_turn_number(gs)
+        if _world_changed_while_waiting(gs, epoch):
+            return _RELOAD_INTERRUPTED
         if (
             turn_after is not None
             and turn_before is not None
@@ -1582,6 +1698,7 @@ async def execute_end_turn(gs: GameState) -> str:
     if not advanced:
         diplomacy_probed = False
         for delay in _end_turn_poll_delays(wc_turn):
+            cumulative_wait = _pending_elapsed(gs)
             if cumulative_wait - pass_start_wait >= _END_TURN_POLL_WINDOW_SECONDS:
                 # This call has spent its window. Report rather than keep the
                 # host call open; the caller can continue the wait cheaply.
@@ -1593,8 +1710,10 @@ async def execute_end_turn(gs: GameState) -> str:
                 )
                 break
             await _sleep(delay)
-            cumulative_wait += delay
+            cumulative_wait = _pending_elapsed(gs)
             turn_after = await _get_turn_number(gs)
+            if _world_changed_while_waiting(gs, epoch):
+                return _RELOAD_INTERRUPTED
             if (
                 turn_after is not None
                 and turn_before is not None
@@ -1602,42 +1721,46 @@ async def execute_end_turn(gs: GameState) -> str:
             ):
                 advanced = True
                 break
+            cumulative_wait = _pending_elapsed(gs)
             # Check for game-over during longer polling intervals.
             # An opponent victory (Science, Culture, etc.) fires during
             # their turn — without this we'd wait the full 9-min timeout.
             if delay >= 10.0:
                 gameover = await gs.check_game_over()
+                if _world_changed_while_waiting(gs, epoch):
+                    return _RELOAD_INTERRUPTED
                 if gameover is not None:
                     return _game_over_message(gs, gameover)
-            # Early diplomacy probe — ONE InGame query after ~45s of silence.
-            # The CRITICAL constraint (Games 1-5) was about REPEATED InGame
-            # queries in a tight loop. A single probe after 45s is safe: if
-            # the AI paused for a trade deal, the game is idle. If the AI is
-            # still processing, the query may be slow/fail (caught below).
+            # Bounded named diplomacy probe. Silence alone does not prove the
+            # engine is idle; only a confirmed session permits a response.
             if not diplomacy_probed and cumulative_wait >= 45:
                 diplomacy_probed = True
                 diplo_msg, diplo_advanced = await _check_mid_turn_diplomacy(
-                    gs, lua, turn_before
+                    gs, lua, turn_before, expected_world_epoch=epoch
                 )
                 if diplo_msg is not None:
                     return diplo_msg
                 if diplo_advanced:
-                    advanced = True
-                    break
+                    turn_after = await _get_turn_number(gs)
+                    if _world_changed_while_waiting(gs, epoch):
+                        return _RELOAD_INTERRUPTED
+                    advanced = turn_after is not None and turn_before is not None and turn_after > turn_before
+                    if advanced:
+                        break
             # World Congress turns park on a congress screen. The session opens
             # inside ACTION_ENDTURN, so nobody else can vote it: we drive it
             # here — vote the live resolutions and submit — which is what a
             # human would do and is orders of magnitude faster than waiting the
             # screen out. Tried from t+5s and kept up across the whole opening
             # window, because only driving makes the turn advance.
-            if _wc_drive_due(
+            if not wc_driven and not getattr(gs, "_wc_drive_uncertain", False) and _wc_drive_due(
                 wc_turn=wc_turn,
                 cumulative_wait=cumulative_wait,
                 drives=wc_drives,
             ):
                 wc_drives += 1
                 gs._wc_drives = wc_drives
-                if await _drive_congress(gs):
+                if await _drive_congress(gs, expected_world_epoch=epoch):
                     wc_driven = True
                     gs._wc_driven = True
                     log.info(
@@ -1647,6 +1770,8 @@ async def execute_end_turn(gs: GameState) -> str:
                     )
                     await _sleep(2.0)
                     turn_after = await _get_turn_number(gs)
+                    if _world_changed_while_waiting(gs, epoch):
+                        return _RELOAD_INTERRUPTED
                     if (
                         turn_after is not None
                         and turn_before is not None
@@ -1654,86 +1779,33 @@ async def execute_end_turn(gs: GameState) -> str:
                     ):
                         advanced = True
                         break
-            # Only when no session can be driven: clear a stale congress screen.
-            # Kept late and tight on purpose (see _wc_dismiss_due).
-            if not advanced and _wc_dismiss_due(
-                wc_turn=wc_turn,
-                cumulative_wait=cumulative_wait,
-                dismissals=wc_dismissals,
-            ):
-                wc_dismissals += 1
-                gs._wc_dismissals = wc_dismissals
-                if await _dismiss_congress_popup(gs):
-                    log.info(
-                        "World Congress popup cleared (t+%.0fs, dismissal %d)",
-                        cumulative_wait,
-                        wc_dismissals,
-                    )
-                    await _sleep(2.0)
-                    turn_after = await _get_turn_number(gs)
-                    if (
-                        turn_after is not None
-                        and turn_before is not None
-                        and turn_after > turn_before
-                    ):
-                        advanced = True
-                        break
-
     # Carry this pass's waiting forward so the next call continues the schedule
     # instead of restarting it (and, on a congress turn, re-driving from zero).
-    gs._pending_end_turn_wait = cumulative_wait
+    cumulative_wait = _pending_elapsed(gs)
 
-    # Phase 3: The poll window is spent, so it is now safe to check InGame state.
-    # AI processing either completed (the blocker is on our side) or the turn is
-    # genuinely wedged. Do ONE round of InGame checks, not a loop.
+    # A deadline is not proof that the AI is idle. Only the bounded, named
+    # diplomacy input probe is allowed; generic UI reads/dismissals stay off.
     if not advanced:
         # Check for AI diplomatic proposals (reuses the same helper
         # as the early Phase 2 probe — Phase 3 is the fallback if the
         # probe didn't fire or missed the diplomacy window).
         diplo_msg, diplo_advanced = await _check_mid_turn_diplomacy(
-            gs, lua, turn_before
+            gs, lua, turn_before, expected_world_epoch=epoch
         )
         if diplo_msg is not None:
             return diplo_msg
         if diplo_advanced:
-            advanced = True
-
-    if not advanced:
-        # Check for incoming trade deals
-        try:
-            mid_deals = await gs.get_pending_deals()
-            if mid_deals:
-                return (
-                    "Turn paused — incoming trade deal:\n"
-                    + nr.narrate_pending_deals(mid_deals)
-                )
-        except Exception:
-            log.debug("Mid-turn deal check failed", exc_info=True)
-
-        # Single popup dismiss attempt (NOT a loop — looped dismissal
-        # during AI processing was a primary cause of AI hangs).
-        try:
-            dismissed = await gs.dismiss_popup()
-            if "Dismissed" in dismissed:
-                log.info("Post-timeout popup dismissed: %s", dismissed)
-                await gs.conn.execute_mutation(lua)
-                for _ in range(5):
-                    await _sleep(2.0)
-                    turn_after = await _get_turn_number(gs)
-                    if (
-                        turn_after is not None
-                        and turn_before is not None
-                        and turn_after > turn_before
-                    ):
-                        advanced = True
-                        break
-        except Exception:
-            log.debug("Post-timeout dismiss failed", exc_info=True)
+            turn_after = await _get_turn_number(gs)
+            if _world_changed_while_waiting(gs, epoch):
+                return _RELOAD_INTERRUPTED
+            advanced = turn_after is not None and turn_before is not None and turn_after > turn_before
 
     if not advanced:
         # Final verification — turn may have slipped through
         await _sleep(2.0)
         turn_after = await _get_turn_number(gs)
+        if _world_changed_while_waiting(gs, epoch):
+            return _RELOAD_INTERRUPTED
         if (
             turn_after is not None
             and turn_before is not None
@@ -1744,71 +1816,16 @@ async def execute_end_turn(gs: GameState) -> str:
     if not advanced:
         # Check if game ended during turn transition (victory/defeat)
         gameover = await gs.check_game_over()
+        if _world_changed_while_waiting(gs, epoch):
+            return _RELOAD_INTERRUPTED
         if gameover is not None:
             return _game_over_message(gs, gameover)
 
-        # Provide specific blocker info instead of generic message
-        details: list[str] = []
-        try:
-            sessions = await gs.get_diplomacy_sessions()
-            if sessions:
-                names = [s.other_civ_name for s in sessions]
-                details.append(f"Open diplomacy session with: {', '.join(names)}")
-        except Exception:
-            pass
-        try:
-            blocking_lines = await gs.conn.execute_write(
-                lq.build_end_turn_blocking_query()
-            )
-            blockers = lq.parse_end_turn_blocking(blocking_lines)
-            for bt, bm in blockers:
-                display = bt.replace("ENDTURN_BLOCKING_", "").replace("_", " ").title()
-                details.append(f"Blocker: {display}" + (f" ({bm})" if bm else ""))
-        except Exception:
-            pass
-        # Whether the in-flight flag survives decides what the *next* call does,
-        # so it is set per verdict rather than cleared up front:
-        #   blocked / hang  -> the request was consumed or the turn is dead, so
-        #                      the next call must send ACTION_ENDTURN again;
-        #   pending / congress-not-driven -> the request is *still parked in the
-        #                      game*, so re-sending would skip a turn (the
-        #                      documented 412 -> 415 failure). Keep it.
-        def _clear_pending() -> None:
-            gs._pending_end_turn = False
-            gs._pending_end_turn_from = None
-            gs.conn.turn_in_progress = False
-
-        if details:
-            # Before returning blocker, check if game actually ended —
-            # victory can trigger during AI processing while blockers coexist
-            gameover = await gs.check_game_over()
-            if gameover is not None:
-                return _game_over_message(gs, gameover)
-            _clear_pending()
-            return f"End turn blocked (turn {turn_after or turn_before}): {'; '.join(details)}"
-        # No blockers, no diplomacy, no game over. Before calling this a wedged
-        # AI turn, rule out the congress: the game parks on the congress screen
-        # waiting for a vote only we can cast, and the blocker query reports
-        # *nothing* while that segment runs. An undriven congress therefore used
-        # to fall straight through to HANG, which killed and reloaded a
-        # perfectly healthy game up to three times — over a missing vote. That
-        # is never a hang.
+        # Expected congress timing is not evidence of a currently open session.
+        # no_session/failed probes exhaust their finite schedule and eventually
+        # yield the same diagnostic deadline as any other unconfirmed request.
         turn_num = turn_after or turn_before
-        if wc_turn and not wc_driven:
-            log.error(
-                "Congress turn T%s never driven after %d attempt(s); not a hang",
-                turn_num,
-                wc_drives,
-            )
-            return (
-                f"CONGRESS_NOT_DRIVEN:{turn_num}|"
-                "议会已开会，但本次未能由程序投票并提交（尝试 "
-                f"{wc_drives} 次）。这不是 AI 卡死，禁止重启游戏。\n"
-                "下一步：调用 get_world_congress 查看当前决议，用 queue_wc_votes "
-                "按决议类型名（type）注册票型，然后重新调用 end_turn；"
-                "驱动器会在开会时套用该票型并提交。\n"
-                "CONGRESS_NOT_DRIVEN_IS_NOT_A_HANG"
-            )
+        cumulative_wait = _pending_elapsed(gs)
         # No blockers, no diplomacy, no game over. Whether this is a hang or
         # merely a turn that is still being played out is decided by how long the
         # *same* pending turn has been waited on in total, not by how long one
@@ -1824,17 +1841,15 @@ async def execute_end_turn(gs: GameState) -> str:
             # accumulated wait so the next call continues instead of restarting.
             return (
                 f"TURN_PENDING:{turn_num}|"
-                f"回合仍在处理中（本次已等待累计 {cumulative_wait:.0f} 秒，"
-                "超过阈值的回合才判定为挂起）。\n"
-                "这不是错误，也没有改动丢失：再次调用 end_turn 即可继续等待，"
+                f"尚未确认回合推进（距本次逻辑请求提交已过 {cumulative_wait:.0f} 秒）。\n"
+                "再次调用 end_turn 即可继续等待，"
                 "重复调用不会重发结束回合请求。\n"
                 "若同时有需要决策的通知或阻塞项，先处理它们。\n"
                 "TURN_PENDING_KEEP_WAITING"
             )
-        # True AI turn hang, after the full cumulative threshold.
+        # The diagnostic threshold is not proof of a dead engine.
         # Return structured HANG: prefix so the caller can start the explicit
         # recovery step. Recovery is deliberately NOT attempted inside this call.
-        _clear_pending()
         if turn_num is not None:
             from .autosave import get_autosave_for_turn
 
@@ -1842,16 +1857,23 @@ async def execute_end_turn(gs: GameState) -> str:
             return (
                 f"HANG:{turn_num}:{hang_save}|"
                 f"End turn requested (turn is still {turn_num}) after "
-                f"{cumulative_wait:.0f}s. AI turn processing appears stuck."
+                f"{cumulative_wait:.0f}s. 等待达到诊断阈值，尚未确认推进。"
+                + (" 预计议会到期，但尚未确认会话或投票提交。" if wc_turn and not wc_driven else "")
+                + " 原请求仍可能在途；不得重新提交或据此自动重启。"
             )
-        return f"End turn requested (turn is still {turn_num}). Check get_pending_diplomacy or dismiss_popup."
+        return "UNKNOWN:END_TURN_UNCONFIRMED|无法确认回合号；保留原请求，暂停提交并检查连接。"
+
+    receipt.confirm(f"Turn {turn_before} -> {turn_after}")
 
     # Turn advanced — clear the pending flag and the carried waiting state, so
     # the next turn starts its own window and its own drive schedule.
     gs._pending_end_turn = False
     gs._pending_end_turn_from = None
     gs._pending_end_turn_wait = 0.0
+    gs._pending_end_turn_started = None
+    gs._pending_wc_turn = False
     gs._wc_driven = False
+    gs._wc_drive_uncertain = False
     gs._wc_drives = 0
     gs._wc_dismissals = 0
     gs.conn.turn_in_progress = False
@@ -1886,6 +1908,8 @@ async def execute_end_turn(gs: GameState) -> str:
     # transition (e.g. science vessel arriving, diplo VP threshold).
     # Must check here so "GAME OVER" appears in result for log_game_over.
     gameover = await gs.check_game_over()
+    if _world_changed_while_waiting(gs, epoch):
+        return f"Turn {turn_before} -> {turn_after}\nBRIEF_PENDING|推进已确认，后处理期间局面改变。"
     if gameover is not None:
         gs._last_game_over = gameover
         vtype = gameover.victory_type.replace("VICTORY_", "").replace("_", " ").title()
@@ -1905,6 +1929,8 @@ async def execute_end_turn(gs: GameState) -> str:
     snap_after = None
     try:
         snap_after = await gs._take_snapshot()
+        if _world_changed_while_waiting(gs, epoch):
+            return f"Turn {turn_before} -> {turn_after}\nBRIEF_PENDING|推进已确认，快照期间局面改变。"
         gs._last_snapshot = snap_after
     except Exception:
         log.warning("Post-turn snapshot failed — events will be limited", exc_info=True)

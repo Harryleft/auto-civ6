@@ -208,12 +208,13 @@ print("{SENTINEL}")
 """
 
 
-def build_congress_submit() -> str:
+def build_congress_submit(*, resume_pending: bool = False) -> str:
     """Submit all World Congress votes and resume turn processing (InGame context).
 
-    Mirrors WorldCongressPopup.lua OnAccept(): submit votes then ACTION_ENDTURN
-    to resume turn-segment processing after the WC stage.
+    An existing end-turn request resumes from WORLD_CONGRESS_SUBMIT_TURN.
+    Only an independent submission may also request a fresh end turn.
     """
+    end_turn = "" if resume_pending else "UI.RequestAction(ActionTypes.ACTION_ENDTURN)"
     return f"""
 local me = Game.GetLocalPlayer()
 {_lua_require_ruleset("RULESET_EXPANSION_2", "ERR:NO_WORLD_CONGRESS_IN_RULESET")}
@@ -227,7 +228,7 @@ if intro then intro:SetHide(true) end
 local popup = ContextPtr:LookUpControl("/InGame/WorldCongressPopup")
 if popup then popup:SetHide(true) end
 UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_SUBMIT_TURN, {{}})
-UI.RequestAction(ActionTypes.ACTION_ENDTURN)
+{end_turn}
 print("OK:CONGRESS_SUBMITTED")
 print("{SENTINEL}")
 """
@@ -418,7 +419,7 @@ print("{SENTINEL}")
 """
 
 
-def build_wc_drive_and_submit() -> str:
+def build_wc_drive_and_submit(*, resume_pending: bool = False) -> str:
     """Vote the open World Congress session from Lua and submit it (InGame).
 
     This is the program-side replacement for a human clicking the congress
@@ -431,13 +432,14 @@ def build_wc_drive_and_submit() -> str:
     2. applies the registered policy (``__civmcp_wc_votes`` by hash,
        ``__civmcp_wc_by_type`` by resolution type name; default = one free
        vote, which costs no favor),
-    3. submits the turn (``WORLD_CONGRESS_SUBMIT_TURN`` + ``ACTION_ENDTURN``),
+    3. submits the congress input (a pending end turn is never re-submitted),
     4. records what it did in ``__civmcp_wc_report`` for the caller to read.
 
     Safe to call when no session is open: it reports ``WC_DRIVE|no_session``
     and changes nothing.
     """
 
+    end_turn = "" if resume_pending else "UI.RequestAction(ActionTypes.ACTION_ENDTURN)"
     return f"""
 {_lua_require_ruleset("RULESET_EXPANSION_2", "ERR:NO_WORLD_CONGRESS_IN_RULESET")}
 local me = Game.GetLocalPlayer()
@@ -448,6 +450,12 @@ end)
 if not gotCongress or wc == nil or PlayerOperations.WORLD_CONGRESS_RESOLUTION_VOTE == nil or PlayerOperations.WORLD_CONGRESS_SUBMIT_TURN == nil then {_bail("ERR:NO_WORLD_CONGRESS_IN_RULESET")} end
 if not wc:IsInSession() then
     print("WC_DRIVE|no_session")
+    print("{SENTINEL}")
+    return
+end
+
+if __civmcp_wc_voted then
+    print("WC_DRIVE|already_submitted")
     print("{SENTINEL}")
     return
 end
@@ -524,7 +532,7 @@ if intro then intro:SetHide(true) end
 local popup = ContextPtr:LookUpControl("/InGame/WorldCongressPopup")
 if popup then popup:SetHide(true) end
 UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_SUBMIT_TURN, {{}})
-UI.RequestAction(ActionTypes.ACTION_ENDTURN)
+{end_turn}
 
 __civmcp_wc_voted = true
 __civmcp_wc_report = table.concat(report, "|")

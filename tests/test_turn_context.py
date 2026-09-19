@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import pathlib
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -349,9 +350,9 @@ def test_visible_threats_reach_the_input_without_the_model_asking() -> None:
 def test_briefing_reports_its_own_collection_cost() -> None:
     context = _build(_FakeGame())
 
-    assert context.query_calls > 0
+    assert context.query_calls == -1
     assert context.elapsed_ms >= 0
-    assert "calls=" in context.brief
+    assert "calls=unavailable" in context.brief
     assert "chars=" in context.brief
     assert "elapsed_ms=" in context.brief
 
@@ -548,12 +549,12 @@ def test_the_field_allowlist_is_enforced() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_the_tested_combination_has_material() -> None:
+def test_scenario_material_is_not_promoted_to_verified_civilization_rules() -> None:
     found, lines = tc.civ_material("sumeria", "RULESET_EXPANSION_2")
 
-    assert found is True
-    assert any("战车" in line for line in lines)
-    assert any("通天塔" in line for line in lines)
+    assert found is False
+    assert "经独立核验" in " ".join(lines)
+    assert "Cry Havoc" not in " ".join(lines)
 
 
 def test_material_is_marked_missing_for_an_uncovered_civ() -> None:
@@ -1045,3 +1046,436 @@ def test_unknown_outcome_does_not_get_a_next_turn_brief(
     )
 
     assert "回合局面简报" not in result
+
+
+@pytest.mark.parametrize("second_outcome", ["complete", "cancel", "query_failure"])
+def test_overlapping_briefs_never_replace_shared_connection_methods(
+    second_outcome: str,
+) -> None:
+    async def exercise():
+        first = _FakeGame()
+        second = _FakeGame()
+        second.conn = first.conn
+        original_read = first.conn.execute_read
+        original_write = first.conn.execute_write
+        original_attributes = dict(vars(first.conn))
+        started = [asyncio.Event(), asyncio.Event()]
+        release = [asyncio.Event(), asyncio.Event()]
+
+        async def paused_overview(index, game):
+            started[index].set()
+            await release[index].wait()
+            return game.overview
+
+        first.get_game_overview = lambda: paused_overview(0, first)
+        second.get_game_overview = lambda: paused_overview(1, second)
+        if second_outcome == "query_failure":
+            second.fail.add("get_units")
+        first_task = asyncio.create_task(tc.build_turn_context(first))
+        await started[0].wait()
+        second_task = asyncio.create_task(tc.build_turn_context(second))
+        await started[1].wait()
+        identities_during = (
+            first.conn.execute_read == original_read,
+            first.conn.execute_write == original_write,
+        )
+        # A starts, B starts, A exits, then B exits: not a nested stack.
+        release[0].set()
+        first_context = await first_task
+        await first.conn.execute_write("BACKGROUND_POLL")
+        if second_outcome == "cancel":
+            second_task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await second_task
+            second_context = None
+        else:
+            release[1].set()
+            second_context = await second_task
+        await first.conn.execute_read("BACKGROUND_POLL")
+
+        assert all(identities_during)
+        assert first.conn.execute_read == original_read
+        assert first.conn.execute_write == original_write
+        assert set(vars(first.conn)) == set(original_attributes)
+        assert first_context.query_calls == -1
+        if second_context is not None:
+            assert second_context.query_calls == -1
+        if second_outcome == "query_failure":
+            assert second_context.field("units").status == tc.UNAVAILABLE
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize(
+    ("turn", "era", "difficulty", "ruleset"),
+    [
+        (1, "Ancient", "Settler", "RULESET_EXPANSION_2"),
+        (80, "Medieval", "Immortal", "RULESET_EXPANSION_2"),
+        (250, "Information", "Deity", "RULESET_EXPANSION_2"),
+        (80, "Medieval", "Prince", "RULESET_STANDARD"),
+    ],
+)
+def test_sumeria_brief_keeps_observed_rules_without_scenario_strategy(
+    turn, era, difficulty, ruleset,
+) -> None:
+    context = _build(
+        _FakeGame(
+            turns=[turn, turn],
+            overview=_overview(turn=turn, era_name=era, difficulty=difficulty, ruleset=ruleset),
+        )
+    )
+
+    assert f"难度={difficulty}" in context.brief
+    assert f"时代={era}" in context.brief
+    assert f"ruleset={ruleset}" in context.brief
+    material = context.brief.split("[文明能力与触发前提]", 1)[1].split("[重要变化]", 1)[0]
+    assert "status=unavailable" in material
+    for unsupported in ("立刻开战", "优先生产战车", "+40%", "30 战斗强度", "Cry Havoc"):
+        assert unsupported not in material
+
+
+@pytest.mark.parametrize("slow_stage", ["brief", "map", "logging", "core_post_confirmation"])
+def test_post_advance_timeout_keeps_the_confirmed_receipt(
+    monkeypatch: pytest.MonkeyPatch, slow_stage: str,
+) -> None:
+    _stub_end_turn_io(monkeypatch, "unused")
+    monkeypatch.setattr(end_turn_flow, "_budget_seconds", lambda: 0.02)
+    monkeypatch.setattr(end_turn_flow.heartbeat, "write", lambda *_args, **_kwargs: None)
+    gs = _FakeGame()
+    executed = []
+    cancelled = []
+
+    async def advance():
+        executed.append("end_turn")
+        if slow_stage == "core_post_confirmation":
+            callback = end_turn_flow.end_turn_confirmation.get()
+            assert callback is not None
+            callback("Turn 57 -> 58")
+            await slow()
+        return "Turn 57 -> 58"
+
+    async def slow(*_args, **_kwargs):
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cancelled.append(slow_stage)
+
+    async def logged(_ctx, _name, _params, operation, **_kwargs):
+        raw = await operation()
+        if slow_stage == "logging":
+            await slow()
+        return raw
+
+    async def no_capture(*_args):
+        return None
+
+    gs.end_turn = advance
+    monkeypatch.setattr(pipeline, "_logged", logged)
+    monkeypatch.setattr(
+        pipeline, "_get_map_capture",
+        lambda _ctx: SimpleNamespace(
+            bind_game=lambda *_args: None,
+            capture=slow if slow_stage == "map" else no_capture,
+        ),
+    )
+    monkeypatch.setattr(pipeline, "build_and_record_turn_context", slow)
+
+    result = asyncio.run(end_turn_flow.run_end_turn(_end_turn_ctx(gs)))
+
+    assert executed == ["end_turn"]
+    assert cancelled == [slow_stage]
+    assert "57 → 58" in result
+    assert "CONFIRMED:END_TURN_ADVANCED" in result
+    assert "BRIEF_PENDING:RE_READ_OVERVIEW_ONLY" in result
+    assert "UNKNOWN:END_TURN_BUDGET_EXHAUSTED" not in result
+    assert "不要再次调用 end_turn" in result
+
+
+def test_pending_outer_flow_skips_pre_turn_diary_queries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stub_end_turn_io(monkeypatch, "unused")
+    monkeypatch.setattr(pipeline, "_get_play_profile", lambda _ctx: PlayProfile.LEGACY)
+    gs = _FakeGame()
+    gs._pending_end_turn = True
+    gs._pending_end_turn_from = 14
+    observed = []
+
+    async def observe():
+        observed.append("pending_observation")
+        return "TURN_IN_PROGRESS:14|请求仍在处理中"
+
+    async def logged(_ctx, _name, _params, operation, **_kwargs):
+        return await operation()
+
+    gs.end_turn = observe
+    monkeypatch.setattr(pipeline, "_logged", logged)
+
+    result = asyncio.run(end_turn_flow.run_end_turn(_end_turn_ctx(gs)))
+
+    assert observed == ["pending_observation"]
+    assert gs.calls == []
+    assert "TURN_IN_PROGRESS" in result
+    assert "Empty reflections" not in result
+    assert "回合局面简报" not in result
+
+
+
+def test_concurrent_end_turn_timeouts_keep_receipts_in_their_own_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stub_end_turn_io(monkeypatch, "unused")
+    monkeypatch.setattr(end_turn_flow, "_budget_seconds", lambda: 0.02)
+    first = _FakeGame()
+    second = _FakeGame()
+    first._pending_end_turn = second._pending_end_turn = True
+    first._pending_end_turn_from = 57
+    second._pending_end_turn_from = 14
+
+    async def confirmed_then_pending():
+        callback = end_turn_flow.end_turn_confirmation.get()
+        assert callback is not None
+        callback("Turn 57 -> 58")
+        await asyncio.Event().wait()
+
+    async def unknown():
+        await asyncio.Event().wait()
+
+    async def logged(_ctx, _name, _params, operation, **_kwargs):
+        return await operation()
+
+    first.end_turn = confirmed_then_pending
+    second.end_turn = unknown
+    monkeypatch.setattr(pipeline, "_logged", logged)
+
+    async def exercise():
+        results = await asyncio.gather(
+            end_turn_flow.run_end_turn(_end_turn_ctx(first)),
+            end_turn_flow.run_end_turn(_end_turn_ctx(second)),
+        )
+        assert end_turn_flow.end_turn_confirmation.get() is None
+        return results
+
+    confirmed, pending = asyncio.run(exercise())
+
+    assert "CONFIRMED:END_TURN_ADVANCED" in confirmed
+    assert "BRIEF_PENDING" in confirmed
+    assert "57 → 58" in confirmed
+    assert "UNKNOWN:END_TURN_BUDGET_EXHAUSTED" in pending
+    assert "CONFIRMED:" not in pending
+    assert "57" not in pending
+
+
+
+def test_repeated_congress_blocker_does_not_submit_from_outer_observation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stub_end_turn_io(monkeypatch, "World Congress fires on turn 14")
+    gs = _FakeGame()
+    gs._pending_end_turn = True
+    gs._pending_end_turn_from = 14
+    submitted = []
+
+    async def submit():
+        submitted.append("vote")
+
+    gs.submit_congress = submit
+
+    async def exercise():
+        return [await end_turn_flow.run_end_turn(_end_turn_ctx(gs)) for _ in range(4)]
+
+    results = asyncio.run(exercise())
+
+    assert submitted == []
+    assert gs.calls == []
+    assert gs._end_turn_blocked is True
+    assert all("14" in result for result in results)
+
+
+
+@pytest.mark.parametrize("failed_stage", ["core_after_confirmation", "telemetry"])
+def test_post_confirmation_exceptions_through_real_pipeline_keep_success(
+    monkeypatch: pytest.MonkeyPatch, failed_stage: str,
+) -> None:
+    real_logged = pipeline._logged
+    _stub_end_turn_io(monkeypatch, "unused")
+    monkeypatch.setattr(pipeline, "_logged", real_logged)
+    monkeypatch.setattr(end_turn_flow.heartbeat, "write", lambda *_args, **_kwargs: None)
+    gs = _FakeGame()
+    gs._pending_end_turn = True
+    gs._pending_end_turn_from = 57
+    executed = []
+    logger = SimpleNamespace(
+        _turn=57,
+        log_tool_call=AsyncMock(side_effect=RuntimeError("telemetry failed")),
+        log_error=AsyncMock(),
+    )
+    monkeypatch.setattr(pipeline, "_get_logger", lambda _ctx: logger)
+
+    async def advance():
+        executed.append("end_turn")
+        callback = end_turn_flow.end_turn_confirmation.get()
+        assert callback is not None
+        callback("Turn 57 -> 58")
+        if failed_stage == "core_after_confirmation":
+            raise RuntimeError("snapshot failed after confirmation")
+        return "Turn 57 -> 58"
+
+    gs.end_turn = advance
+    result = asyncio.run(end_turn_flow.run_end_turn(_end_turn_ctx(gs)))
+
+    assert executed == ["end_turn"]
+    assert "57 → 58" in result
+    assert "CONFIRMED:END_TURN_ADVANCED" in result
+    assert "BRIEF_PENDING:RE_READ_OVERVIEW_ONLY" in result
+    assert "UNKNOWN:END_TURN_BUDGET_EXHAUSTED" not in result
+    if failed_stage == "core_after_confirmation":
+        logger.log_error.assert_awaited_once()
+    else:
+        logger.log_tool_call.assert_awaited_once()
+
+
+def test_outer_concurrent_calls_share_slow_diary_before_one_action_endturn(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from civ_mcp import lua as lq
+
+    _stub_end_turn_io(monkeypatch, "unused")
+    monkeypatch.setattr(pipeline, "_turn_context_enabled", lambda _ctx: False)
+    monkeypatch.setattr(end_turn_flow.heartbeat, "write", lambda *_args, **_kwargs: None)
+    gs = _FakeGame()
+    gs.conn.execute_mutation = AsyncMock(return_value=["ok"])
+    diary_reads = []
+
+    async def exercise():
+        diary_started = asyncio.Event()
+        release_diary = asyncio.Event()
+        first_finished = asyncio.Event()
+
+        async def slow_overview():
+            diary_reads.append("overview")
+            if len(diary_reads) == 1:
+                diary_started.set()
+                await release_diary.wait()
+            else:
+                # With core-only coalescing, caller B reaches this point while
+                # A prepares, then resumes after A has already ended T14.
+                await first_finished.wait()
+            return gs.overview
+
+        async def advance():
+            before = gs.overview.turn
+            await gs.conn.execute_mutation(lq.build_end_turn(), turn_action="end_turn")
+            gs.overview.turn += 1
+            return f"Turn {before} -> {gs.overview.turn}"
+
+        async def logged(_ctx, _name, _params, operation, **_kwargs):
+            return await operation()
+
+        gs.get_game_overview = slow_overview
+        gs.end_turn = advance
+        monkeypatch.setattr(pipeline, "_logged", logged)
+        first = asyncio.create_task(end_turn_flow.run_end_turn(_end_turn_ctx(gs)))
+        await diary_started.wait()
+        second = asyncio.create_task(end_turn_flow.run_end_turn(_end_turn_ctx(gs)))
+        await asyncio.sleep(0)
+        release_diary.set()
+        first_result = await first
+        first_finished.set()
+        second_result = await second
+        return first_result, second_result
+
+    first_result, second_result = asyncio.run(exercise())
+
+    assert first_result == second_result
+    assert "14 → 15" in first_result
+    assert diary_reads == ["overview"]
+    gs.conn.execute_mutation.assert_awaited_once()
+    assert "ACTION_ENDTURN" in gs.conn.execute_mutation.call_args.args[0]
+    assert gs.overview.turn == 15
+
+
+def test_cancelled_owner_does_not_cancel_follower_after_confirmation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stub_end_turn_io(monkeypatch, "unused")
+    monkeypatch.setattr(pipeline, "_turn_context_enabled", lambda _ctx: False)
+    monkeypatch.setattr(end_turn_flow.heartbeat, "write", lambda *_args, **_kwargs: None)
+    gs = _FakeGame()
+    gs._pending_end_turn = True
+    gs._pending_end_turn_from = 14
+    observed = []
+
+    async def exercise():
+        confirmed = asyncio.Event()
+        finish = asyncio.Event()
+
+        async def advance():
+            observed.append("operation")
+            callback = end_turn_flow.end_turn_confirmation.get()
+            assert callback is not None
+            callback("Turn 14 -> 15")
+            confirmed.set()
+            await finish.wait()
+            return "Turn 14 -> 15"
+
+        async def logged(_ctx, _name, _params, operation, **_kwargs):
+            return await operation()
+
+        gs.end_turn = advance
+        monkeypatch.setattr(pipeline, "_logged", logged)
+        owner = asyncio.create_task(end_turn_flow.run_end_turn(_end_turn_ctx(gs)))
+        await confirmed.wait()
+        follower = asyncio.create_task(end_turn_flow.run_end_turn(_end_turn_ctx(gs)))
+        await asyncio.sleep(0)
+        owner.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await owner
+        finish.set()
+        return await follower
+
+    result = asyncio.run(exercise())
+
+    assert observed == ["operation"]
+    assert "14 → 15" in result
+    assert "UNKNOWN:" not in result
+    assert gs._end_turn_flow_operation is None
+
+
+def test_cancelling_all_outer_waiters_cancels_the_shared_operation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stub_end_turn_io(monkeypatch, "unused")
+    gs = _FakeGame()
+    gs._pending_end_turn = True
+    cancelled = []
+
+    async def exercise():
+        started = asyncio.Event()
+
+        async def observe():
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.append("underlying_operation")
+
+        async def logged(_ctx, _name, _params, operation, **_kwargs):
+            return await operation()
+
+        gs.end_turn = observe
+        monkeypatch.setattr(pipeline, "_logged", logged)
+        first = asyncio.create_task(end_turn_flow.run_end_turn(_end_turn_ctx(gs)))
+        await started.wait()
+        second = asyncio.create_task(end_turn_flow.run_end_turn(_end_turn_ctx(gs)))
+        await asyncio.sleep(0)
+        first.cancel()
+        second.cancel()
+        results = await asyncio.gather(first, second, return_exceptions=True)
+        assert all(isinstance(result, asyncio.CancelledError) for result in results)
+        assert gs._end_turn_flow_operation is None
+
+    asyncio.run(exercise())
+
+    assert cancelled == ["underlying_operation"]
+    assert gs._pending_end_turn is True

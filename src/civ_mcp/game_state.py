@@ -16,6 +16,8 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from civ_mcp import lua as lq
+from civ_mcp.lua.overview import build_gameover_check_gamecore
+from civ_mcp.lua.congress import build_wc_drive_and_submit
 from civ_mcp.connection import SLOW_MUTATION_TIMEOUT, GameConnection, LuaError
 from civ_mcp.read_cache import ReadCache, scoped_collection, scoped_read
 from civ_mcp.research_cache import ResearchCache
@@ -49,6 +51,7 @@ class GameState:
     def __init__(self, connection: GameConnection):
         self.conn = connection
         self._cache_epoch = 0
+        self._world_epoch = 0
         self._reads = ReadCache(self._read_stamp)
         self._research_cache = ResearchCache()
         self.spatial: SpatialTracker | None = None
@@ -63,7 +66,10 @@ class GameState:
             None  # guard against double-write per turn
         )
         self._end_turn_blocked: bool = False  # last end_turn hit a blocker (diplo/WC)
-        self._pending_end_turn: bool = False  # ACTION_ENDTURN already in flight
+        self._pending_end_turn: bool = False  # ACTION_ENDTURN may be in flight
+        self._pending_end_turn_started: float | None = None
+        self._end_turn_task: asyncio.Task[str] | None = None
+        self._reload_uncertain: bool = False
         self._pending_end_turn_from: int | None = (
             None  # turn number when ACTION_ENDTURN was sent
         )
@@ -108,22 +114,38 @@ class GameState:
             self._research_cache.clear()
         self._ruleset_caps = None
         self._last_snapshot = None
+
+    def mark_reload_uncertain(self) -> None:
+        """A load may have reached the game; preserve the old request as evidence."""
+        self._reload_uncertain = True
+        self.conn.reload_pending = True
+        self.invalidate_cached_state()
+
+    def confirm_world_changed(self) -> None:
+        """Reset request state only after a new game/load is confirmed remotely."""
+        self._world_epoch = getattr(self, "_world_epoch", 0) + 1
+        self.conn.world_epoch = self._world_epoch
+        self.invalidate_cached_state()
         self._reset_pending_end_turn()
+        self._reload_uncertain = False
+        self.conn.reload_pending = False
 
     def _reset_pending_end_turn(self) -> None:
-        """Forget an end-turn request that belonged to the abandoned branch.
+        """Forget an operation after confirmed advance, game over, or world change.
 
-        Every load and every new game lands here. Leaving the in-flight flag set
-        across a reload makes the next ``end_turn`` skip sending ACTION_ENDTURN
-        and poll a turn that will never advance — a self-inflicted wedge. The
-        turn-position flags are cleared for the same reason.
+        Invalidating read caches is deliberately insufficient evidence for this.
         """
 
         self._pending_end_turn = False
         self._pending_end_turn_from = None
         self._end_turn_blocked = False
         self._pending_end_turn_wait = 0.0
+        self._pending_end_turn_started = None
+        self._pending_wc_turn = False
+        self._pending_snap_before = None
+        self._pending_threats_before = []
         self._wc_driven = False
+        self._wc_drive_uncertain = False
         self._wc_drives = 0
         self._wc_dismissals = 0
         try:
@@ -153,7 +175,7 @@ class GameState:
                 new_id = (civ, seed)
                 if self._game_identity is not None and new_id != self._game_identity:
                     log.info("Game changed: %s → %s", self._game_identity, new_id)
-                    self.invalidate_cached_state()
+                    self.confirm_world_changed()
                     self._last_snapshot = None
                     self._diary_written_turn = None
                     self._last_game_over = None
@@ -305,23 +327,18 @@ class GameState:
         return lq.parse_rival_snapshot_response(lines)
 
     async def check_game_over(self) -> lq.GameOverStatus | None:
-        """Check if the game has ended (victory/defeat screen showing).
-
-        Tries InGame context first (full detection with UI checks).
-        Falls back to GameCore context (read-only, survives defeat screen)
-        when InGame fails — this catches victories that freeze the InGame UI.
-        """
+        """Use GameCore while a turn is pending; UI reads resume after confirmation."""
+        if not getattr(self.conn, "turn_in_progress", False):
+            try:
+                lines = await self.conn.execute_write(lq.build_gameover_check())
+                return lq.parse_gameover_response(lines)
+            except Exception:
+                log.debug("Game-over check failed in InGame, trying GameCore")
         try:
-            lines = await self.conn.execute_write(lq.build_gameover_check())
+            lines = await self.conn.execute_read(build_gameover_check_gamecore())
             return lq.parse_gameover_response(lines)
         except Exception:
-            log.debug("Game-over check failed in InGame, trying GameCore")
-        # Fallback: GameCore-only check (survives defeat screen)
-        try:
-            lines = await self.conn.execute_read(lq.build_gameover_check_gamecore())
-            return lq.parse_gameover_response(lines)
-        except Exception:
-            log.debug("Game-over check failed in GameCore too", exc_info=True)
+            log.debug("Game-over check failed in GameCore", exc_info=True)
             return None
 
     @scoped_read
@@ -1018,9 +1035,9 @@ class GameState:
     # Diplomacy methods
     # ------------------------------------------------------------------
 
-    async def get_diplomacy_sessions(self) -> list[lq.DiplomacySession]:
+    async def get_diplomacy_sessions(self, *, expected_world_epoch: int | None = None) -> list[lq.DiplomacySession]:
         lua = lq.build_diplomacy_session_query()
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_write(lua, turn_action="diplomacy", expected_world_epoch=expected_world_epoch)
         return lq.parse_diplomacy_sessions(lines)
 
     async def diplomacy_respond(self, other_player_id: int, response: str) -> str:
@@ -1034,7 +1051,7 @@ class GameState:
 
         # Phase 1: Send AddResponse only (no CloseSession — engine handles lifecycle)
         lua = lq.build_diplomacy_respond(other_player_id, response.upper())
-        lines = await self.conn.execute_mutation(lua)
+        lines = await self.conn.execute_mutation(lua, turn_action="diplomacy")
         result = _action_result(lines)
 
         # EXIT and error paths return immediately
@@ -1046,7 +1063,8 @@ class GameState:
         # a separate TCP round-trip (same-frame checks see stale state).
         await asyncio.sleep(0.3)
         check_lines = await self.conn.execute_write(
-            lq.build_check_diplomacy_session_state(other_player_id)
+            lq.build_check_diplomacy_session_state(other_player_id),
+            turn_action="diplomacy",
         )
         if not any("SESSION_OPEN" in l for l in check_lines):
             return f"OK:RESPONDED|{response.upper()}|SESSION_CLOSED"
@@ -1071,7 +1089,7 @@ class GameState:
                 other_player_id,
             )
             close_lua = lq.build_diplomacy_respond(other_player_id, "EXIT")
-            await self.conn.execute_mutation(close_lua)
+            await self.conn.execute_mutation(close_lua, turn_action="diplomacy")
             return f"OK:RESPONDED|{response.upper()}|SESSION_CLOSED (auto-closed goodbye phase)"
 
         # Include the new dialogue text so the agent can see what the leader said
@@ -1143,12 +1161,12 @@ class GameState:
 
     async def get_pending_deals(self) -> list[lq.PendingDeal]:
         lua = lq.build_pending_deals_query()
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_write(lua, turn_action="diplomacy")
         return lq.parse_pending_deals_response(lines)
 
     async def respond_to_deal(self, other_player_id: int, accept: bool) -> str:
         lua = lq.build_respond_to_deal(other_player_id, accept)
-        lines = await self.conn.execute_mutation(lua)
+        lines = await self.conn.execute_mutation(lua, turn_action="diplomacy")
         return _action_result(lines)
 
     async def propose_trade(
@@ -1682,7 +1700,7 @@ class GameState:
 
     async def get_world_congress(self) -> lq.WorldCongressStatus:
         lua = lq.build_world_congress_query()
-        lines = await self.conn.execute_write(lua)
+        lines = await self.conn.execute_write(lua, turn_action="congress")
         _raise_query_error(lines)
         return lq.parse_world_congress_response(lines)
 
@@ -1701,15 +1719,15 @@ class GameState:
         self, resolution_hash: int, option: int, target_index: int, num_votes: int
     ) -> str:
         lua = lq.build_congress_vote(resolution_hash, option, target_index, num_votes)
-        lines = await self.conn.execute_mutation(lua)
+        lines = await self.conn.execute_mutation(lua, turn_action="congress")
         return _action_result(lines)
 
     async def submit_congress(self) -> str:
-        lua = lq.build_congress_submit()
-        lines = await self.conn.execute_mutation(lua, timeout=SLOW_MUTATION_TIMEOUT)
+        lua = lq.build_congress_submit(resume_pending=bool(getattr(self, "_pending_end_turn", False)))
+        lines = await self.conn.execute_mutation(lua, timeout=SLOW_MUTATION_TIMEOUT, turn_action="congress")
         return _action_result(lines)
 
-    async def drive_world_congress(self) -> str:
+    async def drive_world_congress(self, *, expected_world_epoch: int | None = None) -> str:
         """Vote the open World Congress session and submit it, from Lua.
 
         Program-side replacement for a human clicking the congress screen.
@@ -1718,14 +1736,14 @@ class GameState:
         votes on — then submits.  A no-op (``WC_DRIVE|no_session``) when no
         session is open, so callers may invoke it speculatively.
         """
-        lua = lq.build_wc_drive_and_submit()
-        lines = await self.conn.execute_mutation(lua, timeout=SLOW_MUTATION_TIMEOUT)
+        lua = build_wc_drive_and_submit(resume_pending=bool(getattr(self, "_pending_end_turn", False)))
+        lines = await self.conn.execute_mutation(lua, timeout=SLOW_MUTATION_TIMEOUT, turn_action="congress", expected_world_epoch=expected_world_epoch)
         return _action_result(lines)
 
     async def queue_wc_votes(self, votes: list[dict]) -> str:
         """Store agent voting preferences and register WC event handler."""
         lua = lq.build_register_wc_voter(votes=votes)
-        lines = await self.conn.execute_mutation(lua, timeout=SLOW_MUTATION_TIMEOUT)
+        lines = await self.conn.execute_mutation(lua, timeout=SLOW_MUTATION_TIMEOUT, turn_action="congress")
         return _action_result(lines)
 
     # ------------------------------------------------------------------
@@ -2073,9 +2091,10 @@ class GameState:
 
     async def execute_lua(self, code: str, context: str = "gamecore") -> str:
         """Escape hatch: run arbitrary Lua code."""
-        # Arbitrary user code has no obligation to print the completion
-        # sentinel, so every branch stays lenient. The InGame context and
-        # raw state indexes are mutation-capable channels (the escape hatch
+        # Read-only arbitrary code may omit the completion sentinel, at the
+        # cost of retiring its connection after the partial read. Mutation-capable
+        # code must provide the sentinel or its result remains unknown.
+        # The InGame context and raw state indexes are mutation-capable channels (the escape hatch
         # exists precisely for actions the domain tools do not cover), so
         # they carry the send-exactly-once mutation contract; the GameCore
         # context is documented as read-only state access and keeps the
