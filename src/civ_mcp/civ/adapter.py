@@ -17,6 +17,7 @@ from civ_mcp.runtime.transport import FireTunerTransport, Frame, TransportReceip
 
 SENTINEL = "---END---"
 T = TypeVar("T")
+StateResolver = Callable[[str], int]
 
 
 class CivReadError(RuntimeError):
@@ -61,16 +62,28 @@ class CivAdapter:
     """
 
     def __init__(
-        self, transport: FireTunerTransport, *, gamecore_state: int, ingame_state: int
+        self,
+        transport: FireTunerTransport,
+        *,
+        gamecore_state: int | None = None,
+        ingame_state: int | None = None,
+        state_resolver: StateResolver | None = None,
     ) -> None:
         self._transport = transport
+        if state_resolver is not None and (
+            gamecore_state is not None or ingame_state is not None
+        ):
+            raise ValueError("state_resolver 与固定 Lua state 不能同时提供。")
+        if state_resolver is None and (
+            gamecore_state is None or ingame_state is None
+        ):
+            raise ValueError("CivAdapter 需要 Lua state 或 state_resolver。")
         self._gamecore_state = gamecore_state
         self._ingame_state = ingame_state
+        self._state_resolver = state_resolver
 
     async def read(self, request: CivReadRequest[T], *, observed_turn: int) -> CivReadResult[T]:
-        if request.context not in {"gamecore", "ingame"}:
-            raise ValueError("CivReadRequest.context 必须是 gamecore 或 ingame。")
-        state = self._gamecore_state if request.context == "gamecore" else self._ingame_state
+        state = self._state_for(request.context)
         receipt = await self._transport.execute_read(
             self._command(state, request.lua_code),
             is_complete=_is_sentinel,
@@ -153,10 +166,17 @@ class CivAdapter:
         )
 
     async def submit(self, request: CivMutationRequest) -> TransportReceipt:
-        state = self._ingame_state if request.context == "ingame" else self._gamecore_state
+        state = self._state_for(request.context)
         return await self._transport.execute_mutation(
             self._command(state, request.lua_code), is_complete=_is_sentinel
         )
+
+    def _state_for(self, context: str) -> int:
+        if context not in {"gamecore", "ingame"}:
+            raise ValueError("Civ Lua context 必须是 gamecore 或 ingame。")
+        if self._state_resolver is not None:
+            return self._state_resolver(context)
+        return self._gamecore_state if context == "gamecore" else self._ingame_state
 
     @staticmethod
     def _command(state: int, lua_code: str) -> str:
