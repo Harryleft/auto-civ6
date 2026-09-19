@@ -54,9 +54,9 @@
   城邦 player ID；模型选择一个 ID 后仅发送一次 `send_envoy`，再继续等待原 end-turn，
   绝不自动选城邦或补发 end-turn。
 - 单一、条款完整的待决交易会以 `TRADE_COUNTER_OFFER` interrupt 返回双方实际条款；
-  模型只能选 `ACCEPT` 或 `REJECT`。主动提议若无新的结构化回价证据会保留 `UNKNOWN`，
-  绝不根据 Lua 成功文本自动接受不同条款。世界议会仅支持模型显式的
-  `SUBMIT_ABSTAIN`；不支持自动投票。
+  模型只能选 `ACCEPT` 或 `REJECT`。主动提议只有在 DealManager 的独立读取仍显示
+  `PROPOSED` 或出现结构化 `COUNTER_OFFER` 时才确认；其余情况保留 `UNKNOWN`，绝不根据
+  Lua 成功文本自动接受不同条款。世界议会仅支持模型显式的 `SUBMIT_ABSTAIN`；不支持自动投票。
 - 已通过实验入口暴露的 mutation 仅限 [`capabilities.md`](capabilities.md) 表中列出的
   项目，并各自有 precheck 与领域 Evidence。`CivMutationFactory` 内未由该入口注册的
   旧构造函数不是 Runtime 支持能力，不能据此推断宗教、间谍、奇观或世界议会投票已迁移。

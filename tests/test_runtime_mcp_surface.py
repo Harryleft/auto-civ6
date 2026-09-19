@@ -53,6 +53,21 @@ def test_surface_reads_city_states_only_through_context() -> None:
     assert asyncio.run(surface.get_city_states()) is expected
 
 
+def test_surface_reads_trade_negotiation_only_through_context() -> None:
+    expected = SimpleNamespace(state="PROPOSED")
+
+    class Context:
+        async def read_trade_negotiation(self, other_player_id: int):
+            assert other_player_id == 2
+            return expected
+
+    surface = RuntimeMcpSurface(
+        context=Context(), session=SimpleNamespace(), turn_loop=SimpleNamespace()
+    )
+
+    assert asyncio.run(surface.get_trade_negotiation(2)) is expected
+
+
 def test_surface_reads_attack_target_only_through_context() -> None:
     expected = SimpleNamespace(value="RANGE")
 
