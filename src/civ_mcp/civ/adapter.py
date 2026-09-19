@@ -6,6 +6,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Generic, TypeVar
 
+from civ_mcp.lua.barbarians import (
+    build_barbarian_overview_query,
+    parse_barbarian_overview_response,
+)
 from civ_mcp.lua.cities import (
     build_cities_query,
     build_city_capture_state_query,
@@ -57,6 +61,7 @@ from civ_mcp.lua.governance import (
 )
 from civ_mcp.lua.great_people import build_great_people_query, parse_great_people_response
 from civ_mcp.lua.models import (
+    BarbarianOverview,
     CityCaptureState,
     CityInfo,
     ClimateOverview,
@@ -550,6 +555,23 @@ class CivAdapter:
                 decode=_decode_religion_overview,
                 coverage="RELIGION_OVERVIEW:COMPLETE",
                 context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
+    async def read_barbarian_overview(
+        self, *, observed_turn: int
+    ) -> CivReadResult[BarbarianOverview]:
+        """Read revealed camps and visible units without moving or attacking."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_barbarian_overview",
+                lua_code=build_barbarian_overview_query(),
+                decode=lambda lines: parse_barbarian_overview_response(list(lines)),
+                coverage=(
+                    "BARBARIAN_CAMPS:REVEALED;"
+                    "BARBARIAN_UNITS:CURRENTLY_VISIBLE"
+                ),
             ),
             observed_turn=observed_turn,
         )

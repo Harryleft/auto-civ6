@@ -97,6 +97,7 @@ class ContextBuilder:
                 "get_climate_overview",
                 "get_spies",
                 "get_religion_overview",
+                "get_barbarian_overview",
             ),
         )
 
@@ -224,5 +225,12 @@ class ContextBuilder:
         """Read world religion facts without selecting a belief or using a unit."""
         overview = await self._adapter.read_overview()
         return await self._adapter.read_religion_overview(
+            observed_turn=overview.observed_turn
+        )
+
+    async def read_barbarian_overview(self):
+        """Read only camps revealed by exploration and units visible this turn."""
+        overview = await self._adapter.read_overview()
+        return await self._adapter.read_barbarian_overview(
             observed_turn=overview.observed_turn
         )
