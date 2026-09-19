@@ -88,6 +88,33 @@ CIV_MCP_RUNTIME_BRANCH=<稳定存档分支标识> \
 该入口不会启动游戏、加载存档、自动重连后重发 mutation，或调用旧的
 Belief/Governance 链路。
 
+## K1 现场冒烟入口（尚未执行）
+
+新核心的手工验收使用 [`tests/manual/test_runtime_core_smoke.py`](../../tests/manual/test_runtime_core_smoke.py)，
+不使用旧 `GameConnection` / `GameState` 手工脚本。先进入单机对局、确认
+`EnableTuner=1`、`4318` 正在监听且没有其他客户端；再由 host 选择当前存档对应的稳定
+branch token 和一个保留 operation evidence 的 SQLite 路径：
+
+```bash
+.venv/bin/python tests/manual/test_runtime_core_smoke.py \
+  --branch <stable-save-branch> \
+  --store <operation-store.sqlite3>
+```
+
+该命令只读 context。只有操作者额外传入 `--confirm-end-turn` 才会发送**一次** end-turn：
+
+```bash
+.venv/bin/python tests/manual/test_runtime_core_smoke.py \
+  --branch <stable-save-branch> \
+  --store <operation-store.sqlite3> \
+  --confirm-end-turn
+```
+
+脚本输出 game/branch/turn、未知读取、operation send/outcome 与 Evidence。任何
+`NEEDS_DECISION`、`RECOVERY_REQUIRED` 或 `UNKNOWN` 都以非零退出，且不自动恢复、重发或
+处理 decision；保存输出和 SQLite 后再进行明确诊断。这是 K1 的准备入口，尚不是一次已
+完成的真实 smoke。
+
 ## 不变量
 
 - 同一对局在任意时刻只有一个写入 owner。
