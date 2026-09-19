@@ -131,7 +131,7 @@ class TurnContext:
     consistency: str
     write_allowed: bool
     blocked_reasons: tuple[str, ...]
-    query_calls: int
+    query_calls: int  # -1 means unavailable; no shared-connection instrumentation.
     elapsed_ms: int
     brief: str = ""
 
@@ -178,59 +178,19 @@ class TurnContextState:
 # ---------------------------------------------------------------------------
 # Civilization rules material
 # ---------------------------------------------------------------------------
-# Scope is deliberately narrow: only the combination the repository actually
-# tests (Sumeria / Gilgamesh under RULESET_EXPANSION_2, the "Cry Havoc"
-# benchmark). Anything else is reported as missing rather than described from
-# another leader's or ruleset's material. Facts below are taken from this
-# repository's own scenario specification (docs/paper/scenario-spec.md).
-CIV_RULES: dict[str, dict[str, Any]] = {
-    "sumeria": {
-        "display": "苏美尔（吉尔伽美什）",
-        "rulesets": ("RULESET_EXPANSION_2",),
-        "identity": "文明定位是「立刻开战」：早期单位优势窗口很短。",
-        "abilities": (
-            "战车（War-Cart）：无需任何科技即可生产，30 战斗强度、3 移动力，"
-            "在远古时代压制其他所有单位。",
-            "通天塔（Ziggurat）：无需科技即可建造，+2 科技、+1 文化。",
-            "史诗任务：清除蛮族营地可获得部落村庄奖励，并可与蛮族和解（触发前提："
-            "本单位位于营地上并获得清除结算）。",
-        ),
-        "triggers": (
-            "想在窗口内扩张：优先生产战车，而不是先补科技。",
-            "通天塔无需科技，早期即可提供科技/文化，不必等科技解锁。",
-            "与 AI 交战时注意难度加成：Immortal 下 AI 有约 +40% 产出与战斗力加成，"
-            "产出优势会逐回合复利，窗口会关闭。",
-        ),
-        "source": "docs/paper/scenario-spec.md（Scenario C — Cry Havoc）",
-    },
-}
-
-
+# Scenario descriptions are strategy material, not verified game rules. The
+# former Sumeria card was sourced only from the Cry Havoc benchmark; none of
+# its numerical claims or scenario advice qualifies for automatic injection.
+# Keep the missing-material contract until an independently verified rules
+# source can supply civilization, leader and ruleset-specific conditions.
 def civ_material(civ_type: str, ruleset: str) -> tuple[bool, tuple[str, ...]]:
-    """Return (found, lines) for the given civ and ruleset.
+    """Report the current gap without importing a scenario's strategy."""
 
-    A civ whose material exists but whose ruleset differs is reported as
-    missing: applying another ruleset's material is exactly the failure this
-    function is meant to prevent.
-    """
-
-    entry = CIV_RULES.get((civ_type or "").strip().lower())
-    if entry is None:
-        return False, (
-            f"本批次没有收录 {civ_type or '未知文明'} 的规则材料，"
-            "不会套用其它文明或领袖的材料。",
-        )
-    if ruleset and ruleset not in entry["rulesets"]:
-        return False, (
-            f"{entry['display']} 的材料只覆盖 {', '.join(entry['rulesets'])}，"
-            f"本局规则集为 {ruleset}；不套用，按缺失处理。",
-        )
-    lines = [f"{entry['display']}：{entry['identity']}"]
-    lines.extend(f"- {item}" for item in entry["abilities"])
-    lines.append("触发前提与用法:")
-    lines.extend(f"- {item}" for item in entry["triggers"])
-    lines.append(f"来源: {entry['source']}")
-    return True, tuple(lines)
+    return False, (
+        f"本批次没有收录 {civ_type or '未知文明'} 经独立核验的文明规则材料"
+        f"（ruleset={ruleset or '未知'}）。",
+        "能力数值与触发条件按缺失处理；场景攻略不自动作为本局规则或行动建议。",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -250,54 +210,6 @@ def _gap(
         observed_turn=turn,
         detail=f"采集失败：{detail[:180]}。缺失不补零、不视为安全。",
     )
-
-
-class _Counter:
-    """Counts game queries so the briefing can report its own collection cost.
-
-    Instrumentation only: if the connection refuses attribute assignment the
-    counter degrades to a field count rather than failing the collection.
-    """
-
-    def __init__(self, gs: GameState) -> None:
-        self.gs = gs
-        self.calls = 0
-        self.active = False
-        self._original_read: Any = None
-        self._original_write: Any = None
-
-    def __enter__(self) -> "_Counter":
-        try:
-            self._original_read = self.gs.conn.execute_read
-            self._original_write = self.gs.conn.execute_write
-        except AttributeError:  # pragma: no cover - defensive
-            return self
-        original_read = self._original_read
-        original_write = self._original_write
-
-        async def counting_read(*args, **kwargs):
-            self.calls += 1
-            return await original_read(*args, **kwargs)
-
-        async def counting_write(*args, **kwargs):
-            # GameState's InGame reads go through execute_write; counting both
-            # keeps the reported call count honest.
-            self.calls += 1
-            return await original_write(*args, **kwargs)
-
-        try:
-            self.gs.conn.execute_read = counting_read  # type: ignore[method-assign]
-            self.gs.conn.execute_write = counting_write  # type: ignore[method-assign]
-        except (AttributeError, TypeError):  # pragma: no cover - defensive
-            return self
-        self.active = True
-        return self
-
-    def __exit__(self, *_exc: object) -> None:
-        if not self.active:
-            return
-        self.gs.conn.execute_read = self._original_read  # type: ignore[method-assign]
-        self.gs.conn.execute_write = self._original_write  # type: ignore[method-assign]
 
 
 async def _collect_fields(
@@ -709,21 +621,19 @@ async def build_turn_context(gs: GameState) -> TurnContext:
     """
 
     started = time.monotonic()
-    with _Counter(gs) as counter:
-        fields: dict[str, Field] = {}
-        identity: tuple[str, int] | None = None
-        turn_before: int | None = None
-        consistency = UNKNOWN
-        attempts = 0
-        for _attempt in range(2):
-            attempts += 1
-            turn_before = await _get_turn_number(gs)
-            fields, identity = await _collect_fields(gs, turn_before)
-            turn_after = await _get_turn_number(gs)
-            if turn_before is not None and turn_before == turn_after:
-                consistency = OK
-                break
-        calls = counter.calls
+    fields: dict[str, Field] = {}
+    identity: tuple[str, int] | None = None
+    turn_before: int | None = None
+    consistency = UNKNOWN
+    attempts = 0
+    for _attempt in range(2):
+        attempts += 1
+        turn_before = await _get_turn_number(gs)
+        fields, identity = await _collect_fields(gs, turn_before)
+        turn_after = await _get_turn_number(gs)
+        if turn_before is not None and turn_before == turn_after:
+            consistency = OK
+            break
     elapsed_ms = int((time.monotonic() - started) * 1000)
 
     unexpected = set(fields) - ALLOWED_DECISION_FIELDS
@@ -755,7 +665,7 @@ async def build_turn_context(gs: GameState) -> TurnContext:
         consistency=consistency,
         write_allowed=not blocked,
         blocked_reasons=tuple(blocked),
-        query_calls=calls,
+        query_calls=-1,
         elapsed_ms=elapsed_ms,
     )
     context.brief = _render(context, attempts)
@@ -811,14 +721,11 @@ def _render(context: TurnContext, attempts: int = 1) -> str:
     for name in ALLOWED_DECISION_FIELDS_ORDER:
         out.extend(fields[name].render(_SECTION_TITLES[name]))
 
-    # Civilization material: the fixed table plus an explicit missing marker.
+    # No verified civilization rules source is currently available.
     out.append("[文明能力与触发前提]")
     found, material = civ_material(civ_type, ruleset)
     if not found:
         out.append("  status=unavailable")
-        out.extend(f"  {line}" for line in material)
-    else:
-        out.append(f"  status=ok source={CIV_RULES[civ_type.lower()]['source']}")
         out.extend(f"  {line}" for line in material)
 
     out.append("[重要变化]")
@@ -848,7 +755,8 @@ def _render(context: TurnContext, attempts: int = 1) -> str:
     body = "\n".join(out)
     out.append("[采集元数据]")
     out.append(
-        f"  calls={context.query_calls} elapsed_ms={context.elapsed_ms} "
+        f"  calls={context.query_calls if context.query_calls >= 0 else 'unavailable'} "
+        f"elapsed_ms={context.elapsed_ms} "
         f"chars={len(body)} attempts={attempts}"
     )
     return "\n".join(out)

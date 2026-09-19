@@ -22,8 +22,8 @@ class _RecordingConnection:
     def __init__(self) -> None:
         self.calls: list[dict] = []
 
-    async def execute_mutation(self, lua_code, timeout=None, context="ingame"):
-        self.calls.append({"timeout": timeout, "context": context})
+    async def execute_mutation(self, lua_code, timeout=None, context="ingame", *, turn_action=None, expected_world_epoch=None):
+        self.calls.append({"timeout": timeout, "context": context, "turn_action": turn_action, "lua": lua_code})
         return ["OK:done"]
 
     async def execute_write(self, lua_code, timeout=None, **kwargs):
@@ -59,3 +59,13 @@ def test_heavy_mutations_request_the_slow_timeout(invoke):
     assert connection.calls, "the command never reached the connection"
     for call in connection.calls:
         assert call["timeout"] == SLOW_MUTATION_TIMEOUT, call
+
+
+@pytest.mark.parametrize("method", ["submit_congress", "queue_wc_votes", "drive_world_congress"])
+def test_congress_mutations_use_only_the_named_phase_exception(method):
+    state, connection = _state()
+    state._pending_end_turn = True
+    action = getattr(state, method)
+    asyncio.run(action([]) if method == "queue_wc_votes" else action())
+    assert connection.calls[0]["turn_action"] == "congress"
+    assert "UI.RequestAction(ActionTypes.ACTION_ENDTURN)" not in connection.calls[0]["lua"]

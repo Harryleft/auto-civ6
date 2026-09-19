@@ -286,6 +286,7 @@ async def _record_game_reload_epoch(
     reason: str,
     turn: int | None = None,
     details: dict[str, Any] | None = None,
+    confirmed: bool = False,
 ) -> None:
     """Mark a world rollback so the abandoned branch stops authorizing actions.
 
@@ -296,9 +297,16 @@ async def _record_game_reload_epoch(
     """
 
     try:
-        invalidate = getattr(_get_game(ctx), "invalidate_cached_state", None)
-        if callable(invalidate):
-            invalidate()
+        game = _get_game(ctx)
+        transition = getattr(
+            game, "confirm_world_changed" if confirmed else "mark_reload_uncertain", None
+        )
+        if callable(transition):
+            transition()
+        else:
+            invalidate = getattr(game, "invalidate_cached_state", None)
+            if callable(invalidate):
+                invalidate()
     except Exception:
         log.error("Failed to clear game read caches (%s)", reason, exc_info=True)
     try:
@@ -916,6 +924,11 @@ async def _record_belief_tool_result(
     try:
         engine = _get_beliefs(ctx)
         logger = _get_logger(ctx)
+        if (
+            getattr(_get_game(ctx), "_pending_end_turn", False) is True
+            and (not engine.bound or logger._turn is None)
+        ):
+            return
         if not engine.bound:
             civ, seed = await _get_game(ctx).get_game_identity()
             await _bind_belief_engine(ctx, engine, civ=civ, seed=seed)
@@ -984,6 +997,27 @@ async def _logged(
     tiles: set[tuple[int, int]] | None = None,
     localize: bool = True,
 ) -> str:
+    """Serialize load preparation and its receipt, including the state recheck."""
+    if tool_name in _SAVE_LOADING_TOOLS:
+        game = _get_game(ctx)
+        lock = getattr(game, "_load_operation_lock", None)
+        if lock is None:
+            lock = asyncio.Lock()
+            game._load_operation_lock = lock
+        async with lock:
+            return await _logged_impl(ctx, tool_name, params, fn, tiles=tiles, localize=localize)
+    return await _logged_impl(ctx, tool_name, params, fn, tiles=tiles, localize=localize)
+
+
+async def _logged_impl(
+    ctx: Context,
+    tool_name: str,
+    params: dict[str, Any],
+    fn: Callable[[], Awaitable[str]],
+    *,
+    tiles: set[tuple[int, int]] | None = None,
+    localize: bool = True,
+) -> str:
     """Run a tool function with timing, error handling, and logging."""
 
     def _return_result(raw_result: str) -> str:
@@ -999,7 +1033,8 @@ async def _logged(
         """Shared error tail: timing, log, belief record (caller returns)."""
 
         if tool_name in _SAVE_LOADING_TOOLS and (
-            execution_status == "unknown" or _load_was_submitted()
+            _load_was_submitted()
+            or (execution_status == "unknown" and load_counter == "mutation_revision")
         ):
             await _record_game_reload_epoch(ctx, reason=f"{tool_name}_unknown")
         ms = int((time.monotonic() - start) * 1000)
@@ -1030,11 +1065,37 @@ async def _logged(
         log.warning("Refused control-plane tool %s under the lean profile", tool_name)
         return _return_result(refusal)
 
-    gate = await _turn_context_gate(ctx, tool_name)
-    if gate is not None:
-        return _return_result(gate)
-
     await _await_auto_resume_ready(ctx)
+    game = getattr(ctx.request_context.lifespan_context, "game", None)
+    pending_observation = (
+        tool_name == "end_turn" and getattr(game, "_pending_end_turn", False) is True
+    )
+    if getattr(getattr(game, "conn", None), "reload_pending", False) is True:
+        if tool_name == "get_game_overview":
+            from civ_mcp.game_lifecycle import verify_loaded_world
+
+            if await verify_loaded_world(game.conn):
+                game.confirm_world_changed()
+            else:
+                return _return_result(
+                    "读档结果尚未确认，旧回合请求仍保留；本次只读核验未确认新局面。"
+                    "可稍后重读 get_game_overview，或由操作者选择独立恢复。"
+                    " GATE:RELOAD_UNCONFIRMED"
+                )
+        elif _tool_requires_briefing(tool_name):
+            return _return_result(
+                "读档结果尚未确认，暂停游戏写入；先调用 get_game_overview 核验。"
+                " GATE:RELOAD_UNCONFIRMED"
+            )
+    pending_input = (
+        getattr(game, "_pending_end_turn", False) is True
+        and tool_name in {"respond_to_diplomacy", "respond_to_trade", "queue_wc_votes"}
+    )
+    if not pending_observation and not pending_input:
+        gate = await _turn_context_gate(ctx, tool_name)
+        if gate is not None:
+            return _return_result(gate)
+
     logger = _get_logger(ctx)
     turn = logger._turn or "?"
     start = time.monotonic()
@@ -1044,7 +1105,8 @@ async def _logged(
         "route": "routine",
     }
     try:
-        decision_context = await _belief_action_preflight(ctx, tool_name, params)
+        if not pending_observation:
+            decision_context = await _belief_action_preflight(ctx, tool_name, params)
     except Exception as exc:
         result = f"Error: Belief preflight failed: {exc}"
         ms = int((time.monotonic() - start) * 1000)
@@ -1093,11 +1155,14 @@ async def _logged(
 
     game = None
     load_revision = None
+    load_counter = "mutation_revision"  # compatibility for older connection adapters
+    load_known_rejected = False
 
     def _load_was_submitted() -> bool:
-        revision = getattr(getattr(game, "conn", None), "mutation_revision", None)
+        revision = getattr(getattr(game, "conn", None), load_counter, None)
         return (
-            type(load_revision) is int and type(revision) is int
+            not load_known_rejected
+            and type(load_revision) is int and type(revision) is int
             and revision != load_revision
         )
 
@@ -1108,7 +1173,10 @@ async def _logged(
             game = None
         collection = getattr(game, "read_collection", None)
         if tool_name in _SAVE_LOADING_TOOLS:
-            load_revision = getattr(getattr(game, "conn", None), "mutation_revision", None)
+            connection = getattr(game, "conn", None)
+            if type(getattr(connection, "load_revision", None)) is int:
+                load_counter = "load_revision"
+            load_revision = getattr(connection, load_counter, None)
             invalidate = getattr(game, "invalidate_cached_state", None)
             if callable(invalidate):
                 invalidate()
@@ -1122,6 +1190,7 @@ async def _logged(
         with read_scope:
             result = await fn()
         if tool_name in _SAVE_LOADING_TOOLS:
+            load_known_rejected = "LOAD_NOT_SUBMITTED" in result
             receipt = action_receipt_status(tool_name, result, params=params)
             status = receipt[0] if receipt else "unknown"
             if status in {"succeeded", "submitted", "unknown"} or _load_was_submitted():
@@ -1129,13 +1198,19 @@ async def _logged(
                 # when its auto-continue step fails. Submission still abandons
                 # the old world branch, even if the final receipt is a failure.
                 reason = "submitted" if status in {"succeeded", "submitted"} else "unknown"
-                await _record_game_reload_epoch(ctx, reason=f"{tool_name}_{reason}")
+                await _record_game_reload_epoch(
+                    ctx, reason=f"{tool_name}_{reason}", confirmed=status == "succeeded"
+                )
+                if status == "failed":
+                    result = "ERR:OUTCOME_UNKNOWN|加载可能已提交，但未确认完成。" + result
     except asyncio.CancelledError:
         if tool_name in _SAVE_LOADING_TOOLS and _load_was_submitted():
             await _record_game_reload_epoch(ctx, reason=f"{tool_name}_unknown")
         raise
     except (LuaError, ValueError) as e:
         result = f"Error: {e}"
+        if tool_name in _SAVE_LOADING_TOOLS and _load_was_submitted():
+            result = "ERR:OUTCOME_UNKNOWN|加载可能已提交，但未确认完成。" + result
         await _fail(
             result,
             _action_execution_status(tool_name, params, result, fallback="failed"),
@@ -1145,50 +1220,9 @@ async def _logged(
         result = str(e)
         await _fail(result, "unknown")
 
-        # Connection-loss recovery: after consecutive failures,
-        # the game has likely crashed. Auto-restart from autosave.
-        _logged._conn_errors = getattr(_logged, "_conn_errors", 0) + 1
-        if _logged._conn_errors >= 5:
-            log.error(
-                "CONNECTION RECOVERY: %d consecutive connection failures "
-                "— triggering restart_and_load",
-                _logged._conn_errors,
-            )
-            _logged._conn_errors = 0
-            try:
-                from civ_mcp.autosave import get_autosave_for_turn, get_latest_autosave
-
-                turn_num = logger._turn
-                save = (
-                    get_autosave_for_turn(int(turn_num))
-                    if turn_num
-                    else get_latest_autosave()
-                )
-                restart_result = await game_launcher.restart_and_load(
-                    save, conn=_get_game(ctx).conn
-                )
-                log.info("CONNECTION RECOVERY: %s", restart_result)
-                # The game state rolled back to an older save; events recorded
-                # after that point describe a future that no longer happened.
-                # Mark a new epoch so the append-only stream stays interpretable.
-                await _record_game_reload_epoch(
-                    ctx,
-                    reason="connection_recovery_restart_and_load",
-                    turn=int(turn_num) if isinstance(turn_num, int) else None,
-                    details={"save": str(save)},
-                )
-                gs = _get_game(ctx)
-                for rc_attempt in range(30):
-                    try:
-                        await gs.conn.reconnect()
-                        if gs.conn.gamecore_index is not None:
-                            log.info("CONNECTION RECOVERY: reconnected")
-                            break
-                    except ConnectionError:
-                        pass
-                    await asyncio.sleep(1)
-            except Exception:
-                log.error("CONNECTION RECOVERY: restart failed", exc_info=True)
+        # A lost response is not proof of process death. Recovery belongs to
+        # the explicit lifecycle tools; this wrapper only records uncertainty.
+        log.warning("连接异常，保留当前对局；请只读诊断：%s", result)
 
         return _return_result(result)
     except Exception as e:
@@ -1199,15 +1233,15 @@ async def _logged(
         result = f"Error: {e}"
         await _fail(result, "unknown")
         return _return_result(result)
-    # Success — reset connection error counter + refresh heartbeat
-    _logged._conn_errors = 0
+    # Refresh the heartbeat only; success does not authorize recovery.
     heartbeat.write("playing", turn=turn or 0)
     # Keep the domain result separate from model-facing belief annotations.
     # Telemetry owns the rendered transcript; the Belief Engine observes only
     # the underlying game/tool result and never feeds its own context back in.
     domain_result = result
     if not domain_result.startswith(("Error", "ERR")):
-        result = await _append_belief_context(ctx, tool_name, result)
+        if not pending_observation and not pending_input:
+            result = await _append_belief_context(ctx, tool_name, result)
         if decision_id:
             result += (
                 f"\n\n[Belief decision consumed: {decision_id}; "
