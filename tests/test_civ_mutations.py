@@ -47,3 +47,30 @@ def test_attack_accepts_explicit_domain_evidence_only() -> None:
         operation_id=OperationId("attack-4"), unit_index=4, target_x=5, target_y=7, readback=confirmed_readback
     )
     assert asyncio.run(execution.verify()).source == "read_units"
+
+
+def test_production_requires_city_queue_readback() -> None:
+    class Adapter:
+        async def read_cities(self, *, observed_turn):
+            city = SimpleNamespace(city_id=4, currently_building="UNIT_ARCHER")
+            return SimpleNamespace(value=[city], observed_turn=observed_turn)
+
+    execution = CivMutationFactory(Adapter()).set_production(
+        operation_id=OperationId("production-4"), city_id=4, item_type="UNIT", item_name="UNIT_ARCHER", observed_turn=12
+    )
+    assert asyncio.run(execution.verify()).source == "read_cities"
+
+
+def test_purchase_requires_gold_change_and_new_unit() -> None:
+    class Adapter:
+        async def read_overview(self):
+            return SimpleNamespace(value=SimpleNamespace(gold=50), observed_turn=12)
+
+        async def read_units(self, *, observed_turn):
+            unit = SimpleNamespace(unit_id=9, unit_type="UNIT_ARCHER")
+            return SimpleNamespace(value=[unit], observed_turn=observed_turn)
+
+    execution = CivMutationFactory(Adapter()).purchase_item(
+        operation_id=OperationId("purchase-4"), city_id=4, item_type="UNIT", item_name="UNIT_ARCHER", yield_type="YIELD_GOLD", currency_before=100, observed_turn=12, known_unit_ids=frozenset({1})
+    )
+    assert asyncio.run(execution.verify()).source == "read_overview+read_units"
