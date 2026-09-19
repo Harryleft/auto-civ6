@@ -49,6 +49,25 @@ def test_attack_accepts_explicit_domain_evidence_only() -> None:
     assert asyncio.run(execution.verify()).source == "read_units"
 
 
+def test_city_attack_requires_explicit_domain_readback() -> None:
+    class Adapter:
+        pass
+
+    async def readback() -> Evidence:
+        return Evidence("read_units", 12, "target has an observed post-combat state")
+
+    execution = CivMutationFactory(Adapter()).attack_city(
+        operation_id=OperationId("city-attack-4"),
+        city_id=4,
+        target_x=5,
+        target_y=7,
+        readback=readback,
+    )
+    assert execution.intent.tool == execution.request.tool == "city_attack"
+    assert "CityCommandTypes.RANGE_ATTACK" in execution.request.lua_code
+    assert asyncio.run(execution.verify()).source == "read_units"
+
+
 def test_production_requires_city_queue_readback() -> None:
     class Adapter:
         async def read_cities(self, *, observed_turn):
@@ -134,6 +153,21 @@ def test_governance_mutations_are_hash_bound_and_need_readback() -> None:
     assert governor.intent.tool == "assign_governor"
     assert promotion.request.context == "gamecore"
     assert asyncio.run(governor.verify()).source == "read_governors"
+
+
+def test_unit_upgrade_is_hash_bound_and_requires_domain_readback() -> None:
+    class Adapter:
+        pass
+
+    async def readback() -> Evidence:
+        return Evidence("read_units", 13, "unit type changed from UNIT_SLINGER")
+
+    execution = CivMutationFactory(Adapter()).upgrade_unit(
+        operation_id=OperationId("upgrade-1"), unit_index=2, readback=readback
+    )
+    assert execution.intent.tool == execution.request.tool == "upgrade_unit"
+    assert "UnitCommandTypes.UPGRADE" in execution.request.lua_code
+    assert asyncio.run(execution.verify()).source == "read_units"
 
 
 def test_remaining_domain_mutations_use_explicit_readback_contracts() -> None:
