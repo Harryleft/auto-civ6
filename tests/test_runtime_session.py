@@ -61,6 +61,29 @@ def test_can_switch_a_to_b_then_back_to_a() -> None:
     asyncio.run(run())
 
 
+def test_context_read_guard_rejects_a_game_that_changed_after_binding() -> None:
+    async def run() -> None:
+        current = GameIdentity("game-a")
+
+        async def probe() -> GameIdentity:
+            return current
+
+        kernel = SessionKernel(
+            _Adapter(), OperationStore(":memory:"), identity_probe=probe, turn_probe=lambda: _turn(1)
+        )
+        branch = BranchIdentity(current, "main")
+        bound = await kernel.bind(current, branch)
+
+        assert await kernel.current_binding() == bound
+        current = GameIdentity("game-b")
+        with pytest.raises(SessionIdentityMismatchError, match="不属于 Runtime session binding"):
+            await kernel.current_binding()
+        with pytest.raises(StaleSessionRequestError, match="读取期间"):
+            await kernel.assert_binding_current(bound)
+
+    asyncio.run(run())
+
+
 def test_stale_precheck_creates_no_operation_and_sends_nothing(tmp_path) -> None:
     async def run() -> None:
         game = GameIdentity("game-a")
