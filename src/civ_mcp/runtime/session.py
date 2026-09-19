@@ -9,7 +9,7 @@ from typing import TypeVar
 
 from civ_mcp.civ.adapter import CivAdapter, CivMutationRequest, CivReadRequest, CivReadResult
 from civ_mcp.runtime.contracts import BranchIdentity, Evidence, GameIdentity, OperationId, OperationIntent, OperationRecord, SendState
-from civ_mcp.runtime.store import OperationStore
+from civ_mcp.runtime.store import HandoffNote, OperationStore
 
 
 T = TypeVar("T")
@@ -69,6 +69,12 @@ class SessionKernel:
     @property
     def binding(self) -> SessionBinding | None:
         return self._binding
+
+    def current_operations(self) -> list[OperationRecord]:
+        return self._store.list_operations_for_branch(self._require_binding().branch_id)
+
+    def handoff_note(self) -> HandoffNote | None:
+        return self._store.get_handoff_note(self._require_binding().branch_id)
 
     async def bind(self, game_id: GameIdentity, branch_id: BranchIdentity) -> SessionBinding:
         if branch_id.game_id != game_id:
