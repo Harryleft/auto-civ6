@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+import re
 from typing import Generic, TypeVar
 
 from civ_mcp.lua.barbarians import (
@@ -93,8 +94,10 @@ from civ_mcp.lua.models import (
     UnitPromotionStatus,
     VillageOverview,
     VictoryProgress,
+    WonderPlacement,
     WorldCongressStatus,
 )
+from civ_mcp.lua.map import build_wonder_advisor_query, parse_wonder_advisor_response
 from civ_mcp.lua.overview import (
     build_game_identity_query,
     build_overview_query,
@@ -592,6 +595,22 @@ class CivAdapter:
             observed_turn=observed_turn,
         )
 
+    async def read_wonder_placements(
+        self, *, city_id: int, wonder_name: str, observed_turn: int
+    ) -> CivReadResult[list[WonderPlacement]]:
+        """Read only placements that the live BUILD operation accepts for one wonder."""
+        _validate_wonder_advisor_input(city_id, wonder_name)
+        return await self.read(
+            CivReadRequest(
+                tool="get_wonder_placements",
+                lua_code=build_wonder_advisor_query(city_id, wonder_name),
+                decode=_decode_wonder_placements,
+                coverage="WONDER_PLACEMENTS:COMPLETE",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
     async def read_diplomacy_sessions(
         self, *, observed_turn: int
     ) -> CivReadResult[list[DiplomacySession]]:
@@ -802,6 +821,25 @@ def _decode_religion_overview(lines: tuple[str, ...]) -> ReligionOverview:
     if not any(line.startswith("SELF|") for line in lines):
         raise CivReadError("religion overview query missing SELF row")
     return parse_religion_overview_response(list(lines))
+
+
+def _validate_wonder_advisor_input(city_id: int, wonder_name: str) -> None:
+    """Keep model input out of the legacy Lua string template."""
+    if isinstance(city_id, bool) or not isinstance(city_id, int) or city_id < 0:
+        raise ValueError("city_id 必须是非负整数。")
+    if not isinstance(wonder_name, str) or not re.fullmatch(
+        r"BUILDING_[A-Z0-9_]+", wonder_name
+    ):
+        raise ValueError("wonder_name 必须是 BUILDING_* 类型标识。")
+
+
+def _decode_wonder_placements(lines: tuple[str, ...]) -> list[WonderPlacement]:
+    if error := next((line for line in lines if line.startswith("ERR:")), None):
+        raise ValueError(error[4:])
+    placements = parse_wonder_advisor_response(list(lines))
+    if not placements:
+        raise CivReadError("wonder placement query missing WPLOT row")
+    return placements
 
 
 def _decode_unit_promotions(lines: tuple[str, ...]) -> UnitPromotionStatus:

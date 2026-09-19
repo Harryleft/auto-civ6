@@ -114,6 +114,10 @@ class RuntimeMcpSurface:
         """Return revealed village facts without exposing a tile-entry operation."""
         return await self._context.read_village_overview()
 
+    async def get_wonder_placements(self, city_id: int, wonder_name: str):
+        """Return live wonder placements without exposing a production operation."""
+        return await self._context.read_wonder_placements(city_id, wonder_name)
+
     def save_handoff(
         self,
         *,
