@@ -168,6 +168,15 @@ class SessionKernel:
                 raise
             except Exception:
                 evidence = None
+            if evidence is not None:
+                try:
+                    same_binding = self._binding == binding
+                    same_game = await self._identity_probe() == binding.game_id
+                except Exception:
+                    same_binding = False
+                    same_game = False
+                if not same_binding or not same_game:
+                    evidence = None
             record = record.confirmed(evidence) if evidence is not None else record.unknown()
             self._store.save_operation(record)
             return record
