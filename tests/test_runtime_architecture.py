@@ -13,6 +13,7 @@ import civ_mcp.runtime.bootstrap as bootstrap
 import civ_mcp.runtime.mcp_surface as surface
 import civ_mcp.runtime.server as server
 import civ_mcp.runtime.session as session
+import civ_mcp.runtime.telemetry as telemetry
 import civ_mcp.civ.mutations as mutations
 from civ_mcp.civ.mutations import CivMutationFactory
 
@@ -196,3 +197,20 @@ def test_runtime_has_no_play_profile_or_belief_mode_branch() -> None:
 def test_recovery_is_not_imported_by_the_model_tool_path() -> None:
     for module in (server, surface):
         assert not _has_import(_import_modules(module), "civ_mcp.runtime.recovery")
+
+
+def test_telemetry_has_no_runtime_control_dependency() -> None:
+    imports = _import_modules(telemetry)
+    for forbidden in (
+        "civ_mcp.civ.adapter",
+        "civ_mcp.runtime.session",
+        "civ_mcp.runtime.turn",
+        "civ_mcp.runtime.mcp_surface",
+        "civ_mcp.runtime.recovery",
+        "civ_mcp.runtime.server",
+    ):
+        assert not _has_import(imports, forbidden)
+    source = Path(telemetry.__file__).read_text()
+    assert ".submit(" not in source
+    assert ".execute(" not in source
+    assert "save_operation" not in source
