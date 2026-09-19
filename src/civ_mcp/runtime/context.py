@@ -44,6 +44,7 @@ class ContextBuilder:
         self._pending_decisions = pending_decisions or (lambda: ())
 
     async def build(self) -> RuntimeContext:
+        binding = await self._session.current_binding()
         overview = await self._adapter.read_overview()
         turn = overview.observed_turn
         facts: dict[str, object] = {"overview": overview}
@@ -69,6 +70,7 @@ class ContextBuilder:
             for operation in self._session.current_operations()
             if operation.outcome_state in {OutcomeState.OBSERVING, OutcomeState.UNKNOWN}
         )
+        await self._session.assert_binding_current(binding)
         return RuntimeContext(
             facts=facts,
             unknown=tuple(unknown),

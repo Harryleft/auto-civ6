@@ -18,7 +18,9 @@
 
 `UNKNOWN`、`RECOVERY_REQUIRED` 与 `NEEDS_DECISION` 都不是成功，也不会触发重试。
 `pending_decisions` 不持有 continuation；进程重启后它会为空，原 operation 仍保留在
-`unfinished_intents` 中并进入显式 Recovery 边界，绝不伪造可恢复的决策。
+`unfinished_intents` 中并进入显式 Recovery 边界，绝不伪造可恢复的决策。Context 在组合
+多项读取前后都会核验同一 Session game/branch binding；切档或换局时整份上下文被拒绝，绝不
+混入旧 branch 的 operation。
 
 ## 明确不支持
 
