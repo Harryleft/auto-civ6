@@ -129,6 +129,56 @@ def test_same_operation_id_never_submits_twice_after_unknown_transport_failure(t
     asyncio.run(run())
 
 
+def test_concurrent_same_operation_id_submits_once_and_reuses_the_record(tmp_path) -> None:
+    async def run() -> None:
+        game = GameIdentity("game-a")
+
+        async def probe() -> GameIdentity:
+            return game
+
+        class MutationAdapter(_Adapter):
+            calls = 0
+
+            def __init__(self) -> None:
+                super().__init__()
+                self.started = asyncio.Event()
+                self.release = asyncio.Event()
+
+            async def submit(self, _request):
+                self.calls += 1
+                self.started.set()
+                await self.release.wait()
+                return TransportReceipt(SendState.MAYBE_SENT, True, (), True)
+
+        adapter = MutationAdapter()
+        store = OperationStore(tmp_path / "operations.sqlite3")
+        kernel = SessionKernel(adapter, store, identity_probe=probe, turn_probe=lambda: _turn(10))
+        await kernel.bind(game, BranchIdentity(game, "main"))
+        operation_id = OperationId("concurrent-move")
+
+        async def verify() -> Evidence:
+            return Evidence("read_units", 10, "unit reached the requested tile")
+
+        execution = MutationExecution(
+            OperationIntent.create("move_unit", {"unit_id": 1}),
+            CivMutationRequest("move_unit", "move()"), verify, operation_id,
+        )
+        first = asyncio.create_task(kernel.execute(execution, decision_turn=10))
+        await adapter.started.wait()
+        second = asyncio.create_task(kernel.execute(execution, decision_turn=10))
+        await asyncio.sleep(0)
+        assert adapter.calls == 1
+        adapter.release.set()
+        records = await asyncio.gather(first, second)
+
+        assert [record.operation_id for record in records] == [operation_id, operation_id]
+        assert {record.outcome_state for record in records} == {OutcomeState.CONFIRMED}
+        assert adapter.calls == 1
+        assert store.get_operation(operation_id) == records[0]
+
+    asyncio.run(run())
+
+
 def test_cancelled_submit_is_persisted_as_unknown_and_never_resent(tmp_path) -> None:
     async def run() -> None:
         game = GameIdentity("game-a")
