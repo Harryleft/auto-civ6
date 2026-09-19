@@ -12,11 +12,11 @@ from dataclasses import dataclass
 from civ_mcp.civ.adapter import CivAdapter
 from civ_mcp.civ.mutations import CivMutationFactory
 from civ_mcp.runtime.context import ContextBuilder
-from civ_mcp.runtime.contracts import BranchIdentity, Evidence, OperationRecord
+from civ_mcp.runtime.contracts import BranchIdentity, Evidence, OperationId, OperationRecord, OutcomeState
 from civ_mcp.runtime.mcp_surface import RuntimeMcpSurface
 from civ_mcp.runtime.session import SessionBinding, SessionKernel
 from civ_mcp.runtime.store import OperationStore
-from civ_mcp.runtime.turn import TurnLoop, TurnObservation
+from civ_mcp.runtime.turn import DecisionInterrupt, TurnLoop, TurnObservation, TurnOutcome, TurnResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +63,29 @@ async def assemble_runtime(
     game_id = await identity_probe()
     branch_id = BranchIdentity(game_id, f"{game_id.value}:{branch_token}")
     binding = await session.bind(game_id, branch_id)
+    mutations = CivMutationFactory(adapter)
+    turn_loop: TurnLoop
+
+    async def continue_diplomacy(
+        operation: OperationRecord, other_player_id: int, choice: str
+    ) -> TurnResult:
+        """Execute one model-selected response, then continue the original turn."""
+        response = await session.execute(
+            mutations.respond_to_diplomacy(
+                operation_id=OperationId.new(),
+                other_player_id=other_player_id,
+                response=choice,
+                observed_turn=operation.decision_turn,
+            ),
+            decision_turn=operation.decision_turn,
+        )
+        if response.outcome_state is not OutcomeState.CONFIRMED:
+            return TurnResult(
+                TurnOutcome.RECOVERY_REQUIRED,
+                response,
+                "外交响应未由新会话事实确认；不得重发，需重新读取或恢复。",
+            )
+        return await turn_loop.wait_for_turn(operation)
 
     async def observe_turn(operation: OperationRecord) -> TurnObservation:
         """Poll fresh game facts only; this never submits or resumes a turn."""
@@ -84,7 +107,41 @@ async def assemble_runtime(
                     detail=f"turn {operation.decision_turn} -> {overview.value.turn}",
                 )
             )
-        return TurnObservation()
+        try:
+            sessions = await adapter.read_diplomacy_sessions(
+                observed_turn=overview.value.turn
+            )
+        except Exception:
+            return TurnObservation()
+        if not sessions.value:
+            return TurnObservation()
+        active = sessions.value[0]
+        allowed_choices = (
+            ("EXIT",)
+            if "GOODBYE" in active.buttons.split(";")
+            else ("POSITIVE", "NEGATIVE")
+        )
+        interrupt = DecisionInterrupt(
+            decision_type="DIPLOMACY",
+            facts={
+                "session_id": active.session_id,
+                "other_player_id": active.other_player_id,
+                "civilization": active.other_civ_name,
+                "leader": active.other_leader_name,
+                "dialogue": active.dialogue_text,
+                "reason": active.reason_text,
+                "visible_buttons": active.buttons,
+                "deal_summary": active.deal_summary,
+                "is_at_war": active.is_at_war,
+            },
+            allowed_choices=allowed_choices,
+            continuation_operation_id=operation.operation_id,
+        )
+
+        async def continuation(choice: str) -> TurnResult:
+            return await continue_diplomacy(operation, active.other_player_id, choice)
+
+        return TurnObservation(interrupt=interrupt, continuation=continuation)
 
     context = ContextBuilder(adapter, session)
     turn_loop = TurnLoop(session, observer=observe_turn)
@@ -94,7 +151,7 @@ async def assemble_runtime(
         store=store,
         session=session,
         context=context,
-        mutations=CivMutationFactory(adapter),
+        mutations=mutations,
         turn_loop=turn_loop,
         surface=RuntimeMcpSurface(
             context=context,

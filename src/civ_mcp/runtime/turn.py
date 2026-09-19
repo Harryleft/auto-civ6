@@ -48,6 +48,7 @@ class TurnObservation:
 
     evidence: Evidence | None = None
     interrupt: DecisionInterrupt | None = None
+    continuation: Continuation | None = None
     identity_changed: bool = False
 
 
@@ -122,7 +123,11 @@ class TurnLoop:
         if choice not in interrupt.allowed_choices:
             self._continuations[operation_id] = (interrupt, continuation)
             raise ValueError("choice 不属于该 interrupt 的 allowed_choices。")
-        return await continuation(choice)
+        try:
+            return await continuation(choice)
+        except BaseException:
+            self._continuations[operation_id] = (interrupt, continuation)
+            raise
 
     async def wait_for_turn(
         self,
@@ -160,6 +165,11 @@ class TurnLoop:
                         TurnOutcome.RECOVERY_REQUIRED,
                         operation,
                         "turn interrupt 归属另一条 operation，拒绝接管。",
+                    )
+                if observed.continuation is not None:
+                    self._continuations[operation.operation_id] = (
+                        observed.interrupt,
+                        observed.continuation,
                     )
                 return TurnResult(
                     TurnOutcome.NEEDS_DECISION, operation, decision=observed.interrupt

@@ -245,6 +245,70 @@ def test_trade_proposal_preserves_the_exact_hash_bound_terms() -> None:
     assert asyncio.run(execution.verify()) is None
 
 
+def test_diplomacy_response_requires_a_fresh_session_transition() -> None:
+    initial = SimpleNamespace(
+        session_id=9,
+        other_player_id=2,
+        dialogue_text="Greetings",
+        reason_text="First meeting",
+        buttons="Accept;Reject",
+        deal_summary="",
+    )
+    advanced = SimpleNamespace(
+        session_id=9,
+        other_player_id=2,
+        dialogue_text="A new response",
+        reason_text="First meeting",
+        buttons="Accept;Reject",
+        deal_summary="",
+    )
+
+    class Adapter:
+        calls = 0
+
+        async def read_diplomacy_sessions(self, *, observed_turn):
+            self.calls += 1
+            session = initial if self.calls == 1 else advanced
+            return SimpleNamespace(value=[session], observed_turn=observed_turn)
+
+    adapter = Adapter()
+    execution = CivMutationFactory(adapter).respond_to_diplomacy(
+        operation_id=OperationId("diplomacy-9"),
+        other_player_id=2,
+        response="positive",
+        observed_turn=12,
+    )
+    asyncio.run(execution.precheck())
+    evidence = asyncio.run(execution.verify())
+    assert evidence.source == "read_diplomacy_sessions"
+    assert "POSITIVE" in execution.request.lua_code
+    assert adapter.calls == 2
+
+
+def test_diplomacy_response_does_not_confirm_an_unchanged_session() -> None:
+    session = SimpleNamespace(
+        session_id=9,
+        other_player_id=2,
+        dialogue_text="Greetings",
+        reason_text="First meeting",
+        buttons="Accept;Reject",
+        deal_summary="",
+    )
+
+    class Adapter:
+        async def read_diplomacy_sessions(self, *, observed_turn):
+            return SimpleNamespace(value=[session], observed_turn=observed_turn)
+
+    execution = CivMutationFactory(Adapter()).respond_to_diplomacy(
+        operation_id=OperationId("diplomacy-stale"),
+        other_player_id=2,
+        response="NEGATIVE",
+        observed_turn=12,
+    )
+    asyncio.run(execution.precheck())
+    assert asyncio.run(execution.verify()) is None
+
+
 def test_research_and_civic_require_fresh_domain_evidence() -> None:
     class Adapter:
         pass

@@ -7,8 +7,13 @@ from dataclasses import dataclass
 from typing import Generic, TypeVar
 
 from civ_mcp.lua.cities import build_cities_query, parse_cities_response
-from civ_mcp.lua.diplomacy import build_diplomacy_query, parse_diplomacy_response
-from civ_mcp.lua.models import CityInfo, CivInfo, GameOverview, UnitInfo, VictoryProgress
+from civ_mcp.lua.diplomacy import (
+    build_diplomacy_query,
+    build_diplomacy_session_query,
+    parse_diplomacy_response,
+    parse_diplomacy_sessions,
+)
+from civ_mcp.lua.models import CityInfo, CivInfo, DiplomacySession, GameOverview, UnitInfo, VictoryProgress
 from civ_mcp.lua.overview import (
     build_game_identity_query,
     build_overview_query,
@@ -165,6 +170,21 @@ class CivAdapter:
                 lua_code=build_diplomacy_query(),
                 decode=lambda lines: parse_diplomacy_response(list(lines)),
                 coverage="MET_CIVILIZATIONS:COMPLETE;UNMET_CIVILIZATIONS:UNOBSERVED",
+                context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
+    async def read_diplomacy_sessions(
+        self, *, observed_turn: int
+    ) -> CivReadResult[list[DiplomacySession]]:
+        """Read active diplomacy sessions without resolving any of them."""
+        return await self.read(
+            CivReadRequest(
+                tool="get_pending_diplomacy",
+                lua_code=build_diplomacy_session_query(),
+                decode=lambda lines: parse_diplomacy_sessions(list(lines)),
+                coverage="OPEN_DIPLOMACY_SESSIONS:COMPLETE",
                 context="ingame",
             ),
             observed_turn=observed_turn,

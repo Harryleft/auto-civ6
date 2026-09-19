@@ -15,7 +15,7 @@ from civ_mcp.lua.cities import (
     build_purchase_item,
     build_set_yield_focus,
 )
-from civ_mcp.lua.diplomacy import build_propose_trade
+from civ_mcp.lua.diplomacy import build_diplomacy_respond, build_propose_trade
 from civ_mcp.lua.economy import build_make_trade_route
 from civ_mcp.lua.governance import (
     build_appoint_governor,
@@ -473,6 +473,100 @@ class CivMutationFactory:
             ),
             verify=readback,
             operation_id=operation_id,
+        )
+
+    def respond_to_diplomacy(
+        self,
+        *,
+        operation_id: OperationId,
+        other_player_id: int,
+        response: str,
+        observed_turn: int,
+    ) -> MutationExecution:
+        """Respond once to the currently observed diplomacy session.
+
+        A response is confirmed only when a fresh session read shows the
+        selected session closed or progressed.  Repeated or unchanged UI state
+        remains ``UNKNOWN`` rather than being inferred from Lua output text.
+        """
+        normalized_response = response.upper()
+        if normalized_response not in {"POSITIVE", "NEGATIVE", "EXIT"}:
+            raise ValueError("外交会话 response 只能是 POSITIVE、NEGATIVE 或 EXIT。")
+        intent = OperationIntent.create(
+            "respond_to_diplomacy",
+            {"other_player_id": other_player_id, "response": normalized_response},
+        )
+        baseline: tuple[int, str, str, str, str] | None = None
+
+        async def precheck() -> None:
+            nonlocal baseline
+            try:
+                sessions = await self._adapter.read_diplomacy_sessions(
+                    observed_turn=observed_turn
+                )
+            except Exception as exc:
+                raise MutationPreconditionError("无法获取外交会话 baseline。") from exc
+            matches = [
+                session
+                for session in sessions.value
+                if session.other_player_id == other_player_id
+            ]
+            if len(matches) != 1:
+                raise MutationPreconditionError("当前不存在唯一匹配的外交会话，不提交响应。")
+            session = matches[0]
+            baseline = (
+                session.session_id,
+                session.dialogue_text,
+                session.reason_text,
+                session.buttons,
+                session.deal_summary,
+            )
+
+        async def verify() -> Evidence | None:
+            if baseline is None:
+                return None
+            try:
+                sessions = await self._adapter.read_diplomacy_sessions(
+                    observed_turn=observed_turn
+                )
+            except Exception:
+                return None
+            matches = [
+                session
+                for session in sessions.value
+                if session.other_player_id == other_player_id
+            ]
+            if not matches:
+                return Evidence(
+                    "read_diplomacy_sessions",
+                    sessions.observed_turn,
+                    f"player_id={other_player_id} session closed after {normalized_response}",
+                )
+            session = matches[0]
+            current = (
+                session.session_id,
+                session.dialogue_text,
+                session.reason_text,
+                session.buttons,
+                session.deal_summary,
+            )
+            if current != baseline:
+                return Evidence(
+                    "read_diplomacy_sessions",
+                    sessions.observed_turn,
+                    f"player_id={other_player_id} session advanced after {normalized_response}",
+                )
+            return None
+
+        return MutationExecution(
+            intent=intent,
+            request=CivMutationRequest(
+                "respond_to_diplomacy",
+                build_diplomacy_respond(other_player_id, normalized_response),
+            ),
+            verify=verify,
+            operation_id=operation_id,
+            precheck=precheck,
         )
 
     def set_research(
