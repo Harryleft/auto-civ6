@@ -115,6 +115,29 @@ Belief/Governance 链路。
 该适配器将模型限制为实验 Runtime 工具；`UNKNOWN`、`NEEDS_DECISION` 或
 `RECOVERY_REQUIRED` 一律停止并报告，不能通过 DSH 重发操作、执行读档或启动 recovery。
 
+## M11 现场证据核验（尚未执行）
+
+K1/J2 必须由真实单机环境分别运行，且只把各自 stdout 保存为证据文件。完成 K1 的
+`--confirm-end-turn` 命令时可重定向 stdout；完成 host 读档后的 J2 验证同样保存 stdout：
+
+```bash
+.venv/bin/python tests/manual/test_runtime_core_smoke.py \
+  --branch save-0001 --store /tmp/runtime.sqlite3 --confirm-end-turn > /tmp/k1.stdout
+
+.venv/bin/python tests/manual/test_runtime_recovery_smoke.py \
+  --game-id <recorded-game-id> --old-branch save-0001 \
+  --checkpoint <loaded-checkpoint-id> --checkpoint-turn <recorded-turn> \
+  --new-branch after-recovery > /tmp/j2.stdout
+
+.venv/bin/python tests/manual/verify_runtime_cutover.py \
+  --k1-output /tmp/k1.stdout --j2-output /tmp/j2.stdout
+```
+
+最后一个命令不连接游戏，只校验 K1 是否有无 unknown 的 context、一次 `MAYBE_SENT` →
+`CONFIRMED` 的 end-turn Evidence 和回合推进，以及 J2 是否使用同一 game、不同 branch 和
+已记录的 checkpoint。它输出 `approved` 只表示现场证据格式与运行时契约齐备；仍须由人工
+审阅后才可决定 K1 切换，脚本绝不改动入口或删除旧链路。
+
 ## K1 现场冒烟入口（尚未执行）
 
 新核心的手工验收使用 [`tests/manual/test_runtime_core_smoke.py`](../../tests/manual/test_runtime_core_smoke.py)，
