@@ -102,6 +102,19 @@ def test_city_purchase_candidates_are_typed_live_ingame_facts() -> None:
     assert transport.commands[0].startswith("CMD:153:")
 
 
+def test_city_production_candidates_are_typed_live_ingame_facts() -> None:
+    transport = _Transport(_complete("UNIT|UNIT_ARCHER|40|3|60"))
+    civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
+
+    result = asyncio.run(civ.read_city_production(city_id=4, observed_turn=42))
+
+    assert [(item.category, item.item_name) for item in result.value] == [
+        ("UNIT", "UNIT_ARCHER")
+    ]
+    assert result.coverage == "CITY_PRODUCTION_CANDIDATES:COMPLETE"
+    assert transport.commands[0].startswith("CMD:153:")
+
+
 def test_city_purchase_candidate_error_is_not_coerced_to_an_empty_result() -> None:
     transport = _Transport(_complete("ERR:CITY_NOT_FOUND"))
     civ = adapter.CivAdapter(transport, gamecore_state=8, ingame_state=153)
