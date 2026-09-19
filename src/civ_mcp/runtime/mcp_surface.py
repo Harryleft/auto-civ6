@@ -50,6 +50,10 @@ class RuntimeMcpSurface:
         """Return policy facts without exposing CivAdapter to MCP routing."""
         return await self._context.read_policies()
 
+    async def get_city_purchases(self, city_id: int, yield_type: str):
+        """Return live purchase candidates without exposing CivAdapter to routing."""
+        return await self._context.read_city_purchases(city_id, yield_type)
+
     def save_handoff(
         self,
         *,

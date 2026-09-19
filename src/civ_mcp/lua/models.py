@@ -325,6 +325,16 @@ class ProductionOption:
     repair_y: int | None = None  # district repair Y coordinate
 
 
+@dataclass(frozen=True)
+class PurchaseOption:
+    """One currently legal immediate city purchase and its current cost."""
+
+    item_type: str  # "UNIT" or "BUILDING"
+    item_name: str  # stable UNIT_* or BUILDING_* type
+    yield_type: str  # YIELD_GOLD or YIELD_FAITH
+    cost: int
+
+
 @dataclass
 class TileInfo:
     x: int

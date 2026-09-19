@@ -136,6 +136,16 @@ def test_purchase_item_injects_item_and_costs():
     assert "ERR:ITEM_NOT_FOUND" in query
 
 
+def test_purchase_candidates_use_the_actual_purchase_command_and_are_complete():
+    query = cities.build_city_purchase_query(5, "YIELD_GOLD")
+
+    _assert_sentinel(query)
+    assert "CityManager.CanStartCommand" in query
+    assert "CityCommandTypes.PURCHASE" in query
+    assert "PURCHASE|UNIT|" in query
+    assert "PURCHASE|BUILDING|" in query
+
+
 def test_city_attack_injects_coordinates():
     query = cities.build_city_attack(5, 3, 4)
     _assert_sentinel(query)

@@ -208,17 +208,140 @@ def test_city_capture_rejects_choices_not_allowed_by_current_game_state() -> Non
 
 def test_purchase_requires_gold_change_and_new_unit() -> None:
     class Adapter:
+        overview_calls = 0
+        unit_calls = 0
+
         async def read_overview(self):
-            return SimpleNamespace(value=SimpleNamespace(gold=50), observed_turn=12)
+            self.overview_calls += 1
+            gold = 100 if self.overview_calls == 1 else 50
+            return SimpleNamespace(value=SimpleNamespace(gold=gold, faith=0), observed_turn=12)
+
+        async def read_city_purchases(self, *, city_id, yield_type, observed_turn):
+            assert (city_id, yield_type, observed_turn) == (4, "YIELD_GOLD", 12)
+            return SimpleNamespace(
+                value=[
+                    SimpleNamespace(
+                        item_type="UNIT", item_name="UNIT_ARCHER", cost=60
+                    )
+                ],
+                observed_turn=observed_turn,
+            )
 
         async def read_units(self, *, observed_turn):
-            unit = SimpleNamespace(unit_id=9, unit_type="UNIT_ARCHER")
-            return SimpleNamespace(value=[unit], observed_turn=observed_turn)
+            self.unit_calls += 1
+            units = (
+                [SimpleNamespace(unit_id=1, unit_type="UNIT_WARRIOR")]
+                if self.unit_calls == 1
+                else [SimpleNamespace(unit_id=9, unit_type="UNIT_ARCHER")]
+            )
+            return SimpleNamespace(value=units, observed_turn=observed_turn)
 
     execution = CivMutationFactory(Adapter()).purchase_item(
-        operation_id=OperationId("purchase-4"), city_id=4, item_type="UNIT", item_name="UNIT_ARCHER", yield_type="YIELD_GOLD", currency_before=100, observed_turn=12, known_unit_ids=frozenset({1})
+        operation_id=OperationId("purchase-4"),
+        city_id=4,
+        item_type="UNIT",
+        item_name="UNIT_ARCHER",
+        yield_type="YIELD_GOLD",
+        observed_turn=12,
     )
+    asyncio.run(execution.precheck())
     assert asyncio.run(execution.verify()).source == "read_overview+read_units"
+
+
+def test_purchase_rejects_a_value_not_in_the_live_purchase_candidates() -> None:
+    class Adapter:
+        async def read_city_purchases(self, **_kwargs):
+            return SimpleNamespace(value=[], observed_turn=12)
+
+        async def read_overview(self):
+            raise AssertionError("candidate rejection must occur before balance lookup")
+
+    execution = CivMutationFactory(Adapter()).purchase_item(
+        operation_id=OperationId("purchase-invalid"),
+        city_id=4,
+        item_type="UNIT",
+        item_name="UNIT_ARCHER",
+        yield_type="YIELD_GOLD",
+        observed_turn=12,
+    )
+
+    with pytest.raises(MutationPreconditionError, match="允许的购买候选"):
+        asyncio.run(execution.precheck())
+
+
+def test_purchase_does_not_confirm_from_currency_change_without_a_new_object() -> None:
+    class Adapter:
+        overview_calls = 0
+
+        async def read_city_purchases(self, **_kwargs):
+            return SimpleNamespace(
+                value=[SimpleNamespace(item_type="UNIT", item_name="UNIT_ARCHER", cost=60)],
+                observed_turn=12,
+            )
+
+        async def read_overview(self):
+            self.overview_calls += 1
+            gold = 100 if self.overview_calls == 1 else 50
+            return SimpleNamespace(value=SimpleNamespace(gold=gold, faith=0), observed_turn=12)
+
+        async def read_units(self, *, observed_turn):
+            return SimpleNamespace(
+                value=[SimpleNamespace(unit_id=1, unit_type="UNIT_WARRIOR")],
+                observed_turn=observed_turn,
+            )
+
+    execution = CivMutationFactory(Adapter()).purchase_item(
+        operation_id=OperationId("purchase-missing-object"),
+        city_id=4,
+        item_type="UNIT",
+        item_name="UNIT_ARCHER",
+        yield_type="YIELD_GOLD",
+        observed_turn=12,
+    )
+    asyncio.run(execution.precheck())
+
+    assert asyncio.run(execution.verify()) is None
+
+
+def test_purchase_building_confirms_only_after_the_city_gains_the_building() -> None:
+    class Adapter:
+        overview_calls = 0
+        city_calls = 0
+
+        async def read_city_purchases(self, **_kwargs):
+            return SimpleNamespace(
+                value=[
+                    SimpleNamespace(
+                        item_type="BUILDING", item_name="BUILDING_MONUMENT", cost=80
+                    )
+                ],
+                observed_turn=12,
+            )
+
+        async def read_overview(self):
+            self.overview_calls += 1
+            gold = 100 if self.overview_calls == 1 else 20
+            return SimpleNamespace(value=SimpleNamespace(gold=gold, faith=0), observed_turn=12)
+
+        async def read_cities(self, *, observed_turn):
+            self.city_calls += 1
+            buildings = [] if self.city_calls == 1 else ["MONUMENT"]
+            return SimpleNamespace(
+                value=[SimpleNamespace(city_id=4, buildings=buildings)],
+                observed_turn=observed_turn,
+            )
+
+    execution = CivMutationFactory(Adapter()).purchase_item(
+        operation_id=OperationId("purchase-building"),
+        city_id=4,
+        item_type="BUILDING",
+        item_name="BUILDING_MONUMENT",
+        yield_type="YIELD_GOLD",
+        observed_turn=12,
+    )
+    asyncio.run(execution.precheck())
+
+    assert asyncio.run(execution.verify()).source == "read_overview+read_cities"
 
 
 def test_builder_mutations_are_hash_bound_and_need_tile_readback() -> None:

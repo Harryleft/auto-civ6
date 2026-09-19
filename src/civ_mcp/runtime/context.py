@@ -65,6 +65,7 @@ class ContextBuilder:
                 "get_governors",
                 "get_governments",
                 "get_policies",
+                "get_city_purchases",
             ),
         )
 
@@ -94,3 +95,12 @@ class ContextBuilder:
         """Read policy configuration through the context boundary only."""
         overview = await self._adapter.read_overview()
         return await self._adapter.read_policies(observed_turn=overview.observed_turn)
+
+    async def read_city_purchases(self, city_id: int, yield_type: str):
+        """Read one city's legal immediate purchases through the context boundary."""
+        overview = await self._adapter.read_overview()
+        return await self._adapter.read_city_purchases(
+            city_id=city_id,
+            yield_type=yield_type,
+            observed_turn=overview.observed_turn,
+        )

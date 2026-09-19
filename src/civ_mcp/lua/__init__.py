@@ -45,6 +45,7 @@ from civ_mcp.lua.cities import (  # noqa: F401
     build_cities_query,
     build_city_attack,
     build_city_capture_state_query,
+    build_city_purchase_query,
     build_city_production_query,
     build_city_yield_focus_query,
     build_pending_city_capture_query,
@@ -55,6 +56,7 @@ from civ_mcp.lua.cities import (  # noqa: F401
     build_verify_production,
     parse_cities_response,
     parse_city_capture_state_response,
+    parse_city_purchase_response,
     parse_city_production_response,
     parse_pending_city_capture_response,
 )
@@ -234,6 +236,7 @@ from civ_mcp.lua.models import (  # noqa: F401
     PolicyInfo,
     PolicySlot,
     ProductionOption,
+    PurchaseOption,
     PromotionOption,
     PurchasableTile,
     PlayerReligionState,

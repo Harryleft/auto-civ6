@@ -123,6 +123,16 @@ async def get_policies(ctx: Context) -> dict[str, object]:
     return _json_value(await _runtime(ctx).assembly.surface.get_policies())
 
 
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_city_purchases(
+    ctx: Context, city_id: int, yield_type: str = "YIELD_GOLD"
+) -> dict[str, object]:
+    """Return immediate unit/building purchases legal for one city and currency."""
+    return _json_value(
+        await _runtime(ctx).assembly.surface.get_city_purchases(city_id, yield_type)
+    )
+
+
 @mcp.tool()
 async def save_handoff(
     ctx: Context,
@@ -334,6 +344,31 @@ async def set_city_production(
         item_name=item_name,
         target_x=target_x,
         target_y=target_y,
+        observed_turn=decision_turn,
+    )
+    return _operation_payload(
+        await assembly.surface.execute_mutation(execution, decision_turn=decision_turn)
+    )
+
+
+@mcp.tool()
+async def purchase_item(
+    ctx: Context,
+    operation_id: str,
+    city_id: int,
+    item_type: str,
+    item_name: str,
+    decision_turn: int,
+    yield_type: str = "YIELD_GOLD",
+) -> dict[str, object]:
+    """Purchase one currently legal unit/building with fresh two-part evidence."""
+    assembly = _runtime(ctx).assembly
+    execution = assembly.mutations.purchase_item(
+        operation_id=OperationId(operation_id),
+        city_id=city_id,
+        item_type=item_type,
+        item_name=item_name,
+        yield_type=yield_type,
         observed_turn=decision_turn,
     )
     return _operation_payload(
