@@ -134,3 +134,19 @@ def test_governance_mutations_are_hash_bound_and_need_readback() -> None:
     assert governor.intent.tool == "assign_governor"
     assert promotion.request.context == "gamecore"
     assert asyncio.run(governor.verify()).source == "read_governors"
+
+
+def test_remaining_domain_mutations_use_explicit_readback_contracts() -> None:
+    class Adapter:
+        pass
+
+    async def evidence():
+        return Evidence("domain_read", 13, "verified")
+
+    factory = CivMutationFactory(Adapter())
+    pantheon = factory.choose_pantheon(operation_id=OperationId("pantheon-1"), belief_type="BELIEF_DIVINE_SPARK", readback=evidence)
+    person = factory.recruit_great_person(operation_id=OperationId("gp-1"), individual_id=5, readback=evidence)
+    spy = factory.spy_travel(operation_id=OperationId("spy-1"), unit_index=2, target_x=4, target_y=5, readback=evidence)
+    vote = factory.congress_vote(operation_id=OperationId("vote-1"), resolution_hash=1, option=0, target_index=2, num_votes=3, readback=evidence)
+    assert [pantheon.intent.tool, person.intent.tool, spy.intent.tool, vote.intent.tool] == ["choose_pantheon", "recruit_great_person", "spy_travel", "congress_vote"]
+    assert asyncio.run(vote.verify()).source == "domain_read"
