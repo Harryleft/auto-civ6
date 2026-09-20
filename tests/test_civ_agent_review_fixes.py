@@ -575,17 +575,21 @@ def test_review_provides_readable_blocking_reasons() -> None:
 
     from civ_agent.nodes.jev import REVIEW_QUESTIONS
 
+    # 两种方向都覆盖：证据类给极低（为否即拦），红线类给极高（踩线即拦）。
     answers = {
         spec["id"]: Answer(
             {"type": "score", "score": 0.0}
             if spec["kind"] == "score"
-            else {"type": "noul", "noul": 0.02}
+            else {
+                "type": "noul",
+                "noul": 0.95 if spec.get("blocking_when") == "true" else 0.02,
+            }
         )
         for spec in REVIEW_QUESTIONS
     }
     response = type("Response", (), {"answers": answers})()
 
-    payload = _payload_from_verdicts(_verdicts(REVIEW_QUESTIONS, response))
+    payload = _payload_from_verdicts(_verdicts(REVIEW_QUESTIONS, response), REVIEW_QUESTIONS)
 
     assert payload["blocking"], "极低概率应当触发阻断"
     assert len(payload["blocking_reasons"]) == len(payload["blocking"])
