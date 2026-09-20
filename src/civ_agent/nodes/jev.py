@@ -205,7 +205,12 @@ REVIEW_QUESTIONS: tuple[dict[str, Any], ...] = (
     {
         "id": "information_sufficient",
         "kind": NOUL,
-        "role": ROLE_BLOCKING,
+        # **informative 而非 blocking**：真机 50 回合跑里它 12 次决定中有 10 次为否，
+        # 而那些候选本身是合理的（建城/选研究/排生产），其中一次 set_city_production
+        # 最终被 Runtime CONFIRMED。"信息还不足"是"先再查一轮"的建议，不是"这个动作
+        # 有危险"的判定——把它当硬门禁会长期误拦，正如实测所示。它仍然作为信号进入
+        # 决策材料，由模型权衡"先补读还是先行动"。
+        "role": ROLE_INFORMATIVE,
         "instructions": "就这次的候选而言，信息是否已经足够到可以提交执行？",
         "criteria": {
             "true": "足以提交；剩余不确定性可以接受。",
