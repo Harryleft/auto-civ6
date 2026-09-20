@@ -96,9 +96,9 @@ def _assess_answers(**overrides: Any) -> dict[str, Any]:
 
 def _review_answers(**overrides: Any) -> dict[str, Any]:
     answers: dict[str, Any] = {
-        "assumptions_supported": NoulAnswer(type="noul", noul=0.2),
-        "cost_understood": NoulAnswer(type="noul", noul=0.3),
-        "information_sufficient": NoulAnswer(type="noul", noul=0.15),
+        "assumptions_supported": NoulAnswer(type="noul", noul=0.10),
+        "cost_understood": NoulAnswer(type="noul", noul=0.12),
+        "information_sufficient": NoulAnswer(type="noul", noul=0.08),
         "action_cost": ScoreAnswer(
             type="score", score=2.1, legend={0: "可忽略", 1: "可承受", 2: "较高", 3: "很高"}, probabilities={2: 0.9}, confidence=0.9
         ),
@@ -295,7 +295,9 @@ def test_jev_review_blocks_when_evidence_does_not_support_the_candidate() -> Non
         "cost_understood",
         "information_sufficient",
     }
-    assert result["verdicts"]["assumptions_supported"]["value"] == pytest.approx(0.2)
+    assert result["verdicts"]["assumptions_supported"]["value"] == pytest.approx(0.10)
+    # 被拦时必须带上可读理由，供下一轮反馈给模型
+    assert len(result["blocking_reasons"]) == 3
 
 
 def test_jev_review_passes_when_evidence_is_confirmed() -> None:

@@ -36,6 +36,7 @@ class DecisionContext:
     pending: dict[str, Any] | None = None
     previous_operation: dict[str, Any] | None = None
     candidates: tuple[dict[str, Any], ...] = ()
+    review_feedback: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         """交给模型/分类器的 JSON 形状；不裁剪必需字段。"""
@@ -51,6 +52,7 @@ class DecisionContext:
             "pending": self.pending,
             "previous_operation": self.previous_operation,
             "candidates": [dict(item) for item in self.candidates],
+            "review_feedback": self.review_feedback,
         }
 
     def missing_evidence(self) -> tuple[str, ...]:
@@ -178,6 +180,7 @@ def build_decision_context(state: Any) -> DecisionContext:
         pending=take("pending_decision"),
         previous_operation=previous,
         candidates=_candidate_payloads(take("candidates")),
+        review_feedback=str(take("review_feedback") or ""),
     )
 
 
