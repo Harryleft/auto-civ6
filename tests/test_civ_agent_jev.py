@@ -7,6 +7,7 @@ pydantic 答案模型构造响应，因此测的是真实字段名而不是自�
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Any
 
 import pytest
@@ -24,7 +25,7 @@ from civ_agent.nodes.jev import (
     observation_state,
 )
 from civ_agent.observation import OurState, OpponentState, Observation
-from langchain_typesafe import ChoiceAnswer, NoulAnswer, ScoreAnswer
+from langchain_typesafe import NoulAnswer, ScoreAnswer
 
 
 def _run(coro: Any) -> Any:
@@ -82,17 +83,12 @@ def _factory_for(answers: dict[str, Any]) -> tuple[Any, FakeClassifier]:
 
 def _assess_answers(**overrides: Any) -> dict[str, Any]:
     answers: dict[str, Any] = {
-        "expansion_open": NoulAnswer(type="noul", noul=0.81),
-        "growth_risk": NoulAnswer(type="noul", noul=0.12),
-        "military_pressure": ScoreAnswer(
-            type="score", score=0.4, legend={0: "低", 1: "中", 2: "高"}, probabilities={0: 0.6, 1: 0.4, 2: 0.0}, confidence=0.7
+        "information_gap": NoulAnswer(type="noul", noul=0.81),
+        "factual_conflict": NoulAnswer(type="noul", noul=0.12),
+        "immediate_risk": ScoreAnswer(
+            type="score", score=0.4, legend={0: "无", 1: "低", 2: "中", 3: "高"}, probabilities={0: 0.6, 1: 0.4}, confidence=0.7
         ),
-        "strategic_direction": ChoiceAnswer(
-            type="choice",
-            choice="expand",
-            probabilities={"expand": 0.7, "develop": 0.3},
-            confidence=0.7,
-        ),
+        "unknown_impact": NoulAnswer(type="noul", noul=0.7),
     }
     answers.update(overrides)
     return answers
@@ -100,10 +96,11 @@ def _assess_answers(**overrides: Any) -> dict[str, Any]:
 
 def _review_answers(**overrides: Any) -> dict[str, Any]:
     answers: dict[str, Any] = {
-        "plan_conflicts_with_assessment": NoulAnswer(type="noul", noul=0.9),
-        "needs_confirmation": NoulAnswer(type="noul", noul=0.2),
-        "reversibility": ScoreAnswer(
-            type="score", score=2.1, legend={0: "易", 1: "部分", 2: "难"}, probabilities={2: 0.9}, confidence=0.9
+        "assumptions_supported": NoulAnswer(type="noul", noul=0.2),
+        "cost_understood": NoulAnswer(type="noul", noul=0.3),
+        "information_sufficient": NoulAnswer(type="noul", noul=0.15),
+        "action_cost": ScoreAnswer(
+            type="score", score=2.1, legend={0: "可忽略", 1: "可承受", 2: "较高", 3: "很高"}, probabilities={2: 0.9}, confidence=0.9
         ),
     }
     answers.update(overrides)
@@ -115,21 +112,49 @@ def _review_answers(**overrides: Any) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def test_assess_questions_use_the_three_typesafe_kinds() -> None:
+def test_assess_questions_use_the_typesafe_kinds() -> None:
     kinds = {spec["kind"] for spec in ASSESS_QUESTIONS}
 
-    assert kinds == {"noul", "choice", "score"}
+    assert kinds == {"noul", "score"}
+
+
+def test_assess_questions_ask_about_evidence_not_human_strategy() -> None:
+    """审查 R10：固定问题不得硬编码人工国策（expand/develop/defend/research）。"""
+
+    blob = json.dumps(ASSESS_QUESTIONS, ensure_ascii=False)
+
+    for banned in ("expand", "develop", "defend", "research"):
+        assert banned not in blob
+    assert {spec["id"] for spec in ASSESS_QUESTIONS} == {
+        "information_gap",
+        "factual_conflict",
+        "immediate_risk",
+        "unknown_impact",
+    }
+
+
+def test_review_questions_check_reality_not_obedience_to_the_assessment() -> None:
+    """审查 R10：复核不得退化为"是否服从上一次模型回答"的自我确认。"""
+
+    ids = {spec["id"] for spec in REVIEW_QUESTIONS}
+
+    assert ids == {
+        "assumptions_supported",
+        "cost_understood",
+        "information_sufficient",
+        "action_cost",
+    }
+    assert not any("conflict" in question_id for question_id in ids)
 
 
 def test_questions_are_built_as_real_typesafe_objects() -> None:
     questions = _build_questions(ASSESS_QUESTIONS)
 
-    from langchain_typesafe import Choice, Noul, Score
+    from langchain_typesafe import Noul, Score
 
     assert set(questions) == {spec["id"] for spec in ASSESS_QUESTIONS}
-    assert isinstance(questions["expansion_open"], Noul)
-    assert isinstance(questions["strategic_direction"], Choice)
-    assert isinstance(questions["military_pressure"], Score)
+    assert isinstance(questions["information_gap"], Noul)
+    assert isinstance(questions["immediate_risk"], Score)
 
 
 def test_questions_carry_instructions_every_time() -> None:
@@ -156,37 +181,38 @@ def test_jev_assess_returns_serializable_verdicts() -> None:
 
     assert set(result["verdicts"]) == {spec["id"] for spec in ASSESS_QUESTIONS}
     assert result["turn"] == 7
-    assert result["verdicts"]["expansion_open"]["kind"] == "noul"
+    assert result["verdicts"]["information_gap"]["kind"] == "noul"
 
 
-def test_jev_assess_applies_the_expansion_threshold() -> None:
+def test_jev_assess_applies_the_information_threshold() -> None:
     factory, _ = _factory_for(_assess_answers())
     result = _run(jev_assess(_observation(), classifier_factory=factory))
 
-    # 0.81 >= 0.6 → 是
-    assert result["verdicts"]["expansion_open"]["summary"].startswith("是")
+    # 0.81 >= 0.5 → 是
+    assert result["verdicts"]["information_gap"]["summary"].startswith("是")
     # 0.12 < 0.5 → 否
-    assert result["verdicts"]["growth_risk"]["summary"].startswith("否")
+    assert result["verdicts"]["factual_conflict"]["summary"].startswith("否")
 
 
 def test_jev_assess_records_the_probability_and_threshold_for_audit() -> None:
     factory, _ = _factory_for(_assess_answers())
     result = _run(jev_assess(_observation(), classifier_factory=factory))
 
-    summary = result["verdicts"]["expansion_open"]["summary"]
+    summary = result["verdicts"]["information_gap"]["summary"]
     assert "0.81" in summary
-    assert "0.60" in summary
-    assert result["verdicts"]["expansion_open"]["value"] == pytest.approx(0.81)
+    assert "0.50" in summary
+    assert result["verdicts"]["information_gap"]["value"] == pytest.approx(0.81)
 
 
-def test_jev_assess_keeps_choice_label_and_confidence() -> None:
+def test_jev_assess_reports_information_gaps_separately() -> None:
+    """评估为"有信息缺口"时必须能被下游单独看见，而不是只留在日志里。"""
+
     factory, _ = _factory_for(_assess_answers())
     result = _run(jev_assess(_observation(), classifier_factory=factory))
 
-    verdict = result["verdicts"]["strategic_direction"]
-    assert "expand" in verdict["summary"]
-    assert verdict["confidence"] == pytest.approx(0.7)
-    assert verdict["answer"]["choice"] == "expand"
+    assert "information_gap" in result["information_gaps"]
+    assert "unknown_impact" in result["information_gaps"]
+    assert "factual_conflict" not in result["information_gaps"]
 
 
 def test_jev_assess_sends_a_json_compatible_state() -> None:
@@ -204,10 +230,10 @@ def test_jev_assess_sends_a_json_compatible_state() -> None:
 
 def test_jev_assess_raises_when_a_required_answer_is_missing() -> None:
     answers = _assess_answers()
-    del answers["growth_risk"]
+    del answers["factual_conflict"]
     factory, _ = _factory_for(answers)
 
-    with pytest.raises(JevError, match="growth_risk"):
+    with pytest.raises(JevError, match="factual_conflict"):
         _run(jev_assess(_observation(), classifier_factory=factory))
 
 
@@ -242,7 +268,7 @@ def test_assessment_summary_maps_question_ids_to_readable_text() -> None:
     result = _run(jev_assess(_observation(), classifier_factory=factory))
 
     assert set(result["summary"]) == {spec["id"] for spec in ASSESS_QUESTIONS}
-    assert isinstance(result["summary"]["military_pressure"], str)
+    assert isinstance(result["summary"]["immediate_risk"], str)
 
 
 # ---------------------------------------------------------------------------
@@ -250,25 +276,35 @@ def test_assessment_summary_maps_question_ids_to_readable_text() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_jev_review_flags_a_plan_that_conflicts_with_the_assessment() -> None:
+def test_jev_review_blocks_when_evidence_does_not_support_the_candidate() -> None:
+    """复核以现实证据为准：假设无支持 / 代价未知 / 信息不足 → 阻断提交。"""
+
     factory, _ = _factory_for(_review_answers())
 
     result = _run(
         jev_review(
-            assessment={"summary": {"expansion_open": "是"}},
+            assessment={"summary": {"information_gap": "是"}},
             candidates=[{"tool": "found_city", "arguments": {"x": 1, "y": 2}}],
             final_action=None,
             classifier_factory=factory,
         )
     )
 
-    assert result["blocking"] == ["plan_conflicts_with_assessment"]
-    assert result["verdicts"]["plan_conflicts_with_assessment"]["value"] == pytest.approx(0.9)
+    assert set(result["blocking"]) == {
+        "assumptions_supported",
+        "cost_understood",
+        "information_sufficient",
+    }
+    assert result["verdicts"]["assumptions_supported"]["value"] == pytest.approx(0.2)
 
 
-def test_jev_review_without_conflict_is_not_blocking() -> None:
+def test_jev_review_passes_when_evidence_is_confirmed() -> None:
     factory, _ = _factory_for(
-        _review_answers(plan_conflicts_with_assessment=NoulAnswer(type="noul", noul=0.1))
+        _review_answers(
+            assumptions_supported=NoulAnswer(type="noul", noul=0.9),
+            cost_understood=NoulAnswer(type="noul", noul=0.8),
+            information_sufficient=NoulAnswer(type="noul", noul=0.85),
+        )
     )
 
     result = _run(

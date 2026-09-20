@@ -227,8 +227,16 @@ def _status_from_record(payload: Any, tool: str) -> ExecutionResult:
 class MutationExecutor:
     """按"恰好一次"语义把 action 提交给 Runtime。
 
-    ``operation_ids`` 让同一个 action 在重复提交时复用同一个 id。跨进程恢复时
-    应把已用 id 传进来，否则重启后可能对同一意图生成新 id。
+    **身份属于决定，不属于参数内容**（审查 R04）：
+
+    - 每个新的决定由宿主分配一个 ``decision_id`` 与一个 ``operation_id``；
+      该决定的传输重试复用同一 ``operation_id``；
+    - 参数内容只用于**核对**同一个 ``operation_id`` 没有被偷换参数，
+      绝不用于认定"所有同参数动作都是同一次决定"。T1 与 T2 的
+      ``end_turn`` 参数相同，但它们是两次决定，因此必须是两个 operation。
+
+    ``max_submissions`` 限制一次决定能提交的动作数。超限**报错而不是丢弃**，
+    因为静默丢弃会让模型以为动作已经发出（审查 R04 的"新行动被吞掉"）。
     """
 
     def __init__(
@@ -237,24 +245,37 @@ class MutationExecutor:
         *,
         operation_ids: Mapping[str, str] | None = None,
         new_operation_id: Callable[[], str] = generate_operation_id,
+        max_submissions: int = 1,
     ) -> None:
+        if max_submissions < 1:
+            raise ValueError("max_submissions 必须是正整数。")
         self._client = client
+        #: decision_id → operation_id；重试同一决定时复用。
         self._ids: dict[str, str] = dict(operation_ids or {})
+        #: decision_id → 已提交动作的规范化内容，用于禁止同一 ID 偷换参数。
+        self._contents: dict[str, str] = {}
         self._new_operation_id = new_operation_id
+        self._max_submissions = max_submissions
+        self._submissions: dict[str, int] = {}
 
-    def operation_id_for(self, action: CandidateAction) -> str:
-        """取得（必要时分配）该 action 的 operation id。"""
+    def operation_id_for(self, decision_id: str) -> str:
+        """取得（必要时分配）该**决定**的 operation id。"""
 
-        key = action_key(action)
-        if key not in self._ids:
-            self._ids[key] = self._new_operation_id()
-        return self._ids[key]
+        if not isinstance(decision_id, str) or not decision_id.strip():
+            raise ValueError("decision_id 必须是非空字符串：身份以决定为单位。")
+        if decision_id not in self._ids:
+            self._ids[decision_id] = self._new_operation_id()
+        return self._ids[decision_id]
 
     def known_operation_ids(self) -> dict[str, str]:
         return dict(self._ids)
 
     async def submit(
-        self, action: CandidateAction, *, decision_turn: int
+        self,
+        action: CandidateAction,
+        *,
+        decision_id: str,
+        decision_turn: int,
     ) -> MutationOutcome:
         """提交一个 action；``end_turn`` 走 TurnLoop，其余走普通 mutation。"""
 
@@ -266,7 +287,29 @@ class MutationExecutor:
                 "候选必须来自 Runtime 的工具清单。"
             )
 
-        operation_id = self.operation_id_for(action)
+        operation_id = self.operation_id_for(decision_id)
+        content = action_key(action)
+
+        # 先判次数上限，再判内容一致性：第二次提交一个**不同**动作时，更准确的
+        # 诊断是"一次决定只能提交一个动作"，而不是"偷换意图"。
+        attempts = self._submissions.get(decision_id, 0)
+        if attempts >= self._max_submissions:
+            raise MutationError(
+                f"决定 {decision_id} 已提交 {attempts} 次，超过 max_submissions="
+                f"{self._max_submissions}；拒绝静默丢弃 {content}。"
+                "同一回合需要多个动作时，请把它建模为多个决定（各自新 operation_id）。"
+            )
+
+        recorded = self._contents.get(decision_id)
+        if recorded is not None and recorded != content:
+            raise MutationError(
+                f"决定 {decision_id} 已用 operation_id {operation_id} 提交过 {recorded}，"
+                f"现在却要提交 {content}；拒绝在同一 operation_id 上偷换意图。"
+            )
+
+        self._contents[decision_id] = content
+        self._submissions[decision_id] = attempts + 1
+
         if action.tool == END_TURN_TOOL:
             return await self._submit_end_turn(operation_id, decision_turn)
         if action.tool == RESUME_DECISION_TOOL:
@@ -364,15 +407,29 @@ class MutationExecutor:
 
 
 def action_key(action: CandidateAction) -> str:
-    """稳定的 action 身份：同工具同参数视为同一意图。"""
+    """一个动作的**规范化内容**，只用于核对同一 operation 没被偷换意图。
+
+    它**不**决定操作身份（审查 R04）：身份来自 decision_id。模型提供的
+    ``operation_id`` / ``decision_turn`` 是宿主字段，先剔除再规范化，否则模型多带
+    一个最后会被覆盖的字段就能改变这个核对值。
+    """
 
     import json
 
+    arguments = {
+        key: value
+        for key, value in action.arguments.items()
+        if key not in _HOST_OWNED_ARGUMENTS
+    }
     try:
-        arguments = json.dumps(action.arguments, ensure_ascii=False, sort_keys=True)
+        encoded = json.dumps(arguments, ensure_ascii=False, sort_keys=True)
     except (TypeError, ValueError):
-        arguments = repr(action.arguments)
-    return f"{action.tool}:{arguments}"
+        encoded = repr(sorted(arguments.items(), key=lambda item: str(item[0])))
+    return f"{action.tool}:{encoded}"
+
+
+#: 由宿主（执行器/Runtime）注入的字段；模型给的值一律先剔除。
+_HOST_OWNED_ARGUMENTS = frozenset({"operation_id", "decision_turn"})
 
 
 def make_execute_fn(
@@ -381,7 +438,8 @@ def make_execute_fn(
     """构造图用的 ``execute_fn``，把执行器的完整结果交给图。"""
 
     async def execute_fn(action: CandidateAction, deps: Any) -> MutationOutcome:
+        decision_id = str(getattr(deps, "decision_id", "") or "")
         turn = int(getattr(deps, "decision_turn", 0) or 0)
-        return await executor.submit(action, decision_turn=turn)
+        return await executor.submit(action, decision_id=decision_id, decision_turn=turn)
 
     return execute_fn

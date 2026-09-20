@@ -90,51 +90,85 @@ def _action(tool: str = "move_unit", **arguments: Any) -> CandidateAction:
 # ---------------------------------------------------------------------------
 
 
-def test_operation_id_is_stable_for_the_same_action() -> None:
+def test_operation_id_is_stable_within_one_decision() -> None:
+    """同一个决定的重试复用同一 operation_id。"""
+
     executor = MutationExecutor(FakeRuntimeClient(), new_operation_id=lambda: "op-fixed")
 
-    first = executor.operation_id_for(_action())
-    second = executor.operation_id_for(_action())
+    first = executor.operation_id_for("d1")
+    second = executor.operation_id_for("d1")
 
     assert first == second == "op-fixed"
 
 
-def test_different_actions_get_different_operation_ids() -> None:
-    counter = iter(["op-1", "op-2"])
+def test_operation_id_requires_a_decision_identity() -> None:
+    executor = MutationExecutor(FakeRuntimeClient())
+
+    with pytest.raises(ValueError, match="decision_id"):
+        executor.operation_id_for("  ")
+
+
+def test_two_decisions_with_identical_arguments_get_different_operation_ids() -> None:
+    """审查 R04 核心：T1 与 T2 的 end_turn({}) 参数相同，但必须是两次操作。"""
+
+    counter = iter(["op-t1", "op-t2"])
     executor = MutationExecutor(FakeRuntimeClient(), new_operation_id=lambda: next(counter))
+    end_turn = CandidateAction(tool=END_TURN_TOOL, arguments={})
 
-    first = executor.operation_id_for(_action(unit_index=1))
-    second = executor.operation_id_for(_action(unit_index=2))
+    assert executor.operation_id_for("T1") != executor.operation_id_for("T2")
+    assert executor.operation_id_for("T1") == "op-t1"
+    assert executor.operation_id_for("T2") == "op-t2"
 
-    assert first != second
 
+def test_new_decision_is_not_swallowed_by_an_old_one() -> None:
+    """同一参数的新决定必须真的发出新 operation，而不是复用旧记录。"""
 
-def test_resubmitting_the_same_action_reuses_the_operation_id() -> None:
-    """重复提交同一意图必须复用 id，否则就是 duplicate mutation。"""
+    counter = iter(["op-t1", "op-t2"])
+    client = FakeRuntimeClient({END_TURN_TOOL: _turn("ADVANCED")})
+    executor = MutationExecutor(client, new_operation_id=lambda: next(counter))
+    end_turn = CandidateAction(tool=END_TURN_TOOL, arguments={})
 
-    client = FakeRuntimeClient()
-    executor = MutationExecutor(client, new_operation_id=lambda: "op-fixed")
-    action = _action()
-
-    _run(executor.submit(action, decision_turn=7))
-    _run(executor.submit(action, decision_turn=7))
+    _run(executor.submit(end_turn, decision_id="T1", decision_turn=1))
+    _run(executor.submit(end_turn, decision_id="T2", decision_turn=2))
 
     ids = [call[1]["operation_id"] for call in client.calls]
-    assert ids == ["op-fixed", "op-fixed"]
+    assert ids == ["op-t1", "op-t2"]
 
 
 def test_known_operation_ids_can_be_restored_across_processes() -> None:
     """跨进程恢复：传入已用 id 后不得再生成新的 id。"""
 
-    action = _action()
-    key = action_key(action)
     executor = MutationExecutor(
         FakeRuntimeClient(),
-        operation_ids={key: "op-from-store"},
+        operation_ids={"d1": "op-from-store"},
         new_operation_id=lambda: "op-brand-new",
     )
 
-    assert executor.operation_id_for(action) == "op-from-store"
+    assert executor.operation_id_for("d1") == "op-from-store"
+
+
+def test_swapping_arguments_on_the_same_operation_id_is_refused() -> None:
+    """同一 operation_id 不得被偷换成另一个意图（放宽次数上限以单独验证这一条）。"""
+
+    executor = MutationExecutor(
+        FakeRuntimeClient(), new_operation_id=lambda: "op-fixed", max_submissions=2
+    )
+
+    _run(executor.submit(_action(unit_index=1), decision_id="d1", decision_turn=7))
+
+    with pytest.raises(MutationError, match="偷换"):
+        _run(executor.submit(_action(unit_index=2), decision_id="d1", decision_turn=7))
+
+
+def test_second_distinct_action_in_one_decision_is_refused_not_dropped() -> None:
+    """超限必须报错：静默丢弃会让模型以为动作已经发出（审查 R04）。"""
+
+    executor = MutationExecutor(FakeRuntimeClient(), new_operation_id=lambda: "op-fixed")
+
+    _run(executor.submit(_action(unit_index=1), decision_id="d1", decision_turn=7))
+
+    with pytest.raises(MutationError, match="max_submissions"):
+        _run(executor.submit(_action(unit_index=2), decision_id="d1", decision_turn=7))
 
 
 def test_action_key_is_order_insensitive() -> None:
@@ -143,6 +177,18 @@ def test_action_key_is_order_insensitive() -> None:
 
 def test_action_key_separates_different_tools() -> None:
     assert action_key(_action("move_unit")) != action_key(_action("attack_unit"))
+
+
+def test_action_key_ignores_host_owned_arguments() -> None:
+    """模型多带一个会被覆盖的字段，不得因此改变内容核对值（审查 R04）。"""
+
+    plain = CandidateAction(tool="purchase_item", arguments={"item": "MONUMENT"})
+    forged = CandidateAction(
+        tool="purchase_item",
+        arguments={"item": "MONUMENT", "operation_id": "x", "decision_turn": 99},
+    )
+
+    assert action_key(plain) == action_key(forged)
 
 
 # ---------------------------------------------------------------------------
@@ -158,7 +204,7 @@ def test_non_confirmed_outcomes_never_become_confirmed(outcome: str) -> None:
     client = FakeRuntimeClient({"move_unit": _record(outcome)})
     executor = MutationExecutor(client, new_operation_id=lambda: "op-1")
 
-    result = _run(executor.submit(_action(), decision_turn=7))
+    result = _run(executor.submit(_action(), decision_id="d1", decision_turn=7))
 
     assert result.execution.status is ExecutionStatus.UNKNOWN
     assert result.execution.status is not ExecutionStatus.CONFIRMED
@@ -170,7 +216,7 @@ def test_observing_is_distinguished_from_unknown_but_still_not_confirmed() -> No
     client = FakeRuntimeClient({"move_unit": _record("OBSERVING")})
     executor = MutationExecutor(client, new_operation_id=lambda: "op-1")
 
-    result = _run(executor.submit(_action(), decision_turn=7))
+    result = _run(executor.submit(_action(), decision_id="d1", decision_turn=7))
 
     assert result.execution.status is ExecutionStatus.OBSERVING
     assert result.execution.status is not ExecutionStatus.CONFIRMED
@@ -181,7 +227,7 @@ def test_confirmed_outcome_is_reported_as_confirmed() -> None:
     client = FakeRuntimeClient({"move_unit": _record("CONFIRMED")})
     executor = MutationExecutor(client, new_operation_id=lambda: "op-1")
 
-    result = _run(executor.submit(_action(), decision_turn=7))
+    result = _run(executor.submit(_action(), decision_id="d1", decision_turn=7))
 
     assert result.execution.status is ExecutionStatus.CONFIRMED
     assert result.execution.operation_id == "op-1"
@@ -192,7 +238,7 @@ def test_unknown_result_keeps_the_operation_id_for_reconciliation() -> None:
     client = FakeRuntimeClient({"move_unit": _record("UNKNOWN", operation_id="op-unknown")})
     executor = MutationExecutor(client, new_operation_id=lambda: "op-1")
 
-    result = _run(executor.submit(_action(), decision_turn=7))
+    result = _run(executor.submit(_action(), decision_id="d1", decision_turn=7))
 
     assert result.execution.operation_id == "op-unknown"
     assert "不重发" in result.execution.reason
@@ -204,7 +250,7 @@ def test_unknown_result_is_not_resent() -> None:
     client = FakeRuntimeClient({"move_unit": _record("UNKNOWN")})
     executor = MutationExecutor(client, new_operation_id=lambda: "op-1")
 
-    _run(executor.submit(_action(), decision_turn=7))
+    _run(executor.submit(_action(), decision_id="d1", decision_turn=7))
 
     assert len(client.calls) == 1
 
@@ -218,7 +264,7 @@ def test_runtime_owned_arguments_are_injected() -> None:
     client = FakeRuntimeClient()
     executor = MutationExecutor(client, new_operation_id=lambda: "op-1")
 
-    _run(executor.submit(_action(unit_index=9, target_x=1, target_y=2), decision_turn=42))
+    _run(executor.submit(_action(unit_index=9, target_x=1, target_y=2), decision_id="d1", decision_turn=42))
 
     name, arguments = client.calls[0]
     assert name == "move_unit"
@@ -237,7 +283,7 @@ def test_model_cannot_forge_the_operation_id() -> None:
         arguments={"unit_index": 1, "operation_id": "forged", "decision_turn": 999},
     )
 
-    _run(executor.submit(action, decision_turn=7))
+    _run(executor.submit(action, decision_id="d1", decision_turn=7))
 
     arguments = client.calls[0][1]
     assert arguments["operation_id"] == "op-real"
@@ -248,7 +294,7 @@ def test_unknown_tools_are_rejected() -> None:
     executor = MutationExecutor(FakeRuntimeClient())
 
     with pytest.raises(MutationError, match="不是 Runtime mutation"):
-        _run(executor.submit(CandidateAction(tool="launch_nuke", arguments={}), decision_turn=1))
+        _run(executor.submit(CandidateAction(tool="launch_nuke", arguments={}), decision_id="d1", decision_turn=1))
 
 
 def test_all_runtime_mutation_tools_are_whitelisted() -> None:
@@ -290,7 +336,7 @@ def test_invalid_decision_turn_is_rejected() -> None:
     executor = MutationExecutor(FakeRuntimeClient())
 
     with pytest.raises(ValueError, match="decision_turn"):
-        _run(executor.submit(_action(), decision_turn=-1))
+        _run(executor.submit(_action(), decision_id="d1", decision_turn=-1))
 
 
 def test_tool_failures_are_wrapped_with_context() -> None:
@@ -299,7 +345,7 @@ def test_tool_failures_are_wrapped_with_context() -> None:
     executor = MutationExecutor(client)
 
     with pytest.raises(MutationError, match="move_unit"):
-        _run(executor.submit(_action(), decision_turn=7))
+        _run(executor.submit(_action(), decision_id="d1", decision_turn=7))
 
 
 # ---------------------------------------------------------------------------
@@ -311,7 +357,7 @@ def test_end_turn_advanced_marks_the_turn_advanced() -> None:
     client = FakeRuntimeClient({END_TURN_TOOL: _turn("ADVANCED")})
     executor = MutationExecutor(client, new_operation_id=lambda: "op-1")
 
-    result = _run(executor.submit(CandidateAction(tool=END_TURN_TOOL, arguments={}), decision_turn=7))
+    result = _run(executor.submit(CandidateAction(tool=END_TURN_TOOL, arguments={}), decision_id="d1", decision_turn=7))
 
     assert result.turn_advanced is True
     assert result.pending_decision is None
@@ -334,7 +380,7 @@ def test_end_turn_needs_decision_records_the_blocker() -> None:
     )
     executor = MutationExecutor(client, new_operation_id=lambda: "op-1")
 
-    result = _run(executor.submit(CandidateAction(tool=END_TURN_TOOL, arguments={}), decision_turn=7))
+    result = _run(executor.submit(CandidateAction(tool=END_TURN_TOOL, arguments={}), decision_id="d1", decision_turn=7))
 
     assert result.execution.status is ExecutionStatus.NEEDS_DECISION
     assert result.turn_advanced is False
@@ -350,7 +396,7 @@ def test_end_turn_recovery_required_is_not_treated_as_success() -> None:
     client = FakeRuntimeClient({END_TURN_TOOL: _turn("RECOVERY_REQUIRED")})
     executor = MutationExecutor(client, new_operation_id=lambda: "op-1")
 
-    result = _run(executor.submit(CandidateAction(tool=END_TURN_TOOL, arguments={}), decision_turn=7))
+    result = _run(executor.submit(CandidateAction(tool=END_TURN_TOOL, arguments={}), decision_id="d1", decision_turn=7))
 
     assert result.execution.status is ExecutionStatus.UNKNOWN
     assert result.turn_advanced is False
@@ -361,7 +407,7 @@ def test_unknown_turn_outcome_is_not_treated_as_success() -> None:
     client = FakeRuntimeClient({END_TURN_TOOL: _turn("SOMETHING_ELSE")})
     executor = MutationExecutor(client, new_operation_id=lambda: "op-1")
 
-    result = _run(executor.submit(CandidateAction(tool=END_TURN_TOOL, arguments={}), decision_turn=7))
+    result = _run(executor.submit(CandidateAction(tool=END_TURN_TOOL, arguments={}), decision_id="d1", decision_turn=7))
 
     assert result.execution.status is ExecutionStatus.UNKNOWN
     assert result.turn_advanced is False
@@ -371,7 +417,7 @@ def test_needs_decision_without_a_decision_payload_is_still_reported() -> None:
     client = FakeRuntimeClient({END_TURN_TOOL: _turn("NEEDS_DECISION")})
     executor = MutationExecutor(client, new_operation_id=lambda: "op-1")
 
-    result = _run(executor.submit(CandidateAction(tool=END_TURN_TOOL, arguments={}), decision_turn=7))
+    result = _run(executor.submit(CandidateAction(tool=END_TURN_TOOL, arguments={}), decision_id="d1", decision_turn=7))
 
     assert result.execution.status is ExecutionStatus.NEEDS_DECISION
     assert result.pending_decision is None
@@ -392,7 +438,7 @@ def test_pending_decision_is_serializable() -> None:
     )
     executor = MutationExecutor(client, new_operation_id=lambda: "op-1")
 
-    result = _run(executor.submit(CandidateAction(tool=END_TURN_TOOL, arguments={}), decision_turn=7))
+    result = _run(executor.submit(CandidateAction(tool=END_TURN_TOOL, arguments={}), decision_id="d1", decision_turn=7))
 
     payload = json.loads(json.dumps(result.pending_decision.as_dict(), ensure_ascii=False))
     assert payload["decision_type"] == "ENVOY"
@@ -405,7 +451,9 @@ def test_resume_decision_requires_a_choice() -> None:
     with pytest.raises(MutationError, match="choice"):
         _run(
             executor.submit(
-                CandidateAction(tool=RESUME_DECISION_TOOL, arguments={}), decision_turn=7
+                CandidateAction(tool=RESUME_DECISION_TOOL, arguments={}),
+                decision_id="d1",
+                decision_turn=7,
             )
         )
 
@@ -420,6 +468,7 @@ def test_resume_decision_targets_the_original_end_turn() -> None:
                 tool=RESUME_DECISION_TOOL,
                 arguments={"choice": "POSITIVE", "operation_id": "op-endturn"},
             ),
+            decision_id="d1",
             decision_turn=7,
         )
     )
@@ -438,6 +487,7 @@ def test_resume_decision_without_target_falls_back_to_its_own_id() -> None:
     _run(
         executor.submit(
             CandidateAction(tool=RESUME_DECISION_TOOL, arguments={"choice": "EXIT"}),
+            decision_id="d1",
             decision_turn=7,
         )
     )
@@ -465,10 +515,12 @@ def test_execute_node_reports_pending_decision_and_turn_flag() -> None:
     )
     executor = MutationExecutor(client, new_operation_id=lambda: "op-1")
     node = make_execute(
-        GraphDeps(client=client, allow_mutation=True, executor=executor, decision_turn=7)
+        GraphDeps(client=client, allow_mutation=True, executor=executor, decision_id="d1")
     )
 
-    result = _run(node({"final_action": CandidateAction(tool=END_TURN_TOOL, arguments={})}))
+    result = _run(
+        node({"final_action": CandidateAction(tool=END_TURN_TOOL, arguments={}), "turn": 7})
+    )
 
     assert result["execution"].status is ExecutionStatus.NEEDS_DECISION
     assert result["pending_decision"]["decision_type"] == "CITY_CAPTURE"
@@ -482,16 +534,38 @@ def test_execute_node_requires_an_executor() -> None:
         _run(node({"final_action": _action()}))
 
 
-def test_execute_node_uses_deps_decision_turn() -> None:
+def test_execute_binds_the_turn_from_the_observation_not_a_static_default() -> None:
+    """审查 R05：提交必须使用本次决定所依据的观察回合。"""
+
     client = FakeRuntimeClient()
     executor = MutationExecutor(client, new_operation_id=lambda: "op-1")
     node = make_execute(
-        GraphDeps(client=client, allow_mutation=True, executor=executor, decision_turn=33)
+        GraphDeps(client=client, allow_mutation=True, executor=executor, decision_id="d1")
     )
 
-    _run(node({"final_action": _action()}))
+    _run(node({"final_action": _action(), "turn": 2}))
 
-    assert client.calls[0][1]["decision_turn"] == 33
+    assert client.calls[0][1]["decision_turn"] == 2
+
+
+def test_execute_refuses_a_missing_turn() -> None:
+    client = FakeRuntimeClient()
+    executor = MutationExecutor(client, new_operation_id=lambda: "op-1")
+    node = make_execute(
+        GraphDeps(client=client, allow_mutation=True, executor=executor, decision_id="d1")
+    )
+
+    with pytest.raises(GraphError, match="turn"):
+        _run(node({"final_action": _action()}))
+
+
+def test_execute_refuses_a_missing_decision_id() -> None:
+    client = FakeRuntimeClient()
+    executor = MutationExecutor(client, new_operation_id=lambda: "op-1")
+    node = make_execute(GraphDeps(client=client, allow_mutation=True, executor=executor))
+
+    with pytest.raises(GraphError, match="decision_id"):
+        _run(node({"final_action": _action(), "turn": 7}))
 
 
 def test_make_execute_fn_delegates_to_the_executor() -> None:
@@ -499,7 +573,9 @@ def test_make_execute_fn_delegates_to_the_executor() -> None:
     executor = MutationExecutor(client, new_operation_id=lambda: "op-1")
     fn = make_execute_fn(executor)
 
-    outcome = _run(fn(_action(), GraphDeps(client=client, decision_turn=5)))
+    outcome = _run(fn(_action(), GraphDeps(client=client, decision_id="d9")))
 
     assert outcome.execution.status is ExecutionStatus.CONFIRMED
-    assert client.calls[0][1]["decision_turn"] == 5
+    # 静态 decision_turn 已删除（审查 R05）；没有 turn 时按 0 提交。
+    assert client.calls[0][1]["decision_turn"] == 0
+    assert client.calls[0][1]["operation_id"] == "op-1"

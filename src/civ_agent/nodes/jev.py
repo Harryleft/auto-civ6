@@ -27,81 +27,99 @@ CHOICE = "choice"
 SCORE = "score"
 
 #: 概率阈值。显式常量：判断结果会写进 Game Memory，阈值不能藏在分支里。
-EXPANSION_OPEN_THRESHOLD = 0.6
-GROWTH_RISK_THRESHOLD = 0.5
-REVERSIBILITY_THRESHOLD = 0.5
+INFORMATION_GAP_THRESHOLD = 0.5
+FACTUAL_CONFLICT_THRESHOLD = 0.5
+CONFIDENT_EVIDENCE_THRESHOLD = 0.5
+ASSUMPTION_SUPPORTED_THRESHOLD = 0.5
 
-#: Jev Assess 提出的问题（v7 §12 的 ``jev_assess`` 阶段）。
+#: Jev Assess 提出的问题。
+#:
+#: 审查 R10 指出：把"expand/develop/defend/research"这类人工国策写进固定问题，
+#: 等于把人的战略答案硬编码进判断层，换成概率问句并不会消除这层偏置。因此这里
+#: 只问**信息缺口、事实矛盾与风险**——这些是可核对的事实属性，不是战略主张。
 ASSESS_QUESTIONS: tuple[dict[str, Any], ...] = (
     {
-        "id": "expansion_open",
+        "id": "information_gap",
         "kind": NOUL,
-        "instructions": "当前局面是否仍然存在值得占用的、未被阻挡的扩张机会？",
+        "instructions": "为了在本回合做出有依据的选择，是否仍缺少必需的当前事实（例如单位位置、城市生产候选、可操作对象或游戏待选项）？",
         "criteria": {
-            "true": "还有可占资源/淡水/战略要地，且我方有能力派出开拓者。",
-            "false": "可占位置已被占满、被强敌封锁，或当前无力承担新城成本。",
+            "true": "至少一项做决定所必需的事实目前缺失或读不到。",
+            "false": "当前材料足以评估本回合的选择。",
         },
     },
     {
-        "id": "growth_risk",
+        "id": "factual_conflict",
         "kind": NOUL,
-        "instructions": "当前是否存在必须立刻处理的增长或经济风险（粮食盈余不足、住房或宜居度压制、金币转负）？",
+        "instructions": "当前材料内部是否存在互相矛盾的事实（例如同一对象状态不一致、计数与明细不符、coverage 与内容冲突）？",
         "criteria": {
-            "true": "任一城市增长停滞或国库每回合净减。",
-            "false": "各城增长正常且国库净增。",
+            "true": "存在两处材料无法同时为真。",
+            "false": "未发现互相矛盾之处。",
         },
     },
     {
-        "id": "military_pressure",
+        "id": "immediate_risk",
         "kind": SCORE,
-        "instructions": "当前面临的军事压力有多高？",
+        "instructions": "当前局面存在多高程度的即时风险（城市或单位在本回合内可能遭受不可逆损失）？",
         "criteria": [
-            "无敌意单位接近，无战争状态。",
-            "有零星蛮族或邻国单位在边境活动。",
-            "存在明确敌对意图或已在交战。",
+            "无即时风险：没有敌对单位或敌对意图接近。",
+            "低：有零星敌对单位在边境活动，短期内不构成实质威胁。",
+            "中：存在明确的军事或忠诚压力，需要本回合分神处理。",
+            "高：城市或关键单位在本回合内可能失守或被摧毁。",
         ],
     },
     {
-        "id": "strategic_direction",
-        "kind": CHOICE,
-        "instructions": "本回合最应当投入的方向是什么？",
+        "id": "unknown_impact",
+        "kind": NOUL,
+        "instructions": "材料中标记为 unknown 的项，是否会实质影响本回合的选择（即不同取值会导向不同动作）？",
         "criteria": {
-            "expand": "铺城、占资源、扩张领土。",
-            "develop": "建设已占城市：区域、改良、建筑。",
-            "defend": "应对眼前的军事或忠诚威胁。",
-            "research": "推进科技或市政路线以解锁关键能力。",
+            "true": "存在这样的 unknown 项；先补齐再决定更稳妥。",
+            "false": "unknown 项不影响本回合可选动作的排序。",
         },
     },
 )
 
-#: Jev Review 提出的问题（v7 §12 的 ``jev_review`` 阶段）。
+#: Jev Review 提出的问题。
+#:
+#: 审查 R10 指出：复核若主要问"是否与 Assess 冲突"，容易变成对上一步模型回答的
+#: 自我确认。因此这里改为核对**现实证据**：候选的假设是否有事实支持、代价是否
+#: 已知、信息是否够。
 REVIEW_QUESTIONS: tuple[dict[str, Any], ...] = (
     {
-        "id": "plan_conflicts_with_assessment",
+        "id": "assumptions_supported",
         "kind": NOUL,
-        "instructions": "候选行动是否与本次 Jev Assess 的判断相冲突（例如评估为需要防御却继续无防守的扩张）？",
+        "instructions": "候选行动所依赖的关键假设，是否被当前材料中的事实支持（而不是依赖未经确认的推测）？",
         "criteria": {
-            "true": "行动直接违背已识别的风险或方向。",
-            "false": "行动与判断一致或至少不冲突。",
+            "true": "候选的前提能在材料里找到对应事实。",
+            "false": "候选依赖了材料中没有的推测，或与材料冲突。",
         },
     },
     {
-        "id": "needs_confirmation",
+        "id": "cost_understood",
         "kind": NOUL,
-        "instructions": "候选行动是否属于不可逆或高代价操作，应当在执行前再确认一次？",
+        "instructions": "候选行动的代价是否已经明确（金币、产能、单位、外交后果等）？",
         "criteria": {
-            "true": "宣战、和谈、放弃城市、大量购金等难以撤回的操作。",
-            "false": "常规生产、移动、研究选择等可调整操作。",
+            "true": "代价可从当前事实算出或已有明确数值。",
+            "false": "代价未知，或候选描述的代价与事实不符。",
         },
     },
     {
-        "id": "reversibility",
-        "kind": "score",
-        "instructions": "候选行动的后果有多容易撤回？",
+        "id": "information_sufficient",
+        "kind": NOUL,
+        "instructions": "就这次的候选而言，信息是否已经足够到可以提交执行？",
+        "criteria": {
+            "true": "足以提交；剩余不确定性可以接受。",
+            "false": "应先补读事实或查规则，再提交。",
+        },
+    },
+    {
+        "id": "action_cost",
+        "kind": SCORE,
+        "instructions": "所选行动的代价有多难以承受（按其占用资源与不可逆程度评估）？",
         "criteria": [
-            "容易撤回：下一回合即可改回，几乎无损失。",
-            "部分可撤回：会损失产能或时间，但可纠正。",
-            "难以撤回：会造成长期或不可逆的后果。",
+            "可忽略：常规操作，几乎不占用关键资源。",
+            "可承受：消耗部分产能或时间，但可恢复。",
+            "较高：占用关键资源或造成长期影响。",
+            "很高：可能不可逆地损害本局形势。",
         ],
     },
 )
@@ -193,8 +211,12 @@ def _summarize(kind: str, payload: dict[str, Any], *, threshold: float) -> tuple
 
 def _threshold_for(question_id: str) -> float:
     return {
-        "expansion_open": EXPANSION_OPEN_THRESHOLD,
-        "growth_risk": GROWTH_RISK_THRESHOLD,
+        "information_gap": INFORMATION_GAP_THRESHOLD,
+        "factual_conflict": FACTUAL_CONFLICT_THRESHOLD,
+        "unknown_impact": INFORMATION_GAP_THRESHOLD,
+        "assumptions_supported": ASSUMPTION_SUPPORTED_THRESHOLD,
+        "cost_understood": ASSUMPTION_SUPPORTED_THRESHOLD,
+        "information_sufficient": CONFIDENT_EVIDENCE_THRESHOLD,
     }.get(question_id, 0.5)
 
 
@@ -268,17 +290,31 @@ def _verdicts(
     return tuple(verdicts)
 
 
+#: 复核结论为"否"即应阻止直接提交的问题：它们表示证据不足或代价未知。
+_BLOCKING_WHEN_FALSE = ("assumptions_supported", "cost_understood", "information_sufficient")
+#: 评估结论为"是"即表示需要先补信息的信号。
+_INFORMATION_SIGNALS = ("information_gap", "factual_conflict", "unknown_impact")
+
+
 def _payload_from_verdicts(verdicts: Iterable[Verdict]) -> dict[str, Any]:
     collected = {verdict.question_id: verdict.as_dict() for verdict in verdicts}
+    blocking = [
+        question_id
+        for question_id in _BLOCKING_WHEN_FALSE
+        if question_id in collected
+        and (collected[question_id]["value"] or 0.0) < _threshold_for(question_id)
+    ]
+    information_gaps = [
+        question_id
+        for question_id in _INFORMATION_SIGNALS
+        if question_id in collected
+        and (collected[question_id]["value"] or 0.0) >= _threshold_for(question_id)
+    ]
     return {
         "verdicts": collected,
         "summary": {verdict.question_id: verdict.summary for verdict in verdicts},
-        "blocking": [
-            verdict.question_id
-            for verdict in verdicts
-            if verdict.question_id == "plan_conflicts_with_assessment"
-            and (verdict.value or 0.0) >= 0.5
-        ],
+        "blocking": blocking,
+        "information_gaps": information_gaps,
     }
 
 
@@ -288,22 +324,31 @@ ClassifierFactory = Callable[[dict[str, Any]], Any]
 def make_classifier_factory(
     *, api_key: str, model: str | None = None, timeout: float | None = None
 ) -> ClassifierFactory:
-    """返回一个长期存活的 classifier 工厂；连接池随实例复用。"""
+    """按**问题集合**缓存 classifier：Assess 与 Review 各自一个实例。
+
+    连接池复用与问题配置是两件事。只缓存一个实例会让第二次调用（Review）拿回
+    第一次（Assess）的问题，而 ``_verdicts`` 仍按 Review 的问题索要答案，于是
+    Review 必然缺答案。这里按问题 id 集合分别缓存，既复用连接池又保持配置正确。
+
+    同一问题集合始终得到同一实例，因此连接池不会被无谓地重建。
+    """
 
     from langchain_typesafe import TypeSafeClassifier
 
-    cache: dict[str, Any] = {}
+    cache: dict[frozenset[str], Any] = {}
 
     def factory(questions: dict[str, Any]) -> Any:
-        # 问题固定，因此只需要一个实例；连接池得以复用。
-        if "classifier" not in cache:
+        key = frozenset(questions)
+        if not key:
+            raise JevError("Jev 问题集合不能为空。")
+        if key not in cache:
             kwargs: dict[str, Any] = {"questions": questions, "api_key": api_key}
             if model is not None:
                 kwargs["model"] = model
             if timeout is not None:
                 kwargs["timeout"] = timeout
-            cache["classifier"] = TypeSafeClassifier(**kwargs)
-        return cache["classifier"]
+            cache[key] = TypeSafeClassifier(**kwargs)
+        return cache[key]
 
     return factory
 
@@ -313,12 +358,22 @@ async def jev_assess(
     *,
     classifier_factory: ClassifierFactory,
     questions: Sequence[Mapping[str, Any]] = ASSESS_QUESTIONS,
+    decision_context: Any | None = None,
 ) -> dict[str, Any]:
-    """对当前局面做结构化判断，供 DeepSeek 决策使用。"""
+    """对当前局面做结构化判断，供 DeepSeek 决策使用。
+
+    ``decision_context`` 非空时作为 TypeSafe 的 state，从而把规则正文、历史片段、
+    补读结果与目标一并交给判断（审查 R02：这些材料原本到不了模型）。
+    """
 
     classifier = classifier_factory(_build_questions(questions))
+    state = (
+        decision_context.as_dict()
+        if hasattr(decision_context, "as_dict")
+        else (decision_context if decision_context is not None else observation_state(observation))
+    )
     try:
-        response = await classifier.ainvoke(observation_state(observation))
+        response = await classifier.ainvoke(state)
     except JevError:
         raise
     except Exception as exc:  # noqa: BLE001 - 包装成可诊断的领域错误
@@ -336,10 +391,24 @@ async def jev_review(
     final_action: Any | None,
     classifier_factory: ClassifierFactory,
     questions: Sequence[Mapping[str, Any]] = REVIEW_QUESTIONS,
+    decision_context: Any | None = None,
 ) -> dict[str, Any]:
-    """审查候选行动/最终决定：风险、冲突与是否需要确认。"""
+    """审查候选行动/最终决定：证据是否支持、代价是否已知、风险与是否需要确认。
+
+    复核对象是**现实证据**，不只是"是否服从上一次 Jev 的方向"（审查 R10）。
+    因此这里同样把本次决定的材料交给复核。
+    """
+
+    context_payload: dict[str, Any] = {}
+    if decision_context is not None:
+        context_payload = (
+            decision_context.as_dict()
+            if hasattr(decision_context, "as_dict")
+            else dict(decision_context)
+        )
 
     state = {
+        **context_payload,
         "assessment": dict(assessment or {}),
         "candidates": [_candidate_payload(item) for item in candidates],
         "final_action": _candidate_payload(final_action) if final_action is not None else None,

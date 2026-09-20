@@ -69,8 +69,42 @@ class GameStart:
 
 
 @dataclass(frozen=True, slots=True)
+class DecisionRecord:
+    """一个回合内的**一次决定**（审查 R08）。
+
+    ``decision_id`` 与执行器用的身份同源，便于把日志与 Runtime operation 对上。
+    ``consequences`` 只写**行动之后新观察到**的事实；行动前算出的变化属于
+    ``important_changes``，两者不得互相冒充。
+    """
+
+    decision_id: str
+    our_state: OurState
+    opponents: tuple[OpponentState, ...] = ()
+    important_changes: tuple[str, ...] = ()
+    memory_used: tuple[str, ...] = ()
+    jev_assess: Iterable[str] = ()
+    deepseek_summary: Iterable[str] = ()
+    rule_queries: tuple[dict[str, Any], ...] = ()
+    candidates: Iterable[str] = ()
+    jev_review: Iterable[str] = ()
+    final_action: Iterable[str] = ()
+    execution: Iterable[str] = ()
+    consequences: Iterable[str] = ()
+    planning: str = ""
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.decision_id, str) or not self.decision_id.strip():
+            raise ValueError("decision_id 必须是非空字符串。")
+
+
+@dataclass(frozen=True, slots=True)
 class TurnRecord:
-    """一个回合的完整决策过程（v7 §9 的 Turn 小节）。"""
+    """一个回合的基本状态段（不含具体决定）。
+
+    保留这个类型是为了兼容既有的"一回合一条记录"用法；新的多决定流程请用
+    :meth:`GameMemoryWriter.append_turn_state` 与
+    :meth:`GameMemoryWriter.append_decision`。
+    """
 
     turn: int
     our_state: OurState
@@ -131,12 +165,105 @@ class GameMemoryWriter:
         return path
 
     def append_turn(self, path: Path, record: TurnRecord) -> Path:
-        """把一个回合追加到当前局文件末尾。"""
+        """把一个回合追加到当前局文件末尾（单决定兼容用法）。"""
 
         self._require_existing(path)
         with path.open("a", encoding="utf-8") as handle:
             handle.write("\n" + self._render_turn(record))
         return path
+
+    def append_turn_state(self, path: Path, record: TurnRecord) -> Path:
+        """写一个回合的**基本状态段**，随后用 ``append_decision`` 追加决定。
+
+        同一回合重复调用是幂等的：已存在的回合状态段不会再次写入（审查 R08：
+        恢复后重跑节点不应重复生成内容）。
+        """
+
+        self._require_existing(path)
+        existing = path.read_text(encoding="utf-8")
+        if self._has_turn_state(existing, record.turn):
+            return path
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write("\n" + self._render_turn_state(record))
+        return path
+
+    def append_decision(self, path: Path, turn: int, decision: DecisionRecord) -> Path:
+        """在一个回合下追加一个决定子段；同一 ``decision_id`` 只写一次。"""
+
+        self._require_existing(path)
+        if turn < 1:
+            raise ValueError("turn 必须从 1 开始。")
+        existing = path.read_text(encoding="utf-8")
+        if self._has_decision(existing, decision.decision_id):
+            return path
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(self._render_decision(turn, decision))
+        return path
+
+    def close_turn(self, path: Path, turn: int, *, advanced_to: int | None, note: str = "") -> Path:
+        """写回合收尾：明确是否真的推进（审查 R08：不能把未推进写成推进）。"""
+
+        self._require_existing(path)
+        if turn < 1:
+            raise ValueError("turn 必须从 1 开始。")
+        existing = path.read_text(encoding="utf-8")
+        if f"<!-- turn-close {turn} -->" in existing:
+            return path
+        outcome = (
+            f"已进入 Turn {advanced_to}" if advanced_to is not None else "本回合尚未推进"
+        )
+        lines = [
+            f"<!-- turn-close {turn} -->",
+            "",
+            f"### Turn {turn} 收尾",
+            "",
+            f"- {outcome}",
+        ]
+        if note.strip():
+            lines.append(f"- {note.strip()}")
+        lines.append("")
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write("\n".join(lines))
+        return path
+
+    def record_consequence(
+        self, path: Path, decision_id: str, observations: Iterable[str]
+    ) -> Path:
+        """把**行动之后新观察到**的结果挂到早先的决定上（审查 R08）。
+
+        只能引用已存在的 ``decision_id``：不能给一个没写过的决定倒填后果。
+        """
+
+        self._require_existing(path)
+        lines = [str(item) for item in observations]
+        if not lines:
+            return path
+        existing = path.read_text(encoding="utf-8")
+        if not self._has_decision(existing, decision_id):
+            raise ValueError(
+                f"决定 {decision_id} 尚未写入，不能为它记录后果；"
+                "后果只能追加到已发生的决定上。"
+            )
+        block = "\n".join(
+            [
+                "",
+                f"#### 对 Decision {decision_id} 的新增观察",
+                "",
+                *_bullets(lines),
+                "",
+            ]
+        )
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(block)
+        return path
+
+    @staticmethod
+    def _has_turn_state(text: str, turn: int) -> bool:
+        return f"<!-- turn-state {turn} -->" in text
+
+    @staticmethod
+    def _has_decision(text: str, decision_id: str) -> bool:
+        return f"<!-- decision {decision_id} -->" in text
 
     def finish_game(self, path: Path, *, result: str, end_turn: int) -> Path:
         """回填最终结果；不改动已追加的回合记录。"""
@@ -211,15 +338,102 @@ class GameMemoryWriter:
         lines.extend(f"| **{key}** | {_cell(values[key])} |" for key in _META_KEYS)
         return "\n".join(lines) + "\n"
 
-    def _render_turn(self, record: TurnRecord) -> str:
-        our = record.our_state
+    def _render_turn_state(self, record: TurnRecord) -> str:
+        """回合基本状态段：当时我方与已知对手的信息。"""
+
         lines = [
             "---",
             "",
+            f"<!-- turn-state {record.turn} -->",
+            "",
             f"## Turn {record.turn}",
             "",
-            "### 我方基本信息",
+            "### 当时我方基本信息",
             "",
+            *self._render_our_state(record.our_state),
+            "### 当时已知对手",
+            "",
+        ]
+        if record.opponents:
+            for opponent in record.opponents:
+                lines.extend(self._render_opponent(opponent))
+        else:
+            lines.extend(["> 未遇到任何其他文明，本回合不记录对手。", ""])
+        lines.extend(
+            [
+                "### 行动前已观察到的变化",
+                "",
+                *_bullets(record.important_changes),
+                "",
+                "### 长期目标",
+                "",
+                record.planning.strip() or "（未记录）",
+                "",
+            ]
+        )
+        return "\n".join(lines)
+
+    def _render_decision(self, turn: int, decision: DecisionRecord) -> str:
+        """一个决定子段：依据 / 候选 / Jev / 最终动作 / Runtime 回执 / 后果。"""
+
+        lines = [
+            f"<!-- decision {decision.decision_id} -->",
+            "",
+            f"### Decision {turn}-{decision.decision_id}",
+            "",
+            "#### 当时我方基本信息",
+            "",
+            *self._render_our_state(decision.our_state),
+        ]
+        if decision.opponents:
+            lines.extend(["#### 当时已知对手", ""])
+            for opponent in decision.opponents:
+                lines.extend(self._render_opponent(opponent))
+
+        lines.extend(
+            [
+                "#### 历史经验",
+                "",
+                *_bullets(decision.memory_used),
+                "",
+                "#### Jev Assess",
+                "",
+                *_bullets(decision.jev_assess),
+                "",
+                "#### Rule Search",
+                "",
+                *(self._render_rules(decision.rule_queries)),
+                "#### DeepSeek 决策摘要",
+                "",
+                *_bullets(decision.deepseek_summary),
+                "",
+                "#### 候选行动",
+                "",
+                *_numbered(decision.candidates),
+                "",
+                "#### Jev Review",
+                "",
+                *_bullets(decision.jev_review),
+                "",
+                "#### 最终行动",
+                "",
+                *_bullets(decision.final_action),
+                "",
+                "#### Runtime 执行结果",
+                "",
+                *_bullets(decision.execution),
+                "",
+                "#### 本决定后果",
+                "",
+                *_bullets(decision.consequences),
+                "",
+            ]
+        )
+        return "\n".join(lines)
+
+    @staticmethod
+    def _render_our_state(our: OurState) -> list[str]:
+        return [
             "| 字段 | 值 |",
             "| --- | --- |",
             f"| 文明 | {_cell(our.civilization)} |",
@@ -236,8 +450,21 @@ class GameMemoryWriter:
             f"| 当前市政 | {_cell(our.current_civic)} |",
             f"| 当前政府 | {_cell(our.government)} |",
             f"| 战争状态 | {_cell('、'.join(our.at_war_with) if our.at_war_with else UNKNOWN)} |",
-            f"| 胜利进度 | {_cell(our.score)} |",
+            # 审查 R08：这是游戏内总分，不是各胜利条件的进展，字段名必须如实。
+            f"| 总分（非胜利条件进度） | {_cell(our.score)} |",
             "",
+        ]
+
+    def _render_turn(self, record: TurnRecord) -> str:
+        our = record.our_state
+        lines = [
+            "---",
+            "",
+            f"## Turn {record.turn}",
+            "",
+            "### 我方基本信息",
+            "",
+            *self._render_our_state(our),
             "### 对手基本信息",
             "",
         ]

@@ -22,7 +22,7 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from civ_agent.memory import GameMemoryWriter, GameStart, TurnRecord
+from civ_agent.memory import DecisionRecord, GameMemoryWriter, GameStart, TurnRecord
 from civ_agent.memory.search import search_memory
 from civ_agent.observation import build_observation, diff
 from civ_agent.rules import search_rules
@@ -72,8 +72,8 @@ class GraphDeps:
     executor: Any | None = None
     """``civ_agent.execute.MutationExecutor``；``allow_mutation=True`` 时必需。"""
 
-    decision_turn: int = 0
-    """提交给 Runtime 的决策回合，用于 hash-bound intent 与 operation 记录。"""
+    decision_id: str = ""
+    """本次决定的身份（审查 R04）；operation_id 由它派生，不由参数内容派生。"""
 
     jev_assess_fn: Callable[..., Awaitable[dict[str, Any]]] | None = None
     jev_review_fn: Callable[..., Awaitable[dict[str, Any]]] | None = None
@@ -100,6 +100,18 @@ class GraphResources:
         if self.model is None:
             raise GraphError("缺少 model：deepseek_decide / deepseek_finalize 需要 ChatDeepSeek。")
         return self.model
+
+
+def _field_of(item: Any, name: str, default: str = "") -> Any:
+    """从对象或映射里取字段：检索结果两种形状都可能出现。"""
+
+    if isinstance(item, Mapping):
+        value = item.get(name, default)
+    else:
+        value = getattr(item, name, default)
+    if value is None:
+        return default
+    return value if isinstance(value, int) else str(value)
 
 
 def _observation_lookup(state: Any, key: str) -> Any:
@@ -130,12 +142,32 @@ def make_observe(deps: GraphDeps) -> Callable[[GraphState], Awaitable[dict[str, 
         unknown = tuple(getattr(observation, "unknown", ()) or ())
         return {
             "observation": observation,
+            # 审查 R07：Observation 是为日志紧凑做的投影；决定还需要可操作实体
+            # （单位、城市、待选项）。这里把 Runtime 事实原样留存，供决策材料使用。
+            "runtime_facts": _runtime_facts(context),
             "turn": observation.turn,
             "unknown": unknown,
             "important_changes": changes,
         }
 
     return observe
+
+
+def _runtime_facts(context: Any) -> dict[str, Any]:
+    """取出 Runtime 上下文里的域事实载荷，保留 unknown 与 coverage。"""
+
+    facts = context.get("facts") if isinstance(context, Mapping) else getattr(context, "facts", None)
+    if not isinstance(facts, Mapping):
+        return {}
+    payload: dict[str, Any] = {}
+    for name, holder in facts.items():
+        value = holder.get("value") if isinstance(holder, Mapping) else getattr(holder, "value", None)
+        entry: dict[str, Any] = {"value": value}
+        coverage = holder.get("coverage") if isinstance(holder, Mapping) else getattr(holder, "coverage", None)
+        if coverage is not None:
+            entry["coverage"] = coverage
+        payload[str(name)] = entry
+    return payload
 
 
 def make_retrieve_memory(deps: GraphDeps) -> Callable[[GraphState], Awaitable[dict[str, Any]]]:
@@ -184,6 +216,7 @@ def make_jev_assess(
     deps: GraphDeps, resources: GraphResources
 ) -> Callable[[GraphState], Awaitable[dict[str, Any]]]:
     async def jev_assess_node(state: GraphState) -> dict[str, Any]:
+        from civ_agent.decision import build_decision_context
         from civ_agent.nodes.jev import jev_assess
 
         observation = _observation_lookup(state, "observation")
@@ -191,7 +224,9 @@ def make_jev_assess(
             raise GraphError("jev_assess 需要先有 observation。")
         run = deps.jev_assess_fn or jev_assess
         result = await run(
-            observation, classifier_factory=resources.require_classifier_factory()
+            observation,
+            classifier_factory=resources.require_classifier_factory(),
+            decision_context=build_decision_context(state),
         )
         return {"jev_assess": result, "jev_review": None}
 
@@ -202,6 +237,7 @@ def make_deepseek_decide(
     deps: GraphDeps, resources: GraphResources
 ) -> Callable[[GraphState], Awaitable[dict[str, Any]]]:
     async def deepseek_decide_node(state: GraphState) -> dict[str, Any]:
+        from civ_agent.decision import build_decision_context
         from civ_agent.nodes.deepseek import deepseek_decide
 
         observation = _observation_lookup(state, "observation")
@@ -215,6 +251,7 @@ def make_deepseek_decide(
             observation=getattr(observation, "as_dict", lambda: observation)(),
             assessment=_observation_lookup(state, "jev_assess"),
             tools=_observation_lookup(state, "bound_tools"),
+            decision_context=build_decision_context(state),
         )
         candidates = tuple(getattr(result, "candidates", ()) or ())
         update: dict[str, Any] = {
@@ -247,18 +284,18 @@ def make_search_rules(deps: GraphDeps) -> Callable[[GraphState], Awaitable[dict[
         if not isinstance(query, str) or not query.strip():
             return {"rule_queries": ()}
         hits = deps.rule_search(query)
-        return {
-            "rule_queries": (
-                {
-                    "query": query,
-                    "result": "; ".join(
-                        f"{getattr(hit, 'doc', '')}#{getattr(hit, 'section', '')}"
-                        for hit in hits
-                    )
-                    or "无匹配规则",
-                },
-            )
-        }
+        # 保留正文（excerpt），而不是只留 doc#section：审查 P5 指出旧实现把答案
+        # 丢成了目录索引，模型拿到的不是规则内容。
+        payload = tuple(
+            {
+                "doc": _field_of(hit, "doc"),
+                "section": _field_of(hit, "section"),
+                "level": _field_of(hit, "level") or None,
+                "excerpt": _field_of(hit, "excerpt"),
+            }
+            for hit in hits
+        )
+        return {"rule_queries": ({"query": query, "hits": payload},)}
 
     return search_rules_node
 
@@ -271,7 +308,17 @@ def make_read_game_info(
         if not isinstance(query_name, str) or not query_name.strip():
             return {}
         arguments = _observation_lookup(state, "read_info_arguments") or {}
-        result = await deps.client.call(query_name, dict(arguments))
+        # 审查 R03：补读通路必须是**只读**的。权限来自 MCP 的 readOnlyHint，
+        # 未知分类默认拒绝——拒绝时把原因写回状态，而不是静默跳过。
+        try:
+            result = await deps.client.call_read_only(query_name, dict(arguments))
+        except Exception as exc:  # noqa: BLE001 - 拒绝也是一种需要记录的事实
+            extra = dict(_observation_lookup(state, "extra_facts") or {})
+            extra[query_name] = {
+                "refused": True,
+                "reason": f"{type(exc).__name__}: {exc}",
+            }
+            return {"extra_facts": extra}
         extra = dict(_observation_lookup(state, "extra_facts") or {})
         extra[query_name] = result
         return {"extra_facts": extra}
@@ -346,7 +393,25 @@ def make_execute(deps: GraphDeps) -> Callable[[GraphState], Awaitable[dict[str, 
                 "提交 mutation。用 civ_agent.execute.MutationExecutor 装配。"
             )
 
-        outcome = await executor.submit(action, decision_turn=deps.decision_turn)
+        # 审查 R05：提交必须绑定"本次决定所依据的观察回合"，而不是一个静态依赖。
+        # 这里读 state["turn"]（observe 已写入），不再使用 deps.decision_turn。
+        decision_turn = _observation_lookup(state, "turn")
+        if not isinstance(decision_turn, int) or decision_turn < 0:
+            raise GraphError(
+                "execute 需要 state['turn'] 作为决策回合；observe 必须先成功写入它。"
+                f"实际得到：{decision_turn!r}"
+            )
+
+        decision_id = str(_observation_lookup(state, "decision_id") or deps.decision_id or "")
+        if not decision_id.strip():
+            raise GraphError(
+                "execute 缺少 decision_id；操作身份必须以决定为单位（审查 R04），"
+                "不能由参数内容派生。"
+            )
+
+        outcome = await executor.submit(
+            action, decision_id=decision_id, decision_turn=decision_turn
+        )
         update: dict[str, Any] = {
             "execution": outcome.execution,
             "pending_decision": (
@@ -398,37 +463,78 @@ def make_append_game_memory(deps: GraphDeps) -> Callable[[GraphState], Awaitable
             if seed is None:
                 raise GraphError("append_game_memory 缺少 memory_file 或 seed。")
             path = writer.create_game(
-                GameStart(benchmark_save=seed.benchmark_save, civilization=seed.civilization, leader=seed.leader)
+                GameStart(
+                    benchmark_save=seed.benchmark_save,
+                    civilization=seed.civilization,
+                    leader=seed.leader,
+                )
+            )
+
+        turn = int(_observation_lookup(state, "turn") or 0)
+        decision_id = str(_observation_lookup(state, "decision_id") or "")
+        if turn < 1 or not decision_id:
+            raise GraphError(
+                "append_game_memory 需要 turn 与 decision_id：Memory 以决定为单位记录。"
             )
 
         observation = _observation_lookup(state, "observation")
         execution = _observation_lookup(state, "execution")
-        record = TurnRecord(
-            turn=int(_observation_lookup(state, "turn") or 0),
-            our_state=getattr(observation, "our_state", None),
-            opponents=tuple(getattr(observation, "opponents", ()) or ()),
-            important_changes=tuple(_observation_lookup(state, "important_changes") or ()),
-            memory_used=tuple(
-                f"{hit.game_id} / Turn {hit.turn}：{hit.excerpt[:80]}"
-                for hit in (_observation_lookup(state, "memory_hits") or ())
+        our_state = getattr(observation, "our_state", None)
+        if our_state is None:
+            raise GraphError("append_game_memory 需要 observation.our_state。")
+
+        # 先写回合状态段（幂等），再写这个决定的子段（幂等）。
+        writer.append_turn_state(
+            path,
+            TurnRecord(
+                turn=turn,
+                our_state=our_state,
+                opponents=tuple(getattr(observation, "opponents", ()) or ()),
+                important_changes=tuple(_observation_lookup(state, "important_changes") or ()),
+                planning=str(_observation_lookup(state, "long_term_goal") or ""),
             ),
-            jev_assess=tuple(_summary_lines(_observation_lookup(state, "jev_assess"))),
-            deepseek_summary=(str(_observation_lookup(state, "deepseek_summary") or ""),),
-            rule_queries=tuple(_observation_lookup(state, "rule_queries") or ()),
-            candidates=tuple(
-                f"{item.tool}({item.arguments})" for item in (_observation_lookup(state, "candidates") or ())
-            ),
-            jev_review=tuple(_summary_lines(_observation_lookup(state, "jev_review"))),
-            final_action=(
-                f"{_observation_lookup(state, 'final_action').tool}"
-                if _observation_lookup(state, "final_action") is not None
-                else "（无）",
-            ),
-            execution=(_execution_line(execution),),
-            consequences=tuple(_observation_lookup(state, "important_changes") or ()),
-            planning=str(_observation_lookup(state, "long_term_goal") or ""),
         )
-        writer.append_turn(path, record)
+        writer.append_decision(
+            path,
+            turn,
+            DecisionRecord(
+                decision_id=decision_id,
+                our_state=our_state,
+                opponents=tuple(getattr(observation, "opponents", ()) or ()),
+                important_changes=tuple(_observation_lookup(state, "important_changes") or ()),
+                memory_used=tuple(
+                    f"{hit.game_id} / Turn {hit.turn}：{hit.excerpt[:80]}"
+                    for hit in (_observation_lookup(state, "memory_hits") or ())
+                ),
+                jev_assess=tuple(_summary_lines(_observation_lookup(state, "jev_assess"))),
+                deepseek_summary=(str(_observation_lookup(state, "deepseek_summary") or ""),),
+                rule_queries=tuple(_observation_lookup(state, "rule_queries") or ()),
+                candidates=tuple(
+                    f"{item.tool}({item.arguments})"
+                    for item in (_observation_lookup(state, "candidates") or ())
+                ),
+                jev_review=tuple(_summary_lines(_observation_lookup(state, "jev_review"))),
+                final_action=(
+                    f"{_observation_lookup(state, 'final_action').tool}"
+                    if _observation_lookup(state, "final_action") is not None
+                    else "（无）",
+                ),
+                execution=(_execution_line(execution),),
+                # 审查 R08：行动前算出的 important_changes **不是**本次行动的后果。
+                # 真正的后果要等下一次观察，由 record_consequence 追加。
+                consequences=(),
+                planning=str(_observation_lookup(state, "long_term_goal") or ""),
+            ),
+        )
+
+        # 若本次观察看到了上一个决定的实际后果，就把它挂到那个决定上。
+        pending = _observation_lookup(state, "observe_for_decision")
+        if isinstance(pending, Mapping):
+            previous_id = str(pending.get("decision_id") or "")
+            observed = tuple(pending.get("observations") or ())
+            if previous_id and observed:
+                writer.record_consequence(path, previous_id, observed)
+
         return {"memory_file": path}
 
     return append_game_memory_node
