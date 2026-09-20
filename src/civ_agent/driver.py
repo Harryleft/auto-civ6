@@ -111,9 +111,12 @@ class WholeGameDriver:
         turn_seconds: float = DEFAULT_TURN_SECONDS,
         game_over_reader: Callable[[], Awaitable[dict[str, Any]]] | None = None,
         start_turn: int = 1,
+        max_decisions_per_turn: int = 8,
     ) -> None:
         if max_turns < 1:
             raise ValueError("max_turns 必须是正整数。")
+        if max_decisions_per_turn < 1:
+            raise ValueError("max_decisions_per_turn 必须是正整数。")
         if turn_seconds <= 0:
             raise ValueError("turn_seconds 必须为正数。")
         # execute 必须能提交：整局驱动本身就是"允许动作"的那一层。
@@ -136,6 +139,7 @@ class WholeGameDriver:
         self._executor = executor
         self._seed = seed
         self._max_turns = max_turns
+        self._max_decisions_per_turn = max_decisions_per_turn
         self._turn_seconds = turn_seconds
         self._game_over_reader = game_over_reader
         self._turn = start_turn
@@ -198,10 +202,16 @@ class WholeGameDriver:
                 self._turn += 1
                 continue
             # 没有推进也没有阻塞：本次决定没做事，继续同一回合再试一次，
-            # 但要避免无限空转——用决策数上限兜底。
-            if len(report.decisions) >= self._max_turns * 4:
+            # 但要避免无限空转——用**同回合决策数**上限兜底（按回合重置）。
+            decisions_this_turn = sum(
+                1 for item in report.decisions if item.turn == self._turn
+            )
+            if decisions_this_turn >= self._max_decisions_per_turn:
                 report.outcome = RunOutcome.STOPPED
-                report.note = "同一回合内决策次数超过上限，停止以避免空转。"
+                report.note = (
+                    f"同一回合（Turn {self._turn}）内已做 {decisions_this_turn} 次决策"
+                    "仍无推进，停止以避免空转。"
+                )
                 report.note += self._game_over_caveat()
                 break
 
