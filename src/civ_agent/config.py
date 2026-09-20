@@ -76,10 +76,79 @@ def _resolve(environ: Mapping[str, str], name: str) -> tuple[str, str]:
     )
 
 
-def load_config(environ: Mapping[str, str] | None = None) -> AgentConfig:
-    """读取并校验凭据；缺任何一个都直接失败，不返回半可用配置。"""
+def shell_environ() -> dict[str, str]:
+    """当前环境 + 登录 shell 里导出的凭据（不打印任何值）。
 
-    source = os.environ if environ is None else environ
+    ``uv run`` / pytest 等非交互进程不会 source ``~/.zshrc``，因此用户在 shell
+    里 export 的 key 对脚本不可见。这里用登录 shell 取一次；取不到就退回当前
+    环境，仍然由 :func:`load_config` fail-fast。
+
+    只读取本模块声明的这几个变量，不把整个登录环境灌进当前进程。
+    """
+
+    merged = dict(os.environ)
+    wanted = sorted({name for names in _KEY_SOURCES.values() for name in names})
+    missing = [name for name in wanted if not _clean(merged, name)]
+    if not missing:
+        return merged
+
+    import shutil
+    import subprocess
+
+    shell = os.environ.get("SHELL") or "/bin/zsh"
+    if not os.path.exists(shell):
+        shell = shutil.which("zsh") or shutil.which("bash") or ""
+    if not shell:
+        return merged
+
+    # -l 走登录 shell，-i 让 .zshrc 生效。用唯一的开始/结束标记包住，避免
+    # shell 自身或 rc 文件的输出混进值里。不用 f-string，避免 ${...} 与 {} 冲突。
+    marker = "__CIV6_ENV__"
+    names = " ".join(missing)
+    script = (
+        'printf "%s\\n" "' + marker + '"; '
+        "for __n in " + names + "; do "
+        'eval "__v=\\${$__n}"; printf "%s\\t%s\\n" "$__n" "$__v"; '
+        "done; "
+        'printf "%s\\n" "' + marker + '"'
+    )
+    try:
+        completed = subprocess.run(
+            [shell, "-lic", script],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return merged
+
+    # 只解析两个标记之间的内容；其余（rc 文件的问候语等）一律忽略。
+    payload: list[str] = []
+    inside = False
+    for line in completed.stdout.splitlines():
+        if line.strip() == marker:
+            inside = not inside
+            continue
+        if inside:
+            payload.append(line)
+
+    for line in payload:
+        name, _, value = line.partition("\t")
+        if name.strip() in wanted and value:
+            merged[name.strip()] = value
+    return merged
+
+
+def load_config(environ: Mapping[str, str] | None = None) -> AgentConfig:
+    """读取并校验凭据；缺任何一个都直接失败，不返回半可用配置。
+
+    ``environ`` 为 ``None`` 时除了当前进程环境，还会尝试从登录 shell 里取
+    （见 :func:`shell_environ`）。脚本经 ``uv run`` 启动时不会自动继承
+    ``~/.zshrc`` 里 export 的变量，而用户正是把 key 放在那里。
+    """
+
+    source = shell_environ() if environ is None else environ
     missing = [
         name
         for name in _KEY_SOURCES
