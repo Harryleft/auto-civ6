@@ -20,6 +20,9 @@ dependencies = [
     "mcp>=1.20",
     "fastapi[standard]>=0.128",
     "anthropic>=0.84.0",
+    "langgraph>=1.2.11",
+    "langchain-deepseek>=1.1.0",
+    "langchain-typesafe==0.0.1a2",
 ]
 
 [project.optional-dependencies]

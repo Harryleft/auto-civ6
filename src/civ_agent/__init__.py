@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+from civ_agent.config import AgentConfig, MissingCredentialError, load_config
 from civ_agent.graph import build_graph
 from civ_agent.observation import Observation, OpponentState, build_observation
 from civ_agent.state import (
@@ -21,15 +22,18 @@ from civ_agent.state import (
 )
 
 __all__ = [
+    "AgentConfig",
     "CandidateAction",
     "ExecutionResult",
     "ExecutionStatus",
     "GraphState",
     "MemoryHit",
+    "MissingCredentialError",
     "Observation",
     "OpponentState",
     "Seed",
     "build_graph",
     "build_observation",
+    "load_config",
     "new_state",
 ]
