@@ -1,0 +1,272 @@
+#!/usr/bin/env python3
+"""civ6_run — 从基准存档跑一局（v7 launcher + 整局驱动）。
+
+一条命令完成：安装基准存档 → 启动游戏 → 读档 → 拉起 Runtime server 子进程 →
+运行 LangGraph 循环 → 追加 Game Memory。
+
+用法：
+
+    uv run python scripts/civ6_run                 # 完整跑（最多 50 回合）
+    uv run python scripts/civ6_run --turns 2       # 只跑 2 回合（纵向验收）
+    uv run python scripts/civ6_run --dry-run       # 只做前置检查，不进游戏
+    uv run python scripts/civ6_run --no-launch     # 游戏已在运行，跳过启动
+    uv run python scripts/civ6_run --observe-only  # 只读一次状态并退出
+
+安全约束：
+
+- FireTuner 只允许一个客户端。本脚本独占它；运行期间不要另开 MCP 客户端。
+- Runtime **不**负责启动与读档，因此这些步骤在本脚本里显式完成。
+- ``--dry-run`` 不启动游戏、不连接 FireTuner、不调用模型。
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import logging
+import sys
+from datetime import datetime
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO / "src"))
+
+log = logging.getLogger("civ6_run")
+
+DEFAULT_BENCHMARK = "benchmark_start"
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="从固定基准存档跑一局《文明 VI》（Jev + DeepSeek + LangGraph + Runtime）",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--benchmark", default=DEFAULT_BENCHMARK, help="读档用的存档名（不含 .Civ6Save）")
+    parser.add_argument("--source-name", default=None, help="基准存档源文件名（默认按 D1 的约定名）")
+    parser.add_argument("--branch", default=None, help="Runtime branch token（默认按时间生成）")
+    parser.add_argument("--store", default=None, help="Runtime operation store 的 SQLite 路径")
+    parser.add_argument("--turns", type=int, default=50, help="回合上限（默认 50，冒烟边界）")
+    parser.add_argument("--turn-seconds", type=float, default=180.0, help="单回合墙钟上限（默认 180s）")
+    parser.add_argument("--model", default=None, help="DeepSeek 模型名（默认 deepseek-chat）")
+    parser.add_argument("--no-launch", action="store_true", help="游戏已在运行，跳过启动与读档")
+    parser.add_argument("--observe-only", action="store_true", help="只读一次游戏状态并退出")
+    parser.add_argument("--dry-run", action="store_true", help="只做前置检查，不启动游戏、不调用模型")
+    parser.add_argument("--memory-dir", default=None, help="Game Memory 目录（默认 memory/games）")
+    parser.add_argument("-v", "--verbose", action="store_true", help="输出调试日志")
+    return parser
+
+
+def _check_phase(args: argparse.Namespace) -> dict[str, object]:
+    """前置检查：存档、凭据、端口。全部只读。"""
+
+    from civ_agent.benchmark import (
+        ASCII_SAVE_NAME,
+        DEFAULT_SOURCE_NAME,
+        install_benchmark_save,
+        save_dir,
+    )
+
+    report: dict[str, object] = {}
+    source_name = args.source_name or DEFAULT_SOURCE_NAME
+    target_name = args.benchmark or ASCII_SAVE_NAME
+    directory = save_dir()
+    report["save_dir"] = str(directory)
+    report["benchmark_source"] = source_name
+    report["benchmark_target"] = target_name
+
+    install = install_benchmark_save(
+        directory=directory, source_name=source_name, target_name=target_name
+    )
+    report["benchmark_path"] = str(install.path)
+    report["benchmark_installed"] = install.installed
+    report["benchmark_identical"] = install.identical_to_source
+
+    from civ_agent.config import MissingCredentialError, load_config
+
+    try:
+        config = load_config()
+        report["config"] = config.masked()
+    except MissingCredentialError as exc:
+        report["config_error"] = str(exc)
+    return report
+
+
+async def _install_and_load(args: argparse.Namespace) -> None:
+    """启动游戏并读档（Runtime 不负责这两件事）。"""
+
+    from civ_mcp.connection import GameConnection
+    from civ_mcp.game_launcher import _is_tuner_port_open, _launch_game_sync
+    from civ_mcp.game_lifecycle import load_save_from_frontend
+
+    if not _is_tuner_port_open():
+        log.info("FireTuner 4318 未监听：启动游戏（可能需要 1-3 分钟）")
+        await asyncio.to_thread(_launch_game_sync)
+    else:
+        log.info("FireTuner 4318 已在监听：认为游戏已运行")
+
+    conn = GameConnection()
+    await conn.connect()
+    try:
+        if getattr(conn, "gamecore_index", None) is not None and getattr(
+            conn, "ingame_index", None
+        ) is not None:
+            log.info("已在游戏内：跳过读档")
+            return
+        log.info("在主菜单：经 Civ VI FrontEnd API 载入 %s", args.benchmark)
+        result = await load_save_from_frontend(conn, args.benchmark)
+        log.info("读档结果：%s", result)
+        if result.startswith(("Error", "ERR")):
+            raise SystemExit(f"读档失败：{result}")
+    finally:
+        await conn.disconnect()
+
+
+async def _observe_only(args: argparse.Namespace, deps_factory) -> dict[str, object]:
+    from civ_agent.driver import observe_once
+    from civ_agent.mcp_client import runtime_session
+
+    async with runtime_session(
+        branch_token=args.branch, store_path=args.store
+    ) as client:
+        from civ_agent.graph import GraphDeps
+
+        observation, context = await observe_once(GraphDeps(client=client))
+        unknown = getattr(observation, "unknown", ())
+        return {
+            "turn": observation.turn,
+            "civilization": observation.our_state.civilization,
+            "leader": observation.our_state.leader,
+            "cities": observation.our_state.cities,
+            "opponents": [item.civilization for item in observation.opponents],
+            "unknown": list(unknown),
+            "fact_names": sorted(context.get("facts", {})),
+        }
+
+
+async def _run_game(args: argparse.Namespace) -> dict[str, object]:
+    """装配真实依赖并跑整局。"""
+
+    from civ_agent.config import load_config
+    from civ_agent.driver import WholeGameDriver
+    from civ_agent.execute import MutationExecutor
+    from civ_agent.graph import GraphDeps, GraphResources
+    from civ_agent.memory import GameMemoryWriter
+    from civ_agent.mcp_client import runtime_session
+    from civ_agent.nodes.deepseek import (
+        DEFAULT_MODEL,
+        build_agent_tools,
+        make_model,
+    )
+    from civ_agent.nodes.jev import make_classifier_factory
+    from civ_agent.observation import build_observation
+    from civ_agent.state import Seed
+
+    config = load_config()
+    model = make_model(api_key=config.deepseek_api_key, model=args.model or DEFAULT_MODEL)
+    classifier_factory = make_classifier_factory(api_key=config.typesafe_api_key)
+    writer = GameMemoryWriter(
+        Path(args.memory_dir) if args.memory_dir else None
+    )
+
+    async with runtime_session(branch_token=args.branch, store_path=args.store) as client:
+        # 事实先读一次：既用于自检，也用于确定 Seed 与起始回合。
+        context = await client.read_context()
+        observation = build_observation(context)
+        seed = Seed(
+            benchmark_save=f"{args.benchmark}.Civ6Save",
+            branch_token=args.branch,
+            game_id=f"{observation.our_state.civilization}-{observation.turn}",
+            civilization=observation.our_state.civilization,
+            leader=observation.our_state.leader,
+        )
+        log.info(
+            "起始状态：Turn %s · %s/%s · 城市 %s · 对手 %s",
+            observation.turn,
+            seed.civilization,
+            seed.leader,
+            observation.our_state.cities,
+            [item.civilization for item in observation.opponents] or "（尚未遇到）",
+        )
+
+        # 工具动态发现一次，绑定给模型（D5：不手写包装层）。
+        specs = await client.list_tools()
+        tools = build_agent_tools(specs, client)
+        log.info("Runtime 工具 %d 个（含控制面元工具）", len(tools))
+
+        executor = MutationExecutor(client)
+        deps = GraphDeps(
+            client=client,
+            memory_writer=writer,
+            record_turns=True,
+        )
+        resources = GraphResources(classifier_factory=classifier_factory, model=model)
+        driver = WholeGameDriver(
+            deps=deps,
+            resources=resources,
+            executor=executor,
+            seed=seed,
+            max_turns=args.turns,
+            turn_seconds=args.turn_seconds,
+            start_turn=observation.turn,
+        )
+        report = await driver.run()
+        return report.summary()
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+    )
+
+    if not args.branch:
+        args.branch = f"bench-{datetime.now():%Y%m%d-%H%M%S}"
+
+    print("=" * 64)
+    print("civ6_run" + ("（dry-run）" if args.dry_run else ""))
+    print("=" * 64)
+
+    try:
+        check = _check_phase(args)
+    except Exception as exc:  # noqa: BLE001 - 前置检查失败必须给出可读原因
+        print(f"前置检查失败：{type(exc).__name__}: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(check, ensure_ascii=False, indent=2))
+    # --observe-only 不调用任何模型，因此不要求凭据；只有真正跑决策才 fail-fast。
+    needs_credentials = not args.dry_run and not args.observe_only
+    if "config_error" in check and needs_credentials:
+        print(f"\n凭据缺失，无法继续：\n{check['config_error']}", file=sys.stderr)
+        return 2
+    if args.dry_run:
+        print("\ndry-run 完成：未启动游戏、未连接 FireTuner、未调用模型。")
+        return 0
+
+    try:
+        if not args.no_launch:
+            asyncio.run(_install_and_load(args))
+        if args.observe_only:
+            summary = asyncio.run(_observe_only(args, None))
+            print("\n只读观察：")
+            print(json.dumps(summary, ensure_ascii=False, indent=2))
+            return 0
+        summary = asyncio.run(_run_game(args))
+    except KeyboardInterrupt:
+        print("\n被中断：未完成的回合不会写入 Game Memory。", file=sys.stderr)
+        return 130
+    except Exception as exc:  # noqa: BLE001
+        print(f"\n运行失败：{type(exc).__name__}: {exc}", file=sys.stderr)
+        if args.verbose:
+            import traceback
+
+            traceback.print_exc()
+        return 1
+
+    print("\n运行结束：")
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

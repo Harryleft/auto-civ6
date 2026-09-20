@@ -379,3 +379,63 @@ M01 后需一并删除该节，否则 mutation 配置悬空。
   离线部分已由上述回归测试覆盖。
 - **"敌方回合不调模型"是错的**（原方案 M14）：外交回应可能发生在对手处理阶段，
   仍需模型决策。该规则改为"只有 Runtime 明确要求时才调用模型"。
+
+---
+
+## 8. launcher 与整局驱动（B 阶段）
+
+审查 §六 的路径要求先有可复现的入口，再加真实长局。本轮补齐两件：
+
+### 8.1 `scripts/civ6_run`
+
+一条命令完成：安装基准存档 → 启动游戏 → 读档 → 拉起 Runtime server 子进程 →
+运行 LangGraph → 追加 Game Memory。Runtime 本身不负责启动与读档，因此这两步在
+脚本里显式完成。
+
+| 参数 | 作用 |
+|---|---|
+| `--turns N` | 回合上限（默认 50，D9 冒烟边界） |
+| `--turn-seconds S` | 单回合墙钟（默认 180s，O4） |
+| `--dry-run` | 只做前置检查：不启动游戏、不连 FireTuner、不调模型 |
+| `--observe-only` | 只读一次真实状态；**不要求凭据**（不调用模型） |
+| `--no-launch` | 游戏已在运行，跳过启动与读档 |
+| `--branch` / `--store` | Runtime branch token 与 operation store 路径 |
+
+### 8.2 `src/civ_agent/benchmark.py`（D1）
+
+把 `吉尔伽美什_turn_1.Civ6Save` 安装为 ASCII 名 `benchmark_start.Civ6Save`。
+**不放宽**读档入口的存档名正则——那条正则是防 Lua 注入的，复制副本不触碰它。
+目标已存在且内容一致时复用；内容不同则**报错而不是覆盖**（可能是用户的进度）。
+
+### 8.3 `src/civ_agent/driver.py`（审查 R09 的整局负责人）
+
+按 Runtime 真实状态分派，只判断运行状态、不判断国家战略：
+
+```text
+读取游戏状态
+  ├─ 终局读取器缺失（D3 未实现）→ 明确报 GAME_OVER_UNSUPPORTED，不猜终局
+  ├─ 游戏终局                    → 记胜负，停止
+  ├─ 等待选择                    → 保留待选项，留在同一回合继续决策
+  └─ 我方可行动                  → 一次完整决策（新 decision_id）
+```
+
+- 每次决策都是**新的 decision_id**，单回合墙钟超时标记为**未完成**而非已推进。
+- 终局读取器未接线时**拒绝宣称跑到终局**，这正是审查 R09 要求的诚实口径。
+- 回合推进仍由 Runtime 的 `TurnLoop` 负责，不另造等待程序。
+
+### 8.4 凭据来源
+
+用户把 key 放在 `~/.zshrc`，而 `uv run` 等非交互进程不会 source 它。因此
+`civ_agent.config.shell_environ()` 会用登录 shell 取一次（只取本模块声明的变量，
+用标记包围输出避免 rc 噪声，绝不回显值），取不到仍由 `load_config` fail-fast。
+
+### 8.5 已验证 / 未验证
+
+- **已用真实游戏验证**：`--dry-run` 前置检查；`--observe-only` 读到 Turn 1、
+  苏美尔/吉尔伽美什、11 个域事实、对手为空、unknown 为空。真实读档经
+  `load_save_from_frontend`（FrontEnd API，无 OCR）成功进入游戏。
+- **离线已验证**：`tests/test_civ_agent_driver.py` 覆盖存档安装（含拒绝覆盖与
+  拒绝非法名）、回合上限、终局读取、待选阻塞、超时标记、mutation 使能。
+- **未验证**：真实双模型的两回合纵向验收。**当前缺 `DEEPSEEK_API_KEY`**
+  （`JEV_API_KEY` 可从 `~/.zshrc` 读到）。缺它时脚本在有凭据需求的分支上
+  fail-fast，不做降级。
