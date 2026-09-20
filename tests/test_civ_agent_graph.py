@@ -124,7 +124,10 @@ def _run_chain(**deps_overrides: Any) -> tuple[dict[str, Any], FakeClassifier, F
 
     async def scenario() -> dict[str, Any]:
         async with create_connected_server_and_client_session(server) as session:
-            deps = GraphDeps(client=RuntimeClient(session), **deps_overrides)
+            # 隔离：不读真实 memory/games，否则本机跑过 civ6_run 后测试会互相污染。
+            overrides = {"memory_search": lambda *a, **k: ()}
+            overrides.update(deps_overrides)
+            deps = GraphDeps(client=RuntimeClient(session), **overrides)
             graph = build_graph(deps, resources)
             return await graph.ainvoke(new_state(seed=_seed(), turn=1))
 

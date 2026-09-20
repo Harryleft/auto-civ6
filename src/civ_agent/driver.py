@@ -21,7 +21,7 @@ observe。因此这里放一个**按 Runtime 真实状态分派**的负责人：
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
@@ -141,6 +141,8 @@ class WholeGameDriver:
         self._turn = start_turn
         self._memory_file: Any | None = None
         self._pending: dict[str, Any] | None = None
+        self._game_over_error: str = ""
+        self._game_over_read_failures: int = 0
         self._graph = build_graph(self._deps, self._resources)
 
     @property
@@ -159,21 +161,26 @@ class WholeGameDriver:
             if report.turns_completed >= self._max_turns:
                 report.outcome = RunOutcome.TURN_LIMIT
                 report.note = f"达到回合上限 {self._max_turns}（冒烟边界，不是终局）。"
+                report.note += self._game_over_caveat()
                 break
 
             game_over = await self._read_game_over()
             if game_over is not None:
-                if game_over.get("supported") is False:
+                if game_over.get("supported") is False and not game_over.get("transient"):
+                    # 接线缺口：没有终局信号就不该假装在跑整局。
                     report.outcome = RunOutcome.GAME_OVER_UNSUPPORTED
                     report.note = (
-                        "Runtime 尚无 game over 读取（D3 未实现），"
-                        "因此本次不能宣称跑到真实终局。"
+                        "Runtime 未提供 game over 读取；没有终局信号时无法区分"
+                        '"跑到上限"与"游戏结束"，因此本次不宣称整局。'
                     )
                     break
                 if game_over.get("is_over"):
                     report.outcome = RunOutcome.GAME_OVER
                     report.note = str(game_over.get("result") or "游戏结束")
                     break
+                if game_over.get("transient"):
+                    # 可恢复失败：继续跑，但记下来，结束时不声称跑到终局。
+                    self._game_over_read_failures += 1
 
             outcome = await self._run_one_decision()
             report.decisions.append(outcome)
@@ -195,19 +202,54 @@ class WholeGameDriver:
             if len(report.decisions) >= self._max_turns * 4:
                 report.outcome = RunOutcome.STOPPED
                 report.note = "同一回合内决策次数超过上限，停止以避免空转。"
+                report.note += self._game_over_caveat()
                 break
 
         return report
 
-    async def _read_game_over(self) -> dict[str, Any] | None:
-        """读取终局状态；未接线时返回 ``{"supported": False}`` 而不是猜。"""
+    def _game_over_caveat(self) -> str:
+        """结束原因里必须带上终局信号的读取状态，不能让人误以为跑到了终局。"""
 
-        if self._game_over_reader is None:
+        if self._game_over_read_failures == 0:
+            return ""
+        detail = f"（最近错误：{self._game_over_error}）" if self._game_over_error else ""
+        return (
+            f" 注意：本次有 {self._game_over_read_failures} 次终局读取失败，"
+            f"未取得终局信号，因此不能声称这条路径已验证到 Game Over。{detail}"
+        )
+
+    async def _read_game_over(self) -> dict[str, Any] | None:
+        """读取终局状态。
+
+        三种情况必须分开（审查 R09）：
+
+        - ``supported=True`` + ``is_over``：Runtime 给了权威信号，据此收尾；
+        - ``supported=False`` 且**未接线**：接线缺口，驱动拒绝开跑——没有终局信号
+          就无法区分"跑到上限"与"游戏结束"；
+        - ``supported=False`` 但**已接线却临时读不到**：可恢复的读取失败。驱动
+          继续跑并把失败如实记进报告；此时结束原因只会是回合上限或超时，note 会
+          说明"未取得终局信号"，绝不声称跑到真实终局。
+        """
+
+        if self._game_over_reader is not None:
+            try:
+                return await self._game_over_reader()
+            except Exception as exc:  # noqa: BLE001 - 读不到终局不等于游戏结束
+                self._game_over_error = f"{type(exc).__name__}: {exc}"
+                return {"supported": False, "transient": True, "error": self._game_over_error}
+
+        reader = getattr(self._deps.client, "read_game_over", None)
+        if reader is None:
+            # 真正的接线缺口：Runtime 没有这个工具。
             return {"supported": False}
         try:
-            return await self._game_over_reader()
-        except Exception as exc:  # noqa: BLE001 - 读不到终局不等于游戏结束
-            return {"supported": False, "error": f"{type(exc).__name__}: {exc}"}
+            normalized = _normalize_game_over(await reader())
+        except Exception as exc:  # noqa: BLE001
+            self._game_over_error = f"{type(exc).__name__}: {exc}"
+            return {"supported": False, "transient": True, "error": self._game_over_error}
+        if normalized.get("supported") is False:
+            self._game_over_error = str(normalized.get("error") or "")
+        return normalized
 
     async def _run_one_decision(self) -> TurnOutcome:
         """一次决策：新 decision_id，单回合墙钟上限。"""
@@ -256,6 +298,50 @@ class WholeGameDriver:
             execution_status=getattr(execution, "status", None),
             pending_decision=final.get("pending_decision"),
         )
+
+
+def _normalize_game_over(payload: Any) -> dict[str, Any]:
+    """把 ``get_game_over`` 的 JSON 归一成驱动需要的形状。
+
+    字段名固定为驱动自己的 ``is_over`` / ``won`` / ``result``；缺字段就是缺字段，
+    不用默认值伪造"未结束"。
+    """
+
+    if not isinstance(payload, Mapping):
+        return {"supported": False, "error": f"意外的 game over 载荷：{type(payload).__name__}"}
+    # 兼容读模型是 CivReadResult（含 value）或已展开的载荷。
+    body = payload.get("value") if isinstance(payload.get("value"), Mapping) else payload
+    is_over = body.get("is_game_over")
+    if not isinstance(is_over, bool):
+        return {
+            "supported": False,
+            "error": "game over 读取未返回布尔 is_game_over；不据此判断终局。",
+        }
+    is_defeat = body.get("is_defeat")
+    winner = str(body.get("winner_name") or "")
+    victory = str(body.get("victory_type") or "")
+    if not is_over:
+        # 未结束就没有胜负可言；result 不能写成"胜利"。
+        return {
+            "supported": True,
+            "is_over": False,
+            "won": None,
+            "victory_type": victory,
+            "result": "游戏进行中",
+        }
+    if is_defeat:
+        result = f"败局（{winner or '未知对手'}）"
+    else:
+        result = f"胜利（{winner or '我方'}）"
+    if victory:
+        result += f" · {victory}"
+    return {
+        "supported": True,
+        "is_over": True,
+        "won": (not is_defeat) if isinstance(is_defeat, bool) else None,
+        "victory_type": victory,
+        "result": result,
+    }
 
 
 async def observe_once(deps: GraphDeps) -> tuple[Any, dict[str, Any]]:

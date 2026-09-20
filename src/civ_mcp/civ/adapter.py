@@ -74,6 +74,7 @@ from civ_mcp.lua.models import (
     DedicationStatus,
     EnvoyStatus,
     GameOverview,
+    GameOverStatus,
     GreatPersonInfo,
     GovernmentChoice,
     GovernmentStatus,
@@ -100,8 +101,10 @@ from civ_mcp.lua.models import (
 from civ_mcp.lua.map import build_wonder_advisor_query, parse_wonder_advisor_response
 from civ_mcp.lua.overview import (
     build_game_identity_query,
+    build_gameover_check_gamecore,
     build_overview_query,
     parse_game_identity_response,
+    parse_gameover_response,
     parse_overview_response,
 )
 from civ_mcp.lua.religion import (
@@ -759,6 +762,46 @@ class CivAdapter:
                 decode=lambda lines: parse_victory_progress_response(list(lines)),
                 coverage="MET_CIVILIZATIONS:CURRENTLY_VISIBLE",
                 context="ingame",
+            ),
+            observed_turn=observed_turn,
+        )
+
+    async def read_game_over(self, *, observed_turn: int) -> CivReadResult[GameOverStatus]:
+        """Read the authoritative end-of-game signal (审查 D3).
+
+        用 **GameCore** 变体：它只用 ``Game.GetWinningTeam()`` 与 ``Players[]``，
+        不碰 ``ContextPtr`` UI 查找（那个变体在真实对局中会超时），因此在胜负
+        界面出现后仍然可读。代价是 victory_type 可能为 Unknown——宁可"知道结束了
+        但类型未知"，也不要完全测不到。
+
+        ``is_game_over`` 只在 Civ6 自己宣布终局时为真。读不到就是读不到：不能把
+        读取失败当成"游戏未结束"，也不能把回合上限或超时当成终局。
+
+        ``parse_gameover_response`` 对"游戏仍在进行"返回 ``None``（这是它的既有
+        契约）。这里把它转成显式的 ``is_game_over=False``，避免把"未结束"误报成
+        读取失败或未知状态。
+        """
+
+        def _decode(lines: list[str]) -> GameOverStatus:
+            status = parse_gameover_response(lines)
+            if status is not None:
+                return status
+            return GameOverStatus(
+                is_game_over=False,
+                is_defeat=False,
+                winner_name="",
+                winner_leader="",
+                victory_type="",
+                player_alive=True,
+            )
+
+        return await self.read(
+            CivReadRequest(
+                tool="get_game_over",
+                lua_code=build_gameover_check_gamecore(),
+                decode=_decode,
+                coverage="GAME_OVER:COMPLETE",
+                context="gamecore",
             ),
             observed_turn=observed_turn,
         )
