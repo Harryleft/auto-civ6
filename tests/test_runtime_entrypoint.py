@@ -28,11 +28,14 @@ def test_python_module_starts_the_runtime_core() -> None:
 
 
 def test_formal_dsh_overlay_forwards_runtime_binding() -> None:
+    # v7 M01 removed the legacy ``civ6.cordis.yml`` overlay (it started the
+    # deleted ``civ-mcp`` legacy server). The surviving formal overlay is the
+    # Runtime-only one, which binds the server through the Runtime module.
     overlay = (
-        ROOT / "integrations" / "deepseek-harness" / "civ6.cordis.yml"
+        ROOT / "integrations" / "deepseek-harness" / "civ6-runtime.cordis.yml"
     ).read_text(encoding="utf-8")
 
-    assert "args: [run, civ-mcp]" in overlay
+    assert "args: [run, python, -m, civ_mcp.runtime.server]" in overlay
     assert "CIV_MCP_RUNTIME_BRANCH" in overlay
     assert "CIV_MCP_RUNTIME_STORE" in overlay
 

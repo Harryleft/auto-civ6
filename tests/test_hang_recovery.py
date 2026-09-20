@@ -1,6 +1,7 @@
-"""Tests for HANG recovery and post-load civ verification.
+"""Tests for autosave cleanup in the game lifecycle.
 
-Tests the autosave cleanup logic and GameState hang guard field.
+Only ``cleanup_old_autosaves`` remains after the v7 M01 removal; the old
+``GameState`` hang-retry guard was deleted with the legacy core.
 """
 
 import os
@@ -46,20 +47,3 @@ class TestCleanupAutosaves:
 
         cleanup_old_autosaves(keep=8)
         assert len(list(tmp_path.glob("0_MCP_*.Civ6Save"))) == 8
-
-
-# ---------------------------------------------------------------------------
-# GameState._hang_retry_active guard
-# ---------------------------------------------------------------------------
-
-
-class TestHangRetryGuard:
-    def test_initial_state(self):
-        """GameState starts with _hang_retry_active = False."""
-        from unittest.mock import MagicMock
-
-        from civ_mcp.game_state import GameState
-
-        conn = MagicMock()
-        gs = GameState(conn)
-        assert gs._hang_retry_active is False

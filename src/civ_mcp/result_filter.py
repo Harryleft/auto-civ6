@@ -24,6 +24,9 @@ _DEFAULT_MAX_CHARS = 20_000
 _DEFAULT_HISTORY_ITEMS = 3
 _MIN_MAX_CHARS = 2_000
 _MAX_MAX_CHARS = 200_000
+# v7 M01 删除了提供这三个工具的控制面（civ_mcp.server）。保留本模块是因为
+# 「过滤只作用于模型面副本、遥测保留原始全文」这条分层仍有价值，但当前没有
+# 任何工具命中这个集合；接入 civ_agent 的工具面时必须重新决定受管名单。
 _FILTERED_TOOLS = frozenset(
     {"get_governance_brief", "get_belief_state", "get_belief_trace"}
 )
