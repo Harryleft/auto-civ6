@@ -49,47 +49,13 @@ cd "$project_root"
 # check, the MCP child, and the RUNTIME POLICY block all resolve the profile
 # through the same code, so none of them can describe a different surface.
 profile_surface_check() {
-  CIV_MCP_PLAY_PROFILE="$play_profile" uv run python -c '
-import asyncio, json, sys
-
-from civ_mcp.server import mcp
-from civ_mcp.server.assembly import (
-    play_profile_report,
-    registered_control_plane_tool_names,
-    resolve_play_profile,
-)
-
-report = json.loads(play_profile_report())
-served = {tool.name for tool in asyncio.run(mcp.list_tools())}
-problems = []
-if report["hidden_tools_still_served"]:
-    problems.append(
-        "精简模式仍暴露控制面工具: " + ", ".join(report["hidden_tools_still_served"])
-    )
-if resolve_play_profile().hides_control_plane and registered_control_plane_tool_names():
-    problems.append(
-        "精简模式仍有控制面工具注册在案: "
-        + ", ".join(sorted(registered_control_plane_tool_names()))
-    )
-reported = report["tool_count"]
-if len(served) != reported:
-    problems.append(
-        "tools/list 返回 %d 个工具，但配置报告为 %d 个" % (len(served), reported)
-    )
-for required in ("get_game_overview", "end_turn", "get_barbarian_overview", "get_policies"):
-    if required not in served:
-        problems.append("缺少必需的游戏工具: " + required)
-if problems:
-    sys.exit("\n".join(problems))
-print(
-    "play_profile={profile} belief_mode={mode} tools={count} hidden={hidden}".format(
-        profile=report["play_profile"],
-        mode=report["belief_mode"],
-        count=report["tool_count"],
-        hidden=report["hidden_tool_count"],
-    )
-)
-'
+  # v7 M01 删除了 civ_mcp.server（旧 112 工具 MCP 面）与 play profile 机制。
+  # 这里保留脚本的启动/环境检查能力，但不再假装能校验一个已不存在的工具面。
+  printf 'ERROR: play profile 工具面校验在 v7 M01 后不可用：\n' >&2
+  printf '  civ_mcp.server 与 legacy/lean play profile 已删除。\n' >&2
+  printf '  等新的 civ_agent 命令行入口（v7 launcher 任务卡）接管该检查。\n' >&2
+  printf '  如需启动游戏与读档，本脚本的启动路径仍然可用。\n' >&2
+  return 1
 }
 
 if [ "${1:-}" = "check" ]; then

@@ -41,11 +41,13 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # class of bug where a machine is "on latest main" but main itself doesn't
 # contain the fix you expected to deploy (uncommitted local work).
 #
-# One marker per feature area is enough: if `_check_save_scumming` imports
-# from civ_mcp.end_turn, the adjacent scumming/budget infrastructure in the
-# same PR must also be present. Keep the list small so preflight stays fast.
+# One marker per feature area is enough: if the Runtime TurnLoop still exposes
+# `resume`, the adjacent interrupt-continuation infrastructure in the same PR
+# must also be present. Keep the list small so preflight stays fast.
+# v7 M01 removed the previous marker (`civ_mcp.end_turn._check_save_scumming`)
+# together with the legacy core, so it now names a Runtime symbol instead.
 FEATURE_MARKERS: list[tuple[str, str]] = [
-    ("civ_mcp.end_turn", "_check_save_scumming"),
+    ("civ_mcp.runtime.turn", "TurnLoop"),
 ]
 
 

@@ -94,7 +94,7 @@ class Machine:
         "latest main" but main is missing an uncommitted local fix.
 
         Markers are passed as (module_path, attribute_name) tuples, e.g.
-        ("civ_mcp.end_turn", "_check_save_scumming").
+        ("civ_mcp.runtime.turn", "TurnLoop").
         """
         # Reject markers with shell metacharacters — the Python one-liner is
         # embedded in a double-quoted string inside an SSH command, and any

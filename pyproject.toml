@@ -1,7 +1,7 @@
 [project]
-name = "civ6-belief-engine"
+name = "civ6-agent"
 version = "1.1.11"
-description = "Civilization VI Belief Engine with an MCP game adapter"
+description = "Civilization VI LangGraph agent with a Runtime Core and FireTuner adapter"
 readme = "README.md"
 license = "MIT"
 authors = [
@@ -53,7 +53,13 @@ launcher-linux = [
     "pytesseract>=0.3.10",
     "Pillow>=10.0",
 ]
-launcher = ["civ6-belief-engine[launcher-macos]"]  # backward compat alias
+# Backward-compat alias for the old project name. It cannot reference
+# ``civ6-agent[launcher-macos]`` because a self-referential extra makes
+# resolution unsatisfiable; the dependencies are listed directly instead.
+launcher = [
+    "pyobjc-framework-Quartz>=11.0",
+    "pyobjc-framework-Vision>=11.0",
+]
 analysis = [
     "matplotlib>=3.10.8",
     "pandas>=2.3.3",
@@ -75,7 +81,7 @@ Repository = "https://github.com/lmwilki/civ6-mcp"
 civ-mcp = "civ_mcp.runtime.server:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/civ_mcp", "src/civ6_belief_engine"]
+packages = ["src/civ_mcp", "src/civ_agent"]
 
 [build-system]
 requires = ["hatchling"]
@@ -111,32 +117,4 @@ markers = [
     "property: hypothesis 属性测试（随机化不变量）",
     "golden: Lua 生成黄金契约测试",
     "manual: 需要真实游戏实例的手动冒烟测试",
-]
-
-[tool.mutmut]
-source_paths = [
-    "src/civ6_belief_engine/belief_engine.py",
-    "src/civ6_belief_engine/derivation.py",
-    "src/civ6_belief_engine/ids.py",
-]
-# 包内其余模块只复制（供 import）不变异。
-also_copy = [
-    "src/civ_mcp",
-    "src/civ6_belief_engine/__init__.py",
-    "src/civ6_belief_engine/belief_mode.py",
-    "src/civ6_belief_engine/coverage.py",
-    "src/civ6_belief_engine/dashboard.py",
-    "src/civ6_belief_engine/forecast",
-    "src/civ6_belief_engine/governance",
-    "src/civ6_belief_engine/graph",
-    "src/civ6_belief_engine/py.typed",
-]
-pytest_add_cli_args_test_selection = [
-    "tests/test_belief_engine.py",
-    "tests/test_belief_engine_p0.py",
-    "tests/test_derivation.py",
-    "tests/test_belief_mode.py",
-    "tests/test_belief_coverage.py",
-    "tests/test_harness_belief_flow.py",
-    "tests/test_belief_mode_server.py",
 ]
