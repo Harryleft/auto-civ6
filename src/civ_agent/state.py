@@ -77,6 +77,8 @@ class ExecutionStatus(StrEnum):
     """Runtime 对一次 mutation 的判定，不把 UNKNOWN 当作成功。"""
 
     CONFIRMED = "CONFIRMED"
+    #: 已发送但尚未回读确认；与 UNKNOWN 不同，但同样不是成功。
+    OBSERVING = "OBSERVING"
     UNKNOWN = "UNKNOWN"
     NEEDS_DECISION = "NEEDS_DECISION"
     NOT_ATTEMPTED = "NOT_ATTEMPTED"
@@ -132,6 +134,8 @@ class GraphState(TypedDict, total=False):
 
     # 执行与记忆
     execution: Annotated[ExecutionResult | None, _replace]
+    pending_decision: Annotated[dict[str, Any] | None, _replace]
+    turn_advanced: Annotated[bool, _replace]
     memory_file: Annotated[Any | None, _replace]
     long_term_goal: Annotated[str, _replace]
     final_result: Annotated[str, _replace]
@@ -165,6 +169,8 @@ def new_state(*, seed: Seed, turn: int) -> GraphState:
         backedge_count=0,
         last_backedge=None,
         execution=None,
+        pending_decision=None,
+        turn_advanced=False,
         memory_file=None,
         long_term_goal="",
         final_result="",

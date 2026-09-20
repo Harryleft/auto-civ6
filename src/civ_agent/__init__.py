@@ -9,6 +9,14 @@
 from __future__ import annotations
 
 from civ_agent.config import AgentConfig, MissingCredentialError, load_config
+from civ_agent.execute import (
+    END_TURN_TOOL,
+    MUTATION_TOOLS,
+    MutationError,
+    MutationExecutor,
+    MutationOutcome,
+    PendingDecision,
+)
 from civ_agent.graph import GraphDeps, GraphError, GraphResources, build_graph
 from civ_agent.mcp_client import (
     RuntimeClient,
@@ -32,16 +40,22 @@ from civ_agent.state import (
 __all__ = [
     "AgentConfig",
     "CandidateAction",
+    "END_TURN_TOOL",
     "ExecutionResult",
     "ExecutionStatus",
     "GraphDeps",
     "GraphError",
     "GraphResources",
     "GraphState",
+    "MUTATION_TOOLS",
     "MemoryHit",
     "MissingCredentialError",
+    "MutationError",
+    "MutationExecutor",
+    "MutationOutcome",
     "Observation",
     "OpponentState",
+    "PendingDecision",
     "RuleHit",
     "RuntimeClient",
     "Seed",
