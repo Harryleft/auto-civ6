@@ -21,13 +21,14 @@ observe。因此这里放一个**按 Runtime 真实状态分派**的负责人：
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
-from civ_agent.execute import MutationExecutor
+from civ_agent.execute import MutationError, MutationExecutor
 from civ_agent.graph import GraphDeps, GraphError, GraphResources, build_graph
 from civ_agent.observation import build_observation
 from civ_agent.state import (
@@ -36,6 +37,8 @@ from civ_agent.state import (
     Seed,
     new_state,
 )
+
+log = logging.getLogger(__name__)
 
 #: 单回合墙钟预算（O4）。审查提醒：这是运营决定，不是"真实回合应在 3 分钟内完成"
 #: 的物理事实；超时只说明这一次没有进展，不能据此认定引擎卡死。
@@ -69,6 +72,7 @@ class TurnOutcome:
     pending_decision: dict[str, Any] | None = None
     timed_out: bool = False
     error: str = ""
+    note: str = ""
 
 
 @dataclass(slots=True)
@@ -194,6 +198,9 @@ class WholeGameDriver:
                 report.outcome = RunOutcome.STOPPED
                 report.note = outcome.error
                 break
+            if outcome.note:
+                # 提交被拒：记入报告但继续（同回合下一次决策会带上反馈重试）。
+                log.warning("决定被拒：%s", outcome.note)
             if outcome.pending_decision:
                 # 游戏等待选择：留在同一回合，下一次决策会带着这个待选项。
                 continue
@@ -296,6 +303,18 @@ class WholeGameDriver:
                 turn_advanced=False,
                 execution_status=None,
                 error=f"图执行失败：{exc}",
+            )
+        except MutationError as exc:
+            # 模型可能提出 Runtime 并不存在的工具（实测出现 get_units）。提交被拒是
+            # **这一条候选**的问题，不是整局的问题：应当记为未完成并让下一次决策重试，
+            # 而不是把整局打断。拒绝理由经 review_feedback 机制让模型知道。
+            return TurnOutcome(
+                decision_id=decision_id,
+                turn=self._turn,
+                turn_advanced=False,
+                execution_status=ExecutionStatus.NOT_ATTEMPTED,
+                error="",
+                note=f"提交被拒：{exc}",
             )
 
         self._memory_file = final.get("memory_file") or self._memory_file

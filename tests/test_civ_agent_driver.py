@@ -463,3 +463,52 @@ def test_default_limits_match_the_agreed_budget() -> None:
 
     assert DEFAULT_TURN_SECONDS == 180.0
     assert DEFAULT_MAX_TURNS == 50
+
+
+def test_a_rejected_submission_does_not_abort_the_run() -> None:
+    """模型可能提出 Runtime 不存在的工具（实测出现 get_units）。
+
+    提交被拒是**这一条候选**的问题，不是整局的问题：应当记为未完成并让下一次
+    决策重试，而不是把整局打断。
+    """
+
+    from civ_agent.execute import MutationError
+    from civ_agent.nodes.deepseek import DecisionResult
+    from civ_agent.state import CandidateAction
+
+    class HallucinatingDecide:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def __call__(self, **kwargs: Any) -> Any:
+            self.calls += 1
+            return DecisionResult(
+                candidates=(
+                    CandidateAction(tool="get_units", arguments={}),
+                ),
+                summary="幻觉工具",
+                messages=(),
+                tool_rounds=1,
+            )
+
+    client = _EndTurnClient(turn=1)
+    executor = MutationExecutor(client, new_operation_id=lambda: "op-1")
+    deps = GraphDeps(client=client, decide_fn=HallucinatingDecide(), finalize_fn=_FinalizeFirst())
+    driver = WholeGameDriver(
+        deps=deps,
+        resources=GraphResources(classifier_factory=lambda q: _NoopClassifier(q), model=object()),
+        executor=executor,
+        seed=_seed(),
+        max_turns=1,
+        turn_seconds=30.0,
+        game_over_reader=_never_over,
+        max_decisions_per_turn=2,
+    )
+
+    report = _run(driver.run())
+
+    # 没有被拒绝打崩：跑满同回合决策上限才停，且每次都记为未提交。
+    assert report.outcome is RunOutcome.STOPPED
+    assert len(report.decisions) == 2
+    assert all(item.execution_status is ExecutionStatus.NOT_ATTEMPTED for item in report.decisions)
+    assert any("被拒" in (item.note or "") for item in report.decisions)
