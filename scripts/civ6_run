@@ -111,8 +111,21 @@ async def _install_and_load(args: argparse.Namespace) -> None:
     else:
         log.info("FireTuner 4318 已在监听：认为游戏已运行")
 
+    # 刚启动的游戏会在握手后立刻重置连接（实测发生两次）：端口 listening 不等于
+    # 握手稳定。这里重试几次，而不是让整局在第 0 步就失败。
     conn = GameConnection()
-    await conn.connect()
+    last: Exception | None = None
+    for attempt in range(1, 5):
+        try:
+            await conn.connect()
+            last = None
+            break
+        except Exception as exc:  # noqa: BLE001 - 启动期抖动是预期的
+            last = exc
+            log.warning("连接 FireTuner 第 %d 次失败：%s", attempt, exc)
+            await asyncio.sleep(5)
+    if last is not None:
+        raise SystemExit(f"无法连接 FireTuner：{type(last).__name__}: {last}")
     try:
         if getattr(conn, "gamecore_index", None) is not None and getattr(
             conn, "ingame_index", None
@@ -124,6 +137,30 @@ async def _install_and_load(args: argparse.Namespace) -> None:
         log.info("读档结果：%s", result)
         if result.startswith(("Error", "ERR")):
             raise SystemExit(f"读档失败：{result}")
+
+        # 读档是异步的：FrontEnd 接受了命令不等于已经进场。必须等到
+        # GameCore_Tuner/InGame 出现，否则 Runtime server 会在无对局时启动并立刻
+        # 因连不上 FireTuner 而崩溃（实测发生）。
+        wait_seconds = 180
+        for waited in range(wait_seconds):
+            if getattr(conn, "gamecore_index", None) is not None and getattr(
+                conn, "ingame_index", None
+            ) is not None:
+                log.info("已进入对局（GameCore=%s, InGame=%s，等待 %ds）",
+                         conn.gamecore_index, conn.ingame_index, waited)
+                break
+            await asyncio.sleep(1)
+            if waited and waited % 15 == 0:
+                # 状态表在连接时发现一次；重新连接以刷新（没有单独的 refresh API）。
+                try:
+                    await conn.disconnect()
+                    await conn.connect()
+                except Exception:  # noqa: BLE001 - 加载中抖动是预期的
+                    pass
+        else:
+            raise SystemExit(
+                f"等待 {wait_seconds}s 后仍未进入对局；拒绝在无对局时启动 Runtime。"
+            )
     finally:
         await conn.disconnect()
 
