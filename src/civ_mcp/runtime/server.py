@@ -96,6 +96,14 @@ async def get_runtime_context(ctx: Context) -> dict[str, object]:
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
+async def get_settle_candidates(ctx: Context, unit_index: int) -> dict[str, object]:
+    """Read the game's settle judgments (water/resources/yields) without settling."""
+    return _json_value(
+        await _runtime(ctx).assembly.surface.get_settle_candidates(unit_index)
+    )
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
 async def get_game_over(ctx: Context) -> dict[str, object]:
     """Read the authoritative end-of-game signal; a read failure is not "not over"."""
     return _json_value(await _runtime(ctx).assembly.surface.get_game_over())

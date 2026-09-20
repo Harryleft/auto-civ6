@@ -65,6 +65,7 @@ def test_context_keeps_failed_domain_reads_explicitly_unknown() -> None:
     assert context.unfinished_intents == ()
     assert context.further_queries == (
         "get_unit_promotions",
+        "get_settle_candidates",
         "get_unit_attack_target",
         "get_city_attack_target",
         "get_district_placements",

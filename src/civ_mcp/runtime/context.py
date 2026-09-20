@@ -79,6 +79,7 @@ class ContextBuilder:
             handoff=self._session.handoff_note(),
             further_queries=(
                 "get_unit_promotions",
+                "get_settle_candidates",
                 "get_unit_attack_target",
                 "get_city_attack_target",
                 "get_district_placements",
@@ -242,6 +243,17 @@ class ContextBuilder:
         overview = await self._adapter.read_overview()
         return await self._adapter.read_village_overview(
             observed_turn=overview.observed_turn
+        )
+
+    async def read_settle_candidates(self, unit_index: int):
+        """Read the game's own settle-quality judgments for one settler.
+
+        只读；用于让模型看到淡水/资源/内环产出等**游戏判定**，而不是自己从坐标猜。
+        """
+
+        overview = await self._adapter.read_overview()
+        return await self._adapter.read_settle_candidates(
+            unit_index=unit_index, observed_turn=overview.observed_turn
         )
 
     async def read_game_over(self):
