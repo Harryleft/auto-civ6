@@ -27,10 +27,17 @@ CHOICE = "choice"
 SCORE = "score"
 
 #: 概率阈值。显式常量：判断结果会写进 Game Memory，阈值不能藏在分支里。
+#:
+#: 校准依据（真实两回合验收，2026-09-20）：Jev 对 Turn 1「建都 / 选制陶术 /
+#: 选法典」这类**完全合理**的动作给出的 assumptions_supported 只有 0.20–0.26，
+#: cost_understood 只有 0.06–0.10。原先 0.50 的门槛落在实际分布**之外**，导致
+#: 任何动作都被拦下、回合永不推进。复核的本意是"防止无依据的推测"，不是"要求
+#: 高置信"，因此门槛按实测分布下调，并保留显式常量以便再校准。
+BLOCKING_THRESHOLD = 0.25
 INFORMATION_GAP_THRESHOLD = 0.5
 FACTUAL_CONFLICT_THRESHOLD = 0.5
 CONFIDENT_EVIDENCE_THRESHOLD = 0.5
-ASSUMPTION_SUPPORTED_THRESHOLD = 0.5
+ASSUMPTION_SUPPORTED_THRESHOLD = BLOCKING_THRESHOLD
 
 #: Jev Assess 提出的问题。
 #:
@@ -216,7 +223,7 @@ def _threshold_for(question_id: str) -> float:
         "unknown_impact": INFORMATION_GAP_THRESHOLD,
         "assumptions_supported": ASSUMPTION_SUPPORTED_THRESHOLD,
         "cost_understood": ASSUMPTION_SUPPORTED_THRESHOLD,
-        "information_sufficient": CONFIDENT_EVIDENCE_THRESHOLD,
+        "information_sufficient": ASSUMPTION_SUPPORTED_THRESHOLD,
     }.get(question_id, 0.5)
 
 
@@ -310,10 +317,16 @@ def _payload_from_verdicts(verdicts: Iterable[Verdict]) -> dict[str, Any]:
         if question_id in collected
         and (collected[question_id]["value"] or 0.0) >= _threshold_for(question_id)
     ]
+    reasons = [
+        f"{question_id}={collected[question_id]['summary']}" for question_id in blocking
+    ]
     return {
         "verdicts": collected,
         "summary": {verdict.question_id: verdict.summary for verdict in verdicts},
         "blocking": blocking,
+        # 被拦时必须给出**可读理由**：模型下一轮要靠它调整，否则只会重复同一提案
+        # 或干脆不再提案。
+        "blocking_reasons": reasons,
         "information_gaps": information_gaps,
     }
 
