@@ -120,14 +120,22 @@
 
 ## 3. 仍未决定的事项
 
-### O1 读档/启动模块的归属
+### O1 读档/启动模块的归属 —— 已测量，建议保留
 
 launcher 需要 `game_lifecycle` / `game_launcher`，但方案 §13.2 的"保留"清单里
-没有它们，§14 的新目录也没给位置。它们是"已验证有价值的底层能力"还是"旧认知
-代码"？
+没有它们，§14 的新目录也没给位置。已实测其依赖闭包：
 
-**倾向**：保留，但归到 launcher 侧而非 `civ_mcp.runtime`，以维持"Runtime 不拥有
-存档生命周期"这条边界。
+```text
+game_lifecycle → civ_mcp.lua, civ_mcp.connection
+connection     → civ_mcp.tuner_client, civ_mcp.lua._helpers
+game_launcher  → （无内部依赖）
+logger         → civ_mcp.telemetry → civ_mcp.run_id
+（telemetry / run_id 只依赖标准库）
+```
+
+**结论**：该闭包完全不含 belief engine，也不含旧 server。保留即可，无需归入
+`civ_mcp.runtime`，从而维持"Runtime 不拥有存档生命周期"这条边界。
+`run_id` / `telemetry` 必须随 `logger` 一起保留。
 
 ### O2 launcher 装配方式
 
@@ -137,8 +145,9 @@ launcher 需要 `game_lifecycle` / `game_launcher`，但方案 §13.2 的"保留
 
 ### O3 `@mcp.tool` / `FastMCP` 去留
 
-D4 之后 MCP 不进主路径。48 个 tool 的函数体是需要的，装饰器不需要。是拆出
-纯函数层，还是保留 server.py 仅作参考？
+D4 之后 MCP 不进主路径。建议保留 `civ_mcp/runtime/server.py` 作为参考适配层
+（它已冻结并被 `tests/test_runtime_entrypoint.py` 等覆盖），但**删除**
+`civ_mcp/server/`（旧 112 工具 MCP 面）。两者的名字相近但完全不同，见 §5。
 
 ### O4 总运行成本与停止条件
 
@@ -147,38 +156,137 @@ D7 不设循环上限，加上"整局几百回合"，需要明确：
 - 单回合墙钟超时；
 - 是否需要在超时后把该回合标记为"未完成"并写入 Memory。
 
-### O5 脚本命名冲突
+### O5 脚本命名冲突 —— 已定位受影响测试
 
 `scripts/civ6_agent` 已存在，是旧 DSH 受控回合循环（含
 `--play-profile legacy|lean`）。D4 之后它属于 §13.1 的 "legacy / lean play
 profile"，需要删除或改名，新 launcher 需要新名字。
 
+实测：删除它会连带使 `tests/test_civ6_agent_entrypoint.py` 的 5 项测试失败
+（其中 `test_default_profile_is_legacy` 正断言默认 `legacy`）。
+
 ### O6 `uv.lock` 重算
 
 加入 `langgraph` / `langchain-typesafe`（prerelease）/ `langchain-deepseek`，
-以及 D10 改名后会触发大范围 lock 变更。
+以及 D10 改名后会触发大范围 lock 变更。建议与 D10 合并成一次重算。
 
-### O7 131 个旧测试的去留
+### O7 旧测试的去留 —— 已精确测量
 
-`tests/` 共 120 个文件，其中 106 个引用 `civ6_belief_engine`（含 `conftest.py`
-与 `graph_test_helpers.py`）。D8 只删"仅测它"的部分，但 `conftest.py` 是共享
-fixture，需要先拆分才能确定精确名单。
+见 §4，结论是 **63 个测试文件**硬依赖旧认知栈。
 
 ---
 
-## 4. 任务卡执行顺序
+## 4. M01 精确删除边界（O7 实测结果）
+
+在 `civ6_belief_engine` 临时不可导入、并把根 `conftest.py` 换成"引擎缺失时
+夹具 skip"的实验版本后，跑全量测试得到：
+
+```text
+63 collection errors（硬依赖：模块级 import 旧认知栈）
+10 failed（软依赖：与旧 play profile / server 面绑定）
+605 passed
+```
+
+实验后已还原 `civ6_belief_engine`（39 个 .py 文件 shasum 逐一比对一致）、还原
+根 `conftest.py`，并重跑全量确认恢复到 `1434 passed`。
+
+### 4.1 production 侧必须删除的模块（10 个，实测 import 旧引擎）
+
+```text
+src/civ_mcp/belief_mode.py
+src/civ_mcp/facts.py
+src/civ_mcp/game_state.py
+src/civ_mcp/server/assembly.py
+src/civ_mcp/server/governance_snapshot.py
+src/civ_mcp/server/pipeline.py
+src/civ_mcp/server/tools/actions.py
+src/civ_mcp/server/tools/belief_tools.py
+src/civ_mcp/server/tools/governance_adapters.py
+src/civ_mcp/server/tools/world_model.py
+```
+
+`civ_mcp/runtime/` 与 `civ_mcp/civ/` 实测**零**belief-engine 引用。
+
+### 4.2 硬依赖测试（63 个，随旧栈一起删除）
+
+```text
+test_audit_fixes              test_belief_mode_server        test_facts
+test_authorization_integrity  test_belief_properties         test_forecast_bayes
+test_belief_bind_offload      test_belief_tool_pipeline      test_forecast_calibration
+test_belief_coverage          test_canonical_hash            test_forecast_extrapolation
+test_belief_engine            test_climate_overview          test_gate_fixes
+test_belief_engine_p0         test_collection_snapshot       test_governance_core
+test_belief_journal_isolation test_dashboard_state           test_governance_dedup
+test_belief_mode              test_department_civics         test_governance_entity_types
+test_department_coordinator   test_department_diplomacy      test_governance_inputs
+test_department_economy       test_department_great_people   test_governance_server
+test_department_military      test_department_production     test_governance_snapshot
+test_department_review_guard  test_department_science        test_derivation
+test_derived_read_caches      test_dsh_auto_resume           test_end_turn_budget
+test_era_progress             test_graph_context             test_graph_governance
+test_graph_model              test_graph_replay_verification test_harness_belief_flow
+test_history_windows          test_journal_single_writer     test_lean_profile
+test_load_cache_lifecycle     test_notification_arbitration  test_phase2_threat_chain
+test_presentation             test_read_cache                test_religion_overview
+test_reload_epoch_recording   test_result_filter             test_runtime_recovery_contract
+test_server_shutdown          test_shared_validation         test_tool_gate_coverage
+test_tool_surface             test_turn_context              test_world_model_engine
+```
+
+### 4.3 软依赖测试（10 项失败，O5 解决后单独处理）
+
+```text
+tests/test_civ6_agent_entrypoint.py   （5 项：断言 legacy 默认 profile）
+tests/test_experiment_baseline.py     （2 项：旧实验基线脚本）
+tests/test_product_package_boundary.py（1 项：断言旧 server 工具边界）
+tests/test_turn_in_progress.py        （2 项：旧 reload epoch 语义）
+```
+
+### 4.4 存活的测试文件（117 - 63 = 54 个）
+
+`test_civ_adapter.py`、`test_runtime_*.py`（22 个）、`test_civ6_agent_*`、
+`test_civ_agent_memory.py` 等。根 `conftest.py` 现有两个夹具全部服务于旧引擎，
+M01 后可整体删除；存活测试不依赖它。
+
+---
+
+## 5. 新增发现（实施 M02 阶段）
+
+### P9 `civ_mcp/server/` 与 `civ_mcp/runtime/server.py` 是两套东西
+
+- `civ_mcp/server/`：旧 MCP 面，112 个工具，经 `pipeline._logged` 与
+  belief/治理门禁（AGENTS.md 的硬规则描述的就是它）。**属于删除范围**。
+- `civ_mcp/runtime/server.py`：新 Runtime Core 的 MCP 面，48 个 tool
+  （23 只读 + 25 mutation）。D4 后不进主路径，但函数体就是 `civ_agent` 的
+  动作库来源，**保留**。
+
+AGENTS.md 中"不要在 `civ_mcp/server/` 包外新增游戏动作"等规则，M01 之后其
+约束对象消失，需要同步更新该文件的生命周期说明。
+
+### P10 `pyproject.toml [tool.mutmut]` 指向将被删除的文件
+
+```toml
+source_paths = ["src/civ6_belief_engine/belief_engine.py", ...]
+```
+
+M01 后需一并删除该节，否则 mutation 配置悬空。
+
+
+---
+
+## 6. 任务卡执行顺序
 
 | 卡 | 内容 | 依赖 | 阻塞 |
 |---|---|---|---|
-| 前置 | 拍定 O1–O7 | — | 否 |
-| M01 | 删旧认知系统（D8 边界） | O7 | 是 |
-| M02 | 建 `src/civ_agent/` 包骨架 | — | 否 |
+| 前置 | 拍定 O2 / O3 / O4 / O5 / O6 | — | 否 |
+| M01 | 删旧认知系统（边界见 §4，已实测） | — | 否 |
+| M02 | 建 `src/civ_agent/` 包骨架 | — | 已完成 |
 | M03 | 装 `langgraph` / `langchain-typesafe`(a) / `langchain-deepseek`；fail-fast | O6 | 是 |
 | M04 | Jev 节点（`jev_assess` / `jev_review`） | M03 | 是 |
 | M05 | DeepSeek 节点 + 25 mutation 工具绑定（D5） | M03 | 是 |
-| M06 | Observation 组合（`civ_mcp.runtime.context`） | — | 否 |
-| M07 | Game Memory Writer | — | 否 |
-| M08 | Memory Search（全文） | M07 | 否 |
+| M06 | Observation 组合（`civ_mcp.runtime.context`） | — | 已完成 |
+| M07 | Game Memory Writer | — | 已完成 |
+| M08 | Memory Search（全文） | M07 | 已完成 |
 | M09 | Rule Search | — | 否 |
 | M10 | LangGraph 只读跑通 | M02 M04 M05 M06 | 是 |
 | M11 | `read_game_info` / `search_rules` 回边 | M10 | 是 |
@@ -187,5 +295,5 @@ fixture，需要先拆分才能确定精确名单。
 | M14 | End Turn / AI Turn | M12 | 是 |
 | M15a | 冒烟：固定回合上限整局 | M14 M13 D3 | 是 |
 | M15b | 全量：Turn 1 → Game Over | M15a | 是 |
-| 横切 | launcher（启动 + 读档 + D1 安装） | D2 O1 O2 O5 | 是 |
+| 横切 | launcher（启动 + 读档 + D1 安装） | D2 O1(已定) O2 O5 | 是 |
 | 横切 | `civ6-agent` 改名（D10） | — | 否 |
