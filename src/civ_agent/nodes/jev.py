@@ -200,7 +200,12 @@ REVIEW_QUESTIONS: tuple[dict[str, Any], ...] = (
     {
         "id": "assumptions_supported",
         "kind": NOUL,
-        "role": ROLE_BLOCKING,
+        # **informative 而非 blocking**：实测这条在"模型给出完全合理的提案"时也只在
+        # 0.24–0.49 之间摆动，正好骑在门槛上。真机证据：模型对 Turn 1 提出建都/选研究/
+        # 侦察/end_turn 四个候选（理由具体到地块评分与人口瓶颈），assumptions_supported
+        # 仍给 0.24 < 0.25 而整条决定被否。用单点概率噪声决定整局，与审查 R10 的本意
+        # 相反。它仍作为信号进入决策材料，由模型自己权衡。
+        "role": ROLE_INFORMATIVE,
         "instructions": "候选行动所依赖的关键假设，是否被当前材料中的事实支持？",
         "criteria": {
             "true": "候选的前提能在材料里找到对应事实。",
