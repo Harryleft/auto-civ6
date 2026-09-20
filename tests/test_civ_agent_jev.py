@@ -372,7 +372,10 @@ def test_jev_review_blocks_when_evidence_does_not_support_the_candidate() -> Non
         )
     )
 
-    assert {"assumptions_supported", "information_sufficient"} <= set(result["blocking"])
+    # information_sufficient 是 informative（"先再查一轮"的建议），不参与拦截；
+    # 证据类里真正拦下的是 assumptions_supported。
+    assert "assumptions_supported" in result["blocking"]
+    assert "information_sufficient" not in result["blocking"]
     assert result["verdicts"]["assumptions_supported"]["value"] == pytest.approx(0.05)
     # 被拦时必须带上可读理由，供下一轮反馈给模型
     assert len(result["blocking_reasons"]) == len(result["blocking"])
