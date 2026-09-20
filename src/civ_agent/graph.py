@@ -22,6 +22,7 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from civ_agent.decision import build_decision_context
 from civ_agent.memory import DecisionRecord, GameMemoryWriter, GameStart, TurnRecord
 from civ_agent.memory.search import search_memory
 from civ_agent.observation import build_observation, diff
@@ -338,8 +339,14 @@ def make_jev_review(
             candidates=_observation_lookup(state, "candidates") or (),
             final_action=_observation_lookup(state, "final_action"),
             classifier_factory=resources.require_classifier_factory(),
+            decision_context=build_decision_context(state),
         )
-        return {"jev_review": result}
+        # 被拦下时把可读理由回馈给下一轮决策，否则模型只会重复同一提案或不再提案。
+        reasons = result.get("blocking_reasons") if isinstance(result, Mapping) else None
+        feedback = ""
+        if reasons:
+            feedback = "上一轮候选被复核拦下：" + "；".join(str(item) for item in reasons)
+        return {"jev_review": result, "review_feedback": feedback}
 
     return jev_review_node
 

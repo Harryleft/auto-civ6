@@ -124,6 +124,8 @@ class GraphState(TypedDict, total=False):
     rule_queries: Annotated[tuple[dict[str, Any], ...], _extend]
     candidates: Annotated[tuple[CandidateAction, ...], _replace]
     jev_review: Annotated[dict[str, Any] | None, _replace]
+    review_feedback: Annotated[str, _replace]
+    """上一轮被复核拦下的原因（审查：被拦后模型必须收到反馈）。"""
     final_action: Annotated[CandidateAction | None, _replace]
     deepseek_messages: Annotated[list[Any], _replace]
     deepseek_summary: Annotated[str, _replace]
@@ -174,6 +176,7 @@ def new_state(*, seed: Seed, turn: int, decision_id: str | None = None) -> Graph
         rule_queries=(),
         candidates=(),
         jev_review=None,
+        review_feedback="",
         final_action=None,
         deepseek_messages=[],
         deepseek_summary="",

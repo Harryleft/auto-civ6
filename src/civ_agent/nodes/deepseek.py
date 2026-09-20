@@ -275,6 +275,11 @@ def _system_prompt(
         lines.append(
             "注意：以下证据本次为空，不要假装已经查阅：" + "、".join(missing)
         )
+    feedback = material.get("review_feedback") if isinstance(material, dict) else ""
+    if feedback:
+        lines.append(
+            "复核反馈（必须据此调整，不要重复同一提案）：" + str(feedback)
+        )
     lines.append("Jev 判断（JSON）：")
     lines.append(json.dumps(dict(assessment or {}), ensure_ascii=False, sort_keys=True))
     return "\n".join(lines)

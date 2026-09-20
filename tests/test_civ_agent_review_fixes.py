@@ -544,3 +544,65 @@ def test_extra_parse_choice_is_strict(text: str, expected: int | None) -> None:
     from civ_agent.nodes.deepseek import _parse_choice
 
     assert _parse_choice(text, 3) == expected
+
+
+# ---------------------------------------------------------------------------
+# 真实验收发现：阈值校准 + 否决反馈
+# ---------------------------------------------------------------------------
+
+
+def test_blocking_threshold_matches_the_measured_distribution() -> None:
+    """真实验收实测合理动作只得 0.10–0.26；门槛必须落在分布内。"""
+
+    from civ_agent.nodes.jev import BLOCKING_THRESHOLD
+
+    assert 0.15 <= BLOCKING_THRESHOLD <= 0.35, (
+        "门槛高于实测分布会让任何动作都过不了复核（真实验收教训）"
+    )
+
+
+def test_review_provides_readable_blocking_reasons() -> None:
+    """被拦时必须给出可读理由，否则无法反馈给模型。"""
+
+    from civ_agent.nodes.jev import _payload_from_verdicts, _verdicts
+
+    class Answer:
+        def __init__(self, payload: dict[str, Any]) -> None:
+            self._payload = payload
+
+        def model_dump(self) -> dict[str, Any]:
+            return dict(self._payload)
+
+    from civ_agent.nodes.jev import REVIEW_QUESTIONS
+
+    answers = {
+        spec["id"]: Answer(
+            {"type": "score", "score": 0.0}
+            if spec["kind"] == "score"
+            else {"type": "noul", "noul": 0.02}
+        )
+        for spec in REVIEW_QUESTIONS
+    }
+    response = type("Response", (), {"answers": answers})()
+
+    payload = _payload_from_verdicts(_verdicts(REVIEW_QUESTIONS, response))
+
+    assert payload["blocking"], "极低概率应当触发阻断"
+    assert len(payload["blocking_reasons"]) == len(payload["blocking"])
+    assert all("=" in reason for reason in payload["blocking_reasons"])
+
+
+def test_veto_feedback_reaches_the_next_decision_material() -> None:
+    """被拦后的理由必须出现在下一轮决策材料里。"""
+
+    from civ_agent.decision import build_decision_context
+
+    context = build_decision_context(
+        {
+            "turn": 1,
+            "observation": None,
+            "review_feedback": "上一轮候选被复核拦下：assumptions_supported=否",
+        }
+    )
+
+    assert "assumptions_supported" in context.as_dict()["review_feedback"]
