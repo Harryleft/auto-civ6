@@ -43,6 +43,11 @@ docs/paper/*
 # Save files
 /saves/
 
+# Game Memory: one timestamped Markdown per playthrough (v7 §8). These are
+# per-run experience records, never source. Override the location with
+# CIV6_AGENT_MEMORY_DIR.
+memory/games/
+
 # Lean-vs-legacy experiment artifacts: baseline manifests, run logs, and
 # copies of the user's saves. Per-run evidence, never source; the manifest
 # schema is documented in docs/experiment-baseline.md.
