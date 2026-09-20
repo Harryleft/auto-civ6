@@ -23,6 +23,12 @@ async def _no_precheck() -> None:
     """Default for mutations whose domain has no additional baseline contract."""
 
 
+#: 核验重试次数。建城/攻击这类动作在引擎忙时会晚于写命令超时才生效，因此给几次
+#: 机会；每次核验都是一次只读读，重试是幂等的。
+_VERIFY_ATTEMPTS = 3
+_VERIFY_RETRY_DELAY_SECONDS = 1.0
+
+
 class SessionIdentityMismatchError(RuntimeError):
     """The requested binding does not match the game observed from Civ6."""
 
@@ -185,18 +191,23 @@ class SessionKernel:
                 return record
             record = record.maybe_sent()
             self._store.save_operation(record)
-            if not receipt.complete:
-                record = record.unknown()
-                self._store.save_operation(record)
-                return record
+
+            # 审查 §四第四步 / 实测缺陷：写命令回执不完整时**不能直接定 UNKNOWN**。
+            # 建城这类动作会让引擎忙（时代推进等），sentinel 可能超出写命令超时，
+            # 于是 receipt.complete 为假；但动作其实已经生效。此时必须用该动作自己的
+            # verify() 做只读核验——verify 是幂等的读，重试安全。
+            #
+            # 无论回执是否完整都先核验；核验不到证据才落到 UNKNOWN。
             try:
-                evidence = await execution.verify()
+                evidence = await self._verify_with_retries(
+                    execution, attempts=_VERIFY_ATTEMPTS
+                )
             except asyncio.CancelledError:
-                record = record.unknown()
-                self._store.save_operation(record)
+                # 取消时也必须留下确定的账本状态：停在 OBSERVING 会让后续核验
+                # 无法判断这条操作是否已经发送过。
+                self._store.save_operation(record.unknown())
                 raise
-            except Exception:
-                evidence = None
+
             if evidence is not None:
                 try:
                     same_binding = self._binding == binding
@@ -206,9 +217,34 @@ class SessionKernel:
                     same_game = False
                 if not same_binding or not same_game:
                     evidence = None
+
+            # 核验成功才算 CONFIRMED；否则一律 UNKNOWN（含"回执完整但读不到证据"与
+            # "回执不完整"两种情形）—— 绝不把"没确认"写成成功。
             record = record.confirmed(evidence) if evidence is not None else record.unknown()
             self._store.save_operation(record)
             return record
+
+    async def _verify_with_retries(
+        self, execution: MutationExecution, *, attempts: int
+    ) -> Evidence | None:
+        """只读核验动作是否真的生效；幂等，可安全重试。
+
+        取不到证据返回 ``None``（调用方据此定 UNKNOWN），**不抛错**：核验失败不等于
+        动作失败，只是还没确认。
+        """
+
+        for attempt in range(max(1, attempts)):
+            if attempt:
+                await asyncio.sleep(_VERIFY_RETRY_DELAY_SECONDS)
+            try:
+                evidence = await execution.verify()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                evidence = None
+            if evidence is not None:
+                return evidence
+        return None
 
     async def confirm_observed(
         self, operation: OperationRecord, evidence: Evidence

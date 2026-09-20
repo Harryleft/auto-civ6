@@ -168,6 +168,11 @@ class CivReadResult(Generic[T]):
     coverage: str
 
 
+#: 重命令的写超时。建城会触发时代推进、攻击会触发战斗结算，sentinel 常常超出
+#: 读命令的 5 秒窗口；超时会导致回执不完整（进而原本只能记 UNKNOWN）。
+HEAVY_MUTATION_TIMEOUT_SECONDS = 20.0
+
+
 @dataclass(frozen=True, slots=True)
 class CivMutationRequest:
     """A requested player action, without strategy or recovery behavior."""
@@ -175,6 +180,8 @@ class CivMutationRequest:
     tool: str
     lua_code: str
     context: str = "ingame"
+    #: 为 ``None`` 时用 transport 默认（5s）；重命令应显式给更长的值。
+    timeout_seconds: float | None = None
 
 
 class CivAdapter:
@@ -837,8 +844,14 @@ class CivAdapter:
 
     async def submit(self, request: CivMutationRequest) -> TransportReceipt:
         state = self._state_for(request.context)
+        # 重命令（建城/攻击/结束回合）会让引擎明显变忙——建城还会触发时代推进，
+        # sentinel 常常超出读命令的 5 秒窗口。允许请求自带更长超时。
+        kwargs: dict[str, object] = {"is_complete": _is_sentinel}
+        timeout = getattr(request, "timeout_seconds", None)
+        if timeout is not None:
+            kwargs["timeout"] = timeout
         return await self._transport.execute_mutation(
-            self._command(state, request.lua_code), is_complete=_is_sentinel
+            self._command(state, request.lua_code), **kwargs
         )
 
     def _state_for(self, context: str) -> int:
