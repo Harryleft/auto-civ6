@@ -353,7 +353,7 @@ def test_assessment_summary_maps_question_ids_to_readable_text() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_jev_review_blocks_when_evidence_does_not_support_the_candidate() -> None:
+def test_jev_review_no_longer_hard_blocks_on_evidence_quality() -> None:
     """复核以现实证据为准：假设无支持 / 代价未知 / 信息不足 → 阻断提交。"""
 
     factory, _ = _factory_for(
@@ -374,8 +374,16 @@ def test_jev_review_blocks_when_evidence_does_not_support_the_candidate() -> Non
 
     # information_sufficient 是 informative（"先再查一轮"的建议），不参与拦截；
     # 证据类里真正拦下的是 assumptions_supported。
-    assert "assumptions_supported" in result["blocking"]
+    # 证据类两条都是 informative（"先再查一轮"的建议），不再参与拦截。
+    assert "assumptions_supported" not in result["blocking"]
     assert "information_sufficient" not in result["blocking"]
+    # 本 fixture 把三条红线刻意设为 0.95（踩线），因此它们**应当**拦住——
+    # 说明"拦截权只留给红线"这条规则生效。
+    assert set(result["blocking"]) == {
+        "combat_power_deficit",
+        "siege_capability_missing",
+        "unprepared_war",
+    }
     assert result["verdicts"]["assumptions_supported"]["value"] == pytest.approx(0.05)
     # 被拦时必须带上可读理由，供下一轮反馈给模型
     assert len(result["blocking_reasons"]) == len(result["blocking"])
