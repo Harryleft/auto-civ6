@@ -43,24 +43,27 @@
 - **不复用** `civ_mcp/game_over_watchdog.py`：它绑定即将删除的旧 `GameState`。
 - 参考现有 `CivAdapter.read_victory_progress()`（`lua/victory.py`）的 shape。
 
-### D4 入口形态：独立命令行进程，完全绕开 DSH
+### D4 入口形态：独立命令行进程 + MCP 客户端（由 O2 修订）
 
 - `civ_agent` 是**自己的 Python 主进程**，一条命令行启动，LangGraph 在进程内
   运行。
-- **直接内调** `civ_mcp.runtime` 的 Python 对象（`CivAdapter` / `SessionKernel` /
-  `OperationStore` / `TurnLoop`），**不经 MCP**。
-- 不走 DSH：`integrations/deepseek-harness/` 与 `scripts/runtime_dsh` 不进入
-  MVP 正式路径。
-- **后果**：`civ_mcp.runtime.server` 的 48 个 MCP tool 在 MVP 主路径中不被调用，
-  仅作为参考；`RuntimeMcpSurface` 同理。`@mcp.tool` 装饰器与 `FastMCP` 依赖
-  在 MVP 中不再需要，删除时机留到 M01 之后单独确认。
+- 它**经 MCP 客户端**（stdio）连接 `civ_mcp.runtime.server` 来读写游戏，**不**在
+  进程内直连 `CivAdapter` / `SessionKernel`。branch token 与 store 路径经
+  `CIV_MCP_RUNTIME_BRANCH` / `CIV_MCP_RUNTIME_STORE` 传给 server 子进程；
+  每次从基准存档起跑生成新 branch，换局必须重启 server 子进程。（细节见 §3 O2）
+- **不**走 DSH 宿主：不使用 `integrations/deepseek-harness/` 的 overlay，也不使用
+  `scripts/runtime_dsh` 启动 DSH。`civ_agent` 自己拉起 Runtime server 子进程。
+- 修订原因：MCP 工具面需要保留，好让 CLI 能直接操作游戏，同时让 48 个工具对
+  DeepSeek 可用。走 MCP 使工具只有一份实现，避免两套入口同时竞争 FireTuner。
 
-### D5 DeepSeek → 动作：原生 function calling
+### D5 DeepSeek → 动作：原生 function calling，工具由 MCP 动态发现
 
-- 把 Runtime 的 **25 个 mutation** 包装成 LangChain tools 绑定给
-  `ChatDeepSeek`，在 `deepseek_decide` 阶段由模型自主调用，从而拿到真实可行性
-  数据（如 `get_unit_attack_target`）。不采用"模型输出 JSON、节点层解析"的
-  方案。
+- 把 Runtime 的工具绑定给 `ChatDeepSeek`，在 `deepseek_decide` 阶段由模型自主
+  调用，从而拿到真实可行性数据（如 `get_unit_attack_target`）。不采用"模型输出
+  JSON、节点层解析"的方案。
+- **工具来源由 O2 修订**：不再手写 25 个 mutation 的包装层，而是从 MCP server
+  的 `list_tools` 结果动态发现并逐一包装成 LangChain tools。这样工具清单始终与
+  Runtime 实际暴露的能力一致，不会漂移。
 - 25 个 mutation 清单（来自 `src/civ_mcp/runtime/server.py`）：
   `save_handoff` `move_unit` `attack_unit` `attack_city` `build_improvement`
   `propose_trade` `upgrade_unit` `promote_unit` `send_envoy` `appoint_governor`
@@ -79,7 +82,7 @@
 
 - `deepseek_decide` 回边 `search_rules` / `read_game_info` 的次数**不设硬上限**，
   信任模型自己收敛。
-- **配套要求**：必须有墙钟超时与总回合数停止条件兜底，见 O6 / O7。
+- **配套兜底**：单回合墙钟 3 分钟 + 总 50 回合（见 §3 O4）。
 
 ### D8 M01 删除边界：只删代码 + 只测它的测试
 
@@ -118,7 +121,9 @@
 
 ---
 
-## 3. 仍未决定的事项
+## 3. 已决定的实施细节（原开放问题）
+
+以下 O1–O7 全部已定案，实施时不再需要另行确认。
 
 ### O1 读档/启动模块的归属 —— 已测量，建议保留
 
@@ -137,42 +142,64 @@ logger         → civ_mcp.telemetry → civ_mcp.run_id
 `civ_mcp.runtime`，从而维持"Runtime 不拥有存档生命周期"这条边界。
 `run_id` / `telemetry` 必须随 `logger` 一起保留。
 
-### O2 launcher 装配方式
+### O2 接入形态：经 CLI MCP 客户端调 Runtime —— 已定
 
-`civ_agent` 需要 `assemble_runtime(adapter, store, branch_token=...)` + a
-`RuntimeConnection` + a store 路径。launcher 需要自己完成这套装配，并选一个
-稳定的 branch token（例如基准存档每次运行生成一个新的）。
+`civ_agent` **不**在进程内直连 `CivAdapter`/`SessionKernel`，而是作为 **MCP 客户端**
+通过 stdio 连接 `civ_mcp.runtime.server`，把它的 48 个工具作为动作库使用。
 
-### O3 `@mcp.tool` / `FastMCP` 去留
+- 唯一的装配方是 `civ_mcp.runtime.server` 的 lifespan：它自己
+  `RuntimeConnection.connect()` → `assemble_runtime(...)` → 关闭时 `store.close()`。
+  `civ_agent` 不重复这套装配。
+- branch token 经启动 server 子进程时的环境变量传入：
+  `CIV_MCP_RUNTIME_BRANCH`（`civ_mcp/runtime/server.py:44` 的 `RUNTIME_BRANCH_ENV`），
+  store 路径经 `CIV_MCP_RUNTIME_STORE`。**每次从基准存档起跑生成一个新的 branch
+  token，从不复用**，避免跨局回读把不同 run 的 operation 串在一起。
+- 因为 branch 只在 lifespan 绑定时读取一次，**换局必须重启 server 子进程**，
+  不能在同一个 server 进程里切 branch。
+- 直接收益（取代原 D5 的手写绑定）：48 个工具可经 MCP `list_tools` 动态发现，
+  再逐一包装成 LangChain tools 喂给 `ChatDeepSeek`，因此
+  **不需要为 25 个 mutation 手写包装层**，且 CLI 手动操作与 `civ_agent` 共用同一份
+  工具实现，不存在两套竞争 FireTuner 的实现。
+- 参考实现：`scripts/_mcp_call.py`（单次调用）与 `scripts/_mcp_session.py`
+  （stdin 逐行 JSON 的常驻会话）。
 
-D4 之后 MCP 不进主路径。建议保留 `civ_mcp/runtime/server.py` 作为参考适配层
-（它已冻结并被 `tests/test_runtime_entrypoint.py` 等覆盖），但**删除**
-`civ_mcp/server/`（旧 112 工具 MCP 面）。两者的名字相近但完全不同，见 §5。
+### O3 MCP 工具面：保留并进入主路径 —— 已定
 
-### O4 总运行成本与停止条件
+`civ_mcp/runtime/server.py`（48 个 tool：23 只读 + 25 mutation）**保留**，且不再是
+"仅供参考"：按 O2 它是 `civ_agent` 的实际动作库入口。因此
 
-D7 不设循环上限，加上"整局几百回合"，需要明确：
-- 总回合上限或总墙钟上限；
-- 单回合墙钟超时；
-- 是否需要在超时后把该回合标记为"未完成"并写入 Memory。
+- **不**拆分纯函数层，`@mcp.tool` 装饰器保留；
+- `civ_mcp/server/`（旧 112 工具面）已在 M01 删除，与本文档无关，见 §5 P9；
+- `scripts/_mcp_call.py` / `_mcp_session.py` 从"旧 pi 临时脚本"升级为正式的
+  CLI 操作入口，M01 未删除它们。
 
-### O5 脚本命名冲突 —— 已定位受影响测试
+### O4 停止条件：单回合 3 分钟 / 总 50 回合 —— 已定
 
-`scripts/civ6_agent` 已存在，是旧 DSH 受控回合循环（含
-`--play-profile legacy|lean`）。D4 之后它属于 §13.1 的 "legacy / lean play
-profile"，需要删除或改名，新 launcher 需要新名字。
+`deepseek_decide` 的循环次数仍然不设上限（D7），由墙钟兜底：
 
-实测：删除它会连带使 `tests/test_civ6_agent_entrypoint.py` 的 5 项测试失败
-（其中 `test_default_profile_is_legacy` 正断言默认 `legacy`）。
+- **单回合墙钟超时 3 分钟**；
+- **总回合上限 50 回合**（冒烟用，见 D9）；
+- 超时或触顶时，该回合标记为**未完成**并写入 Game Memory，**不伪造成
+  CONFIRMED**；本局以"未结束"收尾，不调用 `finish_game` 写胜负。
 
-### O6 `uv.lock` 重算
+### O5 新命令行入口：`scripts/civ6_run` —— 已定
 
-加入 `langgraph` / `langchain-typesafe`（prerelease）/ `langchain-deepseek`，
-以及 D10 改名后会触发大范围 lock 变更。建议与 D10 合并成一次重算。
+`scripts/civ6_agent` 已在 M01 删除（属于 §13.1 的 legacy/lean play profile）。
+新入口命名为 **`scripts/civ6_run`**，同时提供 `python -m civ_agent` 等价入口。
+
+### O6 依赖：允许 prerelease 并锁死精确版本 —— 已定
+
+加入 `langgraph`、`langchain-deepseek`、`langchain-typesafe`。其中
+`langchain-typesafe` 目前是 alpha 预发布版（`0.0.1a2`）：
+
+- `uv add` 需显式允许 prerelease；
+- 必须**锁死精确版本**（`==0.0.1a2`），因为 alpha 的 API 可能随时变动；
+- 升级该依赖时视为一次独立改动，需重跑 Jev 节点的测试。
 
 ### O7 旧测试的去留 —— 已精确测量
 
-见 §4，结论是 **63 个测试文件**硬依赖旧认知栈。
+见 §4，结论是 **74 个测试文件**随 M01 一起删除（实测，非估算）。
+
 
 ---
 
@@ -278,13 +305,13 @@ M01 后需一并删除该节，否则 mutation 配置悬空。
 
 | 卡 | 内容 | 依赖 | 阻塞 |
 |---|---|---|---|
-| 前置 | 拍定 O2 / O3 / O4 / O5 / O6 | — | 否 |
-| M01 | 删旧认知系统（边界见 §4，已实测） | — | 否 |
+| 前置 | O1–O7 全部定案（见 §3） | — | 已完成 |
+| M01 | 删旧认知系统（边界见 §4） | — | 已完成 |
 | M02 | 建 `src/civ_agent/` 包骨架 | — | 已完成 |
-| M03 | 装 `langgraph` / `langchain-typesafe`(a) / `langchain-deepseek`；fail-fast | O6 | 是 |
+| M03 | 装 `langgraph` / `langchain-typesafe==0.0.1a2` / `langchain-deepseek`；fail-fast | O6 | 否 |
 | M04 | Jev 节点（`jev_assess` / `jev_review`） | M03 | 是 |
-| M05 | DeepSeek 节点 + 25 mutation 工具绑定（D5） | M03 | 是 |
-| M06 | Observation 组合（`civ_mcp.runtime.context`） | — | 已完成 |
+| M05 | DeepSeek 节点 + MCP 动态发现的工具绑定（D5） | M03 | 是 |
+| M06 | Observation 组合（经 MCP 的 `get_runtime_context`） | O2 | 已完成（内调版），O2 后需改为 MCP 来源 |
 | M07 | Game Memory Writer | — | 已完成 |
 | M08 | Memory Search（全文） | M07 | 已完成 |
 | M09 | Rule Search | — | 否 |
@@ -293,7 +320,8 @@ M01 后需一并删除该节，否则 mutation 配置悬空。
 | M12 | 接 Runtime mutation | M11 | 是 |
 | M13 | 完整 Turn Memory 追加 | M12 M07 | 是 |
 | M14 | End Turn / AI Turn | M12 | 是 |
-| M15a | 冒烟：固定回合上限整局 | M14 M13 D3 | 是 |
+| M15a | 冒烟：单回合 3 分钟 / 总 50 回合 | M14 M13 D3 | 是 |
 | M15b | 全量：Turn 1 → Game Over | M15a | 是 |
-| 横切 | launcher（启动 + 读档 + D1 安装） | D2 O1(已定) O2 O5 | 是 |
-| 横切 | `civ6-agent` 改名（D10） | — | 否 |
+| 横切 | `scripts/civ6_run`（启动 + 读档 + D1 安装 + 拉起 Runtime server） | D1 D2 O2 O5 | 是 |
+| 横切 | MCP 客户端层（stdio 连 Runtime server，动态发现工具） | O2 | 是 |
+
