@@ -298,8 +298,8 @@ def test_driver_advances_one_turn_per_advanced_decision() -> None:
     assert driver.turn == 8
 
 
-def test_driver_does_not_claim_a_game_over_that_it_cannot_read() -> None:
-    """D3 未实现时，驱动必须说"不能宣称跑到终局"，而不是猜。"""
+def test_driver_refuses_to_run_when_game_over_is_not_wired() -> None:
+    """接线缺口：没有终局读取就不该假装在跑整局。"""
 
     client = _EndTurnClient(turn=1)
     driver = _build_driver(client, game_over_reader=None)
@@ -307,8 +307,25 @@ def test_driver_does_not_claim_a_game_over_that_it_cannot_read() -> None:
     report = _run(driver.run())
 
     assert report.outcome is RunOutcome.GAME_OVER_UNSUPPORTED
-    assert "D3" in report.note
+    assert "终局信号" in report.note
     assert report.turns_completed == 0
+
+
+def test_driver_continues_but_records_a_transient_game_over_failure() -> None:
+    """已接线但临时读不到：继续跑，且结束时不声称跑到真实终局。"""
+
+    async def flaky() -> dict[str, Any]:
+        raise TimeoutError("get_game_over 未得到完整响应")
+
+    client = _EndTurnClient(turn=1)
+    driver = _build_driver(client, max_turns=1, game_over_reader=flaky)
+
+    report = _run(driver.run())
+
+    assert report.outcome is RunOutcome.TURN_LIMIT
+    assert report.turns_completed == 1, "可恢复失败不应阻止推进"
+    assert "终局读取失败" in report.note
+    assert "不能声称" in report.note
 
 
 def test_driver_reports_a_real_game_over_from_the_reader() -> None:

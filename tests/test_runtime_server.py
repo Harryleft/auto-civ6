@@ -26,6 +26,8 @@ def test_experimental_runtime_surface_exposes_only_new_core_tools() -> None:
 
     assert names == {
         "get_runtime_context",
+        # 审查 D3：终局读取，只读，供整局驱动判断何时收尾。
+        "get_game_over",
         "get_unit_promotions",
         "get_unit_attack_target",
         "get_city_attack_target",

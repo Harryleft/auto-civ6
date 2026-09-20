@@ -118,6 +118,10 @@ class RuntimeMcpSurface:
         """Return live wonder placements without exposing a production operation."""
         return await self._context.read_wonder_placements(city_id, wonder_name)
 
+    async def get_game_over(self):
+        """Return the authoritative end-of-game signal without assuming an outcome."""
+        return await self._context.read_game_over()
+
     def save_handoff(
         self,
         *,

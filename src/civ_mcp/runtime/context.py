@@ -244,6 +244,15 @@ class ContextBuilder:
             observed_turn=overview.observed_turn
         )
 
+    async def read_game_over(self):
+        """Read the authoritative end-of-game signal (审查 D3).
+
+        只读；读不到时 ``read`` 会抛错，调用方**不得**把失败当成"游戏未结束"。
+        """
+
+        overview = await self._adapter.read_overview()
+        return await self._adapter.read_game_over(observed_turn=overview.observed_turn)
+
     async def read_wonder_placements(self, city_id: int, wonder_name: str):
         """Read game-approved placement candidates without starting production."""
         overview = await self._adapter.read_overview()

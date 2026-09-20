@@ -189,11 +189,22 @@ class FireTunerTransport:
         timeout: float = 5.0,
         is_complete: Completion,
     ) -> TransportReceipt:
-        """Retry a read once, but only when the first command was NOT_SENT."""
+        """Retry a read once after reconnecting whenever the stream became unusable.
+
+        只读命令可以安全重试：它不改变游戏状态。早先的实现只在 ``NOT_SENT`` 时
+        重连，但超时发生在写入**之后**，``send_state`` 是 ``MAYBE_SENT``，于是
+        ``submit_command`` 已经 ``_retire()`` 了连接，而下一次读取仍然连着一条
+        死流——一条超时的只读会把后续所有读取一起带崩。
+
+        这里把条件放宽为"连接已不可用就重连一次"。**mutation 不享受这个待遇**：
+        ``execute_mutation`` 仍然只发一次，未知结果必须由上层核对。
+        """
+
         receipt = await self.submit_command(
             payload, tag=tag, timeout=timeout, is_complete=is_complete
         )
-        if receipt.send_state is not SendState.NOT_SENT or self._reconnect is None:
+        retryable = receipt.send_state is SendState.NOT_SENT or not receipt.connection_usable
+        if not retryable or self._reconnect is None:
             return receipt
 
         try:

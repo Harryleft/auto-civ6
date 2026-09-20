@@ -96,6 +96,12 @@ async def get_runtime_context(ctx: Context) -> dict[str, object]:
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
+async def get_game_over(ctx: Context) -> dict[str, object]:
+    """Read the authoritative end-of-game signal; a read failure is not "not over"."""
+    return _json_value(await _runtime(ctx).assembly.surface.get_game_over())
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
 async def get_unit_promotions(ctx: Context, unit_index: int) -> dict[str, object]:
     """Return current legal and already-owned promotions for one unit."""
     return _json_value(
