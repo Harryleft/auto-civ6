@@ -9,7 +9,14 @@
 from __future__ import annotations
 
 from civ_agent.config import AgentConfig, MissingCredentialError, load_config
-from civ_agent.graph import build_graph
+from civ_agent.graph import GraphDeps, GraphError, GraphResources, build_graph
+from civ_agent.mcp_client import (
+    RuntimeClient,
+    ToolCallError,
+    ToolSpec,
+    runtime_session,
+    with_runtime,
+)
 from civ_agent.observation import Observation, OpponentState, build_observation
 from civ_agent.rules import RuleHit, known_topics, search_rules
 from civ_agent.state import (
@@ -27,17 +34,25 @@ __all__ = [
     "CandidateAction",
     "ExecutionResult",
     "ExecutionStatus",
+    "GraphDeps",
+    "GraphError",
+    "GraphResources",
     "GraphState",
     "MemoryHit",
     "MissingCredentialError",
     "Observation",
     "OpponentState",
     "RuleHit",
+    "RuntimeClient",
     "Seed",
+    "ToolCallError",
+    "ToolSpec",
     "build_graph",
     "build_observation",
     "known_topics",
     "load_config",
     "new_state",
+    "runtime_session",
     "search_rules",
+    "with_runtime",
 ]

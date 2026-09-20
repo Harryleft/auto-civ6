@@ -94,15 +94,20 @@ class ExecutionResult:
 
 
 class GraphState(TypedDict, total=False):
-    """LangGraph 在一次决策循环内传递的状态。"""
+    """LangGraph 在一次决策循环内传递的状态。
+
+    字段按写入方分组；新增字段必须同时说明写入方，避免多个节点互相覆写。
+    """
 
     # 身份
     seed: Seed
     turn: int
 
-    # 事实与不确定性
+    # 事实与不确定性（observe / read_game_info 写入）
     observation: Annotated[Observation | None, _replace]
     unknown: Annotated[tuple[str, ...], _extend]
+    important_changes: Annotated[tuple[str, ...], _replace]
+    extra_facts: Annotated[dict[str, Any], _replace]
 
     # 历史经验
     memory_hits: Annotated[tuple[MemoryHit, ...], _replace]
@@ -114,9 +119,22 @@ class GraphState(TypedDict, total=False):
     jev_review: Annotated[dict[str, Any] | None, _replace]
     final_action: Annotated[CandidateAction | None, _replace]
     deepseek_messages: Annotated[list[Any], _replace]
+    deepseek_summary: Annotated[str, _replace]
 
-    # 执行
+    # 回边请求（由调用方或模型填充，节点只读）
+    bound_tools: Annotated[Sequence[Any] | None, _replace]
+    tool_request: Annotated[str | None, _replace]
+    rule_query: Annotated[str | None, _replace]
+    read_info_tool: Annotated[str | None, _replace]
+    read_info_arguments: Annotated[dict[str, Any] | None, _replace]
+    backedge_count: Annotated[int, _replace]
+    last_backedge: Annotated[str | None, _replace]
+
+    # 执行与记忆
     execution: Annotated[ExecutionResult | None, _replace]
+    memory_file: Annotated[Any | None, _replace]
+    long_term_goal: Annotated[str, _replace]
+    final_result: Annotated[str, _replace]
 
 
 def new_state(*, seed: Seed, turn: int) -> GraphState:
@@ -129,6 +147,8 @@ def new_state(*, seed: Seed, turn: int) -> GraphState:
         turn=turn,
         observation=None,
         unknown=(),
+        important_changes=(),
+        extra_facts={},
         memory_hits=(),
         jev_assess=None,
         rule_queries=(),
@@ -136,5 +156,16 @@ def new_state(*, seed: Seed, turn: int) -> GraphState:
         jev_review=None,
         final_action=None,
         deepseek_messages=[],
+        deepseek_summary="",
+        bound_tools=None,
+        tool_request=None,
+        rule_query=None,
+        read_info_tool=None,
+        read_info_arguments=None,
+        backedge_count=0,
+        last_backedge=None,
         execution=None,
+        memory_file=None,
+        long_term_goal="",
+        final_result="",
     )
