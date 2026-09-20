@@ -650,9 +650,9 @@ class SettleCandidate:
     defense_score: int = 0
     luxury_count: int = 0
     strategic_count: int = 0
-    loyalty_pressure: float = (
-        0.0  # approx loyalty/turn from population pressure, negative = bad
-    )
+    #: 忠诚压力近似值，被 clamp 在 [-20, 20]。**正数 = 友方压力（对我们有利）**，
+    #: 负数 = 敌方压力。注意这在开局（附近没有城市）也会是正值 20，不表示有邻国。
+    loyalty_pressure: float = 0.0
 
 
 @dataclass

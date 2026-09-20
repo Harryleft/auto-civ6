@@ -83,6 +83,7 @@ from civ_mcp.lua.models import (
     PendingCityCapture,
     PendingDeal,
     ReligionOverview,
+    SettleCandidate,
     SpyInfo,
     TradeNegotiation,
     ProductionOption,
@@ -98,7 +99,12 @@ from civ_mcp.lua.models import (
     WonderPlacement,
     WorldCongressStatus,
 )
-from civ_mcp.lua.map import build_wonder_advisor_query, parse_wonder_advisor_response
+from civ_mcp.lua.map import (
+    build_settle_advisor_query,
+    build_wonder_advisor_query,
+    parse_settle_advisor_response,
+    parse_wonder_advisor_response,
+)
 from civ_mcp.lua.overview import (
     build_game_identity_query,
     build_gameover_check_gamecore,
@@ -594,6 +600,29 @@ class CivAdapter:
                 lua_code=build_village_overview_query(),
                 decode=lambda lines: parse_village_overview_response(list(lines)),
                 coverage="VILLAGES:REVEALED",
+            ),
+            observed_turn=observed_turn,
+        )
+
+    async def read_settle_candidates(
+        self, *, unit_index: int, observed_turn: int
+    ) -> CivReadResult[list[SettleCandidate]]:
+        """Read the game's own settle-quality judgments for one settler.
+
+        这是**游戏给出的判定**，不是我们自造的策略：每个候选点带
+        ``water_type``（淡水/海岸/无）、``total_food``/``total_prod``（内环产出）、
+        ``resources``（已分类 S=战略 / L=奢侈 / B=加成）、``defense_score`` 与
+        ``loyalty_pressure``（附近城市压力）。模型据此判断该在哪里建城，而不是
+        自己从坐标猜。
+        """
+
+        return await self.read(
+            CivReadRequest(
+                tool="get_settle_candidates",
+                lua_code=build_settle_advisor_query(unit_index),
+                decode=lambda lines: parse_settle_advisor_response(list(lines)),
+                coverage="SETTLE_CANDIDATES:RADIUS_5_SCORED",
+                context="ingame",
             ),
             observed_turn=observed_turn,
         )
