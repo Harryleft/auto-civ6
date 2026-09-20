@@ -28,6 +28,8 @@ def test_experimental_runtime_surface_exposes_only_new_core_tools() -> None:
         "get_runtime_context",
         # 审查 D3：终局读取，只读，供整局驱动判断何时收尾。
         "get_game_over",
+        # 建城判定：游戏给出的淡水/资源/内环产出等事实，只读。
+        "get_settle_candidates",
         "get_unit_promotions",
         "get_unit_attack_target",
         "get_city_attack_target",

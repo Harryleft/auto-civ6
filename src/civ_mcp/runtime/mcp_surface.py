@@ -118,6 +118,10 @@ class RuntimeMcpSurface:
         """Return live wonder placements without exposing a production operation."""
         return await self._context.read_wonder_placements(city_id, wonder_name)
 
+    async def get_settle_candidates(self, unit_index: int):
+        """Return the game's own settle-quality judgments without founding a city."""
+        return await self._context.read_settle_candidates(unit_index)
+
     async def get_game_over(self):
         """Return the authoritative end-of-game signal without assuming an outcome."""
         return await self._context.read_game_over()
