@@ -36,82 +36,176 @@ SCORE = "score"
 BLOCKING_THRESHOLD = 0.25
 INFORMATION_GAP_THRESHOLD = 0.5
 FACTUAL_CONFLICT_THRESHOLD = 0.5
-CONFIDENT_EVIDENCE_THRESHOLD = 0.5
-ASSUMPTION_SUPPORTED_THRESHOLD = BLOCKING_THRESHOLD
+#: Civ6 特有红线（审查 R10 之后新增）：军力代差硬打、攻城手段不足、战狂代价
+#: 未评估等，wiki 的 L0 速查把它们列为可直接依据的硬规则。
+CIV6_REDLINE_THRESHOLD = 0.5
+
+#: 问题角色，决定答案如何被使用：
+#: - ``blocking``：为"否"即可阻止提交（复核用）
+#: - ``informative``：只作为信号交回模型（评估用）
+#: - ``descriptive``：只记录，不参与任何判定（Choice/Score 多为这一类）
+ROLE_BLOCKING = "blocking"
+ROLE_INFORMATIVE = "informative"
+ROLE_DESCRIPTIVE = "descriptive"
 
 #: Jev Assess 提出的问题。
 #:
-#: 审查 R10 指出：把"expand/develop/defend/research"这类人工国策写进固定问题，
-#: 等于把人的战略答案硬编码进判断层，换成概率问句并不会消除这层偏置。因此这里
-#: 只问**信息缺口、事实矛盾与风险**——这些是可核对的事实属性，不是战略主张。
+#: 设计依据是 ``docs/wiki/`` 的 L0 决策速查（游戏机制事实），不是凭印象编的
+#: 战略主张：
+#:
+#: - ``victory.md``：不要平均发展，第一章就选定唯一主路线；每 10 回合重估瓶颈；
+#:   AI 接近任意胜利都要立刻反制。
+#: - ``economy.md``：商路闲置 = 机会成本；宜居度是隐藏产出税；金币/信仰是时间
+#:   加速器，不要无计划囤积。
+#: - ``military.md``：敌方在边境集结攻城单位 = 宣战信号；军力差 2 倍视为实质威胁。
+#:
+#: 这些问句问的是**局面与事实**（走哪条路、瓶颈在哪、威胁多高、有没有浪费），
+#: 而不是"应该走哪条路"的答案；答案由模型给，Jev 只做结构化判断。
 ASSESS_QUESTIONS: tuple[dict[str, Any], ...] = (
+    # ---- 战略取向（对应 victory.md：不平均发展、每 10 回合重估）----
+    {
+        "id": "primary_victory_path",
+        "kind": CHOICE,
+        "role": ROLE_DESCRIPTIVE,
+        "instructions": "按当前已知事实，本局最可能投入的主路线是哪一条（选最符合现状的一项，不要求已决定）？",
+        "criteria": {
+            "science": "科技：宇航中心 + 太空项目链；需要产能与铝。",
+            "culture": "文化：旅游压过对手国内游客；需要伟作/奇观/商路乘区。",
+            "religion": "宗教：己方宗教成为所有文明主流；需要圣地与大预言家。",
+            "domination": "征服：占领对手首都；军事是清道夫，需回填主路线。",
+            "diplomatic": "外交：外交支持度点数制，硬上限 20 点。",
+            "score": "分数兜底：仅在稳居第一且无人接近其他胜利时考虑。",
+        },
+    },
+    {
+        "id": "current_bottleneck",
+        "kind": CHOICE,
+        "role": ROLE_DESCRIPTIVE,
+        "instructions": "当前限制主路线推进的最大瓶颈是哪一项（据实选，无明确短板选 none）？",
+        "criteria": {
+            "production": "产能不足，关键区域/单位/项目排队过长。",
+            "science": "科技产出或研究顺序拖慢解锁。",
+            "culture": "文化/市政或旅游乘区不足。",
+            "faith": "信仰不足，无法支撑宗教线或买伟人/移民。",
+            "gold": "金币不足，无法购买或维持军费。",
+            "amenities": "宜居度不足，全城产出与增长被百分比惩罚。",
+            "housing": "住房不足，人口增长停滞。",
+            "military": "军力不足，无法应对威胁或推进征服。",
+            "population": "人口/城市数量不足，复利基数太小。",
+            "diplomacy": "外交支持度或关系管理不足。",
+            "none": "没有明确单一瓶颈。",
+        },
+    },
+    {
+        "id": "bottleneck_actionable",
+        "kind": NOUL,
+        "role": ROLE_INFORMATIVE,
+        "instructions": "当前材料是否足以支撑**本回合就针对上述瓶颈**做一个具体动作？",
+        "criteria": {
+            "true": "材料里能指到具体城市/单位/科技/政策与可执行动作。",
+            "false": "还缺关键事实，先补读再决定更稳妥。",
+        },
+    },
+    # ---- 威胁与战备（对应 military.md：攻城单位集结 = 宣战信号）----
+    {
+        "id": "military_threat",
+        "kind": SCORE,
+        "role": ROLE_DESCRIPTIVE,
+        "instructions": "当前面临的军事威胁程度有多高（按 wiki 口径：军力差 2 倍或边境集结即为实质威胁）？",
+        "criteria": [
+            "无威胁：无敌意单位接近，无战争状态。",
+            "边境骚扰：少量蛮族或外国单位在边境活动。",
+            "明确威胁：存在敌对意图或军力接近 2 倍差距。",
+            "迫在眉睫：已在交战，或城市/关键单位本回合内可能失守。",
+        ],
+    },
+    {
+        "id": "enemy_siege_massing",
+        "kind": NOUL,
+        "role": ROLE_INFORMATIVE,
+        "instructions": "是否有敌方攻城单位（Catapult/Trebuchet 类）正在向边境集结？",
+        "criteria": {
+            "true": "观察到攻城单位移动或已就位——wiki 视其为宣战信号。",
+            "false": "未观察到，或视野内没有这类单位。",
+        },
+    },
+    {
+        "id": "defense_inadequate",
+        "kind": NOUL,
+        "role": ROLE_INFORMATIVE,
+        "instructions": "在可预见的威胁下，当前防御是否明显不足（照 wiki：城墙是最高性价比防御）？",
+        "criteria": {
+            "true": "关键城市无城墙/驻军，且存在明确威胁。",
+            "false": "防线够用，或当前没有需要防御的方向。",
+        },
+    },
+    # ---- 经济与增长（对应 economy.md：宜居度税、商路闲置、金信仰是加速器）----
+    {
+        "id": "amenities_penalty",
+        "kind": NOUL,
+        "role": ROLE_INFORMATIVE,
+        "instructions": "是否存在宜居度不足导致的产出/增长惩罚？",
+        "criteria": {
+            "true": "至少一座城市的宜居度为负，正在承受百分比惩罚。",
+            "false": "各城宜居度正常。",
+        },
+    },
+    {
+        "id": "idle_trade_capacity",
+        "kind": NOUL,
+        "role": ROLE_INFORMATIVE,
+        "instructions": "是否存在闲置的商路容量（可建商队却未建，或商路无目的地）？",
+        "criteria": {
+            "true": "商路容量未被用满——wiki 视为白送的机会成本。",
+            "false": "商路容量已用满或尚未解锁。",
+        },
+    },
+    # ---- 事实质量（保留审查 R10 要求的信息类判断）----
     {
         "id": "information_gap",
         "kind": NOUL,
-        "instructions": "为了在本回合做出有依据的选择，是否仍缺少必需的当前事实（例如单位位置、城市生产候选、可操作对象或游戏待选项）？",
+        "role": ROLE_INFORMATIVE,
+        "instructions": "为了在本回合做出有依据的选择，是否仍缺少必需的当前事实？",
         "criteria": {
-            "true": "至少一项做决定所必需的事实目前缺失或读不到。",
+            "true": "至少一项做决定所必需的事实缺失或读不到。",
             "false": "当前材料足以评估本回合的选择。",
         },
     },
     {
         "id": "factual_conflict",
         "kind": NOUL,
-        "instructions": "当前材料内部是否存在互相矛盾的事实（例如同一对象状态不一致、计数与明细不符、coverage 与内容冲突）？",
+        "role": ROLE_INFORMATIVE,
+        "instructions": "当前材料内部是否存在互相矛盾的事实？",
         "criteria": {
             "true": "存在两处材料无法同时为真。",
             "false": "未发现互相矛盾之处。",
-        },
-    },
-    {
-        "id": "immediate_risk",
-        "kind": SCORE,
-        "instructions": "当前局面存在多高程度的即时风险（城市或单位在本回合内可能遭受不可逆损失）？",
-        "criteria": [
-            "无即时风险：没有敌对单位或敌对意图接近。",
-            "低：有零星敌对单位在边境活动，短期内不构成实质威胁。",
-            "中：存在明确的军事或忠诚压力，需要本回合分神处理。",
-            "高：城市或关键单位在本回合内可能失守或被摧毁。",
-        ],
-    },
-    {
-        "id": "unknown_impact",
-        "kind": NOUL,
-        "instructions": "材料中标记为 unknown 的项，是否会实质影响本回合的选择（即不同取值会导向不同动作）？",
-        "criteria": {
-            "true": "存在这样的 unknown 项；先补齐再决定更稳妥。",
-            "false": "unknown 项不影响本回合可选动作的排序。",
         },
     },
 )
 
 #: Jev Review 提出的问题。
 #:
-#: 审查 R10 指出：复核若主要问"是否与 Assess 冲突"，容易变成对上一步模型回答的
-#: 自我确认。因此这里改为核对**现实证据**：候选的假设是否有事实支持、代价是否
-#: 已知、信息是否够。
+#: 分两类：
+#:
+#: - **证据类**（blocking）：候选的假设是否有事实支持、信息是否够提交；
+#: - **Civ6 红线类**（blocking）：wiki L0 明确列为可直接依据的硬规则——军力代差
+#:   硬打、防御不足还要拖延、战狂代价未评估等。这类问题的"是"表示**确实踩线**，
+#:   因此其 blocking 语义是"为是则拦"。
 REVIEW_QUESTIONS: tuple[dict[str, Any], ...] = (
     {
         "id": "assumptions_supported",
         "kind": NOUL,
-        "instructions": "候选行动所依赖的关键假设，是否被当前材料中的事实支持（而不是依赖未经确认的推测）？",
+        "role": ROLE_BLOCKING,
+        "instructions": "候选行动所依赖的关键假设，是否被当前材料中的事实支持？",
         "criteria": {
             "true": "候选的前提能在材料里找到对应事实。",
             "false": "候选依赖了材料中没有的推测，或与材料冲突。",
         },
     },
     {
-        "id": "cost_understood",
-        "kind": NOUL,
-        "instructions": "候选行动的代价是否已经明确（金币、产能、单位、外交后果等）？",
-        "criteria": {
-            "true": "代价可从当前事实算出或已有明确数值。",
-            "false": "代价未知，或候选描述的代价与事实不符。",
-        },
-    },
-    {
         "id": "information_sufficient",
         "kind": NOUL,
+        "role": ROLE_BLOCKING,
         "instructions": "就这次的候选而言，信息是否已经足够到可以提交执行？",
         "criteria": {
             "true": "足以提交；剩余不确定性可以接受。",
@@ -119,8 +213,42 @@ REVIEW_QUESTIONS: tuple[dict[str, Any], ...] = (
         },
     },
     {
+        "id": "combat_power_deficit",
+        "kind": NOUL,
+        "role": ROLE_BLOCKING,
+        "blocking_when": "true",
+        "instructions": "候选行动是否要用明显低一级的兵种硬打高一级兵种（wiki：差 10 点战力伤害显著拉开，差 36+ 必被秒杀）？",
+        "criteria": {
+            "true": "确实存在代差硬打，且没有夹击/地形/驻防补偿。",
+            "false": "不涉及此类攻击，或已有足够补偿。",
+        },
+    },
+    {
+        "id": "siege_capability_missing",
+        "kind": NOUL,
+        "role": ROLE_BLOCKING,
+        "blocking_when": "true",
+        "instructions": "候选若是攻城，是否缺少必要手段（wiki：远程只打兵不清城防，破墙必须靠攻城单位或破城锤，最后需近战占领）？",
+        "criteria": {
+            "true": "计划攻城但没有攻城单位/破城锤，或没有近战单位收尾。",
+            "false": "不是攻城动作，或手段齐备。",
+        },
+    },
+    {
+        "id": "unprepared_war",
+        "kind": NOUL,
+        "role": ROLE_BLOCKING,
+        "blocking_when": "true",
+        "instructions": "候选是否在防御明显不足的情况下主动开启或扩大战争？",
+        "criteria": {
+            "true": "要在无城墙/无驻军/无盟友的状态下开战或扩大战线。",
+            "false": "不涉及开战，或防御已就绪。",
+        },
+    },
+    {
         "id": "action_cost",
         "kind": SCORE,
+        "role": ROLE_DESCRIPTIVE,
         "instructions": "所选行动的代价有多难以承受（按其占用资源与不可逆程度评估）？",
         "criteria": [
             "可忽略：常规操作，几乎不占用关键资源。",
@@ -216,15 +344,27 @@ def _summarize(kind: str, payload: dict[str, Any], *, threshold: float) -> tuple
     raise JevError(f"未知的 Jev 问题种类：{kind!r}")
 
 
-def _threshold_for(question_id: str) -> float:
-    return {
-        "information_gap": INFORMATION_GAP_THRESHOLD,
-        "factual_conflict": FACTUAL_CONFLICT_THRESHOLD,
-        "unknown_impact": INFORMATION_GAP_THRESHOLD,
-        "assumptions_supported": ASSUMPTION_SUPPORTED_THRESHOLD,
-        "cost_understood": ASSUMPTION_SUPPORTED_THRESHOLD,
-        "information_sufficient": ASSUMPTION_SUPPORTED_THRESHOLD,
-    }.get(question_id, 0.5)
+#: 每条问句的阈值：红线类用 CIV6_REDLINE_THRESHOLD，其余按角色取。
+_THRESHOLDS: dict[str, float] = {
+    "information_gap": INFORMATION_GAP_THRESHOLD,
+    "factual_conflict": FACTUAL_CONFLICT_THRESHOLD,
+    "bottleneck_actionable": INFORMATION_GAP_THRESHOLD,
+    "assumptions_supported": BLOCKING_THRESHOLD,
+    "information_sufficient": BLOCKING_THRESHOLD,
+    "combat_power_deficit": CIV6_REDLINE_THRESHOLD,
+    "siege_capability_missing": CIV6_REDLINE_THRESHOLD,
+    "unprepared_war": CIV6_REDLINE_THRESHOLD,
+}
+
+
+def _threshold_for(question_id: str, spec: Mapping[str, Any] | None = None) -> float:
+    """问句阈值；未登记的按 0.5。"""
+
+    if question_id in _THRESHOLDS:
+        return _THRESHOLDS[question_id]
+    if spec is not None and spec.get("threshold") is not None:
+        return float(spec["threshold"])
+    return 0.5
 
 
 def observation_state(observation: Observation) -> dict[str, Any]:
@@ -297,26 +437,47 @@ def _verdicts(
     return tuple(verdicts)
 
 
-#: 复核结论为"否"即应阻止直接提交的问题：它们表示证据不足或代价未知。
-_BLOCKING_WHEN_FALSE = ("assumptions_supported", "cost_understood", "information_sufficient")
-#: 评估结论为"是"即表示需要先补信息的信号。
-_INFORMATION_SIGNALS = ("information_gap", "factual_conflict", "unknown_impact")
+def _payload_from_verdicts(
+    verdicts: Iterable[Verdict],
+    specs: Sequence[Mapping[str, Any]] = (),
+) -> dict[str, Any]:
+    """按**问句规格**决定哪些答案参与判定，而不是硬编码问句名。
 
+    ``role`` 决定用途（blocking / informative / descriptive）；``blocking_when``
+    决定方向：
 
-def _payload_from_verdicts(verdicts: Iterable[Verdict]) -> dict[str, Any]:
+    - ``"false"``（默认）：证据不足类——为否即拦；
+    - ``"true"``：Civ6 红线类——**踩线**（为是）即拦。
+    """
+
     collected = {verdict.question_id: verdict.as_dict() for verdict in verdicts}
-    blocking = [
-        question_id
-        for question_id in _BLOCKING_WHEN_FALSE
-        if question_id in collected
-        and (collected[question_id]["value"] or 0.0) < _threshold_for(question_id)
-    ]
-    information_gaps = [
-        question_id
-        for question_id in _INFORMATION_SIGNALS
-        if question_id in collected
-        and (collected[question_id]["value"] or 0.0) >= _threshold_for(question_id)
-    ]
+    by_id = {spec["id"]: spec for spec in specs}
+
+    blocking: list[str] = []
+    information_gaps: list[str] = []
+    for question_id, verdict in collected.items():
+        spec = by_id.get(question_id)
+        if spec is None or spec.get("role") != ROLE_BLOCKING:
+            continue
+        threshold = _threshold_for(question_id, spec)
+        value = verdict["value"]
+        if value is None:
+            # Score 类不参与判定；缺少数值时也不猜。
+            continue
+        direction = str(spec.get("blocking_when") or "false")
+        triggered = value >= threshold if direction == "true" else value < threshold
+        if triggered:
+            blocking.append(question_id)
+
+    for question_id, spec in by_id.items():
+        if spec.get("role") != ROLE_INFORMATIVE:
+            continue
+        verdict = collected.get(question_id)
+        if verdict is None or verdict["value"] is None:
+            continue
+        if verdict["value"] >= _threshold_for(question_id, spec):
+            information_gaps.append(question_id)
+
     reasons = [
         f"{question_id}={collected[question_id]['summary']}" for question_id in blocking
     ]
@@ -392,7 +553,7 @@ async def jev_assess(
     except Exception as exc:  # noqa: BLE001 - 包装成可诊断的领域错误
         raise JevError(f"Jev Assess 调用失败：{type(exc).__name__}: {exc}") from exc
     verdicts = _verdicts(questions, response)
-    payload = _payload_from_verdicts(verdicts)
+    payload = _payload_from_verdicts(verdicts, questions)
     payload["turn"] = observation.turn
     return payload
 
@@ -433,7 +594,7 @@ async def jev_review(
         raise
     except Exception as exc:  # noqa: BLE001
         raise JevError(f"Jev Review 调用失败：{type(exc).__name__}: {exc}") from exc
-    return _payload_from_verdicts(_verdicts(questions, response))
+    return _payload_from_verdicts(_verdicts(questions, response), questions)
 
 
 def _candidate_payload(item: Any) -> dict[str, Any]:
