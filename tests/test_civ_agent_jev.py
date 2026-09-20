@@ -81,30 +81,40 @@ def _factory_for(answers: dict[str, Any]) -> tuple[Any, FakeClassifier]:
     return factory, classifier
 
 
-def _assess_answers(**overrides: Any) -> dict[str, Any]:
-    answers: dict[str, Any] = {
-        "information_gap": NoulAnswer(type="noul", noul=0.81),
-        "factual_conflict": NoulAnswer(type="noul", noul=0.12),
-        "immediate_risk": ScoreAnswer(
-            type="score", score=0.4, legend={0: "无", 1: "低", 2: "中", 3: "高"}, probabilities={0: 0.6, 1: 0.4}, confidence=0.7
-        ),
-        "unknown_impact": NoulAnswer(type="noul", noul=0.7),
-    }
+def _answers_for(specs: Any, **overrides: Any) -> dict[str, Any]:
+    """按问句种类生成合法答案；各问句可用 overrides 指定概率/分数。"""
+
+    from langchain_typesafe import ChoiceAnswer
+
+    answers: dict[str, Any] = {}
+    for spec in specs:
+        question_id = spec["id"]
+        if spec["kind"] == "choice":
+            first = next(iter(spec["criteria"]))
+            answers[question_id] = ChoiceAnswer(
+                type="choice", choice=first, probabilities={first: 0.9}, confidence=0.9
+            )
+        elif spec["kind"] == "score":
+            levels = len(spec["criteria"])
+            answers[question_id] = ScoreAnswer(
+                type="score",
+                score=float(levels - 1),
+                legend={i: c for i, c in enumerate(spec["criteria"])},
+                probabilities={levels - 1: 0.9},
+                confidence=0.9,
+            )
+        else:
+            answers[question_id] = NoulAnswer(type="noul", noul=0.9)
     answers.update(overrides)
     return answers
+
+
+def _assess_answers(**overrides: Any) -> dict[str, Any]:
+    return _answers_for(ASSESS_QUESTIONS, **overrides)
 
 
 def _review_answers(**overrides: Any) -> dict[str, Any]:
-    answers: dict[str, Any] = {
-        "assumptions_supported": NoulAnswer(type="noul", noul=0.10),
-        "cost_understood": NoulAnswer(type="noul", noul=0.12),
-        "information_sufficient": NoulAnswer(type="noul", noul=0.08),
-        "action_cost": ScoreAnswer(
-            type="score", score=2.1, legend={0: "可忽略", 1: "可承受", 2: "较高", 3: "很高"}, probabilities={2: 0.9}, confidence=0.9
-        ),
-    }
-    answers.update(overrides)
-    return answers
+    return _answers_for(REVIEW_QUESTIONS, **overrides)
 
 
 # ---------------------------------------------------------------------------
@@ -112,25 +122,27 @@ def _review_answers(**overrides: Any) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def test_assess_questions_use_the_typesafe_kinds() -> None:
+def test_assess_questions_use_all_three_typesafe_kinds() -> None:
+    """审查要求把 Jev 的能力用足：Choice / Score / Noul 三类都要有。"""
+
     kinds = {spec["kind"] for spec in ASSESS_QUESTIONS}
 
-    assert kinds == {"noul", "score"}
+    assert kinds == {"noul", "score", "choice"}
 
 
-def test_assess_questions_ask_about_evidence_not_human_strategy() -> None:
-    """审查 R10：固定问题不得硬编码人工国策（expand/develop/defend/research）。"""
+def test_assess_questions_ask_about_the_position_not_the_answer() -> None:
+    """审查 R10：问句问"局面是什么"，不问"应该走哪条路"。
+
+    允许出现胜利路线/瓶颈这类**分类维度**（它们描述现状），但不得出现
+    expand/develop/defend 这类预设答案。
+    """
 
     blob = json.dumps(ASSESS_QUESTIONS, ensure_ascii=False)
 
-    for banned in ("expand", "develop", "defend", "research"):
+    for banned in ("expand", "develop", "defend"):
         assert banned not in blob
-    assert {spec["id"] for spec in ASSESS_QUESTIONS} == {
-        "information_gap",
-        "factual_conflict",
-        "immediate_risk",
-        "unknown_impact",
-    }
+    kinds = {spec["kind"] for spec in ASSESS_QUESTIONS}
+    assert "choice" in kinds, "需要 Choice 表达胜利路线/瓶颈这类分类判断"
 
 
 def test_review_questions_check_reality_not_obedience_to_the_assessment() -> None:
@@ -138,13 +150,44 @@ def test_review_questions_check_reality_not_obedience_to_the_assessment() -> Non
 
     ids = {spec["id"] for spec in REVIEW_QUESTIONS}
 
-    assert ids == {
-        "assumptions_supported",
-        "cost_understood",
-        "information_sufficient",
-        "action_cost",
-    }
-    assert not any("conflict" in question_id for question_id in ids)
+    assert {"assumptions_supported", "information_sufficient"} <= ids
+    assert not any("conflict_with_assessment" in question_id for question_id in ids)
+
+
+def test_review_has_civ6_redlines_that_block_when_triggered() -> None:
+    """wiki L0 的硬规则要作为红线进入复核，且方向是"踩线即拦"。"""
+
+    redlines = {spec["id"]: spec.get("blocking_when") for spec in REVIEW_QUESTIONS}
+
+    assert redlines.get("combat_power_deficit") == "true"
+    assert redlines.get("siege_capability_missing") == "true"
+    assert redlines.get("unprepared_war") == "true"
+
+
+def test_every_question_declares_a_role() -> None:
+    """每条问句都必须声明角色，否则判定逻辑会静默忽略它。"""
+
+    from civ_agent.nodes.jev import ROLE_BLOCKING, ROLE_DESCRIPTIVE, ROLE_INFORMATIVE
+
+    allowed = {ROLE_BLOCKING, ROLE_INFORMATIVE, ROLE_DESCRIPTIVE}
+    for spec in (*ASSESS_QUESTIONS, *REVIEW_QUESTIONS):
+        assert spec.get("role") in allowed, f"{spec['id']} 缺少合法 role"
+
+
+def test_civ6_grounded_questions_cover_the_wiki_axes() -> None:
+    """问句要覆盖 wiki L0 的关键轴：胜利路线、瓶颈、威胁、经济税、闲置。"""
+
+    ids = {spec["id"] for spec in ASSESS_QUESTIONS}
+
+    for expected in (
+        "primary_victory_path",
+        "current_bottleneck",
+        "military_threat",
+        "enemy_siege_massing",
+        "amenities_penalty",
+        "idle_trade_capacity",
+    ):
+        assert expected in ids, f"缺少 Civ6 维度：{expected}"
 
 
 def test_questions_are_built_as_real_typesafe_objects() -> None:
@@ -152,16 +195,20 @@ def test_questions_are_built_as_real_typesafe_objects() -> None:
 
     from langchain_typesafe import Noul, Score
 
+    from langchain_typesafe import Choice
+
     assert set(questions) == {spec["id"] for spec in ASSESS_QUESTIONS}
     assert isinstance(questions["information_gap"], Noul)
-    assert isinstance(questions["immediate_risk"], Score)
+    assert isinstance(questions["military_threat"], Score)
+    assert isinstance(questions["primary_victory_path"], Choice)
 
 
 def test_questions_carry_instructions_every_time() -> None:
     """TypeSafe 要求 instructions 写完整问题，不能只靠 id 自解释。"""
 
     for spec in (*ASSESS_QUESTIONS, *REVIEW_QUESTIONS):
-        assert spec["instructions"].strip().endswith(("？", "?"))
+        text = spec["instructions"].strip()
+        assert text.endswith(("？", "?")), f"{spec['id']} 的 instructions 不是完整问句"
 
 
 def test_unknown_question_kind_is_rejected() -> None:
@@ -185,17 +232,22 @@ def test_jev_assess_returns_serializable_verdicts() -> None:
 
 
 def test_jev_assess_applies_the_information_threshold() -> None:
-    factory, _ = _factory_for(_assess_answers())
+    factory, _ = _factory_for(
+        _assess_answers(
+            information_gap=NoulAnswer(type="noul", noul=0.81),
+            factual_conflict=NoulAnswer(type="noul", noul=0.12),
+        )
+    )
     result = _run(jev_assess(_observation(), classifier_factory=factory))
 
-    # 0.81 >= 0.5 → 是
     assert result["verdicts"]["information_gap"]["summary"].startswith("是")
-    # 0.12 < 0.5 → 否
     assert result["verdicts"]["factual_conflict"]["summary"].startswith("否")
 
 
 def test_jev_assess_records_the_probability_and_threshold_for_audit() -> None:
-    factory, _ = _factory_for(_assess_answers())
+    factory, _ = _factory_for(
+        _assess_answers(information_gap=NoulAnswer(type="noul", noul=0.81))
+    )
     result = _run(jev_assess(_observation(), classifier_factory=factory))
 
     summary = result["verdicts"]["information_gap"]["summary"]
@@ -207,12 +259,37 @@ def test_jev_assess_records_the_probability_and_threshold_for_audit() -> None:
 def test_jev_assess_reports_information_gaps_separately() -> None:
     """评估为"有信息缺口"时必须能被下游单独看见，而不是只留在日志里。"""
 
-    factory, _ = _factory_for(_assess_answers())
+    factory, _ = _factory_for(
+        _assess_answers(
+            information_gap=NoulAnswer(type="noul", noul=0.8),
+            factual_conflict=NoulAnswer(type="noul", noul=0.1),
+            enemy_siege_massing=NoulAnswer(type="noul", noul=0.9),
+        )
+    )
     result = _run(jev_assess(_observation(), classifier_factory=factory))
 
     assert "information_gap" in result["information_gaps"]
-    assert "unknown_impact" in result["information_gaps"]
+    assert "enemy_siege_massing" in result["information_gaps"]
     assert "factual_conflict" not in result["information_gaps"]
+
+
+def test_choice_questions_are_recorded_with_their_label() -> None:
+    """Choice 类答案要能在判断结果里读出标签，供模型据此调整。"""
+
+    factory, _ = _factory_for(_assess_answers())
+    result = _run(jev_assess(_observation(), classifier_factory=factory))
+
+    verdict = result["verdicts"]["primary_victory_path"]
+    assert verdict["kind"] == "choice"
+    assert verdict["answer"]["choice"] in {"science", "culture", "religion", "domination", "diplomatic", "score"}
+
+def test_descriptive_questions_never_block() -> None:
+    """Choice/Score 只作记录，不得进入 blocking。"""
+
+    factory, _ = _factory_for(_assess_answers())
+    result = _run(jev_assess(_observation(), classifier_factory=factory))
+
+    assert result["blocking"] == []
 
 
 def test_jev_assess_sends_a_json_compatible_state() -> None:
@@ -268,7 +345,7 @@ def test_assessment_summary_maps_question_ids_to_readable_text() -> None:
     result = _run(jev_assess(_observation(), classifier_factory=factory))
 
     assert set(result["summary"]) == {spec["id"] for spec in ASSESS_QUESTIONS}
-    assert isinstance(result["summary"]["immediate_risk"], str)
+    assert isinstance(result["summary"]["military_threat"], str)
 
 
 # ---------------------------------------------------------------------------
@@ -279,7 +356,12 @@ def test_assessment_summary_maps_question_ids_to_readable_text() -> None:
 def test_jev_review_blocks_when_evidence_does_not_support_the_candidate() -> None:
     """复核以现实证据为准：假设无支持 / 代价未知 / 信息不足 → 阻断提交。"""
 
-    factory, _ = _factory_for(_review_answers())
+    factory, _ = _factory_for(
+        _review_answers(
+            assumptions_supported=NoulAnswer(type="noul", noul=0.05),
+            information_sufficient=NoulAnswer(type="noul", noul=0.05),
+        )
+    )
 
     result = _run(
         jev_review(
@@ -290,22 +372,21 @@ def test_jev_review_blocks_when_evidence_does_not_support_the_candidate() -> Non
         )
     )
 
-    assert set(result["blocking"]) == {
-        "assumptions_supported",
-        "cost_understood",
-        "information_sufficient",
-    }
-    assert result["verdicts"]["assumptions_supported"]["value"] == pytest.approx(0.10)
+    assert {"assumptions_supported", "information_sufficient"} <= set(result["blocking"])
+    assert result["verdicts"]["assumptions_supported"]["value"] == pytest.approx(0.05)
     # 被拦时必须带上可读理由，供下一轮反馈给模型
-    assert len(result["blocking_reasons"]) == 3
+    assert len(result["blocking_reasons"]) == len(result["blocking"])
 
 
 def test_jev_review_passes_when_evidence_is_confirmed() -> None:
     factory, _ = _factory_for(
         _review_answers(
             assumptions_supported=NoulAnswer(type="noul", noul=0.9),
-            cost_understood=NoulAnswer(type="noul", noul=0.8),
             information_sufficient=NoulAnswer(type="noul", noul=0.85),
+            # 红线必须**不踩**（为否）才放行
+            combat_power_deficit=NoulAnswer(type="noul", noul=0.05),
+            siege_capability_missing=NoulAnswer(type="noul", noul=0.05),
+            unprepared_war=NoulAnswer(type="noul", noul=0.05),
         )
     )
 
