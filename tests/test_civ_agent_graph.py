@@ -184,3 +184,105 @@ def test_chain_records_the_rule_and_memory_channels_as_empty_not_missing() -> No
 
     assert final["rule_queries"] == ()
     assert final["memory_hits"] == ()
+
+
+# ---------------------------------------------------------------------------
+# M12 接线：候选 → Jev Review → finalize → execute
+# ---------------------------------------------------------------------------
+
+
+class _ScriptedModel:
+    """第一轮提出一个候选，之后不再调工具；finalize 时选定第 1 项。"""
+
+    def __init__(self) -> None:
+        self.calls = 0
+        self.proposed = False
+
+    def bind_tools(self, tools: list[Any]) -> "_ScriptedModel":
+        return self
+
+    async def ainvoke(self, messages: Any) -> FakeMessage:
+        self.calls += 1
+        joined = " ".join(str(getattr(m, "content", "")) for m in messages)
+        if "候选" in joined and "最终" in joined:
+            return FakeMessage(text="1")
+        if not self.proposed:
+            self.proposed = True
+            return FakeMessage(
+                tool_calls=[
+                    {
+                        "name": "set_research",
+                        "args": {"tech_name": "TECH_POTTERY"},
+                        "id": "c1",
+                    }
+                ]
+            )
+        return FakeMessage(text="候选已提出，等待审查。")
+
+
+def test_candidate_flows_through_jev_review_into_execute() -> None:
+    """M12 端到端：候选经 Jev Review 后由 execute 提交，且恰好带一个 operation_id。"""
+
+    from civ_agent.execute import MutationExecutor
+    from tests.test_civ_agent_execute import FakeRuntimeClient, _record
+
+    client = FakeRuntimeClient({"set_research": _record("CONFIRMED")})
+    executor = MutationExecutor(client, new_operation_id=lambda: "op-fixed")
+
+    server = build_fake_server()
+    resources, _classifier, _model = _resources()
+    resources = GraphResources(
+        classifier_factory=resources.classifier_factory, model=_ScriptedModel()
+    )
+
+    async def scenario() -> dict[str, Any]:
+        async with create_connected_server_and_client_session(server) as session:
+            deps = GraphDeps(
+                client=RuntimeClient(session),
+                allow_mutation=True,
+                executor=executor,
+                decision_turn=7,
+            )
+            return await build_graph(deps, resources).ainvoke(
+                new_state(seed=_seed(), turn=1)
+            )
+
+    final = _run(scenario())
+
+    # 候选确实被提出并经 Jev Review。
+    assert len(final["candidates"]) == 1
+    assert final["candidates"][0].tool == "set_research"
+    assert final["jev_review"] is not None
+    # 最终行动被选中并提交。
+    assert final["final_action"].tool == "set_research"
+    assert final["execution"].status is ExecutionStatus.CONFIRMED
+    assert client.calls == [("set_research", {"tech_name": "TECH_POTTERY", "operation_id": "op-fixed", "decision_turn": 7})]
+
+
+def test_execute_is_not_called_when_the_model_declines() -> None:
+    from civ_agent.execute import MutationExecutor
+    from tests.test_civ_agent_execute import FakeRuntimeClient
+
+    client = FakeRuntimeClient()
+    executor = MutationExecutor(client, new_operation_id=lambda: "op-fixed")
+
+    server = build_fake_server()
+    resources, _classifier, _model = _resources()  # FakeModel 的 finalize 返回 "0"
+
+    async def scenario() -> dict[str, Any]:
+        async with create_connected_server_and_client_session(server) as session:
+            deps = GraphDeps(
+                client=RuntimeClient(session),
+                allow_mutation=True,
+                executor=executor,
+                decision_turn=7,
+            )
+            return await build_graph(deps, resources).ainvoke(
+                new_state(seed=_seed(), turn=1)
+            )
+
+    final = _run(scenario())
+
+    assert final["final_action"] is None
+    assert final["execution"].status is ExecutionStatus.NOT_ATTEMPTED
+    assert client.calls == []

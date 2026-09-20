@@ -237,7 +237,7 @@ def test_execute_requires_an_executor_when_mutation_is_allowed() -> None:
             {"final_action": CandidateAction(tool="move_unit", arguments={"unit_index": 0})}
         )
 
-    with pytest.raises(GraphError, match="execute_fn"):
+    with pytest.raises(GraphError, match="executor"):
         _run(scenario())
 
 

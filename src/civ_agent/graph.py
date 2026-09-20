@@ -69,11 +69,16 @@ class GraphDeps:
     allow_mutation: bool = False
     """M12 之前必须为 ``False``：``execute`` 会直接失败而不是操作游戏。"""
 
+    executor: Any | None = None
+    """``civ_agent.execute.MutationExecutor``；``allow_mutation=True`` 时必需。"""
+
+    decision_turn: int = 0
+    """提交给 Runtime 的决策回合，用于 hash-bound intent 与 operation 记录。"""
+
     jev_assess_fn: Callable[..., Awaitable[dict[str, Any]]] | None = None
     jev_review_fn: Callable[..., Awaitable[dict[str, Any]]] | None = None
     decide_fn: Callable[..., Awaitable[Any]] | None = None
     finalize_fn: Callable[..., Awaitable[Any]] | None = None
-    execute_fn: Callable[..., Awaitable[Any]] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -323,7 +328,9 @@ def make_execute(deps: GraphDeps) -> Callable[[GraphState], Awaitable[dict[str, 
                 "execution": ExecutionResult(
                     status=ExecutionStatus.NOT_ATTEMPTED,
                     reason="Jev Review 后未选定任何行动。",
-                )
+                ),
+                "pending_decision": None,
+                "turn_advanced": False,
             }
 
         if not deps.allow_mutation:
@@ -331,9 +338,25 @@ def make_execute(deps: GraphDeps) -> Callable[[GraphState], Awaitable[dict[str, 
                 "execute 被调用但 allow_mutation=False（M10 只读阶段）。"
                 "接线 Runtime mutation 是 M12 的任务；只读阶段不得操作真实游戏。"
             )
-        if deps.execute_fn is None:
-            raise GraphError("allow_mutation=True 但未注入 execute_fn。")
-        return {"execution": await deps.execute_fn(action, deps)}
+
+        executor = deps.executor
+        if executor is None:
+            raise GraphError(
+                "allow_mutation=True 但未提供 executor；拒绝在不明确执行者的情况下"
+                "提交 mutation。用 civ_agent.execute.MutationExecutor 装配。"
+            )
+
+        outcome = await executor.submit(action, decision_turn=deps.decision_turn)
+        update: dict[str, Any] = {
+            "execution": outcome.execution,
+            "pending_decision": (
+                outcome.pending_decision.as_dict()
+                if outcome.pending_decision is not None
+                else None
+            ),
+            "turn_advanced": outcome.turn_advanced,
+        }
+        return update
 
     return execute_node
 

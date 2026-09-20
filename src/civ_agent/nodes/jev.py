@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, is_dataclass
 from typing import Any
 
 from civ_agent.observation import Observation
@@ -355,7 +355,11 @@ async def jev_review(
 
 
 def _candidate_payload(item: Any) -> dict[str, Any]:
-    """候选行动可能来自 state 的 dataclass 或普通 dict。"""
+    """候选行动可能来自 state 的 dataclass 或普通 dict。
+
+    ``CandidateAction`` 是 ``slots=True`` 的 dataclass，**没有** ``__dict__``，
+    所以必须先走 ``dataclasses.asdict``，否则会把真实候选判成不可序列化。
+    """
 
     if item is None:
         return {}
@@ -366,6 +370,8 @@ def _candidate_payload(item: Any) -> dict[str, Any]:
             return {str(key): _plain(value) for key, value in payload.items()}
     if isinstance(item, Mapping):
         return {str(key): _plain(value) for key, value in item.items()}
+    if is_dataclass(item) and not isinstance(item, type):
+        return {str(key): _plain(value) for key, value in asdict(item).items()}
     fields = getattr(item, "__dict__", None)
     if isinstance(fields, dict):
         return {str(key): _plain(value) for key, value in fields.items()}
