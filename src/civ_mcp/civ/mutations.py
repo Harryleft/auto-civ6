@@ -9,7 +9,11 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 import re
 
-from civ_mcp.civ.adapter import CivAdapter, CivMutationRequest
+from civ_mcp.civ.adapter import (
+    HEAVY_MUTATION_TIMEOUT_SECONDS,
+    CivAdapter,
+    CivMutationRequest,
+)
 from civ_mcp.lua.cities import (
     build_city_attack,
     build_produce_item,
@@ -259,7 +263,7 @@ class CivMutationFactory:
                 "attack_unit",
                 {"unit_index": unit_index, "target_x": target_x, "target_y": target_y},
             ),
-            request=CivMutationRequest("attack_unit", build_attack_unit(unit_index, target_x, target_y)),
+            request=CivMutationRequest("attack_unit", build_attack_unit(unit_index, target_x, target_y), timeout_seconds=HEAVY_MUTATION_TIMEOUT_SECONDS),
             verify=verify,
             operation_id=operation_id,
             precheck=precheck,
@@ -327,7 +331,7 @@ class CivMutationFactory:
                 "attack_city",
                 {"city_id": city_id, "target_x": target_x, "target_y": target_y},
             ),
-            request=CivMutationRequest("attack_city", build_city_attack(city_id, target_x, target_y)),
+            request=CivMutationRequest("attack_city", build_city_attack(city_id, target_x, target_y), timeout_seconds=HEAVY_MUTATION_TIMEOUT_SECONDS),
             verify=verify,
             operation_id=operation_id,
             precheck=precheck,
@@ -560,7 +564,7 @@ class CivMutationFactory:
 
         return MutationExecution(
             intent=intent,
-            request=CivMutationRequest("found_city", build_found_city(unit_index)),
+            request=CivMutationRequest("found_city", build_found_city(unit_index), timeout_seconds=HEAVY_MUTATION_TIMEOUT_SECONDS),
             verify=verify,
             operation_id=operation_id,
             precheck=precheck,
