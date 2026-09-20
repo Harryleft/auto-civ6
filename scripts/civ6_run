@@ -48,6 +48,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--store", default=None, help="Runtime operation store 的 SQLite 路径")
     parser.add_argument("--turns", type=int, default=50, help="回合上限（默认 50，冒烟边界）")
     parser.add_argument("--turn-seconds", type=float, default=180.0, help="单回合墙钟上限（默认 180s）")
+    parser.add_argument(
+        "--decisions-per-turn",
+        type=int,
+        default=8,
+        help="同一回合内的决策次数上限（防空转；默认 8）",
+    )
     parser.add_argument("--model", default=None, help="DeepSeek 模型名（默认 deepseek-chat）")
     parser.add_argument("--no-launch", action="store_true", help="游戏已在运行，跳过启动与读档")
     parser.add_argument("--observe-only", action="store_true", help="只读一次游戏状态并退出")
@@ -209,9 +215,23 @@ async def _run_game(args: argparse.Namespace) -> dict[str, object]:
             max_turns=args.turns,
             turn_seconds=args.turn_seconds,
             start_turn=observation.turn,
+            max_decisions_per_turn=args.decisions_per_turn,
         )
         report = await driver.run()
         return report.summary()
+
+
+def _leaf_causes(exc: BaseException) -> list[BaseException]:
+    """展开 ExceptionGroup，取出最内层的真实异常。"""
+
+    if isinstance(exc, BaseExceptionGroup):
+        leaves: list[BaseException] = []
+        for child in exc.exceptions:
+            leaves.extend(_leaf_causes(child))
+        return leaves
+    if exc.__cause__ is not None and exc.__cause__ is not exc:
+        return _leaf_causes(exc.__cause__)
+    return [exc]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -256,7 +276,15 @@ def main(argv: list[str] | None = None) -> int:
         print("\n被中断：未完成的回合不会写入 Game Memory。", file=sys.stderr)
         return 130
     except Exception as exc:  # noqa: BLE001
-        print(f"\n运行失败：{type(exc).__name__}: {exc}", file=sys.stderr)
+        # anyio/TaskGroup 会把真实原因包在 ExceptionGroup 里；只打印最外层会丢掉
+        # 唯一的诊断信息（这一点在本项目里已经浪费过多次排查）。
+        leaves = _leaf_causes(exc)
+        if leaves:
+            print("\n运行失败，真实原因：", file=sys.stderr)
+            for item in leaves:
+                print(f"  - {type(item).__name__}: {item}", file=sys.stderr)
+        else:
+            print(f"\n运行失败：{type(exc).__name__}: {exc}", file=sys.stderr)
         if args.verbose:
             import traceback
 
