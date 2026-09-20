@@ -219,6 +219,14 @@ class RuntimeClient:
 
         return await self.call("get_runtime_context", {})
 
+    async def read_game_over(self) -> Any:
+        """读取终局信号（``get_game_over``，审查 D3）。
+
+        失败会抛错：**不得**把读取失败当成"游戏未结束"。
+        """
+
+        return await self.call("get_game_over", {})
+
 
 def _default_launcher(
     command: str, args: Sequence[str], env: Mapping[str, str]

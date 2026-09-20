@@ -250,7 +250,7 @@ def build_gameover_check_gamecore() -> str:
     """
     return f"""
 local winTeam = -1
-pcall(function() winTeam = Game.GetWinningTeam() end)
+local __wt = nil; pcall(function() __wt = Game.GetWinningTeam() end); if type(__wt) == "number" then winTeam = __wt end
 local me = Game.GetLocalPlayer()
 if winTeam < 0 then
     -- No formal winner yet — check for player elimination or turn limit.
@@ -312,7 +312,7 @@ def build_gameover_check() -> str:
 -- Primary check: GetWinningTeam is reliable regardless of UI state.
 -- EndGameMenu control lookup can fail when blockers coexist with victory screen.
 local winTeam = -1
-pcall(function() winTeam = Game.GetWinningTeam() end)
+local __wt = nil; pcall(function() __wt = Game.GetWinningTeam() end); if type(__wt) == "number" then winTeam = __wt end
 local me = Game.GetLocalPlayer()
 if winTeam < 0 then
     -- No formal winner — check EndGameMenu, elimination, and turn limit
@@ -340,7 +340,7 @@ if winTeam < 0 then
 end
 local meAlive = Players[me]:IsAlive()
 local winTeam = -1
-pcall(function() winTeam = Game.GetWinningTeam() end)
+local __wt = nil; pcall(function() __wt = Game.GetWinningTeam() end); if type(__wt) == "number" then winTeam = __wt end
 local winnerId = -1
 local winnerName = "Unknown"
 local winnerLeader = "Unknown"

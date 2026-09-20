@@ -177,7 +177,7 @@ def test_r01_review_receives_its_own_questions_through_the_graph(
         async with create_connected_server_and_client_session(
             build_review_server(read_log, write_log)
         ) as session:
-            deps = GraphDeps(client=RuntimeClient(session))
+            deps = GraphDeps(client=RuntimeClient(session), memory_search=lambda *a, **k: ())
             resources = GraphResources(
                 classifier_factory=_recording_factory(jlog), model=model
             )
@@ -219,6 +219,7 @@ def test_r02_rule_and_memory_evidence_reach_the_model_messages(
         ) as session:
             deps = GraphDeps(
                 client=RuntimeClient(session),
+                memory_search=lambda *a, **k: (),
                 rule_search=lambda query: (
                     {
                         "doc": "cities.md",
@@ -332,7 +333,7 @@ def test_r03_read_game_info_refuses_a_write_tool_through_the_graph() -> None:
         async with create_connected_server_and_client_session(
             build_review_server(read_log, write_log)
         ) as session:
-            deps = GraphDeps(client=RuntimeClient(session))
+            deps = GraphDeps(client=RuntimeClient(session), memory_search=lambda *a, **k: ())
             resources = GraphResources(
                 classifier_factory=_recording_factory(jlog), model=model
             )
@@ -409,7 +410,7 @@ def test_r06_read_only_tool_call_executes_and_returns_body_to_the_model() -> Non
         async with create_connected_server_and_client_session(
             build_review_server(read_log, write_log)
         ) as session:
-            deps = GraphDeps(client=RuntimeClient(session))
+            deps = GraphDeps(client=RuntimeClient(session), memory_search=lambda *a, **k: ())
             resources = GraphResources(
                 classifier_factory=_recording_factory(jlog), model=model
             )
