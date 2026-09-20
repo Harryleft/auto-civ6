@@ -325,3 +325,57 @@ M01 后需一并删除该节，否则 mutation 配置悬空。
 | 横切 | `scripts/civ6_run`（启动 + 读档 + D1 安装 + 拉起 Runtime server） | D1 D2 O2 O5 | 是 |
 | 横切 | MCP 客户端层（stdio 连 Runtime server，动态发现工具） | O2 | 是 |
 
+
+---
+
+## 7. 审查修复记录（基线 9082880）
+
+《Civ6 架构审查_第一性原理_9082880》提出的问题与处置。审查的核心判断被接受：
+**当前缺的不是新组件，而是跨组件可核验的语义**。
+
+| 编号 | 问题 | 处置 |
+|---|---|---|
+| R01 | 单一 Jev 缓存让 Assess/Review 共用第一次的问题集合 | `make_classifier_factory` 改为**按问题集合**缓存，两套问题各一个实例 |
+| R02 | 检索/历史/补读结果没有进入模型消息 | 新增 `civ_agent/decision.py` 的 `DecisionContext`；Jev 与 DeepSeek 都从它取输入；规则节点保留 **excerpt 正文**（原先只剩 `doc#section`） |
+| R03 | `read_game_info` 可绕过 Jev Review 发出修改 | `ToolSpec` 保留 MCP `readOnlyHint`；新增 `RuntimeClient.call_read_only`，未知分类**默认拒绝**；该限制同时覆盖直接只读工具与元工具 |
+| R04 | 参数内容被当作操作身份 | 身份改为**以决定为单位**：`decision_id` → `operation_id`；`action_key` 只用于核对同一 operation 没被偷换意图，且先剔除宿主字段 |
+| R05 | 提交回合取自静态 `GraphDeps.decision_turn` | 删除该字段；execute 使用 `state["turn"]`（本次观察的回合） |
+| R06 | 只读工具被当成待执行动作；元工具未默认合入 | 只读工具**真正执行**并把正文作为 ToolMessage 回给模型；写工具才形成候选；新增 `build_agent_tools` 默认合入元工具 |
+| R07 | Observation 太薄，决策缺实体 | `observe` 额外留存 `runtime_facts`（单位/城市/待选项原始载荷），DecisionContext 并列提供；Observation 仍作为日志投影 |
+| R08 | Memory 不是可信的连续经历 | 新 API：`append_turn_state` / `append_decision` / `close_turn` / `record_consequence`；一回合多个带 `decision_id` 的决定；**幂等**；后果只能挂到已存在的决定；`our.score` 如实标注为总分而非胜利进度 |
+| R09 | 单决策图被当成整局完成 | 见 §7.2：明确整局负责人尚未实现，并修正"敌方回合不调模型"的说法 |
+| R10 | Jev 固定问题混入人工国策，复核易自我确认 | 问题改为**信息缺口 / 事实矛盾 / 即时风险 / unknown 影响**与**假设是否有支持 / 代价是否已知 / 信息是否充分 / 行动代价**；不再出现 expand/develop/defend |
+| 附加 | `_parse_choice` 接受不合法数字 | 改为整段严格匹配（`99 then 2`、`-1` 均拒绝）；`0` 始终合法表示"不执行" |
+
+回归测试见 `tests/test_civ_agent_review_fixes.py`：一条发现一个测试，装配真实图、
+真实 classifier 工厂与真实执行器，只替换模型 HTTP 边界、TypeSafe 替身与 MCP 响应。
+
+### 7.1 审查未要求但顺带修掉的
+
+- **只读轮预算**：只读工具真执行之后，模型可以一直查而不提出候选，把往返预算
+  烧在查询上。新增 `MAX_READ_ONLY_ROUNDS`（默认 6），超限停止并说明原因。
+- **`0` 被可选集合误拦**：复核拦下全部候选时，`allowed_indices` 不含 0，导致
+  "不执行"这一合法选择被拒。已修正。
+- **`CandidateAction` 无法序列化**：它是 `slots=True` dataclass（没有 `__dict__`），
+  Jev 复核会判定不可序列化。改走 `dataclasses.asdict`。
+- **`OBSERVING` 与 `UNKNOWN` 混为一谈**：已发送未回读 ≠ 结果不明，拆成两个状态。
+
+### 7.2 仍未成立的部分（不声称已完成）
+
+审查 R09 的判断正确，这里如实记录：
+
+- **整局负责人不存在**。图当前是**单决策子图**，`append_game_memory → END`。
+  审查指出"把 END 机械改成 observe"不是修复；需要一个按 Runtime 真实状态分派的
+  负责人（新决策 / 等待原动作 / 处理游戏选择 / 核验未知 / 暂停 / 终局）。
+  这是独立任务卡，不在本轮。
+- **Game Over 读取仍缺**（D3 未实现），因此无法验收"跑到真实终局"。
+- **M13–M15 未完成**：Memory 落盘 API 已具备但尚未在整局中启用；AI 回合循环与
+  冒烟上限未接。
+- **D7 与 O4 的口径差异**：D7 说不限制 `deepseek_decide` 的循环次数，O4 给了
+  单回合 3 分钟。审查指出不应靠放大超时解决"失去进展"。现行实现是
+  `MAX_TOOL_ROUNDS=12` + `MAX_READ_ONLY_ROUNDS=6` + 单回合墙钟；后续应以
+  "每轮是否新增信息或完成了动作"作为真正的收敛判据。
+- **审查 §六 的纵向验收**尚未在真实双模型与固定存档上跑过（缺本机授权执行条件）。
+  离线部分已由上述回归测试覆盖。
+- **"敌方回合不调模型"是错的**（原方案 M14）：外交回应可能发生在对手处理阶段，
+  仍需模型决策。该规则改为"只有 Runtime 明确要求时才调用模型"。

@@ -92,19 +92,14 @@ class FakeClassifier:
 
     @staticmethod
     def _answer_for(question_id: str) -> FakeAnswer:
-        if question_id == "military_pressure":
+        if question_id in {"immediate_risk", "action_cost"}:
             return FakeAnswer({"type": "score", "score": 0.4, "confidence": 0.6})
-        if question_id == "strategic_direction":
-            return FakeAnswer(
-                {"type": "choice", "choice": "develop", "confidence": 0.7}
-            )
-        if question_id == "reversibility":
-            return FakeAnswer({"type": "score", "score": 0.5, "confidence": 0.5})
-        if question_id == "plan_conflicts_with_assessment":
+        if question_id in {"assumptions_supported", "cost_understood", "information_sufficient"}:
+            # 复核通过：证据支持、代价已知、信息足够。
+            return FakeAnswer({"type": "noul", "noul": 0.9})
+        if question_id in {"information_gap", "factual_conflict", "unknown_impact"}:
             return FakeAnswer({"type": "noul", "noul": 0.1})
-        if question_id == "needs_confirmation":
-            return FakeAnswer({"type": "noul", "noul": 0.2})
-        return FakeAnswer({"type": "noul", "noul": 0.8})
+        return FakeAnswer({"type": "noul", "noul": 0.5})
 
 
 def _resources() -> tuple[GraphResources, FakeClassifier, FakeModel]:
@@ -152,8 +147,9 @@ def test_jev_runs_both_assess_and_review() -> None:
 
     assert len(classifier.calls) == 2
     assess_ids, review_ids = classifier.calls
-    assert "strategic_direction" in assess_ids
-    assert "plan_conflicts_with_assessment" in review_ids
+    assert "information_gap" in assess_ids
+    assert "assumptions_supported" in review_ids
+    assert not (assess_ids & review_ids), "Assess 与 Review 必须是两套问题"
     assert final["jev_assess"] is not None
     assert final["jev_review"] is not None
 
@@ -241,10 +237,10 @@ def test_candidate_flows_through_jev_review_into_execute() -> None:
                 client=RuntimeClient(session),
                 allow_mutation=True,
                 executor=executor,
-                decision_turn=7,
+                decision_id="decision-1",
             )
             return await build_graph(deps, resources).ainvoke(
-                new_state(seed=_seed(), turn=1)
+                new_state(seed=_seed(), turn=1, decision_id="decision-1")
             )
 
     final = _run(scenario())
@@ -275,10 +271,10 @@ def test_execute_is_not_called_when_the_model_declines() -> None:
                 client=RuntimeClient(session),
                 allow_mutation=True,
                 executor=executor,
-                decision_turn=7,
+                decision_id="decision-1",
             )
             return await build_graph(deps, resources).ainvoke(
-                new_state(seed=_seed(), turn=1)
+                new_state(seed=_seed(), turn=1, decision_id="decision-1")
             )
 
     final = _run(scenario())

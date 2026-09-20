@@ -20,6 +20,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Annotated, Any, TypedDict
+from uuid import uuid4
 
 from civ_agent.observation import Observation
 
@@ -104,12 +105,16 @@ class GraphState(TypedDict, total=False):
     # 身份
     seed: Seed
     turn: int
+    decision_id: Annotated[str, _replace]
+    """本次决定的身份（审查 R04）；每个新决定一个新值，重试同一决定复用它。"""
 
     # 事实与不确定性（observe / read_game_info 写入）
     observation: Annotated[Observation | None, _replace]
     unknown: Annotated[tuple[str, ...], _extend]
     important_changes: Annotated[tuple[str, ...], _replace]
     extra_facts: Annotated[dict[str, Any], _replace]
+    runtime_facts: Annotated[dict[str, Any], _replace]
+    """Runtime 域事实的原始载荷（审查 R07）；Observation 只是它的日志投影。"""
 
     # 历史经验
     memory_hits: Annotated[tuple[MemoryHit, ...], _replace]
@@ -137,22 +142,33 @@ class GraphState(TypedDict, total=False):
     pending_decision: Annotated[dict[str, Any] | None, _replace]
     turn_advanced: Annotated[bool, _replace]
     memory_file: Annotated[Any | None, _replace]
+    observe_for_decision: Annotated[dict[str, Any] | None, _replace]
+    """把本次观察到的新结果挂到早先的决定上（审查 R08）；只在真的观察到时填。"""
     long_term_goal: Annotated[str, _replace]
     final_result: Annotated[str, _replace]
 
 
-def new_state(*, seed: Seed, turn: int) -> GraphState:
-    """建立一次决策循环的初始状态，所有未知通道为空而不是 ``None``。"""
+def new_state(*, seed: Seed, turn: int, decision_id: str | None = None) -> GraphState:
+    """建立一次决策循环的初始状态，所有未知通道为空而不是 ``None``。
+
+    ``decision_id`` 缺省时自动生成：每个新决定都必须有**自己的**身份，这样
+    T1 与 T2 的同参数 ``end_turn`` 才不会被当成同一次操作（审查 R04）。
+    """
 
     if turn < 1:
         raise ValueError("turn 必须从 1 开始。")
+    identity = decision_id or str(uuid4())
+    if not identity.strip():
+        raise ValueError("decision_id 必须是非空字符串。")
     return GraphState(
         seed=seed,
         turn=turn,
+        decision_id=identity,
         observation=None,
         unknown=(),
         important_changes=(),
         extra_facts={},
+        runtime_facts={},
         memory_hits=(),
         jev_assess=None,
         rule_queries=(),
@@ -172,6 +188,7 @@ def new_state(*, seed: Seed, turn: int) -> GraphState:
         pending_decision=None,
         turn_advanced=False,
         memory_file=None,
+        observe_for_decision=None,
         long_term_goal="",
         final_result="",
     )
