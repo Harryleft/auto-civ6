@@ -41,20 +41,44 @@ def _seed() -> Seed:
 
 
 class _StubClient:
-    """只提供事实，不调用工具；用于不跑端到端的拓扑测试。"""
+    """只提供事实与工具元数据；用于不跑端到端的拓扑测试。"""
 
     def __init__(self, context: dict[str, Any] | None = None) -> None:
         self.calls: list[tuple[str, dict[str, Any]]] = []
+        self.read_only_calls: list[tuple[str, dict[str, Any]]] = []
         self._context = context if context is not None else _context_json()
 
     async def read_context(self) -> dict[str, Any]:
         return self._context
 
     async def list_tools(self) -> tuple[Any, ...]:
-        return ()
+        from civ_agent.mcp_client import ToolSpec
+
+        return (
+            ToolSpec(name="get_policies", description="只读", read_only=True),
+            ToolSpec(name="get_city_production", description="只读", read_only=True),
+            ToolSpec(name="move_unit", description="写", read_only=False),
+        )
+
+    def read_only_names(self, specs: Any = None) -> frozenset[str]:
+        return frozenset({"get_policies", "get_city_production"})
 
     async def call(self, name: str, arguments: dict[str, Any] | None = None) -> Any:
         self.calls.append((name, dict(arguments or {})))
+        return {"tool": name, "arguments": dict(arguments or {})}
+
+    async def call_read_only(
+        self, name: str, arguments: dict[str, Any] | None = None
+    ) -> Any:
+        from civ_agent.mcp_client import ToolSpec
+
+        known = {spec.name for spec in await self.list_tools()}
+        read_only = self.read_only_names()
+        if name not in known:
+            raise PermissionError(f"{name!r} 不在当前 Runtime 工具清单中；拒绝调用。")
+        if name not in read_only:
+            raise PermissionError(f"{name!r} 不是只读工具；只读通道拒绝调用它。")
+        self.read_only_calls.append((name, dict(arguments or {})))
         return {"tool": name, "arguments": dict(arguments or {})}
 
 
@@ -308,7 +332,12 @@ def test_search_rules_backedge_populates_rule_queries() -> None:
     deps = GraphDeps(
         client=client,
         rule_search=lambda query: (
-            type("Hit", (), {"doc": "cities.md", "section": "忠诚度机制"})(),
+            {
+                "doc": "cities.md",
+                "section": "忠诚度机制",
+                "level": 1,
+                "excerpt": "每回合忠诚度按压力修正；归 0 变自由城市。",
+            },
         ),
     )
     graph = build_graph(
@@ -322,7 +351,10 @@ def test_search_rules_backedge_populates_rule_queries() -> None:
 
     assert final["backedge_count"] == 1
     assert final["rule_queries"]
-    assert "cities.md" in final["rule_queries"][0]["result"]
+    hits = final["rule_queries"][0]["hits"]
+    assert hits[0]["doc"] == "cities.md"
+    # 审查 P5：必须保留正文，而不是只留 doc#section 目录
+    assert "自由城市" in hits[0]["excerpt"]
     assert final["rule_queries"][0]["query"] == "忠诚度 机制"
 
 
@@ -353,7 +385,7 @@ def test_read_game_info_backedge_calls_the_requested_tool() -> None:
 
     final = _run(scenario())
 
-    assert ("get_policies", {"city_id": 1}) in client.calls
+    assert ("get_policies", {"city_id": 1}) in client.read_only_calls
     assert "get_policies" in final["extra_facts"]
     assert final["backedge_count"] == 1
 
@@ -376,7 +408,12 @@ def test_meta_requests_are_not_recorded_as_action_candidates() -> None:
         GraphDeps(
             client=client,
             rule_search=lambda query: (
-                type("Hit", (), {"doc": "cities.md", "section": "区域（District）"})(),
+                {
+                    "doc": "cities.md",
+                    "section": "区域（District）",
+                    "level": 1,
+                    "excerpt": "区域成本随研究进度上涨。",
+                },
             ),
         ),
         GraphResources(classifier_factory=_fake_classifier_factory(), model=model),

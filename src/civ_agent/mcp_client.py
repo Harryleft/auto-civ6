@@ -33,11 +33,17 @@ class ToolCallError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class ToolSpec:
-    """一个 Runtime 工具的元数据，用于包装成 LangChain tool。"""
+    """一个 Runtime 工具的元数据，用于包装成 LangChain tool。
+
+    ``read_only`` 直接来自 MCP 的 ``readOnlyHint`` 注解（审查 R03：权限边界不能
+    由函数名或提示词承担）。**无法确认只读时默认为非只读**——未知分类一律按写
+    处理，因为把写操作误判成读会让它绕过 Jev Review。
+    """
 
     name: str
     description: str
     input_schema: dict[str, Any] = field(default_factory=dict)
+    read_only: bool = False
 
     @property
     def parameters(self) -> dict[str, Any]:
@@ -46,6 +52,18 @@ class ToolSpec:
         if self.input_schema:
             return self.input_schema
         return {"type": "object", "properties": {}}
+
+
+def _read_only_hint(tool: Any) -> bool:
+    """读取 MCP 注解；只在显式为真时才认为只读。"""
+
+    annotations = getattr(tool, "annotations", None)
+    if annotations is None:
+        return False
+    value = getattr(annotations, "readOnlyHint", None)
+    if value is None and isinstance(annotations, Mapping):
+        value = annotations.get("readOnlyHint")
+    return value is True
 
 
 @runtime_checkable
@@ -68,6 +86,7 @@ def tool_specs(result: Any) -> tuple[ToolSpec, ...]:
                 name=str(getattr(tool, "name", "")),
                 description=str(getattr(tool, "description", "") or ""),
                 input_schema=dict(schema) if isinstance(schema, Mapping) else {},
+                read_only=_read_only_hint(tool),
             )
         )
     return tuple(spec for spec in specs if spec.name)
@@ -145,12 +164,55 @@ class RuntimeClient:
         return self._specs
 
     async def call(self, name: str, arguments: Mapping[str, Any] | None = None) -> Any:
-        """调用一个 Runtime 工具并返回其载荷。"""
+        """调用一个 Runtime 工具并返回其载荷。
+
+        本方法**不做权限判断**：它同时服务只读查询与已批准动作的提交。需要权限
+        边界的地方（例如模型的"补读"通路）必须用 :meth:`call_read_only`。
+        """
 
         if not isinstance(name, str) or not name.strip():
             raise ValueError("工具名必须是非空字符串。")
         result = await self._session.call_tool(name, dict(arguments or {}))
         return tool_result_value(result)
+
+    async def call_read_only(
+        self, name: str, arguments: Mapping[str, Any] | None = None
+    ) -> Any:
+        """只允许只读工具；未知分类默认拒绝（审查 R03）。
+
+        权限由 MCP 的 ``readOnlyHint`` 决定，不由函数名或提示词决定。
+        """
+
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("工具名必须是非空字符串。")
+        spec = self._spec_by_name(await self.list_tools(), name)
+        if spec is None:
+            raise PermissionError(
+                f"{name!r} 不在当前 Runtime 工具清单中；拒绝调用。"
+            )
+        if not spec.read_only:
+            raise PermissionError(
+                f"{name!r} 不是只读工具（readOnlyHint 未标记为真）；"
+                "只读通道拒绝调用它。修改类动作必须经 Jev Review 后由提交入口执行。"
+            )
+        return await self.call(name, arguments)
+
+    @staticmethod
+    def _spec_by_name(
+        specs: Sequence[ToolSpec], name: str
+    ) -> ToolSpec | None:
+        for spec in specs:
+            if spec.name == name:
+                return spec
+        return None
+
+    def read_only_names(self, specs: Sequence[ToolSpec] | None = None) -> frozenset[str]:
+        """已知只读的工具名集合；用于把工具分成查询与提议两类。"""
+
+        source = self._specs if specs is None else specs
+        if source is None:
+            return frozenset()
+        return frozenset(spec.name for spec in source if spec.read_only)
 
     async def read_context(self) -> Any:
         """读取当前 Runtime 上下文（``get_runtime_context``）。"""

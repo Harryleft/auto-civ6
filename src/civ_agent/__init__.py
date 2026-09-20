@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from civ_agent.config import AgentConfig, MissingCredentialError, load_config
+from civ_agent.decision import DecisionContext, build_decision_context
 from civ_agent.execute import (
     END_TURN_TOOL,
     MUTATION_TOOLS,
@@ -40,6 +41,7 @@ from civ_agent.state import (
 __all__ = [
     "AgentConfig",
     "CandidateAction",
+    "DecisionContext",
     "END_TURN_TOOL",
     "ExecutionResult",
     "ExecutionStatus",
@@ -61,6 +63,7 @@ __all__ = [
     "Seed",
     "ToolCallError",
     "ToolSpec",
+    "build_decision_context",
     "build_graph",
     "build_observation",
     "known_topics",

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from civ_agent.memory.search import MemorySearchHit, search_memory
 from civ_agent.memory.writer import (
+    DecisionRecord,
     GameMemoryWriter,
     GameStart,
     TurnRecord,
@@ -11,6 +12,7 @@ from civ_agent.memory.writer import (
 )
 
 __all__ = [
+    "DecisionRecord",
     "GameMemoryWriter",
     "GameStart",
     "MemorySearchHit",

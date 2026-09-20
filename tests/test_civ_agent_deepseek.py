@@ -300,9 +300,20 @@ def test_decide_rejects_unknown_tool_names_in_the_note() -> None:
 
 def test_decide_stops_at_the_round_limit() -> None:
     client, tools = _client_and_tools()
-    # 模型一直要求调工具：必须由结构性上限收敛，而不是无限循环。
+    # 模型一直提出同一个写候选：必须由结构性上限收敛，而不是无限循环。
     model = FakeModel(
-        [FakeMessage(tool_calls=[_tool_call("get_policies", {}, f"c{i}")]) for i in range(50)]
+        [
+            FakeMessage(
+                tool_calls=[
+                    _tool_call(
+                        "move_unit",
+                        {"unit_index": 1, "target_x": i, "target_y": 3},
+                        f"c{i}",
+                    )
+                ]
+            )
+            for i in range(50)
+        ]
     )
 
     result = _run(
@@ -357,7 +368,7 @@ def test_decide_includes_observation_and_assessment_in_the_prompt() -> None:
     assert "expand" in system.content
 
 
-def test_decide_reports_candidate_rationale_referencing_jev_direction() -> None:
+def test_decide_reports_candidate_rationale_referencing_jev_verdict() -> None:
     client, tools = _client_and_tools()
     model = FakeModel(
         [
@@ -371,12 +382,12 @@ def test_decide_reports_candidate_rationale_referencing_jev_direction() -> None:
             model=model,
             client=client,
             observation={},
-            assessment={"summary": {"strategic_direction": "expand"}},
+            assessment={"summary": {"information_gap": "是（概率 0.90）"}},
             tools=tools,
         )
     )
 
-    assert "expand" in result.candidates[0].rationale
+    assert "information_gap" in result.candidates[0].rationale
 
 
 def test_decide_meta_search_request_is_not_a_candidate() -> None:
