@@ -244,6 +244,7 @@ from civ_mcp.lua.notifications import (  # noqa: F401
 from civ_mcp.lua.overview import (  # noqa: F401
     build_diary_full_query,
     build_gameover_check,
+    build_gameover_check_gamecore,
     build_overview_query,
     build_rival_snapshot_query,
     parse_diary_full_response,

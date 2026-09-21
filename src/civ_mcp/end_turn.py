@@ -150,7 +150,7 @@ async def _check_victory_proximity(gs: GameState) -> list[lq.TurnEvent]:
             if enabled and "VICTORY_RELIGIOUS" not in enabled:
                 continue
             parts = line.split("|")
-            if len(parts) >= 4:
+            if len(parts) >= 5:
                 civ_name, rel_name = parts[1], parts[2]
                 count, total = int(parts[3]), int(parts[4])
                 if count >= total:
@@ -251,11 +251,7 @@ async def _check_empire_warnings(
     if snap:
         for cs in snap.cities.values():
             if cs.loyalty_per_turn < -5:
-                turns_left = (
-                    int(cs.loyalty / abs(cs.loyalty_per_turn))
-                    if cs.loyalty_per_turn < 0
-                    else 99
-                )
+                turns_left = int(cs.loyalty / abs(cs.loyalty_per_turn))
                 events.append(
                     lq.TurnEvent(
                         priority=1,
@@ -305,11 +301,7 @@ async def _check_empire_warnings(
             overview.gold_per_turn < 0
             and overview.gold < abs(overview.gold_per_turn) * 20
         ):
-            turns_to_zero = (
-                int(overview.gold / abs(overview.gold_per_turn))
-                if overview.gold_per_turn < 0
-                else 99
-            )
+            turns_to_zero = int(overview.gold / abs(overview.gold_per_turn))
             events.append(
                 lq.TurnEvent(
                     priority=2,

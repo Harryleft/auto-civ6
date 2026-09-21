@@ -6,6 +6,7 @@ import logging
 
 from civ_mcp import lua as lq
 from civ_mcp.connection import GameConnection
+from civ_mcp.lua._helpers import SENTINEL
 
 log = logging.getLogger(__name__)
 
@@ -107,6 +108,8 @@ async def dismiss_popup(conn: GameConnection) -> str:
                     pending_deal = True
                 elif "DiplomacyActionView" in line:
                     pending_diplomacy = True
+    except ConnectionError:
+        raise  # dead transport is not "no popups" — surface it
     except Exception as e:
         log.debug("Phase 1 dismiss failed: %s", e)
 
@@ -172,7 +175,8 @@ async def dismiss_popup(conn: GameConnection) -> str:
                         'print("---END---")',
                     )
                     if any("DISMISSED" in l for l in lines):
-                        dismissed.append(name)
+                        if name not in dismissed:
+                            dismissed.append(name)
                     else:
                         break  # popup stayed hidden, queue drained
                 except Exception as e:
@@ -274,17 +278,28 @@ async def dismiss_popup(conn: GameConnection) -> str:
 # ------------------------------------------------------------------
 
 
+def _lua_escape(value: str) -> str:
+    """Escape a string for interpolation into a double-quoted Lua string."""
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+# Names from the most recent filesystem listing (newest first, display cap
+# applied) — lets load_save(index) resolve an entry when the Lua
+# MCPSaveList cache is empty because the listing came from disk.
+_filesystem_save_names: list[str] = []
+
+
 async def save_game(conn: GameConnection, name: str) -> str:
     """Create a named save. Used for MCP per-turn autosaves."""
     lines = await conn.execute_write(
         f"local gf = {{}}; "
-        f'gf.Name = "{name}"; '
+        f'gf.Name = "{_lua_escape(name)}"; '
         f"gf.Location = SaveLocations.LOCAL_STORAGE; "
         f"gf.Type = SaveTypes.SINGLE_PLAYER; "
         f"gf.IsAutosave = false; "
         f"gf.IsQuicksave = false; "
         f"Network.SaveGame(gf); "
-        f'print("OK|{name}"); '
+        f'print("OK|{_lua_escape(name)}"); '
         f'print("{lq.SENTINEL}")'
     )
     if any("OK|" in l for l in lines):
@@ -377,6 +392,8 @@ async def _list_saves_lua(conn: GameConnection) -> str | None:
                     name = parts[2] if len(parts) > 2 else "?"
                     lines_out.append(f"  {idx}. {name}")
                 return "\n".join(lines_out)
+    except ConnectionError:
+        raise  # dead transport is not "no saves" — surface it
     except Exception:
         pass
     return None  # timed out or error — fall through to filesystem
@@ -401,12 +418,15 @@ def _list_saves_filesystem() -> str:
         all_saves.append((os.path.getmtime(f), os.path.basename(f)))
 
     all_saves.sort(reverse=True)  # newest first
+    _filesystem_save_names.clear()
     if not all_saves:
         return "No saves found on filesystem."
 
     lines = ["Available saves (filesystem scan, sorted by date):"]
     for i, (_mtime, name) in enumerate(all_saves[:25], 1):
-        lines.append(f"  {i}. {name.replace('.Civ6Save', '')}")
+        stripped = name.replace(".Civ6Save", "")
+        _filesystem_save_names.append(stripped)
+        lines.append(f"  {i}. {stripped}")
     return "\n".join(lines)
 
 
@@ -433,6 +453,20 @@ async def load_save(conn: GameConnection, save_index: int) -> str:
     )
     for line in lines:
         if line.startswith("ERR:NO_SAVE_LIST"):
+            if _filesystem_save_names:
+                if not 1 <= save_index <= len(_filesystem_save_names):
+                    count = len(_filesystem_save_names)
+                    return (
+                        f"Error: Index {save_index} out of range (1-{count}). "
+                        "Call list_saves() to see available saves."
+                    )
+                name = _filesystem_save_names[save_index - 1]
+                log.info(
+                    "No Lua save list — resolving filesystem entry %d ('%s')",
+                    save_index,
+                    name,
+                )
+                return await load_game_save(conn, name)
             return "Error: No save list cached. Call list_saves() first."
         if line.startswith("ERR:INDEX_OUT_OF_RANGE"):
             count = line.split("|")[1] if "|" in line else "?"
@@ -468,7 +502,7 @@ async def load_game_save(conn: GameConnection, save_name: str) -> str:
                 f"  UI.CloseFileListQuery(qid); "
                 f"  LuaEvents.FileListQueryResults.Remove(OnResults); "
                 f"  for i, s in ipairs(fileList) do "
-                f'    if s.Name == "{save_name}" then '
+                f'    if s.Name == "{_lua_escape(save_name)}" then '
                 f'      ExposedMembers.MCPLoadResult = "FOUND"; '
                 f"      ExposedMembers.MCPLoadDone = true; "
                 f"      Network.LeaveGame(); "
@@ -508,6 +542,8 @@ async def load_game_save(conn: GameConnection, save_name: str) -> str:
                 break  # NOT_FOUND — try filesystem
 
             log.info("Lua query did not find '%s', trying filesystem", save_name)
+        except ConnectionError:
+            raise  # dead transport is not "not found" — surface it
         except Exception:
             log.debug("Lua load_game_save failed", exc_info=True)
     else:
@@ -547,10 +583,15 @@ async def execute_lua(
     conn: GameConnection, code: str, context: str = "gamecore"
 ) -> str:
     """Escape hatch: run arbitrary Lua code."""
+    # End every chunk with the sentinel, like the builders do — without it the
+    # connection layer cannot tell "ran fine, printed nothing" from "never
+    # answered" (silent sockets raise TimeoutError there now). Function-wrapped
+    # so a trailing `return` in user code stays valid Lua.
+    wrapped = f'(function() {code} end)(); print("{SENTINEL}")'
     if context == "ingame":
-        lines = await conn.execute_write(code)
+        lines = await conn.execute_write(wrapped)
     elif context.isdigit():
-        lines = await conn.execute_in_state(int(context), code)
+        lines = await conn.execute_in_state(int(context), wrapped)
     else:
-        lines = await conn.execute_read(code)
+        lines = await conn.execute_read(wrapped)
     return "\n".join(lines) if lines else "(no output)"
