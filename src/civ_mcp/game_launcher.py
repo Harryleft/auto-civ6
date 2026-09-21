@@ -434,7 +434,8 @@ def _wait_for_tuner_port(timeout: int = _PORT_POLL_TIMEOUT) -> bool:
     """
     interval = 3
 
-    for i in range(int(timeout / interval)):
+    # max(1, ...): a timeout shorter than the interval still gets one check
+    for i in range(max(1, int(timeout / interval))):
         if _is_tuner_port_open():
             log.info("FireTuner port reachable after %ds", i * interval)
             return True
@@ -545,10 +546,11 @@ def _launch_game_sync() -> str:
         raise NotImplementedError(f"launch not supported on {sys.platform}")
     log.info("Launched Civ 6 via Steam, waiting for process...")
 
-    # macOS: click through the Aspyr launcher if it appears
+    # macOS: click through the Aspyr launcher if it appears. A click
+    # failure (e.g. no pyobjc) is NOT fatal — Steam may still launch the
+    # game fine — so keep waiting and surface the warning at the end.
     launcher_err = _click_aspyr_launcher_sync()
-    if launcher_err:
-        return f"WARNING: {launcher_err}"
+    launcher_warning = f"WARNING: {launcher_err}" if launcher_err else None
 
     # Wait for actual game process (Linux/Proton can be slow to start)
     waited = _wait_for_game_process(timeout=60)
@@ -563,16 +565,29 @@ def _launch_game_sync() -> str:
             waited = _wait_for_game_process()
 
     if waited is None:
-        return "WARNING: Game process not detected after launch. Check Steam."
+        msg = "FAILED: Game process not detected after launch. Check Steam."
+        if launcher_warning:
+            msg += f" Also: {launcher_warning}"
+        return msg
 
     # Wait for FireTuner port to open (replaces blind sleep)
     log.info("Game process started after %ds, waiting for FireTuner port...", waited)
     if _wait_for_tuner_port():
-        return (
-            f"Game launched. Process started after {waited}s, FireTuner port is open."
+        msg = (
+            f"Game launched. Process started after {waited}s, "
+            "FireTuner port is open."
         )
+        if launcher_warning:
+            msg += f" ({launcher_warning})"
+        return msg
 
-    return f"WARNING: Game launched (process after {waited}s) but FireTuner port did not open within {_PORT_POLL_TIMEOUT}s."
+    msg = (
+        f"FAILED: Game launched (process after {waited}s) but FireTuner "
+        f"port not detected within {_PORT_POLL_TIMEOUT}s."
+    )
+    if launcher_warning:
+        msg += f" Also: {launcher_warning}"
+    return msg
 
 
 # ---------------------------------------------------------------------------
@@ -1228,13 +1243,13 @@ def _ocr_tesseract(
         config="--psm 11",
         output_type=pytesseract.Output.DICT,
     )
-    # Append threshold results with a tag so we can de-duplicate
-    n_orig = len(data["text"])
+    # Append threshold results after the normal-pass results
     for key in data:
         data[key].extend(data_thresh[key])
 
     # Group words by block + par + line (not just block + line)
     lines: dict[tuple[int, int, int], list[int]] = {}
+    seen_tokens: set[tuple[tuple[int, int, int], str, int, int]] = set()
     n = len(data["text"])
     _last_rejected_ocr.clear()
     for i in range(n):
@@ -1259,6 +1274,20 @@ def _ocr_tesseract(
         if not text_val:
             continue
         key = (data["block_num"][i], data["par_num"][i], data["line_num"][i])
+        # The threshold pass can re-find the same word with the same line
+        # key — drop those duplicates HERE, before words are joined into a
+        # line (post-join they read as "PLAY PLAY" and the region-level
+        # dedup key no longer matches). Normal-pass words come first in
+        # `data`, so the higher-confidence pass wins.
+        token_key = (
+            key,
+            _normalize(text_val),
+            data["left"][i] // 20,
+            data["top"][i] // 20,
+        )
+        if token_key in seen_tokens:
+            continue
+        seen_tokens.add(token_key)
         lines.setdefault(key, []).append(i)
 
     # Split lines at large horizontal gaps (e.g. two-column menus).
@@ -1532,6 +1561,7 @@ def _find_text(
     exact: bool = False,
     prefer_bottom: bool = False,
     min_y_fraction: float = 0.0,
+    screen_bottom: int | None = None,
 ) -> tuple[str, int, int, int, int] | None:
     """Find OCR result matching target text.
 
@@ -1544,8 +1574,11 @@ def _find_text(
             label and a button have the same text (e.g. "Load Game" title
             at top vs "Load Game" button at bottom).
         min_y_fraction: Reject matches in the top portion of the screen.
-            0.7 means only accept matches in the bottom 30%. Requires a
-            game window to determine screen bounds; ignored if no window.
+            0.7 means only accept matches in the bottom 30%.
+        screen_bottom: Absolute screen y of the window's bottom edge, used
+            as the reference for min_y_fraction when known. Falls back to
+            the max OCR y as a proxy when not provided (that proxy shrinks
+            the filter zone on text-sparse screens).
     """
     target_norm = _normalize(target)
     matches = []
@@ -1556,16 +1589,21 @@ def _find_text(
         elif not exact and target_norm in text_norm:
             matches.append((text, x, y, w, h))
     if min_y_fraction > 0 and matches:
-        # Filter by screen position — use the max y from all results as proxy
-        # for screen bottom (avoids needing window info here)
-        max_y = max(r[2] for r in ocr_results)
-        min_y = max_y * min_y_fraction
+        # Filter by screen position — prefer real window geometry, fall
+        # back to the max y from all results as a proxy for screen bottom.
+        bottom = (
+            screen_bottom
+            if screen_bottom is not None
+            else max(r[2] for r in ocr_results)
+        )
+        min_y = bottom * min_y_fraction
         matches = [(t, x, y, w, h) for t, x, y, w, h in matches if y >= min_y]
     if not matches:
-        # Second-chance: fuzzy suffix match on rejected low-confidence results
-        fuzzy = _fuzzy_suffix_match(target, _last_rejected_ocr) or _fuzzy_suffix_match(
-            target, ocr_results
-        )
+        # Second-chance: fuzzy suffix match against the rejected
+        # low-confidence buffer ONLY — confident results that already
+        # mismatched must not win on trailing digits (could click the
+        # wrong save).
+        fuzzy = _fuzzy_suffix_match(target, _last_rejected_ocr)
         if fuzzy:
             log.info(
                 "_find_text: '%s' not in confident results, "
@@ -1908,6 +1946,7 @@ def _wait_for_text(
             exact=exact,
             prefer_bottom=prefer_bottom,
             min_y_fraction=min_y_fraction,
+            screen_bottom=(win.y + win.h) if win else None,
         )
         elapsed = time.time() - start
         if match:
@@ -2127,12 +2166,12 @@ def _navigate_to_save_sync(save_name: str, tab: str | None = "Autosaves") -> str
         # Click through Aspyr launcher if present (macOS shows PLAY button before main menu)
         _click_aspyr_launcher_sync()
 
-    log.info("[1/7] Waiting for main menu (Single Player)...")
+    log.info("[1/6] Waiting for main menu (Single Player)...")
     if not _click_text("Single Player", timeout=90, exact=True, post_delay=0.5):
         return "FAILED: Could not find 'Single Player' on main menu. Is the game at the main menu?"
     steps.append("Clicked Single Player")
 
-    log.info("[2/7] Clicking 'Load Game'...")
+    log.info("[2/6] Clicking 'Load Game'...")
     # y_offset nudges the click down from bbox center to avoid hitting
     # "Resume Game" directly above in the tightly-packed single player menu.
     if not _click_text("Load Game", timeout=5, exact=True, post_delay=0.5, y_offset=15):

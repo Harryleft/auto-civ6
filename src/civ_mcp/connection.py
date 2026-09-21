@@ -165,6 +165,7 @@ class GameConnection:
         )
 
         lines: list[str] = []
+        saw_sentinel = False
         deadline = asyncio.get_running_loop().time() + timeout
 
         while True:
@@ -184,9 +185,22 @@ class GameConnection:
             text = _parse_output(msg.payload)
             if text is not None:
                 if text.strip() == SENTINEL:
+                    saw_sentinel = True
                     break
                 lines.append(text)
             # Ignore non-output messages (e.g. tag=3 empty ack)
+
+        # A completely silent socket is a dead connection, not an empty result.
+        # Builders always end their Lua with the sentinel, so "no sentinel and
+        # no output" means the game never answered. Surface it as a timeout
+        # instead of returning [] (indistinguishable from "no data").
+        # TimeoutError is an OSError, so _execute_and_collect treats it like a
+        # dead socket: reconnect once and retry before giving up.
+        if not saw_sentinel and not lines:
+            raise TimeoutError(
+                f"No response from Civ 6 within {timeout:.1f}s "
+                f"(Lua state {state_index})."
+            )
 
         # Drain any trailing unsolicited output
         await tuner_client.drain_messages(self._reader, timeout=0.2)

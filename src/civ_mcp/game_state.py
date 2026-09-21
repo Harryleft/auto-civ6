@@ -354,16 +354,26 @@ class GameState:
                 log.debug("Attack followup read failed: %s", e)
 
             try:
-                followup_str = _format_attack_followup(followup, local_id)
+                # An empty follow-up means the read returned no data — that
+                # is NOT proof of a kill, so only format real data here.
+                if followup:
+                    followup_str = _format_attack_followup(followup, local_id)
+                else:
+                    followup_str = (
+                        "no follow-up data — outcome unconfirmed "
+                        "(verify with get_units)"
+                    )
                 city_def = _extract_city_defense(followup)
 
-                # Check if target was eliminated (no enemy units on tile)
+                # Check if target was eliminated (no enemy units on tile).
+                # Requires follow-up data: silence from the read must not be
+                # reported as elimination.
                 enemy_units = [
                     l
                     for l in followup
                     if l.startswith("UNIT|") and f"owner:{local_id}" not in l
                 ]
-                eliminated = not enemy_units
+                eliminated = bool(followup) and not enemy_units
 
                 # Build damage report from estimate (authoritative) or followup
                 post_hp = _extract_post_hp(followup, local_id)
@@ -410,12 +420,21 @@ class GameState:
             except Exception:
                 followup = []
             try:
-                followup_str = _format_attack_followup(followup)
+                # An empty follow-up means the read returned no data — that
+                # is NOT proof of a kill, so only format real data here.
+                if followup:
+                    followup_str = _format_attack_followup(followup)
+                else:
+                    followup_str = (
+                        "no follow-up data — outcome unconfirmed "
+                        "(verify with get_units)"
+                    )
                 post_hp = _extract_post_hp(followup)
                 damage_info = ""
                 if pre_hp is not None and post_hp is not None and post_hp < pre_hp:
                     damage_info = f"|damage dealt:{pre_hp - post_hp}"
-                elif not any(l.startswith("UNIT|") for l in followup):
+                elif followup and not any(l.startswith("UNIT|") for l in followup):
+                    # Tile confirmed clear of units — target eliminated.
                     if pre_hp is not None:
                         damage_info = f"|damage dealt:{pre_hp} (killed)"
                     followup_str = "Target eliminated"
@@ -512,7 +531,7 @@ class GameState:
 
     async def skip_unit(self, unit_index: int) -> str:
         lua = lq.build_skip_unit(unit_index)
-        lines = await self.conn.execute_read(lua)
+        lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
     async def skip_remaining_units(self) -> str:
@@ -835,7 +854,9 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         result = _action_result(lines)
 
-        if is_war and not result.startswith("ERR:"):
+        # _action_result rewrites "ERR:" to "Error: " — only schedule the
+        # background UI cleanup when the declaration actually succeeded.
+        if is_war and not result.startswith("Error:"):
             # War session left open for ~8s so the leader animation plays.
             # Background task will close session + dismiss DiplomacyActionView.
             asyncio.create_task(self._cleanup_war_diplomacy(other_player_id))
@@ -1115,7 +1136,8 @@ class GameState:
         lua = lq.build_send_envoy(city_state_player_id)
         lines = await self.conn.execute_write(lua)
         result = _action_result(lines)
-        if result.startswith("OK:ENVOY_SENT"):
+        # _action_result already stripped the "OK:" prefix
+        if result.startswith("ENVOY_SENT"):
             # Verify token actually decremented (async race condition workaround)
             await asyncio.sleep(0.1)
             try:
@@ -1304,14 +1326,14 @@ class GameState:
     async def recruit_great_person(self, individual_id: int) -> str:
         lua = lq.build_recruit_great_person(individual_id)
         lines = await self.conn.execute_write(lua)
-        return lines[0] if lines else "No response"
+        return _action_result(lines)
 
     async def patronize_great_person(
         self, individual_id: int, yield_type: str = "YIELD_GOLD"
     ) -> str:
         lua = lq.build_patronize_great_person(individual_id, yield_type)
         lines = await self.conn.execute_write(lua)
-        return lines[0] if lines else "No response"
+        return _action_result(lines)
 
     async def get_religion_status(self) -> lq.ReligionStatus:
         lines = await self.conn.execute_write(lq.build_religion_status_query())
@@ -1320,7 +1342,7 @@ class GameState:
     async def reject_great_person(self, individual_id: int) -> str:
         lua = lq.build_reject_great_person(individual_id)
         lines = await self.conn.execute_write(lua)
-        return lines[0] if lines else "No response"
+        return _action_result(lines)
 
     # ------------------------------------------------------------------
     # Trade route methods (InGame context)

@@ -20,6 +20,7 @@ import uvicorn
 from mcp.server.fastmcp import Context, FastMCP
 
 from civ_mcp import game_launcher, heartbeat
+from civ_mcp import lua as lq
 from civ_mcp.game_over_watchdog import GameOverWatchdog
 from civ_mcp import narrate as nr
 from civ_mcp.connection import GameConnection, LuaError
@@ -422,6 +423,8 @@ async def _logged(
     try:
         result = await fn()
     except (LuaError, ValueError) as e:
+        # A Lua error means the game answered — the connection is alive.
+        _logged._conn_errors = 0
         result = f"Error: {e}"
         ms = int((time.monotonic() - start) * 1000)
         log.info(
@@ -435,7 +438,7 @@ async def _logged(
         await logger.log_error(tool_name, result)
         return result
     except ConnectionError as e:
-        result = str(e)
+        result = f"Error: {e}"
         ms = int((time.monotonic() - start) * 1000)
         log.info(
             "[T%s] %s(%s) ERR %dms: %s",
@@ -716,7 +719,7 @@ async def get_map_area(
         center_y: Y coordinate of center tile
         radius: How many tiles out from center (default 2, max 4)
     """
-    radius = min(radius, 4)
+    radius = max(1, min(radius, 4))
     gs = _get_game(ctx)
     tile_coords: set[tuple[int, int]] = set()
 
@@ -2604,12 +2607,12 @@ async def queue_wc_votes(ctx: Context, votes: str) -> str:
     and return control to you for interactive voting.
     """
     gs = _get_game(ctx)
-    vote_list = json.loads(votes)
 
     async def _run():
+        vote_list = json.loads(votes)
         return await gs.queue_wc_votes(vote_list)
 
-    return await _logged(ctx, "queue_wc_votes", {"votes": vote_list}, _run)
+    return await _logged(ctx, "queue_wc_votes", {"votes": votes}, _run)
 
 
 # ---------------------------------------------------------------------------
