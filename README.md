@@ -70,7 +70,7 @@ Enable the FireTuner debug interface and configure recommended settings:
 
 - The **native Linux port** is required — the FireTuner debug interface is built into the native binary. Proton/Wine builds do not expose it.
 - The game runs as a single `Civ6` process launched via Steam Linux Runtime (scout-on-soldier).
-- GUI automation (OCR-based menu navigation) requires **X11**. On Wayland, the game typically runs under XWayland which should work, but a native X11 session is most reliable.
+- GUI automation requires **X11**. On Wayland, the game typically runs under XWayland which should work, but a native X11 session is most reliable.
 </details>
 
 Restart Civ 6. The game will listen on TCP port 4318 for connections.
@@ -83,13 +83,13 @@ cd civ6-mcp
 uv sync
 ```
 
-Optional — only for GUI automation extras (screenshot, crash-dialog dismissal, and the legacy OCR-based `scripts/launch_save.py`). Save loading itself uses the native FrontEnd API and needs no OCR:
+Optional — GUI automation extras (screenshot and crash-dialog dismissal):
 
 ```bash
 # macOS
 uv pip install 'civ6-mcp[launcher-macos]'
 
-# Windows (uses built-in Windows OCR — no external binaries needed)
+# Windows (no external binaries needed)
 uv pip install 'civ6-mcp[launcher-windows]'
 
 # Linux (Ubuntu/Debian)
