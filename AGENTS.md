@@ -261,7 +261,7 @@ EOF
 3. 工具坏了：修复底层查询或上报。
 
 ## 手动调优检查清单（顺序执行）
-1. `pgrep -x CivilizationVI`——确认游戏在运行。
+1. `pgrep -f Civ6`——确认游戏在运行（进程名是 `Civ6_Exe_Child`，不是 `CivilizationVI`）。
 2. `lsof -iTCP:4318 -sTCP:LISTEN`——确认 FireTuner 已启用。
 3. `uv run civ-mcp` 或 MCP 客户端——确认 stdio 已连接。
 4. 触发一个工具调用并观察 stderr 日志；任何"Connection refused"都意味着 FireTuner 关闭或游戏尚未加载存档。
@@ -279,13 +279,7 @@ EOF
 
 ## 参考文档
 - `AGENTS.md`——本文件（统一工作流协议）。
-- `docs/Telemetry-and-Monitoring.md`——事件与指标。
-- `docs/Architecture.md`——进程/调谐器接线。
-- `docs/FireTuner-and-Debugging.md`——诊断与原始 Lua。
-- `docs/Testing-and-CI.md`——测试、仿真器、门禁。
-
-## 参考资料
-- `reference/civ6_vanilla_actions.csv`——原版动作列表。
+- `docs/README.md`——文档索引：架构（`architecture-diagrams.md`）、可观测性（`observability.md`）、存档格式、Aspyr 启动器绕行、评测与设计研究。
 
 ---
 
