@@ -219,14 +219,13 @@
 
 ## 启动与运行（命令行）
 ```bash
-# 一键：启动游戏（Steam）+ FrontEnd API 读档 + 自动打 N 回合（无 OCR）
+# 一键：启动游戏（Steam）+ FrontEnd API 读档 + 自动打 N 回合
 uv run python scripts/integration_turns.py --save 吉尔伽美什_turn_1 --turns 10
 
 # 启动 MCP server（agent 通过 stdio 连接）
 uv run civ-mcp
 ```
 - 集成驱动会处理：启动游戏、等待 FireTuner 端口、连接重试、脚本读档、blocker 自动解决、异常记录。
-- `scripts/launch_save.py` 是旧的 OCR 菜单导航方式，保留作备用，优先用上面的集成驱动。
 
 ## 存档加载（供诊断参考）
 ```bash

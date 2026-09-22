@@ -115,7 +115,7 @@ Tools break down into three categories:
 
 **Action tools** (38) change game state. They correspond to things a human player would click: moving a unit, setting production, declaring friendship, proposing a trade deal. Every action tool validates preconditions before executing (can the unit reach that tile? does the city have that building available? is the diplomatic action valid?) and returns either `OK:` with a confirmation or `ERR:` with a reason.
 
-**Lifecycle tools** (6) manage the game session itself: advancing the turn, saving/loading, and crash recovery (kill the process, relaunch via Steam, reload a save through the game's native FrontEnd API — `Network.LoadGame` plus auto-start from the MainMenu Lua state, no OCR).
+**Lifecycle tools** (6) manage the game session itself: advancing the turn, saving/loading, and crash recovery (kill the process, relaunch via Steam, reload a save through the game's native FrontEnd API — `Network.LoadGame` plus auto-start from the MainMenu Lua state).
 
 ---
 
