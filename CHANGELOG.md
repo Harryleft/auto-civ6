@@ -24,6 +24,11 @@ The focus shifted from running games to packaging the results. The dataset publi
 - **Kimi-K2.5 support**: Register 256K context window with Inspect.
 - **Sync safety**: Don't regress completed games to live when sync watcher delivers late rows.
 - **Web**: Next.js 16.2.3, clickable model names, SEO (OG metadata, sitemap, llms.txt), UI polish (shimmer skeletons, victory glow, map playback 10x default).
+- **FrontEnd API save loading**: `load_game_save` drives Civ VI's native FrontEnd API (`Network.LoadGame` + `Automation.SetAutoStartEnabled`) from the MainMenu Lua state — no OCR menu navigation. Menu-only by design; refuses in-game loads. `restart_and_load` uses the same path, and load commands are never re-sent after connection loss (`retry_on_connection_loss=False`).
+- **Core-module test suite**: 561 unit tests for connection / tuner_client / end_turn / game_state / game_lifecycle / game_launcher / server, driven by in-memory FireTuner streams (`tests/fake_tuner.py`) instead of a live game. Coverage 20% → 53%.
+- **24 fixes pinned by the new tests**: silent sockets raise `TimeoutError` (auto-reconnect + retry) instead of returning empty results indistinguishable from "no data"; `get_game_overview` spatial seeding and the game-over GameCore fallback restored (both were dead code swallowed by broad excepts); save names escaped against Lua injection; launch/restart failure detection unified so `restart_and_load` actually detects failed launches.
+- **Integration driver**: `scripts/integration_turns.py` — launch the game, load a save via the FrontEnd API, play N turns autonomously, record hangs/anomalies. First 10-turn run: 0 hangs, 0 anomalies.
+- **AGENTS.md in Chinese**: full translation with corrected run instructions (integration driver + `uv run civ-mcp`).
 
 ## v1.1.10 — Orchestrator Hardening (2026-04-15)
 

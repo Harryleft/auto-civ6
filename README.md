@@ -36,7 +36,7 @@ Enable the FireTuner debug interface and configure recommended settings:
 |---------|-------|-----|
 | **Tuner** | Enabled | Required — opens the TCP debug port the MCP server connects to. Disables achievements. |
 | **Auto End Turn** | Disabled | The agent controls when turns end. Auto-end interferes with the blocker resolution flow. |
-| **Windowed mode** | Recommended | Lets you watch the game while the agent plays. Required for OCR-based save loading. |
+| **Windowed mode** | Recommended | Lets you watch the game while the agent plays. |
 
 **Windows:** All three settings are available in the in-game Options menu. The Tuner setting appears as "Tuner (disables achievements)" under gameplay options.
 
@@ -83,7 +83,7 @@ cd civ6-mcp
 uv sync
 ```
 
-For GUI automation features (screenshot, OCR-based menu navigation):
+Optional — only for GUI automation extras (screenshot, crash-dialog dismissal, and the legacy OCR-based `scripts/launch_save.py`). Save loading itself uses the native FrontEnd API and needs no OCR:
 
 ```bash
 # macOS
