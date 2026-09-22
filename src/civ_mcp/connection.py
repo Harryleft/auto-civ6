@@ -128,23 +128,51 @@ class GameConnection:
         return await self._execute_and_collect(self.ingame_index, lua_code, timeout)
 
     async def execute_in_state(
-        self, state_index: int, lua_code: str, timeout: float = 5.0
+        self,
+        state_index: int,
+        lua_code: str,
+        timeout: float = 5.0,
+        *,
+        retry_on_connection_loss: bool = True,
     ) -> list[str]:
-        """Execute Lua in an arbitrary state index. Returns parsed output lines."""
-        return await self._execute_and_collect(state_index, lua_code, timeout)
+        """Execute Lua in an arbitrary state index. Returns parsed output lines.
+
+        A load command is special: Civ VI may close FireTuner immediately after
+        accepting it. Callers can disable the normal retry in that case so a
+        possibly-submitted mutation is never sent a second time.
+        """
+        return await self._execute_and_collect(
+            state_index,
+            lua_code,
+            timeout,
+            retry_on_connection_loss=retry_on_connection_loss,
+        )
 
     async def _execute_and_collect(
-        self, state_index: int, lua_code: str, timeout: float
+        self,
+        state_index: int,
+        lua_code: str,
+        timeout: float,
+        *,
+        retry_on_connection_loss: bool = True,
     ) -> list[str]:
         """Send Lua code and collect output lines until sentinel or timeout.
 
-        Auto-reconnects once on dead socket (e.g. after game crash/reload).
+        Auto-reconnects once on dead socket (e.g. after game crash/reload),
+        unless retry_on_connection_loss=False (e.g. a save-load command whose
+        submission state is unknowable — never send those twice).
         """
         await self.ensure_connected()
         async with self._lock:
             try:
                 return await self._locked_execute(state_index, lua_code, timeout)
             except (ConnectionError, OSError, asyncio.IncompleteReadError):
+                # A load can legitimately close the socket after the command
+                # was accepted. Do not resend it: the outcome is unknown and a
+                # second Network.LoadGame can leave Civ 6 stuck in loading.
+                if not retry_on_connection_loss:
+                    await self.disconnect()
+                    raise
                 # Dead socket — reconnect once and retry (still holding lock)
                 log.info("Connection lost, reconnecting...")
                 await self.reconnect()

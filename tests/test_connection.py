@@ -298,6 +298,30 @@ class TestExecuteAndCollect:
         assert result == ["recovered"]
         assert attempts == [1, 1]
 
+    def test_no_retry_when_the_caller_disables_it(self, monkeypatch):
+        """retry_on_connection_loss=False (load commands): a dead socket
+        disconnects and raises — a possibly-submitted mutation is never
+        sent a second time."""
+
+        async def go():
+            conn, _ = await make_connection(monkeypatch)
+            calls = []
+
+            async def dead(state_index, lua_code, timeout):
+                calls.append(1)
+                raise ConnectionError("socket closed after accepting the command")
+
+            monkeypatch.setattr(conn, "_locked_execute", dead)
+            with pytest.raises(ConnectionError):
+                await conn.execute_in_state(
+                    24, "Network.LoadGame(...)", retry_on_connection_loss=False
+                )
+            return calls, conn
+
+        calls, conn = run(go())
+        assert calls == [1]  # never resent
+        assert not conn.is_connected  # left disconnected for the caller to handle
+
     def test_does_not_retry_a_lua_error(self, monkeypatch):
         """A Lua error is the game answering, not the socket dying — a retry would re-run it."""
 

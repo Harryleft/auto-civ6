@@ -46,19 +46,25 @@ class FakeConn:
         self,
         *,
         gamecore_index=0,
+        ingame_index=1,
         lua_states=None,
         on_write=None,
         on_state=None,
         on_read=None,
     ):
         self.gamecore_index = gamecore_index
+        self.ingame_index = ingame_index
         self.lua_states = dict(lua_states or {})
         self.on_write = on_write
         self.on_state = on_state
         self.on_read = on_read
         self.writes: list[str] = []
         self.state_calls: list[tuple[int, str]] = []
+        self.no_retry_calls: list[tuple[int, str]] = []
         self.reads: list[str] = []
+
+    async def ensure_connected(self):
+        """No-op — the fake is always 'connected'; tests set indexes directly."""
 
     async def execute_write(self, lua, timeout=5.0):
         self.writes.append(lua)
@@ -66,8 +72,10 @@ class FakeConn:
             return []
         return self.on_write(lua)
 
-    async def execute_in_state(self, state_index, lua, timeout=5.0):
+    async def execute_in_state(self, state_index, lua, timeout=5.0, **kwargs):
         self.state_calls.append((state_index, lua))
+        if kwargs.get("retry_on_connection_loss") is False:
+            self.no_retry_calls.append((state_index, lua))
         if self.on_state is None:
             return []
         return self.on_state(state_index, lua)
@@ -331,25 +339,20 @@ class TestLoadSaveFilesystemFallback:
         _touch(base / "MyGame.Civ6Save", 2000)
 
         def on_write(lua):
-            if "MCPSaveList" in lua and "MCPLoadResult" not in lua:
-                return ["ERR:NO_SAVE_LIST"]  # load_save's Lua cache check
-            if "MCPLoadResult = nil" in lua:
-                return ["QUERY_SENT"]
-            if "MCPLoadDone then" in lua:
-                return ["RESULT|FOUND"]
-            raise AssertionError(f"unexpected lua: {lua}")
+            return ["ERR:NO_SAVE_LIST"]  # load_save's Lua cache check
 
         async def go():
-            conn = FakeConn(on_write=on_write)
+            conn = menu_conn(on_write=on_write, on_state=frontend_ok)
             listing = await gl.list_saves(conn)
             result = await gl.load_save(conn, 1)
             return conn, listing, result
 
         conn, listing, result = run(go())
         assert listing.startswith("Available saves (filesystem scan")
-        # Index 1 = newest = MyGame; loaded by name via load_game_save.
-        assert result.startswith("Loading save: MyGame")
-        assert any('if s.Name == "MyGame" then' in w for w in conn.writes)
+        # Index 1 = newest = MyGame; loaded by name via the FrontEnd loader.
+        assert result.startswith("Loading save MyGame")
+        ((_, lua),) = conn.state_calls
+        assert 'loadGame.Name = "MyGame";' in lua
 
     def test_out_of_range_index_against_the_filesystem_cache(self, save_dirs):
         base, _auto = save_dirs
@@ -364,184 +367,141 @@ class TestLoadSaveFilesystemFallback:
 
 
 # ---------------------------------------------------------------------------
-# load_game_save — Lua tier, then filesystem verify + launcher fallback
+# load_game_save — native FrontEnd API from the MainMenu state (no OCR)
 # ---------------------------------------------------------------------------
 
 
-def load_router(poll_lines):
-    """Script Tier 1: query accepted, poll answers with the given lines."""
+def menu_conn(**kwargs):
+    """A FakeConn sitting at the main menu: no GameCore/InGame, MainMenu at 24."""
+    kwargs.setdefault("gamecore_index", None)
+    kwargs.setdefault("ingame_index", None)
+    kwargs.setdefault("lua_states", {24: "MainMenu"})
+    return FakeConn(**kwargs)
 
-    def on_write(lua):
-        if "MCPLoadResult = nil" in lua:
-            return ["QUERY_SENT"]
-        if "MCPLoadDone then" in lua:
-            return list(poll_lines)
-        raise AssertionError(f"unexpected lua: {lua}")
 
-    return on_write
+def frontend_ok(idx, lua):
+    return ["MCP_FRONTEND_AUTOSTART|true", "MCP_FRONTEND_LOAD|true"]
 
 
 class TestLoadGameSave:
-    def test_found_via_lua_returns_loading_message(self, monkeypatch):
-        monkeypatch.setattr(asyncio, "sleep", _no_sleep)
-        monkeypatch.setattr(sys, "platform", "darwin")
+    """load_game_save is intentionally main-menu-only: it drives Civ VI's
+    native FrontEnd API (Network.LoadGame + Automation.SetAutoStartEnabled)
+    from the MainMenu Lua state — never OCR, never an in-game reload."""
+
+    def test_in_game_load_is_refused_without_touching_the_game(self):
+        """An in-game load would invalidate the FireTuner world; refuse it
+        explicitly instead of silently restarting or navigating the GUI."""
 
         async def go():
-            conn = FakeConn(on_write=load_router(["RESULT|FOUND"]))
-            result = await gl.load_game_save(conn, "0_MCP_0042")
-            return conn, result
+            conn = FakeConn()  # gamecore_index=0 — a game is loaded
+            return conn, await gl.load_game_save(conn, "0_MCP_0042")
 
         conn, result = run(go())
-        assert result.startswith("Loading save: 0_MCP_0042")
-        assert 'if s.Name == "0_MCP_0042" then' in conn.writes[0]
-        assert "Network.LoadGame(s, ServerType.SERVER_TYPE_NONE)" in conn.writes[0]
-
-    def test_not_found_anywhere_returns_an_actionable_error(
-        self, save_dirs, monkeypatch
-    ):
-        monkeypatch.setattr(asyncio, "sleep", _no_sleep)
-        monkeypatch.setattr(sys, "platform", "darwin")
-
-        async def go():
-            conn = FakeConn(on_write=load_router(["RESULT|NOT_FOUND"]))
-            return await gl.load_game_save(conn, "ghost")
-
-        out = run(go())
-        assert "Error: Save 'ghost' not found" in out
-        assert "list_saves()" in out
-
-    def test_on_disk_at_main_menu_uses_menu_navigation(
-        self, save_dirs, monkeypatch
-    ):
-        """gamecore_index=None means main menu: navigate, don't restart."""
-        monkeypatch.setattr(asyncio, "sleep", _no_sleep)
-        monkeypatch.setattr(sys, "platform", "darwin")
-        base, _auto = save_dirs
-        _touch(base / "OldSave.Civ6Save", 1000)
-
-        calls = []
-
-        async def fake_menu_nav(name):
-            calls.append(("menu", name))
-            return "menu nav done"
-
-        async def fake_restart(name):
-            calls.append(("restart", name))
-            return "restarted"
-
-        monkeypatch.setattr(game_launcher, "load_save_from_menu", fake_menu_nav)
-        monkeypatch.setattr(game_launcher, "restart_and_load", fake_restart)
-
-        async def go():
-            conn = FakeConn(
-                gamecore_index=None, on_write=load_router(["RESULT|NOT_FOUND"])
-            )
-            return await gl.load_game_save(conn, "OldSave")
-
-        assert run(go()) == "menu nav done"
-        assert calls == [("menu", "OldSave")]
-
-    def test_on_disk_while_in_game_triggers_restart_and_load(
-        self, save_dirs, monkeypatch
-    ):
-        monkeypatch.setattr(asyncio, "sleep", _no_sleep)
-        monkeypatch.setattr(sys, "platform", "darwin")
-        _base, auto = save_dirs
-        _touch(auto / "AutoSave_0221.Civ6Save", 1000)
-
-        calls = []
-
-        async def fake_restart(name):
-            calls.append(name)
-            return "restarted"
-
-        monkeypatch.setattr(game_launcher, "restart_and_load", fake_restart)
-
-        async def go():
-            conn = FakeConn(
-                gamecore_index=0, on_write=load_router(["RESULT|NOT_FOUND"])
-            )
-            return await gl.load_game_save(conn, "AutoSave_0221")
-
-        assert run(go()) == "restarted"
-        assert calls == ["AutoSave_0221"]
-
-    def test_linux_skips_the_lua_tier_entirely(self, save_dirs, monkeypatch):
-        """The Aspyr Linux port silently ignores Network.LoadGame, so on
-        linux the function must not send a single Lua chunk."""
-        monkeypatch.setattr(sys, "platform", "linux")
-        base, _auto = save_dirs
-        _touch(base / "TuxSave.Civ6Save", 1000)
-
-        async def fake_menu_nav(name):
-            return f"menu:{name}"
-
-        monkeypatch.setattr(game_launcher, "load_save_from_menu", fake_menu_nav)
-
-        async def go():
-            def on_write(lua):
-                raise AssertionError("Lua tier must be skipped on linux")
-
-            conn = FakeConn(gamecore_index=None, on_write=on_write)
-            result = await gl.load_game_save(conn, "TuxSave")
-            return conn, result
-
-        conn, result = run(go())
-        assert result == "menu:TuxSave"
+        assert "a game is already loaded" in result
+        assert conn.state_calls == []
         assert conn.writes == []
 
-    def test_save_name_is_escaped_in_the_lua_match(self, save_dirs, monkeypatch):
-        """The name-matching Lua must escape quotes, same as save_game."""
-        monkeypatch.setattr(asyncio, "sleep", _no_sleep)
-        monkeypatch.setattr(sys, "platform", "darwin")
+    def test_invalid_save_names_are_rejected_before_any_lua(self):
+        async def go():
+            conn = menu_conn()
+            results = [
+                await gl.load_game_save(conn, ""),
+                await gl.load_game_save(conn, "a/b"),
+                await gl.load_game_save(conn, "bad\x01name"),
+            ]
+            return conn, results
+
+        conn, results = run(go())
+        assert all(r.startswith("Error:") for r in results)
+        assert conn.state_calls == []
+
+    def test_missing_mainmenu_state_is_an_error_not_an_ocr_fallback(self):
+        async def go():
+            conn = menu_conn(lua_states={})
+            return await gl.load_game_save(conn, "0_MCP_0042")
+
+        assert "MainMenu Lua state is unavailable" in run(go())
+
+    def test_frontend_load_succeeds_via_mainmenu_state(self):
+        """The happy path: load + auto-start accepted in the MainMenu state —
+        sent exactly once, with connection-loss retries disabled."""
 
         async def go():
-            conn = FakeConn(on_write=load_router(["RESULT|NOT_FOUND"]))
+            conn = menu_conn(on_state=frontend_ok)
+            return conn, await gl.load_game_save(conn, "0_MCP_0042")
+
+        conn, result = run(go())
+        assert result.startswith("Loading save 0_MCP_0042")
+        ((idx, lua),) = conn.state_calls
+        assert idx == 24
+        assert "Network.LoadGame(loadGame, ServerType.SERVER_TYPE_NONE)" in lua
+        assert "Automation.SetAutoStartEnabled(true)" in lua
+        assert conn.no_retry_calls == [(24, lua)]  # never resent mid-load
+
+    def test_civ6_rejecting_the_save_is_an_error(self):
+        async def go():
+            conn = menu_conn(
+                on_state=lambda idx, lua: [
+                    "MCP_FRONTEND_AUTOSTART|true",
+                    "MCP_FRONTEND_LOAD|false",
+                ]
+            )
+            return await gl.load_game_save(conn, "ghost")
+
+        assert "Civ VI rejected save" in run(go())
+
+    def test_no_confirmation_means_outcome_unknown(self):
+        async def go():
+            conn = menu_conn(on_state=lambda idx, lua: ["garbage"])
+            return await gl.load_game_save(conn, "0_MCP_0042")
+
+        assert run(go()).startswith("ERR:OUTCOME_UNKNOWN")
+
+    def test_autostart_unavailable_is_an_error(self):
+        async def go():
+            conn = menu_conn(
+                on_state=lambda idx, lua: [
+                    "MCP_FRONTEND_AUTOSTART|false",
+                    "MCP_FRONTEND_LOAD|true",
+                ]
+            )
+            return await gl.load_game_save(conn, "0_MCP_0042")
+
+        assert "auto-start was unavailable" in run(go())
+
+    def test_connection_loss_mid_load_is_outcome_unknown_not_an_exception(self):
+        """Civ VI may close FireTuner while accepting a load — that is an
+        unknown outcome to report, not a crash, and never a resend."""
+
+        async def go():
+            def on_state(idx, lua):
+                raise ConnectionError("socket closed")
+
+            conn = menu_conn(on_state=on_state)
+            return await gl.load_game_save(conn, "0_MCP_0042")
+
+        assert run(go()).startswith("ERR:OUTCOME_UNKNOWN")
+
+    def test_save_name_is_lua_quoted_by_json(self):
+        """Names are quoted with json.dumps — quotes or backslashes in the
+        name cannot break out of the Lua string."""
+
+        async def go():
+            conn = menu_conn(on_state=frontend_ok)
             await gl.load_game_save(conn, 'evil"; print("pwned"); --')
-            return conn.writes[0]
+            return conn.state_calls[0][1]
 
         lua = run(go())
-        assert 'if s.Name == "evil\\"; print(\\"pwned\\"); --" then' in lua
+        assert 'loadGame.Name = "evil\\"; print(\\"pwned\\"); --";' in lua
 
-    def test_lua_tier_connection_error_propagates(self, save_dirs, monkeypatch):
-        """A dead connection during the Lua query is a transport failure —
-        it propagates instead of falling through to the launcher."""
-        monkeypatch.setattr(sys, "platform", "darwin")
-        base, _auto = save_dirs
-        _touch(base / "Fallback.Civ6Save", 1000)
-
+    def test_civ6save_suffix_is_stripped(self):
         async def go():
-            def on_write(lua):
-                raise ConnectionError("socket dead")
+            conn = menu_conn(on_state=frontend_ok)
+            await gl.load_game_save(conn, "0_MCP_0042.Civ6Save")
+            return conn.state_calls[0][1]
 
-            conn = FakeConn(gamecore_index=None, on_write=on_write)
-            await gl.load_game_save(conn, "Fallback")
+        assert 'loadGame.Name = "0_MCP_0042";' in run(go())
 
-        with pytest.raises(ConnectionError):
-            run(go())
-
-    def test_other_lua_tier_errors_fall_through_to_filesystem(
-        self, save_dirs, monkeypatch
-    ):
-        """Non-transport errors keep the old behaviour: swallow (log.debug)
-        and continue loading via the launcher."""
-        monkeypatch.setattr(sys, "platform", "darwin")
-        base, _auto = save_dirs
-        _touch(base / "Fallback.Civ6Save", 1000)
-
-        async def fake_menu_nav(name):
-            return f"menu:{name}"
-
-        monkeypatch.setattr(game_launcher, "load_save_from_menu", fake_menu_nav)
-
-        async def go():
-            def on_write(lua):
-                raise RuntimeError("lua blew up")
-
-            conn = FakeConn(gamecore_index=None, on_write=on_write)
-            return await gl.load_game_save(conn, "Fallback")
-
-        assert run(go()) == "menu:Fallback"
 
 
 # ---------------------------------------------------------------------------
@@ -814,9 +774,15 @@ class TestProcessLifecycle:
             calls.append("dismiss")
             return []
 
-        async def fake_load(name):
+        async def fake_load(conn, name):
             calls.append(("load", name))
             return "Loaded save"
+
+        class FakePostLaunchConn:
+            """Stands in for GameConnection — connect() succeeds immediately."""
+
+            async def connect(self):
+                pass
 
         monkeypatch.setattr(game_launcher, "dismiss_crash_dialogs", fake_dismiss)
         monkeypatch.setattr(
@@ -827,7 +793,8 @@ class TestProcessLifecycle:
             "_launch_game_sync",
             lambda: calls.append("launch") or "Game process detected",
         )
-        monkeypatch.setattr(game_launcher, "load_save_from_menu", fake_load)
+        monkeypatch.setattr("civ_mcp.connection.GameConnection", FakePostLaunchConn)
+        monkeypatch.setattr(gl, "load_save_from_frontend", fake_load)
 
         out = run(game_launcher.restart_and_load("0_MCP_0042"))
         assert out == "Kill: Killed | Launch: Game process detected | Load: Loaded save"
@@ -847,7 +814,7 @@ class TestProcessLifecycle:
         async def fake_dismiss():
             return []
 
-        async def fake_load(name):
+        async def fake_load(conn, name):
             raise AssertionError("load must not run after a failed launch")
 
         monkeypatch.setattr(game_launcher, "dismiss_crash_dialogs", fake_dismiss)
@@ -857,7 +824,7 @@ class TestProcessLifecycle:
             "_launch_game_sync",
             lambda: "Game process not detected after launch",
         )
-        monkeypatch.setattr(game_launcher, "load_save_from_menu", fake_load)
+        monkeypatch.setattr(gl, "load_save_from_frontend", fake_load)
 
         out = run(game_launcher.restart_and_load("0_MCP_0042"))
         assert out.endswith("ABORTED: Game failed to launch.")
