@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 
 from civ_mcp import lua as lq
@@ -477,106 +478,101 @@ async def load_save(conn: GameConnection, save_index: int) -> str:
     return "Load command sent. Wait for game to reload."
 
 
-async def load_game_save(conn: GameConnection, save_name: str) -> str:
-    """Load a save by name — no list_saves() prerequisite.
+def _validate_save_name(save_name: str) -> str | None:
+    """Reject path-like or control-character input before sending it to Lua."""
 
-    Two-tier approach:
-    1. Lua: query save list, find by name, load in one async operation.
-    2. Filesystem: verify file exists, use OCR menu navigation (slow but
-       reliable — works for autosaves and quicksaves that Lua can't find).
+    if not isinstance(save_name, str) or not save_name.strip():
+        return "Error: save name must be a non-empty filename."
+    if len(save_name) > 255 or any(char in "/\\" for char in save_name):
+        return "Error: save name contains an unsupported path or control character."
+    if any(ord(char) < 32 or ord(char) == 127 for char in save_name):
+        return "Error: save name contains an unsupported control character."
+    return None
+
+
+async def load_save_from_frontend(conn: GameConnection, save_name: str) -> str:
+    """Load a save from Civ VI's MainMenu state without GUI automation.
+
+    ``Automation.SetAutoStartEnabled`` asks Civ VI to complete the same
+    post-load Continue action used by the normal menu flow.  The load command
+    is sent exactly once because Civ VI may close FireTuner while accepting it.
     """
-    import asyncio
-    import sys
 
-    # On the Aspyr Linux port, Network.LoadGame silently does nothing
-    # (same as Network.SaveGame). Skip Lua tier and go straight to OCR
-    # menu navigation which actually works.
-    if sys.platform != "linux":
-        # Tier 1: Lua query-match-load (Windows/macOS only)
-        try:
-            await conn.execute_write(
-                f"if not ExposedMembers then ExposedMembers = {{}} end; "
-                f"ExposedMembers.MCPLoadResult = nil; "
-                f"ExposedMembers.MCPLoadDone = false; "
-                f"local function OnResults(fileList, qid) "
-                f"  UI.CloseFileListQuery(qid); "
-                f"  LuaEvents.FileListQueryResults.Remove(OnResults); "
-                f"  for i, s in ipairs(fileList) do "
-                f'    if s.Name == "{_lua_escape(save_name)}" then '
-                f'      ExposedMembers.MCPLoadResult = "FOUND"; '
-                f"      ExposedMembers.MCPLoadDone = true; "
-                f"      Network.LeaveGame(); "
-                f"      Network.LoadGame(s, ServerType.SERVER_TYPE_NONE); "
-                f"      return "
-                f"    end "
-                f"  end; "
-                f'  ExposedMembers.MCPLoadResult = "NOT_FOUND"; '
-                f"  ExposedMembers.MCPLoadDone = true; "
-                f"end; "
-                f"LuaEvents.FileListQueryResults.Add(OnResults); "
-                f"local opts = SaveLocationOptions.NORMAL + SaveLocationOptions.AUTOSAVE "
-                f"  + SaveLocationOptions.QUICKSAVE + SaveLocationOptions.LOAD_METADATA; "
-                f"UI.QuerySaveGameList(SaveLocations.LOCAL_STORAGE, SaveTypes.SINGLE_PLAYER, opts); "
-                f'print("QUERY_SENT"); '
-                f'print("{lq.SENTINEL}")'
-            )
+    validation_error = _validate_save_name(save_name)
+    if validation_error:
+        return validation_error
 
-            for _ in range(20):
-                await asyncio.sleep(0.25)
-                check = await conn.execute_write(
-                    f"if ExposedMembers.MCPLoadDone then "
-                    f'  print("RESULT|" .. tostring(ExposedMembers.MCPLoadResult)) '
-                    f'else print("PENDING") end; '
-                    f'print("{lq.SENTINEL}")'
-                )
-                for line in check:
-                    if line == "RESULT|FOUND":
-                        return (
-                            f"Loading save: {save_name}. Game will reload — "
-                            f"wait ~10 seconds then call get_game_overview to verify."
-                        )
-                    if line == "RESULT|NOT_FOUND":
-                        break  # fall through to Tier 2
-                else:
-                    continue
-                break  # NOT_FOUND — try filesystem
+    main_menu_index = next(
+        (idx for idx, name in conn.lua_states.items() if name == "MainMenu"),
+        None,
+    )
+    if main_menu_index is None:
+        return "Error: MainMenu Lua state is unavailable; refusing UI automation fallback."
 
-            log.info("Lua query did not find '%s', trying filesystem", save_name)
-        except ConnectionError:
-            raise  # dead transport is not "not found" — surface it
-        except Exception:
-            log.debug("Lua load_game_save failed", exc_info=True)
-    else:
-        log.info(
-            "Linux: skipping Lua load (Aspyr port bug), using OCR nav for '%s'",
-            save_name,
+    save_stem = save_name.removesuffix(".Civ6Save")
+    code = f"""
+local loadGame = {{}};
+loadGame.Location = SaveLocations.LOCAL_STORAGE;
+loadGame.Type = SaveTypes.SINGLE_PLAYER;
+loadGame.IsAutosave = false;
+loadGame.IsQuicksave = false;
+loadGame.Directory = SaveDirectories.DEFAULT;
+loadGame.Name = {json.dumps(save_stem, ensure_ascii=False)};
+local automationOK = pcall(function() Automation.SetAutoStartEnabled(true); end);
+local loadOK, loadResult = pcall(function()
+  return Network.LoadGame(loadGame, ServerType.SERVER_TYPE_NONE);
+end);
+print("MCP_FRONTEND_AUTOSTART|" .. tostring(automationOK));
+print("MCP_FRONTEND_LOAD|" .. tostring(loadOK and loadResult ~= false));
+if not loadOK then print("MCP_FRONTEND_ERROR|" .. tostring(loadResult)); end;
+print("{lq.SENTINEL}");
+"""
+    try:
+        lines = await conn.execute_in_state(
+            main_menu_index,
+            code,
+            timeout=5.0,
+            retry_on_connection_loss=False,
         )
-
-    # Tier 2: Filesystem verify + OCR menu load
-    import os
-
-    from .game_launcher import SAVE_DIR, SINGLE_SAVE_DIR
-
-    auto_path = os.path.join(SAVE_DIR, f"{save_name}.Civ6Save")
-    single_path = os.path.join(SINGLE_SAVE_DIR, f"{save_name}.Civ6Save")
-
-    if not os.path.exists(auto_path) and not os.path.exists(single_path):
+    except (ConnectionError, OSError, TimeoutError) as exc:
         return (
-            f"Error: Save '{save_name}' not found in Lua query or on filesystem. "
-            f"Check the name and try list_saves() to see available saves."
+            f"ERR:OUTCOME_UNKNOWN|FrontEnd load for {save_name!r} may have been "
+            f"submitted; FireTuner disconnected: {exc}"
         )
 
-    # File exists but Lua couldn't find it — use OCR menu navigation.
-    # If we're at the main menu (no GameCore), navigate directly without
-    # restarting. Only restart_and_load if we're in-game.
-    from . import game_launcher
+    if "MCP_FRONTEND_LOAD|false" in lines:
+        return f"Error: Civ VI rejected save {save_name!r}: {lines!r}"
+    if "MCP_FRONTEND_LOAD|true" not in lines:
+        return f"ERR:OUTCOME_UNKNOWN|FrontEnd load returned no confirmation: {lines!r}"
+    if "MCP_FRONTEND_AUTOSTART|true" not in lines:
+        return (
+            "Error: save loading began but Civ VI auto-start was unavailable; "
+            "refusing UI automation fallback."
+        )
+    return (
+        f"Loading save {save_name}; Civ VI will complete Continue Game through "
+        "its native FrontEnd automation."
+    )
 
-    if conn.gamecore_index is None:
-        log.info("At main menu — loading '%s' via OCR menu nav", save_name)
-        return await game_launcher.load_save_from_menu(save_name)
-    else:
-        log.info("In-game — restart_and_load for '%s'", save_name)
-        return await game_launcher.restart_and_load(save_name)
+
+async def load_game_save(conn: GameConnection, save_name: str) -> str:
+    """Load a save by name through Civ VI's native FrontEnd API.
+
+    This operation is intentionally limited to the main menu.  An in-game
+    load would invalidate the current FireTuner world and needs a separate,
+    explicitly verified recovery workflow; silently restarting or navigating
+    the GUI makes the result impossible to prove from scripts.
+    """
+
+    validation_error = _validate_save_name(save_name)
+    if validation_error:
+        return validation_error
+    if conn.gamecore_index is not None:
+        return (
+            "Error: a game is already loaded; return to the main menu before "
+            "calling load_game_save. No GUI fallback was attempted."
+        )
+    return await load_save_from_frontend(conn, save_name)
 
 
 async def execute_lua(

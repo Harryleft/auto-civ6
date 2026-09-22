@@ -1847,14 +1847,23 @@ class TestRestartAndLoad:
             events.append("launch")
             return launch_result
 
-        async def fake_load(name):
+        async def fake_load(conn, name):
             events.append(("load", name))
             return "Save loading."
+
+        class FakePostLaunchConn:
+            """Stands in for GameConnection — connect() succeeds immediately."""
+
+            async def connect(self):
+                pass
 
         monkeypatch.setattr(gl, "dismiss_crash_dialogs", fake_dismiss)
         monkeypatch.setattr(gl, "kill_game", fake_kill)
         monkeypatch.setattr(gl, "launch_game", fake_launch)
-        monkeypatch.setattr(gl, "load_save_from_menu", fake_load)
+        monkeypatch.setattr("civ_mcp.connection.GameConnection", FakePostLaunchConn)
+        monkeypatch.setattr(
+            "civ_mcp.game_lifecycle.load_save_from_frontend", fake_load
+        )
         return events
 
     def test_full_sequence_joins_step_reports(self, monkeypatch):
