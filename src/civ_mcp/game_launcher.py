@@ -2407,8 +2407,27 @@ async def restart_and_load(save_name: str | None = None) -> str:
     # Dismiss any lingering crash dialog from previous session (both platforms)
     await dismiss_crash_dialogs()
 
-    # Step 3: Load save via OCR
-    load_result = await load_save_from_menu(save_name)
+    # Step 3: Load save via the native FrontEnd API (no OCR navigation).
+    # After relaunch the game sits at the main menu, which is exactly the
+    # context the FrontEnd loader needs.
+    from civ_mcp.connection import GameConnection
+    from civ_mcp.game_lifecycle import load_save_from_frontend
+
+    conn = GameConnection()
+    load_result = None
+    for attempt in range(12):
+        try:
+            await conn.connect()
+            break
+        except Exception as e:
+            log.info("Post-relaunch connect attempt %d failed: %s", attempt + 1, e)
+            if attempt == 11:
+                load_result = (
+                    "FAILED: FireTuner did not accept a connection after relaunch"
+                )
+            await asyncio.sleep(5)
+    if load_result is None:
+        load_result = await load_save_from_frontend(conn, save_name)
     results.append(f"Load: {load_result}")
 
     return " | ".join(results)
