@@ -5,7 +5,7 @@ Wraps tuner_client.py into a stateful connection manager with:
 - asyncio lock for serializing commands
 - Sentinel-based multi-line response collection
 - Output prefix parsing (O\x00<context>: <value>)
-- Reconnection on connection loss
+- Explicit reconnection and no automatic command replay
 """
 
 from __future__ import annotations
@@ -41,53 +41,48 @@ class GameConnection:
         return self._writer is not None and not self._writer.is_closing()
 
     async def connect(self) -> None:
-        """Connect to Civ 6 and discover Lua state indexes."""
-        log.info("Connecting to Civ 6 at %s:%d", self.host, self.port)
+        """Connect and discover context indexes; retire unsuccessful handshakes."""
         try:
-            self._reader, self._writer = await tuner_client.connect(
-                self.host, self.port
-            )
-        except (asyncio.TimeoutError, OSError) as e:
+            self._reader, self._writer = await tuner_client.connect(self.host, self.port)
+            app_identity, raw_states = await tuner_client.handshake(self._reader, self._writer)
+            self.lua_states = {}
+            self.gamecore_index = None
+            self.ingame_index = None
+            i = 0
+            while i + 1 < len(raw_states):
+                try:
+                    index = int(raw_states[i])
+                except ValueError:
+                    i += 1
+                    continue
+                name = raw_states[i + 1]
+                i += 2
+                self.lua_states[index] = name
+                if name == "GameCore_Tuner" and self.gamecore_index is None:
+                    self.gamecore_index = index
+                if name == "InGame" and self.ingame_index is None:
+                    self.ingame_index = index
+            log.info("Connected: %s, GameCore=%s, InGame=%s", app_identity, self.gamecore_index, self.ingame_index)
+        except (OSError, asyncio.IncompleteReadError) as exc:
+            await self.disconnect()
             raise ConnectionError(
-                f"Cannot connect to Civ 6 at {self.host}:{self.port}. "
-                "Is the game running with EnableTuner=1?"
-            ) from e
-        app_identity, raw_states = await tuner_client.handshake(
-            self._reader, self._writer
-        )
-        log.info("Connected: %s", app_identity)
+                f"Cannot connect to Civ 6 at {self.host}:{self.port}: {exc}. "
+                "Make sure Civ 6 is running with EnableTuner enabled."
+            ) from exc
 
-        # Parse state list: alternating [index_number, state_name] pairs
+    async def disconnect(self) -> None:
+        writer = self._writer
+        self._writer = None
+        self._reader = None
         self.lua_states = {}
         self.gamecore_index = None
         self.ingame_index = None
-        i = 0
-        while i + 1 < len(raw_states):
+        if writer and not writer.is_closing():
+            writer.close()
             try:
-                idx = int(raw_states[i])
-                name = raw_states[i + 1]
-                self.lua_states[idx] = name
-                if name == "GameCore_Tuner" and self.gamecore_index is None:
-                    self.gamecore_index = idx
-                if name == "InGame" and self.ingame_index is None:
-                    self.ingame_index = idx
-                i += 2
-            except ValueError:
-                i += 1
-
-        log.info(
-            "Discovered %d Lua states (GameCore=%s, InGame=%s)",
-            len(self.lua_states),
-            self.gamecore_index,
-            self.ingame_index,
-        )
-
-    async def disconnect(self) -> None:
-        if self._writer and not self._writer.is_closing():
-            self._writer.close()
-            await self._writer.wait_closed()
-        self._writer = None
-        self._reader = None
+                await writer.wait_closed()
+            except OSError:
+                pass
 
     async def ensure_connected(self) -> None:
         """Connect (or reconnect) if not connected. Raises ConnectionError on failure."""
@@ -118,65 +113,35 @@ class GameConnection:
             )
 
     async def execute_read(self, lua_code: str, timeout: float = 5.0) -> list[str]:
-        """Execute Lua in GameCore context (read state). Returns parsed output lines."""
-        await self._ensure_game_states()
-        return await self._execute_and_collect(self.gamecore_index, lua_code, timeout)
+        """Execute in GameCore; context indexes are resolved under the command lock."""
+        return await self._execute_and_collect("GameCore_Tuner", lua_code, timeout)
 
     async def execute_write(self, lua_code: str, timeout: float = 5.0) -> list[str]:
-        """Execute Lua in InGame context (issue commands). Returns parsed output lines."""
-        await self._ensure_game_states()
-        return await self._execute_and_collect(self.ingame_index, lua_code, timeout)
+        """Execute in InGame once. A lost response never causes automatic replay."""
+        return await self._execute_and_collect("InGame", lua_code, timeout)
 
-    async def execute_in_state(
-        self,
-        state_index: int,
-        lua_code: str,
-        timeout: float = 5.0,
-        *,
-        retry_on_connection_loss: bool = True,
-    ) -> list[str]:
-        """Execute Lua in an arbitrary state index. Returns parsed output lines.
+    async def execute_in_state(self, state_index: int, lua_code: str, timeout: float = 5.0) -> list[str]:
+        """Execute once in a known Lua context, including MainMenu."""
+        return await self._execute_and_collect(state_index, lua_code, timeout)
 
-        A load command is special: Civ VI may close FireTuner immediately after
-        accepting it. Callers can disable the normal retry in that case so a
-        possibly-submitted mutation is never sent a second time.
+    async def _execute_and_collect(self, state_index: int | str, lua_code: str, timeout: float) -> list[str]:
+        """Serialize connection discovery and execution; retire uncertain streams.
+
+        GameCore is also used for mutations by some game tools, so context name
+        alone cannot establish idempotence. No Lua chunk is automatically replayed.
         """
-        return await self._execute_and_collect(
-            state_index,
-            lua_code,
-            timeout,
-            retry_on_connection_loss=retry_on_connection_loss,
-        )
-
-    async def _execute_and_collect(
-        self,
-        state_index: int,
-        lua_code: str,
-        timeout: float,
-        *,
-        retry_on_connection_loss: bool = True,
-    ) -> list[str]:
-        """Send Lua code and collect output lines until sentinel or timeout.
-
-        Auto-reconnects once on dead socket (e.g. after game crash/reload),
-        unless retry_on_connection_loss=False (e.g. a save-load command whose
-        submission state is unknowable — never send those twice).
-        """
-        await self.ensure_connected()
         async with self._lock:
             try:
-                return await self._locked_execute(state_index, lua_code, timeout)
-            except (ConnectionError, OSError, asyncio.IncompleteReadError):
-                # A load can legitimately close the socket after the command
-                # was accepted. Do not resend it: the outcome is unknown and a
-                # second Network.LoadGame can leave Civ 6 stuck in loading.
-                if not retry_on_connection_loss:
-                    await self.disconnect()
-                    raise
-                # Dead socket — reconnect once and retry (still holding lock)
-                log.info("Connection lost, reconnecting...")
-                await self.reconnect()
-                return await self._locked_execute(state_index, lua_code, timeout)
+                await self.ensure_connected()
+                if isinstance(state_index, str):
+                    await self._ensure_game_states()
+                    index = self.gamecore_index if state_index == "GameCore_Tuner" else self.ingame_index
+                else:
+                    index = state_index
+                return await self._locked_execute(index, lua_code, timeout)
+            except (OSError, LuaError, asyncio.IncompleteReadError, asyncio.CancelledError):
+                await self.disconnect()
+                raise
 
     async def _locked_execute(
         self, state_index: int, lua_code: str, timeout: float
@@ -184,9 +149,6 @@ class GameConnection:
         """Inner execute — must be called while holding self._lock."""
         assert self._reader is not None
         assert self._writer is not None
-
-        # Drain any stale messages
-        await tuner_client.drain_messages(self._reader, timeout=0.1)
 
         await tuner_client.send_message(
             self._writer, tuner_client.TAG_COMMAND, f"CMD:{state_index}:{lua_code}"
@@ -218,20 +180,11 @@ class GameConnection:
                 lines.append(text)
             # Ignore non-output messages (e.g. tag=3 empty ack)
 
-        # A completely silent socket is a dead connection, not an empty result.
-        # Builders always end their Lua with the sentinel, so "no sentinel and
-        # no output" means the game never answered. Surface it as a timeout
-        # instead of returning [] (indistinguishable from "no data").
-        # TimeoutError is an OSError, so _execute_and_collect treats it like a
-        # dead socket: reconnect once and retry before giving up.
-        if not saw_sentinel and not lines:
+        if not saw_sentinel:
             raise TimeoutError(
-                f"No response from Civ 6 within {timeout:.1f}s "
-                f"(Lua state {state_index})."
+                f"Incomplete response from Civ 6 within {timeout:.1f}s "
+                f"(Lua state {state_index}); command outcome is unknown."
             )
-
-        # Drain any trailing unsolicited output
-        await tuner_client.drain_messages(self._reader, timeout=0.2)
         return lines
 
 

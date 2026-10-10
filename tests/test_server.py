@@ -1,15 +1,4 @@
-"""Unit tests for `civ_mcp.server` — the MCP tool dispatch layer.
-
-Tools are plain async functions registered on a FastMCP instance, so the tests
-call them directly with a fake `Context` whose lifespan context carries scripted
-stand-ins for GameState / GameLogger / SpatialTracker / CameraController /
-MapCapture / GameOverWatchdog. Only process-level side effects are patched:
-`server.heartbeat` (writes ~/.civ6-mcp/heartbeat.json), `server.game_launcher`
-for the lifecycle tools (kills/launches real processes), and the diary path
-helpers (home-directory I/O). Everything inside server.py itself — parameter
-parsing, dispatch tables, error mapping, camera pushes, watchdog arming — is the
-real code under test.
-"""
+"""MCP tool dispatch and protocol tests with isolated game transport and logs."""
 
 from __future__ import annotations
 
@@ -32,22 +21,34 @@ run = asyncio.run
 
 
 class FakeConn:
-    """Stands in for GameConnection on the fake GameState."""
-
-    def __init__(self, gamecore_index: int | None = 0) -> None:
+    def __init__(self, gamecore_index=0):
         self.gamecore_index = gamecore_index
+        self.ingame_index = 1
+        self.lua_states = {24: "MainMenu"}
         self.reconnect_calls = 0
-        self.read_queries: list[str] = []
+        self.disconnect_calls = 0
+        self.read_queries = []
+        self.state_calls = []
+        self.reconnect_states = []
+        self.load_response = ["MCP_FRONTEND_AUTOSTART|true", "MCP_FRONTEND_LOAD|true"]
 
     async def execute_read(self, query, timeout=None):
         self.read_queries.append(query)
         return []
 
-    async def execute_write(self, code, timeout=None):
-        return []
+    async def execute_in_state(self, index, code, timeout=None):
+        self.state_calls.append((index, code))
+        if isinstance(self.load_response, Exception):
+            raise self.load_response
+        return self.load_response
 
     async def reconnect(self):
         self.reconnect_calls += 1
+        if self.reconnect_states:
+            self.gamecore_index = self.reconnect_states.pop(0)
+
+    async def disconnect(self):
+        self.disconnect_calls += 1
 
 
 class FakeGameState:
@@ -62,16 +63,16 @@ class FakeGameState:
     def __init__(self) -> None:
         self.conn = FakeConn()
         self._game_identity = None
-        self._diary_written_turn = None
-        self._end_turn_blocked = False
+        self._revealed_tiles = set()
+        self.reset_calls = 0
         self._pending_end_turn = False
         self._pending_end_turn_from = None
-        self._hang_retry_active = False
-        self._last_game_over = None
-        self._advisor_budget_warning = None
-        self.spatial = None
         self.calls: list[tuple[str, tuple, dict]] = []
         self.script: dict = {"check_game_over": None}
+
+    def reset_session(self):
+        self.reset_calls += 1
+        self._revealed_tiles = None
 
     def __getattr__(self, name):
         if name.startswith("_"):
@@ -96,108 +97,16 @@ class FakeGameState:
 
 
 class FakeLogger:
-    def __init__(self) -> None:
-        self._turn = None
-        self.session_id = "test-run"
-        self.turns: list[int] = []
-        self.bound_games: list[tuple] = []
-        self.agent_models: list[str] = []
-        self.errors: list[tuple[str, str]] = []
-        self.tool_calls: list[tuple] = []
-        self.game_overs: list[dict] = []
-        self.emitted: list[tuple] = []
-        self._emitter = SimpleNamespace(metadata={}, emit=self._emit)
-
-    def set_turn(self, turn):
-        self._turn = turn
-        self.turns.append(turn)
-
-    def set_agent_model(self, model):
-        self.agent_models.append(model)
-
-    def bind_game(self, civ, seed):
-        self.bound_games.append((civ, seed))
+    def __init__(self):
+        self.tool_calls = []
 
     async def log_tool_call(self, tool, params, result, ms):
         self.tool_calls.append((tool, params, result, ms))
 
-    async def log_error(self, tool, error):
-        self.errors.append((tool, error))
-
-    async def log_game_over(self, **kwargs):
-        self.game_overs.append(kwargs)
-
-    async def _emit(self, event, row):
-        self.emitted.append((event, row))
-
-
-class FakeSpatial:
-    def __init__(self) -> None:
-        self._revealed_seeded = False
-        self.turns: list[int] = []
-        self.bound_games: list[tuple] = []
-        self.seeded: list[set] = []
-        self.records: list[tuple] = []
-        self.record_error: Exception | None = None
-
-    def set_turn(self, turn):
-        self.turns.append(turn)
-
-    def bind_game(self, civ, seed):
-        self.bound_games.append((civ, seed))
-
-    def seed_revealed(self, tiles):
-        self.seeded.append(tiles)
-        self._revealed_seeded = True
-
-    async def record(self, tool_name, params, result, ms, tiles=None):
-        if self.record_error is not None:
-            raise self.record_error
-        self.records.append((tool_name, tiles))
-
-
-class FakeCamera:
-    def __init__(self) -> None:
-        self.pushes: list[tuple] = []
-        self.clears = 0
-
-    def push(self, x, y, label=""):
-        self.pushes.append((x, y, label))
-
-    def clear(self):
-        self.clears += 1
-
-
-class FakeWatchdog:
-    def __init__(self) -> None:
-        self.armed = 0
-
-    def arm(self):
-        self.armed += 1
-
-
-class FakeMapCapture:
-    def __init__(self) -> None:
-        self.bound_games: list[tuple] = []
-        self.captures: list[tuple] = []
-
-    def bind_game(self, civ, seed):
-        self.bound_games.append((civ, seed))
-
-    async def capture(self, conn, turn):
-        self.captures.append((conn, turn))
-
 
 def make_ctx(**overrides) -> SimpleNamespace:
     """Build a Context stand-in: request_context.lifespan_context.<service>."""
-    app = SimpleNamespace(
-        game=FakeGameState(),
-        logger=FakeLogger(),
-        camera=FakeCamera(),
-        spatial=FakeSpatial(),
-        map_capture=FakeMapCapture(),
-        watchdog=FakeWatchdog(),
-    )
+    app = server.AppContext(game=FakeGameState(), logger=FakeLogger())
     for key, value in overrides.items():
         setattr(app, key, value)
     return SimpleNamespace(request_context=SimpleNamespace(lifespan_context=app))
@@ -205,17 +114,6 @@ def make_ctx(**overrides) -> SimpleNamespace:
 
 def app_of(ctx) -> SimpleNamespace:
     return ctx.request_context.lifespan_context
-
-
-@pytest.fixture(autouse=True)
-def _isolate_server_state(monkeypatch):
-    """Keep process-level side effects and cross-test counters out of tests."""
-    monkeypatch.setattr(server.heartbeat, "write", lambda *a, **k: None)
-    monkeypatch.setattr(server.heartbeat, "bind_game", lambda *a, **k: None)
-    monkeypatch.delenv("CIV_MCP_AGENT_MODEL", raising=False)
-    server._logged._conn_errors = 0
-    yield
-    server._logged._conn_errors = 0
 
 
 def make_overview(turn: int = 12, player_id: int = 0) -> GameOverview:
@@ -247,15 +145,6 @@ def make_gameover(defeat: bool = True) -> GameOverStatus:
     )
 
 
-REFLECTIONS = {
-    "tactical": "moved warriors",
-    "strategic": "ahead on score",
-    "tooling": "No issues",
-    "planning": "build settler next",
-    "hypothesis": "barb camp spawns T20",
-}
-
-
 # ---------------------------------------------------------------------------
 # Tool registration
 # ---------------------------------------------------------------------------
@@ -278,7 +167,6 @@ class TestToolRegistration:
             "set_research",
             "propose_trade",
             "queue_wc_votes",
-            "get_diary",
             "load_game_save",
             "restart_and_load",
             "run_lua",
@@ -322,254 +210,6 @@ class TestResultSummary:
 
 
 # ---------------------------------------------------------------------------
-# _logged — the wrapper every tool result flows through
-# ---------------------------------------------------------------------------
-
-
-class TestLogged:
-    """The error-mapping contract: what an agent sees when things go wrong."""
-
-    def test_success_returns_result_and_logs_the_call(self):
-        ctx = make_ctx()
-
-        async def go():
-            return await server._logged(ctx, "my_tool", {"a": 1}, lambda: _ret("ok"))
-
-        async def _ret(v):
-            return v
-
-        assert run(go()) == "ok"
-        logger = app_of(ctx).logger
-        assert len(logger.tool_calls) == 1
-        tool, params, result, ms = logger.tool_calls[0]
-        assert (tool, params, result) == ("my_tool", {"a": 1}, "ok")
-        assert ms >= 0
-        assert logger.errors == []
-
-    def test_lua_error_becomes_an_error_string(self):
-        """The game answered with a Lua failure — the agent sees 'Error: ...'."""
-        ctx = make_ctx()
-
-        async def go():
-            async def boom():
-                raise LuaError("ERR:attempt to index nil")
-
-            return await server._logged(ctx, "my_tool", {}, boom)
-
-        assert run(go()) == "Error: ERR:attempt to index nil"
-        assert app_of(ctx).logger.errors == [("my_tool", "Error: ERR:attempt to index nil")]
-
-    def test_value_error_becomes_an_error_string(self):
-        ctx = make_ctx()
-
-        async def go():
-            async def boom():
-                raise ValueError("bad int")
-
-            return await server._logged(ctx, "my_tool", {}, boom)
-
-        assert run(go()) == "Error: bad int"
-
-    def test_connection_error_is_returned_with_the_error_prefix(self):
-        """Connection loss is mapped to "Error: ..." like every other failure.
-
-        Lua/validation failures come back as "Error: ..." and transport
-        failures now do too, so an agent keying on the "Error:" prefix
-        catches both.
-        """
-        ctx = make_ctx()
-
-        async def go():
-            async def boom():
-                raise ConnectionError("socket closed by peer")
-
-            return await server._logged(ctx, "my_tool", {}, boom)
-
-        assert run(go()) == "Error: socket closed by peer"
-        assert server._logged._conn_errors == 1
-
-    def test_success_resets_the_connection_error_counter(self):
-        ctx = make_ctx()
-
-        async def go():
-            async def boom():
-                raise ConnectionError("dead")
-
-            async def fine():
-                return "ok"
-
-            await server._logged(ctx, "t", {}, boom)
-            await server._logged(ctx, "t", {}, boom)
-            mid = server._logged._conn_errors
-            await server._logged(ctx, "t", {}, fine)
-            return mid
-
-        assert run(go()) == 2
-        assert server._logged._conn_errors == 0
-
-    def test_lua_error_resets_the_connection_error_counter(self):
-        """A Lua error means the game answered — the connection is alive.
-
-        After 4 connection failures, a Lua error resets the counter to 0,
-        so one more dead socket does not trigger the auto-restart: the
-        last five calls were not all transport failures.
-        """
-        ctx = make_ctx()
-
-        async def go():
-            async def dead():
-                raise ConnectionError("dead")
-
-            async def lua():
-                raise LuaError("ERR:bad lua")
-
-            for _ in range(4):
-                await server._logged(ctx, "t", {}, dead)
-            await server._logged(ctx, "t", {}, lua)
-            return server._logged._conn_errors
-
-        assert run(go()) == 0
-
-    def test_five_consecutive_connection_errors_trigger_auto_restart(self, monkeypatch):
-        """The recovery path: after 5 dead sockets, restart_and_load fires."""
-        ctx = make_ctx()
-        restarts: list = []
-
-        async def fake_restart(save):
-            restarts.append(save)
-            return "restarted"
-
-        monkeypatch.setattr(server.game_launcher, "restart_and_load", fake_restart)
-
-        async def go():
-            async def dead():
-                raise ConnectionError("dead")
-
-            results = [await server._logged(ctx, "t", {}, dead) for _ in range(5)]
-            return results
-
-        results = run(go())
-        assert results == ["Error: dead"] * 5
-        assert len(restarts) == 1
-        # Counter reset after triggering, and the conn was reconnected.
-        assert server._logged._conn_errors == 0
-        assert app_of(ctx).game.conn.reconnect_calls >= 1
-
-    def test_a_spatial_record_failure_is_swallowed(self):
-        """Telemetry must never break a tool call."""
-        ctx = make_ctx()
-        app_of(ctx).spatial.record_error = RuntimeError("telemetry exploded")
-
-        async def go():
-            async def fine():
-                return "ok"
-
-            return await server._logged(ctx, "t", {}, fine)
-
-        assert run(go()) == "ok"
-
-
-# ---------------------------------------------------------------------------
-# get_game_overview
-# ---------------------------------------------------------------------------
-
-
-class TestGetGameOverview:
-    def test_happy_path_narrates_and_binds_turn_and_game(self):
-        ctx = make_ctx()
-        gs = app_of(ctx).game
-        gs.script["get_game_overview"] = make_overview(turn=12)
-        gs.script["get_game_identity"] = ("CIVILIZATION_ROME", 4242)
-
-        async def go():
-            return await server.get_game_overview(ctx)
-
-        text = run(go())
-        assert "Turn 12" in text
-        assert "Rome" in text
-        logger = app_of(ctx).logger
-        spatial = app_of(ctx).spatial
-        assert logger._turn == 12
-        assert 12 in spatial.turns
-        assert ("CIVILIZATION_ROME", 4242) in logger.bound_games
-        assert ("CIVILIZATION_ROME", 4242) in spatial.bound_games
-
-    def test_revealed_tile_seeding_happens(self):
-        """The seeding block runs: spatial tracker is seeded on first overview.
-
-        server.py imports the lua module as `lq`, so the seed query is built,
-        the read is issued, and the spatial tracker is seeded for the
-        visibility diff. The overview itself still succeeds.
-        """
-        ctx = make_ctx()
-        gs = app_of(ctx).game
-        gs.script["get_game_overview"] = make_overview()
-        gs.script["get_game_identity"] = ("CIVILIZATION_ROME", 1)
-        spatial = app_of(ctx).spatial
-
-        async def go():
-            return await server.get_game_overview(ctx)
-
-        text = run(go())
-        assert "Turn 12" in text  # tool itself succeeds
-        assert len(spatial.seeded) == 1
-        assert spatial._revealed_seeded is True
-        # The seed query was built and the read was issued.
-        assert len(gs.conn.read_queries) == 1
-
-    def test_identity_failure_is_swallowed(self):
-        """A failure in get_game_identity must not break the overview."""
-        ctx = make_ctx()
-        gs = app_of(ctx).game
-        gs.script["get_game_overview"] = make_overview()
-        gs.script["get_game_identity"] = LuaError("ERR:no identity")
-
-        async def go():
-            return await server.get_game_overview(ctx)
-
-        assert "Turn 12" in run(go())
-
-    def test_game_over_defeat_is_appended(self):
-        ctx = make_ctx()
-        gs = app_of(ctx).game
-        gs.script["get_game_overview"] = make_overview()
-        gs.script["get_game_identity"] = ("CIVILIZATION_ROME", 1)
-        gs.script["check_game_over"] = make_gameover(defeat=True)
-
-        async def go():
-            return await server.get_game_overview(ctx)
-
-        text = run(go())
-        assert "*** GAME OVER — DEFEAT ***" in text
-        assert "Cleopatra of Egypt won a Religious victory." in text
-        over = app_of(ctx).logger.game_overs[0]
-        assert over["is_defeat"] is True
-        assert over["victory_type"] == "Religious"
-
-    def test_game_over_victory_is_appended(self):
-        ctx = make_ctx()
-        gs = app_of(ctx).game
-        gs.script["get_game_overview"] = make_overview()
-        gs.script["get_game_identity"] = ("CIVILIZATION_ROME", 1)
-        gs.script["check_game_over"] = make_gameover(defeat=False)
-
-        async def go():
-            return await server.get_game_overview(ctx)
-
-        text = run(go())
-        assert "*** GAME OVER — VICTORY ***" in text
-
-    def test_lua_error_from_the_query_is_mapped(self):
-        ctx = make_ctx()
-        app_of(ctx).game.script["get_game_overview"] = LuaError("ERR:gamecore gone")
-
-        async def go():
-            return await server.get_game_overview(ctx)
-
-        assert run(go()) == "Error: ERR:gamecore gone"
-
-
-# ---------------------------------------------------------------------------
 # get_units / get_cities / get_spies (query + narrate wiring)
 # ---------------------------------------------------------------------------
 
@@ -601,23 +241,6 @@ class TestGetUnits:
         text = run(go())
         assert "Warrior" in text
 
-    def test_unit_tiles_are_recorded_for_the_spatial_tracker(self):
-        ctx = make_ctx()
-        gs = app_of(ctx).game
-        gs.script["get_units"] = [
-            UnitInfo(1, 1, "Warrior", "UNIT_WARRIOR", 3, 4, 2, 2, 100, 100),
-            # x=-1 marks a unit with no map position (e.g. consumed/garrisoned)
-            UnitInfo(2, 2, "Spy", "UNIT_SPY", -1, -1, 2, 2, 100, 100),
-        ]
-        gs.script["get_threat_scan"] = LuaError("ERR:no scan")
-        gs.script["get_trade_routes"] = LuaError("ERR:no routes")
-
-        async def go():
-            return await server.get_units(ctx)
-
-        run(go())
-        spatial = app_of(ctx).spatial
-        assert spatial.records[-1] == ("get_units", {(3, 4)})
 
     def test_threat_and_trade_failures_are_tolerated(self):
         """Threat scan and trade routes are best-effort enrichments."""
@@ -712,39 +335,6 @@ class TestUnitActionDispatch:
         run(go())
         assert gs.last_args("move_unit") == (7, 10, 11)
 
-    def test_move_pushes_the_camera(self):
-        ctx = make_ctx()
-
-        async def go():
-            return await server.unit_action(ctx, 1, "move", 10, 11)
-
-        run(go())
-        assert app_of(ctx).camera.pushes == [(10, 11, "move→(10,11)")]
-
-    def test_fortify_does_not_push_the_camera(self):
-        ctx = make_ctx()
-
-        async def go():
-            return await server.unit_action(ctx, 1, "fortify")
-
-        run(go())
-        assert app_of(ctx).camera.pushes == []
-
-    def test_camera_is_pushed_even_when_the_move_fails(self):
-        """Pins current behaviour: the camera moves on error results too.
-
-        The push happens after `_logged` without inspecting the result, so a
-        move rejected by the game still yanks the spectator camera.
-        """
-        ctx = make_ctx()
-        app_of(ctx).game.script["move_unit"] = LuaError("ERR:unit cannot move")
-
-        async def go():
-            return await server.unit_action(ctx, 1, "move", 5, 6)
-
-        assert run(go()) == "Error: ERR:unit cannot move"
-        assert app_of(ctx).camera.pushes == [(5, 6, "move→(5,6)")]
-
 
 class TestUnitActionValidation:
     """Parameter errors must come back as text, not exceptions."""
@@ -825,7 +415,7 @@ class TestCityAction:
 
         assert run(go()) == "Error: attack requires target_x and target_y"
 
-    def test_attack_dispatches_and_pushes_the_camera(self):
+    def test_attack_dispatches_with_coordinates(self):
         ctx = make_ctx()
         gs = app_of(ctx).game
 
@@ -834,7 +424,6 @@ class TestCityAction:
 
         run(go())
         assert gs.last_args("city_attack") == (5, 7, 8)
-        assert app_of(ctx).camera.pushes == [(7, 8, "city attack")]
 
     @pytest.mark.parametrize(
         "action", ["keep", "reject", "raze", "liberate_founder", "liberate_previous"]
@@ -1119,6 +708,14 @@ class TestQueueWcVotes:
 
 
 class TestSpyAction:
+    def test_explicit_escape_route_dispatches_to_the_requested_spy(self):
+        ctx = make_ctx()
+        gs = app_of(ctx).game
+        result = run(server.spy_action(ctx, 65536 + 4, "escape:district_harbor", 0, 0))
+        assert result == "<spy_escape>"
+        assert gs.last_args("spy_escape") == (4, "DISTRICT_HARBOR")
+        assert gs.called("spy_mission") == []
+
     def test_travel_uses_the_unit_index(self):
         ctx = make_ctx()
         gs = app_of(ctx).game
@@ -1128,7 +725,6 @@ class TestSpyAction:
 
         run(go())
         assert gs.last_args("spy_travel") == (4, 10, 11)
-        assert app_of(ctx).camera.pushes == [(10, 11, "spy travel")]
 
     def test_mission_names_are_uppercased(self):
         ctx = make_ctx()
@@ -1170,7 +766,7 @@ class TestGetMapArea:
         run(go())
         assert gs.last_args("get_map_area") == (10, 10, 1)
 
-    def test_tiles_are_narrated_and_camera_pushed(self):
+    def test_tiles_are_narrated(self):
         ctx = make_ctx()
         gs = app_of(ctx).game
         gs.script["get_map_area"] = [
@@ -1193,7 +789,6 @@ class TestGetMapArea:
 
         text = run(go())
         assert "GRASS" in text
-        assert app_of(ctx).camera.pushes == [(10, 11, "map_area (10,11)")]
 
 
 class TestGetSettleAdvisor:
@@ -1225,7 +820,7 @@ class TestGetPathingEstimate:
 
 
 # ---------------------------------------------------------------------------
-# Advisors (district / wonder) — error strings and budget warnings
+# Advisors (district / wonder) — placement results
 # ---------------------------------------------------------------------------
 
 
@@ -1240,18 +835,6 @@ class TestGetDistrictAdvisor:
 
         assert run(go()) == "Error: city not found"
 
-    def test_budget_warning_is_prepended_once_and_cleared(self):
-        ctx = make_ctx()
-        gs = app_of(ctx).game
-        gs.script["get_district_advisor"] = []
-        gs._advisor_budget_warning = "budget exceeded"
-
-        async def go():
-            return await server.get_district_advisor(ctx, 1, "DISTRICT_CAMPUS")
-
-        text = run(go())
-        assert text.startswith("!! budget exceeded")
-        assert gs._advisor_budget_warning is None
 
     def test_no_warning_means_plain_narration(self):
         ctx = make_ctx()
@@ -1287,298 +870,6 @@ class TestGetGpAdvisor:
 
 
 # ---------------------------------------------------------------------------
-# end_turn
-# ---------------------------------------------------------------------------
-
-
-def _prime_end_turn(gs, turn=5, result="Turn 5 -> 6"):
-    """Script the GameState calls end_turn makes before/after advancing."""
-    gs.script["get_game_overview"] = make_overview(turn=turn)
-    gs.script["get_game_identity"] = ("CIVILIZATION_ROME", 77)
-    gs.script["end_turn"] = result
-    gs._diary_written_turn = turn  # skip the diary-snapshot write path
-
-
-class TestEndTurnReflections:
-    def test_missing_reflections_are_rejected_before_advancing(self):
-        ctx = make_ctx()
-        gs = app_of(ctx).game
-
-        async def go():
-            return await server.end_turn(ctx, tactical="did stuff")
-
-        text = run(go())
-        assert "Empty reflections: strategic, tooling, planning, hypothesis" in text
-        assert gs.called("end_turn") == []
-
-    def test_all_reflections_required_even_whitespace(self):
-        ctx = make_ctx()
-        gs = app_of(ctx).game
-
-        async def go():
-            return await server.end_turn(
-                ctx,
-                tactical="ok",
-                strategic="   ",
-                tooling="ok",
-                planning="ok",
-                hypothesis="ok",
-            )
-
-        text = run(go())
-        assert "Empty reflections: strategic" in text
-        assert gs.called("end_turn") == []
-
-
-class TestEndTurnAdvance:
-    def test_successful_advance_updates_turn_clears_camera_arms_watchdog(self):
-        ctx = make_ctx()
-        app = app_of(ctx)
-        _prime_end_turn(app.game, turn=5, result="Turn 5 -> 6")
-
-        async def go():
-            return await server.end_turn(ctx, **REFLECTIONS)
-
-        assert run(go()) == "Turn 5 -> 6"
-        assert app.logger._turn == 6
-        assert 6 in app.spatial.turns
-        assert app.camera.clears == 1
-        assert app.watchdog.armed == 1
-        assert app.game._end_turn_blocked is False
-        # Map capture ran for the new turn.
-        assert app.map_capture.captures[-1][1] == 6
-
-    def test_agent_model_env_var_is_forwarded_to_the_logger(self, monkeypatch):
-        monkeypatch.setenv("CIV_MCP_AGENT_MODEL", "test-model-1")
-        ctx = make_ctx()
-        app = app_of(ctx)
-        _prime_end_turn(app.game)
-
-        async def go():
-            return await server.end_turn(ctx, **REFLECTIONS)
-
-        run(go())
-        assert app.logger.agent_models == ["test-model-1"]
-
-    def test_a_blocked_turn_sets_the_blocked_flag(self):
-        ctx = make_ctx()
-        app = app_of(ctx)
-        _prime_end_turn(app.game, result="Turn paused: diplomacy encounter open")
-
-        async def go():
-            return await server.end_turn(ctx, **REFLECTIONS)
-
-        assert run(go()) == "Turn paused: diplomacy encounter open"
-        assert app.game._end_turn_blocked is True
-        # A blocked turn is not an advance: camera stays, logger turn unchanged.
-        assert app.camera.clears == 0
-        assert app.logger._turn == 5  # from the pre-turn overview sync
-
-    def test_retry_after_blocker_merges_reflections(self, monkeypatch, tmp_path):
-        """Second end_turn after a blocker merges into the existing diary row."""
-        ctx = make_ctx()
-        app = app_of(ctx)
-        _prime_end_turn(app.game, turn=9, result="Turn 9 -> 10")
-        app.game._end_turn_blocked = True  # previous call hit a blocker
-        app.game._diary_written_turn = 9
-
-        monkeypatch.setattr(server, "_diary_path", lambda *a: tmp_path / "d.jsonl")
-        merges: list[tuple] = []
-
-        def fake_merge(path, turn, reflections):
-            merges.append((path, turn, reflections))
-            return {"turn": turn, "merged": True}
-
-        monkeypatch.setattr(server, "_merge_agent_reflections", fake_merge)
-
-        async def go():
-            return await server.end_turn(ctx, **REFLECTIONS)
-
-        assert run(go()) == "Turn 9 -> 10"
-        assert len(merges) == 1
-        assert merges[0][1] == 9
-        assert merges[0][2] == REFLECTIONS
-        # The merged row was re-emitted for the telemetry sinks.
-        assert any(evt == server.EVENT_DIARY_ROW for evt, _ in app.logger.emitted)
-
-    def test_world_congress_blocker_auto_submits_on_the_third_repeat(self):
-        """Same-turn WC blocker three times in a row → submit_congress fires."""
-        ctx = make_ctx()
-        app = app_of(ctx)
-        _prime_end_turn(app.game, turn=20, result="World Congress fires this turn")
-        app.game.script["submit_congress"] = "submitted"
-
-        async def go():
-            results = []
-            for _ in range(3):
-                results.append(await server.end_turn(ctx, **REFLECTIONS))
-            return results
-
-        run(go())
-        assert app.game._end_turn_blocked is True
-        assert len(app.game.called("submit_congress")) == 1
-
-
-class TestEndTurnHang:
-    def test_hang_with_no_save_file_returns_the_hang_message(self, monkeypatch):
-        """Recovery needs the autosave on disk; without it the agent sees HANG."""
-        ctx = make_ctx()
-        app = app_of(ctx)
-        _prime_end_turn(
-            app.game, turn=57, result="HANG:57:0_MCP_999997_UNITTEST|AI stuck"
-        )
-        restarts: list = []
-
-        async def fake_restart(save):
-            restarts.append(save)
-            return "restarted"
-
-        monkeypatch.setattr(server.game_launcher, "restart_and_load", fake_restart)
-
-        async def go():
-            return await server.end_turn(ctx, **REFLECTIONS)
-
-        text = run(go())
-        assert text.startswith("HANG:57:")
-        assert restarts == []  # no save on disk → no recovery attempt
-        assert app.watchdog.armed == 1
-
-    def test_hang_during_game_over_is_rewritten_to_defeat(self):
-        """The game can end while InGame Lua is frozen: end_turn returns HANG
-        but the GameCore fallback in check_game_over still sees the outcome."""
-        ctx = make_ctx()
-        app = app_of(ctx)
-        _prime_end_turn(
-            app.game, turn=57, result="HANG:57:0_MCP_999998_UNITTEST|AI stuck"
-        )
-        app.game.script["check_game_over"] = make_gameover(defeat=True)
-
-        async def go():
-            return await server.end_turn(ctx, **REFLECTIONS)
-
-        text = run(go())
-        assert text.startswith("GAME OVER — DEFEAT.")
-        assert "Cleopatra of Egypt won a Religious victory." in text
-        assert app.logger.game_overs[0]["is_defeat"] is True
-        # Game over → watchdog is not armed for further polling.
-        assert app.watchdog.armed == 0
-
-
-# ---------------------------------------------------------------------------
-# get_diary
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def diary_file(tmp_path, monkeypatch):
-    """Point the server's diary path at a tmp file; returns the path."""
-    path = tmp_path / "diary.jsonl"
-    monkeypatch.setattr(server, "_diary_path", lambda *a: path)
-    return path
-
-
-def _write_diary(path, entries):
-    path.write_text("\n".join(json.dumps(e) for e in entries) + "\n")
-
-
-LEGACY_T1 = {"turn": 1, "score": {"total": 10}, "reflections": {"tactical": "founded capital"}}
-V2_AGENT_T2 = {
-    "v": 1,
-    "turn": 2,
-    "is_agent": True,
-    "score": 25,
-    "cities": 2,
-    "reflections": {"tactical": "scouted east"},
-}
-V2_RIVAL_T2 = {"v": 1, "turn": 2, "score": 22, "cities": 2}  # no is_agent
-LEGACY_T3 = {"turn": 3, "score": {"total": 40}, "reflections": {"tactical": "built monument"}}
-
-
-class TestGetDiary:
-    def test_game_not_detected(self):
-        ctx = make_ctx()
-        app_of(ctx).game.script["get_game_identity"] = LuaError("ERR:no game")
-
-        async def go():
-            return await server.get_diary(ctx)
-
-        assert run(go()) == "Could not detect current game. Is the game running?"
-
-    def test_no_diary_file(self, diary_file):
-        ctx = make_ctx()
-        app_of(ctx).game.script["get_game_identity"] = ("CIVILIZATION_ROME", 7)
-
-        async def go():
-            return await server.get_diary(ctx)
-
-        text = run(go())
-        assert "No diary entries yet for this game" in text
-        assert "CIVILIZATION_ROME" in text
-
-    def test_reads_entries_and_drops_non_agent_v2_rows(self, diary_file):
-        """v2 diaries have one row per player per turn; only agent rows shown."""
-        ctx = make_ctx()
-        app_of(ctx).game.script["get_game_identity"] = ("CIVILIZATION_ROME", 7)
-        _write_diary(diary_file, [LEGACY_T1, V2_AGENT_T2, V2_RIVAL_T2, LEGACY_T3])
-
-        async def go():
-            return await server.get_diary(ctx)
-
-        text = run(go())
-        assert "=== Turn 1 ===" in text
-        assert "=== Turn 2 ===" in text
-        assert "=== Turn 3 ===" in text
-        # The rival row for turn 2 must not appear (only one T2 block).
-        assert text.count("=== Turn 2 ===") == 1
-
-    def test_last_n_limits_the_output(self, diary_file):
-        ctx = make_ctx()
-        app_of(ctx).game.script["get_game_identity"] = ("CIVILIZATION_ROME", 7)
-        _write_diary(diary_file, [LEGACY_T1, V2_AGENT_T2, LEGACY_T3])
-
-        async def go():
-            return await server.get_diary(ctx, last_n=1)
-
-        text = run(go())
-        assert "=== Turn 3 ===" in text
-        assert "=== Turn 1 ===" not in text
-
-    def test_turn_filter_selects_a_single_turn(self, diary_file):
-        ctx = make_ctx()
-        app_of(ctx).game.script["get_game_identity"] = ("CIVILIZATION_ROME", 7)
-        _write_diary(diary_file, [LEGACY_T1, V2_AGENT_T2, LEGACY_T3])
-
-        async def go():
-            return await server.get_diary(ctx, turn=2)
-
-        text = run(go())
-        assert "=== Turn 2 ===" in text
-        assert "=== Turn 1 ===" not in text
-
-    def test_range_filter(self, diary_file):
-        ctx = make_ctx()
-        app_of(ctx).game.script["get_game_identity"] = ("CIVILIZATION_ROME", 7)
-        _write_diary(diary_file, [LEGACY_T1, V2_AGENT_T2, LEGACY_T3])
-
-        async def go():
-            return await server.get_diary(ctx, from_turn=2, to_turn=2)
-
-        text = run(go())
-        assert "=== Turn 2 ===" in text
-        assert "=== Turn 3 ===" not in text
-
-    def test_no_match(self, diary_file):
-        ctx = make_ctx()
-        app_of(ctx).game.script["get_game_identity"] = ("CIVILIZATION_ROME", 7)
-        _write_diary(diary_file, [LEGACY_T1])
-
-        async def go():
-            return await server.get_diary(ctx, turn=99)
-
-        assert run(go()) == "No diary entries match the query."
-
-
-# ---------------------------------------------------------------------------
 # run_lua / saves / lifecycle
 # ---------------------------------------------------------------------------
 
@@ -1605,101 +896,6 @@ class TestRunLua:
         assert gs.last_args("execute_lua") == ("print(1)", "gamecore")
 
 
-class TestSaveTools:
-    def test_load_save_by_index(self):
-        ctx = make_ctx()
-        gs = app_of(ctx).game
-
-        async def go():
-            return await server.load_save(ctx, 3)
-
-        run(go())
-        assert gs.last_args("load_save") == (3,)
-
-    def test_load_game_save_by_name(self):
-        ctx = make_ctx()
-        gs = app_of(ctx).game
-
-        async def go():
-            return await server.load_game_save(ctx, "0_MCP_0079")
-
-        run(go())
-        assert gs.last_args("load_game_save") == ("0_MCP_0079",)
-
-    def test_load_game_save_lua_error_is_mapped(self):
-        ctx = make_ctx()
-        app_of(ctx).game.script["load_game_save"] = LuaError("ERR:save not found")
-
-        async def go():
-            return await server.load_game_save(ctx, "nope")
-
-        assert run(go()) == "Error: ERR:save not found"
-
-
-class TestLifecycleTools:
-    """These drive the game process, not FireTuner — game_launcher is patched."""
-
-    def test_lifecycle_tools_forward_to_the_game_layer(self, monkeypatch):
-        """Wiring smoke test: process-level tools reach game_launcher, and
-        list_saves reaches the game state."""
-        calls: list = []
-
-        async def fake_kill():
-            calls.append("kill")
-            return "killed"
-
-        async def fake_launch():
-            calls.append("launch")
-            return "launched"
-
-        monkeypatch.setattr(server.game_launcher, "kill_game", fake_kill)
-        monkeypatch.setattr(server.game_launcher, "launch_game", fake_launch)
-        ctx = make_ctx()
-        app_of(ctx).game.script["list_saves"] = "1. quicksave"
-
-        async def go():
-            return (
-                await server.kill_game(ctx),
-                await server.launch_game(ctx),
-                await server.list_saves(ctx),
-            )
-
-        assert run(go()) == ("killed", "launched", "1. quicksave")
-        assert calls == ["kill", "launch"]
-
-    def test_load_save_from_menu_passes_the_name(self, monkeypatch):
-        seen: list = []
-
-        async def fake(name):
-            seen.append(name)
-            return "loading"
-
-        monkeypatch.setattr(server.game_launcher, "load_save_from_menu", fake)
-
-        async def go():
-            return await server.load_save_from_menu(make_ctx(), "AutoSave_0001")
-
-        assert run(go()) == "loading"
-        assert seen == ["AutoSave_0001"]
-
-    def test_restart_and_load_reconnects_and_returns(self, monkeypatch):
-        ctx = make_ctx()
-        app = app_of(ctx)
-
-        async def fake(name):
-            return f"restarted {name}"
-
-        monkeypatch.setattr(server.game_launcher, "restart_and_load", fake)
-
-        async def go():
-            return await server.restart_and_load(ctx, "0_MCP_0050")
-
-        assert run(go()) == "restarted 0_MCP_0050"
-        # Identity was unknown before the restart → no wrong-game retry, and
-        # the reconnect loop exits as soon as GameCore appears.
-        assert app.game.conn.reconnect_calls == 1
-
-
 # ---------------------------------------------------------------------------
 # The _narrate helper
 # ---------------------------------------------------------------------------
@@ -1714,3 +910,318 @@ class TestNarrateHelper:
             return await server._narrate(query, lambda d: f"got {d['x']}")
 
         assert run(go()) == "got 1"
+
+
+@pytest.fixture(autouse=True)
+def isolated_server(monkeypatch, tmp_path):
+    """Tools must not reach real process controls, sockets or save paths."""
+    import socket
+    import subprocess
+
+    def external_call(*args, **kwargs):
+        raise AssertionError("Test attempted an external process or socket call")
+
+    real_socket = socket.socket
+
+    def local_socket(family=socket.AF_INET, *args, **kwargs):
+        if family == socket.AF_UNIX:
+            return real_socket(family, *args, **kwargs)
+        return external_call(family, *args, **kwargs)
+
+    async def external_process():
+        raise AssertionError("Test attempted a real game lifecycle action")
+
+    monkeypatch.setattr(socket, "socket", local_socket)
+    monkeypatch.setattr(subprocess, "run", external_call)
+    monkeypatch.setattr(subprocess, "Popen", external_call)
+    monkeypatch.setattr(server.game_launcher, "kill_game", external_process)
+    monkeypatch.setattr(server.game_launcher, "launch_game", external_process)
+    monkeypatch.setattr(server.game_launcher, "get_latest_autosave", lambda: None)
+    monkeypatch.setattr(server.game_launcher, "SAVE_DIR", str(tmp_path / "auto"))
+    monkeypatch.setattr(server.game_launcher, "SINGLE_SAVE_DIR", str(tmp_path))
+
+
+class TestLogged:
+    @pytest.mark.parametrize("failure", [LuaError, ValueError, ConnectionError, TimeoutError])
+    def test_errors_are_logged_without_replaying(self, failure):
+        ctx = make_ctx()
+        calls = []
+
+        async def operation():
+            calls.append(1)
+            raise failure("failed")
+
+        assert run(server._logged(ctx, "action", {}, operation)) == "Error: failed"
+        assert calls == [1]
+        assert app_of(ctx).game.conn.reconnect_calls == 0
+        assert app_of(ctx).logger.tool_calls[0][:3] == ("action", {}, "Error: failed")
+
+    def test_whole_tools_are_serialized_across_awaits(self):
+        async def go():
+            ctx = make_ctx()
+            started = asyncio.Event()
+            release = asyncio.Event()
+            events = []
+
+            async def first():
+                events.append("check")
+                started.set()
+                await release.wait()
+                events.append("verify")
+                return "first"
+
+            async def second():
+                events.append("second")
+                return "second"
+
+            task = asyncio.create_task(server._logged(ctx, "first", {}, first))
+            await started.wait()
+            next_task = asyncio.create_task(server._logged(ctx, "second", {}, second))
+            await asyncio.sleep(0)
+            assert events == ["check"]
+            release.set()
+            assert await asyncio.gather(task, next_task) == ["first", "second"]
+            return events
+
+        assert run(go()) == ["check", "verify", "second"]
+
+    def test_local_log_failure_does_not_replay_action(self):
+        ctx = make_ctx()
+        calls = []
+
+        async def action():
+            calls.append(1)
+            return "confirmed"
+
+        async def full_disk(*args):
+            raise OSError("disk full")
+
+        app_of(ctx).logger.log_tool_call = full_disk
+        assert run(server._logged(ctx, "action", {}, action)) == "confirmed"
+        assert calls == [1]
+
+
+class TestGetGameOverview:
+    def test_identity_is_checked_before_overview(self):
+        ctx = make_ctx()
+        gs = app_of(ctx).game
+        gs.script["get_game_identity"] = ("rome", 4242)
+        gs.script["get_game_overview"] = make_overview()
+        text = run(server.get_game_overview(ctx))
+        assert "Turn 12" in text and "Rome" in text
+        assert [call[0] for call in gs.calls] == [
+            "get_game_identity", "get_game_overview", "check_game_over",
+        ]
+
+    def test_identity_failure_stops_the_query(self):
+        ctx = make_ctx()
+        gs = app_of(ctx).game
+        gs.script["get_game_identity"] = LuaError("identity unavailable")
+        assert run(server.get_game_overview(ctx)) == "Error: identity unavailable"
+        assert gs.called("get_game_overview") == []
+
+    def test_revealed_baseline_is_seeded_only_once(self):
+        ctx = make_ctx()
+        gs = app_of(ctx).game
+        gs._revealed_tiles = None
+        gs.script["get_game_overview"] = make_overview()
+
+        async def go():
+            await server.get_game_overview(ctx)
+            await server.get_game_overview(ctx)
+
+        run(go())
+        assert gs._revealed_tiles == set()
+        assert len(gs.conn.read_queries) == 1
+
+    @pytest.mark.parametrize("defeat, label", [(True, "DEFEAT"), (False, "VICTORY")])
+    def test_game_outcome_is_visible(self, defeat, label):
+        ctx = make_ctx()
+        gs = app_of(ctx).game
+        gs.script["get_game_overview"] = make_overview()
+        gs.script["check_game_over"] = make_gameover(defeat)
+        assert f"GAME OVER: {label}" in run(server.get_game_overview(ctx))
+
+
+class TestEndTurn:
+    @pytest.mark.parametrize("result", [
+        "Turn 5 -> 6", "BLOCKED: research", "ERR:OUTCOME_UNKNOWN|request pending",
+    ])
+    def test_result_is_returned_without_reflection_or_recovery(self, result):
+        ctx = make_ctx()
+        gs = app_of(ctx).game
+        gs.script["end_turn"] = result
+        assert run(server.end_turn(ctx)) == result
+        assert gs.called("end_turn") == [("end_turn", (), {})]
+        assert gs.conn.reconnect_calls == 0
+
+
+class TestSaveTools:
+    def test_index_load_dispatches_to_game_state(self):
+        ctx = make_ctx()
+        run(server.load_save(ctx, 3))
+        assert app_of(ctx).game.last_args("load_save") == (3,)
+
+    def prepare_menu_load(self):
+        ctx = make_ctx()
+        gs = app_of(ctx).game
+        gs.conn.gamecore_index = None
+        gs.conn.reconnect_states = [None, 0]
+        gs.script["get_game_identity"] = ("rome", 4242)
+        gs.script["get_game_overview"] = make_overview()
+        return ctx, gs
+
+    @pytest.mark.parametrize("tool", ["load_game_save", "load_save_from_menu"])
+    def test_named_loader_confirms_on_the_same_connection(self, tool):
+        ctx, gs = self.prepare_menu_load()
+        assert run(getattr(server, tool)(ctx, "MySave")) == "Loaded MySave: rome, seed 4242, turn 12."
+        assert len(gs.conn.state_calls) == 1
+        assert gs.conn.state_calls[0][0] == 24
+        assert gs.reset_calls == 1
+
+    def test_unknown_submission_is_confirmed_without_resending(self):
+        ctx, gs = self.prepare_menu_load()
+        gs.conn.load_response = ConnectionError("load closed socket")
+        result = run(server.load_game_save(ctx, "MySave"))
+        assert result.startswith("Loaded MySave:")
+        assert len(gs.conn.state_calls) == 1
+
+    def test_loading_while_in_game_is_refused(self):
+        ctx = make_ctx()
+        result = run(server.load_game_save(ctx, "MySave"))
+        assert result.startswith("Error: A game is loaded")
+        assert app_of(ctx).game.conn.state_calls == []
+
+    def test_unconfirmed_load_is_bounded_and_never_resent(self, monkeypatch):
+        ctx, gs = self.prepare_menu_load()
+        gs.conn.reconnect_states = []
+        gs.conn.load_response = []
+        monkeypatch.setattr(server, "LOAD_TIMEOUT", 0.01)
+        result = run(server.load_game_save(ctx, "MySave"))
+        assert result.startswith("ERR:OUTCOME_UNKNOWN")
+        assert len(gs.conn.state_calls) == 1
+        assert gs.conn.disconnect_calls == 1
+
+    def test_invalid_name_is_rejected_before_reconnecting(self):
+        ctx = make_ctx()
+        assert run(server.load_game_save(ctx, "a/b")).startswith("Error:")
+        assert app_of(ctx).game.conn.reconnect_calls == 0
+
+
+class TestLifecycleTools:
+    def test_kill_disconnects_and_resets_session(self, monkeypatch):
+        ctx = make_ctx()
+        gs = app_of(ctx).game
+
+        async def kill():
+            assert gs.conn.disconnect_calls == 1
+            return "killed"
+
+        monkeypatch.setattr(server.game_launcher, "kill_game", kill)
+        assert run(server.kill_game(ctx)) == "killed"
+        assert gs.reset_calls == 1
+
+    def test_restart_uses_one_connection_and_native_load(self, monkeypatch):
+        ctx, gs = TestSaveTools().prepare_menu_load()
+        events = []
+
+        async def kill():
+            assert gs.conn.disconnect_calls == 1
+            events.append("kill")
+            return "killed"
+
+        async def launch():
+            assert gs.reset_calls == 1
+            events.append("launch")
+            return "launched"
+
+        monkeypatch.setattr(server.game_launcher, "kill_game", kill)
+        monkeypatch.setattr(server.game_launcher, "launch_game", launch)
+        result = run(server.restart_and_load(ctx, "MySave"))
+        assert result.startswith("Loaded MySave:")
+        assert events == ["kill", "launch"]
+        assert len(gs.conn.state_calls) == 1
+        assert gs.reset_calls == 2
+
+    def test_failed_launch_does_not_load(self, monkeypatch):
+        ctx = make_ctx()
+
+        async def kill():
+            return "killed"
+
+        async def launch():
+            return "FAILED: process not detected"
+
+        monkeypatch.setattr(server.game_launcher, "kill_game", kill)
+        monkeypatch.setattr(server.game_launcher, "launch_game", launch)
+        assert run(server.restart_and_load(ctx, "MySave")).startswith("Error:")
+        assert app_of(ctx).game.conn.state_calls == []
+
+    def test_failed_shutdown_does_not_launch_or_load(self, monkeypatch):
+        ctx = make_ctx()
+
+        async def kill():
+            return "WARNING: Game process is still running."
+
+        async def launch():
+            raise AssertionError("Shutdown failure must not launch another process")
+
+        monkeypatch.setattr(server.game_launcher, "kill_game", kill)
+        monkeypatch.setattr(server.game_launcher, "launch_game", launch)
+        assert run(server.restart_and_load(ctx, "MySave")).startswith("Error:")
+        assert app_of(ctx).game.conn.state_calls == []
+
+
+class TestMcpProtocol:
+    def test_session_initializes_calls_game_tools_and_closes_lifespan(self, monkeypatch, tmp_path):
+        """Use real MCP client/server messages over memory streams, with fake FireTuner.
+
+        This exercises initialization, schemas, tool dispatch, GameState, action
+        logging and lifespan cleanup without opening a game or HTTP listener.
+        """
+        import anyio
+        from mcp import ClientSession
+        from civ_mcp.logger import GameLogger
+
+        conn = FakeConn()
+
+        async def read(query, timeout=None):
+            conn.read_queries.append(query)
+            return ["42"]
+
+        conn.execute_read = read
+        log_path = tmp_path / "actions.jsonl"
+        monkeypatch.setattr(server, "GameConnection", lambda: conn)
+        monkeypatch.setattr(server, "GameLogger", lambda: GameLogger(log_path))
+
+        async def go():
+            client_write, server_read = anyio.create_memory_object_stream(10)
+            server_write, client_read = anyio.create_memory_object_stream(10)
+            lowlevel = server.mcp._mcp_server
+            async with anyio.create_task_group() as tasks:
+                tasks.start_soon(
+                    lowlevel.run, server_read, server_write,
+                    lowlevel.create_initialization_options(),
+                )
+                async with ClientSession(client_read, client_write) as session:
+                    initialization = await session.initialize()
+                    assert initialization.serverInfo.name == "Civilization VI"
+                    tools = (await session.list_tools()).tools
+                    names = {tool.name for tool in tools}
+                    assert len(names) == 75
+                    assert "get_diary" not in names
+                    schema = next(tool.inputSchema for tool in tools if tool.name == "end_turn")
+                    assert schema.get("properties", {}) == {}
+                    result = await session.call_tool("run_lua", {"code": "print(42)"})
+                    assert not result.isError
+                    assert result.content[0].text == "42"
+                    invalid = await session.call_tool("unit_action", {"unit_id": 7, "action": "dance"})
+                    assert "Error: Unknown action" in invalid.content[0].text
+                tasks.cancel_scope.cancel()
+
+        anyio.run(go)
+        assert conn.disconnect_calls == 1
+        assert conn.read_queries == ['(function() print(42) end)(); print("---END---")']
+        entries = [json.loads(line) for line in log_path.read_text().splitlines()]
+        assert [entry["tool"] for entry in entries] == ["run_lua", "unit_action"]
+        assert all("success" not in entry for entry in entries)

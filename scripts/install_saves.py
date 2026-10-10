@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Install CivBench eval saves into the Civ 6 save directory.
+"""Install bundled saves into the Civ 6 save directory.
 
-Copies .Civ6Save files from evals/saves/ into the platform-specific
+Copies .Civ6Save files from fixtures/saves/ into the platform-specific
 Civilization VI save directory so they can be loaded via load_game_save().
 
 Usage:
@@ -21,11 +21,11 @@ from pathlib import Path
 sys.path.insert(0, "src")
 from civ_mcp.game_launcher import SINGLE_SAVE_DIR
 
-SAVES_SRC = Path(__file__).resolve().parent.parent / "evals" / "saves"
+SAVES_SRC = Path(__file__).resolve().parent.parent / "fixtures" / "saves"
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Install CivBench saves into Civ 6")
+    parser = argparse.ArgumentParser(description="Install bundled saves into Civ 6")
     parser.add_argument(
         "--force", action="store_true", help="Overwrite saves that already exist"
     )

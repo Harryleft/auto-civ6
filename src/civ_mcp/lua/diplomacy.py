@@ -692,6 +692,7 @@ for i = 0, 62 do
         end
     end
 end
+print("DEALS_COMPLETE")
 print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
 

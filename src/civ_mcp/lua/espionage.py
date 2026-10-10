@@ -218,56 +218,53 @@ def build_spy_mission(
 # Escape route resolution
 # ---------------------------------------------------------------------------
 
-# District priority for escape: fastest travel time first.
-# City Center is always available (every city has one) so it's the fallback.
-_ESCAPE_DISTRICTS = [
+# These are the four choices exposed by the native EspionageEscape popup.
+_ESCAPE_DISTRICTS = (
     "DISTRICT_AERODROME",
     "DISTRICT_HARBOR",
     "DISTRICT_COMMERCIAL_HUB",
     "DISTRICT_CITY_CENTER",
-]
+)
 
 
-def build_spy_escape_route() -> str:
-    """InGame context: auto-resolve spy escape by choosing the fastest available district.
+def build_spy_escape_route(unit_index: int, district_type: str) -> str:
+    """InGame context: choose the requested caught spy's explicit escape route.
 
     Uses the same API as the game's EspionageEscape.lua popup:
     - GetNextEscapingSpyID() to find the caught spy
     - HasDistrict() to check which escape routes are available
     - SET_ESCAPE_ROUTE PlayerOperation to choose the district
     """
+    district_type = district_type.strip().upper()
+    if district_type not in _ESCAPE_DISTRICTS:
+        raise ValueError(
+            f"Unknown spy escape route {district_type!r}; "
+            f"choose {', '.join(_ESCAPE_DISTRICTS)}"
+        )
     sentinel = SENTINEL
-    # Build Lua table of districts to try in priority order
-    district_checks = []
-    for dist in _ESCAPE_DISTRICTS:
-        if dist == "DISTRICT_CITY_CENTER":
-            # City Center is always available — no HasDistrict check needed
-            district_checks.append(
-                f"if not chosen then "
-                f'  chosen = GameInfo.Districts["{dist}"]; '
-                f'  chosenName = "{dist}" '
-                f"end"
-            )
-        else:
-            district_checks.append(
-                f"if not chosen and city:GetDistricts():HasDistrict("
-                f'GameInfo.Districts["{dist}"].Index, true, true) then '
-                f'  chosen = GameInfo.Districts["{dist}"]; '
-                f'  chosenName = "{dist}" '
-                f"end"
-            )
-    checks_lua = " ".join(district_checks)
 
     # WARNING: GetNextEscapingSpyID() causes native ACCESS_VIOLATION crashes
     # in some game states. Only call it here where it's essential (escape blocker
     # is active, so the game expects this call). Never call it speculatively.
     return (
         f"local me = Game.GetLocalPlayer() "
+        f"local escapeType = EndTurnBlockingTypes and EndTurnBlockingTypes.ENDTURN_BLOCKING_SPY_CHOOSE_ESCAPE_ROUTE "
+        f"if not escapeType or escapeType == 0 then {_bail('ERR:ESCAPE_BLOCKER_UNAVAILABLE')} end "
+        f"local escapeBlocked = false "
+        f"for _, nid in ipairs(NotificationManager.GetList(me) or {{}}) do "
+        f"  local entry = NotificationManager.Find(me, nid) "
+        f"  if entry and not entry:IsDismissed() and "
+        f"entry:GetEndTurnBlocking() == escapeType then "
+        f"    escapeBlocked = true; break "
+        f"  end "
+        f"end "
+        f"if not escapeBlocked then {_bail('ERR:NO_ESCAPE_BLOCKER')} end "
         f"local pDiplo = Players[me]:GetDiplomacy() "
         f"local ok_esc, spyID = pcall(function() return pDiplo:GetNextEscapingSpyID() end) "
         f"if not ok_esc or spyID == nil or spyID < 0 then "
-        f'  print("NO_ESCAPING_SPY") print("{sentinel}") do return end '
+        f'  print("ERR:NO_ESCAPING_SPY") print("{sentinel}") do return end '
         f"end "
+        f"if spyID ~= {unit_index} then {_bail('ERR:SPY_NOT_ESCAPING|Requested spy is not the pending escape')} end "
         f"local spy = Players[me]:GetUnits():FindID(spyID) "
         f"if not spy then "
         f'  print("ERR:SPY_NOT_FOUND") print("{sentinel}") do return end '
@@ -276,11 +273,13 @@ def build_spy_escape_route() -> str:
         f"if not city then "
         f'  print("ERR:NO_CITY") print("{sentinel}") do return end '
         f"end "
-        f"local chosen = nil "
-        f"local chosenName = nil "
-        f"{checks_lua} "
+        f'local chosen = GameInfo.Districts["{district_type}"] '
+        f'local chosenName = "{district_type}" '
         f"if not chosen then "
         f'  print("ERR:NO_DISTRICT") print("{sentinel}") do return end '
+        f"end "
+        f'if chosenName ~= "DISTRICT_CITY_CENTER" and not city:GetDistricts():HasDistrict(chosen.Index, true, true) then '
+        f"  {_bail('ERR:ESCAPE_ROUTE_UNAVAILABLE')} "
         f"end "
         f"local params = {{}} "
         f"params[PlayerOperations.PARAM_DISTRICT_TYPE] = chosen.Index "

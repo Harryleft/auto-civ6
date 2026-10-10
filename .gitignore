@@ -21,6 +21,8 @@ wheels/
 logs/
 
 # Next.js web viewer
+# Preserve local caches/data after removing the tracked viewer.
+/web/
 web/node_modules/
 web/.next/
 web/.env.local

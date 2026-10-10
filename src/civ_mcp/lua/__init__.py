@@ -144,11 +144,8 @@ from civ_mcp.lua.map import (  # noqa: F401
 from civ_mcp.lua.models import (  # noqa: F401
     AgendaInfo,
     AppointedGovernor,
-    AgentExtras,
     BuilderInfo,
     BuilderTask,
-    CityRow,
-    DiarySnapshot,
     BeliefInfo,
     CityInfo,
     CityReligionInfo,
@@ -188,7 +185,6 @@ from civ_mcp.lua.models import (  # noqa: F401
     PantheonStatus,
     PathingEstimate,
     PendingDeal,
-    PlayerRow,
     PolicyInfo,
     PolicySlot,
     ProductionOption,
@@ -200,7 +196,6 @@ from civ_mcp.lua.models import (  # noqa: F401
     ReligionStatus,
     ReligionSummary,
     ResourceStockpile,
-    RivalSnapshot,
     ScoreEntry,
     SettleCandidate,
     SpyInfo,
@@ -242,15 +237,11 @@ from civ_mcp.lua.notifications import (  # noqa: F401
 
 # --- Domain module re-exports ---
 from civ_mcp.lua.overview import (  # noqa: F401
-    build_diary_full_query,
     build_gameover_check,
     build_gameover_check_gamecore,
     build_overview_query,
-    build_rival_snapshot_query,
-    parse_diary_full_response,
     parse_gameover_response,
     parse_overview_response,
-    parse_rival_snapshot_response,
 )
 from civ_mcp.lua.religion import (  # noqa: F401
     build_choose_pantheon,

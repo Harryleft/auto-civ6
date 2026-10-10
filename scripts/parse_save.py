@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Extract per-player per-turn timelines from a Civ 6 save file.
 
-Outputs diary-compatible JSONL: one row per player per turn, with fields
-matching the PlayerRow schema used by the live diary system.
+Outputs historical-log-compatible JSONL: one row per player per turn.
+This offline parser does not depend on the MCP runtime.
 
 Usage:
     python scripts/parse_save.py saves/CHANDRAGUPTA*.Civ6Save
@@ -40,7 +40,7 @@ TIMELINE_NAMES = [
     "DiploVP",
 ]
 
-# Map timeline names → diary PlayerRow field names
+# Map timeline names to the archived PlayerRow field names.
 # NOTE on approximate fields:
 #   - Gold: treasury balance in both save and diary, but may diverge by ~10%
 #     due to measurement timing within the turn (int truncation + frame difference)

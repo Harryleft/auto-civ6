@@ -211,35 +211,17 @@ class TestLockedExecute:
             conn, _ = await make_connection(monkeypatch, incoming=())
             return await conn._locked_execute(0, "print()", timeout=0.01)
 
-        with pytest.raises(TimeoutError, match="No response from Civ 6"):
+        with pytest.raises(TimeoutError, match="Incomplete response from Civ 6"):
             run(go())
 
-    def test_pays_a_fixed_drain_before_and_after_every_command(self, monkeypatch):
-        """Every command is bracketed by two drains (0.1s before, 0.2s after).
-
-        On a quiet stream both run to their full timeout — unconditional sleep,
-        not response handling (~300ms/command, measured in the field). The
-        per-drain cost itself is pinned in test_tuner_client; this pins that the
-        bracket exists and uses those timeouts.
-        """
-        drains: list[float] = []
-
-        async def spy(reader, timeout=0.5):
-            drains.append(timeout)
-            return []  # leave the scripted sentinel for the command itself
-
-        monkeypatch.setattr(tuner_client, "drain_messages", spy)
-
+    def test_does_not_cancel_and_drain_frames_between_commands(self, monkeypatch):
+        async def forbidden(*args, **kwargs):
+            raise AssertionError("No frame drains in the command path")
+        monkeypatch.setattr(tuner_client, "drain_messages", forbidden)
         async def go():
-            conn, _ = await make_connection(
-                monkeypatch,
-                incoming=(frame(TAG, f"O\x00c: {SENTINEL}"),),
-                patch_drain=False,
-            )
-            await conn._locked_execute(0, "print()", timeout=1.0)
-
+            conn, _ = await make_connection(monkeypatch, incoming=(frame(TAG, f"O\x00c: {SENTINEL}"),), patch_drain=False)
+            assert await conn._locked_execute(0, "print()", 1.0) == []
         run(go())
-        assert drains == [0.1, 0.2]
 
 
 # ---------------------------------------------------------------------------
@@ -248,79 +230,35 @@ class TestLockedExecute:
 
 
 class TestExecuteAndCollect:
-    def test_reconnects_once_when_the_socket_dies(self, monkeypatch):
+    def test_lost_response_retires_socket_without_replaying(self, monkeypatch):
         async def go():
-            conn, _ = await make_connection(monkeypatch)
-            attempts: list[int] = []
-            reconnects: list[int] = []
-
-            async def flaky(state_index, lua_code, timeout):
-                attempts.append(state_index)
-                if len(attempts) == 1:
-                    raise ConnectionError("socket closed by peer")
-                return ["recovered"]
-
-            real_reconnect = conn.reconnect
-
-            async def spy():
-                reconnects.append(1)
-                await real_reconnect()
-
-            monkeypatch.setattr(conn, "_locked_execute", flaky)
-            monkeypatch.setattr(conn, "reconnect", spy)
-
-            result = await conn._execute_and_collect(0, "print()", 5.0)
-            return result, attempts, reconnects
-
-        result, attempts, reconnects = run(go())
-        assert result == ["recovered"]
-        assert attempts == [0, 0]
-        assert reconnects == [1]
-
-    def test_retries_once_when_the_first_attempt_times_out_silently(self, monkeypatch):
-        """TimeoutError is an OSError, so a silent socket takes the same
-        reconnect-once-and-retry path as a dead one."""
-
-        async def go():
-            conn, _ = await make_connection(monkeypatch)
-            attempts: list[int] = []
-
-            async def silent_then_ok(state_index, lua_code, timeout):
-                attempts.append(1)
-                if len(attempts) == 1:
-                    raise TimeoutError("No response from Civ 6 within 5.0s")
-                return ["recovered"]
-
-            monkeypatch.setattr(conn, "_locked_execute", silent_then_ok)
-            return await conn._execute_and_collect(0, "print()", 5.0), attempts
-
-        result, attempts = run(go())
-        assert result == ["recovered"]
-        assert attempts == [1, 1]
-
-    def test_no_retry_when_the_caller_disables_it(self, monkeypatch):
-        """retry_on_connection_loss=False (load commands): a dead socket
-        disconnects and raises — a possibly-submitted mutation is never
-        sent a second time."""
-
-        async def go():
-            conn, _ = await make_connection(monkeypatch)
+            conn, writer = await make_connection(monkeypatch)
             calls = []
-
-            async def dead(state_index, lua_code, timeout):
-                calls.append(1)
-                raise ConnectionError("socket closed after accepting the command")
-
-            monkeypatch.setattr(conn, "_locked_execute", dead)
+            async def failed(index, code, timeout):
+                calls.append(index)
+                raise ConnectionError("accepted command but response lost")
+            monkeypatch.setattr(conn, "_locked_execute", failed)
             with pytest.raises(ConnectionError):
-                await conn.execute_in_state(
-                    24, "Network.LoadGame(...)", retry_on_connection_loss=False
-                )
-            return calls, conn
+                await conn._execute_and_collect(0, "MUTATION", 1.0)
+            assert calls == [0]
+            assert writer.closed
+            assert not conn.is_connected
+        run(go())
 
-        calls, conn = run(go())
-        assert calls == [1]  # never resent
-        assert not conn.is_connected  # left disconnected for the caller to handle
+    def test_silent_response_is_unknown_and_never_resent(self, monkeypatch):
+        async def go():
+            conn, writer = await make_connection(monkeypatch)
+            calls = []
+            async def failed(index, code, timeout):
+                calls.append(code)
+                raise TimeoutError("No response")
+            monkeypatch.setattr(conn, "_locked_execute", failed)
+            with pytest.raises(TimeoutError):
+                await conn._execute_and_collect(0, "MUTATION", 1.0)
+            assert calls == ["MUTATION"]
+            assert writer.closed
+        run(go())
+
 
     def test_does_not_retry_a_lua_error(self, monkeypatch):
         """A Lua error is the game answering, not the socket dying — a retry would re-run it."""
@@ -353,3 +291,31 @@ class TestExecuteAndCollect:
             (TAG, "CMD:0:READ_ME"),
             (TAG, "CMD:1:WRITE_ME"),
         ]
+
+
+class TestUncertainStream:
+    def test_partial_output_without_sentinel_is_not_success(self, monkeypatch):
+        async def go():
+            conn, writer = await make_connection(monkeypatch, incoming=(frame(TAG, "O\x00c: OK:SUBMITTED"),))
+            with pytest.raises(TimeoutError, match="outcome is unknown"):
+                await conn.execute_write("MUTATION", timeout=0.01)
+            assert len(writer.messages()) == 1
+            assert writer.closed
+        run(go())
+
+    def test_cancelled_partial_frame_cannot_poison_the_next_connection(self, monkeypatch):
+        async def go():
+            raw = frame(TAG, "O\x00c: reply")
+            conn, writer = await make_connection(monkeypatch, incoming=(raw[:10],))
+            with pytest.raises(TimeoutError):
+                await conn.execute_write("MUTATION", timeout=0.01)
+            assert writer.closed
+            assert conn._reader is None
+        run(go())
+
+    def test_context_index_is_resolved_after_reconnection(self, monkeypatch):
+        async def go():
+            conn, writer = await make_connection(monkeypatch, incoming=(frame(TAG, f"O\x00c: {SENTINEL}"),), states=("8", "GameCore_Tuner", "160", "InGame"))
+            await conn.execute_write("CURRENT_CONTEXT")
+            assert writer.messages() == [(TAG, "CMD:160:CURRENT_CONTEXT")]
+        run(go())
