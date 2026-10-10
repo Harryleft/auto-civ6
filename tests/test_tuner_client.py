@@ -242,13 +242,11 @@ class TestHandshake:
         _, states = run(go())
         assert states == ["0", "GameCore_Tuner", "1", "InGame"]
 
-    def test_reports_missing_identity_instead_of_raising(self, monkeypatch):
-        """At the main menu the game may not answer APP: — the caller needs a value."""
+    def test_missing_identity_rejects_an_incomplete_handshake(self, monkeypatch):
         self._script(monkeypatch, [None])
 
         async def go():
             return await tuner_client.handshake(make_reader(), FakeWriter())
 
-        identity, states = run(go())
-        assert identity == "<no response>"
-        assert states == []
+        with pytest.raises(ConnectionError, match="APP handshake timed out"):
+            run(go())

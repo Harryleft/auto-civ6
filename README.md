@@ -1,231 +1,79 @@
 # civ6-mcp
 
-An MCP server that lets LLM agents play full games of Civilization VI.
+本机 Civilization VI MCP 工具服务，让模型读取真实游戏状态、操作游戏并确认结果。通过 stdio 连接 MCP 客户端，通过 FireTuner 的 TCP 4318 端口连接游戏。
 
-Connect any MCP-compatible client — Claude Code, Codex, Gemini CLI, or your own — to a running Civ 6 game. The agent reads game state, moves units, manages cities, conducts diplomacy, and ends turns, all through the game's own rule-enforcing APIs. No cheats, no vision model required.
+## 能力与边界
 
-<!-- TODO: Add screenshot or GIF of agent playing -->
+保留 75 个工具，覆盖单位、城市、地图、科研文化、政策总督、宗教、伟人、外交贸易、世界议会、胜利进度，以及启动、保存、读档和显式恢复。
 
-## Capabilities
+- 动作工具回读游戏状态；模型基于返回结果决定下一步。
+- `end_turn` 检查阻塞、推进回合并报告结果，无 reflection 参数，也不强制反思。
+- 生产、研究、外交、占城、议会等决策由模型明确调用工具完成。
+- 无网页、云同步、批量评测、后台镜头或弹窗轮询服务，也不提供 `get_diary`。
+- 连接异常或回合挂起时报告问题，不透明重启游戏或重放动作。需要恢复时显式调用 `restart_and_load`，再读取当前状态。
 
-76 tools covering the full gameplay loop:
+## 安装与启动
 
-- **Units** — list, move, attack, fortify, found cities, build improvements, promote, upgrade
-- **Cities** — inspect, set production, purchase units/buildings with gold, manage focus
-- **Map** — explore terrain, resources, fog of war; get settle and district placement advice
-- **Research** — browse tech and civic trees, set research targets
-- **Diplomacy** — relationships, modifiers, delegations, embassies, alliances, peace deals
-- **Trade** — propose and respond to deals, manage trade routes and destinations
-- **Government** — swap policy cards, change governments, choose era dedications
-- **Governors** — appoint, assign to cities, promote
-- **Religion** — found pantheons and religions, select beliefs, track spread
-- **Great People** — recruit, patronize, reject
-- **World Congress** — vote on resolutions, manage diplomatic favor
-- **Victory** — track progress across all victory conditions
-- **Game lifecycle** — save, load, launch, restart, kill
+需要 Civilization VI（Steam 版，Gathering Storm）、Python 3.12+、uv 和一个 MCP 客户端。
 
-Every turn, `end_turn` takes before/after snapshots and reports what happened: units damaged, cities grew, production completed, threats spotted near your cities.
-
-## Quick start
-
-### 1. Configure Civ 6
-
-Enable the FireTuner debug interface and configure recommended settings:
-
-| Setting | Value | Why |
-|---------|-------|-----|
-| **Tuner** | Enabled | Required — opens the TCP debug port the MCP server connects to. Disables achievements. |
-| **Auto End Turn** | Disabled | The agent controls when turns end. Auto-end interferes with the blocker resolution flow. |
-| **Windowed mode** | Recommended | Lets you watch the game while the agent plays. |
-
-**Windows:** All three settings are available in the in-game Options menu. The Tuner setting appears as "Tuner (disables achievements)" under gameplay options.
-
-**macOS:** The Tuner setting is not exposed in the menu. Edit `AppOptions.txt` directly and set `EnableTuner 1`:
-
-```
-~/Library/Application Support/Sid Meier's Civilization VI/Firaxis Games/Sid Meier's Civilization VI/AppOptions.txt
-```
-
-**Linux:** Same as macOS — edit `AppOptions.txt` directly and set `EnableTuner 1`:
-
-```
-~/.local/share/aspyr-media/Sid Meier's Civilization VI/AppOptions.txt
-```
-
-<details>
-<summary><strong>Windows: additional setup</strong></summary>
-
-**Install the Civ 6 SDK** — the tuner server is part of the SDK, not the base game:
-1. In Steam, go to Library → filter by Tools
-2. Find and install "Sid Meier's Civilization VI SDK"
-
-**Important notes:**
-- Close `FireTuner.exe` (the SDK's GUI tool) before running civ6-mcp — the game only allows **one** tuner connection at a time
-- Do **not** run from WSL — the network bridging between WSL2 and Windows is unreliable and the tuner server locks up after failed connections
-- If the connection fails, **restart the game** — the tuner often hangs after a bad handshake and won't recover until the process is recycled
-</details>
-
-<details>
-<summary><strong>Linux: additional notes</strong></summary>
-
-- The **native Linux port** is required — the FireTuner debug interface is built into the native binary. Proton/Wine builds do not expose it.
-- The game runs as a single `Civ6` process launched via Steam Linux Runtime (scout-on-soldier).
-- GUI automation requires **X11**. On Wayland, the game typically runs under XWayland which should work, but a native X11 session is most reliable.
-</details>
-
-Restart Civ 6. The game will listen on TCP port 4318 for connections.
-
-### 2. Install
+1. 在游戏设置或 `AppOptions.txt` 中启用 FireTuner，并关闭自动结束回合。更改后重启游戏。
+2. 手动加载存档，或通过生命周期工具从主菜单加载。macOS 的 Aspyr 启动器设置见 [启动说明](docs/research/bypassing_aspyr_launcher.md)。
+3. 安装依赖并验证连接：
 
 ```bash
-git clone https://github.com/lmwilki/civ6-mcp.git
-cd civ6-mcp
-uv sync
-```
-
-Optional — GUI automation extras (screenshot and crash-dialog dismissal):
-
-```bash
-# macOS
-uv pip install 'civ6-mcp[launcher-macos]'
-
-# Windows (no external binaries needed)
-uv pip install 'civ6-mcp[launcher-windows]'
-
-# Linux (Ubuntu/Debian)
-sudo apt install xdotool tesseract-ocr
-uv pip install 'civ6-mcp[launcher-linux]'
-```
-
-### 3. Test the connection
-
-With Civ 6 running and a game loaded:
-
-```bash
+uv sync --locked
 uv run python scripts/test_connection.py
 ```
 
-You should see a successful handshake and a list of Lua states (GameCore_Tuner, InGame, etc.).
-
-### 4. Configure your MCP client
-
-The server runs over stdio. Point your client at it:
-
-<details>
-<summary><strong>Claude Code</strong></summary>
-
-The repo includes `.mcp.json` — detected automatically:
-
-```bash
-cd civ6-mcp
-claude
-```
-</details>
-
-<details>
-<summary><strong>Claude Desktop</strong></summary>
-
-Add to your config file:
-- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "civ6": {
-      "command": "uv",
-      "args": ["run", "--directory", "/path/to/civ6-mcp", "civ-mcp"]
-    }
-  }
-}
-```
-</details>
-
-<details>
-<summary><strong>Codex</strong></summary>
-
-Add to `.codex/config.toml` in the project root:
-
-```toml
-[mcp_servers.civ6]
-command = "uv"
-args = ["run", "--directory", "/path/to/civ6-mcp", "civ-mcp"]
-```
-</details>
-
-<details>
-<summary><strong>Gemini CLI</strong></summary>
-
-Add to `.gemini/settings.json` in the project root:
-
-```json
-{
-  "mcpServers": {
-    "civ6": {
-      "command": "uv",
-      "args": ["run", "--directory", "/path/to/civ6-mcp", "civ-mcp"]
-    }
-  }
-}
-```
-</details>
-
-<details>
-<summary><strong>Other MCP clients</strong></summary>
-
-The server speaks stdio JSON-RPC:
+服务启动命令：
 
 ```bash
 uv run civ-mcp
 ```
-</details>
 
-### 5. Play
+仅本机 MCP 服务需要 `mcp`；离线测试依赖 `pytest`。启动和原生读档不依赖 OCR。
 
-Load a game in Civ 6, connect your client, and try:
+## 配置 MCP 客户端
 
-```
-Play my Civ 6 game. Start by getting an overview, then check units and
-cities, and play through the turn.
-```
+以 Codex 为例，将项目绝对路径填入配置：
 
-The agent will orient with `get_game_overview`, scan the map for threats, move units, set production and research, handle diplomacy, and end the turn.
-
-## As a benchmark
-
-Civilization VI is a compelling environment for evaluating LLM strategic reasoning. Games run 300+ turns with compounding decisions, incomplete information, and multiple competing objectives — a significant step up from single-turn or short-horizon tasks.
-
-- **Multi-turn planning** — decisions compound over hundreds of turns with delayed payoffs
-- **Incomplete information** — fog of war, hidden AI intentions, unexplored map
-- **Resource management** — balancing gold, production, science, culture, faith, and military
-- **Opponent modeling** — reading diplomatic signals, anticipating AI behavior
-- **Strategic adaptation** — responding to threats, shifting priorities mid-game
-
-The MCP interface provides a clean abstraction: the model receives narrated game state as text and responds with tool calls. All game rules are enforced by the engine. A companion web app lets you replay sessions turn by turn.
-
-## How it works
-
-```
-Claude / Any MCP Client
-    |  stdio (JSON-RPC)
-    v
-MCP Server (Python)    <- 70+ tools
-    |
-    |  Generates Lua code at runtime
-    |  TCP :4318
-    v
-Civilization VI        <- Game is the TCP server
+```toml
+[mcp_servers.civ6]
+command = "uv"
+args = ["run", "--directory", "/absolute/path/to/civ6-mcp", "civ-mcp"]
 ```
 
-The server maintains a persistent TCP connection to Civ 6 via the FireTuner debug protocol. It generates Lua code, executes it inside the game's two Lua VMs (GameCore for reading state, InGame for issuing commands), parses the output, and returns narrated text to the LLM.
+其他 stdio MCP 客户端使用相同命令与参数。仓库 `.mcp.json` 提供对应 JSON 配置。
 
-The repo includes an [AGENTS.md](AGENTS.md) playbook (symlinked as `CLAUDE.md` for Claude Code) with detailed instructions for agents: turn loop, combat, diplomacy, common pitfalls. See the [devlog](docs/devlog/) for the full development story, including reverse-engineering the FireTuner protocol and the many API quirks discovered along the way.
+连接后可要求模型：
 
-## Requirements
+> 读取当前概览、单位和城市，根据真实状态完成当前回合；先解决阻塞，再推进回合。动作结果不明确时先查询确认。
 
-- **macOS, Windows, or Linux** with Civilization VI (Steam version, Gathering Storm DLC)
-- **Python 3.12+** with [uv](https://docs.astral.sh/uv/)
-- An **MCP client** (Claude Code, Codex, Gemini CLI, or any MCP-compatible client)
+## 验证与资料
+
+```bash
+# 离线测试；默认只收集 tests/，不会执行实时游戏脚本
+uv run --locked pytest -q
+
+# 检查随附存档安装位置，不写入游戏目录
+uv run python scripts/install_saves.py --dry-run
+```
+
+`integration_turns.py` 通过真实 stdio MCP 服务诊断游戏；显式运行后会操作游戏，不属于离线 CI：
+
+```bash
+# --save 显式加载该存档；已加载其他游戏时会重启并替换当前会话
+uv run python scripts/integration_turns.py --save 0C_CRY_HAVOC --turns 10 --timeout 900
+
+# 省略 --save，仅使用已经加载的游戏
+uv run python scripts/integration_turns.py --turns 3
+```
+
+驱动采用固定测试策略跳过单位、选择首个可用科研文化和生产项；其他阻塞明确中断。只有确认回合增加才计数，挂起、结果未知或超出时间/阻塞次数时退出，不自动恢复或重发动作。
+
+[架构与文档](docs/README.md) · [模型操作规则](AGENTS.md) · [存档和历史数据](fixtures/README.md)
+
+历史研究、游戏报告及旧架构保存在 `docs/archive/`，仅作参考。
 
 ## License
 

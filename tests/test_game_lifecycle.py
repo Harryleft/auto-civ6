@@ -7,14 +7,14 @@ scripted response lines, so the tests can assert on the generated Lua itself
 filesystem seams (`game_launcher` module attributes, `asyncio.sleep`) are
 monkeypatched — no game is launched and no real save directory is touched.
 
-`cleanup_old_autosaves` is deliberately not covered here; it is tested in
-tests/test_hang_recovery.py.
 """
 
 from __future__ import annotations
 
 import asyncio
 import os
+import socket
+import subprocess
 import sys
 
 import pytest
@@ -23,6 +23,30 @@ from civ_mcp import game_launcher
 from civ_mcp import game_lifecycle as gl
 
 run = asyncio.run
+
+
+@pytest.fixture(autouse=True)
+def isolated_lifecycle(monkeypatch, tmp_path):
+    """Prevent process/transport access and keep every scan in a temp tree."""
+    def external_call(*args, **kwargs):
+        raise AssertionError("Test attempted an external process or socket call")
+
+    monkeypatch.setattr(subprocess, "run", external_call)
+    monkeypatch.setattr(subprocess, "Popen", external_call)
+    real_socket = socket.socket
+
+    def local_socket(family=socket.AF_INET, *args, **kwargs):
+        # asyncio uses an AF_UNIX socketpair for its internal wake-up pipe.
+        if family == socket.AF_UNIX:
+            return real_socket(family, *args, **kwargs)
+        return external_call(family, *args, **kwargs)
+
+    monkeypatch.setattr(socket, "socket", local_socket)
+    auto = tmp_path / "Single" / "auto"
+    auto.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(game_launcher, "SAVE_DIR", str(auto))
+    monkeypatch.setattr(game_launcher, "SINGLE_SAVE_DIR", str(auto.parent))
+    no_crash_dialogs(monkeypatch)
 
 
 # ---------------------------------------------------------------------------
@@ -60,7 +84,6 @@ class FakeConn:
         self.on_read = on_read
         self.writes: list[str] = []
         self.state_calls: list[tuple[int, str]] = []
-        self.no_retry_calls: list[tuple[int, str]] = []
         self.reads: list[str] = []
 
     async def ensure_connected(self):
@@ -72,10 +95,8 @@ class FakeConn:
             return []
         return self.on_write(lua)
 
-    async def execute_in_state(self, state_index, lua, timeout=5.0, **kwargs):
+    async def execute_in_state(self, state_index, lua, timeout=5.0):
         self.state_calls.append((state_index, lua))
-        if kwargs.get("retry_on_connection_loss") is False:
-            self.no_retry_calls.append((state_index, lua))
         if self.on_state is None:
             return []
         return self.on_state(state_index, lua)
@@ -203,7 +224,7 @@ def save_dirs(tmp_path, monkeypatch):
     """
     base = tmp_path / "Single"
     auto = base / "auto"
-    auto.mkdir(parents=True)
+    auto.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(game_launcher, "SAVE_DIR", str(auto))
     monkeypatch.setattr(game_launcher, "SINGLE_SAVE_DIR", str(base))
     return base, auto
@@ -424,7 +445,7 @@ class TestLoadGameSave:
 
     def test_frontend_load_succeeds_via_mainmenu_state(self):
         """The happy path: load + auto-start accepted in the MainMenu state —
-        sent exactly once, with connection-loss retries disabled."""
+        sent exactly once, including when the response is lost."""
 
         async def go():
             conn = menu_conn(on_state=frontend_ok)
@@ -436,7 +457,7 @@ class TestLoadGameSave:
         assert idx == 24
         assert "Network.LoadGame(loadGame, ServerType.SERVER_TYPE_NONE)" in lua
         assert "Automation.SetAutoStartEnabled(true)" in lua
-        assert conn.no_retry_calls == [(24, lua)]  # never resent mid-load
+        assert len(conn.state_calls) == 1  # never resent mid-load
 
     def test_civ6_rejecting_the_save_is_an_error(self):
         async def go():
@@ -469,18 +490,21 @@ class TestLoadGameSave:
 
         assert "auto-start was unavailable" in run(go())
 
-    def test_connection_loss_mid_load_is_outcome_unknown_not_an_exception(self):
+    @pytest.mark.parametrize("failure", [ConnectionError, OSError, TimeoutError])
+    def test_connection_loss_mid_load_is_outcome_unknown_not_an_exception(self, failure):
         """Civ VI may close FireTuner while accepting a load — that is an
         unknown outcome to report, not a crash, and never a resend."""
 
         async def go():
             def on_state(idx, lua):
-                raise ConnectionError("socket closed")
+                raise failure("socket closed")
 
             conn = menu_conn(on_state=on_state)
-            return await gl.load_game_save(conn, "0_MCP_0042")
+            return conn, await gl.load_game_save(conn, "0_MCP_0042")
 
-        assert run(go()).startswith("ERR:OUTCOME_UNKNOWN")
+        conn, result = run(go())
+        assert result.startswith("ERR:OUTCOME_UNKNOWN")
+        assert len(conn.state_calls) == 1
 
     def test_save_name_is_lua_quoted_by_json(self):
         """Names are quoted with json.dumps — quotes or backslashes in the
@@ -510,11 +534,55 @@ class TestLoadGameSave:
 
 
 class TestDismissPopup:
+    def test_congress_results_dismissal_is_reported_from_confirmed_output(self):
+        async def go():
+            conn = FakeConn(on_write=dismiss_router(
+                phase1=["DISMISSED|WorldCongressResults"],
+            ))
+            return conn, await gl.dismiss_popup(conn)
+
+        conn, result = run(go())
+        assert result == "Dismissed: WorldCongressResults"
+        assert len(conn.writes) == 2
+        # The acknowledgment applies to captured LOOK notifications only,
+        # not to every Congress notification or its live voting session.
+        lua = conn.writes[0]
+        assert "local reviewType = EndTurnBlockingTypes.ENDTURN_BLOCKING_WORLD_CONGRESS_LOOK" in lua
+        assert "if reviewType and blocking == reviewType then" in lua
+        assert "if #review > 0 then" in lua
+        assert "WORLD_CONGRESS_LOOKED_AT_AVAILABLE" in lua
+        assert "for _, nid in ipairs(review) do" in lua
+        assert "if not entry or entry:IsDismissed() then dismissed = dismissed + 1 end" in lua
+        assert "if dismissed > 0 then" in lua
+        assert "if not sessionPending then" in lua
+
+    def test_congress_acknowledgment_without_dismissed_fact_is_not_success(self):
+        async def go():
+            conn = FakeConn(on_write=dismiss_router(
+                phase1=["ACKNOWLEDGED|WorldCongressResults"],
+            ))
+            return await gl.dismiss_popup(conn)
+
+        assert run(go()) == "No popups to dismiss."
+
+    def test_congress_voting_screens_are_not_unconditionally_hidden(self):
+        async def go():
+            conn = FakeConn(on_write=dismiss_router())
+            return conn, await gl.dismiss_popup(conn)
+
+        conn, result = run(go())
+        assert result == "No popups to dismiss."
+        lua = conn.writes[0]
+        assert 'LookUpControl("/InGame/WorldCongressPopup")' not in lua
+        assert 'LookUpControl("/InGame/WorldCongressIntro")' not in lua
+        assert "blocking == EndTurnBlockingTypes.ENDTURN_BLOCKING_WORLD_CONGRESS_SESSION" in lua
+        assert "blocking == EndTurnBlockingTypes.ENDTURN_BLOCKING_WORLD_CONGRESS_SPECIAL_SESSION" in lua
+        assert 'k:find("WORLD_CONGRESS")' not in lua
+
     def test_phase1_dismissal_is_reported_without_a_state_scan(
         self, monkeypatch
     ):
         """No exclusive popup visible => Phase 2/3 never touch other states."""
-        no_crash_dialogs(monkeypatch)
 
         async def go():
             conn = FakeConn(
@@ -529,7 +597,6 @@ class TestDismissPopup:
         assert conn.state_calls == []
 
     def test_pending_diplomacy_is_reported_not_dismissed(self, monkeypatch):
-        no_crash_dialogs(monkeypatch)
 
         async def go():
             conn = FakeConn(
@@ -544,7 +611,6 @@ class TestDismissPopup:
 
     def test_pending_trade_deal_is_reported_not_dismissed(self, monkeypatch):
         """DiplomacyDealView is an incoming offer; dismissing it kills the deal."""
-        no_crash_dialogs(monkeypatch)
 
         async def go():
             conn = FakeConn(
@@ -558,7 +624,6 @@ class TestDismissPopup:
         )
 
     def test_dismissal_plus_pending_deal_combines_the_message(self, monkeypatch):
-        no_crash_dialogs(monkeypatch)
 
         async def go():
             conn = FakeConn(
@@ -574,7 +639,6 @@ class TestDismissPopup:
         )
 
     def test_nothing_visible_means_nothing_to_dismiss(self, monkeypatch):
-        no_crash_dialogs(monkeypatch)
 
         async def go():
             return await gl.dismiss_popup(FakeConn(on_write=dismiss_router()))
@@ -584,7 +648,6 @@ class TestDismissPopup:
     def test_phase1_connection_error_propagates(self, monkeypatch):
         """A dead socket during Phase 1 is a transport failure — it
         propagates instead of being reported as 'No popups to dismiss.'"""
-        no_crash_dialogs(monkeypatch)
 
         def on_write(lua):
             if "EXCL_VISIBLE" in lua or "STILL_VISIBLE" in lua:
@@ -597,7 +660,6 @@ class TestDismissPopup:
     def test_phase1_other_errors_are_still_swallowed(self, monkeypatch):
         """Non-transport errors keep the old behaviour: logged at debug and
         the sweep continues as if nothing was dismissed."""
-        no_crash_dialogs(monkeypatch)
 
         def on_write(lua):
             if "EXCL_VISIBLE" in lua or "STILL_VISIBLE" in lua:
@@ -611,7 +673,6 @@ class TestDismissPopup:
 
     def test_exclusive_popup_is_closed_in_its_own_lua_state(self, monkeypatch):
         """Phase 2: only states whose names carry popup keywords are scanned."""
-        no_crash_dialogs(monkeypatch)
 
         closes = []
 
@@ -638,7 +699,6 @@ class TestDismissPopup:
     def test_phase2_drains_until_the_popup_stays_hidden(self, monkeypatch):
         """The drain loop closes every queued popup, but the state name is
         reported only once no matter how many queue entries drained."""
-        no_crash_dialogs(monkeypatch)
         closes = []
 
         def on_state(idx, lua):
@@ -659,7 +719,6 @@ class TestDismissPopup:
     def test_phase3_probes_unknown_state_indexes(self, monkeypatch):
         """When the handshake's state list is incomplete, Phase 3 probes
         indexes 50+ for the still-visible popup and learns the new state."""
-        no_crash_dialogs(monkeypatch)
 
         def on_state(idx, lua):
             if "ContextPtr:GetID()" in lua:
@@ -749,82 +808,3 @@ class TestExecuteLua:
             return await gl.execute_lua(FakeConn(), "x = 1")
 
         assert run(go()) == "(no output)"
-
-
-# ---------------------------------------------------------------------------
-# Process lifecycle orchestrators in game_launcher
-# ---------------------------------------------------------------------------
-
-
-class TestProcessLifecycle:
-    def test_kill_game_delegates_to_the_sync_killer(self, monkeypatch):
-        monkeypatch.setattr(game_launcher, "_kill_game_sync", lambda: "killed")
-        assert run(game_launcher.kill_game()) == "killed"
-
-    def test_launch_game_delegates_to_the_sync_launcher(self, monkeypatch):
-        monkeypatch.setattr(
-            game_launcher, "_launch_game_sync", lambda: "launched"
-        )
-        assert run(game_launcher.launch_game()) == "launched"
-
-    def test_restart_and_load_runs_kill_launch_load_in_order(self, monkeypatch):
-        calls = []
-
-        async def fake_dismiss():
-            calls.append("dismiss")
-            return []
-
-        async def fake_load(conn, name):
-            calls.append(("load", name))
-            return "Loaded save"
-
-        class FakePostLaunchConn:
-            """Stands in for GameConnection — connect() succeeds immediately."""
-
-            async def connect(self):
-                pass
-
-        monkeypatch.setattr(game_launcher, "dismiss_crash_dialogs", fake_dismiss)
-        monkeypatch.setattr(
-            game_launcher, "_kill_game_sync", lambda: calls.append("kill") or "Killed"
-        )
-        monkeypatch.setattr(
-            game_launcher,
-            "_launch_game_sync",
-            lambda: calls.append("launch") or "Game process detected",
-        )
-        monkeypatch.setattr("civ_mcp.connection.GameConnection", FakePostLaunchConn)
-        monkeypatch.setattr(gl, "load_save_from_frontend", fake_load)
-
-        out = run(game_launcher.restart_and_load("0_MCP_0042"))
-        assert out == "Kill: Killed | Launch: Game process detected | Load: Loaded save"
-        assert calls == [
-            "dismiss",  # pre-kill: crash dialogs block process exit
-            "kill",
-            "launch",
-            "dismiss",  # post-launch: leftover crash dialog from last session
-            ("load", "0_MCP_0042"),
-        ]
-
-    def test_restart_and_load_aborts_when_the_game_never_launches(
-        self, monkeypatch
-    ):
-        """'not detected' in the launch result short-circuits before any load."""
-
-        async def fake_dismiss():
-            return []
-
-        async def fake_load(conn, name):
-            raise AssertionError("load must not run after a failed launch")
-
-        monkeypatch.setattr(game_launcher, "dismiss_crash_dialogs", fake_dismiss)
-        monkeypatch.setattr(game_launcher, "_kill_game_sync", lambda: "Killed")
-        monkeypatch.setattr(
-            game_launcher,
-            "_launch_game_sync",
-            lambda: "Game process not detected after launch",
-        )
-        monkeypatch.setattr(gl, "load_save_from_frontend", fake_load)
-
-        out = run(game_launcher.restart_and_load("0_MCP_0042"))
-        assert out.endswith("ABORTED: Game failed to launch.")

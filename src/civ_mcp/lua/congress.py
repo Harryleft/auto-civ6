@@ -204,128 +204,117 @@ print("{SENTINEL}")
 
 
 def build_register_wc_voter(votes: list[dict] | None = None) -> str:
-    """Register a one-shot Events.WorldCongressStage1 handler (InGame context).
+    """Register explicit votes; each entry supplies hash, option, target, votes.
 
-    The handler fires during WC turn-segment processing (inside ACTION_ENDTURN),
-    casts votes using the player's diplomatic favor, and submits.
-
-    Args:
-        votes: Optional list of agent preferences, each dict with keys:
-            hash (int) — resolution type hash
-            option (int) — 1 for A, 2 for B
-            target (int) — player ID for PlayerType resolutions, or raw value
-                           for non-player targets. The handler resolves this
-                           to the correct 0-based index at runtime.
-            votes (int) — max votes to allocate
-            If None, handler uses default strategy: spread favor evenly,
-            option A, target 0.
+    Votes are a maximum, limited by available favor. Player targets are IDs;
+    other targets are the query's zero-based index or a raw string value.
+    Missing resolutions or unmatched targets stop the handler before any vote.
     """
-    # Build the Lua table literal for agent vote preferences
-    if votes:
-        entries = []
-        for v in votes:
-            h = v.get("hash", v.get("resolution_hash", 0))
-            o = v.get("option", 1)
-            t = v.get("target", v.get("target_index", 0))
-            n = v.get("votes", v.get("num_votes", 5))
-            entries.append(f'["{h}"] = {{o={o}, t={t}, v={n}}}')
-        prefs_lua = "{" + ", ".join(entries) + "}"
-    else:
-        prefs_lua = "nil"
+    import json
+
+    if not isinstance(votes, list) or not votes:
+        raise ValueError("World Congress votes must be a non-empty list of explicit preferences.")
+    entries = []
+    hashes = set()
+    for vote in votes:
+        if not isinstance(vote, dict) or not all(key in vote for key in ("hash", "option", "target", "votes")):
+            raise ValueError("Each vote requires hash, option, target and votes.")
+        h, o, t, n = (vote[key] for key in ("hash", "option", "target", "votes"))
+        if type(h) is not int or type(o) is not int or o not in (1, 2) or type(n) is not int or n < 1:
+            raise ValueError("hash must be an integer, option 1 or 2, and votes a positive integer.")
+        if not (type(t) is int and t >= 0) and not (isinstance(t, str) and t and not any(ord(c) < 32 for c in t)):
+            raise ValueError("target must be a nonnegative integer or a non-empty raw string.")
+        if h in hashes:
+            raise ValueError("Each resolution hash must appear only once.")
+        hashes.add(h)
+        entries.append(f'["{h}"] = {{o={o}, t={json.dumps(t, ensure_ascii=False)}, v={n}}}')
+    prefs_lua = "{" + ", ".join(entries) + "}"
 
     return f"""
--- Clean up any stale handler
 if __civmcp_wc_handler then
     pcall(function() Events.WorldCongressStage1.Remove(__civmcp_wc_handler) end)
-    __civmcp_wc_handler = nil
 end
-
 __civmcp_wc_votes = {prefs_lua}
 
 local function handler()
     local me = Game.GetLocalPlayer()
     local wc = Game.GetWorldCongress()
     if not wc or not wc:IsInSession() then return end
-
-    local favor = Players[me]:GetFavor()
-    local costs = wc:GetVotesandFavorCost()
-    local maxV = costs.MaxVotes or 5
+    local function stop(message)
+        print("ERR:WC_VOTE_PREFERENCES|" .. message)
+        __civmcp_wc_votes = nil
+        pcall(function() Events.WorldCongressStage1.Remove(__civmcp_wc_handler) end)
+        __civmcp_wc_handler = nil
+    end
     local ress = wc:GetResolutions()
-    if not ress or #ress == 0 then
+    if not ress then stop("Resolution status unavailable"); return end
+    if #ress == 0 then
         UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_SUBMIT_TURN, {{}})
         __civmcp_wc_votes = nil
         pcall(function() Events.WorldCongressStage1.Remove(__civmcp_wc_handler) end)
         __civmcp_wc_handler = nil
+        print("OK:WC_VOTES_SUBMITTED")
         return
     end
 
-    local prefs = __civmcp_wc_votes
-    local nRes = #ress
-
-    for ri, res in ipairs(ress) do
-        local rHash = res.Type
-        local pref = prefs and prefs[tostring(rHash)]
-        local option = pref and pref.o or 1
-        local maxWanted = pref and pref.v or maxV
-
-        -- Resolve target: pref.t is a player ID (for PlayerType) or raw value
-        -- Find the matching 0-based index in PossibleTargets
-        local targetIdx = 0
-        if pref and pref.t and res.PossibleTargets then
-            local isPlayerType = (res.TargetType == "PlayerType")
-            for ti, tgt in ipairs(res.PossibleTargets) do
-                if isPlayerType then
-                    if tonumber(tgt) == pref.t then targetIdx = ti - 1 end
-                else
-                    if tostring(tgt) == tostring(pref.t) then targetIdx = ti - 1 end
+    -- Validate every preference and target before spending any favor.
+    local plan = {{}}
+    for _, res in ipairs(ress) do
+        local pref = __civmcp_wc_votes[tostring(res.Type)]
+        if not pref then stop("Missing explicit vote for " .. tostring(res.Type)); return end
+        local targetIdx = nil
+        local targets = res.PossibleTargets
+        if not targets or #targets == 0 then
+            if res.TargetType ~= "PlayerType" and pref.t == 0 then targetIdx = 0 end
+        elseif res.TargetType == "PlayerType" then
+            local playerTarget = tonumber(pref.t)
+            if playerTarget then
+                for ti, tgt in ipairs(targets) do
+                    if tonumber(tgt) == playerTarget then targetIdx = ti - 1; break end
                 end
             end
-        end
-
-        local votesForThis = 1
-        local costForThis = 0
-
-        -- costs[i] is CUMULATIVE cost for (i+1) total votes
-        -- So for v total votes, total cost = costs[v-1]
-        if prefs then
-            for v = 2, math.min(maxWanted, maxV) do
-                local totalCost = costs[v - 1] or 99999
-                if totalCost <= favor then
-                    costForThis = totalCost
-                    votesForThis = v
-                else break end
-            end
+        elseif type(pref.t) == "number" then
+            if pref.t >= 0 and pref.t < #targets then targetIdx = pref.t end
         else
-            local resLeft = nRes - ri
-            local budgetPerRes = math.floor(favor / (resLeft + 1))
-            for v = 2, maxV do
-                local totalCost = costs[v - 1] or 99999
-                if totalCost <= budgetPerRes then
-                    costForThis = totalCost
-                    votesForThis = v
-                else break end
+            for ti, tgt in ipairs(targets) do
+                if tostring(tgt) == pref.t then targetIdx = ti - 1; break end
             end
         end
-
-        favor = favor - costForThis
-
-        local kParams = {{}}
-        kParams[PlayerOperations.PARAM_RESOLUTION_TYPE] = rHash
-        kParams[PlayerOperations.PARAM_WORLD_CONGRESS_VOTES] = votesForThis
-        kParams[PlayerOperations.PARAM_RESOLUTION_OPTION] = option
-        kParams[PlayerOperations.PARAM_RESOLUTION_SELECTION] = targetIdx
-        UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_RESOLUTION_VOTE, kParams)
+        if targetIdx == nil then stop("Target not found for " .. tostring(res.Type)); return end
+        table.insert(plan, {{hash=res.Type, pref=pref, target=targetIdx}})
     end
 
+    local favor = Players[me]:GetFavor()
+    local costs = wc:GetVotesandFavorCost()
+    local maxV = costs.MaxVotes or 5
+    for _, item in ipairs(plan) do
+        local count, cost = 1, 0
+        -- costs[v-1] is the cumulative favor cost for v total votes.
+        for v = 2, math.min(item.pref.v, maxV) do
+            local totalCost = costs[v - 1]
+            if totalCost == nil or totalCost > favor then break end
+            count, cost = v, totalCost
+        end
+        favor = favor - cost
+        local params = {{}}
+        params[PlayerOperations.PARAM_RESOLUTION_TYPE] = item.hash
+        params[PlayerOperations.PARAM_WORLD_CONGRESS_VOTES] = count
+        params[PlayerOperations.PARAM_RESOLUTION_OPTION] = item.pref.o
+        params[PlayerOperations.PARAM_RESOLUTION_SELECTION] = item.target
+        UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_RESOLUTION_VOTE, params)
+    end
     UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_SUBMIT_TURN, {{}})
-
     __civmcp_wc_votes = nil
     pcall(function() Events.WorldCongressStage1.Remove(__civmcp_wc_handler) end)
     __civmcp_wc_handler = nil
+    print("OK:WC_VOTES_SUBMITTED")
 end
-
 __civmcp_wc_handler = handler
 Events.WorldCongressStage1.Add(handler)
-print("OK:WC_VOTER_REGISTERED")
+-- A turn already paused inside a session cannot replay ACTION_ENDTURN.
+-- Submit the explicit choices now; otherwise keep the one-shot event.
+local current = Game.GetWorldCongress()
+if current and current:IsInSession() then handler()
+else print("OK:WC_VOTER_REGISTERED") end
 print("{SENTINEL}")
 """
