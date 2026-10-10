@@ -1,9 +1,7 @@
 """High-level game state API with server-side narration.
 
-Wraps GameConnection + lua into typed async methods that return
-both structured data and human-readable narrated text. Has ZERO MCP
-dependency — enabling multi-agent architectures where specialist servers
-import the same GameState class but expose different tool subsets.
+Wraps GameConnection + Lua into typed queries, actions, verification and
+human-readable results. This layer does not depend on MCP.
 """
 
 from __future__ import annotations
@@ -12,10 +10,9 @@ import asyncio
 import logging
 import re
 
-from typing import TYPE_CHECKING
 
 from civ_mcp import lua as lq
-from civ_mcp.connection import GameConnection
+from civ_mcp.connection import GameConnection, LuaError
 from civ_mcp.narrate import (
     narrate_combat_estimate,
     narrate_move_discoveries,
@@ -23,8 +20,6 @@ from civ_mcp.narrate import (
     narrate_test_trade,
 )
 
-if TYPE_CHECKING:
-    from civ_mcp.spatial import SpatialTracker
 
 log = logging.getLogger(__name__)
 
@@ -34,34 +29,16 @@ class GameState:
 
     def __init__(self, connection: GameConnection):
         self.conn = connection
-        self.spatial: SpatialTracker | None = None
+        self.reset_session()
+
+    def reset_session(self) -> None:
+        """新游戏或显式读档后，从实际状态重新建立会话。"""
         self._last_snapshot: lq.TurnSnapshot | None = None
-        self._game_identity: tuple[str, int] | None = None  # (civ_type, seed)
-        self._diary_written_turn: int | None = (
-            None  # guard against double-write per turn
-        )
-        self._end_turn_blocked: bool = False  # last end_turn hit a blocker (diplo/WC)
-        self._pending_end_turn: bool = False  # ACTION_ENDTURN already in flight
-        self._pending_end_turn_from: int | None = (
-            None  # turn number when ACTION_ENDTURN was sent
-        )
-        self._high_water_turn: int = 0  # highest turn seen (for regression detection)
-        self._local_player_id: int = 0  # human player (always 0 in single-player)
-        self._hang_retry_active: bool = False  # guard against recursive hang recovery
-        self._last_game_over: lq.GameOverStatus | None = (
-            None  # captured by execute_end_turn for server.py
-        )
-        # (ts, turn, save_name) for each successful save load — used to detect
-        # save scumming in _check_save_scumming(). Bounded to last 50 entries.
-        self._save_load_history: list[tuple[float, int, str]] = []
-        self._run_aborted: bool = False  # set when save scumming threshold is exceeded
-        # Per-turn advisor call budget — prevents compulsive advisor loops
-        # (e.g. Gemini Pro's 1,567 get_wonder_advisor calls in a single turn).
-        # Reset in execute_end_turn on successful turn advance.
-        self._advisor_calls_this_turn: int = 0
-        # One-shot warning from the most recent advisor call, consumed and
-        # cleared by the server wrapper.
-        self._advisor_budget_warning: str | None = None
+        self._game_identity: tuple[str, int] | None = None
+        self._pending_end_turn = False
+        self._pending_end_turn_from: int | None = None
+        self._local_player_id = 0
+        self._revealed_tiles: set[tuple[int, int]] | None = None
 
     async def get_game_identity(self) -> tuple[str, int]:
         """Return (civ_type_lower, random_seed) for the current game.
@@ -85,13 +62,7 @@ class GameState:
                 new_id = (civ, seed)
                 if self._game_identity is not None and new_id != self._game_identity:
                     log.info("Game changed: %s → %s", self._game_identity, new_id)
-                    self._last_snapshot = None
-                    self._diary_written_turn = None
-                    self._last_game_over = None
-                    self._save_load_history = []
-                    self._run_aborted = False
-                    self._advisor_calls_this_turn = 0
-                    self._advisor_budget_warning = None
+                    self.reset_session()
                 self._game_identity = new_id
                 return self._game_identity
         return ("unknown", 0)
@@ -104,6 +75,7 @@ class GameState:
         # InGame context needed for GetFavor() (nil in GameCore)
         lines = await self.conn.execute_write(lq.build_overview_query())
         ov = lq.parse_overview_response(lines)
+        self._local_player_id = ov.player_id
         # Bootstrap: capture baseline snapshot for first end_turn diff
         if self._last_snapshot is None:
             try:
@@ -112,15 +84,7 @@ class GameState:
                 log.debug("Failed to bootstrap snapshot", exc_info=True)
         return ov
 
-    async def get_diary_snapshot(self) -> lq.DiarySnapshot:
-        """Full per-turn snapshot for diary JSONL. InGame context."""
-        lines = await self.conn.execute_write(lq.build_diary_full_query())
-        return lq.parse_diary_full_response(lines)
 
-    async def get_rival_snapshot(self) -> list[lq.RivalSnapshot]:
-        """Lightweight per-rival stats for diary entries."""
-        lines = await self.conn.execute_write(lq.build_rival_snapshot_query())
-        return lq.parse_rival_snapshot_response(lines)
 
     async def check_game_over(self) -> lq.GameOverStatus | None:
         """Check if the game has ended (victory/defeat screen showing).
@@ -165,6 +129,11 @@ class GameState:
         self, unit_index: int, mission_type: str, target_x: int, target_y: int
     ) -> str:
         lua = lq.build_spy_mission(unit_index, mission_type, target_x, target_y)
+        lines = await self.conn.execute_write(lua)
+        return _action_result(lines)
+
+    async def spy_escape(self, unit_index: int, district_type: str) -> str:
+        lua = lq.build_spy_escape_route(unit_index, district_type)
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
@@ -275,40 +244,21 @@ class GameState:
                         break
             except Exception:
                 pass
-        # Post-move: visibility diff for discovery feedback
-        blocked = "|BLOCKED" in result
-        if not blocked and self.spatial is not None and self.spatial._revealed_seeded:
+        # 保留探索反馈；集合只用于区分本次新揭示的格子。
+        if "|BLOCKED" not in result and self._revealed_tiles is not None:
             try:
-                # Extract actual position from result
-                now_match = re.search(r"now_at:(\d+),(\d+)", result)
-                if now_match:
-                    vis_x, vis_y = int(now_match.group(1)), int(now_match.group(2))
-                    vis_lines = await self.conn.execute_read(
-                        lq.build_post_move_visibility_query(vis_x, vis_y)
-                    )
-                    vis_tiles = lq.parse_post_move_visibility(vis_lines)
-                    all_revealed = {(x, y) for x, y, _ in vis_tiles}
-                    newly_revealed = self.spatial.mark_revealed(all_revealed)
+                position = re.search(r"now_at:(\d+),(\d+)", result)
+                if position:
+                    x, y = map(int, position.groups())
+                    lines = await self.conn.execute_read(lq.build_post_move_visibility_query(x, y))
+                    tiles = lq.parse_post_move_visibility(lines)
+                    newly_revealed = {(tx, ty) for tx, ty, _ in tiles} - self._revealed_tiles
+                    self._revealed_tiles.update((tx, ty) for tx, ty, _ in tiles)
                     if newly_revealed:
-                        new_tile_data = [
-                            (x, y, m)
-                            for x, y, m in vis_tiles
-                            if (x, y) in newly_revealed
-                        ]
-                        discovery_text = narrate_move_discoveries(
-                            new_tile_data, len(newly_revealed)
-                        )
-                        if discovery_text:
-                            result += "\n" + discovery_text
-                        # Record discovery event in spatial tracker
-                        await self.spatial.record_discovery(
-                            "unit_action",
-                            (vis_x, vis_y),
-                            newly_revealed,
-                            0,
-                        )
-            except Exception:
-                log.debug("Post-move visibility diff failed", exc_info=True)
+                        data = [(tx, ty, meta) for tx, ty, meta in tiles if (tx, ty) in newly_revealed]
+                        result += "\n" + narrate_move_discoveries(data, len(newly_revealed))
+            except (OSError, ValueError):
+                log.debug("Post-move visibility unavailable", exc_info=True)
         return result
 
     async def attack_unit(self, unit_index: int, target_x: int, target_y: int) -> str:
@@ -774,6 +724,8 @@ class GameState:
     async def get_diplomacy_sessions(self) -> list[lq.DiplomacySession]:
         lua = lq.build_diplomacy_session_query()
         lines = await self.conn.execute_write(lua)
+        if not any(line == "NONE" or line.startswith("SESSION|") for line in lines):
+            raise LuaError("Diplomacy session status is unknown")
         return lq.parse_diplomacy_sessions(lines)
 
     async def diplomacy_respond(self, other_player_id: int, response: str) -> str:
@@ -899,6 +851,8 @@ class GameState:
     async def get_pending_deals(self) -> list[lq.PendingDeal]:
         lua = lq.build_pending_deals_query()
         lines = await self.conn.execute_write(lua)
+        if not any(line == "DEALS_COMPLETE" for line in lines):
+            raise LuaError("Pending deal status is unknown")
         return lq.parse_pending_deals_response(lines)
 
     async def respond_to_deal(self, other_player_id: int, accept: bool) -> str:
@@ -1214,52 +1168,13 @@ class GameState:
         return _action_result(lines)
 
     # ------------------------------------------------------------------
-    # District / wonder advisor (with per-turn budget)
+    # District / wonder placement queries
     # ------------------------------------------------------------------
-
-    # Pathological loops (Gemini Pro's 1,567 calls in one turn) motivate a
-    # per-turn budget. Opus averages 2-4 advisor calls/turn so 20 leaves
-    # 5x headroom for legitimate exploration.
-    ADVISOR_BUDGET_SOFT = 10
-    ADVISOR_BUDGET_HARD = 20
-
-    def _advisor_budget_check(self) -> tuple[str | None, str | None]:
-        """Check advisor budget. Returns (hard_error, soft_warning).
-
-        - hard_error: short-circuit string if budget exceeded (caller returns it)
-        - soft_warning: string to prepend to the result, or None
-        """
-        # Increment unconditionally — the hard-cap path stays sticky until
-        # the end-of-turn reset, and reporting the true call count is more
-        # honest for logs and telemetry.
-        self._advisor_calls_this_turn += 1
-        n = self._advisor_calls_this_turn
-        if n > self.ADVISOR_BUDGET_HARD:
-            return (
-                f"ERR:ADVISOR_BUDGET_EXCEEDED|You have made {n} advisor calls "
-                f"this turn (limit {self.ADVISOR_BUDGET_HARD}). The advisors "
-                f"rank placements; they are not for brute-forcing every "
-                f"wonder or district. Make a decision with the information "
-                f"you already have, skip this step, or end your turn. Budget "
-                f"resets next turn.",
-                None,
-            )
-        if n >= self.ADVISOR_BUDGET_SOFT:
-            return (
-                None,
-                f"ADVISOR BUDGET WARNING: {n}/{self.ADVISOR_BUDGET_HARD} "
-                f"advisor calls this turn. Consolidate your queries — the "
-                f"advisors rank placements, not iterate through options.",
-            )
-        return None, None
 
     async def get_district_advisor(
         self, city_id: int, district_type: str
     ) -> list[lq.DistrictPlacement] | str:
         """Returns placements list, or an error string if placement is impossible."""
-        hard_err, soft_warn = self._advisor_budget_check()
-        if hard_err:
-            return hard_err
         lua = lq.build_district_advisor_query(city_id, district_type)
         lines = await self.conn.execute_write(lua)
         # Check for error bail lines (parser only looks for DPLOT| and silently
@@ -1267,23 +1182,14 @@ class GameState:
         for line in lines:
             if line.startswith("ERR:"):
                 return line  # propagate the specific error to the agent
-        # Warning only attaches to the success path — error-string returns
-        # bypass the server wrapper's narration branch and would otherwise
-        # leave a stale warning for the next advisor call.
-        self._advisor_budget_warning = soft_warn
         return lq.parse_district_advisor_response(lines)
 
     async def get_wonder_advisor(
         self, city_id: int, wonder_name: str
     ) -> list[lq.WonderPlacement] | str:
-        """Returns placements list, or an error string if budget exceeded."""
-        hard_err, soft_warn = self._advisor_budget_check()
-        if hard_err:
-            return hard_err
+        """Returns placements list, or an error string if placement is impossible."""
         lua = lq.build_wonder_advisor_query(city_id, wonder_name)
         lines = await self.conn.execute_write(lua)
-        # Warning only attaches to the success path (same reason as above)
-        self._advisor_budget_warning = soft_warn
         return lq.parse_wonder_advisor_response(lines)
 
     # ------------------------------------------------------------------
@@ -1401,6 +1307,8 @@ class GameState:
     async def get_world_congress(self) -> lq.WorldCongressStatus:
         lua = lq.build_world_congress_query()
         lines = await self.conn.execute_write(lua)
+        if not any(line.startswith(("WC_STATUS|", "ERR:NO_WORLD_CONGRESS|")) for line in lines):
+            raise LuaError("World Congress status is unknown")
         return lq.parse_world_congress_response(lines)
 
     async def vote_world_congress(
@@ -1705,34 +1613,22 @@ class GameState:
         return await list_saves(self.conn)
 
     async def load_save(self, save_index: int) -> str:
-        """Load a save file by index."""
-        import time
+        """Load a save by index; discard the old world's cached state."""
         from civ_mcp.game_lifecycle import load_save
-
         result = await load_save(self.conn, save_index)
         if not result.startswith(("Error", "ERR", "FAILED")):
-            self._record_save_load(f"index:{save_index}")
+            self.reset_session()
+            await self.conn.disconnect()
         return result
 
     async def load_game_save(self, save_name: str) -> str:
-        """Load a save file by name (no list_saves prerequisite)."""
+        """Submit a native main-menu load; discard caches if submitted or unknown."""
         from civ_mcp.game_lifecycle import load_game_save
-
         result = await load_game_save(self.conn, save_name)
-        if not result.startswith(("Error", "ERR", "FAILED")):
-            self._record_save_load(save_name)
+        if result.startswith(("Loading", "ERR:OUTCOME_UNKNOWN")):
+            self.reset_session()
         return result
 
-    def _record_save_load(self, save_name: str) -> None:
-        """Record a successful save load for scumming detection."""
-        import time
-
-        ts = time.time()
-        turn = self._high_water_turn
-        self._save_load_history.append((ts, turn, save_name))
-        # Keep bounded
-        if len(self._save_load_history) > 50:
-            self._save_load_history = self._save_load_history[-50:]
 
     async def execute_lua(self, code: str, context: str = "gamecore") -> str:
         """Escape hatch: run arbitrary Lua code."""
@@ -1749,14 +1645,13 @@ def _action_result(lines: list[str]) -> str:
     spurious output before the actual result line.
     """
     if not lines:
-        return "Action completed (no response)."
+        return "Error: OUTCOME_UNKNOWN — no action confirmation; read game state before retrying."
     for line in lines:
         if line.startswith("OK:"):
             return line[3:]
         if line.startswith("ERR:"):
             return f"Error: {line[4:]}"
-    # No OK/ERR found — return all lines for debugging
-    return "\n".join(lines)
+    return "Error: OUTCOME_UNKNOWN — no action confirmation; read game state before retrying.\n" + "\n".join(lines)
 
 
 def _format_attack_followup(lines: list[str], attacker_owner: int = 0) -> str:

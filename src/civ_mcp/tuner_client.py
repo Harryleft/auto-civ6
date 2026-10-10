@@ -46,6 +46,8 @@ async def recv_message(reader: asyncio.StreamReader) -> Message:
     """Read a single framed message from the game."""
     header = await reader.readexactly(HEADER_SIZE)
     length, tag = struct.unpack(HEADER_FMT, header)
+    if length > 16 * 1024 * 1024:
+        raise ConnectionError("Invalid FireTuner frame length")
     data = await reader.readexactly(length)
     # Strip trailing null bytes and decode
     payload = data.rstrip(b"\x00").decode("utf-8", errors="replace")
@@ -92,11 +94,15 @@ async def handshake(
     # APP: — get game identity
     await send_message(writer, TAG_HANDSHAKE, "APP:")
     app_msg = await recv_message_timeout(reader, timeout=5.0)
-    app_identity = app_msg.payload if app_msg else "<no response>"
+    if app_msg is None:
+        raise ConnectionError("FireTuner APP handshake timed out")
+    app_identity = app_msg.payload
 
     # LSQ: — list Lua states
     await send_message(writer, TAG_HANDSHAKE, "LSQ:")
     lsq_msg = await recv_message_timeout(reader, timeout=5.0)
+    if lsq_msg is None:
+        raise ConnectionError("FireTuner LSQ handshake timed out")
     lua_states = []
     if lsq_msg:
         # States come as null-separated or newline-separated entries

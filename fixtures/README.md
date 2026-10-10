@@ -1,28 +1,16 @@
-# Fixture Data
+# 存档与历史数据
 
-Sample game data for local development and testing. Contains 4 completed games (with ELO data) and 1 in-progress game, enough to populate the dashboard, leaderboard, and diary views.
+## 可复用存档
 
-## Loading
-
-```bash
-./fixtures/load.sh
-```
-
-This copies the JSONL files into `~/.civ6-mcp/`, which is where the web dashboard reads data from by default.
-
-Alternatively, you can point the dashboard at the fixtures directory directly:
+`fixtures/saves/` 保留原有 3 个 `.Civ6Save` 文件：Ground Control、Snowflake、Cry Havoc。文件内容未修改，可用于明确指定存档的实机诊断。
 
 ```bash
-CIV6_DIARY_DIR=./fixtures CIV6_LOG_DIR=./fixtures bun dev
+uv run python scripts/install_saves.py --dry-run
+uv run python scripts/install_saves.py
 ```
 
-## What's included
+安装脚本默认只复制缺失存档；`--force` 才覆盖游戏目录中的同名文件。场景设置见 [存档说明](saves/README.md)。
 
-| File | Description |
-|------|-------------|
-| `diary_demo_elo1.jsonl` | Game 1 — Russia/Peter (claude-opus-4-6) vs Rome, Egypt, Japan. Science victory (Russia). |
-| `diary_demo_elo2.jsonl` | Game 2 — Greece/Pericles (claude-sonnet-4-6) vs Germany, Spain, Brazil. Science victory (Germany). |
-| `diary_demo_elo3.jsonl` | Game 3 — America/Teddy Roosevelt (gpt-5) vs Rome, Egypt, India. Diplomatic victory (America). |
-| `diary_demo_elo4.jsonl` | Game 4 — Rome/Trajan (claude-opus-4-6) vs India, Mongolia, Spain. **Defeat** — India religious victory T195. |
-| `diary_demo_model_pill_20260224.jsonl` | In-progress game — Russia/Peter (claude-opus-4-6) vs Rome. |
-| `log_demo_elo{1,2,3,4}.jsonl` | Tool call logs and game-over events for the 4 completed games. |
+## 历史日志
+
+`fixtures/archive/` 保存原有 5 个 diary JSONL 和 4 个工具日志 JSONL，内容未修改。这些是旧网页演示数据，供离线分析参考；当前 MCP 无需读取它们，也无需运行数据加载服务。

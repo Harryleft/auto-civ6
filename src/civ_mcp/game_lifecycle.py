@@ -16,8 +16,8 @@ async def dismiss_popup(conn: GameConnection) -> str:
     """Dismiss any blocking popup or UI overlay in the game.
 
     Three-phase approach:
-    1. Single batched InGame call that checks all known popup/overlay names
-       and closes diplomacy screens (fast — one TCP roundtrip).
+    1. Single batched InGame call that acknowledges Congress results and
+       closes informational overlays. Strategy choices remain pending.
     2. Only if Phase 1 found nothing: scan individual Lua states for
        ExclusivePopupManager popups (disaster, wonder, era screens) that
        need Close() in their own state to release the engine event lock.
@@ -39,10 +39,52 @@ async def dismiss_popup(conn: GameConnection) -> str:
         "PopupDialog",
         "BoostUnlockedPopup",
         "GreatWorkShowcase",
-        "WorldCongressPopup",
-        "WorldCongressIntro",
     ]
-    checks = []
+    # Results acknowledgment replaces the old automatic end-turn unlock.
+    # Match notifications before requesting the operation, and report only
+    # entries confirmed gone/dismissed afterward. Sessions still need votes.
+    checks = ["""
+do
+    local me = Game.GetLocalPlayer()
+    local reviewType = EndTurnBlockingTypes.ENDTURN_BLOCKING_WORLD_CONGRESS_LOOK
+    local review = {}
+    local sessionPending = false
+    local list = NotificationManager.GetList(me)
+    for _, nid in ipairs(list or {}) do
+        local entry = NotificationManager.Find(me, nid)
+        if entry and not entry:IsDismissed() then
+            local blocking = entry:GetEndTurnBlocking()
+            if reviewType and blocking == reviewType then
+                table.insert(review, nid)
+            elseif blocking == EndTurnBlockingTypes.ENDTURN_BLOCKING_WORLD_CONGRESS_SESSION
+                or blocking == EndTurnBlockingTypes.ENDTURN_BLOCKING_WORLD_CONGRESS_SPECIAL_SESSION then
+                sessionPending = true
+            end
+        end
+    end
+    if #review > 0 then
+        local requested = UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_LOOKED_AT_AVAILABLE, {})
+        if requested ~= false then
+            local dismissed = 0
+            for _, nid in ipairs(review) do
+                local entry = NotificationManager.Find(me, nid)
+                if entry and not entry:IsDismissed() then NotificationManager.Dismiss(me, nid) end
+                entry = NotificationManager.Find(me, nid)
+                if not entry or entry:IsDismissed() then dismissed = dismissed + 1 end
+            end
+            if dismissed > 0 then
+                print("DISMISSED|WorldCongressResults")
+                if not sessionPending then
+                    for _, name in ipairs({"WorldCongressIntro", "WorldCongressPopup"}) do
+                        local popup = ContextPtr:LookUpControl("/InGame/" .. name)
+                        if popup then popup:SetHide(true) end
+                    end
+                end
+            end
+        end
+    end
+end
+"""]
     for name in popup_names:
         checks.append(
             f'do local c = ContextPtr:LookUpControl("/InGame/{name}") '
@@ -308,24 +350,6 @@ async def save_game(conn: GameConnection, name: str) -> str:
     return f"Save may have failed: {' '.join(lines)}"
 
 
-def cleanup_old_autosaves(keep: int = 5) -> None:
-    """Delete MCP autosaves older than the most recent `keep` saves."""
-    import glob
-    import os
-
-    from .game_launcher import SINGLE_SAVE_DIR
-
-    pattern = os.path.join(SINGLE_SAVE_DIR, "0_MCP_*.Civ6Save")
-    saves = glob.glob(pattern)
-    if len(saves) <= keep:
-        return
-    saves.sort(key=os.path.getmtime, reverse=True)
-    for old in saves[keep:]:
-        try:
-            os.remove(old)
-            log.debug("Deleted old MCP autosave: %s", old)
-        except OSError as e:
-            log.debug("Failed to delete %s: %s", old, e)
 
 
 async def list_saves(conn: GameConnection) -> str:
@@ -532,7 +556,6 @@ print("{lq.SENTINEL}");
             main_menu_index,
             code,
             timeout=5.0,
-            retry_on_connection_loss=False,
         )
     except (ConnectionError, OSError, TimeoutError) as exc:
         return (

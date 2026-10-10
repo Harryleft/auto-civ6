@@ -5,7 +5,7 @@ replaced here by a scripted `FakeConn`), drives Lua builders, and adds the
 behaviours that make the tools trustworthy — position/combat follow-ups,
 silent-failure verification (research, civic, production policies, governor
 promotions, envoy tokens), game-identity cache invalidation, snapshot diffing,
-turn reporting, and save-load bookkeeping for scumming detection.
+turn reporting, and session reset after save loading.
 
 The fake connection is scripted with (kind, lines) pairs consumed in call
 order; "kind" ("read" = GameCore, "write" = InGame) is asserted on every call,
@@ -91,18 +91,10 @@ class TestGameStateInit:
         gs = GameState(FakeConn())
         assert gs._last_snapshot is None
         assert gs._game_identity is None
-        assert gs._diary_written_turn is None
-        assert gs._end_turn_blocked is False
         assert gs._pending_end_turn is False
         assert gs._pending_end_turn_from is None
-        assert gs._high_water_turn == 0
         assert gs._local_player_id == 0
-        assert gs._last_game_over is None
-        assert gs._save_load_history == []
-        assert gs._run_aborted is False
-        assert gs._advisor_calls_this_turn == 0
-        assert gs._advisor_budget_warning is None
-        assert gs.spatial is None
+        assert gs._revealed_tiles is None
 
 
 # ---------------------------------------------------------------------------
@@ -118,7 +110,7 @@ class TestActionResult:
     """
 
     def test_empty_response_has_a_distinct_message(self):
-        assert _action_result([]) == "Action completed (no response)."
+        assert "OUTCOME_UNKNOWN" in _action_result([])
 
     def test_ok_prefix_is_stripped(self):
         assert _action_result(["OK:FORTIFIED|10,20"]) == "FORTIFIED|10,20"
@@ -136,7 +128,9 @@ class TestActionResult:
         assert _action_result(lines) == "PRODUCING|X"
 
     def test_unprefixed_lines_are_joined_for_debugging(self):
-        assert _action_result(["one", "two"]) == "one\ntwo"
+        result = _action_result(["one", "two"])
+        assert "OUTCOME_UNKNOWN" in result
+        assert result.endswith("one\ntwo")
 
 
 # ---------------------------------------------------------------------------
@@ -209,7 +203,7 @@ class TestAttackFollowupHelpers:
 class TestGetGameIdentity:
     """get_game_identity re-queries every call and resets all per-game caches
     when the (civ, seed) pair changes — loading a different save must not
-    leak the previous game's snapshots, diary guards, or scumming history."""
+    leak the previous game's snapshots, pending requests or previous turn counters."""
 
     def test_parses_civ_and_seed(self):
         gs, conn = _gs([("write", ["GAMESEED|CIVILIZATION_ROME|12345"])])
@@ -223,39 +217,26 @@ class TestGetGameIdentity:
     def test_same_identity_keeps_cached_state(self):
         gs, _ = _gs([("write", ["GAMESEED|CIVILIZATION_ROME|1"])])
         gs._game_identity = ("rome", 1)
-        gs._last_snapshot = object()
-        gs._diary_written_turn = 7
-        snapshot_before = gs._last_snapshot
-
-        async def go():
-            return await gs.get_game_identity()
-
-        assert run(go()) == ("rome", 1)
-        assert gs._last_snapshot is snapshot_before
-        assert gs._diary_written_turn == 7
+        snapshot = object()
+        gs._last_snapshot = snapshot
+        gs._pending_end_turn = True
+        gs._pending_end_turn_from = 7
+        assert run(gs.get_game_identity()) == ("rome", 1)
+        assert gs._last_snapshot is snapshot
+        assert gs._pending_end_turn_from == 7
 
     def test_changed_identity_resets_all_per_game_state(self):
         gs, _ = _gs([("write", ["GAMESEED|CIVILIZATION_EGYPT|2"])])
         gs._game_identity = ("rome", 1)
         gs._last_snapshot = object()
-        gs._diary_written_turn = 9
-        gs._last_game_over = object()
-        gs._save_load_history = [(1.0, 10, "AutoSave_0010")]
-        gs._run_aborted = True
-        gs._advisor_calls_this_turn = 15
-        gs._advisor_budget_warning = "warn"
-
-        async def go():
-            return await gs.get_game_identity()
-
-        assert run(go()) == ("egypt", 2)
+        gs._pending_end_turn = True
+        gs._pending_end_turn_from = 99
+        gs._revealed_tiles = {(2, 3)}
+        assert run(gs.get_game_identity()) == ("egypt", 2)
         assert gs._last_snapshot is None
-        assert gs._diary_written_turn is None
-        assert gs._last_game_over is None
-        assert gs._save_load_history == []
-        assert gs._run_aborted is False
-        assert gs._advisor_calls_this_turn == 0
-        assert gs._advisor_budget_warning is None
+        assert gs._pending_end_turn is False
+        assert gs._pending_end_turn_from is None
+        assert gs._revealed_tiles is None
 
     def test_unparseable_response_returns_unknown_without_caching(self):
         """Pins current behaviour: a response with no GAMESEED line yields
@@ -340,6 +321,13 @@ class TestGetGameOverviewBootstrap:
     next end_turn diffs against. A failed bootstrap must never lose the
     overview itself."""
 
+    def test_empty_overview_cannot_confirm_a_loaded_game(self):
+        import pytest
+
+        gs, _ = _gs([("write", [])])
+        with pytest.raises(ValueError, match="Empty overview"):
+            run(gs.get_game_overview())
+
     def test_first_call_captures_a_snapshot(self):
         gs, conn = _gs(
             [
@@ -384,6 +372,13 @@ class TestGetGameOverviewBootstrap:
         # FakeConn raises on any unscripted call: reaching here proves the
         # second overview only paid for the single overview query.
         assert conn.exhausted
+
+    def test_overview_sets_actual_local_player_for_combat_followup(self):
+        gs, _ = _gs([("write", [_OVERVIEW_LINE.replace("12|0|", "12|3|")])])
+        gs._last_snapshot = object()
+        ov = run(gs.get_game_overview())
+        assert ov.player_id == 3
+        assert gs._local_player_id == 3
 
     def test_snapshot_failure_is_swallowed(self):
         gs, _ = _gs(
@@ -1408,7 +1403,7 @@ class TestDiplomacyRespond:
         monkeypatch.setattr(asyncio, "sleep", _instant_sleep)
         gs, conn = _gs(
             [
-                ("write", []),  # get_diplomacy_sessions (pre-text capture)
+                ("write", ["NONE"]),  # get_diplomacy_sessions (pre-text capture)
                 ("write", ["OK:SESSION_CLOSED|goodbye"]),
             ]
         )
@@ -1421,15 +1416,12 @@ class TestDiplomacyRespond:
 
 
 # ---------------------------------------------------------------------------
-# District advisor (budget + error propagation)
+# District advisor (placement facts + error propagation)
 # ---------------------------------------------------------------------------
 
 
 class TestDistrictAdvisor:
-    """Beyond the call budget (tested in test_advisor_budget.py), the
-    contract here: Lua bail lines (ERR:*) reach the agent verbatim instead
-    of being swallowed by the DPLOT-only parser, and the soft warning only
-    attaches to successful calls so an error can't strand a stale warning."""
+    """Placement facts and Lua errors remain visible to the player."""
 
     def test_err_lines_are_propagated_verbatim(self):
         gs, conn = _gs([("write", ["ERR:NO_CITY|city 99 not found"])])
@@ -1451,37 +1443,8 @@ class TestDistrictAdvisor:
         assert result[0].x == 12 and result[0].y == 20
         assert result[0].adjacency == {"science": 2, "production": 1}
 
-    def test_soft_warning_attaches_to_successful_calls(self):
-        gs, _ = _gs([("write", ["DPLOT|12,20|2|1|0|0|0|3|freshwater"])])
-        gs._advisor_calls_this_turn = 9  # this call is the 10th → soft zone
 
-        async def go():
-            return await gs.get_district_advisor(1, "DISTRICT_CAMPUS")
 
-        run(go())
-        assert gs._advisor_budget_warning is not None
-        assert "10/20" in gs._advisor_budget_warning
-
-    def test_error_path_does_not_attach_a_warning(self):
-        gs, _ = _gs([("write", ["ERR:NO_CITY|gone"])])
-        gs._advisor_calls_this_turn = 9
-
-        async def go():
-            return await gs.get_district_advisor(99, "DISTRICT_CAMPUS")
-
-        run(go())
-        assert gs._advisor_budget_warning is None
-
-    def test_hard_cap_short_circuits_without_touching_the_game(self):
-        gs, conn = _gs()  # no script: any conn call fails the test
-        gs._advisor_calls_this_turn = 20
-
-        async def go():
-            return await gs.get_district_advisor(1, "DISTRICT_CAMPUS")
-
-        result = run(go())
-        assert result.startswith("ERR:ADVISOR_BUDGET_EXCEEDED")
-        assert conn.calls == []
 
 
 # ---------------------------------------------------------------------------
@@ -1509,13 +1472,13 @@ class TestGreatPersonResults:
 
         assert run(go()) == "Error: NOT_ENOUGH_FAITH|need 100"
 
-    def test_empty_response_has_a_fallback_message(self):
+    def test_empty_response_reports_an_unknown_outcome(self):
         gs, _ = _gs([("write", [])])
 
         async def go():
             return await gs.patronize_great_person(42)
 
-        assert run(go()) == "Action completed (no response)."
+        assert "OUTCOME_UNKNOWN" in run(go())
 
 
 # ---------------------------------------------------------------------------
@@ -1523,61 +1486,46 @@ class TestGreatPersonResults:
 # ---------------------------------------------------------------------------
 
 
-class TestSaveLoadRecording:
-    """Every successful load feeds the scumming detector (_save_load_history);
-    failures must not. The history is bounded so long sessions don't grow it
-    without limit."""
 
-    def test_successful_load_by_index_is_recorded(self, monkeypatch):
-        async def fake_load(conn, save_index):
-            return "OK:LOADED"
 
-        monkeypatch.setattr(game_lifecycle, "load_save", fake_load)
+class TestSessionReset:
+    def test_submitted_index_load_discards_previous_world(self, monkeypatch):
+        async def loaded(conn, index):
+            return "Loading save: chosen"
+        async def disconnect():
+            return None
+        monkeypatch.setattr(game_lifecycle, "load_save", loaded)
+        gs, conn = _gs()
+        conn.disconnect = disconnect
+        gs._pending_end_turn = True
+        assert run(gs.load_save(1)).startswith("Loading")
+        assert not gs._pending_end_turn
+
+    def test_rejected_load_preserves_current_session(self, monkeypatch):
+        async def rejected(conn, index):
+            return "Error: rejected"
+        monkeypatch.setattr(game_lifecycle, "load_save", rejected)
         gs, _ = _gs()
+        gs._pending_end_turn = True
+        assert run(gs.load_save(1)).startswith("Error")
+        assert gs._pending_end_turn
 
-        async def go():
-            return await gs.load_save(3)
-
-        assert run(go()) == "OK:LOADED"
-        assert [name for _, _, name in gs._save_load_history] == ["index:3"]
-
-    def test_failed_load_is_not_recorded(self, monkeypatch):
-        async def fake_load(conn, save_index):
-            return "Error: INDEX_OUT_OF_RANGE|5"
-
-        monkeypatch.setattr(game_lifecycle, "load_save", fake_load)
+    def test_unknown_native_load_discards_previous_session(self, monkeypatch):
+        async def unknown(conn, name):
+            return "ERR:OUTCOME_UNKNOWN|response lost"
+        monkeypatch.setattr(game_lifecycle, "load_game_save", unknown)
         gs, _ = _gs()
+        gs._pending_end_turn = True
+        assert "OUTCOME_UNKNOWN" in run(gs.load_game_save("chosen"))
+        assert not gs._pending_end_turn
 
-        async def go():
-            return await gs.load_save(9)
+    def test_unknown_diplomacy_status_is_not_an_empty_session(self):
+        gs, _ = _gs([("write", [])])
+        from civ_mcp.connection import LuaError
+        import pytest
+        with pytest.raises(LuaError, match="unknown"):
+            run(gs.get_diplomacy_sessions())
 
-        assert run(go()).startswith("Error:")
-        assert gs._save_load_history == []
-
-    def test_successful_load_by_name_is_recorded(self, monkeypatch):
-        async def fake_load(conn, save_name):
-            return "OK:LOADED"
-
-        monkeypatch.setattr(game_lifecycle, "load_game_save", fake_load)
-        gs, _ = _gs()
-
-        async def go():
-            return await gs.load_game_save("0_MCP_0079")
-
-        assert run(go()) == "OK:LOADED"
-        assert [name for _, _, name in gs._save_load_history] == ["0_MCP_0079"]
-
-    def test_history_is_bounded_to_the_last_50_entries(self):
-        gs, _ = _gs()
-        gs._save_load_history = [(float(i), i, f"save_{i}") for i in range(50)]
-        gs._record_save_load("save_new")
-        assert len(gs._save_load_history) == 50
-        assert gs._save_load_history[-1][2] == "save_new"
-        assert gs._save_load_history[0][2] == "save_1"  # oldest dropped
-
-    def test_recorded_turn_comes_from_the_high_water_mark(self):
-        gs, _ = _gs()
-        gs._high_water_turn = 123
-        gs._record_save_load("AutoSave_0123")
-        _, turn, _ = gs._save_load_history[-1]
-        assert turn == 123
+    def test_empty_pending_deals_requires_completion_marker(self):
+        gs, _ = _gs([("write", ["DEALS_COMPLETE"])])
+        assert run(gs.get_pending_deals()) == []
