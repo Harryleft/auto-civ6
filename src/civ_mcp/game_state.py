@@ -647,10 +647,10 @@ class GameState:
     # Diplomacy methods
     # ------------------------------------------------------------------
 
-    async def get_diplomacy_sessions(self) -> list[lq.DiplomacySession]:
+    async def get_diplomacy_sessions(self) -> lq.DiplomacyContext:
         lua = lq.build_diplomacy_session_query()
         lines = await self.conn.execute_write(lua)
-        if not any(line == "NONE" or line.startswith("SESSION|") for line in lines):
+        if "CONTEXT_COMPLETE" not in lines:
             raise LuaError("Diplomacy session status is unknown")
         return lq.parse_diplomacy_sessions(lines)
 
@@ -658,7 +658,7 @@ class GameState:
         # Capture dialogue text BEFORE response to detect goodbye phase
         pre_sessions = await self.get_diplomacy_sessions()
         pre_text = ""
-        for s in pre_sessions:
+        for s in pre_sessions.sessions:
             if s.other_player_id == other_player_id:
                 pre_text = s.dialogue_text
                 break
@@ -685,17 +685,24 @@ class GameState:
         # Phase 3: Session still open — check if dialogue text changed.
         # If unchanged, we're in the goodbye phase. Auto-close.
         post_sessions = await self.get_diplomacy_sessions()
+        if post_sessions.status == "UNKNOWN":
+            return (f"OK:RESPONDED|{response.upper()}|SESSION_CONTINUES\n"
+                    f"Diplomacy context UNKNOWN: {post_sessions.reason}; read again before responding.")
         post_text = ""
-        for s in post_sessions:
+        for s in post_sessions.sessions:
             if s.other_player_id == other_player_id:
                 post_text = s.dialogue_text
                 break
 
-        if not post_sessions:
+        if post_sessions.status == "NONE":
             # Session disappeared between checks (race condition)
             return f"OK:RESPONDED|{response.upper()}|SESSION_CLOSED"
 
-        if post_text == pre_text:
+        if (pre_sessions.status == post_sessions.status == "DIALOGUE"
+                and pre_text and post_text == pre_text
+                and len(pre_sessions.sessions) == len(post_sessions.sessions) == 1
+                and pre_sessions.sessions[0].session_id == post_sessions.sessions[0].session_id
+                and post_sessions.sessions[0].other_player_id == other_player_id):
             # Dialogue unchanged → goodbye phase. Force close.
             log.info(
                 "Goodbye phase detected (text unchanged) for player %d — auto-closing",
@@ -707,7 +714,7 @@ class GameState:
 
         # Include the new dialogue text so the agent can see what the leader said
         post_reason = ""
-        for s in post_sessions:
+        for s in post_sessions.sessions:
             if s.other_player_id == other_player_id:
                 post_reason = s.reason_text
                 break
@@ -774,10 +781,10 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         return lq.parse_deal_options_response(lines)
 
-    async def get_pending_deals(self) -> list[lq.PendingDeal]:
+    async def get_pending_deals(self) -> lq.DiplomacyContext:
         lua = lq.build_pending_deals_query()
         lines = await self.conn.execute_write(lua)
-        if not any(line == "DEALS_COMPLETE" for line in lines):
+        if "CONTEXT_COMPLETE" not in lines:
             raise LuaError("Pending deal status is unknown")
         return lq.parse_pending_deals_response(lines)
 
