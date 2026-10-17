@@ -1058,6 +1058,11 @@ async def send_diplomatic_action(
                 DECLARE_PROTECTORATE_WAR, DECLARE_COLONIAL_WAR,
                 DECLARE_TERRITORIAL_WAR
 
+    DECLARE_FRIENDSHIP submits once and waits briefly for a native bilateral
+    DECLARED_FRIEND relationship. ACCEPTED requires that witness; otherwise
+    PROPOSED_UNCONFIRMED means read get_diplomacy first, without automatic resend.
+    A legal request alone does not confirm that the friendship was accepted.
+
     Delegations cost 25 gold and can be rejected if the civ dislikes you.
     Embassies require Writing tech. Use get_diplomacy to see available actions.
     Surprise war is always available if not allied/friends. Other war types
