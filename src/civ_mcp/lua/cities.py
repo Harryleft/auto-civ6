@@ -30,10 +30,9 @@ for i, c in Players[me]:GetCities():Members() do
     if bq:GetSize() > 0 then
         local h = bq:GetCurrentProductionTypeHash()
         if h == 0 then
-            -- Ghost entry (Babylon eureka can obsolete queued items).
-            -- Try to clear it so the city reports as idle.
-            pcall(function() bq:RemoveAt(0) end)
-            producing = "nothing"
+            -- A nonempty queue with no item hash is not evidence of idle.
+            -- Queries report the anomaly without editing the queue.
+            producing = "CORRUPTED_QUEUE"
         else
             producing = hashName[h] or "UNKNOWN"
         end
@@ -159,6 +158,20 @@ for i, c in Players[me]:GetCities():Members() do
     if #allBuildings > 0 then
         print("CITYBLDG|" .. c:GetID() .. "|" .. table.concat(allBuildings, ","))
     end
+    -- Emit completion facts only when the native observation is complete.
+    -- Missing facts remain unknown; placed districts can still be unfinished.
+    pcall(function()
+        local completed = {}
+        for _, d in c:GetDistricts():Members() do
+            local info = GameInfo.Districts[d:GetType()]
+            if info and d:IsComplete() then
+                table.insert(completed, info.DistrictType .. "@" .. d:GetX() .. "," .. d:GetY())
+            end
+        end
+        local civ = PlayerConfigurations[me]:GetCivilizationTypeName()
+        local seed = GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")
+        print("CITYFACTS|" .. c:GetID() .. "|" .. c:GetOwner() .. "|" .. civ .. "|" .. tostring(seed) .. "|" .. table.concat(completed, ";"))
+    end)
 end
 for i = 1, #cityCoords do for j = i + 1, #cityCoords do
     local d = Map.GetPlotDistance(cityCoords[i].x, cityCoords[i].y, cityCoords[j].x, cityCoords[j].y)
@@ -719,6 +732,18 @@ def parse_cities_response(lines: list[str]) -> tuple[list[CityInfo], list[str]]:
                     city_by_id[cid].pillaged_improvements = [
                         r for r in p[3].split(",") if r
                     ]
+            continue
+        if line.startswith("CITYFACTS|"):
+            p = line.split("|")
+            try:
+                cid, owner, seed = int(p[1]), int(p[2]), int(p[4])
+                if len(p) == 6 and p[3].startswith("CIVILIZATION_") and cid in city_by_id:
+                    city = city_by_id[cid]
+                    city.owner_id = owner
+                    city.game_identity = (p[3].removeprefix("CIVILIZATION_").lower(), seed)
+                    city.completed_districts = [d for d in p[5].split(";") if d]
+            except (IndexError, ValueError):
+                pass  # Partial/malformed observation cannot prove completion.
             continue
         if line.startswith("CITYBLDG|"):
             p = line.split("|")
