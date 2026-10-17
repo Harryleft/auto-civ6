@@ -18,6 +18,7 @@ Agent 从根目录 [AGENTS.md](../AGENTS.md) 开始；命中任务后读取对�
 
 仅在定位对应改动或核对成果时读取。历史记录中的提交、测试数量与实机结果只适用于该记录，不代表当前分支已重新验收。
 
+- [第 117 回合和平确认修复](acceptance/2026-10-18-terminal-peace-confirmation.md)：1,081 项离线、原场景单次提议及延迟成立回读；[规格](specs/2026-10-18-terminal-peace-confirmation.md)。
 - [第 113 回合攻击类别修复](acceptance/2026-10-18-terminal-attack-mode.md)：1,062 项离线、拒绝不移动及实际远程攻击复验；[规格](specs/2026-10-18-terminal-attack-mode.md)。
 - [第 106 回合政策跨槽修复](acceptance/2026-10-18-terminal-policy-relocation.md)：完整换卡计划、1,028 项离线及菜单恢复实测；[规格](specs/2026-10-18-terminal-policy-relocation.md)。
 - [五主题知识扩展规格](specs/2026-10-17-knowledge-expansion.md)与[工作项](specs/2026-10-17-knowledge-expansion-tickets.md)：经营、资源、军事、外交、胜利宗教；[离线验收](acceptance/2026-10-17-knowledge-expansion.md)记录九主题 1,004 卡、995 项测试及来源关联修复。
