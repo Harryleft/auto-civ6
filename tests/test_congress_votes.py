@@ -21,7 +21,7 @@ class FakeConn:
         return ["OK:WC_VOTER_REGISTERED"]
 
 
-@pytest.mark.parametrize("votes", [None, [], {}, "[]", [None], [1]])
+@pytest.mark.parametrize("votes", [None, {}, "[]", [None], [1]])
 def test_empty_or_non_object_votes_never_reach_connection(votes):
     conn = FakeConn()
     with pytest.raises(ValueError):
@@ -102,8 +102,88 @@ def test_missing_preference_or_unmatched_target_stops_before_any_vote():
     assert "resLeft" not in lua
 
 
-def test_votes_for_a_paused_session_do_not_require_another_end_turn():
+def test_votes_for_a_paused_session_use_one_distinct_congress_stage_continuation():
     lua = build_register_wc_voter([VOTE])
-    assert "if current and current:IsInSession() then handler()" in lua
-    assert "ACTION_ENDTURN)" not in lua
-    assert 'print("OK:WC_VOTES_SUBMITTED")' in lua
+    assert "current and current:IsInSession() then q.handler()" in lua
+    assert lua.count("UI.RequestAction(ActionTypes.ACTION_ENDTURN)") == 1
+    assert 'print("OK:WC_STAGE_CONTINUE_REQUESTED|stage:"' in lua
+
+
+def test_explicit_vote_plan_submits_then_continues_its_native_stage_once():
+    lua = build_register_wc_voter([VOTE])
+    assert lua.count("UI.RequestAction(ActionTypes.ACTION_ENDTURN)") == 1
+    assert lua.index("WORLD_CONGRESS_SUBMIT_TURN, {}") < lua.index("UI.RequestAction(ActionTypes.ACTION_ENDTURN)")
+    assert lua.index('q.state = "VOTES_REQUESTED"') < lua.index("PlayerOperations.WORLD_CONGRESS_RESOLUTION_VOTE,")
+    assert lua.index('q.state = "CONTINUE_REQUESTED"') < lua.index("UI.RequestAction(ActionTypes.ACTION_ENDTURN)")
+
+
+def test_read_congress_distinguishes_requested_local_continuation_from_voting_requirement():
+    from civ_mcp.narrate import narrate_world_congress
+
+    class StatusConn(FakeConn):
+        async def execute_write(self, lua):
+            self.calls.append(lua)
+            return ["WC_STATUS|true|0|5|5|0,10,30", "WC_PHASE|true|STAGE1|67|CONTINUE_REQUESTED|123"]
+
+    status = asyncio.run(GameState(StatusConn()).get_world_congress())
+    text = narrate_world_congress(status)
+    assert "CONTINUE_REQUESTED" in text and "STAGE1" in text
+    assert "vote required" not in text
+    assert "not a receipt" in text
+
+
+def test_lost_vote_reply_reports_unknown_and_repeat_only_requests_native_record_status():
+    class LostReply(FakeConn):
+        async def execute_write(self, lua):
+            self.calls.append(lua)
+            if len(self.calls) == 1:
+                raise ConnectionError("lost after possible native submission")
+            return ["OK:WC_REQUEST|CONTINUE_REQUESTED|stage:STAGE1|token:original"]
+
+    conn = LostReply()
+    state = GameState(conn)
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.queue_wc_votes([VOTE]))
+    assert "CONTINUE_REQUESTED" in asyncio.run(state.queue_wc_votes([VOTE]))
+    for code in conn.calls:
+        assert code.index("local prior = __civmcp_wc_request") < code.index("WORLD_CONGRESS_RESOLUTION_VOTE,")
+        assert 'print("---END---"); return' in code
+
+
+def test_native_popup_close_only_runs_for_visible_popup_and_does_not_accept_again():
+    lua = build_register_wc_voter([VOTE])
+    assert "popup and popup:IsVisible()" in lua
+    assert "intro and intro:IsVisible() then UIManager:DequeuePopup(intro)" in lua
+    assert "SetHide(" not in lua
+    assert "LuaEvents.WorldCongressIntro_ShowWorldCongress()" not in lua
+
+
+def test_empty_explicit_plan_requires_native_no_choices_and_has_one_common_submit_pair():
+    conn = FakeConn()
+    assert asyncio.run(GameState(conn).queue_wc_votes([])) == "WC_VOTER_REGISTERED"
+    code = conn.calls[0]
+    assert "votes={}" in code
+    assert 'if nowStage == "STAGE1" then ress = wc:GetResolutions(me) end' in code
+    assert "local categories = props.Proposals" in code
+    assert 'if next(category.ProposalsOfType) ~= nil then' in code
+    assert 'stop("Explicit proposal votes are required; no defaults supplied")' in code
+    assert "if #plan > 0 then" in code
+    assert code.count("WORLD_CONGRESS_SUBMIT_TURN, {}") == 1
+    assert code.count("UI.RequestAction(ActionTypes.ACTION_ENDTURN)") == 1
+
+
+def test_congress_native_query_is_read_only_and_scope_and_no_replay_guards_precede_spending():
+    from civ_mcp.lua.congress import build_congress_phase_query
+    query = build_congress_phase_query()
+    assert "RequestAction" not in query and "RequestPlayerOperation" not in query
+    assert "SetHide(" not in query and ".Add(" not in query
+    for field in ("phaseQ.owner", "phaseQ.civ", "phaseQ.seed", "phaseQ.turn", "phaseQ.stage"):
+        assert field in query
+    code = build_register_wc_voter([VOTE])
+    first_vote = code.index("UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_RESOLUTION_VOTE")
+    for guard in ("prior.owner == me", "prior.civ == civ", "prior.seed == seed", "prior.turn == turn",
+                  "prior.stage == stage", 'q.state ~= "REGISTERED"', 'q.stage ~= nowStage'):
+        assert code.index(guard) < first_vote
+    assert "Events.WorldCongressStage1.Remove(q.handler)" in code
+    assert "Events.WorldCongressStage2.Remove(q.handler)" in code
+    assert "Events.WorldCongressStage1.Add(q.handler)" in code
+    assert "Events.WorldCongressStage2.Add(q.handler)" in code
