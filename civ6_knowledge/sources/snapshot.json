@@ -16302,6 +16302,344 @@
         "UITreeRow": 1
       }
     ],
+    "CivilizationTraits": [
+      {
+        "CivilizationType": "CIVILIZATION_AMERICA",
+        "TraitType": "TRAIT_CIVILIZATION_BUILDING_FILM_STUDIO"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_AMERICA",
+        "TraitType": "TRAIT_CIVILIZATION_FOUNDING_FATHERS"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_AMERICA",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_AMERICAN_P51"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_ARABIA",
+        "TraitType": "TRAIT_CIVILIZATION_BUILDING_MADRASA"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_ARABIA",
+        "TraitType": "TRAIT_CIVILIZATION_LAST_PROPHET"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_ARABIA",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_ARABIAN_MAMLUK"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_AZTEC",
+        "TraitType": "TRAIT_CIVILIZATION_BUILDING_TLACHTLI"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_AZTEC",
+        "TraitType": "TRAIT_CIVILIZATION_LEGEND_FIVE_SUNS"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_AZTEC",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_AZTEC_EAGLE_WARRIOR"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_BARBARIAN",
+        "TraitType": "TRAIT_BARBARIAN"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_BARBARIAN",
+        "TraitType": "TRAIT_BARBARIAN_BUT_SHOWS_UP_IN_PEDIA"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_BRAZIL",
+        "TraitType": "TRAIT_CIVILIZATION_AMAZON"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_BRAZIL",
+        "TraitType": "TRAIT_CIVILIZATION_STREET_CARNIVAL"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_BRAZIL",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_BRAZILIAN_MINAS_GERAES"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_CANADA",
+        "TraitType": "TRAIT_CIVILIZATION_FACES_OF_PEACE"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_CANADA",
+        "TraitType": "TRAIT_CIVILIZATION_IMPROVEMENT_ICE_HOCKEY_RINK"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_CANADA",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_CANADA_MOUNTIE"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_CHINA",
+        "TraitType": "TRAIT_CIVILIZATION_DYNASTIC_CYCLE"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_CHINA",
+        "TraitType": "TRAIT_CIVILIZATION_IMPROVEMENT_GREAT_WALL"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_CHINA",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_CHINESE_CROUCHING_TIGER"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_EGYPT",
+        "TraitType": "TRAIT_CIVILIZATION_IMPROVEMENT_SPHINX"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_EGYPT",
+        "TraitType": "TRAIT_CIVILIZATION_ITERU"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_EGYPT",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_EGYPTIAN_CHARIOT_ARCHER"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_ENGLAND",
+        "TraitType": "TRAIT_CIVILIZATION_INDUSTRIAL_REVOLUTION"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_ENGLAND",
+        "TraitType": "TRAIT_CIVILIZATION_ROYAL_NAVY_DOCKYARD"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_ENGLAND",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_ENGLISH_SEADOG"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_FRANCE",
+        "TraitType": "TRAIT_CIVILIZATION_IMPROVEMENT_CHATEAU"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_FRANCE",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_FRENCH_GARDE_IMPERIALE"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_FRANCE",
+        "TraitType": "TRAIT_CIVILIZATION_WONDER_TOURISM"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_GERMANY",
+        "TraitType": "TRAIT_CIVILIZATION_DISTRICT_HANSA"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_GERMANY",
+        "TraitType": "TRAIT_CIVILIZATION_IMPERIAL_FREE_CITIES"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_GERMANY",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_GERMAN_UBOAT"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_GREECE",
+        "TraitType": "TRAIT_CIVILIZATION_DISTRICT_ACROPOLIS"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_GREECE",
+        "TraitType": "TRAIT_CIVILIZATION_PLATOS_REPUBLIC"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_GREECE",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_GREEK_HOPLITE"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_HUNGARY",
+        "TraitType": "TRAIT_CIVILIZATION_BUILDING_THERMAL_BATH"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_HUNGARY",
+        "TraitType": "TRAIT_CIVILIZATION_PEARL_DANUBE"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_HUNGARY",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_HUNGARY_HUSZAR"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_INCA",
+        "TraitType": "TRAIT_CIVILIZATION_GREAT_MOUNTAINS"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_INCA",
+        "TraitType": "TRAIT_CIVILIZATION_IMPROVEMENT_TERRACE_FARM"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_INCA",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_INCA_WARAKAQ"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_INDIA",
+        "TraitType": "TRAIT_CIVILIZATION_DHARMA"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_INDIA",
+        "TraitType": "TRAIT_CIVILIZATION_IMPROVEMENT_STEPWELL"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_INDIA",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_INDIAN_VARU"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_JAPAN",
+        "TraitType": "TRAIT_CIVILIZATION_ADJACENT_DISTRICTS"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_JAPAN",
+        "TraitType": "TRAIT_CIVILIZATION_BUILDING_ELECTRONICS_FACTORY"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_JAPAN",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_JAPANESE_SAMURAI"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_KONGO",
+        "TraitType": "TRAIT_CIVILIZATION_MBANZA"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_KONGO",
+        "TraitType": "TRAIT_CIVILIZATION_NKISI"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_KONGO",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_KONGO_SHIELD_BEARER"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_MALI",
+        "TraitType": "TRAIT_CIVILIZATION_DISTRICT_SUGUBA"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_MALI",
+        "TraitType": "TRAIT_CIVILIZATION_MALI_GOLD_DESERT"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_MALI",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_MALI_MANDEKALU_CAVALRY"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_MAORI",
+        "TraitType": "TRAIT_CIVILIZATION_BUILDING_MARAE"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_MAORI",
+        "TraitType": "TRAIT_CIVILIZATION_IMPROVEMENT_MAORI_PA"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_MAORI",
+        "TraitType": "TRAIT_CIVILIZATION_MAORI_MANA"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_MAORI",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_MAORI_TOA"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_NORWAY",
+        "TraitType": "TRAIT_CIVILIZATION_BUILDING_STAVE_CHURCH"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_NORWAY",
+        "TraitType": "TRAIT_CIVILIZATION_EARLY_OCEAN_NAVIGATION"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_NORWAY",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_NORWEGIAN_BERSERKER"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_OTTOMAN",
+        "TraitType": "TRAIT_CIVILIZATION_BUILDING_GRAND_BAZAAR"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_OTTOMAN",
+        "TraitType": "TRAIT_CIVILIZATION_GREAT_TURKISH_BOMBARD"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_OTTOMAN",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_OTTOMAN_BARBARY_CORSAIR"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_PHOENICIA",
+        "TraitType": "TRAIT_CIVILIZATION_DISTRICT_COTHON"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_PHOENICIA",
+        "TraitType": "TRAIT_CIVILIZATION_MEDITERRANEAN_COLONIES"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_PHOENICIA",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_PHOENICIA_BIREME"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_ROME",
+        "TraitType": "TRAIT_CIVILIZATION_ALL_ROADS_TO_ROME"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_ROME",
+        "TraitType": "TRAIT_CIVILIZATION_DISTRICT_BATH"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_ROME",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_ROMAN_LEGION"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_RUSSIA",
+        "TraitType": "TRAIT_CIVILIZATION_DISTRICT_LAVRA"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_RUSSIA",
+        "TraitType": "TRAIT_CIVILIZATION_MOTHER_RUSSIA"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_RUSSIA",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_RUSSIAN_COSSACK"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_SCYTHIA",
+        "TraitType": "TRAIT_CIVILIZATION_EXTRA_LIGHT_CAVALRY"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_SCYTHIA",
+        "TraitType": "TRAIT_CIVILIZATION_IMPROVEMENT_KURGAN"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_SCYTHIA",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_SCYTHIAN_HORSE_ARCHER"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_SPAIN",
+        "TraitType": "TRAIT_CIVILIZATION_IMPROVEMENT_MISSION"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_SPAIN",
+        "TraitType": "TRAIT_CIVILIZATION_TREASURE_FLEET"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_SPAIN",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_SPANISH_CONQUISTADOR"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_SUMERIA",
+        "TraitType": "TRAIT_CIVILIZATION_FIRST_CIVILIZATION"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_SUMERIA",
+        "TraitType": "TRAIT_CIVILIZATION_IMPROVEMENT_ZIGGURAT"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_SUMERIA",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_SUMERIAN_WAR_CART"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_SWEDEN",
+        "TraitType": "TRAIT_CIVILIZATION_IMPROVEMENT_OPEN_AIR_MUSEUM"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_SWEDEN",
+        "TraitType": "TRAIT_CIVILIZATION_NOBEL_PRIZE"
+      },
+      {
+        "CivilizationType": "CIVILIZATION_SWEDEN",
+        "TraitType": "TRAIT_CIVILIZATION_UNIT_SWEDEN_CAROLEAN"
+      }
+    ],
     "CivilopediaPageChapterParagraphs": [],
     "CivilopediaPages": [
       {
@@ -21138,6 +21476,512 @@
         "YieldFromAppealPercent": 100
       }
     ],
+    "LeaderTraits": [
+      {
+        "LeaderType": "LEADER_BARBARIAN",
+        "TraitType": "TRAIT_LEADER_BARBARIAN"
+      },
+      {
+        "LeaderType": "LEADER_BARBAROSSA",
+        "TraitType": "TRAIT_LEADER_HOLY_ROMAN_EMPEROR"
+      },
+      {
+        "LeaderType": "LEADER_CATHERINE_DE_MEDICI",
+        "TraitType": "FLYING_SQUADRON_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_CATHERINE_DE_MEDICI",
+        "TraitType": "TRAIT_LEADER_CULTURAL_MAJOR_CIV"
+      },
+      {
+        "LeaderType": "LEADER_CLEOPATRA",
+        "TraitType": "TRAIT_LEADER_MEDITERRANEAN"
+      },
+      {
+        "LeaderType": "LEADER_DEFAULT",
+        "TraitType": "TRAIT_LEADER_MAJOR_CIV"
+      },
+      {
+        "LeaderType": "LEADER_DIDO",
+        "TraitType": "TRAIT_LEADER_EXPANSIONIST"
+      },
+      {
+        "LeaderType": "LEADER_DIDO",
+        "TraitType": "TRAIT_LEADER_FOUNDER_CARTHAGE"
+      },
+      {
+        "LeaderType": "LEADER_DIDO",
+        "TraitType": "TRAIT_LEADER_LOW_RELIGIOUS_PREFERENCE"
+      },
+      {
+        "LeaderType": "LEADER_ELEANOR_ENGLAND",
+        "TraitType": "TRAIT_LEADER_ELEANOR_LOYALTY"
+      },
+      {
+        "LeaderType": "LEADER_ELEANOR_FRANCE",
+        "TraitType": "TRAIT_LEADER_CULTURAL_MAJOR_CIV"
+      },
+      {
+        "LeaderType": "LEADER_ELEANOR_FRANCE",
+        "TraitType": "TRAIT_LEADER_ELEANOR_LOYALTY"
+      },
+      {
+        "LeaderType": "LEADER_FREE_CITIES",
+        "TraitType": "TRAIT_LEADER_FREE_CITIES"
+      },
+      {
+        "LeaderType": "LEADER_GANDHI",
+        "TraitType": "TRAIT_LEADER_LOW_CITY_STATE_PREFERENCE_WAR"
+      },
+      {
+        "LeaderType": "LEADER_GANDHI",
+        "TraitType": "TRAIT_LEADER_RELIGIOUS_MAJOR_CIV"
+      },
+      {
+        "LeaderType": "LEADER_GANDHI",
+        "TraitType": "TRAIT_LEADER_SATYAGRAHA"
+      },
+      {
+        "LeaderType": "LEADER_GILGAMESH",
+        "TraitType": "TRAIT_LEADER_ADVENTURES_ENKIDU"
+      },
+      {
+        "LeaderType": "LEADER_GILGAMESH",
+        "TraitType": "TRAIT_LEADER_LOW_CITY_STATE_PREFERENCE_WAR"
+      },
+      {
+        "LeaderType": "LEADER_GILGAMESH",
+        "TraitType": "TRAIT_LEADER_LOW_RELIGIOUS_PREFERENCE"
+      },
+      {
+        "LeaderType": "LEADER_GILGAMESH",
+        "TraitType": "TRAIT_LEADER_SCIENCE_MAJOR_CIV"
+      },
+      {
+        "LeaderType": "LEADER_GORGO",
+        "TraitType": "CULTURE_KILLS_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_GORGO",
+        "TraitType": "TRAIT_LEADER_AGGRESSIVE_MILITARY"
+      },
+      {
+        "LeaderType": "LEADER_GORGO",
+        "TraitType": "TRAIT_LEADER_CULTURAL_MAJOR_CIV"
+      },
+      {
+        "LeaderType": "LEADER_GORGO",
+        "TraitType": "TRAIT_LEADER_LOW_RELIGIOUS_PREFERENCE"
+      },
+      {
+        "LeaderType": "LEADER_HARDRADA",
+        "TraitType": "TRAIT_LEADER_AGGRESSIVE_MILITARY"
+      },
+      {
+        "LeaderType": "LEADER_HARDRADA",
+        "TraitType": "TRAIT_LEADER_MELEE_COASTAL_RAIDS"
+      },
+      {
+        "LeaderType": "LEADER_HARDRADA",
+        "TraitType": "TRAIT_LEADER_UNIT_NORWEGIAN_LONGSHIP"
+      },
+      {
+        "LeaderType": "LEADER_HOJO",
+        "TraitType": "TRAIT_LEADER_DIVINE_WIND"
+      },
+      {
+        "LeaderType": "LEADER_JULIUS_CAESAR",
+        "TraitType": "TRAIT_LEADER_AGGRESSIVE_MILITARY"
+      },
+      {
+        "LeaderType": "LEADER_JULIUS_CAESAR",
+        "TraitType": "TRAIT_LEADER_CAESAR"
+      },
+      {
+        "LeaderType": "LEADER_JULIUS_CAESAR",
+        "TraitType": "TRAIT_LEADER_LOW_RELIGIOUS_PREFERENCE"
+      },
+      {
+        "LeaderType": "LEADER_KRISTINA",
+        "TraitType": "TRAIT_LEADER_BUILDING_QUEENS_BIBLIOTHEQUE"
+      },
+      {
+        "LeaderType": "LEADER_KRISTINA",
+        "TraitType": "TRAIT_LEADER_CULTURAL_MAJOR_CIV"
+      },
+      {
+        "LeaderType": "LEADER_KRISTINA",
+        "TraitType": "TRAIT_LEADER_KRISTINA_AUTO_THEME"
+      },
+      {
+        "LeaderType": "LEADER_KRISTINA",
+        "TraitType": "TRAIT_LEADER_LOW_CITY_STATE_PREFERENCE_WAR"
+      },
+      {
+        "LeaderType": "LEADER_KRISTINA",
+        "TraitType": "TRAIT_LEADER_PURSUE_DIPLOMATIC_VICTORY"
+      },
+      {
+        "LeaderType": "LEADER_KUPE",
+        "TraitType": "TRAIT_LEADER_CULTURAL_MAJOR_CIV"
+      },
+      {
+        "LeaderType": "LEADER_KUPE",
+        "TraitType": "TRAIT_LEADER_KUPES_VOYAGE"
+      },
+      {
+        "LeaderType": "LEADER_LAURIER",
+        "TraitType": "TRAIT_LEADER_LAST_BEST_WEST"
+      },
+      {
+        "LeaderType": "LEADER_LAURIER",
+        "TraitType": "TRAIT_LEADER_LOW_CITY_STATE_PREFERENCE_WAR"
+      },
+      {
+        "LeaderType": "LEADER_LAURIER",
+        "TraitType": "TRAIT_LEADER_LOW_RELIGIOUS_PREFERENCE"
+      },
+      {
+        "LeaderType": "LEADER_LAURIER",
+        "TraitType": "TRAIT_LEADER_PURSUE_DIPLOMATIC_VICTORY"
+      },
+      {
+        "LeaderType": "LEADER_MANSA_MUSA",
+        "TraitType": "TRAIT_LEADER_SAHEL_MERCHANTS"
+      },
+      {
+        "LeaderType": "LEADER_MATTHIAS_CORVINUS",
+        "TraitType": "TRAIT_LEADER_AGGRESSIVE_MILITARY"
+      },
+      {
+        "LeaderType": "LEADER_MATTHIAS_CORVINUS",
+        "TraitType": "TRAIT_LEADER_LOW_CITY_STATE_PREFERENCE_WAR"
+      },
+      {
+        "LeaderType": "LEADER_MATTHIAS_CORVINUS",
+        "TraitType": "TRAIT_LEADER_RAVEN_KING"
+      },
+      {
+        "LeaderType": "LEADER_MATTHIAS_CORVINUS",
+        "TraitType": "TRAIT_LEADER_UNIT_MATTHIAS_BLACK_ARMY"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_AKKAD",
+        "TraitType": "MINOR_CIV_AKKAD_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_ANTIOCH",
+        "TraitType": "MINOR_CIV_ANTIOCH_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_BABYLON",
+        "TraitType": "MINOR_CIV_BABYLON_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_BOLOGNA",
+        "TraitType": "MINOR_CIV_BOLOGNA_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_BRUSSELS",
+        "TraitType": "MINOR_CIV_BRUSSELS_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_BUENOS_AIRES",
+        "TraitType": "MINOR_CIV_BUENOS_AIRES_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_CAHOKIA",
+        "TraitType": "MINOR_CIV_CAHOKIA_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_CARDIFF",
+        "TraitType": "MINOR_CIV_CARDIFF_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_CARTHAGE",
+        "TraitType": "MINOR_CIV_CARTHAGE_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_CULTURAL",
+        "TraitType": "MINOR_CIV_CULTURAL_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_DEFAULT",
+        "TraitType": "MINOR_CIV_DEFAULT_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_FEZ",
+        "TraitType": "MINOR_CIV_FEZ_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_GENEVA",
+        "TraitType": "MINOR_CIV_GENEVA_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_HATTUSA",
+        "TraitType": "MINOR_CIV_HATTUSA_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_HONG_KONG",
+        "TraitType": "MINOR_CIV_HONG_KONG_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_INDUSTRIAL",
+        "TraitType": "MINOR_CIV_INDUSTRIAL_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_JAKARTA",
+        "TraitType": "MINOR_CIV_JAKARTA_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_JERUSALEM",
+        "TraitType": "MINOR_CIV_JERUSALEM_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_KABUL",
+        "TraitType": "MINOR_CIV_KABUL_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_KANDY",
+        "TraitType": "MINOR_CIV_KANDY_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_KUMASI",
+        "TraitType": "MINOR_CIV_KUMASI_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_LA_VENTA",
+        "TraitType": "MINOR_CIV_LA_VENTA_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_LISBON",
+        "TraitType": "MINOR_CIV_LISBON_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_MEXICO_CITY",
+        "TraitType": "MINOR_CIV_MEXICO_CITY_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_MILITARISTIC",
+        "TraitType": "MINOR_CIV_MILITARISTIC_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_MOHENJO_DARO",
+        "TraitType": "MINOR_CIV_MOHENJO_DARO_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_NAN_MADOL",
+        "TraitType": "MINOR_CIV_NAN_MADOL_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_NAZCA",
+        "TraitType": "MINOR_CIV_NAZCA_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_NGAZARGAMU",
+        "TraitType": "MINOR_CIV_NGAZARGAMU_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_PRESLAV",
+        "TraitType": "MINOR_CIV_PRESLAV_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_RAPA_NUI",
+        "TraitType": "MINOR_CIV_RAPA_NUI_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_RELIGIOUS",
+        "TraitType": "MINOR_CIV_RELIGIOUS_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_SCIENTIFIC",
+        "TraitType": "MINOR_CIV_SCIENTIFIC_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_STOCKHOLM",
+        "TraitType": "MINOR_CIV_STOCKHOLM_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_TRADE",
+        "TraitType": "MINOR_CIV_TRADE_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_VALLETTA",
+        "TraitType": "MINOR_CIV_VALLETTA_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_VILNIUS",
+        "TraitType": "MINOR_CIV_VILNIUS_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_YEREVAN",
+        "TraitType": "MINOR_CIV_YEREVAN_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MINOR_CIV_ZANZIBAR",
+        "TraitType": "MINOR_CIV_ZANZIBAR_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_MONTEZUMA",
+        "TraitType": "TRAIT_LEADER_AGGRESSIVE_MILITARY"
+      },
+      {
+        "LeaderType": "LEADER_MONTEZUMA",
+        "TraitType": "TRAIT_LEADER_GIFTS_FOR_TLATOANI"
+      },
+      {
+        "LeaderType": "LEADER_MVEMBA",
+        "TraitType": "TRAIT_LEADER_CULTURAL_MAJOR_CIV"
+      },
+      {
+        "LeaderType": "LEADER_MVEMBA",
+        "TraitType": "TRAIT_LEADER_RELIGIOUS_CONVERT"
+      },
+      {
+        "LeaderType": "LEADER_PACHACUTI",
+        "TraitType": "TRAIT_LEADER_LOW_RELIGIOUS_PREFERENCE"
+      },
+      {
+        "LeaderType": "LEADER_PACHACUTI",
+        "TraitType": "TRAIT_LEADER_PACHACUTI_IMPROVEMENT_MOUNTAIN_ROAD"
+      },
+      {
+        "LeaderType": "LEADER_PACHACUTI",
+        "TraitType": "TRAIT_LEADER_PACHACUTI_QHAPAQ_NAN"
+      },
+      {
+        "LeaderType": "LEADER_PACHACUTI",
+        "TraitType": "TRAIT_LEADER_SCIENCE_MAJOR_CIV"
+      },
+      {
+        "LeaderType": "LEADER_PEDRO",
+        "TraitType": "TRAIT_LEADER_CULTURAL_MAJOR_CIV"
+      },
+      {
+        "LeaderType": "LEADER_PEDRO",
+        "TraitType": "TRAIT_LEADER_MAGNANIMOUS"
+      },
+      {
+        "LeaderType": "LEADER_PERICLES",
+        "TraitType": "TRAIT_LEADER_CULTURAL_MAJOR_CIV"
+      },
+      {
+        "LeaderType": "LEADER_PERICLES",
+        "TraitType": "TRAIT_LEADER_LOW_RELIGIOUS_PREFERENCE"
+      },
+      {
+        "LeaderType": "LEADER_PERICLES",
+        "TraitType": "TRAIT_LEADER_PURSUE_DIPLOMATIC_VICTORY"
+      },
+      {
+        "LeaderType": "LEADER_PERICLES",
+        "TraitType": "TRAIT_LEADER_SURROUNDED_BY_GLORY"
+      },
+      {
+        "LeaderType": "LEADER_PETER_GREAT",
+        "TraitType": "TRAIT_LEADER_GRAND_EMBASSY"
+      },
+      {
+        "LeaderType": "LEADER_PETER_GREAT",
+        "TraitType": "TRAIT_LEADER_RELIGIOUS_MAJOR_CIV"
+      },
+      {
+        "LeaderType": "LEADER_PHILIP_II",
+        "TraitType": "TRAIT_LEADER_EL_ESCORIAL"
+      },
+      {
+        "LeaderType": "LEADER_PHILIP_II",
+        "TraitType": "TRAIT_LEADER_RELIGIOUS_MAJOR_CIV"
+      },
+      {
+        "LeaderType": "LEADER_QIN",
+        "TraitType": "FIRST_EMPEROR_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_QIN",
+        "TraitType": "TRAIT_LEADER_CULTURAL_MAJOR_CIV"
+      },
+      {
+        "LeaderType": "LEADER_QIN",
+        "TraitType": "TRAIT_LEADER_LOW_RELIGIOUS_PREFERENCE"
+      },
+      {
+        "LeaderType": "LEADER_SALADIN",
+        "TraitType": "TRAIT_LEADER_RELIGIOUS_MAJOR_CIV"
+      },
+      {
+        "LeaderType": "LEADER_SALADIN",
+        "TraitType": "TRAIT_LEADER_RIGHTEOUSNESS_OF_FAITH"
+      },
+      {
+        "LeaderType": "LEADER_SULEIMAN",
+        "TraitType": "TRAIT_LEADER_AGGRESSIVE_MILITARY"
+      },
+      {
+        "LeaderType": "LEADER_SULEIMAN",
+        "TraitType": "TRAIT_LEADER_SULEIMAN_GOVERNOR"
+      },
+      {
+        "LeaderType": "LEADER_SULEIMAN",
+        "TraitType": "TRAIT_LEADER_UNIT_SULEIMAN_JANISSARY"
+      },
+      {
+        "LeaderType": "LEADER_TOMYRIS",
+        "TraitType": "TRAIT_LEADER_KILLER_OF_CYRUS"
+      },
+      {
+        "LeaderType": "LEADER_TRAJAN",
+        "TraitType": "TRAIT_LEADER_EXPANSIONIST"
+      },
+      {
+        "LeaderType": "LEADER_TRAJAN",
+        "TraitType": "TRAIT_LEADER_LOW_RELIGIOUS_PREFERENCE"
+      },
+      {
+        "LeaderType": "LEADER_TRAJAN",
+        "TraitType": "TRAJANS_COLUMN_TRAIT"
+      },
+      {
+        "LeaderType": "LEADER_T_ROOSEVELT",
+        "TraitType": "TRAIT_LEADER_CULTURAL_MAJOR_CIV"
+      },
+      {
+        "LeaderType": "LEADER_T_ROOSEVELT",
+        "TraitType": "TRAIT_LEADER_LOW_CITY_STATE_PREFERENCE_WAR"
+      },
+      {
+        "LeaderType": "LEADER_T_ROOSEVELT",
+        "TraitType": "TRAIT_LEADER_LOW_RELIGIOUS_PREFERENCE"
+      },
+      {
+        "LeaderType": "LEADER_T_ROOSEVELT",
+        "TraitType": "TRAIT_LEADER_NONRELIGIOUS_MAJOR_CIV"
+      },
+      {
+        "LeaderType": "LEADER_T_ROOSEVELT",
+        "TraitType": "TRAIT_LEADER_PURSUE_DIPLOMATIC_VICTORY"
+      },
+      {
+        "LeaderType": "LEADER_T_ROOSEVELT",
+        "TraitType": "TRAIT_LEADER_ROOSEVELT_COROLLARY"
+      },
+      {
+        "LeaderType": "LEADER_T_ROOSEVELT",
+        "TraitType": "TRAIT_LEADER_UNIT_AMERICAN_ROUGH_RIDER"
+      },
+      {
+        "LeaderType": "LEADER_VICTORIA",
+        "TraitType": "TRAIT_LEADER_LOW_RELIGIOUS_PREFERENCE"
+      },
+      {
+        "LeaderType": "LEADER_VICTORIA",
+        "TraitType": "TRAIT_LEADER_PAX_BRITANNICA"
+      },
+      {
+        "LeaderType": "LEADER_VICTORIA",
+        "TraitType": "TRAIT_LEADER_UNIT_ENGLISH_REDCOAT"
+      }
+    ],
     "Policies": [
       {
         "Description": "LOC_GOVT_INHERENT_BONUS_AUTOCRACY_XP1",
@@ -23364,6 +24208,254 @@
         "Name": "LOC_WC_PROPOSAL_TYPE_KUDO_NAME",
         "ProposalType": "WC_PROPOSAL_TYPE_KUDO",
         "Sort": 1
+      }
+    ],
+    "ResolutionEffects": [
+      {
+        "ModifierId": "ADD_TOURISM_FROM_GREAT_WORK_OBJECT",
+        "ResolutionEffectId": 40,
+        "ResolutionType": "WC_RES_HERITAGE_ORG",
+        "WhichEffect": 1
+      },
+      {
+        "ModifierId": "ANYONE_CONDEMNS_FOR_FAVOR",
+        "ResolutionEffectId": 35,
+        "ResolutionType": "WC_RES_WORLD_RELIGION",
+        "WhichEffect": 2
+      },
+      {
+        "ModifierId": "APPLY_ALL_DISTRICTS_CULTURE_BOMB_TO_PLAYER",
+        "ResolutionEffectId": 80,
+        "ResolutionType": "WC_RES_BORDER_CONTROL",
+        "WhichEffect": 1
+      },
+      {
+        "ModifierId": "APPLY_DECREASED_DIPLO_VP_TO_PLAYER",
+        "ResolutionEffectId": 5,
+        "ResolutionType": "WC_RES_DIPLOVICTORY",
+        "WhichEffect": 2
+      },
+      {
+        "ModifierId": "APPLY_DISABLE_UNIQUE_SUZERAIN_BONUS_TO_MINORCIVTYPES",
+        "ResolutionEffectId": 155,
+        "ResolutionType": "WC_RES_SOVEREIGNTY",
+        "WhichEffect": 2
+      },
+      {
+        "ModifierId": "APPLY_GROWTH_BONUS_TO_PLAYER",
+        "ResolutionEffectId": 160,
+        "ResolutionType": "WC_RES_MIGRATION_TREATY",
+        "WhichEffect": 1
+      },
+      {
+        "ModifierId": "APPLY_GROWTH_PENALTY_TO_PLAYER",
+        "ResolutionEffectId": 165,
+        "ResolutionType": "WC_RES_MIGRATION_TREATY",
+        "WhichEffect": 2
+      },
+      {
+        "ModifierId": "APPLY_INCREASED_DIPLO_VP_TO_PLAYER",
+        "ResolutionEffectId": 0,
+        "ResolutionType": "WC_RES_DIPLOVICTORY",
+        "WhichEffect": 1
+      },
+      {
+        "ModifierId": "APPLY_INCREASES_TRADE_TO_GOLD_TO_PLAYER",
+        "ResolutionEffectId": 21,
+        "ResolutionType": "WC_RES_TRADE_TREATY",
+        "WhichEffect": 1
+      },
+      {
+        "ModifierId": "APPLY_INTERNATIONAL_MAJOR_TRADE_ROUTES_DISABLED",
+        "ResolutionEffectId": 25,
+        "ResolutionType": "WC_RES_TRADE_TREATY",
+        "WhichEffect": 2
+      },
+      {
+        "ModifierId": "APPLY_LOYALTY_BONUS_TO_PLAYER",
+        "ResolutionEffectId": 166,
+        "ResolutionType": "WC_RES_MIGRATION_TREATY",
+        "WhichEffect": 2
+      },
+      {
+        "ModifierId": "APPLY_LOYALTY_PENALTY_TO_PLAYER",
+        "ResolutionEffectId": 161,
+        "ResolutionType": "WC_RES_MIGRATION_TREATY",
+        "WhichEffect": 1
+      },
+      {
+        "ModifierId": "APPLY_NO_CULTURE_BORDER_EXPANSION_TO_PLAYER",
+        "ResolutionEffectId": 85,
+        "ResolutionType": "WC_RES_BORDER_CONTROL",
+        "WhichEffect": 2
+      },
+      {
+        "ModifierId": "APPLY_PLAYER_GRIEVANCES_BUFF",
+        "ResolutionEffectId": 180,
+        "ResolutionType": "WC_RES_PUBLIC_RELATIONS",
+        "WhichEffect": 1
+      },
+      {
+        "ModifierId": "APPLY_PLAYER_GRIEVANCES_DEBUFF",
+        "ResolutionEffectId": 185,
+        "ResolutionType": "WC_RES_PUBLIC_RELATIONS",
+        "WhichEffect": 2
+      },
+      {
+        "ModifierId": "APPLY_RES_UNIT_COMBAT_BUFF",
+        "ResolutionEffectId": 200,
+        "ResolutionType": "WC_RES_MILITARY_ADVISORY",
+        "WhichEffect": 1
+      },
+      {
+        "ModifierId": "APPLY_RES_UNIT_COMBAT_DEBUFF",
+        "ResolutionEffectId": 205,
+        "ResolutionType": "WC_RES_MILITARY_ADVISORY",
+        "WhichEffect": 2
+      },
+      {
+        "ModifierId": "APPLY_TARGET_FREE_TRADE_ROUTE",
+        "ResolutionEffectId": 20,
+        "ResolutionType": "WC_RES_TRADE_TREATY",
+        "WhichEffect": 1
+      },
+      {
+        "ModifierId": "BAN_DISTRICT_BUILDING",
+        "ResolutionEffectId": 105,
+        "ResolutionType": "WC_RES_URBAN_DEVELOPMENT",
+        "WhichEffect": 2
+      },
+      {
+        "ModifierId": "BAN_LUXURY_RESOURCE",
+        "ResolutionEffectId": 15,
+        "ResolutionType": "WC_RES_LUXURY",
+        "WhichEffect": 2
+      },
+      {
+        "ModifierId": "DECREASE_PROJECT_PRODUCTION",
+        "ResolutionEffectId": 95,
+        "ResolutionType": "WC_RES_PUBLIC_WORKS",
+        "WhichEffect": 2
+      },
+      {
+        "ModifierId": "GOVT_ADD_WILDCARD_SLOT",
+        "ResolutionEffectId": 70,
+        "ResolutionType": "WC_RES_WORLD_IDEOLOGY",
+        "WhichEffect": 1
+      },
+      {
+        "ModifierId": "GOVT_LOSE_WILDCARD_SLOT",
+        "ResolutionEffectId": 75,
+        "ResolutionType": "WC_RES_WORLD_IDEOLOGY",
+        "WhichEffect": 2
+      },
+      {
+        "ModifierId": "INCREASE_DISTRICT_BUILDING_PRODUCTION",
+        "ResolutionEffectId": 100,
+        "ResolutionType": "WC_RES_URBAN_DEVELOPMENT",
+        "WhichEffect": 1
+      },
+      {
+        "ModifierId": "INCREASE_GREAT_PERSON_POINTS",
+        "ResolutionEffectId": 120,
+        "ResolutionType": "WC_RES_PATRONAGE",
+        "WhichEffect": 1
+      },
+      {
+        "ModifierId": "INCREASE_PROJECT_PRODUCTION",
+        "ResolutionEffectId": 90,
+        "ResolutionType": "WC_RES_PUBLIC_WORKS",
+        "WhichEffect": 1
+      },
+      {
+        "ModifierId": "NO_CAP_LUXURY_RESOURCE",
+        "ResolutionEffectId": 10,
+        "ResolutionType": "WC_RES_LUXURY",
+        "WhichEffect": 1
+      },
+      {
+        "ModifierId": "NO_GREAT_PERSON_POINTS",
+        "ResolutionEffectId": 125,
+        "ResolutionType": "WC_RES_PATRONAGE",
+        "WhichEffect": 2
+      },
+      {
+        "ModifierId": "NO_TOURISM_FROM_GREAT_WORK_OBJECT",
+        "ResolutionEffectId": 45,
+        "ResolutionType": "WC_RES_HERITAGE_ORG",
+        "WhichEffect": 2
+      },
+      {
+        "ModifierId": "WC_RES_BUILDING_PRODUCTION_BAN",
+        "ResolutionEffectId": 140,
+        "ResolutionType": "WC_RES_GLOBAL_ENERGY_TREATY",
+        "WhichEffect": 1
+      },
+      {
+        "ModifierId": "WC_RES_BUILDING_PRODUCTION_BUFF",
+        "ResolutionEffectId": 145,
+        "ResolutionType": "WC_RES_GLOBAL_ENERGY_TREATY",
+        "WhichEffect": 2
+      },
+      {
+        "ModifierId": "WC_RES_DEFORESTATION_BAN",
+        "ResolutionEffectId": 50,
+        "ResolutionType": "WC_RES_DEFORESTATION_TREATY",
+        "WhichEffect": 1
+      },
+      {
+        "ModifierId": "WC_RES_DEFORESTATION_GOLD",
+        "ResolutionEffectId": 55,
+        "ResolutionType": "WC_RES_DEFORESTATION_TREATY",
+        "WhichEffect": 2
+      },
+      {
+        "ModifierId": "WC_RES_MEET_WMD_TARGET",
+        "ResolutionEffectId": 60,
+        "ResolutionType": "WC_RES_ARMS_CONTROL",
+        "WhichEffect": 1
+      },
+      {
+        "ModifierId": "WC_RES_MODIFY_CITY_STATE_TRADE_YIELD",
+        "ResolutionEffectId": 150,
+        "ResolutionType": "WC_RES_SOVEREIGNTY",
+        "WhichEffect": 1
+      },
+      {
+        "ModifierId": "WC_RES_OPERATION_CHANCE_BUFF",
+        "ResolutionEffectId": 190,
+        "ResolutionType": "WC_RES_ESPIONAGE_PACT",
+        "WhichEffect": 1
+      },
+      {
+        "ModifierId": "WC_RES_OPERATION_REMOVE",
+        "ResolutionEffectId": 195,
+        "ResolutionType": "WC_RES_ESPIONAGE_PACT",
+        "WhichEffect": 2
+      },
+      {
+        "ModifierId": "WC_RES_RELIGIOUS_UNITS_STRENGTH",
+        "ResolutionEffectId": 30,
+        "ResolutionType": "WC_RES_WORLD_RELIGION",
+        "WhichEffect": 1
+      },
+      {
+        "ModifierId": "WC_RES_UNIT_PRODUCTION_YIELD_BUFF",
+        "ResolutionEffectId": 175,
+        "ResolutionType": "WC_RES_MERCENARY_COMPANIES",
+        "WhichEffect": 2
+      },
+      {
+        "ModifierId": "WC_RES_UNIT_PRODUCTION_YIELD_DEBUFF",
+        "ResolutionEffectId": 170,
+        "ResolutionType": "WC_RES_MERCENARY_COMPANIES",
+        "WhichEffect": 1
+      },
+      {
+        "ModifierId": "WC_RES_WMD_BAN",
+        "ResolutionEffectId": 65,
+        "ResolutionType": "WC_RES_ARMS_CONTROL",
+        "WhichEffect": 2
       }
     ],
     "Resolutions": [
