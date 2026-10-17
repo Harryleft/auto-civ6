@@ -8,6 +8,30 @@ from __future__ import annotations
 from civ_mcp import lua as lq
 
 
+def narrate_score_comparison(saved: dict | None, current: dict) -> str:
+    """Describe paired native readings without inferring whole-world equality."""
+    if saved is None:
+        return (
+            "Score comparison: save-time score evidence unavailable (legacy checkpoint); "
+            f"current official GetScore: {current['official']}; category comparison unknown."
+        )
+    text = f"Score comparison: official GetScore: {saved['official']} -> {current['official']}; "
+    before, after = saved["categories"], current["categories"]
+    if before is None or after is None:
+        text += "positive-weight category comparison unknown (complete native evidence unavailable)."
+    elif before == after:
+        text += "positive-weight categories unchanged."
+        if saved["official"] != current["official"]:
+            text += " Native total changed while the complete category vector stayed identical."
+    else:
+        changes = [
+            f"{key}: {before.get(key, 'unreported')} -> {after.get(key, 'unreported')}"
+            for key in sorted(before.keys() | after.keys()) if before.get(key) != after.get(key)
+        ]
+        text += "positive-weight categories changed: " + "; ".join(changes) + "."
+    return text + " Score evidence alone does not establish full world-state equality."
+
+
 def narrate_overview(ov: lq.GameOverview) -> str:
     diff_str = f" | {ov.difficulty}" if ov.difficulty else ""
     speed_str = ""
@@ -44,6 +68,19 @@ def narrate_overview(ov: lq.GameOverview) -> str:
             ),
         ]
     )
+    if ov.score_categories is None:
+        lines.append("Score categories (GetCategoryScore): unknown; complete native evidence unavailable.")
+    else:
+        lines.append("Score categories (GetCategoryScore, positive-weight): " + "; ".join(
+            f"{category.name} [{category.category_type}]: {category.score}"
+            for category in ov.score_categories
+        ))
+        consistency = (
+            "matches official GetScore"
+            if ov.score_category_total == ov.score
+            else f"differs from official GetScore: {ov.score}; native aggregate and category readings are inconsistent"
+        )
+        lines.append(f"Diagnostic category sum: {ov.score_category_total} ({consistency}).")
     if ov.total_land > 0:
         pct = ov.explored_land * 100 // ov.total_land
         lines.append(

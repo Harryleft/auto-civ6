@@ -1113,6 +1113,38 @@ class TestEndTurn:
 
 
 class TestSaveTools:
+    def test_load_reports_native_aggregate_refresh_with_unchanged_categories(self):
+        from civ_mcp import checkpoints
+        ctx, gs = self.prepare_real_menu_load()
+        saved_score = {"official": 72, "categories": {
+            "CATEGORY_CIVICS": 21, "CATEGORY_EMPIRE": 18,
+            "CATEGORY_TECH": 16, "CATEGORY_ERA_SCORE": 21,
+        }}
+        checkpoints.mark_complete("MySave")
+        assert checkpoints.record_checkpoint("MySave", ("rome", 4242), 12, saved_score) is None
+        write = gs.conn.execute_write
+
+        async def native_score(query, timeout=None):
+            if "local tr = p:GetTreasury()" in query:
+                return [
+                    "12|0|Rome|Trajan|100|5|3|2|10|Pottery|Code of Laws|1|1|76",
+                    "SCORECATEGORY|CATEGORY_CIVICS|Civics|1|21",
+                    "SCORECATEGORY|CATEGORY_EMPIRE|Empire|1|18",
+                    "SCORECATEGORY|CATEGORY_TECH|Technology|1|16",
+                    "SCORECATEGORY|CATEGORY_ERA_SCORE|Era Score|1|21",
+                    "SCORECATEGORIES|4|12|0",
+                ]
+            return await write(query, timeout)
+
+        gs.conn.execute_write = native_score
+        result = run(server.load_game_save(ctx, "MySave"))
+        assert result.startswith("Loaded MySave:")
+        assert "official GetScore: 72 -> 76" in result
+        assert "positive-weight categories unchanged" in result
+        assert "full world-state equality" in result
+        assert gs._pending_load is False
+        assert len(gs.conn.load_calls) == 1
+
     def prepare_real_menu_load(self, failed_query=None):
         """Run real GameState over the existing isolated transport seam."""
         from civ_mcp.game_state import GameState
@@ -1330,7 +1362,10 @@ class TestSaveTools:
     @pytest.mark.parametrize("tool", ["load_game_save", "load_save_from_menu"])
     def test_named_loader_confirms_on_the_same_connection(self, tool):
         ctx, gs = self.prepare_menu_load()
-        assert run(getattr(server, tool)(ctx, "MySave")) == "Loaded MySave: rome, seed 4242, turn 12."
+        result = run(getattr(server, tool)(ctx, "MySave"))
+        assert result.startswith("Loaded MySave: rome, seed 4242, turn 12.\n")
+        assert "save-time score evidence unavailable (legacy checkpoint)" in result
+        assert "category comparison unknown" in result
         assert len(gs.conn.load_calls) == 1
         assert gs.conn.load_calls[0][0] == 24
         assert gs.reset_calls == 1

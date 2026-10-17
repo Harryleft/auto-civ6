@@ -1743,7 +1743,7 @@ class TestSaveCheckpoint:
                 raise value
             return value
         async def overview():
-            return SimpleNamespace(turn=next(snapshots))
+            return SimpleNamespace(turn=next(snapshots), score=0, score_categories=None)
         async def save(connection, name):
             assert connection is conn
             saves.append(name)
