@@ -22,6 +22,10 @@ class FakeConn:
         self.blocking = ["NONE"]
         self.handler = ["HANDLER_SET"]
         self.game_over_status = ["GAME_ACTIVE"]
+        self.ready = True
+        self.readiness = None
+        self.diplomacy_probe = ["DIPLOMACY_NONE"]
+        self.ui_processing = False
 
     async def execute_read(self, lua):
         self.calls.append(lua)
@@ -29,10 +33,18 @@ class FakeConn:
             raise self.read_error
         if "Game.GetWinningTeam" in lua:
             return self.game_over_status(self) if callable(self.game_over_status) else self.game_over_status
+        if "TURN_STATE|" in lua:
+            ready = self.readiness(self) if self.readiness else self.ready
+            return [f"TURN_STATE|{self.turn}|{int(ready)}"]
         return [str(self.turn)]
 
     async def execute_write(self, lua):
         self.calls.append(lua)
+        if "TURN_UI_READY|" in lua:
+            processing = self.ui_processing(self) if callable(self.ui_processing) else self.ui_processing
+            return [f"TURN_UI_READY|{self.turn}|{int(not processing)}"]
+        if "DIPLOMACY_PROBE" in lua:
+            return self.diplomacy_probe(self) if callable(self.diplomacy_probe) else self.diplomacy_probe
         if "ACTION_ENDTURN" in lua:
             if self.advance:
                 self.turn += 1
@@ -66,6 +78,14 @@ class FakeGameState:
         self.game_over = None
         self.snapshot_error = False
         self.diff_baselines = []
+        self.pending_action_summary = None
+        self.action_confirmed = False
+
+    async def confirm_pending_action(self):
+        if self.action_confirmed:
+            self.pending_action_summary = None
+            return "CONFIRMED|move"
+        return "ERR:OUTCOME_UNKNOWN|move unit 123"
 
     async def get_diplomacy_sessions(self):
         self.sessions_calls += 1
@@ -209,7 +229,7 @@ def test_timeout_budget_is_three_minutes_and_pending_is_never_resent(clock):
     assert gs._pending_end_turn
     assert gs._pending_end_turn_from == 50
     assert len(gs.conn.requests) == 1
-    assert gs.sessions_calls == 2  # Preflight plus one mid-turn probe.
+    assert gs.sessions_calls == 1  # Full UI dialogue only during preflight.
     second = play(gs)
     assert "HANG:" in second
     assert clock.now == 360
@@ -241,14 +261,14 @@ def test_mid_turn_diplomacy_never_replays_or_makes_war_choice(clock):
     gs = FakeGameState()
     gs._pending_end_turn = True
     gs._pending_end_turn_from = 50
-    gs.sessions = [session(is_at_war=True, dialogue_text="War declared")]
+    gs.conn.diplomacy_probe = ["DIPLOMACY|2"]
     result = play(gs)
     assert "Turn paused" in result
-    assert "War declared" in result
-    assert clock.now == 46
+    assert "player_id=2" in result
+    assert clock.now == 10
     assert gs._pending_end_turn
     assert not gs.conn.requests
-    assert all("GetCurrentGameTurn" in c for c in gs.conn.calls)
+    assert not any("ContextPtr" in c or "AddResponse" in c or "CloseSession" in c for c in gs.conn.calls)
 
 
 def test_turn_regression_does_not_clear_pending(clock):
@@ -332,3 +352,59 @@ def test_unknown_gamecore_terminal_status_does_not_invent_game_over(clock):
     assert "cannot be reliably confirmed" in result
     assert gs._pending_end_turn
     assert not gs.conn.requests
+
+
+def test_turn_counter_advances_before_local_player_is_ready(clock):
+    gs = FakeGameState()
+    gs.conn.readiness = lambda conn: not conn.requests or clock.now >= 6
+    result = play(gs)
+    assert "Turn 50 -> 51" in result
+    assert clock.now >= 6
+    assert len(gs.conn.requests) == 1
+
+
+def test_inactive_local_turn_does_not_submit_new_request(clock):
+    gs = FakeGameState()
+    gs.conn.ready = False
+    assert "not ready" in play(gs)
+    assert not gs.conn.requests
+
+
+def test_unconfirmed_action_prevents_turn_submission(clock):
+    gs = FakeGameState()
+    gs.pending_action_summary = "move unit 123"
+    result = play(gs)
+    assert "OUTCOME_UNKNOWN" in result
+    assert "unit 123" in result
+    assert not gs.conn.requests
+
+
+def test_confirmed_pending_action_allows_turn_submission(clock):
+    gs = FakeGameState()
+    gs.pending_action_summary = "move unit 123"
+    gs.action_confirmed = True
+    assert "Turn 50 -> 51" in play(gs)
+    assert gs.pending_action_summary is None
+    assert len(gs.conn.requests) == 1
+
+
+def test_diplomacy_appearing_after_first_probe_is_found_without_replay(clock):
+    gs = FakeGameState()
+    gs.conn.advance = False
+    gs.conn.diplomacy_probe = lambda conn: (
+        ["DIPLOMACY|2"] if clock.now >= 20 else ["DIPLOMACY_NONE"]
+    )
+    result = play(gs)
+    assert "Turn paused" in result
+    assert "player_id=2" in result
+    assert clock.now < 45
+    assert gs._pending_end_turn
+    assert len(gs.conn.requests) == 1
+
+
+def test_message_processing_must_finish_after_turn_activation(clock):
+    gs = FakeGameState()
+    gs.conn.ui_processing = lambda conn: bool(conn.requests) and clock.now < 4
+    assert "Turn 50 -> 51" in play(gs)
+    assert clock.now >= 4
+    assert len(gs.conn.requests) == 1
