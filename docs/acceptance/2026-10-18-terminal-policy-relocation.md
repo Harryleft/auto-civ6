@@ -12,4 +12,4 @@
 
 证据：`~/.civ6-mcp/acceptance/20261018-turn-terminal/` 内 `policy-fix/`、`policy-live-validation.json`、两份 turn106 存档清单、`result-saves/` 与两轴审查报告。原始基准、第 100 回合结果及旧验收均保留，实施工作树已清理。
 
-[规格](../specs/2026-10-18-terminal-policy-relocation.md)与[工作项](../specs/2026-10-18-terminal-policy-relocation-tickets.md)。本记录仅关闭政策阻塞的修复验证；从第 100 回合推进到原生终局的续测尚在进行。
+[规格](../specs/2026-10-18-terminal-policy-relocation.md)与[工作项](../specs/2026-10-18-terminal-policy-relocation-tickets.md)。本记录仅关闭政策阻塞的修复验证；整体已到第 244 回合原生终局，见[全程验收](2026-10-18-turn-terminal.md)。
