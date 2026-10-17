@@ -20,3 +20,5 @@
 投票前保存 `benchmark_turn_167_before_congress_proposals_20261018`（1,141,752 字节），完成后保存 `benchmark_turn_168_congress_proposals_verified_20261018`（1,142,475 字节）；两档均核对 sumeria／seed 719665280 及对应回合，保留副本与 SHA-256。本修复实测完成，整体终局续测仍在进行。
 
 证据位于 `~/.civ6-mcp/acceptance/20261018-turn-terminal/`：`congress167-live-validation.json` 保留现场查询、票单、回应和原推进确认；`congress167-display-validation.json` 提取原／坏／新中文纯读结果及 7 次重放；`congress167-recovery.json`、`save-167.json`、`save-168.json`、`preservation-through167.json` 保留恢复、文件与保护证据。`congress-proposals-fix/` 保留红绿测试、两次全量日志及 tested-tree；`congress-proposals-review-standards.md`、`congress-proposals-review-spec.md` 保留双轴审查。
+
+第 192 回合继续读取“世界运动会”：名称、说明与限制中文完整；三项决议与竞赛的混合计划显式请求 2／2／6／1 票，统一分配 102／102 支持度，原请求确认 192 → 193，通知积分竞赛已开始。会后查询已读到下一次会议 24 回合，未再次投票；该现场不冒充 FINISHED／零倒计时窗口的额外覆盖。见 `congress192-live-validation.json`。
