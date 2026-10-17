@@ -234,8 +234,11 @@ end
 if unit:GetMovesRemaining() <= 0 then
     {_bail("ERR:NO_MOVES|Unit has no movement points remaining this turn. Use skip or wait until next turn.")}
 end
-if not UnitManager.CanStartOperation(unit, UnitOperationTypes.MOVE_TO, nil, true) then
-    {_bail("ERR:CANNOT_MOVE|Unit cannot move (invalid state)")}
+local moveOK, canMove = pcall(function()
+    return UnitManager.CanStartOperation(unit, UnitOperationTypes.MOVE_TO, nil, true)
+end)
+if not moveOK or canMove ~= true then
+    {_bail("ERR:CANNOT_MOVE|Native movement eligibility unavailable or refused; no move submitted.")}
 end
 -- Pre-check: stacking conflict at target tile
 local unitInfo = GameInfo.Units[unit:GetType()]
@@ -257,15 +260,33 @@ local fromX, fromY = unit:GetX(), unit:GetY()
 local params = {{}}
 params[UnitOperationTypes.PARAM_X] = {target_x}
 params[UnitOperationTypes.PARAM_Y] = {target_y}
--- Add ATTACK modifier if hostile unit on target tile (needed for civilian capture)
+-- Foreign units may be allies or neutral. Only an existing native war
+-- authorizes the ATTACK modifier needed for hostile civilian capture.
 local hasHostile = false
 if tgtUnits then
     for other in tgtUnits:Units() do
-        if other:GetOwner() ~= me then hasHostile = true end
+        local owner = other:GetOwner()
+        if owner ~= me then
+            local relationOK, atWar = pcall(function()
+                return Players[me]:GetDiplomacy():IsAtWarWith(owner)
+            end)
+            if not relationOK or type(atWar) ~= "boolean" then
+                {_bail("ERR:MOVE_RELATION_UNKNOWN|Native target war relationship unavailable; no move submitted.")}
+            end
+            if atWar then hasHostile = true end
+        end
     end
 end
 if hasHostile then
     params[UnitOperationTypes.PARAM_MODIFIERS] = UnitOperationMoveModifiers.ATTACK
+end
+-- General movement eligibility does not validate this destination. Use the
+-- final parameters before arming a witness or submitting any operation.
+local targetOK, canTarget = pcall(function()
+    return UnitManager.CanStartOperation(unit, UnitOperationTypes.MOVE_TO, nil, params)
+end)
+if not targetOK or canTarget ~= true then
+    {_bail("ERR:CANNOT_MOVE_TARGET|Native target movement eligibility unavailable or refused; no move submitted.")}
 end
 {witness}
 UnitManager.RequestOperation(unit, UnitOperationTypes.MOVE_TO, params)
@@ -324,13 +345,9 @@ pcall(function()
                     local cfg = PlayerConfigurations[owner]
                     civName = cfg and Locale.Lookup(cfg:GetCivilizationShortDescription()) or civName
                 end)
-                local isMajor = true
-                pcall(function() isMajor = Players[owner]:IsMajor() end)
-                if isMajor then
-                    print("DIAG|BORDER|foreign territory (" .. civName .. ") - need Open Borders via propose_trade")
-                else
-                    print("DIAG|BORDER_CS|city-state territory (" .. civName .. ") - need suzerainty or Open Borders")
-                end
+                -- Ownership alone says nothing about received Open Borders,
+                -- alliance access, city entry, or an intermediate path tile.
+                print("DIAG|FOREIGN_TERRITORY|foreign territory (" .. civName .. ") - entry or path restriction unconfirmed")
             end
         else
             print("DIAG|UNKNOWN|tile appears passable - path may be blocked by intermediate tiles")
