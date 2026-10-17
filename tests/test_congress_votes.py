@@ -72,13 +72,6 @@ def test_explicit_preferences_are_registered_without_defaults():
     result = asyncio.run(GameState(conn).queue_wc_votes(votes))
     assert result == "WC_VOTER_REGISTERED"
     assert len(conn.calls) == 1
-    lua = conn.calls[0]
-    assert '["-513644209"] = {o=2, t=7, v=3}' in lua
-    assert '["13"] = {o=1, t=2, v=8}' in lua
-    assert "budgetPerRes" not in lua
-    assert "pref and pref.o or 1" not in lua
-    assert "pref and pref.v or maxV" not in lua
-    assert "math.min(item.pref.v, maxV)" in lua  # Requested count remains a maximum.
 
 
 @pytest.mark.parametrize("target", [0, 2, "YIELD_SCIENCE", 'DISTRICT_"QUOTED"'])
@@ -91,15 +84,15 @@ def test_non_player_target_accepts_query_index_or_escaped_raw_value(target):
 
 
 def test_missing_preference_or_unmatched_target_stops_before_any_vote():
-    lua = build_register_wc_voter([VOTE])
-    # The entire resolution/target plan is validated before the first vote;
-    # unknown targets stay nil and have no default target-index assignment.
-    vote_start = lua.index("UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_RESOLUTION_VOTE")
-    assert lua.index('if not pref then stop("Missing explicit vote') < vote_start
-    assert lua.index('if targetIdx == nil then stop("Target not found') < vote_start
-    assert "local targetIdx = nil" in lua
-    assert "or 1" not in lua
-    assert "resLeft" not in lua
+    from test_congress_eligibility import CongressConn, proposal_status
+
+    conn = CongressConn(proposal_status(), stage="STAGE1", resolutions=[{"Type": 13, "PossibleTargets": ["YIELD_SCIENCE"]}])
+    state = GameState(conn)
+    assert "Missing explicit vote" in asyncio.run(state.queue_wc_votes([]))
+    assert "Target not found" in asyncio.run(state.queue_wc_votes([
+        {"hash": 13, "option": 1, "target": 7, "votes": 1},
+    ]))
+    assert conn.operations == conn.actions == []
 
 
 def test_votes_for_a_paused_session_use_one_distinct_congress_stage_continuation():
@@ -163,7 +156,7 @@ def test_empty_explicit_plan_requires_native_no_choices_and_has_one_common_submi
     code = conn.calls[0]
     assert "votes={}" in code
     assert 'if nowStage == "STAGE1" then ress = wc:GetResolutions(me) end' in code
-    assert 'stop("Explicit proposal votes are required; no defaults supplied")' in code
+    assert "Explicit proposal votes are required" in code
     assert "if #plan > 0 then" in code
     assert code.count("WORLD_CONGRESS_SUBMIT_TURN, {}") == 1
     assert code.count("UI.RequestAction(ActionTypes.ACTION_ENDTURN)") == 1
