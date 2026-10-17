@@ -21,6 +21,7 @@ class FakeConn:
         self.read_error = None
         self.blocking = ["NONE"]
         self.handler = ["HANDLER_SET"]
+        self.congress_phase = ["WC_PHASE|false|NONE|50|NONE"]
         self.game_over_status = ["GAME_ACTIVE"]
         self.ready = True
         self.readiness = None
@@ -48,6 +49,8 @@ class FakeConn:
             return self.information_popups
         if "DIPLOMACY_PROBE" in lua:
             return self.diplomacy_probe(self) if callable(self.diplomacy_probe) else self.diplomacy_probe
+        if "WC_PHASE|" in lua:
+            return self.congress_phase(self) if callable(self.congress_phase) else self.congress_phase
         if "ACTION_ENDTURN" in lua:
             if self.advance:
                 self.turn += 1
@@ -190,6 +193,7 @@ def test_world_congress_requires_registered_player_votes(clock):
     gs = FakeGameState()
     gs.wc.is_in_session = True
     gs.conn.handler = ["NO_HANDLER"]
+    gs.conn.congress_phase = ["WC_PHASE|true|STAGE1|50|NONE"]
     assert "queue_wc_votes" in play(gs)
     assert not gs.conn.requests
 
@@ -538,3 +542,57 @@ def test_visible_disaster_is_reported_when_ui_turn_temporarily_lags(clock):
     assert "NaturalDisasterPopup" in play(gs)
     assert clock.now <= 15 and gs._pending_end_turn
     assert not gs.conn.requests
+
+
+def test_pending_turn_reports_midturn_world_congress_without_resending(clock):
+    gs = FakeGameState()
+    gs.conn.turn = 67
+    gs.conn.ready = False
+    gs._pending_end_turn = True
+    gs._pending_end_turn_from = 67
+    gs.wc.is_in_session = True
+    gs.conn.congress_phase = ["WC_PHASE|true|STAGE1|67|NONE"]
+    result = play(gs)
+    assert "World Congress" in result and "queue_wc_votes" in result
+    assert not gs.conn.requests
+    assert clock.now < 10
+
+
+@pytest.mark.parametrize("phase", ["WC_PHASE|true|UNKNOWN|67|NONE", "WC_PHASE|true|STAGE1|67|SUBMIT_REQUESTED", "WC_PHASE|true|STAGE1|67|FAILED"])
+def test_uncertain_congress_phase_is_reported_without_replaying_or_guessing(phase, clock):
+    gs = FakeGameState()
+    gs.conn.ready = False
+    gs.conn.turn = 67
+    gs._pending_end_turn = True
+    gs._pending_end_turn_from = 67
+    gs.conn.congress_phase = [phase]
+    assert "World Congress phase/result unknown" in play(gs)
+    assert clock.now < 10 and not gs.conn.requests
+
+
+def test_requested_congress_continuation_only_observes_original_turn_until_ready(clock):
+    gs = FakeGameState()
+    gs.conn.turn = 67
+    gs.conn.ready = False
+    gs._pending_end_turn = True
+    gs._pending_end_turn_from = 67
+
+    def phase(conn):
+        conn.turn, conn.ready = 68, True
+        return ["WC_PHASE|true|STAGE1|67|CONTINUE_REQUESTED"]
+
+    gs.conn.congress_phase = phase
+    assert "Turn 67 -> 68" in play(gs)
+    assert not gs.conn.requests
+    assert not gs._pending_end_turn
+
+
+def test_malformed_congress_read_reports_unknown_instead_of_claiming_no_session(clock):
+    gs = FakeGameState()
+    gs.conn.ready = False
+    gs._pending_end_turn = True
+    gs._pending_end_turn_from = 50
+    gs.conn.congress_phase = ["WC_PHASE|truncated"]
+    result = play(gs)
+    assert "World Congress phase unavailable" in result
+    assert clock.now < 10 and not gs.conn.requests
