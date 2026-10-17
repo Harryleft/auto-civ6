@@ -58,7 +58,39 @@ def test_siege_evidence_uses_gathering_storm_wall_exceptions(knowledge):
     text = tower['localization']['LOC_UNIT_SIEGE_TOWER_EXPANSION2_DESCRIPTION']['en_US']
     assert 'melee and anti-cavalry' in text
     assert 'Renaissance' in text and 'Urban Defenses' in text
+    path = tower['localization_sources']['LOC_UNIT_SIEGE_TOWER_EXPANSION2_DESCRIPTION']['en_US']
+    assert path == 'game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Units_Text.xml'
+    assert any(source['path'] == path and len(source['sha256']) == 64 for source in tower['sources'])
     ram = query(knowledge, 'show', 'UNIT_BATTERING_RAM', '--level', 'evidence')
     text = ram['localization']['LOC_UNIT_BATTERING_RAM_EXPANSION2_DESCRIPTION']['en_US']
-    assert 'Ancient Walls' in text
+    assert 'melee and anti-cavalry' in text
     assert 'Medieval' in text and 'Renaissance' in text
+
+
+def test_control_zone_keeps_river_exception_with_traceable_source(knowledge):
+    ident = 'MECHANIC_COMBAT_CONTROL_ZONE'
+    card = query(knowledge, 'show', ident, '--level', 'rule')
+    assert card['rule']['facts']['origin'] == 'curated_interpretation'
+    evidence = query(knowledge, 'show', ident, '--level', 'evidence')
+    paragraphs = [row['facts'] for row in evidence['evidence'] if row['source_ref']['table'] == 'CivilopediaTexts']
+    assert any(row['Text'] == 'Rivers block Zone of Control from all units.' for row in paragraphs)
+    assert any('Naval Raider' in row['Text'] and 'Religious units' in row['Text'] for row in paragraphs)
+    tag = 'LOC_PEDIA_CONCEPTS_PAGE_MOVEMENT_3_CHAPTER_CONTENT_PARA_2'
+    assert evidence['localization_sources'][tag]['en_US'] == 'user/Cache/DebugLocalization.sqlite'
+    summary = query(knowledge, 'show', ident)
+    assert not {'rule', 'source_refs', 'evidence', 'curation_ref'} & summary.keys()
+
+
+def test_upgrade_and_formation_keep_target_resources_and_different_eligibility(knowledge):
+    upgrade = query(knowledge, 'show', 'MECHANIC_COMBAT_UPGRADE', '--level', 'evidence')
+    rows = [row['facts'] for row in upgrade['evidence']]
+    assert {'Unit': 'UNIT_WARRIOR', 'UpgradeUnit': 'UNIT_SWORDSMAN'} in rows
+    assert any(row.get('UnitType') == 'UNIT_SWORDSMAN' and row.get('ResourceCost') == 20 for row in rows)
+    assert any(row.get('UnitType') == 'UNIT_SWORDSMAN' and row.get('StrategicResource') == 'RESOURCE_IRON' for row in rows)
+    formation = query(knowledge, 'show', 'MECHANIC_COMBAT_FORMATIONS', '--level', 'evidence')
+    rows = [row['facts'] for row in formation['evidence']]
+    assert any(row.get('UnitType') == 'UNIT_SWORDSMAN' and row.get('CanFormMilitaryFormation') == 1 for row in rows)
+    assert any(row.get('UnitType') == 'UNIT_SIEGE_TOWER' and row.get('CanFormMilitaryFormation') == 0 for row in rows)
+    assert {'Name': 'COMBAT_CORPS_STRENGTH_MODIFIER', 'Value': '10'} in rows
+    assert {'Name': 'COMBAT_ARMY_STRENGTH_MODIFIER', 'Value': '17'} in rows
+    assert any('may not be broken apart' in row.get('Text', '') for row in rows)
