@@ -1608,8 +1608,11 @@ def narrate_world_congress(status: lq.WorldCongressStatus) -> str:
                 lines.append("Local operations requested, not a receipt of acceptance or meeting completion. Do not repeat votes.")
             elif status.native_stage in ("STAGE1", "STAGE2") and status.local_request == "NONE":
                 lines.append("No local tool request recorded; this is not proof votes are absent. Use queue_wc_votes only for new explicit choices; [] requires a verified no-choice stage.")
-            if status.proposal_status != "EMPTY":
-                lines.append(f"Native proposal choices: {status.proposal_status}; no default proposal votes are supplied.")
+            eligibility = {
+                "EMPTY": "EMPTY (no eligible proposals)",
+                "CHOICES": "CHOICES (eligible proposals require explicit votes)",
+            }.get(status.proposal_status, "UNKNOWN (eligibility not verified)")
+            lines.append(f"Native proposal eligibility: {eligibility}; no default proposal votes are supplied.")
         else:
             lines.append(
                 "World Congress: FIRES THIS TURN — use queue_wc_votes() before end_turn()!"

@@ -7,7 +7,7 @@ from civ_mcp.lua.models import CongressProposal, CongressResolution, WorldCongre
 
 
 def _proposal_eligibility_lua() -> str:
-    """Share native proposal widget eligibility between opening and voting."""
+    """Interpret native proposal eligibility for reads, opening and explicit votes."""
     return """
 local function hasEligibleProposals(proposals)
     if type(proposals) ~= "table" or (proposals.Proposals ~= nil and type(proposals.Proposals) ~= "table") then
@@ -36,19 +36,31 @@ end
 """
 
 
+def _native_stage_lua() -> str:
+    """Share segment interpretation; each operation retains its session policy."""
+    return """
+local function congressStage(segment, inSession)
+    if segment == DB.MakeHash("TURNSEG_WORLDCONGRESS_1") then return "STAGE1" end
+    if segment == DB.MakeHash("TURNSEG_WORLDCONGRESS_2") then return "STAGE2" end
+    if segment == DB.MakeHash("TURNSEG_WORLDCONGRESS_RESOLUTION") then return "RESOLUTION" end
+    return inSession and "UNKNOWN" or "NONE"
+end
+"""
+
+
 def build_congress_phase_query(*, sentinel: bool = True) -> str:
     """Read native segment and this context's request record; never vote/resume."""
+    return _native_stage_lua() + _congress_phase_rows_lua(sentinel=sentinel)
+
+
+def _congress_phase_rows_lua(*, sentinel: bool) -> str:
     ending = f'print("{SENTINEL}")' if sentinel else ""
     return f"""
 local phaseMe = Game.GetLocalPlayer()
 local phaseWC = Game.GetWorldCongress()
 local phaseSession = phaseWC and phaseWC:IsInSession() or false
 local phaseSegment = Game.GetCurrentTurnSegment()
-local phaseStage = "NONE"
-if phaseSegment == DB.MakeHash("TURNSEG_WORLDCONGRESS_1") then phaseStage = "STAGE1"
-elseif phaseSegment == DB.MakeHash("TURNSEG_WORLDCONGRESS_2") then phaseStage = "STAGE2"
-elseif phaseSegment == DB.MakeHash("TURNSEG_WORLDCONGRESS_RESOLUTION") then phaseStage = "RESOLUTION"
-elseif phaseSession then phaseStage = "UNKNOWN" end
+local phaseStage = congressStage(phaseSegment, phaseSession)
 local phaseReceipt = "NONE"
 local phaseQ = __civmcp_wc_request
 if phaseQ then
@@ -91,11 +103,10 @@ local civ = cfg:GetCivilizationTypeName()
 local seed = GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")
 local turn = Game.GetCurrentGameTurn()
 local segment = Game.GetCurrentTurnSegment()
-local stage = nil
-if segment == DB.MakeHash("TURNSEG_WORLDCONGRESS_1") then stage = "STAGE1"
-elseif segment == DB.MakeHash("TURNSEG_WORLDCONGRESS_2") then stage = "STAGE2" end
 local wc = Game.GetWorldCongress()
-if not wc or wc:IsInSession() ~= true or not stage then
+{_native_stage_lua()}
+local stage = congressStage(segment, wc and wc:IsInSession())
+if not wc or wc:IsInSession() ~= true or (stage ~= "STAGE1" and stage ~= "STAGE2") then
     {_bail("ERR:WC_OPEN_UNAVAILABLE|No verified native voting stage; no start event sent.")}
 end
 local submitted = __civmcp_wc_request
@@ -184,6 +195,7 @@ def build_world_congress_query() -> str:
     return f"""
 local me = Game.GetLocalPlayer()
 local pDiplo = Players[me]:GetDiplomacy()
+{_native_stage_lua()}
 local wc = Game.GetWorldCongress()
 if not wc then {_bail("ERR:NO_WORLD_CONGRESS|World Congress not available yet")} end
 local inSession = wc:IsInSession()
@@ -199,7 +211,7 @@ for i = 0, maxVotes do
 end
 print("WC_STATUS|" .. tostring(inSession) .. "|" .. turnsLeft .. "|" .. favor .. "|" .. maxVotes .. "|" .. costStr)
 local ress = wc:GetResolutions(me)
-if ress and (not inSession or Game.GetCurrentTurnSegment() == DB.MakeHash("TURNSEG_WORLDCONGRESS_1")) then
+if ress and (not inSession or congressStage(Game.GetCurrentTurnSegment(), inSession) == "STAGE1") then
     for _, res in ipairs(ress) do
         local rType = res.Type
         local gRes = nil
@@ -262,24 +274,16 @@ if ress and (not inSession or Game.GetCurrentTurnSegment() == DB.MakeHash("TURNS
         print("WC_RES|" .. rType .. "|" .. typeName .. "|" .. name .. "|" .. targetKind .. "|" .. effectA .. "|" .. effectB .. "|" .. isPassed .. "|" .. winner .. "|" .. chosen .. "|" .. targets)
     end
 end
+{_proposal_eligibility_lua()}
 if inSession then
     local proposalStatus = "UNKNOWN"
     pcall(function()
-        local container = wc:GetProposals(me)
-        if type(container) ~= "table" then return end
-        local categories = container.Proposals
-        if categories ~= nil and type(categories) ~= "table" then return end
-        proposalStatus = "EMPTY"
-        for _, category in pairs(categories or {{}}) do
-            if type(category) ~= "table" or type(category.ProposalsOfType) ~= "table" then
-                proposalStatus = "UNKNOWN"; return
-            end
-            if next(category.ProposalsOfType) ~= nil then proposalStatus = "CHOICES" end
-        end
+        local eligible = hasEligibleProposals(wc:GetProposals(me))
+        if eligible ~= nil then proposalStatus = eligible and "CHOICES" or "EMPTY" end
     end)
     print("WC_PROPOSAL_STATUS|" .. proposalStatus)
 end
-{build_congress_phase_query(sentinel=False)}
+{_congress_phase_rows_lua(sentinel=False)}
 print("{SENTINEL}")
 """
 
@@ -417,15 +421,9 @@ local cfg = PlayerConfigurations[me]
 local civ = cfg:GetCivilizationTypeName()
 local seed = GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")
 local turn = Game.GetCurrentGameTurn()
-local function stageNow()
-    local s = Game.GetCurrentTurnSegment()
-    if s == DB.MakeHash("TURNSEG_WORLDCONGRESS_1") then return "STAGE1" end
-    if s == DB.MakeHash("TURNSEG_WORLDCONGRESS_2") then return "STAGE2" end
-    if s == DB.MakeHash("TURNSEG_WORLDCONGRESS_RESOLUTION") then return "RESOLUTION" end
-    return "NONE"
-end
+{_native_stage_lua()}
 local current = Game.GetWorldCongress()
-local stage = stageNow()
+local stage = congressStage(Game.GetCurrentTurnSegment(), current and current:IsInSession())
 local prior = __civmcp_wc_request
 if not prior and __civmcp_wc_handler then
     {_bail("ERR:OUTCOME_UNKNOWN|Untracked prior congress handler; no votes submitted.")}
@@ -471,7 +469,7 @@ local function handler(eventPlayer)
     if Game.GetLocalPlayer() ~= q.owner or nowCfg:GetCivilizationTypeName() ~= q.civ
         or GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED") ~= q.seed
         or Game.GetCurrentGameTurn() ~= q.turn then stop("Request identity/turn changed"); return end
-    local nowStage = stageNow()
+    local nowStage = congressStage(Game.GetCurrentTurnSegment(), wc:IsInSession())
     if nowStage ~= "STAGE1" and nowStage ~= "STAGE2" then stop("Voting stage unavailable"); return end
     if q.stage ~= "NONE" and q.stage ~= nowStage then stop("Request stage changed"); return end
     q.stage = nowStage

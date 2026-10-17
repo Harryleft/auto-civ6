@@ -1099,7 +1099,7 @@ class WorldCongressStatus:
     proposals: list[CongressProposal]
     native_stage: str = "UNKNOWN"
     local_request: str = "UNKNOWN"
-    proposal_status: str = "UNKNOWN"
+    proposal_status: str = "UNKNOWN"  # Eligible proposals: CHOICES, EMPTY, or UNKNOWN.
 
 
 # --- Scattered dataclasses (originally defined mid-file near their builders) ---
