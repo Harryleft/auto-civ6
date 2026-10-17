@@ -176,6 +176,14 @@ class GameState:
                     return pending.success + suffix
                 if moves is not None and moves <= 0 and busy == "false":
                     return pending.success + suffix + "|STOPPED_MID_PATH (moves exhausted)"
+                # Civ6 may leave unusable movement points: e.g. one point
+                # remains but the next forest step costs two. Native path turns
+                # (used by WorldInput.lua) provide the boundary, not a timing guess.
+                next_step = next((line for line in pending.observed if line.startswith("PATH_STEP|")), "")
+                step = re.search(r"\|turn:(\d+)$", next_step)
+                if (origin is not None and (x, y) != origin and busy == "false"
+                        and step is not None and int(step[1]) > 1):
+                    return pending.success + suffix + "|STOPPED_MID_PATH (next path step requires a later turn)"
                 impassable = any(line.startswith(("DIAG|MOUNTAIN|", "DIAG|IMPASSABLE|")) for line in pending.observed)
                 if (x, y) == origin and busy == "false" and impassable:
                     return pending.success + suffix + f"|BLOCKED ({lq.parse_blocked_diagnostic(pending.observed)})"
