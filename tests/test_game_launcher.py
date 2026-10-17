@@ -100,6 +100,15 @@ class TestProcessManagement:
         gl._kill_game_sync()
         assert calls == [["taskkill", "/F", "/IM", "CivilizationVI.exe"]]
 
+    def test_macos_shutdown_allows_steam_to_release_exited_process(self, monkeypatch):
+        states = iter([True, False])
+        monkeypatch.setattr(gl, "is_game_running", lambda: next(states))
+        monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: _cp())
+        sleeps = []
+        monkeypatch.setattr(time, "sleep", sleeps.append)
+        assert gl._kill_game_sync() == "Killed Civ 6."
+        assert sleeps == [2, 15]
+
     def test_windows_failed_kill_is_reported(self, monkeypatch):
         monkeypatch.setattr(sys, "platform", "win32")
         monkeypatch.setattr(gl, "is_game_running", lambda: True)

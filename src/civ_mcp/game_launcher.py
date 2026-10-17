@@ -167,6 +167,13 @@ def _kill_game_sync() -> str:
         time.sleep(3)
         if is_game_running():
             return "WARNING: Game process is still running."
+    if sys.platform == "darwin":
+        # Steam still tracked the exited PID for ~12 seconds in the live
+        # recovery check and rejected an immediate launch with AppError_16.
+        # Allow that bookkeeping to settle before the one explicit relaunch;
+        # if this grace period proves insufficient, replace it with a Steam
+        # readiness check rather than replaying a possibly accepted launch.
+        time.sleep(15)
     return "Killed Civ 6."
 
 
