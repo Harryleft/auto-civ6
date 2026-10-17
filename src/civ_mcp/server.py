@@ -41,7 +41,7 @@ async def lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
 
 mcp = FastMCP(
     "Civilization VI",
-    instructions="Read real game state before issuing actions. Call get_game_overview first. A lost response may mean an action already ran; verify before retrying. Recovery is explicit.",
+    instructions="Read real game state before issuing actions. Call get_game_overview first. A lost response may mean an action already ran; verify before retrying. Normal save swaps use reload_game_save; restart_and_load is explicit full-process fault recovery.",
     lifespan=lifespan,
 )
 
@@ -1868,9 +1868,22 @@ async def load_save(ctx: Context, save_index: int) -> str:
 async def load_game_save(ctx: Context, save_name: str) -> str:
     """Load a named save once through native FrontEnd APIs, from the main menu.
 
-    Confirms the loaded identity and turn. No OCR, restart or automatic resend.
+    Confirms identity, turn and a fresh complete snapshot. Use reload_game_save
+    for a normal in-game swap. No OCR, restart or automatic resend.
     """
     return await _logged(ctx, "load_game_save", {"save_name": save_name}, lambda: _load_and_verify(_get_game(ctx), save_name))
+
+
+@mcp.tool(annotations={"destructiveHint": True})
+async def reload_game_save(ctx: Context, save_name: str) -> str:
+    """Normally swap to a verified named checkpoint through the main menu.
+
+    Keeps Civ6 running. Rejects unresolved actions/save/load/end-turn, exits
+    once, clears old session state, then fully verifies the loaded world.
+    Unknown results are never resent; restart_and_load is explicit fault recovery.
+    """
+    return await _logged(ctx, "reload_game_save", {"save_name": save_name},
+                         lambda: _load_and_verify(_get_game(ctx), save_name, return_to_menu=True))
 
 
 # ---------------------------------------------------------------------------
@@ -1909,8 +1922,9 @@ async def load_save_from_menu(ctx: Context, save_name: str | None = None) -> str
 
 @mcp.tool(annotations={"destructiveHint": True})
 async def restart_and_load(ctx: Context, save_name: str | None = None) -> str:
-    """Explicitly restart Civ6, load once, and verify the new session.
+    """Explicit full-process fault recovery: stop Civ6, launch, then load once.
 
+    Prefer reload_game_save for normal swaps while Civ6 responds.
     Unknown load results are confirmed by reading state, never by reloading.
     """
     gs = _get_game(ctx)
@@ -1936,38 +1950,65 @@ async def restart_and_load(ctx: Context, save_name: str | None = None) -> str:
     return await _logged(ctx, "restart_and_load", {"save_name": name}, _run)
 
 
-async def _load_and_verify(gs: GameState, save_name: str) -> str:
+async def _load_and_verify(gs: GameState, save_name: str, *, return_to_menu: bool = False) -> str:
     """同一个连接负责加载与验证；确认窗口内不重复发送加载命令。"""
     error = game_lifecycle._validate_save_name(save_name)
     if error:
         return error
     if getattr(gs, "_pending_load", False):
         return "ERR:OUTCOME_UNKNOWN|An earlier load is unconfirmed; inspect state or use explicit recovery, not another load."
+    if return_to_menu and (
+        getattr(gs, "_pending_save", False) or getattr(gs, "_pending_end_turn", False)
+        or gs.pending_action_entity is not None
+    ):
+        return "ERR:OUTCOME_UNKNOWN|An action/save/end-turn is pending; confirm it or use explicit restart_and_load before replacing the session."
     expected = checkpoints.expected_checkpoint(save_name)
     if expected is None:
         return "Error: Checkpoint completion and expected identity are unavailable; no load sent."
     saved_score = checkpoints.expected_score(save_name)
     submitted = False
+    replacing = False
     try:
         async with asyncio.timeout(LOAD_TIMEOUT):
+            if return_to_menu:
+                # Install the barrier before ExitToMainMenu can be submitted.
+                # The helper only releases it when native code proves no exit ran.
+                gs._pending_load = True
+                replacing = True
+                menu = await game_lifecycle.return_to_main_menu(gs.conn)
+                if menu != "Main menu confirmed.":
+                    if menu.startswith("Error:") and "no exit sent" in menu:
+                        gs._pending_load = False
+                        replacing = False
+                    return menu
+                gs.reset_session()
+                game_lifecycle._filesystem_save_names.clear()
+                gs._pending_load = True
             # During startup FireTuner briefly opens before MainMenu exists,
             # then resets the socket. Retry only this read-only discovery;
             # the actual load below is still submitted exactly once.
             while True:
                 try:
-                    await gs.conn.reconnect()
-                    if gs.conn.gamecore_index is not None:
-                        return "Error: A game is loaded; return to the main menu first."
-                    if "MainMenu" in gs.conn.lua_states.values():
+                    frontend = await game_lifecycle.is_in_frontend(gs.conn)
+                    if frontend is False:
+                        message = "A game is loaded; return to the main menu first."
+                        return ("ERR:OUTCOME_UNKNOWN|" if replacing else "Error: ") + message
+                    if frontend is True and "MainMenu" in gs.conn.lua_states.values():
                         break
                 except (OSError, LuaError, ValueError):
                     pass
                 await asyncio.sleep(2)
+            if checkpoints.expected_checkpoint(save_name) != expected:
+                prefix = "ERR:OUTCOME_UNKNOWN|" if replacing else "Error: "
+                return prefix + "Checkpoint file changed before load; no load sent."
             submitted = True
             result = await game_lifecycle.load_save_from_frontend(gs.conn, save_name)
             if not result.startswith(("Loading", "ERR:OUTCOME_UNKNOWN")):
+                if replacing:
+                    return "ERR:OUTCOME_UNKNOWN|Main menu reached but replacement is not verified. " + result
                 return result
             gs.reset_session()
+            game_lifecycle._filesystem_save_names.clear()
             gs._pending_load = True
             while True:
                 try:
@@ -2004,13 +2045,17 @@ async def _load_and_verify(gs: GameState, save_name: str) -> str:
                 except (OSError, LuaError, ValueError):
                     gs._pending_load = True
                 await asyncio.sleep(2)
+    except asyncio.CancelledError:
+        if replacing or submitted:
+            gs._pending_load = True
+        raise
     except TimeoutError:
-        if submitted:
+        if replacing or submitted:
             gs._pending_load = True
         await gs.conn.disconnect()
-        if not submitted:
+        if not submitted and not replacing:
             return "Error: MainMenu was not ready within 180 seconds; no load command was sent."
-        return "ERR:OUTCOME_UNKNOWN|Loading was not confirmed within 180 seconds. Read state before another load."
+        return "ERR:OUTCOME_UNKNOWN|Session replacement was not confirmed within 180 seconds. Use explicit restart_and_load for fault recovery."
 
 
 async def _narrate(
