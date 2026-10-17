@@ -16,6 +16,7 @@ import os
 import socket
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -134,42 +135,75 @@ def no_crash_dialogs(monkeypatch):
 
 
 class TestSaveGame:
-    def test_emits_a_named_single_player_local_save(self):
-        """The Lua must name the save and pin it to local single-player storage."""
+    @pytest.fixture(autouse=True)
+    def fast_confirmation(self, monkeypatch):
+        monkeypatch.setattr(gl, "SAVE_CONFIRM_TIMEOUT", 0.03)
+        monkeypatch.setattr(gl, "SAVE_POLL_INTERVAL", 0.001)
+
+    def test_success_requires_a_fresh_nonempty_file(self):
+        def write(lua):
+            path = Path(game_launcher.SINGLE_SAVE_DIR) / "checkpoint.Civ6Save"
+            path.write_bytes(b"new save")
+            return ["MCP_SAVE|true"]
 
         async def go():
-            conn = FakeConn(on_write=lambda lua: ["OK|0_MCP_0001"])
-            result = await gl.save_game(conn, "0_MCP_0001")
-            return conn, result
+            conn = FakeConn(on_write=write)
+            return conn, await gl.save_game(conn, "checkpoint.Civ6Save")
 
         conn, result = run(go())
-        assert result == "Saved: 0_MCP_0001"
-        (lua,) = conn.writes
-        assert 'gf.Name = "0_MCP_0001"' in lua
-        assert "SaveLocations.LOCAL_STORAGE" in lua
-        assert "SaveTypes.SINGLE_PLAYER" in lua
-        assert "IsAutosave = false" in lua
-        assert "Network.SaveGame(gf)" in lua
+        assert result == "Saved: checkpoint; file confirmed (8 bytes)."
+        assert len(conn.writes) == 1
+        assert 'gf.Name = "checkpoint"' in conn.writes[0]
+        assert "SaveLocations.LOCAL_STORAGE" in conn.writes[0]
+        assert "SaveTypes.SINGLE_PLAYER" in conn.writes[0]
+        assert "IsAutosave = false" in conn.writes[0]
 
-    def test_reports_failure_when_the_game_does_not_echo_ok(self):
+    def test_acknowledgment_does_not_confirm_an_old_file(self):
+        path = Path(game_launcher.SINGLE_SAVE_DIR) / "checkpoint.Civ6Save"
+        path.write_bytes(b"old save")
+        conn = FakeConn(on_write=lambda lua: ["MCP_SAVE|true"])
+        result = run(gl.save_game(conn, "checkpoint"))
+        assert result.startswith("ERR:OUTCOME_UNKNOWN")
+        assert len(conn.writes) == 1
+        assert path.read_bytes() == b"old save"
+
+    def test_lost_response_can_be_confirmed_without_resending(self):
+        def write(lua):
+            (Path(game_launcher.SINGLE_SAVE_DIR) / "checkpoint.Civ6Save").write_bytes(b"save")
+            raise ConnectionError("response lost")
+        conn = FakeConn(on_write=write)
+        assert run(gl.save_game(conn, "checkpoint")).startswith("Saved:")
+        assert len(conn.writes) == 1
+
+    def test_waits_for_nonempty_file_after_submission(self):
         async def go():
-            conn = FakeConn(on_write=lambda lua: ["ERR:something broke"])
-            return await gl.save_game(conn, "x")
+            path = Path(game_launcher.SINGLE_SAVE_DIR) / "checkpoint.Civ6Save"
+            async def finish():
+                await asyncio.sleep(0.005)
+                path.write_bytes(b"finished")
+            def write(lua):
+                path.touch()
+                asyncio.create_task(finish())
+                return ["MCP_SAVE|true"]
+            return await gl.save_game(FakeConn(on_write=write), "checkpoint")
+        assert "(8 bytes)" in run(go())
 
-        assert run(go()).startswith("Save may have failed:")
+    def test_explicit_rejection_is_not_reported_as_saved(self):
+        conn = FakeConn(on_write=lambda lua: ["MCP_SAVE|false"])
+        assert run(gl.save_game(conn, "checkpoint")).startswith("Error: Civ VI rejected")
+        assert len(conn.writes) == 1
 
-    def test_save_name_is_escaped_against_lua_injection(self):
-        """The name is escaped before landing inside the Lua string, so a
-        name containing a double quote cannot break out and inject Lua."""
+    @pytest.mark.parametrize("name", ["", "a/b", "a\\b", "bad\x01name", ".", "..", ".Civ6Save"])
+    def test_invalid_name_never_reaches_game(self, name):
+        conn = FakeConn()
+        assert run(gl.save_game(conn, name)).startswith("Error:")
+        assert conn.writes == []
 
-        async def go():
-            conn = FakeConn(on_write=lambda lua: [])
-            await gl.save_game(conn, 'evil"; print("pwned"); --')
-            return conn.writes[0]
-
-        lua = run(go())
-        assert 'gf.Name = "evil\\"; print(\\"pwned\\"); --"' in lua
-        assert 'gf.Name = "evil"; print("pwned"); --"' not in lua
+    def test_save_name_cannot_inject_lua(self):
+        conn = FakeConn(on_write=lambda lua: ["MCP_SAVE|false"])
+        run(gl.save_game(conn, 'evil"; print("pwned"); --'))
+        assert 'gf.Name = "evil\\"; print(\\"pwned\\"); --"' in conn.writes[0]
+        assert 'gf.Name = "evil"; print("pwned"); --"' not in conn.writes[0]
 
 
 # ---------------------------------------------------------------------------

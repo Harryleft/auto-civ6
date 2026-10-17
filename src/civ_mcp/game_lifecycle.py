@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+from pathlib import Path
 
 from civ_mcp import lua as lq
-from civ_mcp.connection import GameConnection
+from civ_mcp.connection import GameConnection, LuaError
 from civ_mcp.lua._helpers import SENTINEL
 
 log = logging.getLogger(__name__)
+SAVE_CONFIRM_TIMEOUT = 10.0
+SAVE_POLL_INTERVAL = 0.2
 
 
 async def dismiss_popup(conn: GameConnection) -> str:
@@ -333,21 +337,62 @@ _filesystem_save_names: list[str] = []
 
 
 async def save_game(conn: GameConnection, name: str) -> str:
-    """Create a named save. Used for MCP per-turn autosaves."""
-    lines = await conn.execute_write(
+    """Submit one local save and confirm a fresh, nonempty file on disk.
+
+    Network.SaveGame only acknowledges submission. Never replay a lost
+    request: its file may still finish writing after FireTuner disconnects.
+    """
+    from civ_mcp.game_launcher import SINGLE_SAVE_DIR
+
+    error = _validate_save_name(name)
+    if error:
+        return error
+    name = name.removesuffix(".Civ6Save")
+    path = Path(SINGLE_SAVE_DIR) / f"{name}.Civ6Save"
+
+    def fingerprint():
+        try:
+            stat = path.stat()
+            return (stat.st_mtime_ns, stat.st_size, stat.st_ino)
+        except FileNotFoundError:
+            return None
+
+    before = fingerprint()
+    code = (
         f"local gf = {{}}; "
         f'gf.Name = "{_lua_escape(name)}"; '
         f"gf.Location = SaveLocations.LOCAL_STORAGE; "
         f"gf.Type = SaveTypes.SINGLE_PLAYER; "
         f"gf.IsAutosave = false; "
         f"gf.IsQuicksave = false; "
-        f"Network.SaveGame(gf); "
-        f'print("OK|{_lua_escape(name)}"); '
+        "local ok, result = pcall(function() return Network.SaveGame(gf); end); "
+        'print("MCP_SAVE|" .. tostring(ok and result ~= false)); '
+        'if not ok then print("MCP_SAVE_ERROR|" .. tostring(result)); end; '
         f'print("{lq.SENTINEL}")'
     )
-    if any("OK|" in l for l in lines):
-        return f"Saved: {name}"
-    return f"Save may have failed: {' '.join(lines)}"
+    try:
+        lines = await conn.execute_write(code)
+    except (OSError, TimeoutError, LuaError):
+        lines = []
+    if "MCP_SAVE|false" in lines:
+        return f"Error: Civ VI rejected save {name!r}: {lines!r}"
+    try:
+        async with asyncio.timeout(SAVE_CONFIRM_TIMEOUT):
+            previous = None
+            while True:
+                current = fingerprint()
+                if current and current != before and current[1] > 0:
+                    if current == previous:
+                        return f"Saved: {name}; file confirmed ({current[1]} bytes)."
+                    previous = current
+                else:
+                    previous = None
+                await asyncio.sleep(SAVE_POLL_INTERVAL)
+    except TimeoutError:
+        return (
+            f"ERR:OUTCOME_UNKNOWN|Save {name!r} was submitted once, but no fresh "
+            "nonempty file was confirmed. Inspect the save before retrying."
+        )
 
 
 
@@ -507,6 +552,8 @@ def _validate_save_name(save_name: str) -> str | None:
 
     if not isinstance(save_name, str) or not save_name.strip():
         return "Error: save name must be a non-empty filename."
+    if save_name.removesuffix(".Civ6Save") in ("", ".", ".."):
+        return "Error: save name must include a filename stem."
     if len(save_name) > 255 or any(char in "/\\" for char in save_name):
         return "Error: save name contains an unsupported path or control character."
     if any(ord(char) < 32 or ord(char) == 127 for char in save_name):

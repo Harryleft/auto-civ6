@@ -167,6 +167,7 @@ class TestToolRegistration:
             "set_research",
             "propose_trade",
             "queue_wc_votes",
+            "save_game",
             "load_game_save",
             "restart_and_load",
             "run_lua",
@@ -1057,6 +1058,16 @@ class TestEndTurn:
 
 
 class TestSaveTools:
+    def test_save_dispatch_and_log_preserve_confirmed_result(self):
+        ctx = make_ctx()
+        gs = app_of(ctx).game
+        gs.script["save_game"] = "Saved: checkpoint; file confirmed, turn 12."
+        result = run(server.save_game(ctx, "checkpoint"))
+        assert result == gs.script["save_game"]
+        assert gs.last_args("save_game") == ("checkpoint",)
+        logged = app_of(ctx).logger.tool_calls[0]
+        assert logged[:3] == ("save_game", {"save_name": "checkpoint"}, result)
+
     def test_index_load_dispatches_to_game_state(self):
         ctx = make_ctx()
         run(server.load_save(ctx, 3))
@@ -1208,8 +1219,12 @@ class TestMcpProtocol:
                     assert initialization.serverInfo.name == "Civilization VI"
                     tools = (await session.list_tools()).tools
                     names = {tool.name for tool in tools}
-                    assert len(names) == 75
+                    assert len(names) == 76
                     assert "get_diary" not in names
+                    save_schema = next(tool.inputSchema for tool in tools if tool.name == "save_game")
+                    assert save_schema["required"] == ["save_name"]
+                    rejected = await session.call_tool("save_game", {"save_name": "a/b"})
+                    assert rejected.content[0].text.startswith("Error:")
                     schema = next(tool.inputSchema for tool in tools if tool.name == "end_turn")
                     assert schema.get("properties", {}) == {}
                     result = await session.call_tool("run_lua", {"code": "print(42)"})
@@ -1223,5 +1238,5 @@ class TestMcpProtocol:
         assert conn.disconnect_calls == 1
         assert conn.read_queries == ['(function() print(42) end)(); print("---END---")']
         entries = [json.loads(line) for line in log_path.read_text().splitlines()]
-        assert [entry["tool"] for entry in entries] == ["run_lua", "unit_action"]
+        assert [entry["tool"] for entry in entries] == ["save_game", "run_lua", "unit_action"]
         assert all("success" not in entry for entry in entries)

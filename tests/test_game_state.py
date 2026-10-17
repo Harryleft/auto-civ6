@@ -1488,6 +1488,60 @@ class TestGreatPersonResults:
 
 
 
+class TestSaveCheckpoint:
+    def prepare(self, monkeypatch, *, turns=(12, 12), identities=None):
+        from types import SimpleNamespace
+        gs, conn = _gs()
+        snapshots = iter(turns)
+        game_ids = iter(identities or [("babylon", 42), ("babylon", 42)])
+        saves = []
+        async def identity():
+            return next(game_ids)
+        async def overview():
+            return SimpleNamespace(turn=next(snapshots))
+        async def save(connection, name):
+            assert connection is conn
+            saves.append(name)
+            return "Saved: checkpoint; file confirmed (100 bytes)."
+        monkeypatch.setattr(gs, "get_game_identity", identity)
+        monkeypatch.setattr(gs, "get_game_overview", overview)
+        monkeypatch.setattr(game_lifecycle, "save_game", save)
+        return gs, conn, saves
+
+    def test_confirmed_checkpoint_includes_identity_and_turn(self, monkeypatch):
+        gs, conn, saves = self.prepare(monkeypatch)
+        result = run(gs.save_game("checkpoint"))
+        assert result.endswith("Civilization babylon, seed 42, turn 12.")
+        assert saves == ["checkpoint"]
+        assert conn.calls == []
+
+    def test_pending_end_turn_cannot_create_recovery_checkpoint(self, monkeypatch):
+        gs, _, saves = self.prepare(monkeypatch)
+        gs._pending_end_turn = True
+        assert "pending" in run(gs.save_game("checkpoint"))
+        assert saves == []
+        assert gs._pending_end_turn
+
+    def test_changed_turn_is_not_a_confirmed_checkpoint(self, monkeypatch):
+        gs, _, saves = self.prepare(monkeypatch, turns=(12, 13))
+        assert run(gs.save_game("checkpoint")).startswith("ERR:OUTCOME_UNKNOWN")
+        assert saves == ["checkpoint"]
+
+    def test_changed_world_is_not_a_confirmed_checkpoint(self, monkeypatch):
+        gs, _, _ = self.prepare(monkeypatch, identities=[("babylon", 42), ("rome", 42)])
+        assert run(gs.save_game("checkpoint")).startswith("ERR:OUTCOME_UNKNOWN")
+
+    def test_unknown_identity_refuses_save(self, monkeypatch):
+        gs, _, saves = self.prepare(monkeypatch, identities=[("unknown", 0)])
+        assert run(gs.save_game("checkpoint")).startswith("Error:")
+        assert saves == []
+
+    def test_invalid_name_refuses_save_before_queries(self):
+        gs, conn = _gs()
+        assert run(gs.save_game("a/b")).startswith("Error:")
+        assert conn.calls == []
+
+
 class TestSessionReset:
     def test_submitted_index_load_discards_previous_world(self, monkeypatch):
         async def loaded(conn, index):
