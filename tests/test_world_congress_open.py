@@ -2,6 +2,7 @@
 import asyncio
 
 from civ_mcp.game_state import GameState
+from action_scope_support import scope_rows
 
 
 class OpenConn:
@@ -10,6 +11,8 @@ class OpenConn:
         self.calls = []
 
     async def execute_write(self, code):
+        if 'print("ACTION_SCOPE|' in code:
+            return scope_rows()
         self.calls.append(code)
         value = self.responses.pop(0)
         if isinstance(value, BaseException):

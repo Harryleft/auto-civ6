@@ -249,7 +249,7 @@ print("{lq.SENTINEL}")
                 damage = f"|damage dealt:{pre_hp-post_hp}" if pre_hp is not None and post_hp is not None else ""
                 # Missing from the original tile is not evidence of death. The
                 # consumed attack can be confirmed while the target stays unknown.
-                observed = _format_attack_followup([target_line] if target_line else [])
+                observed = _format_attack_followup([target_line] if target_line else [], attacker_owner=pending.owner)
                 return pending.success + damage + "\n  Post-combat: " + observed
         if pending.kind == "move":
             for line in pending.observed:

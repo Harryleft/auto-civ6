@@ -55,7 +55,7 @@ class ScopeEngine:
         if self.confirm_error:
             raise self.confirm_error
         identity = "ACTION_IDENTITY|" + "|".join(map(str, self.scope))
-        return [identity, "CONFIRMED|queue verified", "CITY_EXISTS|owner:0|city:65536",
+        return [identity, "CONFIRMED|queue verified", f"CITY_EXISTS|owner:{self.scope[3]}|city:65536",
                 "POS|18|18|moves:1|busy:false", "UNIT|UNIT_SCOUT|55/100|owner:63|id:123", "CORE_BUSY|false"]
 
 
@@ -150,6 +150,15 @@ def test_native_submission_scope_is_required_without_a_report_snapshot(initializ
     assert asyncio.run(invoke(state, "production")) == "PRODUCING|UNIT_TRADER"
     assert engine.probes == 1
     assert state._last_snapshot is None
+
+
+def test_founding_uses_fresh_local_owner_instead_of_cached_report_owner():
+    engine = ScopeEngine()
+    engine.scope = ("CIVILIZATION_SUMERIA", 719665280, 68, 1)
+    state = current_state(engine)
+    assert asyncio.run(invoke(state, "found")) == "FOUNDED|19,17"
+    assert state.pending_action_summary is None
+    assert len(engine.operations) == 1
 
 
 @pytest.mark.parametrize("action", ["production", "move", "found", "unit_attack", "city_attack"])
