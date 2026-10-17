@@ -406,8 +406,8 @@ def build_verify_city_at(x: int, y: int) -> str:
     """Check if a city exists at the given coordinates."""
     return f"""
 local plot = Map.GetPlot({x}, {y})
-if plot and plot:IsCity() then
-    print("OK:CITY_EXISTS")
+if plot and plot:IsCity() and plot:GetOwner() == Game.GetLocalPlayer() then
+    print("OK:CITY_EXISTS|owner:" .. plot:GetOwner())
 else
     print("OK:NO_CITY")
 end
