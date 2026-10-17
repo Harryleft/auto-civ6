@@ -266,9 +266,10 @@ class TestSaveGame:
         target.write_bytes(b"different map using the same name")
         assert checkpoints.expected_checkpoint("benchmark_turn_1") is None
 
-    def test_original_baseline_cannot_be_overwritten(self):
+    @pytest.mark.parametrize("name", ["benchmark_turn_1", "benchmark_turn_1.Civ6Save", "BENCHMARK_TURN_1", "benchmark_turn_1 "])
+    def test_original_baseline_cannot_be_overwritten(self, name):
         conn = FakeConn()
-        assert run(gl.save_game(conn, "benchmark_turn_1")).startswith("Error:")
+        assert run(gl.save_game(conn, name)).startswith("Error:")
         assert conn.writes == []
 
     def test_explicit_rejection_is_not_reported_as_saved(self):
