@@ -1891,7 +1891,7 @@ async def launch_game(ctx: Context) -> str:
 
 @mcp.tool(annotations={"destructiveHint": True})
 async def load_save_from_menu(ctx: Context, save_name: str | None = None) -> str:
-    """Load a named save, or the latest autosave, through the native FrontEnd API."""
+    """Load an explicitly named confirmed checkpoint through native FrontEnd APIs."""
     name = save_name
     if not name:
         return "Error: Provide an explicit confirmed checkpoint save_name; autosave guessing is disabled."
