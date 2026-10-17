@@ -1113,6 +1113,110 @@ class TestEndTurn:
 
 
 class TestSaveTools:
+    def prepare_real_menu_load(self, failed_query=None):
+        """Run real GameState over the existing isolated transport seam."""
+        from civ_mcp.game_state import GameState
+
+        ctx = make_ctx()
+        conn = FakeConn(gamecore_index=None)
+        conn.reconnect_states = [None, 0]
+        conn.state_queries = []
+
+        async def write(query, timeout=None):
+            conn.state_queries.append(query)
+            if "TURN_UI_READY|" in query:
+                return ["TURN_UI_READY|12|1"]
+            if "GAMESEED|" in query:
+                return ["GAMESEED|CIVILIZATION_ROME|4242"]
+            if "local tr = p:GetTreasury()" in query:
+                return ["12|0|Rome|Trajan|100|5|3|2|10|Pottery|Code of Laws|1|1|45"]
+            if "local nm = Locale.Lookup(u:GetName())" in query:
+                if failed_query == "units":
+                    raise LuaError("unit facts unavailable")
+                return ["65536|1|Warrior|UNIT_WARRIOR|10,20|2.0/2.0|100/100"]
+            if "CITYFACTS|" in query:
+                if failed_query == "cities":
+                    raise ConnectionRefusedError("city facts unavailable")
+                return ["123|Capital|10,20|2|4|3|2|1|1|0.5|6|1|5|BUILDING_MONUMENT|3"]
+            return []
+
+        conn.execute_write = write
+        gs = GameState(conn)
+        app_of(ctx).game = gs
+        return ctx, gs
+
+    @pytest.mark.parametrize("failed_query", ["units", "cities"])
+    def test_incomplete_loaded_snapshot_keeps_barrier_without_replaying_load(self, monkeypatch, failed_query):
+        ctx, gs = self.prepare_real_menu_load(failed_query)
+        monkeypatch.setattr(server, "LOAD_TIMEOUT", 0.01)
+        result = run(server.load_game_save(ctx, "MySave"))
+        assert result.startswith("ERR:OUTCOME_UNKNOWN")
+        assert gs._pending_load is True
+        assert len(gs.conn.load_calls) == 1
+
+    def test_load_retries_only_reads_then_returns_immediately_readable_state(self, monkeypatch):
+        ctx, gs = self.prepare_real_menu_load()
+        write = gs.conn.execute_write
+        unit_attempts = []
+
+        async def temporarily_unavailable(query, timeout=None):
+            if "local nm = Locale.Lookup(u:GetName())" in query:
+                unit_attempts.append(1)
+                if len(unit_attempts) == 1:
+                    raise ConnectionRefusedError("unit context not ready")
+            return await write(query, timeout)
+
+        sleep = asyncio.sleep
+        async def no_delay(seconds):
+            await sleep(0)
+
+        gs.conn.execute_write = temporarily_unavailable
+        monkeypatch.setattr(server.asyncio, "sleep", no_delay)
+
+        async def go():
+            result = await server.load_game_save(ctx, "MySave")
+            units = await gs.get_units()
+            cities, _ = await gs.get_cities()
+            return result, units, cities
+
+        result, units, cities = run(go())
+        assert result.startswith("Loaded MySave:")
+        assert gs._pending_load is False
+        assert [unit.unit_id for unit in units] == [65536]
+        assert [city.city_id for city in cities] == [123]
+        assert len(unit_attempts) == 3
+        assert len(gs.conn.load_calls) == 1
+
+    @pytest.mark.parametrize("changed_fact", ["identity", "turn", "readiness"])
+    def test_load_does_not_release_barrier_if_state_changes_during_snapshot(self, monkeypatch, changed_fact):
+        ctx, gs = self.prepare_real_menu_load()
+        write, read = gs.conn.execute_write, gs.conn.execute_read
+        identities, turns = [], []
+
+        async def change_identity(query, timeout=None):
+            if "GAMESEED|" in query:
+                identities.append(1)
+                if len(identities) > 1 and changed_fact == "identity":
+                    return ["GAMESEED|CIVILIZATION_EGYPT|4242"]
+            return await write(query, timeout)
+
+        async def change_turn(query, timeout=None):
+            if "TURN_STATE|" in query:
+                turns.append(1)
+                if len(turns) > 1:
+                    if changed_fact == "turn":
+                        return ["TURN_STATE|13|1"]
+                    if changed_fact == "readiness":
+                        return ["TURN_STATE|12|0"]
+            return await read(query, timeout)
+
+        gs.conn.execute_write, gs.conn.execute_read = change_identity, change_turn
+        monkeypatch.setattr(server, "LOAD_TIMEOUT", 0.01)
+        result = run(server.load_game_save(ctx, "MySave"))
+        assert result.startswith("ERR:OUTCOME_UNKNOWN")
+        assert gs._pending_load is True
+        assert len(gs.conn.load_calls) == 1
+
     def test_save_dispatch_and_log_preserve_confirmed_result(self):
         ctx = make_ctx()
         gs = app_of(ctx).game
