@@ -52,7 +52,21 @@ UnitManager = {
     end,
 }
 UI = {IsGameCoreBusy=function() return false end}
-Map = {GetUnitsAt=function() return nil end, GetPlot=function() return nil end}
+-- Isolated map/path facts for the explicit source and requested target.
+plot_owner=-1
+local function plot(px,py)
+    return {GetIndex=function() return px+1000*py end,
+            GetX=function() return px end,GetY=function() return py end,
+            GetOwner=function() return plot_owner end,
+            IsWater=function() return false end,IsMountain=function() return false end,
+            IsImpassable=function() return false end}
+end
+Map = {GetUnitsAt=function() return nil end, GetPlot=plot,
+       GetPlotByIndex=function(index) return plot(index%1000,math.floor(index/1000)) end}
+PlayersVisibility={[0]={IsVisible=function() return true end}}
+UnitManager.GetMoveToPathEx=function(u,destination)
+    return {plots={u:GetX()+1000*u:GetY(),destination},turns={1,1}}
+end
 ''')
 
     async def execute_write(self, code):

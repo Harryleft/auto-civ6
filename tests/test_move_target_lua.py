@@ -98,11 +98,7 @@ Players[0].GetDiplomacy=function() return {
     IsAtWarWith=function() return false end,
     HasOpenBordersFrom=function() return true end,
 } end
-Map.GetPlot=function() return {
-    GetIndex=function() return 40 end, GetOwner=function() return 3 end,
-    IsWater=function() return false end, IsMountain=function() return false end,
-    IsImpassable=function() return false end,
-} end
+plot_owner=3
 ''')
     state = GameState(conn)
     result = run(state.move_unit(6, 23, 20))
@@ -186,18 +182,19 @@ def test_existing_no_moves_generic_refusal_and_own_stacking_guards_still_prevent
 
 
 @pytest.mark.parametrize("target", [(20, 17), (50, 30)])
-@pytest.mark.parametrize("path", ['nil', '{plots={},turns={}}', '{plots={1,2},turns={1,4}}'])
-def test_legal_near_far_and_fog_targets_do_not_require_a_current_path_preview(target, path):
+@pytest.mark.parametrize("end_turn", [1, 4])
+@pytest.mark.parametrize("visible", [True, False])
+def test_complete_native_paths_allow_near_far_and_fog_targets_without_same_turn_requirement(target, end_turn, visible):
     conn = TargetMovementConn()
+    conn.lua.globals().visible=visible
+    conn.lua.globals().end_turn=end_turn
     conn.lua.execute('''
 can_target=true
-Map.GetPlot=function() return {
-    GetIndex=function() return 40 end, GetOwner=function() return -1 end,
-    IsWater=function() return false end, IsMountain=function() return false end,
-    IsImpassable=function() return false end,
-} end
-UnitManager.GetMoveToPathEx=function() return PATH_PREVIEW end
-'''.replace('PATH_PREVIEW',path))
+PlayersVisibility[0].IsVisible=function() return visible end
+UnitManager.GetMoveToPathEx=function(u,destination)
+    return {plots={u:GetX()+1000*u:GetY(),destination},turns={1,end_turn}}
+end
+''')
     state = GameState(conn)
     result = run(state.move_unit(6, *target))
     assert f"now_at:{target[0]},{target[1]}" in result
@@ -230,3 +227,131 @@ end
     assert native.submissions == native.target_checks == 1
     assert native.path_reads >= 2
     assert native.listenerCount() == 2
+
+
+
+def test_visible_target_with_explicit_empty_native_path_is_refused_without_request_or_listener():
+    conn = TargetMovementConn()
+    conn.lua.execute('can_target=true; UnitManager.GetMoveToPathEx=function() return {plots={},turns={}} end')
+    state = GameState(conn)
+    result = run(state.move_unit(6, 23, 20))
+    assert result.startswith("Error: NO_PATH|"), result
+    assert state.pending_action_summary is None
+    native=conn.lua.globals()
+    assert native.submissions == 0 and native.listenerCount() == 1
+
+
+def test_native_path_for_a_different_source_cannot_authorize_this_move():
+    conn = TargetMovementConn()
+    conn.lua.execute('can_target=true; UnitManager.GetMoveToPathEx=function() return {plots={17018,17020},turns={1,1}} end')
+    state = GameState(conn)
+    result = run(state.move_unit(6, 20, 17))
+    assert result.startswith("Error: PATH_UNKNOWN|"), result
+    assert state.pending_action_summary is None
+    assert conn.lua.globals().submissions == 0 and conn.lua.globals().listenerCount() == 1
+
+
+@pytest.mark.parametrize("setup", [
+    'UnitManager.GetMoveToPathEx=nil',
+    'UnitManager.GetMoveToPathEx=function() error("path unavailable") end',
+    'UnitManager.GetMoveToPathEx=function() return nil end',
+    'UnitManager.GetMoveToPathEx=function() return false end',
+    'UnitManager.GetMoveToPathEx=function() return {} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={},turns={1}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={17019,17020}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots="unknown",turns={}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={[1]=17019,[3]=17020},turns={[1]=1,[3]=1}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={[0]=17019,[1]=17020},turns={[0]=1,[1]=1}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={17019,17020,extra=17021},turns={1,1}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={17019,17021},turns={1,1}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={17019},turns={1}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={17019,17020.5},turns={1,1}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={17019,math.huge},turns={1,1}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={17019,17020},turns={1,"2"}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={17019,17020},turns={1,0/0}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={17019,17020},turns={1,math.huge}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={17019,17020},turns={2,1}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={17019,17020},turns={1,0}} end',
+    'Map.GetPlot=function() return nil end',
+    'Map.GetPlotByIndex=function() return nil end',
+    'Map.GetPlotByIndex=function() error("missing native plot") end',
+    'UI.IsGameCoreBusy=function() return true end',
+    'UI.IsGameCoreBusy=function() return nil end',
+    'UI.IsGameCoreBusy=function() error("busy state unknown") end',
+])
+def test_unavailable_or_malformed_native_paths_are_unknown_and_never_submit(setup):
+    conn = TargetMovementConn()
+    conn.lua.execute('can_target=true; '+setup)
+    state = GameState(conn)
+    result = run(state.move_unit(6, 20, 17))
+    assert result.startswith("Error: PATH_UNKNOWN|"), result
+    assert state.pending_action_summary is None
+    native=conn.lua.globals()
+    assert native.submissions == 0 and native.listenerCount() == 1
+
+
+@pytest.mark.parametrize("visibility", ['false', 'nil', '"true"', 'error("visibility unknown")'])
+def test_empty_path_without_confirmed_current_visibility_is_unknown_zero_submit(visibility):
+    conn = TargetMovementConn()
+    conn.lua.execute('''
+can_target=true
+UnitManager.GetMoveToPathEx=function() return {plots={},turns={}} end
+PlayersVisibility[0].IsVisible=function() VISIBILITY end
+'''.replace('VISIBILITY',visibility if visibility.startswith('error(') else 'return '+visibility))
+    state = GameState(conn)
+    result = run(state.move_unit(6, 20, 17))
+    assert result.startswith("Error: PATH_UNKNOWN|"), result
+    assert state.pending_action_summary is None
+    native=conn.lua.globals()
+    assert native.submissions == 0 and native.listenerCount() == 1
+
+
+def test_missing_middle_plot_cannot_authorize_an_otherwise_matching_path():
+    conn = TargetMovementConn()
+    conn.lua.execute('''
+can_target=true
+UnitManager.GetMoveToPathEx=function() return {plots={17019,17018,17020},turns={1,1,2}} end
+local original=Map.GetPlotByIndex
+Map.GetPlotByIndex=function(index)
+    if index~=17018 then return original(index) end
+end
+''')
+    state = GameState(conn)
+    result = run(state.move_unit(6, 20, 17))
+    assert result.startswith("Error: PATH_UNKNOWN|"), result
+    assert state.pending_action_summary is None
+    assert conn.lua.globals().submissions == 0 and conn.lua.globals().listenerCount() == 1
+
+
+def test_recorded_207_empty_city_path_is_rejected_then_native_neighbour_and_fog_paths_still_move():
+    conn = TargetMovementConn()
+    conn.lua.execute('''
+x,y=23,22
+can_target=true
+local function plot(px,py)
+    return {GetIndex=function() return px+60*py end,
+            GetX=function() return px end,GetY=function() return py end,
+            GetOwner=function() return 3 end,
+            IsWater=function() return false end,IsMountain=function() return false end,
+            IsImpassable=function() return false end}
+end
+Map.GetPlot=plot
+Map.GetPlotByIndex=function(index) return plot(index%60,math.floor(index/60)) end
+PlayersVisibility[0].IsVisible=function(_,px,py) return px~=24 end
+UnitManager.GetMoveToPathEx=function(u,destination)
+    if destination==1223 then return {plots={},turns={}} end
+    if destination==1283 then return {plots={1343,1283},turns={1,1}} end
+    return {plots={1343,1283,1224},turns={1,1,1}}
+end
+''')
+    state = GameState(conn)
+    result = run(state.move_unit(6, 23, 20))
+    assert result.startswith("Error: NO_PATH|"), result
+    assert state.pending_action_summary is None
+    assert conn.lua.globals().submissions == 0 and conn.lua.globals().listenerCount() == 1
+    assert "now_at:23,21" in run(state.move_unit(6, 23, 21))
+    # Reset the isolated native fixture to reuse the recorded fog origin.
+    conn.lua.execute('x,y=23,22')
+    assert "now_at:24,20" in run(state.move_unit(6, 24, 20))
+    assert state.pending_action_summary is None
+    assert conn.lua.globals().submissions == 2 and conn.lua.globals().listenerCount() == 1
