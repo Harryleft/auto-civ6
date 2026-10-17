@@ -4,9 +4,9 @@
 
 | 工作项 | 依赖 | 责任范围 | 状态 |
 | --- | --- | --- | --- |
-| A1 动作提交与确认 | 无 | 集中动作生命周期，四类动作复用，关键 Lua listener 行为验证 | ready-for-agent |
-| A2 存档替换所有权 | 无 | GameState 拥有完整替换、typed 原生结果、MCP 只调度、状态清理 | ready-for-agent |
-| A3 议会事实解释 | 无 | 共享阶段与可投事实，查询明确语义，Lua 行为回归 | ready-for-agent |
+| A1 动作提交与确认 | 无 | 集中动作生命周期，四类动作复用，关键 Lua listener 行为验证 | in-progress |
+| A2 存档替换所有权 | 无 | GameState 拥有完整替换、typed 原生结果、MCP 只调度、状态清理 | in-progress |
+| A3 议会事实解释 | 无 | 共享阶段与可投事实，查询明确语义，Lua 行为回归 | in-progress |
 | A4 回合推进所有权 | 无 | 自持推进状态、消除跨文件私有字段约定、真实 GameState 测试 | ready-for-agent |
 | A5 集成验证与独立审查 | A1、A2、A3、A4 | 共享状态一致性、全量离线、双轴审查及修正、文档和保护校验 | blocked |
 
