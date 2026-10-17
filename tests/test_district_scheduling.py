@@ -9,6 +9,7 @@ import asyncio
 
 from civ_mcp.connection import LuaError
 from civ_mcp.game_state import GameState
+from action_scope_support import scope_rows, with_action_identity
 
 
 class DistrictConnection:
@@ -18,13 +19,15 @@ class DistrictConnection:
         self.calls = []
 
     async def execute_write(self, lua):
+        if 'print("ACTION_SCOPE|' in lua:
+            return scope_rows()
         self.calls.append(("write", lua))
         # execute_write selects InGame, including read-only district queries.
         responses = self.reads if 'print("PRODUCTION|"' in lua else self.writes
         value = responses.pop(0) if responses else ConnectionError("no observation")
         if isinstance(value, Exception):
             raise value
-        return value
+        return with_action_identity(lua, value)
 
     async def execute_read(self, lua):
         self.calls.append(("read", lua))
@@ -33,7 +36,7 @@ class DistrictConnection:
         value = self.reads.pop(0) if self.reads else ConnectionError("no observation")
         if isinstance(value, Exception):
             raise value
-        return value
+        return with_action_identity(lua, value)
 
 
 def test_exact_district_confirmation_uses_native_ingame_facts_without_resubmission():
