@@ -26,6 +26,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from dataclasses import dataclass
 
 log = logging.getLogger(__name__)
 
@@ -537,53 +538,34 @@ async def launch_game() -> str:
     return await asyncio.to_thread(_launch_game_sync)
 
 
+@dataclass(frozen=True)
+class ProcessResult:
+    confirmed: bool
+    message: str
+
+
+async def stop_game() -> ProcessResult:
+    """Stop once and determine completion from the actual process fact."""
+    message = await kill_game()
+    stopped = not await asyncio.to_thread(is_game_running)
+    return ProcessResult(stopped, message)
+
+
+async def start_game() -> ProcessResult:
+    """Launch once; presentation text cannot establish process readiness."""
+    message = await launch_game()
+    running = await asyncio.to_thread(is_game_running)
+    ready = running and await asyncio.to_thread(_is_tuner_port_open)
+    return ProcessResult(ready, message)
+
+
 async def restart_and_load(save_name: str | None = None) -> str:
-    """Kill game, relaunch, and load a save. Full recovery sequence.
-
-    This is the recommended tool for recovering from game hangs.
-    Takes 60-120 seconds total.
-    """
-    results = []
-
-    # Dismiss crash dialogs before kill — they block the process from exiting
-    pre_dismissed = await dismiss_crash_dialogs()
-    if pre_dismissed:
-        log.info("Pre-kill: dismissed %s", pre_dismissed)
-
-    # Step 1: Kill
-    kill_result = await kill_game()
-    results.append(f"Kill: {kill_result}")
-
-    # Step 2: Launch
-    launch_result = await launch_game()
-    results.append(f"Launch: {launch_result}")
-    if "not detected" in launch_result:
-        return " | ".join(results) + " | ABORTED: Game failed to launch."
-
-    # Dismiss any lingering crash dialog from previous session (both platforms)
-    await dismiss_crash_dialogs()
-
-    # Step 3: Load save via the native FrontEnd API.
-    # After relaunch the game sits at the main menu, which is exactly the
-    # context the FrontEnd loader needs.
+    """Compatibility entry point using the single verified replacement owner."""
     from civ_mcp.connection import GameConnection
-    from civ_mcp.game_lifecycle import load_save_from_frontend
+    from civ_mcp.game_state import GameState
 
     conn = GameConnection()
-    load_result = None
-    for attempt in range(12):
-        try:
-            await conn.connect()
-            break
-        except Exception as e:
-            log.info("Post-relaunch connect attempt %d failed: %s", attempt + 1, e)
-            if attempt == 11:
-                load_result = (
-                    "FAILED: FireTuner did not accept a connection after relaunch"
-                )
-            await asyncio.sleep(5)
-    if load_result is None:
-        load_result = await load_save_from_frontend(conn, save_name)
-    results.append(f"Load: {load_result}")
-
-    return " | ".join(results)
+    try:
+        return await GameState(conn).restart_and_load(save_name)
+    finally:
+        await conn.disconnect()
