@@ -1,4 +1,5 @@
 """Public offline capture CLI; all game inputs are isolated temporary files."""
+from datetime import datetime
 import json
 import plistlib
 import sqlite3
@@ -18,7 +19,8 @@ def setup_inputs(tmp_path):
     user = tmp_path / 'user'
     (user / 'Cache').mkdir(parents=True)
     (user / 'Logs').mkdir()
-    (user / 'Logs/Startup.log').write_text('Game Version = 1.0.12.54 (951533)\n')
+    started = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    (user / 'Logs/Startup.log').write_text(f'[{started}]\tGame Version = 1.0.12.54 (951533)\n')
     (user / 'Logs/Modding.log').write_text('Enabled Mods (in no particular order):\n[123.0] 4873eb62-8ccc-4574-b784-dda455e74e68 (Expansion2)\nnext\n')
     manifest = tmp_path / 'appmanifest.acf'
     manifest.write_text('"buildid" "15296837"\n"LastOwner" "private-account"')
@@ -123,3 +125,36 @@ def test_capture_reads_committed_wal_without_creating_source_sidecars(tmp_path):
     assert before == after
     rows = json.loads(output.read_text())['tables']['Technologies']
     assert any(row['TechnologyType'] == 'TECH_CURRENCY' for row in rows)
+
+
+def test_capture_uses_last_boot_marker_instead_of_exit_appended_file_mtime(tmp_path):
+    import os
+    game, user, manifest = setup_inputs(tmp_path)
+    started = datetime(2026, 10, 17, 19, 45, 1)
+    startup = user / 'Logs/Startup.log'
+    startup.write_text('[2026-10-16 10:00:00]\tGame Version = old-version\n'
+                       '[2026-10-17 19:45:01]\tCiv6App::InitialInit start.\n'
+                       '[2026-10-17 19:45:01]\tGame Version = 1.0.12.54 (951533)\n'
+                       '[2026-10-17 23:40:00]\tQueue counters at exit\n')
+    cache = user / 'Cache/DebugGameplay.sqlite'
+    os.utime(cache, (started.timestamp() + 3600, started.timestamp() + 3600))
+    os.utime(startup, (started.timestamp() + 7200, started.timestamp() + 7200))
+    result, output = capture(tmp_path, game, user, manifest)
+    assert result.returncode == 0, result.stderr
+    profile = json.loads(output.read_text())['profile']
+    assert profile['game_version'] == '1.0.12.54 (951533)'
+    assert profile['startup_started_at'] == '2026-10-17T19:45:01'
+    assert profile['current_session_verified'] is False
+
+
+def test_missing_or_invalid_startup_timestamp_preserves_previous_snapshot(tmp_path):
+    game, user, manifest = setup_inputs(tmp_path)
+    output = tmp_path / 'knowledge/sources/snapshot.json'
+    output.parent.mkdir(parents=True)
+    output.write_text('previous confirmed snapshot')
+    for line in ['Game Version = 1.0.12.54 (951533)', '[not-a-time] Game Version = 1.0.12.54 (951533)']:
+        (user / 'Logs/Startup.log').write_text(line + '\n')
+        result, _ = capture(tmp_path, game, user, manifest)
+        assert result.returncode == 2
+        assert 'startup timestamp' in result.stderr
+        assert output.read_text() == 'previous confirmed snapshot'
