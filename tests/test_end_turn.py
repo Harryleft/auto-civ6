@@ -35,7 +35,7 @@ class FakeConn:
             return self.game_over_status(self) if callable(self.game_over_status) else self.game_over_status
         if "TURN_STATE|" in lua:
             ready = self.readiness(self) if self.readiness else self.ready
-            return [f"TURN_STATE|{self.turn}|{int(ready)}"]
+            return [f"TURN_STATE|{self.turn}|{"?" if ready is None else int(ready)}"]
         return [str(self.turn)]
 
     async def execute_write(self, lua):
@@ -407,4 +407,53 @@ def test_message_processing_must_finish_after_turn_activation(clock):
     gs.conn.ui_processing = lambda conn: bool(conn.requests) and clock.now < 4
     assert "Turn 50 -> 51" in play(gs)
     assert clock.now >= 4
+    assert len(gs.conn.requests) == 1
+
+
+def test_readiness_unknown_keeps_request_pending_until_later_confirmation(clock):
+    gs = FakeGameState()
+    gs.conn.readiness = lambda conn: True if not conn.requests else None
+    first = play(gs)
+    assert "HANG:" in first
+    assert gs._pending_end_turn
+    assert len(gs.conn.requests) == 1
+    gs.conn.readiness = None
+    second = play(gs)
+    assert "Turn 50 -> 51" in second
+    assert len(gs.conn.requests) == 1
+
+
+def test_external_turn_advance_during_inspection_waits_without_new_request(clock):
+    gs = FakeGameState()
+    async def snapshot():
+        gs.conn.turn = 51
+        return lq.TurnSnapshot(50, {}, {}, "", "")
+    gs._take_snapshot = snapshot
+    gs.conn.readiness = lambda conn: conn.turn == 50 or clock.now >= 4
+    assert "Turn 50 -> 51" in play(gs)
+    assert clock.now >= 4
+    assert not gs.conn.requests
+
+
+def test_diplomacy_resume_confirms_original_request_only(clock):
+    gs = FakeGameState()
+    gs.conn.advance = False
+    gs.conn.diplomacy_probe = ["DIPLOMACY|2"]
+    assert "Turn paused" in play(gs)
+    gs.conn.diplomacy_probe = ["DIPLOMACY_NONE"]
+    gs.conn.turn = 51
+    assert "Turn 50 -> 51" in play(gs)
+    assert len(gs.conn.requests) == 1
+    assert not any("AddResponse" in code or "CloseSession" in code for code in gs.conn.calls)
+
+
+def test_probe_queries_count_against_total_deadline(clock):
+    gs = FakeGameState()
+    gs.conn.advance = False
+    def slow_probe(conn):
+        clock.now += 25
+        return ["DIPLOMACY_NONE"]
+    gs.conn.diplomacy_probe = slow_probe
+    assert "HANG:" in play(gs)
+    assert 180 <= clock.now <= 205
     assert len(gs.conn.requests) == 1
