@@ -46,9 +46,9 @@ if govIdx and govIdx >= 0 then
 end
 local numSlots = pCulture:GetNumPolicySlots()
 print("GOV|" .. govType .. "|" .. govName:gsub("|","/") .. "|" .. numSlots)
-local slotNames = {[0]="SLOT_ECONOMIC", [1]="SLOT_MILITARY", [2]="SLOT_DIPLOMATIC", [3]="SLOT_WILDCARD", [4]="SLOT_WILDCARD"}
 for s = 0, numSlots - 1 do
-    local slotType = slotNames[pCulture:GetSlotType(s)] or ("SLOT_" .. pCulture:GetSlotType(s))
+    local slotEntry = GameInfo.GovernmentSlots[pCulture:GetSlotType(s)]
+    local slotType = slotEntry and slotEntry.GovernmentSlotType or ("SLOT_" .. pCulture:GetSlotType(s))
     local policyIdx = pCulture:GetSlotPolicy(s)
     local policyType = "NONE"
     local policyName = "Empty"
@@ -84,69 +84,88 @@ print("{SENTINEL}")
 
 
 def build_set_policies(assignments: dict[int, str]) -> str:
-    """Set policy cards in government slots (InGame context).
+    """Validate one final slot plan before unlocking and submitting it once.
 
-    assignments maps slot_index -> policy_type string.
-    Slots not listed keep their current policy. Use "NONE" to explicitly clear a slot.
-    Three-step: pre-checks (before UNLOCK), UNLOCK_POLICIES, then RequestPolicyChanges.
-
-    Pre-checks run before UNLOCK_POLICIES because CanSlotPolicy is reliable there.
-    It becomes stale same-frame after UNLOCK_POLICIES in the same Lua string.
+    The native eligibility check rejects active cards before considering a new
+    slot (GovernmentScreen.lua). Only explicit, unlocked, type-compatible
+    relocation may use that exception; final duplicates always fail first.
     """
-    pre_checks = []  # policy lookup + CanSlotPolicy + type check — BEFORE UNLOCK_POLICIES
-    add_entries = []  # addList[slot] = hash — AFTER UNLOCK_POLICIES
-    clear_entries = []  # clearList entries — only slots we're touching
+    from json import dumps
 
-    for slot_idx, policy_type in assignments.items():
-        # Always clear the slot we're about to reassign (or explicitly clearing)
-        clear_entries.append(f"table.insert(clearList, {slot_idx})")
-
-        if policy_type.upper() == "NONE":
-            # Explicit clear — add to clearList but skip addList/pre-checks
-            continue
-
-        pre_checks.append(
-            f'local pe_{slot_idx} = GameInfo.Policies["{policy_type}"]; '
-            f"if pe_{slot_idx} == nil then {_bail(f'ERR:POLICY_NOT_FOUND|{policy_type}')} end; "
-            # CanSlotPolicy pre-check (reliable before UNLOCK_POLICIES).
-            # CanSlotPolicy returns false when the policy is already in that exact slot,
-            # so we also check alreadyThere to avoid false positives on replace-in-place.
-            f"local canSlot_{slot_idx} = pCulture:CanSlotPolicy(pe_{slot_idx}.Index, {slot_idx}); "
-            f"local alreadyThere_{slot_idx} = (pCulture:GetSlotPolicy({slot_idx}) == pe_{slot_idx}.Index); "
-            f"if not canSlot_{slot_idx} and not alreadyThere_{slot_idx} then "
-            f'local pType_{slot_idx} = pe_{slot_idx}.GovernmentSlotType or "unknown"; '
-            f"local st_{slot_idx} = pCulture:GetSlotType({slot_idx}); "
-            f'local sName_{slot_idx} = slotNames[st_{slot_idx}] or ("type_" .. st_{slot_idx}); '
-            f"{_bail_lua(f''' "ERR:CANNOT_SLOT|{policy_type} (" .. pType_{slot_idx} .. ") rejected for slot {slot_idx} (" .. sName_{slot_idx} .. ")" ''')} end; "
-            # Belt-and-suspenders type string check, now covers Economic/Military/Diplomatic (sType < 3)
-            f"local sType_{slot_idx} = pCulture:GetSlotType({slot_idx}); "
-            f"local pSlot_{slot_idx} = slotTypeMap[pe_{slot_idx}.GovernmentSlotType] or -1; "
-            f"if sType_{slot_idx} < 3 and pSlot_{slot_idx} ~= sType_{slot_idx} "
-            f"  and pe_{slot_idx}.GovernmentSlotType ~= 'SLOT_WILDCARD' then "
-            f'local sName = slotNames[sType_{slot_idx}] or "unknown"; '
-            f'local pType = pe_{slot_idx}.GovernmentSlotType or "unknown"; '
-            f"{_bail_lua(f''' "ERR:SLOT_MISMATCH|{policy_type} (" .. pType .. ") cannot go in slot {slot_idx} (" .. sName .. ")" ''')} end"
-        )
-        add_entries.append(f"addList[{slot_idx}] = pe_{slot_idx}.Hash")
-
-    pre_lua = "; ".join(pre_checks)
-    add_lua = "; ".join(add_entries)
-    clear_lua = "; ".join(clear_entries)
-
+    entries = ", ".join(
+        f"[{slot}]={dumps(policy, ensure_ascii=False)}"
+        for slot, policy in assignments.items()
+    )
     return f"""
 local me = Game.GetLocalPlayer()
 local pCulture = Players[me]:GetCulture()
 local numSlots = pCulture:GetNumPolicySlots()
 if numSlots <= 0 then {_bail("ERR:NO_GOVERNMENT|No government selected")} end
-local slotNames = {{[0]="Economic", [1]="Military", [2]="Diplomatic", [3]="Wildcard", [4]="Wildcard"}}
-local slotTypeMap = {{SLOT_ECONOMIC=0, SLOT_MILITARY=1, SLOT_DIPLOMATIC=2, SLOT_WILDCARD=3, SLOT_GREAT_PERSON=4}}
-{pre_lua}
+local requested = {{{entries}}}
+local current, final, origins = {{}}, {{}}, {{}}
+for slot = 0, numSlots - 1 do
+    local index = pCulture:GetSlotPolicy(slot)
+    current[slot], final[slot] = index, index
+    if index >= 0 then origins[index] = slot end
+end
+for slot, policyType in pairs(requested) do
+    if type(slot) ~= "number" or slot % 1 ~= 0 or slot < 0 or slot >= numSlots then
+        {_bail_lua('"ERR:INVALID_POLICY_SLOT|" .. tostring(slot)')}
+    end
+    if string.upper(policyType) == "NONE" then
+        final[slot] = -1
+    else
+        local policy = GameInfo.Policies[policyType]
+        if not policy then {_bail_lua('"ERR:POLICY_NOT_FOUND|" .. policyType')} end
+        final[slot] = policy.Index
+    end
+end
+local seen = {{}}
+for slot = 0, numSlots - 1 do
+    local index = final[slot]
+    if index >= 0 then
+        if seen[index] ~= nil then
+            {_bail_lua('"ERR:DUPLICATE_POLICY|" .. GameInfo.Policies[index].PolicyType')}
+        end
+        seen[index] = slot
+    end
+end
+local clearList, addList = {{}}, {{}}
+for slot = 0, numSlots - 1 do
+    local index = final[slot]
+    if index >= 0 then
+        local policy = GameInfo.Policies[index]
+        if not policy then {_bail_lua('"ERR:POLICY_NOT_FOUND|" .. tostring(index)')} end
+        local slotType = GameInfo.GovernmentSlots[pCulture:GetSlotType(slot)]
+        if not slotType then {_bail_lua('"ERR:UNKNOWN_SLOT_TYPE|" .. slot')} end
+        local acceptsAny = slotType.AllowsAnyPolicy == true or slotType.AllowsAnyPolicy == 1
+        if not acceptsAny and slotType.GovernmentSlotType ~= policy.GovernmentSlotType then
+            {_bail_lua('"ERR:SLOT_MISMATCH|" .. policy.PolicyType .. " cannot go in slot " .. slot .. " (" .. slotType.GovernmentSlotType .. ")"')}
+        end
+        if not pCulture:IsPolicyUnlocked(policy.Hash) then
+            {_bail_lua('"ERR:POLICY_LOCKED|" .. policy.PolicyType')}
+        end
+        if pCulture:IsPolicyObsolete(policy.Hash) then
+            {_bail_lua('"ERR:POLICY_OBSOLETE|" .. policy.PolicyType')}
+        end
+        local origin = origins[index]
+        local alreadyThere = current[slot] == index
+        local relocating = origin ~= nil and origin ~= slot
+            and requested[origin] ~= nil and final[origin] ~= index
+        if not pCulture:CanSlotPolicy(index, slot) and not alreadyThere and not relocating then
+            {_bail_lua('"ERR:CANNOT_SLOT|" .. policy.PolicyType .. " rejected for slot " .. slot')}
+        end
+        addList[slot] = policy.Hash
+    end
+    table.insert(clearList, slot)
+end
 UI.RequestPlayerOperation(me, PlayerOperations.UNLOCK_POLICIES, {{}})
-local clearList = {{}}
-{clear_lua}
-local addList = {{}}
-{add_lua}
 pCulture:RequestPolicyChanges(clearList, addList)
+print("POLICY_PLAN_COUNT|" .. numSlots)
+for slot = 0, numSlots - 1 do
+    local policy = GameInfo.Policies[final[slot]]
+    print("POLICY_PLAN|" .. slot .. "|" .. (policy and policy.PolicyType or "NONE"))
+end
 print("OK:POLICIES_SET|Policies updated. Use get_policies to verify.")
 print("{SENTINEL}")
 """
