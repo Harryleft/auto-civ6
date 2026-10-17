@@ -1088,12 +1088,27 @@ class CongressResolution:
 class CongressProposal:
     """A discussion proposal to vote on."""
 
-    sender_id: int
+    sender_id: int | None
     sender_name: str
     target_id: int
     target_name: str
-    proposal_type: int
+    proposal_type: int | None
     description: str
+    proposal_key: str = ""
+    category: str = ""
+    category_name: str = ""
+    proposal_blocker_type: str = ""
+    type_name: str = ""
+    name: str = ""
+    emergency_type: str = ""
+    disabled: bool = False
+    eligible: bool = False
+    can_upvote: bool = False
+    can_downvote: bool = False
+    voting_restriction: str = ""
+    restriction_reason: str = ""
+    max_votes: int = 0
+    favor_costs: list[int] = field(default_factory=list)
 
 
 @dataclass
@@ -1110,6 +1125,9 @@ class WorldCongressStatus:
     native_stage: str = "UNKNOWN"
     local_request: str = "UNKNOWN"
     proposal_status: str = "UNKNOWN"  # Eligible proposals: CHOICES, EMPTY, or UNKNOWN.
+    proposal_error: str = ""
+    vote_cost_status: str = "UNKNOWN"
+    vote_allocation: str = ""
 
 
 # --- Scattered dataclasses (originally defined mid-file near their builders) ---

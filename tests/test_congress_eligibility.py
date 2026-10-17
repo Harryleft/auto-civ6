@@ -48,7 +48,7 @@ Game = {
         GetMeetingStatus = function() return {TurnsLeft=0} end,
         GetProposals = function() return proposals end,
         GetResolutions = function() return resolutions end,
-        GetVotesandFavorCost = function() return {MaxVotes=5, [0]=0} end,
+        GetVotesandFavorCost = function() return {MaxVotes=5, [0]=0, [1]=10, [2]=30, [3]=60, [4]=100} end,
     } end,
 }
 PlayerConfigurations = {[0]={GetCivilizationTypeName=function() return "CIVILIZATION_SUMERIA" end}}
@@ -108,7 +108,10 @@ UI = {RequestPlayerOperation=record_operation, RequestAction=record_action}
 
 
 def proposal_status(*proposals):
-    return {"Proposals": {"EMERGENCY": {"ProposalsOfType": list(proposals)}}}
+    rows = [({"TypeName": f"FIXTURE_PROPOSAL_{i}", "Target": 100+i,
+              "Name": "Fixture proposal", "Description": "Fixture description"} | proposal)
+            if isinstance(proposal, dict) else proposal for i, proposal in enumerate(proposals)]
+    return {"Proposals": {"EMERGENCY": {"ProposalsOfType": rows}}}
 
 
 def test_all_disabled_proposals_use_empty_plan_without_opening_or_casting_votes():

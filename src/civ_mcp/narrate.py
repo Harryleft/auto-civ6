@@ -1629,22 +1629,13 @@ def narrate_world_congress(status: lq.WorldCongressStatus) -> str:
             lines.append(
                 "World Congress: FIRES THIS TURN — use queue_wc_votes() before end_turn()!"
             )
-        # Build clear cost table: "N votes = X favor total"
-        costs = status.favor_costs
-        if costs and len(costs) > 1:
-            cost_entries = []
-            for i, c in enumerate(costs):
-                n = i + 1  # 1-indexed vote count
-                if n == 1:
-                    cost_entries.append("1 vote=free")
-                else:
-                    cost_entries.append(f"{n}={c}")
-                if c > status.favor:
-                    break  # stop showing costs we can't afford
-            costs_str = ", ".join(cost_entries)
-        else:
-            costs_str = "1 vote=free, 2=10, 3=30, 4=60, 5=100, 6=150, 7=210, 8=280, 9=360, 10=450, 11=550"
-        lines.append(f"Favor: {status.favor} | Vote costs (cumulative): {costs_str}")
+        costs_str = ", ".join(f"{i+1}={cost}" for i, cost in enumerate(status.favor_costs))
+        if status.vote_cost_status != "KNOWN": costs_str = "UNKNOWN"
+        lines.append(f"Favor: {status.favor} | Resolution vote costs (cumulative): {costs_str}")
+        if status.proposal_error:
+            lines.append(f"Proposal details UNKNOWN: {status.proposal_error}")
+        if status.vote_allocation:
+            lines.append(f"Local plan allocation (not acceptance): {status.vote_allocation}")
     else:
         if status.turns_until_next >= 0:
             lines.append(
@@ -1714,7 +1705,16 @@ def narrate_world_congress(status: lq.WorldCongressStatus) -> str:
     if status.proposals:
         lines.append("\nProposals:")
         for p in status.proposals:
-            lines.append(f"  {p.sender_name} -> {p.target_name}: {p.description}")
+            lines.append(f"  {p.name} [{p.category_name} ({p.category}), {p.type_name}, type={p.proposal_type}, emergency={p.emergency_type}]")
+            lines.append(f"  proposal_key: {p.proposal_key}; sender={p.sender_id if p.sender_id is not None else 'NONE'} ({p.sender_name}); target={p.target_id} ({p.target_name})")
+            lines.append(f"  {p.description}")
+            directions = ", ".join(label for allowed, label in ((p.can_upvote, '1=up'), (p.can_downvote, '2=down')) if allowed)
+            lines.append(f"  Eligible: {p.eligible}; Disabled: {p.disabled}; options: {directions or 'none'}; restriction: {p.voting_restriction or p.proposal_blocker_type or 'none'} {p.restriction_reason}")
+            lines.append("  Cumulative favor: " + ", ".join(f"{i+1}={cost}" for i, cost in enumerate(p.favor_costs)) + f"; max votes: {p.max_votes}")
+            if p.eligible:
+                option = 1 if p.can_upvote else 2
+                lines.append(f'  Explicit choice format (choose option/votes): {{"proposal_key": "{p.proposal_key}", "option": {option}, "votes": 1}}')
+        lines.append("Provide every eligible resolution/proposal once in one votes array. Reserve every first-vote cost, then allocate extra votes in input order within one favor budget; send resolutions before proposals.")
 
     return "\n".join(lines)
 

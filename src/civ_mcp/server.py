@@ -1696,31 +1696,30 @@ async def open_world_congress(ctx: Context) -> str:
 
 @mcp.tool()
 async def queue_wc_votes(ctx: Context, votes: str) -> str:
-    """Pre-configure World Congress votes for the upcoming session.
+    """Submit a complete explicit World Congress resolution/proposal plan.
 
     Args:
-        votes: JSON array of vote objects, e.g.
-            '[{"hash": -513644209, "option": 1, "target": 2, "votes": 5}]'
-            hash = resolution type hash (from get_world_congress)
-            option = 1 for A, 2 for B
-            target = player ID for PlayerType resolutions (from get_world_congress
-                     target list, e.g. [target=2] Portugal); for other resolutions,
-                     use the shown 0-based target index or a raw target string.
-            votes = max votes to allocate (will use as many as favor allows)
+        votes: JSON array. Resolutions retain {"hash": ..., "option": 1 or 2,
+            "target": ..., "votes": N}. Proposals use {"proposal_key": "exact key
+            from get_world_congress", "option": 1 (up) or 2 (down), "votes": N}.
+            Resolution target is the shown player ID for PlayerType, otherwise
+            the shown zero-based index or exact raw value. Never mix identifiers.
 
-    Call this BEFORE end_turn when get_world_congress shows 0 turns until next
-    session. Registers an event handler that fires during WC processing and
-    casts your votes with the specified preferences. Provide all four fields
-    for every resolution; missing choices never receive default votes.
-    If already in session, the specified votes are submitted immediately so
-    one congress-stage continuation is requested after votes and submission.
-    The original ordinary end-turn request is never replayed. Repeated calls
-    report the existing request; they do not repeat votes or continuation.
-    An empty list is allowed only for a verified no-choice native stage;
-    non-empty or unknown proposal choices are rejected without default votes.
+    Cover every eligible item once: Stage1 resolutions and proposals, Stage2
+    proposals only. Disabled/both-direction-blocked items need no vote. Unknown
+    identities, costs, restrictions, incomplete plans and illegal choices submit
+    nothing. [] is allowed only for a verified native stage with no choices.
 
-    If you don't call this, end_turn will pause at the World Congress session
-    and return control to you for interactive voting.
+    Votes are maxima: reserve every required first-vote cost, then allocate extra
+    votes in input order using one favor budget and each native category's cost
+    table/limit. The result reports actual requested counts and cumulative costs.
+    Native operations send resolutions first, proposals second, then one submit
+    and one stage continuation. This is not an acceptance receipt.
+
+    Before a session the plan registers for its native stage event. In session it
+    executes immediately. Repeats/lost replies inspect the existing request;
+    partial or unknown submissions never replay votes or continuation. Read
+    get_world_congress before voting and choose every option explicitly.
     """
     gs = _get_game(ctx)
 
