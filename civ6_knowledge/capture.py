@@ -30,6 +30,7 @@ TABLES = PRIMARY_TABLES + (
 TABLES = tuple(dict.fromkeys(TABLES + (
     'Happinesses', 'PolicyModifiers',
     'Yields',
+    'BuildingModifiers',
     'Building_YieldChanges',
     'Building_CitizenYieldChanges',
     'BuildingPrereqs',
@@ -171,10 +172,12 @@ def read_text(path: Path, tables: dict, xml_inputs: list) -> tuple[dict, dict]:
                 origins.setdefault(tag, {})[language] = 'user/Cache/DebugLocalization.sqlite'
     # The cached localization DB may lack expansion-only tags. Fill missing
     # literals from installed Expansion2 text, without overriding cached entries.
+    # BaseGameText is an English source group too; configuration translations
+    # supply some in-game names, such as Diplomatic Victory.
     for file, logical_path in xml_inputs:
         document = ET.parse(file)
         for group in document.getroot():
-            default = 'en_US' if group.tag == 'EnglishText' else None
+            default = 'en_US' if group.tag in ('EnglishText', 'BaseGameText') else None
             for row in group:
                 language = row.get('Language', default)
                 tag = row.get('Tag')
@@ -229,7 +232,7 @@ def capture(game_root: Path, user_root: Path, steam_manifest: Path) -> dict:
         if p.is_file():
             inputs[relative] = (p, 'game/Contents/' + relative)
     text_root = game_root / 'Assets/DLC/Expansion2/Text'
-    xml_paths = sorted((text_root / 'en_US').glob('*.xml')) + [p for p in [text_root / 'Expansion2_Translations_Text.xml'] if p.is_file()]
+    xml_paths = sorted((text_root / 'en_US').glob('*.xml')) + [p for p in [text_root / 'Expansion2_Translations_Text.xml', text_root / 'Expansion2_Translations_ConfigText.xml'] if p.is_file()]
     xml_inputs = [(p, 'game/Contents/' + str(p.relative_to(game_root))) for p in xml_paths]
     for p, logical in xml_inputs:
         inputs[logical] = (p, logical)
