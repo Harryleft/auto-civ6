@@ -197,3 +197,11 @@ def test_identity_refresh_does_not_clear_unknown_lifecycle_or_action():
     assert asyncio.run(state.get_game_identity()) == ("rome", 11)
     assert state.pending_action_summary
     assert state._pending_load and state._pending_save
+
+
+def test_wrong_owner_city_does_not_confirm_founding():
+    engine = Engine(writes=[["OK:FOUNDED|19,17"]], reads=[["CITY_EXISTS|owner:1"], ConnectionError("lost")])
+    state = GameState(engine)
+    state.dismiss_popup = no_dismiss
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.found_city(0))
+    assert state.pending_action_summary

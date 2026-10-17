@@ -1477,8 +1477,11 @@ class TestGreatPersonResults:
 
 
 class TestSaveCheckpoint:
-    def prepare(self, monkeypatch, *, turns=(12, 12), identities=None):
+    def prepare(self, monkeypatch, tmp_path, *, turns=(12, 12), identities=None):
         from types import SimpleNamespace
+        from civ_mcp import checkpoints, game_launcher
+        monkeypatch.setattr(game_launcher, "SINGLE_SAVE_DIR", str(tmp_path))
+        monkeypatch.setattr(checkpoints, "CHECKPOINT_DIR", tmp_path / "metadata")
         gs, conn = _gs()
         snapshots = iter(turns)
         game_ids = iter(identities or [("babylon", 42), ("babylon", 42)])
@@ -1493,44 +1496,46 @@ class TestSaveCheckpoint:
         async def save(connection, name):
             assert connection is conn
             saves.append(name)
+            (tmp_path / (name + ".Civ6Save")).write_bytes(b"completed-save")
+            checkpoints.mark_complete(name)
             return "Saved: checkpoint; file confirmed (100 bytes)."
         monkeypatch.setattr(gs, "get_game_identity", identity)
         monkeypatch.setattr(gs, "get_game_overview", overview)
         monkeypatch.setattr(game_lifecycle, "save_game", save)
         return gs, conn, saves
 
-    def test_confirmed_checkpoint_includes_identity_and_turn(self, monkeypatch):
-        gs, conn, saves = self.prepare(monkeypatch)
+    def test_confirmed_checkpoint_includes_identity_and_turn(self, monkeypatch, tmp_path):
+        gs, conn, saves = self.prepare(monkeypatch, tmp_path)
         result = run(gs.save_game("checkpoint"))
         assert result.endswith("Civilization babylon, seed 42, turn 12.")
         assert saves == ["checkpoint"]
         assert conn.calls == []
 
-    def test_pending_end_turn_cannot_create_recovery_checkpoint(self, monkeypatch):
-        gs, _, saves = self.prepare(monkeypatch)
+    def test_pending_end_turn_cannot_create_recovery_checkpoint(self, monkeypatch, tmp_path):
+        gs, _, saves = self.prepare(monkeypatch, tmp_path)
         gs._pending_end_turn = True
         assert "pending" in run(gs.save_game("checkpoint"))
         assert saves == []
         assert gs._pending_end_turn
 
-    def test_changed_turn_is_not_a_confirmed_checkpoint(self, monkeypatch):
-        gs, _, saves = self.prepare(monkeypatch, turns=(12, 13))
+    def test_changed_turn_is_not_a_confirmed_checkpoint(self, monkeypatch, tmp_path):
+        gs, _, saves = self.prepare(monkeypatch, tmp_path, turns=(12, 13))
         assert run(gs.save_game("checkpoint")).startswith("ERR:OUTCOME_UNKNOWN")
         assert saves == ["checkpoint"]
 
-    def test_changed_world_is_not_a_confirmed_checkpoint(self, monkeypatch):
-        gs, _, _ = self.prepare(monkeypatch, identities=[("babylon", 42), ("rome", 42)])
+    def test_changed_world_is_not_a_confirmed_checkpoint(self, monkeypatch, tmp_path):
+        gs, _, _ = self.prepare(monkeypatch, tmp_path, identities=[("babylon", 42), ("rome", 42)])
         assert run(gs.save_game("checkpoint")).startswith("ERR:OUTCOME_UNKNOWN")
 
-    def test_lost_verification_does_not_replay_or_hide_the_saved_file(self, monkeypatch):
-        gs, _, saves = self.prepare(monkeypatch, identities=[("babylon", 42), ConnectionError("lost")])
+    def test_lost_verification_does_not_replay_or_hide_the_saved_file(self, monkeypatch, tmp_path):
+        gs, _, saves = self.prepare(monkeypatch, tmp_path, identities=[("babylon", 42), ConnectionError("lost")])
         result = run(gs.save_game("checkpoint"))
         assert result.startswith("ERR:OUTCOME_UNKNOWN|Saved: checkpoint;")
         assert "verification failed" in result
         assert saves == ["checkpoint"]
 
-    def test_unknown_identity_refuses_save(self, monkeypatch):
-        gs, _, saves = self.prepare(monkeypatch, identities=[("unknown", 0)])
+    def test_unknown_identity_refuses_save(self, monkeypatch, tmp_path):
+        gs, _, saves = self.prepare(monkeypatch, tmp_path, identities=[("unknown", 0)])
         assert run(gs.save_game("checkpoint")).startswith("Error:")
         assert saves == []
 
@@ -1541,7 +1546,7 @@ class TestSaveCheckpoint:
 
 
 class TestSessionReset:
-    def test_submitted_index_load_discards_previous_world(self, monkeypatch):
+    def test_submitted_index_load_discards_previous_world(self, monkeypatch, tmp_path):
         async def loaded(conn, index):
             return "Loading save: chosen"
         async def disconnect():
@@ -1553,7 +1558,7 @@ class TestSessionReset:
         assert run(gs.load_save(1)).startswith("Loading")
         assert not gs._pending_end_turn
 
-    def test_rejected_load_preserves_current_session(self, monkeypatch):
+    def test_rejected_load_preserves_current_session(self, monkeypatch, tmp_path):
         async def rejected(conn, index):
             return "Error: rejected"
         monkeypatch.setattr(game_lifecycle, "load_save", rejected)
@@ -1562,7 +1567,7 @@ class TestSessionReset:
         assert run(gs.load_save(1)).startswith("Error")
         assert gs._pending_end_turn
 
-    def test_unknown_native_load_discards_previous_session(self, monkeypatch):
+    def test_unknown_native_load_discards_previous_session(self, monkeypatch, tmp_path):
         async def unknown(conn, name):
             return "ERR:OUTCOME_UNKNOWN|response lost"
         monkeypatch.setattr(game_lifecycle, "load_game_save", unknown)
