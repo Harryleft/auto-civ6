@@ -37,11 +37,19 @@ def snapshot():
     }
 
 
+def legacy_distribution(tmp_path):
+    # Keep four-topic fixtures independent of later topic definitions.
+    distribution = tmp_path / 'legacy-distribution'
+    if not distribution.exists():
+        shutil.copytree(ROOT / 'civ6_knowledge', distribution, ignore=shutil.ignore_patterns('*.json', '__pycache__'))
+    return distribution
+
+
 def build(tmp_path, data=None):
     source = tmp_path / 'input.json'
     source.write_text(json.dumps(data or snapshot()), encoding='utf-8')
     output = tmp_path / 'knowledge'
-    result = subprocess.run([sys.executable, str(ROOT / 'civ6_knowledge/build.py'), '--source', str(source), '--output', str(output)], capture_output=True, text=True)
+    result = subprocess.run([sys.executable, str(legacy_distribution(tmp_path) / 'build.py'), '--source', str(source), '--output', str(output)], capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
     return output
 
@@ -126,14 +134,14 @@ def test_incomplete_sources_and_dangling_prerequisites_fail_without_output(tmp_p
     del data['tables']['VotingBlockers']
     source = tmp_path / 'bad.json'
     source.write_text(json.dumps(data))
-    result = subprocess.run([sys.executable, str(ROOT / 'civ6_knowledge/build.py'), '--source', str(source), '--output', str(tmp_path / 'bad')], capture_output=True, text=True)
+    result = subprocess.run([sys.executable, str(legacy_distribution(tmp_path) / 'build.py'), '--source', str(source), '--output', str(tmp_path / 'bad')], capture_output=True, text=True)
     assert result.returncode == 2
     assert 'missing primary table' in json.loads(result.stdout)['error']
     assert not (tmp_path / 'bad').exists()
     data = snapshot()
     data['tables']['TechnologyPrereqs'][0]['PrereqTech'] = 'TECH_ABSENT'
     source.write_text(json.dumps(data))
-    result = subprocess.run([sys.executable, str(ROOT / 'civ6_knowledge/build.py'), '--source', str(source), '--output', str(tmp_path / 'bad')], capture_output=True, text=True)
+    result = subprocess.run([sys.executable, str(legacy_distribution(tmp_path) / 'build.py'), '--source', str(source), '--output', str(tmp_path / 'bad')], capture_output=True, text=True)
     assert result.returncode == 2
     assert 'dangling prerequisite' in json.loads(result.stdout)['error']
 
@@ -221,7 +229,7 @@ def test_missing_core_relationship_tables_cannot_build_a_complete_looking_tree(t
         source = tmp_path / 'incomplete.json'
         source.write_text(json.dumps(data))
         output = tmp_path / 'incomplete'
-        result = subprocess.run([sys.executable, str(ROOT / 'civ6_knowledge/build.py'), '--source', str(source), '--output', str(output)], capture_output=True, text=True)
+        result = subprocess.run([sys.executable, str(legacy_distribution(tmp_path) / 'build.py'), '--source', str(source), '--output', str(output)], capture_output=True, text=True)
         assert result.returncode == 2, table
         assert 'missing core relationship table' in json.loads(result.stdout)['error']
         assert not output.exists()
@@ -237,7 +245,7 @@ def test_missing_optional_coverage_is_derived_from_actual_tables(tmp_path):
 def test_malformed_snapshot_and_manifest_roots_fail_as_structured_errors(tmp_path):
     source = tmp_path / 'array.json'
     source.write_text('[]')
-    result = subprocess.run([sys.executable, str(ROOT / 'civ6_knowledge/build.py'), '--source', str(source), '--output', str(tmp_path / 'bad-root')], capture_output=True, text=True)
+    result = subprocess.run([sys.executable, str(legacy_distribution(tmp_path) / 'build.py'), '--source', str(source), '--output', str(tmp_path / 'bad-root')], capture_output=True, text=True)
     assert result.returncode == 2, result.stderr
     assert 'snapshot must be an object' in json.loads(result.stdout)['error']
     root = build(tmp_path)

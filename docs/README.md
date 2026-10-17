@@ -8,7 +8,7 @@ Agent 从根目录 [AGENTS.md](../AGENTS.md) 开始；命中任务后读取对�
 | --- | --- |
 | 安装依赖、配置 FireTuner 或 MCP 客户端 | [安装与启动](../README.md#安装与启动) |
 | 连接游戏、查询、动作、推进、世界议会 | [游戏操作](agent-playbook.md) |
-| 查询市政、科技、区域与议会规则 | [本机版本知识库](../civ6_knowledge/README.md) |
+| 查询研究、建设、经营、军事、外交或胜利规则 | [本机版本知识库](../civ6_knowledge/README.md) |
 | 保存、菜单换档、未知结果或完整恢复 | [保存与恢复](agent-recovery.md) |
 | 定位代码、离线测试、实机验收或提交 | [开发与验证](development.md) |
 | 理解状态所有权、Lua 和通信机制 | [当前架构](architecture.md) |
