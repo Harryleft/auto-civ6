@@ -30,10 +30,9 @@ for i, c in Players[me]:GetCities():Members() do
     if bq:GetSize() > 0 then
         local h = bq:GetCurrentProductionTypeHash()
         if h == 0 then
-            -- Ghost entry (Babylon eureka can obsolete queued items).
-            -- Try to clear it so the city reports as idle.
-            pcall(function() bq:RemoveAt(0) end)
-            producing = "nothing"
+            -- A nonempty queue with no item hash is not evidence of idle.
+            -- Queries report the anomaly without editing the queue.
+            producing = "CORRUPTED_QUEUE"
         else
             producing = hashName[h] or "UNKNOWN"
         end
@@ -159,6 +158,20 @@ for i, c in Players[me]:GetCities():Members() do
     if #allBuildings > 0 then
         print("CITYBLDG|" .. c:GetID() .. "|" .. table.concat(allBuildings, ","))
     end
+    -- Emit completion facts only when the native observation is complete.
+    -- Missing facts remain unknown; placed districts can still be unfinished.
+    pcall(function()
+        local completed = {}
+        for _, d in c:GetDistricts():Members() do
+            local info = GameInfo.Districts[d:GetType()]
+            if info and d:IsComplete() then
+                table.insert(completed, info.DistrictType .. "@" .. d:GetX() .. "," .. d:GetY())
+            end
+        end
+        local civ = PlayerConfigurations[me]:GetCivilizationTypeName()
+        local seed = GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")
+        print("CITYFACTS|" .. c:GetID() .. "|" .. c:GetOwner() .. "|" .. civ .. "|" .. tostring(seed) .. "|" .. table.concat(completed, ";"))
+    end)
 end
 for i = 1, #cityCoords do for j = i + 1, #cityCoords do
     local d = Map.GetPlotDistance(cityCoords[i].x, cityCoords[i].y, cityCoords[j].x, cityCoords[j].y)
@@ -428,16 +441,14 @@ def build_produce_item(
         )
     # Extra params for district placement
     xy_params = ""
-    xy_check_params = ""
     if target_x is not None and target_y is not None:
         xy_params = f"tParams[CityOperationTypes.PARAM_X] = {target_x}\ntParams[CityOperationTypes.PARAM_Y] = {target_y}"
-        xy_check_params = f"tCheck[CityOperationTypes.PARAM_X] = {target_x}\ntCheck[CityOperationTypes.PARAM_Y] = {target_y}"
     return f"""
 {_lua_get_city(city_id)}
 local item = GameInfo.{table_name}["{item_name}"]
 if item == nil then {_bail(f"ERR:ITEM_NOT_FOUND|{item_name}")} end
 local bq = pCity:GetBuildQueue()
-if not bq:CanProduce(item.Hash, true) then
+if "{itype}" ~= "DISTRICT" and not bq:CanProduce(item.Hash, true) then
     -- Diagnose why production is blocked
     local reason = ""
     pcall(function()
@@ -487,63 +498,110 @@ if "{item_name}" == "UNIT_TRADER" then
         return
     end
 end
-local tCheck = {{}}
-tCheck[CityOperationTypes.{param_key}] = item.Hash
-{xy_check_params}
-local canStart = CityManager.CanStartOperation(pCity, CityOperationTypes.BUILD, tCheck, true)
 local tParams = {{}}
 tParams[CityOperationTypes.{param_key}] = item.Hash
 {xy_params}
--- Always EXCLUSIVE: set_city_production's contract is "replace the current
--- build", not "queue alongside existing items". EXCLUSIVE clears the queue
--- and writes one item, avoiding silent no-ops that hit REPLACE_AT when the
--- queue is in a degenerate state.
+-- Check exactly the operation that will be submitted, including replacement
+-- mode. A reliable refusal is a completed rejection, never a pending action.
 tParams[CityOperationTypes.PARAM_INSERT_MODE] = CityOperationTypes.VALUE_EXCLUSIVE
-CityManager.RequestOperation(pCity, CityOperationTypes.BUILD, tParams)
-if canStart then
-    local turnsLeft = bq:GetTurnsLeft(item.Hash)
-    print("OK:PRODUCING|{item_name}|" .. turnsLeft .. " turns")
-else
-    -- Check for pillaged districts to give actionable error
-    local pillaged = {{}}
-    for _, d in pCity:GetDistricts():Members() do
-        if d:IsPillaged() then
-            local dInfo = GameInfo.Districts[d:GetType()]
-            if dInfo then table.insert(pillaged, dInfo.DistrictType) end
-        end
-    end
-    if #pillaged > 0 then
-        print("MAYBE:PRODUCING|{
-        item_name
-    }|canStart=false|PILLAGED:" .. table.concat(pillaged, ","))
-    else
-        print("MAYBE:PRODUCING|{item_name}|canStart=false")
-    end
+local checkOk, canStart, checkResults = pcall(function()
+    return CityManager.CanStartOperation(pCity, CityOperationTypes.BUILD, tParams, true)
+end)
+local target = "{f'target:{target_x},{target_y}|' if target_x is not None and target_y is not None else ''}"
+if not checkOk or type(canStart) ~= "boolean" then
+    print("ERR:PREFLIGHT_UNAVAILABLE|{item_name}|" .. target .. "not submitted|native eligibility unknown")
+    print("{SENTINEL}")
+    return
 end
+if canStart == false then
+    local facts = {{}}
+    -- This enum differs by context/build. Do not assume Command and Operation
+    -- result keys are interchangeable, or turn missing reasons into a guess.
+    pcall(function()
+        local reasonKey = CityOperationResults and CityOperationResults.FAILURE_REASONS
+        local reasons = reasonKey and type(checkResults) == "table" and checkResults[reasonKey]
+        if type(reasons) == "table" then
+            for _, reason in ipairs(reasons) do
+                if type(reason) == "string" then
+                    table.insert(facts, "native:" .. Locale.Lookup(reason):gsub("|", "/"))
+                end
+            end
+        end
+    end)
+    pcall(function()
+        local x, y = tParams[CityOperationTypes.PARAM_X], tParams[CityOperationTypes.PARAM_Y]
+        local plot = x ~= nil and y ~= nil and Map.GetPlot(x, y)
+        if plot then
+            table.insert(facts, "owner:" .. tostring(plot:GetOwner()))
+            local terrain = GameInfo.Terrains[plot:GetTerrainType()]
+            if terrain then table.insert(facts, "terrain:" .. terrain.TerrainType) end
+            local feature = GameInfo.Features[plot:GetFeatureType()]
+            if feature then table.insert(facts, "feature:" .. feature.FeatureType) end
+            local district = GameInfo.Districts[plot:GetDistrictType()]
+            if district then table.insert(facts, "existing_district:" .. district.DistrictType) end
+        end
+    end)
+    pcall(function()
+        local tech = item.PrereqTech and GameInfo.Technologies[item.PrereqTech]
+        if tech then
+            table.insert(facts, "prereq_tech:" .. item.PrereqTech .. "|has_tech:" .. tostring(Players[me]:GetTechs():HasTech(tech.Index)))
+        end
+    end)
+    if #facts == 0 then table.insert(facts, "native reason unavailable") end
+    print("ERR:CANNOT_START|{item_name}|" .. target .. "not submitted|" .. table.concat(facts, "|"))
+    print("{SENTINEL}")
+    return
+end
+CityManager.RequestOperation(pCity, CityOperationTypes.BUILD, tParams)
+local turnsLeft = bq:GetTurnsLeft(item.Hash)
+print("OK:PRODUCING|{item_name}|" .. turnsLeft .. " turns")
 print("{SENTINEL}")
 """
 
 
-def build_verify_production(city_id: int, item_name: str) -> str:
-    """GameCore readback: verify production was set after RequestOperation.
+def build_verify_production(
+    city_id: int, item_name: str, district_position: tuple[int, int] | None = None
+) -> str:
+    """Read-only verification after RequestOperation, in the native Lua context.
 
-    Uses CurrentlyBuilding() (GameCore) instead of GetCurrentProductionTypeHash()
-    which is InGame-only and returns nil in GameCore context.
+    District entity coordinates and queue hashes require InGame. Other
+    production keeps the existing GameCore CurrentlyBuilding() readback.
     """
+    if district_position is not None:
+        current_item = '''
+local productionHash = bq:GetCurrentProductionTypeHash()
+local row = productionHash and productionHash ~= 0 and GameInfo.Districts[productionHash]
+local cur = row and row.DistrictType
+'''
+        # Queue identity alone cannot prove which tile received a district.
+        # Report city-owned district entities; GameState matches the exact intent.
+        verification = '''
+print("PRODUCTION|" .. tostring(cur))
+for _, district in pCity:GetDistricts():Members() do
+    local row = GameInfo.Districts[district:GetType()]
+    if row then
+        print("DISTRICT|" .. row.DistrictType .. "|" .. district:GetX() .. "|" .. district:GetY())
+    end
+end
+'''
+    else:
+        current_item = "local cur = bq:CurrentlyBuilding()"
+        verification = f'''
+if cur == "{item_name}" then
+    print("CONFIRMED|production queue verified")
+else
+    print("NOT_SET|current=" .. tostring(cur) .. "|expected={item_name}")
+end
+'''
     return f"""
 local me = Game.GetLocalPlayer()
 local pCity = Players[me]:GetCities():FindID({city_id} % 65536)
 if pCity == nil then print("NOT_FOUND"); print("{SENTINEL}"); return end
 local bq = pCity:GetBuildQueue()
-local cur = bq:CurrentlyBuilding()
-if cur == "{item_name}" then
-    -- macOS GameCore exposes GetTurnsLeft but raises "Not Implemented".
-    -- The queue identity is sufficient verification; the InGame response
-    -- already reports the production estimate.
-    print("CONFIRMED|production queue verified")
-else
-    print("NOT_SET|current=" .. tostring(cur) .. "|expected={item_name}")
-end
+{current_item}
+-- GameCore GetTurnsLeft is not implemented on macOS. Confirmation uses
+-- queue/placement facts; the submission response supplies the estimate.
+{verification}
 print("{SENTINEL}")
 """
 
@@ -719,6 +777,18 @@ def parse_cities_response(lines: list[str]) -> tuple[list[CityInfo], list[str]]:
                     city_by_id[cid].pillaged_improvements = [
                         r for r in p[3].split(",") if r
                     ]
+            continue
+        if line.startswith("CITYFACTS|"):
+            p = line.split("|")
+            try:
+                cid, owner, seed = int(p[1]), int(p[2]), int(p[4])
+                if len(p) == 6 and p[3].startswith("CIVILIZATION_") and cid in city_by_id:
+                    city = city_by_id[cid]
+                    city.owner_id = owner
+                    city.game_identity = (p[3].removeprefix("CIVILIZATION_").lower(), seed)
+                    city.completed_districts = [d for d in p[5].split(";") if d]
+            except (IndexError, ValueError):
+                pass  # Partial/malformed observation cannot prove completion.
             continue
         if line.startswith("CITYBLDG|"):
             p = line.split("|")

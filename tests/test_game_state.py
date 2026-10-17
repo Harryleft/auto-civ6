@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
 import civ_mcp.game_lifecycle as game_lifecycle
 from civ_mcp import lua as lq
 from civ_mcp.game_state import (
@@ -321,6 +323,29 @@ class TestGetGameOverviewBootstrap:
     next end_turn diffs against. A failed bootstrap must never lose the
     overview itself."""
 
+    def test_overview_then_units_and_cities_share_working_ingame_context(self):
+        gs, conn = _gs([
+            ("write", [_OVERVIEW_LINE]),
+            ("write", [_UNIT_LINE]),
+            ("write", [_CITY_LINE]),
+            ("write", [_STOCKPILE_LINE]),
+            ("write", [_UNIT_LINE]),
+            ("write", [_CITY_LINE]),
+        ])
+
+        async def go():
+            overview = await gs.get_game_overview()
+            units = await gs.get_units()
+            cities, _ = await gs.get_cities()
+            return overview, units, cities
+
+        overview, units, cities = run(go())
+        assert overview.turn == 12
+        assert [unit.unit_id for unit in units] == [65536]
+        assert [city.city_id for city in cities] == [123]
+        assert gs._last_snapshot is not None
+        assert conn.exhausted
+
     def test_empty_overview_cannot_confirm_a_loaded_game(self):
         import pytest
 
@@ -332,7 +357,7 @@ class TestGetGameOverviewBootstrap:
         gs, conn = _gs(
             [
                 ("write", [_OVERVIEW_LINE]),
-                ("read", [_UNIT_LINE]),
+                ("write", [_UNIT_LINE]),
                 ("write", [_CITY_LINE]),
                 ("write", [_STOCKPILE_LINE]),
             ]
@@ -356,7 +381,7 @@ class TestGetGameOverviewBootstrap:
         gs, conn = _gs(
             [
                 ("write", [_OVERVIEW_LINE]),
-                ("read", [_UNIT_LINE]),
+                ("write", [_UNIT_LINE]),
                 ("write", [_CITY_LINE]),
                 ("write", [_STOCKPILE_LINE]),
                 ("write", [_OVERVIEW_LINE]),
@@ -384,7 +409,7 @@ class TestGetGameOverviewBootstrap:
         gs, _ = _gs(
             [
                 ("write", [_OVERVIEW_LINE]),
-                ("read", RuntimeError("units query blew up")),
+                ("write", RuntimeError("units query blew up")),
             ]
         )
 
@@ -394,6 +419,60 @@ class TestGetGameOverviewBootstrap:
         ov = run(go())
         assert ov.turn == 12
         assert gs._last_snapshot is None
+
+    @pytest.mark.parametrize("failed_query", ["units", "cities", "stockpiles"])
+    def test_required_snapshot_never_uses_cached_or_partial_load_evidence(self, failed_query):
+        script = [("write", [_OVERVIEW_LINE])]
+        for query, lines in [("units", [_UNIT_LINE]), ("cities", [_CITY_LINE]),
+                             ("stockpiles", [_STOCKPILE_LINE])]:
+            script.append(("write", ValueError(f"{query} unavailable") if query == failed_query else lines))
+            if query == failed_query:
+                break
+        gs, conn = _gs(script)
+        gs._last_snapshot = object()
+
+        with pytest.raises(ValueError, match=f"{failed_query} unavailable"):
+            run(gs.get_game_overview(require_snapshot=True))
+        assert conn.exhausted
+
+
+class TestReadOnlyCityFacts:
+    def test_snapshot_preserves_observed_city_completion_facts(self):
+        gs, _ = _gs([
+            ("write", [_OVERVIEW_LINE]), ("write", [_UNIT_LINE]),
+            ("write", [_CITY_LINE, "CITYBLDG|123|PALACE,MONUMENT",
+                       "CITYFACTS|123|0|CIVILIZATION_ROME|42|DISTRICT_CAMPUS@11,20"]),
+            ("write", []),
+        ])
+        run(gs.get_game_overview())
+        city = gs._last_snapshot.cities[123]
+        assert (city.x, city.y) == (10, 20)
+        assert city.owner_id == 0
+        assert city.game_identity == ("rome", 42)
+        assert city.buildings == ["BUILDING_PALACE", "BUILDING_MONUMENT"]
+        assert city.completed_districts == ["DISTRICT_CAMPUS@11,20"]
+
+    def test_partial_city_facts_do_not_turn_into_completion_evidence(self):
+        gs, _ = _gs([
+            ("write", [_OVERVIEW_LINE]), ("write", [_UNIT_LINE]),
+            ("write", [_CITY_LINE, "CITYFACTS|123|0|CIVILIZATION_ROME|nil|",
+                       "CITYFACTS|123|0|CIVILIZATION_ROME"]),
+            ("write", []),
+        ])
+        run(gs.get_game_overview())
+        city = gs._last_snapshot.cities[123]
+        assert city.game_identity is None
+        assert city.buildings is None
+        assert city.completed_districts is None
+
+    def test_invalid_queue_is_reported_without_repair(self):
+        line = _CITY_LINE.replace("BUILDING_MONUMENT", "CORRUPTED_QUEUE")
+        gs, conn = _gs([("write", [line])])
+        cities, _ = run(gs.get_cities())
+        assert cities[0].currently_building == "CORRUPTED_QUEUE"
+        # This existing boundary carries generated Lua to the real engine.
+        # Reading must never submit a queue edit, even for a zero hash.
+        assert not any("RemoveAt" in lua or "RequestOperation" in lua for _, lua in conn.calls)
 
 
 # ---------------------------------------------------------------------------
@@ -416,9 +495,9 @@ def _unit(uid, hp=100, name="Warrior", x=1, y=2):
     )
 
 
-def _city(cid, pop=2, building="NONE", name="Capital"):
+def _city(cid, pop=2, building="NONE", name="Capital", **facts):
     return lq.CitySnapshot(
-        city_id=cid, name=name, population=pop, currently_building=building
+        city_id=cid, name=name, population=pop, currently_building=building, **facts
     )
 
 
@@ -483,19 +562,95 @@ class TestDiffSnapshots:
         assert any("grew to population 4" in m for m in messages)
         assert any("New city founded: Colony!" in m for m in messages)
 
-    def test_finished_building_reports_what_is_now_queued(self):
+    def test_cleared_queue_does_not_claim_completion_without_product(self):
         before = _snap(cities={5: _city(5, building="BUILDING_MONUMENT")})
         after = _snap(cities={5: _city(5, building="NONE")})
         (event,) = self.diff(before, after)
         assert event.priority == 2
-        assert "finished building BUILDING_MONUMENT" in event.message
+        assert "completion unconfirmed" in event.message
+        assert "finished building" not in event.message
         assert "Now: nothing." in event.message
 
-    def test_corrupted_queue_is_called_out_as_invalidated(self):
+    def test_new_building_reports_finished_while_old_building_does_not(self):
+        facts = dict(
+            x=10, y=20, owner_id=0, game_identity=("rome", 42), completed_districts=[]
+        )
+        after = _snap(cities={5: _city(5, buildings=["BUILDING_MONUMENT"], **facts)})
+        for existing, expected in (([], True), (["BUILDING_MONUMENT"], False), (None, False)):
+            before = _snap(cities={5: _city(
+                5, building="BUILDING_MONUMENT", buildings=existing, **facts
+            )})
+            (event,) = self.diff(before, after)
+            assert ("finished building" in event.message) is expected
+
+    def test_unit_completion_requires_new_matching_unit_in_this_city(self):
+        facts = dict(x=10, y=20, owner_id=0, game_identity=("rome", 42))
+        old = _unit(1, x=10, y=20)
+        before = _snap(
+            units={1: old}, cities={5: _city(5, building="UNIT_WARRIOR", **facts)}
+        )
+        cases = (
+            (_unit(2, x=10, y=20), True),
+            (_unit(2, x=30, y=40), False),
+            (old, False),
+        )
+        for unit, expected in cases:
+            after = _snap(units={unit.unit_id: unit}, cities={5: _city(5, **facts)})
+            events = self.diff(before, after)
+            messages = [e.message for e in events if e.category == "city"]
+            assert any("finished building UNIT_WARRIOR" in m for m in messages) is expected
+
+    def test_native_district_completion_reports_finished(self):
+        facts = dict(x=10, y=20, owner_id=0, game_identity=("rome", 42), buildings=[])
+        before = _snap(cities={5: _city(
+            5, building="DISTRICT_CAMPUS", completed_districts=[], **facts
+        )})
+        after = _snap(cities={5: _city(
+            5, completed_districts=["DISTRICT_CAMPUS@11,20"], **facts
+        )})
+        (event,) = self.diff(before, after)
+        assert "finished building DISTRICT_CAMPUS" in event.message
+
+    def test_district_completion_rejects_old_products_and_mismatched_identity(self):
+        from dataclasses import replace
+
+        city = _city(5, building="DISTRICT_CAMPUS", x=10, y=20, owner_id=0,
+                     game_identity=("rome", 42), completed_districts=[])
+        completed = replace(
+            city, currently_building="NONE", completed_districts=["DISTRICT_CAMPUS@11,20"]
+        )
+        cases = [
+            (replace(city, completed_districts=["DISTRICT_CAMPUS@11,20"]), completed),
+            (replace(city, completed_districts=None), completed),
+            (city, replace(completed, completed_districts=[])),
+            (city, replace(completed, completed_districts=["DISTRICT_HOLY_SITE@11,20"])),
+            (city, replace(completed, game_identity=("rome", 43))),
+            (city, replace(completed, game_identity=None)),
+            (city, replace(completed, owner_id=1)),
+            (city, replace(completed, owner_id=None)),
+            (city, replace(completed, x=30)),
+        ]
+        for before, after in cases:
+            (event,) = self.diff(_snap(cities={5: before}), _snap(cities={5: after}))
+            assert "completion unconfirmed" in event.message
+            assert "finished building" not in event.message
+
+    def test_switch_cancel_and_unknown_queue_never_prove_completion(self):
+        for queued in ("BUILDING_GRANARY", "NONE", "UNKNOWN", "CORRUPTED_QUEUE"):
+            before = _snap(cities={5: _city(5, building="DISTRICT_CAMPUS")})
+            after = _snap(cities={5: _city(5, building=queued)})
+            assert all("finished building" not in e.message for e in self.diff(before, after))
+        # Unknown/idle queue entries are never production projects.
+        for old in ("NONE", "nothing", "UNKNOWN", "CORRUPTED_QUEUE"):
+            assert self.diff(_snap(cities={5: _city(5, building=old)}),
+                             _snap(cities={5: _city(5)})) == []
+
+    def test_corrupted_queue_is_reported_as_anomaly_not_idle(self):
         before = _snap(cities={5: _city(5, building="UNIT_TRADER")})
         after = _snap(cities={5: _city(5, building="CORRUPTED_QUEUE")})
         (event,) = self.diff(before, after)
-        assert "queue invalidated" in event.message
+        assert "invalid queue" in event.message
+        assert "nothing" not in event.message
 
     def test_research_and_civic_completion(self):
         before = _snap(research="Pottery", civic="Code of Laws")
@@ -618,7 +773,7 @@ class TestMoveUnit:
         gs, conn = _gs(
             [
                 ("write", ["OK:MOVING_TO|12,20|from:10,20"]),
-                ("write", ["POS|12|20"]),
+                ("write", ["POS|12|20|busy:false"]),
             ]
         )
         gs.dismiss_popup = _no_dismiss
@@ -692,7 +847,7 @@ class TestMoveUnit:
         gs, _ = _gs(
             [
                 ("write", ["OK:MOVING_TO|12,20|from:10,20"]),
-                ("write", ["POS|12|20"]),
+                ("write", ["POS|12|20|busy:false"]),
             ]
         )
 
@@ -712,7 +867,7 @@ class TestMoveUnit:
 # ---------------------------------------------------------------------------
 
 
-_ESTIMATE_LINE = "ESTIMATE|UNIT_ARCHER|UNIT_WARRIOR|25|20|1||100|80"
+_ESTIMATE_LINE = "NATIVE_ESTIMATE|UNIT_ARCHER|UNIT_WARRIOR|25|20|1|100|80|0|35"
 _RANGE_HIT = "OK:RANGE_ATTACK|target:Warrior at (12,20)|pre_hp:80/100|your HP:100|range:2 dist:2"
 
 
@@ -720,6 +875,99 @@ class TestAttackUnit:
     """Combat HP is not readable same-frame, so the contract is: follow-up
     read confirms actual changes; estimates never replace actual damage
     and absence from a tile is never proof of elimination."""
+
+    def test_native_preview_preserves_engine_strength_and_damage_for_wounded_target(self):
+        # Native preview already applied the attack/defense requirements. In this
+        # melee attack the attacker has Barding, whose ranged-defense +7 does not apply.
+        gs, conn = _gs([
+            ("write", ["NATIVE_ESTIMATE|UNIT_HORSEMAN|UNIT_WARRIOR|36|20|0|100|40|8|39"]),
+            ("write", ["OK:MELEE_ATTACK|pre_hp:40/100|target_owner:63|target_id:123|attacks_before:1"]),
+            ("write", ["UNIT|UNIT_WARRIOR|11/100|owner:63|id:123", "CORE_BUSY|false"]),
+        ])
+        gs.dismiss_popup = _no_dismiss
+        result = run(gs.attack_unit(1, 12, 20))
+        assert "Native combat preview (Melee)" in result
+        assert "UNIT_HORSEMAN (CS:36, HP:100)" in result
+        assert "Est damage to defender: ~39" in result
+        assert "Est damage to attacker: ~8" in result
+        assert "damage dealt:29" in result
+        assert "BARDING" not in result
+        assert conn.exhausted
+
+    def test_unverified_legacy_estimate_is_unknown_and_does_not_block_attack(self):
+        gs, conn = _gs([
+            ("write", ["ESTIMATE|UNIT_HORSEMAN|UNIT_WARRIOR|43|20|0|att BARDING +7|100|40"]),
+            ("write", [_RANGE_HIT]),
+            ("write", ["UNIT|UNIT_WARRIOR|50/100|owner:1", "CORE_BUSY|false"]),
+        ])
+        gs.dismiss_popup = _no_dismiss
+        result = run(gs.attack_unit(1, 12, 20))
+        assert "Combat estimate unknown" in result
+        assert "conditional modifiers uncomputed" in result
+        assert "CS:43" not in result and "BARDING +7" not in result
+        assert "damage dealt:30" in result
+        assert sum("RequestOperation" in code for _, code in conn.calls) == 1
+        assert conn.exhausted
+
+    def test_preview_uses_native_rules_for_exact_unit_without_gameplay_mutation(self):
+        gs, conn = _gs([
+            ("write", ["NATIVE_ESTIMATE|UNIT_HORSEMAN|UNIT_WARRIOR|36|20|0|100|40|8|39"]),
+            ("write", ["OK:MELEE_ATTACK|pre_hp:40/100"]),
+            ("write", ["UNIT|UNIT_WARRIOR|11/100|owner:63", "CORE_BUSY|false"]),
+        ])
+        gs.dismiss_popup = _no_dismiss
+        result = run(gs.attack_unit(1, 12, 20))
+        preview = conn.calls[0][1]
+        # FakeConn cannot execute Civ6's native API. These source checks supplement
+        # the public result contract and pin the documented native boundary.
+        assert "GameInfo.UnitPromotionModifiers" not in preview
+        assert "GameInfo.ModifierArguments" not in preview
+        assert "RequestOperation" not in preview
+        assert "CombatManager.SimulateAttackVersus(unit:GetComponentID(), enemy:GetComponentID(), combatType)" in preview
+        assert "CombatManager.SimulateAttackInto(unit:GetComponentID(), combatType, 12, 20)" in preview
+        assert "side[CombatResultParameters.COMBAT_STRENGTH] + side[CombatResultParameters.STRENGTH_MODIFIER]" in preview
+        assert "attacker[CombatResultParameters.DAMAGE_TO]" in preview
+        assert "defender[CombatResultParameters.DAMAGE_TO]" in preview
+        assert "sameComponent(defender[CombatResultParameters.ID], defenderID)" in preview
+        assert "Est damage to defender: ~39" in result
+        assert "damage dealt:29" in result
+        assert conn.exhausted
+
+    @pytest.mark.parametrize("line", [
+        "NATIVE_ESTIMATE|UNIT_ARCHER|UNIT_WARRIOR|25|20|invalid|100|80|0|30",
+        "NATIVE_ESTIMATE|UNIT_ARCHER|UNIT_WARRIOR|25|20|1|100|80|0|-30",
+        "NATIVE_ESTIMATE|UNIT_ARCHER|UNIT_WARRIOR|25|20|1|100|0|0|30",
+        "NATIVE_ESTIMATE|UNIT_ARCHER|UNIT_WARRIOR|NaN|20|1|100|80|0|30",
+        "NATIVE_ESTIMATE|UNIT_ARCHER|UNIT_WARRIOR|25|20|1|100|80|0",
+        "ESTIMATE_UNKNOWN|core busy or state unavailable",
+        "ESTIMATE_UNKNOWN|native preview target mismatch or malformed",
+        "ESTIMATE_UNKNOWN|air preview mode unverified",
+    ])
+    def test_unreliable_native_preview_is_unknown_without_blocking_real_attack(self, line):
+        gs, conn = _gs([
+            ("write", [line]), ("write", [_RANGE_HIT]),
+            ("write", ["UNIT|UNIT_WARRIOR|50/100|owner:1", "CORE_BUSY|false"]),
+        ])
+        gs.dismiss_popup = _no_dismiss
+        result = run(gs.attack_unit(1, 12, 20))
+        assert "Combat estimate unknown" in result
+        assert "Est damage" not in result
+        assert "damage dealt:30" in result
+        assert conn.exhausted
+
+    @pytest.mark.parametrize("preview_mode, operation", [("0", "RANGE_ATTACK"), ("1", "MELEE_ATTACK")])
+    def test_mismatched_preview_mode_is_discarded_after_real_attack(self, preview_mode, operation):
+        gs, conn = _gs([
+            ("write", [f"NATIVE_ESTIMATE|UNIT_ARCHER|UNIT_WARRIOR|25|20|{preview_mode}|100|80|0|33"]),
+            ("write", [f"OK:{operation}|pre_hp:80/100"]),
+            ("write", ["UNIT|UNIT_WARRIOR|50/100|owner:63", "CORE_BUSY|false"]),
+        ])
+        gs.dismiss_popup = _no_dismiss
+        result = run(gs.attack_unit(1, 12, 20))
+        assert "Combat estimate unknown" in result
+        assert "Est damage" not in result
+        assert "damage dealt:30" in result
+        assert conn.exhausted
 
     def test_followup_with_lower_hp_reports_real_damage(self, monkeypatch):
         monkeypatch.setattr(asyncio, "sleep", _instant_sleep)
@@ -759,14 +1007,14 @@ class TestAttackUnit:
             return await gs.attack_unit(1, 12, 20)
 
         result = run(go())
-        # estimate: 24 * 10^((25-20)/30) ≈ 35 damage → ~45/80
+        # The native preview (35) still cannot replace an unchanged HP observation.
         assert "OUTCOME_UNKNOWN" in result
         assert "damage dealt:" not in result
 
     def test_empty_followup_is_not_reported_as_a_kill(self, monkeypatch):
         """A follow-up read that returns nothing — indistinguishable from a
         silently failed read — must not be treated as target elimination.
-        With no follow-up data, the report falls back to the estimate."""
+        With no follow-up data, the attack outcome stays unknown."""
         monkeypatch.setattr(asyncio, "sleep", _instant_sleep)
         gs, _ = _gs(
             [
@@ -803,7 +1051,9 @@ class TestAttackUnit:
         async def go():
             return await gs.attack_unit(1, 12, 20)
 
-        assert "|damage dealt:30" in run(go())
+        result = run(go())
+        assert "Combat estimate unknown" in result
+        assert "|damage dealt:30" in result
 
     def test_melee_result_uses_enemy_hp_format(self, monkeypatch):
         monkeypatch.setattr(asyncio, "sleep", _instant_sleep)
@@ -1493,7 +1743,7 @@ class TestSaveCheckpoint:
                 raise value
             return value
         async def overview():
-            return SimpleNamespace(turn=next(snapshots))
+            return SimpleNamespace(turn=next(snapshots), score=0, score_categories=None)
         async def save(connection, name):
             assert connection is conn
             saves.append(name)

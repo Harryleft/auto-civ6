@@ -7,6 +7,7 @@ from civ_mcp.lua.models import (
     GameOverStatus,
     GameOverview,
     ReligionInfo,
+    ScoreCategory,
     ScoreEntry,
 )
 
@@ -79,6 +80,24 @@ for i = 0, 62 do
     end
 end
 print(Game.GetCurrentGameTurn() .. "|" .. id .. "|" .. Locale.Lookup(cfg:GetCivilizationShortDescription()):gsub("|", "/") .. "|" .. Locale.Lookup(cfg:GetLeaderName()):gsub("|", "/") .. "|" .. string.format("%.1f", tr:GetGoldBalance()) .. "|" .. string.format("%.1f", tr:GetGoldYield() - tr:GetTotalMaintenance()) .. "|" .. string.format("%.1f", te:GetScienceYield()) .. "|" .. string.format("%.1f", cu:GetCultureYield()) .. "|" .. string.format("%.1f", re:GetFaithBalance()) .. "|" .. techName .. "|" .. civicName .. "|" .. nCities .. "|" .. nUnits .. "|" .. myScore .. "|" .. favor .. "|" .. favorPerTurn .. "|" .. totalPop .. "|" .. string.format("%.1f", tr:GetGoldYield()) .. "|" .. string.format("%.1f", tr:GetTotalMaintenance()))
+-- These scores are already weighted by the engine. Keep GetScore above intact;
+-- a complete category set explains native aggregate refresh differences.
+local categoryCount = 0
+local categoriesOK = pcall(function()
+    for row in GameInfo.ScoringCategories() do
+        assert(type(row.CategoryType) == "string" and row.CategoryType ~= "")
+        assert(type(row.Multiplier) == "number" and row.Multiplier % 1 == 0)
+        if row.Multiplier > 0 then
+            local value = p:GetCategoryScore(row.Index)
+            assert(type(value) == "number" and value >= 0 and value % 1 == 0)
+            local name = row.CategoryType
+            pcall(function() name = Locale.Lookup(row.Name or row.CategoryType) end)
+            print("SCORECATEGORY|" .. row.CategoryType .. "|" .. tostring(name):gsub("[|\\r\\n]", "/") .. "|" .. row.Multiplier .. "|" .. value)
+            categoryCount = categoryCount + 1
+        end
+    end
+end)
+print("SCORECATEGORIES|" .. (categoriesOK and tostring(categoryCount) or "unknown") .. "|" .. Game.GetCurrentGameTurn() .. "|" .. id)
 for i = 0, 62 do
     if i ~= id and Players[i] and Players[i]:IsAlive() and Players[i]:IsMajor() and pDiplo:HasMet(i) then
         local oCfg = PlayerConfigurations[i]
@@ -504,9 +523,28 @@ def parse_overview_response(lines: list[str]) -> GameOverview:
     game_speed_name = ""
     speed_cost_multiplier = 100
     enabled_victories: set[str] = set()
+    score_categories: list[ScoreCategory] = []
+    category_markers: list[list[str]] = []
+    categories_valid = True
     player_id_parsed = int(parts[1])
     for line in lines[1:]:
-        if line.startswith("RANK|"):
+        if line.startswith("SCORECATEGORY|"):
+            cp = line.split("|")
+            try:
+                if len(cp) != 5 or not cp[1].isidentifier() or not cp[2].strip():
+                    raise ValueError("Malformed category")
+                category = ScoreCategory(cp[1], cp[2], int(cp[3]), int(cp[4]))
+                if (
+                    category.multiplier <= 0 or category.score < 0
+                    or any(c.category_type == category.category_type for c in score_categories)
+                ):
+                    raise ValueError("Invalid or duplicate category")
+                score_categories.append(category)
+            except ValueError:
+                categories_valid = False
+        elif line.startswith("SCORECATEGORIES|"):
+            category_markers.append(line.split("|"))
+        elif line.startswith("RANK|"):
             rp = line.split("|")
             if len(rp) >= 4:
                 rankings.append(
@@ -576,6 +614,16 @@ def parse_overview_response(lines: list[str]) -> GameOverview:
                     unit_maintenance = int(bp[2])
                 except ValueError:
                     pass
+    try:
+        (marker,) = category_markers
+        categories_valid = (
+            categories_valid and len(marker) == 4
+            and int(marker[1]) == len(score_categories) > 0
+            and int(marker[2]) == int(parts[0])
+            and int(marker[3]) == player_id_parsed
+        )
+    except (ValueError, IndexError):
+        categories_valid = False
     return GameOverview(
         turn=int(parts[0]),
         player_id=int(parts[1]),
@@ -591,6 +639,7 @@ def parse_overview_response(lines: list[str]) -> GameOverview:
         num_cities=int(parts[11]),
         num_units=int(parts[12]),
         score=int(parts[13]) if len(parts) > 13 else 0,
+        score_categories=score_categories if categories_valid else None,
         diplomatic_favor=int(parts[14]) if len(parts) > 14 else 0,
         favor_per_turn=_int(parts[15]) if len(parts) > 15 else 0,
         total_population=int(parts[16]) if len(parts) > 16 else 0,

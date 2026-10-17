@@ -8,6 +8,30 @@ from __future__ import annotations
 from civ_mcp import lua as lq
 
 
+def narrate_score_comparison(saved: dict | None, current: dict) -> str:
+    """Describe paired native readings without inferring whole-world equality."""
+    if saved is None:
+        return (
+            "Score comparison: save-time score evidence unavailable (legacy checkpoint); "
+            f"current official GetScore: {current['official']}; category comparison unknown."
+        )
+    text = f"Score comparison: official GetScore: {saved['official']} -> {current['official']}; "
+    before, after = saved["categories"], current["categories"]
+    if before is None or after is None:
+        text += "positive-weight category comparison unknown (complete native evidence unavailable)."
+    elif before == after:
+        text += "positive-weight categories unchanged."
+        if saved["official"] != current["official"]:
+            text += " Native total changed while the complete category vector stayed identical."
+    else:
+        changes = [
+            f"{key}: {before.get(key, 'unreported')} -> {after.get(key, 'unreported')}"
+            for key in sorted(before.keys() | after.keys()) if before.get(key) != after.get(key)
+        ]
+        text += "positive-weight categories changed: " + "; ".join(changes) + "."
+    return text + " Score evidence alone does not establish full world-state equality."
+
+
 def narrate_overview(ov: lq.GameOverview) -> str:
     diff_str = f" | {ov.difficulty}" if ov.difficulty else ""
     speed_str = ""
@@ -44,6 +68,19 @@ def narrate_overview(ov: lq.GameOverview) -> str:
             ),
         ]
     )
+    if ov.score_categories is None:
+        lines.append("Score categories (GetCategoryScore): unknown; complete native evidence unavailable.")
+    else:
+        lines.append("Score categories (GetCategoryScore, positive-weight): " + "; ".join(
+            f"{category.name} [{category.category_type}]: {category.score}"
+            for category in ov.score_categories
+        ))
+        consistency = (
+            "matches official GetScore"
+            if ov.score_category_total == ov.score
+            else f"differs from official GetScore: {ov.score}; native aggregate and category readings are inconsistent"
+        )
+        lines.append(f"Diagnostic category sum: {ov.score_category_total} ({consistency}).")
     if ov.total_land > 0:
         pct = ov.explored_land * 100 // ov.total_land
         lines.append(
@@ -379,7 +416,7 @@ def narrate_cities(
             )
         if c.currently_building == "CORRUPTED_QUEUE":
             lines.append(
-                "    !! QUEUE EMPTY (stale entry cleared) — set new production with set_city_production"
+                "    !! INVALID QUEUE (nonempty, zero item hash; unchanged) — inspect production before choosing a new item"
             )
         for t in c.attack_targets:
             lines.append(f"    >> CAN ATTACK: {t}")
@@ -439,7 +476,7 @@ def narrate_combat_estimate(est: lq.CombatEstimate) -> str:
     atk_type = "Ranged" if est.is_ranged else "Melee"
     mods_str = ", ".join(est.modifiers) if est.modifiers else "none"
     lines = [
-        f"Combat Estimate ({atk_type}):",
+        f"Native combat preview ({atk_type}):",
         f"  {est.attacker_type} (CS:{est.attacker_cs}, HP:{est.attacker_hp}) vs "
         f"{est.defender_type} (CS:{est.defender_cs}, HP:{est.defender_hp})",
         f"  Modifiers: {mods_str}",

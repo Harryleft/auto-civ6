@@ -237,7 +237,10 @@ def build_unit_position_query(
     move_target_x: int | None = None,
     move_target_y: int | None = None,
 ) -> str:
-    """InGame read-only probe: position, actual moves and optional core-busy state.
+    """InGame read-only probe: position, moves, effective movement, ZOC and busy.
+
+    Native effective movement / ZOC facts are optional on unsupported contexts.
+    Their absence must remain unknown, not become a zero or false value.
 
     When *move_target_x/y* are provided, also diagnoses why a blocked move
     failed (water, mountain, foreign border) so the caller doesn't need a
@@ -319,7 +322,17 @@ local u = Players[me]:GetUnits():FindID({unit_index})
 if u then
     local busy = "unknown"
     pcall(function() busy = tostring(UI.IsGameCoreBusy()) end)
-    print("POS|" .. u:GetX() .. "|" .. u:GetY() .. "|moves:" .. u:GetMovesRemaining() .. "|busy:" .. busy)
+    local movementMoves = ""
+    pcall(function()
+        local value = u:GetMovementMovesRemaining()
+        if type(value) == "number" then movementMoves = "|movement_moves:" .. value end
+    end)
+    local zoc = ""
+    pcall(function()
+        local value = u:HasMovedIntoZOC()
+        if type(value) == "boolean" then zoc = "|zoc:" .. tostring(value) end
+    end)
+    print("POS|" .. u:GetX() .. "|" .. u:GetY() .. "|moves:" .. u:GetMovesRemaining() .. movementMoves .. zoc .. "|busy:" .. busy)
 else print("POS|GONE") end
 {path_probe}
 {diag_block}print("{SENTINEL}")
@@ -523,206 +536,123 @@ def parse_blocked_diagnostic(lines: list[str]) -> str:
 
 
 def build_combat_estimate_query(unit_index: int, target_x: int, target_y: int) -> str:
-    """InGame context: gather combat stats for damage estimation (no attack executed).
+    """InGame: native combat preview, without executing an attack.
 
-    Includes: base CS, promotions, fortification, terrain (hills, forest/jungle),
-    river crossing, flanking bonus, and support bonus.
+    UnitPanel.lua uses SimulateAttackVersus for an exact unit and
+    SimulateAttackInto for a plot. The engine evaluates conditional promotions;
+    an unavailable preview must never fall back to summing modifier amounts.
     """
     return f"""
 {_lua_get_unit(unit_index)}
-local ux, uy = unit:GetX(), unit:GetY()
-local dist = Map.GetPlotDistance(ux, uy, {target_x}, {target_y})
-local unitInfo = GameInfo.Units[unit:GetType()]
-local attType = unitInfo and unitInfo.UnitType or "UNKNOWN"
-local attCS = unitInfo and unitInfo.Combat or 0
-local attRS = unitInfo and unitInfo.RangedCombat or 0
-local estimateParams = {{}}
-estimateParams[UnitOperationTypes.PARAM_X] = {target_x}
-estimateParams[UnitOperationTypes.PARAM_Y] = {target_y}
-local isRanged = UnitManager.CanStartOperation(unit, UnitOperationTypes.RANGE_ATTACK, nil, true)
-if isRanged then
-    isRanged = UnitManager.CanStartOperation(unit, UnitOperationTypes.RANGE_ATTACK, nil, estimateParams)
-end
-local isAir = (not isRanged) and UnitManager.CanStartOperation(unit, UnitOperationTypes.AIR_ATTACK, nil, estimateParams)
-isRanged = isRanged or isAir
-local effAttCS = isRanged and attRS or attCS
--- Find defender
-local enemy = nil
-local tgtUnits = Map.GetUnitsAt({target_x}, {target_y})
-if tgtUnits then
-    for other in tgtUnits:Units() do
-        if other:GetOwner() ~= me then
-            local eInfo = GameInfo.Units[other:GetType()]
-            local eCombat = eInfo and eInfo.Combat or 0
-            if eCombat > 0 or enemy == nil then enemy = other end
-            if eCombat > 0 then break end
+local function preview()
+    if not UI or not UI.IsGameCoreBusy or UI.IsGameCoreBusy() ~= false then
+        return "ESTIMATE_UNKNOWN|core busy or state unavailable"
+    end
+    if not CombatManager or not CombatResultParameters then
+        return "ESTIMATE_UNKNOWN|native combat preview unavailable"
+    end
+    local params = {{}}
+    params[UnitOperationTypes.PARAM_X] = {target_x}
+    params[UnitOperationTypes.PARAM_Y] = {target_y}
+    -- Mirror attack_unit's ranged-to-melee fallback, without changing UI mode.
+    local isRanged = UnitManager.CanStartOperation(unit, UnitOperationTypes.RANGE_ATTACK, nil, true)
+    local isAir = (not isRanged) and UnitManager.CanStartOperation(unit, UnitOperationTypes.AIR_ATTACK, nil, params)
+    if isRanged and not UnitManager.CanStartOperation(unit, UnitOperationTypes.RANGE_ATTACK, nil, params) then
+        if Map.GetPlotDistance(unit:GetX(), unit:GetY(), {target_x}, {target_y}) <= 1 then
+            isRanged = false
+        else
+            return "ESTIMATE_UNKNOWN|ranged target unavailable"
         end
     end
-end
-if enemy == nil then {_bail(f"ERR:NO_ENEMY|No hostile unit at ({target_x},{target_y})")} end
--- Check diplomatic status — estimates for units at peace are misleading
-local enemyOwner = enemy:GetOwner()
-if enemyOwner ~= 63 then
-    local pDiplo = Players[me]:GetDiplomacy()
-    if not pDiplo:IsAtWarWith(enemyOwner) then
-        local ownerCfg = PlayerConfigurations[enemyOwner]
-        local ownerName = ownerCfg and Locale.Lookup(ownerCfg:GetCivilizationDescription()) or ("player " .. enemyOwner)
-        local eInfo2 = GameInfo.Units[enemy:GetType()]
-        local eName = eInfo2 and eInfo2.UnitType or "UNKNOWN"
-        {_bail_lua('"ERR:NOT_AT_WAR|Cannot attack " .. eName .. " — you are at peace with " .. ownerName .. ". Declare war first."')}
+    -- Shipped UnitPanel documents nil melee and RANGED/BOMBARD. Its air
+    -- mapping is not established here; leave that preview unknown, not guessed.
+    if isAir then return "ESTIMATE_UNKNOWN|air preview mode unverified" end
+    local combatType = nil
+    if isRanged then
+        combatType = CombatTypes.RANGED
+        if unit:GetBombardCombat() > unit:GetRangedCombat() then combatType = CombatTypes.BOMBARD end
+        if combatType == nil then return "ESTIMATE_UNKNOWN|ranged combat type unavailable" end
     end
-end
-local eInfo = GameInfo.Units[enemy:GetType()]
-local defType = eInfo and eInfo.UnitType or "UNKNOWN"
-local defCS = eInfo and eInfo.Combat or 0
-local enemyHP = enemy:GetMaxDamage() - enemy:GetDamage()
-local myHP = unit:GetMaxDamage() - unit:GetDamage()
--- Build promotion -> CS bonus lookup table
-local promoBonuses = {{}}
-pcall(function()
-    for pm in GameInfo.UnitPromotionModifiers() do
-        local mod = GameInfo.Modifiers[pm.ModifierId]
-        if mod and mod.ModifierType == "MODIFIER_UNIT_ADJUST_COMBAT_STRENGTH" then
-            for arg in GameInfo.ModifierArguments() do
-                if arg.ModifierId == pm.ModifierId and arg.Name == "Amount" then
-                    local val = tonumber(arg.Value) or 0
-                    if val ~= 0 then
-                        if not promoBonuses[pm.UnitPromotionType] then
-                            promoBonuses[pm.UnitPromotionType] = {{}}
-                        end
-                        table.insert(promoBonuses[pm.UnitPromotionType], {{
-                            amount = val,
-                            name = pm.ModifierId
-                        }})
-                    end
-                end
+    local enemy = nil
+    local tgtUnits = Map.GetUnitsAt({target_x}, {target_y})
+    if tgtUnits then
+        for other in tgtUnits:Units() do
+            if other:GetOwner() ~= me then
+                local info = GameInfo.Units[other:GetType()]
+                local military = info and (info.Combat or 0) > 0
+                if military or enemy == nil then enemy = other end
+                if military then break end
             end
         end
     end
-end)
--- Sum promotion bonuses for a unit
-local function getPromoBonuses(u)
-    local total = 0
-    local parts = {{}}
-    local exp = u:GetExperience()
-    for promoType, infos in pairs(promoBonuses) do
-        local promoRow = GameInfo.UnitPromotions[promoType]
-        if promoRow then
-            local ok, has = pcall(function() return exp:HasPromotion(promoRow.Index) end)
-            if ok and has then
-                for _, info in ipairs(infos) do
-                    total = total + info.amount
-                    local short = info.name:gsub("MODIFIER_", "")
-                    table.insert(parts, short .. " " .. (info.amount > 0 and "+" or "") .. info.amount)
-                end
+    local city = CityManager.GetCityAt({target_x}, {target_y})
+    local defenderID, defenderType, defenderHP, owner
+    if city then
+        owner = city:GetOwner()
+        local center = GameInfo.Districts["DISTRICT_CITY_CENTER"]
+        for _, district in city:GetDistricts():Members() do
+            if center and district:GetType() == center.Index then
+                defenderID = district:GetComponentID()
+                defenderType = "DISTRICT_CITY_CENTER"
+                defenderHP = district:GetMaxDamage(DefenseTypes.DISTRICT_GARRISON) - district:GetDamage(DefenseTypes.DISTRICT_GARRISON)
+                break
             end
         end
+    elseif enemy then
+        owner = enemy:GetOwner()
+        defenderID = enemy:GetComponentID()
+        local info = GameInfo.Units[enemy:GetType()]
+        defenderType = info and info.UnitType or "UNKNOWN"
+        defenderHP = enemy:GetMaxDamage() - enemy:GetDamage()
     end
-    return total, parts
-end
--- Gather modifiers
-local mods = {{}}
-local defModTotal = 0
-local attModTotal = 0
--- Attacker promotion bonuses
-local attPromoBonus, attPromoMods = getPromoBonuses(unit)
-if attPromoBonus ~= 0 then
-    attModTotal = attModTotal + attPromoBonus
-    for _, m in ipairs(attPromoMods) do table.insert(mods, "att " .. m) end
-end
--- Defender promotion bonuses
-local defPromoBonus, defPromoMods = getPromoBonuses(enemy)
-if defPromoBonus ~= 0 then
-    defModTotal = defModTotal + defPromoBonus
-    for _, m in ipairs(defPromoMods) do table.insert(mods, "def " .. m) end
-end
--- Defender fortified?
-local ok1, ft = pcall(function() return enemy:GetFortifyTurns() end)
-if ok1 and ft and ft > 0 then
-    local bonus = math.min(ft * 3, 6)
-    table.insert(mods, "fortified +" .. bonus)
-    defModTotal = defModTotal + bonus
-end
--- Defender on hills?
-local tgtPlot = Map.GetPlot({target_x}, {target_y})
-if tgtPlot and tgtPlot:IsHills() then
-    table.insert(mods, "hills +3")
-    defModTotal = defModTotal + 3
-end
--- Forest/jungle defense bonus
-if tgtPlot then
-    local feat = tgtPlot:GetFeatureType()
-    if feat >= 0 then
-        local fInfo = GameInfo.Features[feat]
-        if fInfo and (fInfo.FeatureType == "FEATURE_FOREST" or fInfo.FeatureType == "FEATURE_JUNGLE") then
-            table.insert(mods, fInfo.FeatureType:gsub("FEATURE_",""):lower() .. " +3")
-            defModTotal = defModTotal + 3
+    if not defenderID or owner == me then return "ESTIMATE_UNKNOWN|hostile target unavailable" end
+    if owner ~= 63 and not Players[me]:GetDiplomacy():IsAtWarWith(owner) then
+        return "ESTIMATE_UNKNOWN|target is not at war"
+    end
+    local result
+    if city then
+        result = CombatManager.SimulateAttackInto(unit:GetComponentID(), combatType, {target_x}, {target_y})
+    else
+        result = CombatManager.SimulateAttackVersus(unit:GetComponentID(), enemy:GetComponentID(), combatType)
+    end
+    if type(result) ~= "table" then return "ESTIMATE_UNKNOWN|native preview missing" end
+    local attacker = result[CombatResultParameters.ATTACKER]
+    local defender = result[CombatResultParameters.DEFENDER]
+    local function sameComponent(actual, expected)
+        return type(actual) == "table" and type(expected) == "table"
+            and actual.player ~= nil and actual.id ~= nil and actual.type ~= nil
+            and actual.player == expected.player and actual.id == expected.id and actual.type == expected.type
+    end
+    if type(attacker) ~= "table" or type(defender) ~= "table"
+        or not sameComponent(attacker[CombatResultParameters.ID], unit:GetComponentID())
+        or not sameComponent(defender[CombatResultParameters.ID], defenderID) then
+        return "ESTIMATE_UNKNOWN|native preview target mismatch or malformed"
+    end
+    local function finite(value)
+        return type(value) == "number" and value == value and value ~= math.huge and value ~= -math.huge
+    end
+    local function strength(side)
+        if not finite(side[CombatResultParameters.COMBAT_STRENGTH]) or not finite(side[CombatResultParameters.STRENGTH_MODIFIER]) then
+            return nil
         end
+        return side[CombatResultParameters.COMBAT_STRENGTH] + side[CombatResultParameters.STRENGTH_MODIFIER]
     end
-end
--- River crossing penalty (attacker crosses river for melee)
-if not isRanged and tgtPlot then
-    local attPlot = Map.GetPlot(ux, uy)
-    if attPlot and tgtPlot:IsRiverCrossingToPlot(attPlot) then
-        table.insert(mods, "river -2")
-        attModTotal = attModTotal - 2
+    local attCS, defCS = strength(attacker), strength(defender)
+    -- DAMAGE_TO is damage suffered by that side, not damage it inflicts.
+    local attDamage = attacker[CombatResultParameters.DAMAGE_TO]
+    local defDamage = defender[CombatResultParameters.DAMAGE_TO]
+    local attHP = unit:GetMaxDamage() - unit:GetDamage()
+    if not finite(attCS) or not finite(defCS) or not finite(attDamage) or not finite(defDamage)
+        or not finite(attHP) or not finite(defenderHP) or attDamage < 0 or defDamage < 0 then
+        return "ESTIMATE_UNKNOWN|native preview values malformed"
     end
+    local info = GameInfo.Units[unit:GetType()]
+    local attackerType = info and info.UnitType or "UNKNOWN"
+    return "NATIVE_ESTIMATE|" .. attackerType .. "|" .. defenderType .. "|" .. attCS .. "|" .. defCS
+        .. "|" .. (isRanged and "1" or "0") .. "|" .. attHP .. "|" .. defenderHP .. "|" .. attDamage .. "|" .. defDamage
 end
--- Flanking: count our units adjacent to defender (excluding attacker)
-local flankBonus = 0
-if not isRanged then
-    local enemyOwner = enemy:GetOwner()
-    for dy = -1, 1 do for dx = -1, 1 do
-        if dx ~= 0 or dy ~= 0 then
-            local fx, fy = {target_x} + dx, {target_y} + dy
-            if not (fx == ux and fy == uy) then
-                local adjUnits = Map.GetUnitsAt(fx, fy)
-                if adjUnits then
-                    for adjU in adjUnits:Units() do
-                        if adjU:GetOwner() == me then
-                            local adjInfo = GameInfo.Units[adjU:GetType()]
-                            if adjInfo and (adjInfo.Combat or 0) > 0 then
-                                flankBonus = flankBonus + 2
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end end
-    if flankBonus > 0 then
-        table.insert(mods, "flank +" .. flankBonus)
-        attModTotal = attModTotal + flankBonus
-    end
-end
--- Support: count defender's adjacent friendlies
-local supportBonus = 0
-if not isRanged then
-    local enemyOwner = enemy:GetOwner()
-    for dy = -1, 1 do for dx = -1, 1 do
-        if dx ~= 0 or dy ~= 0 then
-            local sx, sy = {target_x} + dx, {target_y} + dy
-            local adjUnits = Map.GetUnitsAt(sx, sy)
-            if adjUnits then
-                for adjU in adjUnits:Units() do
-                    if adjU:GetOwner() == enemyOwner and adjU ~= enemy then
-                        local adjInfo = GameInfo.Units[adjU:GetType()]
-                        if adjInfo and (adjInfo.Combat or 0) > 0 then
-                            supportBonus = supportBonus + 2
-                        end
-                    end
-                end
-            end
-        end
-    end end
-    if supportBonus > 0 then
-        table.insert(mods, "support +" .. supportBonus)
-        defModTotal = defModTotal + supportBonus
-    end
-end
-local effDefCS = defCS + defModTotal
-effAttCS = effAttCS + attModTotal
-print("ESTIMATE|" .. attType .. "|" .. defType .. "|" .. effAttCS .. "|" .. effDefCS .. "|" .. (isRanged and "1" or "0") .. "|" .. table.concat(mods, ";") .. "|" .. myHP .. "|" .. enemyHP)
+local ok, result = pcall(preview)
+print(ok and result or "ESTIMATE_UNKNOWN|native preview unavailable")
 print("{SENTINEL}")
 """
 
@@ -730,43 +660,28 @@ print("{SENTINEL}")
 def parse_combat_estimate(
     lines: list[str], att_cs: int, def_cs: int
 ) -> CombatEstimate | None:
-    """Parse ESTIMATE line and compute damage using Civ 6 formula."""
+    """Read native damage preview; never infer conditional modifiers or damage."""
     for line in lines:
-        if line.startswith("ESTIMATE|"):
-            p = line.split("|")
-            if len(p) < 9:
-                return None
-            eff_att = int(p[3])
-            eff_def = int(p[4])
-            is_ranged = p[5] == "1"
-            mods = [m for m in p[6].split(";") if m]
-            my_hp = int(p[7])
-            enemy_hp = int(p[8])
-            # Civ 6 damage formula: BASE * 10^((att-def)/30)
-
-            base_damage = 24
-            if eff_att > 0 and eff_def > 0:
-                dmg_to_def = base_damage * (10 ** ((eff_att - eff_def) / 30))
-                dmg_to_att = (
-                    base_damage * (10 ** ((eff_def - eff_att) / 30))
-                    if not is_ranged
-                    else 0
-                )
-            else:
-                dmg_to_def = 0
-                dmg_to_att = 0
-            return CombatEstimate(
-                attacker_type=p[1],
-                defender_type=p[2],
-                attacker_cs=eff_att,
-                defender_cs=eff_def,
-                is_ranged=is_ranged,
-                modifiers=mods,
-                est_damage_to_defender=int(round(dmg_to_def)),
-                est_damage_to_attacker=int(round(dmg_to_att)),
-                defender_hp=enemy_hp,
-                attacker_hp=my_hp,
+        if not line.startswith("NATIVE_ESTIMATE|"):
+            continue
+        p = line.split("|")
+        if len(p) != 10 or p[5] not in ("0", "1") or not p[1] or not p[2]:
+            return None
+        try:
+            eff_att, eff_def, my_hp, enemy_hp, att_damage, def_damage = (
+                int(p[index]) for index in (3, 4, 6, 7, 8, 9)
             )
+        except ValueError:
+            return None
+        if my_hp <= 0 or enemy_hp <= 0 or att_damage < 0 or def_damage < 0:
+            return None
+        return CombatEstimate(
+            attacker_type=p[1], defender_type=p[2],
+            attacker_cs=eff_att, defender_cs=eff_def, is_ranged=p[5] == "1",
+            modifiers=["native rules; individual modifiers not listed"],
+            attacker_hp=my_hp, defender_hp=enemy_hp,
+            est_damage_to_attacker=att_damage, est_damage_to_defender=def_damage,
+        )
     return None
 
 

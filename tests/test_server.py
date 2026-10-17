@@ -24,7 +24,9 @@ class FakeConn:
     def __init__(self, gamecore_index=0):
         self.gamecore_index = gamecore_index
         self.ingame_index = 1
-        self.lua_states = {24: "MainMenu"}
+        self.lua_states = {24: "MainMenu", 1: "InGame"}
+        self.frontend = gamecore_index is None
+        self.exit_response = ["MCP_MENU_EXIT|SUBMITTED"]
         self.reconnect_calls = 0
         self.disconnect_calls = 0
         self.read_queries = []
@@ -49,13 +51,24 @@ class FakeConn:
 
     async def execute_in_state(self, index, code, timeout=None):
         self.state_calls.append((index, code))
+        if "MCP_FRONTEND_STATUS" in code:
+            return ["MCP_FRONTEND|" + ("UNKNOWN" if self.frontend is None else str(self.frontend).lower())]
+        if "MCP_MENU_EXIT:" in code:
+            self.frontend = True
+            if isinstance(self.exit_response, BaseException):
+                raise self.exit_response
+            return self.exit_response
         if "MCP_SAVE_QUERY_START" in code:
             return ["MCP_SAVE_QUERY_STARTED"]
         if "MCP_SAVE_QUERY_STATUS" in code:
             return ["MCP_SAVE_QUERY|" + getattr(self, "query_status", "READY")]
+        self.frontend = False
         if isinstance(self.load_response, Exception):
             raise self.load_response
         return self.load_response
+
+    async def rediscover_states(self, timeout=5.0):
+        await self.reconnect()
 
     async def reconnect(self):
         self.reconnect_calls += 1
@@ -184,6 +197,7 @@ class TestToolRegistration:
             "queue_wc_votes",
             "save_game",
             "load_game_save",
+            "reload_game_save",
             "restart_and_load",
             "run_lua",
             "spy_action",
@@ -1113,6 +1127,142 @@ class TestEndTurn:
 
 
 class TestSaveTools:
+    def test_load_reports_native_aggregate_refresh_with_unchanged_categories(self):
+        from civ_mcp import checkpoints
+        ctx, gs = self.prepare_real_menu_load()
+        saved_score = {"official": 72, "categories": {
+            "CATEGORY_CIVICS": 21, "CATEGORY_EMPIRE": 18,
+            "CATEGORY_TECH": 16, "CATEGORY_ERA_SCORE": 21,
+        }}
+        checkpoints.mark_complete("MySave")
+        assert checkpoints.record_checkpoint("MySave", ("rome", 4242), 12, saved_score) is None
+        write = gs.conn.execute_write
+
+        async def native_score(query, timeout=None):
+            if "local tr = p:GetTreasury()" in query:
+                return [
+                    "12|0|Rome|Trajan|100|5|3|2|10|Pottery|Code of Laws|1|1|76",
+                    "SCORECATEGORY|CATEGORY_CIVICS|Civics|1|21",
+                    "SCORECATEGORY|CATEGORY_EMPIRE|Empire|1|18",
+                    "SCORECATEGORY|CATEGORY_TECH|Technology|1|16",
+                    "SCORECATEGORY|CATEGORY_ERA_SCORE|Era Score|1|21",
+                    "SCORECATEGORIES|4|12|0",
+                ]
+            return await write(query, timeout)
+
+        gs.conn.execute_write = native_score
+        result = run(server.load_game_save(ctx, "MySave"))
+        assert result.startswith("Loaded MySave:")
+        assert "official GetScore: 72 -> 76" in result
+        assert "positive-weight categories unchanged" in result
+        assert "full world-state equality" in result
+        assert gs._pending_load is False
+        assert len(gs.conn.load_calls) == 1
+
+    def prepare_real_menu_load(self, failed_query=None):
+        """Run real GameState over the existing isolated transport seam."""
+        from civ_mcp.game_state import GameState
+
+        ctx = make_ctx()
+        conn = FakeConn(gamecore_index=None)
+        conn.reconnect_states = [None, 0]
+        conn.state_queries = []
+
+        async def write(query, timeout=None):
+            conn.state_queries.append(query)
+            if "TURN_UI_READY|" in query:
+                return ["TURN_UI_READY|12|1"]
+            if "GAMESEED|" in query:
+                return ["GAMESEED|CIVILIZATION_ROME|4242"]
+            if "local tr = p:GetTreasury()" in query:
+                return ["12|0|Rome|Trajan|100|5|3|2|10|Pottery|Code of Laws|1|1|45"]
+            if "local nm = Locale.Lookup(u:GetName())" in query:
+                if failed_query == "units":
+                    raise LuaError("unit facts unavailable")
+                return ["65536|1|Warrior|UNIT_WARRIOR|10,20|2.0/2.0|100/100"]
+            if "CITYFACTS|" in query:
+                if failed_query == "cities":
+                    raise ConnectionRefusedError("city facts unavailable")
+                return ["123|Capital|10,20|2|4|3|2|1|1|0.5|6|1|5|BUILDING_MONUMENT|3"]
+            return []
+
+        conn.execute_write = write
+        gs = GameState(conn)
+        app_of(ctx).game = gs
+        return ctx, gs
+
+    @pytest.mark.parametrize("failed_query", ["units", "cities"])
+    def test_incomplete_loaded_snapshot_keeps_barrier_without_replaying_load(self, monkeypatch, failed_query):
+        ctx, gs = self.prepare_real_menu_load(failed_query)
+        monkeypatch.setattr(server, "LOAD_TIMEOUT", 0.01)
+        result = run(server.load_game_save(ctx, "MySave"))
+        assert result.startswith("ERR:OUTCOME_UNKNOWN")
+        assert gs._pending_load is True
+        assert len(gs.conn.load_calls) == 1
+
+    def test_load_retries_only_reads_then_returns_immediately_readable_state(self, monkeypatch):
+        ctx, gs = self.prepare_real_menu_load()
+        write = gs.conn.execute_write
+        unit_attempts = []
+
+        async def temporarily_unavailable(query, timeout=None):
+            if "local nm = Locale.Lookup(u:GetName())" in query:
+                unit_attempts.append(1)
+                if len(unit_attempts) == 1:
+                    raise ConnectionRefusedError("unit context not ready")
+            return await write(query, timeout)
+
+        sleep = asyncio.sleep
+        async def no_delay(seconds):
+            await sleep(0)
+
+        gs.conn.execute_write = temporarily_unavailable
+        monkeypatch.setattr(server.asyncio, "sleep", no_delay)
+
+        async def go():
+            result = await server.load_game_save(ctx, "MySave")
+            units = await gs.get_units()
+            cities, _ = await gs.get_cities()
+            return result, units, cities
+
+        result, units, cities = run(go())
+        assert result.startswith("Loaded MySave:")
+        assert gs._pending_load is False
+        assert [unit.unit_id for unit in units] == [65536]
+        assert [city.city_id for city in cities] == [123]
+        assert len(unit_attempts) == 3
+        assert len(gs.conn.load_calls) == 1
+
+    @pytest.mark.parametrize("changed_fact", ["identity", "turn", "readiness"])
+    def test_load_does_not_release_barrier_if_state_changes_during_snapshot(self, monkeypatch, changed_fact):
+        ctx, gs = self.prepare_real_menu_load()
+        write, read = gs.conn.execute_write, gs.conn.execute_read
+        identities, turns = [], []
+
+        async def change_identity(query, timeout=None):
+            if "GAMESEED|" in query:
+                identities.append(1)
+                if len(identities) > 1 and changed_fact == "identity":
+                    return ["GAMESEED|CIVILIZATION_EGYPT|4242"]
+            return await write(query, timeout)
+
+        async def change_turn(query, timeout=None):
+            if "TURN_STATE|" in query:
+                turns.append(1)
+                if len(turns) > 1:
+                    if changed_fact == "turn":
+                        return ["TURN_STATE|13|1"]
+                    if changed_fact == "readiness":
+                        return ["TURN_STATE|12|0"]
+            return await read(query, timeout)
+
+        gs.conn.execute_write, gs.conn.execute_read = change_identity, change_turn
+        monkeypatch.setattr(server, "LOAD_TIMEOUT", 0.01)
+        result = run(server.load_game_save(ctx, "MySave"))
+        assert result.startswith("ERR:OUTCOME_UNKNOWN")
+        assert gs._pending_load is True
+        assert len(gs.conn.load_calls) == 1
+
     def test_save_dispatch_and_log_preserve_confirmed_result(self):
         ctx = make_ctx()
         gs = app_of(ctx).game
@@ -1218,6 +1368,7 @@ class TestSaveTools:
         ctx = make_ctx()
         gs = app_of(ctx).game
         gs.conn.gamecore_index = None
+        gs.conn.frontend = True
         gs.conn.reconnect_states = [None, 0]
         gs.script["get_game_identity"] = ("rome", 4242)
         gs.script["get_game_overview"] = make_overview()
@@ -1226,7 +1377,10 @@ class TestSaveTools:
     @pytest.mark.parametrize("tool", ["load_game_save", "load_save_from_menu"])
     def test_named_loader_confirms_on_the_same_connection(self, tool):
         ctx, gs = self.prepare_menu_load()
-        assert run(getattr(server, tool)(ctx, "MySave")) == "Loaded MySave: rome, seed 4242, turn 12."
+        result = run(getattr(server, tool)(ctx, "MySave"))
+        assert result.startswith("Loaded MySave: rome, seed 4242, turn 12.\n")
+        assert "save-time score evidence unavailable (legacy checkpoint)" in result
+        assert "category comparison unknown" in result
         assert len(gs.conn.load_calls) == 1
         assert gs.conn.load_calls[0][0] == 24
         assert gs.reset_calls == 1
@@ -1260,7 +1414,7 @@ class TestSaveTools:
         ctx = make_ctx()
         result = run(server.load_game_save(ctx, "MySave"))
         assert result.startswith("Error: A game is loaded")
-        assert app_of(ctx).game.conn.state_calls == []
+        assert app_of(ctx).game.conn.load_calls == []
 
     def test_unconfirmed_load_is_bounded_and_never_resent(self, monkeypatch):
         ctx, gs = self.prepare_menu_load()
@@ -1407,7 +1561,7 @@ class TestMcpProtocol:
                     assert initialization.serverInfo.name == "Civilization VI"
                     tools = (await session.list_tools()).tools
                     names = {tool.name for tool in tools}
-                    assert len(names) == 76
+                    assert len(names) == 77
                     assert "get_diary" not in names
                     save_schema = next(tool.inputSchema for tool in tools if tool.name == "save_game")
                     assert save_schema["required"] == ["save_name"]
@@ -1424,7 +1578,252 @@ class TestMcpProtocol:
 
         anyio.run(go)
         assert conn.disconnect_calls == 1
-        assert conn.read_queries == ['(function() print(42) end)(); print("---END---")']
+        assert conn.read_queries == ['print(42)']
         entries = [json.loads(line) for line in log_path.read_text().splitlines()]
         assert [entry["tool"] for entry in entries] == ["save_game", "run_lua", "unit_action"]
         assert all("success" not in entry for entry in entries)
+
+
+class TestMenuReload:
+    def test_running_world_reload_rebuilds_complete_same_turn_state(self):
+        ctx, gs = TestSaveTools().prepare_real_menu_load()
+        gs.conn.frontend = False
+        gs.conn.gamecore_index = 0
+        gs.conn.reconnect_states = [0, 0, 0]
+        gs._game_identity = ("rome", 4242)
+        gs._revealed_tiles = {(99, 99)}
+        gs._last_snapshot = object()
+        gs._local_player_id = 9
+        gs._pending_end_turn_from = 11
+        server.game_lifecycle._filesystem_save_names[:] = ["old-index"]
+        result = run(server.reload_game_save(ctx, "MySave"))
+        assert result.startswith("Loaded MySave: rome, seed 4242, turn 12.")
+        assert gs._pending_load is False
+        assert set(gs._last_snapshot.units) == {65536}
+        assert set(gs._last_snapshot.cities) == {123}
+        assert gs._revealed_tiles is None
+        assert gs._local_player_id == 0
+        assert gs._pending_end_turn_from is None
+        assert gs._pending_action is None
+        assert gs._pending_save is False
+        assert "No matching cached save index" in run(server.load_save(ctx, 1))
+        assert len(gs.conn.load_calls) == 1
+        assert sum("MCP_MENU_EXIT:" in code for _, code in gs.conn.state_calls) == 1
+
+    def test_no_exit_capability_keeps_old_world_and_releases_replacement_barrier(self):
+        ctx, gs = TestSaveTools().prepare_real_menu_load()
+        gs.conn.frontend = False
+        gs.conn.lua_states = {24: "MainMenu"}  # no current InGame capability
+        sentinel_snapshot = object()
+        gs._last_snapshot = sentinel_snapshot
+        gs._revealed_tiles = {(99, 99)}
+        result = run(server.reload_game_save(ctx, "MySave"))
+        assert "no exit sent" in result
+        assert gs._pending_load is False
+        assert gs._last_snapshot is sentinel_snapshot
+        assert gs._revealed_tiles == {(99, 99)}
+        assert gs.conn.load_calls == []
+
+    @pytest.mark.parametrize("pending", ["action", "save", "load", "end_turn"])
+    def test_unresolved_operation_prevents_exit_or_load(self, pending):
+        from civ_mcp.game_state import _PendingAction
+        ctx, gs = TestSaveTools().prepare_real_menu_load()
+        gs.conn.frontend = False
+        if pending == "action":
+            gs._pending_action = _PendingAction("move", ("unit", 7), "probe")
+        else:
+            setattr(gs, "_pending_" + pending, True)
+        result = run(server.reload_game_save(ctx, "MySave"))
+        assert result.startswith("ERR:OUTCOME_UNKNOWN")
+        assert gs.conn.state_calls == []
+        assert gs.conn.reconnect_calls == 0
+
+    @pytest.mark.parametrize("name", ["a/b", "missing", "MySave"])
+    def test_invalid_or_changed_checkpoint_is_rejected_before_exit(self, name, tmp_path):
+        ctx, gs = TestSaveTools().prepare_real_menu_load()
+        gs.conn.frontend = False
+        sentinel_snapshot = object()
+        gs._last_snapshot = sentinel_snapshot
+        if name == "MySave":
+            (tmp_path / "MySave.Civ6Save").write_bytes(b"changed file")
+        result = run(server.reload_game_save(ctx, name))
+        assert result.startswith("Error:")
+        assert gs.conn.state_calls == []
+        assert gs._last_snapshot is sentinel_snapshot
+        assert gs._pending_load is False
+
+    @pytest.mark.parametrize("tool", ["reload_game_save", "load_game_save", "load_save_from_menu"])
+    def test_native_frontend_allows_load_even_when_old_gamecore_index_remains(self, tool):
+        ctx, gs = TestSaveTools().prepare_real_menu_load()
+        gs.conn.gamecore_index = 0
+        gs.conn.reconnect_states = [0]
+        result = run(getattr(server, tool)(ctx, "MySave"))
+        assert result.startswith("Loaded MySave:")
+        assert not any("MCP_MENU_EXIT:" in code for _, code in gs.conn.state_calls)
+        assert len(gs.conn.load_calls) == 1
+
+    @pytest.mark.parametrize("tool", ["load_game_save", "load_save_from_menu"])
+    def test_native_false_rejects_menu_only_load_even_without_gamecore_index(self, tool):
+        ctx, gs = TestSaveTools().prepare_real_menu_load()
+        gs.conn.frontend = False
+        assert run(getattr(server, tool)(ctx, "MySave")).startswith("Error: A game is loaded")
+        assert gs.conn.load_calls == []
+        assert not any("MCP_MENU_EXIT:" in code for _, code in gs.conn.state_calls)
+
+    def test_exit_response_loss_is_confirmed_without_replay(self):
+        ctx, gs = TestSaveTools().prepare_real_menu_load()
+        gs.conn.frontend = False
+        gs.conn.exit_response = ConnectionResetError("exit accepted, reply lost")
+        result = run(server.reload_game_save(ctx, "MySave"))
+        assert result.startswith("Loaded MySave:")
+        assert len(gs.conn.load_calls) == 1
+        assert sum("MCP_MENU_EXIT:" in code for _, code in gs.conn.state_calls) == 1
+
+    @pytest.mark.parametrize("frontend", [False, None])
+    def test_unconfirmed_exit_keeps_gate_and_never_replays_or_cold_restarts(self, monkeypatch, frontend):
+        ctx, gs = TestSaveTools().prepare_real_menu_load()
+        gs.conn.frontend = False
+        execute = gs.conn.execute_in_state
+        async def exit_without_confirmation(index, code, timeout=None):
+            result = await execute(index, code, timeout)
+            if "MCP_MENU_EXIT:" in code:
+                gs.conn.frontend = frontend
+            return result
+        gs.conn.execute_in_state = exit_without_confirmation
+        monkeypatch.setattr(server, "LOAD_TIMEOUT", 0.01)
+        result = run(server.reload_game_save(ctx, "MySave"))
+        assert result.startswith("ERR:OUTCOME_UNKNOWN")
+        assert gs._pending_load is True
+        assert gs.conn.load_calls == []
+        calls = list(gs.conn.state_calls)
+        assert run(server.reload_game_save(ctx, "MySave")).startswith("ERR:OUTCOME_UNKNOWN")
+        assert run(server.set_research(ctx, "TECH_MINING")).startswith("ERR:OUTCOME_UNKNOWN")
+        assert gs.conn.state_calls == calls
+        assert sum("MCP_MENU_EXIT:" in code for _, code in calls) == 1
+
+    @pytest.mark.parametrize("stage", ["exit", "load", "snapshot"])
+    def test_cancel_during_replacement_preserves_gate(self, stage):
+        ctx, gs = TestSaveTools().prepare_real_menu_load()
+        gs.conn.frontend = False
+        execute = gs.conn.execute_in_state
+        async def go():
+            submitted = asyncio.Event()
+            async def pause_after_exit(index, code, timeout=None):
+                result = await execute(index, code, timeout)
+                if ((stage == "exit" and "MCP_MENU_EXIT:" in code)
+                    or (stage == "load" and "Network.LoadGame" in code)):
+                    submitted.set()
+                    await asyncio.Event().wait()
+                return result
+            write = gs.conn.execute_write
+            async def pause_snapshot(query, timeout=None):
+                result = await write(query, timeout)
+                if stage == "snapshot" and "local nm = Locale.Lookup(u:GetName())" in query:
+                    submitted.set()
+                    await asyncio.Event().wait()
+                return result
+            gs.conn.execute_in_state = pause_after_exit
+            gs.conn.execute_write = pause_snapshot
+            task = asyncio.create_task(server.reload_game_save(ctx, "MySave"))
+            await submitted.wait()
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert gs._pending_load is True
+            assert (await server.reload_game_save(ctx, "MySave")).startswith("ERR:OUTCOME_UNKNOWN")
+        run(go())
+        assert len(gs.conn.load_calls) == (0 if stage == "exit" else 1)
+        assert sum("MCP_MENU_EXIT:" in code for _, code in gs.conn.state_calls) == 1
+
+    @pytest.mark.parametrize("failed_query", ["units", "cities"])
+    def test_fast_reload_does_not_accept_old_or_partial_snapshot(self, monkeypatch, failed_query):
+        ctx, gs = TestSaveTools().prepare_real_menu_load(failed_query)
+        gs.conn.frontend = False
+        old_snapshot = object()
+        gs._last_snapshot = old_snapshot
+        monkeypatch.setattr(server, "LOAD_TIMEOUT", 0.01)
+        assert run(server.reload_game_save(ctx, "MySave")).startswith("ERR:OUTCOME_UNKNOWN")
+        assert gs._pending_load is True
+        assert gs._last_snapshot is not old_snapshot
+        assert len(gs.conn.load_calls) == 1
+
+    def test_checkpoint_changed_while_returning_to_menu_is_not_loaded(self, tmp_path):
+        ctx, gs = TestSaveTools().prepare_real_menu_load()
+        gs.conn.frontend = False
+        execute = gs.conn.execute_in_state
+        async def change_after_exit(index, code, timeout=None):
+            result = await execute(index, code, timeout)
+            if "MCP_MENU_EXIT:" in code:
+                (tmp_path / "MySave.Civ6Save").write_bytes(b"changed after exit")
+            return result
+        gs.conn.execute_in_state = change_after_exit
+        assert "Checkpoint file changed before load" in run(server.reload_game_save(ctx, "MySave"))
+        assert gs._pending_load is True
+        assert gs.conn.load_calls == []
+
+    @pytest.mark.parametrize("tool", ["load_game_save", "load_save_from_menu"])
+    def test_unknown_frontend_never_uses_directory_as_ready_fact(self, monkeypatch, tool):
+        ctx, gs = TestSaveTools().prepare_real_menu_load()
+        gs.conn.frontend = None
+        monkeypatch.setattr(server, "LOAD_TIMEOUT", 0.01)
+        assert "no load command was sent" in run(getattr(server, tool)(ctx, "MySave"))
+        assert gs.conn.load_calls == []
+        assert gs._pending_load is False
+
+    def test_native_load_rejection_after_exit_keeps_replacement_explicitly_unverified(self):
+        ctx, gs = TestSaveTools().prepare_real_menu_load()
+        gs.conn.frontend = False
+        gs.conn.load_response = ["MCP_FRONTEND_NOT_READY|false"]
+        result = run(server.reload_game_save(ctx, "MySave"))
+        assert result.startswith("ERR:OUTCOME_UNKNOWN")
+        assert "no load sent" in result
+        assert gs._pending_load is True
+        assert run(server.set_research(ctx, "TECH_MINING")).startswith("ERR:OUTCOME_UNKNOWN")
+
+
+    def test_explicit_cold_recovery_can_replace_an_unknown_session(self, monkeypatch):
+        from civ_mcp.game_state import _PendingAction
+        ctx, gs = TestSaveTools().prepare_real_menu_load()
+        gs._pending_load = gs._pending_save = gs._pending_end_turn = True
+        gs._pending_action = _PendingAction("move", ("unit", 7), "probe")
+        events = []
+        async def kill():
+            events.append("kill")
+            return "killed"
+        async def launch():
+            events.append("launch")
+            return "launched"
+        monkeypatch.setattr(server.game_launcher, "kill_game", kill)
+        monkeypatch.setattr(server.game_launcher, "launch_game", launch)
+        assert run(server.restart_and_load(ctx, "MySave")).startswith("Loaded MySave:")
+        assert events == ["kill", "launch"]
+        assert gs._pending_load is gs._pending_save is gs._pending_end_turn is False
+        assert gs.pending_action_entity is None
+        assert len(gs.conn.load_calls) == 1
+
+    def test_frontend_confirmation_waits_for_new_mainmenu_context(self, monkeypatch):
+        ctx, gs = TestSaveTools().prepare_real_menu_load()
+        gs.conn.frontend = False
+        execute, discover = gs.conn.execute_in_state, gs.conn.rediscover_states
+        frontend_discoveries = []
+        async def unloading(index, code, timeout=None):
+            result = await execute(index, code, timeout)
+            if "MCP_MENU_EXIT:" in code:
+                gs.conn.lua_states.pop(24)
+            return result
+        async def delayed_menu(timeout=5.0):
+            await discover(timeout)
+            if gs.conn.frontend:
+                frontend_discoveries.append(1)
+                if len(frontend_discoveries) >= 3:
+                    gs.conn.lua_states[70] = "MainMenu"
+        sleep = asyncio.sleep
+        async def no_delay(seconds):
+            await sleep(0)
+        gs.conn.execute_in_state, gs.conn.rediscover_states = unloading, delayed_menu
+        monkeypatch.setattr(server.asyncio, "sleep", no_delay)
+        result = run(server.reload_game_save(ctx, "MySave"))
+        assert result.startswith("Loaded MySave:")
+        assert len(frontend_discoveries) == 3
+        assert [index for index, _ in gs.conn.load_calls] == [70]
+        assert sum("MCP_MENU_EXIT:" in code for _, code in gs.conn.state_calls) == 1
