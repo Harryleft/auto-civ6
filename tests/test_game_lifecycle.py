@@ -90,10 +90,17 @@ class FakeConn:
         self.writes: list[str] = []
         self.state_calls: list[tuple[int, str]] = []
         self.reads: list[str] = []
+        self.discoveries = 0
+        self.discovered_states = None
 
     @property
     def load_calls(self):
         return [(idx, code) for idx, code in self.state_calls if "Network.LoadGame" in code]
+
+    async def rediscover_states(self, timeout=5.0):
+        self.discoveries += 1
+        if self.discovered_states is not None:
+            self.lua_states = self.discovered_states
 
     async def ensure_connected(self):
         """No-op — the fake is always 'connected'; tests set indexes directly."""
@@ -127,13 +134,11 @@ class FakeConn:
 
 
 def dismiss_router(*, phase1=(), precheck=(), phase3=()):
-    """Route dismiss_popup's three InGame calls by their marker strings."""
+    """Route overlay and complete information visibility responses."""
 
     def on_write(lua):
-        if "EXCL_VISIBLE" in lua:
-            return list(precheck)
-        if "STILL_VISIBLE" in lua:
-            return list(phase3)
+        if "INFORMATION_POPUPS" in lua:
+            return list(precheck) + ["INFORMATION_POPUPS|DONE"]
         return list(phase1)
 
     return on_write
@@ -493,7 +498,7 @@ class TestLoadSaveFilesystemFallback:
         assert result.startswith("Loading save MyGame")
         ((_, lua),) = conn.load_calls
         assert "local loadGame = q.save" in lua
-        assert 'local wanted = "MyGame.Civ6Save";' in conn.state_calls[0][1]
+        assert any('local wanted = "MyGame.Civ6Save";' in code for _, code in conn.state_calls)
 
     def test_out_of_range_index_against_the_filesystem_cache(self, save_dirs):
         base, _auto = save_dirs
@@ -517,11 +522,171 @@ def menu_conn(**kwargs):
     kwargs.setdefault("gamecore_index", None)
     kwargs.setdefault("ingame_index", None)
     kwargs.setdefault("lua_states", {24: "MainMenu"})
+    frontend = kwargs.pop("frontend", "true")
+    callback = kwargs.get("on_state")
+    def route(idx, lua):
+        if "MCP_FRONTEND_STATUS" in lua:
+            return ["MCP_FRONTEND|" + frontend]
+        return callback(idx, lua) if callback else []
+    kwargs["on_state"] = route
     return FakeConn(**kwargs)
 
 
 def frontend_ok(idx, lua):
     return ["MCP_FRONTEND_AUTOSTART|true", "MCP_FRONTEND_LOAD|true"]
+
+
+class TestFrontendFact:
+    @pytest.mark.parametrize("native_value, expected", [("false", False), ("true", True)])
+    def test_transient_discovery_refusal_still_reads_native_frontend(self, native_value, expected):
+        conn = FakeConn(lua_states={24: "MainMenu", 1: "InGame"},
+                        on_state=lambda idx, lua: ["MCP_FRONTEND|" + native_value])
+        discover = conn.rediscover_states
+        failures = iter([True, False])
+
+        async def temporarily_refused(timeout=5.0):
+            if next(failures):
+                raise ConnectionRefusedError("previous FireTuner client still retiring")
+            await discover(timeout=timeout)
+
+        conn.rediscover_states = temporarily_refused
+        assert run(gl.is_in_frontend(conn, timeout=1.0)) is expected
+        assert not any("Events.ExitToMainMenu()" in code or "Network.LoadGame" in code
+                       for _, code in conn.state_calls)
+
+    def test_transient_native_read_refusal_is_confirmed_after_rediscovery(self):
+        replies = iter([ConnectionResetError("read socket retired"), ["MCP_FRONTEND|true"]])
+
+        def native_response(idx, lua):
+            reply = next(replies)
+            if isinstance(reply, Exception):
+                raise reply
+            return reply
+
+        conn = FakeConn(lua_states={24: "MainMenu"}, on_state=native_response)
+        assert run(gl.is_in_frontend(conn, timeout=1.0)) is True
+
+    def test_persistent_discovery_refusal_expires_inside_shared_budget(self):
+        conn = FakeConn(lua_states={24: "MainMenu"})
+
+        async def refused(timeout=5.0):
+            raise ConnectionRefusedError("still unavailable")
+
+        conn.rediscover_states = refused
+
+        async def check():
+            async with asyncio.timeout(0.5):
+                return await gl.is_in_frontend(conn, timeout=0.03)
+
+        assert run(check()) is None
+        assert conn.state_calls == []
+
+    def test_cancellation_during_read_only_recovery_propagates(self):
+        async def check():
+            refused_once = asyncio.Event()
+            conn = FakeConn(lua_states={24: "MainMenu"})
+
+            async def refused(timeout=5.0):
+                refused_once.set()
+                raise ConnectionRefusedError("still unavailable")
+
+            conn.rediscover_states = refused
+            task = asyncio.create_task(gl.is_in_frontend(conn))
+            await refused_once.wait()
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert conn.state_calls == []
+
+        run(check())
+
+    @pytest.mark.parametrize("lines, expected", [
+        (["MCP_FRONTEND|true"], True),
+        (["MCP_FRONTEND|false"], False),
+        ([], None),
+        (["MCP_FRONTEND|UNKNOWN"], None),
+        (["MCP_FRONTEND|1"], None),
+        (["MCP_FRONTEND|true", "MCP_FRONTEND|true"], None),
+        (["MCP_FRONTEND|true", "MCP_FRONTEND|false"], None),
+    ])
+    def test_native_boolean_alone_decides_frontend_even_with_old_world_indexes(self, lines, expected):
+        conn = FakeConn(lua_states={24: "MainMenu", 0: "GameCore_Tuner", 1: "InGame"},
+                        on_state=lambda idx, lua: lines)
+        assert run(gl.is_in_frontend(conn)) is expected
+        assert conn.discoveries == 1
+        assert conn.state_calls[0][0] == 24
+        assert 'type(value) ~= "boolean"' in conn.state_calls[0][1]
+
+
+class TestReturnToMainMenu:
+    def test_transient_confirmation_disconnect_does_not_replay_exit(self):
+        conn = FakeConn(lua_states={24: "MainMenu", 1: "InGame"})
+        exit_sent = False
+        refused_once = False
+        discover = conn.rediscover_states
+
+        async def temporarily_refused(timeout=5.0):
+            nonlocal refused_once
+            if exit_sent and not refused_once:
+                refused_once = True
+                raise ConnectionRefusedError("menu connection not ready")
+            await discover(timeout=timeout)
+
+        def native_response(idx, lua):
+            nonlocal exit_sent
+            if "Events.ExitToMainMenu()" in lua:
+                exit_sent = True
+                return ["MCP_MENU_EXIT|SUBMITTED"]
+            return ["MCP_FRONTEND|" + str(exit_sent).lower()]
+
+        conn.rediscover_states = temporarily_refused
+        conn.on_state = native_response
+        assert run(gl.return_to_main_menu(conn, timeout=1.0)) == "Main menu confirmed."
+        assert sum("Events.ExitToMainMenu()" in code for _, code in conn.state_calls) == 1
+        assert conn.load_calls == []
+
+    def test_already_frontend_does_not_submit_exit_with_stale_gamecore(self):
+        conn = FakeConn(lua_states={24: "MainMenu", 0: "GameCore_Tuner", 1: "InGame"},
+                        on_state=lambda idx, lua: ["MCP_FRONTEND|true"])
+        assert run(gl.return_to_main_menu(conn)) == "Main menu confirmed."
+        assert not any("Events.ExitToMainMenu()" in code for _, code in conn.state_calls)
+
+    def test_lost_exit_reply_is_confirmed_without_replay_using_new_directory(self):
+        observations = iter([["MCP_FRONTEND|false"], ["MCP_FRONTEND|true"]])
+        conn = FakeConn(lua_states={24: "MainMenu", 1: "InGame"})
+        def route(idx, lua):
+            if "Events.ExitToMainMenu()" in lua:
+                conn.discovered_states = {99: "MainMenu", 0: "GameCore_Tuner"}
+                raise ConnectionError("reply lost")
+            return next(observations)
+        conn.on_state = route
+        assert run(gl.return_to_main_menu(conn)) == "Main menu confirmed."
+        assert [idx for idx, code in conn.state_calls if "Events.ExitToMainMenu()" in code] == [1]
+        assert conn.state_calls[-1][0] == 99
+
+    @pytest.mark.parametrize("response", [[], ["MCP_FRONTEND|UNKNOWN"], ["MCP_FRONTEND|true", "MCP_FRONTEND|false"]])
+    def test_unknown_before_exit_preserves_the_world(self, response):
+        conn = FakeConn(lua_states={24: "MainMenu", 1: "InGame"}, on_state=lambda idx, lua: response)
+        result = run(gl.return_to_main_menu(conn))
+        assert result.startswith("Error:") and "no exit sent" in result
+        assert not any("Events.ExitToMainMenu()" in code for _, code in conn.state_calls)
+
+    def test_unconfirmed_exit_expires_without_a_second_submission_or_loading(self):
+        conn = FakeConn(lua_states={24: "MainMenu", 1: "InGame"},
+                        on_state=lambda idx, lua: ["MCP_FRONTEND|false"])
+        result = run(gl.return_to_main_menu(conn, timeout=0.01))
+        assert result.startswith("ERR:OUTCOME_UNKNOWN|")
+        assert sum("Events.ExitToMainMenu()" in code for _, code in conn.state_calls) == 1
+        assert conn.load_calls == []
+
+    def test_discovery_is_inside_the_callers_budget(self):
+        conn = FakeConn(lua_states={24: "MainMenu"})
+        async def slow_discovery(timeout=5.0):
+            await asyncio.sleep(10)
+        conn.rediscover_states = slow_discovery
+        result = run(gl.return_to_main_menu(conn, timeout=0.01))
+        assert result.startswith("Error:") and "no exit sent" in result
+        assert conn.state_calls == []
 
 
 class TestLoadGameSave:
@@ -534,13 +699,23 @@ class TestLoadGameSave:
         explicitly instead of silently restarting or navigating the GUI."""
 
         async def go():
-            conn = FakeConn()  # gamecore_index=0 — a game is loaded
+            conn = FakeConn(lua_states={1: "InGame"}, on_state=lambda idx, lua: ["MCP_FRONTEND|false"])
             return conn, await gl.load_game_save(conn, "0_MCP_0042")
 
         conn, result = run(go())
         assert "a game is already loaded" in result
-        assert conn.state_calls == []
+        assert conn.load_calls == []
+        assert all("MCP_FRONTEND_STATUS" in code for _, code in conn.state_calls)
         assert conn.writes == []
+
+    def test_stale_gamecore_directory_does_not_refuse_a_native_frontend(self):
+        conn = menu_conn(gamecore_index=0, lua_states={24: "MainMenu", 0: "GameCore_Tuner"}, on_state=frontend_ok)
+        assert run(gl.load_game_save(conn, "checkpoint")).startswith("Loading save")
+
+    def test_unknown_native_frontend_refuses_load_without_submission(self):
+        conn = menu_conn(frontend="UNKNOWN", on_state=frontend_ok)
+        assert "no load sent" in run(gl.load_game_save(conn, "checkpoint"))
+        assert conn.load_calls == []
 
     def test_invalid_save_names_are_rejected_before_any_lua(self):
         async def go():
@@ -561,7 +736,7 @@ class TestLoadGameSave:
             conn = menu_conn(lua_states={})
             return await gl.load_game_save(conn, "0_MCP_0042")
 
-        assert "MainMenu Lua state is unavailable" in run(go())
+        assert "frontend state unavailable" in run(go())
 
     def test_frontend_load_succeeds_via_mainmenu_state(self):
         """The happy path: load + auto-start accepted in the MainMenu state —
@@ -602,6 +777,17 @@ class TestLoadGameSave:
             return await gl.load_game_save(conn, "ghost")
 
         assert "Civ VI rejected save" in run(go())
+
+    @pytest.mark.parametrize("frontend", ["false", "UNKNOWN"])
+    def test_frontend_changed_in_load_chunk_is_explicitly_not_submitted(self, frontend):
+        conn = menu_conn(on_state=lambda idx, lua: ["MCP_FRONTEND_NOT_READY|" + frontend])
+        result = run(gl.load_save_from_frontend(conn, "checkpoint"))
+        assert result.startswith("Error:") and "no load sent" in result
+        assert "Civ VI rejected" not in result
+        code = conn.load_calls[0][1]
+        assert code.index("UI.IsInFrontEnd()") < code.index("Network.LoadGame")
+        assert 'type(frontend) ~= "boolean"' in code
+        assert 'frontend ~= true' in code
 
     def test_no_confirmation_means_outcome_unknown(self):
         async def go():
@@ -647,7 +833,7 @@ class TestLoadGameSave:
         async def go():
             conn = menu_conn(on_state=frontend_ok)
             await gl.load_game_save(conn, 'evil"; print("pwned"); --')
-            return conn.state_calls[0][1]
+            return next(code for _, code in conn.state_calls if "MCP_SAVE_QUERY_START" in code)
 
         lua = run(go())
         assert 'local wanted = "evil\\"; print(\\"pwned\\"); --.Civ6Save";' in lua
@@ -657,7 +843,7 @@ class TestLoadGameSave:
         async def go():
             conn = menu_conn(on_state=frontend_ok)
             await gl.load_game_save(conn, name)
-            return conn.state_calls[0][1]
+            return next(code for _, code in conn.state_calls if "MCP_SAVE_QUERY_START" in code)
 
         assert 'local wanted = "0_MCP_0042.Civ6Save";' in run(go())
 
@@ -804,79 +990,95 @@ class TestDismissPopup:
         async def go():
             return await gl.dismiss_popup(FakeConn(on_write=on_write))
 
-        assert run(go()) == "No popups to dismiss."
+        assert "outcome unknown" in run(go())
 
-    def test_exclusive_popup_is_closed_in_its_own_lua_state(self, monkeypatch):
-        """Phase 2: only states whose names carry popup keywords are scanned."""
+    def test_information_popup_closes_only_its_exact_discovered_state(self):
+        conn = FakeConn(
+            lua_states={5: "NaturalWonderPopup", 7: "FrontEnd", 8: "UnrelatedPopup"},
+            on_write=dismiss_router(precheck=["INFORMATION_POPUPS|VISIBLE|NaturalWonderPopup"]),
+            on_state=lambda idx, lua: ["POPUP_CLOSED|NaturalWonderPopup"],
+        )
+        assert run(gl.dismiss_popup(conn)) == "Dismissed: NaturalWonderPopup"
+        assert [idx for idx, _ in conn.state_calls] == [5]
+        lua = conn.state_calls[0][1]
+        assert 'id ~= expected' in lua
+        assert 'local expected = "NaturalWonderPopup"' in lua
+        assert 'pcall(callback)' in lua
+        assert 'nowHidden == true' in lua
+        assert 'm_kQueuedPopups' not in lua and 'SetHide' not in lua
 
-        closes = []
+    def test_native_information_queue_is_drained_without_clearing_private_state(self):
+        responses = iter([["POPUP_VISIBLE|TechCivicCompletedPopup"], ["POPUP_CLOSED|TechCivicCompletedPopup"]])
+        conn = FakeConn(
+            lua_states={5: "TechCivicCompletedPopup"},
+            on_write=dismiss_router(precheck=["INFORMATION_POPUPS|VISIBLE|TechCivicCompletedPopup"]),
+            on_state=lambda idx, lua: next(responses),
+        )
+        assert run(gl.dismiss_popup(conn)) == "Dismissed: TechCivicCompletedPopup"
+        assert len(conn.state_calls) == 2
+        for _, lua in conn.state_calls:
+            assert 'local callback = OnClose' in lua
+            assert 'callback = Close' not in lua
+            assert 'm_kPopupData' not in lua and 'm_kQueuedPopups' not in lua
 
-        def on_state(idx, lua):
-            assert "pcall(Close)" in lua
-            closes.append(idx)
-            # First Close() dismisses; the drain loop's next check finds it hidden.
-            return ["DISMISSED"] if len(closes) == 1 and idx == 5 else []
+    def test_missing_state_is_discovered_once_and_then_closed_by_name(self):
+        conn = FakeConn(
+            on_write=dismiss_router(precheck=["INFORMATION_POPUPS|VISIBLE|NaturalDisasterPopup"]),
+            on_state=lambda idx, lua: ["POPUP_CLOSED|NaturalDisasterPopup"],
+        )
+        conn.discovered_states = {211: "NaturalDisasterPopup"}
+        assert run(gl.dismiss_popup(conn)) == "Dismissed: NaturalDisasterPopup"
+        assert conn.discoveries == 1
+        assert [idx for idx, _ in conn.state_calls] == [211]
 
-        async def go():
-            conn = FakeConn(
-                lua_states={5: "NaturalWonderPopup", 7: "FrontEnd"},
-                on_write=dismiss_router(precheck=["EXCL_VISIBLE"]),
-                on_state=on_state,
-            )
-            result = await gl.dismiss_popup(conn)
-            return conn, result
+    @pytest.mark.parametrize("native_response", [
+        [], ["DISMISSED"], ["POPUP_UNKNOWN|NaturalDisasterPopup|context mismatch"],
+        ["POPUP_UNKNOWN|NaturalDisasterPopup|native callback failed"],
+        ["POPUP_CLOSED|OtherPopup"],
+    ])
+    def test_unconfirmed_native_close_never_reports_dismissed(self, native_response):
+        conn = FakeConn(
+            lua_states={5: "NaturalDisasterPopup"},
+            on_write=dismiss_router(precheck=["INFORMATION_POPUPS|VISIBLE|NaturalDisasterPopup"]),
+            on_state=lambda idx, lua: native_response,
+        )
+        result = run(gl.dismiss_popup(conn))
+        assert "outcome unknown" in result
+        assert "Dismissed:" not in result
+        assert len(conn.state_calls) == 1 and conn.discoveries == 0
 
-        conn, result = run(go())
-        assert result == "Dismissed: NaturalWonderPopup"
-        scanned = {idx for idx, _ in conn.state_calls}
-        assert 5 in scanned and 7 not in scanned
+    def test_visible_native_queue_has_a_limit_without_false_success(self):
+        conn = FakeConn(
+            lua_states={5: "NaturalDisasterPopup"},
+            on_write=dismiss_router(precheck=["INFORMATION_POPUPS|VISIBLE|NaturalDisasterPopup"]),
+            on_state=lambda idx, lua: ["POPUP_VISIBLE|NaturalDisasterPopup"],
+        )
+        result = run(gl.dismiss_popup(conn))
+        assert "queue remains; outcome unknown" in result
+        assert "Dismissed:" not in result
+        assert len(conn.state_calls) == 20
 
-    def test_phase2_drains_until_the_popup_stays_hidden(self, monkeypatch):
-        """The drain loop closes every queued popup, but the state name is
-        reported only once no matter how many queue entries drained."""
-        closes = []
+    def test_native_callback_transport_failure_stops_without_rediscovery(self):
+        def failed(idx, lua):
+            raise ConnectionError("reply lost")
+        conn = FakeConn(
+            lua_states={5: "NaturalDisasterPopup", 6: "HistoricMoments"},
+            on_write=dismiss_router(precheck=[
+                "INFORMATION_POPUPS|VISIBLE|NaturalDisasterPopup",
+                "INFORMATION_POPUPS|VISIBLE|HistoricMoments",
+            ]),
+            on_state=failed,
+        )
+        result = run(gl.dismiss_popup(conn))
+        assert "reply lost; outcome unknown" in result
+        assert len(conn.state_calls) == 1 and conn.discoveries == 0
 
-        def on_state(idx, lua):
-            closes.append(idx)
-            # Two queued popups drain, the third check finds it hidden.
-            return ["DISMISSED"] if len(closes) <= 2 else []
-
-        async def go():
-            conn = FakeConn(
-                lua_states={5: "WonderBuiltPopup"},
-                on_write=dismiss_router(precheck=["EXCL_VISIBLE"]),
-                on_state=on_state,
-            )
-            return await gl.dismiss_popup(conn)
-
-        assert run(go()) == "Dismissed: WonderBuiltPopup"
-
-    def test_phase3_probes_unknown_state_indexes(self, monkeypatch):
-        """When the handshake's state list is incomplete, Phase 3 probes
-        indexes 50+ for the still-visible popup and learns the new state."""
-
-        def on_state(idx, lua):
-            if "ContextPtr:GetID()" in lua:
-                return ["WonderBuiltPopup"] if idx == 50 else ["Other"]
-            if "pcall(Close)" in lua:
-                return ["DISMISSED"]
-            return []
-
-        async def go():
-            conn = FakeConn(
-                lua_states={},  # truncated handshake — no popup states known
-                on_write=dismiss_router(
-                    precheck=["EXCL_VISIBLE"],
-                    phase3=["STILL_VISIBLE|WonderBuiltPopup"],
-                ),
-                on_state=on_state,
-            )
-            result = await gl.dismiss_popup(conn)
-            return conn, result
-
-        conn, result = run(go())
-        assert result == "Dismissed: WonderBuiltPopup (probed state 50)"
-        assert conn.lua_states[50] == "WonderBuiltPopup"
+    @pytest.mark.parametrize("visibility", [[], ["INFORMATION_POPUPS|UNKNOWN"],
+        ["INFORMATION_POPUPS|VISIBLE|UnknownPopup", "INFORMATION_POPUPS|DONE"]])
+    def test_unknown_visibility_does_not_scan_or_report_none(self, visibility):
+        conn = FakeConn(on_write=lambda lua: visibility if "INFORMATION_POPUPS" in lua else [])
+        assert "visibility unavailable; outcome unknown" in run(gl.dismiss_popup(conn))
+        assert conn.state_calls == [] and conn.discoveries == 0
 
     def test_crash_dialog_dismissals_are_appended(self, monkeypatch):
         async def fake():
@@ -904,7 +1106,7 @@ class TestExecuteLua:
 
         conn, result = run(go())
         assert result == "1\n2"
-        assert conn.writes == ['(function() print(1) end)(); print("---END---")']
+        assert conn.writes == ['print(1)']
 
     def test_numeric_context_routes_to_that_state_index(self):
         async def go():
@@ -914,7 +1116,7 @@ class TestExecuteLua:
 
         conn, result = run(go())
         assert result == "state5"
-        assert conn.state_calls == [(5, '(function() print(1) end)(); print("---END---")')]
+        assert conn.state_calls == [(5, 'print(1)')]
 
     def test_any_other_context_routes_to_gamecore_read(self):
         async def go():
@@ -924,22 +1126,32 @@ class TestExecuteLua:
 
         conn, result = run(go())
         assert result == "ok"
-        assert conn.reads == ['(function() print(1) end)(); print("---END---")']
+        assert conn.reads == ['print(1)']
 
-    def test_user_code_is_function_wrapped_and_sentinel_terminated(self):
-        """The connection layer tells "no output" from "no answer" by the
-        sentinel, so run_lua chunks must end with one. Function-wrapped so a
-        trailing `return` in user code stays valid Lua."""
+    def test_user_code_passes_unchanged_to_the_connection_boundary(self):
+        """Only the connection owns response framing, including trailing returns."""
 
         async def go():
             conn = FakeConn(on_read=lambda lua: [])
             await gl.execute_lua(conn, "return 1")
             return conn.reads
 
-        assert run(go()) == ['(function() return 1 end)(); print("---END---")']
+        assert run(go()) == ['return 1']
 
     def test_empty_output_becomes_a_placeholder(self):
         async def go():
             return await gl.execute_lua(FakeConn(), "x = 1")
 
         assert run(go()) == "(no output)"
+
+
+def test_missing_popup_state_refreshes_once_without_guessing_indexes():
+    conn = FakeConn(on_write=lambda lua: [
+        "EXCL_VISIBLE", "STILL_VISIBLE|NaturalDisasterPopup",
+        "INFORMATION_POPUPS|VISIBLE|NaturalDisasterPopup", "INFORMATION_POPUPS|DONE",
+    ] if "EXCL_VISIBLE" in lua or "STILL_VISIBLE" in lua or "INFORMATION_POPUPS" in lua else [])
+    result = run(gl.dismiss_popup(conn))
+    assert "outcome unknown" in result
+    assert "NaturalDisasterPopup" in result
+    assert conn.discoveries == 1
+    assert conn.state_calls == []

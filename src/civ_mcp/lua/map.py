@@ -580,12 +580,10 @@ if not bq:CanProduce(dist.Hash, true) then
 end
 local targets = CityManager.GetOperationTargets(pCity, CityOperationTypes.BUILD, {{[CityOperationTypes.PARAM_DISTRICT_TYPE] = dist.Hash}})
 if targets == nil then {_bail("ERR:NO_TARGETS|No valid placement targets found")} end
-local plotIndices = {{}}
-for k, v in pairs(targets) do
-    if type(v) == "table" then
-        for _, idx in ipairs(v) do table.insert(plotIndices, idx) end
-    end
-end
+-- Native UI identifies only PLOTS as available. BLOCKED_PLOTS and
+-- unrelated result arrays are not executable placement candidates.
+local plotIndices = targets[CityOperationResults.PLOTS]
+if type(plotIndices) ~= "table" then plotIndices = {{}} end
 if #plotIndices == 0 then {_bail("ERR:NO_TILES|No valid placement tiles found")} end
 local results = {{}}
 local dType = "{district_type}"

@@ -126,8 +126,24 @@ class GameState:
             identity = (fields[1].replace("CIVILIZATION_", "").lower(), int(fields[2]))
             if identity != pending.identity or (pending.turn is not None and int(fields[3]) != pending.turn):
                 return None
-        if pending.kind == "production" and any(line.startswith("CONFIRMED|") for line in pending.observed):
-            return pending.success
+        if pending.kind == "production":
+            target = pending.details.get("target")
+            if target is not None:
+                item = pending.details["item"]
+                if f"PRODUCTION|{item}" not in pending.observed:
+                    return None
+                for line in pending.observed:
+                    fields = line.split("|")
+                    if len(fields) != 4 or fields[:2] != ["DISTRICT", item]:
+                        continue
+                    try:
+                        position = tuple(float(value) for value in fields[2:])
+                    except ValueError:
+                        continue
+                    if position == target:
+                        return pending.success
+            elif any(line.startswith("CONFIRMED|") for line in pending.observed):
+                return pending.success
         if pending.kind == "attack":
             pre_hp = pending.details.get("pre_hp")
             post_hp = None
@@ -172,18 +188,23 @@ class GameState:
                 suffix = f"|now_at:{x},{y}"
                 if origin:
                     suffix += f"|(moved dx:{x-origin[0]:+d} dy:{y-origin[1]:+d})"
-                if (x, y) == target and busy != "true":
+                if (x, y) == target and busy == "false":
                     return pending.success + suffix
                 if moves is not None and moves <= 0 and busy == "false":
                     return pending.success + suffix + "|STOPPED_MID_PATH (moves exhausted)"
-                # Civ6 may leave unusable movement points: e.g. one point
-                # remains but the next forest step costs two. Native path turns
-                # (used by WorldInput.lua) provide the boundary, not a timing guess.
-                next_step = next((line for line in pending.observed if line.startswith("PATH_STEP|")), "")
-                step = re.search(r"\|turn:(\d+)$", next_step)
-                if (origin is not None and (x, y) != origin and busy == "false"
-                        and step is not None and int(step[1]) > 1):
-                    return pending.success + suffix + "|STOPPED_MID_PATH (next path step requires a later turn)"
+                # Civ6's effective movement and ZOC facts can stop a segment
+                # while ordinary moves remain. Path-preview turn labels alone
+                # do not prove completion; missing native facts stay unknown.
+                movement_moves = float(meta["movement_moves"]) if "movement_moves" in meta else None
+                native_stop = None
+                if movement_moves is not None and movement_moves <= 0:
+                    native_stop = "native movement exhausted"
+                elif meta.get("zoc") == "true":
+                    native_stop = "entered zone of control"
+                if origin is not None and (x, y) != origin and busy == "false" and native_stop:
+                    if moves is not None:
+                        suffix += f"|moves_remaining:{moves:g}"
+                    return pending.success + suffix + f"|STOPPED_MID_PATH ({native_stop})"
                 impassable = any(line.startswith(("DIAG|MOUNTAIN|", "DIAG|IMPASSABLE|")) for line in pending.observed)
                 if (x, y) == origin and busy == "false" and impassable:
                     return pending.success + suffix + f"|BLOCKED ({lq.parse_blocked_diagnostic(pending.observed)})"
@@ -245,13 +266,17 @@ class GameState:
     # Query methods
     # ------------------------------------------------------------------
 
-    async def get_game_overview(self) -> lq.GameOverview:
+    async def get_game_overview(self, *, require_snapshot: bool = False) -> lq.GameOverview:
         # InGame context needed for GetFavor() (nil in GameCore)
         lines = await self.conn.execute_write(lq.build_overview_query())
         ov = lq.parse_overview_response(lines)
         self._local_player_id = ov.player_id
+        if require_snapshot:
+            # Load confirmation requires this attempt's complete evidence,
+            # including failures that could retire the FireTuner stream.
+            self._last_snapshot = await self._take_snapshot(ov, require_complete=True)
         # Bootstrap: capture baseline snapshot for first end_turn diff
-        if self._last_snapshot is None:
+        elif self._last_snapshot is None:
             try:
                 self._last_snapshot = await self._take_snapshot(ov)
             except Exception:
@@ -438,8 +463,11 @@ class GameState:
         blocked = await self._action_gate()
         if blocked:
             return blocked
+        estimate = None
         estimate_str = ""
+        unknown_estimate = "Combat estimate unknown (native preview unavailable; conditional modifiers uncomputed).\n"
         if entity[0] == "unit":
+            estimate_str = unknown_estimate
             try:
                 await self.dismiss_popup()
             except (OSError, TimeoutError, LuaError):
@@ -463,6 +491,8 @@ class GameState:
             return self._pending_unknown(f"submission acknowledgement unavailable: {exc}")
         result = _action_result(lines)
         if result.startswith(("RANGE_ATTACK", "MELEE_ATTACK", "AIR_ATTACK", "CITY_RANGE_ATTACK")):
+            if estimate and (result.startswith("AIR_ATTACK") or estimate.is_ranged != result.startswith("RANGE_ATTACK")):
+                estimate_str = unknown_estimate
             pending.success = result
             pending.details["pre_hp"] = _extract_pre_hp(result)
             for name in ("target_owner", "target_id", "attacks_before"):
@@ -659,17 +689,22 @@ class GameState:
         target_x: int | None = None,
         target_y: int | None = None,
     ) -> str:
+        target = ((target_x, target_y) if item_type.upper() == "DISTRICT"
+                  and target_x is not None and target_y is not None else None)
         if (self._pending_action and self._pending_action.kind == "production"
                 and self._pending_action.entity == ("city", city_id)
-                and self._pending_action.details.get("item") == item_name):
+                and self._pending_action.details.get("item") == item_name
+                and self._pending_action.details.get("target") == target):
             return await self.confirm_pending_action()
         blocked = await self._action_gate()
         if blocked:
             return blocked
         pending = _PendingAction(
-            "production", ("city", city_id), lq.build_verify_production(city_id, item_name),
+            "production", ("city", city_id), lq.build_verify_production(city_id, item_name, target),
+            # "write" selects InGame; this confirmation Lua only reads facts.
+            context="write" if target is not None else "read",
             identity=self._game_identity, success=f"PRODUCING|{item_name}",
-            details={"item": item_name},
+            details={"item": item_name, "target": target},
         )
         # Retain intent before dispatch: losing the acknowledgement does not
         # establish that CityManager.RequestOperation was never executed.
@@ -1400,14 +1435,16 @@ class GameState:
     # ------------------------------------------------------------------
 
     async def _take_snapshot(
-        self, overview: lq.GameOverview | None = None
+        self, overview: lq.GameOverview | None = None, *, require_complete: bool = False
     ) -> lq.TurnSnapshot:
         """Capture current game state for diffing."""
         if overview is None:
             ov_lines = await self.conn.execute_write(lq.build_overview_query())
             overview = lq.parse_overview_response(ov_lines)
 
-        unit_lines = await self.conn.execute_read(lq.build_units_query())
+        # The unit builder uses InGame-only native operation/command checks,
+        # including ranged target checks when a unit has moves remaining.
+        unit_lines = await self.conn.execute_write(lq.build_units_query())
         units = lq.parse_units_response(unit_lines)
 
         city_lines = await self.conn.execute_write(lq.build_cities_query())
@@ -1417,6 +1454,8 @@ class GameState:
             stk_lines = await self.conn.execute_write(lq.build_stockpile_query())
             stockpiles = lq.parse_stockpile_response(stk_lines)
         except Exception:
+            if require_complete:
+                raise
             log.debug("Stockpile query failed", exc_info=True)
             stockpiles = []
 
@@ -1429,6 +1468,16 @@ class GameState:
                     name=c.name,
                     population=c.population,
                     currently_building=c.currently_building,
+                    x=c.x,
+                    y=c.y,
+                    owner_id=c.owner_id,
+                    game_identity=c.game_identity,
+                    buildings=(
+                        ["BUILDING_" + b for b in c.buildings]
+                        if c.game_identity is not None
+                        else None
+                    ),
+                    completed_districts=c.completed_districts,
                     food_surplus=c.food_surplus,
                     turns_to_grow=c.turns_to_grow,
                     loyalty=c.loyalty,
@@ -1509,20 +1558,56 @@ class GameState:
                         )
                     )
                 if (
-                    cb.currently_building != "NONE"
+                    cb.currently_building not in (
+                        "NONE", "nothing", "CORRUPTED_QUEUE", "UNKNOWN"
+                    )
                     and ca.currently_building != cb.currently_building
                 ):
                     now = ca.currently_building
                     if now in ("NONE", "nothing"):
                         now = "nothing"
                     elif now == "CORRUPTED_QUEUE":
-                        now = "nothing (queue invalidated — set new production)"
-                    events.append(
-                        lq.TurnEvent(
-                            priority=2,
-                            category="city",
-                            message=f"{ca.name} finished building {cb.currently_building}. Now: {now}.",
+                        now = "invalid queue (nonempty, zero item hash; unchanged)"
+                    # A queue transition is not proof of production. Compare
+                    # native products only across the same observed owner/game.
+                    same_city = (
+                        cb.game_identity is not None
+                        and cb.game_identity == ca.game_identity
+                        and cb.owner_id is not None
+                        and cb.owner_id == ca.owner_id
+                        and cb.x is not None
+                        and cb.y is not None
+                        and (cb.x, cb.y) == (ca.x, ca.y)
+                    )
+                    completed = False
+                    item = cb.currently_building
+                    if same_city and item.startswith("DISTRICT_"):
+                        if (
+                            cb.completed_districts is not None
+                            and ca.completed_districts is not None
+                        ):
+                            new = set(ca.completed_districts) - set(cb.completed_districts)
+                            completed = any(d.split("@", 1)[0] == item for d in new)
+                    elif same_city and item.startswith("BUILDING_"):
+                        if cb.buildings is not None and ca.buildings is not None:
+                            completed = item in set(ca.buildings) - set(cb.buildings)
+                    elif same_city and item.startswith("UNIT_"):
+                        # Local-unit queries and matching city coordinates tie
+                        # the new product to this owner/city. Adjacent naval
+                        # spawns remain unconfirmed rather than guessed.
+                        completed = any(
+                            uid not in before.units
+                            and unit.unit_type == item
+                            and (unit.x, unit.y) == (ca.x, ca.y)
+                            for uid, unit in after.units.items()
                         )
+                    message = (
+                        f"{ca.name} finished building {item}. Now: {now}."
+                        if completed else
+                        f"{ca.name} production queue changed from {item}; completion unconfirmed. Now: {now}."
+                    )
+                    events.append(
+                        lq.TurnEvent(priority=2, category="city", message=message)
                     )
 
         for cid, ca in after.cities.items():
@@ -1690,8 +1775,8 @@ class GameState:
         if after_identity != identity or after.turn != before.turn:
             self._pending_save = True
             return f"ERR:OUTCOME_UNKNOWN|{result} Game or turn changed during saving; inspect before recovery."
-        from civ_mcp.checkpoints import record_checkpoint
-        error = record_checkpoint(save_name, identity, after.turn)
+        from civ_mcp.checkpoints import record_checkpoint, score_evidence
+        error = record_checkpoint(save_name, identity, after.turn, score_evidence(before))
         if error:
             self._pending_save = True
             return error

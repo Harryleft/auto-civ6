@@ -4,6 +4,7 @@ import asyncio
 import pytest
 
 from civ_mcp.game_state import GameState
+from civ_mcp.lua import TurnSnapshot
 
 
 class Engine:
@@ -87,7 +88,7 @@ def test_movement_waits_through_old_and_intermediate_positions():
 
 def test_attack_waits_for_real_damage_and_never_uses_estimate_as_actual():
     engine = Engine(
-        writes=[["ESTIMATE|UNIT_SLINGER|UNIT_SCOUT|15|10|1||100|80"],
+        writes=[["NATIVE_ESTIMATE|UNIT_SLINGER|UNIT_SCOUT|15|10|1|100|80|0|35"],
                 ["OK:RANGE_ATTACK|pre_hp:80/100|target_owner:63|target_id:123|attacks_before:1"],
                 ["UNIT|UNIT_SCOUT|80/100|owner:63|id:123"],
                 ["UNIT|UNIT_SCOUT|55/100|owner:63|id:123", "CORE_BUSY|false"]],
@@ -224,17 +225,18 @@ def test_changed_city_attack_hp_does_not_bypass_busy_engine():
     assert engine.writes == []
 
 
-def test_move_stops_when_native_next_step_is_in_a_later_turn_despite_remaining_moves():
+def test_later_turn_path_label_alone_does_not_confirm_a_partial_move():
     engine = Engine(writes=[["OK:MOVING_TO|14,13|from:14,15"]], reads=[
         ["POS|14|14|moves:1|busy:true", "PATH_STEP|14|13|turn:2"],
         ["POS|14|14|moves:1|busy:false", "PATH_STEP|14|13|turn:2"],
+        ConnectionError("no reliable native stop signal"),
     ])
     state = GameState(engine)
     state.dismiss_popup = no_dismiss
     result = asyncio.run(state.move_unit(1, 14, 13))
-    assert "OUTCOME_UNKNOWN" not in result
-    assert "now_at:14,14" in result
-    assert "next path step requires a later turn" in result
+    assert "OUTCOME_UNKNOWN" in result
+    assert state.pending_action_summary
+    assert "STOPPED_MID_PATH" not in result
     assert "moves exhausted" not in result
     assert len(engine.submissions) == 1
     assert engine.reads == []
@@ -259,3 +261,129 @@ def test_idle_partial_move_with_native_step_still_reachable_stays_unknown():
     state.dismiss_popup = no_dismiss
     assert "OUTCOME_UNKNOWN" in asyncio.run(state.move_unit(1, 14, 13))
     assert state.pending_action_summary
+
+
+def test_turn_22_partial_move_confirms_native_movement_exhaustion_with_real_moves():
+    engine = Engine(writes=[["OK:MOVING_TO|17,15|from:15,12"]], reads=[
+        ["POS|15|12|moves:2|movement_moves:2|zoc:false|busy:true"],
+        ["POS|15|13|moves:1|movement_moves:0|zoc:false|busy:true", "PATH_STEP|15|14|turn:1"],
+        ["POS|15|13|moves:1|movement_moves:0|zoc:false|busy:false", "PATH_STEP|15|14|turn:1"],
+        ConnectionError("no further observation"),
+    ])
+    state = GameState(engine)
+    state.dismiss_popup = no_dismiss
+    result = asyncio.run(state.move_unit(1, 17, 15))
+    assert "OUTCOME_UNKNOWN" not in result
+    assert "now_at:15,13" in result
+    assert "moves_remaining:1" in result
+    assert "STOPPED_MID_PATH (native movement exhausted)" in result
+    assert "now_at:17,15" not in result
+    assert len(engine.submissions) == 1
+
+
+def test_native_zoc_confirms_partial_stop_without_claiming_moves_exhausted():
+    engine = Engine(writes=[["OK:MOVING_TO|17,15|from:15,12"]], reads=[
+        ["POS|15|13|moves:1|movement_moves:1|zoc:true|busy:false", "PATH_STEP|15|14|turn:1"],
+        ConnectionError("no further observation"),
+    ])
+    state = GameState(engine)
+    state.dismiss_popup = no_dismiss
+    result = asyncio.run(state.move_unit(1, 17, 15))
+    assert "OUTCOME_UNKNOWN" not in result
+    assert "now_at:15,13" in result and "moves_remaining:1" in result
+    assert "STOPPED_MID_PATH (entered zone of control)" in result
+    assert "exhausted" not in result
+    assert len(engine.submissions) == 1
+
+
+@pytest.mark.parametrize("activity", ["", "|busy:unknown", "|busy:true"])
+def test_arrival_without_confirmed_idle_keeps_movement_pending(activity):
+    engine = Engine(writes=[["OK:MOVING_TO|17,15|from:15,12"]], reads=[
+        [f"POS|17|15|moves:1{activity}"], ConnectionError("idle state unavailable"),
+    ])
+    state = GameState(engine)
+    state.dismiss_popup = no_dismiss
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.move_unit(1, 17, 15))
+    assert state.pending_action_summary
+    assert len(engine.submissions) == 1
+
+
+@pytest.mark.parametrize("native", ["", "|movement_moves:1|zoc:false", "|movement_moves:unknown|zoc:unknown"])
+def test_repeated_idle_partial_position_without_native_stop_remains_unknown(native):
+    observation = [f"POS|15|13|moves:1{native}|busy:false", "PATH_STEP|15|14|turn:1"]
+    engine = Engine(writes=[["OK:MOVING_TO|17,15|from:15,12"]], reads=[
+        observation, observation, ConnectionError("no reliable stop evidence"),
+    ])
+    state = GameState(engine)
+    state.dismiss_popup = no_dismiss
+    result = asyncio.run(state.move_unit(1, 17, 15))
+    assert "OUTCOME_UNKNOWN" in result
+    assert "STOPPED_MID_PATH" not in result
+    assert state.pending_action_summary
+    assert len(engine.submissions) == 1
+
+
+@pytest.mark.parametrize("native", ["movement_moves:0", "zoc:true"])
+@pytest.mark.parametrize("position,busy", [("15|12", "false"), ("15|13", "true"), ("15|13", "unknown")])
+def test_native_stop_signal_without_observed_progress_and_idle_is_insufficient(native, position, busy):
+    engine = Engine(writes=[["OK:MOVING_TO|17,15|from:15,12"]], reads=[
+        [f"POS|{position}|moves:1|{native}|busy:{busy}"], ConnectionError("incomplete stop evidence"),
+    ])
+    state = GameState(engine)
+    state.dismiss_popup = no_dismiss
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.move_unit(1, 17, 15))
+    assert state.pending_action_summary
+    assert len(engine.submissions) == 1
+
+
+def test_read_only_unit_query_confirms_lost_move_without_replaying():
+    engine = Engine(writes=[["OK:MOVING_TO|17,15|from:15,12"], []], reads=[
+        ConnectionError("lost"), ["POS|15|13|moves:1|movement_moves:0|busy:false"],
+    ])
+    state = GameState(engine)
+    state.dismiss_popup = no_dismiss
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.move_unit(1, 17, 15))
+    assert asyncio.run(state.get_units()) == []
+    assert state.pending_action_summary is None
+    assert sum("RequestOperation" in code for code in engine.submissions) == 1
+
+
+@pytest.mark.parametrize("operation", ["end_turn", "save", "fortify"])
+def test_ambiguous_turn_22_movement_blocks_later_mutations_after_identity_refresh(operation):
+    engine = Engine(writes=[
+        ["OK:MOVING_TO|17,15|from:15,12"], ["GAMESEED|CIVILIZATION_SUMERIA|719665280"],
+    ], reads=[
+        ["ACTION_IDENTITY|CIVILIZATION_SUMERIA|719665280|22", "POS|15|13|moves:1|busy:false", "PATH_STEP|15|14|turn:1"],
+        ConnectionError("stop evidence unavailable"), ConnectionError("still unknown"),
+    ])
+    state = GameState(engine)
+    state.dismiss_popup = no_dismiss
+    state._game_identity = ("sumeria", 719665280)
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.move_unit(1, 17, 15))
+    assert asyncio.run(state.get_game_identity()) == ("sumeria", 719665280)
+    if operation == "end_turn":
+        result = asyncio.run(state.end_turn())
+    elif operation == "save":
+        result = asyncio.run(state.save_game("isolated_checkpoint"))
+    else:
+        result = asyncio.run(state.fortify_unit(1))
+    assert "OUTCOME_UNKNOWN" in result
+    assert state.pending_action_summary
+    assert len(engine.submissions) == 2  # MOVE_TO and identity read only.
+
+
+@pytest.mark.parametrize("identity", [None, "CIVILIZATION_ROME|11|22", "CIVILIZATION_SUMERIA|719665280|23"])
+def test_native_movement_stop_from_missing_or_changed_identity_stays_unknown(identity):
+    observation = ["POS|15|13|moves:1|movement_moves:0|zoc:true|busy:false"]
+    if identity:
+        observation.insert(0, f"ACTION_IDENTITY|{identity}")
+    engine = Engine(writes=[["OK:MOVING_TO|17,15|from:15,12"]], reads=[
+        observation, ConnectionError("same-world evidence unavailable"),
+    ])
+    state = GameState(engine)
+    state.dismiss_popup = no_dismiss
+    state._game_identity = ("sumeria", 719665280)
+    state._last_snapshot = TurnSnapshot(turn=22, units={}, cities={}, current_research="", current_civic="")
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.move_unit(1, 17, 15))
+    assert state.pending_action_summary
+    assert len(engine.submissions) == 1
