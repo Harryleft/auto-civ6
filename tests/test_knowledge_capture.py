@@ -158,3 +158,26 @@ def test_missing_or_invalid_startup_timestamp_preserves_previous_snapshot(tmp_pa
         assert result.returncode == 2
         assert 'startup timestamp' in result.stderr
         assert output.read_text() == 'previous confirmed snapshot'
+
+
+def test_capture_expanded_theme_facts_without_filtering_their_mechanisms(tmp_path):
+    game, user, manifest = setup_inputs(tmp_path)
+    with sqlite3.connect(user / 'Cache/DebugGameplay.sqlite') as con:
+        con.execute('CREATE TABLE Yields (YieldType TEXT, Name TEXT)')
+        con.execute("INSERT INTO Yields VALUES ('YIELD_FOOD','LOC_FOOD')")
+        con.execute('CREATE TABLE Resource_Consumption (ResourceType TEXT, PowerProvided INTEGER)')
+        con.execute("INSERT INTO Resource_Consumption VALUES ('RESOURCE_COAL',4)")
+        con.execute('CREATE TABLE GlobalParameters (Name TEXT, Value TEXT)')
+        con.execute("INSERT INTO GlobalParameters VALUES ('CITY_GROWTH_THRESHOLD','15')")
+        con.execute('CREATE TABLE CivilopediaPages (SectionId TEXT, PageId TEXT, Name TEXT)')
+        con.execute("INSERT INTO CivilopediaPages VALUES ('CONCEPTS','FAITH_1','LOC_FAITH')")
+    with sqlite3.connect(user / 'Cache/DebugLocalization.sqlite') as con:
+        con.execute("INSERT INTO LocalizedText VALUES ('zh_Hans_CN','LOC_FOOD','食物')")
+    result, output = capture(tmp_path, game, user, manifest)
+    assert result.returncode == 0, result.stderr
+    data = json.loads(output.read_text())
+    assert data['tables']['Yields'][0]['YieldType'] == 'YIELD_FOOD'
+    assert data['tables']['Resource_Consumption'][0]['PowerProvided'] == 4
+    assert data['tables']['GlobalParameters'][0]['Name'] == 'CITY_GROWTH_THRESHOLD'
+    assert data['tables']['CivilopediaPages'][0]['PageId'] == 'FAITH_1'
+    assert data['localization']['LOC_FOOD']['zh_Hans_CN'] == '食物'
