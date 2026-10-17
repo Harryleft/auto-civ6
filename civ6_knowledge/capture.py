@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import hashlib
 import json
 import plistlib
 import re
 import sqlite3
+import shutil
+import tempfile
 import sys
 from pathlib import Path
 
@@ -40,8 +43,25 @@ def ordered(rows):
     return sorted(rows, key=lambda row: json.dumps(row, sort_keys=True, ensure_ascii=False))
 
 
+@contextmanager
+def copied_database(path: Path):
+    # SQLite read-only connections may create SHM beside a WAL database. Only
+    # connect to isolated copies; copy WAL too so committed rows remain visible.
+    with tempfile.TemporaryDirectory(prefix='civ6-knowledge-') as directory:
+        copied = Path(directory) / path.name
+        shutil.copyfile(path, copied)
+        wal = Path(str(path) + '-wal')
+        if wal.exists():
+            shutil.copyfile(wal, Path(str(copied) + '-wal'))
+        conn = sqlite3.connect(copied.as_uri() + '?mode=ro', uri=True)
+        try:
+            yield conn
+        finally:
+            conn.close()
+
+
 def read_tables(path: Path) -> tuple[dict, list]:
-    with sqlite3.connect(path.resolve().as_uri() + '?mode=ro', uri=True) as conn:
+    with copied_database(path) as conn:
         conn.row_factory = sqlite3.Row
         conn.execute('BEGIN')
         available = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
@@ -65,7 +85,7 @@ def read_tables(path: Path) -> tuple[dict, list]:
 def read_text(path: Path, tables: dict) -> dict:
     tags = set(re.findall(r'LOC_[A-Za-z0-9_]+', json.dumps(tables)))
     result = {}
-    with sqlite3.connect(path.resolve().as_uri() + '?mode=ro', uri=True) as conn:
+    with copied_database(path) as conn:
         for language, tag, text in conn.execute(
                 "SELECT Language,Tag,Text FROM LocalizedText WHERE Language IN ('zh_Hans_CN','en_US') ORDER BY Language,Tag"):
             if tag in tags:
@@ -86,11 +106,12 @@ def capture(game_root: Path, user_root: Path, steam_manifest: Path) -> dict:
         p = game_root / relative
         if p.is_file():
             inputs[relative] = (p, 'game/Contents/' + relative)
+    wal_states = {name: Path(str(inputs[name][0]) + '-wal').exists() for name in ('gameplay', 'localization')}
     for name in ('gameplay', 'localization'):
         if name == 'gameplay' and inputs[name][0].stat().st_mtime < inputs['startup'][0].stat().st_mtime:
             raise ValueError(f'{name} cache is older than startup; source version binding is stale')
         wal = Path(str(inputs[name][0]) + '-wal')
-        if wal.exists():
+        if wal_states[name]:
             inputs[name + '_wal'] = (wal, inputs[name][1] + '-wal')
     hashes = {name: digest(p) for name, (p, _) in inputs.items()}
     bundle = plistlib.loads(inputs['bundle'][0].read_bytes())
@@ -133,7 +154,8 @@ def capture(game_root: Path, user_root: Path, steam_manifest: Path) -> dict:
                              'text': '\n'.join(content[first - 1:last]),
                              'text_sha256': hashlib.sha256('\n'.join(content[first - 1:last]).encode()).hexdigest()})
     localized = read_text(inputs['localization'][0], tables)
-    if any(digest(p) != hashes[name] for name, (p, _) in inputs.items()):
+    wal_changed = any(Path(str(inputs[name][0]) + '-wal').exists() != present for name, present in wal_states.items())
+    if wal_changed or any(digest(p) != hashes[name] for name, (p, _) in inputs.items()):
         raise ValueError('source changed during capture; keep prior snapshot and recapture after files stabilize')
     return {'schema_version': 1, 'profile': profile, 'tables': tables, 'localization': localized,
             'code_evidence': evidence, 'sources': [
