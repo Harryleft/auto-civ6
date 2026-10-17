@@ -396,6 +396,45 @@ class TestGetGameOverviewBootstrap:
         assert gs._last_snapshot is None
 
 
+class TestReadOnlyCityFacts:
+    def test_snapshot_preserves_observed_city_completion_facts(self):
+        gs, _ = _gs([
+            ("write", [_OVERVIEW_LINE]), ("read", [_UNIT_LINE]),
+            ("write", [_CITY_LINE, "CITYBLDG|123|PALACE,MONUMENT",
+                       "CITYFACTS|123|0|CIVILIZATION_ROME|42|DISTRICT_CAMPUS@11,20"]),
+            ("write", []),
+        ])
+        run(gs.get_game_overview())
+        city = gs._last_snapshot.cities[123]
+        assert (city.x, city.y) == (10, 20)
+        assert city.owner_id == 0
+        assert city.game_identity == ("rome", 42)
+        assert city.buildings == ["BUILDING_PALACE", "BUILDING_MONUMENT"]
+        assert city.completed_districts == ["DISTRICT_CAMPUS@11,20"]
+
+    def test_partial_city_facts_do_not_turn_into_completion_evidence(self):
+        gs, _ = _gs([
+            ("write", [_OVERVIEW_LINE]), ("read", [_UNIT_LINE]),
+            ("write", [_CITY_LINE, "CITYFACTS|123|0|CIVILIZATION_ROME|nil|",
+                       "CITYFACTS|123|0|CIVILIZATION_ROME"]),
+            ("write", []),
+        ])
+        run(gs.get_game_overview())
+        city = gs._last_snapshot.cities[123]
+        assert city.game_identity is None
+        assert city.buildings is None
+        assert city.completed_districts is None
+
+    def test_invalid_queue_is_reported_without_repair(self):
+        line = _CITY_LINE.replace("BUILDING_MONUMENT", "CORRUPTED_QUEUE")
+        gs, conn = _gs([("write", [line])])
+        cities, _ = run(gs.get_cities())
+        assert cities[0].currently_building == "CORRUPTED_QUEUE"
+        # This existing boundary carries generated Lua to the real engine.
+        # Reading must never submit a queue edit, even for a zero hash.
+        assert not any("RemoveAt" in lua or "RequestOperation" in lua for _, lua in conn.calls)
+
+
 # ---------------------------------------------------------------------------
 # _diff_snapshots
 # ---------------------------------------------------------------------------
@@ -416,9 +455,9 @@ def _unit(uid, hp=100, name="Warrior", x=1, y=2):
     )
 
 
-def _city(cid, pop=2, building="NONE", name="Capital"):
+def _city(cid, pop=2, building="NONE", name="Capital", **facts):
     return lq.CitySnapshot(
-        city_id=cid, name=name, population=pop, currently_building=building
+        city_id=cid, name=name, population=pop, currently_building=building, **facts
     )
 
 
@@ -483,19 +522,95 @@ class TestDiffSnapshots:
         assert any("grew to population 4" in m for m in messages)
         assert any("New city founded: Colony!" in m for m in messages)
 
-    def test_finished_building_reports_what_is_now_queued(self):
+    def test_cleared_queue_does_not_claim_completion_without_product(self):
         before = _snap(cities={5: _city(5, building="BUILDING_MONUMENT")})
         after = _snap(cities={5: _city(5, building="NONE")})
         (event,) = self.diff(before, after)
         assert event.priority == 2
-        assert "finished building BUILDING_MONUMENT" in event.message
+        assert "completion unconfirmed" in event.message
+        assert "finished building" not in event.message
         assert "Now: nothing." in event.message
 
-    def test_corrupted_queue_is_called_out_as_invalidated(self):
+    def test_new_building_reports_finished_while_old_building_does_not(self):
+        facts = dict(
+            x=10, y=20, owner_id=0, game_identity=("rome", 42), completed_districts=[]
+        )
+        after = _snap(cities={5: _city(5, buildings=["BUILDING_MONUMENT"], **facts)})
+        for existing, expected in (([], True), (["BUILDING_MONUMENT"], False), (None, False)):
+            before = _snap(cities={5: _city(
+                5, building="BUILDING_MONUMENT", buildings=existing, **facts
+            )})
+            (event,) = self.diff(before, after)
+            assert ("finished building" in event.message) is expected
+
+    def test_unit_completion_requires_new_matching_unit_in_this_city(self):
+        facts = dict(x=10, y=20, owner_id=0, game_identity=("rome", 42))
+        old = _unit(1, x=10, y=20)
+        before = _snap(
+            units={1: old}, cities={5: _city(5, building="UNIT_WARRIOR", **facts)}
+        )
+        cases = (
+            (_unit(2, x=10, y=20), True),
+            (_unit(2, x=30, y=40), False),
+            (old, False),
+        )
+        for unit, expected in cases:
+            after = _snap(units={unit.unit_id: unit}, cities={5: _city(5, **facts)})
+            events = self.diff(before, after)
+            messages = [e.message for e in events if e.category == "city"]
+            assert any("finished building UNIT_WARRIOR" in m for m in messages) is expected
+
+    def test_native_district_completion_reports_finished(self):
+        facts = dict(x=10, y=20, owner_id=0, game_identity=("rome", 42), buildings=[])
+        before = _snap(cities={5: _city(
+            5, building="DISTRICT_CAMPUS", completed_districts=[], **facts
+        )})
+        after = _snap(cities={5: _city(
+            5, completed_districts=["DISTRICT_CAMPUS@11,20"], **facts
+        )})
+        (event,) = self.diff(before, after)
+        assert "finished building DISTRICT_CAMPUS" in event.message
+
+    def test_district_completion_rejects_old_products_and_mismatched_identity(self):
+        from dataclasses import replace
+
+        city = _city(5, building="DISTRICT_CAMPUS", x=10, y=20, owner_id=0,
+                     game_identity=("rome", 42), completed_districts=[])
+        completed = replace(
+            city, currently_building="NONE", completed_districts=["DISTRICT_CAMPUS@11,20"]
+        )
+        cases = [
+            (replace(city, completed_districts=["DISTRICT_CAMPUS@11,20"]), completed),
+            (replace(city, completed_districts=None), completed),
+            (city, replace(completed, completed_districts=[])),
+            (city, replace(completed, completed_districts=["DISTRICT_HOLY_SITE@11,20"])),
+            (city, replace(completed, game_identity=("rome", 43))),
+            (city, replace(completed, game_identity=None)),
+            (city, replace(completed, owner_id=1)),
+            (city, replace(completed, owner_id=None)),
+            (city, replace(completed, x=30)),
+        ]
+        for before, after in cases:
+            (event,) = self.diff(_snap(cities={5: before}), _snap(cities={5: after}))
+            assert "completion unconfirmed" in event.message
+            assert "finished building" not in event.message
+
+    def test_switch_cancel_and_unknown_queue_never_prove_completion(self):
+        for queued in ("BUILDING_GRANARY", "NONE", "UNKNOWN", "CORRUPTED_QUEUE"):
+            before = _snap(cities={5: _city(5, building="DISTRICT_CAMPUS")})
+            after = _snap(cities={5: _city(5, building=queued)})
+            assert all("finished building" not in e.message for e in self.diff(before, after))
+        # Unknown/idle queue entries are never production projects.
+        for old in ("NONE", "nothing", "UNKNOWN", "CORRUPTED_QUEUE"):
+            assert self.diff(_snap(cities={5: _city(5, building=old)}),
+                             _snap(cities={5: _city(5)})) == []
+
+    def test_corrupted_queue_is_reported_as_anomaly_not_idle(self):
         before = _snap(cities={5: _city(5, building="UNIT_TRADER")})
         after = _snap(cities={5: _city(5, building="CORRUPTED_QUEUE")})
         (event,) = self.diff(before, after)
-        assert "queue invalidated" in event.message
+        assert "invalid queue" in event.message
+        assert "nothing" not in event.message
 
     def test_research_and_civic_completion(self):
         before = _snap(research="Pottery", civic="Code of Laws")

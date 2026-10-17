@@ -379,7 +379,7 @@ def narrate_cities(
             )
         if c.currently_building == "CORRUPTED_QUEUE":
             lines.append(
-                "    !! QUEUE EMPTY (stale entry cleared) — set new production with set_city_production"
+                "    !! INVALID QUEUE (nonempty, zero item hash; unchanged) — inspect production before choosing a new item"
             )
         for t in c.attack_targets:
             lines.append(f"    >> CAN ATTACK: {t}")
