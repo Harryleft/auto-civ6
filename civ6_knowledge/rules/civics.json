@@ -427,7 +427,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -802,7 +803,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "可以在草原丘陵和平原丘陵上建造农场。",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -1279,7 +1281,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -1677,7 +1680,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -2071,7 +2075,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -2623,7 +2628,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "可额外招募一名间谍。",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -2949,7 +2955,7 @@
             "id": "IMPROVEMENT_ICE_HOCKEY_RINK",
             "names": {
               "en_US": "Ice Hockey Rink",
-              "zh_Hans_CN": "Ice Hockey Rink"
+              "zh_Hans_CN": "冰球场"
             },
             "source_ref": {
               "row": 39,
@@ -3109,7 +3115,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "奖励2位 [ICON_Envoy] 使者。",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -3444,7 +3451,7 @@
             "id": "UNIT_CANADA_MOUNTIE",
             "names": {
               "en_US": "Mountie",
-              "zh_Hans_CN": "Mountie"
+              "zh_Hans_CN": "皇家骑警"
             },
             "source_ref": {
               "row": 94,
@@ -3637,7 +3644,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "奖励3位 [ICON_Envoy] 使者。允许使用 [ICON_Faith] 信仰值建造国家公园和购买自然学家。允许建造者植树造林（人造林）。您领土上从未被移除的树林（非人造林）获得+1魅力。从城墙获得 [ICON_TOURISM] 旅游业绩。",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -3985,7 +3993,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -4445,7 +4454,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -4743,7 +4753,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -5194,7 +5205,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -5611,7 +5623,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -5959,7 +5972,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -6334,7 +6348,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "获得招募间谍的能力。",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -6838,7 +6853,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -7235,7 +7251,7 @@
             "id": "BUILDING_MARAE",
             "names": {
               "en_US": "Marae",
-              "zh_Hans_CN": "Marae"
+              "zh_Hans_CN": "毛利会堂"
             },
             "source_ref": {
               "row": 33,
@@ -7467,7 +7483,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -7890,7 +7907,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "解锁加固边境和为其他文明开放边界的能力。",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -8214,7 +8232,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "在帝国全境内+25% [ICON_Tourism] 旅游业绩。",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -8512,7 +8531,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -8930,7 +8950,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -9425,7 +9446,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "现与2个农场改良设施相邻时，农场产出的 [ICON_Food] 食物+1。",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -9841,7 +9863,7 @@
             "id": "IMPROVEMENT_MOUNTAIN_ROAD",
             "names": {
               "en_US": "Qhapaq Ñan",
-              "zh_Hans_CN": "Qhapaq Ñan"
+              "zh_Hans_CN": "印加路网"
             },
             "source_ref": {
               "row": 30,
@@ -9983,7 +10005,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "允许创建 [ICON_TradeRoute] 贸易路线。",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -10255,7 +10278,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "可多次完成，增加分数胜利点数。每完成一次便奖励1个 [ICON_Governor] 总督头衔与50点 [ICON_Favor] 外交支持。",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -11033,7 +11057,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -11515,7 +11540,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "种植园 [ICON_Gold] 金币+2。",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -11795,7 +11821,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "奖励1点外交胜利点数。",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -12387,7 +12414,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -13013,7 +13041,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -13504,7 +13533,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "可额外招募一名间谍。",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -13802,7 +13832,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -14317,7 +14348,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -14666,7 +14698,7 @@
             "id": "UNIT_OTTOMAN_BARBARY_CORSAIR",
             "names": {
               "en_US": "Barbary Corsair",
-              "zh_Hans_CN": "Barbary Corsair"
+              "zh_Hans_CN": "巴巴里海盗"
             },
             "source_ref": {
               "row": 63,
@@ -14830,7 +14862,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -15441,7 +15474,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "营地改良设施获得+1 [ICON_Production] 生产力和+1 [ICON_Food] 食物。",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -15867,7 +15901,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -16242,7 +16277,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "所有战斗单位获得夹击和支援战斗加成。",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -16668,7 +16704,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -17028,7 +17065,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "允许进行共同防御。允许3个相同单位组成一支军队或无敌舰队。现在可用一个新的战争借口替战争辩护：领土扩张战争。",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -17472,7 +17510,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -17888,7 +17927,7 @@
             "id": "IMPROVEMENT_OPEN_AIR_MUSEUM",
             "names": {
               "en_US": "Open-Air Museum",
-              "zh_Hans_CN": "Open-Air Museum"
+              "zh_Hans_CN": "生态博物馆"
             },
             "source_ref": {
               "row": 22,
@@ -18030,7 +18069,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "可额外招募一名间谍。允许两个完全相同的单位组成一个兵团或舰队。现在可用一个新的战争借口替战争辩护：殖民战争。",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -18664,7 +18704,7 @@
             "id": "BUILDING_THERMAL_BATH",
             "names": {
               "en_US": "Thermal Bath",
-              "zh_Hans_CN": "Thermal Bath"
+              "zh_Hans_CN": "温泉浴场"
             },
             "source_ref": {
               "row": 82,
@@ -18778,7 +18818,7 @@
             "id": "DISTRICT_WATER_STREET_CARNIVAL",
             "names": {
               "en_US": "Copacabana",
-              "zh_Hans_CN": "Copacabana"
+              "zh_Hans_CN": "科帕卡瓦纳"
             },
             "source_ref": {
               "row": 26,
@@ -18831,7 +18871,7 @@
             "entity_type": "Districts",
             "id": "DISTRICT_WATER_ENTERTAINMENT_COMPLEX",
             "names": {
-              "en_US": "水上乐园",
+              "en_US": "Water Park",
               "zh_Hans_CN": "水上乐园"
             },
             "source_ref": {
@@ -18979,7 +19019,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -19337,7 +19378,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -19644,7 +19686,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -20002,7 +20045,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -20433,7 +20477,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -20957,7 +21002,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -21588,7 +21634,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -21976,7 +22023,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "允许在包含机场的航空港之间运输陆地单位。",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -22440,7 +22488,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -22893,7 +22942,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -23299,7 +23349,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -23597,7 +23648,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -24062,7 +24114,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -24481,7 +24534,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -24793,7 +24847,7 @@
             "entity_type": "Districts",
             "id": "DISTRICT_GOVERNMENT",
             "names": {
-              "en_US": "市政广场",
+              "en_US": "Government Plaza",
               "zh_Hans_CN": "市政广场"
             },
             "source_ref": {
@@ -24932,7 +24986,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -25330,7 +25385,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -25678,7 +25734,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -26326,7 +26383,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -26769,7 +26827,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "同您开战的文明，宗教 [ICON_Tourism] 旅游业绩减半。",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -27167,7 +27226,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     },
@@ -27673,7 +27733,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Civics"
+        "entity_type": "Civics",
+        "name_fallbacks": {}
       },
       "topic": "civics"
     }
