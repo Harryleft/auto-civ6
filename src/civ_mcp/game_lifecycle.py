@@ -7,6 +7,8 @@ import json
 import uuid
 import logging
 from pathlib import Path
+from dataclasses import dataclass
+from typing import Literal
 
 from civ_mcp import lua as lq
 from civ_mcp.connection import GameConnection, LuaError
@@ -15,6 +17,25 @@ from civ_mcp.lua._helpers import SENTINEL
 log = logging.getLogger(__name__)
 SAVE_CONFIRM_TIMEOUT = 10.0
 SAVE_POLL_INTERVAL = 0.2
+
+
+@dataclass(frozen=True)
+class NativeTransition:
+    """Native facts for sequencing; message is presentation only."""
+
+    status: Literal["confirmed", "not_submitted", "submitted", "unknown"]
+    message: str
+
+
+def clear_save_listing() -> None:
+    """Retire displayed indexes when the world is replaced."""
+    _filesystem_save_names.clear()
+
+
+def listed_save_name(index: int) -> str | None:
+    if 1 <= index <= len(_filesystem_save_names):
+        return _filesystem_save_names[index - 1]
+    return None
 
 
 INFORMATION_POPUPS = (
@@ -530,53 +551,6 @@ def _list_saves_filesystem() -> str:
     return "\n".join(lines)
 
 
-async def load_save(conn: GameConnection, save_index: int) -> str:
-    """Load a save by index from the most recent list_saves() query.
-
-    The game will reload — the FireTuner connection stays alive but
-    all Lua state is wiped. Wait a few seconds after calling this.
-    """
-    lines = await conn.execute_write(
-        f"if not ExposedMembers or not ExposedMembers.MCPSaveList then "
-        f'  print("ERR:NO_SAVE_LIST"); print("{lq.SENTINEL}"); return '
-        f"end; "
-        f"local fl = ExposedMembers.MCPSaveList; "
-        f"local idx = {save_index}; "
-        f"if idx < 1 or idx > #fl then "
-        f'  print("ERR:INDEX_OUT_OF_RANGE|" .. #fl); print("{lq.SENTINEL}"); return '
-        f"end; "
-        f"local save = fl[idx]; "
-        f'print("LOADING|" .. tostring(save.Name)); '
-        f'print("{lq.SENTINEL}"); '
-        f"Network.LeaveGame(); "
-        f"Network.LoadGame(save, ServerType.SERVER_TYPE_NONE)"
-    )
-    for line in lines:
-        if line.startswith("ERR:NO_SAVE_LIST"):
-            if _filesystem_save_names:
-                if not 1 <= save_index <= len(_filesystem_save_names):
-                    count = len(_filesystem_save_names)
-                    return (
-                        f"Error: Index {save_index} out of range (1-{count}). "
-                        "Call list_saves() to see available saves."
-                    )
-                name = _filesystem_save_names[save_index - 1]
-                log.info(
-                    "No Lua save list — resolving filesystem entry %d ('%s')",
-                    save_index,
-                    name,
-                )
-                return await load_game_save(conn, name)
-            return "Error: No save list cached. Call list_saves() first."
-        if line.startswith("ERR:INDEX_OUT_OF_RANGE"):
-            count = line.split("|")[1] if "|" in line else "?"
-            return f"Error: Index {save_index} out of range (1-{count}). Call list_saves() to see available saves."
-        if line.startswith("LOADING|"):
-            name = line.split("|", 1)[1]
-            return f"Loading save: {name}. Game will reload — wait ~10 seconds then call get_game_overview to verify."
-    return "Load command sent. Wait for game to reload."
-
-
 def _validate_save_name(save_name: str) -> str | None:
     """Reject path-like or control-character input before sending it to Lua."""
 
@@ -630,7 +604,7 @@ print("{lq.SENTINEL}");
     return None
 
 
-async def return_to_main_menu(conn: GameConnection, *, timeout: float = 30.0) -> str:
+async def return_to_main_menu_result(conn: GameConnection, *, timeout: float = 30.0) -> NativeTransition:
     """Submit at most one native exit, then confirm only through native facts.
 
     The caller must serialize session replacement and retain its gate after an
@@ -642,12 +616,12 @@ async def return_to_main_menu(conn: GameConnection, *, timeout: float = 30.0) ->
         async with asyncio.timeout(min(timeout, 30.0)):
             frontend = await is_in_frontend(conn)
             if frontend is True:
-                return "Main menu confirmed."
+                return NativeTransition("confirmed", "Main menu confirmed.")
             if frontend is None:
-                return "Error: Native frontend state unavailable; no exit sent."
+                return NativeTransition("not_submitted", "Error: Native frontend state unavailable; no exit sent.")
             index = next((idx for idx, name in conn.lua_states.items() if name == "InGame"), None)
             if index is None:
-                return "Error: InGame Lua state unavailable; no exit sent."
+                return NativeTransition("not_submitted", "Error: InGame Lua state unavailable; no exit sent.")
             code = f"""
 -- MCP_MENU_EXIT: submit once; never replay after a lost response
 local ok, frontend = pcall(function() return UI.IsInFrontEnd(); end);
@@ -668,21 +642,26 @@ print("{lq.SENTINEL}");
             except (OSError, TimeoutError, LuaError):
                 lines = []
             if lines == ["MCP_MENU_EXIT|UNAVAILABLE"]:
-                return "Error: Native exit unavailable; no exit sent."
+                return NativeTransition("not_submitted", "Error: Native exit unavailable; no exit sent.")
             while True:
                 if await is_in_frontend(conn) is True:
-                    return "Main menu confirmed."
+                    return NativeTransition("confirmed", "Main menu confirmed.")
                 await asyncio.sleep(0.2)
     except TimeoutError:
         if not attempted:
-            return "Error: Native frontend discovery timed out; no exit sent."
-    return (
+            return NativeTransition("not_submitted", "Error: Native frontend discovery timed out; no exit sent.")
+    return NativeTransition("unknown",
         "ERR:OUTCOME_UNKNOWN|Return to main menu was attempted once but not confirmed; "
         "do not resend. Use explicit restart_and_load for fault recovery."
     )
 
 
-async def load_save_from_frontend(conn: GameConnection, save_name: str) -> str:
+async def return_to_main_menu(conn: GameConnection, *, timeout: float = 30.0) -> str:
+    """Compatibility display wrapper for the typed native transition."""
+    return (await return_to_main_menu_result(conn, timeout=timeout)).message
+
+
+async def load_save_from_frontend_result(conn: GameConnection, save_name: str) -> NativeTransition:
     """Load a save from Civ VI's MainMenu state without GUI automation.
 
     ``Automation.SetAutoStartEnabled`` asks Civ VI to complete the same
@@ -692,14 +671,14 @@ async def load_save_from_frontend(conn: GameConnection, save_name: str) -> str:
 
     validation_error = _validate_save_name(save_name)
     if validation_error:
-        return validation_error
+        return NativeTransition("not_submitted", validation_error)
 
     main_menu_index = next(
         (idx for idx, name in conn.lua_states.items() if name == "MainMenu"),
         None,
     )
     if main_menu_index is None:
-        return "Error: MainMenu Lua state is unavailable; refusing UI automation fallback."
+        return NativeTransition("not_submitted", "Error: MainMenu Lua state is unavailable; refusing UI automation fallback.")
 
     # Match the native menu: load the complete queried entry, preserving its
     # Path, FileType and mod metadata. A hand-built descriptor failed the live
@@ -745,12 +724,12 @@ print("{lq.SENTINEL}");
                 if "MCP_SAVE_QUERY|READY" in lines:
                     break
                 if "MCP_SAVE_QUERY|MISSING" in lines:
-                    return f"Error: Save {save_filename!r} not found in the native list; no load sent."
+                    return NativeTransition("not_submitted", f"Error: Save {save_filename!r} not found in the native list; no load sent.")
                 if "MCP_SAVE_QUERY|AMBIGUOUS" in lines:
-                    return f"Error: Save {save_filename!r} is ambiguous; no load sent."
+                    return NativeTransition("not_submitted", f"Error: Save {save_filename!r} is ambiguous; no load sent.")
                 await asyncio.sleep(0.2)
     except (OSError, TimeoutError, LuaError) as exc:
-        return f"Error: Native save metadata unavailable; no load sent: {exc}"
+        return NativeTransition("not_submitted", f"Error: Native save metadata unavailable; no load sent: {exc}")
 
     code = f"""
 local frontendOK, frontend = pcall(function() return UI.IsInFrontEnd(); end);
@@ -780,26 +759,31 @@ print("{lq.SENTINEL}");
             timeout=5.0,
         )
     except (ConnectionError, OSError, TimeoutError, LuaError) as exc:
-        return (
+        return NativeTransition("unknown",
             f"ERR:OUTCOME_UNKNOWN|FrontEnd load for {save_name!r} may have been "
             f"submitted; FireTuner disconnected: {exc}"
         )
 
     if any(line.startswith("MCP_FRONTEND_NOT_READY|") for line in lines):
-        return "Error: Native frontend is not confirmed in the load context; no load sent."
+        return NativeTransition("not_submitted", "Error: Native frontend is not confirmed in the load context; no load sent.")
     if "MCP_FRONTEND_LOAD|false" in lines:
-        return f"Error: Civ VI rejected save {save_name!r}: {lines!r}"
+        return NativeTransition("not_submitted", f"Error: Civ VI rejected save {save_name!r}: {lines!r}")
     if "MCP_FRONTEND_LOAD|true" not in lines:
-        return f"ERR:OUTCOME_UNKNOWN|FrontEnd load returned no confirmation: {lines!r}"
+        return NativeTransition("unknown", f"ERR:OUTCOME_UNKNOWN|FrontEnd load returned no confirmation: {lines!r}")
     if "MCP_FRONTEND_AUTOSTART|true" not in lines:
-        return (
+        return NativeTransition("unknown",
             "ERR:OUTCOME_UNKNOWN|save loading began but Civ VI auto-start was unavailable; "
             "refusing UI automation fallback."
         )
-    return (
+    return NativeTransition("submitted",
         f"Loading save {save_name}; Civ VI will complete Continue Game through "
         "its native FrontEnd automation."
     )
+
+
+async def load_save_from_frontend(conn: GameConnection, save_name: str) -> str:
+    """Compatibility display wrapper; replacement is owned by GameState."""
+    return (await load_save_from_frontend_result(conn, save_name)).message
 
 
 async def load_game_save(conn: GameConnection, save_name: str) -> str:
