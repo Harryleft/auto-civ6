@@ -36,6 +36,7 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
+    "lupa>=2.8",
     "pytest>=8.0",
 ]
 
