@@ -1610,6 +1610,14 @@ def narrate_trade_destinations(dests: list[lq.TradeDestination]) -> str:
 
 
 def narrate_world_congress(status: lq.WorldCongressStatus) -> str:
+    if status.local_request in ("CONTINUE_REQUESTED", "FINISHED"):
+        lines = [f"World Congress: local request {status.local_request} | native stage: {status.native_stage}"]
+        lines.append("Local request recorded, not a receipt of vote acceptance. Do not repeat votes, submission or continuation.")
+        lines.append("Use end_turn only to confirm the original ordinary turn request; this recorded window needs no new voting plan.")
+        if status.vote_allocation:
+            lines.append(f"Local plan allocation (not acceptance): {status.vote_allocation}")
+        lines.append(f"Favor: {status.favor}")
+        return "\n".join(lines)
     lines = []
     imminent = not status.is_in_session and status.turns_until_next <= 0
 
