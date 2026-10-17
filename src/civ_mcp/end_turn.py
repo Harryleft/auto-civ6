@@ -11,6 +11,7 @@ import civ_mcp.narrate as nr
 from civ_mcp import lua as lq
 from civ_mcp.connection import LuaError
 from civ_mcp.game_lifecycle import visible_information_popups
+from civ_mcp.lua.congress import build_congress_phase_query, parse_congress_phase
 
 if TYPE_CHECKING:
     from civ_mcp.game_state import GameState
@@ -21,6 +22,7 @@ END_TURN_TIMEOUT_SECONDS = 180.0
 POLL_INTERVAL_SECONDS = 2.0
 DIPLOMACY_PROBE_SECONDS = 10.0
 INFORMATION_PROBE_SECONDS = 5.0
+CONGRESS_PROBE_SECONDS = 5.0
 
 
 async def read_turn_state(gs: GameState) -> tuple[int | None, bool | None]:
@@ -132,6 +134,27 @@ print("{lq.SENTINEL}")
     return "\n".join(lines), False
 
 
+async def _check_congress_phase(gs: GameState, *, pending: bool) -> str | None:
+    session, stage, turn, receipt = parse_congress_phase(
+        await gs.conn.execute_write(build_congress_phase_query())
+    )
+    if not session and stage == "NONE":
+        return None
+    prefix = "Turn paused —" if pending else "Cannot end turn:"
+    if stage == "UNKNOWN" or (not session and stage != "NONE") or receipt in ("VOTES_REQUESTED", "SUBMIT_REQUESTED", "FAILED", "STALE"):
+        return (f"{prefix} World Congress phase/result unknown (turn {turn}, {stage}, {receipt}). "
+                "Use get_world_congress; do not repeat votes or the original end-turn request.")
+    if stage in ("STAGE1", "STAGE2") and receipt == "NONE":
+        return (f"{prefix} World Congress voting stage active (turn {turn}, {stage}); no local tool request recorded. "
+                "This is not proof that votes are absent. Use get_world_congress, then queue_wc_votes "
+                "only for new explicit choices. Call end_turn afterward only to confirm "
+                "the existing request; it will not be sent again.")
+    if not pending:
+        return (f"{prefix} World Congress {stage}, local request {receipt}. "
+                "The congress stage is already processing; no ordinary end-turn request was sent.")
+    return None
+
+
 async def _check_blockers(gs: GameState) -> str | None:
     """Check actual game prerequisites; never make strategy choices for the player."""
     sessions = await gs.get_diplomacy_sessions()
@@ -145,17 +168,9 @@ async def _check_blockers(gs: GameState) -> str | None:
     if deals:
         return "Cannot end turn: incoming trade deal pending.\n" + nr.narrate_pending_deals(deals)
 
-    wc = await gs.get_world_congress()
-    if wc.is_in_session or (wc.turns_until_next == 0 and wc.resolutions):
-        handler = await gs.conn.execute_write(
-            f'print(__civmcp_wc_handler and "HANDLER_SET" or "NO_HANDLER"); '
-            f'print("{lq.SENTINEL}")'
-        )
-        if "HANDLER_SET" not in handler:
-            return (
-                "Cannot end turn: World Congress requires votes. "
-                "Use get_world_congress then queue_wc_votes before end_turn."
-            )
+    congress = await _check_congress_phase(gs, pending=False)
+    if congress:
+        return congress
 
     lines = await gs.conn.execute_write(lq.build_end_turn_blocking_query())
     # The parser's empty list is also used for malformed responses. Only an
@@ -274,6 +289,7 @@ async def execute_end_turn(gs: GameState) -> str:
     deadline = started + END_TURN_TIMEOUT_SECONDS
     next_diplomacy_probe = started + DIPLOMACY_PROBE_SECONDS
     next_information_probe = started
+    next_congress_probe = started
     turn_after = None
     ready = None
     reads_failed = False
@@ -309,6 +325,17 @@ async def execute_end_turn(gs: GameState) -> str:
                         f"to {turn_after}. Read game state or use explicit recovery; "
                         "the pending request was not resent."
                     )
+                if time.monotonic() >= next_congress_probe:
+                    next_congress_probe = time.monotonic() + CONGRESS_PROBE_SECONDS
+                    try:
+                        congress = await _check_congress_phase(gs, pending=True)
+                        if congress:
+                            return congress
+                    except ValueError:
+                        return ("End-turn result unknown: World Congress phase unavailable. "
+                                "Use get_world_congress; the original request is preserved and was not resent.")
+                    except (ConnectionError, TimeoutError, LuaError):
+                        reads_failed = True
                 diplomacy_checked = False
                 if time.monotonic() >= next_diplomacy_probe:
                     diplomacy_checked = True
