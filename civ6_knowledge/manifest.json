@@ -14,6 +14,7 @@
       "ProposalTypes",
       "VotingBlockers"
     ],
+    "missing_optional_tables": [],
     "not_covered": [
       "完整 Modifier 解释",
       "当前对局模组／模式核对",
@@ -97,5 +98,16 @@
   },
   "schema_version": 1,
   "snapshot": "sources/snapshot.json",
-  "snapshot_sha256": "cde60f73810c7b51b6f4d0c7aba5055e5f0af914a90c3b713784fc2afa644c18"
+  "snapshot_sha256": "cde60f73810c7b51b6f4d0c7aba5055e5f0af914a90c3b713784fc2afa644c18",
+  "support_files": {
+    "NEXT.md": "317099d5895d81800ccc3548f9385d60a39ef5c173efe96a0f6b786edde0eeae",
+    "README.md": "2871e5a0857bd8df90ed06871df2a4ff9278d99401f96e9a2febb7f4bd5c349e",
+    "build.py": "4c2e6ce57e846a1864572a9c9bab2082a39eb32e96cfb6ef1d1928c0a8bba125",
+    "capture.py": "f762f46e205f0362fbf29356dfee972da702a200aa1b2b97182c1db2a9934091",
+    "query.py": "05ca18bf19c9d65ceb14d4d39b1dd00942d817dfc023a4a014e85c17d9142062",
+    "topics/civics.md": "45aec1c81da0ffc9f748abe4d2fd36b9912f3acfe902f39cf99a06ef78d2924e",
+    "topics/congress.md": "168a05e7b3a61bf3de9b842ce2150a8bdd2deb9e5e5a899cf18110d36cd5c016",
+    "topics/districts.md": "cf04e8956622c4a5f1fe9a8c08b6ba88d5df297d46ac036348ec14d4ee444a20",
+    "topics/technologies.md": "c26815104bfec36eb4e3e188596cd5f39fe2ccb43b7e2f08e79ca0bd4637b84c"
+  }
 }
