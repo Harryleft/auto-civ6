@@ -766,6 +766,12 @@ print("{lq.SENTINEL}");
 
     if any(line.startswith("MCP_FRONTEND_NOT_READY|") for line in lines):
         return NativeTransition("not_submitted", "Error: Native frontend is not confirmed in the load context; no load sent.")
+    # pcall failing says nothing about whether Network.LoadGame performed its
+    # side effect before raising. Only a normal false result proves rejection.
+    if any(line.startswith("MCP_FRONTEND_ERROR|") for line in lines):
+        return NativeTransition("unknown",
+            f"ERR:OUTCOME_UNKNOWN|Native load for {save_name!r} raised after invocation; "
+            f"it may have been submitted. Do not replay: {lines!r}")
     if "MCP_FRONTEND_LOAD|false" in lines:
         return NativeTransition("not_submitted", f"Error: Civ VI rejected save {save_name!r}: {lines!r}")
     if "MCP_FRONTEND_LOAD|true" not in lines:
