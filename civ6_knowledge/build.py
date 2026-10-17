@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build a portable, deterministic knowledge directory from an offline snapshot."""
 import argparse
+from collections import deque
 import hashlib
 import json
 from pathlib import Path
@@ -22,7 +23,7 @@ TOPIC_PRIMARY = {
 }
 TOPIC_NAMES = ('civics', 'technologies', 'districts', 'congress', *TOPIC_PRIMARY)
 ENTITY_RECORDS = {
-    'Buildings': ('Buildings_XP2', 'Building_YieldChanges', 'Building_YieldChangesBonusWithPower', 'BuildingPrereqs', 'Building_ResourceCosts'),
+    'Buildings': ('BuildingModifiers', 'Buildings_XP2', 'Building_YieldChanges', 'Building_YieldChangesBonusWithPower', 'BuildingPrereqs', 'Building_ResourceCosts', 'Building_ValidTerrains', 'Building_RequiredFeatures', 'Building_CitizenYieldChanges'),
     'Policies': ('PolicyModifiers',),
     'Resources': ('Resource_Consumption', 'Resource_YieldChanges', 'Resource_Harvests', 'Resource_ValidTerrains', 'Resource_ValidFeatures'),
     'RandomEvents': ('RandomEvent_Damages', 'RandomEvent_Yields', 'RandomEvent_Terrains', 'RandomEvent_Features', 'RandomEvent_Frequencies', 'RandomEvent_PillagedBuildings', 'RandomEvent_PillagedDistricts', 'RandomEvent_PillagedImprovements', 'RandomEvent_DamagedUnits'),
@@ -34,6 +35,24 @@ ENTITY_RECORDS = {
     'Alliances': ('AllianceEffects',),
     'Beliefs': ('BeliefModifiers',),
 }
+REFERENCE_TABLES = {
+    'ModifierId': ('Modifiers', 'ModifierArguments'),
+    'ModifierType': ('DynamicModifiers',),
+    'RequirementSetId': ('RequirementSets', 'RequirementSetRequirements'),
+    'RequirementId': ('Requirements', 'RequirementArguments'),
+}
+
+
+def reference_index(tables):
+    result = {key: {} for key in REFERENCE_TABLES}
+    for key, sources in REFERENCE_TABLES.items():
+        aliases = ('ModifierId', 'ModifierID') if key == 'ModifierId' else (key,)
+        for table in sources:
+            for index, row in enumerate(tables.get(table, [])):
+                for alias in aliases:
+                    if row.get(alias):
+                        result[key].setdefault(row[alias], []).append((table, index))
+    return result
 
 
 def definitions(root):
@@ -53,21 +72,38 @@ def support_files(root):
     return BASE_SUPPORT_FILES + tuple(name for topic in definitions(root) for name in ('topics/' + topic + '.md', 'topics/' + topic + '.json'))
 
 
-def related_records(card, tables, attach):
+def related_records(card, tables, attach, references):
     # These are database references, not proof that an effect applies in this game.
     for table in ENTITY_RECORDS.get(card['summary']['entity_type'], ()):
         for index, row in enumerate(tables.get(table, [])):
             if card['id'] in row.values():
                 attach(card, table, index)
-    for _ in range(3):
-        rows = [tables[r['table']][r['row']] for r in card['source_refs']]
-        modifiers = {r['ModifierId'] for r in rows if r.get('ModifierId')}
-        sets = {v for r in rows for k, v in r.items() if k.endswith('RequirementSetId') and v}
-        requirements = {r['RequirementId'] for r in rows if r.get('RequirementId')}
-        for table, key, ids in [('Modifiers', 'ModifierId', modifiers), ('ModifierArguments', 'ModifierId', modifiers), ('RequirementSets', 'RequirementSetId', sets), ('RequirementSetRequirements', 'RequirementSetId', sets), ('Requirements', 'RequirementId', requirements), ('RequirementArguments', 'RequirementId', requirements)]:
-            for index, row in enumerate(tables.get(table, [])):
-                if row.get(key) in ids:
-                    attach(card, table, index)
+    # Follow explicit references only. A visited row set permits nested and
+    # cyclic source data without a depth cutoff or evaluating any requirement.
+    pending = deque((ref['table'], ref['row']) for ref in card['source_refs'])
+    visited = set()
+    while pending:
+        table, index = pending.popleft()
+        if (table, index) in visited:
+            continue
+        visited.add((table, index))
+        row = tables[table][index]
+        targets = []
+        for key, value in row.items():
+            if key == 'ModifierID':
+                key = 'ModifierId'
+            elif key.endswith('RequirementSetId'):
+                key = 'RequirementSetId'
+            if key in references and value:
+                targets.append((key, value))
+        argument = row.get('Name')
+        if table in ('ModifierArguments', 'RequirementArguments') and argument in ('ModifierId', 'ModifierID', 'RequirementSetId', 'RequirementId') and row.get('Value'):
+            targets.append(('ModifierId' if argument == 'ModifierID' else argument, row['Value']))
+        for key, value in targets:
+            for target_table, target_index in references[key].get(value, []):
+                attach(card, target_table, target_index)
+                if (target_table, target_index) not in visited:
+                    pending.append((target_table, target_index))
     card['rule']['related_records'] = [{'source_ref': ref, 'facts': tables[ref['table']][ref['row']]} for ref in card['source_refs'][1:]]
 
 
@@ -98,7 +134,7 @@ def add_mechanisms(topics, cards, tables, curated):
                 for ref in matches:
                     if ref not in refs:
                         refs.append(ref)
-            card = {'id': ident, 'topic': topic, 'names': data['names'], 'summary': {'entity_type': 'CuratedMechanism', 'description': data['summary'], 'applicability': 'curated_interpretation; current_session_and_action_unverified'},
+            card = {'id': ident, 'topic': topic, 'names': data['names'], 'summary': {'entity_type': 'CuratedMechanism', 'description': data['summary'], 'name_fallbacks': {}, 'applicability': 'curated_interpretation; current_session_and_action_unverified'},
                     'curation_ref': {'file': 'topics/' + topic + '.json', 'id': ident},
                     'rule': {'facts': {'mechanism': ident, 'origin': 'curated_interpretation'}, 'conditions': [{'interpretation': v} for v in data.get('conditions', [])], 'prerequisites': [], 'unlocks': [], 'boosts': [], 'adjacencies': [], 'related_records': [{'source_ref': r, 'facts': tables[r['table']][r['row']]} for r in refs], 'current_facts_needed': data.get('current_facts_needed', []), 'limitations': data.get('limitations', [])},
                     'source_refs': refs, 'relations': []}
@@ -123,6 +159,13 @@ def names(snapshot, tag, fallback):
     value = snapshot['localization'].get(tag, {})
     return {'zh_Hans_CN': value.get('zh_Hans_CN') or value.get('en_US') or fallback,
             'en_US': value.get('en_US') or value.get('zh_Hans_CN') or fallback}
+
+
+def name_fallbacks(snapshot, tag):
+    value = snapshot['localization'].get(tag, {})
+    available = [language for language in ('zh_Hans_CN', 'en_US') if value.get(language)]
+    return {language: available[0] if available else 'identifier'
+            for language in ('zh_Hans_CN', 'en_US') if not value.get(language)}
 
 
 def source_ref(table, index):
@@ -168,6 +211,7 @@ def generate(snapshot, root=None):
     if declared is not None and set(declared) != set(('civics', 'technologies', 'districts', 'congress', *curated)):
         raise ValueError('declared knowledge topics differ from available definitions')
     tables = snapshot['tables']
+    references = reference_index(tables)
     topics = {topic: [] for topic in ('civics', 'technologies', 'districts', 'congress', *curated)}
     cards = {}
     for table, (topic, key) in primary.items():
@@ -179,7 +223,7 @@ def generate(snapshot, root=None):
                 raise ValueError('missing or duplicate primary ID: ' + table)
             label = names(snapshot, row.get('Name'), ident)
             card = {'id': ident, 'topic': topic, 'names': label,
-                    'summary': {'entity_type': table, 'description': names(snapshot, row.get('Description'), '').get('zh_Hans_CN', ''), 'applicability': 'version_snapshot_only; current_session_and_action_unverified'},
+                    'summary': {'entity_type': table, 'description': names(snapshot, row.get('Description'), '').get('zh_Hans_CN', ''), 'name_fallbacks': name_fallbacks(snapshot, row.get('Name')), 'applicability': 'version_snapshot_only; current_session_and_action_unverified'},
                     'rule': {'facts': row, 'conditions': [], 'prerequisites': [], 'unlocks': [], 'boosts': [], 'adjacencies': [],
                              'limitations': ['原始基础成本不是本局有效成本；前置与解锁不构成完整合法性判断。', '模组、模式、随机规则树与当前对局未核对；缺少记录不证明条件不存在。'],
                              'current_facts_needed': []},
@@ -284,7 +328,7 @@ def generate(snapshot, root=None):
             card['rule']['limitations'].append('禁投定义不代表玩家当前已被禁投；NoUpvote 和 NoDownvote 分别读取，未知资格保留 UNKNOWN；不生成默认选票。')
         elif topic in curated:
             card['rule']['current_facts_needed'] = ['本局对象与可见状态', '实际费用、修正与合法候选', '活动规则及条件是否满足']
-            related_records(card, tables, attach)
+            related_records(card, tables, attach, references)
         # Localized literal fields supplement raw identifiers without replacing evidence.
         card['rule']['localized_fields'] = {key: names(snapshot, value, value) for key, value in card['rule']['facts'].items() if isinstance(value, str) and value.startswith('LOC_')}
         for index, row in enumerate(tables.get('GlobalParameters', [])):
@@ -301,7 +345,16 @@ def coverage(snapshot, root=None):
     root = root or Path(__file__).resolve().parent
     active = definitions(root)
     tables = list(PRIMARY) + [table for topic in active for table in TOPIC_PRIMARY[topic]]
-    return {'complete_for_snapshot_tables': tables, 'missing_optional_tables': sorted(set(OPTIONAL_TABLES) - snapshot['tables'].keys()), 'not_covered': ['完整 Modifier 解释', '当前对局模组／模式核对', '完整动作合法性和有效费用', '策略最优性']}
+    optional = set(OPTIONAL_TABLES)
+    for topic in active:
+        for table in TOPIC_PRIMARY[topic]:
+            optional.update(ENTITY_RECORDS.get(table, ()))
+    if active:
+        optional.update(table for group in REFERENCE_TABLES.values() for table in group)
+    return {'complete_for_snapshot_tables': tables,
+            'missing_optional_tables': sorted(optional - snapshot['tables'].keys()),
+            'empty_optional_tables': sorted(table for table in optional if snapshot['tables'].get(table) == []),
+            'not_covered': ['完整 Modifier 解释', '当前对局模组／模式核对', '完整动作合法性和有效费用', '策略最优性']}
 
 
 def build(source, output):
