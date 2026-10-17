@@ -387,3 +387,160 @@ def test_native_movement_stop_from_missing_or_changed_identity_stays_unknown(ide
     assert "OUTCOME_UNKNOWN" in asyncio.run(state.move_unit(1, 17, 15))
     assert state.pending_action_summary
     assert len(engine.submissions) == 1
+
+
+class SegmentEngine(Engine):
+    """Native request record returned by the FireTuner boundary."""
+    def __init__(self, observations=None):
+        super().__init__(writes=[["OK:MOVING_TO|18,18|from:19,17"]])
+        self.observations = observations or [{}]
+        self.read_codes = []
+
+    async def execute_read(self, code):
+        import re
+        self.read_codes.append(code)
+        if not self.observations:
+            raise ConnectionError("no further native observation")
+        observation = self.observations.pop(0)
+        if isinstance(observation, BaseException):
+            raise observation
+        token = re.search(r'token="([a-f0-9]+)"', self.submissions[0])
+        token = token[1] if token else "missing-current-token"
+        values = dict(token=token, owner="0", unit="851974", civ="CIVILIZATION_SUMERIA",
+                      seed="719665280", turn="54", origin="19|17", target="18|18",
+                      done="true", pos="19|18", busy="false", queued="18|18", step="2",
+                      pos_id="851974", moves="1")
+        values.update(observation)
+        return [
+            "ACTION_IDENTITY|CIVILIZATION_SUMERIA|719665280|54",
+            f"POS|{values['pos']}|moves:{values['moves']}|movement_moves:1|zoc:false|busy:{values['busy']}|owner:0|id:{values['pos_id']}",
+            f"MOVE_WITNESS|{values['token']}|{values['owner']}|{values['unit']}|{values['civ']}|{values['seed']}|{values['turn']}|{values['origin']}|{values['target']}|{values['done']}|rawCommand:177|rawData:9",
+            f"QUEUED_TARGET|{values['queued']}",
+            f"PATH_STEP|18|18|turn:{values['step']}",
+        ]
+
+
+def segment_state(engine):
+    state = GameState(engine)
+    state.dismiss_popup = no_dismiss
+    state._game_identity = ("sumeria", 719665280)
+    state._last_snapshot = TurnSnapshot(turn=54, units={}, cities={}, current_research="", current_civic="")
+    return state
+
+
+def test_turn_54_native_segment_witness_confirms_partial_move_with_real_remaining_moves():
+    engine = SegmentEngine()
+    state = segment_state(engine)
+    result = asyncio.run(state.move_unit(6, 18, 18))
+    assert "STOPPED_MID_PATH (native segment complete; next step requires later turn)" in result
+    assert "now_at:19,18" in result and "moves_remaining:1" in result
+    assert state.pending_action_summary is None
+    assert sum("RequestOperation" in code for code in engine.submissions) == 1
+
+
+@pytest.mark.parametrize("change", [
+    {"token": "old-token"}, {"owner": "1"}, {"unit": "917510"},
+    {"pos_id": "917510"}, {"civ": "CIVILIZATION_ROME"}, {"seed": "11"},
+    {"turn": "55"}, {"origin": "19|16"}, {"target": "17|18"},
+    {"done": "false"}, {"busy": "true"}, {"busy": "unknown"},
+    {"pos": "19|17"}, {"queued": "17|18"}, {"step": "1"},
+])
+def test_segment_event_without_all_current_request_facts_keeps_movement_unknown(change):
+    engine = SegmentEngine([change])
+    state = segment_state(engine)
+    result = asyncio.run(state.move_unit(6, 18, 18))
+    assert "OUTCOME_UNKNOWN" in result
+    assert "STOPPED_MID_PATH" not in result
+    assert state.pending_action_summary
+    assert sum("RequestOperation" in code for code in engine.submissions) == 1
+
+
+def test_late_segment_witness_confirms_after_read_loss_without_move_replay():
+    engine = SegmentEngine([ConnectionError("lost observation"), {}])
+    state = segment_state(engine)
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.move_unit(6, 18, 18))
+    assert "native segment complete" in asyncio.run(state.confirm_pending_action())
+    assert sum("RequestOperation" in code for code in engine.submissions) == 1
+
+
+def test_cancelled_segment_read_keeps_witness_for_later_confirmation():
+    engine = SegmentEngine([asyncio.CancelledError(), {}])
+    state = segment_state(engine)
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(state.move_unit(6, 18, 18))
+    assert state.pending_action_summary
+    assert "native segment complete" in asyncio.run(state.confirm_pending_action())
+    assert sum("RequestOperation" in code for code in engine.submissions) == 1
+
+
+def test_lost_move_acknowledgement_can_use_its_prearmed_native_record_without_replay():
+    engine = SegmentEngine()
+    engine.writes = [ConnectionError("lost acknowledgement")]
+    state = segment_state(engine)
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.move_unit(6, 18, 18))
+    assert "native segment complete" in asyncio.run(state.confirm_pending_action())
+    assert sum("RequestOperation" in code for code in engine.submissions) == 1
+
+
+def test_partial_segment_confirmation_preserves_untyped_native_payload_for_live_diagnosis():
+    result = asyncio.run(segment_state(SegmentEngine()).move_unit(6, 18, 18))
+    assert "rawCommand:177|rawData:9" in result
+
+
+def test_truncated_position_response_with_segment_witness_stays_unknown():
+    class TruncatedEngine(SegmentEngine):
+        async def execute_read(self, code):
+            rows = await super().execute_read(code)
+            return ["POS|19" if row.startswith("POS|") else row for row in rows]
+
+    engine = TruncatedEngine()
+    state = segment_state(engine)
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.move_unit(6, 18, 18))
+    assert state.pending_action_summary
+
+
+@pytest.mark.parametrize("bad_row", [
+    "MOVE_WITNESS|truncated", "QUEUED_TARGET|18", "PATH_STEP|18|18|turn:NaN",
+    "PATH_STEP|18|18|turn:2|truncated", "MOVE_WITNESS|missing",
+])
+def test_incomplete_native_segment_response_never_clears_unknown(bad_row):
+    class IncompleteEngine(SegmentEngine):
+        async def execute_read(self, code):
+            rows = await super().execute_read(code)
+            prefix = bad_row.split("|", 1)[0] + "|"
+            return [bad_row if row.startswith(prefix) else row for row in rows]
+
+    state = segment_state(IncompleteEngine())
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.move_unit(6, 18, 18))
+    assert state.pending_action_summary
+
+
+@pytest.mark.parametrize("missing", ["MOVE_WITNESS|", "QUEUED_TARGET|", "PATH_STEP|"])
+def test_missing_native_segment_fact_never_clears_unknown(missing):
+    class MissingEngine(SegmentEngine):
+        async def execute_read(self, code):
+            return [row for row in await super().execute_read(code) if not row.startswith(missing)]
+
+    state = segment_state(MissingEngine())
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.move_unit(6, 18, 18))
+    assert state.pending_action_summary
+
+
+def test_move_wire_arms_one_scoped_listener_before_its_only_submission_and_reads_without_replay():
+    engine = SegmentEngine()
+    assert "native segment complete" in asyncio.run(segment_state(engine).move_unit(6, 18, 18))
+    code = engine.submissions[0]
+    assert code.index("Events.UnitOperationSegmentComplete.Add(q.handler)") < code.index("UnitManager.RequestOperation")
+    assert code.count("UnitManager.RequestOperation") == 1
+    assert "player ~= q.owner or unitID ~= q.id" in code
+    assert "unitID %" not in code
+    assert "q.turn" in code and "q.civ" in code and "q.seed" in code
+    assert "Events.UnitOperationSegmentComplete.Remove(q.handler)" in code
+    query = engine.read_codes[0]
+    assert "RequestOperation" not in query and ".Add(" not in query
+    assert "q.id ~= u:GetID()" in query
+    assert "q.token" in query and "q.targetX ~= 18 or q.targetY ~= 18" in query
+    assert "#path.plots ~= #path.turns" in query
+    assert "Map.GetPlotByIndex(path.plots[i])" in query
+    assert "q.closed = true" in query
+    assert "Events.UnitOperationSegmentComplete.Remove(q.handler)" in query

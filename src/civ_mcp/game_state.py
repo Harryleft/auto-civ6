@@ -10,6 +10,7 @@ import asyncio
 import logging
 import re
 import time
+import uuid
 from dataclasses import dataclass, field
 
 
@@ -179,12 +180,19 @@ class GameState:
                 if not line.startswith("POS|") or "GONE" in line:
                     continue
                 fields = line.split("|")
+                if len(fields) < 3:
+                    continue
                 x, y = int(fields[1]), int(fields[2])
                 meta = dict(field.split(":", 1) for field in fields[3:] if ":" in field)
                 moves = float(meta["moves"]) if "moves" in meta else None
                 busy = meta.get("busy", "unknown")
                 target = pending.details["target"]
                 origin = pending.details.get("origin")
+                # The pre-submission record survives a lost acknowledgement;
+                # never install a listener retrospectively to fill that gap.
+                witness = self._move_witness(pending, meta)
+                if origin is None and witness is not None:
+                    origin = witness[0]
                 suffix = f"|now_at:{x},{y}"
                 if origin:
                     suffix += f"|(moved dx:{x-origin[0]:+d} dy:{y-origin[1]:+d})"
@@ -205,6 +213,21 @@ class GameState:
                     if moves is not None:
                         suffix += f"|moves_remaining:{moves:g}"
                     return pending.success + suffix + f"|STOPPED_MID_PATH ({native_stop})"
+                # A path preview alone never closes movement. This branch
+                # additionally requires this request's native segment event,
+                # full runtime ID, current identity/turn, and queued target.
+                queued = [row for row in pending.observed if row.startswith("QUEUED_TARGET|")]
+                steps = [row for row in pending.observed if row.startswith("PATH_STEP|")]
+                if (witness is not None and witness[1] and witness[0] == origin
+                        and len(queued) == 1 and len(steps) == 1
+                        and origin is not None and (x, y) != origin and busy == "false"
+                        and moves is not None and moves > 0
+                        and queued[0] == f"QUEUED_TARGET|{target[0]}|{target[1]}"
+                        and re.fullmatch(r"PATH_STEP\|-?\d+\|-?\d+\|turn:[1-9]\d*", steps[0])
+                        and int(steps[0].rsplit(":", 1)[1]) > 1):
+                    return (pending.success + suffix + f"|moves_remaining:{moves:g}"
+                            "|STOPPED_MID_PATH (native segment complete; next step requires later turn)"
+                            + "|" + "|".join(witness[2]))
                 impassable = any(line.startswith(("DIAG|MOUNTAIN|", "DIAG|IMPASSABLE|")) for line in pending.observed)
                 if (x, y) == origin and busy == "false" and impassable:
                     return pending.success + suffix + f"|BLOCKED ({lq.parse_blocked_diagnostic(pending.observed)})"
@@ -214,6 +237,26 @@ class GameState:
                 if owner is None or int(owner[1]) == self._local_player_id:
                     return pending.success
         return None
+
+    def _move_witness(self, pending: _PendingAction, meta: dict[str, str]) -> tuple[tuple[int, int], bool, list[str]] | None:
+        """Validate the native request record, including the full runtime ID."""
+        rows = [row.split("|") for row in pending.observed if row.startswith("MOVE_WITNESS|")]
+        if len(rows) != 1 or len(rows[0]) != 14 or pending.identity is None or pending.turn is None:
+            return None
+        row = rows[0]
+        try:
+            identity = (row[4].replace("CIVILIZATION_", "").lower(), int(row[5]))
+            if (row[1] != pending.details.get("witness_token")
+                    or row[2] != str(self._local_player_id) or row[2] != meta.get("owner")
+                    or row[3] != meta.get("id")
+                    or int(row[3]) % 65536 != pending.entity[1] % 65536
+                    or identity != pending.identity or int(row[6]) != pending.turn
+                    or tuple(map(int, row[9:11])) != pending.details["target"]
+                    or row[11] not in ("true", "false")):
+                return None
+            return (int(row[7]), int(row[8])), row[11] == "true", row[12:14]
+        except ValueError:
+            return None
 
     async def _action_gate(self, entity: tuple[str, int] | None = None) -> str | None:
         if self._pending_load or self._pending_save:
@@ -398,7 +441,7 @@ class GameState:
     # ------------------------------------------------------------------
 
     async def move_unit(self, unit_index: int, target_x: int, target_y: int) -> str:
-        details = {"target": (target_x, target_y)}
+        details = {"target": (target_x, target_y), "witness_token": uuid.uuid4().hex}
         if (self._pending_action and self._pending_action.kind == "move"
                 and self._pending_action.entity == ("unit", unit_index)
                 and self._pending_action.details.get("target") == details["target"]):
@@ -412,14 +455,19 @@ class GameState:
             pass
         pending = _PendingAction(
             "move", ("unit", unit_index),
-            lq.build_unit_position_query(unit_index, move_target_x=target_x, move_target_y=target_y),
+            lq.build_unit_position_query(
+                unit_index, move_target_x=target_x, move_target_y=target_y,
+                witness_token=details["witness_token"],
+            ),
             context="write", identity=self._game_identity, details=details,
             success=f"MOVING_TO|{target_x},{target_y}",
         )
         pending.turn = self._last_snapshot.turn if self._last_snapshot else None
         self._pending_action = pending
         try:
-            lines = await self.conn.execute_write(lq.build_move_unit(unit_index, target_x, target_y))
+            lines = await self.conn.execute_write(lq.build_move_unit(
+                unit_index, target_x, target_y, witness_token=details["witness_token"],
+            ))
         except (OSError, TimeoutError, LuaError) as exc:
             return self._pending_unknown(f"submission acknowledgement unavailable: {exc}")
         result = _action_result(lines)
