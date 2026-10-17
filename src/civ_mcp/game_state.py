@@ -245,7 +245,9 @@ print("{lq.SENTINEL}")
                         and int(metadata["attacks"]) < attacks_before and metadata.get("busy") == "false")
             changed = pre_hp is not None and post_hp is not None and pre_hp != post_hp
             core_status = next((line.split("|", 1)[1] for line in pending.observed if line.startswith("CORE_BUSY|")), metadata.get("busy", "unknown"))
-            if (changed or consumed) and core_status == "false":
+            core_rows = [line for line in pending.observed if line.startswith("CORE_BUSY|")]
+            city_started = core_rows == ["CORE_BUSY|false"] and self._city_attack_witness(pending)
+            if (changed or consumed or city_started) and core_status == "false":
                 damage = f"|damage dealt:{pre_hp-post_hp}" if pre_hp is not None and post_hp is not None else ""
                 # Missing from the original tile is not evidence of death. The
                 # consumed attack can be confirmed while the target stays unknown.
@@ -313,6 +315,34 @@ print("{lq.SENTINEL}")
                 if owner is not None and int(owner[1]) == pending.owner:
                     return pending.success
         return None
+
+    def _city_attack_witness(self, pending: _PendingAction) -> bool:
+        """Only a pre-submission native record can confirm a missing target."""
+        token = pending.details.get("city_witness_token")
+        if pending.entity[0] != "city" or not token or pending.identity is None:
+            return False
+        records = [line.split("|") for line in pending.observed if line.startswith("CITY_ATTACK_WITNESS|")]
+        sources = [line.split("|") for line in pending.observed if line.startswith("CITY_ATTACK_SOURCE|")]
+        if len(records) != 1 or len(records[0]) != 17 or len(sources) != 1 or len(sources[0]) != 5:
+            return False
+        row, source = records[0], sources[0]
+        try:
+            if not all(re.fullmatch(r"\d+", row[index]) for index in (2, 3, 4, 5, 8, 11, 12)):
+                return False
+            if (row[1] != token or int(row[2]) != pending.owner or int(row[3]) != pending.entity[1]
+                    or int(row[4]) != pending.owner or row[2:6] != source[1:5]
+                    or (row[6].removeprefix("CIVILIZATION_").lower(), int(row[7])) != pending.identity
+                    or int(row[8]) != pending.turn or tuple(map(int, row[9:11])) != pending.details["target"]
+                    or int(row[11]) == pending.owner
+                    or row[13:15] != ["started:true", "command_matches:true"]
+                    or not row[15].startswith("rawCommand:") or not row[16].startswith("rawData:")):
+                return False
+            for key, index in (("target_owner", 11), ("target_id", 12)):
+                if key in pending.details and int(row[index]) != pending.details[key]:
+                    return False
+            return True
+        except ValueError:
+            return False
 
     def _move_witness(self, pending: _PendingAction, meta: dict[str, str]) -> tuple[tuple[int, int], bool, list[str]] | None:
         """Validate the native request record, including the full runtime ID."""
@@ -608,14 +638,21 @@ print("{lq.SENTINEL}")
         scope = await self._prepare_action_scope()
         if isinstance(scope, str):
             return scope
+        city_token = uuid.uuid4().hex if entity[0] == "city" else None
         pending = _PendingAction(
-            "attack", entity, lq.build_attack_followup_query(target_x, target_y, entity[1] if entity[0] == "unit" else None),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner, details={"target": (target_x, target_y)},
+            "attack", entity,
+            lq.build_city_attack_followup(entity[1], target_x, target_y, city_token) if city_token else
+            lq.build_attack_followup_query(target_x, target_y, entity[1]),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"target": (target_x, target_y), "city_witness_token": city_token},
+            success=f"CITY_RANGE_ATTACK|city:{entity[1]} -> {target_x},{target_y}" if city_token else "",
         )
         self._pending_action = pending
         build = lq.build_attack_unit if entity[0] == "unit" else lq.build_city_attack
         try:
-            lines = await self.conn.execute_write(scope.guard(build(entity[1], target_x, target_y)))
+            code = (build(entity[1], target_x, target_y, witness_token=city_token) if city_token else
+                    build(entity[1], target_x, target_y))
+            lines = await self.conn.execute_write(scope.guard(code))
         except (OSError, TimeoutError, LuaError) as exc:
             return self._pending_unknown(f"submission acknowledgement unavailable: {exc}")
         result = _scoped_action_result(lines)
