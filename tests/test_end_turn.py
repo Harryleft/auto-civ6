@@ -26,6 +26,7 @@ class FakeConn:
         self.readiness = None
         self.diplomacy_probe = ["DIPLOMACY_NONE"]
         self.ui_processing = False
+        self.information_popups = ["INFORMATION_POPUPS|DONE"]
 
     async def execute_read(self, lua):
         self.calls.append(lua)
@@ -43,6 +44,8 @@ class FakeConn:
         if "TURN_UI_READY|" in lua:
             processing = self.ui_processing(self) if callable(self.ui_processing) else self.ui_processing
             return [f"TURN_UI_READY|{self.turn}|{int(not processing)}"]
+        if "INFORMATION_POPUPS" in lua:
+            return self.information_popups
         if "DIPLOMACY_PROBE" in lua:
             return self.diplomacy_probe(self) if callable(self.diplomacy_probe) else self.diplomacy_probe
         if "ACTION_ENDTURN" in lua:
@@ -268,7 +271,8 @@ def test_mid_turn_diplomacy_never_replays_or_makes_war_choice(clock):
     assert clock.now == 10
     assert gs._pending_end_turn
     assert not gs.conn.requests
-    assert not any("ContextPtr" in c or "AddResponse" in c or "CloseSession" in c for c in gs.conn.calls)
+    assert not any("AddResponse" in c or "CloseSession" in c for c in gs.conn.calls)
+    assert all("ContextPtr" not in c or "INFORMATION_POPUPS" in c for c in gs.conn.calls)
 
 
 def test_turn_regression_does_not_clear_pending(clock):
@@ -457,3 +461,80 @@ def test_probe_queries_count_against_total_deadline(clock):
     assert "HANG:" in play(gs)
     assert 180 <= clock.now <= 205
     assert len(gs.conn.requests) == 1
+
+
+@pytest.mark.parametrize("ready", [True, False, None])
+def test_visible_disaster_pauses_promptly_without_replay_or_dismissal(clock, ready):
+    gs = FakeGameState()
+    gs._pending_end_turn = True
+    gs._pending_end_turn_from = 49
+    gs.conn.ready = ready
+    gs.conn.ui_processing = True
+    gs.conn.information_popups = ["INFORMATION_POPUPS|VISIBLE|NaturalDisasterPopup", "INFORMATION_POPUPS|DONE"]
+    result = play(gs)
+    assert "NaturalDisasterPopup" in result
+    assert "dismiss_popup" in result
+    assert "requested from turn 49" in result
+    assert clock.now <= 15
+    assert gs._pending_end_turn
+    assert gs._pending_end_turn_from == 49
+    assert not gs.conn.requests
+    assert not any("pcall(Close)" in c or "SetHide" in c for c in gs.conn.calls)
+
+
+def test_diplomacy_takes_priority_when_information_popup_is_also_visible(clock):
+    gs = FakeGameState()
+    gs._pending_end_turn = True
+    gs._pending_end_turn_from = 49
+    gs.conn.ui_processing = True
+    gs.conn.diplomacy_probe = ["DIPLOMACY|2"]
+    gs.conn.information_popups = ["INFORMATION_POPUPS|VISIBLE|NaturalDisasterPopup", "INFORMATION_POPUPS|DONE"]
+    result = play(gs)
+    assert "diplomacy response required" in result
+    assert gs._pending_end_turn
+    assert not gs.conn.requests
+
+
+def test_popup_closure_confirms_original_request_without_another_submission(clock):
+    gs = FakeGameState()
+    gs.conn.ui_processing = lambda conn: bool(conn.requests)
+    gs.conn.information_popups = [
+        "INFORMATION_POPUPS|VISIBLE|NaturalDisasterPopup",
+        "INFORMATION_POPUPS|VISIBLE|HistoricMoments", "INFORMATION_POPUPS|DONE",
+    ]
+    first = play(gs)
+    assert "NaturalDisasterPopup, HistoricMoments" in first
+    assert gs._pending_end_turn and len(gs.conn.requests) == 1
+    gs.conn.information_popups = ["INFORMATION_POPUPS|DONE"]
+    gs.conn.ui_processing = False
+    assert "Turn 50 -> 51" in play(gs)
+    assert not gs._pending_end_turn and len(gs.conn.requests) == 1
+
+
+@pytest.mark.parametrize("visibility", [[], ["INFORMATION_POPUPS|UNKNOWN"],
+    ["INFORMATION_POPUPS|VISIBLE|UnrecognizedPopup", "INFORMATION_POPUPS|DONE"]])
+def test_unknown_popup_visibility_never_authorizes_advancement(clock, visibility):
+    gs = FakeGameState()
+    gs._pending_end_turn = True
+    gs._pending_end_turn_from = 49
+    gs.conn.ui_processing = True
+    gs.conn.information_popups = visibility
+    result = play(gs)
+    assert "HANG:" in result and "queries failed" in result
+    assert gs._pending_end_turn and not gs.conn.requests
+
+
+def test_visible_disaster_is_reported_when_ui_turn_temporarily_lags(clock):
+    gs = FakeGameState()
+    gs._pending_end_turn = True
+    gs._pending_end_turn_from = 49
+    original = gs.conn.execute_write
+    async def delayed_ui(lua):
+        if "TURN_UI_READY|" in lua:
+            return ["TURN_UI_READY|49|1"]
+        return await original(lua)
+    gs.conn.execute_write = delayed_ui
+    gs.conn.information_popups = ["INFORMATION_POPUPS|VISIBLE|NaturalDisasterPopup", "INFORMATION_POPUPS|DONE"]
+    assert "NaturalDisasterPopup" in play(gs)
+    assert clock.now <= 15 and gs._pending_end_turn
+    assert not gs.conn.requests
