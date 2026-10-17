@@ -697,6 +697,8 @@ class GameState:
             return blocked
         pending = _PendingAction(
             "production", ("city", city_id), lq.build_verify_production(city_id, item_name, target),
+            # "write" selects InGame; this confirmation Lua only reads facts.
+            context="write" if target is not None else "read",
             identity=self._game_identity, success=f"PRODUCING|{item_name}",
             details={"item": item_name, "target": target},
         )
