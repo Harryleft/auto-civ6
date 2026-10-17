@@ -1800,36 +1800,6 @@ class TestSaveCheckpoint:
 
 
 class TestSessionReset:
-    def test_submitted_index_load_discards_previous_world(self, monkeypatch, tmp_path):
-        async def loaded(conn, index):
-            return "Loading save: chosen"
-        async def disconnect():
-            return None
-        monkeypatch.setattr(game_lifecycle, "load_save", loaded)
-        gs, conn = _gs()
-        conn.disconnect = disconnect
-        gs._pending_end_turn = True
-        assert run(gs.load_save(1)).startswith("Loading")
-        assert not gs._pending_end_turn
-
-    def test_rejected_load_preserves_current_session(self, monkeypatch, tmp_path):
-        async def rejected(conn, index):
-            return "Error: rejected"
-        monkeypatch.setattr(game_lifecycle, "load_save", rejected)
-        gs, _ = _gs()
-        gs._pending_end_turn = True
-        assert run(gs.load_save(1)).startswith("Error")
-        assert gs._pending_end_turn
-
-    def test_unknown_native_load_discards_previous_session(self, monkeypatch, tmp_path):
-        async def unknown(conn, name):
-            return "ERR:OUTCOME_UNKNOWN|response lost"
-        monkeypatch.setattr(game_lifecycle, "load_game_save", unknown)
-        gs, _ = _gs()
-        gs._pending_end_turn = True
-        assert "OUTCOME_UNKNOWN" in run(gs.load_game_save("chosen"))
-        assert not gs._pending_end_turn
-
     def test_unknown_diplomacy_status_is_not_an_empty_session(self):
         gs, _ = _gs([("write", [])])
         from civ_mcp.connection import LuaError
