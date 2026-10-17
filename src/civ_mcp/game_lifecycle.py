@@ -338,7 +338,7 @@ _filesystem_save_names: list[str] = []
 
 
 async def save_game(conn: GameConnection, name: str) -> str:
-    """Submit one local save and confirm a fresh, nonempty file on disk.
+    """Submit once; require native SaveComplete and the exact fresh file.
 
     Network.SaveGame only acknowledges submission. Never replay a lost
     request: its file may still finish writing after FireTuner disconnects.
@@ -350,7 +350,7 @@ async def save_game(conn: GameConnection, name: str) -> str:
     if error:
         return error
     name = name.removesuffix(".Civ6Save")
-    if name == "benchmark_turn_1":
+    if name.rstrip(" .").casefold() == "benchmark_turn_1":
         return "Error: The original benchmark_turn_1 baseline cannot be overwritten."
     checkpoints.forget_completion(name)
     path = Path(SINGLE_SAVE_DIR) / f"{name}.Civ6Save"
