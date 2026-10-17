@@ -64,6 +64,7 @@ from civ_mcp.lua.diplomacy import (  # noqa: F401
 from civ_mcp.lua.congress import (  # noqa: F401
     build_congress_submit,
     build_congress_vote,
+    build_open_world_congress,
     build_register_wc_voter,
     build_world_congress_query,
     parse_world_congress_response,
