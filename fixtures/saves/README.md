@@ -1,13 +1,11 @@
-# 可复用 Civ6 存档
+# 唯一测试基准
 
-保留原有评测场景的初始存档，供本机游玩和固定存档诊断使用。评测执行框架已移除；文件内容保持原样。
+`benchmark_turn_1.Civ6Save` 是用户确认的唯一原始测试地图。文件内容保持不变，SHA-256 和实机核对信息见 [基准清单](benchmark_turn_1.json)。
 
-| 文件 | 文明 / 领袖 | 地图 | 难度 | 对手数 |
-|---|---|---|---|---:|
-| `0A_GROUND_CONTROL.Civ6Save` | Babylon / Hammurabi | Pangaea Standard | Prince | 7 |
-| `0B_SNOWFLAKE.Civ6Save` | Korea / Seondeok | Six-Armed Snowflake Small | King | 5 |
-| `0C_CRY_HAVOC.Civ6Save` | Sumeria / Gilgamesh | Pangaea Tiny | Immortal | 3 |
+| 文明／领袖 | 规则 | 难度 | 速度 | 地图 | 初始回合 |
+|---|---|---|---|---|---:|
+| 苏美尔／吉尔伽美什 | 风云变幻 | 不朽 | 快速 | 盘古大陆、极小 | 1 |
 
-场景记录为 Ancient 起始、Quick 速度、Gathering Storm、Turn 1。Snowflake 仅启用统治胜利，其余场景启用全部胜利；具体状态以加载后的游戏查询为准。
+游戏种子为 `719665280`，地图种子为 `719665281`。测试从该原件开始；过程检查点另存，不能覆盖基准。
 
-使用 `scripts/install_saves.py` 复制到当前平台的单人存档目录，然后手动加载或通过原生主菜单读档工具加载。
+旧 Ground Control、Snowflake、Cry Havoc 存档已从当前项目移除，可从 Git 历史找回，不再用于测试。本机旧存档移入 `~/.civ6-mcp/save-archive/`，归档清单保留原路径和 SHA-256。

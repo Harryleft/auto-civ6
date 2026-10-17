@@ -132,3 +132,23 @@ def test_stdio_entry_uses_same_server_without_direct_game_calls(monkeypatch):
     assert captured["parameters"].args == ["-m", "civ_mcp"]
     assert captured["streams"] == ("read", "write")
     assert captured["initialized"] is True
+
+
+def test_cli_only_accepts_the_original_benchmark(monkeypatch):
+    monkeypatch.setattr(driver.sys, "argv", ["integration_turns.py", "--save", "old_map"])
+    with pytest.raises(SystemExit) as exc:
+        driver.main()
+    assert exc.value.code == 2
+
+
+def test_cli_defaults_to_the_original_benchmark(monkeypatch):
+    captured = []
+    async def fake_play(save, turns, timeout):
+        captured.append((save, turns, timeout))
+        return 0
+    monkeypatch.setattr(driver, "play", fake_play)
+    monkeypatch.setattr(driver.sys, "argv", ["integration_turns.py", "--turns", "2"])
+    with pytest.raises(SystemExit) as exc:
+        driver.main()
+    assert exc.value.code == 0
+    assert captured == [("benchmark_turn_1", 2, 900)]

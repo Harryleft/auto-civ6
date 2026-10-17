@@ -6,6 +6,12 @@
 
 不重新引入网页、云同步、批量评测、后台观测服务、强制反思或日记协议。策略判断由模型负责，Runtime 不替模型选择占城、议会或外交策略。
 
+## 唯一测试基准
+
+- 所有实机测试只从 `benchmark_turn_1` 原始存档开始，原件与 SHA-256 清单位于 `fixtures/saves/`。不加载旧示例地图、旧自动存档或其他历史基准。
+- 该基准实际为苏美尔／吉尔伽美什、风云变幻、不朽难度、快速、第 1 回合；用户已确认使用它，不能沿用更早讨论的地图设置。
+- 原始基准不得覆盖。需要保存过程状态时使用独立名称；恢复检查点必须来自本次从该基准开始的同一对局，且核对种子和回合。不得仅按文件修改时间挑选不明来源的自动存档。
+
 ## 游戏操作
 
 - 先用 `get_game_overview`、`get_units`、`get_cities` 等工具取得当前回合的真实信息，再使用坐标、单位 ID 和城市 ID。
@@ -21,7 +27,7 @@
 - 修改时保留已有工作树内容，只提交本次改动。默认沿用当前分支；未经明确授权不 push、不改写提交历史。
 - 离线验证：`uv sync --locked`、`uv run --locked pytest -q`。pytest 默认仅收集 `tests/`。
 - `scripts/test_connection.py`、`test_game_state.py`、`test_queries.py` 与 `integration_turns.py` 连接真实游戏，不能作为离线测试运行。
-- `integration_turns.py` 是 stdio MCP 客户端。`--save` 显式授权加载指定存档并替换已加载会话；省略时使用当前游戏。其固定策略只属于测试驱动，不能移入 Runtime。遇到挂起、结果未知、未知阻塞或时间限制立即退出。
+- `integration_turns.py` 是 stdio MCP 客户端。`--save` 显式授权加载指定存档并替换已加载会话；省略时也加载该唯一基准。CLI 默认并仅允许 `benchmark_turn_1`；其固定策略只属于测试驱动，不能移入 Runtime。遇到挂起、结果未知、未知阻塞或时间限制立即退出。
 - 实机测试必须报告使用的存档、实际执行动作和结果；未实测不得声称连续回合或恢复验收通过。
 - 随附存档在 `fixtures/saves/`。历史日志在 `fixtures/archive/`，历史研究在 `docs/archive/`；它们不是当前运行时依赖。
 

@@ -4,8 +4,8 @@ This script starts/loads and operates the real game only when explicitly run.
 The fixed blocker policy belongs to this test driver, never to the runtime.
 Unknown results, hangs and unsupported blockers abort without replay or recovery.
 
-Usage: uv run python scripts/integration_turns.py --save SAVE_NAME --turns 10
-Omit --save to use the game already loaded. Exit 0 means all turns confirmed.
+Usage: uv run python scripts/integration_turns.py --turns 10
+Always starts from benchmark_turn_1. Exit 0 means all turns confirmed.
 """
 
 from __future__ import annotations
@@ -167,7 +167,8 @@ async def play(save: str | None, turns: int, timeout: float = 900) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--save", help="Explicitly start/load this save, replacing any loaded game")
+    parser.add_argument("--save", default="benchmark_turn_1", choices=["benchmark_turn_1"],
+                        help="唯一原始基准；运行会替换当前已加载对局")
     parser.add_argument("--turns", type=int, default=10)
     parser.add_argument("--timeout", type=float, default=900, help="Total runtime limit in seconds")
     args = parser.parse_args()
