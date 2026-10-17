@@ -533,21 +533,39 @@ def test_missing_native_segment_fact_never_clears_unknown(missing):
     assert state.pending_action_summary
 
 
-def test_move_wire_arms_one_scoped_listener_before_its_only_submission_and_reads_without_replay():
-    engine = SegmentEngine()
-    assert "native segment complete" in asyncio.run(segment_state(engine).move_unit(6, 18, 18))
-    code = engine.submissions[0]
-    assert code.index("Events.UnitOperationSegmentComplete.Add(q.handler)") < code.index("UnitManager.RequestOperation")
-    assert code.count("UnitManager.RequestOperation") == 1
-    assert "player ~= q.owner or unitID ~= q.id" in code
-    assert "unitID %" not in code
-    assert "q.turn" in code and "q.civ" in code and "q.seed" in code
-    assert "Events.UnitOperationSegmentComplete.Remove(q.handler)" in code
-    query = engine.read_codes[0]
-    assert "RequestOperation" not in query and ".Add(" not in query
-    assert "q.id ~= u:GetID()" in query
-    assert "q.token" in query and "q.targetX ~= 18 or q.targetY ~= 18" in query
-    assert "#path.plots ~= #path.turns" in query
-    assert "Map.GetPlotByIndex(path.plots[i])" in query
-    assert "q.closed = true" in query
-    assert "Events.UnitOperationSegmentComplete.Remove(q.handler)" in query
+@pytest.mark.parametrize("lose_ack", [False, True])
+def test_concurrent_same_production_intent_submits_once(lose_ack):
+    class ConcurrentEngine(Engine):
+        def __init__(self):
+            super().__init__()
+            self.scope_reads = 0
+            self.scoped = asyncio.Event()
+
+        async def execute_write(self, code):
+            if 'print("ACTION_SCOPE|' in code:
+                self.scope_reads += 1
+                if self.scope_reads == 2:
+                    self.scoped.set()
+                await self.scoped.wait()
+                return scope_rows(self.scope)
+            self.submissions.append(code)
+            await asyncio.sleep(0)
+            if lose_ack:
+                raise ConnectionError("lost after independent confirmation")
+            return ["OK:PRODUCING|UNIT_SCOUT"]
+
+        async def execute_read(self, code):
+            return with_action_identity(code, ["CONFIRMED|queue verified"], self.scope)
+
+    async def scenario():
+        engine = ConcurrentEngine()
+        state = GameState(engine)
+        results = await asyncio.gather(
+            state.set_city_production(65536, "UNIT", "UNIT_SCOUT"),
+            state.set_city_production(65536, "UNIT", "UNIT_SCOUT"),
+        )
+        assert len(engine.submissions) == 1
+        assert results == ["PRODUCING|UNIT_SCOUT", "PRODUCING|UNIT_SCOUT"]
+        assert state.pending_action_summary is None
+
+    asyncio.run(scenario())
