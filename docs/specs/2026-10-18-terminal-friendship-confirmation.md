@@ -1,14 +1,14 @@
-# 终局续测：友好声明结果确认
+# 终局续测：友好声明与同盟结果确认
 
 标签 ready-for-agent；本地 Markdown tracker；基点 `91b3356`，沿用 `codex/architecture-deepening`。
 
 ## Problem Statement
 
-第 173 回合向巴西、加拿大、瑞典声明友好，三个工具结果都称 ACCEPTED。第 174 回合巴西和加拿大已成为 DECLARED_FRIEND，瑞典仍非盟约；第 176 回合原生双方状态均为 UNFRIENDLY，允许宣战及再次提议友好。当前实现把请求合法当作已接受，模型会基于不存在的外交保障安排后续行动。
+第 173 回合向巴西、加拿大、瑞典声明友好，三个工具结果都称 ACCEPTED。第 174 回合巴西和加拿大已成为 DECLARED_FRIEND，瑞典仍非盟约；第 176 回合原生双方状态均为 UNFRIENDLY，允许宣战及再次提议友好。第 180 回合一次加拿大研究同盟请求返回 FAILED／state=1，随后第 181 回合原生已是 ALLIED／RESEARCH Lv1。当前实现把请求合法当作已接受，模型会基于不存在的外交保障安排后续行动；同盟同帧回读又可能把实际成立误报失败。
 
 ## Solution
 
-友好声明仍只提交一次；只有随后原生回读确认关系已成立才称 ACCEPTED。期限内没有确认时返回 PROPOSED_UNCONFIRMED，指引读取外交状态，不自动再次提议，也不猜测已拒绝。
+友好声明与同盟请求仍各只提交一次；只有随后原生回读确认对应关系及请求的同盟类型已成立才称 ACCEPTED。期限内没有确认时返回 PROPOSED_UNCONFIRMED，指引读取外交状态，不自动再次提议，也不猜测已拒绝。
 
 ## User Stories
 
@@ -24,14 +24,18 @@
 10. 作为维护者，我希望沿用既有确认边界，以便不增加后台服务或通用外交状态机。
 11. 作为测试者，我希望真实 Lua 和公开 GameState 证明请求计数及返回结果，以便不复制实现。
 12. 作为玩家，我希望保存原有进度后验证修复，并继续同一地图到原生胜负终点。
+13. 作为玩家，我希望同盟稍后成立时仍被确认，以便不收到虚假 FAILED。
+14. 作为玩家，我希望实际同盟类型与请求相符，以便不把另一类同盟当成功。
+15. 作为玩家，我希望不能成立或未知的同盟只报告未确认，以便不会重发已提交提案。
 
 ## Implementation Decisions
 
-- 仅修复 DECLARE_FRIENDSHIP 的结果语义与提交后确认，不改已在本机工作的请求协议，也不扩大自动回应或自动关闭条件。
+- 仅修复 DECLARE_FRIENDSHIP 与 form_alliance 的结果语义与提交后确认，不改已在本机工作的请求协议，也不扩大自动回应或自动关闭条件。
 - 原生合法性只证明可提出请求。友好分支的首次 Lua 返回提交事实，不产生 ACCEPTED；GameState 在现有确认期限中执行只读回读。
 - 使用本机官方 GetDiplomaticStateIndex 与 GameInfo.DiplomaticStates 的 StateType／Hash 映射，不硬编码推测新 API。只有唯一、精确且属于本方与目标的声明友好见证才授权 ACCEPTED；双方不一致、缺失、畸形或未知均不成立。
+- 同盟的首次 Lua 返回提交事实，不根据同帧旧 state 或工作交易条目推断已接受／已拒绝。确认时双边原生关系须为 ALLIED，且原生 GetAllianceType 通过本机 GameInfo.Alliances 映射到精确请求类型；类型未知、相反或缺失均未确认。
 - 延迟成立可在同一次确认期限内完成；读取异常、持续非友好、矛盾或超时返回 PROPOSED_UNCONFIRMED，并明确先查询外交，不自动再提交。前置拒绝保持原错误；写入结果未知不能推断已接受或已拒绝。
-- 一次公开调用最多一次 RequestSession，不因轮询重放提交。确认期限包含每次读取；沿用现有短轮询参数，不新增缓存、监听器、重试服务或生命周期重构。
+- 一次公开调用最多一次 RequestSession／提案提交序列，不因轮询重放提交。确认期限包含每次读取；沿用现有短轮询参数，不新增缓存、监听器、重试服务或生命周期重构。
 - 公开说明准确区分请求与成立；其他外交动作保持现有范围，实际恢复优先正常菜单，所有检查点和旧结果保留。
 
 ## Testing Decisions
@@ -40,13 +44,14 @@
 
 - 立即／延迟 DECLARED_FRIEND、持续 FRIENDLY／UNFRIENDLY、双方矛盾、缺失／畸形行、原生读取异常与挂起；成功仅由真实回读授权。
 - 前置拒绝零 RequestSession；正常和未确认调用各一次请求；回读只读，无自动第二声明。
+- 同盟立即／延迟成立、持续非同盟、类型不符／缺失、读取异常；每次至多一次既有提案序列，无默认其他同盟类型。
 - 保持 OPEN_BORDERS 路由、宣战及其他动作兼容；不为纯文案增加镜像测试。
 - 全量离线、编译、diff、独立双轴审查后实机核对公开返回与实际外交关系；不盲目重发第 173 回合旧声明。使用新时点合法请求或明确检查点诊断重放，重放另计。
 
 ## Out of Scope
 
-其他外交动作结果的整体重构、自动谈判、强制接受、为验证而宣战、后台服务、旧存档删除、push。
+除友好和同盟外的外交动作结果整体重构、工作交易回应协议重构、自动谈判、强制接受、为验证而宣战、后台服务、旧存档删除、push。
 
 ## Further Notes
 
-证据：`~/.civ6-mcp/acceptance/20261018-turn-terminal/friendship173-misreport.json`、`friendship-native-research.json`、`save-176.json`。本机官方外交界面依据原生 StateType 识别 DIPLO_STATE_DECLARED_FRIEND；不把一般 FRIENDLY 态当作友好盟约。
+证据：`~/.civ6-mcp/acceptance/20261018-turn-terminal/friendship173-misreport.json`、`friendship-native-research.json`、`save-176.json`、`alliance180-misreport.json`、`save-180.json`。本机官方外交界面依据原生 StateType 识别 DIPLO_STATE_DECLARED_FRIEND；不把一般 FRIENDLY 态当作友好盟约。
