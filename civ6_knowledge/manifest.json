@@ -1,0 +1,101 @@
+{
+  "counts": {
+    "civics": 61,
+    "congress": 29,
+    "districts": 28,
+    "technologies": 77
+  },
+  "coverage": {
+    "complete_for_snapshot_tables": [
+      "Civics",
+      "Technologies",
+      "Districts",
+      "Resolutions",
+      "ProposalTypes",
+      "VotingBlockers"
+    ],
+    "not_covered": [
+      "完整 Modifier 解释",
+      "当前对局模组／模式核对",
+      "完整动作合法性和有效费用",
+      "策略最优性"
+    ]
+  },
+  "files": {
+    "rules/civics.json": "d41b81f91ef002691ba46fc0d1322edfb001464ca03f927d2d6e237333a1b644",
+    "rules/congress.json": "235fd10d5488936753173b3075883a29c8551e7e761e4d4e18b9e4bf0c7a7e9f",
+    "rules/districts.json": "f85d381e991b9c3042c5e3b5db5b1c616bd0358f60503340f5f3adc4343dbb1d",
+    "rules/technologies.json": "ef28257d0836d2367a5657b752bb4853900a73161b7c36cd4b15e88bb9deb8e0"
+  },
+  "profile": {
+    "active_modes_verified": false,
+    "active_mods_verified": false,
+    "configuration_enabled_mods": [
+      {
+        "id": "02a8bdde-67ea-4d38-9540-26e685e3156e",
+        "label": "LOC_AZTEC_MONTEZUMA_MOD_TITLE"
+      },
+      {
+        "id": "0c0c1169-cc34-44a6-9db9-52ca4499a2cf",
+        "label": "LOC_MOD_SCOUT_CAT_TITLE"
+      },
+      {
+        "id": "19d1c7ec-54de-11ea-a2e3-2e728ce88125",
+        "label": "Tech and Civic Shuffle Game Mode"
+      },
+      {
+        "id": "19ed1a36-d744-4a58-8f8b-0376c2ba86e5",
+        "label": "Barbarian Clans Game Mode"
+      },
+      {
+        "id": "4873eb62-8ccc-4574-b784-dda455e74e68",
+        "label": "LOC_EXPANSION2_MOD_TITLE"
+      },
+      {
+        "id": "5b0445c9-1376-45ad-9b51-c96a83a8f17d",
+        "label": "LOC_WARMACHINE_MOD_TITLE"
+      },
+      {
+        "id": "648cd2a8-057a-4eb5-9e41-e1f7d86b5443",
+        "label": "LOC_COLDWAR_MOD_TITLE"
+      },
+      {
+        "id": "9ed63236-617c-45a6-bb70-8cb6b0be8ed2",
+        "label": "LOC_JULIUS_CAESAR_MOD_TITLE"
+      },
+      {
+        "id": "a55fafb4-9070-4597-9453-b28a99910cda",
+        "label": "Multiplayer Scenario: Pirates"
+      },
+      {
+        "id": "c1f775d8-59b5-401b-b86d-78faf3446ec7",
+        "label": "LOC_BLACKDEATH_MOD_TITLE"
+      },
+      {
+        "id": "f264ee10-f21b-4a9a-bbcd-d534e9843e90",
+        "label": "LOC_CIV_ROYALE_MOD_TITLE"
+      },
+      {
+        "id": "f653805e-f7c8-44e1-8cbd-fb48d7aabcba",
+        "label": "LOC_ANCIENT_RIVALS_MOD_TITLE"
+      }
+    ],
+    "configuration_warning": "Configuration enabled lists do not prove per-game active modes or ownership.",
+    "current_session_verified": false,
+    "game_version": "1.0.12.54 (951533)",
+    "language_preference": [
+      "zh_Hans_CN",
+      "en_US"
+    ],
+    "macos_bundle_build": "376653.178",
+    "macos_bundle_version": "1.4.6",
+    "missing_optional_tables": [],
+    "ruleset": "RULESET_EXPANSION_2",
+    "ruleset_basis": "target knowledge ruleset; Expansion2 definitions required; not a loaded-session attestation",
+    "source_scope": "local_cached_rules_snapshot",
+    "steam_build_id": "15296837"
+  },
+  "schema_version": 1,
+  "snapshot": "sources/snapshot.json",
+  "snapshot_sha256": "cde60f73810c7b51b6f4d0c7aba5055e5f0af914a90c3b713784fc2afa644c18"
+}
