@@ -331,9 +331,8 @@ def _lua_escape(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
-# Names from the most recent filesystem listing (newest first, display cap
-# applied) — lets load_save(index) resolve an entry when the Lua
-# MCPSaveList cache is empty because the listing came from disk.
+# Names from the most recently displayed listing, from either filesystem or
+# native enumeration. An index always refers to that exact displayed snapshot.
 _filesystem_save_names: list[str] = []
 
 
@@ -460,6 +459,7 @@ async def list_saves(conn: GameConnection) -> str:
     autosaves and quicksaves). Falls back to Lua query if filesystem
     scan finds nothing.
     """
+    _filesystem_save_names.clear()
     result = _list_saves_filesystem()
     if "No saves found" not in result:
         return result
@@ -512,11 +512,15 @@ async def _list_saves_lua(conn: GameConnection) -> str | None:
                 if not results:
                     return None  # empty — fall through to filesystem
                 lines_out = ["Available saves (use load_save with the index number):"]
-                for r in results:
+                names = []
+                for index, r in enumerate(results, 1):
                     parts = r.split("|", 2)
-                    idx = parts[1]
-                    name = parts[2] if len(parts) > 2 else "?"
-                    lines_out.append(f"  {idx}. {name}")
+                    if len(parts) != 3 or int(parts[1]) != index or _validate_save_name(parts[2]):
+                        return None
+                    name = parts[2].removesuffix(".Civ6Save")
+                    names.append(name)
+                    lines_out.append(f"  {index}. {name}")
+                _filesystem_save_names[:] = names
                 return "\n".join(lines_out)
     except ConnectionError:
         raise  # dead transport is not "no saves" — surface it
@@ -721,7 +725,7 @@ print("{lq.SENTINEL}");
         return f"ERR:OUTCOME_UNKNOWN|FrontEnd load returned no confirmation: {lines!r}"
     if "MCP_FRONTEND_AUTOSTART|true" not in lines:
         return (
-            "Error: save loading began but Civ VI auto-start was unavailable; "
+            "ERR:OUTCOME_UNKNOWN|save loading began but Civ VI auto-start was unavailable; "
             "refusing UI automation fallback."
         )
     return (

@@ -151,7 +151,8 @@ class GameState:
             consumed = (attacks_before is not None and "attacks" in metadata
                         and int(metadata["attacks"]) < attacks_before and metadata.get("busy") == "false")
             changed = pre_hp is not None and post_hp is not None and pre_hp != post_hp
-            if changed or consumed:
+            core_status = next((line.split("|", 1)[1] for line in pending.observed if line.startswith("CORE_BUSY|")), metadata.get("busy", "unknown"))
+            if (changed or consumed) and core_status == "false":
                 damage = f"|damage dealt:{pre_hp-post_hp}" if pre_hp is not None and post_hp is not None else ""
                 # Missing from the original tile is not evidence of death. The
                 # consumed attack can be confirmed while the target stays unknown.

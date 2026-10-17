@@ -436,6 +436,9 @@ else print("ATTACKER|gone") end
 """
     return f"""
 {attacker_probe}
+local coreBusy = "unknown"
+pcall(function() coreBusy = tostring(UI.IsGameCoreBusy()) end)
+print("CORE_BUSY|" .. coreBusy)
 local found = false
 local visible = false
 pcall(function()
