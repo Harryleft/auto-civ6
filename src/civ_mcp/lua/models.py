@@ -153,6 +153,9 @@ class CityInfo:
     buildings: list[str] = field(
         default_factory=list
     )  # completed buildings (BUILDING_ prefix stripped)
+    owner_id: int | None = None
+    game_identity: tuple[str, int] | None = None
+    completed_districts: list[str] | None = None  # native IsComplete, with coordinates
 
 
 @dataclass
@@ -354,6 +357,12 @@ class CitySnapshot:
     turns_to_grow: int = 0
     loyalty: float = 100.0
     loyalty_per_turn: float = 0.0
+    x: int | None = None
+    y: int | None = None
+    owner_id: int | None = None
+    game_identity: tuple[str, int] | None = None
+    buildings: list[str] | None = None
+    completed_districts: list[str] | None = None
 
 
 @dataclass
