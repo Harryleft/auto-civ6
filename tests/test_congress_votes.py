@@ -163,8 +163,6 @@ def test_empty_explicit_plan_requires_native_no_choices_and_has_one_common_submi
     code = conn.calls[0]
     assert "votes={}" in code
     assert 'if nowStage == "STAGE1" then ress = wc:GetResolutions(me) end' in code
-    assert "local categories = props.Proposals" in code
-    assert 'if next(category.ProposalsOfType) ~= nil then' in code
     assert 'stop("Explicit proposal votes are required; no defaults supplied")' in code
     assert "if #plan > 0 then" in code
     assert code.count("WORLD_CONGRESS_SUBMIT_TURN, {}") == 1

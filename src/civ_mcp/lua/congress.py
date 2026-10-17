@@ -6,6 +6,36 @@ from civ_mcp.lua._helpers import SENTINEL, _bail
 from civ_mcp.lua.models import CongressProposal, CongressResolution, WorldCongressStatus
 
 
+def _proposal_eligibility_lua() -> str:
+    """Share native proposal widget eligibility between opening and voting."""
+    return """
+local function hasEligibleProposals(proposals)
+    if type(proposals) ~= "table" or (proposals.Proposals ~= nil and type(proposals.Proposals) ~= "table") then
+        return nil, "Proposal status unknown"
+    end
+    local hasChoices = false
+    for proposalType, category in pairs(proposals.Proposals or {}) do
+        if not GameInfo.ProposalTypes[proposalType] or type(category) ~= "table" or type(category.ProposalsOfType) ~= "table" then
+            return nil, "Proposal category unknown"
+        end
+        for _, proposal in pairs(category.ProposalsOfType) do
+            if type(proposal) ~= "table" or (proposal.Disabled ~= nil and type(proposal.Disabled) ~= "boolean") then
+                return nil, "Proposal eligibility unknown"
+            end
+            local blocker = nil
+            if proposal.VotingRestriction then
+                blocker = GameInfo.VotingBlockers[proposal.VotingRestriction]
+                if not blocker then return nil, "Proposal voting restriction unknown" end
+            end
+            if not proposal.Disabled and not (blocker and blocker.NoUpvote and blocker.NoDownvote) then hasChoices = true end
+        end
+    end
+    -- Validate every row: a known eligible proposal must not mask unknown data.
+    return hasChoices
+end
+"""
+
+
 def build_congress_phase_query(*, sentinel: bool = True) -> str:
     """Read native segment and this context's request record; never vote/resume."""
     ending = f'print("{SENTINEL}")' if sentinel else ""
@@ -115,26 +145,13 @@ if stage == "STAGE1" then
         end
     end
 end
-local proposals = wc:GetProposals(me)
-if type(proposals) ~= "table" or (proposals.Proposals ~= nil and type(proposals.Proposals) ~= "table") then
-    {_bail("ERR:WC_CHOICES_UNKNOWN|Proposal status unknown; no start event sent.")}
+{_proposal_eligibility_lua()}
+local eligibleProposals, proposalError = hasEligibleProposals(wc:GetProposals(me))
+if eligibleProposals == nil then
+    print("ERR:WC_CHOICES_UNKNOWN|" .. proposalError .. "; no start event sent.")
+    print("{SENTINEL}"); return
 end
-for proposalType, category in pairs(proposals.Proposals or {{}}) do
-    if not GameInfo.ProposalTypes[proposalType] or type(category) ~= "table" or type(category.ProposalsOfType) ~= "table" then
-        {_bail("ERR:WC_CHOICES_UNKNOWN|Proposal category unknown; no start event sent.")}
-    end
-    for _, proposal in pairs(category.ProposalsOfType) do
-        if type(proposal) ~= "table" or (proposal.Disabled ~= nil and type(proposal.Disabled) ~= "boolean") then
-            {_bail("ERR:WC_CHOICES_UNKNOWN|Proposal eligibility unknown; no start event sent.")}
-        end
-        local blocker = nil
-        if proposal.VotingRestriction then
-            blocker = GameInfo.VotingBlockers[proposal.VotingRestriction]
-            if not blocker then {_bail("ERR:WC_CHOICES_UNKNOWN|Proposal voting restriction unknown; no start event sent.")} end
-        end
-        if not proposal.Disabled and not (blocker and blocker.NoUpvote and blocker.NoDownvote) then hasChoices = true end
-    end
-end
+hasChoices = hasChoices or eligibleProposals
 if not hasChoices then
     {_bail("ERR:WC_NO_CHOICES|No native voting choices; use an explicit empty vote plan instead of starting the Intro.")}
 end
@@ -444,6 +461,7 @@ local function stop(message)
     cleanup()
     print("ERR:WC_VOTE_PREFERENCES|" .. message)
 end
+{_proposal_eligibility_lua()}
 local function handler(eventPlayer)
     if __civmcp_wc_request ~= q or q.state ~= "REGISTERED" then return end
     if eventPlayer ~= nil and eventPlayer ~= me then return end
@@ -457,18 +475,12 @@ local function handler(eventPlayer)
     if nowStage ~= "STAGE1" and nowStage ~= "STAGE2" then stop("Voting stage unavailable"); return end
     if q.stage ~= "NONE" and q.stage ~= nowStage then stop("Request stage changed"); return end
     q.stage = nowStage
-    -- Unknown proposals cannot be accepted/abstained by a resolution-only plan.
-    local props = wc:GetProposals(me)
-    if type(props) ~= "table" then stop("Proposal status unavailable"); return end
-    local categories = props.Proposals
-    if categories ~= nil and type(categories) ~= "table" then stop("Malformed proposal categories"); return end
-    for _, category in pairs(categories or {{}}) do
-        if type(category) ~= "table" or type(category.ProposalsOfType) ~= "table" then
-            stop("Malformed proposal choices"); return
-        end
-        if next(category.ProposalsOfType) ~= nil then
-            stop("Explicit proposal votes are required; no defaults supplied"); return
-        end
+    -- Match native widget eligibility: disabled/bidirectionally blocked rows
+    -- need no vote. Eligible or unknown proposals still forbid implicit votes.
+    local eligibleProposals, proposalError = hasEligibleProposals(wc:GetProposals(me))
+    if eligibleProposals == nil then stop(proposalError); return end
+    if eligibleProposals then
+        stop("Explicit proposal votes are required; no defaults supplied"); return
     end
     -- Native Stage2 only handles proposals; its old resolution list is not a
     -- fresh voting plan and must never cause a repeat of Stage1 votes.
