@@ -7,6 +7,7 @@
 - [第 30～50 回合调度修复规格](specs/2026-10-17-scheduling-repair.md)：响应归属、纯查询、真实完成、区域落位、移动与战斗估算；[工作项](specs/2026-10-17-scheduling-repair-tickets.md)。
 - [第 21～30 回合调度问题](acceptance/2026-10-17-turn-30-scheduling.md)：当时的 3 次未知及恢复、完成事件与响应归属问题证据。
 - [调度修复与第 50 回合验收](acceptance/2026-10-17-scheduling-repair-turn-50.md)：630 项离线测试、20 净推进、最终保存恢复及新增问题。
+- [灾害弹窗、恢复读取与分数差异验收](acceptance/2026-10-17-reliability-repair.md)：两处灾害回放、分数原因、保存恢复及菜单换档分析。
 - [模型操作规则](../AGENTS.md)：基于真实状态操作游戏。
 - [存档格式](save-file-format.md)：`scripts/parse_save.py` 的逆向研究依据。
 - [macOS 启动器设置](research/bypassing_aspyr_launcher.md)：Steam 启动配置参考。
