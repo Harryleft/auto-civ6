@@ -126,8 +126,24 @@ class GameState:
             identity = (fields[1].replace("CIVILIZATION_", "").lower(), int(fields[2]))
             if identity != pending.identity or (pending.turn is not None and int(fields[3]) != pending.turn):
                 return None
-        if pending.kind == "production" and any(line.startswith("CONFIRMED|") for line in pending.observed):
-            return pending.success
+        if pending.kind == "production":
+            target = pending.details.get("target")
+            if target is not None:
+                item = pending.details["item"]
+                if f"PRODUCTION|{item}" not in pending.observed:
+                    return None
+                for line in pending.observed:
+                    fields = line.split("|")
+                    if len(fields) != 4 or fields[:2] != ["DISTRICT", item]:
+                        continue
+                    try:
+                        position = tuple(float(value) for value in fields[2:])
+                    except ValueError:
+                        continue
+                    if position == target:
+                        return pending.success
+            elif any(line.startswith("CONFIRMED|") for line in pending.observed):
+                return pending.success
         if pending.kind == "attack":
             pre_hp = pending.details.get("pre_hp")
             post_hp = None
@@ -659,17 +675,20 @@ class GameState:
         target_x: int | None = None,
         target_y: int | None = None,
     ) -> str:
+        target = ((target_x, target_y) if item_type.upper() == "DISTRICT"
+                  and target_x is not None and target_y is not None else None)
         if (self._pending_action and self._pending_action.kind == "production"
                 and self._pending_action.entity == ("city", city_id)
-                and self._pending_action.details.get("item") == item_name):
+                and self._pending_action.details.get("item") == item_name
+                and self._pending_action.details.get("target") == target):
             return await self.confirm_pending_action()
         blocked = await self._action_gate()
         if blocked:
             return blocked
         pending = _PendingAction(
-            "production", ("city", city_id), lq.build_verify_production(city_id, item_name),
+            "production", ("city", city_id), lq.build_verify_production(city_id, item_name, target),
             identity=self._game_identity, success=f"PRODUCING|{item_name}",
-            details={"item": item_name},
+            details={"item": item_name, "target": target},
         )
         # Retain intent before dispatch: losing the acknowledgement does not
         # establish that CityManager.RequestOperation was never executed.
