@@ -412,3 +412,68 @@ class TestRequestOwnership:
             assert len(writer.messages()) == 1
             assert writer.closed
         run(go())
+
+
+class TestBoundedStateRediscovery:
+    def test_refresh_waits_for_current_request_then_replaces_directory(self, monkeypatch):
+        from fake_tuner import FakeWriter, make_reader
+        async def go():
+            conn, old_writer = await make_connection(monkeypatch)
+            old_reader = conn._reader
+            new_writer = FakeWriter()
+            async def fresh_connect(*args):
+                return make_reader(), new_writer
+            async def fresh_handshake(*args):
+                return "APP:Civ6", ["8", "InGame", "9", "GameCore_Tuner", "211", "NaturalDisasterPopup"]
+            monkeypatch.setattr(tuner_client, "connect", fresh_connect)
+            monkeypatch.setattr(tuner_client, "handshake", fresh_handshake)
+            command = asyncio.create_task(conn.execute_in_state(0, "return 1"))
+            await asyncio.sleep(0)
+            refresh = asyncio.create_task(conn.rediscover_states(timeout=0.1))
+            await asyncio.sleep(0)
+            assert not old_writer.closed
+            old_reader.feed_data(frame(TAG, "O\x00ctx: CIVMCP|request1|END"))
+            assert await command == []
+            await refresh
+            assert old_writer.closed and conn.is_connected
+            assert conn.lua_states == {8: "InGame", 9: "GameCore_Tuner", 211: "NaturalDisasterPopup"}
+            assert len(old_writer.messages()) == 1 and new_writer.messages() == []
+        run(go())
+
+    def test_timeout_retires_partial_discovery_without_gameplay_submission(self, monkeypatch):
+        from fake_tuner import FakeWriter, make_reader
+        async def go():
+            conn, old_writer = await make_connection(monkeypatch)
+            new_writer = FakeWriter()
+            async def fresh_connect(*args):
+                return make_reader(), new_writer
+            async def stuck_handshake(*args):
+                await asyncio.Event().wait()
+            monkeypatch.setattr(tuner_client, "connect", fresh_connect)
+            monkeypatch.setattr(tuner_client, "handshake", stuck_handshake)
+            with pytest.raises(TimeoutError):
+                await conn.rediscover_states(timeout=0.01)
+            assert old_writer.closed and new_writer.closed
+            assert not conn.is_connected and conn.lua_states == {}
+            assert old_writer.messages() == [] and new_writer.messages() == []
+        run(go())
+
+    def test_refresh_queue_wait_has_a_deadline_without_retiring_active_command(self, monkeypatch):
+        async def go():
+            conn, writer = await make_connection(monkeypatch)
+            command = asyncio.create_task(conn.execute_in_state(0, "return 1"))
+            await asyncio.sleep(0)
+            refresh = asyncio.create_task(conn.rediscover_states(timeout=0.005))
+            try:
+                await asyncio.sleep(0.015)
+                assert refresh.done(), "state discovery waited beyond its budget on another command"
+                with pytest.raises(TimeoutError):
+                    await refresh
+                assert not writer.closed
+                conn._reader.feed_data(frame(TAG, "O\x00ctx: CIVMCP|request1|END"))
+                assert await command == []
+            finally:
+                command.cancel()
+                refresh.cancel()
+                await asyncio.gather(command, refresh, return_exceptions=True)
+        run(go())

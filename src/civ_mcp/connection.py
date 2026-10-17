@@ -97,6 +97,20 @@ class GameConnection:
         await self.disconnect()
         await self.connect()
 
+    async def rediscover_states(self, timeout: float = 5.0) -> None:
+        """Perform one bounded discovery, serialized with normal commands.
+
+        Reuse the established handshake instead of probing numeric contexts.
+        No gameplay chunk is submitted or replayed by this explicit refresh.
+        """
+        async with asyncio.timeout(timeout):
+            async with self._lock:
+                try:
+                    await self.reconnect()
+                except (OSError, LuaError, asyncio.IncompleteReadError, asyncio.CancelledError):
+                    await self.disconnect()
+                    raise
+
     async def _ensure_game_states(self) -> None:
         """Ensure we have GameCore and InGame state indexes.
 

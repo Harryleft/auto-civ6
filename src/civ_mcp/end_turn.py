@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import civ_mcp.narrate as nr
 from civ_mcp import lua as lq
 from civ_mcp.connection import LuaError
+from civ_mcp.game_lifecycle import visible_information_popups
 
 if TYPE_CHECKING:
     from civ_mcp.game_state import GameState
@@ -19,6 +20,7 @@ log = logging.getLogger(__name__)
 END_TURN_TIMEOUT_SECONDS = 180.0
 POLL_INTERVAL_SECONDS = 2.0
 DIPLOMACY_PROBE_SECONDS = 10.0
+INFORMATION_PROBE_SECONDS = 5.0
 
 
 async def read_turn_state(gs: GameState) -> tuple[int | None, bool | None]:
@@ -271,6 +273,7 @@ async def execute_end_turn(gs: GameState) -> str:
     started = time.monotonic()
     deadline = started + END_TURN_TIMEOUT_SECONDS
     next_diplomacy_probe = started + DIPLOMACY_PROBE_SECONDS
+    next_information_probe = started
     turn_after = None
     ready = None
     reads_failed = False
@@ -306,12 +309,35 @@ async def execute_end_turn(gs: GameState) -> str:
                         f"to {turn_after}. Read game state or use explicit recovery; "
                         "the pending request was not resent."
                     )
+                diplomacy_checked = False
                 if time.monotonic() >= next_diplomacy_probe:
+                    diplomacy_checked = True
                     next_diplomacy_probe = time.monotonic() + DIPLOMACY_PROBE_SECONDS
                     try:
                         message, _ = await _check_mid_turn_diplomacy(gs, "", turn_before)
                         if message:
                             return message
+                    except (ConnectionError, TimeoutError, LuaError, ValueError):
+                        reads_failed = True
+                if time.monotonic() >= next_information_probe:
+                    next_information_probe = time.monotonic() + INFORMATION_PROBE_SECONDS
+                    try:
+                        popups = await visible_information_popups(gs.conn)
+                        if popups:
+                            # A simultaneous information overlay must not hide
+                            # a pending encounter or choose its response.
+                            if not diplomacy_checked:
+                                message, _ = await _check_mid_turn_diplomacy(gs, "", turn_before)
+                                if message:
+                                    return message
+                            return (
+                                f"Turn paused — information popup visible: {', '.join(popups)} "
+                                f"(requested from turn {turn_before}, last observed turn {turn_after}). "
+                                "Use dismiss_popup to close it explicitly, then call end_turn "
+                                "to confirm the existing request; it will not be sent again."
+                            )
+                        if popups is None:
+                            reads_failed = True
                     except (ConnectionError, TimeoutError, LuaError, ValueError):
                         reads_failed = True
                 remaining = deadline - time.monotonic()
