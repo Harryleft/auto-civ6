@@ -1,0 +1,458 @@
+{
+  "schema_version": 1,
+  "topic": "victory",
+  "cards": [
+    {
+      "id": "MECHANIC_VICTORY_SCIENCE",
+      "names": {
+        "zh_Hans_CN": "科学胜利与太空项目",
+        "en_US": "Science victory and space projects"
+      },
+      "summary": "风云变幻的科学胜利需要系外行星阶段及胜利点，火星项目不是终点。",
+      "conditions": [
+        "当前胜利定义指向 REQUIREMENTS_EXOPLANET_TECHNOLOGY_VICTORY；成员需求集合包含卫星、登月、火星、系外行星项目及科学胜利点条件。",
+        "项目记录分别给出科技与宇航中心前置；当前可启动项目、已完成里程碑与远征进度须查询本局。",
+        "旧科学胜利概念正文以火星为终点，与本机风云变幻胜利定义不一致；按当前需求集合与项目表判断。"
+      ],
+      "source_selectors": [
+        {
+          "table": "Victories",
+          "key": "VictoryType",
+          "value": "VICTORY_TECHNOLOGY"
+        },
+        {
+          "table": "RequirementSetRequirements",
+          "key": "RequirementSetId",
+          "value": "EXOPLANET_TECHNOLOGY_VICTORY_PER_TEAM_REQUIREMENTS"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "SCIENCE_VICTORY_POINTS_REQUIRED"
+        },
+        {
+          "table": "Projects",
+          "key": "ProjectType",
+          "value": "PROJECT_LAUNCH_EARTH_SATELLITE"
+        },
+        {
+          "table": "Projects",
+          "key": "ProjectType",
+          "value": "PROJECT_LAUNCH_MOON_LANDING"
+        },
+        {
+          "table": "Projects",
+          "key": "ProjectType",
+          "value": "PROJECT_LAUNCH_MARS_BASE"
+        },
+        {
+          "table": "Projects",
+          "key": "ProjectType",
+          "value": "PROJECT_LAUNCH_EXOPLANET_EXPEDITION"
+        },
+        {
+          "table": "Requirements",
+          "key": "RequirementId",
+          "value": "TECHNOLOGY_VICTORY_POINTS_MET"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_VICTORY_3_CHAPTER_CONTENT_PARA_1"
+        }
+      ],
+      "related": [
+        "VICTORY_TECHNOLOGY",
+        "TECH_ROCKETRY",
+        "TECH_SMART_MATERIALS",
+        "DISTRICT_SPACEPORT"
+      ],
+      "current_facts_needed": [
+        "本局启用的胜利、各玩家里程碑、远征进度、城市可建项目与科技"
+      ],
+      "limitations": [
+        "点数参数不等于当前剩余回合；项目顺序、加速与破坏后的有效进度仍由游戏判定。"
+      ]
+    },
+    {
+      "id": "MECHANIC_VICTORY_CULTURE",
+      "names": {
+        "zh_Hans_CN": "文化胜利与游客",
+        "en_US": "Culture victory and tourists"
+      },
+      "summary": "文化胜利比较来访游客与各对手的国内游客，不能仅比较文化产出。",
+      "conditions": [
+        "游客比较需求位于团队成员与主要对手集合内；个人来访游客不直接等于团队游客之和。",
+        "文化与旅游业绩对应不同指标；开放边界和商路有旅游修正参数，具体目标和本局加成另查。"
+      ],
+      "source_selectors": [
+        {
+          "table": "Victories",
+          "key": "VictoryType",
+          "value": "VICTORY_CULTURE"
+        },
+        {
+          "table": "Requirements",
+          "key": "RequirementId",
+          "value": "CULTURE_VICTORY_ENOUGH_TOURISTS_REQUIREMENT"
+        },
+        {
+          "table": "Requirements",
+          "key": "RequirementId",
+          "value": "CULTURE_VICTORY_PER_MEMBER_REQUIREMENT"
+        },
+        {
+          "table": "Requirements",
+          "key": "RequirementId",
+          "value": "CULTURE_VICTORY_REQUIREMENT"
+        },
+        {
+          "table": "RequirementArguments",
+          "key": "RequirementId",
+          "value": "CULTURE_VICTORY_PER_MEMBER_REQUIREMENT"
+        },
+        {
+          "table": "RequirementArguments",
+          "key": "RequirementId",
+          "value": "CULTURE_VICTORY_REQUIREMENT"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "TOURISM_OPEN_BORDERS_BONUS"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "TOURISM_TRADE_ROUTE_BONUS"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_VICTORY_4_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_VICTORY_4_CHAPTER_CONTENT_PARA_4"
+        }
+      ],
+      "related": [
+        "VICTORY_CULTURE",
+        "YIELD_CULTURE"
+      ],
+      "current_facts_needed": [
+        "对手国内游客、己方来访游客、旅游业绩、开放边界与商路对象"
+      ],
+      "limitations": [
+        "当前资料不把旅游参数组合成完整游客换算公式；伟作、摇滚乐队及各文明修正需另查。"
+      ]
+    },
+    {
+      "id": "MECHANIC_VICTORY_DOMINATION",
+      "names": {
+        "zh_Hans_CN": "征服胜利与原始首都",
+        "en_US": "Domination victory and original capitals"
+      },
+      "summary": "征服目标是原始首都控制权，失去自己的原始首都会影响此路径。",
+      "conditions": [
+        "概念正文要求控制所有文明的原始首都；现首都、迁都后首都与原始首都应区分。",
+        "失去原始首都但仍有其他城市时，仍可争取其他启用的胜利；征服胜利须核对自身原始首都控制权。",
+        "团队征服另有团队原始首都条件；最终判断由 REQUIREMENT_TEAM_DOMINATION_VICTORY 引擎需求执行。"
+      ],
+      "source_selectors": [
+        {
+          "table": "Victories",
+          "key": "VictoryType",
+          "value": "VICTORY_CONQUEST"
+        },
+        {
+          "table": "Requirements",
+          "key": "RequirementId",
+          "value": "CONQUEST_VICTORY_REQUIREMENT"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_VICTORY_2_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_VICTORY_2_CHAPTER_CONTENT_PARA_2"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_VICTORY_2_CHAPTER_CONTENT_PARA_4"
+        }
+      ],
+      "related": [
+        "VICTORY_CONQUEST"
+      ],
+      "current_facts_needed": [
+        "各文明原始首都、当前控制者、己方首都控制权与团队配置"
+      ],
+      "limitations": [
+        "引擎需求类型未在离线资料中实现；不由城市总数或淘汰文明数量代替征服判定。"
+      ]
+    },
+    {
+      "id": "MECHANIC_VICTORY_DIPLOMATIC",
+      "names": {
+        "zh_Hans_CN": "外交胜利点",
+        "en_US": "Diplomatic victory points"
+      },
+      "summary": "外交支持用于影响议会，外交胜利点才是胜利进度。",
+      "conditions": [
+        "胜利点目标读取 DIPLOMATIC_VICTORY_POINTS_REQUIRED；支持库存和票数不等于胜利点。",
+        "议会胜出的选项与目标、特定决议、竞赛及部分科技市政和奇观可产生胜利点；奖励与阶段需核对当前记录。",
+        "团队成员的胜利点不直接相加；概念规则以单一成员达到目标为团队胜利条件。"
+      ],
+      "source_selectors": [
+        {
+          "table": "Victories",
+          "key": "VictoryType",
+          "value": "VICTORY_DIPLOMATIC"
+        },
+        {
+          "table": "Requirements",
+          "key": "RequirementId",
+          "value": "DIPLOMATIC_VICTORY_REQUIREMENT"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "DIPLOMATIC_VICTORY_POINTS_REQUIRED"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_DIPLOMATIC_VICTORY_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_DIPLOMATIC_VICTORY_CHAPTER_CONTENT_PARA_2"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_DIPLOMATIC_VICTORY_CHAPTER_CONTENT_PARA_3"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_DIPLOMATIC_VICTORY_CHAPTER_CONTENT_PARA_4"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_DIPLOMATIC_VICTORY_CHAPTER_CONTENT_PARA_7"
+        }
+      ],
+      "related": [
+        "VICTORY_DIPLOMATIC"
+      ],
+      "current_facts_needed": [
+        "外交胜利点、支持库存、当前议程与阶段、奖励条件和对手进度"
+      ],
+      "limitations": [
+        "不从议会普通投票记录推断所有竞赛奖励；也不自动生成投票选择。"
+      ]
+    },
+    {
+      "id": "MECHANIC_VICTORY_RELIGIOUS",
+      "names": {
+        "zh_Hans_CN": "宗教胜利与主流宗教",
+        "en_US": "Religious victory and majority religion"
+      },
+      "summary": "宗教胜利核对各主要对手的主流宗教，不要求每座城市全部皈依。",
+      "conditions": [
+        "概念规则以多数城市的主流宗教判断文明主流宗教；玩家多数宗教需求在主要对手集合内核对。",
+        "团队规则涉及团队创建宗教与成员集合，不能直接把所有玩家信徒数相加代替需求判定。",
+        "万神殿与正式宗教不同，万神殿不向境外传播；仅有万神殿不能视为已创建可争取宗教胜利的宗教。"
+      ],
+      "source_selectors": [
+        {
+          "table": "Victories",
+          "key": "VictoryType",
+          "value": "VICTORY_RELIGIOUS"
+        },
+        {
+          "table": "Requirements",
+          "key": "RequirementId",
+          "value": "RELIGIOUS_VICTORY_MAJORITY_RELIGION_IS_OWNER_REQUIREMENT"
+        },
+        {
+          "table": "Requirements",
+          "key": "RequirementId",
+          "value": "RELIGIOUS_VICTORY_PER_MEMBER_REQUIREMENT"
+        },
+        {
+          "table": "Requirements",
+          "key": "RequirementId",
+          "value": "RELIGIOUS_VICTORY_REQUIREMENT"
+        },
+        {
+          "table": "RequirementArguments",
+          "key": "RequirementId",
+          "value": "RELIGIOUS_VICTORY_PER_MEMBER_REQUIREMENT"
+        },
+        {
+          "table": "RequirementArguments",
+          "key": "RequirementId",
+          "value": "RELIGIOUS_VICTORY_REQUIREMENT"
+        },
+        {
+          "table": "Religions",
+          "key": "ReligionType",
+          "value": "RELIGION_PANTHEON"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_VICTORY_5_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_VICTORY_5_CHAPTER_CONTENT_PARA_4"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_FAITH_3_CHAPTER_CONTENT_PARA_1"
+        }
+      ],
+      "related": [
+        "VICTORY_RELIGIOUS",
+        "RELIGION_PANTHEON"
+      ],
+      "current_facts_needed": [
+        "宗教创建者、各主要文明城市主流宗教、团队组成、胜利是否启用"
+      ],
+      "limitations": [
+        "城市信徒与压力换算、特殊团队边界及引擎最终胜利判定不在离线资料中求值。"
+      ]
+    },
+    {
+      "id": "MECHANIC_VICTORY_BELIEFS_SPREAD",
+      "names": {
+        "zh_Hans_CN": "信条类别与宗教传播",
+        "en_US": "Belief classes and religious spread"
+      },
+      "summary": "信条效果通过类别与 Modifier 关联；城市压力、商路、传播行动和神学战斗分别核对。",
+      "conditions": [
+        "信条有追随者、创始人、强化和祭祀等类别；可选类别、已选项与上限结合本局宗教阶段判断。",
+        "以宗教殖民为例，BeliefModifiers 关联自动传播效果；概念说明要求建城玩家以该宗教为主流宗教，不能仅由已选信条推断任意玩家新城都适用。",
+        "宗教单位采用购买城市的主流宗教；单位宗教、传播次数、目标及城市信徒状态需逐项核对。",
+        "相邻城市压力、商路压力与战斗传播分别有参数；概念正文神学战斗距离与当前 RELIGION_SPREAD_RANGE_COMBAT_VICTORY 不一致，距离数值以本机规则参数为准。"
+      ],
+      "source_selectors": [
+        {
+          "table": "BeliefClasses",
+          "key": "BeliefClassType",
+          "value": "BELIEF_CLASS_FOLLOWER"
+        },
+        {
+          "table": "BeliefClasses",
+          "key": "BeliefClassType",
+          "value": "BELIEF_CLASS_FOUNDER"
+        },
+        {
+          "table": "BeliefClasses",
+          "key": "BeliefClassType",
+          "value": "BELIEF_CLASS_ENHANCER"
+        },
+        {
+          "table": "BeliefClasses",
+          "key": "BeliefClassType",
+          "value": "BELIEF_CLASS_WORSHIP"
+        },
+        {
+          "table": "Beliefs",
+          "key": "BeliefType",
+          "value": "BELIEF_RELIGIOUS_COLONIZATION"
+        },
+        {
+          "table": "BeliefModifiers",
+          "key": "BeliefType",
+          "value": "BELIEF_RELIGIOUS_COLONIZATION"
+        },
+        {
+          "table": "Modifiers",
+          "key": "ModifierId",
+          "value": "RELIGIOUS_COLONIZATION_AUTO_SPREAD"
+        },
+        {
+          "table": "ModifierArguments",
+          "key": "ModifierId",
+          "value": "RELIGIOUS_COLONIZATION_AUTO_SPREAD"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "RELIGION_INITIAL_BELIEFS"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "RELIGION_SPREAD_ADJACENT_CITY_DISTANCE"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "RELIGION_SPREAD_ADJACENT_PER_TURN_PRESSURE"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "RELIGION_SPREAD_TRADE_ROUTE_PRESSURE_FOR_DESTINATION"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "RELIGION_SPREAD_TRADE_ROUTE_PRESSURE_FOR_ORIGIN"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "RELIGION_SPREAD_RANGE_COMBAT_VICTORY"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_FAITH_5_CHAPTER_CONTENT_PARA_3"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_FAITH_6_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_FAITH_6_CHAPTER_CONTENT_PARA_6"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_FAITH_7_CHAPTER_CONTENT_PARA_3"
+        }
+      ],
+      "related": [
+        "BELIEF_RELIGIOUS_COLONIZATION",
+        "RELIGION_PANTHEON",
+        "UNIT_MISSIONARY",
+        "UNIT_APOSTLE"
+      ],
+      "current_facts_needed": [
+        "宗教阶段、已选与可选信条、宗教单位所属宗教与次数、城市主流宗教和信徒、商路端点"
+      ],
+      "limitations": [
+        "Modifier 关联不是通用效果解释器；当前资料不实现压力到信徒的完整换算或传播行动合法性。"
+      ]
+    }
+  ]
+}
