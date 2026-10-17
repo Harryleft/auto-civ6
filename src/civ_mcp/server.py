@@ -1977,13 +1977,20 @@ async def _load_and_verify(gs: GameState, save_name: str) -> str:
                         if ready is True:
                             identity = await gs.get_game_identity()
                             gs._pending_load = True
-                            ov = await gs.get_game_overview()
+                            ov = await gs.get_game_overview(require_snapshot=True)
                             # Identity discovery can reset cached session data;
                             # restore the barrier until every comparison passes.
                             gs._pending_load = True
                             actual = (*identity, ov.turn)
                             if actual != expected or turn != ov.turn:
                                 return f"ERR:OUTCOME_UNKNOWN|Loaded state mismatch: expected {expected}, observed {actual}, active turn {turn}. No load replayed."
+                            # Confirm identity and readiness after all snapshot
+                            # reads too, rather than trusting their earlier state.
+                            final_identity = await gs.get_game_identity()
+                            gs._pending_load = True
+                            final_turn, final_ready = await read_turn_state(gs)
+                            if final_identity != identity or final_turn != ov.turn or final_ready is not True:
+                                raise ValueError("Loaded state changed or became unreadable during snapshot confirmation")
                             if checkpoints.expected_checkpoint(save_name) != expected:
                                 return "ERR:OUTCOME_UNKNOWN|Checkpoint file changed during load; recovery not verified."
                             if save_name.removesuffix(".Civ6Save") == "benchmark_turn_1":
