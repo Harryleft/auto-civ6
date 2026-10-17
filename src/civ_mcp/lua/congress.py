@@ -7,13 +7,31 @@ from civ_mcp.lua.models import CongressProposal, CongressResolution, WorldCongre
 
 
 def _proposal_eligibility_lua() -> str:
-    """Interpret native proposal eligibility for reads, opening and explicit votes."""
+    """Read-only native ballot facts shared by query, opening and submission."""
     return """
+local function integer(value)
+    return type(value) == "number" and value == value and math.abs(value) < math.huge and value == math.floor(value)
+end
+local function voteCosts(costs)
+    if type(costs) ~= "table" or not integer(costs.MaxVotes) or costs.MaxVotes < 1 then return nil end
+    local previous = 0
+    for i = 0, costs.MaxVotes - 1 do
+        local value = costs[i]
+        if not integer(value) or value < previous then return nil end
+        previous = value
+    end
+    return costs
+end
+local function nativeVoteCosts(wc, player)
+    local ok, costs = pcall(function() return wc:GetVotesandFavorCost(player) end)
+    return ok and voteCosts(costs) or nil
+end
 local function hasEligibleProposals(proposals)
     if type(proposals) ~= "table" or (proposals.Proposals ~= nil and type(proposals.Proposals) ~= "table") then
         return nil, "Proposal status unknown"
     end
-    local hasChoices = false
+    local rows, keys, nativePairs, hasChoices = {}, {}, {}, false
+    local wc = Game.GetWorldCongress()
     for proposalType, category in pairs(proposals.Proposals or {}) do
         if not GameInfo.ProposalTypes[proposalType] or type(category) ~= "table" or type(category.ProposalsOfType) ~= "table" then
             return nil, "Proposal category unknown"
@@ -22,16 +40,51 @@ local function hasEligibleProposals(proposals)
             if type(proposal) ~= "table" or (proposal.Disabled ~= nil and type(proposal.Disabled) ~= "boolean") then
                 return nil, "Proposal eligibility unknown"
             end
-            local blocker = nil
+            if type(proposal.TypeName) ~= "string" or proposal.TypeName == "" or proposal.TypeName:find("[|%c]")
+                or (proposal.Type ~= nil and not integer(proposal.Type)) or not integer(proposal.Target)
+                or (proposal.Sender ~= nil and not integer(proposal.Sender))
+                or type(proposal.Name) ~= "string" or type(proposal.Description) ~= "string" then
+                return nil, "Proposal identity or description unknown"
+            end
+            local key = proposal.TypeName .. "_" .. proposal.Target .. "_" .. (proposal.Sender ~= nil and proposal.Sender or "NONE")
+            if keys[key] then return nil, "Duplicate proposal key" end
+            keys[key] = true
+            local blocker, proposalBlocker = nil, nil
             if proposal.VotingRestriction then
                 blocker = GameInfo.VotingBlockers[proposal.VotingRestriction]
-                if not blocker then return nil, "Proposal voting restriction unknown" end
+                if not blocker or type(blocker.NoUpvote) ~= "boolean" or type(blocker.NoDownvote) ~= "boolean" then
+                    return nil, "Proposal voting restriction unknown"
+                end
             end
-            if not proposal.Disabled and not (blocker and blocker.NoUpvote and blocker.NoDownvote) then hasChoices = true end
+            if proposal.ProposalBlockerType then
+                proposalBlocker = GameInfo.ProposalBlockers and GameInfo.ProposalBlockers[proposal.ProposalBlockerType]
+                if not proposalBlocker then return nil, "Proposal blocker unknown" end
+            end
+            local costs = category.FavorCost
+            if costs == nil then costs = nativeVoteCosts(wc, Game.GetLocalPlayer()) end
+            costs = voteCosts(costs)
+            if not costs then return nil, "Proposal category costs unknown" end
+            local up = not proposal.Disabled and not (blocker and blocker.NoUpvote)
+            local down = not proposal.Disabled and not (blocker and blocker.NoDownvote)
+            local eligible = up or down
+            if eligible then
+                -- DISCUSSION_VOTE has only Sender/Target, no discussion-type parameter.
+                -- Distinct keys mapping to the same native arguments are not distinguishable.
+                local pair = tostring(proposal.Sender) .. ":" .. proposal.Target
+                if nativePairs[pair] then return nil, "Ambiguous native proposal identity" end
+                nativePairs[pair] = true
+                hasChoices = true
+            end
+            local definition = GameInfo.ProposalTypes[proposalType]
+            local categoryName = definition.Name and Locale.Lookup(definition.Name) or definition.ProposalType or tostring(proposalType)
+            rows[#rows+1] = {key=key, category=tostring(proposalType), category_name=categoryName, data=proposal, costs=costs,
+                eligible=eligible, up=up, down=down,
+                reason=proposalBlocker and proposalBlocker.Description or (blocker and blocker.Description)
+                    or (proposal.Disabled and "Disabled" or (not eligible and "Both vote directions blocked" or ""))}
         end
     end
-    -- Validate every row: a known eligible proposal must not mask unknown data.
-    return hasChoices
+    table.sort(rows, function(a, b) return a.key < b.key end)
+    return hasChoices, nil, rows
 end
 """
 
@@ -73,6 +126,9 @@ if phaseQ then
     elseif same and (phaseQ.stage == phaseStage or phaseQ.state == "REGISTERED") then
         phaseReceipt = phaseQ.state
     elseif phaseSession then phaseReceipt = "STALE" end
+end
+if phaseQ and phaseQ.summary and phaseReceipt ~= "NONE" and phaseReceipt ~= "STALE" then
+    print("WC_ALLOCATION|" .. phaseQ.summary)
 end
 print("WC_PHASE|" .. tostring(phaseSession) .. "|" .. phaseStage .. "|"
     .. Game.GetCurrentGameTurn() .. "|" .. phaseReceipt .. "|" .. tostring(phaseSegment))
@@ -193,6 +249,7 @@ print("{SENTINEL}")
 def build_world_congress_query() -> str:
     """Get World Congress status, resolutions, and proposals (InGame context)."""
     return f"""
+{_proposal_eligibility_lua()}
 local me = Game.GetLocalPlayer()
 local pDiplo = Players[me]:GetDiplomacy()
 {_native_stage_lua()}
@@ -202,13 +259,14 @@ local inSession = wc:IsInSession()
 local meeting = wc:GetMeetingStatus()
 local turnsLeft = meeting and meeting.TurnsLeft or -1
 local favor = Players[me]:GetFavor()
-local costs = wc:GetVotesandFavorCost(me)
-local maxVotes = costs.MaxVotes or 5
+local costs = nativeVoteCosts(wc, me)
+local maxVotes = costs and costs.MaxVotes or 0
 local costStr = ""
-for i = 0, maxVotes do
+for i = 0, maxVotes - 1 do
     if i > 0 then costStr = costStr .. "," end
-    costStr = costStr .. tostring(costs[i] or 0)
+    costStr = costStr .. tostring(costs[i])
 end
+print("WC_COST_STATUS|" .. (costs and "KNOWN" or "UNKNOWN"))
 print("WC_STATUS|" .. tostring(inSession) .. "|" .. turnsLeft .. "|" .. favor .. "|" .. maxVotes .. "|" .. costStr)
 local ress = wc:GetResolutions(me)
 if ress and (not inSession or congressStage(Game.GetCurrentTurnSegment(), inSession) == "STAGE1") then
@@ -274,14 +332,36 @@ if ress and (not inSession or congressStage(Game.GetCurrentTurnSegment(), inSess
         print("WC_RES|" .. rType .. "|" .. typeName .. "|" .. name .. "|" .. targetKind .. "|" .. effectA .. "|" .. effectB .. "|" .. isPassed .. "|" .. winner .. "|" .. chosen .. "|" .. targets)
     end
 end
-{_proposal_eligibility_lua()}
 if inSession then
-    local proposalStatus = "UNKNOWN"
-    pcall(function()
-        local eligible = hasEligibleProposals(wc:GetProposals(me))
-        if eligible ~= nil then proposalStatus = eligible and "CHOICES" or "EMPTY" end
-    end)
-    print("WC_PROPOSAL_STATUS|" .. proposalStatus)
+    local eligible, proposalError, proposals
+    local ok = pcall(function() eligible, proposalError, proposals = hasEligibleProposals(wc:GetProposals(me)) end)
+    local status = ok and eligible ~= nil and (eligible and "CHOICES" or "EMPTY") or "UNKNOWN"
+    print("WC_PROPOSAL_STATUS|" .. status)
+    local function clean(value) return tostring(value or ""):gsub("[|%c]", " ") end
+    print("WC_PROPOSAL_ERROR|" .. clean(proposalError or (not ok and "Native proposal read failed" or "")))
+    local function playerName(player)
+        if player == nil then return "NONE" end
+        local cfg = PlayerConfigurations[player]
+        if not cfg then return "Generic target " .. tostring(player) end
+        if player ~= me and not pDiplo:HasMet(player) then return "Unmet player" end
+        return Locale.Lookup(cfg:GetCivilizationShortDescription())
+    end
+    for _, row in ipairs(proposals or {{}}) do
+        local p = row.data
+        local costs = {{}}
+        for i = 0, row.costs.MaxVotes-1 do costs[#costs+1]=tostring(row.costs[i]) end
+        local targetName = playerName(p.Target)
+        local displayName = Locale.Lookup(p.Name, targetName)
+        local description = Locale.Lookup(p.Description, targetName)
+        print("WC_PROP|" .. row.key .. "|" .. clean(row.category) .. "|" .. p.TypeName .. "|" .. (p.Type ~= nil and p.Type or "NONE")
+            .. "|" .. (p.Sender ~= nil and p.Sender or "NONE") .. "|" .. clean(playerName(p.Sender))
+            .. "|" .. p.Target .. "|" .. clean(targetName) .. "|" .. clean(displayName) .. "|" .. clean(description)
+            .. "|" .. clean(p.EmergencyType) .. "|" .. (p.Disabled and "1" or "0")
+            .. "|" .. (row.eligible and "1" or "0") .. "|" .. (row.up and "1" or "0") .. "|" .. (row.down and "1" or "0")
+            .. "|" .. clean(p.VotingRestriction) .. "|" .. clean(Locale.Lookup(row.reason))
+            .. "|" .. row.costs.MaxVotes .. "|" .. table.concat(costs, ",") .. "|" .. clean(row.category_name)
+            .. "|" .. clean(p.ProposalBlockerType))
+    end
 end
 {_congress_phase_rows_lua(sentinel=False)}
 print("{SENTINEL}")
@@ -304,6 +384,12 @@ def parse_world_congress_response(lines: list[str]) -> WorldCongressStatus:
     for line in lines:
         if line.startswith("WC_PROPOSAL_STATUS|"):
             status.proposal_status = line.split("|", 1)[1]
+        elif line.startswith("WC_PROPOSAL_ERROR|"):
+            status.proposal_error = line.split("|", 1)[1]
+        elif line.startswith("WC_COST_STATUS|"):
+            status.vote_cost_status = line.split("|", 1)[1]
+        elif line.startswith("WC_ALLOCATION|"):
+            status.vote_allocation = line.split("|", 1)[1]
         if line.startswith("WC_STATUS|"):
             parts = line.split("|")
             status.is_in_session = parts[1] == "true"
@@ -331,14 +417,20 @@ def parse_world_congress_response(lines: list[str]) -> WorldCongressStatus:
             )
         elif line.startswith("WC_PROP|"):
             parts = line.split("|")
+            if len(parts) != 22:
+                status.proposal_status = "UNKNOWN"
+                status.proposal_error = "Malformed proposal row"
+                continue
             status.proposals.append(
                 CongressProposal(
-                    sender_id=int(parts[1]),
-                    sender_name=parts[2],
-                    target_id=int(parts[3]),
-                    target_name=parts[4],
-                    proposal_type=int(parts[5]),
-                    description=parts[6] if len(parts) > 6 else "",
+                    proposal_key=parts[1], category=parts[2], type_name=parts[3],
+                    proposal_type=None if parts[4] == "NONE" else int(parts[4]), sender_id=None if parts[5] == "NONE" else int(parts[5]),
+                    sender_name=parts[6], target_id=int(parts[7]), target_name=parts[8],
+                    name=parts[9], description=parts[10], emergency_type=parts[11], disabled=parts[12]=="1",
+                    eligible=parts[13]=="1", can_upvote=parts[14]=="1", can_downvote=parts[15]=="1",
+                    voting_restriction=parts[16], restriction_reason=parts[17], max_votes=int(parts[18]),
+                    favor_costs=[int(value) for value in parts[19].split(",")],
+                    category_name=parts[20], proposal_blocker_type=parts[21],
                 )
             )
     return status
@@ -386,12 +478,12 @@ print("{SENTINEL}")
 
 
 def build_register_wc_voter(votes: list[dict] | None = None) -> str:
-    """Register explicit votes; each entry supplies hash, option, target, votes.
+    """Register an ordered, complete native-stage resolution/proposal plan.
 
-    Votes are a maximum, limited by available favor. Player targets are IDs;
-    other targets are the query's zero-based index or a raw string value.
-    Missing resolutions or unmatched targets stop the handler before any vote.
-    An empty list is explicit consent only for a native stage with no choices.
+    Resolution entries retain hash/option/target/votes. Proposal entries use
+    proposal_key/option/votes, with 1=up and 2=down. Votes are maxima; reserve
+    all first-vote costs, then allocate extras in input order under one budget.
+    An empty plan consents only to a verified native stage with no choices.
     """
     import json
     import uuid
@@ -399,19 +491,34 @@ def build_register_wc_voter(votes: list[dict] | None = None) -> str:
     if not isinstance(votes, list):
         raise ValueError("World Congress votes must be a list of explicit preferences.")
     entries = []
-    hashes = set()
+    seen = set()
     for vote in votes:
-        if not isinstance(vote, dict) or not all(key in vote for key in ("hash", "option", "target", "votes")):
-            raise ValueError("Each vote requires hash, option, target and votes.")
-        h, o, t, n = (vote[key] for key in ("hash", "option", "target", "votes"))
-        if type(h) is not int or type(o) is not int or o not in (1, 2) or type(n) is not int or n < 1:
-            raise ValueError("hash must be an integer, option 1 or 2, and votes a positive integer.")
-        if not (type(t) is int and t >= 0) and not (isinstance(t, str) and t and not any(ord(c) < 32 for c in t)):
-            raise ValueError("target must be a nonnegative integer or a non-empty raw string.")
-        if h in hashes:
-            raise ValueError("Each resolution hash must appear only once.")
-        hashes.add(h)
-        entries.append(f'["{h}"] = {{o={o}, t={json.dumps(t, ensure_ascii=False)}, v={n}}}')
+        if not isinstance(vote, dict):
+            raise ValueError("Each vote must be an object.")
+        is_proposal = "proposal_key" in vote
+        fields = {"proposal_key", "option", "votes"} if is_proposal else {"hash", "option", "target", "votes"}
+        if set(vote) != fields:
+            raise ValueError("Use exactly hash/option/target/votes or proposal_key/option/votes.")
+        o, n = vote["option"], vote["votes"]
+        if type(o) is not int or o not in (1, 2) or type(n) is not int or n < 1:
+            raise ValueError("option must be 1 or 2 and votes a positive integer.")
+        if is_proposal:
+            key = vote["proposal_key"]
+            if not isinstance(key, str) or not key or any(ord(c) < 32 or c == "|" for c in key):
+                raise ValueError("proposal_key must be the exact nonempty native key from the query.")
+            kind, details = "proposal", ""
+        else:
+            h, t = vote["hash"], vote["target"]
+            if type(h) is not int:
+                raise ValueError("hash must be an integer.")
+            if not (type(t) is int and t >= 0) and not (isinstance(t, str) and t and not any(ord(c) < 32 for c in t)):
+                raise ValueError("target must be a nonnegative integer or a non-empty raw string.")
+            key, kind = str(h), "resolution"
+            details = f", hash={h}, t={json.dumps(t, ensure_ascii=False)}"
+        if (kind, key) in seen:
+            raise ValueError("Each resolution hash or proposal key must appear only once.")
+        seen.add((kind, key))
+        entries.append(f'{{kind="{kind}", key={json.dumps(key, ensure_ascii=False)}, o={o}, v={n}{details}}}')
     prefs_lua = "{" + ", ".join(entries) + "}"
 
     token = uuid.uuid4().hex
@@ -432,7 +539,7 @@ if prior then
     local same = prior.owner == me and prior.civ == civ and prior.seed == seed and prior.turn == turn
     if same and prior.state ~= "FAILED" and (prior.stage == stage or prior.state == "REGISTERED") then
         local tag = (prior.state == "REGISTERED" or prior.state == "CONTINUE_REQUESTED") and "OK:WC_REQUEST|" or "ERR:OUTCOME_UNKNOWN|WC_REQUEST|"
-        print(tag .. prior.state .. "|stage:" .. prior.stage .. "|token:" .. prior.token)
+        print(tag .. prior.state .. "|stage:" .. prior.stage .. "|token:" .. prior.token .. (prior.summary and "|allocation:" .. prior.summary or ""))
         print("{SENTINEL}"); return
     end
     -- A known pre-validation failure sent no vote. A continuation can
@@ -473,80 +580,126 @@ local function handler(eventPlayer)
     if nowStage ~= "STAGE1" and nowStage ~= "STAGE2" then stop("Voting stage unavailable"); return end
     if q.stage ~= "NONE" and q.stage ~= nowStage then stop("Request stage changed"); return end
     q.stage = nowStage
-    -- Match native widget eligibility: disabled/bidirectionally blocked rows
-    -- need no vote. Eligible or unknown proposals still forbid implicit votes.
-    local eligibleProposals, proposalError = hasEligibleProposals(wc:GetProposals(me))
+    local eligibleProposals, proposalError, proposals = hasEligibleProposals(wc:GetProposals(me))
     if eligibleProposals == nil then stop(proposalError); return end
-    if eligibleProposals then
-        stop("Explicit proposal votes are required; no defaults supplied"); return
-    end
-    -- Native Stage2 only handles proposals; its old resolution list is not a
-    -- fresh voting plan and must never cause a repeat of Stage1 votes.
+    -- Stage2 does not include the old Stage1 resolution list.
     local ress = {{}}
     if nowStage == "STAGE1" then ress = wc:GetResolutions(me) end
     if type(ress) ~= "table" then stop("Resolution status unavailable"); return end
-    local plan, seen = {{}}, {{}}
-    -- Validate every preference and target before spending any favor.
+    local resByHash, propByKey = {{}}, {{}}
     for key, res in pairs(ress) do
-      if key ~= "Stage" then
-        if type(res) ~= "table" or type(res.Type) ~= "number" then stop("Malformed resolution"); return end
-        local pref = q.votes[tostring(res.Type)]
-        if not pref then stop("Missing explicit vote for " .. tostring(res.Type)); return end
-        local targetIdx = nil
-        local targets = res.PossibleTargets
-        if not targets or #targets == 0 then
-            if res.TargetType ~= "PlayerType" and pref.t == 0 then targetIdx = 0 end
-        elseif res.TargetType == "PlayerType" then
-            local playerTarget = tonumber(pref.t)
-            if playerTarget then
+        if key ~= "Stage" then
+            if type(res) ~= "table" or not integer(res.Type) or not GameInfo.Resolutions[res.Type] then
+                stop("Malformed or unknown resolution"); return
+            end
+            local hash = tostring(res.Type)
+            if resByHash[hash] then stop("Duplicate native resolution"); return end
+            resByHash[hash] = res
+        end
+    end
+    for _, proposal in ipairs(proposals) do propByKey[proposal.key] = proposal end
+    local plan, seenRes, seenProp = {{}}, {{}}, {{}}
+    local generalCosts = nil
+    for _, pref in ipairs(q.votes) do
+        if pref.kind == "resolution" then
+            local res = resByHash[pref.key]
+            if not res then stop("Preference does not match this native stage"); return end
+            local targetIdx = nil
+            local targets = res.PossibleTargets
+            if targets ~= nil and type(targets) ~= "table" then stop("Resolution targets unavailable"); return end
+            if not targets or #targets == 0 then
+                if res.TargetType ~= "PlayerType" and pref.t == 0 then targetIdx = 0 end
+            elseif res.TargetType == "PlayerType" then
+                local playerTarget = tonumber(pref.t)
+                if playerTarget then
+                    for ti, tgt in ipairs(targets) do
+                        if tonumber(tgt) == playerTarget then targetIdx = ti - 1; break end
+                    end
+                end
+            elseif type(pref.t) == "number" then
+                if pref.t >= 0 and pref.t < #targets then targetIdx = pref.t end
+            else
                 for ti, tgt in ipairs(targets) do
-                    if tonumber(tgt) == playerTarget then targetIdx = ti - 1; break end
+                    if tostring(tgt) == pref.t then targetIdx = ti - 1; break end
                 end
             end
-        elseif type(pref.t) == "number" then
-            if pref.t >= 0 and pref.t < #targets then targetIdx = pref.t end
+            if targetIdx == nil then stop("Target not found for " .. pref.key); return end
+            generalCosts = generalCosts or nativeVoteCosts(wc, me)
+            if not generalCosts then stop("Resolution vote costs unavailable"); return end
+            seenRes[pref.key] = true
+            plan[#plan+1] = {{hash=res.Type, pref=pref, target=targetIdx, costs=generalCosts}}
         else
-            for ti, tgt in ipairs(targets) do
-                if tostring(tgt) == pref.t then targetIdx = ti - 1; break end
+            local proposal = propByKey[pref.key]
+            if not proposal or not proposal.eligible then stop("Proposal is absent, disabled or not eligible"); return end
+            if (pref.o == 1 and not proposal.up) or (pref.o == 2 and not proposal.down) then
+                stop("Proposal vote direction is blocked"); return
+            end
+            seenProp[pref.key] = true
+            plan[#plan+1] = {{proposal=proposal, pref=pref, costs=proposal.costs}}
+        end
+    end
+    for hash, _ in pairs(resByHash) do
+        if not seenRes[hash] then stop("Missing explicit vote for " .. hash); return end
+    end
+    for key, proposal in pairs(propByKey) do
+        if proposal.eligible and not seenProp[key] then
+            stop("Explicit proposal votes are required; missing " .. key .. "; no defaults supplied"); return
+        end
+    end
+    local spent, startingFavor = 0, 0
+    if #plan > 0 then
+        startingFavor = Players[me]:GetFavor()
+        if not integer(startingFavor) or startingFavor < 0 then stop("Favor unavailable"); return end
+        -- Reserve every mandatory first vote, including nonzero category costs.
+        for _, item in ipairs(plan) do item.count=1; item.cost=item.costs[0]; spent=spent+item.cost end
+        if spent > startingFavor then stop("Favor cannot fund every required first vote"); return end
+        local remaining = startingFavor-spent
+        for _, item in ipairs(plan) do
+            local maxV = item.costs.MaxVotes
+            for v = 2, math.min(item.pref.v, maxV) do
+                local extra = item.costs[v-1]-item.cost
+                if extra > remaining then break end
+                remaining=remaining-extra; spent=spent+extra; item.count=v; item.cost=item.costs[v-1]
             end
         end
-        if targetIdx == nil then stop("Target not found for " .. tostring(res.Type)); return end
-        seen[tostring(res.Type)] = true
-        table.insert(plan, {{hash=res.Type, pref=pref, target=targetIdx}})
-      end
     end
-    for hash, _ in pairs(q.votes) do
-        if not seen[hash] then stop("Preference does not match this native stage"); return end
-    end
-    if #plan > 0 then
-    local favor = Players[me]:GetFavor()
-    local costs = wc:GetVotesandFavorCost(me)
-    if type(favor) ~= "number" or type(costs) ~= "table" or type(costs.MaxVotes) ~= "number" then
-        stop("Favor/vote costs unavailable"); return
-    end
-    local maxV = costs.MaxVotes
+    local summary = {{}}
     for _, item in ipairs(plan) do
-        local count, cost = 1, 0
-        for v = 2, math.min(item.pref.v, maxV) do
-            local totalCost = costs[v - 1]
-            if type(totalCost) ~= "number" or totalCost > favor then break end
-            count, cost = v, totalCost
-        end
-        favor = favor - cost
-        item.count = count
+        local signed = item.proposal and item.pref.o == 2 and -item.count or item.count
+        summary[#summary+1] = item.pref.kind .. ":" .. item.pref.key .. " option=" .. item.pref.o
+            .. " votes=" .. signed .. " cost=" .. item.cost
     end
+    summary[#summary+1] = "favor=" .. spent .. "/" .. startingFavor
+    q.summary=table.concat(summary, "; ")
+    if Game.GetLocalPlayer() ~= q.owner or PlayerConfigurations[me]:GetCivilizationTypeName() ~= q.civ
+        or GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED") ~= q.seed
+        or Game.GetCurrentGameTurn() ~= q.turn or congressStage(Game.GetCurrentTurnSegment(), wc:IsInSession()) ~= nowStage then
+        stop("Request scope changed during validation"); return
     end
     -- Latch before every possibly sent stage, even if Lua/transport fails.
     -- Re-entering this handler or queue tool can only report this record.
     q.state = "VOTES_REQUESTED"
     cleanup()
+    -- Native order is resolutions first, then proposals. Favor priority above
+    -- remains the caller's input order, independently of operation grouping.
     for _, item in ipairs(plan) do
-        local params = {{}}
-        params[PlayerOperations.PARAM_RESOLUTION_TYPE] = item.hash
-        params[PlayerOperations.PARAM_WORLD_CONGRESS_VOTES] = item.count
-        params[PlayerOperations.PARAM_RESOLUTION_OPTION] = item.pref.o
-        params[PlayerOperations.PARAM_RESOLUTION_SELECTION] = item.target
-        UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_RESOLUTION_VOTE, params)
+        if not item.proposal then
+            local params = {{}}
+            params[PlayerOperations.PARAM_RESOLUTION_TYPE] = item.hash
+            params[PlayerOperations.PARAM_WORLD_CONGRESS_VOTES] = item.count
+            params[PlayerOperations.PARAM_RESOLUTION_OPTION] = item.pref.o
+            params[PlayerOperations.PARAM_RESOLUTION_SELECTION] = item.target
+            UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_RESOLUTION_VOTE, params)
+        end
+    end
+    for _, item in ipairs(plan) do
+        if item.proposal then
+            local params = {{}}
+            params[PlayerOperations.PARAM_PLAYER_ONE] = item.proposal.data.Sender
+            params[PlayerOperations.PARAM_PLAYER_TWO] = item.proposal.data.Target
+            params[PlayerOperations.PARAM_WORLD_CONGRESS_VOTES] = item.count * (item.pref.o == 1 and 1 or -1)
+            UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_DISCUSSION_VOTE, params)
+        end
     end
     q.state = "SUBMIT_REQUESTED"
     UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_SUBMIT_TURN, {{}})
@@ -563,7 +716,7 @@ local function handler(eventPlayer)
         if intro and intro:IsVisible() then UIManager:DequeuePopup(intro) end
     end)
     pcall(function() LuaEvents.WorldCongressPopup_HideWorldCongressBetweenTurns() end)
-    print("OK:WC_STAGE_CONTINUE_REQUESTED|stage:" .. q.stage .. "|token:" .. q.token)
+    print("OK:WC_STAGE_CONTINUE_REQUESTED|stage:" .. q.stage .. "|token:" .. q.token .. "|allocation:" .. q.summary)
 end
 q.handler = function(eventPlayer)
     local ok, err = pcall(handler, eventPlayer)
