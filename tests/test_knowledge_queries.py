@@ -21,6 +21,7 @@ def snapshot():
         'tables': {
             'Civics': [{'CivicType': 'CIVIC_CODE_OF_LAWS', 'Name': 'LOC_LAWS', 'Cost': 20}],
             'Technologies': [{'TechnologyType': 'TECH_POTTERY', 'Name': 'LOC_POTTERY', 'Cost': 25}, {'TechnologyType': 'TECH_WRITING', 'Name': 'LOC_WRITING', 'Cost': 50}],
+            'CivicPrereqs': [],
             'TechnologyPrereqs': [{'Technology': 'TECH_WRITING', 'PrereqTech': 'TECH_POTTERY'}],
             'Districts': [{'DistrictType': 'DISTRICT_CAMPUS', 'Name': 'LOC_CAMPUS', 'PrereqTech': 'TECH_WRITING', 'Cost': 54, 'RequiresPopulation': 1}],
             'Policies': [{'PolicyType': 'POLICY_DISCIPLINE', 'Name': 'LOC_DISCIPLINE', 'PrereqCivic': 'CIVIC_CODE_OF_LAWS', 'GovernmentSlotType': 'SLOT_MILITARY', 'TraitType': 'TRAIT_TEST'}],
@@ -170,3 +171,86 @@ def test_resolution_effect_and_district_trait_ownership_remain_traceable(tmp_pat
     assert any(row['facts'].get('LeaderType') == 'LEADER_TEST' for row in district['evidence'])
     resolution = cli(root, 'show', 'RESOLUTION_TEST', '--level', 'evidence')
     assert any(row['facts'].get('ModifierId') == 'MODIFIER_TEST' for row in resolution['evidence'])
+
+
+def test_evidence_filters_native_excerpts_to_the_selected_topic(tmp_path):
+    import hashlib
+    data = snapshot()
+    ids = ['technology-live-prerequisites', 'civic-live-prerequisites', 'district-adjacency-calculation', 'congress-voting-blockers', 'congress-stage-flow']
+    data['code_evidence'] = [{'id': ident, 'path': 'game/' + ident + '.lua', 'line_start': 1, 'line_end': 1, 'sha256': 'a' * 64, 'text': ident, 'text_sha256': hashlib.sha256(ident.encode()).hexdigest()} for ident in ids]
+    root = build(tmp_path, data)
+    for ident, expected in [('TECH_WRITING', ids[:1]), ('CIVIC_CODE_OF_LAWS', ids[1:2]), ('DISTRICT_CAMPUS', ids[2:3]), ('RESOLUTION_TEST', ids[3:])]:
+        actual = cli(root, 'show', ident, '--level', 'evidence')['code_evidence']
+        assert [entry['id'] for entry in actual] == expected
+
+
+def test_built_directory_contains_readable_guides_and_standalone_commands(tmp_path):
+    import re
+    root = build(tmp_path)
+    for name in ['README.md', 'NEXT.md', 'capture.py', 'build.py', 'query.py']:
+        assert (root / name).is_file(), name
+    topics = cli(root, 'topics')['topics']
+    for topic in topics:
+        guide = root / topic['guide']
+        assert guide.is_file()
+        for link in re.findall(r'\]\(([^)]+)\)', guide.read_text()):
+            if '://' not in link and not link.startswith('#'):
+                assert (guide.parent / link.split('#')[0]).exists(), link
+    result = subprocess.run([sys.executable, str(root / 'query.py'), 'validate'], capture_output=True, text=True, cwd=tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    for script in ['capture.py', 'build.py']:
+        result = subprocess.run([sys.executable, str(root / script), '--help'], capture_output=True, text=True, cwd=tmp_path)
+        assert result.returncode == 0, result.stderr
+
+
+def test_profile_must_be_an_object_before_comparing_fields(tmp_path):
+    root = build(tmp_path)
+    profile = tmp_path / 'malformed-profile.json'
+    for value in [[], {'profile': []}]:
+        profile.write_text(json.dumps(value))
+        result = cli(root, 'check-profile', str(profile), ok=False)
+        assert 'profile must be an object' in result['error']
+        result = cli(root, '--profile', str(profile), 'topics', ok=False)
+        assert 'profile must be an object' in result['error']
+
+
+def test_missing_core_relationship_tables_cannot_build_a_complete_looking_tree(tmp_path):
+    for table in ['TechnologyPrereqs', 'CivicPrereqs', 'Boosts', 'District_Adjacencies', 'Adjacency_YieldChanges']:
+        data = snapshot()
+        del data['tables'][table]
+        source = tmp_path / 'incomplete.json'
+        source.write_text(json.dumps(data))
+        output = tmp_path / 'incomplete'
+        result = subprocess.run([sys.executable, str(ROOT / 'civ6_knowledge/build.py'), '--source', str(source), '--output', str(output)], capture_output=True, text=True)
+        assert result.returncode == 2, table
+        assert 'missing core relationship table' in json.loads(result.stdout)['error']
+        assert not output.exists()
+
+
+def test_missing_optional_coverage_is_derived_from_actual_tables(tmp_path):
+    data = snapshot()
+    data['profile']['missing_optional_tables'] = []
+    root = build(tmp_path, data)
+    assert 'ResolutionEffects' in cli(root, 'validate')['coverage']['missing_optional_tables']
+
+
+def test_malformed_snapshot_and_manifest_roots_fail_as_structured_errors(tmp_path):
+    source = tmp_path / 'array.json'
+    source.write_text('[]')
+    result = subprocess.run([sys.executable, str(ROOT / 'civ6_knowledge/build.py'), '--source', str(source), '--output', str(tmp_path / 'bad-root')], capture_output=True, text=True)
+    assert result.returncode == 2, result.stderr
+    assert 'snapshot must be an object' in json.loads(result.stdout)['error']
+    root = build(tmp_path)
+    (root / 'manifest.json').write_text('[]')
+    assert 'manifest must be an object' in cli(root, 'validate', ok=False)['error']
+
+
+def test_incomplete_support_distribution_refuses_to_build_and_missing_guide_is_invalid(tmp_path):
+    root = build(tmp_path)
+    (root / 'topics/civics.md').unlink()
+    assert cli(root, 'validate', ok=False)['status'] == 'error'
+    output = tmp_path / 'must-not-exist'
+    result = subprocess.run([sys.executable, str(root / 'build.py'), '--source', str(root / 'sources/snapshot.json'), '--output', str(output)], capture_output=True, text=True)
+    assert result.returncode == 2
+    assert 'missing support file' in json.loads(result.stdout)['error']
+    assert not output.exists()
