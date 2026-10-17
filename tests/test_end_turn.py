@@ -728,3 +728,85 @@ def test_real_game_state_resumes_paused_request_without_resubmitting(clock, paus
     assert "Research complete: Writing! Now: Currency." in report
     assert not gs.turn_pending
     assert len(conn.requests) == 1
+
+
+def test_real_game_state_identity_refresh_cannot_retire_or_confirm_an_old_turn_request(clock, monkeypatch):
+    from civ_mcp import game_launcher
+
+    class ChangedWorldConn(GameStateConn):
+        seed = 1
+
+        async def execute_write(self, code):
+            if "GAMESEED|" in code:
+                return [f"GAMESEED|CIVILIZATION_SUMERIA|{self.seed}"]
+            return await super().execute_write(code)
+
+        async def disconnect(self):
+            pass
+
+    conn = ChangedWorldConn()
+    gs = GameState(conn)
+    assert asyncio.run(gs.get_game_identity()) == ("sumeria", 1)
+    conn.send_error = ConnectionError("reply lost")
+    assert "result unknown" in asyncio.run(gs.end_turn())
+    assert gs.turn_pending
+    conn.send_error = None
+    conn.seed, conn.turn = 2, 100
+    assert asyncio.run(gs.get_game_identity()) == ("sumeria", 2)
+    assert gs.turn_pending
+    result = asyncio.run(gs.end_turn())
+    assert "OUTCOME_UNKNOWN" in result
+    assert "Turn 50 -> 100" not in result
+    assert gs.turn_pending and len(conn.requests) == 1
+    assert "End-turn outcome is pending" in asyncio.run(gs.save_game("another_checkpoint"))
+
+    async def stopped():
+        return game_launcher.ProcessResult(True, "stopped")
+
+    monkeypatch.setattr(game_launcher, "stop_game", stopped)
+    assert asyncio.run(gs.kill_game()) == "stopped"
+    assert not gs.turn_pending
+    # Only explicit, confirmed replacement can retire the old request. A newly
+    # available session can now start its own turn rather than confirm turn 50.
+    assert asyncio.run(gs.get_game_identity()) == ("sumeria", 2)
+    assert "Turn 100 -> 101" in asyncio.run(gs.end_turn())
+    assert len(conn.requests) == 2
+
+
+def test_identity_change_during_pending_read_cannot_confirm_new_world_readiness(clock):
+    class PausedObservationConn(GameStateConn):
+        seed = 1
+        pause = False
+
+        def __init__(self):
+            super().__init__()
+            self.observing = asyncio.Event()
+            self.resume = asyncio.Event()
+
+        async def execute_write(self, code):
+            if "GAMESEED|" in code:
+                return [f"GAMESEED|CIVILIZATION_SUMERIA|{self.seed}"]
+            return await super().execute_write(code)
+
+        async def execute_read(self, code):
+            if self.pause and "TURN_STATE|" in code:
+                self.observing.set()
+                await self.resume.wait()
+            return await super().execute_read(code)
+
+    async def scenario():
+        conn = PausedObservationConn()
+        gs = GameState(conn)
+        await gs.get_game_identity()
+        conn.send_error = ConnectionError("reply lost")
+        assert "result unknown" in await gs.end_turn()
+        conn.send_error, conn.pause = None, True
+        confirmation = asyncio.create_task(gs.end_turn())
+        await conn.observing.wait()
+        conn.seed, conn.turn = 2, 100
+        await gs.get_game_identity()
+        conn.resume.set()
+        assert "OUTCOME_UNKNOWN" in await confirmation
+        assert gs.turn_pending and len(conn.requests) == 1
+
+    asyncio.run(scenario())

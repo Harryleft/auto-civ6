@@ -1074,3 +1074,57 @@ def test_missing_popup_state_refreshes_once_without_guessing_indexes():
     assert "NaturalDisasterPopup" in result
     assert conn.discoveries == 1
     assert conn.state_calls == []
+
+
+def test_native_load_that_throws_after_submission_keeps_game_state_gate_and_never_replays(monkeypatch):
+    from lupa.lua51 import LuaRuntime
+    from civ_mcp.game_state import GameState
+
+    class NativeLoadConn(FakeConn):
+        def __init__(self):
+            super().__init__(gamecore_index=None, ingame_index=None, lua_states={24: "MainMenu"})
+            self.lua = LuaRuntime()
+            self.rows = []
+            self.lua.globals().print = lambda row: self.rows.append(str(row))
+            self.lua.execute('''
+loads = 0
+UI = {IsInFrontEnd=function() return true end,
+      QuerySaveGameList=function() return 91 end, CloseFileListQuery=function() end}
+local listener
+LuaEvents = {FileListQueryResults={
+    Add=function(handler) listener=handler end,
+    Remove=function(handler) if listener==handler then listener=nil end end,
+    Fire=function() listener({{Name="checkpoint.Civ6Save"}}, 91) end,
+}}
+SaveLocations={LOCAL_STORAGE=0}; SaveTypes={SINGLE_PLAYER=0}; SaveFileTypes={GAME_STATE=0}
+SaveLocationOptions={NORMAL=1, AUTOSAVE=2, QUICKSAVE=4, LOAD_METADATA=8}
+ServerType={SERVER_TYPE_NONE=0}
+Automation={SetAutoStartEnabled=function() end}
+Network={LoadGame=function() loads=loads+1; error("engine exception after load dispatch") end}
+''')
+
+        async def execute_in_state(self, index, code, timeout=5.0):
+            self.state_calls.append((index, code))
+            self.rows.clear()
+            self.lua.execute(code)
+            if "MCP_SAVE_QUERY_START" in code:
+                self.lua.execute("LuaEvents.FileListQueryResults.Fire()")
+            return [row for row in self.rows if row != "---END---"]
+
+        async def reconnect(self):
+            pass  # Loaded contexts remain unavailable; confirmation must time out.
+
+        async def disconnect(self):
+            pass
+
+    Path(game_launcher.SINGLE_SAVE_DIR, "checkpoint.Civ6Save").write_bytes(b"offline checkpoint")
+    checkpoints.mark_complete("checkpoint")
+    assert checkpoints.record_checkpoint("checkpoint", ("sumeria", 719665280), 50) is None
+    monkeypatch.setattr("civ_mcp.game_state.LOAD_TIMEOUT", 0.01)
+    conn = NativeLoadConn()
+    gs = GameState(conn)
+    first = run(gs.load_game_save("checkpoint"))
+    assert "OUTCOME_UNKNOWN" in first
+    assert gs.replacement_pending
+    assert "OUTCOME_UNKNOWN" in run(gs.load_game_save("checkpoint"))
+    assert conn.lua.globals().loads == 1

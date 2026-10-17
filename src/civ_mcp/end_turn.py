@@ -214,8 +214,21 @@ class TurnProgress:
         self.pending = False
         self.from_turn: int | None = None
         self.baseline: lq.TurnSnapshot | None = None
+        self._scope_invalid = False
+
+    def invalidate_scope(self) -> None:
+        """An observed world change cannot retire or confirm an older request."""
+        if self.pending:
+            self._scope_invalid = True
+
+    def _scope_error(self) -> str:
+        return ("ERR:OUTCOME_UNKNOWN|Pending end-turn belongs to a changed game. "
+                "New-world readiness cannot confirm the original request; "
+                "use explicit recovery. No request was resent.")
 
     async def _report_advance(self, gs: TurnContext, before: int, after: int) -> str:
+        if self._scope_invalid:
+            return self._scope_error()
         # Retire the request before presentation. No report failure may restore
         # a confirmed mutation or cause it to be sent again.
         previous = self.baseline
@@ -233,6 +246,8 @@ class TurnProgress:
 
     async def execute(self, gs: TurnContext) -> str:
         """Send at most one request and preserve uncertainty until advancement is seen."""
+        if self._scope_invalid:
+            return self._scope_error()
         if gs.pending_action_summary:
             confirmation = await gs.confirm_pending_action()
             if gs.pending_action_summary:
@@ -314,6 +329,8 @@ class TurnProgress:
                         next_game_over_check = time.monotonic() + 10.0
                         try:
                             status = await gs.conn.execute_read(lq.build_gameover_check_gamecore())
+                            if self._scope_invalid:
+                                return self._scope_error()
                             if not any(line == "GAME_ACTIVE" or line.startswith("GAME_OVER|") for line in status):
                                 reads_failed = True
                             else:
@@ -324,6 +341,8 @@ class TurnProgress:
                         except (ConnectionError, TimeoutError, LuaError, ValueError):
                             reads_failed = True
                     turn_after, ready = await read_turn_state(gs)
+                    if self._scope_invalid:
+                        return self._scope_error()
                     if turn_after is None:
                         reads_failed = True
                     elif turn_after > turn_before and ready is True:

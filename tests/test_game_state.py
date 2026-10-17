@@ -230,17 +230,18 @@ class TestGetGameIdentity:
         assert gs._last_snapshot is snapshot
         assert gs._pending_end_turn_from == 7
 
-    def test_changed_identity_resets_all_per_game_state(self):
+    @pytest.mark.parametrize("pending", [False, True])
+    def test_changed_identity_clears_observations_without_retiring_pending_turn(self, pending):
         gs, _ = _gs([("write", ["GAMESEED|CIVILIZATION_EGYPT|2"])])
         gs._game_identity = ("rome", 1)
         gs._last_snapshot = object()
-        gs._pending_end_turn = True
-        gs._pending_end_turn_from = 99
+        gs._pending_end_turn = pending
+        gs._pending_end_turn_from = 99 if pending else None
         gs._revealed_tiles = {(2, 3)}
         assert run(gs.get_game_identity()) == ("egypt", 2)
         assert gs._last_snapshot is None
-        assert gs._pending_end_turn is False
-        assert gs._pending_end_turn_from is None
+        assert gs.turn_pending is pending
+        assert gs._pending_end_turn_from == (99 if pending else None)
         assert gs._revealed_tiles is None
 
     def test_unparseable_response_returns_unknown_without_caching(self):
