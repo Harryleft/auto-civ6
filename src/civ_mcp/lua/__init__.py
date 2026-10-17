@@ -164,6 +164,7 @@ from civ_mcp.lua.models import (  # noqa: F401
     DedicationStatus,
     DemographicEntry,
     DiplomacyChoice,
+    DiplomacyContext,
     DiplomacyModifier,
     DiplomacySession,
     DistrictPlacement,

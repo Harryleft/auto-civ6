@@ -22,8 +22,8 @@ class TurnContext(Protocol):
     def pending_action_summary(self) -> str | None: ...
     async def confirm_pending_action(self) -> str: ...
     async def check_game_over(self) -> lq.GameOverStatus | None: ...
-    async def get_diplomacy_sessions(self) -> list[lq.DiplomacySession]: ...
-    async def get_pending_deals(self) -> list[lq.PendingDeal]: ...
+    async def get_diplomacy_sessions(self) -> lq.DiplomacyContext: ...
+    async def get_pending_deals(self) -> lq.DiplomacyContext: ...
     async def capture_turn_snapshot(self) -> lq.TurnSnapshot: ...
     async def report_turn_advance(
         self, before: int, after: int, baseline: lq.TurnSnapshot | None,
@@ -170,15 +170,11 @@ async def _check_congress_phase(gs: TurnContext, *, pending: bool) -> str | None
 async def _check_blockers(gs: TurnContext) -> str | None:
     """Check actual game prerequisites; never make strategy choices for the player."""
     sessions = await gs.get_diplomacy_sessions()
-    if sessions:
-        names = ", ".join(s.other_civ_name for s in sessions)
-        return (
-            f"Cannot end turn: diplomacy encounter pending with {names}. "
-            "Use get_pending_diplomacy then respond_to_diplomacy."
-        )
+    if sessions.status != "NONE":
+        return "Cannot end turn: diplomacy encounter pending.\n" + nr.narrate_diplomacy_sessions(sessions)
     deals = await gs.get_pending_deals()
-    if deals:
-        return "Cannot end turn: incoming trade deal pending.\n" + nr.narrate_pending_deals(deals)
+    if deals.status != "NONE":
+        return "Cannot end turn: " + nr.narrate_pending_deals(deals)
 
     congress = await _check_congress_phase(gs, pending=False)
     if congress:

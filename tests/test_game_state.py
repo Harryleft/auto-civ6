@@ -1714,7 +1714,7 @@ class TestDiplomacyRespond:
         monkeypatch.setattr(asyncio, "sleep", _instant_sleep)
         gs, conn = _gs(
             [
-                ("write", ["NONE"]),  # get_diplomacy_sessions (pre-text capture)
+                ("write", ["CONTEXT|NONE|NO_OPEN_SESSION", "CONTEXT_COMPLETE"]),  # pre-text capture
                 ("write", ["OK:SESSION_CLOSED|goodbye"]),
             ]
         )
@@ -1878,5 +1878,5 @@ class TestSessionReset:
             run(gs.get_diplomacy_sessions())
 
     def test_empty_pending_deals_requires_completion_marker(self):
-        gs, _ = _gs([("write", ["DEALS_COMPLETE"])])
-        assert run(gs.get_pending_deals()) == []
+        gs, _ = _gs([("write", ["CONTEXT|NONE|NO_OPEN_SESSION", "CONTEXT_COMPLETE"])])
+        assert run(gs.get_pending_deals()).status == "NONE"
