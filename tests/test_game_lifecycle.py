@@ -87,6 +87,10 @@ class FakeConn:
         self.state_calls: list[tuple[int, str]] = []
         self.reads: list[str] = []
 
+    @property
+    def load_calls(self):
+        return [(idx, code) for idx, code in self.state_calls if "Network.LoadGame" in code]
+
     async def ensure_connected(self):
         """No-op — the fake is always 'connected'; tests set indexes directly."""
 
@@ -98,6 +102,10 @@ class FakeConn:
 
     async def execute_in_state(self, state_index, lua, timeout=5.0):
         self.state_calls.append((state_index, lua))
+        if "MCP_SAVE_QUERY_START" in lua:
+            return ["MCP_SAVE_QUERY_STARTED"]
+        if "MCP_SAVE_QUERY_STATUS" in lua:
+            return ["MCP_SAVE_QUERY|" + getattr(self, "query_status", "READY")]
         if self.on_state is None:
             return []
         return self.on_state(state_index, lua)
@@ -406,8 +414,9 @@ class TestLoadSaveFilesystemFallback:
         assert listing.startswith("Available saves (filesystem scan")
         # Index 1 = newest = MyGame; loaded by name via the FrontEnd loader.
         assert result.startswith("Loading save MyGame")
-        ((_, lua),) = conn.state_calls
-        assert 'loadGame.Name = "MyGame";' in lua
+        ((_, lua),) = conn.load_calls
+        assert "local loadGame = q.save" in lua
+        assert 'local wanted = "MyGame.Civ6Save";' in conn.state_calls[0][1]
 
     def test_out_of_range_index_against_the_filesystem_cache(self, save_dirs):
         base, _auto = save_dirs
@@ -487,11 +496,23 @@ class TestLoadGameSave:
 
         conn, result = run(go())
         assert result.startswith("Loading save 0_MCP_0042")
-        ((idx, lua),) = conn.state_calls
+        ((idx, lua),) = conn.load_calls
         assert idx == 24
         assert "Network.LoadGame(loadGame, ServerType.SERVER_TYPE_NONE)" in lua
         assert "Automation.SetAutoStartEnabled(true)" in lua
-        assert len(conn.state_calls) == 1  # never resent mid-load
+        assert len(conn.load_calls) == 1  # never resent mid-load
+
+    @pytest.mark.parametrize("status", ["MISSING", "AMBIGUOUS"])
+    def test_unresolved_native_entry_never_loads_another_save(self, status):
+        async def go():
+            conn = menu_conn(on_state=frontend_ok)
+            conn.query_status = status
+            result = await gl.load_game_save(conn, "benchmark_turn_1")
+            return conn, result
+        conn, result = run(go())
+        assert result.startswith("Error:")
+        assert "no load sent" in result
+        assert conn.load_calls == []
 
     def test_civ6_rejecting_the_save_is_an_error(self):
         async def go():
@@ -538,7 +559,7 @@ class TestLoadGameSave:
 
         conn, result = run(go())
         assert result.startswith("ERR:OUTCOME_UNKNOWN")
-        assert len(conn.state_calls) == 1
+        assert len(conn.load_calls) == 1
 
     def test_save_name_is_lua_quoted_by_json(self):
         """Names are quoted with json.dumps — quotes or backslashes in the
@@ -550,15 +571,16 @@ class TestLoadGameSave:
             return conn.state_calls[0][1]
 
         lua = run(go())
-        assert 'loadGame.Name = "evil\\"; print(\\"pwned\\"); --";' in lua
+        assert 'local wanted = "evil\\"; print(\\"pwned\\"); --.Civ6Save";' in lua
 
-    def test_civ6save_suffix_is_stripped(self):
+    @pytest.mark.parametrize("name", ["0_MCP_0042", "0_MCP_0042.Civ6Save"])
+    def test_native_filename_keeps_exactly_one_suffix(self, name):
         async def go():
             conn = menu_conn(on_state=frontend_ok)
-            await gl.load_game_save(conn, "0_MCP_0042.Civ6Save")
+            await gl.load_game_save(conn, name)
             return conn.state_calls[0][1]
 
-        assert 'loadGame.Name = "0_MCP_0042";' in run(go())
+        assert 'local wanted = "0_MCP_0042.Civ6Save";' in run(go())
 
 
 

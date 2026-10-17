@@ -580,15 +580,64 @@ async def load_save_from_frontend(conn: GameConnection, save_name: str) -> str:
     if main_menu_index is None:
         return "Error: MainMenu Lua state is unavailable; refusing UI automation fallback."
 
-    save_stem = save_name.removesuffix(".Civ6Save")
+    # Match the native menu: load the complete queried entry, preserving its
+    # Path, FileType and mod metadata. A hand-built descriptor failed the live
+    # checkpoint round trip even though the native requirements check passed.
+    save_filename = save_name.removesuffix(".Civ6Save") + ".Civ6Save"
+    query = f"""
+-- MCP_SAVE_QUERY_START
+local wanted = {json.dumps(save_filename, ensure_ascii=False)};
+local q = {{name=wanted, done=false, count=0}};
+__civmcpSaveQuery = q;
+local function onResults(files, queryID)
+  if q.id ~= queryID then return; end;
+  for _, entry in ipairs(files or {{}}) do
+    if entry.Name == wanted and not entry.IsDirectory then
+      q.count = q.count + 1; q.save = entry;
+    end;
+  end;
+  q.done = true;
+  UI.CloseFileListQuery(queryID);
+  LuaEvents.FileListQueryResults.Remove(onResults);
+end;
+LuaEvents.FileListQueryResults.Add(onResults);
+q.id = UI.QuerySaveGameList(SaveLocations.LOCAL_STORAGE, SaveTypes.SINGLE_PLAYER,
+  SaveLocationOptions.NORMAL + SaveLocationOptions.AUTOSAVE + SaveLocationOptions.QUICKSAVE + SaveLocationOptions.LOAD_METADATA,
+  SaveFileTypes.GAME_STATE);
+print("MCP_SAVE_QUERY_STARTED");
+print("{lq.SENTINEL}");
+"""
+    status = f"""
+-- MCP_SAVE_QUERY_STATUS
+local q = __civmcpSaveQuery;
+if not q or not q.done then print("MCP_SAVE_QUERY|PENDING");
+elseif q.count == 0 then print("MCP_SAVE_QUERY|MISSING");
+elseif q.count ~= 1 then print("MCP_SAVE_QUERY|AMBIGUOUS");
+else print("MCP_SAVE_QUERY|READY"); end;
+print("{lq.SENTINEL}");
+"""
+    try:
+        async with asyncio.timeout(10):
+            await conn.execute_in_state(main_menu_index, query)
+            while True:
+                lines = await conn.execute_in_state(main_menu_index, status)
+                if "MCP_SAVE_QUERY|READY" in lines:
+                    break
+                if "MCP_SAVE_QUERY|MISSING" in lines:
+                    return f"Error: Save {save_filename!r} not found in the native list; no load sent."
+                if "MCP_SAVE_QUERY|AMBIGUOUS" in lines:
+                    return f"Error: Save {save_filename!r} is ambiguous; no load sent."
+                await asyncio.sleep(0.2)
+    except (OSError, TimeoutError, LuaError) as exc:
+        return f"Error: Native save metadata unavailable; no load sent: {exc}"
+
     code = f"""
-local loadGame = {{}};
-loadGame.Location = SaveLocations.LOCAL_STORAGE;
-loadGame.Type = SaveTypes.SINGLE_PLAYER;
-loadGame.IsAutosave = false;
-loadGame.IsQuicksave = false;
-loadGame.Directory = SaveDirectories.DEFAULT;
-loadGame.Name = {json.dumps(save_stem, ensure_ascii=False)};
+local q = __civmcpSaveQuery;
+if not q or not q.done or q.count ~= 1 or q.name ~= {json.dumps(save_filename, ensure_ascii=False)} then
+  print("MCP_FRONTEND_LOAD|false"); print("{lq.SENTINEL}"); return;
+end;
+local loadGame = q.save;
+__civmcpSaveQuery = nil;
 local automationOK = pcall(function() Automation.SetAutoStartEnabled(true); end);
 local loadOK, loadResult = pcall(function()
   return Network.LoadGame(loadGame, ServerType.SERVER_TYPE_NONE);
