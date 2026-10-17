@@ -1628,8 +1628,11 @@ class GameState:
         result = await save_game(self.conn, save_name)
         if not result.startswith("Saved:"):
             return result
-        after_identity = await self.get_game_identity()
-        after = await self.get_game_overview()
+        try:
+            after_identity = await self.get_game_identity()
+            after = await self.get_game_overview()
+        except (OSError, TimeoutError, LuaError, ValueError) as exc:
+            return f"ERR:OUTCOME_UNKNOWN|{result} Saved-turn verification failed: {exc}. Inspect before recovery."
         if after_identity != identity or after.turn != before.turn:
             return f"ERR:OUTCOME_UNKNOWN|{result} Game or turn changed during saving; inspect before recovery."
         return f"{result} Civilization {identity[0]}, seed {identity[1]}, turn {after.turn}."

@@ -388,9 +388,9 @@ async def save_game(conn: GameConnection, name: str) -> str:
                 else:
                     previous = None
                 await asyncio.sleep(SAVE_POLL_INTERVAL)
-    except TimeoutError:
+    except (TimeoutError, OSError):
         return (
-            f"ERR:OUTCOME_UNKNOWN|Save {name!r} was submitted once, but no fresh "
+            f"ERR:OUTCOME_UNKNOWN|Save {name!r} was attempted once, but no fresh "
             "nonempty file was confirmed. Inspect the save before retrying."
         )
 

@@ -1496,7 +1496,10 @@ class TestSaveCheckpoint:
         game_ids = iter(identities or [("babylon", 42), ("babylon", 42)])
         saves = []
         async def identity():
-            return next(game_ids)
+            value = next(game_ids)
+            if isinstance(value, Exception):
+                raise value
+            return value
         async def overview():
             return SimpleNamespace(turn=next(snapshots))
         async def save(connection, name):
@@ -1530,6 +1533,13 @@ class TestSaveCheckpoint:
     def test_changed_world_is_not_a_confirmed_checkpoint(self, monkeypatch):
         gs, _, _ = self.prepare(monkeypatch, identities=[("babylon", 42), ("rome", 42)])
         assert run(gs.save_game("checkpoint")).startswith("ERR:OUTCOME_UNKNOWN")
+
+    def test_lost_verification_does_not_replay_or_hide_the_saved_file(self, monkeypatch):
+        gs, _, saves = self.prepare(monkeypatch, identities=[("babylon", 42), ConnectionError("lost")])
+        result = run(gs.save_game("checkpoint"))
+        assert result.startswith("ERR:OUTCOME_UNKNOWN|Saved: checkpoint;")
+        assert "verification failed" in result
+        assert saves == ["checkpoint"]
 
     def test_unknown_identity_refuses_save(self, monkeypatch):
         gs, _, saves = self.prepare(monkeypatch, identities=[("unknown", 0)])
