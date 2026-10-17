@@ -904,7 +904,7 @@ class TestExecuteLua:
 
         conn, result = run(go())
         assert result == "1\n2"
-        assert conn.writes == ['(function() print(1) end)(); print("---END---")']
+        assert conn.writes == ['print(1)']
 
     def test_numeric_context_routes_to_that_state_index(self):
         async def go():
@@ -914,7 +914,7 @@ class TestExecuteLua:
 
         conn, result = run(go())
         assert result == "state5"
-        assert conn.state_calls == [(5, '(function() print(1) end)(); print("---END---")')]
+        assert conn.state_calls == [(5, 'print(1)')]
 
     def test_any_other_context_routes_to_gamecore_read(self):
         async def go():
@@ -924,19 +924,17 @@ class TestExecuteLua:
 
         conn, result = run(go())
         assert result == "ok"
-        assert conn.reads == ['(function() print(1) end)(); print("---END---")']
+        assert conn.reads == ['print(1)']
 
-    def test_user_code_is_function_wrapped_and_sentinel_terminated(self):
-        """The connection layer tells "no output" from "no answer" by the
-        sentinel, so run_lua chunks must end with one. Function-wrapped so a
-        trailing `return` in user code stays valid Lua."""
+    def test_user_code_passes_unchanged_to_the_connection_boundary(self):
+        """Only the connection owns response framing, including trailing returns."""
 
         async def go():
             conn = FakeConn(on_read=lambda lua: [])
             await gl.execute_lua(conn, "return 1")
             return conn.reads
 
-        assert run(go()) == ['(function() return 1 end)(); print("---END---")']
+        assert run(go()) == ['return 1']
 
     def test_empty_output_becomes_a_placeholder(self):
         async def go():

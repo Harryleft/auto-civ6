@@ -758,15 +758,10 @@ async def execute_lua(
     conn: GameConnection, code: str, context: str = "gamecore"
 ) -> str:
     """Escape hatch: run arbitrary Lua code."""
-    # End every chunk with the sentinel, like the builders do — without it the
-    # connection layer cannot tell "ran fine, printed nothing" from "never
-    # answered" (silent sockets raise TimeoutError there now). Function-wrapped
-    # so a trailing `return` in user code stays valid Lua.
-    wrapped = f'(function() {code} end)(); print("{SENTINEL}")'
     if context == "ingame":
-        lines = await conn.execute_write(wrapped)
+        lines = await conn.execute_write(code)
     elif context.isdigit():
-        lines = await conn.execute_in_state(int(context), wrapped)
+        lines = await conn.execute_in_state(int(context), code)
     else:
-        lines = await conn.execute_read(wrapped)
+        lines = await conn.execute_read(code)
     return "\n".join(lines) if lines else "(no output)"
