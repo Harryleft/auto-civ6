@@ -48,6 +48,21 @@
           "table": "GlobalParameters",
           "key": "Name",
           "value": "MOVEMENT_EMBARK_COST"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_MOVEMENT_1_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_MOVEMENT_2_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_MOVEMENT_5_CHAPTER_CONTENT_PARA_1"
         }
       ],
       "related": [
@@ -66,10 +81,11 @@
         "zh_Hans_CN": "控制区与寻路",
         "en_US": "Zone of control and pathfinding"
       },
-      "summary": "ZoneOfControl 标记单位是否施加控制区；当前路线受哪些敌军控制须结合地图判断。",
+      "summary": "控制区会截停受影响的敌军移动；施加控制区与忽略控制区是不同能力。",
       "conditions": [
-        "区分施加控制区与忽略敌方控制区的能力；单位类别、陆海关系及河流可能形成例外。",
-        "不能凭基础移动力或直线格数断言可绕过敌军；先查实际可达性。"
+        "受到敌方控制区影响而停下的单位，如仍有攻击所需移动力，仍可攻击。",
+        "远程与轰炸类通常不施加控制区；骑兵及海军袭击类可忽略敌方控制区；宗教单位影响其他宗教单位。",
+        "河流阻隔控制区；能力和晋升可能改变通常规则。先查当前可达性，不用直线格数代替寻路。"
       ],
       "source_selectors": [
         {
@@ -83,9 +99,14 @@
           "value": "UNIT_ARCHER"
         },
         {
-          "table": "CivilopediaPages",
-          "key": "PageId",
-          "value": "MOVEMENT_3"
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_MOVEMENT_3_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_MOVEMENT_3_CHAPTER_CONTENT_PARA_2"
         }
       ],
       "related": [
@@ -111,7 +132,8 @@
       "conditions": [
         "核对攻击类型、射程、视线、目标与已消耗攻击次数。",
         "神射手额外攻击要求单位未移动；无法移动射击能力限制同回合移动与攻击。",
-        "伤势、地形、支援和修正器会改变战斗；基础战力不能直接当作本次伤害。"
+        "伤势、地形、支援和修正器会改变战斗；基础战力不能直接当作本次伤害。",
+        "夹击和支援加成须先完成军事传统；位置、攻击类型及相邻友军仍需核对。"
       ],
       "source_selectors": [
         {
@@ -135,25 +157,46 @@
           "value": "ABILITY_NO_MOVE_AND_SHOOT"
         },
         {
-          "table": "CivilopediaPages",
-          "key": "PageId",
-          "value": "COMBAT_5"
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_COMBAT_5_CHAPTER_CONTENT_PARA_3"
         },
         {
-          "table": "CivilopediaPages",
-          "key": "PageId",
-          "value": "COMBAT_6"
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_COMBAT_5_CHAPTER_CONTENT_PARA_4"
         },
         {
-          "table": "CivilopediaPages",
-          "key": "PageId",
-          "value": "COMBAT_7"
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_COMBAT_5_CHAPTER_CONTENT_PARA_5"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_COMBAT_5_CHAPTER_CONTENT_PARA_6"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_COMBAT_6_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_COMBAT_7_CHAPTER_CONTENT_PARA_4"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "COMBAT_WOUNDED_DAMAGE_MULTIPLIER"
         }
       ],
       "related": [
         "UNIT_ARCHER",
         "PROMOTION_EXPERT_MARKSMAN",
-        "MECHANIC_COMBAT_SIEGE"
+        "MECHANIC_COMBAT_SIEGE",
+        "CIVIC_MILITARY_TRADITION"
       ],
       "current_facts_needed": [
         "单位当前移动、攻击次数、生命与已获能力",
@@ -171,9 +214,11 @@
       },
       "summary": "攻城支援依赖相邻位置、攻击单位类别与城防层级；破城槌和攻城塔的效果不同。",
       "conditions": [
-        "用风云变幻单位说明核对近战／抗骑兵适用范围和城墙层级；不套用基础版能力说明。",
-        "破城槌加强对适用城墙的攻击，攻城塔让适用单位绕墙攻击城市；不等于无视所有城防。",
-        "攻城还需核对可占领城市的单位与城市实际生命、防御和支援位置。"
+        "两种支援都要求相邻城市，且适用于进攻的近战和抗骑兵类单位。",
+        "破城槌对中世纪、文艺复兴城墙及城市防御无效；攻城塔对文艺复兴城墙及城市防御无效。",
+        "破城槌使适用单位对城墙输出全额伤害；攻城塔使其绕墙攻击城市。",
+        "围城要求全部相邻格被敌军占据、受敌方控制区影响或不可通行；控制区例外仍需核对。围城使该区域停止自然回血。",
+        "攻城还需核对城市生命、防御及实际占领资格；城墙修复另走项目条件。"
       ],
       "source_selectors": [
         {
@@ -217,9 +262,19 @@
           "value": "ENABLE_WALL_ATTACK_ANTI_CAVALRY"
         },
         {
-          "table": "CivilopediaPages",
-          "key": "PageId",
-          "value": "COMBAT_10"
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_COMBAT_9_CHAPTER_CONTENT_PARA_2"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_COMBAT_9_CHAPTER_CONTENT_PARA_3"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_COMBAT_10_CHAPTER_CONTENT_PARA_1"
         }
       ],
       "related": [
@@ -276,6 +331,11 @@
           "table": "GlobalParameters",
           "key": "Name",
           "value": "UPGRADE_MINIMUM_COST"
+        },
+        {
+          "table": "UnitReplaces",
+          "key": "ReplacesUnitType",
+          "value": "UNIT_SWORDSMAN"
         }
       ],
       "related": [
@@ -301,7 +361,8 @@
       "conditions": [
         "民族主义与动员分别提供两单位和三单位军事编队；仍需核对同种单位及编队资格。",
         "CanFormMilitaryFormation 与当前规模、位置和状态共同检查；不把支援单位当作可合并的作战单位。",
-        "兵团与军队有独立战力参数，不用该增益推算当前攻击伤害。"
+        "兵团与军队有独立战力参数，不用该增益推算当前攻击伤害。",
+        "合并后不能拆回独立单位，保留经验最高单位的经验与晋升；生命上限不会随单位数量增加。"
       ],
       "source_selectors": [
         {
@@ -335,9 +396,19 @@
           "value": "COMBAT_ARMY_STRENGTH_MODIFIER"
         },
         {
-          "table": "CivilopediaPages",
-          "key": "PageId",
-          "value": "COMBAT_12"
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_COMBAT_12_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_COMBAT_12_CHAPTER_CONTENT_PARA_2"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_COMBAT_12_CHAPTER_CONTENT_PARA_3"
         }
       ],
       "related": [
@@ -350,7 +421,8 @@
         "单位编队资格及可执行合并状态"
       ],
       "limitations": [
-        "现有工具没有完整军事编队候选查询；资料不构成合并操作支持。"
+        "现有工具没有完整军事编队候选查询；资料不构成合并操作支持。",
+        "百科军队段落的战力措辞与全局参数口径不同；保留两者证据，不按段落数值替代本机参数。"
       ]
     }
   ]
