@@ -1612,6 +1612,28 @@ class GameState:
 
         return await list_saves(self.conn)
 
+    async def save_game(self, save_name: str) -> str:
+        """Save a confirmed active turn without resetting the current session."""
+        from civ_mcp.game_lifecycle import _validate_save_name, save_game
+
+        error = _validate_save_name(save_name)
+        if error:
+            return error
+        if self._pending_end_turn:
+            return "Error: End-turn outcome is pending; confirm it before saving."
+        identity = await self.get_game_identity()
+        before = await self.get_game_overview()
+        if identity == ("unknown", 0) or before.turn <= 0:
+            return "Error: Current game identity and turn must be confirmed before saving."
+        result = await save_game(self.conn, save_name)
+        if not result.startswith("Saved:"):
+            return result
+        after_identity = await self.get_game_identity()
+        after = await self.get_game_overview()
+        if after_identity != identity or after.turn != before.turn:
+            return f"ERR:OUTCOME_UNKNOWN|{result} Game or turn changed during saving; inspect before recovery."
+        return f"{result} Civilization {identity[0]}, seed {identity[1]}, turn {after.turn}."
+
     async def load_save(self, save_index: int) -> str:
         """Load a save by index; discard the old world's cached state."""
         from civ_mcp.game_lifecycle import load_save

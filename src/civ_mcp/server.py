@@ -1773,6 +1773,21 @@ async def run_lua(ctx: Context, code: str, context: str = "gamecore") -> str:
 # ---------------------------------------------------------------------------
 
 
+@mcp.tool()
+async def save_game(ctx: Context, save_name: str) -> str:
+    """Save the active single-player game under a local filename.
+
+    Confirms a fresh nonempty file, civilization, seed and unchanged turn.
+    An existing filename is overwritten; use unique names for checkpoints.
+    An unknown result is never resent automatically. Confirm pending end-turn
+    results before saving, and explicitly name a confirmed save for recovery.
+    """
+    gs = _get_game(ctx)
+    return await _logged(
+        ctx, "save_game", {"save_name": save_name}, lambda: gs.save_game(save_name)
+    )
+
+
 @mcp.tool(annotations={"readOnlyHint": True})
 async def list_saves(ctx: Context) -> str:
     """List available save files (normal, autosave).
