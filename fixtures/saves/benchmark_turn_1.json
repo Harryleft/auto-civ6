@@ -19,7 +19,13 @@
   "verification": {
     "baseline_loaded": true,
     "identity_and_turn_read_back": true,
-    "native_mod_requirements_success": true
+    "native_mod_requirements_success": true,
+    "autonomous_net_turns": 20,
+    "final_turn": 21,
+    "in_run_game_reloads": 0,
+    "final_checkpoint_restart_load_verified": true,
+    "final_checkpoint": "benchmark_turn_1_test_20261017_t21",
+    "original_sha256_unchanged": true
   },
   "evidence_directory": "~/.civ6-mcp/acceptance/20261017-093253-benchmark",
   "status": "confirmed_sole_original_test_baseline",
