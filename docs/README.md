@@ -16,4 +16,4 @@
 - [随附存档与历史日志](../fixtures/README.md)：离线数据位置。
 - [历史归档](archive/README.md)：旧架构、评测研究及游戏报告，不代表当前实现。
 
-- [四项架构深化规格](specs/2026-10-17-architecture-deepening.md)与[工作项](specs/2026-10-17-architecture-deepening-tickets.md)：动作确认、存档替换、回合推进和议会事实解释的状态归属及离线验收约束。
+- [四项架构深化规格](specs/2026-10-17-architecture-deepening.md)与[工作项](specs/2026-10-17-architecture-deepening-tickets.md)：动作确认、存档替换、回合推进和议会事实解释的状态归属；[离线验收](acceptance/2026-10-17-architecture-deepening.md)记录 933 项测试及双轴审查修复结果。
