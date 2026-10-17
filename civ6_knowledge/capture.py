@@ -12,6 +12,7 @@ import sqlite3
 import shutil
 import tempfile
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 PRIMARY_TABLES = ('Technologies', 'Civics', 'Districts', 'Resolutions', 'ProposalTypes', 'VotingBlockers')
@@ -25,6 +26,7 @@ TABLES = PRIMARY_TABLES + (
     'CivilopediaPages', 'CivilopediaPageChapterParagraphs', 'GlobalParameters',
 )
 TABLES = tuple(dict.fromkeys(TABLES + (
+    'Happinesses', 'PolicyModifiers',
     'Yields',
     'Building_YieldChanges',
     'Building_CitizenYieldChanges',
@@ -153,45 +155,32 @@ def read_tables(path: Path) -> tuple[dict, list]:
         return tables, sorted(set(TABLES) - available)
 
 
-def read_text(path: Path, tables: dict) -> dict:
+def read_text(path: Path, tables: dict, xml_inputs: list) -> tuple[dict, dict]:
     tags = set(re.findall(r'LOC_[A-Za-z0-9_]+', json.dumps(tables)))
-    result = {}
+    prefixes = tuple('LOC_PEDIA_CONCEPTS_PAGE_' + row['PageId'] + '_' for row in tables.get('CivilopediaPages', []) if row.get('SectionId') == 'CONCEPTS')
+    result, origins = {}, {}
+    def wanted(tag):
+        return tag in tags or bool(prefixes and tag.startswith(prefixes))
     with copied_database(path) as conn:
         for language, tag, text in conn.execute(
                 "SELECT Language,Tag,Text FROM LocalizedText WHERE Language IN ('zh_Hans_CN','en_US') ORDER BY Language,Tag"):
-            if tag in tags:
+            if wanted(tag):
                 result.setdefault(tag, {})[language] = text
-    return dict(sorted(result.items()))
-
-
-def startup_version(path: Path) -> tuple[str, datetime]:
-    lines = path.read_text().splitlines()
-    versions = [(index, re.search(r'Game Version\s*=\s*(.+)', line))
-                for index, line in enumerate(lines) if 'Game Version' in line]
-    versions = [(index, match) for index, match in versions if match]
-    if not versions:
-        raise ValueError('missing game version evidence')
-    index, version = versions[-1]
-    boots = [i for i, line in enumerate(lines) if 'Civ6App::InitialInit start.' in line]
-    if boots and boots[-1] > index:
-        raise ValueError('latest startup has no game version evidence')
-
-    def timestamp(line):
-        match = re.match(r'^\[([^]]+)\]', line)
-        if not match:
-            raise ValueError('missing startup timestamp')
-        try:
-            return datetime.strptime(match[1], '%Y-%m-%d %H:%M:%S')
-        except ValueError as exc:
-            raise ValueError('invalid startup timestamp') from exc
-
-    # Logs can be appended at shutdown; file mtime is not a boot timestamp.
-    started = timestamp(lines[index])
-    previous = versions[-2][0] if len(versions) > 1 else -1
-    matching_boots = [i for i in boots if previous < i <= index]
-    if matching_boots:
-        started = timestamp(lines[matching_boots[-1]])
-    return version[1].strip(), started
+                origins.setdefault(tag, {})[language] = 'user/Cache/DebugLocalization.sqlite'
+    # The cached localization DB may lack expansion-only tags. Fill missing
+    # literals from installed Expansion2 text, without overriding cached entries.
+    for file, logical_path in xml_inputs:
+        document = ET.parse(file)
+        for group in document.getroot():
+            default = 'en_US' if group.tag == 'EnglishText' else None
+            for row in group:
+                language = row.get('Language', default)
+                tag = row.get('Tag')
+                text = row.find('Text')
+                if tag and language in ('en_US', 'zh_Hans_CN') and text is not None and wanted(tag) and language not in result.get(tag, {}):
+                    result.setdefault(tag, {})[language] = ''.join(text.itertext())
+                    origins.setdefault(tag, {})[language] = logical_path
+    return dict(sorted(result.items())), origins
 
 
 def capture(game_root: Path, user_root: Path, steam_manifest: Path) -> dict:
@@ -207,6 +196,11 @@ def capture(game_root: Path, user_root: Path, steam_manifest: Path) -> dict:
         p = game_root / relative
         if p.is_file():
             inputs[relative] = (p, 'game/Contents/' + relative)
+    text_root = game_root / 'Assets/DLC/Expansion2/Text'
+    xml_paths = sorted((text_root / 'en_US').glob('*.xml')) + [p for p in [text_root / 'Expansion2_Translations_Text.xml'] if p.is_file()]
+    xml_inputs = [(p, 'game/Contents/' + str(p.relative_to(game_root))) for p in xml_paths]
+    for p, logical in xml_inputs:
+        inputs[logical] = (p, logical)
     wal_states = {name: Path(str(inputs[name][0]) + '-wal').exists() for name in ('gameplay', 'localization')}
     for name in ('gameplay', 'localization'):
         wal = Path(str(inputs[name][0]) + '-wal')
@@ -256,11 +250,14 @@ def capture(game_root: Path, user_root: Path, steam_manifest: Path) -> dict:
                              'line_end': min(last, len(content)), 'sha256': hashes[relative],
                              'text': '\n'.join(content[first - 1:last]),
                              'text_sha256': hashlib.sha256('\n'.join(content[first - 1:last]).encode()).hexdigest()})
-    localized = read_text(inputs['localization'][0], tables)
+    localized, origins = read_text(inputs['localization'][0], tables, xml_inputs)
+    tables['CivilopediaTexts'] = [{'Tag': tag, 'Language': language, 'Text': text, 'Source': origins[tag][language]} for tag, texts in localized.items() if tag.startswith('LOC_PEDIA_CONCEPTS_PAGE_') for language, text in sorted(texts.items())]
+    profile['derived_tables'] = ['CivilopediaTexts']
+    profile['localization_policy'] = 'Cached text; missing literals supplemented from installed Expansion2 text. Active overrides unverified.'
     wal_changed = any(Path(str(inputs[name][0]) + '-wal').exists() != present for name, present in wal_states.items())
     if wal_changed or any(digest(p) != hashes[name] for name, (p, _) in inputs.items()):
         raise ValueError('source changed during capture; keep prior snapshot and recapture after files stabilize')
-    return {'schema_version': 1, 'profile': profile, 'tables': tables, 'localization': localized,
+    return {'schema_version': 1, 'profile': profile, 'tables': tables, 'localization': localized, 'localization_sources': origins,
             'code_evidence': evidence, 'sources': [
                 {'id': name, 'path': relative, 'sha256': hashes[name], 'size_bytes': p.stat().st_size}
                 for name, (p, relative) in sorted(inputs.items())]}
@@ -288,7 +285,7 @@ def main() -> int:
         temp.replace(output)
         print(json.dumps({'status': 'captured', 'tables': len(data['tables']), 'game_version': data['profile']['game_version']}, ensure_ascii=False))
         return 0
-    except (OSError, ValueError, sqlite3.Error, plistlib.InvalidFileException) as exc:
+    except (OSError, ValueError, sqlite3.Error, plistlib.InvalidFileException, ET.ParseError) as exc:
         print(json.dumps({'status': 'error', 'message': str(exc)}, ensure_ascii=False), file=sys.stderr)
         return 2
 

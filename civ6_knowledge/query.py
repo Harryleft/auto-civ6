@@ -106,7 +106,7 @@ def execute(root, args):
     localization = {tag: snapshot['localization'][tag] for tag in sorted(tags) if tag in snapshot['localization']}
     prefix = {'technologies': 'technology-', 'civics': 'civic-', 'districts': 'district-', 'congress': 'congress-'}.get(card['topic'], card['topic'] + '-')
     excerpts = [entry for entry in snapshot.get('code_evidence', []) if entry['id'].startswith(prefix)]
-    return {'id': card['id'], 'source_refs': card['source_refs'], 'evidence': evidence, 'localization': localization, 'code_evidence': excerpts, 'profile': manifest['profile'], 'sources': snapshot.get('sources', [])}
+    return {'id': card['id'], 'source_refs': card['source_refs'], 'evidence': evidence, 'localization': localization, 'localization_sources': {tag: snapshot.get('localization_sources', {}).get(tag, {}) for tag in localization}, 'code_evidence': excerpts, 'profile': manifest['profile'], 'sources': snapshot.get('sources', [])}
 
 
 def positive(value):
