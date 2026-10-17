@@ -186,7 +186,49 @@ print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
 
 
-def build_move_unit(unit_index: int, target_x: int, target_y: int) -> str:
+def build_move_unit(
+    unit_index: int, target_x: int, target_y: int, *, witness_token: str | None = None,
+) -> str:
+    witness = ""
+    if witness_token is not None:
+        witness = f"""
+-- This record is armed before exactly one submission. The native callback
+-- has no request nonce; serial actions and fresh target/path facts fence it.
+local prior = __civmcpMoveSegment
+if prior and not prior.closed then
+    {_bail("ERR:OUTCOME_UNKNOWN|Prior native movement witness is unresolved; no move submitted.")}
+end
+if prior and prior.handler then
+    pcall(function() Events.UnitOperationSegmentComplete.Remove(prior.handler) end)
+end
+local cfg = PlayerConfigurations[me]
+local q = {{token="{witness_token}", owner=me, id=unit:GetID(),
+    civ=cfg:GetCivilizationTypeName(), seed=GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED"),
+    turn=Game.GetCurrentGameTurn(), fromX=fromX, fromY=fromY,
+    targetX={target_x}, targetY={target_y}, done=false, closed=false}}
+__civmcpMoveSegment = q
+q.handler = function(player, unitID, hCommand, iData1)
+    pcall(function()
+        if __civmcpMoveSegment ~= q or q.closed or q.done then return end
+        if player ~= q.owner or unitID ~= q.id then return end
+        if Game.GetLocalPlayer() ~= q.owner or Game.GetCurrentGameTurn() ~= q.turn then return end
+        local currentCfg = PlayerConfigurations[q.owner]
+        if currentCfg:GetCivilizationTypeName() ~= q.civ
+            or GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED") ~= q.seed then return end
+        q.done = true
+        -- Shipped UI does not type these two fields. Keep raw diagnostics;
+        -- do not assume hCommand equals the MOVE_TO hash.
+        q.rawCommand, q.rawData = tostring(hCommand), tostring(iData1)
+        pcall(function() Events.UnitOperationSegmentComplete.Remove(q.handler) end)
+    end)
+end
+local armed = pcall(function() Events.UnitOperationSegmentComplete.Add(q.handler) end)
+if not armed then
+    q.closed = true
+    pcall(function() Events.UnitOperationSegmentComplete.Remove(q.handler) end)
+    {_bail("ERR:MOVE_WITNESS_UNAVAILABLE|Native movement witness unavailable; no move submitted.")}
+end
+"""
     return f"""
 {_lua_get_unit(unit_index)}
 if unit:GetMovesRemaining() <= 0 then
@@ -225,6 +267,7 @@ end
 if hasHostile then
     params[UnitOperationTypes.PARAM_MODIFIERS] = UnitOperationMoveModifiers.ATTACK
 end
+{witness}
 UnitManager.RequestOperation(unit, UnitOperationTypes.MOVE_TO, params)
 local tag = hasHostile and "OK:CAPTURE_MOVE|" or "OK:MOVING_TO|"
 print(tag .. {target_x} .. "," .. {target_y} .. "|from:" .. fromX .. "," .. fromY)
@@ -236,8 +279,9 @@ def build_unit_position_query(
     unit_index: int,
     move_target_x: int | None = None,
     move_target_y: int | None = None,
+    *, witness_token: str | None = None,
 ) -> str:
-    """InGame read-only probe: position, moves, effective movement, ZOC and busy.
+    """InGame gameplay read-only probe; retires only its own event listener.
 
     Native effective movement / ZOC facts are optional on unsupported contexts.
     Their absence must remain unknown, not become a zero or false value.
@@ -262,8 +306,10 @@ pcall(function()
         if hasShip then print("DIAG|WATER_OK|water tile (can embark)")
         else print("DIAG|WATER|water tile - land units need Shipbuilding tech to embark") end
     elseif plot:IsMountain() then
+        moveImpassable = true
         print("DIAG|MOUNTAIN|impassable mountain")
     elseif plot:IsImpassable() then
+        moveImpassable = true
         print("DIAG|IMPASSABLE|impassable terrain (ice or natural wonder)")
     else
         local owner = plot:GetOwner()
@@ -293,6 +339,7 @@ pcall(function()
 end)
 """
     path_probe = ""
+    witness_probe = ""
     if move_target_x is not None and move_target_y is not None:
         # Shipped WorldInput.lua uses GetMoveToPathEx().plots/.turns and
         # interprets turn numbers >1 as later-turn movement. The older
@@ -309,14 +356,58 @@ pcall(function()
     local last = Map.GetPlotByIndex(path.plots[#path.plots])
     if not first or not last or first:GetX() ~= u:GetX() or first:GetY() ~= u:GetY() then return end
     if last:GetX() ~= {move_target_x} or last:GetY() ~= {move_target_y} then return end
+    -- A truncated/malformed middle of a path cannot support completion.
+    for i = 1, #path.plots do
+        if not Map.GetPlotByIndex(path.plots[i]) or type(path.turns[i]) ~= "number"
+            or path.turns[i] < 1 or path.turns[i] % 1 ~= 0 then return end
+        if i > 1 and path.turns[i] < path.turns[i-1] then return end
+    end
     local nextPlot = Map.GetPlotByIndex(path.plots[2])
     local nextTurn = tonumber(path.turns[2])
     if nextPlot and nextTurn then
+        nextStepTurn = nextTurn
         print("PATH_STEP|" .. nextPlot:GetX() .. "|" .. nextPlot:GetY() .. "|turn:" .. nextTurn)
     end
 end)
 """
+    if witness_token is not None:
+        witness_probe = f"""
+pcall(function()
+    local q = __civmcpMoveSegment
+    if not q or q.token ~= "{witness_token}" or not u then return end
+    local cfg = PlayerConfigurations[me]
+    if q.owner ~= me or q.id ~= u:GetID() or q.turn ~= Game.GetCurrentGameTurn()
+        or q.civ ~= cfg:GetCivilizationTypeName()
+        or q.seed ~= GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")
+        or q.targetX ~= {move_target_x} or q.targetY ~= {move_target_y} then return end
+    print("MOVE_WITNESS|" .. q.token .. "|" .. q.owner .. "|" .. q.id .. "|" .. q.civ
+        .. "|" .. q.seed .. "|" .. q.turn .. "|" .. q.fromX .. "|" .. q.fromY
+        .. "|" .. q.targetX .. "|" .. q.targetY .. "|" .. tostring(q.done)
+        .. "|rawCommand:" .. tostring(q.rawCommand) .. "|rawData:" .. tostring(q.rawData))
+    local plot = nil
+    pcall(function()
+        local queued = UnitManager.GetQueuedDestination(u)
+        plot = queued and Map.GetPlotByIndex(queued)
+    end)
+    local queuedMatches = plot and plot:GetX() == q.targetX and plot:GetY() == q.targetY
+    if plot then print("QUEUED_TARGET|" .. plot:GetX() .. "|" .. plot:GetY()) end
+    if UI.IsGameCoreBusy() ~= false then return end
+    local moved = u:GetX() ~= q.fromX or u:GetY() ~= q.fromY
+    local reached = u:GetX() == q.targetX and u:GetY() == q.targetY
+    local nativeStop = u:GetMovesRemaining() <= 0
+    pcall(function() nativeStop = nativeStop or u:GetMovementMovesRemaining() <= 0 end)
+    pcall(function() nativeStop = nativeStop or u:HasMovedIntoZOC() end)
+    local segmentStop = q.done and queuedMatches and nextStepTurn and nextStepTurn > 1
+    if reached or u:GetMovesRemaining() <= 0 or nativeStop and moved
+        or segmentStop and moved or moveImpassable and not moved then
+        q.closed = true
+        pcall(function() Events.UnitOperationSegmentComplete.Remove(q.handler) end)
+    end
+end)
+"""
     return f"""
+local nextStepTurn = nil
+local moveImpassable = false
 local me = Game.GetLocalPlayer()
 local u = Players[me]:GetUnits():FindID({unit_index})
 if u then
@@ -332,10 +423,12 @@ if u then
         local value = u:HasMovedIntoZOC()
         if type(value) == "boolean" then zoc = "|zoc:" .. tostring(value) end
     end)
-    print("POS|" .. u:GetX() .. "|" .. u:GetY() .. "|moves:" .. u:GetMovesRemaining() .. movementMoves .. zoc .. "|busy:" .. busy)
+    print("POS|" .. u:GetX() .. "|" .. u:GetY() .. "|moves:" .. u:GetMovesRemaining() .. movementMoves .. zoc .. "|busy:" .. busy .. "|owner:" .. me .. "|id:" .. u:GetID())
 else print("POS|GONE") end
 {path_probe}
-{diag_block}print("{SENTINEL}")
+{diag_block}
+{witness_probe}
+print("{SENTINEL}")
 """
 
 

@@ -8,6 +8,7 @@ in a degenerate state. The OK-path verification catches this.
 import asyncio
 
 from civ_mcp.game_state import GameState
+from action_scope_support import scope_rows, with_action_identity
 
 
 class _StubConnection:
@@ -19,13 +20,15 @@ class _StubConnection:
         self.submissions = 0
 
     async def execute_write(self, lua):
+        if 'print("ACTION_SCOPE|' in lua:
+            return scope_rows()
         self.submissions += 1
         return self._write.pop(0)
 
     async def execute_read(self, lua):
         if not self._read:
             raise ConnectionError("confirmation unavailable")
-        return self._read.pop(0)
+        return with_action_identity(lua, self._read.pop(0))
 
 
 def _gs(write_lines, read_lines) -> GameState:
@@ -77,6 +80,8 @@ class TestSetCityProductionVerification:
 
         class _ThrowingConn:
             async def execute_write(self, lua):
+                if 'print("ACTION_SCOPE|' in lua:
+                    return scope_rows()
                 return ["OK:PRODUCING|UNIT_WARRIOR|2 turns"]
 
             async def execute_read(self, lua):

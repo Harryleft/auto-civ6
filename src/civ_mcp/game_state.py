@@ -10,6 +10,7 @@ import asyncio
 import logging
 import re
 import time
+import uuid
 from dataclasses import dataclass, field
 
 
@@ -38,8 +39,49 @@ class _PendingAction:
     success: str = ""
     identity: tuple[str, int] | None = None
     turn: int | None = None
+    owner: int | None = None
     details: dict = field(default_factory=dict)
     observed: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class _ActionScope:
+    civilization: str
+    seed: int
+    turn: int
+    owner: int
+
+    @property
+    def identity(self) -> tuple[str, int]:
+        return self.civilization.removeprefix("CIVILIZATION_").lower(), self.seed
+
+    def guard(self, code: str) -> str:
+        # A fresh read alone cannot prevent a turn/world change before dispatch.
+        # This guard must precede even witness/listener installation.
+        return f'''-- ACTION_SUBMIT_SCOPE|{self.civilization}|{self.seed}|{self.turn}|{self.owner}
+do
+    local ok, scope = pcall(function()
+        local owner = Game.GetLocalPlayer()
+        return {{PlayerConfigurations[owner]:GetCivilizationTypeName(),
+                GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED"),
+                Game.GetCurrentGameTurn(), owner}}
+    end)
+    if not ok or scope[1] ~= "{self.civilization}" or scope[2] ~= {self.seed}
+            or scope[3] ~= {self.turn} or scope[4] ~= {self.owner} then
+        print("ERR:ACTION_SCOPE_NO_SUBMIT|Native action scope changed or unavailable")
+        print("{lq.SENTINEL}")
+        return
+    end
+end
+{code}'''
+
+
+def _scoped_action_result(lines: list[str]) -> str:
+    if any("ACTION_SCOPE_NO_SUBMIT" in line for line in lines):
+        if lines == ["ERR:ACTION_SCOPE_NO_SUBMIT|Native action scope changed or unavailable"]:
+            return _action_result(lines)
+        return "Error: OUTCOME_UNKNOWN — incomplete or conflicting submission guard response"
+    return _action_result(lines)
 
 
 
@@ -76,6 +118,40 @@ class GameState:
         kind, identifier = self._pending_action.entity
         return (kind, identifier % 65536 if kind == "unit" else identifier)
 
+    async def _prepare_action_scope(self) -> _ActionScope | str:
+        """Read submission identity without touching the narration baseline."""
+        code = f'''
+local ok, scope = pcall(function()
+    local owner = Game.GetLocalPlayer()
+    return {{PlayerConfigurations[owner]:GetCivilizationTypeName(),
+            GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED"),
+            Game.GetCurrentGameTurn(), owner}}
+end)
+if ok then
+    print("ACTION_SCOPE|" .. tostring(scope[1]) .. "|" .. tostring(scope[2])
+          .. "|" .. tostring(scope[3]) .. "|" .. tostring(scope[4]))
+end
+print("{lq.SENTINEL}")
+'''
+        try:
+            lines = await self.conn.execute_write(code)
+            rows = [row.split("|") for row in lines if row.startswith("ACTION_SCOPE|")]
+            if len(rows) != 1 or len(rows[0]) != 5:
+                raise ValueError("missing or ambiguous native scope")
+            _, civ, seed, turn, owner = rows[0]
+            if not re.fullmatch(r"CIVILIZATION_[A-Z0-9_]+", civ):
+                raise ValueError("invalid civilization")
+            if not all(re.fullmatch(r"-?\d+", value) for value in (seed, turn, owner)):
+                raise ValueError("invalid native scope numbers")
+            scope = _ActionScope(civ, int(seed), int(turn), int(owner))
+            if scope.turn < 0 or scope.owner < 0:
+                raise ValueError("no local turn or player")
+            if self._game_identity is not None and scope.identity != self._game_identity:
+                raise ValueError("world changed; read the current game before acting")
+            return scope
+        except (OSError, TimeoutError, LuaError, ValueError) as exc:
+            return f"Error: ACTION_SCOPE_UNAVAILABLE|{exc}; no action submitted."
+
     def _pending_unknown(self, reason: str = "confirmation deadline reached") -> str:
         pending = self._pending_action
         if pending is None:
@@ -104,7 +180,7 @@ class GameState:
                             "local actionMe = Game.GetLocalPlayer(); "
                             "local actionCfg = PlayerConfigurations[actionMe]; "
                             'print("ACTION_IDENTITY|" .. actionCfg:GetCivilizationTypeName() .. "|" '
-                            '.. tostring(GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")) .. "|" .. Game.GetCurrentGameTurn()); '
+                            '.. tostring(GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")) .. "|" .. Game.GetCurrentGameTurn() .. "|" .. actionMe); '
                         )
                     pending.observed = await execute(identity_probe + pending.query)
                     confirmed = self._confirmed_action(pending)
@@ -119,12 +195,13 @@ class GameState:
 
     def _confirmed_action(self, pending: _PendingAction) -> str | None:
         if pending.identity is not None:
-            identity_line = next((line for line in pending.observed if line.startswith("ACTION_IDENTITY|")), "")
-            fields = identity_line.split("|")
-            if len(fields) != 4:
+            rows = [line.split("|") for line in pending.observed if line.startswith("ACTION_IDENTITY|")]
+            if len(rows) != 1 or len(rows[0]) != 5:
                 return None
+            fields = rows[0]
             identity = (fields[1].replace("CIVILIZATION_", "").lower(), int(fields[2]))
-            if identity != pending.identity or (pending.turn is not None and int(fields[3]) != pending.turn):
+            if (identity != pending.identity or int(fields[3]) != pending.turn
+                    or int(fields[4]) != pending.owner):
                 return None
         if pending.kind == "production":
             target = pending.details.get("target")
@@ -153,7 +230,7 @@ class GameState:
                     continue
                 fields = line.split("|")
                 metadata = dict(field.split(":", 1) for field in fields[3:] if ":" in field)
-                if metadata.get("owner") == str(self._local_player_id):
+                if metadata.get("owner") == str(pending.owner):
                     continue
                 if pending.details.get("target_owner") is not None:
                     if metadata.get("owner") != str(pending.details["target_owner"]) or metadata.get("id") != str(pending.details["target_id"]):
@@ -168,23 +245,32 @@ class GameState:
                         and int(metadata["attacks"]) < attacks_before and metadata.get("busy") == "false")
             changed = pre_hp is not None and post_hp is not None and pre_hp != post_hp
             core_status = next((line.split("|", 1)[1] for line in pending.observed if line.startswith("CORE_BUSY|")), metadata.get("busy", "unknown"))
-            if (changed or consumed) and core_status == "false":
+            core_rows = [line for line in pending.observed if line.startswith("CORE_BUSY|")]
+            city_started = core_rows == ["CORE_BUSY|false"] and self._city_attack_witness(pending)
+            if (changed or consumed or city_started) and core_status == "false":
                 damage = f"|damage dealt:{pre_hp-post_hp}" if pre_hp is not None and post_hp is not None else ""
                 # Missing from the original tile is not evidence of death. The
                 # consumed attack can be confirmed while the target stays unknown.
-                observed = _format_attack_followup([target_line] if target_line else [])
+                observed = _format_attack_followup([target_line] if target_line else [], attacker_owner=pending.owner)
                 return pending.success + damage + "\n  Post-combat: " + observed
         if pending.kind == "move":
             for line in pending.observed:
                 if not line.startswith("POS|") or "GONE" in line:
                     continue
                 fields = line.split("|")
+                if len(fields) < 3:
+                    continue
                 x, y = int(fields[1]), int(fields[2])
                 meta = dict(field.split(":", 1) for field in fields[3:] if ":" in field)
                 moves = float(meta["moves"]) if "moves" in meta else None
                 busy = meta.get("busy", "unknown")
                 target = pending.details["target"]
                 origin = pending.details.get("origin")
+                # The pre-submission record survives a lost acknowledgement;
+                # never install a listener retrospectively to fill that gap.
+                witness = self._move_witness(pending, meta)
+                if origin is None and witness is not None:
+                    origin = witness[0]
                 suffix = f"|now_at:{x},{y}"
                 if origin:
                     suffix += f"|(moved dx:{x-origin[0]:+d} dy:{y-origin[1]:+d})"
@@ -205,15 +291,78 @@ class GameState:
                     if moves is not None:
                         suffix += f"|moves_remaining:{moves:g}"
                     return pending.success + suffix + f"|STOPPED_MID_PATH ({native_stop})"
+                # A path preview alone never closes movement. This branch
+                # additionally requires this request's native segment event,
+                # full runtime ID, current identity/turn, and queued target.
+                queued = [row for row in pending.observed if row.startswith("QUEUED_TARGET|")]
+                steps = [row for row in pending.observed if row.startswith("PATH_STEP|")]
+                if (witness is not None and witness[1] and witness[0] == origin
+                        and len(queued) == 1 and len(steps) == 1
+                        and origin is not None and (x, y) != origin and busy == "false"
+                        and moves is not None and moves > 0
+                        and queued[0] == f"QUEUED_TARGET|{target[0]}|{target[1]}"
+                        and re.fullmatch(r"PATH_STEP\|-?\d+\|-?\d+\|turn:[1-9]\d*", steps[0])
+                        and int(steps[0].rsplit(":", 1)[1]) > 1):
+                    return (pending.success + suffix + f"|moves_remaining:{moves:g}"
+                            "|STOPPED_MID_PATH (native segment complete; next step requires later turn)"
+                            + "|" + "|".join(witness[2]))
                 impassable = any(line.startswith(("DIAG|MOUNTAIN|", "DIAG|IMPASSABLE|")) for line in pending.observed)
                 if (x, y) == origin and busy == "false" and impassable:
                     return pending.success + suffix + f"|BLOCKED ({lq.parse_blocked_diagnostic(pending.observed)})"
         if pending.kind == "found" and pending.details.get("position") is not None:
             if lq.parse_verify_city_at(pending.observed):
                 owner = next((re.search(r"\|owner:(\d+)", line) for line in pending.observed if "CITY_EXISTS" in line), None)
-                if owner is None or int(owner[1]) == self._local_player_id:
+                if owner is not None and int(owner[1]) == pending.owner:
                     return pending.success
         return None
+
+    def _city_attack_witness(self, pending: _PendingAction) -> bool:
+        """Only a pre-submission native record can confirm a missing target."""
+        token = pending.details.get("city_witness_token")
+        if pending.entity[0] != "city" or not token or pending.identity is None:
+            return False
+        records = [line.split("|") for line in pending.observed if line.startswith("CITY_ATTACK_WITNESS|")]
+        sources = [line.split("|") for line in pending.observed if line.startswith("CITY_ATTACK_SOURCE|")]
+        if len(records) != 1 or len(records[0]) != 17 or len(sources) != 1 or len(sources[0]) != 5:
+            return False
+        row, source = records[0], sources[0]
+        try:
+            if not all(re.fullmatch(r"\d+", row[index]) for index in (2, 3, 4, 5, 8, 11, 12)):
+                return False
+            if (row[1] != token or int(row[2]) != pending.owner or int(row[3]) != pending.entity[1]
+                    or int(row[4]) != pending.owner or row[2:6] != source[1:5]
+                    or (row[6].removeprefix("CIVILIZATION_").lower(), int(row[7])) != pending.identity
+                    or int(row[8]) != pending.turn or tuple(map(int, row[9:11])) != pending.details["target"]
+                    or int(row[11]) == pending.owner
+                    or row[13:15] != ["started:true", "command_matches:true"]
+                    or not row[15].startswith("rawCommand:") or not row[16].startswith("rawData:")):
+                return False
+            for key, index in (("target_owner", 11), ("target_id", 12)):
+                if key in pending.details and int(row[index]) != pending.details[key]:
+                    return False
+            return True
+        except ValueError:
+            return False
+
+    def _move_witness(self, pending: _PendingAction, meta: dict[str, str]) -> tuple[tuple[int, int], bool, list[str]] | None:
+        """Validate the native request record, including the full runtime ID."""
+        rows = [row.split("|") for row in pending.observed if row.startswith("MOVE_WITNESS|")]
+        if len(rows) != 1 or len(rows[0]) != 14 or pending.identity is None or pending.turn is None:
+            return None
+        row = rows[0]
+        try:
+            identity = (row[4].replace("CIVILIZATION_", "").lower(), int(row[5]))
+            if (row[1] != pending.details.get("witness_token")
+                    or row[2] != str(pending.owner) or row[2] != meta.get("owner")
+                    or row[3] != meta.get("id")
+                    or int(row[3]) % 65536 != pending.entity[1] % 65536
+                    or identity != pending.identity or int(row[6]) != pending.turn
+                    or tuple(map(int, row[9:11])) != pending.details["target"]
+                    or row[11] not in ("true", "false")):
+                return None
+            return (int(row[7]), int(row[8])), row[11] == "true", row[12:14]
+        except ValueError:
+            return None
 
     async def _action_gate(self, entity: tuple[str, int] | None = None) -> str | None:
         if self._pending_load or self._pending_save:
@@ -398,7 +547,7 @@ class GameState:
     # ------------------------------------------------------------------
 
     async def move_unit(self, unit_index: int, target_x: int, target_y: int) -> str:
-        details = {"target": (target_x, target_y)}
+        details = {"target": (target_x, target_y), "witness_token": uuid.uuid4().hex}
         if (self._pending_action and self._pending_action.kind == "move"
                 and self._pending_action.entity == ("unit", unit_index)
                 and self._pending_action.details.get("target") == details["target"]):
@@ -410,19 +559,26 @@ class GameState:
             await self.dismiss_popup()
         except (OSError, TimeoutError, LuaError):
             pass
+        scope = await self._prepare_action_scope()
+        if isinstance(scope, str):
+            return scope
         pending = _PendingAction(
             "move", ("unit", unit_index),
-            lq.build_unit_position_query(unit_index, move_target_x=target_x, move_target_y=target_y),
-            context="write", identity=self._game_identity, details=details,
+            lq.build_unit_position_query(
+                unit_index, move_target_x=target_x, move_target_y=target_y,
+                witness_token=details["witness_token"],
+            ),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner, details=details,
             success=f"MOVING_TO|{target_x},{target_y}",
         )
-        pending.turn = self._last_snapshot.turn if self._last_snapshot else None
         self._pending_action = pending
         try:
-            lines = await self.conn.execute_write(lq.build_move_unit(unit_index, target_x, target_y))
+            lines = await self.conn.execute_write(scope.guard(lq.build_move_unit(
+                unit_index, target_x, target_y, witness_token=details["witness_token"],
+            )))
         except (OSError, TimeoutError, LuaError) as exc:
             return self._pending_unknown(f"submission acknowledgement unavailable: {exc}")
-        result = _action_result(lines)
+        result = _scoped_action_result(lines)
         if result.startswith(("MOVING_TO|", "CAPTURE_MOVE|")):
             pending.success = result
             origin = re.search(r"\|from:(-?\d+),(-?\d+)", result)
@@ -479,17 +635,27 @@ class GameState:
                     estimate_str = narrate_combat_estimate(estimate) + "\n"
             except (OSError, TimeoutError, LuaError, ValueError):
                 log.debug("Combat estimate unavailable", exc_info=True)
+        scope = await self._prepare_action_scope()
+        if isinstance(scope, str):
+            return scope
+        city_token = uuid.uuid4().hex if entity[0] == "city" else None
         pending = _PendingAction(
-            "attack", entity, lq.build_attack_followup_query(target_x, target_y, entity[1] if entity[0] == "unit" else None),
-            context="write", identity=self._game_identity, details={"target": (target_x, target_y)},
+            "attack", entity,
+            lq.build_city_attack_followup(entity[1], target_x, target_y, city_token) if city_token else
+            lq.build_attack_followup_query(target_x, target_y, entity[1]),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"target": (target_x, target_y), "city_witness_token": city_token},
+            success=f"CITY_RANGE_ATTACK|city:{entity[1]} -> {target_x},{target_y}" if city_token else "",
         )
         self._pending_action = pending
         build = lq.build_attack_unit if entity[0] == "unit" else lq.build_city_attack
         try:
-            lines = await self.conn.execute_write(build(entity[1], target_x, target_y))
+            code = (build(entity[1], target_x, target_y, witness_token=city_token) if city_token else
+                    build(entity[1], target_x, target_y))
+            lines = await self.conn.execute_write(scope.guard(code))
         except (OSError, TimeoutError, LuaError) as exc:
             return self._pending_unknown(f"submission acknowledgement unavailable: {exc}")
-        result = _action_result(lines)
+        result = _scoped_action_result(lines)
         if result.startswith(("RANGE_ATTACK", "MELEE_ATTACK", "AIR_ATTACK", "CITY_RANGE_ATTACK")):
             if estimate and (result.startswith("AIR_ATTACK") or estimate.is_ranged != result.startswith("RANGE_ATTACK")):
                 estimate_str = unknown_estimate
@@ -521,17 +687,19 @@ class GameState:
             await self.dismiss_popup()
         except (OSError, TimeoutError, LuaError):
             pass
+        scope = await self._prepare_action_scope()
+        if isinstance(scope, str):
+            return scope
         pending = _PendingAction(
             "found", ("unit", unit_index), lq.build_unit_position_query(unit_index),
-            identity=self._game_identity,
+            identity=scope.identity, turn=scope.turn, owner=scope.owner,
         )
-        pending.turn = self._last_snapshot.turn if self._last_snapshot else None
         self._pending_action = pending
         try:
-            lines = await self.conn.execute_write(lq.build_found_city(unit_index))
+            lines = await self.conn.execute_write(scope.guard(lq.build_found_city(unit_index)))
         except (OSError, TimeoutError, LuaError) as exc:
             return self._pending_unknown(f"submission acknowledgement unavailable: {exc}")
-        result = _action_result(lines)
+        result = _scoped_action_result(lines)
         if result.startswith("FOUNDED|"):
             x, y = map(int, result.split("|")[1].split(","))
             pending.query = lq.build_verify_city_at(x, y)
@@ -699,24 +867,26 @@ class GameState:
         blocked = await self._action_gate()
         if blocked:
             return blocked
+        scope = await self._prepare_action_scope()
+        if isinstance(scope, str):
+            return scope
         pending = _PendingAction(
             "production", ("city", city_id), lq.build_verify_production(city_id, item_name, target),
             # "write" selects InGame; this confirmation Lua only reads facts.
             context="write" if target is not None else "read",
-            identity=self._game_identity, success=f"PRODUCING|{item_name}",
+            identity=scope.identity, turn=scope.turn, owner=scope.owner, success=f"PRODUCING|{item_name}",
             details={"item": item_name, "target": target},
         )
         # Retain intent before dispatch: losing the acknowledgement does not
         # establish that CityManager.RequestOperation was never executed.
-        pending.turn = self._last_snapshot.turn if self._last_snapshot else None
         self._pending_action = pending
         try:
             lines = await self.conn.execute_write(
-                lq.build_produce_item(city_id, item_type, item_name, target_x, target_y)
+                scope.guard(lq.build_produce_item(city_id, item_type, item_name, target_x, target_y))
             )
         except (OSError, TimeoutError, LuaError) as exc:
             return self._pending_unknown(f"submission acknowledgement unavailable: {exc}")
-        result = _action_result(lines)
+        result = _scoped_action_result(lines)
         if result.startswith("PRODUCING|"):
             pending.success = result
         elif not any("MAYBE:" in line for line in lines) and "OUTCOME_UNKNOWN" not in result:
@@ -1394,6 +1564,24 @@ class GameState:
             raise LuaError("World Congress status is unknown")
         return lq.parse_world_congress_response(lines)
 
+    async def open_world_congress(self) -> str:
+        """Explicitly enter a verified nonempty voting UI, never cast votes."""
+        if self._pending_load or self._pending_save:
+            return "ERR:OUTCOME_UNKNOWN|Load/save must be confirmed before opening Congress."
+        if self._pending_action is not None:
+            await self.confirm_pending_action()
+            if self._pending_action is not None:
+                return self._pending_unknown("Congress was not opened")
+        try:
+            lines = await self.conn.execute_write(lq.build_open_world_congress())
+        except (OSError, TimeoutError, LuaError) as exc:
+            return (f"ERR:OUTCOME_UNKNOWN|Congress start may have executed: {exc}. "
+                    "Inspect the existing start record and UI; no automatic resend.")
+        result = _action_result(lines)
+        if not any(line.startswith(("OK:WC_VOTING_OPEN|", "OK:WC_VOTING_ALREADY_OPEN|", "ERR:")) for line in lines):
+            return "ERR:OUTCOME_UNKNOWN|Congress start returned no valid status; inspect without resending."
+        return result
+
     async def vote_world_congress(
         self, resolution_hash: int, option: int, target_index: int, num_votes: int
     ) -> str:
@@ -1407,9 +1595,13 @@ class GameState:
         return _action_result(lines)
 
     async def queue_wc_votes(self, votes: list[dict]) -> str:
-        """Store agent voting preferences and register WC event handler."""
+        """Submit one explicit native-stage plan, or report its existing record."""
         lua = lq.build_register_wc_voter(votes=votes)
-        lines = await self.conn.execute_write(lua)
+        try:
+            lines = await self.conn.execute_write(lua)
+        except (OSError, TimeoutError, LuaError) as exc:
+            return (f"ERR:OUTCOME_UNKNOWN|World Congress request may have executed: {exc}. "
+                    "Use get_world_congress; no automatic vote/submission/continuation replay.")
         return _action_result(lines)
 
     # ------------------------------------------------------------------
