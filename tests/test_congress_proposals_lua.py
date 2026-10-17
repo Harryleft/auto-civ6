@@ -376,3 +376,54 @@ proposals={Proposals={[777]={ProposalsOfType={{TypeName="WC_EMERGENCY_RELIGIOUS"
         {"proposal_key": "WC_EMERGENCY_RELIGIOUS_2_3", "option": 1, "votes": 2},
     ]))
     assert conn.operations[0] == (0, "discussion", {"sender": 3, "target": 2, "votes": 2})
+
+
+def test_utf8_proposal_text_preserves_chinese_while_normalizing_ascii_protocol_bytes():
+    import locale
+
+    previous = locale.setlocale(locale.LC_CTYPE)
+    try:
+        # Darwin UTF-8 ctype marks some UTF-8 continuation bytes as %c.
+        # Other hosts still exercise public Unicode and protocol normalization.
+        for name in ("zh_CN.UTF-8", "en_US.UTF-8"):
+            try:
+                locale.setlocale(locale.LC_CTYPE, name)
+                break
+            except locale.Error:
+                pass
+        conn = ProposalConn()
+        row = conn.lua.globals().proposals.Proposals.COMPETITION.ProposalsOfType[1]
+        row.Name = "世界博览会|政策"
+        row.Description = "中文\t说明\x00结束\x1f\x7f"
+        conn.lua.globals().GameInfo.ProposalTypes.COMPETITION.Name = "竞赛|议题"
+        conn.lua.globals().GameInfo.Resolutions[13].Name = "外交决议"
+        status = run(GameState(conn).get_world_congress())
+        assert status.proposal_status == "CHOICES"
+        assert status.proposals[0].name == "世界博览会 政策"
+        assert status.proposals[0].description == "中文 说明 结束  "
+        assert status.proposals[0].category_name == "竞赛 议题"
+        text = narrate_world_congress(status)
+        assert "世界博览会 政策" in text and "外交决议" in text
+        assert "�" not in text
+        assert conn.operations == conn.actions == []
+    finally:
+        locale.setlocale(locale.LC_CTYPE, previous)
+
+
+@pytest.mark.parametrize("finished", [False, True])
+def test_requested_or_finished_congress_window_only_guides_confirmation_not_a_new_plan(finished):
+    conn = ProposalConn()
+    state = GameState(conn)
+    assert "WC_STAGE_CONTINUE_REQUESTED" in run(state.queue_wc_votes([RES_VOTE, PROP_VOTE]))
+    if finished:
+        conn.lua.execute('in_session=false; segment="TURNSEG_NORMAL"')
+    status = run(state.get_world_congress())
+    assert status.turns_until_next == 0
+    assert status.local_request == ("FINISHED" if finished else "CONTINUE_REQUESTED")
+    text = narrate_world_congress(status)
+    assert "FIRES THIS TURN" not in text
+    assert "queue_wc_votes(" not in text
+    assert "end_turn" in text and status.local_request in text
+    assert "favor=25/25" in text
+    assert [op[1] for op in conn.operations] == ["vote", "discussion", "submit"]
+    assert conn.actions == ["continue"]
