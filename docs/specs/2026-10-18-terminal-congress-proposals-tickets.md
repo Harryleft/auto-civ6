@@ -1,0 +1,10 @@
+# 议会提案工作项
+
+规格：[显式提案投票](2026-10-18-terminal-congress-proposals.md)。标签 ready-for-agent；集成分支 codex/architecture-deepening。
+
+| 工作项 | 依赖 | 所有权 | 状态 |
+| --- | --- | --- | --- |
+| W1 完整提案查询与显式混合投票 | 无 | 单一实施任务：议会 Lua、模型／解析、叙述、工具契约与回归 | ready-for-agent |
+| W2 集成与实机续测 | W1 | 父任务：独立审查、第 167 回合复验及终局 | blocked |
+
+沿用已确认测试边界；独立 worktree 实施，保留现场、所有存档及结果，合入后清理，不 push。
