@@ -15,6 +15,8 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from build import TOPIC_NAMES
+
 PRIMARY_TABLES = ('Technologies', 'Civics', 'Districts', 'Resolutions', 'ProposalTypes', 'VotingBlockers')
 TABLES = PRIMARY_TABLES + (
     'TechnologyPrereqs', 'CivicPrereqs', 'Boosts', 'Districts_XP2',
@@ -287,7 +289,7 @@ def capture(game_root: Path, user_root: Path, steam_manifest: Path) -> dict:
     wal_changed = any(Path(str(inputs[name][0]) + '-wal').exists() != present for name, present in wal_states.items())
     if wal_changed or any(digest(p) != hashes[name] for name, (p, _) in inputs.items()):
         raise ValueError('source changed during capture; keep prior snapshot and recapture after files stabilize')
-    return {'schema_version': 1, 'profile': profile, 'tables': tables, 'localization': localized, 'localization_sources': origins,
+    return {'schema_version': 1, 'knowledge_topics': list(TOPIC_NAMES), 'profile': profile, 'tables': tables, 'localization': localized, 'localization_sources': origins,
             'code_evidence': evidence, 'sources': [
                 {'id': name, 'path': relative, 'sha256': hashes[name], 'size_bytes': p.stat().st_size}
                 for name, (p, relative) in sorted(inputs.items())]}
