@@ -1692,6 +1692,11 @@ class GameState:
         return f"{result} Civilization {identity[0]}, seed {identity[1]}, turn {after.turn}."
 
     @property
+    def save_pending(self) -> bool:
+        """A save acknowledgement or its saved-state verification is unresolved."""
+        return self._pending_save
+
+    @property
     def replacement_pending(self) -> bool:
         """A replacement is unconfirmed; save uncertainty is tracked separately."""
         return self._pending_load

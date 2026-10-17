@@ -98,6 +98,18 @@ class FakeGameState:
         self.calls: list[tuple[str, tuple, dict]] = []
         self.script: dict = {"check_game_over": None}
 
+    @property
+    def replacement_pending(self) -> bool:
+        return getattr(self, "_pending_load", False)
+
+    @property
+    def save_pending(self) -> bool:
+        return getattr(self, "_pending_save", False)
+
+    @property
+    def turn_pending(self) -> bool:
+        return self._pending_end_turn
+
     def reset_session(self):
         self.reset_calls += 1
         self._revealed_tiles = None
