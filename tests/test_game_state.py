@@ -1806,7 +1806,7 @@ class TestSaveCheckpoint:
         monkeypatch.setattr(game_launcher, "SINGLE_SAVE_DIR", str(tmp_path))
         monkeypatch.setattr(checkpoints, "CHECKPOINT_DIR", tmp_path / "metadata")
         assert checkpoints.begin_baseline_run() is None
-        gs, conn = _gs()
+        gs, conn = _gs([("write", ["GAME_ACTIVE"])])
         snapshots = iter(turns)
         game_ids = iter(identities or [("babylon", 42), ("babylon", 42)])
         saves = []
@@ -1833,7 +1833,7 @@ class TestSaveCheckpoint:
         result = run(gs.save_game("checkpoint"))
         assert result.endswith("Civilization babylon, seed 42, turn 12.")
         assert saves == ["checkpoint"]
-        assert conn.calls == []
+        assert conn.exhausted
 
     def test_pending_end_turn_cannot_create_recovery_checkpoint(self, monkeypatch, tmp_path):
         gs, _, saves = self.prepare(monkeypatch, tmp_path)

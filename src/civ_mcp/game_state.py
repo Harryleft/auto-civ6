@@ -177,9 +177,8 @@ class GameState:
     async def check_game_over(self) -> lq.GameOverStatus | None:
         """Check if the game has ended (victory/defeat screen showing).
 
-        Tries InGame context first (full detection with UI checks).
-        Falls back to GameCore context (read-only, survives defeat screen)
-        when InGame fails — this catches victories that freeze the InGame UI.
+        Reads the same native outcome tuple in either context. Falls back to
+        read-only GameCore when the InGame context is unavailable.
         """
         try:
             lines = await self.conn.execute_write(lq.build_gameover_check())
@@ -1776,6 +1775,8 @@ class GameState:
             return blocked
         if self.turn_pending:
             return "Error: End-turn outcome is pending; confirm it before saving."
+        if await self.check_game_over() is not None:
+            return "Error: GAME_OVER|Saving is unavailable at the confirmed terminal boundary; no save submitted. Keep the last confirmed checkpoint and terminal evidence."
         identity = await self.get_game_identity()
         before = await self.get_game_overview()
         if identity == ("unknown", 0) or before.turn <= 0:
