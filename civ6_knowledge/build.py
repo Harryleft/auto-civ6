@@ -11,7 +11,103 @@ PRIMARY = {'Civics': ('civics', 'CivicType'), 'Technologies': ('technologies', '
 UNLOCKS = {'Units': 'UnitType', 'Buildings': 'BuildingType', 'Districts': 'DistrictType', 'Improvements': 'ImprovementType', 'Projects': 'ProjectType', 'Policies': 'PolicyType', 'Governments': 'GovernmentType', 'Resources': 'ResourceType', 'Routes': 'RouteType'}
 CORE_RELATIONSHIPS = ('TechnologyPrereqs', 'CivicPrereqs', 'Boosts', 'District_Adjacencies', 'Adjacency_YieldChanges')
 OPTIONAL_TABLES = tuple(UNLOCKS) + ('Districts_XP2', 'District_RequiredFeatures', 'District_ValidTerrains', 'DistrictReplaces', 'District_CitizenYieldChanges', 'GovernmentSlots', 'Government_SlotCounts', 'ResolutionEffects', 'CivilizationTraits', 'LeaderTraits', 'CivilopediaPages', 'CivilopediaPageChapterParagraphs', 'GlobalParameters')
-SUPPORT_FILES = ('README.md', 'NEXT.md', 'capture.py', 'build.py', 'query.py', 'topics/civics.md', 'topics/technologies.md', 'topics/districts.md', 'topics/congress.md')
+BASE_SUPPORT_FILES = ('README.md', 'NEXT.md', 'capture.py', 'build.py', 'query.py', 'topics/civics.md', 'topics/technologies.md', 'topics/districts.md', 'topics/congress.md')
+
+TOPIC_PRIMARY = {
+    'economy': {'Yields': 'YieldType', 'Buildings': 'BuildingType', 'Policies': 'PolicyType'},
+    'resources': {'Resources': 'ResourceType', 'RandomEvents': 'RandomEventType'},
+    'combat': {'Units': 'UnitType', 'UnitPromotions': 'UnitPromotionType', 'Terrains': 'TerrainType', 'Features': 'FeatureType'},
+    'diplomacy': {'DiplomaticActions': 'DiplomaticActionType', 'Alliances': 'AllianceType'},
+    'victory': {'Victories': 'VictoryType', 'Religions': 'ReligionType', 'Beliefs': 'BeliefType'},
+}
+TOPIC_NAMES = ('civics', 'technologies', 'districts', 'congress', *TOPIC_PRIMARY)
+ENTITY_RECORDS = {
+    'Buildings': ('Buildings_XP2', 'Building_YieldChanges', 'Building_YieldChangesBonusWithPower', 'BuildingPrereqs', 'Building_ResourceCosts'),
+    'Policies': ('PolicyModifiers',),
+    'Resources': ('Resource_Consumption', 'Resource_YieldChanges', 'Resource_Harvests', 'Resource_ValidTerrains', 'Resource_ValidFeatures'),
+    'RandomEvents': ('RandomEvent_Damages', 'RandomEvent_Yields', 'RandomEvent_Terrains', 'RandomEvent_Features', 'RandomEvent_Frequencies', 'RandomEvent_PillagedBuildings', 'RandomEvent_PillagedDistricts', 'RandomEvent_PillagedImprovements', 'RandomEvent_DamagedUnits'),
+    'Units': ('Units_XP2', 'UnitUpgrades', 'Unit_BuildingPrereqs', 'UnitReplaces', 'TypeTags'),
+    'UnitPromotions': ('UnitPromotionPrereqs', 'UnitPromotionModifiers'),
+    'Terrains': ('Terrain_YieldChanges',),
+    'Features': ('Feature_YieldChanges', 'Features_XP2', 'Feature_Floodplains', 'Feature_UnitMovements'),
+    'DiplomaticActions': ('DiplomaticActions_XP1', 'DiplomaticActions_XP2', 'DiplomaticStateActions'),
+    'Alliances': ('AllianceEffects',),
+    'Beliefs': ('BeliefModifiers',),
+}
+
+
+def definitions(root):
+    result = {}
+    for topic in TOPIC_PRIMARY:
+        path = root / 'topics' / (topic + '.json')
+        if not path.is_file():
+            continue
+        data = json.loads(path.read_text(encoding='utf-8'))
+        if not isinstance(data, dict) or data.get('schema_version') != 1 or data.get('topic') != topic or not isinstance(data.get('cards'), list):
+            raise ValueError('invalid topic definition: ' + topic)
+        result[topic] = data['cards']
+    return result
+
+
+def support_files(root):
+    return BASE_SUPPORT_FILES + tuple(name for topic in definitions(root) for name in ('topics/' + topic + '.md', 'topics/' + topic + '.json'))
+
+
+def related_records(card, tables, attach):
+    # These are database references, not proof that an effect applies in this game.
+    for table in ENTITY_RECORDS.get(card['summary']['entity_type'], ()):
+        for index, row in enumerate(tables.get(table, [])):
+            if card['id'] in row.values():
+                attach(card, table, index)
+    for _ in range(3):
+        rows = [tables[r['table']][r['row']] for r in card['source_refs']]
+        modifiers = {r['ModifierId'] for r in rows if r.get('ModifierId')}
+        sets = {v for r in rows for k, v in r.items() if k.endswith('RequirementSetId') and v}
+        requirements = {r['RequirementId'] for r in rows if r.get('RequirementId')}
+        for table, key, ids in [('Modifiers', 'ModifierId', modifiers), ('ModifierArguments', 'ModifierId', modifiers), ('RequirementSets', 'RequirementSetId', sets), ('RequirementSetRequirements', 'RequirementSetId', sets), ('Requirements', 'RequirementId', requirements), ('RequirementArguments', 'RequirementId', requirements)]:
+            for index, row in enumerate(tables.get(table, [])):
+                if row.get(key) in ids:
+                    attach(card, table, index)
+    card['rule']['related_records'] = [{'source_ref': ref, 'facts': tables[ref['table']][ref['row']]} for ref in card['source_refs'][1:]]
+
+
+def add_mechanisms(topics, cards, tables, curated):
+    for topic, records in curated.items():
+        for data in records:
+            if not isinstance(data, dict):
+                raise ValueError('mechanism must be an object')
+            ident = data.get('id')
+            if not isinstance(ident, str) or not ident.startswith('MECHANIC_') or ident in cards:
+                raise ValueError('missing or duplicate mechanism ID')
+            if not isinstance(data.get('names'), dict) or not all(isinstance(data['names'].get(k), str) and data['names'][k] for k in ('zh_Hans_CN', 'en_US')) or not isinstance(data.get('summary'), str):
+                raise ValueError('invalid mechanism names or summary: ' + ident)
+            for field in ('conditions', 'current_facts_needed', 'limitations', 'related'):
+                if not isinstance(data.get(field, []), list) or any(not isinstance(v, str) for v in data.get(field, [])):
+                    raise ValueError('invalid mechanism field: ' + field)
+            selectors = data.get('source_selectors')
+            if not isinstance(selectors, list) or not selectors:
+                raise ValueError('mechanism requires source selectors: ' + ident)
+            refs = []
+            for selector in selectors:
+                if not isinstance(selector, dict) or not isinstance(selector.get('table'), str) or not isinstance(selector.get('key'), str) or 'value' not in selector:
+                    raise ValueError('invalid source selector: ' + ident)
+                table, key, value = selector['table'], selector['key'], selector['value']
+                matches = [source_ref(table, i) for i, row in enumerate(tables.get(table, [])) if key in row and row[key] == value]
+                if not matches:
+                    raise ValueError('unmatched source selector: ' + ident + ' ' + table + '.' + key)
+                for ref in matches:
+                    if ref not in refs:
+                        refs.append(ref)
+            card = {'id': ident, 'topic': topic, 'names': data['names'], 'summary': {'entity_type': 'CuratedMechanism', 'description': data['summary'], 'applicability': 'curated_interpretation; current_session_and_action_unverified'},
+                    'curation_ref': {'file': 'topics/' + topic + '.json', 'id': ident},
+                    'rule': {'facts': {'mechanism': ident, 'origin': 'curated_interpretation'}, 'conditions': [{'interpretation': v} for v in data.get('conditions', [])], 'prerequisites': [], 'unlocks': [], 'boosts': [], 'adjacencies': [], 'related_records': [{'source_ref': r, 'facts': tables[r['table']][r['row']]} for r in refs], 'current_facts_needed': data.get('current_facts_needed', []), 'limitations': data.get('limitations', [])},
+                    'source_refs': refs, 'relations': []}
+            cards[ident] = card
+            topics[topic].append(card)
+    for topic, records in curated.items():
+        for data in records:
+            cards[data['id']]['relations'] = [{'type': 'curated_context', 'target': target, 'coverage': 'internal' if target in cards else 'external'} for target in data.get('related', [])]
+
 VERSION_KEYS = ('game_version', 'macos_bundle_version', 'macos_bundle_build', 'steam_build_id', 'ruleset')
 
 
@@ -61,12 +157,22 @@ def check_snapshot(snapshot):
             raise ValueError('invalid table rows: ' + table)
 
 
-def generate(snapshot):
+def generate(snapshot, root=None):
     check_snapshot(snapshot)
+    root = root or Path(__file__).resolve().parent
+    curated = definitions(root)
+    primary = dict(PRIMARY)
+    for topic in curated:
+        primary.update({table: (topic, key) for table, key in TOPIC_PRIMARY[topic].items()})
+    declared = snapshot.get('knowledge_topics')
+    if declared is not None and set(declared) != set(('civics', 'technologies', 'districts', 'congress', *curated)):
+        raise ValueError('declared knowledge topics differ from available definitions')
     tables = snapshot['tables']
-    topics = {topic: [] for topic in ('civics', 'technologies', 'districts', 'congress')}
+    topics = {topic: [] for topic in ('civics', 'technologies', 'districts', 'congress', *curated)}
     cards = {}
-    for table, (topic, key) in PRIMARY.items():
+    for table, (topic, key) in primary.items():
+        if not isinstance(tables.get(table), list):
+            raise ValueError('missing active topic table: ' + table)
         for index, row in enumerate(tables[table]):
             ident = row.get(key)
             if not isinstance(ident, str) or not ident or ident in cards:
@@ -173,9 +279,12 @@ def generate(snapshot):
         elif topic == 'districts':
             card['rule']['current_facts_needed'] = ['城市人口与已建区域', '可落位坐标和地块占用', '地形／地貌／资源', '相邻地块与政策修正', '当前成本及文明限制']
             card['rule']['limitations'].append('人口要求、相邻收益及落位结果由当前游戏查询确认；不在离线卡片中计算合法坐标。')
-        else:
+        elif topic == 'congress':
             card['rule']['current_facts_needed'] = ['议会阶段和请求身份', '实际议题与候选目标', '提案资格和双向禁投结果', '外交支持点及实际费用', '提交后的原生确认']
             card['rule']['limitations'].append('禁投定义不代表玩家当前已被禁投；NoUpvote 和 NoDownvote 分别读取，未知资格保留 UNKNOWN；不生成默认选票。')
+        elif topic in curated:
+            card['rule']['current_facts_needed'] = ['本局对象与可见状态', '实际费用、修正与合法候选', '活动规则及条件是否满足']
+            related_records(card, tables, attach)
         # Localized literal fields supplement raw identifiers without replacing evidence.
         card['rule']['localized_fields'] = {key: names(snapshot, value, value) for key, value in card['rule']['facts'].items() if isinstance(value, str) and value.startswith('LOC_')}
         for index, row in enumerate(tables.get('GlobalParameters', [])):
@@ -184,18 +293,22 @@ def generate(snapshot):
             if relevant:
                 ref = attach(card, 'GlobalParameters', index)
                 card['rule']['conditions'].append({'facts': row, 'source_ref': ref})
+    add_mechanisms(topics, cards, tables, curated)
     return {topic: {'schema_version': 1, 'topic': topic, 'cards': sorted(values, key=lambda c: c['id'])} for topic, values in topics.items()}
 
 
-def coverage(snapshot):
-    return {'complete_for_snapshot_tables': list(PRIMARY), 'missing_optional_tables': sorted(set(OPTIONAL_TABLES) - snapshot['tables'].keys()), 'not_covered': ['完整 Modifier 解释', '当前对局模组／模式核对', '完整动作合法性和有效费用', '策略最优性']}
+def coverage(snapshot, root=None):
+    root = root or Path(__file__).resolve().parent
+    active = definitions(root)
+    tables = list(PRIMARY) + [table for topic in active for table in TOPIC_PRIMARY[topic]]
+    return {'complete_for_snapshot_tables': tables, 'missing_optional_tables': sorted(set(OPTIONAL_TABLES) - snapshot['tables'].keys()), 'not_covered': ['完整 Modifier 解释', '当前对局模组／模式核对', '完整动作合法性和有效费用', '策略最优性']}
 
 
 def build(source, output):
     snapshot = json.loads(source.read_text(encoding='utf-8'))
     documents = generate(snapshot)
     support_root = Path(__file__).resolve().parent
-    for name in SUPPORT_FILES:
+    for name in support_files(support_root):
         if not (support_root / name).is_file():
             raise ValueError('missing support file: ' + name)
     output.mkdir(parents=True, exist_ok=True)
@@ -210,10 +323,10 @@ def build(source, output):
         (output / relative).write_bytes(data)
         files[relative] = digest(data)
     manifest = {'schema_version': 1, 'profile': snapshot['profile'], 'snapshot': 'sources/snapshot.json', 'snapshot_sha256': digest(snapshot_bytes), 'files': files,
-                'support_files': {name: digest((support_root / name).read_bytes()) for name in SUPPORT_FILES},
+                'support_files': {name: digest((support_root / name).read_bytes()) for name in support_files(support_root)},
                 'counts': {topic: len(doc['cards']) for topic, doc in documents.items()}, 'coverage': coverage(snapshot)}
     (output / 'manifest.json').write_bytes(encoded(manifest))
-    for name in SUPPORT_FILES:
+    for name in support_files(support_root):
         script = support_root / name
         destination = output / name
         destination.parent.mkdir(parents=True, exist_ok=True)

@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import sys
 
-from build import SUPPORT_FILES, VERSION_KEYS, check_snapshot, coverage, digest, generate
+from build import TOPIC_NAMES, VERSION_KEYS, check_snapshot, coverage, digest, generate, support_files
 
 
 def read(path):
@@ -23,7 +23,9 @@ def load(root):
         raise ValueError('snapshot fingerprint mismatch')
     cards = {}
     documents = {}
-    for topic in ('civics', 'technologies', 'districts', 'congress'):
+    for topic in manifest['counts']:
+        if topic not in TOPIC_NAMES:
+            raise ValueError('unknown manifest topic: ' + topic)
         relative = 'rules/' + topic + '.json'
         data = (root / relative).read_bytes()
         if digest(data) != manifest['files'][relative]:
@@ -62,20 +64,20 @@ def execute(root, args):
     if args.command == 'check-profile':
         return compare(manifest['profile'], read(args.expected))
     if args.command == 'validate':
-        if set(manifest.get('support_files', {})) != set(SUPPORT_FILES):
+        if set(manifest.get('support_files', {})) != set(support_files(root)):
             raise ValueError('missing support file coverage')
-        for name in SUPPORT_FILES:
+        for name in support_files(root):
             if digest((root / name).read_bytes()) != manifest['support_files'][name]:
                 raise ValueError('support file fingerprint mismatch: ' + name)
         if snapshot['profile'] != manifest['profile']:
             raise ValueError('profile differs from source')
-        expected = generate(snapshot)
+        expected = generate(snapshot, root)
         if expected != documents:
             raise ValueError('cards, relations or source references differ from source snapshot')
         counts = {topic: len(doc['cards']) for topic, doc in documents.items()}
         if counts != manifest['counts']:
             raise ValueError('coverage counts differ')
-        if coverage(snapshot) != manifest['coverage']:
+        if coverage(snapshot, root) != manifest['coverage']:
             raise ValueError('coverage differs from actual source tables')
         source_hashes = {entry.get('path'): entry.get('sha256') for entry in snapshot.get('sources', [])}
         for entry in snapshot.get('code_evidence', []):
@@ -102,7 +104,7 @@ def execute(root, args):
     evidence = [{'source_ref': ref, 'facts': snapshot['tables'][ref['table']][ref['row']]} for ref in card['source_refs']]
     tags = {value for entry in evidence for value in entry['facts'].values() if isinstance(value, str) and value.startswith('LOC_')}
     localization = {tag: snapshot['localization'][tag] for tag in sorted(tags) if tag in snapshot['localization']}
-    prefix = {'technologies': 'technology-', 'civics': 'civic-', 'districts': 'district-', 'congress': 'congress-'}[card['topic']]
+    prefix = {'technologies': 'technology-', 'civics': 'civic-', 'districts': 'district-', 'congress': 'congress-'}.get(card['topic'], card['topic'] + '-')
     excerpts = [entry for entry in snapshot.get('code_evidence', []) if entry['id'].startswith(prefix)]
     return {'id': card['id'], 'source_refs': card['source_refs'], 'evidence': evidence, 'localization': localization, 'code_evidence': excerpts, 'profile': manifest['profile'], 'sources': snapshot.get('sources', [])}
 
@@ -122,7 +124,7 @@ def main():
     sub.add_parser('topics')
     search = sub.add_parser('search')
     search.add_argument('text')
-    search.add_argument('--topic', choices=('civics', 'technologies', 'districts', 'congress'))
+    search.add_argument('--topic', choices=TOPIC_NAMES)
     search.add_argument('--limit', type=positive, default=10)
     show = sub.add_parser('show')
     show.add_argument('ident')
