@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 from contextlib import contextmanager
+from datetime import datetime
 import hashlib
 import json
 import plistlib
@@ -93,6 +94,36 @@ def read_text(path: Path, tables: dict) -> dict:
     return dict(sorted(result.items()))
 
 
+def startup_version(path: Path) -> tuple[str, datetime]:
+    lines = path.read_text().splitlines()
+    versions = [(index, re.search(r'Game Version\s*=\s*(.+)', line))
+                for index, line in enumerate(lines) if 'Game Version' in line]
+    versions = [(index, match) for index, match in versions if match]
+    if not versions:
+        raise ValueError('missing game version evidence')
+    index, version = versions[-1]
+    boots = [i for i, line in enumerate(lines) if 'Civ6App::InitialInit start.' in line]
+    if boots and boots[-1] > index:
+        raise ValueError('latest startup has no game version evidence')
+
+    def timestamp(line):
+        match = re.match(r'^\[([^]]+)\]', line)
+        if not match:
+            raise ValueError('missing startup timestamp')
+        try:
+            return datetime.strptime(match[1], '%Y-%m-%d %H:%M:%S')
+        except ValueError as exc:
+            raise ValueError('invalid startup timestamp') from exc
+
+    # Logs can be appended at shutdown; file mtime is not a boot timestamp.
+    started = timestamp(lines[index])
+    previous = versions[-2][0] if len(versions) > 1 else -1
+    matching_boots = [i for i in boots if previous < i <= index]
+    if matching_boots:
+        started = timestamp(lines[matching_boots[-1]])
+    return version[1].strip(), started
+
+
 def capture(game_root: Path, user_root: Path, steam_manifest: Path) -> dict:
     inputs = {
         'bundle': (game_root / 'Info.plist', 'game/Contents/Info.plist'),
@@ -108,20 +139,22 @@ def capture(game_root: Path, user_root: Path, steam_manifest: Path) -> dict:
             inputs[relative] = (p, 'game/Contents/' + relative)
     wal_states = {name: Path(str(inputs[name][0]) + '-wal').exists() for name in ('gameplay', 'localization')}
     for name in ('gameplay', 'localization'):
-        if name == 'gameplay' and inputs[name][0].stat().st_mtime < inputs['startup'][0].stat().st_mtime:
-            raise ValueError(f'{name} cache is older than startup; source version binding is stale')
         wal = Path(str(inputs[name][0]) + '-wal')
         if wal_states[name]:
             inputs[name + '_wal'] = (wal, inputs[name][1] + '-wal')
     hashes = {name: digest(p) for name, (p, _) in inputs.items()}
     bundle = plistlib.loads(inputs['bundle'][0].read_bytes())
-    version = re.search(r'Game Version\s*=\s*([^\r\n]+)', inputs['startup'][0].read_text())
+    version, started = startup_version(inputs['startup'][0])
+    if inputs['gameplay'][0].stat().st_mtime < started.timestamp():
+        raise ValueError('gameplay cache is older than startup; source version binding is stale')
     build = re.search(r'"buildid"\s*"([0-9]+)"', steam_manifest.read_text())
     if not version or not build or not bundle.get('CFBundleShortVersionString') or not bundle.get('CFBundleVersion'):
         raise ValueError('missing game, bundle or Steam version evidence')
     tables, missing = read_tables(inputs['gameplay'][0])
     profile = {
-        'game_version': version[1].strip(),
+        'game_version': version,
+        'startup_started_at': started.isoformat(),
+        'startup_timestamp_basis': 'startup_log_local_time',
         'macos_bundle_version': bundle['CFBundleShortVersionString'],
         'macos_bundle_build': bundle['CFBundleVersion'],
         'steam_build_id': build[1],
