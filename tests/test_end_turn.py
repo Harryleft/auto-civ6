@@ -8,6 +8,7 @@ import pytest
 from civ_mcp import end_turn as et
 from civ_mcp import lua as lq
 from civ_mcp.connection import LuaError
+from civ_mcp.game_state import GameState
 
 
 class FakeConn:
@@ -71,7 +72,15 @@ class FakeConn:
 
 
 class FakeGameState:
+    _pending_end_turn = GameState._pending_end_turn
+    _pending_end_turn_from = GameState._pending_end_turn_from
+    turn_pending = GameState.turn_pending
+    capture_turn_snapshot = GameState.capture_turn_snapshot
+    report_turn_advance = GameState.report_turn_advance
+    end_turn = GameState.end_turn
+
     def __init__(self):
+        self._turn_progress = et.TurnProgress()
         self.conn = FakeConn()
         self._pending_end_turn = False
         self._pending_end_turn_from = None
@@ -139,7 +148,7 @@ def clock(monkeypatch):
 
 
 def play(gs):
-    return asyncio.run(et.execute_end_turn(gs))
+    return asyncio.run(gs.end_turn())
 
 
 def session(**changes):
@@ -247,7 +256,7 @@ def test_pending_request_can_confirm_without_querying_in_game_blockers(clock):
     gs = FakeGameState()
     gs._pending_end_turn = True
     gs._pending_end_turn_from = 49
-    gs._last_snapshot = lq.TurnSnapshot(49, {}, {}, "", "")
+    gs._turn_progress.baseline = lq.TurnSnapshot(49, {}, {}, "", "")
     gs.sessions_error = AssertionError("Must not re-enter preflight while AI is processing")
     assert "Turn 49 -> 50" in play(gs)
     assert not gs.conn.requests
@@ -596,3 +605,126 @@ def test_malformed_congress_read_reports_unknown_instead_of_claiming_no_session(
     result = play(gs)
     assert "World Congress phase unavailable" in result
     assert clock.now < 10 and not gs.conn.requests
+
+
+class GameStateConn(FakeConn):
+    """The native protocol, exercised through the real GameState interface."""
+
+    def __init__(self):
+        super().__init__()
+        self.snapshot_turn = None
+        self.snapshot_error = False
+        self.notification_error = False
+
+    async def execute_write(self, lua):
+        if lua == lq.build_overview_query():
+            self.calls.append(lua)
+            if self.snapshot_error:
+                raise LuaError("Snapshot unavailable")
+            turn = self.turn if self.snapshot_turn is None else self.snapshot_turn
+            research = "Writing" if turn == 50 else "Currency"
+            return [f"{turn}|0|Babylon|Hammurabi|100|5|10|5|0|{research}|Craftsmanship|0|0|20"]
+        responses = {
+            lq.build_gameover_check(): ["GAME_ACTIVE"],
+            lq.build_diplomacy_session_query(): ["NONE"],
+            lq.build_pending_deals_query(): ["DEALS_COMPLETE"],
+            lq.build_units_query(): [],
+            lq.build_cities_query(): [],
+            lq.build_stockpile_query(): [],
+        }
+        if lua in responses:
+            self.calls.append(lua)
+            return responses[lua]
+        if lua == lq.build_notifications_query() and self.notification_error:
+            self.calls.append(lua)
+            raise LuaError("Notifications unavailable")
+        return await super().execute_write(lua)
+
+
+def test_real_game_state_keeps_original_baseline_when_overview_observes_pending_turn(clock):
+    conn = GameStateConn()
+    gs = GameState(conn)
+    conn.send_error = ConnectionError("reply lost")
+    assert "result unknown" in asyncio.run(gs.end_turn())
+    # An ordinary observation can refresh its cache but cannot rewrite the
+    # submitted request's turn-50 facts.
+    asyncio.run(gs.get_game_overview(require_snapshot=True))
+    report = asyncio.run(gs.end_turn())
+    assert "Turn 50 -> 51" in report
+    assert "Research complete: Writing! Now: Currency." in report
+    assert len(conn.requests) == 1
+
+
+@pytest.mark.parametrize("snapshot_turn", [50, 52])
+def test_real_game_state_does_not_describe_stale_or_future_snapshot_as_confirmed_turn(clock, snapshot_turn):
+    conn = GameStateConn()
+    gs = GameState(conn)
+    conn.send_error = ConnectionError("reply lost")
+    assert "result unknown" in asyncio.run(gs.end_turn())
+    conn.snapshot_turn = snapshot_turn
+    report = asyncio.run(gs.end_turn())
+    assert "Turn 50 -> 51" in report
+    assert "snapshot unavailable" in report
+    assert "Research complete:" not in report
+    assert not gs.turn_pending
+    assert len(conn.requests) == 1
+
+
+@pytest.mark.parametrize("failure", ["snapshot", "notifications", "both"])
+def test_real_game_state_report_failure_keeps_confirmed_request_retired(clock, failure):
+    conn = GameStateConn()
+    gs = GameState(conn)
+    conn.send_error = ConnectionError("reply lost")
+    assert "result unknown" in asyncio.run(gs.end_turn())
+    conn.snapshot_error = failure in {"snapshot", "both"}
+    conn.notification_error = failure in {"notifications", "both"}
+    report = asyncio.run(gs.end_turn())
+    assert "Turn 50 -> 51" in report
+    assert "unavailable" in report
+    assert not gs.turn_pending
+    conn.ready = False
+    assert "not ready" in asyncio.run(gs.end_turn())
+    assert len(conn.requests) == 1
+
+
+def test_real_game_state_unknown_request_blocks_actions_and_saves_until_ready(clock):
+    conn = GameStateConn()
+    gs = GameState(conn)
+    conn.readiness = lambda conn: not conn.requests
+    assert "after 180s" in asyncio.run(gs.end_turn())
+    assert gs.turn_pending
+    calls = len(conn.calls)
+    assert "End-turn outcome is pending" in asyncio.run(gs.move_unit(123, 4, 5))
+    assert "End-turn outcome is pending" in asyncio.run(gs.save_game("offline_turn_test"))
+    assert len(conn.calls) == calls
+    conn.readiness = None
+    assert "Turn 50 -> 51" in asyncio.run(gs.end_turn())
+    assert not gs.turn_pending
+    assert len(conn.requests) == 1
+
+
+@pytest.mark.parametrize("pause", ["diplomacy", "congress", "disaster"])
+def test_real_game_state_resumes_paused_request_without_resubmitting(clock, pause):
+    conn = GameStateConn()
+    gs = GameState(conn)
+    conn.readiness = lambda conn: not conn.requests
+    if pause == "diplomacy":
+        conn.diplomacy_probe = ["DIPLOMACY|2"]
+    elif pause == "congress":
+        conn.congress_phase = lambda conn: [
+            f"WC_PHASE|true|STAGE1|{conn.turn}|NONE" if conn.requests
+            else "WC_PHASE|false|NONE|50|NONE"
+        ]
+    else:
+        conn.information_popups = ["INFORMATION_POPUPS|VISIBLE|NaturalDisasterPopup", "INFORMATION_POPUPS|DONE"]
+    assert "Turn paused" in asyncio.run(gs.end_turn())
+    assert gs.turn_pending
+    conn.readiness = None
+    conn.diplomacy_probe = ["DIPLOMACY_NONE"]
+    conn.congress_phase = ["WC_PHASE|false|NONE|51|NONE"]
+    conn.information_popups = ["INFORMATION_POPUPS|DONE"]
+    report = asyncio.run(gs.end_turn())
+    assert "Turn 50 -> 51" in report
+    assert "Research complete: Writing! Now: Currency." in report
+    assert not gs.turn_pending
+    assert len(conn.requests) == 1
