@@ -1164,7 +1164,7 @@ async def unit_action(
             and getattr(gs, "pending_action_entity", None) == ("unit", unit_index)
         ):
             confirmation = await gs.confirm_pending_action()
-            if not confirmation.startswith("CONFIRMED|"):
+            if gs.pending_action_entity == ("unit", unit_index):
                 return confirmation
         match action.lower():
             case "move":
