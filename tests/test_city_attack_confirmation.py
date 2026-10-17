@@ -217,6 +217,7 @@ def test_confirmed_request_cleans_only_its_listener_and_arms_before_one_shot(fas
     followup = engine.observations[-1]
     assert "RequestCommand" not in followup and ".Add(" not in followup
     assert "q.closed = true" in followup and "Events.CityCommandStarted.Remove(q.handler)" in followup
+    assert followup.index("if not q.started then") < followup.index("FindID(q.targetId)")
     assert "center:GetID() ~= q.districtId" in followup and "center:GetCity():GetID() ~= q.cityId" in followup
     assert "q.targetX ~= 18 or q.targetY ~= 19" in followup
 
