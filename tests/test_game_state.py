@@ -1404,7 +1404,7 @@ class TestSetPolicies:
     def test_matching_slots_return_a_clean_result(self):
         gs, _ = _gs(
             [
-                ("write", ["OK:POLICIES_SET"]),
+                ("write", ["POLICY_PLAN_COUNT|2", "POLICY_PLAN|0|POLICY_DISCIPLINE", "POLICY_PLAN|1|NONE", "OK:POLICIES_SET"]),
                 ("write", self._GOV_LINES),
             ]
         )
@@ -1421,7 +1421,7 @@ class TestSetPolicies:
             "GOV|GOVERNMENT_CHIEFDOM|Chiefdom|x",
             "SLOT|0|SLOT_MILITARY|NONE|Empty",
         ]
-        gs, _ = _gs([("write", ["OK:POLICIES_SET"]), ("write", lines)])
+        gs, _ = _gs([("write", ["POLICY_PLAN_COUNT|1", "POLICY_PLAN|0|POLICY_DISCIPLINE", "OK:POLICIES_SET"]), ("write", lines)])
 
         async def go():
             return await gs.set_policies({0: "POLICY_DISCIPLINE"})
