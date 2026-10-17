@@ -180,7 +180,9 @@ class GameState:
                     return pending.success + suffix + f"|BLOCKED ({lq.parse_blocked_diagnostic(pending.observed)})"
         if pending.kind == "found" and pending.details.get("position") is not None:
             if lq.parse_verify_city_at(pending.observed):
-                return pending.success
+                owner = next((re.search(r"\|owner:(\d+)", line) for line in pending.observed if "CITY_EXISTS" in line), None)
+                if owner is None or int(owner[1]) == self._local_player_id:
+                    return pending.success
         return None
 
     async def _action_gate(self, entity: tuple[str, int] | None = None) -> str | None:
