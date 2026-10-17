@@ -537,6 +537,69 @@ def frontend_ok(idx, lua):
 
 
 class TestFrontendFact:
+    @pytest.mark.parametrize("native_value, expected", [("false", False), ("true", True)])
+    def test_transient_discovery_refusal_still_reads_native_frontend(self, native_value, expected):
+        conn = FakeConn(lua_states={24: "MainMenu", 1: "InGame"},
+                        on_state=lambda idx, lua: ["MCP_FRONTEND|" + native_value])
+        discover = conn.rediscover_states
+        failures = iter([True, False])
+
+        async def temporarily_refused(timeout=5.0):
+            if next(failures):
+                raise ConnectionRefusedError("previous FireTuner client still retiring")
+            await discover(timeout=timeout)
+
+        conn.rediscover_states = temporarily_refused
+        assert run(gl.is_in_frontend(conn, timeout=1.0)) is expected
+        assert not any("Events.ExitToMainMenu()" in code or "Network.LoadGame" in code
+                       for _, code in conn.state_calls)
+
+    def test_transient_native_read_refusal_is_confirmed_after_rediscovery(self):
+        replies = iter([ConnectionResetError("read socket retired"), ["MCP_FRONTEND|true"]])
+
+        def native_response(idx, lua):
+            reply = next(replies)
+            if isinstance(reply, Exception):
+                raise reply
+            return reply
+
+        conn = FakeConn(lua_states={24: "MainMenu"}, on_state=native_response)
+        assert run(gl.is_in_frontend(conn, timeout=1.0)) is True
+
+    def test_persistent_discovery_refusal_expires_inside_shared_budget(self):
+        conn = FakeConn(lua_states={24: "MainMenu"})
+
+        async def refused(timeout=5.0):
+            raise ConnectionRefusedError("still unavailable")
+
+        conn.rediscover_states = refused
+
+        async def check():
+            async with asyncio.timeout(0.5):
+                return await gl.is_in_frontend(conn, timeout=0.03)
+
+        assert run(check()) is None
+        assert conn.state_calls == []
+
+    def test_cancellation_during_read_only_recovery_propagates(self):
+        async def check():
+            refused_once = asyncio.Event()
+            conn = FakeConn(lua_states={24: "MainMenu"})
+
+            async def refused(timeout=5.0):
+                refused_once.set()
+                raise ConnectionRefusedError("still unavailable")
+
+            conn.rediscover_states = refused
+            task = asyncio.create_task(gl.is_in_frontend(conn))
+            await refused_once.wait()
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert conn.state_calls == []
+
+        run(check())
+
     @pytest.mark.parametrize("lines, expected", [
         (["MCP_FRONTEND|true"], True),
         (["MCP_FRONTEND|false"], False),
@@ -556,6 +619,32 @@ class TestFrontendFact:
 
 
 class TestReturnToMainMenu:
+    def test_transient_confirmation_disconnect_does_not_replay_exit(self):
+        conn = FakeConn(lua_states={24: "MainMenu", 1: "InGame"})
+        exit_sent = False
+        refused_once = False
+        discover = conn.rediscover_states
+
+        async def temporarily_refused(timeout=5.0):
+            nonlocal refused_once
+            if exit_sent and not refused_once:
+                refused_once = True
+                raise ConnectionRefusedError("menu connection not ready")
+            await discover(timeout=timeout)
+
+        def native_response(idx, lua):
+            nonlocal exit_sent
+            if "Events.ExitToMainMenu()" in lua:
+                exit_sent = True
+                return ["MCP_MENU_EXIT|SUBMITTED"]
+            return ["MCP_FRONTEND|" + str(exit_sent).lower()]
+
+        conn.rediscover_states = temporarily_refused
+        conn.on_state = native_response
+        assert run(gl.return_to_main_menu(conn, timeout=1.0)) == "Main menu confirmed."
+        assert sum("Events.ExitToMainMenu()" in code for _, code in conn.state_calls) == 1
+        assert conn.load_calls == []
+
     def test_already_frontend_does_not_submit_exit_with_stale_gamecore(self):
         conn = FakeConn(lua_states={24: "MainMenu", 0: "GameCore_Tuner", 1: "InGame"},
                         on_state=lambda idx, lua: ["MCP_FRONTEND|true"])

@@ -599,20 +599,28 @@ async def is_in_frontend(conn: GameConnection, *, timeout: float = 5.0) -> bool 
     """
     try:
         async with asyncio.timeout(timeout):
-            await conn.rediscover_states(timeout=timeout)
-            index = next((idx for idx, name in conn.lua_states.items() if name == "MainMenu"), None)
-            if index is None:
-                index = next((idx for idx, name in conn.lua_states.items() if name == "InGame"), None)
-            if index is None:
-                return None
-            lines = await conn.execute_in_state(index, f"""
+            while True:
+                try:
+                    await conn.rediscover_states(timeout=timeout)
+                    index = next((idx for idx, name in conn.lua_states.items() if name == "MainMenu"), None)
+                    if index is None:
+                        index = next((idx for idx, name in conn.lua_states.items() if name == "InGame"), None)
+                    if index is None:
+                        return None
+                    lines = await conn.execute_in_state(index, f"""
 -- MCP_FRONTEND_STATUS: read-only native frontend fact
 local ok, value = pcall(function() return UI.IsInFrontEnd(); end);
 if not ok or type(value) ~= "boolean" then print("MCP_FRONTEND|UNKNOWN");
 else print("MCP_FRONTEND|" .. tostring(value)); end;
 print("{lq.SENTINEL}");
 """, timeout=timeout)
-    except (OSError, TimeoutError, LuaError):
+                    break
+                except OSError:
+                    # FireTuner can briefly refuse a replacement client while
+                    # retiring the old one. Retry only discovery/native reads,
+                    # within the same deadline; exit/load are never replayed.
+                    await asyncio.sleep(0.2)
+    except (TimeoutError, LuaError):
         return None
     facts = [line for line in lines if line.startswith("MCP_FRONTEND|")]
     if facts == ["MCP_FRONTEND|true"]:
