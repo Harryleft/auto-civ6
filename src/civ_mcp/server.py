@@ -972,7 +972,9 @@ async def propose_peace(ctx: Context, other_player_id: int) -> str:
         other_player_id: The player ID (from get_diplomacy output)
 
     Requires being at war and past the 10-turn war cooldown.
-    The AI may accept or reject based on war score and relationship.
+    Submits once and briefly checks war state. ACCEPTED confirms observed peace.
+    PROPOSED_UNCONFIRMED requires get_diplomacy before another proposal;
+    continued war alone is not a rejection and must not trigger an automatic resend.
     """
     gs = _get_game(ctx)
     return await _logged(
