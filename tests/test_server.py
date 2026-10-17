@@ -32,12 +32,20 @@ class FakeConn:
         self.reconnect_states = []
         self.load_response = ["MCP_FRONTEND_AUTOSTART|true", "MCP_FRONTEND_LOAD|true"]
 
+    @property
+    def load_calls(self):
+        return [(idx, code) for idx, code in self.state_calls if "Network.LoadGame" in code]
+
     async def execute_read(self, query, timeout=None):
         self.read_queries.append(query)
         return []
 
     async def execute_in_state(self, index, code, timeout=None):
         self.state_calls.append((index, code))
+        if "MCP_SAVE_QUERY_START" in code:
+            return ["MCP_SAVE_QUERY_STARTED"]
+        if "MCP_SAVE_QUERY_STATUS" in code:
+            return ["MCP_SAVE_QUERY|" + getattr(self, "query_status", "READY")]
         if isinstance(self.load_response, Exception):
             raise self.load_response
         return self.load_response
@@ -1086,8 +1094,8 @@ class TestSaveTools:
     def test_named_loader_confirms_on_the_same_connection(self, tool):
         ctx, gs = self.prepare_menu_load()
         assert run(getattr(server, tool)(ctx, "MySave")) == "Loaded MySave: rome, seed 4242, turn 12."
-        assert len(gs.conn.state_calls) == 1
-        assert gs.conn.state_calls[0][0] == 24
+        assert len(gs.conn.load_calls) == 1
+        assert gs.conn.load_calls[0][0] == 24
         assert gs.reset_calls == 1
 
     def test_unknown_submission_is_confirmed_without_resending(self):
@@ -1095,7 +1103,7 @@ class TestSaveTools:
         gs.conn.load_response = ConnectionError("load closed socket")
         result = run(server.load_game_save(ctx, "MySave"))
         assert result.startswith("Loaded MySave:")
-        assert len(gs.conn.state_calls) == 1
+        assert len(gs.conn.load_calls) == 1
 
     def test_loading_while_in_game_is_refused(self):
         ctx = make_ctx()
@@ -1110,7 +1118,7 @@ class TestSaveTools:
         monkeypatch.setattr(server, "LOAD_TIMEOUT", 0.01)
         result = run(server.load_game_save(ctx, "MySave"))
         assert result.startswith("ERR:OUTCOME_UNKNOWN")
-        assert len(gs.conn.state_calls) == 1
+        assert len(gs.conn.load_calls) == 1
         assert gs.conn.disconnect_calls == 1
 
     def test_invalid_name_is_rejected_before_reconnecting(self):
@@ -1136,7 +1144,7 @@ class TestSaveTools:
         monkeypatch.setattr(server.asyncio, "sleep", immediate_sleep)
         assert run(server.load_game_save(ctx, "MySave")).startswith("Loaded MySave:")
         assert len(attempts) == 3
-        assert len(gs.conn.state_calls) == 1
+        assert len(gs.conn.load_calls) == 1
 
     def test_missing_main_menu_times_out_without_sending_load(self, monkeypatch):
         ctx, gs = self.prepare_menu_load()
@@ -1180,7 +1188,7 @@ class TestLifecycleTools:
         result = run(server.restart_and_load(ctx, "MySave"))
         assert result.startswith("Loaded MySave:")
         assert events == ["kill", "launch"]
-        assert len(gs.conn.state_calls) == 1
+        assert len(gs.conn.load_calls) == 1
         assert gs.reset_calls == 2
 
     def test_failed_launch_does_not_load(self, monkeypatch):
