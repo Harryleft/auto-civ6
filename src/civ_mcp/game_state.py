@@ -828,16 +828,23 @@ class GameState:
         result = _action_result(lines)
         if result.startswith("Error"):
             return result
-        # War state is async — verify with a second round-trip
-        verify_lines = await self.conn.execute_write(
-            lq.build_check_war_state(other_player_id)
-        )
-        at_peace = any("AT_PEACE" in l for l in verify_lines)
         name = result.split("|", 1)[1] if "|" in result else f"player {other_player_id}"
-        if at_peace:
-            return f"ACCEPTED|Peace established with {name}"
-        else:
-            return f"REJECTED|{name} rejected your peace offer"
+        # War state is asynchronous. The deadline includes each read; observing
+        # continued war is not evidence that the native AI rejected the offer.
+        query = lq.build_check_war_state(other_player_id)
+        try:
+            async with asyncio.timeout(ACTION_CONFIRM_TIMEOUT):
+                while True:
+                    verify_lines = await self.conn.execute_write(query)
+                    if verify_lines == ["AT_PEACE"]:
+                        return f"ACCEPTED|Peace established with {name}"
+                    await asyncio.sleep(ACTION_CONFIRM_INTERVAL)
+        except (OSError, TimeoutError, LuaError, ValueError):
+            pass
+        return (
+            f"PROPOSED_UNCONFIRMED|Peace proposed to {name}; outcome not confirmed. "
+            "Query get_diplomacy before another proposal; do not automatically resend."
+        )
 
     async def form_alliance(self, other_player_id: int, alliance_type: str) -> str:
         lua = lq.build_form_alliance(other_player_id, alliance_type.upper())
