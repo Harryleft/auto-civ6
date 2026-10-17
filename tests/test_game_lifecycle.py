@@ -20,6 +20,7 @@ from pathlib import Path
 
 import pytest
 
+from civ_mcp import checkpoints
 from civ_mcp import game_launcher
 from civ_mcp import game_lifecycle as gl
 
@@ -47,6 +48,7 @@ def isolated_lifecycle(monkeypatch, tmp_path):
     auto.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(game_launcher, "SAVE_DIR", str(auto))
     monkeypatch.setattr(game_launcher, "SINGLE_SAVE_DIR", str(auto.parent))
+    monkeypatch.setattr(checkpoints, "CHECKPOINT_DIR", tmp_path / "records")
     no_crash_dialogs(monkeypatch)
 
 
@@ -83,6 +85,7 @@ class FakeConn:
         self.on_write = on_write
         self.on_state = on_state
         self.on_read = on_read
+        self.native_completion = True
         self.writes: list[str] = []
         self.state_calls: list[tuple[int, str]] = []
         self.reads: list[str] = []
@@ -96,6 +99,11 @@ class FakeConn:
 
     async def execute_write(self, lua, timeout=5.0):
         self.writes.append(lua)
+        if "MCP_SAVE_COMPLETION_CLEANUP" in lua:
+            return []
+        if "MCP_SAVE_COMPLETION_STATUS" in lua:
+            done = self.native_completion() if callable(self.native_completion) else self.native_completion
+            return ["MCP_SAVE_COMPLETE|" + str(done).lower()]
         if self.on_write is None:
             return []
         return self.on_write(lua)
@@ -148,6 +156,29 @@ class TestSaveGame:
         monkeypatch.setattr(gl, "SAVE_CONFIRM_TIMEOUT", 0.03)
         monkeypatch.setattr(gl, "SAVE_POLL_INTERVAL", 0.001)
 
+    def test_partial_file_is_not_confirmed_until_native_save_complete(self):
+        async def go():
+            path = Path(game_launcher.SINGLE_SAVE_DIR) / "checkpoint.Civ6Save"
+            complete = False
+            async def finish():
+                nonlocal complete
+                await asyncio.sleep(0.012)
+                path.write_bytes(b"completed save")
+                complete = True
+            def respond(lua):
+                if "Network.SaveGame" in lua:
+                    path.write_bytes(b"part")
+                    asyncio.create_task(finish())
+                    return ["MCP_SAVE|true"]
+                return ["MCP_SAVE_COMPLETE|" + str(complete).lower()]
+            conn = FakeConn(on_write=respond)
+            conn.native_completion = lambda: complete
+            result = await gl.save_game(conn, "checkpoint")
+            return result, complete
+        result, complete = run(go())
+        assert complete
+        assert "(14 bytes)" in result
+
     def test_success_requires_a_fresh_nonempty_file(self):
         def write(lua):
             path = Path(game_launcher.SINGLE_SAVE_DIR) / "checkpoint.Civ6Save"
@@ -159,8 +190,8 @@ class TestSaveGame:
             return conn, await gl.save_game(conn, "checkpoint.Civ6Save")
 
         conn, result = run(go())
-        assert result == "Saved: checkpoint; file confirmed (8 bytes)."
-        assert len(conn.writes) == 1
+        assert result == "Saved: checkpoint; native completion and file confirmed (8 bytes)."
+        assert sum("Network.SaveGame" in code for code in conn.writes) == 1
         assert 'gf.Name = "checkpoint"' in conn.writes[0]
         assert "SaveLocations.LOCAL_STORAGE" in conn.writes[0]
         assert "SaveTypes.SINGLE_PLAYER" in conn.writes[0]
@@ -172,7 +203,7 @@ class TestSaveGame:
         conn = FakeConn(on_write=lambda lua: ["MCP_SAVE|true"])
         result = run(gl.save_game(conn, "checkpoint"))
         assert result.startswith("ERR:OUTCOME_UNKNOWN")
-        assert len(conn.writes) == 1
+        assert sum("Network.SaveGame" in code for code in conn.writes) == 1
         assert path.read_bytes() == b"old save"
 
     def test_lost_response_can_be_confirmed_without_resending(self):
@@ -181,7 +212,7 @@ class TestSaveGame:
             raise ConnectionError("response lost")
         conn = FakeConn(on_write=write)
         assert run(gl.save_game(conn, "checkpoint")).startswith("Saved:")
-        assert len(conn.writes) == 1
+        assert sum("Network.SaveGame" in code for code in conn.writes) == 1
 
     def test_waits_for_nonempty_file_after_submission(self):
         async def go():
@@ -196,10 +227,55 @@ class TestSaveGame:
             return await gl.save_game(FakeConn(on_write=write), "checkpoint")
         assert "(8 bytes)" in run(go())
 
+    def test_fresh_file_without_native_completion_remains_unknown(self):
+        def write(lua):
+            (Path(game_launcher.SINGLE_SAVE_DIR) / "checkpoint.Civ6Save").write_bytes(b"part")
+            return ["MCP_SAVE|true"]
+        conn = FakeConn(on_write=write)
+        conn.native_completion = False
+        assert run(gl.save_game(conn, "checkpoint")).startswith("ERR:OUTCOME_UNKNOWN")
+        assert sum("Network.SaveGame" in code for code in conn.writes) == 1
+
+    def test_checkpoint_record_survives_session_and_rejects_changed_file(self):
+        path = Path(game_launcher.SINGLE_SAVE_DIR) / "checkpoint.Civ6Save"
+        def write(lua):
+            path.write_bytes(b"native completed")
+            return ["MCP_SAVE|true"]
+        assert run(gl.save_game(FakeConn(on_write=write), "checkpoint")).startswith("Saved:")
+        assert checkpoints.record_checkpoint("checkpoint", ("sumeria", 719665280), 21) is None
+        assert checkpoints.expected_checkpoint("checkpoint") == ("sumeria", 719665280, 21)
+        path.write_bytes(b"different later file")
+        assert checkpoints.expected_checkpoint("checkpoint") is None
+
+    def test_unknown_overwrite_invalidates_prior_recovery_record(self):
+        path = Path(game_launcher.SINGLE_SAVE_DIR) / "checkpoint.Civ6Save"
+        def write(lua):
+            path.write_bytes(b"native completed")
+            return ["MCP_SAVE|true"]
+        run(gl.save_game(FakeConn(on_write=write), "checkpoint"))
+        assert checkpoints.record_checkpoint("checkpoint", ("sumeria", 719665280), 21) is None
+        result = run(gl.save_game(FakeConn(on_write=lambda code: ["MCP_SAVE|true"]), "checkpoint"))
+        assert result.startswith("ERR:OUTCOME_UNKNOWN")
+        assert checkpoints.expected_checkpoint("checkpoint") is None
+
+    def test_only_exact_archived_baseline_has_trusted_original_identity(self):
+        archived = Path(__file__).resolve().parents[1] / "fixtures/saves/benchmark_turn_1.Civ6Save"
+        target = Path(game_launcher.SINGLE_SAVE_DIR) / archived.name
+        target.write_bytes(archived.read_bytes())
+        assert checkpoints.expected_checkpoint("benchmark_turn_1") == ("sumeria", 719665280, 1)
+        target.write_bytes(b"different map using the same name")
+        assert checkpoints.expected_checkpoint("benchmark_turn_1") is None
+
+    @pytest.mark.parametrize("name", ["benchmark_turn_1", "benchmark_turn_1.Civ6Save", "BENCHMARK_TURN_1", "benchmark_turn_1 "])
+    def test_original_baseline_cannot_be_overwritten(self, name):
+        conn = FakeConn()
+        assert run(gl.save_game(conn, name)).startswith("Error:")
+        assert conn.writes == []
+
     def test_explicit_rejection_is_not_reported_as_saved(self):
         conn = FakeConn(on_write=lambda lua: ["MCP_SAVE|false"])
         assert run(gl.save_game(conn, "checkpoint")).startswith("Error: Civ VI rejected")
-        assert len(conn.writes) == 1
+        assert sum("Network.SaveGame" in code for code in conn.writes) == 1
 
     @pytest.mark.parametrize("name", ["", "a/b", "a\\b", "bad\x01name", ".", "..", ".Civ6Save"])
     def test_invalid_name_never_reaches_game(self, name):

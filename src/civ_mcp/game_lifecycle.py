@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import uuid
 import logging
 from pathlib import Path
 
@@ -337,17 +338,21 @@ _filesystem_save_names: list[str] = []
 
 
 async def save_game(conn: GameConnection, name: str) -> str:
-    """Submit one local save and confirm a fresh, nonempty file on disk.
+    """Submit once; require native SaveComplete and the exact fresh file.
 
     Network.SaveGame only acknowledges submission. Never replay a lost
     request: its file may still finish writing after FireTuner disconnects.
     """
     from civ_mcp.game_launcher import SINGLE_SAVE_DIR
+    from civ_mcp import checkpoints
 
     error = _validate_save_name(name)
     if error:
         return error
     name = name.removesuffix(".Civ6Save")
+    if name.rstrip(" .").casefold() == "benchmark_turn_1":
+        return "Error: The original benchmark_turn_1 baseline cannot be overwritten."
+    checkpoints.forget_completion(name)
     path = Path(SINGLE_SAVE_DIR) / f"{name}.Civ6Save"
 
     def fingerprint():
@@ -358,41 +363,92 @@ async def save_game(conn: GameConnection, name: str) -> str:
             return None
 
     before = fingerprint()
-    code = (
-        f"local gf = {{}}; "
-        f'gf.Name = "{_lua_escape(name)}"; '
-        f"gf.Location = SaveLocations.LOCAL_STORAGE; "
-        f"gf.Type = SaveTypes.SINGLE_PLAYER; "
-        f"gf.IsAutosave = false; "
-        f"gf.IsQuicksave = false; "
-        "local ok, result = pcall(function() return Network.SaveGame(gf); end); "
-        'print("MCP_SAVE|" .. tostring(ok and result ~= false)); '
-        'if not ok then print("MCP_SAVE_ERROR|" .. tostring(result)); end; '
-        f'print("{lq.SENTINEL}")'
-    )
+    # The installed native automation tests explicitly wait for SaveComplete.
+    # It has no filename argument, so arm before our single request, bind the
+    # listener to this token, and also require this exact file to become fresh.
+    # No end-turn/save request may overlap this serialized active-turn operation.
+    token = uuid.uuid4().hex
+    code = f"""
+local prior = __civmcpSaveCompletion;
+if prior and not prior.done then print("MCP_SAVE_PENDING"); print("{lq.SENTINEL}"); return; end;
+if prior and prior.handler then pcall(function() Events.SaveComplete.Remove(prior.handler); end); end;
+local q = {{token="{token}", done=false}};
+__civmcpSaveCompletion = q;
+q.handler = function()
+  if __civmcpSaveCompletion == q then q.done = true; end;
+  Events.SaveComplete.Remove(q.handler);
+end;
+local armed = pcall(function() Events.SaveComplete.Add(q.handler); end);
+if not armed then q.done = true; print("MCP_SAVE_UNAVAILABLE"); print("{lq.SENTINEL}"); return; end;
+local gf = {{}};
+gf.Name = "{_lua_escape(name)}";
+gf.Location = SaveLocations.LOCAL_STORAGE;
+gf.Type = SaveTypes.SINGLE_PLAYER;
+gf.IsAutosave = false;
+gf.IsQuicksave = false;
+local ok, result = pcall(function() return Network.SaveGame(gf); end);
+if not ok or result == false then q.done = true; end;
+print("MCP_SAVE|" .. tostring(ok and result ~= false));
+if not ok then print("MCP_SAVE_ERROR|" .. tostring(result)); end;
+print("{lq.SENTINEL}");
+"""
+    status = f"""
+-- MCP_SAVE_COMPLETION_STATUS
+local q = __civmcpSaveCompletion;
+print("MCP_SAVE_COMPLETE|" .. tostring(q and q.token == "{token}" and q.done == true));
+print("{lq.SENTINEL}");
+"""
+    deadline = asyncio.get_running_loop().time() + SAVE_CONFIRM_TIMEOUT
+    # Reserve a little of the same total budget for listener cleanup. A dead
+    # transport cannot guarantee cleanup; the unresolved latch still refuses
+    # another save until explicit recovery instead of accepting a late event.
+    cleanup_budget = min(0.5, SAVE_CONFIRM_TIMEOUT / 4)
     try:
-        lines = await conn.execute_write(code)
-    except (OSError, TimeoutError, LuaError):
-        lines = []
-    if "MCP_SAVE|false" in lines:
-        return f"Error: Civ VI rejected save {name!r}: {lines!r}"
-    try:
-        async with asyncio.timeout(SAVE_CONFIRM_TIMEOUT):
-            previous = None
+        async with asyncio.timeout(SAVE_CONFIRM_TIMEOUT - cleanup_budget):
+            try:
+                lines = await conn.execute_write(code)
+            except (OSError, TimeoutError, LuaError):
+                lines = []
+            if "MCP_SAVE_PENDING" in lines:
+                return "ERR:OUTCOME_UNKNOWN|Earlier native save completion is unresolved; no new save submitted. Use explicit recovery."
+            if "MCP_SAVE_UNAVAILABLE" in lines:
+                return "Error: Native save completion event unavailable; no save submitted."
+            if "MCP_SAVE|false" in lines:
+                return f"Error: Civ VI rejected save {name!r}: {lines!r}"
             while True:
                 current = fingerprint()
                 if current and current != before and current[1] > 0:
-                    if current == previous:
-                        return f"Saved: {name}; file confirmed ({current[1]} bytes)."
-                    previous = current
-                else:
-                    previous = None
+                    try:
+                        observed = await conn.execute_write(status)
+                    except (OSError, TimeoutError, LuaError):
+                        observed = []
+                    if "MCP_SAVE_COMPLETE|true" in observed and fingerprint() == current:
+                        checkpoints.mark_complete(name)
+                        return f"Saved: {name}; native completion and file confirmed ({current[1]} bytes)."
                 await asyncio.sleep(SAVE_POLL_INTERVAL)
     except (TimeoutError, OSError):
         return (
-            f"ERR:OUTCOME_UNKNOWN|Save {name!r} was attempted once, but no fresh "
-            "nonempty file was confirmed. Inspect the save before retrying."
+            f"ERR:OUTCOME_UNKNOWN|Save {name!r} was attempted once; a fresh "
+            "nonempty file and native completion were not both confirmed. "
+            "Inspect the save; do not use it for recovery or resend blindly."
         )
+    finally:
+        remaining = deadline - asyncio.get_running_loop().time()
+        if remaining > 0:
+            cleanup = f"""
+-- MCP_SAVE_COMPLETION_CLEANUP
+local q = __civmcpSaveCompletion;
+if q and q.token == "{token}" and q.handler then
+  pcall(function() Events.SaveComplete.Remove(q.handler); end);
+  q.handler = nil;
+end;
+print("{lq.SENTINEL}");
+"""
+            try:
+                async with asyncio.timeout(remaining):
+                    await conn.execute_write(cleanup, timeout=remaining)
+            except (OSError, TimeoutError, LuaError):
+                log.warning("Save completion listener cleanup could not be confirmed")
 
 
 
