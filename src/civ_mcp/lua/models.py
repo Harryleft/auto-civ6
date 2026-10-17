@@ -13,6 +13,14 @@ class ScoreEntry:
 
 
 @dataclass
+class ScoreCategory:
+    category_type: str
+    name: str
+    multiplier: int
+    score: int
+
+
+@dataclass
 class ReligionInfo:
     """Religion founded by a civilization."""
 
@@ -67,6 +75,15 @@ class GameOverview:
     speed_cost_multiplier: int = 100  # 67 for Quick, 100 for Standard, etc.
     # Victory conditions (empty = all enabled)
     enabled_victories: set[str] = field(default_factory=set)
+    # None means the native positive-weight category set was not complete.
+    score_categories: list[ScoreCategory] | None = None
+
+    @property
+    def score_category_total(self) -> int | None:
+        if self.score_categories is None:
+            return None
+        # GetCategoryScore already includes weighting; this is diagnostic only.
+        return sum(category.score for category in self.score_categories)
 
 
 @dataclass
