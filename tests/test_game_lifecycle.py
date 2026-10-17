@@ -49,6 +49,7 @@ def isolated_lifecycle(monkeypatch, tmp_path):
     monkeypatch.setattr(game_launcher, "SAVE_DIR", str(auto))
     monkeypatch.setattr(game_launcher, "SINGLE_SAVE_DIR", str(auto.parent))
     monkeypatch.setattr(checkpoints, "CHECKPOINT_DIR", tmp_path / "records")
+    assert checkpoints.begin_baseline_run() is None
     no_crash_dialogs(monkeypatch)
 
 
@@ -609,7 +610,7 @@ class TestLoadGameSave:
 
         assert run(go()).startswith("ERR:OUTCOME_UNKNOWN")
 
-    def test_autostart_unavailable_is_an_error(self):
+    def test_autostart_unavailable_after_load_starts_is_unknown(self):
         async def go():
             conn = menu_conn(
                 on_state=lambda idx, lua: [
@@ -619,7 +620,9 @@ class TestLoadGameSave:
             )
             return await gl.load_game_save(conn, "0_MCP_0042")
 
-        assert "auto-start was unavailable" in run(go())
+        result = run(go())
+        assert result.startswith("ERR:OUTCOME_UNKNOWN")
+        assert "auto-start was unavailable" in result
 
     @pytest.mark.parametrize("failure", [ConnectionError, OSError, TimeoutError])
     def test_connection_loss_mid_load_is_outcome_unknown_not_an_exception(self, failure):

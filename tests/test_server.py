@@ -959,6 +959,7 @@ def isolated_server(monkeypatch, tmp_path):
     from civ_mcp import checkpoints
     from pathlib import Path
     monkeypatch.setattr(checkpoints, "CHECKPOINT_DIR", tmp_path / "records")
+    assert checkpoints.begin_baseline_run() is None
     class SaveBoundary:
         async def execute_write(self, code, timeout=None):
             if "Network.SaveGame" in code:
@@ -1027,6 +1028,33 @@ class TestLogged:
         app_of(ctx).logger.log_tool_call = full_disk
         assert run(server._logged(ctx, "action", {}, action)) == "confirmed"
         assert calls == [1]
+
+
+class TestPendingEndTurnDispatch:
+    @pytest.mark.parametrize("tool,args", [
+        ("set_research", ("TECH_MINING",)),
+        ("promote_unit", (7, "PROMOTION_BATTLECRY")),
+        ("unit_action", (7, "automate")),
+    ])
+    def test_unconfirmed_turn_blocks_all_gameplay_mutations(self, tool, args):
+        ctx = make_ctx()
+        gs = app_of(ctx).game
+        gs._pending_end_turn = True
+        result = run(getattr(server, tool)(ctx, *args))
+        assert "OUTCOME_UNKNOWN" in result
+        assert gs.calls == []
+
+    @pytest.mark.parametrize("tool", ["get_units", "list_saves", "end_turn", "respond_to_diplomacy", "respond_to_trade", "queue_wc_votes", "dismiss_popup", "restart_and_load"])
+    def test_unconfirmed_turn_still_allows_confirmation_and_blocker_resolution(self, tool):
+        ctx = make_ctx()
+        gs = app_of(ctx).game
+        gs._pending_end_turn = True
+        observations = []
+        async def operation():
+            observations.append(tool)
+            return "observed"
+        assert run(server._logged(ctx, tool, {}, operation)) == "observed"
+        assert observations == [tool]
 
 
 class TestGetGameOverview:
@@ -1103,6 +1131,84 @@ class TestSaveTools:
         assert len(gs.conn.load_calls) == 1
         assert not gs.called("load_save")
 
+    def test_public_native_fallback_listing_routes_displayed_index(self, monkeypatch, tmp_path):
+        ctx, gs = self.prepare_menu_load()
+        # The platform's native list can work when the filesystem scanner has
+        # no files in its configured autosave-parent path.
+        monkeypatch.setattr(server.game_launcher, "SAVE_DIR", str(tmp_path / "empty" / "auto"))
+        original_write = gs.conn.execute_write
+        async def enumerate_native(code, timeout=None):
+            if "MCPSaveQueryDone = false" in code:
+                return ["QUERY_SENT"]
+            if "MCPSaveQueryDone then" in code:
+                return ["COUNT|1", "SAVE|1|MySave"]
+            return await original_write(code, timeout)
+        gs.conn.execute_write = enumerate_native
+        async def list_native():
+            return await server.game_lifecycle.list_saves(gs.conn)
+        gs.list_saves = list_native
+        listing = run(server.list_saves(ctx))
+        assert "1. MySave" in listing
+        assert run(server.load_save(ctx, 1)).startswith("Loaded MySave:")
+        assert len(gs.conn.load_calls) == 1
+
+    def test_previous_run_checkpoint_is_rejected_before_restart_or_load(self):
+        from civ_mcp import checkpoints
+        ctx, gs = self.prepare_menu_load()
+        assert checkpoints.begin_baseline_run() is None
+        assert "no restart performed" in run(server.restart_and_load(ctx, "MySave"))
+        assert "no load sent" in run(server.load_game_save(ctx, "MySave"))
+        assert gs.conn.load_calls == []
+        assert gs.conn.disconnect_calls == 0
+
+    def test_verified_checkpoint_recovery_preserves_run_ownership(self):
+        from civ_mcp import checkpoints
+        ctx, gs = self.prepare_menu_load()
+        assert run(server.load_game_save(ctx, "MySave")).startswith("Loaded MySave:")
+        assert checkpoints.expected_checkpoint("MySave") == ("rome", 4242, 12)
+
+    @pytest.mark.parametrize("matches", [True, False])
+    def test_only_verified_baseline_load_rotates_current_run(self, monkeypatch, tmp_path, matches):
+        from civ_mcp import checkpoints
+        from pathlib import Path
+        ctx, gs = self.prepare_menu_load()
+        original = Path(__file__).resolve().parents[1] / "fixtures" / "saves" / "benchmark_turn_1.Civ6Save"
+        (tmp_path / original.name).write_bytes(original.read_bytes())
+        gs.script["get_game_identity"] = ("sumeria", 719665280) if matches else ("rome", 4242)
+        gs.script["get_game_overview"] = make_overview(turn=1)
+        original_read = gs.conn.execute_read
+        original_write = gs.conn.execute_write
+        async def turn_one_read(code, timeout=None):
+            if "TURN_STATE|" in code:
+                return ["TURN_STATE|1|1"]
+            return await original_read(code, timeout)
+        async def turn_one_write(code, timeout=None):
+            if "TURN_UI_READY|" in code:
+                return ["TURN_UI_READY|1|1"]
+            return await original_write(code, timeout)
+        gs.conn.execute_read = turn_one_read
+        gs.conn.execute_write = turn_one_write
+        result = run(server.load_game_save(ctx, "benchmark_turn_1"))
+        assert result.startswith("Loaded" if matches else "ERR:OUTCOME_UNKNOWN")
+        assert (checkpoints.expected_checkpoint("MySave") is None) == matches
+        assert len(gs.conn.load_calls) == 1
+
+    def test_invalid_native_listing_clears_previous_displayed_indices(self, monkeypatch, tmp_path):
+        ctx, gs = self.prepare_menu_load()
+        async def list_real():
+            return await server.game_lifecycle.list_saves(gs.conn)
+        gs.list_saves = list_real
+        assert "1. MySave" in run(server.list_saves(ctx))
+        monkeypatch.setattr(server.game_launcher, "SAVE_DIR", str(tmp_path / "empty" / "auto"))
+        async def invalid_native(code, timeout=None):
+            if "MCPSaveQueryDone then" in code:
+                return ["COUNT|1", "SAVE|3|MySave"]
+            return ["QUERY_SENT"]
+        gs.conn.execute_write = invalid_native
+        assert "No saves found" in run(server.list_saves(ctx))
+        assert "No matching cached save index" in run(server.load_save(ctx, 1))
+        assert gs.conn.load_calls == []
+
     def test_missing_index_does_not_submit_a_load(self):
         ctx = make_ctx()
         assert run(server.load_save(ctx, 999)).startswith("Error:")
@@ -1124,6 +1230,14 @@ class TestSaveTools:
         assert len(gs.conn.load_calls) == 1
         assert gs.conn.load_calls[0][0] == 24
         assert gs.reset_calls == 1
+
+    def test_native_load_started_without_autostart_still_requires_confirmation(self):
+        ctx, gs = self.prepare_menu_load()
+        gs.conn.load_response = ["MCP_FRONTEND_AUTOSTART|false", "MCP_FRONTEND_LOAD|true"]
+        result = run(server.load_game_save(ctx, "MySave"))
+        assert result.startswith("Loaded MySave:")
+        assert len(gs.conn.load_calls) == 1
+        assert gs._pending_load is False
 
     def test_unknown_submission_is_confirmed_without_resending(self):
         ctx, gs = self.prepare_menu_load()
