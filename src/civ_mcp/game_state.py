@@ -459,8 +459,11 @@ class GameState:
         blocked = await self._action_gate()
         if blocked:
             return blocked
+        estimate = None
         estimate_str = ""
+        unknown_estimate = "Combat estimate unknown (native preview unavailable; conditional modifiers uncomputed).\n"
         if entity[0] == "unit":
+            estimate_str = unknown_estimate
             try:
                 await self.dismiss_popup()
             except (OSError, TimeoutError, LuaError):
@@ -484,6 +487,8 @@ class GameState:
             return self._pending_unknown(f"submission acknowledgement unavailable: {exc}")
         result = _action_result(lines)
         if result.startswith(("RANGE_ATTACK", "MELEE_ATTACK", "AIR_ATTACK", "CITY_RANGE_ATTACK")):
+            if estimate and (result.startswith("AIR_ATTACK") or estimate.is_ranged != result.startswith("RANGE_ATTACK")):
+                estimate_str = unknown_estimate
             pending.success = result
             pending.details["pre_hp"] = _extract_pre_hp(result)
             for name in ("target_owner", "target_id", "attacks_before"):

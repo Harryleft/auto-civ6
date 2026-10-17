@@ -439,7 +439,7 @@ def narrate_combat_estimate(est: lq.CombatEstimate) -> str:
     atk_type = "Ranged" if est.is_ranged else "Melee"
     mods_str = ", ".join(est.modifiers) if est.modifiers else "none"
     lines = [
-        f"Combat Estimate ({atk_type}):",
+        f"Native combat preview ({atk_type}):",
         f"  {est.attacker_type} (CS:{est.attacker_cs}, HP:{est.attacker_hp}) vs "
         f"{est.defender_type} (CS:{est.defender_cs}, HP:{est.defender_hp})",
         f"  Modifiers: {mods_str}",

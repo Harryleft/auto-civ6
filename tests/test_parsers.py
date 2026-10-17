@@ -175,8 +175,8 @@ class TestParseUnits:
 
 class TestParseCombat:
     def test_melee_combat(self):
-        # ESTIMATE|att_type|def_type|eff_att_cs|eff_def_cs|is_ranged|modifiers|my_hp|enemy_hp
-        line = "ESTIMATE|UNIT_WARRIOR|UNIT_WARRIOR|20|20|0|Flanking +2;Fortified -4|100|100"
+        # Native side DAMAGE_TO values are authoritative, not a strength formula.
+        line = "NATIVE_ESTIMATE|UNIT_WARRIOR|UNIT_WARRIOR|20|20|0|100|100|17|31"
         result = parse_combat_estimate([line], att_cs=20, def_cs=20)
         assert result is not None
         assert result.attacker_type == "UNIT_WARRIOR"
@@ -184,19 +184,16 @@ class TestParseCombat:
         assert result.attacker_cs == 20
         assert result.defender_cs == 20
         assert result.is_ranged is False
-        assert "Flanking +2" in result.modifiers
-        assert "Fortified -4" in result.modifiers
-        # Equal CS: damage should be base (24) for both sides
-        assert result.est_damage_to_defender == 24
-        assert result.est_damage_to_attacker == 24
+        assert result.est_damage_to_defender == 31
+        assert result.est_damage_to_attacker == 17
 
     def test_ranged_no_counter(self):
-        line = "ESTIMATE|UNIT_ARCHER|UNIT_WARRIOR|25|20|1||100|100"
+        line = "NATIVE_ESTIMATE|UNIT_ARCHER|UNIT_WARRIOR|25|20|1|100|100|0|33"
         result = parse_combat_estimate([line], att_cs=25, def_cs=20)
         assert result is not None
         assert result.is_ranged is True
         assert result.est_damage_to_attacker == 0  # ranged = no counter
-        assert result.est_damage_to_defender > 24  # attacker stronger
+        assert result.est_damage_to_defender == 33
 
     def test_no_estimate_line(self):
         assert parse_combat_estimate(["some other line"], att_cs=20, def_cs=20) is None
