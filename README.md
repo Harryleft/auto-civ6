@@ -55,7 +55,7 @@ args = ["run", "--directory", "/absolute/path/to/civ6-mcp", "civ-mcp"]
 
 结果为 `OUTCOME_UNKNOWN` 时，先检查实际文件和游戏状态，不立即重发保存。回合推进结果尚未确认时，工具拒绝建立检查点。
 
-恢复时显式调用 `restart_and_load(save_name="已确认的检查点名称")`，随后用 `get_game_overview` 核对文明、种子和回合。读取检查点会丢失保存后的操作；只有已确认的检查点满足允许的回退范围时才能恢复。省略名称会选择游戏自动存档，该路径不等同于已验证的命名检查点恢复。
+恢复时显式调用 `restart_and_load(save_name="已确认的检查点名称")`，随后用 `get_game_overview` 核对文明、种子和回合。读取检查点会丢失保存后的操作；只有已确认的检查点满足允许的回退范围时才能恢复。本项目测试必须明确提供来自当前基准对局的存档名称，不按「最新自动存档」推断来源。
 
 ## 验证与资料
 
@@ -71,13 +71,13 @@ uv run python scripts/install_saves.py --dry-run
 
 ```bash
 # --save 显式加载该存档；已加载其他游戏时会重启并替换当前会话
-uv run python scripts/integration_turns.py --save 0C_CRY_HAVOC --turns 10 --timeout 900
+uv run python scripts/integration_turns.py --save benchmark_turn_1 --turns 10 --timeout 900
 
-# 省略 --save，仅使用已经加载的游戏
+# 省略 --save 同样从唯一原始基准 benchmark_turn_1 开始
 uv run python scripts/integration_turns.py --turns 3
 ```
 
-驱动采用固定测试策略跳过单位、选择首个可用科研文化和生产项；其他阻塞明确中断。只有确认回合增加才计数，挂起、结果未知或超出时间/阻塞次数时退出，不自动恢复或重发动作。
+CLI 只允许 `benchmark_turn_1`，运行会替换当前对局。驱动采用固定测试策略跳过单位、选择首个可用科研文化和生产项；其他阻塞明确中断。只有确认回合增加才计数，挂起、结果未知或超出时间/阻塞次数时退出，不自动恢复或重发动作。
 
 [本次保存与巴比伦验收记录](docs/acceptance/2026-10-17-babylon.md) · [架构与文档](docs/README.md) · [模型操作规则](AGENTS.md) · [存档和历史数据](fixtures/README.md)
 

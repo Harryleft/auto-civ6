@@ -1,0 +1,27 @@
+{
+  "save_name": "benchmark_turn_1",
+  "file": "benchmark_turn_1.Civ6Save",
+  "sha256": "688b12eddbf1ec6bdb44da4f558d39191e96a6893a538f57ccc531beb5339ffd",
+  "size_bytes": 416470,
+  "source": "user-created local save; archived without modification",
+  "confirmed_game": {
+    "turn": 1,
+    "civilization": "CIVILIZATION_SUMERIA",
+    "leader": "LEADER_GILGAMESH",
+    "ruleset": "RULESET_EXPANSION_2",
+    "difficulty": "DIFFICULTY_IMMORTAL",
+    "speed": "GAMESPEED_QUICK",
+    "map_size": "MAPSIZE_TINY",
+    "map_script": "Pangaea",
+    "game_seed": 719665280,
+    "map_seed": 719665281
+  },
+  "verification": {
+    "baseline_loaded": true,
+    "identity_and_turn_read_back": true,
+    "native_mod_requirements_success": true
+  },
+  "evidence_directory": "~/.civ6-mcp/acceptance/20261017-093253-benchmark",
+  "status": "confirmed_sole_original_test_baseline",
+  "note": "User confirmed this exact original save as the only test baseline. Never overwrite it or load historical maps/checkpoints from other sessions."
+}

@@ -2,7 +2,7 @@
 
 ## 可复用存档
 
-`fixtures/saves/` 保留原有 3 个 `.Civ6Save` 文件：Ground Control、Snowflake、Cry Havoc。文件内容未修改，可用于明确指定存档的实机诊断。
+`fixtures/saves/` 仅保留用户确认的原始基准 `benchmark_turn_1.Civ6Save` 及其身份、种子和 SHA-256 清单。所有实机测试从该基准开始，原件不得覆盖。旧示例地图已移除，不再安装或加载。
 
 ```bash
 uv run python scripts/install_saves.py --dry-run
