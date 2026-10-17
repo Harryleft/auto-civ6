@@ -1087,7 +1087,11 @@ async def form_alliance(
         other_player_id: The player ID (from get_diplomacy output)
         alliance_type: One of: MILITARY, RESEARCH, CULTURAL, ECONOMIC, RELIGIOUS
 
-    Requires declared friendship and Diplomatic Service civic.
+    Requires declared friendship and Diplomatic Service civic. Submits the
+    existing proposal sequence once, then waits briefly for bilateral ALLIED
+    and the exact requested native alliance type. Otherwise returns
+    PROPOSED_UNCONFIRMED; read get_diplomacy before another proposal and do not
+    automatically resend. Same-frame working-deal data is not acceptance.
     Use get_trade_options to check alliance eligibility first.
     """
     gs = _get_game(ctx)

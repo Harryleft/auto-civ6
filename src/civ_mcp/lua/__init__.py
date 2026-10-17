@@ -42,6 +42,7 @@ from civ_mcp.lua.cities import (  # noqa: F401
 from civ_mcp.lua.diplomacy import (  # noqa: F401
     build_check_diplomacy_session_state,
     build_check_friendship_state,
+    build_check_alliance_state,
     build_check_war_state,
     build_deal_options_query,
     build_diplomacy_choices_query,
