@@ -28,6 +28,7 @@ from civ_mcp.lua.espionage import (  # noqa: F401
 from civ_mcp.lua.cities import (  # noqa: F401
     build_cities_query,
     build_city_attack,
+    build_city_attack_followup,
     build_city_production_query,
     build_city_yield_focus_query,
     build_produce_item,
