@@ -2,6 +2,7 @@
 
 - [安装与使用](../README.md)：本机 MCP 启动和客户端配置。
 - [当前架构](architecture.md)：核心职责、执行与恢复边界。
+- [动作确认与恢复时序修复规格](specs/2026-10-17-action-confirmation.md)：20 回合审查问题、待实施约束和验收条件。
 - [模型操作规则](../AGENTS.md)：基于真实状态操作游戏。
 - [存档格式](save-file-format.md)：`scripts/parse_save.py` 的逆向研究依据。
 - [macOS 启动器设置](research/bypassing_aspyr_launcher.md)：Steam 启动配置参考。
