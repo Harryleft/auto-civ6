@@ -1,6 +1,8 @@
 """Delayed engine observations at the GameState / FireTuner boundary."""
 import asyncio
 
+import pytest
+
 from civ_mcp.game_state import GameState
 
 
@@ -220,3 +222,40 @@ def test_changed_city_attack_hp_does_not_bypass_busy_engine():
     state = GameState(engine)
     assert "damage dealt:25" in asyncio.run(state.city_attack(65536, 12, 20))
     assert engine.writes == []
+
+
+def test_move_stops_when_native_next_step_is_in_a_later_turn_despite_remaining_moves():
+    engine = Engine(writes=[["OK:MOVING_TO|14,13|from:14,15"]], reads=[
+        ["POS|14|14|moves:1|busy:true", "PATH_STEP|14|13|turn:2"],
+        ["POS|14|14|moves:1|busy:false", "PATH_STEP|14|13|turn:2"],
+    ])
+    state = GameState(engine)
+    state.dismiss_popup = no_dismiss
+    result = asyncio.run(state.move_unit(1, 14, 13))
+    assert "OUTCOME_UNKNOWN" not in result
+    assert "now_at:14,14" in result
+    assert "next path step requires a later turn" in result
+    assert "moves exhausted" not in result
+    assert len(engine.submissions) == 1
+    assert engine.reads == []
+
+
+@pytest.mark.parametrize("busy", ["unknown", "true"])
+def test_later_turn_path_does_not_confirm_move_while_engine_idle_is_unknown(busy):
+    engine = Engine(writes=[["OK:MOVING_TO|14,13|from:14,15"]], reads=[
+        [f"POS|14|14|moves:1|busy:{busy}", "PATH_STEP|14|13|turn:2"], ConnectionError("lost"),
+    ])
+    state = GameState(engine)
+    state.dismiss_popup = no_dismiss
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.move_unit(1, 14, 13))
+    assert state.pending_action_summary
+
+
+def test_idle_partial_move_with_native_step_still_reachable_stays_unknown():
+    engine = Engine(writes=[["OK:MOVING_TO|14,13|from:14,15"]], reads=[
+        ["POS|14|14|moves:1|busy:false", "PATH_STEP|14|13|turn:1"], ConnectionError("lost"),
+    ])
+    state = GameState(engine)
+    state.dismiss_popup = no_dismiss
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.move_unit(1, 14, 13))
+    assert state.pending_action_summary
