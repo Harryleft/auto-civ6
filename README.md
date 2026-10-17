@@ -79,7 +79,7 @@ uv run python scripts/integration_turns.py --turns 3
 
 驱动采用固定测试策略跳过单位、选择首个可用科研文化和生产项；其他阻塞明确中断。只有确认回合增加才计数，挂起、结果未知或超出时间/阻塞次数时退出，不自动恢复或重发动作。
 
-[架构与文档](docs/README.md) · [模型操作规则](AGENTS.md) · [存档和历史数据](fixtures/README.md)
+[本次保存与巴比伦验收记录](docs/acceptance/2026-10-17-babylon.md) · [架构与文档](docs/README.md) · [模型操作规则](AGENTS.md) · [存档和历史数据](fixtures/README.md)
 
 历史研究、游戏报告及旧架构保存在 `docs/archive/`，仅作参考。
 
