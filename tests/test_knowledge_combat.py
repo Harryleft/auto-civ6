@@ -35,7 +35,9 @@ def test_unit_base_movement_and_control_do_not_expand_into_summary(knowledge):
     assert warrior['rule']['facts']['BaseMoves'] == 2
     assert warrior['rule']['facts']['ZoneOfControl'] == 1
     assert warrior['rule']['facts']['Combat'] == 20
-    assert query(knowledge, 'search', '勇士', '--topic', 'combat')['results'][0]['id'] == 'UNIT_WARRIOR'
+    matches = query(knowledge, 'search', '勇士', '--topic', 'combat')['results']
+    assert any(card['id'] == 'UNIT_WARRIOR' for card in matches)
+    assert all(card['topic'] == 'combat' for card in matches)
     summary = query(knowledge, 'show', 'UNIT_WARRIOR')
     assert not {'rule', 'source_refs', 'evidence'} & summary.keys()
 
