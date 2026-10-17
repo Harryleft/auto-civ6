@@ -17,6 +17,7 @@ TABLES = PRIMARY_TABLES + (
     'District_ValidTerrains', 'DistrictReplaces', 'District_CitizenYieldChanges',
     'Buildings', 'Units', 'Improvements', 'Projects', 'Policies', 'Governments',
     'Resources', 'Routes', 'GovernmentSlots', 'Government_SlotCounts',
+    'ResolutionEffects', 'CivilizationTraits', 'LeaderTraits',
     'CivilopediaPages', 'CivilopediaPageChapterParagraphs', 'GlobalParameters',
 )
 # Small native excerpts explain conditions that database fields alone cannot express.
