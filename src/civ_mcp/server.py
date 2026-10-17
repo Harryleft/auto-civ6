@@ -1058,6 +1058,11 @@ async def send_diplomatic_action(
                 DECLARE_PROTECTORATE_WAR, DECLARE_COLONIAL_WAR,
                 DECLARE_TERRITORIAL_WAR
 
+    DECLARE_FRIENDSHIP submits once and waits briefly for a native bilateral
+    DECLARED_FRIEND relationship. ACCEPTED requires that witness; otherwise
+    PROPOSED_UNCONFIRMED means read get_diplomacy first, without automatic resend.
+    A legal request alone does not confirm that the friendship was accepted.
+
     Delegations cost 25 gold and can be rejected if the civ dislikes you.
     Embassies require Writing tech. Use get_diplomacy to see available actions.
     Surprise war is always available if not allied/friends. Other war types
@@ -1082,7 +1087,11 @@ async def form_alliance(
         other_player_id: The player ID (from get_diplomacy output)
         alliance_type: One of: MILITARY, RESEARCH, CULTURAL, ECONOMIC, RELIGIOUS
 
-    Requires declared friendship and Diplomatic Service civic.
+    Requires declared friendship and Diplomatic Service civic. Submits the
+    existing proposal sequence once, then waits briefly for bilateral ALLIED
+    and the exact requested native alliance type. Otherwise returns
+    PROPOSED_UNCONFIRMED; read get_diplomacy before another proposal and do not
+    automatically resend. Same-frame working-deal data is not acceptance.
     Use get_trade_options to check alliance eligibility first.
     """
     gs = _get_game(ctx)
