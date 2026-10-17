@@ -42,16 +42,19 @@ class GameState:
         self._pending_load = False
         self.reset_session()
 
+    def _clear_world_caches(self) -> None:
+        self._last_snapshot: lq.TurnSnapshot | None = None
+        self._game_identity: tuple[str, int] | None = None
+        self._local_player_id = 0
+        self._revealed_tiles: set[tuple[int, int]] | None = None
+
     def reset_session(self) -> None:
-        """Retire world caches; only replacement verification releases its gate."""
+        """Retire requests after explicit replacement; keep its verification gate."""
+        self._clear_world_caches()
         self._pending_save = False
         # Replacement survives all cache/identity resets until verified.
         self._actions = ActionLifecycle(self.conn)
-        self._last_snapshot: lq.TurnSnapshot | None = None
-        self._game_identity: tuple[str, int] | None = None
         self._turn_progress = TurnProgress()
-        self._local_player_id = 0
-        self._revealed_tiles: set[tuple[int, int]] | None = None
 
     @property
     def turn_pending(self) -> bool:
@@ -124,7 +127,7 @@ class GameState:
         """Return (civ_type_lower, random_seed) for the current game.
 
         Always queries the game so we detect new-game loads.  When the
-        identity changes, all per-game cached state is reset.
+        identity changes, observation caches expire without retiring requests.
         """
         code = (
             "local me = Game.GetLocalPlayer() "
@@ -142,11 +145,8 @@ class GameState:
                 new_id = (civ, seed)
                 if self._game_identity is not None and new_id != self._game_identity:
                     log.info("Game changed: %s → %s", self._game_identity, new_id)
-                    pending = self._pending_action
-                    pending_save = self._pending_save
-                    self.reset_session()
-                    self._pending_action = pending
-                    self._pending_save = pending_save
+                    self._clear_world_caches()
+                    self._turn_progress.invalidate_scope()
                 self._game_identity = new_id
                 return self._game_identity
         return ("unknown", 0)
