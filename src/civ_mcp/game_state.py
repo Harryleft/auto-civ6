@@ -735,8 +735,16 @@ class GameState:
         is_war = action.upper().endswith("_WAR") and action.upper().startswith(
             "DECLARE_"
         )
+        is_friendship = action.upper() == "DECLARE_FRIENDSHIP"
         lua = lq.build_send_diplo_action(other_player_id, action.upper())
-        lines = await self.conn.execute_write(lua)
+        try:
+            lines = await self.conn.execute_write(lua)
+        except (OSError, TimeoutError, LuaError, ValueError):
+            if is_friendship:
+                return await self._confirm_diplomatic_relationship(other_player_id, None)
+            raise
+        if is_friendship:
+            return await self._confirm_diplomatic_relationship(other_player_id, lines)
         result = _action_result(lines)
 
         # _action_result rewrites "ERR:" to "Error: " — only schedule the
@@ -747,6 +755,54 @@ class GameState:
             asyncio.create_task(self._cleanup_war_diplomacy(other_player_id))
 
         return result
+
+    async def _confirm_diplomatic_relationship(
+        self, other_player_id: int, lines: list[str] | None, *, alliance_type: str | None = None,
+    ) -> str:
+        """Confirm only the scoped native relationship; never submit or clean up."""
+        kind = "ALLIANCE" if alliance_type is not None else "FRIENDSHIP"
+        relationship = f"{alliance_type} alliance" if alliance_type is not None else "Friendship declaration"
+        unconfirmed = (
+            f"PROPOSED_UNCONFIRMED|{relationship} to player {other_player_id} is unconfirmed; "
+            "the request may have been submitted. Query get_diplomacy before another proposal; "
+            "do not automatically resend."
+        )
+        if not isinstance(lines, list) or any(not isinstance(line, str) for line in lines):
+            return unconfirmed
+        result = _action_result(lines)
+        if result.startswith("Error:") and not result.startswith("Error: OUTCOME_UNKNOWN"):
+            return result
+        scope = [line.split("|") for line in lines if line.startswith(f"{kind}_SCOPE|")]
+        proposed = [line for line in lines if line.startswith("OK:PROPOSED|")]
+        scope_length = 4 if alliance_type is not None else 3
+        if not result.startswith("PROPOSED|") or len(proposed) != 1 or len(scope) != 1 or len(scope[0]) != scope_length:
+            return unconfirmed
+        try:
+            owner, target = int(scope[0][1]), int(scope[0][2])
+        except ValueError:
+            return unconfirmed
+        if owner < 0 or owner == target or target != other_player_id:
+            return unconfirmed
+        state = f"ALLIANCE_{alliance_type}" if alliance_type is not None else "DECLARED_FRIEND"
+        if alliance_type is not None and scope[0][3] != state:
+            return unconfirmed
+        name = result.split("|", 1)[1]
+        query = (lq.build_check_alliance_state(target, owner, alliance_type) if alliance_type is not None
+                 else lq.build_check_friendship_state(target, owner))
+        try:
+            # The deadline includes reads. Transient state never authorizes a
+            # rejection or another submission of either diplomatic proposal.
+            async with asyncio.timeout(ACTION_CONFIRM_TIMEOUT):
+                while True:
+                    evidence = await self.conn.execute_write(query)
+                    if evidence == [f"{kind}|{owner}|{target}|{state}"]:
+                        if alliance_type is not None:
+                            return f"ACCEPTED|{alliance_type} alliance formed with {name}"
+                        return f"ACCEPTED|Friendship established with {name}"
+                    await asyncio.sleep(ACTION_CONFIRM_INTERVAL)
+        except (OSError, TimeoutError, LuaError, ValueError):
+            pass
+        return unconfirmed
 
     async def _cleanup_war_diplomacy(self, other_player_id: int) -> None:
         """Background: dismiss war declaration diplomacy view after animation.
@@ -854,9 +910,13 @@ class GameState:
         )
 
     async def form_alliance(self, other_player_id: int, alliance_type: str) -> str:
-        lua = lq.build_form_alliance(other_player_id, alliance_type.upper())
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        requested = alliance_type.upper()
+        lua = lq.build_form_alliance(other_player_id, requested)
+        try:
+            lines = await self.conn.execute_write(lua)
+        except (OSError, TimeoutError, LuaError, ValueError):
+            lines = None
+        return await self._confirm_diplomatic_relationship(other_player_id, lines, alliance_type=requested)
 
     # ------------------------------------------------------------------
     # Policy methods (InGame context)
