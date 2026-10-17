@@ -181,6 +181,7 @@ if not enemy then {_bail("ERR:NO_ENEMY|No hostile unit at target tile")} end
 local eInfo = GameInfo.Units[enemy:GetType()]
 local eName = eInfo and eInfo.UnitType or "UNKNOWN"
 local eHP = enemy:GetMaxDamage() - enemy:GetDamage()
+local targetTag = "|target_owner:" .. enemy:GetOwner() .. "|target_id:" .. enemy:GetID()
 local params = {{}}
 params[CityCommandTypes.PARAM_X] = {target_x}
 params[CityCommandTypes.PARAM_Y] = {target_y}
@@ -233,7 +234,7 @@ if not canAttack then
     {_bail("ERR:CANNOT_ATTACK|City cannot attack this target (unknown reason)")}
 end
 CityManager.RequestCommand(pCity, CityCommandTypes.RANGE_ATTACK, params)
-print("OK:CITY_RANGE_ATTACK|" .. Locale.Lookup(pCity:GetName()) .. " -> " .. eName .. "@{target_x},{target_y}|pre_hp:" .. eHP .. "/" .. enemy:GetMaxDamage())
+print("OK:CITY_RANGE_ATTACK|" .. Locale.Lookup(pCity:GetName()) .. " -> " .. eName .. "@{target_x},{target_y}|pre_hp:" .. eHP .. "/" .. enemy:GetMaxDamage() .. targetTag)
 print("{SENTINEL}")
 """
 
