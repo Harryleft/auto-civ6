@@ -536,7 +536,10 @@ if pCity == nil then print("NOT_FOUND"); print("{SENTINEL}"); return end
 local bq = pCity:GetBuildQueue()
 local cur = bq:CurrentlyBuilding()
 if cur == "{item_name}" then
-    print("CONFIRMED|" .. bq:GetTurnsLeft() .. " turns")
+    -- macOS GameCore exposes GetTurnsLeft but raises "Not Implemented".
+    -- The queue identity is sufficient verification; the InGame response
+    -- already reports the production estimate.
+    print("CONFIRMED|production queue verified")
 else
     print("NOT_SET|current=" .. tostring(cur) .. "|expected={item_name}")
 end
