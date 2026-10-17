@@ -1890,11 +1890,23 @@ async def _load_and_verify(gs: GameState, save_name: str) -> str:
     error = game_lifecycle._validate_save_name(save_name)
     if error:
         return error
+    submitted = False
     try:
         async with asyncio.timeout(LOAD_TIMEOUT):
-            await gs.conn.reconnect()
-            if gs.conn.gamecore_index is not None:
-                return "Error: A game is loaded; return to the main menu first."
+            # During startup FireTuner briefly opens before MainMenu exists,
+            # then resets the socket. Retry only this read-only discovery;
+            # the actual load below is still submitted exactly once.
+            while True:
+                try:
+                    await gs.conn.reconnect()
+                    if gs.conn.gamecore_index is not None:
+                        return "Error: A game is loaded; return to the main menu first."
+                    if "MainMenu" in gs.conn.lua_states.values():
+                        break
+                except (OSError, LuaError, ValueError):
+                    pass
+                await asyncio.sleep(2)
+            submitted = True
             result = await game_lifecycle.load_save_from_frontend(gs.conn, save_name)
             if not result.startswith(("Loading", "ERR:OUTCOME_UNKNOWN")):
                 return result
@@ -1912,6 +1924,8 @@ async def _load_and_verify(gs: GameState, save_name: str) -> str:
                 await asyncio.sleep(2)
     except TimeoutError:
         await gs.conn.disconnect()
+        if not submitted:
+            return "Error: MainMenu was not ready within 180 seconds; no load command was sent."
         return "ERR:OUTCOME_UNKNOWN|Loading was not confirmed within 180 seconds. Read state before another load."
 
 
