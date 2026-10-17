@@ -1,0 +1,15 @@
+# 第 30～50 回合调度修复工作项
+
+规格：[调度修复规格](2026-10-17-scheduling-repair.md)。起点 `bd11efb`，集成分支 `codex/turn-50-scheduling`。本地 tracker，初始标签 `ready-for-agent`；未配置远端 tracker，不创建远端 issue／PR。
+
+| 工作项 | 依赖 | 责任范围 | 状态 |
+| --- | --- | --- | --- |
+| T1 响应归属 | 无 | 连接执行边界、原始 Lua 包装与工具说明；S01～S04 | ready-for-agent |
+| T2 纯查询与完成事实 | T1 | 城市查询、快照事实与事件差分；S05～S07 | ready-for-agent |
+| T3 区域落位 | T2 | 区域顾问、生产前置判断和精确位置确认；S08～S10 | ready-for-agent |
+| T4 移动停步 | T3 | 原生状态调查、移动确认与门禁；S11～S13 | ready-for-agent |
+| T5 晋升条件估算 | T4 | 估算时按条件处理／省略晋升；S14 | ready-for-agent |
+| T6 离线及双轴审查 | T5 | 全量离线检查、Standards／Spec、单一 worker 修正；S15 | ready-for-agent |
+| T7 第 30～50 回合验收 | T6 | 明确加载 T30，同轮 20 净推进、T50 保存恢复、结果与证据；S16 | ready-for-agent |
+
+依赖顺序即用户授权的修复顺序。原生接口只读源码调查可并行；共享模块实施按依赖推进。每项独立分支／worktree，从最新集成分支开始；TDD 循环后由 merger 合并。新验收成绩不得用旧成绩代替；需要中途修源码时，保留失败尝试并从受保护的 T30 完整重新计数。完成后清理实施 worktree，保留集成分支及结果，不 push。
