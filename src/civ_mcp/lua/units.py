@@ -237,7 +237,10 @@ def build_unit_position_query(
     move_target_x: int | None = None,
     move_target_y: int | None = None,
 ) -> str:
-    """InGame read-only probe: position, actual moves and optional core-busy state.
+    """InGame read-only probe: position, moves, effective movement, ZOC and busy.
+
+    Native effective movement / ZOC facts are optional on unsupported contexts.
+    Their absence must remain unknown, not become a zero or false value.
 
     When *move_target_x/y* are provided, also diagnoses why a blocked move
     failed (water, mountain, foreign border) so the caller doesn't need a
@@ -319,7 +322,17 @@ local u = Players[me]:GetUnits():FindID({unit_index})
 if u then
     local busy = "unknown"
     pcall(function() busy = tostring(UI.IsGameCoreBusy()) end)
-    print("POS|" .. u:GetX() .. "|" .. u:GetY() .. "|moves:" .. u:GetMovesRemaining() .. "|busy:" .. busy)
+    local movementMoves = ""
+    pcall(function()
+        local value = u:GetMovementMovesRemaining()
+        if type(value) == "number" then movementMoves = "|movement_moves:" .. value end
+    end)
+    local zoc = ""
+    pcall(function()
+        local value = u:HasMovedIntoZOC()
+        if type(value) == "boolean" then zoc = "|zoc:" .. tostring(value) end
+    end)
+    print("POS|" .. u:GetX() .. "|" .. u:GetY() .. "|moves:" .. u:GetMovesRemaining() .. movementMoves .. zoc .. "|busy:" .. busy)
 else print("POS|GONE") end
 {path_probe}
 {diag_block}print("{SENTINEL}")

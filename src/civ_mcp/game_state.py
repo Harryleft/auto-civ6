@@ -188,18 +188,23 @@ class GameState:
                 suffix = f"|now_at:{x},{y}"
                 if origin:
                     suffix += f"|(moved dx:{x-origin[0]:+d} dy:{y-origin[1]:+d})"
-                if (x, y) == target and busy != "true":
+                if (x, y) == target and busy == "false":
                     return pending.success + suffix
                 if moves is not None and moves <= 0 and busy == "false":
                     return pending.success + suffix + "|STOPPED_MID_PATH (moves exhausted)"
-                # Civ6 may leave unusable movement points: e.g. one point
-                # remains but the next forest step costs two. Native path turns
-                # (used by WorldInput.lua) provide the boundary, not a timing guess.
-                next_step = next((line for line in pending.observed if line.startswith("PATH_STEP|")), "")
-                step = re.search(r"\|turn:(\d+)$", next_step)
-                if (origin is not None and (x, y) != origin and busy == "false"
-                        and step is not None and int(step[1]) > 1):
-                    return pending.success + suffix + "|STOPPED_MID_PATH (next path step requires a later turn)"
+                # Civ6's effective movement and ZOC facts can stop a segment
+                # while ordinary moves remain. Path-preview turn labels alone
+                # do not prove completion; missing native facts stay unknown.
+                movement_moves = float(meta["movement_moves"]) if "movement_moves" in meta else None
+                native_stop = None
+                if movement_moves is not None and movement_moves <= 0:
+                    native_stop = "native movement exhausted"
+                elif meta.get("zoc") == "true":
+                    native_stop = "entered zone of control"
+                if origin is not None and (x, y) != origin and busy == "false" and native_stop:
+                    if moves is not None:
+                        suffix += f"|moves_remaining:{moves:g}"
+                    return pending.success + suffix + f"|STOPPED_MID_PATH ({native_stop})"
                 impassable = any(line.startswith(("DIAG|MOUNTAIN|", "DIAG|IMPASSABLE|")) for line in pending.observed)
                 if (x, y) == origin and busy == "false" and impassable:
                     return pending.success + suffix + f"|BLOCKED ({lq.parse_blocked_diagnostic(pending.observed)})"
