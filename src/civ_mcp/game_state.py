@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 
 from civ_mcp import lua as lq
 from civ_mcp.connection import GameConnection, LuaError
+from civ_mcp.end_turn import TurnProgress
 from civ_mcp.narrate import (
     narrate_combat_estimate,
     narrate_move_discoveries,
@@ -99,10 +100,32 @@ class GameState:
         self._pending_action: _PendingAction | None = None
         self._last_snapshot: lq.TurnSnapshot | None = None
         self._game_identity: tuple[str, int] | None = None
-        self._pending_end_turn = False
-        self._pending_end_turn_from: int | None = None
+        self._turn_progress = TurnProgress()
         self._local_player_id = 0
         self._revealed_tiles: set[tuple[int, int]] | None = None
+
+    @property
+    def turn_pending(self) -> bool:
+        """One fact for action/save gates and MCP while advancement is unconfirmed."""
+        return self._turn_progress.pending
+
+    # Existing integrations/tests can still address these names. They never
+    # carry a second copy of the request owned by TurnProgress.
+    @property
+    def _pending_end_turn(self) -> bool:
+        return self._turn_progress.pending
+
+    @_pending_end_turn.setter
+    def _pending_end_turn(self, pending: bool) -> None:
+        self._turn_progress.pending = pending
+
+    @property
+    def _pending_end_turn_from(self) -> int | None:
+        return self._turn_progress.from_turn
+
+    @_pending_end_turn_from.setter
+    def _pending_end_turn_from(self, turn: int | None) -> None:
+        self._turn_progress.from_turn = turn
 
     @property
     def pending_action_summary(self) -> str | None:
@@ -367,7 +390,7 @@ print("{lq.SENTINEL}")
     async def _action_gate(self, entity: tuple[str, int] | None = None) -> str | None:
         if self._pending_load or self._pending_save:
             return "ERR:OUTCOME_UNKNOWN|Load or save completion is not confirmed; inspect or recover before gameplay."
-        if self._pending_end_turn:
+        if self.turn_pending:
             return "ERR:OUTCOME_UNKNOWN|End-turn outcome is pending; confirm end_turn before gameplay."
         if entity is not None and entity[0] == "unit":
             entity = (entity[0], entity[1] % 65536)
@@ -1919,11 +1942,49 @@ print("{lq.SENTINEL}")
     # Turn management
     # ------------------------------------------------------------------
 
+    async def capture_turn_snapshot(self) -> lq.TurnSnapshot:
+        """Capture reporting facts; request ownership lives in TurnProgress."""
+        snapshot = await self._take_snapshot()
+        self._last_snapshot = snapshot
+        return snapshot
+
+    async def report_turn_advance(
+        self, before: int, after: int, baseline: lq.TurnSnapshot | None,
+    ) -> str:
+        """Present a confirmed advance without changing its request state."""
+        current = None
+        limited: list[str] = []
+        try:
+            current = await self.capture_turn_snapshot()
+            if current.turn != after:
+                # This observation is useful to a caller but cannot describe
+                # the different turn whose advancement was just confirmed.
+                current = None
+                raise ValueError("Snapshot turn does not match confirmed turn")
+        except (ConnectionError, TimeoutError, LuaError, ValueError):
+            limited.append("Post-turn snapshot unavailable; read game state to confirm changes.")
+        if baseline is not None and baseline.turn != before:
+            baseline = None
+            limited.append("Pre-turn snapshot unavailable; changes cannot be compared.")
+        events = self._diff_snapshots(baseline, current) if baseline and current else []
+        notifications: list[lq.GameNotification] = []
+        try:
+            lines = await self.conn.execute_write(lq.build_notifications_query())
+            if not any(line.startswith("TOTAL|") for line in lines):
+                limited.append("Notifications unavailable.")
+            else:
+                notifications = lq.parse_notifications_response(lines)
+        except (ConnectionError, TimeoutError, LuaError, ValueError):
+            limited.append("Notifications unavailable.")
+        report = self._build_turn_report(
+            before, after, events, notifications,
+            stockpiles=current.stockpiles if current else None,
+        )
+        return "\n".join([report, *limited])
+
     async def end_turn(self) -> str:
         """End the turn with snapshot-diff event detection."""
-        from civ_mcp.end_turn import execute_end_turn
-
-        return await execute_end_turn(self)
+        return await self._turn_progress.execute(self)
 
     async def dismiss_popup(self) -> str:
         """Dismiss any blocking popup or UI overlay."""
@@ -1947,7 +2008,7 @@ print("{lq.SENTINEL}")
         blocked = await self._action_gate()
         if blocked:
             return blocked
-        if self._pending_end_turn:
+        if self.turn_pending:
             return "Error: End-turn outcome is pending; confirm it before saving."
         identity = await self.get_game_identity()
         before = await self.get_game_overview()
