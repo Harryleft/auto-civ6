@@ -3,8 +3,8 @@
     {
       "id": "WC_PROPOSAL_TYPE_AID_REQUEST",
       "names": {
-        "en_US": "WC_PROPOSAL_TYPE_AID_REQUEST",
-        "zh_Hans_CN": "WC_PROPOSAL_TYPE_AID_REQUEST"
+        "en_US": "Request For Aid",
+        "zh_Hans_CN": "请求援助"
       },
       "relations": [],
       "rule": {
@@ -17,7 +17,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -27,7 +37,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -37,7 +47,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -47,7 +57,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -57,7 +67,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -67,7 +77,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -77,7 +87,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -87,7 +97,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -97,7 +107,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -107,7 +117,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -117,7 +127,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -127,7 +137,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -158,8 +168,8 @@
             "zh_Hans_CN": "LOC_WC_PROPOSAL_TYPE_AID_REQUEST_DESC"
           },
           "Name": {
-            "en_US": "LOC_WC_PROPOSAL_TYPE_AID_REQUEST_NAME",
-            "zh_Hans_CN": "LOC_WC_PROPOSAL_TYPE_AID_REQUEST_NAME"
+            "en_US": "Request For Aid",
+            "zh_Hans_CN": "请求援助"
           }
         },
         "prerequisites": [],
@@ -171,51 +181,55 @@
           "table": "ProposalTypes"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
@@ -243,7 +257,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -253,7 +277,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -263,7 +287,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -273,7 +297,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -283,7 +307,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -293,7 +317,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -303,7 +327,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -313,7 +337,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -323,7 +347,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -333,7 +357,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -343,7 +367,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -353,7 +377,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -397,51 +421,55 @@
           "table": "ProposalTypes"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
@@ -455,8 +483,8 @@
     {
       "id": "WC_PROPOSAL_TYPE_COMPETITION",
       "names": {
-        "en_US": "WC_PROPOSAL_TYPE_COMPETITION",
-        "zh_Hans_CN": "WC_PROPOSAL_TYPE_COMPETITION"
+        "en_US": "Competitions",
+        "zh_Hans_CN": "竞赛"
       },
       "relations": [],
       "rule": {
@@ -469,7 +497,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -479,7 +517,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -489,7 +527,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -499,7 +537,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -509,7 +547,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -519,7 +557,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -529,7 +567,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -539,7 +577,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -549,7 +587,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -559,7 +597,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -569,7 +607,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -579,7 +617,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -610,8 +648,8 @@
             "zh_Hans_CN": "LOC_WC_PROPOSAL_TYPE_COMPETITION_DESC"
           },
           "Name": {
-            "en_US": "LOC_WC_PROPOSAL_TYPE_COMPETITION_NAME",
-            "zh_Hans_CN": "LOC_WC_PROPOSAL_TYPE_COMPETITION_NAME"
+            "en_US": "Competitions",
+            "zh_Hans_CN": "竞赛"
           }
         },
         "prerequisites": [],
@@ -623,51 +661,55 @@
           "table": "ProposalTypes"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
@@ -681,8 +723,8 @@
     {
       "id": "WC_PROPOSAL_TYPE_EMERGENCY",
       "names": {
-        "en_US": "WC_PROPOSAL_TYPE_EMERGENCY",
-        "zh_Hans_CN": "WC_PROPOSAL_TYPE_EMERGENCY"
+        "en_US": "Emergencies",
+        "zh_Hans_CN": "紧急状况"
       },
       "relations": [],
       "rule": {
@@ -695,7 +737,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -705,7 +757,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -715,7 +767,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -725,7 +777,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -735,7 +787,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -745,7 +797,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -755,7 +807,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -765,7 +817,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -775,7 +827,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -785,7 +837,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -795,7 +847,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -805,7 +857,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -836,8 +888,8 @@
             "zh_Hans_CN": "LOC_WC_PROPOSAL_TYPE_EMERGENCY_DESC"
           },
           "Name": {
-            "en_US": "LOC_WC_PROPOSAL_TYPE_EMERGENCY_NAME",
-            "zh_Hans_CN": "LOC_WC_PROPOSAL_TYPE_EMERGENCY_NAME"
+            "en_US": "Emergencies",
+            "zh_Hans_CN": "紧急状况"
           }
         },
         "prerequisites": [],
@@ -849,51 +901,55 @@
           "table": "ProposalTypes"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
@@ -921,7 +977,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -931,7 +997,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -941,7 +1007,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -951,7 +1017,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -961,7 +1027,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -971,7 +1037,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -981,7 +1047,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -991,7 +1057,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -1001,7 +1067,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -1011,7 +1077,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -1021,7 +1087,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -1031,7 +1097,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -1075,51 +1141,55 @@
           "table": "ProposalTypes"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
@@ -1133,8 +1203,8 @@
     {
       "id": "WC_RES_ARMS_CONTROL",
       "names": {
-        "en_US": "WC_RES_ARMS_CONTROL",
-        "zh_Hans_CN": "WC_RES_ARMS_CONTROL"
+        "en_US": "Arms Control",
+        "zh_Hans_CN": "军备控制"
       },
       "relations": [],
       "rule": {
@@ -1171,7 +1241,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -1181,7 +1261,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -1191,7 +1271,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -1201,7 +1281,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -1211,7 +1291,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -1221,7 +1301,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -1231,7 +1311,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -1241,7 +1321,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -1251,7 +1331,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -1261,7 +1341,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -1271,7 +1351,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -1281,7 +1361,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -1313,16 +1393,16 @@
         ],
         "localized_fields": {
           "Effect1Description": {
-            "en_US": "LOC_WORLD_CONGRESS_BUFF_ARMS_CONTROL_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_BUFF_ARMS_CONTROL_DESC"
+            "en_US": "All players have their Weapons of Mass Destruction set equal to the target player's.",
+            "zh_Hans_CN": "所有文明的大规模杀伤性武器储量将与目标文明储量匹配。"
           },
           "Effect2Description": {
-            "en_US": "LOC_WORLD_CONGRESS_NERF_ARMS_CONTROL_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_NERF_ARMS_CONTROL_DESC"
+            "en_US": "The target player loses all of their Weapons of Mass Destruction.",
+            "zh_Hans_CN": "目标文明将失去所有大规模杀伤性武器。"
           },
           "Name": {
-            "en_US": "LOC_WC_RES_ARMS_CONTROL_NAME",
-            "zh_Hans_CN": "LOC_WC_RES_ARMS_CONTROL_NAME"
+            "en_US": "Arms Control",
+            "zh_Hans_CN": "军备控制"
           }
         },
         "prerequisites": [],
@@ -1342,51 +1422,55 @@
           "table": "ResolutionEffects"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
@@ -1400,8 +1484,8 @@
     {
       "id": "WC_RES_BORDER_CONTROL",
       "names": {
-        "en_US": "WC_RES_BORDER_CONTROL",
-        "zh_Hans_CN": "WC_RES_BORDER_CONTROL"
+        "en_US": "Border Control Treaty",
+        "zh_Hans_CN": "边境控制条约"
       },
       "relations": [],
       "rule": {
@@ -1438,7 +1522,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -1448,7 +1542,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -1458,7 +1552,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -1468,7 +1562,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -1478,7 +1572,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -1488,7 +1582,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -1498,7 +1592,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -1508,7 +1602,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -1518,7 +1612,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -1528,7 +1622,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -1538,7 +1632,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -1548,7 +1642,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -1580,16 +1674,16 @@
         ],
         "localized_fields": {
           "Effect1Description": {
-            "en_US": "LOC_WORLD_CONGRESS_DISTRICTS_CULTURE_BOMB_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_DISTRICTS_CULTURE_BOMB_DESC"
+            "en_US": "New districts built by this player act as [ICON_Culture] Culture bombs.",
+            "zh_Hans_CN": "此文明新建区域将具有 [ICON_Culture] 文化炸弹效果。"
           },
           "Effect2Description": {
-            "en_US": "LOC_WORLD_CONGRESS_NO_CULTURE_BORDER_GROWTH_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_NO_CULTURE_BORDER_GROWTH_DESC"
+            "en_US": "This player's borders will not grow via [ICON_Culture] Culture.",
+            "zh_Hans_CN": "该文明的边界将无法通过 [ICON_Culture] 文化值增长。"
           },
           "Name": {
-            "en_US": "LOC_WC_RES_BORDER_CONTROL_NAME",
-            "zh_Hans_CN": "LOC_WC_RES_BORDER_CONTROL_NAME"
+            "en_US": "Border Control Treaty",
+            "zh_Hans_CN": "边境控制条约"
           }
         },
         "prerequisites": [],
@@ -1609,51 +1703,55 @@
           "table": "ResolutionEffects"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
@@ -1667,8 +1765,8 @@
     {
       "id": "WC_RES_DEFORESTATION_TREATY",
       "names": {
-        "en_US": "WC_RES_DEFORESTATION_TREATY",
-        "zh_Hans_CN": "WC_RES_DEFORESTATION_TREATY"
+        "en_US": "Deforestation Treaty",
+        "zh_Hans_CN": "森林砍伐条约"
       },
       "relations": [],
       "rule": {
@@ -1705,7 +1803,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -1715,7 +1823,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -1725,7 +1833,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -1735,7 +1843,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -1745,7 +1853,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -1755,7 +1863,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -1765,7 +1873,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -1775,7 +1883,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -1785,7 +1893,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -1795,7 +1903,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -1805,7 +1913,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -1815,7 +1923,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -1847,16 +1955,16 @@
         ],
         "localized_fields": {
           "Effect1Description": {
-            "en_US": "LOC_WORLD_CONGRESS_DEFORESTATION_BAN_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_DEFORESTATION_BAN_DESC"
+            "en_US": "Prohibits chopping or clearing Features of the chosen type.",
+            "zh_Hans_CN": "禁止砍伐或清除所选地貌类型。"
           },
           "Effect2Description": {
-            "en_US": "LOC_WORLD_CONGRESS_DEFORESTATION_GOLD_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_DEFORESTATION_GOLD_DESC"
+            "en_US": "Clearing Features of the chosen type yields [ICON_Gold] Gold equal to the [ICON_Production] Production and [ICON_Food] Food.",
+            "zh_Hans_CN": "清除所选地貌类型产出的 [ICON_Gold] 金币等同于 [ICON_Production] 生产力与 [ICON_Food] 食物。"
           },
           "Name": {
-            "en_US": "LOC_WC_RES_DEFORESTATION_TREATY_NAME",
-            "zh_Hans_CN": "LOC_WC_RES_DEFORESTATION_TREATY_NAME"
+            "en_US": "Deforestation Treaty",
+            "zh_Hans_CN": "森林砍伐条约"
           }
         },
         "prerequisites": [],
@@ -1876,51 +1984,55 @@
           "table": "ResolutionEffects"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
@@ -1934,8 +2046,8 @@
     {
       "id": "WC_RES_DIPLOVICTORY",
       "names": {
-        "en_US": "WC_RES_DIPLOVICTORY",
-        "zh_Hans_CN": "WC_RES_DIPLOVICTORY"
+        "en_US": "Diplomatic Victory",
+        "zh_Hans_CN": "外交胜利"
       },
       "relations": [],
       "rule": {
@@ -1972,7 +2084,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -1982,7 +2104,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -1992,7 +2114,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -2002,7 +2124,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -2012,7 +2134,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -2022,7 +2144,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -2032,7 +2154,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -2042,7 +2164,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -2052,7 +2174,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -2062,7 +2184,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -2072,7 +2194,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -2082,7 +2204,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -2114,16 +2236,16 @@
         ],
         "localized_fields": {
           "Effect1Description": {
-            "en_US": "LOC_WORLD_CONGRESS_ADD_DIPLOVICTORY_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_ADD_DIPLOVICTORY_DESC"
+            "en_US": "Chosen Player gains 2 Diplomatic Victory points.",
+            "zh_Hans_CN": "所选文明获得2点外交胜利点数。"
           },
           "Effect2Description": {
-            "en_US": "LOC_WORLD_CONGRESS_SUBTRACT_DIPLOVICTORY_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_SUBTRACT_DIPLOVICTORY_DESC"
+            "en_US": "Chosen Player loses 2 Diplomatic Victory points.",
+            "zh_Hans_CN": "所选文明失去2点外交胜利点数。"
           },
           "Name": {
-            "en_US": "LOC_RESOLUTION_DIPLOVICTORY_NAME",
-            "zh_Hans_CN": "LOC_RESOLUTION_DIPLOVICTORY_NAME"
+            "en_US": "Diplomatic Victory",
+            "zh_Hans_CN": "外交胜利"
           }
         },
         "prerequisites": [],
@@ -2143,51 +2265,55 @@
           "table": "ResolutionEffects"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
@@ -2201,8 +2327,8 @@
     {
       "id": "WC_RES_ESPIONAGE_PACT",
       "names": {
-        "en_US": "WC_RES_ESPIONAGE_PACT",
-        "zh_Hans_CN": "WC_RES_ESPIONAGE_PACT"
+        "en_US": "Espionage Pact",
+        "zh_Hans_CN": "间谍协定"
       },
       "relations": [],
       "rule": {
@@ -2239,7 +2365,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -2249,7 +2385,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -2259,7 +2395,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -2269,7 +2405,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -2279,7 +2415,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -2289,7 +2425,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -2299,7 +2435,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -2309,7 +2445,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -2319,7 +2455,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -2329,7 +2465,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -2339,7 +2475,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -2349,7 +2485,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -2381,16 +2517,16 @@
         ],
         "localized_fields": {
           "Effect1Description": {
-            "en_US": "LOC_WORLD_CONGRESS_PUBLIC_ESPIONAGE_PACT_BUFF_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_PUBLIC_ESPIONAGE_PACT_BUFF_DESC"
+            "en_US": "Spies executing the chosen Operation function 2 levels higher.",
+            "zh_Hans_CN": "间谍执行所选行动时产生的效果提升2级。"
           },
           "Effect2Description": {
-            "en_US": "LOC_WORLD_CONGRESS_PUBLIC_ESPIONAGE_PACT_DISABLE_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_PUBLIC_ESPIONAGE_PACT_DISABLE_DESC"
+            "en_US": "The chosen Operation is unavailable.",
+            "zh_Hans_CN": "选择的行动不可用。"
           },
           "Name": {
-            "en_US": "LOC_WC_RES_ESPIONAGE_PACT_NAME",
-            "zh_Hans_CN": "LOC_WC_RES_ESPIONAGE_PACT_NAME"
+            "en_US": "Espionage Pact",
+            "zh_Hans_CN": "间谍协定"
           }
         },
         "prerequisites": [],
@@ -2410,51 +2546,55 @@
           "table": "ResolutionEffects"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
@@ -2468,8 +2608,8 @@
     {
       "id": "WC_RES_GLOBAL_ENERGY_TREATY",
       "names": {
-        "en_US": "WC_RES_GLOBAL_ENERGY_TREATY",
-        "zh_Hans_CN": "WC_RES_GLOBAL_ENERGY_TREATY"
+        "en_US": "Global Energy Treaty",
+        "zh_Hans_CN": "全球能源条约"
       },
       "relations": [],
       "rule": {
@@ -2506,7 +2646,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -2516,7 +2666,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -2526,7 +2676,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -2536,7 +2686,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -2546,7 +2696,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -2556,7 +2706,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -2566,7 +2716,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -2576,7 +2726,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -2586,7 +2736,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -2596,7 +2746,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -2606,7 +2756,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -2616,7 +2766,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -2648,16 +2798,16 @@
         ],
         "localized_fields": {
           "Effect1Description": {
-            "en_US": "LOC_WORLD_CONGRESS_BAN_BUILDING_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_BAN_BUILDING_DESC"
+            "en_US": "Ban the production of buildings of this type.",
+            "zh_Hans_CN": "禁止建造此类型建筑。"
           },
           "Effect2Description": {
-            "en_US": "LOC_WORLD_CONGRESS_BUILDING_DISCOUNT_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_BUILDING_DISCOUNT_DESC"
+            "en_US": "50% discount on the production of buildings of this type.",
+            "zh_Hans_CN": "建造此类型建筑所需生产力减少50%。"
           },
           "Name": {
-            "en_US": "LOC_WC_RES_GLOBAL_ENERGY_TREATY_NAME",
-            "zh_Hans_CN": "LOC_WC_RES_GLOBAL_ENERGY_TREATY_NAME"
+            "en_US": "Global Energy Treaty",
+            "zh_Hans_CN": "全球能源条约"
           }
         },
         "prerequisites": [],
@@ -2677,51 +2827,55 @@
           "table": "ResolutionEffects"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
@@ -2735,8 +2889,8 @@
     {
       "id": "WC_RES_HERITAGE_ORG",
       "names": {
-        "en_US": "WC_RES_HERITAGE_ORG",
-        "zh_Hans_CN": "WC_RES_HERITAGE_ORG"
+        "en_US": "Heritage Organization",
+        "zh_Hans_CN": "文化遗产组织"
       },
       "relations": [],
       "rule": {
@@ -2773,7 +2927,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -2783,7 +2947,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -2793,7 +2957,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -2803,7 +2967,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -2813,7 +2977,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -2823,7 +2987,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -2833,7 +2997,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -2843,7 +3007,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -2853,7 +3017,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -2863,7 +3027,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -2873,7 +3037,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -2883,7 +3047,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -2915,16 +3079,16 @@
         ],
         "localized_fields": {
           "Effect1Description": {
-            "en_US": "LOC_WORLD_CONGRESS_BUFF_WORK_TOURISM_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_BUFF_WORK_TOURISM_DESC"
+            "en_US": "[ICON_Tourism] Tourism from Great Works of this type is doubled.",
+            "zh_Hans_CN": "该类型巨作的 [ICON_Tourism] 旅游业绩翻倍。"
           },
           "Effect2Description": {
-            "en_US": "LOC_WORLD_CONGRESS_NO_WORK_TOURISM_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_NO_WORK_TOURISM_DESC"
+            "en_US": "No [ICON_Tourism] Tourism from Great Works of this type.",
+            "zh_Hans_CN": "该类型巨作将不提供 [ICON_Tourism] 旅游业绩。"
           },
           "Name": {
-            "en_US": "LOC_WC_RES_HERITAGE_ORG_NAME",
-            "zh_Hans_CN": "LOC_WC_RES_HERITAGE_ORG_NAME"
+            "en_US": "Heritage Organization",
+            "zh_Hans_CN": "文化遗产组织"
           }
         },
         "prerequisites": [],
@@ -2944,51 +3108,55 @@
           "table": "ResolutionEffects"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
@@ -3002,8 +3170,8 @@
     {
       "id": "WC_RES_LUXURY",
       "names": {
-        "en_US": "WC_RES_LUXURY",
-        "zh_Hans_CN": "WC_RES_LUXURY"
+        "en_US": "Luxury Policy",
+        "zh_Hans_CN": "奢侈品政策"
       },
       "relations": [],
       "rule": {
@@ -3040,7 +3208,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -3050,7 +3228,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -3060,7 +3238,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -3070,7 +3248,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -3080,7 +3258,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -3090,7 +3268,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -3100,7 +3278,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -3110,7 +3288,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -3120,7 +3298,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -3130,7 +3308,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -3140,7 +3318,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -3150,7 +3328,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -3182,16 +3360,16 @@
         ],
         "localized_fields": {
           "Effect1Description": {
-            "en_US": "LOC_WORLD_CONGRESS_IMPROVE_LUXURY_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_IMPROVE_LUXURY_DESC"
+            "en_US": "Duplicates of the chosen Luxury resource grant [ICON_Amenities] Amenities.",
+            "zh_Hans_CN": "所选奢侈品资源将重复提供 [ICON_Amenities] 宜居度。"
           },
           "Effect2Description": {
-            "en_US": "LOC_WORLD_CONGRESS_BAN_LUXURY_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_BAN_LUXURY_DESC"
+            "en_US": "The chosen Luxury resource grants no [ICON_Amenities] Amenities.",
+            "zh_Hans_CN": "所选奢侈品资源将无法提供 [ICON_Amenities] 宜居度。"
           },
           "Name": {
-            "en_US": "LOC_WC_RES_LUXURY_NAME",
-            "zh_Hans_CN": "LOC_WC_RES_LUXURY_NAME"
+            "en_US": "Luxury Policy",
+            "zh_Hans_CN": "奢侈品政策"
           }
         },
         "prerequisites": [],
@@ -3211,51 +3389,55 @@
           "table": "ResolutionEffects"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
@@ -3269,8 +3451,8 @@
     {
       "id": "WC_RES_MERCENARY_COMPANIES",
       "names": {
-        "en_US": "WC_RES_MERCENARY_COMPANIES",
-        "zh_Hans_CN": "WC_RES_MERCENARY_COMPANIES"
+        "en_US": "Mercenary Companies",
+        "zh_Hans_CN": "雇佣兵公司"
       },
       "relations": [],
       "rule": {
@@ -3307,7 +3489,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -3317,7 +3509,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -3327,7 +3519,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -3337,7 +3529,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -3347,7 +3539,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -3357,7 +3549,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -3367,7 +3559,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -3377,7 +3569,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -3387,7 +3579,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -3397,7 +3589,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -3407,7 +3599,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -3417,7 +3609,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -3449,16 +3641,16 @@
         ],
         "localized_fields": {
           "Effect1Description": {
-            "en_US": "LOC_WORLD_CONGRESS_BAN_PRODUCTION_YIELD_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_BAN_PRODUCTION_YIELD_DESC"
+            "en_US": "Producing, or purchasing military units using the chosen currency type, is +100% of the cost until the next World Congress.",
+            "zh_Hans_CN": "下次世界议会召开前，使用此类型货币建造或购买军事单位时花费+100%。"
           },
           "Effect2Description": {
-            "en_US": "LOC_WORLD_CONGRESS_BUFF_PRODUCTION_YIELD_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_BUFF_PRODUCTION_YIELD_DESC"
+            "en_US": "Producing, or purchasing military units using the chosen currency type, is -50% of the cost until the next World Congress.",
+            "zh_Hans_CN": "下次世界议会召开前，使用此类型货币建造或购买军事单位时花费-50%。"
           },
           "Name": {
-            "en_US": "LOC_WC_RES_MERCENARY_COMPANIES_NAME",
-            "zh_Hans_CN": "LOC_WC_RES_MERCENARY_COMPANIES_NAME"
+            "en_US": "Mercenary Companies",
+            "zh_Hans_CN": "雇佣兵公司"
           }
         },
         "prerequisites": [],
@@ -3478,51 +3670,55 @@
           "table": "ResolutionEffects"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
@@ -3536,8 +3732,8 @@
     {
       "id": "WC_RES_MIGRATION_TREATY",
       "names": {
-        "en_US": "WC_RES_MIGRATION_TREATY",
-        "zh_Hans_CN": "WC_RES_MIGRATION_TREATY"
+        "en_US": "Migration Treaty",
+        "zh_Hans_CN": "移民条约"
       },
       "relations": [],
       "rule": {
@@ -3598,7 +3794,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -3608,7 +3814,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -3618,7 +3824,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -3628,7 +3834,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -3638,7 +3844,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -3648,7 +3854,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -3658,7 +3864,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -3668,7 +3874,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -3678,7 +3884,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -3688,7 +3894,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -3698,7 +3904,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -3708,7 +3914,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -3740,16 +3946,16 @@
         ],
         "localized_fields": {
           "Effect1Description": {
-            "en_US": "LOC_WORLD_CONGRESS_MORE_GROWTH_LESS_LOYALTY_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_MORE_GROWTH_LESS_LOYALTY_DESC"
+            "en_US": "+20% faster [ICON_Citizen] Population growth but -5 Loyalty per turn in this player's cities.",
+            "zh_Hans_CN": "该文明的城市 [ICON_Citizen] 人口增长+20%，但每回合将-5忠诚度。"
           },
           "Effect2Description": {
-            "en_US": "LOC_WORLD_CONGRESS_LESS_GROWTH_MORE_LOYALTY_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_LESS_GROWTH_MORE_LOYALTY_DESC"
+            "en_US": "+5 Loyalty per turn but -20% [ICON_Citizen] Population growth in this player's cities.",
+            "zh_Hans_CN": "该文明的城市每回合+5忠诚度，但 [ICON_Citizen] 人口增长将-20%。"
           },
           "Name": {
-            "en_US": "LOC_WC_RES_MIGRATION_TREATY_NAME",
-            "zh_Hans_CN": "LOC_WC_RES_MIGRATION_TREATY_NAME"
+            "en_US": "Migration Treaty",
+            "zh_Hans_CN": "移民条约"
           }
         },
         "prerequisites": [],
@@ -3777,51 +3983,55 @@
           "table": "ResolutionEffects"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
@@ -3835,8 +4045,8 @@
     {
       "id": "WC_RES_MILITARY_ADVISORY",
       "names": {
-        "en_US": "WC_RES_MILITARY_ADVISORY",
-        "zh_Hans_CN": "WC_RES_MILITARY_ADVISORY"
+        "en_US": "Military Advisory",
+        "zh_Hans_CN": "军事顾问"
       },
       "relations": [],
       "rule": {
@@ -3873,7 +4083,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -3883,7 +4103,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -3893,7 +4113,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -3903,7 +4123,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -3913,7 +4133,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -3923,7 +4143,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -3933,7 +4153,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -3943,7 +4163,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -3953,7 +4173,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -3963,7 +4183,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -3973,7 +4193,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -3983,7 +4203,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -4015,16 +4235,16 @@
         ],
         "localized_fields": {
           "Effect1Description": {
-            "en_US": "LOC_WORLD_CONGRESS_MILITARY_ADVISORY_BUFF_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_MILITARY_ADVISORY_BUFF_DESC"
+            "en_US": "Units of the chosen promotion class gain +5 Combat Strength.",
+            "zh_Hans_CN": "拥有所选升级类型的单位+5战斗力。"
           },
           "Effect2Description": {
-            "en_US": "LOC_WORLD_CONGRESS_MILITARY_ADVISORY_NERF_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_MILITARY_ADVISORY_NERF_DESC"
+            "en_US": "Units of the chosen promotion class lose 5 Combat Strength.",
+            "zh_Hans_CN": "拥有所选升级类型的单位-5战斗力。"
           },
           "Name": {
-            "en_US": "LOC_WC_RES_MILITARY_ADVISORY_NAME",
-            "zh_Hans_CN": "LOC_WC_RES_MILITARY_ADVISORY_NAME"
+            "en_US": "Military Advisory",
+            "zh_Hans_CN": "军事顾问"
           }
         },
         "prerequisites": [],
@@ -4044,51 +4264,55 @@
           "table": "ResolutionEffects"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
@@ -4102,8 +4326,8 @@
     {
       "id": "WC_RES_PATRONAGE",
       "names": {
-        "en_US": "WC_RES_PATRONAGE",
-        "zh_Hans_CN": "WC_RES_PATRONAGE"
+        "en_US": "Patronage",
+        "zh_Hans_CN": "赞助"
       },
       "relations": [],
       "rule": {
@@ -4140,7 +4364,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -4150,7 +4384,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -4160,7 +4394,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -4170,7 +4404,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -4180,7 +4414,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -4190,7 +4424,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -4200,7 +4434,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -4210,7 +4444,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -4220,7 +4454,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -4230,7 +4464,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -4240,7 +4474,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -4250,7 +4484,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -4282,16 +4516,16 @@
         ],
         "localized_fields": {
           "Effect1Description": {
-            "en_US": "LOC_WORLD_CONGRESS_BUFF_GP_POINTS_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_BUFF_GP_POINTS_DESC"
+            "en_US": "Earn double points towards [ICON_GreatPerson] Great People of this class.",
+            "zh_Hans_CN": "获得此类型 [ICON_GreatPerson] 伟人两倍的点数。"
           },
           "Effect2Description": {
-            "en_US": "LOC_WORLD_CONGRESS_NO_GP_POINTS_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_NO_GP_POINTS_DESC"
+            "en_US": "No points earned towards [ICON_GreatPerson] Great People of this class.",
+            "zh_Hans_CN": "无法获得此类型 [ICON_GreatPerson] 伟人的点数。"
           },
           "Name": {
-            "en_US": "LOC_WC_RES_PATRONAGE_NAME",
-            "zh_Hans_CN": "LOC_WC_RES_PATRONAGE_NAME"
+            "en_US": "Patronage",
+            "zh_Hans_CN": "赞助"
           }
         },
         "prerequisites": [],
@@ -4311,51 +4545,55 @@
           "table": "ResolutionEffects"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
@@ -4369,8 +4607,8 @@
     {
       "id": "WC_RES_PUBLIC_RELATIONS",
       "names": {
-        "en_US": "WC_RES_PUBLIC_RELATIONS",
-        "zh_Hans_CN": "WC_RES_PUBLIC_RELATIONS"
+        "en_US": "Public Relations",
+        "zh_Hans_CN": "公共关系"
       },
       "relations": [],
       "rule": {
@@ -4407,7 +4645,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -4417,7 +4665,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -4427,7 +4675,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -4437,7 +4685,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -4447,7 +4695,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -4457,7 +4705,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -4467,7 +4715,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -4477,7 +4725,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -4487,7 +4735,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -4497,7 +4745,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -4507,7 +4755,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -4517,7 +4765,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -4549,16 +4797,16 @@
         ],
         "localized_fields": {
           "Effect1Description": {
-            "en_US": "LOC_WORLD_CONGRESS_PUBLIC_RELATIONS_MORE_GRIEVANCES_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_PUBLIC_RELATIONS_MORE_GRIEVANCES_DESC"
+            "en_US": "The chosen player generates 100% more [ICON_STAT_GRIEVANCE] Grievances, and other players generate 100% more [ICON_STAT_GRIEVANCE] Grievances toward this player.",
+            "zh_Hans_CN": "所选文明产生的 [ICON_STAT_GRIEVANCE] 不满增加100%，其他文明对此文明产生的 [ICON_STAT_GRIEVANCE] 不满同样增加100%。"
           },
           "Effect2Description": {
-            "en_US": "LOC_WORLD_CONGRESS_PUBLIC_RELATIONS_FEWER_GRIEVANCES_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_PUBLIC_RELATIONS_FEWER_GRIEVANCES_DESC"
+            "en_US": "The chosen player generates 50% fewer [ICON_STAT_GRIEVANCE] Grievances, and other players generate 50% fewer [ICON_STAT_GRIEVANCE] Grievances toward this player.",
+            "zh_Hans_CN": "所选文明产生的 [ICON_STAT_GRIEVANCE] 不满减少50%，其他文明对此文明产生的 [ICON_STAT_GRIEVANCE] 不满同样减少50%。"
           },
           "Name": {
-            "en_US": "LOC_WC_RES_PUBLIC_RELATIONS_NAME",
-            "zh_Hans_CN": "LOC_WC_RES_PUBLIC_RELATIONS_NAME"
+            "en_US": "Public Relations",
+            "zh_Hans_CN": "公共关系"
           }
         },
         "prerequisites": [],
@@ -4578,51 +4826,55 @@
           "table": "ResolutionEffects"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
@@ -4636,8 +4888,8 @@
     {
       "id": "WC_RES_PUBLIC_WORKS",
       "names": {
-        "en_US": "WC_RES_PUBLIC_WORKS",
-        "zh_Hans_CN": "WC_RES_PUBLIC_WORKS"
+        "en_US": "Public Works Program",
+        "zh_Hans_CN": "公共工程计划"
       },
       "relations": [],
       "rule": {
@@ -4674,7 +4926,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -4684,7 +4946,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -4694,7 +4956,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -4704,7 +4966,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -4714,7 +4976,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -4724,7 +4986,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -4734,7 +4996,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -4744,7 +5006,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -4754,7 +5016,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -4764,7 +5026,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -4774,7 +5036,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -4784,7 +5046,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -4816,16 +5078,16 @@
         ],
         "localized_fields": {
           "Effect1Description": {
-            "en_US": "LOC_WORLD_CONGRESS_BUFF_PROJECT_PRODUCTION_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_BUFF_PROJECT_PRODUCTION_DESC"
+            "en_US": "+100% [ICON_Production] Production towards this Project.",
+            "zh_Hans_CN": "建造该项目时+100% [ICON_Production] 生产力。"
           },
           "Effect2Description": {
-            "en_US": "LOC_WORLD_CONGRESS_BAN_PROJECT_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_BAN_PROJECT_DESC"
+            "en_US": "-50% [ICON_Production] Production towards this Project.",
+            "zh_Hans_CN": "建造该项目时-50% [ICON_Production] 生产力。"
           },
           "Name": {
-            "en_US": "LOC_WC_RES_PUBLIC_WORKS_NAME",
-            "zh_Hans_CN": "LOC_WC_RES_PUBLIC_WORKS_NAME"
+            "en_US": "Public Works Program",
+            "zh_Hans_CN": "公共工程计划"
           }
         },
         "prerequisites": [],
@@ -4845,51 +5107,55 @@
           "table": "ResolutionEffects"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
@@ -4903,8 +5169,8 @@
     {
       "id": "WC_RES_SOVEREIGNTY",
       "names": {
-        "en_US": "WC_RES_SOVEREIGNTY",
-        "zh_Hans_CN": "WC_RES_SOVEREIGNTY"
+        "en_US": "Sovereignty",
+        "zh_Hans_CN": "主权"
       },
       "relations": [],
       "rule": {
@@ -4941,7 +5207,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -4951,7 +5227,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -4961,7 +5237,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -4971,7 +5247,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -4981,7 +5257,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -4991,7 +5267,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -5001,7 +5277,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -5011,7 +5287,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -5021,7 +5297,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -5031,7 +5307,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -5041,7 +5317,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -5051,7 +5327,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -5083,16 +5359,16 @@
         ],
         "localized_fields": {
           "Effect1Description": {
-            "en_US": "LOC_WORLD_CONGRESS_FAVOR_FROM_TRADE_AND_ENVOYS_WITH_MINORS_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_FAVOR_FROM_TRADE_AND_ENVOYS_WITH_MINORS_DESC"
+            "en_US": "+100% of the City-States' yield type when sending [ICON_TradeRoute] Trade Routes to a City-State of this type.",
+            "zh_Hans_CN": "通往该类型城邦的 [ICON_TradeRoute] 贸易路线建立后城邦的此类产出+100%。"
           },
           "Effect2Description": {
-            "en_US": "LOC_WORLD_CONGRESS_NO_SUZERAIN_BONUS_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_NO_SUZERAIN_BONUS_DESC"
+            "en_US": "City-States of this type do not provide their unique Suzerain bonus.",
+            "zh_Hans_CN": "此类型的城邦将无法提供自身特色宗主国加成。"
           },
           "Name": {
-            "en_US": "LOC_WC_RES_SOVEREIGNTY_NAME",
-            "zh_Hans_CN": "LOC_WC_RES_SOVEREIGNTY_NAME"
+            "en_US": "Sovereignty",
+            "zh_Hans_CN": "主权"
           }
         },
         "prerequisites": [],
@@ -5112,51 +5388,55 @@
           "table": "ResolutionEffects"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
@@ -5170,8 +5450,8 @@
     {
       "id": "WC_RES_TRADE_TREATY",
       "names": {
-        "en_US": "WC_RES_TRADE_TREATY",
-        "zh_Hans_CN": "WC_RES_TRADE_TREATY"
+        "en_US": "Trade Policy",
+        "zh_Hans_CN": "贸易政策"
       },
       "relations": [],
       "rule": {
@@ -5220,7 +5500,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -5230,7 +5520,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -5240,7 +5530,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -5250,7 +5540,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -5260,7 +5550,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -5270,7 +5560,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -5280,7 +5570,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -5290,7 +5580,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -5300,7 +5590,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -5310,7 +5600,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -5320,7 +5610,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -5330,7 +5620,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -5362,16 +5652,16 @@
         ],
         "localized_fields": {
           "Effect1Description": {
-            "en_US": "LOC_WORLD_CONGRESS_IMPROVE_TRADE_WTH_PLAYER_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_IMPROVE_TRADE_WTH_PLAYER_DESC"
+            "en_US": "[ICON_TradeRoute] Trade Routes sent to the chosen player provide +4 [ICON_Gold] Gold to the sender. The chosen player receives +1 [ICON_TradeRoute] Trade Route capacity.",
+            "zh_Hans_CN": "通往所选国家的 [ICON_TradeRoute] 贸易路线可为其发起者提供+4 [ICON_Gold] 金币。所选国家获得+1 [ICON_TradeRoute] 贸易路线容量。"
           },
           "Effect2Description": {
-            "en_US": "LOC_WORLD_CONGRESS_BAN_TRADE_WITH_PLAYER_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_BAN_TRADE_WITH_PLAYER_DESC"
+            "en_US": "Cancels any international [ICON_TradeRoute] Trade Routes between other civilizations and the chosen player, and embargoes any new ones from starting.",
+            "zh_Hans_CN": "取消所选文明和其他文明之间的所有国际 [ICON_TradeRoute] 贸易路线，同时禁止新建连接所选文明的国际 [ICON_TradeRoute] 贸易路线。"
           },
           "Name": {
-            "en_US": "LOC_WC_RES_TRADE_TREATY_NAME",
-            "zh_Hans_CN": "LOC_WC_RES_TRADE_TREATY_NAME"
+            "en_US": "Trade Policy",
+            "zh_Hans_CN": "贸易政策"
           }
         },
         "prerequisites": [],
@@ -5395,51 +5685,55 @@
           "table": "ResolutionEffects"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
@@ -5453,8 +5747,8 @@
     {
       "id": "WC_RES_URBAN_DEVELOPMENT",
       "names": {
-        "en_US": "WC_RES_URBAN_DEVELOPMENT",
-        "zh_Hans_CN": "WC_RES_URBAN_DEVELOPMENT"
+        "en_US": "Urban Development Treaty",
+        "zh_Hans_CN": "城市发展条约"
       },
       "relations": [],
       "rule": {
@@ -5491,7 +5785,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -5501,7 +5805,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -5511,7 +5815,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -5521,7 +5825,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -5531,7 +5835,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -5541,7 +5845,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -5551,7 +5855,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -5561,7 +5865,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -5571,7 +5875,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -5581,7 +5885,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -5591,7 +5895,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -5601,7 +5905,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -5633,16 +5937,16 @@
         ],
         "localized_fields": {
           "Effect1Description": {
-            "en_US": "LOC_WORLD_CONGRESS_DISTRICT_BUILDING_PRODUCTION_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_DISTRICT_BUILDING_PRODUCTION_DESC"
+            "en_US": "+100% [ICON_Production] Production towards buildings in this district.",
+            "zh_Hans_CN": "建造该区域中的建筑时+100% [ICON_Production] 生产力。"
           },
           "Effect2Description": {
-            "en_US": "LOC_WORLD_CONGRESS_NO_DISTRICT_BUILDING_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_NO_DISTRICT_BUILDING_DESC"
+            "en_US": "No buildings can be created in this district.",
+            "zh_Hans_CN": "该区域中无法修建建筑。"
           },
           "Name": {
-            "en_US": "LOC_WC_RES_URBAN_DEVELOPMENT_NAME",
-            "zh_Hans_CN": "LOC_WC_RES_URBAN_DEVELOPMENT_NAME"
+            "en_US": "Urban Development Treaty",
+            "zh_Hans_CN": "城市发展条约"
           }
         },
         "prerequisites": [],
@@ -5662,51 +5966,55 @@
           "table": "ResolutionEffects"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
@@ -5720,8 +6028,8 @@
     {
       "id": "WC_RES_WORLD_IDEOLOGY",
       "names": {
-        "en_US": "WC_RES_WORLD_IDEOLOGY",
-        "zh_Hans_CN": "WC_RES_WORLD_IDEOLOGY"
+        "en_US": "World Ideology",
+        "zh_Hans_CN": "世界意识形态"
       },
       "relations": [],
       "rule": {
@@ -5758,7 +6066,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -5768,7 +6086,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -5778,7 +6096,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -5788,7 +6106,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -5798,7 +6116,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -5808,7 +6126,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -5818,7 +6136,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -5828,7 +6146,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -5838,7 +6156,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -5848,7 +6166,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -5858,7 +6176,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -5868,7 +6186,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -5900,16 +6218,16 @@
         ],
         "localized_fields": {
           "Effect1Description": {
-            "en_US": "LOC_WORLD_CONGRESS_GAIN_WILDCARD_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_GAIN_WILDCARD_DESC"
+            "en_US": "This Government type gains a Wildcard policy slot.",
+            "zh_Hans_CN": "该政体类型获得一个通配符政策槽位。"
           },
           "Effect2Description": {
-            "en_US": "LOC_WORLD_CONGRESS_LOSE_WILDCARD_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_LOSE_WILDCARD_DESC"
+            "en_US": "This Government type loses a Wildcard policy slot.",
+            "zh_Hans_CN": "该政体类型失去一个通配符政策槽位。"
           },
           "Name": {
-            "en_US": "LOC_WC_RES_WORLD_IDEOLOGY_NAME",
-            "zh_Hans_CN": "LOC_WC_RES_WORLD_IDEOLOGY_NAME"
+            "en_US": "World Ideology",
+            "zh_Hans_CN": "世界意识形态"
           }
         },
         "prerequisites": [],
@@ -5929,51 +6247,55 @@
           "table": "ResolutionEffects"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
@@ -5987,8 +6309,8 @@
     {
       "id": "WC_RES_WORLD_RELIGION",
       "names": {
-        "en_US": "WC_RES_WORLD_RELIGION",
-        "zh_Hans_CN": "WC_RES_WORLD_RELIGION"
+        "en_US": "World Religion",
+        "zh_Hans_CN": "世界宗教"
       },
       "relations": [],
       "rule": {
@@ -6025,7 +6347,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -6035,7 +6367,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -6045,7 +6377,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -6055,7 +6387,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -6065,7 +6397,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -6075,7 +6407,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -6085,7 +6417,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -6095,7 +6427,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -6105,7 +6437,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -6115,7 +6447,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -6125,7 +6457,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -6135,7 +6467,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -6167,16 +6499,16 @@
         ],
         "localized_fields": {
           "Effect1Description": {
-            "en_US": "LOC_WORLD_CONGRESS_EMPOWER_RELIGION_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_EMPOWER_RELIGION_DESC"
+            "en_US": "+10 Strength (Combat and Religious) for all units of this [ICON_Religion] Religion.",
+            "zh_Hans_CN": "为此 [ICON_Religion] 宗教的所有单位+10战斗力（普通及宗教战斗力）。"
           },
           "Effect2Description": {
-            "en_US": "LOC_WORLD_CONGRESS_BAN_RELIGION_DESC",
-            "zh_Hans_CN": "LOC_WORLD_CONGRESS_BAN_RELIGION_DESC"
+            "en_US": "All players may condemn units of the chosen Religion, and doing so grants 25 [ICON_Favor] Diplomatic Favor.",
+            "zh_Hans_CN": "所有文明可对所选宗教的单位进行“异教徒审判”，审判后可获得25点 [ICON_Favor] 外交支持。"
           },
           "Name": {
-            "en_US": "LOC_WC_RES_WORLD_RELIGION_NAME",
-            "zh_Hans_CN": "LOC_WC_RES_WORLD_RELIGION_NAME"
+            "en_US": "World Religion",
+            "zh_Hans_CN": "世界宗教"
           }
         },
         "prerequisites": [],
@@ -6196,51 +6528,55 @@
           "table": "ResolutionEffects"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
@@ -6268,7 +6604,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -6278,7 +6624,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -6288,7 +6634,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -6298,7 +6644,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -6308,7 +6654,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -6318,7 +6664,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -6328,7 +6674,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -6338,7 +6684,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -6348,7 +6694,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -6358,7 +6704,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -6368,7 +6714,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -6378,7 +6724,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -6403,8 +6749,8 @@
         ],
         "localized_fields": {
           "Description": {
-            "en_US": "LOC_WC_VOTING_BLOCKER_AM_TARGET_OF_FRIENDLY_DESC",
-            "zh_Hans_CN": "LOC_WC_VOTING_BLOCKER_AM_TARGET_OF_FRIENDLY_DESC"
+            "en_US": "You may not vote against this Discussion.  You are the target player.",
+            "zh_Hans_CN": "无法投票反对此议案。您是目标文明。"
           }
         },
         "prerequisites": [],
@@ -6416,57 +6762,61 @@
           "table": "VotingBlockers"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
-        "description": "",
+        "description": "无法投票反对此议案。您是目标文明。",
         "entity_type": "VotingBlockers"
       },
       "topic": "congress"
@@ -6488,7 +6838,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -6498,7 +6858,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -6508,7 +6868,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -6518,7 +6878,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -6528,7 +6888,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -6538,7 +6898,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -6548,7 +6908,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -6558,7 +6918,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -6568,7 +6928,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -6578,7 +6938,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -6588,7 +6948,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -6598,7 +6958,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -6623,8 +6983,8 @@
         ],
         "localized_fields": {
           "Description": {
-            "en_US": "LOC_WC_VOTING_BLOCKER_AM_TARGET_OF_HOSTILE_DESC",
-            "zh_Hans_CN": "LOC_WC_VOTING_BLOCKER_AM_TARGET_OF_HOSTILE_DESC"
+            "en_US": "You may not vote in favor of this Discussion.  You are the target player.",
+            "zh_Hans_CN": "无法投票支持此议案。您是目标文明。"
           }
         },
         "prerequisites": [],
@@ -6636,57 +6996,61 @@
           "table": "VotingBlockers"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
-        "description": "",
+        "description": "无法投票支持此议案。您是目标文明。",
         "entity_type": "VotingBlockers"
       },
       "topic": "congress"
@@ -6708,7 +7072,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -6718,7 +7092,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -6728,7 +7102,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -6738,7 +7112,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -6748,7 +7122,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -6758,7 +7132,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -6768,7 +7142,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -6778,7 +7152,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -6788,7 +7162,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -6798,7 +7172,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -6808,7 +7182,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -6818,7 +7192,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -6843,8 +7217,8 @@
         ],
         "localized_fields": {
           "Description": {
-            "en_US": "LOC_WC_VOTING_BLOCKER_HAVENT_MET_TARGET_DESC",
-            "zh_Hans_CN": "LOC_WC_VOTING_BLOCKER_HAVENT_MET_TARGET_DESC"
+            "en_US": "You may not vote on this Discussion.  You have not met the target player.",
+            "zh_Hans_CN": "无法对此议案投票。您尚未遇见目标文明。"
           }
         },
         "prerequisites": [],
@@ -6856,57 +7230,61 @@
           "table": "VotingBlockers"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
-        "description": "",
+        "description": "无法对此议案投票。您尚未遇见目标文明。",
         "entity_type": "VotingBlockers"
       },
       "topic": "congress"
@@ -6928,7 +7306,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -6938,7 +7326,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -6948,7 +7336,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -6958,7 +7346,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -6968,7 +7356,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -6978,7 +7366,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -6988,7 +7376,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -6998,7 +7386,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -7008,7 +7396,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -7018,7 +7406,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -7028,7 +7416,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -7038,7 +7426,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -7063,8 +7451,8 @@
         ],
         "localized_fields": {
           "Description": {
-            "en_US": "LOC_WC_VOTING_BLOCKER_NOT_BLOCKING_DESC",
-            "zh_Hans_CN": "LOC_WC_VOTING_BLOCKER_NOT_BLOCKING_DESC"
+            "en_US": "You may vote for or against this Discussion.",
+            "zh_Hans_CN": "可以投票支持或反对该议案。"
           }
         },
         "prerequisites": [],
@@ -7076,57 +7464,61 @@
           "table": "VotingBlockers"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
-        "description": "",
+        "description": "可以投票支持或反对该议案。",
         "entity_type": "VotingBlockers"
       },
       "topic": "congress"
@@ -7148,7 +7540,17 @@
               "Value": "20"
             },
             "source_ref": {
-              "row": 0,
+              "row": 160,
+              "table": "GlobalParameters"
+            }
+          },
+          {
+            "facts": {
+              "Name": "USE_OLD_WORLD_CONGRESS_FLOW",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 440,
               "table": "GlobalParameters"
             }
           },
@@ -7158,7 +7560,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 2,
+              "row": 462,
               "table": "GlobalParameters"
             }
           },
@@ -7168,7 +7570,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 3,
+              "row": 463,
               "table": "GlobalParameters"
             }
           },
@@ -7178,7 +7580,7 @@
               "Value": "2"
             },
             "source_ref": {
-              "row": 4,
+              "row": 464,
               "table": "GlobalParameters"
             }
           },
@@ -7188,7 +7590,7 @@
               "Value": "30.0"
             },
             "source_ref": {
-              "row": 5,
+              "row": 465,
               "table": "GlobalParameters"
             }
           },
@@ -7198,7 +7600,7 @@
               "Value": "30"
             },
             "source_ref": {
-              "row": 6,
+              "row": 466,
               "table": "GlobalParameters"
             }
           },
@@ -7208,7 +7610,7 @@
               "Value": "15"
             },
             "source_ref": {
-              "row": 7,
+              "row": 467,
               "table": "GlobalParameters"
             }
           },
@@ -7218,7 +7620,7 @@
               "Value": "5.0"
             },
             "source_ref": {
-              "row": 8,
+              "row": 468,
               "table": "GlobalParameters"
             }
           },
@@ -7228,7 +7630,7 @@
               "Value": "4"
             },
             "source_ref": {
-              "row": 9,
+              "row": 469,
               "table": "GlobalParameters"
             }
           },
@@ -7238,7 +7640,7 @@
               "Value": "200"
             },
             "source_ref": {
-              "row": 10,
+              "row": 470,
               "table": "GlobalParameters"
             }
           },
@@ -7248,7 +7650,7 @@
               "Value": "1"
             },
             "source_ref": {
-              "row": 11,
+              "row": 471,
               "table": "GlobalParameters"
             }
           },
@@ -7258,7 +7660,7 @@
               "Value": "0"
             },
             "source_ref": {
-              "row": 12,
+              "row": 472,
               "table": "GlobalParameters"
             }
           }
@@ -7283,8 +7685,8 @@
         ],
         "localized_fields": {
           "Description": {
-            "en_US": "LOC_WC_VOTING_BLOCKER_NOT_INVITED_TO_EMERGENCY_DESC",
-            "zh_Hans_CN": "LOC_WC_VOTING_BLOCKER_NOT_INVITED_TO_EMERGENCY_DESC"
+            "en_US": "You may not vote on this Discussion.  You are not party to the Emergency.",
+            "zh_Hans_CN": "无法对此议案投票。您未加入紧急状况。"
           }
         },
         "prerequisites": [],
@@ -7296,57 +7698,61 @@
           "table": "VotingBlockers"
         },
         {
-          "row": 0,
+          "row": 160,
           "table": "GlobalParameters"
         },
         {
-          "row": 2,
+          "row": 440,
           "table": "GlobalParameters"
         },
         {
-          "row": 3,
+          "row": 462,
           "table": "GlobalParameters"
         },
         {
-          "row": 4,
+          "row": 463,
           "table": "GlobalParameters"
         },
         {
-          "row": 5,
+          "row": 464,
           "table": "GlobalParameters"
         },
         {
-          "row": 6,
+          "row": 465,
           "table": "GlobalParameters"
         },
         {
-          "row": 7,
+          "row": 466,
           "table": "GlobalParameters"
         },
         {
-          "row": 8,
+          "row": 467,
           "table": "GlobalParameters"
         },
         {
-          "row": 9,
+          "row": 468,
           "table": "GlobalParameters"
         },
         {
-          "row": 10,
+          "row": 469,
           "table": "GlobalParameters"
         },
         {
-          "row": 11,
+          "row": 470,
           "table": "GlobalParameters"
         },
         {
-          "row": 12,
+          "row": 471,
+          "table": "GlobalParameters"
+        },
+        {
+          "row": 472,
           "table": "GlobalParameters"
         }
       ],
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
-        "description": "",
+        "description": "无法对此议案投票。您未加入紧急状况。",
         "entity_type": "VotingBlockers"
       },
       "topic": "congress"
