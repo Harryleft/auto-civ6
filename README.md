@@ -94,3 +94,5 @@ CLI 只允许 `benchmark_turn_1`，运行会替换当前对局。驱动采用固
 MIT
 
 世界议会由 `open_world_congress` 显式开始投票界面，再用 `get_world_congress` 读取议题、`queue_wc_votes` 提交明确选择，最后 `end_turn` 确认原推进。读取不打开界面；无选择阶段用明确的空计划 `[]`，不触发可能自动提交的 Intro 开始事件。已提交、状态未知或丢应答时不重复开始／投票。
+
+第50至100回合实机结果与已知限制见[调度验收](docs/acceptance/2026-10-17-turn-100-scheduling.md)。

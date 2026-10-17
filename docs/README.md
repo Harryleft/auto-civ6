@@ -9,6 +9,7 @@
 - [调度修复与第 50 回合验收](acceptance/2026-10-17-scheduling-repair-turn-50.md)：630 项离线测试、20 净推进、最终保存恢复及新增问题。
 - [灾害弹窗、恢复读取与分数差异验收](acceptance/2026-10-17-reliability-repair.md)：两处灾害回放、分数原因、保存恢复及菜单换档分析。
 - [菜单换档规格](specs/2026-10-17-menu-save-reload.md)与[耗时验收](acceptance/2026-10-17-menu-save-reload.md)：735项离线测试、进程保留、两组配对耗时、状态清理及新存档恢复。
+- [第50至100回合规格](specs/2026-10-17-turn-100-scheduling.md)与[验收](acceptance/2026-10-17-turn-100-scheduling.md)：871项离线测试、议会完整投票、移动／动作来源／城市射击确认、阶段存档及最终菜单恢复。
 - [模型操作规则](../AGENTS.md)：基于真实状态操作游戏。
 - [存档格式](save-file-format.md)：`scripts/parse_save.py` 的逆向研究依据。
 - [macOS 启动器设置](research/bypassing_aspyr_launcher.md)：Steam 启动配置参考。
