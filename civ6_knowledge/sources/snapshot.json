@@ -64,6 +64,17 @@
       "text_sha256": "794263dbdbf69985401e10073283cb09fb7c742bc13f4537d0224704c241523b"
     }
   ],
+  "knowledge_topics": [
+    "civics",
+    "technologies",
+    "districts",
+    "congress",
+    "economy",
+    "resources",
+    "combat",
+    "diplomacy",
+    "victory"
+  ],
   "localization": {
     "LOC_ABILITY_AIRPORT_TRAINED_AIRCRAFT_XP_DESCRIPTION": {
       "en_US": "+50% Earned experience from Airport",

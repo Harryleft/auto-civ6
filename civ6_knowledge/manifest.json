@@ -1,9 +1,14 @@
 {
   "counts": {
     "civics": 61,
+    "combat": 311,
     "congress": 29,
+    "diplomacy": 53,
     "districts": 28,
-    "technologies": 77
+    "economy": 261,
+    "resources": 87,
+    "technologies": 77,
+    "victory": 97
   },
   "coverage": {
     "complete_for_snapshot_tables": [
@@ -12,7 +17,21 @@
       "Districts",
       "Resolutions",
       "ProposalTypes",
-      "VotingBlockers"
+      "VotingBlockers",
+      "Yields",
+      "Buildings",
+      "Policies",
+      "Resources",
+      "RandomEvents",
+      "Units",
+      "UnitPromotions",
+      "Terrains",
+      "Features",
+      "DiplomaticActions",
+      "Alliances",
+      "Victories",
+      "Religions",
+      "Beliefs"
     ],
     "missing_optional_tables": [],
     "not_covered": [
@@ -23,10 +42,15 @@
     ]
   },
   "files": {
-    "rules/civics.json": "d41b81f91ef002691ba46fc0d1322edfb001464ca03f927d2d6e237333a1b644",
-    "rules/congress.json": "235fd10d5488936753173b3075883a29c8551e7e761e4d4e18b9e4bf0c7a7e9f",
-    "rules/districts.json": "f85d381e991b9c3042c5e3b5db5b1c616bd0358f60503340f5f3adc4343dbb1d",
-    "rules/technologies.json": "ef28257d0836d2367a5657b752bb4853900a73161b7c36cd4b15e88bb9deb8e0"
+    "rules/civics.json": "a133f4edaca78d1d229bdf2e88bca87cb7c284f29838c3c598324d0b74877502",
+    "rules/combat.json": "c49118b878e78bcf9bb767e7afcde15df8400f3c12e20c8e7647e807d7b99ba5",
+    "rules/congress.json": "2e98fa445d5933daaeebbd6b85fd8191ab3e6c3659c7b51a4ddacc9b7f72dedb",
+    "rules/diplomacy.json": "3441ba686fbda3fa86267855d0fc496dbceab670075db0e20fd34bb448f255b2",
+    "rules/districts.json": "54da37dbdbcc159d6d2c6fa595d9f52910202c115dbd92917d6bab75d4f8ac11",
+    "rules/economy.json": "70ee4a9a58382484fd1547f6dc41363b501ee48e220771cc9ec3012e1134b2da",
+    "rules/resources.json": "45011271939a4ac9d9b486be10b422ac460d81049c4c93f41727840b0d9f5730",
+    "rules/technologies.json": "bc93fb9c0e4a53457135ce61c3108e92dd95f8e1ff05bde12d135c4ccd780015",
+    "rules/victory.json": "268d9dfe3b15db54e3b295ae1d13808733d6bf9c163f7bd0d455740ffabaab4e"
   },
   "profile": {
     "active_modes_verified": false,
@@ -83,11 +107,15 @@
     ],
     "configuration_warning": "Configuration enabled lists do not prove per-game active modes or ownership.",
     "current_session_verified": false,
+    "derived_tables": [
+      "CivilopediaTexts"
+    ],
     "game_version": "1.0.12.54 (951533)",
     "language_preference": [
       "zh_Hans_CN",
       "en_US"
     ],
+    "localization_policy": "Cached text; missing literals supplemented from installed Expansion2 text. Active overrides unverified.",
     "macos_bundle_build": "376653.178",
     "macos_bundle_version": "1.4.6",
     "missing_optional_tables": [],
@@ -100,16 +128,26 @@
   },
   "schema_version": 1,
   "snapshot": "sources/snapshot.json",
-  "snapshot_sha256": "e50515a34f2a15cc427734300a17a6569186ef2a2c2aba548b3dd5f2d118cfec",
+  "snapshot_sha256": "0f574a77352b642e9b0b420f1d87cb54b9a3fb2c42048dac28600935c27f1e5c",
   "support_files": {
-    "NEXT.md": "20d96d1dbbdfaf63f0e3e0b64a90ebd047d67fc2db1f9e30216773cb7b9c6db8",
-    "README.md": "f0544a76aef417cd3120a0146bf7a473e08467baacf77191f06d5677be500a16",
-    "build.py": "4c2e6ce57e846a1864572a9c9bab2082a39eb32e96cfb6ef1d1928c0a8bba125",
-    "capture.py": "b52d6e5073546dd862a9dbb920b30e87a1ab06c4132a2322346ee09d26b0e047",
-    "query.py": "05ca18bf19c9d65ceb14d4d39b1dd00942d817dfc023a4a014e85c17d9142062",
+    "NEXT.md": "41f3329d78ca2582985df220564268efe4e1ed513ef83b6b673f4f92ae295d8b",
+    "README.md": "9ddf411998cab905aaf4510a158adde843c274064f5c26983c280bd60aa74918",
+    "build.py": "c3f98a6bb9cf49700abdb7475fe8dd7a282bddd6d6fbfb8ee43a491123313f74",
+    "capture.py": "b0424419b8d59141325d0b32b8253913df2ab09df88ec5ca77fdfd4b69717829",
+    "query.py": "b7f34768ff2e292835e894e31aef4b25f2e00ad16682275e04d877099bad757f",
     "topics/civics.md": "55dea2e99d9df7f606335c5fd454df79b57d22907cfb7ce2d7d68162a732ff61",
+    "topics/combat.json": "bac2bb41c0088e6f9acf2350c907ed918c8c835d848d2bbe7bff8bf0a17572bc",
+    "topics/combat.md": "2d83533865d70d396b0388a468c5fc1193839aaa758b344c77d41893fd574bc1",
     "topics/congress.md": "6dd6a09d6ba7989dd7e254bf387094f317100816ce55c7c276ee99f0588edc6c",
+    "topics/diplomacy.json": "ec7ede1da23a0f9a58ce9947f4561dfacb98f68d9c798f6b8db639692fd600b5",
+    "topics/diplomacy.md": "7c6d60f1f25b470801ff751b3b9da5471fad56efad5613bec112568770ab7fc5",
     "topics/districts.md": "895c7c367653bb8bcd9906b3ede83debddd6548b07a0bb2f3bd6b5224a358bc3",
-    "topics/technologies.md": "2ca46828e7c42d55d7a6a4cc543eab7bcd8e66e80366208612deea97c3a39623"
+    "topics/economy.json": "75461e9b8a921dc7e2fb3ab0ddc27db708da57e08aafe7cb12716d6f9b4bc832",
+    "topics/economy.md": "451c93851a327aa8eba0a5ec96fed68036bd49ca1eadf40f22b990445bb8961a",
+    "topics/resources.json": "e738dc454abe25e92463cf15dd612997dca3efe3f9937aa0aecbba8384cef941",
+    "topics/resources.md": "c84d1aabbbdfc2eca5e25ba7e85787951314924b70f33002c8dea08f9b4de5e7",
+    "topics/technologies.md": "2ca46828e7c42d55d7a6a4cc543eab7bcd8e66e80366208612deea97c3a39623",
+    "topics/victory.json": "cd77b81f6f7c044ca241183fbb0cbee9b6af611280397c80f1c41f04f38dcb36",
+    "topics/victory.md": "a8a9d30ebaba4879d03e4670f162b1bd210c0974f5c0b3a2af2fb4db0d71db2e"
   }
 }
