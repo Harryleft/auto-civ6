@@ -80,7 +80,18 @@ async def _logged(
     async with app.lock:
         start = time.monotonic()
         try:
-            result = await fn()
+            if (
+                getattr(app.game, "_pending_load", False)
+                and not tool_name.startswith(("get_", "list_"))
+                and tool_name != "restart_and_load"
+            ):
+                result = (
+                    "ERR:OUTCOME_UNKNOWN|The requested load has not been verified. "
+                    "Read game state or explicitly restart_and_load a verified checkpoint "
+                    "before issuing gameplay actions."
+                )
+            else:
+                result = await fn()
         except (LuaError, ValueError, OSError) as exc:
             result = f"Error: {exc}"
         ms = int((time.monotonic() - start) * 1000)

@@ -28,6 +28,9 @@ class PendingGame:
         self.actions.append(("skip", unit_index))
         return "SKIPPED"
 
+    async def get_units(self):
+        return []
+
 
 class Logger:
     async def log_tool_call(self, *_args):
@@ -60,3 +63,20 @@ def test_other_unit_does_not_depend_on_pending_position():
     result = asyncio.run(server.unit_action(context(game), 65536 + 8, "fortify"))
     assert result == "FORTIFIED"
     assert game.actions == [("fortify", 8)]
+
+
+def test_unknown_load_blocks_gameplay_even_without_pending_unit():
+    game = PendingGame("CONFIRMED|unused")
+    game.pending_action_entity = None
+    game._pending_load = True
+    result = asyncio.run(server.unit_action(context(game), 7, "fortify"))
+    assert "OUTCOME_UNKNOWN" in result
+    assert game.actions == []
+
+
+def test_unknown_load_still_allows_read_only_unit_query():
+    game = PendingGame("CONFIRMED|unused")
+    game._pending_load = True
+    result = asyncio.run(server.get_units(context(game)))
+    assert "OUTCOME_UNKNOWN" not in result
+    assert game.actions == []
