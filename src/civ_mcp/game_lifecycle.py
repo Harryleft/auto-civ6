@@ -342,7 +342,6 @@ async def save_game(conn: GameConnection, name: str) -> str:
     name = name.removesuffix(".Civ6Save")
     if name.rstrip(" .").casefold() == "benchmark_turn_1":
         return "Error: The original benchmark_turn_1 baseline cannot be overwritten."
-    checkpoints.forget_completion(name)
     path = Path(SINGLE_SAVE_DIR) / f"{name}.Civ6Save"
 
     def fingerprint():
@@ -361,6 +360,19 @@ async def save_game(conn: GameConnection, name: str) -> str:
     code = f"""
 local prior = __civmcpSaveCompletion;
 if prior and not prior.done then print("MCP_SAVE_PENDING"); print("{lq.SENTINEL}"); return; end;
+-- This tool saves confirmed active turns. Do not release the end-game pause
+-- or enter One More Turn to make a terminal save possible.
+local stateOK, terminal = pcall(function()
+  local winner = Game.GetWinningTeam();
+  assert(winner == nil or type(winner) == "number" and winner == winner
+    and math.abs(winner) < math.huge and winner == math.floor(winner));
+  if winner ~= nil and winner >= 0 then return true; end;
+  local alive = Players[Game.GetLocalPlayer()]:IsAlive();
+  assert(type(alive) == "boolean");
+  return not alive;
+end);
+if not stateOK then print("MCP_SAVE_STATE_UNAVAILABLE"); print("{lq.SENTINEL}"); return; end;
+if terminal then print("MCP_SAVE_TERMINAL"); print("{lq.SENTINEL}"); return; end;
 if prior and prior.handler then pcall(function() Events.SaveComplete.Remove(prior.handler); end); end;
 local q = {{token="{token}", done=false}};
 __civmcpSaveCompletion = q;
@@ -395,14 +407,27 @@ print("{lq.SENTINEL}");
     cleanup_budget = min(0.5, SAVE_CONFIRM_TIMEOUT / 4)
     try:
         async with asyncio.timeout(SAVE_CONFIRM_TIMEOUT - cleanup_budget):
+            lines = []
             try:
                 lines = await conn.execute_write(code)
             except (OSError, TimeoutError, LuaError):
-                lines = []
+                pass
+            finally:
+                # Serialized saves cannot overlap recovery. Invalidate once a
+                # submission may have occurred, including cancellation/lost
+                # replies; a proven zero-submit refusal preserves old records.
+                unsubmitted = {"MCP_SAVE_PENDING", "MCP_SAVE_UNAVAILABLE",
+                               "MCP_SAVE_TERMINAL", "MCP_SAVE_STATE_UNAVAILABLE"}
+                if not unsubmitted.intersection(lines):
+                    checkpoints.forget_completion(name)
             if "MCP_SAVE_PENDING" in lines:
                 return "ERR:OUTCOME_UNKNOWN|Earlier native save completion is unresolved; no new save submitted. Use explicit recovery."
             if "MCP_SAVE_UNAVAILABLE" in lines:
                 return "Error: Native save completion event unavailable; no save submitted."
+            if "MCP_SAVE_TERMINAL" in lines:
+                return "Error: GAME_OVER|Saving is unavailable at the confirmed terminal boundary; no save submitted. Keep the last confirmed checkpoint and terminal evidence."
+            if "MCP_SAVE_STATE_UNAVAILABLE" in lines:
+                return "Error: SAVE_STATE_UNAVAILABLE|Native terminal state unavailable; no save submitted."
             if "MCP_SAVE|false" in lines:
                 return f"Error: Civ VI rejected save {name!r}: {lines!r}"
             while True:

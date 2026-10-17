@@ -190,285 +190,83 @@ print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
 
 
-def build_gameover_check_gamecore() -> str:
-    """GameCore: minimal game-over check that survives the defeat screen.
-
-    Uses only Game.GetWinningTeam() and Players[] — no ContextPtr or UI
-    lookups. Victory type is reported as Unknown (TestVictory may not work
-    in GameCore). Better to detect the game-over with unknown type than
-    miss it entirely.
-    """
-    return f"""
-local winTeam = -1
-pcall(function() winTeam = Game.GetWinningTeam() or -1 end)
+def _gameover_check_lua() -> str:
+    """Read the official winning-team/type tuple in either native context."""
+    return r'''
+local winTeam, victorySelector = nil, nil
+pcall(function() winTeam, victorySelector = Game.GetWinningTeam() end)
 local me = Game.GetLocalPlayer()
-if winTeam < 0 then
-    -- No formal winner yet — check for player elimination or turn limit.
-    local meAlive = true
-    pcall(function() meAlive = Players[me]:IsAlive() end)
-    -- Check turn limit: Quick speed = 330, Standard = 500.
-    -- Game.GetMaxTurns() returns 0 if no limit is set.
-    local curTurn = Game.GetCurrentGameTurn()
-    local maxTurns = 0
-    pcall(function() maxTurns = Game.GetMaxTurns() end)
+local meAlive = true
+pcall(function()
+    local value = Players[me]:IsAlive()
+    if type(value) == "boolean" then meAlive = value end
+end)
+local function integer(value)
+    return type(value) == "number" and value == value and math.abs(value) < math.huge and value == math.floor(value)
+end
+if not integer(winTeam) or winTeam < 0 then
     if not meAlive then
-        -- Player eliminated — all cities lost
         print("GAME_OVER|DEFEAT|Unknown|Elimination|dead|Unknown|-1")
-        print("{SENTINEL}")
-        return
+    else
+        local curTurn, maxTurns = Game.GetCurrentGameTurn(), 0
+        pcall(function() maxTurns = Game.GetMaxTurns() or 0 end)
+        if maxTurns > 0 and curTurn >= maxTurns then
+            print("GAME_OVER|DEFEAT|Unknown|TurnLimit|alive|Unknown|-1")
+        else
+            print("GAME_ACTIVE")
+        end
     end
-    if maxTurns > 0 and curTurn >= maxTurns then
-        -- Turn limit reached — "Out of Time"
-        print("GAME_OVER|DEFEAT|Unknown|TurnLimit|alive|Unknown|-1")
-        print("{SENTINEL}")
-        return
-    end
-    print("GAME_ACTIVE")
     print("{SENTINEL}")
     return
 end
-local winnerId = -1
-local winnerName = "Unknown"
-local winnerLeader = "Unknown"
+local victoryType = "Unknown"
+pcall(function()
+    if not integer(victorySelector) and type(victorySelector) ~= "string" then return end
+    local row = GameInfo.Victories[victorySelector]
+    if row and type(row.VictoryType) == "string" and row.VictoryType:match("^VICTORY_[A-Z0-9_]+$") then
+        victoryType = row.VictoryType
+    end
+end)
+local winnerId, winnerName, winnerLeader = -1, "Unknown", "Unknown"
 for i = 0, 62 do
     local p = Players[i]
     if p and p:IsMajor() and p:IsAlive() and p:GetTeam() == winTeam then
         winnerId = i
-        local cfg = PlayerConfigurations[i]
         pcall(function()
+            local cfg = PlayerConfigurations[i]
             winnerName = Locale.Lookup(cfg:GetCivilizationShortDescription())
             winnerLeader = Locale.Lookup(cfg:GetLeaderName())
         end)
         break
     end
 end
-local isDefeat = (winnerId ~= me)
-local meAlive = true
-pcall(function() meAlive = Players[me]:IsAlive() end)
-print("GAME_OVER|" .. (isDefeat and "DEFEAT" or "VICTORY") .. "|" .. winnerName .. "|Unknown|" .. (meAlive and "alive" or "dead") .. "|" .. winnerLeader .. "|" .. tostring(winnerId))
+-- A displayed teammate is not the local player; result belongs to the team.
+local isDefeat = Players[me]:GetTeam() ~= winTeam
+print("GAME_OVER|" .. (isDefeat and "DEFEAT" or "VICTORY") .. "|" .. winnerName .. "|" .. victoryType
+    .. "|" .. (meAlive and "alive" or "dead") .. "|" .. winnerLeader .. "|" .. winnerId)
 print("{SENTINEL}")
-"""
+'''.replace("{SENTINEL}", SENTINEL)
+
+
+def build_gameover_check_gamecore() -> str:
+    """Read-only GameCore fallback; uses the same official outcome facts."""
+    return _gameover_check_lua()
 
 
 def build_gameover_check() -> str:
-    """InGame: check if the game is over (EndGameMenu visible).
-
-    Tries Game.TestVictory() first (direct engine query), then falls back to
-    heuristic checks: religious majority, diplo VP >= 20 (scans all winning-team
-    players), science VP >= needed, domination capitals, and culture tourism.
-    Each check is pcall-wrapped so failures don't block detection.
-    """
-    return """
--- Primary check: GetWinningTeam is reliable regardless of UI state.
--- EndGameMenu control lookup can fail when blockers coexist with victory screen.
-local winTeam = -1
-pcall(function() winTeam = Game.GetWinningTeam() or -1 end)
-local me = Game.GetLocalPlayer()
-if winTeam < 0 then
-    -- No formal winner — check EndGameMenu, elimination, and turn limit
-    local egm = ContextPtr:LookUpControl("/InGame/EndGameMenu")
-    if not egm or egm:IsHidden() then
-        local meAlive = true
-        pcall(function() meAlive = Players[me]:IsAlive() end)
-        local curTurn = Game.GetCurrentGameTurn()
-        local maxTurns = 0
-        pcall(function() maxTurns = Game.GetMaxTurns() end)
-        if not meAlive then
-            print("GAME_OVER|DEFEAT|Unknown|Elimination|dead|Unknown|-1")
-            print("{SENTINEL}")
-            return
-        end
-        if maxTurns > 0 and curTurn >= maxTurns then
-            print("GAME_OVER|DEFEAT|Unknown|TurnLimit|alive|Unknown|-1")
-            print("{SENTINEL}")
-            return
-        end
-        print("GAME_ACTIVE")
-        print("{SENTINEL}")
-        return
-    end
-end
-local meAlive = Players[me]:IsAlive()
-local winTeam = -1
-pcall(function() winTeam = Game.GetWinningTeam() or -1 end)
-local winnerId = -1
-local winnerName = "Unknown"
-local winnerLeader = "Unknown"
-local victoryType = "Unknown"
-if winTeam >= 0 then
-    for i = 0, 62 do
-        local p = Players[i]
-        if p and p:IsMajor() and p:IsAlive() and p:GetTeam() == winTeam then
-            winnerId = i
-            local cfg = PlayerConfigurations[i]
-            winnerName = Locale.Lookup(cfg:GetCivilizationShortDescription())
-            winnerLeader = Locale.Lookup(cfg:GetLeaderName())
-            break
-        end
-    end
-end
-if winnerId >= 0 then
-    local wp = Players[winnerId]
-    -- Try each GameInfo.Victories row with Game.TestVictory first (direct engine query)
-    pcall(function()
-        for row in GameInfo.Victories() do
-            if Game.TestVictory(row.Index) then
-                victoryType = row.VictoryType
-                break
-            end
-        end
-    end)
-    -- Fallback heuristics if TestVictory didn't work (can be stale on EndGameMenu)
-    if victoryType == "Unknown" then
-        -- Religious: winner's religion is majority in all (or nearly all) major civs
-        pcall(function()
-            local relCreated = wp:GetReligion():GetReligionTypeCreated()
-            if relCreated >= 0 then
-                local totalM, convM = 0, 0
-                for i = 0, 62 do
-                    local q = Players[i]
-                    if q and q:IsMajor() and q:IsAlive() then
-                        totalM = totalM + 1
-                        if q:GetReligion():GetReligionInMajorityOfCities() == relCreated then convM = convM + 1 end
-                    end
-                end
-                if convM >= totalM - 1 then victoryType = "VICTORY_RELIGIOUS" end
-            end
-        end)
-    end
-    if victoryType == "Unknown" then
-        -- Diplomatic: any player with 20+ diplo VP (check all, not just winner — GetStats may fail on winner)
-        pcall(function()
-            for i = 0, 62 do
-                local q = Players[i]
-                if q and q:IsMajor() and q:IsAlive() and q:GetTeam() == winTeam then
-                    local ok, dvp = pcall(function() return q:GetStats():GetDiplomaticVictoryPoints() end)
-                    if ok and dvp and dvp >= 20 then victoryType = "VICTORY_DIPLOMATIC" end
-                end
-            end
-        end)
-    end
-    if victoryType == "Unknown" then
-        -- Science: completed space projects
-        pcall(function()
-            local ok, svp = pcall(function() return wp:GetStats():GetScienceVictoryPoints() end)
-            local ok2, needed = pcall(function() return wp:GetStats():GetScienceVictoryPointsTotalNeeded() end)
-            if ok and ok2 and svp and needed and svp >= needed then victoryType = "VICTORY_TECHNOLOGY" end
-        end)
-    end
-    if victoryType == "Unknown" then
-        -- Domination: owns all original capitals
-        pcall(function()
-            local caps, owned = 0, 0
-            for i = 0, 62 do
-                local q = Players[i]
-                if q and q:IsMajor() and q:IsAlive() and i ~= winnerId then
-                    caps = caps + 1
-                    local oCap = q:GetCities():GetOriginalCapital()
-                    if oCap and oCap:GetOwner() == winnerId then owned = owned + 1 end
-                end
-            end
-            if caps > 0 and owned >= caps then victoryType = "VICTORY_CONQUEST" end
-        end)
-    end
-    if victoryType == "Unknown" then
-        -- Culture: winner's visiting tourists exceed all others' domestic tourists
-        pcall(function()
-            local dominated = true
-            local checked = 0
-            for i = 0, 62 do
-                local q = Players[i]
-                if q and q:IsMajor() and q:IsAlive() and i ~= winnerId then
-                    local okS, stay = pcall(function() return q:GetCulture():GetStaycationers() end)
-                    local okV, visit = pcall(function() return wp:GetCulture():GetTouristsFrom(i) end)
-                    if okS and okV and stay and visit then
-                        checked = checked + 1
-                        if visit < stay then
-                            dominated = false
-                            break
-                        end
-                    end
-                end
-            end
-            if checked > 0 and dominated then victoryType = "VICTORY_CULTURE" end
-        end)
-    end
-    if victoryType == "Unknown" then
-        -- Score: turn limit reached without any other victory condition
-        victoryType = "VICTORY_SCORE"
-    end
-end
--- Emit per-player VP data so Python can cross-check victory type
--- (EndGameMenu APIs for tourism/staycationers are unreliable)
-pcall(function()
-    for i = 0, 62 do
-        local q = Players[i]
-        if q and q:IsMajor() and q:IsAlive() then
-            local tourism, stay, sciVP, sciNeeded, diploVP = 0, 0, 0, 50, 0
-            pcall(function() tourism = q:GetStats():GetTourism() end)
-            pcall(function() stay = q:GetCulture():GetStaycationers() end)
-            pcall(function() sciVP = q:GetStats():GetScienceVictoryPoints() end)
-            pcall(function() sciNeeded = q:GetStats():GetScienceVictoryPointsTotalNeeded() end)
-            pcall(function() diploVP = q:GetStats():GetDiplomaticVictoryPoints() end)
-            print("VP_DATA|" .. i .. "|" .. tourism .. "|" .. stay .. "|" .. sciVP .. "|" .. sciNeeded .. "|" .. diploVP)
-        end
-    end
-end)
-local isDefeat = winTeam >= 0 and Players[me]:GetTeam() ~= winTeam
-local result = isDefeat and "DEFEAT" or "VICTORY"
-print("GAME_OVER|" .. result .. "|" .. winnerName .. "|" .. victoryType .. "|" .. (meAlive and "alive" or "dead") .. "|" .. winnerLeader .. "|" .. winnerId)
-print("{SENTINEL}")
-""".replace("{SENTINEL}", SENTINEL)
-
-
-def _infer_victory_from_vp_data(vp_data: dict[int, dict], winner_id: int) -> str | None:
-    """Infer victory type from per-player VP data when Lua detection fails.
-
-    Returns a VICTORY_* string or None if Score is genuine.
-    """
-    winner = vp_data.get(winner_id)
-    if not winner:
-        return None
-
-    # Science: winner completed all space projects
-    if winner["sci_vp"] > 0 and winner["sci_vp"] >= winner["sci_needed"]:
-        return "VICTORY_TECHNOLOGY"
-
-    # Diplomatic: 20+ DVP
-    if winner["diplo_vp"] >= 20:
-        return "VICTORY_DIPLOMATIC"
-
-    # Culture: winner's tourism exceeds all rivals' staycationers
-    rivals = {pid: d for pid, d in vp_data.items() if pid != winner_id}
-    if winner["tourism"] > 0 and rivals:
-        max_rival_stay = max(r["stay"] for r in rivals.values())
-        if winner["tourism"] > max_rival_stay:
-            return "VICTORY_CULTURE"
-
-    return None
+    """InGame outcome query; progress estimates never establish victory type."""
+    return _gameover_check_lua()
 
 
 def parse_gameover_response(lines: list[str]) -> GameOverStatus | None:
     """Parse game-over check response. Returns None if game is still active."""
     game_over_line = None
-    vp_data: dict[int, dict] = {}
 
     for line in lines:
         if line == "GAME_ACTIVE":
             return None
         if line.startswith("GAME_OVER|"):
             game_over_line = line
-        elif line.startswith("VP_DATA|"):
-            parts = line.split("|")
-            if len(parts) >= 7:
-                pid = int(parts[1])
-                vp_data[pid] = {
-                    "tourism": int(parts[2]),
-                    "stay": int(parts[3]),
-                    "sci_vp": int(parts[4]),
-                    "sci_needed": int(parts[5]),
-                    "diplo_vp": int(parts[6]),
-                }
 
     if not game_over_line:
         return None
@@ -476,15 +274,6 @@ def parse_gameover_response(lines: list[str]) -> GameOverStatus | None:
     parts = game_over_line.split("|")
     victory_type = parts[3] if len(parts) > 3 else "Unknown"
     winner_name = parts[2] if len(parts) > 2 else "Unknown"
-
-    # Cross-check: if Lua reported Score but VP data suggests otherwise
-    winner_id = (
-        int(parts[6]) if len(parts) > 6 and parts[6].lstrip("-").isdigit() else -1
-    )
-    if victory_type == "VICTORY_SCORE" and vp_data and winner_id >= 0:
-        corrected = _infer_victory_from_vp_data(vp_data, winner_id)
-        if corrected:
-            victory_type = corrected
 
     return GameOverStatus(
         is_game_over=True,
