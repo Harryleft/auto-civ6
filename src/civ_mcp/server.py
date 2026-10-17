@@ -94,7 +94,7 @@ async def _logged(
             elif (
                 getattr(app.game, "_pending_end_turn", False)
                 and not tool_name.startswith(("get_", "list_"))
-                and tool_name not in {"end_turn", "respond_to_diplomacy", "respond_to_trade", "queue_wc_votes", "dismiss_popup", "restart_and_load"}
+                and tool_name not in {"end_turn", "respond_to_diplomacy", "respond_to_trade", "queue_wc_votes", "open_world_congress", "dismiss_popup", "restart_and_load"}
             ):
                 result = (
                     "ERR:OUTCOME_UNKNOWN|The submitted end-turn is still pending. "
@@ -1665,6 +1665,7 @@ async def get_world_congress(ctx: Context) -> str:
 
     Shows whether congress is in session, resolutions to vote on (with options A/B
     and possible targets), turns until next session, and your diplomatic favor.
+    Use open_world_congress to explicitly enter voting; this query never opens UI.
     Native stage and local request status distinguish voting from processing;
     an active session alone does not mean the local player must vote.
     """
@@ -1675,6 +1676,19 @@ async def get_world_congress(ctx: Context) -> str:
         return nr.narrate_world_congress(status)
 
     return await _logged(ctx, "get_world_congress", {}, _run)
+
+
+@mcp.tool()
+async def open_world_congress(ctx: Context) -> str:
+    """Explicitly open native Congress voting, then read get_world_congress.
+
+    Opens only a verified STAGE1/2 with native eligible choices. Already open
+    only reports visibility. Empty/unknown stages and submitted requests never
+    trigger the Intro event; no votes, submission, or continuation are chosen.
+    A lost response only permits inspection of the existing start, not replay.
+    """
+    gs = _get_game(ctx)
+    return await _logged(ctx, "open_world_congress", {}, gs.open_world_congress)
 
 
 @mcp.tool()
