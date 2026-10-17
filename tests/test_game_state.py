@@ -733,7 +733,7 @@ class TestMoveUnit:
         gs, conn = _gs(
             [
                 ("write", ["OK:MOVING_TO|12,20|from:10,20"]),
-                ("write", ["POS|12|20"]),
+                ("write", ["POS|12|20|busy:false"]),
             ]
         )
         gs.dismiss_popup = _no_dismiss
@@ -807,7 +807,7 @@ class TestMoveUnit:
         gs, _ = _gs(
             [
                 ("write", ["OK:MOVING_TO|12,20|from:10,20"]),
-                ("write", ["POS|12|20"]),
+                ("write", ["POS|12|20|busy:false"]),
             ]
         )
 
