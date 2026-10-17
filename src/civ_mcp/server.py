@@ -1855,9 +1855,11 @@ async def run_lua(ctx: Context, code: str, context: str = "gamecore") -> str:
 
 @mcp.tool()
 async def save_game(ctx: Context, save_name: str) -> str:
-    """Save the active single-player game under a local filename.
+    """Save a confirmed active single-player turn under a local filename.
 
-    Confirms a fresh nonempty file, civilization, seed and unchanged turn.
+    Known terminal outcomes are refused before saving; retain the last
+    confirmed checkpoint and terminal evidence. Active saves require a fresh
+    nonempty file, native completion, civilization, seed and unchanged turn.
     An existing filename is overwritten; use unique names for checkpoints.
     An unknown result is never resent automatically. Confirm pending end-turn
     results before saving, and explicitly name a confirmed save for recovery.
