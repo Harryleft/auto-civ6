@@ -18,6 +18,7 @@ Agent 从根目录 [AGENTS.md](../AGENTS.md) 开始；命中任务后读取对�
 
 仅在定位对应改动或核对成果时读取。历史记录中的提交、测试数量与实机结果只适用于该记录，不代表当前分支已重新验收。
 
+- [友好与同盟结果确认验收](acceptance/2026-10-18-terminal-friendship-confirmation.md)：1,279 项离线、友好未确认与研究同盟成立实测、菜单诊断恢复；[规格](specs/2026-10-18-terminal-friendship-confirmation.md)。
 - [第 167 回合议会提案验收](acceptance/2026-10-18-terminal-congress-proposals.md)：1,185 项离线、世界博览会与 3 决议显式混合投票、中文修复及会后确认指引；[规格](specs/2026-10-18-terminal-congress-proposals.md)。
 - [外交当前上下文验收](acceptance/2026-10-18-terminal-diplomacy-context.md)：1,119 项离线、NONE／INCOMING／DIALOGUE 实机复验、错误目标拦截及显式 EXIT；[规格](specs/2026-10-18-terminal-diplomacy-context.md)。
 - [第 117 回合和平确认修复](acceptance/2026-10-18-terminal-peace-confirmation.md)：1,081 项离线、原场景单次提议及延迟成立回读；[规格](specs/2026-10-18-terminal-peace-confirmation.md)。
