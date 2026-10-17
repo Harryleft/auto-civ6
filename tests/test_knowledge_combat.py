@@ -38,3 +38,27 @@ def test_unit_base_movement_and_control_do_not_expand_into_summary(knowledge):
     assert query(knowledge, 'search', '勇士', '--topic', 'combat')['results'][0]['id'] == 'UNIT_WARRIOR'
     summary = query(knowledge, 'show', 'UNIT_WARRIOR')
     assert not {'rule', 'source_refs', 'evidence'} & summary.keys()
+
+
+def test_terrain_feature_and_promotion_conditions_remain_separate(knowledge):
+    hills = query(knowledge, 'show', 'TERRAIN_GRASS_HILLS', '--level', 'rule')
+    forest = query(knowledge, 'show', 'FEATURE_FOREST', '--level', 'rule')
+    assert hills['rule']['facts']['MovementCost'] == 2
+    assert hills['rule']['facts']['DefenseModifier'] == 3
+    assert forest['rule']['facts']['MovementChange'] == 1
+    assert forest['rule']['facts']['RemoveTech'] == 'TECH_MINING'
+    commando = query(knowledge, 'show', 'PROMOTION_COMMANDO', '--level', 'evidence')
+    prereqs = [row['facts'] for row in commando['evidence'] if row['source_ref']['table'] == 'UnitPromotionPrereqs']
+    assert {'UnitPromotion': 'PROMOTION_COMMANDO', 'PrereqUnitPromotion': 'PROMOTION_AMPHIBIOUS'} in prereqs
+    assert {'UnitPromotion': 'PROMOTION_COMMANDO', 'PrereqUnitPromotion': 'PROMOTION_BATTLECRY'} in prereqs
+
+
+def test_siege_evidence_uses_gathering_storm_wall_exceptions(knowledge):
+    tower = query(knowledge, 'show', 'UNIT_SIEGE_TOWER', '--level', 'evidence')
+    text = tower['localization']['LOC_UNIT_SIEGE_TOWER_EXPANSION2_DESCRIPTION']['en_US']
+    assert 'melee and anti-cavalry' in text
+    assert 'Renaissance' in text and 'Urban Defenses' in text
+    ram = query(knowledge, 'show', 'UNIT_BATTERING_RAM', '--level', 'evidence')
+    text = ram['localization']['LOC_UNIT_BATTERING_RAM_EXPANSION2_DESCRIPTION']['en_US']
+    assert 'Ancient Walls' in text
+    assert 'Medieval' in text and 'Renaissance' in text
