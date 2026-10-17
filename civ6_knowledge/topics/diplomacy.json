@@ -1,0 +1,361 @@
+{
+  "schema_version": 1,
+  "topic": "diplomacy",
+  "cards": [
+    {
+      "id": "MECHANIC_DIPLOMACY_ACTIONS",
+      "names": {
+        "zh_Hans_CN": "外交关系与行动资格",
+        "en_US": "Diplomatic relations and action eligibility"
+      },
+      "summary": "行动资格由双方关系、发起方／目标方研究、既有协议与行动专属条件共同约束；关系好感不等于协议已经成立。",
+      "conditions": [
+        "DiplomaticStateActions 描述关系状态与行动的关联；AiAllowed 是 AI 使用标志，不能据其值替代人类玩家的可用行动判定。",
+        "DiplomaticActions 的 InitiatorPrereq 与 TargetPrereq 分开核对，不能把发起方前置自动复制给目标方。",
+        "正式战争的 DenouncementTurnsRequired 与其他宣战理由不同；不能把所有宣战都套用同一等待规则。",
+        "开放边界是有方向的协议；联盟附带的互通不能推导所有独立开放边界协议自动互惠。"
+      ],
+      "source_selectors": [
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_DIPLO_2_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_DIPLO_9_CHAPTER_CONTENT_PARA_2"
+        },
+        {
+          "table": "DiplomaticActions",
+          "key": "DiplomaticActionType",
+          "value": "DIPLOACTION_OPEN_BORDERS"
+        },
+        {
+          "table": "DiplomaticActions",
+          "key": "DiplomaticActionType",
+          "value": "DIPLOACTION_DECLARE_FORMAL_WAR"
+        },
+        {
+          "table": "DiplomaticStateActions",
+          "key": "DiplomaticActionType",
+          "value": "DIPLOACTION_DECLARE_FORMAL_WAR"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "DIPLOMACY_DENOUNCE_WAR_DELAY"
+        }
+      ],
+      "related": [
+        "DIPLOACTION_OPEN_BORDERS",
+        "DIPLOACTION_DECLARE_FORMAL_WAR",
+        "CIVIC_EARLY_EMPIRE"
+      ],
+      "current_facts_needed": [
+        "双方当前关系与有效协议",
+        "行动候选及拒绝原因",
+        "双方研究与谴责时间"
+      ],
+      "limitations": [
+        "开放边界百科段落将早期帝国概括为双方条件，数据行只列发起方；保留差异，以本局行动候选确认。"
+      ]
+    },
+    {
+      "id": "MECHANIC_DIPLOMACY_ALLIANCES",
+      "names": {
+        "zh_Hans_CN": "联盟类型、等级与续期",
+        "en_US": "Alliance type, level and renewal"
+      },
+      "summary": "联盟要求宣布友谊及双方解锁文官制度；类型决定收益，等级效果累计，商路可增加联盟点数。",
+      "conditions": [
+        "同一对文明只能有一种联盟，同一种联盟类型不能同时用于另一文明；不能仅凭关系友好推断能签新联盟。",
+        "AllianceEffects 的 LevelRequirement 是效果门槛；等级较高时保留较低等级效果，但商路／研究等效果仍有各自条件。",
+        "联盟点数、等级阈值与持续时间分别查 GlobalParameters；基础阈值和 Duration 不直接给出当前剩余回合。",
+        "所有联盟提供互相开放边界及防御协定；防御协定并非对所有参战链条自动触发，紧急事件也有例外。"
+      ],
+      "source_selectors": [
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_ALLIANCES_1_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_DIPLO_11_CHAPTER_CONTENT_PARA_2"
+        },
+        {
+          "table": "DiplomaticActions",
+          "key": "DiplomaticActionType",
+          "value": "DIPLOACTION_ALLIANCE_RESEARCH"
+        },
+        {
+          "table": "DiplomaticActions_XP1",
+          "key": "DiplomaticActionType",
+          "value": "DIPLOACTION_ALLIANCE_RESEARCH"
+        },
+        {
+          "table": "AllianceEffects",
+          "key": "AllianceType",
+          "value": "ALLIANCE_RESEARCH"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "ALLIANCE_LEVEL_TWO_XP"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "ALLIANCE_LEVEL_THREE_XP"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "ALLIANCE_POINTS_FOR_TRADE"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "DIPLOMACY_ALLIANCE_TIME_LIMIT"
+        }
+      ],
+      "related": [
+        "ALLIANCE_RESEARCH",
+        "DIPLOACTION_ALLIANCE_RESEARCH",
+        "CIVIC_CIVIL_SERVICE"
+      ],
+      "current_facts_needed": [
+        "已宣布友谊与双方市政",
+        "现有联盟类型、等级、点数及期限",
+        "与盟友的商路和战争状态"
+      ],
+      "limitations": []
+    },
+    {
+      "id": "MECHANIC_DIPLOMACY_ROUTES",
+      "names": {
+        "zh_Hans_CN": "商路资格、范围与产出",
+        "en_US": "Trade route eligibility, range and yields"
+      },
+      "summary": "商人执行商路，双边交易另行谈判；商路收益由目的地区域、路线及其他修正组成，国内与国际列不同。",
+      "conditions": [
+        "先查商人、起点城市、剩余容量及可达目的地；不把已有商人或静态距离当作路线合法证明。",
+        "District_TradeRouteYields 分开记录国内目的地、国际目的地和起点收益；不能把它们全部累加。",
+        "商路完成后可建立所属玩家的贸易站并延伸范围；陆海转换和补给会改变可达性，不能只按直线距离判断。",
+        "标准速度的基础持续时间不等于当前速度下固定结束回合；活动路线须完成返程，沿途还可能被掠夺。"
+      ],
+      "source_selectors": [
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_TRADE_1_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_TRADE_1_CHAPTER_CONTENT_PARA_3"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_TRADE_3_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_TRADE_4_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_TRADE_5_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "District_TradeRouteYields",
+          "key": "DistrictType",
+          "value": "DISTRICT_CAMPUS"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "TRADE_ROUTE_BASE_RANGE"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "TRADE_ROUTE_WATER_RANGE_REFUEL"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "TRADE_ROUTE_TURN_DURATION_BASE"
+        }
+      ],
+      "related": [
+        "DISTRICT_CAMPUS",
+        "UNIT_TRADER",
+        "CIVIC_FOREIGN_TRADE"
+      ],
+      "current_facts_needed": [
+        "商人起点、容量与目的地候选",
+        "路线收益、贸易站及掠夺风险",
+        "速度与当前路线进度"
+      ],
+      "limitations": [
+        "缓存百科关于容量的区域概括不能替代风云变幻的建筑／Modifier 条件，本卡不复述该概括。"
+      ]
+    },
+    {
+      "id": "MECHANIC_DIPLOMACY_DEALS",
+      "names": {
+        "zh_Hans_CN": "双边交易、条款与接受",
+        "en_US": "Bilateral deals, terms and acceptance"
+      },
+      "summary": "双边交易交换双方可提供的条目；报价、AI 接受和实际成交是不同步骤，不会因建立商路自动成交。",
+      "conditions": [
+        "必须分清我方付出、对方付出、一次性转移与持续条款；数量、期限和资源类型逐项确认。",
+        "对方库存与可交易候选会改变，静态规则无法确定接受价格或代替当前报价。",
+        "赠礼是单向转移，不能因没有对价就推断可以撤回；接受后仍需回读余额、资源和协议。",
+        "开放边界等协议有独立行动前置，列入交易不绕过资格条件。"
+      ],
+      "source_selectors": [
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_DIPLO_7_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "DiplomaticActions",
+          "key": "DiplomaticActionType",
+          "value": "DIPLOACTION_OPEN_BORDERS"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "DIPLOMACY_MAXIMUM_LOPSIDED_DEAL_MODIFIER"
+        }
+      ],
+      "related": [
+        "DIPLOACTION_OPEN_BORDERS",
+        "RESOURCE_COAL"
+      ],
+      "current_facts_needed": [
+        "双方当前可交易条目及库存",
+        "报价双方数量、期限与接受状态",
+        "成交后的余额与有效协议"
+      ],
+      "limitations": [
+        "旧百科将资源概括为到期归还，不适合推断风云变幻战略库存交易；本卡不采用这一概括，也不统一假定全部条款同一期限。"
+      ]
+    },
+    {
+      "id": "MECHANIC_DIPLOMACY_ENVOYS",
+      "names": {
+        "zh_Hans_CN": "使者、影响力与宗主权",
+        "en_US": "Envoys, influence and suzerainty"
+      },
+      "summary": "影响力积累与获得使者、派遣使者、形成宗主权是不同阶段；普通使者奖励与宗主专属奖励分别判断。",
+      "conditions": [
+        "使者可来自影响力、任务或研究等来源；已获得使者不等于已派往某城邦。",
+        "宗主权要求达到最低使者门槛且独占最多使者；并列最多不能认定宗主。",
+        "普通类型奖励按本国使者条件累计，不要求成为宗主；城邦特有宗主奖励不能套用于所有城邦。",
+        "直接向城邦宣战会移除本国在那里已有的使者，战争与宗主变化应重新查询。"
+      ],
+      "source_selectors": [
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_CITYSTATES_3_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_CITYSTATES_4_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_CITYSTATES_4_CHAPTER_CONTENT_PARA_2"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_CITYSTATES_5_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "INFLUENCE_TOKENS_MINIMUM_FOR_SUZERAIN"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "INFLUENCE_TOKENS_FREE_FOR_FIRST_PLAYER_MEET"
+        }
+      ],
+      "related": [
+        "CIVIC_POLITICAL_PHILOSOPHY",
+        "ALLIANCE_ECONOMIC"
+      ],
+      "current_facts_needed": [
+        "已遇见城邦、可用使者及任务",
+        "各方使者数量和当前宗主",
+        "战争关系、有效政策和城邦专属奖励"
+      ],
+      "limitations": []
+    },
+    {
+      "id": "MECHANIC_DIPLOMACY_PROMISES",
+      "names": {
+        "zh_Hans_CN": "承诺、怨恨与战争理由",
+        "en_US": "Promises, grievances and casus belli"
+      },
+      "summary": "风云变幻中战争理由与外交事件会影响怨恨；承诺有发起条件、外交支持费用及违约后果。",
+      "conditions": [
+        "请求停止传教、挖掘或近处定居等行动有各自触发条件，不能把 Discuss 分组当作所有请求随时可用。",
+        "DiplomaticActions_XP2 的 FavorCost、GrievancesForRefusal、GrievancesPerIncursion 分别表达费用、拒绝与后续侵入后果。",
+        "旧 WarmongerPercent 字段仍可能出现在行动基础行；不能将其直接换算为风云变幻实际怨恨。",
+        "紧急事件参与资格另依关系及事件条件判断，转世界议会核对；联盟或友谊不是所有事件的一致参战许可。"
+      ],
+      "source_selectors": [
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_DIPLO_3_CHAPTER_CONTENT_PARA_2"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_DIPLO_7_CHAPTER_CONTENT_PARA_4"
+        },
+        {
+          "table": "DiplomaticActions",
+          "key": "DiplomaticActionType",
+          "value": "DIPLOACTION_KEEP_PROMISE_DONT_CONVERT"
+        },
+        {
+          "table": "DiplomaticActions_XP2",
+          "key": "DiplomaticActionType",
+          "value": "DIPLOACTION_KEEP_PROMISE_DONT_CONVERT"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_EMERGENCY_ALLIANCES_1_CHAPTER_CONTENT_PARA_3"
+        }
+      ],
+      "related": [
+        "DIPLOACTION_KEEP_PROMISE_DONT_CONVERT",
+        "DIPLOACTION_DECLARE_FORMAL_WAR"
+      ],
+      "current_facts_needed": [
+        "当前承诺、侵入事件与怨恨",
+        "可用外交支持与请求候选",
+        "战争理由及紧急事件资格"
+      ],
+      "limitations": []
+    }
+  ]
+}
