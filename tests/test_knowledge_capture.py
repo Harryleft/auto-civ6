@@ -181,3 +181,24 @@ def test_capture_expanded_theme_facts_without_filtering_their_mechanisms(tmp_pat
     assert data['tables']['GlobalParameters'][0]['Name'] == 'CITY_GROWTH_THRESHOLD'
     assert data['tables']['CivilopediaPages'][0]['PageId'] == 'FAITH_1'
     assert data['localization']['LOC_FOOD']['zh_Hans_CN'] == '食物'
+
+
+def test_capture_concept_bodies_and_missing_expansion_text_have_sources(tmp_path):
+    game, user, manifest = setup_inputs(tmp_path)
+    with sqlite3.connect(user / 'Cache/DebugGameplay.sqlite') as con:
+        con.execute('CREATE TABLE CivilopediaPages (SectionId TEXT, PageId TEXT, Name TEXT)')
+        con.execute("INSERT INTO CivilopediaPages VALUES ('CONCEPTS','MOVEMENT_1','LOC_MOVE_TITLE')")
+        con.execute('CREATE TABLE Units (UnitType TEXT, Description TEXT)')
+        con.execute("INSERT INTO Units VALUES ('UNIT_TEST','LOC_UNIT_TEST_GS')")
+    with sqlite3.connect(user / 'Cache/DebugLocalization.sqlite') as con:
+        con.execute("INSERT INTO LocalizedText VALUES ('en_US','LOC_PEDIA_CONCEPTS_PAGE_MOVEMENT_1_CHAPTER_CONTENT_PARA_1','Every unit has movement points.')")
+    text = game / 'Assets/DLC/Expansion2/Text/en_US/Expansion2_Units_Text.xml'
+    text.parent.mkdir(parents=True)
+    text.write_text('<GameData><EnglishText><Row Tag="LOC_UNIT_TEST_GS"><Text>GS-specific ability</Text></Row></EnglishText></GameData>')
+    result, output = capture(tmp_path, game, user, manifest)
+    assert result.returncode == 0, result.stderr
+    data = json.loads(output.read_text())
+    bodies = data['tables']['CivilopediaTexts']
+    assert bodies[0]['Text'] == 'Every unit has movement points.'
+    assert data['localization']['LOC_UNIT_TEST_GS']['en_US'] == 'GS-specific ability'
+    assert data['localization_sources']['LOC_UNIT_TEST_GS']['en_US'].endswith('Expansion2_Units_Text.xml')
