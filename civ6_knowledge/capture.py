@@ -24,6 +24,81 @@ TABLES = PRIMARY_TABLES + (
     'ResolutionEffects', 'CivilizationTraits', 'LeaderTraits',
     'CivilopediaPages', 'CivilopediaPageChapterParagraphs', 'GlobalParameters',
 )
+TABLES = tuple(dict.fromkeys(TABLES + (
+    'Yields',
+    'Building_YieldChanges',
+    'Building_CitizenYieldChanges',
+    'BuildingPrereqs',
+    'Building_ValidTerrains',
+    'Building_RequiredFeatures',
+    'Building_ResourceCosts',
+    'Building_YieldChangesBonusWithPower',
+    'Buildings_XP2',
+    'Improvement_YieldChanges',
+    'Improvement_ValidResources',
+    'Resource_Consumption',
+    'Resource_YieldChanges',
+    'Resource_Harvests',
+    'Resource_ValidTerrains',
+    'Resource_ValidFeatures',
+    'Features_XP2',
+    'Feature_Floodplains',
+    'RandomEvents',
+    'RandomEvent_Damages',
+    'RandomEvent_Yields',
+    'RandomEvent_Terrains',
+    'RandomEvent_Features',
+    'RandomEvent_Frequencies',
+    'RandomEvent_PillagedBuildings',
+    'RandomEvent_PillagedDistricts',
+    'RandomEvent_PillagedImprovements',
+    'RandomEvent_DamagedUnits',
+    'Units_XP2',
+    'UnitPromotions',
+    'UnitPromotionPrereqs',
+    'UnitUpgrades',
+    'Unit_BuildingPrereqs',
+    'UnitReplaces',
+    'UnitAbilities',
+    'UnitAbilityModifiers',
+    'UnitPromotionModifiers',
+    'TypeTags',
+    'Tags',
+    'Terrains',
+    'Terrain_YieldChanges',
+    'Features',
+    'Feature_YieldChanges',
+    'Feature_UnitMovements',
+    'DiplomaticActions',
+    'Alliances',
+    'AllianceEffects',
+    'DiplomaticStates',
+    'DiplomaticStateActions',
+    'DiplomaticActions_XP1',
+    'DiplomaticActions_XP2',
+    'DiplomaticVisibilitySources',
+    'DiplomaticVisibilitySources_XP1',
+    'District_TradeRouteYields',
+    'Resource_TradeRouteYields',
+    'Victories',
+    'Religions',
+    'Beliefs',
+    'BeliefClasses',
+    'BeliefModifiers',
+    'Projects_XP1',
+    'Projects_XP2',
+    'Project_YieldConversions',
+    'Project_ResourceCosts',
+    'Modifiers',
+    'ModifierArguments',
+    'DynamicModifiers',
+    'Requirements',
+    'RequirementArguments',
+    'RequirementSets',
+    'RequirementSetRequirements',
+    'GameSpeeds',
+    'GameSpeed_Turns',
+)))
 # Small native excerpts explain conditions that database fields alone cannot express.
 CODE_RANGES = (
     ('technology-live-prerequisites', 'Assets/Base/Assets/UI/Civilopedia/CivilopediaPage_Technology.lua', 32, 62),
@@ -74,11 +149,6 @@ def read_tables(path: Path) -> tuple[dict, list]:
             if name not in available:
                 continue
             rows = [dict(r) for r in conn.execute(f'SELECT * FROM "{name}"')]
-            if name.startswith('Civilopedia'):
-                rows = [r for r in rows if r.get('SectionId') in {'CIVICS', 'TECHNOLOGIES', 'DISTRICTS'}
-                        or r.get('PageId', '').startswith(('SCIENCE_', 'CULTURE_', 'GOVT_', 'CITIES_', 'WORLD_CONGRESS', 'DIPLOMATIC_VICTORY'))]
-            if name == 'GlobalParameters':
-                rows = [r for r in rows if r.get('Name', '').startswith(('DISTRICT_POPULATION_', 'WORLD_CONGRESS_', 'DIPLOMATIC_VICTORY_'))]
             tables[name] = ordered(rows)
         return tables, sorted(set(TABLES) - available)
 
