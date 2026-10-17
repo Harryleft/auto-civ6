@@ -4696,6 +4696,8 @@
     "ruleset": "RULESET_EXPANSION_2",
     "ruleset_basis": "target knowledge ruleset; Expansion2 definitions required; not a loaded-session attestation",
     "source_scope": "local_cached_rules_snapshot",
+    "startup_started_at": "2026-10-17T19:45:01",
+    "startup_timestamp_basis": "startup_log_local_time",
     "steam_build_id": "15296837"
   },
   "schema_version": 1,
@@ -4751,19 +4753,19 @@
     {
       "id": "modding",
       "path": "user/Logs/Modding.log",
-      "sha256": "ce5e057497abea256354a700c14132db51aa1a6ed49020f88539e782223ffddd",
-      "size_bytes": 430971
+      "sha256": "6c3a1392cc5fa3128fd36412cbc42a236f01c54079e1412170c557f3d1c720a9",
+      "size_bytes": 431118
     },
     {
       "id": "startup",
       "path": "user/Logs/Startup.log",
-      "sha256": "49e76bcf19e7373206ceddc83a0757da58831b0e635ed17037636f5f79070599",
-      "size_bytes": 2568
+      "sha256": "7e9d4fbf1aa15a1b3187999b5c2b8c49e260fe211a3573bdb470fb8a02180ac6",
+      "size_bytes": 2810
     },
     {
       "id": "steam",
       "path": "steam/appmanifest_289070.acf",
-      "sha256": "ba9a9fbb2368077ceded05a329bdb31ca825ea0e9b95f48ed20dbf8e324de39d",
+      "sha256": "e083a95545d1fb0e928836a8e78595fca2b109b5db67138558514a4f65070a27",
       "size_bytes": 1250
     }
   ],
