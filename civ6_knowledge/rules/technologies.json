@@ -266,7 +266,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "解锁末日机甲升级：无人机防空[NEWLINE]+100 [ICON_AntiAir_Large] 防空战斗力。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -789,7 +790,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -1446,7 +1448,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -1716,7 +1719,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "单位的二氧化碳排放降低50%。解锁末日机甲升级：粒子束攻城巨炮[NEWLINE]进攻城市和军营时 [ICON_Ranged] 远程攻击的效率为100%，+30 [ICON_Ranged] 远程攻击力。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -2232,7 +2236,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "可收获 [ICON_RESOURCE_CATTLE] 牛、[ICON_RESOURCE_SHEEP] 羊和 [ICON_RESOURCE_DEER] 鹿。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -2885,7 +2890,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "矿山改良设施的 [ICON_Production] 生产力+1 。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -3281,7 +3287,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -3842,7 +3849,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -4217,7 +4225,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -4801,7 +4810,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -5248,7 +5258,7 @@
             "id": "BUILDING_GRAND_BAZAAR",
             "names": {
               "en_US": "Grand Bazaar",
-              "zh_Hans_CN": "Grand Bazaar"
+              "zh_Hans_CN": "大巴扎"
             },
             "source_ref": {
               "row": 64,
@@ -5342,7 +5352,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -6018,7 +6029,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "允许砍伐雨林。显示 [ICON_RESOURCE_IRON] 铁资源。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -6493,7 +6505,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -6893,7 +6906,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "渔船改良设施+2 [ICON_Gold] 金币。所有海军和水运单位可在海洋单元格上航行。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -7319,7 +7333,7 @@
             "id": "UNIT_HUNGARY_BLACK_ARMY",
             "names": {
               "en_US": "Black Army",
-              "zh_Hans_CN": "Black Army"
+              "zh_Hans_CN": "黑军"
             },
             "source_ref": {
               "row": 77,
@@ -7533,7 +7547,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "长城相邻加成中包含 [ICON_Culture] 文化值加成。如果使用凯瑟琳·德·美第奇（黑王后），能免费获得1名间谍。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -7987,7 +8002,7 @@
             "id": "DISTRICT_COTHON",
             "names": {
               "en_US": "Cothon",
-              "zh_Hans_CN": "Cothon"
+              "zh_Hans_CN": "U型港"
             },
             "source_ref": {
               "row": 23,
@@ -8193,7 +8208,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "可使商人上船，并收获 [ICON_RESOURCE_FISH] 鱼和 [ICON_RESOURCE_CRABS] 螃蟹。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -8758,7 +8774,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -9310,7 +9327,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -9910,7 +9928,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "水运单位+1 [ICON_Movement] 移动力。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -10476,7 +10495,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -10982,7 +11002,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "可以额外招募1个间谍。在帝国全境内+100% [ICON_Tourism] 旅游业绩。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -11339,7 +11360,7 @@
             "id": "UNIT_MAORI_TOA",
             "names": {
               "en_US": "Toa",
-              "zh_Hans_CN": "Toa"
+              "zh_Hans_CN": "托阿勇士"
             },
             "source_ref": {
               "row": 33,
@@ -11560,7 +11581,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -11934,7 +11956,7 @@
             "id": "DISTRICT_SUGUBA",
             "names": {
               "en_US": "Suguba",
-              "zh_Hans_CN": "Suguba"
+              "zh_Hans_CN": "曼丁哥市场"
             },
             "source_ref": {
               "row": 7,
@@ -12082,7 +12104,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -12352,7 +12375,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "解锁末日机甲升级：增强机动[NEWLINE]+3 [ICON_Movement] 移动力。可进行1次跳跃，跨过山脉地貌。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -12820,7 +12844,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -13390,7 +13415,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -14147,7 +14173,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -14750,7 +14777,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -15480,7 +15508,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "为所有能提供 [ICON_Culture] 文化值的改良设施提供 [ICON_Tourism] 旅游业绩加成。产出的 [ICON_Tourism] 旅游业绩等于改良设施的 [ICON_Culture] 文化值输出。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -15711,7 +15740,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "可多次完成，增加分数胜利点数。每次完成后，所有城市建造城市项目时 [ICON_Production] 生产力均+5%。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -16221,7 +16251,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -16751,7 +16782,7 @@
             "id": "UNIT_SULEIMAN_JANISSARY",
             "names": {
               "en_US": "Janissary",
-              "zh_Hans_CN": "Janissary"
+              "zh_Hans_CN": "苏丹亲兵"
             },
             "source_ref": {
               "row": 26,
@@ -16849,7 +16880,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "采石场改良设施+1 [ICON_Production] 生产力。为苏莱曼一世（立法者）解锁1个 [ICON_GOVERNOR] 总督头衔。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -17532,7 +17564,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -18253,7 +18286,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "矿山改良设施+1 [ICON_Production] 生产力。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -18837,7 +18871,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -19355,7 +19390,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "可清理沼泽，并收获 [ICON_RESOURCE_BANANAS] 香蕉。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -19858,7 +19894,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -20548,7 +20585,7 @@
             "id": "UNIT_INCA_WARAKAQ",
             "names": {
               "en_US": "Warak’aq",
-              "zh_Hans_CN": "Warak’aq"
+              "zh_Hans_CN": "瓦剌卡战士"
             },
             "source_ref": {
               "row": 45,
@@ -20650,7 +20687,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -21272,7 +21310,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "允许收获 [ICON_RESOURCE_STONE] 石材。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -21760,7 +21799,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -22165,7 +22205,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "所有海军单位+1 [ICON_Movement] 移动力。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -22668,7 +22709,7 @@
             "id": "UNIT_SWEDEN_CAROLEAN",
             "names": {
               "en_US": "Carolean",
-              "zh_Hans_CN": "Carolean"
+              "zh_Hans_CN": "卡洛林步兵"
             },
             "source_ref": {
               "row": 51,
@@ -22762,7 +22803,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -23367,7 +23409,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -24075,7 +24118,7 @@
             "id": "UNIT_HUNGARY_HUSZAR",
             "names": {
               "en_US": "Huszár",
-              "zh_Hans_CN": "Huszár"
+              "zh_Hans_CN": "骠骑兵"
             },
             "source_ref": {
               "row": 79,
@@ -24326,7 +24369,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -24889,7 +24933,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -25313,7 +25358,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "允许砍伐树林和开采 [ICON_RESOURCE_Copper] 铜。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -25650,7 +25696,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -26237,7 +26284,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -26622,7 +26670,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -26986,7 +27035,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -27462,7 +27512,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "渔船+1 [ICON_Food] 食物。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -27867,7 +27918,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "允许收获由农场改良的加成资源。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -28215,7 +28267,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "采石场、油井和石油钻机改良设施提供的 [ICON_Production] 生产力+1。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -28594,7 +28647,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "为所有其他文明提供高于一个等级的外交能见度。从 [ICON_GreatWork_Writing] 著作巨作中获得的所有 [ICON_Tourism] 旅游业绩收益翻倍。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -29206,7 +29260,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -29720,7 +29775,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -30206,7 +30262,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "升级农场改良设施为机械化农业。为邻近的每个农场改良设施+1 [ICON_Food] 食物相邻加成。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -30635,7 +30692,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -31082,7 +31140,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "牧场 [ICON_Production] 生产力+1。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -31612,7 +31671,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "采石场改良设施+1 [ICON_Production] 生产力。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -32120,7 +32180,7 @@
             "id": "UNIT_PHOENICIA_BIREME",
             "names": {
               "en_US": "Bireme",
-              "zh_Hans_CN": "Bireme"
+              "zh_Hans_CN": "双层桨座战船"
             },
             "source_ref": {
               "row": 61,
@@ -32344,7 +32404,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "允许建造者上船。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -32890,7 +32951,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "梯井改良设施+1 [ICON_Housing] 住房。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -33430,7 +33492,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -33855,7 +33918,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "允许外交行动研究协议。种植园改良设施+1 [ICON_Food] 食物。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -34203,7 +34267,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "奖励1点外交胜利点数。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -34676,7 +34741,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "允许所有陆地单位上船。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -35127,7 +35193,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -35447,7 +35514,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "解锁末日机甲升级：强力装甲[NEWLINE]防御陆地与海军单位时+10 [ICON_Strength] 战斗力。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -35847,7 +35915,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "水运单位+1 [ICON_Movement] 移动力。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -36230,7 +36299,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -36783,7 +36853,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "水运单位+2 [ICON_Movement] 移动力。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -37282,7 +37353,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "从伐木场改良设施获得的 [ICON_Production] 生产力+1。解锁城市防御，为所有城市提供400点自动防御力和发起远程攻击的能力。之前的城墙改良设施将全部过时，攻城单位进攻时不再拥有特殊效果。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -37805,7 +37877,7 @@
             "id": "UNIT_MALI_MANDEKALU_CAVALRY",
             "names": {
               "en_US": "Mandekalu Cavalry",
-              "zh_Hans_CN": "Mandekalu Cavalry"
+              "zh_Hans_CN": "曼德卡鲁骑兵"
             },
             "source_ref": {
               "row": 69,
@@ -37903,7 +37975,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "牧场改良设施提供的 [ICON_Food] 食物+1。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -38392,7 +38465,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "营地+1 [ICON_Gold] 金币。",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -38775,7 +38849,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -39338,7 +39413,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     },
@@ -39780,7 +39856,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Technologies"
+        "entity_type": "Technologies",
+        "name_fallbacks": {}
       },
       "topic": "technologies"
     }
