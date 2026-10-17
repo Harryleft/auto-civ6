@@ -1,0 +1,341 @@
+{
+  "schema_version": 1,
+  "topic": "resources",
+  "cards": [
+    {
+      "id": "MECHANIC_RESOURCES_SUPPLY",
+      "names": {
+        "zh_Hans_CN": "资源揭示、改良与库存",
+        "en_US": "Resource reveal, improvement and stockpile"
+      },
+      "summary": "研究揭示资源、建造对应改良和积累战略资源是不同环节；库存与开采参数另见 Resource_Consumption。",
+      "conditions": [
+        "资源的 PrereqTech／PrereqCivic 与改良自身前置分别核对；煤对应工业化，矿山自身仍有采矿业前置。",
+        "资源类别不同，不能把战略资源的积累与库存规则套用到加成或奢侈资源。",
+        "Improvement_ValidResources 只记录适用资源，不能证明当前地块所有权、可达性或改良未被掠夺。"
+      ],
+      "source_selectors": [
+        {
+          "table": "Resources",
+          "key": "ResourceType",
+          "value": "RESOURCE_COAL"
+        },
+        {
+          "table": "Resources",
+          "key": "ResourceType",
+          "value": "RESOURCE_WHEAT"
+        },
+        {
+          "table": "Resources",
+          "key": "ResourceType",
+          "value": "RESOURCE_DIAMONDS"
+        },
+        {
+          "table": "Improvements",
+          "key": "ImprovementType",
+          "value": "IMPROVEMENT_MINE"
+        },
+        {
+          "table": "Improvement_ValidResources",
+          "key": "ResourceType",
+          "value": "RESOURCE_COAL"
+        },
+        {
+          "table": "Resource_Consumption",
+          "key": "ResourceType",
+          "value": "RESOURCE_COAL"
+        }
+      ],
+      "related": [
+        "RESOURCE_COAL",
+        "TECH_INDUSTRIALIZATION",
+        "TECH_MINING"
+      ],
+      "current_facts_needed": [
+        "已研究科技／市政",
+        "资源地块、所有权和改良状态",
+        "库存、上限与净收入"
+      ],
+      "limitations": []
+    },
+    {
+      "id": "MECHANIC_RESOURCES_CONSUMPTION",
+      "names": {
+        "zh_Hans_CN": "单位与项目资源消耗",
+        "en_US": "Unit and project resource consumption"
+      },
+      "summary": "单位生产资源、持续维护和项目开工资源是不同字段；已有资源储量不能直接证明持续供应充足。",
+      "conditions": [
+        "Units 的 StrategicResource 与 Units_XP2 的 ResourceCost、ResourceMaintenanceType、ResourceMaintenanceAmount 合并读取。",
+        "Project_ResourceCosts 的 StartProductionCost 是项目开工条件，不等于单位每回合维护；金币维护也另算。",
+        "这些是基础定义，政策、特性、速度及当前消耗以引擎回读确认。"
+      ],
+      "source_selectors": [
+        {
+          "table": "Units",
+          "key": "UnitType",
+          "value": "UNIT_BATTLESHIP"
+        },
+        {
+          "table": "Units_XP2",
+          "key": "UnitType",
+          "value": "UNIT_BATTLESHIP"
+        },
+        {
+          "table": "Project_ResourceCosts",
+          "key": "ProjectType",
+          "value": "PROJECT_BUILD_NUCLEAR_DEVICE"
+        }
+      ],
+      "related": [
+        "UNIT_BATTLESHIP",
+        "RESOURCE_COAL",
+        "RESOURCE_URANIUM"
+      ],
+      "current_facts_needed": [
+        "单位与项目实际费用",
+        "资源库存和每回合收支",
+        "生效政策／特性"
+      ],
+      "limitations": []
+    },
+    {
+      "id": "MECHANIC_RESOURCES_POWER",
+      "names": {
+        "zh_Hans_CN": "燃料、电力与排放",
+        "en_US": "Fuel, power and emissions"
+      },
+      "summary": "电厂的 ResourceTypeConvertedToPower 指定燃料；资源的 PowerProvided 与 CO2perkWh 分别描述供电和排放参数。",
+      "conditions": [
+        "Buildings_XP2 的 RequiredPower 与 Building_YieldChangesBonusWithPower 分开核对；建成建筑不等于已获得供电加成。",
+        "煤、石油与铀的电力／排放参数不同，核电还带 NuclearReactor 标记，不能统一视作无风险燃料。",
+        "RegionalRange、需求、燃料、设施状态和已有供电共同影响本局结果；静态参数不能直接换算本回合排放总量。",
+        "太阳能与水电另有免费电力 Modifier；设施前置、落位及效果是否生效需单独确认，不能把全部电力都算作燃料消耗。"
+      ],
+      "source_selectors": [
+        {
+          "table": "Buildings_XP2",
+          "key": "BuildingType",
+          "value": "BUILDING_COAL_POWER_PLANT"
+        },
+        {
+          "table": "Buildings",
+          "key": "BuildingType",
+          "value": "BUILDING_COAL_POWER_PLANT"
+        },
+        {
+          "table": "Buildings_XP2",
+          "key": "BuildingType",
+          "value": "BUILDING_POWER_PLANT"
+        },
+        {
+          "table": "Resource_Consumption",
+          "key": "ResourceType",
+          "value": "RESOURCE_COAL"
+        },
+        {
+          "table": "Resource_Consumption",
+          "key": "ResourceType",
+          "value": "RESOURCE_OIL"
+        },
+        {
+          "table": "Resource_Consumption",
+          "key": "ResourceType",
+          "value": "RESOURCE_URANIUM"
+        },
+        {
+          "table": "Building_YieldChangesBonusWithPower",
+          "key": "BuildingType",
+          "value": "BUILDING_RESEARCH_LAB"
+        },
+        {
+          "table": "Buildings_XP2",
+          "key": "BuildingType",
+          "value": "BUILDING_RESEARCH_LAB"
+        },
+        {
+          "table": "Improvements",
+          "key": "ImprovementType",
+          "value": "IMPROVEMENT_SOLAR_FARM"
+        },
+        {
+          "table": "Buildings",
+          "key": "BuildingType",
+          "value": "BUILDING_HYDROELECTRIC_DAM"
+        },
+        {
+          "table": "Modifiers",
+          "key": "ModifierId",
+          "value": "SOLAR_FARM_GENERATE_POWER"
+        },
+        {
+          "table": "ModifierArguments",
+          "key": "ModifierId",
+          "value": "SOLAR_FARM_GENERATE_POWER"
+        },
+        {
+          "table": "Modifiers",
+          "key": "ModifierId",
+          "value": "HYDROELECTRIC_DAM_FREE_POWER"
+        },
+        {
+          "table": "ModifierArguments",
+          "key": "ModifierId",
+          "value": "HYDROELECTRIC_DAM_FREE_POWER"
+        }
+      ],
+      "related": [
+        "BUILDING_COAL_POWER_PLANT",
+        "BUILDING_POWER_PLANT",
+        "RESOURCE_COAL",
+        "RESOURCE_OIL",
+        "RESOURCE_URANIUM",
+        "BUILDING_HYDROELECTRIC_DAM"
+      ],
+      "current_facts_needed": [
+        "城市电力需求与供应",
+        "电厂燃料、区域覆盖和损坏",
+        "本局气候与排放统计"
+      ],
+      "limitations": [
+        "免费电力 Modifier 作为定义证据保留；快照未包含完整设施挂接／生效求值，不能由其名称直接确认本局供电。"
+      ]
+    },
+    {
+      "id": "MECHANIC_RESOURCES_FLOODS",
+      "names": {
+        "zh_Hans_CN": "河流洪水及灾害强度",
+        "en_US": "River floods and disaster severity"
+      },
+      "summary": "河流洪水定义将灾害强度、受损对象、肥力收益及灾害强度设置的频率分开记录。",
+      "conditions": [
+        "RandomEvent_Damages 与 RandomEvent_Yields 分别描述损害和可能收益，不能把灾害描述当作每次必然结果。",
+        "RandomEvent_Frequencies 受 RealismSettingType 区分，不能只凭事件基础行预测下一次发生时间。",
+        "MitigatedYieldReduction 及建筑防灾标记需结合具体河流与覆盖；沿海低地淹没属于另一类事件。"
+      ],
+      "source_selectors": [
+        {
+          "table": "RandomEvents",
+          "key": "RandomEventType",
+          "value": "RANDOM_EVENT_FLOOD_MAJOR"
+        },
+        {
+          "table": "RandomEvent_Damages",
+          "key": "RandomEventType",
+          "value": "RANDOM_EVENT_FLOOD_MAJOR"
+        },
+        {
+          "table": "RandomEvent_Yields",
+          "key": "RandomEventType",
+          "value": "RANDOM_EVENT_FLOOD_MAJOR"
+        },
+        {
+          "table": "RandomEvent_Frequencies",
+          "key": "RandomEventType",
+          "value": "RANDOM_EVENT_FLOOD_MAJOR"
+        },
+        {
+          "table": "Feature_Floodplains",
+          "key": "FeatureType",
+          "value": "FEATURE_FLOODPLAINS"
+        },
+        {
+          "table": "Buildings_XP2",
+          "key": "PreventsFloods",
+          "value": 1
+        },
+        {
+          "table": "Districts_XP2",
+          "key": "DistrictType",
+          "value": "DISTRICT_DAM"
+        }
+      ],
+      "related": [
+        "RANDOM_EVENT_FLOOD_MAJOR",
+        "FEATURE_FLOODPLAINS",
+        "DISTRICT_DAM"
+      ],
+      "current_facts_needed": [
+        "灾害强度设置",
+        "河流与泛滥平原、城市设施覆盖",
+        "实际灾害通知及受损对象"
+      ],
+      "limitations": []
+    },
+    {
+      "id": "MECHANIC_RESOURCES_SEA_LEVEL",
+      "names": {
+        "zh_Hans_CN": "海平面与气候阶段",
+        "en_US": "Sea level and climate stages"
+      },
+      "summary": "海平面事件含气候阶段、冰层损失和肥力变化标记；不同阶段的条件不能用同一灾害概率概括。",
+      "conditions": [
+        "EffectOperatorType 为 SEA_LEVEL 的事件与普通洪水分开；中后期的 HaltsFloodFertility、HaltsStormFertility、FertilityRemovalChance 需逐阶段核对。",
+        "CLIMATE_CHANGE_PERCENT_COASTAL_LOWLANDS 是全局生成参数，不能推导某个已生成地块的低地等级或淹没状态。",
+        "当前阶段、低地等级及已淹没／沉没地块必须读取本局地图，不能从静态事件 Severity 推断损失。"
+      ],
+      "source_selectors": [
+        {
+          "table": "RandomEvents",
+          "key": "EffectOperatorType",
+          "value": "SEA_LEVEL"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "CLIMATE_CHANGE_PERCENT_COASTAL_LOWLANDS"
+        }
+      ],
+      "related": [
+        "RANDOM_EVENT_SEA_LEVEL_RISE1",
+        "RANDOM_EVENT_SEA_LEVEL_RISE4"
+      ],
+      "current_facts_needed": [
+        "当前气候阶段",
+        "沿海低地等级与地块状态",
+        "全球及本国排放"
+      ],
+      "limitations": [
+        "快照没有完整气候阈值计算过程；不预测剩余回合。"
+      ]
+    },
+    {
+      "id": "MECHANIC_RESOURCES_BARRIER",
+      "names": {
+        "zh_Hans_CN": "防洪堤与防护边界",
+        "en_US": "Flood barrier and protection scope"
+      },
+      "summary": "防洪堤有沿海淹没防护标记，建设成本受地块及海平面乘数影响；它没有河流防洪标记。",
+      "conditions": [
+        "Buildings 指定计算机科技和市中心前置；是否存在合法建设候选仍由当前城市确认。",
+        "BlocksCoastalFlooding 与 PreventsFloods 是不同字段，不能把沿海防护当作普通河流洪水防护。",
+        "CostMultiplierPerSeaLevel、CostMultiplierPerTile 必须结合当前阶段与地块；基础 Cost 不是本局最终费用。"
+      ],
+      "source_selectors": [
+        {
+          "table": "Buildings",
+          "key": "BuildingType",
+          "value": "BUILDING_FLOOD_BARRIER"
+        },
+        {
+          "table": "Buildings_XP2",
+          "key": "BuildingType",
+          "value": "BUILDING_FLOOD_BARRIER"
+        }
+      ],
+      "related": [
+        "BUILDING_FLOOD_BARRIER",
+        "TECH_COMPUTERS",
+        "DISTRICT_CITY_CENTER"
+      ],
+      "current_facts_needed": [
+        "城市生产候选与实际费用",
+        "低地数量、淹没／沉没状态",
+        "既有防洪堤和当前海平面"
+      ],
+      "limitations": [
+        "仅凭防护标记不推断已永久沉没地块可以恢复。"
+      ]
+    }
+  ]
+}
