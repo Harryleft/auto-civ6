@@ -20,6 +20,7 @@ import asyncio
 import pytest
 
 import civ_mcp.game_lifecycle as game_lifecycle
+from action_scope_support import scope_rows, with_action_identity
 from civ_mcp import lua as lq
 from civ_mcp.game_state import (
     GameState,
@@ -54,13 +55,15 @@ class FakeConn:
         return self._next("write", lua)
 
     def _next(self, kind, lua):
+        if 'print("ACTION_SCOPE|' in lua:
+            return scope_rows()
         self.calls.append((kind, lua))
         assert self._script, f"unexpected {kind} call: {lua[:100]}"
         expected, payload = self._script.pop(0)
         assert kind == expected, f"expected {expected}, got {kind}: {lua[:100]}"
         if isinstance(payload, Exception):
             raise payload
-        return payload
+        return with_action_identity(lua, payload)
 
     @property
     def exhausted(self) -> bool:
@@ -1222,7 +1225,7 @@ class TestFoundCity:
         gs, conn = _gs(
             [
                 ("write", ["OK:FOUNDED|10,20"]),
-                ("read", ["CITY_EXISTS|Rome"]),
+                ("read", ["CITY_EXISTS|owner:0|city:65536"]),
             ]
         )
         gs.dismiss_popup = _no_dismiss
