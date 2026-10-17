@@ -289,6 +289,30 @@ pcall(function()
     end
 end)
 """
+    path_probe = ""
+    if move_target_x is not None and move_target_y is not None:
+        # Shipped WorldInput.lua uses GetMoveToPathEx().plots/.turns and
+        # interprets turn numbers >1 as later-turn movement. The older
+        # get_pathing_estimate heuristic is not completion evidence.
+        path_probe = f"""
+pcall(function()
+    if not u or UI.IsGameCoreBusy() then return end
+    local destination = Map.GetPlot({move_target_x}, {move_target_y})
+    if not destination then return end
+    local path = UnitManager.GetMoveToPathEx(u, destination:GetIndex())
+    if type(path) ~= "table" or type(path.plots) ~= "table" or type(path.turns) ~= "table" then return end
+    if #path.plots < 2 or #path.plots ~= #path.turns then return end
+    local first = Map.GetPlotByIndex(path.plots[1])
+    local last = Map.GetPlotByIndex(path.plots[#path.plots])
+    if not first or not last or first:GetX() ~= u:GetX() or first:GetY() ~= u:GetY() then return end
+    if last:GetX() ~= {move_target_x} or last:GetY() ~= {move_target_y} then return end
+    local nextPlot = Map.GetPlotByIndex(path.plots[2])
+    local nextTurn = tonumber(path.turns[2])
+    if nextPlot and nextTurn then
+        print("PATH_STEP|" .. nextPlot:GetX() .. "|" .. nextPlot:GetY() .. "|turn:" .. nextTurn)
+    end
+end)
+"""
     return f"""
 local me = Game.GetLocalPlayer()
 local u = Players[me]:GetUnits():FindID({unit_index})
@@ -297,6 +321,7 @@ if u then
     pcall(function() busy = tostring(UI.IsGameCoreBusy()) end)
     print("POS|" .. u:GetX() .. "|" .. u:GetY() .. "|moves:" .. u:GetMovesRemaining() .. "|busy:" .. busy)
 else print("POS|GONE") end
+{path_probe}
 {diag_block}print("{SENTINEL}")
 """
 
