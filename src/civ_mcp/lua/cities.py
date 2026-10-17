@@ -562,12 +562,17 @@ print("{SENTINEL}")
 def build_verify_production(
     city_id: int, item_name: str, district_position: tuple[int, int] | None = None
 ) -> str:
-    """GameCore readback: verify production was set after RequestOperation.
+    """Read-only verification after RequestOperation, in the native Lua context.
 
-    Uses CurrentlyBuilding() (GameCore) instead of GetCurrentProductionTypeHash()
-    which is InGame-only and returns nil in GameCore context.
+    District entity coordinates and queue hashes require InGame. Other
+    production keeps the existing GameCore CurrentlyBuilding() readback.
     """
     if district_position is not None:
+        current_item = '''
+local productionHash = bq:GetCurrentProductionTypeHash()
+local row = productionHash and productionHash ~= 0 and GameInfo.Districts[productionHash]
+local cur = row and row.DistrictType
+'''
         # Queue identity alone cannot prove which tile received a district.
         # Report city-owned district entities; GameState matches the exact intent.
         verification = '''
@@ -580,6 +585,7 @@ for _, district in pCity:GetDistricts():Members() do
 end
 '''
     else:
+        current_item = "local cur = bq:CurrentlyBuilding()"
         verification = f'''
 if cur == "{item_name}" then
     print("CONFIRMED|production queue verified")
@@ -592,7 +598,7 @@ local me = Game.GetLocalPlayer()
 local pCity = Players[me]:GetCities():FindID({city_id} % 65536)
 if pCity == nil then print("NOT_FOUND"); print("{SENTINEL}"); return end
 local bq = pCity:GetBuildQueue()
-local cur = bq:CurrentlyBuilding()
+{current_item}
 -- GameCore GetTurnsLeft is not implemented on macOS. Confirmation uses
 -- queue/placement facts; the submission response supplies the estimate.
 {verification}
