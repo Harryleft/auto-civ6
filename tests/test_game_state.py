@@ -323,6 +323,29 @@ class TestGetGameOverviewBootstrap:
     next end_turn diffs against. A failed bootstrap must never lose the
     overview itself."""
 
+    def test_overview_then_units_and_cities_share_working_ingame_context(self):
+        gs, conn = _gs([
+            ("write", [_OVERVIEW_LINE]),
+            ("write", [_UNIT_LINE]),
+            ("write", [_CITY_LINE]),
+            ("write", [_STOCKPILE_LINE]),
+            ("write", [_UNIT_LINE]),
+            ("write", [_CITY_LINE]),
+        ])
+
+        async def go():
+            overview = await gs.get_game_overview()
+            units = await gs.get_units()
+            cities, _ = await gs.get_cities()
+            return overview, units, cities
+
+        overview, units, cities = run(go())
+        assert overview.turn == 12
+        assert [unit.unit_id for unit in units] == [65536]
+        assert [city.city_id for city in cities] == [123]
+        assert gs._last_snapshot is not None
+        assert conn.exhausted
+
     def test_empty_overview_cannot_confirm_a_loaded_game(self):
         import pytest
 
@@ -334,7 +357,7 @@ class TestGetGameOverviewBootstrap:
         gs, conn = _gs(
             [
                 ("write", [_OVERVIEW_LINE]),
-                ("read", [_UNIT_LINE]),
+                ("write", [_UNIT_LINE]),
                 ("write", [_CITY_LINE]),
                 ("write", [_STOCKPILE_LINE]),
             ]
@@ -358,7 +381,7 @@ class TestGetGameOverviewBootstrap:
         gs, conn = _gs(
             [
                 ("write", [_OVERVIEW_LINE]),
-                ("read", [_UNIT_LINE]),
+                ("write", [_UNIT_LINE]),
                 ("write", [_CITY_LINE]),
                 ("write", [_STOCKPILE_LINE]),
                 ("write", [_OVERVIEW_LINE]),
@@ -386,7 +409,7 @@ class TestGetGameOverviewBootstrap:
         gs, _ = _gs(
             [
                 ("write", [_OVERVIEW_LINE]),
-                ("read", RuntimeError("units query blew up")),
+                ("write", RuntimeError("units query blew up")),
             ]
         )
 
@@ -397,11 +420,26 @@ class TestGetGameOverviewBootstrap:
         assert ov.turn == 12
         assert gs._last_snapshot is None
 
+    @pytest.mark.parametrize("failed_query", ["units", "cities", "stockpiles"])
+    def test_required_snapshot_never_uses_cached_or_partial_load_evidence(self, failed_query):
+        script = [("write", [_OVERVIEW_LINE])]
+        for query, lines in [("units", [_UNIT_LINE]), ("cities", [_CITY_LINE]),
+                             ("stockpiles", [_STOCKPILE_LINE])]:
+            script.append(("write", ValueError(f"{query} unavailable") if query == failed_query else lines))
+            if query == failed_query:
+                break
+        gs, conn = _gs(script)
+        gs._last_snapshot = object()
+
+        with pytest.raises(ValueError, match=f"{failed_query} unavailable"):
+            run(gs.get_game_overview(require_snapshot=True))
+        assert conn.exhausted
+
 
 class TestReadOnlyCityFacts:
     def test_snapshot_preserves_observed_city_completion_facts(self):
         gs, _ = _gs([
-            ("write", [_OVERVIEW_LINE]), ("read", [_UNIT_LINE]),
+            ("write", [_OVERVIEW_LINE]), ("write", [_UNIT_LINE]),
             ("write", [_CITY_LINE, "CITYBLDG|123|PALACE,MONUMENT",
                        "CITYFACTS|123|0|CIVILIZATION_ROME|42|DISTRICT_CAMPUS@11,20"]),
             ("write", []),
@@ -416,7 +454,7 @@ class TestReadOnlyCityFacts:
 
     def test_partial_city_facts_do_not_turn_into_completion_evidence(self):
         gs, _ = _gs([
-            ("write", [_OVERVIEW_LINE]), ("read", [_UNIT_LINE]),
+            ("write", [_OVERVIEW_LINE]), ("write", [_UNIT_LINE]),
             ("write", [_CITY_LINE, "CITYFACTS|123|0|CIVILIZATION_ROME|nil|",
                        "CITYFACTS|123|0|CIVILIZATION_ROME"]),
             ("write", []),
