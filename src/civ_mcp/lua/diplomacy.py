@@ -381,7 +381,7 @@ print("{SENTINEL}")
 
 
 def build_send_diplo_action(other_player_id: int, action_name: str) -> str:
-    """Send a proactive diplomatic action and detect acceptance/rejection.
+    """Send a native action; friendship needs a later relationship witness.
 
     action_name is e.g. DIPLOMATIC_DELEGATION, DECLARE_FRIENDSHIP, DENOUNCE,
     RESIDENT_EMBASSY, DECLARE_SURPRISE_WAR, DECLARE_FORMAL_WAR, etc.
@@ -495,8 +495,8 @@ end
 -- NOTE: All post-state queries (HasDelegationAt, HasEmbassyAt, IsDiplomaticActionValid,
 -- GetGoldBalance, GetVisibilityOn) are STALE same-frame after CloseSession. The C++ engine
 -- commits state changes on the next frame. So we cannot reliably detect acceptance by
--- comparing pre/post state. Instead: IsDiplomaticActionValid passed the pre-check (line above),
--- meaning the action was valid. If the session completed, the game accepted it.
+-- comparing pre/post state. Friendship reports only a submitted request here;
+-- GameState confirms its native bilateral relationship in later read-only calls.
 local name = Locale.Lookup(PlayerConfigurations[target]:GetCivilizationShortDescription())
 if action:find("_WAR") then
     local atWar = pDiplo:IsAtWarWith(target)
@@ -514,12 +514,45 @@ elseif action == "DIPLOMATIC_DELEGATION" then
 elseif action == "RESIDENT_EMBASSY" then
     print("OK:ACCEPTED|" .. name .. " accepted your embassy")
 elseif action == "DECLARE_FRIENDSHIP" then
-    print("OK:ACCEPTED|" .. name .. " accepted your friendship declaration")
+    print("OK:PROPOSED|" .. name)
+    print("FRIENDSHIP_SCOPE|" .. me .. "|" .. target)
 elseif action == "DENOUNCE" then
     print("OK:SENT|Denounced " .. name)
 else
     print("OK:SENT|" .. action .. " sent to " .. name)
 end
+print("{SENTINEL}")
+"""
+
+
+def build_check_friendship_state(other_player_id: int, owner_id: int) -> str:
+    """Read reciprocal native indices through official StateType/hash mappings."""
+    return f"""
+local me = Game.GetLocalPlayer()
+local target = {other_player_id}
+local status = "UNKNOWN"
+local ok, result = pcall(function()
+    if me ~= {owner_id} or me == target or not Players[me] or not Players[target] then return "UNKNOWN" end
+    local function integer(value)
+        return type(value) == "number" and value == value and math.abs(value) < math.huge and value == math.floor(value)
+    end
+    local friendHash = DiplomaticStates.DECLARED_FRIEND
+    if not integer(friendHash) then return "UNKNOWN" end
+    local function declared(player, other)
+        local index = Players[player]:GetDiplomaticAI():GetDiplomaticStateIndex(other)
+        if not integer(index) then return nil end
+        local row = GameInfo.DiplomaticStates[index]
+        if not row or type(row.StateType) ~= "string" or not integer(row.Hash) then return nil end
+        if row.StateType == "DIPLO_STATE_DECLARED_FRIEND" and row.Hash == friendHash then return true end
+        if row.StateType == "DIPLO_STATE_DECLARED_FRIEND" or row.Hash == friendHash then return nil end
+        return false
+    end
+    local ours, theirs = declared(me, target), declared(target, me)
+    if ours == nil or theirs == nil then return "UNKNOWN" end
+    return ours and theirs and "DECLARED_FRIEND" or "NOT_DECLARED_FRIEND"
+end)
+if ok then status = result end
+print("FRIENDSHIP|" .. me .. "|" .. target .. "|" .. status)
 print("{SENTINEL}")
 """
 

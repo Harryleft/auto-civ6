@@ -735,9 +735,49 @@ class GameState:
         is_war = action.upper().endswith("_WAR") and action.upper().startswith(
             "DECLARE_"
         )
+        is_friendship = action.upper() == "DECLARE_FRIENDSHIP"
+        unconfirmed = (
+            f"PROPOSED_UNCONFIRMED|Friendship declaration to player {other_player_id} is unconfirmed; "
+            "the request may have been submitted. Query get_diplomacy before another proposal; "
+            "do not automatically resend."
+        )
         lua = lq.build_send_diplo_action(other_player_id, action.upper())
-        lines = await self.conn.execute_write(lua)
+        try:
+            lines = await self.conn.execute_write(lua)
+        except (OSError, TimeoutError, LuaError, ValueError):
+            if is_friendship:
+                return unconfirmed
+            raise
+        if is_friendship and (not isinstance(lines, list) or any(not isinstance(line, str) for line in lines)):
+            return unconfirmed
         result = _action_result(lines)
+        if is_friendship:
+            if result.startswith("Error:") and not result.startswith("Error: OUTCOME_UNKNOWN"):
+                return result
+            scope = [line.split("|") for line in lines if line.startswith("FRIENDSHIP_SCOPE|")]
+            proposed = [line for line in lines if line.startswith("OK:PROPOSED|")]
+            if not result.startswith("PROPOSED|") or len(proposed) != 1 or len(scope) != 1 or len(scope[0]) != 3:
+                return unconfirmed
+            try:
+                owner, target = int(scope[0][1]), int(scope[0][2])
+            except ValueError:
+                return unconfirmed
+            if owner < 0 or owner == target or target != other_player_id:
+                return unconfirmed
+            name = result.split("|", 1)[1]
+            query = lq.build_check_friendship_state(target, owner)
+            try:
+                # Include each read in the deadline. A transient non-friend
+                # state never authorizes rejection or another RequestSession.
+                async with asyncio.timeout(ACTION_CONFIRM_TIMEOUT):
+                    while True:
+                        evidence = await self.conn.execute_write(query)
+                        if evidence == [f"FRIENDSHIP|{owner}|{target}|DECLARED_FRIEND"]:
+                            return f"ACCEPTED|Friendship established with {name}"
+                        await asyncio.sleep(ACTION_CONFIRM_INTERVAL)
+            except (OSError, TimeoutError, LuaError, ValueError):
+                pass
+            return unconfirmed
 
         # _action_result rewrites "ERR:" to "Error: " — only schedule the
         # background UI cleanup when the declaration actually succeeded.
