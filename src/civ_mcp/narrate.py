@@ -876,7 +876,7 @@ def narrate_diplomacy_sessions(context: lq.DiplomacyContext) -> str:
             )
         elif s.buttons == "GOODBYE":
             lines.append(
-                "  Phase: GOODBYE — respond with POSITIVE or NEGATIVE (auto-closes)"
+                f'  Phase: GOODBYE — use respond_to_diplomacy(other_player_id={s.other_player_id}, response="EXIT")'
             )
         else:
             lines.append("  Respond with: POSITIVE (friendly) or NEGATIVE (dismissive)")
