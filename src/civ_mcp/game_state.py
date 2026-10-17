@@ -1775,8 +1775,8 @@ class GameState:
         if after_identity != identity or after.turn != before.turn:
             self._pending_save = True
             return f"ERR:OUTCOME_UNKNOWN|{result} Game or turn changed during saving; inspect before recovery."
-        from civ_mcp.checkpoints import record_checkpoint
-        error = record_checkpoint(save_name, identity, after.turn)
+        from civ_mcp.checkpoints import record_checkpoint, score_evidence
+        error = record_checkpoint(save_name, identity, after.turn, score_evidence(before))
         if error:
             self._pending_save = True
             return error

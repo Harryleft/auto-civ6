@@ -1946,6 +1946,7 @@ async def _load_and_verify(gs: GameState, save_name: str) -> str:
     expected = checkpoints.expected_checkpoint(save_name)
     if expected is None:
         return "Error: Checkpoint completion and expected identity are unavailable; no load sent."
+    saved_score = checkpoints.expected_score(save_name)
     submitted = False
     try:
         async with asyncio.timeout(LOAD_TIMEOUT):
@@ -1998,7 +1999,8 @@ async def _load_and_verify(gs: GameState, save_name: str) -> str:
                                 if ownership_error:
                                     return ownership_error
                             gs._pending_load = False
-                            return f"Loaded {save_name}: {identity[0]}, seed {identity[1]}, turn {ov.turn}."
+                            score_comparison = nr.narrate_score_comparison(saved_score, checkpoints.score_evidence(ov))
+                            return f"Loaded {save_name}: {identity[0]}, seed {identity[1]}, turn {ov.turn}.\n{score_comparison}"
                 except (OSError, LuaError, ValueError):
                     gs._pending_load = True
                 await asyncio.sleep(2)
