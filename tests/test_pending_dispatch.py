@@ -9,6 +9,9 @@ from civ_mcp import server
 
 
 class PendingGame:
+    replacement_pending = False
+    save_pending = False
+    turn_pending = False
     pending_action_entity = ("unit", 7)
 
     def __init__(self, confirmation):
@@ -30,6 +33,10 @@ class PendingGame:
 
     async def get_units(self):
         return []
+
+    async def restart_and_load(self, save_name=None):
+        self.actions.append(("recover", save_name))
+        return "RECOVERY_REQUESTED"
 
     async def upgrade_unit(self, unit_id):
         self.actions.append(("upgrade", unit_id))
@@ -69,7 +76,7 @@ def test_other_unit_does_not_depend_on_pending_position():
     assert game.actions == [("fortify", 8)]
 
 
-@pytest.mark.parametrize("pending_flag", ["_pending_load", "_pending_save"])
+@pytest.mark.parametrize("pending_flag", ["replacement_pending", "save_pending", "turn_pending"])
 def test_unknown_lifecycle_blocks_gameplay_even_without_pending_unit(pending_flag):
     game = PendingGame("CONFIRMED|unused")
     game.pending_action_entity = None
@@ -79,9 +86,10 @@ def test_unknown_lifecycle_blocks_gameplay_even_without_pending_unit(pending_fla
     assert game.actions == []
 
 
-def test_unknown_load_still_allows_read_only_unit_query():
+@pytest.mark.parametrize("pending_flag", ["replacement_pending", "save_pending", "turn_pending"])
+def test_pending_operation_still_allows_read_only_unit_query(pending_flag):
     game = PendingGame("CONFIRMED|unused")
-    game._pending_load = True
+    setattr(game, pending_flag, True)
     result = asyncio.run(server.get_units(context(game)))
     assert "OUTCOME_UNKNOWN" not in result
     assert game.actions == []
@@ -92,3 +100,12 @@ def test_separate_upgrade_tool_cannot_bypass_pending_unit():
     result = asyncio.run(server.upgrade_unit(context(game), 65536 + 7))
     assert "OUTCOME_UNKNOWN" in result
     assert game.actions == []
+
+
+@pytest.mark.parametrize("pending_flag", ["replacement_pending", "save_pending", "turn_pending"])
+def test_public_pending_facts_allow_explicit_fault_recovery(pending_flag):
+    game = PendingGame("CONFIRMED|unused")
+    game.pending_action_entity = None
+    setattr(game, pending_flag, True)
+    assert asyncio.run(server.restart_and_load(context(game), "verified_checkpoint")) == "RECOVERY_REQUESTED"
+    assert game.actions == [("recover", "verified_checkpoint")]

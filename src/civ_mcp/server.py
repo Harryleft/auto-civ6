@@ -79,8 +79,7 @@ async def _logged(
         start = time.monotonic()
         try:
             if (
-                (getattr(app.game, "_pending_load", False)
-                 or getattr(app.game, "_pending_save", False))
+                (app.game.replacement_pending or app.game.save_pending)
                 and not tool_name.startswith(("get_", "list_"))
                 and tool_name != "restart_and_load"
             ):
@@ -90,7 +89,7 @@ async def _logged(
                     "before issuing gameplay actions."
                 )
             elif (
-                getattr(app.game, "_pending_end_turn", False)
+                app.game.turn_pending
                 and not tool_name.startswith(("get_", "list_"))
                 and tool_name not in {"end_turn", "respond_to_diplomacy", "respond_to_trade", "queue_wc_votes", "open_world_congress", "dismiss_popup", "restart_and_load"}
             ):
