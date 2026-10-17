@@ -498,7 +498,7 @@ class TestLoadSaveFilesystemFallback:
         assert result.startswith("Loading save MyGame")
         ((_, lua),) = conn.load_calls
         assert "local loadGame = q.save" in lua
-        assert 'local wanted = "MyGame.Civ6Save";' in conn.state_calls[0][1]
+        assert any('local wanted = "MyGame.Civ6Save";' in code for _, code in conn.state_calls)
 
     def test_out_of_range_index_against_the_filesystem_cache(self, save_dirs):
         base, _auto = save_dirs
@@ -522,11 +522,82 @@ def menu_conn(**kwargs):
     kwargs.setdefault("gamecore_index", None)
     kwargs.setdefault("ingame_index", None)
     kwargs.setdefault("lua_states", {24: "MainMenu"})
+    frontend = kwargs.pop("frontend", "true")
+    callback = kwargs.get("on_state")
+    def route(idx, lua):
+        if "MCP_FRONTEND_STATUS" in lua:
+            return ["MCP_FRONTEND|" + frontend]
+        return callback(idx, lua) if callback else []
+    kwargs["on_state"] = route
     return FakeConn(**kwargs)
 
 
 def frontend_ok(idx, lua):
     return ["MCP_FRONTEND_AUTOSTART|true", "MCP_FRONTEND_LOAD|true"]
+
+
+class TestFrontendFact:
+    @pytest.mark.parametrize("lines, expected", [
+        (["MCP_FRONTEND|true"], True),
+        (["MCP_FRONTEND|false"], False),
+        ([], None),
+        (["MCP_FRONTEND|UNKNOWN"], None),
+        (["MCP_FRONTEND|1"], None),
+        (["MCP_FRONTEND|true", "MCP_FRONTEND|true"], None),
+        (["MCP_FRONTEND|true", "MCP_FRONTEND|false"], None),
+    ])
+    def test_native_boolean_alone_decides_frontend_even_with_old_world_indexes(self, lines, expected):
+        conn = FakeConn(lua_states={24: "MainMenu", 0: "GameCore_Tuner", 1: "InGame"},
+                        on_state=lambda idx, lua: lines)
+        assert run(gl.is_in_frontend(conn)) is expected
+        assert conn.discoveries == 1
+        assert conn.state_calls[0][0] == 24
+        assert 'type(value) ~= "boolean"' in conn.state_calls[0][1]
+
+
+class TestReturnToMainMenu:
+    def test_already_frontend_does_not_submit_exit_with_stale_gamecore(self):
+        conn = FakeConn(lua_states={24: "MainMenu", 0: "GameCore_Tuner", 1: "InGame"},
+                        on_state=lambda idx, lua: ["MCP_FRONTEND|true"])
+        assert run(gl.return_to_main_menu(conn)) == "Main menu confirmed."
+        assert not any("Events.ExitToMainMenu()" in code for _, code in conn.state_calls)
+
+    def test_lost_exit_reply_is_confirmed_without_replay_using_new_directory(self):
+        observations = iter([["MCP_FRONTEND|false"], ["MCP_FRONTEND|true"]])
+        conn = FakeConn(lua_states={24: "MainMenu", 1: "InGame"})
+        def route(idx, lua):
+            if "Events.ExitToMainMenu()" in lua:
+                conn.discovered_states = {99: "MainMenu", 0: "GameCore_Tuner"}
+                raise ConnectionError("reply lost")
+            return next(observations)
+        conn.on_state = route
+        assert run(gl.return_to_main_menu(conn)) == "Main menu confirmed."
+        assert [idx for idx, code in conn.state_calls if "Events.ExitToMainMenu()" in code] == [1]
+        assert conn.state_calls[-1][0] == 99
+
+    @pytest.mark.parametrize("response", [[], ["MCP_FRONTEND|UNKNOWN"], ["MCP_FRONTEND|true", "MCP_FRONTEND|false"]])
+    def test_unknown_before_exit_preserves_the_world(self, response):
+        conn = FakeConn(lua_states={24: "MainMenu", 1: "InGame"}, on_state=lambda idx, lua: response)
+        result = run(gl.return_to_main_menu(conn))
+        assert result.startswith("Error:") and "no exit sent" in result
+        assert not any("Events.ExitToMainMenu()" in code for _, code in conn.state_calls)
+
+    def test_unconfirmed_exit_expires_without_a_second_submission_or_loading(self):
+        conn = FakeConn(lua_states={24: "MainMenu", 1: "InGame"},
+                        on_state=lambda idx, lua: ["MCP_FRONTEND|false"])
+        result = run(gl.return_to_main_menu(conn, timeout=0.01))
+        assert result.startswith("ERR:OUTCOME_UNKNOWN|")
+        assert sum("Events.ExitToMainMenu()" in code for _, code in conn.state_calls) == 1
+        assert conn.load_calls == []
+
+    def test_discovery_is_inside_the_callers_budget(self):
+        conn = FakeConn(lua_states={24: "MainMenu"})
+        async def slow_discovery(timeout=5.0):
+            await asyncio.sleep(10)
+        conn.rediscover_states = slow_discovery
+        result = run(gl.return_to_main_menu(conn, timeout=0.01))
+        assert result.startswith("Error:") and "no exit sent" in result
+        assert conn.state_calls == []
 
 
 class TestLoadGameSave:
@@ -539,13 +610,23 @@ class TestLoadGameSave:
         explicitly instead of silently restarting or navigating the GUI."""
 
         async def go():
-            conn = FakeConn()  # gamecore_index=0 — a game is loaded
+            conn = FakeConn(lua_states={1: "InGame"}, on_state=lambda idx, lua: ["MCP_FRONTEND|false"])
             return conn, await gl.load_game_save(conn, "0_MCP_0042")
 
         conn, result = run(go())
         assert "a game is already loaded" in result
-        assert conn.state_calls == []
+        assert conn.load_calls == []
+        assert all("MCP_FRONTEND_STATUS" in code for _, code in conn.state_calls)
         assert conn.writes == []
+
+    def test_stale_gamecore_directory_does_not_refuse_a_native_frontend(self):
+        conn = menu_conn(gamecore_index=0, lua_states={24: "MainMenu", 0: "GameCore_Tuner"}, on_state=frontend_ok)
+        assert run(gl.load_game_save(conn, "checkpoint")).startswith("Loading save")
+
+    def test_unknown_native_frontend_refuses_load_without_submission(self):
+        conn = menu_conn(frontend="UNKNOWN", on_state=frontend_ok)
+        assert "no load sent" in run(gl.load_game_save(conn, "checkpoint"))
+        assert conn.load_calls == []
 
     def test_invalid_save_names_are_rejected_before_any_lua(self):
         async def go():
@@ -566,7 +647,7 @@ class TestLoadGameSave:
             conn = menu_conn(lua_states={})
             return await gl.load_game_save(conn, "0_MCP_0042")
 
-        assert "MainMenu Lua state is unavailable" in run(go())
+        assert "frontend state unavailable" in run(go())
 
     def test_frontend_load_succeeds_via_mainmenu_state(self):
         """The happy path: load + auto-start accepted in the MainMenu state —
@@ -607,6 +688,17 @@ class TestLoadGameSave:
             return await gl.load_game_save(conn, "ghost")
 
         assert "Civ VI rejected save" in run(go())
+
+    @pytest.mark.parametrize("frontend", ["false", "UNKNOWN"])
+    def test_frontend_changed_in_load_chunk_is_explicitly_not_submitted(self, frontend):
+        conn = menu_conn(on_state=lambda idx, lua: ["MCP_FRONTEND_NOT_READY|" + frontend])
+        result = run(gl.load_save_from_frontend(conn, "checkpoint"))
+        assert result.startswith("Error:") and "no load sent" in result
+        assert "Civ VI rejected" not in result
+        code = conn.load_calls[0][1]
+        assert code.index("UI.IsInFrontEnd()") < code.index("Network.LoadGame")
+        assert 'type(frontend) ~= "boolean"' in code
+        assert 'frontend ~= true' in code
 
     def test_no_confirmation_means_outcome_unknown(self):
         async def go():
@@ -652,7 +744,7 @@ class TestLoadGameSave:
         async def go():
             conn = menu_conn(on_state=frontend_ok)
             await gl.load_game_save(conn, 'evil"; print("pwned"); --')
-            return conn.state_calls[0][1]
+            return next(code for _, code in conn.state_calls if "MCP_SAVE_QUERY_START" in code)
 
         lua = run(go())
         assert 'local wanted = "evil\\"; print(\\"pwned\\"); --.Civ6Save";' in lua
@@ -662,7 +754,7 @@ class TestLoadGameSave:
         async def go():
             conn = menu_conn(on_state=frontend_ok)
             await gl.load_game_save(conn, name)
-            return conn.state_calls[0][1]
+            return next(code for _, code in conn.state_calls if "MCP_SAVE_QUERY_START" in code)
 
         assert 'local wanted = "0_MCP_0042.Civ6Save";' in run(go())
 
