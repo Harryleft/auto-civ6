@@ -591,6 +591,89 @@ def _validate_save_name(save_name: str) -> str | None:
     return None
 
 
+async def is_in_frontend(conn: GameConnection, *, timeout: float = 5.0) -> bool | None:
+    """Read the native frontend fact from a freshly discovered named context.
+
+    World indexes can remain in the directory after returning to the menu.
+    Neither their presence nor MainMenu's presence proves the current mode.
+    """
+    try:
+        async with asyncio.timeout(timeout):
+            await conn.rediscover_states(timeout=timeout)
+            index = next((idx for idx, name in conn.lua_states.items() if name == "MainMenu"), None)
+            if index is None:
+                index = next((idx for idx, name in conn.lua_states.items() if name == "InGame"), None)
+            if index is None:
+                return None
+            lines = await conn.execute_in_state(index, f"""
+-- MCP_FRONTEND_STATUS: read-only native frontend fact
+local ok, value = pcall(function() return UI.IsInFrontEnd(); end);
+if not ok or type(value) ~= "boolean" then print("MCP_FRONTEND|UNKNOWN");
+else print("MCP_FRONTEND|" .. tostring(value)); end;
+print("{lq.SENTINEL}");
+""", timeout=timeout)
+    except (OSError, TimeoutError, LuaError):
+        return None
+    facts = [line for line in lines if line.startswith("MCP_FRONTEND|")]
+    if facts == ["MCP_FRONTEND|true"]:
+        return True
+    if facts == ["MCP_FRONTEND|false"]:
+        return False
+    return None
+
+
+async def return_to_main_menu(conn: GameConnection, *, timeout: float = 30.0) -> str:
+    """Submit at most one native exit, then confirm only through native facts.
+
+    The caller must serialize session replacement and retain its gate after an
+    unknown outcome. This helper never kills, launches, loads or resets state.
+    Its complete discovery/submit/confirmation budget is capped at 30 seconds.
+    """
+    attempted = False
+    try:
+        async with asyncio.timeout(min(timeout, 30.0)):
+            frontend = await is_in_frontend(conn)
+            if frontend is True:
+                return "Main menu confirmed."
+            if frontend is None:
+                return "Error: Native frontend state unavailable; no exit sent."
+            index = next((idx for idx, name in conn.lua_states.items() if name == "InGame"), None)
+            if index is None:
+                return "Error: InGame Lua state unavailable; no exit sent."
+            code = f"""
+-- MCP_MENU_EXIT: submit once; never replay after a lost response
+local ok, frontend = pcall(function() return UI.IsInFrontEnd(); end);
+if not ok or type(frontend) ~= "boolean" then
+  print("MCP_MENU_EXIT|UNAVAILABLE"); print("{lq.SENTINEL}"); return;
+end;
+if frontend then print("MCP_MENU_EXIT|ALREADY"); print("{lq.SENTINEL}"); return; end;
+if not Events or not Events.ExitToMainMenu then
+  print("MCP_MENU_EXIT|UNAVAILABLE"); print("{lq.SENTINEL}"); return;
+end;
+local submitted, err = pcall(function() Events.ExitToMainMenu(); end);
+print(submitted and "MCP_MENU_EXIT|SUBMITTED" or "MCP_MENU_EXIT|UNKNOWN");
+print("{lq.SENTINEL}");
+"""
+            attempted = True
+            try:
+                lines = await conn.execute_in_state(index, code, timeout=5.0)
+            except (OSError, TimeoutError, LuaError):
+                lines = []
+            if lines == ["MCP_MENU_EXIT|UNAVAILABLE"]:
+                return "Error: Native exit unavailable; no exit sent."
+            while True:
+                if await is_in_frontend(conn) is True:
+                    return "Main menu confirmed."
+                await asyncio.sleep(0.2)
+    except TimeoutError:
+        if not attempted:
+            return "Error: Native frontend discovery timed out; no exit sent."
+    return (
+        "ERR:OUTCOME_UNKNOWN|Return to main menu was attempted once but not confirmed; "
+        "do not resend. Use explicit restart_and_load for fault recovery."
+    )
+
+
 async def load_save_from_frontend(conn: GameConnection, save_name: str) -> str:
     """Load a save from Civ VI's MainMenu state without GUI automation.
 
@@ -662,6 +745,11 @@ print("{lq.SENTINEL}");
         return f"Error: Native save metadata unavailable; no load sent: {exc}"
 
     code = f"""
+local frontendOK, frontend = pcall(function() return UI.IsInFrontEnd(); end);
+if not frontendOK or type(frontend) ~= "boolean" or frontend ~= true then
+  print("MCP_FRONTEND_NOT_READY|" .. (frontendOK and tostring(frontend) or "UNKNOWN"));
+  print("{lq.SENTINEL}"); return;
+end;
 local q = __civmcpSaveQuery;
 if not q or not q.done or q.count ~= 1 or q.name ~= {json.dumps(save_filename, ensure_ascii=False)} then
   print("MCP_FRONTEND_LOAD|false"); print("{lq.SENTINEL}"); return;
@@ -683,12 +771,14 @@ print("{lq.SENTINEL}");
             code,
             timeout=5.0,
         )
-    except (ConnectionError, OSError, TimeoutError) as exc:
+    except (ConnectionError, OSError, TimeoutError, LuaError) as exc:
         return (
             f"ERR:OUTCOME_UNKNOWN|FrontEnd load for {save_name!r} may have been "
             f"submitted; FireTuner disconnected: {exc}"
         )
 
+    if any(line.startswith("MCP_FRONTEND_NOT_READY|") for line in lines):
+        return "Error: Native frontend is not confirmed in the load context; no load sent."
     if "MCP_FRONTEND_LOAD|false" in lines:
         return f"Error: Civ VI rejected save {save_name!r}: {lines!r}"
     if "MCP_FRONTEND_LOAD|true" not in lines:
@@ -716,11 +806,14 @@ async def load_game_save(conn: GameConnection, save_name: str) -> str:
     validation_error = _validate_save_name(save_name)
     if validation_error:
         return validation_error
-    if conn.gamecore_index is not None:
+    frontend = await is_in_frontend(conn)
+    if frontend is False:
         return (
             "Error: a game is already loaded; return to the main menu before "
             "calling load_game_save. No GUI fallback was attempted."
         )
+    if frontend is None:
+        return "Error: Native frontend state unavailable; no load sent."
     return await load_save_from_frontend(conn, save_name)
 
 
