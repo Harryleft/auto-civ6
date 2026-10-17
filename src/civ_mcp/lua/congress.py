@@ -40,7 +40,7 @@ local function hasEligibleProposals(proposals)
             if type(proposal) ~= "table" or (proposal.Disabled ~= nil and type(proposal.Disabled) ~= "boolean") then
                 return nil, "Proposal eligibility unknown"
             end
-            if type(proposal.TypeName) ~= "string" or proposal.TypeName == "" or proposal.TypeName:find("[|%c]")
+            if type(proposal.TypeName) ~= "string" or proposal.TypeName == "" or proposal.TypeName:find("[|%z\\1-\\31\\127]")
                 or (proposal.Type ~= nil and not integer(proposal.Type)) or not integer(proposal.Target)
                 or (proposal.Sender ~= nil and not integer(proposal.Sender))
                 or type(proposal.Name) ~= "string" or type(proposal.Description) ~= "string" then
@@ -337,7 +337,9 @@ if inSession then
     local ok = pcall(function() eligible, proposalError, proposals = hasEligibleProposals(wc:GetProposals(me)) end)
     local status = ok and eligible ~= nil and (eligible and "CHOICES" or "EMPTY") or "UNKNOWN"
     print("WC_PROPOSAL_STATUS|" .. status)
-    local function clean(value) return tostring(value or ""):gsub("[|%c]", " ") end
+    -- %c follows process locale and can replace UTF-8 continuation bytes.
+    -- Match only the ASCII protocol delimiter, C0 controls and DEL.
+    local function clean(value) return tostring(value or ""):gsub("[|%z\\1-\\31\\127]", " ") end
     print("WC_PROPOSAL_ERROR|" .. clean(proposalError or (not ok and "Native proposal read failed" or "")))
     local function playerName(player)
         if player == nil then return "NONE" end
