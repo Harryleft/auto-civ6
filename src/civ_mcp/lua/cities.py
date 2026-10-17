@@ -181,8 +181,51 @@ print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
 
 
-def build_city_attack(city_id: int, target_x: int, target_y: int) -> str:
+def build_city_attack(city_id: int, target_x: int, target_y: int, *, witness_token: str | None = None) -> str:
     """InGame context: fire city ranged attack at a target tile."""
+    witness = ""
+    if witness_token is not None:
+        witness = f'''
+local prior = __civmcpCityAttack
+if prior and not prior.closed then
+    {_bail("ERR:OUTCOME_UNKNOWN|Prior native city attack witness is unresolved; no shot submitted.")}
+end
+if prior and prior.handler then
+    pcall(function() Events.CityCommandStarted.Remove(prior.handler) end)
+end
+local cfg = PlayerConfigurations[me]
+local q = {{token="{witness_token}", owner=me, cityId=pCity:GetID(),
+    districtOwner=cityCenter:GetOwner(), districtId=cityCenter:GetID(),
+    civ=cfg:GetCivilizationTypeName(), seed=GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED"),
+    turn=Game.GetCurrentGameTurn(), command=CityCommandTypes.RANGE_ATTACK,
+    targetX={target_x}, targetY={target_y}, targetOwner=enemy:GetOwner(),
+    targetId=enemy:GetID(), preHP=eHP, started=false, closed=false}}
+__civmcpCityAttack = q
+q.handler = function(cityOwnerID, cityID, districtOwnerID, districtID, commandType, iData1)
+    pcall(function()
+        if __civmcpCityAttack ~= q or q.closed or q.started then return end
+        if cityOwnerID ~= q.owner or cityID ~= q.cityId
+            or districtOwnerID ~= q.districtOwner or districtID ~= q.districtId
+            or commandType ~= q.command then return end
+        if Game.GetLocalPlayer() ~= q.owner or Game.GetCurrentGameTurn() ~= q.turn then return end
+        local currentCfg = PlayerConfigurations[q.owner]
+        if currentCfg:GetCivilizationTypeName() ~= q.civ
+            or GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED") ~= q.seed then return end
+        -- Native events echo neither nonce nor target. Attribution relies on
+        -- this prearmed actual target and one serialized unresolved command.
+        -- iData1 is untyped; never interpret it as a target or plot ID.
+        q.started = true
+        q.rawCommand, q.rawData = tostring(commandType), tostring(iData1)
+        pcall(function() Events.CityCommandStarted.Remove(q.handler) end)
+    end)
+end
+local armed = pcall(function() Events.CityCommandStarted.Add(q.handler) end)
+if not armed then
+    q.closed = true
+    pcall(function() Events.CityCommandStarted.Remove(q.handler) end)
+    {_bail("ERR:CITY_ATTACK_WITNESS_UNAVAILABLE|Native command witness unavailable; no shot submitted.")}
+end
+'''
     return f"""
 {_lua_get_city(city_id)}
 local cx, cy = pCity:GetX(), pCity:GetY()
@@ -201,8 +244,10 @@ params[CityCommandTypes.PARAM_Y] = {target_y}
 -- Pre-checks for specific error messages
 local ccIdx = GameInfo.Districts["DISTRICT_CITY_CENTER"].Index
 local hasWalls = false
+local cityCenter = nil
 for _, d in pCity:GetDistricts():Members() do
     if d:GetType() == ccIdx then
+        cityCenter = d
         local wHP = d:GetMaxDamage(DefenseTypes.DISTRICT_OUTER)
         if wHP and wHP > 0 then hasWalls = true end
         break
@@ -246,10 +291,54 @@ local canAttack = CityManager.CanStartCommand(pCity, CityCommandTypes.RANGE_ATTA
 if not canAttack then
     {_bail("ERR:CANNOT_ATTACK|City cannot attack this target (unknown reason)")}
 end
+{witness}
 CityManager.RequestCommand(pCity, CityCommandTypes.RANGE_ATTACK, params)
 print("OK:CITY_RANGE_ATTACK|" .. Locale.Lookup(pCity:GetName()) .. " -> " .. eName .. "@{target_x},{target_y}|pre_hp:" .. eHP .. "/" .. enemy:GetMaxDamage() .. targetTag)
 print("{SENTINEL}")
 """
+
+
+def build_city_attack_followup(city_id: int, target_x: int, target_y: int, witness_token: str) -> str:
+    """Read this prearmed native request record and the ordinary target facts."""
+    from civ_mcp.lua.units import build_attack_followup_query
+
+    return f'''
+pcall(function()
+    local q = __civmcpCityAttack
+    local me = Game.GetLocalPlayer()
+    if not q or q.token ~= "{witness_token}" or q.owner ~= me
+        or q.turn ~= Game.GetCurrentGameTurn() then return end
+    local cfg = PlayerConfigurations[me]
+    if q.civ ~= cfg:GetCivilizationTypeName()
+        or q.seed ~= GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")
+        or q.command ~= CityCommandTypes.RANGE_ATTACK
+        or q.targetX ~= {target_x} or q.targetY ~= {target_y} then return end
+    local city = CityManager.GetCity(me, {city_id} % 65536)
+    if not city or city:GetID() ~= q.cityId or city:GetOwner() ~= q.owner then return end
+    local center = nil
+    local ccIdx = GameInfo.Districts["DISTRICT_CITY_CENTER"].Index
+    for _, d in city:GetDistricts():Members() do
+        if d:GetType() == ccIdx then center = d; break end
+    end
+    if not center or center:GetID() ~= q.districtId or center:GetOwner() ~= q.districtOwner
+        or center:GetCity():GetID() ~= q.cityId then return end
+    print("CITY_ATTACK_SOURCE|" .. me .. "|" .. city:GetID() .. "|" .. center:GetOwner() .. "|" .. center:GetID())
+    print("CITY_ATTACK_WITNESS|" .. q.token .. "|" .. q.owner .. "|" .. q.cityId
+        .. "|" .. q.districtOwner .. "|" .. q.districtId .. "|" .. q.civ .. "|" .. q.seed
+        .. "|" .. q.turn .. "|" .. q.targetX .. "|" .. q.targetY .. "|" .. q.targetOwner .. "|" .. q.targetId
+        .. "|started:" .. tostring(q.started) .. "|command_matches:" .. tostring(q.command == CityCommandTypes.RANGE_ATTACK)
+        .. "|rawCommand:" .. tostring(q.rawCommand) .. "|rawData:" .. tostring(q.rawData))
+    if UI.IsGameCoreBusy() ~= false then return end
+    local target = Players[q.targetOwner] and Players[q.targetOwner]:GetUnits():FindID(q.targetId)
+    local changedHP = target and target:GetID() == q.targetId
+        and target:GetX() == q.targetX and target:GetY() == q.targetY
+        and target:GetMaxDamage() - target:GetDamage() ~= q.preHP
+    if q.started or changedHP then
+        q.closed = true
+        pcall(function() Events.CityCommandStarted.Remove(q.handler) end)
+    end
+end)
+''' + build_attack_followup_query(target_x, target_y)
 
 
 def build_resolve_city_capture(action: str) -> str:
