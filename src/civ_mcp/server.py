@@ -80,7 +80,18 @@ async def _logged(
     async with app.lock:
         start = time.monotonic()
         try:
-            result = await fn()
+            if (
+                getattr(app.game, "_pending_load", False)
+                and not tool_name.startswith(("get_", "list_"))
+                and tool_name != "restart_and_load"
+            ):
+                result = (
+                    "ERR:OUTCOME_UNKNOWN|The requested load has not been verified. "
+                    "Read game state or explicitly restart_and_load a verified checkpoint "
+                    "before issuing gameplay actions."
+                )
+            else:
+                result = await fn()
         except (LuaError, ValueError, OSError) as exc:
             result = f"Error: {exc}"
         ms = int((time.monotonic() - start) * 1000)
@@ -1146,6 +1157,15 @@ async def unit_action(
         params["improvement"] = improvement
 
     async def _run():
+        # Move/attack/founding reconcile their own pending requests. Other
+        # commands must not change that unit before its outcome is known.
+        if (
+            action.lower() not in {"move", "attack", "found_city"}
+            and getattr(gs, "pending_action_entity", None) == ("unit", unit_index)
+        ):
+            confirmation = await gs.confirm_pending_action()
+            if gs.pending_action_entity == ("unit", unit_index):
+                return confirmation
         match action.lower():
             case "move":
                 if target_x is None or target_y is None:
