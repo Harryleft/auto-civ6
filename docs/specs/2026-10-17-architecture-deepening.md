@@ -1,6 +1,6 @@
 # 四项架构深化规格
 
-状态：ready-for-agent。固定基点：ce1e843242420d7ac79ed5f9bfe0129a5e186ed1。集成分支：codex/architecture-deepening。沿用现有本地 Markdown tracker，不创建远程 Issue 或 PR，不 push。
+状态：done（初始标签 ready-for-agent）。固定基点：ce1e843242420d7ac79ed5f9bfe0129a5e186ed1。集成分支：codex/architecture-deepening。沿用现有本地 Markdown tracker，不创建远程 Issue 或 PR，不 push。
 
 ## Problem Statement
 
@@ -77,3 +77,5 @@
 ## Further Notes
 
 四项均在本次范围内，不需要先逐个重新 grilling。实现使用独立 worktree，合并时解决共享代码的真实依赖；所有 ticket 最终在同一集成分支关闭。默认不自动合并 main，用户可审查该分支后另行指定合并。详见配套本地工作项。
+
+离线交付见[四项架构深化验收](../acceptance/2026-10-17-architecture-deepening.md)：933 项测试通过，双轴审查发现的两项 P2 已修复并复核，现有存档与第 100 回合验收结果保留。
