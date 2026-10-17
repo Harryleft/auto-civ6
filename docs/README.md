@@ -18,6 +18,8 @@ Agent 从根目录 [AGENTS.md](../AGENTS.md) 开始；命中任务后读取对�
 
 仅在定位对应改动或核对成果时读取。历史记录中的提交、测试数量与实机结果只适用于该记录，不代表当前分支已重新验收。
 
+- [第 100 回合至原生终局验收](acceptance/2026-10-18-turn-terminal.md)：净推进 144 回合至第 244 回合失败，瑞典科技胜利；八组修复、1,385 项离线及存档保护。
+- [终局类型与保存边界验收](acceptance/2026-10-18-terminal-outcome-boundary.md)：官方胜利类型、终局新保存零提交与原生结果复验；[规格](specs/2026-10-18-terminal-outcome-boundary.md)。
 - [第 207 回合移动目标保护验收](acceptance/2026-10-18-terminal-move-target.md)：1,340 项离线、初版实测不足与原生路径保护、拒绝后合法移动；[规格](specs/2026-10-18-terminal-move-target.md)。
 - [友好与同盟结果确认验收](acceptance/2026-10-18-terminal-friendship-confirmation.md)：1,279 项离线、友好未确认与研究同盟成立实测、菜单诊断恢复；[规格](specs/2026-10-18-terminal-friendship-confirmation.md)。
 - [第 167 回合议会提案验收](acceptance/2026-10-18-terminal-congress-proposals.md)：1,185 项离线、世界博览会与 3 决议显式混合投票、中文修复及会后确认指引；[规格](specs/2026-10-18-terminal-congress-proposals.md)。

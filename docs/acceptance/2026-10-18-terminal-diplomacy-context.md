@@ -13,6 +13,6 @@
 | 第 152 回合 INCOMING | 两入口一致显示巴西的当前提案；错填瑞典被资格检查拒绝，巴西提案仍在；正确接受巴西后两入口 NONE，原推进请求完成 152 → 153 |
 | 第 155 回合 DIALOGUE | 两入口均识别瑞典普通对话，不附旧交易；使用正确参数交易回应，返回 `NO_CURRENT_PROPOSAL\|DIALOGUE`，再次查询对话保留；POSITIVE 返回 SESSION_CONTINUES，显式 EXIT 关闭，随后 NONE，原推进请求完成 155 → 156 |
 
-三类实机流程通过；UNKNOWN 和零原生提交的异常边界由隔离测试覆盖。实机日志第 1341 行曾使用错误参数 `player_id`，在参数校验阶段失败，不计作上下文资格检查证据。原始基准、现有存档及既有验收结果保留；本修复的实测完成，整体终局续测仍在进行。
+三类实机流程通过；UNKNOWN 和零原生提交的异常边界由隔离测试覆盖。实机日志第 1341 行曾使用错误参数 `player_id`，在参数校验阶段失败，不计作上下文资格检查证据。原始基准、现有存档及既有验收结果保留；本修复的实测完成，整体已到第 244 回合原生终局，见[全程验收](2026-10-18-turn-terminal.md)。
 
 证据位于 `~/.civ6-mcp/acceptance/20261018-turn-terminal/`：`diplomacy-context-live-evidence.json` 提取 session.jsonl 第 1241–1245、1275–1289、1337–1355 行的对应结果；`diplomacy-context-fix/` 保留红绿测试、完整／增量测试日志、公开 EXIT 验证及 tested-tree 指纹；`diplomacy-context-review-standards.md`、`diplomacy-context-review-spec.md` 保留独立审查。源码关联研究及第 145 回合纯读探测另见规格中的证据指针。

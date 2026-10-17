@@ -27,4 +27,4 @@
 
 第 100／106／111 回合成果、旧自动存档副本和原未知现场均保留；新第 113 回合存档另有副本及 SHA-256。完整证据位于 `~/.civ6-mcp/acceptance/20261018-turn-terminal/`：`session.jsonl`、`attack113-unknown.json`、`attack-mode-fix/`、两份 `attack-mode-review-*.md`、`save-113.json`。
 
-终局续测继续进行；本记录仅确认攻击修复及第 113 回合实测。
+本记录确认攻击修复及第 113 回合实测；整体终局见[全程验收](2026-10-18-turn-terminal.md)。

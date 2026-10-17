@@ -15,6 +15,6 @@
 
 本次路径保护使用原生规划事实，是自动化的保守提交策略；官方空路径绘制并非相同的统一点击门禁。没有复制外国城市通行规则，也没有通过当前位置／空路径追认已提交请求失败。
 
-保留初始未知、初版失败、两次恢复、第 204／207 修复前／207 验证后存档及 SHA-256。累计诊断重放 16 次，净推进另计；整体终局续测继续进行。
+保留初始未知、初版失败、两次恢复、第 204／207 修复前／207 验证后存档及 SHA-256。累计诊断重放 16 次，净推进另计；整体已到第 244 回合原生终局，见[全程验收](2026-10-18-turn-terminal.md)。
 
 证据目录 `~/.civ6-mcp/acceptance/20261018-turn-terminal/`：`movement207-unknown.json`、`move207-target-preflight-insufficient.json`、`move207-path-probe-evidence.json`、`move207-live-validation.json`、`save-207-before.json`、`save-207-verified.json`、`move-target-fix/` 及 `move-target-path-review-*.md`。[规格](../specs/2026-10-18-terminal-move-target.md)；[工作项](../specs/2026-10-18-terminal-move-target-tickets.md)。

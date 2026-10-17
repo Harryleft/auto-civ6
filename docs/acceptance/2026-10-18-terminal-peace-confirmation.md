@@ -15,4 +15,4 @@
 
 两档均核对 sumeria／seed 719665280／turn 117，另保留副本及 SHA-256。第 122 回合主续测进度在诊断前已独立保存；诊断重放不计入净推进。实机验证成立分支，未确认及异常分支由隔离测试覆盖。
 
-证据：`~/.civ6-mcp/acceptance/20261018-turn-terminal/` 中 `peace117-misreport.json`、`peace-fix/`、`peace-review-*.md`、`save-117-peace.json` 与 `session.jsonl`。终局续测继续进行。
+证据：`~/.civ6-mcp/acceptance/20261018-turn-terminal/` 中 `peace117-misreport.json`、`peace-fix/`、`peace-review-*.md`、`save-117-peace.json` 与 `session.jsonl`。整体已到第 244 回合原生终局，见[全程验收](2026-10-18-turn-terminal.md)。

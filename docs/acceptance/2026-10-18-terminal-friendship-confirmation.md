@@ -14,6 +14,6 @@
 | 菜单恢复 | 192 → 180 耗时 29.0309 秒，180 → 192 耗时 28.8693 秒；两次均保留 PID 49863，诊断未调用 end_turn，零回合增长，累计诊断重放仍为 13 次 |
 | 恢复后读取 | 返回第 192 回合后重新查询 overview、8 个单位及 2 座城市；原生总分 272 → 275，正权重类别向量不变，现有说明保留聚合差异，不据此宣称完整世界状态相等 |
 
-第 199 回合主进度另验证友好成立；未确认与成立的公开语义均已实测。第 180 回合诊断结果另存为 `benchmark_turn_180_diplomacy_confirmation_verified_20261018`（1,173,737 字节）；主进度检查点 `benchmark_turn_192_before_diplomacy_replay_20261018`（1,207,530 字节）已恢复。两档均保留副本、SHA-256 及元数据，原始基准和既有存档不删除。修复实测完成，整体终局续测仍在进行。
+第 199 回合主进度另验证友好成立；未确认与成立的公开语义均已实测。第 180 回合诊断结果另存为 `benchmark_turn_180_diplomacy_confirmation_verified_20261018`（1,173,737 字节）；主进度检查点 `benchmark_turn_192_before_diplomacy_replay_20261018`（1,207,530 字节）已恢复。两档均保留副本、SHA-256 及元数据，原始基准和既有存档不删除。修复实测完成，整体已到第 244 回合原生终局，见[全程验收](2026-10-18-turn-terminal.md)。
 
 证据位于 `~/.civ6-mcp/acceptance/20261018-turn-terminal/`：`friendship-alliance-live-validation.json` 保留两次菜单恢复及第 180 回合新请求；`friendship199-live-validation.json` 记录自然到期后的成功续约；`friendship-alliance-restoration-validation.json` 补充恢复后的新鲜读取与零推进核对；`save-180-diplomacy.json`、`save-192.json` 保留存档元数据。`friendship-fix/` 保留红绿测试、全量日志、原生来源和 `tested-tree-combined.json`；`friendship-review-standards.md`、`friendship-review-spec.md` 保留双轴审查。
