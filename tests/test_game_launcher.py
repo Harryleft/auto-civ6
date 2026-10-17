@@ -37,6 +37,7 @@ def isolated_launcher(monkeypatch, tmp_path):
     monkeypatch.setattr(socket, "socket", local_socket)
     monkeypatch.setattr(sys, "platform", "darwin")
     monkeypatch.setattr(time, "sleep", lambda _: None)
+    monkeypatch.setattr(gl, "STEAM_PROCESS_LOG", tmp_path / "gameprocess_log.txt")
     monkeypatch.setattr(gl, "SAVE_DIR", str(tmp_path / "auto"))
     monkeypatch.setattr(gl, "SINGLE_SAVE_DIR", str(tmp_path))
 
@@ -107,7 +108,7 @@ class TestProcessManagement:
         sleeps = []
         monkeypatch.setattr(time, "sleep", sleeps.append)
         assert gl._kill_game_sync() == "Killed Civ 6."
-        assert sleeps == [2, 15]
+        assert sleeps == [2]
 
     def test_windows_failed_kill_is_reported(self, monkeypatch):
         monkeypatch.setattr(sys, "platform", "win32")
@@ -198,6 +199,26 @@ class TestLaunch:
         monkeypatch.setattr(gl, "is_game_running", lambda: False)
         monkeypatch.setattr(gl, "_wait_for_game_process", lambda timeout: 3)
         monkeypatch.setattr(gl, "_wait_for_tuner_port", lambda: True)
+
+    def test_crashed_process_still_tracked_by_steam_does_not_launch(self, monkeypatch):
+        gl.STEAM_PROCESS_LOG.write_text("[2026-10-17 09:35:14] AppID 289070 adding PID 123 as a tracked process")
+        now = [0.0]
+        monkeypatch.setattr(time, "monotonic", lambda: now[0])
+        monkeypatch.setattr(time, "sleep", lambda seconds: now.__setitem__(0, now[0] + seconds))
+        result = gl._launch_game_sync()
+        assert result.startswith("FAILED:")
+        assert "Steam" in result
+
+    def test_launch_waits_for_steam_release_after_crash(self, monkeypatch):
+        gl.STEAM_PROCESS_LOG.write_text("AppID 289070 adding PID 123 as a tracked process")
+        events = []
+        def release(seconds):
+            events.append("wait")
+            gl.STEAM_PROCESS_LOG.write_text("AppID 289070 adding PID 123 as a tracked process\nRemove 289070 from running list")
+        monkeypatch.setattr(time, "sleep", release)
+        monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: events.append("launch") or _cp())
+        assert "FireTuner port is open" in gl._launch_game_sync()
+        assert events == ["wait", "launch"]
 
     def test_running_and_connected_does_not_launch_again(self, monkeypatch):
         monkeypatch.setattr(gl, "is_game_running", lambda: True)
