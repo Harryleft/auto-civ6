@@ -266,13 +266,17 @@ class GameState:
     # Query methods
     # ------------------------------------------------------------------
 
-    async def get_game_overview(self) -> lq.GameOverview:
+    async def get_game_overview(self, *, require_snapshot: bool = False) -> lq.GameOverview:
         # InGame context needed for GetFavor() (nil in GameCore)
         lines = await self.conn.execute_write(lq.build_overview_query())
         ov = lq.parse_overview_response(lines)
         self._local_player_id = ov.player_id
+        if require_snapshot:
+            # Load confirmation requires this attempt's complete evidence,
+            # including failures that could retire the FireTuner stream.
+            self._last_snapshot = await self._take_snapshot(ov, require_complete=True)
         # Bootstrap: capture baseline snapshot for first end_turn diff
-        if self._last_snapshot is None:
+        elif self._last_snapshot is None:
             try:
                 self._last_snapshot = await self._take_snapshot(ov)
             except Exception:
@@ -1431,14 +1435,16 @@ class GameState:
     # ------------------------------------------------------------------
 
     async def _take_snapshot(
-        self, overview: lq.GameOverview | None = None
+        self, overview: lq.GameOverview | None = None, *, require_complete: bool = False
     ) -> lq.TurnSnapshot:
         """Capture current game state for diffing."""
         if overview is None:
             ov_lines = await self.conn.execute_write(lq.build_overview_query())
             overview = lq.parse_overview_response(ov_lines)
 
-        unit_lines = await self.conn.execute_read(lq.build_units_query())
+        # The unit builder uses InGame-only native operation/command checks,
+        # including ranged target checks when a unit has moves remaining.
+        unit_lines = await self.conn.execute_write(lq.build_units_query())
         units = lq.parse_units_response(unit_lines)
 
         city_lines = await self.conn.execute_write(lq.build_cities_query())
@@ -1448,6 +1454,8 @@ class GameState:
             stk_lines = await self.conn.execute_write(lq.build_stockpile_query())
             stockpiles = lq.parse_stockpile_response(stk_lines)
         except Exception:
+            if require_complete:
+                raise
             log.debug("Stockpile query failed", exc_info=True)
             stockpiles = []
 
