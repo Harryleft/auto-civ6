@@ -106,10 +106,10 @@ class FakeGameState:
         self.sessions_calls += 1
         if self.sessions_error:
             raise self.sessions_error
-        return self.sessions
+        return lq.DiplomacyContext(status="DIALOGUE" if self.sessions else "NONE", sessions=self.sessions)
 
     async def get_pending_deals(self):
-        return self.deals
+        return lq.DiplomacyContext(status="INCOMING" if self.deals else "NONE", deals=self.deals)
 
     async def get_world_congress(self):
         return self.wc
@@ -152,7 +152,7 @@ def play(gs):
 
 
 def session(**changes):
-    defaults = dict(other_civ_name="Rome", other_leader_name="Trajan", other_player_id=2,
+    defaults = dict(session_id=71, buttons="", other_civ_name="Rome", other_leader_name="Trajan", other_player_id=2,
                     dialogue_text="Proposal", reason_text="", deal_summary="", is_at_war=False)
     return SimpleNamespace(**(defaults | changes))
 
@@ -626,8 +626,7 @@ class GameStateConn(FakeConn):
             return [f"{turn}|0|Babylon|Hammurabi|100|5|10|5|0|{research}|Craftsmanship|0|0|20"]
         responses = {
             lq.build_gameover_check(): ["GAME_ACTIVE"],
-            lq.build_diplomacy_session_query(): ["NONE"],
-            lq.build_pending_deals_query(): ["DEALS_COMPLETE"],
+            lq.build_diplomacy_session_query(): ["CONTEXT|NONE|NO_OPEN_SESSION", "CONTEXT_COMPLETE"],
             lq.build_units_query(): [],
             lq.build_cities_query(): [],
             lq.build_stockpile_query(): [],
@@ -810,3 +809,38 @@ def test_identity_change_during_pending_read_cannot_confirm_new_world_readiness(
         assert gs.turn_pending and len(conn.requests) == 1
 
     asyncio.run(scenario())
+
+
+def test_unknown_diplomacy_context_never_releases_end_turn(clock):
+    gs = FakeGameState()
+
+    async def unknown_context():
+        return lq.DiplomacyContext(reason="MULTIPLE_SESSIONS")
+
+    gs.get_diplomacy_sessions = unknown_context
+    assert "UNKNOWN" in play(gs)
+    assert not gs.conn.requests
+
+
+def test_dialogue_appearing_during_the_second_context_read_blocks_end_turn(clock):
+    gs = FakeGameState()
+
+    async def dialogue_context():
+        return lq.DiplomacyContext(status="DIALOGUE", reason="CURRENT_DIALOGUE_VIEW", sessions=[session()])
+
+    gs.get_pending_deals = dialogue_context
+    assert "DIALOGUE" in play(gs)
+    assert not gs.conn.requests
+
+
+def test_current_incoming_blocker_preserves_trade_response_guidance(clock):
+    gs = FakeGameState()
+    current = session()
+    current.deal_summary = "They offer: Great Work x1"
+
+    async def incoming_context():
+        return lq.DiplomacyContext(status="INCOMING", sessions=[current])
+
+    gs.get_diplomacy_sessions = incoming_context
+    assert "respond_to_trade" in play(gs)
+    assert not gs.conn.requests

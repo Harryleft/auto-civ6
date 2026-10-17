@@ -847,10 +847,16 @@ def narrate_diplomacy(civs: list[lq.CivInfo]) -> str:
     return "\n".join(lines)
 
 
-def narrate_diplomacy_sessions(sessions: list[lq.DiplomacySession]) -> str:
-    if not sessions:
+def narrate_diplomacy_sessions(context: lq.DiplomacyContext) -> str:
+    if context.status == "UNKNOWN":
+        identities = ", ".join(s.other_civ_name for s in context.sessions)
+        return (f"Diplomacy context UNKNOWN: {context.reason}. "
+                f"Verified session participants: {identities or 'unavailable'}. "
+                "Read again before responding; current dialogue and incoming proposal are unverified.")
+    sessions = context.sessions
+    if context.status == "NONE":
         return "No pending diplomacy sessions."
-    lines = [f"{len(sessions)} pending diplomacy session(s):"]
+    lines = [f"Diplomacy context {context.status}: {len(sessions)} pending session(s):"]
     for s in sessions:
         lines.append(
             f"  {s.other_civ_name} ({s.other_leader_name}) — "
@@ -866,7 +872,7 @@ def narrate_diplomacy_sessions(sessions: list[lq.DiplomacySession]) -> str:
         if s.deal_summary:
             lines.append(f"  Deal: {s.deal_summary}")
             lines.append(
-                f"  This is a DEAL proposal — use respond_to_trade(other_player_id={s.other_player_id}, accept=True/False)"
+                f"  Current incoming deal or demand — use respond_to_trade(other_player_id={s.other_player_id}, accept=True/False)"
             )
         elif s.buttons == "GOODBYE":
             lines.append(
@@ -959,10 +965,16 @@ def narrate_tech_civics(tc: lq.TechCivicStatus) -> str:
     return "\n".join(lines)
 
 
-def narrate_pending_deals(deals: list[lq.PendingDeal]) -> str:
-    if not deals:
-        return "No pending trade deals."
-    lines = [f"{len(deals)} pending trade deal(s):"]
+def narrate_pending_deals(context: lq.DiplomacyContext) -> str:
+    if context.status == "UNKNOWN":
+        return (f"Incoming proposal context UNKNOWN: {context.reason}. "
+                "Read get_pending_diplomacy again before responding.")
+    if context.status == "DIALOGUE":
+        return "Diplomacy context DIALOGUE: current encounter is dialogue; use get_pending_diplomacy."
+    if context.status == "NONE":
+        return "No pending trade deals (NONE: no open diplomacy session)."
+    deals = context.deals
+    lines = [f"Current INCOMING deal or demand: {len(deals)} proposal(s):"]
     for d in deals:
         lines.append(
             f"\n  From: {d.other_player_name} ({d.other_leader_name}) [player {d.other_player_id}]"
