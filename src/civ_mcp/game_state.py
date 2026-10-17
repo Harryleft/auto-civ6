@@ -859,13 +859,49 @@ class GameState:
         result = _action_result(lines)
         if not result.startswith("Error"):
             # Post-verify: RequestPolicyChanges can silently no-op (e.g. during era transitions)
+            expected_slots: dict[int, str] = {}
+            plan_count = None
+            invalid_plan = False
+            for line in lines:
+                if line.startswith("POLICY_PLAN_COUNT|"):
+                    try:
+                        if plan_count is not None:
+                            invalid_plan = True
+                        _, count = line.split("|")
+                        plan_count = int(count)
+                    except ValueError:
+                        invalid_plan = True
+                elif line.startswith("POLICY_PLAN"):
+                    try:
+                        _, slot, policy = line.split("|")
+                        index = int(slot)
+                        if index in expected_slots or not policy:
+                            invalid_plan = True
+                        expected_slots[index] = policy
+                    except ValueError:
+                        invalid_plan = True
+            complete_plan = (
+                not invalid_plan and plan_count is not None and plan_count > 0
+                and len(expected_slots) == plan_count
+                and all(0 <= idx < plan_count for idx in expected_slots)
+                and all(expected_slots.get(idx) == ("NONE" if policy.upper() == "NONE" else policy)
+                        for idx, policy in assignments.items())
+            )
+            if not complete_plan:
+                expected_slots = dict(assignments)
+                result += (
+                    "\nWARN:POLICY_PLAN_UNVERIFIED — final plan receipt missing or invalid; "
+                    "only requested slots can be checked. Inspect get_policies before another change."
+                )
             status = await self.get_policies()
             slot_map = {s.slot_index: s.current_policy for s in status.slots}
+            if complete_plan and set(slot_map) != set(expected_slots):
+                result += "\nWARN:POLICY_PLAN_UNVERIFIED — slot layout changed after submission."
             mismatches = []
-            for idx, pol in assignments.items():
+            for idx, pol in expected_slots.items():
                 expected = None if pol.upper() == "NONE" else pol
                 actual = slot_map.get(idx)
-                if actual != expected:
+                if idx not in slot_map or actual != expected:
                     wanted = "EMPTY" if expected is None else pol
                     got = actual or "EMPTY"
                     mismatches.append(f"slot {idx} (wanted {wanted}, got {got})")
