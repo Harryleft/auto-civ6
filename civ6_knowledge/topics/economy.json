@@ -1,0 +1,257 @@
+{
+  "schema_version": 1,
+  "topic": "economy",
+  "cards": [
+    {
+      "id": "MECHANIC_ECONOMY_GROWTH",
+      "names": {
+        "zh_Hans_CN": "城市人口增长",
+        "en_US": "City population growth"
+      },
+      "summary": "先扣除人口食物消耗，再结合住房和城市状态判断增长瓶颈。",
+      "conditions": [
+        "人口消耗食物；判断增长应读取城市食物结余，而非只看食物总产出。",
+        "增长参数与占领增长修正分别存储；当前所需食物、增速及占领状态以城市查询为准。"
+      ],
+      "source_selectors": [
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "CITY_FOOD_CONSUMPTION_PER_POPULATION"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "CITY_GROWTH_THRESHOLD"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "CITY_GROWTH_MULTIPLIER"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "CITY_GROWTH_EXPONENT"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "CITY_GROWTH_OCCUPATION_MULTIPLIER"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_CITIES_13_CHAPTER_CONTENT_PARA_1"
+        }
+      ],
+      "related": [
+        "YIELD_FOOD"
+      ],
+      "current_facts_needed": [
+        "人口、食物产出与消耗、增长剩余回合、住房和占领状态"
+      ],
+      "limitations": [
+        "参数证据不单独构成适用于所有城市的完整增长公式。"
+      ]
+    },
+    {
+      "id": "MECHANIC_ECONOMY_HOUSING",
+      "names": {
+        "zh_Hans_CN": "住房与增长限制",
+        "en_US": "Housing and growth limits"
+      },
+      "summary": "住房余量影响人口增长；粮仓同时提供住房与食物，需分别核对。",
+      "conditions": [
+        "比较住房与人口，读取相应增长档位；增加食物产出不等于消除住房限制。",
+        "粮仓的住房来自建筑定义，食物产出来自建筑产出表；仍受制陶术和市中心前置限制。"
+      ],
+      "source_selectors": [
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "CITY_HOUSING_LEFT_50PCT_GROWTH"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "CITY_HOUSING_LEFT_25PCT_GROWTH"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "CITY_HOUSING_LEFT_ZERO_GROWTH"
+        },
+        {
+          "table": "Buildings",
+          "key": "BuildingType",
+          "value": "BUILDING_GRANARY"
+        },
+        {
+          "table": "Building_YieldChanges",
+          "key": "BuildingType",
+          "value": "BUILDING_GRANARY"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_CITIES_14_CHAPTER_CONTENT_PARA_2"
+        }
+      ],
+      "related": [
+        "BUILDING_GRANARY",
+        "TECH_POTTERY",
+        "YIELD_FOOD"
+      ],
+      "current_facts_needed": [
+        "城市人口、住房总量与余量、实际增长修正、粮仓是否已建"
+      ],
+      "limitations": [
+        "住房参数不包含所有淡水、地形、改良设施和特性来源；住房供应不能仅从建筑表求和。"
+      ]
+    },
+    {
+      "id": "MECHANIC_ECONOMY_AMENITIES",
+      "names": {
+        "zh_Hans_CN": "宜居度需求与来源",
+        "en_US": "Amenity demand and sources"
+      },
+      "summary": "人口对应宜居度需求，娱乐建筑提供宜居度；住房另行计算。",
+      "conditions": [
+        "人口需求参数与免费宜居度参数分开核对；城市实际需求和收支由本局状态确认。",
+        "竞技场要求娱乐区和游戏与娱乐市政，其 Entertainment 与 Housing 字段表达不同收益。",
+        "幸福等级按净宜居度区间查询 Happinesses，GrowthModifier 与 NonFoodYieldModifier 分别影响增长和非食物产出；开放端点按缺省值保留。",
+        "概念正文的部分收益加成与 Happinesses 不一致；当前等级数值以本机规则表为准，概念文本只补充机制。",
+        "奢侈品、娱乐建筑、伟人、信仰和政策可提供宜居度；厌战与破产会减少宜居度，地域范围和资源分配需另查。"
+      ],
+      "source_selectors": [
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "CITY_POP_PER_AMENITY"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "CITY_AMENITIES_FOR_FREE"
+        },
+        {
+          "table": "Buildings",
+          "key": "BuildingType",
+          "value": "BUILDING_ARENA"
+        },
+        {
+          "table": "Happinesses",
+          "key": "HappinessType",
+          "value": "HAPPINESS_REVOLT"
+        },
+        {
+          "table": "Happinesses",
+          "key": "HappinessType",
+          "value": "HAPPINESS_UNREST"
+        },
+        {
+          "table": "Happinesses",
+          "key": "HappinessType",
+          "value": "HAPPINESS_UNHAPPY"
+        },
+        {
+          "table": "Happinesses",
+          "key": "HappinessType",
+          "value": "HAPPINESS_DISPLEASED"
+        },
+        {
+          "table": "Happinesses",
+          "key": "HappinessType",
+          "value": "HAPPINESS_CONTENT"
+        },
+        {
+          "table": "Happinesses",
+          "key": "HappinessType",
+          "value": "HAPPINESS_HAPPY"
+        },
+        {
+          "table": "Happinesses",
+          "key": "HappinessType",
+          "value": "HAPPINESS_ECSTATIC"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_CITIES_16_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_CITIES_17_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_CITIES_17_CHAPTER_CONTENT_PARA_2"
+        }
+      ],
+      "related": [
+        "BUILDING_ARENA",
+        "CIVIC_GAMES_RECREATION",
+        "DISTRICT_ENTERTAINMENT_COMPLEX"
+      ],
+      "current_facts_needed": [
+        "城市人口、宜居度需求与来源、净宜居度、幸福等级及实际增长与产出修正"
+      ],
+      "limitations": [
+        "当前证据不求值奢侈品分配、厌战和所有特性修正；不由人口参数单独推导最终需求。"
+      ]
+    },
+    {
+      "id": "MECHANIC_ECONOMY_PRODUCTION",
+      "names": {
+        "zh_Hans_CN": "建筑产出与经营成本",
+        "en_US": "Building yields and economic costs"
+      },
+      "summary": "建筑基础成本、每回合产出和维护费分别核对，前置与地形条件共同限制候选。",
+      "conditions": [
+        "基础 Cost 是建造成本，Maintenance 是维护费；Building_YieldChanges 给出对应产出类型，不把一次性投入和每回合收益相加。",
+        "粮仓与水磨的科技前置不同；水磨还要求邻河，研究解锁不能替代城市落位条件。",
+        "政策、供电、文明特性及间接 Modifier 可改变实际收益；比较应使用城市当前可建项和有效费用。"
+      ],
+      "source_selectors": [
+        {
+          "table": "Buildings",
+          "key": "BuildingType",
+          "value": "BUILDING_GRANARY"
+        },
+        {
+          "table": "Buildings",
+          "key": "BuildingType",
+          "value": "BUILDING_WATER_MILL"
+        },
+        {
+          "table": "Building_YieldChanges",
+          "key": "BuildingType",
+          "value": "BUILDING_GRANARY"
+        },
+        {
+          "table": "Building_YieldChanges",
+          "key": "BuildingType",
+          "value": "BUILDING_WATER_MILL"
+        }
+      ],
+      "related": [
+        "BUILDING_GRANARY",
+        "BUILDING_WATER_MILL",
+        "TECH_POTTERY",
+        "TECH_THE_WHEEL",
+        "YIELD_FOOD",
+        "YIELD_PRODUCTION",
+        "YIELD_GOLD"
+      ],
+      "current_facts_needed": [
+        "城市可建项、有效成本与剩余回合、实际生产力、现有建筑、每回合收入和政策"
+      ],
+      "limitations": [
+        "这里只用粮仓和水磨解释字段；其他建筑的区域、唯一性、资源和文明专属条件应展开对应实体卡。"
+      ]
+    }
+  ]
+}
