@@ -136,6 +136,22 @@ def generate(snapshot):
             if table == 'DistrictReplaces':
                 relation(card, 'replaces', row['ReplacesDistrictType'], ref)
 
+    for index, row in enumerate(tables.get('ResolutionEffects', [])):
+        card = cards.get(row.get('ResolutionType'))
+        if not card:
+            raise ValueError('dangling resolution effect')
+        ref = attach(card, 'ResolutionEffects', index)
+        card['rule']['conditions'].append({'facts': row, 'source_ref': ref})
+
+    for card in topics['districts']:
+        trait = card['rule']['facts'].get('TraitType')
+        if trait:
+            for table in ('CivilizationTraits', 'LeaderTraits'):
+                for index, row in enumerate(tables.get(table, [])):
+                    if row.get('TraitType') == trait:
+                        ref = attach(card, table, index)
+                        card['rule']['conditions'].append({'facts': row, 'source_ref': ref})
+
     for card in cards.values():
         topic = card['topic']
         if topic in ('civics', 'technologies'):

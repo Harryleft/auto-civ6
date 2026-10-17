@@ -156,3 +156,17 @@ def test_evidence_includes_only_the_referenced_localized_source_text(tmp_path):
     assert evidence['localization']['LOC_WRITING']['en_US'] == 'Writing'
     assert evidence['localization']['LOC_BOOST_WRITING']['zh_Hans_CN'] == '遇见另一个文明'
     assert 'LOC_LAWS' not in evidence['localization']
+
+
+def test_resolution_effect_and_district_trait_ownership_remain_traceable(tmp_path):
+    data = snapshot()
+    data['tables']['Districts'][0]['TraitType'] = 'TRAIT_CAMPUS'
+    data['tables']['CivilizationTraits'] = [{'CivilizationType': 'CIVILIZATION_TEST', 'TraitType': 'TRAIT_CAMPUS'}]
+    data['tables']['LeaderTraits'] = [{'LeaderType': 'LEADER_TEST', 'TraitType': 'TRAIT_CAMPUS'}]
+    data['tables']['ResolutionEffects'] = [{'ResolutionEffectId': 1, 'ResolutionType': 'RESOLUTION_TEST', 'WhichEffect': 1, 'ModifierId': 'MODIFIER_TEST'}]
+    root = build(tmp_path, data)
+    district = cli(root, 'show', 'DISTRICT_CAMPUS', '--level', 'evidence')
+    assert any(row['facts'].get('CivilizationType') == 'CIVILIZATION_TEST' for row in district['evidence'])
+    assert any(row['facts'].get('LeaderType') == 'LEADER_TEST' for row in district['evidence'])
+    resolution = cli(root, 'show', 'RESOLUTION_TEST', '--level', 'evidence')
+    assert any(row['facts'].get('ModifierId') == 'MODIFIER_TEST' for row in resolution['evidence'])
