@@ -90,10 +90,17 @@ class FakeConn:
         self.writes: list[str] = []
         self.state_calls: list[tuple[int, str]] = []
         self.reads: list[str] = []
+        self.discoveries = 0
+        self.discovered_states = None
 
     @property
     def load_calls(self):
         return [(idx, code) for idx, code in self.state_calls if "Network.LoadGame" in code]
+
+    async def rediscover_states(self, timeout=5.0):
+        self.discoveries += 1
+        if self.discovered_states is not None:
+            self.lua_states = self.discovered_states
 
     async def ensure_connected(self):
         """No-op — the fake is always 'connected'; tests set indexes directly."""
@@ -127,13 +134,11 @@ class FakeConn:
 
 
 def dismiss_router(*, phase1=(), precheck=(), phase3=()):
-    """Route dismiss_popup's three InGame calls by their marker strings."""
+    """Route overlay and complete information visibility responses."""
 
     def on_write(lua):
-        if "EXCL_VISIBLE" in lua:
-            return list(precheck)
-        if "STILL_VISIBLE" in lua:
-            return list(phase3)
+        if "INFORMATION_POPUPS" in lua:
+            return list(precheck) + ["INFORMATION_POPUPS|DONE"]
         return list(phase1)
 
     return on_write
@@ -804,79 +809,95 @@ class TestDismissPopup:
         async def go():
             return await gl.dismiss_popup(FakeConn(on_write=on_write))
 
-        assert run(go()) == "No popups to dismiss."
+        assert "outcome unknown" in run(go())
 
-    def test_exclusive_popup_is_closed_in_its_own_lua_state(self, monkeypatch):
-        """Phase 2: only states whose names carry popup keywords are scanned."""
+    def test_information_popup_closes_only_its_exact_discovered_state(self):
+        conn = FakeConn(
+            lua_states={5: "NaturalWonderPopup", 7: "FrontEnd", 8: "UnrelatedPopup"},
+            on_write=dismiss_router(precheck=["INFORMATION_POPUPS|VISIBLE|NaturalWonderPopup"]),
+            on_state=lambda idx, lua: ["POPUP_CLOSED|NaturalWonderPopup"],
+        )
+        assert run(gl.dismiss_popup(conn)) == "Dismissed: NaturalWonderPopup"
+        assert [idx for idx, _ in conn.state_calls] == [5]
+        lua = conn.state_calls[0][1]
+        assert 'id ~= expected' in lua
+        assert 'local expected = "NaturalWonderPopup"' in lua
+        assert 'pcall(callback)' in lua
+        assert 'nowHidden == true' in lua
+        assert 'm_kQueuedPopups' not in lua and 'SetHide' not in lua
 
-        closes = []
+    def test_native_information_queue_is_drained_without_clearing_private_state(self):
+        responses = iter([["POPUP_VISIBLE|TechCivicCompletedPopup"], ["POPUP_CLOSED|TechCivicCompletedPopup"]])
+        conn = FakeConn(
+            lua_states={5: "TechCivicCompletedPopup"},
+            on_write=dismiss_router(precheck=["INFORMATION_POPUPS|VISIBLE|TechCivicCompletedPopup"]),
+            on_state=lambda idx, lua: next(responses),
+        )
+        assert run(gl.dismiss_popup(conn)) == "Dismissed: TechCivicCompletedPopup"
+        assert len(conn.state_calls) == 2
+        for _, lua in conn.state_calls:
+            assert 'local callback = OnClose' in lua
+            assert 'callback = Close' not in lua
+            assert 'm_kPopupData' not in lua and 'm_kQueuedPopups' not in lua
 
-        def on_state(idx, lua):
-            assert "pcall(Close)" in lua
-            closes.append(idx)
-            # First Close() dismisses; the drain loop's next check finds it hidden.
-            return ["DISMISSED"] if len(closes) == 1 and idx == 5 else []
+    def test_missing_state_is_discovered_once_and_then_closed_by_name(self):
+        conn = FakeConn(
+            on_write=dismiss_router(precheck=["INFORMATION_POPUPS|VISIBLE|NaturalDisasterPopup"]),
+            on_state=lambda idx, lua: ["POPUP_CLOSED|NaturalDisasterPopup"],
+        )
+        conn.discovered_states = {211: "NaturalDisasterPopup"}
+        assert run(gl.dismiss_popup(conn)) == "Dismissed: NaturalDisasterPopup"
+        assert conn.discoveries == 1
+        assert [idx for idx, _ in conn.state_calls] == [211]
 
-        async def go():
-            conn = FakeConn(
-                lua_states={5: "NaturalWonderPopup", 7: "FrontEnd"},
-                on_write=dismiss_router(precheck=["EXCL_VISIBLE"]),
-                on_state=on_state,
-            )
-            result = await gl.dismiss_popup(conn)
-            return conn, result
+    @pytest.mark.parametrize("native_response", [
+        [], ["DISMISSED"], ["POPUP_UNKNOWN|NaturalDisasterPopup|context mismatch"],
+        ["POPUP_UNKNOWN|NaturalDisasterPopup|native callback failed"],
+        ["POPUP_CLOSED|OtherPopup"],
+    ])
+    def test_unconfirmed_native_close_never_reports_dismissed(self, native_response):
+        conn = FakeConn(
+            lua_states={5: "NaturalDisasterPopup"},
+            on_write=dismiss_router(precheck=["INFORMATION_POPUPS|VISIBLE|NaturalDisasterPopup"]),
+            on_state=lambda idx, lua: native_response,
+        )
+        result = run(gl.dismiss_popup(conn))
+        assert "outcome unknown" in result
+        assert "Dismissed:" not in result
+        assert len(conn.state_calls) == 1 and conn.discoveries == 0
 
-        conn, result = run(go())
-        assert result == "Dismissed: NaturalWonderPopup"
-        scanned = {idx for idx, _ in conn.state_calls}
-        assert 5 in scanned and 7 not in scanned
+    def test_visible_native_queue_has_a_limit_without_false_success(self):
+        conn = FakeConn(
+            lua_states={5: "NaturalDisasterPopup"},
+            on_write=dismiss_router(precheck=["INFORMATION_POPUPS|VISIBLE|NaturalDisasterPopup"]),
+            on_state=lambda idx, lua: ["POPUP_VISIBLE|NaturalDisasterPopup"],
+        )
+        result = run(gl.dismiss_popup(conn))
+        assert "queue remains; outcome unknown" in result
+        assert "Dismissed:" not in result
+        assert len(conn.state_calls) == 20
 
-    def test_phase2_drains_until_the_popup_stays_hidden(self, monkeypatch):
-        """The drain loop closes every queued popup, but the state name is
-        reported only once no matter how many queue entries drained."""
-        closes = []
+    def test_native_callback_transport_failure_stops_without_rediscovery(self):
+        def failed(idx, lua):
+            raise ConnectionError("reply lost")
+        conn = FakeConn(
+            lua_states={5: "NaturalDisasterPopup", 6: "HistoricMoments"},
+            on_write=dismiss_router(precheck=[
+                "INFORMATION_POPUPS|VISIBLE|NaturalDisasterPopup",
+                "INFORMATION_POPUPS|VISIBLE|HistoricMoments",
+            ]),
+            on_state=failed,
+        )
+        result = run(gl.dismiss_popup(conn))
+        assert "reply lost; outcome unknown" in result
+        assert len(conn.state_calls) == 1 and conn.discoveries == 0
 
-        def on_state(idx, lua):
-            closes.append(idx)
-            # Two queued popups drain, the third check finds it hidden.
-            return ["DISMISSED"] if len(closes) <= 2 else []
-
-        async def go():
-            conn = FakeConn(
-                lua_states={5: "WonderBuiltPopup"},
-                on_write=dismiss_router(precheck=["EXCL_VISIBLE"]),
-                on_state=on_state,
-            )
-            return await gl.dismiss_popup(conn)
-
-        assert run(go()) == "Dismissed: WonderBuiltPopup"
-
-    def test_phase3_probes_unknown_state_indexes(self, monkeypatch):
-        """When the handshake's state list is incomplete, Phase 3 probes
-        indexes 50+ for the still-visible popup and learns the new state."""
-
-        def on_state(idx, lua):
-            if "ContextPtr:GetID()" in lua:
-                return ["WonderBuiltPopup"] if idx == 50 else ["Other"]
-            if "pcall(Close)" in lua:
-                return ["DISMISSED"]
-            return []
-
-        async def go():
-            conn = FakeConn(
-                lua_states={},  # truncated handshake — no popup states known
-                on_write=dismiss_router(
-                    precheck=["EXCL_VISIBLE"],
-                    phase3=["STILL_VISIBLE|WonderBuiltPopup"],
-                ),
-                on_state=on_state,
-            )
-            result = await gl.dismiss_popup(conn)
-            return conn, result
-
-        conn, result = run(go())
-        assert result == "Dismissed: WonderBuiltPopup (probed state 50)"
-        assert conn.lua_states[50] == "WonderBuiltPopup"
+    @pytest.mark.parametrize("visibility", [[], ["INFORMATION_POPUPS|UNKNOWN"],
+        ["INFORMATION_POPUPS|VISIBLE|UnknownPopup", "INFORMATION_POPUPS|DONE"]])
+    def test_unknown_visibility_does_not_scan_or_report_none(self, visibility):
+        conn = FakeConn(on_write=lambda lua: visibility if "INFORMATION_POPUPS" in lua else [])
+        assert "visibility unavailable; outcome unknown" in run(gl.dismiss_popup(conn))
+        assert conn.state_calls == [] and conn.discoveries == 0
 
     def test_crash_dialog_dismissals_are_appended(self, monkeypatch):
         async def fake():
@@ -941,3 +962,15 @@ class TestExecuteLua:
             return await gl.execute_lua(FakeConn(), "x = 1")
 
         assert run(go()) == "(no output)"
+
+
+def test_missing_popup_state_refreshes_once_without_guessing_indexes():
+    conn = FakeConn(on_write=lambda lua: [
+        "EXCL_VISIBLE", "STILL_VISIBLE|NaturalDisasterPopup",
+        "INFORMATION_POPUPS|VISIBLE|NaturalDisasterPopup", "INFORMATION_POPUPS|DONE",
+    ] if "EXCL_VISIBLE" in lua or "STILL_VISIBLE" in lua or "INFORMATION_POPUPS" in lua else [])
+    result = run(gl.dismiss_popup(conn))
+    assert "outcome unknown" in result
+    assert "NaturalDisasterPopup" in result
+    assert conn.discoveries == 1
+    assert conn.state_calls == []
