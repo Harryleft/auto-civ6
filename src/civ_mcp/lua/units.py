@@ -288,6 +288,49 @@ end)
 if not targetOK or canTarget ~= true then
     {_bail("ERR:CANNOT_MOVE_TARGET|Native target movement eligibility unavailable or refused; no move submitted.")}
 end
+-- CanStartOperation may allow a target with no usable movement path. The
+-- stock UI marks an empty path bad, but its click handling can still send it.
+local pathOK, pathStatus = pcall(function()
+    if UI.IsGameCoreBusy() ~= false then return "UNKNOWN" end
+    local destination = Map.GetPlot({target_x}, {target_y})
+    if not destination then return "UNKNOWN" end
+    local path = UnitManager.GetMoveToPathEx(unit, destination:GetIndex())
+    if type(path) ~= "table" or type(path.plots) ~= "table" or type(path.turns) ~= "table" then return "UNKNOWN" end
+    local function integer(value, minimum)
+        return type(value) == "number" and value >= minimum and value < math.huge and value == math.floor(value)
+    end
+    local function length(values)
+        local count = 0
+        for key in pairs(values) do
+            if not integer(key, 1) then return nil end
+            count = count + 1
+        end
+        for i = 1, count do if values[i] == nil then return nil end end
+        return count
+    end
+    local count = length(path.plots)
+    if count == nil or length(path.turns) ~= count then return "UNKNOWN" end
+    if count == 0 then
+        local visible = PlayersVisibility[me]:IsVisible({target_x}, {target_y})
+        return visible == true and "NO_PATH" or "UNKNOWN"
+    end
+    if count < 2 then return "UNKNOWN" end
+    for i = 1, count do
+        if not integer(path.plots[i], 0) or not integer(path.turns[i], 1) then return "UNKNOWN" end
+        if i > 1 and path.turns[i] < path.turns[i-1] then return "UNKNOWN" end
+        local plot = Map.GetPlotByIndex(path.plots[i])
+        if not plot then return "UNKNOWN" end
+        if i == 1 and (plot:GetX() ~= fromX or plot:GetY() ~= fromY) then return "UNKNOWN" end
+        if i == count and (plot:GetX() ~= {target_x} or plot:GetY() ~= {target_y}) then return "UNKNOWN" end
+    end
+    return "VALID"
+end)
+if pathOK and pathStatus == "NO_PATH" then
+    {_bail("ERR:NO_PATH|Visible destination has no native movement path; no move submitted.")}
+end
+if not pathOK or pathStatus ~= "VALID" then
+    {_bail("ERR:PATH_UNKNOWN|Native movement path unavailable or unverified; no move submitted.")}
+end
 {witness}
 UnitManager.RequestOperation(unit, UnitOperationTypes.MOVE_TO, params)
 local tag = hasHostile and "OK:CAPTURE_MOVE|" or "OK:MOVING_TO|"
