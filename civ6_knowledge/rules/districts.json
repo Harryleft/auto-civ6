@@ -132,7 +132,7 @@
           },
           {
             "description": {
-              "en_US": "+{1_num} [ICON_Culture] 文化值来自相邻市政广场。",
+              "en_US": "+{1_num} [ICON_Culture] Culture from the adjacent Government Plaza.",
               "zh_Hans_CN": "+{1_num} [ICON_Culture] 文化值来自相邻市政广场。"
             },
             "facts": {
@@ -597,7 +597,7 @@
         "localized_fields": {
           "Description": {
             "en_US": "A district unique to Greece for cultural sites. Replaces the Theater Square district and cheaper to build. Awards 1 [ICON_Envoy] Envoy when completed.[NEWLINE][NEWLINE]+1  [ICON_Culture] Culture bonus for each adjacent district and an additional +1 [ICON_Culture] Culture bonus for adjacent City Center. +2 [ICON_Culture] Culture bonus for each adjacent wonder, Entertainment Complex, and Water Park. Can only be built on Hills.",
-            "zh_Hans_CN": "A district unique to Greece for cultural sites. Replaces the Theater Square district and cheaper to build. Awards 1 [ICON_Envoy] Envoy when completed.[NEWLINE][NEWLINE]+1  [ICON_Culture] Culture bonus for each adjacent district and an additional +1 [ICON_Culture] Culture bonus for adjacent City Center. +2 [ICON_Culture] Culture bonus for each adjacent wonder, Entertainment Complex, and Water Park. Can only be built on Hills."
+            "zh_Hans_CN": "希腊特色文化遗址区域，替代剧院广场，建造费用更低。建成后奖励1名 [ICON_Envoy] 使者。[NEWLINE][NEWLINE]每个相邻区域+1 [ICON_Culture] 文化值，每个相邻市中心额外+1 [ICON_Culture] 文化值。每个相邻奇观、娱乐设施及水上乐园+2 [ICON_Culture] 文化值。只能建在丘陵上。"
           },
           "Name": {
             "en_US": "Acropolis",
@@ -787,8 +787,9 @@
       ],
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
-        "description": "A district unique to Greece for cultural sites. Replaces the Theater Square district and cheaper to build. Awards 1 [ICON_Envoy] Envoy when completed.[NEWLINE][NEWLINE]+1  [ICON_Culture] Culture bonus for each adjacent district and an additional +1 [ICON_Culture] Culture bonus for adjacent City Center. +2 [ICON_Culture] Culture bonus for each adjacent wonder, Entertainment Complex, and Water Park. Can only be built on Hills.",
-        "entity_type": "Districts"
+        "description": "希腊特色文化遗址区域，替代剧院广场，建造费用更低。建成后奖励1名 [ICON_Envoy] 使者。[NEWLINE][NEWLINE]每个相邻区域+1 [ICON_Culture] 文化值，每个相邻市中心额外+1 [ICON_Culture] 文化值。每个相邻奇观、娱乐设施及水上乐园+2 [ICON_Culture] 文化值。只能建在丘陵上。",
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
@@ -1248,7 +1249,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "可用于建造和存放飞机的区域。不能建在丘陵上。",
-        "entity_type": "Districts"
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
@@ -1656,7 +1658,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "区域从相邻河流、湖泊、绿洲或山脉引水，为该城市提供淡水资源。没有淡水资源的城市最多获得6个 [ICON_Housing] 住房。相反，已有淡水资源的城市 [ICON_Housing] 住房数量+2；若与地热裂缝相邻，提供+1 [ICON_Amenities]宜居度。干旱时可防止 [ICON_Food] 食物损失。必须修建在与市中心相邻的单元格中。军事工程师可消耗1次使用次数来完成水渠20%的修建进度。",
-        "entity_type": "Districts"
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
@@ -1982,7 +1985,7 @@
         "localized_fields": {
           "Description": {
             "en_US": "A district unique to Rome for city growth. Replaces the Aqueduct district and cheaper to build.[NEWLINE][NEWLINE]It provides this city with a source of fresh water from an adjacent River, Lake, Oasis, or Mountain. Cities that do not yet have existing fresh water receive up to 6 [ICON_Housing] Housing. Cities that already have existing fresh water will instead get +2 [ICON_Housing] Housing. If built adjacent to a Geothermal Fissure +1 [ICON_Amenities] Amenity. In all cases the Bath provides an additional bonus of +2 [ICON_Housing] Housing and +1 [ICON_Amenities] Amenity. Prevents [ICON_Food] Food loss during Drought. Must be built adjacent to the City Center. Military Engineers can spend a charge to complete 20% of a Bath's production.",
-            "zh_Hans_CN": "A district unique to Rome for city growth. Replaces the Aqueduct district and cheaper to build.[NEWLINE][NEWLINE]It provides this city with a source of fresh water from an adjacent River, Lake, Oasis, or Mountain. Cities that do not yet have existing fresh water receive up to 6 [ICON_Housing] Housing. Cities that already have existing fresh water will instead get +2 [ICON_Housing] Housing. If built adjacent to a Geothermal Fissure +1 [ICON_Amenities] Amenity. In all cases the Bath provides an additional bonus of +2 [ICON_Housing] Housing and +1 [ICON_Amenities] Amenity. Prevents [ICON_Food] Food loss during Drought. Must be built adjacent to the City Center. Military Engineers can spend a charge to complete 20% of a Bath's production."
+            "zh_Hans_CN": "促进城市发展的罗马特色区域。取代水渠，建造费用更低。[NEWLINE][NEWLINE]从相邻河流、湖泊、绿洲或山脉引水，为该城市提供淡水资源。尚未拥有淡水资源的城市最多获得6个 [ICON_Housing] 住房。已有淡水资源的城市则+2 [ICON_Housing] 住房。若与地热裂缝相邻，提供+1 [ICON_Amenities] 宜居度。在任何情况下，浴场都能额外提供+2 [ICON_Housing] 住房和+1 [ICON_Amenities] 宜居度。干旱时可防止 [ICON_Food] 食物损失。必须修建在与市中心相邻的单元格中。军事工程师可消耗1次使用次数来完成浴场20%的修建进度。"
           },
           "Name": {
             "en_US": "Bath",
@@ -2100,8 +2103,9 @@
       ],
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
-        "description": "A district unique to Rome for city growth. Replaces the Aqueduct district and cheaper to build.[NEWLINE][NEWLINE]It provides this city with a source of fresh water from an adjacent River, Lake, Oasis, or Mountain. Cities that do not yet have existing fresh water receive up to 6 [ICON_Housing] Housing. Cities that already have existing fresh water will instead get +2 [ICON_Housing] Housing. If built adjacent to a Geothermal Fissure +1 [ICON_Amenities] Amenity. In all cases the Bath provides an additional bonus of +2 [ICON_Housing] Housing and +1 [ICON_Amenities] Amenity. Prevents [ICON_Food] Food loss during Drought. Must be built adjacent to the City Center. Military Engineers can spend a charge to complete 20% of a Bath's production.",
-        "entity_type": "Districts"
+        "description": "促进城市发展的罗马特色区域。取代水渠，建造费用更低。[NEWLINE][NEWLINE]从相邻河流、湖泊、绿洲或山脉引水，为该城市提供淡水资源。尚未拥有淡水资源的城市最多获得6个 [ICON_Housing] 住房。已有淡水资源的城市则+2 [ICON_Housing] 住房。若与地热裂缝相邻，提供+1 [ICON_Amenities] 宜居度。在任何情况下，浴场都能额外提供+2 [ICON_Housing] 住房和+1 [ICON_Amenities] 宜居度。干旱时可防止 [ICON_Food] 食物损失。必须修建在与市中心相邻的单元格中。军事工程师可消耗1次使用次数来完成浴场20%的修建进度。",
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
@@ -2228,7 +2232,7 @@
           },
           {
             "description": {
-              "en_US": "+{1_num} [ICON_Science] 科技值来自相邻市政广场。",
+              "en_US": "+{1_num} [ICON_Science] Science from the adjacent Government Plaza.",
               "zh_Hans_CN": "+{1_num} [ICON_Science] 科技值来自相邻市政广场。"
             },
             "facts": {
@@ -2996,7 +3000,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "您城市中的科学发展区。",
-        "entity_type": "Districts"
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
@@ -3474,7 +3479,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "建在平原上的区域，连接两块水域单元格或将一块水域单元格与市中心连接。如 [ICON_TradeRoute] 贸易路线途径此处，其将从目的地的区域处获得成倍 [ICON_Gold] 金币。运河可笔直穿过单元格，也可在其中进行60度转向。无法建造三向连接运河，且运河在其所建水路的两侧皆必须含有一个完整的陆地单元格。军事工程师可消耗1次使用次数来完成运河20%的修建进度。",
-        "entity_type": "Districts"
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
@@ -3864,7 +3870,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "这是市中心。",
-        "entity_type": "Districts"
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
@@ -3957,7 +3964,7 @@
           },
           {
             "description": {
-              "en_US": "+{1_num} [ICON_Gold] 金币来自相邻市政广场。",
+              "en_US": "+{1_num} [ICON_Gold] Gold from the adjacent Government Plaza.",
               "zh_Hans_CN": "+{1_num} [ICON_Gold] 金币来自相邻市政广场。"
             },
             "facts": {
@@ -4385,7 +4392,7 @@
         ],
         "localized_fields": {
           "Description": {
-            "en_US": "城市中专注于金融和贸易的区域。",
+            "en_US": "A district in your city specializing in finance and trade.",
             "zh_Hans_CN": "城市中专注于金融和贸易的区域。"
           },
           "Name": {
@@ -4549,7 +4556,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "城市中专注于金融和贸易的区域。",
-        "entity_type": "Districts"
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
@@ -4557,7 +4565,7 @@
       "id": "DISTRICT_COTHON",
       "names": {
         "en_US": "Cothon",
-        "zh_Hans_CN": "Cothon"
+        "zh_Hans_CN": "U型港"
       },
       "relations": [
         {
@@ -4617,7 +4625,7 @@
           },
           {
             "description": {
-              "en_US": "+{1_num} [ICON_Gold] 金币来自相邻市政广场。",
+              "en_US": "+{1_num} [ICON_Gold] Gold from the adjacent Government Plaza.",
               "zh_Hans_CN": "+{1_num} [ICON_Gold] 金币来自相邻市政广场。"
             },
             "facts": {
@@ -4998,11 +5006,11 @@
         "localized_fields": {
           "Description": {
             "en_US": "A district unique to Phoenicia for naval activity in your city. Replaces the Harbor district and cheaper to build. Must be built on Coast or Lake Terrain adjacent to land.[NEWLINE][NEWLINE]+50% [ICON_PRODUCTION] Production towards naval units and Settlers in this city. All wounded naval units in this city’s borders heal +100 HP each turn.",
-            "zh_Hans_CN": "A district unique to Phoenicia for naval activity in your city. Replaces the Harbor district and cheaper to build. Must be built on Coast or Lake Terrain adjacent to land.[NEWLINE][NEWLINE]+50% [ICON_PRODUCTION] Production towards naval units and Settlers in this city. All wounded naval units in this city’s borders heal +100 HP each turn."
+            "zh_Hans_CN": "腓尼基特色城市海军活动区域，取代港口且建造成本更低。必须修建在海岸或与陆地相邻的湖泊地貌上。[NEWLINE][NEWLINE]该城市的海军单位与开拓者的 [ICON_PRODUCTION] 生产力+50%。在该城范围内，所有受损海军单位每回合可恢复100点生命值。"
           },
           "Name": {
             "en_US": "Cothon",
-            "zh_Hans_CN": "Cothon"
+            "zh_Hans_CN": "U型港"
           }
         },
         "prerequisites": [
@@ -5144,8 +5152,9 @@
       ],
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
-        "description": "A district unique to Phoenicia for naval activity in your city. Replaces the Harbor district and cheaper to build. Must be built on Coast or Lake Terrain adjacent to land.[NEWLINE][NEWLINE]+50% [ICON_PRODUCTION] Production towards naval units and Settlers in this city. All wounded naval units in this city’s borders heal +100 HP each turn.",
-        "entity_type": "Districts"
+        "description": "腓尼基特色城市海军活动区域，取代港口且建造成本更低。必须修建在海岸或与陆地相邻的湖泊地貌上。[NEWLINE][NEWLINE]该城市的海军单位与开拓者的 [ICON_PRODUCTION] 生产力+50%。在该城范围内，所有受损海军单位每回合可恢复100点生命值。",
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
@@ -5595,7 +5604,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "建造在泛滥平原单元格上的区域，可改善此江河流域旁的民生质量（但来自洪水的产出减半）。其可防止江河泛滥带来的损害，还可在干旱时防止 [ICON_Food] 食物损失。每条江河的泛滥平原中仅能建造1个（有文明建成便视为已建造），且江河必须至少穿过堤坝格位的两个面。军事工程师可消耗1次使用次数来完成堤坝20%的修建进度。",
-        "entity_type": "Districts"
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
@@ -6003,7 +6013,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "您城市里的军事机构区。",
-        "entity_type": "Districts"
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
@@ -6393,14 +6404,15 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "您城市里的该区域致力于通过增加 [ICON_Amenities] 宜居度让您的人民开心。",
-        "entity_type": "Districts"
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
     {
       "id": "DISTRICT_GOVERNMENT",
       "names": {
-        "en_US": "市政广场",
+        "en_US": "Government Plaza",
         "zh_Hans_CN": "市政广场"
       },
       "relations": [
@@ -6675,11 +6687,11 @@
         ],
         "localized_fields": {
           "Description": {
-            "en_US": "为纪念所选政体而在帝国中建造的区域。使此城每回合的忠诚度+8、使相邻区域获得的相邻加成+1。[NEWLINE]奖励1个 [Icon_Governor] 总督头衔。",
+            "en_US": "A district placed once in your empire to commemorate your government choices. Provides +8 Loyalty per turn to this city, and an increase of +1 to the adjacency bonuses being earned by any adjacent district. Awards +1 [Icon_Governor] Governor Title.",
             "zh_Hans_CN": "为纪念所选政体而在帝国中建造的区域。使此城每回合的忠诚度+8、使相邻区域获得的相邻加成+1。[NEWLINE]奖励1个 [Icon_Governor] 总督头衔。"
           },
           "Name": {
-            "en_US": "市政广场",
+            "en_US": "Government Plaza",
             "zh_Hans_CN": "市政广场"
           }
         },
@@ -6783,7 +6795,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "为纪念所选政体而在帝国中建造的区域。使此城每回合的忠诚度+8、使相邻区域获得的相邻加成+1。[NEWLINE]奖励1个 [Icon_Governor] 总督头衔。",
-        "entity_type": "Districts"
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
@@ -6987,7 +7000,7 @@
           },
           {
             "description": {
-              "en_US": "+{1_num} [ICON_Production] 生产力来自相邻市政广场。",
+              "en_US": "+{1_num} [ICON_Production] Production from the adjacent Government Plaza.",
               "zh_Hans_CN": "+{1_num} [ICON_Production] 生产力来自相邻市政广场。"
             },
             "facts": {
@@ -7334,7 +7347,7 @@
         "localized_fields": {
           "Description": {
             "en_US": "A district unique to Germany for industrial activity. Replaces the Industrial Zone district and cheaper to build.[NEWLINE][NEWLINE]+ 2[ICON_Production] Production bonus for each adjacent Commercial Hub, Aqueduct, Canal, and Dam districts. +1 [ICON_Production] Production bonus for each adjacent resource. +1 [ICON_Production] Production bonus for every two adjacent district tiles.",
-            "zh_Hans_CN": "A district unique to Germany for industrial activity. Replaces the Industrial Zone district and cheaper to build.[NEWLINE][NEWLINE]+ 2[ICON_Production] Production bonus for each adjacent Commercial Hub, Aqueduct, Canal, and Dam districts. +1 [ICON_Production] Production bonus for each adjacent resource. +1 [ICON_Production] Production bonus for every two adjacent district tiles."
+            "zh_Hans_CN": "德国特色工业区域，替代工业区，建造费用更低。[NEWLINE][NEWLINE]可从每个相邻的商业中心、水渠、运河和堤坝区域处获得+2 [ICON_Production] 生产力加成。每处相邻资源为其提供1点 [ICON_Production] 生产力加成。每两处相邻区域为其提供1点 [ICON_Production] 生产力加成。"
           },
           "Name": {
             "en_US": "Hansa",
@@ -7504,8 +7517,9 @@
       ],
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
-        "description": "A district unique to Germany for industrial activity. Replaces the Industrial Zone district and cheaper to build.[NEWLINE][NEWLINE]+ 2[ICON_Production] Production bonus for each adjacent Commercial Hub, Aqueduct, Canal, and Dam districts. +1 [ICON_Production] Production bonus for each adjacent resource. +1 [ICON_Production] Production bonus for every two adjacent district tiles.",
-        "entity_type": "Districts"
+        "description": "德国特色工业区域，替代工业区，建造费用更低。[NEWLINE][NEWLINE]可从每个相邻的商业中心、水渠、运河和堤坝区域处获得+2 [ICON_Production] 生产力加成。每处相邻资源为其提供1点 [ICON_Production] 生产力加成。每两处相邻区域为其提供1点 [ICON_Production] 生产力加成。",
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
@@ -7564,7 +7578,7 @@
           },
           {
             "description": {
-              "en_US": "+{1_num} [ICON_Gold] 金币来自相邻市政广场。",
+              "en_US": "+{1_num} [ICON_Gold] Gold from the adjacent Government Plaza.",
               "zh_Hans_CN": "+{1_num} [ICON_Gold] 金币来自相邻市政广场。"
             },
             "facts": {
@@ -7924,7 +7938,7 @@
         ],
         "localized_fields": {
           "Description": {
-            "en_US": "城市中的海军活动区域。同时取消从该单元格上下船的 [ICON_Movement] 移动力消耗。必须修建在和陆地相邻的海岸或湖泊单元格上。无法建造在礁石上。",
+            "en_US": "A district for naval activity in your city. Also removes the [ICON_Movement] Movement penalty for embarking and disembarking to and from this tile. Must be built on Coast or Lake Terrain adjacent to land. Cannot be built on Reef.",
             "zh_Hans_CN": "城市中的海军活动区域。同时取消从该单元格上下船的 [ICON_Movement] 移动力消耗。必须修建在和陆地相邻的海岸或湖泊单元格上。无法建造在礁石上。"
           },
           "Name": {
@@ -8064,7 +8078,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "城市中的海军活动区域。同时取消从该单元格上下船的 [ICON_Movement] 移动力消耗。必须修建在和陆地相邻的海岸或湖泊单元格上。无法建造在礁石上。",
-        "entity_type": "Districts"
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
@@ -8157,7 +8172,7 @@
           },
           {
             "description": {
-              "en_US": "+{1_num} [ICON_Faith] 信仰值来自相邻市政广场。",
+              "en_US": "+{1_num} [ICON_Faith] Faith from the adjacent Government Plaza.",
               "zh_Hans_CN": "+{1_num} [ICON_Faith] 信仰值来自相邻市政广场。"
             },
             "facts": {
@@ -8875,7 +8890,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "您城市里的宗教祭祀区。",
-        "entity_type": "Districts"
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
@@ -9070,7 +9086,7 @@
           },
           {
             "description": {
-              "en_US": "+{1_num} [ICON_Production] 生产力来自相邻市政广场。",
+              "en_US": "+{1_num} [ICON_Production] Production from the adjacent Government Plaza.",
               "zh_Hans_CN": "+{1_num} [ICON_Production] 生产力来自相邻市政广场。"
             },
             "facts": {
@@ -9686,7 +9702,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "您城市里的工业活动区。",
-        "entity_type": "Districts"
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
@@ -9788,7 +9805,7 @@
           },
           {
             "description": {
-              "en_US": "+{1_num} [ICON_Faith] 信仰值来自相邻市政广场。",
+              "en_US": "+{1_num} [ICON_Faith] Faith from the adjacent Government Plaza.",
               "zh_Hans_CN": "+{1_num} [ICON_Faith] 信仰值来自相邻市政广场。"
             },
             "facts": {
@@ -10534,7 +10551,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "俄罗斯特色宗教活动区域。替代圣地区域，建造费用更低。[NEWLINE][NEWLINE]此城市中每消耗一位伟人，城市边界便扩大一单元格的范围。拥有神社的修道院每回合提供+1 [ICON_GreatWriter] 大作家点数；拥有寺庙的修道院每回合提供+1 [ICON_GreatArtist] 大艺术家点数；拥有祭祀建筑的修道院每回合提供+1 [ICON_GreatMusician] 大音乐家点数。",
-        "entity_type": "Districts"
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
@@ -10989,7 +11007,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "刚果特色区域，只能建在雨林或树林里。代替社区，可更早建造，且建造费用更低。无视魅力值，固定提供+5 [ICON_Housing] 住房、+2 [ICON_Food] 食物和+4 [ICON_Gold] 金币。",
-        "entity_type": "Districts"
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
@@ -11379,7 +11398,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "基于单元格的魅力，您城市里的一个区域提供住房情况如下：[NEWLINE]惊艳的：+6 [ICON_Housing] 住房。[NEWLINE]迷人的：+5 [ICON_Housing] 住房。[NEWLINE]普通的：+4 [ICON_Housing] 住房。[NEWLINE]无吸引力的：+3 [ICON_Housing] 住房。[NEWLINE]令人厌恶的：+2 [ICON_Housing] 住房。",
-        "entity_type": "Districts"
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
@@ -11447,7 +11467,7 @@
           },
           {
             "description": {
-              "en_US": "+{1_num} [ICON_Gold] 金币来自相邻市政广场。",
+              "en_US": "+{1_num} [ICON_Gold] Gold from the adjacent Government Plaza.",
               "zh_Hans_CN": "+{1_num} [ICON_Gold] 金币来自相邻市政广场。"
             },
             "facts": {
@@ -11828,7 +11848,7 @@
         "localized_fields": {
           "Description": {
             "en_US": "A district unique to England for naval activity in your city. Replaces the Harbor district. Also removes the [ICON_Movement] Movement penalty for embarking and disembarking to and from this tile. Must be built on Coast or Lake Terrain adjacent to land.[NEWLINE][NEWLINE]+1 [ICON_Movement] Movement for all naval units built in Dockyard[NEWLINE]+2 [ICON_Gold] Gold and +4 Loyalty per turn when built on a foreign continent. Cannot be built on Reef",
-            "zh_Hans_CN": "A district unique to England for naval activity in your city. Replaces the Harbor district. Also removes the [ICON_Movement] Movement penalty for embarking and disembarking to and from this tile. Must be built on Coast or Lake Terrain adjacent to land.[NEWLINE][NEWLINE]+1 [ICON_Movement] Movement for all naval units built in Dockyard[NEWLINE]+2 [ICON_Gold] Gold and +4 Loyalty per turn when built on a foreign continent. Cannot be built on Reef"
+            "zh_Hans_CN": "城市中的英国特色海军活动区域，取代港口。同时移除该单元格的上船、下船 [ICON_Movement] 移动力减益。必须建在与陆地相邻的海岸或湖泊地形上。[NEWLINE][NEWLINE]造船厂中建造的所有海军单位+1 [ICON_Movement] 移动力。[NEWLINE]修建在外国大陆上时+2 [ICON_Gold] 金币、每回合的忠诚度+4。无法建造在礁石上。"
           },
           "Name": {
             "en_US": "Royal Navy Dockyard",
@@ -11974,8 +11994,9 @@
       ],
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
-        "description": "A district unique to England for naval activity in your city. Replaces the Harbor district. Also removes the [ICON_Movement] Movement penalty for embarking and disembarking to and from this tile. Must be built on Coast or Lake Terrain adjacent to land.[NEWLINE][NEWLINE]+1 [ICON_Movement] Movement for all naval units built in Dockyard[NEWLINE]+2 [ICON_Gold] Gold and +4 Loyalty per turn when built on a foreign continent. Cannot be built on Reef",
-        "entity_type": "Districts"
+        "description": "城市中的英国特色海军活动区域，取代港口。同时移除该单元格的上船、下船 [ICON_Movement] 移动力减益。必须建在与陆地相邻的海岸或湖泊地形上。[NEWLINE][NEWLINE]造船厂中建造的所有海军单位+1 [ICON_Movement] 移动力。[NEWLINE]修建在外国大陆上时+2 [ICON_Gold] 金币、每回合的忠诚度+4。无法建造在礁石上。",
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
@@ -12435,7 +12456,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "建造科技胜利项目所需的区域。其中包括：{LOC_PROJECT_LAUNCH_EARTH_SATELLITE_NAME}、{LOC_PROJECT_LAUNCH_MOON_LANDING_NAME}、{LOC_PROJECT_LAUNCH_MARS_BASE_NAME}与{LOC_PROJECT_LAUNCH_EXOPLANET_EXPEDITION_NAME}。无法建在丘陵上。",
-        "entity_type": "Districts"
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
@@ -12747,7 +12769,7 @@
         "localized_fields": {
           "Description": {
             "en_US": "A district unique to Brazil. Replaces the Entertainment Complex district, and provides +2 [ICON_Amenities] Amenities. Also unlocks the Carnival project, which grants an additional +1 [ICON_Amenities] Amenity when underway and a variety of [ICON_GreatPerson] Great People points once completed. Cannot be built in a city with a Copacabana.",
-            "zh_Hans_CN": "A district unique to Brazil. Replaces the Entertainment Complex district, and provides +2 [ICON_Amenities] Amenities. Also unlocks the Carnival project, which grants an additional +1 [ICON_Amenities] Amenity when underway and a variety of [ICON_GreatPerson] Great People points once completed. Cannot be built in a city with a Copacabana."
+            "zh_Hans_CN": "巴西特色区域，代替娱乐设施区域，+2 [ICON_Amenities] 宜居度。可解锁“狂欢节”项目，项目启动后即可额外+1 [ICON_Amenities] 宜居度，项目完成后可获得若干 [ICON_GreatPerson] 伟人点数。无法建在拥有“科帕卡瓦纳”的城市中。"
           },
           "Name": {
             "en_US": "Street Carnival",
@@ -12861,8 +12883,9 @@
       ],
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
-        "description": "A district unique to Brazil. Replaces the Entertainment Complex district, and provides +2 [ICON_Amenities] Amenities. Also unlocks the Carnival project, which grants an additional +1 [ICON_Amenities] Amenity when underway and a variety of [ICON_GreatPerson] Great People points once completed. Cannot be built in a city with a Copacabana.",
-        "entity_type": "Districts"
+        "description": "巴西特色区域，代替娱乐设施区域，+2 [ICON_Amenities] 宜居度。可解锁“狂欢节”项目，项目启动后即可额外+1 [ICON_Amenities] 宜居度，项目完成后可获得若干 [ICON_GreatPerson] 伟人点数。无法建在拥有“科帕卡瓦纳”的城市中。",
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
@@ -12870,7 +12893,7 @@
       "id": "DISTRICT_SUGUBA",
       "names": {
         "en_US": "Suguba",
-        "zh_Hans_CN": "Suguba"
+        "zh_Hans_CN": "曼丁哥市场"
       },
       "relations": [
         {
@@ -12930,7 +12953,7 @@
           },
           {
             "description": {
-              "en_US": "+{1_num} [ICON_Gold] 金币来自相邻市政广场。",
+              "en_US": "+{1_num} [ICON_Gold] Gold from the adjacent Government Plaza.",
               "zh_Hans_CN": "+{1_num} [ICON_Gold] 金币来自相邻市政广场。"
             },
             "facts": {
@@ -13379,11 +13402,11 @@
         "localized_fields": {
           "Description": {
             "en_US": "A district unique to Mali specializing in finance and trade that replaces the Commercial Hub. Units, Buildings, and Districts are 20% cheaper to purchase with [ICON_GOLD] Gold and [ICON_FAITH] Faith in this City.[NEWLINE][NEWLINE]+2 [ICON_Gold] Gold bonus for each adjacent Holy Site. +2 [ICON_Gold] Gold bonus from a tile containing a River edge. +1 [ICON_Gold] Gold bonus for every two adjacent district tiles.",
-            "zh_Hans_CN": "A district unique to Mali specializing in finance and trade that replaces the Commercial Hub. Units, Buildings, and Districts are 20% cheaper to purchase with [ICON_GOLD] Gold and [ICON_FAITH] Faith in this City.[NEWLINE][NEWLINE]+2 [ICON_Gold] Gold bonus for each adjacent Holy Site. +2 [ICON_Gold] Gold bonus from a tile containing a River edge. +1 [ICON_Gold] Gold bonus for every two adjacent district tiles."
+            "zh_Hans_CN": "马里特色区域，专精于经济与贸易，取代商业中心。使用 [ICON_GOLD] 金币和 [ICON_FAITH] 信仰值在此城中购买单位、建筑和区域时，费用减少20%。[NEWLINE][NEWLINE]每个相邻圣地获得+2 [ICON_Gold] 金币加成。每个包含河岸的单元格获得+2 [ICON_Gold] 金币加成。每两个相邻区域单元格获得+1 [ICON_Gold] 金币加成。"
           },
           "Name": {
             "en_US": "Suguba",
-            "zh_Hans_CN": "Suguba"
+            "zh_Hans_CN": "曼丁哥市场"
           }
         },
         "prerequisites": [
@@ -13541,8 +13564,9 @@
       ],
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
-        "description": "A district unique to Mali specializing in finance and trade that replaces the Commercial Hub. Units, Buildings, and Districts are 20% cheaper to purchase with [ICON_GOLD] Gold and [ICON_FAITH] Faith in this City.[NEWLINE][NEWLINE]+2 [ICON_Gold] Gold bonus for each adjacent Holy Site. +2 [ICON_Gold] Gold bonus from a tile containing a River edge. +1 [ICON_Gold] Gold bonus for every two adjacent district tiles.",
-        "entity_type": "Districts"
+        "description": "马里特色区域，专精于经济与贸易，取代商业中心。使用 [ICON_GOLD] 金币和 [ICON_FAITH] 信仰值在此城中购买单位、建筑和区域时，费用减少20%。[NEWLINE][NEWLINE]每个相邻圣地获得+2 [ICON_Gold] 金币加成。每个包含河岸的单元格获得+2 [ICON_Gold] 金币加成。每两个相邻区域单元格获得+1 [ICON_Gold] 金币加成。",
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
@@ -13669,7 +13693,7 @@
           },
           {
             "description": {
-              "en_US": "+{1_num} [ICON_Culture] 文化值来自相邻市政广场。",
+              "en_US": "+{1_num} [ICON_Culture] Culture from the adjacent Government Plaza.",
               "zh_Hans_CN": "+{1_num} [ICON_Culture] 文化值来自相邻市政广场。"
             },
             "facts": {
@@ -14269,14 +14293,15 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "您城市里的文化遗址区。",
-        "entity_type": "Districts"
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
     {
       "id": "DISTRICT_WATER_ENTERTAINMENT_COMPLEX",
       "names": {
-        "en_US": "水上乐园",
+        "en_US": "Water Park",
         "zh_Hans_CN": "水上乐园"
       },
       "relations": [
@@ -14551,11 +14576,11 @@
         ],
         "localized_fields": {
           "Description": {
-            "en_US": "建在海岸单元格上的区域，可增加 [ICON_Amenities] 宜居度，让人民生活幸福。无法建在拥有娱乐设施的城市中。无法建在礁石上。",
+            "en_US": "A district placed out on a coastal tile dedicated to keeping your people happy by increasing [ICON_Amenities] Amenities. Cannot be built in a city with an Entertainment Complex. Cannot be built on Reef.",
             "zh_Hans_CN": "建在海岸单元格上的区域，可增加 [ICON_Amenities] 宜居度，让人民生活幸福。无法建在拥有娱乐设施的城市中。无法建在礁石上。"
           },
           "Name": {
-            "en_US": "水上乐园",
+            "en_US": "Water Park",
             "zh_Hans_CN": "水上乐园"
           }
         },
@@ -14659,7 +14684,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "建在海岸单元格上的区域，可增加 [ICON_Amenities] 宜居度，让人民生活幸福。无法建在拥有娱乐设施的城市中。无法建在礁石上。",
-        "entity_type": "Districts"
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
@@ -14667,7 +14693,7 @@
       "id": "DISTRICT_WATER_STREET_CARNIVAL",
       "names": {
         "en_US": "Copacabana",
-        "zh_Hans_CN": "Copacabana"
+        "zh_Hans_CN": "科帕卡瓦纳"
       },
       "relations": [
         {
@@ -14971,11 +14997,11 @@
         "localized_fields": {
           "Description": {
             "en_US": "A district unique to Brazil. Replaces the Water Park district, and provides +2 [ICON_Amenities] Amenities. Also unlocks the Carnival project, which grants an additional +1 [ICON_Amenities] Amenity when underway and a variety of [ICON_GreatPerson] Great People points once completed. Cannot be built in a city with a Street Carnival. Cannot be built on Reef.",
-            "zh_Hans_CN": "A district unique to Brazil. Replaces the Water Park district, and provides +2 [ICON_Amenities] Amenities. Also unlocks the Carnival project, which grants an additional +1 [ICON_Amenities] Amenity when underway and a variety of [ICON_GreatPerson] Great People points once completed. Cannot be built in a city with a Street Carnival. Cannot be built on Reef."
+            "zh_Hans_CN": "巴西特色区域，代替水上乐园，+2 [ICON_Amenities] 宜居度。可解锁“狂欢节”项目，项目启动后即可额外+1 [ICON_Amenities] 宜居度，项目完成后可获得若干 [ICON_GreatPerson] 伟人点数。无法建在拥有“街头狂欢节”的城市中。无法建在礁石上。"
           },
           "Name": {
             "en_US": "Copacabana",
-            "zh_Hans_CN": "Copacabana"
+            "zh_Hans_CN": "科帕卡瓦纳"
           }
         },
         "prerequisites": [
@@ -15085,8 +15111,9 @@
       ],
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
-        "description": "A district unique to Brazil. Replaces the Water Park district, and provides +2 [ICON_Amenities] Amenities. Also unlocks the Carnival project, which grants an additional +1 [ICON_Amenities] Amenity when underway and a variety of [ICON_GreatPerson] Great People points once completed. Cannot be built in a city with a Street Carnival. Cannot be built on Reef.",
-        "entity_type": "Districts"
+        "description": "巴西特色区域，代替水上乐园，+2 [ICON_Amenities] 宜居度。可解锁“狂欢节”项目，项目启动后即可额外+1 [ICON_Amenities] 宜居度，项目完成后可获得若干 [ICON_GreatPerson] 伟人点数。无法建在拥有“街头狂欢节”的城市中。无法建在礁石上。",
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     },
@@ -15458,7 +15485,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Districts"
+        "entity_type": "Districts",
+        "name_fallbacks": {}
       },
       "topic": "districts"
     }

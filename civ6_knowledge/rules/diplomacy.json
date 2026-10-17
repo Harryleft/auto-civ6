@@ -102,6 +102,369 @@
               "row": 5,
               "table": "AllianceEffects"
             }
+          },
+          {
+            "facts": {
+              "ModifierId": "ALLIANCE_ADD_CULTURE_TO_DESTINATION_TRADE_ROUTE",
+              "ModifierType": "MODIFIER_ALLIANCE_TRADE_ROUTE_ADJUST_YIELD",
+              "NewOnly": 0,
+              "OwnerRequirementSetId": null,
+              "OwnerStackLimit": null,
+              "Permanent": 0,
+              "Repeatable": 0,
+              "RunOnce": 0,
+              "SubjectRequirementSetId": "ROUTE_BETWEEN_ALLIES_REQUIREMENTS",
+              "SubjectStackLimit": null
+            },
+            "source_ref": {
+              "row": 130,
+              "table": "Modifiers"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADD_CULTURE_TO_DESTINATION_TRADE_ROUTE",
+              "Name": "AffectDestination",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 666,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADD_CULTURE_TO_DESTINATION_TRADE_ROUTE",
+              "Name": "Amount",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 667,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADD_CULTURE_TO_DESTINATION_TRADE_ROUTE",
+              "Name": "YieldType",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "YIELD_CULTURE"
+            },
+            "source_ref": {
+              "row": 668,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "ModifierId": "ALLIANCE_ADD_CULTURE_TO_ORIGIN_TRADE_ROUTE",
+              "ModifierType": "MODIFIER_ALLIANCE_TRADE_ROUTE_ADJUST_YIELD",
+              "NewOnly": 0,
+              "OwnerRequirementSetId": null,
+              "OwnerStackLimit": null,
+              "Permanent": 0,
+              "Repeatable": 0,
+              "RunOnce": 0,
+              "SubjectRequirementSetId": "ROUTE_BETWEEN_ALLIES_REQUIREMENTS",
+              "SubjectStackLimit": null
+            },
+            "source_ref": {
+              "row": 131,
+              "table": "Modifiers"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADD_CULTURE_TO_ORIGIN_TRADE_ROUTE",
+              "Name": "AffectOrigin",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 669,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADD_CULTURE_TO_ORIGIN_TRADE_ROUTE",
+              "Name": "Amount",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "2"
+            },
+            "source_ref": {
+              "row": 670,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADD_CULTURE_TO_ORIGIN_TRADE_ROUTE",
+              "Name": "YieldType",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "YIELD_CULTURE"
+            },
+            "source_ref": {
+              "row": 671,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "ModifierId": "ALLIANCE_NO_CULTURE_PRESSURE",
+              "ModifierType": "MODIFIER_ALLIANCE_DO_NOTHING",
+              "NewOnly": 0,
+              "OwnerRequirementSetId": null,
+              "OwnerStackLimit": null,
+              "Permanent": 0,
+              "Repeatable": 0,
+              "RunOnce": 0,
+              "SubjectRequirementSetId": null,
+              "SubjectStackLimit": null
+            },
+            "source_ref": {
+              "row": 146,
+              "table": "Modifiers"
+            }
+          },
+          {
+            "facts": {
+              "ModifierId": "ALLIANCE_ADJUST_DISTRICT_GREAT_PEOPLE_POINTS",
+              "ModifierType": "MODIFIER_ALLIANCE_DISTRICTS_ADJUST_GREAT_POINTS",
+              "NewOnly": 0,
+              "OwnerRequirementSetId": null,
+              "OwnerStackLimit": null,
+              "Permanent": 0,
+              "Repeatable": 0,
+              "RunOnce": 0,
+              "SubjectRequirementSetId": "ALLIANCE_CITY_HAS_TRADE_ROUTE_WITH_ALLY",
+              "SubjectStackLimit": null
+            },
+            "source_ref": {
+              "row": 139,
+              "table": "Modifiers"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADJUST_DISTRICT_GREAT_PEOPLE_POINTS",
+              "Name": "Amount",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 691,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "ModifierId": "ALLIANCE_CULTURE_SHARING_FROM_ALLY",
+              "ModifierType": "MODIFIER_ALLIANCE_PLAYERS_CULTURE_FROM_ALLY",
+              "NewOnly": 0,
+              "OwnerRequirementSetId": null,
+              "OwnerStackLimit": null,
+              "Permanent": 0,
+              "Repeatable": 0,
+              "RunOnce": 0,
+              "SubjectRequirementSetId": null,
+              "SubjectStackLimit": null
+            },
+            "source_ref": {
+              "row": 142,
+              "table": "Modifiers"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_CULTURE_SHARING_FROM_ALLY",
+              "Name": "Amount",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "10"
+            },
+            "source_ref": {
+              "row": 694,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "ModifierId": "ALLIANCE_TOURISM_SHARING_FROM_ALLY",
+              "ModifierType": "MODIFIER_ALLIANCE_PLAYERS_TOURISM_FROM_ALLY",
+              "NewOnly": 0,
+              "OwnerRequirementSetId": null,
+              "OwnerStackLimit": null,
+              "Permanent": 0,
+              "Repeatable": 0,
+              "RunOnce": 0,
+              "SubjectRequirementSetId": null,
+              "SubjectStackLimit": null
+            },
+            "source_ref": {
+              "row": 153,
+              "table": "Modifiers"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_TOURISM_SHARING_FROM_ALLY",
+              "Name": "Amount",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "20"
+            },
+            "source_ref": {
+              "row": 701,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "CollectionType": "COLLECTION_ALLIANCE_TRADEROUTES",
+              "EffectType": "EFFECT_ADJUST_TRADE_ROUTE_YIELD_CHANGE",
+              "ModifierType": "MODIFIER_ALLIANCE_TRADE_ROUTE_ADJUST_YIELD"
+            },
+            "source_ref": {
+              "row": 4,
+              "table": "DynamicModifiers"
+            }
+          },
+          {
+            "facts": {
+              "RequirementSetId": "ROUTE_BETWEEN_ALLIES_REQUIREMENTS",
+              "RequirementSetType": "REQUIREMENTSET_TEST_ALL"
+            },
+            "source_ref": {
+              "row": 615,
+              "table": "RequirementSets"
+            }
+          },
+          {
+            "facts": {
+              "RequirementId": "REQUIRES_TRADE_ROUTE_BETWEEN_ALLIES",
+              "RequirementSetId": "ROUTE_BETWEEN_ALLIES_REQUIREMENTS"
+            },
+            "source_ref": {
+              "row": 1181,
+              "table": "RequirementSetRequirements"
+            }
+          },
+          {
+            "facts": {
+              "CollectionType": "COLLECTION_OWNER",
+              "EffectType": "EFFECT_DO_NOTHING",
+              "ModifierType": "MODIFIER_ALLIANCE_DO_NOTHING"
+            },
+            "source_ref": {
+              "row": 600,
+              "table": "DynamicModifiers"
+            }
+          },
+          {
+            "facts": {
+              "CollectionType": "COLLECTION_ALLIANCE_DISTRICTS",
+              "EffectType": "EFFECT_ADJUST_DISTRICT_GREAT_PERSON_POINTS",
+              "ModifierType": "MODIFIER_ALLIANCE_DISTRICTS_ADJUST_GREAT_POINTS"
+            },
+            "source_ref": {
+              "row": 2,
+              "table": "DynamicModifiers"
+            }
+          },
+          {
+            "facts": {
+              "RequirementSetId": "ALLIANCE_CITY_HAS_TRADE_ROUTE_WITH_ALLY",
+              "RequirementSetType": "REQUIREMENTSET_TEST_ALL"
+            },
+            "source_ref": {
+              "row": 6,
+              "table": "RequirementSets"
+            }
+          },
+          {
+            "facts": {
+              "RequirementId": "REQUIRES_ALLIANCE_CITY_HAS_TRADE_ROUTE_WITH_ALLY",
+              "RequirementSetId": "ALLIANCE_CITY_HAS_TRADE_ROUTE_WITH_ALLY"
+            },
+            "source_ref": {
+              "row": 269,
+              "table": "RequirementSetRequirements"
+            }
+          },
+          {
+            "facts": {
+              "CollectionType": "COLLECTION_OWNER",
+              "EffectType": "EFFECT_ALLIANCE_CULTURE_SHARING",
+              "ModifierType": "MODIFIER_ALLIANCE_PLAYERS_CULTURE_FROM_ALLY"
+            },
+            "source_ref": {
+              "row": 582,
+              "table": "DynamicModifiers"
+            }
+          },
+          {
+            "facts": {
+              "CollectionType": "COLLECTION_OWNER",
+              "EffectType": "EFFECT_ALLIANCE_TOURISM_SHARING",
+              "ModifierType": "MODIFIER_ALLIANCE_PLAYERS_TOURISM_FROM_ALLY"
+            },
+            "source_ref": {
+              "row": 589,
+              "table": "DynamicModifiers"
+            }
+          },
+          {
+            "facts": {
+              "Impact": 0,
+              "Inverse": 0,
+              "Likeliness": 0,
+              "Persistent": 0,
+              "ProgressWeight": 1,
+              "RequirementId": "REQUIRES_TRADE_ROUTE_BETWEEN_ALLIES",
+              "RequirementType": "REQUIREMENT_TRADE_ROUTE_BETWEEN_ALLIANCE_PARTNERS",
+              "Reverse": 0,
+              "Triggered": 0
+            },
+            "source_ref": {
+              "row": 550,
+              "table": "Requirements"
+            }
+          },
+          {
+            "facts": {
+              "Impact": 0,
+              "Inverse": 0,
+              "Likeliness": 0,
+              "Persistent": 0,
+              "ProgressWeight": 1,
+              "RequirementId": "REQUIRES_ALLIANCE_CITY_HAS_TRADE_ROUTE_WITH_ALLY",
+              "RequirementType": "REQUIREMENT_ALLIANCE_CITY_HAS_TRADE_ROUTE_WITH_ALLY",
+              "Reverse": 0,
+              "Triggered": 0
+            },
+            "source_ref": {
+              "row": 143,
+              "table": "Requirements"
+            }
           }
         ],
         "unlocks": []
@@ -134,12 +497,117 @@
         {
           "row": 5,
           "table": "AllianceEffects"
+        },
+        {
+          "row": 130,
+          "table": "Modifiers"
+        },
+        {
+          "row": 666,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 667,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 668,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 131,
+          "table": "Modifiers"
+        },
+        {
+          "row": 669,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 670,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 671,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 146,
+          "table": "Modifiers"
+        },
+        {
+          "row": 139,
+          "table": "Modifiers"
+        },
+        {
+          "row": 691,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 142,
+          "table": "Modifiers"
+        },
+        {
+          "row": 694,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 153,
+          "table": "Modifiers"
+        },
+        {
+          "row": 701,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 4,
+          "table": "DynamicModifiers"
+        },
+        {
+          "row": 615,
+          "table": "RequirementSets"
+        },
+        {
+          "row": 1181,
+          "table": "RequirementSetRequirements"
+        },
+        {
+          "row": 600,
+          "table": "DynamicModifiers"
+        },
+        {
+          "row": 2,
+          "table": "DynamicModifiers"
+        },
+        {
+          "row": 6,
+          "table": "RequirementSets"
+        },
+        {
+          "row": 269,
+          "table": "RequirementSetRequirements"
+        },
+        {
+          "row": 582,
+          "table": "DynamicModifiers"
+        },
+        {
+          "row": 589,
+          "table": "DynamicModifiers"
+        },
+        {
+          "row": 550,
+          "table": "Requirements"
+        },
+        {
+          "row": 143,
+          "table": "Requirements"
         }
       ],
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "文化同盟等级{1_AllianceLevel}",
-        "entity_type": "Alliances"
+        "entity_type": "Alliances",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -223,6 +691,246 @@
               "row": 9,
               "table": "AllianceEffects"
             }
+          },
+          {
+            "facts": {
+              "ModifierId": "ALLIANCE_ADD_GOLD_TO_DESTINATION_TRADE_ROUTE",
+              "ModifierType": "MODIFIER_ALLIANCE_TRADE_ROUTE_ADJUST_YIELD",
+              "NewOnly": 0,
+              "OwnerRequirementSetId": null,
+              "OwnerStackLimit": null,
+              "Permanent": 0,
+              "Repeatable": 0,
+              "RunOnce": 0,
+              "SubjectRequirementSetId": "ROUTE_BETWEEN_ALLIES_REQUIREMENTS",
+              "SubjectStackLimit": null
+            },
+            "source_ref": {
+              "row": 134,
+              "table": "Modifiers"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADD_GOLD_TO_DESTINATION_TRADE_ROUTE",
+              "Name": "AffectDestination",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 678,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADD_GOLD_TO_DESTINATION_TRADE_ROUTE",
+              "Name": "Amount",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "2"
+            },
+            "source_ref": {
+              "row": 679,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADD_GOLD_TO_DESTINATION_TRADE_ROUTE",
+              "Name": "YieldType",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "YIELD_GOLD"
+            },
+            "source_ref": {
+              "row": 680,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "ModifierId": "ALLIANCE_ADD_GOLD_TO_ORIGIN_TRADE_ROUTE",
+              "ModifierType": "MODIFIER_ALLIANCE_TRADE_ROUTE_ADJUST_YIELD",
+              "NewOnly": 0,
+              "OwnerRequirementSetId": null,
+              "OwnerStackLimit": null,
+              "Permanent": 0,
+              "Repeatable": 0,
+              "RunOnce": 0,
+              "SubjectRequirementSetId": "ROUTE_BETWEEN_ALLIES_REQUIREMENTS",
+              "SubjectStackLimit": null
+            },
+            "source_ref": {
+              "row": 135,
+              "table": "Modifiers"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADD_GOLD_TO_ORIGIN_TRADE_ROUTE",
+              "Name": "AffectOrigin",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 681,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADD_GOLD_TO_ORIGIN_TRADE_ROUTE",
+              "Name": "Amount",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "4"
+            },
+            "source_ref": {
+              "row": 682,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADD_GOLD_TO_ORIGIN_TRADE_ROUTE",
+              "Name": "YieldType",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "YIELD_GOLD"
+            },
+            "source_ref": {
+              "row": 683,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "ModifierId": "ALLIANCE_ENVOY_POINTS_FROM_ALLIANCE",
+              "ModifierType": "MODIFIER_ALLIANCE_PLAYERS_ENVOY_POINTS_FROM_ALLY",
+              "NewOnly": 0,
+              "OwnerRequirementSetId": null,
+              "OwnerStackLimit": null,
+              "Permanent": 0,
+              "Repeatable": 0,
+              "RunOnce": 0,
+              "SubjectRequirementSetId": null,
+              "SubjectStackLimit": null
+            },
+            "source_ref": {
+              "row": 143,
+              "table": "Modifiers"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ENVOY_POINTS_FROM_ALLIANCE",
+              "Name": "Amount",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 695,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "ModifierId": "ALLIANCE_SHARE_SUZERAIN",
+              "ModifierType": "MODIFIER_ALLIANCE_PLAYERS_SHARE_SUZERAIN",
+              "NewOnly": 0,
+              "OwnerRequirementSetId": null,
+              "OwnerStackLimit": null,
+              "Permanent": 0,
+              "Repeatable": 0,
+              "RunOnce": 0,
+              "SubjectRequirementSetId": null,
+              "SubjectStackLimit": null
+            },
+            "source_ref": {
+              "row": 151,
+              "table": "Modifiers"
+            }
+          },
+          {
+            "facts": {
+              "CollectionType": "COLLECTION_ALLIANCE_TRADEROUTES",
+              "EffectType": "EFFECT_ADJUST_TRADE_ROUTE_YIELD_CHANGE",
+              "ModifierType": "MODIFIER_ALLIANCE_TRADE_ROUTE_ADJUST_YIELD"
+            },
+            "source_ref": {
+              "row": 4,
+              "table": "DynamicModifiers"
+            }
+          },
+          {
+            "facts": {
+              "RequirementSetId": "ROUTE_BETWEEN_ALLIES_REQUIREMENTS",
+              "RequirementSetType": "REQUIREMENTSET_TEST_ALL"
+            },
+            "source_ref": {
+              "row": 615,
+              "table": "RequirementSets"
+            }
+          },
+          {
+            "facts": {
+              "RequirementId": "REQUIRES_TRADE_ROUTE_BETWEEN_ALLIES",
+              "RequirementSetId": "ROUTE_BETWEEN_ALLIES_REQUIREMENTS"
+            },
+            "source_ref": {
+              "row": 1181,
+              "table": "RequirementSetRequirements"
+            }
+          },
+          {
+            "facts": {
+              "CollectionType": "COLLECTION_OWNER",
+              "EffectType": "EFFECT_ALLIANCE_ENVOY_POINTS_FROM_ALLY_TRIBUTARIES",
+              "ModifierType": "MODIFIER_ALLIANCE_PLAYERS_ENVOY_POINTS_FROM_ALLY"
+            },
+            "source_ref": {
+              "row": 583,
+              "table": "DynamicModifiers"
+            }
+          },
+          {
+            "facts": {
+              "CollectionType": "COLLECTION_OWNER",
+              "EffectType": "EFFECT_ALLIANCE_SHARE_SUZERAIN",
+              "ModifierType": "MODIFIER_ALLIANCE_PLAYERS_SHARE_SUZERAIN"
+            },
+            "source_ref": {
+              "row": 588,
+              "table": "DynamicModifiers"
+            }
+          },
+          {
+            "facts": {
+              "Impact": 0,
+              "Inverse": 0,
+              "Likeliness": 0,
+              "Persistent": 0,
+              "ProgressWeight": 1,
+              "RequirementId": "REQUIRES_TRADE_ROUTE_BETWEEN_ALLIES",
+              "RequirementType": "REQUIREMENT_TRADE_ROUTE_BETWEEN_ALLIANCE_PARTNERS",
+              "Reverse": 0,
+              "Triggered": 0
+            },
+            "source_ref": {
+              "row": 550,
+              "table": "Requirements"
+            }
           }
         ],
         "unlocks": []
@@ -247,12 +955,81 @@
         {
           "row": 9,
           "table": "AllianceEffects"
+        },
+        {
+          "row": 134,
+          "table": "Modifiers"
+        },
+        {
+          "row": 678,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 679,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 680,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 135,
+          "table": "Modifiers"
+        },
+        {
+          "row": 681,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 682,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 683,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 143,
+          "table": "Modifiers"
+        },
+        {
+          "row": 695,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 151,
+          "table": "Modifiers"
+        },
+        {
+          "row": 4,
+          "table": "DynamicModifiers"
+        },
+        {
+          "row": 615,
+          "table": "RequirementSets"
+        },
+        {
+          "row": 1181,
+          "table": "RequirementSetRequirements"
+        },
+        {
+          "row": 583,
+          "table": "DynamicModifiers"
+        },
+        {
+          "row": 588,
+          "table": "DynamicModifiers"
+        },
+        {
+          "row": 550,
+          "table": "Requirements"
         }
       ],
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "经济同盟等级{1_AllianceLevel}",
-        "entity_type": "Alliances"
+        "entity_type": "Alliances",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -336,6 +1113,306 @@
               "row": 13,
               "table": "AllianceEffects"
             }
+          },
+          {
+            "facts": {
+              "ModifierId": "ALLIANCE_ADJUST_COMBAT_STRENGTH",
+              "ModifierType": "MODIFIER_ALLIANCE_COMBATS_UNIT_STRENGTHS",
+              "NewOnly": 0,
+              "OwnerRequirementSetId": null,
+              "OwnerStackLimit": null,
+              "Permanent": 0,
+              "Repeatable": 0,
+              "RunOnce": 0,
+              "SubjectRequirementSetId": "ALLIES_AT_WAR_WITH_TARGET_REQUIREMENTS",
+              "SubjectStackLimit": null
+            },
+            "source_ref": {
+              "row": 138,
+              "table": "Modifiers"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADJUST_COMBAT_STRENGTH",
+              "Name": "Amount",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "5"
+            },
+            "source_ref": {
+              "row": 690,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "ModifierId": "ALLIANCE_INCREASE_PRODUCTION_WHEN_WAR",
+              "ModifierType": "MODIFIER_ALLIANCE_CITIES_MILITARY_UNIT_PRODUCTION",
+              "NewOnly": 0,
+              "OwnerRequirementSetId": null,
+              "OwnerStackLimit": null,
+              "Permanent": 0,
+              "Repeatable": 0,
+              "RunOnce": 0,
+              "SubjectRequirementSetId": "OWNER_OR_ALLY_IS_AT_WAR_REQUIREMENTS",
+              "SubjectStackLimit": null
+            },
+            "source_ref": {
+              "row": 145,
+              "table": "Modifiers"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_INCREASE_PRODUCTION_WHEN_WAR",
+              "Name": "Amount",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "15"
+            },
+            "source_ref": {
+              "row": 697,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "ModifierId": "ALLIANCE_SHARE_VISIBILITY",
+              "ModifierType": "MODIFIER_ALLIANCE_SHARE_VISIBILITY",
+              "NewOnly": 0,
+              "OwnerRequirementSetId": null,
+              "OwnerStackLimit": null,
+              "Permanent": 0,
+              "Repeatable": 0,
+              "RunOnce": 0,
+              "SubjectRequirementSetId": null,
+              "SubjectStackLimit": null
+            },
+            "source_ref": {
+              "row": 152,
+              "table": "Modifiers"
+            }
+          },
+          {
+            "facts": {
+              "ModifierId": "ALLIANCE_FREE_UNIT_UPGRADE",
+              "ModifierType": "MODIFIER_ALLIANCE_TRAINED_UNITS_FREE_UPGRADE",
+              "NewOnly": 0,
+              "OwnerRequirementSetId": null,
+              "OwnerStackLimit": null,
+              "Permanent": 0,
+              "Repeatable": 0,
+              "RunOnce": 0,
+              "SubjectRequirementSetId": null,
+              "SubjectStackLimit": null
+            },
+            "source_ref": {
+              "row": 144,
+              "table": "Modifiers"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_FREE_UNIT_UPGRADE",
+              "Name": "Amount",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "-1"
+            },
+            "source_ref": {
+              "row": 696,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "CollectionType": "COLLECTION_ALLIANCE_COMBATS",
+              "EffectType": "EFFECT_ADJUST_ALLIANCE_PLAYER_STRENGTH_MODIFIER",
+              "ModifierType": "MODIFIER_ALLIANCE_COMBATS_UNIT_STRENGTHS"
+            },
+            "source_ref": {
+              "row": 1,
+              "table": "DynamicModifiers"
+            }
+          },
+          {
+            "facts": {
+              "RequirementSetId": "ALLIES_AT_WAR_WITH_TARGET_REQUIREMENTS",
+              "RequirementSetType": "REQUIREMENTSET_TEST_ALL"
+            },
+            "source_ref": {
+              "row": 7,
+              "table": "RequirementSets"
+            }
+          },
+          {
+            "facts": {
+              "RequirementId": "REQUIRES_ALLIES_AT_WAR_WITH_TARGET",
+              "RequirementSetId": "ALLIES_AT_WAR_WITH_TARGET_REQUIREMENTS"
+            },
+            "source_ref": {
+              "row": 270,
+              "table": "RequirementSetRequirements"
+            }
+          },
+          {
+            "facts": {
+              "RequirementId": "REQUIRES_COMBAT_UNIT_VS_UNIT",
+              "RequirementSetId": "ALLIES_AT_WAR_WITH_TARGET_REQUIREMENTS"
+            },
+            "source_ref": {
+              "row": 429,
+              "table": "RequirementSetRequirements"
+            }
+          },
+          {
+            "facts": {
+              "CollectionType": "COLLECTION_ALLIANCE_CITIES",
+              "EffectType": "EFFECT_ADJUST_CITY_ALL_MILITARY_UNITS_PRODUCTION",
+              "ModifierType": "MODIFIER_ALLIANCE_CITIES_MILITARY_UNIT_PRODUCTION"
+            },
+            "source_ref": {
+              "row": 0,
+              "table": "DynamicModifiers"
+            }
+          },
+          {
+            "facts": {
+              "RequirementSetId": "OWNER_OR_ALLY_IS_AT_WAR_REQUIREMENTS",
+              "RequirementSetType": "REQUIREMENTSET_TEST_ANY"
+            },
+            "source_ref": {
+              "row": 300,
+              "table": "RequirementSets"
+            }
+          },
+          {
+            "facts": {
+              "RequirementId": "REQUIRES_ALLY_IS_AT_WAR",
+              "RequirementSetId": "OWNER_OR_ALLY_IS_AT_WAR_REQUIREMENTS"
+            },
+            "source_ref": {
+              "row": 271,
+              "table": "RequirementSetRequirements"
+            }
+          },
+          {
+            "facts": {
+              "RequirementId": "REQUIRES_PLAYER_IS_AT_WAR",
+              "RequirementSetId": "OWNER_OR_ALLY_IS_AT_WAR_REQUIREMENTS"
+            },
+            "source_ref": {
+              "row": 951,
+              "table": "RequirementSetRequirements"
+            }
+          },
+          {
+            "facts": {
+              "CollectionType": "COLLECTION_OWNER",
+              "EffectType": "EFFECT_ALLIANCE_GRANT_SHARED_VIS",
+              "ModifierType": "MODIFIER_ALLIANCE_SHARE_VISIBILITY"
+            },
+            "source_ref": {
+              "row": 584,
+              "table": "DynamicModifiers"
+            }
+          },
+          {
+            "facts": {
+              "CollectionType": "COLLECTION_ALLIANCE_TRAINED_UNITS",
+              "EffectType": "EFFECT_ADJUST_UNIT_GRANT_EXPERIENCE",
+              "ModifierType": "MODIFIER_ALLIANCE_TRAINED_UNITS_FREE_UPGRADE"
+            },
+            "source_ref": {
+              "row": 5,
+              "table": "DynamicModifiers"
+            }
+          },
+          {
+            "facts": {
+              "Impact": 0,
+              "Inverse": 0,
+              "Likeliness": 0,
+              "Persistent": 0,
+              "ProgressWeight": 1,
+              "RequirementId": "REQUIRES_ALLIES_AT_WAR_WITH_TARGET",
+              "RequirementType": "REQUIREMENT_ALLIANCE_AT_WAR_WITH_COMBAT_TARGET",
+              "Reverse": 0,
+              "Triggered": 0
+            },
+            "source_ref": {
+              "row": 144,
+              "table": "Requirements"
+            }
+          },
+          {
+            "facts": {
+              "Impact": 0,
+              "Inverse": 0,
+              "Likeliness": 0,
+              "Persistent": 0,
+              "ProgressWeight": 1,
+              "RequirementId": "REQUIRES_COMBAT_UNIT_VS_UNIT",
+              "RequirementType": "REQUIREMENT_COMBAT_VERSUS_TYPE_MATCHES",
+              "Reverse": 0,
+              "Triggered": 0
+            },
+            "source_ref": {
+              "row": 255,
+              "table": "Requirements"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "Name": "CombatVersusType",
+              "RequirementId": "REQUIRES_COMBAT_UNIT_VS_UNIT",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "COMBAT_UNIT_VS_UNIT"
+            },
+            "source_ref": {
+              "row": 148,
+              "table": "RequirementArguments"
+            }
+          },
+          {
+            "facts": {
+              "Impact": 0,
+              "Inverse": 0,
+              "Likeliness": 0,
+              "Persistent": 0,
+              "ProgressWeight": 1,
+              "RequirementId": "REQUIRES_ALLY_IS_AT_WAR",
+              "RequirementType": "REQUIREMENT_CITY_OWNER_ALLY_AT_WAR",
+              "Reverse": 0,
+              "Triggered": 0
+            },
+            "source_ref": {
+              "row": 145,
+              "table": "Requirements"
+            }
+          },
+          {
+            "facts": {
+              "Impact": 0,
+              "Inverse": 0,
+              "Likeliness": 0,
+              "Persistent": 0,
+              "ProgressWeight": 1,
+              "RequirementId": "REQUIRES_PLAYER_IS_AT_WAR",
+              "RequirementType": "REQUIREMENT_PLAYER_IS_AT_WAR",
+              "Reverse": 0,
+              "Triggered": 0
+            },
+            "source_ref": {
+              "row": 443,
+              "table": "Requirements"
+            }
           }
         ],
         "unlocks": []
@@ -360,12 +1437,101 @@
         {
           "row": 13,
           "table": "AllianceEffects"
+        },
+        {
+          "row": 138,
+          "table": "Modifiers"
+        },
+        {
+          "row": 690,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 145,
+          "table": "Modifiers"
+        },
+        {
+          "row": 697,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 152,
+          "table": "Modifiers"
+        },
+        {
+          "row": 144,
+          "table": "Modifiers"
+        },
+        {
+          "row": 696,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 1,
+          "table": "DynamicModifiers"
+        },
+        {
+          "row": 7,
+          "table": "RequirementSets"
+        },
+        {
+          "row": 270,
+          "table": "RequirementSetRequirements"
+        },
+        {
+          "row": 429,
+          "table": "RequirementSetRequirements"
+        },
+        {
+          "row": 0,
+          "table": "DynamicModifiers"
+        },
+        {
+          "row": 300,
+          "table": "RequirementSets"
+        },
+        {
+          "row": 271,
+          "table": "RequirementSetRequirements"
+        },
+        {
+          "row": 951,
+          "table": "RequirementSetRequirements"
+        },
+        {
+          "row": 584,
+          "table": "DynamicModifiers"
+        },
+        {
+          "row": 5,
+          "table": "DynamicModifiers"
+        },
+        {
+          "row": 144,
+          "table": "Requirements"
+        },
+        {
+          "row": 255,
+          "table": "Requirements"
+        },
+        {
+          "row": 148,
+          "table": "RequirementArguments"
+        },
+        {
+          "row": 145,
+          "table": "Requirements"
+        },
+        {
+          "row": 443,
+          "table": "Requirements"
         }
       ],
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "军事同盟等级{1_AllianceLevel}",
-        "entity_type": "Alliances"
+        "entity_type": "Alliances",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -471,6 +1637,383 @@
               "row": 19,
               "table": "AllianceEffects"
             }
+          },
+          {
+            "facts": {
+              "ModifierId": "ALLIANCE_ADD_FAITH_TO_DESTINATION_TRADE_ROUTE",
+              "ModifierType": "MODIFIER_ALLIANCE_TRADE_ROUTE_ADJUST_YIELD",
+              "NewOnly": 0,
+              "OwnerRequirementSetId": null,
+              "OwnerStackLimit": null,
+              "Permanent": 0,
+              "Repeatable": 0,
+              "RunOnce": 0,
+              "SubjectRequirementSetId": "ROUTE_BETWEEN_ALLIES_REQUIREMENTS",
+              "SubjectStackLimit": null
+            },
+            "source_ref": {
+              "row": 132,
+              "table": "Modifiers"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADD_FAITH_TO_DESTINATION_TRADE_ROUTE",
+              "Name": "AffectDestination",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 672,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADD_FAITH_TO_DESTINATION_TRADE_ROUTE",
+              "Name": "Amount",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 673,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADD_FAITH_TO_DESTINATION_TRADE_ROUTE",
+              "Name": "YieldType",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "YIELD_FAITH"
+            },
+            "source_ref": {
+              "row": 674,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "ModifierId": "ALLIANCE_ADD_FAITH_TO_ORIGIN_TRADE_ROUTE",
+              "ModifierType": "MODIFIER_ALLIANCE_TRADE_ROUTE_ADJUST_YIELD",
+              "NewOnly": 0,
+              "OwnerRequirementSetId": null,
+              "OwnerStackLimit": null,
+              "Permanent": 0,
+              "Repeatable": 0,
+              "RunOnce": 0,
+              "SubjectRequirementSetId": "ROUTE_BETWEEN_ALLIES_REQUIREMENTS",
+              "SubjectStackLimit": null
+            },
+            "source_ref": {
+              "row": 133,
+              "table": "Modifiers"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADD_FAITH_TO_ORIGIN_TRADE_ROUTE",
+              "Name": "AffectOrigin",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 675,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADD_FAITH_TO_ORIGIN_TRADE_ROUTE",
+              "Name": "Amount",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "2"
+            },
+            "source_ref": {
+              "row": 676,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADD_FAITH_TO_ORIGIN_TRADE_ROUTE",
+              "Name": "YieldType",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "YIELD_FAITH"
+            },
+            "source_ref": {
+              "row": 677,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "ModifierId": "ALLIANCE_NO_RELIGIOUS_PRESSURE",
+              "ModifierType": "MODIFIER_ALLIANCE_DO_NOTHING",
+              "NewOnly": 0,
+              "OwnerRequirementSetId": null,
+              "OwnerStackLimit": null,
+              "Permanent": 0,
+              "Repeatable": 0,
+              "RunOnce": 0,
+              "SubjectRequirementSetId": null,
+              "SubjectStackLimit": null
+            },
+            "source_ref": {
+              "row": 147,
+              "table": "Modifiers"
+            }
+          },
+          {
+            "facts": {
+              "ModifierId": "ALLIANCE_ADJUST_RELIGIOUS_COMBAT_STRENGTH",
+              "ModifierType": "MODIFIER_ALLIANCE_COMBATS_UNIT_STRENGTHS",
+              "NewOnly": 0,
+              "OwnerRequirementSetId": null,
+              "OwnerStackLimit": null,
+              "Permanent": 0,
+              "Repeatable": 0,
+              "RunOnce": 0,
+              "SubjectRequirementSetId": "RELIGIOUS_COMBAT_ENEMY_NOT_IN_ALLIED_RELIGION",
+              "SubjectStackLimit": null
+            },
+            "source_ref": {
+              "row": 141,
+              "table": "Modifiers"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADJUST_RELIGIOUS_COMBAT_STRENGTH",
+              "Name": "Amount",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "10"
+            },
+            "source_ref": {
+              "row": 693,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "ModifierId": "ALLIANCE_RELIGIOUS_PRESSURE",
+              "ModifierType": "MODIFIER_ALLIANCE_PLAYERS_RELIGIOUS_PRESSURE",
+              "NewOnly": 0,
+              "OwnerRequirementSetId": null,
+              "OwnerStackLimit": null,
+              "Permanent": 0,
+              "Repeatable": 0,
+              "RunOnce": 0,
+              "SubjectRequirementSetId": null,
+              "SubjectStackLimit": null
+            },
+            "source_ref": {
+              "row": 148,
+              "table": "Modifiers"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_RELIGIOUS_PRESSURE",
+              "Name": "Amount",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "20"
+            },
+            "source_ref": {
+              "row": 698,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "ModifierId": "ALLIANCE_YIELDS_FROM_FOLLOWING_ALLY_RELIGION",
+              "ModifierType": "MODIFIER_ALLIANCE_PLAYERS_YIELD_FROM_FOLLOWERS_OF_ALLY_RELIGIONS",
+              "NewOnly": 0,
+              "OwnerRequirementSetId": null,
+              "OwnerStackLimit": null,
+              "Permanent": 0,
+              "Repeatable": 0,
+              "RunOnce": 0,
+              "SubjectRequirementSetId": null,
+              "SubjectStackLimit": null
+            },
+            "source_ref": {
+              "row": 154,
+              "table": "Modifiers"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_YIELDS_FROM_FOLLOWING_ALLY_RELIGION",
+              "Name": "Amount",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 702,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_YIELDS_FROM_FOLLOWING_ALLY_RELIGION",
+              "Name": "YieldType",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "YIELD_FAITH"
+            },
+            "source_ref": {
+              "row": 703,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "CollectionType": "COLLECTION_ALLIANCE_TRADEROUTES",
+              "EffectType": "EFFECT_ADJUST_TRADE_ROUTE_YIELD_CHANGE",
+              "ModifierType": "MODIFIER_ALLIANCE_TRADE_ROUTE_ADJUST_YIELD"
+            },
+            "source_ref": {
+              "row": 4,
+              "table": "DynamicModifiers"
+            }
+          },
+          {
+            "facts": {
+              "RequirementSetId": "ROUTE_BETWEEN_ALLIES_REQUIREMENTS",
+              "RequirementSetType": "REQUIREMENTSET_TEST_ALL"
+            },
+            "source_ref": {
+              "row": 615,
+              "table": "RequirementSets"
+            }
+          },
+          {
+            "facts": {
+              "RequirementId": "REQUIRES_TRADE_ROUTE_BETWEEN_ALLIES",
+              "RequirementSetId": "ROUTE_BETWEEN_ALLIES_REQUIREMENTS"
+            },
+            "source_ref": {
+              "row": 1181,
+              "table": "RequirementSetRequirements"
+            }
+          },
+          {
+            "facts": {
+              "CollectionType": "COLLECTION_OWNER",
+              "EffectType": "EFFECT_DO_NOTHING",
+              "ModifierType": "MODIFIER_ALLIANCE_DO_NOTHING"
+            },
+            "source_ref": {
+              "row": 600,
+              "table": "DynamicModifiers"
+            }
+          },
+          {
+            "facts": {
+              "CollectionType": "COLLECTION_ALLIANCE_COMBATS",
+              "EffectType": "EFFECT_ADJUST_ALLIANCE_PLAYER_STRENGTH_MODIFIER",
+              "ModifierType": "MODIFIER_ALLIANCE_COMBATS_UNIT_STRENGTHS"
+            },
+            "source_ref": {
+              "row": 1,
+              "table": "DynamicModifiers"
+            }
+          },
+          {
+            "facts": {
+              "RequirementSetId": "RELIGIOUS_COMBAT_ENEMY_NOT_IN_ALLIED_RELIGION",
+              "RequirementSetType": "REQUIREMENTSET_TEST_ALL"
+            },
+            "source_ref": {
+              "row": 573,
+              "table": "RequirementSets"
+            }
+          },
+          {
+            "facts": {
+              "RequirementId": "REQUIRES_RELIGIOUS_ENEMY_NOT_ALLIED_RELIGION",
+              "RequirementSetId": "RELIGIOUS_COMBAT_ENEMY_NOT_IN_ALLIED_RELIGION"
+            },
+            "source_ref": {
+              "row": 1149,
+              "table": "RequirementSetRequirements"
+            }
+          },
+          {
+            "facts": {
+              "CollectionType": "COLLECTION_OWNER",
+              "EffectType": "EFFECT_ALLIANCE_PRESSURE_FROM_NO_ALLY_RELIGION",
+              "ModifierType": "MODIFIER_ALLIANCE_PLAYERS_RELIGIOUS_PRESSURE"
+            },
+            "source_ref": {
+              "row": 585,
+              "table": "DynamicModifiers"
+            }
+          },
+          {
+            "facts": {
+              "CollectionType": "COLLECTION_OWNER",
+              "EffectType": "EFFECT_ALLIANCE_YIELD_INCOME_FROM_ALLY_RELIGION",
+              "ModifierType": "MODIFIER_ALLIANCE_PLAYERS_YIELD_FROM_FOLLOWERS_OF_ALLY_RELIGIONS"
+            },
+            "source_ref": {
+              "row": 590,
+              "table": "DynamicModifiers"
+            }
+          },
+          {
+            "facts": {
+              "Impact": 0,
+              "Inverse": 0,
+              "Likeliness": 0,
+              "Persistent": 0,
+              "ProgressWeight": 1,
+              "RequirementId": "REQUIRES_TRADE_ROUTE_BETWEEN_ALLIES",
+              "RequirementType": "REQUIREMENT_TRADE_ROUTE_BETWEEN_ALLIANCE_PARTNERS",
+              "Reverse": 0,
+              "Triggered": 0
+            },
+            "source_ref": {
+              "row": 550,
+              "table": "Requirements"
+            }
+          },
+          {
+            "facts": {
+              "Impact": 0,
+              "Inverse": 0,
+              "Likeliness": 0,
+              "Persistent": 0,
+              "ProgressWeight": 1,
+              "RequirementId": "REQUIRES_RELIGIOUS_ENEMY_NOT_ALLIED_RELIGION",
+              "RequirementType": "REQUIREMENT_COMBAT_ENEMY_NOT_ALLIANCE_RELIGION",
+              "Reverse": 0,
+              "Triggered": 0
+            },
+            "source_ref": {
+              "row": 524,
+              "table": "Requirements"
+            }
           }
         ],
         "unlocks": []
@@ -503,12 +2046,121 @@
         {
           "row": 19,
           "table": "AllianceEffects"
+        },
+        {
+          "row": 132,
+          "table": "Modifiers"
+        },
+        {
+          "row": 672,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 673,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 674,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 133,
+          "table": "Modifiers"
+        },
+        {
+          "row": 675,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 676,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 677,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 147,
+          "table": "Modifiers"
+        },
+        {
+          "row": 141,
+          "table": "Modifiers"
+        },
+        {
+          "row": 693,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 148,
+          "table": "Modifiers"
+        },
+        {
+          "row": 698,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 154,
+          "table": "Modifiers"
+        },
+        {
+          "row": 702,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 703,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 4,
+          "table": "DynamicModifiers"
+        },
+        {
+          "row": 615,
+          "table": "RequirementSets"
+        },
+        {
+          "row": 1181,
+          "table": "RequirementSetRequirements"
+        },
+        {
+          "row": 600,
+          "table": "DynamicModifiers"
+        },
+        {
+          "row": 1,
+          "table": "DynamicModifiers"
+        },
+        {
+          "row": 573,
+          "table": "RequirementSets"
+        },
+        {
+          "row": 1149,
+          "table": "RequirementSetRequirements"
+        },
+        {
+          "row": 585,
+          "table": "DynamicModifiers"
+        },
+        {
+          "row": 590,
+          "table": "DynamicModifiers"
+        },
+        {
+          "row": 550,
+          "table": "Requirements"
+        },
+        {
+          "row": 524,
+          "table": "Requirements"
         }
       ],
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "宗教同盟等级{1_AllianceLevel}",
-        "entity_type": "Alliances"
+        "entity_type": "Alliances",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -592,6 +2244,260 @@
               "row": 23,
               "table": "AllianceEffects"
             }
+          },
+          {
+            "facts": {
+              "ModifierId": "ALLIANCE_ADD_SCIENCE_TO_DESTINATION_TRADE_ROUTE",
+              "ModifierType": "MODIFIER_ALLIANCE_TRADE_ROUTE_ADJUST_YIELD",
+              "NewOnly": 0,
+              "OwnerRequirementSetId": null,
+              "OwnerStackLimit": null,
+              "Permanent": 0,
+              "Repeatable": 0,
+              "RunOnce": 0,
+              "SubjectRequirementSetId": "ROUTE_BETWEEN_ALLIES_REQUIREMENTS",
+              "SubjectStackLimit": null
+            },
+            "source_ref": {
+              "row": 136,
+              "table": "Modifiers"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADD_SCIENCE_TO_DESTINATION_TRADE_ROUTE",
+              "Name": "AffectDestination",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 684,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADD_SCIENCE_TO_DESTINATION_TRADE_ROUTE",
+              "Name": "Amount",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 685,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADD_SCIENCE_TO_DESTINATION_TRADE_ROUTE",
+              "Name": "YieldType",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "YIELD_SCIENCE"
+            },
+            "source_ref": {
+              "row": 686,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "ModifierId": "ALLIANCE_ADD_SCIENCE_TO_ORIGIN_TRADE_ROUTE",
+              "ModifierType": "MODIFIER_ALLIANCE_TRADE_ROUTE_ADJUST_YIELD",
+              "NewOnly": 0,
+              "OwnerRequirementSetId": null,
+              "OwnerStackLimit": null,
+              "Permanent": 0,
+              "Repeatable": 0,
+              "RunOnce": 0,
+              "SubjectRequirementSetId": "ROUTE_BETWEEN_ALLIES_REQUIREMENTS",
+              "SubjectStackLimit": null
+            },
+            "source_ref": {
+              "row": 137,
+              "table": "Modifiers"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADD_SCIENCE_TO_ORIGIN_TRADE_ROUTE",
+              "Name": "AffectOrigin",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "1"
+            },
+            "source_ref": {
+              "row": 687,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADD_SCIENCE_TO_ORIGIN_TRADE_ROUTE",
+              "Name": "Amount",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "2"
+            },
+            "source_ref": {
+              "row": 688,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_ADD_SCIENCE_TO_ORIGIN_TRADE_ROUTE",
+              "Name": "YieldType",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "YIELD_SCIENCE"
+            },
+            "source_ref": {
+              "row": 689,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "ModifierId": "ALLIANCE_RESEARCH_AGREEMENT",
+              "ModifierType": "MODIFIER_ALLIANCE_RESEARCH_AGREEMENT",
+              "NewOnly": 0,
+              "OwnerRequirementSetId": null,
+              "OwnerStackLimit": null,
+              "Permanent": 0,
+              "Repeatable": 0,
+              "RunOnce": 0,
+              "SubjectRequirementSetId": null,
+              "SubjectStackLimit": null
+            },
+            "source_ref": {
+              "row": 149,
+              "table": "Modifiers"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_RESEARCH_AGREEMENT",
+              "Name": "Amount",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "30"
+            },
+            "source_ref": {
+              "row": 699,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "ModifierId": "ALLIANCE_SCIENCE_SHARING_FROM_ALLY",
+              "ModifierType": "MODIFIER_ALLIANCE_PLAYERS_SCIENCE_FROM_ALLY",
+              "NewOnly": 0,
+              "OwnerRequirementSetId": null,
+              "OwnerStackLimit": null,
+              "Permanent": 0,
+              "Repeatable": 0,
+              "RunOnce": 0,
+              "SubjectRequirementSetId": null,
+              "SubjectStackLimit": null
+            },
+            "source_ref": {
+              "row": 150,
+              "table": "Modifiers"
+            }
+          },
+          {
+            "facts": {
+              "Extra": null,
+              "ModifierId": "ALLIANCE_SCIENCE_SHARING_FROM_ALLY",
+              "Name": "Amount",
+              "SecondExtra": null,
+              "Type": "ARGTYPE_IDENTITY",
+              "Value": "10"
+            },
+            "source_ref": {
+              "row": 700,
+              "table": "ModifierArguments"
+            }
+          },
+          {
+            "facts": {
+              "CollectionType": "COLLECTION_ALLIANCE_TRADEROUTES",
+              "EffectType": "EFFECT_ADJUST_TRADE_ROUTE_YIELD_CHANGE",
+              "ModifierType": "MODIFIER_ALLIANCE_TRADE_ROUTE_ADJUST_YIELD"
+            },
+            "source_ref": {
+              "row": 4,
+              "table": "DynamicModifiers"
+            }
+          },
+          {
+            "facts": {
+              "RequirementSetId": "ROUTE_BETWEEN_ALLIES_REQUIREMENTS",
+              "RequirementSetType": "REQUIREMENTSET_TEST_ALL"
+            },
+            "source_ref": {
+              "row": 615,
+              "table": "RequirementSets"
+            }
+          },
+          {
+            "facts": {
+              "RequirementId": "REQUIRES_TRADE_ROUTE_BETWEEN_ALLIES",
+              "RequirementSetId": "ROUTE_BETWEEN_ALLIES_REQUIREMENTS"
+            },
+            "source_ref": {
+              "row": 1181,
+              "table": "RequirementSetRequirements"
+            }
+          },
+          {
+            "facts": {
+              "CollectionType": "COLLECTION_OWNER",
+              "EffectType": "EFFECT_ALLIANCE_RESEARCH_AGREEMENT",
+              "ModifierType": "MODIFIER_ALLIANCE_RESEARCH_AGREEMENT"
+            },
+            "source_ref": {
+              "row": 586,
+              "table": "DynamicModifiers"
+            }
+          },
+          {
+            "facts": {
+              "CollectionType": "COLLECTION_OWNER",
+              "EffectType": "EFFECT_ALLIANCE_SCIENCE_SHARING",
+              "ModifierType": "MODIFIER_ALLIANCE_PLAYERS_SCIENCE_FROM_ALLY"
+            },
+            "source_ref": {
+              "row": 587,
+              "table": "DynamicModifiers"
+            }
+          },
+          {
+            "facts": {
+              "Impact": 0,
+              "Inverse": 0,
+              "Likeliness": 0,
+              "Persistent": 0,
+              "ProgressWeight": 1,
+              "RequirementId": "REQUIRES_TRADE_ROUTE_BETWEEN_ALLIES",
+              "RequirementType": "REQUIREMENT_TRADE_ROUTE_BETWEEN_ALLIANCE_PARTNERS",
+              "Reverse": 0,
+              "Triggered": 0
+            },
+            "source_ref": {
+              "row": 550,
+              "table": "Requirements"
+            }
           }
         ],
         "unlocks": []
@@ -616,12 +2522,85 @@
         {
           "row": 23,
           "table": "AllianceEffects"
+        },
+        {
+          "row": 136,
+          "table": "Modifiers"
+        },
+        {
+          "row": 684,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 685,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 686,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 137,
+          "table": "Modifiers"
+        },
+        {
+          "row": 687,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 688,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 689,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 149,
+          "table": "Modifiers"
+        },
+        {
+          "row": 699,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 150,
+          "table": "Modifiers"
+        },
+        {
+          "row": 700,
+          "table": "ModifierArguments"
+        },
+        {
+          "row": 4,
+          "table": "DynamicModifiers"
+        },
+        {
+          "row": 615,
+          "table": "RequirementSets"
+        },
+        {
+          "row": 1181,
+          "table": "RequirementSetRequirements"
+        },
+        {
+          "row": 586,
+          "table": "DynamicModifiers"
+        },
+        {
+          "row": 587,
+          "table": "DynamicModifiers"
+        },
+        {
+          "row": 550,
+          "table": "Requirements"
         }
       ],
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "研究同盟等级{1_AllianceLevel}",
-        "entity_type": "Alliances"
+        "entity_type": "Alliances",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -725,7 +2704,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "与公开宣布的朋友结成同盟。盟友之间不会开战，会自动形成开放边界，如果其中一位盟友失去一座城市，其他人会获得一个针对侵略者文明的战争借口。",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -862,7 +2842,11 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "向该国提议结盟",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {
+          "en_US": "identifier",
+          "zh_Hans_CN": "identifier"
+        }
       },
       "topic": "diplomacy"
     },
@@ -999,7 +2983,11 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "向该国提议结盟",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {
+          "en_US": "identifier",
+          "zh_Hans_CN": "identifier"
+        }
       },
       "topic": "diplomacy"
     },
@@ -1136,7 +3124,11 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "向该国提议结盟",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {
+          "en_US": "identifier",
+          "zh_Hans_CN": "identifier"
+        }
       },
       "topic": "diplomacy"
     },
@@ -1273,7 +3265,11 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "向该国提议结盟",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {
+          "en_US": "identifier",
+          "zh_Hans_CN": "identifier"
+        }
       },
       "topic": "diplomacy"
     },
@@ -1410,7 +3406,11 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "向该国提议结盟",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {
+          "en_US": "identifier",
+          "zh_Hans_CN": "identifier"
+        }
       },
       "topic": "diplomacy"
     },
@@ -1514,7 +3514,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "适用于向落后于您两个科技时代的国家宣战。所有好战程度减半。",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -1618,7 +3619,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "用于对谴责过您的玩家，或您之前谴责过（至少5回合前）的玩家宣战。不限制具体的占领城市。",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -1798,7 +3800,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "正式表明您愿同该国维持友好关系的意愿。作为朋友，您能获得一个盟友，但无法对该国正式宣战。",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -1861,7 +3864,7 @@
         ],
         "localized_fields": {
           "Description": {
-            "en_US": "在黄金时代中拥有“全民皆兵”着力点时用于对玩家宣战。可在对文明进行谴责后直接宣战，无需等待正常所需的回合数。不限制占领的城市。产生的 [ICON_STAT_GRIEVANCE] 不满降低75%。",
+            "en_US": "Used to declare war on a player while you are in a Golden Age with a \"To Arms!\" Dedication. Can be used right after Denouncing a civilization, without waiting the normal amount of turns. No restrictions on which cities you may capture. 75% reduction in [ICON_STAT_GRIEVANCE] Grievances generated.",
             "zh_Hans_CN": "在黄金时代中拥有“全民皆兵”着力点时用于对玩家宣战。可在对文明进行谴责后直接宣战，无需等待正常所需的回合数。不限制占领的城市。产生的 [ICON_STAT_GRIEVANCE] 不满降低75%。"
           },
           "Name": {
@@ -1920,7 +3923,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "在黄金时代中拥有“全民皆兵”着力点时用于对玩家宣战。可在对文明进行谴责后直接宣战，无需等待正常所需的回合数。不限制占领的城市。产生的 [ICON_STAT_GRIEVANCE] 不满降低75%。",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -2024,7 +4028,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "适用于向转变了您某座城市宗教信仰的国家宣战。所有好战程度减半。",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -2087,7 +4092,7 @@
         ],
         "localized_fields": {
           "Description": {
-            "en_US": "用于向采纳不同第三级政体的文明宣战。不限制占领的城市。产生的普通 [ICON_STAT_GRIEVANCE] 不满降低50%。",
+            "en_US": "Used to declare war on a player who is in a different Tier 3 government. No restrictions on which cities you may capture. Half the usual [ICON_STAT_GRIEVANCE] Grievances generated.",
             "zh_Hans_CN": "用于向采纳不同第三级政体的文明宣战。不限制占领的城市。产生的普通 [ICON_STAT_GRIEVANCE] 不满降低50%。"
           },
           "Name": {
@@ -2146,7 +4151,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "用于向采纳不同第三级政体的文明宣战。不限制占领的城市。产生的普通 [ICON_STAT_GRIEVANCE] 不满降低50%。",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -2250,7 +4256,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "适用于向占领了您某位朋友或盟友城市的国家宣战。解放任何已被占领的城市都不会增加好战程度。",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -2354,7 +4361,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "用于向占领您同盟城邦的国家宣战。解放被占领的城邦不会增加好战程度。",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -2458,7 +4466,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "适用于向占领了您某座城市的国家宣战。不影响好战程度。",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -2619,7 +4628,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "适用于立即开战。普通好战程度增加50%。",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -2723,7 +4733,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "适用于向您的帝国接壤的国家宣战。在两位对手城市的10个单元格范围内，必须有属于您的两座城市。好战争度减少25%。",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -2861,7 +4872,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -2924,7 +4936,7 @@
         ],
         "localized_fields": {
           "Description": {
-            "en_US": "用于向过去30个回合内对您背弃承诺的国家宣战。不限制占领的城市。产生的普通 [ICON_STAT_GRIEVANCE] 不满降低50%。",
+            "en_US": "Used to declare war on a player who has broken a promise to you within the past 30 turns. No restrictions on which cities you may capture. Half the usual [ICON_STAT_GRIEVANCE] Grievances generated.",
             "zh_Hans_CN": "用于向过去30个回合内对您背弃承诺的国家宣战。不限制占领的城市。产生的普通 [ICON_STAT_GRIEVANCE] 不满降低50%。"
           },
           "Name": {
@@ -2983,7 +4995,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "用于向过去30个回合内对您背弃承诺的国家宣战。不限制占领的城市。产生的普通 [ICON_STAT_GRIEVANCE] 不满降低50%。",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -3144,7 +5157,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "向该国索取外交礼物。",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -3286,7 +5300,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "通常会向该国正式表达您的不满。5个额外回合之后可正式宣战（使用或不使用战争借口均可）。",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -3466,7 +5481,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "派遣代表团带着 [ICON_Gold] 金币作为礼物前往该国。如果对方接受，则会变得更加友好，您也会提升一个访问级别。这种状态会一直持续到您获得“外交部门”市政为止。",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -3585,7 +5601,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -3742,7 +5759,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -3922,7 +5940,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "创建联合作战对抗目标文明。",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -4136,7 +6155,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -4350,7 +6370,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -4564,7 +6585,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -4778,7 +6800,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -4858,7 +6881,11 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {
+          "en_US": "identifier",
+          "zh_Hans_CN": "identifier"
+        }
       },
       "topic": "diplomacy"
     },
@@ -4981,7 +7008,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "达成一项协议来结束同该国当前的战争。",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -5081,7 +7109,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -5261,7 +7290,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "请求该国允许您的单位穿越他们的管辖区域。",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -5365,7 +7395,11 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "向该国提出和平协议。",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {
+          "en_US": "identifier",
+          "zh_Hans_CN": "identifier"
+        }
       },
       "topic": "diplomacy"
     },
@@ -5564,7 +7598,11 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "同该国进行贸易谈判。",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {
+          "en_US": "identifier",
+          "zh_Hans_CN": "identifier"
+        }
       },
       "topic": "diplomacy"
     },
@@ -5682,7 +7720,11 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "提议延长当前和此文明的同盟周期",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {
+          "en_US": "identifier",
+          "zh_Hans_CN": "identifier"
+        }
       },
       "topic": "diplomacy"
     },
@@ -5824,7 +7866,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "向该国索求外交礼物。",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -6004,7 +8047,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "同该国建立一个永久大使馆。如果接受，接受者会变得更加友好，您也会获得一个访问级别，同时，显示接受者的 [ICON_Capital] 首都。",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -6184,7 +8228,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "加入其它玩家针对目标文明的战争。",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -6264,7 +8309,11 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {
+          "en_US": "identifier",
+          "zh_Hans_CN": "identifier"
+        }
       },
       "topic": "diplomacy"
     },
@@ -6344,7 +8393,11 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {
+          "en_US": "identifier",
+          "zh_Hans_CN": "identifier"
+        }
       },
       "topic": "diplomacy"
     },
@@ -6424,7 +8477,11 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "DiplomaticActions"
+        "entity_type": "DiplomaticActions",
+        "name_fallbacks": {
+          "en_US": "identifier",
+          "zh_Hans_CN": "identifier"
+        }
       },
       "topic": "diplomacy"
     },
@@ -6685,7 +8742,8 @@
       "summary": {
         "applicability": "curated_interpretation; current_session_and_action_unverified",
         "description": "行动资格由双方关系、发起方／目标方研究、既有协议与行动专属条件共同约束；关系好感不等于协议已经成立。",
-        "entity_type": "CuratedMechanism"
+        "entity_type": "CuratedMechanism",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -6998,7 +9056,8 @@
       "summary": {
         "applicability": "curated_interpretation; current_session_and_action_unverified",
         "description": "联盟要求宣布友谊及双方解锁文官制度；类型决定收益，等级效果累计，商路可增加联盟点数。",
-        "entity_type": "CuratedMechanism"
+        "entity_type": "CuratedMechanism",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -7156,7 +9215,8 @@
       "summary": {
         "applicability": "curated_interpretation; current_session_and_action_unverified",
         "description": "双边交易交换双方可提供的条目；报价、AI 接受和实际成交是不同步骤，不会因建立商路自动成交。",
-        "entity_type": "CuratedMechanism"
+        "entity_type": "CuratedMechanism",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -7375,7 +9435,8 @@
       "summary": {
         "applicability": "curated_interpretation; current_session_and_action_unverified",
         "description": "影响力积累与获得使者、派遣使者、形成宗主权是不同阶段；普通使者奖励与宗主专属奖励分别判断。",
-        "entity_type": "CuratedMechanism"
+        "entity_type": "CuratedMechanism",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -7600,7 +9661,8 @@
       "summary": {
         "applicability": "curated_interpretation; current_session_and_action_unverified",
         "description": "风云变幻中战争理由与外交事件会影响怨恨；承诺有发起条件、外交支持费用及违约后果。",
-        "entity_type": "CuratedMechanism"
+        "entity_type": "CuratedMechanism",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     },
@@ -7906,7 +9968,8 @@
       "summary": {
         "applicability": "curated_interpretation; current_session_and_action_unverified",
         "description": "商人执行商路，双边交易另行谈判；商路收益由目的地区域、路线及其他修正组成，国内与国际列不同。",
-        "entity_type": "CuratedMechanism"
+        "entity_type": "CuratedMechanism",
+        "name_fallbacks": {}
       },
       "topic": "diplomacy"
     }
