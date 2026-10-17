@@ -88,7 +88,7 @@ def test_movement_waits_through_old_and_intermediate_positions():
 
 def test_attack_waits_for_real_damage_and_never_uses_estimate_as_actual():
     engine = Engine(
-        writes=[["ESTIMATE|UNIT_SLINGER|UNIT_SCOUT|15|10|1||100|80"],
+        writes=[["NATIVE_ESTIMATE|UNIT_SLINGER|UNIT_SCOUT|15|10|1|100|80|0|35"],
                 ["OK:RANGE_ATTACK|pre_hp:80/100|target_owner:63|target_id:123|attacks_before:1"],
                 ["UNIT|UNIT_SCOUT|80/100|owner:63|id:123"],
                 ["UNIT|UNIT_SCOUT|55/100|owner:63|id:123", "CORE_BUSY|false"]],
