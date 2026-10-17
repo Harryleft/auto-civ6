@@ -98,3 +98,28 @@ def test_capture_rejects_output_inside_game_data(tmp_path):
                              '--output', str(original)], text=True, capture_output=True)
     assert result.returncode == 2
     assert original.read_bytes() == before
+
+
+def test_capture_reads_committed_wal_without_creating_source_sidecars(tmp_path):
+    game, user, manifest = setup_inputs(tmp_path)
+    database = user / 'Cache/DebugGameplay.sqlite'
+    # Preserve a database plus committed WAL without SHM, as produced by a copied
+    # SQLite cache. Opening this original in mode=ro would create a source SHM.
+    con = sqlite3.connect(database)
+    con.execute('PRAGMA journal_mode=WAL')
+    con.execute('PRAGMA wal_autocheckpoint=0')
+    con.execute("INSERT INTO Technologies VALUES ('TECH_CURRENCY','LOC_CURRENCY')")
+    con.commit()
+    db_bytes = database.read_bytes()
+    wal_bytes = Path(str(database) + '-wal').read_bytes()
+    con.close()
+    database.write_bytes(db_bytes)
+    Path(str(database) + '-wal').write_bytes(wal_bytes)
+    assert not Path(str(database) + '-shm').exists()
+    before = {str(p.relative_to(user)): p.read_bytes() for p in user.rglob('*') if p.is_file()}
+    result, output = capture(tmp_path, game, user, manifest)
+    assert result.returncode == 0, result.stderr
+    after = {str(p.relative_to(user)): p.read_bytes() for p in user.rglob('*') if p.is_file()}
+    assert before == after
+    rows = json.loads(output.read_text())['tables']['Technologies']
+    assert any(row['TechnologyType'] == 'TECH_CURRENCY' for row in rows)

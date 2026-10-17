@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import sys
 
-from build import VERSION_KEYS, digest, generate
+from build import SUPPORT_FILES, VERSION_KEYS, check_snapshot, coverage, digest, generate
 
 
 def read(path):
@@ -14,6 +14,8 @@ def read(path):
 
 def load(root):
     manifest = read(root / 'manifest.json')
+    if not isinstance(manifest, dict):
+        raise ValueError('manifest must be an object')
     snapshot_path = root / 'sources/snapshot.json'
     if manifest.get('schema_version') != 1 or manifest.get('snapshot') != 'sources/snapshot.json':
         raise ValueError('unsupported manifest')
@@ -32,7 +34,9 @@ def load(root):
             if card['id'] in cards:
                 raise ValueError('duplicate card ID: ' + card['id'])
             cards[card['id']] = card
-    return manifest, read(snapshot_path), documents, cards
+    snapshot = read(snapshot_path)
+    check_snapshot(snapshot)
+    return manifest, snapshot, documents, cards
 
 
 def summary(card):
@@ -40,7 +44,11 @@ def summary(card):
 
 
 def compare(profile, expected):
+    if not isinstance(profile, dict) or not isinstance(expected, dict):
+        raise ValueError('profile must be an object')
     supplied = expected.get('profile', expected)
+    if not isinstance(supplied, dict):
+        raise ValueError('profile must be an object')
     mismatches = {key: {'knowledge': profile.get(key), 'requested': supplied.get(key)} for key in VERSION_KEYS if not supplied.get(key) or str(profile.get(key)) != str(supplied.get(key))}
     if mismatches:
         raise ValueError('profile incompatible: ' + json.dumps(mismatches, ensure_ascii=False, sort_keys=True))
@@ -54,6 +62,11 @@ def execute(root, args):
     if args.command == 'check-profile':
         return compare(manifest['profile'], read(args.expected))
     if args.command == 'validate':
+        if set(manifest.get('support_files', {})) != set(SUPPORT_FILES):
+            raise ValueError('missing support file coverage')
+        for name in SUPPORT_FILES:
+            if digest((root / name).read_bytes()) != manifest['support_files'][name]:
+                raise ValueError('support file fingerprint mismatch: ' + name)
         if snapshot['profile'] != manifest['profile']:
             raise ValueError('profile differs from source')
         expected = generate(snapshot)
@@ -62,9 +75,14 @@ def execute(root, args):
         counts = {topic: len(doc['cards']) for topic, doc in documents.items()}
         if counts != manifest['counts']:
             raise ValueError('coverage counts differ')
+        if coverage(snapshot) != manifest['coverage']:
+            raise ValueError('coverage differs from actual source tables')
+        source_hashes = {entry.get('path'): entry.get('sha256') for entry in snapshot.get('sources', [])}
         for entry in snapshot.get('code_evidence', []):
             if not entry.get('text') or entry.get('line_start', 0) < 1 or entry.get('line_end', 0) < entry['line_start'] or len(entry.get('sha256', '')) != 64:
                 raise ValueError('invalid code evidence: ' + str(entry.get('id')))
+            if entry.get('path') in source_hashes and entry['sha256'] != source_hashes[entry['path']]:
+                raise ValueError('code source fingerprint mismatch: ' + str(entry.get('id')))
             if entry.get('text_sha256') and digest(entry['text'].encode('utf-8')) != entry['text_sha256']:
                 raise ValueError('code evidence fingerprint mismatch: ' + str(entry.get('id')))
         return {'status': 'valid', 'counts': counts, 'profile': manifest['profile'], 'coverage': manifest['coverage']}
@@ -84,7 +102,9 @@ def execute(root, args):
     evidence = [{'source_ref': ref, 'facts': snapshot['tables'][ref['table']][ref['row']]} for ref in card['source_refs']]
     tags = {value for entry in evidence for value in entry['facts'].values() if isinstance(value, str) and value.startswith('LOC_')}
     localization = {tag: snapshot['localization'][tag] for tag in sorted(tags) if tag in snapshot['localization']}
-    return {'id': card['id'], 'source_refs': card['source_refs'], 'evidence': evidence, 'localization': localization, 'code_evidence': snapshot.get('code_evidence', []) if card['topic'] == 'congress' else [], 'profile': manifest['profile'], 'sources': snapshot.get('sources', [])}
+    prefix = {'technologies': 'technology-', 'civics': 'civic-', 'districts': 'district-', 'congress': 'congress-'}[card['topic']]
+    excerpts = [entry for entry in snapshot.get('code_evidence', []) if entry['id'].startswith(prefix)]
+    return {'id': card['id'], 'source_refs': card['source_refs'], 'evidence': evidence, 'localization': localization, 'code_evidence': excerpts, 'profile': manifest['profile'], 'sources': snapshot.get('sources', [])}
 
 
 def positive(value):

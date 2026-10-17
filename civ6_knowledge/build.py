@@ -9,6 +9,9 @@ import sys
 
 PRIMARY = {'Civics': ('civics', 'CivicType'), 'Technologies': ('technologies', 'TechnologyType'), 'Districts': ('districts', 'DistrictType'), 'Resolutions': ('congress', 'ResolutionType'), 'ProposalTypes': ('congress', 'ProposalType'), 'VotingBlockers': ('congress', 'VotingBlockerType')}
 UNLOCKS = {'Units': 'UnitType', 'Buildings': 'BuildingType', 'Districts': 'DistrictType', 'Improvements': 'ImprovementType', 'Projects': 'ProjectType', 'Policies': 'PolicyType', 'Governments': 'GovernmentType', 'Resources': 'ResourceType', 'Routes': 'RouteType'}
+CORE_RELATIONSHIPS = ('TechnologyPrereqs', 'CivicPrereqs', 'Boosts', 'District_Adjacencies', 'Adjacency_YieldChanges')
+OPTIONAL_TABLES = tuple(UNLOCKS) + ('Districts_XP2', 'District_RequiredFeatures', 'District_ValidTerrains', 'DistrictReplaces', 'District_CitizenYieldChanges', 'GovernmentSlots', 'Government_SlotCounts', 'ResolutionEffects', 'CivilizationTraits', 'LeaderTraits', 'CivilopediaPages', 'CivilopediaPageChapterParagraphs', 'GlobalParameters')
+SUPPORT_FILES = ('README.md', 'NEXT.md', 'capture.py', 'build.py', 'query.py', 'topics/civics.md', 'topics/technologies.md', 'topics/districts.md', 'topics/congress.md')
 VERSION_KEYS = ('game_version', 'macos_bundle_version', 'macos_bundle_build', 'steam_build_id', 'ruleset')
 
 
@@ -31,17 +34,28 @@ def source_ref(table, index):
 
 
 def check_snapshot(snapshot):
+    if not isinstance(snapshot, dict):
+        raise ValueError('snapshot must be an object')
     if snapshot.get('schema_version') != 1:
         raise ValueError('unsupported snapshot schema_version')
     for key in ('profile', 'tables', 'localization'):
         if not isinstance(snapshot.get(key), dict):
             raise ValueError('missing or invalid snapshot field: ' + key)
+    for key, value in snapshot['localization'].items():
+        if not isinstance(value, dict):
+            raise ValueError('invalid localization object: ' + key)
+    for field in ('code_evidence', 'sources'):
+        if not isinstance(snapshot.get(field, []), list) or any(not isinstance(row, dict) for row in snapshot.get(field, [])):
+            raise ValueError('invalid snapshot list: ' + field)
     for key in VERSION_KEYS:
         if not snapshot['profile'].get(key):
             raise ValueError('missing version field: ' + key)
     for table in PRIMARY:
         if not isinstance(snapshot['tables'].get(table), list):
             raise ValueError('missing primary table: ' + table)
+    for table in CORE_RELATIONSHIPS:
+        if not isinstance(snapshot['tables'].get(table), list):
+            raise ValueError('missing core relationship table: ' + table)
     for table, rows in snapshot['tables'].items():
         if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
             raise ValueError('invalid table rows: ' + table)
@@ -173,9 +187,17 @@ def generate(snapshot):
     return {topic: {'schema_version': 1, 'topic': topic, 'cards': sorted(values, key=lambda c: c['id'])} for topic, values in topics.items()}
 
 
+def coverage(snapshot):
+    return {'complete_for_snapshot_tables': list(PRIMARY), 'missing_optional_tables': sorted(set(OPTIONAL_TABLES) - snapshot['tables'].keys()), 'not_covered': ['完整 Modifier 解释', '当前对局模组／模式核对', '完整动作合法性和有效费用', '策略最优性']}
+
+
 def build(source, output):
     snapshot = json.loads(source.read_text(encoding='utf-8'))
     documents = generate(snapshot)
+    support_root = Path(__file__).resolve().parent
+    for name in SUPPORT_FILES:
+        if not (support_root / name).is_file():
+            raise ValueError('missing support file: ' + name)
     output.mkdir(parents=True, exist_ok=True)
     (output / 'rules').mkdir(exist_ok=True)
     (output / 'sources').mkdir(exist_ok=True)
@@ -188,11 +210,13 @@ def build(source, output):
         (output / relative).write_bytes(data)
         files[relative] = digest(data)
     manifest = {'schema_version': 1, 'profile': snapshot['profile'], 'snapshot': 'sources/snapshot.json', 'snapshot_sha256': digest(snapshot_bytes), 'files': files,
-                'counts': {topic: len(doc['cards']) for topic, doc in documents.items()}, 'coverage': {'complete_for_snapshot_tables': list(PRIMARY), 'not_covered': ['完整 Modifier 解释', '当前对局模组／模式核对', '完整动作合法性和有效费用', '策略最优性']}}
+                'support_files': {name: digest((support_root / name).read_bytes()) for name in SUPPORT_FILES},
+                'counts': {topic: len(doc['cards']) for topic, doc in documents.items()}, 'coverage': coverage(snapshot)}
     (output / 'manifest.json').write_bytes(encoded(manifest))
-    for name in ('build.py', 'query.py'):
-        script = Path(__file__).with_name(name)
+    for name in SUPPORT_FILES:
+        script = support_root / name
         destination = output / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
         if script.resolve() != destination.resolve():
             shutil.copyfile(script, destination)
     return {'status': 'built', 'counts': manifest['counts']}
