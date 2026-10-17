@@ -164,8 +164,8 @@ class TestAttackFollowupHelpers:
         assert "Walls 74/100" in out
         assert "City garrison 197/200" in out
 
-    def test_format_reports_elimination_when_nothing_is_left(self):
-        assert _format_attack_followup([]) == "Target eliminated"
+    def test_empty_followup_leaves_elimination_unconfirmed(self):
+        assert "elimination unconfirmed" in _format_attack_followup([])
 
     def test_extract_pre_hp_ranged_format(self):
         assert _extract_pre_hp("RANGE_ATTACK|t|pre_hp:80/100|your HP:100") == 80
@@ -618,7 +618,7 @@ class TestMoveUnit:
         gs, conn = _gs(
             [
                 ("write", ["OK:MOVING_TO|12,20|from:10,20"]),
-                ("read", ["POS|12|20"]),
+                ("write", ["POS|12|20"]),
             ]
         )
         gs.dismiss_popup = _no_dismiss
@@ -636,7 +636,7 @@ class TestMoveUnit:
         gs, _ = _gs(
             [
                 ("write", ["OK:MOVING_TO|12,20|from:10,20"]),
-                ("read", ["POS|11|20"]),
+                ("write", ["POS|11|20|moves:0|busy:false"]),
             ]
         )
         gs.dismiss_popup = _no_dismiss
@@ -652,7 +652,7 @@ class TestMoveUnit:
         gs, _ = _gs(
             [
                 ("write", ["OK:MOVING_TO|12,20|from:10,20"]),
-                ("read", ["POS|10|20", "DIAG|MOUNTAIN|impassable mountain"]),
+                ("write", ["POS|10|20|moves:2|busy:false", "DIAG|MOUNTAIN|impassable mountain"]),
             ]
         )
         gs.dismiss_popup = _no_dismiss
@@ -663,11 +663,12 @@ class TestMoveUnit:
         result = run(go())
         assert "|BLOCKED (impassable mountain)" in result
 
-    def test_gone_unit_leaves_the_result_unannotated(self):
+    def test_gone_unit_leaves_outcome_unknown(self):
         gs, _ = _gs(
             [
                 ("write", ["OK:CAPTURE_MOVE|12,20|from:10,20"]),
-                ("read", ["POS|GONE"]),
+                ("write", ["POS|GONE"]),
+                ("write", ConnectionError("no further observation")),
             ]
         )
         gs.dismiss_popup = _no_dismiss
@@ -675,7 +676,7 @@ class TestMoveUnit:
         async def go():
             return await gs.move_unit(1, 12, 20)
 
-        assert run(go()) == "CAPTURE_MOVE|12,20|from:10,20"
+        assert "OUTCOME_UNKNOWN" in run(go())
 
     def test_error_result_skips_the_position_readback(self):
         gs, conn = _gs([("write", ["ERR:NO_MOVES|unit has no moves"])])
@@ -691,7 +692,7 @@ class TestMoveUnit:
         gs, _ = _gs(
             [
                 ("write", ["OK:MOVING_TO|12,20|from:10,20"]),
-                ("read", ["POS|12|20"]),
+                ("write", ["POS|12|20"]),
             ]
         )
 
@@ -717,9 +718,8 @@ _RANGE_HIT = "OK:RANGE_ATTACK|target:Warrior at (12,20)|pre_hp:80/100|your HP:10
 
 class TestAttackUnit:
     """Combat HP is not readable same-frame, so the contract is: follow-up
-    read wins when it reflects a change, the pre-attack estimate is the
-    fallback when the follow-up looks stale, and elimination is reported
-    when no enemy remains on the tile."""
+    read confirms actual changes; estimates never replace actual damage
+    and absence from a tile is never proof of elimination."""
 
     def test_followup_with_lower_hp_reports_real_damage(self, monkeypatch):
         monkeypatch.setattr(asyncio, "sleep", _instant_sleep)
@@ -741,15 +741,15 @@ class TestAttackUnit:
         assert "Post-combat: UNIT_WARRIOR 50/100" in result
         assert conn.exhausted
 
-    def test_stale_followup_falls_back_to_the_estimate(self, monkeypatch):
-        """The follow-up often reflects pre-combat HP (engine hasn't applied
-        damage within the same frame); the estimate is then authoritative."""
+    def test_stale_followup_remains_unknown(self, monkeypatch):
+        """An old HP observation cannot confirm asynchronous combat."""
         monkeypatch.setattr(asyncio, "sleep", _instant_sleep)
         gs, _ = _gs(
             [
                 ("write", [_ESTIMATE_LINE]),
                 ("write", [_RANGE_HIT]),
                 ("write", ["UNIT|UNIT_WARRIOR|80/100|owner:1"]),
+                ("write", ConnectionError("confirmation lost")),
             ]
         )
 
@@ -760,8 +760,8 @@ class TestAttackUnit:
 
         result = run(go())
         # estimate: 24 * 10^((25-20)/30) ≈ 35 damage → ~45/80
-        assert "|est damage dealt:~35" in result
-        assert "~45/80 (estimate — verify with get_units)" in result
+        assert "OUTCOME_UNKNOWN" in result
+        assert "damage dealt:" not in result
 
     def test_empty_followup_is_not_reported_as_a_kill(self, monkeypatch):
         """A follow-up read that returns nothing — indistinguishable from a
@@ -773,6 +773,7 @@ class TestAttackUnit:
                 ("write", [_ESTIMATE_LINE]),
                 ("write", [_RANGE_HIT]),
                 ("write", []),  # game said nothing — not proof of a kill
+                ("write", ConnectionError("confirmation lost")),
             ]
         )
 
@@ -784,8 +785,8 @@ class TestAttackUnit:
         result = run(go())
         assert "(killed)" not in result
         assert "Target eliminated" not in result
-        assert "|est damage dealt:~35" in result
-        assert "~45/80 (estimate — verify with get_units)" in result
+        assert "OUTCOME_UNKNOWN" in result
+        assert "damage dealt:" not in result
 
     def test_failed_estimate_does_not_block_the_attack(self, monkeypatch):
         monkeypatch.setattr(asyncio, "sleep", _instant_sleep)
@@ -850,6 +851,7 @@ class TestCityAttack:
             [
                 ("write", ["OK:CITY_RANGE_ATTACK|Capital -> Warrior@12,20|pre_hp:80/100"]),
                 ("write", []),
+                ("write", ConnectionError("confirmation lost")),
             ]
         )
 
@@ -859,7 +861,7 @@ class TestCityAttack:
         result = run(go())
         assert "(killed)" not in result
         assert "Target eliminated" not in result
-        assert "Post-combat: no follow-up data — outcome unconfirmed" in result
+        assert "OUTCOME_UNKNOWN" in result
 
     def test_non_attack_result_skips_the_followup(self, monkeypatch):
         monkeypatch.setattr(asyncio, "sleep", _instant_sleep)
@@ -981,41 +983,27 @@ class TestFoundCity:
         assert run(go()) == "FOUNDED|10,20"
         assert conn.exhausted
 
-    def test_unverified_founding_retries_once_after_popup_dismiss(self):
-        gs, conn = _gs(
-            [
-                ("write", ["OK:FOUNDED|10,20"]),
-                ("read", ["NO_CITY_HERE"]),
-                ("write", ["OK:FOUNDED|10,20"]),  # retry
-                ("read", ["CITY_EXISTS|Rome"]),
-            ]
-        )
+    def test_unverified_founding_waits_without_resubmitting(self):
+        gs, conn = _gs([
+            ("write", ["OK:FOUNDED|10,20"]),
+            ("read", ["NO_CITY_HERE"]),
+            ("read", ["CITY_EXISTS|owner:0|city:65536"]),
+        ])
         gs.dismiss_popup = _no_dismiss
-
-        async def go():
-            return await gs.found_city(1)
-
-        assert run(go()) == "FOUNDED|10,20"
+        assert run(gs.found_city(1)) == "FOUNDED|10,20"
+        assert sum("RequestOperation" in code for _, code in conn.calls) == 1
         assert conn.exhausted
 
-    def test_double_failure_becomes_found_failed_with_advisor(self):
-        gs, conn = _gs(
-            [
-                ("write", ["OK:FOUNDED|10,20"]),
-                ("read", ["NO_CITY_HERE"]),
-                ("write", ["OK:FOUNDED|10,20"]),
-                ("read", ["NO_CITY_HERE"]),
-                ("read", ["SETTLE|11,21|42.5|4|2|river|1|"]),  # advisor
-            ]
-        )
+    def test_missing_city_and_lost_observation_leaves_unknown(self):
+        gs, conn = _gs([
+            ("write", ["OK:FOUNDED|10,20"]),
+            ("read", ["NO_CITY_HERE"]),
+            ("read", ConnectionError("confirmation lost")),
+        ])
         gs.dismiss_popup = _no_dismiss
-
-        async def go():
-            return await gs.found_city(1)
-
-        result = run(go())
-        assert result.startswith("Error: FOUND_FAILED|Founding at 10,20")
-        assert "\n\n" in result  # advisor narration appended
+        assert "OUTCOME_UNKNOWN" in run(gs.found_city(1))
+        assert sum("RequestOperation" in code for _, code in conn.calls) == 1
+        assert gs.pending_action_summary
         assert conn.exhausted
 
     def test_cannot_found_appends_settle_advisor(self):
@@ -1489,8 +1477,11 @@ class TestGreatPersonResults:
 
 
 class TestSaveCheckpoint:
-    def prepare(self, monkeypatch, *, turns=(12, 12), identities=None):
+    def prepare(self, monkeypatch, tmp_path, *, turns=(12, 12), identities=None):
         from types import SimpleNamespace
+        from civ_mcp import checkpoints, game_launcher
+        monkeypatch.setattr(game_launcher, "SINGLE_SAVE_DIR", str(tmp_path))
+        monkeypatch.setattr(checkpoints, "CHECKPOINT_DIR", tmp_path / "metadata")
         gs, conn = _gs()
         snapshots = iter(turns)
         game_ids = iter(identities or [("babylon", 42), ("babylon", 42)])
@@ -1505,44 +1496,46 @@ class TestSaveCheckpoint:
         async def save(connection, name):
             assert connection is conn
             saves.append(name)
+            (tmp_path / (name + ".Civ6Save")).write_bytes(b"completed-save")
+            checkpoints.mark_complete(name)
             return "Saved: checkpoint; file confirmed (100 bytes)."
         monkeypatch.setattr(gs, "get_game_identity", identity)
         monkeypatch.setattr(gs, "get_game_overview", overview)
         monkeypatch.setattr(game_lifecycle, "save_game", save)
         return gs, conn, saves
 
-    def test_confirmed_checkpoint_includes_identity_and_turn(self, monkeypatch):
-        gs, conn, saves = self.prepare(monkeypatch)
+    def test_confirmed_checkpoint_includes_identity_and_turn(self, monkeypatch, tmp_path):
+        gs, conn, saves = self.prepare(monkeypatch, tmp_path)
         result = run(gs.save_game("checkpoint"))
         assert result.endswith("Civilization babylon, seed 42, turn 12.")
         assert saves == ["checkpoint"]
         assert conn.calls == []
 
-    def test_pending_end_turn_cannot_create_recovery_checkpoint(self, monkeypatch):
-        gs, _, saves = self.prepare(monkeypatch)
+    def test_pending_end_turn_cannot_create_recovery_checkpoint(self, monkeypatch, tmp_path):
+        gs, _, saves = self.prepare(monkeypatch, tmp_path)
         gs._pending_end_turn = True
         assert "pending" in run(gs.save_game("checkpoint"))
         assert saves == []
         assert gs._pending_end_turn
 
-    def test_changed_turn_is_not_a_confirmed_checkpoint(self, monkeypatch):
-        gs, _, saves = self.prepare(monkeypatch, turns=(12, 13))
+    def test_changed_turn_is_not_a_confirmed_checkpoint(self, monkeypatch, tmp_path):
+        gs, _, saves = self.prepare(monkeypatch, tmp_path, turns=(12, 13))
         assert run(gs.save_game("checkpoint")).startswith("ERR:OUTCOME_UNKNOWN")
         assert saves == ["checkpoint"]
 
-    def test_changed_world_is_not_a_confirmed_checkpoint(self, monkeypatch):
-        gs, _, _ = self.prepare(monkeypatch, identities=[("babylon", 42), ("rome", 42)])
+    def test_changed_world_is_not_a_confirmed_checkpoint(self, monkeypatch, tmp_path):
+        gs, _, _ = self.prepare(monkeypatch, tmp_path, identities=[("babylon", 42), ("rome", 42)])
         assert run(gs.save_game("checkpoint")).startswith("ERR:OUTCOME_UNKNOWN")
 
-    def test_lost_verification_does_not_replay_or_hide_the_saved_file(self, monkeypatch):
-        gs, _, saves = self.prepare(monkeypatch, identities=[("babylon", 42), ConnectionError("lost")])
+    def test_lost_verification_does_not_replay_or_hide_the_saved_file(self, monkeypatch, tmp_path):
+        gs, _, saves = self.prepare(monkeypatch, tmp_path, identities=[("babylon", 42), ConnectionError("lost")])
         result = run(gs.save_game("checkpoint"))
         assert result.startswith("ERR:OUTCOME_UNKNOWN|Saved: checkpoint;")
         assert "verification failed" in result
         assert saves == ["checkpoint"]
 
-    def test_unknown_identity_refuses_save(self, monkeypatch):
-        gs, _, saves = self.prepare(monkeypatch, identities=[("unknown", 0)])
+    def test_unknown_identity_refuses_save(self, monkeypatch, tmp_path):
+        gs, _, saves = self.prepare(monkeypatch, tmp_path, identities=[("unknown", 0)])
         assert run(gs.save_game("checkpoint")).startswith("Error:")
         assert saves == []
 
@@ -1553,7 +1546,7 @@ class TestSaveCheckpoint:
 
 
 class TestSessionReset:
-    def test_submitted_index_load_discards_previous_world(self, monkeypatch):
+    def test_submitted_index_load_discards_previous_world(self, monkeypatch, tmp_path):
         async def loaded(conn, index):
             return "Loading save: chosen"
         async def disconnect():
@@ -1565,7 +1558,7 @@ class TestSessionReset:
         assert run(gs.load_save(1)).startswith("Loading")
         assert not gs._pending_end_turn
 
-    def test_rejected_load_preserves_current_session(self, monkeypatch):
+    def test_rejected_load_preserves_current_session(self, monkeypatch, tmp_path):
         async def rejected(conn, index):
             return "Error: rejected"
         monkeypatch.setattr(game_lifecycle, "load_save", rejected)
@@ -1574,7 +1567,7 @@ class TestSessionReset:
         assert run(gs.load_save(1)).startswith("Error")
         assert gs._pending_end_turn
 
-    def test_unknown_native_load_discards_previous_session(self, monkeypatch):
+    def test_unknown_native_load_discards_previous_session(self, monkeypatch, tmp_path):
         async def unknown(conn, name):
             return "ERR:OUTCOME_UNKNOWN|response lost"
         monkeypatch.setattr(game_lifecycle, "load_game_save", unknown)

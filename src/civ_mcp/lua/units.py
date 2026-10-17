@@ -237,7 +237,7 @@ def build_unit_position_query(
     move_target_x: int | None = None,
     move_target_y: int | None = None,
 ) -> str:
-    """GameCore: read a unit's current position.
+    """InGame read-only probe: position, actual moves and optional core-busy state.
 
     When *move_target_x/y* are provided, also diagnoses why a blocked move
     failed (water, mountain, foreign border) so the caller doesn't need a
@@ -292,7 +292,11 @@ end)
     return f"""
 local me = Game.GetLocalPlayer()
 local u = Players[me]:GetUnits():FindID({unit_index})
-if u then print("POS|" .. u:GetX() .. "|" .. u:GetY()) else print("POS|GONE") end
+if u then
+    local busy = "unknown"
+    pcall(function() busy = tostring(UI.IsGameCoreBusy()) end)
+    print("POS|" .. u:GetX() .. "|" .. u:GetY() .. "|moves:" .. u:GetMovesRemaining() .. "|busy:" .. busy)
+else print("POS|GONE") end
 {diag_block}print("{SENTINEL}")
 """
 
@@ -342,6 +346,7 @@ end
 local enemyHP = enemy:GetMaxDamage() - enemy:GetDamage()
 local enemyMaxHP = enemy:GetMaxDamage()
 local myHP = unit:GetMaxDamage() - unit:GetDamage()
+local beforeTag = "|target_owner:" .. enemyOwner .. "|target_id:" .. enemy:GetID() .. "|attacks_before:" .. unit:GetAttacksRemaining()
 local params = {{}}
 params[UnitOperationTypes.PARAM_X] = {target_x}
 params[UnitOperationTypes.PARAM_Y] = {target_y}
@@ -365,7 +370,7 @@ if isRanged then
     local canRanged = UnitManager.CanStartOperation(unit, UnitOperationTypes.RANGE_ATTACK, nil, losParams)
     if canRanged then
         UnitManager.RequestOperation(unit, UnitOperationTypes.RANGE_ATTACK, params)
-        print("OK:RANGE_ATTACK|target:" .. enemyName .. " at ({target_x},{target_y})|pre_hp:" .. enemyHP .. "/" .. enemyMaxHP .. "|your HP:" .. myHP .. "|range:" .. rng .. " dist:" .. dist)
+        print("OK:RANGE_ATTACK|target:" .. enemyName .. " at ({target_x},{target_y})|pre_hp:" .. enemyHP .. "/" .. enemyMaxHP .. "|your HP:" .. myHP .. "|range:" .. rng .. " dist:" .. dist .. beforeTag)
         print("{SENTINEL}"); return
     elseif dist <= 1 then
         -- Ranged failed at melee range: fall through to melee attack below
@@ -382,7 +387,7 @@ if isAir then
         {_bail_lua('"ERR:OUT_OF_RANGE|Target at distance " .. dist .. " but air range is " .. rng .. ". Rebase closer first."')}
     end
     UnitManager.RequestOperation(unit, UnitOperationTypes.AIR_ATTACK, params)
-    print("OK:AIR_ATTACK|target:" .. enemyName .. " at ({target_x},{target_y})|pre_hp:" .. enemyHP .. "/" .. enemyMaxHP .. "|bomber HP:" .. myHP .. "|range:" .. rng .. " dist:" .. dist)
+    print("OK:AIR_ATTACK|target:" .. enemyName .. " at ({target_x},{target_y})|pre_hp:" .. enemyHP .. "/" .. enemyMaxHP .. "|bomber HP:" .. myHP .. "|range:" .. rng .. " dist:" .. dist .. beforeTag)
 else
     -- Melee: let CanStartOperation be the authority on adjacency/validity.
     -- Map.GetPlotDistance can misreport distance on offset hex grids, so we
@@ -402,36 +407,13 @@ else
         {_bail_lua('"ERR:ATTACK_BLOCKED|Cannot attack " .. enemyName .. " at ({target_x},{target_y}) (map dist=" .. dist .. "). Unit not adjacent or blocked by popup/diplomacy."')}
     end
     UnitManager.RequestOperation(unit, UnitOperationTypes.MOVE_TO, params)
-    -- Verify unit reached adjacency (MOVE_TO resolves synchronously for movement)
-    local newX, newY = unit:GetX(), unit:GetY()
-    local newDist = Map.GetPlotDistance(newX, newY, {target_x}, {target_y})
-    if newDist > 1 then
-        print("ERR:STOPPED_SHORT|Unit moved to (" .. newX .. "," .. newY .. ") but could not reach target at ({target_x},{target_y}) — " .. newDist .. " tiles away. Movement exhausted by terrain. Try again next turn from closer position.")
-        print("{SENTINEL}"); return
-    end
-    -- Try to read post-combat state (may fail if units moved/died)
-    local myAfterHP = myHP
-    local ok1, _ = pcall(function() myAfterHP = unit:GetMaxDamage() - unit:GetDamage() end)
-    local enemyAfterHP = 0
-    local enemyAlive = false
-    local ok2, _ = pcall(function()
-        local d = enemy:GetDamage()
-        if d ~= nil then enemyAfterHP = enemy:GetMaxDamage() - d; enemyAlive = true end
-    end)
-    local report = "OK:MELEE_ATTACK|target:" .. enemyName .. " at ({target_x},{target_y})"
-    if enemyAlive then
-        report = report .. "|enemy HP:" .. enemyHP .. " -> " .. enemyAfterHP .. "/" .. enemyMaxHP
-    else
-        report = report .. "|enemy HP:" .. enemyHP .. " -> KILLED"
-    end
-    report = report .. "|your HP:" .. myHP .. " -> " .. myAfterHP .. " CS:" .. myCS
-    print(report)
+    print("OK:MELEE_ATTACK|target:" .. enemyName .. " at ({target_x},{target_y})|pre_hp:" .. enemyHP .. "/" .. enemyMaxHP .. "|your HP:" .. myHP .. " CS:" .. myCS .. beforeTag)
 end
 print("{SENTINEL}")
 """
 
 
-def build_attack_followup_query(target_x: int, target_y: int) -> str:
+def build_attack_followup_query(target_x: int, target_y: int, attacker_index: int | None = None) -> str:
     """InGame context: get actual HP of units at target tile after combat.
 
     Also checks for city defenses (walls/garrison) at the target — when
@@ -441,8 +423,27 @@ def build_attack_followup_query(target_x: int, target_y: int) -> str:
     Runs in InGame context because enemy city district APIs
     (GetDistricts, GetMaxDamage) are not available in GameCore.
     """
+    attacker_probe = ""
+    if attacker_index is not None:
+        attacker_probe = f"""
+local me = Game.GetLocalPlayer()
+local attacker = Players[me]:GetUnits():FindID({attacker_index})
+if attacker then
+    local busy = "unknown"
+    pcall(function() busy = tostring(UI.IsGameCoreBusy()) end)
+    print("ATTACKER|hp:" .. (attacker:GetMaxDamage()-attacker:GetDamage()) .. "|moves:" .. attacker:GetMovesRemaining() .. "|attacks:" .. attacker:GetAttacksRemaining() .. "|busy:" .. busy)
+else print("ATTACKER|gone") end
+"""
     return f"""
+{attacker_probe}
 local found = false
+local visible = false
+pcall(function()
+    local visibility = PlayersVisibility[Game.GetLocalPlayer()]
+    local plot = Map.GetPlot({target_x}, {target_y})
+    visible = visibility and plot and visibility:IsVisible(plot:GetIndex())
+end)
+if visible then
 for i = 0, 63 do
     if Players[i] and Players[i]:IsAlive() then
         for _, u in Players[i]:GetUnits():Members() do
@@ -450,7 +451,7 @@ for i = 0, 63 do
                 local hp = u:GetMaxDamage() - u:GetDamage()
                 local entry = GameInfo.Units[u:GetType()]
                 local name = entry and entry.UnitType or "UNKNOWN"
-                print("UNIT|" .. name .. "|" .. hp .. "/" .. u:GetMaxDamage() .. "|owner:" .. i)
+                print("UNIT|" .. name .. "|" .. hp .. "/" .. u:GetMaxDamage() .. "|owner:" .. i .. "|id:" .. u:GetID())
                 found = true
             end
         end
@@ -477,7 +478,8 @@ for i = 0, 63 do
         end)
     end
 end
-if not found then print("EMPTY") end
+end
+if not visible then print("TARGET_NOT_VISIBLE") elseif not found then print("EMPTY") end
 print("{SENTINEL}")
 """
 
@@ -506,7 +508,15 @@ local unitInfo = GameInfo.Units[unit:GetType()]
 local attType = unitInfo and unitInfo.UnitType or "UNKNOWN"
 local attCS = unitInfo and unitInfo.Combat or 0
 local attRS = unitInfo and unitInfo.RangedCombat or 0
-local isRanged = attRS > 0 and dist > 1
+local estimateParams = {{}}
+estimateParams[UnitOperationTypes.PARAM_X] = {target_x}
+estimateParams[UnitOperationTypes.PARAM_Y] = {target_y}
+local isRanged = UnitManager.CanStartOperation(unit, UnitOperationTypes.RANGE_ATTACK, nil, true)
+if isRanged then
+    isRanged = UnitManager.CanStartOperation(unit, UnitOperationTypes.RANGE_ATTACK, nil, estimateParams)
+end
+local isAir = (not isRanged) and UnitManager.CanStartOperation(unit, UnitOperationTypes.AIR_ATTACK, nil, estimateParams)
+isRanged = isRanged or isAir
 local effAttCS = isRanged and attRS or attCS
 -- Find defender
 local enemy = nil
