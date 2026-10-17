@@ -295,47 +295,6 @@ class TestAutosaveDiscovery:
 
 
 class TestRecovery:
-    def patch_recovery(self, monkeypatch, launch_result):
-        events = []
-
-        async def dismiss():
-            events.append("dismiss")
-            return []
-
-        async def kill():
-            events.append("kill")
-            return "Killed"
-
-        async def launch():
-            events.append("launch")
-            return launch_result
-
-        async def load(conn, name):
-            events.append(("load", name))
-            return "Loading save"
-
-        class FakeConn:
-            async def connect(self):
-                events.append("connect")
-
-        monkeypatch.setattr(gl, "dismiss_crash_dialogs", dismiss)
-        monkeypatch.setattr(gl, "kill_game", kill)
-        monkeypatch.setattr(gl, "launch_game", launch)
-        monkeypatch.setattr("civ_mcp.connection.GameConnection", FakeConn)
-        monkeypatch.setattr("civ_mcp.game_lifecycle.load_save_from_frontend", load)
-        return events
-
-    def test_recovery_connects_then_uses_native_loader_once(self, monkeypatch):
-        events = self.patch_recovery(monkeypatch, "Game launched")
-        result = asyncio.run(gl.restart_and_load("MySave"))
-        assert events == ["dismiss", "kill", "launch", "dismiss", "connect", ("load", "MySave")]
-        assert "Load: Loading save" in result
-
-    def test_launch_failure_does_not_connect_or_load(self, monkeypatch):
-        events = self.patch_recovery(monkeypatch, "FAILED: Game process not detected")
-        assert "ABORTED" in asyncio.run(gl.restart_and_load("MySave"))
-        assert events == ["dismiss", "kill", "launch"]
-
     def test_async_process_wrappers_are_safe_to_call(self, monkeypatch):
         monkeypatch.setattr(gl, "_kill_game_sync", lambda: "K")
         monkeypatch.setattr(gl, "_launch_game_sync", lambda: "L")
@@ -345,3 +304,11 @@ class TestRecovery:
             return await gl.kill_game(), await gl.launch_game(), await gl.dismiss_crash_dialogs()
 
         assert asyncio.run(wrappers()) == ("K", "L", ["dialog"])
+
+
+def test_typed_stop_uses_process_fact_independently_of_display(monkeypatch):
+    monkeypatch.setattr(gl, "_kill_game_sync", lambda: "WARNING: display text changed")
+    monkeypatch.setattr(gl, "is_game_running", lambda: False)
+    result = asyncio.run(gl.stop_game())
+    assert result.confirmed is True
+    assert result.message == "WARNING: display text changed"

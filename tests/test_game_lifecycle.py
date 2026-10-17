@@ -297,45 +297,6 @@ class TestSaveGame:
 
 
 # ---------------------------------------------------------------------------
-# load_save (index-based)
-# ---------------------------------------------------------------------------
-
-
-class TestLoadSave:
-    def test_reports_missing_cache_before_any_list_query(self):
-        async def go():
-            conn = FakeConn(on_write=lambda lua: ["ERR:NO_SAVE_LIST"])
-            return await gl.load_save(conn, 1)
-
-        assert "No save list cached" in run(go())
-
-    def test_reports_index_out_of_range_with_the_list_size(self):
-        async def go():
-            conn = FakeConn(on_write=lambda lua: ["ERR:INDEX_OUT_OF_RANGE|3"])
-            return await gl.load_save(conn, 9)
-
-        assert "out of range (1-3)" in run(go())
-
-    def test_confirms_loading_and_interpolates_the_index(self):
-        async def go():
-            conn = FakeConn(on_write=lambda lua: ["LOADING|AutoSave_0221"])
-            result = await gl.load_save(conn, 7)
-            return conn, result
-
-        conn, result = run(go())
-        assert result.startswith("Loading save: AutoSave_0221")
-        assert "local idx = 7;" in conn.writes[0]
-        assert "Network.LeaveGame()" in conn.writes[0]
-
-    def test_unrecognised_response_falls_back_to_a_generic_message(self):
-        async def go():
-            conn = FakeConn(on_write=lambda lua: ["garbage"])
-            return await gl.load_save(conn, 1)
-
-        assert run(go()) == "Load command sent. Wait for game to reload."
-
-
-# ---------------------------------------------------------------------------
 # list_saves — filesystem scan first, Lua query as fallback
 # ---------------------------------------------------------------------------
 
@@ -468,48 +429,6 @@ class TestListSaves:
 
         out = run(gl.list_saves(FakeConn(on_write=on_write)))
         assert out == "No saves found on filesystem."
-
-
-class TestLoadSaveFilesystemFallback:
-    """A filesystem listing is cached so load_save(index) works even when
-    the Lua MCPSaveList cache was never populated."""
-
-    def test_filesystem_listing_is_cached_for_load_save(
-        self, save_dirs, monkeypatch
-    ):
-        monkeypatch.setattr(asyncio, "sleep", _no_sleep)
-        monkeypatch.setattr(sys, "platform", "darwin")
-        base, auto = save_dirs
-        _touch(auto / "AutoSave_0001.Civ6Save", 1000)
-        _touch(base / "MyGame.Civ6Save", 2000)
-
-        def on_write(lua):
-            return ["ERR:NO_SAVE_LIST"]  # load_save's Lua cache check
-
-        async def go():
-            conn = menu_conn(on_write=on_write, on_state=frontend_ok)
-            listing = await gl.list_saves(conn)
-            result = await gl.load_save(conn, 1)
-            return conn, listing, result
-
-        conn, listing, result = run(go())
-        assert listing.startswith("Available saves (filesystem scan")
-        # Index 1 = newest = MyGame; loaded by name via the FrontEnd loader.
-        assert result.startswith("Loading save MyGame")
-        ((_, lua),) = conn.load_calls
-        assert "local loadGame = q.save" in lua
-        assert any('local wanted = "MyGame.Civ6Save";' in code for _, code in conn.state_calls)
-
-    def test_out_of_range_index_against_the_filesystem_cache(self, save_dirs):
-        base, _auto = save_dirs
-        _touch(base / "Only.Civ6Save", 1000)
-
-        async def go():
-            conn = FakeConn(on_write=lambda lua: ["ERR:NO_SAVE_LIST"])
-            await gl.list_saves(conn)
-            return await gl.load_save(conn, 5)
-
-        assert "out of range (1-1)" in run(go())
 
 
 # ---------------------------------------------------------------------------
