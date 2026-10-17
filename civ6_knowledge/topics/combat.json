@@ -1,0 +1,429 @@
+{
+  "schema_version": 1,
+  "topic": "combat",
+  "cards": [
+    {
+      "id": "MECHANIC_COMBAT_MOVEMENT",
+      "names": {
+        "zh_Hans_CN": "单位移动与地形成本",
+        "en_US": "Unit movement and terrain costs"
+      },
+      "summary": "单位移动力、地形成本、地貌变化与道路分别定义；基础移动力不等于本回合可走格数。",
+      "conditions": [
+        "结合地形、地貌、道路、河流、上下船及单位能力判断路径。",
+        "道路是否架桥由道路定义区分；同一目的地的实际路径仍由引擎计算。"
+      ],
+      "source_selectors": [
+        {
+          "table": "Units",
+          "key": "UnitType",
+          "value": "UNIT_WARRIOR"
+        },
+        {
+          "table": "Terrains",
+          "key": "TerrainType",
+          "value": "TERRAIN_GRASS_HILLS"
+        },
+        {
+          "table": "Features",
+          "key": "FeatureType",
+          "value": "FEATURE_FOREST"
+        },
+        {
+          "table": "Routes",
+          "key": "RouteType",
+          "value": "ROUTE_ANCIENT_ROAD"
+        },
+        {
+          "table": "Routes",
+          "key": "RouteType",
+          "value": "ROUTE_MEDIEVAL_ROAD"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "MOVEMENT_RIVER_COST"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "MOVEMENT_EMBARK_COST"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_MOVEMENT_1_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_MOVEMENT_2_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_MOVEMENT_5_CHAPTER_CONTENT_PARA_1"
+        }
+      ],
+      "related": [
+        "UNIT_WARRIOR",
+        "TERRAIN_GRASS_HILLS",
+        "FEATURE_FOREST"
+      ],
+      "current_facts_needed": [
+        "剩余移动力、当前及目标位置",
+        "地图道路、河流、上下船条件与寻路结果"
+      ]
+    },
+    {
+      "id": "MECHANIC_COMBAT_CONTROL_ZONE",
+      "names": {
+        "zh_Hans_CN": "控制区与寻路",
+        "en_US": "Zone of control and pathfinding"
+      },
+      "summary": "控制区会截停受影响的敌军移动；施加控制区与忽略控制区是不同能力。",
+      "conditions": [
+        "受到敌方控制区影响而停下的单位，如仍有攻击所需移动力，仍可攻击。",
+        "远程与轰炸类通常不施加控制区；骑兵及海军袭击类可忽略敌方控制区；宗教单位影响其他宗教单位。",
+        "河流阻隔控制区；能力和晋升可能改变通常规则。先查当前可达性，不用直线格数代替寻路。"
+      ],
+      "source_selectors": [
+        {
+          "table": "Units",
+          "key": "UnitType",
+          "value": "UNIT_WARRIOR"
+        },
+        {
+          "table": "Units",
+          "key": "UnitType",
+          "value": "UNIT_ARCHER"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_MOVEMENT_3_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_MOVEMENT_3_CHAPTER_CONTENT_PARA_2"
+        }
+      ],
+      "related": [
+        "UNIT_WARRIOR",
+        "UNIT_ARCHER",
+        "MECHANIC_COMBAT_MOVEMENT"
+      ],
+      "current_facts_needed": [
+        "可见敌军及能力、河流和陆海位置",
+        "当前寻路与本回合可达地块"
+      ],
+      "limitations": [
+        "静态控制区字段不求值敌军隐蔽状态或完整寻路规则。"
+      ]
+    },
+    {
+      "id": "MECHANIC_COMBAT_ATTACK",
+      "names": {
+        "zh_Hans_CN": "攻击类型与次数",
+        "en_US": "Attack types and limits"
+      },
+      "summary": "近战、远程和轰炸分开定义；攻击次数与移动后能否攻击还受晋升和能力影响。",
+      "conditions": [
+        "核对攻击类型、射程、视线、目标与已消耗攻击次数。",
+        "神射手额外攻击要求单位未移动；无法移动射击能力限制同回合移动与攻击。",
+        "伤势、地形、支援和修正器会改变战斗；基础战力不能直接当作本次伤害。",
+        "夹击和支援加成须先完成军事传统；位置、攻击类型及相邻友军仍需核对。"
+      ],
+      "source_selectors": [
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "COMBAT_MAX_NUM_ATTACKS"
+        },
+        {
+          "table": "Units",
+          "key": "UnitType",
+          "value": "UNIT_ARCHER"
+        },
+        {
+          "table": "UnitPromotions",
+          "key": "UnitPromotionType",
+          "value": "PROMOTION_EXPERT_MARKSMAN"
+        },
+        {
+          "table": "UnitAbilities",
+          "key": "UnitAbilityType",
+          "value": "ABILITY_NO_MOVE_AND_SHOOT"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_COMBAT_5_CHAPTER_CONTENT_PARA_3"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_COMBAT_5_CHAPTER_CONTENT_PARA_4"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_COMBAT_5_CHAPTER_CONTENT_PARA_5"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_COMBAT_5_CHAPTER_CONTENT_PARA_6"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_COMBAT_6_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_COMBAT_7_CHAPTER_CONTENT_PARA_4"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "COMBAT_WOUNDED_DAMAGE_MULTIPLIER"
+        }
+      ],
+      "related": [
+        "UNIT_ARCHER",
+        "PROMOTION_EXPERT_MARKSMAN",
+        "MECHANIC_COMBAT_SIEGE",
+        "CIVIC_MILITARY_TRADITION"
+      ],
+      "current_facts_needed": [
+        "单位当前移动、攻击次数、生命与已获能力",
+        "目标类型、视线、射程和实际战斗修正"
+      ],
+      "limitations": [
+        "不拼接全局参数猜测伤害公式；现有查询没有通用伤害预览。"
+      ]
+    },
+    {
+      "id": "MECHANIC_COMBAT_SIEGE",
+      "names": {
+        "zh_Hans_CN": "城墙与攻城支援",
+        "en_US": "Walls and siege support"
+      },
+      "summary": "攻城支援依赖相邻位置、攻击单位类别与城防层级；破城槌和攻城塔的效果不同。",
+      "conditions": [
+        "两种支援都要求相邻城市，且适用于进攻的近战和抗骑兵类单位。",
+        "破城槌对中世纪、文艺复兴城墙及城市防御无效；攻城塔对文艺复兴城墙及城市防御无效。",
+        "破城槌使适用单位对城墙输出全额伤害；攻城塔使其绕墙攻击城市。",
+        "围城要求全部相邻格被敌军占据、受敌方控制区影响或不可通行；控制区例外仍需核对。围城使该区域停止自然回血。",
+        "攻城还需核对城市生命、防御及实际占领资格；城墙修复另走项目条件。"
+      ],
+      "source_selectors": [
+        {
+          "table": "Units",
+          "key": "UnitType",
+          "value": "UNIT_BATTERING_RAM"
+        },
+        {
+          "table": "Units",
+          "key": "UnitType",
+          "value": "UNIT_SIEGE_TOWER"
+        },
+        {
+          "table": "TypeTags",
+          "key": "Type",
+          "value": "UNIT_BATTERING_RAM"
+        },
+        {
+          "table": "TypeTags",
+          "key": "Type",
+          "value": "UNIT_SIEGE_TOWER"
+        },
+        {
+          "table": "UnitAbilities",
+          "key": "UnitAbilityType",
+          "value": "ABILITY_ENABLE_WALL_ATTACK_PROMOTION_CLASS"
+        },
+        {
+          "table": "UnitAbilities",
+          "key": "UnitAbilityType",
+          "value": "ABILITY_BYPASS_WALLS_PROMOTION_CLASS"
+        },
+        {
+          "table": "ModifierArguments",
+          "key": "ModifierId",
+          "value": "ENABLE_WALL_ATTACK_MELEE"
+        },
+        {
+          "table": "ModifierArguments",
+          "key": "ModifierId",
+          "value": "ENABLE_WALL_ATTACK_ANTI_CAVALRY"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_COMBAT_9_CHAPTER_CONTENT_PARA_2"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_COMBAT_9_CHAPTER_CONTENT_PARA_3"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_COMBAT_10_CHAPTER_CONTENT_PARA_1"
+        }
+      ],
+      "related": [
+        "UNIT_BATTERING_RAM",
+        "UNIT_SIEGE_TOWER",
+        "MECHANIC_COMBAT_ATTACK"
+      ],
+      "current_facts_needed": [
+        "城市城墙层级、防御和生命",
+        "攻击单位晋升类别、占领资格、支援位置"
+      ],
+      "limitations": [
+        "静态能力关联不证明当前城市或单位满足生效条件。"
+      ]
+    },
+    {
+      "id": "MECHANIC_COMBAT_UPGRADE",
+      "names": {
+        "zh_Hans_CN": "单位升级链与费用",
+        "en_US": "Unit upgrade paths and costs"
+      },
+      "summary": "UnitUpgrades 指向下一单位；升级目标的研究和资源条件及费用修正需单独核对。",
+      "conditions": [
+        "升级链与文明替代关系一起读取；目标单位的研究、资源和有效费用不能沿用旧单位数值。",
+        "全局升级成本参数是计算输入，不能代替当前金币、位置、移动与单位状态检查。"
+      ],
+      "source_selectors": [
+        {
+          "table": "UnitUpgrades",
+          "key": "Unit",
+          "value": "UNIT_WARRIOR"
+        },
+        {
+          "table": "Units",
+          "key": "UnitType",
+          "value": "UNIT_SWORDSMAN"
+        },
+        {
+          "table": "Units_XP2",
+          "key": "UnitType",
+          "value": "UNIT_SWORDSMAN"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "UPGRADE_BASE_COST"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "UPGRADE_NET_PRODUCTION_PERCENT_COST"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "UPGRADE_MINIMUM_COST"
+        },
+        {
+          "table": "UnitReplaces",
+          "key": "ReplacesUnitType",
+          "value": "UNIT_SWORDSMAN"
+        }
+      ],
+      "related": [
+        "UNIT_WARRIOR",
+        "UNIT_SWORDSMAN",
+        "TECH_IRON_WORKING"
+      ],
+      "current_facts_needed": [
+        "当前研究、资源、金币与费用修正",
+        "单位位置、剩余移动和可执行升级状态"
+      ],
+      "limitations": [
+        "不根据静态参数承诺当前升级费用或合法性。"
+      ]
+    },
+    {
+      "id": "MECHANIC_COMBAT_FORMATIONS",
+      "names": {
+        "zh_Hans_CN": "护送与军事编队",
+        "en_US": "Escort and military formations"
+      },
+      "summary": "护送编队与同种单位组成的兵团／军队、舰队／无敌舰队是不同机制。",
+      "conditions": [
+        "民族主义与动员分别提供两单位和三单位军事编队；仍需核对同种单位及编队资格。",
+        "CanFormMilitaryFormation 与当前规模、位置和状态共同检查；不把支援单位当作可合并的作战单位。",
+        "兵团与军队有独立战力参数，不用该增益推算当前攻击伤害。",
+        "合并后不能拆回独立单位，保留经验最高单位的经验与晋升；生命上限不会随单位数量增加。"
+      ],
+      "source_selectors": [
+        {
+          "table": "Civics",
+          "key": "CivicType",
+          "value": "CIVIC_NATIONALISM"
+        },
+        {
+          "table": "Civics",
+          "key": "CivicType",
+          "value": "CIVIC_MOBILIZATION"
+        },
+        {
+          "table": "Units_XP2",
+          "key": "UnitType",
+          "value": "UNIT_SWORDSMAN"
+        },
+        {
+          "table": "Units_XP2",
+          "key": "UnitType",
+          "value": "UNIT_SIEGE_TOWER"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "COMBAT_CORPS_STRENGTH_MODIFIER"
+        },
+        {
+          "table": "GlobalParameters",
+          "key": "Name",
+          "value": "COMBAT_ARMY_STRENGTH_MODIFIER"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_COMBAT_12_CHAPTER_CONTENT_PARA_1"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_COMBAT_12_CHAPTER_CONTENT_PARA_2"
+        },
+        {
+          "table": "CivilopediaTexts",
+          "key": "Tag",
+          "value": "LOC_PEDIA_CONCEPTS_PAGE_COMBAT_12_CHAPTER_CONTENT_PARA_3"
+        }
+      ],
+      "related": [
+        "CIVIC_NATIONALISM",
+        "CIVIC_MOBILIZATION",
+        "UNIT_SWORDSMAN"
+      ],
+      "current_facts_needed": [
+        "当前市政、单位类型、规模和位置",
+        "单位编队资格及可执行合并状态"
+      ],
+      "limitations": [
+        "现有工具没有完整军事编队候选查询；资料不构成合并操作支持。",
+        "百科军队段落的战力措辞与全局参数口径不同；保留两者证据，不按段落数值替代本机参数。"
+      ]
+    }
+  ]
+}
