@@ -1,6 +1,6 @@
 # Civ6 第 30～50 回合调度修复规格
 
-日期：2026-10-17。来源：第 21～30 回合实机记录 B1～B5。状态：`ready-for-agent`，规格与工作项已形成本地记录，尚未实施。代码基点 `bd11efb`，集成分支 `codex/turn-50-scheduling`。
+日期：2026-10-17。来源：第 21～30 回合实机记录 B1～B5。状态：实施中，T1 已合并并通过离线测试，后续按依赖顺序推进。代码基点 `bd11efb`，集成分支 `codex/turn-50-scheduling`。
 
 ## Problem Statement
 
