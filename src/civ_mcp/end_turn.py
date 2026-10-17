@@ -5,16 +5,29 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import TYPE_CHECKING
+from typing import Protocol
 
 import civ_mcp.narrate as nr
 from civ_mcp import lua as lq
-from civ_mcp.connection import LuaError
+from civ_mcp.connection import GameConnection, LuaError
 from civ_mcp.game_lifecycle import visible_information_popups
 from civ_mcp.lua.congress import build_congress_phase_query, parse_congress_phase
 
-if TYPE_CHECKING:
-    from civ_mcp.game_state import GameState
+class TurnContext(Protocol):
+    """The deliberate collaboration used by turn advancement, not all GameState."""
+
+    conn: GameConnection
+
+    @property
+    def pending_action_summary(self) -> str | None: ...
+    async def confirm_pending_action(self) -> str: ...
+    async def check_game_over(self) -> lq.GameOverStatus | None: ...
+    async def get_diplomacy_sessions(self) -> list[lq.DiplomacySession]: ...
+    async def get_pending_deals(self) -> list[lq.PendingDeal]: ...
+    async def capture_turn_snapshot(self) -> lq.TurnSnapshot: ...
+    async def report_turn_advance(
+        self, before: int, after: int, baseline: lq.TurnSnapshot | None,
+    ) -> str: ...
 
 log = logging.getLogger(__name__)
 
@@ -25,7 +38,7 @@ INFORMATION_PROBE_SECONDS = 5.0
 CONGRESS_PROBE_SECONDS = 5.0
 
 
-async def read_turn_state(gs: GameState) -> tuple[int | None, bool | None]:
+async def read_turn_state(gs: TurnContext) -> tuple[int | None, bool | None]:
     """Read engine turn readiness without switching UI while AI is processing.
 
     The installed PiratesScenario gameplay uses IsTurnActive; ActionPanel uses
@@ -72,9 +85,7 @@ print("{lq.SENTINEL}")
     return None, None
 
 
-def _game_over_result(gs: GameState, gameover: lq.GameOverStatus) -> str:
-    gs._pending_end_turn = False
-    gs._pending_end_turn_from = None
+def _game_over_result(gameover: lq.GameOverStatus) -> str:
     victory = gameover.victory_type.replace("VICTORY_", "").replace("_", " ").title()
     if gameover.is_defeat:
         return (
@@ -85,7 +96,7 @@ def _game_over_result(gs: GameState, gameover: lq.GameOverStatus) -> str:
 
 
 async def _check_mid_turn_diplomacy(
-    gs: GameState, lua: str, turn_before: int | None,
+    gs: TurnContext, lua: str, turn_before: int | None,
 ) -> tuple[str | None, bool]:
     """Report a paused encounter; leave its response and original request intact.
 
@@ -134,7 +145,7 @@ print("{lq.SENTINEL}")
     return "\n".join(lines), False
 
 
-async def _check_congress_phase(gs: GameState, *, pending: bool) -> str | None:
+async def _check_congress_phase(gs: TurnContext, *, pending: bool) -> str | None:
     session, stage, turn, receipt = parse_congress_phase(
         await gs.conn.execute_write(build_congress_phase_query())
     )
@@ -156,7 +167,7 @@ async def _check_congress_phase(gs: GameState, *, pending: bool) -> str | None:
     return None
 
 
-async def _check_blockers(gs: GameState) -> str | None:
+async def _check_blockers(gs: TurnContext) -> str | None:
     """Check actual game prerequisites; never make strategy choices for the player."""
     sessions = await gs.get_diplomacy_sessions()
     if sessions:
@@ -189,196 +200,193 @@ async def _check_blockers(gs: GameState) -> str | None:
     return "\n".join(result)
 
 
-async def _report_advance(gs: GameState, before: int, after: int) -> str:
-    """Capture factual changes without evaluations, automatic saves, or advice."""
-    gs._pending_end_turn = False
-    gs._pending_end_turn_from = None
-    try:
-        gameover = await gs.check_game_over()
-        if gameover is not None:
-            return f"Turn {before} -> {after}\n" + _game_over_result(gs, gameover)
-    except (ConnectionError, TimeoutError, LuaError):
-        log.debug("Post-turn game-over check failed", exc_info=True)
+class TurnProgress:
+    """Own one submitted turn and its immutable reporting baseline.
 
-    previous = gs._last_snapshot
-    current = None
-    limited: list[str] = []
-    try:
-        current = await gs._take_snapshot()
-        gs._last_snapshot = current
-    except (ConnectionError, TimeoutError, LuaError, ValueError):
-        limited.append("Post-turn snapshot unavailable; read game state to confirm changes.")
-    events = gs._diff_snapshots(previous, current) if previous and current else []
-    notifications: list[lq.GameNotification] = []
-    try:
-        lines = await gs.conn.execute_write(lq.build_notifications_query())
-        if not any(line.startswith("TOTAL|") for line in lines):
-            limited.append("Notifications unavailable.")
-        else:
-            notifications = lq.parse_notifications_response(lines)
-    except (ConnectionError, TimeoutError, LuaError, ValueError):
-        limited.append("Notifications unavailable.")
-    report = gs._build_turn_report(
-        before, after, events, notifications,
-        stockpiles=current.stockpiles if current else None,
-    )
-    return "\n".join([report, *limited])
+    Cache refreshes belong to observations; only this module may retire a
+    submitted request after readiness or a terminal-game witness confirms it.
+    """
 
+    def __init__(self) -> None:
+        self.reset()
 
-async def execute_end_turn(gs: GameState) -> str:
-    """Send at most one request and preserve uncertainty until advancement is seen."""
-    if gs.pending_action_summary:
-        confirmation = await gs.confirm_pending_action()
-        if gs.pending_action_summary:
-            return (
-                f"ERR:OUTCOME_UNKNOWN|Cannot end turn while {gs.pending_action_summary}. "
-                f"{confirmation} Read the affected unit/city before continuing."
-            )
-    if not gs._pending_end_turn:
+    def reset(self) -> None:
+        self.pending = False
+        self.from_turn: int | None = None
+        self.baseline: lq.TurnSnapshot | None = None
+
+    async def _report_advance(self, gs: TurnContext, before: int, after: int) -> str:
+        # Retire the request before presentation. No report failure may restore
+        # a confirmed mutation or cause it to be sent again.
+        previous = self.baseline
+        self.reset()
         try:
             gameover = await gs.check_game_over()
             if gameover is not None:
-                return _game_over_result(gs, gameover)
-            turn_before, ready = await read_turn_state(gs)
-            if turn_before is None:
-                return "Cannot end turn: current turn is unknown. Read game state before retrying."
-            if ready is not True:
-                return "Cannot end turn: local player is not ready or readiness is unknown. Read game state before retrying."
-            blocked = await _check_blockers(gs)
-            if blocked:
-                return blocked
-            # A missing snapshot limits the report, but must not hide whether
-            # the request was sent. Store the baseline before writing it.
-            try:
-                gs._last_snapshot = await gs._take_snapshot()
-            except (ConnectionError, TimeoutError, LuaError, ValueError):
-                gs._last_snapshot = None
-            # Queries can race an external UI action. Never send from an old
-            # turn after taking its snapshot and inspecting its notifications.
-            current, ready = await read_turn_state(gs)
-            if current is None:
-                return "Cannot end turn: current turn cannot be confirmed. Read game state before retrying."
-            if current > turn_before:
-                # An external UI request advanced the game during inspection.
-                # Confirm its readiness below without sending another request.
-                gs._pending_end_turn = True
-                gs._pending_end_turn_from = turn_before
-            elif current != turn_before:
-                return "Cannot end turn: game turn changed during inspection. Read game state before retrying."
-            elif ready is not True:
-                return "Cannot end turn: local player is not ready or readiness is unknown. Read game state before retrying."
-        except (ConnectionError, TimeoutError, LuaError, ValueError) as exc:
-            return f"Cannot confirm end-turn prerequisites: {exc}. Read game state before retrying."
+                return f"Turn {before} -> {after}\n" + _game_over_result(gameover)
+        except (ConnectionError, TimeoutError, LuaError):
+            log.debug("Post-turn game-over check failed", exc_info=True)
+        try:
+            return await gs.report_turn_advance(before, after, previous)
+        except (ConnectionError, TimeoutError, LuaError, ValueError):
+            return f"Turn {before} -> {after}\nPost-turn report unavailable; read game state to confirm changes."
 
-        if not gs._pending_end_turn:
-            gs._pending_end_turn = True
-            gs._pending_end_turn_from = turn_before
-            try:
-                await gs.conn.execute_write(lq.build_end_turn())
-            except (ConnectionError, TimeoutError, LuaError) as exc:
+    async def execute(self, gs: TurnContext) -> str:
+        """Send at most one request and preserve uncertainty until advancement is seen."""
+        if gs.pending_action_summary:
+            confirmation = await gs.confirm_pending_action()
+            if gs.pending_action_summary:
                 return (
-                    f"End-turn result unknown (from turn {turn_before}): {exc}. "
-                    "The request may have executed. Read game state or call end_turn "
-                    "to confirm; it will not be sent again. Use explicit recovery if needed."
+                    f"ERR:OUTCOME_UNKNOWN|Cannot end turn while {gs.pending_action_summary}. "
+                    f"{confirmation} Read the affected unit/city before continuing."
                 )
-    else:
-        turn_before = gs._pending_end_turn_from
-        if turn_before is None:
-            return "End-turn result unknown: request has no baseline. Read game state or use explicit recovery; no request was resent."
+        if not self.pending:
+            try:
+                gameover = await gs.check_game_over()
+                if gameover is not None:
+                    self.reset()
+                    return _game_over_result(gameover)
+                turn_before, ready = await read_turn_state(gs)
+                if turn_before is None:
+                    return "Cannot end turn: current turn is unknown. Read game state before retrying."
+                if ready is not True:
+                    return "Cannot end turn: local player is not ready or readiness is unknown. Read game state before retrying."
+                blocked = await _check_blockers(gs)
+                if blocked:
+                    return blocked
+                # A missing snapshot limits the report, but must not hide whether
+                # the request was sent. Store the baseline before writing it.
+                try:
+                    self.baseline = await gs.capture_turn_snapshot()
+                except (ConnectionError, TimeoutError, LuaError, ValueError):
+                    self.baseline = None
+                # Queries can race an external UI action. Never send from an old
+                # turn after taking its snapshot and inspecting its notifications.
+                current, ready = await read_turn_state(gs)
+                if current is None:
+                    return "Cannot end turn: current turn cannot be confirmed. Read game state before retrying."
+                if current > turn_before:
+                    # An external UI request advanced the game during inspection.
+                    # Confirm its readiness below without sending another request.
+                    self.pending = True
+                    self.from_turn = turn_before
+                elif current != turn_before:
+                    return "Cannot end turn: game turn changed during inspection. Read game state before retrying."
+                elif ready is not True:
+                    return "Cannot end turn: local player is not ready or readiness is unknown. Read game state before retrying."
+            except (ConnectionError, TimeoutError, LuaError, ValueError) as exc:
+                return f"Cannot confirm end-turn prerequisites: {exc}. Read game state before retrying."
 
-    started = time.monotonic()
-    deadline = started + END_TURN_TIMEOUT_SECONDS
-    next_diplomacy_probe = started + DIPLOMACY_PROBE_SECONDS
-    next_information_probe = started
-    next_congress_probe = started
-    turn_after = None
-    ready = None
-    reads_failed = False
-    next_game_over_check = started
-    try:
-        # Deadline covers both polling and bounded read-only session probes. Query
-        # duration counts toward the budget, not only the sleep intervals.
-        async with asyncio.timeout(END_TURN_TIMEOUT_SECONDS):
-            while time.monotonic() < deadline:
-                # A victory/elimination can finish AI processing without
-                # advancing the counter. Keep this probe in GameCore so a
-                # pending request never switches into the InGame UI to check.
-                if time.monotonic() >= next_game_over_check:
-                    next_game_over_check = time.monotonic() + 10.0
-                    try:
-                        status = await gs.conn.execute_read(lq.build_gameover_check_gamecore())
-                        if not any(line == "GAME_ACTIVE" or line.startswith("GAME_OVER|") for line in status):
-                            reads_failed = True
-                        else:
-                            gameover = lq.parse_gameover_response(status)
-                            if gameover is not None:
-                                return _game_over_result(gs, gameover)
-                    except (ConnectionError, TimeoutError, LuaError, ValueError):
-                        reads_failed = True
-                turn_after, ready = await read_turn_state(gs)
-                if turn_after is None:
-                    reads_failed = True
-                elif turn_after > turn_before and ready is True:
-                    break
-                elif turn_after < turn_before:
+            if not self.pending:
+                self.pending = True
+                self.from_turn = turn_before
+                try:
+                    await gs.conn.execute_write(lq.build_end_turn())
+                except (ConnectionError, TimeoutError, LuaError) as exc:
                     return (
-                        f"End-turn result unknown: turn changed from {turn_before} "
-                        f"to {turn_after}. Read game state or use explicit recovery; "
-                        "the pending request was not resent."
+                        f"End-turn result unknown (from turn {turn_before}): {exc}. "
+                        "The request may have executed. Read game state or call end_turn "
+                        "to confirm; it will not be sent again. Use explicit recovery if needed."
                     )
-                if time.monotonic() >= next_congress_probe:
-                    next_congress_probe = time.monotonic() + CONGRESS_PROBE_SECONDS
-                    try:
-                        congress = await _check_congress_phase(gs, pending=True)
-                        if congress:
-                            return congress
-                    except ValueError:
-                        return ("End-turn result unknown: World Congress phase unavailable. "
-                                "Use get_world_congress; the original request is preserved and was not resent.")
-                    except (ConnectionError, TimeoutError, LuaError):
-                        reads_failed = True
-                diplomacy_checked = False
-                if time.monotonic() >= next_diplomacy_probe:
-                    diplomacy_checked = True
-                    next_diplomacy_probe = time.monotonic() + DIPLOMACY_PROBE_SECONDS
-                    try:
-                        message, _ = await _check_mid_turn_diplomacy(gs, "", turn_before)
-                        if message:
-                            return message
-                    except (ConnectionError, TimeoutError, LuaError, ValueError):
-                        reads_failed = True
-                if time.monotonic() >= next_information_probe:
-                    next_information_probe = time.monotonic() + INFORMATION_PROBE_SECONDS
-                    try:
-                        popups = await visible_information_popups(gs.conn)
-                        if popups:
-                            # A simultaneous information overlay must not hide
-                            # a pending encounter or choose its response.
-                            if not diplomacy_checked:
-                                message, _ = await _check_mid_turn_diplomacy(gs, "", turn_before)
-                                if message:
-                                    return message
-                            return (
-                                f"Turn paused — information popup visible: {', '.join(popups)} "
-                                f"(requested from turn {turn_before}, last observed turn {turn_after}). "
-                                "Use dismiss_popup to close it explicitly, then call end_turn "
-                                "to confirm the existing request; it will not be sent again."
-                            )
-                        if popups is None:
+        else:
+            turn_before = self.from_turn
+            if turn_before is None:
+                return "End-turn result unknown: request has no baseline. Read game state or use explicit recovery; no request was resent."
+
+        started = time.monotonic()
+        deadline = started + END_TURN_TIMEOUT_SECONDS
+        next_diplomacy_probe = started + DIPLOMACY_PROBE_SECONDS
+        next_information_probe = started
+        next_congress_probe = started
+        turn_after = None
+        ready = None
+        reads_failed = False
+        next_game_over_check = started
+        try:
+            # Deadline covers both polling and bounded read-only session probes. Query
+            # duration counts toward the budget, not only the sleep intervals.
+            async with asyncio.timeout(END_TURN_TIMEOUT_SECONDS):
+                while time.monotonic() < deadline:
+                    # A victory/elimination can finish AI processing without
+                    # advancing the counter. Keep this probe in GameCore so a
+                    # pending request never switches into the InGame UI to check.
+                    if time.monotonic() >= next_game_over_check:
+                        next_game_over_check = time.monotonic() + 10.0
+                        try:
+                            status = await gs.conn.execute_read(lq.build_gameover_check_gamecore())
+                            if not any(line == "GAME_ACTIVE" or line.startswith("GAME_OVER|") for line in status):
+                                reads_failed = True
+                            else:
+                                gameover = lq.parse_gameover_response(status)
+                                if gameover is not None:
+                                    self.reset()
+                                    return _game_over_result(gameover)
+                        except (ConnectionError, TimeoutError, LuaError, ValueError):
                             reads_failed = True
-                    except (ConnectionError, TimeoutError, LuaError, ValueError):
+                    turn_after, ready = await read_turn_state(gs)
+                    if turn_after is None:
                         reads_failed = True
-                remaining = deadline - time.monotonic()
-                if remaining > 0:
-                    await asyncio.sleep(min(POLL_INTERVAL_SECONDS, remaining))
-    except TimeoutError:
-        reads_failed = True
-    if turn_after is not None and turn_after > turn_before and ready is True:
-        return await _report_advance(gs, turn_before, turn_after)
-    detail = " Some game queries failed; the current turn cannot be reliably confirmed." if reads_failed else ""
-    return (
-        f"HANG: end-turn result unknown after {END_TURN_TIMEOUT_SECONDS:g}s "
-        f"(requested from turn {turn_before}, last observed turn {turn_after})."
-        f"{detail} Read game state, inspect diplomacy/popups, or use explicit recovery. "
-        "The pending request is preserved; another end_turn call will only confirm it."
-    )
+                    elif turn_after > turn_before and ready is True:
+                        break
+                    elif turn_after < turn_before:
+                        return (
+                            f"End-turn result unknown: turn changed from {turn_before} "
+                            f"to {turn_after}. Read game state or use explicit recovery; "
+                            "the pending request was not resent."
+                        )
+                    if time.monotonic() >= next_congress_probe:
+                        next_congress_probe = time.monotonic() + CONGRESS_PROBE_SECONDS
+                        try:
+                            congress = await _check_congress_phase(gs, pending=True)
+                            if congress:
+                                return congress
+                        except ValueError:
+                            return ("End-turn result unknown: World Congress phase unavailable. "
+                                    "Use get_world_congress; the original request is preserved and was not resent.")
+                        except (ConnectionError, TimeoutError, LuaError):
+                            reads_failed = True
+                    diplomacy_checked = False
+                    if time.monotonic() >= next_diplomacy_probe:
+                        diplomacy_checked = True
+                        next_diplomacy_probe = time.monotonic() + DIPLOMACY_PROBE_SECONDS
+                        try:
+                            message, _ = await _check_mid_turn_diplomacy(gs, "", turn_before)
+                            if message:
+                                return message
+                        except (ConnectionError, TimeoutError, LuaError, ValueError):
+                            reads_failed = True
+                    if time.monotonic() >= next_information_probe:
+                        next_information_probe = time.monotonic() + INFORMATION_PROBE_SECONDS
+                        try:
+                            popups = await visible_information_popups(gs.conn)
+                            if popups:
+                                # A simultaneous information overlay must not hide
+                                # a pending encounter or choose its response.
+                                if not diplomacy_checked:
+                                    message, _ = await _check_mid_turn_diplomacy(gs, "", turn_before)
+                                    if message:
+                                        return message
+                                return (
+                                    f"Turn paused — information popup visible: {', '.join(popups)} "
+                                    f"(requested from turn {turn_before}, last observed turn {turn_after}). "
+                                    "Use dismiss_popup to close it explicitly, then call end_turn "
+                                    "to confirm the existing request; it will not be sent again."
+                                )
+                            if popups is None:
+                                reads_failed = True
+                        except (ConnectionError, TimeoutError, LuaError, ValueError):
+                            reads_failed = True
+                    remaining = deadline - time.monotonic()
+                    if remaining > 0:
+                        await asyncio.sleep(min(POLL_INTERVAL_SECONDS, remaining))
+        except TimeoutError:
+            reads_failed = True
+        if turn_after is not None and turn_after > turn_before and ready is True:
+            return await self._report_advance(gs, turn_before, turn_after)
+        detail = " Some game queries failed; the current turn cannot be reliably confirmed." if reads_failed else ""
+        return (
+            f"HANG: end-turn result unknown after {END_TURN_TIMEOUT_SECONDS:g}s "
+            f"(requested from turn {turn_before}, last observed turn {turn_after})."
+            f"{detail} Read game state, inspect diplomacy/popups, or use explicit recovery. "
+            "The pending request is preserved; another end_turn call will only confirm it."
+        )
