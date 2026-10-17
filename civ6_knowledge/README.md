@@ -1,45 +1,49 @@
-# Civilization VI 本机规则知识
+# Civ6 本机规则知识
 
-这里保存市政、科技解锁、区域建设和世界议会的离线资料。先选择主题，再展开相关规则；整个 `civ6_knowledge` 目录可独立复制，查询仅需 Python 3 标准库。
+市政、科技解锁、区域建设和世界议会的离线资料。目录可独立复制，查询只需 Python 3 标准库。
 
-## 适用范围
+## 读取路径
 
-本次采集对应内部版本 `1.0.12.54 (951533)`、macOS 包 `1.4.6`／`376653.178`、Steam Build `15296837`；目标规则集为 `RULESET_EXPANSION_2`（《风云变幻》）。完整来源指纹、覆盖数和未验证项以 [manifest.json](manifest.json) 为准。
+| 当前问题 | 主题 |
+| --- | --- |
+| 文化路线、政策与政体解锁 | [市政](topics/civics.md) |
+| 科研路线、尤里卡与科技解锁 | [科技](topics/technologies.md) |
+| 区域容量、落位与相邻收益 | [区域建设](topics/districts.md) |
+| 议题、阶段与投票资格 | [世界议会](topics/congress.md) |
 
-规则数据库是本机最后生成的缓存快照。当前加载存档、活动 DLC／模组／模式与该快照的匹配尚未验证。版本匹配只表明资料的版本字段一致；执行前仍需读取本局状态、合法候选和实际费用。
+先读主题，再按实体 ID 查询；条件足够支持当前判断时停止展开。`topics/` 解释机制，`rules/` 保存规则卡，`sources/` 保存原始证据。通过命令读取单条记录，避免整份加载 JSON。
 
-## 按问题展开
+## 资料边界
 
-| 问题 | 先读主题 | 继续展开的条件 |
-| --- | --- | --- |
-| 文化路线、政策与政体解锁 | [市政](topics/civics.md) | 比较前置、鼓舞条件或具体解锁对象时 |
-| 科研路线、尤里卡与科技解锁 | [科技](topics/technologies.md) | 比较前置、解锁用途或特殊限制时 |
-| 区域落位、人口与相邻收益 | [区域建设](topics/districts.md) | 选择具体区域／地块，或核对加成条件时 |
-| 议会议题、阶段与投票资格 | [世界议会](topics/congress.md) | 查看决议效果、目标类型、提案和禁投定义时 |
+- 目标规则集为《风云变幻》。内部版本、包版本、Steam Build 和来源指纹以 [manifest.json](manifest.json) 为准。
+- 来源为本机规则缓存；当前存档及活动 DLC／模组／模式尚未核对。本局候选、进度、费用和地块状态从游戏读取。
+- 未命中不能证明规则不存在；外部关联未独立建卡。本期不完整解释 Modifier、脚本条件和活动随机树；策略取舍结合本局事实判断。
 
-主题指南解释使用方法与机制边界；`rules/*.json` 保存实体规则卡；[sources/snapshot.json](sources/snapshot.json) 保存原始表行、双语文本与脚本证据。规则卡的 `source_refs` 用表名及行索引定位快照，关联明确区分已覆盖条目与外部对象。主题中的策略取舍属于解释，不等于游戏原始规则。
+## 查询
 
-## 分层查询
-
-在此目录执行以下命令；在项目根目录执行时给 `query.py` 加上 `civ6_knowledge/` 前缀。
+以下命令在知识目录执行；从项目根目录先进入 `civ6_knowledge`。
 
 ```sh
-python3 query.py topics
 python3 query.py search 写作 --topic technologies --limit 5
 python3 query.py show TECH_WRITING
 python3 query.py show TECH_WRITING --level rule
-python3 query.py show DISTRICT_INDUSTRIAL_ZONE --level evidence
+python3 query.py show TECH_WRITING --level evidence
+```
+
+默认读取摘要，`rule` 展开条件与关联，`evidence` 返回原始行、双语文本和相关脚本。搜索同时返回总数与截断状态；证据中的 `source_refs` 定位来源表及行索引。
+
+核对已知环境：`python3 query.py check-profile PROFILE_JSON`。输入字段取自清单的 `profile`；版本不匹配时拒绝兼容结论。
+
+## 更新
+
+按顺序执行：
+
+```sh
+python3 capture.py
+python3 build.py --source sources/snapshot.json --output .
 python3 query.py validate
 ```
 
-默认返回摘要；需要完整条件时选 `rule`，需要核对原始记录时选 `evidence`。搜索结果同时报告匹配总数与截断状态；未命中表示本资料未找到，不能据此判断游戏没有该规则。沿关联读取必要前置和解锁后，条件足以支持当前判断即可停止；重要例外与主规则一起读取。
+`capture.py` 只读采集本机来源，其他安装位置用 `--help` 指定。来源变化、缺失或缓存早于真实启动时间时保留旧快照并报错。修改指南后从构建步骤开始，刷新文件指纹；独立重建时将 `--output` 指向新目录。
 
-已知待比较环境时，执行 `python3 query.py check-profile PROFILE_JSON`；也可在子命令前使用 `--profile PROFILE_JSON`。字段以 `manifest.json` 的 `profile` 为准。出现不匹配时，先定位差异，保留兼容性未确认状态。
-
-## 更新与扩展
-
-本机默认路径适用时，运行 `python3 capture.py` 只读采集规则、文本及版本证据；其他安装位置使用 `python3 capture.py --help` 指定目录。采集输出须位于游戏与用户数据目录之外；来源变化或规则缓存早于启动记录时拒绝替换已有快照。该检查只排除已知陈旧来源，不证明当前对局匹配。
-
-已有受控快照时，运行 `python3 build.py --source SNAPSHOT --output DIRECTORY` 重建结构化资料；输出目录是生成目标，应与原始快照分开。构建不会连接游戏。重新采集本机来源、修改主题解释后，重新执行完整性和离线测试；保留来源指纹及覆盖缺口。
-
-本期没有完整 Modifier 求值器、实时合法性判断或最优策略结论。下一批主题见 [整理优先级](NEXT.md)。
+下一批主题见 [整理优先级](NEXT.md)。

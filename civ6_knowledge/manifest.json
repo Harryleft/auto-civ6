@@ -102,14 +102,14 @@
   "snapshot": "sources/snapshot.json",
   "snapshot_sha256": "e50515a34f2a15cc427734300a17a6569186ef2a2c2aba548b3dd5f2d118cfec",
   "support_files": {
-    "NEXT.md": "317099d5895d81800ccc3548f9385d60a39ef5c173efe96a0f6b786edde0eeae",
-    "README.md": "2871e5a0857bd8df90ed06871df2a4ff9278d99401f96e9a2febb7f4bd5c349e",
+    "NEXT.md": "20d96d1dbbdfaf63f0e3e0b64a90ebd047d67fc2db1f9e30216773cb7b9c6db8",
+    "README.md": "f0544a76aef417cd3120a0146bf7a473e08467baacf77191f06d5677be500a16",
     "build.py": "4c2e6ce57e846a1864572a9c9bab2082a39eb32e96cfb6ef1d1928c0a8bba125",
     "capture.py": "b52d6e5073546dd862a9dbb920b30e87a1ab06c4132a2322346ee09d26b0e047",
     "query.py": "05ca18bf19c9d65ceb14d4d39b1dd00942d817dfc023a4a014e85c17d9142062",
-    "topics/civics.md": "45aec1c81da0ffc9f748abe4d2fd36b9912f3acfe902f39cf99a06ef78d2924e",
-    "topics/congress.md": "168a05e7b3a61bf3de9b842ce2150a8bdd2deb9e5e5a899cf18110d36cd5c016",
-    "topics/districts.md": "cf04e8956622c4a5f1fe9a8c08b6ba88d5df297d46ac036348ec14d4ee444a20",
-    "topics/technologies.md": "c26815104bfec36eb4e3e188596cd5f39fe2ccb43b7e2f08e79ca0bd4637b84c"
+    "topics/civics.md": "55dea2e99d9df7f606335c5fd454df79b57d22907cfb7ce2d7d68162a732ff61",
+    "topics/congress.md": "6dd6a09d6ba7989dd7e254bf387094f317100816ce55c7c276ee99f0588edc6c",
+    "topics/districts.md": "895c7c367653bb8bcd9906b3ede83debddd6548b07a0bb2f3bd6b5224a358bc3",
+    "topics/technologies.md": "2ca46828e7c42d55d7a6a4cc543eab7bcd8e66e80366208612deea97c3a39623"
   }
 }
