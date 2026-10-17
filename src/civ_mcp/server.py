@@ -91,6 +91,15 @@ async def _logged(
                     "Read game state or explicitly restart_and_load a verified checkpoint "
                     "before issuing gameplay actions."
                 )
+            elif (
+                getattr(app.game, "_pending_end_turn", False)
+                and not tool_name.startswith(("get_", "list_"))
+                and tool_name not in {"end_turn", "respond_to_diplomacy", "respond_to_trade", "queue_wc_votes", "dismiss_popup", "restart_and_load"}
+            ):
+                result = (
+                    "ERR:OUTCOME_UNKNOWN|The submitted end-turn is still pending. "
+                    "Use end_turn to confirm or resolve the reported diplomacy/trade blocker before gameplay actions."
+                )
             else:
                 entity = getattr(app.game, "pending_action_entity", None)
                 dependent = False
@@ -1842,7 +1851,7 @@ async def list_saves(ctx: Context) -> str:
 
 @mcp.tool(annotations={"destructiveHint": True})
 async def load_save(ctx: Context, save_index: int) -> str:
-    """Load a confirmed checkpoint from the latest filesystem listing, once.
+    """Load a confirmed checkpoint from the latest displayed listing, once.
 
     The same MainMenu, expected identity and readiness checks apply to named
     and index-based loads. Unknown legacy files cannot bypass those checks.
@@ -1977,6 +1986,10 @@ async def _load_and_verify(gs: GameState, save_name: str) -> str:
                                 return f"ERR:OUTCOME_UNKNOWN|Loaded state mismatch: expected {expected}, observed {actual}, active turn {turn}. No load replayed."
                             if checkpoints.expected_checkpoint(save_name) != expected:
                                 return "ERR:OUTCOME_UNKNOWN|Checkpoint file changed during load; recovery not verified."
+                            if save_name.removesuffix(".Civ6Save") == "benchmark_turn_1":
+                                ownership_error = checkpoints.begin_baseline_run()
+                                if ownership_error:
+                                    return ownership_error
                             gs._pending_load = False
                             return f"Loaded {save_name}: {identity[0]}, seed {identity[1]}, turn {ov.turn}."
                 except (OSError, LuaError, ValueError):

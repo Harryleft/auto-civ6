@@ -727,7 +727,7 @@ class TestAttackUnit:
             [
                 ("write", [_ESTIMATE_LINE]),
                 ("write", [_RANGE_HIT]),
-                ("write", ["UNIT|UNIT_WARRIOR|50/100|owner:1"]),
+                ("write", ["UNIT|UNIT_WARRIOR|50/100|owner:1", "CORE_BUSY|false"]),
             ]
         )
 
@@ -748,7 +748,7 @@ class TestAttackUnit:
             [
                 ("write", [_ESTIMATE_LINE]),
                 ("write", [_RANGE_HIT]),
-                ("write", ["UNIT|UNIT_WARRIOR|80/100|owner:1"]),
+                ("write", ["UNIT|UNIT_WARRIOR|80/100|owner:1", "CORE_BUSY|false"]),
                 ("write", ConnectionError("confirmation lost")),
             ]
         )
@@ -794,7 +794,7 @@ class TestAttackUnit:
             [
                 ("write", ConnectionError("estimate query died")),
                 ("write", [_RANGE_HIT]),
-                ("write", ["UNIT|UNIT_WARRIOR|50/100|owner:1"]),
+                ("write", ["UNIT|UNIT_WARRIOR|50/100|owner:1", "CORE_BUSY|false"]),
             ]
         )
 
@@ -811,7 +811,7 @@ class TestAttackUnit:
             [
                 ("write", [_ESTIMATE_LINE]),
                 ("write", ["OK:MELEE_ATTACK|target:Warrior at (12,20)|enemy HP:100 -> 80/100"]),
-                ("write", ["UNIT|UNIT_WARRIOR|80/100|owner:1"]),
+                ("write", ["UNIT|UNIT_WARRIOR|80/100|owner:1", "CORE_BUSY|false"]),
             ]
         )
 
@@ -832,7 +832,7 @@ class TestCityAttack:
         gs, conn = _gs(
             [
                 ("write", ["OK:CITY_RANGE_ATTACK|Capital -> Warrior@12,20|pre_hp:80/100"]),
-                ("write", ["UNIT|UNIT_WARRIOR|60/100|owner:1"]),
+                ("write", ["UNIT|UNIT_WARRIOR|60/100|owner:1", "CORE_BUSY|false"]),
             ]
         )
 
@@ -1482,6 +1482,7 @@ class TestSaveCheckpoint:
         from civ_mcp import checkpoints, game_launcher
         monkeypatch.setattr(game_launcher, "SINGLE_SAVE_DIR", str(tmp_path))
         monkeypatch.setattr(checkpoints, "CHECKPOINT_DIR", tmp_path / "metadata")
+        assert checkpoints.begin_baseline_run() is None
         gs, conn = _gs()
         snapshots = iter(turns)
         game_ids = iter(identities or [("babylon", 42), ("babylon", 42)])

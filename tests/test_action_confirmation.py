@@ -88,7 +88,7 @@ def test_attack_waits_for_real_damage_and_never_uses_estimate_as_actual():
         writes=[["ESTIMATE|UNIT_SLINGER|UNIT_SCOUT|15|10|1||100|80"],
                 ["OK:RANGE_ATTACK|pre_hp:80/100|target_owner:63|target_id:123|attacks_before:1"],
                 ["UNIT|UNIT_SCOUT|80/100|owner:63|id:123"],
-                ["UNIT|UNIT_SCOUT|55/100|owner:63|id:123"]],
+                ["UNIT|UNIT_SCOUT|55/100|owner:63|id:123", "CORE_BUSY|false"]],
     )
     state = GameState(engine)
     state.dismiss_popup = no_dismiss
@@ -205,3 +205,18 @@ def test_wrong_owner_city_does_not_confirm_founding():
     state.dismiss_popup = no_dismiss
     assert "OUTCOME_UNKNOWN" in asyncio.run(state.found_city(0))
     assert state.pending_action_summary
+
+
+def test_changed_combat_hp_does_not_bypass_busy_engine():
+    engine = Engine(writes=[[], ["OK:RANGE_ATTACK|pre_hp:80/100|target_owner:63|target_id:123|attacks_before:1"], ["UNIT|UNIT_SCOUT|55/100|owner:63|id:123", "CORE_BUSY|true"], ["UNIT|UNIT_SCOUT|55/100|owner:63|id:123", "CORE_BUSY|false"]])
+    state = GameState(engine)
+    state.dismiss_popup = no_dismiss
+    assert "damage dealt:25" in asyncio.run(state.attack_unit(2, 12, 20))
+    assert engine.writes == []
+
+
+def test_changed_city_attack_hp_does_not_bypass_busy_engine():
+    engine = Engine(writes=[["OK:CITY_RANGE_ATTACK|pre_hp:80/100|target_owner:63|target_id:123"], ["UNIT|UNIT_SCOUT|55/100|owner:63|id:123", "CORE_BUSY|true"], ["UNIT|UNIT_SCOUT|55/100|owner:63|id:123", "CORE_BUSY|false"]])
+    state = GameState(engine)
+    assert "damage dealt:25" in asyncio.run(state.city_attack(65536, 12, 20))
+    assert engine.writes == []
