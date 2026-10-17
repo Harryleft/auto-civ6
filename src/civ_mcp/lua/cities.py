@@ -329,10 +329,20 @@ pcall(function()
         .. "|started:" .. tostring(q.started) .. "|command_matches:" .. tostring(q.command == CityCommandTypes.RANGE_ATTACK)
         .. "|rawCommand:" .. tostring(q.rawCommand) .. "|rawData:" .. tostring(q.rawData))
     if UI.IsGameCoreBusy() ~= false then return end
-    local target = Players[q.targetOwner] and Players[q.targetOwner]:GetUnits():FindID(q.targetId)
-    local changedHP = target and target:GetID() == q.targetId
-        and target:GetX() == q.targetX and target:GetY() == q.targetY
-        and target:GetMaxDamage() - target:GetDamage() ~= q.preHP
+    local changedHP = false
+    -- A started command can outlive the defender; its cleanup must not
+    -- depend on looking up the vanished unit. The legacy HP path also
+    -- requires the same visible tile used by ordinary combat followup.
+    if not q.started then
+        local plot = Map.GetPlot(q.targetX, q.targetY)
+        local visibility = PlayersVisibility[me]
+        if plot and visibility and visibility:IsVisible(plot:GetIndex()) then
+            local target = Players[q.targetOwner] and Players[q.targetOwner]:GetUnits():FindID(q.targetId)
+            changedHP = target and target:GetID() == q.targetId
+                and target:GetX() == q.targetX and target:GetY() == q.targetY
+                and target:GetMaxDamage() - target:GetDamage() ~= q.preHP
+        end
+    end
     if q.started or changedHP then
         q.closed = true
         pcall(function() Events.CityCommandStarted.Remove(q.handler) end)
