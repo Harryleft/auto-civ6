@@ -26,6 +26,8 @@ from civ_mcp.narrate import (
 
 log = logging.getLogger(__name__)
 
+LOAD_TIMEOUT = 180.0
+
 ACTION_CONFIRM_TIMEOUT = 5.0
 ACTION_CONFIRM_INTERVAL = 0.15
 
@@ -90,12 +92,13 @@ class GameState:
 
     def __init__(self, connection: GameConnection):
         self.conn = connection
+        self._pending_load = False
         self.reset_session()
 
     def reset_session(self) -> None:
-        """新游戏或显式读档后，从实际状态重新建立会话。"""
+        """Retire world caches; only replacement verification releases its gate."""
         self._pending_save = False
-        self._pending_load = False
+        # Replacement survives all cache/identity resets until verified.
         self._pending_action: _PendingAction | None = None
         self._last_snapshot: lq.TurnSnapshot | None = None
         self._game_identity: tuple[str, int] | None = None
@@ -401,11 +404,9 @@ print("{lq.SENTINEL}")
                 if self._game_identity is not None and new_id != self._game_identity:
                     log.info("Game changed: %s → %s", self._game_identity, new_id)
                     pending = self._pending_action
-                    pending_load = self._pending_load
                     pending_save = self._pending_save
                     self.reset_session()
                     self._pending_action = pending
-                    self._pending_load = pending_load
                     self._pending_save = pending_save
                 self._game_identity = new_id
                 return self._game_identity
@@ -1974,23 +1975,176 @@ print("{lq.SENTINEL}")
             return error
         return f"{result} Civilization {identity[0]}, seed {identity[1]}, turn {after.turn}."
 
+    @property
+    def replacement_pending(self) -> bool:
+        """A replacement is unconfirmed; save uncertainty is tracked separately."""
+        return self._pending_load
+
     async def load_save(self, save_index: int) -> str:
-        """Load a save by index; discard the old world's cached state."""
-        from civ_mcp.game_lifecycle import load_save
-        result = await load_save(self.conn, save_index)
-        if not result.startswith(("Error", "ERR", "FAILED")):
-            self.reset_session()
-            await self.conn.disconnect()
-        return result
+        """Resolve only a displayed index, then use the single verified loader."""
+        from civ_mcp.game_lifecycle import listed_save_name
+
+        name = listed_save_name(save_index)
+        if name is None:
+            return "Error: No matching cached save index; call list_saves or use load_game_save with an explicit confirmed name."
+        return await self.load_game_save(name)
 
     async def load_game_save(self, save_name: str) -> str:
-        """Submit a native main-menu load; discard caches if submitted or unknown."""
-        from civ_mcp.game_lifecycle import load_game_save
-        result = await load_game_save(self.conn, save_name)
-        if result.startswith(("Loading", "ERR:OUTCOME_UNKNOWN")):
-            self.reset_session()
-        return result
+        """Load once from MainMenu and confirm identity, readiness and snapshot."""
+        return await self._replace_save(save_name)
 
+    async def reload_game_save(self, save_name: str) -> str:
+        """Replace through the native menu while preserving the process."""
+        return await self._replace_save(save_name, return_to_menu=True)
+
+    async def kill_game(self) -> str:
+        """Explicit process stop; clear state only when shutdown is confirmed."""
+        from civ_mcp import game_launcher, game_lifecycle
+
+        self._pending_load = True
+        await self.conn.disconnect()
+        result = await game_launcher.stop_game()
+        if result.confirmed:
+            self.reset_session()
+            game_lifecycle.clear_save_listing()
+            self._pending_load = False
+        return result.message
+
+    async def launch_game(self) -> str:
+        from civ_mcp import game_launcher
+
+        return (await game_launcher.start_game()).message
+
+    async def restart_and_load(self, save_name: str | None = None) -> str:
+        """Explicit cold recovery; retains the gate across process replacement."""
+        from civ_mcp import checkpoints, game_launcher, game_lifecycle
+
+        if not save_name:
+            return "Error: Provide an explicit confirmed checkpoint save_name; autosave guessing is disabled."
+        error = game_lifecycle._validate_save_name(save_name)
+        if error:
+            return error
+        if checkpoints.expected_checkpoint(save_name) is None:
+            return "Error: Checkpoint completion and expected identity are unavailable; no restart performed."
+        self._pending_load = True
+        await self.conn.disconnect()
+        stopped = await game_launcher.stop_game()
+        if not stopped.confirmed:
+            return f"Error: Restart stopped because Civ6 shutdown was not confirmed: {stopped.message}"
+        self.reset_session()
+        game_lifecycle.clear_save_listing()
+        started = await game_launcher.start_game()
+        if not started.confirmed:
+            return f"Error: {stopped.message} | {started.message}"
+        loaded = await self._replace_save(save_name, recovering=True)
+        return f"{loaded} | {stopped.message} | {started.message}"
+
+    async def _replace_save(self, save_name: str, *, return_to_menu: bool = False, recovering: bool = False) -> str:
+        """同一个连接负责加载与验证；确认窗口内不重复发送加载命令。"""
+        from civ_mcp import checkpoints, game_lifecycle
+        from civ_mcp.narrate import narrate_score_comparison
+
+        error = game_lifecycle._validate_save_name(save_name)
+        if error:
+            return error
+        if self._pending_load and not recovering:
+            return "ERR:OUTCOME_UNKNOWN|An earlier load is unconfirmed; inspect state or use explicit recovery, not another load."
+        if not recovering and (
+            self._pending_save or self._pending_end_turn
+            or self.pending_action_entity is not None
+        ):
+            return "ERR:OUTCOME_UNKNOWN|An action/save/end-turn is pending; confirm it or use explicit restart_and_load before replacing the session."
+        expected = checkpoints.expected_checkpoint(save_name)
+        if expected is None:
+            return "Error: Checkpoint completion and expected identity are unavailable; no load sent."
+        saved_score = checkpoints.expected_score(save_name)
+        submitted = False
+        replacing = recovering
+        try:
+            async with asyncio.timeout(LOAD_TIMEOUT):
+                if return_to_menu:
+                    # Install the barrier before ExitToMainMenu can be submitted.
+                    # The helper only releases it when native code proves no exit ran.
+                    self._pending_load = True
+                    replacing = True
+                    menu = await game_lifecycle.return_to_main_menu_result(self.conn)
+                    if menu.status != "confirmed":
+                        if menu.status == "not_submitted":
+                            self._pending_load = False
+                            replacing = recovering
+                        return menu.message
+                    self.reset_session()
+                    game_lifecycle.clear_save_listing()
+                # During startup FireTuner briefly opens before MainMenu exists,
+                # then resets the socket. Retry only this read-only discovery;
+                # the actual load below is still submitted exactly once.
+                while True:
+                    try:
+                        frontend = await game_lifecycle.is_in_frontend(self.conn)
+                        if frontend is False:
+                            message = "A game is loaded; return to the main menu first."
+                            return ("ERR:OUTCOME_UNKNOWN|" if replacing else "Error: ") + message
+                        if frontend is True and "MainMenu" in self.conn.lua_states.values():
+                            break
+                    except (OSError, LuaError, ValueError):
+                        pass
+                    await asyncio.sleep(2)
+                if checkpoints.expected_checkpoint(save_name) != expected:
+                    prefix = "ERR:OUTCOME_UNKNOWN|" if replacing else "Error: "
+                    return prefix + "Checkpoint file changed before load; no load sent."
+                self._pending_load = True
+                # A cancelled transport may already have dispatched the native load.
+                submitted = True
+                result = await game_lifecycle.load_save_from_frontend_result(self.conn, save_name)
+                submitted = result.status in {"submitted", "unknown"}
+                if not submitted:
+                    self._pending_load = replacing
+                    if replacing:
+                        return "ERR:OUTCOME_UNKNOWN|Main menu reached but replacement is not verified. " + result.message
+                    return result.message
+                self.reset_session()
+                game_lifecycle.clear_save_listing()
+                while True:
+                    try:
+                        await self.conn.reconnect()
+                        if self.conn.gamecore_index is not None and self.conn.ingame_index is not None:
+                            from civ_mcp.end_turn import read_turn_state
+                            turn, ready = await read_turn_state(self)
+                            if ready is True:
+                                identity = await self.get_game_identity()
+                                ov = await self.get_game_overview(require_snapshot=True)
+                                actual = (*identity, ov.turn)
+                                if actual != expected or turn != ov.turn:
+                                    return f"ERR:OUTCOME_UNKNOWN|Loaded state mismatch: expected {expected}, observed {actual}, active turn {turn}. No load replayed."
+                                # Confirm identity and readiness after all snapshot
+                                # reads too, rather than trusting their earlier state.
+                                final_identity = await self.get_game_identity()
+                                final_turn, final_ready = await read_turn_state(self)
+                                if final_identity != identity or final_turn != ov.turn or final_ready is not True:
+                                    raise ValueError("Loaded state changed or became unreadable during snapshot confirmation")
+                                if checkpoints.expected_checkpoint(save_name) != expected:
+                                    return "ERR:OUTCOME_UNKNOWN|Checkpoint file changed during load; recovery not verified."
+                                if save_name.removesuffix(".Civ6Save") == "benchmark_turn_1":
+                                    ownership_error = checkpoints.begin_baseline_run()
+                                    if ownership_error:
+                                        return ownership_error
+                                self._pending_load = False
+                                score_comparison = narrate_score_comparison(saved_score, checkpoints.score_evidence(ov))
+                                return f"Loaded {save_name}: {identity[0]}, seed {identity[1]}, turn {ov.turn}.\n{score_comparison}"
+                    except (OSError, LuaError, ValueError):
+                        self._pending_load = True
+                    await asyncio.sleep(2)
+        except asyncio.CancelledError:
+            if replacing or submitted:
+                self._pending_load = True
+            raise
+        except TimeoutError:
+            if replacing or submitted:
+                self._pending_load = True
+            await self.conn.disconnect()
+            if not submitted and not replacing:
+                return "Error: MainMenu was not ready within 180 seconds; no load command was sent."
+            return "ERR:OUTCOME_UNKNOWN|Session replacement was not confirmed within 180 seconds. Use explicit restart_and_load for fault recovery."
 
     async def execute_lua(self, code: str, context: str = "gamecore") -> str:
         """Escape hatch: run arbitrary Lua code."""

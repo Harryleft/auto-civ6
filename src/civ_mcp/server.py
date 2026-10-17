@@ -11,7 +11,6 @@ from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Awaitable, Callable, Optional
 
 from mcp.server.fastmcp import Context, FastMCP
-from civ_mcp import game_launcher, game_lifecycle, checkpoints
 from civ_mcp import lua as lq
 from civ_mcp import narrate as nr
 from civ_mcp.connection import GameConnection, LuaError
@@ -19,7 +18,6 @@ from civ_mcp.game_state import GameState
 from civ_mcp.logger import GameLogger
 
 log = logging.getLogger(__name__)
-LOAD_TIMEOUT = 180.0
 
 
 @dataclass
@@ -1875,12 +1873,8 @@ async def load_save(ctx: Context, save_index: int) -> str:
     The same MainMenu, expected identity and readiness checks apply to named
     and index-based loads. Unknown legacy files cannot bypass those checks.
     """
-    async def _run():
-        names = game_lifecycle._filesystem_save_names
-        if not 1 <= save_index <= len(names):
-            return "Error: No matching cached save index; call list_saves or use load_game_save with an explicit confirmed name."
-        return await _load_and_verify(_get_game(ctx), names[save_index - 1])
-    return await _logged(ctx, "load_save", {"save_index": save_index}, _run)
+    gs = _get_game(ctx)
+    return await _logged(ctx, "load_save", {"save_index": save_index}, lambda: gs.load_save(save_index))
 
 
 @mcp.tool(annotations={"destructiveHint": True})
@@ -1890,7 +1884,7 @@ async def load_game_save(ctx: Context, save_name: str) -> str:
     Confirms identity, turn and a fresh complete snapshot. Use reload_game_save
     for a normal in-game swap. No OCR, restart or automatic resend.
     """
-    return await _logged(ctx, "load_game_save", {"save_name": save_name}, lambda: _load_and_verify(_get_game(ctx), save_name))
+    return await _logged(ctx, "load_game_save", {"save_name": save_name}, lambda: _get_game(ctx).load_game_save(save_name))
 
 
 @mcp.tool(annotations={"destructiveHint": True})
@@ -1902,7 +1896,7 @@ async def reload_game_save(ctx: Context, save_name: str) -> str:
     Unknown results are never resent; restart_and_load is explicit fault recovery.
     """
     return await _logged(ctx, "reload_game_save", {"save_name": save_name},
-                         lambda: _load_and_verify(_get_game(ctx), save_name, return_to_menu=True))
+                         lambda: _get_game(ctx).reload_game_save(save_name))
 
 
 # ---------------------------------------------------------------------------
@@ -1915,19 +1909,13 @@ async def reload_game_save(ctx: Context, save_name: str) -> str:
 @mcp.tool(annotations={"destructiveHint": True})
 async def kill_game(ctx: Context) -> str:
     """Explicitly stop Civ6 and release its FireTuner session."""
-    gs = _get_game(ctx)
-    async def _run():
-        await gs.conn.disconnect()
-        result = await game_launcher.kill_game()
-        gs.reset_session()
-        return result
-    return await _logged(ctx, "kill_game", {}, _run)
+    return await _logged(ctx, "kill_game", {}, _get_game(ctx).kill_game)
 
 
 @mcp.tool(annotations={"destructiveHint": True})
 async def launch_game(ctx: Context) -> str:
     """Launch Civ6 through Steam; load a save explicitly from the main menu."""
-    return await _logged(ctx, "launch_game", {}, game_launcher.launch_game)
+    return await _logged(ctx, "launch_game", {}, _get_game(ctx).launch_game)
 
 
 @mcp.tool(annotations={"destructiveHint": True})
@@ -1936,7 +1924,7 @@ async def load_save_from_menu(ctx: Context, save_name: str | None = None) -> str
     name = save_name
     if not name:
         return "Error: Provide an explicit confirmed checkpoint save_name; autosave guessing is disabled."
-    return await _logged(ctx, "load_save_from_menu", {"save_name": name}, lambda: _load_and_verify(_get_game(ctx), name))
+    return await _logged(ctx, "load_save_from_menu", {"save_name": name}, lambda: _get_game(ctx).load_game_save(name))
 
 
 @mcp.tool(annotations={"destructiveHint": True})
@@ -1946,135 +1934,8 @@ async def restart_and_load(ctx: Context, save_name: str | None = None) -> str:
     Prefer reload_game_save for normal swaps while Civ6 responds.
     Unknown load results are confirmed by reading state, never by reloading.
     """
-    gs = _get_game(ctx)
-    name = save_name
-    if not name:
-        return "Error: Provide an explicit confirmed checkpoint save_name; autosave guessing is disabled."
-    error = game_lifecycle._validate_save_name(name)
-    if error:
-        return error
-    if checkpoints.expected_checkpoint(name) is None:
-        return "Error: Checkpoint completion and expected identity are unavailable; no restart performed."
-    async def _run():
-        await gs.conn.disconnect()
-        stopped = await game_launcher.kill_game()
-        if stopped.startswith(("Error", "FAILED", "WARNING")):
-            return f"Error: Restart stopped because Civ6 shutdown was not confirmed: {stopped}"
-        gs.reset_session()
-        started = await game_launcher.launch_game()
-        if started.startswith(("Error", "FAILED", "WARNING")) or "not detected" in started:
-            return f"Error: {stopped} | {started}"
-        loaded = await _load_and_verify(gs, name)
-        return f"{loaded} | {stopped} | {started}"
-    return await _logged(ctx, "restart_and_load", {"save_name": name}, _run)
-
-
-async def _load_and_verify(gs: GameState, save_name: str, *, return_to_menu: bool = False) -> str:
-    """同一个连接负责加载与验证；确认窗口内不重复发送加载命令。"""
-    error = game_lifecycle._validate_save_name(save_name)
-    if error:
-        return error
-    if getattr(gs, "_pending_load", False):
-        return "ERR:OUTCOME_UNKNOWN|An earlier load is unconfirmed; inspect state or use explicit recovery, not another load."
-    if return_to_menu and (
-        getattr(gs, "_pending_save", False) or getattr(gs, "_pending_end_turn", False)
-        or gs.pending_action_entity is not None
-    ):
-        return "ERR:OUTCOME_UNKNOWN|An action/save/end-turn is pending; confirm it or use explicit restart_and_load before replacing the session."
-    expected = checkpoints.expected_checkpoint(save_name)
-    if expected is None:
-        return "Error: Checkpoint completion and expected identity are unavailable; no load sent."
-    saved_score = checkpoints.expected_score(save_name)
-    submitted = False
-    replacing = False
-    try:
-        async with asyncio.timeout(LOAD_TIMEOUT):
-            if return_to_menu:
-                # Install the barrier before ExitToMainMenu can be submitted.
-                # The helper only releases it when native code proves no exit ran.
-                gs._pending_load = True
-                replacing = True
-                menu = await game_lifecycle.return_to_main_menu(gs.conn)
-                if menu != "Main menu confirmed.":
-                    if menu.startswith("Error:") and "no exit sent" in menu:
-                        gs._pending_load = False
-                        replacing = False
-                    return menu
-                gs.reset_session()
-                game_lifecycle._filesystem_save_names.clear()
-                gs._pending_load = True
-            # During startup FireTuner briefly opens before MainMenu exists,
-            # then resets the socket. Retry only this read-only discovery;
-            # the actual load below is still submitted exactly once.
-            while True:
-                try:
-                    frontend = await game_lifecycle.is_in_frontend(gs.conn)
-                    if frontend is False:
-                        message = "A game is loaded; return to the main menu first."
-                        return ("ERR:OUTCOME_UNKNOWN|" if replacing else "Error: ") + message
-                    if frontend is True and "MainMenu" in gs.conn.lua_states.values():
-                        break
-                except (OSError, LuaError, ValueError):
-                    pass
-                await asyncio.sleep(2)
-            if checkpoints.expected_checkpoint(save_name) != expected:
-                prefix = "ERR:OUTCOME_UNKNOWN|" if replacing else "Error: "
-                return prefix + "Checkpoint file changed before load; no load sent."
-            submitted = True
-            result = await game_lifecycle.load_save_from_frontend(gs.conn, save_name)
-            if not result.startswith(("Loading", "ERR:OUTCOME_UNKNOWN")):
-                if replacing:
-                    return "ERR:OUTCOME_UNKNOWN|Main menu reached but replacement is not verified. " + result
-                return result
-            gs.reset_session()
-            game_lifecycle._filesystem_save_names.clear()
-            gs._pending_load = True
-            while True:
-                try:
-                    await gs.conn.reconnect()
-                    if gs.conn.gamecore_index is not None and gs.conn.ingame_index is not None:
-                        from civ_mcp.end_turn import read_turn_state
-                        turn, ready = await read_turn_state(gs)
-                        if ready is True:
-                            identity = await gs.get_game_identity()
-                            gs._pending_load = True
-                            ov = await gs.get_game_overview(require_snapshot=True)
-                            # Identity discovery can reset cached session data;
-                            # restore the barrier until every comparison passes.
-                            gs._pending_load = True
-                            actual = (*identity, ov.turn)
-                            if actual != expected or turn != ov.turn:
-                                return f"ERR:OUTCOME_UNKNOWN|Loaded state mismatch: expected {expected}, observed {actual}, active turn {turn}. No load replayed."
-                            # Confirm identity and readiness after all snapshot
-                            # reads too, rather than trusting their earlier state.
-                            final_identity = await gs.get_game_identity()
-                            gs._pending_load = True
-                            final_turn, final_ready = await read_turn_state(gs)
-                            if final_identity != identity or final_turn != ov.turn or final_ready is not True:
-                                raise ValueError("Loaded state changed or became unreadable during snapshot confirmation")
-                            if checkpoints.expected_checkpoint(save_name) != expected:
-                                return "ERR:OUTCOME_UNKNOWN|Checkpoint file changed during load; recovery not verified."
-                            if save_name.removesuffix(".Civ6Save") == "benchmark_turn_1":
-                                ownership_error = checkpoints.begin_baseline_run()
-                                if ownership_error:
-                                    return ownership_error
-                            gs._pending_load = False
-                            score_comparison = nr.narrate_score_comparison(saved_score, checkpoints.score_evidence(ov))
-                            return f"Loaded {save_name}: {identity[0]}, seed {identity[1]}, turn {ov.turn}.\n{score_comparison}"
-                except (OSError, LuaError, ValueError):
-                    gs._pending_load = True
-                await asyncio.sleep(2)
-    except asyncio.CancelledError:
-        if replacing or submitted:
-            gs._pending_load = True
-        raise
-    except TimeoutError:
-        if replacing or submitted:
-            gs._pending_load = True
-        await gs.conn.disconnect()
-        if not submitted and not replacing:
-            return "Error: MainMenu was not ready within 180 seconds; no load command was sent."
-        return "ERR:OUTCOME_UNKNOWN|Session replacement was not confirmed within 180 seconds. Use explicit restart_and_load for fault recovery."
+    return await _logged(ctx, "restart_and_load", {"save_name": save_name},
+                         lambda: _get_game(ctx).restart_and_load(save_name))
 
 
 async def _narrate(
