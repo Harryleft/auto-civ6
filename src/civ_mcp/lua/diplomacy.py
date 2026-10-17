@@ -525,34 +525,73 @@ print("{SENTINEL}")
 """
 
 
+def _native_relationship_lua() -> str:
+    """Official index -> StateType/hash interpretation; no guessed state ordinals."""
+    return """
+local function integer(value)
+    return type(value) == "number" and value == value and math.abs(value) < math.huge and value == math.floor(value)
+end
+local function nativeRelationship(player, other)
+    local ok, row = pcall(function()
+        local index = Players[player]:GetDiplomaticAI():GetDiplomaticStateIndex(other)
+        if not integer(index) then return nil end
+        local row = GameInfo.DiplomaticStates[index]
+        if not row or type(row.StateType) ~= "string" or not integer(row.Hash) then return nil end
+        return row
+    end)
+    return ok and row or nil
+end
+local function matchesRelationship(row, stateType, stateHash)
+    if not row or not integer(stateHash) then return nil end
+    if row.StateType == stateType and row.Hash == stateHash then return true end
+    if row.StateType == stateType or row.Hash == stateHash then return nil end
+    return false
+end
+"""
+
+
 def build_check_friendship_state(other_player_id: int, owner_id: int) -> str:
     """Read reciprocal native indices through official StateType/hash mappings."""
-    return f"""
+    return _native_relationship_lua() + f"""
 local me = Game.GetLocalPlayer()
 local target = {other_player_id}
 local status = "UNKNOWN"
 local ok, result = pcall(function()
     if me ~= {owner_id} or me == target or not Players[me] or not Players[target] then return "UNKNOWN" end
-    local function integer(value)
-        return type(value) == "number" and value == value and math.abs(value) < math.huge and value == math.floor(value)
-    end
-    local friendHash = DiplomaticStates.DECLARED_FRIEND
-    if not integer(friendHash) then return "UNKNOWN" end
-    local function declared(player, other)
-        local index = Players[player]:GetDiplomaticAI():GetDiplomaticStateIndex(other)
-        if not integer(index) then return nil end
-        local row = GameInfo.DiplomaticStates[index]
-        if not row or type(row.StateType) ~= "string" or not integer(row.Hash) then return nil end
-        if row.StateType == "DIPLO_STATE_DECLARED_FRIEND" and row.Hash == friendHash then return true end
-        if row.StateType == "DIPLO_STATE_DECLARED_FRIEND" or row.Hash == friendHash then return nil end
-        return false
-    end
-    local ours, theirs = declared(me, target), declared(target, me)
+    local ours = matchesRelationship(nativeRelationship(me, target), "DIPLO_STATE_DECLARED_FRIEND", DiplomaticStates.DECLARED_FRIEND)
+    local theirs = matchesRelationship(nativeRelationship(target, me), "DIPLO_STATE_DECLARED_FRIEND", DiplomaticStates.DECLARED_FRIEND)
     if ours == nil or theirs == nil then return "UNKNOWN" end
     return ours and theirs and "DECLARED_FRIEND" or "NOT_DECLARED_FRIEND"
 end)
 if ok then status = result end
 print("FRIENDSHIP|" .. me .. "|" .. target .. "|" .. status)
+print("{SENTINEL}")
+"""
+
+
+def build_check_alliance_state(other_player_id: int, owner_id: int, alliance_type: str) -> str:
+    """Require bilateral ALLIED and the exact native requested alliance type."""
+    import json
+
+    alliance_key = json.dumps(f"ALLIANCE_{alliance_type.upper()}", ensure_ascii=False)
+    return _native_relationship_lua() + f"""
+local me = Game.GetLocalPlayer()
+local target = {other_player_id}
+local status = "UNKNOWN"
+local ok, result = pcall(function()
+    if me ~= {owner_id} or me == target or not Players[me] or not Players[target] then return "UNKNOWN" end
+    local ours = matchesRelationship(nativeRelationship(me, target), "DIPLO_STATE_ALLIED", DiplomaticStates.ALLIED)
+    local theirs = matchesRelationship(nativeRelationship(target, me), "DIPLO_STATE_ALLIED", DiplomaticStates.ALLIED)
+    if ours == nil or theirs == nil then return "UNKNOWN" end
+    if not ours or not theirs then return "NOT_ALLIED" end
+    local allianceIndex = Players[me]:GetDiplomacy():GetAllianceType(target)
+    if not integer(allianceIndex) or allianceIndex < 0 then return "UNKNOWN" end
+    local row = GameInfo.Alliances[allianceIndex]
+    if not row or type(row.AllianceType) ~= "string" then return "UNKNOWN" end
+    return row.AllianceType == {alliance_key} and {alliance_key} or "TYPE_MISMATCH"
+end)
+if ok then status = result end
+print("ALLIANCE|" .. me .. "|" .. target .. "|" .. status)
 print("{SENTINEL}")
 """
 
@@ -1008,20 +1047,28 @@ def build_form_alliance(other_player_id: int, alliance_type: str) -> str:
 
     alliance_type: MILITARY, RESEARCH, CULTURAL, ECONOMIC, RELIGIOUS
     """
-    alliance_key = f"ALLIANCE_{alliance_type.upper()}"
-    return f"""
+    import json
+
+    alliance_key = json.dumps(f"ALLIANCE_{alliance_type.upper()}", ensure_ascii=False)
+    return _native_relationship_lua() + f"""
 local me = Game.GetLocalPlayer()
 local target = {other_player_id}
-local allianceRow = GameInfo.Alliances["{alliance_key}"]
-local type_idx = allianceRow and allianceRow.Index or 0
+local allianceKey = {alliance_key}
+local allianceRow = GameInfo.Alliances and GameInfo.Alliances[allianceKey]
+if not allianceRow or allianceRow.AllianceType ~= allianceKey or not integer(allianceRow.Index) or allianceRow.Index < 0 then
+    {_bail("ERR:UNKNOWN_ALLIANCE_TYPE|Requested native alliance type unavailable; no proposal submitted")}
+end
+local type_idx = allianceRow.Index
 local pDiplo = Players[me]:GetDiplomacy()
 if not Players[target] or not Players[target]:IsAlive() then {_bail("ERR:INVALID_PLAYER|Player not found")} end
 if not pDiplo:HasMet(target) then {_bail("ERR:NOT_MET|Have not met this civilization")} end
 if pDiplo:IsAtWarWith(target) then {_bail("ERR:AT_WAR|Cannot ally while at war")} end
-local ai = Players[target]:GetDiplomaticAI()
-local stateIdx = ai:GetDiplomaticStateIndex(me)
-if stateIdx == 0 then {_bail("ERR:ALREADY_ALLIED|Already in an alliance")} end
-if stateIdx ~= 1 then {_bail("ERR:NOT_FRIENDS|Must be declared friends first")} end
+local relationship = nativeRelationship(target, me)
+local allied = matchesRelationship(relationship, "DIPLO_STATE_ALLIED", DiplomaticStates and DiplomaticStates.ALLIED)
+local friends = matchesRelationship(relationship, "DIPLO_STATE_DECLARED_FRIEND", DiplomaticStates and DiplomaticStates.DECLARED_FRIEND)
+if allied == nil or friends == nil then {_bail("ERR:RELATIONSHIP_UNKNOWN|Native relationship unavailable; no proposal submitted")} end
+if allied then {_bail("ERR:ALREADY_ALLIED|Already in an alliance")} end
+if not friends then {_bail("ERR:NOT_FRIENDS|Must be declared friends first")} end
 local hasDiploService = false
 pcall(function()
     local civic = GameInfo.Civics["CIVIC_DIPLOMATIC_SERVICE"]
@@ -1039,7 +1086,6 @@ if ai_item then ai_item:SetSubType(DealAgreementTypes.ALLIANCE) pcall(function()
 DiplomacyManager.RequestSession(me, target, "MAKE_DEAL")
 DealManager.SendWorkingDeal(DealProposalAction.PROPOSED, me, target)
 local sid = DiplomacyManager.FindOpenSessionID(me, target)
-local result = "PROPOSED"
 if sid and sid >= 0 then
     local ok, respDeal = pcall(function()
         return DealManager.GetWorkingDeal(DealDirection.INCOMING, me, target)
@@ -1049,29 +1095,13 @@ if sid and sid >= 0 then
         pcall(function() itemCount = respDeal:GetItemCount() or 0 end)
         if itemCount > 0 then
             DealManager.SendWorkingDeal(DealProposalAction.ACCEPTED, me, target)
-            result = "ACCEPTED"
-        else
-            result = "REJECTED"
         end
-    else
-        result = "REJECTED"
     end
     {_lua_close_diplo_session()}
 end
-local postState = Players[target]:GetDiplomaticAI():GetDiplomaticStateIndex(me)
-if postState == 0 then
-    local aNames = {{"RESEARCH","CULTURAL","ECONOMIC","MILITARY","RELIGIOUS"}}
-    local typeName = "{alliance_type}"
-    local ok3, aType = pcall(function() return pDiplo:GetAllianceType(target) end)
-    if ok3 and aType and aType >= 0 then typeName = aNames[aType+1] or typeName end
-    print("OK:ACCEPTED|" .. typeName .. " alliance formed with " .. name)
-else
-    if result == "REJECTED" then
-        print("OK:REJECTED|" .. name .. " rejected the " .. "{alliance_type}" .. " alliance proposal")
-    else
-        print("OK:FAILED|Alliance proposal sent but status unclear (state=" .. tostring(postState) .. ")")
-    end
-end
+-- A working deal and same-frame relation are not an acceptance witness.
+print("OK:PROPOSED|" .. name)
+print("ALLIANCE_SCOPE|" .. me .. "|" .. target .. "|" .. allianceKey)
 print("{SENTINEL}")
 """
 
