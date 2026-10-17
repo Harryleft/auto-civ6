@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Awaitable, Callable, Optional
 
 from mcp.server.fastmcp import Context, FastMCP
-from civ_mcp import game_launcher, game_lifecycle
+from civ_mcp import game_launcher, game_lifecycle, checkpoints
 from civ_mcp import lua as lq
 from civ_mcp import narrate as nr
 from civ_mcp.connection import GameConnection, LuaError
@@ -80,7 +80,39 @@ async def _logged(
     async with app.lock:
         start = time.monotonic()
         try:
-            result = await fn()
+            if (
+                (getattr(app.game, "_pending_load", False)
+                 or getattr(app.game, "_pending_save", False))
+                and not tool_name.startswith(("get_", "list_"))
+                and tool_name != "restart_and_load"
+            ):
+                result = (
+                    "ERR:OUTCOME_UNKNOWN|The requested save/load has not been verified. "
+                    "Read game state or explicitly restart_and_load a verified checkpoint "
+                    "before issuing gameplay actions."
+                )
+            else:
+                entity = getattr(app.game, "pending_action_entity", None)
+                dependent = False
+                if isinstance(entity, tuple) and not tool_name.startswith(("get_", "list_")):
+                    unit_id = params.get("unit_id")
+                    city_id = params.get("city_id")
+                    dependent = (
+                        (entity[0] == "unit" and isinstance(unit_id, int)
+                         and entity[1] == unit_id % 65536)
+                        or (entity[0] == "city" and entity[1] == city_id)
+                        or tool_name == "run_lua"
+                        or (entity[0] == "unit" and tool_name == "skip_remaining_units")
+                    )
+                # These tracked methods reconcile repeated intents themselves.
+                if dependent and tool_name not in {"unit_action", "set_city_production"}:
+                    confirmation = await app.game.confirm_pending_action()
+                    if app.game.pending_action_entity == entity:
+                        result = confirmation
+                    else:
+                        result = await fn()
+                else:
+                    result = await fn()
         except (LuaError, ValueError, OSError) as exc:
             result = f"Error: {exc}"
         ms = int((time.monotonic() - start) * 1000)
@@ -1146,6 +1178,15 @@ async def unit_action(
         params["improvement"] = improvement
 
     async def _run():
+        # Move/attack/founding reconcile their own pending requests. Other
+        # commands must not change that unit before its outcome is known.
+        if (
+            action.lower() not in {"move", "attack", "found_city"}
+            and getattr(gs, "pending_action_entity", None) == ("unit", unit_index)
+        ):
+            confirmation = await gs.confirm_pending_action()
+            if gs.pending_action_entity == ("unit", unit_index):
+                return confirmation
         match action.lower():
             case "move":
                 if target_x is None or target_y is None:
@@ -1801,18 +1842,17 @@ async def list_saves(ctx: Context) -> str:
 
 @mcp.tool(annotations={"destructiveHint": True})
 async def load_save(ctx: Context, save_index: int) -> str:
-    """Load a save file by index from the most recent list_saves() result.
+    """Load a confirmed checkpoint from the latest filesystem listing, once.
 
-    Args:
-        save_index: Index number from list_saves output (1-based)
-
-    The game will reload entirely. Wait ~10 seconds after calling this,
-    then use get_game_overview to verify the loaded state.
+    The same MainMenu, expected identity and readiness checks apply to named
+    and index-based loads. Unknown legacy files cannot bypass those checks.
     """
-    gs = _get_game(ctx)
-    return await _logged(
-        ctx, "load_save", {"save_index": save_index}, lambda: gs.load_save(save_index)
-    )
+    async def _run():
+        names = game_lifecycle._filesystem_save_names
+        if not 1 <= save_index <= len(names):
+            return "Error: No matching cached save index; call list_saves or use load_game_save with an explicit confirmed name."
+        return await _load_and_verify(_get_game(ctx), names[save_index - 1])
+    return await _logged(ctx, "load_save", {"save_index": save_index}, _run)
 
 
 @mcp.tool(annotations={"destructiveHint": True})
@@ -1851,10 +1891,10 @@ async def launch_game(ctx: Context) -> str:
 
 @mcp.tool(annotations={"destructiveHint": True})
 async def load_save_from_menu(ctx: Context, save_name: str | None = None) -> str:
-    """Load a named save, or the latest autosave, through the native FrontEnd API."""
-    name = save_name or game_launcher.get_latest_autosave()
+    """Load an explicitly named confirmed checkpoint through native FrontEnd APIs."""
+    name = save_name
     if not name:
-        return "Error: No autosave found; provide save_name."
+        return "Error: Provide an explicit confirmed checkpoint save_name; autosave guessing is disabled."
     return await _logged(ctx, "load_save_from_menu", {"save_name": name}, lambda: _load_and_verify(_get_game(ctx), name))
 
 
@@ -1865,12 +1905,14 @@ async def restart_and_load(ctx: Context, save_name: str | None = None) -> str:
     Unknown load results are confirmed by reading state, never by reloading.
     """
     gs = _get_game(ctx)
-    name = save_name or game_launcher.get_latest_autosave()
+    name = save_name
     if not name:
-        return "Error: No autosave found; provide save_name."
+        return "Error: Provide an explicit confirmed checkpoint save_name; autosave guessing is disabled."
     error = game_lifecycle._validate_save_name(name)
     if error:
         return error
+    if checkpoints.expected_checkpoint(name) is None:
+        return "Error: Checkpoint completion and expected identity are unavailable; no restart performed."
     async def _run():
         await gs.conn.disconnect()
         stopped = await game_launcher.kill_game()
@@ -1890,6 +1932,11 @@ async def _load_and_verify(gs: GameState, save_name: str) -> str:
     error = game_lifecycle._validate_save_name(save_name)
     if error:
         return error
+    if getattr(gs, "_pending_load", False):
+        return "ERR:OUTCOME_UNKNOWN|An earlier load is unconfirmed; inspect state or use explicit recovery, not another load."
+    expected = checkpoints.expected_checkpoint(save_name)
+    if expected is None:
+        return "Error: Checkpoint completion and expected identity are unavailable; no load sent."
     submitted = False
     try:
         async with asyncio.timeout(LOAD_TIMEOUT):
@@ -1911,18 +1958,33 @@ async def _load_and_verify(gs: GameState, save_name: str) -> str:
             if not result.startswith(("Loading", "ERR:OUTCOME_UNKNOWN")):
                 return result
             gs.reset_session()
+            gs._pending_load = True
             while True:
                 try:
                     await gs.conn.reconnect()
                     if gs.conn.gamecore_index is not None and gs.conn.ingame_index is not None:
-                        identity = await gs.get_game_identity()
-                        if identity != ("unknown", 0):
+                        from civ_mcp.end_turn import read_turn_state
+                        turn, ready = await read_turn_state(gs)
+                        if ready is True:
+                            identity = await gs.get_game_identity()
+                            gs._pending_load = True
                             ov = await gs.get_game_overview()
+                            # Identity discovery can reset cached session data;
+                            # restore the barrier until every comparison passes.
+                            gs._pending_load = True
+                            actual = (*identity, ov.turn)
+                            if actual != expected or turn != ov.turn:
+                                return f"ERR:OUTCOME_UNKNOWN|Loaded state mismatch: expected {expected}, observed {actual}, active turn {turn}. No load replayed."
+                            if checkpoints.expected_checkpoint(save_name) != expected:
+                                return "ERR:OUTCOME_UNKNOWN|Checkpoint file changed during load; recovery not verified."
+                            gs._pending_load = False
                             return f"Loaded {save_name}: {identity[0]}, seed {identity[1]}, turn {ov.turn}."
                 except (OSError, LuaError, ValueError):
-                    pass
+                    gs._pending_load = True
                 await asyncio.sleep(2)
     except TimeoutError:
+        if submitted:
+            gs._pending_load = True
         await gs.conn.disconnect()
         if not submitted:
             return "Error: MainMenu was not ready within 180 seconds; no load command was sent."
