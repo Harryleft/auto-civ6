@@ -183,6 +183,36 @@ def read_text(path: Path, tables: dict, xml_inputs: list) -> tuple[dict, dict]:
     return dict(sorted(result.items())), origins
 
 
+def startup_version(path: Path) -> tuple[str, datetime]:
+    lines = path.read_text().splitlines()
+    versions = [(index, re.search(r'Game Version\s*=\s*(.+)', line))
+                for index, line in enumerate(lines) if 'Game Version' in line]
+    versions = [(index, match) for index, match in versions if match]
+    if not versions:
+        raise ValueError('missing game version evidence')
+    index, version = versions[-1]
+    boots = [i for i, line in enumerate(lines) if 'Civ6App::InitialInit start.' in line]
+    if boots and boots[-1] > index:
+        raise ValueError('latest startup has no game version evidence')
+
+    def timestamp(line):
+        match = re.match(r'^\[([^]]+)\]', line)
+        if not match:
+            raise ValueError('missing startup timestamp')
+        try:
+            return datetime.strptime(match[1], '%Y-%m-%d %H:%M:%S')
+        except ValueError as exc:
+            raise ValueError('invalid startup timestamp') from exc
+
+    # Logs can be appended at shutdown; file mtime is not a boot timestamp.
+    started = timestamp(lines[index])
+    previous = versions[-2][0] if len(versions) > 1 else -1
+    matching_boots = [i for i in boots if previous < i <= index]
+    if matching_boots:
+        started = timestamp(lines[matching_boots[-1]])
+    return version[1].strip(), started
+
+
 def capture(game_root: Path, user_root: Path, steam_manifest: Path) -> dict:
     inputs = {
         'bundle': (game_root / 'Info.plist', 'game/Contents/Info.plist'),
