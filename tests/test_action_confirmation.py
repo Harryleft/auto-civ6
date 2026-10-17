@@ -5,6 +5,7 @@ import pytest
 
 from civ_mcp.game_state import GameState
 from civ_mcp.lua import TurnSnapshot
+from action_scope_support import DEFAULT_SCOPE, scope_rows, with_action_identity
 
 
 class Engine:
@@ -12,21 +13,25 @@ class Engine:
         self.writes = list(writes)
         self.reads = list(reads)
         self.submissions = []
+        self.scope = DEFAULT_SCOPE
+        self.fill_identity = True
 
     async def execute_write(self, code):
+        if 'print("ACTION_SCOPE|' in code:
+            return scope_rows(self.scope)
         if 'print("POS|' in code:
             return await self.execute_read(code)
         self.submissions.append(code)
         value = self.writes.pop(0)
         if isinstance(value, Exception):
             raise value
-        return value
+        return with_action_identity(code, value, self.scope, fill_missing=self.fill_identity)
 
     async def execute_read(self, code):
         value = self.reads.pop(0)
         if isinstance(value, Exception):
             raise value
-        return value
+        return with_action_identity(code, value, self.scope, fill_missing=self.fill_identity)
 
 
 def test_production_waits_for_target_queue_without_resubmitting():
@@ -381,6 +386,7 @@ def test_native_movement_stop_from_missing_or_changed_identity_stays_unknown(ide
         observation, ConnectionError("same-world evidence unavailable"),
     ])
     state = GameState(engine)
+    engine.fill_identity = False
     state.dismiss_popup = no_dismiss
     state._game_identity = ("sumeria", 719665280)
     state._last_snapshot = TurnSnapshot(turn=22, units={}, cities={}, current_research="", current_civic="")
@@ -395,6 +401,7 @@ class SegmentEngine(Engine):
         super().__init__(writes=[["OK:MOVING_TO|18,18|from:19,17"]])
         self.observations = observations or [{}]
         self.read_codes = []
+        self.scope = ("CIVILIZATION_SUMERIA", 719665280, 54, 0)
 
     async def execute_read(self, code):
         import re
@@ -412,7 +419,7 @@ class SegmentEngine(Engine):
                       pos_id="851974", moves="1")
         values.update(observation)
         return [
-            "ACTION_IDENTITY|CIVILIZATION_SUMERIA|719665280|54",
+            "ACTION_IDENTITY|CIVILIZATION_SUMERIA|719665280|54|0",
             f"POS|{values['pos']}|moves:{values['moves']}|movement_moves:1|zoc:false|busy:{values['busy']}|owner:0|id:{values['pos_id']}",
             f"MOVE_WITNESS|{values['token']}|{values['owner']}|{values['unit']}|{values['civ']}|{values['seed']}|{values['turn']}|{values['origin']}|{values['target']}|{values['done']}|rawCommand:177|rawData:9",
             f"QUEUED_TARGET|{values['queued']}",
