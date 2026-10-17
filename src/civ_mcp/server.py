@@ -1665,7 +1665,8 @@ async def get_world_congress(ctx: Context) -> str:
 
     Shows whether congress is in session, resolutions to vote on (with options A/B
     and possible targets), turns until next session, and your diplomatic favor.
-    When in session, use queue_wc_votes to register votes before end_turn.
+    Native stage and local request status distinguish voting from processing;
+    an active session alone does not mean the local player must vote.
     """
     gs = _get_game(ctx)
 
@@ -1695,7 +1696,11 @@ async def queue_wc_votes(ctx: Context, votes: str) -> str:
     casts your votes with the specified preferences. Provide all four fields
     for every resolution; missing choices never receive default votes.
     If already in session, the specified votes are submitted immediately so
-    the original pending end-turn can continue without another request.
+    one congress-stage continuation is requested after votes and submission.
+    The original ordinary end-turn request is never replayed. Repeated calls
+    report the existing request; they do not repeat votes or continuation.
+    An empty list is allowed only for a verified no-choice native stage;
+    non-empty or unknown proposal choices are rejected without default votes.
 
     If you don't call this, end_turn will pause at the World Congress session
     and return control to you for interactive voting.

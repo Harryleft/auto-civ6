@@ -1455,9 +1455,13 @@ class GameState:
         return _action_result(lines)
 
     async def queue_wc_votes(self, votes: list[dict]) -> str:
-        """Store agent voting preferences and register WC event handler."""
+        """Submit one explicit native-stage plan, or report its existing record."""
         lua = lq.build_register_wc_voter(votes=votes)
-        lines = await self.conn.execute_write(lua)
+        try:
+            lines = await self.conn.execute_write(lua)
+        except (OSError, TimeoutError, LuaError) as exc:
+            return (f"ERR:OUTCOME_UNKNOWN|World Congress request may have executed: {exc}. "
+                    "Use get_world_congress; no automatic vote/submission/continuation replay.")
         return _action_result(lines)
 
     # ------------------------------------------------------------------
