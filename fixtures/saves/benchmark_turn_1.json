@@ -29,5 +29,17 @@
   },
   "evidence_directory": "~/.civ6-mcp/acceptance/20261017-093253-benchmark",
   "status": "confirmed_sole_original_test_baseline",
-  "note": "User confirmed this exact original save as the only test baseline. Never overwrite it or load historical maps/checkpoints from other sessions."
+  "note": "User confirmed this exact original save as the only test baseline. Never overwrite it or load historical maps/checkpoints from other sessions.",
+  "latest_verification": {
+    "runtime_commit": "8631b7a",
+    "report": "docs/acceptance/2026-10-17-confirmation.md",
+    "evidence_directory": "~/.civ6-mcp/acceptance/20261017-1331-confirmation",
+    "net_turns": 20,
+    "final_turn": 21,
+    "in_run_game_reloads": 0,
+    "final_checkpoint_restart_load_verified": true,
+    "final_checkpoint": "benchmark_after_20_turns_confirmed_20261017",
+    "final_checkpoint_sha256": "0aa878855670e803877901da0d1306e14bf2fe469b04f76db72c0ecdfa05fc87",
+    "original_sha256_unchanged": true
+  }
 }
