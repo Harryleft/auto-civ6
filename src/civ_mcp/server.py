@@ -81,12 +81,13 @@ async def _logged(
         start = time.monotonic()
         try:
             if (
-                getattr(app.game, "_pending_load", False)
+                (getattr(app.game, "_pending_load", False)
+                 or getattr(app.game, "_pending_save", False))
                 and not tool_name.startswith(("get_", "list_"))
                 and tool_name != "restart_and_load"
             ):
                 result = (
-                    "ERR:OUTCOME_UNKNOWN|The requested load has not been verified. "
+                    "ERR:OUTCOME_UNKNOWN|The requested save/load has not been verified. "
                     "Read game state or explicitly restart_and_load a verified checkpoint "
                     "before issuing gameplay actions."
                 )
