@@ -1424,7 +1424,7 @@ class TestMcpProtocol:
 
         anyio.run(go)
         assert conn.disconnect_calls == 1
-        assert conn.read_queries == ['(function() print(42) end)(); print("---END---")']
+        assert conn.read_queries == ['print(42)']
         entries = [json.loads(line) for line in log_path.read_text().splitlines()]
         assert [entry["tool"] for entry in entries] == ["save_game", "run_lua", "unit_action"]
         assert all("success" not in entry for entry in entries)

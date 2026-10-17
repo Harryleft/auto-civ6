@@ -8,16 +8,23 @@ state discovery, output parsing, the send/collect loop, reconnect-on-dead-socket
 
 from __future__ import annotations
 
-import time
+import asyncio
+import uuid
+from types import SimpleNamespace
 
 import pytest
 
 from civ_mcp import tuner_client
 from civ_mcp.connection import GameConnection, LuaError, _parse_output
-from civ_mcp.lua._helpers import SENTINEL
 from fake_tuner import frame, make_connection, run
 
 TAG = tuner_client.TAG_COMMAND
+
+
+@pytest.fixture(autouse=True)
+def request_tokens(monkeypatch):
+    tokens = iter(f"request{i}" for i in range(1, 100))
+    monkeypatch.setattr(uuid, "uuid4", lambda: SimpleNamespace(hex=next(tokens)))
 
 
 # ---------------------------------------------------------------------------
@@ -152,29 +159,32 @@ class TestParseOutput:
 # ---------------------------------------------------------------------------
 
 
-class TestLockedExecute:
-    def test_sends_the_state_index_and_code_verbatim(self, monkeypatch):
+class TestFramedResponses:
+    def test_wraps_code_in_the_explicit_state_and_preserves_a_trailing_return(self, monkeypatch):
         async def go():
             conn, writer = await make_connection(
-                monkeypatch, incoming=(frame(TAG, f"O\x00c: {SENTINEL}"),)
+                monkeypatch, incoming=(frame(TAG, "O\x00c: CIVMCP|request1|END"),)
             )
-            await conn._locked_execute(2, "print('hi')", timeout=1.0)
+            await conn.execute_in_state(2, "return 1 -- trailing comment", timeout=1.0)
             return writer
 
-        assert run(go()).messages() == [(TAG, "CMD:2:print('hi')")]
+        messages = run(go()).messages()
+        assert len(messages) == 1
+        assert messages[0][1].startswith("CMD:2:do\n")
+        assert "(function()\nreturn 1 -- trailing comment\nend)()" in messages[0][1]
 
-    def test_collects_output_lines_until_the_sentinel(self, monkeypatch):
+    def test_collects_output_lines_until_its_request_completion(self, monkeypatch):
         async def go():
             conn, _ = await make_connection(
                 monkeypatch,
                 incoming=(
-                    frame(TAG, "O\x00ctx: one"),
-                    frame(TAG, "O\x00ctx: two"),
-                    frame(TAG, f"O\x00ctx: {SENTINEL}"),
+                    frame(TAG, "O\x00ctx: CIVMCP|request1|OUT|one"),
+                    frame(TAG, "O\x00ctx: CIVMCP|request1|OUT|two"),
+                    frame(TAG, "O\x00ctx: CIVMCP|request1|END"),
                     frame(TAG, "O\x00ctx: after sentinel"),
                 ),
             )
-            return await conn._locked_execute(0, "print()", timeout=1.0)
+            return await conn.execute_read("print()", timeout=1.0)
 
         assert run(go()) == ["one", "two"]
 
@@ -182,9 +192,9 @@ class TestLockedExecute:
         async def go():
             conn, _ = await make_connection(
                 monkeypatch,
-                incoming=(frame(TAG, ""), frame(TAG, f"O\x00c: {SENTINEL}")),
+                incoming=(frame(TAG, ""), frame(TAG, "O\x00c: CIVMCP|request1|END")),
             )
-            return await conn._locked_execute(0, "print()", timeout=1.0)
+            return await conn.execute_read("print()", timeout=1.0)
 
         assert run(go()) == []
 
@@ -193,7 +203,7 @@ class TestLockedExecute:
             conn, _ = await make_connection(
                 monkeypatch, incoming=(frame(TAG, "ERR:attempt to index nil"),)
             )
-            return await conn._locked_execute(0, "bad()", timeout=1.0)
+            return await conn.execute_read("bad()", timeout=1.0)
 
         with pytest.raises(LuaError, match="attempt to index nil"):
             run(go())
@@ -201,15 +211,14 @@ class TestLockedExecute:
     def test_a_silent_socket_raises_instead_of_returning_empty_lines(self, monkeypatch):
         """A silent socket is a dead connection, not an empty result.
 
-        Builders always end their Lua with the sentinel, so "no sentinel and no
-        output" means the game never answered. The caller gets a TimeoutError
-        (which _execute_and_collect treats like a dead socket: reconnect + retry)
-        instead of a [] it cannot tell apart from "no data".
+        A response without the request completion marker is incomplete. The
+        caller gets a TimeoutError, and the uncertain socket is retired without
+        replaying a potentially executed command.
         """
 
         async def go():
             conn, _ = await make_connection(monkeypatch, incoming=())
-            return await conn._locked_execute(0, "print()", timeout=0.01)
+            return await conn.execute_read("print()", timeout=0.01)
 
         with pytest.raises(TimeoutError, match="Incomplete response from Civ 6"):
             run(go())
@@ -219,8 +228,8 @@ class TestLockedExecute:
             raise AssertionError("No frame drains in the command path")
         monkeypatch.setattr(tuner_client, "drain_messages", forbidden)
         async def go():
-            conn, _ = await make_connection(monkeypatch, incoming=(frame(TAG, f"O\x00c: {SENTINEL}"),), patch_drain=False)
-            assert await conn._locked_execute(0, "print()", 1.0) == []
+            conn, _ = await make_connection(monkeypatch, incoming=(frame(TAG, "O\x00c: CIVMCP|request1|END"),), patch_drain=False)
+            assert await conn.execute_read("print()", 1.0) == []
         run(go())
 
 
@@ -281,16 +290,18 @@ class TestExecuteAndCollect:
     def test_reads_go_to_gamecore_and_writes_go_to_ingame(self, monkeypatch):
         async def go():
             conn, writer = await make_connection(
-                monkeypatch, incoming=(frame(TAG, f"O\x00c: {SENTINEL}"),) * 2
+                monkeypatch, incoming=(frame(TAG, "O\x00c: CIVMCP|request1|END"), frame(TAG, "O\x00c: CIVMCP|request2|END"))
             )
             await conn.execute_read("READ_ME")
             await conn.execute_write("WRITE_ME")
             return writer
 
-        assert run(go()).messages() == [
-            (TAG, "CMD:0:READ_ME"),
-            (TAG, "CMD:1:WRITE_ME"),
+        messages = run(go()).messages()
+        assert [payload.split(":", 2)[:2] for _, payload in messages] == [
+            ["CMD", "0"], ["CMD", "1"]
         ]
+        assert "\nREAD_ME\n" in messages[0][1]
+        assert "\nWRITE_ME\n" in messages[1][1]
 
 
 class TestUncertainStream:
@@ -315,7 +326,89 @@ class TestUncertainStream:
 
     def test_context_index_is_resolved_after_reconnection(self, monkeypatch):
         async def go():
-            conn, writer = await make_connection(monkeypatch, incoming=(frame(TAG, f"O\x00c: {SENTINEL}"),), states=("8", "GameCore_Tuner", "160", "InGame"))
+            conn, writer = await make_connection(monkeypatch, incoming=(frame(TAG, "O\x00c: CIVMCP|request1|END"),), states=("8", "GameCore_Tuner", "160", "InGame"))
             await conn.execute_write("CURRENT_CONTEXT")
-            assert writer.messages() == [(TAG, "CMD:160:CURRENT_CONTEXT")]
+            assert len(writer.messages()) == 1
+            assert writer.messages()[0][1].startswith("CMD:160:do\n")
+        run(go())
+
+
+class TestRequestOwnership:
+    def test_legacy_end_and_late_previous_output_cannot_shift_the_next_reply(self, monkeypatch):
+        async def go():
+            from civ_mcp.game_lifecycle import execute_lua
+            conn, writer = await make_connection(monkeypatch, incoming=tuple(
+                frame(TAG, "O\x00ctx: " + value) for value in [
+                    "CIVMCP|request1|OUT|FIRST",
+                    "CIVMCP|request1|OUT|---END---",
+                    "CIVMCP|request1|END",
+                    "---END---",
+                    "CIVMCP|request1|OUT|STALE_CALLBACK",
+                    "CIVMCP|request1|END",
+                    "CIVMCP|request2|OUT|SECOND",
+                    "CIVMCP|request2|END",
+                ]
+            ))
+            first = await execute_lua(conn, 'print("FIRST"); print("---END---")', "ingame")
+            second = await conn.execute_read('print("SECOND"); print("---END---")')
+            return first, second, writer
+
+        first, second, writer = run(go())
+        assert (first, second) == ("FIRST", ["SECOND"])
+        assert len(writer.messages()) == 2
+
+    def test_another_request_completion_cannot_turn_an_incomplete_reply_into_success(self, monkeypatch):
+        async def go():
+            conn, writer = await make_connection(monkeypatch, incoming=tuple(
+                frame(TAG, "O\x00ctx: " + value) for value in [
+                    "---END---", "CIVMCP|old-request|OUT|STALE",
+                    "CIVMCP|old-request|END", "CIVMCP|request1|OUT|SUBMITTED",
+                ]
+            ))
+            with pytest.raises(TimeoutError, match="outcome is unknown"):
+                await conn.execute_write("submit_once()", timeout=0.01)
+            assert len(writer.messages()) == 1
+            assert writer.closed
+            assert not conn.is_connected
+        run(go())
+
+    def test_mainmenu_no_output_and_return_need_no_caller_sentinel(self, monkeypatch):
+        async def go():
+            conn, writer = await make_connection(monkeypatch,
+                states=("12", "MainMenu"),
+                incoming=(frame(TAG, "O\x00MainMenu: CIVMCP|request1|END"),))
+            result = await conn.execute_in_state(12, "return -- no value")
+            return result, writer.messages()
+        result, messages = run(go())
+        assert result == []
+        assert len(messages) == 1
+        assert messages[0][1].startswith("CMD:12:do\n")
+        assert "\nreturn -- no value\nend)()" in messages[0][1]
+
+    def test_cancellation_during_a_partial_response_retires_the_stream(self, monkeypatch):
+        async def go():
+            raw = frame(TAG, "O\x00ctx: CIVMCP|request1|OUT|PARTIAL")
+            conn, writer = await make_connection(monkeypatch, incoming=(raw[:10],))
+            task = asyncio.create_task(conn.execute_write("submit_once()"))
+            # Schedule cancellation after execution has had a chance to submit;
+            # this yields to the loop, without a clock-based synchronization guess.
+            await asyncio.sleep(0)
+            assert len(writer.messages()) == 1
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert writer.closed
+            assert not conn.is_connected
+        run(go())
+
+    def test_send_and_response_share_the_same_deadline_without_replay(self, monkeypatch):
+        async def go():
+            conn, writer = await make_connection(monkeypatch)
+            async def blocked_drain():
+                await asyncio.Event().wait()
+            monkeypatch.setattr(writer, "drain", blocked_drain)
+            with pytest.raises(TimeoutError, match="outcome is unknown"):
+                await conn.execute_write("submit_once()", timeout=0.01)
+            assert len(writer.messages()) == 1
+            assert writer.closed
         run(go())
