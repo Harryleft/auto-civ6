@@ -49,6 +49,119 @@ def parse_congress_phase(lines: list[str]) -> tuple[bool, str, int, str]:
     return session == "true", stage, int(turn), receipt
 
 
+def build_open_world_congress() -> str:
+    """Explicit Intro acceptance, only when native voting choices cannot auto-submit."""
+    import uuid
+
+    token = uuid.uuid4().hex
+    return f"""
+local me = Game.GetLocalPlayer()
+local cfg = PlayerConfigurations[me]
+local civ = cfg:GetCivilizationTypeName()
+local seed = GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")
+local turn = Game.GetCurrentGameTurn()
+local segment = Game.GetCurrentTurnSegment()
+local stage = nil
+if segment == DB.MakeHash("TURNSEG_WORLDCONGRESS_1") then stage = "STAGE1"
+elseif segment == DB.MakeHash("TURNSEG_WORLDCONGRESS_2") then stage = "STAGE2" end
+local wc = Game.GetWorldCongress()
+if not wc or wc:IsInSession() ~= true or not stage then
+    {_bail("ERR:WC_OPEN_UNAVAILABLE|No verified native voting stage; no start event sent.")}
+end
+local submitted = __civmcp_wc_request
+if submitted then
+    local same = submitted.owner == me and submitted.civ == civ and submitted.seed == seed
+        and submitted.turn == turn and submitted.stage == stage
+    if (same and submitted.state ~= "REGISTERED" and submitted.state ~= "FAILED")
+        or (not same and submitted.state ~= "CONTINUE_REQUESTED" and submitted.state ~= "FAILED") then
+        {_bail("ERR:OUTCOME_UNKNOWN|Congress request already submitted, continued, or stale; no start event sent.")}
+    end
+end
+local intro = ContextPtr:LookUpControl("/InGame/WorldCongressIntro")
+local popup = ContextPtr:LookUpControl("/InGame/WorldCongressPopup")
+if not intro or not popup then
+    {_bail("ERR:OUTCOME_UNKNOWN|Congress UI context missing; no start event sent.")}
+end
+local prior = __civmcp_wc_open
+local sameOpen = prior and prior.owner == me and prior.civ == civ and prior.seed == seed
+    and prior.turn == turn and prior.stage == stage
+if prior and not sameOpen and prior.state ~= "OPENED" then
+    {_bail("ERR:OUTCOME_UNKNOWN|Previous congress start remains unknown; no start event resent.")}
+end
+if popup:IsVisible() and not intro:IsVisible() then
+    if sameOpen then prior.state = "OPENED" end
+    print("OK:WC_VOTING_ALREADY_OPEN|stage:" .. stage .. "|turn:" .. turn)
+    print("{SENTINEL}"); return
+end
+if sameOpen then
+    {_bail("ERR:OUTCOME_UNKNOWN|Congress start already requested but voting UI is not confirmed; no start event resent.")}
+end
+if not intro:IsVisible() or popup:IsVisible() then
+    {_bail("ERR:OUTCOME_UNKNOWN|Congress Intro visibility is ambiguous; no start event sent.")}
+end
+-- Native HasChoices tests allocated resolution/proposal widgets. Reproduce
+-- only its proven source-data prerequisites; never call the start route for
+-- empty/unknown choices because SetupWorldCongress would auto-submit/resume.
+local hasChoices = false
+if stage == "STAGE1" then
+    local resolutions = wc:GetResolutions(me)
+    if type(resolutions) ~= "table" then {_bail("ERR:WC_CHOICES_UNKNOWN|Resolution status unknown; no start event sent.")} end
+    for key, resolution in pairs(resolutions) do
+        if type(key) == "number" then
+            if type(resolution) ~= "table" or not GameInfo.Resolutions[resolution.Type] then
+                {_bail("ERR:WC_CHOICES_UNKNOWN|Resolution choice unknown; no start event sent.")}
+            end
+            hasChoices = true
+        end
+    end
+end
+local proposals = wc:GetProposals(me)
+if type(proposals) ~= "table" or (proposals.Proposals ~= nil and type(proposals.Proposals) ~= "table") then
+    {_bail("ERR:WC_CHOICES_UNKNOWN|Proposal status unknown; no start event sent.")}
+end
+for proposalType, category in pairs(proposals.Proposals or {{}}) do
+    if not GameInfo.ProposalTypes[proposalType] or type(category) ~= "table" or type(category.ProposalsOfType) ~= "table" then
+        {_bail("ERR:WC_CHOICES_UNKNOWN|Proposal category unknown; no start event sent.")}
+    end
+    for _, proposal in pairs(category.ProposalsOfType) do
+        if type(proposal) ~= "table" or (proposal.Disabled ~= nil and type(proposal.Disabled) ~= "boolean") then
+            {_bail("ERR:WC_CHOICES_UNKNOWN|Proposal eligibility unknown; no start event sent.")}
+        end
+        local blocker = nil
+        if proposal.VotingRestriction then
+            blocker = GameInfo.VotingBlockers[proposal.VotingRestriction]
+            if not blocker then {_bail("ERR:WC_CHOICES_UNKNOWN|Proposal voting restriction unknown; no start event sent.")} end
+        end
+        if not proposal.Disabled and not (blocker and blocker.NoUpvote and blocker.NoDownvote) then hasChoices = true end
+    end
+end
+if not hasChoices then
+    {_bail("ERR:WC_NO_CHOICES|No native voting choices; use an explicit empty vote plan instead of starting the Intro.")}
+end
+-- Bind before the only start event. A lost response can only inspect this
+-- record and current visibility, never replay the native callback.
+local q = {{token="{token}", owner=me, civ=civ, seed=seed, turn=turn, stage=stage, state="REQUESTED"}}
+__civmcp_wc_open = q
+if Game.GetLocalPlayer() ~= me or PlayerConfigurations[me]:GetCivilizationTypeName() ~= civ
+    or GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED") ~= seed or Game.GetCurrentGameTurn() ~= turn
+    or Game.GetCurrentTurnSegment() ~= segment then
+    {_bail("ERR:OUTCOME_UNKNOWN|Congress scope changed; no start event sent.")}
+end
+UIManager:DequeuePopup(intro)
+LuaEvents.WorldCongressIntro_ShowWorldCongress()
+if popup:IsVisible() and not intro:IsVisible() and Game.GetLocalPlayer() == me
+    and PlayerConfigurations[me]:GetCivilizationTypeName() == civ
+    and GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED") == seed
+    and Game.GetCurrentGameTurn() == turn and Game.GetCurrentTurnSegment() == segment then
+    q.state = "OPENED"
+    print("OK:WC_VOTING_OPEN|stage:" .. stage .. "|turn:" .. turn)
+else
+    print("ERR:OUTCOME_UNKNOWN|Congress start requested; voting UI not confirmed. Inspect; do not resend.")
+end
+print("{SENTINEL}")
+"""
+
+
 def build_world_congress_query() -> str:
     """Get World Congress status, resolutions, and proposals (InGame context)."""
     return f"""
