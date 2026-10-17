@@ -1058,7 +1058,7 @@ class TestPendingEndTurnDispatch:
         assert "OUTCOME_UNKNOWN" in result
         assert gs.calls == []
 
-    @pytest.mark.parametrize("tool", ["get_units", "list_saves", "end_turn", "respond_to_diplomacy", "respond_to_trade", "queue_wc_votes", "dismiss_popup", "restart_and_load"])
+    @pytest.mark.parametrize("tool", ["get_units", "list_saves", "end_turn", "respond_to_diplomacy", "respond_to_trade", "queue_wc_votes", "open_world_congress", "dismiss_popup", "restart_and_load"])
     def test_unconfirmed_turn_still_allows_confirmation_and_blocker_resolution(self, tool):
         ctx = make_ctx()
         gs = app_of(ctx).game
@@ -1561,7 +1561,7 @@ class TestMcpProtocol:
                     assert initialization.serverInfo.name == "Civilization VI"
                     tools = (await session.list_tools()).tools
                     names = {tool.name for tool in tools}
-                    assert len(names) == 77
+                    assert len(names) == 78
                     assert "get_diary" not in names
                     save_schema = next(tool.inputSchema for tool in tools if tool.name == "save_game")
                     assert save_schema["required"] == ["save_name"]
@@ -1827,3 +1827,13 @@ class TestMenuReload:
         assert len(frontend_discoveries) == 3
         assert [index for index, _ in gs.conn.load_calls] == [70]
         assert sum("MCP_MENU_EXIT:" in code for _, code in gs.conn.state_calls) == 1
+
+
+def test_pending_ordinary_turn_allows_explicit_congress_open_without_another_turn_request():
+    ctx = make_ctx()
+    gs = app_of(ctx).game
+    gs._pending_end_turn = True
+    gs.script["open_world_congress"] = "WC_VOTING_OPEN|stage:STAGE1|turn:67"
+    assert run(server.open_world_congress(ctx)) == "WC_VOTING_OPEN|stage:STAGE1|turn:67"
+    assert gs.last_args("open_world_congress") == ()
+    assert not gs.called("end_turn")

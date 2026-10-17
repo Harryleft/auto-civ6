@@ -1527,6 +1527,24 @@ print("{lq.SENTINEL}")
             raise LuaError("World Congress status is unknown")
         return lq.parse_world_congress_response(lines)
 
+    async def open_world_congress(self) -> str:
+        """Explicitly enter a verified nonempty voting UI, never cast votes."""
+        if self._pending_load or self._pending_save:
+            return "ERR:OUTCOME_UNKNOWN|Load/save must be confirmed before opening Congress."
+        if self._pending_action is not None:
+            await self.confirm_pending_action()
+            if self._pending_action is not None:
+                return self._pending_unknown("Congress was not opened")
+        try:
+            lines = await self.conn.execute_write(lq.build_open_world_congress())
+        except (OSError, TimeoutError, LuaError) as exc:
+            return (f"ERR:OUTCOME_UNKNOWN|Congress start may have executed: {exc}. "
+                    "Inspect the existing start record and UI; no automatic resend.")
+        result = _action_result(lines)
+        if not any(line.startswith(("OK:WC_VOTING_OPEN|", "OK:WC_VOTING_ALREADY_OPEN|", "ERR:")) for line in lines):
+            return "ERR:OUTCOME_UNKNOWN|Congress start returned no valid status; inspect without resending."
+        return result
+
     async def vote_world_congress(
         self, resolution_hash: int, option: int, target_index: int, num_votes: int
     ) -> str:

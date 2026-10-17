@@ -146,7 +146,8 @@ async def _check_congress_phase(gs: GameState, *, pending: bool) -> str | None:
                 "Use get_world_congress; do not repeat votes or the original end-turn request.")
     if stage in ("STAGE1", "STAGE2") and receipt == "NONE":
         return (f"{prefix} World Congress voting stage active (turn {turn}, {stage}); no local tool request recorded. "
-                "This is not proof that votes are absent. Use get_world_congress, then queue_wc_votes "
+                "This is not proof that votes are absent. Use open_world_congress for a verified nonempty Intro, "
+                "then get_world_congress and queue_wc_votes "
                 "only for new explicit choices. Call end_turn afterward only to confirm "
                 "the existing request; it will not be sent again.")
     if not pending:
