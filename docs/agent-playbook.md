@@ -32,7 +32,7 @@
 
 1. 使用 `get_world_congress` 读取原生阶段和本地请求状态；单凭「正在开会」不能判断本地玩家需要投票。查询保持纯读。
 2. 原生阶段和选择已确认、需要开始投票界面时，调用 `open_world_congress`，再读取 `get_world_congress` 获取议题；打开工具不替模型投票。
-3. 用 `queue_wc_votes` 提交明确票单。`votes` 是 JSON 数组字符串：决议使用 `hash`、`option`、`target`、`votes`；提案使用本次查询返回的完整 `proposal_key`、`option`、`votes`。`option=1` 赞成，`option=2` 反对；目标和票数依据当前选择及共同预算，不提供默认票，不复用旧会议的标识。
+3. 用 `queue_wc_votes` 提交明确票单。`votes` 是 JSON 数组字符串：决议使用 `hash`、`option`、`target`、`votes`；提案使用本次查询返回的完整 `proposal_key`、`option`、`votes`。提案的 `option=1` 赞成、`option=2` 反对，决议按当前 A／B 效果选择；目标和票数依据当前选择及共同预算，不提供默认票，不复用旧会议的标识。
 4. 当前原生阶段已确认没有任何选择时，显式传入 `votes="[]"`；此时不走可能自动提交的 Intro 开始事件。Stage2 不重投 Stage1 的旧决议。
 5. 已记录提交或继续请求后，只读核对状态；原普通推进尚未完成时，用 `end_turn` 确认，不重复开始、投票、提交或阶段继续。
 
