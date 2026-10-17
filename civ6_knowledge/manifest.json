@@ -33,6 +33,15 @@
       "Religions",
       "Beliefs"
     ],
+    "empty_optional_tables": [
+      "Building_ResourceCosts",
+      "CivilopediaPageChapterParagraphs",
+      "Feature_UnitMovements",
+      "RandomEvent_DamagedUnits",
+      "RandomEvent_Features",
+      "RandomEvent_PillagedBuildings",
+      "RandomEvent_PillagedDistricts"
+    ],
     "missing_optional_tables": [],
     "not_covered": [
       "完整 Modifier 解释",
@@ -42,15 +51,15 @@
     ]
   },
   "files": {
-    "rules/civics.json": "a133f4edaca78d1d229bdf2e88bca87cb7c284f29838c3c598324d0b74877502",
-    "rules/combat.json": "c49118b878e78bcf9bb767e7afcde15df8400f3c12e20c8e7647e807d7b99ba5",
-    "rules/congress.json": "2e98fa445d5933daaeebbd6b85fd8191ab3e6c3659c7b51a4ddacc9b7f72dedb",
-    "rules/diplomacy.json": "3441ba686fbda3fa86267855d0fc496dbceab670075db0e20fd34bb448f255b2",
-    "rules/districts.json": "54da37dbdbcc159d6d2c6fa595d9f52910202c115dbd92917d6bab75d4f8ac11",
-    "rules/economy.json": "70ee4a9a58382484fd1547f6dc41363b501ee48e220771cc9ec3012e1134b2da",
-    "rules/resources.json": "45011271939a4ac9d9b486be10b422ac460d81049c4c93f41727840b0d9f5730",
-    "rules/technologies.json": "bc93fb9c0e4a53457135ce61c3108e92dd95f8e1ff05bde12d135c4ccd780015",
-    "rules/victory.json": "268d9dfe3b15db54e3b295ae1d13808733d6bf9c163f7bd0d455740ffabaab4e"
+    "rules/civics.json": "cda39f67e7f06b6990bca4c0a5422238c3053e447cbb2d465ea1e69abe7fb7d3",
+    "rules/combat.json": "55a81df543c024dda8833541ae07e12947c593895ee724410da0dd8fe6789a5f",
+    "rules/congress.json": "8fa798d417e3fa8f39b5cad92a9c8a71421f190cca93f35ae6cfa30d935bd8af",
+    "rules/diplomacy.json": "3f80a8f659315f27627c8b99ac57def40c8c8d762b9b20485c4ac428dac895d8",
+    "rules/districts.json": "640fd76dae262d4247109024e6083fef879b5231562ff5c790571e37c0e36803",
+    "rules/economy.json": "8b0ecf19206baf0f1282ac821b53cd9ff3bb5f19bb63b4a38a3da1ddf34dd5d1",
+    "rules/resources.json": "81a96c4c59b8cd26de6ea2ca57f89ca76c22020cb9acecee5ca7ebfb0300a4db",
+    "rules/technologies.json": "73c4f3847a3f7776d1eb979b2fadf224b40bf95fb523bd9d23c848423d100364",
+    "rules/victory.json": "f52868fead92a96f492c05ea968f4ccb465c0f6aeb045b5893f9303d3cbb7985"
   },
   "profile": {
     "active_modes_verified": false,
@@ -128,12 +137,12 @@
   },
   "schema_version": 1,
   "snapshot": "sources/snapshot.json",
-  "snapshot_sha256": "0f574a77352b642e9b0b420f1d87cb54b9a3fb2c42048dac28600935c27f1e5c",
+  "snapshot_sha256": "aa6e9f0d78862858c8ba6b841a8fdfe04652c4b98825999986d0ead3f4a51e77",
   "support_files": {
     "NEXT.md": "41f3329d78ca2582985df220564268efe4e1ed513ef83b6b673f4f92ae295d8b",
     "README.md": "9ddf411998cab905aaf4510a158adde843c274064f5c26983c280bd60aa74918",
-    "build.py": "c3f98a6bb9cf49700abdb7475fe8dd7a282bddd6d6fbfb8ee43a491123313f74",
-    "capture.py": "b0424419b8d59141325d0b32b8253913df2ab09df88ec5ca77fdfd4b69717829",
+    "build.py": "776478363294067f1e5ad9019251a780fa02dc3005304c04bb3d8e1ad1e4c996",
+    "capture.py": "6ffacaa617bab1ebde0c4374b5b32c9830af03163c8a332c66d33759746cdbfa",
     "query.py": "b7f34768ff2e292835e894e31aef4b25f2e00ad16682275e04d877099bad757f",
     "topics/civics.md": "55dea2e99d9df7f606335c5fd454df79b57d22907cfb7ce2d7d68162a732ff61",
     "topics/combat.json": "bac2bb41c0088e6f9acf2350c907ed918c8c835d848d2bbe7bff8bf0a17572bc",

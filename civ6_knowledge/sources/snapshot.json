@@ -169,15 +169,19 @@
       "zh_Hans_CN": "狂战士之怒"
     },
     "LOC_ABILITY_BIREME_PROTECT_TRADER_DESCRIPTION": {
+      "en_US": "Protects nearby Trade units from being Plundered on Water Tiles.",
       "zh_Hans_CN": "使附近水域单元格中的贸易单位免遭掠夺。"
     },
     "LOC_ABILITY_BIREME_PROTECT_TRADER_NAME": {
+      "en_US": "Bireme Trade Protection",
       "zh_Hans_CN": "双层桨座战船贸易保护"
     },
     "LOC_ABILITY_BLACK_ARMY_DESCRIPTION": {
+      "en_US": "+3 [ICON_Strength] Combat Strength from each adjacent Levied unit.",
       "zh_Hans_CN": "每个相邻的征集单位提供+3 [ICON_Strength] 战斗力。"
     },
     "LOC_ABILITY_BLACK_ARMY_NAME": {
+      "en_US": "Fekete Sereg",
       "zh_Hans_CN": "匈牙利黑军"
     },
     "LOC_ABILITY_BOMBARD_ATTACK_UNIT_DEBUFF_DESCRIPTION": {
@@ -201,6 +205,7 @@
       "zh_Hans_CN": "绕开城墙"
     },
     "LOC_ABILITY_BYPASS_WALLS_PROMOTION_CLASS_DESCRIPTION": {
+      "en_US": "When adjacent to an enemy city, friendly melee and anti-cavalry units can bypass the city walls and attack the city directly. Does not affect cities with Renaissance Walls. Ineffective against Urban Defenses.",
       "zh_Hans_CN": "与敌方城市相邻时，友方近战和抗骑兵单位可穿过城墙直接攻击城市。对拥有文艺复兴城墙的城市无效。对城市防御无效。"
     },
     "LOC_ABILITY_CAPTIVE_WORKERS_DESCRIPTION": {
@@ -212,9 +217,11 @@
       "zh_Hans_CN": "俘获工人"
     },
     "LOC_ABILITY_CAROLEAN_DESCRIPTION": {
+      "en_US": "+3 [ICON_Strength] Combat Strength per unused [ICON_Movement] Movement.",
       "zh_Hans_CN": "每点未消耗的 [ICON_Movement] 移动力提供+3 [ICON_Strength] 战斗力。"
     },
     "LOC_ABILITY_CAROLEAN_NAME": {
+      "en_US": "Gå På",
       "zh_Hans_CN": "向前冲"
     },
     "LOC_ABILITY_CHING_SHIH_PLUNDER_BONUS_DESCRIPTION": {
@@ -222,9 +229,11 @@
       "zh_Hans_CN": "掠夺贸易路线时+60%收益。（郑一嫂）"
     },
     "LOC_ABILITY_CHOLA_NAVAL_COMBAT_DESCRIPTION": {
+      "en_US": "+3 [ICON_Strength] Combat Strength for all naval units. (Rajendra Chola)",
       "zh_Hans_CN": "所有海军单位+3 [ICON_Strength] 战斗力。（拉金德拉·朱罗）"
     },
     "LOC_ABILITY_CHOLA_NAVAL_COMBAT_NAME": {
+      "en_US": "Rajendra Chola",
       "zh_Hans_CN": "拉金德拉·朱罗"
     },
     "LOC_ABILITY_CLANCY_FERNANDO_BONUS_EXPERIENCE_DESCRIPTION": {
@@ -248,15 +257,19 @@
       "zh_Hans_CN": "强制转化"
     },
     "LOC_ABILITY_CORBACI_DESCRIPTION": {
+      "en_US": "Starts with a free promotion.",
       "zh_Hans_CN": "初始便拥有一次免费升级"
     },
     "LOC_ABILITY_CORBACI_NAME": {
+      "en_US": "Çorbaci",
       "zh_Hans_CN": "亲兵团长"
     },
     "LOC_ABILITY_CORSAIR_DESCRIPTION": {
+      "en_US": "It costs no [ICON_Movement] Movement to coastal raid.",
       "zh_Hans_CN": "进行海岸扫荡不消耗 [ICON_Movement] 移动力。"
     },
     "LOC_ABILITY_CORSAIR_NAME": {
+      "en_US": "Corsair",
       "zh_Hans_CN": "海盗"
     },
     "LOC_ABILITY_COSSACK_DESCRIPTION": {
@@ -288,15 +301,19 @@
       "zh_Hans_CN": "启用城墙攻击"
     },
     "LOC_ABILITY_ENABLE_WALL_PROMOTION_CLASS_ATTACK_DESCRIPTION": {
+      "en_US": "When adjacent to an enemy city, melee and anti-cavalry units do full damage to the city's Walls. Does not affect cities with Medieval or Renaissance Walls. Ineffective against Urban Defenses.",
       "zh_Hans_CN": "与敌方城市相邻时，近战和抗骑兵单位可对城墙输出全额伤害。对拥有中世纪或文艺复兴城墙的城市无效。对城市防御无效。"
     },
     "LOC_ABILITY_ERIKSON_NAVAL_SIGHT_DESCRIPTION": {
+      "en_US": "+1 sight range for all naval units. (Leif Erikson)",
       "zh_Hans_CN": "使所有海军单位视野范围+1。（雷夫·埃里克森）"
     },
     "LOC_ABILITY_ERIKSON_NAVAL_SIGHT_NAME": {
+      "en_US": "Leif Erikson",
       "zh_Hans_CN": "雷夫·埃里克森"
     },
     "LOC_ABILITY_EXPERT_MARKSMAN_DESCRIPTION": {
+      "en_US": "+1 additional attack per turn if unit has not used all its movement.",
       "zh_Hans_CN": "如果单位未消耗完移动力，每回合+1额外攻击。"
     },
     "LOC_ABILITY_FRANCIS_DRAKE_PLUNDER_BONUS_DESCRIPTION": {
@@ -368,27 +385,35 @@
       "zh_Hans_CN": "大灯塔提供+1 [ICON_Movement] 移动力。"
     },
     "LOC_ABILITY_GREAT_TURKISH_BOMBARD_DESCRIPTION": {
+      "en_US": "+5 [ICON_Strength] Combat Strength vs. district defenses. (Great Turkish Bombard)",
       "zh_Hans_CN": "对抗区域防御时+5 [ICON_Strength] 战斗力。（达达尼尔射石炮）"
     },
     "LOC_ABILITY_GREAT_TURKISH_BOMBARD_NAME": {
+      "en_US": "Great Turkish Bombard",
       "zh_Hans_CN": "达达尼尔射石炮"
     },
     "LOC_ABILITY_GUIDE_MOVEMENT_AOE_RELIGIOUS_DESCRIPTION": {
+      "en_US": "Gives movement to nearby religious units.",
       "zh_Hans_CN": "为附近的宗教单位赋予移动力。"
     },
     "LOC_ABILITY_GUIDE_MOVEMENT_AOE_RELIGIOUS_NAME": {
+      "en_US": "Guide",
       "zh_Hans_CN": "指引者"
     },
     "LOC_ABILITY_GURU_MOVEMENT_DESCRIPTION": {
+      "en_US": "+1 Movement",
       "zh_Hans_CN": "+1移动力"
     },
     "LOC_ABILITY_GURU_MOVEMENT_NAME": {
+      "en_US": "Guru Movement Area of Effect",
       "zh_Hans_CN": "上师移动效果范围"
     },
     "LOC_ABILITY_GURU_STRENGTH_DESCRIPTION": {
+      "en_US": "+5 Strength",
       "zh_Hans_CN": "+5战斗力"
     },
     "LOC_ABILITY_GURU_STRENGTH_NAME": {
+      "en_US": "Guru Sage Area of Effect",
       "zh_Hans_CN": "上师圣人效果范围"
     },
     "LOC_ABILITY_HANGAR_TRAINED_AIRCRAFT_XP_DESCRIPTION": {
@@ -432,9 +457,11 @@
       "zh_Hans_CN": "+50%夹击加成。（霍雷肖·纳尔逊）"
     },
     "LOC_ABILITY_HUSZAR_DESCRIPTION": {
+      "en_US": "+3 [ICON_Strength] Combat Strength from each active Alliance.",
       "zh_Hans_CN": "每个有效同盟+3 [ICON_Strength] 战斗力。"
     },
     "LOC_ABILITY_HUSZAR_NAME": {
+      "en_US": "Kuruc",
       "zh_Hans_CN": "克鲁兹起义军"
     },
     "LOC_ABILITY_IGNORE_CROSSING_RIVERS_COST_DESCRIPTION": {
@@ -502,12 +529,15 @@
       "zh_Hans_CN": "伊斯兰骑士训练"
     },
     "LOC_ABILITY_MANA_DESCRIPTION": {
+      "en_US": "+2 [ICON_Movement] Movement when embarked.",
       "zh_Hans_CN": "上船后+2 [ICON_Movement] 移动力。"
     },
     "LOC_ABILITY_MANDEKALU_DESCRIPTION": {
+      "en_US": "Protects nearby land Trade units from Plunder.[NEWLINE][ICON_Bullet]Gain [ICON_GOLD] Gold equal to 100% that unit's base [ICON_Strength] Combat Strength.",
       "zh_Hans_CN": "使附近的陆地贸易单位免遭掠夺。[NEWLINE][ICON_Bullet]可获得与其基础 [ICON_Strength] 战斗力相同的 [ICON_GOLD] 金币数。"
     },
     "LOC_ABILITY_MANDEKALU_NAME": {
+      "en_US": "Gold Giver",
       "zh_Hans_CN": "赠金者"
     },
     "LOC_ABILITY_MAPUCHE_MALON_RAIDER_DESCRIPTION": {
@@ -523,9 +553,11 @@
       "zh_Hans_CN": "医学治疗"
     },
     "LOC_ABILITY_MEDITERRANEAN_COLONIES_DESCRIPTION": {
+      "en_US": "+2 [ICON_Movement] Movement and +2 sight range while embarked.[NEWLINE][ICON_Bullet]Ignore additional [ICON_Movement] Movement costs from embarking and disembarking.",
       "zh_Hans_CN": "上船后+2 [ICON_Movement] 移动力、+2视野范围。[NEWLINE][ICON_Bullet]上船和下船不消耗额外 [ICON_Movement] 移动力。"
     },
     "LOC_ABILITY_MEDITERRANEAN_COLONIES_NAME": {
+      "en_US": "Mediterranean Colonies",
       "zh_Hans_CN": "地中海殖民地"
     },
     "LOC_ABILITY_MELEE_COASTAL_RAID_NAME": {
@@ -537,9 +569,11 @@
       "zh_Hans_CN": "可掠夺建筑物和改良设施，并在海岸单元格上俘获平民单位。（哈拉尔德）"
     },
     "LOC_ABILITY_MILITARYORGANIZATION_MOVEMENT_DESCRIPTION": {
+      "en_US": "+2 [ICON_Movement] Movement to [ICON_GreatGeneral] Great Generals from the Military Organization policy.",
       "zh_Hans_CN": "“军事组织”政策为 [ICON_GreatGeneral] 大将军 +2 [ICON_Movement]移动力。"
     },
     "LOC_ABILITY_MILITARYORGANIZATION_MOVEMENT_NAME": {
+      "en_US": "Military Organization",
       "zh_Hans_CN": "军事组织"
     },
     "LOC_ABILITY_MILITARY_ACADEMY_TRAINED_UNIT_XP_DESCRIPTION": {
@@ -555,9 +589,11 @@
       "zh_Hans_CN": "每获得一种特色奢侈品资源，则+1 [ICON_Strength] 战斗力。"
     },
     "LOC_ABILITY_MOUNTIE_DESCRIPTION": {
+      "en_US": "Can create a National Park.[NEWLINE][ICON_Bullet]+5 [ICON_Strength] Combat Strength when fighting within 2 tiles of a National Park.[NEWLINE][ICON_Bullet]+5 [ICON_Strength] Combat Strength when fighting within 2 tiles of a National Park owned by you.",
       "zh_Hans_CN": "可建立国家公园。[NEWLINE][ICON_Bullet]在国家公园附近的2个单元格内战斗时+5 [ICON_Strength] 战斗力。[NEWLINE][ICON_Bullet]如为己方国家公园，则再+5 [ICON_Strength] 战斗力。"
     },
     "LOC_ABILITY_MOUNTIE_NAME": {
+      "en_US": "Park Protector",
       "zh_Hans_CN": "公园护卫"
     },
     "LOC_ABILITY_MUSTANG_DESCRIPTION": {
@@ -665,9 +701,11 @@
       "zh_Hans_CN": "空中漫步"
     },
     "LOC_ABILITY_ROCK_BAND_ENTER_FOREIGN_LANDS_DESCRIPTION": {
+      "en_US": "Even without Open Borders, this unit can enter foreign territory.",
       "zh_Hans_CN": "即使未开放边界，该单位也可进入外国领土。"
     },
     "LOC_ABILITY_ROCK_BAND_ENTER_FOREIGN_LANDS_NAME": {
+      "en_US": "Enter Foreign Lands",
       "zh_Hans_CN": "进入外国领土"
     },
     "LOC_ABILITY_ROMAN_LEGION_BUILD_DESCRIPTION": {
@@ -691,9 +729,11 @@
       "zh_Hans_CN": "皇家海军船坞提供+1 [ICON_Movement] 移动力。"
     },
     "LOC_ABILITY_SAGE_COMBAT_AOE_RELIGIOUS_DESCRIPTION": {
+      "en_US": "Gives additional combat strength to nearby religious units.",
       "zh_Hans_CN": "为附近的宗教单位赋予额外战斗力。"
     },
     "LOC_ABILITY_SAGE_COMBAT_AOE_RELIGIOUS_NAME": {
+      "en_US": "Sage",
       "zh_Hans_CN": "圣人"
     },
     "LOC_ABILITY_SAMURAI_DESCRIPTION": {
@@ -741,9 +781,11 @@
       "zh_Hans_CN": "隐形"
     },
     "LOC_ABILITY_THE_RAVEN_KING_DESCRIPTION": {
+      "en_US": "+2 [ICON_Movement] Movement and +5 [ICON_Strength] Combat Strength to Levied units.",
       "zh_Hans_CN": "征集单位+2 [ICON_Movement] 移动力、+5 [ICON_Strength] 战斗力。"
     },
     "LOC_ABILITY_THE_RAVEN_KING_NAME": {
+      "en_US": "Raven King",
       "zh_Hans_CN": "渡鸦之王"
     },
     "LOC_ABILITY_TIMUR_BONUS_EXPERIENCE_DESCRIPTION": {
@@ -751,6 +793,7 @@
       "zh_Hans_CN": "获得的战斗经验值+25%。（帖木儿）"
     },
     "LOC_ABILITY_TOA_DESCRIPTION": {
+      "en_US": "Adjacent enemy units receive -5 [ICON_STRENGTH] Combat Strength.[NEWLINE][ICON_Bullet]Can build the unique Pā improvement.",
       "zh_Hans_CN": "相邻的敌方单位-5 [ICON_STRENGTH] 战斗力。[NEWLINE][ICON_Bullet]可建造特色改良设施“帕堡”。"
     },
     "LOC_ABILITY_TOMYRIS_BONUS_VS_WOUNDED_UNITS_DESCRIPTION": {
@@ -770,15 +813,19 @@
       "zh_Hans_CN": "获得的战斗经验值+30%。（托奇）"
     },
     "LOC_ABILITY_TRADER_PROTECTED_BY_BIREME_DESCRIPTION": {
+      "en_US": "Trade units near a your Bireme are immune to being Plundered on Water Tiles.",
       "zh_Hans_CN": "在己方双层桨座战船附近水域单元格中的贸易单位可免遭掠夺。"
     },
     "LOC_ABILITY_TRADER_PROTECTED_BY_BIREME_NAME": {
+      "en_US": "Trader Bireme Protection",
       "zh_Hans_CN": "双层桨座战船商人保护"
     },
     "LOC_ABILITY_TRADER_PROTECTED_BY_MANDEKALU_DESCRIPTION": {
+      "en_US": "Trade units near a your Mandekalu Cavalry are immune to being Plundered on Land Tiles.",
       "zh_Hans_CN": "在己方曼德卡鲁骑兵相邻陆地单元格中的贸易单位可免遭掠夺。"
     },
     "LOC_ABILITY_TRADER_PROTECTED_BY_MANDEKALU_NAME": {
+      "en_US": "Trader Mandekalu Protection",
       "zh_Hans_CN": "曼德卡鲁骑兵商人保护"
     },
     "LOC_ABILITY_TRADE_ROUTE_PLUNDER_IMMUNITY_SEA_DESCRIPTION": {
@@ -798,9 +845,11 @@
       "zh_Hans_CN": "狼群战术"
     },
     "LOC_ABILITY_UNIT_FIGHT_WHILE_EMBARKED_DESCRIPTION": {
+      "en_US": "Able to move and fight in water.",
       "zh_Hans_CN": "可在水域中移动和战斗。"
     },
     "LOC_ABILITY_UNIT_WMD_RESISTANCE_DESCRIPTION": {
+      "en_US": "Resistant to Weapons of Mass Destruction.",
       "zh_Hans_CN": "对大规模杀伤性武器拥有耐性。"
     },
     "LOC_ABILITY_UNOBSTRUCTED_VIEW_DESCRIPTION": {
@@ -2464,7 +2513,8 @@
       "zh_Hans_CN": "我应该嫉妒这座塔。她比我更出名。[NEWLINE]——古斯塔夫·埃菲尔"
     },
     "LOC_BUILDING_ELECTRONICS_FACTORY_EXPANSION2_DESCRIPTION": {
-      "en_US": "A building unique to Japan. Provides +4 [ICON_Culture] Culture to this city after researching the Electricity technology. Its [ICON_Production] Production bonus is extended to all City Centers within 6 tiles that do not already have a bonus from this building type."
+      "en_US": "A building unique to Japan. Provides +4 [ICON_Culture] Culture to this city after researching the Electricity technology. Its [ICON_Production] Production bonus is extended to all City Centers within 6 tiles that do not already have a bonus from this building type.",
+      "zh_Hans_CN": "日本特色建筑。研究“电力”科技后为此城市提供+4 [ICON_Culture] 文化值。其 [ICON_Production] 生产力加成延伸到6单元格内的所有市中心（前提是其尚未从其他的此建筑获得加成）。"
     },
     "LOC_BUILDING_ELECTRONICS_FACTORY_NAME": {
       "en_US": "Electronics Factory",
@@ -2499,7 +2549,8 @@
       "zh_Hans_CN": "摩天轮"
     },
     "LOC_BUILDING_FILM_STUDIO_EXPANSION2_DESCRIPTION": {
-      "en_US": "A building unique to America. +100% [ICON_Tourism] Tourism pressure from this city towards other civilizations when the game enters the Modern era."
+      "en_US": "A building unique to America. +100% [ICON_Tourism] Tourism pressure from this city towards other civilizations when the game enters the Modern era.",
+      "zh_Hans_CN": "美国特色建筑。游戏进入现代之后，为所在城市+100% [ICON_Tourism] 旅游业绩。"
     },
     "LOC_BUILDING_FILM_STUDIO_NAME": {
       "en_US": "Film Studio",
@@ -2630,10 +2681,12 @@
       "zh_Hans_CN": "粮仓"
     },
     "LOC_BUILDING_GRAND_BAZAAR_DESCRIPTION": {
-      "en_US": "A building unique to the Ottomans. Accumulate 1 extra Strategic resource for every different type of Strategic resource this city has improved. Receive 1 [ICON_AMENITIES] Amenity for every Luxury resource this city has improved."
+      "en_US": "A building unique to the Ottomans. Accumulate 1 extra Strategic resource for every different type of Strategic resource this city has improved. Receive 1 [ICON_AMENITIES] Amenity for every Luxury resource this city has improved.",
+      "zh_Hans_CN": "奥斯曼特色建筑。城市中改良的每种不同战略资源均可额外增加1点。城市改良的每个奢侈品资源均可提供1点 [ICON_AMENITIES] 宜居度。"
     },
     "LOC_BUILDING_GRAND_BAZAAR_NAME": {
-      "en_US": "Grand Bazaar"
+      "en_US": "Grand Bazaar",
+      "zh_Hans_CN": "大巴扎"
     },
     "LOC_BUILDING_GREAT_BATH_DESCRIPTION": {
       "en_US": "The Floodplains tiles along the river containing the Great Bath are now immune to Flood damage (though [ICON_FOOD] Food and [ICON_PRODUCTION] Production bonuses from flooding drop by 50%). Floodplains tiles belonging to this city gain +1 [ICON_FAITH] Faith for each time Flood damage is mitigated.[NEWLINE][NEWLINE]Must be built on a Floodplains tile.",
@@ -2812,10 +2865,12 @@
       "zh_Hans_CN": "在印度比哈尔邦尘土飞扬的喧闹角落里，有一个神奇的地方被人们当作佛教中心。[NEWLINE]——《旅游者指南》里的菩提伽耶"
     },
     "LOC_BUILDING_MARAE_DESCRIPTION": {
-      "en_US": "A building unique to the Māori. +1 [ICON_CULTURE] Culture and [ICON_FAITH] Faith to all of this city's tiles with a passable feature or natural wonder. After Flight is researched receive +1 [ICON_TOURISM] Tourism to all of this city's tiles with a feature or natural wonder. Costs no maintenance. Has no Great Work slots."
+      "en_US": "A building unique to the Māori. +1 [ICON_CULTURE] Culture and [ICON_FAITH] Faith to all of this city's tiles with a passable feature or natural wonder. After Flight is researched receive +1 [ICON_TOURISM] Tourism to all of this city's tiles with a feature or natural wonder. Costs no maintenance. Has no Great Work slots.",
+      "zh_Hans_CN": "毛利特色建筑。城市中所有包含可通行地貌或自然奇观的单元格+1 [ICON_CULTURE] 文化值与 [ICON_FAITH] 信仰值。研究“飞行”科技后，城市中所有包含地貌或自然奇观的单元格+1 [ICON_TOURISM] 旅游业绩。维护免费；无巨作槽位。"
     },
     "LOC_BUILDING_MARAE_NAME": {
-      "en_US": "Marae"
+      "en_US": "Marae",
+      "zh_Hans_CN": "毛利会堂"
     },
     "LOC_BUILDING_MARKET_EXPANSION1_DESCRIPTION": {
       "en_US": "+1 [ICON_TradeRoute] Trade Route capacity, if this city does not yet have a Lighthouse building.",
@@ -3002,10 +3057,12 @@
       "zh_Hans_CN": "四十个世纪从这些金字塔的顶端，俯瞰着我们。[NEWLINE]——拿破仑·波拿巴"
     },
     "LOC_BUILDING_QUEENS_BIBLIOTHEQUE_DESCRIPTION": {
-      "en_US": "A building unique to Sweden. This building provides 2 slots of [ICON_GreatWork_WRITING] Writing, [ICON_GreatWork_MUSIC] Music, and any type of [ICON_GreatWork_Landscape] Art.[NEWLINE]Awards +1 [Icon_Governor] Governor Title."
+      "en_US": "A building unique to Sweden. This building provides 2 slots of [ICON_GreatWork_WRITING] Writing, [ICON_GreatWork_MUSIC] Music, and any type of [ICON_GreatWork_Landscape] Art.[NEWLINE]Awards +1 [Icon_Governor] Governor Title.",
+      "zh_Hans_CN": "瑞典特色建筑。该建筑包含2个槽位，可放置 [ICON_GreatWork_WRITING] 著作、[ICON_GreatWork_MUSIC] 音乐和任何类型的 [ICON_GreatWork_Landscape] 艺术巨作。[NEWLINE]奖励1个 [Icon_Governor] 总督头衔。"
     },
     "LOC_BUILDING_QUEENS_BIBLIOTHEQUE_NAME": {
-      "en_US": "Queen's Bibliotheque"
+      "en_US": "Queen's Bibliotheque",
+      "zh_Hans_CN": "女王图书馆"
     },
     "LOC_BUILDING_RESEARCH_LAB_NAME": {
       "en_US": "Research Lab",
@@ -3152,10 +3209,12 @@
       "zh_Hans_CN": "世界上有七大奇迹，我们可能会说兵马俑是世界第八大奇迹。[NEWLINE]——雅克·希拉克"
     },
     "LOC_BUILDING_THERMAL_BATH_DESCRIPTION": {
-      "en_US": "A building unique to Hungary. +2 [ICON_AMENITIES] Amenities and +2 [ICON_PRODUCTION] Production extends to each city center within 6 tiles. These bonuses apply once to a city, and multiple copies of this building within 6 tiles of a city center do not provide additional bonuses.[NEWLINE][NEWLINE]This city receives +3 [ICON_TOURISM] Tourism and +2 additional [ICON_AMENITIES] Amenities if there is at least one Geothermal Fissure in this city's borders."
+      "en_US": "A building unique to Hungary. +2 [ICON_AMENITIES] Amenities and +2 [ICON_PRODUCTION] Production extends to each city center within 6 tiles. These bonuses apply once to a city, and multiple copies of this building within 6 tiles of a city center do not provide additional bonuses.[NEWLINE][NEWLINE]This city receives +3 [ICON_TOURISM] Tourism and +2 additional [ICON_AMENITIES] Amenities if there is at least one Geothermal Fissure in this city's borders.",
+      "zh_Hans_CN": "匈牙利特色建筑。+2点 [ICON_Amenities] 宜居度与+2点 [ICON_PRODUCTION] 生产力，可扩展到6个单元格内的每个市中心。城市仅能应用1次此类加成，因此市中心6个单元格以内相同的此建筑不会再额外提供加成。此城中若包含至少1处地热裂缝，则该城市的 [ICON_TOURISM] 旅游业绩+3，同时 [ICON_AMENITIES] 宜居度额外+2。"
     },
     "LOC_BUILDING_THERMAL_BATH_NAME": {
-      "en_US": "Thermal Bath"
+      "en_US": "Thermal Bath",
+      "zh_Hans_CN": "温泉浴场"
     },
     "LOC_BUILDING_TLACHTLI_NAME": {
       "en_US": "Tlachtli",
@@ -3578,6 +3637,7 @@
       "zh_Hans_CN": "宣布友谊"
     },
     "LOC_DIPLOACTION_DECLARE_GOLDEN_AGE_WAR_DESCRIPTION": {
+      "en_US": "Used to declare war on a player while you are in a Golden Age with a \"To Arms!\" Dedication. Can be used right after Denouncing a civilization, without waiting the normal amount of turns. No restrictions on which cities you may capture. 75% reduction in [ICON_STAT_GRIEVANCE] Grievances generated.",
       "zh_Hans_CN": "在黄金时代中拥有“全民皆兵”着力点时用于对玩家宣战。可在对文明进行谴责后直接宣战，无需等待正常所需的回合数。不限制占领的城市。产生的 [ICON_STAT_GRIEVANCE] 不满降低75%。"
     },
     "LOC_DIPLOACTION_DECLARE_GOLDEN_AGE_WAR_NAME": {
@@ -3593,6 +3653,7 @@
       "zh_Hans_CN": "宣布圣战"
     },
     "LOC_DIPLOACTION_DECLARE_IDEOLOGICAL_WAR_DESCRIPTION": {
+      "en_US": "Used to declare war on a player who is in a different Tier 3 government. No restrictions on which cities you may capture. Half the usual [ICON_STAT_GRIEVANCE] Grievances generated.",
       "zh_Hans_CN": "用于向采纳不同第三级政体的文明宣战。不限制占领的城市。产生的普通 [ICON_STAT_GRIEVANCE] 不满降低50%。"
     },
     "LOC_DIPLOACTION_DECLARE_IDEOLOGICAL_WAR_NAME": {
@@ -3644,6 +3705,7 @@
       "zh_Hans_CN": "对小型文明国家宣战"
     },
     "LOC_DIPLOACTION_DECLARE_WAR_OF_RETRIBUTION_DESCRIPTION": {
+      "en_US": "Used to declare war on a player who has broken a promise to you within the past 30 turns. No restrictions on which cities you may capture. Half the usual [ICON_STAT_GRIEVANCE] Grievances generated.",
       "zh_Hans_CN": "用于向过去30个回合内对您背弃承诺的国家宣战。不限制占领的城市。产生的普通 [ICON_STAT_GRIEVANCE] 不满降低50%。"
     },
     "LOC_DIPLOACTION_DECLARE_WAR_OF_RETRIBUTION_NAME": {
@@ -3823,6 +3885,7 @@
       "zh_Hans_CN": "伟大的思想总是相似的。那项科技可是太有用了…"
     },
     "LOC_DIPLO_KUDO_LEADER_ANY_REASON_AGENDA_HIGH_PILLAGE": {
+      "en_US": "Your enemies know you by flame and fear. They pray to be delivered from your wrath, but the heavens are silent. ",
       "zh_Hans_CN": "您的敌人在烈焰与恐惧中知晓了您的名号。他们祈求能够从您的盛怒中逃出，但上天却毫无回应。 "
     },
     "LOC_DIPLO_KUDO_LEADER_ANY_REASON_AGENDA_HIGH_POPULATION": {
@@ -3838,9 +3901,11 @@
       "zh_Hans_CN": "我喜爱的这个领袖拥有令人印象深刻的军事力量。"
     },
     "LOC_DIPLO_KUDO_LEADER_ANY_REASON_AGENDA_INTOLERANT_SAME_RELIGION": {
+      "en_US": "How happy is the land whose ruler follows the one true religion, and protects the souls of his people! ",
       "zh_Hans_CN": "在追随致真信仰之人的统治下，这片土地中的百姓该是如何的快乐啊，他选择保护的正是人民的灵魂！ "
     },
     "LOC_DIPLO_KUDO_LEADER_ANY_REASON_AGENDA_LOW_DIPLOVP": {
+      "en_US": "Maximal freedom can come only from civilizations pursuing their own interests, wouldn’t you say?",
       "zh_Hans_CN": "最大限度的自由只会来自追寻自身利益的文明，您说是吧？"
     },
     "LOC_DIPLO_KUDO_LEADER_ANY_REASON_AGENDA_LOW_EXPLORATION": {
@@ -3848,9 +3913,11 @@
       "zh_Hans_CN": "是的，很好。探索这事就交给我来做吧。"
     },
     "LOC_DIPLO_KUDO_LEADER_ANY_REASON_AGENDA_LOW_FAVOR": {
+      "en_US": "I am pleased that you are ready to accept me as the supreme leader of this planet. Already others whisper that my time is at hand.",
       "zh_Hans_CN": "我很高兴看到你已经做好准备，来接受我成为这星球的最高领袖。已经有人开始窃窃私语，表示我的时代已然来临。"
     },
     "LOC_DIPLO_KUDO_LEADER_ANY_REASON_AGENDA_LOW_TOURISM": {
+      "en_US": "We’ve started a tour package for your citizens who want a world-class vacation. Apparently, nothing like this exists in your civilization.",
       "zh_Hans_CN": "我们已经准备好为您国的游客提供世界顶级的旅游服务了。显然，您的文明可拿不出这种级别的服务。"
     },
     "LOC_DIPLO_KUDO_LEADER_ANY_REASON_AGENDA_MODIFIER_NOT_COMPETING_MINORS": {
@@ -4066,6 +4133,7 @@
       "zh_Hans_CN": "他们喜欢那些打胜仗的人"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_EXPANSIONIST": {
+      "en_US": "They like Empires that claim a lot of land, and dislike those that do not",
       "zh_Hans_CN": "他们喜欢豪占土地的帝国，讨厌不这么做的国家。"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_EXPLOITATION": {
@@ -4073,6 +4141,7 @@
       "zh_Hans_CN": "他们正在观察您改良领土的进展"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_FLAT_EARTHER": {
+      "en_US": "They dislike those who try to leave the Earth",
       "zh_Hans_CN": "他们讨厌试图离开地球的文明"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_GOSSIP_NEGATIVE": {
@@ -4084,6 +4153,7 @@
       "zh_Hans_CN": "他们很高兴您分享了如此多的消息"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_GREAT_WHITE_FLEET": {
+      "en_US": "They like Empires with significant navies",
       "zh_Hans_CN": "他们喜欢拥有强大海军的帝国"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_HIGH_AIRPOWER": {
@@ -4103,6 +4173,7 @@
       "zh_Hans_CN": "他们很高兴见到另一个有修养的文明"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_HIGH_DIPLOVP": {
+      "en_US": "They are angry that you are getting closer to a Diplomatic Victory",
       "zh_Hans_CN": "您即将获得外交胜利，他们十分生气"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_HIGH_EXPLORATION": {
@@ -4114,6 +4185,7 @@
       "zh_Hans_CN": "他们很高兴看到另一个笃信宗教的文明"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_HIGH_FAVOR": {
+      "en_US": "They do not like you competing so actively for Favor",
       "zh_Hans_CN": "他们讨厌您与其争夺外交支持"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_HIGH_HAPPINESS": {
@@ -4129,6 +4201,7 @@
       "zh_Hans_CN": "他们一直认为核武器的发展需要时间和空间"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_HIGH_PILLAGE": {
+      "en_US": "They are pleased to see another civilization who enjoys pillaging",
       "zh_Hans_CN": "看到其他文明享受掠夺带来的快乐，他们很高兴"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_HIGH_POPULATION": {
@@ -4144,6 +4217,7 @@
       "zh_Hans_CN": "他们很高兴看到另一个拥有大型常备军的文明"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_HIGH_TOURISM": {
+      "en_US": "They are unhappy that your Tourism is so strong",
       "zh_Hans_CN": "您的旅游业绩如此高涨，他们颇为不满"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_IGNORES_BARBARIANS": {
@@ -4159,6 +4233,7 @@
       "zh_Hans_CN": "他们讨厌拥有低俗文化的文明"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_LOW_DIPLOVP": {
+      "en_US": "They are pleased you are not a threat for Diplomatic Victory",
       "zh_Hans_CN": "您未成为外交胜利道路上的阻碍，他们很高兴"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_LOW_EXPLORATION": {
@@ -4170,6 +4245,7 @@
       "zh_Hans_CN": "他们讨厌缺乏信仰的文明"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_LOW_FAVOR": {
+      "en_US": "They are happy you are not earning much Favor",
       "zh_Hans_CN": "您未得到太多外交支持，他们很高兴"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_LOW_HAPPINESS": {
@@ -4185,6 +4261,7 @@
       "zh_Hans_CN": "他们讨厌无法成功建造核武器的文明"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_LOW_PILLAGE": {
+      "en_US": "They would like to see you pillage opponents more often",
       "zh_Hans_CN": "他们希望您能够多进行掠夺"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_LOW_POPULATION": {
@@ -4200,6 +4277,7 @@
       "zh_Hans_CN": "他们讨厌拥有小规模常备军的文明"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_LOW_TOURISM": {
+      "en_US": "They are pleased you are not competing in Tourism",
       "zh_Hans_CN": "您未竞争旅游业绩，他们很高兴"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_MED_CITY_STATE_AGGRESSION": {
@@ -4259,9 +4337,11 @@
       "zh_Hans_CN": "友好会见"
     },
     "LOC_DIPLO_MODIFIER_INTOLERANT_ENCROACHING": {
+      "en_US": "They are angry that your religion is present in their empire",
       "zh_Hans_CN": "您的宗教正在其帝国中传播，他们十分生气"
     },
     "LOC_DIPLO_MODIFIER_INTOLERANT_SAME": {
+      "en_US": "They are happy you share a religion",
       "zh_Hans_CN": "您与其信仰相同宗教，他们很高兴"
     },
     "LOC_DIPLO_MODIFIER_IRON_CROWN_INVOLVED": {
@@ -4325,9 +4405,11 @@
       "zh_Hans_CN": "我们在那里建立了常驻使馆"
     },
     "LOC_DIPLO_MODIFIER_SAPA_INCA_HIGH_MOUNTAIN_CITIES": {
+      "en_US": "Pachacuti is displeased because you have many cities near Mountains",
       "zh_Hans_CN": "您在山脉周围拥有许多城市，帕查库特克十分不悦"
     },
     "LOC_DIPLO_MODIFIER_SAPA_INCA_LOW_MOUNTAIN_CITIES": {
+      "en_US": "Pachacuti is pleased you have few cities near Mountains",
       "zh_Hans_CN": "您在山脉周围几乎没有城市，帕查库特克十分欣喜"
     },
     "LOC_DIPLO_MODIFIER_SETTLED_NEAR_BORDER_WARNING": {
@@ -4343,9 +4425,11 @@
       "zh_Hans_CN": "他们信奉我们的宗教"
     },
     "LOC_DIPLO_MODIFIER_SICILIAN_WARS_HIGH_COASTAL_CITIES": {
+      "en_US": "Dido is displeased because you have many coastal cities",
       "zh_Hans_CN": "您拥有太多海岸城市，狄多十分不悦"
     },
     "LOC_DIPLO_MODIFIER_SICILIAN_WARS_LOW_COASTAL_CITES": {
+      "en_US": "Dido is pleased you have few coastal cities",
       "zh_Hans_CN": "您拥有的海岸城市较少，狄多十分喜悦"
     },
     "LOC_DIPLO_MODIFIER_STOP_DIGGING_UP_ARTIFACTS_WARNING": {
@@ -4485,6 +4569,7 @@
       "zh_Hans_CN": "我经常在想你的话为什么这么少。是因为没什么能说的吧。"
     },
     "LOC_DIPLO_WARNING_LEADER_ANY_REASON_AGENDA_HIGH_DIPLOVP": {
+      "en_US": "By what right do you impose your political agenda on my sovereign civilization? I do not consent to be ruled against my will.",
       "zh_Hans_CN": "你有什么权利可以将自己政治议程强加于我的文明？我绝不接受违背意愿的统治。"
     },
     "LOC_DIPLO_WARNING_LEADER_ANY_REASON_AGENDA_HIGH_EXPLORATION": {
@@ -4492,12 +4577,15 @@
       "zh_Hans_CN": "可探索的就这么点，恐怕我无法容忍任何人比我的探险家先出发。"
     },
     "LOC_DIPLO_WARNING_LEADER_ANY_REASON_AGENDA_HIGH_FAVOR": {
+      "en_US": "I see through your honeyed words and your curried favors. You seek ultimate power for yourself, and you would have the nations give it to you of their own free will.",
       "zh_Hans_CN": "我看透了你的糖衣炮弹和假惺惺的馈赠。你只不过是想为自己谋权，还想要各国亲自为你奉上无限权力。"
     },
     "LOC_DIPLO_WARNING_LEADER_ANY_REASON_AGENDA_HIGH_TOURISM": {
+      "en_US": "I know the world is beating a path to your tourist sites, but be warned! Our people possess blue jeans and rock music and are not afraid to use them.",
       "zh_Hans_CN": "我知道全世界都在争先恐后地前往你的旅游景点，但是你给我听好了！我的人民拥有精制的牛仔裤和狂野的摇滚乐，随时准备让世界大开眼界。"
     },
     "LOC_DIPLO_WARNING_LEADER_ANY_REASON_AGENDA_INTOLERANT_ENCROACHING_RELIGION": {
+      "en_US": "Blasphemy and heresy spill from the lips of your subjects! You must restore your people’s souls by restoring the true religion!",
       "zh_Hans_CN": "你的臣民胆敢亵渎神明，发表异端学说！你必须重拾真正的信仰才能挽救人民那堕落的灵魂！"
     },
     "LOC_DIPLO_WARNING_LEADER_ANY_REASON_AGENDA_LOW_AIRPOWER": {
@@ -4525,6 +4613,7 @@
       "zh_Hans_CN": "核武器将主导未来！你竟然对此视而不见？"
     },
     "LOC_DIPLO_WARNING_LEADER_ANY_REASON_AGENDA_LOW_PILLAGE": {
+      "en_US": "Your enemies make war on you, but you do not plunder their lands in retribution. Is it out of cowardice? Or an excess of politeness? ",
       "zh_Hans_CN": "敌人向你发动了战争，但你却不愿意掠夺他们的土地作为报复。这到底是出于懦弱，还是过于礼貌？"
     },
     "LOC_DIPLO_WARNING_LEADER_ANY_REASON_AGENDA_LOW_POPULATION": {
@@ -4608,7 +4697,8 @@
       "zh_Hans_CN": "（她想在您拥有的大陆上定居。）"
     },
     "LOC_DISTRICT_ACROPOLIS_EXPANSION2_DESCRIPTION": {
-      "en_US": "A district unique to Greece for cultural sites. Replaces the Theater Square district and cheaper to build. Awards 1 [ICON_Envoy] Envoy when completed.[NEWLINE][NEWLINE]+1  [ICON_Culture] Culture bonus for each adjacent district and an additional +1 [ICON_Culture] Culture bonus for adjacent City Center. +2 [ICON_Culture] Culture bonus for each adjacent wonder, Entertainment Complex, and Water Park. Can only be built on Hills."
+      "en_US": "A district unique to Greece for cultural sites. Replaces the Theater Square district and cheaper to build. Awards 1 [ICON_Envoy] Envoy when completed.[NEWLINE][NEWLINE]+1  [ICON_Culture] Culture bonus for each adjacent district and an additional +1 [ICON_Culture] Culture bonus for adjacent City Center. +2 [ICON_Culture] Culture bonus for each adjacent wonder, Entertainment Complex, and Water Park. Can only be built on Hills.",
+      "zh_Hans_CN": "希腊特色文化遗址区域，替代剧院广场，建造费用更低。建成后奖励1名 [ICON_Envoy] 使者。[NEWLINE][NEWLINE]每个相邻区域+1 [ICON_Culture] 文化值，每个相邻市中心额外+1 [ICON_Culture] 文化值。每个相邻奇观、娱乐设施及水上乐园+2 [ICON_Culture] 文化值。只能建在丘陵上。"
     },
     "LOC_DISTRICT_ACROPOLIS_NAME": {
       "en_US": "Acropolis",
@@ -4635,10 +4725,12 @@
       "zh_Hans_CN": "相邻水渠区域提供+{1_num} [ICON_PRODUCTION] 生产力。"
     },
     "LOC_DISTRICT_BASE_DISTRICT_SCIENCE": {
+      "en_US": "+{1_num} [ICON_Science] Science.",
       "zh_Hans_CN": "+{1_Num}点 [ICON_Science] 科技值。"
     },
     "LOC_DISTRICT_BATH_EXPANSION2_ALT_DESCRIPTION": {
-      "en_US": "A district unique to Rome for city growth. Replaces the Aqueduct district and cheaper to build.[NEWLINE][NEWLINE]It provides this city with a source of fresh water from an adjacent River, Lake, Oasis, or Mountain. Cities that do not yet have existing fresh water receive up to 6 [ICON_Housing] Housing. Cities that already have existing fresh water will instead get +2 [ICON_Housing] Housing. If built adjacent to a Geothermal Fissure +1 [ICON_Amenities] Amenity. In all cases the Bath provides an additional bonus of +2 [ICON_Housing] Housing and +1 [ICON_Amenities] Amenity. Prevents [ICON_Food] Food loss during Drought. Must be built adjacent to the City Center. Military Engineers can spend a charge to complete 20% of a Bath's production."
+      "en_US": "A district unique to Rome for city growth. Replaces the Aqueduct district and cheaper to build.[NEWLINE][NEWLINE]It provides this city with a source of fresh water from an adjacent River, Lake, Oasis, or Mountain. Cities that do not yet have existing fresh water receive up to 6 [ICON_Housing] Housing. Cities that already have existing fresh water will instead get +2 [ICON_Housing] Housing. If built adjacent to a Geothermal Fissure +1 [ICON_Amenities] Amenity. In all cases the Bath provides an additional bonus of +2 [ICON_Housing] Housing and +1 [ICON_Amenities] Amenity. Prevents [ICON_Food] Food loss during Drought. Must be built adjacent to the City Center. Military Engineers can spend a charge to complete 20% of a Bath's production.",
+      "zh_Hans_CN": "促进城市发展的罗马特色区域。取代水渠，建造费用更低。[NEWLINE][NEWLINE]从相邻河流、湖泊、绿洲或山脉引水，为该城市提供淡水资源。尚未拥有淡水资源的城市最多获得6个 [ICON_Housing] 住房。已有淡水资源的城市则+2 [ICON_Housing] 住房。若与地热裂缝相邻，提供+1 [ICON_Amenities] 宜居度。在任何情况下，浴场都能额外提供+2 [ICON_Housing] 住房和+1 [ICON_Amenities] 宜居度。干旱时可防止 [ICON_Food] 食物损失。必须修建在与市中心相邻的单元格中。军事工程师可消耗1次使用次数来完成浴场20%的修建进度。"
     },
     "LOC_DISTRICT_BATH_NAME": {
       "en_US": "Bath",
@@ -4681,6 +4773,7 @@
       "zh_Hans_CN": "市中心"
     },
     "LOC_DISTRICT_COMMERCIAL_HUB_EXPANSION1_DESCRIPTION": {
+      "en_US": "A district in your city specializing in finance and trade.",
       "zh_Hans_CN": "城市中专注于金融和贸易的区域。"
     },
     "LOC_DISTRICT_COMMERCIAL_HUB_NAME": {
@@ -4696,14 +4789,16 @@
       "zh_Hans_CN": "相邻科帕卡瓦纳区域提供+{1_num} [ICON_Culture] 文化值。"
     },
     "LOC_DISTRICT_COTHON_DESCRIPTION": {
-      "en_US": "A district unique to Phoenicia for naval activity in your city. Replaces the Harbor district and cheaper to build. Must be built on Coast or Lake Terrain adjacent to land.[NEWLINE][NEWLINE]+50% [ICON_PRODUCTION] Production towards naval units and Settlers in this city. All wounded naval units in this city’s borders heal +100 HP each turn."
+      "en_US": "A district unique to Phoenicia for naval activity in your city. Replaces the Harbor district and cheaper to build. Must be built on Coast or Lake Terrain adjacent to land.[NEWLINE][NEWLINE]+50% [ICON_PRODUCTION] Production towards naval units and Settlers in this city. All wounded naval units in this city’s borders heal +100 HP each turn.",
+      "zh_Hans_CN": "腓尼基特色城市海军活动区域，取代港口且建造成本更低。必须修建在海岸或与陆地相邻的湖泊地貌上。[NEWLINE][NEWLINE]该城市的海军单位与开拓者的 [ICON_PRODUCTION] 生产力+50%。在该城范围内，所有受损海军单位每回合可恢复100点生命值。"
     },
     "LOC_DISTRICT_COTHON_GOLD": {
       "en_US": "+{1_num} [ICON_Gold] Gold from the adjacent Cothon district.",
       "zh_Hans_CN": "+{1_num} [ICON_Gold] 金币来自相邻U型港区域。"
     },
     "LOC_DISTRICT_COTHON_NAME": {
-      "en_US": "Cothon"
+      "en_US": "Cothon",
+      "zh_Hans_CN": "U型港"
     },
     "LOC_DISTRICT_CULTURE_CITY_CENTER": {
       "en_US": "+{1_num} [ICON_Culture] Culture from the adjacent City Center.",
@@ -4810,34 +4905,43 @@
       "zh_Hans_CN": "+{1_num} [ICON_SCIENCE] 科技值来自每个相邻的地热裂缝。"
     },
     "LOC_DISTRICT_GOVERNMENT_CULTURE": {
+      "en_US": "+{1_num} [ICON_Culture] Culture from the adjacent Government Plaza.",
       "zh_Hans_CN": "+{1_num} [ICON_Culture] 文化值来自相邻市政广场。"
     },
     "LOC_DISTRICT_GOVERNMENT_DESCRIPTION": {
+      "en_US": "A district placed once in your empire to commemorate your government choices. Provides +8 Loyalty per turn to this city, and an increase of +1 to the adjacency bonuses being earned by any adjacent district. Awards +1 [Icon_Governor] Governor Title.",
       "zh_Hans_CN": "为纪念所选政体而在帝国中建造的区域。使此城每回合的忠诚度+8、使相邻区域获得的相邻加成+1。[NEWLINE]奖励1个 [Icon_Governor] 总督头衔。"
     },
     "LOC_DISTRICT_GOVERNMENT_FAITH": {
+      "en_US": "+{1_num} [ICON_Faith] Faith from the adjacent Government Plaza.",
       "zh_Hans_CN": "+{1_num} [ICON_Faith] 信仰值来自相邻市政广场。"
     },
     "LOC_DISTRICT_GOVERNMENT_GOLD": {
+      "en_US": "+{1_num} [ICON_Gold] Gold from the adjacent Government Plaza.",
       "zh_Hans_CN": "+{1_num} [ICON_Gold] 金币来自相邻市政广场。"
     },
     "LOC_DISTRICT_GOVERNMENT_NAME": {
+      "en_US": "Government Plaza",
       "zh_Hans_CN": "市政广场"
     },
     "LOC_DISTRICT_GOVERNMENT_PRODUCTION": {
+      "en_US": "+{1_num} [ICON_Production] Production from the adjacent Government Plaza.",
       "zh_Hans_CN": "+{1_num} [ICON_Production] 生产力来自相邻市政广场。"
     },
     "LOC_DISTRICT_GOVERNMENT_SCIENCE": {
+      "en_US": "+{1_num} [ICON_Science] Science from the adjacent Government Plaza.",
       "zh_Hans_CN": "+{1_num} [ICON_Science] 科技值来自相邻市政广场。"
     },
     "LOC_DISTRICT_HANSA_EXPANSION2_DESCRIPTION": {
-      "en_US": "A district unique to Germany for industrial activity. Replaces the Industrial Zone district and cheaper to build.[NEWLINE][NEWLINE]+ 2[ICON_Production] Production bonus for each adjacent Commercial Hub, Aqueduct, Canal, and Dam districts. +1 [ICON_Production] Production bonus for each adjacent resource. +1 [ICON_Production] Production bonus for every two adjacent district tiles."
+      "en_US": "A district unique to Germany for industrial activity. Replaces the Industrial Zone district and cheaper to build.[NEWLINE][NEWLINE]+ 2[ICON_Production] Production bonus for each adjacent Commercial Hub, Aqueduct, Canal, and Dam districts. +1 [ICON_Production] Production bonus for each adjacent resource. +1 [ICON_Production] Production bonus for every two adjacent district tiles.",
+      "zh_Hans_CN": "德国特色工业区域，替代工业区，建造费用更低。[NEWLINE][NEWLINE]可从每个相邻的商业中心、水渠、运河和堤坝区域处获得+2 [ICON_Production] 生产力加成。每处相邻资源为其提供1点 [ICON_Production] 生产力加成。每两处相邻区域为其提供1点 [ICON_Production] 生产力加成。"
     },
     "LOC_DISTRICT_HANSA_NAME": {
       "en_US": "Hansa",
       "zh_Hans_CN": "商业同业工会"
     },
     "LOC_DISTRICT_HARBOR_EXPANSION1_DESCRIPTION": {
+      "en_US": "A district for naval activity in your city. Also removes the [ICON_Movement] Movement penalty for embarking and disembarking to and from this tile. Must be built on Coast or Lake Terrain adjacent to land. Cannot be built on Reef.",
       "zh_Hans_CN": "城市中的海军活动区域。同时取消从该单元格上下船的 [ICON_Movement] 移动力消耗。必须修建在和陆地相邻的海岸或湖泊单元格上。无法建造在礁石上。"
     },
     "LOC_DISTRICT_HARBOR_GOLD": {
@@ -4969,6 +5073,7 @@
       "zh_Hans_CN": "+{1_num} [ICON_Faith] 信仰值来自相邻自然{1_Num : plural 1?奇观; other?奇观;}。"
     },
     "LOC_DISTRICT_NEGATIVE_DISTRICT_SCIENCE": {
+      "en_US": "{1_num: number +#,###;-#,###} [ICON_Science] Science from adjacent districts.",
       "zh_Hans_CN": "{1_num: number +#,###;-#,###} [ICON_Science] 科技值来自相邻区域。"
     },
     "LOC_DISTRICT_NEIGHBORHOOD_DESCRIPTION": {
@@ -5012,7 +5117,8 @@
       "zh_Hans_CN": "+{1_num} [ICON_Gold] 金币来自相邻河流。"
     },
     "LOC_DISTRICT_ROYAL_NAVY_DOCKYARD_EXPANSION2_DESCRIPTION": {
-      "en_US": "A district unique to England for naval activity in your city. Replaces the Harbor district. Also removes the [ICON_Movement] Movement penalty for embarking and disembarking to and from this tile. Must be built on Coast or Lake Terrain adjacent to land.[NEWLINE][NEWLINE]+1 [ICON_Movement] Movement for all naval units built in Dockyard[NEWLINE]+2 [ICON_Gold] Gold and +4 Loyalty per turn when built on a foreign continent. Cannot be built on Reef"
+      "en_US": "A district unique to England for naval activity in your city. Replaces the Harbor district. Also removes the [ICON_Movement] Movement penalty for embarking and disembarking to and from this tile. Must be built on Coast or Lake Terrain adjacent to land.[NEWLINE][NEWLINE]+1 [ICON_Movement] Movement for all naval units built in Dockyard[NEWLINE]+2 [ICON_Gold] Gold and +4 Loyalty per turn when built on a foreign continent. Cannot be built on Reef",
+      "zh_Hans_CN": "城市中的英国特色海军活动区域，取代港口。同时移除该单元格的上船、下船 [ICON_Movement] 移动力减益。必须建在与陆地相邻的海岸或湖泊地形上。[NEWLINE][NEWLINE]造船厂中建造的所有海军单位+1 [ICON_Movement] 移动力。[NEWLINE]修建在外国大陆上时+2 [ICON_Gold] 金币、每回合的忠诚度+4。无法建造在礁石上。"
     },
     "LOC_DISTRICT_ROYAL_NAVY_DOCKYARD_GOLD": {
       "en_US": "+{1_num} [ICON_Gold] Gold from the adjacent Royal Navy Dockyard district.",
@@ -5043,17 +5149,20 @@
       "zh_Hans_CN": "相邻街头狂欢节区域提供+{1_num} [ICON_Culture] 文化值。"
     },
     "LOC_DISTRICT_STREET_CARNIVAL_EXPANSION2_DESCRIPTION": {
-      "en_US": "A district unique to Brazil. Replaces the Entertainment Complex district, and provides +2 [ICON_Amenities] Amenities. Also unlocks the Carnival project, which grants an additional +1 [ICON_Amenities] Amenity when underway and a variety of [ICON_GreatPerson] Great People points once completed. Cannot be built in a city with a Copacabana."
+      "en_US": "A district unique to Brazil. Replaces the Entertainment Complex district, and provides +2 [ICON_Amenities] Amenities. Also unlocks the Carnival project, which grants an additional +1 [ICON_Amenities] Amenity when underway and a variety of [ICON_GreatPerson] Great People points once completed. Cannot be built in a city with a Copacabana.",
+      "zh_Hans_CN": "巴西特色区域，代替娱乐设施区域，+2 [ICON_Amenities] 宜居度。可解锁“狂欢节”项目，项目启动后即可额外+1 [ICON_Amenities] 宜居度，项目完成后可获得若干 [ICON_GreatPerson] 伟人点数。无法建在拥有“科帕卡瓦纳”的城市中。"
     },
     "LOC_DISTRICT_STREET_CARNIVAL_NAME": {
       "en_US": "Street Carnival",
       "zh_Hans_CN": "街头狂欢节"
     },
     "LOC_DISTRICT_SUGUBA_DESCRIPTION": {
-      "en_US": "A district unique to Mali specializing in finance and trade that replaces the Commercial Hub. Units, Buildings, and Districts are 20% cheaper to purchase with [ICON_GOLD] Gold and [ICON_FAITH] Faith in this City.[NEWLINE][NEWLINE]+2 [ICON_Gold] Gold bonus for each adjacent Holy Site. +2 [ICON_Gold] Gold bonus from a tile containing a River edge. +1 [ICON_Gold] Gold bonus for every two adjacent district tiles."
+      "en_US": "A district unique to Mali specializing in finance and trade that replaces the Commercial Hub. Units, Buildings, and Districts are 20% cheaper to purchase with [ICON_GOLD] Gold and [ICON_FAITH] Faith in this City.[NEWLINE][NEWLINE]+2 [ICON_Gold] Gold bonus for each adjacent Holy Site. +2 [ICON_Gold] Gold bonus from a tile containing a River edge. +1 [ICON_Gold] Gold bonus for every two adjacent district tiles.",
+      "zh_Hans_CN": "马里特色区域，专精于经济与贸易，取代商业中心。使用 [ICON_GOLD] 金币和 [ICON_FAITH] 信仰值在此城中购买单位、建筑和区域时，费用减少20%。[NEWLINE][NEWLINE]每个相邻圣地获得+2 [ICON_Gold] 金币加成。每个包含河岸的单元格获得+2 [ICON_Gold] 金币加成。每两个相邻区域单元格获得+1 [ICON_Gold] 金币加成。"
     },
     "LOC_DISTRICT_SUGUBA_NAME": {
-      "en_US": "Suguba"
+      "en_US": "Suguba",
+      "zh_Hans_CN": "曼丁哥市场"
     },
     "LOC_DISTRICT_THEATER_DESCRIPTION": {
       "en_US": "A district in your city for cultural sites.",
@@ -5068,9 +5177,11 @@
       "zh_Hans_CN": "+{1_num} [ICON_Faith] 信仰值来自相邻冻土{1_Num : plural 1?单元格; other?单元格;}。"
     },
     "LOC_DISTRICT_WATER_ENTERTAINMENT_COMPLEX_DESCRIPTION": {
+      "en_US": "A district placed out on a coastal tile dedicated to keeping your people happy by increasing [ICON_Amenities] Amenities. Cannot be built in a city with an Entertainment Complex. Cannot be built on Reef.",
       "zh_Hans_CN": "建在海岸单元格上的区域，可增加 [ICON_Amenities] 宜居度，让人民生活幸福。无法建在拥有娱乐设施的城市中。无法建在礁石上。"
     },
     "LOC_DISTRICT_WATER_ENTERTAINMENT_COMPLEX_NAME": {
+      "en_US": "Water Park",
       "zh_Hans_CN": "水上乐园"
     },
     "LOC_DISTRICT_WATER_PARK_CULTURE": {
@@ -5078,10 +5189,12 @@
       "zh_Hans_CN": "相邻水上乐园区域提供+{1_num} [ICON_Culture] 文化值。"
     },
     "LOC_DISTRICT_WATER_STREET_CARNIVAL_EXPANSION2_DESCRIPTION": {
-      "en_US": "A district unique to Brazil. Replaces the Water Park district, and provides +2 [ICON_Amenities] Amenities. Also unlocks the Carnival project, which grants an additional +1 [ICON_Amenities] Amenity when underway and a variety of [ICON_GreatPerson] Great People points once completed. Cannot be built in a city with a Street Carnival. Cannot be built on Reef."
+      "en_US": "A district unique to Brazil. Replaces the Water Park district, and provides +2 [ICON_Amenities] Amenities. Also unlocks the Carnival project, which grants an additional +1 [ICON_Amenities] Amenity when underway and a variety of [ICON_GreatPerson] Great People points once completed. Cannot be built in a city with a Street Carnival. Cannot be built on Reef.",
+      "zh_Hans_CN": "巴西特色区域，代替水上乐园，+2 [ICON_Amenities] 宜居度。可解锁“狂欢节”项目，项目启动后即可额外+1 [ICON_Amenities] 宜居度，项目完成后可获得若干 [ICON_GreatPerson] 伟人点数。无法建在拥有“街头狂欢节”的城市中。无法建在礁石上。"
     },
     "LOC_DISTRICT_WATER_STREET_CARNIVAL_EXPANSION2_NAME": {
-      "en_US": "Copacabana"
+      "en_US": "Copacabana",
+      "zh_Hans_CN": "科帕卡瓦纳"
     },
     "LOC_DISTRICT_WONDER_CULTURE": {
       "en_US": "+{1_num} [ICON_Culture] Culture from the adjacent {1_Num : plural 1?wonder; other?wonders;}.",
@@ -5120,10 +5233,12 @@
       "zh_Hans_CN": "+{1_num} [ICON_SCIENCE] 科技值，来自相邻自然奇观大堡礁。"
     },
     "LOC_FEATURE_CHOCOLATEHILLS_DESCRIPTION": {
-      "en_US": "Four tile natural wonder. It provides +1 [ICON_Food] Food, +2 [ICON_Production] Production,  and +1 [ICON_Science] Science."
+      "en_US": "Four tile natural wonder. It provides +1 [ICON_Food] Food, +2 [ICON_Production] Production,  and +1 [ICON_Science] Science.",
+      "zh_Hans_CN": "占4个单元格的自然奇观，提供+1 [ICON_Food] 食物、+2 [ICON_Production] 生产力、+1 [ICON_Science] 科技值。"
     },
     "LOC_FEATURE_CHOCOLATEHILLS_NAME": {
-      "en_US": "Chocolate Hills"
+      "en_US": "Chocolate Hills",
+      "zh_Hans_CN": "巧克力山"
     },
     "LOC_FEATURE_CHOCOLATEHILLS_QUOTE": {
       "en_US": "“The wicked king pursued the lovers Juan and Maria on his swiftest horse. As he overtook them, Maria flung down her ring, and at once rose up seven tall hills, and the king was slowed.”[NEWLINE] - Filipino Folk Tale",
@@ -5138,7 +5253,8 @@
       "zh_Hans_CN": "在白色悬崖城垛上的王国政府里，一片寂静，比安息日还要寂静。[NEWLINE]——威廉·华兹华斯"
     },
     "LOC_FEATURE_CLIFFS_DOVER_XP2_DESCRIPTION": {
-      "en_US": "Two tile natural wonder. It appears with Cliffs adjacent to water and provides +3 [ICON_Culture] Culture, +2 [ICON_Food] Food, and +3 [ICON_Gold] Gold. Provides +4 appeal, instead of the standard +2 appeal of Natural Wonders, to adjacent tiles. Improvements cannot be placed on it."
+      "en_US": "Two tile natural wonder. It appears with Cliffs adjacent to water and provides +3 [ICON_Culture] Culture, +2 [ICON_Food] Food, and +3 [ICON_Gold] Gold. Provides +4 appeal, instead of the standard +2 appeal of Natural Wonders, to adjacent tiles. Improvements cannot be placed on it.",
+      "zh_Hans_CN": "占2个单元格的自然奇观。随水域旁的悬崖出现，提供+3 [ICON_Culture] 文化值、+2 [ICON_Food] 食物、+3 [ICON_Gold] 金币。为相邻单元格提供+4魅力，而非自然奇观标准的+2魅力。无法在其上方放置改良设施。"
     },
     "LOC_FEATURE_CRATER_LAKE_DESCRIPTION": {
       "en_US": "One tile natural wonder. It appears as a Lake and provides +5 [ICON_Faith] Faith, +1 [ICON_Science] Science, and Fresh Water.",
@@ -5165,10 +5281,12 @@
       "zh_Hans_CN": "就像死海海岸上的苹果，吃了一口，全是灰。[NEWLINE]——拜伦勋爵"
     },
     "LOC_FEATURE_DEVILSTOWER_DESCRIPTION": {
-      "en_US": "One tile impassable natural wonder. Provides +1 [ICON_FAITH] Faith and +1 [ICON_Production] Production to adjacent tiles."
+      "en_US": "One tile impassable natural wonder. Provides +1 [ICON_FAITH] Faith and +1 [ICON_Production] Production to adjacent tiles.",
+      "zh_Hans_CN": "占1个单元格且无法通行的自然奇观，为相邻单元格+1 [ICON_FAITH] 信仰值、+1 [ICON_Production] 生产力。"
     },
     "LOC_FEATURE_DEVILSTOWER_NAME": {
-      "en_US": "Mato Tipila"
+      "en_US": "Mato Tipila",
+      "zh_Hans_CN": "魔鬼塔"
     },
     "LOC_FEATURE_DEVILSTOWER_QUOTE": {
       "en_US": "“Seven girls were chased by bears. The bears were just about to catch them when the girls jumped on a low rock. One of the girls prayed to the rock, \"Rock take pity on us, rock save us!\" The rock heard them and began to grow upwards, pushing the girls higher and higher.”[NEWLINE] - Kiowa Legend",
@@ -5235,10 +5353,12 @@
       "zh_Hans_CN": "地热裂缝"
     },
     "LOC_FEATURE_GOBUSTAN_DESCRIPTION": {
-      "en_US": "Three tile natural wonder. It provides +3 [ICON_CULTURE] Culture and +1 [ICON_Production] Production."
+      "en_US": "Three tile natural wonder. It provides +3 [ICON_CULTURE] Culture and +1 [ICON_Production] Production.",
+      "zh_Hans_CN": "占3个单元格的自然奇观，提供+3 [ICON_CULTURE] 文化值与+1 [ICON_Production] 生产力。"
     },
     "LOC_FEATURE_GOBUSTAN_NAME": {
-      "en_US": "Gobustan "
+      "en_US": "Gobustan ",
+      "zh_Hans_CN": "戈布斯坦国家公园"
     },
     "LOC_FEATURE_GOBUSTAN_QUOTE": {
       "en_US": "“Then weave the web of the mystic measure;[NEWLINE]From the depths of the sky and the ends of the earth,[NEWLINE]Come, swift Spirits of might and of pleasure,[NEWLINE]Fill the dance and the music of mirth.”[NEWLINE] - Percy Bysshe Shelley",
@@ -5249,10 +5369,12 @@
       "zh_Hans_CN": "冰"
     },
     "LOC_FEATURE_IKKIL_DESCRIPTION": {
-      "en_US": "One tile impassable natural wonder. +50% [ICON_Production] Production when producing wonders and districts in adjacent tiles. It provides Fresh Water."
+      "en_US": "One tile impassable natural wonder. +50% [ICON_Production] Production when producing wonders and districts in adjacent tiles. It provides Fresh Water.",
+      "zh_Hans_CN": "占1个单元格且无法通行的自然奇观，在相邻单元格建造奇观与区域时，+50% [ICON_Production] 生产力。可提供淡水。"
     },
     "LOC_FEATURE_IKKIL_NAME": {
-      "en_US": "Ik-Kil"
+      "en_US": "Ik-Kil",
+      "zh_Hans_CN": "伊卡-吉尔地下水坑"
     },
     "LOC_FEATURE_IKKIL_QUOTE": {
       "en_US": "“Son, have you seen the rain of God? It passed and entered beneath the mountains of God... There will be a ring in the sky where the water of God has passed.”[NEWLINE] - Books of Chilam Balam",
@@ -5271,7 +5393,8 @@
       "zh_Hans_CN": "事实证明乞力马扎罗山上没有WIFI，所以，旅行途中我花了两周时间在坦桑尼亚和人聊天。[NEWLINE]——南希·邦兹"
     },
     "LOC_FEATURE_KILIMANJARO_XP2_DESCRIPTION": {
-      "en_US": "One tile impassable natural wonder. It appears as a Volcano and provides +2 [ICON_Food] Food to adjacent tiles. On eruption it gives low yields and is most likely to damage improvements and buildings. Infrequently erupts, but is always active."
+      "en_US": "One tile impassable natural wonder. It appears as a Volcano and provides +2 [ICON_Food] Food to adjacent tiles. On eruption it gives low yields and is most likely to damage improvements and buildings. Infrequently erupts, but is always active.",
+      "zh_Hans_CN": "占1个单元格且无法通行的火山自然奇观，向相邻单元格提供+2 [ICON_Food] 食物。喷发时提供少量产出，有极高几率造成建筑与区域的损坏。不常喷发，但总为活跃状态。"
     },
     "LOC_FEATURE_MARSH_NAME": {
       "en_US": "Marsh",
@@ -5282,10 +5405,12 @@
       "zh_Hans_CN": "绿洲"
     },
     "LOC_FEATURE_PAMUKKALE_DESCRIPTION": {
-      "en_US": "Two tile impassable natural wonder. +1 [ICON_AMENITIES] Amenity. It provides an additional [ICON_AMENITIES] Amenity if adjacent to an Entertainment Complex. Major adjacency bonus to Theater Square, Campus, and Commercial Hub districts. Standard adjacency bonus to the Holy Site district. It provides Fresh Water."
+      "en_US": "Two tile impassable natural wonder. +1 [ICON_AMENITIES] Amenity. It provides an additional [ICON_AMENITIES] Amenity if adjacent to an Entertainment Complex. Major adjacency bonus to Theater Square, Campus, and Commercial Hub districts. Standard adjacency bonus to the Holy Site district. It provides Fresh Water.",
+      "zh_Hans_CN": "占2个单元格且无法通行的自然奇观，+1 [ICON_AMENITIES] 宜居度。如果与娱乐设施相邻，则额外提供1点 [ICON_AMENITIES] 宜居度。相邻于剧院广场、学院及商业中心时可提供大量相邻加成。相邻于圣地时，提供标准相邻加成。可提供淡水。"
     },
     "LOC_FEATURE_PAMUKKALE_NAME": {
-      "en_US": "Pamukkale"
+      "en_US": "Pamukkale",
+      "zh_Hans_CN": "棉花堡"
     },
     "LOC_FEATURE_PAMUKKALE_QUOTE": {
       "en_US": "“Near the Mesogis, opposite Laodicea, is Hierapolis, where are hot springs, and the Plutonium, both of which have some singular properties. The water of the springs is so easily consolidated and becomes stone, that if it is conducted through water-courses dams are formed consisting of a single piece of stone.”[NEWLINE] - Strabo",
@@ -5344,10 +5469,12 @@
       "zh_Hans_CN": "泰斯尼是个占地647平方千米的老虎陷阱，由带有参差不齐长矛的巨大方尖碑组成。是的，它们会将你的漂亮脸蛋刺破。[NEWLINE]——巴德·埃里克森"
     },
     "LOC_FEATURE_VESUVIUS_DESCRIPTION": {
-      "en_US": "One tile impassable natural wonder. It appears as a Volcano and provides +1 [ICON_Production] Production to adjacent tiles. On Eruption it gives high yields to adjacent tiles, but large [ICON_Citizen] Population loss. It is always active."
+      "en_US": "One tile impassable natural wonder. It appears as a Volcano and provides +1 [ICON_Production] Production to adjacent tiles. On Eruption it gives high yields to adjacent tiles, but large [ICON_Citizen] Population loss. It is always active.",
+      "zh_Hans_CN": "占1个单元格且无法通行的火山自然奇观，向相邻单元格提供+1 [ICON_Production] 生产力。喷发时为相邻单元格提供大量产出，但会造成大量 [ICON_Citizen] 人口减少。其固定为活跃状态。"
     },
     "LOC_FEATURE_VESUVIUS_NAME": {
-      "en_US": "Mount Vesuvius"
+      "en_US": "Mount Vesuvius",
+      "zh_Hans_CN": "维苏威火山"
     },
     "LOC_FEATURE_VESUVIUS_QUOTE": {
       "en_US": "“The sea seemed to roll back upon itself, and to be driven from its banks by the convulsive motion of the earth; it is certain at least the shore was considerably enlarged, and several sea animals were left upon it. On the other side, a black and dreadful cloud, broken with rapid, zigzag flashes, revealed behind it variously shaped masses of flame...”[NEWLINE] - Pliny the Younger",
@@ -5370,10 +5497,12 @@
       "zh_Hans_CN": "火山"
     },
     "LOC_FEATURE_WHITEDESERT_DESCRIPTION": {
-      "en_US": "Four tile natural wonder. It provides +1 [ICON_SCIENCE] Science, +1 [ICON_Culture] Culture,  and +4 [ICON_GOLD] Gold."
+      "en_US": "Four tile natural wonder. It provides +1 [ICON_SCIENCE] Science, +1 [ICON_Culture] Culture,  and +4 [ICON_GOLD] Gold.",
+      "zh_Hans_CN": "占4个单元格的自然奇观，提供+1 [ICON_SCIENCE] 科技值、+1 [ICON_Culture] 文化值、+4 [ICON_GOLD] 金币。"
     },
     "LOC_FEATURE_WHITEDESERT_NAME": {
-      "en_US": "Sahara el Beyda"
+      "en_US": "Sahara el Beyda",
+      "zh_Hans_CN": "白沙漠"
     },
     "LOC_FEATURE_WHITEDESERT_QUOTE": {
       "en_US": "“I have filled a water-bag from my people and gone to the desert,[NEWLINE]And walked empty wastes while the wolf howled, like a gambler whose family starves.”[NEWLINE] - Imru-ul-Quais",
@@ -5388,7 +5517,8 @@
       "zh_Hans_CN": "对我来说，约塞米蒂谷是在石头和空间组成的巨大建筑物上形成的一个永远有日出、闪着绿光的金色奇迹。[NEWLINE]——安塞尔·亚当斯"
     },
     "LOC_FEATURE_YOSEMITE_XP2_DESCRIPTION": {
-      "en_US": "Two tile impassable natural wonder. Provides +1 [ICON_Gold] Gold, +1 [ICON_Food] Food,  and +1 [ICON_Science] Science to adjacent tiles."
+      "en_US": "Two tile impassable natural wonder. Provides +1 [ICON_Gold] Gold, +1 [ICON_Food] Food,  and +1 [ICON_Science] Science to adjacent tiles.",
+      "zh_Hans_CN": "占2个单元格且无法通行的自然奇观。为相邻单元格+1 [ICON_Gold] 金币、+1 [ICON_Food] 食物、+1 [ICON_Science] 科技值。"
     },
     "LOC_GAMESPEED_EPIC_HELP": {
       "en_US": "Prolonged game (50% slower).",
@@ -5699,7 +5829,8 @@
       "zh_Hans_CN": "营地"
     },
     "LOC_IMPROVEMENT_CHATEAU_EXPANSION2_DESCRIPTION": {
-      "en_US": "Unlocks the Builder ability to construct a Château, unique to France.[NEWLINE][NEWLINE]+2 [ICON_Culture] Culture and +1  [ICON_Gold] Gold. +1 Appeal. +1 [ICON_Culture] Culture for every adjacent wonder (becomes +2 after researching Flight). +2 [ICON_Gold] Gold if on a tile containing a River edge. Provides [ICON_TOURISM] Tourism from [ICON_CULTURE] Culture after researching Flight. Must be placed adjacent to a Bonus or Luxury resource. Cannot be built adjacent to another Château."
+      "en_US": "Unlocks the Builder ability to construct a Château, unique to France.[NEWLINE][NEWLINE]+2 [ICON_Culture] Culture and +1  [ICON_Gold] Gold. +1 Appeal. +1 [ICON_Culture] Culture for every adjacent wonder (becomes +2 after researching Flight). +2 [ICON_Gold] Gold if on a tile containing a River edge. Provides [ICON_TOURISM] Tourism from [ICON_CULTURE] Culture after researching Flight. Must be placed adjacent to a Bonus or Luxury resource. Cannot be built adjacent to another Château.",
+      "zh_Hans_CN": "解锁建造者建造法国特色建筑法国城堡的能力。[NEWLINE][NEWLINE]+2 [ICON_Culture] 文化值、+1 [ICON_Gold] 金币。+1魅力。每与一座奇观相邻便+2 [ICON_Culture] 文化值（研究“飞行”科技后提升为+2）。如处在包含河岸的单元格上，则+2 [ICON_Gold] 金币。研究完“飞行”之后，将根据 [ICON_CULTURE] 文化值提供 [ICON_TOURISM] 旅游业绩。必须建在加成或奢侈品资源旁。无法建在另一座法国城堡旁。"
     },
     "LOC_IMPROVEMENT_CHATEAU_NAME": {
       "en_US": "Château",
@@ -5766,17 +5897,20 @@
       "zh_Hans_CN": "部落村庄"
     },
     "LOC_IMPROVEMENT_GREAT_WALL_EXPANSION2_DESCRIPTION": {
-      "en_US": "Unlocks the Builder ability to construct the Great Wall, unique to China.[NEWLINE][NEWLINE]+2 [ICON_GOLD] Gold. Provides an increase to [ICON_Strength] Defense. Bonus to [ICON_Gold] Gold if adjacent to other segments. Additional [ICON_Culture] Culture and [ICON_Tourism] Tourism as you advance through the Technology Tree for adjacent segments. Must be built in a line along the borders of your empire. Can only be pillaged (never destroyed) by natural disasters."
+      "en_US": "Unlocks the Builder ability to construct the Great Wall, unique to China.[NEWLINE][NEWLINE]+2 [ICON_GOLD] Gold. Provides an increase to [ICON_Strength] Defense. Bonus to [ICON_Gold] Gold if adjacent to other segments. Additional [ICON_Culture] Culture and [ICON_Tourism] Tourism as you advance through the Technology Tree for adjacent segments. Must be built in a line along the borders of your empire. Can only be pillaged (never destroyed) by natural disasters.",
+      "zh_Hans_CN": "解锁建造者建造中国特色改良设施长城的能力。[NEWLINE][NEWLINE]+2 [ICON_GOLD] 金币。提升 [ICON_Strength] 防御力。如果和其他分段相邻，将获得 [ICON_Gold] 金币加成。随着科技进步，与长城分段相邻将获得额外的 [ICON_Culture] 文化值和 [ICON_Tourism] 旅游业绩。必须沿着帝国的边界线建造。仅能被自然灾害掠夺（不会遭到破坏）。"
     },
     "LOC_IMPROVEMENT_GREAT_WALL_NAME": {
       "en_US": "Great Wall",
       "zh_Hans_CN": "长城"
     },
     "LOC_IMPROVEMENT_ICE_HOCKEY_RINK_DESCRIPTION": {
-      "en_US": "Unlocks the Builder ability to construct an Ice Hockey Rink, unique to Canada.[NEWLINE][NEWLINE]+1 [ICON_AMENITIES] Amenity. +1 [ICON_CULTURE] Culture for each adjacent Tundra, Tundra Hills, Snow, and Snow Hills tile. Provides [ICON_Tourism] Tourism from Culture once Flight is unlocked. +2 [ICON_FOOD] Food and [ICON_PRODUCTION] Production once the Professional Sports civic is unlocked. +4 [ICON_CULTURE] Culture if adjacent to a Stadium building. Can be built on Tundra, Tundra Hills, Snow, and Snow Hills. One per city. +2 Appeal."
+      "en_US": "Unlocks the Builder ability to construct an Ice Hockey Rink, unique to Canada.[NEWLINE][NEWLINE]+1 [ICON_AMENITIES] Amenity. +1 [ICON_CULTURE] Culture for each adjacent Tundra, Tundra Hills, Snow, and Snow Hills tile. Provides [ICON_Tourism] Tourism from Culture once Flight is unlocked. +2 [ICON_FOOD] Food and [ICON_PRODUCTION] Production once the Professional Sports civic is unlocked. +4 [ICON_CULTURE] Culture if adjacent to a Stadium building. Can be built on Tundra, Tundra Hills, Snow, and Snow Hills. One per city. +2 Appeal.",
+      "zh_Hans_CN": "解锁建造者建造加拿大特色改良设施冰球场的能力。[NEWLINE][NEWLINE]+1 [ICON_AMENITIES] 宜居度；每个相邻的冻土、冻土丘陵、雪地、雪地丘陵单元格提供+1 [ICON_CULTURE] 文化值。解锁“飞行”科技后，文化值可提供 [ICON_Tourism] 旅游业绩。解锁“职业体育”市政后，+2 [ICON_FOOD] 食物和 [ICON_PRODUCTION] 生产力。若与建筑“体育场”相邻，+4 [ICON_CULTURE] 文化值。可以修建在冻土、冻土丘陵、雪地和雪地丘陵之上。每个城市只能修建1座，+2魅力。"
     },
     "LOC_IMPROVEMENT_ICE_HOCKEY_RINK_NAME": {
-      "en_US": "Ice Hockey Rink"
+      "en_US": "Ice Hockey Rink",
+      "zh_Hans_CN": "冰球场"
     },
     "LOC_IMPROVEMENT_KURGAN_DESCRIPTION": {
       "en_US": "Unlocks the Builder ability to construct a Kurgan, unique to Scythia.[NEWLINE][NEWLINE]+1 [ICON_Faith] Faith and +3 [ICON_Gold] Gold. +1 [ICON_Faith] Faith for each adjacent Pasture (becomes +2 after researching Stirrups). Provides [ICON_TOURISM] Tourism from [ICON_FAITH] Faith after researching Flight. Cannot be built on Hills.",
@@ -5795,10 +5929,12 @@
       "zh_Hans_CN": "伐木场"
     },
     "LOC_IMPROVEMENT_MAORI_PA_DESCRIPTION": {
-      "en_US": "Unlocks the Toa ability to construct a Pā, unique to Māori.[NEWLINE][NEWLINE]Occupying unit receives +4 [ICON_Strength] Defense Strength, and automatically gains 2 turns of fortification. A Māori unit occupying a Pā heals even if they just moved or attacked. Must be built on a Hill tile."
+      "en_US": "Unlocks the Toa ability to construct a Pā, unique to Māori.[NEWLINE][NEWLINE]Occupying unit receives +4 [ICON_Strength] Defense Strength, and automatically gains 2 turns of fortification. A Māori unit occupying a Pā heals even if they just moved or attacked. Must be built on a Hill tile.",
+      "zh_Hans_CN": "解锁托阿勇士建造毛利特色改良设施帕堡的能力。[NEWLINE][NEWLINE]驻扎单位获得+4 [ICON_Strength] 防御力，自动获得2回合的防御工事。毛利单位驻扎于帕堡中时，即便已进行移动或遭到攻击也能恢复生命值。必须建造在丘陵单元格上。"
     },
     "LOC_IMPROVEMENT_MAORI_PA_NAME": {
-      "en_US": "Pā"
+      "en_US": "Pā",
+      "zh_Hans_CN": "帕堡"
     },
     "LOC_IMPROVEMENT_MINE_DESCRIPTION": {
       "en_US": "Unlocks the Builder ability to construct Mines.[NEWLINE][NEWLINE]+1 [ICON_Production] Production. -1 Appeal. Can be built on hills or valid resources.[NEWLINE][NEWLINE]If built on Luxury or Strategic resources, the city will gain use of that resource.",
@@ -5817,7 +5953,8 @@
       "zh_Hans_CN": "解锁军事工程师能力来建造导弹发射井。[NEWLINE][NEWLINE]作为核装置和热核装置的发射地。"
     },
     "LOC_IMPROVEMENT_MISSION_EXPANSION2_DESCRIPTION": {
-      "en_US": "Unlocks the Builder ability to construct a Mission, unique to Spain.[NEWLINE][NEWLINE]+2 [ICON_Faith] Faith. +2 [ICON_Faith] Faith, +1 [ICON_PRODUCTION] Production, and +1 [ICON_FOod] Food if on a different continent than your [ICON_Capital] Capital. +1 [ICON_Science] Science for every adjacent Campus and Holy Site district. Additional [ICON_SCIENCE] Science once Cultural Heritage is discovered. +2 Loyalty per turn for cities with a Mission improvement adjacent to the City Center and not on your original [ICON_Capital] Capital's continent."
+      "en_US": "Unlocks the Builder ability to construct a Mission, unique to Spain.[NEWLINE][NEWLINE]+2 [ICON_Faith] Faith. +2 [ICON_Faith] Faith, +1 [ICON_PRODUCTION] Production, and +1 [ICON_FOod] Food if on a different continent than your [ICON_Capital] Capital. +1 [ICON_Science] Science for every adjacent Campus and Holy Site district. Additional [ICON_SCIENCE] Science once Cultural Heritage is discovered. +2 Loyalty per turn for cities with a Mission improvement adjacent to the City Center and not on your original [ICON_Capital] Capital's continent.",
+      "zh_Hans_CN": "解锁建造者建造西班牙特色建筑传教团的能力。[NEWLINE][NEWLINE]+2 [ICON_Faith] 信仰值。建在非 [ICON_Capital] 首都所在大陆上时，+2 [ICON_Faith] 信仰值、+1 [ICON_PRODUCTION] 生产力并+1 [ICON_Food] 食物。每与一所学院和圣地区域相邻便+1 [ICON_Science] 科技值。解锁“文化遗产”市政后将产出更多 [ICON_SCIENCE] 科技值。若城市拥有的传教团改良设施与市中心相邻，且处于非 [ICON_Capital] 首都所在大陆上，则每回合+2忠诚度。"
     },
     "LOC_IMPROVEMENT_MISSION_NAME": {
       "en_US": "Mission",
@@ -5840,10 +5977,12 @@
       "zh_Hans_CN": "卡霍基亚土墩"
     },
     "LOC_IMPROVEMENT_MOUNTAIN_ROAD_DESCRIPTION": {
-      "en_US": "Unlocks the Builder ability to construct a Qhapaq Ñan, unique to Pachacuti.[NEWLINE][NEWLINE]Acts as a movement portal on a mountain range, allowing units to move into it and exit from another portal at the cost of 2 [ICON_Movement] Movement. [ICON_TradeRoute] Trade Routes traveling through it can multiply the [ICON_Gold] Gold they get from districts at their destination. Can only be built on an adjacent Mountain tile. Cannot be pillaged or removed."
+      "en_US": "Unlocks the Builder ability to construct a Qhapaq Ñan, unique to Pachacuti.[NEWLINE][NEWLINE]Acts as a movement portal on a mountain range, allowing units to move into it and exit from another portal at the cost of 2 [ICON_Movement] Movement. [ICON_TradeRoute] Trade Routes traveling through it can multiply the [ICON_Gold] Gold they get from districts at their destination. Can only be built on an adjacent Mountain tile. Cannot be pillaged or removed.",
+      "zh_Hans_CN": "解锁建造者建造印加特色改良设施印加路网的能力。[NEWLINE][NEWLINE]其用作山脉地形上的移动通道，单位可消耗2点 [ICON_Movement] 移动力从一个点进入，再从另一个点走出。如 [ICON_TradeRoute] 贸易路线途径此处，其将从目的地的区域处获得成倍 [ICON_Gold] 金币。只能建在与山脉相邻的单元格上。无法被掠夺或移除。"
     },
     "LOC_IMPROVEMENT_MOUNTAIN_ROAD_NAME": {
-      "en_US": "Qhapaq Ñan"
+      "en_US": "Qhapaq Ñan",
+      "zh_Hans_CN": "印加路网"
     },
     "LOC_IMPROVEMENT_MOUNTAIN_TUNNEL_DESCRIPTION": {
       "en_US": "Unlocks the Military Engineer ability to construct a Mountain Tunnel.[NEWLINE][NEWLINE]Acts as a movement portal on a mountain range, allowing units to move into it and exit from another portal at the cost of 2 [ICON_Movement] Movement. [ICON_TradeRoute] Trade Routes traveling through it can multiply the [ICON_Gold] Gold they get from districts at their destination. Can only be built on an adjacent Mountain tile. Cannot be pillaged or removed.",
@@ -5886,10 +6025,12 @@
       "zh_Hans_CN": "油井"
     },
     "LOC_IMPROVEMENT_OPEN_AIR_MUSEUM_DESCRIPTION": {
-      "en_US": "Unlocks the Builder ability to construct an Open-Air Museum, unique to Sweden.[NEWLINE][NEWLINE]Provides +2 Loyalty per turn in this city. +2 [ICON_Culture] Culture and +2 [ICON_Tourism] Tourism for each type of terrain (Snow, Tundra, Desert, Plains or Grassland) in which at least one Swedish city is founded. One per city. Tiles with Open-Air Museums cannot be swapped."
+      "en_US": "Unlocks the Builder ability to construct an Open-Air Museum, unique to Sweden.[NEWLINE][NEWLINE]Provides +2 Loyalty per turn in this city. +2 [ICON_Culture] Culture and +2 [ICON_Tourism] Tourism for each type of terrain (Snow, Tundra, Desert, Plains or Grassland) in which at least one Swedish city is founded. One per city. Tiles with Open-Air Museums cannot be swapped.",
+      "zh_Hans_CN": "解锁建造者建造瑞典特色改良设施生态博物馆的能力。[NEWLINE][NEWLINE]每回合为城市+2忠诚度。每种地貌（雪地、冻土、沙漠、平原或草原）中的每座瑞典城市+2 [ICON_Culture] 文化值、+2 [ICON_Tourism] 旅游业绩。每个城市仅限建造一座。生态博物馆所在的单元格无法被替换更改。"
     },
     "LOC_IMPROVEMENT_OPEN_AIR_MUSEUM_NAME": {
-      "en_US": "Open-Air Museum"
+      "en_US": "Open-Air Museum",
+      "zh_Hans_CN": "生态博物馆"
     },
     "LOC_IMPROVEMENT_PASTURE_DESCRIPTION": {
       "en_US": "Unlocks the Builder ability to construct Pastures.[NEWLINE][NEWLINE]+1 [ICON_Production] Production. Can only be built on valid resources.[NEWLINE][NEWLINE]If built on Strategic resources, the city will gain use of that resource.",
@@ -5948,24 +6089,28 @@
       "zh_Hans_CN": "太阳能农场"
     },
     "LOC_IMPROVEMENT_SPHINX_EXPANSION2_DESCRIPTION": {
-      "en_US": "Unlocks the Builder ability to construct a Sphinx, unique to Egypt.[NEWLINE][NEWLINE]+1 [ICON_Faith] Faith and +1 [ICON_Culture] Culture. +2 Appeal. +2 [ICON_Faith] Faith if next to a wonder. +1 [ICON_CULTURE] Culture if built on Floodplains. Additional [ICON_CULTURE] Culture once Natural History is discovered. Provides [ICON_TOURISM] Tourism after researching Flight. Cannot be built next to another Sphinx. Cannot be built on Snow or Snow Hills."
+      "en_US": "Unlocks the Builder ability to construct a Sphinx, unique to Egypt.[NEWLINE][NEWLINE]+1 [ICON_Faith] Faith and +1 [ICON_Culture] Culture. +2 Appeal. +2 [ICON_Faith] Faith if next to a wonder. +1 [ICON_CULTURE] Culture if built on Floodplains. Additional [ICON_CULTURE] Culture once Natural History is discovered. Provides [ICON_TOURISM] Tourism after researching Flight. Cannot be built next to another Sphinx. Cannot be built on Snow or Snow Hills.",
+      "zh_Hans_CN": "解锁建造者建造埃及特色狮身人面像的能力。[NEWLINE][NEWLINE]+1 [ICON_Faith] 信仰值、+1 [ICON_Culture] 文化值。+2魅力。如果与奇观相邻，+2 [ICON_Faith] 信仰值。如建在泛滥平原上，+1 [ICON_CULTURE] 文化值。获得“自然历史”市政后将产出更多 [ICON_CULTURE] 文化值。研究完“飞行”后其将提供 [ICON_TOURISM] 旅游业绩。无法建在另一个狮身人面像旁。无法建在雪地或雪地丘陵上。"
     },
     "LOC_IMPROVEMENT_SPHINX_NAME": {
       "en_US": "Sphinx",
       "zh_Hans_CN": "狮身人面像"
     },
     "LOC_IMPROVEMENT_STEPWELL_EXPANSION2_DESCRIPTION": {
-      "en_US": "Unlocks the Builder ability to construct a Stepwell, unique to India.[NEWLINE][NEWLINE]+1 [ICON_Food] Food and +1 [ICON_Housing] Housing. +1 [ICON_Faith] Faith if adjacent to a Holy Site district. +1 [ICON_Food] Food if adjacent to a Farm. Additional [ICON_Housing] Housing, [ICON_Faith] Faith, and [ICON_Food] Food as you advance through the Technology and Civics Tree. Prevents [ICON_Food] Food loss during Drought. Cannot be built on Hills or adjacent to another Stepwell."
+      "en_US": "Unlocks the Builder ability to construct a Stepwell, unique to India.[NEWLINE][NEWLINE]+1 [ICON_Food] Food and +1 [ICON_Housing] Housing. +1 [ICON_Faith] Faith if adjacent to a Holy Site district. +1 [ICON_Food] Food if adjacent to a Farm. Additional [ICON_Housing] Housing, [ICON_Faith] Faith, and [ICON_Food] Food as you advance through the Technology and Civics Tree. Prevents [ICON_Food] Food loss during Drought. Cannot be built on Hills or adjacent to another Stepwell.",
+      "zh_Hans_CN": "解锁建造者建造印度特色改良设施梯井的能力。[NEWLINE][NEWLINE]提供+1点 [ICON_Food] 食物并+1 [ICON_Housing] 住房。如与圣地区域相邻，+1 [ICON_Faith] 信仰值。如与农场相邻，+1 [ICON_Food] 食物。随着科技和市政的发展，其将提供更多 [ICON_Housing] 住房、[ICON_Faith] 信仰值和 [ICON_Food] 食物。干旱期间可防止 [ICON_Food] 食物损失。不能建在丘陵上，不能建在另一个梯井旁。"
     },
     "LOC_IMPROVEMENT_STEPWELL_NAME": {
       "en_US": "Stepwell",
       "zh_Hans_CN": "梯井"
     },
     "LOC_IMPROVEMENT_TERRACE_FARM_DESCRIPTION": {
-      "en_US": "Unlocks the Builder ability to construct a Terrace Farm, unique to the Inca.[NEWLINE][NEWLINE]+1 [ICON_FOOD] Food. Provides +1 [ICON_Housing] Housing. +1 [ICON_FOOD] Food for each adjacent Mountain Tile. Gain +2 [ICON_PRODUCTION] Production for each adjacent Aqueduct district. Receive +1 [ICON_PRODUCTION] Production if adjacent to Fresh Water and not an Aqueduct district. Additional [ICON_FOOD] Food as you advance through the Civics and Technology Tree for adjacency with other Terrace Farms. Can be placed on Grassland Hills, Plains Hills, and Desert Hills."
+      "en_US": "Unlocks the Builder ability to construct a Terrace Farm, unique to the Inca.[NEWLINE][NEWLINE]+1 [ICON_FOOD] Food. Provides +1 [ICON_Housing] Housing. +1 [ICON_FOOD] Food for each adjacent Mountain Tile. Gain +2 [ICON_PRODUCTION] Production for each adjacent Aqueduct district. Receive +1 [ICON_PRODUCTION] Production if adjacent to Fresh Water and not an Aqueduct district. Additional [ICON_FOOD] Food as you advance through the Civics and Technology Tree for adjacency with other Terrace Farms. Can be placed on Grassland Hills, Plains Hills, and Desert Hills.",
+      "zh_Hans_CN": "解锁建造者建造印加特色建筑梯田农场的能力。[NEWLINE][NEWLINE]+1 [ICON_FOOD] 食物。+1 [ICON_Housing] 住房。每与一个山脉单元格相邻则+1 [ICON_FOOD] 食物。每与一个水渠区域相邻则+2 [ICON_PRODUCTION] 生产力。与淡水资源（非水渠区域）相邻时，+1 [ICON_PRODUCTION] 生产力。随着市政与科技的发展，与其他印加梯田相邻时还可获得更多 [ICON_FOOD] 食物。可建在草原丘陵、平原丘陵与沙漠丘陵上。"
     },
     "LOC_IMPROVEMENT_TERRACE_FARM_NAME": {
-      "en_US": "Terrace Farm"
+      "en_US": "Terrace Farm",
+      "zh_Hans_CN": "梯田农场"
     },
     "LOC_IMPROVEMENT_WIND_FARM_DESCRIPTION": {
       "en_US": "Unlocks the Builder ability to construct a Wind Farm.[NEWLINE][NEWLINE]+2 [ICON_Gold] Gold. +1 [ICON_Production] Production. Provides 2 [ICON_Power] Power per turn. Must be built on Hills terrain.",
@@ -9216,15 +9361,19 @@
       "zh_Hans_CN": "贸易银行"
     },
     "LOC_PROJECT_BREAD_AND_CIRCUSES_DESCRIPTION": {
+      "en_US": "City project which increases the Loyalty pressure that this city exerts on itself and other cities nearby.[NEWLINE][NEWLINE]While active, each of your [ICON_Citizen] Citizens here exerts +0.5 Loyalty pressure to this city. This pressure also affects other cities within 9 tiles, but is 10% less effective per tile. Once completed, instantly gain +20 Loyalty in this city.[NEWLINE][NEWLINE]Requires: Entertainment Complex district.",
       "zh_Hans_CN": "城市项目，可增加此城市对自身和对附近其他城市施加的忠诚度压力。[NEWLINE][NEWLINE]项目启动后，每位 [ICON_Citizen] 公民每回合对此城所施加的忠诚度压力+0.5。此忠诚度压力还将影响9个单元格以内的其他城市，但每远离1个单元格，效果减弱10%。项目完成后此城立即+20忠诚度。[NEWLINE][NEWLINE]需要先建成“娱乐设施”区域。"
     },
     "LOC_PROJECT_BREAD_AND_CIRCUSES_DESCRIPTION_ALT": {
+      "en_US": "City project which increases the Loyalty pressure that this city exerts on itself and other cities nearby.[NEWLINE][NEWLINE]While active, each of your [ICON_Citizen] Citizens here exert +1 Loyalty pressure to this city. This pressure also affects other cities within 9 tiles, but is 10% less effective per tile. Once completed, instantly gain +20 Loyalty in this city.[NEWLINE][NEWLINE]Requires: Water Park district.",
       "zh_Hans_CN": "城市项目，可增加此城市对自身和对附近其他城市施加的忠诚度压力。[NEWLINE][NEWLINE]项目启动后，每位 [ICON_Citizen] 公民每回合对此城所施加的忠诚度压力+1。此忠诚度压力还将影响9个单元格以内的其他城市，但每远离1个单元格，效果减弱10%。项目完成后此城立即+20忠诚度。[NEWLINE][NEWLINE]需要先建成“水上乐园”区域。"
     },
     "LOC_PROJECT_BREAD_AND_CIRCUSES_NAME": {
+      "en_US": "Bread and Circuses",
       "zh_Hans_CN": "面包和马戏"
     },
     "LOC_PROJECT_BREAD_AND_CIRCUSES_SHORT_NAME": {
+      "en_US": "Bread and Circuses",
       "zh_Hans_CN": "面包和马戏"
     },
     "LOC_PROJECT_BUILD_NUCLEAR_DEVICE_DESCRIPTION": {
@@ -9624,15 +9773,19 @@
       "zh_Hans_CN": "训练运动员"
     },
     "LOC_PROJECT_WATER_BREAD_AND_CIRCUSES_SHORT_NAME": {
+      "en_US": "Bread and Circuses (Coastal)",
       "zh_Hans_CN": "面包和马戏（海滨）"
     },
     "LOC_PROJECT_WATER_CARNIVAL_DESCRIPTION": {
+      "en_US": "Brazilian unique project which provides +1 [ICON_Amenities] Amenity when active and [ICON_GreatPerson] Great Person Points for [ICON_GreatEngineer] Great Engineers, [ICON_GreatMerchant] Great Merchants, [ICON_GreatWriter] Great Writers, [ICON_GreatArtist] Great Artists, and [ICON_GreatMusician] Great Musicians once finished.",
       "zh_Hans_CN": "巴西特色项目，启用后+1 [ICON_Amenities] 宜居度，完成后为 [ICON_GreatEngineer] 大工程师、 [ICON_GreatMerchant] 大商人、 [ICON_GreatWriter] 大作家、 [ICON_GreatArtist] 大艺术家和 [ICON_GreatMusician] 大音乐家提供 [ICON_GreatPerson] 伟人点数。"
     },
     "LOC_PROJECT_WATER_CARNIVAL_NAME": {
+      "en_US": "Carnival",
       "zh_Hans_CN": "狂欢节"
     },
     "LOC_PROJECT_WATER_CARNIVAL_SHORT_NAME": {
+      "en_US": "Carnival (Coastal)",
       "zh_Hans_CN": "狂欢节（海滨）"
     },
     "LOC_PROMOTION_ADVANCED_ENGINES_DESCRIPTION": {
@@ -9652,9 +9805,11 @@
       "zh_Hans_CN": "先进测距"
     },
     "LOC_PROMOTION_ALBUM_COVER_ART_DESCRIPTION": {
+      "en_US": "Performs as if 1 level more experienced on wonder tiles.",
       "zh_Hans_CN": "在奇观单元格中的表演效果提升1个等级。"
     },
     "LOC_PROMOTION_ALBUM_COVER_ART_NAME": {
+      "en_US": "Album Cover Art",
       "zh_Hans_CN": "专辑封面"
     },
     "LOC_PROMOTION_ALPINE_DESCRIPTION": {
@@ -9682,9 +9837,11 @@
       "zh_Hans_CN": "水陆两栖"
     },
     "LOC_PROMOTION_ARENA_ROCK_DESCRIPTION": {
+      "en_US": "Performs as if 2 levels more experienced on Entertainment Complex district tiles.",
       "zh_Hans_CN": "娱乐设施区域单元格中的表演效果提升2个等级。"
     },
     "LOC_PROMOTION_ARENA_ROCK_NAME": {
+      "en_US": "Arena Rock",
       "zh_Hans_CN": "舞台摇滚"
     },
     "LOC_PROMOTION_ARMOR_PIERCING_DESCRIPTION": {
@@ -10008,39 +10165,51 @@
       "zh_Hans_CN": "驻军"
     },
     "LOC_PROMOTION_GDR_AA_DEFENSE_DESCRIPTION": {
+      "en_US": "[ICON_AntiAir_Large] Anti-Air Defense Strength increased to 130.",
       "zh_Hans_CN": "[ICON_AntiAir_Large] 对空防御力增至130点。"
     },
     "LOC_PROMOTION_GDR_AA_DEFENSE_NAME": {
+      "en_US": "Drone Air Defense",
       "zh_Hans_CN": "无人机防空"
     },
     "LOC_PROMOTION_GDR_ARMOR_UPGRADE_DESCRIPTION": {
+      "en_US": "+10 [ICON_Strength] Combat Strength when defending against land and naval units.",
       "zh_Hans_CN": "防御陆地与海军单位的攻击时+10 [ICON_Strength] 战斗力。"
     },
     "LOC_PROMOTION_GDR_ARMOR_UPGRADE_NAME": {
+      "en_US": "Reinforced Armor Plating",
       "zh_Hans_CN": "强力装甲"
     },
     "LOC_PROMOTION_GDR_BONUS_MOVEMENT_DESCRIPTION": {
+      "en_US": "+3 [ICON_Movement] Movement. Can perform a Jump action to cross over mountain terrain.",
       "zh_Hans_CN": "+3 [ICON_Movement] 移动力。可进行1次跳跃，跨过山脉地貌。"
     },
     "LOC_PROMOTION_GDR_BONUS_MOVEMENT_NAME": {
+      "en_US": "Enhanced Mobility",
       "zh_Hans_CN": "增强机动"
     },
     "LOC_PROMOTION_GDR_SIEGE_LASER_DESCRIPTION": {
+      "en_US": "Ranged attacks against Cities and Encampments are 100% effective and gain +30 [ICON_Ranged] Ranged Strength.",
       "zh_Hans_CN": "对城市和军营进行远程攻击的效率为100%，+30 [ICON_Ranged] 远程攻击力。"
     },
     "LOC_PROMOTION_GDR_SIEGE_LASER_NAME": {
+      "en_US": "Particle Beam Siege Cannon",
       "zh_Hans_CN": "粒子束攻城巨炮"
     },
     "LOC_PROMOTION_GLAM_ROCK_DESCRIPTION": {
+      "en_US": "Performs as if 2 levels more experienced on Theater Square district tiles.",
       "zh_Hans_CN": "剧院广场区域单元格中的表演效果提升2个等级。"
     },
     "LOC_PROMOTION_GLAM_ROCK_NAME": {
+      "en_US": "Glam Rock",
       "zh_Hans_CN": "华丽摇滚"
     },
     "LOC_PROMOTION_GOES_TO_DESCRIPTION": {
+      "en_US": "Civilizations within 10 tiles receive 50% of the [ICON_TOURISM] Tourism from this concert.",
       "zh_Hans_CN": "10个单元格内的文明获得本场音乐会50%的 [ICON_TOURISM] 旅游业绩。"
     },
     "LOC_PROMOTION_GOES_TO_NAME": {
+      "en_US": "Goes to 11",
       "zh_Hans_CN": "音量爆表"
     },
     "LOC_PROMOTION_GRAPE_SHOT_DESCRIPTION": {
@@ -10116,9 +10285,11 @@
       "zh_Hans_CN": "燃烧弹"
     },
     "LOC_PROMOTION_INDIE_DESCRIPTION": {
+      "en_US": "Performing a concert causes that city to lose 40 Loyalty.",
       "zh_Hans_CN": "举办音乐会将导致城市失去40点忠诚度。"
     },
     "LOC_PROMOTION_INDIE_NAME": {
+      "en_US": "Indie",
       "zh_Hans_CN": "独立摇滚"
     },
     "LOC_PROMOTION_INDULGENCE_VENDOR_DESCRIPTION": {
@@ -10234,9 +10405,11 @@
       "zh_Hans_CN": "迷魂幕"
     },
     "LOC_PROMOTION_MUSIC_FESTIVAL_DESCRIPTION": {
+      "en_US": "Performs at National Parks and Natural Wonders for expected 1000 [ICON_TOURISM] Tourism and 1 level more experienced.",
       "zh_Hans_CN": "国家公园和自然奇观中的表演效果提升1个等级，预计将获得1000点 [ICON_TOURISM] 旅游业绩。"
     },
     "LOC_PROMOTION_MUSIC_FESTIVAL_NAME": {
+      "en_US": "Music Festival",
       "zh_Hans_CN": "音乐节"
     },
     "LOC_PROMOTION_OBSERVATION_DESCRIPTION": {
@@ -10264,9 +10437,11 @@
       "zh_Hans_CN": "朝圣者"
     },
     "LOC_PROMOTION_POP_DESCRIPTION": {
+      "en_US": "Earn [ICON_GOLD] Gold equal to 25% of the [ICON_Tourism] Tourism generated.",
       "zh_Hans_CN": "获得等同于产生 [ICON_Tourism] 旅游业绩额度25%的 [ICON_GOLD] 金币。"
     },
     "LOC_PROMOTION_POP_NAME": {
+      "en_US": "Pop Star",
       "zh_Hans_CN": "流行巨星"
     },
     "LOC_PROMOTION_PREPARATORY_FIRE_DESCRIPTION": {
@@ -10326,9 +10501,11 @@
       "zh_Hans_CN": "重新部署"
     },
     "LOC_PROMOTION_REGGAE_ROCK_DESCRIPTION": {
+      "en_US": "Performs as if 2 levels more experienced on Water Park district tiles.",
       "zh_Hans_CN": "水上乐园区域单元格中的表演效果提升2个等级。"
     },
     "LOC_PROMOTION_REGGAE_ROCK_NAME": {
+      "en_US": "Reggae Rock",
       "zh_Hans_CN": "雷鬼音乐"
     },
     "LOC_PROMOTION_REINFORCED_HULL_DESCRIPTION": {
@@ -10340,15 +10517,19 @@
       "zh_Hans_CN": "加固船壳"
     },
     "LOC_PROMOTION_RELIGIOUS_ROCK_DESCRIPTION": {
+      "en_US": "Performs a concert that converts the majority religion of that city to the religion founded by the player.",
       "zh_Hans_CN": "举办音乐会将使此城市皈依文明创立的宗教。"
     },
     "LOC_PROMOTION_RELIGIOUS_ROCK_NAME": {
+      "en_US": "Religious Rock",
       "zh_Hans_CN": "宗教摇滚"
     },
     "LOC_PROMOTION_ROADIES_DESCRIPTION": {
+      "en_US": "+4 [ICON_Movement] Movement.",
       "zh_Hans_CN": "+4 [ICON_Movement] 移动力。"
     },
     "LOC_PROMOTION_ROADIES_NAME": {
+      "en_US": "Roadies",
       "zh_Hans_CN": "乐队管家"
     },
     "LOC_PROMOTION_ROLLING_BARRAGE_DESCRIPTION": {
@@ -10424,9 +10605,11 @@
       "zh_Hans_CN": "无声运行"
     },
     "LOC_PROMOTION_SPACE_ROCK_DESCRIPTION": {
+      "en_US": "Performs at Spaceports and Campuses for +500 [ICON_TOURISM] Tourism (+1000 [ICON_TOURISM] Tourism if Campus has a University) and 1 level more experienced.",
       "zh_Hans_CN": "在宇航中心和学院中的表演效果提升1个等级，+500 [ICON_TOURISM] 旅游业绩（如学院拥有大学，则+1000 [ICON_TOURISM] 旅游业绩）。"
     },
     "LOC_PROMOTION_SPACE_ROCK_NAME": {
+      "en_US": "Space Rock",
       "zh_Hans_CN": "太空摇滚"
     },
     "LOC_PROMOTION_SPIKING_THE_GUNS_DESCRIPTION": {
@@ -10518,9 +10701,11 @@
       "zh_Hans_CN": "语言学家"
     },
     "LOC_PROMOTION_SPY_POLYGRAPH_DESCRIPTION": {
+      "en_US": "If this Spy is in home territory, enemy Spies in your lands operate at 1 level below usual.",
       "zh_Hans_CN": "如果该间谍处于本国领土中，境内敌方间谍的行动等级-1。"
     },
     "LOC_PROMOTION_SPY_POLYGRAPH_NAME": {
+      "en_US": "Polygraph",
       "zh_Hans_CN": "测谎仪"
     },
     "LOC_PROMOTION_SPY_QUARTERMASTER_DESCRIPTION": {
@@ -10540,9 +10725,11 @@
       "zh_Hans_CN": "火箭专家"
     },
     "LOC_PROMOTION_SPY_SATCHEL_CHARGES_DESCRIPTION": {
+      "en_US": "Breach Dam as if 2 levels more experienced.",
       "zh_Hans_CN": "2级破坏堤坝能力，有更高几率成功破坏堤坝。"
     },
     "LOC_PROMOTION_SPY_SATCHEL_CHARGES_NAME": {
+      "en_US": "Satchel Charges",
       "zh_Hans_CN": "爆炸装置"
     },
     "LOC_PROMOTION_SPY_SEDUCTION_DESCRIPTION": {
@@ -10562,9 +10749,11 @@
       "zh_Hans_CN": "恶意抹黑"
     },
     "LOC_PROMOTION_SPY_SURVEILLANCE_DESCRIPTION": {
+      "en_US": "When Counterspying all city districts are defended (and +1 level at districts within 1 hex).",
       "zh_Hans_CN": "进行反间谍时效果将覆盖所有城市区域（1格位内的区域将+1等级）。"
     },
     "LOC_PROMOTION_SPY_SURVEILLANCE_NAME": {
+      "en_US": "Surveillance",
       "zh_Hans_CN": "监视"
     },
     "LOC_PROMOTION_SPY_TECHNOLOGIST_DESCRIPTION": {
@@ -10624,9 +10813,11 @@
       "zh_Hans_CN": "压制"
     },
     "LOC_PROMOTION_SURF_ROCK_DESCRIPTION": {
+      "en_US": "Performs at Seaside Resorts and Harbors for +500 [ICON_TOURISM] Tourism (+1000 [ICON_TOURISM] Tourism if Harbor has a Shipyard) and 1 level more experienced.",
       "zh_Hans_CN": "在海滨度假区和港口中的表演效果提升1个等级，+500 [ICON_TOURISM] 旅游业绩（如港口拥有造船厂，则+1000 [ICON_TOURISM] 旅游业绩）。"
     },
     "LOC_PROMOTION_SURF_ROCK_NAME": {
+      "en_US": "Surf Band",
       "zh_Hans_CN": "冲浪摇滚"
     },
     "LOC_PROMOTION_SWIFT_KEEL_DESCRIPTION": {
@@ -11874,7 +12065,8 @@
       "zh_Hans_CN": "P-51战斗机"
     },
     "LOC_UNIT_AMERICAN_ROUGH_RIDER_EXPANSION2_DESCRIPTION": {
-      "en_US": "American unique Industrial era unit when Teddy Roosevelt is their leader that replaces the Cuirassiers. [ICON_Culture] Culture is earned from kills on their [ICON_Capital] Capital's continent. +10 [ICON_Strength] Combat Strength when fighting on Hills. Lower maintenance cost."
+      "en_US": "American unique Industrial era unit when Teddy Roosevelt is their leader that replaces the Cuirassiers. [ICON_Culture] Culture is earned from kills on their [ICON_Capital] Capital's continent. +10 [ICON_Strength] Combat Strength when fighting on Hills. Lower maintenance cost.",
+      "zh_Hans_CN": "泰迪·罗斯福作为领袖时的工业时代美国特色单位，替代胸甲骑兵。在首都所处大陆上击杀敌人后将获得 [ICON_Culture] 文化值。在丘陵地形作战时+10 [ICON_Strength] 战斗力。维护费用更低。"
     },
     "LOC_UNIT_AMERICAN_ROUGH_RIDER_NAME": {
       "en_US": "Rough Rider",
@@ -12017,10 +12209,12 @@
       "zh_Hans_CN": "建造者"
     },
     "LOC_UNIT_CANADA_MOUNTIE_DESCRIPTION": {
-      "en_US": "Canadian unique Modern era unit. Can create 2 National Parks. +5 [ICON_Strength] Combat Strength when fighting within 2 tiles of a National Park. Additional +5 [ICON_Strength] Combat Strength when fighting within 2 tiles of a National Park you own."
+      "en_US": "Canadian unique Modern era unit. Can create 2 National Parks. +5 [ICON_Strength] Combat Strength when fighting within 2 tiles of a National Park. Additional +5 [ICON_Strength] Combat Strength when fighting within 2 tiles of a National Park you own.",
+      "zh_Hans_CN": "现代加拿大特色单位。可创建2座国家公园。在国家公园附近的2个单元格内战斗时+5 [ICON_Strength] 战斗力。如果为本方国家公园，则在加成基础上额外再+5 [ICON_Strength] 战斗力。"
     },
     "LOC_UNIT_CANADA_MOUNTIE_NAME": {
-      "en_US": "Mountie"
+      "en_US": "Mountie",
+      "zh_Hans_CN": "皇家骑警"
     },
     "LOC_UNIT_CARAVEL_DESCRIPTION": {
       "en_US": "Fast Renaissance era exploration melee naval unit.",
@@ -12095,7 +12289,8 @@
       "zh_Hans_CN": "无人机"
     },
     "LOC_UNIT_EGYPTIAN_CHARIOT_ARCHER_EXPANSION2_DESCRIPTION": {
-      "en_US": "Egyptian unique Ancient era ranged unit. 4 [ICON_Movement] Movement when starting in open terrain."
+      "en_US": "Egyptian unique Ancient era ranged unit. 4 [ICON_Movement] Movement when starting in open terrain.",
+      "zh_Hans_CN": "埃及特色远古时代远程单位。如初始位置为开放地貌，则拥有4点 [ICON_Movement] 移动力。"
     },
     "LOC_UNIT_EGYPTIAN_CHARIOT_ARCHER_NAME": {
       "en_US": "Maryannu Chariot Archer",
@@ -12286,22 +12481,28 @@
       "zh_Hans_CN": "骑手"
     },
     "LOC_UNIT_HUNGARY_BLACK_ARMY_DESCRIPTION": {
-      "en_US": "Hungarian unique Medieval Era unit that replaces the Courser. +3 [ICON_Strength] Combat Strength for each adjacent Levied unit."
+      "en_US": "Hungarian unique Medieval Era unit that replaces the Courser. +3 [ICON_Strength] Combat Strength for each adjacent Levied unit.",
+      "zh_Hans_CN": "匈牙利中世纪特色单位，取代追猎者。[NEWLINE]每个相邻征集单位提供+3 [ICON_Strength] 战斗力。"
     },
     "LOC_UNIT_HUNGARY_BLACK_ARMY_NAME": {
-      "en_US": "Black Army"
+      "en_US": "Black Army",
+      "zh_Hans_CN": "黑军"
     },
     "LOC_UNIT_HUNGARY_HUSZAR_DESCRIPTION": {
-      "en_US": "Hungarian unique Industrial era unit that replaces Cavalry. +3 [ICON_Strength] Combat Strength for every active Alliance."
+      "en_US": "Hungarian unique Industrial era unit that replaces Cavalry. +3 [ICON_Strength] Combat Strength for every active Alliance.",
+      "zh_Hans_CN": "匈牙利工业时代特色单位，取代骑兵。[NEWLINE]每个有效同盟提供+3 [ICON_Strength] 战斗力。"
     },
     "LOC_UNIT_HUNGARY_HUSZAR_NAME": {
-      "en_US": "Huszár"
+      "en_US": "Huszár",
+      "zh_Hans_CN": "骠骑兵"
     },
     "LOC_UNIT_INCA_WARAKAQ_DESCRIPTION": {
-      "en_US": "Incan unique Medieval Era unit that replaces the Skirmisher. Stronger at ranged combat than the Skirmisher and +1 additional attack per turn."
+      "en_US": "Incan unique Medieval Era unit that replaces the Skirmisher. Stronger at ranged combat than the Skirmisher and +1 additional attack per turn.",
+      "zh_Hans_CN": "印加中世纪特色单位，取代散兵。远程战斗力强于散兵，每回合+1额外攻击。"
     },
     "LOC_UNIT_INCA_WARAKAQ_NAME": {
-      "en_US": "Warak’aq"
+      "en_US": "Warak’aq",
+      "zh_Hans_CN": "瓦剌卡战士"
     },
     "LOC_UNIT_INDIAN_VARU_DESCRIPTION": {
       "en_US": "Indian unique Classical era heavy cavalry unit.  Adjacent enemy units receive -5 [ICON_STRENGTH] Combat Strength.",
@@ -12392,10 +12593,12 @@
       "zh_Hans_CN": "机关枪队"
     },
     "LOC_UNIT_MALI_MANDEKALU_CAVALRY_DESCRIPTION": {
-      "en_US": "Mali unique Medieval Era unit that replaces the Knight. Trader units are immune to being plundered if they are within 4 tiles of a Mandekalu Cavalry and on a land tile. Combat victories provide [ICON_GOLD] Gold equal to 100% of that unit's base [ICON_Strength] Combat Strength (on Standard Speed)."
+      "en_US": "Mali unique Medieval Era unit that replaces the Knight. Trader units are immune to being plundered if they are within 4 tiles of a Mandekalu Cavalry and on a land tile. Combat victories provide [ICON_GOLD] Gold equal to 100% of that unit's base [ICON_Strength] Combat Strength (on Standard Speed).",
+      "zh_Hans_CN": "马里中世纪特色单位，取代骑士。位于陆地且与曼德卡鲁骑兵相距4个单元格内的商人单位可免遭掠夺。战斗胜利后，可获得等同于被击杀单位基础 [ICON_Strength] 战斗力数值的 [ICON_GOLD] 金币（标准速度下）。"
     },
     "LOC_UNIT_MALI_MANDEKALU_CAVALRY_NAME": {
-      "en_US": "Mandekalu Cavalry"
+      "en_US": "Mandekalu Cavalry",
+      "zh_Hans_CN": "曼德卡鲁骑兵"
     },
     "LOC_UNIT_MAN_AT_ARMS_DESCRIPTION": {
       "en_US": "Medieval Era melee unit.",
@@ -12406,10 +12609,12 @@
       "zh_Hans_CN": "披甲战士"
     },
     "LOC_UNIT_MAORI_TOA_DESCRIPTION": {
-      "en_US": "Māori unique Classical era melee unit. Adjacent enemy units receive -5 [ICON_STRENGTH] Combat Strength. Can build the unique Pā improvement."
+      "en_US": "Māori unique Classical era melee unit. Adjacent enemy units receive -5 [ICON_STRENGTH] Combat Strength. Can build the unique Pā improvement.",
+      "zh_Hans_CN": "毛利古典时代特色近战单位。与其相邻的敌方单位 [ICON_Strength] 战斗力-5。能够建造特色改良设施“帕堡”。"
     },
     "LOC_UNIT_MAORI_TOA_NAME": {
-      "en_US": "Toa"
+      "en_US": "Toa",
+      "zh_Hans_CN": "托阿勇士"
     },
     "LOC_UNIT_MECHANIZED_INFANTRY_DESCRIPTION": {
       "en_US": "Information era melee unit.",
@@ -12524,16 +12729,20 @@
       "zh_Hans_CN": "观测气球"
     },
     "LOC_UNIT_OTTOMAN_BARBARY_CORSAIR_DESCRIPTION": {
-      "en_US": "Ottoman unique Medieval era naval unit that replaces the Privateer. It costs no [ICON_Movement] Movement to coastal raid. Can only be seen by other Naval Raiders unless adjacent to it. Reveals Naval Raiders within sight range."
+      "en_US": "Ottoman unique Medieval era naval unit that replaces the Privateer. It costs no [ICON_Movement] Movement to coastal raid. Can only be seen by other Naval Raiders unless adjacent to it. Reveals Naval Raiders within sight range.",
+      "zh_Hans_CN": "中世纪奥斯曼特色海军单位，取代私掠船。进行海岸扫荡时无需花费 [ICON_Movement] 移动力。除非与单位相邻，否则只能被其他海军袭击者发现。能使视线范围中的海军袭击者暴露位置。"
     },
     "LOC_UNIT_OTTOMAN_BARBARY_CORSAIR_NAME": {
-      "en_US": "Barbary Corsair"
+      "en_US": "Barbary Corsair",
+      "zh_Hans_CN": "巴巴里海盗"
     },
     "LOC_UNIT_PHOENICIA_BIREME_DESCRIPTION": {
-      "en_US": "Phoenician unique Ancient Era unit that replaces the Galley. Increased [ICON_Strength] Combat Strength and [ICON_Movement] Movement. Trader units are immune to being plundered if they are within 4 tiles of a Bireme and on a water tile."
+      "en_US": "Phoenician unique Ancient Era unit that replaces the Galley. Increased [ICON_Strength] Combat Strength and [ICON_Movement] Movement. Trader units are immune to being plundered if they are within 4 tiles of a Bireme and on a water tile.",
+      "zh_Hans_CN": "腓尼基远古时代特色单位，取代桨帆船。[ICON_Strength] 战斗力及 [ICON_Movement] 移动力均有所提升。位于水域且与双层桨座战船相距4个单元格内的贸易单位可免遭掠夺。"
     },
     "LOC_UNIT_PHOENICIA_BIREME_NAME": {
-      "en_US": "Bireme"
+      "en_US": "Bireme",
+      "zh_Hans_CN": "双层桨座战船"
     },
     "LOC_UNIT_PIKEMAN_DESCRIPTION": {
       "en_US": "Medieval era anti-cavalry unit.",
@@ -12696,10 +12905,12 @@
       "zh_Hans_CN": "潜艇"
     },
     "LOC_UNIT_SULEIMAN_JANISSARY_DESCRIPTION": {
-      "en_US": "Ottoman unique Renaissance Era unit that replaces the Musketman. Starts with a free promotion. Stronger and cheaper than the Musketman. To train a Janissary a city must have a population of at least 2. If a city is founded by the Ottomans and trains a Janissary it loses a population."
+      "en_US": "Ottoman unique Renaissance Era unit that replaces the Musketman. Starts with a free promotion. Stronger and cheaper than the Musketman. To train a Janissary a city must have a population of at least 2. If a city is founded by the Ottomans and trains a Janissary it loses a population.",
+      "zh_Hans_CN": "奥斯曼文艺复兴特色单位，取代火枪手。初始便拥有一项免费升级。强于火枪手，但价格更低。城市必须拥有至少2点人口才可训练苏丹亲兵。奥斯曼建立的城市在训练苏丹亲兵后将失去1点人口。"
     },
     "LOC_UNIT_SULEIMAN_JANISSARY_NAME": {
-      "en_US": "Janissary"
+      "en_US": "Janissary",
+      "zh_Hans_CN": "苏丹亲兵"
     },
     "LOC_UNIT_SUMERIAN_WAR_CART_DESCRIPTION": {
       "en_US": "Sumerian unique Ancient era unit. Stronger than all other starting units. No penalties against anti-cavalry units. 4 [ICON_Movement] Movement if this unit starts in open terrain.",
@@ -12718,10 +12929,12 @@
       "zh_Hans_CN": "补给车队"
     },
     "LOC_UNIT_SWEDEN_CAROLEAN_DESCRIPTION": {
-      "en_US": "Swedish unique Renaissance Era unit that replaces the Pike and Shot. Faster than the Pike and Shot. +3 [ICON_Strength] Combat Strength per unused [ICON_Movement] Movement."
+      "en_US": "Swedish unique Renaissance Era unit that replaces the Pike and Shot. Faster than the Pike and Shot. +3 [ICON_Strength] Combat Strength per unused [ICON_Movement] Movement.",
+      "zh_Hans_CN": "瑞典文艺复兴特色单位，取代枪刺与射击方阵，速度较其更快。每点未使用的 [ICON_Movement] 移动力提供+3 [ICON_Strength] 战斗力。"
     },
     "LOC_UNIT_SWEDEN_CAROLEAN_NAME": {
-      "en_US": "Carolean"
+      "en_US": "Carolean",
+      "zh_Hans_CN": "卡洛林步兵"
     },
     "LOC_UNIT_SWORDSMAN_DESCRIPTION": {
       "en_US": "Strong Classical era melee unit.",
@@ -12796,7 +13009,8 @@
       "zh_Hans_CN": "抢先累积足够数量的外交胜利点数后即可达成[COLOR:DiplomaticLabelCS]外交[ENDCOLOR]胜利。投票支持的目标和项目通过世界议会决议后，即可获得1点外交胜利点数。利用世界议会中的外交胜利提案即可获得更多胜利点数，方法有：在请求援助中得到最高分；研究“海洋家园”科技；解锁“全球变暖减缓学”市政；建成“自由女神像”、“摩诃菩提寺”或“布达拉宫”奇观。"
     },
     "LOC_VICTORY_DIPLOMATIC_NAME": {
-      "en_US": "Diplomatic Victory"
+      "en_US": "Diplomatic Victory",
+      "zh_Hans_CN": "外交胜利"
     },
     "LOC_VICTORY_DOMINATION_NAME": {
       "en_US": "Domination Victory",
@@ -13273,15 +13487,19 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_ABILITY_BIREME_PROTECT_TRADER_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_BIREME_PROTECT_TRADER_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_BLACK_ARMY_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_BLACK_ARMY_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_BOMBARD_ATTACK_UNIT_DEBUFF_DESCRIPTION": {
@@ -13305,6 +13523,7 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_ABILITY_BYPASS_WALLS_PROMOTION_CLASS_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_CAPTIVE_WORKERS_DESCRIPTION": {
@@ -13316,9 +13535,11 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_ABILITY_CAROLEAN_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_CAROLEAN_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_CHING_SHIH_PLUNDER_BONUS_DESCRIPTION": {
@@ -13326,9 +13547,11 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_ABILITY_CHOLA_NAVAL_COMBAT_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_CHOLA_NAVAL_COMBAT_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_CLANCY_FERNANDO_BONUS_EXPERIENCE_DESCRIPTION": {
@@ -13352,15 +13575,19 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_ABILITY_CORBACI_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_CORBACI_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_CORSAIR_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_CORSAIR_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_COSSACK_DESCRIPTION": {
@@ -13392,15 +13619,19 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_ABILITY_ENABLE_WALL_PROMOTION_CLASS_ATTACK_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_ERIKSON_NAVAL_SIGHT_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_ERIKSON_NAVAL_SIGHT_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_EXPERT_MARKSMAN_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_FRANCIS_DRAKE_PLUNDER_BONUS_DESCRIPTION": {
@@ -13472,27 +13703,35 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_ABILITY_GREAT_TURKISH_BOMBARD_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_GREAT_TURKISH_BOMBARD_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_GUIDE_MOVEMENT_AOE_RELIGIOUS_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_GUIDE_MOVEMENT_AOE_RELIGIOUS_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_GURU_MOVEMENT_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_GURU_MOVEMENT_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_GURU_STRENGTH_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_GURU_STRENGTH_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_HANGAR_TRAINED_AIRCRAFT_XP_DESCRIPTION": {
@@ -13536,9 +13775,11 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_ABILITY_HUSZAR_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_HUSZAR_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_IGNORE_CROSSING_RIVERS_COST_DESCRIPTION": {
@@ -13606,12 +13847,15 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_ABILITY_MANA_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_MANDEKALU_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_MANDEKALU_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_MAPUCHE_MALON_RAIDER_DESCRIPTION": {
@@ -13627,9 +13871,11 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_ABILITY_MEDITERRANEAN_COLONIES_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_MEDITERRANEAN_COLONIES_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_MELEE_COASTAL_RAID_NAME": {
@@ -13641,9 +13887,11 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_ABILITY_MILITARYORGANIZATION_MOVEMENT_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_MILITARYORGANIZATION_MOVEMENT_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_MILITARY_ACADEMY_TRAINED_UNIT_XP_DESCRIPTION": {
@@ -13659,9 +13907,11 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_ABILITY_MOUNTIE_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_MOUNTIE_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_MUSTANG_DESCRIPTION": {
@@ -13769,9 +14019,11 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_ABILITY_ROCK_BAND_ENTER_FOREIGN_LANDS_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_ROCK_BAND_ENTER_FOREIGN_LANDS_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_ROMAN_LEGION_BUILD_DESCRIPTION": {
@@ -13795,9 +14047,11 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_ABILITY_SAGE_COMBAT_AOE_RELIGIOUS_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_SAGE_COMBAT_AOE_RELIGIOUS_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_SAMURAI_DESCRIPTION": {
@@ -13845,9 +14099,11 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_ABILITY_THE_RAVEN_KING_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_THE_RAVEN_KING_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_TIMUR_BONUS_EXPERIENCE_DESCRIPTION": {
@@ -13855,6 +14111,7 @@
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_TOA_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_TOMYRIS_BONUS_VS_WOUNDED_UNITS_DESCRIPTION": {
@@ -13874,15 +14131,19 @@
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_TRADER_PROTECTED_BY_BIREME_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_TRADER_PROTECTED_BY_BIREME_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_TRADER_PROTECTED_BY_MANDEKALU_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_TRADER_PROTECTED_BY_MANDEKALU_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_TRADE_ROUTE_PLUNDER_IMMUNITY_SEA_DESCRIPTION": {
@@ -13902,9 +14163,11 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_ABILITY_UNIT_FIGHT_WHILE_EMBARKED_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_UNIT_WMD_RESISTANCE_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Unit_Abilities_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_ABILITY_UNOBSTRUCTED_VIEW_DESCRIPTION": {
@@ -15568,7 +15831,8 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_BUILDING_ELECTRONICS_FACTORY_EXPANSION2_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_BUILDING_ELECTRONICS_FACTORY_NAME": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -15603,7 +15867,8 @@
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_BUILDING_FILM_STUDIO_EXPANSION2_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_BUILDING_FILM_STUDIO_NAME": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -15734,10 +15999,12 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_BUILDING_GRAND_BAZAAR_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_BUILDING_GRAND_BAZAAR_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_BUILDING_GREAT_BATH_DESCRIPTION": {
       "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Buildings_Text.xml",
@@ -15916,10 +16183,12 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_BUILDING_MARAE_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_BUILDING_MARAE_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_BUILDING_MARKET_EXPANSION1_DESCRIPTION": {
       "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion1_Buildings_Text.xml",
@@ -16106,10 +16375,12 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_BUILDING_QUEENS_BIBLIOTHEQUE_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_BUILDING_QUEENS_BIBLIOTHEQUE_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_BUILDING_RESEARCH_LAB_NAME": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -16256,10 +16527,12 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_BUILDING_THERMAL_BATH_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_BUILDING_THERMAL_BATH_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_BUILDING_TLACHTLI_NAME": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -16682,6 +16955,7 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DIPLOACTION_DECLARE_GOLDEN_AGE_WAR_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyDeals_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLOACTION_DECLARE_GOLDEN_AGE_WAR_NAME": {
@@ -16697,6 +16971,7 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DIPLOACTION_DECLARE_IDEOLOGICAL_WAR_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyDeals_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLOACTION_DECLARE_IDEOLOGICAL_WAR_NAME": {
@@ -16748,6 +17023,7 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DIPLOACTION_DECLARE_WAR_OF_RETRIBUTION_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyDeals_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLOACTION_DECLARE_WAR_OF_RETRIBUTION_NAME": {
@@ -16927,6 +17203,7 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DIPLO_KUDO_LEADER_ANY_REASON_AGENDA_HIGH_PILLAGE": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyStatements_KudosAndWarnings_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_KUDO_LEADER_ANY_REASON_AGENDA_HIGH_POPULATION": {
@@ -16942,9 +17219,11 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DIPLO_KUDO_LEADER_ANY_REASON_AGENDA_INTOLERANT_SAME_RELIGION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyStatements_KudosAndWarnings_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_KUDO_LEADER_ANY_REASON_AGENDA_LOW_DIPLOVP": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyStatements_KudosAndWarnings_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_KUDO_LEADER_ANY_REASON_AGENDA_LOW_EXPLORATION": {
@@ -16952,9 +17231,11 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DIPLO_KUDO_LEADER_ANY_REASON_AGENDA_LOW_FAVOR": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyStatements_KudosAndWarnings_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_KUDO_LEADER_ANY_REASON_AGENDA_LOW_TOURISM": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyStatements_KudosAndWarnings_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_KUDO_LEADER_ANY_REASON_AGENDA_MODIFIER_NOT_COMPETING_MINORS": {
@@ -17170,6 +17451,7 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_EXPANSIONIST": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyModifiers_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_EXPLOITATION": {
@@ -17177,6 +17459,7 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_FLAT_EARTHER": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyModifiers_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_GOSSIP_NEGATIVE": {
@@ -17188,6 +17471,7 @@
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_GREAT_WHITE_FLEET": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyModifiers_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_HIGH_AIRPOWER": {
@@ -17207,6 +17491,7 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_HIGH_DIPLOVP": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyModifiers_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_HIGH_EXPLORATION": {
@@ -17218,6 +17503,7 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_HIGH_FAVOR": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyModifiers_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_HIGH_HAPPINESS": {
@@ -17233,6 +17519,7 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_HIGH_PILLAGE": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyModifiers_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_HIGH_POPULATION": {
@@ -17248,6 +17535,7 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_HIGH_TOURISM": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyModifiers_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_IGNORES_BARBARIANS": {
@@ -17263,6 +17551,7 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_LOW_DIPLOVP": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyModifiers_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_LOW_EXPLORATION": {
@@ -17274,6 +17563,7 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_LOW_FAVOR": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyModifiers_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_LOW_HAPPINESS": {
@@ -17289,6 +17579,7 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_LOW_PILLAGE": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyModifiers_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_LOW_POPULATION": {
@@ -17304,6 +17595,7 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_LOW_TOURISM": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyModifiers_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_MODIFIER_DESCRIPTION_MED_CITY_STATE_AGGRESSION": {
@@ -17363,9 +17655,11 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DIPLO_MODIFIER_INTOLERANT_ENCROACHING": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyModifiers_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_MODIFIER_INTOLERANT_SAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyModifiers_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_MODIFIER_IRON_CROWN_INVOLVED": {
@@ -17429,9 +17723,11 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DIPLO_MODIFIER_SAPA_INCA_HIGH_MOUNTAIN_CITIES": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyModifiers_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_MODIFIER_SAPA_INCA_LOW_MOUNTAIN_CITIES": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyModifiers_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_MODIFIER_SETTLED_NEAR_BORDER_WARNING": {
@@ -17447,9 +17743,11 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DIPLO_MODIFIER_SICILIAN_WARS_HIGH_COASTAL_CITIES": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyModifiers_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_MODIFIER_SICILIAN_WARS_LOW_COASTAL_CITES": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyModifiers_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_MODIFIER_STOP_DIGGING_UP_ARTIFACTS_WARNING": {
@@ -17589,6 +17887,7 @@
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_WARNING_LEADER_ANY_REASON_AGENDA_HIGH_DIPLOVP": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyStatements_KudosAndWarnings_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_WARNING_LEADER_ANY_REASON_AGENDA_HIGH_EXPLORATION": {
@@ -17596,12 +17895,15 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DIPLO_WARNING_LEADER_ANY_REASON_AGENDA_HIGH_FAVOR": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyStatements_KudosAndWarnings_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_WARNING_LEADER_ANY_REASON_AGENDA_HIGH_TOURISM": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyStatements_KudosAndWarnings_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_WARNING_LEADER_ANY_REASON_AGENDA_INTOLERANT_ENCROACHING_RELIGION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyStatements_KudosAndWarnings_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_WARNING_LEADER_ANY_REASON_AGENDA_LOW_AIRPOWER": {
@@ -17629,6 +17931,7 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DIPLO_WARNING_LEADER_ANY_REASON_AGENDA_LOW_PILLAGE": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_DiplomacyStatements_KudosAndWarnings_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DIPLO_WARNING_LEADER_ANY_REASON_AGENDA_LOW_POPULATION": {
@@ -17712,7 +18015,8 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DISTRICT_ACROPOLIS_EXPANSION2_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_DISTRICT_ACROPOLIS_NAME": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -17739,10 +18043,12 @@
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DISTRICT_BASE_DISTRICT_SCIENCE": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion1_Districts_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DISTRICT_BATH_EXPANSION2_ALT_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_DISTRICT_BATH_NAME": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -17785,6 +18091,7 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DISTRICT_COMMERCIAL_HUB_EXPANSION1_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion1_Districts_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DISTRICT_COMMERCIAL_HUB_NAME": {
@@ -17800,14 +18107,16 @@
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DISTRICT_COTHON_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_DISTRICT_COTHON_GOLD": {
       "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Districts_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DISTRICT_COTHON_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_DISTRICT_CULTURE_CITY_CENTER": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -17914,34 +18223,43 @@
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DISTRICT_GOVERNMENT_CULTURE": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion1_Districts_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DISTRICT_GOVERNMENT_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion1_Districts_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DISTRICT_GOVERNMENT_FAITH": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion1_Districts_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DISTRICT_GOVERNMENT_GOLD": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion1_Districts_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DISTRICT_GOVERNMENT_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion1_Districts_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DISTRICT_GOVERNMENT_PRODUCTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion1_Districts_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DISTRICT_GOVERNMENT_SCIENCE": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion1_Districts_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DISTRICT_HANSA_EXPANSION2_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_DISTRICT_HANSA_NAME": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DISTRICT_HARBOR_EXPANSION1_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion1_Districts_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DISTRICT_HARBOR_GOLD": {
@@ -18073,6 +18391,7 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DISTRICT_NEGATIVE_DISTRICT_SCIENCE": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion1_Districts_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DISTRICT_NEIGHBORHOOD_DESCRIPTION": {
@@ -18116,7 +18435,8 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DISTRICT_ROYAL_NAVY_DOCKYARD_EXPANSION2_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_DISTRICT_ROYAL_NAVY_DOCKYARD_GOLD": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -18147,17 +18467,20 @@
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DISTRICT_STREET_CARNIVAL_EXPANSION2_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_DISTRICT_STREET_CARNIVAL_NAME": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DISTRICT_SUGUBA_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_DISTRICT_SUGUBA_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_DISTRICT_THEATER_DESCRIPTION": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -18172,9 +18495,11 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_DISTRICT_WATER_ENTERTAINMENT_COMPLEX_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion1_Districts_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DISTRICT_WATER_ENTERTAINMENT_COMPLEX_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion1_Districts_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DISTRICT_WATER_PARK_CULTURE": {
@@ -18182,10 +18507,12 @@
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_DISTRICT_WATER_STREET_CARNIVAL_EXPANSION2_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_DISTRICT_WATER_STREET_CARNIVAL_EXPANSION2_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_DISTRICT_WONDER_CULTURE": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -18224,10 +18551,12 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_FEATURE_CHOCOLATEHILLS_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_FEATURE_CHOCOLATEHILLS_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_FEATURE_CHOCOLATEHILLS_QUOTE": {
       "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Quotes_Text.xml",
@@ -18242,7 +18571,8 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_FEATURE_CLIFFS_DOVER_XP2_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_FEATURE_CRATER_LAKE_DESCRIPTION": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -18269,10 +18599,12 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_FEATURE_DEVILSTOWER_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_FEATURE_DEVILSTOWER_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_FEATURE_DEVILSTOWER_QUOTE": {
       "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Quotes_Text.xml",
@@ -18339,10 +18671,12 @@
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_FEATURE_GOBUSTAN_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_FEATURE_GOBUSTAN_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_FEATURE_GOBUSTAN_QUOTE": {
       "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Quotes_Text.xml",
@@ -18353,10 +18687,12 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_FEATURE_IKKIL_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_FEATURE_IKKIL_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_FEATURE_IKKIL_QUOTE": {
       "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Quotes_Text.xml",
@@ -18375,7 +18711,8 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_FEATURE_KILIMANJARO_XP2_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_FEATURE_MARSH_NAME": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -18386,10 +18723,12 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_FEATURE_PAMUKKALE_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_FEATURE_PAMUKKALE_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_FEATURE_PAMUKKALE_QUOTE": {
       "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Quotes_Text.xml",
@@ -18448,10 +18787,12 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_FEATURE_VESUVIUS_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_FEATURE_VESUVIUS_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_FEATURE_VESUVIUS_QUOTE": {
       "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Quotes_Text.xml",
@@ -18474,10 +18815,12 @@
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_FEATURE_WHITEDESERT_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_FEATURE_WHITEDESERT_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_FEATURE_WHITEDESERT_QUOTE": {
       "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Quotes_Text.xml",
@@ -18492,7 +18835,8 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_FEATURE_YOSEMITE_XP2_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_GAMESPEED_EPIC_HELP": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -18803,7 +19147,8 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_IMPROVEMENT_CHATEAU_EXPANSION2_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_IMPROVEMENT_CHATEAU_NAME": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -18870,17 +19215,20 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_IMPROVEMENT_GREAT_WALL_EXPANSION2_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_IMPROVEMENT_GREAT_WALL_NAME": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_IMPROVEMENT_ICE_HOCKEY_RINK_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_IMPROVEMENT_ICE_HOCKEY_RINK_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_IMPROVEMENT_KURGAN_DESCRIPTION": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -18899,10 +19247,12 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_IMPROVEMENT_MAORI_PA_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_IMPROVEMENT_MAORI_PA_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_IMPROVEMENT_MINE_DESCRIPTION": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -18921,7 +19271,8 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_IMPROVEMENT_MISSION_EXPANSION2_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_IMPROVEMENT_MISSION_NAME": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -18944,10 +19295,12 @@
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_IMPROVEMENT_MOUNTAIN_ROAD_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_IMPROVEMENT_MOUNTAIN_ROAD_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_IMPROVEMENT_MOUNTAIN_TUNNEL_DESCRIPTION": {
       "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Improvements_Text.xml",
@@ -18990,10 +19343,12 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_IMPROVEMENT_OPEN_AIR_MUSEUM_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_IMPROVEMENT_OPEN_AIR_MUSEUM_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_IMPROVEMENT_PASTURE_DESCRIPTION": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -19052,24 +19407,28 @@
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_IMPROVEMENT_SPHINX_EXPANSION2_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_IMPROVEMENT_SPHINX_NAME": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_IMPROVEMENT_STEPWELL_EXPANSION2_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_IMPROVEMENT_STEPWELL_NAME": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_IMPROVEMENT_TERRACE_FARM_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_IMPROVEMENT_TERRACE_FARM_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_IMPROVEMENT_WIND_FARM_DESCRIPTION": {
       "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Improvements_Text.xml",
@@ -22320,15 +22679,19 @@
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROJECT_BREAD_AND_CIRCUSES_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion1_Districts_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROJECT_BREAD_AND_CIRCUSES_DESCRIPTION_ALT": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion1_Districts_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROJECT_BREAD_AND_CIRCUSES_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion1_Districts_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROJECT_BREAD_AND_CIRCUSES_SHORT_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion1_Districts_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROJECT_BUILD_NUCLEAR_DEVICE_DESCRIPTION": {
@@ -22728,15 +23091,19 @@
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROJECT_WATER_BREAD_AND_CIRCUSES_SHORT_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion1_Districts_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROJECT_WATER_CARNIVAL_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion1_Districts_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROJECT_WATER_CARNIVAL_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion1_Districts_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROJECT_WATER_CARNIVAL_SHORT_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion1_Districts_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_ADVANCED_ENGINES_DESCRIPTION": {
@@ -22756,9 +23123,11 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_PROMOTION_ALBUM_COVER_ART_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_ALBUM_COVER_ART_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_ALPINE_DESCRIPTION": {
@@ -22786,9 +23155,11 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_PROMOTION_ARENA_ROCK_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_ARENA_ROCK_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_ARMOR_PIERCING_DESCRIPTION": {
@@ -23112,39 +23483,51 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_PROMOTION_GDR_AA_DEFENSE_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_GDR_AA_DEFENSE_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_GDR_ARMOR_UPGRADE_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_GDR_ARMOR_UPGRADE_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_GDR_BONUS_MOVEMENT_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_GDR_BONUS_MOVEMENT_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_GDR_SIEGE_LASER_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_GDR_SIEGE_LASER_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_GLAM_ROCK_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_GLAM_ROCK_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_GOES_TO_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_GOES_TO_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_GRAPE_SHOT_DESCRIPTION": {
@@ -23220,9 +23603,11 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_PROMOTION_INDIE_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_INDIE_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_INDULGENCE_VENDOR_DESCRIPTION": {
@@ -23338,9 +23723,11 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_PROMOTION_MUSIC_FESTIVAL_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_MUSIC_FESTIVAL_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_OBSERVATION_DESCRIPTION": {
@@ -23368,9 +23755,11 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_PROMOTION_POP_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_POP_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_PREPARATORY_FIRE_DESCRIPTION": {
@@ -23430,9 +23819,11 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_PROMOTION_REGGAE_ROCK_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_REGGAE_ROCK_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_REINFORCED_HULL_DESCRIPTION": {
@@ -23444,15 +23835,19 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_PROMOTION_RELIGIOUS_ROCK_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_RELIGIOUS_ROCK_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_ROADIES_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_ROADIES_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_ROLLING_BARRAGE_DESCRIPTION": {
@@ -23528,9 +23923,11 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_PROMOTION_SPACE_ROCK_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_SPACE_ROCK_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_SPIKING_THE_GUNS_DESCRIPTION": {
@@ -23622,9 +24019,11 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_PROMOTION_SPY_POLYGRAPH_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_SPY_POLYGRAPH_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_SPY_QUARTERMASTER_DESCRIPTION": {
@@ -23644,9 +24043,11 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_PROMOTION_SPY_SATCHEL_CHARGES_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_SPY_SATCHEL_CHARGES_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_SPY_SEDUCTION_DESCRIPTION": {
@@ -23666,9 +24067,11 @@
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_SPY_SURVEILLANCE_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_SPY_SURVEILLANCE_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_SPY_TECHNOLOGIST_DESCRIPTION": {
@@ -23728,9 +24131,11 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_PROMOTION_SURF_ROCK_DESCRIPTION": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_SURF_ROCK_NAME": {
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_Promotions_Text.xml",
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_PROMOTION_SWIFT_KEEL_DESCRIPTION": {
@@ -24978,7 +25383,8 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_UNIT_AMERICAN_ROUGH_RIDER_EXPANSION2_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_UNIT_AMERICAN_ROUGH_RIDER_NAME": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -25121,10 +25527,12 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_UNIT_CANADA_MOUNTIE_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_UNIT_CANADA_MOUNTIE_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_UNIT_CARAVEL_DESCRIPTION": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -25199,7 +25607,8 @@
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_UNIT_EGYPTIAN_CHARIOT_ARCHER_EXPANSION2_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_UNIT_EGYPTIAN_CHARIOT_ARCHER_NAME": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -25390,22 +25799,28 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_UNIT_HUNGARY_BLACK_ARMY_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_UNIT_HUNGARY_BLACK_ARMY_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_UNIT_HUNGARY_HUSZAR_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_UNIT_HUNGARY_HUSZAR_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_UNIT_INCA_WARAKAQ_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_UNIT_INCA_WARAKAQ_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_UNIT_INDIAN_VARU_DESCRIPTION": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -25496,10 +25911,12 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_UNIT_MALI_MANDEKALU_CAVALRY_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_UNIT_MALI_MANDEKALU_CAVALRY_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_UNIT_MAN_AT_ARMS_DESCRIPTION": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -25510,10 +25927,12 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_UNIT_MAORI_TOA_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_UNIT_MAORI_TOA_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_UNIT_MECHANIZED_INFANTRY_DESCRIPTION": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -25628,16 +26047,20 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_UNIT_OTTOMAN_BARBARY_CORSAIR_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_UNIT_OTTOMAN_BARBARY_CORSAIR_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_UNIT_PHOENICIA_BIREME_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_UNIT_PHOENICIA_BIREME_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_UNIT_PIKEMAN_DESCRIPTION": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -25800,10 +26223,12 @@
       "zh_Hans_CN": "user/Cache/DebugLocalization.sqlite"
     },
     "LOC_UNIT_SULEIMAN_JANISSARY_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_UNIT_SULEIMAN_JANISSARY_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_UNIT_SUMERIAN_WAR_CART_DESCRIPTION": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -25822,10 +26247,12 @@
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_UNIT_SWEDEN_CAROLEAN_DESCRIPTION": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_UNIT_SWEDEN_CAROLEAN_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_UNIT_SWORDSMAN_DESCRIPTION": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -25900,7 +26327,8 @@
       "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml"
     },
     "LOC_VICTORY_DIPLOMATIC_NAME": {
-      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml"
+      "en_US": "game/Contents/Assets/DLC/Expansion2/Text/en_US/Expansion2_ConfigText.xml",
+      "zh_Hans_CN": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml"
     },
     "LOC_VICTORY_DOMINATION_NAME": {
       "en_US": "user/Cache/DebugLocalization.sqlite",
@@ -26394,6 +26822,12 @@
       "path": "game/Contents/Info.plist",
       "sha256": "4be07aefd4b066bd395ca911269d9e50aeff6bebc0586f0a22009cd506da7eb0",
       "size_bytes": 5147
+    },
+    {
+      "id": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml",
+      "path": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_ConfigText.xml",
+      "sha256": "6c664a206de82e51b71f18029d8b32124791c248e650b6aba51149db95b4236c",
+      "size_bytes": 666107
     },
     {
       "id": "game/Contents/Assets/DLC/Expansion2/Text/Expansion2_Translations_Text.xml",
@@ -32767,6 +33201,672 @@
         "TriggerLongDescription": "LOC_BOOST_TRIGGER_LONGDESC_NEAR_FUTURE_GOVERNANCE",
         "Unit1Type": null,
         "Unit2Type": null
+      }
+    ],
+    "BuildingModifiers": [
+      {
+        "BuildingType": "BUILDING_AIRPORT",
+        "ModifierId": "AIRPORT_BONUS_AIR_SLOTS"
+      },
+      {
+        "BuildingType": "BUILDING_AIRPORT",
+        "ModifierId": "AIRPORT_TRAINED_AIRCRAFT_XP_MODIFIER"
+      },
+      {
+        "BuildingType": "BUILDING_ALHAMBRA",
+        "ModifierId": "ALHAMBRA_MILITARY_GOVERNMENT_SLOT"
+      },
+      {
+        "BuildingType": "BUILDING_AQUARIUM",
+        "ModifierId": "AQUARIUM_REEF_SCIENCE"
+      },
+      {
+        "BuildingType": "BUILDING_AQUARIUM",
+        "ModifierId": "AQUARIUM_SEARESOURCE_SCIENCE"
+      },
+      {
+        "BuildingType": "BUILDING_AQUATICS_CENTER",
+        "ModifierId": "AQUATICS_CENTER_WONDER_TOURISM"
+      },
+      {
+        "BuildingType": "BUILDING_ARMORY",
+        "ModifierId": "ARMORY_ADJUST_RESOURCE_STOCKPILE_CAP"
+      },
+      {
+        "BuildingType": "BUILDING_ARMORY",
+        "ModifierId": "ARMORY_TRAINED_UNIT_XP_MODIFIER"
+      },
+      {
+        "BuildingType": "BUILDING_BARRACKS",
+        "ModifierId": "BARRACKS_ADJUST_RESOURCE_STOCKPILE_CAP"
+      },
+      {
+        "BuildingType": "BUILDING_BARRACKS",
+        "ModifierId": "BARRACKS_TRAINED_UNIT_XP_MODIFIER"
+      },
+      {
+        "BuildingType": "BUILDING_BIG_BEN",
+        "ModifierId": "BIG_BEN_ECONOMIC_GOVERNMENT_SLOT"
+      },
+      {
+        "BuildingType": "BUILDING_BIG_BEN",
+        "ModifierId": "BIG_BEN_INCREASE_GOLD"
+      },
+      {
+        "BuildingType": "BUILDING_BOLSHOI_THEATRE",
+        "ModifierId": "BOLSHOI_THEATRE_FREE_CIVICS"
+      },
+      {
+        "BuildingType": "BUILDING_BROADWAY",
+        "ModifierId": "BROADWAY_ADDCULTUREYIELD"
+      },
+      {
+        "BuildingType": "BUILDING_BROADWAY",
+        "ModifierId": "BUILDING_BROADWAY_RANDOMCIVICBOOST"
+      },
+      {
+        "BuildingType": "BUILDING_CASTLE",
+        "ModifierId": "CASTLE_PREVENT_MELEE_ATTACK_OUTER_DEFENSES"
+      },
+      {
+        "BuildingType": "BUILDING_CHICHEN_ITZA",
+        "ModifierId": "CHICHEN_ITZA_JUNGLE_CULTURE"
+      },
+      {
+        "BuildingType": "BUILDING_CHICHEN_ITZA",
+        "ModifierId": "CHICHEN_ITZA_JUNGLE_PRODUCTION"
+      },
+      {
+        "BuildingType": "BUILDING_COLOSSUS",
+        "ModifierId": "COLOSSUS_ADDTRADEROUTE"
+      },
+      {
+        "BuildingType": "BUILDING_COLOSSUS",
+        "ModifierId": "COLOSSUS_GRANT_TRADER"
+      },
+      {
+        "BuildingType": "BUILDING_CRISTO_REDENTOR",
+        "ModifierId": "CRISTOREDENTOR_BEACHTOURISM"
+      },
+      {
+        "BuildingType": "BUILDING_CRISTO_REDENTOR",
+        "ModifierId": "CRISTOREDENTOR_FULLRELIGIOUSTOURISM"
+      },
+      {
+        "BuildingType": "BUILDING_EIFFEL_TOWER",
+        "ModifierId": "EIFFEL_TOWER_ADDAPPEAL"
+      },
+      {
+        "BuildingType": "BUILDING_ELECTRONICS_FACTORY",
+        "ModifierId": "ELECTRONICSFACTORY_CULTURE"
+      },
+      {
+        "BuildingType": "BUILDING_FERRIS_WHEEL",
+        "ModifierId": "FERRIS_WHEEL_TOURISM"
+      },
+      {
+        "BuildingType": "BUILDING_FILM_STUDIO",
+        "ModifierId": "FILMSTUDIO_ENHANCEDLATETOURISM"
+      },
+      {
+        "BuildingType": "BUILDING_FORBIDDEN_CITY",
+        "ModifierId": "FORBIDDEN_CITY_WILDCARD_GOVERNMENT_SLOT"
+      },
+      {
+        "BuildingType": "BUILDING_GOLDEN_GATE_BRIDGE",
+        "ModifierId": "GOLDENGATE_CITYAPPEAL"
+      },
+      {
+        "BuildingType": "BUILDING_GOLDEN_GATE_BRIDGE",
+        "ModifierId": "GOLDENGATE_GRANT_ROUTES"
+      },
+      {
+        "BuildingType": "BUILDING_GOLDEN_GATE_BRIDGE",
+        "ModifierId": "GOLDENGATE_IMPROVEMENT_TOURISM"
+      },
+      {
+        "BuildingType": "BUILDING_GOLDEN_GATE_BRIDGE",
+        "ModifierId": "GOLDENGATE_NATIONAL_PARK_TOURISM"
+      },
+      {
+        "BuildingType": "BUILDING_GOLDEN_GATE_BRIDGE",
+        "ModifierId": "GOLDENGATE_REMOVE_CLIFFS"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_CITYSTATES",
+        "ModifierId": "BUILDING_GOV_CITYSTATES_LEVERAGED_UNIT_STRENGTH"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_CITYSTATES",
+        "ModifierId": "BUILDING_GOV_CITYSTATES_UNIT_STRENGTH"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_CITYSTATES",
+        "ModifierId": "BUILDING_GOV_LEVY_DISCOUNT"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_CITYSTATES",
+        "ModifierId": "GOVCITYSTATES_ADJUST_FAVOR"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_CONQUEST",
+        "ModifierId": "GOV_PRODUCTION_BOOST_FROM_CAPTURE"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_FAITH",
+        "ModifierId": "GOV_FAITH_PILLAGE_DISTRICT_FAITH"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_FAITH",
+        "ModifierId": "GOV_FAITH_PILLAGE_IMPROVEMENT_FAITH"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_FAITH",
+        "ModifierId": "GOV_FAITH_PURCHASE_ANTI_CAVALRY"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_FAITH",
+        "ModifierId": "GOV_FAITH_PURCHASE_HEAVY_CAVALRY"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_FAITH",
+        "ModifierId": "GOV_FAITH_PURCHASE_HEAVY_CHARIOT"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_FAITH",
+        "ModifierId": "GOV_FAITH_PURCHASE_LIGHT_CAVALRY"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_FAITH",
+        "ModifierId": "GOV_FAITH_PURCHASE_LIGHT_CHARIOT"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_FAITH",
+        "ModifierId": "GOV_FAITH_PURCHASE_MELEE"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_FAITH",
+        "ModifierId": "GOV_FAITH_PURCHASE_RANGED"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_FAITH",
+        "ModifierId": "GOV_FAITH_PURCHASE_RANGED_CAVALRY"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_FAITH",
+        "ModifierId": "GOV_FAITH_PURCHASE_RECON"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_FAITH",
+        "ModifierId": "GOV_FAITH_PURCHASE_SIEGE"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_MILITARY",
+        "ModifierId": "GOV_HEAL_AFTER_DEFEATING_UNIT"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_SCIENCE",
+        "ModifierId": "GOV_PROJECT_ABILITY"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_SPIES",
+        "ModifierId": "GOV_ADD_SPY_UNIT"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_SPIES",
+        "ModifierId": "GOV_GRANT_SPY"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_SPIES",
+        "ModifierId": "GOV_INCREASE_SPY_LEVEL"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_TALL",
+        "ModifierId": "GOV_TALL_AMENITY_BUFF"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_TALL",
+        "ModifierId": "GOV_TALL_HOUSING_BUFF"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_TALL",
+        "ModifierId": "GOV_TALL_LOYALTY_DEBUFF"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_WIDE",
+        "ModifierId": "GOV_SETTLER_COST_REDUCTION"
+      },
+      {
+        "BuildingType": "BUILDING_GOV_WIDE",
+        "ModifierId": "GOV_SETTLER_GRANT_BUILDER"
+      },
+      {
+        "BuildingType": "BUILDING_GRAND_BAZAAR",
+        "ModifierId": "GRANDBAZAAR_ACCUMULATION_STRATEGICS"
+      },
+      {
+        "BuildingType": "BUILDING_GRAND_BAZAAR",
+        "ModifierId": "GRANDBAZAAR_AMENITIES_LUXURIES"
+      },
+      {
+        "BuildingType": "BUILDING_GREAT_BATH",
+        "ModifierId": "GREATBATH_FLOODFAITH"
+      },
+      {
+        "BuildingType": "BUILDING_GREAT_LIBRARY",
+        "ModifierId": "GREAT_LIBRARY_ANCIENT_CLASSICAL_TECH_BOOSTS"
+      },
+      {
+        "BuildingType": "BUILDING_GREAT_LIGHTHOUSE",
+        "ModifierId": "GREATLIGHTHOUSE_ADD_EMBARKED_ABILITY_TEXT_ONLY"
+      },
+      {
+        "BuildingType": "BUILDING_GREAT_LIGHTHOUSE",
+        "ModifierId": "GREATLIGHTHOUSE_ADJUST_EMBARKED_MOVEMENT"
+      },
+      {
+        "BuildingType": "BUILDING_GREAT_LIGHTHOUSE",
+        "ModifierId": "GREATLIGHTHOUSE_ADJUST_SEA_MOVEMENT"
+      },
+      {
+        "BuildingType": "BUILDING_GREAT_ZIMBABWE",
+        "ModifierId": "GREAT_ZIMBABWE_ADDTRADEROUTE"
+      },
+      {
+        "BuildingType": "BUILDING_GREAT_ZIMBABWE",
+        "ModifierId": "GREAT_ZIMBABWE_DOMESTICBONUSRESOURCEGOLD"
+      },
+      {
+        "BuildingType": "BUILDING_GREAT_ZIMBABWE",
+        "ModifierId": "GREAT_ZIMBABWE_INTERNATIONALBONUSRESOURCEGOLD"
+      },
+      {
+        "BuildingType": "BUILDING_HAGIA_SOPHIA",
+        "ModifierId": "HAGIA_SOPHIA_ADJUST_RELIGIOUS_CHARGES"
+      },
+      {
+        "BuildingType": "BUILDING_HANGAR",
+        "ModifierId": "HANGAR_BONUS_AIR_SLOTS"
+      },
+      {
+        "BuildingType": "BUILDING_HANGAR",
+        "ModifierId": "HANGAR_TRAINED_AIRCRAFT_XP_MODIFIER"
+      },
+      {
+        "BuildingType": "BUILDING_HANGING_GARDENS",
+        "ModifierId": "HANGING_GARDEN_ADDGROWTH"
+      },
+      {
+        "BuildingType": "BUILDING_HUEY_TEOCALLI",
+        "ModifierId": "HUEY_ADDENTERTAINMENT"
+      },
+      {
+        "BuildingType": "BUILDING_HUEY_TEOCALLI",
+        "ModifierId": "HUEY_LAKE_FOOD"
+      },
+      {
+        "BuildingType": "BUILDING_HUEY_TEOCALLI",
+        "ModifierId": "HUEY_LAKE_PRODUCTION"
+      },
+      {
+        "BuildingType": "BUILDING_HYDROELECTRIC_DAM",
+        "ModifierId": "HYDROELECTRIC_DAM_FREE_POWER"
+      },
+      {
+        "BuildingType": "BUILDING_HYDROELECTRIC_DAM",
+        "ModifierId": "MERCHANT_RENEWABLE_ENERGY_HYDROELECTRIC_DAM_FREE_POWER"
+      },
+      {
+        "BuildingType": "BUILDING_LIGHTHOUSE",
+        "ModifierId": "LIGHTHOUSE_COASTAL_CITY_HOUSING"
+      },
+      {
+        "BuildingType": "BUILDING_LIGHTHOUSE",
+        "ModifierId": "LIGHTHOUSE_COAST_FOOD"
+      },
+      {
+        "BuildingType": "BUILDING_LIGHTHOUSE",
+        "ModifierId": "LIGHTHOUSE_TRADE_ROUTE_CAPACITY"
+      },
+      {
+        "BuildingType": "BUILDING_LIGHTHOUSE",
+        "ModifierId": "LIGHTHOUSE_TRAINED_UNIT_XP_MODIFIER"
+      },
+      {
+        "BuildingType": "BUILDING_MACHU_PICCHU",
+        "ModifierId": "MACHUPICCHU_COMMERCIALHUB_DESERTMOUNTAIN_GOLD"
+      },
+      {
+        "BuildingType": "BUILDING_MACHU_PICCHU",
+        "ModifierId": "MACHUPICCHU_COMMERCIALHUB_GRASSMOUNTAIN_GOLD"
+      },
+      {
+        "BuildingType": "BUILDING_MACHU_PICCHU",
+        "ModifierId": "MACHUPICCHU_COMMERCIALHUB_PLAINSMOUNTAIN_GOLD"
+      },
+      {
+        "BuildingType": "BUILDING_MACHU_PICCHU",
+        "ModifierId": "MACHUPICCHU_COMMERCIALHUB_SNOWMOUNTAIN_GOLD"
+      },
+      {
+        "BuildingType": "BUILDING_MACHU_PICCHU",
+        "ModifierId": "MACHUPICCHU_COMMERCIALHUB_TUNDRAMOUNTAIN_GOLD"
+      },
+      {
+        "BuildingType": "BUILDING_MACHU_PICCHU",
+        "ModifierId": "MACHUPICCHU_INDUSTRIALZONE_DESERTMOUNTAIN_PRODUCTION"
+      },
+      {
+        "BuildingType": "BUILDING_MACHU_PICCHU",
+        "ModifierId": "MACHUPICCHU_INDUSTRIALZONE_GRASSMOUNTAIN_PRODUCTION"
+      },
+      {
+        "BuildingType": "BUILDING_MACHU_PICCHU",
+        "ModifierId": "MACHUPICCHU_INDUSTRIALZONE_PLAINSMOUNTAIN_PRODUCTION"
+      },
+      {
+        "BuildingType": "BUILDING_MACHU_PICCHU",
+        "ModifierId": "MACHUPICCHU_INDUSTRIALZONE_SNOWMOUNTAIN_PRODUCTION"
+      },
+      {
+        "BuildingType": "BUILDING_MACHU_PICCHU",
+        "ModifierId": "MACHUPICCHU_INDUSTRIALZONE_TUNDRAMOUNTAIN_PRODUCTION"
+      },
+      {
+        "BuildingType": "BUILDING_MACHU_PICCHU",
+        "ModifierId": "MACHUPICCHU_THEATER_DESERTMOUNTAIN_CULTURE"
+      },
+      {
+        "BuildingType": "BUILDING_MACHU_PICCHU",
+        "ModifierId": "MACHUPICCHU_THEATER_GRASSMOUNTAIN_CULTURE"
+      },
+      {
+        "BuildingType": "BUILDING_MACHU_PICCHU",
+        "ModifierId": "MACHUPICCHU_THEATER_PLAINSMOUNTAIN_CULTURE"
+      },
+      {
+        "BuildingType": "BUILDING_MACHU_PICCHU",
+        "ModifierId": "MACHUPICCHU_THEATER_SNOWMOUNTAIN_CULTURE"
+      },
+      {
+        "BuildingType": "BUILDING_MACHU_PICCHU",
+        "ModifierId": "MACHUPICCHU_THEATER_TUNDRAMOUNTAIN_CULTURE"
+      },
+      {
+        "BuildingType": "BUILDING_MAHABODHI_TEMPLE",
+        "ModifierId": "MAHABODHITEMPLE_APOSTLE"
+      },
+      {
+        "BuildingType": "BUILDING_MAHABODHI_TEMPLE",
+        "ModifierId": "MAHABODHI_DIPLOVP"
+      },
+      {
+        "BuildingType": "BUILDING_MARAE",
+        "ModifierId": "MARAE_CULTURE_FEATURES"
+      },
+      {
+        "BuildingType": "BUILDING_MARAE",
+        "ModifierId": "MARAE_FAITH_FEATURES"
+      },
+      {
+        "BuildingType": "BUILDING_MARAE",
+        "ModifierId": "MARAE_TOURISM_FEATURES"
+      },
+      {
+        "BuildingType": "BUILDING_MARKET",
+        "ModifierId": "MARKET_TRADE_ROUTE_CAPACITY"
+      },
+      {
+        "BuildingType": "BUILDING_MEENAKSHI_TEMPLE",
+        "ModifierId": "MEENAKSHITEMPLE_FREE_GURU"
+      },
+      {
+        "BuildingType": "BUILDING_MEENAKSHI_TEMPLE",
+        "ModifierId": "MEENAKSHITEMPLE_GURU_DISCOUNT"
+      },
+      {
+        "BuildingType": "BUILDING_MEENAKSHI_TEMPLE",
+        "ModifierId": "MEENAKSHITEMPLE_RELIGIOUS_UNITS_COMBAT"
+      },
+      {
+        "BuildingType": "BUILDING_MEENAKSHI_TEMPLE",
+        "ModifierId": "MEENAKSHITEMPLE_RELIGIOUS_UNITS_MOVEMENT"
+      },
+      {
+        "BuildingType": "BUILDING_MILITARY_ACADEMY",
+        "ModifierId": "MILITARY_ACADEMY_ADJUST_RESOURCE_STOCKPILE_CAP"
+      },
+      {
+        "BuildingType": "BUILDING_MILITARY_ACADEMY",
+        "ModifierId": "MILITARY_ACADEMY_TRAINED_CORPS_ARMY_DISCOUNT"
+      },
+      {
+        "BuildingType": "BUILDING_MILITARY_ACADEMY",
+        "ModifierId": "MILITARY_ACADEMY_TRAINED_UNIT_XP_MODIFIER"
+      },
+      {
+        "BuildingType": "BUILDING_MONT_ST_MICHEL",
+        "ModifierId": "MONT_ST_MICHEL_GRANT_MARTYR"
+      },
+      {
+        "BuildingType": "BUILDING_MONUMENT",
+        "ModifierId": "MONUMENT_CULTURE_AT_FULL_LOYALTY"
+      },
+      {
+        "BuildingType": "BUILDING_MONUMENT",
+        "ModifierId": "MONUMENT_LOYALTY"
+      },
+      {
+        "BuildingType": "BUILDING_MOSQUE",
+        "ModifierId": "MOSQUE_ADJUST_SPREAD_CHARGES"
+      },
+      {
+        "BuildingType": "BUILDING_ORACLE",
+        "ModifierId": "ORACLE_GREATADMIRALPOINTS"
+      },
+      {
+        "BuildingType": "BUILDING_ORACLE",
+        "ModifierId": "ORACLE_GREATENGINEERPOINTS"
+      },
+      {
+        "BuildingType": "BUILDING_ORACLE",
+        "ModifierId": "ORACLE_GREATGENERALPOINTS"
+      },
+      {
+        "BuildingType": "BUILDING_ORACLE",
+        "ModifierId": "ORACLE_GREATMERCHANTPOINTS"
+      },
+      {
+        "BuildingType": "BUILDING_ORACLE",
+        "ModifierId": "ORACLE_GREATPROPHETPOINTS"
+      },
+      {
+        "BuildingType": "BUILDING_ORACLE",
+        "ModifierId": "ORACLE_GREATSCIENTISTPOINTS"
+      },
+      {
+        "BuildingType": "BUILDING_ORACLE",
+        "ModifierId": "ORACLE_GREATWRITERPOINTS"
+      },
+      {
+        "BuildingType": "BUILDING_ORACLE",
+        "ModifierId": "ORACLE_PATRONAGE_FAITH_DISCOUNT"
+      },
+      {
+        "BuildingType": "BUILDING_ORSZAGHAZ",
+        "ModifierId": "ORSZAGHAZ_DOUBLE_FAVOR_SUZERAIN"
+      },
+      {
+        "BuildingType": "BUILDING_OXFORD_UNIVERSITY",
+        "ModifierId": "OXFORD_ADDSCIENCEYIELD"
+      },
+      {
+        "BuildingType": "BUILDING_OXFORD_UNIVERSITY",
+        "ModifierId": "OXFORD_UNIVERSITY_FREE_TECHS"
+      },
+      {
+        "BuildingType": "BUILDING_PAGODA",
+        "ModifierId": "PAGODA_ADJUST_FAVOR"
+      },
+      {
+        "BuildingType": "BUILDING_PALACE",
+        "ModifierId": "PALACE_ADJUST_GARRISON_STRENGTH"
+      },
+      {
+        "BuildingType": "BUILDING_PETRA",
+        "ModifierId": "PETRA_YIELD_MODIFIER"
+      },
+      {
+        "BuildingType": "BUILDING_POTALA_PALACE",
+        "ModifierId": "POTALA_DIPLOVP"
+      },
+      {
+        "BuildingType": "BUILDING_POTALA_PALACE",
+        "ModifierId": "POTALA_PALACE_DIPLOMATIC_GOVERNMENT_SLOT"
+      },
+      {
+        "BuildingType": "BUILDING_PYRAMIDS",
+        "ModifierId": "PYRAMID_ADJUST_BUILDER_CHARGES"
+      },
+      {
+        "BuildingType": "BUILDING_PYRAMIDS",
+        "ModifierId": "PYRAMID_GRANT_BUILDERS"
+      },
+      {
+        "BuildingType": "BUILDING_RUHR_VALLEY",
+        "ModifierId": "RUHRVALLEY_ADDPRODUCTIONYIELD"
+      },
+      {
+        "BuildingType": "BUILDING_RUHR_VALLEY",
+        "ModifierId": "RUHR_VALLEY_PRODUCTION_MODIFIER"
+      },
+      {
+        "BuildingType": "BUILDING_SEAPORT",
+        "ModifierId": "SEAPORT_COAST_GOLD"
+      },
+      {
+        "BuildingType": "BUILDING_SEAPORT",
+        "ModifierId": "SEAPORT_TRAINED_CORPS_ARMY_DISCOUNT"
+      },
+      {
+        "BuildingType": "BUILDING_SEAPORT",
+        "ModifierId": "SEAPORT_TRAINED_UNIT_XP_MODIFIER"
+      },
+      {
+        "BuildingType": "BUILDING_SHIPYARD",
+        "ModifierId": "SHIPYARD_TRAINED_UNIT_XP_MODIFIER"
+      },
+      {
+        "BuildingType": "BUILDING_SHIPYARD",
+        "ModifierId": "SHIPYARD_UNIMPROVED_COAST_PRODUCTION"
+      },
+      {
+        "BuildingType": "BUILDING_SHOPPING_MALL",
+        "ModifierId": "SHOPPING_MALL_TOURISM"
+      },
+      {
+        "BuildingType": "BUILDING_STABLE",
+        "ModifierId": "STABLE_ADJUST_RESOURCE_STOCKPILE_CAP"
+      },
+      {
+        "BuildingType": "BUILDING_STABLE",
+        "ModifierId": "STABLE_TRAINED_UNIT_XP_MODIFIER"
+      },
+      {
+        "BuildingType": "BUILDING_STADIUM",
+        "ModifierId": "STADIUM_10_POPULATION_TOURISM"
+      },
+      {
+        "BuildingType": "BUILDING_STADIUM",
+        "ModifierId": "STADIUM_20_POPULATION_TOURISM"
+      },
+      {
+        "BuildingType": "BUILDING_STAR_FORT",
+        "ModifierId": "STAR_FORT_PREVENT_BYPASS_OUTER_DEFENSE"
+      },
+      {
+        "BuildingType": "BUILDING_STAR_FORT",
+        "ModifierId": "STAR_FORT_PREVENT_MELEE_ATTACK_OUTER_DEFENSES"
+      },
+      {
+        "BuildingType": "BUILDING_STAVE_CHURCH",
+        "ModifierId": "STAVECHURCH_SEARESOURCE_PRODUCTION"
+      },
+      {
+        "BuildingType": "BUILDING_STAVE_CHURCH",
+        "ModifierId": "STAVE_CHURCH_FAITHWOODSADJACENCY"
+      },
+      {
+        "BuildingType": "BUILDING_STONEHENGE",
+        "ModifierId": "STONEHENGE_ALTERNATE_GRANT_APOSTLE"
+      },
+      {
+        "BuildingType": "BUILDING_STONEHENGE",
+        "ModifierId": "STONEHENGE_GRANT_PROPHET"
+      },
+      {
+        "BuildingType": "BUILDING_TERRACOTTA_ARMY",
+        "ModifierId": "TERRACOTTA_ARMY_ARCHAEOLOGIST_OPEN_BORDERS"
+      },
+      {
+        "BuildingType": "BUILDING_TERRACOTTA_ARMY",
+        "ModifierId": "TERRACOTTA_ARMY_LEVEL_UP_UNITS"
+      },
+      {
+        "BuildingType": "BUILDING_THERMAL_BATH",
+        "ModifierId": "THERMALBATH_ADDAMENITIES"
+      },
+      {
+        "BuildingType": "BUILDING_THERMAL_BATH",
+        "ModifierId": "THERMALBATH_ADDTOURISM"
+      },
+      {
+        "BuildingType": "BUILDING_UNIVERSITY_SANKORE",
+        "ModifierId": "SANKORE_TRADE_DOMESTIC_FAITH"
+      },
+      {
+        "BuildingType": "BUILDING_UNIVERSITY_SANKORE",
+        "ModifierId": "SANKORE_TRADE_DOMESTIC_SCIENCE"
+      },
+      {
+        "BuildingType": "BUILDING_UNIVERSITY_SANKORE",
+        "ModifierId": "SANKORE_TRADE_GAIN_SCIENCE"
+      },
+      {
+        "BuildingType": "BUILDING_UNIVERSITY_SANKORE",
+        "ModifierId": "SANKORE_TRADE_OFFER_GOLD"
+      },
+      {
+        "BuildingType": "BUILDING_UNIVERSITY_SANKORE",
+        "ModifierId": "SANKORE_TRADE_OFFER_SCIENCE"
+      },
+      {
+        "BuildingType": "BUILDING_VENETIAN_ARSENAL",
+        "ModifierId": "VENETIAN_ARSENAL_EXTRANAVALCARRIER"
+      },
+      {
+        "BuildingType": "BUILDING_VENETIAN_ARSENAL",
+        "ModifierId": "VENETIAN_ARSENAL_EXTRANAVALMELEE"
+      },
+      {
+        "BuildingType": "BUILDING_VENETIAN_ARSENAL",
+        "ModifierId": "VENETIAN_ARSENAL_EXTRANAVALRANGED"
+      },
+      {
+        "BuildingType": "BUILDING_WATER_MILL",
+        "ModifierId": "WATERMILL_ADDRICEFOOD"
+      },
+      {
+        "BuildingType": "BUILDING_WATER_MILL",
+        "ModifierId": "WATERMILL_ADDWHEATYIELD"
+      },
+      {
+        "BuildingType": "BUILDING_ZOO",
+        "ModifierId": "ZOO_MARSH_SCIENCE"
+      },
+      {
+        "BuildingType": "BUILDING_ZOO",
+        "ModifierId": "ZOO_RAINFOREST_SCIENCE"
       }
     ],
     "BuildingPrereqs": [

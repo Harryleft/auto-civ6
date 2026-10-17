@@ -146,7 +146,8 @@
       "summary": {
         "applicability": "curated_interpretation; current_session_and_action_unverified",
         "description": "防洪堤有沿海淹没防护标记，建设成本受地块及海平面乘数影响；它没有河流防洪标记。",
-        "entity_type": "CuratedMechanism"
+        "entity_type": "CuratedMechanism",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -328,7 +329,8 @@
       "summary": {
         "applicability": "curated_interpretation; current_session_and_action_unverified",
         "description": "单位生产资源、持续维护和项目开工资源是不同字段；已有资源储量不能直接证明持续供应充足。",
-        "entity_type": "CuratedMechanism"
+        "entity_type": "CuratedMechanism",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -874,7 +876,8 @@
       "summary": {
         "applicability": "curated_interpretation; current_session_and_action_unverified",
         "description": "河流洪水定义将灾害强度、受损对象、肥力收益及灾害强度设置的频率分开记录。",
-        "entity_type": "CuratedMechanism"
+        "entity_type": "CuratedMechanism",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -1402,7 +1405,8 @@
       "summary": {
         "applicability": "curated_interpretation; current_session_and_action_unverified",
         "description": "电厂的 ResourceTypeConvertedToPower 指定燃料；资源的 PowerProvided 与 CO2perkWh 分别描述供电和排放参数。",
-        "entity_type": "CuratedMechanism"
+        "entity_type": "CuratedMechanism",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -1744,7 +1748,8 @@
       "summary": {
         "applicability": "curated_interpretation; current_session_and_action_unverified",
         "description": "海平面事件含气候阶段、冰层损失和肥力变化标记；不同阶段的条件不能用同一灾害概率概括。",
-        "entity_type": "CuratedMechanism"
+        "entity_type": "CuratedMechanism",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -1986,7 +1991,8 @@
       "summary": {
         "applicability": "curated_interpretation; current_session_and_action_unverified",
         "description": "研究揭示资源、建造对应改良和积累战略资源是不同环节；库存与开采参数另见 Resource_Consumption。",
-        "entity_type": "CuratedMechanism"
+        "entity_type": "CuratedMechanism",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -2377,7 +2383,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "呼啸的大风与鹅毛大雪使天空大地一片雪白。人们熟悉的一切都被厚厚的冰雪所覆盖。",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -2695,7 +2702,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "刺骨寒风带来的雪花铺满了整个大地。人和动物都在自己的小窝中瑟瑟发抖。",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -3019,7 +3027,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "无情的阳光直射干旱龟裂的大地。上天毫不留情，一滴雨水也不愿降下。",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -3336,7 +3345,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "蝗虫呼呼作响，尘土在热风中翻腾。大地因干旱不断开裂。",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -3645,7 +3655,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "灰蒙蒙的天空中，太阳不过就是个橘色的愤怒圆盘，人们捂住口鼻在路上继续为生活奔波。",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -4027,7 +4038,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "看着远处不断接近的巨大沙墙，人们四处奔逃，希望在狂风到来前找到避难之处。",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -4494,7 +4506,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "江河决堤而出，汹涌的洪水淹没了数十公里的大地。简直是千年难遇的洪灾！",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -4961,7 +4974,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "浑浊不堪的河水凶猛地冲刷着河岸，奔涌的洪水在河道中激烈地翻滚着。",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -5217,7 +5231,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "翻滚的江河拍打着河岸，不断有河水洒出河堤。",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -5515,7 +5530,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "倾盆的大雨与呼啸的大风都预示着一场大型飓风即将到来。",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -5883,7 +5899,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "狂风啸叫，暴雨如瀑布般落下，波涛无情地拍打着堤岸。飓风所到之处，一切皆尽数被毁。",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -6293,7 +6310,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "乞力马扎罗山爆发出怒吼，蘑菇云般的烟雾与灰烬直冲云霄，惊恐的人们与动物四散奔走！",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -6530,7 +6548,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "人们担忧地望向天空，乌黑的烟雾从曾经安详的火山当中喷发而出。",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -6879,7 +6898,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "一声巨响，滚滚黑烟在核电站上方升起。悲戚的警报声接连响起，如同一首哀伤的怨曲。与此同时，无数燃烧的残骸如暴雨般从天而降。 ",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -7206,7 +7226,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "核电站中响起警报！反应堆的裂缝中冒出丝丝蒸汽；辐射开始蔓延，放射测量器指针飙升。",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -7423,7 +7444,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "核电站控制室中的工程师们正奋力修复核泄漏。他们防止了更严重的后果，但情况仍十分危急。",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -7574,7 +7596,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "0.5",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -7725,7 +7748,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "1.0",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -7876,7 +7900,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "1.5",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -8031,7 +8056,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "2.0",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -8186,7 +8212,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "2.5",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -8341,7 +8368,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "3.0",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -8496,7 +8524,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "3.5",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -8795,7 +8824,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "龙卷风渐渐从夏日风暴中露出了尾巴，人们开始寻找避难之处。",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -9167,7 +9197,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "迅捷的风暴在灰暗的夏日空中划出一道长线，在其之下，龙卷风群正在露出狰狞的面容，想要将一切吞进自己的血盆大口之中。 ",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -9596,7 +9627,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "浓烟裹挟着滚烫的火山灰，从维苏威火山的山壁上奔涌而下，市民们惊恐地尖叫着四处逃散，想要寻找安全的避难所。",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -10006,7 +10038,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "生活在火山周围的人们开始逃离，熔岩与灰烬铺满了整个大地。",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -10243,7 +10276,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "人们担忧地望向天空，乌黑的烟雾从曾经安详的火山当中喷发而出。",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -10653,7 +10687,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "火山喷出的滚烫碎屑从山壁上滚滚落下，炙热的浓烟直冲天际，人们开始恐惧地逃散。",
-        "entity_type": "RandomEvents"
+        "entity_type": "RandomEvents",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -10823,7 +10858,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -10941,7 +10977,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -11258,7 +11295,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -11364,7 +11402,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -11470,7 +11509,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -11530,7 +11570,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -11634,7 +11675,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -11694,7 +11736,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -11850,7 +11893,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -11940,7 +11984,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -12044,7 +12089,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -12206,7 +12252,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -12266,7 +12313,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -12412,7 +12460,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -12518,7 +12567,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -12652,7 +12702,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -12798,7 +12849,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -12902,7 +12954,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -13022,7 +13075,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -13141,7 +13195,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -13288,7 +13343,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -13445,7 +13501,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -13549,7 +13606,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -13719,7 +13777,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -13880,7 +13939,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -13998,7 +14058,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -14058,7 +14119,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -14176,7 +14238,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -14266,7 +14329,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -14479,7 +14543,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -14677,7 +14742,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -14782,7 +14848,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -14872,7 +14939,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -14932,7 +15000,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -15066,7 +15135,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -15199,7 +15269,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -15347,7 +15418,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -15440,7 +15512,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -15530,7 +15603,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -15662,7 +15736,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -15766,7 +15841,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -15886,7 +15962,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -16018,7 +16095,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -16122,7 +16200,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -16254,7 +16333,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -16314,7 +16394,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -16432,7 +16513,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -16522,7 +16604,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -16804,7 +16887,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -16909,7 +16993,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -17043,7 +17128,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     },
@@ -17176,7 +17262,8 @@
       "summary": {
         "applicability": "version_snapshot_only; current_session_and_action_unverified",
         "description": "",
-        "entity_type": "Resources"
+        "entity_type": "Resources",
+        "name_fallbacks": {}
       },
       "topic": "resources"
     }
