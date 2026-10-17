@@ -3,7 +3,7 @@
 Wraps tuner_client.py into a stateful connection manager with:
 - Lua state index discovery (GameCore_Tuner, InGame)
 - asyncio lock for serializing commands
-- Sentinel-based multi-line response collection
+- Request-correlated multi-line response collection
 - Output prefix parsing (O\x00<context>: <value>)
 - Explicit reconnection and no automatic command replay
 """
@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 
 from civ_mcp import tuner_client
 from civ_mcp.lua._helpers import SENTINEL
@@ -150,42 +151,50 @@ class GameConnection:
         assert self._reader is not None
         assert self._writer is not None
 
-        await tuner_client.send_message(
-            self._writer, tuner_client.TAG_COMMAND, f"CMD:{state_index}:{lua_code}"
-        )
+        # Keep print local to this request. Late event callbacks retain their old
+        # prefix, so they cannot become a later command's output or completion.
+        # Legacy builder sentinels remain harmless data inside this boundary.
+        prefix = f"CIVMCP|{uuid.uuid4().hex}|"
+        output_prefix = prefix + "OUT|"
+        completion = prefix + "END"
+        wrapped = f"""do
+local native_print = print
+local function print(...)
+    local values = {{}}
+    for i = 1, select("#", ...) do values[i] = tostring(select(i, ...)) end
+    native_print("{output_prefix}" .. table.concat(values, "\\t"))
+end
+(function()
+{lua_code}
+end)()
+native_print("{completion}")
+end"""
 
         lines: list[str] = []
-        saw_sentinel = False
-        deadline = asyncio.get_running_loop().time() + timeout
-
-        while True:
-            remaining = deadline - asyncio.get_running_loop().time()
-            if remaining <= 0:
-                break
-
-            msg = await tuner_client.recv_message_timeout(
-                self._reader, timeout=min(remaining, 2.0)
-            )
-            if msg is None:
-                break
-
-            if msg.payload.startswith("ERR:"):
-                raise LuaError(msg.payload)
-
-            text = _parse_output(msg.payload)
-            if text is not None:
-                if text.strip() == SENTINEL:
-                    saw_sentinel = True
-                    break
-                lines.append(text)
-            # Ignore non-output messages (e.g. tag=3 empty ack)
-
-        if not saw_sentinel:
+        try:
+            # Sending and reading share one deadline. A cancelled partial frame
+            # is retired by _execute_and_collect, never drained or replayed.
+            async with asyncio.timeout(timeout):
+                await tuner_client.send_message(
+                    self._writer, tuner_client.TAG_COMMAND, f"CMD:{state_index}:{wrapped}"
+                )
+                while True:
+                    msg = await tuner_client.recv_message(self._reader)
+                    if msg.payload.startswith("ERR:"):
+                        raise LuaError(msg.payload)
+                    text = _parse_output(msg.payload)
+                    if text == completion:
+                        return lines
+                    if text is not None and text.startswith(output_prefix):
+                        value = text[len(output_prefix):]
+                        if value.strip() != SENTINEL:
+                            lines.append(value)
+                    # Ignore acks, unsolicited prints and other requests' output.
+        except TimeoutError as exc:
             raise TimeoutError(
                 f"Incomplete response from Civ 6 within {timeout:.1f}s "
                 f"(Lua state {state_index}); command outcome is unknown."
-            )
-        return lines
+            ) from exc
 
 
 def _parse_output(payload: str) -> str | None:

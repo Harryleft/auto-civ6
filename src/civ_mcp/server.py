@@ -1800,7 +1800,7 @@ async def run_lua(ctx: Context, code: str, context: str = "gamecore") -> str:
     """Run arbitrary Lua code in the game. Advanced escape hatch — prefer built-in tools.
 
     Args:
-        code: Lua code to execute. Use print() for output, end with print("---END---").
+        code: Lua code to execute. Use print() for output; transport completion is automatic.
         context: "gamecore" (default) for read-only state queries.
                  "ingame" for commands and UI-dependent queries.
 
