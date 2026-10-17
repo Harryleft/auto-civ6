@@ -1118,6 +1118,35 @@ class TestSaveTools:
         assert run(server.load_game_save(ctx, "a/b")).startswith("Error:")
         assert app_of(ctx).game.conn.reconnect_calls == 0
 
+    def test_startup_connection_reset_retries_discovery_not_loading(self, monkeypatch):
+        ctx, gs = self.prepare_menu_load()
+        reconnect = gs.conn.reconnect
+        attempts = []
+
+        async def startup():
+            attempts.append(1)
+            if len(attempts) == 1:
+                raise ConnectionResetError("FireTuner startup reset")
+            await reconnect()
+
+        async def immediate_sleep(seconds):
+            return None
+
+        gs.conn.reconnect = startup
+        monkeypatch.setattr(server.asyncio, "sleep", immediate_sleep)
+        assert run(server.load_game_save(ctx, "MySave")).startswith("Loaded MySave:")
+        assert len(attempts) == 3
+        assert len(gs.conn.state_calls) == 1
+
+    def test_missing_main_menu_times_out_without_sending_load(self, monkeypatch):
+        ctx, gs = self.prepare_menu_load()
+        gs.conn.lua_states = {}
+        gs.conn.reconnect_states = []
+        monkeypatch.setattr(server, "LOAD_TIMEOUT", 0.01)
+        result = run(server.load_game_save(ctx, "MySave"))
+        assert "no load command was sent" in result
+        assert gs.conn.state_calls == []
+
 
 class TestLifecycleTools:
     def test_kill_disconnects_and_resets_session(self, monkeypatch):
