@@ -1146,6 +1146,15 @@ async def unit_action(
         params["improvement"] = improvement
 
     async def _run():
+        # Move/attack/founding reconcile their own pending requests. Other
+        # commands must not change that unit before its outcome is known.
+        if (
+            action.lower() not in {"move", "attack", "found_city"}
+            and getattr(gs, "pending_action_entity", None) == ("unit", unit_index)
+        ):
+            confirmation = await gs.confirm_pending_action()
+            if not confirmation.startswith("CONFIRMED|"):
+                return confirmation
         match action.lower():
             case "move":
                 if target_x is None or target_y is None:
