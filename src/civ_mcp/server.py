@@ -478,10 +478,11 @@ async def get_tech_civics(ctx: Context) -> str:
 
 @mcp.tool(annotations={"readOnlyHint": True})
 async def get_pending_trades(ctx: Context) -> str:
-    """Check for pending trade deal offers from other civilizations.
+    """Read a verified current incoming deal or demand.
 
-    Shows what each civ is offering and what they want in return.
-    Use respond_to_trade to accept or reject.
+    Returns NONE, DIALOGUE, INCOMING, or UNKNOWN. Cached working items alone
+    are not a current proposal. Read again on UNKNOWN; use respond_to_trade
+    only for a verified INCOMING proposal and an explicit accept/reject choice.
     """
     gs = _get_game(ctx)
     return await _logged(
@@ -845,7 +846,10 @@ async def get_trade_options(ctx: Context, other_player_id: int) -> str:
 
 @mcp.tool()
 async def respond_to_trade(ctx: Context, other_player_id: int, accept: bool) -> str:
-    """Accept or reject a pending trade deal.
+    """Accept or reject the verified current incoming deal or demand.
+
+    Rechecks the visible view, unique session, participants, and incoming data
+    before submitting. Unknown context or a different target submits nothing.
 
     Args:
         other_player_id: The player ID of the civilization (from get_pending_trades)

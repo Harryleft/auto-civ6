@@ -656,6 +656,16 @@ class PendingDeal:
 
 
 @dataclass
+class DiplomacyContext:
+    """Current UI/session association; working data alone does not establish an offer."""
+
+    status: str = "UNKNOWN"  # NONE, DIALOGUE, INCOMING, UNKNOWN
+    reason: str = ""
+    sessions: list[DiplomacySession] = field(default_factory=list)
+    deals: list[PendingDeal] = field(default_factory=list)
+
+
+@dataclass
 class TradeableCity:
     city_id: int
     name: str
