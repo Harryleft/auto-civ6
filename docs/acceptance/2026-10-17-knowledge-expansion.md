@@ -25,7 +25,7 @@
 - 内部版本 `1.0.12.54（951533）`；macOS 包 `1.4.6 / 376653.178`；Steam Build `15296837`；目标 `RULESET_EXPANSION_2`。109 张来源表（含派生百科正文）、74 个来源文件、3,329 个双语文本标签和 1,070 行概念正文。
 - 锁定依赖同步通过；全量离线 `995 passed in 28.53s`；`compileall src tests civ6_knowledge`、`git diff --check`、正式目录 `validate` 通过。新增回归含循环引用、别名、建筑效果、缺表／空表及文本来源。
 - 独立复制→校验→重建→再次校验通过；清单、规则、来源及支持文件逐字节一致。删除声明主题定义时拒绝构建；版本不匹配、无命中选择器和重复 ID 的拒绝测试通过。
-- 89 处链接及锚点通过；主题引用的 25 个查询工具均存在。500 个受保护文件哈希一致；`src/`、依赖、原始基准、既有存档和历史验收未变。
+- 92 处链接及锚点通过；主题引用的 25 个查询工具均存在。500 个受保护文件哈希一致；`src/`、依赖、原始基准、既有存档和历史验收未变。
 - 所有五主题分别实施、合入后清理工作树，审查问题由单一修复工作树处理。沿用 `codex/architecture-deepening`，未合入 main、未 push。
 
 证据目录：`~/.civ6-mcp/acceptance/20261017-knowledge-expansion/`。包含 E1～E5 红绿测试、`review-fix/`、初审及复核报告、`pytest-final.txt`、`integration-verification.json`、采集／构建／校验输出；首次重采后暴露的旧排序断言失败保存在 `pytest-recapture-first.txt`。
