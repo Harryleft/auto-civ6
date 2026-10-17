@@ -1429,6 +1429,16 @@ class GameState:
                     name=c.name,
                     population=c.population,
                     currently_building=c.currently_building,
+                    x=c.x,
+                    y=c.y,
+                    owner_id=c.owner_id,
+                    game_identity=c.game_identity,
+                    buildings=(
+                        ["BUILDING_" + b for b in c.buildings]
+                        if c.game_identity is not None
+                        else None
+                    ),
+                    completed_districts=c.completed_districts,
                     food_surplus=c.food_surplus,
                     turns_to_grow=c.turns_to_grow,
                     loyalty=c.loyalty,
@@ -1509,20 +1519,56 @@ class GameState:
                         )
                     )
                 if (
-                    cb.currently_building != "NONE"
+                    cb.currently_building not in (
+                        "NONE", "nothing", "CORRUPTED_QUEUE", "UNKNOWN"
+                    )
                     and ca.currently_building != cb.currently_building
                 ):
                     now = ca.currently_building
                     if now in ("NONE", "nothing"):
                         now = "nothing"
                     elif now == "CORRUPTED_QUEUE":
-                        now = "nothing (queue invalidated — set new production)"
-                    events.append(
-                        lq.TurnEvent(
-                            priority=2,
-                            category="city",
-                            message=f"{ca.name} finished building {cb.currently_building}. Now: {now}.",
+                        now = "invalid queue (nonempty, zero item hash; unchanged)"
+                    # A queue transition is not proof of production. Compare
+                    # native products only across the same observed owner/game.
+                    same_city = (
+                        cb.game_identity is not None
+                        and cb.game_identity == ca.game_identity
+                        and cb.owner_id is not None
+                        and cb.owner_id == ca.owner_id
+                        and cb.x is not None
+                        and cb.y is not None
+                        and (cb.x, cb.y) == (ca.x, ca.y)
+                    )
+                    completed = False
+                    item = cb.currently_building
+                    if same_city and item.startswith("DISTRICT_"):
+                        if (
+                            cb.completed_districts is not None
+                            and ca.completed_districts is not None
+                        ):
+                            new = set(ca.completed_districts) - set(cb.completed_districts)
+                            completed = any(d.split("@", 1)[0] == item for d in new)
+                    elif same_city and item.startswith("BUILDING_"):
+                        if cb.buildings is not None and ca.buildings is not None:
+                            completed = item in set(ca.buildings) - set(cb.buildings)
+                    elif same_city and item.startswith("UNIT_"):
+                        # Local-unit queries and matching city coordinates tie
+                        # the new product to this owner/city. Adjacent naval
+                        # spawns remain unconfirmed rather than guessed.
+                        completed = any(
+                            uid not in before.units
+                            and unit.unit_type == item
+                            and (unit.x, unit.y) == (ca.x, ca.y)
+                            for uid, unit in after.units.items()
                         )
+                    message = (
+                        f"{ca.name} finished building {item}. Now: {now}."
+                        if completed else
+                        f"{ca.name} production queue changed from {item}; completion unconfirmed. Now: {now}."
+                    )
+                    events.append(
+                        lq.TurnEvent(priority=2, category="city", message=message)
                     )
 
         for cid, ca in after.cities.items():
