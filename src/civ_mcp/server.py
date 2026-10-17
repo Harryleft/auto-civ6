@@ -92,7 +92,27 @@ async def _logged(
                     "before issuing gameplay actions."
                 )
             else:
-                result = await fn()
+                entity = getattr(app.game, "pending_action_entity", None)
+                dependent = False
+                if isinstance(entity, tuple) and not tool_name.startswith(("get_", "list_")):
+                    unit_id = params.get("unit_id")
+                    city_id = params.get("city_id")
+                    dependent = (
+                        (entity[0] == "unit" and isinstance(unit_id, int)
+                         and entity[1] == unit_id % 65536)
+                        or (entity[0] == "city" and entity[1] == city_id)
+                        or tool_name == "run_lua"
+                        or (entity[0] == "unit" and tool_name == "skip_remaining_units")
+                    )
+                # These tracked methods reconcile repeated intents themselves.
+                if dependent and tool_name not in {"unit_action", "set_city_production"}:
+                    confirmation = await app.game.confirm_pending_action()
+                    if app.game.pending_action_entity == entity:
+                        result = confirmation
+                    else:
+                        result = await fn()
+                else:
+                    result = await fn()
         except (LuaError, ValueError, OSError) as exc:
             result = f"Error: {exc}"
         ms = int((time.monotonic() - start) * 1000)

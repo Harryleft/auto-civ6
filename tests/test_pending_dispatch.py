@@ -31,6 +31,10 @@ class PendingGame:
     async def get_units(self):
         return []
 
+    async def upgrade_unit(self, unit_id):
+        self.actions.append(("upgrade", unit_id))
+        return "UPGRADED"
+
 
 class Logger:
     async def log_tool_call(self, *_args):
@@ -80,4 +84,11 @@ def test_unknown_load_still_allows_read_only_unit_query():
     game._pending_load = True
     result = asyncio.run(server.get_units(context(game)))
     assert "OUTCOME_UNKNOWN" not in result
+    assert game.actions == []
+
+
+def test_separate_upgrade_tool_cannot_bypass_pending_unit():
+    game = PendingGame("ERR:OUTCOME_UNKNOWN|move unit 7 is unconfirmed")
+    result = asyncio.run(server.upgrade_unit(context(game), 65536 + 7))
+    assert "OUTCOME_UNKNOWN" in result
     assert game.actions == []
