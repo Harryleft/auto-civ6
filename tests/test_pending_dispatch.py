@@ -65,10 +65,11 @@ def test_other_unit_does_not_depend_on_pending_position():
     assert game.actions == [("fortify", 8)]
 
 
-def test_unknown_load_blocks_gameplay_even_without_pending_unit():
+@pytest.mark.parametrize("pending_flag", ["_pending_load", "_pending_save"])
+def test_unknown_lifecycle_blocks_gameplay_even_without_pending_unit(pending_flag):
     game = PendingGame("CONFIRMED|unused")
     game.pending_action_entity = None
-    game._pending_load = True
+    setattr(game, pending_flag, True)
     result = asyncio.run(server.unit_action(context(game), 7, "fortify"))
     assert "OUTCOME_UNKNOWN" in result
     assert game.actions == []
