@@ -1097,6 +1097,9 @@ class WorldCongressStatus:
     favor_costs: list[int]  # [0, 10, 30, 60, 100, 150]
     resolutions: list[CongressResolution]
     proposals: list[CongressProposal]
+    native_stage: str = "UNKNOWN"
+    local_request: str = "UNKNOWN"
+    proposal_status: str = "UNKNOWN"
 
 
 # --- Scattered dataclasses (originally defined mid-file near their builders) ---
