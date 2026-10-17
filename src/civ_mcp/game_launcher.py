@@ -25,10 +25,13 @@ import socket
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 log = logging.getLogger(__name__)
 
 STEAM_APP_ID = "289070"
+STEAM_PROCESS_LOG = Path.home() / "Library/Application Support/Steam/logs/gameprocess_log.txt"
+STEAM_RELEASE_TIMEOUT = 30.0
 
 # Only ever kill processes matching this exact name pattern — NEVER "steam"
 _ALLOWED_PROCESS_PATTERNS = ["Civ6"]
@@ -167,13 +170,6 @@ def _kill_game_sync() -> str:
         time.sleep(3)
         if is_game_running():
             return "WARNING: Game process is still running."
-    if sys.platform == "darwin":
-        # Steam still tracked the exited PID for ~12 seconds in the live
-        # recovery check and rejected an immediate launch with AppError_16.
-        # Allow that bookkeeping to settle before the one explicit relaunch;
-        # if this grace period proves insufficient, replace it with a Steam
-        # readiness check rather than replaying a possibly accepted launch.
-        time.sleep(15)
     return "Killed Civ 6."
 
 
@@ -288,6 +284,49 @@ def _find_game_exe_win32() -> str | None:
     return default if os.path.exists(default) else None
 
 
+def _steam_tracking_game() -> bool | None:
+    """Read Steam's own process bookkeeping, without starting another app.
+
+    Local macOS gameprocess_log.txt records adding tracked PIDs and the final
+    Remove-from-running-list transition. Unknown format/missing file is not
+    readiness proof. Other platforms retain a conservative launch path.
+    """
+    if sys.platform != "darwin":
+        return None
+    try:
+        with STEAM_PROCESS_LOG.open("rb") as stream:
+            stream.seek(0, 2)
+            stream.seek(max(0, stream.tell() - 131072))
+            lines = stream.read().decode("utf-8", errors="replace").splitlines()
+    except OSError:
+        return None
+    for line in reversed(lines):
+        if f"Remove {STEAM_APP_ID} from running list" in line:
+            return False
+        if f"AppID {STEAM_APP_ID} adding PID" in line:
+            return True
+    return None
+
+
+def _wait_for_steam_release() -> str | None:
+    """Return a failure before launch if Steam still owns the exited game."""
+    if sys.platform != "darwin":
+        return None
+    deadline = time.monotonic() + STEAM_RELEASE_TIMEOUT
+    while time.monotonic() < deadline:
+        tracked = _steam_tracking_game()
+        if tracked is False:
+            return None
+        if tracked is None:
+            # Explicitly a fallback, not a completion signal. It covers both
+            # an active shutdown and a process that disappeared before kill.
+            log.warning("Steam readiness unavailable; applying a 15s conservative grace, not a readiness guarantee")
+            time.sleep(min(15, max(0, deadline - time.monotonic())))
+            return None
+        time.sleep(min(1, max(0, deadline - time.monotonic())))
+    return "FAILED: Steam still tracks Civ6 after exit; no launch submitted."
+
+
 def _launch_game_sync() -> str:
     """Launch Civ 6 and wait for the FireTuner port to open. Blocking.
 
@@ -303,6 +342,10 @@ def _launch_game_sync() -> str:
         if _is_tuner_port_open():
             return "Game already running, FireTuner port is open."
         return "Error: Civ6 is running but FireTuner is unavailable. EnableTuner and wait for startup, or explicitly use restart_and_load."
+
+    release_error = _wait_for_steam_release()
+    if release_error:
+        return release_error
 
     # Launch via Steam
     if sys.platform == "darwin":

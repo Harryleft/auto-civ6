@@ -38,6 +38,13 @@ class FakeConn:
 
     async def execute_read(self, query, timeout=None):
         self.read_queries.append(query)
+        if "TURN_STATE|" in query:
+            return ["TURN_STATE|12|1"]
+        return []
+
+    async def execute_write(self, query, timeout=None):
+        if "TURN_UI_READY|" in query:
+            return ["TURN_UI_READY|12|1"]
         return []
 
     async def execute_in_state(self, index, code, timeout=None):
@@ -949,6 +956,18 @@ def isolated_server(monkeypatch, tmp_path):
     monkeypatch.setattr(server.game_launcher, "SAVE_DIR", str(tmp_path / "auto"))
     monkeypatch.setattr(server.game_launcher, "SINGLE_SAVE_DIR", str(tmp_path))
 
+    from civ_mcp import checkpoints
+    from pathlib import Path
+    monkeypatch.setattr(checkpoints, "CHECKPOINT_DIR", tmp_path / "records")
+    class SaveBoundary:
+        async def execute_write(self, code, timeout=None):
+            if "Network.SaveGame" in code:
+                (tmp_path / "MySave.Civ6Save").write_bytes(b"known completed checkpoint")
+                return ["MCP_SAVE|true"]
+            return ["MCP_SAVE_COMPLETE|true"]
+    assert run(server.game_lifecycle.save_game(SaveBoundary(), "MySave")).startswith("Saved:")
+    assert checkpoints.record_checkpoint("MySave", ("rome", 4242), 12) is None
+
 
 class TestLogged:
     @pytest.mark.parametrize("failure", [LuaError, ValueError, ConnectionError, TimeoutError])
@@ -1076,10 +1095,18 @@ class TestSaveTools:
         logged = app_of(ctx).logger.tool_calls[0]
         assert logged[:3] == ("save_game", {"save_name": "checkpoint"}, result)
 
-    def test_index_load_dispatches_to_game_state(self):
+    def test_index_load_uses_the_same_confirmed_checkpoint_loader(self):
+        ctx, gs = self.prepare_menu_load()
+        server.game_lifecycle._filesystem_save_names[:] = ["MySave"]
+        result = run(server.load_save(ctx, 1))
+        assert result.startswith("Loaded MySave:")
+        assert len(gs.conn.load_calls) == 1
+        assert not gs.called("load_save")
+
+    def test_missing_index_does_not_submit_a_load(self):
         ctx = make_ctx()
-        run(server.load_save(ctx, 3))
-        assert app_of(ctx).game.last_args("load_save") == (3,)
+        assert run(server.load_save(ctx, 999)).startswith("Error:")
+        assert app_of(ctx).game.conn.load_calls == []
 
     def prepare_menu_load(self):
         ctx = make_ctx()
@@ -1104,6 +1131,16 @@ class TestSaveTools:
         result = run(server.load_game_save(ctx, "MySave"))
         assert result.startswith("Loaded MySave:")
         assert len(gs.conn.load_calls) == 1
+
+    @pytest.mark.parametrize("identity,turn", [(('egypt', 4242), 12), (('rome', 999), 12), (('rome', 4242), 11), (('rome', 4242), 0)])
+    def test_load_must_match_checkpoint_identity_and_turn(self, identity, turn):
+        ctx, gs = self.prepare_menu_load()
+        gs.script["get_game_identity"] = identity
+        gs.script["get_game_overview"] = make_overview(turn=turn)
+        result = run(server.load_game_save(ctx, "MySave"))
+        assert result.startswith("ERR:OUTCOME_UNKNOWN")
+        assert len(gs.conn.load_calls) == 1
+        assert gs._pending_load
 
     def test_loading_while_in_game_is_refused(self):
         ctx = make_ctx()
