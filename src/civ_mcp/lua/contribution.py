@@ -104,10 +104,11 @@ receipt.commandHandler=function(owner,id,command)
  receipt.commandSeq=sequenceEvent()
  if command==state.command then receipt.started=true else receipt.invalid=true end
 end
--- TutorialUIRoot's native signature is (playerID,unitID,newCharges,oldCharges).
--- Event delivery order is not guaranteed: retain an entered request's exact
--- numeric delta even before CommandStarted; confirmation still requires both.
--- Keep consumption before userdata removal; Gone is never a delta.
+-- TutorialUIRoot names these arguments newCharges/oldCharges, but the native
+-- Royal callback can increase while GetBuildCharges() is consumed. Preserve
+-- raw counters independently of remaining charges and validate their delta
+-- against actual readback, or all prepared charges after exact removal.
+-- Event delivery order is not guaranteed; confirmation still needs Started.
 receipt.chargesHandler=function(owner,id,newCharges,oldCharges)
  if __civmcpContribution~=receipt or not receipt.entered
   or owner~=receipt.owner or id~=receipt.id then return end
@@ -116,9 +117,7 @@ receipt.chargesHandler=function(owner,id,newCharges,oldCharges)
  receipt.chargeSeq=sequenceEvent()
  receipt.rawChargeBefore=type(oldCharges)=="number" and oldCharges or nil
  receipt.rawChargeAfter=type(newCharges)=="number" and newCharges or nil
- if oldCharges==state.charges and type(newCharges)=="number" and newCharges>=0 and newCharges<oldCharges then
-  receipt.chargeBefore=oldCharges;receipt.chargeAfter=newCharges
- end
+ receipt.chargeBefore=nil;receipt.chargeAfter=nil;receipt.chargeDelta=nil
 end
 -- Numeric event identities survive removal; never capture consumed userdata.
 receipt.removalHandler=function(owner,id)
@@ -168,18 +167,32 @@ local ok,consumed,effect=pcall(function()
  reason="BEFORE_BINDING_MISMATCH";assert(before.fingerprint=={json.dumps(fingerprint)})
  reason="CORE_BUSY_OR_UNKNOWN";assert(UI.IsGameCoreBusy()==false)
  reason=(receipt.chargeEvents or 0)>0 and "CHARGE_EVENT_MISMATCH" or "CHARGES_NOT_OBSERVED"
- assert(receipt.chargeBefore==before.charges and type(receipt.chargeAfter)=="number"
-  and receipt.chargeAfter>=0 and receipt.chargeAfter<receipt.chargeBefore)
- local consumed=receipt.chargeBefore-receipt.chargeAfter
+ local rawBefore,rawAfter=receipt.rawChargeBefore,receipt.rawChargeAfter
+ assert(type(rawBefore)=="number" and type(rawAfter)=="number"
+  and rawBefore>=0 and rawAfter>=0 and rawBefore%1==0 and rawAfter%1==0)
+ local delta=math.abs(rawAfter-rawBefore)
+ assert(delta>0 and delta<=before.charges)
+ receipt.chargeDelta=delta
+ local consumed
  reason="UNIT_LOOKUP_FAILED"
  local unit=UnitManager.GetUnit(receipt.owner,{unit_id})
  if unit then
   reason="UNIT_IDENTITY_CHANGED";assert(unit:GetID()=={unit_id} and unit:GetOwner()==receipt.owner)
   reason="UNIT_POSITION_CHANGED";assert(unit:GetX()==before.x and unit:GetY()==before.y)
-  reason="UNIT_CHARGES_MISMATCH";assert(unit:GetBuildCharges()==receipt.chargeAfter)
+  local charges=unit:GetBuildCharges()
+  reason="UNIT_CHARGES_MISMATCH"
+  assert(type(charges)=="number" and charges>=0 and charges%1==0 and charges<before.charges)
+  consumed=before.charges-charges
+  assert(delta==consumed)
+  receipt.chargeBefore=before.charges;receipt.chargeAfter=charges
  else
   reason="REMOVAL_NOT_OBSERVED";assert(receipt.removed==true)
   reason="REMOVAL_NOT_CONFIRMED";assert(Players[receipt.owner]:GetUnits():FindID({unit_id})==nil)
+  -- Absence cannot supply a remaining-charge readback. Require one exact
+  -- native delta for every prepared charge, never sum unrelated changes.
+  reason="REMOVED_CHARGE_DELTA_MISMATCH";assert(delta==before.charges)
+  consumed=delta
+  receipt.chargeBefore=before.charges;receipt.chargeAfter=0
  end
  reason="TARGET_UNAVAILABLE"
  local city,bq,target=targetAt(before.x,before.y,receipt.owner)
@@ -199,7 +212,7 @@ local facts=matched and receipt or {{}}
 print("CONTRIBUTION_OBSERVED|{token}|unit:{unit_id}|receipt:"..(matched and "matched" or "unmatched")
  .."|entered:"..tostring(facts.entered).."|returned:"..tostring(facts.returned)
  .."|started:"..tostring(facts.started).."|chargeBefore:"..tostring(facts.chargeBefore)
- .."|chargeAfter:"..tostring(facts.chargeAfter).."|chargeEvents:"..tostring(facts.chargeEvents or 0)
+ .."|chargeAfter:"..tostring(facts.chargeAfter).."|chargeDelta:"..tostring(facts.chargeDelta).."|chargeEvents:"..tostring(facts.chargeEvents or 0)
  .."|rawChargeBefore:"..tostring(facts.rawChargeBefore).."|rawChargeAfter:"..tostring(facts.rawChargeAfter)
  .."|commandSeq:"..tostring(facts.commandSeq).."|chargeSeq:"..tostring(facts.chargeSeq)
  .."|removed:"..tostring(facts.removed).."|removedSeq:"..tostring(facts.removedSeq)
