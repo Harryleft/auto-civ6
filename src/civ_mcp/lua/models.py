@@ -176,6 +176,7 @@ class CityInfo:
     owner_id: int | None = None
     game_identity: tuple[str, int] | None = None
     completed_districts: list[str] | None = None  # native IsComplete, with coordinates
+    resource_visibility_known: bool | None = None  # absent in legacy city rows
 
 
 @dataclass
