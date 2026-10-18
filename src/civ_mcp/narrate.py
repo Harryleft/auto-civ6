@@ -68,6 +68,7 @@ def narrate_overview(ov: lq.GameOverview) -> str:
             ),
         ]
     )
+    lines.append(f"Identity: civilization_type={ov.civilization_type or 'unknown'} | leader_type={ov.leader_type or 'unknown'}")
     if ov.score_categories is None:
         lines.append("Score categories (GetCategoryScore): unknown; complete native evidence unavailable.")
     else:
@@ -759,6 +760,7 @@ def narrate_diplomacy(civs: list[lq.CivInfo]) -> str:
         lines.append(
             f"  {c.civ_name} ({c.leader_name}) — {c.diplomatic_state} ({c.relationship_score:+d}){war_str}{alliance_str} [player {c.player_id}]"
         )
+        lines.append(f"    Identity: civilization_type={c.civilization_type or 'unknown'} | leader_type={c.leader_type or 'unknown'}")
         # City details
         if c.num_cities > 0:
             if c.visible_cities:

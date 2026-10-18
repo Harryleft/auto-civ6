@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from civ_mcp.lua._helpers import SENTINEL, _bail, _bail_lua, _lua_close_diplo_session
 from civ_mcp.lua.models import (
     AgendaInfo,
@@ -35,6 +37,17 @@ for i = 0, 62 do
         local met = pDiplo:HasMet(i) and "1" or "0"
         local war = pDiplo:IsAtWarWith(i) and "1" or "0"
         if pDiplo:HasMet(i) then
+            -- Native types are public only after meeting this player.
+            local civilizationType, leaderType = "", ""
+            pcall(function()
+                local value = cfg:GetCivilizationTypeName()
+                if type(value) == "string" and value:match("^CIVILIZATION_[A-Z0-9_]+$") then civilizationType = value end
+            end)
+            pcall(function()
+                local value = cfg:GetLeaderTypeName()
+                if type(value) == "string" and value:match("^LEADER_[A-Z0-9_]+$") then leaderType = value end
+            end)
+            print("IDENTITY|" .. i .. "|" .. civilizationType .. "|" .. leaderType)
             local ai = Players[i]:GetDiplomaticAI()
             local stateIdx = ai:GetDiplomaticStateIndex(me)
             local stateName = states[stateIdx + 1] or tostring(stateIdx)
@@ -108,7 +121,6 @@ for i = 0, 62 do
             local okAg, agendas = pcall(function() return Players[i]:GetAgendaTypes() end)
             if okAg and agendas then
                 local histSet = {}
-                local leaderType = cfg:GetLeaderTypeName()
                 for ha in GameInfo.HistoricalAgendas() do
                     if ha.LeaderType == leaderType then
                         local aDef = GameInfo.Agendas[ha.AgendaType]
@@ -1144,8 +1156,17 @@ print("{SENTINEL}")
 
 def parse_diplomacy_response(lines: list[str]) -> list[CivInfo]:
     civs: dict[int, CivInfo] = {}
+    identities: dict[int, tuple[str | None, str | None]] = {}
     for line in lines:
-        if line.startswith("CIV|"):
+        if line.startswith("IDENTITY|"):
+            identity = line.split("|")
+            if len(identity) == 4 and re.fullmatch(r"[0-9]+", identity[1]):
+                pid = int(identity[1])
+                identities[pid] = (None, None) if pid in identities else (
+                    identity[2] if re.fullmatch(r"CIVILIZATION_[A-Z0-9_]+", identity[2]) else None,
+                    identity[3] if re.fullmatch(r"LEADER_[A-Z0-9_]+", identity[3]) else None,
+                )
+        elif line.startswith("CIV|"):
             parts = line.split("|")
             if len(parts) < 13:
                 continue
@@ -1259,6 +1280,9 @@ def parse_diplomacy_response(lines: list[str]) -> list[CivInfo]:
                     civs[pid1].defensive_pacts.append(pid2)
                 if pid2 in civs:
                     civs[pid2].defensive_pacts.append(pid1)
+    for pid, civ in civs.items():
+        if civ.has_met and pid in identities:
+            civ.civilization_type, civ.leader_type = identities[pid]
     return list(civs.values())
 
 
