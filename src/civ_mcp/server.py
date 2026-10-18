@@ -115,7 +115,9 @@ async def _logged(
                     unit_id = params.get("unit_id")
                     city_id = params.get("city_id")
                     dependent = (
-                        (entity[0] == "unit" and isinstance(unit_id, int)
+                        (getattr(app.game, "pending_action_kind", None) == "contribution"
+                         and tool_name != "restart_and_load")
+                        or (entity[0] == "unit" and isinstance(unit_id, int)
                          and (entity[1] == unit_id % 65536
                               or getattr(app.game, "pending_action_kind", None) in ("pillage", "contribution")))
                         or (entity[0] == "city" and entity[1] == city_id)
