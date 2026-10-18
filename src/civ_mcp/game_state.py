@@ -149,7 +149,7 @@ class GameState:
             entity = (entity[0], entity[1] % 65536)
         pending = self._pending_action
         if pending is not None and (entity is None or entity == self.pending_action_entity
-                                    or pending.kind == "pillage"):
+                                    or pending.kind in ("pillage", "contribution")):
             await self.confirm_pending_action()
             if self._pending_action is not None:
                 return self._pending_unknown("dependent action was not submitted")
@@ -653,13 +653,31 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
-    async def sacrifice_builder_charges(self, unit_index: int) -> str:
-        blocked = await self._action_gate(("unit", unit_index))
+    async def sacrifice_builder_charges(self, unit_id: int) -> str:
+        if type(unit_id) is not int or unit_id < 0:
+            raise ValueError("A full native builder identity is required")
+        if self._actions.matches("contribution", ("unit", unit_id)):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
         if blocked:
             return blocked
-        lua = lq.build_sacrifice_builder_charges(unit_index)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        lines = await self.conn.execute_write(lq.build_contribution_preflight(unit_id))
+        rows = [row.split("|") for row in lines if row.startswith("CONTRIBUTION_PREPARED|")]
+        if len(rows) != 1 or len(rows[0]) != 2:
+            return _action_result(lines)
+        fingerprint = rows[0][1]
+        if not re.fullmatch(r"[-\d.,]+", fingerprint):
+            return "Error: CONTRIBUTION_TARGET_UNKNOWN|No command submitted."
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            "contribution", ("unit", unit_id), lq.build_contribution_query(unit_id, fingerprint, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"witness_token": token, "fingerprint": fingerprint},
+        )
+        return await self._submit_action(pending, scope, lq.build_sacrifice_builder_charges(unit_id, fingerprint, token))
 
     async def build_route(self, unit_index: int) -> str:
         blocked = await self._action_gate(("unit", unit_index))
