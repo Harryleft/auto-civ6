@@ -191,6 +191,15 @@ class DiplomacyProgress:
                             attempt.original = originals[0]
                             attempt.phase = "RESPONSE_WAIT"
                     if attempt.phase in ("RESPONSE_WAIT", "ACCEPT_WAIT"):
+                        if attempt.phase == "ACCEPT_WAIT":
+                            receipt = await _named(gs.conn, "DiplomacyDealView", native.build_trade_accept_receipt(self.observer_scope, attempt.target, attempt.sid, attempt.token, attempt.counter))
+                            if receipt != ["TRADE_ACCEPT_RECEIPT|ENTERED"]:
+                                return self.trade_summary()
+                            final = await _named(gs.conn, "DiplomacyActionView", native.build_trade_human_accept(self.nonce, attempt.token))
+                            if len(final) == 1 and final[0].startswith("TRADE_FINAL|HUMAN_ACCEPT_DEAL|") and final[0].split("|")[-1].isdigit():
+                                attempt.result = "ACCEPTED|Native HUMAN_ACCEPT_DEAL confirms this entered acceptance."
+                                attempt.phase = "DIALOGUE"
+                                return attempt.result + "\nInspect get_pending_diplomacy and use its current native choices; no response was chosen automatically."
                         rows = await _named(gs.conn, "DiplomacyActionView", native.build_trade_response(self.nonce, attempt.token))
                         headers = [row.split("|") for row in rows if row.startswith("TRADE_RESPONSE|KNOWN|")]
                         signatures = [row.split("|", 1)[1] for row in rows if row.startswith("TRADE_COUNTER|")]
