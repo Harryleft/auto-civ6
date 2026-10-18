@@ -420,6 +420,19 @@ class TurnProgress:
             return "unknown"
         return "match" if status.world == self.world else "mismatch"
 
+    def allows_diplomacy_world(self, world: WorldIdentity | None) -> bool:
+        """Permit pending-turn interactions only in the request's original world.
+
+        Fresh query caches cannot establish or repair an old request's binding.
+        A witnessed mismatch latches exactly as it does during turn confirmation.
+        """
+        if not self.pending:
+            return True
+        if self._scope_invalid or self.world is None or self.from_turn is None or world is None:
+            return False
+        self._observe_worlds([world])
+        return not self._scope_invalid
+
     async def get_status(self, gs: TurnContext) -> str:
         status = await read_turn_status(gs, world_observer=self._observe_worlds)
         self.observe(status)

@@ -96,13 +96,13 @@ async def _logged(
             elif (
                 app.game.diplomacy_pending
                 and not tool_name.startswith(("get_", "list_"))
-                and tool_name not in {"end_turn", "test_trade", "propose_trade", "respond_to_trade", "respond_to_diplomacy", "dismiss_popup", "restart_and_load"}
+                and tool_name not in {"end_turn", "test_trade", "propose_trade", "negotiate_incoming_trade", "respond_to_trade", "respond_to_diplomacy", "dismiss_popup", "restart_and_load"}
             ):
                 result = "ERR:OUTCOME_UNKNOWN|Native diplomacy attempt is pending; confirm the original trade/response or use explicit recovery before gameplay."
             elif (
                 app.game.turn_pending
                 and not tool_name.startswith(("get_", "list_"))
-                and tool_name not in {"end_turn", "respond_to_diplomacy", "respond_to_trade", "queue_wc_votes", "open_world_congress", "dismiss_popup", "restart_and_load"}
+                and tool_name not in {"end_turn", "respond_to_diplomacy", "respond_to_trade", "negotiate_incoming_trade", "queue_wc_votes", "open_world_congress", "dismiss_popup", "restart_and_load"}
             ):
                 result = (
                     "ERR:OUTCOME_UNKNOWN|The submitted end-turn is still pending. "
@@ -115,8 +115,13 @@ async def _logged(
                     unit_id = params.get("unit_id")
                     city_id = params.get("city_id")
                     dependent = (
-                        (entity[0] == "unit" and isinstance(unit_id, int)
-                         and entity[1] == unit_id % 65536)
+                        # Native information popups may hold the submitted command's
+                        # events. Explicit close preserves its receipt and pending gate.
+                        (getattr(app.game, "pending_action_kind", None) == "contribution"
+                         and tool_name not in {"restart_and_load", "dismiss_popup"})
+                        or (entity[0] == "unit" and isinstance(unit_id, int)
+                         and (entity[1] == unit_id % 65536
+                              or getattr(app.game, "pending_action_kind", None) in ("pillage", "contribution")))
                         or (entity[0] == "city" and entity[1] == city_id)
                         or tool_name == "run_lua"
                         or (entity[0] == "unit" and tool_name == "skip_remaining_units")
@@ -303,7 +308,7 @@ async def spy_action(
 
     async def _run():
         if action.lower().startswith("escape:"):
-            return await gs.spy_escape(unit_index, action.split(":", 1)[1].strip().upper())
+            return await gs.spy_escape(unit_id, action.split(":", 1)[1].strip().upper())
         if action.lower() == "travel":
             return await gs.spy_travel(unit_index, target_x, target_y)
         return await gs.spy_mission(unit_index, action.upper(), target_x, target_y)
@@ -911,7 +916,8 @@ async def respond_to_trade(ctx: Context, other_player_id: int, accept: bool) -> 
         other_player_id: The player ID of the civilization (from get_pending_trades)
         accept: True to accept the deal, False to reject it
 
-    Use get_pending_trades first to see what's being offered.
+    Read get_pending_trades first. Edited/rejected/unknown native terms cannot be
+    finally accepted. Use negotiate_incoming_trade to test a current incoming offer.
     """
     gs = _get_game(ctx)
     return await _logged(
@@ -919,6 +925,40 @@ async def respond_to_trade(ctx: Context, other_player_id: int, accept: bool) -> 
         "respond_to_trade",
         {"other_player_id": other_player_id, "accept": accept},
         lambda: gs.respond_to_deal(other_player_id, accept),
+    )
+
+
+@mcp.tool()
+async def negotiate_incoming_trade(
+    ctx: Context,
+    other_player_id: int,
+    expected_fingerprint: str,
+    our_gold: int | None = None,
+    their_gold: int | None = None,
+    our_gpt: int | None = None,
+    their_gpt: int | None = None,
+    mode: str = "inspect",
+) -> str:
+    """Evaluate a current incoming offer without final acceptance or opening a session.
+
+    Read get_pending_trades for its fingerprint first. Explicit positive amounts
+    edit existing gold/GPT entries only; omitted entries, durations and all other
+    assets are preserved. Missing, ambiguous or locked entries submit nothing.
+    inspect reports native willingness/rejection; equalize asks for a native
+    counteroffer, which may change other terms. Neither mode concludes a deal.
+    Normal end-turn pending is allowed only for its verified incoming session.
+    Unknown outcomes remain pending; repeating only confirms the original attempt.
+    Read again before another offer. Final accept/reject uses respond_to_trade.
+    """
+    gs = _get_game(ctx)
+    params = {"other_player_id": other_player_id, "expected_fingerprint": expected_fingerprint,
+              "our_gold": our_gold, "their_gold": their_gold, "our_gpt": our_gpt,
+              "their_gpt": their_gpt, "mode": mode}
+    return await _logged(
+        ctx, "negotiate_incoming_trade", params,
+        lambda: gs.negotiate_incoming_trade(other_player_id, expected_fingerprint,
+                                            our_gold=our_gold, their_gold=their_gold,
+                                            our_gpt=our_gpt, their_gpt=their_gpt, mode=mode),
     )
 
 
@@ -1222,7 +1262,7 @@ async def unit_action(
 
     Args:
         unit_id: The unit's composite ID (from get_units output)
-        action: One of: move, cancel_move, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion
+        action: One of: move, cancel_move, pillage, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion
         target_x: Target X coordinate (required for move/attack/trade_route/teleport)
         target_y: Target Y coordinate (required for move/attack/trade_route/teleport)
         improvement: Improvement type for builders (required for improve), e.g.
@@ -1234,13 +1274,17 @@ async def unit_action(
     For cancel_move: explicitly cancel only a verified non-trade movement queue,
     keeping the current position. Then independently choose fortify/heal/skip or
     another strategic action; remaining movement is not a reason to spend it.
+    For pillage: explicitly pillage the current tile once; native eligibility
+    decides whether this is legal. Each call damages one improvement, building
+    or district layer. Unknown outcomes remain pending; repeat only confirms
+    that attempt. No target coordinates, automatic movement or follow-up.
     For trade_route: provide target_x and target_y of destination city.
     For teleport: provide target_x and target_y of destination city. Traders only, must be idle (not on active route).
     For improve: provide improvement name. Builder must be on the tile.
     For repair: repairs a pillaged improvement on the builder's current tile. No improvement name needed.
     For remove_improvement: demolishes an intact improvement on the builder's current tile (e.g. to replace a farm with a mine). Costs one charge.
     For activate: activates a Great Person on their matching district.
-    For sacrifice_charges: Royal Society builder sacrifice — spends ALL builder charges to boost a district project (2% of cost per charge). Builder must be on the district tile.
+    For sacrifice_charges: Royal Society contribution — submit once with the full native builder ID, then confirm consumed charges and project progress/completion. Builder must be on its own district with an active matching project. Unknown results retain the gate; repeat only confirms.
     For spread_religion: spreads religion at current tile. Missionaries/Apostles only.
     For build_route: builds road/railroad on current tile. Military Engineers only. No charges used; costs 1 Iron + 1 Coal per railroad tile.
     For fortify/skip/found_city/automate/heal/alert/sleep/delete: no target needed.
@@ -1262,11 +1306,13 @@ async def unit_action(
         # Move/attack/founding reconcile their own pending requests. Other
         # commands must not change that unit before its outcome is known.
         if (
-            action.lower() not in {"move", "attack", "found_city", "cancel_move"}
-            and getattr(gs, "pending_action_entity", None) == ("unit", unit_index)
+            action.lower() not in {"move", "attack", "found_city", "cancel_move", "pillage", "sacrifice_charges"}
+            and (getattr(gs, "pending_action_entity", None) == ("unit", unit_index)
+                 or getattr(gs, "pending_action_kind", None) in ("pillage", "contribution"))
         ):
             confirmation = await gs.confirm_pending_action()
-            if gs.pending_action_entity == ("unit", unit_index):
+            if (gs.pending_action_entity == ("unit", unit_index)
+                    or getattr(gs, "pending_action_kind", None) in ("pillage", "contribution")):
                 return confirmation
         match action.lower():
             case "move":
@@ -1275,6 +1321,8 @@ async def unit_action(
                 return await gs.move_unit(unit_index, target_x, target_y)
             case "cancel_move":
                 return await gs.cancel_unit_move(unit_id)
+            case "pillage":
+                return await gs.pillage_unit(unit_id)
             case "attack":
                 if target_x is None or target_y is None:
                     return "Error: attack requires target_x and target_y"
@@ -1314,7 +1362,7 @@ async def unit_action(
             case "activate":
                 return await gs.activate_great_person(unit_index)
             case "sacrifice_charges":
-                return await gs.sacrifice_builder_charges(unit_index)
+                return await gs.sacrifice_builder_charges(unit_id)
             case "spread_religion":
                 return await gs.spread_religion(unit_index)
             case "teleport":
@@ -1322,7 +1370,7 @@ async def unit_action(
                     return "Error: teleport requires target_x and target_y of the destination city"
                 return await gs.teleport_to_city(unit_index, target_x, target_y)
             case _:
-                return f"Error: Unknown action '{action}'. Valid: move, cancel_move, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion"
+                return f"Error: Unknown action '{action}'. Valid: move, cancel_move, pillage, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion"
 
     result = await _logged(ctx, "unit_action", params, _run)
     return result

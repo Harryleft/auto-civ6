@@ -71,6 +71,18 @@ class GameState:
         """One fact for action/save gates and MCP while advancement is unconfirmed."""
         return self._turn_progress.pending
 
+    def allows_incoming_trade_world(self, native_scope: str) -> bool:
+        """Ask the turn owner about a freshly verified native diplomacy scope."""
+        fields = native_scope.split("|")
+        if len(fields) != 3 or not re.fullmatch(r"CIVILIZATION_[A-Z0-9_]+", fields[1]):
+            return False
+        if not all(re.fullmatch(r"-?\d+", fields[i]) for i in (0, 2)):
+            return False
+        player, civ, seed = int(fields[0]), fields[1], int(fields[2])
+        if not 0 <= player <= 63:
+            return False
+        return self._turn_progress.allows_diplomacy_world((civ, seed, player))
+
     # Existing integrations/tests can still address these names. They never
     # carry a second copy of the request owned by TurnProgress.
     @property
@@ -107,6 +119,11 @@ class GameState:
     def pending_action_entity(self) -> tuple[str, int] | None:
         return self._actions.entity
 
+    @property
+    def pending_action_kind(self) -> str | None:
+        pending = self._actions.pending
+        return pending.kind if pending else None
+
     def _pending_unknown(self, reason: str = "confirmation deadline reached") -> str:
         return self._actions.unknown(reason)
 
@@ -131,7 +148,8 @@ class GameState:
         if entity is not None and entity[0] == "unit":
             entity = (entity[0], entity[1] % 65536)
         pending = self._pending_action
-        if pending is not None and (entity is None or entity == self.pending_action_entity):
+        if pending is not None and (entity is None or entity == self.pending_action_entity
+                                    or pending.kind in ("pillage", "contribution")):
             await self.confirm_pending_action()
             if self._pending_action is not None:
                 return self._pending_unknown("dependent action was not submitted")
@@ -163,6 +181,7 @@ class GameState:
                     self._diplomacy_cleanup.invalidate_scope()
                     self._diplomacy_progress.invalidate_scope()
                 self._turn_progress.invalidate_scope(new_id)
+                self._actions.observe_identity(new_id)
                 self._game_identity = new_id
                 return self._game_identity
         return ("unknown", 0)
@@ -224,9 +243,14 @@ class GameState:
 
     async def get_spies(self) -> list[lq.SpyInfo]:
         lines = await self.conn.execute_write(lq.build_get_spies_query())
+        if "SPY_ESCAPE_QUERY_UNKNOWN" in lines:
+            raise LuaError("Current spy escape identity or legal routes are unknown; no route was selected.")
         return lq.parse_spies_response(lines)
 
     async def spy_travel(self, unit_index: int, target_x: int, target_y: int) -> str:
+        blocked = await self._action_gate(("unit", unit_index))
+        if blocked:
+            return blocked
         lua = lq.build_spy_travel(unit_index, target_x, target_y)
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
@@ -234,14 +258,33 @@ class GameState:
     async def spy_mission(
         self, unit_index: int, mission_type: str, target_x: int, target_y: int
     ) -> str:
+        blocked = await self._action_gate(("unit", unit_index))
+        if blocked:
+            return blocked
         lua = lq.build_spy_mission(unit_index, mission_type, target_x, target_y)
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
-    async def spy_escape(self, unit_index: int, district_type: str) -> str:
-        lua = lq.build_spy_escape_route(unit_index, district_type)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+    async def spy_escape(self, unit_id: int, district_type: str) -> str:
+        if type(unit_id) is not int or unit_id < 0:
+            raise ValueError("A full native spy identity is required")
+        route = district_type.strip().upper()
+        token = uuid.uuid4().hex
+        code = lq.build_spy_escape_route(unit_id, route, witness_token=token)
+        if self._actions.matches("spy_escape", ("unit", unit_id), item=route):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        pending = _PendingAction(
+            "spy_escape", ("unit", unit_id), lq.build_verify_spy_escape(unit_id, route, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"item": route, "witness_token": token, "full_id": unit_id},
+        )
+        return await self._submit_action(pending, scope, code)
 
     async def get_threat_scan(self) -> list[lq.ThreatInfo]:
         lines = await self.conn.execute_read(lq.build_threat_scan_query())
@@ -473,6 +516,34 @@ class GameState:
         )
         return await self._submit_action(pending, scope, lq.build_cancel_unit_move(unit_index, token))
 
+    async def pillage_unit(self, unit_id: int) -> str:
+        if self._actions.matches("pillage", ("unit", unit_id)):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        lines = await self.conn.execute_write(lq.build_pillage_preflight(unit_id))
+        rows = [row.split("|") for row in lines if row.startswith("PILLAGE_PREPARED|")]
+        if len(rows) != 1 or len(rows[0]) != 5:
+            return _action_result(lines)
+        _, full_id, x, y, fingerprint = rows[0]
+        if (not all(re.fullmatch(r"\d+", value) for value in (full_id, x, y))
+                or not re.fullmatch(r"[-\d,]+(?:;(?:improvement|district|building):\d+:(?:true|false))+", fingerprint)):
+            return "Error: PILLAGE_TARGET_UNKNOWN|No action submitted."
+        token = uuid.uuid4().hex
+        position = (int(x), int(y))
+        pending = _PendingAction(
+            "pillage", ("unit", unit_id), lq.build_pillage_query(int(full_id), token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"witness_token": token, "full_id": int(full_id),
+                     "target": position, "fingerprint": fingerprint},
+        )
+        return await self._submit_action(pending, scope, lq.build_pillage_unit(
+            int(full_id), *position, fingerprint, token))
+
     async def _set_unit_readiness(
         self, unit_index: int, kind: str, *, scope: _ActionScope | None = None,
     ) -> str:
@@ -582,13 +653,31 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
-    async def sacrifice_builder_charges(self, unit_index: int) -> str:
-        blocked = await self._action_gate(("unit", unit_index))
+    async def sacrifice_builder_charges(self, unit_id: int) -> str:
+        if type(unit_id) is not int or unit_id < 0:
+            raise ValueError("A full native builder identity is required")
+        if self._actions.matches("contribution", ("unit", unit_id)):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
         if blocked:
             return blocked
-        lua = lq.build_sacrifice_builder_charges(unit_index)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        lines = await self.conn.execute_write(lq.build_contribution_preflight(unit_id))
+        rows = [row.split("|") for row in lines if row.startswith("CONTRIBUTION_PREPARED|")]
+        if len(rows) != 1 or len(rows[0]) != 2:
+            return _action_result(lines)
+        fingerprint = rows[0][1]
+        if not re.fullmatch(r"[-\d.,]+", fingerprint):
+            return "Error: CONTRIBUTION_TARGET_UNKNOWN|No command submitted."
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            "contribution", ("unit", unit_id), lq.build_contribution_query(unit_id, fingerprint, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"witness_token": token, "fingerprint": fingerprint},
+        )
+        return await self._submit_action(pending, scope, lq.build_sacrifice_builder_charges(unit_id, fingerprint, token))
 
     async def build_route(self, unit_index: int) -> str:
         blocked = await self._action_gate(("unit", unit_index))
@@ -711,6 +800,7 @@ class GameState:
             keys, _ = await self._diplomacy_progress.choices(self.conn, session.session_id, session.other_player_id)
             session.choice_status = "KNOWN" if keys is not None else "UNKNOWN"
             session.choices = [lq.DiplomacyChoice(key=key, text=key) for key in keys or []]
+        await self._diplomacy_progress.describe_incoming(self.conn, context)
         return context
 
     async def diplomacy_respond(self, other_player_id: int, response: str) -> str:
@@ -865,6 +955,7 @@ class GameState:
             raise LuaError("Pending deal status is unknown")
         context = lq.parse_pending_deals_response(lines)
         context.outgoing_summary = await self._diplomacy_progress.outgoing_report(self.conn)
+        await self._diplomacy_progress.describe_incoming(self.conn, context)
         return context
 
     async def respond_to_deal(self, other_player_id: int, accept: bool) -> str:
@@ -874,6 +965,10 @@ class GameState:
         lua = lq.build_respond_to_deal(other_player_id, accept)
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
+
+    async def negotiate_incoming_trade(self, other_player_id: int, expected_fingerprint: str, *, our_gold: int | None = None, their_gold: int | None = None, our_gpt: int | None = None, their_gpt: int | None = None, mode: str = "inspect") -> str:
+        edits = {key: value for key, value in {"our_gold": our_gold, "their_gold": their_gold, "our_gpt": our_gpt, "their_gpt": their_gpt}.items() if value is not None}
+        return await self._diplomacy_progress.negotiate_incoming(self, other_player_id, expected_fingerprint, edits, mode)
 
     async def propose_trade(self, other_player_id: int, offer_items: list[dict], request_items: list[dict]) -> str:
         return await self._diplomacy_progress.run_trade(self, other_player_id, offer_items, request_items, preview=False)
@@ -1404,9 +1499,42 @@ class GameState:
     # ------------------------------------------------------------------
 
     async def set_city_focus(self, city_id: int, focus: str) -> str:
-        lua = lq.build_set_yield_focus(city_id, focus)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        if type(city_id) is not int or city_id < 0 or not isinstance(focus, str):
+            return "Error: FOCUS_INVALID|A native city ID and yield name are required."
+        name = focus.upper()
+        if name != "DEFAULT" and not name.startswith("YIELD_"):
+            name = "YIELD_" + name
+        if name != "DEFAULT" and not re.fullmatch(r"YIELD_[A-Z0-9_]+", name):
+            return "Error: FOCUS_INVALID|Invalid yield name."
+        if self._actions.matches("city_focus", ("city", city_id), item=name):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        try:
+            rows = await self.conn.execute_write(scope.guard(lq.build_city_yield_focus_query(city_id, name)))
+            facts = {}
+            for key in ("CITY", "CURRENT", "GOAL"):
+                values = [row.split("|", 1)[1] for row in rows if row.startswith("CITY_FOCUS_" + key + "|")]
+                if len(values) != 1:
+                    return "Error: FOCUS_STATE_UNKNOWN|Native city or complete preferences unavailable; no action submitted."
+                facts[key] = values[0]
+        except (OSError, TimeoutError, LuaError):
+            return "Error: FOCUS_STATE_UNKNOWN|Native Citizens read failed; no action submitted."
+        if facts["CURRENT"] == facts["GOAL"]:
+            return f"NO_CHANGE|city:{city_id}|focus:{name}|Native Citizens already match the target."
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            "city_focus", ("city", city_id),
+            lq.build_city_yield_focus_query(city_id, name, witness_token=token, expected_city=facts["CITY"], expected_goal=facts["GOAL"]),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"item": name, "witness_token": token, "city": facts["CITY"].split(",")[0], "goal": facts["GOAL"]},
+        )
+        code = lq.build_set_yield_focus(city_id, name, expected_city=facts["CITY"], expected_current=facts["CURRENT"], expected_goal=facts["GOAL"], witness_token=token)
+        return await self._submit_action(pending, scope, code)
 
     # ------------------------------------------------------------------
     # Notifications
@@ -1784,6 +1912,8 @@ class GameState:
         """End the turn with snapshot-diff event detection."""
         progress = getattr(self, "_diplomacy_progress", None)
         if progress is not None:
+            if progress.incoming is not None:
+                return progress.trade_summary()
             if self._diplomacy_cleanup.pending and not self.turn_pending:
                 return "ERR:OUTCOME_UNKNOWN|Native diplomacy cleanup is unconfirmed; dismiss_popup only confirms it."
             if progress.pending and not self.turn_pending:
@@ -1795,6 +1925,8 @@ class GameState:
         """Dismiss any blocking popup or UI overlay."""
         from civ_mcp.game_lifecycle import dismiss_popup
 
+        if self._diplomacy_progress.incoming is not None:
+            return self._diplomacy_progress.trade_summary()
         if self._diplomacy_progress.trade is not None:
             return await self._diplomacy_progress.explicit_cleanup(self)
         return await dismiss_popup(self.conn, self._diplomacy_cleanup)

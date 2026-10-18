@@ -17,6 +17,25 @@ Agent 从根目录 [AGENTS.md](../AGENTS.md) 开始；命中任务后读取对�
 
 ## 规格与验收
 
+- [T121 至本轮终局验收](acceptance/2026-10-19-turn-terminal.md)：净推进112回合至T233科技胜利，九项修复、菜单恢复及存档保全。
+- [贡献未决与信息弹窗](acceptance/2026-10-19-contribution-popup-progress.md)：原生事件暂停、显式关闭通路、157项相关测试和未知门禁保留。
+
+- [交易确认请求身份](specs/2026-10-19-trade-request-identity.md)与[验收](acceptance/2026-10-19-trade-request-identity.md)：旧尝试身份门禁，97项相关测试及实机拒绝／续行。
+
+- [城市宜居度总量](specs/2026-10-19-city-amenities-total.md)与[验收](acceptance/2026-10-19-city-amenities-total.md)：原生总量语义、21项相关测试及同轮对照。
+
+- [原生科研与市政资格](specs/2026-10-19-native-civic-eligibility.md)与[验收](acceptance/2026-10-19-native-civic-eligibility.md)：随机未来树原生候选、UI及既有回退前置门禁，266项相关测试。
+
+- [皇家学会贡献验收](acceptance/2026-10-19-royal-society-contribution.md)：601 项相关测试、单次贡献与原生计数解释、T191／192 消耗及项目确认、保存与菜单恢复。
+
+- [间谍撤离身份与确认验收](acceptance/2026-10-19-spy-escape-identity.md)：696 项相关离线测试、完整 ID、原生离图见证、T148 同路线复验及菜单恢复后续行。
+
+- [原生掠夺验收](acceptance/2026-10-19-native-pillage.md)：580 项相关离线测试、T132 瑞典毛皮营地真实损坏及撤退，继续同轮终局验证。
+
+- [来约试价与反提案验收](acceptance/2026-10-19-incoming-counteroffer.md)：官方原始接口、只评估不成交、世界门禁及同价反提案确认修复、T139 显式成交与续行。
+
+- [城市产出偏好验收](acceptance/2026-10-19-city-yield-focus.md)：487 项相关离线测试、T141 原生偏好与幂等确认、保存及菜单恢复，继续至 T148。
+
 - [第 101～121 回合调度与决策验收](acceptance/2026-10-18-turn121-scheduling.md)：净 20 回合、失去路径队列取消及议会 B 结果修复、相关模块测试、双份结果档与十三类菜单恢复比较；[取消规格](specs/2026-10-18-cancel-unpathable-queue.md)、[议会标签规格](specs/2026-10-18-congress-outcome-label.md)。
 - [远程 CI 测试替身修复](acceptance/2026-10-18-ci-pending-dispatch.md)：同步外交未决字段及参数化场景，194 项相关测试通过；修复尚未 push。
 - [结束回合世界身份绑定验收](acceptance/2026-10-18-end-turn-world-scope.md)：270 项相关离线回归、异世界及取消后保留门禁、双轴复查与旧成果保护；未实机；[规格](specs/2026-10-18-end-turn-world-scope.md)与[工作项](specs/2026-10-18-end-turn-world-scope-tickets.md)。
