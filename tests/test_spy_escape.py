@@ -34,10 +34,20 @@ GameInfo.Districts={DISTRICT_CITY_CENTER={Index=0,TravelTime=4},DISTRICT_AERODRO
 UnitOperationTypes.PARAM_X0=1;UnitOperationTypes.PARAM_Y0=2
 UnitManager.CanStartOperation=function() return true end
 PlayerOperations={SET_ESCAPE_ROUTE=22,PARAM_DISTRICT_TYPE="district"}
+removal_handlers={}
+Events={UnitRemovedFromMap={
+ Add=function(handler) table.insert(removal_handlers,handler);if event_on_arm then handler(0,2949124) end end,
+ Remove=function(handler) for i=#removal_handlers,1,-1 do if removal_handlers[i]==handler then table.remove(removal_handlers,i) end end end}}
+function emitRemoval(owner,id)
+ local copy={};for _,handler in ipairs(removal_handlers) do table.insert(copy,handler) end
+ for _,handler in ipairs(copy) do handler(owner,id) end
+end
 UI.RequestPlayerOperation=function(owner,operation,params)
  table.insert(escape_requests,{owner=owner,operation=operation,district=params.district})
  if fail_request then error("native failure after entry") end
+ if remove_on_request then units[2949124]=nil;emitRemoval(owner,2949124) end
  if not escape_deferred then blocked=false end
+ if fail_after_removal then error("request did not return after removal") end
 end
 ContextPtr={LookUpControl=function() return {SetHide=function() end} end}
 ''')
@@ -151,7 +161,8 @@ def test_deferred_choice_requires_gate_resolution_not_old_mission_or_hidden_popu
 
 
 @pytest.mark.parametrize('exception', [OSError, asyncio.CancelledError])
-def test_lost_reply_and_cancel_only_confirm_original_route(exception, quick_escape):
+@pytest.mark.parametrize('remove', [False, True])
+def test_lost_reply_and_cancel_only_confirm_original_route(exception, remove, quick_escape):
     class LostConn(EscapeConn):
         lost = False
         async def execute_write(self, source):
@@ -161,6 +172,8 @@ def test_lost_reply_and_cancel_only_confirm_original_route(exception, quick_esca
                 raise exception('lost callback reply')
             return rows
     conn = LostConn();state = GameState(conn)
+    if remove:
+        conn.lua.execute("remove_on_request=true")
     if exception is asyncio.CancelledError:
         with pytest.raises(asyncio.CancelledError):
             run(state.spy_escape(2949124, "DISTRICT_HARBOR"))
@@ -272,4 +285,69 @@ def test_missing_next_spy_cannot_confirm_queue_advancement(quick_escape):
     assert "OUTCOME_UNKNOWN" in run(state.spy_escape(2949124, 'DISTRICT_HARBOR'))
     conn.lua.execute('pending_spy=3670029')
     assert "OUTCOME_UNKNOWN" in run(state.spy_escape(2949124, 'DISTRICT_HARBOR'))
+    assert state.pending_action_summary and conn.lua.eval('#escape_requests') == 1
+
+
+def test_precise_native_removal_after_route_selection_confirms_choice_without_claiming_survival():
+    conn = EscapeConn();state = GameState(conn);conn.lua.execute('remove_on_request=true')
+    result = run(state.spy_escape(2949124, 'DISTRICT_CITY_CENTER'))
+    assert result.startswith('ESCAPE_ROUTE_CONFIRMED|spy:2949124')
+    assert 'entity:removed_event' in result
+    assert 'survival outcome not measured' in result
+    assert conn.lua.eval('#escape_requests') == 1
+    assert conn.lua.eval('#removal_handlers') == 0
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('event', [
+    'emitRemoval(0,4)', 'emitRemoval(0,3014660)', 'emitRemoval(1,2949124)',
+    'seed=99;emitRemoval(0,2949124);seed=719665280',
+])
+def test_unattributed_or_other_world_removal_cannot_confirm_missing_original(event, quick_escape):
+    conn = EscapeConn();state = GameState(conn);conn.lua.execute('escape_deferred=true')
+    assert 'OUTCOME_UNKNOWN' in run(state.spy_escape(2949124, 'DISTRICT_CITY_CENTER'))
+    conn.lua.execute(event+';units[2949124]=nil;blocked=false')
+    assert 'OUTCOME_UNKNOWN' in run(state.spy_escape(2949124, 'DISTRICT_CITY_CENTER'))
+    assert state.pending_action_summary and conn.lua.eval('#escape_requests') == 1
+
+
+def test_event_before_request_entry_is_not_evidence_of_selected_route(quick_escape):
+    conn = EscapeConn();state = GameState(conn);conn.lua.execute('event_on_arm=true;escape_deferred=true')
+    assert 'OUTCOME_UNKNOWN' in run(state.spy_escape(2949124, 'DISTRICT_CITY_CENTER'))
+    conn.lua.execute('units[2949124]=nil;blocked=false')
+    assert 'OUTCOME_UNKNOWN' in run(state.spy_escape(2949124, 'DISTRICT_CITY_CENTER'))
+    assert state.pending_action_summary
+
+
+def test_late_precise_removal_only_confirms_original_pending_choice(quick_escape):
+    conn = EscapeConn();state = GameState(conn);conn.lua.execute('escape_deferred=true')
+    assert 'OUTCOME_UNKNOWN' in run(state.spy_escape(2949124, 'DISTRICT_CITY_CENTER'))
+    conn.lua.execute('units[2949124]=nil;emitRemoval(0,2949124);blocked=false')
+    result = run(state.spy_escape(2949124, 'DISTRICT_CITY_CENTER'))
+    assert result.startswith('ESCAPE_ROUTE_CONFIRMED') and 'entity:removed_event' in result
+    assert conn.lua.eval('#escape_requests') == 1
+    assert conn.lua.eval('#removal_handlers') == 0
+
+
+def test_unavailable_native_removal_observer_is_zero_submission():
+    conn = EscapeConn();state = GameState(conn);conn.lua.execute('Events=nil')
+    assert run(state.spy_escape(2949124, 'DISTRICT_CITY_CENTER')).startswith('Error:')
+    assert state.pending_action_summary is None and conn.lua.eval('#escape_requests') == 0
+
+
+def test_precise_removal_without_resolved_gate_remains_unknown(quick_escape):
+    conn = EscapeConn();state = GameState(conn)
+    conn.lua.execute('remove_on_request=true;escape_deferred=true')
+    assert 'OUTCOME_UNKNOWN' in run(state.spy_escape(2949124, 'DISTRICT_CITY_CENTER'))
+    assert state.pending_action_summary and conn.lua.eval('#escape_requests') == 1
+    conn.lua.execute('blocked=false')
+    assert 'ESCAPE_ROUTE_CONFIRMED' in run(state.spy_escape(2949124, 'DISTRICT_CITY_CENTER'))
+    assert conn.lua.eval('#escape_requests') == 1
+
+
+def test_precise_removal_without_returned_request_cannot_confirm(quick_escape):
+    conn = EscapeConn();state = GameState(conn)
+    conn.lua.execute('remove_on_request=true;fail_after_removal=true')
+    assert 'OUTCOME_UNKNOWN' in run(state.spy_escape(2949124, 'DISTRICT_CITY_CENTER'))
+    assert 'OUTCOME_UNKNOWN' in run(state.spy_escape(2949124, 'DISTRICT_CITY_CENTER'))
     assert state.pending_action_summary and conn.lua.eval('#escape_requests') == 1
