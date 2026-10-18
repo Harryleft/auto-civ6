@@ -181,6 +181,7 @@ class GameState:
                     self._diplomacy_cleanup.invalidate_scope()
                     self._diplomacy_progress.invalidate_scope()
                 self._turn_progress.invalidate_scope(new_id)
+                self._actions.observe_identity(new_id)
                 self._game_identity = new_id
                 return self._game_identity
         return ("unknown", 0)
@@ -1456,9 +1457,42 @@ class GameState:
     # ------------------------------------------------------------------
 
     async def set_city_focus(self, city_id: int, focus: str) -> str:
-        lua = lq.build_set_yield_focus(city_id, focus)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        if type(city_id) is not int or city_id < 0 or not isinstance(focus, str):
+            return "Error: FOCUS_INVALID|A native city ID and yield name are required."
+        name = focus.upper()
+        if name != "DEFAULT" and not name.startswith("YIELD_"):
+            name = "YIELD_" + name
+        if name != "DEFAULT" and not re.fullmatch(r"YIELD_[A-Z0-9_]+", name):
+            return "Error: FOCUS_INVALID|Invalid yield name."
+        if self._actions.matches("city_focus", ("city", city_id), item=name):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        try:
+            rows = await self.conn.execute_write(scope.guard(lq.build_city_yield_focus_query(city_id, name)))
+            facts = {}
+            for key in ("CITY", "CURRENT", "GOAL"):
+                values = [row.split("|", 1)[1] for row in rows if row.startswith("CITY_FOCUS_" + key + "|")]
+                if len(values) != 1:
+                    return "Error: FOCUS_STATE_UNKNOWN|Native city or complete preferences unavailable; no action submitted."
+                facts[key] = values[0]
+        except (OSError, TimeoutError, LuaError):
+            return "Error: FOCUS_STATE_UNKNOWN|Native Citizens read failed; no action submitted."
+        if facts["CURRENT"] == facts["GOAL"]:
+            return f"NO_CHANGE|city:{city_id}|focus:{name}|Native Citizens already match the target."
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            "city_focus", ("city", city_id),
+            lq.build_city_yield_focus_query(city_id, name, witness_token=token, expected_city=facts["CITY"], expected_goal=facts["GOAL"]),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"item": name, "witness_token": token, "city": facts["CITY"].split(",")[0], "goal": facts["GOAL"]},
+        )
+        code = lq.build_set_yield_focus(city_id, name, expected_city=facts["CITY"], expected_current=facts["CURRENT"], expected_goal=facts["GOAL"], witness_token=token)
+        return await self._submit_action(pending, scope, code)
 
     # ------------------------------------------------------------------
     # Notifications
