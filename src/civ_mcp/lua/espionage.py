@@ -62,6 +62,16 @@ local function verifiedSpy(id)
  if not info or info.UnitType~="UNIT_SPY" then error("not a spy") end
  return spy
 end
+local function escapeScope()
+ local owner=Game.GetLocalPlayer()
+ return {owner,PlayerConfigurations[owner]:GetCivilizationTypeName(),
+         GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED"),Game.GetCurrentGameTurn()}
+end
+local function sameEscapeScope(expected)
+ local ok,current=pcall(escapeScope)
+ return ok and expected and current[1]==expected[1] and current[2]==expected[2]
+        and current[3]==expected[3] and current[4]==expected[4]
+end
 local function escapeRoutes(spy)
  local x,y=spy:GetX(),spy:GetY()
  if type(x)~="number" or type(y)~="number" or x<0 or y<0 then error("spy city unavailable") end
@@ -317,9 +327,27 @@ if not ok or available~=true then print("ERR:ESCAPE_ROUTE_UNAVAILABLE|Spy identi
 if not PlayerOperations or PlayerOperations.SET_ESCAPE_ROUTE==nil or PlayerOperations.PARAM_DISTRICT_TYPE==nil or type(UI.RequestPlayerOperation)~="function" then print("ERR:ESCAPE_COMMAND_UNAVAILABLE");print("{SENTINEL}");return end
 if __civmcpSpyEscape~=nil and type(__civmcpSpyEscape)~="table" then print("ERR:ESCAPE_RECEIPT_UNAVAILABLE");print("{SENTINEL}");return end
 __civmcpSpyEscape=__civmcpSpyEscape or {{}}
-local receipt={{token={json.dumps(witness_token)},id={unit_id},owner=me,route=requested,complete=false}}
+local scopeOK,scope=pcall(escapeScope)
+if not scopeOK then print("ERR:ESCAPE_SCOPE_UNAVAILABLE");print("{SENTINEL}");return end
+local prior=__civmcpSpyEscape[{unit_id}]
+if prior and prior.handler then pcall(function() Events.UnitRemovedFromMap.Remove(prior.handler) end) end
+local receipt={{token={json.dumps(witness_token)},id={unit_id},owner=me,route=requested,scope=scope,entered=false,complete=false}}
 __civmcpSpyEscape[{unit_id}]=receipt
+local function retire()
+ pcall(function() Events.UnitRemovedFromMap.Remove(receipt.handler) end)
+end
+-- Official UnitRemovedFromMap(playerID,unitID) carries the complete entity identity.
+-- Removal alone proves neither death nor successful escape; pair it with this
+-- entered request, its returned receipt, and the fresh resolved choice gate.
+receipt.handler=function(owner,id)
+ if type(__civmcpSpyEscape)~="table" or __civmcpSpyEscape[{unit_id}]~=receipt or not receipt.entered or owner~=me or id~={unit_id} then return end
+ if sameEscapeScope(receipt.scope) then receipt.removed=true else receipt.scope_invalid=true end
+ retire()
+end
+local armed=pcall(function() Events.UnitRemovedFromMap.Add(receipt.handler) end)
+if not armed then retire();print("ERR:ESCAPE_OBSERVER_UNAVAILABLE");print("{SENTINEL}");return end
 local params={{[PlayerOperations.PARAM_DISTRICT_TYPE]=GameInfo.Districts[requested].Index}}
+receipt.entered=true
 UI.RequestPlayerOperation(me,PlayerOperations.SET_ESCAPE_ROUTE,params)
 receipt.complete=true
 local popup=ContextPtr:LookUpControl("/InGame/EspionageEscape")
@@ -333,15 +361,18 @@ def build_verify_spy_escape(unit_id: int, district_type: str, witness_token: str
     """Read the actual escape gate; never probe the unsafe getter without it."""
     return _spy_escape_context() + f"""
 local receipt=type(__civmcpSpyEscape)=="table" and __civmcpSpyEscape[{unit_id}]
-local ok=pcall(function() verifiedSpy({unit_id}) end)
-if not ok or not receipt or receipt.token~={json.dumps(witness_token)} or receipt.id~={unit_id} or receipt.owner~=me or receipt.route~={json.dumps(district_type)} or receipt.complete~=true then print("SPY_ESCAPE_UNCONFIRMED|IDENTITY_OR_RECEIPT");print("{SENTINEL}");return end
+local present=pcall(function() verifiedSpy({unit_id}) end)
+local lookupOK,current=pcall(function() return Players[me]:GetUnits():FindID({unit_id}) end)
+local removed=lookupOK and current==nil and receipt and receipt.removed==true
+if not (present or removed) or not receipt or receipt.token~={json.dumps(witness_token)} or receipt.id~={unit_id} or receipt.owner~=me or receipt.route~={json.dumps(district_type)} or receipt.entered~=true or receipt.complete~=true or receipt.scope_invalid or not sameEscapeScope(receipt.scope) then print("SPY_ESCAPE_UNCONFIRMED|IDENTITY_OR_RECEIPT");print("{SENTINEL}");return end
 -- Another verified full identity means the queue advanced past this choice.
 local advanced=false
 if escapeGate.status=="ACTIVE" and escapeGate.id~={unit_id} then
  advanced=pcall(function() verifiedSpy(escapeGate.id) end)
 end
 if escapeGate.status=="NONE" or advanced then
- print("SPY_ESCAPE_CONFIRMED|"..receipt.token.."|{unit_id}|"..receipt.route.."|gate:"..escapeGate.status.."|next:"..(escapeGate.id or "none"))
+ pcall(function() Events.UnitRemovedFromMap.Remove(receipt.handler) end)
+ print("SPY_ESCAPE_CONFIRMED|"..receipt.token.."|{unit_id}|"..receipt.route.."|gate:"..escapeGate.status.."|next:"..(escapeGate.id or "none").."|entity:"..(present and "present" or "removed_event"))
 else print("SPY_ESCAPE_UNCONFIRMED|GATE_"..escapeGate.status) end
 print("{SENTINEL}")
 """

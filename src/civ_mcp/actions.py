@@ -299,14 +299,14 @@ print("{lq.SENTINEL}")
                 return f"{label}|city:{pending.details['city']}|{pending.details['item']}|Native Citizens confirmed."
         if pending.kind == "spy_escape":
             rows = [row.split("|") for row in pending.observed if row.startswith("SPY_ESCAPE_CONFIRMED|")]
-            if len(rows) == 1 and len(rows[0]) == 6:
+            if len(rows) == 1 and len(rows[0]) == 7:
                 row = rows[0]
                 expected = [pending.details["witness_token"], str(pending.details["full_id"]), pending.details["item"]]
                 next_id = row[5].removeprefix("next:")
-                resolved = (row[4:] == ["gate:NONE", "next:none"] or
+                resolved = (row[4:6] == ["gate:NONE", "next:none"] or
                             (row[4] == "gate:ACTIVE" and row[5].startswith("next:") and next_id.isdigit() and int(next_id) != pending.details["full_id"]))
-                if row[1:4] == expected and resolved:
-                    return f"ESCAPE_ROUTE_CONFIRMED|spy:{row[2]}|{row[3]}|Escape-choice gate for this spy resolved; travel outcome not measured."
+                if row[1:4] == expected and resolved and row[6] in ("entity:present", "entity:removed_event"):
+                    return f"ESCAPE_ROUTE_CONFIRMED|spy:{row[2]}|{row[3]}|{row[6]}|Escape-choice gate for this spy resolved; travel and survival outcome not measured."
         if pending.kind == "production":
             target = pending.details.get("target")
             if target is not None:
