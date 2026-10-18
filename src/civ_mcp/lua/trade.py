@@ -373,9 +373,10 @@ for item in deal:Items() do
  elseif itemType==DealItemTypes.FAVOR then kind="FAVOR"
  elseif itemType==DealItemTypes.CITIES then kind="CITY"
  elseif itemType==DealItemTypes.GREATWORK then kind="GREAT_WORK" end
- local value,subtype="",""
- pcall(function() value=tostring(item:GetValueTypeID() or "") end)
- pcall(function() subtype=tostring(item:GetSubTypeID() or "") end)
+ -- The installed native deal API exposes numeric value/subtype fields;
+ -- unverified *ID getters silently erased real identities in the old preview.
+ local value=tostring(item:GetValueType() or "UNKNOWN")
+ local subtype=tostring(item:GetSubType() or "UNKNOWN")
  print("ITEM|"..(item:GetFromPlayerID()==me and "US" or "THEM").."|"..kind.."|"..(item:GetAmount() or 0).."|"..(item:GetDuration() or 0).."|"..value.."|"..subtype)
 end
 '''

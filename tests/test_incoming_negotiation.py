@@ -398,3 +398,40 @@ def test_turn_scope_invalidated_after_arming_never_submits_evaluation():
     assert "UNKNOWN" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint, their_gold=100))
     assert state.turn_pending and state.diplomacy_pending
     assert not list(conn.lua.globals().sent_actions.values())
+
+
+def test_rejected_native_terms_are_never_narrated_as_a_fair_counteroffer(quick_trade):
+    conn = IncomingConn()
+    conn.response_event = lambda action: '''working_incoming=working_outgoing;accept_visible=false;
+Events.DiplomacyStatement.Emit(1,0,{SessionID=71,StatementType="MAKE_DEAL",StatementSubType="AI_REFUSE_DEAL",FromPlayer=1,RespondingToDealAction=9,DealAction=2})'''
+    state = GameState(conn)
+    quote = run(state.get_pending_deals())
+    result = run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint, their_gold=50))
+    assert result.startswith("REJECTED|")
+    assert "AI response: REJECTED" in result
+    assert "fair" not in result and "counter-offer" not in result
+    assert "will not trade at all" not in result
+
+
+def test_native_great_work_identity_is_shown_instead_of_its_unused_amount(quick_trade):
+    conn = IncomingConn()
+    conn.setup('working_outgoing[3]:SetValueType(5);working_outgoing[3]:SetAmount(0)')
+    state = GameState(conn)
+    quote = run(state.get_pending_deals())
+    result = run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint))
+    assert result.startswith("WILLING|")
+    assert "AI response: ACCEPTABLE" in result and "counter-offer" not in result
+    assert "Great Work (id=5)" in result
+    assert "GREAT_WORK (0)" not in result
+    assert "Agreement (subtype=12" in result
+
+
+def test_numeric_native_resource_identity_is_explicit_in_report(quick_trade):
+    conn = IncomingConn()
+    conn.setup('''GameInfo={Resources={[9]={Name="Iron"}}};
+local resource=DealManager.GetWorkingDeal(DealDirection.OUTGOING,0,1):AddItemOfType(DealItemTypes.RESOURCES,1)
+resource:SetValueType(9);resource:SetAmount(5);resource:SetDuration(30)''')
+    state = GameState(conn)
+    quote = run(state.get_pending_deals())
+    result = run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint))
+    assert "Resource (id=9) x5 (30 turns)" in result

@@ -1116,17 +1116,21 @@ def _describe_trade_item(item: lq.TestTradeItem) -> str:
             return f"{item.amount} gold/turn ({item.duration} turns)"
         return f"{item.amount} gold"
     elif item.item_type == "RESOURCE":
-        name = item.value_id.replace("RESOURCE_", "").replace("_", " ").title()
+        name = (f"Resource (id={item.value_id})" if item.value_id.lstrip("-").isdigit()
+                else item.value_id.replace("RESOURCE_", "").replace("_", " ").title())
         dur = f" ({item.duration} turns)" if item.duration > 0 else ""
         amt = f" x{item.amount}" if item.amount > 1 else ""
         return f"{name}{amt}{dur}"
     elif item.item_type == "AGREEMENT":
-        sub = item.subtype_id.replace("DIPLOACTION_", "").replace("_", " ").title()
-        return sub
+        if item.subtype_id.lstrip("-").isdigit():
+            return f"Agreement (subtype={item.subtype_id}, value={item.value_id})"
+        return item.subtype_id.replace("DIPLOACTION_", "").replace("_", " ").title()
     elif item.item_type == "FAVOR":
         return f"{item.amount} diplomatic favor"
     elif item.item_type == "CITY":
         return f"City (id={item.value_id})"
+    elif item.item_type == "GREAT_WORK":
+        return f"Great Work (id={item.value_id or 'UNKNOWN'})"
     return f"{item.item_type} ({item.amount})"
 
 
@@ -1150,7 +1154,7 @@ def narrate_test_trade(result: lq.TestTradeResult, *, preview: bool = True, incl
         )
 
     if result.rejected:
-        lines.append("\nAI response: REJECTED — will not trade at all")
+        lines.append("\nAI response: REJECTED — these terms were not accepted")
     else:
         our_counter = [i for i in result.counter if i.side == "US"]
         their_counter = [i for i in result.counter if i.side == "THEM"]
