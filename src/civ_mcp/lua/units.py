@@ -22,7 +22,7 @@ from civ_mcp.lua.models import (
 
 def build_units_query() -> str:
     """InGame context: lists all units with upgrade and builder improvement info."""
-    return """
+    return _LUA_ATTACK_MODE + _LUA_MELEE_ELIGIBILITY + """
 local id = Game.GetLocalPlayer()
 for i, u in Players[id]:GetUnits():Members() do
     local x, y = u:GetX(), u:GetY()
@@ -78,11 +78,15 @@ for i, u in Players[id]:GetUnits():Members() do
                             for other in plotUnits:Units() do
                                 local otherOwner = other:GetOwner()
                                 if otherOwner ~= id and (otherOwner == 63 or Players[id]:GetDiplomacy():IsAtWarWith(otherOwner)) then
-                                    -- LOS check for ranged units (d>1): verify the
-                                    -- game engine agrees we can actually fire there.
-                                    -- Melee (d==1) doesn't need LOS.
-                                    local losOK = true
-                                    if rs > 0 and d > 1 then
+                                    local mode = classifyUnitAttack(u)
+                                    local losOK = mode ~= nil
+                                    if mode == "MELEE" then
+                                        local mp = {}
+                                        mp[UnitOperationTypes.PARAM_X] = tx
+                                        mp[UnitOperationTypes.PARAM_Y] = ty
+                                        mp[UnitOperationTypes.PARAM_MODIFIERS] = UnitOperationMoveModifiers.ATTACK
+                                        losOK = meleeAttackEligibility(u, mp) == nil
+                                    elseif rs > 0 and d > 1 then
                                         local lp = {{}}
                                         lp[UnitOperationTypes.PARAM_X] = tx
                                         lp[UnitOperationTypes.PARAM_Y] = ty
@@ -530,10 +534,79 @@ end
 """
 
 
+# CanStartOperation admits deferred MOVE_TO+ATTACK orders. The shipped
+# WorldInput.lua draws GetMoveToPathEx paths using .plots/.turns and treats
+# arrival turns >1 as queued attacks. Require a complete current-turn path
+# before either advertising or submitting a melee attack; never infer it
+# from terrain costs or positive remaining movement alone.
+_LUA_MELEE_ELIGIBILITY = """
+local function meleeAttackEligibility(unit, params)
+    local ok, code, reason = pcall(function()
+        local moves = unit:GetMovesRemaining()
+        if type(moves) ~= "number" or moves ~= moves or moves == math.huge then
+            return "ATTACK_PATH_UNKNOWN", "Native movement points unavailable; no attack submitted."
+        end
+        if moves <= 0 then return "NO_MOVES", "Unit has no movement points for melee attack." end
+        local zoc = unit:HasMovedIntoZOC()
+        if zoc == true then return "ZOC", "Unit entered Zone of Control this turn; no attack submitted." end
+        if zoc ~= false then return "ATTACK_PATH_UNKNOWN", "Native Zone of Control status unavailable; no attack submitted." end
+        if UnitManager.CanStartOperation(unit, UnitOperationTypes.MOVE_TO, nil, params) ~= true then
+            return "ATTACK_BLOCKED", "Native melee target unavailable; no attack submitted."
+        end
+        if UI.IsGameCoreBusy() ~= false then
+            return "ATTACK_PATH_UNKNOWN", "Native movement path unavailable while core is busy; no attack submitted."
+        end
+        local tx, ty = params[UnitOperationTypes.PARAM_X], params[UnitOperationTypes.PARAM_Y]
+        local destination = Map.GetPlot(tx, ty)
+        if not destination then return "ATTACK_PATH_UNKNOWN", "Native target plot unavailable; no attack submitted." end
+        local path = UnitManager.GetMoveToPathEx(unit, destination:GetIndex())
+        local function integer(value, minimum)
+            return type(value) == "number" and value >= minimum and value < math.huge and value == math.floor(value)
+        end
+        local function length(values)
+            if type(values) ~= "table" then return nil end
+            local count = 0
+            for key in pairs(values) do
+                if not integer(key, 1) then return nil end
+                count = count + 1
+            end
+            for i = 1, count do if values[i] == nil then return nil end end
+            return count
+        end
+        if type(path) ~= "table" then return "ATTACK_PATH_UNKNOWN", "Native movement path unavailable; no attack submitted." end
+        local count = length(path.plots)
+        if count == nil or count < 2 or length(path.turns) ~= count then
+            return "ATTACK_PATH_UNKNOWN", "Native movement path incomplete; no attack submitted."
+        end
+        for i = 1, count do
+            if not integer(path.plots[i], 0) or not integer(path.turns[i], 1)
+                or (i > 1 and path.turns[i] < path.turns[i-1]) then
+                return "ATTACK_PATH_UNKNOWN", "Native movement path malformed; no attack submitted."
+            end
+            local plot = Map.GetPlotByIndex(path.plots[i])
+            if not plot or (i == 1 and (plot:GetX() ~= unit:GetX() or plot:GetY() ~= unit:GetY()))
+                or (i == count and (plot:GetX() ~= tx or plot:GetY() ~= ty)) then
+                return "ATTACK_PATH_UNKNOWN", "Native movement path does not match attack; no attack submitted."
+            end
+        end
+        if path.turns[1] ~= 1 then
+            return "ATTACK_PATH_UNKNOWN", "Native movement path has no current-turn origin; no attack submitted."
+        end
+        if path.turns[count] > 1 then
+            return "ATTACK_DEFERRED", "Native melee path arrives after this turn; no attack submitted."
+        end
+    end)
+    if not ok then return "ATTACK_PATH_UNKNOWN", "Native melee eligibility unavailable; no attack submitted." end
+    return code, reason
+end
+"""
+
+
 def build_attack_unit(unit_index: int, target_x: int, target_y: int) -> str:
     return f"""
 {_lua_get_unit(unit_index)}
 {_LUA_ATTACK_MODE}
+{_LUA_MELEE_ELIGIBILITY}
 local mode, unitInfo, attackRange = classifyUnitAttack(unit)
 if not mode then {_bail("ERR:ATTACK_CAPABILITY_UNKNOWN|Unit has no known attack capability")} end
 local isRanged = mode == "RANGED" or mode == "BOMBARD"
@@ -618,22 +691,11 @@ if isAir then
     UnitManager.RequestOperation(unit, UnitOperationTypes.AIR_ATTACK, params)
     print("OK:AIR_ATTACK|target:" .. enemyName .. " at ({target_x},{target_y})|pre_hp:" .. enemyHP .. "/" .. enemyMaxHP .. "|bomber HP:" .. myHP .. "|range:" .. rng .. " dist:" .. dist .. beforeTag)
 else
-    -- Melee: let CanStartOperation be the authority on adjacency/validity.
-    -- Map.GetPlotDistance can misreport distance on offset hex grids, so we
-    -- do not use it as a gate here — only as a diagnostic in the error message.
     local myCS = unitInfo and unitInfo.Combat or 0
-    -- Movement check: melee attack requires movement points (ranged does not)
-    if unit:GetMovesRemaining() <= 0 then
-        {_bail("ERR:NO_MOVES|Unit has no movement points for melee attack. Melee requires movement to close distance. Wait until next turn.")}
-    end
-    -- ZOC check: if unit entered enemy ZOC this turn, it cannot attack until next turn.
-    -- CanStartOperation returns true but RequestOperation silently queues for next turn.
-    if unit:HasMovedIntoZOC() then
-        {_bail_lua('"ERR:ZOC|Unit entered Zone of Control this turn — cannot attack until next turn. End turn and attack from current position next turn."')}
-    end
     params[UnitOperationTypes.PARAM_MODIFIERS] = UnitOperationMoveModifiers.ATTACK
-    if not UnitManager.CanStartOperation(unit, UnitOperationTypes.MOVE_TO, nil, params) then
-        {_bail_lua('"ERR:ATTACK_BLOCKED|Cannot attack " .. enemyName .. " at ({target_x},{target_y}) (map dist=" .. dist .. "). Unit not adjacent or blocked by popup/diplomacy."')}
+    local code, reason = meleeAttackEligibility(unit, params)
+    if code then
+        {_bail_lua('"ERR:" .. code .. "|" .. reason')}
     end
     UnitManager.RequestOperation(unit, UnitOperationTypes.MOVE_TO, params)
     print("OK:MELEE_ATTACK|target:" .. enemyName .. " at ({target_x},{target_y})|pre_hp:" .. enemyHP .. "/" .. enemyMaxHP .. "|your HP:" .. myHP .. " CS:" .. myCS .. beforeTag)
@@ -736,6 +798,7 @@ def build_combat_estimate_query(unit_index: int, target_x: int, target_y: int) -
     return f"""
 {_lua_get_unit(unit_index)}
 {_LUA_ATTACK_MODE}
+{_LUA_MELEE_ELIGIBILITY}
 local function preview()
     if not UI or not UI.IsGameCoreBusy or UI.IsGameCoreBusy() ~= false then
         return "ESTIMATE_UNKNOWN|core busy or state unavailable"
@@ -765,9 +828,8 @@ local function preview()
         if combatType == nil then return "ESTIMATE_UNKNOWN|ranged combat type unavailable" end
     else
         params[UnitOperationTypes.PARAM_MODIFIERS] = UnitOperationMoveModifiers.ATTACK
-        if unit:HasMovedIntoZOC() or not UnitManager.CanStartOperation(unit, UnitOperationTypes.MOVE_TO, nil, params) then
-            return "ESTIMATE_UNKNOWN|melee target unavailable"
-        end
+        local code, reason = meleeAttackEligibility(unit, params)
+        if code then return "ESTIMATE_UNKNOWN|" .. reason end
     end
     local enemy = nil
     local tgtUnits = Map.GetUnitsAt({target_x}, {target_y})
