@@ -259,12 +259,18 @@ def build_trade_send(scope: str, target: int, sid: int, token: str, offer: list[
     return _deal_guard(scope, target, sid) + _fingerprint() + f'''
 local deal=DealManager.GetWorkingDeal(DealDirection.OUTGOING,me,target)
 if not deal or deal:GetItemCount()~=0 then print("TRADE|NOT_SUBMITTED|NOT_EMPTY"); return end
-__civmcp_trade_deal={{token={json.dumps(token)},sent=false}}
+__civmcp_trade_deal={{token={json.dumps(token)},sid=sid,target=target,sent=false}}
+local prepared=pcall(function()
 {items}
-if deal:GetItemCount()~={len(offer)+len(request)} then print("TRADE|NOT_SUBMITTED|TERMS_UNAVAILABLE"); return end
-__civmcp_trade_deal.original=fingerprint(deal)
-if not __civmcp_trade_deal.original then print("TRADE|NOT_SUBMITTED|TERMS_UNKNOWN"); return end
-__civmcp_trade_deal.sent=true
+end)
+local receipt=__civmcp_trade_deal
+receipt.original=fingerprint(deal)
+if not prepared or deal:GetItemCount()~={len(offer)+len(request)} then
+ receipt.failed=true
+ print("TRADE_PREPARE|NOT_SUBMITTED|TERMS_UNAVAILABLE"); return
+end
+if not receipt.original then receipt.failed=true; print("TRADE_PREPARE|NOT_SUBMITTED|TERMS_UNKNOWN"); return end
+receipt.sent=true
 DealManager.SendWorkingDeal(DealProposalAction.{action},me,target)
 print("TRADE|SENT")
 print("TRADE_ORIGINAL|"..__civmcp_trade_deal.original)
@@ -318,6 +324,21 @@ print("TRADE_EXIT|REQUESTED")
 '''
 
 
+def build_trade_abort_prepare(scope: str, target: int, sid: int, token: str) -> str:
+    return _deal_guard(scope, target, sid) + _fingerprint() + f'''
+local receipt=__civmcp_trade_deal
+local deal=DealManager.GetWorkingDeal(DealDirection.OUTGOING,me,target)
+if not receipt or receipt.token~={json.dumps(token)} or receipt.sid~=sid or receipt.target~=target or receipt.sent~=false or receipt.failed~=true or not receipt.original or fingerprint(deal)~=receipt.original then print("TRADE_EXIT|NOT_SUBMITTED"); return end
+if type(OnRefuseDeal)~="function" then print("TRADE_EXIT|NOT_SUBMITTED"); return end
+receipt.exitEntered=true
+-- No EQUALIZE/PROPOSED was entered. Exit only this still-matching local session;
+-- keep partial terms untouched rather than clear an unowned/replaced deal.
+OnRefuseDeal()
+receipt.exitReturned=true
+print("TRADE_EXIT|REQUESTED")
+'''
+
+
 def build_trade_closed(nonce: str, token: str, finish: bool = False) -> str:
     return _trade(nonce, token) + f'''
 if not trade.sid or not trade.closed or DiplomacyManager.FindOpenSessionID(me,target)==trade.sid or DiplomacyManager.HasQueuedSession(me)~=false or DealManager.HasPendingDeal(me,target)~=false then
@@ -332,8 +353,10 @@ def build_trade_deal_receipt(scope: str, token: str) -> str:
     return _scope() + f'''
 if currentScope()~={json.dumps(scope)} or ContextPtr:GetID()~="DiplomacyDealView" then print("TRADE_RECEIPT|UNKNOWN"); return end
 local receipt=__civmcp_trade_deal
-if not receipt or receipt.token~={json.dumps(token)} or not receipt.sent then print("TRADE_RECEIPT|UNKNOWN"); return end
-print("TRADE_ORIGINAL|"..receipt.original)
+if not receipt or receipt.token~={json.dumps(token)} then print("TRADE_RECEIPT|UNKNOWN"); return end
+if receipt.sent~=true and receipt.failed~=true then print("TRADE_RECEIPT|UNKNOWN"); return end
+if receipt.failed and receipt.sent==false then print("TRADE_PREPARE|NOT_SUBMITTED|TERMS_UNAVAILABLE") end
+if receipt.original then print("TRADE_ORIGINAL|"..receipt.original) end
 print(ContextPtr:IsHidden() and "TRADE_VIEW|HIDDEN" or "TRADE_VIEW|VISIBLE")
 '''
 

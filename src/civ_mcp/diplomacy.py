@@ -166,10 +166,14 @@ class DiplomacyProgress:
                     if attempt.phase == "TERMS_ENTERED":
                         rows = await _named(gs.conn, "DiplomacyDealView", native.build_trade_deal_receipt(self.observer_scope, attempt.token))
                         originals = [row.split("|", 1)[1] for row in rows if row.startswith("TRADE_ORIGINAL|")]
-                        if not originals:
-                            return self.trade_summary()
-                        attempt.original = originals[0]
-                        attempt.phase = "RESPONSE_WAIT"
+                        if any(row.startswith("TRADE_PREPARE|NOT_SUBMITTED|") for row in rows):
+                            attempt.result = "ERR:NOT_SUBMITTED|Native terms unavailable; no proposal or equalize was sent."
+                            attempt.phase = "PREPARE_EXIT_READY"
+                        else:
+                            if not originals:
+                                return self.trade_summary()
+                            attempt.original = originals[0]
+                            attempt.phase = "RESPONSE_WAIT"
                     if attempt.phase in ("RESPONSE_WAIT", "ACCEPT_WAIT"):
                         rows = await _named(gs.conn, "DiplomacyActionView", native.build_trade_response(self.nonce, attempt.token))
                         headers = [row.split("|") for row in rows if row.startswith("TRADE_RESPONSE|KNOWN|")]
@@ -185,7 +189,9 @@ class DiplomacyProgress:
                         if attempt.preview:
                             attempt.result = report
                             attempt.phase = "PREVIEW_EXIT_READY"
-                        elif attempt.phase == "ACCEPT_WAIT":
+                        # Native ActionView hides DealView for a terminal PROPOSED
+                        # response; its acceptance is already final, not a counter.
+                        elif attempt.phase == "ACCEPT_WAIT" or subtype in ("AI_ACCEPT_DEAL", "HUMAN_ACCEPT_DEAL"):
                             if subtype not in ("AI_ACCEPT_DEAL", "HUMAN_ACCEPT_DEAL") and action != "ACCEPTED":
                                 return self.trade_summary()
                             attempt.result = "ACCEPTED|Native response confirms the explicitly authorized trade.\n" + report
@@ -213,11 +219,17 @@ class DiplomacyProgress:
                                 return "ERR:NOT_SUBMITTED|Native acceptance guard changed; inspect the current counter again."
                         attempt.phase = "ACCEPT_WAIT"  # Even a lost callback reply only observes its statement.
                         continue
-                    if attempt.phase == "PREVIEW_EXIT_READY":
+                    if attempt.phase in ("PREVIEW_EXIT_READY", "PREPARE_EXIT_READY"):
+                        exit_phase = attempt.phase
+                        if exit_phase == "PREPARE_EXIT_READY":
+                            bound = await _named(gs.conn, "DiplomacyActionView", native.build_trade_session(self.nonce, attempt.token))
+                            if bound != [f"TRADE_SESSION|BOUND|{attempt.sid}"]:
+                                return self.trade_summary()
                         attempt.phase = "EXIT_ENTERED"
-                        rows = await _named(gs.conn, "DiplomacyDealView", native.build_trade_close_preview(self.observer_scope, attempt.target, attempt.sid, attempt.token))
+                        builder = native.build_trade_abort_prepare if exit_phase == "PREPARE_EXIT_READY" else native.build_trade_close_preview
+                        rows = await _named(gs.conn, "DiplomacyDealView", builder(self.observer_scope, attempt.target, attempt.sid, attempt.token))
                         if "TRADE_DEAL|NOT_READY" in rows or "TRADE_EXIT|NOT_SUBMITTED" in rows:
-                            attempt.phase = "PREVIEW_EXIT_READY"
+                            attempt.phase = exit_phase
                             return self.trade_summary()
                     if attempt.phase in ("EXIT_ENTERED", "DIALOGUE", "COUNTER"):
                         rows = await _named(gs.conn, "DiplomacyActionView", native.build_trade_closed(self.nonce, attempt.token))
@@ -248,7 +260,7 @@ class DiplomacyProgress:
     async def explicit_cleanup(self, gs) -> str:
         if self.trade is None:
             return "No trade attempt pending."
-        if self.trade.phase not in ("DIALOGUE", "COUNTER", "EXIT_ENTERED", "CLEANUP"):
+        if self.trade.phase not in ("DIALOGUE", "COUNTER", "TERMS_ENTERED", "PREPARE_EXIT_READY", "EXIT_ENTERED", "CLEANUP"):
             return self.trade_summary()
         return await self.resume_trade(gs)
 
