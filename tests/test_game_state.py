@@ -230,17 +230,18 @@ class TestGetGameIdentity:
         assert gs._last_snapshot is snapshot
         assert gs._pending_end_turn_from == 7
 
-    def test_changed_identity_resets_all_per_game_state(self):
+    @pytest.mark.parametrize("pending", [False, True])
+    def test_changed_identity_clears_observations_without_retiring_pending_turn(self, pending):
         gs, _ = _gs([("write", ["GAMESEED|CIVILIZATION_EGYPT|2"])])
         gs._game_identity = ("rome", 1)
         gs._last_snapshot = object()
-        gs._pending_end_turn = True
-        gs._pending_end_turn_from = 99
+        gs._pending_end_turn = pending
+        gs._pending_end_turn_from = 99 if pending else None
         gs._revealed_tiles = {(2, 3)}
         assert run(gs.get_game_identity()) == ("egypt", 2)
         assert gs._last_snapshot is None
-        assert gs._pending_end_turn is False
-        assert gs._pending_end_turn_from is None
+        assert gs.turn_pending is pending
+        assert gs._pending_end_turn_from == (99 if pending else None)
         assert gs._revealed_tiles is None
 
     def test_unparseable_response_returns_unknown_without_caching(self):
@@ -1403,7 +1404,7 @@ class TestSetPolicies:
     def test_matching_slots_return_a_clean_result(self):
         gs, _ = _gs(
             [
-                ("write", ["OK:POLICIES_SET"]),
+                ("write", ["POLICY_PLAN_COUNT|2", "POLICY_PLAN|0|POLICY_DISCIPLINE", "POLICY_PLAN|1|NONE", "OK:POLICIES_SET"]),
                 ("write", self._GOV_LINES),
             ]
         )
@@ -1420,7 +1421,7 @@ class TestSetPolicies:
             "GOV|GOVERNMENT_CHIEFDOM|Chiefdom|x",
             "SLOT|0|SLOT_MILITARY|NONE|Empty",
         ]
-        gs, _ = _gs([("write", ["OK:POLICIES_SET"]), ("write", lines)])
+        gs, _ = _gs([("write", ["POLICY_PLAN_COUNT|1", "POLICY_PLAN|0|POLICY_DISCIPLINE", "OK:POLICIES_SET"]), ("write", lines)])
 
         async def go():
             return await gs.set_policies({0: "POLICY_DISCIPLINE"})
@@ -1521,43 +1522,112 @@ class TestSendEnvoy:
 
 
 class TestProposePeace:
-    """Peace is async on the engine side: the PROPOSED line is followed by a
-    war-state readback that decides ACCEPTED vs REJECTED."""
+    """One proposal followed by bounded read-only confirmation of exact peace."""
+
+    @staticmethod
+    def _repeat_readback(monkeypatch, reply, *, hang=False):
+        monkeypatch.setattr("civ_mcp.game_state.ACTION_CONFIRM_TIMEOUT", 0.01)
+        monkeypatch.setattr("civ_mcp.game_state.ACTION_CONFIRM_INTERVAL", 0.001)
+        gs, conn = _gs([("write", ["OK:PROPOSED|Gilgamesh"])])
+        original = conn.execute_write
+
+        async def execute(lua):
+            if not conn.calls:
+                return await original(lua)
+            conn.calls.append(("write", lua))
+            if hang:
+                await asyncio.Future()
+            if isinstance(reply, Exception):
+                raise reply
+            return reply
+
+        conn.execute_write = execute
+        return gs, conn
+
+    @staticmethod
+    def _assert_one_proposal_then_queries(conn):
+        assert conn.calls[0] == ("write", lq.build_propose_peace(1))
+        assert all(call == ("write", lq.build_check_war_state(1)) for call in conn.calls[1:])
 
     def test_at_peace_readback_reports_acceptance(self):
-        gs, _ = _gs(
-            [
-                ("write", ["OK:PROPOSED|Gilgamesh"]),
-                ("write", ["AT_PEACE|1"]),
-            ]
-        )
+        gs, conn = _gs([
+            ("write", ["OK:PROPOSED|Gilgamesh"]),
+            ("write", ["AT_PEACE"]),
+        ])
+        assert run(gs.propose_peace(1)) == "ACCEPTED|Peace established with Gilgamesh"
+        assert conn.exhausted and len(conn.calls) == 2
+        self._assert_one_proposal_then_queries(conn)
+
+    @pytest.mark.parametrize("intermediate", [
+        [["AT_WAR"], ["AT_WAR"]],
+        [[], ["AT_PEACE|1"]],
+        [["AT_PEACE", "AT_WAR"], ["AT_PEACE", "AT_PEACE"]],
+    ])
+    def test_delayed_peace_is_confirmed_without_sending_another_proposal(self, monkeypatch, intermediate):
+        monkeypatch.setattr("civ_mcp.game_state.ACTION_CONFIRM_INTERVAL", 0)
+        gs, conn = _gs([
+            ("write", ["OK:PROPOSED|Gilgamesh"]),
+            *[("write", rows) for rows in intermediate],
+            ("write", ["AT_PEACE"]),
+        ])
+        assert run(gs.propose_peace(1)) == "ACCEPTED|Peace established with Gilgamesh"
+        assert conn.exhausted and len(conn.calls) == 4
+        self._assert_one_proposal_then_queries(conn)
+
+    @pytest.mark.parametrize("reply", [
+        ["AT_WAR"], [], ["AT_PEACE|1"], ["NOT_AT_PEACE"], ["AT_PEACE_EXTRA"],
+        ["AT_PEACE", "AT_WAR"], ["AT_PEACE", "AT_PEACE"], ["AT_PEACE", ""],
+        None, {"AT_PEACE": True},
+    ])
+    def test_unconfirmed_or_malformed_readback_is_not_rejection_or_acceptance(self, monkeypatch, reply):
+        gs, conn = self._repeat_readback(monkeypatch, reply)
 
         async def go():
-            return await gs.propose_peace(1)
+            return await asyncio.wait_for(gs.propose_peace(1), 0.5)
 
-        assert run(go()) == "ACCEPTED|Peace established with Gilgamesh"
+        result = run(go())
+        assert result.startswith("PROPOSED_UNCONFIRMED|"), result
+        assert "ACCEPTED" not in result and "REJECTED" not in result
+        assert "get_diplomacy" in result and "do not automatically resend" in result
+        assert len(conn.calls) >= 2
+        self._assert_one_proposal_then_queries(conn)
 
-    def test_still_at_war_reports_rejection(self):
-        gs, _ = _gs(
-            [
-                ("write", ["OK:PROPOSED|Gilgamesh"]),
-                ("write", ["AT_WAR|1"]),
-            ]
-        )
+    @pytest.mark.parametrize("exception", [OSError("read lost"), TimeoutError("read timeout"), ValueError("bad reply")])
+    def test_read_exception_keeps_the_proposal_unconfirmed(self, monkeypatch, exception):
+        gs, conn = self._repeat_readback(monkeypatch, exception)
+        result = run(gs.propose_peace(1))
+        assert result.startswith("PROPOSED_UNCONFIRMED|")
+        assert "get_diplomacy" in result and "REJECTED" not in result
+        assert len(conn.calls) == 2
+        self._assert_one_proposal_then_queries(conn)
+
+    def test_native_read_failure_keeps_the_proposal_unconfirmed(self, monkeypatch):
+        from civ_mcp.connection import LuaError
+
+        gs, conn = self._repeat_readback(monkeypatch, LuaError("native read failed"))
+        assert run(gs.propose_peace(1)).startswith("PROPOSED_UNCONFIRMED|")
+        assert len(conn.calls) == 2
+        self._assert_one_proposal_then_queries(conn)
+
+    def test_confirmation_deadline_includes_a_read_that_never_completes(self, monkeypatch):
+        gs, conn = self._repeat_readback(monkeypatch, [], hang=True)
 
         async def go():
-            return await gs.propose_peace(1)
+            return await asyncio.wait_for(gs.propose_peace(1), 0.5)
 
-        assert run(go()) == "REJECTED|Gilgamesh rejected your peace offer"
+        assert run(go()).startswith("PROPOSED_UNCONFIRMED|")
+        assert len(conn.calls) == 2
+        self._assert_one_proposal_then_queries(conn)
 
-    def test_error_result_skips_the_war_state_readback(self):
-        gs, conn = _gs([("write", ["ERR:COOLDOWN|peace on cooldown"])])
-
-        async def go():
-            return await gs.propose_peace(1)
-
-        assert run(go()) == "Error: COOLDOWN|peace on cooldown"
-        assert conn.exhausted
+    @pytest.mark.parametrize(("native_error", "expected"), [
+        ("ERR:COOLDOWN|peace on cooldown", "Error: COOLDOWN|peace on cooldown"),
+        ("ERR:NOT_AT_WAR|Not at war", "Error: NOT_AT_WAR|Not at war"),
+        ("ERR:CANNOT_MAKE_PEACE|war cooldown", "Error: CANNOT_MAKE_PEACE|war cooldown"),
+    ])
+    def test_error_result_skips_the_war_state_readback(self, native_error, expected):
+        gs, conn = _gs([("write", [native_error])])
+        assert run(gs.propose_peace(1)) == expected
+        assert conn.exhausted and len(conn.calls) == 1
 
 
 class TestSendDiplomaticAction:
@@ -1644,7 +1714,7 @@ class TestDiplomacyRespond:
         monkeypatch.setattr(asyncio, "sleep", _instant_sleep)
         gs, conn = _gs(
             [
-                ("write", ["NONE"]),  # get_diplomacy_sessions (pre-text capture)
+                ("write", ["CONTEXT|NONE|NO_OPEN_SESSION", "CONTEXT_COMPLETE"]),  # pre-text capture
                 ("write", ["OK:SESSION_CLOSED|goodbye"]),
             ]
         )
@@ -1736,7 +1806,7 @@ class TestSaveCheckpoint:
         monkeypatch.setattr(game_launcher, "SINGLE_SAVE_DIR", str(tmp_path))
         monkeypatch.setattr(checkpoints, "CHECKPOINT_DIR", tmp_path / "metadata")
         assert checkpoints.begin_baseline_run() is None
-        gs, conn = _gs()
+        gs, conn = _gs([("write", ["GAME_ACTIVE"])])
         snapshots = iter(turns)
         game_ids = iter(identities or [("babylon", 42), ("babylon", 42)])
         saves = []
@@ -1763,7 +1833,7 @@ class TestSaveCheckpoint:
         result = run(gs.save_game("checkpoint"))
         assert result.endswith("Civilization babylon, seed 42, turn 12.")
         assert saves == ["checkpoint"]
-        assert conn.calls == []
+        assert conn.exhausted
 
     def test_pending_end_turn_cannot_create_recovery_checkpoint(self, monkeypatch, tmp_path):
         gs, _, saves = self.prepare(monkeypatch, tmp_path)
@@ -1800,36 +1870,6 @@ class TestSaveCheckpoint:
 
 
 class TestSessionReset:
-    def test_submitted_index_load_discards_previous_world(self, monkeypatch, tmp_path):
-        async def loaded(conn, index):
-            return "Loading save: chosen"
-        async def disconnect():
-            return None
-        monkeypatch.setattr(game_lifecycle, "load_save", loaded)
-        gs, conn = _gs()
-        conn.disconnect = disconnect
-        gs._pending_end_turn = True
-        assert run(gs.load_save(1)).startswith("Loading")
-        assert not gs._pending_end_turn
-
-    def test_rejected_load_preserves_current_session(self, monkeypatch, tmp_path):
-        async def rejected(conn, index):
-            return "Error: rejected"
-        monkeypatch.setattr(game_lifecycle, "load_save", rejected)
-        gs, _ = _gs()
-        gs._pending_end_turn = True
-        assert run(gs.load_save(1)).startswith("Error")
-        assert gs._pending_end_turn
-
-    def test_unknown_native_load_discards_previous_session(self, monkeypatch, tmp_path):
-        async def unknown(conn, name):
-            return "ERR:OUTCOME_UNKNOWN|response lost"
-        monkeypatch.setattr(game_lifecycle, "load_game_save", unknown)
-        gs, _ = _gs()
-        gs._pending_end_turn = True
-        assert "OUTCOME_UNKNOWN" in run(gs.load_game_save("chosen"))
-        assert not gs._pending_end_turn
-
     def test_unknown_diplomacy_status_is_not_an_empty_session(self):
         gs, _ = _gs([("write", [])])
         from civ_mcp.connection import LuaError
@@ -1838,5 +1878,5 @@ class TestSessionReset:
             run(gs.get_diplomacy_sessions())
 
     def test_empty_pending_deals_requires_completion_marker(self):
-        gs, _ = _gs([("write", ["DEALS_COMPLETE"])])
-        assert run(gs.get_pending_deals()) == []
+        gs, _ = _gs([("write", ["CONTEXT|NONE|NO_OPEN_SESSION", "CONTEXT_COMPLETE"])])
+        assert run(gs.get_pending_deals()).status == "NONE"

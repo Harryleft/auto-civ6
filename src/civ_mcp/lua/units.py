@@ -234,8 +234,11 @@ end
 if unit:GetMovesRemaining() <= 0 then
     {_bail("ERR:NO_MOVES|Unit has no movement points remaining this turn. Use skip or wait until next turn.")}
 end
-if not UnitManager.CanStartOperation(unit, UnitOperationTypes.MOVE_TO, nil, true) then
-    {_bail("ERR:CANNOT_MOVE|Unit cannot move (invalid state)")}
+local moveOK, canMove = pcall(function()
+    return UnitManager.CanStartOperation(unit, UnitOperationTypes.MOVE_TO, nil, true)
+end)
+if not moveOK or canMove ~= true then
+    {_bail("ERR:CANNOT_MOVE|Native movement eligibility unavailable or refused; no move submitted.")}
 end
 -- Pre-check: stacking conflict at target tile
 local unitInfo = GameInfo.Units[unit:GetType()]
@@ -257,15 +260,76 @@ local fromX, fromY = unit:GetX(), unit:GetY()
 local params = {{}}
 params[UnitOperationTypes.PARAM_X] = {target_x}
 params[UnitOperationTypes.PARAM_Y] = {target_y}
--- Add ATTACK modifier if hostile unit on target tile (needed for civilian capture)
+-- Foreign units may be allies or neutral. Only an existing native war
+-- authorizes the ATTACK modifier needed for hostile civilian capture.
 local hasHostile = false
 if tgtUnits then
     for other in tgtUnits:Units() do
-        if other:GetOwner() ~= me then hasHostile = true end
+        local owner = other:GetOwner()
+        if owner ~= me then
+            local relationOK, atWar = pcall(function()
+                return Players[me]:GetDiplomacy():IsAtWarWith(owner)
+            end)
+            if not relationOK or type(atWar) ~= "boolean" then
+                {_bail("ERR:MOVE_RELATION_UNKNOWN|Native target war relationship unavailable; no move submitted.")}
+            end
+            if atWar then hasHostile = true end
+        end
     end
 end
 if hasHostile then
     params[UnitOperationTypes.PARAM_MODIFIERS] = UnitOperationMoveModifiers.ATTACK
+end
+-- General movement eligibility does not validate this destination. Use the
+-- final parameters before arming a witness or submitting any operation.
+local targetOK, canTarget = pcall(function()
+    return UnitManager.CanStartOperation(unit, UnitOperationTypes.MOVE_TO, nil, params)
+end)
+if not targetOK or canTarget ~= true then
+    {_bail("ERR:CANNOT_MOVE_TARGET|Native target movement eligibility unavailable or refused; no move submitted.")}
+end
+-- CanStartOperation may allow a target with no usable movement path. The
+-- stock UI marks an empty path bad, but its click handling can still send it.
+local pathOK, pathStatus = pcall(function()
+    if UI.IsGameCoreBusy() ~= false then return "UNKNOWN" end
+    local destination = Map.GetPlot({target_x}, {target_y})
+    if not destination then return "UNKNOWN" end
+    local path = UnitManager.GetMoveToPathEx(unit, destination:GetIndex())
+    if type(path) ~= "table" or type(path.plots) ~= "table" or type(path.turns) ~= "table" then return "UNKNOWN" end
+    local function integer(value, minimum)
+        return type(value) == "number" and value >= minimum and value < math.huge and value == math.floor(value)
+    end
+    local function length(values)
+        local count = 0
+        for key in pairs(values) do
+            if not integer(key, 1) then return nil end
+            count = count + 1
+        end
+        for i = 1, count do if values[i] == nil then return nil end end
+        return count
+    end
+    local count = length(path.plots)
+    if count == nil or length(path.turns) ~= count then return "UNKNOWN" end
+    if count == 0 then
+        local visible = PlayersVisibility[me]:IsVisible({target_x}, {target_y})
+        return visible == true and "NO_PATH" or "UNKNOWN"
+    end
+    if count < 2 then return "UNKNOWN" end
+    for i = 1, count do
+        if not integer(path.plots[i], 0) or not integer(path.turns[i], 1) then return "UNKNOWN" end
+        if i > 1 and path.turns[i] < path.turns[i-1] then return "UNKNOWN" end
+        local plot = Map.GetPlotByIndex(path.plots[i])
+        if not plot then return "UNKNOWN" end
+        if i == 1 and (plot:GetX() ~= fromX or plot:GetY() ~= fromY) then return "UNKNOWN" end
+        if i == count and (plot:GetX() ~= {target_x} or plot:GetY() ~= {target_y}) then return "UNKNOWN" end
+    end
+    return "VALID"
+end)
+if pathOK and pathStatus == "NO_PATH" then
+    {_bail("ERR:NO_PATH|Visible destination has no native movement path; no move submitted.")}
+end
+if not pathOK or pathStatus ~= "VALID" then
+    {_bail("ERR:PATH_UNKNOWN|Native movement path unavailable or unverified; no move submitted.")}
 end
 {witness}
 UnitManager.RequestOperation(unit, UnitOperationTypes.MOVE_TO, params)
@@ -324,13 +388,9 @@ pcall(function()
                     local cfg = PlayerConfigurations[owner]
                     civName = cfg and Locale.Lookup(cfg:GetCivilizationShortDescription()) or civName
                 end)
-                local isMajor = true
-                pcall(function() isMajor = Players[owner]:IsMajor() end)
-                if isMajor then
-                    print("DIAG|BORDER|foreign territory (" .. civName .. ") - need Open Borders via propose_trade")
-                else
-                    print("DIAG|BORDER_CS|city-state territory (" .. civName .. ") - need suzerainty or Open Borders")
-                end
+                -- Ownership alone says nothing about received Open Borders,
+                -- alliance access, city entry, or an intermediate path tile.
+                print("DIAG|FOREIGN_TERRITORY|foreign territory (" .. civName .. ") - entry or path restriction unconfirmed")
             end
         else
             print("DIAG|UNKNOWN|tile appears passable - path may be blocked by intermediate tiles")
@@ -432,9 +492,52 @@ print("{SENTINEL}")
 """
 
 
+# Capability is independent of CanStartOperation's current eligibility. In
+# particular, a ranged refusal must never turn into MOVE_TO + ATTACK.
+_LUA_ATTACK_MODE = """
+local function classifyUnitAttack(unit)
+    local info = GameInfo and GameInfo.Units and GameInfo.Units[unit:GetType()]
+    if not info or (info.Domain ~= "DOMAIN_AIR" and info.Domain ~= "DOMAIN_LAND" and info.Domain ~= "DOMAIN_SEA") then
+        return nil
+    end
+    local function valid(value)
+        return type(value) == "number" and value == value and value >= 0 and value < math.huge
+    end
+    local function strength(method, field)
+        local base = info[field]
+        local ok, native = pcall(function() return unit[method](unit) end)
+        if ok and valid(native) then
+            -- A temporary effective zero does not erase the rule capability.
+            return valid(base) and math.max(base, native) or native
+        end
+        if valid(base) then return base end
+    end
+    local combat = strength("GetCombat", "Combat")
+    local ranged = strength("GetRangedCombat", "RangedCombat")
+    local bombard = strength("GetBombardCombat", "Bombard")
+    local range = strength("GetRange", "Range")
+    if info.Domain == "DOMAIN_AIR" then
+        if (combat and combat > 0) or (ranged and ranged > 0) or (bombard and bombard > 0) then
+            return "AIR", info, range
+        end
+    elseif ranged ~= nil and bombard ~= nil then
+        if bombard > ranged and bombard > 0 then return "BOMBARD", info, range end
+        if ranged > 0 or bombard > 0 then return "RANGED", info, range end
+        if combat and combat > 0 then return "MELEE", info, range end
+    end
+    return nil
+end
+"""
+
+
 def build_attack_unit(unit_index: int, target_x: int, target_y: int) -> str:
     return f"""
 {_lua_get_unit(unit_index)}
+{_LUA_ATTACK_MODE}
+local mode, unitInfo, attackRange = classifyUnitAttack(unit)
+if not mode then {_bail("ERR:ATTACK_CAPABILITY_UNKNOWN|Unit has no known attack capability")} end
+local isRanged = mode == "RANGED" or mode == "BOMBARD"
+local isAir = mode == "AIR"
 local ux, uy = unit:GetX(), unit:GetY()
 local dist = Map.GetPlotDistance(ux, uy, {target_x}, {target_y})
 -- Find hostile unit on target tile (prefer military over civilian)
@@ -481,31 +584,22 @@ local beforeTag = "|target_owner:" .. enemyOwner .. "|target_id:" .. enemy:GetID
 local params = {{}}
 params[UnitOperationTypes.PARAM_X] = {target_x}
 params[UnitOperationTypes.PARAM_Y] = {target_y}
--- Determine attack type
-local unitInfo = GameInfo.Units[unit:GetType()]
-local isRanged = UnitManager.CanStartOperation(unit, UnitOperationTypes.RANGE_ATTACK, nil, true)
-local isAir = (not isRanged) and UnitManager.CanStartOperation(unit, UnitOperationTypes.AIR_ATTACK, nil, params)
 if isRanged then
     if unit:GetMovesRemaining() <= 0 then
         {_bail("ERR:NO_MOVES|Unit has no movement points for ranged attack. Ranged attacks require movement. Move and attack on separate turns, or attack before moving.")}
     end
-    local rng = unitInfo and unitInfo.Range or 1
+    local rng = attackRange
+    if not rng or rng <= 0 then {_bail("ERR:ATTACK_CAPABILITY_UNKNOWN|Attack range unavailable")} end
     if dist > rng then
         {_bail_lua('"ERR:OUT_OF_RANGE|Target at distance " .. dist .. " but range is " .. rng .. ". Move closer first."')}
     end
     -- LOS check: CanStartOperation with target params is authoritative;
     -- GetOperationTargets returns empty for some valid targets (naval units, etc.)
-    local losParams = {{}}
-    losParams[UnitOperationTypes.PARAM_X] = {target_x}
-    losParams[UnitOperationTypes.PARAM_Y] = {target_y}
-    local canRanged = UnitManager.CanStartOperation(unit, UnitOperationTypes.RANGE_ATTACK, nil, losParams)
+    local canRanged = UnitManager.CanStartOperation(unit, UnitOperationTypes.RANGE_ATTACK, nil, params)
     if canRanged then
         UnitManager.RequestOperation(unit, UnitOperationTypes.RANGE_ATTACK, params)
         print("OK:RANGE_ATTACK|target:" .. enemyName .. " at ({target_x},{target_y})|pre_hp:" .. enemyHP .. "/" .. enemyMaxHP .. "|your HP:" .. myHP .. "|range:" .. rng .. " dist:" .. dist .. beforeTag)
         print("{SENTINEL}"); return
-    elseif dist <= 1 then
-        -- Ranged failed at melee range: fall through to melee attack below
-        isRanged = false
     else
         {_bail_lua(f'"ERR:NO_LOS|Cannot ranged-attack target at ({target_x},{target_y}) from (" .. ux .. "," .. uy .. "). LOS blocked or unit already attacked this turn."')}
     end
@@ -513,9 +607,13 @@ end
 if isAir then
     -- Air units (jet bombers, jet fighters, bombers, fighters): use AIR_ATTACK operation.
     -- Combat resolves asynchronously in the UI so post-combat HP reads may be stale.
-    local rng = unitInfo and unitInfo.Range or 1
+    local rng = attackRange
+    if not rng or rng <= 0 then {_bail("ERR:ATTACK_CAPABILITY_UNKNOWN|Attack range unavailable")} end
     if dist > rng then
         {_bail_lua('"ERR:OUT_OF_RANGE|Target at distance " .. dist .. " but air range is " .. rng .. ". Rebase closer first."')}
+    end
+    if not UnitManager.CanStartOperation(unit, UnitOperationTypes.AIR_ATTACK, nil, params) then
+        {_bail("ERR:AIR_ATTACK_BLOCKED|Native air target unavailable")}
     end
     UnitManager.RequestOperation(unit, UnitOperationTypes.AIR_ATTACK, params)
     print("OK:AIR_ATTACK|target:" .. enemyName .. " at ({target_x},{target_y})|pre_hp:" .. enemyHP .. "/" .. enemyMaxHP .. "|bomber HP:" .. myHP .. "|range:" .. rng .. " dist:" .. dist .. beforeTag)
@@ -637,6 +735,7 @@ def build_combat_estimate_query(unit_index: int, target_x: int, target_y: int) -
     """
     return f"""
 {_lua_get_unit(unit_index)}
+{_LUA_ATTACK_MODE}
 local function preview()
     if not UI or not UI.IsGameCoreBusy or UI.IsGameCoreBusy() ~= false then
         return "ESTIMATE_UNKNOWN|core busy or state unavailable"
@@ -647,24 +746,28 @@ local function preview()
     local params = {{}}
     params[UnitOperationTypes.PARAM_X] = {target_x}
     params[UnitOperationTypes.PARAM_Y] = {target_y}
-    -- Mirror attack_unit's ranged-to-melee fallback, without changing UI mode.
-    local isRanged = UnitManager.CanStartOperation(unit, UnitOperationTypes.RANGE_ATTACK, nil, true)
-    local isAir = (not isRanged) and UnitManager.CanStartOperation(unit, UnitOperationTypes.AIR_ATTACK, nil, params)
-    if isRanged and not UnitManager.CanStartOperation(unit, UnitOperationTypes.RANGE_ATTACK, nil, params) then
-        if Map.GetPlotDistance(unit:GetX(), unit:GetY(), {target_x}, {target_y}) <= 1 then
-            isRanged = false
-        else
-            return "ESTIMATE_UNKNOWN|ranged target unavailable"
-        end
-    end
-    -- Shipped UnitPanel documents nil melee and RANGED/BOMBARD. Its air
-    -- mapping is not established here; leave that preview unknown, not guessed.
-    if isAir then return "ESTIMATE_UNKNOWN|air preview mode unverified" end
+    local mode, info, range = classifyUnitAttack(unit)
+    if not mode then return "ESTIMATE_UNKNOWN|unit attack capability unavailable" end
+    -- Shipped UnitPanel verifies RANGED/BOMBARD and nil melee. Its air
+    -- preview mapping remains unverified; do not guess one.
+    if mode == "AIR" then return "ESTIMATE_UNKNOWN|air preview mode unverified" end
+    if unit:GetMovesRemaining() <= 0 then return "ESTIMATE_UNKNOWN|unit has no moves" end
+    local isRanged = mode == "RANGED" or mode == "BOMBARD"
     local combatType = nil
     if isRanged then
-        combatType = CombatTypes.RANGED
-        if unit:GetBombardCombat() > unit:GetRangedCombat() then combatType = CombatTypes.BOMBARD end
+        if not range or range <= 0 or Map.GetPlotDistance(unit:GetX(), unit:GetY(), {target_x}, {target_y}) > range then
+            return "ESTIMATE_UNKNOWN|ranged target out of known range"
+        end
+        if not UnitManager.CanStartOperation(unit, UnitOperationTypes.RANGE_ATTACK, nil, params) then
+            return "ESTIMATE_UNKNOWN|ranged target unavailable"
+        end
+        if mode == "BOMBARD" then combatType = CombatTypes.BOMBARD else combatType = CombatTypes.RANGED end
         if combatType == nil then return "ESTIMATE_UNKNOWN|ranged combat type unavailable" end
+    else
+        params[UnitOperationTypes.PARAM_MODIFIERS] = UnitOperationMoveModifiers.ATTACK
+        if unit:HasMovedIntoZOC() or not UnitManager.CanStartOperation(unit, UnitOperationTypes.MOVE_TO, nil, params) then
+            return "ESTIMATE_UNKNOWN|melee target unavailable"
+        end
     end
     local enemy = nil
     local tgtUnits = Map.GetUnitsAt({target_x}, {target_y})

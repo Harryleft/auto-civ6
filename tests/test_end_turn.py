@@ -8,6 +8,7 @@ import pytest
 from civ_mcp import end_turn as et
 from civ_mcp import lua as lq
 from civ_mcp.connection import LuaError
+from civ_mcp.game_state import GameState
 
 
 class FakeConn:
@@ -42,6 +43,8 @@ class FakeConn:
 
     async def execute_write(self, lua):
         self.calls.append(lua)
+        if lua == lq.build_victory_proximity_query():
+            return [f"VICTORY_CONTEXT|{self.turn}|0", "VICTORY_ENABLED_KNOWN|true", "VICTORY_COMPLETE"]
         if "TURN_UI_READY|" in lua:
             processing = self.ui_processing(self) if callable(self.ui_processing) else self.ui_processing
             return [f"TURN_UI_READY|{self.turn}|{int(not processing)}"]
@@ -71,11 +74,20 @@ class FakeConn:
 
 
 class FakeGameState:
+    _pending_end_turn = GameState._pending_end_turn
+    _pending_end_turn_from = GameState._pending_end_turn_from
+    turn_pending = GameState.turn_pending
+    capture_turn_snapshot = GameState.capture_turn_snapshot
+    report_turn_advance = GameState.report_turn_advance
+    end_turn = GameState.end_turn
+
     def __init__(self):
+        self._turn_progress = et.TurnProgress()
         self.conn = FakeConn()
         self._pending_end_turn = False
         self._pending_end_turn_from = None
         self._last_snapshot = None
+        self._local_player_id = 0
         self.sessions = []
         self.sessions_calls = 0
         self.sessions_error = None
@@ -97,10 +109,10 @@ class FakeGameState:
         self.sessions_calls += 1
         if self.sessions_error:
             raise self.sessions_error
-        return self.sessions
+        return lq.DiplomacyContext(status="DIALOGUE" if self.sessions else "NONE", sessions=self.sessions)
 
     async def get_pending_deals(self):
-        return self.deals
+        return lq.DiplomacyContext(status="INCOMING" if self.deals else "NONE", deals=self.deals)
 
     async def get_world_congress(self):
         return self.wc
@@ -139,11 +151,11 @@ def clock(monkeypatch):
 
 
 def play(gs):
-    return asyncio.run(et.execute_end_turn(gs))
+    return asyncio.run(gs.end_turn())
 
 
 def session(**changes):
-    defaults = dict(other_civ_name="Rome", other_leader_name="Trajan", other_player_id=2,
+    defaults = dict(session_id=71, buttons="", other_civ_name="Rome", other_leader_name="Trajan", other_player_id=2,
                     dialogue_text="Proposal", reason_text="", deal_summary="", is_at_war=False)
     return SimpleNamespace(**(defaults | changes))
 
@@ -247,7 +259,7 @@ def test_pending_request_can_confirm_without_querying_in_game_blockers(clock):
     gs = FakeGameState()
     gs._pending_end_turn = True
     gs._pending_end_turn_from = 49
-    gs._last_snapshot = lq.TurnSnapshot(49, {}, {}, "", "")
+    gs._turn_progress.baseline = lq.TurnSnapshot(49, {}, {}, "", "")
     gs.sessions_error = AssertionError("Must not re-enter preflight while AI is processing")
     assert "Turn 49 -> 50" in play(gs)
     assert not gs.conn.requests
@@ -596,3 +608,336 @@ def test_malformed_congress_read_reports_unknown_instead_of_claiming_no_session(
     result = play(gs)
     assert "World Congress phase unavailable" in result
     assert clock.now < 10 and not gs.conn.requests
+
+
+class GameStateConn(FakeConn):
+    """The native protocol, exercised through the real GameState interface."""
+
+    def __init__(self):
+        super().__init__()
+        self.snapshot_turn = None
+        self.snapshot_error = False
+        self.notification_error = False
+        self.victory_error = None
+        self.victory_lines = None
+
+    async def execute_write(self, lua):
+        if lua == lq.build_overview_query():
+            self.calls.append(lua)
+            if self.snapshot_error:
+                raise LuaError("Snapshot unavailable")
+            turn = self.turn if self.snapshot_turn is None else self.snapshot_turn
+            research = "Writing" if turn == 50 else "Currency"
+            return [f"{turn}|0|Babylon|Hammurabi|100|5|10|5|0|{research}|Craftsmanship|0|0|20"]
+        if lua == lq.build_victory_proximity_query():
+            self.calls.append(lua)
+            if self.victory_error:
+                raise self.victory_error
+            return self.victory_lines if self.victory_lines is not None else [
+                f"VICTORY_CONTEXT|{self.turn}|0", "VICTORY_ENABLED_KNOWN|true",
+                "VENABLED|VICTORY_TECHNOLOGY", "DIPLO_REQUIRED|25",
+                "VFACT|0|Babylon|0|33.5|0|0|0|0|1|0|0|3",
+                "VFACT|1|Known rival|0|33.5|1|2|0|1|41|0|0|3",
+                "VICTORY_COMPLETE",
+            ]
+        responses = {
+            lq.build_gameover_check(): ["GAME_ACTIVE"],
+            lq.build_diplomacy_session_query(): ["CONTEXT|NONE|NO_OPEN_SESSION", "CONTEXT_COMPLETE"],
+            lq.build_units_query(): [],
+            lq.build_cities_query(): [],
+            lq.build_stockpile_query(): [],
+        }
+        if lua in responses:
+            self.calls.append(lua)
+            return responses[lua]
+        if lua == lq.build_notifications_query() and self.notification_error:
+            self.calls.append(lua)
+            raise LuaError("Notifications unavailable")
+        return await super().execute_write(lua)
+
+
+def test_real_game_state_keeps_original_baseline_when_overview_observes_pending_turn(clock):
+    conn = GameStateConn()
+    gs = GameState(conn)
+    conn.send_error = ConnectionError("reply lost")
+    assert "result unknown" in asyncio.run(gs.end_turn())
+    # An ordinary observation can refresh its cache but cannot rewrite the
+    # submitted request's turn-50 facts.
+    asyncio.run(gs.get_game_overview(require_snapshot=True))
+    report = asyncio.run(gs.end_turn())
+    assert "Turn 50 -> 51" in report
+    assert "Research complete: Writing! Now: Currency." in report
+    assert len(conn.requests) == 1
+
+
+@pytest.mark.parametrize("snapshot_turn", [50, 52])
+def test_real_game_state_does_not_describe_stale_or_future_snapshot_as_confirmed_turn(clock, snapshot_turn):
+    conn = GameStateConn()
+    gs = GameState(conn)
+    conn.send_error = ConnectionError("reply lost")
+    assert "result unknown" in asyncio.run(gs.end_turn())
+    conn.snapshot_turn = snapshot_turn
+    report = asyncio.run(gs.end_turn())
+    assert "Turn 50 -> 51" in report
+    assert "snapshot unavailable" in report
+    assert "Research complete:" not in report
+    assert not gs.turn_pending
+    assert len(conn.requests) == 1
+
+
+@pytest.mark.parametrize("failure", ["snapshot", "notifications", "both"])
+def test_real_game_state_report_failure_keeps_confirmed_request_retired(clock, failure):
+    conn = GameStateConn()
+    gs = GameState(conn)
+    conn.send_error = ConnectionError("reply lost")
+    assert "result unknown" in asyncio.run(gs.end_turn())
+    conn.snapshot_error = failure in {"snapshot", "both"}
+    conn.notification_error = failure in {"notifications", "both"}
+    report = asyncio.run(gs.end_turn())
+    assert "Turn 50 -> 51" in report
+    assert "unavailable" in report
+    assert not gs.turn_pending
+    conn.ready = False
+    assert "not ready" in asyncio.run(gs.end_turn())
+    assert len(conn.requests) == 1
+
+
+def test_real_game_state_unknown_request_blocks_actions_and_saves_until_ready(clock):
+    conn = GameStateConn()
+    gs = GameState(conn)
+    conn.readiness = lambda conn: not conn.requests
+    assert "after 180s" in asyncio.run(gs.end_turn())
+    assert gs.turn_pending
+    calls = len(conn.calls)
+    assert "End-turn outcome is pending" in asyncio.run(gs.move_unit(123, 4, 5))
+    assert "End-turn outcome is pending" in asyncio.run(gs.save_game("offline_turn_test"))
+    assert len(conn.calls) == calls
+    conn.readiness = None
+    assert "Turn 50 -> 51" in asyncio.run(gs.end_turn())
+    assert not gs.turn_pending
+    assert len(conn.requests) == 1
+
+
+@pytest.mark.parametrize("pause", ["diplomacy", "congress", "disaster"])
+def test_real_game_state_resumes_paused_request_without_resubmitting(clock, pause):
+    conn = GameStateConn()
+    gs = GameState(conn)
+    conn.readiness = lambda conn: not conn.requests
+    if pause == "diplomacy":
+        conn.diplomacy_probe = ["DIPLOMACY|2"]
+    elif pause == "congress":
+        conn.congress_phase = lambda conn: [
+            f"WC_PHASE|true|STAGE1|{conn.turn}|NONE" if conn.requests
+            else "WC_PHASE|false|NONE|50|NONE"
+        ]
+    else:
+        conn.information_popups = ["INFORMATION_POPUPS|VISIBLE|NaturalDisasterPopup", "INFORMATION_POPUPS|DONE"]
+    assert "Turn paused" in asyncio.run(gs.end_turn())
+    assert gs.turn_pending
+    conn.readiness = None
+    conn.diplomacy_probe = ["DIPLOMACY_NONE"]
+    conn.congress_phase = ["WC_PHASE|false|NONE|51|NONE"]
+    conn.information_popups = ["INFORMATION_POPUPS|DONE"]
+    report = asyncio.run(gs.end_turn())
+    assert "Turn 50 -> 51" in report
+    assert "Research complete: Writing! Now: Currency." in report
+    assert not gs.turn_pending
+    assert len(conn.requests) == 1
+
+
+def test_real_game_state_identity_refresh_cannot_retire_or_confirm_an_old_turn_request(clock, monkeypatch):
+    from civ_mcp import game_launcher
+
+    class ChangedWorldConn(GameStateConn):
+        seed = 1
+
+        async def execute_write(self, code):
+            if "GAMESEED|" in code:
+                return [f"GAMESEED|CIVILIZATION_SUMERIA|{self.seed}"]
+            return await super().execute_write(code)
+
+        async def disconnect(self):
+            pass
+
+    conn = ChangedWorldConn()
+    gs = GameState(conn)
+    assert asyncio.run(gs.get_game_identity()) == ("sumeria", 1)
+    conn.send_error = ConnectionError("reply lost")
+    assert "result unknown" in asyncio.run(gs.end_turn())
+    assert gs.turn_pending
+    conn.send_error = None
+    conn.seed, conn.turn = 2, 100
+    assert asyncio.run(gs.get_game_identity()) == ("sumeria", 2)
+    assert gs.turn_pending
+    result = asyncio.run(gs.end_turn())
+    assert "OUTCOME_UNKNOWN" in result
+    assert "Turn 50 -> 100" not in result
+    assert gs.turn_pending and len(conn.requests) == 1
+    assert "End-turn outcome is pending" in asyncio.run(gs.save_game("another_checkpoint"))
+
+    async def stopped():
+        return game_launcher.ProcessResult(True, "stopped")
+
+    monkeypatch.setattr(game_launcher, "stop_game", stopped)
+    assert asyncio.run(gs.kill_game()) == "stopped"
+    assert not gs.turn_pending
+    # Only explicit, confirmed replacement can retire the old request. A newly
+    # available session can now start its own turn rather than confirm turn 50.
+    assert asyncio.run(gs.get_game_identity()) == ("sumeria", 2)
+    assert "Turn 100 -> 101" in asyncio.run(gs.end_turn())
+    assert len(conn.requests) == 2
+
+
+def test_identity_change_during_pending_read_cannot_confirm_new_world_readiness(clock):
+    class PausedObservationConn(GameStateConn):
+        seed = 1
+        pause = False
+
+        def __init__(self):
+            super().__init__()
+            self.observing = asyncio.Event()
+            self.resume = asyncio.Event()
+
+        async def execute_write(self, code):
+            if "GAMESEED|" in code:
+                return [f"GAMESEED|CIVILIZATION_SUMERIA|{self.seed}"]
+            return await super().execute_write(code)
+
+        async def execute_read(self, code):
+            if self.pause and "TURN_STATE|" in code:
+                self.observing.set()
+                await self.resume.wait()
+            return await super().execute_read(code)
+
+    async def scenario():
+        conn = PausedObservationConn()
+        gs = GameState(conn)
+        await gs.get_game_identity()
+        conn.send_error = ConnectionError("reply lost")
+        assert "result unknown" in await gs.end_turn()
+        conn.send_error, conn.pause = None, True
+        confirmation = asyncio.create_task(gs.end_turn())
+        await conn.observing.wait()
+        conn.seed, conn.turn = 2, 100
+        await gs.get_game_identity()
+        conn.resume.set()
+        assert "OUTCOME_UNKNOWN" in await confirmation
+        assert gs.turn_pending and len(conn.requests) == 1
+
+    asyncio.run(scenario())
+
+
+def test_unknown_diplomacy_context_never_releases_end_turn(clock):
+    gs = FakeGameState()
+
+    async def unknown_context():
+        return lq.DiplomacyContext(reason="MULTIPLE_SESSIONS")
+
+    gs.get_diplomacy_sessions = unknown_context
+    assert "UNKNOWN" in play(gs)
+    assert not gs.conn.requests
+
+
+def test_dialogue_appearing_during_the_second_context_read_blocks_end_turn(clock):
+    gs = FakeGameState()
+
+    async def dialogue_context():
+        return lq.DiplomacyContext(status="DIALOGUE", reason="CURRENT_DIALOGUE_VIEW", sessions=[session()])
+
+    gs.get_pending_deals = dialogue_context
+    assert "DIALOGUE" in play(gs)
+    assert not gs.conn.requests
+
+
+def test_current_incoming_blocker_preserves_trade_response_guidance(clock):
+    gs = FakeGameState()
+    current = session()
+    current.deal_summary = "They offer: Great Work x1"
+
+    async def incoming_context():
+        return lq.DiplomacyContext(status="INCOMING", sessions=[current])
+
+    gs.get_diplomacy_sessions = incoming_context
+    assert "respond_to_trade" in play(gs)
+    assert not gs.conn.requests
+
+
+def test_confirmed_turn_report_adds_readonly_early_victory_warning_once(clock):
+    conn = GameStateConn()
+    gs = GameState(conn)
+    report = play(gs)
+    assert "Turn 50 -> 51" in report
+    assert "Known rival: space race observed" in report
+    assert "0/33.5 VP" in report
+    assert not gs.turn_pending and len(conn.requests) == 1
+    assert conn.calls.count(lq.build_victory_proximity_query()) == 1
+    assert not any("Network.SaveGame" in code or "RequestOperation" in code for code in conn.calls)
+
+
+@pytest.mark.parametrize("error", [OSError("read dropped"), LuaError("unavailable"), TimeoutError("late")])
+def test_victory_read_failure_cannot_undo_confirmed_turn_or_resend(clock, error):
+    conn = GameStateConn()
+    conn.victory_error = error
+    gs = GameState(conn)
+    report = play(gs)
+    assert "Turn 50 -> 51" in report and "Victory warnings unavailable" in report
+    assert not gs.turn_pending and len(conn.requests) == 1
+    conn.ready = False
+    assert "not ready" in play(gs)
+    assert len(conn.requests) == 1
+    assert conn.calls.count(lq.build_victory_proximity_query()) == 1
+
+
+@pytest.mark.parametrize("invalid", ["wrong_turn", "wrong_player", "incomplete", "duplicate", "malformed"])
+def test_unbound_or_incomplete_victory_read_is_unknown_after_confirmed_turn(clock, invalid):
+    conn = GameStateConn()
+    context = "VICTORY_CONTEXT|51|0"
+    conn.victory_lines = [context, "VICTORY_ENABLED_KNOWN|true", "VENABLED|VICTORY_TECHNOLOGY",
+                          "VFACT|0|Babylon|0|33.5|0|0|0|0|1|0|0|3",
+                          "VFACT|1|Known rival|0|33.5|1|2|0|1|41|0|0|3", "VICTORY_COMPLETE"]
+    if invalid == "wrong_turn": conn.victory_lines[0] = "VICTORY_CONTEXT|52|0"
+    if invalid == "wrong_player": conn.victory_lines[0] = "VICTORY_CONTEXT|51|2"
+    if invalid == "incomplete": conn.victory_lines.pop()
+    if invalid == "duplicate": conn.victory_lines.insert(0, context)
+    if invalid == "malformed": conn.victory_lines[4] = "VFACT|1|Known rival|truncated"
+    gs = GameState(conn)
+    report = play(gs)
+    assert "Turn 50 -> 51" in report and "Victory warnings unavailable" in report
+    assert "Known rival: space race observed" not in report
+    assert not gs.turn_pending and len(conn.requests) == 1
+
+
+@pytest.mark.parametrize("state", ["unknown", "paused", "terminal"])
+def test_unconfirmed_paused_and_terminal_turns_do_not_read_victory_warnings(clock, state):
+    conn = GameStateConn()
+    gs = GameState(conn)
+    if state == "terminal":
+        conn.game_over_status = lambda conn: (["GAME_OVER|DEFEAT|Rome|VICTORY_TECHNOLOGY|alive|Trajan|2"]
+                                               if conn.requests else ["GAME_ACTIVE"])
+    else:
+        conn.readiness = lambda conn: not conn.requests
+        if state == "paused": conn.diplomacy_probe = ["DIPLOMACY|2"]
+    report = play(gs)
+    assert "Turn 50 -> 51" not in report
+    assert conn.calls.count(lq.build_victory_proximity_query()) == 0
+    assert len(conn.requests) == 1
+    assert gs.turn_pending is (state != "terminal")
+
+
+def test_stalled_victory_read_is_bounded_and_does_not_reopen_confirmed_turn(monkeypatch):
+    from civ_mcp import game_state
+
+    class StalledVictoryConn(GameStateConn):
+        async def execute_write(self, code):
+            if code == lq.build_victory_proximity_query():
+                self.calls.append(code)
+                await asyncio.Event().wait()
+            return await super().execute_write(code)
+
+    monkeypatch.setattr(game_state, "VICTORY_REPORT_TIMEOUT", .001)
+    conn = StalledVictoryConn()
+    gs = GameState(conn)
+    report = play(gs)
+    assert "Turn 50 -> 51" in report and "Victory warnings unavailable" in report
+    assert not gs.turn_pending and len(conn.requests) == 1
+    assert conn.calls.count(lq.build_victory_proximity_query()) == 1

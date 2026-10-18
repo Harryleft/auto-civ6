@@ -1,0 +1,162 @@
+{
+  "counts": {
+    "civics": 61,
+    "combat": 311,
+    "congress": 29,
+    "diplomacy": 53,
+    "districts": 28,
+    "economy": 261,
+    "resources": 87,
+    "technologies": 77,
+    "victory": 97
+  },
+  "coverage": {
+    "complete_for_snapshot_tables": [
+      "Civics",
+      "Technologies",
+      "Districts",
+      "Resolutions",
+      "ProposalTypes",
+      "VotingBlockers",
+      "Yields",
+      "Buildings",
+      "Policies",
+      "Resources",
+      "RandomEvents",
+      "Units",
+      "UnitPromotions",
+      "Terrains",
+      "Features",
+      "DiplomaticActions",
+      "Alliances",
+      "Victories",
+      "Religions",
+      "Beliefs"
+    ],
+    "empty_optional_tables": [
+      "Building_ResourceCosts",
+      "CivilopediaPageChapterParagraphs",
+      "Feature_UnitMovements",
+      "RandomEvent_DamagedUnits",
+      "RandomEvent_Features",
+      "RandomEvent_PillagedBuildings",
+      "RandomEvent_PillagedDistricts"
+    ],
+    "missing_optional_tables": [],
+    "not_covered": [
+      "完整 Modifier 解释",
+      "当前对局模组／模式核对",
+      "完整动作合法性和有效费用",
+      "策略最优性"
+    ]
+  },
+  "files": {
+    "rules/civics.json": "cda39f67e7f06b6990bca4c0a5422238c3053e447cbb2d465ea1e69abe7fb7d3",
+    "rules/combat.json": "55a81df543c024dda8833541ae07e12947c593895ee724410da0dd8fe6789a5f",
+    "rules/congress.json": "8fa798d417e3fa8f39b5cad92a9c8a71421f190cca93f35ae6cfa30d935bd8af",
+    "rules/diplomacy.json": "3f80a8f659315f27627c8b99ac57def40c8c8d762b9b20485c4ac428dac895d8",
+    "rules/districts.json": "640fd76dae262d4247109024e6083fef879b5231562ff5c790571e37c0e36803",
+    "rules/economy.json": "8b0ecf19206baf0f1282ac821b53cd9ff3bb5f19bb63b4a38a3da1ddf34dd5d1",
+    "rules/resources.json": "81a96c4c59b8cd26de6ea2ca57f89ca76c22020cb9acecee5ca7ebfb0300a4db",
+    "rules/technologies.json": "73c4f3847a3f7776d1eb979b2fadf224b40bf95fb523bd9d23c848423d100364",
+    "rules/victory.json": "f52868fead92a96f492c05ea968f4ccb465c0f6aeb045b5893f9303d3cbb7985"
+  },
+  "profile": {
+    "active_modes_verified": false,
+    "active_mods_verified": false,
+    "configuration_enabled_mods": [
+      {
+        "id": "02a8bdde-67ea-4d38-9540-26e685e3156e",
+        "label": "LOC_AZTEC_MONTEZUMA_MOD_TITLE"
+      },
+      {
+        "id": "0c0c1169-cc34-44a6-9db9-52ca4499a2cf",
+        "label": "LOC_MOD_SCOUT_CAT_TITLE"
+      },
+      {
+        "id": "19d1c7ec-54de-11ea-a2e3-2e728ce88125",
+        "label": "Tech and Civic Shuffle Game Mode"
+      },
+      {
+        "id": "19ed1a36-d744-4a58-8f8b-0376c2ba86e5",
+        "label": "Barbarian Clans Game Mode"
+      },
+      {
+        "id": "4873eb62-8ccc-4574-b784-dda455e74e68",
+        "label": "LOC_EXPANSION2_MOD_TITLE"
+      },
+      {
+        "id": "5b0445c9-1376-45ad-9b51-c96a83a8f17d",
+        "label": "LOC_WARMACHINE_MOD_TITLE"
+      },
+      {
+        "id": "648cd2a8-057a-4eb5-9e41-e1f7d86b5443",
+        "label": "LOC_COLDWAR_MOD_TITLE"
+      },
+      {
+        "id": "9ed63236-617c-45a6-bb70-8cb6b0be8ed2",
+        "label": "LOC_JULIUS_CAESAR_MOD_TITLE"
+      },
+      {
+        "id": "a55fafb4-9070-4597-9453-b28a99910cda",
+        "label": "Multiplayer Scenario: Pirates"
+      },
+      {
+        "id": "c1f775d8-59b5-401b-b86d-78faf3446ec7",
+        "label": "LOC_BLACKDEATH_MOD_TITLE"
+      },
+      {
+        "id": "f264ee10-f21b-4a9a-bbcd-d534e9843e90",
+        "label": "LOC_CIV_ROYALE_MOD_TITLE"
+      },
+      {
+        "id": "f653805e-f7c8-44e1-8cbd-fb48d7aabcba",
+        "label": "LOC_ANCIENT_RIVALS_MOD_TITLE"
+      }
+    ],
+    "configuration_warning": "Configuration enabled lists do not prove per-game active modes or ownership.",
+    "current_session_verified": false,
+    "derived_tables": [
+      "CivilopediaTexts"
+    ],
+    "game_version": "1.0.12.54 (951533)",
+    "language_preference": [
+      "zh_Hans_CN",
+      "en_US"
+    ],
+    "localization_policy": "Cached text; missing literals supplemented from installed Expansion2 text. Active overrides unverified.",
+    "macos_bundle_build": "376653.178",
+    "macos_bundle_version": "1.4.6",
+    "missing_optional_tables": [],
+    "ruleset": "RULESET_EXPANSION_2",
+    "ruleset_basis": "target knowledge ruleset; Expansion2 definitions required; not a loaded-session attestation",
+    "source_scope": "local_cached_rules_snapshot",
+    "startup_started_at": "2026-10-17T19:45:01",
+    "startup_timestamp_basis": "startup_log_local_time",
+    "steam_build_id": "15296837"
+  },
+  "schema_version": 1,
+  "snapshot": "sources/snapshot.json",
+  "snapshot_sha256": "aa6e9f0d78862858c8ba6b841a8fdfe04652c4b98825999986d0ead3f4a51e77",
+  "support_files": {
+    "NEXT.md": "41f3329d78ca2582985df220564268efe4e1ed513ef83b6b673f4f92ae295d8b",
+    "README.md": "138a4bdbb94ba3950d4c7210f8319c66014916b8da0b0c5dceca6192042ec01d",
+    "build.py": "776478363294067f1e5ad9019251a780fa02dc3005304c04bb3d8e1ad1e4c996",
+    "capture.py": "6ffacaa617bab1ebde0c4374b5b32c9830af03163c8a332c66d33759746cdbfa",
+    "query.py": "b7f34768ff2e292835e894e31aef4b25f2e00ad16682275e04d877099bad757f",
+    "topics/civics.md": "55dea2e99d9df7f606335c5fd454df79b57d22907cfb7ce2d7d68162a732ff61",
+    "topics/combat.json": "bac2bb41c0088e6f9acf2350c907ed918c8c835d848d2bbe7bff8bf0a17572bc",
+    "topics/combat.md": "2d83533865d70d396b0388a468c5fc1193839aaa758b344c77d41893fd574bc1",
+    "topics/congress.md": "6dd6a09d6ba7989dd7e254bf387094f317100816ce55c7c276ee99f0588edc6c",
+    "topics/diplomacy.json": "ec7ede1da23a0f9a58ce9947f4561dfacb98f68d9c798f6b8db639692fd600b5",
+    "topics/diplomacy.md": "7c6d60f1f25b470801ff751b3b9da5471fad56efad5613bec112568770ab7fc5",
+    "topics/districts.md": "895c7c367653bb8bcd9906b3ede83debddd6548b07a0bb2f3bd6b5224a358bc3",
+    "topics/economy.json": "75461e9b8a921dc7e2fb3ab0ddc27db708da57e08aafe7cb12716d6f9b4bc832",
+    "topics/economy.md": "451c93851a327aa8eba0a5ec96fed68036bd49ca1eadf40f22b990445bb8961a",
+    "topics/resources.json": "e738dc454abe25e92463cf15dd612997dca3efe3f9937aa0aecbba8384cef941",
+    "topics/resources.md": "c84d1aabbbdfc2eca5e25ba7e85787951314924b70f33002c8dea08f9b4de5e7",
+    "topics/technologies.md": "2ca46828e7c42d55d7a6a4cc543eab7bcd8e66e80366208612deea97c3a39623",
+    "topics/victory.json": "cd77b81f6f7c044ca241183fbb0cbee9b6af611280397c80f1c41f04f38dcb36",
+    "topics/victory.md": "a8a9d30ebaba4879d03e4670f162b1bd210c0974f5c0b3a2af2fb4db0d71db2e"
+  }
+}

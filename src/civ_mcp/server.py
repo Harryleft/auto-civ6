@@ -8,10 +8,11 @@ import sys
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Awaitable, Callable, Optional
+from typing import Annotated, Any, AsyncIterator, Awaitable, Callable, Optional
 
 from mcp.server.fastmcp import Context, FastMCP
-from civ_mcp import game_launcher, game_lifecycle, checkpoints
+from pydantic import Field
+from civ_mcp import knowledge
 from civ_mcp import lua as lq
 from civ_mcp import narrate as nr
 from civ_mcp.connection import GameConnection, LuaError
@@ -19,7 +20,6 @@ from civ_mcp.game_state import GameState
 from civ_mcp.logger import GameLogger
 
 log = logging.getLogger(__name__)
-LOAD_TIMEOUT = 180.0
 
 
 @dataclass
@@ -41,7 +41,7 @@ async def lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
 
 mcp = FastMCP(
     "Civilization VI",
-    instructions="Read real game state before issuing actions. Call get_game_overview first. A lost response may mean an action already ran; verify before retrying. Normal save swaps use reload_game_save; restart_and_load is explicit full-process fault recovery.",
+    instructions="Read real game state before issuing actions. Call get_game_overview first. When rules, prerequisites, unlocks or mechanics are unclear, use search_knowledge to locate names/IDs, then get_knowledge(level='rule'); use evidence for source conflicts. Static knowledge does not verify current action eligibility: check the relevant game tools. Knowledge tools work without a game connection. A lost response may mean an action already ran; verify before retrying. Normal save swaps use reload_game_save; restart_and_load is explicit full-process fault recovery.",
     lifespan=lifespan,
 )
 
@@ -80,9 +80,11 @@ async def _logged(
     async with app.lock:
         start = time.monotonic()
         try:
-            if (
-                (getattr(app.game, "_pending_load", False)
-                 or getattr(app.game, "_pending_save", False))
+            # Only these static readers bypass game-state access and pending gates.
+            if tool_name in {"search_knowledge", "get_knowledge"}:
+                result = await fn()
+            elif (
+                (app.game.replacement_pending or app.game.save_pending)
                 and not tool_name.startswith(("get_", "list_"))
                 and tool_name != "restart_and_load"
             ):
@@ -92,7 +94,7 @@ async def _logged(
                     "before issuing gameplay actions."
                 )
             elif (
-                getattr(app.game, "_pending_end_turn", False)
+                app.game.turn_pending
                 and not tool_name.startswith(("get_", "list_"))
                 and tool_name not in {"end_turn", "respond_to_diplomacy", "respond_to_trade", "queue_wc_votes", "open_world_congress", "dismiss_popup", "restart_and_load"}
             ):
@@ -136,6 +138,43 @@ async def _logged(
 # ---------------------------------------------------------------------------
 # Query tools (read-only)
 # ---------------------------------------------------------------------------
+
+
+@mcp.tool(annotations={"readOnlyHint": True, "idempotentHint": True})
+async def search_knowledge(
+    ctx: Context,
+    query: Annotated[str, Field(min_length=1)],
+    topic: Optional[knowledge.KnowledgeTopic] = None,
+    limit: Annotated[int, Field(ge=1, le=20, strict=True)] = 5,
+) -> str:
+    """Search static Civ6 rules by a Chinese/English name or internal ID fragment.
+
+    Matches names/IDs case-insensitively, not semantic text. Optionally filter
+    one of nine topics; returns bounded summaries and total/truncated metadata.
+    Use get_knowledge(level='rule') for prerequisites, unlocks and mechanics;
+    evidence for source conflicts. Snapshot rules do not establish current-game
+    eligibility. Available offline and during pending operations.
+    """
+    return await _logged(ctx, "search_knowledge", {"query": query, "topic": topic, "limit": limit},
+                         lambda: knowledge.search(query, topic, limit))
+
+
+@mcp.tool(annotations={"readOnlyHint": True, "idempotentHint": True})
+async def get_knowledge(
+    ctx: Context,
+    entry_id: Annotated[str, Field(min_length=1)],
+    level: knowledge.KnowledgeLevel = 'summary',
+) -> str:
+    """Read a static knowledge entry ID from search_knowledge as UTF-8 JSON.
+
+    summary gives identity/overview; rule gives prerequisites, conditions and
+    relations; evidence gives source references and facts. Read only the depth
+    needed. Profile/snapshot identify static data; current session, active mods
+    and action applicability remain unverified. Check game tools for current
+    candidates, costs and progress. No game connection is required.
+    """
+    return await _logged(ctx, "get_knowledge", {"entry_id": entry_id, "level": level},
+                         lambda: knowledge.get(entry_id, level))
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
@@ -481,10 +520,11 @@ async def get_tech_civics(ctx: Context) -> str:
 
 @mcp.tool(annotations={"readOnlyHint": True})
 async def get_pending_trades(ctx: Context) -> str:
-    """Check for pending trade deal offers from other civilizations.
+    """Read a verified current incoming deal or demand.
 
-    Shows what each civ is offering and what they want in return.
-    Use respond_to_trade to accept or reject.
+    Returns NONE, DIALOGUE, INCOMING, or UNKNOWN. Cached working items alone
+    are not a current proposal. Read again on UNKNOWN; use respond_to_trade
+    only for a verified INCOMING proposal and an explicit accept/reject choice.
     """
     gs = _get_game(ctx)
     return await _logged(
@@ -848,7 +888,10 @@ async def get_trade_options(ctx: Context, other_player_id: int) -> str:
 
 @mcp.tool()
 async def respond_to_trade(ctx: Context, other_player_id: int, accept: bool) -> str:
-    """Accept or reject a pending trade deal.
+    """Accept or reject the verified current incoming deal or demand.
+
+    Rechecks the visible view, unique session, participants, and incoming data
+    before submitting. Unknown context or a different target submits nothing.
 
     Args:
         other_player_id: The player ID of the civilization (from get_pending_trades)
@@ -975,7 +1018,9 @@ async def propose_peace(ctx: Context, other_player_id: int) -> str:
         other_player_id: The player ID (from get_diplomacy output)
 
     Requires being at war and past the 10-turn war cooldown.
-    The AI may accept or reject based on war score and relationship.
+    Submits once and briefly checks war state. ACCEPTED confirms observed peace.
+    PROPOSED_UNCONFIRMED requires get_diplomacy before another proposal;
+    continued war alone is not a rejection and must not trigger an automatic resend.
     """
     gs = _get_game(ctx)
     return await _logged(
@@ -1025,10 +1070,10 @@ async def respond_to_diplomacy(
 
     Args:
         other_player_id: The player ID of the other civilization (from get_pending_diplomacy)
-        response: "POSITIVE" (friendly) or "NEGATIVE" (dismissive)
+        response: "POSITIVE" (friendly), "NEGATIVE" (dismissive), or "EXIT" (close a verified GOODBYE)
 
-    First meetings typically have 2-3 rounds. The tool automatically detects
-    and closes goodbye-phase sessions (where dialogue text stops changing).
+    First meetings typically have 2-3 rounds. Automatic goodbye cleanup requires
+    the same verified dialogue with identical nonempty text before and after.
     If SESSION_CONTINUES is returned, send another response for the next round.
     """
     gs = _get_game(ctx)
@@ -1055,6 +1100,11 @@ async def send_diplomatic_action(
                 DECLARE_PROTECTORATE_WAR, DECLARE_COLONIAL_WAR,
                 DECLARE_TERRITORIAL_WAR
 
+    DECLARE_FRIENDSHIP submits once and waits briefly for a native bilateral
+    DECLARED_FRIEND relationship. ACCEPTED requires that witness; otherwise
+    PROPOSED_UNCONFIRMED means read get_diplomacy first, without automatic resend.
+    A legal request alone does not confirm that the friendship was accepted.
+
     Delegations cost 25 gold and can be rejected if the civ dislikes you.
     Embassies require Writing tech. Use get_diplomacy to see available actions.
     Surprise war is always available if not allied/friends. Other war types
@@ -1079,7 +1129,11 @@ async def form_alliance(
         other_player_id: The player ID (from get_diplomacy output)
         alliance_type: One of: MILITARY, RESEARCH, CULTURAL, ECONOMIC, RELIGIOUS
 
-    Requires declared friendship and Diplomatic Service civic.
+    Requires declared friendship and Diplomatic Service civic. Submits the
+    existing proposal sequence once, then waits briefly for bilateral ALLIED
+    and the exact requested native alliance type. Otherwise returns
+    PROPOSED_UNCONFIRMED; read get_diplomacy before another proposal and do not
+    automatically resend. Same-frame working-deal data is not acceptance.
     Use get_trade_options to check alliance eligibility first.
     """
     gs = _get_game(ctx)
@@ -1693,31 +1747,30 @@ async def open_world_congress(ctx: Context) -> str:
 
 @mcp.tool()
 async def queue_wc_votes(ctx: Context, votes: str) -> str:
-    """Pre-configure World Congress votes for the upcoming session.
+    """Submit a complete explicit World Congress resolution/proposal plan.
 
     Args:
-        votes: JSON array of vote objects, e.g.
-            '[{"hash": -513644209, "option": 1, "target": 2, "votes": 5}]'
-            hash = resolution type hash (from get_world_congress)
-            option = 1 for A, 2 for B
-            target = player ID for PlayerType resolutions (from get_world_congress
-                     target list, e.g. [target=2] Portugal); for other resolutions,
-                     use the shown 0-based target index or a raw target string.
-            votes = max votes to allocate (will use as many as favor allows)
+        votes: JSON array. Resolutions retain {"hash": ..., "option": 1 or 2,
+            "target": ..., "votes": N}. Proposals use {"proposal_key": "exact key
+            from get_world_congress", "option": 1 (up) or 2 (down), "votes": N}.
+            Resolution target is the shown player ID for PlayerType, otherwise
+            the shown zero-based index or exact raw value. Never mix identifiers.
 
-    Call this BEFORE end_turn when get_world_congress shows 0 turns until next
-    session. Registers an event handler that fires during WC processing and
-    casts your votes with the specified preferences. Provide all four fields
-    for every resolution; missing choices never receive default votes.
-    If already in session, the specified votes are submitted immediately so
-    one congress-stage continuation is requested after votes and submission.
-    The original ordinary end-turn request is never replayed. Repeated calls
-    report the existing request; they do not repeat votes or continuation.
-    An empty list is allowed only for a verified no-choice native stage;
-    non-empty or unknown proposal choices are rejected without default votes.
+    Cover every eligible item once: Stage1 resolutions and proposals, Stage2
+    proposals only. Disabled/both-direction-blocked items need no vote. Unknown
+    identities, costs, restrictions, incomplete plans and illegal choices submit
+    nothing. [] is allowed only for a verified native stage with no choices.
 
-    If you don't call this, end_turn will pause at the World Congress session
-    and return control to you for interactive voting.
+    Votes are maxima: reserve every required first-vote cost, then allocate extra
+    votes in input order using one favor budget and each native category's cost
+    table/limit. The result reports actual requested counts and cumulative costs.
+    Native operations send resolutions first, proposals second, then one submit
+    and one stage continuation. This is not an acceptance receipt.
+
+    Before a session the plan registers for its native stage event. In session it
+    executes immediately. Repeats/lost replies inspect the existing request;
+    partial or unknown submissions never replay votes or continuation. Read
+    get_world_congress before voting and choose every option explicitly.
     """
     gs = _get_game(ctx)
 
@@ -1740,7 +1793,11 @@ async def get_victory_progress(ctx: Context) -> str:
     Shows progress toward Science, Domination, Culture, Religious,
     Diplomatic, and Score victories. Includes space race VP, diplomatic VP,
     tourism vs domestic tourists, religion spread, capital ownership,
-    and military strength. Call every 20-30 turns to track the race.
+    and military strength. Uses active native project prerequisites and
+    production eligibility; unknown observations remain unknown. After a
+    spaceport or space progress appears, inspect relevant facts each turn.
+    Confirmed end-turn reports include lightweight risk warnings; these are
+    heuristics, not game outcomes or exact remaining-turn predictions.
     """
     gs = _get_game(ctx)
 
@@ -1844,9 +1901,11 @@ async def run_lua(ctx: Context, code: str, context: str = "gamecore") -> str:
 
 @mcp.tool()
 async def save_game(ctx: Context, save_name: str) -> str:
-    """Save the active single-player game under a local filename.
+    """Save a confirmed active single-player turn under a local filename.
 
-    Confirms a fresh nonempty file, civilization, seed and unchanged turn.
+    Known terminal outcomes are refused before saving; retain the last
+    confirmed checkpoint and terminal evidence. Active saves require a fresh
+    nonempty file, native completion, civilization, seed and unchanged turn.
     An existing filename is overwritten; use unique names for checkpoints.
     An unknown result is never resent automatically. Confirm pending end-turn
     results before saving, and explicitly name a confirmed save for recovery.
@@ -1875,12 +1934,8 @@ async def load_save(ctx: Context, save_index: int) -> str:
     The same MainMenu, expected identity and readiness checks apply to named
     and index-based loads. Unknown legacy files cannot bypass those checks.
     """
-    async def _run():
-        names = game_lifecycle._filesystem_save_names
-        if not 1 <= save_index <= len(names):
-            return "Error: No matching cached save index; call list_saves or use load_game_save with an explicit confirmed name."
-        return await _load_and_verify(_get_game(ctx), names[save_index - 1])
-    return await _logged(ctx, "load_save", {"save_index": save_index}, _run)
+    gs = _get_game(ctx)
+    return await _logged(ctx, "load_save", {"save_index": save_index}, lambda: gs.load_save(save_index))
 
 
 @mcp.tool(annotations={"destructiveHint": True})
@@ -1890,7 +1945,7 @@ async def load_game_save(ctx: Context, save_name: str) -> str:
     Confirms identity, turn and a fresh complete snapshot. Use reload_game_save
     for a normal in-game swap. No OCR, restart or automatic resend.
     """
-    return await _logged(ctx, "load_game_save", {"save_name": save_name}, lambda: _load_and_verify(_get_game(ctx), save_name))
+    return await _logged(ctx, "load_game_save", {"save_name": save_name}, lambda: _get_game(ctx).load_game_save(save_name))
 
 
 @mcp.tool(annotations={"destructiveHint": True})
@@ -1902,7 +1957,7 @@ async def reload_game_save(ctx: Context, save_name: str) -> str:
     Unknown results are never resent; restart_and_load is explicit fault recovery.
     """
     return await _logged(ctx, "reload_game_save", {"save_name": save_name},
-                         lambda: _load_and_verify(_get_game(ctx), save_name, return_to_menu=True))
+                         lambda: _get_game(ctx).reload_game_save(save_name))
 
 
 # ---------------------------------------------------------------------------
@@ -1915,19 +1970,13 @@ async def reload_game_save(ctx: Context, save_name: str) -> str:
 @mcp.tool(annotations={"destructiveHint": True})
 async def kill_game(ctx: Context) -> str:
     """Explicitly stop Civ6 and release its FireTuner session."""
-    gs = _get_game(ctx)
-    async def _run():
-        await gs.conn.disconnect()
-        result = await game_launcher.kill_game()
-        gs.reset_session()
-        return result
-    return await _logged(ctx, "kill_game", {}, _run)
+    return await _logged(ctx, "kill_game", {}, _get_game(ctx).kill_game)
 
 
 @mcp.tool(annotations={"destructiveHint": True})
 async def launch_game(ctx: Context) -> str:
     """Launch Civ6 through Steam; load a save explicitly from the main menu."""
-    return await _logged(ctx, "launch_game", {}, game_launcher.launch_game)
+    return await _logged(ctx, "launch_game", {}, _get_game(ctx).launch_game)
 
 
 @mcp.tool(annotations={"destructiveHint": True})
@@ -1936,7 +1985,7 @@ async def load_save_from_menu(ctx: Context, save_name: str | None = None) -> str
     name = save_name
     if not name:
         return "Error: Provide an explicit confirmed checkpoint save_name; autosave guessing is disabled."
-    return await _logged(ctx, "load_save_from_menu", {"save_name": name}, lambda: _load_and_verify(_get_game(ctx), name))
+    return await _logged(ctx, "load_save_from_menu", {"save_name": name}, lambda: _get_game(ctx).load_game_save(name))
 
 
 @mcp.tool(annotations={"destructiveHint": True})
@@ -1946,135 +1995,8 @@ async def restart_and_load(ctx: Context, save_name: str | None = None) -> str:
     Prefer reload_game_save for normal swaps while Civ6 responds.
     Unknown load results are confirmed by reading state, never by reloading.
     """
-    gs = _get_game(ctx)
-    name = save_name
-    if not name:
-        return "Error: Provide an explicit confirmed checkpoint save_name; autosave guessing is disabled."
-    error = game_lifecycle._validate_save_name(name)
-    if error:
-        return error
-    if checkpoints.expected_checkpoint(name) is None:
-        return "Error: Checkpoint completion and expected identity are unavailable; no restart performed."
-    async def _run():
-        await gs.conn.disconnect()
-        stopped = await game_launcher.kill_game()
-        if stopped.startswith(("Error", "FAILED", "WARNING")):
-            return f"Error: Restart stopped because Civ6 shutdown was not confirmed: {stopped}"
-        gs.reset_session()
-        started = await game_launcher.launch_game()
-        if started.startswith(("Error", "FAILED", "WARNING")) or "not detected" in started:
-            return f"Error: {stopped} | {started}"
-        loaded = await _load_and_verify(gs, name)
-        return f"{loaded} | {stopped} | {started}"
-    return await _logged(ctx, "restart_and_load", {"save_name": name}, _run)
-
-
-async def _load_and_verify(gs: GameState, save_name: str, *, return_to_menu: bool = False) -> str:
-    """同一个连接负责加载与验证；确认窗口内不重复发送加载命令。"""
-    error = game_lifecycle._validate_save_name(save_name)
-    if error:
-        return error
-    if getattr(gs, "_pending_load", False):
-        return "ERR:OUTCOME_UNKNOWN|An earlier load is unconfirmed; inspect state or use explicit recovery, not another load."
-    if return_to_menu and (
-        getattr(gs, "_pending_save", False) or getattr(gs, "_pending_end_turn", False)
-        or gs.pending_action_entity is not None
-    ):
-        return "ERR:OUTCOME_UNKNOWN|An action/save/end-turn is pending; confirm it or use explicit restart_and_load before replacing the session."
-    expected = checkpoints.expected_checkpoint(save_name)
-    if expected is None:
-        return "Error: Checkpoint completion and expected identity are unavailable; no load sent."
-    saved_score = checkpoints.expected_score(save_name)
-    submitted = False
-    replacing = False
-    try:
-        async with asyncio.timeout(LOAD_TIMEOUT):
-            if return_to_menu:
-                # Install the barrier before ExitToMainMenu can be submitted.
-                # The helper only releases it when native code proves no exit ran.
-                gs._pending_load = True
-                replacing = True
-                menu = await game_lifecycle.return_to_main_menu(gs.conn)
-                if menu != "Main menu confirmed.":
-                    if menu.startswith("Error:") and "no exit sent" in menu:
-                        gs._pending_load = False
-                        replacing = False
-                    return menu
-                gs.reset_session()
-                game_lifecycle._filesystem_save_names.clear()
-                gs._pending_load = True
-            # During startup FireTuner briefly opens before MainMenu exists,
-            # then resets the socket. Retry only this read-only discovery;
-            # the actual load below is still submitted exactly once.
-            while True:
-                try:
-                    frontend = await game_lifecycle.is_in_frontend(gs.conn)
-                    if frontend is False:
-                        message = "A game is loaded; return to the main menu first."
-                        return ("ERR:OUTCOME_UNKNOWN|" if replacing else "Error: ") + message
-                    if frontend is True and "MainMenu" in gs.conn.lua_states.values():
-                        break
-                except (OSError, LuaError, ValueError):
-                    pass
-                await asyncio.sleep(2)
-            if checkpoints.expected_checkpoint(save_name) != expected:
-                prefix = "ERR:OUTCOME_UNKNOWN|" if replacing else "Error: "
-                return prefix + "Checkpoint file changed before load; no load sent."
-            submitted = True
-            result = await game_lifecycle.load_save_from_frontend(gs.conn, save_name)
-            if not result.startswith(("Loading", "ERR:OUTCOME_UNKNOWN")):
-                if replacing:
-                    return "ERR:OUTCOME_UNKNOWN|Main menu reached but replacement is not verified. " + result
-                return result
-            gs.reset_session()
-            game_lifecycle._filesystem_save_names.clear()
-            gs._pending_load = True
-            while True:
-                try:
-                    await gs.conn.reconnect()
-                    if gs.conn.gamecore_index is not None and gs.conn.ingame_index is not None:
-                        from civ_mcp.end_turn import read_turn_state
-                        turn, ready = await read_turn_state(gs)
-                        if ready is True:
-                            identity = await gs.get_game_identity()
-                            gs._pending_load = True
-                            ov = await gs.get_game_overview(require_snapshot=True)
-                            # Identity discovery can reset cached session data;
-                            # restore the barrier until every comparison passes.
-                            gs._pending_load = True
-                            actual = (*identity, ov.turn)
-                            if actual != expected or turn != ov.turn:
-                                return f"ERR:OUTCOME_UNKNOWN|Loaded state mismatch: expected {expected}, observed {actual}, active turn {turn}. No load replayed."
-                            # Confirm identity and readiness after all snapshot
-                            # reads too, rather than trusting their earlier state.
-                            final_identity = await gs.get_game_identity()
-                            gs._pending_load = True
-                            final_turn, final_ready = await read_turn_state(gs)
-                            if final_identity != identity or final_turn != ov.turn or final_ready is not True:
-                                raise ValueError("Loaded state changed or became unreadable during snapshot confirmation")
-                            if checkpoints.expected_checkpoint(save_name) != expected:
-                                return "ERR:OUTCOME_UNKNOWN|Checkpoint file changed during load; recovery not verified."
-                            if save_name.removesuffix(".Civ6Save") == "benchmark_turn_1":
-                                ownership_error = checkpoints.begin_baseline_run()
-                                if ownership_error:
-                                    return ownership_error
-                            gs._pending_load = False
-                            score_comparison = nr.narrate_score_comparison(saved_score, checkpoints.score_evidence(ov))
-                            return f"Loaded {save_name}: {identity[0]}, seed {identity[1]}, turn {ov.turn}.\n{score_comparison}"
-                except (OSError, LuaError, ValueError):
-                    gs._pending_load = True
-                await asyncio.sleep(2)
-    except asyncio.CancelledError:
-        if replacing or submitted:
-            gs._pending_load = True
-        raise
-    except TimeoutError:
-        if replacing or submitted:
-            gs._pending_load = True
-        await gs.conn.disconnect()
-        if not submitted and not replacing:
-            return "Error: MainMenu was not ready within 180 seconds; no load command was sent."
-        return "ERR:OUTCOME_UNKNOWN|Session replacement was not confirmed within 180 seconds. Use explicit restart_and_load for fault recovery."
+    return await _logged(ctx, "restart_and_load", {"save_name": save_name},
+                         lambda: _get_game(ctx).restart_and_load(save_name))
 
 
 async def _narrate(
