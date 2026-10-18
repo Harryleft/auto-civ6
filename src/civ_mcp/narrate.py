@@ -126,14 +126,9 @@ def narrate_overview(ov: lq.GameOverview) -> str:
             + (f" (disabled: {', '.join(disabled)})" if disabled else "")
         )
     if ov.era_name:
-        score_status = ""
-        if ov.era_score >= ov.era_golden_threshold:
-            score_status = " -> GOLDEN AGE"
-        elif ov.era_score < ov.era_dark_threshold:
-            deficit = ov.era_dark_threshold - ov.era_score
-            score_status = f" !! {deficit} short of avoiding Dark Age"
+        lines.append(f"Era: {ov.era_name} | Current age: {ov.current_age or 'unknown'}")
         lines.append(
-            f"Era: {ov.era_name} | Score: {ov.era_score} (Dark: {ov.era_dark_threshold}, Golden: {ov.era_golden_threshold}){score_status}"
+            f"Era score: {ov.era_score} | Next-era thresholds (Dark: {ov.era_dark_threshold}, Golden: {ov.era_golden_threshold})"
         )
     if ov.rankings:
         all_scores = [(ov.civ_name, ov.score)] + [
@@ -1361,7 +1356,7 @@ def narrate_dedications(status: lq.DedicationStatus) -> str:
     era_name = era_names.get(status.era, f"Era {status.era}")
     lines = [
         f"{status.age_type} Age — {era_name} Era",
-        f"Era Score: {status.era_score} (Dark: {status.dark_threshold}, Golden: {status.golden_threshold})",
+        f"Era score: {status.era_score} | Next-era thresholds (Dark: {status.dark_threshold}, Golden: {status.golden_threshold})",
     ]
     if status.active:
         lines.append(f"\nActive dedications: {', '.join(status.active)}")
@@ -1627,7 +1622,7 @@ def narrate_trade_destinations(dests: list[lq.TradeDestination]) -> str:
         return "".join(parts)
 
     if domestic:
-        lines.append("\nDomestic (food + production to destination):")
+        lines.append("\nDomestic (food + production to origin):")
         for d in domestic:
             lines.append(_fmt_dest(d))
     if foreign:

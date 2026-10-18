@@ -79,6 +79,7 @@ class GameOverview:
     score_categories: list[ScoreCategory] | None = None
     civilization_type: str | None = None
     leader_type: str | None = None
+    current_age: str | None = None  # Native current age, not inferred from era score.
 
     @property
     def score_category_total(self) -> int | None:
