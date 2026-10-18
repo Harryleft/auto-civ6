@@ -23,7 +23,6 @@ from civ_mcp.narrate import (
     narrate_move_discoveries,
     narrate_notification_message,
     narrate_settle_candidates,
-    narrate_test_trade,
     narrate_victory_warnings,
 )
 
@@ -60,7 +59,12 @@ class GameState:
         self._turn_progress = TurnProgress()
         from civ_mcp.game_lifecycle import DiplomacyViewCleanup
         self._diplomacy_cleanup = DiplomacyViewCleanup()
-        self._trade_result_pending_cleanup: str | None = None
+        from civ_mcp.diplomacy import DiplomacyProgress
+        self._diplomacy_progress = DiplomacyProgress()
+
+    @property
+    def diplomacy_pending(self) -> bool:
+        return self._diplomacy_progress.pending or self._diplomacy_cleanup.pending
 
     @property
     def turn_pending(self) -> bool:
@@ -118,6 +122,10 @@ class GameState:
     async def _action_gate(self, entity: tuple[str, int] | None = None) -> str | None:
         if self._pending_load or self._pending_save:
             return "ERR:OUTCOME_UNKNOWN|Load or save completion is not confirmed; inspect or recover before gameplay."
+        if self._diplomacy_progress.pending:
+            return self._diplomacy_progress.trade_summary()
+        if self._diplomacy_cleanup.pending:
+            return "ERR:OUTCOME_UNKNOWN|Native diplomacy cleanup is unconfirmed; dismiss_popup only confirms it."
         if self.turn_pending:
             return "ERR:OUTCOME_UNKNOWN|End-turn outcome is pending; confirm end_turn before gameplay."
         if entity is not None and entity[0] == "unit":
@@ -154,6 +162,7 @@ class GameState:
                     self._clear_world_caches()
                     self._turn_progress.invalidate_scope()
                     self._diplomacy_cleanup.invalidate_scope()
+                    self._diplomacy_progress.invalidate_scope()
                 self._game_identity = new_id
                 return self._game_identity
         return ("unknown", 0)
@@ -163,6 +172,7 @@ class GameState:
     # ------------------------------------------------------------------
 
     async def get_game_overview(self, *, require_snapshot: bool = False) -> lq.GameOverview:
+        await self._diplomacy_progress.ensure_observer(self.conn)
         # InGame context needed for GetFavor() (nil in GameCore)
         lines = await self.conn.execute_write(lq.build_overview_query())
         ov = lq.parse_overview_response(lines)
@@ -679,76 +689,21 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         if "CONTEXT_COMPLETE" not in lines:
             raise LuaError("Diplomacy session status is unknown")
-        return lq.parse_diplomacy_sessions(lines)
+        context = lq.parse_diplomacy_sessions(lines)
+        for session in context.sessions:
+            keys, _ = await self._diplomacy_progress.choices(self.conn, session.session_id, session.other_player_id)
+            session.choice_status = "KNOWN" if keys is not None else "UNKNOWN"
+            session.choices = [lq.DiplomacyChoice(key=key, text=key) for key in keys or []]
+        return context
 
     async def diplomacy_respond(self, other_player_id: int, response: str) -> str:
-        # Capture dialogue text BEFORE response to detect goodbye phase
-        pre_sessions = await self.get_diplomacy_sessions()
-        pre_text = ""
-        for s in pre_sessions.sessions:
-            if s.other_player_id == other_player_id:
-                pre_text = s.dialogue_text
-                break
-
-        # Phase 1: Send AddResponse only (no CloseSession — engine handles lifecycle)
-        lua = lq.build_diplomacy_respond(other_player_id, response.upper())
-        lines = await self.conn.execute_write(lua)
-        result = _action_result(lines)
-
-        # EXIT and error paths return immediately
-        if "SESSION_CLOSED" in result or result.startswith("Error"):
-            return result
-
-        # Phase 2: Give engine ~9 frames (0.3s at 30fps) to process the
-        # response and transition/close the session, then check state in
-        # a separate TCP round-trip (same-frame checks see stale state).
-        await asyncio.sleep(0.3)
-        check_lines = await self.conn.execute_write(
-            lq.build_check_diplomacy_session_state(other_player_id)
-        )
-        if not any("SESSION_OPEN" in l for l in check_lines):
-            return f"OK:RESPONDED|{response.upper()}|SESSION_CLOSED"
-
-        # Phase 3: Session still open — check if dialogue text changed.
-        # If unchanged, we're in the goodbye phase. Auto-close.
-        post_sessions = await self.get_diplomacy_sessions()
-        if post_sessions.status == "UNKNOWN":
-            return (f"OK:RESPONDED|{response.upper()}|SESSION_CONTINUES\n"
-                    f"Diplomacy context UNKNOWN: {post_sessions.reason}; read again before responding.")
-        post_text = ""
-        for s in post_sessions.sessions:
-            if s.other_player_id == other_player_id:
-                post_text = s.dialogue_text
-                break
-
-        if post_sessions.status == "NONE":
-            # Session disappeared between checks (race condition)
-            return f"OK:RESPONDED|{response.upper()}|SESSION_CLOSED"
-
-        if (pre_sessions.status == post_sessions.status == "DIALOGUE"
-                and pre_text and post_text == pre_text
-                and len(pre_sessions.sessions) == len(post_sessions.sessions) == 1
-                and pre_sessions.sessions[0].session_id == post_sessions.sessions[0].session_id
-                and post_sessions.sessions[0].other_player_id == other_player_id):
-            # Dialogue unchanged → goodbye phase. Force close.
-            log.info(
-                "Goodbye phase detected (text unchanged) for player %d — auto-closing",
-                other_player_id,
-            )
-            close_lua = lq.build_diplomacy_respond(other_player_id, "EXIT")
-            await self.conn.execute_write(close_lua)
-            return f"OK:RESPONDED|{response.upper()}|SESSION_CLOSED (auto-closed goodbye phase)"
-
-        # Include the new dialogue text so the agent can see what the leader said
-        post_reason = ""
-        for s in post_sessions.sessions:
-            if s.other_player_id == other_player_id:
-                post_reason = s.reason_text
-                break
-        dialogue_note = f'\nLeader says: "{post_text}"'
-        if post_reason:
-            dialogue_note += f'\nReason/agenda: "{post_reason}"'
-        return f"OK:RESPONDED|{response.upper()}|SESSION_CONTINUES{dialogue_note}"
+        sessions = await self.get_diplomacy_sessions()
+        if self._diplomacy_progress.response is not None:
+            return await self._diplomacy_progress.confirm_response(self.conn)
+        candidates = [item for item in sessions.sessions if item.other_player_id == other_player_id]
+        if sessions.status != "DIALOGUE" or len(candidates) != 1:
+            return "ERR:OUTCOME_UNKNOWN|Current dialogue is not verified; no response submitted."
+        return await self._diplomacy_progress.respond(self.conn, candidates[0].session_id, other_player_id, response)
 
     async def send_diplomatic_action(self, other_player_id: int, action: str) -> str:
         if action.upper() == "OPEN_BORDERS":
@@ -891,49 +846,23 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         if "CONTEXT_COMPLETE" not in lines:
             raise LuaError("Pending deal status is unknown")
-        return lq.parse_pending_deals_response(lines)
+        context = lq.parse_pending_deals_response(lines)
+        context.outgoing_summary = await self._diplomacy_progress.outgoing_report(self.conn)
+        return context
 
     async def respond_to_deal(self, other_player_id: int, accept: bool) -> str:
+        owned = await self._diplomacy_progress.respond_counter(self, other_player_id, accept)
+        if owned is not None:
+            return owned
         lua = lq.build_respond_to_deal(other_player_id, accept)
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
-    async def propose_trade(
-        self,
-        other_player_id: int,
-        offer_items: list[dict],
-        request_items: list[dict],
-    ) -> str:
-        if self._trade_result_pending_cleanup is not None or self._diplomacy_cleanup.pending:
-            previous = self._trade_result_pending_cleanup or "No prior trade result was recorded for this UI cleanup."
-            return "No new trade submitted; confirming previous native cleanup.\n" + await self._finish_trade_cleanup(previous)
-        lua = lq.build_propose_trade(other_player_id, offer_items, request_items)
-        lines = await self.conn.execute_write(lua)
-        result = _action_result(lines)
-        return await self._finish_trade_cleanup(result)
+    async def propose_trade(self, other_player_id: int, offer_items: list[dict], request_items: list[dict]) -> str:
+        return await self._diplomacy_progress.run_trade(self, other_player_id, offer_items, request_items, preview=False)
 
-    async def _finish_trade_cleanup(self, result: str) -> str:
-        # Close may execute before this await is cancelled. Preserve the known
-        # trade result first so every later entry only confirms its cleanup.
-        self._trade_result_pending_cleanup = result
-        cleanup = await self._diplomacy_cleanup.close(self.conn)
-        if cleanup.status != "unknown":
-            self._trade_result_pending_cleanup = None
-        return result + "\n" + cleanup.message
-
-    async def test_trade(
-        self,
-        other_player_id: int,
-        offer_items: list[dict],
-        request_items: list[dict],
-    ) -> str:
-        if self._trade_result_pending_cleanup is not None or self._diplomacy_cleanup.pending:
-            previous = self._trade_result_pending_cleanup or "No prior trade result was recorded for this UI cleanup."
-            return "No new trade submitted; confirming previous native cleanup.\n" + await self._finish_trade_cleanup(previous)
-        lua = lq.build_test_trade(other_player_id, offer_items, request_items)
-        lines = await self.conn.execute_write(lua)
-        result = lq.parse_test_trade_response(lines)
-        return await self._finish_trade_cleanup(narrate_test_trade(result))
+    async def test_trade(self, other_player_id: int, offer_items: list[dict], request_items: list[dict]) -> str:
+        return await self._diplomacy_progress.run_trade(self, other_player_id, offer_items, request_items, preview=True)
 
     async def propose_peace(self, other_player_id: int) -> str:
         lua = lq.build_propose_peace(other_player_id)
@@ -1825,22 +1754,30 @@ class GameState:
     async def get_turn_status(self) -> str:
         """Read native phases without confirming or retiring pending advancement."""
         result = await self._turn_progress.get_status(self)
+        if self._diplomacy_progress.pending:
+            result += "\n" + self._diplomacy_progress.trade_summary()
         if self._diplomacy_cleanup.pending:
             result += "\ndiplomacy_cleanup: native callback outcome unknown; dismiss_popup only confirms its receipt; no callback or trade will be replayed."
         return result
 
     async def end_turn(self) -> str:
         """End the turn with snapshot-diff event detection."""
+        progress = getattr(self, "_diplomacy_progress", None)
+        if progress is not None:
+            if self._diplomacy_cleanup.pending and not self.turn_pending:
+                return "ERR:OUTCOME_UNKNOWN|Native diplomacy cleanup is unconfirmed; dismiss_popup only confirms it."
+            if progress.pending and not self.turn_pending:
+                return progress.trade_summary()
+            await progress.ensure_observer(self.conn)
         return await self._turn_progress.execute(self)
 
     async def dismiss_popup(self) -> str:
         """Dismiss any blocking popup or UI overlay."""
         from civ_mcp.game_lifecycle import dismiss_popup
 
-        result = await dismiss_popup(self.conn, self._diplomacy_cleanup)
-        if not self._diplomacy_cleanup.pending:
-            self._trade_result_pending_cleanup = None
-        return result
+        if self._diplomacy_progress.trade is not None:
+            return await self._diplomacy_progress.explicit_cleanup(self)
+        return await dismiss_popup(self.conn, self._diplomacy_cleanup)
 
     async def list_saves(self) -> str:
         """List available save files."""
@@ -1967,7 +1904,7 @@ class GameState:
         if self._pending_load and not recovering:
             return "ERR:OUTCOME_UNKNOWN|An earlier load is unconfirmed; inspect state or use explicit recovery, not another load."
         if not recovering and (
-            self._pending_save or self._pending_end_turn
+            self._pending_save or self._pending_end_turn or self.diplomacy_pending
             or self.pending_action_entity is not None
         ):
             return "ERR:OUTCOME_UNKNOWN|An action/save/end-turn is pending; confirm it or use explicit restart_and_load before replacing the session."
