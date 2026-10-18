@@ -347,6 +347,80 @@ PlayerConfigurations[0].GetCivilizationTypeName=function() return "CIVILIZATION_
     assert list(conn.lua.globals().sent_actions.values()) == [9]
 
 
+@pytest.mark.parametrize("boundary", ["zero_finish", "zero_confirm_finish", "response", "finish"])
+@pytest.mark.parametrize("native_seed", ["99", "nil", "0.5"])
+def test_every_incoming_confirmation_boundary_preserves_observed_world(boundary, native_seed, quick_trade):
+    conn = IncomingConn()
+    if boundary.startswith("zero"):
+        conn.setup('''
+local original=DealManager.GetWorkingDeal
+DealManager.GetWorkingDeal=function(...)
+ local deal=original(...)
+ deal.Validate=function() return working_outgoing[4]:GetAmount()==3 and 0 or -1 end
+ return deal
+end
+''')
+    state = GameState(conn)
+    quote = run(state.get_pending_deals())
+    execute = conn.execute_in_named_state
+    if boundary == "zero_confirm_finish":
+        async def lose_zero(name, source, timeout=5):
+            rows = await execute(name, source, timeout)
+            if "INCOMING|NOT_SUBMITTED|INVALID_TERMS" in rows:
+                raise OSError("zero acknowledgement lost")
+            return rows
+        conn.execute_in_named_state = lose_zero
+        assert "UNKNOWN" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint, their_gold=100))
+    switched = False
+
+    async def transient_world_at_native_boundary(name, source, timeout=5):
+        nonlocal switched
+        marker = 'print("TRADE_RESPONSE|KNOWN|' if boundary == "response" else 'print("INCOMING_FINISH|CONFIRMED")'
+        if not switched and marker in source:
+            switched = True
+            conn.setup(f'GameConfiguration.GetValue=function() return {native_seed} end')
+            rows = await execute(name, source, timeout)
+            # The next native read already sees the old world. Only this
+            # boundary's actual observation can preserve the foreign evidence.
+            conn.setup('GameConfiguration.GetValue=function() return 7 end')
+            return rows
+        return await execute(name, source, timeout)
+
+    conn.execute_in_named_state = transient_world_at_native_boundary
+    assert "UNKNOWN" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint, their_gold=100))
+    assert switched and state.diplomacy_pending
+    result = run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint))
+    if native_seed == "99":
+        assert "world changed" in result and state.diplomacy_pending
+    else:
+        assert result.startswith("ERR:NOT_SUBMITTED|" if boundary.startswith("zero") else "WILLING|")
+        assert not state.diplomacy_pending
+    assert list(conn.lua.globals().sent_actions.values()) == ([] if boundary.startswith("zero") else [9])
+
+
+@pytest.mark.parametrize("native_seed", ["99", "nil", "0.5"])
+def test_unconfirmed_incoming_arm_preserves_world_evidence_and_never_sends(native_seed):
+    conn = IncomingConn()
+    state = GameState(conn)
+    quote = run(state.get_pending_deals())
+    execute = conn.execute_in_named_state
+
+    async def transient_world_at_arm(name, source, timeout=5):
+        if 'print("INCOMING|ARMED")' in source:
+            conn.setup(f'GameConfiguration.GetValue=function() return {native_seed} end')
+            rows = await execute(name, source, timeout)
+            conn.setup('GameConfiguration.GetValue=function() return 7 end')
+            return rows
+        return await execute(name, source, timeout)
+
+    conn.execute_in_named_state = transient_world_at_arm
+    assert "UNKNOWN" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint, their_gold=100))
+    result = run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint))
+    assert "UNKNOWN" in result and state.diplomacy_pending
+    assert ("world changed" in result) is (native_seed == "99")
+    assert not list(conn.lua.globals().sent_actions.values())
+
+
 def test_unrelated_native_event_does_not_confirm_evaluation(quick_trade):
     conn = IncomingConn()
     conn.response_event = lambda action: '''Events.DiplomacyStatement.Emit(1,0,{SessionID=71,StatementType="MAKE_DEAL",StatementSubType="AI_ACCEPT_DEAL",FromPlayer=1,RespondingToDealAction=3,DealAction=1})'''
@@ -535,7 +609,7 @@ def test_turn_scope_invalidated_after_arming_never_submits_evaluation():
 
     async def invalidate_after_arm(name, source, timeout=5):
         rows = await original_execute(name, source, timeout)
-        if rows == ["INCOMING|ARMED"]:
+        if "INCOMING|ARMED" in rows:
             state._turn_progress.invalidate_scope()
         return rows
 
