@@ -199,11 +199,12 @@ local target=trade.target
 '''
 
 
-def build_trade_open(nonce: str, token: str, target: int) -> str:
+def build_trade_open(nonce: str, token: str, target: int, *, ai_only: bool = False) -> str:
     return _observer(nonce) + f'''
 local me,target=Game.GetLocalPlayer(),{int(target)}
 local function blocked()
  if not Players[target] or not Players[me]:GetDiplomacy():HasMet(target) or Players[me]:GetDiplomacy():IsAtWarWith(target) then return "TARGET" end
+ {'if Players[target]:IsHuman()~=false then return "TARGET_NOT_AI" end' if ai_only else ''}
  local queued=DiplomacyManager.HasQueuedSession(me)
  if type(queued)~="boolean" then return "QUEUED_UNKNOWN" end
  if queued then return "QUEUED_SESSION" end
@@ -285,10 +286,25 @@ if deal and deal:GetItemCount()==0 then print("TRADE_DEAL|READY") else print("TR
 def build_trade_arm_action(nonce: str, token: str, action: str) -> str:
     return _trade(nonce, token) + f'''
 if not trade.sid or DiplomacyManager.FindOpenSessionID(me,target)~=trade.sid then print("TRADE|UNKNOWN|SESSION"); return end
+if DealProposalAction.{action}==DealProposalAction.ACCEPTED then
+ trade.evaluation={{action=trade.action,afterSeq=trade.afterSeq,response=trade.response}}
+end
 trade.action=DealProposalAction.{action}
 trade.afterSeq=observer.seq
 trade.response=nil
 print("TRADE|ARMED")
+'''
+
+
+def build_trade_restore_evaluation(nonce: str, token: str) -> str:
+    return _trade(nonce, token) + '''
+local evaluation=trade.evaluation
+if not evaluation or not evaluation.response or DiplomacyManager.FindOpenSessionID(me,target)~=trade.sid then print("TRADE|UNKNOWN|EVALUATION"); return end
+if trade.action==evaluation.action and trade.response==evaluation.response and trade.afterSeq==evaluation.afterSeq then print("TRADE|EVALUATION_RESTORED"); return end
+if trade.action~=DealProposalAction.ACCEPTED or trade.response~=nil then print("TRADE|UNKNOWN|ACTION_CHANGED"); return end
+-- Invoked only after the acceptance callback's final guard proved zero submission.
+trade.action=evaluation.action; trade.afterSeq=evaluation.afterSeq; trade.response=evaluation.response
+print("TRADE|EVALUATION_RESTORED")
 '''
 
 
@@ -304,7 +320,8 @@ local prepared=pcall(function()
 end)
 local receipt=__civmcp_trade_deal
 receipt.original=fingerprint(deal)
-if not prepared or deal:GetItemCount()~={len(offer)+len(request)} then
+local valid,isValid=pcall(function() return deal:GetItemCount()>0 and deal:Validate()==DealValidationResult.VALID and deal:IsValid()==true end)
+if not prepared or deal:GetItemCount()~={len(offer)+len(request)} or not valid or isValid~=true then
  receipt.failed=true
  print("TRADE_PREPARE|NOT_SUBMITTED|TERMS_UNAVAILABLE"); return
 end
@@ -406,7 +423,7 @@ local receipt=__civmcp_trade_deal
 local incoming=DealManager.GetWorkingDeal(DealDirection.INCOMING,me,target)
 local outgoing=DealManager.GetWorkingDeal(DealDirection.OUTGOING,me,target)
 if not receipt or receipt.token~={json.dumps(token)} or fingerprint(incoming)~={json.dumps(signature)} or fingerprint(outgoing)~={json.dumps(signature)} or DealManager.AreWorkingDealsEqual(me,target)~=true then print("TRADE_ACCEPT|NOT_SUBMITTED|TERMS_CHANGED"); return end
-if not Controls.AcceptDeal or Controls.AcceptDeal:IsHidden() or Controls.AcceptDeal:IsDisabled() then print("TRADE_ACCEPT|NOT_SUBMITTED|NATIVE_NOT_READY"); return end
+if not Controls.AcceptDeal or Controls.AcceptDeal:IsHidden()~=false or Controls.AcceptDeal:IsDisabled()~=false then print("TRADE_ACCEPT|NOT_SUBMITTED|NATIVE_NOT_READY"); return end
 if type(OnProposeOrAcceptDeal)~="function" then print("TRADE_ACCEPT|NOT_SUBMITTED|CALLBACK_UNKNOWN"); return end
 receipt.acceptEntered=true
 OnProposeOrAcceptDeal()
