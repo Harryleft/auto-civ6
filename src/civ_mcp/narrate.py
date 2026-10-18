@@ -1591,7 +1591,7 @@ def narrate_trade_routes(status: lq.TradeRouteStatus) -> str:
 
 def narrate_trade_destinations(dests: list[lq.TradeDestination]) -> str:
     if not dests:
-        return "No valid trade route destinations. Check that your trader is in a city and has moves."
+        return "No legal trade route destinations for this ready trader (native checks completed)."
     domestic = [d for d in dests if d.is_domestic]
     foreign = [d for d in dests if not d.is_domestic]
     lines = [f"{len(dests)} trade route destinations:"]
