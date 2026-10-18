@@ -549,16 +549,16 @@ class VictoryPlayerProgress:
     player_id: int
     name: str  # "Unmet" if not met
     score: int
-    science_vp: int  # space race VP (0-50)
-    science_vp_needed: int
-    diplomatic_vp: int  # need 20 to win
+    science_vp: float | None  # native space-race progress, including fractions
+    science_vp_needed: float | None
+    diplomatic_vp: float | None  # requirement comes from active native rules
     tourism: int
     military_strength: int
     techs_researched: int
     civics_completed: int
     religion_cities: int  # cities following their religion
     # Culture dominance (only for our civ)
-    staycationers: int = 0  # domestic tourists
+    staycationers: float | None = 0  # domestic tourists
     # Religion details (only meaningful if they founded one)
     has_religion: bool = False
     # Rival intel
@@ -567,8 +567,14 @@ class VictoryPlayerProgress:
     culture_yield: float = 0.0
     gold_yield: float = 0.0
     # Space race
-    spaceports: int = 0
+    spaceports: float | None = 0
     space_progress: str = ""  # e.g. "3/20"
+    science_rate: float | None = None
+    completed_space_projects: float | None = None
+    culture_visiting: float | None = None
+    culture_required: float | None = None
+    religion_civilizations: float | None = None
+    religion_civilizations_required: float | None = None
 
 
 @dataclass
@@ -588,10 +594,10 @@ class VictoryProgress:
 
     players: list[VictoryPlayerProgress]
     # Culture victory details (our perspective)
-    our_tourists_from: dict[str, int] = field(
+    our_tourists_from: dict[str, float | None] = field(
         default_factory=dict
     )  # civ_name -> tourists
-    their_staycationers: dict[str, int] = field(
+    their_staycationers: dict[str, float | None] = field(
         default_factory=dict
     )  # civ_name -> domestic tourists
     # Domination: who holds their original capital?
@@ -612,8 +618,13 @@ class VictoryProgress:
     demographics: dict[str, DemographicEntry] = field(default_factory=dict)
     # Space race project detail (our player only)
     space_projects: list[SpaceProject] = field(default_factory=list)
-    # Which victory types are enabled (empty = all enabled / unknown)
+    # Empty is all disabled only when enabled_known is true.
     enabled_victories: set[str] = field(default_factory=set)
+    enabled_known: bool = False
+    turn: float | None = None
+    local_player_id: float | None = None
+    complete: bool = False
+    diplomatic_vp_needed: float | None = None
 
 
 @dataclass
@@ -622,13 +633,15 @@ class SpaceProject:
 
     project_type: str  # e.g. "PROJECT_LAUNCH_EARTH_SATELLITE"
     name: str  # localized name
-    status: str  # "completed" / "building" / "available" / "locked"
-    progress_pct: int = 0  # 0-100, only if building
-    turns_remaining: int = 0  # only if building
-    cost: int = 0  # speed-adjusted production cost
+    status: str  # completed / building / ready / unlocked / locked / unknown
+    progress_pct: float | None = 0  # only if building
+    turns_remaining: float | None = 0  # only if building
+    cost: float | None = 0  # speed-adjusted production cost
     tech_prereq: str = ""  # e.g. "TECH_ROCKETRY"
-    has_tech: bool = False
+    has_tech: bool | None = False
     city_name: str = ""  # city building it (if status=building)
+    can_produce: bool | None = None
+    completed_count: float | None = None
 
 
 @dataclass

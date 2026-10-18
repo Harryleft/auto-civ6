@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from civ_mcp.lua._helpers import _LUA_VICTORY_ENABLED, SENTINEL, _int
+import math
+
+from civ_mcp.lua._helpers import SENTINEL, _int
 from civ_mcp.lua.models import (
     DemographicEntry,
     SpaceProject,
@@ -11,66 +13,179 @@ from civ_mcp.lua.models import (
 )
 
 
-def build_victory_proximity_query() -> str:
-    """InGame: lightweight check for foreign victory threats. Safe for every turn."""
-    return (
-        """
+
+def _number(value: str) -> float | None:
+    try:
+        number = float(value)
+        return number if math.isfinite(number) and number >= 0 else None
+    except (ValueError, TypeError):
+        return None
+
+
+# pcall preserves false; unknown observations must not become production eligibility.
+_LUA_READ = r"""
+local function observed(fn)
+    local ok, value = pcall(fn)
+    if ok then return value end
+end
+local function number(value)
+    if type(value) == "number" and value == value and value >= 0 and value < math.huge then return value end
+end
+local function wire(value)
+    if value == nil then return "unknown" end
+    return tostring(value):gsub("|", "/"):gsub(".", function(c)
+        local byte = string.byte(c)
+        return (byte < 32 or byte == 127) and " " or c
+    end)
+end
+local function projectTypes()
+    local types = {"PROJECT_LAUNCH_EARTH_SATELLITE", "PROJECT_LAUNCH_MOON_LANDING"}
+    if GameInfo.Projects["PROJECT_LAUNCH_MARS_BASE"] then
+        table.insert(types, "PROJECT_LAUNCH_MARS_BASE")
+    else
+        for _, key in ipairs({"PROJECT_LAUNCH_MARS_REACTOR", "PROJECT_LAUNCH_MARS_HABITATION", "PROJECT_LAUNCH_MARS_HYDROPONICS"}) do
+            table.insert(types, key)
+        end
+    end
+    table.insert(types, "PROJECT_LAUNCH_EXOPLANET_EXPEDITION")
+    return types
+end
+"""
+
+_LUA_PROJECTS = r"""
+for _, projType in ipairs(projectTypes()) do
+    local row = GameInfo.Projects[projType]
+    if row then
+        local techType = row.PrereqTech or ""
+        local tech = GameInfo.Technologies[techType]
+        local hasTech = techType == "" or observed(function() return p:GetTechs():HasTech(tech.Index) end)
+        local completed = number(observed(function() return p:GetStats():GetNumProjectsAdvanced(row.Index) end))
+        local status, pct, turns, cost, cityName = "unknown", nil, nil, nil, ""
+        local building, queuesKnown, eligibilityKnown, canProduce = false, true, true, false
+        local okCities = pcall(function()
+            for _, city in p:GetCities():Members() do
+                local bq = city:GetBuildQueue()
+                local okHash, hash = pcall(function() return bq:GetCurrentProductionTypeHash() end)
+                if not okHash or (hash ~= nil and (type(hash) ~= "number" or hash ~= hash or math.abs(hash) == math.huge)) then
+                    queuesKnown = false
+                end
+                if okHash and hash == row.Hash then
+                    building = true
+                    cityName = Locale.Lookup(city:GetName())
+                    cost = number(observed(function() return bq:GetProjectCost(row.Index) end))
+                    local progress = number(observed(function() return bq:GetProjectProgress(row.Index) end))
+                    if cost and cost > 0 and progress then pct = math.floor(progress * 100 / cost) end
+                    turns = number(observed(function() return bq:GetTurnsLeft(row.Hash) end))
+                end
+                local listed = observed(function() return bq:CanProduce(row.Hash, true) end)
+                local ready = observed(function() return bq:CanProduce(row.Hash, false, true) end)
+                if type(listed) ~= "boolean" or type(ready) ~= "boolean" then
+                    eligibilityKnown = false
+                elseif listed and ready then
+                    canProduce = true
+                    if not cost then cost = number(observed(function() return bq:GetProjectCost(row.Index) end)) end
+                end
+            end
+        end)
+        if not okCities then queuesKnown, eligibilityKnown = false, false end
+        if not canProduce and not eligibilityKnown then canProduce = nil end
+        if building then status = "building"
+        elseif completed and completed > 0 then status = "completed"
+        elseif queuesKnown and completed == 0 then
+            if hasTech == false then status = "locked"
+            elseif hasTech == true and canProduce ~= nil then status = canProduce and "ready" or "unlocked" end
+        end
+        print("SPACEPROJ|" .. wire(projType) .. "|" .. wire(Locale.Lookup(row.Name)) .. "|" .. status .. "|" .. wire(pct) .. "|" .. wire(turns) .. "|" .. wire(cost) .. "|" .. wire(techType) .. "|" .. wire(hasTech) .. "|" .. wire(cityName) .. "|" .. wire(canProduce) .. "|" .. wire(completed))
+    end
+end
+"""
+
+# Both public views consume the same native facts. Threshold policy stays in narration.
+_LUA_VICTORY_FACTS = r"""
+do
 local me = Game.GetLocalPlayer()
-local pDiplo = Players[me]:GetDiplomacy()
-local relCount = {}
-local relOwner = {}
-local totalMajors = 0
-for i = 0, 62 do
-    local p = Players[i]
+local diplo = Players[me]:GetDiplomacy()
+print("VICTORY_CONTEXT|" .. wire(Game.GetCurrentGameTurn()) .. "|" .. wire(me))
+local enabledKnown = true
+local enabled = {}
+local okVictories = pcall(function()
+    for row in GameInfo.Victories() do
+        local value = observed(function() return Game.IsVictoryEnabled(row.Index) end)
+        if type(value) ~= "boolean" then enabledKnown = false
+        elseif value then table.insert(enabled, row.VictoryType) end
+    end
+end)
+if not okVictories then enabledKnown = false end
+print("VICTORY_ENABLED_KNOWN|" .. tostring(enabledKnown))
+for _, key in ipairs(enabled) do print("VENABLED|" .. wire(key)) end
+print("DIPLO_REQUIRED|" .. wire(number(observed(function() return GlobalParameters.DIPLOMATIC_VICTORY_POINTS_REQUIRED end))))
+local majors, religionCount, religionKnown = {}, {}, true
+for id = 0, 62 do
+    local p = Players[id]
     if p and p:IsMajor() and p:IsAlive() then
-        totalMajors = totalMajors + 1
-        local majRel = p:GetReligion():GetReligionInMajorityOfCities()
-        if majRel >= 0 then
-            relCount[majRel] = (relCount[majRel] or 0) + 1
-            if not relOwner[majRel] then
-                local creator = -1
-                for j = 0, 62 do
-                    if Players[j] and Players[j]:IsAlive() and Players[j]:GetReligion():GetReligionTypeCreated() == majRel then creator = j end
+        table.insert(majors, id)
+        local religion = observed(function() return p:GetReligion():GetReligionInMajorityOfCities() end)
+        if type(religion) ~= "number" then religionKnown = false
+        elseif religion >= 0 then religionCount[religion] = (religionCount[religion] or 0) + 1 end
+    end
+end
+for _, id in ipairs(majors) do
+    local p = Players[id]
+    if id == me or observed(function() return diplo:HasMet(id) end) == true then
+        local name = observed(function() return Locale.Lookup(PlayerConfigurations[id]:GetCivilizationShortDescription()) end)
+        local stats = p:GetStats()
+        local science = number(observed(function() return stats:GetScienceVictoryPoints() end))
+        local needed = number(observed(function() return stats:GetScienceVictoryPointsTotalNeeded() end))
+        local rate = number(observed(function() return stats:GetScienceVictoryPointsPerTurn() end))
+        local diplomatic = number(observed(function() return stats:GetDiplomaticVictoryPoints() end))
+        local spaceports = 0
+        local okPorts = pcall(function()
+            for _, city in p:GetCities():Members() do
+                for _, district in city:GetDistricts():Members() do
+                    local row = GameInfo.Districts[district:GetType()]
+                    if row and row.DistrictType == "DISTRICT_SPACEPORT" and district:IsComplete() then spaceports = spaceports + 1 end
                 end
-                if creator >= 0 and creator ~= me then
-                    local rEntry = GameInfo.Religions[majRel]
-                    local relName = rEntry and Locale.Lookup(rEntry.Name) or "Unknown"
-                    if pDiplo:HasMet(creator) then
-                        local cfg = PlayerConfigurations[creator]
-                        relOwner[majRel] = Locale.Lookup(cfg:GetCivilizationShortDescription()) .. "|" .. relName
-                    else
-                        relOwner[majRel] = "Unknown civilization|" .. relName
-                    end
+            end
+        end)
+        if not okPorts then spaceports = nil end
+        local advanced, advancedKnown = 0, true
+        for _, key in ipairs(projectTypes()) do
+            local row = GameInfo.Projects[key]
+            if row then
+                local count = number(observed(function() return stats:GetNumProjectsAdvanced(row.Index) end))
+                if count then advanced = advanced + count else advancedKnown = false end
+            end
+        end
+        if not advancedKnown then advanced = nil end
+        local visiting = number(observed(function() return p:GetCulture():GetTouristsTo() end))
+        local required, cultureKnown = 0, true
+        local team = observed(function() return p:GetTeam() end)
+        if type(team) ~= "number" then cultureKnown = false end
+        for _, other in ipairs(majors) do
+            if other ~= id then
+                local otherTeam = observed(function() return Players[other]:GetTeam() end)
+                if type(otherTeam) ~= "number" then cultureKnown = false
+                elseif otherTeam ~= team then
+                    local domestic = number(observed(function() return Players[other]:GetCulture():GetStaycationers() end))
+                    if domestic then required = math.max(required, domestic) else cultureKnown = false end
                 end
             end
         end
-        if i ~= me and pDiplo:HasMet(i) then
-            local okDvp, dvp = pcall(function() return p:GetStats():GetDiplomaticVictoryPoints() end)
-            if okDvp and dvp and dvp >= 10 then
-                local cfg = PlayerConfigurations[i]
-                print("DIPLO_THREAT|" .. Locale.Lookup(cfg:GetCivilizationShortDescription()) .. "|" .. dvp)
-            end
-            local okSvp, svp = pcall(function() return p:GetStats():GetScienceVictoryPoints() end)
-            if okSvp and svp and svp > 0 then
-                local cfg = PlayerConfigurations[i]
-                local needed = 50
-                pcall(function() needed = p:GetStats():GetScienceVictoryPointsTotalNeeded() end)
-                print("SCI_THREAT|" .. Locale.Lookup(cfg:GetCivilizationShortDescription()) .. "|" .. svp .. "|" .. needed)
-            end
-        end
+        if cultureKnown then required = required + 1 else required = nil end
+        local founded = observed(function() return p:GetReligion():GetReligionTypeCreated() end)
+        local converted = nil
+        if religionKnown and type(founded) == "number" then converted = founded >= 0 and (religionCount[founded] or 0) or 0 end
+        print("VFACT|" .. wire(id) .. "|" .. wire(name) .. "|" .. wire(science) .. "|" .. wire(needed) .. "|" .. wire(spaceports) .. "|" .. wire(rate) .. "|" .. wire(diplomatic) .. "|" .. wire(visiting) .. "|" .. wire(required) .. "|" .. wire(advanced) .. "|" .. wire(converted) .. "|" .. wire(religionKnown and #majors or nil))
     end
 end
-for relId, count in pairs(relCount) do
-    if relOwner[relId] then
-        print("REL_THREAT|" .. relOwner[relId] .. "|" .. count .. "|" .. totalMajors)
-    end
+print("VICTORY_COMPLETE")
 end
 """
-        + _LUA_VICTORY_ENABLED
-        + """
-print("{SENTINEL}")
-"""
-    ).replace("{SENTINEL}", SENTINEL)
+
+
+def build_victory_proximity_query() -> str:
+    """InGame: pure-read, lightweight facts for a confirmed turn report."""
+    return _LUA_READ + _LUA_VICTORY_FACTS + f'\nprint("{SENTINEL}")\n'
 
 
 def build_victory_progress_query() -> str:
@@ -83,6 +198,7 @@ def build_victory_progress_query() -> str:
       RELMAJ|civName|religionName
     """
     return f"""
+{_LUA_READ}
 local me = Game.GetLocalPlayer()
 local pDiplo = Players[me]:GetDiplomacy()
 local pCul = Players[me]:GetCulture()
@@ -94,111 +210,29 @@ for i = 0, 62 do
         local met = pDiplo:HasMet(i) or i == me
         if met then
             local cfg = PlayerConfigurations[i]
-            local name = Locale.Lookup(cfg:GetCivilizationShortDescription())
+            local name = wire(Locale.Lookup(cfg:GetCivilizationShortDescription()))
             local st = p:GetStats()
-            local sciVP = st:GetScienceVictoryPoints()
-            local sciNeeded = st:GetScienceVictoryPointsTotalNeeded()
-            local diploVP = st:GetDiplomaticVictoryPoints()
+            local sciVP = wire(number(observed(function() return st:GetScienceVictoryPoints() end)))
+            local sciNeeded = wire(number(observed(function() return st:GetScienceVictoryPointsTotalNeeded() end)))
+            local diploVP = wire(number(observed(function() return st:GetDiplomaticVictoryPoints() end)))
             local tourism = st:GetTourism()
             local milStr = st:GetMilitaryStrength()
             local techs = st:GetNumTechsResearched()
             local civics = st:GetNumCivicsCompleted()
             local relCities = st:GetNumCitiesFollowingReligion()
-            local stay = p:GetCulture():GetStaycationers()
+            local stay = wire(number(observed(function() return p:GetCulture():GetStaycationers() end)))
             local hasRel = p:GetReligion():GetReligionTypeCreated() >= 0
             local nCities = 0; for _ in p:GetCities():Members() do nCities = nCities + 1 end
             local pSci = p:GetTechs():GetScienceYield()
             local pCulYield = p:GetCulture():GetCultureYield()
             local pGold2 = p:GetTreasury():GetGoldYield() - p:GetTreasury():GetTotalMaintenance()
-            -- Space race: count spaceports
-            local spaceports = 0
-            for _, city in p:GetCities():Members() do
-                for _, d in city:GetDistricts():Members() do
-                    local dInfo = GameInfo.Districts[d:GetType()]
-                    if dInfo and dInfo.DistrictType == "DISTRICT_SPACEPORT" and d:IsComplete() then
-                        spaceports = spaceports + 1
-                    end
-                end
-            end
             print("PLAYER|" .. i .. "|" .. name .. "|" .. p:GetScore() .. "|" .. sciVP .. "|" .. sciNeeded .. "|" .. diploVP .. "|" .. tourism .. "|" .. milStr .. "|" .. techs .. "|" .. civics .. "|" .. relCities .. "|" .. stay .. "|" .. tostring(hasRel) .. "|" .. nCities .. "|" .. string.format("%.1f", pSci) .. "|" .. string.format("%.1f", pCulYield) .. "|" .. string.format("%.1f", pGold2))
-            print("SPACE|" .. name .. "|" .. spaceports .. "|" .. sciVP .. "/" .. sciNeeded)
             if i == me then
-                -- Space project chain detail (our player only)
-                local spaceChain = {{}}
-                if GameInfo.Projects["PROJECT_LAUNCH_MARS_HABITAT"] then
-                    spaceChain = {{
-                        {{"PROJECT_LAUNCH_EARTH_SATELLITE", "TECH_ROCKETRY"}},
-                        {{"PROJECT_LAUNCH_MOON_LANDING", "TECH_SATELLITES"}},
-                        {{"PROJECT_LAUNCH_MARS_HABITAT", "TECH_NUCLEAR_FUSION"}},
-                        {{"PROJECT_LAUNCH_MARS_HYDROPONICS", "TECH_NUCLEAR_FUSION"}},
-                        {{"PROJECT_LAUNCH_MARS_REACTOR", "TECH_NUCLEAR_FUSION"}},
-                    }}
-                else
-                    spaceChain = {{
-                        {{"PROJECT_LAUNCH_EARTH_SATELLITE", "TECH_ROCKETRY"}},
-                        {{"PROJECT_LAUNCH_MOON_LANDING", "TECH_SATELLITES"}},
-                        {{"PROJECT_LAUNCH_MARS_COLONY", "TECH_NUCLEAR_FUSION"}},
-                    }}
-                end
-                if GameInfo.Projects["PROJECT_LAUNCH_EXOPLANET_EXPEDITION"] then
-                    table.insert(spaceChain, {{"PROJECT_LAUNCH_EXOPLANET_EXPEDITION", "TECH_OFFWORLD_MISSION"}})
-                end
-                local pTechs = p:GetTechs()
-                local completedCount = 0
-                for _, sp in ipairs(spaceChain) do
-                    local projType, techType = sp[1], sp[2]
-                    local projRow = GameInfo.Projects[projType]
-                    if projRow then
-                        local projName = Locale.Lookup(projRow.Name)
-                        local techRow = GameInfo.Technologies[techType]
-                        local hasTech = techRow and pTechs:HasTech(techRow.Index) or false
-                        local status = "locked"
-                        local progPct, turnsLeft, cost, cityBuild = 0, 0, 0, ""
-                        local building = false
-                        for _, city in p:GetCities():Members() do
-                            local bq = city:GetBuildQueue()
-                            local okH, h = pcall(function() return bq:GetCurrentProductionTypeHash() end)
-                            if okH and h and h == projRow.Hash then
-                                status = "building"
-                                building = true
-                                pcall(function()
-                                    turnsLeft = bq:GetTurnsLeft(projRow.Hash)
-                                    cost = math.floor(bq:GetProductionCost(projRow.Hash))
-                                    local prog = bq:GetProductionProgress(projRow.Hash)
-                                    if cost > 0 then progPct = math.floor(prog * 100 / cost) end
-                                end)
-                                cityBuild = Locale.Lookup(city:GetName())
-                                break
-                            end
-                        end
-                        if not building then
-                            if completedCount < sciVP then
-                                status = "completed"
-                                completedCount = completedCount + 1
-                            elseif hasTech then
-                                -- Check if any city with a spaceport can actually build it
-                                local canBuild = false
-                                pcall(function()
-                                    for _, city in p:GetCities():Members() do
-                                        local bq = city:GetBuildQueue()
-                                        local c = bq:GetProductionCost(projRow.Hash)
-                                        if c and c > 0 then
-                                            cost = math.floor(c)
-                                            canBuild = true
-                                            break
-                                        end
-                                    end
-                                end)
-                                status = canBuild and "ready" or "unlocked"
-                            end
-                        end
-                        print("SPACEPROJ|" .. projType .. "|" .. projName .. "|" .. status .. "|" .. progPct .. "|" .. turnsLeft .. "|" .. cost .. "|" .. techType .. "|" .. tostring(hasTech) .. "|" .. cityBuild)
-                    end
-                end
+                {_LUA_PROJECTS}
             end
             if i ~= me then
-                local ourTourists = pCul:GetTouristsFrom(i)
-                local theirStay = p:GetCulture():GetStaycationers()
+                local ourTourists = wire(number(observed(function() return pCul:GetTouristsFrom(i) end)))
+                local theirStay = wire(number(observed(function() return p:GetCulture():GetStaycationers() end)))
                 local dominant = pCul:IsDominantOver(i)
                 print("CULTURE|" .. name .. "|" .. ourTourists .. "|" .. theirStay .. "|" .. tostring(dominant))
             end
@@ -266,7 +300,7 @@ for i = 0, 62 do
     end
 end
 print("RELSLOTS|" .. nRels .. "|" .. (math.floor(nMajors / 2) + 1))
-{_LUA_VICTORY_ENABLED}
+{_LUA_VICTORY_FACTS}
 print("{SENTINEL}")
 """
 
@@ -274,8 +308,8 @@ print("{SENTINEL}")
 def parse_victory_progress_response(lines: list[str]) -> VictoryProgress:
     """Parse victory progress from Lua output."""
     players: list[VictoryPlayerProgress] = []
-    our_tourists: dict[str, int] = {}
-    their_stay: dict[str, int] = {}
+    our_tourists: dict[str, float | None] = {}
+    their_stay: dict[str, float | None] = {}
     capitals: dict[str, bool] = {}
     rel_majority: dict[str, str] = {}
     rel_founded_names: dict[str, str] = {}
@@ -284,6 +318,10 @@ def parse_victory_progress_response(lines: list[str]) -> VictoryProgress:
     demographics: dict[str, DemographicEntry] = {}
     space_projects: list[SpaceProject] = []
     enabled_victories: set[str] = set()
+    turn = local_player_id = diplomatic_vp_needed = None
+    enabled_known = complete = False
+    facts = []
+    contexts = completions = enabled_markers = 0
 
     for line in lines:
         if line.startswith("PLAYER|"):
@@ -295,15 +333,15 @@ def parse_victory_progress_response(lines: list[str]) -> VictoryProgress:
                     player_id=int(p[1]),
                     name=p[2],
                     score=_int(p[3]),
-                    science_vp=_int(p[4]),
-                    science_vp_needed=_int(p[5]),
-                    diplomatic_vp=_int(p[6]),
+                    science_vp=_number(p[4]),
+                    science_vp_needed=_number(p[5]),
+                    diplomatic_vp=_number(p[6]),
                     tourism=_int(p[7]),
                     military_strength=_int(p[8]),
                     techs_researched=_int(p[9]),
                     civics_completed=_int(p[10]),
                     religion_cities=_int(p[11]),
-                    staycationers=_int(p[12]),
+                    staycationers=_number(p[12]),
                     has_religion=p[13] == "true",
                     num_cities=_int(p[14]) if len(p) > 14 else 0,
                     science_yield=float(p[15]) if len(p) > 15 else 0.0,
@@ -325,8 +363,8 @@ def parse_victory_progress_response(lines: list[str]) -> VictoryProgress:
         elif line.startswith("CULTURE|"):
             p = line.split("|")
             if len(p) >= 5:
-                our_tourists[p[1]] = int(p[2])
-                their_stay[p[1]] = int(p[3])
+                our_tourists[p[1]] = _number(p[2])
+                their_stay[p[1]] = _number(p[3])
         elif line.startswith("CAPITAL|"):
             p = line.split("|")
             if len(p) >= 3:
@@ -352,12 +390,14 @@ def parse_victory_progress_response(lines: list[str]) -> VictoryProgress:
                         project_type=p[1],
                         name=p[2],
                         status=p[3],
-                        progress_pct=int(p[4]),
-                        turns_remaining=int(p[5]),
-                        cost=int(p[6]),
+                        progress_pct=_number(p[4]),
+                        turns_remaining=_number(p[5]),
+                        cost=_number(p[6]),
                         tech_prereq=p[7],
-                        has_tech=p[8] == "true",
+                        has_tech={"true": True, "false": False}.get(p[8]),
                         city_name=p[9] if len(p) > 9 else "",
+                        can_produce={"true": True, "false": False}.get(p[10]) if len(p) > 10 else None,
+                        completed_count=_number(p[11]) if len(p) > 11 else None,
                     )
                 )
         elif line.startswith("DEMO|"):
@@ -370,11 +410,49 @@ def parse_victory_progress_response(lines: list[str]) -> VictoryProgress:
                     average=float(p[5]),
                     worst=float(p[6]) if len(p) > 6 else float(p[5]),
                 )
+        elif line.startswith("VICTORY_CONTEXT|"):
+            contexts += 1
+            p = line.split("|")
+            if len(p) == 3:
+                turn, local_player_id = _number(p[1]), _number(p[2])
+        elif line.startswith("VICTORY_ENABLED_KNOWN|"):
+            enabled_markers += 1
+            enabled_known = line == "VICTORY_ENABLED_KNOWN|true"
+        elif line.startswith("DIPLO_REQUIRED|"):
+            diplomatic_vp_needed = _number(line.split("|", 1)[1])
+        elif line.startswith("VFACT|"):
+            facts.append(line.split("|"))
+        elif line == "VICTORY_COMPLETE":
+            completions += 1
+            complete = True
         elif line.startswith("VENABLED|"):
             enabled_victories.add(line.split("|", 1)[1])
 
+    seen = set()
+    for fact in facts:
+        identifier = _number(fact[1]) if len(fact) > 1 else None
+        if (len(fact) != 13 or identifier is None or not identifier.is_integer()
+                or identifier > 62 or identifier in seen):
+            complete = False
+            continue
+        player_id = int(identifier)
+        seen.add(player_id)
+        player = next((item for item in players if item.player_id == player_id), None)
+        if player is None:
+            player = VictoryPlayerProgress(player_id, fact[2], 0, None, None, None, 0, 0, 0, 0, 0)
+            players.append(player)
+        (player.science_vp, player.science_vp_needed, player.spaceports,
+         player.science_rate, player.diplomatic_vp, player.culture_visiting,
+         player.culture_required, player.completed_space_projects,
+         player.religion_civilizations, player.religion_civilizations_required) = map(_number, fact[3:])
+    complete = (complete and contexts == completions == enabled_markers == 1
+                and turn is not None and turn.is_integer()
+                and local_player_id is not None and local_player_id.is_integer()
+                and local_player_id in seen)
     return VictoryProgress(
         players=players,
+        turn=turn, local_player_id=local_player_id, complete=complete,
+        enabled_known=enabled_known, diplomatic_vp_needed=diplomatic_vp_needed,
         our_tourists_from=our_tourists,
         their_staycationers=their_stay,
         capitals_held=capitals,

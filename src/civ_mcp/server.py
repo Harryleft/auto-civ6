@@ -1751,7 +1751,11 @@ async def get_victory_progress(ctx: Context) -> str:
     Shows progress toward Science, Domination, Culture, Religious,
     Diplomatic, and Score victories. Includes space race VP, diplomatic VP,
     tourism vs domestic tourists, religion spread, capital ownership,
-    and military strength. Call every 20-30 turns to track the race.
+    and military strength. Uses active native project prerequisites and
+    production eligibility; unknown observations remain unknown. After a
+    spaceport or space progress appears, inspect relevant facts each turn.
+    Confirmed end-turn reports include lightweight risk warnings; these are
+    heuristics, not game outcomes or exact remaining-turn predictions.
     """
     gs = _get_game(ctx)
 

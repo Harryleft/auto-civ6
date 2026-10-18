@@ -22,6 +22,7 @@ def test_victory_progress_reports_observed_fields_without_strategy_score():
         capitals_held={"Rome": False},
         religion_majority={"Rome": "Buddhism"},
         religion_founded_names={"Rome": "Buddhism"},
+        diplomatic_vp_needed=20,
         religions_founded=3,
         religions_max=5,
         demographics={"Land": lq.DemographicEntry(2, 50, 80, 60, 40)},
