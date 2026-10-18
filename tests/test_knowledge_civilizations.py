@@ -302,3 +302,124 @@ def test_installed_same_id_from_multiple_packages_is_unknown_instead_of_combined
     assert card['summary']['description'] == ''
     assert card['rule']['traits'] == [] and card['rule']['unique_content'] == []
     assert {'field': 'package', 'id': 'CIVILIZATION_INSTALLED', 'status': 'unknown_ambiguous_definition'} in card['rule']['unresolved_references']
+
+
+def unit_ability_fixture():
+    data = fixture()
+    data['tables'].update({
+        'TypeTags': [
+            {'Type': 'UNIT_UNIQUE', 'Tag': 'CLASS_UNIQUE'},
+            {'Type': 'ABILITY_UNIQUE', 'Tag': 'CLASS_UNIQUE'},
+            {'Type': 'UNIT_OTHER_UNIQUE', 'Tag': 'CLASS_UNIQUE'},
+            {'Type': 'ABILITY_UNRELATED', 'Tag': 'CLASS_OTHER'},
+        ],
+        'UnitAbilities': [
+            {'UnitAbilityType': 'ABILITY_UNIQUE', 'Name': 'LOC_UNIT_ABILITY', 'Description': 'LOC_UNIT_ABILITY_DESC', 'Inactive': 1},
+            {'UnitAbilityType': 'ABILITY_UNRELATED', 'Name': 'LOC_OTHER', 'Inactive': 0},
+        ],
+        'UnitAbilityModifiers': [
+            {'UnitAbilityType': 'ABILITY_UNIQUE', 'ModifierId': 'MOD_UNIT_ABILITY'},
+            {'UnitAbilityType': 'ABILITY_UNRELATED', 'ModifierId': 'MOD_OTHER'},
+        ],
+    })
+    data['tables']['Modifiers'].append({'ModifierId': 'MOD_UNIT_ABILITY', 'ModifierType': 'MODIFIER_YIELD', 'SubjectRequirementSetId': 'REQSET_RIVER'})
+    data['tables']['TraitModifiers'].append({'TraitType': 'TRAIT_BASE', 'ModifierId': 'MOD_GRANT_UNIT_ABILITY'})
+    data['tables']['Modifiers'].append({'ModifierId': 'MOD_GRANT_UNIT_ABILITY', 'ModifierType': 'MODIFIER_YIELD', 'SubjectRequirementSetId': 'REQSET_RIVER'})
+    data['tables']['ModifierArguments'].append({'ModifierId': 'MOD_GRANT_UNIT_ABILITY', 'Name': 'AbilityType', 'Value': 'ABILITY_UNIQUE'})
+    data['tables']['ModifierArguments'].append({'ModifierId': 'MOD_UNIT_ABILITY', 'Name': 'Amount', 'Value': '17'})
+    data['localization'].update({'LOC_UNIT_ABILITY': {'zh_Hans_CN': '特色单位能力'}, 'LOC_UNIT_ABILITY_DESC': {'zh_Hans_CN': '需授予能力并满足河流条件。'}})
+    return data
+
+
+def test_cached_unique_unit_keeps_tag_matched_ability_inactive_state_effects_and_conditions(tmp_path):
+    root = build(tmp_path, unit_ability_fixture())
+    card = query(root, 'show', 'LEADER_VARIANT', '--level', 'rule')
+    unit = card['rule']['unique_content'][0]
+    ability = unit['abilities'][0]
+    assert ability['id'] == 'ABILITY_UNIQUE'
+    assert ability['facts']['Inactive'] == 1
+    assert ability['activation'] == 'unverified_trait_grant_conditions'
+    assert ability['grant_references'][0]['trait'] == 'TRAIT_BASE'
+    assert ability['description']['zh_Hans_CN'] == '需授予能力并满足河流条件。'
+    assert ability['modifiers'][0]['id'] == 'MOD_UNIT_ABILITY'
+    assert any(row['facts'] == {'ModifierId': 'MOD_UNIT_ABILITY', 'Name': 'Amount', 'Value': '17'} for row in card['rule']['related_records'])
+    evidence = query(root, 'show', 'LEADER_VARIANT', '--level', 'evidence')
+    facts = [row['facts'] for row in evidence['evidence']]
+    assert {'RequirementId': 'REQ_RIVER', 'RequirementType': 'REQUIREMENT_PLOT_ADJACENT_TO_RIVER'} in facts
+    assert not any(row.get('Type') == 'UNIT_OTHER_UNIQUE' or row.get('UnitAbilityType') == 'ABILITY_UNRELATED' for row in facts)
+    assert query(root, 'validate')['status'] == 'valid'
+
+
+def installed_unit_ability_fixture():
+    data = installed_fixture()
+    context = data['tables']['InstalledRuleRows'][0]
+    records = [
+        ('Units', {'UnitType': 'UNIT_INSTALLED', 'Name': 'LOC_UNIT', 'TraitType': 'TRAIT_INSTALLED'}),
+        ('TypeTags', {'Type': 'UNIT_INSTALLED', 'Tag': 'CLASS_INSTALLED'}),
+        ('TypeTags', {'Type': 'ABILITY_INSTALLED', 'Tag': 'CLASS_INSTALLED'}),
+        ('TypeTags', {'Type': 'UNIT_OTHER_INSTALLED', 'Tag': 'CLASS_INSTALLED'}),
+        ('UnitAbilities', {'UnitAbilityType': 'ABILITY_INSTALLED', 'Name': 'LOC_INSTALL_ABILITY', 'Inactive': '1'}),
+        ('UnitAbilityModifiers', {'UnitAbilityType': 'ABILITY_INSTALLED', 'ModifierId': 'MOD_INSTALLED_ABILITY'}),
+        ('TraitModifiers', {'TraitType': 'TRAIT_INSTALLED', 'ModifierId': 'MOD_GRANT_INSTALLED_ABILITY'}),
+        ('Modifiers', {'ModifierId': 'MOD_GRANT_INSTALLED_ABILITY', 'ModifierType': 'MODIFIER_YIELD', 'SubjectRequirementSetId': 'REQSET_RIVER'}),
+        ('ModifierArguments', {'ModifierId': 'MOD_GRANT_INSTALLED_ABILITY', 'Name': 'AbilityType', 'Value': 'ABILITY_INSTALLED'}),
+        ('Modifiers', {'ModifierId': 'MOD_INSTALLED_ABILITY', 'ModifierType': 'MODIFIER_YIELD', 'SubjectRequirementSetId': 'REQSET_RIVER'}),
+        ('ModifierArguments', {'ModifierId': 'MOD_INSTALLED_ABILITY', 'Name': 'Amount', 'Value': '17'}),
+    ]
+    data['tables']['InstalledRuleRows'] += [context | {'table': table, 'facts': facts} for table, facts in records]
+    data['tables']['InstalledRuleRows'] += [context | {'package': 'unrelated-pack', 'table': table, 'facts': facts} for table, facts in [
+        ('TypeTags', {'Type': 'ABILITY_OTHER_PACKAGE', 'Tag': 'CLASS_INSTALLED'}),
+        ('UnitAbilities', {'UnitAbilityType': 'ABILITY_OTHER_PACKAGE', 'Inactive': '0'}),
+        ('UnitAbilityModifiers', {'UnitAbilityType': 'ABILITY_OTHER_PACKAGE', 'ModifierId': 'MOD_OTHER'}),
+    ]]
+    return data
+
+
+def test_installed_unique_unit_ability_uses_package_type_tags_without_shared_tag_unit_leak(tmp_path):
+    root = build(tmp_path, installed_unit_ability_fixture())
+    card = query(root, 'show', 'CIVILIZATION_INSTALLED', '--level', 'rule')
+    unit = next(item for item in card['rule']['unique_content'] if item['id'] == 'UNIT_INSTALLED')
+    assert [(a['id'], a['facts']['Inactive'], a['activation']) for a in unit['abilities']] == [
+        ('ABILITY_INSTALLED', '1', 'unverified_trait_grant_conditions')]
+    assert any(row['facts'] == {'ModifierId': 'MOD_INSTALLED_ABILITY', 'Name': 'Amount', 'Value': '17'} for row in card['rule']['related_records'])
+    evidence = query(root, 'show', 'CIVILIZATION_INSTALLED', '--level', 'evidence')
+    facts = [row['facts'].get('facts', row['facts']) for row in evidence['evidence']]
+    assert {'RequirementId': 'REQ_RIVER', 'RequirementType': 'REQUIREMENT_PLOT_ADJACENT_TO_RIVER'} in facts
+    assert not any(row.get('Type') == 'UNIT_OTHER_INSTALLED' or row.get('UnitAbilityType') == 'ABILITY_OTHER_PACKAGE' or row.get('ModifierId') == 'MOD_OTHER' for row in facts)
+    assert card['rule']['applied'] is False
+    assert query(root, 'validate')['status'] == 'valid'
+
+
+@pytest.mark.parametrize('installed', [False, True])
+def test_missing_ability_target_stays_unknown_even_when_another_package_defines_it(tmp_path, installed):
+    data = installed_unit_ability_fixture() if installed else unit_ability_fixture()
+    if installed:
+        for row in data['tables']['InstalledRuleRows']:
+            if row['table'] == 'UnitAbilities' and row['facts'].get('UnitAbilityType') == 'ABILITY_INSTALLED':
+                row['package'] = 'unrelated-pack'
+        ident, ability_id = 'CIVILIZATION_INSTALLED', 'ABILITY_INSTALLED'
+    else:
+        data['tables']['UnitAbilities'] = []
+        ident, ability_id = 'LEADER_VARIANT', 'ABILITY_UNIQUE'
+    root = build(tmp_path, data)
+    card = query(root, 'show', ident, '--level', 'rule')
+    assert {'field': 'UnitAbilityType', 'id': ability_id, 'status': 'unknown_missing_definition'} in card['rule']['unresolved_references']
+    unit = next(item for item in card['rule']['unique_content'] if item['entity_type'] == 'Units')
+    assert unit['abilities'] == []
+
+
+def test_shared_all_units_tag_does_not_assign_another_traits_inactive_ability(tmp_path):
+    data = unit_ability_fixture()
+    data['tables']['TypeTags'] += [
+        {'Type': 'UNIT_UNIQUE', 'Tag': 'CLASS_ALL_UNITS'},
+        {'Type': 'ABILITY_FOREIGN_INACTIVE', 'Tag': 'CLASS_ALL_UNITS'},
+    ]
+    data['tables']['UnitAbilities'].append({'UnitAbilityType': 'ABILITY_FOREIGN_INACTIVE', 'Inactive': 1})
+    data['tables']['TraitModifiers'].append({'TraitType': 'TRAIT_OTHER', 'ModifierId': 'MOD_GRANT_FOREIGN'})
+    data['tables']['Modifiers'].append({'ModifierId': 'MOD_GRANT_FOREIGN', 'ModifierType': 'MODIFIER_YIELD'})
+    data['tables']['ModifierArguments'].append({'ModifierId': 'MOD_GRANT_FOREIGN', 'Name': 'AbilityType', 'Value': 'ABILITY_FOREIGN_INACTIVE'})
+    root = build(tmp_path, data)
+    card = query(root, 'show', 'LEADER_VARIANT', '--level', 'rule')
+    assert all(ability['id'] != 'ABILITY_FOREIGN_INACTIVE' for ability in card['rule']['unique_content'][0]['abilities'])
+    facts = [row['facts'] for row in query(root, 'show', 'LEADER_VARIANT', '--level', 'evidence')['evidence']]
+    assert not any(row.get('UnitAbilityType') == 'ABILITY_FOREIGN_INACTIVE' or row.get('ModifierId') == 'MOD_GRANT_FOREIGN' for row in facts)

@@ -294,3 +294,33 @@ def test_mcp_civilization_topic_and_three_layers_keep_installed_scope_without_ga
 
     session_run(monkeypatch, FakeGameState(), scenario)
     assert fingerprints(root) == before
+
+
+def test_mcp_civilization_unique_unit_ability_keeps_inactive_grant_and_conditions(monkeypatch, tmp_path):
+    from test_knowledge_civilizations import build as build_civilizations, installed_unit_ability_fixture
+
+    root = build_civilizations(tmp_path, installed_unit_ability_fixture())
+    monkeypatch.setenv('CIV6_KNOWLEDGE_DIR', str(root))
+    before = fingerprints(root)
+
+    async def scenario(session):
+        assert len((await session.list_tools()).tools) == 80
+        response = await session.call_tool('get_knowledge', {'entry_id': 'CIVILIZATION_INSTALLED', 'level': 'rule'})
+        assert not response.isError
+        card = json.loads(response.content[0].text)
+        unit = next(item for item in card['rule']['unique_content'] if item['id'] == 'UNIT_INSTALLED')
+        ability = unit['abilities'][0]
+        assert ability['id'] == 'ABILITY_INSTALLED' and ability['facts']['Inactive'] == '1'
+        assert ability['activation'] == 'unverified_trait_grant_conditions'
+        assert ability['grant_references'][0]['trait'] == 'TRAIT_INSTALLED'
+        assert card['rule']['applied'] is False
+        response = await session.call_tool('get_knowledge', {'entry_id': 'CIVILIZATION_INSTALLED', 'level': 'evidence'})
+        assert not response.isError
+        evidence = json.loads(response.content[0].text)
+        facts = [row['facts'].get('facts', row['facts']) for row in evidence['evidence']]
+        assert {'ModifierId': 'MOD_INSTALLED_ABILITY', 'Name': 'Amount', 'Value': '17'} in facts
+        assert {'RequirementId': 'REQ_RIVER', 'RequirementType': 'REQUIREMENT_PLOT_ADJACENT_TO_RIVER'} in facts
+        assert not any(row.get('UnitAbilityType') == 'ABILITY_OTHER_PACKAGE' or row.get('Type') == 'UNIT_OTHER_INSTALLED' for row in facts)
+
+    session_run(monkeypatch, FakeGameState(), scenario)
+    assert fingerprints(root) == before
