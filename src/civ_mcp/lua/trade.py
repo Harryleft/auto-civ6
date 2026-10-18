@@ -33,9 +33,38 @@ if old and old.trade and not old.trade.finished then print("DIPLO_OBSERVER|UNKNO
 if old then
  Events.DiplomacyStatement.Remove(old.statementHandler)
  Events.DiplomacySessionClosed.Remove(old.closedHandler)
+ if old.incomingHandler and Events.DiplomacyIncomingDeal then Events.DiplomacyIncomingDeal.Remove(old.incomingHandler) end
 end
-local observer={{nonce=nonce,scope=scope,seq=0,records={{}}}}
+local observer={{nonce=nonce,scope=scope,seq=0,diagnosticSeq=0,records={{}}}}
+-- Diagnostic witnesses never feed choices or response completion. Keep only the
+-- bound attempt's current session, including fields rejected by the strict filter.
+local function boundTrade(sid)
+ local valid,now=pcall(currentScope)
+ local me=Game.GetLocalPlayer()
+ local trade=observer.trade
+ if not valid or now~=observer.scope or not trade or trade.finished or type(sid)~="number" or trade.sid~=sid then return nil end
+ local info=DiplomacyManager.GetSessionInfo(sid)
+ if not info or not ((info.FromPlayer==me and info.ToPlayer==trade.target) or (info.FromPlayer==trade.target and info.ToPlayer==me)) then return nil end
+ return trade
+end
 observer.statementHandler=function(from,to,k)
+ local diagnostic
+ if type(k)=="table" then
+  local trade=boundTrade(k.SessionID)
+  if trade then
+   observer.diagnosticSeq=observer.diagnosticSeq+1
+   diagnostic={{seq=observer.diagnosticSeq,from=from,to=to,expected=trade.action,variant={{}},filter="UNKNOWN"}}
+   for _,key in ipairs({{"SessionID","StatementType","StatementSubType","FromPlayer","RespondingToDealAction","DealAction","ResponseType"}}) do
+    local value=k[key]; if type(value)=="number" or type(value)=="string" then diagnostic.variant[key]=value end
+   end
+   if not ((from==Game.GetLocalPlayer() and to==trade.target) or (from==trade.target and to==Game.GetLocalPlayer())) then diagnostic.filter="EVENT_PAIR_MISMATCH"
+   elseif k.FromPlayer~=from then diagnostic.filter="FROM_PLAYER_MISMATCH"
+   elseif trade.action==nil then diagnostic.filter="NO_EXPECTED_ACTION"
+   elseif k.RespondingToDealAction~=trade.action then diagnostic.filter="RESPONDING_ACTION_MISMATCH"
+   else diagnostic.filter="ACCEPTED_EVENT" end
+   trade.latestEvent=diagnostic
+  end
+ end
  local valid,now=pcall(currentScope)
  local me=Game.GetLocalPlayer()
  if not valid or now~=observer.scope or (from~=me and to~=me) or type(k)~="table" or type(k.SessionID)~="number" or k.FromPlayer~=from then return end
@@ -51,6 +80,7 @@ observer.statementHandler=function(from,to,k)
  observer.seq=observer.seq+1
  local record={{seq=observer.seq,sid=sid,other=other,from=from,to=to,variant=copy}}
  observer.records[sid]=record
+ if diagnostic then diagnostic.acceptedSeq=record.seq end
  local trade=observer.trade
  if trade and trade.sid==sid and trade.target==other and trade.action~=nil and
     copy.RespondingToDealAction==trade.action and record.seq>trade.afterSeq then
@@ -64,8 +94,17 @@ observer.closedHandler=function(sid)
  if observer.records[sid] then observer.records[sid].closed=true end
  if observer.trade and observer.trade.sid==sid then observer.trade.closed=true end
 end
+observer.incomingHandler=function(from,to,action)
+ local trade=observer.trade
+ local me=Game.GetLocalPlayer()
+ if not trade or not ((from==me and to==trade.target) or (from==trade.target and to==me)) then return end
+ if boundTrade(trade.sid)~=trade or DiplomacyManager.FindOpenSessionID(me,trade.target)~=trade.sid then return end
+ observer.diagnosticSeq=observer.diagnosticSeq+1
+ trade.latestIncoming={{seq=observer.diagnosticSeq,from=from,to=to,action=action,sid=trade.sid}}
+end
 Events.DiplomacyStatement.Add(observer.statementHandler)
 Events.DiplomacySessionClosed.Add(observer.closedHandler)
+if Events.DiplomacyIncomingDeal then Events.DiplomacyIncomingDeal.Add(observer.incomingHandler) end
 __civmcp_diplomacy=observer
 print("DIPLO_OBSERVER|READY")
 print("DIPLO_SCOPE|"..scope)
@@ -381,4 +420,49 @@ def build_trade_finish(nonce: str, token: str) -> str:
 if not trade.closed then print("TRADE_FINISH|UNKNOWN"); return end
 trade.finished=true
 print("TRADE_FINISH|CONFIRMED")
+'''
+
+
+def build_trade_diagnostics(nonce: str, scope: str, token: str, sid: int | None) -> str:
+    return _scope() + f'''
+local function emit(text) print("DIPLO_DIAGNOSTIC|"..text) end
+local function value(v)
+ if type(v)=="number" or type(v)=="string" then return tostring(v):gsub("[|\\r\\n]","/") end
+ return "unknown"
+end
+local function action(v)
+ if type(v)~="number" then return value(v) end
+ for name,number in pairs(DealProposalAction) do if number==v then return name.."("..v..")" end end
+ return "unknown("..v..")"
+end
+local function key(v)
+ local ok,name=pcall(DiplomacyManager.GetKeyName,v)
+ return ok and type(name)=="string" and value(name) or value(v)
+end
+local observer=__civmcp_diplomacy
+local ok,scope=pcall(currentScope)
+if ContextPtr:GetID()~="DiplomacyActionView" or not observer or observer.nonce~={json.dumps(nonce)} then emit("diplomacy_observation: owner=UNKNOWN reason=OWNER_OR_CONTEXT"); return end
+if not ok or scope~={json.dumps(scope)} or observer.scope~=scope then emit("diplomacy_observation: owner=MATCHED world=UNKNOWN reason=WORLD_CHANGED"); return end
+local trade=observer.trade
+if not trade or trade.token~={json.dumps(token)} then emit("diplomacy_observation: owner=MATCHED world=MATCHED session=UNKNOWN reason=ATTEMPT_CHANGED"); return end
+local sid=trade.sid
+local me=Game.GetLocalPlayer()
+local info=sid and DiplomacyManager.GetSessionInfo(sid)
+if type(sid)~="number" or sid~={"nil" if sid is None else int(sid)} or DiplomacyManager.FindOpenSessionID(me,trade.target)~=sid or not info or not ((info.FromPlayer==me and info.ToPlayer==trade.target) or (info.FromPlayer==trade.target and info.ToPlayer==me)) then emit("diplomacy_observation: owner=MATCHED world=MATCHED session=UNKNOWN reason=SESSION_NOT_CURRENT"); return end
+emit("diplomacy_observation: owner=MATCHED world=MATCHED session=MATCHED nonce="..value(observer.nonce).." world="..value(scope).." session_id="..value(sid).." expected_action="..action(trade.action).." after_seq="..value(trade.afterSeq).." response_recorded="..tostring(trade.response~=nil).." response_current="..tostring(trade.response~=nil and observer.records[sid]==trade.response).." accepted_seq="..value(trade.response and trade.response.seq))
+local event=trade.latestEvent
+if not event then emit("diplomacy_statement: statement=NONE")
+else
+ local k=event.variant
+ emit("diplomacy_statement: event_seq="..value(event.seq).." statement_seq="..value(event.acceptedSeq).." filter="..value(event.filter).." expected_at_event="..action(event.expected).." event_from="..value(event.from).." event_to="..value(event.to).." k_from="..value(k.FromPlayer).." session_id="..value(k.SessionID).." subtype="..key(k.StatementSubType).." subtype_raw="..value(k.StatementSubType).." responding_action="..action(k.RespondingToDealAction).." deal_action="..action(k.DealAction).." response_type="..value(k.ResponseType))
+end
+local accepted=observer.records[sid]
+if accepted then
+ local k=accepted.variant
+ emit("diplomacy_accepted_statement: statement_seq="..value(accepted.seq).." subtype="..key(k.StatementSubType).." responding_action="..action(k.RespondingToDealAction).." deal_action="..action(k.DealAction).." response_type="..value(k.ResponseType))
+end
+local incoming=trade.latestIncoming
+if not incoming then emit("diplomacy_incoming: event=NONE")
+else emit("diplomacy_incoming: event_seq="..value(incoming.seq).." event_from="..value(incoming.from).." event_to="..value(incoming.to).." session_id="..value(incoming.sid).." deal_action="..action(incoming.action).." diagnostic_only=true") end
+print("{SENTINEL}")
 '''
