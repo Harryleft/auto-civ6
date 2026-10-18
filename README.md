@@ -54,7 +54,7 @@ args = ["run", "--directory", "/absolute/path/to/civ6-mcp", "civ-mcp"]
 
 ## 游戏操作与恢复
 
-连接后先读取真实概览、单位和城市，再决定动作与回合推进。动作、外交和世界议会的按需流程见[游戏操作](docs/agent-playbook.md)。
+开局识别本方文明与领袖、相遇后理解对手能力，并结合当前事实选择路线，见[获胜决策](docs/agent-strategy.md)。动作、外交和世界议会的合法执行与回读见[游戏操作](docs/agent-playbook.md)。
 
 正常换档使用 `reload_game_save`，完整重启作为显式故障恢复入口。结果未知时先核对原请求；基准、检查点轮次、保存与加载确认见[保存与恢复](docs/agent-recovery.md)。
 
