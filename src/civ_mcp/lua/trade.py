@@ -112,10 +112,11 @@ print("{SENTINEL}")
 '''
 
 
-def _observer(nonce: str) -> str:
+def _observer(nonce: str, *, incoming: bool = False) -> str:
     return _scope() + f'''
 local observer=__civmcp_diplomacy
 local ok,scope=pcall(currentScope)
+{'print("INCOMING_WORLD|"..(ok and scope or "UNKNOWN"))' if incoming else ''}
 if ContextPtr:GetID()~="DiplomacyActionView" or not ok or not observer or observer.nonce~={json.dumps(nonce)} or observer.scope~=scope then
  print("DIPLO_OBSERVER|UNKNOWN|SCOPE"); return
 end
@@ -190,8 +191,8 @@ print("{SENTINEL}")
 '''
 
 
-def _trade(nonce: str, token: str) -> str:
-    return _observer(nonce) + f'''
+def _trade(nonce: str, token: str, *, incoming: bool = False) -> str:
+    return _observer(nonce, incoming=incoming) + f'''
 local trade=observer.trade
 if not trade or trade.token~={json.dumps(token)} then print("TRADE|UNKNOWN|TOKEN"); return end
 local me=Game.GetLocalPlayer()
@@ -346,8 +347,8 @@ print("TRADE_ORIGINAL|"..__civmcp_trade_deal.original)
 '''
 
 
-def build_trade_response(nonce: str, token: str) -> str:
-    return _trade(nonce, token) + _fingerprint() + '''
+def build_trade_response(nonce: str, token: str, *, incoming: bool = False) -> str:
+    return _trade(nonce, token, incoming=incoming) + _fingerprint() + '''
 local record=trade.response
 if not record then print("TRADE_RESPONSE|WAITING"); return end
 if trade.incoming and (record.from~=target or record.to~=me) then print("TRADE_RESPONSE|UNKNOWN"); return end
@@ -574,7 +575,7 @@ print("INCOMING_CURRENT|"..b)
 
 
 def build_incoming_arm(nonce: str, token: str, target: int, sid: int, action: str) -> str:
-    return _observer(nonce) + f'''
+    return _observer(nonce, incoming=True) + f'''
 local target,sid={int(target)},{int(sid)}
 local me=Game.GetLocalPlayer()
 local info=DiplomacyManager.GetSessionInfo(sid)
@@ -649,7 +650,7 @@ print("INCOMING_PROPOSAL|"..receipt.proposal)
 
 def build_incoming_finish(nonce: str, token: str, *, zero: bool = False) -> str:
     guard = 'trade.response==nil' if zero else 'trade.response~=nil and observer.records[trade.sid]==trade.response'
-    return _trade(nonce, token) + f'''
+    return _trade(nonce, token, incoming=True) + f'''
 if not trade.incoming or not ({guard}) then print("INCOMING_FINISH|UNKNOWN"); return end
 trade.finished=true
 print("INCOMING_FINISH|CONFIRMED")

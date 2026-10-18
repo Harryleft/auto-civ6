@@ -150,10 +150,13 @@ class DiplomacyProgress:
         self.incoming = attempt
         try:
             armed = await _named(gs.conn, "DiplomacyActionView", native.build_incoming_arm(self.nonce, attempt.token, target, sid, attempt.action))
-            if armed == ["INCOMING|NOT_ARMED"]:
+            if not self._incoming_world_allowed(gs, armed):
+                return self.trade_summary()
+            arm_status = [row for row in armed if row.startswith("INCOMING|")]
+            if arm_status == ["INCOMING|NOT_ARMED"]:
                 self.incoming = None
                 return "ERR:NOT_SUBMITTED|Native session could not be armed."
-            if armed != ["INCOMING|ARMED"]:
+            if arm_status != ["INCOMING|ARMED"]:
                 return self.trade_summary()
             if not gs.allows_incoming_trade_world(attempt.scope):
                 return self.trade_summary()
@@ -162,7 +165,9 @@ class DiplomacyProgress:
                 return self.trade_summary()
             if any(row.startswith("INCOMING|NOT_SUBMITTED|") for row in rows) or "INCOMING|NOT_READY" in rows:
                 finished = await _named(gs.conn, "DiplomacyActionView", native.build_incoming_finish(self.nonce, attempt.token, zero=True))
-                if finished == ["INCOMING_FINISH|CONFIRMED"]:
+                if not self._incoming_world_allowed(gs, finished):
+                    return self.trade_summary()
+                if "INCOMING_FINISH|CONFIRMED" in finished:
                     self.incoming = None
                     return "ERR:NOT_SUBMITTED|Native guard rejected the unchanged quote/amount; no evaluation sent. " + " ".join(rows)
         except (OSError, TimeoutError, LuaError):
@@ -183,14 +188,16 @@ class DiplomacyProgress:
                         # The DealView retained proof that editing was rolled
                         # back before SendWorkingDeal, even if its reply was lost.
                         finished = await _named(gs.conn, "DiplomacyActionView", native.build_incoming_finish(self.nonce, attempt.token, zero=True))
-                        if finished != ["INCOMING_FINISH|CONFIRMED"]:
+                        if not self._incoming_world_allowed(gs, finished) or "INCOMING_FINISH|CONFIRMED" not in finished:
                             return self.trade_summary()
                         self.incoming = None
                         return "ERR:NOT_SUBMITTED|Native edit was rejected and the original draft restored; no evaluation sent."
                     proposals = [row.split("|", 1)[1] for row in receipt if row.startswith("INCOMING_PROPOSAL|")]
                     if "INCOMING_RECEIPT|SENT" not in receipt or len(proposals) != 1:
                         return self.trade_summary()
-                    rows = await _named(gs.conn, "DiplomacyActionView", native.build_trade_response(self.nonce, attempt.token))
+                    rows = await _named(gs.conn, "DiplomacyActionView", native.build_trade_response(self.nonce, attempt.token, incoming=True))
+                    if not self._incoming_world_allowed(gs, rows):
+                        return self.trade_summary()
                     headers = [row.split("|") for row in rows if row.startswith("TRADE_RESPONSE|KNOWN|")]
                     signatures = [row.split("|", 1)[1] for row in rows if row.startswith("TRADE_COUNTER|")]
                     if len(headers) != 1 or len(signatures) != 1:
@@ -215,7 +222,7 @@ class DiplomacyProgress:
                     else:
                         return self.trade_summary()
                     finished = await _named(gs.conn, "DiplomacyActionView", native.build_incoming_finish(self.nonce, attempt.token))
-                    if finished != ["INCOMING_FINISH|CONFIRMED"]:
+                    if not self._incoming_world_allowed(gs, finished) or "INCOMING_FINISH|CONFIRMED" not in finished:
                         return self.trade_summary()
                     self.incoming = None
                     parsed = lq.parse_test_trade_response(rows)
