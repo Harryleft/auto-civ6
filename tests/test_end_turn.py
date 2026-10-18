@@ -38,7 +38,7 @@ class FakeConn:
             return self.game_over_status(self) if callable(self.game_over_status) else self.game_over_status
         if "TURN_STATE|" in lua:
             ready = self.readiness(self) if self.readiness else self.ready
-            return [f"TURN_STATE|{self.turn}|{"?" if ready is None else int(ready)}"]
+            return [f"TURN_STATE|{self.turn}|{"?" if ready is None else int(ready)}|{"?" if ready is None else int(ready)}"]
         return [str(self.turn)]
 
     async def execute_write(self, lua):
@@ -47,7 +47,7 @@ class FakeConn:
             return [f"VICTORY_CONTEXT|{self.turn}|0", "VICTORY_ENABLED_KNOWN|true", "VICTORY_COMPLETE"]
         if "TURN_UI_READY|" in lua:
             processing = self.ui_processing(self) if callable(self.ui_processing) else self.ui_processing
-            return [f"TURN_UI_READY|{self.turn}|{int(not processing)}"]
+            return [f"TURN_UI_READY|{self.turn}|{int(not processing)}|0|1|0|1"]
         if "INFORMATION_POPUPS" in lua:
             return self.information_popups
         if "DIPLOMACY_PROBE" in lua:
@@ -59,7 +59,7 @@ class FakeConn:
                 self.turn += 1
             if self.send_error:
                 raise self.send_error
-            return ["OK:TURN_ENDED"]
+            return ["END_TURN|SUBMITTED"]
         if "BLOCKING|" in lua:
             return self.blocking
         if "__civmcp_wc_handler" in lua:
@@ -242,7 +242,7 @@ def test_timeout_budget_is_three_minutes_and_pending_is_never_resent(clock):
     gs = FakeGameState()
     gs.conn.advance = False
     first = play(gs)
-    assert "HANG:" in first
+    assert "WAITING:" in first
     assert "after 180s" in first
     assert clock.now == 180
     assert gs._pending_end_turn
@@ -250,7 +250,7 @@ def test_timeout_budget_is_three_minutes_and_pending_is_never_resent(clock):
     assert len(gs.conn.requests) == 1
     assert gs.sessions_calls == 1  # Full UI dialogue only during preflight.
     second = play(gs)
-    assert "HANG:" in second
+    assert "WAITING:" in second
     assert clock.now == 360
     assert len(gs.conn.requests) == 1
 
@@ -328,7 +328,7 @@ def test_polling_hard_timeout_includes_slow_read(monkeypatch):
 
     gs.conn.execute_read = stuck_read
     monkeypatch.setattr(et, "END_TURN_TIMEOUT_SECONDS", 0.01)
-    assert "HANG:" in play(gs)
+    assert "WAITING:" in play(gs)
     assert gs._pending_end_turn
     assert not gs.conn.requests
 
@@ -368,7 +368,7 @@ def test_unknown_gamecore_terminal_status_does_not_invent_game_over(clock):
     gs._pending_end_turn_from = 50
     gs.conn.game_over_status = ["UNKNOWN"]
     result = play(gs)
-    assert "HANG:" in result
+    assert "WAITING:" in result
     assert "cannot be reliably confirmed" in result
     assert gs._pending_end_turn
     assert not gs.conn.requests
@@ -434,7 +434,7 @@ def test_readiness_unknown_keeps_request_pending_until_later_confirmation(clock)
     gs = FakeGameState()
     gs.conn.readiness = lambda conn: True if not conn.requests else None
     first = play(gs)
-    assert "HANG:" in first
+    assert "WAITING:" in first
     assert gs._pending_end_turn
     assert len(gs.conn.requests) == 1
     gs.conn.readiness = None
@@ -474,7 +474,7 @@ def test_probe_queries_count_against_total_deadline(clock):
         clock.now += 25
         return ["DIPLOMACY_NONE"]
     gs.conn.diplomacy_probe = slow_probe
-    assert "HANG:" in play(gs)
+    assert "WAITING:" in play(gs)
     assert 180 <= clock.now <= 205
     assert len(gs.conn.requests) == 1
 
@@ -536,7 +536,7 @@ def test_unknown_popup_visibility_never_authorizes_advancement(clock, visibility
     gs.conn.ui_processing = True
     gs.conn.information_popups = visibility
     result = play(gs)
-    assert "HANG:" in result and "queries failed" in result
+    assert "WAITING:" in result and "queries failed" in result
     assert gs._pending_end_turn and not gs.conn.requests
 
 
