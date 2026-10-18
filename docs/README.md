@@ -17,6 +17,8 @@ Agent 从根目录 [AGENTS.md](../AGENTS.md) 开始；命中任务后读取对�
 
 ## 规格与验收
 
+- [原生掠夺验收](acceptance/2026-10-19-native-pillage.md)：580 项相关离线测试、T132 瑞典毛皮营地真实损坏及撤退，继续同轮终局验证。
+
 - [来约试价与反提案验收](acceptance/2026-10-19-incoming-counteroffer.md)：官方原始接口、只评估不成交、世界门禁及同价反提案确认修复、T139 显式成交与续行。
 
 - [城市产出偏好验收](acceptance/2026-10-19-city-yield-focus.md)：487 项相关离线测试、T141 原生偏好与幂等确认、保存及菜单恢复，继续至 T148。
