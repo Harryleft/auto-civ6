@@ -14,6 +14,7 @@ from civ_mcp.lua._helpers import (
 from civ_mcp.lua.models import (
     BuilderInfo,
     BuilderTask,
+    BuilderTaskReport,
     CombatEstimate,
     PathingEstimate,
     ThreatInfo,
@@ -2150,7 +2151,7 @@ for _, city in pCities:Members() do
 end
 
 -- Do not present a partially observed resource board as complete/empty.
-if not resourceVisibilityKnown then print("RESOURCE_VISIBILITY_UNKNOWN") end
+print("RESOURCE_VISIBILITY|" .. tostring(resourceVisibilityKnown))
 
 -- Print builder info
 for _, b in ipairs(builders) do
@@ -2162,13 +2163,13 @@ print("{SENTINEL}")
 
 def parse_builder_tasks(
     lines: list[str],
-) -> tuple[list[BuilderTask], list[BuilderInfo]]:
-    """Parse TASK| and BUILDER| lines from build_builder_tasks_query."""
-    if "RESOURCE_VISIBILITY_UNKNOWN" in lines:
-        raise ValueError(
-            "Builder advice incomplete: native resource visibility is unknown; "
-            "no resource advice available."
-        )
+) -> BuilderTaskReport:
+    """Keep safe advice and explicitly mark incomplete resource observations."""
+    resource_visibility_known = None
+    if "RESOURCE_VISIBILITY|true" in lines:
+        resource_visibility_known = True
+    if "RESOURCE_VISIBILITY|false" in lines or "RESOURCE_VISIBILITY_UNKNOWN" in lines:
+        resource_visibility_known = False
     tasks: list[BuilderTask] = []
     builders: list[BuilderInfo] = []
 
@@ -2218,4 +2219,4 @@ def parse_builder_tasks(
         except (ValueError, IndexError):
             continue
 
-    return tasks, builders
+    return BuilderTaskReport(tasks, builders, resource_visibility_known)
