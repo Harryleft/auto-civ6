@@ -11,6 +11,7 @@ from civ_mcp import server
 class PendingGame:
     replacement_pending = False
     save_pending = False
+    diplomacy_pending = False
     turn_pending = False
     pending_action_entity = ("unit", 7)
 
@@ -76,7 +77,7 @@ def test_other_unit_does_not_depend_on_pending_position():
     assert game.actions == [("fortify", 8)]
 
 
-@pytest.mark.parametrize("pending_flag", ["replacement_pending", "save_pending", "turn_pending"])
+@pytest.mark.parametrize("pending_flag", ["replacement_pending", "save_pending", "diplomacy_pending", "turn_pending"])
 def test_unknown_lifecycle_blocks_gameplay_even_without_pending_unit(pending_flag):
     game = PendingGame("CONFIRMED|unused")
     game.pending_action_entity = None
@@ -86,7 +87,7 @@ def test_unknown_lifecycle_blocks_gameplay_even_without_pending_unit(pending_fla
     assert game.actions == []
 
 
-@pytest.mark.parametrize("pending_flag", ["replacement_pending", "save_pending", "turn_pending"])
+@pytest.mark.parametrize("pending_flag", ["replacement_pending", "save_pending", "diplomacy_pending", "turn_pending"])
 def test_pending_operation_still_allows_read_only_unit_query(pending_flag):
     game = PendingGame("CONFIRMED|unused")
     setattr(game, pending_flag, True)
@@ -102,7 +103,7 @@ def test_separate_upgrade_tool_cannot_bypass_pending_unit():
     assert game.actions == []
 
 
-@pytest.mark.parametrize("pending_flag", ["replacement_pending", "save_pending", "turn_pending"])
+@pytest.mark.parametrize("pending_flag", ["replacement_pending", "save_pending", "diplomacy_pending", "turn_pending"])
 def test_public_pending_facts_allow_explicit_fault_recovery(pending_flag):
     game = PendingGame("CONFIRMED|unused")
     game.pending_action_entity = None
