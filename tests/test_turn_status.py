@@ -196,3 +196,29 @@ def test_already_sent_native_request_has_unknown_original_submission_time(clock)
     result = asyncio.run(state.end_turn())
     assert "elapsed=unknown" in result
     assert state.turn_pending and not conn.requests
+
+
+@pytest.mark.parametrize("native_value", ["nil", '"processing"', "0"])
+def test_nonboolean_native_processing_stays_unknown(native_value):
+    conn = NativeStatusConn()
+    conn.lua.execute('UI.IsProcessingMessages=function() return ' + native_value + ' end')
+    result = asyncio.run(GameState(conn).get_turn_status())
+    assert result.startswith("UNKNOWN") and "ui_processing=unknown" in result
+    assert "read_failures=0" in result
+
+
+def test_higher_turn_with_unknown_native_processing_cannot_retire_pending(clock):
+    class PollingStatusConn(NativeStatusConn):
+        async def execute_read(self, code):
+            if "Game.GetWinningTeam" in code:
+                return ["GAME_ACTIVE"]
+            return await super().execute_read(code)
+    conn = PollingStatusConn()
+    conn.lua.execute('UI.IsProcessingMessages=function() return nil end')
+    state = GameState(conn)
+    state._pending_end_turn = True
+    state._pending_end_turn_from = 77
+    result = asyncio.run(state.end_turn())
+    assert state.turn_pending
+    assert "Turn 77 -> 78" not in result
+    assert "ui_processing=unknown" in result

@@ -151,3 +151,59 @@ def test_hidden_empty_view_without_this_nonce_cannot_confirm_unknown_close():
     assert asyncio.run(cleanup.close(conn)).status == "unknown"
     assert cleanup.pending and conn.lua.globals().closes == 0
     assert conn.lua.globals().hidden and conn.lua.globals().locks == 1
+
+
+class CancelledTradeConn(NativeDiplomacy):
+    def __init__(self):
+        super().__init__()
+        self.proposals = 0
+        self.cancel_close_reply = True
+
+    async def execute_write(self, source):
+        if "DealManager.SendWorkingDeal" in source:
+            self.proposals += 1
+            if "EQUALIZE" in source:
+                return ["CIV|1|Canada", "PROPOSED_ITEMS", "ITEM|US|GOLD|20|0||", "AI_COUNTER", "ITEM|THEM|GOLD|10|30||"]
+            return ["OK:ACCEPTED|Trade accepted with Canada"]
+        if "DIPLOMACY_VIEW_PRESENT" in source:
+            return ["DIPLOMACY_VIEW_PRESENT"]
+        if "INFORMATION_POPUPS" in source:
+            return ["INFORMATION_POPUPS|DONE"]
+        raise AssertionError("Unexpected game boundary call")
+
+    async def execute_in_named_state(self, name, source, timeout=5):
+        rows = await super().execute_in_named_state(name, source, timeout)
+        if self.cancel_close_reply:
+            self.cancel_close_reply = False
+            raise asyncio.CancelledError()
+        return rows
+
+
+@pytest.mark.parametrize("first", ["propose_trade", "test_trade"])
+@pytest.mark.parametrize("retry", ["propose_trade", "test_trade"])
+def test_cancel_after_native_close_keeps_original_trade_and_never_resubmits(first, retry):
+    from civ_mcp.game_state import GameState
+    async def scenario():
+        conn = CancelledTradeConn()
+        state = GameState(conn)
+        with pytest.raises(asyncio.CancelledError):
+            await getattr(state, first)(1, [], [])
+        result = await getattr(state, retry)(1, [], [])
+        assert "No new trade submitted" in result
+        assert "Canada" in result and "cleanup confirmed" in result
+        assert conn.proposals == 1 and conn.lua.globals().closes == 1
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("entry", ["propose_trade", "test_trade"])
+def test_unrelated_dismiss_cancel_only_confirms_cleanup_before_any_new_trade(entry):
+    from civ_mcp.game_state import GameState
+    async def scenario():
+        conn = CancelledTradeConn()
+        state = GameState(conn)
+        with pytest.raises(asyncio.CancelledError):
+            await state.dismiss_popup()
+        result = await getattr(state, entry)(1, [], [])
+        assert "No new trade submitted" in result and "cleanup confirmed" in result
+        assert conn.proposals == 0 and conn.lua.globals().closes == 1
+    asyncio.run(scenario())
