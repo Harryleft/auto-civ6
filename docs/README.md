@@ -17,6 +17,8 @@ Agent 从根目录 [AGENTS.md](../AGENTS.md) 开始；命中任务后读取对�
 
 ## 规格与验收
 
+- [第 21～41 回合决策与调度修复规格](specs/2026-10-18-decision-repair-turn41.md)与[工作项](specs/2026-10-18-decision-repair-turn41-tickets.md)：近战执行资格、使团确认、专属改良、市政进度；本轮第 21 回合检查点续测。
+
 仅在定位对应改动或核对成果时读取。历史记录中的提交、测试数量与实机结果只适用于该记录，不代表当前分支已重新验收。
 
 - [文明特性与自主决策离线验收](acceptance/2026-10-18-civilization-knowledge.md)：文明／领袖能力与公开身份、三类信息决策指南、1,517 项离线和审查修复；未实机；[规格](specs/2026-10-18-civilization-knowledge.md)。
