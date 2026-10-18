@@ -191,7 +191,13 @@ class DiplomacyProgress:
                     if finished != ["INCOMING_FINISH|CONFIRMED"]:
                         return self.trade_summary()
                     self.incoming = None
-                    report = narrate_test_trade(lq.parse_test_trade_response(rows), include_guidance=False, preview=True)
+                    parsed = lq.parse_test_trade_response(rows)
+                    parsed.rejected = outcome == "REJECTED"
+                    if outcome == "WILLING":
+                        # Equal native fingerprints certify these are our exact
+                        # evaluated terms, rather than a distinct fair counter.
+                        parsed.proposed = list(parsed.counter)
+                    report = narrate_test_trade(parsed, include_guidance=False, preview=True)
                     return f"{outcome}|Native {attempt.action} evaluation; deal not concluded.\n" + report + f"\nfingerprint={quote['fingerprint']}\nUse a fresh query for another explicit offer or final response."
         except (OSError, TimeoutError, LuaError, ValueError, IndexError):
             return self.trade_summary()
