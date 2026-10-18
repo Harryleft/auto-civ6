@@ -119,7 +119,11 @@ local mode = "?"
 local ok, value = pcall(UI.GetInterfaceMode)
 if ok and type(value) == "number" then mode = tostring(value) end
 print("TURN_UI_READY|" .. tostring(Game.GetCurrentGameTurn()) .. "|" ..
-    fact(function() return not UI.IsProcessingMessages() end) .. "|" ..
+    fact(function()
+        local processing = UI.IsProcessingMessages()
+        if type(processing) ~= "boolean" then return nil end
+        return not processing
+    end) .. "|" ..
     fact(UI.HasSentTurnComplete) .. "|" .. fact(UI.CanEndTurn) .. "|" ..
     fact(function() return Players[Game.GetLocalPlayer()]:CanUnreadyTurn() end) .. "|" .. mode)
 print("{lq.SENTINEL}")
