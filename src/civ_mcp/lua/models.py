@@ -1114,8 +1114,9 @@ class CongressResolution:
     effect_b: str  # description of option B
     possible_targets: list[str]  # ["Production", "Gold", ...] or player names etc.
     is_passed: bool = False
-    winner: int = -1  # 0=A won, 1=B won
+    winner: int = -1  # Raw native diagnostic; not an A/B option index.
     chosen_thing: str = ""  # target that was chosen
+    chosen_label: str = ""  # Native A/B label; empty means unknown.
 
 
 @dataclass
