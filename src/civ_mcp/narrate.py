@@ -1717,19 +1717,11 @@ def narrate_world_congress(status: lq.WorldCongressStatus) -> str:
                 lines.append(
                     f'  -> queue_wc_votes(votes=\'[{{"hash": {r.resolution_hash}, "option": 1or2, "target": 0, "votes": 1}}]\')'
                 )
-            elif imminent:
-                # Imminent but not yet in session — resolutions are LAST SESSION's passed outcomes
-                # Show as active effects, not as upcoming votes
-                outcome = "A" if r.winner == 0 else "B" if r.winner == 1 else "?"
-                effect = (
-                    r.effect_a if r.winner == 0 else r.effect_b if r.winner == 1 else ""
-                )
-                chosen = f" ({r.chosen_thing})" if r.chosen_thing else ""
-                lines.append(f"  {r.name} — Outcome {outcome}{chosen}: {effect}")
             else:
-                outcome = "A" if r.winner == 0 else "B" if r.winner == 1 else "?"
+                # Prior-session effects use the native label; Winner is not an option index.
+                outcome = r.chosen_label if r.chosen_label in ("A", "B") else "UNKNOWN"
                 effect = (
-                    r.effect_a if r.winner == 0 else r.effect_b if r.winner == 1 else ""
+                    r.effect_a if outcome == "A" else r.effect_b if outcome == "B" else ""
                 )
                 chosen = f" ({r.chosen_thing})" if r.chosen_thing else ""
                 lines.append(f"  {r.name} — Outcome {outcome}{chosen}: {effect}")
