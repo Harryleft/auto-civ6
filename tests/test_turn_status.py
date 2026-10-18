@@ -43,6 +43,8 @@ class NativeStatusConn:
         self.writes = 0
         self.lua.globals().print = lambda row: self.rows.append(str(row))
         self.lua.execute('''
+PlayerConfigurations={[0]={GetCivilizationTypeName=function() return 'CIVILIZATION_SUMERIA' end}}
+GameConfiguration={GetValue=function() return 1 end}
 active, complete, processing, sent, allowed, unready, mode = true, true, false, false, true, false, 1
 Game={GetLocalPlayer=function() return 0 end, GetCurrentGameTurn=function() return 78 end}
 Players={[0]={IsTurnActive=function() return active end, IsTurnActiveComplete=function() return complete end,
@@ -216,13 +218,14 @@ def test_higher_turn_with_unknown_native_processing_cannot_retire_pending(clock)
     class PollingStatusConn(NativeStatusConn):
         async def execute_read(self, code):
             if "Game.GetWinningTeam" in code:
-                return ["GAME_ACTIVE"]
+                return ["GAME_ACTIVE", "TURN_WORLD|CIVILIZATION_SUMERIA|1|0|78"]
             return await super().execute_read(code)
     conn = PollingStatusConn()
     conn.lua.execute('UI.IsProcessingMessages=function() return nil end')
     state = GameState(conn)
     state._pending_end_turn = True
     state._pending_end_turn_from = 77
+    state._turn_progress.world = ("CIVILIZATION_SUMERIA", 1, 0)
     result = asyncio.run(state.end_turn())
     assert state.turn_pending
     assert "Turn 77 -> 78" not in result
@@ -296,3 +299,29 @@ def test_queue_completion_then_new_local_action_preserves_original_turn_request(
     assert 'LOCAL_ACTION_REQUIRED' in second
     assert state.turn_pending and len(conn.requests)==1
     assert clock.now<10
+
+
+def test_native_world_change_inside_observation_latches_pending_scope(clock):
+    conn = GameStateConn()
+    state = GameState(conn)
+    conn.send_error = ConnectionError("reply lost")
+    assert "result unknown" in asyncio.run(state.end_turn())
+    native = NativeStatusConn()
+    native.lua.execute('''
+seed=1
+GameConfiguration.GetValue=function() return seed end
+Game.GetCurrentGameTurn=function() return 51 end
+Players[0].IsTurnActive=function() seed=2;return true end
+''')
+    original = conn.execute_read
+    async def changing_native_observation(code):
+        if "TURN_STATE|" in code:
+            return await native.execute_read(code)
+        return await original(code)
+    conn.execute_read = changing_native_observation
+    result = asyncio.run(state.get_turn_status())
+    assert "world_identity=mismatch" in result
+    assert state.turn_pending and len(conn.requests) == 1
+    conn.execute_read = original
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.end_turn())
+    assert state.turn_pending and len(conn.requests) == 1

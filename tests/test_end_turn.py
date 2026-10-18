@@ -16,6 +16,9 @@ class FakeConn:
 
     def __init__(self):
         self.turn = 50
+        self.seed = 1
+        self.civ = "CIVILIZATION_SUMERIA"
+        self.player = 0
         self.calls = []
         self.advance = True
         self.send_error = None
@@ -31,15 +34,18 @@ class FakeConn:
         self.local_readiness = None
         self.information_popups = ["INFORMATION_POPUPS|DONE"]
 
+    def world_rows(self):
+        return [f"TURN_WORLD|{self.civ}|{self.seed}|{self.player}|{self.turn}"]
+
     async def execute_read(self, lua):
         self.calls.append(lua)
         if self.read_error:
             raise self.read_error
         if "Game.GetWinningTeam" in lua:
-            return self.game_over_status(self) if callable(self.game_over_status) else self.game_over_status
+            return (self.game_over_status(self) if callable(self.game_over_status) else self.game_over_status) + self.world_rows()
         if "TURN_STATE|" in lua:
             ready = self.readiness(self) if self.readiness else self.ready
-            return [f"TURN_STATE|{self.turn}|{"?" if ready is None else int(ready)}|{"?" if ready is None else int(ready)}"]
+            return [f"TURN_STATE|{self.turn}|{"?" if ready is None else int(ready)}|{"?" if ready is None else int(ready)}"] + self.world_rows()
         return [str(self.turn)]
 
     async def execute_write(self, lua):
@@ -52,7 +58,7 @@ class FakeConn:
             return [f"TURN_LOCAL|{self.turn}|NONE|auto_end_turn=0|city_range_turn_blocking=0|allow_tactical_commands=1|core_busy=0|first_ready_unit_present=0|city_range_notification=0|native_blocker=0|units_have_moves=0|city_range_attack=0|queued_move_current=0", "TURN_LOCAL_DONE"]
         if "TURN_UI_READY|" in lua:
             processing = self.ui_processing(self) if callable(self.ui_processing) else self.ui_processing
-            return [f"TURN_UI_READY|{self.turn}|{int(not processing)}|0|1|0|1"]
+            return [f"TURN_UI_READY|{self.turn}|{int(not processing)}|0|1|0|1"] + self.world_rows()
         if "INFORMATION_POPUPS" in lua:
             return self.information_popups
         if "DIPLOMACY_PROBE" in lua:
@@ -264,6 +270,7 @@ def test_pending_request_can_confirm_without_querying_in_game_blockers(clock):
     gs = FakeGameState()
     gs._pending_end_turn = True
     gs._pending_end_turn_from = 49
+    gs._turn_progress.world = ("CIVILIZATION_SUMERIA", 1, 0)
     gs._turn_progress.baseline = lq.TurnSnapshot(49, {}, {}, "", "")
     gs.sessions_error = AssertionError("Must not re-enter preflight while AI is processing")
     assert "Turn 49 -> 50" in play(gs)
@@ -275,6 +282,7 @@ def test_poll_query_failure_is_reported_and_preserves_pending(clock):
     gs = FakeGameState()
     gs._pending_end_turn = True
     gs._pending_end_turn_from = 50
+    gs._turn_progress.world = ("CIVILIZATION_SUMERIA", 1, 0)
     gs.conn.read_error = LuaError("GameCore unavailable")
     assert "cannot be reliably confirmed" in play(gs)
     assert gs._pending_end_turn
@@ -285,6 +293,7 @@ def test_mid_turn_diplomacy_never_replays_or_makes_war_choice(clock):
     gs = FakeGameState()
     gs._pending_end_turn = True
     gs._pending_end_turn_from = 50
+    gs._turn_progress.world = ("CIVILIZATION_SUMERIA", 1, 0)
     gs.conn.diplomacy_probe = ["DIPLOMACY|2"]
     result = play(gs)
     assert "Turn paused" in result
@@ -300,6 +309,7 @@ def test_turn_regression_does_not_clear_pending(clock):
     gs = FakeGameState()
     gs._pending_end_turn = True
     gs._pending_end_turn_from = 51
+    gs._turn_progress.world = ("CIVILIZATION_SUMERIA", 1, 0)
     assert "turn changed from 51 to 50" in play(gs)
     assert gs._pending_end_turn
     assert not gs.conn.requests
@@ -327,6 +337,7 @@ def test_polling_hard_timeout_includes_slow_read(monkeypatch):
     gs = FakeGameState()
     gs._pending_end_turn = True
     gs._pending_end_turn_from = 50
+    gs._turn_progress.world = ("CIVILIZATION_SUMERIA", 1, 0)
 
     async def stuck_read(lua):
         await asyncio.Event().wait()
@@ -342,6 +353,7 @@ def test_pending_terminal_game_is_confirmed_without_turn_advance(clock):
     gs = FakeGameState()
     gs._pending_end_turn = True
     gs._pending_end_turn_from = 50
+    gs._turn_progress.world = ("CIVILIZATION_SUMERIA", 1, 0)
     gs.conn.game_over_status = ["GAME_OVER|DEFEAT|Rome|Unknown|alive|Trajan|2"]
     result = play(gs)
     assert "GAME OVER — DEFEAT" in result
@@ -371,6 +383,7 @@ def test_unknown_gamecore_terminal_status_does_not_invent_game_over(clock):
     gs = FakeGameState()
     gs._pending_end_turn = True
     gs._pending_end_turn_from = 50
+    gs._turn_progress.world = ("CIVILIZATION_SUMERIA", 1, 0)
     gs.conn.game_over_status = ["UNKNOWN"]
     result = play(gs)
     assert "WAITING:" in result
@@ -489,6 +502,7 @@ def test_visible_disaster_pauses_promptly_without_replay_or_dismissal(clock, rea
     gs = FakeGameState()
     gs._pending_end_turn = True
     gs._pending_end_turn_from = 49
+    gs._turn_progress.world = ("CIVILIZATION_SUMERIA", 1, 0)
     gs.conn.ready = ready
     gs.conn.ui_processing = True
     gs.conn.information_popups = ["INFORMATION_POPUPS|VISIBLE|NaturalDisasterPopup", "INFORMATION_POPUPS|DONE"]
@@ -507,6 +521,7 @@ def test_diplomacy_takes_priority_when_information_popup_is_also_visible(clock):
     gs = FakeGameState()
     gs._pending_end_turn = True
     gs._pending_end_turn_from = 49
+    gs._turn_progress.world = ("CIVILIZATION_SUMERIA", 1, 0)
     gs.conn.ui_processing = True
     gs.conn.diplomacy_probe = ["DIPLOMACY|2"]
     gs.conn.information_popups = ["INFORMATION_POPUPS|VISIBLE|NaturalDisasterPopup", "INFORMATION_POPUPS|DONE"]
@@ -538,6 +553,7 @@ def test_unknown_popup_visibility_never_authorizes_advancement(clock, visibility
     gs = FakeGameState()
     gs._pending_end_turn = True
     gs._pending_end_turn_from = 49
+    gs._turn_progress.world = ("CIVILIZATION_SUMERIA", 1, 0)
     gs.conn.ui_processing = True
     gs.conn.information_popups = visibility
     result = play(gs)
@@ -549,6 +565,7 @@ def test_visible_disaster_is_reported_when_ui_turn_temporarily_lags(clock):
     gs = FakeGameState()
     gs._pending_end_turn = True
     gs._pending_end_turn_from = 49
+    gs._turn_progress.world = ("CIVILIZATION_SUMERIA", 1, 0)
     original = gs.conn.execute_write
     async def delayed_ui(lua):
         if "TURN_UI_READY|" in lua:
@@ -567,6 +584,7 @@ def test_pending_turn_reports_midturn_world_congress_without_resending(clock):
     gs.conn.ready = False
     gs._pending_end_turn = True
     gs._pending_end_turn_from = 67
+    gs._turn_progress.world = ("CIVILIZATION_SUMERIA", 1, 0)
     gs.wc.is_in_session = True
     gs.conn.congress_phase = ["WC_PHASE|true|STAGE1|67|NONE"]
     result = play(gs)
@@ -582,6 +600,7 @@ def test_uncertain_congress_phase_is_reported_without_replaying_or_guessing(phas
     gs.conn.turn = 67
     gs._pending_end_turn = True
     gs._pending_end_turn_from = 67
+    gs._turn_progress.world = ("CIVILIZATION_SUMERIA", 1, 0)
     gs.conn.congress_phase = [phase]
     assert "World Congress phase/result unknown" in play(gs)
     assert clock.now < 10 and not gs.conn.requests
@@ -593,6 +612,7 @@ def test_requested_congress_continuation_only_observes_original_turn_until_ready
     gs.conn.ready = False
     gs._pending_end_turn = True
     gs._pending_end_turn_from = 67
+    gs._turn_progress.world = ("CIVILIZATION_SUMERIA", 1, 0)
 
     def phase(conn):
         conn.turn, conn.ready = 68, True
@@ -609,6 +629,7 @@ def test_malformed_congress_read_reports_unknown_instead_of_claiming_no_session(
     gs.conn.ready = False
     gs._pending_end_turn = True
     gs._pending_end_turn_from = 50
+    gs._turn_progress.world = ("CIVILIZATION_SUMERIA", 1, 0)
     gs.conn.congress_phase = ["WC_PHASE|truncated"]
     result = play(gs)
     assert "World Congress phase unavailable" in result
@@ -946,3 +967,194 @@ def test_stalled_victory_read_is_bounded_and_does_not_reopen_confirmed_turn(monk
     assert "Turn 50 -> 51" in report and "Victory warnings unavailable" in report
     assert not gs.turn_pending and len(conn.requests) == 1
     assert conn.calls.count(lq.build_victory_proximity_query()) == 1
+
+
+def test_pending_request_checks_native_world_without_prior_identity_refresh(clock):
+    conn = GameStateConn()
+    gs = GameState(conn)
+    conn.send_error = ConnectionError("reply lost")
+    assert "result unknown" in asyncio.run(gs.end_turn())
+    conn.send_error = None
+    conn.seed, conn.turn = 2, 100
+    result = asyncio.run(gs.end_turn())
+    assert "OUTCOME_UNKNOWN" in result
+    assert "Turn 50 -> 100" not in result
+    assert gs.turn_pending and len(conn.requests) == 1
+    assert "End-turn outcome is pending" in asyncio.run(gs.save_game("new_world"))
+
+
+@pytest.mark.parametrize("field,value", [("seed", 2), ("civ", "CIVILIZATION_BABYLON"), ("player", 1)])
+@pytest.mark.parametrize("turn,terminal", [(50, False), (100, False), (100, True)])
+def test_changed_world_or_player_never_confirms_original_request(clock, field, value, turn, terminal):
+    conn = GameStateConn()
+    gs = GameState(conn)
+    conn.send_error = ConnectionError("reply lost")
+    assert "result unknown" in asyncio.run(gs.end_turn())
+    baseline = gs._turn_progress.baseline
+    conn.send_error, conn.turn = None, turn
+    setattr(conn, field, value)
+    if terminal:
+        conn.game_over_status = ["GAME_OVER|DEFEAT|Rome|Unknown|alive|Trajan|2"]
+    result = asyncio.run(gs.end_turn())
+    assert "OUTCOME_UNKNOWN" in result and "GAME OVER" not in result
+    assert gs.turn_pending and gs._turn_progress.baseline is baseline
+    assert len(conn.requests) == 1
+
+
+def test_status_latches_world_change_even_if_original_identity_reappears(clock):
+    conn = GameStateConn()
+    gs = GameState(conn)
+    conn.send_error = ConnectionError("reply lost")
+    assert "result unknown" in asyncio.run(gs.end_turn())
+    conn.send_error, conn.seed = None, 2
+    result = asyncio.run(gs.get_turn_status())
+    assert "world_identity=mismatch" in result
+    assert gs.turn_pending and len(conn.requests) == 1
+    conn.seed = 1
+    assert "OUTCOME_UNKNOWN" in asyncio.run(gs.end_turn())
+    assert gs.turn_pending and len(conn.requests) == 1
+
+
+@pytest.mark.parametrize("rows", [[], ["TURN_WORLD|UNKNOWN"], ["TURN_WORLD|CIVILIZATION_SUMERIA|bad|0|51"],
+    ["TURN_WORLD|CIVILIZATION_SUMERIA|1|0|51"] * 2])
+def test_missing_or_malformed_identity_preserves_pending_until_original_world_returns(clock, rows):
+    conn = GameStateConn()
+    gs = GameState(conn)
+    conn.send_error = ConnectionError("reply lost")
+    assert "result unknown" in asyncio.run(gs.end_turn())
+    conn.send_error = None
+    original = conn.world_rows
+    conn.world_rows = lambda: rows
+    assert "Turn 50 -> 51" not in asyncio.run(gs.end_turn())
+    assert gs.turn_pending and len(conn.requests) == 1
+    assert "world_identity=unknown" in asyncio.run(gs.get_turn_status())
+    conn.world_rows = original
+    assert "Turn 50 -> 51" in asyncio.run(gs.end_turn())
+    assert not gs.turn_pending and len(conn.requests) == 1
+
+
+def test_pending_without_original_world_is_never_bound_to_first_new_read(clock):
+    conn = GameStateConn()
+    conn.seed, conn.turn = 2, 100
+    gs = GameState(conn)
+    gs._pending_end_turn, gs._pending_end_turn_from = True, 50
+    assert "world_identity=unknown" in asyncio.run(gs.get_turn_status())
+    assert "OUTCOME_UNKNOWN" in asyncio.run(gs.end_turn())
+    assert gs.turn_pending and not conn.requests
+
+
+def test_new_request_does_not_combine_worlds_observed_during_preflight(clock):
+    conn = GameStateConn()
+    original = conn.execute_write
+    async def changed_after_snapshot(code):
+        result = await original(code)
+        if code == lq.build_stockpile_query():
+            conn.seed = 2
+        return result
+    conn.execute_write = changed_after_snapshot
+    gs = GameState(conn)
+    assert "world identity changed" in asyncio.run(gs.end_turn())
+    assert not gs.turn_pending and not conn.requests
+
+
+def test_pending_read_does_not_combine_gamecore_and_ingame_worlds(clock):
+    conn = GameStateConn()
+    gs = GameState(conn)
+    conn.send_error = ConnectionError("reply lost")
+    assert "result unknown" in asyncio.run(gs.end_turn())
+    conn.send_error = None
+    original = conn.execute_write
+    async def changed_ui(code):
+        if "TURN_UI_READY|" in code:
+            conn.seed = 2
+        return await original(code)
+    conn.execute_write = changed_ui
+    assert "OUTCOME_UNKNOWN" in asyncio.run(gs.end_turn())
+    assert gs.turn_pending and len(conn.requests) == 1
+
+
+def test_stale_cached_identity_cannot_invalidate_a_request_bound_to_current_world(clock):
+    class IdentityConn(GameStateConn):
+        async def execute_write(self, code):
+            if "GAMESEED|" in code:
+                return [f"GAMESEED|{self.civ}|{self.seed}"]
+            return await super().execute_write(code)
+    conn = IdentityConn()
+    gs = GameState(conn)
+    assert asyncio.run(gs.get_game_identity()) == ("sumeria", 1)
+    conn.seed = 2
+    conn.send_error = ConnectionError("reply lost")
+    assert "result unknown" in asyncio.run(gs.end_turn())
+    assert asyncio.run(gs.get_game_identity()) == ("sumeria", 2)
+    conn.send_error = None
+    assert "Turn 50 -> 51" in asyncio.run(gs.end_turn())
+    assert not gs.turn_pending and len(conn.requests) == 1
+
+
+@pytest.mark.parametrize("rows", [[], ["TURN_WORLD|UNKNOWN"], ["TURN_WORLD|CIVILIZATION_SUMERIA|1|not_a_player|50"]])
+def test_new_request_requires_original_native_world_identity(clock, rows):
+    gs = FakeGameState()
+    gs.conn.world_rows = lambda: rows
+    assert "world identity unavailable" in play(gs)
+    assert not gs.turn_pending and not gs.conn.requests
+
+
+def test_temporary_identity_read_failure_can_resume_same_world_without_resending(clock):
+    conn = GameStateConn()
+    gs = GameState(conn)
+    conn.send_error = ConnectionError("reply lost")
+    assert "result unknown" in asyncio.run(gs.end_turn())
+    baseline, started = gs._turn_progress.baseline, gs._turn_progress.submitted_at
+    conn.send_error, conn.read_error = None, ConnectionError("identity temporarily unavailable")
+    assert "WAITING:" in asyncio.run(gs.end_turn())
+    assert gs.turn_pending and gs._turn_progress.baseline is baseline
+    assert gs._turn_progress.submitted_at == started and len(conn.requests) == 1
+    conn.read_error = None
+    assert "Turn 50 -> 51" in asyncio.run(gs.end_turn())
+    assert not gs.turn_pending and len(conn.requests) == 1
+
+
+@pytest.mark.parametrize("world_state", ["original", "foreign", "changes_during_outcome"])
+def test_terminal_outcome_requires_original_world_in_same_native_block(clock, world_state):
+    from test_terminal_boundary_lua import TerminalConn
+    conn = GameStateConn()
+    gs = GameState(conn)
+    conn.send_error = ConnectionError("reply lost")
+    assert "result unknown" in asyncio.run(gs.end_turn())
+    native = TerminalConn()
+    native.lua.execute('''
+seed=1
+GameConfiguration={GetValue=function() return seed end}
+PlayerConfigurations[0].GetCivilizationTypeName=function() return 'CIVILIZATION_SUMERIA' end
+''')
+    if world_state == "foreign":
+        native.lua.execute('seed=2')
+    elif world_state == "changes_during_outcome":
+        native.lua.execute('Game.GetWinningTeam=function() seed=2;return winner,selector end')
+    original = conn.execute_read
+    async def native_terminal(code):
+        if "Game.GetWinningTeam" in code:
+            return await native.execute_read(code)
+        return await original(code)
+    conn.execute_read = native_terminal
+    result = asyncio.run(gs.end_turn())
+    if world_state == "original":
+        assert "GAME OVER — DEFEAT" in result
+        assert not gs.turn_pending
+    else:
+        assert "OUTCOME_UNKNOWN" in result and "GAME OVER" not in result
+        assert gs.turn_pending
+    assert len(conn.requests) == 1
+
+
+def test_matching_readonly_status_cannot_retire_or_rebind_pending_request(clock):
+    conn = GameStateConn()
+    gs = GameState(conn)
+    conn.send_error = ConnectionError("reply lost")
+    assert "result unknown" in asyncio.run(gs.end_turn())
+    result = asyncio.run(gs.get_turn_status())
+    assert "world_identity=match" in result
+    assert gs.turn_pending and len(conn.requests) == 1
+    conn.send_error = None
+    assert "Turn 50 -> 51" in asyncio.run(gs.end_turn())
+    assert not gs.turn_pending and len(conn.requests) == 1
