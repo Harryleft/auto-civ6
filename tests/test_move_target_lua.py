@@ -256,17 +256,15 @@ def test_existing_no_moves_generic_refusal_and_own_stacking_guards_still_prevent
 
 
 @pytest.mark.parametrize("target", [(20, 17), (50, 30)])
-@pytest.mark.parametrize("end_turn", [1, 4])
 @pytest.mark.parametrize("visible", [True, False])
-def test_complete_native_paths_allow_near_far_and_fog_targets_without_same_turn_requirement(target, end_turn, visible):
+def test_current_turn_native_paths_allow_near_far_and_fog_targets(target, visible):
     conn = TargetMovementConn()
     conn.lua.globals().visible=visible
-    conn.lua.globals().end_turn=end_turn
     conn.lua.execute('''
 can_target=true
 PlayersVisibility[0].IsVisible=function() return visible end
 UnitManager.GetMoveToPathEx=function(u,destination)
-    return {plots={u:GetX()+1000*u:GetY(),destination},turns={1,end_turn}}
+    return {plots={u:GetX()+1000*u:GetY(),destination},turns={1,1}}
 end
 ''')
     state = GameState(conn)
@@ -345,6 +343,9 @@ def test_native_path_for_a_different_source_cannot_authorize_this_move():
     'UnitManager.GetMoveToPathEx=function() return {plots={17019,17020},turns={1,0/0}} end',
     'UnitManager.GetMoveToPathEx=function() return {plots={17019,17020},turns={1,math.huge}} end',
     'UnitManager.GetMoveToPathEx=function() return {plots={17019,17020},turns={2,1}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={17019,17020},turns={2,2}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={17019,17019,17020},turns={1,1,2}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={17019,17019},turns={1,1}} end',
     'UnitManager.GetMoveToPathEx=function() return {plots={17019,17020},turns={1,0}} end',
     'Map.GetPlot=function() return nil end',
     'Map.GetPlotByIndex=function() return nil end',
@@ -429,3 +430,173 @@ end
     assert "now_at:24,20" in run(state.move_unit(6, 24, 20))
     assert state.pending_action_summary is None
     assert conn.lua.globals().submissions == 2 and conn.lua.globals().listenerCount() == 1
+
+
+def test_recorded_turn66_partial_move_then_future_step_defers_without_replacing_the_old_queue(short_confirmation):
+    conn = TargetMovementConn()
+    conn.lua.execute('''
+x,y=18,19
+can_target=true
+movement_left=2
+unit.GetMovesRemaining=function() return movement_left end
+unit.GetMovementMovesRemaining=function() return movement_left end
+queued_destination=19016
+UnitManager.GetQueuedDestination=function() return queued_destination end
+UnitManager.GetMoveToPathEx=function(u,destination)
+    if x==18 then return {plots={19018,19017,destination},turns={1,1,2}} end
+    return {plots={19017,destination},turns={1,2}}
+end
+UnitManager.RequestOperation=function(u,operation,params)
+    submissions=submissions+1
+    queued_destination=params[2]+1000*params[3]
+    x,y=17,19
+    movement_left=1
+    Events.UnitOperationSegmentComplete.Fire(0,u:GetID())
+end
+''')
+    state = GameState(conn)
+    first = run(state.move_unit(6, 16, 19))
+    assert "now_at:17,19" in first and "native segment complete" in first
+    native = conn.lua.globals()
+    old_witness = native.__civmcpMoveSegment
+    assert old_witness.closed and state.pending_action_summary is None
+    conn.lua.execute("old_witness=__civmcpMoveSegment")
+
+    second = run(state.move_unit(6, 16, 19))
+    assert second.startswith("Error: MOVE_DEFERRED|"), second
+    assert "no move submitted" in second and "existing orders unchanged" in second
+    assert native.submissions == 1 and native.listenerCount() == 1
+    assert conn.lua.eval("__civmcpMoveSegment==old_witness")
+    assert native.queued_destination == 19016 and state.pending_action_summary is None
+
+    # The rejected second intent must leave the ordinary action gate usable.
+    conn.lua.execute('''
+UnitManager.GetMoveToPathEx=function(u,destination)
+    return {plots={u:GetX()+1000*u:GetY(),destination},turns={1,1}}
+end
+UnitManager.RequestOperation=function(u,operation,params)
+    submissions=submissions+1
+    x,y=params[2],params[3]
+    queued_destination=params[2]+1000*params[3]
+    Events.UnitOperationSegmentComplete.Fire(0,u:GetID())
+end
+''')
+    assert "now_at:18,19" in run(state.move_unit(6, 18, 19))
+    assert native.submissions == 2 and state.pending_action_summary is None
+
+
+@pytest.mark.parametrize("target", [(20, 17), (50, 30)])
+@pytest.mark.parametrize("visible", [True, False])
+def test_first_future_native_step_defers_near_far_and_fog_destinations_without_a_request(target, visible):
+    conn = TargetMovementConn()
+    conn.lua.globals().visible = visible
+    conn.lua.execute("""
+can_target=true
+PlayersVisibility[0].IsVisible=function() return visible end
+UnitManager.GetMoveToPathEx=function(u,destination)
+    return {plots={u:GetX()+1000*u:GetY(),destination},turns={1,4}}
+end
+""")
+    state = GameState(conn)
+    result = run(state.move_unit(6, *target))
+    native = conn.lua.globals()
+    assert result.startswith("Error: MOVE_DEFERRED|"), result
+    assert "no move submitted" in result
+    assert state.pending_action_summary is None
+    assert native.submissions == 0 and native.listenerCount() == 1
+    assert native.__civmcpMoveSegment is None
+
+
+@pytest.mark.parametrize("last_turn", [2, 4])
+@pytest.mark.parametrize("remaining_moves", [1, 2])
+@pytest.mark.parametrize("visible", [True, False])
+def test_first_current_step_allows_future_destination_and_confirms_positive_remaining_move_segment(last_turn, remaining_moves, visible):
+    conn = TargetMovementConn()
+    conn.lua.globals().last_turn = last_turn
+    conn.lua.globals().remaining_moves = remaining_moves
+    conn.lua.globals().visible = visible
+    conn.lua.execute("""
+can_target=true
+PlayersVisibility[0].IsVisible=function() return visible end
+UnitManager.GetQueuedDestination=function() return 17021 end
+UnitManager.GetMoveToPathEx=function(u,destination)
+    if x==19 then return {plots={17019,17020,destination},turns={1,1,last_turn}} end
+    return {plots={17020,destination},turns={1,last_turn}}
+end
+UnitManager.RequestOperation=function(u,operation,params)
+    submissions=submissions+1
+    x,y=20,17
+    unit.GetMovesRemaining=function() return remaining_moves end
+    unit.GetMovementMovesRemaining=function() return remaining_moves end
+    Events.UnitOperationSegmentComplete.Fire(0,u:GetID())
+end
+""")
+    state = GameState(conn)
+    result = run(state.move_unit(6, 21, 17))
+    native = conn.lua.globals()
+    assert "now_at:20,17" in result and "native segment complete" in result
+    assert f"moves_remaining:{remaining_moves}" in result
+    assert "now_at:21,17" not in result
+    assert state.pending_action_summary is None
+    assert native.submissions == 1 and native.__civmcpMoveSegment.closed
+
+
+def test_lost_ack_for_a_real_partial_segment_confirms_the_old_intent_before_future_path_preflight():
+    class LostMoveAckConn(TargetMovementConn):
+        async def execute_write(self, code):
+            rows = await super().execute_write(code)
+            if 'RequestOperation' in code:
+                raise ConnectionError("lost move acknowledgement")
+            return rows
+
+    conn = LostMoveAckConn()
+    conn.lua.execute("""
+can_target=true
+UnitManager.GetQueuedDestination=function() return 17021 end
+UnitManager.GetMoveToPathEx=function(u,destination)
+    if x==19 then return {plots={17019,17020,destination},turns={1,1,2}} end
+    return {plots={17020,destination},turns={1,2}}
+end
+UnitManager.RequestOperation=function(u,operation,params)
+    submissions=submissions+1
+    x,y=20,17
+    unit.GetMovesRemaining=function() return 1 end
+    Events.UnitOperationSegmentComplete.Fire(0,u:GetID())
+end
+""")
+    state = GameState(conn)
+    assert "OUTCOME_UNKNOWN" in run(state.move_unit(6, 21, 17))
+    assert state.pending_action_summary is not None
+    result = run(state.move_unit(6, 21, 17))
+    assert "native segment complete" in result and "now_at:20,17" in result
+    assert "MOVE_DEFERRED" not in result
+    assert state.pending_action_summary is None
+    assert conn.lua.globals().submissions == 1
+
+
+def test_submitted_no_displacement_with_a_future_queue_keeps_pending_even_with_native_segment_event(short_confirmation):
+    conn = TargetMovementConn()
+    conn.lua.execute('''
+can_target=true
+UnitManager.GetQueuedDestination=function() return 17021 end
+UnitManager.GetMoveToPathEx=function(u,destination)
+    if submissions==0 then return {plots={17019,17020,destination},turns={1,1,2}} end
+    return {plots={17019,destination},turns={1,2}}
+end
+UnitManager.RequestOperation=function(u,operation,params)
+    submissions=submissions+1
+    Events.UnitOperationSegmentComplete.Fire(0,u:GetID())
+end
+''')
+    state = GameState(conn)
+    assert "OUTCOME_UNKNOWN" in run(state.move_unit(6, 21, 17))
+    native = conn.lua.globals()
+    conn.lua.execute('old_witness=__civmcpMoveSegment')
+    assert native.__civmcpMoveSegment.done and not native.__civmcpMoveSegment.closed
+    # A future preflight can reject a new request only; it cannot clear an
+    # already submitted intent that never produced displacement evidence.
+    assert "OUTCOME_UNKNOWN" in run(state.move_unit(6, 21, 17))
+    assert "OUTCOME_UNKNOWN" in run(state.move_unit(6, 20, 17))
+    assert state.pending_action_summary is not None
+    assert native.submissions == native.target_checks == 1
+    assert conn.lua.eval('__civmcpMoveSegment==old_witness')
