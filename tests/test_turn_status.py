@@ -47,7 +47,12 @@ active, complete, processing, sent, allowed, unready, mode = true, true, false, 
 Game={GetLocalPlayer=function() return 0 end, GetCurrentGameTurn=function() return 78 end}
 Players={[0]={IsTurnActive=function() return active end, IsTurnActiveComplete=function() return complete end,
               CanUnreadyTurn=function() return unready end}}
-UI={IsProcessingMessages=function() return processing end, HasSentTurnComplete=function() return sent end,
+UserConfiguration={IsAutoEndTurn=function() return false end,IsCityRangeAttackTurnBlocking=function() return false end}
+Game.IsAllowTacticalCommands=function() return true end
+Players[0].GetUnits=function() return {GetFirstReadyUnit=function() return nil end,Members=function() return ipairs({}) end} end
+NotificationManager={GetFirstEndTurnBlocking=function() return 0 end,FindType=function() return nil end}
+NotificationTypes={CITY_RANGE_ATTACK=15};EndTurnBlockingTypes={NO_ENDTURN_BLOCKING=0}
+UI={IsGameCoreBusy=function() return false end,IsProcessingMessages=function() return processing end, HasSentTurnComplete=function() return sent end,
     CanEndTurn=function() return allowed end, GetInterfaceMode=function() return mode end,
     RequestAction=function() error("query attempted mutation") end, SetInterfaceMode=function() error("query attempted mode change") end}
 ''')
@@ -222,3 +227,72 @@ def test_higher_turn_with_unknown_native_processing_cannot_retire_pending(clock)
     assert state.turn_pending
     assert "Turn 77 -> 78" not in result
     assert "ui_processing=unknown" in result
+
+
+def native_local_status_conn(setup=''):
+    from test_end_turn_native import NativeTurn
+    native=NativeTurn()
+    native.lua.execute(setup)
+    conn=NativeStatusConn()
+    conn.lua,conn.rows=native.lua,native.rows
+    return conn,native
+
+
+@pytest.mark.parametrize('setup,detail', [
+    ('auto_end=true;first_ready=makeUnit(2228231,21,18,1)','unit_id=2228231'),
+    ('range_block=true;range_notice={IsDismissed=function() return false end}','city_range_attack'),
+    ('units={makeUnit(2228231,21,18,2)};queued_targets[2228231]=2;paths[2228231]={plots={1,2},turns={1,1}}','goal=20,18'),
+])
+def test_public_status_exposes_native_local_actions_without_clearing_pending(setup,detail):
+    conn,native=native_local_status_conn(setup)
+    state=GameState(conn)
+    state._pending_end_turn=True;state._pending_end_turn_from=78
+    result=asyncio.run(state.get_turn_status())
+    assert result.startswith('LOCAL_ACTION_REQUIRED') and detail in result
+    assert 'request_state=LOCAL_COMPLETION_UNCONFIRMED' in result
+    assert state.turn_pending
+    assert native.lua.globals().requests==0 and native.lua.globals().mode_changes==0
+
+
+def test_missing_native_option_stays_unknown_without_read_error_or_pending_retirement():
+    conn,native=native_local_status_conn('UserConfiguration.IsAutoEndTurn=nil;first_ready=makeUnit(2228231,21,18,1)')
+    state=GameState(conn);state._pending_end_turn=True;state._pending_end_turn_from=78
+    result=asyncio.run(state.get_turn_status())
+    assert 'auto_end_turn=unknown' in result and 'local_actions=READINESS_UNKNOWN' in result
+    assert 'read_failures=0' in result and 'request_state=LOCAL_COMPLETION_UNCONFIRMED' in result
+    assert state.turn_pending and native.lua.globals().requests==0
+
+
+def test_native_queued_move_preflight_returns_specific_decision_with_zero_request(clock):
+    from civ_mcp.lua.turn_readiness import build_turn_readiness_query
+    from test_end_turn_native import NativeTurn
+    native=NativeTurn();native.lua.execute('turn=50;units={makeUnit(2228231,21,18,2)};queued_targets[2228231]=2;paths[2228231]={plots={1,2},turns={1,1}}')
+    native.lua.execute(build_turn_readiness_query())
+    conn=GameStateConn();conn.local_readiness=list(native.rows)
+    state=GameState(conn)
+    result=asyncio.run(state.end_turn())
+    assert 'NOT_SUBMITTED (QUEUED_MOVE_CURRENT)' in result
+    assert 'unit_id=2228231' in result and 'goal=20,18' in result
+    assert not state.turn_pending and not conn.requests
+    assert native.lua.eval('queued_targets[2228231]')==2
+
+
+def test_queue_completion_then_new_local_action_preserves_original_turn_request(clock):
+    from civ_mcp.lua.turn_readiness import build_turn_readiness_query
+    from test_end_turn_native import NativeTurn
+    native=NativeTurn();native.lua.execute('turn=50;auto_end=true')
+    conn=GameStateConn();conn.advance=False
+    def local_rows(current):
+        native.rows.clear()
+        if current.requests:
+            native.lua.execute('first_ready=makeUnit(2228231,20,18,1)')
+        native.lua.execute(build_turn_readiness_query())
+        return list(native.rows)
+    conn.local_readiness=local_rows
+    state=GameState(conn)
+    first=asyncio.run(state.end_turn())
+    second=asyncio.run(state.end_turn())
+    assert 'LOCAL_ACTION_REQUIRED' in first and 'LOCAL_COMPLETION_UNCONFIRMED' in first
+    assert 'LOCAL_ACTION_REQUIRED' in second
+    assert state.turn_pending and len(conn.requests)==1
+    assert clock.now<10

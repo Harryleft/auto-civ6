@@ -288,6 +288,8 @@ from civ_mcp.lua.units import (  # noqa: F401
     build_move_unit,
     build_skip_remaining_units,
     build_skip_unit,
+    build_cancel_unit_move,
+    build_cancel_unit_move_query,
     build_unit_readiness_query,
     build_sleep_unit,
     build_fog_neighbor_query,

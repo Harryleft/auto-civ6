@@ -28,6 +28,7 @@ class FakeConn:
         self.readiness = None
         self.diplomacy_probe = ["DIPLOMACY_NONE"]
         self.ui_processing = False
+        self.local_readiness = None
         self.information_popups = ["INFORMATION_POPUPS|DONE"]
 
     async def execute_read(self, lua):
@@ -45,6 +46,10 @@ class FakeConn:
         self.calls.append(lua)
         if lua == lq.build_victory_proximity_query():
             return [f"VICTORY_CONTEXT|{self.turn}|0", "VICTORY_ENABLED_KNOWN|true", "VICTORY_COMPLETE"]
+        if "TURN_LOCAL|" in lua:
+            if self.local_readiness is not None:
+                return self.local_readiness(self) if callable(self.local_readiness) else self.local_readiness
+            return [f"TURN_LOCAL|{self.turn}|NONE|auto_end_turn=0|city_range_turn_blocking=0|allow_tactical_commands=1|core_busy=0|first_ready_unit_present=0|city_range_notification=0|native_blocker=0|units_have_moves=0|city_range_attack=0|queued_move_current=0", "TURN_LOCAL_DONE"]
         if "TURN_UI_READY|" in lua:
             processing = self.ui_processing(self) if callable(self.ui_processing) else self.ui_processing
             return [f"TURN_UI_READY|{self.turn}|{int(not processing)}|0|1|0|1"]
