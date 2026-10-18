@@ -136,13 +136,13 @@ for i, u in Players[id]:GetUnits():Members() do
             if plot and plot:GetOwner() == id then
                 local impList = {}
                 for imp in GameInfo.Improvements() do
-                    if imp.Buildable and not imp.TraitType then
+                    if imp.Buildable then
                         local bParams = {}
                         bParams[UnitOperationTypes.PARAM_X] = x
                         bParams[UnitOperationTypes.PARAM_Y] = y
                         bParams[UnitOperationTypes.PARAM_IMPROVEMENT_TYPE] = imp.Hash
                         local ok2, _ = pcall(function()
-                            if UnitManager.CanStartOperation(u, UnitOperationTypes.BUILD_IMPROVEMENT, nil, bParams) then
+                            if UnitManager.CanStartOperation(u, UnitOperationTypes.BUILD_IMPROVEMENT, nil, bParams) == true then
                                 table.insert(impList, imp.ImprovementType)
                             end
                         end)
@@ -168,13 +168,13 @@ for i, u in Players[id]:GetUnits():Members() do
             local plot = Map.GetPlot(x, y)
             if plot and plot:GetOwner() == id then
                 for imp in GameInfo.Improvements() do
-                    if imp.Buildable and not imp.TraitType then
+                    if imp.Buildable then
                         pcall(function()
                             local bp = {}
                             bp[UnitOperationTypes.PARAM_X] = x
                             bp[UnitOperationTypes.PARAM_Y] = y
                             bp[UnitOperationTypes.PARAM_IMPROVEMENT_TYPE] = imp.Hash
-                            if UnitManager.CanStartOperation(u, UnitOperationTypes.BUILD_IMPROVEMENT, nil, bp) then
+                            if UnitManager.CanStartOperation(u, UnitOperationTypes.BUILD_IMPROVEMENT, nil, bp) == true then
                                 table.insert(meList, imp.ImprovementType)
                             end
                         end)
@@ -1204,7 +1204,7 @@ if imp == nil then
                 local ok2, canBuild2 = pcall(function()
                     return UnitManager.CanStartOperation(unit, UnitOperationTypes.BUILD_IMPROVEMENT, nil, params0)
                 end)
-                if ok2 and canBuild2 then table.insert(available, row.ImprovementType) end
+                if ok2 and canBuild2 == true then table.insert(available, row.ImprovementType) end
             end
         end
         local hint = #available > 0 and ". Available here: " .. table.concat(available, ", ") or ""
@@ -1276,7 +1276,7 @@ if not canBuild then
     -- List what CAN be built here
     local alts = {{}}
     for altImp in GameInfo.Improvements() do
-        if altImp.Buildable and not altImp.TraitType then
+        if altImp.Buildable then
             local aParams = {{}}
             aParams[UnitOperationTypes.PARAM_X] = unit:GetX()
             aParams[UnitOperationTypes.PARAM_Y] = unit:GetY()
@@ -1284,7 +1284,7 @@ if not canBuild then
             local ok3, canAlt = pcall(function()
                 return UnitManager.CanStartOperation(unit, UnitOperationTypes.BUILD_IMPROVEMENT, nil, aParams)
             end)
-            if ok3 and canAlt then table.insert(alts, altImp.ImprovementType) end
+            if ok3 and canAlt == true then table.insert(alts, altImp.ImprovementType) end
         end
     end
     if #alts > 0 then
