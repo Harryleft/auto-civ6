@@ -1137,13 +1137,13 @@ class TestSimpleUnitActions:
     """Thin action wrappers: the contract is which Lua state they run in and
     how the raw lines are reduced to a result string."""
 
-    def test_fortify_translates_sleeping_into_an_explanation(self):
+    def test_fortify_passes_sleeping_status_through(self):
         gs, _ = _gs([("write", ["OK:SLEEPING"])])
 
         async def go():
             return await gs.fortify_unit(1)
 
-        assert run(go()) == "Unit is sleeping (this unit type cannot fortify)"
+        assert run(go()) == "SLEEPING"
 
     def test_fortify_passes_other_results_through(self):
         gs, _ = _gs([("write", ["OK:FORTIFIED|10,20"])])
@@ -1166,48 +1166,24 @@ class TestSimpleUnitActions:
 
 
 class TestSkipRemainingUnits:
-    """Two-phase contract: fortify/heal what can fight (InGame), then skip
-    whatever still has moves (GameCore). A failed fortify phase must not
-    eat the skip phase."""
+    """Batch candidate queries are read-only InGame calls; failures cannot
+    trigger an alternative mutation or hide behind a successful second phase.
+    Native per-unit behavior is exercised in test_unit_readiness.py.
+    """
 
-    def test_fortify_and_skip_results_are_combined(self):
-        gs, _ = _gs(
-            [
-                ("write", ["OK:FORTIFIED|3 units fortified"]),
-                ("read", ["OK:SKIPPED|2 units"]),
-            ]
-        )
+    def test_empty_ready_list_does_not_submit(self):
+        gs, conn = _gs([("write", ["OK:READY_UNITS"])])
+        assert run(gs.skip_remaining_units()) == "SKIPPED|0 candidates checked"
+        assert conn.exhausted
 
-        async def go():
-            return await gs.skip_remaining_units()
+    def test_candidate_query_error_is_preserved_without_fallback(self):
+        gs, conn = _gs([("write", ["ERR:READINESS_UNKNOWN|native state unavailable"])])
+        assert "READINESS_UNKNOWN" in run(gs.skip_remaining_units())
+        assert conn.exhausted
 
-        assert run(go()) == "FORTIFIED|3 units fortified\nSKIPPED|2 units"
-
-    def test_fortify_error_is_dropped_from_the_output(self):
-        gs, _ = _gs(
-            [
-                ("write", ["ERR:NO_UNITS|nothing to fortify"]),
-                ("read", ["OK:SKIPPED|2 units"]),
-            ]
-        )
-
-        async def go():
-            return await gs.skip_remaining_units()
-
-        assert run(go()) == "SKIPPED|2 units"
-
-    def test_fortify_exception_still_runs_the_skip_phase(self):
-        gs, conn = _gs(
-            [
-                ("write", ConnectionError("InGame dead")),
-                ("read", ["OK:SKIPPED|1 unit"]),
-            ]
-        )
-
-        async def go():
-            return await gs.skip_remaining_units()
-
-        assert run(go()) == "SKIPPED|1 unit"
+    def test_candidate_query_disconnect_does_not_submit(self):
+        gs, conn = _gs([("write", ConnectionError("InGame dead"))])
+        assert "no units submitted" in run(gs.skip_remaining_units())
         assert conn.exhausted
 
 

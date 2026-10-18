@@ -1011,94 +1011,118 @@ print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
 
 
-def build_fortify_unit(unit_index: int) -> str:
-    return f"""
-{_lua_get_unit(unit_index)}
-if unit:GetFortifyTurns() > 0 then
-    print("OK:ALREADY_FORTIFIED|Fortify turns: " .. unit:GetFortifyTurns())
-    print("{SENTINEL}"); return
+_LUA_UNIT_READINESS = """
+local function unitReady(unit)
+    local ok, value = pcall(function() return unit:IsReadyToMove() end)
+    if ok and type(value) == "boolean" then return value end
+    return nil
 end
-if UnitManager.CanStartOperation(unit, UnitOperationTypes.FORTIFY, nil, true) then
-    UnitManager.RequestOperation(unit, UnitOperationTypes.FORTIFY)
-    print("OK:FORTIFIED")
-else
-    local sleepOp = GameInfo.UnitOperations["UNITOPERATION_SLEEP"]
-    if sleepOp and UnitManager.CanStartOperation(unit, sleepOp.Hash, nil, true) then
-        UnitManager.RequestOperation(unit, sleepOp.Hash)
-        print("OK:SLEEPING")
-    else
-        {_bail("ERR:CANNOT_FORTIFY|Unit cannot fortify or sleep")}
-    end
-end
-print("{SENTINEL}")
 """
 
 
-def build_skip_unit(unit_index: int) -> str:
-    """Skip a unit's turn (GameCore context — uses FinishMoves)."""
-    return f"""
-{_lua_get_unit_gamecore(unit_index)}
-UnitManager.FinishMoves(unit)
-print("OK:SKIPPED")
-print("{SENTINEL}")
-"""
+def build_fortify_unit(unit_index: int, witness_token: str = "") -> str:
+    # Fortify turns describe historical defense, not current readiness.
+    return _build_readiness_action(unit_index, "fortify", witness_token)
 
 
-def build_fortify_remaining_units() -> str:
-    """Fortify/heal combat units with remaining moves (InGame context).
-
-    Tries to fortify (or heal if damaged) combat units. Non-combat units
-    and units that can't fortify are left for skip_remaining_units to handle.
-    """
-    return """
-local me = Game.GetLocalPlayer()
-local fortified = 0
-local healed = 0
-local healHash = GameInfo.UnitOperations["UNITOPERATION_HEAL"] and GameInfo.UnitOperations["UNITOPERATION_HEAL"].Hash
-for _, unit in Players[me]:GetUnits():Members() do
-    local x = unit:GetX()
-    if x ~= -9999 and unit:GetMovesRemaining() > 0 then
-        local info = GameInfo.Units[unit:GetType()]
-        local isCombat = info and info.Combat > 0
-        if isCombat then
-            if unit:GetDamage() > 0 and healHash then
-                local ok = pcall(function()
-                    if UnitManager.CanStartOperation(unit, healHash, nil, true) then
-                        UnitManager.RequestOperation(unit, healHash)
-                        healed = healed + 1
-                    end
-                end)
-            else
-                local ok = pcall(function()
-                    if UnitManager.CanStartOperation(unit, UnitOperationTypes.FORTIFY, nil, true) then
-                        UnitManager.RequestOperation(unit, UnitOperationTypes.FORTIFY)
-                        fortified = fortified + 1
-                    end
-                end)
-            end
-        end
-    end
-end
-print("OK:FORTIFIED|" .. fortified .. " fortified, " .. healed .. " healing")
-print("{SENTINEL}")
-""".replace("{SENTINEL}", SENTINEL)
+def build_skip_unit(unit_index: int, witness_token: str = "") -> str:
+    """Native skip operation, without changing movement points directly."""
+    return _build_readiness_action(unit_index, "skip", witness_token)
 
 
 def build_skip_remaining_units() -> str:
-    """Skip all units with moves remaining (GameCore context — FinishMoves for each)."""
-    return """
+    """Read a finite candidate list; callers submit each candidate once."""
+    return _LUA_UNIT_READINESS + """
 local me = Game.GetLocalPlayer()
-local count = 0
 for _, unit in Players[me]:GetUnits():Members() do
-    local x = unit:GetX()
-    if x ~= -9999 and unit:GetMovesRemaining() > 0 then
-        UnitManager.FinishMoves(unit)
-        count = count + 1
+    if unit:GetX() ~= -9999 then
+        local ready = unitReady(unit)
+        if ready == nil then
+            print("ERR:READINESS_UNKNOWN|Cannot determine unit readiness")
+            print("{SENTINEL}"); return
+        end
+        if ready then print("READY_UNIT|" .. unit:GetID()) end
     end
 end
-print("OK:SKIPPED|" .. count .. " units")
+print("OK:READY_UNITS")
 print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
+
+
+def _build_readiness_action(unit_index: int, kind: str, witness_token: str) -> str:
+    operation = "SKIP_TURN" if kind == "skip" else "FORTIFY"
+    result = "SKIPPED" if kind == "skip" else "FORTIFIED"
+    return f'''
+{_lua_get_unit(unit_index)}
+if {unit_index} >= 65536 and unit:GetID() ~= {unit_index} then
+    {_bail("ERR:UNIT_ID_CHANGED|Runtime unit identity no longer matches")}
+end
+{_LUA_UNIT_READINESS}
+local ready = unitReady(unit)
+if ready == nil then {_bail("ERR:READINESS_UNKNOWN|Cannot determine current unit readiness")} end
+if not ready then
+    local activity = nil
+    pcall(function() activity = UnitManager.GetActivityType(unit) end)
+    local waiting = ActivityTypes and activity ~= nil
+        and (activity == ActivityTypes.ACTIVITY_SLEEP or activity == ActivityTypes.ACTIVITY_HOLD)
+    if waiting then
+        print("OK:ALREADY_WAITING|activity:" .. tostring(activity) .. "|Current native activity preserved")
+    else
+        print("OK:NOT_READY|activity:" .. tostring(activity) .. "|Existing activity preserved")
+    end
+    print("{SENTINEL}"); return
+end
+if not UnitManager.CanStartOperation or not UnitManager.RequestOperation then
+    {_bail("ERR:OPERATION_UNAVAILABLE|Native unit operation API unavailable")}
+end
+local op = GameInfo.UnitOperations["UNITOPERATION_{operation}"]
+local label = "{result}"
+local ok, allowed = pcall(function()
+    return op and UnitManager.CanStartOperation(unit, op.Hash, nil, true)
+end)
+if "{kind}" == "fortify" and ok and allowed == false then
+    op = GameInfo.UnitOperations["UNITOPERATION_SLEEP"]
+    label = "SLEEPING"
+    ok, allowed = pcall(function()
+        return op and UnitManager.CanStartOperation(unit, op.Hash, nil, true)
+    end)
+end
+if not op then {_bail("ERR:OPERATION_UNAVAILABLE|Native unit operation missing")} end
+if not ok or type(allowed) ~= "boolean" then
+    {_bail("ERR:ELIGIBILITY_UNKNOWN|Native operation eligibility unavailable")}
+end
+if not allowed then {_bail("ERR:CANNOT_OPERATE|Native unit operation rejected")} end
+-- Capture the full runtime ID before entering RequestOperation. Lost replies
+-- may be confirmed only from this request's original unit and native scope.
+__civmcpReadinessRequest = {{token="{witness_token}", kind="{kind}", owner=me,
+    id=unit:GetID(), turn=Game.GetCurrentGameTurn(),
+    civ=PlayerConfigurations[me]:GetCivilizationTypeName(),
+    seed=GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED"), label=label}}
+UnitManager.RequestOperation(unit, op.Hash, {{}})
+print("OK:READINESS_REQUESTED|" .. label)
+print("{SENTINEL}")
+'''
+
+
+def build_unit_readiness_query(unit_index: int, kind: str, witness_token: str) -> str:
+    return f'''
+{_LUA_UNIT_READINESS}
+local me = Game.GetLocalPlayer()
+local record = __civmcpReadinessRequest
+local unit = UnitManager.GetUnit(me, {unit_index})
+if record and record.token == "{witness_token}" and record.kind == "{kind}"
+    and record.owner == me and record.turn == Game.GetCurrentGameTurn()
+    and record.civ == PlayerConfigurations[me]:GetCivilizationTypeName()
+    and record.seed == GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")
+    and unit and record.id == unit:GetID() then
+    local busy = nil
+    pcall(function() busy = UI.IsGameCoreBusy() end)
+    print("READINESS|" .. record.token .. "|" .. record.owner .. "|" .. record.id
+        .. "|ready:" .. tostring(unitReady(unit)) .. "|busy:" .. tostring(busy)
+        .. "|result:" .. record.label)
+end
+print("{SENTINEL}")
+'''
 
 
 def build_automate_explore(unit_index: int) -> str:
