@@ -27,6 +27,23 @@
 
 初审 1 项 P2 已修复；独立公开 CLI 复核真实资料的规则和证据后，0 项未解决问题。两轴原始报告和复核分别保留。
 
+## main 合并与客户端重载验证
+
+2026-10-18，改动合并到 `main`，提交 `6a106d5`；合并文件树与已通过 1,517 项离线测试的版本一致。用户完整重启客户端后，本聊天发现新版 `search_knowledge` 和 `get_knowledge`，搜索参数已包含 `civilizations`，并完成 16 次直接调用。
+
+| 样本 | 带 `topic="civilizations"` 的搜索 | 三层读取 |
+| --- | --- | --- |
+| 巴比伦 | `query="巴比伦"`，返回 3 条，包含 `CIVILIZATION_BABYLON_STK` | 该文明的 `summary`、`rule`、`evidence` 均成功 |
+| 汉谟拉比 | `query="汉谟拉比"`，返回 `LEADER_HAMMURABI` | 该领袖的三层均成功 |
+| 吉尔伽美什 | `query="LEADER_GILGAMESH"`，返回 2 条，包含该领袖 | 该领袖的三层均成功，规则关联恩奇都奇遇能力 |
+| 恩奇都奇遇 | `query="TRAIT_LEADER_ADVENTURES_ENKIDU"`，返回该能力 | 该能力的三层均成功 |
+
+4 次搜索均使用 `limit=5`；12 次读取分别核对摘要字段、规则与来源引用、原始证据。全部回复为 `found`，对应同一 `1.0.12.54 (951533)` 快照，来源 SHA-256 为 `02bba8b29260d6ec4afbd34f738a92ae5503ddeeeea527813fc4599227916d29`。巴比伦和汉谟拉比仍标记为未应用的安装定义；吉尔伽美什及其能力来自缓存规则。静态适用边界保留，对手仅作为公开身份样本，未读取实际对局或隐藏议程。
+
+重启前，本聊天省略主题参数的 16 次调用已通过，但参数列表仍为旧版；独立 stdio 客户端两次启动／停止、8 次调用也通过，未代替当前会话重载。此次带主题过滤的直接调用确认旧参数缓存问题已解除，两阶段结果分别保留。
+
+重载验证前后，54 个原生存档、1 个项目基准及 1,309 个既有验收文件 SHA-256 一致；未连接游戏、执行游戏工具或 push。原始证据位于 `~/.civ6-mcp/acceptance/20261018-civilization-knowledge-client-reloaded/`：`current-tool-metadata.json` 保存工具声明，`current-calls.json` 索引 16 次调用，逐次 JSON 保存回复，`result.json` 记录校验与成果保护。重启前记录保留在同级 `20261018-civilization-knowledge-current-client/`。
+
 ## 来源与成果保护
 
 本机版本为 `1.0.12.54 (951533)`，资料区分以下来源。
@@ -40,7 +57,7 @@
 
 旧知识源码与资料的 30 个文件副本保留在 `knowledge-before/`。1,092 个既有验收文件、54 个原生存档、1 个项目基准的 SHA-256 一致；109 个旧缓存表相同，九个旧规则文件字节一致。
 
-本轮只读本机缓存和安装文件，以隔离 SQLite 副本处理 WAL；没有连接真实游戏、FireTuner 或执行游戏工具，没有保存／加载／推进回合。实机决策、原生身份 API 适用性与新主题在既有客户端中的重载尚未实测。沿用集成分支 `codex/civilization-knowledge`，main 保持 `2b19881`；未合并 main、未 push。
+实施阶段只读本机缓存和安装文件，以隔离 SQLite 副本处理 WAL；没有连接真实游戏、FireTuner 或执行游戏工具，没有保存／加载／推进回合。该阶段在 `codex/civilization-knowledge` 完成，main 当时保持 `2b19881`；后续合并与客户端重载结果见上节。实机决策和原生身份 API 适用性仍未实测。
 
 规格与工作项：[规格](../specs/2026-10-18-civilization-knowledge.md)、[工作项](../specs/2026-10-18-civilization-knowledge-tickets.md)。证据目录：`~/.civ6-mcp/acceptance/20261018-civilization-knowledge/`；旧实现与审查证据保留，修复另存，不覆盖初轮结果。
 
