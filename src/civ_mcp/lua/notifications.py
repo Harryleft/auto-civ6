@@ -7,6 +7,29 @@ from civ_mcp.lua.models import GameNotification
 from civ_mcp.lua.turn_readiness import LUA_TURN_READINESS
 
 
+# TurnProgress owns this identity; queries emit it beside the facts they qualify.
+LUA_TURN_WORLD = r"""
+local function turnWorld()
+    local ok, value = pcall(function()
+        local me = Game.GetLocalPlayer()
+        local civ = PlayerConfigurations[me]:GetCivilizationTypeName()
+        local seed = GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")
+        local turn = Game.GetCurrentGameTurn()
+        local function integer(n) return type(n)=="number" and n==n and math.abs(n)<math.huge and n==math.floor(n) end
+        if not integer(me) or me<0 or me>63 or type(civ)~="string" or not civ:match("^CIVILIZATION_[A-Z0-9_]+$")
+            or not integer(seed) or not integer(turn) or turn<0 then return nil end
+        return civ.."|"..string.format("%.0f",seed).."|"..me.."|"..turn
+    end)
+    if ok then return value end
+end
+local function printTurnWorld(before)
+    local after = turnWorld()
+    if before then print("TURN_WORLD_SEEN|"..before) end
+    if after then print("TURN_WORLD_SEEN|"..after) end
+    print("TURN_WORLD|"..(before and after==before and after or "UNKNOWN"))
+end
+"""
+
 def build_end_turn_blocking_query() -> str:
     """Check for ALL EndTurnBlocking notifications (InGame context).
 
@@ -44,22 +67,34 @@ print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
 
 
-def build_end_turn(expected_turn: int | None = None) -> str:
+def build_end_turn(expected_turn: int | None = None, expected_world: tuple[str, int, int] | None = None) -> str:
     """Final native guard and submission share one InGame block.
 
     NOT_SUBMITTED is emitted only before RequestAction. Errors/response loss
     after entry remain unknown; no native unready action is ever requested.
     """
     expected = "Game.GetCurrentGameTurn()" if expected_turn is None else str(int(expected_turn))
-    return LUA_TURN_READINESS + """
+    world = "nil" if expected_world is None else repr("|".join(map(str, expected_world)))
+    return LUA_TURN_WORLD + LUA_TURN_READINESS + """
 local expected = EXPECTED_TURN
+local expectedWorld = EXPECTED_WORLD
+local function scopeReason()
+    local world = turnWorld()
+    if not expectedWorld or not world then return "WORLD_UNKNOWN" end
+    local expectedScope = expectedWorld.."|"..expected
+    if world ~= expectedScope then
+        if world:match("^(.*)|[^|]+$") ~= expectedWorld then return "WORLD_CHANGED" end
+        return "TURN_CHANGED"
+    end
+end
 local me = Game.GetLocalPlayer()
 local p = Players[me]
 local function stop(reason)
     print("END_TURN|NOT_SUBMITTED|" .. reason)
 end
 local ok, reason = pcall(function()
-    if Game.GetCurrentGameTurn() ~= expected then return "TURN_CHANGED" end
+    local mismatch = scopeReason()
+    if mismatch then return mismatch end
     if not p or p:IsTurnActive() ~= true or p:IsTurnActiveComplete() ~= true then return "NOT_READY" end
     local processing, sent, unready, allowed = UI.IsProcessingMessages(), UI.HasSentTurnComplete(), p:CanUnreadyTurn(), UI.CanEndTurn()
     if type(processing) ~= "boolean" or type(sent) ~= "boolean" or type(unready) ~= "boolean" or type(allowed) ~= "boolean" then return "UNKNOWN" end
@@ -80,14 +115,18 @@ local ok, reason = pcall(function()
 end)
 if not ok then stop("UNKNOWN"); return end
 if reason then stop(reason); return end
+reason = scopeReason()
+if reason then stop(reason); return end
 -- Match ActionPanel.DoEndTurn's mode recovery only after every guard passes.
 if UI.GetInterfaceMode() ~= InterfaceModeTypes.SELECTION then
     UI.SetInterfaceMode(InterfaceModeTypes.SELECTION)
 end
+reason = scopeReason()
+if reason then stop(reason); return end
 UI.RequestAction(ActionTypes.ACTION_ENDTURN)
 print("END_TURN|SUBMITTED")
 print("{SENTINEL}")
-""".replace("EXPECTED_TURN", expected).replace("{SENTINEL}", SENTINEL)
+""".replace("EXPECTED_TURN", expected).replace("EXPECTED_WORLD", world).replace("{SENTINEL}", SENTINEL)
 
 
 def build_notifications_query() -> str:
