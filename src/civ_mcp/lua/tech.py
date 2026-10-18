@@ -25,13 +25,57 @@ if techIdx >= 0 then
     techName = Locale.Lookup(GameInfo.Technologies[techIdx].Name)
     techTurns = te:GetTurnsToResearch(techIdx)
 end
+-- One read per civic keeps the current header and candidate facts identical.
+-- These APIs mirror this installation's CivicsTree.lua. Native progress already
+-- includes inspiration; applying the boost again would double count it.
+local function readNumber(fn)
+    local ok, value = pcall(fn)
+    if ok and type(value) == "number" and value == value
+        and value ~= math.huge and value ~= -math.huge and value >= 0 then
+        return value
+    end
+    return nil
+end
+local function field(value)
+    if value == nil then return "UNKNOWN" end
+    return tostring(value)
+end
+local cultureYield = readNumber(function() return cu:GetCultureYield() end)
+local civicFacts = {}
+local function readCivic(index)
+    if civicFacts[index] then return civicFacts[index] end
+    local cost = readNumber(function() return cu:GetCultureCost(index) end)
+    local progress = readNumber(function() return cu:GetCulturalProgress(index) end)
+    local pct, turns, turnsSource = nil, nil, "unknown"
+    if cost and cost > 0 and progress then
+        pct = math.floor(progress * 100 / cost)
+        if cultureYield and cultureYield > 0 then
+            if index == civicIdx then
+                turns = readNumber(function() return cu:GetTurnsLeft() end)
+                if turns ~= nil then turnsSource = "native_current" end
+            end
+            if turns == nil then
+                turns = readNumber(function() return cu:GetTurnsToProgressCivic(index) end)
+                if turns ~= nil then turnsSource = "native_civic" end
+            end
+            if turns == nil then
+                turns = math.ceil(math.max(0, cost - progress) / cultureYield)
+                turnsSource = "remaining_cost_estimate"
+            end
+        end
+    end
+    local facts = {cost=cost, progress=progress, pct=pct, turns=turns, turnsSource=turnsSource}
+    civicFacts[index] = facts
+    return facts
+end
 local civicName = "None"
-local civicTurns = -1
+local civicTurns, civicPct, civicTurnsSource = nil, nil, "unknown"
 if civicIdx >= 0 then
     civicName = Locale.Lookup(GameInfo.Civics[civicIdx].Name)
-    civicTurns = cu:GetTurnsLeftOnCurrentCivic()
+    local facts = readCivic(civicIdx)
+    civicTurns, civicPct, civicTurnsSource = facts.turns, facts.pct, facts.turnsSource
 end
-print("CURRENT|" .. techName .. "|" .. techTurns .. "|" .. civicName .. "|" .. civicTurns)
+print("CURRENT|" .. techName .. "|" .. techTurns .. "|" .. civicName .. "|" .. field(civicTurns) .. "|" .. field(civicPct) .. "|" .. civicTurnsSource)
 -- Build boost lookup
 local boostsByTech = {}
 local boostsByCivic = {}
@@ -110,12 +154,8 @@ for civic in GameInfo.Civics() do
                 end
             end
             if canProgress then
-                local cost = cu:GetCultureCost(civic.Index)
-                local currentProg = 0
-                pcall(function() currentProg = cu:GetCulturalProgress(civic.Index) end)
-                local pct2 = cost > 0 and math.floor(currentProg * 100 / cost) or 0
-                local cultureYield = Players[id]:GetCulture():GetCultureYield() or 1
-                local turns2 = cultureYield > 0 and math.ceil(cost / cultureYield) or -1
+                local facts = readCivic(civic.Index)
+                local cost, pct2, turns2 = facts.cost, facts.pct, facts.turns
                 local boosted2 = cu:HasBoostBeenTriggered(civic.Index)
                 local boostDesc2 = ""
                 local b2 = boostsByCivic[civic.CivicType]
@@ -127,7 +167,7 @@ for civic in GameInfo.Civics() do
                 if prereqs[civic.CivicType] then
                     civicPrereqStr = table.concat(prereqs[civic.CivicType], ",")
                 end
-                print("CIVIC|" .. Locale.Lookup(civic.Name) .. "|" .. civic.CivicType .. "|" .. cost .. "|" .. pct2 .. "|" .. turns2 .. "|" .. boostTag2 .. "|" .. boostDesc2 .. "|" .. civicPrereqStr .. "|" .. (civic.EraType or ""))
+                print("CIVIC|" .. Locale.Lookup(civic.Name) .. "|" .. civic.CivicType .. "|" .. field(cost) .. "|" .. field(pct2) .. "|" .. field(turns2) .. "|" .. boostTag2 .. "|" .. boostDesc2 .. "|" .. civicPrereqStr .. "|" .. (civic.EraType or "") .. "|" .. facts.turnsSource)
             end
         end
     end
@@ -313,11 +353,21 @@ def build_set_civic_gamecore(civic_name: str) -> str:
     )
 
 
+def _optional_int(value: str) -> int | None:
+    """The new query emits UNKNOWN; legacy numeric response fields still parse."""
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return None
+
+
 def parse_tech_civics_response(lines: list[str]) -> TechCivicStatus:
     current_research = "None"
     current_research_turns = -1
     current_civic = "None"
-    current_civic_turns = -1
+    current_civic_turns: int | None = -1
+    current_civic_progress_pct: int | None = None
+    current_civic_turns_source: str | None = None
     available_techs: list[TechOption] = []
     available_civics: list[CivicOption] = []
     completed_tech_count = 0
@@ -336,7 +386,9 @@ def parse_tech_civics_response(lines: list[str]) -> TechCivicStatus:
             current_research = parts[1]
             current_research_turns = int(parts[2])
             current_civic = parts[3]
-            current_civic_turns = int(parts[4])
+            current_civic_turns = _optional_int(parts[4])
+            current_civic_progress_pct = _optional_int(parts[5]) if len(parts) > 5 else None
+            current_civic_turns_source = parts[6] if len(parts) > 6 else None
         elif line.startswith("TECH|"):
             parts = line.split("|")
             if len(parts) >= 9:
@@ -374,13 +426,14 @@ def parse_tech_civics_response(lines: list[str]) -> TechCivicStatus:
                     CivicOption(
                         name=parts[1],
                         civic_type=parts[2],
-                        cost=int(parts[3]),
-                        progress_pct=int(parts[4]),
-                        turns=int(parts[5]),
+                        cost=_optional_int(parts[3]),
+                        progress_pct=_optional_int(parts[4]),
+                        turns=_optional_int(parts[5]),
                         boosted=parts[6] == "BOOSTED",
                         boost_desc=parts[7],
                         prereqs=parts[8] if len(parts) > 8 else "",
                         era=parts[9] if len(parts) > 9 else "",
+                        turns_source=parts[10] if len(parts) > 10 else None,
                     )
                 )
             elif len(parts) >= 3:
@@ -427,6 +480,8 @@ def parse_tech_civics_response(lines: list[str]) -> TechCivicStatus:
         current_research_turns=current_research_turns,
         current_civic=current_civic,
         current_civic_turns=current_civic_turns,
+        current_civic_progress_pct=current_civic_progress_pct,
+        current_civic_turns_source=current_civic_turns_source,
         available_techs=available_techs,
         available_civics=available_civics,
         completed_tech_count=completed_tech_count,
