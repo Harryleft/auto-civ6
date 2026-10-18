@@ -1058,10 +1058,10 @@ local inspected,reason,queue=pcall(function()
     if info.Spy or info.IgnoreMoves then return "NOT_MOVE_QUEUE" end
     local facts=localTurnReadiness(me,unit)
     local queued=facts.queues[unit:GetID()]
-    if not facts.queue_known then return "READINESS_UNKNOWN" end
+    if not facts.queue_identity_known or facts.core_busy~=false then return "READINESS_UNKNOWN" end
     if not queued then return "NO_QUEUED_MOVE" end
     if queued.active_route==true then return "ACTIVE_TRADE_ROUTE" end
-    if queued.active_route~=false or queued.valid~=true then return "READINESS_UNKNOWN" end
+    if queued.active_route~=false then return "READINESS_UNKNOWN" end
     return nil,queued
 end)
 if not inspected then {_bail("ERR:READINESS_UNKNOWN|Cannot verify this unit's queued movement")} end
