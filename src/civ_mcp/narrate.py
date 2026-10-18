@@ -897,7 +897,20 @@ def narrate_tech_civics(tc: lq.TechCivicStatus) -> str:
     else:
         lines.append(f"No technology being researched!{completed}")
     if tc.current_civic != "None":
-        lines.append(f"Civic: {tc.current_civic} ({tc.current_civic_turns} turns)")
+        turns = (
+            f"{tc.current_civic_turns} turns"
+            if tc.current_civic_turns is not None and tc.current_civic_turns >= 0
+            else "turns unknown"
+        )
+        if tc.current_civic_turns_source == "remaining_cost_estimate":
+            turns += " (estimate)"
+        progress = (
+            f"{tc.current_civic_progress_pct}%, "
+            if tc.current_civic_progress_pct is not None else ""
+        )
+        if tc.current_civic_progress_pct is None and tc.current_civic_turns_source is not None:
+            progress = "progress unknown, "
+        lines.append(f"Civic: {tc.current_civic} ({progress}{turns})")
     else:
         lines.append("No civic being progressed!")
     if tc.available_techs:
@@ -914,14 +927,26 @@ def narrate_tech_civics(tc: lq.TechCivicStatus) -> str:
             )
     if tc.available_civics:
         lines.append("\nAvailable civics:")
-        for c in sorted(tc.available_civics, key=lambda x: x.turns):
+        for c in sorted(
+            tc.available_civics,
+            key=lambda x: x.turns if x.turns is not None and x.turns >= 0 else float("inf"),
+        ):
             boost_str = " BOOSTED" if c.boosted else ""
             boost_desc = f" [Boost: {c.boost_desc}]" if c.boost_desc else ""
             era_str = f" [{c.era.replace('ERA_', '')}]" if c.era else ""
             prereq_str = f" (needs: {c.prereqs})" if c.prereqs else ""
-            flag = " !! GRAB THIS" if c.turns <= 2 else ""
+            flag = " !! GRAB THIS" if c.turns is not None and 0 <= c.turns <= 2 else ""
+            progress = (
+                f"{c.progress_pct}%" if c.progress_pct is not None else "progress unknown"
+            )
+            turns = (
+                f"{c.turns} turns"
+                if c.turns is not None and c.turns >= 0 else "turns unknown"
+            )
+            if c.turns_source == "remaining_cost_estimate":
+                turns += " (estimate)"
             lines.append(
-                f"  {c.name} ({c.civic_type}){era_str} — {c.progress_pct}%, {c.turns} turns{boost_str}{boost_desc}{prereq_str}{flag}"
+                f"  {c.name} ({c.civic_type}){era_str} — {progress}, {turns}{boost_str}{boost_desc}{prereq_str}{flag}"
             )
     era_order = [
         "ERA_ANCIENT",
