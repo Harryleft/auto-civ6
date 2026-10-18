@@ -370,7 +370,11 @@ class DiplomacySession:
     is_at_war: bool = (
         False  # True if this player declared war (session is war declaration)
     )
+    choice_status: str = "UNKNOWN"
 
+    @property
+    def choice_keys(self) -> list[str]:
+        return [choice.key for choice in self.choices]
 
 @dataclass
 class CitySnapshot:
@@ -689,6 +693,7 @@ class DiplomacyContext:
     reason: str = ""
     sessions: list[DiplomacySession] = field(default_factory=list)
     deals: list[PendingDeal] = field(default_factory=list)
+    outgoing_summary: str = ""
 
 
 @dataclass
