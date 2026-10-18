@@ -17,6 +17,8 @@ Agent 从根目录 [AGENTS.md](../AGENTS.md) 开始；命中任务后读取对�
 
 ## 规格与验收
 
+- [城市产出偏好验收](acceptance/2026-10-19-city-yield-focus.md)：487 项相关离线测试、T141 原生偏好与幂等确认、保存及菜单恢复，继续至 T148。
+
 - [第 101～121 回合调度与决策验收](acceptance/2026-10-18-turn121-scheduling.md)：净 20 回合、失去路径队列取消及议会 B 结果修复、相关模块测试、双份结果档与十三类菜单恢复比较；[取消规格](specs/2026-10-18-cancel-unpathable-queue.md)、[议会标签规格](specs/2026-10-18-congress-outcome-label.md)。
 - [远程 CI 测试替身修复](acceptance/2026-10-18-ci-pending-dispatch.md)：同步外交未决字段及参数化场景，194 项相关测试通过；修复尚未 push。
 - [结束回合世界身份绑定验收](acceptance/2026-10-18-end-turn-world-scope.md)：270 项相关离线回归、异世界及取消后保留门禁、双轴复查与旧成果保护；未实机；[规格](specs/2026-10-18-end-turn-world-scope.md)与[工作项](specs/2026-10-18-end-turn-world-scope-tickets.md)。

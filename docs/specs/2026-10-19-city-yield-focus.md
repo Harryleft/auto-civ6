@@ -26,7 +26,7 @@
 
 ## Testing Decisions
 
-沿用已确认的 GameState／FakeConn、Lua 5.1 与 MCP 公开边界；TDD 覆盖官方标志、已满足目标、被忽略目标、default、延迟／丢回应／取消、世界／城市变化和保存推进门禁。只运行受影响模块。实机在当前 T140 同轮状态设置粮食偏好，回读 Citizens 及城市产出；不为改善战略结果回档。
+沿用已确认的 GameState／FakeConn、Lua 5.1 与 MCP 公开边界；TDD 覆盖官方标志、已满足目标、被忽略目标、default、延迟／丢回应／取消、世界／城市变化和保存推进门禁。只运行受影响模块。实机在当前 T141 同轮状态设置粮食偏好，回读 Citizens 及城市产出；不为改善战略结果回档。
 
 ## Out of Scope
 
@@ -34,4 +34,4 @@
 
 ## Further Notes
 
-本地 tracker，ready-for-agent。父任务保留全部存档、T138 故障现场与 T139 和约验收；本修复不重启或重载游戏。
+本地 tracker，ready-for-agent。父任务保留全部存档、T138 故障现场与 T139 和约验收；安装修复无需重启游戏；T141 另存后按保存恢复验收执行菜单快速换档。
