@@ -65,11 +65,20 @@ class DiplomacyProgress:
         except (OSError, TimeoutError, LuaError, ValueError, IndexError):
             return None, None
 
-    async def incoming_quote(self, conn, sid: int, target: int) -> dict | None:
+    @staticmethod
+    def _incoming_world_allowed(gs, rows: list[str]) -> bool:
+        worlds = [row.split("|", 1)[1] for row in rows if row.startswith("INCOMING_WORLD|")]
+        # Hand each witnessed world to the turn owner before another await.
+        allowed = [gs.allows_incoming_trade_world(world) for world in worlds]
+        return len(worlds) == 1 and all(allowed)
+
+    async def incoming_quote(self, conn, sid: int, target: int, *, gs=None) -> dict | None:
         if self.scope_invalid or not await self.ensure_observer(conn):
             return None
         try:
             rows = await _named(conn, "DiplomacyDealView", native.build_incoming_quote(self.observer_scope, target, sid))
+            if gs is not None and not self._incoming_world_allowed(gs, rows):
+                return None
             data = {}
             for name in ("SCOPE", "SESSION", "PHASE", "ORIGINAL", "CURRENT"):
                 values = [row.split("|", 1)[1] for row in rows if row.startswith("INCOMING_" + name + "|")]
@@ -121,6 +130,8 @@ class DiplomacyProgress:
         quote = await self.incoming_quote(gs.conn, sid, target)
         if quote is None or quote["fingerprint"] != fingerprint:
             return "ERR:NOT_SUBMITTED|Quote changed or is unknown; read current incoming terms again."
+        if not gs.allows_incoming_trade_world(quote["scope"]):
+            return "ERR:NOT_SUBMITTED|Pending end-turn world is changed or unbound; no incoming evaluation submitted."
         attempt = IncomingAttempt(uuid.uuid4().hex, target, sid, quote["scope"], mode.upper())
         self.incoming = attempt
         try:
@@ -130,8 +141,12 @@ class DiplomacyProgress:
                 return "ERR:NOT_SUBMITTED|Native session could not be armed."
             if armed != ["INCOMING|ARMED"]:
                 return self.trade_summary()
+            if not gs.allows_incoming_trade_world(attempt.scope):
+                return self.trade_summary()
             rows = await _named(gs.conn, "DiplomacyDealView", native.build_incoming_send(attempt.scope, target, sid, attempt.token, quote["original"], quote["current"], quote["phase"], edits, attempt.action))
-            if any(row.startswith("INCOMING|NOT_SUBMITTED|") for row in rows) or rows == ["INCOMING|NOT_READY"]:
+            if not self._incoming_world_allowed(gs, rows):
+                return self.trade_summary()
+            if any(row.startswith("INCOMING|NOT_SUBMITTED|") for row in rows) or "INCOMING|NOT_READY" in rows:
                 finished = await _named(gs.conn, "DiplomacyActionView", native.build_incoming_finish(self.nonce, attempt.token, zero=True))
                 if finished == ["INCOMING_FINISH|CONFIRMED"]:
                     self.incoming = None
@@ -142,12 +157,14 @@ class DiplomacyProgress:
 
     async def confirm_incoming(self, gs) -> str:
         attempt = self.incoming
-        if attempt is None or self.scope_invalid:
+        if attempt is None or self.scope_invalid or not gs.allows_incoming_trade_world(attempt.scope):
             return self.trade_summary()
         try:
             async with asyncio.timeout(TRADE_CONFIRM_SECONDS):
                 while True:
                     receipt = await _named(gs.conn, "DiplomacyDealView", native.build_incoming_receipt(attempt.scope, attempt.target, attempt.sid, attempt.token))
+                    if not self._incoming_world_allowed(gs, receipt):
+                        return self.trade_summary()
                     proposals = [row.split("|", 1)[1] for row in receipt if row.startswith("INCOMING_PROPOSAL|")]
                     if "INCOMING_RECEIPT|SENT" not in receipt or len(proposals) != 1:
                         return self.trade_summary()
@@ -158,8 +175,9 @@ class DiplomacyProgress:
                         await asyncio.sleep(TRADE_POLL_SECONDS)
                         continue
                     action, subtype = headers[0][2:4]
-                    quote = await self.incoming_quote(gs.conn, attempt.sid, attempt.target)
-                    if quote is None or quote["original"] != signatures[0] or quote["current"] != signatures[0]:
+                    quote = await self.incoming_quote(gs.conn, attempt.sid, attempt.target, gs=gs)
+                    if (quote is None or not gs.allows_incoming_trade_world(quote["scope"])
+                            or quote["original"] != signatures[0] or quote["current"] != signatures[0]):
                         return self.trade_summary()
                     if action in ("REJECTED", "EQUALIZE_FAILED") or subtype == "AI_REFUSE_DEAL":
                         outcome = "REJECTED"
