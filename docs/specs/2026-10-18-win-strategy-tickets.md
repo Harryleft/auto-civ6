@@ -4,7 +4,7 @@
 
 | 工作项 | 依赖 | 所有权 | 状态 |
 | --- | --- | --- | --- |
-| S1 胜利事实与确认后只读预警 | 无 | 单一实施任务：胜利 Lua／模型／叙述、GameState 报告、工具说明和真实回归 | ready-for-agent |
+| S1 胜利事实与确认后只读预警 | 无 | 单一实施任务：胜利 Lua／模型／叙述、GameState 报告、工具说明和真实回归 | completed |
 | S2 获胜决策指南与入口 | 无 | 独立文档任务：Agent 策略、AGENTS 路由、操作／导航的必要链接 | completed `42f21ff` / merge `9867da9` |
 | S3 离线集成与双轴审查 | S1、S2 | 父任务：独立 merger、全量离线、Standards／Spec 审查及问题关闭 | ready-for-agent |
 | S4 原始地图获胜实测 | S3 | 父任务独占实机：原始指纹、早期扩张、路线与预警、原生终局、存档保护与验收 | deferred-by-user：先不进入下一轮测试 |

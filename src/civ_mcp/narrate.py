@@ -1727,6 +1727,59 @@ def narrate_world_congress(status: lq.WorldCongressStatus) -> str:
     return "\n".join(lines)
 
 
+def _victory_number(value: float | int | None) -> str:
+    return "unknown" if value is None else f"{value:g}"
+
+
+def narrate_victory_warnings(vp: lq.VictoryProgress) -> str:
+    """Risk heuristics over shared observations; never a game outcome or action."""
+    if not vp.complete or not vp.enabled_known:
+        return "Victory warnings unavailable: victory facts or enabled types unknown; use get_victory_progress."
+    warnings: list[str] = []
+    unknown: set[str] = set()
+    for player in vp.players:
+        if player.player_id == vp.local_player_id:
+            continue
+        if "VICTORY_TECHNOLOGY" in vp.enabled_victories:
+            values = (player.spaceports, player.science_vp, player.completed_space_projects)
+            if any(value is None for value in (*values, player.science_vp_needed)):
+                unknown.add("science")
+            if any(value is not None and value > 0 for value in values):
+                near = (player.science_vp is not None and player.science_vp_needed is not None
+                        and player.science_vp_needed > 0 and player.science_vp / player.science_vp_needed >= .75)
+                warnings.append(
+                    f"{player.name}: space race observed | {_victory_number(player.spaceports)} completed spaceport(s) | "
+                    f"{_victory_number(player.science_vp)}/{_victory_number(player.science_vp_needed)} VP"
+                    + (" | near requirement (>=75%)" if near else "")
+                    + f" | completed milestones {_victory_number(player.completed_space_projects)}"
+                )
+        if "VICTORY_CULTURE" in vp.enabled_victories:
+            visiting, required = player.culture_visiting, player.culture_required
+            if visiting is None or required is None or required <= 0:
+                unknown.add("culture")
+            elif visiting / required >= .75:
+                warnings.append(f"{player.name}: visiting tourists {_victory_number(visiting)}/{_victory_number(required)} (>=75%)")
+        if "VICTORY_DIPLOMATIC" in vp.enabled_victories:
+            points, required = player.diplomatic_vp, vp.diplomatic_vp_needed
+            if points is None or required is None or required <= 0:
+                unknown.add("diplomatic")
+            elif points / required >= .5:
+                warnings.append(f"{player.name}: diplomatic {_victory_number(points)}/{_victory_number(required)} VP (>=50%)")
+        if "VICTORY_RELIGIOUS" in vp.enabled_victories:
+            count, required = player.religion_civilizations, player.religion_civilizations_required
+            if count is None or required is None or required <= 0:
+                unknown.add("religious")
+            elif count > 0 and count >= required - 1:
+                warnings.append(f"{player.name}: founded religion is majority in {_victory_number(count)}/{_victory_number(required)} civilizations")
+    if not warnings and not unknown:
+        return ""
+    lines = ["Victory risk (heuristic; not a terminal result):", *("  " + item for item in warnings)]
+    if unknown:
+        lines.append("  Unknown observations: " + ", ".join(sorted(unknown)) + ".")
+    lines.append("Inspect get_victory_progress and reassess the victory route; no exact remaining-turn estimate.")
+    return "\n".join(lines)
+
+
 def narrate_victory_progress(vp: lq.VictoryProgress) -> str:
     """Render observed victory progress, leaving strategy to the caller."""
     if not vp.players:
@@ -1741,50 +1794,56 @@ def narrate_victory_progress(vp: lq.VictoryProgress) -> str:
     }
     enabled = vp.enabled_victories
     lines = ["=== VICTORY PROGRESS ==="]
-    if enabled:
+    if vp.enabled_known and not enabled:
+        lines.append("Enabled: none.")
+    elif enabled:
         lines.append("Enabled: " + ", ".join(names.get(key, key) for key in sorted(enabled)))
+        if not vp.enabled_known:
+            lines.append("Enabled victory set: incomplete/unknown.")
     else:
         lines.append("Enabled victory types: not reported.")
 
-    if not enabled or "VICTORY_TECHNOLOGY" in enabled:
+    if (not vp.enabled_known and not enabled) or "VICTORY_TECHNOLOGY" in enabled:
         lines.append("\nSCIENCE")
-        for player in sorted(vp.players, key=lambda p: p.science_vp, reverse=True):
+        for player in sorted(vp.players, key=lambda p: p.science_vp if p.science_vp is not None else -1, reverse=True):
             lines.append(
-                f"  {player.name}: {player.science_vp}/{player.science_vp_needed} VP | "
-                f"{player.techs_researched} techs | {player.spaceports} spaceports"
+                f"  {player.name}: {_victory_number(player.science_vp)}/{_victory_number(player.science_vp_needed)} VP | "
+                f"{player.techs_researched} techs | {_victory_number(player.spaceports)} spaceports"
+                + (f" | native progress/turn {_victory_number(player.science_rate)}" if player.science_rate is not None else "")
                 + (f" | space progress {player.space_progress}" if player.space_progress else "")
             )
         for project in vp.space_projects:
             detail = f"  {project.name}: {project.status}"
             if project.status == "building":
-                detail += f" | {project.progress_pct}% | {project.turns_remaining} turns | {project.city_name}"
+                detail += f" | {_victory_number(project.progress_pct)}% | {_victory_number(project.turns_remaining)} turns | {project.city_name}"
             if project.tech_prereq:
                 detail += f" | prerequisite {project.tech_prereq} (researched={project.has_tech})"
             if project.cost:
-                detail += f" | cost {project.cost}"
+                detail += f" | cost {_victory_number(project.cost)}"
             lines.append(detail)
 
-    if not enabled or "VICTORY_CONQUEST" in enabled:
+    if (not vp.enabled_known and not enabled) or "VICTORY_CONQUEST" in enabled:
         lines.append("\nDOMINATION (original capitals)")
         for player in vp.players:
             held = vp.capitals_held.get(player.name)
             status = "unknown" if held is None else "held" if held else "lost"
             lines.append(f"  {player.name}: original capital {status}")
 
-    if not enabled or "VICTORY_CULTURE" in enabled:
+    if (not vp.enabled_known and not enabled) or "VICTORY_CULTURE" in enabled:
         lines.append("\nCULTURE")
         for player in vp.players:
             lines.append(
-                f"  {player.name}: tourism {player.tourism} | domestic tourists {player.staycationers}"
+                f"  {player.name}: tourism {player.tourism} | domestic tourists {_victory_number(player.staycationers)}"
+                + f" | visiting tourists {_victory_number(player.culture_visiting)}/{_victory_number(player.culture_required)}"
             )
         for name, tourists in vp.our_tourists_from.items():
             domestic = vp.their_staycationers.get(name)
             lines.append(
-                f"  Our tourists from {name}: {tourists} | "
-                f"their domestic tourists: {domestic if domestic is not None else 'unknown'}"
+                f"  Our tourists from {name}: {_victory_number(tourists)} | "
+                f"their domestic tourists: {_victory_number(domestic)}"
             )
 
-    if not enabled or "VICTORY_RELIGIOUS" in enabled:
+    if (not vp.enabled_known and not enabled) or "VICTORY_RELIGIOUS" in enabled:
         lines.append(f"\nRELIGION (founded {vp.religions_founded}/{vp.religions_max})")
         for player in vp.players:
             majority = vp.religion_majority.get(player.name, "unknown")
@@ -1797,10 +1856,10 @@ def narrate_victory_progress(vp: lq.VictoryProgress) -> str:
                 detail += f" ({founded})"
             lines.append(detail)
 
-    if not enabled or "VICTORY_DIPLOMATIC" in enabled:
+    if (not vp.enabled_known and not enabled) or "VICTORY_DIPLOMATIC" in enabled:
         lines.append("\nDIPLOMATIC")
-        for player in sorted(vp.players, key=lambda p: p.diplomatic_vp, reverse=True):
-            lines.append(f"  {player.name}: {player.diplomatic_vp}/20 VP")
+        for player in sorted(vp.players, key=lambda p: p.diplomatic_vp if p.diplomatic_vp is not None else -1, reverse=True):
+            lines.append(f"  {player.name}: {_victory_number(player.diplomatic_vp)}/{_victory_number(vp.diplomatic_vp_needed)} VP")
 
     lines.append("\nSCORE AND CIVILIZATION DATA")
     for player in sorted(vp.players, key=lambda p: p.score, reverse=True):
@@ -1817,6 +1876,9 @@ def narrate_victory_progress(vp: lq.VictoryProgress) -> str:
                 f"  {name}: rank {metric.rank} | ours {metric.value:g} | "
                 f"best {metric.best:g} | average {metric.average:g} | worst {metric.worst:g}"
             )
+    warnings = narrate_victory_warnings(vp)
+    if warnings:
+        lines.append("\n" + warnings)
     return "\n".join(lines)
 
 
