@@ -17,6 +17,7 @@ Agent 从根目录 [AGENTS.md](../AGENTS.md) 开始；命中任务后读取对�
 
 ## 规格与验收
 
+- [结束回合世界身份绑定规格](specs/2026-10-18-end-turn-world-scope.md)与[工作项](specs/2026-10-18-end-turn-world-scope-tickets.md)：确认旧请求前直接核对原生世界，换世界保留门禁；仅离线验证。
 - [第 81～101 回合调度验收](acceptance/2026-10-18-turn101-scheduling.md)：异步交易、本地队列与显式取消、相关模块测试、净 20 回合、双份结果档及十类恢复比较；原地治疗／驻守由模型明确判断。
 - [第 81～101 回合调度与等待识别规格](specs/2026-10-18-turn101-scheduling.md)与[工作项](specs/2026-10-18-turn101-scheduling-tickets.md)：外交原生关闭、等待阶段、未来移动前置拒绝及资源提示；T81 verified 同轮续测。
 - [第 61～81 回合查询与展示验收](acceptance/2026-10-18-turn81-queries.md)：1,805 项离线、净 20 回合、两份结果档与十类恢复比较；保留移动及长等待新增待办。
