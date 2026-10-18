@@ -426,3 +426,54 @@ def test_exact_delayed_consumption_event_confirms_removed_builder_with_actual_de
     conn.lua.execute("emit('charges',0,196608,0,6)")
     assert 'SACRIFICED|unit:196608|charges:6|progress:100->101' == run(state.sacrifice_builder_charges(196608))
     assert conn.lua.eval('#submissions') == 1
+
+
+def test_charge_event_before_command_started_is_retained_until_exact_command_matches():
+    conn = ContributionConn();state = GameState(conn);conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in run(state.sacrifice_builder_charges(196608))
+    conn.lua.execute("emit('charges',0,196608,0,6);units[196608]=nil;emit('removed',0,196608);progress=220")
+    assert 'OUTCOME_UNKNOWN' in run(state.sacrifice_builder_charges(196608))
+    conn.lua.execute("emit('command',0,196608,55)")
+    assert 'SACRIFICED|unit:196608|charges:6|progress:100->220' == run(state.sacrifice_builder_charges(196608))
+    assert conn.lua.eval('#submissions') == 1
+
+
+def test_unknown_confirmation_exposes_token_bound_native_facts_and_failure_reason():
+    import re
+    conn = ContributionConn();state = GameState(conn);conn.lua.execute('deferred=true')
+    first = run(state.sacrifice_builder_charges(196608))
+    token = re.search(r'CONTRIBUTION_OBSERVED\|([a-f0-9]+)\|unit:196608', first)
+    assert token is not None
+    assert 'reason:COMMAND_NOT_OBSERVED' in first
+    conn.lua.execute("emit('command',0,196608,55);units[196608]=nil;emit('removed',0,196608);progress=220")
+    unknown = run(state.sacrifice_builder_charges(196608))
+    assert 'CONTRIBUTION_OBSERVED|'+token[1]+'|unit:196608' in unknown
+    for fact in ('entered:true', 'returned:true', 'started:true', 'chargeBefore:nil',
+                 'chargeAfter:nil', 'removed:true', 'completed:nil', 'invalid:nil',
+                 'reason:CHARGES_NOT_OBSERVED'):
+        assert fact in unknown
+    assert state.pending_action_summary and conn.lua.eval('#submissions') == 1
+
+
+def test_early_invalid_numeric_charge_event_remains_visible_without_confirming():
+    conn = ContributionConn();state = GameState(conn);conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in run(state.sacrifice_builder_charges(196608))
+    conn.lua.execute("emit('charges',0,196608,-1,6);emit('command',0,196608,55);units[196608]=nil;emit('removed',0,196608);progress=220")
+    unknown = run(state.sacrifice_builder_charges(196608))
+    for fact in ('chargeBefore:nil', 'chargeAfter:nil', 'chargeEvents:1', 'rawChargeBefore:6',
+                 'rawChargeAfter:-1', 'commandSeq:2', 'chargeSeq:1', 'removedSeq:3',
+                 'reason:CHARGE_EVENT_MISMATCH'):
+        assert fact in unknown
+    assert 'OUTCOME_UNKNOWN' in unknown
+    assert state.pending_action_summary and conn.lua.eval('#submissions') == 1
+
+
+def test_successful_query_also_reports_native_event_sequence_without_extra_command():
+    conn = ContributionConn();state = GameState(conn);conn.lua.execute('remove_builder=true;complete_project=true')
+    assert run(state.sacrifice_builder_charges(196608)).startswith('SACRIFICED|')
+    facts = next(row for row in conn.rows if row.startswith('CONTRIBUTION_OBSERVED|'))
+    for fact in ('chargeBefore:6', 'chargeAfter:0', 'chargeEvents:1', 'rawChargeBefore:6',
+                 'rawChargeAfter:0', 'commandSeq:1', 'chargeSeq:2', 'removedSeq:3',
+                 'completedSeq:4', 'reason:CONFIRMED'):
+        assert fact in facts
+    assert conn.lua.eval('#submissions') == 1
