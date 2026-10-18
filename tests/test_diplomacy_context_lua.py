@@ -262,14 +262,18 @@ def test_unknown_after_explicit_dialogue_response_does_not_close_or_hide_uncerta
     async def instant_sleep(_):
         pass
     monkeypatch.setattr(asyncio, "sleep", instant_sleep)
-    conn = DiplomacyConn()
+    from test_trade_progress import AsyncDiplomacyConn
+    conn = AsyncDiplomacyConn()
     conn.setup('''
 DiplomacyManager.AddResponse=function()
     table.insert(mutations, "response")
     controls["/InGame/DiplomacyActionView"].hidden=true
 end
 ''')
-    result = run(GameState(conn).diplomacy_respond(1, "POSITIVE"))
+    state = GameState(conn)
+    run(state.get_diplomacy_sessions())
+    conn.statement()
+    result = run(state.diplomacy_respond(1, "POSITIVE"))
     assert "UNKNOWN" in result
     assert list(conn.lua.globals().mutations.values()) == ["response"]
 
@@ -282,19 +286,28 @@ def test_empty_text_or_a_different_verified_dialogue_is_not_automatic_goodbye(mo
     async def instant_sleep(_):
         pass
     monkeypatch.setattr(asyncio, "sleep", instant_sleep)
-    conn = DiplomacyConn()
+    from test_trade_progress import AsyncDiplomacyConn
+    conn = AsyncDiplomacyConn()
     conn.setup(setup)
-    assert "SESSION_CONTINUES" in run(GameState(conn).diplomacy_respond(1, "POSITIVE"))
+    state = GameState(conn)
+    run(state.get_diplomacy_sessions())
+    conn.statement()
+    assert "OUTCOME_UNKNOWN" in run(state.diplomacy_respond(1, "POSITIVE"))
     assert list(conn.lua.globals().mutations.values()) == ["response"]
 
 
-def test_same_verified_nonempty_dialogue_keeps_existing_goodbye_cleanup(monkeypatch):
+def test_unchanged_text_never_auto_closes_native_dialogue_without_new_statement(monkeypatch):
     async def instant_sleep(_):
         pass
     monkeypatch.setattr(asyncio, "sleep", instant_sleep)
-    conn = DiplomacyConn()
-    assert "auto-closed goodbye phase" in run(GameState(conn).diplomacy_respond(1, "POSITIVE"))
-    assert list(conn.lua.globals().mutations.values())[:2] == ["response", "close"]
+    from test_trade_progress import AsyncDiplomacyConn
+    conn = AsyncDiplomacyConn()
+    state = GameState(conn)
+    run(state.get_diplomacy_sessions())
+    conn.statement()
+    assert "OUTCOME_UNKNOWN" in run(state.diplomacy_respond(1, "POSITIVE"))
+    assert "OUTCOME_UNKNOWN" in run(state.diplomacy_respond(1, "POSITIVE"))
+    assert list(conn.lua.globals().mutations.values()) == ["response"]
 
 
 @pytest.mark.parametrize("rows", [

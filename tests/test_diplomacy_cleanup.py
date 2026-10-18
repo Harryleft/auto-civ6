@@ -3,6 +3,7 @@ import asyncio
 import pytest
 from lupa.lua51 import LuaRuntime
 from civ_mcp.game_lifecycle import DiplomacyViewCleanup
+from test_trade_progress import quick_trade
 
 
 class NativeDiplomacy:
@@ -101,22 +102,26 @@ def test_context_mismatch_is_known_zero_submission():
     assert not cleanup.pending and conn.lua.globals().closes == 0
 
 
-def test_propose_trade_keeps_accepted_result_when_close_reply_is_lost():
+def test_propose_trade_keeps_accepted_result_when_close_reply_is_lost(quick_trade):
     from civ_mcp.game_state import GameState
-    class TradeConn(NativeDiplomacy):
-        proposals = 0
-        async def execute_write(self, source):
-            assert "DealManager.SendWorkingDeal" in source
-            self.proposals += 1
-            return ["OK:ACCEPTED|Trade accepted with Canada"]
-    conn = TradeConn()
-    conn.lose_reply = True
-    state = GameState(conn)
-    first = asyncio.run(state.propose_trade(1, [], []))
-    second = asyncio.run(state.propose_trade(1, [], []))
-    assert "ACCEPTED" in first and "cleanup unknown" in first
-    assert "ACCEPTED" in second and "cleanup confirmed" in second
-    assert conn.proposals == 1 and conn.lua.globals().closes == 1
+    from test_trade_progress import TradeConn
+    class LostClose(TradeConn):
+        lost = False
+        async def execute_in_named_state(self, name, source, timeout=5):
+            rows = await super().execute_in_named_state(name, source, timeout)
+            if "DIPLOMACY_NATIVE_CLOSE" in source and not self.lost:
+                self.lost = True
+                raise TimeoutError("close reply lost")
+            return rows
+    async def scenario():
+        conn=LostClose(); state=GameState(conn)
+        assert "ACCEPTED|" in await state.propose_trade(1,[{"type":"GOLD","amount":20}],[])
+        assert "SESSION_CLOSED" in await state.diplomacy_respond(1,"EXIT")
+        assert "cleanup unknown" in await state.dismiss_popup()
+        result=await state.propose_trade(1,[],[])
+        assert "ACCEPTED|" in result and "cleanup confirmed" in result
+        assert conn.lua.globals().requests==1 and conn.lua.globals().close_callbacks==1
+    asyncio.run(scenario())
 
 
 def test_hidden_new_world_cannot_confirm_old_native_receipt():
@@ -181,17 +186,28 @@ class CancelledTradeConn(NativeDiplomacy):
 
 @pytest.mark.parametrize("first", ["propose_trade", "test_trade"])
 @pytest.mark.parametrize("retry", ["propose_trade", "test_trade"])
-def test_cancel_after_native_close_keeps_original_trade_and_never_resubmits(first, retry):
+def test_cancel_after_native_close_keeps_original_trade_and_never_resubmits(first, retry, quick_trade):
     from civ_mcp.game_state import GameState
+    from test_trade_progress import TradeConn
+    class CancelledClose(TradeConn):
+        cancelled=False
+        async def execute_in_named_state(self,name,source,timeout=5):
+            rows=await super().execute_in_named_state(name,source,timeout)
+            if "DIPLOMACY_NATIVE_CLOSE" in source and not self.cancelled:
+                self.cancelled=True
+                raise asyncio.CancelledError()
+            return rows
     async def scenario():
-        conn = CancelledTradeConn()
-        state = GameState(conn)
+        conn=CancelledClose(); state=GameState(conn)
         with pytest.raises(asyncio.CancelledError):
-            await getattr(state, first)(1, [], [])
-        result = await getattr(state, retry)(1, [], [])
-        assert "No new trade submitted" in result
-        assert "Canada" in result and "cleanup confirmed" in result
-        assert conn.proposals == 1 and conn.lua.globals().closes == 1
+            result=await getattr(state,first)(1,[{"type":"GOLD","amount":20}],[])
+            if first=="propose_trade":
+                assert "ACCEPTED|" in result
+                assert "SESSION_CLOSED" in await state.diplomacy_respond(1,"EXIT")
+                await state.dismiss_popup()
+        result=await getattr(state,retry)(1,[],[])
+        assert "cleanup confirmed" in result
+        assert conn.lua.globals().requests==1 and conn.lua.globals().close_callbacks==1
     asyncio.run(scenario())
 
 
@@ -206,4 +222,21 @@ def test_unrelated_dismiss_cancel_only_confirms_cleanup_before_any_new_trade(ent
         result = await getattr(state, entry)(1, [], [])
         assert "No new trade submitted" in result and "cleanup confirmed" in result
         assert conn.proposals == 0 and conn.lua.globals().closes == 1
+    asyncio.run(scenario())
+
+
+def test_unconfirmed_unrelated_cleanup_keeps_gameplay_save_and_turn_gates():
+    from civ_mcp.game_state import GameState
+    async def scenario():
+        conn = CancelledTradeConn()
+        state = GameState(conn)
+        with pytest.raises(asyncio.CancelledError):
+            await state.dismiss_popup()
+        assert state.diplomacy_pending
+        for operation in (state.end_turn, lambda: state.save_game("cleanup_gate"),
+                          lambda: state.reload_game_save("checkpoint")):
+            assert "OUTCOME_UNKNOWN" in await operation()
+        assert conn.lua.globals().closes == 1 and conn.proposals == 0
+        assert "Dismissed: DiplomacyActionView (native Close)" == await state.dismiss_popup()
+        assert not state.diplomacy_pending
     asyncio.run(scenario())

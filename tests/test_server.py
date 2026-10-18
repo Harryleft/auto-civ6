@@ -93,6 +93,7 @@ class FakeGameState:
         self._game_identity = None
         self._revealed_tiles = set()
         self.reset_calls = 0
+        self.diplomacy_pending = False
         self._pending_end_turn = False
         self._pending_end_turn_from = None
         self.calls: list[tuple[str, tuple, dict]] = []

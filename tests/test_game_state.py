@@ -1682,22 +1682,10 @@ class TestSendDiplomaticAction:
 
 
 class TestDiplomacyRespond:
-    """A session that closes on its own (or errors) short-circuits before
-    the frame-delay state check — no extra round-trips."""
-
-    def test_session_closed_returns_immediately(self, monkeypatch):
-        monkeypatch.setattr(asyncio, "sleep", _instant_sleep)
-        gs, conn = _gs(
-            [
-                ("write", ["CONTEXT|NONE|NO_OPEN_SESSION", "CONTEXT_COMPLETE"]),  # pre-text capture
-                ("write", ["OK:SESSION_CLOSED|goodbye"]),
-            ]
-        )
-
-        async def go():
-            return await gs.diplomacy_respond(1, "POSITIVE")
-
-        assert run(go()) == "SESSION_CLOSED|goodbye"
+    def test_absent_session_does_not_submit_generic_response(self):
+        gs, conn = _gs([("write", ["CONTEXT|NONE|NO_OPEN_SESSION", "CONTEXT_COMPLETE"])])
+        result = run(gs.diplomacy_respond(1, "POSITIVE"))
+        assert "OUTCOME_UNKNOWN" in result
         assert conn.exhausted
 
 
