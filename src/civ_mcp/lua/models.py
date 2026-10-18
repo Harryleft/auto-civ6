@@ -768,6 +768,9 @@ class GovernmentStatus:
     government_type: str
     slots: list[PolicySlot] = field(default_factory=list)
     available_policies: list[PolicyInfo] = field(default_factory=list)
+    policy_unlock_cost: float | None = None
+    policy_unlock_currency: str | None = None
+    policy_unlock_balance: float | None = None
 
 
 @dataclass

@@ -956,60 +956,70 @@ class GameState:
         lua = lq.build_set_policies(assignments)
         lines = await self.conn.execute_write(lua)
         result = _action_result(lines)
-        if not result.startswith("Error"):
-            # Post-verify: RequestPolicyChanges can silently no-op (e.g. during era transitions)
-            expected_slots: dict[int, str] = {}
-            plan_count = None
-            invalid_plan = False
-            for line in lines:
-                if line.startswith("POLICY_PLAN_COUNT|"):
-                    try:
-                        if plan_count is not None:
-                            invalid_plan = True
-                        _, count = line.split("|")
-                        plan_count = int(count)
-                    except ValueError:
+        if result.startswith("Error") or result.startswith("POLICIES_UNCHANGED|"):
+            return result
+        # Native policy application is asynchronous; only later matching
+        # reads confirm it. An old frame never proves rejection.
+        expected_slots: dict[int, str] = {}
+        plan_count = None
+        invalid_plan = False
+        for line in lines:
+            if line.startswith("POLICY_PLAN_COUNT|"):
+                try:
+                    if plan_count is not None:
                         invalid_plan = True
-                elif line.startswith("POLICY_PLAN"):
-                    try:
-                        _, slot, policy = line.split("|")
-                        index = int(slot)
-                        if index in expected_slots or not policy:
-                            invalid_plan = True
-                        expected_slots[index] = policy
-                    except ValueError:
+                    _, count = line.split("|")
+                    plan_count = int(count)
+                except ValueError:
+                    invalid_plan = True
+            elif line.startswith("POLICY_PLAN"):
+                try:
+                    _, slot, policy = line.split("|")
+                    index = int(slot)
+                    if index in expected_slots or not policy:
                         invalid_plan = True
-            complete_plan = (
-                not invalid_plan and plan_count is not None and plan_count > 0
-                and len(expected_slots) == plan_count
-                and all(0 <= idx < plan_count for idx in expected_slots)
-                and all(expected_slots.get(idx) == ("NONE" if policy.upper() == "NONE" else policy)
-                        for idx, policy in assignments.items())
+                    expected_slots[index] = policy
+                except ValueError:
+                    invalid_plan = True
+        complete_plan = (
+            not invalid_plan and plan_count is not None and plan_count > 0
+            and len(expected_slots) == plan_count
+            and all(0 <= idx < plan_count for idx in expected_slots)
+            and all(expected_slots.get(idx) == ("NONE" if policy.upper() == "NONE" else policy)
+                    for idx, policy in assignments.items())
+        )
+        unconfirmed = (
+            "POLICIES_UNCONFIRMED|Policy change submitted once; application not confirmed. "
+            "Inspect get_policies before another change; do not automatically resend."
+        )
+        if not complete_plan:
+            return unconfirmed + (
+                "\nWARN:POLICY_PLAN_UNVERIFIED — final plan receipt missing or invalid."
             )
-            if not complete_plan:
-                expected_slots = dict(assignments)
-                result += (
-                    "\nWARN:POLICY_PLAN_UNVERIFIED — final plan receipt missing or invalid; "
-                    "only requested slots can be checked. Inspect get_policies before another change."
-                )
-            status = await self.get_policies()
-            slot_map = {s.slot_index: s.current_policy for s in status.slots}
-            if complete_plan and set(slot_map) != set(expected_slots):
-                result += "\nWARN:POLICY_PLAN_UNVERIFIED — slot layout changed after submission."
-            mismatches = []
-            for idx, pol in expected_slots.items():
-                expected = None if pol.upper() == "NONE" else pol
-                actual = slot_map.get(idx)
-                if idx not in slot_map or actual != expected:
-                    wanted = "EMPTY" if expected is None else pol
-                    got = actual or "EMPTY"
-                    mismatches.append(f"slot {idx} (wanted {wanted}, got {got})")
-            if mismatches:
-                result += (
-                    f"\nWARN:SILENT_FAILURE — engine rejected: {', '.join(mismatches)}. "
-                    "Try a different policy or retry next turn."
-                )
-        return result
+        mismatches = []
+        try:
+            async with asyncio.timeout(ACTION_CONFIRM_TIMEOUT):
+                while True:
+                    status = await self.get_policies()
+                    slot_map = {s.slot_index: s.current_policy for s in status.slots}
+                    mismatches = []
+                    for idx, pol in expected_slots.items():
+                        expected = None if pol.upper() == "NONE" else pol
+                        actual = slot_map.get(idx)
+                        if idx not in slot_map or actual != expected:
+                            wanted = "EMPTY" if expected is None else pol
+                            got = actual or "EMPTY"
+                            mismatches.append(f"slot {idx} (wanted {wanted}, got {got})")
+                    if set(slot_map) != set(expected_slots):
+                        mismatches.append("slot layout differs from submitted plan")
+                    if not mismatches:
+                        return "POLICIES_SET|Final policy plan confirmed by subsequent readback."
+                    await asyncio.sleep(ACTION_CONFIRM_INTERVAL)
+        except (OSError, TimeoutError, LuaError, ValueError):
+            pass
+        if mismatches:
+            unconfirmed += "\nLast read: " + ", ".join(mismatches)
+        return unconfirmed
 
     # ------------------------------------------------------------------
     # Governor methods (InGame context)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from civ_mcp.lua._helpers import (
     SENTINEL,
     _LUA_XP_THRESHOLD,
@@ -29,6 +31,28 @@ from civ_mcp.lua.models import (
 )
 
 
+# Native UI payment facts are shared by the read-only decision surface and
+# final submission preflight. Missing APIs never imply free or affordable.
+_LUA_POLICY_PAYMENT = """
+local function finiteNonnegative(value)
+    return type(value) == "number" and value == value
+        and value >= 0 and value < math.huge
+end
+local policyCost, policyCurrency, policyBalance
+local costOK, cost = pcall(function() return pCulture:GetCostToUnlockPolicies() end)
+if costOK and finiteNonnegative(cost) then policyCost = cost end
+local flagOK, flag = pcall(function() return GlobalParameters.GOVERNMENT_UNLOCK_WITH_FAITH end)
+if flagOK and finiteNonnegative(flag) then
+    policyCurrency = flag ~= 0 and "FAITH" or "GOLD"
+    local balanceOK, balance = pcall(function()
+        if policyCurrency == "FAITH" then return Players[me]:GetReligion():GetFaithBalance() end
+        return Players[me]:GetTreasury():GetGoldBalance()
+    end)
+    if balanceOK and finiteNonnegative(balance) then policyBalance = balance end
+end
+"""
+
+
 def build_policies_query() -> str:
     """Read current government, policy slots, and available policies (InGame context)."""
     return """
@@ -44,6 +68,9 @@ if govIdx and govIdx >= 0 then
         govType = govEntry.GovernmentType
     end
 end
+{POLICY_PAYMENT}
+print("POLICY_PAYMENT|" .. tostring(policyCost or "UNKNOWN") .. "|"
+    .. (policyCurrency or "UNKNOWN") .. "|" .. tostring(policyBalance or "UNKNOWN"))
 local numSlots = pCulture:GetNumPolicySlots()
 print("GOV|" .. govType .. "|" .. govName:gsub("|","/") .. "|" .. numSlots)
 for s = 0, numSlots - 1 do
@@ -80,7 +107,7 @@ for policy in GameInfo.Policies() do
     end
 end
 print("{SENTINEL}")
-""".replace("{SENTINEL}", SENTINEL)
+""".replace("{SENTINEL}", SENTINEL).replace("{POLICY_PAYMENT}", _LUA_POLICY_PAYMENT)
 
 
 def build_set_policies(assignments: dict[int, str]) -> str:
@@ -159,14 +186,35 @@ for slot = 0, numSlots - 1 do
     end
     table.insert(clearList, slot)
 end
-UI.RequestPlayerOperation(me, PlayerOperations.UNLOCK_POLICIES, {{}})
+local changed = false
+for slot = 0, numSlots - 1 do
+    if current[slot] ~= final[slot] then changed = true end
+end
+if not changed then
+    {_bail('OK:POLICIES_UNCHANGED|Requested policies already active; no payment or submission.')}
+end
+-- Match GovernmentScreen's native price and configured currency. Never guess
+-- affordability or directly mutate resources; the engine performs the payment.
+{_LUA_POLICY_PAYMENT}
+if policyCost == nil then
+    {_bail('ERR:POLICY_UNLOCK_UNKNOWN|Policy unlock cost unavailable; no submission.')}
+end
+if policyCost > 0 then
+    if policyCurrency == nil or policyBalance == nil then
+        {_bail_lua('"ERR:POLICY_UNLOCK_UNKNOWN|required=" .. policyCost .. "|currency=" .. (policyCurrency or "UNKNOWN") .. "|balance=" .. tostring(policyBalance or "UNKNOWN") .. "|No submission."')}
+    end
+    if policyBalance < policyCost then
+        {_bail_lua('"ERR:POLICY_UNLOCK_UNAFFORDABLE|required=" .. policyCost .. "|balance=" .. policyBalance .. "|currency=" .. policyCurrency .. "|No submission."')}
+    end
+    UI.RequestPlayerOperation(me, PlayerOperations.UNLOCK_POLICIES, {{}})
+end
 pCulture:RequestPolicyChanges(clearList, addList)
 print("POLICY_PLAN_COUNT|" .. numSlots)
 for slot = 0, numSlots - 1 do
     local policy = GameInfo.Policies[final[slot]]
     print("POLICY_PLAN|" .. slot .. "|" .. (policy and policy.PolicyType or "NONE"))
 end
-print("OK:POLICIES_SET|Policies updated. Use get_policies to verify.")
+print("OK:POLICIES_SET|Policy change submitted once; awaiting readback.")
 print("{SENTINEL}")
 """
 
@@ -676,9 +724,25 @@ def parse_policies_response(lines: list[str]) -> GovernmentStatus:
     gov_type = "NONE"
     slots: list[PolicySlot] = []
     available: list[PolicyInfo] = []
+    unlock_cost = unlock_currency = unlock_balance = None
 
     for line in lines:
-        if line.startswith("GOV|"):
+        if line.startswith("POLICY_PAYMENT|"):
+            parts = line.split("|")
+            if len(parts) == 4:
+                try:
+                    value = float(parts[1])
+                    unlock_cost = value if math.isfinite(value) and value >= 0 else None
+                except ValueError:
+                    pass
+                unlock_currency = parts[2] if parts[2] in {"GOLD", "FAITH"} else None
+                try:
+                    value = float(parts[3])
+                    unlock_balance = value if math.isfinite(value) and value >= 0 else None
+                except ValueError:
+                    pass
+
+        elif line.startswith("GOV|"):
             parts = line.split("|")
             if len(parts) >= 4:
                 gov_type = parts[1]
@@ -713,6 +777,9 @@ def parse_policies_response(lines: list[str]) -> GovernmentStatus:
         government_type=gov_type,
         slots=slots,
         available_policies=available,
+        policy_unlock_cost=unlock_cost,
+        policy_unlock_currency=unlock_currency,
+        policy_unlock_balance=unlock_balance,
     )
 
 
