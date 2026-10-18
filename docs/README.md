@@ -17,6 +17,9 @@ Agent 从根目录 [AGENTS.md](../AGENTS.md) 开始；命中任务后读取对�
 
 ## 规格与验收
 
+- [T121 至本轮终局验收](acceptance/2026-10-19-turn-terminal.md)：净推进112回合至T233科技胜利，九项修复、菜单恢复及存档保全。
+- [贡献未决与信息弹窗](acceptance/2026-10-19-contribution-popup-progress.md)：原生事件暂停、显式关闭通路、157项相关测试和未知门禁保留。
+
 - [交易确认请求身份](specs/2026-10-19-trade-request-identity.md)与[验收](acceptance/2026-10-19-trade-request-identity.md)：旧尝试身份门禁，97项相关测试及实机拒绝／续行。
 
 - [城市宜居度总量](specs/2026-10-19-city-amenities-total.md)与[验收](acceptance/2026-10-19-city-amenities-total.md)：原生总量语义、21项相关测试及同轮对照。
