@@ -4,7 +4,7 @@
 
 | 工作项 | 依赖 | 所有权与完成条件 | 状态 |
 | --- | --- | --- | --- |
-| W1 身份绑定与回归 | 无 | 单一实施者负责 `end_turn.py`、必要原生 Lua 构造及 GameState 协作、直接相关测试；先红后绿，换世界保留门禁，同世界正常确认 | ready-for-agent |
+| W1 身份绑定与回归 | 无 | 单一实施者负责 `end_turn.py`、必要原生 Lua 构造及 GameState 协作、直接相关测试；先红后绿，换世界保留门禁，同世界正常确认 | in-progress |
 | W2 独立合入与验证 | W1 | merger 独立合入并验证相关模块、compileall、diff 及源指纹 | blocked |
 | W3 双轴复查 | W2 | 两名独立 reviewer 对照规格及项目规范；问题由单一实施者修复 | blocked |
 | W4 验收、main 与保护核对 | W3 | 父任务记录离线结果、核对旧成果指纹、提交 main、清理实施 worktree，不 push | blocked |
