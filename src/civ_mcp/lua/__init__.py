@@ -18,9 +18,13 @@ works identically to the old monolithic ``lua_queries`` module.
 
 # Re-export helpers & sentinel
 from civ_mcp.lua._helpers import SENTINEL  # noqa: F401
+from civ_mcp.lua.pillage import (  # noqa: F401
+    build_pillage_preflight, build_pillage_unit, build_pillage_query,
+)
 from civ_mcp.lua.espionage import (  # noqa: F401
     build_get_spies_query,
     build_spy_escape_route,
+    build_verify_spy_escape,
     build_spy_mission,
     build_spy_travel,
     parse_spies_response,
@@ -284,7 +288,6 @@ from civ_mcp.lua.units import (  # noqa: F401
     build_remove_feature,
     build_remove_improvement,
     build_repair_improvement,
-    build_sacrifice_builder_charges,
     build_move_unit,
     build_skip_remaining_units,
     build_skip_unit,
@@ -310,4 +313,8 @@ from civ_mcp.lua.victory import (  # noqa: F401
     build_victory_progress_query,
     build_victory_proximity_query,
     parse_victory_progress_response,
+)
+
+from civ_mcp.lua.contribution import (  # noqa: F401
+    build_contribution_preflight, build_sacrifice_builder_charges, build_contribution_query,
 )

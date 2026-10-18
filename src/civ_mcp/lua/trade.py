@@ -252,7 +252,14 @@ local function fingerprint(deal)
  for item in deal:Items() do
   local values={item:GetFromPlayerID(),item:GetType(),item:GetValueType(),item:GetSubType(),item:GetAmount(),item:GetDuration()}
   for index=1,6 do if values[index]==nil then values[index]="?" else values[index]=tostring(values[index]) end end
-  table.insert(rows,table.concat(values,","))
+  local entry=table.concat(values,",")
+  if DealAgreementTypes and item:GetType()==DealItemTypes.AGREEMENTS and
+     (item:GetSubType()==DealAgreementTypes.JOINT_WAR or item:GetSubType()==DealAgreementTypes.THIRD_PARTY_WAR) then
+   local ok,warType=pcall(function() return item:GetParameterValue("WarType") end)
+   if not ok or (warType~=nil and type(warType)~="number") then return nil end
+   entry=entry..",WarType="..tostring(warType)
+  end
+  table.insert(rows,entry)
  end
  table.sort(rows); return table.concat(rows,";")
 end
@@ -343,6 +350,7 @@ def build_trade_response(nonce: str, token: str) -> str:
     return _trade(nonce, token) + _fingerprint() + '''
 local record=trade.response
 if not record then print("TRADE_RESPONSE|WAITING"); return end
+if trade.incoming and (record.from~=target or record.to~=me) then print("TRADE_RESPONSE|UNKNOWN"); return end
 if observer.records[trade.sid]~=record or record.other~=target or record.sid~=trade.sid or record.variant.RespondingToDealAction~=trade.action then print("TRADE_RESPONSE|UNKNOWN"); return end
 if DealManager.HasPendingDeal(me,target)~=false then print("TRADE_RESPONSE|WAITING"); return end
 local action="UNKNOWN"
@@ -365,9 +373,10 @@ for item in deal:Items() do
  elseif itemType==DealItemTypes.FAVOR then kind="FAVOR"
  elseif itemType==DealItemTypes.CITIES then kind="CITY"
  elseif itemType==DealItemTypes.GREATWORK then kind="GREAT_WORK" end
- local value,subtype="",""
- pcall(function() value=tostring(item:GetValueTypeID() or "") end)
- pcall(function() subtype=tostring(item:GetSubTypeID() or "") end)
+ -- The installed native deal API exposes numeric value/subtype fields;
+ -- unverified *ID getters silently erased real identities in the old preview.
+ local value=tostring(item:GetValueType() or "UNKNOWN")
+ local subtype=tostring(item:GetSubType() or "UNKNOWN")
  print("ITEM|"..(item:GetFromPlayerID()==me and "US" or "THEM").."|"..kind.."|"..(item:GetAmount() or 0).."|"..(item:GetDuration() or 0).."|"..value.."|"..subtype)
 end
 '''
@@ -512,4 +521,136 @@ local incoming=trade.latestIncoming
 if not incoming then emit("diplomacy_incoming: event=NONE")
 else emit("diplomacy_incoming: event_seq="..value(incoming.seq).." event_from="..value(incoming.from).." event_to="..value(incoming.to).." session_id="..value(incoming.sid).." deal_action="..action(incoming.action).." diagnostic_only=true") end
 print("{SENTINEL}")
+'''
+
+
+def _incoming_guard(scope: str, target: int, sid: int) -> str:
+    """Incoming and AI-evaluation phases share this original native session."""
+    return _scope() + f'''
+local me,target,sid=Game.GetLocalPlayer(),{int(target)},{int(sid)}
+local worldKnown,observedScope=pcall(currentScope)
+print("INCOMING_WORLD|"..(worldKnown and observedScope or "UNKNOWN"))
+local function ready()
+ if not worldKnown or observedScope~={json.dumps(scope)} or ContextPtr:GetID()~="DiplomacyDealView" or ContextPtr:IsHidden() then return false end
+ local localPlayer=g_LocalPlayer or ms_LocalPlayer
+ local otherPlayer=g_OtherPlayer or ms_OtherPlayer
+ local actionRoot=ContextPtr:LookUpControl("/InGame/DiplomacyActionView")
+ local conversation=ContextPtr:LookUpControl("/InGame/DiplomacyActionView/ConversationContainer")
+ if not actionRoot or not conversation or (actionRoot:IsHidden()==false and conversation:IsHidden()==false) then return false end
+ if ms_OtherPlayerID~=target or ms_InitiatedByPlayerID~=target or ms_bIsDemand~=false then return false end
+ if not localPlayer or localPlayer:GetID()~=me or not otherPlayer or otherPlayer:GetID()~=target then return false end
+ if DiplomacyManager.FindOpenSessionID(me,target)~=sid or DiplomacyManager.HasQueuedSession(me)~=false then return false end
+ local info=DiplomacyManager.GetSessionInfo(sid)
+ if not info or info.FromPlayer~=target or info.ToPlayer~=me then return false end
+ if type(Players[target].IsHuman)~="function" or Players[target]:IsHuman()~=false then return false end
+ return DealManager.HasPendingDeal(me,target)==false
+end
+local ok,isReady=pcall(ready)
+if not ok or not isReady then print("INCOMING|NOT_READY"); return end
+'''
+
+
+def build_incoming_quote(scope: str, target: int, sid: int) -> str:
+    return _incoming_guard(scope, target, sid) + _fingerprint() + '''
+local original=DealManager.GetWorkingDeal(DealDirection.INCOMING,me,target)
+local current=DealManager.GetWorkingDeal(DealDirection.OUTGOING,me,target)
+local a,b=fingerprint(original),fingerprint(current)
+local ok,phase=pcall(function()
+ if not a or not b or original:GetItemCount()==0 or current:GetItemCount()==0 then return nil end
+ if current:Validate()~=DealValidationResult.VALID or current:IsValid()~=true then return nil end
+ if a~=b or DealManager.AreWorkingDealsEqual(me,target)~=true then return "EDITED_UNSENT" end
+ -- Official UpdateDealStatus derives this button from its private last native
+ -- action, validity and HasPendingDeal. Equality alone also holds after rejection.
+ if Controls.AcceptDeal:IsHidden()==false and Controls.AcceptDeal:IsDisabled()==false then return "ACCEPTABLE" end
+ return "EVALUATION_UNAVAILABLE"
+end)
+if not ok or not phase then print("INCOMING|UNKNOWN"); return end
+print("INCOMING_SCOPE|"..currentScope())
+print("INCOMING_SESSION|"..sid.."|"..target)
+print("INCOMING_PHASE|"..phase)
+print("INCOMING_ORIGINAL|"..a)
+print("INCOMING_CURRENT|"..b)
+'''
+
+
+def build_incoming_arm(nonce: str, token: str, target: int, sid: int, action: str) -> str:
+    return _observer(nonce) + f'''
+local target,sid={int(target)},{int(sid)}
+local me=Game.GetLocalPlayer()
+local info=DiplomacyManager.GetSessionInfo(sid)
+if not info or info.FromPlayer~=target or info.ToPlayer~=me or DiplomacyManager.FindOpenSessionID(me,target)~=sid or (observer.trade and not observer.trade.finished) then print("INCOMING|NOT_ARMED"); return end
+if type(DealProposalAction.{action})~="number" then print("INCOMING|NOT_ARMED"); return end
+observer.trade={{token={json.dumps(token)},target=target,sid=sid,action=DealProposalAction.{action},afterSeq=observer.seq,incoming=true}}
+print("INCOMING|ARMED")
+'''
+
+
+def build_incoming_send(scope: str, target: int, sid: int, token: str, original: str, current: str, phase: str, edits: dict, action: str) -> str:
+    changes = "\n".join(f'{{owner={"me" if key.startswith("our_") else "target"},perTurn={str(key.endswith("gpt")).lower()},amount={value}}},' for key, value in edits.items())
+    return _incoming_guard(scope, target, sid) + _fingerprint() + f'''
+local token={json.dumps(token)}
+if __civmcp_incoming and __civmcp_incoming.token==token then print("INCOMING|ALREADY_ENTERED"); return end
+local original=DealManager.GetWorkingDeal(DealDirection.INCOMING,me,target)
+local current=DealManager.GetWorkingDeal(DealDirection.OUTGOING,me,target)
+local phase
+local readable=pcall(function()
+ if fingerprint(original)~=fingerprint(current) or DealManager.AreWorkingDealsEqual(me,target)~=true then phase="EDITED_UNSENT"
+ elseif Controls.AcceptDeal:IsHidden()==false and Controls.AcceptDeal:IsDisabled()==false then phase="ACCEPTABLE"
+ else phase="EVALUATION_UNAVAILABLE" end
+end)
+if not readable or phase~={json.dumps(phase)} or fingerprint(original)~={json.dumps(original)} or fingerprint(current)~={json.dumps(current)} then print("INCOMING|NOT_SUBMITTED|QUOTE_CHANGED"); return end
+local changes={{{changes}}}
+local valid,reason=pcall(function()
+ for _,change in ipairs(changes) do
+  local count=0
+  for item in current:Items() do
+   if item:GetType()==DealItemTypes.GOLD and item:GetFromPlayerID()==change.owner and (item:GetDuration()>0)==change.perTurn then count=count+1; change.item=item end
+  end
+  if count~=1 then error("GOLD_ENTRY_ABSENT_OR_AMBIGUOUS") end
+  if change.item:IsLocked()~=false then error("GOLD_ENTRY_LOCKED") end
+  local maximum=change.item:GetMaxAmount()
+  if type(maximum)~="number" or change.amount>maximum then error("GOLD_AMOUNT_UNAVAILABLE") end
+  change.previous=change.item:GetAmount()
+ end
+end)
+if not valid then print("INCOMING|NOT_SUBMITTED|GOLD_ENTRY_UNAVAILABLE"); return end
+local receipt={{token=token,sid=sid,target=target,sent=false}}
+__civmcp_incoming=receipt
+local prepared=pcall(function()
+ for _,change in ipairs(changes) do change.item:SetAmount(change.amount) end
+ if current:Validate()~=DealValidationResult.VALID or current:IsValid()~=true then error("INVALID_TERMS") end
+end)
+if not prepared then
+ local restored=pcall(function() for _,change in ipairs(changes) do change.item:SetAmount(change.previous) end end)
+ if restored and fingerprint(current)=={json.dumps(current)} then receipt.zero=true; print("INCOMING|NOT_SUBMITTED|INVALID_TERMS") else print("INCOMING|UNKNOWN|DRAFT_CHANGED") end
+ return
+end
+receipt.proposal=fingerprint(current)
+if not receipt.proposal then print("INCOMING|UNKNOWN|TERMS"); return end
+receipt.sent=true
+-- Official ProposeWorkingDeal(true)/RequestEqualizeWorkingDeal semantics.
+-- Never invoke OnProposeOrAcceptDeal: equality may turn it into final ACCEPTED.
+DealManager.SendWorkingDeal(DealProposalAction.{action},me,target)
+print("INCOMING|SENT")
+print("INCOMING_PROPOSAL|"..receipt.proposal)
+'''
+
+
+def build_incoming_receipt(scope: str, target: int, sid: int, token: str) -> str:
+    return _incoming_guard(scope, target, sid) + f'''
+local receipt=__civmcp_incoming
+if not receipt or receipt.token~={json.dumps(token)} or receipt.sid~=sid or receipt.target~=target then print("INCOMING_RECEIPT|UNKNOWN"); return end
+if receipt.zero then print("INCOMING_RECEIPT|ZERO"); return end
+if receipt.sent~=true or not receipt.proposal then print("INCOMING_RECEIPT|UNKNOWN"); return end
+print("INCOMING_RECEIPT|SENT")
+print("INCOMING_PROPOSAL|"..receipt.proposal)
+'''
+
+
+def build_incoming_finish(nonce: str, token: str, *, zero: bool = False) -> str:
+    guard = 'trade.response==nil' if zero else 'trade.response~=nil and observer.records[trade.sid]==trade.response'
+    return _trade(nonce, token) + f'''
+if not trade.incoming or not ({guard}) then print("INCOMING_FINISH|UNKNOWN"); return end
+trade.finished=true
+print("INCOMING_FINISH|CONFIRMED")
 '''

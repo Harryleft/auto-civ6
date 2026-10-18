@@ -345,6 +345,7 @@ class TestUnitActionDispatch:
         ("action", "method"),
         [
             ("cancel_move", "cancel_unit_move"),
+            ("pillage", "pillage_unit"),
             ("fortify", "fortify_unit"),
             ("skip", "skip_unit"),
             ("found_city", "found_city"),
@@ -387,6 +388,12 @@ class TestUnitActionDispatch:
         ctx=make_ctx();gs=app_of(ctx).game
         run(server.unit_action(ctx,3*65536+7,"cancel_move"))
         assert gs.last_args("cancel_unit_move")== (3*65536+7,)
+
+    def test_pillage_keeps_full_runtime_identity(self):
+        ctx = make_ctx()
+        gs = app_of(ctx).game
+        run(server.unit_action(ctx, 3 * 65536 + 7, "pillage"))
+        assert gs.last_args("pillage_unit") == (3 * 65536 + 7,)
 
 
 class TestUnitActionValidation:
@@ -764,9 +771,9 @@ class TestSpyAction:
     def test_explicit_escape_route_dispatches_to_the_requested_spy(self):
         ctx = make_ctx()
         gs = app_of(ctx).game
-        result = run(server.spy_action(ctx, 65536 + 4, "escape:district_harbor", 0, 0))
+        result = run(server.spy_action(ctx, 2949124, "escape:district_harbor", 0, 0))
         assert result == "<spy_escape>"
-        assert gs.last_args("spy_escape") == (4, "DISTRICT_HARBOR")
+        assert gs.last_args("spy_escape") == (2949124, "DISTRICT_HARBOR")
         assert gs.called("spy_mission") == []
 
     def test_travel_uses_the_unit_index(self):
@@ -1083,7 +1090,7 @@ class TestPendingEndTurnDispatch:
         assert "OUTCOME_UNKNOWN" in result
         assert gs.calls == []
 
-    @pytest.mark.parametrize("tool", ["get_units", "list_saves", "end_turn", "respond_to_diplomacy", "respond_to_trade", "queue_wc_votes", "open_world_congress", "dismiss_popup", "restart_and_load"])
+    @pytest.mark.parametrize("tool", ["get_units", "list_saves", "end_turn", "respond_to_diplomacy", "respond_to_trade", "negotiate_incoming_trade", "queue_wc_votes", "open_world_congress", "dismiss_popup", "restart_and_load"])
     def test_unconfirmed_turn_still_allows_confirmation_and_blocker_resolution(self, tool):
         ctx = make_ctx()
         gs = app_of(ctx).game
@@ -1606,7 +1613,13 @@ class TestMcpProtocol:
                     assert initialization.serverInfo.name == "Civilization VI"
                     tools = (await session.list_tools()).tools
                     names = {tool.name for tool in tools}
-                    assert len(names) == 81
+                    assert len(names) == 82
+                    assert "negotiate_incoming_trade" in names
+                    negotiation = next(tool.inputSchema for tool in tools if tool.name == "negotiate_incoming_trade")
+                    assert negotiation["required"] == ["other_player_id", "expected_fingerprint"]
+                    assert negotiation["properties"]["mode"]["default"] == "inspect"
+                    unavailable = await session.call_tool("negotiate_incoming_trade", {"other_player_id": 1, "expected_fingerprint": "unverified"})
+                    assert not unavailable.isError and "unknown" in unavailable.content[0].text.lower()
                     assert "get_turn_status" in names
                     status_tool = next(tool for tool in tools if tool.name == "get_turn_status")
                     assert status_tool.annotations.readOnlyHint is True
@@ -1632,7 +1645,7 @@ class TestMcpProtocol:
         assert 'TURN_STATE|' in conn.read_queries[0]
         assert conn.read_queries[1] == 'print(42)'
         entries = [json.loads(line) for line in log_path.read_text().splitlines()]
-        assert [entry["tool"] for entry in entries] == ["get_turn_status", "save_game", "run_lua", "unit_action"]
+        assert [entry["tool"] for entry in entries] == ["negotiate_incoming_trade", "get_turn_status", "save_game", "run_lua", "unit_action"]
         assert all("success" not in entry for entry in entries)
 
 
@@ -1905,3 +1918,22 @@ def test_world_mismatch_keeps_mcp_gameplay_and_save_gates_closed(tool, args):
     result = run(getattr(server, tool)(ctx, *args))
     assert "OUTCOME_UNKNOWN" in result or "End-turn outcome is pending" in result
     assert gs.turn_pending and len(conn.requests) == 1
+
+
+def test_incoming_negotiation_dispatches_during_normal_pending_turn():
+    ctx = make_ctx()
+    gs = app_of(ctx).game
+    gs._pending_end_turn = True
+    result = run(server.negotiate_incoming_trade(ctx, 2, "quote", their_gold=100))
+    assert result == "<negotiate_incoming_trade>"
+    assert ("negotiate_incoming_trade", (2, "quote"), {"our_gold": None, "their_gold": 100, "our_gpt": None, "their_gpt": None, "mode": "inspect"}) in gs.calls
+
+
+@pytest.mark.parametrize("pending", ["_pending_save", "_pending_load"])
+def test_incoming_negotiation_does_not_bypass_save_or_replacement(pending):
+    ctx = make_ctx()
+    gs = app_of(ctx).game
+    setattr(gs, pending, True)
+    result = run(server.negotiate_incoming_trade(ctx, 2, "quote", their_gold=100))
+    assert "OUTCOME_UNKNOWN" in result
+    assert not gs.calls

@@ -829,12 +829,28 @@ def build_respond_to_deal(other_player_id: int, accept: bool) -> str:
     """Submit only against a verified current incoming deal/demand for this target."""
     action = "DealProposalAction.ACCEPTED" if accept else "DealProposalAction.REJECTED"
     verb = "ACCEPTED" if accept else "REJECTED"
+    guard = ""
+    if accept:
+        from civ_mcp.lua.trade import _fingerprint
+        guard = _fingerprint() + """
+local acceptable = pcall(function()
+    local outgoing = DealManager.GetWorkingDeal(DealDirection.OUTGOING, me, target)
+    local incoming = DealManager.GetWorkingDeal(DealDirection.INCOMING, me, target)
+    local control = ContextPtr:LookUpControl("/InGame/DiplomacyDealView/AcceptDeal")
+    if not control or control:IsHidden() ~= false or control:IsDisabled() ~= false then error("NATIVE_ACCEPT_UNAVAILABLE") end
+    if DealManager.HasPendingDeal(me,target) ~= false or DealManager.AreWorkingDealsEqual(me,target) ~= true then error("UNEVALUATED_TERMS") end
+    local original,current = fingerprint(incoming),fingerprint(outgoing)
+    if not original or original ~= current then error("TERMS_CHANGED") end
+end)
+if not acceptable then print("ERR:NOT_ACCEPTABLE|Current terms are edited, rejected, pending or unknown; no final acceptance sent."); print("---END---"); return end
+"""
     return _LUA_DIPLOMACY_CONTEXT + f"""
 local target = {other_player_id}
 if context.status ~= "INCOMING" or context.other ~= target then
     {_bail_lua('"ERR:NO_CURRENT_PROPOSAL|" .. context.status .. "|" .. context.reason .. "|Target must match the verified current incoming view"')}
 end
 local sid = context.sessions[1].sid
+{guard}
 DealManager.SendWorkingDeal({action}, me, target)
 {_lua_close_diplo_session()}
 local name = Locale.Lookup(PlayerConfigurations[target]:GetCivilizationShortDescription())

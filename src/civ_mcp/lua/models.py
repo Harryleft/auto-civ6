@@ -129,6 +129,7 @@ class SpyInfo:
     current_mission: str = "none"  # active mission e.g. "COUNTERSPY", or "none"
     is_escaping: bool = False  # True if spy is caught and needs escape route
     status: str = "idle"  # "idle", "in_transit", "on_mission", "escaping"
+    escape_routes: list[str] = field(default_factory=list)  # Native legal choices only.
 
 
 @dataclass
@@ -694,6 +695,9 @@ class DiplomacyContext:
     sessions: list[DiplomacySession] = field(default_factory=list)
     deals: list[PendingDeal] = field(default_factory=list)
     outgoing_summary: str = ""
+    negotiation_fingerprint: str = ""
+    negotiation_phase: str = "UNKNOWN"
+    negotiation_summary: str = ""
 
 
 @dataclass

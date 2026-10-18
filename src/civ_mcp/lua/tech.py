@@ -91,8 +91,18 @@ pcall(function()
         table.insert(techPrereqs[row.Technology], row.PrereqTech)
     end
 end)
+local techEligibility = {}
 for tech in GameInfo.Technologies() do
-    if te:CanResearch(tech.Index) and not te:HasTech(tech.Index) then
+    if not te:HasTech(tech.Index) then
+        local checked, allowed = pcall(function() return te:CanResearch(tech.Index) end)
+        if not checked or type(allowed) ~= "boolean" then
+            print("ERR:ELIGIBILITY_UNKNOWN|" .. tech.TechnologyType)
+            print("{SENTINEL}")
+            return
+        end
+        techEligibility[tech.Index] = allowed
+    end
+    if techEligibility[tech.Index] == true then
         local cost = te:GetResearchCost(tech.Index)
         local progress = te:GetResearchProgress(tech.Index)
         local turns = te:GetTurnsToResearch(tech.Index)
@@ -142,18 +152,21 @@ for row in GameInfo.CivicPrereqs() do
 end
 local eraLookup = {}
 for e in GameInfo.Eras() do eraLookup[e.EraType] = e.Index end
+local civicEligibility = {}
 for civic in GameInfo.Civics() do
     if not cu:HasCivic(civic.Index) then
         local civicEra = eraLookup[civic.EraType] or 99
         if civicEra <= curEra + 2 then
-            local canProgress = true
-            if prereqs[civic.CivicType] then
-                for _, pType in ipairs(prereqs[civic.CivicType]) do
-                    local pEntry = GameInfo.Civics[pType]
-                    if pEntry and not cu:HasCivic(pEntry.Index) then canProgress = false; break end
-                end
+            -- CivicsTree/CivicsChooser use CanProgress for this game's tree.
+            -- Static CivicPrereqs do not describe randomized future branches.
+            local checked, canProgress = pcall(function() return cu:CanProgress(civic.Index) end)
+            if not checked or type(canProgress) ~= "boolean" then
+                print("ERR:ELIGIBILITY_UNKNOWN|" .. civic.CivicType)
+                print("{SENTINEL}")
+                return
             end
-            if canProgress then
+            civicEligibility[civic.Index] = canProgress
+            if canProgress == true then
                 local facts = readCivic(civic.Index)
                 local cost, pct2, turns2 = facts.cost, facts.pct, facts.turns
                 local boosted2 = cu:HasBoostBeenTriggered(civic.Index)
@@ -175,7 +188,7 @@ end
 -- Locked civics: within curEra + 2 only (skip far-future clutter)
 for civic in GameInfo.Civics() do
     local civicEra = eraLookup[civic.EraType] or 99
-    if not cu:HasCivic(civic.Index) and civicEra <= curEra + 2 then
+    if civicEligibility[civic.Index] == false and civicEra <= curEra + 2 then
         local missing = {}
         if prereqs[civic.CivicType] then
             for _, pType in ipairs(prereqs[civic.CivicType]) do
@@ -197,7 +210,7 @@ end
 -- Locked techs: within curEra + 2 only (skip far-future clutter)
 for tech in GameInfo.Technologies() do
     local techEra = eraLookup[tech.EraType] or 99
-    if not te:HasTech(tech.Index) and not te:CanResearch(tech.Index) and techEra <= curEra + 2 then
+    if techEligibility[tech.Index] == false and techEra <= curEra + 2 then
         local missing = {}
         if techPrereqs[tech.TechnologyType] then
             for _, pType in ipairs(techPrereqs[tech.TechnologyType]) do
@@ -220,6 +233,42 @@ print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
 
 
+def _build_selection_guard(name: str, gi_table: str) -> str:
+    """Re-read native facts immediately before either existing write path.
+
+    Static prerequisites cannot authorize a selection in the randomized tree.
+    A current unfinished target is already selected and needs no submission.
+    """
+    is_tech = gi_table == "Technologies"
+    player_method = "GetTechs" if is_tech else "GetCulture"
+    has_method = "HasTech" if is_tech else "HasCivic"
+    current_method = "GetResearchingTech" if is_tech else "GetProgressingCivic"
+    can_method = "CanResearch" if is_tech else "CanProgress"
+    return f"""
+local completedRead, completed = pcall(function() return Players[id]:{player_method}():{has_method}(idx) end)
+if not completedRead or type(completed) ~= "boolean" then
+    {_bail(f"ERR:ELIGIBILITY_UNKNOWN|Native completion unavailable for {name}")}
+end
+if completed then
+    {_bail(f"ERR:ALREADY_COMPLETED|{name} is already researched")}
+end
+local currentRead, current = pcall(function() return Players[id]:{player_method}():{current_method}() end)
+if not currentRead or type(current) ~= "number" or current < -1 or current % 1 ~= 0 then
+    {_bail(f"ERR:ELIGIBILITY_UNKNOWN|Native current target unavailable for {name}")}
+end
+if current == idx then
+    {_bail(f"OK:ALREADY_SELECTED|{name}")}
+end
+local checked, allowed = pcall(function() return Players[id]:{player_method}():{can_method}(idx) end)
+if not checked or type(allowed) ~= "boolean" then
+    {_bail(f"ERR:ELIGIBILITY_UNKNOWN|Native eligibility unavailable for {name}")}
+end
+if not allowed then
+    {_bail(f"ERR:NOT_ELIGIBLE|Native eligibility denied for {name}")}
+end
+"""
+
+
 def _build_set_ingame(
     name: str,
     gi_table: str,
@@ -231,8 +280,6 @@ def _build_set_ingame(
 ) -> str:
     """Shared builder for set_research / set_civic via InGame UI."""
     err_label = "TECH" if "Tech" in gi_table else "CIVIC"
-    has_method = "HasTech" if "Tech" in gi_table else "HasCivic"
-    player_method = "GetTechs" if "Tech" in gi_table else "GetCulture"
     return f"""
 local id = Game.GetLocalPlayer()
 local idx = nil
@@ -240,9 +287,7 @@ for row in GameInfo.{gi_table}() do
     if row.{type_field} == "{name}" then idx = row.Index; break end
 end
 if idx == nil then {_bail(f"ERR:{err_label}_NOT_FOUND|{name}")} end
-if Players[id]:{player_method}():{has_method}(idx) then
-    {_bail(f"ERR:ALREADY_COMPLETED|{name} is already researched")}
-end
+{_build_selection_guard(name, gi_table)}
 local params = {{}}
 params[PlayerOperations.{param}] = idx
 UI.RequestPlayerOperation(id, PlayerOperations.{operation}, params)
@@ -310,8 +355,6 @@ else
 end"""
     else:
         verify = f'\nprint("{ok_prefix}|{name}")'
-    has_method = "HasTech" if "Tech" in gi_table else "HasCivic"
-    completed_method = "GetTechs" if "Tech" in gi_table else "GetCulture"
     return f"""
 local id = Game.GetLocalPlayer()
 local idx = nil
@@ -319,9 +362,7 @@ for row in GameInfo.{gi_table}() do
     if row.{type_field} == "{name}" then idx = row.Index; break end
 end
 if idx == nil then {_bail(f"ERR:{err_label}_NOT_FOUND|{name}")} end
-if Players[id]:{completed_method}():{has_method}(idx) then
-    {_bail(f"ERR:ALREADY_COMPLETED|{name} is already researched")}
-end
+{_build_selection_guard(name, gi_table)}
 Players[id]:{player_method}():{setter}(idx){verify}
 print("{SENTINEL}")
 """
@@ -377,6 +418,8 @@ def parse_tech_civics_response(lines: list[str]) -> TechCivicStatus:
     locked_techs: list[LockedTech] = []
 
     for line in lines:
+        if line.startswith("ERR:"):
+            raise ValueError(line)
         if line.startswith("COMPLETED|"):
             parts = line.split("|")
             completed_tech_count = int(parts[1]) if len(parts) > 1 else 0

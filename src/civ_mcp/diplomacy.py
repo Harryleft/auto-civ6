@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import uuid
 import time
 from dataclasses import dataclass
@@ -20,11 +21,12 @@ class DiplomacyProgress:
         self.observer_ready = False
         self.observer_scope: str | None = None
         self.trade = None
+        self.incoming = None
         self.response: tuple[str, int, int, int] | None = None
 
     @property
     def pending(self) -> bool:
-        return self.response is not None or self.trade is not None
+        return self.response is not None or self.trade is not None or self.incoming is not None
 
     def invalidate_scope(self) -> None:
         if self.pending:
@@ -63,7 +65,151 @@ class DiplomacyProgress:
         except (OSError, TimeoutError, LuaError, ValueError, IndexError):
             return None, None
 
+    @staticmethod
+    def _incoming_world_allowed(gs, rows: list[str]) -> bool:
+        worlds = [row.split("|", 1)[1] for row in rows if row.startswith("INCOMING_WORLD|")]
+        # Hand each witnessed world to the turn owner before another await.
+        allowed = [gs.allows_incoming_trade_world(world) for world in worlds]
+        return len(worlds) == 1 and all(allowed)
+
+    async def incoming_quote(self, conn, sid: int, target: int, *, gs=None) -> dict | None:
+        if self.scope_invalid or not await self.ensure_observer(conn):
+            return None
+        try:
+            rows = await _named(conn, "DiplomacyDealView", native.build_incoming_quote(self.observer_scope, target, sid))
+            if gs is not None and not self._incoming_world_allowed(gs, rows):
+                return None
+            data = {}
+            for name in ("SCOPE", "SESSION", "PHASE", "ORIGINAL", "CURRENT"):
+                values = [row.split("|", 1)[1] for row in rows if row.startswith("INCOMING_" + name + "|")]
+                if len(values) != 1:
+                    return None
+                data[name.lower()] = values[0]
+            if data["scope"] != self.observer_scope or data["session"] != f"{sid}|{target}":
+                return None
+            data["fingerprint"] = hashlib.sha256("\n".join(rows).encode()).hexdigest()
+            return data
+        except (OSError, TimeoutError, LuaError):
+            return None
+
+    async def describe_incoming(self, conn, context) -> None:
+        if context.status != "INCOMING" or len(context.sessions) != 1:
+            return
+        session = context.sessions[0]
+        quote = await self.incoming_quote(conn, session.session_id, session.other_player_id)
+        if quote is None:
+            context.negotiation_summary = "Negotiation UNKNOWN; no current acceptance or counteroffer is authorized."
+            return
+        context.negotiation_fingerprint = quote["fingerprint"]
+        context.negotiation_phase = quote["phase"]
+        context.negotiation_summary = (
+            f"Negotiation {quote['phase']} — session {session.session_id}, player {session.other_player_id}\n"
+            f"fingerprint={quote['fingerprint']}\n"
+            f"incoming_terms={quote['original']}\ncurrent_terms={quote['current']}\n"
+            "Raw term fields: owner,type,value,subtype,amount,duration. Edited/evaluated terms are not a concluded deal. "
+            "Use negotiate_incoming_trade for explicit no-commit evaluation; final acceptance requires native ACCEPTABLE terms."
+        )
+
+    async def negotiate_incoming(self, gs, target: int, fingerprint: str, edits: dict, mode: str) -> str:
+        if self.scope_invalid:
+            return self.trade_summary()
+        if self.incoming is not None:
+            if target != self.incoming.target:
+                return self.trade_summary()
+            return await self.confirm_incoming(gs)
+        if self.trade is not None or self.response is not None or gs.save_pending or gs.replacement_pending or gs.pending_action_summary or gs._diplomacy_cleanup.pending:
+            return "ERR:NOT_SUBMITTED|Another action, save, replacement or diplomacy attempt is pending."
+        if mode not in ("inspect", "equalize") or not isinstance(fingerprint, str) or not fingerprint:
+            return "ERR:NOT_SUBMITTED|A current fingerprint and inspect/equalize mode are required."
+        if any(type(value) is not int or value < 1 or value > 2147483647 for value in edits.values()):
+            return "ERR:NOT_SUBMITTED|Gold amounts must be positive integers."
+        context = await gs.get_pending_deals()
+        if context.status != "INCOMING" or len(context.sessions) != 1 or context.sessions[0].other_player_id != target:
+            return "ERR:NOT_SUBMITTED|No verified current incoming negotiation for this target."
+        sid = context.sessions[0].session_id
+        quote = await self.incoming_quote(gs.conn, sid, target)
+        if quote is None or quote["fingerprint"] != fingerprint:
+            return "ERR:NOT_SUBMITTED|Quote changed or is unknown; read current incoming terms again."
+        if not gs.allows_incoming_trade_world(quote["scope"]):
+            return "ERR:NOT_SUBMITTED|Pending end-turn world is changed or unbound; no incoming evaluation submitted."
+        attempt = IncomingAttempt(uuid.uuid4().hex, target, sid, quote["scope"], mode.upper())
+        self.incoming = attempt
+        try:
+            armed = await _named(gs.conn, "DiplomacyActionView", native.build_incoming_arm(self.nonce, attempt.token, target, sid, attempt.action))
+            if armed == ["INCOMING|NOT_ARMED"]:
+                self.incoming = None
+                return "ERR:NOT_SUBMITTED|Native session could not be armed."
+            if armed != ["INCOMING|ARMED"]:
+                return self.trade_summary()
+            if not gs.allows_incoming_trade_world(attempt.scope):
+                return self.trade_summary()
+            rows = await _named(gs.conn, "DiplomacyDealView", native.build_incoming_send(attempt.scope, target, sid, attempt.token, quote["original"], quote["current"], quote["phase"], edits, attempt.action))
+            if not self._incoming_world_allowed(gs, rows):
+                return self.trade_summary()
+            if any(row.startswith("INCOMING|NOT_SUBMITTED|") for row in rows) or "INCOMING|NOT_READY" in rows:
+                finished = await _named(gs.conn, "DiplomacyActionView", native.build_incoming_finish(self.nonce, attempt.token, zero=True))
+                if finished == ["INCOMING_FINISH|CONFIRMED"]:
+                    self.incoming = None
+                    return "ERR:NOT_SUBMITTED|Native guard rejected the unchanged quote/amount; no evaluation sent. " + " ".join(rows)
+        except (OSError, TimeoutError, LuaError):
+            return self.trade_summary()
+        return await self.confirm_incoming(gs)
+
+    async def confirm_incoming(self, gs) -> str:
+        attempt = self.incoming
+        if attempt is None or self.scope_invalid or not gs.allows_incoming_trade_world(attempt.scope):
+            return self.trade_summary()
+        try:
+            async with asyncio.timeout(TRADE_CONFIRM_SECONDS):
+                while True:
+                    receipt = await _named(gs.conn, "DiplomacyDealView", native.build_incoming_receipt(attempt.scope, attempt.target, attempt.sid, attempt.token))
+                    if not self._incoming_world_allowed(gs, receipt):
+                        return self.trade_summary()
+                    proposals = [row.split("|", 1)[1] for row in receipt if row.startswith("INCOMING_PROPOSAL|")]
+                    if "INCOMING_RECEIPT|SENT" not in receipt or len(proposals) != 1:
+                        return self.trade_summary()
+                    rows = await _named(gs.conn, "DiplomacyActionView", native.build_trade_response(self.nonce, attempt.token))
+                    headers = [row.split("|") for row in rows if row.startswith("TRADE_RESPONSE|KNOWN|")]
+                    signatures = [row.split("|", 1)[1] for row in rows if row.startswith("TRADE_COUNTER|")]
+                    if len(headers) != 1 or len(signatures) != 1:
+                        await asyncio.sleep(TRADE_POLL_SECONDS)
+                        continue
+                    action, subtype = headers[0][2:4]
+                    quote = await self.incoming_quote(gs.conn, attempt.sid, attempt.target, gs=gs)
+                    if (quote is None or not gs.allows_incoming_trade_world(quote["scope"])
+                            or quote["original"] != signatures[0] or quote["current"] != signatures[0]):
+                        return self.trade_summary()
+                    if action in ("REJECTED", "EQUALIZE_FAILED") or subtype == "AI_REFUSE_DEAL":
+                        outcome = "REJECTED"
+                    elif signatures[0] != proposals[0] and action in ("ACCEPTED", "PROPOSED", "ADJUSTED") and quote["phase"] == "ACCEPTABLE":
+                        outcome = "COUNTER_OFFER"
+                    elif (action in ("ACCEPTED", "PROPOSED", "ADJUSTED") and quote["phase"] == "ACCEPTABLE"
+                          and (subtype == "AI_ACCEPT_DEAL" or attempt.action == "EQUALIZE")):
+                        # Official MakeDeal_ApplyStatement updates an evaluation
+                        # from DealAction even with subtype NONE. Equalize may
+                        # return the exact proposed terms, so no changed counter
+                        # or conversational AI_ACCEPT_DEAL subtype is required.
+                        outcome = "WILLING"
+                    else:
+                        return self.trade_summary()
+                    finished = await _named(gs.conn, "DiplomacyActionView", native.build_incoming_finish(self.nonce, attempt.token))
+                    if finished != ["INCOMING_FINISH|CONFIRMED"]:
+                        return self.trade_summary()
+                    self.incoming = None
+                    parsed = lq.parse_test_trade_response(rows)
+                    parsed.rejected = outcome == "REJECTED"
+                    if outcome == "WILLING":
+                        # Equal native fingerprints certify these are our exact
+                        # evaluated terms, rather than a distinct fair counter.
+                        parsed.proposed = list(parsed.counter)
+                    report = narrate_test_trade(parsed, include_guidance=False, preview=True)
+                    return f"{outcome}|Native {attempt.action} evaluation; deal not concluded.\n" + report + f"\nfingerprint={quote['fingerprint']}\nUse a fresh query for another explicit offer or final response."
+        except (OSError, TimeoutError, LuaError, ValueError, IndexError):
+            return self.trade_summary()
+
     async def respond(self, conn, sid: int, target: int, response: str) -> str:
+        if self.incoming is not None:
+            return self.trade_summary()
         if self.scope_invalid:
             return "ERR:OUTCOME_UNKNOWN|Diplomacy belongs to a changed world; explicit recovery required."
         if self.response is not None:
@@ -104,6 +250,8 @@ class DiplomacyProgress:
     def trade_summary(self) -> str:
         if self.scope_invalid:
             return "ERR:OUTCOME_UNKNOWN|Diplomacy world changed; explicit protected recovery required."
+        if self.incoming is not None:
+            return f"ERR:OUTCOME_UNKNOWN|Incoming {self.incoming.action} with player {self.incoming.target} is pending; repeat negotiate_incoming_trade only confirms, never resends."
         if self.trade is not None:
             return (f"ERR:OUTCOME_UNKNOWN|Trade attempt {self.trade.phase} with player {self.trade.target} is pending. "
                     "Repeat the original trade tool only to confirm; no RequestSession, proposal or response will be resent.")
@@ -111,7 +259,7 @@ class DiplomacyProgress:
 
     async def diagnostics(self, conn) -> str:
         """Read the existing observer only; never install, advance, or retire it."""
-        attempt = self.trade
+        attempt = self.incoming or self.trade
         if attempt is None:
             return ""
         if self.scope_invalid or self.observer_scope is None:
@@ -120,12 +268,31 @@ class DiplomacyProgress:
             rows = await conn.execute_in_named_state("DiplomacyActionView", native.build_trade_diagnostics(self.nonce, self.observer_scope, attempt.token, attempt.sid))
             facts = [row.split("|", 1)[1] for row in rows if row.startswith("DIPLO_DIAGNOSTIC|")]
             if facts:
+                if self.incoming is not None:
+                    try:
+                        receipt = await _named(conn, "DiplomacyDealView", native.build_incoming_receipt(
+                            attempt.scope, attempt.target, attempt.sid, attempt.token))
+                        facts.append("incoming_evaluation_receipt: diagnostic_only=true " + " ".join(receipt))
+                    except (OSError, TimeoutError, LuaError):
+                        facts.append("incoming_evaluation_receipt: UNKNOWN reason=READ_FAILED diagnostic_only=true")
                 return "\n".join(facts)
         except (OSError, TimeoutError, LuaError):
             return "diplomacy_observation: UNKNOWN reason=READ_FAILED"
         return "diplomacy_observation: UNKNOWN reason=NO_DIAGNOSTIC_RECEIPT"
 
     async def run_trade(self, gs, target: int, offer: list[dict], request: list[dict], *, preview: bool) -> str:
+        # A retained receipt belongs only to the prepared request. Check before
+        # any confirmation/cleanup can turn its result into a new call's reply.
+        if self.trade is not None and (
+            target != self.trade.target or preview != self.trade.preview
+            or offer != self.trade.offer or request != self.trade.request
+        ):
+            mode = "test_trade" if self.trade.preview else "propose_trade"
+            return (f"ERR:PENDING_TRADE_MISMATCH|Existing trade with player {self.trade.target}, mode={mode}, "
+                    f"phase={self.trade.phase}; new request not submitted. "
+                    "Repeat the original target, mode, offer and request to confirm.")
+        if self.incoming is not None:
+            return self.trade_summary()
         if self.scope_invalid:
             return self.trade_summary()
         if self.response is not None:
@@ -296,6 +463,8 @@ class DiplomacyProgress:
         return await self.resume_trade(gs)
 
     async def respond_counter(self, gs, target: int, accept: bool) -> str | None:
+        if self.incoming is not None:
+            return self.trade_summary()
         attempt = self.trade
         if attempt is None:
             return None
@@ -320,6 +489,15 @@ class DiplomacyProgress:
         signatures = [row.split("|", 1)[1] for row in rows if row.startswith("TRADE_COUNTER|")]
         return attempt.result if signatures == [attempt.counter] else ""
 
+
+
+@dataclass
+class IncomingAttempt:
+    token: str
+    target: int
+    sid: int
+    scope: str
+    action: str
 
 
 @dataclass

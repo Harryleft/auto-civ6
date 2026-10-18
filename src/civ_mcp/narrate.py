@@ -157,13 +157,15 @@ def narrate_spies(spies: list[lq.SpyInfo]) -> str:
         mission_tag = (
             f" | mission: {s.current_mission}" if s.current_mission != "none" else ""
         )
-        escape_tag = " ** [ESCAPING — needs escape route] **" if s.is_escaping else ""
+        escape_tag = (" ** [ESCAPING — needs escape route] ** routes: " + (", ".join(s.escape_routes) or "UNKNOWN")) if s.is_escaping else ""
         lines.append(
             f"  id:{s.unit_id} [{rank_name}] {s.name} — at {loc} | moves:{s.moves}"
             f" | xp:{s.xp}{mission_tag} | ops: {ops}{escape_tag}"
         )
     lines.append("")
     lines.append("Actions:")
+    if any(s.is_escaping for s in spies):
+        lines.append("  Escape: spy_action(unit_id, action='escape:<listed district>', target_x=0, target_y=0) — choose one legal route; route selection does not confirm completed travel.")
     lines.append(
         "  Travel: spy_action(unit_id, action='travel', target_x, target_y)"
         " — send spy to own city or city-state"
@@ -864,6 +866,8 @@ def narrate_diplomacy_sessions(context: lq.DiplomacyContext) -> str:
     if context.status == "NONE":
         return "No pending diplomacy sessions."
     lines = [f"Diplomacy context {context.status}: {len(sessions)} pending session(s):"]
+    if context.negotiation_summary:
+        lines.append(context.negotiation_summary)
     for s in sessions:
         lines.append(
             f"  {s.other_civ_name} ({s.other_leader_name}) — "
@@ -877,9 +881,12 @@ def narrate_diplomacy_sessions(context: lq.DiplomacyContext) -> str:
             lines.append(f"  Buttons: {s.buttons}")
         # Phase-appropriate guidance
         if s.deal_summary:
-            lines.append(f"  Deal: {s.deal_summary}")
+            summary = s.deal_summary
+            if context.negotiation_summary and context.negotiation_phase != "ACCEPTABLE":
+                summary = summary.replace("They offer:", "Native incoming items from them:").replace("You offer:", "Native incoming items from us:")
+            lines.append(f"  Deal: {summary}")
             lines.append(
-                f"  Current incoming deal or demand — use respond_to_trade(other_player_id={s.other_player_id}, accept=True/False)"
+                f"  Current incoming deal or demand; inspect negotiation eligibility before respond_to_trade(other_player_id={s.other_player_id}, accept=True/False)"
             )
         elif getattr(s, "choice_status", "UNKNOWN") == "KNOWN":
             choices = ", ".join(key.removeprefix("CHOICE_") for key in s.choice_keys)
@@ -1008,6 +1015,8 @@ def narrate_pending_deals(context: lq.DiplomacyContext) -> str:
         return "No pending trade deals (NONE: no open diplomacy session)."
     deals = context.deals
     lines = [f"Current INCOMING deal or demand: {len(deals)} proposal(s):"]
+    if context.negotiation_summary:
+        lines.append(context.negotiation_summary)
     for d in deals:
         lines.append(
             f"\n  From: {d.other_player_name} ({d.other_leader_name}) [player {d.other_player_id}]"
@@ -1028,7 +1037,7 @@ def narrate_pending_deals(context: lq.DiplomacyContext) -> str:
                 dur = f" for {item.duration} turns" if item.duration > 0 else ""
                 lines.append(f"    = {item.name}{dur}")
         if their_only:
-            lines.append("  They offer:")
+            lines.append("  Native incoming items from them:" if context.negotiation_summary and context.negotiation_phase != "ACCEPTABLE" else "  They offer:")
             for item in their_only:
                 dur = f" for {item.duration} turns" if item.duration > 0 else ""
                 amt = (
@@ -1038,7 +1047,7 @@ def narrate_pending_deals(context: lq.DiplomacyContext) -> str:
                 )
                 lines.append(f"    + {item.name}{amt}{dur}")
         if our_only:
-            lines.append("  They want:")
+            lines.append("  Native incoming items from us:" if context.negotiation_summary and context.negotiation_phase != "ACCEPTABLE" else "  They want:")
             for item in our_only:
                 dur = f" for {item.duration} turns" if item.duration > 0 else ""
                 amt = (
@@ -1048,7 +1057,7 @@ def narrate_pending_deals(context: lq.DiplomacyContext) -> str:
                 )
                 lines.append(f"    - {item.name}{amt}{dur}")
         lines.append(
-            f"  -> respond_to_trade(other_player_id={d.other_player_id}, accept=True/False)"
+            f"  -> Inspect native negotiation eligibility before respond_to_trade(other_player_id={d.other_player_id}, accept=True/False)"
         )
     return "\n".join(lines)
 
@@ -1109,17 +1118,21 @@ def _describe_trade_item(item: lq.TestTradeItem) -> str:
             return f"{item.amount} gold/turn ({item.duration} turns)"
         return f"{item.amount} gold"
     elif item.item_type == "RESOURCE":
-        name = item.value_id.replace("RESOURCE_", "").replace("_", " ").title()
+        name = (f"Resource (id={item.value_id})" if item.value_id.lstrip("-").isdigit()
+                else item.value_id.replace("RESOURCE_", "").replace("_", " ").title())
         dur = f" ({item.duration} turns)" if item.duration > 0 else ""
         amt = f" x{item.amount}" if item.amount > 1 else ""
         return f"{name}{amt}{dur}"
     elif item.item_type == "AGREEMENT":
-        sub = item.subtype_id.replace("DIPLOACTION_", "").replace("_", " ").title()
-        return sub
+        if item.subtype_id.lstrip("-").isdigit():
+            return f"Agreement (subtype={item.subtype_id}, value={item.value_id})"
+        return item.subtype_id.replace("DIPLOACTION_", "").replace("_", " ").title()
     elif item.item_type == "FAVOR":
         return f"{item.amount} diplomatic favor"
     elif item.item_type == "CITY":
         return f"City (id={item.value_id})"
+    elif item.item_type == "GREAT_WORK":
+        return f"Great Work (id={item.value_id or 'UNKNOWN'})"
     return f"{item.item_type} ({item.amount})"
 
 
@@ -1143,7 +1156,7 @@ def narrate_test_trade(result: lq.TestTradeResult, *, preview: bool = True, incl
         )
 
     if result.rejected:
-        lines.append("\nAI response: REJECTED — will not trade at all")
+        lines.append("\nAI response: REJECTED — these terms were not accepted")
     else:
         our_counter = [i for i in result.counter if i.side == "US"]
         their_counter = [i for i in result.counter if i.side == "THEM"]
