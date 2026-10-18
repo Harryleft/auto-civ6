@@ -12,6 +12,7 @@
 | 领域准备、查询、完整存档替换 | `game_state.py`；通过真实 GameState／MCP 入口验证。 |
 | 动作锁存、单次提交、回应与证据确认 | `actions.py` 的 ActionLifecycle；各动作保留自身原生见证。 |
 | 推进请求、起始回合和差分基线 | `end_turn.py` 的 TurnProgress；报告读取失败不改变已确认推进。 |
+| 当前外交语句、回应及交易阶段 | `diplomacy.py`、`lua/trade.py`；通过 GameState／MCP 与延迟原生事件验证，未知不重发。 |
 | 原生菜单、文件事实、进程控制 | `game_lifecycle.py`、`game_launcher.py`；转换和进程结果用事实控制，不匹配展示文案。 |
 | 检查点身份、指纹和测试轮次 | `checkpoints.py`；使用临时目录，保留文件与轮次约束。 |
 | 游戏领域 Lua 构造与解析 | `lua/`；议会阶段与提案资格共用解释，纯查询不产生游戏操作。 |
