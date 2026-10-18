@@ -118,6 +118,9 @@ def incoming(conn):
 controls["/InGame/DiplomacyDealView"].hidden=false
 controls["/InGame/DiplomacyActionView/ConversationContainer"].hidden=true
 controls["/InGame/DiplomacyDealView/LeaderResponseText"].text="Current demand"
+controls["/InGame/DiplomacyDealView/AcceptDeal"]={IsHidden=function() return false end,IsDisabled=function() return false end}
+DealManager.HasPendingDeal=function() return false end
+DealManager.AreWorkingDealsEqual=function() return true end
 ''')
 
 

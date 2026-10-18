@@ -864,6 +864,8 @@ def narrate_diplomacy_sessions(context: lq.DiplomacyContext) -> str:
     if context.status == "NONE":
         return "No pending diplomacy sessions."
     lines = [f"Diplomacy context {context.status}: {len(sessions)} pending session(s):"]
+    if context.negotiation_summary:
+        lines.append(context.negotiation_summary)
     for s in sessions:
         lines.append(
             f"  {s.other_civ_name} ({s.other_leader_name}) — "
@@ -877,9 +879,12 @@ def narrate_diplomacy_sessions(context: lq.DiplomacyContext) -> str:
             lines.append(f"  Buttons: {s.buttons}")
         # Phase-appropriate guidance
         if s.deal_summary:
-            lines.append(f"  Deal: {s.deal_summary}")
+            summary = s.deal_summary
+            if context.negotiation_summary and context.negotiation_phase != "ACCEPTABLE":
+                summary = summary.replace("They offer:", "Native incoming items from them:").replace("You offer:", "Native incoming items from us:")
+            lines.append(f"  Deal: {summary}")
             lines.append(
-                f"  Current incoming deal or demand — use respond_to_trade(other_player_id={s.other_player_id}, accept=True/False)"
+                f"  Current incoming deal or demand; inspect negotiation eligibility before respond_to_trade(other_player_id={s.other_player_id}, accept=True/False)"
             )
         elif getattr(s, "choice_status", "UNKNOWN") == "KNOWN":
             choices = ", ".join(key.removeprefix("CHOICE_") for key in s.choice_keys)
@@ -1008,6 +1013,8 @@ def narrate_pending_deals(context: lq.DiplomacyContext) -> str:
         return "No pending trade deals (NONE: no open diplomacy session)."
     deals = context.deals
     lines = [f"Current INCOMING deal or demand: {len(deals)} proposal(s):"]
+    if context.negotiation_summary:
+        lines.append(context.negotiation_summary)
     for d in deals:
         lines.append(
             f"\n  From: {d.other_player_name} ({d.other_leader_name}) [player {d.other_player_id}]"
@@ -1028,7 +1035,7 @@ def narrate_pending_deals(context: lq.DiplomacyContext) -> str:
                 dur = f" for {item.duration} turns" if item.duration > 0 else ""
                 lines.append(f"    = {item.name}{dur}")
         if their_only:
-            lines.append("  They offer:")
+            lines.append("  Native incoming items from them:" if context.negotiation_summary and context.negotiation_phase != "ACCEPTABLE" else "  They offer:")
             for item in their_only:
                 dur = f" for {item.duration} turns" if item.duration > 0 else ""
                 amt = (
@@ -1038,7 +1045,7 @@ def narrate_pending_deals(context: lq.DiplomacyContext) -> str:
                 )
                 lines.append(f"    + {item.name}{amt}{dur}")
         if our_only:
-            lines.append("  They want:")
+            lines.append("  Native incoming items from us:" if context.negotiation_summary and context.negotiation_phase != "ACCEPTABLE" else "  They want:")
             for item in our_only:
                 dur = f" for {item.duration} turns" if item.duration > 0 else ""
                 amt = (
@@ -1048,7 +1055,7 @@ def narrate_pending_deals(context: lq.DiplomacyContext) -> str:
                 )
                 lines.append(f"    - {item.name}{amt}{dur}")
         lines.append(
-            f"  -> respond_to_trade(other_player_id={d.other_player_id}, accept=True/False)"
+            f"  -> Inspect native negotiation eligibility before respond_to_trade(other_player_id={d.other_player_id}, accept=True/False)"
         )
     return "\n".join(lines)
 
