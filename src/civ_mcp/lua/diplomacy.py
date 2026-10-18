@@ -967,7 +967,7 @@ if sid and sid >= 0 then
     else
         result = "REJECTED"
     end
-    {_lua_close_diplo_session()}
+    -- Native session events own acceptance/closure; UI cleanup must not respond NEGATIVE.
 end
 print("OK:" .. result .. "|Trade " .. result:lower() .. " with " .. name .. termsStr)
 print("{SENTINEL}")

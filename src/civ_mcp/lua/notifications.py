@@ -43,12 +43,45 @@ print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
 
 
-def build_end_turn() -> str:
+def build_end_turn(expected_turn: int | None = None) -> str:
+    """Final native guard and submission share one InGame block.
+
+    NOT_SUBMITTED is emitted only before RequestAction. Errors/response loss
+    after entry remain unknown; no native unready action is ever requested.
+    """
+    expected = "Game.GetCurrentGameTurn()" if expected_turn is None else str(int(expected_turn))
     return """
+local expected = EXPECTED_TURN
+local me = Game.GetLocalPlayer()
+local p = Players[me]
+local function stop(reason)
+    print("END_TURN|NOT_SUBMITTED|" .. reason)
+end
+local ok, reason = pcall(function()
+    if Game.GetCurrentGameTurn() ~= expected then return "TURN_CHANGED" end
+    if not p or p:IsTurnActive() ~= true or p:IsTurnActiveComplete() ~= true then return "NOT_READY" end
+    local processing, sent, unready, allowed = UI.IsProcessingMessages(), UI.HasSentTurnComplete(), p:CanUnreadyTurn(), UI.CanEndTurn()
+    if type(processing) ~= "boolean" or type(sent) ~= "boolean" or type(unready) ~= "boolean" or type(allowed) ~= "boolean" then return "UNKNOWN" end
+    if sent or unready then return "ALREADY_SENT" end
+    if processing then return "UI_PROCESSING" end
+    local blocker = NotificationManager.GetFirstEndTurnBlocking(me)
+    if blocker == nil or EndTurnBlockingTypes.NO_ENDTURN_BLOCKING == nil then return "UNKNOWN" end
+    if blocker ~= EndTurnBlockingTypes.NO_ENDTURN_BLOCKING then return "BLOCKED" end
+    if not allowed then return "CANNOT_END_TURN" end
+    local mode = UI.GetInterfaceMode()
+    if type(mode) ~= "number" or type(InterfaceModeTypes.SELECTION) ~= "number" then return "UNKNOWN" end
+    return nil
+end)
+if not ok then stop("UNKNOWN"); return end
+if reason then stop(reason); return end
+-- Match ActionPanel.DoEndTurn's mode recovery only after every guard passes.
+if UI.GetInterfaceMode() ~= InterfaceModeTypes.SELECTION then
+    UI.SetInterfaceMode(InterfaceModeTypes.SELECTION)
+end
 UI.RequestAction(ActionTypes.ACTION_ENDTURN)
-print("OK:TURN_ENDED")
+print("END_TURN|SUBMITTED")
 print("{SENTINEL}")
-""".replace("{SENTINEL}", SENTINEL)
+""".replace("EXPECTED_TURN", expected).replace("{SENTINEL}", SENTINEL)
 
 
 def build_notifications_query() -> str:
