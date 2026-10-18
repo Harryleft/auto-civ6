@@ -8,6 +8,87 @@ from civ_mcp import narrate
 run = asyncio.run
 
 
+@pytest.mark.parametrize("reply_error", [OSError, asyncio.CancelledError])
+@pytest.mark.parametrize("reply_stage", ["send", "finish"])
+def test_restored_zero_submission_can_be_confirmed_after_reply_loss(reply_error, reply_stage):
+    conn = IncomingConn()
+    conn.setup('''
+local original=DealManager.GetWorkingDeal
+DealManager.GetWorkingDeal=function(...)
+ local deal=original(...)
+ deal.Validate=function() return working_outgoing[4]:GetAmount()==3 and 0 or -1 end
+ return deal
+end
+''')
+    state = GameState(conn)
+    quote = run(state.get_pending_deals())
+    execute = conn.execute_in_named_state
+
+    async def lose_zero_reply(name, source, timeout=5):
+        rows = await execute(name, source, timeout)
+        expected = "INCOMING|NOT_SUBMITTED|INVALID_TERMS" if reply_stage == "send" else "INCOMING_FINISH|CONFIRMED"
+        if expected in rows:
+            conn.execute_in_named_state = execute
+            raise reply_error()
+        return rows
+
+    conn.execute_in_named_state = lose_zero_reply
+    if reply_error is asyncio.CancelledError:
+        with pytest.raises(asyncio.CancelledError):
+            run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint, their_gold=100))
+    else:
+        assert "UNKNOWN" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint, their_gold=100))
+    assert state.diplomacy_pending
+    result = run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint, their_gold=200))
+    assert result.startswith("ERR:NOT_SUBMITTED|")
+    assert not state.diplomacy_pending
+    assert run(state.get_pending_deals()).negotiation_fingerprint == quote.negotiation_fingerprint
+    assert not list(conn.lua.globals().sent_actions.values())
+
+
+@pytest.mark.parametrize("missing_evidence", [
+    "__civmcp_incoming=nil",
+    '__civmcp_incoming.token="another-attempt"',
+    "__civmcp_incoming.sid=72",
+    "__civmcp_incoming.target=2",
+    "__civmcp_incoming.zero=nil",
+    "__civmcp_incoming.sent=true",
+    '__civmcp_diplomacy.nonce="another-observer"',
+    "__civmcp_diplomacy.trade.response={}",
+    'GameConfiguration.GetValue=function() return 99 end',
+])
+def test_zero_submission_missing_receipt_or_finish_evidence_keeps_gate(missing_evidence):
+    conn = IncomingConn()
+    conn.setup('''
+local original=DealManager.GetWorkingDeal
+DealManager.GetWorkingDeal=function(...)
+ local deal=original(...)
+ deal.Validate=function() return working_outgoing[4]:GetAmount()==3 and 0 or -1 end
+ return deal
+end
+''')
+    state = GameState(conn)
+    quote = run(state.get_pending_deals())
+    execute = conn.execute_in_named_state
+
+    async def lose_zero_reply(name, source, timeout=5):
+        rows = await execute(name, source, timeout)
+        if "INCOMING|NOT_SUBMITTED|INVALID_TERMS" in rows:
+            raise OSError("zero reply lost")
+        return rows
+
+    conn.execute_in_named_state = lose_zero_reply
+    assert "UNKNOWN" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint, their_gold=100))
+    conn.setup(missing_evidence)
+    assert "UNKNOWN" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint, their_gold=200))
+    assert state.diplomacy_pending
+    conn.setup('GameConfiguration.GetValue=function() return 7 end')
+    assert "UNKNOWN" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint))
+    assert state.diplomacy_pending
+    assert "UNKNOWN" in run(state.save_game("offline_should_not_save"))
+    assert not list(conn.lua.globals().sent_actions.values())
+
+
 class IncomingConn(TradeConn):
     def __init__(self):
         super().__init__()
@@ -199,6 +280,70 @@ def test_world_changes_after_submission_preserve_unknown_gate(quick_trade):
     conn.deliver_events = True
     assert "UNKNOWN" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint))
     assert state.diplomacy_pending
+    assert list(conn.lua.globals().sent_actions.values()) == [9]
+
+
+def test_incoming_world_mismatch_stays_invalid_when_original_world_returns(quick_trade):
+    conn = IncomingConn()
+    state = GameState(conn)
+    quote = run(state.get_pending_deals())
+    conn.deliver_events = False
+    assert "UNKNOWN" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint, their_gold=100))
+    assert not state.turn_pending
+    conn.setup('GameConfiguration.GetValue=function() return 99 end')
+    assert "UNKNOWN" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint))
+    conn.setup('GameConfiguration.GetValue=function() return 7 end')
+    conn.deliver_events = True
+    assert "UNKNOWN" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint))
+    assert state.diplomacy_pending and not state.turn_pending
+    assert list(conn.lua.globals().sent_actions.values()) == [9]
+
+
+@pytest.mark.parametrize("boundary", ["send", "quote"])
+def test_world_change_at_send_or_final_quote_is_latched_without_pending_turn(boundary, quick_trade):
+    conn = IncomingConn()
+    state = GameState(conn)
+    quote = run(state.get_pending_deals())
+    execute = conn.execute_in_named_state
+    sent = False
+
+    async def switch_world(name, source, timeout=5):
+        nonlocal sent
+        if ((boundary == "send" and "local changes=" in source)
+                or (boundary == "quote" and sent and 'print("INCOMING_SCOPE|"' in source)):
+            conn.setup('GameConfiguration.GetValue=function() return 99 end')
+        rows = await execute(name, source, timeout)
+        sent = sent or "INCOMING|SENT" in rows
+        return rows
+
+    conn.execute_in_named_state = switch_world
+    assert "UNKNOWN" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint, their_gold=100))
+    conn.execute_in_named_state = execute
+    conn.setup('GameConfiguration.GetValue=function() return 7 end')
+    assert "UNKNOWN" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint))
+    assert state.diplomacy_pending and not state.turn_pending
+    assert list(conn.lua.globals().sent_actions.values()) == ([] if boundary == "send" else [9])
+
+
+@pytest.mark.parametrize("unknown_world", [
+    'GameConfiguration.GetValue=function() return nil end',
+    'GameConfiguration.GetValue=function() return 0.5 end',
+    'PlayerConfigurations[0].GetCivilizationTypeName=function() return "UNKNOWN" end',
+])
+def test_unknown_world_preserves_gate_but_does_not_latch_mismatch(unknown_world, quick_trade):
+    conn = IncomingConn()
+    state = GameState(conn)
+    quote = run(state.get_pending_deals())
+    conn.deliver_events = False
+    assert "UNKNOWN" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint, their_gold=100))
+    conn.setup(unknown_world)
+    assert "UNKNOWN" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint))
+    assert state.diplomacy_pending
+    conn.setup('''GameConfiguration.GetValue=function() return 7 end
+PlayerConfigurations[0].GetCivilizationTypeName=function() return "CIVILIZATION_SUMERIA" end''')
+    conn.deliver_events = True
+    assert "WILLING" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint))
+    assert not state.diplomacy_pending
     assert list(conn.lua.globals().sent_actions.values()) == [9]
 
 
