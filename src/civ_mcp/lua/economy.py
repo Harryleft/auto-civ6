@@ -173,15 +173,37 @@ print("{SENTINEL}")
 def build_trade_destinations_query(unit_index: int) -> str:
     """List valid trade route destinations with yields, quests, and pressure.
 
-    Tries CanStartOperation first.  If ALL destinations fail (capacity bug
-    from stale route counts), falls back to listing reachable cities directly.
+    Uses the native chooser's operation and path checks, restricted to
+    locally met owners and revealed city tiles. Never expands rejected routes.
     Enriches each destination with yield preview, religious pressure,
     city-state quest status, and trading post info.
     """
     return f"""
-{_lua_get_unit(unit_index)}
+local destRows = {{}}
+local function nativeBoolean(value)
+    if type(value) ~= "boolean" then error("Native boolean is unknown") end
+    return value
+end
+local function collectDestinations()
+local me = Game.GetLocalPlayer()
+local unit = UnitManager.GetUnit(me, {unit_index})
+if unit == nil then return "UNAVAILABLE", "Trader no longer exists" end
+local unitInfo = GameInfo.Units[unit:GetType()]
+if not unitInfo or not unitInfo.MakeTradeRoute then return "UNAVAILABLE", "Unit is not a trader" end
+local moves = unit:GetMovesRemaining()
+local activity = UnitManager.GetActivityType(unit)
+if type(moves) ~= "number" or type(activity) ~= "number" or type(ActivityTypes.ACTIVITY_AWAKE) ~= "number" then
+    error("Trader readiness is unknown")
+end
+if moves <= 0 or activity ~= ActivityTypes.ACTIVITY_AWAKE then
+    return "UNAVAILABLE", "Trader is not ready (no moves or active orders)"
+end
+local playerTrade = Players[me]:GetTrade()
+if playerTrade:GetNumOutgoingRoutes() >= playerTrade:GetOutgoingRouteCapacity() then
+    return "UNAVAILABLE", "Trade route capacity is full"
+end
 local opInfo = GameInfo.UnitOperations["UNITOPERATION_MAKE_TRADE_ROUTE"]
-if opInfo == nil then {_bail("ERR:NO_TRADE_OP|MAKE_TRADE_ROUTE operation not found")} end
+if opInfo == nil then error("Trade operation unavailable") end
 local opHash = opInfo.Hash
 local ux, uy = unit:GetX(), unit:GetY()
 local tm = Game.GetTradeManager()
@@ -192,7 +214,8 @@ local tradeQIdx = tradeQI and tradeQI.Index or -1
 {_LUA_FMT_FLAT}
 -- Find origin city (city the trader is standing in)
 local origCity = CityManager.GetCityAt(ux, uy)
-local origCID = origCity and origCity:GetID() or 0
+if not origCity or origCity:GetOwner() ~= me then return "UNAVAILABLE", "Trader must stand in its own city" end
+local origCID = origCity:GetID()
 local majRel = -1
 local relName = ""
 if origCity then
@@ -242,54 +265,42 @@ local function enrichDest(i, city, cx, cy, isDom)
         local d3 = tm:CalculateDestinationYieldsFromModifiers(me, origCID, i, city:GetID())
         dy = fmtFlat(sumFlat(d1, d2, d3))
     end)
-    print("TDEST|" .. Locale.Lookup(city:GetName()) .. "|" .. civ .. "|" .. cx .. "," .. cy .. "|" .. (isDom and "1" or "0") .. "|" .. (isCS and "1" or "0") .. "|" .. (hasQ and "1" or "0") .. "|" .. (hasTP and "1" or "0") .. "|" .. pOut .. "|" .. relName .. "|" .. pIn .. "|" .. relIn .. "|" .. oy .. "|" .. dy)
+    table.insert(destRows, "TDEST|" .. Locale.Lookup(city:GetName()) .. "|" .. civ .. "|" .. cx .. "," .. cy .. "|" .. (isDom and "1" or "0") .. "|" .. (isCS and "1" or "0") .. "|" .. (hasQ and "1" or "0") .. "|" .. (hasTP and "1" or "0") .. "|" .. pOut .. "|" .. relName .. "|" .. pIn .. "|" .. relIn .. "|" .. oy .. "|" .. dy)
 end
-local found = 0
+-- Native chooser requires both operation eligibility and a nonempty route path.
+-- Apply local knowledge before reading any destination's yields or identity.
+local diplo = Players[me]:GetDiplomacy()
+local visibility = PlayersVisibility[me]
 for i = 0, 62 do
-    if Players[i]:IsAlive() and i ~= 63 then
-        for _, city in Players[i]:GetCities():Members() do
+    local player = Players[i]
+    if player and player:IsAlive() and (i == me or nativeBoolean(diplo:HasMet(i))) then
+        for _, city in player:GetCities():Members() do
             local cx, cy = city:GetX(), city:GetY()
-            local tParams = {{}}
-            tParams[UnitOperationTypes.PARAM_X0] = cx
-            tParams[UnitOperationTypes.PARAM_Y0] = cy
-            tParams[UnitOperationTypes.PARAM_X1] = ux
-            tParams[UnitOperationTypes.PARAM_Y1] = uy
-            local can = UnitManager.CanStartOperation(unit, opHash, nil, tParams, true)
-            if can then
-                enrichDest(i, city, cx, cy, i == me)
-                found = found + 1
-            end
-        end
-    end
-end
-if found == 0 then
-    local pTrade = Players[me]:GetTrade()
-    local nOut = pTrade:GetNumOutgoingRoutes()
-    local capVal = pTrade:GetOutgoingRouteCapacity()
-    if nOut >= capVal then
-        print("WARN:CAPACITY_FULL|Routes at capacity (" .. nOut .. "/" .. capVal .. "). Trader already on an active route or build Markets/Lighthouses for more slots.")
-    else
-        print("WARN:CANNOT_START|CanStartOperation blocked all destinations.")
-    end
-    for i = 0, 62 do
-        if Players[i]:IsAlive() and i ~= 63 then
-            local atWar = false
-            if i ~= me then
-                pcall(function()
-                    local pDiplo = Players[me]:GetDiplomacy()
-                    if pDiplo then atWar = pDiplo:IsAtWarWith(i) end
-                end)
-            end
-            if not atWar then
-                for _, city in Players[i]:GetCities():Members() do
-                    local cx, cy = city:GetX(), city:GetY()
-                    if cx ~= ux or cy ~= uy then
+            if not (i == me and city:GetID() == origCID) and nativeBoolean(visibility:IsRevealed(cx, cy)) then
+                local tParams = {{}}
+                tParams[UnitOperationTypes.PARAM_X0] = cx
+                tParams[UnitOperationTypes.PARAM_Y0] = cy
+                tParams[UnitOperationTypes.PARAM_X1] = ux
+                tParams[UnitOperationTypes.PARAM_Y1] = uy
+                if nativeBoolean(UnitManager.CanStartOperation(unit, opHash, nil, tParams)) then
+                    local path = tm:GetTradeRoutePath(me, origCID, i, city:GetID())
+                    if path ~= nil and type(path) ~= "table" then error("Trade path is unknown") end
+                    if path and next(path) ~= nil then
                         enrichDest(i, city, cx, cy, i == me)
                     end
                 end
             end
         end
     end
+end
+return #destRows > 0 and "AVAILABLE" or "EMPTY", ""
+end
+local ok, status, reason = pcall(collectDestinations)
+if not ok then
+    print("TDEST_STATUS|UNKNOWN|Native candidate facts could not be read; no destinations returned")
+else
+    print("TDEST_STATUS|" .. status .. "|" .. reason)
+    for _, row in ipairs(destRows) do print(row) end
 end
 print("{SENTINEL}")
 """
@@ -400,42 +411,64 @@ def parse_trade_destinations_response(lines: list[str]) -> list[TradeDestination
 
     Format: TDEST|name|owner|x,y|isDom|isCS|hasQ|hasTP|pOut|relOut|pIn|relIn|origY|destY
     """
+    receipts = [line for line in lines if line.startswith("TDEST_STATUS|")]
+    if len(receipts) > 1:
+        raise ValueError("TRADE_DESTINATIONS_UNKNOWN|Conflicting native query receipts")
+    status = None
+    if receipts:
+        parts = receipts[0].split("|", 2)
+        status = parts[1]
+        reason = parts[2] if len(parts) > 2 else "Native candidate facts are unknown"
+        if status == "UNAVAILABLE":
+            raise ValueError("TRADE_DESTINATIONS_UNAVAILABLE|" + reason)
+        if status not in {"AVAILABLE", "EMPTY"}:
+            raise ValueError("TRADE_DESTINATIONS_UNKNOWN|" + reason)
     results: list[TradeDestination] = []
-    for line in lines:
-        if line.startswith("TDEST|"):
-            parts = line.split("|")
-            if len(parts) >= 14:
-                coords = parts[3].split(",")
-                results.append(
-                    TradeDestination(
-                        city_name=parts[1],
-                        owner_name=parts[2],
-                        x=int(coords[0]),
-                        y=int(coords[1]),
-                        is_domestic=parts[4] == "1",
-                        is_city_state=parts[5] == "1",
-                        has_quest=parts[6] == "1",
-                        has_trading_post=parts[7] == "1",
-                        origin_yields=_parse_compact_yields(parts[12]),
-                        dest_yields=_parse_compact_yields(parts[13]),
-                        pressure_out=float(parts[8]) if parts[8] else 0.0,
-                        religion_out=parts[9],
-                        pressure_in=float(parts[10]) if parts[10] else 0.0,
-                        religion_in=parts[11],
+    try:
+        for line in lines:
+            if line.startswith("TDEST|"):
+                parts = line.split("|")
+                if len(parts) < 5 or len(parts[3].split(",")) != 2:
+                    raise ValueError("Malformed destination row")
+                if len(parts) >= 14:
+                    coords = parts[3].split(",")
+                    results.append(
+                        TradeDestination(
+                            city_name=parts[1],
+                            owner_name=parts[2],
+                            x=int(coords[0]),
+                            y=int(coords[1]),
+                            is_domestic=parts[4] == "1",
+                            is_city_state=parts[5] == "1",
+                            has_quest=parts[6] == "1",
+                            has_trading_post=parts[7] == "1",
+                            origin_yields=_parse_compact_yields(parts[12]),
+                            dest_yields=_parse_compact_yields(parts[13]),
+                            pressure_out=float(parts[8]) if parts[8] else 0.0,
+                            religion_out=parts[9],
+                            pressure_in=float(parts[10]) if parts[10] else 0.0,
+                            religion_in=parts[11],
+                        )
                     )
-                )
-            elif len(parts) >= 5:
-                # Fallback for old format
-                coords = parts[3].split(",")
-                results.append(
-                    TradeDestination(
-                        city_name=parts[1],
-                        owner_name=parts[2],
-                        x=int(coords[0]),
-                        y=int(coords[1]),
-                        is_domestic=parts[4] == "1",
+                elif len(parts) >= 5:
+                    # Fallback for old format
+                    coords = parts[3].split(",")
+                    results.append(
+                        TradeDestination(
+                            city_name=parts[1],
+                            owner_name=parts[2],
+                            x=int(coords[0]),
+                            y=int(coords[1]),
+                            is_domestic=parts[4] == "1",
+                        )
                     )
-                )
+    except (ValueError, IndexError) as exc:
+        raise ValueError("TRADE_DESTINATIONS_UNKNOWN|Malformed native destination row") from exc
+    if status == "EMPTY" and results:
+        raise ValueError("TRADE_DESTINATIONS_UNKNOWN|Empty receipt contains destinations")
+    # Legacy nonempty rows remain readable, but silence is not an empty receipt.
+    if not results and status != "EMPTY":
+        raise ValueError("TRADE_DESTINATIONS_UNKNOWN|Native candidate response is incomplete")
     return results
 
 
