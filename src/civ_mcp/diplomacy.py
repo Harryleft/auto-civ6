@@ -183,7 +183,12 @@ class DiplomacyProgress:
                         outcome = "REJECTED"
                     elif signatures[0] != proposals[0] and action in ("ACCEPTED", "PROPOSED", "ADJUSTED") and quote["phase"] == "ACCEPTABLE":
                         outcome = "COUNTER_OFFER"
-                    elif action in ("ACCEPTED", "PROPOSED", "ADJUSTED") and subtype == "AI_ACCEPT_DEAL" and quote["phase"] == "ACCEPTABLE":
+                    elif (action in ("ACCEPTED", "PROPOSED", "ADJUSTED") and quote["phase"] == "ACCEPTABLE"
+                          and (subtype == "AI_ACCEPT_DEAL" or attempt.action == "EQUALIZE")):
+                        # Official MakeDeal_ApplyStatement updates an evaluation
+                        # from DealAction even with subtype NONE. Equalize may
+                        # return the exact proposed terms, so no changed counter
+                        # or conversational AI_ACCEPT_DEAL subtype is required.
                         outcome = "WILLING"
                     else:
                         return self.trade_summary()
@@ -191,7 +196,13 @@ class DiplomacyProgress:
                     if finished != ["INCOMING_FINISH|CONFIRMED"]:
                         return self.trade_summary()
                     self.incoming = None
-                    report = narrate_test_trade(lq.parse_test_trade_response(rows), include_guidance=False, preview=True)
+                    parsed = lq.parse_test_trade_response(rows)
+                    parsed.rejected = outcome == "REJECTED"
+                    if outcome == "WILLING":
+                        # Equal native fingerprints certify these are our exact
+                        # evaluated terms, rather than a distinct fair counter.
+                        parsed.proposed = list(parsed.counter)
+                    report = narrate_test_trade(parsed, include_guidance=False, preview=True)
                     return f"{outcome}|Native {attempt.action} evaluation; deal not concluded.\n" + report + f"\nfingerprint={quote['fingerprint']}\nUse a fresh query for another explicit offer or final response."
         except (OSError, TimeoutError, LuaError, ValueError, IndexError):
             return self.trade_summary()
@@ -248,7 +259,7 @@ class DiplomacyProgress:
 
     async def diagnostics(self, conn) -> str:
         """Read the existing observer only; never install, advance, or retire it."""
-        attempt = self.trade
+        attempt = self.incoming or self.trade
         if attempt is None:
             return ""
         if self.scope_invalid or self.observer_scope is None:
@@ -257,6 +268,13 @@ class DiplomacyProgress:
             rows = await conn.execute_in_named_state("DiplomacyActionView", native.build_trade_diagnostics(self.nonce, self.observer_scope, attempt.token, attempt.sid))
             facts = [row.split("|", 1)[1] for row in rows if row.startswith("DIPLO_DIAGNOSTIC|")]
             if facts:
+                if self.incoming is not None:
+                    try:
+                        receipt = await _named(conn, "DiplomacyDealView", native.build_incoming_receipt(
+                            attempt.scope, attempt.target, attempt.sid, attempt.token))
+                        facts.append("incoming_evaluation_receipt: diagnostic_only=true " + " ".join(receipt))
+                    except (OSError, TimeoutError, LuaError):
+                        facts.append("incoming_evaluation_receipt: UNKNOWN reason=READ_FAILED diagnostic_only=true")
                 return "\n".join(facts)
         except (OSError, TimeoutError, LuaError):
             return "diplomacy_observation: UNKNOWN reason=READ_FAILED"
