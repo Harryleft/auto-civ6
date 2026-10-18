@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from civ_mcp.lua._helpers import SENTINEL
 from civ_mcp.lua.models import GameNotification
+from civ_mcp.lua.turn_readiness import LUA_TURN_READINESS
 
 
 def build_end_turn_blocking_query() -> str:
@@ -50,7 +51,7 @@ def build_end_turn(expected_turn: int | None = None) -> str:
     after entry remain unknown; no native unready action is ever requested.
     """
     expected = "Game.GetCurrentGameTurn()" if expected_turn is None else str(int(expected_turn))
-    return """
+    return LUA_TURN_READINESS + """
 local expected = EXPECTED_TURN
 local me = Game.GetLocalPlayer()
 local p = Players[me]
@@ -68,6 +69,11 @@ local ok, reason = pcall(function()
     if blocker == nil or EndTurnBlockingTypes.NO_ENDTURN_BLOCKING == nil then return "UNKNOWN" end
     if blocker ~= EndTurnBlockingTypes.NO_ENDTURN_BLOCKING then return "BLOCKED" end
     if not allowed then return "CANNOT_END_TURN" end
+    local localReadiness=localTurnReadiness(me)
+    if localReadiness.reason~="NONE" then
+        for _,detail in ipairs(localReadiness.details) do print("END_TURN_DETAIL|"..detail) end
+        return localReadiness.reason
+    end
     local mode = UI.GetInterfaceMode()
     if type(mode) ~= "number" or type(InterfaceModeTypes.SELECTION) ~= "number" then return "UNKNOWN" end
     return nil
