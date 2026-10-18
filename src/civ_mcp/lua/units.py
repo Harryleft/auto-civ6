@@ -197,7 +197,7 @@ def build_move_unit(
     if witness_token is not None:
         witness = f"""
 -- This record is armed before exactly one submission. The native callback
--- has no request nonce; serial actions and fresh target/path facts fence it.
+-- has no request nonce; serial actions and fresh identity/target facts fence it.
 local prior = __civmcpMoveSegment
 if prior and not prior.closed then
     {_bail("ERR:OUTCOME_UNKNOWN|Prior native movement witness is unresolved; no move submitted.")}
@@ -429,7 +429,6 @@ pcall(function()
     local nextPlot = Map.GetPlotByIndex(path.plots[2])
     local nextTurn = tonumber(path.turns[2])
     if nextPlot and nextTurn then
-        nextStepTurn = nextTurn
         print("PATH_STEP|" .. nextPlot:GetX() .. "|" .. nextPlot:GetY() .. "|turn:" .. nextTurn)
     end
 end)
@@ -461,7 +460,9 @@ pcall(function()
     local nativeStop = u:GetMovesRemaining() <= 0
     pcall(function() nativeStop = nativeStop or u:GetMovementMovesRemaining() <= 0 end)
     pcall(function() nativeStop = nativeStop or u:HasMovedIntoZOC() end)
-    local segmentStop = q.done and queuedMatches and nextStepTurn and nextStepTurn > 1
+    -- This event completes the original segment, even if a newly planned
+    -- route now backtracks or is unavailable. It does not prove arrival.
+    local segmentStop = q.done and queuedMatches
     if reached or u:GetMovesRemaining() <= 0 or nativeStop and moved
         or segmentStop and moved or moveImpassable and not moved then
         q.closed = true
@@ -470,7 +471,6 @@ pcall(function()
 end)
 """
     return f"""
-local nextStepTurn = nil
 local moveImpassable = false
 local me = Game.GetLocalPlayer()
 local u = Players[me]:GetUnits():FindID({unit_index})
