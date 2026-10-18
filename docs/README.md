@@ -17,6 +17,15 @@ Agent 从根目录 [AGENTS.md](../AGENTS.md) 开始；命中任务后读取对�
 
 ## 规格与验收
 
+- [第 81～101 回合调度验收](acceptance/2026-10-18-turn101-scheduling.md)：异步交易、本地队列与显式取消、相关模块测试、净 20 回合、双份结果档及十类恢复比较；原地治疗／驻守由模型明确判断。
+- [第 81～101 回合调度与等待识别规格](specs/2026-10-18-turn101-scheduling.md)与[工作项](specs/2026-10-18-turn101-scheduling-tickets.md)：外交原生关闭、等待阶段、未来移动前置拒绝及资源提示；T81 verified 同轮续测。
+- [第 61～81 回合查询与展示验收](acceptance/2026-10-18-turn81-queries.md)：1,805 项离线、净 20 回合、两份结果档与十类恢复比较；保留移动及长等待新增待办。
+- [第 61～81 回合查询与展示规格](specs/2026-10-18-turn81-queries.md)与[工作项](specs/2026-10-18-turn81-queries-tickets.md)：商路候选、资源可见性、通知详情；本轮 T61 检查点续测。
+- [第 41～61 回合修复验收](acceptance/2026-10-18-turn61-readiness.md)：1,750 项离线、净 20 回合、第四城、原生待命复现、结果存档与双次菜单恢复。
+- [第 41～61 回合跳过、待命与叙述修复规格](specs/2026-10-18-turn61-readiness.md)与[工作项](specs/2026-10-18-turn61-readiness-tickets.md)：从本轮已验证第 41 回合检查点续测，保留已有成果。
+- [第 21～41 回合修复验收](acceptance/2026-10-18-decision-repair-turn41.md)：1,719 项离线、净 20 回合、第三城、资金补修与菜单恢复；保留结果档及新增待办。
+- [第 21～41 回合决策与调度修复规格](specs/2026-10-18-decision-repair-turn41.md)与[工作项](specs/2026-10-18-decision-repair-turn41-tickets.md)：近战执行资格、使团确认、专属改良、市政进度；本轮第 21 回合检查点续测。
+
 仅在定位对应改动或核对成果时读取。历史记录中的提交、测试数量与实机结果只适用于该记录，不代表当前分支已重新验收。
 
 - [文明特性与自主决策离线验收](acceptance/2026-10-18-civilization-knowledge.md)：文明／领袖能力与公开身份、三类信息决策指南、1,517 项离线和审查修复；未实机；[规格](specs/2026-10-18-civilization-knowledge.md)。

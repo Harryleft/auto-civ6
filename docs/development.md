@@ -12,6 +12,7 @@
 | 领域准备、查询、完整存档替换 | `game_state.py`；通过真实 GameState／MCP 入口验证。 |
 | 动作锁存、单次提交、回应与证据确认 | `actions.py` 的 ActionLifecycle；各动作保留自身原生见证。 |
 | 推进请求、起始回合和差分基线 | `end_turn.py` 的 TurnProgress；报告读取失败不改变已确认推进。 |
+| 当前外交语句、回应及交易阶段 | `diplomacy.py`、`lua/trade.py`；通过 GameState／MCP 与延迟原生事件验证，未知不重发。 |
 | 原生菜单、文件事实、进程控制 | `game_lifecycle.py`、`game_launcher.py`；转换和进程结果用事实控制，不匹配展示文案。 |
 | 检查点身份、指纹和测试轮次 | `checkpoints.py`；使用临时目录，保留文件与轮次约束。 |
 | 游戏领域 Lua 构造与解析 | `lua/`；议会阶段与提案资格共用解释，纯查询不产生游戏操作。 |
@@ -21,16 +22,18 @@
 
 ## 离线验证
 
-代码修改使用现有门槛：
+代码修改只运行受影响模块的测试；由改动范围选择文件，例如交易生命周期修改：
 
 ```bash
 uv sync --locked
-uv run --locked pytest -q
+uv run --locked pytest -q tests/test_trade_progress.py
 uv run --locked python -m compileall -q src tests
 git diff --check
 ```
 
-pytest 默认仅收集 `tests/`。现有测试采用 GameState／FakeConn、内存 FireTuner 流、Lua 5.1 执行、快照差分和临时存档目录；在这些位置验证可观察行为，不复制自有状态机，也不以源码字符串断言代替关键时序验证。
+影响跨模块契约时补充直接相关的测试文件，不默认运行全量。复用同一受测版本的集成结果；仅在新改动、失败或未解决疑点需要时重跑或扩大范围。
+
+现有测试采用 GameState／FakeConn、内存 FireTuner 流、Lua 5.1 执行、快照差分和临时存档目录；在这些位置验证可观察行为，不复制自有状态机，也不以源码字符串断言代替关键时序验证。
 
 纯文档修改检查本地链接及锚点、命令与实现、关键约束覆盖和 `git diff --check`；不为排版重跑游戏流程或全量测试。开发依赖和版本以 `pyproject.toml`、`uv.lock` 为准。
 

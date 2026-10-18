@@ -41,12 +41,12 @@ class FakeConn:
     async def execute_read(self, query, timeout=None):
         self.read_queries.append(query)
         if "TURN_STATE|" in query:
-            return ["TURN_STATE|12|1"]
+            return ["TURN_STATE|12|1|1"]
         return []
 
     async def execute_write(self, query, timeout=None):
         if "TURN_UI_READY|" in query:
-            return ["TURN_UI_READY|12|1"]
+            return ["TURN_UI_READY|12|1|0|1|0|1"]
         return []
 
     async def execute_in_state(self, index, code, timeout=None):
@@ -93,6 +93,7 @@ class FakeGameState:
         self._game_identity = None
         self._revealed_tiles = set()
         self.reset_calls = 0
+        self.diplomacy_pending = False
         self._pending_end_turn = False
         self._pending_end_turn_from = None
         self.calls: list[tuple[str, tuple, dict]] = []
@@ -339,6 +340,7 @@ class TestUnitActionDispatch:
     @pytest.mark.parametrize(
         ("action", "method"),
         [
+            ("cancel_move", "cancel_unit_move"),
             ("fortify", "fortify_unit"),
             ("skip", "skip_unit"),
             ("found_city", "found_city"),
@@ -376,6 +378,11 @@ class TestUnitActionDispatch:
 
         run(go())
         assert gs.last_args("move_unit") == (7, 10, 11)
+
+    def test_cancel_move_keeps_full_runtime_identity(self):
+        ctx=make_ctx();gs=app_of(ctx).game
+        run(server.unit_action(ctx,3*65536+7,"cancel_move"))
+        assert gs.last_args("cancel_unit_move")== (3*65536+7,)
 
 
 class TestUnitActionValidation:
@@ -1205,7 +1212,7 @@ class TestSaveTools:
         async def write(query, timeout=None):
             conn.state_queries.append(query)
             if "TURN_UI_READY|" in query:
-                return ["TURN_UI_READY|12|1"]
+                return ["TURN_UI_READY|12|1|0|1|0|1"]
             if "GAMESEED|" in query:
                 return [f"GAMESEED|CIVILIZATION_{conn.identity[0].upper()}|{conn.identity[1]}"]
             if "local tr = p:GetTreasury()" in query:
@@ -1285,9 +1292,9 @@ class TestSaveTools:
                 turns.append(1)
                 if len(turns) > 1:
                     if changed_fact == "turn":
-                        return ["TURN_STATE|13|1"]
+                        return ["TURN_STATE|13|1|1"]
                     if changed_fact == "readiness":
-                        return ["TURN_STATE|12|0"]
+                        return ["TURN_STATE|12|0|0"]
             return await read(query, timeout)
 
         gs.conn.execute_write, gs.conn.execute_read = change_identity, change_turn
@@ -1363,11 +1370,11 @@ class TestSaveTools:
         original_write = gs.conn.execute_write
         async def turn_one_read(code, timeout=None):
             if "TURN_STATE|" in code:
-                return ["TURN_STATE|1|1"]
+                return ["TURN_STATE|1|1|1"]
             return await original_read(code, timeout)
         async def turn_one_write(code, timeout=None):
             if "TURN_UI_READY|" in code:
-                return ["TURN_UI_READY|1|1"]
+                return ["TURN_UI_READY|1|1|0|1|0|1"]
             return await original_write(code, timeout)
         gs.conn.execute_read = turn_one_read
         gs.conn.execute_write = turn_one_write
@@ -1595,7 +1602,12 @@ class TestMcpProtocol:
                     assert initialization.serverInfo.name == "Civilization VI"
                     tools = (await session.list_tools()).tools
                     names = {tool.name for tool in tools}
-                    assert len(names) == 80
+                    assert len(names) == 81
+                    assert "get_turn_status" in names
+                    status_tool = next(tool for tool in tools if tool.name == "get_turn_status")
+                    assert status_tool.annotations.readOnlyHint is True
+                    status = await session.call_tool("get_turn_status", {})
+                    assert not status.isError and "UNKNOWN" in status.content[0].text
                     assert "get_diary" not in names
                     save_schema = next(tool.inputSchema for tool in tools if tool.name == "save_game")
                     assert save_schema["required"] == ["save_name"]
@@ -1612,9 +1624,11 @@ class TestMcpProtocol:
 
         anyio.run(go)
         assert conn.disconnect_calls == 1
-        assert conn.read_queries == ['print(42)']
+        assert len(conn.read_queries) == 2
+        assert 'TURN_STATE|' in conn.read_queries[0]
+        assert conn.read_queries[1] == 'print(42)'
         entries = [json.loads(line) for line in log_path.read_text().splitlines()]
-        assert [entry["tool"] for entry in entries] == ["save_game", "run_lua", "unit_action"]
+        assert [entry["tool"] for entry in entries] == ["get_turn_status", "save_game", "run_lua", "unit_action"]
         assert all("success" not in entry for entry in entries)
 
 
