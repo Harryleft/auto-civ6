@@ -31,6 +31,12 @@ end
 local function number(value)
     if type(value) == "number" and value == value and value >= 0 and value < math.huge then return value end
 end
+local function religionID(value)
+    -- -1 is the native no-religion sentinel; IDs resolve in the active table.
+    if type(value) ~= "number" or value ~= value or math.abs(value) == math.huge
+        or value % 1 ~= 0 or value < -1 then return nil end
+    if value == -1 or observed(function() return GameInfo.Religions[value] end) then return value end
+end
 local function wire(value)
     if value == nil then return "unknown" end
     return tostring(value):gsub("|", "/"):gsub(".", function(c)
@@ -124,30 +130,41 @@ for id = 0, 62 do
     local p = Players[id]
     if p and p:IsMajor() and p:IsAlive() then
         table.insert(majors, id)
-        local religion = observed(function() return p:GetReligion():GetReligionInMajorityOfCities() end)
-        if type(religion) ~= "number" then religionKnown = false
+        local religion = religionID(observed(function() return p:GetReligion():GetReligionInMajorityOfCities() end))
+        if religion == nil then religionKnown = false
         elseif religion >= 0 then religionCount[religion] = (religionCount[religion] or 0) + 1 end
     end
 end
+local contactsKnown = true
 for _, id in ipairs(majors) do
     local p = Players[id]
-    if id == me or observed(function() return diplo:HasMet(id) end) == true then
+    local met = id == me
+    if not met then
+        local value = observed(function() return diplo:HasMet(id) end)
+        if type(value) == "boolean" then met = value else contactsKnown = false end
+    end
+    if met then
         local name = observed(function() return Locale.Lookup(PlayerConfigurations[id]:GetCivilizationShortDescription()) end)
         local stats = p:GetStats()
         local science = number(observed(function() return stats:GetScienceVictoryPoints() end))
         local needed = number(observed(function() return stats:GetScienceVictoryPointsTotalNeeded() end))
         local rate = number(observed(function() return stats:GetScienceVictoryPointsPerTurn() end))
         local diplomatic = number(observed(function() return stats:GetDiplomaticVictoryPoints() end))
-        local spaceports = 0
+        local spaceports, portsKnown = 0, true
         local okPorts = pcall(function()
             for _, city in p:GetCities():Members() do
                 for _, district in city:GetDistricts():Members() do
                     local row = GameInfo.Districts[district:GetType()]
-                    if row and row.DistrictType == "DISTRICT_SPACEPORT" and district:IsComplete() then spaceports = spaceports + 1 end
+                    if row and row.DistrictType == "DISTRICT_SPACEPORT" then
+                        local complete = observed(function() return district:IsComplete() end)
+                        if type(complete) ~= "boolean" then portsKnown = false
+                        elseif complete then spaceports = spaceports + 1 end
+                    end
                 end
             end
         end)
-        if not okPorts then spaceports = nil end
+        local portsVerified = spaceports
+        if not okPorts or not portsKnown then spaceports = nil end
         local advanced, advancedKnown = 0, true
         for _, key in ipairs(projectTypes()) do
             local row = GameInfo.Projects[key]
@@ -172,12 +189,13 @@ for _, id in ipairs(majors) do
             end
         end
         if cultureKnown then required = required + 1 else required = nil end
-        local founded = observed(function() return p:GetReligion():GetReligionTypeCreated() end)
+        local founded = religionID(observed(function() return p:GetReligion():GetReligionTypeCreated() end))
         local converted = nil
-        if religionKnown and type(founded) == "number" then converted = founded >= 0 and (religionCount[founded] or 0) or 0 end
-        print("VFACT|" .. wire(id) .. "|" .. wire(name) .. "|" .. wire(science) .. "|" .. wire(needed) .. "|" .. wire(spaceports) .. "|" .. wire(rate) .. "|" .. wire(diplomatic) .. "|" .. wire(visiting) .. "|" .. wire(required) .. "|" .. wire(advanced) .. "|" .. wire(converted) .. "|" .. wire(religionKnown and #majors or nil))
+        if religionKnown and founded ~= nil then converted = founded >= 0 and (religionCount[founded] or 0) or 0 end
+        print("VFACT|" .. wire(id) .. "|" .. wire(name) .. "|" .. wire(science) .. "|" .. wire(needed) .. "|" .. wire(spaceports) .. "|" .. wire(rate) .. "|" .. wire(diplomatic) .. "|" .. wire(visiting) .. "|" .. wire(required) .. "|" .. wire(advanced) .. "|" .. wire(converted) .. "|" .. wire(religionKnown and #majors or nil) .. "|" .. wire(portsVerified))
     end
 end
+print("VICTORY_CONTACTS_KNOWN|" .. tostring(contactsKnown))
 print("VICTORY_COMPLETE")
 end
 """
@@ -207,7 +225,7 @@ local dPop, dMil, dFood, dGold, dLand, dProd = {{}}, {{}}, {{}}, {{}}, {{}}, {{}
 for i = 0, 62 do
     local p = Players[i]
     if p and p:IsMajor() and p:IsAlive() then
-        local met = pDiplo:HasMet(i) or i == me
+        local met = i == me or observed(function() return pDiplo:HasMet(i) end) == true
         if met then
             local cfg = PlayerConfigurations[i]
             local name = wire(Locale.Lookup(cfg:GetCivilizationShortDescription()))
@@ -221,12 +239,14 @@ for i = 0, 62 do
             local civics = st:GetNumCivicsCompleted()
             local relCities = st:GetNumCitiesFollowingReligion()
             local stay = wire(number(observed(function() return p:GetCulture():GetStaycationers() end)))
-            local hasRel = p:GetReligion():GetReligionTypeCreated() >= 0
+            local createdRel = religionID(observed(function() return p:GetReligion():GetReligionTypeCreated() end))
+            local hasRel = nil
+            if createdRel ~= nil then hasRel = createdRel >= 0 end
             local nCities = 0; for _ in p:GetCities():Members() do nCities = nCities + 1 end
             local pSci = p:GetTechs():GetScienceYield()
             local pCulYield = p:GetCulture():GetCultureYield()
             local pGold2 = p:GetTreasury():GetGoldYield() - p:GetTreasury():GetTotalMaintenance()
-            print("PLAYER|" .. i .. "|" .. name .. "|" .. p:GetScore() .. "|" .. sciVP .. "|" .. sciNeeded .. "|" .. diploVP .. "|" .. tourism .. "|" .. milStr .. "|" .. techs .. "|" .. civics .. "|" .. relCities .. "|" .. stay .. "|" .. tostring(hasRel) .. "|" .. nCities .. "|" .. string.format("%.1f", pSci) .. "|" .. string.format("%.1f", pCulYield) .. "|" .. string.format("%.1f", pGold2))
+            print("PLAYER|" .. i .. "|" .. name .. "|" .. p:GetScore() .. "|" .. sciVP .. "|" .. sciNeeded .. "|" .. diploVP .. "|" .. tourism .. "|" .. milStr .. "|" .. techs .. "|" .. civics .. "|" .. relCities .. "|" .. stay .. "|" .. wire(hasRel) .. "|" .. nCities .. "|" .. string.format("%.1f", pSci) .. "|" .. string.format("%.1f", pCulYield) .. "|" .. string.format("%.1f", pGold2))
             if i == me then
                 {_LUA_PROJECTS}
             end
@@ -239,15 +259,15 @@ for i = 0, 62 do
             local cap = p:GetCities():GetCapitalCity()
             local holdsOwn = cap and cap:IsOriginalCapital() or false
             print("CAPITAL|" .. name .. "|" .. tostring(holdsOwn))
-            local majRel = p:GetReligion():GetReligionInMajorityOfCities()
-            local relName = "none"
-            if majRel >= 0 then
+            local majRel = religionID(observed(function() return p:GetReligion():GetReligionInMajorityOfCities() end))
+            local relName = "unknown"
+            if majRel == -1 then relName = "none"
+            elseif majRel ~= nil then
                 local r = GameInfo.Religions[majRel]
                 if r then relName = r.ReligionType end
             end
             print("RELMAJ|" .. name .. "|" .. relName)
-            local createdRel = p:GetReligion():GetReligionTypeCreated()
-            if createdRel >= 0 then
+            if createdRel ~= nil and createdRel >= 0 then
                 local rEntry = GameInfo.Religions[createdRel]
                 local fName = rEntry and Locale.Lookup(rEntry.Name) or "Unknown"
                 print("RELFOUNDED|" .. name .. "|" .. fName)
@@ -292,14 +312,17 @@ emitDemo("GNP", dGold)
 emitDemo("Land", dLand)
 emitDemo("Goods", dProd)
 local nMajors = 0
-local nRels = 0
+local nRels, foundedKnown = 0, true
 for i = 0, 62 do
     if Players[i] and Players[i]:IsMajor() and Players[i]:IsAlive() then
         nMajors = nMajors + 1
-        if Players[i]:GetReligion():GetReligionTypeCreated() >= 0 then nRels = nRels + 1 end
+        local created = religionID(observed(function() return Players[i]:GetReligion():GetReligionTypeCreated() end))
+        if created == nil then foundedKnown = false
+        elseif created >= 0 then nRels = nRels + 1 end
     end
 end
-print("RELSLOTS|" .. nRels .. "|" .. (math.floor(nMajors / 2) + 1))
+if not foundedKnown then nRels = nil end
+print("RELSLOTS|" .. wire(nRels) .. "|" .. (math.floor(nMajors / 2) + 1))
 {_LUA_VICTORY_FACTS}
 print("{SENTINEL}")
 """
@@ -319,7 +342,7 @@ def parse_victory_progress_response(lines: list[str]) -> VictoryProgress:
     space_projects: list[SpaceProject] = []
     enabled_victories: set[str] = set()
     turn = local_player_id = diplomatic_vp_needed = None
-    enabled_known = complete = False
+    enabled_known = complete = contacts_known = False
     facts = []
     contexts = completions = enabled_markers = 0
 
@@ -342,7 +365,7 @@ def parse_victory_progress_response(lines: list[str]) -> VictoryProgress:
                     civics_completed=_int(p[10]),
                     religion_cities=_int(p[11]),
                     staycationers=_number(p[12]),
-                    has_religion=p[13] == "true",
+                    has_religion={"true": True, "false": False}.get(p[13]),
                     num_cities=_int(p[14]) if len(p) > 14 else 0,
                     science_yield=float(p[15]) if len(p) > 15 else 0.0,
                     culture_yield=float(p[16]) if len(p) > 16 else 0.0,
@@ -380,7 +403,7 @@ def parse_victory_progress_response(lines: list[str]) -> VictoryProgress:
         elif line.startswith("RELSLOTS|"):
             p = line.split("|")
             if len(p) >= 3:
-                religions_founded = int(p[1])
+                religions_founded = _number(p[1])
                 religions_max = int(p[2])
         elif line.startswith("SPACEPROJ|"):
             p = line.split("|")
@@ -418,6 +441,8 @@ def parse_victory_progress_response(lines: list[str]) -> VictoryProgress:
         elif line.startswith("VICTORY_ENABLED_KNOWN|"):
             enabled_markers += 1
             enabled_known = line == "VICTORY_ENABLED_KNOWN|true"
+        elif line.startswith("VICTORY_CONTACTS_KNOWN|"):
+            contacts_known = line == "VICTORY_CONTACTS_KNOWN|true"
         elif line.startswith("DIPLO_REQUIRED|"):
             diplomatic_vp_needed = _number(line.split("|", 1)[1])
         elif line.startswith("VFACT|"):
@@ -431,7 +456,7 @@ def parse_victory_progress_response(lines: list[str]) -> VictoryProgress:
     seen = set()
     for fact in facts:
         identifier = _number(fact[1]) if len(fact) > 1 else None
-        if (len(fact) != 13 or identifier is None or not identifier.is_integer()
+        if (len(fact) not in (13, 14) or identifier is None or not identifier.is_integer()
                 or identifier > 62 or identifier in seen):
             complete = False
             continue
@@ -444,7 +469,8 @@ def parse_victory_progress_response(lines: list[str]) -> VictoryProgress:
         (player.science_vp, player.science_vp_needed, player.spaceports,
          player.science_rate, player.diplomatic_vp, player.culture_visiting,
          player.culture_required, player.completed_space_projects,
-         player.religion_civilizations, player.religion_civilizations_required) = map(_number, fact[3:])
+         player.religion_civilizations, player.religion_civilizations_required) = map(_number, fact[3:13])
+        player.spaceports_verified = (_number(fact[13]) or 0) if len(fact) == 14 else 0
     complete = (complete and contexts == completions == enabled_markers == 1
                 and turn is not None and turn.is_integer()
                 and local_player_id is not None and local_player_id.is_integer()
@@ -453,6 +479,7 @@ def parse_victory_progress_response(lines: list[str]) -> VictoryProgress:
         players=players,
         turn=turn, local_player_id=local_player_id, complete=complete,
         enabled_known=enabled_known, diplomatic_vp_needed=diplomatic_vp_needed,
+        contacts_known=contacts_known,
         our_tourists_from=our_tourists,
         their_staycationers=their_stay,
         capitals_held=capitals,
