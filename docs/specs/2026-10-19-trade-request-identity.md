@@ -1,6 +1,6 @@
 # 交易确认请求身份
 
-状态：ready-for-agent。分支codex/native-pillage，[工作项](2026-10-19-trade-request-identity-tickets.md)。
+状态：complete。分支codex/native-pillage，[工作项](2026-10-19-trade-request-identity-tickets.md)。
 
 ## Problem Statement
 
