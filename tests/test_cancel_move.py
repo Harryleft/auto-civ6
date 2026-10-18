@@ -45,6 +45,23 @@ def test_explicit_cancel_uses_native_command_and_leaves_position_for_separate_de
     assert conn.lua.eval('#submissions')==1
 
 
+@pytest.mark.parametrize('path',[
+    'return {plots={},turns={}}',
+    'return nil',
+    'return {plots={1,2}}',
+    'error("path unavailable")',
+])
+def test_explicit_cancel_removes_an_unpathable_queue_without_spending_moves(path):
+    conn=CancelConn();state=GameState(conn)
+    conn.lua.execute('UnitManager.GetMoveToPathEx=function() '+path+' end')
+    assert asyncio.run(state.cancel_unit_move(196608)).startswith('MOVE_CANCELLED')
+    assert conn.lua.eval('#commands')==1 and conn.lua.eval('#submissions')==0
+    assert conn.lua.eval('units[196608].queued') is None
+    assert conn.lua.eval('units[196608].x')==19 and conn.lua.eval('units[196608].y')==17
+    assert conn.lua.eval('units[196608].moves')==3
+    assert state.pending_action_summary is None
+
+
 @pytest.mark.parametrize('setup,reason', [
     ('GameInfo.Units[1].Spy=true','NOT_MOVE_QUEUE'),
     ('GameInfo.Units[1].IgnoreMoves=true','NOT_MOVE_QUEUE'),
@@ -55,17 +72,24 @@ def test_explicit_cancel_uses_native_command_and_leaves_position_for_separate_de
     ('cancel_allowed=nil','ELIGIBILITY_UNKNOWN'),
     ('UnitManager.CanStartCommand=nil','COMMAND_UNAVAILABLE'),
     ('GameInfo.UnitCommands.UNITCOMMAND_CANCEL.Hash=21','COMMAND_UNAVAILABLE'),
-    ('UnitManager.GetMoveToPathEx=function() return nil end','READINESS_UNKNOWN'),
+    ('UnitManager.GetQueuedDestination=function() error("target unavailable") end','READINESS_UNKNOWN'),
+    ('units[196608].queued=false','READINESS_UNKNOWN'),
+    ('units[196608].queued=99','READINESS_UNKNOWN'),
+    ('Map.GetPlotByIndex=function() return {GetX=function() return nil end,GetY=function() return 17 end} end','READINESS_UNKNOWN'),
+    ('units[196608].x=nil','READINESS_UNKNOWN'),
     ('Players[0].GetCities=nil','READINESS_UNKNOWN'),
     ('busy=true','READINESS_UNKNOWN'),
+    ('busy=nil','READINESS_UNKNOWN'),
+    ('UI.IsGameCoreBusy=function() error("core unavailable") end','READINESS_UNKNOWN'),
 ])
 def test_cancel_refuses_other_activities_routes_and_unknown_without_any_unit_command(setup,reason):
     conn=CancelConn();conn.lua.execute(setup);state=GameState(conn)
+    original_x=conn.lua.eval('units[196608].x')
     result=asyncio.run(state.cancel_unit_move(196608))
     assert reason in result
     assert conn.lua.eval('#commands')==0 and conn.lua.eval('#submissions')==0
     assert conn.lua.eval('units[196608].activity')==3
-    assert conn.lua.eval('units[196608].x')==19
+    assert conn.lua.eval('units[196608].x')==original_x
     assert state.pending_action_summary is None
 
 
@@ -88,6 +112,7 @@ def test_lost_cancel_reply_repeats_only_confirmation_and_never_command(error):
             return rows
     async def scenario():
         conn=LostConn();state=GameState(conn)
+        conn.lua.execute('UnitManager.GetMoveToPathEx=function() return {plots={},turns={}} end')
         if error is asyncio.CancelledError:
             with pytest.raises(asyncio.CancelledError): await state.cancel_unit_move(196608)
         else: assert 'OUTCOME_UNKNOWN' in await state.cancel_unit_move(196608)

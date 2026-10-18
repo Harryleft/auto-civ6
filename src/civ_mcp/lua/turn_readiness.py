@@ -102,7 +102,7 @@ local function localTurnReadiness(me,inspectUnit)
   if path.turns[1]~=1 then return nil end
   return path.turns[2]
  end
- local queueUnknown=false
+ local queueUnknown,queueIdentityUnknown=false,false
  local function queuedUnit(u)
   local x,y=u:GetX(),u:GetY()
   if x==-9999 or y==-9999 then return end
@@ -115,15 +115,20 @@ local function localTurnReadiness(me,inspectUnit)
   if type(target)~="number" or target<0 or target%1~=0 then error("queue target unknown") end
   local goal=Map.GetPlotByIndex(target)
   if not goal then error("queue plot unknown") end
-  if goal:GetX()==x and goal:GetY()==y then return end
-  local queue={id=u:GetID(),x=x,y=y,target=target,goalX=goal:GetX(),goalY=goal:GetY(),valid=false}
+  local goalX,goalY=goal:GetX(),goal:GetY()
+  if type(goalX)~="number" or type(goalY)~="number" or goalX<0 or goalY<0 or goalX%1~=0 or goalY%1~=0 then error("queue position unknown") end
+  if goalX==x and goalY==y then return end
+  local queue={id=u:GetID(),x=x,y=y,target=target,goalX=goalX,goalY=goalY,valid=false}
   r.queues[u:GetID()]=queue
   local route=activeRoute(u:GetID())
   queue.active_route=route
   local detail="queued_move "..unitDetail(u).." goal="..goal:GetX()..","..goal:GetY()
   if route==true then table.insert(r.details,detail.." active_route=true (excluded)"); return end
-  if route==nil then queueUnknown=true; table.insert(r.details,detail.." active_route=unknown"); return end
-  local step=nextTurn(u,target,goal)
+  if route==nil then queueUnknown=true; queueIdentityUnknown=true; table.insert(r.details,detail.." active_route=unknown"); return end
+  -- A stale intent can still be cancelled when its path is unavailable.
+  -- Turn submission continues to require known path timing.
+  local pathOK,step=pcall(nextTurn,u,target,goal)
+  if not pathOK then step=nil end
   if step==nil then queueUnknown=true; table.insert(r.details,detail.." next_turn=unknown"); return end
   table.insert(r.details,detail.." next_turn="..step.." active_route=false")
   queue.valid=true; queue.next_turn=step
@@ -132,15 +137,16 @@ local function localTurnReadiness(me,inspectUnit)
  local scanOK=pcall(function()
   local function scan(u)
    local ok=pcall(queuedUnit,u)
-   if not ok then queueUnknown=true; table.insert(r.details,"queued_move "..unitDetail(u).." target_or_path=unknown") end
+   if not ok then queueUnknown=true; queueIdentityUnknown=true; table.insert(r.details,"queued_move "..unitDetail(u).." target_or_path=unknown") end
   end
   if inspectUnit then scan(inspectUnit)
   else for _,u in p:GetUnits():Members() do scan(u) end
   end
  end)
- if not scanOK then queueUnknown=true end
+ if not scanOK then queueUnknown=true; queueIdentityUnknown=true end
  if queueUnknown and r.queued_move_current~=true then r.queued_move_current=nil end
  r.queue_known=not queueUnknown
+ r.queue_identity_known=not queueIdentityUnknown
  if r.native_blocker then r.reason="BLOCKED"
  elseif r.queued_move_current then r.reason="QUEUED_MOVE_CURRENT"
  elseif r.units_have_moves then r.reason="UNITS_HAVE_MOVES"
