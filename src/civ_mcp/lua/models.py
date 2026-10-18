@@ -424,6 +424,7 @@ class GameNotification:
     y: int
     is_action_required: bool = False
     resolution_hint: str | None = None
+    summary: str = ""
 
 
 @dataclass
