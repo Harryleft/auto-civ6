@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import json
 
 from civ_mcp.lua._helpers import (
     _ITEM_PARAM_MAP,
@@ -785,82 +786,85 @@ print("{SENTINEL}")
 """
 
 
-def build_city_yield_focus_query(city_id: int) -> str:
-    """Get current yield focus settings for a city (InGame context)."""
+def _city_focus_state(city_id: int, focus: str) -> str:
     return f"""
 {_lua_get_city(city_id)}
-local citz = pCity:GetCitizens()
-local yields = {{"YIELD_FOOD", "YIELD_PRODUCTION", "YIELD_GOLD", "YIELD_SCIENCE", "YIELD_CULTURE", "YIELD_FAITH"}}
-for _, yName in ipairs(yields) do
-    local yRow = GameInfo.Yields[yName]
-    if yRow then
-        local favored = citz:IsFavoredYield(yRow.Index)
-        local disfavored = citz:IsDisfavoredYield(yRow.Index)
-        local status = "neutral"
-        if favored then status = "favored" elseif disfavored then status = "disfavored" end
-        print("FOCUS|" .. yName .. "|" .. status)
-    end
-end
+local focus={json.dumps(focus)}
+local ok,state=pcall(function()
+ local owner,id,x,y=pCity:GetOwner(),pCity:GetID(),pCity:GetX(),pCity:GetY()
+ local identity={{id,owner,x,y}}
+ for i=1,4 do local value=identity[i];if type(value)~="number" or value%1~=0 then error("city identity unknown") end end
+ if owner~=me or ({city_id}>=65536 and id~={city_id}) then error("city identity changed") end
+ local citizens=pCity:GetCitizens()
+ local result={{city=table.concat({{id,owner,x,y}},","),rows={{}},current={{}},goal={{}}}}
+ local indices,names={{}},{{}}
+ local targetFound=focus=="DEFAULT"
+ for row in GameInfo.Yields() do
+  local index,name=row.Index,row.YieldType
+  if type(index)~="number" or index%1~=0 or index<0 or type(name)~="string" or not name:match("^YIELD_[A-Z0-9_]+$") or indices[index] or names[name] then error("yield identity unknown") end
+  indices[index]=true;names[name]=true
+  local favored,ignored=citizens:IsFavoredYield(index),citizens:IsDisfavoredYield(index)
+  if type(favored)~="boolean" or type(ignored)~="boolean" then error("citizen focus unknown") end
+  local wantedFavored=focus==name
+  local wantedIgnored=focus~="DEFAULT" and focus~=name and ignored
+  if focus==name then targetFound=true end
+  local prefix=index..","..name..","
+  table.insert(result.current,prefix..(favored and "1" or "0")..","..(ignored and "1" or "0"))
+  table.insert(result.goal,prefix..(wantedFavored and "1" or "0")..","..(wantedIgnored and "1" or "0"))
+  table.insert(result.rows,{{index=index,name=name,favored=favored,ignored=ignored,wantedFavored=wantedFavored,wantedIgnored=wantedIgnored}})
+ end
+ if #result.rows==0 or not targetFound then error("yield unavailable") end
+ table.sort(result.current);table.sort(result.goal)
+ result.current=table.concat(result.current,";");result.goal=table.concat(result.goal,";")
+ return result
+end)
+if not ok then print("ERR:FOCUS_STATE_UNKNOWN|City identity or complete Citizens preferences unavailable"); print("{SENTINEL}"); return end
+"""
+
+
+def build_city_yield_focus_query(city_id: int, focus: str = "DEFAULT", *, witness_token: str | None = None, expected_city: str = "", expected_goal: str = "") -> str:
+    """Read complete native citizen flags; optionally confirm one entered request."""
+    code = _city_focus_state(city_id, focus)
+    if witness_token is not None:
+        return code + f"""
+local receipt=type(__civmcpCityFocus)=="table" and __civmcpCityFocus[{city_id}%65536]
+if receipt and receipt.token=={json.dumps(witness_token)} and receipt.complete==true and receipt.city==state.city and receipt.goal==state.current and state.city=={json.dumps(expected_city)} and state.current=={json.dumps(expected_goal)} then
+ print("CITY_FOCUS_CONFIRMED|"..receipt.token.."|"..pCity:GetID().."|"..state.current)
+else print("CITY_FOCUS_OBSERVED|"..pCity:GetID().."|"..state.current) end
+print("{SENTINEL}")
+"""
+    return code + f"""
+print("CITY_FOCUS_CITY|"..state.city)
+print("CITY_FOCUS_CURRENT|"..state.current)
+print("CITY_FOCUS_GOAL|"..state.goal)
+for _,row in ipairs(state.rows) do print("FOCUS|"..row.name.."|"..(row.favored and "favored" or (row.ignored and "disfavored" or "neutral"))) end
 print("{SENTINEL}")
 """
 
 
-def build_set_yield_focus(city_id: int, yield_type: str) -> str:
-    """Set or clear a yield focus for a city (InGame context).
-
-    Uses CityManager.RequestCommand with CityCommandTypes.SET_FOCUS.
-    yield_type="DEFAULT" clears all focus. Otherwise sets the given yield as favored.
-    PARAM_FLAGS: 1 = toggle favored, 0 = toggle disfavored.
-    """
-    if yield_type.upper() == "DEFAULT":
-        # Clear all focus by toggling off any currently favored/disfavored yields
-        return f"""
-{_lua_get_city(city_id)}
-local citz = pCity:GetCitizens()
-local cleared = false
-for yRow in GameInfo.Yields() do
-    if citz:IsFavoredYield(yRow.Index) then
-        local tp = {{}}
-        tp[CityCommandTypes.PARAM_YIELD_TYPE] = yRow.Index
-        tp[CityCommandTypes.PARAM_FLAGS] = 1
-        CityManager.RequestCommand(pCity, CityCommandTypes.SET_FOCUS, tp)
-        cleared = true
-    end
-    if citz:IsDisfavoredYield(yRow.Index) then
-        local tp = {{}}
-        tp[CityCommandTypes.PARAM_YIELD_TYPE] = yRow.Index
-        tp[CityCommandTypes.PARAM_FLAGS] = 0
-        CityManager.RequestCommand(pCity, CityCommandTypes.SET_FOCUS, tp)
-        cleared = true
-    end
+def build_set_yield_focus(city_id: int, yield_type: str, *, expected_city: str, expected_current: str, expected_goal: str, witness_token: str) -> str:
+    """Submit an atomic target-state plan using official SET_FOCUS parameters."""
+    return _city_focus_state(city_id, yield_type) + f"""
+if state.city~={json.dumps(expected_city)} or state.current~={json.dumps(expected_current)} or state.goal~={json.dumps(expected_goal)} then print("ERR:FOCUS_CHANGED_NO_SUBMIT|City or citizen preferences changed"); print("{SENTINEL}"); return end
+if type(CityManager.RequestCommand)~="function" or CityCommandTypes.SET_FOCUS==nil or CityCommandTypes.PARAM_FLAGS==nil or CityCommandTypes.PARAM_DATA0==nil or CityCommandTypes.PARAM_YIELD_TYPE==nil then print("ERR:FOCUS_COMMAND_NO_SUBMIT|Native SET_FOCUS unavailable"); print("{SENTINEL}"); return end
+if __civmcpCityFocus~=nil and type(__civmcpCityFocus)~="table" then print("ERR:FOCUS_COMMAND_NO_SUBMIT|Receipt unavailable"); print("{SENTINEL}"); return end
+__civmcpCityFocus=__civmcpCityFocus or {{}}
+local receipt={{token={json.dumps(witness_token)},city=state.city,goal=state.goal,complete=false}}
+__civmcpCityFocus[{city_id}%65536]=receipt
+local function setFlag(index,flag,value)
+ local params={{}}
+ params[CityCommandTypes.PARAM_FLAGS]=flag
+ params[CityCommandTypes.PARAM_YIELD_TYPE]=index
+ params[CityCommandTypes.PARAM_DATA0]=value and 1 or 0
+ CityManager.RequestCommand(pCity,CityCommandTypes.SET_FOCUS,params)
 end
-if cleared then print("OK:FOCUS_CLEARED|All yield focus cleared")
-else print("OK:FOCUS_CLEARED|No focus was set") end
-print("{SENTINEL}")
-"""
-    yield_name = yield_type.upper()
-    if not yield_name.startswith("YIELD_"):
-        yield_name = f"YIELD_{yield_name}"
-    return f"""
-{_lua_get_city(city_id)}
-local yRow = GameInfo.Yields["{yield_name}"]
-if yRow == nil then {_bail(f"ERR:YIELD_NOT_FOUND|{yield_name}")} end
-local citz = pCity:GetCitizens()
--- Clear existing favored focus first
-for yr in GameInfo.Yields() do
-    if citz:IsFavoredYield(yr.Index) then
-        local tp = {{}}
-        tp[CityCommandTypes.PARAM_YIELD_TYPE] = yr.Index
-        tp[CityCommandTypes.PARAM_FLAGS] = 1
-        CityManager.RequestCommand(pCity, CityCommandTypes.SET_FOCUS, tp)
-    end
+for _,row in ipairs(state.rows) do
+ -- Official CityPanel SetYieldIgnore clears an ignored target before favoring it.
+ if row.ignored~=row.wantedIgnored then setFlag(row.index,1,row.wantedIgnored) end
+ if row.favored~=row.wantedFavored then setFlag(row.index,0,row.wantedFavored) end
 end
--- Set new focus
-local tParams = {{}}
-tParams[CityCommandTypes.PARAM_YIELD_TYPE] = yRow.Index
-tParams[CityCommandTypes.PARAM_FLAGS] = 1
-CityManager.RequestCommand(pCity, CityCommandTypes.SET_FOCUS, tParams)
-print("OK:FOCUS_SET|{yield_name}|favored")
+receipt.complete=true
+print("OK:CITY_FOCUS_REQUESTED|"..pCity:GetID())
 print("{SENTINEL}")
 """
 
