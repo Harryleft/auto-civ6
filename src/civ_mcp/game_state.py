@@ -23,6 +23,7 @@ from civ_mcp.narrate import (
     narrate_move_discoveries,
     narrate_settle_candidates,
     narrate_test_trade,
+    narrate_victory_warnings,
 )
 
 
@@ -32,6 +33,7 @@ LOAD_TIMEOUT = 180.0
 
 ACTION_CONFIRM_TIMEOUT = 5.0
 ACTION_CONFIRM_INTERVAL = 0.15
+VICTORY_REPORT_TIMEOUT = 5.0
 
 
 class GameState:
@@ -1745,6 +1747,20 @@ class GameState:
             before, after, events, notifications,
             stockpiles=current.stockpiles if current else None,
         )
+        try:
+            # TurnProgress has already retired the confirmed request. This
+            # bounded read can only limit its report, never undo advancement.
+            lines = await asyncio.wait_for(
+                self.conn.execute_write(lq.build_victory_proximity_query()), timeout=VICTORY_REPORT_TIMEOUT,
+            )
+            victory = lq.parse_victory_progress_response(lines)
+            if victory.turn != after or victory.local_player_id != self._local_player_id:
+                raise ValueError("Victory observations do not match confirmed turn/player")
+            warning = narrate_victory_warnings(victory)
+            if warning:
+                limited.append(warning)
+        except (OSError, TimeoutError, LuaError, ValueError):
+            limited.append("Victory warnings unavailable; use get_victory_progress.")
         return "\n".join([report, *limited])
 
     async def end_turn(self) -> str:
