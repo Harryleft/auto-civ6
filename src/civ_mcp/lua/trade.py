@@ -527,8 +527,10 @@ def _incoming_guard(scope: str, target: int, sid: int) -> str:
     """Incoming and AI-evaluation phases share this original native session."""
     return _scope() + f'''
 local me,target,sid=Game.GetLocalPlayer(),{int(target)},{int(sid)}
+local worldKnown,observedScope=pcall(currentScope)
+print("INCOMING_WORLD|"..(worldKnown and observedScope or "UNKNOWN"))
 local function ready()
- if currentScope()~={json.dumps(scope)} or ContextPtr:GetID()~="DiplomacyDealView" or ContextPtr:IsHidden() then return false end
+ if not worldKnown or observedScope~={json.dumps(scope)} or ContextPtr:GetID()~="DiplomacyDealView" or ContextPtr:IsHidden() then return false end
  local localPlayer=g_LocalPlayer or ms_LocalPlayer
  local otherPlayer=g_OtherPlayer or ms_OtherPlayer
  local actionRoot=ContextPtr:LookUpControl("/InGame/DiplomacyActionView")
