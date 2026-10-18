@@ -1657,12 +1657,12 @@ class TestSendDiplomaticAction:
         assert seen["request"] == [agreement]
 
     def test_non_war_action_passes_the_result_through(self):
-        gs, conn = _gs([("write", ["OK:SENT|delegation"])])
+        gs, conn = _gs([("write", ["OK:SENT|Denounced Sweden"])])
 
         async def go():
-            return await gs.send_diplomatic_action(1, "DIPLOMATIC_DELEGATION")
+            return await gs.send_diplomatic_action(1, "DENOUNCE")
 
-        assert run(go()) == "SENT|delegation"
+        assert run(go()) == "SENT|Denounced Sweden"
         assert conn.exhausted
 
     def test_war_declaration_schedules_background_cleanup(self):

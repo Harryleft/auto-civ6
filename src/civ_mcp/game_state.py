@@ -737,15 +737,18 @@ class GameState:
             "DECLARE_"
         )
         is_friendship = action.upper() == "DECLARE_FRIENDSHIP"
+        access_action = (
+            action.upper() if action.upper() in {"DIPLOMATIC_DELEGATION", "RESIDENT_EMBASSY"} else None
+        )
         lua = lq.build_send_diplo_action(other_player_id, action.upper())
         try:
             lines = await self.conn.execute_write(lua)
         except (OSError, TimeoutError, LuaError, ValueError):
-            if is_friendship:
-                return await self._confirm_diplomatic_relationship(other_player_id, None)
+            if is_friendship or access_action:
+                return await self._confirm_diplomatic_relationship(other_player_id, None, access_action=access_action)
             raise
-        if is_friendship:
-            return await self._confirm_diplomatic_relationship(other_player_id, lines)
+        if is_friendship or access_action:
+            return await self._confirm_diplomatic_relationship(other_player_id, lines, access_action=access_action)
         result = _action_result(lines)
 
         # _action_result rewrites "ERR:" to "Error: " — only schedule the
@@ -758,11 +761,14 @@ class GameState:
         return result
 
     async def _confirm_diplomatic_relationship(
-        self, other_player_id: int, lines: list[str] | None, *, alliance_type: str | None = None,
+        self, other_player_id: int, lines: list[str] | None, *,
+        alliance_type: str | None = None, access_action: str | None = None,
     ) -> str:
         """Confirm only the scoped native relationship; never submit or clean up."""
-        kind = "ALLIANCE" if alliance_type is not None else "FRIENDSHIP"
+        kind = access_action or ("ALLIANCE" if alliance_type is not None else "FRIENDSHIP")
         relationship = f"{alliance_type} alliance" if alliance_type is not None else "Friendship declaration"
+        if access_action:
+            relationship = "Delegation" if access_action == "DIPLOMATIC_DELEGATION" else "Embassy"
         unconfirmed = (
             f"PROPOSED_UNCONFIRMED|{relationship} to player {other_player_id} is unconfirmed; "
             "the request may have been submitted. Query get_diplomacy before another proposal; "
@@ -774,9 +780,10 @@ class GameState:
         if result.startswith("Error:") and not result.startswith("Error: OUTCOME_UNKNOWN"):
             return result
         scope = [line.split("|") for line in lines if line.startswith(f"{kind}_SCOPE|")]
-        proposed = [line for line in lines if line.startswith("OK:PROPOSED|")]
-        scope_length = 4 if alliance_type is not None else 3
-        if not result.startswith("PROPOSED|") or len(proposed) != 1 or len(scope) != 1 or len(scope[0]) != scope_length:
+        receipt_prefix = "ALREADY_ESTABLISHED|" if access_action and result.startswith("ALREADY_ESTABLISHED|") else "PROPOSED|"
+        proposed = [line for line in lines if line.startswith(f"OK:{receipt_prefix}")]
+        scope_length = 5 if access_action else (4 if alliance_type is not None else 3)
+        if not result.startswith(receipt_prefix) or len(proposed) != 1 or len(scope) != 1 or len(scope[0]) != scope_length:
             return unconfirmed
         try:
             owner, target = int(scope[0][1]), int(scope[0][2])
@@ -784,19 +791,34 @@ class GameState:
             return unconfirmed
         if owner < 0 or owner == target or target != other_player_id:
             return unconfirmed
-        state = f"ALLIANCE_{alliance_type}" if alliance_type is not None else "DECLARED_FRIEND"
+        state = "PRESENT" if access_action else (f"ALLIANCE_{alliance_type}" if alliance_type is not None else "DECLARED_FRIEND")
         if alliance_type is not None and scope[0][3] != state:
             return unconfirmed
         name = result.split("|", 1)[1]
-        query = (lq.build_check_alliance_state(target, owner, alliance_type) if alliance_type is not None
-                 else lq.build_check_friendship_state(target, owner))
+        if access_action:
+            try:
+                seed = int(scope[0][3])
+            except ValueError:
+                return unconfirmed
+            civilization = scope[0][4]
+            if not re.fullmatch(r"CIVILIZATION_[A-Za-z0-9_]+", civilization):
+                return unconfirmed
+            query = lq.build_check_diplomatic_access(target, owner, access_action, seed, civilization)
+        elif alliance_type is not None:
+            query = lq.build_check_alliance_state(target, owner, alliance_type)
+        else:
+            query = lq.build_check_friendship_state(target, owner)
         try:
             # The deadline includes reads. Transient state never authorizes a
-            # rejection or another submission of either diplomatic proposal.
+            # rejection or another submission of any diplomatic proposal.
             async with asyncio.timeout(ACTION_CONFIRM_TIMEOUT):
                 while True:
                     evidence = await self.conn.execute_write(query)
                     if evidence == [f"{kind}|{owner}|{target}|{state}"]:
+                        if access_action:
+                            if receipt_prefix == "ALREADY_ESTABLISHED|":
+                                return f"ACCEPTED|{relationship} already established with {name}"
+                            return f"ACCEPTED|{name} accepted your {relationship.lower()}"
                         if alliance_type is not None:
                             return f"ACCEPTED|{alliance_type} alliance formed with {name}"
                         return f"ACCEPTED|Friendship established with {name}"
