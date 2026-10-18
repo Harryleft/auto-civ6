@@ -1172,6 +1172,14 @@ def narrate_test_trade(result: lq.TestTradeResult) -> str:
 
 def narrate_policies(gov: lq.GovernmentStatus) -> str:
     lines = [f"Government: {gov.government_name} ({gov.government_type})"]
+    if gov.policy_unlock_cost == 0:
+        lines.append("Policy change cost: free")
+    elif gov.policy_unlock_cost is not None:
+        currency = gov.policy_unlock_currency or "unknown currency"
+        balance = f"{gov.policy_unlock_balance:g}" if gov.policy_unlock_balance is not None else "unknown"
+        lines.append(f"Policy change cost: {gov.policy_unlock_cost:g} {currency}; balance: {balance}")
+    else:
+        lines.append("Policy change cost: unknown")
 
     if gov.slots:
         lines.append(f"\n{len(gov.slots)} policy slots:")
