@@ -274,7 +274,10 @@ def narrate_builder_tasks(
     if not builders:
         return "No builders with charges available."
     idle = [b for b in builders if b.moves > 0]
-    lines = [f"=== BUILDER TASKS ({len(tasks)} tasks, {len(idle)} idle builders) ==="]
+    lines = [
+        f"=== BUILDER TASKS ({len(tasks)} tasks, {len(idle)} idle builders) ===",
+        "Advisory candidates; confirm current native eligibility before acting.",
+    ]
     if not tasks:
         lines.append("")
         lines.append("No tiles need improvement in your territory.")
@@ -438,6 +441,8 @@ def narrate_cities(
             lines.append(
                 f"    !! PILLAGED TILES: {', '.join(pill_imps)} (send builder to repair)"
             )
+        if c.resource_visibility_known is False:
+            lines.append("    Resource advice incomplete: native resource visibility unknown.")
         if c.unimproved_resources:
             res_names = [r.split("@")[0] for r in c.unimproved_resources]
             lines.append(f"    Needs builder: {', '.join(res_names)} (unimproved)")
