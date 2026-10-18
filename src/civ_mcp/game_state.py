@@ -107,6 +107,11 @@ class GameState:
     def pending_action_entity(self) -> tuple[str, int] | None:
         return self._actions.entity
 
+    @property
+    def pending_action_kind(self) -> str | None:
+        pending = self._actions.pending
+        return pending.kind if pending else None
+
     def _pending_unknown(self, reason: str = "confirmation deadline reached") -> str:
         return self._actions.unknown(reason)
 
@@ -131,7 +136,8 @@ class GameState:
         if entity is not None and entity[0] == "unit":
             entity = (entity[0], entity[1] % 65536)
         pending = self._pending_action
-        if pending is not None and (entity is None or entity == self.pending_action_entity):
+        if pending is not None and (entity is None or entity == self.pending_action_entity
+                                    or pending.kind == "pillage"):
             await self.confirm_pending_action()
             if self._pending_action is not None:
                 return self._pending_unknown("dependent action was not submitted")
@@ -472,6 +478,34 @@ class GameState:
             details={"witness_token": token},
         )
         return await self._submit_action(pending, scope, lq.build_cancel_unit_move(unit_index, token))
+
+    async def pillage_unit(self, unit_id: int) -> str:
+        if self._actions.matches("pillage", ("unit", unit_id)):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        lines = await self.conn.execute_write(lq.build_pillage_preflight(unit_id))
+        rows = [row.split("|") for row in lines if row.startswith("PILLAGE_PREPARED|")]
+        if len(rows) != 1 or len(rows[0]) != 5:
+            return _action_result(lines)
+        _, full_id, x, y, fingerprint = rows[0]
+        if (not all(re.fullmatch(r"\d+", value) for value in (full_id, x, y))
+                or not re.fullmatch(r"[-\d,]+(?:;(?:improvement|district|building):\d+:(?:true|false))+", fingerprint)):
+            return "Error: PILLAGE_TARGET_UNKNOWN|No action submitted."
+        token = uuid.uuid4().hex
+        position = (int(x), int(y))
+        pending = _PendingAction(
+            "pillage", ("unit", unit_id), lq.build_pillage_query(int(full_id), token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"witness_token": token, "full_id": int(full_id),
+                     "target": position, "fingerprint": fingerprint},
+        )
+        return await self._submit_action(pending, scope, lq.build_pillage_unit(
+            int(full_id), *position, fingerprint, token))
 
     async def _set_unit_readiness(
         self, unit_index: int, kind: str, *, scope: _ActionScope | None = None,
