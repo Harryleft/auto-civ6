@@ -107,6 +107,7 @@ class ActionLifecycle:
             "skip": ("READINESS_REQUESTED|",),
             "fortify": ("READINESS_REQUESTED|",),
             "cancel_move": ("CANCEL_MOVE_REQUESTED|",),
+            "pillage": ("PILLAGE_REQUESTED|",),
         }[pending.kind]
         if result.startswith(accepted):
             pending.success = result
@@ -266,6 +267,18 @@ print("{lq.SENTINEL}")
                     and re.fullmatch(r"from:-?\d+,-?\d+", row[4]) and row[5] == row[4].replace("from:", "now:", 1)
                     and row[6:] == ["queue:none", "busy:false", "entered:true"]):
                 return f"MOVE_CANCELLED|unit:{row[3]}|at:{row[4][5:]}|Position retained; choose the next unit intent separately."
+        if pending.kind == "pillage":
+            rows = [row.split("|") for row in pending.observed if row.startswith("PILLAGE_DAMAGE|")]
+            if len(rows) != 1 or len(rows[0]) != 8:
+                return None
+            row = rows[0]
+            x, y = pending.details["target"]
+            if (row[1:7] == [pending.details["witness_token"], str(pending.owner),
+                            str(pending.details["full_id"]), str(x), str(y),
+                            pending.details["fingerprint"]]
+                    and re.fullmatch(r"(?:improvement|district|building):\d+", row[7])):
+                return (f"PILLAGED|unit:{row[3]}|at:{x},{y}|damaged:{row[7]}"
+                        "|Native damage confirmed; yields not measured.")
         if pending.kind == "production":
             target = pending.details.get("target")
             if target is not None:
