@@ -17,6 +17,7 @@ Agent 从根目录 [AGENTS.md](../AGENTS.md) 开始；命中任务后读取对�
 
 ## 规格与验收
 
+- [第 81～101 回合调度与等待识别规格](specs/2026-10-18-turn101-scheduling.md)与[工作项](specs/2026-10-18-turn101-scheduling-tickets.md)：外交原生关闭、等待阶段、未来移动前置拒绝及资源提示；T81 verified 同轮续测。
 - [第 61～81 回合查询与展示验收](acceptance/2026-10-18-turn81-queries.md)：1,805 项离线、净 20 回合、两份结果档与十类恢复比较；保留移动及长等待新增待办。
 - [第 61～81 回合查询与展示规格](specs/2026-10-18-turn81-queries.md)与[工作项](specs/2026-10-18-turn81-queries-tickets.md)：商路候选、资源可见性、通知详情；本轮 T61 检查点续测。
 - [第 41～61 回合修复验收](acceptance/2026-10-18-turn61-readiness.md)：1,750 项离线、净 20 回合、第四城、原生待命复现、结果存档与双次菜单恢复。
