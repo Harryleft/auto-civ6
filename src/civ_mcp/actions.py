@@ -109,6 +109,7 @@ class ActionLifecycle:
             "cancel_move": ("CANCEL_MOVE_REQUESTED|",),
             "pillage": ("PILLAGE_REQUESTED|",),
             "city_focus": ("CITY_FOCUS_REQUESTED|",),
+            "spy_escape": ("SPY_ESCAPE_REQUESTED|",),
         }[pending.kind]
         if result.startswith(accepted):
             pending.success = result
@@ -189,9 +190,9 @@ print("{lq.SENTINEL}")
             return f"Error: ACTION_SCOPE_UNAVAILABLE|{exc}; no action submitted."
 
     def observe_identity(self, identity: tuple[str, int]) -> None:
-        """Keep a focus request invalid after a witnessed world replacement."""
+        """Keep focus/escape requests invalid after a witnessed world replacement."""
         pending = self.pending
-        if pending is not None and pending.kind == "city_focus" and identity != pending.identity:
+        if pending is not None and pending.kind in ("city_focus", "spy_escape") and identity != pending.identity:
             pending.details["scope_invalid"] = True
 
     def unknown(self, reason: str = "confirmation deadline reached") -> str:
@@ -243,7 +244,7 @@ print("{lq.SENTINEL}")
             return pending.confirmed or self.unknown(f"confirmation unavailable: {exc}")
 
     def _confirmed_action(self, pending: _PendingAction) -> str | None:
-        if pending.kind == "city_focus" and pending.details.get("scope_invalid"):
+        if pending.kind in ("city_focus", "spy_escape") and pending.details.get("scope_invalid"):
             return None
         if pending.identity is not None:
             rows = [line.split("|") for line in pending.observed if line.startswith("ACTION_IDENTITY|")]
@@ -253,7 +254,7 @@ print("{lq.SENTINEL}")
             identity = (fields[1].replace("CIVILIZATION_", "").lower(), int(fields[2]))
             if (identity != pending.identity or int(fields[3]) != pending.turn
                     or int(fields[4]) != pending.owner):
-                if pending.kind == "city_focus":
+                if pending.kind in ("city_focus", "spy_escape"):
                     pending.details["scope_invalid"] = True
                 return None
         if pending.kind in ("skip", "fortify"):
@@ -296,6 +297,16 @@ print("{lq.SENTINEL}")
             if rows == [expected]:
                 label = "FOCUS_CLEARED" if pending.details["item"] == "DEFAULT" else "FOCUS_SET"
                 return f"{label}|city:{pending.details['city']}|{pending.details['item']}|Native Citizens confirmed."
+        if pending.kind == "spy_escape":
+            rows = [row.split("|") for row in pending.observed if row.startswith("SPY_ESCAPE_CONFIRMED|")]
+            if len(rows) == 1 and len(rows[0]) == 6:
+                row = rows[0]
+                expected = [pending.details["witness_token"], str(pending.details["full_id"]), pending.details["item"]]
+                next_id = row[5].removeprefix("next:")
+                resolved = (row[4:] == ["gate:NONE", "next:none"] or
+                            (row[4] == "gate:ACTIVE" and row[5].startswith("next:") and next_id.isdigit() and int(next_id) != pending.details["full_id"]))
+                if row[1:4] == expected and resolved:
+                    return f"ESCAPE_ROUTE_CONFIRMED|spy:{row[2]}|{row[3]}|Escape-choice gate for this spy resolved; travel outcome not measured."
         if pending.kind == "production":
             target = pending.details.get("target")
             if target is not None:

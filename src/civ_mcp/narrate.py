@@ -157,13 +157,15 @@ def narrate_spies(spies: list[lq.SpyInfo]) -> str:
         mission_tag = (
             f" | mission: {s.current_mission}" if s.current_mission != "none" else ""
         )
-        escape_tag = " ** [ESCAPING — needs escape route] **" if s.is_escaping else ""
+        escape_tag = (" ** [ESCAPING — needs escape route] ** routes: " + (", ".join(s.escape_routes) or "UNKNOWN")) if s.is_escaping else ""
         lines.append(
             f"  id:{s.unit_id} [{rank_name}] {s.name} — at {loc} | moves:{s.moves}"
             f" | xp:{s.xp}{mission_tag} | ops: {ops}{escape_tag}"
         )
     lines.append("")
     lines.append("Actions:")
+    if any(s.is_escaping for s in spies):
+        lines.append("  Escape: spy_action(unit_id, action='escape:<listed district>', target_x=0, target_y=0) — choose one legal route; route selection does not confirm completed travel.")
     lines.append(
         "  Travel: spy_action(unit_id, action='travel', target_x, target_y)"
         " — send spy to own city or city-state"
