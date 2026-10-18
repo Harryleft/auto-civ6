@@ -21,6 +21,7 @@ from civ_mcp.end_turn import TurnProgress
 from civ_mcp.narrate import (
     narrate_combat_estimate,
     narrate_move_discoveries,
+    narrate_notification_message,
     narrate_settle_candidates,
     narrate_test_trade,
     narrate_victory_warnings,
@@ -1748,13 +1749,13 @@ class GameState:
             lines.append("== Action Required ==")
             for n in action_required:
                 hint = f"  -> Use: {n.resolution_hint}" if n.resolution_hint else ""
-                lines.append(f"  * {n.message}{hint}")
+                lines.append(f"  * {narrate_notification_message(n)}{hint}")
 
         if info_notifs:
             lines.append("")
             lines.append("== Notifications ==")
             for n in info_notifs:
-                lines.append(f"  - {n.message}")
+                lines.append(f"  - {narrate_notification_message(n)}")
 
         return "\n".join(lines)
 
