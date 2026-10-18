@@ -1919,6 +1919,17 @@ def narrate_victory_progress(vp: lq.VictoryProgress) -> str:
     return "\n".join(lines)
 
 
+def narrate_notification_message(notification: lq.GameNotification) -> str:
+    """Compose native notification text for lists and confirmed-turn reports."""
+    message = notification.message.strip()
+    summary = notification.summary.strip()
+    if not summary or summary in message:
+        return message
+    if not message or message in summary:
+        return summary
+    return f"{message} — {summary}"
+
+
 def narrate_notifications(notifs: list[lq.GameNotification]) -> str:
     if not notifs:
         return "No active notifications."
@@ -1932,7 +1943,7 @@ def narrate_notifications(notifs: list[lq.GameNotification]) -> str:
         for n in action_required:
             hint = f"  -> Use: {n.resolution_hint}" if n.resolution_hint else ""
             loc = f" at ({n.x},{n.y})" if n.x >= 0 else ""
-            lines.append(f"  * {n.message}{loc}{hint}")
+            lines.append(f"  * {narrate_notification_message(n)}{loc}{hint}")
 
     if info_notifs:
         if lines:
@@ -1941,7 +1952,7 @@ def narrate_notifications(notifs: list[lq.GameNotification]) -> str:
         for n in info_notifs:
             hint = f"  -> {n.resolution_hint}" if n.resolution_hint else ""
             loc = f" at ({n.x},{n.y})" if n.x >= 0 else ""
-            lines.append(f"  - {n.message}{loc}{hint}")
+            lines.append(f"  - {narrate_notification_message(n)}{loc}{hint}")
 
     return "\n".join(lines)
 
