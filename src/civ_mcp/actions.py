@@ -106,6 +106,7 @@ class ActionLifecycle:
             "production": ("PRODUCING|",),
             "skip": ("READINESS_REQUESTED|",),
             "fortify": ("READINESS_REQUESTED|",),
+            "cancel_move": ("CANCEL_MOVE_REQUESTED|",),
         }[pending.kind]
         if result.startswith(accepted):
             pending.success = result
@@ -255,6 +256,16 @@ print("{lq.SENTINEL}")
             label = row[6].removeprefix("result:")
             if label in ({"SKIPPED"} if pending.kind == "skip" else {"FORTIFIED", "SLEEPING"}):
                 return f"{label}|unit:{row[3]}|ready:false"
+        if pending.kind == "cancel_move":
+            rows = [row.split("|") for row in pending.observed if row.startswith("CANCEL_MOVE|")]
+            if len(rows) != 1 or len(rows[0]) != 9:
+                return None
+            row = rows[0]
+            if (row[1] == pending.details["witness_token"] and row[2] == str(pending.owner)
+                    and row[3].isdigit() and int(row[3]) % 65536 == pending.entity[1] % 65536
+                    and re.fullmatch(r"from:-?\d+,-?\d+", row[4]) and row[5] == row[4].replace("from:", "now:", 1)
+                    and row[6:] == ["queue:none", "busy:false", "entered:true"]):
+                return f"MOVE_CANCELLED|unit:{row[3]}|at:{row[4][5:]}|Position retained; choose the next unit intent separately."
         if pending.kind == "production":
             target = pending.details.get("target")
             if target is not None:
