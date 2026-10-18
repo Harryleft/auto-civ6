@@ -1618,6 +1618,8 @@ class TestMcpProtocol:
                     negotiation = next(tool.inputSchema for tool in tools if tool.name == "negotiate_incoming_trade")
                     assert negotiation["required"] == ["other_player_id", "expected_fingerprint"]
                     assert negotiation["properties"]["mode"]["default"] == "inspect"
+                    unavailable = await session.call_tool("negotiate_incoming_trade", {"other_player_id": 1, "expected_fingerprint": "unverified"})
+                    assert not unavailable.isError and "unknown" in unavailable.content[0].text.lower()
                     assert "get_turn_status" in names
                     status_tool = next(tool for tool in tools if tool.name == "get_turn_status")
                     assert status_tool.annotations.readOnlyHint is True
@@ -1643,7 +1645,7 @@ class TestMcpProtocol:
         assert 'TURN_STATE|' in conn.read_queries[0]
         assert conn.read_queries[1] == 'print(42)'
         entries = [json.loads(line) for line in log_path.read_text().splitlines()]
-        assert [entry["tool"] for entry in entries] == ["get_turn_status", "save_game", "run_lua", "unit_action"]
+        assert [entry["tool"] for entry in entries] == ["negotiate_incoming_trade", "get_turn_status", "save_game", "run_lua", "unit_action"]
         assert all("success" not in entry for entry in entries)
 
 
