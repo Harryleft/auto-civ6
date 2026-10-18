@@ -77,6 +77,8 @@ class GameOverview:
     enabled_victories: set[str] = field(default_factory=set)
     # None means the native positive-weight category set was not complete.
     score_categories: list[ScoreCategory] | None = None
+    civilization_type: str | None = None
+    leader_type: str | None = None
 
     @property
     def score_category_total(self) -> int | None:
@@ -271,6 +273,8 @@ class CivInfo:
     num_cities: int = 0  # number of cities they own
     visible_cities: list[VisibleCity] = field(default_factory=list)
     agendas: list[AgendaInfo] = field(default_factory=list)
+    civilization_type: str | None = None
+    leader_type: str | None = None
 
 
 @dataclass
