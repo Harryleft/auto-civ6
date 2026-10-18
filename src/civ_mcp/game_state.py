@@ -71,6 +71,18 @@ class GameState:
         """One fact for action/save gates and MCP while advancement is unconfirmed."""
         return self._turn_progress.pending
 
+    def allows_incoming_trade_world(self, native_scope: str) -> bool:
+        """Ask the turn owner about a freshly verified native diplomacy scope."""
+        fields = native_scope.split("|")
+        if len(fields) != 3 or not re.fullmatch(r"CIVILIZATION_[A-Z0-9_]+", fields[1]):
+            return False
+        if not all(re.fullmatch(r"-?\d+", fields[i]) for i in (0, 2)):
+            return False
+        player, civ, seed = int(fields[0]), fields[1], int(fields[2])
+        if not 0 <= player <= 63:
+            return False
+        return self._turn_progress.allows_diplomacy_world((civ, seed, player))
+
     # Existing integrations/tests can still address these names. They never
     # carry a second copy of the request owned by TurnProgress.
     @property
