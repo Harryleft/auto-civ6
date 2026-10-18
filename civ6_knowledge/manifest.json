@@ -1,6 +1,7 @@
 {
   "counts": {
     "civics": 61,
+    "civilizations": 853,
     "combat": 311,
     "congress": 29,
     "diplomacy": 53,
@@ -18,6 +19,9 @@
       "Resolutions",
       "ProposalTypes",
       "VotingBlockers",
+      "Civilizations",
+      "Leaders",
+      "Traits",
       "Yields",
       "Buildings",
       "Policies",
@@ -42,6 +46,317 @@
       "RandomEvent_PillagedBuildings",
       "RandomEvent_PillagedDistricts"
     ],
+    "installed_definition_catalog": {
+      "applied": false,
+      "conditions_evaluated": false,
+      "gaps": [
+        {
+          "action": "AustraliaText",
+          "criteria": "Australia",
+          "manifest": "game/Contents/Assets/DLC/Australia/Australia.modinfo",
+          "package": "E3F53C61-371C-440B-96CE-077D318B36C0",
+          "path": "Text/Australia_Translations_ConfigText_China.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "AustraliaText",
+          "criteria": "Australia",
+          "manifest": "game/Contents/Assets/DLC/Australia/Australia.modinfo",
+          "package": "E3F53C61-371C-440B-96CE-077D318B36C0",
+          "path": "Text/Australia_Translations_Text_China.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "BarbarianClansMode_Text",
+          "criteria": "BarbarianClansMode",
+          "manifest": "game/Contents/Assets/DLC/BarbarianClansMode/BarbarianClansMode.modinfo",
+          "package": "19ED1A36-D744-4A58-8F8B-0376C2BA86E5",
+          "path": "Text/BarbarianClansMode_Translations_Text_MODE.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "BlackDeathScenarioSettingsText",
+          "criteria": "BlackDeathScenario",
+          "manifest": "game/Contents/Assets/DLC/BlackDeathScenario/BlackDeathScenario.modinfo",
+          "package": "C1F775D8-59B5-401B-B86D-78FAF3446EC7",
+          "path": "Text/BlackDeathScenario_Translations_ConfigText_China.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "BlackDeathScenarioSettingsText",
+          "criteria": "BlackDeathScenario",
+          "manifest": "game/Contents/Assets/DLC/BlackDeathScenario/BlackDeathScenario.modinfo",
+          "package": "C1F775D8-59B5-401B-B86D-78FAF3446EC7",
+          "path": "Text/BlackDeathScenario_Translations_Text_China.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "CatherineDeMediciGameplay",
+          "criteria": "CatherineDeMedici",
+          "manifest": "game/Contents/Assets/DLC/CatherineDeMedici/Catherine_De_Medici.modinfo",
+          "package": "CE5876CD-6900-46D1-9C9C-8DBA1F28872E",
+          "path": "Data/CatherineDeMedici_Modifiers.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "CivRoyaleScenarioText",
+          "criteria": "CivRoyaleScenario",
+          "manifest": "game/Contents/Assets/DLC/CivRoyaleScenario/CivRoyaleScenario.modinfo",
+          "package": "F264EE10-F21B-4A9A-BBCD-D534E9843E90",
+          "path": "Text/CivRoyaleScenario_Translations_ConfigText_China.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "CivRoyaleScenarioText",
+          "criteria": "CivRoyaleScenario",
+          "manifest": "game/Contents/Assets/DLC/CivRoyaleScenario/CivRoyaleScenario.modinfo",
+          "package": "F264EE10-F21B-4A9A-BBCD-D534E9843E90",
+          "path": "Text/CivRoyaleScenario_Translations_Text_China.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "Expansion1_Core",
+          "action_properties": "<Properties>\n\t\t\t\t\n\t\t\t\t<LoadOrder>-100</LoadOrder>\n\t\t\t</Properties>\n\t\t\t\n\t\t\t",
+          "criteria": "Expansion1",
+          "criteria_definition": "<Criteria id=\"Expansion1\">\n\t\t\t<GameCoreInUse>Expansion1</GameCoreInUse>\n\t\t</Criteria>\n\t\t",
+          "manifest": "game/Contents/Assets/DLC/Expansion1/Expansion1.modinfo",
+          "package": "1B28771A-C749-434B-9053-D1380C553DE9",
+          "path": "game/Contents/Assets/DLC/Expansion1/Data/Expansion1_Schema.sql",
+          "scope": "installed_definition_catalog",
+          "status": "unsupported_sql_not_applied"
+        },
+        {
+          "action": "Expansion1_CoreText",
+          "criteria": "Expansion1",
+          "manifest": "game/Contents/Assets/DLC/Expansion1/Expansion1.modinfo",
+          "package": "1B28771A-C749-434B-9053-D1380C553DE9",
+          "path": "Text/Expansion1_Translations_Text_China.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "Expansion1_MajorText",
+          "criteria": "Expansion1AndBeyond",
+          "manifest": "game/Contents/Assets/DLC/Expansion1/Expansion1.modinfo",
+          "package": "1B28771A-C749-434B-9053-D1380C553DE9",
+          "path": "Text/Expansion1_Translations_ConfigText_China.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "Expansion1_MajorText",
+          "criteria": "Expansion1AndBeyond",
+          "manifest": "game/Contents/Assets/DLC/Expansion1/Expansion1.modinfo",
+          "package": "1B28771A-C749-434B-9053-D1380C553DE9",
+          "path": "Text/Expansion1_Translations_Major_Text_China.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "Expansion2Core",
+          "action_properties": "<Properties>\n\t\t\t\t<LoadOrder>-100</LoadOrder>\n\t\t\t</Properties>\n\t\t\t\n\t\t\t",
+          "criteria": "Expansion2",
+          "criteria_definition": "<Criteria id=\"Expansion2\">\n\t\t\t<GameCoreInUse>Expansion2</GameCoreInUse>\n\t\t</Criteria>\n\t\t",
+          "manifest": "game/Contents/Assets/DLC/Expansion2/Expansion2.modinfo",
+          "package": "4873eb62-8ccc-4574-b784-dda455e74e68",
+          "path": "game/Contents/Assets/DLC/Expansion2/Data/Expansion2_Schema.sql",
+          "scope": "installed_definition_catalog",
+          "status": "unsupported_sql_not_applied"
+        },
+        {
+          "action": "Expansion2_CoreText",
+          "criteria": "Expansion2",
+          "manifest": "game/Contents/Assets/DLC/Expansion2/Expansion2.modinfo",
+          "package": "4873eb62-8ccc-4574-b784-dda455e74e68",
+          "path": "Text/Expansion2_Translations_Text_China.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "Expansion2_MajorText",
+          "criteria": "Expansion2AndBeyond",
+          "manifest": "game/Contents/Assets/DLC/Expansion2/Expansion2.modinfo",
+          "package": "4873eb62-8ccc-4574-b784-dda455e74e68",
+          "path": "Text/Expansion2_Translations_ConfigText_China.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "Expansion2_MajorText",
+          "criteria": "Expansion2AndBeyond",
+          "manifest": "game/Contents/Assets/DLC/Expansion2/Expansion2.modinfo",
+          "package": "4873eb62-8ccc-4574-b784-dda455e74e68",
+          "path": "Text/Expansion2_Translations_Major_Text.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "Expansion2_MajorText",
+          "criteria": "Expansion2AndBeyond",
+          "manifest": "game/Contents/Assets/DLC/Expansion2/Expansion2.modinfo",
+          "package": "4873eb62-8ccc-4574-b784-dda455e74e68",
+          "path": "Text/Expansion2_Translations_Major_Text_China.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "IndonesiaKhmerText",
+          "criteria": "IndonesiaKhmer",
+          "manifest": "game/Contents/Assets/DLC/Indonesia_Khmer/Indonesia_Khmer.modinfo",
+          "package": "1F367231-A040-4793-BDBB-088816853683",
+          "path": "Text/Indonesia_Khmer_Translations_ConfigText_China.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "IndonesiaKhmerText",
+          "criteria": "IndonesiaKhmer",
+          "manifest": "game/Contents/Assets/DLC/Indonesia_Khmer/Indonesia_Khmer.modinfo",
+          "package": "1F367231-A040-4793-BDBB-088816853683",
+          "path": "Text/Indonesia_Khmer_Translations_Text_China.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "JuliusCaesarGameplay",
+          "criteria": "JuliusCaesar",
+          "manifest": "game/Contents/Assets/DLC/JuliusCaesar/JuliusCaesar.modinfo",
+          "package": "9ED63236-617C-45A6-BB70-8CB6B0BE8ED2",
+          "path": "Data/JuliusCaesar_Districts.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "JuliusCaesarGameplay",
+          "criteria": "JuliusCaesar",
+          "manifest": "game/Contents/Assets/DLC/JuliusCaesar/JuliusCaesar.modinfo",
+          "package": "9ED63236-617C-45A6-BB70-8CB6B0BE8ED2",
+          "path": "Data/JuliusCaesar_Modifiers.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "JuliusCaesarGameplay",
+          "criteria": "JuliusCaesar",
+          "manifest": "game/Contents/Assets/DLC/JuliusCaesar/JuliusCaesar.modinfo",
+          "package": "9ED63236-617C-45A6-BB70-8CB6B0BE8ED2",
+          "path": "Data/JuliusCaesar_Units.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "KublaiKhanVietnamText",
+          "criteria": "KublaiKhanVietnam",
+          "manifest": "game/Contents/Assets/DLC/KublaiKhan_Vietnam/KublaiKhan_Vietnam.modinfo",
+          "package": "A3F42CD4-6C3E-4F5A-BC81-BE29E0C0B87C",
+          "path": "Text/KublaiKhan_Vietnam_RemoveText.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "MacedoniaText",
+          "criteria": "MacedoniaPersia",
+          "manifest": "game/Contents/Assets/DLC/Macedonia_Persia/Macedonia_Persia.modinfo",
+          "package": "E2749E9A-8056-45CD-901B-C368C8E83DEB",
+          "path": "Text/Macedonia_Persia_Translations_ConfigText_China.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "MacedoniaText",
+          "criteria": "MacedoniaPersia",
+          "manifest": "game/Contents/Assets/DLC/Macedonia_Persia/Macedonia_Persia.modinfo",
+          "package": "E2749E9A-8056-45CD-901B-C368C8E83DEB",
+          "path": "Text/Macedonia_Persia_Translations_Text_China.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "NubiaText",
+          "criteria": "Nubia",
+          "manifest": "game/Contents/Assets/DLC/Nubia_Amanitore/Nubia_Amanitore.modinfo",
+          "package": "643EA320-8E1A-4CF1-A01C-00D88DDD131A",
+          "path": "Text/Nubia_Amanitore_Translations_ConfigText_China.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "NubiaText",
+          "criteria": "Nubia",
+          "manifest": "game/Contents/Assets/DLC/Nubia_Amanitore/Nubia_Amanitore.modinfo",
+          "package": "643EA320-8E1A-4CF1-A01C-00D88DDD131A",
+          "path": "Text/Nubia_Amanitore_Translations_Text_China.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "PolandJadwigaText",
+          "criteria": "PolandJadwiga",
+          "manifest": "game/Contents/Assets/DLC/Poland_Jadwiga/Poland_Jadwiga.modinfo",
+          "package": "3809975F-263F-40A2-A747-8BFB171D821A",
+          "path": "Text/Poland_Translations_ConfigText_China.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "PolandJadwigaText",
+          "criteria": "PolandJadwiga",
+          "manifest": "game/Contents/Assets/DLC/Poland_Jadwiga/Poland_Jadwiga.modinfo",
+          "package": "3809975F-263F-40A2-A747-8BFB171D821A",
+          "path": "Text/Poland_Translations_Text_China.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "RulersOfTheSaharaGameplay",
+          "criteria": "RulersOfTheSahara",
+          "manifest": "game/Contents/Assets/DLC/RulersOfTheSahara/RulersOfTheSahara.modinfo",
+          "package": "82AE6F24-930F-4640-833C-FCDFD4845757",
+          "path": "Data/RulersOfTheSahara_RemoveData.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "RulersOfTheSaharaGameplay_XP1",
+          "criteria": "RulersOfTheSahara_Expansion1",
+          "manifest": "game/Contents/Assets/DLC/RulersOfTheSahara/RulersOfTheSahara.modinfo",
+          "package": "82AE6F24-930F-4640-833C-FCDFD4845757",
+          "path": "Data/RulersOfTheSahara_RemoveData.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "RulersOfTheSaharaGameplay_XP2",
+          "criteria": "RulersOfTheSahara_Expansion2",
+          "manifest": "game/Contents/Assets/DLC/RulersOfTheSahara/RulersOfTheSahara.modinfo",
+          "package": "82AE6F24-930F-4640-833C-FCDFD4845757",
+          "path": "Data/RulersOfTheSahara_RemoveData.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "TreeRandomizerText",
+          "criteria": "TreeRandomizer_Mode",
+          "manifest": "game/Contents/Assets/DLC/TreeRandomizer/TreeRandomizer.modinfo",
+          "package": "19d1c7ec-54de-11ea-a2e3-2e728ce88125",
+          "path": "Text/TreeRandomizer_Translations_Text.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "VIKINGSLANDMARKS_TEXT",
+          "criteria": "VikingLandmarks_Scenario",
+          "manifest": "game/Contents/Assets/DLC/VikingsLandmarks/VikingsLandmarks.modinfo",
+          "package": "2F6E858A-28EF-46B3-BEAC-B985E52E9BC1",
+          "path": "Text/VikingsLandmarks_Translations_ConfigText_China.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "VIKINGSLANDMARKS_TEXT",
+          "criteria": "VikingLandmarks_Scenario",
+          "manifest": "game/Contents/Assets/DLC/VikingsLandmarks/VikingsLandmarks.modinfo",
+          "package": "2F6E858A-28EF-46B3-BEAC-B985E52E9BC1",
+          "path": "Text/VikingsLandmarks_Translations_Text_China.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "WarMachineScenarioSettingsText",
+          "criteria": "WarMachineScenario",
+          "manifest": "game/Contents/Assets/DLC/WarMachineScenario/WarMachineScenario.modinfo",
+          "package": "5B0445C9-1376-45AD-9B51-C96A83A8F17D",
+          "path": "Text/WarMachineScenario_Translations_ConfigText_China.xml",
+          "status": "missing_or_external_input"
+        },
+        {
+          "action": "WarMachineScenarioSettingsText",
+          "criteria": "WarMachineScenario",
+          "manifest": "game/Contents/Assets/DLC/WarMachineScenario/WarMachineScenario.modinfo",
+          "package": "5B0445C9-1376-45AD-9B51-C96A83A8F17D",
+          "path": "Text/WarMachineScenario_Translations_Text_China.xml",
+          "status": "missing_or_external_input"
+        }
+      ],
+      "ownership_verified": false,
+      "packages": 29,
+      "records": 19504
+    },
     "missing_optional_tables": [],
     "not_covered": [
       "完整 Modifier 解释",
@@ -52,6 +367,7 @@
   },
   "files": {
     "rules/civics.json": "cda39f67e7f06b6990bca4c0a5422238c3053e447cbb2d465ea1e69abe7fb7d3",
+    "rules/civilizations.json": "e8cf1f403fe1d0ee57d0f172aafd0c99963871780f1af84a5b67f8458648429d",
     "rules/combat.json": "55a81df543c024dda8833541ae07e12947c593895ee724410da0dd8fe6789a5f",
     "rules/congress.json": "8fa798d417e3fa8f39b5cad92a9c8a71421f190cca93f35ae6cfa30d935bd8af",
     "rules/diplomacy.json": "3f80a8f659315f27627c8b99ac57def40c8c8d762b9b20485c4ac428dac895d8",
@@ -74,77 +390,353 @@
         "label": "LOC_MOD_SCOUT_CAT_TITLE"
       },
       {
-        "id": "19d1c7ec-54de-11ea-a2e3-2e728ce88125",
-        "label": "Tech and Civic Shuffle Game Mode"
-      },
-      {
-        "id": "19ed1a36-d744-4a58-8f8b-0376c2ba86e5",
-        "label": "Barbarian Clans Game Mode"
-      },
-      {
         "id": "4873eb62-8ccc-4574-b784-dda455e74e68",
         "label": "LOC_EXPANSION2_MOD_TITLE"
       },
       {
-        "id": "5b0445c9-1376-45ad-9b51-c96a83a8f17d",
-        "label": "LOC_WARMACHINE_MOD_TITLE"
-      },
-      {
-        "id": "648cd2a8-057a-4eb5-9e41-e1f7d86b5443",
-        "label": "LOC_COLDWAR_MOD_TITLE"
-      },
-      {
         "id": "9ed63236-617c-45a6-bb70-8cb6b0be8ed2",
         "label": "LOC_JULIUS_CAESAR_MOD_TITLE"
-      },
-      {
-        "id": "a55fafb4-9070-4597-9453-b28a99910cda",
-        "label": "Multiplayer Scenario: Pirates"
-      },
-      {
-        "id": "c1f775d8-59b5-401b-b86d-78faf3446ec7",
-        "label": "LOC_BLACKDEATH_MOD_TITLE"
-      },
-      {
-        "id": "f264ee10-f21b-4a9a-bbcd-d534e9843e90",
-        "label": "LOC_CIV_ROYALE_MOD_TITLE"
-      },
-      {
-        "id": "f653805e-f7c8-44e1-8cbd-fb48d7aabcba",
-        "label": "LOC_ANCIENT_RIVALS_MOD_TITLE"
       }
     ],
     "configuration_warning": "Configuration enabled lists do not prove per-game active modes or ownership.",
     "current_session_verified": false,
     "derived_tables": [
-      "CivilopediaTexts"
+      "CivilopediaTexts",
+      "InstalledRuleRows"
     ],
     "game_version": "1.0.12.54 (951533)",
+    "installed_catalog_gaps": [
+      {
+        "action": "AustraliaText",
+        "criteria": "Australia",
+        "manifest": "game/Contents/Assets/DLC/Australia/Australia.modinfo",
+        "package": "E3F53C61-371C-440B-96CE-077D318B36C0",
+        "path": "Text/Australia_Translations_ConfigText_China.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "AustraliaText",
+        "criteria": "Australia",
+        "manifest": "game/Contents/Assets/DLC/Australia/Australia.modinfo",
+        "package": "E3F53C61-371C-440B-96CE-077D318B36C0",
+        "path": "Text/Australia_Translations_Text_China.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "BarbarianClansMode_Text",
+        "criteria": "BarbarianClansMode",
+        "manifest": "game/Contents/Assets/DLC/BarbarianClansMode/BarbarianClansMode.modinfo",
+        "package": "19ED1A36-D744-4A58-8F8B-0376C2BA86E5",
+        "path": "Text/BarbarianClansMode_Translations_Text_MODE.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "BlackDeathScenarioSettingsText",
+        "criteria": "BlackDeathScenario",
+        "manifest": "game/Contents/Assets/DLC/BlackDeathScenario/BlackDeathScenario.modinfo",
+        "package": "C1F775D8-59B5-401B-B86D-78FAF3446EC7",
+        "path": "Text/BlackDeathScenario_Translations_ConfigText_China.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "BlackDeathScenarioSettingsText",
+        "criteria": "BlackDeathScenario",
+        "manifest": "game/Contents/Assets/DLC/BlackDeathScenario/BlackDeathScenario.modinfo",
+        "package": "C1F775D8-59B5-401B-B86D-78FAF3446EC7",
+        "path": "Text/BlackDeathScenario_Translations_Text_China.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "CatherineDeMediciGameplay",
+        "criteria": "CatherineDeMedici",
+        "manifest": "game/Contents/Assets/DLC/CatherineDeMedici/Catherine_De_Medici.modinfo",
+        "package": "CE5876CD-6900-46D1-9C9C-8DBA1F28872E",
+        "path": "Data/CatherineDeMedici_Modifiers.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "CivRoyaleScenarioText",
+        "criteria": "CivRoyaleScenario",
+        "manifest": "game/Contents/Assets/DLC/CivRoyaleScenario/CivRoyaleScenario.modinfo",
+        "package": "F264EE10-F21B-4A9A-BBCD-D534E9843E90",
+        "path": "Text/CivRoyaleScenario_Translations_ConfigText_China.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "CivRoyaleScenarioText",
+        "criteria": "CivRoyaleScenario",
+        "manifest": "game/Contents/Assets/DLC/CivRoyaleScenario/CivRoyaleScenario.modinfo",
+        "package": "F264EE10-F21B-4A9A-BBCD-D534E9843E90",
+        "path": "Text/CivRoyaleScenario_Translations_Text_China.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "Expansion1_Core",
+        "action_properties": "<Properties>\n\t\t\t\t\n\t\t\t\t<LoadOrder>-100</LoadOrder>\n\t\t\t</Properties>\n\t\t\t\n\t\t\t",
+        "criteria": "Expansion1",
+        "criteria_definition": "<Criteria id=\"Expansion1\">\n\t\t\t<GameCoreInUse>Expansion1</GameCoreInUse>\n\t\t</Criteria>\n\t\t",
+        "manifest": "game/Contents/Assets/DLC/Expansion1/Expansion1.modinfo",
+        "package": "1B28771A-C749-434B-9053-D1380C553DE9",
+        "path": "game/Contents/Assets/DLC/Expansion1/Data/Expansion1_Schema.sql",
+        "scope": "installed_definition_catalog",
+        "status": "unsupported_sql_not_applied"
+      },
+      {
+        "action": "Expansion1_CoreText",
+        "criteria": "Expansion1",
+        "manifest": "game/Contents/Assets/DLC/Expansion1/Expansion1.modinfo",
+        "package": "1B28771A-C749-434B-9053-D1380C553DE9",
+        "path": "Text/Expansion1_Translations_Text_China.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "Expansion1_MajorText",
+        "criteria": "Expansion1AndBeyond",
+        "manifest": "game/Contents/Assets/DLC/Expansion1/Expansion1.modinfo",
+        "package": "1B28771A-C749-434B-9053-D1380C553DE9",
+        "path": "Text/Expansion1_Translations_ConfigText_China.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "Expansion1_MajorText",
+        "criteria": "Expansion1AndBeyond",
+        "manifest": "game/Contents/Assets/DLC/Expansion1/Expansion1.modinfo",
+        "package": "1B28771A-C749-434B-9053-D1380C553DE9",
+        "path": "Text/Expansion1_Translations_Major_Text_China.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "Expansion2Core",
+        "action_properties": "<Properties>\n\t\t\t\t<LoadOrder>-100</LoadOrder>\n\t\t\t</Properties>\n\t\t\t\n\t\t\t",
+        "criteria": "Expansion2",
+        "criteria_definition": "<Criteria id=\"Expansion2\">\n\t\t\t<GameCoreInUse>Expansion2</GameCoreInUse>\n\t\t</Criteria>\n\t\t",
+        "manifest": "game/Contents/Assets/DLC/Expansion2/Expansion2.modinfo",
+        "package": "4873eb62-8ccc-4574-b784-dda455e74e68",
+        "path": "game/Contents/Assets/DLC/Expansion2/Data/Expansion2_Schema.sql",
+        "scope": "installed_definition_catalog",
+        "status": "unsupported_sql_not_applied"
+      },
+      {
+        "action": "Expansion2_CoreText",
+        "criteria": "Expansion2",
+        "manifest": "game/Contents/Assets/DLC/Expansion2/Expansion2.modinfo",
+        "package": "4873eb62-8ccc-4574-b784-dda455e74e68",
+        "path": "Text/Expansion2_Translations_Text_China.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "Expansion2_MajorText",
+        "criteria": "Expansion2AndBeyond",
+        "manifest": "game/Contents/Assets/DLC/Expansion2/Expansion2.modinfo",
+        "package": "4873eb62-8ccc-4574-b784-dda455e74e68",
+        "path": "Text/Expansion2_Translations_ConfigText_China.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "Expansion2_MajorText",
+        "criteria": "Expansion2AndBeyond",
+        "manifest": "game/Contents/Assets/DLC/Expansion2/Expansion2.modinfo",
+        "package": "4873eb62-8ccc-4574-b784-dda455e74e68",
+        "path": "Text/Expansion2_Translations_Major_Text.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "Expansion2_MajorText",
+        "criteria": "Expansion2AndBeyond",
+        "manifest": "game/Contents/Assets/DLC/Expansion2/Expansion2.modinfo",
+        "package": "4873eb62-8ccc-4574-b784-dda455e74e68",
+        "path": "Text/Expansion2_Translations_Major_Text_China.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "IndonesiaKhmerText",
+        "criteria": "IndonesiaKhmer",
+        "manifest": "game/Contents/Assets/DLC/Indonesia_Khmer/Indonesia_Khmer.modinfo",
+        "package": "1F367231-A040-4793-BDBB-088816853683",
+        "path": "Text/Indonesia_Khmer_Translations_ConfigText_China.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "IndonesiaKhmerText",
+        "criteria": "IndonesiaKhmer",
+        "manifest": "game/Contents/Assets/DLC/Indonesia_Khmer/Indonesia_Khmer.modinfo",
+        "package": "1F367231-A040-4793-BDBB-088816853683",
+        "path": "Text/Indonesia_Khmer_Translations_Text_China.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "JuliusCaesarGameplay",
+        "criteria": "JuliusCaesar",
+        "manifest": "game/Contents/Assets/DLC/JuliusCaesar/JuliusCaesar.modinfo",
+        "package": "9ED63236-617C-45A6-BB70-8CB6B0BE8ED2",
+        "path": "Data/JuliusCaesar_Districts.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "JuliusCaesarGameplay",
+        "criteria": "JuliusCaesar",
+        "manifest": "game/Contents/Assets/DLC/JuliusCaesar/JuliusCaesar.modinfo",
+        "package": "9ED63236-617C-45A6-BB70-8CB6B0BE8ED2",
+        "path": "Data/JuliusCaesar_Modifiers.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "JuliusCaesarGameplay",
+        "criteria": "JuliusCaesar",
+        "manifest": "game/Contents/Assets/DLC/JuliusCaesar/JuliusCaesar.modinfo",
+        "package": "9ED63236-617C-45A6-BB70-8CB6B0BE8ED2",
+        "path": "Data/JuliusCaesar_Units.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "KublaiKhanVietnamText",
+        "criteria": "KublaiKhanVietnam",
+        "manifest": "game/Contents/Assets/DLC/KublaiKhan_Vietnam/KublaiKhan_Vietnam.modinfo",
+        "package": "A3F42CD4-6C3E-4F5A-BC81-BE29E0C0B87C",
+        "path": "Text/KublaiKhan_Vietnam_RemoveText.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "MacedoniaText",
+        "criteria": "MacedoniaPersia",
+        "manifest": "game/Contents/Assets/DLC/Macedonia_Persia/Macedonia_Persia.modinfo",
+        "package": "E2749E9A-8056-45CD-901B-C368C8E83DEB",
+        "path": "Text/Macedonia_Persia_Translations_ConfigText_China.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "MacedoniaText",
+        "criteria": "MacedoniaPersia",
+        "manifest": "game/Contents/Assets/DLC/Macedonia_Persia/Macedonia_Persia.modinfo",
+        "package": "E2749E9A-8056-45CD-901B-C368C8E83DEB",
+        "path": "Text/Macedonia_Persia_Translations_Text_China.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "NubiaText",
+        "criteria": "Nubia",
+        "manifest": "game/Contents/Assets/DLC/Nubia_Amanitore/Nubia_Amanitore.modinfo",
+        "package": "643EA320-8E1A-4CF1-A01C-00D88DDD131A",
+        "path": "Text/Nubia_Amanitore_Translations_ConfigText_China.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "NubiaText",
+        "criteria": "Nubia",
+        "manifest": "game/Contents/Assets/DLC/Nubia_Amanitore/Nubia_Amanitore.modinfo",
+        "package": "643EA320-8E1A-4CF1-A01C-00D88DDD131A",
+        "path": "Text/Nubia_Amanitore_Translations_Text_China.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "PolandJadwigaText",
+        "criteria": "PolandJadwiga",
+        "manifest": "game/Contents/Assets/DLC/Poland_Jadwiga/Poland_Jadwiga.modinfo",
+        "package": "3809975F-263F-40A2-A747-8BFB171D821A",
+        "path": "Text/Poland_Translations_ConfigText_China.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "PolandJadwigaText",
+        "criteria": "PolandJadwiga",
+        "manifest": "game/Contents/Assets/DLC/Poland_Jadwiga/Poland_Jadwiga.modinfo",
+        "package": "3809975F-263F-40A2-A747-8BFB171D821A",
+        "path": "Text/Poland_Translations_Text_China.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "RulersOfTheSaharaGameplay",
+        "criteria": "RulersOfTheSahara",
+        "manifest": "game/Contents/Assets/DLC/RulersOfTheSahara/RulersOfTheSahara.modinfo",
+        "package": "82AE6F24-930F-4640-833C-FCDFD4845757",
+        "path": "Data/RulersOfTheSahara_RemoveData.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "RulersOfTheSaharaGameplay_XP1",
+        "criteria": "RulersOfTheSahara_Expansion1",
+        "manifest": "game/Contents/Assets/DLC/RulersOfTheSahara/RulersOfTheSahara.modinfo",
+        "package": "82AE6F24-930F-4640-833C-FCDFD4845757",
+        "path": "Data/RulersOfTheSahara_RemoveData.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "RulersOfTheSaharaGameplay_XP2",
+        "criteria": "RulersOfTheSahara_Expansion2",
+        "manifest": "game/Contents/Assets/DLC/RulersOfTheSahara/RulersOfTheSahara.modinfo",
+        "package": "82AE6F24-930F-4640-833C-FCDFD4845757",
+        "path": "Data/RulersOfTheSahara_RemoveData.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "TreeRandomizerText",
+        "criteria": "TreeRandomizer_Mode",
+        "manifest": "game/Contents/Assets/DLC/TreeRandomizer/TreeRandomizer.modinfo",
+        "package": "19d1c7ec-54de-11ea-a2e3-2e728ce88125",
+        "path": "Text/TreeRandomizer_Translations_Text.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "VIKINGSLANDMARKS_TEXT",
+        "criteria": "VikingLandmarks_Scenario",
+        "manifest": "game/Contents/Assets/DLC/VikingsLandmarks/VikingsLandmarks.modinfo",
+        "package": "2F6E858A-28EF-46B3-BEAC-B985E52E9BC1",
+        "path": "Text/VikingsLandmarks_Translations_ConfigText_China.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "VIKINGSLANDMARKS_TEXT",
+        "criteria": "VikingLandmarks_Scenario",
+        "manifest": "game/Contents/Assets/DLC/VikingsLandmarks/VikingsLandmarks.modinfo",
+        "package": "2F6E858A-28EF-46B3-BEAC-B985E52E9BC1",
+        "path": "Text/VikingsLandmarks_Translations_Text_China.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "WarMachineScenarioSettingsText",
+        "criteria": "WarMachineScenario",
+        "manifest": "game/Contents/Assets/DLC/WarMachineScenario/WarMachineScenario.modinfo",
+        "package": "5B0445C9-1376-45AD-9B51-C96A83A8F17D",
+        "path": "Text/WarMachineScenario_Translations_ConfigText_China.xml",
+        "status": "missing_or_external_input"
+      },
+      {
+        "action": "WarMachineScenarioSettingsText",
+        "criteria": "WarMachineScenario",
+        "manifest": "game/Contents/Assets/DLC/WarMachineScenario/WarMachineScenario.modinfo",
+        "package": "5B0445C9-1376-45AD-9B51-C96A83A8F17D",
+        "path": "Text/WarMachineScenario_Translations_Text_China.xml",
+        "status": "missing_or_external_input"
+      }
+    ],
+    "installed_catalog_policy": "Conditional XML records only; no SQL, updates, criteria or load order evaluated; never merged into cached rules; ownership and activation unknown.",
     "language_preference": [
       "zh_Hans_CN",
       "en_US"
     ],
-    "localization_policy": "Cached text; missing literals supplemented from installed Expansion2 text. Active overrides unverified.",
+    "localization_policy": "Cached text; missing literals supplemented first from installed Expansion2 text, then referenced installed package text. Active overrides and package load order unverified.",
     "macos_bundle_build": "376653.178",
     "macos_bundle_version": "1.4.6",
     "missing_optional_tables": [],
     "ruleset": "RULESET_EXPANSION_2",
     "ruleset_basis": "target knowledge ruleset; Expansion2 definitions required; not a loaded-session attestation",
     "source_scope": "local_cached_rules_snapshot",
-    "startup_started_at": "2026-10-17T19:45:01",
+    "startup_started_at": "2026-10-18T04:56:36",
     "startup_timestamp_basis": "startup_log_local_time",
     "steam_build_id": "15296837"
   },
   "schema_version": 1,
   "snapshot": "sources/snapshot.json",
-  "snapshot_sha256": "aa6e9f0d78862858c8ba6b841a8fdfe04652c4b98825999986d0ead3f4a51e77",
+  "snapshot_sha256": "02bba8b29260d6ec4afbd34f738a92ae5503ddeeeea527813fc4599227916d29",
   "support_files": {
-    "NEXT.md": "41f3329d78ca2582985df220564268efe4e1ed513ef83b6b673f4f92ae295d8b",
-    "README.md": "138a4bdbb94ba3950d4c7210f8319c66014916b8da0b0c5dceca6192042ec01d",
-    "build.py": "776478363294067f1e5ad9019251a780fa02dc3005304c04bb3d8e1ad1e4c996",
-    "capture.py": "6ffacaa617bab1ebde0c4374b5b32c9830af03163c8a332c66d33759746cdbfa",
-    "query.py": "b7f34768ff2e292835e894e31aef4b25f2e00ad16682275e04d877099bad757f",
+    "NEXT.md": "a1522fee076436cde445bffb42757f1a567ca6ba15147e492f9ca678cfcc0665",
+    "README.md": "6461c5167465f68755af960584ca8376fc234ed24adb5cfdc53c047c9c55bc12",
+    "build.py": "00015a4278f94a877d5a59a05a5b127de6d23f2ff8ae83174560a61620539b3e",
+    "capture.py": "356e4acd4c0a2b4a6acc17f916484e99aa5346df184c0c9073a84322928d40cc",
+    "query.py": "dee6858e38ec972ad8cc4e99c90cc4afd9eba2030bd3bc5ad2c6502f930fe9a7",
     "topics/civics.md": "55dea2e99d9df7f606335c5fd454df79b57d22907cfb7ce2d7d68162a732ff61",
+    "topics/civilizations.json": "5a2af9f4d149f40a4b2a3497fdae2056f08015e28e83cf280d40905de8ba4d2c",
+    "topics/civilizations.md": "54ea3ce6a00502b3b4f35ee993ca419d6ed135d04d26cc2709909bb65d7af01d",
     "topics/combat.json": "bac2bb41c0088e6f9acf2350c907ed918c8c835d848d2bbe7bff8bf0a17572bc",
     "topics/combat.md": "2d83533865d70d396b0388a468c5fc1193839aaa758b344c77d41893fd574bc1",
     "topics/congress.md": "6dd6a09d6ba7989dd7e254bf387094f317100816ce55c7c276ee99f0588edc6c",

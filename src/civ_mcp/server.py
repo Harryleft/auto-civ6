@@ -150,10 +150,14 @@ async def search_knowledge(
     """Search static Civ6 rules by a Chinese/English name or internal ID fragment.
 
     Matches names/IDs case-insensitively, not semantic text. Optionally filter
-    one of nine topics; returns bounded summaries and total/truncated metadata.
+    a topic, including civilizations for civilization/leader/trait identities;
+    returns bounded summaries and total/truncated metadata.
+    At setup, use the overview's civilization/leader IDs to understand your
+    abilities before choosing a route; query newly met opponents by visible IDs.
     Use get_knowledge(level='rule') for prerequisites, unlocks and mechanics;
     evidence for source conflicts. Snapshot rules do not establish current-game
-    eligibility. Available offline and during pending operations.
+    eligibility or DLC ownership. Installed-definition catalog entries remain
+    conditional and unapplied. Available offline and during pending operations.
     """
     return await _logged(ctx, "search_knowledge", {"query": query, "topic": topic, "limit": limit},
                          lambda: knowledge.search(query, topic, limit))
@@ -170,7 +174,11 @@ async def get_knowledge(
     summary gives identity/overview; rule gives prerequisites, conditions and
     relations; evidence gives source references and facts. Read only the depth
     needed. Profile/snapshot identify static data; current session, active mods
-    and action applicability remain unverified. Check game tools for current
+    and action applicability remain unverified. Civilization entries distinguish
+    direct/inherited abilities and cached rules from unapplied installed records.
+    Stable definitions inform choices; current benefits, opponent intent and
+    victory-route judgments still require fresh facts and remain revisable.
+    Check game tools for current
     candidates, costs and progress. No game connection is required.
     """
     return await _logged(ctx, "get_knowledge", {"entry_id": entry_id, "level": level},
