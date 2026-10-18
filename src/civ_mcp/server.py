@@ -1319,10 +1319,10 @@ async def unit_action(
 
 @mcp.tool()
 async def skip_remaining_units(ctx: Context) -> str:
-    """Skip all units that still have moves remaining.
+    """Skip currently ready units through native InGame operations.
 
-    Useful after diplomacy encounters invalidate all standing orders.
-    Uses GameCore FinishMoves on each unit — fast, reliable, no async issues.
+    Preserve existing standing orders. Check a finite candidate list once;
+    confirm each request and stop on refusal or unknown outcome.
     """
     gs = _get_game(ctx)
     return await _logged(

@@ -104,6 +104,8 @@ class ActionLifecycle:
             "attack": ("RANGE_ATTACK", "MELEE_ATTACK", "AIR_ATTACK", "CITY_RANGE_ATTACK"),
             "found": ("FOUNDED|",),
             "production": ("PRODUCING|",),
+            "skip": ("READINESS_REQUESTED|",),
+            "fortify": ("READINESS_REQUESTED|",),
         }[pending.kind]
         if result.startswith(accepted):
             pending.success = result
@@ -241,6 +243,18 @@ print("{lq.SENTINEL}")
             if (identity != pending.identity or int(fields[3]) != pending.turn
                     or int(fields[4]) != pending.owner):
                 return None
+        if pending.kind in ("skip", "fortify"):
+            rows = [row.split("|") for row in pending.observed if row.startswith("READINESS|")]
+            if len(rows) != 1 or len(rows[0]) != 7:
+                return None
+            row = rows[0]
+            if (row[1] != pending.details["witness_token"] or row[2] != str(pending.owner)
+                    or not row[3].isdigit() or int(row[3]) % 65536 != pending.entity[1] % 65536
+                    or row[4:6] != ["ready:false", "busy:false"]):
+                return None
+            label = row[6].removeprefix("result:")
+            if label in ({"SKIPPED"} if pending.kind == "skip" else {"FORTIFIED", "SLEEPING"}):
+                return f"{label}|unit:{row[3]}|ready:false"
         if pending.kind == "production":
             target = pending.details.get("target")
             if target is not None:
