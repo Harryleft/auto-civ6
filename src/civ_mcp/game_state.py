@@ -204,7 +204,7 @@ class GameState:
 
     async def get_builder_tasks(
         self,
-    ) -> tuple[list[lq.BuilderTask], list[lq.BuilderInfo]]:
+    ) -> lq.BuilderTaskReport:
         lines = await self.conn.execute_write(lq.build_builder_tasks_query())
         return lq.parse_builder_tasks(lines)
 

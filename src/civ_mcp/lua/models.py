@@ -1243,3 +1243,10 @@ class BuilderInfo:
     y: int
     charges: int
     moves: float
+
+
+@dataclass
+class BuilderTaskReport:
+    tasks: list[BuilderTask]
+    builders: list[BuilderInfo]
+    resource_visibility_known: bool | None = None  # legacy observations are unknown

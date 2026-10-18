@@ -268,21 +268,26 @@ def narrate_units(
     return "\n".join(lines)
 
 
-def narrate_builder_tasks(
-    tasks: list[lq.BuilderTask], builders: list[lq.BuilderInfo]
-) -> str:
-    if not builders:
-        return "No builders with charges available."
+def narrate_builder_tasks(report: lq.BuilderTaskReport) -> str:
+    tasks, builders = report.tasks, report.builders
     idle = [b for b in builders if b.moves > 0]
-    lines = [
-        f"=== BUILDER TASKS ({len(tasks)} tasks, {len(idle)} idle builders) ===",
-        "Advisory candidates; confirm current native eligibility before acting.",
-    ]
+    lines = [f"=== BUILDER TASKS ({len(tasks)} tasks, {len(idle)} idle builders) ==="]
+    if report.resource_visibility_known is not True:
+        lines.append(
+            "Resource advice incomplete: native resource visibility unknown; "
+            "safe terrain and repair candidates retained."
+        )
+    lines.append("Advisory candidates; confirm current native eligibility before acting.")
+    if not builders:
+        lines.append("No builders with charges available.")
     if not tasks:
-        lines.append("")
-        lines.append("No tiles need improvement in your territory.")
-        lines.append("")
-        _append_builder_list(lines, builders)
+        if report.resource_visibility_known is True:
+            lines.append("No improvement candidates identified in your territory.")
+        else:
+            lines.append("No confirmed improvement candidates identified; resource advice is incomplete.")
+        if builders:
+            lines.append("")
+            _append_builder_list(lines, builders)
         return "\n".join(lines)
 
     # Group by priority
