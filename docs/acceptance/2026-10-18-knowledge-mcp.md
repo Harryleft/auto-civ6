@@ -38,3 +38,5 @@
 会话验证前后，54 个原生存档、1 个项目基准、1,081 个既有验收文件和 36 个知识文件指纹一致。此前工具未发现的复核与独立 stdio 结果全部保留。本次 MCP 实施与客户端验证均未连接真实游戏、FireTuner 或加载存档，未推进回合、未 push。
 
 本轮原始证据：`~/.civ6-mcp/acceptance/20261018-knowledge-mcp-current-session/`。`direct-client-summary.json` 保存工具发现与四次调用校验，`raw-actions-*.jsonl` 保存原始回复，`result.json` 记录成果保护结果。前序证据分别保存在 `20261018-main-knowledge-mcp-merge/`、`20261018-knowledge-mcp-client/` 和 `20261018-knowledge-mcp-client-recheck/`，均位于同一验收根目录。
+
+后续新增 `civilizations` 第十主题，客户端重启后的工具发现、4 次主题搜索及 12 次三层读取结果，见[文明知识客户端重载验收](2026-10-18-civilization-knowledge.md#main-合并与客户端重载验证)。
