@@ -1222,7 +1222,7 @@ async def unit_action(
 
     Args:
         unit_id: The unit's composite ID (from get_units output)
-        action: One of: move, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion
+        action: One of: move, cancel_move, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion
         target_x: Target X coordinate (required for move/attack/trade_route/teleport)
         target_y: Target Y coordinate (required for move/attack/trade_route/teleport)
         improvement: Improvement type for builders (required for improve), e.g.
@@ -1231,6 +1231,9 @@ async def unit_action(
             IMPROVEMENT_FISHING_BOATS, IMPROVEMENT_LUMBER_MILL
 
     For move/attack: provide target_x and target_y.
+    For cancel_move: explicitly cancel only a verified non-trade movement queue,
+    keeping the current position. Then independently choose fortify/heal/skip or
+    another strategic action; remaining movement is not a reason to spend it.
     For trade_route: provide target_x and target_y of destination city.
     For teleport: provide target_x and target_y of destination city. Traders only, must be idle (not on active route).
     For improve: provide improvement name. Builder must be on the tile.
@@ -1259,7 +1262,7 @@ async def unit_action(
         # Move/attack/founding reconcile their own pending requests. Other
         # commands must not change that unit before its outcome is known.
         if (
-            action.lower() not in {"move", "attack", "found_city"}
+            action.lower() not in {"move", "attack", "found_city", "cancel_move"}
             and getattr(gs, "pending_action_entity", None) == ("unit", unit_index)
         ):
             confirmation = await gs.confirm_pending_action()
@@ -1270,6 +1273,8 @@ async def unit_action(
                 if target_x is None or target_y is None:
                     return "Error: move requires target_x and target_y"
                 return await gs.move_unit(unit_index, target_x, target_y)
+            case "cancel_move":
+                return await gs.cancel_unit_move(unit_id)
             case "attack":
                 if target_x is None or target_y is None:
                     return "Error: attack requires target_x and target_y"
@@ -1317,7 +1322,7 @@ async def unit_action(
                     return "Error: teleport requires target_x and target_y of the destination city"
                 return await gs.teleport_to_city(unit_index, target_x, target_y)
             case _:
-                return f"Error: Unknown action '{action}'. Valid: move, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion"
+                return f"Error: Unknown action '{action}'. Valid: move, cancel_move, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion"
 
     result = await _logged(ctx, "unit_action", params, _run)
     return result

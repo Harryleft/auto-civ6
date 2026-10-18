@@ -456,6 +456,23 @@ class GameState:
     async def skip_unit(self, unit_index: int) -> str:
         return await self._set_unit_readiness(unit_index, "skip")
 
+    async def cancel_unit_move(self, unit_index: int) -> str:
+        if self._actions.matches("cancel_move", ("unit", unit_index)):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            "cancel_move", ("unit", unit_index), lq.build_cancel_unit_move_query(unit_index, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"witness_token": token},
+        )
+        return await self._submit_action(pending, scope, lq.build_cancel_unit_move(unit_index, token))
+
     async def _set_unit_readiness(
         self, unit_index: int, kind: str, *, scope: _ActionScope | None = None,
     ) -> str:

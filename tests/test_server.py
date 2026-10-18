@@ -340,6 +340,7 @@ class TestUnitActionDispatch:
     @pytest.mark.parametrize(
         ("action", "method"),
         [
+            ("cancel_move", "cancel_unit_move"),
             ("fortify", "fortify_unit"),
             ("skip", "skip_unit"),
             ("found_city", "found_city"),
@@ -377,6 +378,11 @@ class TestUnitActionDispatch:
 
         run(go())
         assert gs.last_args("move_unit") == (7, 10, 11)
+
+    def test_cancel_move_keeps_full_runtime_identity(self):
+        ctx=make_ctx();gs=app_of(ctx).game
+        run(server.unit_action(ctx,3*65536+7,"cancel_move"))
+        assert gs.last_args("cancel_unit_move")== (3*65536+7,)
 
 
 class TestUnitActionValidation:

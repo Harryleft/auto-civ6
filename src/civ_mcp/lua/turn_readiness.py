@@ -4,9 +4,9 @@ from civ_mcp.lua._helpers import SENTINEL
 
 
 LUA_TURN_READINESS = r'''
-local function localTurnReadiness(me)
+local function localTurnReadiness(me,inspectUnit)
  local p=Players[me]
- local r={details={},queued_move_current=false}
+ local r={details={},queues={},queued_move_current=false}
  local function read(fn,kind)
   local ok,value=pcall(fn)
   if ok and type(value)==kind then return value end
@@ -44,7 +44,7 @@ local function localTurnReadiness(me)
   if dismissed~=nil then r.city_range_notification=not dismissed end
  end
  r.city_range_attack=both(both(r.city_range_turn_blocking,r.allow_tactical_commands),r.city_range_notification)
- if r.city_range_attack then table.insert(r.details,"city_range_attack: use an explicit city attack or other authorized disposition") end
+ if r.city_range_attack then table.insert(r.details,"city_range_attack: choose an attack or explicitly acknowledge the native city-range notification") end
  local blocker=read(function() return NotificationManager.GetFirstEndTurnBlocking(me) end,"number")
  if blocker~=nil and EndTurnBlockingTypes and type(EndTurnBlockingTypes.NO_ENDTURN_BLOCKING)=="number" then
   r.native_blocker=blocker~=EndTurnBlockingTypes.NO_ENDTURN_BLOCKING
@@ -106,32 +106,41 @@ local function localTurnReadiness(me)
  local function queuedUnit(u)
   local x,y=u:GetX(),u:GetY()
   if x==-9999 or y==-9999 then return end
+  if type(x)~="number" or type(y)~="number" or x<0 or y<0 or x%1~=0 or y%1~=0 then error("unit position unknown") end
   local moves=u:GetMovesRemaining()
   if type(moves)~="number" or moves~=moves or moves<0 then error("unit moves unknown") end
-  if moves<=0 then return end
+  if moves<=0 and not inspectUnit then return end
   local target=UnitManager.GetQueuedDestination(u)
   if target==nil then return end
   if type(target)~="number" or target<0 or target%1~=0 then error("queue target unknown") end
   local goal=Map.GetPlotByIndex(target)
   if not goal then error("queue plot unknown") end
   if goal:GetX()==x and goal:GetY()==y then return end
+  local queue={id=u:GetID(),x=x,y=y,target=target,goalX=goal:GetX(),goalY=goal:GetY(),valid=false}
+  r.queues[u:GetID()]=queue
   local route=activeRoute(u:GetID())
+  queue.active_route=route
   local detail="queued_move "..unitDetail(u).." goal="..goal:GetX()..","..goal:GetY()
   if route==true then table.insert(r.details,detail.." active_route=true (excluded)"); return end
   if route==nil then queueUnknown=true; table.insert(r.details,detail.." active_route=unknown"); return end
   local step=nextTurn(u,target,goal)
   if step==nil then queueUnknown=true; table.insert(r.details,detail.." next_turn=unknown"); return end
   table.insert(r.details,detail.." next_turn="..step.." active_route=false")
+  queue.valid=true; queue.next_turn=step
   if step==1 then r.queued_move_current=true end
  end
  local scanOK=pcall(function()
-  for _,u in p:GetUnits():Members() do
+  local function scan(u)
    local ok=pcall(queuedUnit,u)
    if not ok then queueUnknown=true; table.insert(r.details,"queued_move "..unitDetail(u).." target_or_path=unknown") end
+  end
+  if inspectUnit then scan(inspectUnit)
+  else for _,u in p:GetUnits():Members() do scan(u) end
   end
  end)
  if not scanOK then queueUnknown=true end
  if queueUnknown and r.queued_move_current~=true then r.queued_move_current=nil end
+ r.queue_known=not queueUnknown
  if r.native_blocker then r.reason="BLOCKED"
  elseif r.queued_move_current then r.reason="QUEUED_MOVE_CURRENT"
  elseif r.units_have_moves then r.reason="UNITS_HAVE_MOVES"

@@ -20,6 +20,7 @@ from civ_mcp.lua.models import (
     ThreatInfo,
     UnitInfo,
 )
+from civ_mcp.lua.turn_readiness import LUA_TURN_READINESS
 
 
 def build_units_query() -> str:
@@ -1042,6 +1043,67 @@ def build_fortify_unit(unit_index: int, witness_token: str = "") -> str:
 def build_skip_unit(unit_index: int, witness_token: str = "") -> str:
     """Native skip operation, without changing movement points directly."""
     return _build_readiness_action(unit_index, "skip", witness_token)
+
+
+def build_cancel_unit_move(unit_index: int, witness_token: str) -> str:
+    """Cancel one verified queued movement through the native command."""
+    return LUA_TURN_READINESS + f'''
+{_lua_get_unit(unit_index)}
+if {unit_index} >= 65536 and unit:GetID() ~= {unit_index} then
+    {_bail("ERR:UNIT_ID_CHANGED|Runtime unit identity no longer matches")}
+end
+local inspected,reason,queue=pcall(function()
+    local info=GameInfo.Units[unit:GetType()]
+    if not info or type(info.Spy)~="boolean" or type(info.IgnoreMoves)~="boolean" then return "READINESS_UNKNOWN" end
+    if info.Spy or info.IgnoreMoves then return "NOT_MOVE_QUEUE" end
+    local facts=localTurnReadiness(me,unit)
+    local queued=facts.queues[unit:GetID()]
+    if not facts.queue_known then return "READINESS_UNKNOWN" end
+    if not queued then return "NO_QUEUED_MOVE" end
+    if queued.active_route==true then return "ACTIVE_TRADE_ROUTE" end
+    if queued.active_route~=false or queued.valid~=true then return "READINESS_UNKNOWN" end
+    return nil,queued
+end)
+if not inspected then {_bail("ERR:READINESS_UNKNOWN|Cannot verify this unit's queued movement")} end
+if reason=="NO_QUEUED_MOVE" then {_bail("OK:NO_QUEUED_MOVE|Existing activity preserved")} end
+if reason then {_bail_lua('"ERR:"..reason.."|Queued movement was not cancelled"')} end
+local command=GameInfo.UnitCommands["UNITCOMMAND_CANCEL"]
+if not command or type(command.Hash)~="number" or not UnitCommandTypes or command.Hash~=UnitCommandTypes.CANCEL
+    or type(UnitManager.CanStartCommand)~="function" or type(UnitManager.RequestCommand)~="function" then
+    {_bail("ERR:COMMAND_UNAVAILABLE|Native cancel command unavailable")}
+end
+local checked,allowed=pcall(function() return UnitManager.CanStartCommand(unit,command.Hash,false,true) end)
+if not checked or type(allowed)~="boolean" then {_bail("ERR:ELIGIBILITY_UNKNOWN|Native cancel eligibility unknown")} end
+if not allowed then {_bail("ERR:CANNOT_CANCEL_MOVE|Native cancel command refused")} end
+__civmcpCancelMoveRequest={{token="{witness_token}",owner=me,id=unit:GetID(),
+    civ=PlayerConfigurations[me]:GetCivilizationTypeName(),seed=GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED"),
+    turn=Game.GetCurrentGameTurn(),x=queue.x,y=queue.y,target=queue.target,entered=true}}
+UnitManager.RequestCommand(unit,command.Hash)
+print("OK:CANCEL_MOVE_REQUESTED|unit:"..unit:GetID())
+print("{SENTINEL}")
+'''
+
+
+def build_cancel_unit_move_query(unit_index: int, witness_token: str) -> str:
+    return f'''
+local me=Game.GetLocalPlayer()
+local record=__civmcpCancelMoveRequest
+local unit=UnitManager.GetUnit(me,{unit_index})
+if record and record.token=="{witness_token}" and record.entered==true
+    and record.owner==me and record.turn==Game.GetCurrentGameTurn()
+    and record.civ==PlayerConfigurations[me]:GetCivilizationTypeName()
+    and record.seed==GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")
+    and unit and record.id==unit:GetID() then
+    local busy=nil
+    pcall(function() busy=UI.IsGameCoreBusy() end)
+    local known,target=pcall(function() return UnitManager.GetQueuedDestination(unit) end)
+    local queue=known and target==nil and "none" or "unknown"
+    print("CANCEL_MOVE|"..record.token.."|"..me.."|"..record.id
+        .."|from:"..record.x..","..record.y.."|now:"..unit:GetX()..","..unit:GetY()
+        .."|queue:"..queue.."|busy:"..tostring(busy).."|entered:true")
+end
+print("{SENTINEL}")
+'''
 
 
 def build_skip_remaining_units() -> str:
