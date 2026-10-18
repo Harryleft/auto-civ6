@@ -367,7 +367,7 @@
   },
   "files": {
     "rules/civics.json": "cda39f67e7f06b6990bca4c0a5422238c3053e447cbb2d465ea1e69abe7fb7d3",
-    "rules/civilizations.json": "128e9aae27580a3bef8bf024472ecbf0e7415a97f37a37034b52243a00b3a392",
+    "rules/civilizations.json": "e8cf1f403fe1d0ee57d0f172aafd0c99963871780f1af84a5b67f8458648429d",
     "rules/combat.json": "55a81df543c024dda8833541ae07e12947c593895ee724410da0dd8fe6789a5f",
     "rules/congress.json": "8fa798d417e3fa8f39b5cad92a9c8a71421f190cca93f35ae6cfa30d935bd8af",
     "rules/diplomacy.json": "3f80a8f659315f27627c8b99ac57def40c8c8d762b9b20485c4ac428dac895d8",
@@ -731,7 +731,7 @@
   "support_files": {
     "NEXT.md": "a1522fee076436cde445bffb42757f1a567ca6ba15147e492f9ca678cfcc0665",
     "README.md": "6461c5167465f68755af960584ca8376fc234ed24adb5cfdc53c047c9c55bc12",
-    "build.py": "dc12eb6450553fe527f54967f42e0f489a8586b96eb54bc0845f8ba796dca9ab",
+    "build.py": "00015a4278f94a877d5a59a05a5b127de6d23f2ff8ae83174560a61620539b3e",
     "capture.py": "356e4acd4c0a2b4a6acc17f916484e99aa5346df184c0c9073a84322928d40cc",
     "query.py": "dee6858e38ec972ad8cc4e99c90cc4afd9eba2030bd3bc5ad2c6502f930fe9a7",
     "topics/civics.md": "55dea2e99d9df7f606335c5fd454df79b57d22907cfb7ce2d7d68162a732ff61",
