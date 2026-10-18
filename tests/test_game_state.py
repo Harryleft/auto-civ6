@@ -524,19 +524,20 @@ def _stock(name="Iron", amount=0, per_turn=0, demand=0, imported=0):
 
 
 class TestDiffSnapshots:
-    """The end_turn event stream is only as good as this diff: deaths and
+    """The end_turn event stream is only as good as this diff: missing units and
     city losses are critical (1), damage/finished builds/research important
     (2), heals/growth/new units informational (3), and the report is sorted
     by that priority."""
 
     diff = staticmethod(GameState._diff_snapshots)
 
-    def test_killed_unit_is_critical(self):
+    def test_missing_unit_is_critical_without_claiming_death(self):
         before = _snap(units={1: _unit(1, x=3, y=4)})
         events = self.diff(before, _snap())
         assert len(events) == 1
         assert events[0].priority == 1
-        assert "was killed" in events[0].message
+        assert "no longer appears" in events[0].message
+        assert "cause unknown" in events[0].message
         assert "(3,4)" in events[0].message
 
     def test_damaged_and_healed_units(self):

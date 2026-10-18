@@ -156,7 +156,21 @@ local eraName = eraEntry and Locale.Lookup(eraEntry.Name) or "Unknown"
 local eraScore = eraManager:GetPlayerCurrentScore(id)
 local darkThresh = eraManager:GetPlayerDarkAgeThreshold(id)
 local goldenThresh = eraManager:GetPlayerGoldenAgeThreshold(id)
-print("ERA|" .. eraName .. "|" .. eraScore .. "|" .. darkThresh .. "|" .. goldenThresh)
+-- Score thresholds apply to the next era; read the current age separately.
+local age = "unknown"
+pcall(function()
+    local heroic = eraManager:HasHeroicGoldenAge(id)
+    local golden = eraManager:HasGoldenAge(id)
+    local dark = eraManager:HasDarkAge(id)
+    if type(heroic) == "boolean" and type(golden) == "boolean" and type(dark) == "boolean"
+        and not (dark and (heroic or golden)) then
+        if heroic then age = "Heroic"
+        elseif golden then age = "Golden"
+        elseif dark then age = "Dark"
+        else age = "Normal" end
+    end
+end)
+print("ERA|" .. eraName .. "|" .. eraScore .. "|" .. darkThresh .. "|" .. goldenThresh .. "|" .. age)
 local maxTurns = GameConfiguration.GetValue("GAME_MAX_TURNS") or 0
 print("MAXTURNS|" .. maxTurns)
 local diffName = "Unknown"
@@ -314,6 +328,7 @@ def parse_overview_response(lines: list[str]) -> GameOverview:
     our_religion: str | None = None
     founded_religions: list[ReligionInfo] = []
     era_name = ""
+    current_age = None
     era_score = 0
     era_dark_threshold = 0
     era_golden_threshold = 0
@@ -393,6 +408,8 @@ def parse_overview_response(lines: list[str]) -> GameOverview:
                 era_score = int(ep[2])
                 era_dark_threshold = int(ep[3])
                 era_golden_threshold = int(ep[4])
+                if len(ep) >= 6 and ep[5] in {"Normal", "Golden", "Heroic", "Dark"}:
+                    current_age = ep[5]
         elif line.startswith("MAXTURNS|"):
             ep = line.split("|")
             if len(ep) >= 2:
@@ -470,6 +487,7 @@ def parse_overview_response(lines: list[str]) -> GameOverview:
         our_religion=our_religion,
         founded_religions=founded_religions if founded_religions else None,
         era_name=era_name,
+        current_age=current_age,
         era_score=era_score,
         era_dark_threshold=era_dark_threshold,
         era_golden_threshold=era_golden_threshold,
