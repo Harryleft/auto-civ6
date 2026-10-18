@@ -155,4 +155,3 @@ entry.GetLocation=function() return 19,17 end
     notifications = asyncio.run(GameState(conn).get_notifications())
     assert "An unmet civilization completed a wonder." in narrate_notifications(notifications)
     assert conn.lua.globals().hidden_reads == 0
-
