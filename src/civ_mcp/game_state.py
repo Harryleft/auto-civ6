@@ -58,6 +58,9 @@ class GameState:
         # Replacement survives all cache/identity resets until verified.
         self._actions = ActionLifecycle(self.conn)
         self._turn_progress = TurnProgress()
+        from civ_mcp.game_lifecycle import DiplomacyViewCleanup
+        self._diplomacy_cleanup = DiplomacyViewCleanup()
+        self._trade_result_pending_cleanup: str | None = None
 
     @property
     def turn_pending(self) -> bool:
@@ -150,6 +153,7 @@ class GameState:
                     log.info("Game changed: %s → %s", self._game_identity, new_id)
                     self._clear_world_caches()
                     self._turn_progress.invalidate_scope()
+                    self._diplomacy_cleanup.invalidate_scope()
                 self._game_identity = new_id
                 return self._game_identity
         return ("unknown", 0)
@@ -900,24 +904,17 @@ class GameState:
         offer_items: list[dict],
         request_items: list[dict],
     ) -> str:
+        if self._trade_result_pending_cleanup is not None:
+            return "No new trade submitted; confirming previous native cleanup.\n" + await self._finish_trade_cleanup(self._trade_result_pending_cleanup)
         lua = lq.build_propose_trade(other_player_id, offer_items, request_items)
         lines = await self.conn.execute_write(lua)
         result = _action_result(lines)
-        # Dismiss diplomacy UI left open by the trade session.
-        # After CloseSession, the game transitions DiplomacyActionView to
-        # OVERVIEW_MODE (intel screen). Need a brief delay for the C++ UI
-        # state machine to settle, then dismiss it in a separate call.
-        await asyncio.sleep(0.3)
-        try:
-            await self.conn.execute_write(
-                'pcall(function() ContextPtr:LookUpControl("/InGame/DiplomacyActionView"):SetHide(true) end) '
-                "pcall(function() Events.HideLeaderScreen() end) "
-                "LuaEvents.DiplomacyActionView_ShowIngameUI() "
-                f'print("{lq.SENTINEL}")'
-            )
-        except Exception:
-            pass
-        return result
+        return await self._finish_trade_cleanup(result)
+
+    async def _finish_trade_cleanup(self, result: str) -> str:
+        cleanup = await self._diplomacy_cleanup.close(self.conn)
+        self._trade_result_pending_cleanup = result if cleanup.status == "unknown" else None
+        return result + "\n" + cleanup.message
 
     async def test_trade(
         self,
@@ -925,10 +922,12 @@ class GameState:
         offer_items: list[dict],
         request_items: list[dict],
     ) -> str:
+        if self._trade_result_pending_cleanup is not None:
+            return "No new trade submitted; confirming previous native cleanup.\n" + await self._finish_trade_cleanup(self._trade_result_pending_cleanup)
         lua = lq.build_test_trade(other_player_id, offer_items, request_items)
         lines = await self.conn.execute_write(lua)
         result = lq.parse_test_trade_response(lines)
-        return narrate_test_trade(result)
+        return await self._finish_trade_cleanup(narrate_test_trade(result))
 
     async def propose_peace(self, other_player_id: int) -> str:
         lua = lq.build_propose_peace(other_player_id)
@@ -1817,6 +1816,13 @@ class GameState:
             limited.append("Victory warnings unavailable; use get_victory_progress.")
         return "\n".join([report, *limited])
 
+    async def get_turn_status(self) -> str:
+        """Read native phases without confirming or retiring pending advancement."""
+        result = await self._turn_progress.get_status(self)
+        if self._diplomacy_cleanup.pending:
+            result += "\ndiplomacy_cleanup: native callback outcome unknown; dismiss_popup only confirms its receipt; no callback or trade will be replayed."
+        return result
+
     async def end_turn(self) -> str:
         """End the turn with snapshot-diff event detection."""
         return await self._turn_progress.execute(self)
@@ -1825,7 +1831,10 @@ class GameState:
         """Dismiss any blocking popup or UI overlay."""
         from civ_mcp.game_lifecycle import dismiss_popup
 
-        return await dismiss_popup(self.conn)
+        result = await dismiss_popup(self.conn, self._diplomacy_cleanup)
+        if not self._diplomacy_cleanup.pending:
+            self._trade_result_pending_cleanup = None
+        return result
 
     async def list_saves(self) -> str:
         """List available save files."""

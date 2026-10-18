@@ -1422,6 +1422,17 @@ async def set_research(ctx: Context, tech_or_civic: str, category: str = "tech")
     )
 
 
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_turn_status(ctx: Context) -> str:
+    """Read native turn/UI phases and cumulative wait without clearing pending.
+
+    WAITING_FOR_PLAYERS is local inactivity, not proof of a particular AI's
+    computation. Time alone never proves deadlock. Resolve reported interaction
+    through its explicit tools; end_turn only confirms an existing request.
+    """
+    return await _logged(ctx, "get_turn_status", {}, _get_game(ctx).get_turn_status)
+
+
 @mcp.tool(annotations={"destructiveHint": True})
 async def end_turn(ctx: Context) -> str:
     """Advance once and confirm the next turn. Resolve reported blockers first.
