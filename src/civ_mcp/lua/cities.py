@@ -43,9 +43,7 @@ for i, c in Players[me]:GetCities():Members() do
         turnsLeft = bq:GetTurnsLeft()
     end
     local g = c:GetGrowth()
-    local amNeed = 0
-    pcall(function() amNeed = g:GetAmenitiesNeeded() end)
-    local amTotal = amNeed + g:GetAmenities()
+    local amTotal = g:GetAmenities()
     -- City defense info
     local defStr, garHP, garMax, wallHP, wallMax = 0, 0, 0, 0, 0
     local ccIdx = GameInfo.Districts["DISTRICT_CITY_CENTER"].Index
