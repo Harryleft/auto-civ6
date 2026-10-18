@@ -1108,10 +1108,11 @@ async def send_diplomatic_action(
                 DECLARE_PROTECTORATE_WAR, DECLARE_COLONIAL_WAR,
                 DECLARE_TERRITORIAL_WAR
 
-    DECLARE_FRIENDSHIP submits once and waits briefly for a native bilateral
-    DECLARED_FRIEND relationship. ACCEPTED requires that witness; otherwise
-    PROPOSED_UNCONFIRMED means read get_diplomacy first, without automatic resend.
-    A legal request alone does not confirm that the friendship was accepted.
+    Friendship, delegation and embassy requests submit once, then read native
+    relationship evidence. Friendship requires bilateral DECLARED_FRIEND;
+    delegation/embassy require our native presence at the target, not theirs
+    at us. ACCEPTED requires that witness. PROPOSED_UNCONFIRMED means inspect
+    get_diplomacy without resending. A legal request is not acceptance.
 
     Delegations cost 25 gold and can be rejected if the civ dislikes you.
     Embassies require Writing tech. Use get_diplomacy to see available actions.
