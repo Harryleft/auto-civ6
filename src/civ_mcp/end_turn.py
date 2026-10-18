@@ -398,7 +398,7 @@ class TurnProgress:
                     # Confirm its readiness below without sending another request.
                     self.pending = True
                     self.from_turn = turn_before
-                    self.submitted_at = time.monotonic()
+                    self.submitted_at = None  # External submit time was not observed.
                 elif current != turn_before:
                     return "Cannot end turn: game turn changed during inspection. Read game state before retrying."
                 elif ready is not True:
@@ -419,7 +419,8 @@ class TurnProgress:
                             self.reset()
                             return f"Cannot end turn: NOT_SUBMITTED ({reason}); no end-turn request was sent. Read get_turn_status."
                         # The native UI has already sent complete. Preserve a
-                        # monitor for that request rather than sending another.
+                        # monitor; its original submission time is unknown.
+                        self.submitted_at = None
                     elif receipt != ["END_TURN|SUBMITTED"]:
                         return (f"End-turn result unknown (from turn {turn_before}): no authoritative submission receipt. "
                                 "The pending request is preserved; call end_turn only to confirm it.")
