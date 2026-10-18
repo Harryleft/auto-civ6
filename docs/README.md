@@ -17,6 +17,8 @@ Agent 从根目录 [AGENTS.md](../AGENTS.md) 开始；命中任务后读取对�
 
 ## 规格与验收
 
+- [交易确认请求身份](specs/2026-10-19-trade-request-identity.md)与[验收](acceptance/2026-10-19-trade-request-identity.md)：旧尝试身份门禁，97项相关测试及实机拒绝／续行。
+
 - [城市宜居度总量](specs/2026-10-19-city-amenities-total.md)与[验收](acceptance/2026-10-19-city-amenities-total.md)：原生总量语义、21项相关测试及同轮对照。
 
 - [原生科研与市政资格](specs/2026-10-19-native-civic-eligibility.md)与[验收](acceptance/2026-10-19-native-civic-eligibility.md)：随机未来树原生候选、UI及既有回退前置门禁，266项相关测试。
