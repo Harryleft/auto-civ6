@@ -694,6 +694,9 @@ class DiplomacyContext:
     sessions: list[DiplomacySession] = field(default_factory=list)
     deals: list[PendingDeal] = field(default_factory=list)
     outgoing_summary: str = ""
+    negotiation_fingerprint: str = ""
+    negotiation_phase: str = "UNKNOWN"
+    negotiation_summary: str = ""
 
 
 @dataclass
