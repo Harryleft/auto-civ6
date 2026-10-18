@@ -84,6 +84,15 @@ UnitManager = {
         if onlyMove then x=21 else attacks=attacks-1;enemyHP=enemyHP-5 end
     end,
 }
+local function plot(px,py)
+    return {GetIndex=function() return px+1000*py end,
+            GetX=function() return px end,GetY=function() return py end}
+end
+Map.GetPlot=function(px,py) return plot(px,py) end
+Map.GetPlotByIndex=function(index) return plot(index%1000,math.floor(index/1000)) end
+UnitManager.GetMoveToPathEx=function(u,destination)
+    return {plots={u:GetX()+1000*u:GetY(),destination},turns={1,arrivalTurn or 1}}
+end
 CityManager = {GetCityAt=function() return nil end}
 CombatTypes = {RANGED='Ranged',BOMBARD='Bombard'}
 CombatResultParameters = {ATTACKER='attacker',DEFENDER='defender',ID='id',COMBAT_STRENGTH='strength',STRENGTH_MODIFIER='modifier',DAMAGE_TO='damage'}
@@ -223,3 +232,131 @@ def test_old_move_only_attack_stays_unknown_and_same_intent_only_observes():
     assert 'OUTCOME_UNKNOWN' in observed and 'attacks:1' in observed
     assert len(conn.operations) == 1 and conn.operations[0][0] == 'move'
     assert state.pending_action_summary is not None
+
+
+class CandidateAttackConn(AttackConn):
+    def __init__(self):
+        super().__init__()
+        self.lua.execute('''
+unit.GetName=function() return 'Warrior' end
+unit.GetBuildCharges=function() return 0 end
+unit.GetGreatPerson=function() return nil end
+unit.GetMaxMoves=function() return 2 end
+Map.GetPlotDistance=function(sx,sy,tx,ty)
+    if tx==19 and ty==16 then return 1 end
+    return 99
+end
+Map.GetUnitsAt=function(tx,ty)
+    if tx~=19 or ty~=16 then return nil end
+    return {Units=function()
+        local seen=false
+        return function() if not seen then seen=true;return enemy end end
+    end}
+end
+''')
+
+
+def test_one_move_cross_river_rainforest_path_deferred_to_next_turn_is_not_an_attack_candidate_or_submitted():
+    conn = CandidateAttackConn()
+    # Native path, rather than guessed terrain costs, proves the turn boundary.
+    conn.lua.execute('unitInfo.RangedCombat=0;moves=1;arrivalTurn=2')
+    state = state_for(conn)
+    units = asyncio.run(state.get_units())
+    assert len(units) == 1 and units[0].targets == []
+    result = asyncio.run(state.attack_unit(8, 19, 16))
+    assert result.startswith('Error: ATTACK_DEFERRED|'), result
+    assert conn.operations == [] and conn.previews == []
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('setup', [
+    'UnitManager.GetMoveToPathEx=nil',
+    'UnitManager.GetMoveToPathEx=function() error("path unavailable") end',
+    'UnitManager.GetMoveToPathEx=function() return nil end',
+    'UnitManager.GetMoveToPathEx=function() return {} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={},turns={}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={16020},turns={1}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={16020,16019},turns={1}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={16020,16019},turns={1,"1"}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={16020,16019},turns={1,0/0}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={16020,16019},turns={1,math.huge}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={16020,16019},turns={2,1}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={16020,16019},turns={0,1}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={16020,16019},turns={2,2}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={16021,16019},turns={1,1}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={16020,16018},turns={1,1}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={[1]=16020,[3]=16019},turns={[1]=1,[3]=1}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={16020,16019,extra=16018},turns={1,1}} end',
+    'UnitManager.GetMoveToPathEx=function() return {plots={16020,16019.5},turns={1,1}} end',
+    'Map.GetPlotByIndex=function() return nil end',
+    'UI.IsGameCoreBusy=function() return true end',
+    'UI.IsGameCoreBusy=nil',
+    'unit.HasMovedIntoZOC=nil',
+    'unit.HasMovedIntoZOC=function() return nil end',
+    'UnitManager.CanStartOperation=function() error("eligibility unavailable") end',
+])
+def test_unprovable_native_melee_path_is_neither_advertised_nor_submitted(setup):
+    conn = CandidateAttackConn()
+    conn.lua.execute('unitInfo.RangedCombat=0;' + setup)
+    state = state_for(conn)
+    assert asyncio.run(state.get_units())[0].targets == []
+    result = asyncio.run(state.attack_unit(8, 19, 16))
+    assert result.startswith('Error: ATTACK_PATH_UNKNOWN|'), result
+    assert conn.operations == [] and conn.previews == []
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize(('setup', 'code'), [
+    ('movedIntoZOC=true', 'ZOC'),
+    ('moves=0', 'NO_MOVES'),
+    ('allowed.move=false', 'ATTACK_BLOCKED'),
+    ('UnitManager.CanStartOperation=function() return 1 end', 'ATTACK_BLOCKED'),
+])
+def test_blocked_melee_paths_use_the_same_candidate_and_submission_guards(setup, code):
+    conn = CandidateAttackConn()
+    conn.lua.execute('unitInfo.RangedCombat=0;' + setup)
+    state = state_for(conn)
+    assert asyncio.run(state.get_units())[0].targets == []
+    result = asyncio.run(state.attack_unit(8, 19, 16))
+    assert result.startswith('Error: '+code+'|'), result
+    assert conn.operations == [] and state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('moves', [1, 2])
+def test_native_current_turn_melee_path_is_a_candidate_and_submits_exactly_once(moves):
+    conn = CandidateAttackConn()
+    conn.lua.execute(f'unitInfo.RangedCombat=0;moves={moves}')
+    state = state_for(conn)
+    assert asyncio.run(state.get_units())[0].targets == ['UNIT_SWEDEN_CAROLEAN@19,16(6hp)']
+    assert conn.operations == []
+    result = asyncio.run(state.attack_unit(8, 19, 16))
+    assert 'MELEE_ATTACK|' in result and 'Native combat preview (Melee)' in result
+    assert conn.operations == [('move', {'x': 19, 'y': 16, 'modifiers': 7})]
+    assert state.pending_action_summary is None
+
+
+def test_recorded_turn10_one_move_river_target_does_not_queue_an_attack():
+    conn = CandidateAttackConn()
+    conn.lua.execute('''
+x,y,moves,attacks=18,23,1,1
+unitInfo.RangedCombat=0
+arrivalTurn=2
+unit.GetDamage=function() return 8 end
+Map.GetPlotDistance=function(_,_,tx,ty)
+    if tx==17 and ty==23 then return 1 end
+    return 99
+end
+Map.GetUnitsAt=function(tx,ty)
+    if tx~=17 or ty~=23 then return nil end
+    return {Units=function()
+        local seen=false
+        return function() if not seen then seen=true;return enemy end end
+    end}
+end
+''')
+    state = state_for(conn)
+    assert asyncio.run(state.get_units())[0].targets == []
+    result = asyncio.run(state.attack_unit(8, 17, 23))
+    assert result.startswith('Error: ATTACK_DEFERRED|'), result
+    assert conn.operations == [] and state.pending_action_summary is None
+    assert (conn.lua.globals().attacks, conn.lua.globals().moves) == (1, 1)
