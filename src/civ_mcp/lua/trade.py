@@ -431,10 +431,34 @@ local outgoing=DealManager.GetWorkingDeal(DealDirection.OUTGOING,me,target)
 if not receipt or receipt.token~={json.dumps(token)} or fingerprint(incoming)~={json.dumps(signature)} or fingerprint(outgoing)~={json.dumps(signature)} or DealManager.AreWorkingDealsEqual(me,target)~=true then print("TRADE_ACCEPT|NOT_SUBMITTED|TERMS_CHANGED"); return end
 if not Controls.AcceptDeal or Controls.AcceptDeal:IsHidden()~=false or Controls.AcceptDeal:IsDisabled()~=false then print("TRADE_ACCEPT|NOT_SUBMITTED|NATIVE_NOT_READY"); return end
 if type(OnProposeOrAcceptDeal)~="function" then print("TRADE_ACCEPT|NOT_SUBMITTED|CALLBACK_UNKNOWN"); return end
+receipt.acceptSignature={json.dumps(signature)}
 receipt.acceptEntered=true
 OnProposeOrAcceptDeal()
 receipt.acceptReturned=true
 print("TRADE_ACCEPT|REQUESTED")
+'''
+
+
+def build_trade_accept_receipt(scope: str, target: int, sid: int, token: str, signature: str) -> str:
+    return _scope() + f'''
+local me,target,sid=Game.GetLocalPlayer(),{int(target)},{int(sid)}
+if ContextPtr:GetID()~="DiplomacyDealView" or currentScope()~={json.dumps(scope)} then print("TRADE_ACCEPT_RECEIPT|UNKNOWN"); return end
+local receipt=__civmcp_trade_deal
+if not receipt or receipt.token~={json.dumps(token)} or receipt.sid~=sid or receipt.target~=target or receipt.sent~=true or receipt.acceptEntered~=true or receipt.acceptSignature~={json.dumps(signature)} then print("TRADE_ACCEPT_RECEIPT|UNKNOWN"); return end
+print("TRADE_ACCEPT_RECEIPT|ENTERED")
+'''
+
+
+def build_trade_human_accept(nonce: str, token: str) -> str:
+    return _trade(nonce, token) + '''
+-- The engine's post-human-accept statement uses 0/0 actions. This is a narrow
+-- final witness, read only after the exact DealView callback entry receipt.
+local record=observer.records[trade.sid]
+local info=trade.sid and DiplomacyManager.GetSessionInfo(trade.sid)
+if trade.action~=DealProposalAction.ACCEPTED or not trade.evaluation or trade.evaluation.action~=DealProposalAction.INSPECT or not trade.evaluation.response or not record or record.closed or record.sid~=trade.sid or record.other~=target or record.from~=target or record.to~=me or type(trade.afterSeq)~="number" or record.seq<=trade.afterSeq or DiplomacyManager.FindOpenSessionID(me,target)~=trade.sid or not info or not ((info.FromPlayer==me and info.ToPlayer==target) or (info.FromPlayer==target and info.ToPlayer==me)) or DealManager.HasPendingDeal(me,target)~=false then print("TRADE_FINAL|WAITING"); return end
+local k=record.variant
+if DiplomacyManager.GetKeyName(k.StatementType)~="MAKE_DEAL" or DiplomacyManager.GetKeyName(k.StatementSubType)~="HUMAN_ACCEPT_DEAL" or k.FromPlayer~=target or k.RespondingToDealAction~=0 or k.DealAction~=0 then print("TRADE_FINAL|WAITING"); return end
+print("TRADE_FINAL|HUMAN_ACCEPT_DEAL|"..record.seq)
 '''
 
 

@@ -138,8 +138,11 @@ Events.DiplomacyStatement.Emit(0,1,{SessionID=71,StatementType="MAKE_DEAL",State
 
     def response_event(self, action):
         final = self.response_is_final(action)
+        subtype="HUMAN_ACCEPT_DEAL" if action==1 else "AI_ACCEPT_DEAL"
+        responding=0 if action==1 else action
+        incoming_action=0 if action==1 else 1
         return '''working_incoming=working_outgoing;
-''' + ('controls["/InGame/DiplomacyDealView"].hidden=true; controls["/InGame/DiplomacyActionView/ConversationContainer"].hidden=false; native_selections={{Key="CHOICE_EXIT"}};\n' if final else '') + f'''Events.DiplomacyStatement.Emit(1,0,{{SessionID=71,StatementType="MAKE_DEAL",StatementSubType="AI_ACCEPT_DEAL",FromPlayer=1,FromPlayerMood=0,Initiator=0,RespondingToDealAction={action},DealAction=1,ResponseType=1}})'''
+''' + ('controls["/InGame/DiplomacyDealView"].hidden=true; controls["/InGame/DiplomacyActionView/ConversationContainer"].hidden=false; native_selections={{Key="CHOICE_EXIT"}};\n' if final else '') + f'''Events.DiplomacyStatement.Emit(1,0,{{SessionID=71,StatementType="MAKE_DEAL",StatementSubType="{subtype}",FromPlayer=1,FromPlayerMood=0,Initiator=0,RespondingToDealAction={responding},DealAction={incoming_action},ResponseType=1}})'''
 
     async def execute_in_named_state(self, name, source, timeout=5):
         if self.deliver_events and self.queue:
@@ -606,4 +609,95 @@ def test_lost_accept_arming_reply_preserves_evaluation_for_zero_accept_and_decli
         assert list(conn.lua.globals().sent_actions.values())==[9]
         assert list(conn.lua.globals().mutations.values())==["close"]
         assert not state.diplomacy_pending
+    asyncio.run(scenario())
+
+
+def test_fresh_native_human_accept_zero_action_confirms_only_entered_owned_accept_once(quick_trade):
+    async def scenario():
+        conn=TradeConn(); state=GameState(conn)
+        result=await state.propose_trade(1,[{"type":"FAVOR","amount":20}],[{"type":"GOLD","amount":50}])
+        assert "ACCEPTED|" in result
+        assert "HUMAN_ACCEPT_DEAL" in result
+        assert list(conn.lua.globals().sent_actions.values())==[9,1]
+        # Repeated confirmation keeps the final result and never sends a new trade.
+        again=await state.propose_trade(2,[{"type":"GOLD","amount":99}],[])
+        assert "ACCEPTED|" in again
+        assert list(conn.lua.globals().sent_actions.values())==[9,1]
+        assert conn.lua.globals().requests==1 and state.diplomacy_pending
+        assert "SESSION_CLOSED" in await state.diplomacy_respond(1,"EXIT")
+        assert "cleanup confirmed" in await state.dismiss_popup()
+        assert not state.diplomacy_pending
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("tamper", [
+    'world', 'nonce', 'session', 'stale_seq', 'subtype', 'statement_type',
+    'responding_action', 'deal_action', 'from_player', 'accept_receipt',
+])
+def test_human_accept_zero_action_rejects_unmatched_final_witness(tamper,quick_trade):
+    class ChangedFinalConn(TradeConn):
+        def response_event(self,action):
+            source=super().response_event(action)
+            if action!=1: return source
+            if tamper=='world': return 'GameConfiguration.GetValue=function() return 99 end;' + source
+            if tamper=='nonce': return '__civmcp_diplomacy.nonce="other-owner";' + source
+            if tamper=='session': return source.replace('SessionID=71','SessionID=72')
+            if tamper=='stale_seq': return source+';__civmcp_diplomacy.trade.afterSeq=__civmcp_diplomacy.seq'
+            if tamper=='subtype': return source.replace('StatementSubType="HUMAN_ACCEPT_DEAL"','StatementSubType="AI_ACCEPT_DEAL"')
+            if tamper=='statement_type': return source.replace('StatementType="MAKE_DEAL"','StatementType="MAKE_DEMAND"')
+            if tamper=='responding_action': return source.replace('RespondingToDealAction=0','RespondingToDealAction=7')
+            if tamper=='deal_action': return source.replace('DealAction=0,','DealAction=2,')
+            if tamper=='from_player': return source.replace('FromPlayer=1,','FromPlayer=2,')
+            if tamper=='accept_receipt': return source+';__civmcp_trade_deal.token="other-attempt"'
+            return source
+    async def scenario():
+        conn=ChangedFinalConn(); state=GameState(conn)
+        first=await state.propose_trade(1,[{"type":"GOLD","amount":20}],[])
+        second=await state.propose_trade(2,[{"type":"GOLD","amount":99}],[])
+        assert "ACCEPTED|" not in first and "ACCEPTED|" not in second
+        assert "OUTCOME_UNKNOWN" in first and "OUTCOME_UNKNOWN" in second
+        assert conn.lua.globals().requests==1
+        assert list(conn.lua.globals().sent_actions.values())==[9,1]
+        assert state.diplomacy_pending
+    asyncio.run(scenario())
+
+
+def test_final_human_accept_requires_actual_native_accept_entry_not_an_armed_action(quick_trade):
+    class NoEntryConn(TradeConn):
+        async def execute_in_named_state(self,name,source,timeout=5):
+            if "receipt.acceptEntered=true" in source:
+                self.setup(self.response_event(1))
+                return ["TRADE_ACCEPT|REQUESTED"]  # Lost/ambiguous adapter reply, no callback entry.
+            return await super().execute_in_named_state(name,source,timeout)
+    async def scenario():
+        conn=NoEntryConn(); state=GameState(conn)
+        for target in (1,2):
+            result=await state.propose_trade(target,[{"type":"GOLD","amount":20}],[])
+            assert "ACCEPTED|" not in result and "OUTCOME_UNKNOWN" in result
+        assert list(conn.lua.globals().sent_actions.values())==[9]
+        assert state.diplomacy_pending
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("error", [TimeoutError,asyncio.CancelledError])
+def test_entered_accept_lost_reply_confirms_human_final_once(error,quick_trade):
+    class LostAcceptConn(TradeConn):
+        lost=False
+        async def execute_in_named_state(self,name,source,timeout=5):
+            rows=await super().execute_in_named_state(name,source,timeout)
+            if "receipt.acceptEntered=true" in source and not self.lost:
+                self.lost=True
+                raise error()
+            return rows
+    async def scenario():
+        conn=LostAcceptConn(); state=GameState(conn)
+        if error is asyncio.CancelledError:
+            with pytest.raises(asyncio.CancelledError):
+                await state.propose_trade(1,[{"type":"GOLD","amount":20}],[])
+        else:
+            assert "OUTCOME_UNKNOWN" in await state.propose_trade(1,[{"type":"GOLD","amount":20}],[])
+        result=await state.propose_trade(2,[{"type":"GOLD","amount":99}],[])
+        assert "ACCEPTED|" in result and "HUMAN_ACCEPT_DEAL" in result
+        assert list(conn.lua.globals().sent_actions.values())==[9,1]
+        assert conn.lua.globals().requests==1
     asyncio.run(scenario())
