@@ -453,8 +453,8 @@ async def get_builder_tasks(ctx: Context) -> str:
     gs = _get_game(ctx)
 
     async def _run():
-        tasks, builders = await gs.get_builder_tasks()
-        return nr.narrate_builder_tasks(tasks, builders)
+        report = await gs.get_builder_tasks()
+        return nr.narrate_builder_tasks(report)
 
     return await _logged(ctx, "get_builder_tasks", {}, _run)
 
