@@ -576,3 +576,34 @@ local deal=DealManager.GetWorkingDeal(DealDirection.OUTGOING);local item=deal:Ad
     assert conn.lua.eval('working_outgoing[1]:GetAmount()')==777
     assert list(conn.lua.globals().sent_actions.values())==[]
     assert not state.diplomacy_pending
+
+
+@pytest.mark.parametrize("error", [TimeoutError,asyncio.CancelledError])
+def test_lost_accept_arming_reply_preserves_evaluation_for_zero_accept_and_decline(error,quick_trade):
+    class LostArmConn(TradeConn):
+        lost=False
+        async def execute_in_named_state(self,name,source,timeout=5):
+            rows=await super().execute_in_named_state(name,source,timeout)
+            if 'if DealProposalAction.ACCEPTED==DealProposalAction.ACCEPTED' in source and not self.lost:
+                self.lost=True
+                raise error()
+            return rows
+    async def scenario():
+        conn=LostArmConn(); state=GameState(conn)
+        conn.setup('Controls.AcceptDeal.IsHidden=function() return true end')
+        if error is asyncio.CancelledError:
+            with pytest.raises(asyncio.CancelledError):
+                await state.propose_trade(1,[{"type":"GOLD","amount":20}],[])
+        else:
+            assert "OUTCOME_UNKNOWN" in await state.propose_trade(1,[{"type":"GOLD","amount":20}],[])
+        assert state.diplomacy_pending
+        seq=conn.lua.eval('__civmcp_diplomacy.trade.evaluation.response.seq')
+        result=await state.propose_trade(2,[{"type":"GOLD","amount":99}],[])
+        assert "ERR:NOT_SUBMITTED|" in result
+        assert conn.lua.eval('__civmcp_diplomacy.trade.evaluation.response.seq')==seq
+        assert "cleanup confirmed" in await state.respond_to_deal(1,False)
+        assert conn.lua.globals().requests==1
+        assert list(conn.lua.globals().sent_actions.values())==[9]
+        assert list(conn.lua.globals().mutations.values())==["close"]
+        assert not state.diplomacy_pending
+    asyncio.run(scenario())
