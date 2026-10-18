@@ -2,7 +2,9 @@
 
 九个主题的本机版本规则快照，通过 MCP 按需查询；目录可独立复制，备用 CLI 只需 Python 3 标准库。
 
-## MCP 查询
+## 查询
+
+### MCP 查询
 
 规则、前置或机制不清楚时，先搜索名称或内部 ID，再按结果 ID 读取。查询无需游戏启动或客户端文件权限。
 
@@ -21,6 +23,19 @@ get_knowledge(entry_id="TECH_WRITING", level="rule")
 搜索不支持整句语义或全文检索。结果包含总数和截断标记；零命中可换用名称、英文或 ID，不能据此判定规则不存在。`summary` 主要用于确认身份；规划与条件判断读取 `rule`，规则冲突或来源不清时再读取 `evidence`。证据中的 `source_refs` 定位来源表与行。
 
 回复附带版本快照与适用边界，不验证当前存档、活动模组或操作资格。规则明确后，用对应游戏工具核对本局候选、费用、地块和进度；无需每回合重复查阅。
+
+### CLI 备用
+
+CLI 用于备用查询与维护。在知识目录执行；从项目根目录先进入 `civ6_knowledge`。
+
+```sh
+python3 query.py search 写作 --topic technologies --limit 5
+python3 query.py show TECH_WRITING
+python3 query.py show TECH_WRITING --level rule
+python3 query.py show TECH_WRITING --level evidence
+```
+
+核对已知环境：`python3 query.py check-profile PROFILE_JSON`。输入字段取自清单的 `profile`；版本不匹配时拒绝兼容结论。
 
 ## 读取路径
 
@@ -43,19 +58,6 @@ get_knowledge(entry_id="TECH_WRITING", level="rule")
 - 目标规则集为《风云变幻》。内部版本、包版本、Steam Build 和来源指纹以 [manifest.json](manifest.json) 为准。
 - 来源为本机规则缓存，缺失文本补自安装文件；活动 DLC／模组／模式尚未核对。
 - 外部关联未独立建卡。Modifier 与需求集合仅保留关联，不求值；脚本条件和活动随机树未完整解释。百科与规则表冲突时，数值以规则表为准，差异随相关卡保留。
-
-## 查询
-
-CLI 用于备用查询与维护。在知识目录执行；从项目根目录先进入 `civ6_knowledge`。
-
-```sh
-python3 query.py search 写作 --topic technologies --limit 5
-python3 query.py show TECH_WRITING
-python3 query.py show TECH_WRITING --level rule
-python3 query.py show TECH_WRITING --level evidence
-```
-
-核对已知环境：`python3 query.py check-profile PROFILE_JSON`。输入字段取自清单的 `profile`；版本不匹配时拒绝兼容结论。
 
 ## 更新
 
