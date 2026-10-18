@@ -9,7 +9,7 @@ from typing import Literal
 
 KnowledgeTopic = Literal[
     'civics', 'technologies', 'districts', 'congress', 'economy',
-    'resources', 'combat', 'diplomacy', 'victory',
+    'resources', 'combat', 'diplomacy', 'victory', 'civilizations',
 ]
 KnowledgeLevel = Literal['summary', 'rule', 'evidence']
 TOPICS = KnowledgeTopic.__args__
