@@ -143,7 +143,7 @@ def test_mcp_schemas_reject_invalid_arguments_and_keep_whitespace_query_as_expli
     async def scenario(session):
         tools = {tool.name: tool for tool in (await session.list_tools()).tools}
         topic = tools['search_knowledge'].inputSchema['properties']['topic']['anyOf'][0]['enum']
-        assert set(topic) == {'civics', 'technologies', 'districts', 'congress', 'economy', 'resources', 'combat', 'diplomacy', 'victory'}
+        assert set(topic) == {'civics', 'technologies', 'districts', 'congress', 'economy', 'resources', 'combat', 'diplomacy', 'victory', 'civilizations'}
         assert tools['get_knowledge'].inputSchema['properties']['level']['enum'] == ['summary', 'rule', 'evidence']
         for name, args in [
             ('search_knowledge', {'query': ''}),
@@ -267,3 +267,30 @@ def test_returned_profile_cannot_disagree_with_fingerprinted_source(monkeypatch,
     path.write_text(json.dumps(manifest))
     result = json.loads(asyncio.run(server.search_knowledge(make_ctx(game=None), 'writing')))
     assert result['status'] == 'error' and 'profile' in result['error'].lower()
+
+
+def test_mcp_civilization_topic_and_three_layers_keep_installed_scope_without_game(monkeypatch, tmp_path):
+    from test_knowledge_civilizations import build as build_civilizations, installed_fixture
+
+    root = build_civilizations(tmp_path, installed_fixture())
+    monkeypatch.setenv('CIV6_KNOWLEDGE_DIR', str(root))
+    before = fingerprints(root)
+
+    async def scenario(session):
+        tools = {tool.name: tool for tool in (await session.list_tools()).tools}
+        assert len(tools) == 80
+        topic = tools['search_knowledge'].inputSchema['properties']['topic']['anyOf'][0]['enum']
+        assert 'civilizations' in topic
+        result = await session.call_tool('search_knowledge', {'query': '安装文明', 'topic': 'civilizations'})
+        search = json.loads(result.content[0].text)
+        assert search['results'][0]['id'] == 'CIVILIZATION_INSTALLED'
+        for level in ('summary', 'rule', 'evidence'):
+            result = await session.call_tool('get_knowledge', {'entry_id': 'CIVILIZATION_INSTALLED', 'level': level})
+            assert not result.isError
+            data = json.loads(result.content[0].text)
+            scoped = data['summary'] if level == 'summary' else data['rule'] if level == 'rule' else data
+            assert scoped['source_scope'] == 'installed_definition_catalog' and scoped['applied'] is False
+            assert data['applicability']['current_session_verified'] is False
+
+    session_run(monkeypatch, FakeGameState(), scenario)
+    assert fingerprints(root) == before

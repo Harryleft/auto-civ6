@@ -102,11 +102,19 @@ def execute(root, args):
     if args.level == 'rule':
         return card
     evidence = [{'source_ref': ref, 'facts': snapshot['tables'][ref['table']][ref['row']]} for ref in card['source_refs']]
-    tags = {value for entry in evidence for value in entry['facts'].values() if isinstance(value, str) and value.startswith('LOC_')}
+    if card['topic'] == 'civilizations':
+        for entry in evidence:
+            entry['source_scope'] = ('installed_definition_catalog' if entry['source_ref']['table'] == 'InstalledRuleRows'
+                                     else 'cached_reference_only' if card['summary']['source_scope'] == 'installed_definition_catalog'
+                                     else 'local_cached_rules_snapshot')
+    tags = {value for entry in evidence for value in (
+        entry['facts'].get('facts', entry['facts']) if entry['source_ref']['table'] == 'InstalledRuleRows' else entry['facts']
+    ).values() if isinstance(value, str) and value.startswith('LOC_')}
     localization = {tag: snapshot['localization'][tag] for tag in sorted(tags) if tag in snapshot['localization']}
     prefix = {'technologies': 'technology-', 'civics': 'civic-', 'districts': 'district-', 'congress': 'congress-'}.get(card['topic'], card['topic'] + '-')
     excerpts = [entry for entry in snapshot.get('code_evidence', []) if entry['id'].startswith(prefix)]
-    return {'id': card['id'], 'source_refs': card['source_refs'], 'evidence': evidence, 'localization': localization, 'localization_sources': {tag: snapshot.get('localization_sources', {}).get(tag, {}) for tag in localization}, 'code_evidence': excerpts, 'profile': manifest['profile'], 'sources': snapshot.get('sources', [])}
+    boundary = {key: card['summary'][key] for key in ('source_scope', 'applied', 'conditions_evaluated', 'ownership_verified', 'activation_verified') if key in card['summary']}
+    return {'id': card['id'], **boundary, 'source_refs': card['source_refs'], 'evidence': evidence, 'localization': localization, 'localization_sources': {tag: snapshot.get('localization_sources', {}).get(tag, {}) for tag in localization}, 'code_evidence': excerpts, 'profile': manifest['profile'], 'sources': snapshot.get('sources', [])}
 
 
 def positive(value):
