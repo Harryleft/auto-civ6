@@ -116,7 +116,8 @@ async def _logged(
                     city_id = params.get("city_id")
                     dependent = (
                         (entity[0] == "unit" and isinstance(unit_id, int)
-                         and entity[1] == unit_id % 65536)
+                         and (entity[1] == unit_id % 65536
+                              or getattr(app.game, "pending_action_kind", None) == "pillage"))
                         or (entity[0] == "city" and entity[1] == city_id)
                         or tool_name == "run_lua"
                         or (entity[0] == "unit" and tool_name == "skip_remaining_units")
@@ -1222,7 +1223,7 @@ async def unit_action(
 
     Args:
         unit_id: The unit's composite ID (from get_units output)
-        action: One of: move, cancel_move, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion
+        action: One of: move, cancel_move, pillage, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion
         target_x: Target X coordinate (required for move/attack/trade_route/teleport)
         target_y: Target Y coordinate (required for move/attack/trade_route/teleport)
         improvement: Improvement type for builders (required for improve), e.g.
@@ -1234,6 +1235,10 @@ async def unit_action(
     For cancel_move: explicitly cancel only a verified non-trade movement queue,
     keeping the current position. Then independently choose fortify/heal/skip or
     another strategic action; remaining movement is not a reason to spend it.
+    For pillage: explicitly pillage the current tile once; native eligibility
+    decides whether this is legal. Each call damages one improvement, building
+    or district layer. Unknown outcomes remain pending; repeat only confirms
+    that attempt. No target coordinates, automatic movement or follow-up.
     For trade_route: provide target_x and target_y of destination city.
     For teleport: provide target_x and target_y of destination city. Traders only, must be idle (not on active route).
     For improve: provide improvement name. Builder must be on the tile.
@@ -1262,11 +1267,13 @@ async def unit_action(
         # Move/attack/founding reconcile their own pending requests. Other
         # commands must not change that unit before its outcome is known.
         if (
-            action.lower() not in {"move", "attack", "found_city", "cancel_move"}
-            and getattr(gs, "pending_action_entity", None) == ("unit", unit_index)
+            action.lower() not in {"move", "attack", "found_city", "cancel_move", "pillage"}
+            and (getattr(gs, "pending_action_entity", None) == ("unit", unit_index)
+                 or getattr(gs, "pending_action_kind", None) == "pillage")
         ):
             confirmation = await gs.confirm_pending_action()
-            if gs.pending_action_entity == ("unit", unit_index):
+            if (gs.pending_action_entity == ("unit", unit_index)
+                    or getattr(gs, "pending_action_kind", None) == "pillage"):
                 return confirmation
         match action.lower():
             case "move":
@@ -1275,6 +1282,8 @@ async def unit_action(
                 return await gs.move_unit(unit_index, target_x, target_y)
             case "cancel_move":
                 return await gs.cancel_unit_move(unit_id)
+            case "pillage":
+                return await gs.pillage_unit(unit_id)
             case "attack":
                 if target_x is None or target_y is None:
                     return "Error: attack requires target_x and target_y"
@@ -1322,7 +1331,7 @@ async def unit_action(
                     return "Error: teleport requires target_x and target_y of the destination city"
                 return await gs.teleport_to_city(unit_index, target_x, target_y)
             case _:
-                return f"Error: Unknown action '{action}'. Valid: move, cancel_move, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion"
+                return f"Error: Unknown action '{action}'. Valid: move, cancel_move, pillage, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion"
 
     result = await _logged(ctx, "unit_action", params, _run)
     return result
