@@ -1391,9 +1391,7 @@ class TestSetCivic:
 
 
 class TestSetPolicies:
-    """RequestPolicyChanges can silently no-op (e.g. mid era-transition), so
-    every non-error result is re-read and per-slot mismatches are surfaced
-    as a WARN instead of being reported as success."""
+    """Policy plans require a later matching native read to be confirmed."""
 
     _GOV_LINES = [
         "GOV|GOVERNMENT_CHIEFDOM|Chiefdom|x",
@@ -1413,21 +1411,21 @@ class TestSetPolicies:
             return await gs.set_policies({0: "POLICY_DISCIPLINE", 1: "NONE"})
 
         result = run(go())
-        assert result == "POLICIES_SET"
+        assert result == "POLICIES_SET|Final policy plan confirmed by subsequent readback."
         assert "WARN" not in result
 
-    def test_mismatched_slot_appends_silent_failure_warning(self):
+    def test_mismatched_slot_keeps_application_unconfirmed(self):
         lines = [
             "GOV|GOVERNMENT_CHIEFDOM|Chiefdom|x",
             "SLOT|0|SLOT_MILITARY|NONE|Empty",
         ]
-        gs, _ = _gs([("write", ["POLICY_PLAN_COUNT|1", "POLICY_PLAN|0|POLICY_DISCIPLINE", "OK:POLICIES_SET"]), ("write", lines)])
+        gs, _ = _gs([("write", ["POLICY_PLAN_COUNT|1", "POLICY_PLAN|0|POLICY_DISCIPLINE", "OK:POLICIES_SET"]), ("write", lines), ("write", OSError("read interrupted"))])
 
         async def go():
             return await gs.set_policies({0: "POLICY_DISCIPLINE"})
 
         result = run(go())
-        assert "WARN:SILENT_FAILURE" in result
+        assert result.startswith("POLICIES_UNCONFIRMED|")
         assert "slot 0 (wanted POLICY_DISCIPLINE, got EMPTY)" in result
 
     def test_error_result_skips_the_verification_read(self):
