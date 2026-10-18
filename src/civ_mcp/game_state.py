@@ -1756,6 +1756,9 @@ class GameState:
         result = await self._turn_progress.get_status(self)
         if self._diplomacy_progress.pending:
             result += "\n" + self._diplomacy_progress.trade_summary()
+            diagnostic = await self._diplomacy_progress.diagnostics(self.conn)
+            if diagnostic:
+                result += "\n" + diagnostic
         if self._diplomacy_cleanup.pending:
             result += "\ndiplomacy_cleanup: native callback outcome unknown; dismiss_popup only confirms its receipt; no callback or trade will be replayed."
         return result
