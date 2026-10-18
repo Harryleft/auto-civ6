@@ -1,6 +1,6 @@
 # 原生科研与市政资格
 
-状态：ready-for-agent。工作项见[本地 tracker](2026-10-19-native-civic-eligibility-tickets.md)。
+状态：complete。工作项见[本地 tracker](2026-10-19-native-civic-eligibility-tickets.md)。
 
 ## Problem Statement
 
