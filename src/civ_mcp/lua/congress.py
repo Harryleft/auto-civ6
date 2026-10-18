@@ -284,9 +284,12 @@ if ress and (not inSession or congressStage(Game.GetCurrentTurnSegment(), inSess
         local isPassed = "0"
         local winner = -1
         local chosen = ""
+        local chosenLabel = ""
         if not inSession then
             isPassed = "1"
             winner = res.Winner or -1
+            local labelOK, label = pcall(function() return res.ChosenLabel end)
+            if labelOK and (label == "A" or label == "B") then chosenLabel = label end
             if res.ChosenThing then
                 if res.TargetType == "PlayerType" then
                     local pid = tonumber(res.ChosenThing)
@@ -329,7 +332,7 @@ if ress and (not inSession or congressStage(Game.GetCurrentTurnSegment(), inSess
         effectB = effectB:gsub("|", "/"):gsub("~", "-")
         name = name:gsub("|", "/"):gsub("~", "-")
         chosen = chosen:gsub("|", "/"):gsub("~", "-")
-        print("WC_RES|" .. rType .. "|" .. typeName .. "|" .. name .. "|" .. targetKind .. "|" .. effectA .. "|" .. effectB .. "|" .. isPassed .. "|" .. winner .. "|" .. chosen .. "|" .. targets)
+        print("WC_RES|" .. rType .. "|" .. typeName .. "|" .. name .. "|" .. targetKind .. "|" .. effectA .. "|" .. effectB .. "|" .. isPassed .. "|" .. winner .. "|" .. chosen .. "|" .. targets .. "|" .. chosenLabel)
     end
 end
 if inSession then
@@ -415,6 +418,7 @@ def parse_world_congress_response(lines: list[str]) -> WorldCongressStatus:
                     is_passed=parts[7] == "1",
                     winner=int(parts[8]),
                     chosen_thing=parts[9],
+                    chosen_label=parts[11] if len(parts) > 11 and parts[11] in ("A", "B") else "",
                 )
             )
         elif line.startswith("WC_PROP|"):
