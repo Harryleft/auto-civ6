@@ -94,6 +94,12 @@ async def _logged(
                     "before issuing gameplay actions."
                 )
             elif (
+                app.game.diplomacy_pending
+                and not tool_name.startswith(("get_", "list_"))
+                and tool_name not in {"end_turn", "test_trade", "propose_trade", "respond_to_trade", "respond_to_diplomacy", "dismiss_popup", "restart_and_load"}
+            ):
+                result = "ERR:OUTCOME_UNKNOWN|Native diplomacy attempt is pending; confirm the original trade/response or use explicit recovery before gameplay."
+            elif (
                 app.game.turn_pending
                 and not tool_name.startswith(("get_", "list_"))
                 and tool_name not in {"end_turn", "respond_to_diplomacy", "respond_to_trade", "queue_wc_votes", "open_world_congress", "dismiss_popup", "restart_and_load"}
@@ -896,7 +902,7 @@ async def get_trade_options(ctx: Context, other_player_id: int) -> str:
 
 @mcp.tool()
 async def respond_to_trade(ctx: Context, other_player_id: int, accept: bool) -> str:
-    """Accept or reject the verified current incoming deal or demand.
+    """Accept/reject a verified incoming offer or the owned current outgoing counter.
 
     Rechecks the visible view, unique session, participants, and incoming data
     before submitting. Unknown context or a different target submits nothing.
@@ -1078,11 +1084,11 @@ async def respond_to_diplomacy(
 
     Args:
         other_player_id: The player ID of the other civilization (from get_pending_diplomacy)
-        response: "POSITIVE" (friendly), "NEGATIVE" (dismissive), or "EXIT" (close a verified GOODBYE)
+        response: A currently verified native choice: e.g. "POSITIVE", "NEGATIVE", or "EXIT".
 
-    First meetings typically have 2-3 rounds. Automatic goodbye cleanup requires
-    the same verified dialogue with identical nonempty text before and after.
-    If SESSION_CONTINUES is returned, send another response for the next round.
+    Read get_pending_diplomacy first. UNKNOWN choices authorize no response.
+    Identical text never closes a conversation. An unconfirmed response is only
+    observed on retry; new native statement choices require an explicit choice.
     """
     gs = _get_game(ctx)
     return await _logged(

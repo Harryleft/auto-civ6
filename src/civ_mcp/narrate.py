@@ -881,12 +881,11 @@ def narrate_diplomacy_sessions(context: lq.DiplomacyContext) -> str:
             lines.append(
                 f"  Current incoming deal or demand — use respond_to_trade(other_player_id={s.other_player_id}, accept=True/False)"
             )
-        elif s.buttons == "GOODBYE":
-            lines.append(
-                f'  Phase: GOODBYE — use respond_to_diplomacy(other_player_id={s.other_player_id}, response="EXIT")'
-            )
+        elif getattr(s, "choice_status", "UNKNOWN") == "KNOWN":
+            choices = ", ".join(key.removeprefix("CHOICE_") for key in s.choice_keys)
+            lines.append("  Current native choices: " + (choices or "none"))
         else:
-            lines.append("  Respond with: POSITIVE (friendly) or NEGATIVE (dismissive)")
+            lines.append("  Current native choices UNKNOWN; no response is authorized by visible text alone.")
     return "\n".join(lines)
 
 
@@ -998,6 +997,8 @@ def narrate_tech_civics(tc: lq.TechCivicStatus) -> str:
 
 
 def narrate_pending_deals(context: lq.DiplomacyContext) -> str:
+    if context.outgoing_summary:
+        return context.outgoing_summary + "\nCurrent owned outgoing counter: use respond_to_trade(accept=True/False) for an explicit decision."
     if context.status == "UNKNOWN":
         return (f"Incoming proposal context UNKNOWN: {context.reason}. "
                 "Read get_pending_diplomacy again before responding.")
@@ -1122,14 +1123,15 @@ def _describe_trade_item(item: lq.TestTradeItem) -> str:
     return f"{item.item_type} ({item.amount})"
 
 
-def narrate_test_trade(result: lq.TestTradeResult) -> str:
+def narrate_test_trade(result: lq.TestTradeResult, *, preview: bool = True, include_guidance: bool = True) -> str:
     lines = [
-        f"Trade test with {result.other_civ_name} (player {result.other_player_id}):"
+        f"{'Trade test' if preview else 'Native trade response'} with {result.other_civ_name} (player {result.other_player_id}):"
     ]
 
     our_proposed = [i for i in result.proposed if i.side == "US"]
     their_proposed = [i for i in result.proposed if i.side == "THEM"]
-    lines.append("\nYour proposal:")
+    if result.proposed:
+        lines.append("\nYour proposal:")
     if our_proposed:
         lines.append(
             "  We offer: " + ", ".join(_describe_trade_item(i) for i in our_proposed)
@@ -1168,9 +1170,8 @@ def narrate_test_trade(result: lq.TestTradeResult) -> str:
                     "  They give: "
                     + ", ".join(_describe_trade_item(i) for i in their_counter)
                 )
-            lines.append(
-                "\nAdjust your proposal to match or exceed the counter-offer, then use mode='send' to commit."
-            )
+            if include_guidance:
+                lines.append("\nAdjust your proposal to match or exceed the counter-offer, then use mode='send' to commit.")
 
     return "\n".join(lines)
 
