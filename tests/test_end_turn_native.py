@@ -12,6 +12,9 @@ class NativeTurn:
         self.lua.execute('''
 turn, active, complete, processing, sent, allowed, unready, blocker, mode = 78, true, true, false, false, true, false, 0, 4
 requests, mode_changes = 0, 0
+seed,civ,local_player=1,'CIVILIZATION_SUMERIA',0
+PlayerConfigurations=setmetatable({}, {__index=function() return {GetCivilizationTypeName=function() return civ end} end})
+GameConfiguration={GetValue=function() return seed end}
 auto_end, range_block, tactical, first_ready, range_notice, core_busy = false, false, true, nil, nil, false
 units, cities, queued_targets, paths = {}, {}, {}, {}
 local p = {IsTurnActive=function() return active end, IsTurnActiveComplete=function() return complete end,
@@ -29,7 +32,7 @@ UnitManager={GetQueuedDestination=function(u) return queued_targets[u:GetID()] e
  GetMoveToPathEx=function(u) return paths[u:GetID()] end, GetActivityType=function() return 1225574625 end}
 ActivityTypes={ACTIVITY_OPERATION=1225574625}
 UserConfiguration={IsAutoEndTurn=function() return auto_end end,IsCityRangeAttackTurnBlocking=function() return range_block end}
-Game = {GetLocalPlayer=function() return 0 end, GetCurrentGameTurn=function() return turn end,IsAllowTacticalCommands=function() return tactical end}
+Game = {GetLocalPlayer=function() return local_player end, GetCurrentGameTurn=function() return turn end,IsAllowTacticalCommands=function() return tactical end}
 Players = {[0]=p}
 UI = {IsProcessingMessages=function() return processing end, HasSentTurnComplete=function() return sent end,
       CanEndTurn=function() return allowed end, GetInterfaceMode=function() return mode end,IsGameCoreBusy=function() return core_busy end,
@@ -43,7 +46,7 @@ ActionTypes={ACTION_ENDTURN=12}
 ''')
 
     def run(self):
-        self.lua.execute(build_end_turn(78))
+        self.lua.execute(build_end_turn(78, ("CIVILIZATION_SUMERIA", 1, 0)))
         return self.rows
 
 
@@ -112,3 +115,35 @@ def test_native_unknown_relevant_local_facts_never_submit_or_replace_queue(setup
     assert 'END_TURN|NOT_SUBMITTED|READINESS_UNKNOWN' in game.run()
     assert game.lua.globals().requests==0 and game.lua.globals().mode_changes==0
     assert game.lua.eval('queued_targets[2228231]') in (None,2)
+
+
+@pytest.mark.parametrize("change", ["seed=2", "civ='CIVILIZATION_BABYLON'", "local_player=1"])
+def test_world_change_at_final_native_boundary_never_submits(change):
+    game = NativeTurn()
+    game.lua.execute("seed=1;civ='CIVILIZATION_SUMERIA';local_player=0;" + change)
+    assert "END_TURN|NOT_SUBMITTED|WORLD_CHANGED" in game.run()
+    assert game.lua.globals().requests == 0
+    assert game.lua.globals().mode_changes == 0
+
+
+@pytest.mark.parametrize("setup", ["seed=nil", "civ='unknown'", "local_player=nil", "seed=0/0"])
+def test_unknown_world_at_final_native_boundary_never_submits(setup):
+    game = NativeTurn()
+    game.lua.execute(setup)
+    assert "END_TURN|NOT_SUBMITTED|WORLD_UNKNOWN" in game.run()
+    assert game.lua.globals().requests == 0 and game.lua.globals().mode_changes == 0
+
+
+@pytest.mark.parametrize("mutation", ["seed=2", "turn=79"])
+def test_world_and_turn_are_rechecked_after_native_precondition_callbacks(mutation):
+    game = NativeTurn()
+    game.lua.execute('UI.CanEndTurn=function() ' + mutation + ';return true end')
+    assert any(row.startswith("END_TURN|NOT_SUBMITTED|") for row in game.run())
+    assert game.lua.globals().requests == 0 and game.lua.globals().mode_changes == 0
+
+
+def test_world_is_rechecked_between_mode_recovery_and_actual_end_request():
+    game = NativeTurn()
+    game.lua.execute('UI.SetInterfaceMode=function(value) mode=value;mode_changes=mode_changes+1;seed=2 end')
+    assert "END_TURN|NOT_SUBMITTED|WORLD_CHANGED" in game.run()
+    assert game.lua.globals().requests == 0

@@ -160,9 +160,9 @@ class GameState:
                 if self._game_identity is not None and new_id != self._game_identity:
                     log.info("Game changed: %s → %s", self._game_identity, new_id)
                     self._clear_world_caches()
-                    self._turn_progress.invalidate_scope()
                     self._diplomacy_cleanup.invalidate_scope()
                     self._diplomacy_progress.invalidate_scope()
+                self._turn_progress.invalidate_scope(new_id)
                 self._game_identity = new_id
                 return self._game_identity
         return ("unknown", 0)
