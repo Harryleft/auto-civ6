@@ -59,6 +59,10 @@ Players={[0]={GetCulture=function() return culture end,
         self.lua.execute(source)
         return [row for row in self.rows if row != "---END---"]
 
+    async def execute_write(self, source):
+        # This fixture supplies the native UI API set for read-only queries.
+        return await self.execute_read(source)
+
     async def disconnect(self):
         pass
 
@@ -172,6 +176,9 @@ def test_invalid_cost_never_yields_a_finite_time_or_percentage(cost_expr):
 
 
 class LegacyConn:
+    async def execute_write(self, source):
+        return await self.execute_read(source)
+
     async def execute_read(self, _source):
         return [
             "CURRENT|Pottery|2|Code of Laws|3",
@@ -191,3 +198,141 @@ def test_existing_numeric_response_still_parses_and_narrates():
     assert status.available_civics[0].progress_pct == 30
     assert status.available_civics[0].turns == 3
     assert "Civic: Code of Laws (3 turns)" in narrate_tech_civics(status)
+
+
+class ContextCivicConn:
+    """Separate native APIs as observed in GameCore and the InGame UI."""
+
+    def __init__(self):
+        self.gamecore = CivicConn()
+        self.ingame = CivicConn()
+        for engine in (self.gamecore, self.ingame):
+            engine.lua.execute('''
+native_requests=0
+function record_request() native_requests=native_requests+1 end
+UI={RequestPlayerOperation=record_request}
+UnitManager={RequestOperation=record_request,RequestCommand=record_request}
+PlayerManager={RequestOperation=record_request}
+culture.SetProgressingCivic=record_request
+culture.GetCultureCost=function() return 26 end
+''')
+        self.gamecore.lua.execute('''
+culture.GetCulturalProgress=nil
+culture.GetTurnsLeft=nil
+culture.GetTurnsToProgressCivic=nil
+culture.GetTurnsLeftOnCurrentCivic=function() return 1 end
+''')
+        self.ingame.lua.execute('''
+culture.GetCulturalProgress=function() return 22.44140625 end
+culture.GetTurnsLeft=function() return 1 end
+culture.GetTurnsToProgressCivic=function() return 1 end
+''')
+
+    async def execute_read(self, source):
+        return await self.gamecore.execute_read(source)
+
+    async def execute_write(self, source):
+        # The transport name selects InGame; only native request functions mutate.
+        return await self.ingame.execute_read(source)
+
+    async def disconnect(self):
+        pass
+
+    @property
+    def native_requests(self):
+        return sum(engine.lua.globals().native_requests
+                   for engine in (self.gamecore, self.ingame))
+
+
+def test_public_civic_query_uses_ingame_progress_apis_without_native_requests():
+    conn = ContextCivicConn()
+    status = asyncio.run(GameState(conn).get_tech_civics())
+    current = status.available_civics[0]
+    assert status.current_civic_progress_pct == current.progress_pct == 86
+    assert status.current_civic_turns == current.turns == 1
+    assert status.current_civic_turns_source == current.turns_source == "native_current"
+    assert conn.native_requests == 0
+
+
+@pytest.mark.parametrize("ui_patch", [
+    'culture.GetCulturalProgress=nil',
+    'culture.GetCulturalProgress=function() error("read unavailable") end',
+    'culture.GetCultureYield=function() return 0 end',
+])
+def test_ingame_unavailable_facts_remain_unknown_without_native_requests(ui_patch):
+    conn = ContextCivicConn()
+    conn.ingame.lua.execute(ui_patch)
+    status = asyncio.run(GameState(conn).get_tech_civics())
+    assert status.current_civic_turns is None
+    assert all(c.turns is None for c in status.available_civics)
+    assert "turns unknown" in narrate_tech_civics(status)
+    assert conn.native_requests == 0
+
+
+class UnconfirmedProductionCivicConn(ContextCivicConn):
+    """Native submission/transport failure frames, then real civic query Lua."""
+
+    def __init__(self):
+        super().__init__()
+        self.production_stage = 0
+
+    async def execute_write(self, source):
+        if self.production_stage == 0:
+            self.production_stage = 1
+            return ["ACTION_SCOPE|CIVILIZATION_SUMERIA|719665280|21|0"]
+        if self.production_stage == 1:
+            self.production_stage = 2
+            self.ingame.lua.execute('record_request()')
+            return ["ACTION_IDENTITY|CIVILIZATION_SUMERIA|719665280|21|0",
+                    "OK:PRODUCING|UNIT_SCOUT"]
+        return await super().execute_write(source)
+
+    async def execute_read(self, source):
+        if self.production_stage == 2:
+            self.production_stage = 3
+            raise ConnectionError("production acknowledgement read lost")
+        return await super().execute_read(source)
+
+
+def test_reading_civics_does_not_confirm_or_release_an_unknown_action():
+    conn = UnconfirmedProductionCivicConn()
+    state = GameState(conn)
+    result = asyncio.run(state.set_city_production(65536, "UNIT", "UNIT_SCOUT"))
+    assert "OUTCOME_UNKNOWN" in result
+    original_pending = state.pending_action_summary
+    assert original_pending is not None
+    original_requests = conn.native_requests
+    status = asyncio.run(state.get_tech_civics())
+    assert status.current_civic_progress_pct == 86
+    assert status.current_civic_turns == 1
+    assert state.pending_action_summary == original_pending
+    assert state.pending_action_entity == ("city", 65536)
+    assert conn.native_requests == original_requests == 1
+
+
+def test_ingame_query_keeps_technology_research_facts_without_native_requests():
+    conn = ContextCivicConn()
+    conn.ingame.lua.execute('''
+local tech={Index=0,TechnologyType="TECH_POTTERY",Name="Pottery",EraType="ERA_ANCIENT"}
+GameInfo.Technologies=setmetatable({[0]=tech,TECH_POTTERY=tech},{__call=function()
+    local delivered=false
+    return function() if not delivered then delivered=true; return tech end end
+end})
+Players[0].GetTechs=function() return {
+    GetResearchingTech=function() return 0 end,
+    CanResearch=function() return true end,
+    HasTech=function() return false end,
+    GetResearchCost=function() return 25 end,
+    GetResearchProgress=function() return 15 end,
+    GetTurnsToResearch=function() return 2 end,
+    HasBoostBeenTriggered=function() return false end,
+    SetResearchingTech=record_request,
+} end
+''')
+    status = asyncio.run(GameState(conn).get_tech_civics())
+    tech = status.available_techs[0]
+    assert status.current_research == tech.name == "Pottery"
+    assert status.current_research_turns == tech.turns == 2
+    assert tech.progress_pct == 60
+    assert status.current_civic_progress_pct == 86
+    assert conn.native_requests == 0

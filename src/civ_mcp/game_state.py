@@ -268,7 +268,9 @@ class GameState:
         return lq.parse_diplomacy_response(lines)
 
     async def get_tech_civics(self) -> lq.TechCivicStatus:
-        lines = await self.conn.execute_read(lq.build_tech_civics_query())
+        # "write" selects InGame; this query is read-only. Native civic progress
+        # and GetTurnsLeft/GetTurnsToProgressCivic are unavailable in GameCore.
+        lines = await self.conn.execute_write(lq.build_tech_civics_query())
         return lq.parse_tech_civics_response(lines)
 
     async def get_empire_resources(
