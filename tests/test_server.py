@@ -771,9 +771,9 @@ class TestSpyAction:
     def test_explicit_escape_route_dispatches_to_the_requested_spy(self):
         ctx = make_ctx()
         gs = app_of(ctx).game
-        result = run(server.spy_action(ctx, 65536 + 4, "escape:district_harbor", 0, 0))
+        result = run(server.spy_action(ctx, 2949124, "escape:district_harbor", 0, 0))
         assert result == "<spy_escape>"
-        assert gs.last_args("spy_escape") == (4, "DISTRICT_HARBOR")
+        assert gs.last_args("spy_escape") == (2949124, "DISTRICT_HARBOR")
         assert gs.called("spy_mission") == []
 
     def test_travel_uses_the_unit_index(self):
