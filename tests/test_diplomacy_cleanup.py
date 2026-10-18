@@ -118,7 +118,7 @@ def test_propose_trade_keeps_accepted_result_when_close_reply_is_lost(quick_trad
         assert "ACCEPTED|" in await state.propose_trade(1,[{"type":"GOLD","amount":20}],[])
         assert "SESSION_CLOSED" in await state.diplomacy_respond(1,"EXIT")
         assert "cleanup unknown" in await state.dismiss_popup()
-        result=await state.propose_trade(1,[],[])
+        result=await state.propose_trade(1,[{"type":"GOLD","amount":20}],[])
         assert "ACCEPTED|" in result and "cleanup confirmed" in result
         assert conn.lua.globals().requests==1 and conn.lua.globals().close_callbacks==1
     asyncio.run(scenario())
@@ -205,7 +205,11 @@ def test_cancel_after_native_close_keeps_original_trade_and_never_resubmits(firs
                 assert "ACCEPTED|" in result
                 assert "SESSION_CLOSED" in await state.diplomacy_respond(1,"EXIT")
                 await state.dismiss_popup()
-        result=await getattr(state,retry)(1,[],[])
+        result=await getattr(state,retry)(1,[{"type":"GOLD","amount":20}],[])
+        if first!=retry:
+            assert "PENDING_TRADE_MISMATCH" in result and "ACCEPTED" not in result
+            assert state.diplomacy_pending
+            result=await getattr(state,first)(1,[{"type":"GOLD","amount":20}],[])
         assert "cleanup confirmed" in result
         assert conn.lua.globals().requests==1 and conn.lua.globals().close_callbacks==1
     asyncio.run(scenario())

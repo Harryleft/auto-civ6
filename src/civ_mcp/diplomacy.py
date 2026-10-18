@@ -281,6 +281,16 @@ class DiplomacyProgress:
         return "diplomacy_observation: UNKNOWN reason=NO_DIAGNOSTIC_RECEIPT"
 
     async def run_trade(self, gs, target: int, offer: list[dict], request: list[dict], *, preview: bool) -> str:
+        # A retained receipt belongs only to the prepared request. Check before
+        # any confirmation/cleanup can turn its result into a new call's reply.
+        if self.trade is not None and (
+            target != self.trade.target or preview != self.trade.preview
+            or offer != self.trade.offer or request != self.trade.request
+        ):
+            mode = "test_trade" if self.trade.preview else "propose_trade"
+            return (f"ERR:PENDING_TRADE_MISMATCH|Existing trade with player {self.trade.target}, mode={mode}, "
+                    f"phase={self.trade.phase}; new request not submitted. "
+                    "Repeat the original target, mode, offer and request to confirm.")
         if self.incoming is not None:
             return self.trade_summary()
         if self.scope_invalid:
