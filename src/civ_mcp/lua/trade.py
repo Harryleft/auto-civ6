@@ -640,7 +640,7 @@ def build_incoming_receipt(scope: str, target: int, sid: int, token: str) -> str
     return _incoming_guard(scope, target, sid) + f'''
 local receipt=__civmcp_incoming
 if not receipt or receipt.token~={json.dumps(token)} or receipt.sid~=sid or receipt.target~=target then print("INCOMING_RECEIPT|UNKNOWN"); return end
-if receipt.zero then print("INCOMING_RECEIPT|ZERO"); return end
+if receipt.zero==true and receipt.sent==false then print("INCOMING_RECEIPT|ZERO"); return end
 if receipt.sent~=true or not receipt.proposal then print("INCOMING_RECEIPT|UNKNOWN"); return end
 print("INCOMING_RECEIPT|SENT")
 print("INCOMING_PROPOSAL|"..receipt.proposal)
