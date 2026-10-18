@@ -15,6 +15,7 @@ OPTIONAL_TABLES = tuple(UNLOCKS) + ('Districts_XP2', 'District_RequiredFeatures'
 BASE_SUPPORT_FILES = ('README.md', 'NEXT.md', 'capture.py', 'build.py', 'query.py', 'topics/civics.md', 'topics/technologies.md', 'topics/districts.md', 'topics/congress.md')
 
 TOPIC_PRIMARY = {
+    'civilizations': {'Civilizations': 'CivilizationType', 'Leaders': 'LeaderType', 'Traits': 'TraitType'},
     'economy': {'Yields': 'YieldType', 'Buildings': 'BuildingType', 'Policies': 'PolicyType'},
     'resources': {'Resources': 'ResourceType', 'RandomEvents': 'RandomEventType'},
     'combat': {'Units': 'UnitType', 'UnitPromotions': 'UnitPromotionType', 'Terrains': 'TerrainType', 'Features': 'FeatureType'},
@@ -23,6 +24,8 @@ TOPIC_PRIMARY = {
 }
 TOPIC_NAMES = ('civics', 'technologies', 'districts', 'congress', *TOPIC_PRIMARY)
 ENTITY_RECORDS = {
+    'Traits': ('TraitModifiers',),
+    'Improvements': ('ImprovementModifiers', 'Improvement_YieldChanges', 'Improvement_ValidResources'),
     'Buildings': ('BuildingModifiers', 'Buildings_XP2', 'Building_YieldChanges', 'Building_YieldChangesBonusWithPower', 'BuildingPrereqs', 'Building_ResourceCosts', 'Building_ValidTerrains', 'Building_RequiredFeatures', 'Building_CitizenYieldChanges'),
     'Policies': ('PolicyModifiers',),
     'Resources': ('Resource_Consumption', 'Resource_YieldChanges', 'Resource_Harvests', 'Resource_ValidTerrains', 'Resource_ValidFeatures'),
@@ -100,11 +103,410 @@ def related_records(card, tables, attach, references):
         if table in ('ModifierArguments', 'RequirementArguments') and argument in ('ModifierId', 'ModifierID', 'RequirementSetId', 'RequirementId') and row.get('Value'):
             targets.append(('ModifierId' if argument == 'ModifierID' else argument, row['Value']))
         for key, value in targets:
+            if card['topic'] == 'civilizations' and not any(table == REFERENCE_TABLES[key][0] for table, _ in references[key].get(value, [])):
+                missing = {'field': key, 'id': value, 'status': 'unknown_missing_definition'}
+                if missing not in card['rule']['unresolved_references']:
+                    card['rule']['unresolved_references'].append(missing)
             for target_table, target_index in references[key].get(value, []):
                 attach(card, target_table, target_index)
                 if (target_table, target_index) not in visited:
                     pending.append((target_table, target_index))
     card['rule']['related_records'] = [{'source_ref': ref, 'facts': tables[ref['table']][ref['row']]} for ref in card['source_refs'][1:]]
+
+
+def unit_ability_grants(traits, select):
+    """Return ability arguments reachable from these owners' trait modifiers."""
+    grants = {}
+    for trait in traits:
+        pending = deque((row['ModifierId'], []) for _, _, row in select('TraitModifiers', 'TraitType', trait))
+        visited = set()
+        while pending:
+            modifier, chain = pending.popleft()
+            if modifier in visited:
+                continue
+            visited.add(modifier)
+            chain = [*chain, modifier]
+            for table, index, row in select('ModifierArguments', 'ModifierId', modifier):
+                if row.get('Name') in ('AbilityType', 'UnitAbilityType') and row.get('Value'):
+                    grants.setdefault(row['Value'], []).append({'trait': trait, 'modifier_chain': chain,
+                                                               'source_ref': source_ref(table, index)})
+                elif row.get('Name') in ('ModifierId', 'ModifierID') and row.get('Value'):
+                    pending.append((row['Value'], chain))
+    return grants
+
+
+def unit_ability_records(unit_id, traits, select, attach, snapshot, unknown):
+    """A shared tag names potential abilities, not granted or active abilities.
+
+    Follow only TypeTags whose Type has a UnitAbilities definition. Never retain
+    other units merely because they share the unit's tag. Effect/requirement
+    traversal starts later from the selected UnitAbilityModifiers records.
+    """
+    abilities, grants = {}, None
+    for unit_table, unit_index, unit_tag in select('TypeTags', 'Type', unit_id):
+        unit_ref = attach(unit_table, unit_index)
+        tag = unit_tag.get('Tag')
+        if not tag:
+            continue
+        for tag_table, tag_index, ability_tag in select('TypeTags', 'Tag', tag):
+            ability_id = ability_tag.get('Type')
+            definitions = select('UnitAbilities', 'UnitAbilityType', ability_id)
+            if not definitions:
+                if isinstance(ability_id, str) and ability_id.startswith('ABILITY_'):
+                    attach(tag_table, tag_index)
+                    unknown('UnitAbilityType', ability_id)
+                continue
+            for table, index, definition in definitions:
+                inactive = str(definition.get('Inactive', '')).casefold() in ('1', 'true')
+                if inactive:
+                    if grants is None:
+                        grants = unit_ability_grants(traits, select)
+                    if ability_id not in grants:
+                        # Generic tags also label abilities granted by other
+                        # civilizations. They do not make those abilities ours.
+                        continue
+                tag_ref = attach(tag_table, tag_index)
+                ref = attach(table, index)
+                marker = (table, index)
+                if marker not in abilities:
+                    modifiers = []
+                    for modifier_table, modifier_index, modifier in select('UnitAbilityModifiers', 'UnitAbilityType', ability_id):
+                        modifier_ref = attach(modifier_table, modifier_index)
+                        modifiers.append({'id': modifier['ModifierId'], 'source_ref': modifier_ref})
+                    abilities[marker] = {'id': ability_id, 'source_ref': ref, 'facts': definition,
+                                         'names': names(snapshot, definition.get('Name'), ability_id),
+                                         'description': names(snapshot, definition.get('Description'), ''),
+                                         'activation': 'unverified_trait_grant_conditions' if inactive else 'unverified_tag_match_only',
+                                         'grant_references': grants.get(ability_id, []) if inactive else [],
+                                         'tag_links': [], 'modifiers': modifiers}
+                link = {'tag': tag, 'unit_source_ref': unit_ref, 'ability_source_ref': tag_ref}
+                if link not in abilities[marker]['tag_links']:
+                    abilities[marker]['tag_links'].append(link)
+    return list(abilities.values())
+
+
+def civilization_records(topics, cards, tables, snapshot, attach, relation):
+    """Follow explicit ownership; a civilization never acquires every leader's traits."""
+    if 'civilizations' not in topics:
+        return
+    leaders = {row['LeaderType']: row for row in tables['Leaders']}
+    traits = {row['TraitType']: index for index, row in enumerate(tables['Traits'])}
+    civs = {row['CivilizationType'] for row in tables['Civilizations']}
+    chains = {}
+    for ident in leaders:
+        chain = []
+        current = ident
+        while current:
+            if current in chain:
+                raise ValueError('leader inheritance cycle: ' + ' -> '.join([*chain, current]))
+            if current not in leaders:
+                raise ValueError('missing inherited leader: ' + current)
+            chain.append(current)
+            current = leaders[current].get('InheritFrom')
+        chains[ident] = chain
+    for table, key, known in [('CivilizationTraits', 'CivilizationType', civs),
+                              ('LeaderTraits', 'LeaderType', leaders)]:
+        if table not in tables:
+            raise ValueError('missing civilization relationship table: ' + table)
+        for row in tables[table]:
+            if row.get(key) not in known or row.get('TraitType') not in traits:
+                raise ValueError('dangling trait ownership: ' + table)
+    if 'CivilizationLeaders' not in tables or 'TraitModifiers' not in tables:
+        raise ValueError('missing civilization relationship table: CivilizationLeaders or TraitModifiers')
+    for row in tables['CivilizationLeaders']:
+        if row.get('LeaderType') not in leaders or row.get('CivilizationType') not in civs:
+            raise ValueError('dangling civilization leader')
+    for row in tables['TraitModifiers']:
+        if row.get('TraitType') not in traits:
+            raise ValueError('dangling trait modifier')
+    replacements = {'Units': ('UnitReplaces', 'CivUniqueUnitType', 'ReplacesUnitType'),
+                    'Buildings': ('BuildingReplaces', 'CivUniqueBuildingType', 'ReplacesBuildingType'),
+                    'Districts': ('DistrictReplaces', 'CivUniqueDistrictType', 'ReplacesDistrictType')}
+    for card in topics['civilizations']:
+        ident = card['id']
+        rule = card['rule']
+        rule.update({'traits': [], 'leaders': [], 'civilizations': [], 'owners': [],
+                     'unique_content': [], 'unresolved_references': [], 'source_scope': 'local_cached_rules_snapshot'})
+        card['summary']['source_scope'] = 'local_cached_rules_snapshot'
+        def unknown(field, value):
+            missing = {'field': field, 'id': value, 'status': 'unknown_missing_definition'}
+            if missing not in rule['unresolved_references']:
+                rule['unresolved_references'].append(missing)
+
+        def select(table, key, value):
+            return [(table, index, row) for index, row in enumerate(tables.get(table, [])) if row.get(key) == value]
+        rule['limitations'] += ['文明与领袖定义不证明本局参加、资料片拥有或启用；对手隐藏议程和意图未知。',
+                                '继承与能力定义不求值；脚本条件、实际收益和本局覆盖需查询游戏。']
+        entity = card['summary']['entity_type']
+        for index, row in enumerate(tables['CivilizationLeaders']):
+            if row.get('CivilizationType') == ident or row.get('LeaderType') == ident:
+                ref = attach(card, 'CivilizationLeaders', index)
+                target = row['LeaderType'] if entity == 'Civilizations' else row['CivilizationType']
+                rule['leaders' if entity == 'Civilizations' else 'civilizations'].append({'id': target, 'source_ref': ref})
+                relation(card, 'leader' if entity == 'Civilizations' else 'civilization', target, ref)
+        lineage = chains.get(ident, [ident])
+        if entity == 'Leaders':
+            for ancestor in lineage[1:]:
+                ancestor_index = next(i for i, row in enumerate(tables['Leaders']) if row['LeaderType'] == ancestor)
+                ref = attach(card, 'Leaders', ancestor_index)
+                relation(card, 'inherits_leader', ancestor, ref)
+        selected_traits = set()
+        for table, owner_key in [('CivilizationTraits', 'CivilizationType'), ('LeaderTraits', 'LeaderType')]:
+            for index, row in enumerate(tables[table]):
+                owner, trait = row[owner_key], row['TraitType']
+                owns = owner in lineage if entity == 'Leaders' and table == 'LeaderTraits' else owner == ident
+                if owns or (entity == 'Traits' and trait == ident):
+                    ref = attach(card, table, index)
+                    if entity == 'Traits':
+                        rule['owners'].append({'id': owner, 'source_ref': ref})
+                        relation(card, 'owned_by', owner, ref)
+                    else:
+                        definition = tables['Traits'][traits[trait]]
+                        attach(card, 'Traits', traits[trait])
+                        selected_traits.add(trait)
+                        rule['traits'].append({'id': trait, 'owner': owner,
+                                               'ownership': 'direct' if owner == ident else 'inherited',
+                                               'inherited_via': lineage[:lineage.index(owner)] if owner != ident else [],
+                                               'names': names(snapshot, definition.get('Name'), trait),
+                                               'description': names(snapshot, definition.get('Description'), ''), 'source_ref': ref})
+                        relation(card, 'trait' if owner == ident else 'inherited_trait', trait, ref)
+        if entity == 'Traits':
+            selected_traits.add(ident)
+        for index, row in enumerate(tables['TraitModifiers']):
+            if row['TraitType'] in selected_traits:
+                attach(card, 'TraitModifiers', index)
+        for table, id_key in [('Units', 'UnitType'), ('Buildings', 'BuildingType'),
+                              ('Districts', 'DistrictType'), ('Improvements', 'ImprovementType')]:
+            for index, row in enumerate(tables.get(table, [])):
+                if row.get('TraitType') not in selected_traits:
+                    continue
+                ref = attach(card, table, index)
+                for related_table in ENTITY_RECORDS.get(table, ()):
+                    for related_index, related_row in enumerate(tables.get(related_table, [])):
+                        related_key = {'UnitReplaces': 'CivUniqueUnitType', 'TypeTags': 'Type'}.get(related_table, id_key)
+                        if related_row.get(related_key) == row[id_key]:
+                            attach(card, related_table, related_index)
+                content = {'id': row[id_key], 'entity_type': table, 'trait': row['TraitType'],
+                           'names': names(snapshot, row.get('Name'), row[id_key]), 'source_ref': ref,
+                           'prerequisites': {key: row[key] for key in ('PrereqTech', 'PrereqCivic') if row.get(key)}, 'replaces': []}
+                if table == 'Units':
+                    content['abilities'] = unit_ability_records(row[id_key], selected_traits, select, lambda t, i: attach(card, t, i), snapshot, unknown)
+                    content['ability_coverage'] = 'tag_matches_with_owned_inactive_grant_references_only; script_activation_unverified'
+                if table in replacements:
+                    replace_table, unique_key, target_key = replacements[table]
+                    for replace_index, replacement in enumerate(tables.get(replace_table, [])):
+                        if replacement.get(unique_key) == row[id_key]:
+                            replace_ref = attach(card, replace_table, replace_index)
+                            content['replaces'].append({'id': replacement[target_key], 'source_ref': replace_ref})
+                rule['unique_content'].append(content)
+                relation(card, 'unique_content', row[id_key], ref)
+
+
+def installed_civilizations(topics, cards, snapshot):
+    """Expose package-local XML alternatives without applying their conditions.
+
+    Cached identities always win. Cached parent/effect references can be shown
+    as separately scoped evidence, but are never merged into an effective mod.
+    SQL and updates remain evidence/coverage gaps, not evaluated definitions.
+    """
+    if 'civilizations' not in topics:
+        return
+    tables = snapshot['tables']
+    installed = tables.get('InstalledRuleRows', [])
+    primary = TOPIC_PRIMARY['civilizations']
+    candidates = {}
+    installed_index, cached_index = {}, {}
+    for index, record in enumerate(installed):
+        for key, value in (record['facts'] | record.get('where', {})).items():
+            if isinstance(value, (str, int, float)):
+                key = 'ModifierId' if key == 'ModifierID' else key
+                installed_index.setdefault((record['package'], record['table'], key, value), []).append(index)
+    for table, records in tables.items():
+        if table == 'InstalledRuleRows':
+            continue
+        for index, record in enumerate(records):
+            for key, value in record.items():
+                if isinstance(value, (str, int, float)):
+                    key = 'ModifierId' if key == 'ModifierID' else key
+                    cached_index.setdefault((table, key, value), []).append(index)
+    for index, record in enumerate(installed):
+        table = record.get('table')
+        if table in primary and record.get('operation') in ('Row', 'Replace'):
+            ident = record['facts'].get(primary[table])
+            if ident and ident not in cards:
+                candidates.setdefault(ident, []).append(index)
+    for ident, indices in candidates.items():
+        packages = {installed[index]['package'] for index in indices}
+        definitions = [installed[index]['facts'] for index in indices]
+        tags = {row.get('Name') for row in definitions}
+        descriptions = {row.get('Description') for row in definitions}
+        tag = next(iter(tags)) if len(tags) == 1 else None
+        entity = installed[indices[0]]['table']
+        boundary = {'source_scope': 'installed_definition_catalog', 'applied': False,
+                    'conditions_evaluated': False, 'ownership_verified': False, 'activation_verified': False}
+        rule = {'facts': definitions[0] if all(row == definitions[0] for row in definitions) else {'definition_status': 'conditional_alternatives', 'id': ident},
+                **boundary, 'traits': [], 'owners': [], 'leaders': [], 'civilizations': [],
+                'unique_content': [], 'conditions': [], 'unresolved_references': [],
+                'limitations': ['安装目录定义未应用；Row／Replace／Update／Delete、载入顺序、条件和 SQL 不求值。',
+                                '拥有、启用和当前对局适用性未知；本机缓存引用单独标注，不构成有效合并规则。',
+                                '脚本效果和隐藏议程未知；缺少关联不证明无能力。'],
+                'current_facts_needed': ['当前文明与领袖 ID', '资料片／模组／模式与规则集', '能力条件及本局实际收益'],
+                'coverage_gaps': [gap for gap in snapshot['profile'].get('installed_catalog_gaps', []) if gap.get('package') in packages]}
+        card = {'id': ident, 'topic': 'civilizations', 'names': names(snapshot, tag, ident),
+                'summary': {'entity_type': entity, 'description': names(snapshot, next(iter(descriptions)) if len(descriptions) == 1 else None, '')['zh_Hans_CN'],
+                            'name_fallbacks': name_fallbacks(snapshot, tag), **boundary},
+                'rule': rule, 'source_refs': [], 'relations': []}
+
+        def unknown(field, value, status='unknown_missing_definition'):
+            entry = {'field': field, 'id': value, 'status': status}
+            if entry not in rule['unresolved_references']:
+                rule['unresolved_references'].append(entry)
+
+        def attach(table, index):
+            ref = source_ref(table, index)
+            if ref not in card['source_refs']:
+                card['source_refs'].append(ref)
+            if table == 'InstalledRuleRows':
+                row = installed[index]
+                condition = {key: row.get(key) for key in ('package', 'manifest', 'path', 'action', 'criteria', 'criteria_definition', 'action_properties')}
+                if condition not in rule['conditions']:
+                    rule['conditions'].append(condition)
+                if row['operation'] not in ('Row', 'Replace', 'Update', 'Delete'):
+                    unknown('operation', row['operation'], 'unsupported_operation_not_applied')
+            return ref
+
+        def find(table, key, value):
+            # Prefer this identity's package, never another installed package.
+            indices = sorted({index for package in packages for index in installed_index.get((package, table, key, value), [])})
+            matches = [('InstalledRuleRows', index, installed[index]['facts']) for index in indices]
+            if matches:
+                return matches
+            return [(table, index, tables[table][index]) for index in cached_index.get((table, key, value), [])]
+
+        def rows(table, key, value):
+            found = find(table, key, value)
+            for table_name, index, _ in found:
+                attach(table_name, index)
+            return [(table_name, index, row) for table_name, index, row in found
+                    if table_name != 'InstalledRuleRows' or installed[index]['operation'] in ('Row', 'Replace')]
+
+        for index in indices:
+            attach('InstalledRuleRows', index)
+        if len(packages) != 1:
+            unknown('package', ident, 'unknown_ambiguous_definition')
+            # Multiple packages with the same identity are alternatives, not a
+            # license to join their ability graphs.
+        else:
+            owners = [(ident, [])]
+            if entity == 'Leaders':
+                current, chain = ident, []
+                while current:
+                    if current in chain:
+                        unknown('LeaderType', current, 'unknown_inheritance_cycle')
+                        break
+                    definitions = rows('Leaders', 'LeaderType', current)
+                    if not definitions:
+                        unknown('LeaderType', current)
+                        break
+                    if current != ident:
+                        owners.append((current, list(chain)))
+                    chain.append(current)
+                    parents = {row.get('InheritFrom') for _, _, row in definitions}
+                    if len(parents) != 1:
+                        unknown('InheritFrom', current, 'unknown_ambiguous_definition')
+                        break
+                    current = next(iter(parents))
+            for table, owner_key in [('CivilizationTraits', 'CivilizationType'), ('LeaderTraits', 'LeaderType')]:
+                if entity not in ('Civilizations', 'Leaders'):
+                    continue
+                if (entity == 'Civilizations') != (table == 'CivilizationTraits'):
+                    continue
+                for owner, chain in owners:
+                    for table_name, index, record in rows(table, owner_key, owner):
+                        trait = record.get('TraitType')
+                        if trait:
+                            rule['traits'].append({'id': trait, 'owner': owner, 'ownership': 'direct' if owner == ident else 'inherited',
+                                                   'inherited_via': chain, 'source_ref': source_ref(table_name, index)})
+            trait_ids = {item['id'] for item in rule['traits']} | ({ident} if entity == 'Traits' else set())
+            for trait in sorted(trait_ids):
+                trait_definitions = rows('Traits', 'TraitType', trait)
+                if not trait_definitions:
+                    unknown('TraitType', trait)
+                else:
+                    for item in rule['traits']:
+                        if item['id'] == trait:
+                            trait_names = {row.get('Name') for _, _, row in trait_definitions}
+                            trait_descriptions = {row.get('Description') for _, _, row in trait_definitions}
+                            item['names'] = names(snapshot, next(iter(trait_names)) if len(trait_names) == 1 else None, trait)
+                            item['description'] = names(snapshot, next(iter(trait_descriptions)) if len(trait_descriptions) == 1 else None, '')
+                rows('TraitModifiers', 'TraitType', trait)
+                if entity == 'Traits':
+                    for table, key in [('CivilizationTraits', 'CivilizationType'), ('LeaderTraits', 'LeaderType')]:
+                        for table_name, index, record in rows(table, 'TraitType', trait):
+                            rule['owners'].append({'id': record[key], 'source_ref': source_ref(table_name, index)})
+                for table, id_key in [('Units', 'UnitType'), ('Buildings', 'BuildingType'), ('Districts', 'DistrictType'), ('Improvements', 'ImprovementType')]:
+                    for table_name, index, record in rows(table, 'TraitType', trait):
+                        content_id = record.get(id_key)
+                        if not content_id:
+                            continue
+                        item = {'id': content_id, 'entity_type': table, 'trait': trait,
+                                'names': names(snapshot, record.get('Name'), content_id), 'source_ref': source_ref(table_name, index),
+                                'prerequisites': {key: record[key] for key in ('PrereqTech', 'PrereqCivic') if record.get(key)}, 'replaces': []}
+                        for related in ENTITY_RECORDS.get(table, ()):
+                            rows(related, 'Type' if related == 'TypeTags' else id_key, content_id)
+                        if table == 'Units':
+                            def select(table, key, value):
+                                return [(t, i, r) for t, i, r in find(table, key, value)
+                                        if t != 'InstalledRuleRows' or installed[i]['operation'] in ('Row', 'Replace')]
+                            item['abilities'] = unit_ability_records(content_id, trait_ids, select, attach, snapshot, unknown)
+                            item['ability_coverage'] = 'tag_matches_with_owned_inactive_grant_references_only; script_activation_unverified'
+                        for replacement, unique, target in [('UnitReplaces', 'CivUniqueUnitType', 'ReplacesUnitType'), ('BuildingReplaces', 'CivUniqueBuildingType', 'ReplacesBuildingType'), ('DistrictReplaces', 'CivUniqueDistrictType', 'ReplacesDistrictType')]:
+                            if (table, replacement) not in (('Units', 'UnitReplaces'), ('Buildings', 'BuildingReplaces'), ('Districts', 'DistrictReplaces')):
+                                continue
+                            for rt, ri, replacement_row in rows(replacement, unique, content_id):
+                                item['replaces'].append({'id': replacement_row[target], 'source_ref': source_ref(rt, ri)})
+                        rule['unique_content'].append(item)
+            if entity in ('Civilizations', 'Leaders'):
+                owner_key = 'CivilizationType' if entity == 'Civilizations' else 'LeaderType'
+                target_key = 'LeaderType' if entity == 'Civilizations' else 'CivilizationType'
+                for table, index, row in rows('CivilizationLeaders', owner_key, ident):
+                    rule['leaders' if entity == 'Civilizations' else 'civilizations'].append({'id': row[target_key], 'source_ref': source_ref(table, index)})
+            # Traverse only explicit modifier/requirement references. Visited
+            # records keep nested or cyclic effects finite, without evaluation.
+            pending, visited = deque(card['source_refs']), set()
+            while pending:
+                ref = pending.popleft()
+                marker = (ref['table'], ref['row'])
+                if marker in visited:
+                    continue
+                visited.add(marker)
+                record = tables[ref['table']][ref['row']]
+                facts = record['facts'] if ref['table'] == 'InstalledRuleRows' else record
+                targets = []
+                for key, value in facts.items():
+                    key = 'ModifierId' if key == 'ModifierID' else ('RequirementSetId' if key.endswith('RequirementSetId') else key)
+                    if key in REFERENCE_TABLES and value:
+                        targets.append((key, value))
+                if facts.get('Name') in REFERENCE_TABLES and facts.get('Value'):
+                    targets.append((facts['Name'], facts['Value']))
+                for key, value in targets:
+                    for position, table in enumerate(REFERENCE_TABLES[key]):
+                        matches = rows(table, key, value)
+                        if position == 0 and not matches:
+                            unknown(key, value)
+                        pending.extend(source_ref(t, i) for t, i, _ in matches)
+        # Rule depth keeps fields/operations; repeated XML, package paths and
+        # full source context are available through the evidence references.
+        rule['related_records'] = []
+        for ref in card['source_refs']:
+            record = tables[ref['table']][ref['row']]
+            installed_record = ref['table'] == 'InstalledRuleRows'
+            rule['related_records'].append({'source_ref': ref,
+                'source_scope': 'installed_definition_catalog' if installed_record else 'cached_reference_only',
+                'facts': record['facts'] if installed_record else record,
+                **({'table': record['table'], 'operation': record['operation'], 'where': record.get('where', {})} if installed_record else {})})
+        cards[ident] = card
+        topics['civilizations'].append(card)
 
 
 def add_mechanisms(topics, cards, tables, curated):
@@ -316,6 +718,7 @@ def generate(snapshot, root=None):
                         ref = attach(card, table, index)
                         card['rule']['conditions'].append({'facts': row, 'source_ref': ref})
 
+    civilization_records(topics, cards, tables, snapshot, attach, relation)
     for card in cards.values():
         topic = card['topic']
         if topic in ('civics', 'technologies'):
@@ -338,6 +741,7 @@ def generate(snapshot, root=None):
                 ref = attach(card, 'GlobalParameters', index)
                 card['rule']['conditions'].append({'facts': row, 'source_ref': ref})
     add_mechanisms(topics, cards, tables, curated)
+    installed_civilizations(topics, cards, snapshot)
     return {topic: {'schema_version': 1, 'topic': topic, 'cards': sorted(values, key=lambda c: c['id'])} for topic, values in topics.items()}
 
 
@@ -349,9 +753,17 @@ def coverage(snapshot, root=None):
     for topic in active:
         for table in TOPIC_PRIMARY[topic]:
             optional.update(ENTITY_RECORDS.get(table, ()))
+    if 'civilizations' in active:
+        optional.update(('CivilizationTraits', 'LeaderTraits', 'CivilizationLeaders', 'TraitModifiers',
+                         'UnitReplaces', 'BuildingReplaces', 'DistrictReplaces',
+                         'TypeTags', 'UnitAbilities', 'UnitAbilityModifiers'))
     if active:
         optional.update(table for group in REFERENCE_TABLES.values() for table in group)
+    installed = snapshot['tables'].get('InstalledRuleRows', [])
     return {'complete_for_snapshot_tables': tables,
+            'installed_definition_catalog': {'records': len(installed), 'packages': len({row['package'] for row in installed}),
+                                             'gaps': snapshot['profile'].get('installed_catalog_gaps', []),
+                                             'applied': False, 'conditions_evaluated': False, 'ownership_verified': False},
             'missing_optional_tables': sorted(optional - snapshot['tables'].keys()),
             'empty_optional_tables': sorted(table for table in optional if snapshot['tables'].get(table) == []),
             'not_covered': ['完整 Modifier 解释', '当前对局模组／模式核对', '完整动作合法性和有效费用', '策略最优性']}

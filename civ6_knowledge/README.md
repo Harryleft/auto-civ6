@@ -1,6 +1,6 @@
 # Civ6 本机规则知识
 
-九个主题的本机版本规则快照，通过 MCP 按需查询；目录可独立复制，备用 CLI 只需 Python 3 标准库。
+十个主题的本机版本资料，通过 MCP 按需查询；目录可独立复制，备用 CLI 只需 Python 3 标准库。
 
 ## 查询
 
@@ -41,6 +41,7 @@ python3 query.py show TECH_WRITING --level evidence
 
 | 当前问题 | 主题 | `topic` |
 | --- | --- | --- |
+| 本方与已相遇对手的文明、领袖、能力和专属内容 | [文明与领袖](topics/civilizations.md) | `civilizations` |
 | 文化路线、政策与政体解锁 | [市政](topics/civics.md) | `civics` |
 | 科研路线、尤里卡与科技解锁 | [科技](topics/technologies.md) | `technologies` |
 | 区域容量、落位与相邻收益 | [区域建设](topics/districts.md) | `districts` |
@@ -56,7 +57,8 @@ python3 query.py show TECH_WRITING --level evidence
 ## 资料边界
 
 - 目标规则集为《风云变幻》。内部版本、包版本、Steam Build 和来源指纹以 [manifest.json](manifest.json) 为准。
-- 来源为本机规则缓存，缺失文本补自安装文件；活动 DLC／模组／模式尚未核对。
+- 文明资料区分 `local_cached_rules_snapshot` 与 `installed_definition_catalog`。后者只补充缓存缺少的身份，保留包内 XML、modinfo 条件及未应用的更新，不模拟加载／SQL，不覆盖缓存。各层均标记来源范围与未应用状态；缺失、继承环或冲突显式报错／未知。
+- 安装目录或缓存中存在资料不证明购买、启用或当前对局适用。缺失文本补自带指纹的安装文件，缺少译文保留 fallback；对手隐藏议程和意图不由静态特性推断。
 - 外部关联未独立建卡。Modifier 与需求集合仅保留关联，不求值；脚本条件和活动随机树未完整解释。百科与规则表冲突时，数值以规则表为准，差异随相关卡保留。
 
 ## 更新

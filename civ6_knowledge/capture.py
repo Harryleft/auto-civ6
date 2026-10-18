@@ -28,6 +28,7 @@ TABLES = PRIMARY_TABLES + (
     'CivilopediaPages', 'CivilopediaPageChapterParagraphs', 'GlobalParameters',
 )
 TABLES = tuple(dict.fromkeys(TABLES + (
+    'Civilizations', 'Leaders', 'CivilizationLeaders', 'Traits', 'TraitModifiers', 'BuildingReplaces', 'ImprovementModifiers',
     'Happinesses', 'PolicyModifiers',
     'Yields',
     'BuildingModifiers',
@@ -115,6 +116,66 @@ CODE_RANGES = (
     ('congress-stage-flow', 'Assets/DLC/Expansion2/UI/Additions/WorldCongressIntro.lua', 75, 145),
 )
 
+# Retain conditional XML records, not a simulated DLC/mod loader. These records
+# never alter the cached tables or attest ownership, activation or final values.
+INSTALLED_TABLES = {
+    'Civilizations', 'Leaders', 'Traits', 'CivilizationTraits', 'LeaderTraits', 'CivilizationLeaders',
+    'TraitModifiers', 'Units', 'Buildings', 'Districts', 'Improvements',
+    'UnitReplaces', 'BuildingReplaces', 'DistrictReplaces', 'BuildingModifiers', 'ImprovementModifiers',
+    'Building_YieldChanges', 'Improvement_YieldChanges', 'UnitAbilities', 'UnitAbilityModifiers', 'TypeTags',
+    'Modifiers', 'ModifierArguments', 'DynamicModifiers', 'Requirements', 'RequirementArguments',
+    'RequirementSets', 'RequirementSetRequirements',
+}
+
+
+def xml_fields(node):
+    return dict(node.attrib) | {child.tag: ''.join(child.itertext()) for child in node}
+
+
+def installed_inputs(game_root):
+    inputs, rows, gaps, text_inputs, captured_hashes = {}, [], [], [], {}
+    for manifest in sorted((game_root / 'Assets/DLC').glob('*/*.modinfo')):
+        logical_manifest = 'game/Contents/' + str(manifest.relative_to(game_root))
+        inputs[logical_manifest] = (manifest, logical_manifest)
+        captured_hashes[logical_manifest] = digest(manifest)
+        root = ET.parse(manifest).getroot()
+        criteria = {node.get('id'): ET.tostring(node, encoding='unicode') for node in root.findall('ActionCriteria/Criteria')}
+        for action in root.findall('InGameActions/*'):
+            if action.tag not in ('UpdateDatabase', 'UpdateText'):
+                continue
+            for entry in action.findall('File'):
+                relative = (entry.text or '').strip()
+                file = (manifest.parent / relative).resolve()
+                if not file.is_relative_to(game_root.resolve()) or not file.is_file():
+                    gaps.append({'path': relative, 'package': root.get('id'), 'manifest': logical_manifest,
+                                 'action': action.get('id'), 'criteria': action.get('criteria'), 'status': 'missing_or_external_input'})
+                    continue
+                logical = 'game/Contents/' + str(file.relative_to(game_root.resolve()))
+                inputs[logical] = (file, logical)
+                captured_hashes.setdefault(logical, digest(file))
+                if action.tag == 'UpdateText':
+                    if file.suffix.lower() == '.xml':
+                        text_inputs.append((file, logical))
+                    continue
+                context = {'package': root.get('id'), 'manifest': logical_manifest,
+                           'path': logical, 'action': action.get('id'), 'criteria': action.get('criteria'),
+                           'criteria_definition': criteria.get(action.get('criteria')),
+                           'action_properties': ET.tostring(action.find('Properties'), encoding='unicode') if action.find('Properties') is not None else None,
+                           'scope': 'installed_definition_catalog'}
+                if file.suffix.lower() != '.xml':
+                    gaps.append(context | {'status': 'unsupported_sql_not_applied' if file.suffix.lower() == '.sql' else 'unsupported_format_not_applied'})
+                    continue
+                for table in ET.parse(file).getroot():
+                    if table.tag not in INSTALLED_TABLES:
+                        continue
+                    for index, operation in enumerate(table):
+                        facts = xml_fields(operation.find('Set')) if operation.tag == 'Update' and operation.find('Set') is not None else xml_fields(operation)
+                        where = xml_fields(operation.find('Where')) if operation.find('Where') is not None else {}
+                        rows.append(context | {'table': table.tag, 'operation': operation.tag, 'row': index,
+                                                'facts': facts, 'where': where,
+                                                'raw_xml': ET.tostring(operation, encoding='unicode')})
+    return inputs, ordered(rows), ordered(gaps), sorted(set(text_inputs)), captured_hashes
+
 
 def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -182,7 +243,10 @@ def read_text(path: Path, tables: dict, xml_inputs: list) -> tuple[dict, dict]:
                 language = row.get('Language', default)
                 tag = row.get('Tag')
                 text = row.find('Text')
-                if tag and language in ('en_US', 'zh_Hans_CN') and text is not None and wanted(tag) and language not in result.get(tag, {}):
+                # Additional DLC text supplies referenced civilization literals;
+                # keep the existing concept-body corpus stable across packages.
+                relevant = tag in tags or ('/Expansion2/Text/' in logical_path and wanted(tag))
+                if tag and language in ('en_US', 'zh_Hans_CN') and text is not None and relevant and language not in result.get(tag, {}):
                     result.setdefault(tag, {})[language] = ''.join(text.itertext())
                     origins.setdefault(tag, {})[language] = logical_path
     return dict(sorted(result.items())), origins
@@ -219,6 +283,7 @@ def startup_version(path: Path) -> tuple[str, datetime]:
 
 
 def capture(game_root: Path, user_root: Path, steam_manifest: Path) -> dict:
+    game_root = game_root.resolve()
     inputs = {
         'bundle': (game_root / 'Info.plist', 'game/Contents/Info.plist'),
         'steam': (steam_manifest, 'steam/appmanifest_289070.acf'),
@@ -234,6 +299,11 @@ def capture(game_root: Path, user_root: Path, steam_manifest: Path) -> dict:
     text_root = game_root / 'Assets/DLC/Expansion2/Text'
     xml_paths = sorted((text_root / 'en_US').glob('*.xml')) + [p for p in [text_root / 'Expansion2_Translations_Text.xml', text_root / 'Expansion2_Translations_ConfigText.xml'] if p.is_file()]
     xml_inputs = [(p, 'game/Contents/' + str(p.relative_to(game_root))) for p in xml_paths]
+    installed_files, installed_rows, installed_gaps, installed_text, installed_hashes = installed_inputs(game_root)
+    inputs.update(installed_files)
+    # Preserve the established Expansion2 fallback before supplementing other
+    # packages; installation order must not silently replace existing literals.
+    xml_inputs = list(dict.fromkeys(xml_inputs + installed_text))
     for p, logical in xml_inputs:
         inputs[logical] = (p, logical)
     wal_states = {name: Path(str(inputs[name][0]) + '-wal').exists() for name in ('gameplay', 'localization')}
@@ -242,6 +312,8 @@ def capture(game_root: Path, user_root: Path, steam_manifest: Path) -> dict:
         if wal_states[name]:
             inputs[name + '_wal'] = (wal, inputs[name][1] + '-wal')
     hashes = {name: digest(p) for name, (p, _) in inputs.items()}
+    if any(hashes[name] != fingerprint for name, fingerprint in installed_hashes.items()):
+        raise ValueError('installed source changed during capture; keep prior snapshot')
     bundle = plistlib.loads(inputs['bundle'][0].read_bytes())
     version, started = startup_version(inputs['startup'][0])
     if inputs['gameplay'][0].stat().st_mtime < started.timestamp():
@@ -250,6 +322,7 @@ def capture(game_root: Path, user_root: Path, steam_manifest: Path) -> dict:
     if not version or not build or not bundle.get('CFBundleShortVersionString') or not bundle.get('CFBundleVersion'):
         raise ValueError('missing game, bundle or Steam version evidence')
     tables, missing = read_tables(inputs['gameplay'][0])
+    tables['InstalledRuleRows'] = installed_rows
     profile = {
         'game_version': version,
         'startup_started_at': started.isoformat(),
@@ -277,6 +350,8 @@ def capture(game_root: Path, user_root: Path, steam_manifest: Path) -> dict:
             mods.append({'id': match[1].lower(), 'label': match[2]})
     profile['configuration_enabled_mods'] = sorted(mods, key=lambda r: r['id'])
     profile['configuration_warning'] = 'Configuration enabled lists do not prove per-game active modes or ownership.'
+    profile['installed_catalog_gaps'] = installed_gaps
+    profile['installed_catalog_policy'] = 'Conditional XML records only; no SQL, updates, criteria or load order evaluated; never merged into cached rules; ownership and activation unknown.'
     evidence = []
     for name, relative, first, last in CODE_RANGES:
         if relative in inputs:
@@ -287,8 +362,8 @@ def capture(game_root: Path, user_root: Path, steam_manifest: Path) -> dict:
                              'text_sha256': hashlib.sha256('\n'.join(content[first - 1:last]).encode()).hexdigest()})
     localized, origins = read_text(inputs['localization'][0], tables, xml_inputs)
     tables['CivilopediaTexts'] = [{'Tag': tag, 'Language': language, 'Text': text, 'Source': origins[tag][language]} for tag, texts in localized.items() if tag.startswith('LOC_PEDIA_CONCEPTS_PAGE_') for language, text in sorted(texts.items())]
-    profile['derived_tables'] = ['CivilopediaTexts']
-    profile['localization_policy'] = 'Cached text; missing literals supplemented from installed Expansion2 text. Active overrides unverified.'
+    profile['derived_tables'] = ['CivilopediaTexts', 'InstalledRuleRows']
+    profile['localization_policy'] = 'Cached text; missing literals supplemented first from installed Expansion2 text, then referenced installed package text. Active overrides and package load order unverified.'
     wal_changed = any(Path(str(inputs[name][0]) + '-wal').exists() != present for name, present in wal_states.items())
     if wal_changed or any(digest(p) != hashes[name] for name, (p, _) in inputs.items()):
         raise ValueError('source changed during capture; keep prior snapshot and recapture after files stabilize')
