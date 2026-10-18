@@ -319,13 +319,15 @@ class CivicOption:
 
     name: str
     civic_type: str  # e.g. "CIVIC_CODE_OF_LAWS"
-    cost: int
-    progress_pct: int  # 0-100
-    turns: int
+    cost: int | None
+    progress_pct: int | None  # native accumulated percentage; None means unreadable
+    turns: int | None
     boosted: bool
     boost_desc: str  # trigger description, empty if none
     prereqs: str = ""  # comma-separated prereq civic type names
     era: str = ""  # e.g. "ERA_MEDIEVAL"
+    # native_current, native_civic, remaining_cost_estimate, unknown
+    turns_source: str | None = None
 
 
 @dataclass
@@ -333,13 +335,15 @@ class TechCivicStatus:
     current_research: str
     current_research_turns: int
     current_civic: str
-    current_civic_turns: int
+    current_civic_turns: int | None
     available_techs: list[TechOption]
     available_civics: list[CivicOption]
     completed_tech_count: int = 0
     completed_civic_count: int = 0
     locked_civics: list[LockedCivic] | None = None
     locked_techs: list[LockedTech] | None = None
+    current_civic_progress_pct: int | None = None
+    current_civic_turns_source: str | None = None
 
 
 @dataclass
