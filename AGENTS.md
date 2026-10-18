@@ -19,6 +19,7 @@
 | --- | --- |
 | 启动、配置或连接游戏 | [游戏操作：开始运行](docs/agent-playbook.md#开始运行)；需要安装或客户端配置时再读 [README](README.md#安装与启动) |
 | 查询、执行动作、推进回合或处理议会 | [游戏操作](docs/agent-playbook.md) |
+| 以获胜为目标开局、续局，或调整扩张、胜利路线与对手响应 | [获胜决策](docs/agent-strategy.md) |
 | 查规则或解释游戏机制 | [规则知识入口](civ6_knowledge/README.md)：九主题按需展开规则与证据；本局候选、费用与进度读取游戏 |
 | 保存、换档、结果未知、断线或挂起 | [保存与恢复](docs/agent-recovery.md) |
 | 修改代码或文档、测试、提交、审查 | [开发与验证](docs/development.md) |
