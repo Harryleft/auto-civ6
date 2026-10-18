@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from civ_mcp.lua._helpers import (
+    _LUA_KNOWN_RESOURCE,
     _LUA_RES_VISIBLE,
     SENTINEL,
     _bail,
@@ -1985,7 +1986,7 @@ def build_builder_tasks_query() -> str:
     Uses hardcoded resource mapping and terrain heuristics for improvement recommendations.
     Does NOT use CanStartOperation with remote tiles (corrupts engine state → crash).
     """
-    return """
+    return _LUA_KNOWN_RESOURCE + """
 local me = Game.GetLocalPlayer()
 local pCities = Players[me]:GetCities()
 
@@ -2040,6 +2041,7 @@ local resImpMap = {
 -- Scan city territory for tasks
 local seen = {}
 local normalCount = 0
+local resourceVisibilityKnown = true
 local maxNormal = 20
 for _, city in pCities:Members() do
     local cx, cy = city:GetX(), city:GetY()
@@ -2053,7 +2055,8 @@ for _, city in pCities:Members() do
             if plot and plot:GetOwner() == me and not plot:IsWater() and not plot:IsMountain() then
                 local distIdx = plot:GetDistrictType()
                 local impIdx = plot:GetImprovementType()
-                local resIdx = plot:GetResourceType()
+                local resIdx = knownResourceIndex(me, plot)
+                if resIdx == nil then resourceVisibilityKnown = false end
 
                 -- Skip tiles with districts
                 if distIdx < 0 then
@@ -2072,7 +2075,7 @@ for _, city in pCities:Members() do
                             print("TASK|urgent|" .. px .. "," .. py .. "|REPAIR|" .. impName:gsub("IMPROVEMENT_", "") .. "|pillaged|" .. cityName .. "|" .. nearId .. "|" .. nearDist)
                         end
                     -- Check for unimproved resource tiles
-                    elseif resIdx >= 0 and impIdx < 0 then
+                    elseif resIdx and resIdx >= 0 and impIdx < 0 then
                         local resInfo = GameInfo.Resources[resIdx]
                         if resInfo then
                             local resClass = resInfo.ResourceClassType or ""
@@ -2110,7 +2113,7 @@ for _, city in pCities:Members() do
                     -- Uses terrain heuristics instead of CanStartOperation (which corrupts
                     -- engine state when called with remote tile coordinates, causing
                     -- EXCEPTION_ACCESS_VIOLATION during end_turn)
-                    elseif impIdx < 0 and resIdx < 0 and normalCount < maxNormal then
+                    elseif impIdx < 0 and (resIdx == nil or resIdx < 0) and normalCount < maxNormal then
                         local featureIdx = plot:GetFeatureType()
                         local terrIdx = plot:GetTerrainType()
                         local terrInfo = terrIdx >= 0 and GameInfo.Terrains[terrIdx] or nil
@@ -2146,6 +2149,9 @@ for _, city in pCities:Members() do
     end end
 end
 
+-- Do not present a partially observed resource board as complete/empty.
+if not resourceVisibilityKnown then print("RESOURCE_VISIBILITY_UNKNOWN") end
+
 -- Print builder info
 for _, b in ipairs(builders) do
     print("BUILDER|" .. b.id .. "|" .. b.idx .. "|" .. b.x .. "," .. b.y .. "|" .. b.charges .. "|" .. string.format("%.1f", b.moves))
@@ -2158,6 +2164,11 @@ def parse_builder_tasks(
     lines: list[str],
 ) -> tuple[list[BuilderTask], list[BuilderInfo]]:
     """Parse TASK| and BUILDER| lines from build_builder_tasks_query."""
+    if "RESOURCE_VISIBILITY_UNKNOWN" in lines:
+        raise ValueError(
+            "Builder advice incomplete: native resource visibility is unknown; "
+            "no resource advice available."
+        )
     tasks: list[BuilderTask] = []
     builders: list[BuilderInfo] = []
 
