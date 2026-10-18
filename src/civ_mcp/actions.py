@@ -108,6 +108,7 @@ class ActionLifecycle:
             "fortify": ("READINESS_REQUESTED|",),
             "cancel_move": ("CANCEL_MOVE_REQUESTED|",),
             "pillage": ("PILLAGE_REQUESTED|",),
+            "city_focus": ("CITY_FOCUS_REQUESTED|",),
         }[pending.kind]
         if result.startswith(accepted):
             pending.success = result
@@ -187,6 +188,12 @@ print("{lq.SENTINEL}")
         except (OSError, TimeoutError, LuaError, ValueError) as exc:
             return f"Error: ACTION_SCOPE_UNAVAILABLE|{exc}; no action submitted."
 
+    def observe_identity(self, identity: tuple[str, int]) -> None:
+        """Keep a focus request invalid after a witnessed world replacement."""
+        pending = self.pending
+        if pending is not None and pending.kind == "city_focus" and identity != pending.identity:
+            pending.details["scope_invalid"] = True
+
     def unknown(self, reason: str = "confirmation deadline reached") -> str:
         pending = self.pending
         if pending is None:
@@ -236,6 +243,8 @@ print("{lq.SENTINEL}")
             return pending.confirmed or self.unknown(f"confirmation unavailable: {exc}")
 
     def _confirmed_action(self, pending: _PendingAction) -> str | None:
+        if pending.kind == "city_focus" and pending.details.get("scope_invalid"):
+            return None
         if pending.identity is not None:
             rows = [line.split("|") for line in pending.observed if line.startswith("ACTION_IDENTITY|")]
             if len(rows) != 1 or len(rows[0]) != 5:
@@ -244,6 +253,8 @@ print("{lq.SENTINEL}")
             identity = (fields[1].replace("CIVILIZATION_", "").lower(), int(fields[2]))
             if (identity != pending.identity or int(fields[3]) != pending.turn
                     or int(fields[4]) != pending.owner):
+                if pending.kind == "city_focus":
+                    pending.details["scope_invalid"] = True
                 return None
         if pending.kind in ("skip", "fortify"):
             rows = [row.split("|") for row in pending.observed if row.startswith("READINESS|")]
@@ -279,6 +290,12 @@ print("{lq.SENTINEL}")
                     and re.fullmatch(r"(?:improvement|district|building):\d+", row[7])):
                 return (f"PILLAGED|unit:{row[3]}|at:{x},{y}|damaged:{row[7]}"
                         "|Native damage confirmed; yields not measured.")
+        if pending.kind == "city_focus":
+            expected = "|".join(("CITY_FOCUS_CONFIRMED", pending.details["witness_token"], pending.details["city"], pending.details["goal"]))
+            rows = [row for row in pending.observed if row.startswith("CITY_FOCUS_CONFIRMED|")]
+            if rows == [expected]:
+                label = "FOCUS_CLEARED" if pending.details["item"] == "DEFAULT" else "FOCUS_SET"
+                return f"{label}|city:{pending.details['city']}|{pending.details['item']}|Native Citizens confirmed."
         if pending.kind == "production":
             target = pending.details.get("target")
             if target is not None:
