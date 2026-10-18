@@ -1,6 +1,6 @@
 # 贡献未决期间关闭信息弹窗
 
-ready-for-agent；[工作项](2026-10-19-contribution-popup-progress-tickets.md)。
+completed；[验收](../acceptance/2026-10-19-contribution-popup-progress.md)；[工作项](2026-10-19-contribution-popup-progress-tickets.md)。
 
 ## Problem Statement
 
