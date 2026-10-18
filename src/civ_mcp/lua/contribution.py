@@ -92,19 +92,30 @@ if __civmcpContribution~=nil and type(__civmcpContribution)~="table" then
 end
 retireContribution(__civmcpContribution)
 __civmcpContribution=receipt
+local function sequenceEvent()
+ receipt.eventSequence=(receipt.eventSequence or 0)+1
+ return receipt.eventSequence
+end
 -- Native UnitCommandStarted carries the command hash; another command on this
 -- full identity invalidates attribution rather than borrowing its charge delta.
 receipt.commandHandler=function(owner,id,command)
  if __civmcpContribution~=receipt or not receipt.entered or owner~=receipt.owner or id~=receipt.id then return end
  if not sameScope(receipt) then return end
+ receipt.commandSeq=sequenceEvent()
  if command==state.command then receipt.started=true else receipt.invalid=true end
 end
 -- TutorialUIRoot's native signature is (playerID,unitID,newCharges,oldCharges).
--- Keep the numeric consumption before userdata removal; Gone is never a delta.
+-- Event delivery order is not guaranteed: retain an entered request's exact
+-- numeric delta even before CommandStarted; confirmation still requires both.
+-- Keep consumption before userdata removal; Gone is never a delta.
 receipt.chargesHandler=function(owner,id,newCharges,oldCharges)
- if __civmcpContribution~=receipt or not receipt.entered or not receipt.started
+ if __civmcpContribution~=receipt or not receipt.entered
   or owner~=receipt.owner or id~=receipt.id then return end
  if not sameScope(receipt) then return end
+ receipt.chargeEvents=(receipt.chargeEvents or 0)+1
+ receipt.chargeSeq=sequenceEvent()
+ receipt.rawChargeBefore=type(oldCharges)=="number" and oldCharges or nil
+ receipt.rawChargeAfter=type(newCharges)=="number" and newCharges or nil
  if oldCharges==state.charges and type(newCharges)=="number" and newCharges>=0 and newCharges<oldCharges then
   receipt.chargeBefore=oldCharges;receipt.chargeAfter=newCharges
  end
@@ -112,13 +123,13 @@ end
 -- Numeric event identities survive removal; never capture consumed userdata.
 receipt.removalHandler=function(owner,id)
  if __civmcpContribution~=receipt or not receipt.entered or owner~=receipt.owner or id~=receipt.id then return end
- if sameScope(receipt) then receipt.removed=true end
+ if sameScope(receipt) then receipt.removed=true;receipt.removedSeq=sequenceEvent() end
 end
 -- Original Expansion2 TutorialLoader: CityProjectCompleted(playerID,cityID,projectID).
 receipt.projectHandler=function(owner,cityID,projectID)
  if __civmcpContribution~=receipt or not receipt.entered or owner~=receipt.owner
   or cityID~=state.city or projectID~=state.project then return end
- if sameScope(receipt) then receipt.completed=true end
+ if sameScope(receipt) then receipt.completed=true;receipt.completedSeq=sequenceEvent() end
 end
 local armed=pcall(function()
  for _,event in ipairs({{Events.UnitRemovedFromMap,Events.CityProjectCompleted,Events.UnitCommandStarted,Events.UnitChargesChanged}}) do
@@ -145,31 +156,55 @@ print("{SENTINEL}")
 def build_contribution_query(unit_id: int, fingerprint: str, token: str) -> str:
     return _CONTEXT + f'''
 local receipt=__civmcpContribution
+local reason="RECEIPT_MISSING"
+local matched=type(receipt)=="table" and receipt.token=={json.dumps(token)} and receipt.id=={unit_id}
 local ok,consumed,effect=pcall(function()
- assert(type(receipt)=="table" and receipt.token=={json.dumps(token)} and receipt.id=={unit_id})
- assert(receipt.entered==true and receipt.returned==true and receipt.started==true and sameScope(receipt))
+ assert(type(receipt)=="table")
+ reason="RECEIPT_BINDING_MISMATCH";assert(matched)
+ reason="REQUEST_NOT_RETURNED";assert(receipt.entered==true and receipt.returned==true)
+ reason="COMMAND_NOT_OBSERVED";assert(receipt.started==true)
+ reason="SCOPE_CHANGED";assert(sameScope(receipt))
  local before=receipt.before
- assert(before.fingerprint=={json.dumps(fingerprint)} and UI.IsGameCoreBusy()==false)
+ reason="BEFORE_BINDING_MISMATCH";assert(before.fingerprint=={json.dumps(fingerprint)})
+ reason="CORE_BUSY_OR_UNKNOWN";assert(UI.IsGameCoreBusy()==false)
+ reason=(receipt.chargeEvents or 0)>0 and "CHARGE_EVENT_MISMATCH" or "CHARGES_NOT_OBSERVED"
  assert(receipt.chargeBefore==before.charges and type(receipt.chargeAfter)=="number"
   and receipt.chargeAfter>=0 and receipt.chargeAfter<receipt.chargeBefore)
  local consumed=receipt.chargeBefore-receipt.chargeAfter
+ reason="UNIT_LOOKUP_FAILED"
  local unit=UnitManager.GetUnit(receipt.owner,{unit_id})
  if unit then
-  assert(unit:GetID()=={unit_id} and unit:GetOwner()==receipt.owner)
-  assert(unit:GetX()==before.x and unit:GetY()==before.y)
-  local charges=unit:GetBuildCharges()
-  assert(charges==receipt.chargeAfter)
+  reason="UNIT_IDENTITY_CHANGED";assert(unit:GetID()=={unit_id} and unit:GetOwner()==receipt.owner)
+  reason="UNIT_POSITION_CHANGED";assert(unit:GetX()==before.x and unit:GetY()==before.y)
+  reason="UNIT_CHARGES_MISMATCH";assert(unit:GetBuildCharges()==receipt.chargeAfter)
  else
-  assert(receipt.removed==true and Players[receipt.owner]:GetUnits():FindID({unit_id})==nil)
+  reason="REMOVAL_NOT_OBSERVED";assert(receipt.removed==true)
+  reason="REMOVAL_NOT_CONFIRMED";assert(Players[receipt.owner]:GetUnits():FindID({unit_id})==nil)
  end
+ reason="TARGET_UNAVAILABLE"
  local city,bq,target=targetAt(before.x,before.y,receipt.owner)
- assert(target==before.target)
+ reason="TARGET_CHANGED";assert(target==before.target)
  if receipt.completed==true then return consumed,"completed:event" end
- assert(bq:GetCurrentProductionTypeHash()==before.hash)
+ reason="PROJECT_CHANGED";assert(bq:GetCurrentProductionTypeHash()==before.hash)
+ reason="PROJECT_PROGRESS_UNAVAILABLE"
  local progress=bq:GetProjectProgress(before.project)
- assert(type(progress)=="number" and progress>before.progress and bq:GetProjectCost(before.project)==before.cost)
+ assert(type(progress)=="number")
+ reason="PROJECT_COST_CHANGED";assert(bq:GetProjectCost(before.project)==before.cost)
+ reason="PROJECT_NOT_ADVANCED";assert(progress>before.progress)
  return consumed,"progress:"..before.progress.."->"..progress
 end)
+-- Always expose this query's token and only its matched receipt facts, so a
+-- pending gate can be diagnosed through existing read-only confirmations.
+local facts=matched and receipt or {{}}
+print("CONTRIBUTION_OBSERVED|{token}|unit:{unit_id}|receipt:"..(matched and "matched" or "unmatched")
+ .."|entered:"..tostring(facts.entered).."|returned:"..tostring(facts.returned)
+ .."|started:"..tostring(facts.started).."|chargeBefore:"..tostring(facts.chargeBefore)
+ .."|chargeAfter:"..tostring(facts.chargeAfter).."|chargeEvents:"..tostring(facts.chargeEvents or 0)
+ .."|rawChargeBefore:"..tostring(facts.rawChargeBefore).."|rawChargeAfter:"..tostring(facts.rawChargeAfter)
+ .."|commandSeq:"..tostring(facts.commandSeq).."|chargeSeq:"..tostring(facts.chargeSeq)
+ .."|removed:"..tostring(facts.removed).."|removedSeq:"..tostring(facts.removedSeq)
+ .."|completed:"..tostring(facts.completed).."|completedSeq:"..tostring(facts.completedSeq).."|invalid:"..tostring(facts.invalid)
+ .."|reason:"..(ok and "CONFIRMED" or reason))
 if ok then retireContribution(receipt);print("CONTRIBUTION_CONFIRMED|"..receipt.token.."|{unit_id}|"..receipt.before.fingerprint.."|"..consumed.."|"..effect) end
 print("{SENTINEL}")
 '''
