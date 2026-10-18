@@ -22,16 +22,18 @@
 
 ## 离线验证
 
-代码修改使用现有门槛：
+代码修改只运行受影响模块的测试；由改动范围选择文件，例如交易生命周期修改：
 
 ```bash
 uv sync --locked
-uv run --locked pytest -q
+uv run --locked pytest -q tests/test_trade_progress.py
 uv run --locked python -m compileall -q src tests
 git diff --check
 ```
 
-pytest 默认仅收集 `tests/`。现有测试采用 GameState／FakeConn、内存 FireTuner 流、Lua 5.1 执行、快照差分和临时存档目录；在这些位置验证可观察行为，不复制自有状态机，也不以源码字符串断言代替关键时序验证。
+影响跨模块契约时补充直接相关的测试文件，不默认运行全量。复用同一受测版本的集成结果；仅在新改动、失败或未解决疑点需要时重跑或扩大范围。
+
+现有测试采用 GameState／FakeConn、内存 FireTuner 流、Lua 5.1 执行、快照差分和临时存档目录；在这些位置验证可观察行为，不复制自有状态机，也不以源码字符串断言代替关键时序验证。
 
 纯文档修改检查本地链接及锚点、命令与实现、关键约束覆盖和 `git diff --check`；不为排版重跑游戏流程或全量测试。开发依赖和版本以 `pyproject.toml`、`uv.lock` 为准。
 
