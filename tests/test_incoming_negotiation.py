@@ -172,6 +172,8 @@ def test_native_delayed_reply_retains_original_turn_and_all_write_gates(quick_tr
     conn = IncomingConn()
     state = GameState(conn)
     state._pending_end_turn = True
+    state._pending_end_turn_from = 78
+    state._turn_progress.world = ("CIVILIZATION_SUMERIA", 7, 0)
     quote = run(state.get_pending_deals())
     conn.deliver_events = False
     assert "UNKNOWN" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint, their_gold=100))
@@ -270,3 +272,129 @@ Events.DiplomacyStatement.Emit(1,0,{SessionID=71,StatementType="MAKE_DEAL",State
     quote = run(state.get_pending_deals())
     assert "UNKNOWN" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint, their_gold=100))
     assert state.diplomacy_pending
+
+
+@pytest.mark.parametrize('world,from_turn,invalidate', [
+    (("CIVILIZATION_SUMERIA", 7, 0), 78, True),
+    (("CIVILIZATION_SUMERIA", 6, 0), 78, False),
+    (("CIVILIZATION_SUMERIA", 7, 1), 78, False),
+    (None, 78, False),
+    (("CIVILIZATION_SUMERIA", 7, 0), None, False),
+])
+def test_pending_turn_world_must_authorize_incoming_evaluation(world, from_turn, invalidate):
+    conn = IncomingConn()
+    state = GameState(conn)
+    state._pending_end_turn = True
+    state._pending_end_turn_from = from_turn
+    state._turn_progress.world = world
+    if invalidate:
+        state._turn_progress.invalidate_scope()
+    quote = run(state.get_pending_deals())
+    assert quote.negotiation_fingerprint  # Current world's valid deal is insufficient.
+    result = run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint, their_gold=100))
+    assert "NOT_SUBMITTED" in result and "end-turn" in result
+    assert state.turn_pending
+    assert state._pending_end_turn_from == from_turn
+    assert not list(conn.lua.globals().sent_actions.values())
+
+
+def test_fresh_current_world_cache_cannot_authorize_old_pending_turn():
+    conn = IncomingConn()
+    state = GameState(conn)
+    state._pending_end_turn = True
+    state._pending_end_turn_from = 78
+    state._turn_progress.world = ("CIVILIZATION_SUMERIA", 6, 0)
+    assert run(state.get_game_identity()) == ("sumeria", 7)
+    assert run(state.get_game_identity()) == ("sumeria", 7)
+    quote = run(state.get_pending_deals())
+    assert "NOT_SUBMITTED" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint, their_gold=100))
+    assert state.turn_pending and state._pending_end_turn_from == 78
+    assert not list(conn.lua.globals().sent_actions.values())
+
+
+def test_zero_seed_and_origin_turn_are_valid_pending_world_binding(quick_trade):
+    conn = IncomingConn()
+    conn.setup('GameConfiguration.GetValue=function() return 0 end')
+    state = GameState(conn)
+    state._pending_end_turn = True
+    state._pending_end_turn_from = 0
+    state._turn_progress.world = ("CIVILIZATION_SUMERIA", 0, 0)
+    quote = run(state.get_pending_deals())
+    assert "WILLING" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint, their_gold=100))
+    assert state.turn_pending and state._pending_end_turn_from == 0
+    assert list(conn.lua.globals().sent_actions.values()) == [9]
+
+
+def test_pending_turn_invalidation_during_evaluation_keeps_both_owners_pending(quick_trade):
+    conn = IncomingConn()
+    state = GameState(conn)
+    state._pending_end_turn = True
+    state._pending_end_turn_from = 78
+    state._turn_progress.world = ("CIVILIZATION_SUMERIA", 7, 0)
+    quote = run(state.get_pending_deals())
+    conn.deliver_events = False
+    assert "UNKNOWN" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint, their_gold=100))
+    state._turn_progress.invalidate_scope()
+    assert run(state.get_game_identity()) == ("sumeria", 7)
+    conn.deliver_events = True
+    assert "UNKNOWN" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint))
+    assert state.turn_pending and state.diplomacy_pending
+    assert state._pending_end_turn_from == 78
+    assert list(conn.lua.globals().sent_actions.values()) == [9]
+
+
+def test_mismatching_quote_latches_turn_gate_even_after_original_world_returns():
+    conn = IncomingConn()
+    state = GameState(conn)
+    assert run(state.get_game_identity()) == ("sumeria", 7)
+    state._pending_end_turn = True
+    state._pending_end_turn_from = 78
+    state._turn_progress.world = ("CIVILIZATION_SUMERIA", 6, 0)
+    quote = run(state.get_pending_deals())
+    assert "NOT_SUBMITTED" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint, their_gold=100))
+    conn.setup('GameConfiguration.GetValue=function() return 6 end')
+    assert run(state.get_game_identity()) == ("sumeria", 6)
+    quote = run(state.get_pending_deals())
+    assert quote.negotiation_fingerprint
+    assert "NOT_SUBMITTED" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint, their_gold=100))
+    assert state.turn_pending and not list(conn.lua.globals().sent_actions.values())
+
+
+def test_native_world_mismatch_during_confirmation_latches_original_turn(quick_trade):
+    conn = IncomingConn()
+    state = GameState(conn)
+    state._pending_end_turn = True
+    state._pending_end_turn_from = 78
+    state._turn_progress.world = ("CIVILIZATION_SUMERIA", 7, 0)
+    quote = run(state.get_pending_deals())
+    conn.deliver_events = False
+    assert "UNKNOWN" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint, their_gold=100))
+    conn.setup('GameConfiguration.GetValue=function() return 99 end')
+    assert "UNKNOWN" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint))
+    conn.setup('GameConfiguration.GetValue=function() return 7 end')
+    conn.deliver_events = True
+    assert run(state.get_game_identity()) == ("sumeria", 7)
+    assert "UNKNOWN" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint))
+    assert state.turn_pending and state.diplomacy_pending
+    assert list(conn.lua.globals().sent_actions.values()) == [9]
+
+
+def test_turn_scope_invalidated_after_arming_never_submits_evaluation():
+    conn = IncomingConn()
+    state = GameState(conn)
+    state._pending_end_turn = True
+    state._pending_end_turn_from = 78
+    state._turn_progress.world = ("CIVILIZATION_SUMERIA", 7, 0)
+    quote = run(state.get_pending_deals())
+    original_execute = conn.execute_in_named_state
+
+    async def invalidate_after_arm(name, source, timeout=5):
+        rows = await original_execute(name, source, timeout)
+        if rows == ["INCOMING|ARMED"]:
+            state._turn_progress.invalidate_scope()
+        return rows
+
+    conn.execute_in_named_state = invalidate_after_arm
+    assert "UNKNOWN" in run(state.negotiate_incoming_trade(1, quote.negotiation_fingerprint, their_gold=100))
+    assert state.turn_pending and state.diplomacy_pending
+    assert not list(conn.lua.globals().sent_actions.values())
