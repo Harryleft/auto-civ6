@@ -325,3 +325,79 @@ Players[0].IsTurnActive=function() seed=2;return true end
     conn.execute_read = original
     assert "OUTCOME_UNKNOWN" in asyncio.run(state.end_turn())
     assert state.turn_pending and len(conn.requests) == 1
+
+
+@pytest.mark.parametrize("observation", ["core", "ui"])
+@pytest.mark.parametrize("operation", ["end_turn", "get_turn_status"])
+@pytest.mark.parametrize("interruption", ["budget", "client_cancel"])
+@pytest.mark.parametrize("identity", ["foreign", "unknown"])
+def test_world_evidence_survives_later_read_cancellation(monkeypatch, observation, operation, interruption, identity):
+    from civ_mcp import end_turn as et
+
+    async def scenario():
+        conn = GameStateConn()
+        state = GameState(conn)
+        conn.send_error = ConnectionError("reply lost")
+        assert "result unknown" in await state.end_turn()
+        conn.send_error = None
+        original_read, original_write = conn.execute_read, conn.execute_write
+        baseline, submitted = state._turn_progress.baseline, state._turn_progress.submitted_at
+        blocked = asyncio.Event()
+        unknown_core_seen = False
+
+        def changed_world(rows):
+            return [row for row in rows if not row.startswith("TURN_WORLD|")] + [
+                "TURN_WORLD|CIVILIZATION_SUMERIA|2|0|51" if identity == "foreign" else "TURN_WORLD|UNKNOWN"
+            ]
+
+        async def read(code):
+            nonlocal unknown_core_seen
+            rows = await original_read(code)
+            if observation == "core" and "TURN_STATE|" in code:
+                rows = changed_world(rows)
+                unknown_core_seen = identity == "unknown"
+            return rows
+
+        async def write(code):
+            # These waits occur only after the preceding foreign/unknown
+            # native response has been returned to the production reader.
+            if ((observation == "core" and "TURN_UI_READY|" in code)
+                    or (observation == "ui" and "TURN_LOCAL|" in code)
+                    or (unknown_core_seen and ("DIPLOMACY_PROBE" in code or "WC_PHASE|" in code))):
+                blocked.set()
+                await asyncio.Event().wait()
+            rows = await original_write(code)
+            if observation == "ui" and "TURN_UI_READY|" in code:
+                rows = changed_world(rows)
+            return rows
+
+        conn.execute_read, conn.execute_write = read, write
+        if interruption == "client_cancel":
+            task = asyncio.create_task(getattr(state, operation)())
+            await asyncio.wait_for(blocked.wait(), 0.5)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        elif operation == "end_turn":
+            monkeypatch.setattr(et, "END_TURN_TIMEOUT_SECONDS", 0.01)
+            first = await state.end_turn()
+            assert ("OUTCOME_UNKNOWN" if identity == "foreign" else "WAITING:") in first
+        else:
+            with pytest.raises(TimeoutError):
+                async with asyncio.timeout(0.01):
+                    await state.get_turn_status()
+        assert state.turn_pending and state._turn_progress.baseline is baseline
+        assert state._turn_progress.submitted_at == submitted and len(conn.requests) == 1
+        conn.execute_read, conn.execute_write = original_read, original_write
+        result = await state.end_turn()
+        if identity == "foreign":
+            assert "OUTCOME_UNKNOWN" in result
+            assert "Turn 50 -> 51" not in result
+            assert state.turn_pending
+            assert "End-turn outcome is pending" in await state.save_game("preserved_after_cancel")
+        else:
+            assert "Turn 50 -> 51" in result
+            assert not state.turn_pending
+        assert len(conn.requests) == 1
+
+    asyncio.run(scenario())
