@@ -109,6 +109,22 @@ class DiplomacyProgress:
                     "Repeat the original trade tool only to confirm; no RequestSession, proposal or response will be resent.")
         return "ERR:OUTCOME_UNKNOWN|Native diplomacy response is pending; repeat response only to confirm."
 
+    async def diagnostics(self, conn) -> str:
+        """Read the existing observer only; never install, advance, or retire it."""
+        attempt = self.trade
+        if attempt is None:
+            return ""
+        if self.scope_invalid or self.observer_scope is None:
+            return "diplomacy_observation: world=UNKNOWN reason=SCOPE_UNCONFIRMED"
+        try:
+            rows = await conn.execute_in_named_state("DiplomacyActionView", native.build_trade_diagnostics(self.nonce, self.observer_scope, attempt.token, attempt.sid))
+            facts = [row.split("|", 1)[1] for row in rows if row.startswith("DIPLO_DIAGNOSTIC|")]
+            if facts:
+                return "\n".join(facts)
+        except (OSError, TimeoutError, LuaError):
+            return "diplomacy_observation: UNKNOWN reason=READ_FAILED"
+        return "diplomacy_observation: UNKNOWN reason=NO_DIAGNOSTIC_RECEIPT"
+
     async def run_trade(self, gs, target: int, offer: list[dict], request: list[dict], *, preview: bool) -> str:
         if self.scope_invalid:
             return self.trade_summary()
