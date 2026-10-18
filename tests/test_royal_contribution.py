@@ -477,3 +477,58 @@ def test_successful_query_also_reports_native_event_sequence_without_extra_comma
                  'completedSeq:4', 'reason:CONFIRMED'):
         assert fact in facts
     assert conn.lua.eval('#submissions') == 1
+
+
+@pytest.mark.parametrize('charges,counter_before', [(6, 6), (4, 10)])
+def test_royal_counter_increase_for_all_remaining_charges_confirms_exact_removed_builder(charges, counter_before):
+    conn = ContributionConn();state = GameState(conn)
+    conn.lua.execute(f'deferred=true;builder.charges={charges}')
+    assert 'OUTCOME_UNKNOWN' in run(state.sacrifice_builder_charges(196608))
+    conn.lua.execute(f"emit('charges',0,196608,{counter_before+charges},{counter_before});units[196608]=nil;emit('removed',0,196608);emit('command',0,196608,55);progress=220")
+    assert f'SACRIFICED|unit:196608|charges:{charges}|progress:100->220' == run(state.sacrifice_builder_charges(196608))
+    assert conn.lua.eval('#submissions') == 1
+
+
+def test_present_builder_uses_remaining_charge_readback_to_check_counter_delta():
+    conn = ContributionConn();state = GameState(conn);conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in run(state.sacrifice_builder_charges(196608))
+    conn.lua.execute("emit('charges',0,196608,12,8);emit('command',0,196608,55);progress=180")
+    assert 'OUTCOME_UNKNOWN' in run(state.sacrifice_builder_charges(196608))
+    conn.lua.execute('builder.charges=2')
+    assert 'SACRIFICED|unit:196608|charges:4|progress:100->180' == run(state.sacrifice_builder_charges(196608))
+    assert conn.lua.eval('#submissions') == 1
+
+
+@pytest.mark.parametrize('raw_after,raw_before', [
+    ('7', '6'), ('11', '6'), ('13', '6'), ('6', '6'),
+    ('6.5', '0.5'), ('-6', '0'), ('6', '-6'),
+    ('math.huge', '6'), ('0/0', '6'), ('nil', '6'), ('"12"', '6'),
+])
+def test_removed_builder_rejects_wrong_or_invalid_counter_delta_despite_project_growth(raw_after, raw_before):
+    conn = ContributionConn();state = GameState(conn);conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in run(state.sacrifice_builder_charges(196608))
+    conn.lua.execute(f"emit('charges',0,196608,{raw_after},{raw_before});units[196608]=nil;emit('removed',0,196608);emit('command',0,196608,55);progress=101")
+    assert 'OUTCOME_UNKNOWN' in run(state.sacrifice_builder_charges(196608))
+    assert state.pending_action_summary and conn.lua.eval('#submissions') == 1
+
+
+@pytest.mark.parametrize('change', [
+    'builder.charges=3;progress=220',
+    'units[196608]=nil;progress=220',
+    "units[196608]=nil;emit('removed',0,196608);progress=100",
+    "units[196608]=nil;emit('removed',0,196608);emit('command',0,196608,56);progress=220",
+])
+def test_counter_delta_alone_never_replaces_remaining_removal_or_project_evidence(change):
+    conn = ContributionConn();state = GameState(conn);conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in run(state.sacrifice_builder_charges(196608))
+    conn.lua.execute("emit('charges',0,196608,12,6);emit('command',0,196608,55);"+change)
+    assert 'OUTCOME_UNKNOWN' in run(state.sacrifice_builder_charges(196608))
+    assert state.pending_action_summary and conn.lua.eval('#submissions') == 1
+
+
+def test_counter_increase_still_confirms_exact_completed_project_after_removal():
+    conn = ContributionConn();state = GameState(conn);conn.lua.execute('deferred=true;builder.charges=5')
+    assert 'OUTCOME_UNKNOWN' in run(state.sacrifice_builder_charges(196608))
+    conn.lua.execute("emit('charges',0,196608,12,7);units[196608]=nil;emit('removed',0,196608);emit('command',0,196608,55);progress=0;current=0;emit('completed',0,65539,4)")
+    assert 'SACRIFICED|unit:196608|charges:5|completed:event' == run(state.sacrifice_builder_charges(196608))
+    assert conn.lua.eval('#submissions') == 1
