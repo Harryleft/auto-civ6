@@ -29,7 +29,7 @@ PlayerManager={RequestOperation=native_request}
 ''')
 
 
-@pytest.mark.parametrize("total,needed", [(9, 9), (0, 9), (4, 9), (12, 9)])
+@pytest.mark.parametrize("total,needed", [(9, 9), (5, 6), (0, 9), (4, 9), (12, 9)])
 def test_city_query_reports_native_amenities_total(total, needed):
     conn = AmenitiesConn(total=total, needed=needed)
     cities, _ = asyncio.run(GameState(conn).get_cities())
