@@ -442,14 +442,14 @@ def narrate_cities(
                 " (repair via set_city_production)"
             )
         if c.pillaged_improvements:
-            pill_imps = [p.split("@")[0] for p in c.pillaged_improvements]
+            pill_imps = [p.replace("@", " (") + ")" for p in c.pillaged_improvements]
             lines.append(
                 f"    !! PILLAGED TILES: {', '.join(pill_imps)} (send builder to repair)"
             )
         if c.resource_visibility_known is False:
             lines.append("    Resource advice incomplete: native resource visibility unknown.")
         if c.unimproved_resources:
-            res_names = [r.split("@")[0] for r in c.unimproved_resources]
+            res_names = [r.replace("@", " (") + ")" for r in c.unimproved_resources]
             lines.append(f"    Needs builder: {', '.join(res_names)} (unimproved)")
     if distances:
         lines.append("")

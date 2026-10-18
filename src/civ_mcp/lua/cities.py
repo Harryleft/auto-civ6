@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from civ_mcp.lua._helpers import (
     _ITEM_PARAM_MAP,
     _LUA_KNOWN_RESOURCE,
@@ -108,21 +110,26 @@ for i, c in Players[me]:GetCities():Members() do
         local px, py = cx2 + dx, cy2 + dy
         local plot = Map.GetPlot(px, py)
         if plot and plot:GetOwner() == me then
-            local res = knownResourceIndex(me, plot)
-            if res == nil then resourceVisibilityKnown = false end
-            local imp = plot:GetImprovementType()
-            if res and res >= 0 and imp < 0 then
-                local resInfo = GameInfo.Resources[res]
-                if resInfo then
-                    table.insert(unimproved, resInfo.ResourceType:gsub("RESOURCE_","") .. "@" .. px .. "," .. py)
+            -- A placed district already reserves its tile, even while unfinished.
+            -- Missing native district facts cannot prove an improvement candidate.
+            local okDistrict, district = pcall(function() return plot:GetDistrictType() end)
+            if (px ~= cx2 or py ~= cy2) and okDistrict and district == -1 then
+                local res = knownResourceIndex(me, plot)
+                if res == nil then resourceVisibilityKnown = false end
+                local imp = plot:GetImprovementType()
+                if res and res >= 0 and imp < 0 then
+                    local resInfo = GameInfo.Resources[res]
+                    if resInfo then
+                        table.insert(unimproved, resInfo.ResourceType:gsub("RESOURCE_","") .. "@" .. px .. "," .. py)
+                    end
                 end
-            end
-            if imp >= 0 then
-                local okP, pil = pcall(function() return plot:IsImprovementPillaged() end)
-                if okP and pil then
-                    local impInfo = GameInfo.Improvements[imp]
-                    if impInfo then
-                        table.insert(pillImprov, impInfo.ImprovementType:gsub("IMPROVEMENT_","") .. "@" .. px .. "," .. py)
+                if imp >= 0 then
+                    local okP, pil = pcall(function() return plot:IsImprovementPillaged() end)
+                    if okP and pil then
+                        local impInfo = GameInfo.Improvements[imp]
+                        if impInfo then
+                            table.insert(pillImprov, impInfo.ImprovementType:gsub("IMPROVEMENT_","") .. "@" .. px .. "," .. py)
+                        end
                     end
                 end
             end
@@ -157,7 +164,7 @@ for i, c in Players[me]:GetCities():Members() do
     print(c:GetID() .. "|" .. nm .. "|" .. c:GetX() .. "," .. c:GetY() .. "|" .. c:GetPopulation() .. "|" .. string.format("%.1f|%.1f|%.1f|%.1f|%.1f|%.1f", c:GetYield(0), c:GetYield(1), c:GetYield(2), c:GetYield(3), c:GetYield(4), c:GetYield(5)) .. "|" .. string.format("%.1f", g:GetHousing()) .. "|" .. amTotal .. "|" .. g:GetTurnsUntilGrowth() .. "|" .. producing .. "|" .. turnsLeft .. "|" .. defStr .. "|" .. garHP .. "/" .. garMax .. "|" .. wallHP .. "/" .. wallMax .. "|" .. table.concat(cityTargets, ";") .. "|" .. table.concat(pillDistricts, ";") .. "|" .. table.concat(distLocs, ";") .. "|" .. string.format("%.1f|%.1f|%.1f|%d", loy, loyMax, loyPT, loyFlip) .. "|" .. string.format("%.1f|%.1f|%d", g:GetFoodSurplus(), g:GetFood(), g:GetGrowthThreshold()) .. "|" .. table.concat(pillBuildings, ";") .. "|" .. garrisonUnit)
     print("CITYRESOURCES|" .. c:GetID() .. "|" .. tostring(resourceVisibilityKnown))
     if #unimproved > 0 or #pillImprov > 0 then
-        print("CITYTILES|" .. c:GetID() .. "|" .. table.concat(unimproved, ",") .. "|" .. table.concat(pillImprov, ","))
+        print("CITYTILES|" .. c:GetID() .. "|" .. table.concat(unimproved, ";") .. "|" .. table.concat(pillImprov, ";"))
     end
     if #allBuildings > 0 then
         print("CITYBLDG|" .. c:GetID() .. "|" .. table.concat(allBuildings, ","))
@@ -858,6 +865,12 @@ print("{SENTINEL}")
 """
 
 
+def _parse_tile_hints(value: str) -> list[str]:
+    # Old rows also used commas between entries. Match complete NAME@x,y
+    # tokens so their y coordinate can never become a separate resource.
+    return re.findall(r"(?:^|[;,])([A-Z][A-Z0-9_]*@-?\d+,-?\d+)(?=$|[;,])", value)
+
+
 def parse_cities_response(lines: list[str]) -> tuple[list[CityInfo], list[str]]:
     """Returns (cities, distance_lines) where distance_lines are 'A|B|N' strings."""
     cities = []
@@ -881,12 +894,8 @@ def parse_cities_response(lines: list[str]) -> tuple[list[CityInfo], list[str]]:
             if len(p) >= 4:
                 cid = int(p[1])
                 if cid in city_by_id:
-                    city_by_id[cid].unimproved_resources = [
-                        r for r in p[2].split(",") if r
-                    ]
-                    city_by_id[cid].pillaged_improvements = [
-                        r for r in p[3].split(",") if r
-                    ]
+                    city_by_id[cid].unimproved_resources = _parse_tile_hints(p[2])
+                    city_by_id[cid].pillaged_improvements = _parse_tile_hints(p[3])
             continue
         if line.startswith("CITYFACTS|"):
             p = line.split("|")
