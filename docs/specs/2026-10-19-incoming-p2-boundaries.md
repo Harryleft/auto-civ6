@@ -1,6 +1,6 @@
 # 来约零提交确认与世界失效锁存
 
-Status: ready-for-agent
+Status: completed
 
 ## Problem Statement
 
@@ -32,7 +32,7 @@ Status: ready-for-agent
 
 ## Testing Decisions
 
-沿用用户此前确认的 GameState／FakeConn、内存 Lua 5.1 与 MCP 公开边界，不新增测试缝。红绿测试覆盖：原生编辑后校验失败并恢复草稿，丢回应／取消后 ZERO 确认且零发送；回执缺失、错 token／会话、世界未知和 finish 失败继续保护；没有 pending end_turn 的世界切换锁存、返回原身份仍未知、正常同世界延迟确认和已有推进世界保护。测试观察公开结果、未决事实、草稿与原生发送记录。只运行来约、主动交易、外交清理、推进世界绑定和相关 MCP 门禁模块；不运行全量或实机脚本。
+沿用用户此前确认的 GameState／FakeConn、内存 Lua 5.1 与 MCP 公开边界，不新增测试缝。红绿测试覆盖：原生编辑后校验失败并恢复草稿，丢回应／取消后 ZERO 确认且零发送；回执缺失、错 token／会话、世界未知和 finish 失败继续保护；没有 pending end_turn 的世界切换锁存、返回原身份仍未知、正常同世界延迟确认和已有推进世界保护。换世界覆盖发送、回执、响应、最终报价及零提交／正常 finish 的原生调用边界。测试观察公开结果、未决事实、草稿与原生发送记录。只运行来约、主动交易、外交清理、推进世界绑定和相关 MCP 门禁模块；不运行全量或实机脚本。
 
 ## Out of Scope
 
