@@ -43,6 +43,8 @@ class FakeConn:
 
     async def execute_write(self, lua):
         self.calls.append(lua)
+        if lua == lq.build_victory_proximity_query():
+            return [f"VICTORY_CONTEXT|{self.turn}|0", "VICTORY_ENABLED_KNOWN|true", "VICTORY_COMPLETE"]
         if "TURN_UI_READY|" in lua:
             processing = self.ui_processing(self) if callable(self.ui_processing) else self.ui_processing
             return [f"TURN_UI_READY|{self.turn}|{int(not processing)}"]
@@ -85,6 +87,7 @@ class FakeGameState:
         self._pending_end_turn = False
         self._pending_end_turn_from = None
         self._last_snapshot = None
+        self._local_player_id = 0
         self.sessions = []
         self.sessions_calls = 0
         self.sessions_error = None
@@ -615,6 +618,8 @@ class GameStateConn(FakeConn):
         self.snapshot_turn = None
         self.snapshot_error = False
         self.notification_error = False
+        self.victory_error = None
+        self.victory_lines = None
 
     async def execute_write(self, lua):
         if lua == lq.build_overview_query():
@@ -624,6 +629,17 @@ class GameStateConn(FakeConn):
             turn = self.turn if self.snapshot_turn is None else self.snapshot_turn
             research = "Writing" if turn == 50 else "Currency"
             return [f"{turn}|0|Babylon|Hammurabi|100|5|10|5|0|{research}|Craftsmanship|0|0|20"]
+        if lua == lq.build_victory_proximity_query():
+            self.calls.append(lua)
+            if self.victory_error:
+                raise self.victory_error
+            return self.victory_lines if self.victory_lines is not None else [
+                f"VICTORY_CONTEXT|{self.turn}|0", "VICTORY_ENABLED_KNOWN|true",
+                "VENABLED|VICTORY_TECHNOLOGY", "DIPLO_REQUIRED|25",
+                "VFACT|0|Babylon|0|33.5|0|0|0|0|1|0|0|3",
+                "VFACT|1|Known rival|0|33.5|1|2|0|1|41|0|0|3",
+                "VICTORY_COMPLETE",
+            ]
         responses = {
             lq.build_gameover_check(): ["GAME_ACTIVE"],
             lq.build_diplomacy_session_query(): ["CONTEXT|NONE|NO_OPEN_SESSION", "CONTEXT_COMPLETE"],
@@ -844,3 +860,84 @@ def test_current_incoming_blocker_preserves_trade_response_guidance(clock):
     gs.get_diplomacy_sessions = incoming_context
     assert "respond_to_trade" in play(gs)
     assert not gs.conn.requests
+
+
+def test_confirmed_turn_report_adds_readonly_early_victory_warning_once(clock):
+    conn = GameStateConn()
+    gs = GameState(conn)
+    report = play(gs)
+    assert "Turn 50 -> 51" in report
+    assert "Known rival: space race observed" in report
+    assert "0/33.5 VP" in report
+    assert not gs.turn_pending and len(conn.requests) == 1
+    assert conn.calls.count(lq.build_victory_proximity_query()) == 1
+    assert not any("Network.SaveGame" in code or "RequestOperation" in code for code in conn.calls)
+
+
+@pytest.mark.parametrize("error", [OSError("read dropped"), LuaError("unavailable"), TimeoutError("late")])
+def test_victory_read_failure_cannot_undo_confirmed_turn_or_resend(clock, error):
+    conn = GameStateConn()
+    conn.victory_error = error
+    gs = GameState(conn)
+    report = play(gs)
+    assert "Turn 50 -> 51" in report and "Victory warnings unavailable" in report
+    assert not gs.turn_pending and len(conn.requests) == 1
+    conn.ready = False
+    assert "not ready" in play(gs)
+    assert len(conn.requests) == 1
+    assert conn.calls.count(lq.build_victory_proximity_query()) == 1
+
+
+@pytest.mark.parametrize("invalid", ["wrong_turn", "wrong_player", "incomplete", "duplicate", "malformed"])
+def test_unbound_or_incomplete_victory_read_is_unknown_after_confirmed_turn(clock, invalid):
+    conn = GameStateConn()
+    context = "VICTORY_CONTEXT|51|0"
+    conn.victory_lines = [context, "VICTORY_ENABLED_KNOWN|true", "VENABLED|VICTORY_TECHNOLOGY",
+                          "VFACT|0|Babylon|0|33.5|0|0|0|0|1|0|0|3",
+                          "VFACT|1|Known rival|0|33.5|1|2|0|1|41|0|0|3", "VICTORY_COMPLETE"]
+    if invalid == "wrong_turn": conn.victory_lines[0] = "VICTORY_CONTEXT|52|0"
+    if invalid == "wrong_player": conn.victory_lines[0] = "VICTORY_CONTEXT|51|2"
+    if invalid == "incomplete": conn.victory_lines.pop()
+    if invalid == "duplicate": conn.victory_lines.insert(0, context)
+    if invalid == "malformed": conn.victory_lines[4] = "VFACT|1|Known rival|truncated"
+    gs = GameState(conn)
+    report = play(gs)
+    assert "Turn 50 -> 51" in report and "Victory warnings unavailable" in report
+    assert "Known rival: space race observed" not in report
+    assert not gs.turn_pending and len(conn.requests) == 1
+
+
+@pytest.mark.parametrize("state", ["unknown", "paused", "terminal"])
+def test_unconfirmed_paused_and_terminal_turns_do_not_read_victory_warnings(clock, state):
+    conn = GameStateConn()
+    gs = GameState(conn)
+    if state == "terminal":
+        conn.game_over_status = lambda conn: (["GAME_OVER|DEFEAT|Rome|VICTORY_TECHNOLOGY|alive|Trajan|2"]
+                                               if conn.requests else ["GAME_ACTIVE"])
+    else:
+        conn.readiness = lambda conn: not conn.requests
+        if state == "paused": conn.diplomacy_probe = ["DIPLOMACY|2"]
+    report = play(gs)
+    assert "Turn 50 -> 51" not in report
+    assert conn.calls.count(lq.build_victory_proximity_query()) == 0
+    assert len(conn.requests) == 1
+    assert gs.turn_pending is (state != "terminal")
+
+
+def test_stalled_victory_read_is_bounded_and_does_not_reopen_confirmed_turn(monkeypatch):
+    from civ_mcp import game_state
+
+    class StalledVictoryConn(GameStateConn):
+        async def execute_write(self, code):
+            if code == lq.build_victory_proximity_query():
+                self.calls.append(code)
+                await asyncio.Event().wait()
+            return await super().execute_write(code)
+
+    monkeypatch.setattr(game_state, "VICTORY_REPORT_TIMEOUT", .001)
+    conn = StalledVictoryConn()
+    gs = GameState(conn)
+    report = play(gs)
+    assert "Turn 50 -> 51" in report and "Victory warnings unavailable" in report
+    assert not gs.turn_pending and len(conn.requests) == 1
+    assert conn.calls.count(lq.build_victory_proximity_query()) == 1
