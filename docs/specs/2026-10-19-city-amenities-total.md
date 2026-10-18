@@ -1,6 +1,6 @@
 # 城市宜居度总量
 
-状态：ready-for-agent。集成分支 codex/native-pillage，[工作项](2026-10-19-city-amenities-total-tickets.md)。
+状态：complete。集成分支 codex/native-pillage，[工作项](2026-10-19-city-amenities-total-tickets.md)。
 
 ## Problem Statement
 

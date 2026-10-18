@@ -17,6 +17,8 @@ Agent 从根目录 [AGENTS.md](../AGENTS.md) 开始；命中任务后读取对�
 
 ## 规格与验收
 
+- [城市宜居度总量](specs/2026-10-19-city-amenities-total.md)与[验收](acceptance/2026-10-19-city-amenities-total.md)：原生总量语义、21项相关测试及同轮对照。
+
 - [原生科研与市政资格](specs/2026-10-19-native-civic-eligibility.md)与[验收](acceptance/2026-10-19-native-civic-eligibility.md)：随机未来树原生候选、UI及既有回退前置门禁，266项相关测试。
 
 - [皇家学会贡献验收](acceptance/2026-10-19-royal-society-contribution.md)：601 项相关测试、单次贡献与原生计数解释、T191／192 消耗及项目确认、保存与菜单恢复。
