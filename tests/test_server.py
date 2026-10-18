@@ -1595,7 +1595,7 @@ class TestMcpProtocol:
                     assert initialization.serverInfo.name == "Civilization VI"
                     tools = (await session.list_tools()).tools
                     names = {tool.name for tool in tools}
-                    assert len(names) == 78
+                    assert len(names) == 80
                     assert "get_diary" not in names
                     save_schema = next(tool.inputSchema for tool in tools if tool.name == "save_game")
                     assert save_schema["required"] == ["save_name"]
