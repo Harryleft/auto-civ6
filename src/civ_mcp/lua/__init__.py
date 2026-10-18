@@ -150,6 +150,7 @@ from civ_mcp.lua.models import (  # noqa: F401
     AgendaInfo,
     AppointedGovernor,
     BuilderInfo,
+    BuilderTaskReport,
     BuilderTask,
     BeliefInfo,
     CityInfo,
