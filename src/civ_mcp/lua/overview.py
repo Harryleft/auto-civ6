@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from civ_mcp.lua._helpers import SENTINEL, _int
 from civ_mcp.lua.models import (
     GameOverStatus,
@@ -17,6 +19,16 @@ def build_overview_query() -> str:
 local id = Game.GetLocalPlayer()
 local p = Players[id]
 local cfg = PlayerConfigurations[id]
+-- Optional native identity must not make the existing overview unavailable.
+local civilizationType, leaderType = "", ""
+pcall(function()
+    local value = cfg:GetCivilizationTypeName()
+    if type(value) == "string" and value:match("^CIVILIZATION_[A-Z0-9_]+$") then civilizationType = value end
+end)
+pcall(function()
+    local value = cfg:GetLeaderTypeName()
+    if type(value) == "string" and value:match("^LEADER_[A-Z0-9_]+$") then leaderType = value end
+end)
 local tr = p:GetTreasury()
 local te = p:GetTechs()
 local cu = p:GetCulture()
@@ -80,6 +92,7 @@ for i = 0, 62 do
     end
 end
 print(Game.GetCurrentGameTurn() .. "|" .. id .. "|" .. Locale.Lookup(cfg:GetCivilizationShortDescription()):gsub("|", "/") .. "|" .. Locale.Lookup(cfg:GetLeaderName()):gsub("|", "/") .. "|" .. string.format("%.1f", tr:GetGoldBalance()) .. "|" .. string.format("%.1f", tr:GetGoldYield() - tr:GetTotalMaintenance()) .. "|" .. string.format("%.1f", te:GetScienceYield()) .. "|" .. string.format("%.1f", cu:GetCultureYield()) .. "|" .. string.format("%.1f", re:GetFaithBalance()) .. "|" .. techName .. "|" .. civicName .. "|" .. nCities .. "|" .. nUnits .. "|" .. myScore .. "|" .. favor .. "|" .. favorPerTurn .. "|" .. totalPop .. "|" .. string.format("%.1f", tr:GetGoldYield()) .. "|" .. string.format("%.1f", tr:GetTotalMaintenance()))
+print("IDENTITY|" .. id .. "|" .. civilizationType .. "|" .. leaderType)
 -- These scores are already weighted by the engine. Keep GetScore above intact;
 -- a complete category set explains native aggregate refresh differences.
 local categoryCount = 0
@@ -316,8 +329,17 @@ def parse_overview_response(lines: list[str]) -> GameOverview:
     category_markers: list[list[str]] = []
     categories_valid = True
     player_id_parsed = int(parts[1])
+    civilization_type = leader_type = None
+    identity_count = 0
     for line in lines[1:]:
-        if line.startswith("SCORECATEGORY|"):
+        if line.startswith("IDENTITY|"):
+            identity = line.split("|")
+            if len(identity) > 1 and identity[1] == str(player_id_parsed):
+                identity_count += 1
+            if len(identity) == 4 and identity[1] == str(player_id_parsed):
+                civilization_type = identity[2] if re.fullmatch(r"CIVILIZATION_[A-Z0-9_]+", identity[2]) else None
+                leader_type = identity[3] if re.fullmatch(r"LEADER_[A-Z0-9_]+", identity[3]) else None
+        elif line.startswith("SCORECATEGORY|"):
             cp = line.split("|")
             try:
                 if len(cp) != 5 or not cp[1].isidentifier() or not cp[2].strip():
@@ -413,10 +435,14 @@ def parse_overview_response(lines: list[str]) -> GameOverview:
         )
     except (ValueError, IndexError):
         categories_valid = False
+    if identity_count != 1:
+        civilization_type = leader_type = None
     return GameOverview(
         turn=int(parts[0]),
         player_id=int(parts[1]),
         civ_name=parts[2],
+        civilization_type=civilization_type,
+        leader_type=leader_type,
         leader_name=parts[3],
         gold=float(parts[4]),
         gold_per_turn=float(parts[5]),
