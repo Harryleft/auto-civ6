@@ -182,3 +182,17 @@ def test_slow_other_players_over_one_budget_later_confirm_original_only(clock):
     second = asyncio.run(state.end_turn())
     assert "Turn 50 -> 51" in second
     assert not state.turn_pending and len(conn.requests) == 1
+
+
+def test_already_sent_native_request_has_unknown_original_submission_time(clock):
+    conn = GameStateConn()
+    original = conn.execute_write
+    async def native_sent(code):
+        if "ACTION_ENDTURN" in code:
+            return ["END_TURN|NOT_SUBMITTED|ALREADY_SENT"]
+        return await original(code)
+    conn.execute_write = native_sent
+    state = GameState(conn)
+    result = asyncio.run(state.end_turn())
+    assert "elapsed=unknown" in result
+    assert state.turn_pending and not conn.requests
