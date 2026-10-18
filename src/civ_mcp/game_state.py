@@ -1520,7 +1520,7 @@ class GameState:
                     lq.TurnEvent(
                         priority=1,
                         category="unit",
-                        message=f"Your {ub.name} ({ub.unit_type}) was killed! Last seen at ({ub.x},{ub.y}).",
+                        message=f"Your {ub.name} ({ub.unit_type}) no longer appears in the unit snapshot; cause unknown. Last seen at ({ub.x},{ub.y}).",
                     )
                 )
             else:
