@@ -131,8 +131,11 @@ controls["/InGame/DiplomacyActionView"].hidden=false;controls["/InGame/Diplomacy
 controls["/InGame/DiplomacyActionView/ConversationContainer"].hidden=true;nativeAutoInspect();
 Events.DiplomacyStatement.Emit(0,1,{SessionID=71,StatementType="MAKE_DEAL",StatementSubType="NONE",FromPlayer=0,FromPlayerMood=0,Initiator=0,RespondingToDealAction=0,DealAction=0,ResponseType=1})'''
 
+    def response_is_final(self, action):
+        return action in (1, 4)
+
     def response_event(self, action):
-        final = action == 1
+        final = self.response_is_final(action)
         return '''working_incoming=working_outgoing;
 ''' + ('controls["/InGame/DiplomacyDealView"].hidden=true; controls["/InGame/DiplomacyActionView/ConversationContainer"].hidden=false; native_selections={{Key="CHOICE_EXIT"}};\n' if final else '') + f'''Events.DiplomacyStatement.Emit(1,0,{{SessionID=71,StatementType="MAKE_DEAL",StatementSubType="AI_ACCEPT_DEAL",FromPlayer=1,FromPlayerMood=0,Initiator=0,RespondingToDealAction={action},DealAction=1,ResponseType=1}})'''
 
@@ -179,7 +182,7 @@ def test_send_waits_for_current_native_response_and_only_accepts_original_terms(
     state = GameState(conn)
     result = asyncio.run(state.propose_trade(1, [{"type":"FAVOR","amount":20}], [{"type":"GOLD","amount":10,"duration":30}]))
     assert "ACCEPTED|" in result and "REJECTED" not in result
-    assert list(conn.lua.globals().sent_actions.values()) == [4, 1]
+    assert list(conn.lua.globals().sent_actions.values()) == [4]
     assert conn.lua.globals().requests == 1 and state.diplomacy_pending
     context = asyncio.run(state.get_diplomacy_sessions())
     assert context.sessions[0].choice_keys == ["CHOICE_EXIT"]
@@ -191,10 +194,13 @@ def test_send_waits_for_current_native_response_and_only_accepts_original_terms(
 
 def test_changed_counter_requires_explicit_accept_and_query_never_submits(quick_trade):
     class CounterConn(TradeConn):
+        def response_is_final(self, action):
+            return action == 1
+
         def response_event(self, action):
             source = super().response_event(action)
             if action == 4:
-                source = 'working_outgoing[2]:SetAmount(5);' + source
+                source = 'working_outgoing[2]:SetAmount(5);' + source.replace('StatementSubType="AI_ACCEPT_DEAL"','StatementSubType="NONE"').replace('DealAction=1,','DealAction=5,')
             return source
     conn = CounterConn()
     state = GameState(conn)
@@ -300,3 +306,106 @@ end''')
     assert "SESSION_CONTINUES" in asyncio.run(state.diplomacy_respond(1,"POSITIVE"))
     assert list(conn.lua.globals().mutations.values())==["response"]
     assert not state.diplomacy_pending
+
+
+def fail_favor_preparation(conn):
+    conn.setup('''local original=DealManager.GetWorkingDeal
+DealManager.GetWorkingDeal=function(direction)
+ local deal=original(direction); local add=deal.AddItemOfType
+ deal.AddItemOfType=function(self,kind,owner)
+  if kind==DealItemTypes.FAVOR then return nil end
+  return add(self,kind,owner)
+ end
+ return deal
+end''')
+
+
+@pytest.mark.parametrize("entry", ["test_trade", "propose_trade"])
+def test_partial_terms_failure_finishes_owned_zero_submission_session(entry, quick_trade):
+    conn=TradeConn(); fail_favor_preparation(conn); state=GameState(conn)
+    result=asyncio.run(getattr(state,entry)(1,[{"type":"GOLD","amount":20},{"type":"FAVOR","amount":20}],[]))
+    assert "NOT_SUBMITTED" in result and "cleanup confirmed" in result
+    assert not state.diplomacy_pending
+    assert conn.lua.globals().requests==1
+    assert list(conn.lua.globals().sent_actions.values())==[]
+    assert list(conn.lua.globals().mutations.values())==["close"]
+
+
+def test_native_proposed_acceptance_is_final_dialogue_without_second_acceptance(quick_trade):
+    class NativeFinalConn(TradeConn):
+        def response_event(self, action):
+            source=super().response_event(action)
+            if action==4:
+                source='''controls["/InGame/DiplomacyDealView"].hidden=true;
+controls["/InGame/DiplomacyActionView/ConversationContainer"].hidden=false;
+native_selections={{Key="CHOICE_EXIT"}};''' + source
+            return source
+    conn=NativeFinalConn(); state=GameState(conn)
+    result=asyncio.run(state.propose_trade(1,[{"type":"GOLD","amount":20}],[]))
+    assert "ACCEPTED|" in result
+    assert list(conn.lua.globals().sent_actions.values())==[4]
+    assert asyncio.run(state.get_diplomacy_sessions()).sessions[0].choice_keys==["CHOICE_EXIT"]
+    assert "SESSION_CLOSED" in asyncio.run(state.diplomacy_respond(1,"EXIT"))
+    assert "cleanup confirmed" in asyncio.run(state.dismiss_popup())
+    assert not state.diplomacy_pending
+
+
+@pytest.mark.parametrize("marker", ["local prepared=pcall", "No EQUALIZE/PROPOSED", "DIPLOMACY_NATIVE_CLOSE"])
+@pytest.mark.parametrize("error", [asyncio.CancelledError, TimeoutError])
+def test_partial_terms_failure_cancellation_or_lost_reply_only_confirms_native_exit(marker,error,quick_trade):
+    class InterruptedConn(TradeConn):
+        interrupted=False
+        async def execute_in_named_state(self,name,source,timeout=5):
+            rows=await super().execute_in_named_state(name,source,timeout)
+            if marker in source and not self.interrupted:
+                self.interrupted=True
+                raise error()
+            return rows
+    async def scenario():
+        conn=InterruptedConn(); fail_favor_preparation(conn); state=GameState(conn)
+        if error is asyncio.CancelledError:
+            with pytest.raises(asyncio.CancelledError):
+                await state.test_trade(1,[{"type":"GOLD","amount":20},{"type":"FAVOR","amount":20}],[])
+        else:
+            first=await state.test_trade(1,[{"type":"GOLD","amount":20},{"type":"FAVOR","amount":20}],[])
+            assert "unknown" in first.lower()
+        assert state.diplomacy_pending
+        # The opposite tool and a different requested target only resume the owned attempt.
+        result=await state.propose_trade(2,[{"type":"GOLD","amount":99}],[])
+        assert "NOT_SUBMITTED" in result and "cleanup confirmed" in result
+        assert not state.diplomacy_pending
+        assert conn.lua.globals().requests==1
+        assert list(conn.lua.globals().sent_actions.values())==[]
+        assert list(conn.lua.globals().mutations.values())==["close"]
+        assert conn.lua.globals().close_callbacks==1
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("tamper", [
+    'GameConfiguration.GetValue=function() return 99 end',
+    '__civmcp_diplomacy.nonce="other-owner"',
+    'sessions={[1]=72};infos[72]={FromPlayer=0,ToPlayer=1}',
+    'working_outgoing[1]:SetAmount(777)',
+])
+def test_partial_terms_failure_never_closes_replaced_world_owner_session_or_terms(tamper,quick_trade):
+    class InterruptedConn(TradeConn):
+        interrupted=False
+        async def execute_in_named_state(self,name,source,timeout=5):
+            rows=await super().execute_in_named_state(name,source,timeout)
+            if "local prepared=pcall" in source and not self.interrupted:
+                self.interrupted=True
+                raise asyncio.CancelledError()
+            return rows
+    async def scenario():
+        conn=InterruptedConn(); fail_favor_preparation(conn); state=GameState(conn)
+        with pytest.raises(asyncio.CancelledError):
+            await state.test_trade(1,[{"type":"GOLD","amount":20},{"type":"FAVOR","amount":20}],[])
+        conn.setup(tamper)
+        result=await state.test_trade(1,[{"type":"GOLD","amount":40}],[])
+        assert "OUTCOME_UNKNOWN" in result
+        assert "OUTCOME_UNKNOWN" in await state.dismiss_popup()
+        assert state.diplomacy_pending and conn.lua.globals().requests==1
+        assert list(conn.lua.globals().sent_actions.values())==[]
+        assert list(conn.lua.globals().mutations.values())==[]
+        assert conn.lua.globals().close_callbacks==0
+    asyncio.run(scenario())
