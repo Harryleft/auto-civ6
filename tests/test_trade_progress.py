@@ -1,5 +1,6 @@
 """Real GameState and Lua 5.1 with deferred native diplomacy event delivery."""
 import asyncio
+from copy import deepcopy
 import pytest
 from test_diplomacy_context_lua import DiplomacyConn
 from civ_mcp.game_state import GameState
@@ -158,6 +159,135 @@ def quick_trade(monkeypatch):
     monkeypatch.setattr(diplomacy, "TRADE_POLL_SECONDS", .001)
 
 
+def test_different_target_cannot_receive_a_pending_trade_result(quick_trade):
+    class CountedConn(TradeConn):
+        calls=0
+        async def execute_in_named_state(self,name,source,timeout=5):
+            self.calls+=1
+            return await super().execute_in_named_state(name,source,timeout)
+
+    conn=CountedConn(); state=GameState(conn)
+    offer=[{"type":"GOLD","amount":20}]
+    assert "ACCEPTED|" in asyncio.run(state.propose_trade(1,offer,[]))
+    attempt=state._diplomacy_progress.trade
+    before=deepcopy(attempt)
+    calls=conn.calls
+    result=asyncio.run(state.propose_trade(2,offer,[]))
+    assert "PENDING_TRADE_MISMATCH" in result and "ACCEPTED" not in result
+    assert "player 1" in result and "propose_trade" in result
+    assert "new request not submitted" in result.lower()
+    assert conn.calls==calls
+    assert state._diplomacy_progress.trade is attempt and attempt==before
+    assert state.diplomacy_pending
+
+
+@pytest.mark.parametrize("phase", ["DIALOGUE", "CLEANUP"])
+@pytest.mark.parametrize("change", ["target", "mode", "offer", "request"])
+def test_pending_trade_requires_the_original_structured_request(phase,change,quick_trade):
+    class CountedConn(TradeConn):
+        calls=0
+        lost_close=False
+        async def execute_in_named_state(self,name,source,timeout=5):
+            self.calls+=1
+            rows=await super().execute_in_named_state(name,source,timeout)
+            if phase=="CLEANUP" and "DIPLOMACY_NATIVE_CLOSE" in source and not self.lost_close:
+                self.lost_close=True
+                raise TimeoutError("native close reply lost")
+            return rows
+    async def scenario():
+        conn=CountedConn(); state=GameState(conn)
+        offer=[{"type":"FAVOR","amount":20}]
+        request=[{"type":"GOLD","amount":10,"duration":30}]
+        assert "ACCEPTED|" in await state.propose_trade(1,offer,request)
+        if phase=="CLEANUP":
+            assert "SESSION_CLOSED" in await state.diplomacy_respond(1,"EXIT")
+            assert "cleanup unknown" in await state.dismiss_popup()
+        attempt=state._diplomacy_progress.trade
+        assert attempt.phase==phase
+        before=deepcopy(attempt)
+        calls=conn.calls
+        cleanup_pending=state._diplomacy_cleanup.pending
+        target=2 if change=="target" else 1
+        changed_offer=[{"type":"FAVOR","amount":21}] if change=="offer" else deepcopy(offer)
+        changed_request=[{"type":"GOLD","amount":11,"duration":30}] if change=="request" else deepcopy(request)
+        operation=state.test_trade if change=="mode" else state.propose_trade
+        result=await operation(target,changed_offer,changed_request)
+        assert "PENDING_TRADE_MISMATCH" in result and "ACCEPTED" not in result
+        assert "player 1" in result and "propose_trade" in result
+        assert "new request not submitted" in result.lower()
+        assert conn.calls==calls
+        assert state._diplomacy_progress.trade is attempt and attempt==before
+        assert state._diplomacy_cleanup.pending==cleanup_pending
+        assert state.diplomacy_pending
+    asyncio.run(scenario())
+
+
+def test_original_prepared_copy_confirms_and_new_request_starts_only_after_retirement(quick_trade):
+    async def scenario():
+        conn=TradeConn(); state=GameState(conn)
+        conn.deliver_events=False
+        offer=[{"type":"GOLD","amount":20}]
+        assert "OUTCOME_UNKNOWN" in await state.propose_trade(1,offer,[])
+        offer[0]["amount"]=99
+        assert "PENDING_TRADE_MISMATCH" in await state.propose_trade(1,offer,[])
+        assert state._diplomacy_progress.trade.offer==[{"type":"GOLD","amount":20}]
+        conn.deliver_events=True
+        # Dict key order is not a term change; the prepared structured values match.
+        original=[{"amount":20,"type":"GOLD"}]
+        assert "ACCEPTED|" in await state.propose_trade(1,original,[])
+        assert conn.lua.globals().requests==1
+        assert "SESSION_CLOSED" in await state.diplomacy_respond(1,"EXIT")
+        assert "cleanup confirmed" in await state.propose_trade(1,original,[])
+        assert not state.diplomacy_pending
+        assert "ACCEPTED|" in await state.propose_trade(1,[{"type":"GOLD","amount":30}],[])
+        assert conn.lua.globals().requests==2
+        assert list(conn.lua.globals().sent_actions.values())==[9,1,9,1]
+    asyncio.run(scenario())
+
+
+def test_mcp_new_trade_cannot_claim_the_previous_receipt_or_release_its_gate(monkeypatch,tmp_path,quick_trade):
+    import anyio
+    from mcp import ClientSession
+    from civ_mcp import server
+    from civ_mcp.logger import GameLogger
+
+    class CountedConn(TradeConn):
+        calls=0
+        async def execute_in_named_state(self,name,source,timeout=5):
+            self.calls+=1
+            return await super().execute_in_named_state(name,source,timeout)
+        async def disconnect(self):
+            pass
+
+    conn=CountedConn()
+    monkeypatch.setattr(server,"GameConnection",lambda:conn)
+    log_path=tmp_path/"trade-identity.jsonl"
+    monkeypatch.setattr(server,"GameLogger",lambda:GameLogger(log_path))
+
+    async def scenario():
+        client_write,server_read=anyio.create_memory_object_stream(10)
+        server_write,client_read=anyio.create_memory_object_stream(10)
+        lowlevel=server.mcp._mcp_server
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(lowlevel.run,server_read,server_write,lowlevel.create_initialization_options())
+            async with ClientSession(client_read,client_write) as session:
+                await session.initialize()
+                original={"other_player_id":1,"offer_gold":20,"mode":"send"}
+                accepted=await session.call_tool("propose_trade",original)
+                assert "ACCEPTED|" in accepted.content[0].text
+                calls=conn.calls
+                mismatch=await session.call_tool("propose_trade",{"other_player_id":2,"offer_gold":30,"mode":"test"})
+                assert "PENDING_TRADE_MISMATCH" in mismatch.content[0].text
+                assert "ACCEPTED" not in mismatch.content[0].text and conn.calls==calls
+                blocked=await session.call_tool("save_game",{"save_name":"identity_guard"})
+                assert "OUTCOME_UNKNOWN" in blocked.content[0].text and conn.calls==calls
+                repeated=await session.call_tool("propose_trade",original)
+                assert "ACCEPTED|" in repeated.content[0].text
+                assert conn.lua.globals().requests==1
+            tasks.cancel_scope.cancel()
+    anyio.run(scenario)
+
+
 def test_preview_waits_for_session_onshow_and_own_response_before_native_exit(quick_trade):
     conn = TradeConn()
     state = GameState(conn)
@@ -175,7 +305,7 @@ def test_missing_asynchronous_reply_is_pending_not_rejection_and_never_resent(qu
     conn.deliver_events = False
     state = GameState(conn)
     first = asyncio.run(state.propose_trade(1, [{"type":"FAVOR","amount":20}], [{"type":"GOLD","amount":10,"duration":30}]))
-    second = asyncio.run(state.test_trade(1, [{"type":"GOLD","amount":1}], []))
+    second = asyncio.run(state.propose_trade(1, [{"type":"FAVOR","amount":20}], [{"type":"GOLD","amount":10,"duration":30}]))
     assert "OUTCOME_UNKNOWN" in first and "REJECTED" not in first
     assert "OUTCOME_UNKNOWN" in second
     assert state.diplomacy_pending and conn.lua.globals().requests == 1
@@ -240,7 +370,7 @@ def test_wrong_response_witness_never_resolves_or_resubmits(change, quick_trade)
     conn = WrongConn()
     state = GameState(conn)
     first = asyncio.run(state.propose_trade(1, [{"type":"GOLD","amount":20}], []))
-    second = asyncio.run(state.test_trade(1, [{"type":"GOLD","amount":30}], []))
+    second = asyncio.run(state.propose_trade(1, [{"type":"GOLD","amount":20}], []))
     assert "OUTCOME_UNKNOWN" in first and "OUTCOME_UNKNOWN" in second
     assert conn.lua.globals().requests == 1 and list(conn.lua.globals().sent_actions.values()) == [9]
 
@@ -270,7 +400,7 @@ def test_cancellation_after_each_native_phase_retains_one_owned_attempt(marker, 
         with pytest.raises(asyncio.CancelledError):
             await state.test_trade(1,[{"type":"GOLD","amount":20}],[])
         assert state.diplomacy_pending
-        result=await state.propose_trade(2,[{"type":"GOLD","amount":99}],[])
+        result=await state.test_trade(1,[{"type":"GOLD","amount":20}],[])
         assert "cleanup confirmed" in result
         assert conn.lua.globals().requests==1
         assert list(conn.lua.globals().sent_actions.values())==[3]
@@ -286,7 +416,7 @@ def test_world_or_nonce_mismatch_keeps_pending_without_new_proposal(tamper, quic
             return tamper + ';' + super().response_event(action)
     conn=WrongScope(); state=GameState(conn)
     first=asyncio.run(state.test_trade(1,[{"type":"GOLD","amount":20}],[]))
-    second=asyncio.run(state.propose_trade(1,[{"type":"GOLD","amount":30}],[]))
+    second=asyncio.run(state.test_trade(1,[{"type":"GOLD","amount":20}],[]))
     assert "OUTCOME_UNKNOWN" in first and "OUTCOME_UNKNOWN" in second
     assert state.diplomacy_pending and conn.lua.globals().requests==1
     assert list(conn.lua.globals().sent_actions.values())==[3]
@@ -345,7 +475,7 @@ def test_inspect_acceptance_is_evaluation_until_fresh_final_accepted_response(qu
     assert "ACCEPTED|" not in result and "OUTCOME_UNKNOWN" in result
     assert state._diplomacy_progress.trade.phase=="ACCEPT_WAIT"
     assert list(conn.lua.globals().sent_actions.values())==[9,1]
-    result=asyncio.run(state.propose_trade(1,[{"type":"GOLD","amount":40}],[]))
+    result=asyncio.run(state.propose_trade(1,[{"type":"GOLD","amount":20}],[]))
     assert "ACCEPTED|" not in result and "OUTCOME_UNKNOWN" in result
     assert list(conn.lua.globals().sent_actions.values())==[9,1]
     assert state.diplomacy_pending
@@ -371,8 +501,8 @@ def test_partial_terms_failure_cancellation_or_lost_reply_only_confirms_native_e
             first=await state.test_trade(1,[{"type":"GOLD","amount":20},{"type":"FAVOR","amount":20}],[])
             assert "unknown" in first.lower()
         assert state.diplomacy_pending
-        # The opposite tool and a different requested target only resume the owned attempt.
-        result=await state.propose_trade(2,[{"type":"GOLD","amount":99}],[])
+        # Only the original request may confirm this owned attempt.
+        result=await state.test_trade(1,[{"type":"GOLD","amount":20},{"type":"FAVOR","amount":20}],[])
         assert "NOT_SUBMITTED" in result and "cleanup confirmed" in result
         assert not state.diplomacy_pending
         assert conn.lua.globals().requests==1
@@ -402,7 +532,7 @@ def test_partial_terms_failure_never_closes_replaced_world_owner_session_or_term
         with pytest.raises(asyncio.CancelledError):
             await state.test_trade(1,[{"type":"GOLD","amount":20},{"type":"FAVOR","amount":20}],[])
         conn.setup(tamper)
-        result=await state.test_trade(1,[{"type":"GOLD","amount":40}],[])
+        result=await state.test_trade(1,[{"type":"GOLD","amount":20},{"type":"FAVOR","amount":20}],[])
         assert "OUTCOME_UNKNOWN" in result
         assert "OUTCOME_UNKNOWN" in await state.dismiss_popup()
         assert state.diplomacy_pending and conn.lua.globals().requests==1
@@ -546,7 +676,7 @@ def test_inspect_acceptance_or_known_zero_restore_cancellation_never_repeats_sen
         with pytest.raises(asyncio.CancelledError):
             await state.propose_trade(1,[{"type":"GOLD","amount":20}],[])
         assert state.diplomacy_pending
-        result=await state.propose_trade(2,[{"type":"GOLD","amount":99}],[])
+        result=await state.propose_trade(1,[{"type":"GOLD","amount":20}],[])
         if marker=="EVALUATION_RESTORED":
             assert "NOT_SUBMITTED" in result
             assert "cleanup confirmed" in await state.respond_to_deal(1,False)
@@ -601,7 +731,7 @@ def test_lost_accept_arming_reply_preserves_evaluation_for_zero_accept_and_decli
             assert "OUTCOME_UNKNOWN" in await state.propose_trade(1,[{"type":"GOLD","amount":20}],[])
         assert state.diplomacy_pending
         seq=conn.lua.eval('__civmcp_diplomacy.trade.evaluation.response.seq')
-        result=await state.propose_trade(2,[{"type":"GOLD","amount":99}],[])
+        result=await state.propose_trade(1,[{"type":"GOLD","amount":20}],[])
         assert "ERR:NOT_SUBMITTED|" in result
         assert conn.lua.eval('__civmcp_diplomacy.trade.evaluation.response.seq')==seq
         assert "cleanup confirmed" in await state.respond_to_deal(1,False)
@@ -620,7 +750,7 @@ def test_fresh_native_human_accept_zero_action_confirms_only_entered_owned_accep
         assert "HUMAN_ACCEPT_DEAL" in result
         assert list(conn.lua.globals().sent_actions.values())==[9,1]
         # Repeated confirmation keeps the final result and never sends a new trade.
-        again=await state.propose_trade(2,[{"type":"GOLD","amount":99}],[])
+        again=await state.propose_trade(1,[{"type":"FAVOR","amount":20}],[{"type":"GOLD","amount":50}])
         assert "ACCEPTED|" in again
         assert list(conn.lua.globals().sent_actions.values())==[9,1]
         assert conn.lua.globals().requests==1 and state.diplomacy_pending
@@ -653,7 +783,7 @@ def test_human_accept_zero_action_rejects_unmatched_final_witness(tamper,quick_t
     async def scenario():
         conn=ChangedFinalConn(); state=GameState(conn)
         first=await state.propose_trade(1,[{"type":"GOLD","amount":20}],[])
-        second=await state.propose_trade(2,[{"type":"GOLD","amount":99}],[])
+        second=await state.propose_trade(1,[{"type":"GOLD","amount":20}],[])
         assert "ACCEPTED|" not in first and "ACCEPTED|" not in second
         assert "OUTCOME_UNKNOWN" in first and "OUTCOME_UNKNOWN" in second
         assert conn.lua.globals().requests==1
@@ -671,8 +801,8 @@ def test_final_human_accept_requires_actual_native_accept_entry_not_an_armed_act
             return await super().execute_in_named_state(name,source,timeout)
     async def scenario():
         conn=NoEntryConn(); state=GameState(conn)
-        for target in (1,2):
-            result=await state.propose_trade(target,[{"type":"GOLD","amount":20}],[])
+        for _ in range(2):
+            result=await state.propose_trade(1,[{"type":"GOLD","amount":20}],[])
             assert "ACCEPTED|" not in result and "OUTCOME_UNKNOWN" in result
         assert list(conn.lua.globals().sent_actions.values())==[9]
         assert state.diplomacy_pending
@@ -696,7 +826,7 @@ def test_entered_accept_lost_reply_confirms_human_final_once(error,quick_trade):
                 await state.propose_trade(1,[{"type":"GOLD","amount":20}],[])
         else:
             assert "OUTCOME_UNKNOWN" in await state.propose_trade(1,[{"type":"GOLD","amount":20}],[])
-        result=await state.propose_trade(2,[{"type":"GOLD","amount":99}],[])
+        result=await state.propose_trade(1,[{"type":"GOLD","amount":20}],[])
         assert "ACCEPTED|" in result and "HUMAN_ACCEPT_DEAL" in result
         assert list(conn.lua.globals().sent_actions.values())==[9,1]
         assert conn.lua.globals().requests==1
