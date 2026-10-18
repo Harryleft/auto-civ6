@@ -54,7 +54,9 @@ def test_mcp_search_then_progressive_read_uses_standalone_rules_without_a_game(m
 
     async def scenario(session):
         tools = {tool.name: tool for tool in (await session.list_tools()).tools}
-        assert len(tools) == 80
+        assert {"search_knowledge", "get_knowledge", "get_turn_status"} <= tools.keys()
+        assert tools["get_turn_status"].annotations.readOnlyHint is True
+        assert tools["get_turn_status"].inputSchema.get("properties", {}) == {}
         for name in ('search_knowledge', 'get_knowledge'):
             assert tools[name].annotations.readOnlyHint is True
             assert tools[name].annotations.idempotentHint is True
@@ -278,7 +280,9 @@ def test_mcp_civilization_topic_and_three_layers_keep_installed_scope_without_ga
 
     async def scenario(session):
         tools = {tool.name: tool for tool in (await session.list_tools()).tools}
-        assert len(tools) == 80
+        assert {"search_knowledge", "get_knowledge", "get_turn_status"} <= tools.keys()
+        assert tools["get_turn_status"].annotations.readOnlyHint is True
+        assert tools["get_turn_status"].inputSchema.get("properties", {}) == {}
         topic = tools['search_knowledge'].inputSchema['properties']['topic']['anyOf'][0]['enum']
         assert 'civilizations' in topic
         result = await session.call_tool('search_knowledge', {'query': '安装文明', 'topic': 'civilizations'})
@@ -304,7 +308,10 @@ def test_mcp_civilization_unique_unit_ability_keeps_inactive_grant_and_condition
     before = fingerprints(root)
 
     async def scenario(session):
-        assert len((await session.list_tools()).tools) == 80
+        tools = {tool.name: tool for tool in (await session.list_tools()).tools}
+        assert {"search_knowledge", "get_knowledge", "get_turn_status"} <= tools.keys()
+        assert tools["get_turn_status"].annotations.readOnlyHint is True
+        assert tools["get_turn_status"].inputSchema.get("properties", {}) == {}
         response = await session.call_tool('get_knowledge', {'entry_id': 'CIVILIZATION_INSTALLED', 'level': 'rule'})
         assert not response.isError
         card = json.loads(response.content[0].text)
