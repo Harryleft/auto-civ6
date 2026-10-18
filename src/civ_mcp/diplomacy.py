@@ -141,7 +141,7 @@ class DiplomacyProgress:
             attempt = TradeAttempt(uuid.uuid4().hex, target, preview, [dict(row) for row in offer], [dict(row) for row in request])
             self.trade = attempt
             try:
-                rows = await _named(gs.conn, "DiplomacyActionView", native.build_trade_open(self.nonce, attempt.token, target))
+                rows = await _named(gs.conn, "DiplomacyActionView", native.build_trade_open(self.nonce, attempt.token, target, ai_only=not preview))
                 if any(row.startswith("TRADE|NOT_SUBMITTED|") for row in rows):
                     self.trade = None
                     return "ERR:NOT_SUBMITTED|" + " ".join(rows)
@@ -170,7 +170,7 @@ class DiplomacyProgress:
                         if rows != ["TRADE_DEAL|READY"]:
                             await asyncio.sleep(TRADE_POLL_SECONDS)
                             continue
-                        action = "EQUALIZE" if attempt.preview else "PROPOSED"
+                        action = "EQUALIZE" if attempt.preview else "INSPECT"
                         armed = await _named(gs.conn, "DiplomacyActionView", native.build_trade_arm_action(self.nonce, attempt.token, action))
                         if armed != ["TRADE|ARMED"]:
                             return self.trade_summary()
@@ -205,18 +205,18 @@ class DiplomacyProgress:
                         if attempt.preview:
                             attempt.result = report
                             attempt.phase = "PREVIEW_EXIT_READY"
-                        # Native ActionView hides DealView for a terminal PROPOSED
-                        # response; its acceptance is already final, not a counter.
-                        elif attempt.phase == "ACCEPT_WAIT" or subtype in ("AI_ACCEPT_DEAL", "HUMAN_ACCEPT_DEAL"):
-                            if subtype not in ("AI_ACCEPT_DEAL", "HUMAN_ACCEPT_DEAL") and action != "ACCEPTED":
+                        # INSPECT only evaluates terms, even for AI_ACCEPT_DEAL.
+                        # Only the response to our later ACCEPTED can be final.
+                        elif attempt.phase == "ACCEPT_WAIT":
+                            if subtype not in ("AI_ACCEPT_DEAL", "HUMAN_ACCEPT_DEAL") or action != "ACCEPTED":
                                 return self.trade_summary()
                             attempt.result = "ACCEPTED|Native response confirms the explicitly authorized trade.\n" + report
                             attempt.phase = "DIALOGUE"
                             return attempt.result + "\nInspect get_pending_diplomacy and use its current native choices; no response was chosen automatically."
                         elif action in ("REJECTED", "EQUALIZE_FAILED") or subtype == "AI_REFUSE_DEAL":
-                            attempt.result = "REJECTED|Native response received.\n" + report
-                            attempt.phase = "DIALOGUE"
-                            return attempt.result + "\nInspect current native choices to exit."
+                            attempt.result = "EVALUATION_REJECTED|AI evaluation did not accept these terms; no trade concluded.\n" + report
+                            attempt.phase = "COUNTER"
+                            return attempt.result + "\nUse respond_to_trade(accept=False) to exit this evaluation; no final dialogue was inferred."
                         elif attempt.counter != attempt.original:
                             attempt.result = "COUNTER_OFFER|Fresh native counter differs from your proposal.\n" + report
                             attempt.phase = "COUNTER"
@@ -231,10 +231,16 @@ class DiplomacyProgress:
                             attempt.phase = "ACCEPT_ENTERED"
                             rows = await _named(gs.conn, "DiplomacyDealView", native.build_trade_accept(self.observer_scope, attempt.target, attempt.sid, attempt.token, attempt.counter))
                             if any(row.startswith("TRADE_ACCEPT|NOT_SUBMITTED|") or row == "TRADE_DEAL|NOT_READY" for row in rows):
-                                attempt.phase = "COUNTER"
-                                return "ERR:NOT_SUBMITTED|Native acceptance guard changed; inspect the current counter again."
-                        attempt.phase = "ACCEPT_WAIT"  # Even a lost callback reply only observes its statement.
-                        continue
+                                attempt.phase = "ACCEPT_NOT_SUBMITTED"
+                        if attempt.phase != "ACCEPT_NOT_SUBMITTED":
+                            attempt.phase = "ACCEPT_WAIT"  # Even a lost callback reply only observes its statement.
+                            continue
+                    if attempt.phase == "ACCEPT_NOT_SUBMITTED":
+                        rows = await _named(gs.conn, "DiplomacyActionView", native.build_trade_restore_evaluation(self.nonce, attempt.token))
+                        if rows != ["TRADE|EVALUATION_RESTORED"]:
+                            return self.trade_summary()
+                        attempt.phase = "COUNTER"
+                        return "ERR:NOT_SUBMITTED|Native acceptance guard changed; evaluation retained for an explicit decision or exit."
                     if attempt.phase in ("PREVIEW_EXIT_READY", "PREPARE_EXIT_READY"):
                         exit_phase = attempt.phase
                         if exit_phase == "PREPARE_EXIT_READY":
@@ -276,14 +282,18 @@ class DiplomacyProgress:
     async def explicit_cleanup(self, gs) -> str:
         if self.trade is None:
             return "No trade attempt pending."
-        if self.trade.phase not in ("DIALOGUE", "COUNTER", "TERMS_ENTERED", "PREPARE_EXIT_READY", "EXIT_ENTERED", "CLEANUP"):
+        if self.trade.phase not in ("DIALOGUE", "COUNTER", "TERMS_ENTERED", "PREPARE_EXIT_READY", "ACCEPT_NOT_SUBMITTED", "EXIT_ENTERED", "CLEANUP"):
             return self.trade_summary()
         return await self.resume_trade(gs)
 
     async def respond_counter(self, gs, target: int, accept: bool) -> str | None:
         attempt = self.trade
-        if attempt is None or attempt.target != target or attempt.phase != "COUNTER":
+        if attempt is None:
             return None
+        if attempt.target != target:
+            return self.trade_summary()
+        if attempt.phase != "COUNTER":
+            return await self.resume_trade(gs) if attempt.phase == "ACCEPT_NOT_SUBMITTED" else self.trade_summary()
         rows = await _named(gs.conn, "DiplomacyActionView", native.build_trade_response(self.nonce, attempt.token))
         signatures = [row.split("|", 1)[1] for row in rows if row.startswith("TRADE_COUNTER|")]
         if signatures != [attempt.counter]:
