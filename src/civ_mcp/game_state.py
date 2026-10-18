@@ -12,7 +12,7 @@ import re
 import uuid
 
 from civ_mcp.actions import (
-    ActionLifecycle, _PendingAction, _action_result, _extract_pre_hp,
+    ActionLifecycle, _ActionScope, _PendingAction, _action_result, _extract_pre_hp,
     _extract_post_hp, _extract_city_defense, _format_attack_followup,
 )
 from civ_mcp import lua as lq
@@ -436,40 +436,59 @@ class GameState:
         return lq.parse_settle_advisor_response(lines)
 
     async def fortify_unit(self, unit_index: int) -> str:
-        blocked = await self._action_gate(("unit", unit_index))
-        if blocked:
-            return blocked
-        lua = lq.build_fortify_unit(unit_index)
-        lines = await self.conn.execute_write(lua)
-        result = _action_result(lines)
-        if result.startswith("SLEEPING"):
-            return "Unit is sleeping (this unit type cannot fortify)"
-        return result
+        return await self._set_unit_readiness(unit_index, "fortify")
 
     async def skip_unit(self, unit_index: int) -> str:
-        blocked = await self._action_gate(("unit", unit_index))
+        return await self._set_unit_readiness(unit_index, "skip")
+
+    async def _set_unit_readiness(
+        self, unit_index: int, kind: str, *, scope: _ActionScope | None = None,
+    ) -> str:
+        if self._actions.matches(kind, ("unit", unit_index)):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
         if blocked:
             return blocked
-        lua = lq.build_skip_unit(unit_index)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        if scope is None:
+            scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            kind, ("unit", unit_index), lq.build_unit_readiness_query(unit_index, kind, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"witness_token": token},
+        )
+        build = lq.build_skip_unit if kind == "skip" else lq.build_fortify_unit
+        return await self._submit_action(pending, scope, build(unit_index, token))
 
     async def skip_remaining_units(self) -> str:
-        # First try to fortify/heal combat units (InGame context)
-        fortify_result = ""
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
         try:
-            lua_fort = lq.build_fortify_remaining_units()
-            fort_lines = await self.conn.execute_write(lua_fort)
-            fortify_result = _action_result(fort_lines)
-        except Exception as e:
-            log.debug("Fortify remaining failed: %s", e)
-        # Then skip anything still with moves (GameCore context)
-        lua = lq.build_skip_remaining_units()
-        lines = await self.conn.execute_read(lua)
-        skip_result = _action_result(lines)
-        if fortify_result and not fortify_result.startswith("Error"):
-            return f"{fortify_result}\n{skip_result}"
-        return skip_result
+            lines = await self.conn.execute_write(scope.guard(lq.build_skip_remaining_units()))
+        except (OSError, TimeoutError, LuaError) as exc:
+            return f"Error: READINESS_UNKNOWN|Candidate query failed: {exc}; no units submitted"
+        result = _action_result(lines)
+        if result != "READY_UNITS":
+            return result
+        try:
+            candidates = [int(row.split("|", 1)[1]) for row in lines if row.startswith("READY_UNIT|")]
+            if len(candidates) != len(set(candidates)) or any(uid < 0 for uid in candidates):
+                raise ValueError("invalid candidate IDs")
+        except ValueError:
+            return "Error: READINESS_UNKNOWN|Malformed candidate list; no units submitted"
+        results = []
+        for unit_id in sorted(candidates):
+            result = await self._set_unit_readiness(unit_id, "skip", scope=scope)
+            results.append(f"unit:{unit_id}|{result}")
+            if self._pending_action is not None or not result.startswith(("SKIPPED", "NOT_READY", "ALREADY_WAITING")):
+                return "SKIP_BATCH_STOPPED|" + "\n".join(results)
+        return f"SKIPPED|{len(candidates)} candidates checked" + ("\n" + "\n".join(results) if results else "")
 
     async def automate_explore(self, unit_index: int) -> str:
         lua = lq.build_automate_explore(unit_index)
