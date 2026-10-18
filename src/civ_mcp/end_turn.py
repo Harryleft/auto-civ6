@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import re
 import time
-from typing import Protocol
+from typing import Callable, Protocol
 from dataclasses import dataclass, field
 
 import civ_mcp.narrate as nr
@@ -144,8 +144,10 @@ class TurnStatus:
                 self.local_readiness.reason if self.local_readiness else None)
 
 
-async def read_turn_status(gs: TurnContext) -> TurnStatus:
-    """Pure observations in native contexts; unavailable APIs stay unknown."""
+async def read_turn_status(
+    gs: TurnContext, *, world_observer: Callable[[list[WorldIdentity]], None] | None = None,
+) -> TurnStatus:
+    """Pure observations; hand known worlds to their owner before another await."""
     status = TurnStatus()
     try:
         lines = await gs.conn.execute_read(LUA_TURN_WORLD + f"""
@@ -163,6 +165,8 @@ printTurnWorld(worldBefore)
 print("{lq.SENTINEL}")
 """)
         status.world_observations.extend(_world_evidence(lines))
+        if world_observer is not None:
+            world_observer(status.world_observations)
         core_world, core_turn = _world_observation(lines)
         rows = [line.split("|") for line in lines if line.startswith("TURN_STATE|")]
         if len(rows) != 1 or len(rows[0]) != 4:
@@ -199,6 +203,8 @@ printTurnWorld(worldBefore)
 print("{lq.SENTINEL}")
 """)
         status.world_observations.extend(_world_evidence(lines))
+        if world_observer is not None:
+            world_observer(status.world_observations)
         ui_world, ui_turn = _world_observation(lines)
         rows = [line.split("|") for line in lines if line.startswith("TURN_UI_READY|")]
         if len(rows) != 1 or len(rows[0]) != 7:
@@ -365,10 +371,13 @@ class TurnProgress:
         self.last_status: TurnStatus | None = None
         self.read_failures = 0
 
+    def _observe_worlds(self, worlds: list[WorldIdentity]) -> None:
+        if self.pending and self.world is not None and any(world != self.world for world in worlds):
+            self.invalidate_scope()
+
     def observe(self, status: TurnStatus) -> None:
         now = time.monotonic()
-        if self.pending and self.world is not None and any(world != self.world for world in status.world_observations):
-            self.invalidate_scope()
+        self._observe_worlds(status.world_observations)
         if status.observed_turn is not None:
             if self.last_status is None or status.signature != self.last_status.signature:
                 self.phase_changed_at = now
@@ -412,7 +421,7 @@ class TurnProgress:
         return "match" if status.world == self.world else "mismatch"
 
     async def get_status(self, gs: TurnContext) -> str:
-        status = await read_turn_status(gs)
+        status = await read_turn_status(gs, world_observer=self._observe_worlds)
         self.observe(status)
         interactions = []
         for name, probe in (
@@ -588,7 +597,7 @@ class TurnProgress:
                         except (OSError, TimeoutError, LuaError, ValueError):
                             reads_failed = True
                             self.read_failures += 1
-                    status = await read_turn_status(gs)
+                    status = await read_turn_status(gs, world_observer=self._observe_worlds)
                     self.observe(status)
                     turn_after, ready = status.observed_turn, status.ready
                     if status.errors:
@@ -661,6 +670,8 @@ class TurnProgress:
                         await asyncio.sleep(min(POLL_INTERVAL_SECONDS, remaining))
         except TimeoutError:
             pass  # Observation budget expiry is not an actual failed native read.
+        if self._scope_invalid:
+            return self._scope_error()
         if turn_after is not None and turn_after > turn_before and ready is True and self.last_status is not None and self.last_status.world == self.world:
             return await self._report_advance(gs, turn_before, turn_after)
         detail = " Some game queries failed; the current turn cannot be reliably confirmed." if reads_failed else ""
