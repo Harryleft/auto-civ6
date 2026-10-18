@@ -560,7 +560,7 @@ class VictoryPlayerProgress:
     # Culture dominance (only for our civ)
     staycationers: float | None = 0  # domestic tourists
     # Religion details (only meaningful if they founded one)
-    has_religion: bool = False
+    has_religion: bool | None = False
     # Rival intel
     num_cities: int = 0
     science_yield: float = 0.0
@@ -575,6 +575,7 @@ class VictoryPlayerProgress:
     culture_required: float | None = None
     religion_civilizations: float | None = None
     religion_civilizations_required: float | None = None
+    spaceports_verified: float = 0  # observed lower bound when total is unknown
 
 
 @dataclass
@@ -612,7 +613,7 @@ class VictoryProgress:
     religion_founded_names: dict[str, str] = field(
         default_factory=dict
     )  # civ_name -> religion display name
-    religions_founded: int = 0
+    religions_founded: float | None = 0
     religions_max: int = 0
     # Demographics (anonymized aggregates for all civs, mirrors in-game panel)
     demographics: dict[str, DemographicEntry] = field(default_factory=dict)
@@ -623,8 +624,9 @@ class VictoryProgress:
     enabled_known: bool = False
     turn: float | None = None
     local_player_id: float | None = None
-    complete: bool = False
+    complete: bool = False  # protocol completeness; individual facts may remain unknown
     diplomatic_vp_needed: float | None = None
+    contacts_known: bool = False
 
 
 @dataclass
