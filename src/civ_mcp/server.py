@@ -304,7 +304,7 @@ async def spy_action(
 
     async def _run():
         if action.lower().startswith("escape:"):
-            return await gs.spy_escape(unit_index, action.split(":", 1)[1].strip().upper())
+            return await gs.spy_escape(unit_id, action.split(":", 1)[1].strip().upper())
         if action.lower() == "travel":
             return await gs.spy_travel(unit_index, target_x, target_y)
         return await gs.spy_mission(unit_index, action.upper(), target_x, target_y)

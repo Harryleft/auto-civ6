@@ -243,9 +243,14 @@ class GameState:
 
     async def get_spies(self) -> list[lq.SpyInfo]:
         lines = await self.conn.execute_write(lq.build_get_spies_query())
+        if "SPY_ESCAPE_QUERY_UNKNOWN" in lines:
+            raise LuaError("Current spy escape identity or legal routes are unknown; no route was selected.")
         return lq.parse_spies_response(lines)
 
     async def spy_travel(self, unit_index: int, target_x: int, target_y: int) -> str:
+        blocked = await self._action_gate(("unit", unit_index))
+        if blocked:
+            return blocked
         lua = lq.build_spy_travel(unit_index, target_x, target_y)
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
@@ -253,14 +258,33 @@ class GameState:
     async def spy_mission(
         self, unit_index: int, mission_type: str, target_x: int, target_y: int
     ) -> str:
+        blocked = await self._action_gate(("unit", unit_index))
+        if blocked:
+            return blocked
         lua = lq.build_spy_mission(unit_index, mission_type, target_x, target_y)
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
-    async def spy_escape(self, unit_index: int, district_type: str) -> str:
-        lua = lq.build_spy_escape_route(unit_index, district_type)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+    async def spy_escape(self, unit_id: int, district_type: str) -> str:
+        if type(unit_id) is not int or unit_id < 0:
+            raise ValueError("A full native spy identity is required")
+        route = district_type.strip().upper()
+        token = uuid.uuid4().hex
+        code = lq.build_spy_escape_route(unit_id, route, witness_token=token)
+        if self._actions.matches("spy_escape", ("unit", unit_id), item=route):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        pending = _PendingAction(
+            "spy_escape", ("unit", unit_id), lq.build_verify_spy_escape(unit_id, route, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"item": route, "witness_token": token, "full_id": unit_id},
+        )
+        return await self._submit_action(pending, scope, code)
 
     async def get_threat_scan(self) -> list[lq.ThreatInfo]:
         lines = await self.conn.execute_read(lq.build_threat_scan_query())
