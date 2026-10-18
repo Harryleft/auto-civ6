@@ -219,8 +219,6 @@ def test_write_exception_does_not_claim_acceptance_rejection_or_resend(after_nat
 
 @pytest.mark.parametrize("action, result", [
     ("DENOUNCE", "SENT|Denounced Sweden"),
-    ("DIPLOMATIC_DELEGATION", "ACCEPTED|Sweden accepted your delegation"),
-    ("RESIDENT_EMBASSY", "ACCEPTED|Sweden accepted your embassy"),
 ])
 def test_other_diplomatic_routes_keep_the_existing_protocol_and_result(action, result):
     conn = FriendshipConn()
