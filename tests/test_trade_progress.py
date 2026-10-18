@@ -17,7 +17,7 @@ local function event()
  return {Add=function(fn) listeners[fn]=true end, Remove=function(fn) listeners[fn]=nil end,
          Emit=function(...) for fn in pairs(listeners) do fn(...) end end}
 end
-Events.DiplomacyStatement=event(); Events.DiplomacySessionClosed=event()
+Events.DiplomacyStatement=event(); Events.DiplomacySessionClosed=event(); Events.DiplomacyIncomingDeal=event()
 DiplomacyManager.GetKeyName=function(key) return key end
 DiplomacyManager.HasQueuedSession=function() return false end
 DealManager.HasPendingDeal=function() return false end
@@ -408,4 +408,88 @@ def test_partial_terms_failure_never_closes_replaced_world_owner_session_or_term
         assert list(conn.lua.globals().sent_actions.values())==[]
         assert list(conn.lua.globals().mutations.values())==[]
         assert conn.lua.globals().close_callbacks==0
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("case,expected", [
+    ("missing", "statement=NONE"),
+    ("wrong_from", "filter=FROM_PLAYER_MISMATCH"),
+    ("wrong_action", "filter=RESPONDING_ACTION_MISMATCH"),
+    ("matched", "response_recorded=true"),
+])
+def test_turn_status_diagnoses_owned_native_event_without_confirmation_or_mutation(case,expected,quick_trade):
+    async def scenario():
+        conn=TradeConn(); state=GameState(conn)
+        conn.response_event=lambda action: ''
+        assert "OUTCOME_UNKNOWN" in await state.propose_trade(1,[{"type":"GOLD","amount":20}],[])
+        if case!="missing":
+            kfrom=2 if case=="wrong_from" else 1
+            action=3 if case=="wrong_action" else 4
+            conn.setup(f'''Events.DiplomacyStatement.Emit(1,0,{{SessionID=71,StatementType="MAKE_DEAL",StatementSubType="AI_ACCEPT_DEAL",FromPlayer={kfrom},FromPlayerMood=0,Initiator=0,RespondingToDealAction={action},DealAction=1,ResponseType=7}})''')
+        async def only_status(gs): return "LOCAL_READY"
+        state._turn_progress.get_status=only_status
+        before=(state._diplomacy_progress.trade.phase,conn.lua.globals().requests,list(conn.lua.globals().sent_actions.values()),list(conn.lua.globals().mutations.values()),conn.lua.globals().__civmcp_diplomacy.seq)
+        result=await state.get_turn_status()
+        assert expected in result
+        assert "expected_action=PROPOSED(4)" in result
+        assert "owner=MATCHED" in result and "session=MATCHED" in result
+        if case!="missing":
+            assert "subtype=AI_ACCEPT_DEAL" in result and "response_type=7" in result
+            assert "event_from=1" in result and "event_to=0" in result
+            assert f"k_from={kfrom}" in result
+        assert state.diplomacy_pending
+        after=(state._diplomacy_progress.trade.phase,conn.lua.globals().requests,list(conn.lua.globals().sent_actions.values()),list(conn.lua.globals().mutations.values()),conn.lua.globals().__civmcp_diplomacy.seq)
+        assert after==before
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("tamper,reason", [
+    ('__civmcp_diplomacy.nonce="other-owner"', "OWNER_OR_CONTEXT"),
+    ('GameConfiguration.GetValue=function() return 99 end', "WORLD_CHANGED"),
+    ('sessions={[1]=72};infos[72]={FromPlayer=0,ToPlayer=1}', "SESSION_NOT_CURRENT"),
+])
+def test_status_diagnostics_preserve_unknown_owner_world_or_session(tamper,reason,quick_trade):
+    async def scenario():
+        conn=TradeConn(); conn.response_event=lambda action: ''; state=GameState(conn)
+        await state.propose_trade(1,[{"type":"GOLD","amount":20}],[])
+        conn.setup(tamper)
+        async def only_status(gs): return "LOCAL_READY"
+        state._turn_progress.get_status=only_status
+        result=await state.get_turn_status()
+        assert reason in result and "subtype=" not in result
+        assert state.diplomacy_pending and conn.lua.globals().requests==1
+        assert list(conn.lua.globals().sent_actions.values())==[4]
+        assert list(conn.lua.globals().mutations.values())==[]
+    asyncio.run(scenario())
+
+
+def test_incoming_deal_diagnostic_does_not_complete_or_accept_trade(quick_trade):
+    async def scenario():
+        conn=TradeConn(); conn.response_event=lambda action: ''; state=GameState(conn)
+        await state.propose_trade(1,[{"type":"GOLD","amount":20}],[])
+        conn.setup('''Events.DiplomacyIncomingDeal.Emit(2,0,5)
+Events.DiplomacyIncomingDeal.Emit(1,0,1)''')
+        async def only_status(gs): return "LOCAL_READY"
+        state._turn_progress.get_status=only_status
+        result=await state.get_turn_status()
+        assert "diplomacy_incoming: event_seq=1 event_from=1 event_to=0 session_id=71 deal_action=ACCEPTED(1) diagnostic_only=true" in result
+        assert "statement=NONE" in result and "response_recorded=false" in result
+        assert state._diplomacy_progress.trade.phase=="RESPONSE_WAIT"
+        assert state.diplomacy_pending and list(conn.lua.globals().sent_actions.values())==[4]
+    asyncio.run(scenario())
+
+
+def test_observation_ignores_unowned_statement_and_read_failure_is_unknown(quick_trade):
+    async def scenario():
+        conn=TradeConn(); conn.response_event=lambda action: ''; state=GameState(conn)
+        await state.propose_trade(1,[{"type":"GOLD","amount":20}],[])
+        conn.setup('''infos[72]={FromPlayer=0,ToPlayer=1}; Events.DiplomacyStatement.Emit(1,0,{SessionID=72,StatementType="MAKE_DEAL",StatementSubType="UNOWNED",FromPlayer=2,RespondingToDealAction=4,DealAction=1,ResponseType=7})''')
+        async def only_status(gs): return "LOCAL_READY"
+        state._turn_progress.get_status=only_status
+        result=await state.get_turn_status()
+        assert "statement=NONE" in result and "UNOWNED" not in result
+        async def failed(*args,**kwargs): raise TimeoutError()
+        conn.execute_in_named_state=failed
+        assert "UNKNOWN reason=READ_FAILED" in await state.get_turn_status()
+        assert state.diplomacy_pending and list(conn.lua.globals().sent_actions.values())==[4]
     asyncio.run(scenario())
