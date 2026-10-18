@@ -45,10 +45,84 @@ def run(awaitable):
     return asyncio.run(awaitable)
 
 
+@pytest.mark.parametrize("after_path", [
+    'return {plots={17019,17020,destination},turns={1,1,3}}',
+    'return {plots={17019,destination},turns={1,3}}',
+    'return {plots={},turns={}}',
+    'return nil',
+    'return {plots="malformed",turns={}}',
+    'error("route changed after segment completion")',
+])
+def test_completed_segment_confirms_only_the_partial_move_independently_of_a_new_path(after_path):
+    conn = TargetMovementConn()
+    conn.lua.execute('''
+x,y=20,17
+can_target=true
+UnitManager.GetQueuedDestination=function() return 21019 end
+UnitManager.RequestOperation=function(u, operation, params)
+    submissions=submissions+1
+    x,y=19,17
+    unit.GetMovesRemaining=function() return 1 end
+    unit.GetMovementMovesRemaining=function() return 1 end
+    Events.UnitOperationSegmentComplete.Fire(0,u:GetID())
+end
+UnitManager.GetMoveToPathEx=function(u,destination)
+    if submissions==0 then return {plots={17020,17019,destination},turns={1,1,3}} end
+    AFTER_PATH
+end
+'''.replace('AFTER_PATH', after_path))
+    state = GameState(conn)
+    result = run(state.move_unit(6, 19, 21))
+    assert "now_at:19,17" in result and "moves_remaining:1" in result
+    assert "STOPPED_MID_PATH (native segment complete)" in result
+    assert "now_at:19,21" not in result and "requires later turn" not in result
+    assert state.pending_action_summary is None
+    assert conn.lua.globals().submissions == 1
+    assert conn.lua.globals().__civmcpMoveSegment.closed
+
+
 @pytest.fixture
 def short_confirmation(monkeypatch):
     monkeypatch.setattr("civ_mcp.game_state.ACTION_CONFIRM_TIMEOUT", 0.015)
     monkeypatch.setattr("civ_mcp.game_state.ACTION_CONFIRM_INTERVAL", 0.001)
+
+
+@pytest.mark.parametrize("completion", [
+    '',
+    'Events.UnitOperationSegmentComplete.Fire(1,u:GetID())',
+    'Events.UnitOperationSegmentComplete.Fire(0,917510)',
+    'turn=55; Events.UnitOperationSegmentComplete.Fire(0,u:GetID()); turn=54',
+    'Events.UnitOperationSegmentComplete.Fire(0,u:GetID()); x,y=20,17',
+    'Events.UnitOperationSegmentComplete.Fire(0,u:GetID()); UI.IsGameCoreBusy=function() return true end',
+    'Events.UnitOperationSegmentComplete.Fire(0,u:GetID()); UI.IsGameCoreBusy=function() error("busy unknown") end',
+    'Events.UnitOperationSegmentComplete.Fire(0,u:GetID()); UnitManager.GetQueuedDestination=nil',
+    'Events.UnitOperationSegmentComplete.Fire(0,u:GetID()); UnitManager.GetQueuedDestination=function() return 21018 end',
+    'Events.UnitOperationSegmentComplete.Fire(0,u:GetID()); UnitManager.GetQueuedDestination=function() error("queue unavailable") end',
+    'Events.UnitOperationSegmentComplete.Fire(0,u:GetID()); __civmcpMoveSegment.token="stale-token"',
+    'Events.UnitOperationSegmentComplete.Fire(0,u:GetID()); __civmcpMoveSegment.fromX=18',
+    'Events.UnitOperationSegmentComplete.Fire(0,u:GetID()); __civmcpMoveSegment.targetX=18',
+    'Events.UnitOperationSegmentComplete.Fire(0,u:GetID()); seed=1',
+])
+def test_incomplete_native_segment_facts_keep_the_gate_and_do_not_replay(completion, short_confirmation):
+    conn = TargetMovementConn()
+    conn.lua.execute('''
+x,y=20,17
+can_target=true
+UnitManager.GetQueuedDestination=function() return 21019 end
+UnitManager.RequestOperation=function(u, operation, params)
+    submissions=submissions+1
+    x,y=19,17
+    COMPLETION
+end
+'''.replace('COMPLETION', completion))
+    state = GameState(conn)
+    result = run(state.move_unit(6, 19, 21))
+    assert "OUTCOME_UNKNOWN" in result
+    assert "STOPPED_MID_PATH" not in result
+    assert state.pending_action_summary is not None
+    assert "OUTCOME_UNKNOWN" in run(state.move_unit(6, 21, 17))
+    assert state.pending_action_summary is not None
+    assert conn.lua.globals().submissions == 1
 
 
 def test_target_rejected_before_request_or_witness_and_next_legal_move_remains_available(short_confirmation):

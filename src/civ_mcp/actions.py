@@ -329,20 +329,18 @@ print("{lq.SENTINEL}")
                     if moves is not None:
                         suffix += f"|moves_remaining:{moves:g}"
                     return pending.success + suffix + f"|STOPPED_MID_PATH ({native_stop})"
-                # A path preview alone never closes movement. This branch
-                # additionally requires this request's native segment event,
-                # full runtime ID, current identity/turn, and queued target.
+                # Completion belongs to the submitted segment. A new path
+                # may backtrack or disappear after units block its route;
+                # its turn labels cannot invalidate the native event.
+                # Keep the full request identity and queued target checks.
                 queued = [row for row in pending.observed if row.startswith("QUEUED_TARGET|")]
-                steps = [row for row in pending.observed if row.startswith("PATH_STEP|")]
                 if (witness is not None and witness[1] and witness[0] == origin
-                        and len(queued) == 1 and len(steps) == 1
+                        and len(queued) == 1
                         and origin is not None and (x, y) != origin and busy == "false"
                         and moves is not None and moves > 0
-                        and queued[0] == f"QUEUED_TARGET|{target[0]}|{target[1]}"
-                        and re.fullmatch(r"PATH_STEP\|-?\d+\|-?\d+\|turn:[1-9]\d*", steps[0])
-                        and int(steps[0].rsplit(":", 1)[1]) > 1):
+                        and queued[0] == f"QUEUED_TARGET|{target[0]}|{target[1]}"):
                     return (pending.success + suffix + f"|moves_remaining:{moves:g}"
-                            "|STOPPED_MID_PATH (native segment complete; next step requires later turn)"
+                            "|STOPPED_MID_PATH (native segment complete)"
                             + "|" + "|".join(witness[2]))
                 impassable = any(line.startswith(("DIAG|MOUNTAIN|", "DIAG|IMPASSABLE|")) for line in pending.observed)
                 if (x, y) == origin and busy == "false" and impassable:
