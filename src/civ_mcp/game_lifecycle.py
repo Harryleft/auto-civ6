@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from civ_mcp import lua as lq
-from civ_mcp.connection import GameConnection, LuaError
+from civ_mcp.connection import GameConnection, LuaError, LuaStateUnavailable
 from civ_mcp.lua._helpers import SENTINEL
 
 log = logging.getLogger(__name__)
@@ -25,6 +25,114 @@ class NativeTransition:
 
     status: Literal["confirmed", "not_submitted", "submitted", "unknown"]
     message: str
+
+
+class DiplomacyViewCleanup:
+    """One explicit native Close with a callback receipt; never replay uncertainty."""
+
+    def __init__(self) -> None:
+        self.token: str | None = None
+        self._scope_invalid = False
+
+    def invalidate_scope(self) -> None:
+        if self.pending:
+            self._scope_invalid = True
+
+    @property
+    def pending(self) -> bool:
+        return self.token is not None
+
+    async def close(self, conn: GameConnection) -> NativeTransition:
+        if self._scope_invalid:
+            return NativeTransition("unknown", "Diplomacy UI cleanup unknown: world changed; only explicit protected replacement can retire this attempt.")
+        confirming = self.pending
+        token = self.token or uuid.uuid4().hex
+        # The receipt belongs to this context and attempt. It proves the native
+        # callback returned; hidden alone cannot prove UninitializeView ran.
+        source = f"""
+-- DIPLOMACY_NATIVE_CLOSE: no diplomatic responses or direct event release
+local token = {json.dumps(token)}
+local confirming = {str(confirming).lower()}
+local function report(status, detail)
+    print("DIPLO_CLEANUP|" .. status .. "|" .. detail)
+end
+local okID, id = pcall(function() return ContextPtr:GetID() end)
+if not okID or id ~= "DiplomacyActionView" then report("NOT_SUBMITTED", "CONTEXT_UNKNOWN"); return end
+local function noPending()
+    local me = Game.GetLocalPlayer()
+    if type(me) ~= "number" or me < 0 or not Players[me] then return false, "IDENTITY_UNKNOWN" end
+    local queued = DiplomacyManager.HasQueuedSession(me)
+    if type(queued) ~= "boolean" then return false, "QUEUED_UNKNOWN" end
+    if queued then return false, "QUEUED_SESSION" end
+    for other = 0, 63 do
+        if other ~= me and Players[other] then
+            local sid = DiplomacyManager.FindOpenSessionID(me, other)
+            if sid ~= nil and type(sid) ~= "number" then return false, "SESSION_UNKNOWN" end
+            if sid and sid >= 0 then return false, "OPEN_SESSION" end
+            local pending = DealManager.HasPendingDeal(me, other)
+            if type(pending) ~= "boolean" then return false, "DEAL_UNKNOWN" end
+            if pending then return false, "PENDING_DEAL" end
+        end
+    end
+    return true, "NONE"
+end
+local ok, safe, reason = pcall(noPending)
+if not ok then
+    report(confirming and "UNKNOWN" or "NOT_SUBMITTED", "SESSION_READ_UNKNOWN"); return
+end
+if not safe then
+    report(confirming and "UNKNOWN" or "NOT_SUBMITTED", reason); return
+end
+local okScope, scope = pcall(function()
+    local me = Game.GetLocalPlayer()
+    local civilization = PlayerConfigurations[me]:GetCivilizationTypeName()
+    local seed = GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")
+    if type(civilization) ~= "string" or type(seed) ~= "number" then return nil end
+    return tostring(me) .. "|" .. civilization .. "|" .. tostring(seed)
+end)
+if not okScope or not scope then report(confirming and "UNKNOWN" or "NOT_SUBMITTED", "WORLD_UNKNOWN"); return end
+if confirming then
+    if not __civmcp_diplo_close or __civmcp_diplo_close.token ~= token or __civmcp_diplo_close.scope ~= scope or __civmcp_diplo_close.done ~= true then
+        report("UNKNOWN", "NATIVE_CALLBACK_NOT_CONFIRMED"); return
+    end
+else
+    if type(Close) ~= "function" then report("NOT_SUBMITTED", "NATIVE_CLOSE_UNAVAILABLE"); return end
+    __civmcp_diplo_close = {{token=token, scope=scope, done=false}}
+    local called, err = pcall(Close)
+    if not called then report("UNKNOWN", "NATIVE_CLOSE_FAILED:" .. tostring(err)); return end
+    __civmcp_diplo_close.done = true
+end
+local okAfter, safeAfter, afterReason = pcall(noPending)
+local okHidden, hidden = pcall(function() return ContextPtr:IsHidden() end)
+local okProcessing, processing = pcall(UI.IsProcessingMessages)
+if okAfter and safeAfter and okHidden and hidden == true and okProcessing and processing == false then
+    report("CONFIRMED", "NATIVE_CLOSE_RETURNED;hidden=true;ui_processing=false")
+else
+    report("UNKNOWN", "POST_CLOSE_NOT_CONFIRMED")
+end
+print("{SENTINEL}")
+"""
+        # Store before the invocation. A missing response might follow Close.
+        self.token = token
+        try:
+            lines = await conn.execute_in_named_state("DiplomacyActionView", source)
+        except LuaStateUnavailable as exc:
+            if not confirming:
+                self.token = None
+            return NativeTransition("unknown" if confirming else "not_submitted", f"Diplomacy UI cleanup: {exc}")
+        except (OSError, TimeoutError, LuaError) as exc:
+            return NativeTransition("unknown", f"Diplomacy UI cleanup unknown: {exc}; no callback was replayed.")
+        rows = [line.split("|", 2) for line in lines if line.startswith("DIPLO_CLEANUP|")]
+        if len(rows) != 1 or len(rows[0]) != 3:
+            return NativeTransition("unknown", "Diplomacy UI cleanup unknown: no valid native receipt; no callback was replayed.")
+        _, status, detail = rows[0]
+        if status == "CONFIRMED":
+            self.token = None
+            return NativeTransition("confirmed", "Diplomacy UI cleanup confirmed: " + detail)
+        if status == "NOT_SUBMITTED" and not confirming:
+            self.token = None
+            return NativeTransition("not_submitted", "Diplomacy UI cleanup not submitted: " + detail + "; inspect pending diplomacy/trades.")
+        return NativeTransition("unknown", "Diplomacy UI cleanup unknown: " + detail + "; use dismiss_popup only to confirm this callback, or explicit recovery.")
 
 
 def clear_save_listing() -> None:
@@ -111,13 +219,15 @@ print("{lq.SENTINEL}")
 """
 
 
-async def dismiss_popup(conn: GameConnection) -> str:
+async def dismiss_popup(conn: GameConnection, diplomacy_cleanup: DiplomacyViewCleanup | None = None) -> str:
     """Explicitly close information overlays through their native callbacks.
 
     State discovery is by exact name, never guessed indexes. A successful
     callback is not a closed-popup fact until that context is proven hidden.
     """
     dismissed = []
+    cleanup = diplomacy_cleanup or DiplomacyViewCleanup()
+    cleanup_result = None
 
     # Phase 1: Single batched InGame call — handles most cases in one roundtrip.
     # Covers: diplomacy screens, generic popups, world congress, boosts, etc.
@@ -187,23 +297,12 @@ end
             f'  print("DISMISSED|{name}") '
             f"end end"
         )
-    # LeaderScene 3D model: SetHide does NOT clear the C++ 3D viewport.
-    # Must fire Events.HideLeaderScreen() to unload the 3D leader model.
-    checks.append(
-        'do local ls = ContextPtr:LookUpControl("/InGame/LeaderScene") '
-        "if ls and not ls:IsHidden() then "
-        "  pcall(function() Events.HideLeaderScreen() end) "
-        "  ls:SetHide(true) "
-        '  print("DISMISSED|LeaderScene") '
-        "end end"
-    )
-    # Diplomacy screens: report only, do NOT close sessions.
-    # Force-closing sessions via DiplomacyManager.CloseSession() bypasses
-    # the C++ engine's session lifecycle callbacks, leaving the AI diplomacy
-    # subsystem in an inconsistent state that causes turn processing hangs
-    # (confirmed across Games 1-5).  Use respond_to_diplomacy() instead.
+    # Detect the view even when hidden: SetHide in older clients could leave
+    # InitializeView's event reference owned. Native Close below is guarded by
+    # fresh session/deal facts; it never supplies a diplomatic response.
     checks.append(
         'do local dv = ContextPtr:LookUpControl("/InGame/DiplomacyActionView") '
+        'if dv then print("DIPLOMACY_VIEW_PRESENT") end '
         "if dv and not dv:IsHidden() then "
         '  print("PENDING|DiplomacyActionView") '
         "end end"
@@ -232,12 +331,15 @@ end
     )
     pending_deal = False
     pending_diplomacy = False
+    diplomacy_view_present = False
     try:
         lua = " ".join(checks) + f' print("{lq.SENTINEL}")'
         lines = await conn.execute_write(lua)
         for line in lines:
             if line.startswith("DISMISSED|"):
                 dismissed.append(line.split("|", 1)[1])
+            elif line == "DIPLOMACY_VIEW_PRESENT":
+                diplomacy_view_present = True
             elif line.startswith("PENDING|"):
                 if "DiplomacyDealView" in line:
                     pending_deal = True
@@ -248,6 +350,9 @@ end
     except Exception as e:
         log.debug("Phase 1 dismiss failed: %s", e)
         return f"Popup overlay query failed: {e}; outcome unknown."
+
+    if diplomacy_view_present or pending_diplomacy or cleanup.pending:
+        cleanup_result = await cleanup.close(conn)
 
     unknown = None
     try:
@@ -285,6 +390,12 @@ end
     except (ConnectionError, TimeoutError, LuaError) as exc:
         unknown = f"Information popup close incomplete: {exc}; outcome unknown."
 
+    if cleanup_result is not None and cleanup_result.status == "confirmed":
+        dismissed.append("DiplomacyActionView (native Close)")
+        pending_diplomacy = False
+    elif cleanup_result is not None:
+        unknown = (unknown + " " if unknown else "") + cleanup_result.message
+
     # Final phase: dismiss Windows-level crash dialogs (Firaxis Crash
     # Reporter, Unhandled Exception).  These are Win32 dialogs that appear
     # on top of the game after EXCEPTION_ACCESS_VIOLATION crashes — the
@@ -304,6 +415,10 @@ end
             msg += " (incoming trade deal pending — use get_pending_trades)"
         return msg
     if unknown:
+        if pending_diplomacy:
+            unknown += ". Also: diplomacy session active — use respond_to_diplomacy."
+        if pending_deal:
+            unknown += ". Incoming trade deal pending — use get_pending_trades."
         return unknown
     if pending_diplomacy:
         return "Diplomacy session active — use respond_to_diplomacy to handle it."

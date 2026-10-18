@@ -24,6 +24,10 @@ class LuaError(Exception):
     """Raised when Lua code execution returns an error."""
 
 
+class LuaStateUnavailable(ConnectionError):
+    """Exact state discovery proved that no command could be submitted."""
+
+
 class GameConnection:
     """Persistent FireTuner TCP connection to Civ 6."""
 
@@ -139,6 +143,10 @@ class GameConnection:
         """Execute once in a known Lua context, including MainMenu."""
         return await self._execute_and_collect(state_index, lua_code, timeout)
 
+    async def execute_in_named_state(self, name: str, lua_code: str, timeout: float = 5.0) -> list[str]:
+        """Resolve one exact native context under the command lock; never guess."""
+        return await self._execute_and_collect(name, lua_code, timeout)
+
     async def _execute_and_collect(self, state_index: int | str, lua_code: str, timeout: float) -> list[str]:
         """Serialize connection discovery and execution; retire uncertain streams.
 
@@ -149,8 +157,17 @@ class GameConnection:
             try:
                 await self.ensure_connected()
                 if isinstance(state_index, str):
-                    await self._ensure_game_states()
-                    index = self.gamecore_index if state_index == "GameCore_Tuner" else self.ingame_index
+                    if state_index in ("GameCore_Tuner", "InGame"):
+                        await self._ensure_game_states()
+                        index = self.gamecore_index if state_index == "GameCore_Tuner" else self.ingame_index
+                    else:
+                        indexes = [idx for idx, name in self.lua_states.items() if name == state_index]
+                        if not indexes:
+                            await self.reconnect()
+                            indexes = [idx for idx, name in self.lua_states.items() if name == state_index]
+                        if len(indexes) != 1:
+                            raise LuaStateUnavailable(f"Exact native context {state_index} unavailable or ambiguous; no command submitted")
+                        index = indexes[0]
                 else:
                     index = state_index
                 return await self._locked_execute(index, lua_code, timeout)

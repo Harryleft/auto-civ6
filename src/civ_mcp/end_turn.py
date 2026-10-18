@@ -6,6 +6,7 @@ import asyncio
 import logging
 import time
 from typing import Protocol
+from dataclasses import dataclass, field
 
 import civ_mcp.narrate as nr
 from civ_mcp import lua as lq
@@ -38,51 +39,111 @@ INFORMATION_PROBE_SECONDS = 5.0
 CONGRESS_PROBE_SECONDS = 5.0
 
 
-async def read_turn_state(gs: TurnContext) -> tuple[int | None, bool | None]:
-    """Read engine turn readiness without switching UI while AI is processing.
+@dataclass
+class TurnStatus:
+    observed_turn: int | None = None
+    local_turn_active: bool | None = None
+    local_turn_complete: bool | None = None
+    ui_processing: bool | None = None
+    has_sent_turn_complete: bool | None = None
+    can_end_turn: bool | None = None
+    can_unready_turn: bool | None = None
+    interface_mode: int | None = None
+    errors: list[str] = field(default_factory=list)
 
-    The installed PiratesScenario gameplay uses IsTurnActive; ActionPanel uses
-    IsTurnActiveComplete before enabling the next-turn controls. Missing APIs
-    stay unknown, so platform differences cannot silently authorize actions.
-    """
+    @property
+    def ready(self) -> bool | None:
+        facts = (self.local_turn_active, self.local_turn_complete)
+        if False in facts or self.ui_processing is True:
+            return False
+        if all(fact is True for fact in facts) and self.ui_processing is False:
+            return True
+        return None
+
+    @property
+    def phase(self) -> str:
+        if self.local_turn_active is False:
+            return "WAITING_FOR_PLAYERS"
+        if self.local_turn_active is True and self.local_turn_complete is False:
+            return "LOCAL_TURN_STARTING"
+        if self.local_turn_active is True and self.local_turn_complete is True:
+            if self.ui_processing is True:
+                return "UI_PROCESSING"
+            if self.ui_processing is False:
+                return "LOCAL_READY"
+        return "UNKNOWN"
+
+    @property
+    def signature(self) -> tuple:
+        return (self.observed_turn, self.local_turn_active, self.local_turn_complete,
+                self.ui_processing, self.has_sent_turn_complete, self.can_end_turn,
+                self.can_unready_turn, self.interface_mode)
+
+
+async def read_turn_status(gs: TurnContext) -> TurnStatus:
+    """Pure observations in native contexts; unavailable APIs stay unknown."""
+    status = TurnStatus()
     try:
         lines = await gs.conn.execute_read(f"""
-local me = Game.GetLocalPlayer()
-local p = Players[me]
-local turn = Game.GetCurrentGameTurn()
-local ok, ready = pcall(function()
-    return p ~= nil and p:IsTurnActive() and p:IsTurnActiveComplete()
-end)
-print("TURN_STATE|" .. tostring(turn) .. "|" .. (ok and (ready and "1" or "0") or "?"))
+local p = Players[Game.GetLocalPlayer()]
+local function fact(fn)
+    local ok, value = pcall(fn)
+    if ok and type(value) == "boolean" then return value and "1" or "0" end
+    return "?"
+end
+print("TURN_STATE|" .. tostring(Game.GetCurrentGameTurn()) .. "|" ..
+    fact(function() return p:IsTurnActive() end) .. "|" ..
+    fact(function() return p:IsTurnActiveComplete() end))
 print("{lq.SENTINEL}")
 """)
-        for line in lines:
-            fields = line.split("|")
-            if len(fields) == 3 and fields[0] == "TURN_STATE":
-                turn = int(fields[1])
-                ready = {"1": True, "0": False}.get(fields[2])
-                if turn < 0:
-                    return None, None
-                if ready is not True:
-                    return turn, ready
-                # ActionPanel also waits for queued UI/game messages to drain.
-                # Only enter InGame after the engine reports the local turn
-                # active and complete, never on each AI-processing poll.
-                ui_lines = await gs.conn.execute_write(f"""
-local ok, processing = pcall(UI.IsProcessingMessages)
-print("TURN_UI_READY|" .. tostring(Game.GetCurrentGameTurn()) .. "|" .. (ok and (not processing and "1" or "0") or "?"))
+        rows = [line.split("|") for line in lines if line.startswith("TURN_STATE|")]
+        if len(rows) != 1 or len(rows[0]) != 4:
+            raise ValueError("Malformed native turn state")
+        _, turn, active, complete = rows[0]
+        status.observed_turn = int(turn)
+        if status.observed_turn < 0:
+            raise ValueError("Invalid native turn")
+        status.local_turn_active = {"1": True, "0": False}.get(active)
+        status.local_turn_complete = {"1": True, "0": False}.get(complete)
+    except (OSError, TimeoutError, LuaError, ValueError, IndexError) as exc:
+        status.errors.append(f"GameCore: {exc}")
+        return status
+    try:
+        lines = await gs.conn.execute_write(f"""
+local function fact(fn)
+    local ok, value = pcall(fn)
+    if ok and type(value) == "boolean" then return value and "1" or "0" end
+    return "?"
+end
+local mode = "?"
+local ok, value = pcall(UI.GetInterfaceMode)
+if ok and type(value) == "number" then mode = tostring(value) end
+print("TURN_UI_READY|" .. tostring(Game.GetCurrentGameTurn()) .. "|" ..
+    fact(function() return not UI.IsProcessingMessages() end) .. "|" ..
+    fact(UI.HasSentTurnComplete) .. "|" .. fact(UI.CanEndTurn) .. "|" ..
+    fact(function() return Players[Game.GetLocalPlayer()]:CanUnreadyTurn() end) .. "|" .. mode)
 print("{lq.SENTINEL}")
 """)
-                for ui_line in ui_lines:
-                    ui_fields = ui_line.split("|")
-                    if len(ui_fields) == 3 and ui_fields[0] == "TURN_UI_READY":
-                        if int(ui_fields[1]) != turn:
-                            return turn, None
-                        return turn, {"1": True, "0": False}.get(ui_fields[2])
-                return turn, None
-    except (ConnectionError, TimeoutError, LuaError, ValueError, IndexError):
-        pass
-    return None, None
+        rows = [line.split("|") for line in lines if line.startswith("TURN_UI_READY|")]
+        if len(rows) != 1 or len(rows[0]) != 7:
+            raise ValueError("Malformed native UI turn state")
+        _, turn, ready, sent, can_end, can_unready, mode = rows[0]
+        if int(turn) != status.observed_turn:
+            raise ValueError("Native contexts observed different turns")
+        status.ui_processing = {"1": False, "0": True}.get(ready)
+        status.has_sent_turn_complete = {"1": True, "0": False}.get(sent)
+        status.can_end_turn = {"1": True, "0": False}.get(can_end)
+        status.can_unready_turn = {"1": True, "0": False}.get(can_unready)
+        status.interface_mode = None if mode == "?" else int(mode)
+    except (OSError, TimeoutError, LuaError, ValueError, IndexError) as exc:
+        status.errors.append(f"InGame: {exc}")
+    return status
+
+
+async def read_turn_state(gs: TurnContext) -> tuple[int | None, bool | None]:
+    """Compatibility view used by loading; detailed facts remain available above."""
+    status = await read_turn_status(gs)
+    return status.observed_turn, status.ready
 
 
 def _game_over_result(gameover: lq.GameOverStatus) -> str:
@@ -211,6 +272,62 @@ class TurnProgress:
         self.from_turn: int | None = None
         self.baseline: lq.TurnSnapshot | None = None
         self._scope_invalid = False
+        self.submitted_at: float | None = None
+        self.last_observed_at: float | None = None
+        self.phase_changed_at: float | None = None
+        self.last_status: TurnStatus | None = None
+        self.read_failures = 0
+
+    def observe(self, status: TurnStatus) -> None:
+        now = time.monotonic()
+        if status.observed_turn is not None:
+            if self.last_status is None or status.signature != self.last_status.signature:
+                self.phase_changed_at = now
+            self.last_observed_at = now
+        self.last_status = status
+        self.read_failures += len(status.errors)
+
+    def describe(self, status: TurnStatus) -> str:
+        now = time.monotonic()
+        def value(fact):
+            if fact is None:
+                return "unknown"
+            if isinstance(fact, bool):
+                return str(fact).lower()
+            return str(fact)
+        facts = [f"{name}={value(getattr(status, name))}" for name in (
+            "observed_turn", "local_turn_active", "local_turn_complete", "ui_processing",
+            "has_sent_turn_complete", "can_end_turn", "can_unready_turn", "interface_mode")]
+        elapsed = now - self.submitted_at if self.submitted_at is not None else None
+        facts += [f"pending={str(self.pending).lower()}", f"from_turn={value(self.from_turn)}",
+                  f"elapsed={elapsed:g}s" if elapsed is not None else "elapsed=unknown",
+                  f"phase_unchanged={now-self.phase_changed_at:g}s" if self.phase_changed_at is not None else "phase_unchanged=unknown",
+                  f"last_observed_age={now-self.last_observed_at:g}s" if self.last_observed_at is not None else "last_observed_age=unknown",
+                  f"read_failures={self.read_failures}"]
+        if status.errors:
+            facts.append("read_errors=" + "; ".join(status.errors))
+        return status.phase + " | " + " | ".join(facts)
+
+    async def get_status(self, gs: TurnContext) -> str:
+        status = await read_turn_status(gs)
+        self.observe(status)
+        interactions = []
+        for name, probe in (
+            ("diplomacy", lambda: _check_mid_turn_diplomacy(gs, "", self.from_turn)),
+            ("congress", lambda: _check_congress_phase(gs, pending=self.pending)),
+            ("information", lambda: visible_information_popups(gs.conn)),
+        ):
+            try:
+                value = await probe()
+                if name == "diplomacy":
+                    value = value[0]
+                if name == "information":
+                    value = "visibility unknown" if value is None else ", ".join(value)
+                interactions.append(name + ": " + (value or "none"))
+            except (OSError, TimeoutError, LuaError, ValueError) as exc:
+                self.read_failures += 1
+                interactions.append(name + ": read error: " + str(exc))
+        return self.describe(status) + "\n" + "\n".join(interactions)
 
     def invalidate_scope(self) -> None:
         """An observed world change cannot retire or confirm an older request."""
@@ -233,11 +350,11 @@ class TurnProgress:
             gameover = await gs.check_game_over()
             if gameover is not None:
                 return f"Turn {before} -> {after}\n" + _game_over_result(gameover)
-        except (ConnectionError, TimeoutError, LuaError):
+        except (OSError, TimeoutError, LuaError):
             log.debug("Post-turn game-over check failed", exc_info=True)
         try:
             return await gs.report_turn_advance(before, after, previous)
-        except (ConnectionError, TimeoutError, LuaError, ValueError):
+        except (OSError, TimeoutError, LuaError, ValueError):
             return f"Turn {before} -> {after}\nPost-turn report unavailable; read game state to confirm changes."
 
     async def execute(self, gs: TurnContext) -> str:
@@ -269,7 +386,7 @@ class TurnProgress:
                 # the request was sent. Store the baseline before writing it.
                 try:
                     self.baseline = await gs.capture_turn_snapshot()
-                except (ConnectionError, TimeoutError, LuaError, ValueError):
+                except (OSError, TimeoutError, LuaError, ValueError):
                     self.baseline = None
                 # Queries can race an external UI action. Never send from an old
                 # turn after taking its snapshot and inspecting its notifications.
@@ -281,19 +398,32 @@ class TurnProgress:
                     # Confirm its readiness below without sending another request.
                     self.pending = True
                     self.from_turn = turn_before
+                    self.submitted_at = time.monotonic()
                 elif current != turn_before:
                     return "Cannot end turn: game turn changed during inspection. Read game state before retrying."
                 elif ready is not True:
                     return "Cannot end turn: local player is not ready or readiness is unknown. Read game state before retrying."
-            except (ConnectionError, TimeoutError, LuaError, ValueError) as exc:
+            except (OSError, TimeoutError, LuaError, ValueError) as exc:
                 return f"Cannot confirm end-turn prerequisites: {exc}. Read game state before retrying."
 
             if not self.pending:
                 self.pending = True
                 self.from_turn = turn_before
+                self.submitted_at = time.monotonic()
                 try:
-                    await gs.conn.execute_write(lq.build_end_turn())
-                except (ConnectionError, TimeoutError, LuaError) as exc:
+                    receipt = await gs.conn.execute_write(lq.build_end_turn(turn_before))
+                    refused = [line for line in receipt if line.startswith("END_TURN|NOT_SUBMITTED|")]
+                    if len(refused) == 1 and "END_TURN|SUBMITTED" not in receipt:
+                        reason = refused[0].split("|", 2)[2]
+                        if reason != "ALREADY_SENT":
+                            self.reset()
+                            return f"Cannot end turn: NOT_SUBMITTED ({reason}); no end-turn request was sent. Read get_turn_status."
+                        # The native UI has already sent complete. Preserve a
+                        # monitor for that request rather than sending another.
+                    elif receipt != ["END_TURN|SUBMITTED"]:
+                        return (f"End-turn result unknown (from turn {turn_before}): no authoritative submission receipt. "
+                                "The pending request is preserved; call end_turn only to confirm it.")
+                except (OSError, TimeoutError, LuaError) as exc:
                     return (
                         f"End-turn result unknown (from turn {turn_before}): {exc}. "
                         "The request may have executed. Read game state or call end_turn "
@@ -329,14 +459,20 @@ class TurnProgress:
                                 return self._scope_error()
                             if not any(line == "GAME_ACTIVE" or line.startswith("GAME_OVER|") for line in status):
                                 reads_failed = True
+                                self.read_failures += 1
                             else:
                                 gameover = lq.parse_gameover_response(status)
                                 if gameover is not None:
                                     self.reset()
                                     return _game_over_result(gameover)
-                        except (ConnectionError, TimeoutError, LuaError, ValueError):
+                        except (OSError, TimeoutError, LuaError, ValueError):
                             reads_failed = True
-                    turn_after, ready = await read_turn_state(gs)
+                            self.read_failures += 1
+                    status = await read_turn_status(gs)
+                    self.observe(status)
+                    turn_after, ready = status.observed_turn, status.ready
+                    if status.errors:
+                        reads_failed = True
                     if self._scope_invalid:
                         return self._scope_error()
                     if turn_after is None:
@@ -358,8 +494,9 @@ class TurnProgress:
                         except ValueError:
                             return ("End-turn result unknown: World Congress phase unavailable. "
                                     "Use get_world_congress; the original request is preserved and was not resent.")
-                        except (ConnectionError, TimeoutError, LuaError):
+                        except (OSError, TimeoutError, LuaError):
                             reads_failed = True
+                            self.read_failures += 1
                     diplomacy_checked = False
                     if time.monotonic() >= next_diplomacy_probe:
                         diplomacy_checked = True
@@ -368,8 +505,9 @@ class TurnProgress:
                             message, _ = await _check_mid_turn_diplomacy(gs, "", turn_before)
                             if message:
                                 return message
-                        except (ConnectionError, TimeoutError, LuaError, ValueError):
+                        except (OSError, TimeoutError, LuaError, ValueError):
                             reads_failed = True
+                            self.read_failures += 1
                     if time.monotonic() >= next_information_probe:
                         next_information_probe = time.monotonic() + INFORMATION_PROBE_SECONDS
                         try:
@@ -389,19 +527,21 @@ class TurnProgress:
                                 )
                             if popups is None:
                                 reads_failed = True
-                        except (ConnectionError, TimeoutError, LuaError, ValueError):
+                                self.read_failures += 1
+                        except (OSError, TimeoutError, LuaError, ValueError):
                             reads_failed = True
+                            self.read_failures += 1
                     remaining = deadline - time.monotonic()
                     if remaining > 0:
                         await asyncio.sleep(min(POLL_INTERVAL_SECONDS, remaining))
         except TimeoutError:
-            reads_failed = True
+            pass  # Observation budget expiry is not an actual failed native read.
         if turn_after is not None and turn_after > turn_before and ready is True:
             return await self._report_advance(gs, turn_before, turn_after)
         detail = " Some game queries failed; the current turn cannot be reliably confirmed." if reads_failed else ""
         return (
-            f"HANG: end-turn result unknown after {END_TURN_TIMEOUT_SECONDS:g}s "
+            f"WAITING: end-turn result unconfirmed after {END_TURN_TIMEOUT_SECONDS:g}s "
             f"(requested from turn {turn_before}, last observed turn {turn_after})."
-            f"{detail} Read game state, inspect diplomacy/popups, or use explicit recovery. "
+            f"{detail} {self.describe(self.last_status or TurnStatus())}. Read get_turn_status, inspect diplomacy/popups, or use explicit recovery. "
             "The pending request is preserved; another end_turn call will only confirm it."
         )
