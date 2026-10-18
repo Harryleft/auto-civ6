@@ -345,6 +345,7 @@ class TestUnitActionDispatch:
         ("action", "method"),
         [
             ("cancel_move", "cancel_unit_move"),
+            ("pillage", "pillage_unit"),
             ("fortify", "fortify_unit"),
             ("skip", "skip_unit"),
             ("found_city", "found_city"),
@@ -387,6 +388,12 @@ class TestUnitActionDispatch:
         ctx=make_ctx();gs=app_of(ctx).game
         run(server.unit_action(ctx,3*65536+7,"cancel_move"))
         assert gs.last_args("cancel_unit_move")== (3*65536+7,)
+
+    def test_pillage_keeps_full_runtime_identity(self):
+        ctx = make_ctx()
+        gs = app_of(ctx).game
+        run(server.unit_action(ctx, 3 * 65536 + 7, "pillage"))
+        assert gs.last_args("pillage_unit") == (3 * 65536 + 7,)
 
 
 class TestUnitActionValidation:
