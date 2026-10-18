@@ -59,6 +59,9 @@ local nm = NotificationManager
 local list = nm.GetList(me)
 local total = 0
 local emitted = 0
+local function notificationText(value)
+    return tostring(Locale.Lookup(value or "") or ""):gsub("|", "/"):gsub("[\\r\\n]+", " ")
+end
 if list then
     total = #list
     for _, nID in ipairs(list) do
@@ -66,33 +69,15 @@ if list then
             local entry = nm.Find(me, nID)
             if entry and not entry:IsDismissed() then
                 local typeName = entry:GetTypeName() or "UNKNOWN"
-                local msg = (entry:GetMessage() or ""):gsub("|", "/")
-                if typeName:find("WONDER") then
-                    pcall(function()
-                        local wx, wy = entry:GetLocation()
-                        if wx and wx >= 0 then
-                            local wPlot = Map.GetPlot(wx, wy)
-                            if wPlot then
-                                local wOwner = wPlot:GetOwner()
-                                if wOwner and wOwner >= 0 and PlayerConfigurations[wOwner] then
-                                    local civShort = Locale.Lookup(PlayerConfigurations[wOwner]:GetCivilizationShortDescription())
-                                    if civShort then msg = msg .. " [" .. civShort .. "]" end
-                                end
-                                local dt = wPlot:GetDistrictType()
-                                if dt and dt >= 0 and GameInfo.Districts[dt] then
-                                    local dName = Locale.Lookup(GameInfo.Districts[dt].Name)
-                                    if dName then msg = msg .. " (" .. dName .. ")" end
-                                end
-                            end
-                        end
-                    end)
-                end
+                local msg = notificationText(entry:GetMessage())
+                local summary = ""
+                pcall(function() summary = notificationText(entry:GetSummary()) end)
                 local turn = entry:GetAddedTurn() or -1
                 local x, y = -1, -1
                 pcall(function() x, y = entry:GetLocation() end)
                 if x == nil then x = -1 end
                 if y == nil then y = -1 end
-                print("NOTIF|" .. typeName .. "|" .. msg .. "|" .. turn .. "|" .. x .. "," .. y)
+                print("NOTIF|" .. typeName .. "|" .. msg .. "|" .. turn .. "|" .. x .. "," .. y .. "|" .. summary)
                 emitted = emitted + 1
             end
         end)
@@ -125,6 +110,7 @@ def parse_notifications_response(lines: list[str]) -> list[GameNotification]:
                 y=int(y_str),
                 is_action_required=is_action,
                 resolution_hint=hint,
+                summary=parts[5] if len(parts) > 5 else "",
             )
         )
     return notifs
