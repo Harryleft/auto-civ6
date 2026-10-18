@@ -34,12 +34,13 @@ Players[0].GetCities=function() return {Members=function() return ipairs({city})
 Players[0].GetUnits=function() return {FindID=function(_,id) return units[id] end} end
 GameInfo.UnitCommands={UNITCOMMAND_PROJECT_PRODUCTION={Hash=55}}
 UnitManager.CanStartCommand=function(u,hash,visible,results) assert(hash==55 and visible==false and results==true);return allowed end
-handlers={removed={},completed={}}
+handlers={removed={},completed={},command={},charges={}}
 local function event(key) return {Add=function(h) table.insert(handlers[key],h);if event_on_arm then h(0,196608) end end,
  Remove=function(h) for i=#handlers[key],1,-1 do if handlers[key][i]==h then table.remove(handlers[key],i) end end end} end
-Events={UnitRemovedFromMap=event('removed'),CityProjectCompleted=event('completed')}
-function emit(key,a,b,c) local copy={};for _,h in ipairs(handlers[key]) do table.insert(copy,h) end;for _,h in ipairs(copy) do h(a,b,c) end end
+Events={UnitRemovedFromMap=event('removed'),CityProjectCompleted=event('completed'),UnitCommandStarted=event('command'),UnitChargesChanged=event('charges')}
+function emit(key,...) local args={...};local copy={};for _,h in ipairs(handlers[key]) do table.insert(copy,h) end;for _,h in ipairs(copy) do h(unpack(args)) end end
 function applyContribution()
+ emit('command',0,196608,55);emit('charges',0,196608,0,builder.charges)
  if remove_builder then units[196608]=nil;emit('removed',0,196608)
  else builder.charges=0 end
  if complete_project then progress=0;current=0;emit('completed',0,65539,4)
@@ -83,7 +84,7 @@ def test_removed_builder_confirms_only_with_bound_project_effect(completed):
     assert result.startswith('SACRIFICED|unit:196608|charges:6')
     assert ('completed:event' if completed else 'progress:100->220') in result
     assert conn.lua.eval('#submissions') == 1
-    assert conn.lua.eval('#handlers.removed + #handlers.completed') == 0
+    assert conn.lua.eval('#handlers.removed + #handlers.completed + #handlers.command + #handlers.charges') == 0
     assert state.pending_action_summary is None
 
 
@@ -180,7 +181,7 @@ def test_gone_builder_and_progress_without_matching_removal_remain_unknown(event
 def test_consumed_builder_and_empty_queue_require_exact_project_completion(event):
     conn = ContributionConn();state = GameState(conn);conn.lua.execute('deferred=true')
     assert 'OUTCOME_UNKNOWN' in run(state.sacrifice_builder_charges(196608))
-    conn.lua.execute("units[196608]=nil;emit('removed',0,196608);current=0;progress=0;"+event)
+    conn.lua.execute("emit('command',0,196608,55);emit('charges',0,196608,0,6);units[196608]=nil;emit('removed',0,196608);current=0;progress=0;"+event)
     assert 'OUTCOME_UNKNOWN' in run(state.sacrifice_builder_charges(196608))
     assert state.pending_action_summary
     conn.lua.execute("emit('completed',0,65539,4)")
@@ -195,7 +196,7 @@ def test_consumption_and_project_gain_are_independent_required_evidence():
     assert 'OUTCOME_UNKNOWN' in run(state.sacrifice_builder_charges(196608))
     conn.lua.execute('progress=100;builder.charges=0')
     assert 'OUTCOME_UNKNOWN' in run(state.sacrifice_builder_charges(196608))
-    conn.lua.execute('progress=220')
+    conn.lua.execute("emit('command',0,196608,55);emit('charges',0,196608,0,6);progress=220")
     assert 'progress:100->220' in run(state.sacrifice_builder_charges(196608))
     assert conn.lua.eval('#submissions') == 1
 
@@ -306,7 +307,7 @@ def test_changed_player_does_not_substitute_other_owners_identical_index():
 def test_reports_actual_partial_charge_change_without_assuming_six():
     conn = ContributionConn();state = GameState(conn);conn.lua.execute('deferred=true')
     assert 'OUTCOME_UNKNOWN' in run(state.sacrifice_builder_charges(196608))
-    conn.lua.execute('builder.charges=2;progress=180')
+    conn.lua.execute("emit('command',0,196608,55);emit('charges',0,196608,2,6);builder.charges=2;progress=180")
     assert 'charges:4|progress:100->180' in run(state.sacrifice_builder_charges(196608))
     assert conn.lua.eval('#submissions') == 1
 
@@ -354,4 +355,74 @@ UnitManager.RequestCommand=function(...)
  for key,value in pairs(builder) do if type(value)=="function" then builder[key]=function() error("dead userdata") end end end
 end''')
     assert run(state.sacrifice_builder_charges(196608)).startswith('SACRIFICED|unit:196608|charges:6')
+    assert conn.lua.eval('#submissions') == 1
+
+
+def test_mcp_write_without_unit_id_cannot_cross_unconfirmed_contribution():
+    from civ_mcp import server
+    from test_server import make_ctx, app_of
+    conn = ContributionConn();ctx = make_ctx();state = GameState(conn);app_of(ctx).game = state
+    conn.lua.execute('''deferred=true;tile_purchases=0
+city.GetGold=function() return {GetPlotPurchaseCost=function() return 50 end} end
+Players[0].GetTreasury=function() return {GetGoldBalance=function() return 100 end} end
+CityCommandTypes={PARAM_PLOT_PURCHASE=1,PARAM_X=2,PARAM_Y=3,PURCHASE=4}
+CityManager={GetCity=function() return city end,RequestCommand=function() tile_purchases=tile_purchases+1 end}''')
+    assert 'OUTCOME_UNKNOWN' in run(state.sacrifice_builder_charges(196608))
+    assert 'OUTCOME_UNKNOWN' in run(server.purchase_tile(ctx, 65539, 20, 17))
+    assert conn.lua.eval('tile_purchases') == 0
+    assert conn.lua.eval('#submissions') == 1
+
+
+def test_external_removal_and_unrelated_progress_cannot_be_spliced_into_contribution():
+    conn = ContributionConn();state = GameState(conn);conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in run(state.sacrifice_builder_charges(196608))
+    conn.lua.execute("units[196608]=nil;emit('removed',0,196608);progress=101")
+    assert 'OUTCOME_UNKNOWN' in run(state.sacrifice_builder_charges(196608))
+    assert state.pending_action_summary and conn.lua.eval('#submissions') == 1
+
+
+@pytest.mark.parametrize('events', [
+    "emit('charges',0,196608,0,6)",
+    "emit('command',0,0,55);emit('charges',0,196608,0,6)",
+    "emit('command',1,196608,55);emit('charges',0,196608,0,6)",
+    "emit('command',0,262144,55);emit('charges',0,196608,0,6)",
+    "emit('command',0,196608,56);emit('charges',0,196608,0,6)",
+    "emit('command',0,196608,55)",
+    "emit('command',0,196608,55);emit('charges',1,196608,0,6)",
+    "emit('command',0,196608,55);emit('charges',0,0,0,6)",
+    "emit('command',0,196608,55);emit('charges',0,262144,0,6)",
+    "emit('command',0,196608,55);emit('charges',0,196608,0,5)",
+    "emit('command',0,196608,55);emit('charges',0,196608,nil,6)",
+    "emit('command',0,196608,55);emit('charges',0,196608,6,6)",
+    "emit('command',0,196608,55);emit('charges',0,196608,-1,6)",
+    "emit('command',0,196608,55);emit('charges',0,196608,0,6);emit('command',0,196608,56)",
+    "seed=99;emit('command',0,196608,55);emit('charges',0,196608,0,6);seed=719665280",
+])
+def test_missing_or_mismatched_command_consumption_events_cannot_attribute_removal(events):
+    conn = ContributionConn();state = GameState(conn);conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in run(state.sacrifice_builder_charges(196608))
+    conn.lua.execute(events+";units[196608]=nil;emit('removed',0,196608);progress=101")
+    assert 'OUTCOME_UNKNOWN' in run(state.sacrifice_builder_charges(196608))
+    assert state.pending_action_summary and conn.lua.eval('#submissions') == 1
+
+
+@pytest.mark.parametrize('capability', [
+    'UnitCommandStarted', 'UnitChargesChanged',
+    'UnitCommandStarted.Add', 'UnitCommandStarted.Remove',
+    'UnitChargesChanged.Add', 'UnitChargesChanged.Remove',
+])
+def test_missing_command_or_charge_observer_refuses_before_submission(capability):
+    conn = ContributionConn();state = GameState(conn);conn.lua.execute('Events.'+capability+'=nil')
+    assert run(state.sacrifice_builder_charges(196608)).startswith('Error:')
+    assert state.pending_action_summary is None and conn.lua.eval('#submissions') == 0
+    assert conn.lua.eval('#handlers.removed+#handlers.completed+#handlers.command+#handlers.charges') == 0
+
+
+def test_exact_delayed_consumption_event_confirms_removed_builder_with_actual_delta():
+    conn = ContributionConn();state = GameState(conn);conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in run(state.sacrifice_builder_charges(196608))
+    conn.lua.execute("emit('command',0,196608,55);units[196608]=nil;emit('removed',0,196608);progress=101")
+    assert 'OUTCOME_UNKNOWN' in run(state.sacrifice_builder_charges(196608))
+    conn.lua.execute("emit('charges',0,196608,0,6)")
+    assert 'SACRIFICED|unit:196608|charges:6|progress:100->101' == run(state.sacrifice_builder_charges(196608))
     assert conn.lua.eval('#submissions') == 1
