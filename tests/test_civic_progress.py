@@ -40,6 +40,7 @@ end
 culture={
     GetProgressingCivic=function() return 0 end,
     HasCivic=function() return false end,
+    CanProgress=function() return true end,
     GetCultureCost=function() return 100 end,
     GetCulturalProgress=function(_,idx) return idx==0 and 65 or 25 end,
     GetCultureYield=function() return 10 end,
@@ -79,6 +80,63 @@ def test_current_and_candidate_share_native_progress_and_current_turns():
     assert (partial.progress_pct, partial.turns) == (25, 8)
     text = narrate_tech_civics(status)
     assert "Civic: Current civic (65%, 3 turns)" in text
+
+
+def test_native_locked_civic_with_no_static_prerequisites_is_not_available():
+    conn = CivicConn()
+    conn.lua.execute('culture.CanProgress=function(_,idx) return idx==0 end')
+    status = conn.query()
+    assert [c.civic_type for c in status.available_civics] == ["CIVIC_CURRENT"]
+
+
+def test_satisfied_static_prerequisites_do_not_override_native_denial():
+    conn = CivicConn()
+    conn.lua.execute('''
+culture.HasCivic=function(_,idx) return idx==0 end
+culture.CanProgress=function() return false end
+GameInfo.CivicPrereqs=function()
+    local delivered=false
+    return function()
+        if not delivered then
+            delivered=true
+            return {Civic="CIVIC_PARTIAL",PrereqCivic="CIVIC_CURRENT"}
+        end
+    end
+end
+''')
+    assert conn.query().available_civics == []
+
+
+def test_native_legal_civic_remains_available_despite_missing_static_prerequisite():
+    conn = CivicConn()
+    conn.lua.execute('''
+GameInfo.CivicPrereqs=function()
+    local delivered=false
+    return function()
+        if not delivered then
+            delivered=true
+            return {Civic="CIVIC_CURRENT",PrereqCivic="CIVIC_PARTIAL"}
+        end
+    end
+end
+''')
+    status = conn.query()
+    assert [c.civic_type for c in status.available_civics] == ["CIVIC_CURRENT", "CIVIC_PARTIAL"]
+    assert status.locked_civics is None
+
+
+@pytest.mark.parametrize("native_api", [
+    'nil',
+    'function() return nil end',
+    'function() return 1 end',
+    'function() return "true" end',
+    'function() error("native unavailable") end',
+])
+def test_unknown_native_civic_eligibility_fails_the_public_query(native_api):
+    conn = CivicConn()
+    conn.lua.execute(f'culture.CanProgress={native_api}')
+    with pytest.raises(ValueError, match="ELIGIBILITY_UNKNOWN.*CIVIC_CURRENT"):
+        conn.query()
 
 
 def test_unavailable_native_turns_estimate_only_the_remaining_cost():
