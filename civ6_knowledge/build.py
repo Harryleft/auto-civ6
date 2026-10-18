@@ -114,6 +114,77 @@ def related_records(card, tables, attach, references):
     card['rule']['related_records'] = [{'source_ref': ref, 'facts': tables[ref['table']][ref['row']]} for ref in card['source_refs'][1:]]
 
 
+def unit_ability_grants(traits, select):
+    """Return ability arguments reachable from these owners' trait modifiers."""
+    grants = {}
+    for trait in traits:
+        pending = deque((row['ModifierId'], []) for _, _, row in select('TraitModifiers', 'TraitType', trait))
+        visited = set()
+        while pending:
+            modifier, chain = pending.popleft()
+            if modifier in visited:
+                continue
+            visited.add(modifier)
+            chain = [*chain, modifier]
+            for table, index, row in select('ModifierArguments', 'ModifierId', modifier):
+                if row.get('Name') in ('AbilityType', 'UnitAbilityType') and row.get('Value'):
+                    grants.setdefault(row['Value'], []).append({'trait': trait, 'modifier_chain': chain,
+                                                               'source_ref': source_ref(table, index)})
+                elif row.get('Name') in ('ModifierId', 'ModifierID') and row.get('Value'):
+                    pending.append((row['Value'], chain))
+    return grants
+
+
+def unit_ability_records(unit_id, traits, select, attach, snapshot, unknown):
+    """A shared tag names potential abilities, not granted or active abilities.
+
+    Follow only TypeTags whose Type has a UnitAbilities definition. Never retain
+    other units merely because they share the unit's tag. Effect/requirement
+    traversal starts later from the selected UnitAbilityModifiers records.
+    """
+    abilities, grants = {}, None
+    for unit_table, unit_index, unit_tag in select('TypeTags', 'Type', unit_id):
+        unit_ref = attach(unit_table, unit_index)
+        tag = unit_tag.get('Tag')
+        if not tag:
+            continue
+        for tag_table, tag_index, ability_tag in select('TypeTags', 'Tag', tag):
+            ability_id = ability_tag.get('Type')
+            definitions = select('UnitAbilities', 'UnitAbilityType', ability_id)
+            if not definitions:
+                if isinstance(ability_id, str) and ability_id.startswith('ABILITY_'):
+                    attach(tag_table, tag_index)
+                    unknown('UnitAbilityType', ability_id)
+                continue
+            for table, index, definition in definitions:
+                inactive = str(definition.get('Inactive', '')).casefold() in ('1', 'true')
+                if inactive:
+                    if grants is None:
+                        grants = unit_ability_grants(traits, select)
+                    if ability_id not in grants:
+                        # Generic tags also label abilities granted by other
+                        # civilizations. They do not make those abilities ours.
+                        continue
+                tag_ref = attach(tag_table, tag_index)
+                ref = attach(table, index)
+                marker = (table, index)
+                if marker not in abilities:
+                    modifiers = []
+                    for modifier_table, modifier_index, modifier in select('UnitAbilityModifiers', 'UnitAbilityType', ability_id):
+                        modifier_ref = attach(modifier_table, modifier_index)
+                        modifiers.append({'id': modifier['ModifierId'], 'source_ref': modifier_ref})
+                    abilities[marker] = {'id': ability_id, 'source_ref': ref, 'facts': definition,
+                                         'names': names(snapshot, definition.get('Name'), ability_id),
+                                         'description': names(snapshot, definition.get('Description'), ''),
+                                         'activation': 'unverified_trait_grant_conditions' if inactive else 'unverified_tag_match_only',
+                                         'grant_references': grants.get(ability_id, []) if inactive else [],
+                                         'tag_links': [], 'modifiers': modifiers}
+                link = {'tag': tag, 'unit_source_ref': unit_ref, 'ability_source_ref': tag_ref}
+                if link not in abilities[marker]['tag_links']:
+                    abilities[marker]['tag_links'].append(link)
+    return list(abilities.values())
+
+
 def civilization_records(topics, cards, tables, snapshot, attach, relation):
     """Follow explicit ownership; a civilization never acquires every leader's traits."""
     if 'civilizations' not in topics:
@@ -157,6 +228,13 @@ def civilization_records(topics, cards, tables, snapshot, attach, relation):
         rule.update({'traits': [], 'leaders': [], 'civilizations': [], 'owners': [],
                      'unique_content': [], 'unresolved_references': [], 'source_scope': 'local_cached_rules_snapshot'})
         card['summary']['source_scope'] = 'local_cached_rules_snapshot'
+        def unknown(field, value):
+            missing = {'field': field, 'id': value, 'status': 'unknown_missing_definition'}
+            if missing not in rule['unresolved_references']:
+                rule['unresolved_references'].append(missing)
+
+        def select(table, key, value):
+            return [(table, index, row) for index, row in enumerate(tables.get(table, [])) if row.get(key) == value]
         rule['limitations'] += ['文明与领袖定义不证明本局参加、资料片拥有或启用；对手隐藏议程和意图未知。',
                                 '继承与能力定义不求值；脚本条件、实际收益和本局覆盖需查询游戏。']
         entity = card['summary']['entity_type']
@@ -211,6 +289,9 @@ def civilization_records(topics, cards, tables, snapshot, attach, relation):
                 content = {'id': row[id_key], 'entity_type': table, 'trait': row['TraitType'],
                            'names': names(snapshot, row.get('Name'), row[id_key]), 'source_ref': ref,
                            'prerequisites': {key: row[key] for key in ('PrereqTech', 'PrereqCivic') if row.get(key)}, 'replaces': []}
+                if table == 'Units':
+                    content['abilities'] = unit_ability_records(row[id_key], selected_traits, select, lambda t, i: attach(card, t, i), snapshot, unknown)
+                    content['ability_coverage'] = 'tag_matches_with_owned_inactive_grant_references_only; script_activation_unverified'
                 if table in replacements:
                     replace_table, unique_key, target_key = replacements[table]
                     for replace_index, replacement in enumerate(tables.get(replace_table, [])):
@@ -372,7 +453,13 @@ def installed_civilizations(topics, cards, snapshot):
                                 'names': names(snapshot, record.get('Name'), content_id), 'source_ref': source_ref(table_name, index),
                                 'prerequisites': {key: record[key] for key in ('PrereqTech', 'PrereqCivic') if record.get(key)}, 'replaces': []}
                         for related in ENTITY_RECORDS.get(table, ()):
-                            rows(related, id_key, content_id)
+                            rows(related, 'Type' if related == 'TypeTags' else id_key, content_id)
+                        if table == 'Units':
+                            def select(table, key, value):
+                                return [(t, i, r) for t, i, r in find(table, key, value)
+                                        if t != 'InstalledRuleRows' or installed[i]['operation'] in ('Row', 'Replace')]
+                            item['abilities'] = unit_ability_records(content_id, trait_ids, select, attach, snapshot, unknown)
+                            item['ability_coverage'] = 'tag_matches_with_owned_inactive_grant_references_only; script_activation_unverified'
                         for replacement, unique, target in [('UnitReplaces', 'CivUniqueUnitType', 'ReplacesUnitType'), ('BuildingReplaces', 'CivUniqueBuildingType', 'ReplacesBuildingType'), ('DistrictReplaces', 'CivUniqueDistrictType', 'ReplacesDistrictType')]:
                             if (table, replacement) not in (('Units', 'UnitReplaces'), ('Buildings', 'BuildingReplaces'), ('Districts', 'DistrictReplaces')):
                                 continue
@@ -668,7 +755,8 @@ def coverage(snapshot, root=None):
             optional.update(ENTITY_RECORDS.get(table, ()))
     if 'civilizations' in active:
         optional.update(('CivilizationTraits', 'LeaderTraits', 'CivilizationLeaders', 'TraitModifiers',
-                         'UnitReplaces', 'BuildingReplaces', 'DistrictReplaces'))
+                         'UnitReplaces', 'BuildingReplaces', 'DistrictReplaces',
+                         'TypeTags', 'UnitAbilities', 'UnitAbilityModifiers'))
     if active:
         optional.update(table for group in REFERENCE_TABLES.values() for table in group)
     installed = snapshot['tables'].get('InstalledRuleRows', [])
