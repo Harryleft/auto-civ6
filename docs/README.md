@@ -17,6 +17,8 @@ Agent 从根目录 [AGENTS.md](../AGENTS.md) 开始；命中任务后读取对�
 
 ## 规格与验收
 
+- [T233 终局修复合入 main](acceptance/2026-10-19-terminal-main-merge.md)：已验证集成树完整合入、存档与胜利证据哈希保全，未 push。
+
 - [T121 至本轮终局验收](acceptance/2026-10-19-turn-terminal.md)：净推进112回合至T233科技胜利，九项修复、菜单恢复及存档保全。
 - [贡献未决与信息弹窗](acceptance/2026-10-19-contribution-popup-progress.md)：原生事件暂停、显式关闭通路、157项相关测试和未知门禁保留。
 
