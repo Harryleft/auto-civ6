@@ -14,7 +14,7 @@
 
 ## 安装与启动
 
-需要 Civilization VI（Steam 版，Gathering Storm）、Python 3.12+、uv 和一个 MCP 客户端。
+运行服务需要 Python 3.12+、uv 和一个 MCP 客户端。仅查[离线规则知识](civ6_knowledge/README.md#mcp-查询)时不需要启动游戏，可跳过下面的游戏连接步骤；操作游戏另需 Civilization VI（Steam 版，Gathering Storm）。
 
 1. 在游戏设置或 `AppOptions.txt` 中启用 FireTuner，并关闭自动结束回合。更改后重启游戏。
 2. 手动加载存档，或通过生命周期工具从主菜单加载。macOS 的 Aspyr 启动器设置见 [启动说明](docs/research/bypassing_aspyr_launcher.md)。
@@ -45,6 +45,8 @@ args = ["run", "--directory", "/absolute/path/to/civ6-mcp", "civ-mcp"]
 ```
 
 其他 stdio MCP 客户端使用相同命令与参数。仓库 `.mcp.json` 提供对应 JSON 配置。
+
+知识查询与非源码安装的服务器目录配置见[知识入口](civ6_knowledge/README.md#mcp-查询)。
 
 连接后可要求模型：
 
