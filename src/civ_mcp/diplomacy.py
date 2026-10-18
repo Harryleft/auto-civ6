@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import re
 import uuid
 import time
 from dataclasses import dataclass
@@ -65,19 +66,32 @@ class DiplomacyProgress:
         except (OSError, TimeoutError, LuaError, ValueError, IndexError):
             return None, None
 
-    @staticmethod
-    def _incoming_world_allowed(gs, rows: list[str]) -> bool:
+    def _incoming_world_allowed(self, gs, rows: list[str]) -> bool:
         worlds = [row.split("|", 1)[1] for row in rows if row.startswith("INCOMING_WORLD|")]
         # Hand each witnessed world to the turn owner before another await.
-        allowed = [gs.allows_incoming_trade_world(world) for world in worlds]
-        return len(worlds) == 1 and all(allowed)
+        allowed = [gs.allows_incoming_trade_world(world) for world in worlds] if gs is not None else []
+
+        def identity(scope):
+            match = re.fullmatch(r"(-?\d+)\|(CIVILIZATION_[A-Z0-9_]+)\|(-?\d+)", scope or "")
+            if match is None or not 0 <= int(match[1]) <= 63:
+                return None
+            return int(match[1]), match[2], int(match[3])
+
+        expected = identity(self.incoming.scope if self.incoming is not None else self.observer_scope)
+        observed = [identity(world) for world in worlds]
+        # A complete foreign identity is permanent evidence against this attempt.
+        # Missing/unknown identity only prevents this read from confirming it.
+        if self.incoming is not None and expected is not None and any(world is not None and world != expected for world in observed):
+            self.scope_invalid = True
+        return (not self.scope_invalid and expected is not None and observed == [expected]
+                and all(allowed))
 
     async def incoming_quote(self, conn, sid: int, target: int, *, gs=None) -> dict | None:
-        if self.scope_invalid or not await self.ensure_observer(conn):
+        if self.scope_invalid or (self.incoming is None and not await self.ensure_observer(conn)):
             return None
         try:
             rows = await _named(conn, "DiplomacyDealView", native.build_incoming_quote(self.observer_scope, target, sid))
-            if gs is not None and not self._incoming_world_allowed(gs, rows):
+            if not self._incoming_world_allowed(gs, rows):
                 return None
             data = {}
             for name in ("SCOPE", "SESSION", "PHASE", "ORIGINAL", "CURRENT"):
@@ -136,10 +150,13 @@ class DiplomacyProgress:
         self.incoming = attempt
         try:
             armed = await _named(gs.conn, "DiplomacyActionView", native.build_incoming_arm(self.nonce, attempt.token, target, sid, attempt.action))
-            if armed == ["INCOMING|NOT_ARMED"]:
+            if not self._incoming_world_allowed(gs, armed):
+                return self.trade_summary()
+            arm_status = [row for row in armed if row.startswith("INCOMING|")]
+            if arm_status == ["INCOMING|NOT_ARMED"]:
                 self.incoming = None
                 return "ERR:NOT_SUBMITTED|Native session could not be armed."
-            if armed != ["INCOMING|ARMED"]:
+            if arm_status != ["INCOMING|ARMED"]:
                 return self.trade_summary()
             if not gs.allows_incoming_trade_world(attempt.scope):
                 return self.trade_summary()
@@ -148,7 +165,9 @@ class DiplomacyProgress:
                 return self.trade_summary()
             if any(row.startswith("INCOMING|NOT_SUBMITTED|") for row in rows) or "INCOMING|NOT_READY" in rows:
                 finished = await _named(gs.conn, "DiplomacyActionView", native.build_incoming_finish(self.nonce, attempt.token, zero=True))
-                if finished == ["INCOMING_FINISH|CONFIRMED"]:
+                if not self._incoming_world_allowed(gs, finished):
+                    return self.trade_summary()
+                if "INCOMING_FINISH|CONFIRMED" in finished:
                     self.incoming = None
                     return "ERR:NOT_SUBMITTED|Native guard rejected the unchanged quote/amount; no evaluation sent. " + " ".join(rows)
         except (OSError, TimeoutError, LuaError):
@@ -165,10 +184,20 @@ class DiplomacyProgress:
                     receipt = await _named(gs.conn, "DiplomacyDealView", native.build_incoming_receipt(attempt.scope, attempt.target, attempt.sid, attempt.token))
                     if not self._incoming_world_allowed(gs, receipt):
                         return self.trade_summary()
+                    if "INCOMING_RECEIPT|ZERO" in receipt:
+                        # The DealView retained proof that editing was rolled
+                        # back before SendWorkingDeal, even if its reply was lost.
+                        finished = await _named(gs.conn, "DiplomacyActionView", native.build_incoming_finish(self.nonce, attempt.token, zero=True))
+                        if not self._incoming_world_allowed(gs, finished) or "INCOMING_FINISH|CONFIRMED" not in finished:
+                            return self.trade_summary()
+                        self.incoming = None
+                        return "ERR:NOT_SUBMITTED|Native edit was rejected and the original draft restored; no evaluation sent."
                     proposals = [row.split("|", 1)[1] for row in receipt if row.startswith("INCOMING_PROPOSAL|")]
                     if "INCOMING_RECEIPT|SENT" not in receipt or len(proposals) != 1:
                         return self.trade_summary()
-                    rows = await _named(gs.conn, "DiplomacyActionView", native.build_trade_response(self.nonce, attempt.token))
+                    rows = await _named(gs.conn, "DiplomacyActionView", native.build_trade_response(self.nonce, attempt.token, incoming=True))
+                    if not self._incoming_world_allowed(gs, rows):
+                        return self.trade_summary()
                     headers = [row.split("|") for row in rows if row.startswith("TRADE_RESPONSE|KNOWN|")]
                     signatures = [row.split("|", 1)[1] for row in rows if row.startswith("TRADE_COUNTER|")]
                     if len(headers) != 1 or len(signatures) != 1:
@@ -193,7 +222,7 @@ class DiplomacyProgress:
                     else:
                         return self.trade_summary()
                     finished = await _named(gs.conn, "DiplomacyActionView", native.build_incoming_finish(self.nonce, attempt.token))
-                    if finished != ["INCOMING_FINISH|CONFIRMED"]:
+                    if not self._incoming_world_allowed(gs, finished) or "INCOMING_FINISH|CONFIRMED" not in finished:
                         return self.trade_summary()
                     self.incoming = None
                     parsed = lq.parse_test_trade_response(rows)
