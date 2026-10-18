@@ -13,6 +13,7 @@ from civ_mcp import lua as lq
 from civ_mcp.connection import GameConnection, LuaError
 from civ_mcp.game_lifecycle import visible_information_popups
 from civ_mcp.lua.congress import build_congress_phase_query, parse_congress_phase
+from civ_mcp.lua.turn_readiness import build_turn_readiness_query
 
 class TurnContext(Protocol):
     """The deliberate collaboration used by turn advancement, not all GameState."""
@@ -39,6 +40,36 @@ INFORMATION_PROBE_SECONDS = 5.0
 CONGRESS_PROBE_SECONDS = 5.0
 
 
+LOCAL_READINESS_FACTS = (
+    "auto_end_turn", "city_range_turn_blocking", "allow_tactical_commands", "core_busy",
+    "first_ready_unit_present", "city_range_notification", "native_blocker",
+    "units_have_moves", "city_range_attack", "queued_move_current",
+)
+LOCAL_ACTION_REASONS = {"BLOCKED", "QUEUED_MOVE_CURRENT", "UNITS_HAVE_MOVES", "CITY_RANGE_ATTACK"}
+
+
+@dataclass
+class LocalTurnReadiness:
+    reason: str
+    facts: dict[str, bool | None]
+    details: list[str]
+
+
+async def read_local_readiness(gs: TurnContext, expected_turn: int) -> LocalTurnReadiness:
+    rows = await gs.conn.execute_write(build_turn_readiness_query())
+    headers = [row.split("|") for row in rows if row.startswith("TURN_LOCAL|")]
+    if len(headers) != 1 or "TURN_LOCAL_DONE" not in rows:
+        raise ValueError("Native local-turn readiness unavailable")
+    _, turn, reason, *fields = headers[0]
+    if int(turn) != expected_turn or reason not in LOCAL_ACTION_REASONS | {"NONE", "READINESS_UNKNOWN"}:
+        raise ValueError("Native local-turn readiness does not match the observed turn")
+    values = dict(field.split("=", 1) for field in fields)
+    if set(values) != set(LOCAL_READINESS_FACTS) or len(fields) != len(values) or any(value not in {"0", "1", "?"} for value in values.values()):
+        raise ValueError("Malformed native local-turn readiness")
+    return LocalTurnReadiness(reason, {key: {"0": False, "1": True}.get(value) for key, value in values.items()},
+                              [row.split("|", 1)[1] for row in rows if row.startswith("TURN_LOCAL_DETAIL|")])
+
+
 @dataclass
 class TurnStatus:
     observed_turn: int | None = None
@@ -49,6 +80,7 @@ class TurnStatus:
     can_end_turn: bool | None = None
     can_unready_turn: bool | None = None
     interface_mode: int | None = None
+    local_readiness: LocalTurnReadiness | None = None
     errors: list[str] = field(default_factory=list)
 
     @property
@@ -70,6 +102,8 @@ class TurnStatus:
             if self.ui_processing is True:
                 return "UI_PROCESSING"
             if self.ui_processing is False:
+                if self.local_readiness is not None and self.local_readiness.reason in LOCAL_ACTION_REASONS:
+                    return "LOCAL_ACTION_REQUIRED"
                 return "LOCAL_READY"
         return "UNKNOWN"
 
@@ -77,7 +111,8 @@ class TurnStatus:
     def signature(self) -> tuple:
         return (self.observed_turn, self.local_turn_active, self.local_turn_complete,
                 self.ui_processing, self.has_sent_turn_complete, self.can_end_turn,
-                self.can_unready_turn, self.interface_mode)
+                self.can_unready_turn, self.interface_mode,
+                self.local_readiness.reason if self.local_readiness else None)
 
 
 async def read_turn_status(gs: TurnContext) -> TurnStatus:
@@ -141,6 +176,10 @@ print("{lq.SENTINEL}")
         status.interface_mode = None if mode == "?" else int(mode)
     except (OSError, TimeoutError, LuaError, ValueError, IndexError) as exc:
         status.errors.append(f"InGame: {exc}")
+    try:
+        status.local_readiness = await read_local_readiness(gs, status.observed_turn)
+    except (OSError, TimeoutError, LuaError, ValueError, IndexError) as exc:
+        status.errors.append(f"InGame local readiness: {exc}")
     return status
 
 
@@ -232,7 +271,7 @@ async def _check_congress_phase(gs: TurnContext, *, pending: bool) -> str | None
     return None
 
 
-async def _check_blockers(gs: TurnContext) -> str | None:
+async def _check_blockers(gs: TurnContext, turn: int) -> str | None:
     """Check actual game prerequisites; never make strategy choices for the player."""
     sessions = await gs.get_diplomacy_sessions()
     if sessions.status != "NONE":
@@ -252,7 +291,12 @@ async def _check_blockers(gs: TurnContext) -> str | None:
         return "Cannot confirm end-turn blockers: game query returned no valid status. Read game state before retrying."
     blockers = lq.parse_end_turn_blocking(lines)
     if not blockers:
-        return None
+        local = await read_local_readiness(gs, turn)
+        if local.reason == "NONE":
+            return None
+        return (f"Cannot end turn: NOT_SUBMITTED ({local.reason}); no end-turn request was sent. "
+                "Inspect the reported facts and make an explicit unit/city decision; no command was chosen automatically.\n"
+                + "\n".join(local.details))
     result = ["Cannot end turn — resolve these blockers:"]
     for blocking_type, message in blockers:
         display = blocking_type.removeprefix("ENDTURN_BLOCKING_").replace("_", " ").title()
@@ -308,9 +352,16 @@ class TurnProgress:
                   f"phase_unchanged={now-self.phase_changed_at:g}s" if self.phase_changed_at is not None else "phase_unchanged=unknown",
                   f"last_observed_age={now-self.last_observed_at:g}s" if self.last_observed_at is not None else "last_observed_age=unknown",
                   f"read_failures={self.read_failures}"]
+        if (self.pending and status.observed_turn == self.from_turn and status.ready is True
+                and status.has_sent_turn_complete is False and status.can_unready_turn is False):
+            facts.append("request_state=LOCAL_COMPLETION_UNCONFIRMED")
+        if status.local_readiness is not None:
+            facts += [f"{key}={value(status.local_readiness.facts[key])}" for key in LOCAL_READINESS_FACTS]
+            facts.append("local_actions=" + status.local_readiness.reason)
         if status.errors:
             facts.append("read_errors=" + "; ".join(status.errors))
-        return status.phase + " | " + " | ".join(facts)
+        details = status.local_readiness.details if status.local_readiness else []
+        return status.phase + " | " + " | ".join(facts) + "".join("\nlocal_action: " + detail for detail in details)
 
     async def get_status(self, gs: TurnContext) -> str:
         status = await read_turn_status(gs)
@@ -383,7 +434,7 @@ class TurnProgress:
                     return "Cannot end turn: current turn is unknown. Read game state before retrying."
                 if ready is not True:
                     return "Cannot end turn: local player is not ready or readiness is unknown. Read game state before retrying."
-                blocked = await _check_blockers(gs)
+                blocked = await _check_blockers(gs, turn_before)
                 if blocked:
                     return blocked
                 # A missing snapshot limits the report, but must not hide whether
@@ -421,7 +472,8 @@ class TurnProgress:
                         reason = refused[0].split("|", 2)[2]
                         if reason != "ALREADY_SENT":
                             self.reset()
-                            return f"Cannot end turn: NOT_SUBMITTED ({reason}); no end-turn request was sent. Read get_turn_status."
+                            details = [row.split("|", 1)[1] for row in receipt if row.startswith("END_TURN_DETAIL|")]
+                            return f"Cannot end turn: NOT_SUBMITTED ({reason}); no end-turn request was sent. Read get_turn_status." + "".join("\n" + detail for detail in details)
                         # The native UI has already sent complete. Preserve a
                         # monitor; its original submission time is unknown.
                         self.submitted_at = None
@@ -490,6 +542,11 @@ class TurnProgress:
                             f"to {turn_after}. Read game state or use explicit recovery; "
                             "the pending request was not resent."
                         )
+                    if (turn_after == turn_before and status.phase == "LOCAL_ACTION_REQUIRED"
+                            and status.has_sent_turn_complete is False):
+                        return ("Turn paused — local action required while native turn completion remains unconfirmed. "
+                                + self.describe(status)
+                                + "\nThe existing request is preserved and was not resent. Inspect get_turn_status; use explicit recovery if completion cannot be confirmed.")
                     if time.monotonic() >= next_congress_probe:
                         next_congress_probe = time.monotonic() + CONGRESS_PROBE_SECONDS
                         try:

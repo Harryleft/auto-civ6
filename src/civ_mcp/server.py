@@ -1432,6 +1432,9 @@ async def set_research(ctx: Context, tech_or_civic: str, category: str = "tech")
 async def get_turn_status(ctx: Context) -> str:
     """Read native turn/UI phases and cumulative wait without clearing pending.
 
+    LOCAL_ACTION_REQUIRED reports native unit/city facts and queued movement
+    that needs an explicit decision. Remaining moves do not require movement;
+    choose whether the old order still serves the current plan.
     WAITING_FOR_PLAYERS is local inactivity, not proof of a particular AI's
     computation. Time alone never proves deadlock. Resolve reported interaction
     through its explicit tools; end_turn only confirms an existing request.
