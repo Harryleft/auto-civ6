@@ -286,6 +286,12 @@ if deal and deal:GetItemCount()==0 then print("TRADE_DEAL|READY") else print("TR
 def build_trade_arm_action(nonce: str, token: str, action: str) -> str:
     return _trade(nonce, token) + f'''
 if not trade.sid or DiplomacyManager.FindOpenSessionID(me,target)~=trade.sid then print("TRADE|UNKNOWN|SESSION"); return end
+if type(DealProposalAction.{action})~="number" then print("TRADE|UNKNOWN|ACTION"); return end
+-- A lost arming reply must not overwrite the pre-accept evaluation on retry.
+if trade.action==DealProposalAction.{action} then
+ if DealProposalAction.{action}==DealProposalAction.ACCEPTED and (not trade.evaluation or trade.evaluation.action~=DealProposalAction.INSPECT or not trade.evaluation.response) then print("TRADE|UNKNOWN|EVALUATION"); return end
+ print("TRADE|ARMED"); return
+end
 if DealProposalAction.{action}==DealProposalAction.ACCEPTED then
  trade.evaluation={{action=trade.action,afterSeq=trade.afterSeq,response=trade.response}}
 end
