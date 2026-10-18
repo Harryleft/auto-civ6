@@ -1736,7 +1736,7 @@ def narrate_victory_warnings(vp: lq.VictoryProgress) -> str:
     if not vp.complete or not vp.enabled_known:
         return "Victory warnings unavailable: victory facts or enabled types unknown; use get_victory_progress."
     warnings: list[str] = []
-    unknown: set[str] = set()
+    unknown: set[str] = set() if vp.contacts_known else {"contact status"}
     for player in vp.players:
         if player.player_id == vp.local_player_id:
             continue
@@ -1744,7 +1744,7 @@ def narrate_victory_warnings(vp: lq.VictoryProgress) -> str:
             values = (player.spaceports, player.science_vp, player.completed_space_projects)
             if any(value is None for value in (*values, player.science_vp_needed)):
                 unknown.add("science")
-            if any(value is not None and value > 0 for value in values):
+            if player.spaceports_verified > 0 or any(value is not None and value > 0 for value in values):
                 near = (player.science_vp is not None and player.science_vp_needed is not None
                         and player.science_vp_needed > 0 and player.science_vp / player.science_vp_needed >= .75)
                 warnings.append(
@@ -1752,6 +1752,8 @@ def narrate_victory_warnings(vp: lq.VictoryProgress) -> str:
                     f"{_victory_number(player.science_vp)}/{_victory_number(player.science_vp_needed)} VP"
                     + (" | near requirement (>=75%)" if near else "")
                     + f" | completed milestones {_victory_number(player.completed_space_projects)}"
+                    + (f" | at least {_victory_number(player.spaceports_verified)} verified completed spaceport(s)"
+                       if player.spaceports is None and player.spaceports_verified > 0 else "")
                 )
         if "VICTORY_CULTURE" in vp.enabled_victories:
             visiting, required = player.culture_visiting, player.culture_required
@@ -1844,13 +1846,13 @@ def narrate_victory_progress(vp: lq.VictoryProgress) -> str:
             )
 
     if (not vp.enabled_known and not enabled) or "VICTORY_RELIGIOUS" in enabled:
-        lines.append(f"\nRELIGION (founded {vp.religions_founded}/{vp.religions_max})")
+        lines.append(f"\nRELIGION (founded {_victory_number(vp.religions_founded)}/{vp.religions_max})")
         for player in vp.players:
             majority = vp.religion_majority.get(player.name, "unknown")
             founded = vp.religion_founded_names.get(player.name)
             detail = (
                 f"  {player.name}: majority={majority} | "
-                f"religion cities {player.religion_cities} | founded religion={player.has_religion}"
+                f"religion cities {player.religion_cities} | founded religion={player.has_religion if player.has_religion is not None else 'unknown'}"
             )
             if founded:
                 detail += f" ({founded})"
