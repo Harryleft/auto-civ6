@@ -745,6 +745,7 @@ class GameState:
             keys, _ = await self._diplomacy_progress.choices(self.conn, session.session_id, session.other_player_id)
             session.choice_status = "KNOWN" if keys is not None else "UNKNOWN"
             session.choices = [lq.DiplomacyChoice(key=key, text=key) for key in keys or []]
+        await self._diplomacy_progress.describe_incoming(self.conn, context)
         return context
 
     async def diplomacy_respond(self, other_player_id: int, response: str) -> str:
@@ -899,6 +900,7 @@ class GameState:
             raise LuaError("Pending deal status is unknown")
         context = lq.parse_pending_deals_response(lines)
         context.outgoing_summary = await self._diplomacy_progress.outgoing_report(self.conn)
+        await self._diplomacy_progress.describe_incoming(self.conn, context)
         return context
 
     async def respond_to_deal(self, other_player_id: int, accept: bool) -> str:
@@ -908,6 +910,10 @@ class GameState:
         lua = lq.build_respond_to_deal(other_player_id, accept)
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
+
+    async def negotiate_incoming_trade(self, other_player_id: int, expected_fingerprint: str, *, our_gold: int | None = None, their_gold: int | None = None, our_gpt: int | None = None, their_gpt: int | None = None, mode: str = "inspect") -> str:
+        edits = {key: value for key, value in {"our_gold": our_gold, "their_gold": their_gold, "our_gpt": our_gpt, "their_gpt": their_gpt}.items() if value is not None}
+        return await self._diplomacy_progress.negotiate_incoming(self, other_player_id, expected_fingerprint, edits, mode)
 
     async def propose_trade(self, other_player_id: int, offer_items: list[dict], request_items: list[dict]) -> str:
         return await self._diplomacy_progress.run_trade(self, other_player_id, offer_items, request_items, preview=False)
@@ -1818,6 +1824,8 @@ class GameState:
         """End the turn with snapshot-diff event detection."""
         progress = getattr(self, "_diplomacy_progress", None)
         if progress is not None:
+            if progress.incoming is not None:
+                return progress.trade_summary()
             if self._diplomacy_cleanup.pending and not self.turn_pending:
                 return "ERR:OUTCOME_UNKNOWN|Native diplomacy cleanup is unconfirmed; dismiss_popup only confirms it."
             if progress.pending and not self.turn_pending:
@@ -1829,6 +1837,8 @@ class GameState:
         """Dismiss any blocking popup or UI overlay."""
         from civ_mcp.game_lifecycle import dismiss_popup
 
+        if self._diplomacy_progress.incoming is not None:
+            return self._diplomacy_progress.trade_summary()
         if self._diplomacy_progress.trade is not None:
             return await self._diplomacy_progress.explicit_cleanup(self)
         return await dismiss_popup(self.conn, self._diplomacy_cleanup)

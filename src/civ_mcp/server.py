@@ -96,13 +96,13 @@ async def _logged(
             elif (
                 app.game.diplomacy_pending
                 and not tool_name.startswith(("get_", "list_"))
-                and tool_name not in {"end_turn", "test_trade", "propose_trade", "respond_to_trade", "respond_to_diplomacy", "dismiss_popup", "restart_and_load"}
+                and tool_name not in {"end_turn", "test_trade", "propose_trade", "negotiate_incoming_trade", "respond_to_trade", "respond_to_diplomacy", "dismiss_popup", "restart_and_load"}
             ):
                 result = "ERR:OUTCOME_UNKNOWN|Native diplomacy attempt is pending; confirm the original trade/response or use explicit recovery before gameplay."
             elif (
                 app.game.turn_pending
                 and not tool_name.startswith(("get_", "list_"))
-                and tool_name not in {"end_turn", "respond_to_diplomacy", "respond_to_trade", "queue_wc_votes", "open_world_congress", "dismiss_popup", "restart_and_load"}
+                and tool_name not in {"end_turn", "respond_to_diplomacy", "respond_to_trade", "negotiate_incoming_trade", "queue_wc_votes", "open_world_congress", "dismiss_popup", "restart_and_load"}
             ):
                 result = (
                     "ERR:OUTCOME_UNKNOWN|The submitted end-turn is still pending. "
@@ -912,7 +912,8 @@ async def respond_to_trade(ctx: Context, other_player_id: int, accept: bool) -> 
         other_player_id: The player ID of the civilization (from get_pending_trades)
         accept: True to accept the deal, False to reject it
 
-    Use get_pending_trades first to see what's being offered.
+    Read get_pending_trades first. Edited/rejected/unknown native terms cannot be
+    finally accepted. Use negotiate_incoming_trade to test a current incoming offer.
     """
     gs = _get_game(ctx)
     return await _logged(
@@ -920,6 +921,40 @@ async def respond_to_trade(ctx: Context, other_player_id: int, accept: bool) -> 
         "respond_to_trade",
         {"other_player_id": other_player_id, "accept": accept},
         lambda: gs.respond_to_deal(other_player_id, accept),
+    )
+
+
+@mcp.tool()
+async def negotiate_incoming_trade(
+    ctx: Context,
+    other_player_id: int,
+    expected_fingerprint: str,
+    our_gold: int | None = None,
+    their_gold: int | None = None,
+    our_gpt: int | None = None,
+    their_gpt: int | None = None,
+    mode: str = "inspect",
+) -> str:
+    """Evaluate a current incoming offer without final acceptance or opening a session.
+
+    Read get_pending_trades for its fingerprint first. Explicit positive amounts
+    edit existing gold/GPT entries only; omitted entries, durations and all other
+    assets are preserved. Missing, ambiguous or locked entries submit nothing.
+    inspect reports native willingness/rejection; equalize asks for a native
+    counteroffer, which may change other terms. Neither mode concludes a deal.
+    Normal end-turn pending is allowed only for its verified incoming session.
+    Unknown outcomes remain pending; repeating only confirms the original attempt.
+    Read again before another offer. Final accept/reject uses respond_to_trade.
+    """
+    gs = _get_game(ctx)
+    params = {"other_player_id": other_player_id, "expected_fingerprint": expected_fingerprint,
+              "our_gold": our_gold, "their_gold": their_gold, "our_gpt": our_gpt,
+              "their_gpt": their_gpt, "mode": mode}
+    return await _logged(
+        ctx, "negotiate_incoming_trade", params,
+        lambda: gs.negotiate_incoming_trade(other_player_id, expected_fingerprint,
+                                            our_gold=our_gold, their_gold=their_gold,
+                                            our_gpt=our_gpt, their_gpt=their_gpt, mode=mode),
     )
 
 
