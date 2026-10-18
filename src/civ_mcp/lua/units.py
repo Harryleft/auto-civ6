@@ -329,8 +329,20 @@ local pathOK, pathStatus = pcall(function()
         if i == 1 and (plot:GetX() ~= fromX or plot:GetY() ~= fromY) then return "UNKNOWN" end
         if i == count and (plot:GetX() ~= {target_x} or plot:GetY() ~= {target_y}) then return "UNKNOWN" end
     end
+    -- WorldInput.lua starts its path-turn counter at 1. A native MOVE_TO
+    -- may accept a queue whose first step is next turn; it cannot provide
+    -- this request's displacement evidence, so defer before touching orders
+    -- or the prior segment witness. A later destination is still legal when
+    -- its first step is current-turn (normal partial movement).
+    if path.turns[1] ~= 1 then return "UNKNOWN" end
+    local firstStep = Map.GetPlotByIndex(path.plots[2])
+    if firstStep:GetX() == fromX and firstStep:GetY() == fromY then return "UNKNOWN" end
+    if path.turns[2] > 1 then return "DEFERRED" end
     return "VALID"
 end)
+if pathOK and pathStatus == "DEFERRED" then
+    {_bail("ERR:MOVE_DEFERRED|Native first movement step is after this turn; no move submitted; existing orders unchanged. Wait until the next turn or choose another reachable destination.")}
+end
 if pathOK and pathStatus == "NO_PATH" then
     {_bail("ERR:NO_PATH|Visible destination has no native movement path; no move submitted.")}
 end
