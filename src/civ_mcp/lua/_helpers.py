@@ -113,6 +113,21 @@ local function resVisible(resEntry)
     return t and pTech:HasTech(t.Index)
 end"""
 
+# Native local-player resource visibility: nil is unavailable, not hidden/absent.
+# Unlike resVisible above, this honors native reveal modifiers as well as techs.
+_LUA_KNOWN_RESOURCE = """\
+local function knownResourceIndex(playerId, plot)
+    local index = plot:GetResourceType()
+    if index < 0 then return -1 end
+    local ok, visible = pcall(function()
+        return Players[playerId]:GetResources():IsResourceVisible(index)
+    end)
+    if not ok or type(visible) ~= "boolean" then return nil end
+    if visible then return index end
+    return -1
+end
+"""
+
 # Victory-enabled check — prints VENABLED| lines for each enabled victory type.
 # Yield label table + formatters for trade route yield display.
 # fmtY: format array of {YieldIndex, Amount} objects (from GetOutgoingRoutes).

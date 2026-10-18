@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from civ_mcp.lua._helpers import (
     _ITEM_PARAM_MAP,
+    _LUA_KNOWN_RESOURCE,
     _ITEM_TABLE_MAP,
     SENTINEL,
     _bail,
@@ -14,7 +15,7 @@ from civ_mcp.lua.models import CityInfo, ProductionOption
 
 
 def build_cities_query() -> str:
-    return """
+    return _LUA_KNOWN_RESOURCE + """
 local me = Game.GetLocalPlayer()
 local hashName = {}
 for u in GameInfo.Units() do hashName[u.Hash] = u.UnitType end
@@ -100,15 +101,17 @@ for i, c in Players[me]:GetCities():Members() do
     end
     -- Scan owned tiles for unimproved resources and pillaged improvements
     local unimproved = {}
+    local resourceVisibilityKnown = true
     local pillImprov = {}
     local cx2, cy2 = c:GetX(), c:GetY()
     for dy = -3, 3 do for dx = -3, 3 do
         local px, py = cx2 + dx, cy2 + dy
         local plot = Map.GetPlot(px, py)
         if plot and plot:GetOwner() == me then
-            local res = plot:GetResourceType()
+            local res = knownResourceIndex(me, plot)
+            if res == nil then resourceVisibilityKnown = false end
             local imp = plot:GetImprovementType()
-            if res >= 0 and imp < 0 then
+            if res and res >= 0 and imp < 0 then
                 local resInfo = GameInfo.Resources[res]
                 if resInfo then
                     table.insert(unimproved, resInfo.ResourceType:gsub("RESOURCE_","") .. "@" .. px .. "," .. py)
@@ -152,6 +155,7 @@ for i, c in Players[me]:GetCities():Members() do
         end
     end
     print(c:GetID() .. "|" .. nm .. "|" .. c:GetX() .. "," .. c:GetY() .. "|" .. c:GetPopulation() .. "|" .. string.format("%.1f|%.1f|%.1f|%.1f|%.1f|%.1f", c:GetYield(0), c:GetYield(1), c:GetYield(2), c:GetYield(3), c:GetYield(4), c:GetYield(5)) .. "|" .. string.format("%.1f", g:GetHousing()) .. "|" .. amTotal .. "|" .. g:GetTurnsUntilGrowth() .. "|" .. producing .. "|" .. turnsLeft .. "|" .. defStr .. "|" .. garHP .. "/" .. garMax .. "|" .. wallHP .. "/" .. wallMax .. "|" .. table.concat(cityTargets, ";") .. "|" .. table.concat(pillDistricts, ";") .. "|" .. table.concat(distLocs, ";") .. "|" .. string.format("%.1f|%.1f|%.1f|%d", loy, loyMax, loyPT, loyFlip) .. "|" .. string.format("%.1f|%.1f|%d", g:GetFoodSurplus(), g:GetFood(), g:GetGrowthThreshold()) .. "|" .. table.concat(pillBuildings, ";") .. "|" .. garrisonUnit)
+    print("CITYRESOURCES|" .. c:GetID() .. "|" .. tostring(resourceVisibilityKnown))
     if #unimproved > 0 or #pillImprov > 0 then
         print("CITYTILES|" .. c:GetID() .. "|" .. table.concat(unimproved, ",") .. "|" .. table.concat(pillImprov, ","))
     end
@@ -864,6 +868,13 @@ def parse_cities_response(lines: list[str]) -> tuple[list[CityInfo], list[str]]:
             p = line.split("|")
             if len(p) >= 4:
                 distances.append(f"{p[1]} <-> {p[2]}: {p[3]} tiles")
+            continue
+        if line.startswith("CITYRESOURCES|"):
+            parts = line.split("|")
+            if len(parts) == 3 and parts[1].isdigit():
+                city = city_by_id.get(int(parts[1]))
+                if city and parts[2] in ("true", "false"):
+                    city.resource_visibility_known = parts[2] == "true"
             continue
         if line.startswith("CITYTILES|"):
             p = line.split("|")
