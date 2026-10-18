@@ -904,16 +904,21 @@ class GameState:
         offer_items: list[dict],
         request_items: list[dict],
     ) -> str:
-        if self._trade_result_pending_cleanup is not None:
-            return "No new trade submitted; confirming previous native cleanup.\n" + await self._finish_trade_cleanup(self._trade_result_pending_cleanup)
+        if self._trade_result_pending_cleanup is not None or self._diplomacy_cleanup.pending:
+            previous = self._trade_result_pending_cleanup or "No prior trade result was recorded for this UI cleanup."
+            return "No new trade submitted; confirming previous native cleanup.\n" + await self._finish_trade_cleanup(previous)
         lua = lq.build_propose_trade(other_player_id, offer_items, request_items)
         lines = await self.conn.execute_write(lua)
         result = _action_result(lines)
         return await self._finish_trade_cleanup(result)
 
     async def _finish_trade_cleanup(self, result: str) -> str:
+        # Close may execute before this await is cancelled. Preserve the known
+        # trade result first so every later entry only confirms its cleanup.
+        self._trade_result_pending_cleanup = result
         cleanup = await self._diplomacy_cleanup.close(self.conn)
-        self._trade_result_pending_cleanup = result if cleanup.status == "unknown" else None
+        if cleanup.status != "unknown":
+            self._trade_result_pending_cleanup = None
         return result + "\n" + cleanup.message
 
     async def test_trade(
@@ -922,8 +927,9 @@ class GameState:
         offer_items: list[dict],
         request_items: list[dict],
     ) -> str:
-        if self._trade_result_pending_cleanup is not None:
-            return "No new trade submitted; confirming previous native cleanup.\n" + await self._finish_trade_cleanup(self._trade_result_pending_cleanup)
+        if self._trade_result_pending_cleanup is not None or self._diplomacy_cleanup.pending:
+            previous = self._trade_result_pending_cleanup or "No prior trade result was recorded for this UI cleanup."
+            return "No new trade submitted; confirming previous native cleanup.\n" + await self._finish_trade_cleanup(previous)
         lua = lq.build_test_trade(other_player_id, offer_items, request_items)
         lines = await self.conn.execute_write(lua)
         result = lq.parse_test_trade_response(lines)
