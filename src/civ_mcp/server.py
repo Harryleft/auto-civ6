@@ -8,9 +8,11 @@ import sys
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Awaitable, Callable, Optional
+from typing import Annotated, Any, AsyncIterator, Awaitable, Callable, Optional
 
 from mcp.server.fastmcp import Context, FastMCP
+from pydantic import Field
+from civ_mcp import knowledge
 from civ_mcp import lua as lq
 from civ_mcp import narrate as nr
 from civ_mcp.connection import GameConnection, LuaError
@@ -39,7 +41,7 @@ async def lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
 
 mcp = FastMCP(
     "Civilization VI",
-    instructions="Read real game state before issuing actions. Call get_game_overview first. A lost response may mean an action already ran; verify before retrying. Normal save swaps use reload_game_save; restart_and_load is explicit full-process fault recovery.",
+    instructions="Read real game state before issuing actions. Call get_game_overview first. When rules, prerequisites, unlocks or mechanics are unclear, use search_knowledge to locate names/IDs, then get_knowledge(level='rule'); use evidence for source conflicts. Static knowledge does not verify current action eligibility: check the relevant game tools. Knowledge tools work without a game connection. A lost response may mean an action already ran; verify before retrying. Normal save swaps use reload_game_save; restart_and_load is explicit full-process fault recovery.",
     lifespan=lifespan,
 )
 
@@ -78,7 +80,10 @@ async def _logged(
     async with app.lock:
         start = time.monotonic()
         try:
-            if (
+            # Only these static readers bypass game-state access and pending gates.
+            if tool_name in {"search_knowledge", "get_knowledge"}:
+                result = await fn()
+            elif (
                 (app.game.replacement_pending or app.game.save_pending)
                 and not tool_name.startswith(("get_", "list_"))
                 and tool_name != "restart_and_load"
@@ -133,6 +138,43 @@ async def _logged(
 # ---------------------------------------------------------------------------
 # Query tools (read-only)
 # ---------------------------------------------------------------------------
+
+
+@mcp.tool(annotations={"readOnlyHint": True, "idempotentHint": True})
+async def search_knowledge(
+    ctx: Context,
+    query: Annotated[str, Field(min_length=1)],
+    topic: Optional[knowledge.KnowledgeTopic] = None,
+    limit: Annotated[int, Field(ge=1, le=20, strict=True)] = 5,
+) -> str:
+    """Search static Civ6 rules by a Chinese/English name or internal ID fragment.
+
+    Matches names/IDs case-insensitively, not semantic text. Optionally filter
+    one of nine topics; returns bounded summaries and total/truncated metadata.
+    Use get_knowledge(level='rule') for prerequisites, unlocks and mechanics;
+    evidence for source conflicts. Snapshot rules do not establish current-game
+    eligibility. Available offline and during pending operations.
+    """
+    return await _logged(ctx, "search_knowledge", {"query": query, "topic": topic, "limit": limit},
+                         lambda: knowledge.search(query, topic, limit))
+
+
+@mcp.tool(annotations={"readOnlyHint": True, "idempotentHint": True})
+async def get_knowledge(
+    ctx: Context,
+    entry_id: Annotated[str, Field(min_length=1)],
+    level: knowledge.KnowledgeLevel = 'summary',
+) -> str:
+    """Read a static knowledge entry ID from search_knowledge as UTF-8 JSON.
+
+    summary gives identity/overview; rule gives prerequisites, conditions and
+    relations; evidence gives source references and facts. Read only the depth
+    needed. Profile/snapshot identify static data; current session, active mods
+    and action applicability remain unverified. Check game tools for current
+    candidates, costs and progress. No game connection is required.
+    """
+    return await _logged(ctx, "get_knowledge", {"entry_id": entry_id, "level": level},
+                         lambda: knowledge.get(entry_id, level))
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
