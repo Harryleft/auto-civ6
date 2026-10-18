@@ -43,6 +43,8 @@ class NativeStatusConn:
         self.writes = 0
         self.lua.globals().print = lambda row: self.rows.append(str(row))
         self.lua.execute('''
+PlayerConfigurations={[0]={GetCivilizationTypeName=function() return 'CIVILIZATION_SUMERIA' end}}
+GameConfiguration={GetValue=function() return 1 end}
 active, complete, processing, sent, allowed, unready, mode = true, true, false, false, true, false, 1
 Game={GetLocalPlayer=function() return 0 end, GetCurrentGameTurn=function() return 78 end}
 Players={[0]={IsTurnActive=function() return active end, IsTurnActiveComplete=function() return complete end,
@@ -216,13 +218,14 @@ def test_higher_turn_with_unknown_native_processing_cannot_retire_pending(clock)
     class PollingStatusConn(NativeStatusConn):
         async def execute_read(self, code):
             if "Game.GetWinningTeam" in code:
-                return ["GAME_ACTIVE"]
+                return ["GAME_ACTIVE", "TURN_WORLD|CIVILIZATION_SUMERIA|1|0|78"]
             return await super().execute_read(code)
     conn = PollingStatusConn()
     conn.lua.execute('UI.IsProcessingMessages=function() return nil end')
     state = GameState(conn)
     state._pending_end_turn = True
     state._pending_end_turn_from = 77
+    state._turn_progress.world = ("CIVILIZATION_SUMERIA", 1, 0)
     result = asyncio.run(state.end_turn())
     assert state.turn_pending
     assert "Turn 77 -> 78" not in result
@@ -296,3 +299,105 @@ def test_queue_completion_then_new_local_action_preserves_original_turn_request(
     assert 'LOCAL_ACTION_REQUIRED' in second
     assert state.turn_pending and len(conn.requests)==1
     assert clock.now<10
+
+
+def test_native_world_change_inside_observation_latches_pending_scope(clock):
+    conn = GameStateConn()
+    state = GameState(conn)
+    conn.send_error = ConnectionError("reply lost")
+    assert "result unknown" in asyncio.run(state.end_turn())
+    native = NativeStatusConn()
+    native.lua.execute('''
+seed=1
+GameConfiguration.GetValue=function() return seed end
+Game.GetCurrentGameTurn=function() return 51 end
+Players[0].IsTurnActive=function() seed=2;return true end
+''')
+    original = conn.execute_read
+    async def changing_native_observation(code):
+        if "TURN_STATE|" in code:
+            return await native.execute_read(code)
+        return await original(code)
+    conn.execute_read = changing_native_observation
+    result = asyncio.run(state.get_turn_status())
+    assert "world_identity=mismatch" in result
+    assert state.turn_pending and len(conn.requests) == 1
+    conn.execute_read = original
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.end_turn())
+    assert state.turn_pending and len(conn.requests) == 1
+
+
+@pytest.mark.parametrize("observation", ["core", "ui"])
+@pytest.mark.parametrize("operation", ["end_turn", "get_turn_status"])
+@pytest.mark.parametrize("interruption", ["budget", "client_cancel"])
+@pytest.mark.parametrize("identity", ["foreign", "unknown"])
+def test_world_evidence_survives_later_read_cancellation(monkeypatch, observation, operation, interruption, identity):
+    from civ_mcp import end_turn as et
+
+    async def scenario():
+        conn = GameStateConn()
+        state = GameState(conn)
+        conn.send_error = ConnectionError("reply lost")
+        assert "result unknown" in await state.end_turn()
+        conn.send_error = None
+        original_read, original_write = conn.execute_read, conn.execute_write
+        baseline, submitted = state._turn_progress.baseline, state._turn_progress.submitted_at
+        blocked = asyncio.Event()
+        unknown_core_seen = False
+
+        def changed_world(rows):
+            return [row for row in rows if not row.startswith("TURN_WORLD|")] + [
+                "TURN_WORLD|CIVILIZATION_SUMERIA|2|0|51" if identity == "foreign" else "TURN_WORLD|UNKNOWN"
+            ]
+
+        async def read(code):
+            nonlocal unknown_core_seen
+            rows = await original_read(code)
+            if observation == "core" and "TURN_STATE|" in code:
+                rows = changed_world(rows)
+                unknown_core_seen = identity == "unknown"
+            return rows
+
+        async def write(code):
+            # These waits occur only after the preceding foreign/unknown
+            # native response has been returned to the production reader.
+            if ((observation == "core" and "TURN_UI_READY|" in code)
+                    or (observation == "ui" and "TURN_LOCAL|" in code)
+                    or (unknown_core_seen and ("DIPLOMACY_PROBE" in code or "WC_PHASE|" in code))):
+                blocked.set()
+                await asyncio.Event().wait()
+            rows = await original_write(code)
+            if observation == "ui" and "TURN_UI_READY|" in code:
+                rows = changed_world(rows)
+            return rows
+
+        conn.execute_read, conn.execute_write = read, write
+        if interruption == "client_cancel":
+            task = asyncio.create_task(getattr(state, operation)())
+            await asyncio.wait_for(blocked.wait(), 0.5)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        elif operation == "end_turn":
+            monkeypatch.setattr(et, "END_TURN_TIMEOUT_SECONDS", 0.01)
+            first = await state.end_turn()
+            assert ("OUTCOME_UNKNOWN" if identity == "foreign" else "WAITING:") in first
+        else:
+            with pytest.raises(TimeoutError):
+                async with asyncio.timeout(0.01):
+                    await state.get_turn_status()
+        assert state.turn_pending and state._turn_progress.baseline is baseline
+        assert state._turn_progress.submitted_at == submitted and len(conn.requests) == 1
+        conn.execute_read, conn.execute_write = original_read, original_write
+        result = await state.end_turn()
+        if identity == "foreign":
+            assert "OUTCOME_UNKNOWN" in result
+            assert "Turn 50 -> 51" not in result
+            assert state.turn_pending
+            assert "End-turn outcome is pending" in await state.save_game("preserved_after_cancel")
+        else:
+            assert "Turn 50 -> 51" in result
+            assert not state.turn_pending
+        assert len(conn.requests) == 1
+
+    asyncio.run(scenario())

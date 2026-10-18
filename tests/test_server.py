@@ -38,15 +38,19 @@ class FakeConn:
     def load_calls(self):
         return [(idx, code) for idx, code in self.state_calls if "Network.LoadGame" in code]
 
+    def world_rows(self, turn=12):
+        civ, seed = getattr(self, "identity", ("rome", 4242))
+        return [f"TURN_WORLD|CIVILIZATION_{civ.upper()}|{seed}|0|{turn}"]
+
     async def execute_read(self, query, timeout=None):
         self.read_queries.append(query)
         if "TURN_STATE|" in query:
-            return ["TURN_STATE|12|1|1"]
+            return ["TURN_STATE|12|1|1"] + self.world_rows()
         return []
 
     async def execute_write(self, query, timeout=None):
         if "TURN_UI_READY|" in query:
-            return ["TURN_UI_READY|12|1|0|1|0|1"]
+            return ["TURN_UI_READY|12|1|0|1|0|1"] + self.world_rows()
         return []
 
     async def execute_in_state(self, index, code, timeout=None):
@@ -1212,7 +1216,7 @@ class TestSaveTools:
         async def write(query, timeout=None):
             conn.state_queries.append(query)
             if "TURN_UI_READY|" in query:
-                return ["TURN_UI_READY|12|1|0|1|0|1"]
+                return ["TURN_UI_READY|12|1|0|1|0|1"] + conn.world_rows()
             if "GAMESEED|" in query:
                 return [f"GAMESEED|CIVILIZATION_{conn.identity[0].upper()}|{conn.identity[1]}"]
             if "local tr = p:GetTreasury()" in query:
@@ -1292,9 +1296,9 @@ class TestSaveTools:
                 turns.append(1)
                 if len(turns) > 1:
                     if changed_fact == "turn":
-                        return ["TURN_STATE|13|1|1"]
+                        return ["TURN_STATE|13|1|1"] + gs.conn.world_rows(13)
                     if changed_fact == "readiness":
-                        return ["TURN_STATE|12|0|0"]
+                        return ["TURN_STATE|12|0|0"] + gs.conn.world_rows()
             return await read(query, timeout)
 
         gs.conn.execute_write, gs.conn.execute_read = change_identity, change_turn
@@ -1370,11 +1374,11 @@ class TestSaveTools:
         original_write = gs.conn.execute_write
         async def turn_one_read(code, timeout=None):
             if "TURN_STATE|" in code:
-                return ["TURN_STATE|1|1|1"]
+                return ["TURN_STATE|1|1|1"] + gs.conn.world_rows(1)
             return await original_read(code, timeout)
         async def turn_one_write(code, timeout=None):
             if "TURN_UI_READY|" in code:
-                return ["TURN_UI_READY|1|1|0|1|0|1"]
+                return ["TURN_UI_READY|1|1|0|1|0|1"] + gs.conn.world_rows(1)
             return await original_write(code, timeout)
         gs.conn.execute_read = turn_one_read
         gs.conn.execute_write = turn_one_write
@@ -1885,3 +1889,19 @@ def test_pending_ordinary_turn_allows_explicit_congress_open_without_another_tur
     assert run(server.open_world_congress(ctx)) == "WC_VOTING_OPEN|stage:STAGE1|turn:67"
     assert gs.last_args("open_world_congress") == ()
     assert not gs.called("end_turn")
+
+
+@pytest.mark.parametrize("tool,args", [("unit_action", (7, "fortify")), ("save_game", ("preserved_world",))])
+def test_world_mismatch_keeps_mcp_gameplay_and_save_gates_closed(tool, args):
+    from test_end_turn import GameStateConn
+    from civ_mcp.game_state import GameState
+    conn = GameStateConn()
+    gs = GameState(conn)
+    ctx = make_ctx(game=gs)
+    conn.send_error = ConnectionError("reply lost")
+    assert "result unknown" in run(server.end_turn(ctx))
+    conn.send_error, conn.seed, conn.turn = None, 2, 100
+    assert "OUTCOME_UNKNOWN" in run(server.end_turn(ctx))
+    result = run(getattr(server, tool)(ctx, *args))
+    assert "OUTCOME_UNKNOWN" in result or "End-turn outcome is pending" in result
+    assert gs.turn_pending and len(conn.requests) == 1
