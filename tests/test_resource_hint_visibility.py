@@ -106,12 +106,91 @@ def test_hidden_resource_uses_ordinary_terrain_then_native_reveal_changes_both_q
     ]
     conn.lua.execute('visible=true')
     city, tasks = conn.advice()
-    assert "OIL@1" in city.unimproved_resources
+    assert city.unimproved_resources == ["OIL@1,0"]
     assert [(t.x, t.improvement, t.resource, t.priority) for t in tasks] == [
         (1, "IMPROVEMENT_OIL_WELL", "OIL", "urgent"),
         (2, "IMPROVEMENT_FARM", "", "normal"),
         (3, "REPAIR", "MINE", "urgent"),
     ]
+    assert conn.lua.globals().native_requests == 0
+
+
+@pytest.mark.parametrize("resource_rows,repair_rows", [
+    ("SILK@1,-2;SILK@-3,4;BANANAS@0,2", "MINE@-1,-2;FARM@3,0"),
+    ("SILK@1,-2,SILK@-3,4,BANANAS@0,2", "MINE@-1,-2,FARM@3,0"),
+    ("SILK@1,-2,99,SILK@-3,4,BANANAS@0,2,INCOMPLETE@1", "MINE@-1,-2,99,FARM@3,0"),
+])
+def test_city_hint_protocol_preserves_complete_coordinates_without_phantom_resources(
+    resource_rows, repair_rows,
+):
+    class HintConn:
+        async def execute_write(self, _source):
+            return [
+                "65536|Kish|0,0|3|2|2|2|2|2|2|5|1|3|nothing|0",
+                f"CITYTILES|65536|{resource_rows}|{repair_rows}",
+            ]
+
+    cities, _ = asyncio.run(GameState(HintConn()).get_cities())
+    assert cities[0].unimproved_resources == ["SILK@1,-2", "SILK@-3,4", "BANANAS@0,2"]
+    assert cities[0].pillaged_improvements == ["MINE@-1,-2", "FARM@3,0"]
+    text = narrate_cities(cities)
+    assert "Needs builder: SILK (1,-2), SILK (-3,4), BANANAS (0,2)" in text
+    assert "PILLAGED TILES: MINE (-1,-2), FARM (3,0)" in text
+
+
+def test_city_native_hints_exclude_centers_placed_districts_and_unknown_sites():
+    conn = ResourceConn()
+    conn.lua.execute('''
+visible=true
+local function copy(p) local q={}; for k,v in pairs(p) do q[k]=v end; return q end
+plots[0]=copy(plots[1]) -- center: resource remains, but cannot receive an improvement
+plots[2].GetResourceType=function() return 7 end -- ordinary, same resource twice
+plots[-1]=copy(plots[1])
+plots[-1].GetDistrictType=function() return 4 end -- placed, not necessarily complete
+plots[-2]=copy(plots[1])
+plots[-2].GetDistrictType=function() return nil end
+plots[-3]=copy(plots[1])
+plots[-3].GetDistrictType=function() error("native unavailable") end
+''')
+    cities, _ = asyncio.run(GameState(conn).get_cities())
+    assert cities[0].unimproved_resources == ["OIL@1,0", "OIL@2,0"]
+    assert cities[0].pillaged_improvements == ["MINE@3,0"]
+    assert "Needs builder: OIL (1,0), OIL (2,0)" in narrate_cities(cities)
+    assert conn.lua.globals().native_requests == 0
+
+
+def test_city_native_pillage_hints_keep_distinct_sites_and_exclude_reserved_tiles():
+    conn = ResourceConn()
+    conn.lua.execute('''
+local function copy(p) local q={}; for k,v in pairs(p) do q[k]=v end; return q end
+plots[-1]=copy(plots[3])
+plots[0]=copy(plots[3])
+plots[1]=copy(plots[3]); plots[1].GetDistrictType=function() return 4 end
+plots[2]=copy(plots[3]); plots[2].GetDistrictType=function() return nil end
+''')
+    cities, _ = asyncio.run(GameState(conn).get_cities())
+    assert cities[0].pillaged_improvements == ["MINE@-1,0", "MINE@3,0"]
+    assert "PILLAGED TILES: MINE (-1,0), MINE (3,0)" in narrate_cities(cities)
+    assert conn.lua.globals().native_requests == 0
+
+
+def test_city_resource_visibility_failure_keeps_safe_visible_and_repair_hints():
+    conn = ResourceConn()
+    conn.lua.execute('''
+resource_read.IsResourceVisible=function(_,idx)
+    if idx==7 then error("unavailable") end
+    return idx==8
+end
+GameInfo.Resources[8]={Index=8,ResourceType="RESOURCE_CATTLE",ResourceClassType="RESOURCECLASS_BONUS"}
+plots[2].GetResourceType=function() return 8 end
+''')
+    cities, _ = asyncio.run(GameState(conn).get_cities())
+    assert cities[0].resource_visibility_known is False
+    assert cities[0].unimproved_resources == ["CATTLE@2,0"]
+    assert cities[0].pillaged_improvements == ["MINE@3,0"]
+    text = narrate_cities(cities)
+    assert "native resource visibility unknown" in text
+    assert "CATTLE (2,0)" in text and "MINE (3,0)" in text and "OIL" not in text
     assert conn.lua.globals().native_requests == 0
 
 
