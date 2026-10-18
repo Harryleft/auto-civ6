@@ -847,10 +847,16 @@ def narrate_diplomacy(civs: list[lq.CivInfo]) -> str:
     return "\n".join(lines)
 
 
-def narrate_diplomacy_sessions(sessions: list[lq.DiplomacySession]) -> str:
-    if not sessions:
+def narrate_diplomacy_sessions(context: lq.DiplomacyContext) -> str:
+    if context.status == "UNKNOWN":
+        identities = ", ".join(s.other_civ_name for s in context.sessions)
+        return (f"Diplomacy context UNKNOWN: {context.reason}. "
+                f"Verified session participants: {identities or 'unavailable'}. "
+                "Read again before responding; current dialogue and incoming proposal are unverified.")
+    sessions = context.sessions
+    if context.status == "NONE":
         return "No pending diplomacy sessions."
-    lines = [f"{len(sessions)} pending diplomacy session(s):"]
+    lines = [f"Diplomacy context {context.status}: {len(sessions)} pending session(s):"]
     for s in sessions:
         lines.append(
             f"  {s.other_civ_name} ({s.other_leader_name}) — "
@@ -866,11 +872,11 @@ def narrate_diplomacy_sessions(sessions: list[lq.DiplomacySession]) -> str:
         if s.deal_summary:
             lines.append(f"  Deal: {s.deal_summary}")
             lines.append(
-                f"  This is a DEAL proposal — use respond_to_trade(other_player_id={s.other_player_id}, accept=True/False)"
+                f"  Current incoming deal or demand — use respond_to_trade(other_player_id={s.other_player_id}, accept=True/False)"
             )
         elif s.buttons == "GOODBYE":
             lines.append(
-                "  Phase: GOODBYE — respond with POSITIVE or NEGATIVE (auto-closes)"
+                f'  Phase: GOODBYE — use respond_to_diplomacy(other_player_id={s.other_player_id}, response="EXIT")'
             )
         else:
             lines.append("  Respond with: POSITIVE (friendly) or NEGATIVE (dismissive)")
@@ -959,10 +965,16 @@ def narrate_tech_civics(tc: lq.TechCivicStatus) -> str:
     return "\n".join(lines)
 
 
-def narrate_pending_deals(deals: list[lq.PendingDeal]) -> str:
-    if not deals:
-        return "No pending trade deals."
-    lines = [f"{len(deals)} pending trade deal(s):"]
+def narrate_pending_deals(context: lq.DiplomacyContext) -> str:
+    if context.status == "UNKNOWN":
+        return (f"Incoming proposal context UNKNOWN: {context.reason}. "
+                "Read get_pending_diplomacy again before responding.")
+    if context.status == "DIALOGUE":
+        return "Diplomacy context DIALOGUE: current encounter is dialogue; use get_pending_diplomacy."
+    if context.status == "NONE":
+        return "No pending trade deals (NONE: no open diplomacy session)."
+    deals = context.deals
+    lines = [f"Current INCOMING deal or demand: {len(deals)} proposal(s):"]
     for d in deals:
         lines.append(
             f"\n  From: {d.other_player_name} ({d.other_leader_name}) [player {d.other_player_id}]"
@@ -1598,6 +1610,14 @@ def narrate_trade_destinations(dests: list[lq.TradeDestination]) -> str:
 
 
 def narrate_world_congress(status: lq.WorldCongressStatus) -> str:
+    if status.local_request in ("CONTINUE_REQUESTED", "FINISHED"):
+        lines = [f"World Congress: local request {status.local_request} | native stage: {status.native_stage}"]
+        lines.append("Local request recorded, not a receipt of vote acceptance. Do not repeat votes, submission or continuation.")
+        lines.append("Use end_turn only to confirm the original ordinary turn request; this recorded window needs no new voting plan.")
+        if status.vote_allocation:
+            lines.append(f"Local plan allocation (not acceptance): {status.vote_allocation}")
+        lines.append(f"Favor: {status.favor}")
+        return "\n".join(lines)
     lines = []
     imminent = not status.is_in_session and status.turns_until_next <= 0
 
@@ -1608,28 +1628,22 @@ def narrate_world_congress(status: lq.WorldCongressStatus) -> str:
                 lines.append("Local operations requested, not a receipt of acceptance or meeting completion. Do not repeat votes.")
             elif status.native_stage in ("STAGE1", "STAGE2") and status.local_request == "NONE":
                 lines.append("No local tool request recorded; this is not proof votes are absent. Use queue_wc_votes only for new explicit choices; [] requires a verified no-choice stage.")
-            if status.proposal_status != "EMPTY":
-                lines.append(f"Native proposal choices: {status.proposal_status}; no default proposal votes are supplied.")
+            eligibility = {
+                "EMPTY": "EMPTY (no eligible proposals)",
+                "CHOICES": "CHOICES (eligible proposals require explicit votes)",
+            }.get(status.proposal_status, "UNKNOWN (eligibility not verified)")
+            lines.append(f"Native proposal eligibility: {eligibility}; no default proposal votes are supplied.")
         else:
             lines.append(
                 "World Congress: FIRES THIS TURN — use queue_wc_votes() before end_turn()!"
             )
-        # Build clear cost table: "N votes = X favor total"
-        costs = status.favor_costs
-        if costs and len(costs) > 1:
-            cost_entries = []
-            for i, c in enumerate(costs):
-                n = i + 1  # 1-indexed vote count
-                if n == 1:
-                    cost_entries.append("1 vote=free")
-                else:
-                    cost_entries.append(f"{n}={c}")
-                if c > status.favor:
-                    break  # stop showing costs we can't afford
-            costs_str = ", ".join(cost_entries)
-        else:
-            costs_str = "1 vote=free, 2=10, 3=30, 4=60, 5=100, 6=150, 7=210, 8=280, 9=360, 10=450, 11=550"
-        lines.append(f"Favor: {status.favor} | Vote costs (cumulative): {costs_str}")
+        costs_str = ", ".join(f"{i+1}={cost}" for i, cost in enumerate(status.favor_costs))
+        if status.vote_cost_status != "KNOWN": costs_str = "UNKNOWN"
+        lines.append(f"Favor: {status.favor} | Resolution vote costs (cumulative): {costs_str}")
+        if status.proposal_error:
+            lines.append(f"Proposal details UNKNOWN: {status.proposal_error}")
+        if status.vote_allocation:
+            lines.append(f"Local plan allocation (not acceptance): {status.vote_allocation}")
     else:
         if status.turns_until_next >= 0:
             lines.append(
@@ -1699,8 +1713,72 @@ def narrate_world_congress(status: lq.WorldCongressStatus) -> str:
     if status.proposals:
         lines.append("\nProposals:")
         for p in status.proposals:
-            lines.append(f"  {p.sender_name} -> {p.target_name}: {p.description}")
+            lines.append(f"  {p.name} [{p.category_name} ({p.category}), {p.type_name}, type={p.proposal_type}, emergency={p.emergency_type}]")
+            lines.append(f"  proposal_key: {p.proposal_key}; sender={p.sender_id if p.sender_id is not None else 'NONE'} ({p.sender_name}); target={p.target_id} ({p.target_name})")
+            lines.append(f"  {p.description}")
+            directions = ", ".join(label for allowed, label in ((p.can_upvote, '1=up'), (p.can_downvote, '2=down')) if allowed)
+            lines.append(f"  Eligible: {p.eligible}; Disabled: {p.disabled}; options: {directions or 'none'}; restriction: {p.voting_restriction or p.proposal_blocker_type or 'none'} {p.restriction_reason}")
+            lines.append("  Cumulative favor: " + ", ".join(f"{i+1}={cost}" for i, cost in enumerate(p.favor_costs)) + f"; max votes: {p.max_votes}")
+            if p.eligible:
+                option = 1 if p.can_upvote else 2
+                lines.append(f'  Explicit choice format (choose option/votes): {{"proposal_key": "{p.proposal_key}", "option": {option}, "votes": 1}}')
+        lines.append("Provide every eligible resolution/proposal once in one votes array. Reserve every first-vote cost, then allocate extra votes in input order within one favor budget; send resolutions before proposals.")
 
+    return "\n".join(lines)
+
+
+def _victory_number(value: float | int | None) -> str:
+    return "unknown" if value is None else f"{value:g}"
+
+
+def narrate_victory_warnings(vp: lq.VictoryProgress) -> str:
+    """Risk heuristics over shared observations; never a game outcome or action."""
+    if not vp.complete or not vp.enabled_known:
+        return "Victory warnings unavailable: victory facts or enabled types unknown; use get_victory_progress."
+    warnings: list[str] = []
+    unknown: set[str] = set() if vp.contacts_known else {"contact status"}
+    for player in vp.players:
+        if player.player_id == vp.local_player_id:
+            continue
+        if "VICTORY_TECHNOLOGY" in vp.enabled_victories:
+            values = (player.spaceports, player.science_vp, player.completed_space_projects)
+            if any(value is None for value in (*values, player.science_vp_needed)):
+                unknown.add("science")
+            if player.spaceports_verified > 0 or any(value is not None and value > 0 for value in values):
+                near = (player.science_vp is not None and player.science_vp_needed is not None
+                        and player.science_vp_needed > 0 and player.science_vp / player.science_vp_needed >= .75)
+                warnings.append(
+                    f"{player.name}: space race observed | {_victory_number(player.spaceports)} completed spaceport(s) | "
+                    f"{_victory_number(player.science_vp)}/{_victory_number(player.science_vp_needed)} VP"
+                    + (" | near requirement (>=75%)" if near else "")
+                    + f" | completed milestones {_victory_number(player.completed_space_projects)}"
+                    + (f" | at least {_victory_number(player.spaceports_verified)} verified completed spaceport(s)"
+                       if player.spaceports is None and player.spaceports_verified > 0 else "")
+                )
+        if "VICTORY_CULTURE" in vp.enabled_victories:
+            visiting, required = player.culture_visiting, player.culture_required
+            if visiting is None or required is None or required <= 0:
+                unknown.add("culture")
+            elif visiting / required >= .75:
+                warnings.append(f"{player.name}: visiting tourists {_victory_number(visiting)}/{_victory_number(required)} (>=75%)")
+        if "VICTORY_DIPLOMATIC" in vp.enabled_victories:
+            points, required = player.diplomatic_vp, vp.diplomatic_vp_needed
+            if points is None or required is None or required <= 0:
+                unknown.add("diplomatic")
+            elif points / required >= .5:
+                warnings.append(f"{player.name}: diplomatic {_victory_number(points)}/{_victory_number(required)} VP (>=50%)")
+        if "VICTORY_RELIGIOUS" in vp.enabled_victories:
+            count, required = player.religion_civilizations, player.religion_civilizations_required
+            if count is None or required is None or required <= 0:
+                unknown.add("religious")
+            elif count > 0 and count >= required - 1:
+                warnings.append(f"{player.name}: founded religion is majority in {_victory_number(count)}/{_victory_number(required)} civilizations")
+    if not warnings and not unknown:
+        return ""
+    lines = ["Victory risk (heuristic; not a terminal result):", *("  " + item for item in warnings)]
+    if unknown:
+        lines.append("  Unknown observations: " + ", ".join(sorted(unknown)) + ".")
+    lines.append("Inspect get_victory_progress and reassess the victory route; no exact remaining-turn estimate.")
     return "\n".join(lines)
 
 
@@ -1718,66 +1796,72 @@ def narrate_victory_progress(vp: lq.VictoryProgress) -> str:
     }
     enabled = vp.enabled_victories
     lines = ["=== VICTORY PROGRESS ==="]
-    if enabled:
+    if vp.enabled_known and not enabled:
+        lines.append("Enabled: none.")
+    elif enabled:
         lines.append("Enabled: " + ", ".join(names.get(key, key) for key in sorted(enabled)))
+        if not vp.enabled_known:
+            lines.append("Enabled victory set: incomplete/unknown.")
     else:
         lines.append("Enabled victory types: not reported.")
 
-    if not enabled or "VICTORY_TECHNOLOGY" in enabled:
+    if (not vp.enabled_known and not enabled) or "VICTORY_TECHNOLOGY" in enabled:
         lines.append("\nSCIENCE")
-        for player in sorted(vp.players, key=lambda p: p.science_vp, reverse=True):
+        for player in sorted(vp.players, key=lambda p: p.science_vp if p.science_vp is not None else -1, reverse=True):
             lines.append(
-                f"  {player.name}: {player.science_vp}/{player.science_vp_needed} VP | "
-                f"{player.techs_researched} techs | {player.spaceports} spaceports"
+                f"  {player.name}: {_victory_number(player.science_vp)}/{_victory_number(player.science_vp_needed)} VP | "
+                f"{player.techs_researched} techs | {_victory_number(player.spaceports)} spaceports"
+                + (f" | native progress/turn {_victory_number(player.science_rate)}" if player.science_rate is not None else "")
                 + (f" | space progress {player.space_progress}" if player.space_progress else "")
             )
         for project in vp.space_projects:
             detail = f"  {project.name}: {project.status}"
             if project.status == "building":
-                detail += f" | {project.progress_pct}% | {project.turns_remaining} turns | {project.city_name}"
+                detail += f" | {_victory_number(project.progress_pct)}% | {_victory_number(project.turns_remaining)} turns | {project.city_name}"
             if project.tech_prereq:
                 detail += f" | prerequisite {project.tech_prereq} (researched={project.has_tech})"
             if project.cost:
-                detail += f" | cost {project.cost}"
+                detail += f" | cost {_victory_number(project.cost)}"
             lines.append(detail)
 
-    if not enabled or "VICTORY_CONQUEST" in enabled:
+    if (not vp.enabled_known and not enabled) or "VICTORY_CONQUEST" in enabled:
         lines.append("\nDOMINATION (original capitals)")
         for player in vp.players:
             held = vp.capitals_held.get(player.name)
             status = "unknown" if held is None else "held" if held else "lost"
             lines.append(f"  {player.name}: original capital {status}")
 
-    if not enabled or "VICTORY_CULTURE" in enabled:
+    if (not vp.enabled_known and not enabled) or "VICTORY_CULTURE" in enabled:
         lines.append("\nCULTURE")
         for player in vp.players:
             lines.append(
-                f"  {player.name}: tourism {player.tourism} | domestic tourists {player.staycationers}"
+                f"  {player.name}: tourism {player.tourism} | domestic tourists {_victory_number(player.staycationers)}"
+                + f" | visiting tourists {_victory_number(player.culture_visiting)}/{_victory_number(player.culture_required)}"
             )
         for name, tourists in vp.our_tourists_from.items():
             domestic = vp.their_staycationers.get(name)
             lines.append(
-                f"  Our tourists from {name}: {tourists} | "
-                f"their domestic tourists: {domestic if domestic is not None else 'unknown'}"
+                f"  Our tourists from {name}: {_victory_number(tourists)} | "
+                f"their domestic tourists: {_victory_number(domestic)}"
             )
 
-    if not enabled or "VICTORY_RELIGIOUS" in enabled:
-        lines.append(f"\nRELIGION (founded {vp.religions_founded}/{vp.religions_max})")
+    if (not vp.enabled_known and not enabled) or "VICTORY_RELIGIOUS" in enabled:
+        lines.append(f"\nRELIGION (founded {_victory_number(vp.religions_founded)}/{vp.religions_max})")
         for player in vp.players:
             majority = vp.religion_majority.get(player.name, "unknown")
             founded = vp.religion_founded_names.get(player.name)
             detail = (
                 f"  {player.name}: majority={majority} | "
-                f"religion cities {player.religion_cities} | founded religion={player.has_religion}"
+                f"religion cities {player.religion_cities} | founded religion={player.has_religion if player.has_religion is not None else 'unknown'}"
             )
             if founded:
                 detail += f" ({founded})"
             lines.append(detail)
 
-    if not enabled or "VICTORY_DIPLOMATIC" in enabled:
+    if (not vp.enabled_known and not enabled) or "VICTORY_DIPLOMATIC" in enabled:
         lines.append("\nDIPLOMATIC")
-        for player in sorted(vp.players, key=lambda p: p.diplomatic_vp, reverse=True):
-            lines.append(f"  {player.name}: {player.diplomatic_vp}/20 VP")
+        for player in sorted(vp.players, key=lambda p: p.diplomatic_vp if p.diplomatic_vp is not None else -1, reverse=True):
+            lines.append(f"  {player.name}: {_victory_number(player.diplomatic_vp)}/{_victory_number(vp.diplomatic_vp_needed)} VP")
 
     lines.append("\nSCORE AND CIVILIZATION DATA")
     for player in sorted(vp.players, key=lambda p: p.score, reverse=True):
@@ -1794,6 +1878,9 @@ def narrate_victory_progress(vp: lq.VictoryProgress) -> str:
                 f"  {name}: rank {metric.rank} | ours {metric.value:g} | "
                 f"best {metric.best:g} | average {metric.average:g} | worst {metric.worst:g}"
             )
+    warnings = narrate_victory_warnings(vp)
+    if warnings:
+        lines.append("\n" + warnings)
     return "\n".join(lines)
 
 

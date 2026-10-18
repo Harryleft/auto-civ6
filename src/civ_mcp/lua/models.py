@@ -549,26 +549,33 @@ class VictoryPlayerProgress:
     player_id: int
     name: str  # "Unmet" if not met
     score: int
-    science_vp: int  # space race VP (0-50)
-    science_vp_needed: int
-    diplomatic_vp: int  # need 20 to win
+    science_vp: float | None  # native space-race progress, including fractions
+    science_vp_needed: float | None
+    diplomatic_vp: float | None  # requirement comes from active native rules
     tourism: int
     military_strength: int
     techs_researched: int
     civics_completed: int
     religion_cities: int  # cities following their religion
     # Culture dominance (only for our civ)
-    staycationers: int = 0  # domestic tourists
+    staycationers: float | None = 0  # domestic tourists
     # Religion details (only meaningful if they founded one)
-    has_religion: bool = False
+    has_religion: bool | None = False
     # Rival intel
     num_cities: int = 0
     science_yield: float = 0.0
     culture_yield: float = 0.0
     gold_yield: float = 0.0
     # Space race
-    spaceports: int = 0
+    spaceports: float | None = 0
     space_progress: str = ""  # e.g. "3/20"
+    science_rate: float | None = None
+    completed_space_projects: float | None = None
+    culture_visiting: float | None = None
+    culture_required: float | None = None
+    religion_civilizations: float | None = None
+    religion_civilizations_required: float | None = None
+    spaceports_verified: float = 0  # observed lower bound when total is unknown
 
 
 @dataclass
@@ -588,10 +595,10 @@ class VictoryProgress:
 
     players: list[VictoryPlayerProgress]
     # Culture victory details (our perspective)
-    our_tourists_from: dict[str, int] = field(
+    our_tourists_from: dict[str, float | None] = field(
         default_factory=dict
     )  # civ_name -> tourists
-    their_staycationers: dict[str, int] = field(
+    their_staycationers: dict[str, float | None] = field(
         default_factory=dict
     )  # civ_name -> domestic tourists
     # Domination: who holds their original capital?
@@ -606,14 +613,20 @@ class VictoryProgress:
     religion_founded_names: dict[str, str] = field(
         default_factory=dict
     )  # civ_name -> religion display name
-    religions_founded: int = 0
+    religions_founded: float | None = 0
     religions_max: int = 0
     # Demographics (anonymized aggregates for all civs, mirrors in-game panel)
     demographics: dict[str, DemographicEntry] = field(default_factory=dict)
     # Space race project detail (our player only)
     space_projects: list[SpaceProject] = field(default_factory=list)
-    # Which victory types are enabled (empty = all enabled / unknown)
+    # Empty is all disabled only when enabled_known is true.
     enabled_victories: set[str] = field(default_factory=set)
+    enabled_known: bool = False
+    turn: float | None = None
+    local_player_id: float | None = None
+    complete: bool = False  # protocol completeness; individual facts may remain unknown
+    diplomatic_vp_needed: float | None = None
+    contacts_known: bool = False
 
 
 @dataclass
@@ -622,13 +635,15 @@ class SpaceProject:
 
     project_type: str  # e.g. "PROJECT_LAUNCH_EARTH_SATELLITE"
     name: str  # localized name
-    status: str  # "completed" / "building" / "available" / "locked"
-    progress_pct: int = 0  # 0-100, only if building
-    turns_remaining: int = 0  # only if building
-    cost: int = 0  # speed-adjusted production cost
+    status: str  # completed / building / ready / unlocked / locked / unknown
+    progress_pct: float | None = 0  # only if building
+    turns_remaining: float | None = 0  # only if building
+    cost: float | None = 0  # speed-adjusted production cost
     tech_prereq: str = ""  # e.g. "TECH_ROCKETRY"
-    has_tech: bool = False
+    has_tech: bool | None = False
     city_name: str = ""  # city building it (if status=building)
+    can_produce: bool | None = None
+    completed_count: float | None = None
 
 
 @dataclass
@@ -653,6 +668,16 @@ class PendingDeal:
     other_leader_name: str
     items_from_them: list[DealItem] = field(default_factory=list)
     items_from_us: list[DealItem] = field(default_factory=list)
+
+
+@dataclass
+class DiplomacyContext:
+    """Current UI/session association; working data alone does not establish an offer."""
+
+    status: str = "UNKNOWN"  # NONE, DIALOGUE, INCOMING, UNKNOWN
+    reason: str = ""
+    sessions: list[DiplomacySession] = field(default_factory=list)
+    deals: list[PendingDeal] = field(default_factory=list)
 
 
 @dataclass
@@ -1078,12 +1103,27 @@ class CongressResolution:
 class CongressProposal:
     """A discussion proposal to vote on."""
 
-    sender_id: int
+    sender_id: int | None
     sender_name: str
     target_id: int
     target_name: str
-    proposal_type: int
+    proposal_type: int | None
     description: str
+    proposal_key: str = ""
+    category: str = ""
+    category_name: str = ""
+    proposal_blocker_type: str = ""
+    type_name: str = ""
+    name: str = ""
+    emergency_type: str = ""
+    disabled: bool = False
+    eligible: bool = False
+    can_upvote: bool = False
+    can_downvote: bool = False
+    voting_restriction: str = ""
+    restriction_reason: str = ""
+    max_votes: int = 0
+    favor_costs: list[int] = field(default_factory=list)
 
 
 @dataclass
@@ -1099,7 +1139,10 @@ class WorldCongressStatus:
     proposals: list[CongressProposal]
     native_stage: str = "UNKNOWN"
     local_request: str = "UNKNOWN"
-    proposal_status: str = "UNKNOWN"
+    proposal_status: str = "UNKNOWN"  # Eligible proposals: CHOICES, EMPTY, or UNKNOWN.
+    proposal_error: str = ""
+    vote_cost_status: str = "UNKNOWN"
+    vote_allocation: str = ""
 
 
 # --- Scattered dataclasses (originally defined mid-file near their builders) ---

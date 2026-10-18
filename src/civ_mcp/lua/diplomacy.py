@@ -10,6 +10,7 @@ from civ_mcp.lua.models import (
     DealOptions,
     DiplomacyModifier,
     DiplomacySession,
+    DiplomacyContext,
     PendingDeal,
     TestTradeItem,
     TestTradeResult,
@@ -151,100 +152,164 @@ print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
 
 
-def build_diplomacy_session_query() -> str:
-    """Check for open diplomacy sessions and return choices (InGame context).
-
-    Also reads the DiplomacyActionView UI controls to capture the leader's
-    actual dialogue text, reason/agenda subtext, and visible button labels.
-    Button info helps detect goodbye phase (only "Goodbye" button visible).
-    """
-    return f"""
+# Working deals outlive their statement. Native ActionView shows DealView for both
+# MAKE_DEAL and MAKE_DEMAND; no cross-context active-statement getter is available.
+# Associate UI only with one verified player pair, never with cached item count.
+_LUA_DIPLOMACY_CONTEXT = """
 local me = Game.GetLocalPlayer()
-local found = false
-local dialogueText = ""
-local reasonText = ""
-local ctrl1 = ContextPtr:LookUpControl("/InGame/DiplomacyActionView/LeaderResponseText")
-local ctrl2 = ContextPtr:LookUpControl("/InGame/DiplomacyActionView/LeaderReasonText")
-if ctrl1 then local ok, t = pcall(ctrl1.GetText, ctrl1); if ok and t and t ~= "" then dialogueText = t end end
-if ctrl2 then local ok, t = pcall(ctrl2.GetText, ctrl2); if ok and t and t ~= "" then reasonText = t end end
-local dealCtrl = ContextPtr:LookUpControl("/InGame/DiplomacyDealView/LeaderResponseText")
-if dealCtrl and not dealCtrl:IsHidden() then local ok, t = pcall(dealCtrl.GetText, dealCtrl); if ok and t and t ~= "" then dialogueText = t end end
-local btnTexts = {{}}
-for _, path in ipairs({{
-    "/InGame/DiplomacyActionView/SelectionStack/Selection1Button/SelectionText",
-    "/InGame/DiplomacyActionView/SelectionStack/Selection2Button/SelectionText",
-}}) do
-    local btn = ContextPtr:LookUpControl(path)
-    if btn then
-        local par = btn:GetParent()
-        if par and not par:IsHidden() then
-            local ok, t = pcall(btn.GetText, btn)
-            if ok and t and t ~= "" then btnTexts[#btnTexts + 1] = t end
-        end
-    end
-end
-local goodbyeBtn = ContextPtr:LookUpControl("/InGame/DiplomacyActionView/GoodbyeButton")
-if goodbyeBtn and not goodbyeBtn:IsHidden() then btnTexts[#btnTexts + 1] = "GOODBYE" end
-local buttonInfo = table.concat(btnTexts, ";")
-for i = 0, 62 do
-    if i ~= me and Players[i] and Players[i]:IsAlive() then
-        local sid = DiplomacyManager.FindOpenSessionID(me, i)
-        if sid and sid >= 0 then
-            local cfg = PlayerConfigurations[i]
-            local civName = Locale.Lookup(cfg:GetCivilizationShortDescription())
-            local leaderName = Locale.Lookup(cfg:GetLeaderName())
-            local atWar = Players[me]:GetDiplomacy():IsAtWarWith(i) and "1" or "0"
-            print("SESSION|" .. sid .. "|" .. i .. "|" .. civName .. "|" .. leaderName .. "|" .. dialogueText .. "|" .. reasonText .. "|" .. buttonInfo .. "|" .. atWar)
-            found = true
-            local okD, deal = pcall(function() return DealManager.GetWorkingDeal(DealDirection.INCOMING, me, i) end)
-            if okD and deal then
-                local okN, cnt = pcall(function() return deal:GetItemCount() end)
-                if okN and cnt and cnt > 0 then
-                    for item in deal:Items() do
-                        local fromTag = "THEM"
-                        local okF, fromID = pcall(function() return item:GetFromPlayerID() end)
-                        if okF and fromID == me then fromTag = "US" end
-                        local itype = item:GetType()
-                        local typeName = "UNKNOWN"
-                        local itemName = "Unknown"
-                        local ok3, vid = pcall(function() return item:GetValueTypeID() end); vid = (ok3 and vid) and tostring(vid) or ""
-                        local ok4, sid2 = pcall(function() return item:GetSubTypeID() end); sid2 = (ok4 and sid2) and tostring(sid2) or ""
-                        local amount = item:GetAmount() or 0
-                        local duration = item:GetDuration() or 0
-                        if itype == DealItemTypes.AGREEMENTS then
-                            typeName = "AGREEMENT"
-                            if vid == "OPEN_BORDERS" or sid2 == "DIPLOACTION_OPEN_BORDERS" then itemName = "Open Borders"
-                            elseif vid == "JOINT_WAR" or sid2 == "DIPLOACTION_JOINT_WAR" then itemName = "Joint War"
-                            elseif string.find(vid, "ALLIANCE") or sid2 == "DIPLOACTION_ALLIANCE" then
-                                local aMap = {{RESEARCH="Research", CULTURAL="Cultural", ECONOMIC="Economic", MILITARY="Military", RELIGIOUS="Religious"}}
-                                local aKey = string.match(vid, "ALLIANCE_(%w+)")
-                                itemName = ((aKey and aMap[aKey]) or aKey or "Unknown") .. " Alliance"
-                            else itemName = "" end
-                        elseif itype == DealItemTypes.GOLD then
-                            typeName = "GOLD"
-                            itemName = duration > 0 and "Gold per turn" or "Gold (lump)"
-                        elseif itype == DealItemTypes.RESOURCES then
-                            typeName = "RESOURCE"
-                            itemName = vid ~= "" and vid or "Resource"
-                        elseif itype == DealItemTypes.FAVOR then
-                            typeName = "FAVOR"; itemName = "Diplomatic Favor"
-                        elseif itype == DealItemTypes.CITIES then
-                            typeName = "CITY"; itemName = "City"
-                        elseif itype == DealItemTypes.GREATWORK then
-                            typeName = "GREAT_WORK"; itemName = "Great Work"
+local function readDiplomacyContext()
+    local c = {status="UNKNOWN", reason="SESSION_READ_FAILED", sessions={}}
+    local seen, candidates = {}, {}
+    local okScan = pcall(function()
+        for i = 0, 62 do
+            if i ~= me and Players[i] then
+                local sid = DiplomacyManager.FindOpenSessionID(me, i)
+                if sid ~= nil then
+                    if type(sid) ~= "number" then error("invalid session id") end
+                    if sid >= 0 then
+                        if not seen[sid] then
+                            seen[sid] = {sid=sid, players={}}
+                            candidates[#candidates + 1] = seen[sid]
                         end
-                        if itemName ~= "" and itemName ~= "Unknown" then
-                            print("DEAL_ITEM|" .. i .. "|" .. fromTag .. "|" .. typeName .. "|" .. itemName:gsub("|","/") .. "|" .. amount .. "|" .. duration)
-                        end
+                        seen[sid].players[i] = true
                     end
                 end
             end
         end
+    end)
+    if not okScan then return c end
+    if #candidates == 0 then c.status="NONE"; c.reason="NO_OPEN_SESSION"; return c end
+    local invalidPair = false
+    for _, candidate in ipairs(candidates) do
+        local ok, other, incoming = pcall(function()
+            local info = DiplomacyManager.GetSessionInfo(candidate.sid)
+            local from, to = info.FromPlayer, info.ToPlayer
+            if type(from) ~= "number" or type(to) ~= "number" then return nil end
+            local other = from == me and to or (to == me and from or nil)
+            if other == me or not candidate.players[other] then return nil end
+            return other, from == other and to == me
+        end)
+        if ok and other ~= nil then
+            c.sessions[#c.sessions + 1] = {sid=candidate.sid, other=other, incoming=incoming}
+        else invalidPair = true end
+    end
+    if #candidates ~= 1 then c.reason="MULTIPLE_SESSIONS"; return c end
+    if invalidPair then c.reason="SESSION_PARTICIPANTS_UNKNOWN"; return c end
+    local session = c.sessions[1]
+    c.other = session.other
+    local function visible(path)
+        local ok, hidden = pcall(function()
+            local control = ContextPtr:LookUpControl(path)
+            if not control then return nil end
+            return control:IsHidden()
+        end)
+        if not ok or type(hidden) ~= "boolean" then return nil end
+        return not hidden
+    end
+    local dealVisible = visible("/InGame/DiplomacyDealView")
+    local actionVisible = visible("/InGame/DiplomacyActionView")
+    local conversationVisible = visible("/InGame/DiplomacyActionView/ConversationContainer")
+    if dealVisible == nil or actionVisible == nil or conversationVisible == nil then
+        c.reason="VIEW_UNAVAILABLE"; return c
+    end
+    if dealVisible then
+        -- Both roots visible is normal. Only an effectively visible conversation
+        -- conflicts with the deal; a child's own flag under a hidden root does not.
+        if actionVisible and conversationVisible then c.reason="CONFLICTING_VIEWS"; return c end
+        if not session.incoming then c.reason="OUTGOING_SESSION"; return c end
+        local ok, deal = pcall(function()
+            local deal = DealManager.GetWorkingDeal(DealDirection.INCOMING, me, c.other)
+            if not deal or deal:IsValid() ~= true then return nil end
+            local count = deal:GetItemCount()
+            if type(count) ~= "number" or count <= 0 then return nil end
+            return deal
+        end)
+        if not ok or not deal then c.reason="INCOMING_UNAVAILABLE"; return c end
+        c.status="INCOMING"; c.reason="CURRENT_INCOMING_VIEW"; c.deal=deal
+    elseif actionVisible and conversationVisible then
+        c.status="DIALOGUE"; c.reason="CURRENT_DIALOGUE_VIEW"
+    else
+        c.reason="NO_CURRENT_VIEW"
+    end
+    return c
+end
+local context = readDiplomacyContext()
+"""
+
+
+def build_diplomacy_session_query() -> str:
+    """Read current diplomacy context, without treating working caches as offers."""
+    return _LUA_DIPLOMACY_CONTEXT + r"""
+local function text(path)
+    local ok, value = pcall(function()
+        local control = ContextPtr:LookUpControl(path)
+        if not control or control:IsHidden() then return "" end
+        return control:GetText()
+    end)
+    return ok and type(value) == "string" and value:gsub("[|\r\n]", " ") or ""
+end
+local dialogue, reason, buttons = "", "", {}
+if context.status == "DIALOGUE" then
+    dialogue = text("/InGame/DiplomacyActionView/LeaderResponseText")
+    reason = text("/InGame/DiplomacyActionView/LeaderReasonText")
+    for _, path in ipairs({
+        "/InGame/DiplomacyActionView/SelectionStack/Selection1Button/SelectionText",
+        "/InGame/DiplomacyActionView/SelectionStack/Selection2Button/SelectionText",
+    }) do
+        local ok, visible = pcall(function()
+            local control = ContextPtr:LookUpControl(path)
+            return control and not control:GetParent():IsHidden()
+        end)
+        if ok and visible then local value=text(path); if value ~= "" then buttons[#buttons+1]=value end end
+    end
+    local ok, goodbye = pcall(function()
+        local control = ContextPtr:LookUpControl("/InGame/DiplomacyActionView/GoodbyeButton")
+        return control and not control:IsHidden()
+    end)
+    if ok and goodbye then buttons[#buttons+1]="GOODBYE" end
+elseif context.status == "INCOMING" then
+    dialogue = text("/InGame/DiplomacyDealView/LeaderResponseText")
+end
+print("CONTEXT|" .. context.status .. "|" .. context.reason)
+for _, session in ipairs(context.sessions) do
+    local cfg = PlayerConfigurations[session.other]
+    local civName = Locale.Lookup(cfg:GetCivilizationShortDescription()):gsub("[|\r\n]", " ")
+    local leaderName = Locale.Lookup(cfg:GetLeaderName()):gsub("[|\r\n]", " ")
+    local atWar = Players[me]:GetDiplomacy():IsAtWarWith(session.other) and "1" or "0"
+    print("SESSION|" .. session.sid .. "|" .. session.other .. "|" .. civName .. "|" .. leaderName .. "|" .. dialogue .. "|" .. reason .. "|" .. table.concat(buttons, ";") .. "|" .. atWar)
+    if context.status == "INCOMING" then
+        print("DEAL|" .. session.other .. "|" .. civName .. "|" .. leaderName)
+        for item in context.deal:Items() do
+            local fromTag = item:GetFromPlayerID() == me and "US" or "THEM"
+            local itemType, subType = item:GetType(), item:GetSubType()
+            local amount, duration = item:GetAmount() or 0, item:GetDuration() or 0
+            local valueType = item:GetValueType() or -1
+            local typeName, itemName = "UNKNOWN", "Unrecognized item"
+            if itemType == DealItemTypes.GOLD then
+                typeName="GOLD"; itemName=duration > 0 and "Gold per turn" or "Gold (lump sum)"
+            elseif itemType == DealItemTypes.RESOURCES then
+                typeName="RESOURCE"
+                local resource = GameInfo.Resources[valueType]
+                itemName=resource and Locale.Lookup(resource.Name) or ("Resource#" .. tostring(valueType))
+            elseif itemType == DealItemTypes.AGREEMENTS then
+                typeName="AGREEMENT"; itemName="Agreement"
+                if subType == DealAgreementTypes.OPEN_BORDERS then itemName="Open Borders"
+                elseif subType == DealAgreementTypes.JOINT_WAR then itemName="Joint War"
+                elseif subType == DealAgreementTypes.ALLIANCE then
+                    local names={"Research","Cultural","Economic","Military","Religious"}
+                    itemName=(names[valueType+1] or "Unknown") .. " Alliance"
+                end
+            elseif itemType == DealItemTypes.FAVOR then typeName="FAVOR"; itemName="Diplomatic Favor"
+            elseif itemType == DealItemTypes.CITIES then typeName="CITY"; itemName="City"
+            elseif itemType == DealItemTypes.GREATWORK then typeName="GREAT_WORK"; itemName="Great Work"
+            end
+            print("ITEM|" .. session.other .. "|" .. fromTag .. "|" .. typeName .. "|" .. itemName:gsub("[|\r\n]", " ") .. "|" .. amount .. "|" .. duration)
+        end
     end
 end
-if not found then print("NONE") end
+print("CONTEXT_COMPLETE")
 print("{SENTINEL}")
-"""
+""".replace("{SENTINEL}", SENTINEL)
 
 
 def build_diplomacy_choices_query(other_player_id: int) -> str:
@@ -316,7 +381,7 @@ print("{SENTINEL}")
 
 
 def build_send_diplo_action(other_player_id: int, action_name: str) -> str:
-    """Send a proactive diplomatic action and detect acceptance/rejection.
+    """Send a native action; friendship needs a later relationship witness.
 
     action_name is e.g. DIPLOMATIC_DELEGATION, DECLARE_FRIENDSHIP, DENOUNCE,
     RESIDENT_EMBASSY, DECLARE_SURPRISE_WAR, DECLARE_FORMAL_WAR, etc.
@@ -430,8 +495,8 @@ end
 -- NOTE: All post-state queries (HasDelegationAt, HasEmbassyAt, IsDiplomaticActionValid,
 -- GetGoldBalance, GetVisibilityOn) are STALE same-frame after CloseSession. The C++ engine
 -- commits state changes on the next frame. So we cannot reliably detect acceptance by
--- comparing pre/post state. Instead: IsDiplomaticActionValid passed the pre-check (line above),
--- meaning the action was valid. If the session completed, the game accepted it.
+-- comparing pre/post state. Friendship reports only a submitted request here;
+-- GameState confirms its native bilateral relationship in later read-only calls.
 local name = Locale.Lookup(PlayerConfigurations[target]:GetCivilizationShortDescription())
 if action:find("_WAR") then
     local atWar = pDiplo:IsAtWarWith(target)
@@ -449,12 +514,84 @@ elseif action == "DIPLOMATIC_DELEGATION" then
 elseif action == "RESIDENT_EMBASSY" then
     print("OK:ACCEPTED|" .. name .. " accepted your embassy")
 elseif action == "DECLARE_FRIENDSHIP" then
-    print("OK:ACCEPTED|" .. name .. " accepted your friendship declaration")
+    print("OK:PROPOSED|" .. name)
+    print("FRIENDSHIP_SCOPE|" .. me .. "|" .. target)
 elseif action == "DENOUNCE" then
     print("OK:SENT|Denounced " .. name)
 else
     print("OK:SENT|" .. action .. " sent to " .. name)
 end
+print("{SENTINEL}")
+"""
+
+
+def _native_relationship_lua() -> str:
+    """Official index -> StateType/hash interpretation; no guessed state ordinals."""
+    return """
+local function integer(value)
+    return type(value) == "number" and value == value and math.abs(value) < math.huge and value == math.floor(value)
+end
+local function nativeRelationship(player, other)
+    local ok, row = pcall(function()
+        local index = Players[player]:GetDiplomaticAI():GetDiplomaticStateIndex(other)
+        if not integer(index) then return nil end
+        local row = GameInfo.DiplomaticStates[index]
+        if not row or type(row.StateType) ~= "string" or not integer(row.Hash) then return nil end
+        return row
+    end)
+    return ok and row or nil
+end
+local function matchesRelationship(row, stateType, stateHash)
+    if not row or not integer(stateHash) then return nil end
+    if row.StateType == stateType and row.Hash == stateHash then return true end
+    if row.StateType == stateType or row.Hash == stateHash then return nil end
+    return false
+end
+"""
+
+
+def build_check_friendship_state(other_player_id: int, owner_id: int) -> str:
+    """Read reciprocal native indices through official StateType/hash mappings."""
+    return _native_relationship_lua() + f"""
+local me = Game.GetLocalPlayer()
+local target = {other_player_id}
+local status = "UNKNOWN"
+local ok, result = pcall(function()
+    if me ~= {owner_id} or me == target or not Players[me] or not Players[target] then return "UNKNOWN" end
+    local ours = matchesRelationship(nativeRelationship(me, target), "DIPLO_STATE_DECLARED_FRIEND", DiplomaticStates.DECLARED_FRIEND)
+    local theirs = matchesRelationship(nativeRelationship(target, me), "DIPLO_STATE_DECLARED_FRIEND", DiplomaticStates.DECLARED_FRIEND)
+    if ours == nil or theirs == nil then return "UNKNOWN" end
+    return ours and theirs and "DECLARED_FRIEND" or "NOT_DECLARED_FRIEND"
+end)
+if ok then status = result end
+print("FRIENDSHIP|" .. me .. "|" .. target .. "|" .. status)
+print("{SENTINEL}")
+"""
+
+
+def build_check_alliance_state(other_player_id: int, owner_id: int, alliance_type: str) -> str:
+    """Require bilateral ALLIED and the exact native requested alliance type."""
+    import json
+
+    alliance_key = json.dumps(f"ALLIANCE_{alliance_type.upper()}", ensure_ascii=False)
+    return _native_relationship_lua() + f"""
+local me = Game.GetLocalPlayer()
+local target = {other_player_id}
+local status = "UNKNOWN"
+local ok, result = pcall(function()
+    if me ~= {owner_id} or me == target or not Players[me] or not Players[target] then return "UNKNOWN" end
+    local ours = matchesRelationship(nativeRelationship(me, target), "DIPLO_STATE_ALLIED", DiplomaticStates.ALLIED)
+    local theirs = matchesRelationship(nativeRelationship(target, me), "DIPLO_STATE_ALLIED", DiplomaticStates.ALLIED)
+    if ours == nil or theirs == nil then return "UNKNOWN" end
+    if not ours or not theirs then return "NOT_ALLIED" end
+    local allianceIndex = Players[me]:GetDiplomacy():GetAllianceType(target)
+    if not integer(allianceIndex) or allianceIndex < 0 then return "UNKNOWN" end
+    local row = GameInfo.Alliances[allianceIndex]
+    if not row or type(row.AllianceType) ~= "string" then return "UNKNOWN" end
+    return row.AllianceType == {alliance_key} and {alliance_key} or "TYPE_MISMATCH"
+end)
+if ok then status = result end
+print("ALLIANCE|" .. me .. "|" .. target .. "|" .. status)
 print("{SENTINEL}")
 """
 
@@ -631,81 +768,20 @@ def parse_deal_options_response(lines: list[str]) -> DealOptions:
 
 
 def build_pending_deals_query() -> str:
-    """Scan all met players for incoming trade deal offers (InGame context)."""
-    return """
-local me = Game.GetLocalPlayer()
-local pDiplo = Players[me]:GetDiplomacy()
-for i = 0, 62 do
-    if i ~= me and Players[i] and Players[i]:IsAlive() and Players[i]:IsMajor() and pDiplo:HasMet(i) then
-        local sid = DiplomacyManager.FindOpenSessionID(me, i)
-        if sid and sid >= 0 then
-        local ok, deal = pcall(function() return DealManager.GetWorkingDeal(DealDirection.INCOMING, me, i) end)
-        if ok and deal then
-            local count = deal:GetItemCount()
-            if count and count > 0 then
-                local cfg = PlayerConfigurations[i]
-                local civName = Locale.Lookup(cfg:GetCivilizationShortDescription())
-                local leaderName = Locale.Lookup(cfg:GetLeaderName())
-                print("DEAL|" .. i .. "|" .. civName:gsub("|","/") .. "|" .. leaderName:gsub("|","/"))
-                for item in deal:Items() do
-                    local fromID = item:GetFromPlayerID()
-                    local iType = item:GetType()
-                    local subType = item:GetSubType()
-                    local amount = item:GetAmount() or 0
-                    local duration = item:GetDuration() or 0
-                    local valueType = item:GetValueType() or -1
-                    local typeName = "UNKNOWN"
-                    local itemName = "Unknown"
-                    if iType == DealItemTypes.GOLD then
-                        typeName = "GOLD"
-                        if duration > 0 then itemName = "Gold per turn" else itemName = "Gold (lump sum)" end
-                    elseif iType == DealItemTypes.RESOURCES then
-                        typeName = "RESOURCE"
-                        local res = GameInfo.Resources[valueType]
-                        if res then itemName = Locale.Lookup(res.Name) else itemName = "Resource#" .. tostring(valueType) end
-                    elseif iType == DealItemTypes.AGREEMENTS then
-                        typeName = "AGREEMENT"
-                        if subType == DealAgreementTypes.OPEN_BORDERS then itemName = "Open Borders"
-                        elseif subType == DealAgreementTypes.JOINT_WAR then itemName = "Joint War"
-                        elseif subType == DealAgreementTypes.ALLIANCE then
-                            local aNames = {"Research","Cultural","Economic","Military","Religious"}
-                            itemName = (valueType >= 0 and valueType < 5 and aNames[valueType+1] or "Unknown") .. " Alliance"
-                        else itemName = "" end
-                    elseif iType == DealItemTypes.FAVOR then
-                        typeName = "FAVOR"
-                        itemName = "Diplomatic Favor"
-                    elseif iType == DealItemTypes.CITIES then
-                        typeName = "CITY"
-                        itemName = "City"
-                    elseif iType == DealItemTypes.GREATWORK then
-                        typeName = "GREAT_WORK"
-                        itemName = "Great Work"
-                    end
-                    if itemName ~= "" and itemName ~= "Unknown" then
-                        local fromTag = "THEM"
-                        if fromID == me then fromTag = "US" end
-                        print("ITEM|" .. i .. "|" .. fromTag .. "|" .. typeName .. "|" .. itemName:gsub("|","/") .. "|" .. amount .. "|" .. duration)
-                    end
-                end
-            end
-        end
-        end
-    end
-end
-print("DEALS_COMPLETE")
-print("{SENTINEL}")
-""".replace("{SENTINEL}", SENTINEL)
+    """Use the same current-context facts as the diplomacy encounter query."""
+    return build_diplomacy_session_query()
 
 
 def build_respond_to_deal(other_player_id: int, accept: bool) -> str:
-    """Accept or reject a pending trade deal (InGame context)."""
+    """Submit only against a verified current incoming deal/demand for this target."""
     action = "DealProposalAction.ACCEPTED" if accept else "DealProposalAction.REJECTED"
     verb = "ACCEPTED" if accept else "REJECTED"
-    return f"""
-local me = Game.GetLocalPlayer()
+    return _LUA_DIPLOMACY_CONTEXT + f"""
 local target = {other_player_id}
-local sid = DiplomacyManager.FindOpenSessionID(me, target)
-if not sid or sid < 0 then {_bail(f"ERR:NO_DEAL|No active deal session with player {other_player_id}")} end
+if context.status ~= "INCOMING" or context.other ~= target then
+    {_bail_lua('"ERR:NO_CURRENT_PROPOSAL|" .. context.status .. "|" .. context.reason .. "|Target must match the verified current incoming view"')}
+end
+local sid = context.sessions[1].sid
 DealManager.SendWorkingDeal({action}, me, target)
 {_lua_close_diplo_session()}
 local name = Locale.Lookup(PlayerConfigurations[target]:GetCivilizationShortDescription())
@@ -971,20 +1047,28 @@ def build_form_alliance(other_player_id: int, alliance_type: str) -> str:
 
     alliance_type: MILITARY, RESEARCH, CULTURAL, ECONOMIC, RELIGIOUS
     """
-    alliance_key = f"ALLIANCE_{alliance_type.upper()}"
-    return f"""
+    import json
+
+    alliance_key = json.dumps(f"ALLIANCE_{alliance_type.upper()}", ensure_ascii=False)
+    return _native_relationship_lua() + f"""
 local me = Game.GetLocalPlayer()
 local target = {other_player_id}
-local allianceRow = GameInfo.Alliances["{alliance_key}"]
-local type_idx = allianceRow and allianceRow.Index or 0
+local allianceKey = {alliance_key}
+local allianceRow = GameInfo.Alliances and GameInfo.Alliances[allianceKey]
+if not allianceRow or allianceRow.AllianceType ~= allianceKey or not integer(allianceRow.Index) or allianceRow.Index < 0 then
+    {_bail("ERR:UNKNOWN_ALLIANCE_TYPE|Requested native alliance type unavailable; no proposal submitted")}
+end
+local type_idx = allianceRow.Index
 local pDiplo = Players[me]:GetDiplomacy()
 if not Players[target] or not Players[target]:IsAlive() then {_bail("ERR:INVALID_PLAYER|Player not found")} end
 if not pDiplo:HasMet(target) then {_bail("ERR:NOT_MET|Have not met this civilization")} end
 if pDiplo:IsAtWarWith(target) then {_bail("ERR:AT_WAR|Cannot ally while at war")} end
-local ai = Players[target]:GetDiplomaticAI()
-local stateIdx = ai:GetDiplomaticStateIndex(me)
-if stateIdx == 0 then {_bail("ERR:ALREADY_ALLIED|Already in an alliance")} end
-if stateIdx ~= 1 then {_bail("ERR:NOT_FRIENDS|Must be declared friends first")} end
+local relationship = nativeRelationship(target, me)
+local allied = matchesRelationship(relationship, "DIPLO_STATE_ALLIED", DiplomaticStates and DiplomaticStates.ALLIED)
+local friends = matchesRelationship(relationship, "DIPLO_STATE_DECLARED_FRIEND", DiplomaticStates and DiplomaticStates.DECLARED_FRIEND)
+if allied == nil or friends == nil then {_bail("ERR:RELATIONSHIP_UNKNOWN|Native relationship unavailable; no proposal submitted")} end
+if allied then {_bail("ERR:ALREADY_ALLIED|Already in an alliance")} end
+if not friends then {_bail("ERR:NOT_FRIENDS|Must be declared friends first")} end
 local hasDiploService = false
 pcall(function()
     local civic = GameInfo.Civics["CIVIC_DIPLOMATIC_SERVICE"]
@@ -1002,7 +1086,6 @@ if ai_item then ai_item:SetSubType(DealAgreementTypes.ALLIANCE) pcall(function()
 DiplomacyManager.RequestSession(me, target, "MAKE_DEAL")
 DealManager.SendWorkingDeal(DealProposalAction.PROPOSED, me, target)
 local sid = DiplomacyManager.FindOpenSessionID(me, target)
-local result = "PROPOSED"
 if sid and sid >= 0 then
     local ok, respDeal = pcall(function()
         return DealManager.GetWorkingDeal(DealDirection.INCOMING, me, target)
@@ -1012,29 +1095,13 @@ if sid and sid >= 0 then
         pcall(function() itemCount = respDeal:GetItemCount() or 0 end)
         if itemCount > 0 then
             DealManager.SendWorkingDeal(DealProposalAction.ACCEPTED, me, target)
-            result = "ACCEPTED"
-        else
-            result = "REJECTED"
         end
-    else
-        result = "REJECTED"
     end
     {_lua_close_diplo_session()}
 end
-local postState = Players[target]:GetDiplomaticAI():GetDiplomaticStateIndex(me)
-if postState == 0 then
-    local aNames = {{"RESEARCH","CULTURAL","ECONOMIC","MILITARY","RELIGIOUS"}}
-    local typeName = "{alliance_type}"
-    local ok3, aType = pcall(function() return pDiplo:GetAllianceType(target) end)
-    if ok3 and aType and aType >= 0 then typeName = aNames[aType+1] or typeName end
-    print("OK:ACCEPTED|" .. typeName .. " alliance formed with " .. name)
-else
-    if result == "REJECTED" then
-        print("OK:REJECTED|" .. name .. " rejected the " .. "{alliance_type}" .. " alliance proposal")
-    else
-        print("OK:FAILED|Alliance proposal sent but status unclear (state=" .. tostring(postState) .. ")")
-    end
-end
+-- A working deal and same-frame relation are not an acceptance witness.
+print("OK:PROPOSED|" .. name)
+print("ALLIANCE_SCOPE|" .. me .. "|" .. target .. "|" .. allianceKey)
 print("{SENTINEL}")
 """
 
@@ -1195,79 +1262,67 @@ def parse_diplomacy_response(lines: list[str]) -> list[CivInfo]:
     return list(civs.values())
 
 
-def parse_diplomacy_sessions(lines: list[str]) -> list[DiplomacySession]:
-    """Parse open diplomacy session output."""
-    sessions = []
-    for line in lines:
-        if line == "NONE":
-            break
-        if line.startswith("SESSION|"):
-            parts = line.split("|")
-            if len(parts) >= 5:
-                sessions.append(
-                    DiplomacySession(
-                        session_id=int(parts[1]),
-                        other_player_id=int(parts[2]),
-                        other_civ_name=parts[3],
-                        other_leader_name=parts[4],
-                        choices=[],
-                        dialogue_text=parts[5] if len(parts) > 5 else "",
-                        reason_text=parts[6] if len(parts) > 6 else "",
-                        buttons=parts[7] if len(parts) > 7 else "",
-                        is_at_war=parts[8] == "1" if len(parts) > 8 else False,
-                    )
-                )
-        elif line.startswith("DEAL_ITEM|") and sessions:
-            # DEAL_ITEM|playerID|fromTag|typeName|itemName|amount|duration
-            parts = line.split("|")
-            if len(parts) >= 5:
-                from_tag = parts[2]  # "THEM" or "US"
-                item_name = parts[4]
-                amount = int(parts[5]) if len(parts) > 5 else 0
-                duration = int(parts[6]) if len(parts) > 6 else 0
-                dur_str = f" ({duration} turns)" if duration > 0 else ""
-                amt_str = f" x{amount}" if amount > 0 else ""
-                entry = f"{'They offer' if from_tag == 'THEM' else 'You offer'}: {item_name}{amt_str}{dur_str}"
-                s = sessions[-1]
-                s.deal_summary = (
-                    (s.deal_summary + "; " + entry) if s.deal_summary else entry
-                )
-    return sessions
-
-
-def parse_pending_deals_response(lines: list[str]) -> list[PendingDeal]:
-    """Parse DEAL| and ITEM| lines from build_pending_deals_query."""
+def parse_diplomacy_sessions(lines: list[str]) -> DiplomacyContext:
+    """Keep context certainty separate from the presence of session/deal rows."""
+    result = DiplomacyContext(reason="INCOMPLETE_RESPONSE")
+    statuses = [line.split("|", 2) for line in lines if line.startswith("CONTEXT|")]
+    if "CONTEXT_COMPLETE" not in lines or len(statuses) != 1:
+        return result
+    row = statuses[0]
+    if len(row) != 3 or row[1] not in {"NONE", "DIALOGUE", "INCOMING", "UNKNOWN"}:
+        return result
+    result.status, result.reason = row[1:]
+    sessions: dict[int, DiplomacySession] = {}
     deals: dict[int, PendingDeal] = {}
-    for line in lines:
-        if line.startswith("DEAL|"):
+    try:
+        for line in lines:
             parts = line.split("|")
-            if len(parts) >= 4:
-                pid = int(parts[1])
-                deals[pid] = PendingDeal(
-                    other_player_id=pid,
-                    other_player_name=parts[2],
-                    other_leader_name=parts[3],
+            if parts[0] == "SESSION" and len(parts) == 9:
+                pid = int(parts[2])
+                sessions[pid] = DiplomacySession(
+                    session_id=int(parts[1]), other_player_id=pid,
+                    other_civ_name=parts[3], other_leader_name=parts[4], choices=[],
+                    dialogue_text=parts[5], reason_text=parts[6], buttons=parts[7],
+                    is_at_war=parts[8] == "1",
                 )
-        elif line.startswith("ITEM|"):
-            parts = line.split("|")
-            if len(parts) >= 7:
+            elif parts[0] == "DEAL" and len(parts) == 4:
                 pid = int(parts[1])
-                if pid not in deals:
-                    continue
+                deals[pid] = PendingDeal(pid, parts[2], parts[3])
+            elif parts[0] == "ITEM" and len(parts) == 7:
+                pid = int(parts[1])
+                if pid not in deals or pid not in sessions:
+                    return DiplomacyContext(reason="MALFORMED_ITEMS")
                 is_from_us = parts[2] == "US"
                 item = DealItem(
                     from_player_id=-1 if is_from_us else pid,
-                    from_player_name="Us"
-                    if is_from_us
-                    else deals[pid].other_player_name,
-                    item_type=parts[3],
-                    name=parts[4],
-                    amount=int(parts[5]),
-                    duration=int(parts[6]),
-                    is_from_us=is_from_us,
+                    from_player_name="Us" if is_from_us else deals[pid].other_player_name,
+                    item_type=parts[3], name=parts[4], amount=int(parts[5]),
+                    duration=int(parts[6]), is_from_us=is_from_us,
                 )
-                if is_from_us:
-                    deals[pid].items_from_us.append(item)
-                else:
-                    deals[pid].items_from_them.append(item)
-    return list(deals.values())
+                (deals[pid].items_from_us if is_from_us else deals[pid].items_from_them).append(item)
+                entry = f"{'You offer' if is_from_us else 'They offer'}: {item.name}"
+                if item.amount > 0: entry += f" x{item.amount}"
+                if item.duration > 0: entry += f" ({item.duration} turns)"
+                summary = sessions[pid].deal_summary
+                sessions[pid].deal_summary = f"{summary}; {entry}" if summary else entry
+            elif parts[0] in {"SESSION", "DEAL", "ITEM"}:
+                return DiplomacyContext(reason="MALFORMED_RESPONSE")
+    except (ValueError, IndexError):
+        return DiplomacyContext(reason="MALFORMED_RESPONSE")
+    if (result.status == "NONE" and (sessions or deals)) or (
+        result.status in {"DIALOGUE", "INCOMING"} and len(sessions) != 1
+    ) or (result.status == "INCOMING" and (
+        len(deals) != 1 or set(deals) != set(sessions)
+        or not any(d.items_from_us or d.items_from_them for d in deals.values())
+    )) or (result.status != "INCOMING" and deals):
+        return DiplomacyContext(reason="INCONSISTENT_RESPONSE")
+    result.sessions = list(sessions.values())
+    result.deals = list(deals.values())
+    if result.status == "UNKNOWN":
+        for session in result.sessions:
+            session.dialogue_text = session.reason_text = session.buttons = ""
+    return result
+
+
+def parse_pending_deals_response(lines: list[str]) -> DiplomacyContext:
+    return parse_diplomacy_sessions(lines)

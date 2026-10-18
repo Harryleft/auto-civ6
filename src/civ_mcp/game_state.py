@@ -9,80 +9,31 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-import time
 import uuid
-from dataclasses import dataclass, field
 
-
+from civ_mcp.actions import (
+    ActionLifecycle, _PendingAction, _action_result, _extract_pre_hp,
+    _extract_post_hp, _extract_city_defense, _format_attack_followup,
+)
 from civ_mcp import lua as lq
 from civ_mcp.connection import GameConnection, LuaError
+from civ_mcp.end_turn import TurnProgress
 from civ_mcp.narrate import (
     narrate_combat_estimate,
     narrate_move_discoveries,
     narrate_settle_candidates,
     narrate_test_trade,
+    narrate_victory_warnings,
 )
 
 
 log = logging.getLogger(__name__)
 
+LOAD_TIMEOUT = 180.0
+
 ACTION_CONFIRM_TIMEOUT = 5.0
 ACTION_CONFIRM_INTERVAL = 0.15
-
-
-@dataclass
-class _PendingAction:
-    kind: str
-    entity: tuple[str, int]
-    query: str
-    context: str = "read"
-    success: str = ""
-    identity: tuple[str, int] | None = None
-    turn: int | None = None
-    owner: int | None = None
-    details: dict = field(default_factory=dict)
-    observed: list[str] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
-class _ActionScope:
-    civilization: str
-    seed: int
-    turn: int
-    owner: int
-
-    @property
-    def identity(self) -> tuple[str, int]:
-        return self.civilization.removeprefix("CIVILIZATION_").lower(), self.seed
-
-    def guard(self, code: str) -> str:
-        # A fresh read alone cannot prevent a turn/world change before dispatch.
-        # This guard must precede even witness/listener installation.
-        return f'''-- ACTION_SUBMIT_SCOPE|{self.civilization}|{self.seed}|{self.turn}|{self.owner}
-do
-    local ok, scope = pcall(function()
-        local owner = Game.GetLocalPlayer()
-        return {{PlayerConfigurations[owner]:GetCivilizationTypeName(),
-                GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED"),
-                Game.GetCurrentGameTurn(), owner}}
-    end)
-    if not ok or scope[1] ~= "{self.civilization}" or scope[2] ~= {self.seed}
-            or scope[3] ~= {self.turn} or scope[4] ~= {self.owner} then
-        print("ERR:ACTION_SCOPE_NO_SUBMIT|Native action scope changed or unavailable")
-        print("{lq.SENTINEL}")
-        return
-    end
-end
-{code}'''
-
-
-def _scoped_action_result(lines: list[str]) -> str:
-    if any("ACTION_SCOPE_NO_SUBMIT" in line for line in lines):
-        if lines == ["ERR:ACTION_SCOPE_NO_SUBMIT|Native action scope changed or unavailable"]:
-            return _action_result(lines)
-        return "Error: OUTCOME_UNKNOWN — incomplete or conflicting submission guard response"
-    return _action_result(lines)
-
+VICTORY_REPORT_TIMEOUT = 5.0
 
 
 class GameState:
@@ -90,284 +41,80 @@ class GameState:
 
     def __init__(self, connection: GameConnection):
         self.conn = connection
+        self._pending_load = False
         self.reset_session()
 
-    def reset_session(self) -> None:
-        """新游戏或显式读档后，从实际状态重新建立会话。"""
-        self._pending_save = False
-        self._pending_load = False
-        self._pending_action: _PendingAction | None = None
+    def _clear_world_caches(self) -> None:
         self._last_snapshot: lq.TurnSnapshot | None = None
         self._game_identity: tuple[str, int] | None = None
-        self._pending_end_turn = False
-        self._pending_end_turn_from: int | None = None
         self._local_player_id = 0
         self._revealed_tiles: set[tuple[int, int]] | None = None
 
+    def reset_session(self) -> None:
+        """Retire requests after explicit replacement; keep its verification gate."""
+        self._clear_world_caches()
+        self._pending_save = False
+        # Replacement survives all cache/identity resets until verified.
+        self._actions = ActionLifecycle(self.conn)
+        self._turn_progress = TurnProgress()
+
+    @property
+    def turn_pending(self) -> bool:
+        """One fact for action/save gates and MCP while advancement is unconfirmed."""
+        return self._turn_progress.pending
+
+    # Existing integrations/tests can still address these names. They never
+    # carry a second copy of the request owned by TurnProgress.
+    @property
+    def _pending_end_turn(self) -> bool:
+        return self._turn_progress.pending
+
+    @_pending_end_turn.setter
+    def _pending_end_turn(self, pending: bool) -> None:
+        self._turn_progress.pending = pending
+
+    @property
+    def _pending_end_turn_from(self) -> int | None:
+        return self._turn_progress.from_turn
+
+    @_pending_end_turn_from.setter
+    def _pending_end_turn_from(self, turn: int | None) -> None:
+        self._turn_progress.from_turn = turn
+
+    @property
+    def _pending_action(self) -> _PendingAction | None:
+        # Compatibility for session replacement and existing test adapters;
+        # the action module remains the sole owner of the pending value.
+        return self._actions.pending
+
+    @_pending_action.setter
+    def _pending_action(self, pending: _PendingAction | None) -> None:
+        self._actions.pending = pending
+
     @property
     def pending_action_summary(self) -> str | None:
-        pending = self._pending_action
-        if pending is None:
-            return None
-        return f"{pending.kind} {pending.entity[0]}:{pending.entity[1]} {pending.details}"
+        return self._actions.summary
 
     @property
     def pending_action_entity(self) -> tuple[str, int] | None:
-        if self._pending_action is None:
-            return None
-        kind, identifier = self._pending_action.entity
-        return (kind, identifier % 65536 if kind == "unit" else identifier)
-
-    async def _prepare_action_scope(self) -> _ActionScope | str:
-        """Read submission identity without touching the narration baseline."""
-        code = f'''
-local ok, scope = pcall(function()
-    local owner = Game.GetLocalPlayer()
-    return {{PlayerConfigurations[owner]:GetCivilizationTypeName(),
-            GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED"),
-            Game.GetCurrentGameTurn(), owner}}
-end)
-if ok then
-    print("ACTION_SCOPE|" .. tostring(scope[1]) .. "|" .. tostring(scope[2])
-          .. "|" .. tostring(scope[3]) .. "|" .. tostring(scope[4]))
-end
-print("{lq.SENTINEL}")
-'''
-        try:
-            lines = await self.conn.execute_write(code)
-            rows = [row.split("|") for row in lines if row.startswith("ACTION_SCOPE|")]
-            if len(rows) != 1 or len(rows[0]) != 5:
-                raise ValueError("missing or ambiguous native scope")
-            _, civ, seed, turn, owner = rows[0]
-            if not re.fullmatch(r"CIVILIZATION_[A-Z0-9_]+", civ):
-                raise ValueError("invalid civilization")
-            if not all(re.fullmatch(r"-?\d+", value) for value in (seed, turn, owner)):
-                raise ValueError("invalid native scope numbers")
-            scope = _ActionScope(civ, int(seed), int(turn), int(owner))
-            if scope.turn < 0 or scope.owner < 0:
-                raise ValueError("no local turn or player")
-            if self._game_identity is not None and scope.identity != self._game_identity:
-                raise ValueError("world changed; read the current game before acting")
-            return scope
-        except (OSError, TimeoutError, LuaError, ValueError) as exc:
-            return f"Error: ACTION_SCOPE_UNAVAILABLE|{exc}; no action submitted."
+        return self._actions.entity
 
     def _pending_unknown(self, reason: str = "confirmation deadline reached") -> str:
-        pending = self._pending_action
-        if pending is None:
-            return "CONFIRMED|No pending action"
-        observed = "; ".join(pending.observed) or "no confirmed observation"
-        return (f"ERR:OUTCOME_UNKNOWN|{self.pending_action_summary}|{reason}|observed:{observed}. "
-                "Use get_units/get_cities to confirm; do not resubmit. Explicit recovery is available if confirmation remains impossible.")
+        return self._actions.unknown(reason)
 
     async def confirm_pending_action(self, *, wait: bool = True) -> str:
-        """Only observe a previously submitted action; never replay its mutation.
+        return await self._actions.confirm(wait=wait, timeout=ACTION_CONFIRM_TIMEOUT,
+                                           interval=ACTION_CONFIRM_INTERVAL)
 
-        The deadline includes connection and Lua time. Reconnection by itself
-        cannot clear this state. Explicit session replacement is the only reset.
-        """
-        pending = self._pending_action
-        if pending is None:
-            return "CONFIRMED|No pending action"
-        deadline = time.monotonic() + ACTION_CONFIRM_TIMEOUT
-        try:
-            async with asyncio.timeout(ACTION_CONFIRM_TIMEOUT):
-                while True:
-                    execute = self.conn.execute_write if pending.context == "write" else self.conn.execute_read
-                    identity_probe = ""
-                    if pending.identity is not None:
-                        identity_probe = (
-                            "local actionMe = Game.GetLocalPlayer(); "
-                            "local actionCfg = PlayerConfigurations[actionMe]; "
-                            'print("ACTION_IDENTITY|" .. actionCfg:GetCivilizationTypeName() .. "|" '
-                            '.. tostring(GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")) .. "|" .. Game.GetCurrentGameTurn() .. "|" .. actionMe); '
-                        )
-                    pending.observed = await execute(identity_probe + pending.query)
-                    confirmed = self._confirmed_action(pending)
-                    if confirmed is not None:
-                        self._pending_action = None
-                        return confirmed
-                    if not wait or time.monotonic() >= deadline:
-                        return self._pending_unknown()
-                    await asyncio.sleep(min(ACTION_CONFIRM_INTERVAL, max(0, deadline - time.monotonic())))
-        except (OSError, TimeoutError, LuaError, ValueError) as exc:
-            return self._pending_unknown(f"confirmation unavailable: {exc}")
-
-    def _confirmed_action(self, pending: _PendingAction) -> str | None:
-        if pending.identity is not None:
-            rows = [line.split("|") for line in pending.observed if line.startswith("ACTION_IDENTITY|")]
-            if len(rows) != 1 or len(rows[0]) != 5:
-                return None
-            fields = rows[0]
-            identity = (fields[1].replace("CIVILIZATION_", "").lower(), int(fields[2]))
-            if (identity != pending.identity or int(fields[3]) != pending.turn
-                    or int(fields[4]) != pending.owner):
-                return None
-        if pending.kind == "production":
-            target = pending.details.get("target")
-            if target is not None:
-                item = pending.details["item"]
-                if f"PRODUCTION|{item}" not in pending.observed:
-                    return None
-                for line in pending.observed:
-                    fields = line.split("|")
-                    if len(fields) != 4 or fields[:2] != ["DISTRICT", item]:
-                        continue
-                    try:
-                        position = tuple(float(value) for value in fields[2:])
-                    except ValueError:
-                        continue
-                    if position == target:
-                        return pending.success
-            elif any(line.startswith("CONFIRMED|") for line in pending.observed):
-                return pending.success
-        if pending.kind == "attack":
-            pre_hp = pending.details.get("pre_hp")
-            post_hp = None
-            target_line = None
-            for line in pending.observed:
-                if not line.startswith("UNIT|"):
-                    continue
-                fields = line.split("|")
-                metadata = dict(field.split(":", 1) for field in fields[3:] if ":" in field)
-                if metadata.get("owner") == str(pending.owner):
-                    continue
-                if pending.details.get("target_owner") is not None:
-                    if metadata.get("owner") != str(pending.details["target_owner"]) or metadata.get("id") != str(pending.details["target_id"]):
-                        continue
-                post_hp = int(fields[2].split("/")[0])
-                target_line = line
-                break
-            attacker = next((line for line in pending.observed if line.startswith("ATTACKER|")), "")
-            metadata = dict(field.split(":", 1) for field in attacker.split("|")[1:] if ":" in field)
-            attacks_before = pending.details.get("attacks_before")
-            consumed = (attacks_before is not None and "attacks" in metadata
-                        and int(metadata["attacks"]) < attacks_before and metadata.get("busy") == "false")
-            changed = pre_hp is not None and post_hp is not None and pre_hp != post_hp
-            core_status = next((line.split("|", 1)[1] for line in pending.observed if line.startswith("CORE_BUSY|")), metadata.get("busy", "unknown"))
-            core_rows = [line for line in pending.observed if line.startswith("CORE_BUSY|")]
-            city_started = core_rows == ["CORE_BUSY|false"] and self._city_attack_witness(pending)
-            if (changed or consumed or city_started) and core_status == "false":
-                damage = f"|damage dealt:{pre_hp-post_hp}" if pre_hp is not None and post_hp is not None else ""
-                # Missing from the original tile is not evidence of death. The
-                # consumed attack can be confirmed while the target stays unknown.
-                observed = _format_attack_followup([target_line] if target_line else [], attacker_owner=pending.owner)
-                return pending.success + damage + "\n  Post-combat: " + observed
-        if pending.kind == "move":
-            for line in pending.observed:
-                if not line.startswith("POS|") or "GONE" in line:
-                    continue
-                fields = line.split("|")
-                if len(fields) < 3:
-                    continue
-                x, y = int(fields[1]), int(fields[2])
-                meta = dict(field.split(":", 1) for field in fields[3:] if ":" in field)
-                moves = float(meta["moves"]) if "moves" in meta else None
-                busy = meta.get("busy", "unknown")
-                target = pending.details["target"]
-                origin = pending.details.get("origin")
-                # The pre-submission record survives a lost acknowledgement;
-                # never install a listener retrospectively to fill that gap.
-                witness = self._move_witness(pending, meta)
-                if origin is None and witness is not None:
-                    origin = witness[0]
-                suffix = f"|now_at:{x},{y}"
-                if origin:
-                    suffix += f"|(moved dx:{x-origin[0]:+d} dy:{y-origin[1]:+d})"
-                if (x, y) == target and busy == "false":
-                    return pending.success + suffix
-                if moves is not None and moves <= 0 and busy == "false":
-                    return pending.success + suffix + "|STOPPED_MID_PATH (moves exhausted)"
-                # Civ6's effective movement and ZOC facts can stop a segment
-                # while ordinary moves remain. Path-preview turn labels alone
-                # do not prove completion; missing native facts stay unknown.
-                movement_moves = float(meta["movement_moves"]) if "movement_moves" in meta else None
-                native_stop = None
-                if movement_moves is not None and movement_moves <= 0:
-                    native_stop = "native movement exhausted"
-                elif meta.get("zoc") == "true":
-                    native_stop = "entered zone of control"
-                if origin is not None and (x, y) != origin and busy == "false" and native_stop:
-                    if moves is not None:
-                        suffix += f"|moves_remaining:{moves:g}"
-                    return pending.success + suffix + f"|STOPPED_MID_PATH ({native_stop})"
-                # A path preview alone never closes movement. This branch
-                # additionally requires this request's native segment event,
-                # full runtime ID, current identity/turn, and queued target.
-                queued = [row for row in pending.observed if row.startswith("QUEUED_TARGET|")]
-                steps = [row for row in pending.observed if row.startswith("PATH_STEP|")]
-                if (witness is not None and witness[1] and witness[0] == origin
-                        and len(queued) == 1 and len(steps) == 1
-                        and origin is not None and (x, y) != origin and busy == "false"
-                        and moves is not None and moves > 0
-                        and queued[0] == f"QUEUED_TARGET|{target[0]}|{target[1]}"
-                        and re.fullmatch(r"PATH_STEP\|-?\d+\|-?\d+\|turn:[1-9]\d*", steps[0])
-                        and int(steps[0].rsplit(":", 1)[1]) > 1):
-                    return (pending.success + suffix + f"|moves_remaining:{moves:g}"
-                            "|STOPPED_MID_PATH (native segment complete; next step requires later turn)"
-                            + "|" + "|".join(witness[2]))
-                impassable = any(line.startswith(("DIAG|MOUNTAIN|", "DIAG|IMPASSABLE|")) for line in pending.observed)
-                if (x, y) == origin and busy == "false" and impassable:
-                    return pending.success + suffix + f"|BLOCKED ({lq.parse_blocked_diagnostic(pending.observed)})"
-        if pending.kind == "found" and pending.details.get("position") is not None:
-            if lq.parse_verify_city_at(pending.observed):
-                owner = next((re.search(r"\|owner:(\d+)", line) for line in pending.observed if "CITY_EXISTS" in line), None)
-                if owner is not None and int(owner[1]) == pending.owner:
-                    return pending.success
-        return None
-
-    def _city_attack_witness(self, pending: _PendingAction) -> bool:
-        """Only a pre-submission native record can confirm a missing target."""
-        token = pending.details.get("city_witness_token")
-        if pending.entity[0] != "city" or not token or pending.identity is None:
-            return False
-        records = [line.split("|") for line in pending.observed if line.startswith("CITY_ATTACK_WITNESS|")]
-        sources = [line.split("|") for line in pending.observed if line.startswith("CITY_ATTACK_SOURCE|")]
-        if len(records) != 1 or len(records[0]) != 17 or len(sources) != 1 or len(sources[0]) != 5:
-            return False
-        row, source = records[0], sources[0]
-        try:
-            if not all(re.fullmatch(r"\d+", row[index]) for index in (2, 3, 4, 5, 8, 11, 12)):
-                return False
-            if (row[1] != token or int(row[2]) != pending.owner or int(row[3]) != pending.entity[1]
-                    or int(row[4]) != pending.owner or row[2:6] != source[1:5]
-                    or (row[6].removeprefix("CIVILIZATION_").lower(), int(row[7])) != pending.identity
-                    or int(row[8]) != pending.turn or tuple(map(int, row[9:11])) != pending.details["target"]
-                    or int(row[11]) == pending.owner
-                    or row[13:15] != ["started:true", "command_matches:true"]
-                    or not row[15].startswith("rawCommand:") or not row[16].startswith("rawData:")):
-                return False
-            for key, index in (("target_owner", 11), ("target_id", 12)):
-                if key in pending.details and int(row[index]) != pending.details[key]:
-                    return False
-            return True
-        except ValueError:
-            return False
-
-    def _move_witness(self, pending: _PendingAction, meta: dict[str, str]) -> tuple[tuple[int, int], bool, list[str]] | None:
-        """Validate the native request record, including the full runtime ID."""
-        rows = [row.split("|") for row in pending.observed if row.startswith("MOVE_WITNESS|")]
-        if len(rows) != 1 or len(rows[0]) != 14 or pending.identity is None or pending.turn is None:
-            return None
-        row = rows[0]
-        try:
-            identity = (row[4].replace("CIVILIZATION_", "").lower(), int(row[5]))
-            if (row[1] != pending.details.get("witness_token")
-                    or row[2] != str(pending.owner) or row[2] != meta.get("owner")
-                    or row[3] != meta.get("id")
-                    or int(row[3]) % 65536 != pending.entity[1] % 65536
-                    or identity != pending.identity or int(row[6]) != pending.turn
-                    or tuple(map(int, row[9:11])) != pending.details["target"]
-                    or row[11] not in ("true", "false")):
-                return None
-            return (int(row[7]), int(row[8])), row[11] == "true", row[12:14]
-        except ValueError:
-            return None
+    async def _submit_action(self, pending, scope, code) -> str:
+        return await self._actions.submit(pending, scope, code,
+                                           timeout=ACTION_CONFIRM_TIMEOUT,
+                                           interval=ACTION_CONFIRM_INTERVAL)
 
     async def _action_gate(self, entity: tuple[str, int] | None = None) -> str | None:
         if self._pending_load or self._pending_save:
             return "ERR:OUTCOME_UNKNOWN|Load or save completion is not confirmed; inspect or recover before gameplay."
-        if self._pending_end_turn:
+        if self.turn_pending:
             return "ERR:OUTCOME_UNKNOWN|End-turn outcome is pending; confirm end_turn before gameplay."
         if entity is not None and entity[0] == "unit":
             entity = (entity[0], entity[1] % 65536)
@@ -382,7 +129,7 @@ print("{lq.SENTINEL}")
         """Return (civ_type_lower, random_seed) for the current game.
 
         Always queries the game so we detect new-game loads.  When the
-        identity changes, all per-game cached state is reset.
+        identity changes, observation caches expire without retiring requests.
         """
         code = (
             "local me = Game.GetLocalPlayer() "
@@ -400,13 +147,8 @@ print("{lq.SENTINEL}")
                 new_id = (civ, seed)
                 if self._game_identity is not None and new_id != self._game_identity:
                     log.info("Game changed: %s → %s", self._game_identity, new_id)
-                    pending = self._pending_action
-                    pending_load = self._pending_load
-                    pending_save = self._pending_save
-                    self.reset_session()
-                    self._pending_action = pending
-                    self._pending_load = pending_load
-                    self._pending_save = pending_save
+                    self._clear_world_caches()
+                    self._turn_progress.invalidate_scope()
                 self._game_identity = new_id
                 return self._game_identity
         return ("unknown", 0)
@@ -437,9 +179,8 @@ print("{lq.SENTINEL}")
     async def check_game_over(self) -> lq.GameOverStatus | None:
         """Check if the game has ended (victory/defeat screen showing).
 
-        Tries InGame context first (full detection with UI checks).
-        Falls back to GameCore context (read-only, survives defeat screen)
-        when InGame fails — this catches victories that freeze the InGame UI.
+        Reads the same native outcome tuple in either context. Falls back to
+        read-only GameCore when the InGame context is unavailable.
         """
         try:
             lines = await self.conn.execute_write(lq.build_gameover_check())
@@ -548,9 +289,7 @@ print("{lq.SENTINEL}")
 
     async def move_unit(self, unit_index: int, target_x: int, target_y: int) -> str:
         details = {"target": (target_x, target_y), "witness_token": uuid.uuid4().hex}
-        if (self._pending_action and self._pending_action.kind == "move"
-                and self._pending_action.entity == ("unit", unit_index)
-                and self._pending_action.details.get("target") == details["target"]):
+        if self._actions.matches("move", ("unit", unit_index), target=details["target"]):
             return await self.confirm_pending_action()
         blocked = await self._action_gate()
         if blocked:
@@ -559,7 +298,7 @@ print("{lq.SENTINEL}")
             await self.dismiss_popup()
         except (OSError, TimeoutError, LuaError):
             pass
-        scope = await self._prepare_action_scope()
+        scope = await self._actions.prepare_scope(self._game_identity)
         if isinstance(scope, str):
             return scope
         pending = _PendingAction(
@@ -571,23 +310,9 @@ print("{lq.SENTINEL}")
             context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner, details=details,
             success=f"MOVING_TO|{target_x},{target_y}",
         )
-        self._pending_action = pending
-        try:
-            lines = await self.conn.execute_write(scope.guard(lq.build_move_unit(
-                unit_index, target_x, target_y, witness_token=details["witness_token"],
-            )))
-        except (OSError, TimeoutError, LuaError) as exc:
-            return self._pending_unknown(f"submission acknowledgement unavailable: {exc}")
-        result = _scoped_action_result(lines)
-        if result.startswith(("MOVING_TO|", "CAPTURE_MOVE|")):
-            pending.success = result
-            origin = re.search(r"\|from:(-?\d+),(-?\d+)", result)
-            if origin:
-                pending.details["origin"] = tuple(map(int, origin.groups()))
-        elif "OUTCOME_UNKNOWN" not in result:
-            self._pending_action = None
-            return result
-        result = await self.confirm_pending_action()
+        result = await self._submit_action(pending, scope, lq.build_move_unit(
+            unit_index, target_x, target_y, witness_token=details["witness_token"],
+        ))
         # 保留探索反馈；集合只用于区分本次新揭示的格子。
         if self._pending_action is None and "|BLOCKED" not in result and self._revealed_tiles is not None:
             try:
@@ -612,9 +337,7 @@ print("{lq.SENTINEL}")
         return await self._attack_and_confirm(("city", city_id), target_x, target_y)
 
     async def _attack_and_confirm(self, entity: tuple[str, int], target_x: int, target_y: int) -> str:
-        if (self._pending_action and self._pending_action.kind == "attack"
-                and self._pending_action.entity == entity
-                and self._pending_action.details.get("target") == (target_x, target_y)):
+        if self._actions.matches("attack", entity, target=(target_x, target_y)):
             return await self.confirm_pending_action()
         blocked = await self._action_gate()
         if blocked:
@@ -635,7 +358,7 @@ print("{lq.SENTINEL}")
                     estimate_str = narrate_combat_estimate(estimate) + "\n"
             except (OSError, TimeoutError, LuaError, ValueError):
                 log.debug("Combat estimate unavailable", exc_info=True)
-        scope = await self._prepare_action_scope()
+        scope = await self._actions.prepare_scope(self._game_identity)
         if isinstance(scope, str):
             return scope
         city_token = uuid.uuid4().hex if entity[0] == "city" else None
@@ -647,29 +370,16 @@ print("{lq.SENTINEL}")
             details={"target": (target_x, target_y), "city_witness_token": city_token},
             success=f"CITY_RANGE_ATTACK|city:{entity[1]} -> {target_x},{target_y}" if city_token else "",
         )
-        self._pending_action = pending
         build = lq.build_attack_unit if entity[0] == "unit" else lq.build_city_attack
-        try:
-            code = (build(entity[1], target_x, target_y, witness_token=city_token) if city_token else
-                    build(entity[1], target_x, target_y))
-            lines = await self.conn.execute_write(scope.guard(code))
-        except (OSError, TimeoutError, LuaError) as exc:
-            return self._pending_unknown(f"submission acknowledgement unavailable: {exc}")
-        result = _scoped_action_result(lines)
+        code = (build(entity[1], target_x, target_y, witness_token=city_token) if city_token else
+                build(entity[1], target_x, target_y))
+        result = await self._submit_action(pending, scope, code)
         if result.startswith(("RANGE_ATTACK", "MELEE_ATTACK", "AIR_ATTACK", "CITY_RANGE_ATTACK")):
             if estimate and (result.startswith("AIR_ATTACK") or estimate.is_ranged != result.startswith("RANGE_ATTACK")):
                 estimate_str = unknown_estimate
-            pending.success = result
-            pending.details["pre_hp"] = _extract_pre_hp(result)
-            for name in ("target_owner", "target_id", "attacks_before"):
-                match = re.search(rf"\|{name}:(\d+)", result)
-                if match:
-                    pending.details[name] = int(match[1])
-            confirmed = await self.confirm_pending_action()
-            return estimate_str + confirmed if self._pending_action is None else confirmed + ("\n" + estimate_str if estimate_str else "")
-        if "OUTCOME_UNKNOWN" in result:
-            return self._pending_unknown("submission acknowledgement missing")
-        self._pending_action = None
+            return estimate_str + result
+        if "OUTCOME_UNKNOWN" in result and pending.success and estimate_str:
+            return result + "\n" + estimate_str
         return result
 
     async def resolve_city_capture(self, action: str) -> str:
@@ -678,7 +388,7 @@ print("{lq.SENTINEL}")
         return _action_result(lines)
 
     async def found_city(self, unit_index: int) -> str:
-        if self._pending_action and self._pending_action.kind == "found" and self._pending_action.entity == ("unit", unit_index):
+        if self._actions.matches("found", ("unit", unit_index)):
             return await self.confirm_pending_action()
         blocked = await self._action_gate()
         if blocked:
@@ -687,28 +397,14 @@ print("{lq.SENTINEL}")
             await self.dismiss_popup()
         except (OSError, TimeoutError, LuaError):
             pass
-        scope = await self._prepare_action_scope()
+        scope = await self._actions.prepare_scope(self._game_identity)
         if isinstance(scope, str):
             return scope
         pending = _PendingAction(
             "found", ("unit", unit_index), lq.build_unit_position_query(unit_index),
             identity=scope.identity, turn=scope.turn, owner=scope.owner,
         )
-        self._pending_action = pending
-        try:
-            lines = await self.conn.execute_write(scope.guard(lq.build_found_city(unit_index)))
-        except (OSError, TimeoutError, LuaError) as exc:
-            return self._pending_unknown(f"submission acknowledgement unavailable: {exc}")
-        result = _scoped_action_result(lines)
-        if result.startswith("FOUNDED|"):
-            x, y = map(int, result.split("|")[1].split(","))
-            pending.query = lq.build_verify_city_at(x, y)
-            pending.details = {"position": (x, y)}
-            pending.success = result
-            return await self.confirm_pending_action()
-        if "OUTCOME_UNKNOWN" in result:
-            return self._pending_unknown("submission acknowledgement missing; founding position unconfirmed")
-        self._pending_action = None
+        result = await self._submit_action(pending, scope, lq.build_found_city(unit_index))
         if result.startswith("Error: CANNOT_FOUND"):
             try:
                 result += "\n\n" + await self.get_settle_advisor(unit_index)
@@ -859,15 +555,12 @@ print("{lq.SENTINEL}")
     ) -> str:
         target = ((target_x, target_y) if item_type.upper() == "DISTRICT"
                   and target_x is not None and target_y is not None else None)
-        if (self._pending_action and self._pending_action.kind == "production"
-                and self._pending_action.entity == ("city", city_id)
-                and self._pending_action.details.get("item") == item_name
-                and self._pending_action.details.get("target") == target):
+        if self._actions.matches("production", ("city", city_id), item=item_name, target=target):
             return await self.confirm_pending_action()
         blocked = await self._action_gate()
         if blocked:
             return blocked
-        scope = await self._prepare_action_scope()
+        scope = await self._actions.prepare_scope(self._game_identity)
         if isinstance(scope, str):
             return scope
         pending = _PendingAction(
@@ -877,22 +570,9 @@ print("{lq.SENTINEL}")
             identity=scope.identity, turn=scope.turn, owner=scope.owner, success=f"PRODUCING|{item_name}",
             details={"item": item_name, "target": target},
         )
-        # Retain intent before dispatch: losing the acknowledgement does not
-        # establish that CityManager.RequestOperation was never executed.
-        self._pending_action = pending
-        try:
-            lines = await self.conn.execute_write(
-                scope.guard(lq.build_produce_item(city_id, item_type, item_name, target_x, target_y))
-            )
-        except (OSError, TimeoutError, LuaError) as exc:
-            return self._pending_unknown(f"submission acknowledgement unavailable: {exc}")
-        result = _scoped_action_result(lines)
-        if result.startswith("PRODUCING|"):
-            pending.success = result
-        elif not any("MAYBE:" in line for line in lines) and "OUTCOME_UNKNOWN" not in result:
-            self._pending_action = None
-            return result
-        return await self.confirm_pending_action()
+        return await self._submit_action(pending, scope, lq.build_produce_item(
+            city_id, item_type, item_name, target_x, target_y,
+        ))
 
     async def purchase_item(
         self,
@@ -968,10 +648,10 @@ print("{lq.SENTINEL}")
     # Diplomacy methods
     # ------------------------------------------------------------------
 
-    async def get_diplomacy_sessions(self) -> list[lq.DiplomacySession]:
+    async def get_diplomacy_sessions(self) -> lq.DiplomacyContext:
         lua = lq.build_diplomacy_session_query()
         lines = await self.conn.execute_write(lua)
-        if not any(line == "NONE" or line.startswith("SESSION|") for line in lines):
+        if "CONTEXT_COMPLETE" not in lines:
             raise LuaError("Diplomacy session status is unknown")
         return lq.parse_diplomacy_sessions(lines)
 
@@ -979,7 +659,7 @@ print("{lq.SENTINEL}")
         # Capture dialogue text BEFORE response to detect goodbye phase
         pre_sessions = await self.get_diplomacy_sessions()
         pre_text = ""
-        for s in pre_sessions:
+        for s in pre_sessions.sessions:
             if s.other_player_id == other_player_id:
                 pre_text = s.dialogue_text
                 break
@@ -1006,17 +686,24 @@ print("{lq.SENTINEL}")
         # Phase 3: Session still open — check if dialogue text changed.
         # If unchanged, we're in the goodbye phase. Auto-close.
         post_sessions = await self.get_diplomacy_sessions()
+        if post_sessions.status == "UNKNOWN":
+            return (f"OK:RESPONDED|{response.upper()}|SESSION_CONTINUES\n"
+                    f"Diplomacy context UNKNOWN: {post_sessions.reason}; read again before responding.")
         post_text = ""
-        for s in post_sessions:
+        for s in post_sessions.sessions:
             if s.other_player_id == other_player_id:
                 post_text = s.dialogue_text
                 break
 
-        if not post_sessions:
+        if post_sessions.status == "NONE":
             # Session disappeared between checks (race condition)
             return f"OK:RESPONDED|{response.upper()}|SESSION_CLOSED"
 
-        if post_text == pre_text:
+        if (pre_sessions.status == post_sessions.status == "DIALOGUE"
+                and pre_text and post_text == pre_text
+                and len(pre_sessions.sessions) == len(post_sessions.sessions) == 1
+                and pre_sessions.sessions[0].session_id == post_sessions.sessions[0].session_id
+                and post_sessions.sessions[0].other_player_id == other_player_id):
             # Dialogue unchanged → goodbye phase. Force close.
             log.info(
                 "Goodbye phase detected (text unchanged) for player %d — auto-closing",
@@ -1028,7 +715,7 @@ print("{lq.SENTINEL}")
 
         # Include the new dialogue text so the agent can see what the leader said
         post_reason = ""
-        for s in post_sessions:
+        for s in post_sessions.sessions:
             if s.other_player_id == other_player_id:
                 post_reason = s.reason_text
                 break
@@ -1049,8 +736,16 @@ print("{lq.SENTINEL}")
         is_war = action.upper().endswith("_WAR") and action.upper().startswith(
             "DECLARE_"
         )
+        is_friendship = action.upper() == "DECLARE_FRIENDSHIP"
         lua = lq.build_send_diplo_action(other_player_id, action.upper())
-        lines = await self.conn.execute_write(lua)
+        try:
+            lines = await self.conn.execute_write(lua)
+        except (OSError, TimeoutError, LuaError, ValueError):
+            if is_friendship:
+                return await self._confirm_diplomatic_relationship(other_player_id, None)
+            raise
+        if is_friendship:
+            return await self._confirm_diplomatic_relationship(other_player_id, lines)
         result = _action_result(lines)
 
         # _action_result rewrites "ERR:" to "Error: " — only schedule the
@@ -1061,6 +756,54 @@ print("{lq.SENTINEL}")
             asyncio.create_task(self._cleanup_war_diplomacy(other_player_id))
 
         return result
+
+    async def _confirm_diplomatic_relationship(
+        self, other_player_id: int, lines: list[str] | None, *, alliance_type: str | None = None,
+    ) -> str:
+        """Confirm only the scoped native relationship; never submit or clean up."""
+        kind = "ALLIANCE" if alliance_type is not None else "FRIENDSHIP"
+        relationship = f"{alliance_type} alliance" if alliance_type is not None else "Friendship declaration"
+        unconfirmed = (
+            f"PROPOSED_UNCONFIRMED|{relationship} to player {other_player_id} is unconfirmed; "
+            "the request may have been submitted. Query get_diplomacy before another proposal; "
+            "do not automatically resend."
+        )
+        if not isinstance(lines, list) or any(not isinstance(line, str) for line in lines):
+            return unconfirmed
+        result = _action_result(lines)
+        if result.startswith("Error:") and not result.startswith("Error: OUTCOME_UNKNOWN"):
+            return result
+        scope = [line.split("|") for line in lines if line.startswith(f"{kind}_SCOPE|")]
+        proposed = [line for line in lines if line.startswith("OK:PROPOSED|")]
+        scope_length = 4 if alliance_type is not None else 3
+        if not result.startswith("PROPOSED|") or len(proposed) != 1 or len(scope) != 1 or len(scope[0]) != scope_length:
+            return unconfirmed
+        try:
+            owner, target = int(scope[0][1]), int(scope[0][2])
+        except ValueError:
+            return unconfirmed
+        if owner < 0 or owner == target or target != other_player_id:
+            return unconfirmed
+        state = f"ALLIANCE_{alliance_type}" if alliance_type is not None else "DECLARED_FRIEND"
+        if alliance_type is not None and scope[0][3] != state:
+            return unconfirmed
+        name = result.split("|", 1)[1]
+        query = (lq.build_check_alliance_state(target, owner, alliance_type) if alliance_type is not None
+                 else lq.build_check_friendship_state(target, owner))
+        try:
+            # The deadline includes reads. Transient state never authorizes a
+            # rejection or another submission of either diplomatic proposal.
+            async with asyncio.timeout(ACTION_CONFIRM_TIMEOUT):
+                while True:
+                    evidence = await self.conn.execute_write(query)
+                    if evidence == [f"{kind}|{owner}|{target}|{state}"]:
+                        if alliance_type is not None:
+                            return f"ACCEPTED|{alliance_type} alliance formed with {name}"
+                        return f"ACCEPTED|Friendship established with {name}"
+                    await asyncio.sleep(ACTION_CONFIRM_INTERVAL)
+        except (OSError, TimeoutError, LuaError, ValueError):
+            pass
+        return unconfirmed
 
     async def _cleanup_war_diplomacy(self, other_player_id: int) -> None:
         """Background: dismiss war declaration diplomacy view after animation.
@@ -1095,10 +838,10 @@ print("{lq.SENTINEL}")
         lines = await self.conn.execute_write(lua)
         return lq.parse_deal_options_response(lines)
 
-    async def get_pending_deals(self) -> list[lq.PendingDeal]:
+    async def get_pending_deals(self) -> lq.DiplomacyContext:
         lua = lq.build_pending_deals_query()
         lines = await self.conn.execute_write(lua)
-        if not any(line == "DEALS_COMPLETE" for line in lines):
+        if "CONTEXT_COMPLETE" not in lines:
             raise LuaError("Pending deal status is unknown")
         return lq.parse_pending_deals_response(lines)
 
@@ -1149,21 +892,32 @@ print("{lq.SENTINEL}")
         result = _action_result(lines)
         if result.startswith("Error"):
             return result
-        # War state is async — verify with a second round-trip
-        verify_lines = await self.conn.execute_write(
-            lq.build_check_war_state(other_player_id)
-        )
-        at_peace = any("AT_PEACE" in l for l in verify_lines)
         name = result.split("|", 1)[1] if "|" in result else f"player {other_player_id}"
-        if at_peace:
-            return f"ACCEPTED|Peace established with {name}"
-        else:
-            return f"REJECTED|{name} rejected your peace offer"
+        # War state is asynchronous. The deadline includes each read; observing
+        # continued war is not evidence that the native AI rejected the offer.
+        query = lq.build_check_war_state(other_player_id)
+        try:
+            async with asyncio.timeout(ACTION_CONFIRM_TIMEOUT):
+                while True:
+                    verify_lines = await self.conn.execute_write(query)
+                    if verify_lines == ["AT_PEACE"]:
+                        return f"ACCEPTED|Peace established with {name}"
+                    await asyncio.sleep(ACTION_CONFIRM_INTERVAL)
+        except (OSError, TimeoutError, LuaError, ValueError):
+            pass
+        return (
+            f"PROPOSED_UNCONFIRMED|Peace proposed to {name}; outcome not confirmed. "
+            "Query get_diplomacy before another proposal; do not automatically resend."
+        )
 
     async def form_alliance(self, other_player_id: int, alliance_type: str) -> str:
-        lua = lq.build_form_alliance(other_player_id, alliance_type.upper())
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        requested = alliance_type.upper()
+        lua = lq.build_form_alliance(other_player_id, requested)
+        try:
+            lines = await self.conn.execute_write(lua)
+        except (OSError, TimeoutError, LuaError, ValueError):
+            lines = None
+        return await self._confirm_diplomatic_relationship(other_player_id, lines, alliance_type=requested)
 
     # ------------------------------------------------------------------
     # Policy methods (InGame context)
@@ -1180,13 +934,49 @@ print("{lq.SENTINEL}")
         result = _action_result(lines)
         if not result.startswith("Error"):
             # Post-verify: RequestPolicyChanges can silently no-op (e.g. during era transitions)
+            expected_slots: dict[int, str] = {}
+            plan_count = None
+            invalid_plan = False
+            for line in lines:
+                if line.startswith("POLICY_PLAN_COUNT|"):
+                    try:
+                        if plan_count is not None:
+                            invalid_plan = True
+                        _, count = line.split("|")
+                        plan_count = int(count)
+                    except ValueError:
+                        invalid_plan = True
+                elif line.startswith("POLICY_PLAN"):
+                    try:
+                        _, slot, policy = line.split("|")
+                        index = int(slot)
+                        if index in expected_slots or not policy:
+                            invalid_plan = True
+                        expected_slots[index] = policy
+                    except ValueError:
+                        invalid_plan = True
+            complete_plan = (
+                not invalid_plan and plan_count is not None and plan_count > 0
+                and len(expected_slots) == plan_count
+                and all(0 <= idx < plan_count for idx in expected_slots)
+                and all(expected_slots.get(idx) == ("NONE" if policy.upper() == "NONE" else policy)
+                        for idx, policy in assignments.items())
+            )
+            if not complete_plan:
+                expected_slots = dict(assignments)
+                result += (
+                    "\nWARN:POLICY_PLAN_UNVERIFIED — final plan receipt missing or invalid; "
+                    "only requested slots can be checked. Inspect get_policies before another change."
+                )
             status = await self.get_policies()
             slot_map = {s.slot_index: s.current_policy for s in status.slots}
+            if complete_plan and set(slot_map) != set(expected_slots):
+                result += "\nWARN:POLICY_PLAN_UNVERIFIED — slot layout changed after submission."
             mismatches = []
-            for idx, pol in assignments.items():
+            for idx, pol in expected_slots.items():
                 expected = None if pol.upper() == "NONE" else pol
                 actual = slot_map.get(idx)
-                if actual != expected:
+                if idx not in slot_map or actual != expected:
                     wanted = "EMPTY" if expected is None else pol
                     got = actual or "EMPTY"
                     mismatches.append(f"slot {idx} (wanted {wanted}, got {got})")
@@ -1919,11 +1709,63 @@ print("{lq.SENTINEL}")
     # Turn management
     # ------------------------------------------------------------------
 
+    async def capture_turn_snapshot(self) -> lq.TurnSnapshot:
+        """Capture reporting facts; request ownership lives in TurnProgress."""
+        snapshot = await self._take_snapshot()
+        self._last_snapshot = snapshot
+        return snapshot
+
+    async def report_turn_advance(
+        self, before: int, after: int, baseline: lq.TurnSnapshot | None,
+    ) -> str:
+        """Present a confirmed advance without changing its request state."""
+        current = None
+        limited: list[str] = []
+        try:
+            current = await self.capture_turn_snapshot()
+            if current.turn != after:
+                # This observation is useful to a caller but cannot describe
+                # the different turn whose advancement was just confirmed.
+                current = None
+                raise ValueError("Snapshot turn does not match confirmed turn")
+        except (ConnectionError, TimeoutError, LuaError, ValueError):
+            limited.append("Post-turn snapshot unavailable; read game state to confirm changes.")
+        if baseline is not None and baseline.turn != before:
+            baseline = None
+            limited.append("Pre-turn snapshot unavailable; changes cannot be compared.")
+        events = self._diff_snapshots(baseline, current) if baseline and current else []
+        notifications: list[lq.GameNotification] = []
+        try:
+            lines = await self.conn.execute_write(lq.build_notifications_query())
+            if not any(line.startswith("TOTAL|") for line in lines):
+                limited.append("Notifications unavailable.")
+            else:
+                notifications = lq.parse_notifications_response(lines)
+        except (ConnectionError, TimeoutError, LuaError, ValueError):
+            limited.append("Notifications unavailable.")
+        report = self._build_turn_report(
+            before, after, events, notifications,
+            stockpiles=current.stockpiles if current else None,
+        )
+        try:
+            # TurnProgress has already retired the confirmed request. This
+            # bounded read can only limit its report, never undo advancement.
+            lines = await asyncio.wait_for(
+                self.conn.execute_write(lq.build_victory_proximity_query()), timeout=VICTORY_REPORT_TIMEOUT,
+            )
+            victory = lq.parse_victory_progress_response(lines)
+            if victory.turn != after or victory.local_player_id != self._local_player_id:
+                raise ValueError("Victory observations do not match confirmed turn/player")
+            warning = narrate_victory_warnings(victory)
+            if warning:
+                limited.append(warning)
+        except (OSError, TimeoutError, LuaError, ValueError):
+            limited.append("Victory warnings unavailable; use get_victory_progress.")
+        return "\n".join([report, *limited])
+
     async def end_turn(self) -> str:
         """End the turn with snapshot-diff event detection."""
-        from civ_mcp.end_turn import execute_end_turn
-
-        return await execute_end_turn(self)
+        return await self._turn_progress.execute(self)
 
     async def dismiss_popup(self) -> str:
         """Dismiss any blocking popup or UI overlay."""
@@ -1947,8 +1789,10 @@ print("{lq.SENTINEL}")
         blocked = await self._action_gate()
         if blocked:
             return blocked
-        if self._pending_end_turn:
+        if self.turn_pending:
             return "Error: End-turn outcome is pending; confirm it before saving."
+        if await self.check_game_over() is not None:
+            return "Error: GAME_OVER|Saving is unavailable at the confirmed terminal boundary; no save submitted. Keep the last confirmed checkpoint and terminal evidence."
         identity = await self.get_game_identity()
         before = await self.get_game_overview()
         if identity == ("unknown", 0) or before.turn <= 0:
@@ -1974,144 +1818,184 @@ print("{lq.SENTINEL}")
             return error
         return f"{result} Civilization {identity[0]}, seed {identity[1]}, turn {after.turn}."
 
+    @property
+    def save_pending(self) -> bool:
+        """A save acknowledgement or its saved-state verification is unresolved."""
+        return self._pending_save
+
+    @property
+    def replacement_pending(self) -> bool:
+        """A replacement is unconfirmed; save uncertainty is tracked separately."""
+        return self._pending_load
+
     async def load_save(self, save_index: int) -> str:
-        """Load a save by index; discard the old world's cached state."""
-        from civ_mcp.game_lifecycle import load_save
-        result = await load_save(self.conn, save_index)
-        if not result.startswith(("Error", "ERR", "FAILED")):
-            self.reset_session()
-            await self.conn.disconnect()
-        return result
+        """Resolve only a displayed index, then use the single verified loader."""
+        from civ_mcp.game_lifecycle import listed_save_name
+
+        name = listed_save_name(save_index)
+        if name is None:
+            return "Error: No matching cached save index; call list_saves or use load_game_save with an explicit confirmed name."
+        return await self.load_game_save(name)
 
     async def load_game_save(self, save_name: str) -> str:
-        """Submit a native main-menu load; discard caches if submitted or unknown."""
-        from civ_mcp.game_lifecycle import load_game_save
-        result = await load_game_save(self.conn, save_name)
-        if result.startswith(("Loading", "ERR:OUTCOME_UNKNOWN")):
-            self.reset_session()
-        return result
+        """Load once from MainMenu and confirm identity, readiness and snapshot."""
+        return await self._replace_save(save_name)
 
+    async def reload_game_save(self, save_name: str) -> str:
+        """Replace through the native menu while preserving the process."""
+        return await self._replace_save(save_name, return_to_menu=True)
+
+    async def kill_game(self) -> str:
+        """Explicit process stop; clear state only when shutdown is confirmed."""
+        from civ_mcp import game_launcher, game_lifecycle
+
+        self._pending_load = True
+        await self.conn.disconnect()
+        result = await game_launcher.stop_game()
+        if result.confirmed:
+            self.reset_session()
+            game_lifecycle.clear_save_listing()
+            self._pending_load = False
+        return result.message
+
+    async def launch_game(self) -> str:
+        from civ_mcp import game_launcher
+
+        return (await game_launcher.start_game()).message
+
+    async def restart_and_load(self, save_name: str | None = None) -> str:
+        """Explicit cold recovery; retains the gate across process replacement."""
+        from civ_mcp import checkpoints, game_launcher, game_lifecycle
+
+        if not save_name:
+            return "Error: Provide an explicit confirmed checkpoint save_name; autosave guessing is disabled."
+        error = game_lifecycle._validate_save_name(save_name)
+        if error:
+            return error
+        if checkpoints.expected_checkpoint(save_name) is None:
+            return "Error: Checkpoint completion and expected identity are unavailable; no restart performed."
+        self._pending_load = True
+        await self.conn.disconnect()
+        stopped = await game_launcher.stop_game()
+        if not stopped.confirmed:
+            return f"Error: Restart stopped because Civ6 shutdown was not confirmed: {stopped.message}"
+        self.reset_session()
+        game_lifecycle.clear_save_listing()
+        started = await game_launcher.start_game()
+        if not started.confirmed:
+            return f"Error: {stopped.message} | {started.message}"
+        loaded = await self._replace_save(save_name, recovering=True)
+        return f"{loaded} | {stopped.message} | {started.message}"
+
+    async def _replace_save(self, save_name: str, *, return_to_menu: bool = False, recovering: bool = False) -> str:
+        """同一个连接负责加载与验证；确认窗口内不重复发送加载命令。"""
+        from civ_mcp import checkpoints, game_lifecycle
+        from civ_mcp.narrate import narrate_score_comparison
+
+        error = game_lifecycle._validate_save_name(save_name)
+        if error:
+            return error
+        if self._pending_load and not recovering:
+            return "ERR:OUTCOME_UNKNOWN|An earlier load is unconfirmed; inspect state or use explicit recovery, not another load."
+        if not recovering and (
+            self._pending_save or self._pending_end_turn
+            or self.pending_action_entity is not None
+        ):
+            return "ERR:OUTCOME_UNKNOWN|An action/save/end-turn is pending; confirm it or use explicit restart_and_load before replacing the session."
+        expected = checkpoints.expected_checkpoint(save_name)
+        if expected is None:
+            return "Error: Checkpoint completion and expected identity are unavailable; no load sent."
+        saved_score = checkpoints.expected_score(save_name)
+        submitted = False
+        replacing = recovering
+        try:
+            async with asyncio.timeout(LOAD_TIMEOUT):
+                if return_to_menu:
+                    # Install the barrier before ExitToMainMenu can be submitted.
+                    # The helper only releases it when native code proves no exit ran.
+                    self._pending_load = True
+                    replacing = True
+                    menu = await game_lifecycle.return_to_main_menu_result(self.conn)
+                    if menu.status != "confirmed":
+                        if menu.status == "not_submitted":
+                            self._pending_load = False
+                            replacing = recovering
+                        return menu.message
+                    self.reset_session()
+                    game_lifecycle.clear_save_listing()
+                # During startup FireTuner briefly opens before MainMenu exists,
+                # then resets the socket. Retry only this read-only discovery;
+                # the actual load below is still submitted exactly once.
+                while True:
+                    try:
+                        frontend = await game_lifecycle.is_in_frontend(self.conn)
+                        if frontend is False:
+                            message = "A game is loaded; return to the main menu first."
+                            return ("ERR:OUTCOME_UNKNOWN|" if replacing else "Error: ") + message
+                        if frontend is True and "MainMenu" in self.conn.lua_states.values():
+                            break
+                    except (OSError, LuaError, ValueError):
+                        pass
+                    await asyncio.sleep(2)
+                if checkpoints.expected_checkpoint(save_name) != expected:
+                    prefix = "ERR:OUTCOME_UNKNOWN|" if replacing else "Error: "
+                    return prefix + "Checkpoint file changed before load; no load sent."
+                self._pending_load = True
+                # A cancelled transport may already have dispatched the native load.
+                submitted = True
+                result = await game_lifecycle.load_save_from_frontend_result(self.conn, save_name)
+                submitted = result.status in {"submitted", "unknown"}
+                if not submitted:
+                    self._pending_load = replacing
+                    if replacing:
+                        return "ERR:OUTCOME_UNKNOWN|Main menu reached but replacement is not verified. " + result.message
+                    return result.message
+                self.reset_session()
+                game_lifecycle.clear_save_listing()
+                while True:
+                    try:
+                        await self.conn.reconnect()
+                        if self.conn.gamecore_index is not None and self.conn.ingame_index is not None:
+                            from civ_mcp.end_turn import read_turn_state
+                            turn, ready = await read_turn_state(self)
+                            if ready is True:
+                                identity = await self.get_game_identity()
+                                ov = await self.get_game_overview(require_snapshot=True)
+                                actual = (*identity, ov.turn)
+                                if actual != expected or turn != ov.turn:
+                                    return f"ERR:OUTCOME_UNKNOWN|Loaded state mismatch: expected {expected}, observed {actual}, active turn {turn}. No load replayed."
+                                # Confirm identity and readiness after all snapshot
+                                # reads too, rather than trusting their earlier state.
+                                final_identity = await self.get_game_identity()
+                                final_turn, final_ready = await read_turn_state(self)
+                                if final_identity != identity or final_turn != ov.turn or final_ready is not True:
+                                    raise ValueError("Loaded state changed or became unreadable during snapshot confirmation")
+                                if checkpoints.expected_checkpoint(save_name) != expected:
+                                    return "ERR:OUTCOME_UNKNOWN|Checkpoint file changed during load; recovery not verified."
+                                if save_name.removesuffix(".Civ6Save") == "benchmark_turn_1":
+                                    ownership_error = checkpoints.begin_baseline_run()
+                                    if ownership_error:
+                                        return ownership_error
+                                self._pending_load = False
+                                score_comparison = narrate_score_comparison(saved_score, checkpoints.score_evidence(ov))
+                                return f"Loaded {save_name}: {identity[0]}, seed {identity[1]}, turn {ov.turn}.\n{score_comparison}"
+                    except (OSError, LuaError, ValueError):
+                        self._pending_load = True
+                    await asyncio.sleep(2)
+        except asyncio.CancelledError:
+            if replacing or submitted:
+                self._pending_load = True
+            raise
+        except TimeoutError:
+            if replacing or submitted:
+                self._pending_load = True
+            await self.conn.disconnect()
+            if not submitted and not replacing:
+                return "Error: MainMenu was not ready within 180 seconds; no load command was sent."
+            return "ERR:OUTCOME_UNKNOWN|Session replacement was not confirmed within 180 seconds. Use explicit restart_and_load for fault recovery."
 
     async def execute_lua(self, code: str, context: str = "gamecore") -> str:
         """Escape hatch: run arbitrary Lua code."""
         from civ_mcp.game_lifecycle import execute_lua
 
         return await execute_lua(self.conn, code, context)
-
-
-def _action_result(lines: list[str]) -> str:
-    """Parse OK:/ERR: prefixed action responses.
-
-    Scans all lines for the first OK:/ERR: prefix, since LuaEvent
-    callbacks (e.g. ShowIngameUI → BulkHide debug prints) can inject
-    spurious output before the actual result line.
-    """
-    if not lines:
-        return "Error: OUTCOME_UNKNOWN — no action confirmation; read game state before retrying."
-    for line in lines:
-        if line.startswith("OK:"):
-            return line[3:]
-        if line.startswith("ERR:"):
-            return f"Error: {line[4:]}"
-    return "Error: OUTCOME_UNKNOWN — no action confirmation; read game state before retrying.\n" + "\n".join(lines)
-
-
-def _format_attack_followup(lines: list[str], attacker_owner: int = 0) -> str:
-    """Format the GameCore follow-up read after an attack.
-
-    Filters out units belonging to ``attacker_owner`` so that after a melee
-    kill (where the attacker moves onto the target tile) we don't misreport
-    our own unit's HP as the defender's.
-
-    Also includes city wall/garrison HP when attacking a walled city.
-    """
-    parts = []
-    for line in lines:
-        if line.startswith("UNIT|"):
-            fields = line.split("|")
-            if len(fields) >= 4:
-                # fields: UNIT|TYPE|hp/max|owner:N
-                owner_str = fields[3]  # "owner:N"
-                try:
-                    owner_id = int(owner_str.split(":")[1])
-                except (IndexError, ValueError):
-                    owner_id = -1
-                label = "(yours) " if owner_id == attacker_owner else ""
-                parts.append(f"{label}{fields[1]} {fields[2]}")
-            elif len(fields) >= 3:
-                parts.append(f"{fields[1]} {fields[2]}")
-    city_def = _extract_city_defense(lines)
-    if city_def:
-        wall_hp, wall_max, gar_hp, gar_max = city_def
-        if wall_max > 0:
-            parts.append(f"Walls {wall_hp}/{wall_max}")
-        if gar_max > 0:
-            parts.append(f"City garrison {gar_hp}/{gar_max}")
-    if not parts:
-        return "Target state unknown (not visible at the original tile; elimination unconfirmed)"
-    return ", ".join(parts)
-
-
-def _extract_pre_hp(result: str) -> int | None:
-    """Extract pre-attack enemy HP from attack result line."""
-    import re
-
-    # Ranged/city: pre_hp:80/100
-    m = re.search(r"pre_hp:(\d+)/", result)
-    if m:
-        return int(m.group(1))
-    # Melee: enemy HP:100 -> 80/100
-    m = re.search(r"enemy HP:(\d+) ->", result)
-    if m:
-        return int(m.group(1))
-    return None
-
-
-def _extract_post_hp(followup_lines: list[str], attacker_owner: int = 0) -> int | None:
-    """Extract post-combat *enemy* HP from followup query lines.
-
-    Followup format: UNIT|UNIT_TYPE|hp/max|owner:N
-    Skips units belonging to ``attacker_owner`` (after melee kill, attacker
-    occupies the target tile and would otherwise be misread as defender).
-    Returns HP of first enemy unit found (None if eliminated).
-    """
-    for line in followup_lines:
-        if line.startswith("UNIT|"):
-            parts = line.split("|")
-            if len(parts) >= 4:
-                try:
-                    owner_id = int(parts[3].split(":")[1])
-                except (IndexError, ValueError):
-                    owner_id = -1
-                if owner_id == attacker_owner:
-                    continue  # our unit, not the target
-            if len(parts) >= 3:
-                hp_part = parts[2].split("/")[0]
-                try:
-                    return int(hp_part)
-                except ValueError:
-                    pass
-    return None
-
-
-def _extract_city_defense(
-    followup_lines: list[str],
-) -> tuple[int, int, int, int] | None:
-    """Extract wall and garrison HP from CITY_DEF followup line.
-
-    Returns ``(wall_hp, wall_max, garrison_hp, garrison_max)`` or *None*
-    when the target tile has no city defenses.
-    """
-    for line in followup_lines:
-        if line.startswith("CITY_DEF|"):
-            # CITY_DEF|wall:74/100|garrison:197/200
-            wall_hp = wall_max = gar_hp = gar_max = 0
-            for part in line.split("|")[1:]:
-                if part.startswith("wall:"):
-                    hp, mx = part[5:].split("/")
-                    wall_hp, wall_max = int(hp), int(mx)
-                elif part.startswith("garrison:"):
-                    hp, mx = part[9:].split("/")
-                    gar_hp, gar_max = int(hp), int(mx)
-            return (wall_hp, wall_max, gar_hp, gar_max)
-    return None
