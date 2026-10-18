@@ -17,6 +17,7 @@ Agent 从根目录 [AGENTS.md](../AGENTS.md) 开始；命中任务后读取对�
 
 ## 规格与验收
 
+- [第 41～61 回合跳过、待命与叙述修复规格](specs/2026-10-18-turn61-readiness.md)与[工作项](specs/2026-10-18-turn61-readiness-tickets.md)：从本轮已验证第 41 回合检查点续测，保留已有成果。
 - [第 21～41 回合修复验收](acceptance/2026-10-18-decision-repair-turn41.md)：1,719 项离线、净 20 回合、第三城、资金补修与菜单恢复；保留结果档及新增待办。
 - [第 21～41 回合决策与调度修复规格](specs/2026-10-18-decision-repair-turn41.md)与[工作项](specs/2026-10-18-decision-repair-turn41-tickets.md)：近战执行资格、使团确认、专属改良、市政进度；本轮第 21 回合检查点续测。
 
