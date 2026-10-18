@@ -17,6 +17,8 @@ Agent 从根目录 [AGENTS.md](../AGENTS.md) 开始；命中任务后读取对�
 
 ## 规格与验收
 
+- [来约试价与反提案验收](acceptance/2026-10-19-incoming-counteroffer.md)：官方原始接口、只评估不成交、世界门禁及同价反提案确认修复、T139 显式成交与续行。
+
 - [城市产出偏好验收](acceptance/2026-10-19-city-yield-focus.md)：487 项相关离线测试、T141 原生偏好与幂等确认、保存及菜单恢复，继续至 T148。
 
 - [第 101～121 回合调度与决策验收](acceptance/2026-10-18-turn121-scheduling.md)：净 20 回合、失去路径队列取消及议会 B 结果修复、相关模块测试、双份结果档与十三类菜单恢复比较；[取消规格](specs/2026-10-18-cancel-unpathable-queue.md)、[议会标签规格](specs/2026-10-18-congress-outcome-label.md)。
