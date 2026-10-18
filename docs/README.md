@@ -19,6 +19,7 @@ Agent 从根目录 [AGENTS.md](../AGENTS.md) 开始；命中任务后读取对�
 
 仅在定位对应改动或核对成果时读取。历史记录中的提交、测试数量与实机结果只适用于该记录，不代表当前分支已重新验收。
 
+- [文明特性与自主决策离线验收](acceptance/2026-10-18-civilization-knowledge.md)：文明／领袖能力与公开身份、三类信息决策指南、1,517 项离线和审查修复；未实机；[规格](specs/2026-10-18-civilization-knowledge.md)。
 - [世界知识 MCP 验收](acceptance/2026-10-18-knowledge-mcp.md)：1,472 项离线与双轴审查、main 合并、当前会话工具发现及搜索／三层读取 4 次直接调用；未连接游戏；[规格](specs/2026-10-18-knowledge-mcp.md)。
 - [获胜策略离线验收](acceptance/2026-10-18-win-strategy.md)：扩张与胜利路线指南、原生事实和确认后预警，1,448 项离线；新局按用户要求暂缓；[规格](specs/2026-10-18-win-strategy.md)。
 - [第 100 回合至原生终局验收](acceptance/2026-10-18-turn-terminal.md)：净推进 144 回合至第 244 回合失败，瑞典科技胜利；八组修复、1,385 项离线及存档保护。
