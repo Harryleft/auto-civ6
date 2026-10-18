@@ -477,3 +477,28 @@ class TestBoundedStateRediscovery:
                 refresh.cancel()
                 await asyncio.gather(command, refresh, return_exceptions=True)
         run(go())
+
+
+def test_named_context_resolves_exact_discovered_index(monkeypatch):
+    async def go():
+        conn, writer = await make_connection(monkeypatch,
+            states=("0", "GameCore_Tuner", "1", "InGame", "47", "DiplomacyActionView"),
+            incoming=(frame(TAG, "O\x00c: CIVMCP|request1|END"),))
+        assert await conn.execute_in_named_state("DiplomacyActionView", "print('native close')") == []
+        return writer.messages()
+    messages = run(go())
+    assert len(messages) == 1 and messages[0][1].startswith("CMD:47:")
+
+
+@pytest.mark.parametrize("states", [
+    ("0", "GameCore_Tuner", "1", "InGame"),
+    ("0", "GameCore_Tuner", "1", "InGame", "47", "DiplomacyActionView", "48", "DiplomacyActionView"),
+])
+def test_unknown_or_ambiguous_named_context_sends_no_command(monkeypatch, states):
+    from civ_mcp.connection import LuaStateUnavailable
+    async def go():
+        conn, writer = await make_connection(monkeypatch, states=states)
+        with pytest.raises(LuaStateUnavailable):
+            await conn.execute_in_named_state("DiplomacyActionView", "Close()")
+        return writer.messages()
+    assert run(go()) == []

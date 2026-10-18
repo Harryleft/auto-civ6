@@ -439,7 +439,7 @@ def test_turn_54_native_segment_witness_confirms_partial_move_with_real_remainin
     engine = SegmentEngine()
     state = segment_state(engine)
     result = asyncio.run(state.move_unit(6, 18, 18))
-    assert "STOPPED_MID_PATH (native segment complete; next step requires later turn)" in result
+    assert "STOPPED_MID_PATH (native segment complete)" in result
     assert "now_at:19,18" in result and "moves_remaining:1" in result
     assert state.pending_action_summary is None
     assert sum("RequestOperation" in code for code in engine.submissions) == 1
@@ -450,7 +450,7 @@ def test_turn_54_native_segment_witness_confirms_partial_move_with_real_remainin
     {"pos_id": "917510"}, {"civ": "CIVILIZATION_ROME"}, {"seed": "11"},
     {"turn": "55"}, {"origin": "19|16"}, {"target": "17|18"},
     {"done": "false"}, {"busy": "true"}, {"busy": "unknown"},
-    {"pos": "19|17"}, {"queued": "17|18"}, {"step": "1"},
+    {"pos": "19|17"}, {"queued": "17|18"},
 ])
 def test_segment_event_without_all_current_request_facts_keeps_movement_unknown(change):
     engine = SegmentEngine([change])
@@ -507,8 +507,7 @@ def test_truncated_position_response_with_segment_witness_stays_unknown():
 
 
 @pytest.mark.parametrize("bad_row", [
-    "MOVE_WITNESS|truncated", "QUEUED_TARGET|18", "PATH_STEP|18|18|turn:NaN",
-    "PATH_STEP|18|18|turn:2|truncated", "MOVE_WITNESS|missing",
+    "MOVE_WITNESS|truncated", "QUEUED_TARGET|18", "MOVE_WITNESS|missing",
 ])
 def test_incomplete_native_segment_response_never_clears_unknown(bad_row):
     class IncompleteEngine(SegmentEngine):
@@ -522,7 +521,7 @@ def test_incomplete_native_segment_response_never_clears_unknown(bad_row):
     assert state.pending_action_summary
 
 
-@pytest.mark.parametrize("missing", ["MOVE_WITNESS|", "QUEUED_TARGET|", "PATH_STEP|"])
+@pytest.mark.parametrize("missing", ["MOVE_WITNESS|", "QUEUED_TARGET|"])
 def test_missing_native_segment_fact_never_clears_unknown(missing):
     class MissingEngine(SegmentEngine):
         async def execute_read(self, code):

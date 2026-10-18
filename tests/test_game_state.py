@@ -524,19 +524,20 @@ def _stock(name="Iron", amount=0, per_turn=0, demand=0, imported=0):
 
 
 class TestDiffSnapshots:
-    """The end_turn event stream is only as good as this diff: deaths and
+    """The end_turn event stream is only as good as this diff: missing units and
     city losses are critical (1), damage/finished builds/research important
     (2), heals/growth/new units informational (3), and the report is sorted
     by that priority."""
 
     diff = staticmethod(GameState._diff_snapshots)
 
-    def test_killed_unit_is_critical(self):
+    def test_missing_unit_is_critical_without_claiming_death(self):
         before = _snap(units={1: _unit(1, x=3, y=4)})
         events = self.diff(before, _snap())
         assert len(events) == 1
         assert events[0].priority == 1
-        assert "was killed" in events[0].message
+        assert "no longer appears" in events[0].message
+        assert "cause unknown" in events[0].message
         assert "(3,4)" in events[0].message
 
     def test_damaged_and_healed_units(self):
@@ -1137,13 +1138,13 @@ class TestSimpleUnitActions:
     """Thin action wrappers: the contract is which Lua state they run in and
     how the raw lines are reduced to a result string."""
 
-    def test_fortify_translates_sleeping_into_an_explanation(self):
+    def test_fortify_passes_sleeping_status_through(self):
         gs, _ = _gs([("write", ["OK:SLEEPING"])])
 
         async def go():
             return await gs.fortify_unit(1)
 
-        assert run(go()) == "Unit is sleeping (this unit type cannot fortify)"
+        assert run(go()) == "SLEEPING"
 
     def test_fortify_passes_other_results_through(self):
         gs, _ = _gs([("write", ["OK:FORTIFIED|10,20"])])
@@ -1166,48 +1167,24 @@ class TestSimpleUnitActions:
 
 
 class TestSkipRemainingUnits:
-    """Two-phase contract: fortify/heal what can fight (InGame), then skip
-    whatever still has moves (GameCore). A failed fortify phase must not
-    eat the skip phase."""
+    """Batch candidate queries are read-only InGame calls; failures cannot
+    trigger an alternative mutation or hide behind a successful second phase.
+    Native per-unit behavior is exercised in test_unit_readiness.py.
+    """
 
-    def test_fortify_and_skip_results_are_combined(self):
-        gs, _ = _gs(
-            [
-                ("write", ["OK:FORTIFIED|3 units fortified"]),
-                ("read", ["OK:SKIPPED|2 units"]),
-            ]
-        )
+    def test_empty_ready_list_does_not_submit(self):
+        gs, conn = _gs([("write", ["OK:READY_UNITS"])])
+        assert run(gs.skip_remaining_units()) == "SKIPPED|0 candidates checked"
+        assert conn.exhausted
 
-        async def go():
-            return await gs.skip_remaining_units()
+    def test_candidate_query_error_is_preserved_without_fallback(self):
+        gs, conn = _gs([("write", ["ERR:READINESS_UNKNOWN|native state unavailable"])])
+        assert "READINESS_UNKNOWN" in run(gs.skip_remaining_units())
+        assert conn.exhausted
 
-        assert run(go()) == "FORTIFIED|3 units fortified\nSKIPPED|2 units"
-
-    def test_fortify_error_is_dropped_from_the_output(self):
-        gs, _ = _gs(
-            [
-                ("write", ["ERR:NO_UNITS|nothing to fortify"]),
-                ("read", ["OK:SKIPPED|2 units"]),
-            ]
-        )
-
-        async def go():
-            return await gs.skip_remaining_units()
-
-        assert run(go()) == "SKIPPED|2 units"
-
-    def test_fortify_exception_still_runs_the_skip_phase(self):
-        gs, conn = _gs(
-            [
-                ("write", ConnectionError("InGame dead")),
-                ("read", ["OK:SKIPPED|1 unit"]),
-            ]
-        )
-
-        async def go():
-            return await gs.skip_remaining_units()
-
-        assert run(go()) == "SKIPPED|1 unit"
+    def test_candidate_query_disconnect_does_not_submit(self):
+        gs, conn = _gs([("write", ConnectionError("InGame dead"))])
+        assert "no units submitted" in run(gs.skip_remaining_units())
         assert conn.exhausted
 
 
@@ -1391,9 +1368,7 @@ class TestSetCivic:
 
 
 class TestSetPolicies:
-    """RequestPolicyChanges can silently no-op (e.g. mid era-transition), so
-    every non-error result is re-read and per-slot mismatches are surfaced
-    as a WARN instead of being reported as success."""
+    """Policy plans require a later matching native read to be confirmed."""
 
     _GOV_LINES = [
         "GOV|GOVERNMENT_CHIEFDOM|Chiefdom|x",
@@ -1413,21 +1388,21 @@ class TestSetPolicies:
             return await gs.set_policies({0: "POLICY_DISCIPLINE", 1: "NONE"})
 
         result = run(go())
-        assert result == "POLICIES_SET"
+        assert result == "POLICIES_SET|Final policy plan confirmed by subsequent readback."
         assert "WARN" not in result
 
-    def test_mismatched_slot_appends_silent_failure_warning(self):
+    def test_mismatched_slot_keeps_application_unconfirmed(self):
         lines = [
             "GOV|GOVERNMENT_CHIEFDOM|Chiefdom|x",
             "SLOT|0|SLOT_MILITARY|NONE|Empty",
         ]
-        gs, _ = _gs([("write", ["POLICY_PLAN_COUNT|1", "POLICY_PLAN|0|POLICY_DISCIPLINE", "OK:POLICIES_SET"]), ("write", lines)])
+        gs, _ = _gs([("write", ["POLICY_PLAN_COUNT|1", "POLICY_PLAN|0|POLICY_DISCIPLINE", "OK:POLICIES_SET"]), ("write", lines), ("write", OSError("read interrupted"))])
 
         async def go():
             return await gs.set_policies({0: "POLICY_DISCIPLINE"})
 
         result = run(go())
-        assert "WARN:SILENT_FAILURE" in result
+        assert result.startswith("POLICIES_UNCONFIRMED|")
         assert "slot 0 (wanted POLICY_DISCIPLINE, got EMPTY)" in result
 
     def test_error_result_skips_the_verification_read(self):
@@ -1657,12 +1632,12 @@ class TestSendDiplomaticAction:
         assert seen["request"] == [agreement]
 
     def test_non_war_action_passes_the_result_through(self):
-        gs, conn = _gs([("write", ["OK:SENT|delegation"])])
+        gs, conn = _gs([("write", ["OK:SENT|Denounced Sweden"])])
 
         async def go():
-            return await gs.send_diplomatic_action(1, "DIPLOMATIC_DELEGATION")
+            return await gs.send_diplomatic_action(1, "DENOUNCE")
 
-        assert run(go()) == "SENT|delegation"
+        assert run(go()) == "SENT|Denounced Sweden"
         assert conn.exhausted
 
     def test_war_declaration_schedules_background_cleanup(self):
@@ -1707,22 +1682,10 @@ class TestSendDiplomaticAction:
 
 
 class TestDiplomacyRespond:
-    """A session that closes on its own (or errors) short-circuits before
-    the frame-delay state check — no extra round-trips."""
-
-    def test_session_closed_returns_immediately(self, monkeypatch):
-        monkeypatch.setattr(asyncio, "sleep", _instant_sleep)
-        gs, conn = _gs(
-            [
-                ("write", ["CONTEXT|NONE|NO_OPEN_SESSION", "CONTEXT_COMPLETE"]),  # pre-text capture
-                ("write", ["OK:SESSION_CLOSED|goodbye"]),
-            ]
-        )
-
-        async def go():
-            return await gs.diplomacy_respond(1, "POSITIVE")
-
-        assert run(go()) == "SESSION_CLOSED|goodbye"
+    def test_absent_session_does_not_submit_generic_response(self):
+        gs, conn = _gs([("write", ["CONTEXT|NONE|NO_OPEN_SESSION", "CONTEXT_COMPLETE"])])
+        result = run(gs.diplomacy_respond(1, "POSITIVE"))
+        assert "OUTCOME_UNKNOWN" in result
         assert conn.exhausted
 
 

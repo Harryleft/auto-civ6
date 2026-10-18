@@ -94,6 +94,12 @@ async def _logged(
                     "before issuing gameplay actions."
                 )
             elif (
+                app.game.diplomacy_pending
+                and not tool_name.startswith(("get_", "list_"))
+                and tool_name not in {"end_turn", "test_trade", "propose_trade", "respond_to_trade", "respond_to_diplomacy", "dismiss_popup", "restart_and_load"}
+            ):
+                result = "ERR:OUTCOME_UNKNOWN|Native diplomacy attempt is pending; confirm the original trade/response or use explicit recovery before gameplay."
+            elif (
                 app.game.turn_pending
                 and not tool_name.startswith(("get_", "list_"))
                 and tool_name not in {"end_turn", "respond_to_diplomacy", "respond_to_trade", "queue_wc_votes", "open_world_congress", "dismiss_popup", "restart_and_load"}
@@ -453,8 +459,8 @@ async def get_builder_tasks(ctx: Context) -> str:
     gs = _get_game(ctx)
 
     async def _run():
-        tasks, builders = await gs.get_builder_tasks()
-        return nr.narrate_builder_tasks(tasks, builders)
+        report = await gs.get_builder_tasks()
+        return nr.narrate_builder_tasks(report)
 
     return await _logged(ctx, "get_builder_tasks", {}, _run)
 
@@ -896,7 +902,7 @@ async def get_trade_options(ctx: Context, other_player_id: int) -> str:
 
 @mcp.tool()
 async def respond_to_trade(ctx: Context, other_player_id: int, accept: bool) -> str:
-    """Accept or reject the verified current incoming deal or demand.
+    """Accept/reject a verified incoming offer or the owned current outgoing counter.
 
     Rechecks the visible view, unique session, participants, and incoming data
     before submitting. Unknown context or a different target submits nothing.
@@ -1078,11 +1084,11 @@ async def respond_to_diplomacy(
 
     Args:
         other_player_id: The player ID of the other civilization (from get_pending_diplomacy)
-        response: "POSITIVE" (friendly), "NEGATIVE" (dismissive), or "EXIT" (close a verified GOODBYE)
+        response: A currently verified native choice: e.g. "POSITIVE", "NEGATIVE", or "EXIT".
 
-    First meetings typically have 2-3 rounds. Automatic goodbye cleanup requires
-    the same verified dialogue with identical nonempty text before and after.
-    If SESSION_CONTINUES is returned, send another response for the next round.
+    Read get_pending_diplomacy first. UNKNOWN choices authorize no response.
+    Identical text never closes a conversation. An unconfirmed response is only
+    observed on retry; new native statement choices require an explicit choice.
     """
     gs = _get_game(ctx)
     return await _logged(
@@ -1108,10 +1114,11 @@ async def send_diplomatic_action(
                 DECLARE_PROTECTORATE_WAR, DECLARE_COLONIAL_WAR,
                 DECLARE_TERRITORIAL_WAR
 
-    DECLARE_FRIENDSHIP submits once and waits briefly for a native bilateral
-    DECLARED_FRIEND relationship. ACCEPTED requires that witness; otherwise
-    PROPOSED_UNCONFIRMED means read get_diplomacy first, without automatic resend.
-    A legal request alone does not confirm that the friendship was accepted.
+    Friendship, delegation and embassy requests submit once, then read native
+    relationship evidence. Friendship requires bilateral DECLARED_FRIEND;
+    delegation/embassy require our native presence at the target, not theirs
+    at us. ACCEPTED requires that witness. PROPOSED_UNCONFIRMED means inspect
+    get_diplomacy without resending. A legal request is not acceptance.
 
     Delegations cost 25 gold and can be rejected if the civ dislikes you.
     Embassies require Writing tech. Use get_diplomacy to see available actions.
@@ -1215,7 +1222,7 @@ async def unit_action(
 
     Args:
         unit_id: The unit's composite ID (from get_units output)
-        action: One of: move, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion
+        action: One of: move, cancel_move, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion
         target_x: Target X coordinate (required for move/attack/trade_route/teleport)
         target_y: Target Y coordinate (required for move/attack/trade_route/teleport)
         improvement: Improvement type for builders (required for improve), e.g.
@@ -1224,6 +1231,9 @@ async def unit_action(
             IMPROVEMENT_FISHING_BOATS, IMPROVEMENT_LUMBER_MILL
 
     For move/attack: provide target_x and target_y.
+    For cancel_move: explicitly cancel only a verified non-trade movement queue,
+    keeping the current position. Then independently choose fortify/heal/skip or
+    another strategic action; remaining movement is not a reason to spend it.
     For trade_route: provide target_x and target_y of destination city.
     For teleport: provide target_x and target_y of destination city. Traders only, must be idle (not on active route).
     For improve: provide improvement name. Builder must be on the tile.
@@ -1252,7 +1262,7 @@ async def unit_action(
         # Move/attack/founding reconcile their own pending requests. Other
         # commands must not change that unit before its outcome is known.
         if (
-            action.lower() not in {"move", "attack", "found_city"}
+            action.lower() not in {"move", "attack", "found_city", "cancel_move"}
             and getattr(gs, "pending_action_entity", None) == ("unit", unit_index)
         ):
             confirmation = await gs.confirm_pending_action()
@@ -1263,6 +1273,8 @@ async def unit_action(
                 if target_x is None or target_y is None:
                     return "Error: move requires target_x and target_y"
                 return await gs.move_unit(unit_index, target_x, target_y)
+            case "cancel_move":
+                return await gs.cancel_unit_move(unit_id)
             case "attack":
                 if target_x is None or target_y is None:
                     return "Error: attack requires target_x and target_y"
@@ -1310,7 +1322,7 @@ async def unit_action(
                     return "Error: teleport requires target_x and target_y of the destination city"
                 return await gs.teleport_to_city(unit_index, target_x, target_y)
             case _:
-                return f"Error: Unknown action '{action}'. Valid: move, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion"
+                return f"Error: Unknown action '{action}'. Valid: move, cancel_move, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion"
 
     result = await _logged(ctx, "unit_action", params, _run)
     return result
@@ -1318,10 +1330,10 @@ async def unit_action(
 
 @mcp.tool()
 async def skip_remaining_units(ctx: Context) -> str:
-    """Skip all units that still have moves remaining.
+    """Skip currently ready units through native InGame operations.
 
-    Useful after diplomacy encounters invalidate all standing orders.
-    Uses GameCore FinishMoves on each unit — fast, reliable, no async issues.
+    Preserve existing standing orders. Check a finite candidate list once;
+    confirm each request and stop on refusal or unknown outcome.
     """
     gs = _get_game(ctx)
     return await _logged(
@@ -1419,6 +1431,20 @@ async def set_research(ctx: Context, tech_or_civic: str, category: str = "tech")
         {"tech_or_civic": tech_or_civic, "category": category},
         _run,
     )
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_turn_status(ctx: Context) -> str:
+    """Read native turn/UI phases and cumulative wait without clearing pending.
+
+    LOCAL_ACTION_REQUIRED reports native unit/city facts and queued movement
+    that needs an explicit decision. Remaining moves do not require movement;
+    choose whether the old order still serves the current plan.
+    WAITING_FOR_PLAYERS is local inactivity, not proof of a particular AI's
+    computation. Time alone never proves deadlock. Resolve reported interaction
+    through its explicit tools; end_turn only confirms an existing request.
+    """
+    return await _logged(ctx, "get_turn_status", {}, _get_game(ctx).get_turn_status)
 
 
 @mcp.tool(annotations={"destructiveHint": True})

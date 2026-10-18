@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from civ_mcp.lua._helpers import (
+    _LUA_KNOWN_RESOURCE,
     _LUA_RES_VISIBLE,
     SENTINEL,
     _bail,
@@ -13,16 +14,18 @@ from civ_mcp.lua._helpers import (
 from civ_mcp.lua.models import (
     BuilderInfo,
     BuilderTask,
+    BuilderTaskReport,
     CombatEstimate,
     PathingEstimate,
     ThreatInfo,
     UnitInfo,
 )
+from civ_mcp.lua.turn_readiness import LUA_TURN_READINESS
 
 
 def build_units_query() -> str:
     """InGame context: lists all units with upgrade and builder improvement info."""
-    return """
+    return _LUA_ATTACK_MODE + _LUA_MELEE_ELIGIBILITY + """
 local id = Game.GetLocalPlayer()
 for i, u in Players[id]:GetUnits():Members() do
     local x, y = u:GetX(), u:GetY()
@@ -78,11 +81,15 @@ for i, u in Players[id]:GetUnits():Members() do
                             for other in plotUnits:Units() do
                                 local otherOwner = other:GetOwner()
                                 if otherOwner ~= id and (otherOwner == 63 or Players[id]:GetDiplomacy():IsAtWarWith(otherOwner)) then
-                                    -- LOS check for ranged units (d>1): verify the
-                                    -- game engine agrees we can actually fire there.
-                                    -- Melee (d==1) doesn't need LOS.
-                                    local losOK = true
-                                    if rs > 0 and d > 1 then
+                                    local mode = classifyUnitAttack(u)
+                                    local losOK = mode ~= nil
+                                    if mode == "MELEE" then
+                                        local mp = {}
+                                        mp[UnitOperationTypes.PARAM_X] = tx
+                                        mp[UnitOperationTypes.PARAM_Y] = ty
+                                        mp[UnitOperationTypes.PARAM_MODIFIERS] = UnitOperationMoveModifiers.ATTACK
+                                        losOK = meleeAttackEligibility(u, mp) == nil
+                                    elseif rs > 0 and d > 1 then
                                         local lp = {{}}
                                         lp[UnitOperationTypes.PARAM_X] = tx
                                         lp[UnitOperationTypes.PARAM_Y] = ty
@@ -132,13 +139,13 @@ for i, u in Players[id]:GetUnits():Members() do
             if plot and plot:GetOwner() == id then
                 local impList = {}
                 for imp in GameInfo.Improvements() do
-                    if imp.Buildable and not imp.TraitType then
+                    if imp.Buildable then
                         local bParams = {}
                         bParams[UnitOperationTypes.PARAM_X] = x
                         bParams[UnitOperationTypes.PARAM_Y] = y
                         bParams[UnitOperationTypes.PARAM_IMPROVEMENT_TYPE] = imp.Hash
                         local ok2, _ = pcall(function()
-                            if UnitManager.CanStartOperation(u, UnitOperationTypes.BUILD_IMPROVEMENT, nil, bParams) then
+                            if UnitManager.CanStartOperation(u, UnitOperationTypes.BUILD_IMPROVEMENT, nil, bParams) == true then
                                 table.insert(impList, imp.ImprovementType)
                             end
                         end)
@@ -164,13 +171,13 @@ for i, u in Players[id]:GetUnits():Members() do
             local plot = Map.GetPlot(x, y)
             if plot and plot:GetOwner() == id then
                 for imp in GameInfo.Improvements() do
-                    if imp.Buildable and not imp.TraitType then
+                    if imp.Buildable then
                         pcall(function()
                             local bp = {}
                             bp[UnitOperationTypes.PARAM_X] = x
                             bp[UnitOperationTypes.PARAM_Y] = y
                             bp[UnitOperationTypes.PARAM_IMPROVEMENT_TYPE] = imp.Hash
-                            if UnitManager.CanStartOperation(u, UnitOperationTypes.BUILD_IMPROVEMENT, nil, bp) then
+                            if UnitManager.CanStartOperation(u, UnitOperationTypes.BUILD_IMPROVEMENT, nil, bp) == true then
                                 table.insert(meList, imp.ImprovementType)
                             end
                         end)
@@ -193,7 +200,7 @@ def build_move_unit(
     if witness_token is not None:
         witness = f"""
 -- This record is armed before exactly one submission. The native callback
--- has no request nonce; serial actions and fresh target/path facts fence it.
+-- has no request nonce; serial actions and fresh identity/target facts fence it.
 local prior = __civmcpMoveSegment
 if prior and not prior.closed then
     {_bail("ERR:OUTCOME_UNKNOWN|Prior native movement witness is unresolved; no move submitted.")}
@@ -323,8 +330,20 @@ local pathOK, pathStatus = pcall(function()
         if i == 1 and (plot:GetX() ~= fromX or plot:GetY() ~= fromY) then return "UNKNOWN" end
         if i == count and (plot:GetX() ~= {target_x} or plot:GetY() ~= {target_y}) then return "UNKNOWN" end
     end
+    -- WorldInput.lua starts its path-turn counter at 1. A native MOVE_TO
+    -- may accept a queue whose first step is next turn; it cannot provide
+    -- this request's displacement evidence, so defer before touching orders
+    -- or the prior segment witness. A later destination is still legal when
+    -- its first step is current-turn (normal partial movement).
+    if path.turns[1] ~= 1 then return "UNKNOWN" end
+    local firstStep = Map.GetPlotByIndex(path.plots[2])
+    if firstStep:GetX() == fromX and firstStep:GetY() == fromY then return "UNKNOWN" end
+    if path.turns[2] > 1 then return "DEFERRED" end
     return "VALID"
 end)
+if pathOK and pathStatus == "DEFERRED" then
+    {_bail("ERR:MOVE_DEFERRED|Native first movement step is after this turn; no move submitted; existing orders unchanged. Wait until the next turn or choose another reachable destination.")}
+end
 if pathOK and pathStatus == "NO_PATH" then
     {_bail("ERR:NO_PATH|Visible destination has no native movement path; no move submitted.")}
 end
@@ -425,7 +444,6 @@ pcall(function()
     local nextPlot = Map.GetPlotByIndex(path.plots[2])
     local nextTurn = tonumber(path.turns[2])
     if nextPlot and nextTurn then
-        nextStepTurn = nextTurn
         print("PATH_STEP|" .. nextPlot:GetX() .. "|" .. nextPlot:GetY() .. "|turn:" .. nextTurn)
     end
 end)
@@ -457,7 +475,9 @@ pcall(function()
     local nativeStop = u:GetMovesRemaining() <= 0
     pcall(function() nativeStop = nativeStop or u:GetMovementMovesRemaining() <= 0 end)
     pcall(function() nativeStop = nativeStop or u:HasMovedIntoZOC() end)
-    local segmentStop = q.done and queuedMatches and nextStepTurn and nextStepTurn > 1
+    -- This event completes the original segment, even if a newly planned
+    -- route now backtracks or is unavailable. It does not prove arrival.
+    local segmentStop = q.done and queuedMatches
     if reached or u:GetMovesRemaining() <= 0 or nativeStop and moved
         or segmentStop and moved or moveImpassable and not moved then
         q.closed = true
@@ -466,7 +486,6 @@ pcall(function()
 end)
 """
     return f"""
-local nextStepTurn = nil
 local moveImpassable = false
 local me = Game.GetLocalPlayer()
 local u = Players[me]:GetUnits():FindID({unit_index})
@@ -530,10 +549,79 @@ end
 """
 
 
+# CanStartOperation admits deferred MOVE_TO+ATTACK orders. The shipped
+# WorldInput.lua draws GetMoveToPathEx paths using .plots/.turns and treats
+# arrival turns >1 as queued attacks. Require a complete current-turn path
+# before either advertising or submitting a melee attack; never infer it
+# from terrain costs or positive remaining movement alone.
+_LUA_MELEE_ELIGIBILITY = """
+local function meleeAttackEligibility(unit, params)
+    local ok, code, reason = pcall(function()
+        local moves = unit:GetMovesRemaining()
+        if type(moves) ~= "number" or moves ~= moves or moves == math.huge then
+            return "ATTACK_PATH_UNKNOWN", "Native movement points unavailable; no attack submitted."
+        end
+        if moves <= 0 then return "NO_MOVES", "Unit has no movement points for melee attack." end
+        local zoc = unit:HasMovedIntoZOC()
+        if zoc == true then return "ZOC", "Unit entered Zone of Control this turn; no attack submitted." end
+        if zoc ~= false then return "ATTACK_PATH_UNKNOWN", "Native Zone of Control status unavailable; no attack submitted." end
+        if UnitManager.CanStartOperation(unit, UnitOperationTypes.MOVE_TO, nil, params) ~= true then
+            return "ATTACK_BLOCKED", "Native melee target unavailable; no attack submitted."
+        end
+        if UI.IsGameCoreBusy() ~= false then
+            return "ATTACK_PATH_UNKNOWN", "Native movement path unavailable while core is busy; no attack submitted."
+        end
+        local tx, ty = params[UnitOperationTypes.PARAM_X], params[UnitOperationTypes.PARAM_Y]
+        local destination = Map.GetPlot(tx, ty)
+        if not destination then return "ATTACK_PATH_UNKNOWN", "Native target plot unavailable; no attack submitted." end
+        local path = UnitManager.GetMoveToPathEx(unit, destination:GetIndex())
+        local function integer(value, minimum)
+            return type(value) == "number" and value >= minimum and value < math.huge and value == math.floor(value)
+        end
+        local function length(values)
+            if type(values) ~= "table" then return nil end
+            local count = 0
+            for key in pairs(values) do
+                if not integer(key, 1) then return nil end
+                count = count + 1
+            end
+            for i = 1, count do if values[i] == nil then return nil end end
+            return count
+        end
+        if type(path) ~= "table" then return "ATTACK_PATH_UNKNOWN", "Native movement path unavailable; no attack submitted." end
+        local count = length(path.plots)
+        if count == nil or count < 2 or length(path.turns) ~= count then
+            return "ATTACK_PATH_UNKNOWN", "Native movement path incomplete; no attack submitted."
+        end
+        for i = 1, count do
+            if not integer(path.plots[i], 0) or not integer(path.turns[i], 1)
+                or (i > 1 and path.turns[i] < path.turns[i-1]) then
+                return "ATTACK_PATH_UNKNOWN", "Native movement path malformed; no attack submitted."
+            end
+            local plot = Map.GetPlotByIndex(path.plots[i])
+            if not plot or (i == 1 and (plot:GetX() ~= unit:GetX() or plot:GetY() ~= unit:GetY()))
+                or (i == count and (plot:GetX() ~= tx or plot:GetY() ~= ty)) then
+                return "ATTACK_PATH_UNKNOWN", "Native movement path does not match attack; no attack submitted."
+            end
+        end
+        if path.turns[1] ~= 1 then
+            return "ATTACK_PATH_UNKNOWN", "Native movement path has no current-turn origin; no attack submitted."
+        end
+        if path.turns[count] > 1 then
+            return "ATTACK_DEFERRED", "Native melee path arrives after this turn; no attack submitted."
+        end
+    end)
+    if not ok then return "ATTACK_PATH_UNKNOWN", "Native melee eligibility unavailable; no attack submitted." end
+    return code, reason
+end
+"""
+
+
 def build_attack_unit(unit_index: int, target_x: int, target_y: int) -> str:
     return f"""
 {_lua_get_unit(unit_index)}
 {_LUA_ATTACK_MODE}
+{_LUA_MELEE_ELIGIBILITY}
 local mode, unitInfo, attackRange = classifyUnitAttack(unit)
 if not mode then {_bail("ERR:ATTACK_CAPABILITY_UNKNOWN|Unit has no known attack capability")} end
 local isRanged = mode == "RANGED" or mode == "BOMBARD"
@@ -618,22 +706,11 @@ if isAir then
     UnitManager.RequestOperation(unit, UnitOperationTypes.AIR_ATTACK, params)
     print("OK:AIR_ATTACK|target:" .. enemyName .. " at ({target_x},{target_y})|pre_hp:" .. enemyHP .. "/" .. enemyMaxHP .. "|bomber HP:" .. myHP .. "|range:" .. rng .. " dist:" .. dist .. beforeTag)
 else
-    -- Melee: let CanStartOperation be the authority on adjacency/validity.
-    -- Map.GetPlotDistance can misreport distance on offset hex grids, so we
-    -- do not use it as a gate here — only as a diagnostic in the error message.
     local myCS = unitInfo and unitInfo.Combat or 0
-    -- Movement check: melee attack requires movement points (ranged does not)
-    if unit:GetMovesRemaining() <= 0 then
-        {_bail("ERR:NO_MOVES|Unit has no movement points for melee attack. Melee requires movement to close distance. Wait until next turn.")}
-    end
-    -- ZOC check: if unit entered enemy ZOC this turn, it cannot attack until next turn.
-    -- CanStartOperation returns true but RequestOperation silently queues for next turn.
-    if unit:HasMovedIntoZOC() then
-        {_bail_lua('"ERR:ZOC|Unit entered Zone of Control this turn — cannot attack until next turn. End turn and attack from current position next turn."')}
-    end
     params[UnitOperationTypes.PARAM_MODIFIERS] = UnitOperationMoveModifiers.ATTACK
-    if not UnitManager.CanStartOperation(unit, UnitOperationTypes.MOVE_TO, nil, params) then
-        {_bail_lua('"ERR:ATTACK_BLOCKED|Cannot attack " .. enemyName .. " at ({target_x},{target_y}) (map dist=" .. dist .. "). Unit not adjacent or blocked by popup/diplomacy."')}
+    local code, reason = meleeAttackEligibility(unit, params)
+    if code then
+        {_bail_lua('"ERR:" .. code .. "|" .. reason')}
     end
     UnitManager.RequestOperation(unit, UnitOperationTypes.MOVE_TO, params)
     print("OK:MELEE_ATTACK|target:" .. enemyName .. " at ({target_x},{target_y})|pre_hp:" .. enemyHP .. "/" .. enemyMaxHP .. "|your HP:" .. myHP .. " CS:" .. myCS .. beforeTag)
@@ -736,6 +813,7 @@ def build_combat_estimate_query(unit_index: int, target_x: int, target_y: int) -
     return f"""
 {_lua_get_unit(unit_index)}
 {_LUA_ATTACK_MODE}
+{_LUA_MELEE_ELIGIBILITY}
 local function preview()
     if not UI or not UI.IsGameCoreBusy or UI.IsGameCoreBusy() ~= false then
         return "ESTIMATE_UNKNOWN|core busy or state unavailable"
@@ -765,9 +843,8 @@ local function preview()
         if combatType == nil then return "ESTIMATE_UNKNOWN|ranged combat type unavailable" end
     else
         params[UnitOperationTypes.PARAM_MODIFIERS] = UnitOperationMoveModifiers.ATTACK
-        if unit:HasMovedIntoZOC() or not UnitManager.CanStartOperation(unit, UnitOperationTypes.MOVE_TO, nil, params) then
-            return "ESTIMATE_UNKNOWN|melee target unavailable"
-        end
+        local code, reason = meleeAttackEligibility(unit, params)
+        if code then return "ESTIMATE_UNKNOWN|" .. reason end
     end
     local enemy = nil
     local tgtUnits = Map.GetUnitsAt({target_x}, {target_y})
@@ -949,94 +1026,179 @@ print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
 
 
-def build_fortify_unit(unit_index: int) -> str:
-    return f"""
+_LUA_UNIT_READINESS = """
+local function unitReady(unit)
+    local ok, value = pcall(function() return unit:IsReadyToMove() end)
+    if ok and type(value) == "boolean" then return value end
+    return nil
+end
+"""
+
+
+def build_fortify_unit(unit_index: int, witness_token: str = "") -> str:
+    # Fortify turns describe historical defense, not current readiness.
+    return _build_readiness_action(unit_index, "fortify", witness_token)
+
+
+def build_skip_unit(unit_index: int, witness_token: str = "") -> str:
+    """Native skip operation, without changing movement points directly."""
+    return _build_readiness_action(unit_index, "skip", witness_token)
+
+
+def build_cancel_unit_move(unit_index: int, witness_token: str) -> str:
+    """Cancel one verified queued movement through the native command."""
+    return LUA_TURN_READINESS + f'''
 {_lua_get_unit(unit_index)}
-if unit:GetFortifyTurns() > 0 then
-    print("OK:ALREADY_FORTIFIED|Fortify turns: " .. unit:GetFortifyTurns())
-    print("{SENTINEL}"); return
+if {unit_index} >= 65536 and unit:GetID() ~= {unit_index} then
+    {_bail("ERR:UNIT_ID_CHANGED|Runtime unit identity no longer matches")}
 end
-if UnitManager.CanStartOperation(unit, UnitOperationTypes.FORTIFY, nil, true) then
-    UnitManager.RequestOperation(unit, UnitOperationTypes.FORTIFY)
-    print("OK:FORTIFIED")
-else
-    local sleepOp = GameInfo.UnitOperations["UNITOPERATION_SLEEP"]
-    if sleepOp and UnitManager.CanStartOperation(unit, sleepOp.Hash, nil, true) then
-        UnitManager.RequestOperation(unit, sleepOp.Hash)
-        print("OK:SLEEPING")
-    else
-        {_bail("ERR:CANNOT_FORTIFY|Unit cannot fortify or sleep")}
-    end
+local inspected,reason,queue=pcall(function()
+    local info=GameInfo.Units[unit:GetType()]
+    if not info or type(info.Spy)~="boolean" or type(info.IgnoreMoves)~="boolean" then return "READINESS_UNKNOWN" end
+    if info.Spy or info.IgnoreMoves then return "NOT_MOVE_QUEUE" end
+    local facts=localTurnReadiness(me,unit)
+    local queued=facts.queues[unit:GetID()]
+    if not facts.queue_known then return "READINESS_UNKNOWN" end
+    if not queued then return "NO_QUEUED_MOVE" end
+    if queued.active_route==true then return "ACTIVE_TRADE_ROUTE" end
+    if queued.active_route~=false or queued.valid~=true then return "READINESS_UNKNOWN" end
+    return nil,queued
+end)
+if not inspected then {_bail("ERR:READINESS_UNKNOWN|Cannot verify this unit's queued movement")} end
+if reason=="NO_QUEUED_MOVE" then {_bail("OK:NO_QUEUED_MOVE|Existing activity preserved")} end
+if reason then {_bail_lua('"ERR:"..reason.."|Queued movement was not cancelled"')} end
+local command=GameInfo.UnitCommands["UNITCOMMAND_CANCEL"]
+if not command or type(command.Hash)~="number" or not UnitCommandTypes or command.Hash~=UnitCommandTypes.CANCEL
+    or type(UnitManager.CanStartCommand)~="function" or type(UnitManager.RequestCommand)~="function" then
+    {_bail("ERR:COMMAND_UNAVAILABLE|Native cancel command unavailable")}
+end
+local checked,allowed=pcall(function() return UnitManager.CanStartCommand(unit,command.Hash,false,true) end)
+if not checked or type(allowed)~="boolean" then {_bail("ERR:ELIGIBILITY_UNKNOWN|Native cancel eligibility unknown")} end
+if not allowed then {_bail("ERR:CANNOT_CANCEL_MOVE|Native cancel command refused")} end
+__civmcpCancelMoveRequest={{token="{witness_token}",owner=me,id=unit:GetID(),
+    civ=PlayerConfigurations[me]:GetCivilizationTypeName(),seed=GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED"),
+    turn=Game.GetCurrentGameTurn(),x=queue.x,y=queue.y,target=queue.target,entered=true}}
+UnitManager.RequestCommand(unit,command.Hash)
+print("OK:CANCEL_MOVE_REQUESTED|unit:"..unit:GetID())
+print("{SENTINEL}")
+'''
+
+
+def build_cancel_unit_move_query(unit_index: int, witness_token: str) -> str:
+    return f'''
+local me=Game.GetLocalPlayer()
+local record=__civmcpCancelMoveRequest
+local unit=UnitManager.GetUnit(me,{unit_index})
+if record and record.token=="{witness_token}" and record.entered==true
+    and record.owner==me and record.turn==Game.GetCurrentGameTurn()
+    and record.civ==PlayerConfigurations[me]:GetCivilizationTypeName()
+    and record.seed==GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")
+    and unit and record.id==unit:GetID() then
+    local busy=nil
+    pcall(function() busy=UI.IsGameCoreBusy() end)
+    local known,target=pcall(function() return UnitManager.GetQueuedDestination(unit) end)
+    local queue=known and target==nil and "none" or "unknown"
+    print("CANCEL_MOVE|"..record.token.."|"..me.."|"..record.id
+        .."|from:"..record.x..","..record.y.."|now:"..unit:GetX()..","..unit:GetY()
+        .."|queue:"..queue.."|busy:"..tostring(busy).."|entered:true")
 end
 print("{SENTINEL}")
-"""
-
-
-def build_skip_unit(unit_index: int) -> str:
-    """Skip a unit's turn (GameCore context — uses FinishMoves)."""
-    return f"""
-{_lua_get_unit_gamecore(unit_index)}
-UnitManager.FinishMoves(unit)
-print("OK:SKIPPED")
-print("{SENTINEL}")
-"""
-
-
-def build_fortify_remaining_units() -> str:
-    """Fortify/heal combat units with remaining moves (InGame context).
-
-    Tries to fortify (or heal if damaged) combat units. Non-combat units
-    and units that can't fortify are left for skip_remaining_units to handle.
-    """
-    return """
-local me = Game.GetLocalPlayer()
-local fortified = 0
-local healed = 0
-local healHash = GameInfo.UnitOperations["UNITOPERATION_HEAL"] and GameInfo.UnitOperations["UNITOPERATION_HEAL"].Hash
-for _, unit in Players[me]:GetUnits():Members() do
-    local x = unit:GetX()
-    if x ~= -9999 and unit:GetMovesRemaining() > 0 then
-        local info = GameInfo.Units[unit:GetType()]
-        local isCombat = info and info.Combat > 0
-        if isCombat then
-            if unit:GetDamage() > 0 and healHash then
-                local ok = pcall(function()
-                    if UnitManager.CanStartOperation(unit, healHash, nil, true) then
-                        UnitManager.RequestOperation(unit, healHash)
-                        healed = healed + 1
-                    end
-                end)
-            else
-                local ok = pcall(function()
-                    if UnitManager.CanStartOperation(unit, UnitOperationTypes.FORTIFY, nil, true) then
-                        UnitManager.RequestOperation(unit, UnitOperationTypes.FORTIFY)
-                        fortified = fortified + 1
-                    end
-                end)
-            end
-        end
-    end
-end
-print("OK:FORTIFIED|" .. fortified .. " fortified, " .. healed .. " healing")
-print("{SENTINEL}")
-""".replace("{SENTINEL}", SENTINEL)
+'''
 
 
 def build_skip_remaining_units() -> str:
-    """Skip all units with moves remaining (GameCore context — FinishMoves for each)."""
-    return """
+    """Read a finite candidate list; callers submit each candidate once."""
+    return _LUA_UNIT_READINESS + """
 local me = Game.GetLocalPlayer()
-local count = 0
 for _, unit in Players[me]:GetUnits():Members() do
-    local x = unit:GetX()
-    if x ~= -9999 and unit:GetMovesRemaining() > 0 then
-        UnitManager.FinishMoves(unit)
-        count = count + 1
+    if unit:GetX() ~= -9999 then
+        local ready = unitReady(unit)
+        if ready == nil then
+            print("ERR:READINESS_UNKNOWN|Cannot determine unit readiness")
+            print("{SENTINEL}"); return
+        end
+        if ready then print("READY_UNIT|" .. unit:GetID()) end
     end
 end
-print("OK:SKIPPED|" .. count .. " units")
+print("OK:READY_UNITS")
 print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
+
+
+def _build_readiness_action(unit_index: int, kind: str, witness_token: str) -> str:
+    operation = "SKIP_TURN" if kind == "skip" else "FORTIFY"
+    result = "SKIPPED" if kind == "skip" else "FORTIFIED"
+    return f'''
+{_lua_get_unit(unit_index)}
+if {unit_index} >= 65536 and unit:GetID() ~= {unit_index} then
+    {_bail("ERR:UNIT_ID_CHANGED|Runtime unit identity no longer matches")}
+end
+{_LUA_UNIT_READINESS}
+local ready = unitReady(unit)
+if ready == nil then {_bail("ERR:READINESS_UNKNOWN|Cannot determine current unit readiness")} end
+if not ready then
+    local activity = nil
+    pcall(function() activity = UnitManager.GetActivityType(unit) end)
+    local waiting = ActivityTypes and activity ~= nil
+        and (activity == ActivityTypes.ACTIVITY_SLEEP or activity == ActivityTypes.ACTIVITY_HOLD)
+    if waiting then
+        print("OK:ALREADY_WAITING|activity:" .. tostring(activity) .. "|Current native activity preserved")
+    else
+        print("OK:NOT_READY|activity:" .. tostring(activity) .. "|Existing activity preserved")
+    end
+    print("{SENTINEL}"); return
+end
+if not UnitManager.CanStartOperation or not UnitManager.RequestOperation then
+    {_bail("ERR:OPERATION_UNAVAILABLE|Native unit operation API unavailable")}
+end
+local op = GameInfo.UnitOperations["UNITOPERATION_{operation}"]
+local label = "{result}"
+local ok, allowed = pcall(function()
+    return op and UnitManager.CanStartOperation(unit, op.Hash, nil, true)
+end)
+if "{kind}" == "fortify" and ok and allowed == false then
+    op = GameInfo.UnitOperations["UNITOPERATION_SLEEP"]
+    label = "SLEEPING"
+    ok, allowed = pcall(function()
+        return op and UnitManager.CanStartOperation(unit, op.Hash, nil, true)
+    end)
+end
+if not op then {_bail("ERR:OPERATION_UNAVAILABLE|Native unit operation missing")} end
+if not ok or type(allowed) ~= "boolean" then
+    {_bail("ERR:ELIGIBILITY_UNKNOWN|Native operation eligibility unavailable")}
+end
+if not allowed then {_bail("ERR:CANNOT_OPERATE|Native unit operation rejected")} end
+-- Capture the full runtime ID before entering RequestOperation. Lost replies
+-- may be confirmed only from this request's original unit and native scope.
+__civmcpReadinessRequest = {{token="{witness_token}", kind="{kind}", owner=me,
+    id=unit:GetID(), turn=Game.GetCurrentGameTurn(),
+    civ=PlayerConfigurations[me]:GetCivilizationTypeName(),
+    seed=GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED"), label=label}}
+UnitManager.RequestOperation(unit, op.Hash, {{}})
+print("OK:READINESS_REQUESTED|" .. label)
+print("{SENTINEL}")
+'''
+
+
+def build_unit_readiness_query(unit_index: int, kind: str, witness_token: str) -> str:
+    return f'''
+{_LUA_UNIT_READINESS}
+local me = Game.GetLocalPlayer()
+local record = __civmcpReadinessRequest
+local unit = UnitManager.GetUnit(me, {unit_index})
+if record and record.token == "{witness_token}" and record.kind == "{kind}"
+    and record.owner == me and record.turn == Game.GetCurrentGameTurn()
+    and record.civ == PlayerConfigurations[me]:GetCivilizationTypeName()
+    and record.seed == GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")
+    and unit and record.id == unit:GetID() then
+    local busy = nil
+    pcall(function() busy = UI.IsGameCoreBusy() end)
+    print("READINESS|" .. record.token .. "|" .. record.owner .. "|" .. record.id
+        .. "|ready:" .. tostring(unitReady(unit)) .. "|busy:" .. tostring(busy)
+        .. "|result:" .. record.label)
+end
+print("{SENTINEL}")
+'''
 
 
 def build_automate_explore(unit_index: int) -> str:
@@ -1142,7 +1304,7 @@ if imp == nil then
                 local ok2, canBuild2 = pcall(function()
                     return UnitManager.CanStartOperation(unit, UnitOperationTypes.BUILD_IMPROVEMENT, nil, params0)
                 end)
-                if ok2 and canBuild2 then table.insert(available, row.ImprovementType) end
+                if ok2 and canBuild2 == true then table.insert(available, row.ImprovementType) end
             end
         end
         local hint = #available > 0 and ". Available here: " .. table.concat(available, ", ") or ""
@@ -1214,7 +1376,7 @@ if not canBuild then
     -- List what CAN be built here
     local alts = {{}}
     for altImp in GameInfo.Improvements() do
-        if altImp.Buildable and not altImp.TraitType then
+        if altImp.Buildable then
             local aParams = {{}}
             aParams[UnitOperationTypes.PARAM_X] = unit:GetX()
             aParams[UnitOperationTypes.PARAM_Y] = unit:GetY()
@@ -1222,7 +1384,7 @@ if not canBuild then
             local ok3, canAlt = pcall(function()
                 return UnitManager.CanStartOperation(unit, UnitOperationTypes.BUILD_IMPROVEMENT, nil, aParams)
             end)
-            if ok3 and canAlt then table.insert(alts, altImp.ImprovementType) end
+            if ok3 and canAlt == true then table.insert(alts, altImp.ImprovementType) end
         end
     end
     if #alts > 0 then
@@ -1899,7 +2061,7 @@ def build_builder_tasks_query() -> str:
     Uses hardcoded resource mapping and terrain heuristics for improvement recommendations.
     Does NOT use CanStartOperation with remote tiles (corrupts engine state → crash).
     """
-    return """
+    return _LUA_KNOWN_RESOURCE + """
 local me = Game.GetLocalPlayer()
 local pCities = Players[me]:GetCities()
 
@@ -1954,6 +2116,7 @@ local resImpMap = {
 -- Scan city territory for tasks
 local seen = {}
 local normalCount = 0
+local resourceVisibilityKnown = true
 local maxNormal = 20
 for _, city in pCities:Members() do
     local cx, cy = city:GetX(), city:GetY()
@@ -1967,7 +2130,8 @@ for _, city in pCities:Members() do
             if plot and plot:GetOwner() == me and not plot:IsWater() and not plot:IsMountain() then
                 local distIdx = plot:GetDistrictType()
                 local impIdx = plot:GetImprovementType()
-                local resIdx = plot:GetResourceType()
+                local resIdx = knownResourceIndex(me, plot)
+                if resIdx == nil then resourceVisibilityKnown = false end
 
                 -- Skip tiles with districts
                 if distIdx < 0 then
@@ -1986,7 +2150,7 @@ for _, city in pCities:Members() do
                             print("TASK|urgent|" .. px .. "," .. py .. "|REPAIR|" .. impName:gsub("IMPROVEMENT_", "") .. "|pillaged|" .. cityName .. "|" .. nearId .. "|" .. nearDist)
                         end
                     -- Check for unimproved resource tiles
-                    elseif resIdx >= 0 and impIdx < 0 then
+                    elseif resIdx and resIdx >= 0 and impIdx < 0 then
                         local resInfo = GameInfo.Resources[resIdx]
                         if resInfo then
                             local resClass = resInfo.ResourceClassType or ""
@@ -2024,7 +2188,7 @@ for _, city in pCities:Members() do
                     -- Uses terrain heuristics instead of CanStartOperation (which corrupts
                     -- engine state when called with remote tile coordinates, causing
                     -- EXCEPTION_ACCESS_VIOLATION during end_turn)
-                    elseif impIdx < 0 and resIdx < 0 and normalCount < maxNormal then
+                    elseif impIdx < 0 and (resIdx == nil or resIdx < 0) and normalCount < maxNormal then
                         local featureIdx = plot:GetFeatureType()
                         local terrIdx = plot:GetTerrainType()
                         local terrInfo = terrIdx >= 0 and GameInfo.Terrains[terrIdx] or nil
@@ -2060,6 +2224,9 @@ for _, city in pCities:Members() do
     end end
 end
 
+-- Do not present a partially observed resource board as complete/empty.
+print("RESOURCE_VISIBILITY|" .. tostring(resourceVisibilityKnown))
+
 -- Print builder info
 for _, b in ipairs(builders) do
     print("BUILDER|" .. b.id .. "|" .. b.idx .. "|" .. b.x .. "," .. b.y .. "|" .. b.charges .. "|" .. string.format("%.1f", b.moves))
@@ -2070,8 +2237,13 @@ print("{SENTINEL}")
 
 def parse_builder_tasks(
     lines: list[str],
-) -> tuple[list[BuilderTask], list[BuilderInfo]]:
-    """Parse TASK| and BUILDER| lines from build_builder_tasks_query."""
+) -> BuilderTaskReport:
+    """Keep safe advice and explicitly mark incomplete resource observations."""
+    resource_visibility_known = None
+    if "RESOURCE_VISIBILITY|true" in lines:
+        resource_visibility_known = True
+    if "RESOURCE_VISIBILITY|false" in lines or "RESOURCE_VISIBILITY_UNKNOWN" in lines:
+        resource_visibility_known = False
     tasks: list[BuilderTask] = []
     builders: list[BuilderInfo] = []
 
@@ -2121,4 +2293,4 @@ def parse_builder_tasks(
         except (ValueError, IndexError):
             continue
 
-    return tasks, builders
+    return BuilderTaskReport(tasks, builders, resource_visibility_known)

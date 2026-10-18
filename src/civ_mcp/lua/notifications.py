@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from civ_mcp.lua._helpers import SENTINEL
 from civ_mcp.lua.models import GameNotification
+from civ_mcp.lua.turn_readiness import LUA_TURN_READINESS
 
 
 def build_end_turn_blocking_query() -> str:
@@ -43,12 +44,50 @@ print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
 
 
-def build_end_turn() -> str:
-    return """
+def build_end_turn(expected_turn: int | None = None) -> str:
+    """Final native guard and submission share one InGame block.
+
+    NOT_SUBMITTED is emitted only before RequestAction. Errors/response loss
+    after entry remain unknown; no native unready action is ever requested.
+    """
+    expected = "Game.GetCurrentGameTurn()" if expected_turn is None else str(int(expected_turn))
+    return LUA_TURN_READINESS + """
+local expected = EXPECTED_TURN
+local me = Game.GetLocalPlayer()
+local p = Players[me]
+local function stop(reason)
+    print("END_TURN|NOT_SUBMITTED|" .. reason)
+end
+local ok, reason = pcall(function()
+    if Game.GetCurrentGameTurn() ~= expected then return "TURN_CHANGED" end
+    if not p or p:IsTurnActive() ~= true or p:IsTurnActiveComplete() ~= true then return "NOT_READY" end
+    local processing, sent, unready, allowed = UI.IsProcessingMessages(), UI.HasSentTurnComplete(), p:CanUnreadyTurn(), UI.CanEndTurn()
+    if type(processing) ~= "boolean" or type(sent) ~= "boolean" or type(unready) ~= "boolean" or type(allowed) ~= "boolean" then return "UNKNOWN" end
+    if sent or unready then return "ALREADY_SENT" end
+    if processing then return "UI_PROCESSING" end
+    local blocker = NotificationManager.GetFirstEndTurnBlocking(me)
+    if blocker == nil or EndTurnBlockingTypes.NO_ENDTURN_BLOCKING == nil then return "UNKNOWN" end
+    if blocker ~= EndTurnBlockingTypes.NO_ENDTURN_BLOCKING then return "BLOCKED" end
+    if not allowed then return "CANNOT_END_TURN" end
+    local localReadiness=localTurnReadiness(me)
+    if localReadiness.reason~="NONE" then
+        for _,detail in ipairs(localReadiness.details) do print("END_TURN_DETAIL|"..detail) end
+        return localReadiness.reason
+    end
+    local mode = UI.GetInterfaceMode()
+    if type(mode) ~= "number" or type(InterfaceModeTypes.SELECTION) ~= "number" then return "UNKNOWN" end
+    return nil
+end)
+if not ok then stop("UNKNOWN"); return end
+if reason then stop(reason); return end
+-- Match ActionPanel.DoEndTurn's mode recovery only after every guard passes.
+if UI.GetInterfaceMode() ~= InterfaceModeTypes.SELECTION then
+    UI.SetInterfaceMode(InterfaceModeTypes.SELECTION)
+end
 UI.RequestAction(ActionTypes.ACTION_ENDTURN)
-print("OK:TURN_ENDED")
+print("END_TURN|SUBMITTED")
 print("{SENTINEL}")
-""".replace("{SENTINEL}", SENTINEL)
+""".replace("EXPECTED_TURN", expected).replace("{SENTINEL}", SENTINEL)
 
 
 def build_notifications_query() -> str:
@@ -59,6 +98,9 @@ local nm = NotificationManager
 local list = nm.GetList(me)
 local total = 0
 local emitted = 0
+local function notificationText(value)
+    return tostring(Locale.Lookup(value or "") or ""):gsub("|", "/"):gsub("[\\r\\n]+", " ")
+end
 if list then
     total = #list
     for _, nID in ipairs(list) do
@@ -66,33 +108,15 @@ if list then
             local entry = nm.Find(me, nID)
             if entry and not entry:IsDismissed() then
                 local typeName = entry:GetTypeName() or "UNKNOWN"
-                local msg = (entry:GetMessage() or ""):gsub("|", "/")
-                if typeName:find("WONDER") then
-                    pcall(function()
-                        local wx, wy = entry:GetLocation()
-                        if wx and wx >= 0 then
-                            local wPlot = Map.GetPlot(wx, wy)
-                            if wPlot then
-                                local wOwner = wPlot:GetOwner()
-                                if wOwner and wOwner >= 0 and PlayerConfigurations[wOwner] then
-                                    local civShort = Locale.Lookup(PlayerConfigurations[wOwner]:GetCivilizationShortDescription())
-                                    if civShort then msg = msg .. " [" .. civShort .. "]" end
-                                end
-                                local dt = wPlot:GetDistrictType()
-                                if dt and dt >= 0 and GameInfo.Districts[dt] then
-                                    local dName = Locale.Lookup(GameInfo.Districts[dt].Name)
-                                    if dName then msg = msg .. " (" .. dName .. ")" end
-                                end
-                            end
-                        end
-                    end)
-                end
+                local msg = notificationText(entry:GetMessage())
+                local summary = ""
+                pcall(function() summary = notificationText(entry:GetSummary()) end)
                 local turn = entry:GetAddedTurn() or -1
                 local x, y = -1, -1
                 pcall(function() x, y = entry:GetLocation() end)
                 if x == nil then x = -1 end
                 if y == nil then y = -1 end
-                print("NOTIF|" .. typeName .. "|" .. msg .. "|" .. turn .. "|" .. x .. "," .. y)
+                print("NOTIF|" .. typeName .. "|" .. msg .. "|" .. turn .. "|" .. x .. "," .. y .. "|" .. summary)
                 emitted = emitted + 1
             end
         end)
@@ -125,6 +149,7 @@ def parse_notifications_response(lines: list[str]) -> list[GameNotification]:
                 y=int(y_str),
                 is_action_required=is_action,
                 resolution_hint=hint,
+                summary=parts[5] if len(parts) > 5 else "",
             )
         )
     return notifs

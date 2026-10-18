@@ -126,14 +126,9 @@ def narrate_overview(ov: lq.GameOverview) -> str:
             + (f" (disabled: {', '.join(disabled)})" if disabled else "")
         )
     if ov.era_name:
-        score_status = ""
-        if ov.era_score >= ov.era_golden_threshold:
-            score_status = " -> GOLDEN AGE"
-        elif ov.era_score < ov.era_dark_threshold:
-            deficit = ov.era_dark_threshold - ov.era_score
-            score_status = f" !! {deficit} short of avoiding Dark Age"
+        lines.append(f"Era: {ov.era_name} | Current age: {ov.current_age or 'unknown'}")
         lines.append(
-            f"Era: {ov.era_name} | Score: {ov.era_score} (Dark: {ov.era_dark_threshold}, Golden: {ov.era_golden_threshold}){score_status}"
+            f"Era score: {ov.era_score} | Next-era thresholds (Dark: {ov.era_dark_threshold}, Golden: {ov.era_golden_threshold})"
         )
     if ov.rankings:
         all_scores = [(ov.civ_name, ov.score)] + [
@@ -273,18 +268,26 @@ def narrate_units(
     return "\n".join(lines)
 
 
-def narrate_builder_tasks(
-    tasks: list[lq.BuilderTask], builders: list[lq.BuilderInfo]
-) -> str:
-    if not builders:
-        return "No builders with charges available."
+def narrate_builder_tasks(report: lq.BuilderTaskReport) -> str:
+    tasks, builders = report.tasks, report.builders
     idle = [b for b in builders if b.moves > 0]
     lines = [f"=== BUILDER TASKS ({len(tasks)} tasks, {len(idle)} idle builders) ==="]
+    if report.resource_visibility_known is not True:
+        lines.append(
+            "Resource advice incomplete: native resource visibility unknown; "
+            "safe terrain and repair candidates retained."
+        )
+    lines.append("Advisory candidates; confirm current native eligibility before acting.")
+    if not builders:
+        lines.append("No builders with charges available.")
     if not tasks:
-        lines.append("")
-        lines.append("No tiles need improvement in your territory.")
-        lines.append("")
-        _append_builder_list(lines, builders)
+        if report.resource_visibility_known is True:
+            lines.append("No improvement candidates identified in your territory.")
+        else:
+            lines.append("No confirmed improvement candidates identified; resource advice is incomplete.")
+        if builders:
+            lines.append("")
+            _append_builder_list(lines, builders)
         return "\n".join(lines)
 
     # Group by priority
@@ -439,12 +442,14 @@ def narrate_cities(
                 " (repair via set_city_production)"
             )
         if c.pillaged_improvements:
-            pill_imps = [p.split("@")[0] for p in c.pillaged_improvements]
+            pill_imps = [p.replace("@", " (") + ")" for p in c.pillaged_improvements]
             lines.append(
                 f"    !! PILLAGED TILES: {', '.join(pill_imps)} (send builder to repair)"
             )
+        if c.resource_visibility_known is False:
+            lines.append("    Resource advice incomplete: native resource visibility unknown.")
         if c.unimproved_resources:
-            res_names = [r.split("@")[0] for r in c.unimproved_resources]
+            res_names = [r.replace("@", " (") + ")" for r in c.unimproved_resources]
             lines.append(f"    Needs builder: {', '.join(res_names)} (unimproved)")
     if distances:
         lines.append("")
@@ -876,12 +881,11 @@ def narrate_diplomacy_sessions(context: lq.DiplomacyContext) -> str:
             lines.append(
                 f"  Current incoming deal or demand — use respond_to_trade(other_player_id={s.other_player_id}, accept=True/False)"
             )
-        elif s.buttons == "GOODBYE":
-            lines.append(
-                f'  Phase: GOODBYE — use respond_to_diplomacy(other_player_id={s.other_player_id}, response="EXIT")'
-            )
+        elif getattr(s, "choice_status", "UNKNOWN") == "KNOWN":
+            choices = ", ".join(key.removeprefix("CHOICE_") for key in s.choice_keys)
+            lines.append("  Current native choices: " + (choices or "none"))
         else:
-            lines.append("  Respond with: POSITIVE (friendly) or NEGATIVE (dismissive)")
+            lines.append("  Current native choices UNKNOWN; no response is authorized by visible text alone.")
     return "\n".join(lines)
 
 
@@ -897,7 +901,20 @@ def narrate_tech_civics(tc: lq.TechCivicStatus) -> str:
     else:
         lines.append(f"No technology being researched!{completed}")
     if tc.current_civic != "None":
-        lines.append(f"Civic: {tc.current_civic} ({tc.current_civic_turns} turns)")
+        turns = (
+            f"{tc.current_civic_turns} turns"
+            if tc.current_civic_turns is not None and tc.current_civic_turns >= 0
+            else "turns unknown"
+        )
+        if tc.current_civic_turns_source == "remaining_cost_estimate":
+            turns += " (estimate)"
+        progress = (
+            f"{tc.current_civic_progress_pct}%, "
+            if tc.current_civic_progress_pct is not None else ""
+        )
+        if tc.current_civic_progress_pct is None and tc.current_civic_turns_source is not None:
+            progress = "progress unknown, "
+        lines.append(f"Civic: {tc.current_civic} ({progress}{turns})")
     else:
         lines.append("No civic being progressed!")
     if tc.available_techs:
@@ -914,14 +931,26 @@ def narrate_tech_civics(tc: lq.TechCivicStatus) -> str:
             )
     if tc.available_civics:
         lines.append("\nAvailable civics:")
-        for c in sorted(tc.available_civics, key=lambda x: x.turns):
+        for c in sorted(
+            tc.available_civics,
+            key=lambda x: x.turns if x.turns is not None and x.turns >= 0 else float("inf"),
+        ):
             boost_str = " BOOSTED" if c.boosted else ""
             boost_desc = f" [Boost: {c.boost_desc}]" if c.boost_desc else ""
             era_str = f" [{c.era.replace('ERA_', '')}]" if c.era else ""
             prereq_str = f" (needs: {c.prereqs})" if c.prereqs else ""
-            flag = " !! GRAB THIS" if c.turns <= 2 else ""
+            flag = " !! GRAB THIS" if c.turns is not None and 0 <= c.turns <= 2 else ""
+            progress = (
+                f"{c.progress_pct}%" if c.progress_pct is not None else "progress unknown"
+            )
+            turns = (
+                f"{c.turns} turns"
+                if c.turns is not None and c.turns >= 0 else "turns unknown"
+            )
+            if c.turns_source == "remaining_cost_estimate":
+                turns += " (estimate)"
             lines.append(
-                f"  {c.name} ({c.civic_type}){era_str} — {c.progress_pct}%, {c.turns} turns{boost_str}{boost_desc}{prereq_str}{flag}"
+                f"  {c.name} ({c.civic_type}){era_str} — {progress}, {turns}{boost_str}{boost_desc}{prereq_str}{flag}"
             )
     era_order = [
         "ERA_ANCIENT",
@@ -968,6 +997,8 @@ def narrate_tech_civics(tc: lq.TechCivicStatus) -> str:
 
 
 def narrate_pending_deals(context: lq.DiplomacyContext) -> str:
+    if context.outgoing_summary:
+        return context.outgoing_summary + "\nCurrent owned outgoing counter: use respond_to_trade(accept=True/False) for an explicit decision."
     if context.status == "UNKNOWN":
         return (f"Incoming proposal context UNKNOWN: {context.reason}. "
                 "Read get_pending_diplomacy again before responding.")
@@ -1092,14 +1123,15 @@ def _describe_trade_item(item: lq.TestTradeItem) -> str:
     return f"{item.item_type} ({item.amount})"
 
 
-def narrate_test_trade(result: lq.TestTradeResult) -> str:
+def narrate_test_trade(result: lq.TestTradeResult, *, preview: bool = True, include_guidance: bool = True) -> str:
     lines = [
-        f"Trade test with {result.other_civ_name} (player {result.other_player_id}):"
+        f"{'Trade test' if preview else 'Native trade response'} with {result.other_civ_name} (player {result.other_player_id}):"
     ]
 
     our_proposed = [i for i in result.proposed if i.side == "US"]
     their_proposed = [i for i in result.proposed if i.side == "THEM"]
-    lines.append("\nYour proposal:")
+    if result.proposed:
+        lines.append("\nYour proposal:")
     if our_proposed:
         lines.append(
             "  We offer: " + ", ".join(_describe_trade_item(i) for i in our_proposed)
@@ -1138,15 +1170,22 @@ def narrate_test_trade(result: lq.TestTradeResult) -> str:
                     "  They give: "
                     + ", ".join(_describe_trade_item(i) for i in their_counter)
                 )
-            lines.append(
-                "\nAdjust your proposal to match or exceed the counter-offer, then use mode='send' to commit."
-            )
+            if include_guidance:
+                lines.append("\nAdjust your proposal to match or exceed the counter-offer, then use mode='send' to commit.")
 
     return "\n".join(lines)
 
 
 def narrate_policies(gov: lq.GovernmentStatus) -> str:
     lines = [f"Government: {gov.government_name} ({gov.government_type})"]
+    if gov.policy_unlock_cost == 0:
+        lines.append("Policy change cost: free")
+    elif gov.policy_unlock_cost is not None:
+        currency = gov.policy_unlock_currency or "unknown currency"
+        balance = f"{gov.policy_unlock_balance:g}" if gov.policy_unlock_balance is not None else "unknown"
+        lines.append(f"Policy change cost: {gov.policy_unlock_cost:g} {currency}; balance: {balance}")
+    else:
+        lines.append("Policy change cost: unknown")
 
     if gov.slots:
         lines.append(f"\n{len(gov.slots)} policy slots:")
@@ -1328,7 +1367,7 @@ def narrate_dedications(status: lq.DedicationStatus) -> str:
     era_name = era_names.get(status.era, f"Era {status.era}")
     lines = [
         f"{status.age_type} Age — {era_name} Era",
-        f"Era Score: {status.era_score} (Dark: {status.dark_threshold}, Golden: {status.golden_threshold})",
+        f"Era score: {status.era_score} | Next-era thresholds (Dark: {status.dark_threshold}, Golden: {status.golden_threshold})",
     ]
     if status.active:
         lines.append(f"\nActive dedications: {', '.join(status.active)}")
@@ -1563,7 +1602,7 @@ def narrate_trade_routes(status: lq.TradeRouteStatus) -> str:
 
 def narrate_trade_destinations(dests: list[lq.TradeDestination]) -> str:
     if not dests:
-        return "No valid trade route destinations. Check that your trader is in a city and has moves."
+        return "No legal trade route destinations for this ready trader (native checks completed)."
     domestic = [d for d in dests if d.is_domestic]
     foreign = [d for d in dests if not d.is_domestic]
     lines = [f"{len(dests)} trade route destinations:"]
@@ -1594,7 +1633,7 @@ def narrate_trade_destinations(dests: list[lq.TradeDestination]) -> str:
         return "".join(parts)
 
     if domestic:
-        lines.append("\nDomestic (food + production to destination):")
+        lines.append("\nDomestic (food + production to origin):")
         for d in domestic:
             lines.append(_fmt_dest(d))
     if foreign:
@@ -1886,6 +1925,17 @@ def narrate_victory_progress(vp: lq.VictoryProgress) -> str:
     return "\n".join(lines)
 
 
+def narrate_notification_message(notification: lq.GameNotification) -> str:
+    """Compose native notification text for lists and confirmed-turn reports."""
+    message = notification.message.strip()
+    summary = notification.summary.strip()
+    if not summary or summary in message:
+        return message
+    if not message or message in summary:
+        return summary
+    return f"{message} — {summary}"
+
+
 def narrate_notifications(notifs: list[lq.GameNotification]) -> str:
     if not notifs:
         return "No active notifications."
@@ -1899,7 +1949,7 @@ def narrate_notifications(notifs: list[lq.GameNotification]) -> str:
         for n in action_required:
             hint = f"  -> Use: {n.resolution_hint}" if n.resolution_hint else ""
             loc = f" at ({n.x},{n.y})" if n.x >= 0 else ""
-            lines.append(f"  * {n.message}{loc}{hint}")
+            lines.append(f"  * {narrate_notification_message(n)}{loc}{hint}")
 
     if info_notifs:
         if lines:
@@ -1908,7 +1958,7 @@ def narrate_notifications(notifs: list[lq.GameNotification]) -> str:
         for n in info_notifs:
             hint = f"  -> {n.resolution_hint}" if n.resolution_hint else ""
             loc = f" at ({n.x},{n.y})" if n.x >= 0 else ""
-            lines.append(f"  - {n.message}{loc}{hint}")
+            lines.append(f"  - {narrate_notification_message(n)}{loc}{hint}")
 
     return "\n".join(lines)
 

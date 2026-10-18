@@ -79,6 +79,7 @@ class GameOverview:
     score_categories: list[ScoreCategory] | None = None
     civilization_type: str | None = None
     leader_type: str | None = None
+    current_age: str | None = None  # Native current age, not inferred from era score.
 
     @property
     def score_category_total(self) -> int | None:
@@ -175,6 +176,7 @@ class CityInfo:
     owner_id: int | None = None
     game_identity: tuple[str, int] | None = None
     completed_districts: list[str] | None = None  # native IsComplete, with coordinates
+    resource_visibility_known: bool | None = None  # absent in legacy city rows
 
 
 @dataclass
@@ -319,13 +321,15 @@ class CivicOption:
 
     name: str
     civic_type: str  # e.g. "CIVIC_CODE_OF_LAWS"
-    cost: int
-    progress_pct: int  # 0-100
-    turns: int
+    cost: int | None
+    progress_pct: int | None  # native accumulated percentage; None means unreadable
+    turns: int | None
     boosted: bool
     boost_desc: str  # trigger description, empty if none
     prereqs: str = ""  # comma-separated prereq civic type names
     era: str = ""  # e.g. "ERA_MEDIEVAL"
+    # native_current, native_civic, remaining_cost_estimate, unknown
+    turns_source: str | None = None
 
 
 @dataclass
@@ -333,13 +337,15 @@ class TechCivicStatus:
     current_research: str
     current_research_turns: int
     current_civic: str
-    current_civic_turns: int
+    current_civic_turns: int | None
     available_techs: list[TechOption]
     available_civics: list[CivicOption]
     completed_tech_count: int = 0
     completed_civic_count: int = 0
     locked_civics: list[LockedCivic] | None = None
     locked_techs: list[LockedTech] | None = None
+    current_civic_progress_pct: int | None = None
+    current_civic_turns_source: str | None = None
 
 
 @dataclass
@@ -364,7 +370,11 @@ class DiplomacySession:
     is_at_war: bool = (
         False  # True if this player declared war (session is war declaration)
     )
+    choice_status: str = "UNKNOWN"
 
+    @property
+    def choice_keys(self) -> list[str]:
+        return [choice.key for choice in self.choices]
 
 @dataclass
 class CitySnapshot:
@@ -418,6 +428,7 @@ class GameNotification:
     y: int
     is_action_required: bool = False
     resolution_hint: str | None = None
+    summary: str = ""
 
 
 @dataclass
@@ -682,6 +693,7 @@ class DiplomacyContext:
     reason: str = ""
     sessions: list[DiplomacySession] = field(default_factory=list)
     deals: list[PendingDeal] = field(default_factory=list)
+    outgoing_summary: str = ""
 
 
 @dataclass
@@ -764,6 +776,9 @@ class GovernmentStatus:
     government_type: str
     slots: list[PolicySlot] = field(default_factory=list)
     available_policies: list[PolicyInfo] = field(default_factory=list)
+    policy_unlock_cost: float | None = None
+    policy_unlock_currency: str | None = None
+    policy_unlock_balance: float | None = None
 
 
 @dataclass
@@ -1233,3 +1248,10 @@ class BuilderInfo:
     y: int
     charges: int
     moves: float
+
+
+@dataclass
+class BuilderTaskReport:
+    tasks: list[BuilderTask]
+    builders: list[BuilderInfo]
+    resource_visibility_known: bool | None = None  # legacy observations are unknown

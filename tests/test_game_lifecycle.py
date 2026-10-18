@@ -116,6 +116,10 @@ class FakeConn:
             return []
         return self.on_write(lua)
 
+    async def execute_in_named_state(self, name, lua, timeout=5.0):
+        from civ_mcp.connection import LuaStateUnavailable
+        raise LuaStateUnavailable("native context not present in this fixture")
+
     async def execute_in_state(self, state_index, lua, timeout=5.0):
         self.state_calls.append((state_index, lua))
         if "MCP_SAVE_QUERY_START" in lua:
@@ -844,10 +848,9 @@ class TestDismissPopup:
             )
             return await gl.dismiss_popup(conn)
 
-        assert (
-            run(go())
-            == "Diplomacy session active — use respond_to_diplomacy to handle it."
-        )
+        result = run(go())
+        assert "Diplomacy UI cleanup" in result
+        assert "diplomacy session active" in result
 
     def test_pending_trade_deal_is_reported_not_dismissed(self, monkeypatch):
         """DiplomacyDealView is an incoming offer; dismissing it kills the deal."""

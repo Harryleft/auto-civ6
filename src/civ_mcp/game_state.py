@@ -12,7 +12,7 @@ import re
 import uuid
 
 from civ_mcp.actions import (
-    ActionLifecycle, _PendingAction, _action_result, _extract_pre_hp,
+    ActionLifecycle, _ActionScope, _PendingAction, _action_result, _extract_pre_hp,
     _extract_post_hp, _extract_city_defense, _format_attack_followup,
 )
 from civ_mcp import lua as lq
@@ -21,8 +21,8 @@ from civ_mcp.end_turn import TurnProgress
 from civ_mcp.narrate import (
     narrate_combat_estimate,
     narrate_move_discoveries,
+    narrate_notification_message,
     narrate_settle_candidates,
-    narrate_test_trade,
     narrate_victory_warnings,
 )
 
@@ -57,6 +57,14 @@ class GameState:
         # Replacement survives all cache/identity resets until verified.
         self._actions = ActionLifecycle(self.conn)
         self._turn_progress = TurnProgress()
+        from civ_mcp.game_lifecycle import DiplomacyViewCleanup
+        self._diplomacy_cleanup = DiplomacyViewCleanup()
+        from civ_mcp.diplomacy import DiplomacyProgress
+        self._diplomacy_progress = DiplomacyProgress()
+
+    @property
+    def diplomacy_pending(self) -> bool:
+        return self._diplomacy_progress.pending or self._diplomacy_cleanup.pending
 
     @property
     def turn_pending(self) -> bool:
@@ -114,6 +122,10 @@ class GameState:
     async def _action_gate(self, entity: tuple[str, int] | None = None) -> str | None:
         if self._pending_load or self._pending_save:
             return "ERR:OUTCOME_UNKNOWN|Load or save completion is not confirmed; inspect or recover before gameplay."
+        if self._diplomacy_progress.pending:
+            return self._diplomacy_progress.trade_summary()
+        if self._diplomacy_cleanup.pending:
+            return "ERR:OUTCOME_UNKNOWN|Native diplomacy cleanup is unconfirmed; dismiss_popup only confirms it."
         if self.turn_pending:
             return "ERR:OUTCOME_UNKNOWN|End-turn outcome is pending; confirm end_turn before gameplay."
         if entity is not None and entity[0] == "unit":
@@ -149,6 +161,8 @@ class GameState:
                     log.info("Game changed: %s → %s", self._game_identity, new_id)
                     self._clear_world_caches()
                     self._turn_progress.invalidate_scope()
+                    self._diplomacy_cleanup.invalidate_scope()
+                    self._diplomacy_progress.invalidate_scope()
                 self._game_identity = new_id
                 return self._game_identity
         return ("unknown", 0)
@@ -158,6 +172,7 @@ class GameState:
     # ------------------------------------------------------------------
 
     async def get_game_overview(self, *, require_snapshot: bool = False) -> lq.GameOverview:
+        await self._diplomacy_progress.ensure_observer(self.conn)
         # InGame context needed for GetFavor() (nil in GameCore)
         lines = await self.conn.execute_write(lq.build_overview_query())
         ov = lq.parse_overview_response(lines)
@@ -203,7 +218,7 @@ class GameState:
 
     async def get_builder_tasks(
         self,
-    ) -> tuple[list[lq.BuilderTask], list[lq.BuilderInfo]]:
+    ) -> lq.BuilderTaskReport:
         lines = await self.conn.execute_write(lq.build_builder_tasks_query())
         return lq.parse_builder_tasks(lines)
 
@@ -268,7 +283,9 @@ class GameState:
         return lq.parse_diplomacy_response(lines)
 
     async def get_tech_civics(self) -> lq.TechCivicStatus:
-        lines = await self.conn.execute_read(lq.build_tech_civics_query())
+        # "write" selects InGame; this query is read-only. Native civic progress
+        # and GetTurnsLeft/GetTurnsToProgressCivic are unavailable in GameCore.
+        lines = await self.conn.execute_write(lq.build_tech_civics_query())
         return lq.parse_tech_civics_response(lines)
 
     async def get_empire_resources(
@@ -434,40 +451,76 @@ class GameState:
         return lq.parse_settle_advisor_response(lines)
 
     async def fortify_unit(self, unit_index: int) -> str:
-        blocked = await self._action_gate(("unit", unit_index))
-        if blocked:
-            return blocked
-        lua = lq.build_fortify_unit(unit_index)
-        lines = await self.conn.execute_write(lua)
-        result = _action_result(lines)
-        if result.startswith("SLEEPING"):
-            return "Unit is sleeping (this unit type cannot fortify)"
-        return result
+        return await self._set_unit_readiness(unit_index, "fortify")
 
     async def skip_unit(self, unit_index: int) -> str:
-        blocked = await self._action_gate(("unit", unit_index))
+        return await self._set_unit_readiness(unit_index, "skip")
+
+    async def cancel_unit_move(self, unit_index: int) -> str:
+        if self._actions.matches("cancel_move", ("unit", unit_index)):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
         if blocked:
             return blocked
-        lua = lq.build_skip_unit(unit_index)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            "cancel_move", ("unit", unit_index), lq.build_cancel_unit_move_query(unit_index, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"witness_token": token},
+        )
+        return await self._submit_action(pending, scope, lq.build_cancel_unit_move(unit_index, token))
+
+    async def _set_unit_readiness(
+        self, unit_index: int, kind: str, *, scope: _ActionScope | None = None,
+    ) -> str:
+        if self._actions.matches(kind, ("unit", unit_index)):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        if scope is None:
+            scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            kind, ("unit", unit_index), lq.build_unit_readiness_query(unit_index, kind, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"witness_token": token},
+        )
+        build = lq.build_skip_unit if kind == "skip" else lq.build_fortify_unit
+        return await self._submit_action(pending, scope, build(unit_index, token))
 
     async def skip_remaining_units(self) -> str:
-        # First try to fortify/heal combat units (InGame context)
-        fortify_result = ""
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
         try:
-            lua_fort = lq.build_fortify_remaining_units()
-            fort_lines = await self.conn.execute_write(lua_fort)
-            fortify_result = _action_result(fort_lines)
-        except Exception as e:
-            log.debug("Fortify remaining failed: %s", e)
-        # Then skip anything still with moves (GameCore context)
-        lua = lq.build_skip_remaining_units()
-        lines = await self.conn.execute_read(lua)
-        skip_result = _action_result(lines)
-        if fortify_result and not fortify_result.startswith("Error"):
-            return f"{fortify_result}\n{skip_result}"
-        return skip_result
+            lines = await self.conn.execute_write(scope.guard(lq.build_skip_remaining_units()))
+        except (OSError, TimeoutError, LuaError) as exc:
+            return f"Error: READINESS_UNKNOWN|Candidate query failed: {exc}; no units submitted"
+        result = _action_result(lines)
+        if result != "READY_UNITS":
+            return result
+        try:
+            candidates = [int(row.split("|", 1)[1]) for row in lines if row.startswith("READY_UNIT|")]
+            if len(candidates) != len(set(candidates)) or any(uid < 0 for uid in candidates):
+                raise ValueError("invalid candidate IDs")
+        except ValueError:
+            return "Error: READINESS_UNKNOWN|Malformed candidate list; no units submitted"
+        results = []
+        for unit_id in sorted(candidates):
+            result = await self._set_unit_readiness(unit_id, "skip", scope=scope)
+            results.append(f"unit:{unit_id}|{result}")
+            if self._pending_action is not None or not result.startswith(("SKIPPED", "NOT_READY", "ALREADY_WAITING")):
+                return "SKIP_BATCH_STOPPED|" + "\n".join(results)
+        return f"SKIPPED|{len(candidates)} candidates checked" + ("\n" + "\n".join(results) if results else "")
 
     async def automate_explore(self, unit_index: int) -> str:
         lua = lq.build_automate_explore(unit_index)
@@ -653,76 +706,21 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         if "CONTEXT_COMPLETE" not in lines:
             raise LuaError("Diplomacy session status is unknown")
-        return lq.parse_diplomacy_sessions(lines)
+        context = lq.parse_diplomacy_sessions(lines)
+        for session in context.sessions:
+            keys, _ = await self._diplomacy_progress.choices(self.conn, session.session_id, session.other_player_id)
+            session.choice_status = "KNOWN" if keys is not None else "UNKNOWN"
+            session.choices = [lq.DiplomacyChoice(key=key, text=key) for key in keys or []]
+        return context
 
     async def diplomacy_respond(self, other_player_id: int, response: str) -> str:
-        # Capture dialogue text BEFORE response to detect goodbye phase
-        pre_sessions = await self.get_diplomacy_sessions()
-        pre_text = ""
-        for s in pre_sessions.sessions:
-            if s.other_player_id == other_player_id:
-                pre_text = s.dialogue_text
-                break
-
-        # Phase 1: Send AddResponse only (no CloseSession — engine handles lifecycle)
-        lua = lq.build_diplomacy_respond(other_player_id, response.upper())
-        lines = await self.conn.execute_write(lua)
-        result = _action_result(lines)
-
-        # EXIT and error paths return immediately
-        if "SESSION_CLOSED" in result or result.startswith("Error"):
-            return result
-
-        # Phase 2: Give engine ~9 frames (0.3s at 30fps) to process the
-        # response and transition/close the session, then check state in
-        # a separate TCP round-trip (same-frame checks see stale state).
-        await asyncio.sleep(0.3)
-        check_lines = await self.conn.execute_write(
-            lq.build_check_diplomacy_session_state(other_player_id)
-        )
-        if not any("SESSION_OPEN" in l for l in check_lines):
-            return f"OK:RESPONDED|{response.upper()}|SESSION_CLOSED"
-
-        # Phase 3: Session still open — check if dialogue text changed.
-        # If unchanged, we're in the goodbye phase. Auto-close.
-        post_sessions = await self.get_diplomacy_sessions()
-        if post_sessions.status == "UNKNOWN":
-            return (f"OK:RESPONDED|{response.upper()}|SESSION_CONTINUES\n"
-                    f"Diplomacy context UNKNOWN: {post_sessions.reason}; read again before responding.")
-        post_text = ""
-        for s in post_sessions.sessions:
-            if s.other_player_id == other_player_id:
-                post_text = s.dialogue_text
-                break
-
-        if post_sessions.status == "NONE":
-            # Session disappeared between checks (race condition)
-            return f"OK:RESPONDED|{response.upper()}|SESSION_CLOSED"
-
-        if (pre_sessions.status == post_sessions.status == "DIALOGUE"
-                and pre_text and post_text == pre_text
-                and len(pre_sessions.sessions) == len(post_sessions.sessions) == 1
-                and pre_sessions.sessions[0].session_id == post_sessions.sessions[0].session_id
-                and post_sessions.sessions[0].other_player_id == other_player_id):
-            # Dialogue unchanged → goodbye phase. Force close.
-            log.info(
-                "Goodbye phase detected (text unchanged) for player %d — auto-closing",
-                other_player_id,
-            )
-            close_lua = lq.build_diplomacy_respond(other_player_id, "EXIT")
-            await self.conn.execute_write(close_lua)
-            return f"OK:RESPONDED|{response.upper()}|SESSION_CLOSED (auto-closed goodbye phase)"
-
-        # Include the new dialogue text so the agent can see what the leader said
-        post_reason = ""
-        for s in post_sessions.sessions:
-            if s.other_player_id == other_player_id:
-                post_reason = s.reason_text
-                break
-        dialogue_note = f'\nLeader says: "{post_text}"'
-        if post_reason:
-            dialogue_note += f'\nReason/agenda: "{post_reason}"'
-        return f"OK:RESPONDED|{response.upper()}|SESSION_CONTINUES{dialogue_note}"
+        sessions = await self.get_diplomacy_sessions()
+        if self._diplomacy_progress.response is not None:
+            return await self._diplomacy_progress.confirm_response(self.conn)
+        candidates = [item for item in sessions.sessions if item.other_player_id == other_player_id]
+        if sessions.status != "DIALOGUE" or len(candidates) != 1:
+            return "ERR:OUTCOME_UNKNOWN|Current dialogue is not verified; no response submitted."
+        return await self._diplomacy_progress.respond(self.conn, candidates[0].session_id, other_player_id, response)
 
     async def send_diplomatic_action(self, other_player_id: int, action: str) -> str:
         if action.upper() == "OPEN_BORDERS":
@@ -737,15 +735,18 @@ class GameState:
             "DECLARE_"
         )
         is_friendship = action.upper() == "DECLARE_FRIENDSHIP"
+        access_action = (
+            action.upper() if action.upper() in {"DIPLOMATIC_DELEGATION", "RESIDENT_EMBASSY"} else None
+        )
         lua = lq.build_send_diplo_action(other_player_id, action.upper())
         try:
             lines = await self.conn.execute_write(lua)
         except (OSError, TimeoutError, LuaError, ValueError):
-            if is_friendship:
-                return await self._confirm_diplomatic_relationship(other_player_id, None)
+            if is_friendship or access_action:
+                return await self._confirm_diplomatic_relationship(other_player_id, None, access_action=access_action)
             raise
-        if is_friendship:
-            return await self._confirm_diplomatic_relationship(other_player_id, lines)
+        if is_friendship or access_action:
+            return await self._confirm_diplomatic_relationship(other_player_id, lines, access_action=access_action)
         result = _action_result(lines)
 
         # _action_result rewrites "ERR:" to "Error: " — only schedule the
@@ -758,11 +759,14 @@ class GameState:
         return result
 
     async def _confirm_diplomatic_relationship(
-        self, other_player_id: int, lines: list[str] | None, *, alliance_type: str | None = None,
+        self, other_player_id: int, lines: list[str] | None, *,
+        alliance_type: str | None = None, access_action: str | None = None,
     ) -> str:
         """Confirm only the scoped native relationship; never submit or clean up."""
-        kind = "ALLIANCE" if alliance_type is not None else "FRIENDSHIP"
+        kind = access_action or ("ALLIANCE" if alliance_type is not None else "FRIENDSHIP")
         relationship = f"{alliance_type} alliance" if alliance_type is not None else "Friendship declaration"
+        if access_action:
+            relationship = "Delegation" if access_action == "DIPLOMATIC_DELEGATION" else "Embassy"
         unconfirmed = (
             f"PROPOSED_UNCONFIRMED|{relationship} to player {other_player_id} is unconfirmed; "
             "the request may have been submitted. Query get_diplomacy before another proposal; "
@@ -774,9 +778,10 @@ class GameState:
         if result.startswith("Error:") and not result.startswith("Error: OUTCOME_UNKNOWN"):
             return result
         scope = [line.split("|") for line in lines if line.startswith(f"{kind}_SCOPE|")]
-        proposed = [line for line in lines if line.startswith("OK:PROPOSED|")]
-        scope_length = 4 if alliance_type is not None else 3
-        if not result.startswith("PROPOSED|") or len(proposed) != 1 or len(scope) != 1 or len(scope[0]) != scope_length:
+        receipt_prefix = "ALREADY_ESTABLISHED|" if access_action and result.startswith("ALREADY_ESTABLISHED|") else "PROPOSED|"
+        proposed = [line for line in lines if line.startswith(f"OK:{receipt_prefix}")]
+        scope_length = 5 if access_action else (4 if alliance_type is not None else 3)
+        if not result.startswith(receipt_prefix) or len(proposed) != 1 or len(scope) != 1 or len(scope[0]) != scope_length:
             return unconfirmed
         try:
             owner, target = int(scope[0][1]), int(scope[0][2])
@@ -784,19 +789,34 @@ class GameState:
             return unconfirmed
         if owner < 0 or owner == target or target != other_player_id:
             return unconfirmed
-        state = f"ALLIANCE_{alliance_type}" if alliance_type is not None else "DECLARED_FRIEND"
+        state = "PRESENT" if access_action else (f"ALLIANCE_{alliance_type}" if alliance_type is not None else "DECLARED_FRIEND")
         if alliance_type is not None and scope[0][3] != state:
             return unconfirmed
         name = result.split("|", 1)[1]
-        query = (lq.build_check_alliance_state(target, owner, alliance_type) if alliance_type is not None
-                 else lq.build_check_friendship_state(target, owner))
+        if access_action:
+            try:
+                seed = int(scope[0][3])
+            except ValueError:
+                return unconfirmed
+            civilization = scope[0][4]
+            if not re.fullmatch(r"CIVILIZATION_[A-Za-z0-9_]+", civilization):
+                return unconfirmed
+            query = lq.build_check_diplomatic_access(target, owner, access_action, seed, civilization)
+        elif alliance_type is not None:
+            query = lq.build_check_alliance_state(target, owner, alliance_type)
+        else:
+            query = lq.build_check_friendship_state(target, owner)
         try:
             # The deadline includes reads. Transient state never authorizes a
-            # rejection or another submission of either diplomatic proposal.
+            # rejection or another submission of any diplomatic proposal.
             async with asyncio.timeout(ACTION_CONFIRM_TIMEOUT):
                 while True:
                     evidence = await self.conn.execute_write(query)
                     if evidence == [f"{kind}|{owner}|{target}|{state}"]:
+                        if access_action:
+                            if receipt_prefix == "ALREADY_ESTABLISHED|":
+                                return f"ACCEPTED|{relationship} already established with {name}"
+                            return f"ACCEPTED|{name} accepted your {relationship.lower()}"
                         if alliance_type is not None:
                             return f"ACCEPTED|{alliance_type} alliance formed with {name}"
                         return f"ACCEPTED|Friendship established with {name}"
@@ -843,48 +863,23 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         if "CONTEXT_COMPLETE" not in lines:
             raise LuaError("Pending deal status is unknown")
-        return lq.parse_pending_deals_response(lines)
+        context = lq.parse_pending_deals_response(lines)
+        context.outgoing_summary = await self._diplomacy_progress.outgoing_report(self.conn)
+        return context
 
     async def respond_to_deal(self, other_player_id: int, accept: bool) -> str:
+        owned = await self._diplomacy_progress.respond_counter(self, other_player_id, accept)
+        if owned is not None:
+            return owned
         lua = lq.build_respond_to_deal(other_player_id, accept)
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
-    async def propose_trade(
-        self,
-        other_player_id: int,
-        offer_items: list[dict],
-        request_items: list[dict],
-    ) -> str:
-        lua = lq.build_propose_trade(other_player_id, offer_items, request_items)
-        lines = await self.conn.execute_write(lua)
-        result = _action_result(lines)
-        # Dismiss diplomacy UI left open by the trade session.
-        # After CloseSession, the game transitions DiplomacyActionView to
-        # OVERVIEW_MODE (intel screen). Need a brief delay for the C++ UI
-        # state machine to settle, then dismiss it in a separate call.
-        await asyncio.sleep(0.3)
-        try:
-            await self.conn.execute_write(
-                'pcall(function() ContextPtr:LookUpControl("/InGame/DiplomacyActionView"):SetHide(true) end) '
-                "pcall(function() Events.HideLeaderScreen() end) "
-                "LuaEvents.DiplomacyActionView_ShowIngameUI() "
-                f'print("{lq.SENTINEL}")'
-            )
-        except Exception:
-            pass
-        return result
+    async def propose_trade(self, other_player_id: int, offer_items: list[dict], request_items: list[dict]) -> str:
+        return await self._diplomacy_progress.run_trade(self, other_player_id, offer_items, request_items, preview=False)
 
-    async def test_trade(
-        self,
-        other_player_id: int,
-        offer_items: list[dict],
-        request_items: list[dict],
-    ) -> str:
-        lua = lq.build_test_trade(other_player_id, offer_items, request_items)
-        lines = await self.conn.execute_write(lua)
-        result = lq.parse_test_trade_response(lines)
-        return narrate_test_trade(result)
+    async def test_trade(self, other_player_id: int, offer_items: list[dict], request_items: list[dict]) -> str:
+        return await self._diplomacy_progress.run_trade(self, other_player_id, offer_items, request_items, preview=True)
 
     async def propose_peace(self, other_player_id: int) -> str:
         lua = lq.build_propose_peace(other_player_id)
@@ -932,60 +927,70 @@ class GameState:
         lua = lq.build_set_policies(assignments)
         lines = await self.conn.execute_write(lua)
         result = _action_result(lines)
-        if not result.startswith("Error"):
-            # Post-verify: RequestPolicyChanges can silently no-op (e.g. during era transitions)
-            expected_slots: dict[int, str] = {}
-            plan_count = None
-            invalid_plan = False
-            for line in lines:
-                if line.startswith("POLICY_PLAN_COUNT|"):
-                    try:
-                        if plan_count is not None:
-                            invalid_plan = True
-                        _, count = line.split("|")
-                        plan_count = int(count)
-                    except ValueError:
+        if result.startswith("Error") or result.startswith("POLICIES_UNCHANGED|"):
+            return result
+        # Native policy application is asynchronous; only later matching
+        # reads confirm it. An old frame never proves rejection.
+        expected_slots: dict[int, str] = {}
+        plan_count = None
+        invalid_plan = False
+        for line in lines:
+            if line.startswith("POLICY_PLAN_COUNT|"):
+                try:
+                    if plan_count is not None:
                         invalid_plan = True
-                elif line.startswith("POLICY_PLAN"):
-                    try:
-                        _, slot, policy = line.split("|")
-                        index = int(slot)
-                        if index in expected_slots or not policy:
-                            invalid_plan = True
-                        expected_slots[index] = policy
-                    except ValueError:
+                    _, count = line.split("|")
+                    plan_count = int(count)
+                except ValueError:
+                    invalid_plan = True
+            elif line.startswith("POLICY_PLAN"):
+                try:
+                    _, slot, policy = line.split("|")
+                    index = int(slot)
+                    if index in expected_slots or not policy:
                         invalid_plan = True
-            complete_plan = (
-                not invalid_plan and plan_count is not None and plan_count > 0
-                and len(expected_slots) == plan_count
-                and all(0 <= idx < plan_count for idx in expected_slots)
-                and all(expected_slots.get(idx) == ("NONE" if policy.upper() == "NONE" else policy)
-                        for idx, policy in assignments.items())
+                    expected_slots[index] = policy
+                except ValueError:
+                    invalid_plan = True
+        complete_plan = (
+            not invalid_plan and plan_count is not None and plan_count > 0
+            and len(expected_slots) == plan_count
+            and all(0 <= idx < plan_count for idx in expected_slots)
+            and all(expected_slots.get(idx) == ("NONE" if policy.upper() == "NONE" else policy)
+                    for idx, policy in assignments.items())
+        )
+        unconfirmed = (
+            "POLICIES_UNCONFIRMED|Policy change submitted once; application not confirmed. "
+            "Inspect get_policies before another change; do not automatically resend."
+        )
+        if not complete_plan:
+            return unconfirmed + (
+                "\nWARN:POLICY_PLAN_UNVERIFIED — final plan receipt missing or invalid."
             )
-            if not complete_plan:
-                expected_slots = dict(assignments)
-                result += (
-                    "\nWARN:POLICY_PLAN_UNVERIFIED — final plan receipt missing or invalid; "
-                    "only requested slots can be checked. Inspect get_policies before another change."
-                )
-            status = await self.get_policies()
-            slot_map = {s.slot_index: s.current_policy for s in status.slots}
-            if complete_plan and set(slot_map) != set(expected_slots):
-                result += "\nWARN:POLICY_PLAN_UNVERIFIED — slot layout changed after submission."
-            mismatches = []
-            for idx, pol in expected_slots.items():
-                expected = None if pol.upper() == "NONE" else pol
-                actual = slot_map.get(idx)
-                if idx not in slot_map or actual != expected:
-                    wanted = "EMPTY" if expected is None else pol
-                    got = actual or "EMPTY"
-                    mismatches.append(f"slot {idx} (wanted {wanted}, got {got})")
-            if mismatches:
-                result += (
-                    f"\nWARN:SILENT_FAILURE — engine rejected: {', '.join(mismatches)}. "
-                    "Try a different policy or retry next turn."
-                )
-        return result
+        mismatches = []
+        try:
+            async with asyncio.timeout(ACTION_CONFIRM_TIMEOUT):
+                while True:
+                    status = await self.get_policies()
+                    slot_map = {s.slot_index: s.current_policy for s in status.slots}
+                    mismatches = []
+                    for idx, pol in expected_slots.items():
+                        expected = None if pol.upper() == "NONE" else pol
+                        actual = slot_map.get(idx)
+                        if idx not in slot_map or actual != expected:
+                            wanted = "EMPTY" if expected is None else pol
+                            got = actual or "EMPTY"
+                            mismatches.append(f"slot {idx} (wanted {wanted}, got {got})")
+                    if set(slot_map) != set(expected_slots):
+                        mismatches.append("slot layout differs from submitted plan")
+                    if not mismatches:
+                        return "POLICIES_SET|Final policy plan confirmed by subsequent readback."
+                    await asyncio.sleep(ACTION_CONFIRM_INTERVAL)
+        except (OSError, TimeoutError, LuaError, ValueError):
+            pass
+        if mismatches:
+            unconfirmed += "\nLast read: " + ", ".join(mismatches)
+        return unconfirmed
 
     # ------------------------------------------------------------------
     # Governor methods (InGame context)
@@ -1486,7 +1491,7 @@ class GameState:
                     lq.TurnEvent(
                         priority=1,
                         category="unit",
-                        message=f"Your {ub.name} ({ub.unit_type}) was killed! Last seen at ({ub.x},{ub.y}).",
+                        message=f"Your {ub.name} ({ub.unit_type}) no longer appears in the unit snapshot; cause unknown. Last seen at ({ub.x},{ub.y}).",
                     )
                 )
             else:
@@ -1695,13 +1700,13 @@ class GameState:
             lines.append("== Action Required ==")
             for n in action_required:
                 hint = f"  -> Use: {n.resolution_hint}" if n.resolution_hint else ""
-                lines.append(f"  * {n.message}{hint}")
+                lines.append(f"  * {narrate_notification_message(n)}{hint}")
 
         if info_notifs:
             lines.append("")
             lines.append("== Notifications ==")
             for n in info_notifs:
-                lines.append(f"  - {n.message}")
+                lines.append(f"  - {narrate_notification_message(n)}")
 
         return "\n".join(lines)
 
@@ -1763,15 +1768,36 @@ class GameState:
             limited.append("Victory warnings unavailable; use get_victory_progress.")
         return "\n".join([report, *limited])
 
+    async def get_turn_status(self) -> str:
+        """Read native phases without confirming or retiring pending advancement."""
+        result = await self._turn_progress.get_status(self)
+        if self._diplomacy_progress.pending:
+            result += "\n" + self._diplomacy_progress.trade_summary()
+            diagnostic = await self._diplomacy_progress.diagnostics(self.conn)
+            if diagnostic:
+                result += "\n" + diagnostic
+        if self._diplomacy_cleanup.pending:
+            result += "\ndiplomacy_cleanup: native callback outcome unknown; dismiss_popup only confirms its receipt; no callback or trade will be replayed."
+        return result
+
     async def end_turn(self) -> str:
         """End the turn with snapshot-diff event detection."""
+        progress = getattr(self, "_diplomacy_progress", None)
+        if progress is not None:
+            if self._diplomacy_cleanup.pending and not self.turn_pending:
+                return "ERR:OUTCOME_UNKNOWN|Native diplomacy cleanup is unconfirmed; dismiss_popup only confirms it."
+            if progress.pending and not self.turn_pending:
+                return progress.trade_summary()
+            await progress.ensure_observer(self.conn)
         return await self._turn_progress.execute(self)
 
     async def dismiss_popup(self) -> str:
         """Dismiss any blocking popup or UI overlay."""
         from civ_mcp.game_lifecycle import dismiss_popup
 
-        return await dismiss_popup(self.conn)
+        if self._diplomacy_progress.trade is not None:
+            return await self._diplomacy_progress.explicit_cleanup(self)
+        return await dismiss_popup(self.conn, self._diplomacy_cleanup)
 
     async def list_saves(self) -> str:
         """List available save files."""
@@ -1898,7 +1924,7 @@ class GameState:
         if self._pending_load and not recovering:
             return "ERR:OUTCOME_UNKNOWN|An earlier load is unconfirmed; inspect state or use explicit recovery, not another load."
         if not recovering and (
-            self._pending_save or self._pending_end_turn
+            self._pending_save or self._pending_end_turn or self.diplomacy_pending
             or self.pending_action_entity is not None
         ):
             return "ERR:OUTCOME_UNKNOWN|An action/save/end-turn is pending; confirm it or use explicit restart_and_load before replacing the session."

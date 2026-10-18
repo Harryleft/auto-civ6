@@ -104,6 +104,9 @@ class ActionLifecycle:
             "attack": ("RANGE_ATTACK", "MELEE_ATTACK", "AIR_ATTACK", "CITY_RANGE_ATTACK"),
             "found": ("FOUNDED|",),
             "production": ("PRODUCING|",),
+            "skip": ("READINESS_REQUESTED|",),
+            "fortify": ("READINESS_REQUESTED|",),
+            "cancel_move": ("CANCEL_MOVE_REQUESTED|",),
         }[pending.kind]
         if result.startswith(accepted):
             pending.success = result
@@ -241,6 +244,28 @@ print("{lq.SENTINEL}")
             if (identity != pending.identity or int(fields[3]) != pending.turn
                     or int(fields[4]) != pending.owner):
                 return None
+        if pending.kind in ("skip", "fortify"):
+            rows = [row.split("|") for row in pending.observed if row.startswith("READINESS|")]
+            if len(rows) != 1 or len(rows[0]) != 7:
+                return None
+            row = rows[0]
+            if (row[1] != pending.details["witness_token"] or row[2] != str(pending.owner)
+                    or not row[3].isdigit() or int(row[3]) % 65536 != pending.entity[1] % 65536
+                    or row[4:6] != ["ready:false", "busy:false"]):
+                return None
+            label = row[6].removeprefix("result:")
+            if label in ({"SKIPPED"} if pending.kind == "skip" else {"FORTIFIED", "SLEEPING"}):
+                return f"{label}|unit:{row[3]}|ready:false"
+        if pending.kind == "cancel_move":
+            rows = [row.split("|") for row in pending.observed if row.startswith("CANCEL_MOVE|")]
+            if len(rows) != 1 or len(rows[0]) != 9:
+                return None
+            row = rows[0]
+            if (row[1] == pending.details["witness_token"] and row[2] == str(pending.owner)
+                    and row[3].isdigit() and int(row[3]) % 65536 == pending.entity[1] % 65536
+                    and re.fullmatch(r"from:-?\d+,-?\d+", row[4]) and row[5] == row[4].replace("from:", "now:", 1)
+                    and row[6:] == ["queue:none", "busy:false", "entered:true"]):
+                return f"MOVE_CANCELLED|unit:{row[3]}|at:{row[4][5:]}|Position retained; choose the next unit intent separately."
         if pending.kind == "production":
             target = pending.details.get("target")
             if target is not None:
@@ -329,20 +354,18 @@ print("{lq.SENTINEL}")
                     if moves is not None:
                         suffix += f"|moves_remaining:{moves:g}"
                     return pending.success + suffix + f"|STOPPED_MID_PATH ({native_stop})"
-                # A path preview alone never closes movement. This branch
-                # additionally requires this request's native segment event,
-                # full runtime ID, current identity/turn, and queued target.
+                # Completion belongs to the submitted segment. A new path
+                # may backtrack or disappear after units block its route;
+                # its turn labels cannot invalidate the native event.
+                # Keep the full request identity and queued target checks.
                 queued = [row for row in pending.observed if row.startswith("QUEUED_TARGET|")]
-                steps = [row for row in pending.observed if row.startswith("PATH_STEP|")]
                 if (witness is not None and witness[1] and witness[0] == origin
-                        and len(queued) == 1 and len(steps) == 1
+                        and len(queued) == 1
                         and origin is not None and (x, y) != origin and busy == "false"
                         and moves is not None and moves > 0
-                        and queued[0] == f"QUEUED_TARGET|{target[0]}|{target[1]}"
-                        and re.fullmatch(r"PATH_STEP\|-?\d+\|-?\d+\|turn:[1-9]\d*", steps[0])
-                        and int(steps[0].rsplit(":", 1)[1]) > 1):
+                        and queued[0] == f"QUEUED_TARGET|{target[0]}|{target[1]}"):
                     return (pending.success + suffix + f"|moves_remaining:{moves:g}"
-                            "|STOPPED_MID_PATH (native segment complete; next step requires later turn)"
+                            "|STOPPED_MID_PATH (native segment complete)"
                             + "|" + "|".join(witness[2]))
                 impassable = any(line.startswith(("DIAG|MOUNTAIN|", "DIAG|IMPASSABLE|")) for line in pending.observed)
                 if (x, y) == origin and busy == "false" and impassable:

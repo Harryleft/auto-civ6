@@ -247,10 +247,11 @@ def test_real_mcp_overview_and_diplomacy_expose_only_public_stable_identities(mo
                              lowlevel.create_initialization_options())
             async with ClientSession(client_read, client_write) as session:
                 await session.initialize()
-                tools = (await session.list_tools()).tools
-                assert len(tools) == 80
-                assert all(tool.annotations.readOnlyHint for tool in tools
-                           if tool.name in {"get_game_overview", "get_diplomacy"})
+                tools = {tool.name: tool for tool in (await session.list_tools()).tools}
+                required = {"get_game_overview", "get_diplomacy", "get_turn_status"}
+                assert required <= tools.keys()
+                assert all(tools[name].annotations.readOnlyHint is True for name in required)
+                assert tools["get_turn_status"].inputSchema.get("properties", {}) == {}
                 overview = await session.call_tool("get_game_overview", {})
                 assert not overview.isError
                 text = overview.content[0].text
