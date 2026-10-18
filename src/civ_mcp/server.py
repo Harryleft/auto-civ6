@@ -117,7 +117,7 @@ async def _logged(
                     dependent = (
                         (entity[0] == "unit" and isinstance(unit_id, int)
                          and (entity[1] == unit_id % 65536
-                              or getattr(app.game, "pending_action_kind", None) == "pillage"))
+                              or getattr(app.game, "pending_action_kind", None) in ("pillage", "contribution")))
                         or (entity[0] == "city" and entity[1] == city_id)
                         or tool_name == "run_lua"
                         or (entity[0] == "unit" and tool_name == "skip_remaining_units")
@@ -1280,7 +1280,7 @@ async def unit_action(
     For repair: repairs a pillaged improvement on the builder's current tile. No improvement name needed.
     For remove_improvement: demolishes an intact improvement on the builder's current tile (e.g. to replace a farm with a mine). Costs one charge.
     For activate: activates a Great Person on their matching district.
-    For sacrifice_charges: Royal Society builder sacrifice — spends ALL builder charges to boost a district project (2% of cost per charge). Builder must be on the district tile.
+    For sacrifice_charges: Royal Society contribution — submit once with the full native builder ID, then confirm consumed charges and project progress/completion. Builder must be on its own district with an active matching project. Unknown results retain the gate; repeat only confirms.
     For spread_religion: spreads religion at current tile. Missionaries/Apostles only.
     For build_route: builds road/railroad on current tile. Military Engineers only. No charges used; costs 1 Iron + 1 Coal per railroad tile.
     For fortify/skip/found_city/automate/heal/alert/sleep/delete: no target needed.
@@ -1302,13 +1302,13 @@ async def unit_action(
         # Move/attack/founding reconcile their own pending requests. Other
         # commands must not change that unit before its outcome is known.
         if (
-            action.lower() not in {"move", "attack", "found_city", "cancel_move", "pillage"}
+            action.lower() not in {"move", "attack", "found_city", "cancel_move", "pillage", "sacrifice_charges"}
             and (getattr(gs, "pending_action_entity", None) == ("unit", unit_index)
-                 or getattr(gs, "pending_action_kind", None) == "pillage")
+                 or getattr(gs, "pending_action_kind", None) in ("pillage", "contribution"))
         ):
             confirmation = await gs.confirm_pending_action()
             if (gs.pending_action_entity == ("unit", unit_index)
-                    or getattr(gs, "pending_action_kind", None) == "pillage"):
+                    or getattr(gs, "pending_action_kind", None) in ("pillage", "contribution")):
                 return confirmation
         match action.lower():
             case "move":
@@ -1358,7 +1358,7 @@ async def unit_action(
             case "activate":
                 return await gs.activate_great_person(unit_index)
             case "sacrifice_charges":
-                return await gs.sacrifice_builder_charges(unit_index)
+                return await gs.sacrifice_builder_charges(unit_id)
             case "spread_religion":
                 return await gs.spread_religion(unit_index)
             case "teleport":
