@@ -1,6 +1,6 @@
 # B02：自动探索的真实原生开始确认
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 
@@ -43,3 +43,5 @@ Gameplay automation policy, background observers, resource or rule changes, broa
 ## Further Notes
 
 Original request #87 in this run evidence/tool-calls.jsonl, token 53879b1ea5c044b3ac638f76c274c80c, unit 196608, turn 11, seed -1896272000. Before (42,30), after (43,28), moves 0. Native task witness entered=true, returned=true, started absent, op=-1676983098. Unit IsAutomated=false and IsReadyToMove=false after current movement; unsupported GetAutomationType/GetOperationType absent. These facts alone do not prove lasting automation. Read-only evidence b02-native-task.txt retained. Last confirmed recovery checkpoint T2: gold_20261019_t002_b01_verified.
+
+实机及审查：T11 单次 automate 原生开始确认、T11→T12、独立 checkpoint 保存均通过（本轮工具日志 #130–135）；Standards / Spec 无实质发现。
