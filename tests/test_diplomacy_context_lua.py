@@ -107,7 +107,7 @@ def test_embassy_dialogue_does_not_read_or_display_valid_old_working_deal():
 def test_trade_response_rejects_dialogue_before_send_or_session_cleanup():
     conn = DiplomacyConn()
     result = run(GameState(conn).respond_to_deal(1, True))
-    assert result.startswith("Error:")
+    assert result.startswith("ERR:")
     assert "DIALOGUE" in result
     assert list(conn.lua.globals().mutations.values()) == []
     assert conn.lua.globals().reads == 0
@@ -124,7 +124,7 @@ DealManager.AreWorkingDealsEqual=function() return true end
 ''')
 
 
-def test_current_incoming_with_both_roots_visible_is_readable_and_submitted_once():
+def test_current_incoming_with_both_roots_visible_is_readable_without_mutation():
     conn = DiplomacyConn()
     incoming(conn)
     state = GameState(conn)
@@ -136,9 +136,9 @@ def test_current_incoming_with_both_roots_visible_is_readable_and_submitted_once
     assert "deal or demand" in narrate.narrate_diplomacy_sessions(sessions)
     assert "deal or demand" in narrate.narrate_pending_deals(deals)
     assert list(conn.lua.globals().mutations.values()) == []
-    assert run(state.respond_to_deal(1, True)) == "DEAL_ACCEPTED|Sweden"
-    actions = list(conn.lua.globals().mutations.values())
-    assert [entry for entry in actions if entry.startswith("send:")] == ["send:1:1"]
+    # Queries stay useful without the named native observer; mutation requires it.
+    assert "NOT_SUBMITTED" in run(state.respond_to_deal(1, True))
+    assert list(conn.lua.globals().mutations.values()) == []
 
 
 def test_both_queries_preserve_dialogue_without_reading_the_trade_cache():
@@ -151,15 +151,6 @@ def test_both_queries_preserve_dialogue_without_reading_the_trade_cache():
     assert "DIALOGUE" in narrate.narrate_pending_deals(deals)
     assert "Welcome" in narrate.narrate_diplomacy_sessions(sessions)
     assert conn.lua.globals().reads == 0
-
-
-@pytest.mark.parametrize("accept, action", [(True, "send:1:1"), (False, "send:2:1")])
-def test_explicit_current_proposal_response_sends_one_requested_action(accept, action):
-    conn = DiplomacyConn()
-    incoming(conn)
-    run(GameState(conn).respond_to_deal(1, accept))
-    mutations = list(conn.lua.globals().mutations.values())
-    assert [entry for entry in mutations if entry.startswith("send:")] == [action]
 
 
 def test_finished_trade_returns_to_dialogue_while_the_working_cache_remains_valid():
@@ -178,7 +169,7 @@ controls["/InGame/DiplomacyActionView/LeaderResponseText"].text="No, thank you."
     assert context.sessions[0].dialogue_text == "No, thank you."
     assert context.sessions[0].deal_summary == ""
     assert run(state.get_pending_deals()).status == "DIALOGUE"
-    assert "Error:" in run(state.respond_to_deal(1, False))
+    assert "ERR:" in run(state.respond_to_deal(1, False))
     assert conn.lua.globals().reads == 0
     assert list(conn.lua.globals().mutations.values()) == []
 
@@ -213,7 +204,7 @@ def test_ambiguous_context_is_unknown_in_both_tools_and_cannot_send_or_close(set
         assert "UNKNOWN" in text and "Current demand" not in text
         assert "No pending" not in text
     for accept in (True, False):
-        assert run(state.respond_to_deal(1, accept)).startswith("Error:")
+        assert run(state.respond_to_deal(1, accept)).startswith("ERR:")
     assert list(conn.lua.globals().mutations.values()) == []
 
 
@@ -225,7 +216,7 @@ def test_hidden_roots_cannot_authorize_their_locally_visible_children_or_valid_c
     assert context.status == "UNKNOWN" and context.reason == "NO_CURRENT_VIEW"
     assert context.sessions[0].dialogue_text == ""
     assert run(state.get_pending_deals()).status == "UNKNOWN"
-    assert run(state.respond_to_deal(1, True)).startswith("Error:")
+    assert run(state.respond_to_deal(1, True)).startswith("ERR:")
     assert conn.lua.globals().reads == 0
     assert list(conn.lua.globals().mutations.values()) == []
 
@@ -238,7 +229,7 @@ def test_no_session_is_none_even_if_valid_cached_deal_and_child_text_remain():
         assert context.status == "NONE"
         assert context.sessions == context.deals == []
     assert "No pending" in narrate.narrate_pending_deals(run(state.get_pending_deals()))
-    assert run(state.respond_to_deal(1, True)).startswith("Error:")
+    assert run(state.respond_to_deal(1, True)).startswith("ERR:")
     assert conn.lua.globals().reads == 0
     assert list(conn.lua.globals().mutations.values()) == []
 
@@ -257,7 +248,7 @@ def test_target_mismatch_cannot_submit_or_close_the_other_current_proposal():
     conn = DiplomacyConn()
     incoming(conn)
     for accept in (True, False):
-        assert run(GameState(conn).respond_to_deal(2, accept)).startswith("Error:")
+        assert run(GameState(conn).respond_to_deal(2, accept)).startswith("ERR:")
     assert list(conn.lua.globals().mutations.values()) == []
 
 

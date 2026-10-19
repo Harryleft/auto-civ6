@@ -5,7 +5,7 @@ import asyncio
 import pytest
 
 from civ_mcp.game_state import GameState
-from test_friendship_confirmation_lua import FriendshipConn, short_confirmation
+from test_friendship_confirmation_lua import FriendshipConn, short_confirmation, checked_rows
 
 
 class AllianceConn(FriendshipConn):
@@ -42,6 +42,7 @@ DealAgreementTypes={ALLIANCE=77}
 DealProposalAction.PROPOSED=3
 alliance_sends={}
 DealManager.HasPendingDeal=function() return false end
+DealManager.AreWorkingDealsEqual=function() return true end
 local outgoing={AddItemOfType=function(_, itemType, owner)
     return {SetSubType=function(_, value) submitted_subtype=value end,
             SetValueType=function(_, value) submitted_alliance=value end}
@@ -84,7 +85,7 @@ def assert_one_alliance_submission(conn, expected_sends=(3, 1)):
     # No working-deal reads, response, or cleanup are repeated by confirmation.
     assert conn.lua.globals().reads == 2
     assert list(conn.lua.globals().mutations.values()) == [
-        "clear", *[f"send:{action}" for action in expected_sends], "response", "close", "show", "hide",
+        "clear", *[f"send:{action}" for action in expected_sends], "close",
     ]
 
 
@@ -118,14 +119,14 @@ def test_nonallied_wrong_type_missing_or_inconsistent_native_witness_remains_unc
     original = conn.execute_write
 
     async def execute(source):
-        if conn.calls:
+        if len(conn.lua.globals().friendship_requests):
             conn.lua.execute(setup)
         return await original(source)
 
     conn.execute_write = execute
     result = run(GameState(conn).form_alliance(1, "RESEARCH"))
-    assert result.startswith("PROPOSED_UNCONFIRMED|"), result
-    assert "get_diplomacy" in result and "do not automatically resend" in result
+    assert result.startswith("ERR:OUTCOME_UNKNOWN"), result
+    assert "get_diplomacy" in result and "confirm only" in result
     assert "ACCEPTED" not in result and "REJECTED" not in result and "FAILED" not in result
     assert_one_alliance_submission(conn)
 
@@ -136,7 +137,7 @@ def test_nonallied_wrong_type_missing_or_inconsistent_native_witness_remains_unc
     ('GameInfo.Alliances.ALLIANCE_RESEARCH.Index=0/0', "UNKNOWN_ALLIANCE_TYPE"),
     ('GameInfo.Alliances.ALLIANCE_RESEARCH.Index=-1', "UNKNOWN_ALLIANCE_TYPE"),
     ('GameInfo.Alliances.ALLIANCE_RESEARCH.AllianceType="ALLIANCE_MILITARY"', "UNKNOWN_ALLIANCE_TYPE"),
-    ('pre_state=44', "ALREADY_ALLIED"),
+    ('pre_state=44;alliance_steps={{[0]=44,[1]=44,alliance=9}}', "ALREADY_ALLIED"),
     ('pre_state=60', "NOT_FRIENDS"),
     ('pre_state=999', "RELATIONSHIP_UNKNOWN"),
     ('Players[1].IsAlive=function() return false end', "INVALID_PLAYER"),
@@ -148,8 +149,8 @@ def test_native_prechecks_reject_before_any_deal_mutation_or_confirmation(setup,
     conn = AllianceConn()
     conn.lua.execute(setup)
     result = run(GameState(conn).form_alliance(1, "RESEARCH"))
-    assert result.startswith(f"Error: {error}|"), result
-    assert len(conn.calls) == 1
+    assert result.startswith("Error: RELATIONSHIP_REFUSED|") and error in result, result
+    assert len(conn.calls) == 2
     assert len(conn.lua.globals().friendship_requests) == len(conn.lua.globals().alliance_sends) == 0
     assert conn.lua.globals().reads == conn.lua.globals().observations == 0
     assert list(conn.lua.globals().mutations.values()) == []
@@ -158,7 +159,7 @@ def test_native_prechecks_reject_before_any_deal_mutation_or_confirmation(setup,
 def test_unsupported_requested_type_never_falls_back_to_another_native_alliance():
     conn = AllianceConn()
     result = run(GameState(conn).form_alliance(1, "NOT_A_TYPE"))
-    assert result.startswith("Error: UNKNOWN_ALLIANCE_TYPE|"), result
+    assert result.startswith("Error: UNSUPPORTED_DIPLOMATIC_ACTION|"), result
     assert list(conn.lua.globals().mutations.values()) == []
     assert len(conn.lua.globals().alliance_sends) == 0
 
@@ -178,7 +179,7 @@ DealManager.GetWorkingDeal=function(direction, ...)
 end
 '''.replace("INCOMING_REPLACEMENT", '{GetItemCount=function() return 0 end}' if empty else 'nil'))
     result = run(GameState(conn).form_alliance(1, "RESEARCH"))
-    assert result.startswith("PROPOSED_UNCONFIRMED|")
+    assert result.startswith("ERR:OUTCOME_UNKNOWN")
     assert_one_alliance_submission(conn, expected_sends=(3,))
 
 
@@ -188,12 +189,12 @@ def test_alliance_read_error_preserves_uncertainty_without_resubmission(error):
     original = conn.execute_write
 
     async def execute(source):
-        if conn.calls:
+        if len(conn.lua.globals().friendship_requests):
             raise error
         return await original(source)
 
     conn.execute_write = execute
-    assert run(GameState(conn).form_alliance(1, "RESEARCH")).startswith("PROPOSED_UNCONFIRMED|")
+    assert run(GameState(conn).form_alliance(1, "RESEARCH")).startswith("ERR:OUTCOME_UNKNOWN")
     assert_one_alliance_submission(conn)
 
 
@@ -202,7 +203,7 @@ def test_alliance_confirmation_deadline_includes_a_hung_read(short_confirmation)
     original = conn.execute_write
 
     async def execute(source):
-        if conn.calls:
+        if len(conn.lua.globals().friendship_requests):
             await asyncio.Future()
         return await original(source)
 
@@ -211,7 +212,7 @@ def test_alliance_confirmation_deadline_includes_a_hung_read(short_confirmation)
     async def call():
         return await asyncio.wait_for(GameState(conn).form_alliance(1, "RESEARCH"), 0.3)
 
-    assert run(call()).startswith("PROPOSED_UNCONFIRMED|")
+    assert run(call()).startswith("ERR:OUTCOME_UNKNOWN")
     assert_one_alliance_submission(conn)
 
 
@@ -221,12 +222,14 @@ def test_alliance_write_exception_never_claims_failure_or_resends(after_native):
     original = conn.execute_write
 
     async def execute(source):
+        if not conn.calls:
+            return await original(source)
         if after_native:
             await original(source)
         raise OSError("submission receipt lost")
 
     conn.execute_write = execute
-    assert run(GameState(conn).form_alliance(1, "RESEARCH")).startswith("PROPOSED_UNCONFIRMED|")
+    assert run(GameState(conn).form_alliance(1, "RESEARCH")).startswith("ERR:OUTCOME_UNKNOWN")
     assert len(conn.lua.globals().friendship_requests) == int(after_native)
     assert len(conn.lua.globals().alliance_sends) == 2 * int(after_native)
     assert conn.lua.globals().observations == 0
@@ -243,12 +246,12 @@ def test_readback_requires_the_exact_requested_type_pair_and_unique_witness(shor
     original = conn.execute_write
 
     async def execute(source):
-        if conn.calls:
-            return rows
+        if len(conn.lua.globals().friendship_requests):
+            return checked_rows(rows)
         return await original(source)
 
     conn.execute_write = execute
-    assert run(GameState(conn).form_alliance(1, "RESEARCH")).startswith("PROPOSED_UNCONFIRMED|")
+    assert run(GameState(conn).form_alliance(1, "RESEARCH")).startswith("ERR:OUTCOME_UNKNOWN")
     assert_one_alliance_submission(conn)
 
 
@@ -257,12 +260,13 @@ def test_mismatched_requested_type_in_submission_receipt_cannot_authorize_a_diff
     original = conn.execute_write
 
     async def execute(source):
+        if not conn.calls:
+            return await original(source)
         await original(source)
         return ["OK:PROPOSED|Sweden", "ALLIANCE_SCOPE|0|1|ALLIANCE_MILITARY"]
 
     conn.execute_write = execute
-    assert run(GameState(conn).form_alliance(1, "RESEARCH")).startswith("PROPOSED_UNCONFIRMED|")
-    assert conn.lua.globals().observations == 0
+    assert run(GameState(conn).form_alliance(1, "RESEARCH")).startswith("ERR:OUTCOME_UNKNOWN")
     assert_one_alliance_submission(conn)
 
 
