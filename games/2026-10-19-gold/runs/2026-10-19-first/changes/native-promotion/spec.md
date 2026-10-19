@@ -1,6 +1,6 @@
 # B10：通过原生命令执行单位晋升
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 
