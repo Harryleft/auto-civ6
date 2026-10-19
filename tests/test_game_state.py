@@ -1504,33 +1504,8 @@ class TestDistrictAdvisor:
 # ---------------------------------------------------------------------------
 
 
-class TestGreatPersonResults:
-    """recruit/patronize/reject go through _action_result like every other
-    action: OK:/ERR: prefixes are normalised, not passed through raw."""
-
-    def test_recruit_strips_the_ok_prefix(self):
-        gs, _ = _gs([("write", ["OK:RECRUITED|Einstein", "trailing noise"])])
-
-        async def go():
-            return await gs.recruit_great_person(42)
-
-        assert run(go()) == "RECRUITED|Einstein"
-
-    def test_reject_rewrites_the_err_prefix(self):
-        gs, _ = _gs([("write", ["ERR:NOT_ENOUGH_FAITH|need 100"])])
-
-        async def go():
-            return await gs.reject_great_person(42)
-
-        assert run(go()) == "Error: NOT_ENOUGH_FAITH|need 100"
-
-    def test_empty_response_reports_an_unknown_outcome(self):
-        gs, _ = _gs([("write", [])])
-
-        async def go():
-            return await gs.patronize_great_person(42)
-
-        assert "OUTCOME_UNKNOWN" in run(go())
+# Great Person result handling is exercised through the real Lua/native seam in
+# test_great_person_pool_confirmation.py; an OK acknowledgement alone is not completion.
 
 
 # ---------------------------------------------------------------------------

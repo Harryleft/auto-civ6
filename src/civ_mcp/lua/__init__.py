@@ -85,9 +85,6 @@ from civ_mcp.lua.great_people import (  # noqa: F401
     build_activate_great_person,
     build_gp_advisor_query,
     build_great_people_query,
-    build_patronize_great_person,
-    build_recruit_great_person,
-    build_reject_great_person,
     parse_gp_advisor_response,
     parse_great_people_response,
 )
@@ -319,3 +316,9 @@ from civ_mcp.lua.contribution import (  # noqa: F401
 from civ_mcp.lua.item_purchase import build_purchase_item, build_item_purchase_query, parse_item_purchase_confirmation  # noqa: F401
 
 from civ_mcp.lua.trader_actions import build_trader_action, build_trader_action_query, parse_trader_confirmation  # noqa: F401
+
+from civ_mcp.lua.great_person_pool import (  # noqa: F401
+    build_great_person_pool_action,
+    build_great_person_pool_query,
+    parse_great_person_pool_confirmation,
+)
