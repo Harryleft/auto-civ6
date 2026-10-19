@@ -89,7 +89,7 @@ for s = 0, numSlots - 1 do
     print("SLOT|" .. s .. "|" .. slotType .. "|" .. policyType .. "|" .. policyName:gsub("|","/"))
 end
 for policy in GameInfo.Policies() do
-    if pCulture:IsPolicyUnlocked(policy.Index) then
+    if pCulture:IsPolicyUnlocked(policy.Hash) then
         local canSlot = false
         for s = 0, numSlots - 1 do
             if pCulture:CanSlotPolicy(policy.Index, s) then
@@ -108,115 +108,6 @@ for policy in GameInfo.Policies() do
 end
 print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL).replace("{POLICY_PAYMENT}", _LUA_POLICY_PAYMENT)
-
-
-def build_set_policies(assignments: dict[int, str]) -> str:
-    """Validate one final slot plan before unlocking and submitting it once.
-
-    The native eligibility check rejects active cards before considering a new
-    slot (GovernmentScreen.lua). Only explicit, unlocked, type-compatible
-    relocation may use that exception; final duplicates always fail first.
-    """
-    from json import dumps
-
-    entries = ", ".join(
-        f"[{slot}]={dumps(policy, ensure_ascii=False)}"
-        for slot, policy in assignments.items()
-    )
-    return f"""
-local me = Game.GetLocalPlayer()
-local pCulture = Players[me]:GetCulture()
-local numSlots = pCulture:GetNumPolicySlots()
-if numSlots <= 0 then {_bail("ERR:NO_GOVERNMENT|No government selected")} end
-local requested = {{{entries}}}
-local current, final, origins = {{}}, {{}}, {{}}
-for slot = 0, numSlots - 1 do
-    local index = pCulture:GetSlotPolicy(slot)
-    current[slot], final[slot] = index, index
-    if index >= 0 then origins[index] = slot end
-end
-for slot, policyType in pairs(requested) do
-    if type(slot) ~= "number" or slot % 1 ~= 0 or slot < 0 or slot >= numSlots then
-        {_bail_lua('"ERR:INVALID_POLICY_SLOT|" .. tostring(slot)')}
-    end
-    if string.upper(policyType) == "NONE" then
-        final[slot] = -1
-    else
-        local policy = GameInfo.Policies[policyType]
-        if not policy then {_bail_lua('"ERR:POLICY_NOT_FOUND|" .. policyType')} end
-        final[slot] = policy.Index
-    end
-end
-local seen = {{}}
-for slot = 0, numSlots - 1 do
-    local index = final[slot]
-    if index >= 0 then
-        if seen[index] ~= nil then
-            {_bail_lua('"ERR:DUPLICATE_POLICY|" .. GameInfo.Policies[index].PolicyType')}
-        end
-        seen[index] = slot
-    end
-end
-local clearList, addList = {{}}, {{}}
-for slot = 0, numSlots - 1 do
-    local index = final[slot]
-    if index >= 0 then
-        local policy = GameInfo.Policies[index]
-        if not policy then {_bail_lua('"ERR:POLICY_NOT_FOUND|" .. tostring(index)')} end
-        local slotType = GameInfo.GovernmentSlots[pCulture:GetSlotType(slot)]
-        if not slotType then {_bail_lua('"ERR:UNKNOWN_SLOT_TYPE|" .. slot')} end
-        local acceptsAny = slotType.AllowsAnyPolicy == true or slotType.AllowsAnyPolicy == 1
-        if not acceptsAny and slotType.GovernmentSlotType ~= policy.GovernmentSlotType then
-            {_bail_lua('"ERR:SLOT_MISMATCH|" .. policy.PolicyType .. " cannot go in slot " .. slot .. " (" .. slotType.GovernmentSlotType .. ")"')}
-        end
-        if not pCulture:IsPolicyUnlocked(policy.Hash) then
-            {_bail_lua('"ERR:POLICY_LOCKED|" .. policy.PolicyType')}
-        end
-        if pCulture:IsPolicyObsolete(policy.Hash) then
-            {_bail_lua('"ERR:POLICY_OBSOLETE|" .. policy.PolicyType')}
-        end
-        local origin = origins[index]
-        local alreadyThere = current[slot] == index
-        local relocating = origin ~= nil and origin ~= slot
-            and requested[origin] ~= nil and final[origin] ~= index
-        if not pCulture:CanSlotPolicy(index, slot) and not alreadyThere and not relocating then
-            {_bail_lua('"ERR:CANNOT_SLOT|" .. policy.PolicyType .. " rejected for slot " .. slot')}
-        end
-        addList[slot] = policy.Hash
-    end
-    table.insert(clearList, slot)
-end
-local changed = false
-for slot = 0, numSlots - 1 do
-    if current[slot] ~= final[slot] then changed = true end
-end
-if not changed then
-    {_bail('OK:POLICIES_UNCHANGED|Requested policies already active; no payment or submission.')}
-end
--- Match GovernmentScreen's native price and configured currency. Never guess
--- affordability or directly mutate resources; the engine performs the payment.
-{_LUA_POLICY_PAYMENT}
-if policyCost == nil then
-    {_bail('ERR:POLICY_UNLOCK_UNKNOWN|Policy unlock cost unavailable; no submission.')}
-end
-if policyCost > 0 then
-    if policyCurrency == nil or policyBalance == nil then
-        {_bail_lua('"ERR:POLICY_UNLOCK_UNKNOWN|required=" .. policyCost .. "|currency=" .. (policyCurrency or "UNKNOWN") .. "|balance=" .. tostring(policyBalance or "UNKNOWN") .. "|No submission."')}
-    end
-    if policyBalance < policyCost then
-        {_bail_lua('"ERR:POLICY_UNLOCK_UNAFFORDABLE|required=" .. policyCost .. "|balance=" .. policyBalance .. "|currency=" .. policyCurrency .. "|No submission."')}
-    end
-    UI.RequestPlayerOperation(me, PlayerOperations.UNLOCK_POLICIES, {{}})
-end
-pCulture:RequestPolicyChanges(clearList, addList)
-print("POLICY_PLAN_COUNT|" .. numSlots)
-for slot = 0, numSlots - 1 do
-    local policy = GameInfo.Policies[final[slot]]
-    print("POLICY_PLAN|" .. slot .. "|" .. (policy and policy.PolicyType or "NONE"))
-end
-print("OK:POLICIES_SET|Policy change submitted once; awaiting readback.")
-print("{SENTINEL}")
-"""
 
 
 def build_governors_query() -> str:

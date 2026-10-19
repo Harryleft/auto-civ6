@@ -1270,59 +1270,6 @@ class TestFoundCity:
 
 
 # ---------------------------------------------------------------------------
-# Policy verification and trade queries
-# ---------------------------------------------------------------------------
-
-
-class TestSetPolicies:
-    """Policy plans require a later matching native read to be confirmed."""
-
-    _GOV_LINES = [
-        "GOV|GOVERNMENT_CHIEFDOM|Chiefdom|x",
-        "SLOT|0|SLOT_MILITARY|POLICY_DISCIPLINE|Discipline",
-        "SLOT|1|SLOT_ECONOMIC|NONE|Empty",
-    ]
-
-    def test_matching_slots_return_a_clean_result(self):
-        gs, _ = _gs(
-            [
-                ("write", ["POLICY_PLAN_COUNT|2", "POLICY_PLAN|0|POLICY_DISCIPLINE", "POLICY_PLAN|1|NONE", "OK:POLICIES_SET"]),
-                ("write", self._GOV_LINES),
-            ]
-        )
-
-        async def go():
-            return await gs.set_policies({0: "POLICY_DISCIPLINE", 1: "NONE"})
-
-        result = run(go())
-        assert result == "POLICIES_SET|Final policy plan confirmed by subsequent readback."
-        assert "WARN" not in result
-
-    def test_mismatched_slot_keeps_application_unconfirmed(self):
-        lines = [
-            "GOV|GOVERNMENT_CHIEFDOM|Chiefdom|x",
-            "SLOT|0|SLOT_MILITARY|NONE|Empty",
-        ]
-        gs, _ = _gs([("write", ["POLICY_PLAN_COUNT|1", "POLICY_PLAN|0|POLICY_DISCIPLINE", "OK:POLICIES_SET"]), ("write", lines), ("write", OSError("read interrupted"))])
-
-        async def go():
-            return await gs.set_policies({0: "POLICY_DISCIPLINE"})
-
-        result = run(go())
-        assert result.startswith("POLICIES_UNCONFIRMED|")
-        assert "slot 0 (wanted POLICY_DISCIPLINE, got EMPTY)" in result
-
-    def test_error_result_skips_the_verification_read(self):
-        gs, conn = _gs([("write", ["ERR:CANNOT_SLOT|wrong slot type"])])
-
-        async def go():
-            return await gs.set_policies({0: "POLICY_DISCIPLINE"})
-
-        assert run(go()) == "Error: CANNOT_SLOT|wrong slot type"
-        assert conn.exhausted
-
-
-# ---------------------------------------------------------------------------
 # Diplomacy actions
 # ---------------------------------------------------------------------------
 
