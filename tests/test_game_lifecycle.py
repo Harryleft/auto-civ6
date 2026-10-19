@@ -276,8 +276,26 @@ class TestSaveGame:
         target.write_bytes(b"different map using the same name")
         assert checkpoints.expected_checkpoint("benchmark_turn_1") is None
 
-    @pytest.mark.parametrize("name", ["benchmark_turn_1", "benchmark_turn_1.Civ6Save", "BENCHMARK_TURN_1", "benchmark_turn_1 "])
-    def test_original_baseline_cannot_be_overwritten(self, name):
+    def test_authorized_deity_original_requires_its_exact_archived_file(self):
+        archived = Path(__file__).resolve().parents[1] / "fixtures/saves/benchmark_gold_tun_1.Civ6Save"
+        target = Path(game_launcher.SINGLE_SAVE_DIR) / archived.name
+        target.write_bytes(archived.read_bytes())
+        assert checkpoints.expected_checkpoint("benchmark_gold_tun_1") == ("sumeria", -1896272000, 1)
+        target.write_bytes(b"replaced deity map")
+        assert checkpoints.expected_checkpoint("benchmark_gold_tun_1") is None
+        (target.parent / "unknown.Civ6Save").write_bytes(archived.read_bytes())
+        assert checkpoints.expected_checkpoint("unknown") is None
+
+    @pytest.mark.parametrize("original", ["benchmark_turn_1", "benchmark_gold_tun_1"])
+    @pytest.mark.parametrize("variant", ["plain", "extension", "uppercase", "spaces", "extension_spaces"])
+    def test_original_baseline_cannot_be_overwritten(self, original, variant):
+        name = {
+            "plain": original,
+            "extension": original + ".Civ6Save",
+            "uppercase": original.upper() + ".CIV6SAVE",
+            "spaces": original + " . ",
+            "extension_spaces": original + ".Civ6Save ",
+        }[variant]
         conn = FakeConn()
         assert run(gl.save_game(conn, name)).startswith("Error:")
         assert conn.writes == []

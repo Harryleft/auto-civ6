@@ -1,7 +1,7 @@
 """Identity expectations for explicit recovery, bound to exact file contents.
 
-Only our native-completion-confirmed saves can create records. The single
-user-confirmed baseline is trusted by its archived SHA-256, never by its name.
+Only our native-completion-confirmed saves can create records. Explicitly
+authorized originals are trusted by their archived SHA-256, never by name alone.
 """
 from __future__ import annotations
 
@@ -14,6 +14,14 @@ from civ_mcp.lua.models import GameOverview
 
 CHECKPOINT_DIR = Path.home() / ".civ6-mcp" / "checkpoints"
 BASELINE_SHA256 = "688b12eddbf1ec6bdb44da4f558d39191e96a6893a538f57ccc531beb5339ffd"
+# Names select an approved original; exact file contents establish trust.
+_BASELINES = {
+    "benchmark_turn_1": (BASELINE_SHA256, ("sumeria", 719665280, 1)),
+    "benchmark_gold_tun_1": (
+        "0d25d557e68b0efbd1aed7e66de9b8434f3a9ac9d321291d45cbe9df83fe3abf",
+        ("sumeria", -1896272000, 1),
+    ),
+}
 # Short-lived evidence between native completion and GameState post-checks.
 _completed: dict[str, str] = {}
 # Revoke before touching disk: a failed metadata unlink must not leave an old
@@ -21,27 +29,36 @@ _completed: dict[str, str] = {}
 _revoked: set[str] = set()
 
 
+def is_original_baseline_name(name: str) -> bool:
+    """Protect approved original names; this alone never authorizes loading."""
+    normalized = name.rstrip(" .").casefold().removesuffix(".civ6save").rstrip(" .")
+    return normalized in _BASELINES
+
+
 def _current_run() -> str | None:
     try:
         data = json.loads((CHECKPOINT_DIR / "current-run.json").read_text(encoding="utf-8"))
-        if isinstance(data, dict) and data.get("baseline_sha256") == BASELINE_SHA256 and isinstance(data.get("run_id"), str) and data["run_id"]:
+        if isinstance(data, dict) and data.get("baseline_sha256") in {baseline[0] for baseline in _BASELINES.values()} and isinstance(data.get("run_id"), str) and data["run_id"]:
             return data["run_id"]
     except (OSError, ValueError, TypeError):
         pass
     return None
 
 
-def begin_baseline_run() -> str | None:
+def begin_baseline_run(name: str = "benchmark_turn_1") -> str | None:
     """Rotate ownership only after the loader verifies the original baseline.
 
     This small durable marker survives an MCP restart and checkpoint recovery;
     loading the baseline starts a new attempt even when civ and seed match.
     """
+    baseline = _BASELINES.get(name.removesuffix(".Civ6Save"))
+    if baseline is None:
+        return "Error: Unregistered original cannot establish run ownership."
     try:
         CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
         target = CHECKPOINT_DIR / "current-run.json"
         temporary = target.with_suffix(".tmp")
-        temporary.write_text(json.dumps({"run_id": uuid.uuid4().hex, "baseline_sha256": BASELINE_SHA256}), encoding="utf-8")
+        temporary.write_text(json.dumps({"run_id": uuid.uuid4().hex, "baseline_sha256": baseline[0]}), encoding="utf-8")
         temporary.replace(target)
         _completed.clear()
         _revoked.clear()
@@ -165,8 +182,9 @@ def expected_checkpoint(name: str) -> tuple[str, int, int] | None:
     """Return verified expected civ/seed/turn, or refuse unknown/stale files."""
     name = name.removesuffix(".Civ6Save")
     try:
-        if name == "benchmark_turn_1" and _digest(name) == BASELINE_SHA256:
-            return ("sumeria", 719665280, 1)
+        baseline = _BASELINES.get(name)
+        if baseline is not None:
+            return baseline[1] if _digest(name) == baseline[0] else None
         data = _verified_record(name)
         if data is not None:
             return (str(data["civilization"]), int(data["seed"]), int(data["turn"]))

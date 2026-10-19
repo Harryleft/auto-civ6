@@ -28,8 +28,8 @@
     "original_sha256_unchanged": true
   },
   "evidence_directory": "~/.civ6-mcp/acceptance/20261017-093253-benchmark",
-  "status": "confirmed_sole_original_test_baseline",
-  "note": "User confirmed this exact original save as the only test baseline. Never overwrite it or load historical maps/checkpoints from other sessions.",
+  "status": "confirmed_original_test_baseline",
+  "note": "User confirmed this exact original; a second deity original was authorized on 2026-10-19. Never overwrite either original or restore checkpoints from another run.",
   "latest_verification": {
     "runtime_commit": "8631b7a",
     "report": "games/benchmark-sumeria-719665280/runs/2026-10-17-t244/reports/2026-10-17-confirmation.md",
