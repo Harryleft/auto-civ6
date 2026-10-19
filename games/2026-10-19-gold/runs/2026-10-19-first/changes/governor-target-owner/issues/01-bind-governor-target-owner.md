@@ -18,3 +18,5 @@ Implement spec through existing governor MCP/GameState/Lua boundaries, TDD redâ†
 ## Independent review and live validation
 
 880f1f9; Spec and Standards reviews of a18a1dd...880f1f9 found no material issues. Parent clean-refreshed MCP with no world reload or pending request. #1735 originalT91 confirmed, #1737 assignedAmani targetowner5/city65536 (establishment5turns), #1738 independentread assignedowner5/fullID65536/40,6. #1739 T92 and #1741 checkpointgold_20261019_t092_b19_verified835258bytes confirmed. Establishment and suzerain effects require later turns; no artificial envoy or immediate establishment claimed.
+
+T96 establishment follow-up: #1810 native notice, #1813 NanMadol4envoys/SuzerainSumeria, #1811 culture37.6/favor+3, #1819 checkpoint846542bytes. Later effects are now observed.
