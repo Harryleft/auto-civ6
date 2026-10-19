@@ -2319,8 +2319,8 @@ class GameState:
                                     raise ValueError("Loaded state changed or became unreadable during snapshot confirmation")
                                 if checkpoints.expected_checkpoint(save_name) != expected:
                                     return "ERR:OUTCOME_UNKNOWN|Checkpoint file changed during load; recovery not verified."
-                                if save_name.removesuffix(".Civ6Save") == "benchmark_turn_1":
-                                    ownership_error = checkpoints.begin_baseline_run()
+                                if checkpoints.is_original_baseline_name(save_name):
+                                    ownership_error = checkpoints.begin_baseline_run(save_name)
                                     if ownership_error:
                                         return ownership_error
                                 self._pending_load = False

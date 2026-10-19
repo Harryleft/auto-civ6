@@ -1,0 +1,30 @@
+{
+  "save_name": "benchmark_gold_tun_1",
+  "file": "benchmark_gold_tun_1.Civ6Save",
+  "sha256": "0d25d557e68b0efbd1aed7e66de9b8434f3a9ac9d321291d45cbe9df83fe3abf",
+  "size_bytes": 396382,
+  "source": "user-created local save; archived without modification on 2026-10-19",
+  "native_menu_metadata": {
+    "turn": 1,
+    "civilization": "CIVILIZATION_SUMERIA",
+    "leader": "LEADER_GILGAMESH",
+    "ruleset": "RULESET_EXPANSION_2",
+    "difficulty": "DIFFICULTY_DEITY",
+    "speed": "GAMESPEED_QUICK",
+    "map_size": "MAPSIZE_TINY",
+    "map_script": "FourLeafClover"
+  },
+  "expected_configuration": {
+    "game_seed": -1896272000,
+    "map_seed": -1896271999,
+    "source": "original file configuration tags; pending live readback"
+  },
+  "verification": {
+    "baseline_loaded": false,
+    "identity_and_turn_read_back": false,
+    "original_sha256_unchanged": true
+  },
+  "status": "authorized_original_pending_live_verification",
+  "report": "games/2026-10-19-gold/runs/2026-10-19-first/reports/progress.md",
+  "note": "User authorized this exact deity original. Actual filename retains tun; never overwrite it or restore checkpoints from another run."
+}
