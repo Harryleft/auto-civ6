@@ -1315,7 +1315,8 @@ async def unit_action(
         # Move/attack/founding reconcile their own pending requests. Other
         # commands must not change that unit before its outcome is known.
         if (
-            action.lower() not in {"move", "attack", "found_city", "cancel_move", "pillage", "sacrifice_charges", "delete"}
+            getattr(gs, "pending_action_tool", None) != "unit_action"
+            and action.lower() not in {"move", "attack", "found_city", "cancel_move", "pillage", "sacrifice_charges", "delete"}
             and (getattr(gs, "pending_action_entity", None) == ("unit", unit_index)
                  or getattr(gs, "pending_action_kind", None) in ("pillage", "contribution"))
         ):
@@ -1355,13 +1356,13 @@ async def unit_action(
             case "build_route":
                 return await gs.build_route(unit_index)
             case "automate":
-                return await gs.automate_explore(unit_index)
+                return await gs.automate_explore(unit_id)
             case "heal":
-                return await gs.heal_unit(unit_index)
+                return await gs.heal_unit(unit_id)
             case "alert":
-                return await gs.alert_unit(unit_index)
+                return await gs.alert_unit(unit_id)
             case "sleep":
-                return await gs.sleep_unit(unit_index)
+                return await gs.sleep_unit(unit_id)
             case "delete":
                 return await gs.delete_unit(unit_id)
             case "trade_route":

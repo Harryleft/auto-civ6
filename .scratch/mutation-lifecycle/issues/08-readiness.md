@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 地块购买与可复用的未决动作契约
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] 绑定原单位全 ID，复用已有 readiness 语义，不暗改移动力。
 - [ ] 同意图仅确认，其他单位或帝国未决不能被绕过。

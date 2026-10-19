@@ -636,29 +636,47 @@ class GameState:
                 return "SKIP_BATCH_STOPPED|" + "\n".join(results)
         return f"SKIPPED|{len(candidates)} candidates checked" + ("\n" + "\n".join(results) if results else "")
 
+    async def _set_unit_task(self, unit_id: int, kind: str, entrypoint: str) -> str:
+        from civ_mcp.lua import unit_tasks
+        entity, intent = ("unit", unit_id), (kind,)
+        if self._actions.matches("unit_task", entity, intent=intent):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        if type(unit_id) is not int or unit_id < 0:
+            return "Error: INVALID_UNIT_ID|Expected a nonnegative integer"
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            "unit_task", entity, unit_tasks.build_task_query(unit_id, kind, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            intent=intent, evidence=_ActionEvidence(
+                tool="unit_action", entrypoint=entrypoint, accepted=("UNIT_TASK_REQUESTED|", "UNIT_TASK_NOOP|"),
+                refused="ERR:UNIT_TASK_REFUSED|",
+                confirm=lambda rows: unit_tasks.parse_task_confirmation(rows, unit_id, kind, token),
+                guidance=f"Repeat {kind} for the original unit to confirm only. ",
+            ),
+        )
+        return await self._submit_action(pending, scope, unit_tasks.build_task(unit_id, kind, token))
+
     @_guard_pending_mutation
     async def automate_explore(self, unit_index: int) -> str:
-        lua = lq.build_automate_explore(unit_index)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._set_unit_task(unit_index, "automate", "automate_explore")
 
     @_guard_pending_mutation
     async def heal_unit(self, unit_index: int) -> str:
-        lua = lq.build_heal_unit(unit_index)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._set_unit_task(unit_index, "heal", "heal_unit")
 
     @_guard_pending_mutation
     async def alert_unit(self, unit_index: int) -> str:
-        lua = lq.build_alert_unit(unit_index)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._set_unit_task(unit_index, "alert", "alert_unit")
 
     @_guard_pending_mutation
     async def sleep_unit(self, unit_index: int) -> str:
-        lua = lq.build_sleep_unit(unit_index)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._set_unit_task(unit_index, "sleep", "sleep_unit")
 
     @_guard_pending_mutation
     async def delete_unit(self, unit_index: int) -> str:
