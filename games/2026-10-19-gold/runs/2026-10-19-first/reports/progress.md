@@ -21,7 +21,7 @@
 | B15 | T69 | 弓手部分位移后 MOVE_TO被原生中断清空，无SegmentComplete，工具保留unknown | 精确本次Added/MoveComplete/Deactivated/Cleared链确认中断位移 | c3d9c4b＋fbdc09f；344相关、双审复核、T70保存及最终代码T73正常移动通过 |
 | B16 | T73 | 原生CanRecruit=true、Claimant=本方，招募工具却拒绝CANDIDATE_UNAVAILABLE | 唯一当前候选按原生各Can*资格，不从Claimant推断不可用 | d9c354e／5bfe109；398相关、双审、招募/激活/尤里卡及T74保存通过 |
 | B17 | T75 | 升级已生成新fullID弩手，确认仍要求原fullID单位变type，始终unknown | 精确Started/Removed/Added/Upgraded链绑定新旧fullID和实际费用 | b10da9b；273相关、双审、升级/新单位动作/T76保存通过 |
-| B20 | T108 | 原生研究同盟有效，但工具硬编码外交部门前置而NO_CIVIC | 具体同盟原生资格及查询一致性 | to-spec；零提交拒绝，待修复 |
+| B20 | T108 | 原生研究同盟有效，但工具硬编码外交部门前置而NO_CIVIC | 具体同盟原生资格及查询一致性 | f06742d；129相关、独立双审通过，原T108一次提案/研究同盟确认、T109保存通过 |
 | B19 | T91 | 阿玛妮原生可派城邦，但工具目标owner固定本方，城市ID冲突 | 显式目标owner绑定及原生派驻验证 | 880f1f9；80相关、双审、T91精确owner5派驻/T92保存通过 |
 | B18 | T89 | 攻击后HEAL精确started，但原生HOLD/0MP未兼容导致unknown | fresh精确HEAL及nonready/HOLD/0MP确认任务开始，回血另验 | 8cfe822；152相关、双审通过，原局T89启动/T90保存/T91回血39→59及保存通过 |
 | B14 | T68 | 港口顾问过滤原生PLOTS水地候选，报告无法放置 | 保留原生合法水地，继续排除BLOCKED和无关数组 | d691113／860e9de；28相关测试、双审查、候选/港口放置及T69保存通过 |
@@ -29,7 +29,7 @@
 | B12 | T57 | 弓手耗尽移动后警戒已原生开始，HOLD未被确认 | fresh alert 精确事件与非就绪前提下接受原生HOLD | 857865c／26c3467；372离线、双审查，#1044实机警戒确认；T58被新增B13阻塞 |
 | B11 | T55 | 开放边境条款期限0，与当前原生25不符 | 双方独立绑定原生摘要期限、完整回读和文案 | 97846e9／1344ad6；476离线，双审查，25回合边境成交及T56保存通过 |
 
-当前已确认 T108，身份 sumeria / seed -1896272000，轮次 e8b4d6a62dca49bbb256e8264beb18f2。四城（T73基什建立）；中世纪黑暗时代与寡头政体；T54与瑞典白和、T55尼普尔建立。B01–B19已修复。最近确认检查点 gold_20261019_t108_before_b20_alliance。用户已确认现有 checkpoint / GameState / lifecycle 验证边界。
+当前已确认 T109，身份 sumeria / seed -1896272000，轮次 e8b4d6a62dca49bbb256e8264beb18f2。四城31人口，文艺复兴黑暗时代、商人共和国、巴西研究同盟Lv1。B01–B20已修复。最近确认检查点 gold_20261019_t109_b20_verified。用户已确认现有 checkpoint / GameState / lifecycle 验证边界。
 
 B01：实施 f3f919a，集成 ffd3f06。相关离线 425 passed，compileall / diff --check 通过；Standards 与 Spec 两项独立审查均无实质发现。原始新旧基准不覆盖、不混用轮次。
 
@@ -223,3 +223,5 @@ T106基什商人2031623完成，#1967建立至里约40,13商路13Gold/1Science/1
 T107金币419，#1973以400金购谒见厅，精确418.91015625→18.91015625，首都住房12→16/宜居4→6、科技35→38、生产13→16；T108埃利都也实际住房9→13、宜居2→4。#1976任命马格努斯、#1977派驻尼普尔，未宣称即刻就职。T108公会完成/银行业提升至94%，开始外交部门；#1998/1999维克多派基什（原生3turns），#2000切纪律/农奴制/自然哲学/商人联盟/魅力型领袖/殖民，#2001首都开拓者5t，拟复核原营地34,26的第五城地点。时代分已51，达到下时代普通门槛；本方4城29人口。
 
 B20：#1990交易选项错误要求外交部门，#1996 form_alliance(RESEARCH,2)零提交NO_CIVIC。本方行政部门T102完成、外交部门未完成；#1995原生研究同盟行动双方前置均行政部门，#1997原生IsDiplomaticActionValid=true、对方行政部门=true、友谊state1。#1994知识Civilopedia同样记述双方行政部门；#2004进一步确认原生XP1行动映射DIPLOACTION_ALLIANCE_RESEARCH→ALLIANCE_RESEARCH/Index0，nativevalid仍true。规格be1ebd3，实施中。#2003保存gold_20261019_t108_before_b20_alliance866507bytes，完成不依赖联盟的本回合指令后clean关闭MCP，无未决提案，不需重载世界；保持T108复验，以免研究外交部门后掩盖缺陷。
+
+B20关闭：f06742d，129相关测试及compile/diff检查通过，Spec/Standards独立双审无实质发现。clean刷新MCP、不重载世界；#2005原T108、#2007行政部门=true/外交部门=false/nativeResearchValid=true，#2008单次提案ACCEPTED、#2009独立回读巴西研究同盟Lv1。#2011–2016明确关闭完成弹窗和瑞典普通对话后确认T109，#2017保存gold_20261019_t109_b20_verified868073bytes；#2018外交部门56%/boosted/剩4t。T109银行业、埃利都大学完成，首都/埃利都分别pop11/9；威尼斯宗主被竞争者夺走，后续重新评估。
