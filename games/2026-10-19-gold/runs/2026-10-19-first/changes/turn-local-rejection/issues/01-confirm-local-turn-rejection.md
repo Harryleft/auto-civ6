@@ -28,8 +28,17 @@ TDD：原请求 token／identity、native返回false和in-call→after-return事
 
 移除泛事件日志、Publish／Dirty／segment监听、返回值跟踪及其临时测试。保留绑定token／owner／world／turn的有限阶段见证：原生End→AUTOMATE_EXPLORE精确Hash的完整单位Deactivated→同单位Cleared→Begin→NONE到UNITS blocker→PlaybackComplete。原生Hash在提交前由GameInfo读取；缺必需API／监听器不影响普通推进，但不能授权本地重新开启。回合／世界／玩家改变或显式unready令见证失效；首次提交仍保留pending，不在同一提交调用中退休。
 
-仅后续显式end_turn在原turn、完整事件链、entered/returned且最终active/complete=true、processing/corebusy/sent/unready=false、CanEndTurn=true、当前UNITS blocker和同完整ID／owner的ready单位（firstReady也匹配）时确认REOPENED_LOCAL，移除监听、退休本次owner并返回“未推进”和单位待办。该调用不再提交；模型选择普通单位动作后，另一次end_turn才创建新token和请求。get_turn_status只观察；旧无token或旧诊断schema不能补证退休。未知scope回读允许后续读取恢复，观测到实际scope变化则持久失效。普通推进／终局、外交／议会／弹窗门禁保留。
+仅后续显式end_turn在原turn、完整事件链、entered/returned且最终active/complete=true、processing/corebusy/sent/unready=false、CanEndTurn=true、当前UNITS blocker和同完整ID／owner的ready单位（firstReady也匹配）时确认REOPENED_LOCAL，退休本次owner并返回“未推进”和单位待办。该调用不再提交；模型选择普通单位动作后，另一次end_turn才创建新token和请求。get_turn_status只观察；旧无token或旧诊断schema不能补证退休。未知scope回读允许后续读取恢复，观测到实际scope变化则持久失效。普通推进／终局、外交／议会／弹窗门禁保留。
 
 TDD公共闭环先红后绿：请求1→本地唤醒→status仍pending→单位动作被挡→显式确认REOPENED_LOCAL→普通skip→新token请求2→T57→58。补充scope未知可恢复和最终proof getter期间真实scope改变保持失效的红绿用例。覆盖延迟／丢回应／取消、缺或错序事件、旧schema／错token／错完整ID和owner、ready／active／complete／processing／busy／sent／unready／CanEnd未知或错误、vanished blocker、跨turn/world后恢复原scope、原生抛错后returned缺失，均不重发且无充分证据不释放。
 
 最终离线：turn_reopened／end_turn_native／end_turn／turn_status／server共438 passed；compileall和diff --check通过。剩余双独立审查、父代理同轮T57→T58及保存实机验证；本票未resolved。
+
+
+## Review corrections
+
+Standards审查两项均已红→绿修正。其一，SETTLED后的周期Playback遇到临时不可读scope时只跳过该事件，不锁存为已知身份变化；getter恢复后可重新核对。若未知scope恰遇End／Begin／unready／玩家变化或已完成链的blocker变化，记独立uncertain并保留未决，避免漏掉无法归属的失效事件；已知scope变化继续持久invalid。
+
+其二，证明query现在完全只读，不在回复送达前拆监听，也不添加会遭遇相同丢回应窗口的ack RPC。监听保留至原生回调确认失效或下一次实际请求统一清理；Python收到有效证明才退休owner。确认回复丢失后，blocker消失再恢复、跨world／turn后恢复、unready均仍会捕获并阻止复用旧证明。外部原生adapter计数验证新请求后监听清零，原正常推进与单次提交契约保留。
+
+最终离线同5模块共446 passed，compileall、diff --check通过；无剩余离线失败。父代理已记录初版正常实机闭环#1066pending→#1068REOPENED_LOCAL→#1070普通移动→#1073T58→#1074保存，本次审查负向修正尚待独立复核。票据保持implemented-pending-review，由父代理完成复核后关闭。

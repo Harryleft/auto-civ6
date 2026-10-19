@@ -155,8 +155,19 @@ for _,name in ipairs({"LocalPlayerTurnEnd","UnitOperationDeactivated","UnitOpera
     local event=Events and Events[name]
     local function capture(a,b,c)
         if __civmcpTurnAttempt~=attempt or attempt.entered~=true or attempt.invalid then return end
-        if turnWorld()~=attempt.scope then attempt.invalid=true;retireAttempt(attempt);return end
         local stage=attempt.stage
+        local scope=turnWorld()
+        if not scope then
+            -- A periodic playback with unavailable identity does not erase an
+            -- already bound cycle. Unattributable lifecycle changes stay unknown.
+            if name=="LocalPlayerTurnEnd" or name=="LocalPlayerTurnBegin"
+                or name=="LocalPlayerTurnUnready" or name=="LocalPlayerChanged"
+                or (name=="EndTurnBlockingChanged" and (stage=="BLOCKED" or stage=="SETTLED")) then
+                attempt.uncertain=true
+            end
+            return
+        end
+        if scope~=attempt.scope then attempt.invalid=true;retireAttempt(attempt);return end
         if name=="LocalPlayerTurnUnready" or name=="LocalPlayerChanged" then attempt.invalid=true
         elseif name=="LocalPlayerTurnEnd" then
             if stage=="ENTERED" then attempt.stage="ENDED" else attempt.invalid=true end
@@ -205,7 +216,7 @@ local ok,id=pcall(function()
         if scope and scope~=r.scope then r.invalid=true end
         return scope==r.scope and not r.invalid
     end
-    assert(sameAttemptScope() and r.capable==true and r.entered==true and r.returned==true and r.stage=="SETTLED")
+    assert(sameAttemptScope() and not r.uncertain and r.capable==true and r.entered==true and r.returned==true and r.stage=="SETTLED")
     local p=Players[r.owner]
     assert(p:IsTurnActive()==true and p:IsTurnActiveComplete()==true)
     assert(UI.IsProcessingMessages()==false and UI.IsGameCoreBusy()==false
@@ -219,9 +230,9 @@ local ok,id=pcall(function()
     assert(sameAttemptScope())
     return r.unit
 end)
+-- A proof reply can be lost. Keep witnesses until native invalidation or the
+-- next actual request; an observational query cannot detach this pending owner.
 if ok then
-    for name,handler in pairs(r.handlers) do pcall(function() Events[name].Remove(handler) end) end
-    r.handlers={{}}
     print("TURN_REOPENED|{token}|{expected_turn}|ENDTURN_BLOCKING_UNITS|"..id)
 else print("TURN_REOPENED|UNKNOWN") end
 print("{SENTINEL}")

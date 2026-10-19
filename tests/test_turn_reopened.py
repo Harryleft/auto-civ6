@@ -19,9 +19,11 @@ class ReopenedConn(GameStateConn):
         self.delay_events=False;self.lose_reply=False
         self.native.lua.execute('''
 turn=57;seed=-1896272000
+native_watchers=0
 local function event()
  local handlers={}
- return {Add=function(fn) handlers[fn]=true end,Remove=function(fn) handlers[fn]=nil end,
+ return {Add=function(fn) if not handlers[fn] then native_watchers=native_watchers+1 end;handlers[fn]=true end,
+ Remove=function(fn) if handlers[fn] then native_watchers=native_watchers-1 end;handlers[fn]=nil end,
  Fire=function(...) for fn in pairs(handlers) do fn(...) end end}
 end
 Events={}
@@ -98,6 +100,7 @@ def test_bound_reopened_turn_requires_explicit_confirmation_then_unit_choice_and
     assert 'Turn 57 -> 58' in asyncio.run(state.end_turn())
     assert conn.native.lua.eval('requests')==2
     assert conn.native.lua.eval('__civmcpTurnAttempt.token')!=token
+    assert conn.native.lua.eval('native_watchers')==0
 
 
 @pytest.mark.parametrize('change',[
@@ -253,3 +256,63 @@ end
     assert 'result unknown' in asyncio.run(state.end_turn())
     assert 'REOPENED_LOCAL' not in asyncio.run(state.end_turn())
     assert state.turn_pending and conn.native.lua.eval('requests')==1
+
+
+def test_settled_attempt_survives_temporary_unknown_scope_on_irrelevant_playback(clock):
+    conn=ReopenedConn();state=GameState(conn);asyncio.run(state.end_turn())
+    conn.native.lua.execute('originalSeedRead=GameConfiguration.GetValue;GameConfiguration.GetValue=function() return nil end;Events.GameCoreEventPlaybackComplete.Fire()')
+    assert 'REOPENED_LOCAL' not in asyncio.run(state.end_turn())
+    assert state.turn_pending
+    conn.native.lua.execute('GameConfiguration.GetValue=originalSeedRead')
+    assert 'REOPENED_LOCAL' in asyncio.run(state.end_turn())
+    assert conn.native.lua.eval('requests')==1
+
+
+def test_lost_confirmation_reply_keeps_native_invalidation_witnesses_until_owner_retires(clock):
+    conn=ReopenedConn();state=GameState(conn);asyncio.run(state.end_turn())
+    original=conn.execute_write
+    async def lost_query(source):
+        rows=await original(source)
+        if 'TURN_REOPENED|' in source: raise OSError('proof completed but reply lost')
+        return rows
+    conn.execute_write=lost_query
+    asyncio.run(state.end_turn())
+    assert state.turn_pending
+    conn.execute_write=original
+    conn.native.lua.execute('blocker=0;Events.EndTurnBlockingChanged.Fire(23669119,0);blocker=23669119;Events.EndTurnBlockingChanged.Fire(0,23669119)')
+    assert 'REOPENED_LOCAL' not in asyncio.run(state.end_turn())
+    assert state.turn_pending and conn.native.lua.eval('requests')==1
+
+
+@pytest.mark.parametrize('event',[
+    'Events.LocalPlayerTurnUnready.Fire()',
+    'Events.LocalPlayerChanged.Fire(0,1)',
+    'blocker=0;Events.EndTurnBlockingChanged.Fire(23669119,0);blocker=23669119;Events.EndTurnBlockingChanged.Fire(0,23669119)',
+])
+def test_scope_unknown_during_invalidating_event_keeps_settled_proof_uncertain(event,clock):
+    conn=ReopenedConn();state=GameState(conn);asyncio.run(state.end_turn())
+    conn.native.lua.execute('originalSeedRead=GameConfiguration.GetValue;GameConfiguration.GetValue=function() return nil end;'+event)
+    conn.native.lua.execute('GameConfiguration.GetValue=originalSeedRead')
+    assert 'REOPENED_LOCAL' not in asyncio.run(state.end_turn())
+    assert state.turn_pending and conn.native.lua.eval('requests')==1
+
+
+@pytest.mark.parametrize('event',[
+    'seed=1;Events.GameCoreEventPlaybackComplete.Fire();seed=-1896272000',
+    'turn=58;Events.GameCoreEventPlaybackComplete.Fire();turn=57',
+    'Events.LocalPlayerTurnUnready.Fire()',
+])
+def test_lost_proof_reply_keeps_late_scope_and_unready_invalidation(event,clock):
+    conn=ReopenedConn();state=GameState(conn);asyncio.run(state.end_turn())
+    original=conn.execute_write
+    async def lost_query(source):
+        rows=await original(source)
+        if 'TURN_REOPENED|' in source: raise OSError('proof reply lost')
+        return rows
+    conn.execute_write=lost_query;asyncio.run(state.end_turn())
+    assert state.turn_pending and conn.native.lua.eval('native_watchers')==8
+    conn.execute_write=original
+    conn.native.lua.execute(event)
+    assert 'REOPENED_LOCAL' not in asyncio.run(state.end_turn())
+    assert state.turn_pending and conn.native.lua.eval('requests')==1
+    assert conn.native.lua.eval('native_watchers')==0
