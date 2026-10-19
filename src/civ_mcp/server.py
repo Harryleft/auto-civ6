@@ -715,6 +715,8 @@ async def promote_unit(ctx: Context, unit_id: int, promotion_type: str) -> str:
         promotion_type: e.g. PROMOTION_BATTLECRY, PROMOTION_TORTOISE
 
     Use get_unit_promotions first to see available options.
+    Unknown outcomes retain the original promotion; repeating only confirms.
+    Use dismiss_popup for a stale promotion notification after confirmation.
     """
     gs = _get_game(ctx)
     return await _logged(
@@ -1313,7 +1315,8 @@ async def unit_action(
         # Move/attack/founding reconcile their own pending requests. Other
         # commands must not change that unit before its outcome is known.
         if (
-            action.lower() not in {"move", "attack", "found_city", "cancel_move", "pillage", "sacrifice_charges"}
+            getattr(gs, "pending_action_tool", None) != "unit_action"
+            and action.lower() not in {"move", "attack", "found_city", "cancel_move", "pillage", "sacrifice_charges", "delete"}
             and (getattr(gs, "pending_action_entity", None) == ("unit", unit_index)
                  or getattr(gs, "pending_action_kind", None) in ("pillage", "contribution"))
         ):
@@ -1361,11 +1364,11 @@ async def unit_action(
             case "sleep":
                 return await gs.sleep_unit(unit_index)
             case "delete":
-                return await gs.delete_unit(unit_index)
+                return await gs.delete_unit(unit_id)
             case "trade_route":
                 if target_x is None or target_y is None:
                     return "Error: trade_route requires target_x and target_y of destination city"
-                return await gs.make_trade_route(unit_index, target_x, target_y)
+                return await gs.make_trade_route(unit_id, target_x, target_y)
             case "activate":
                 return await gs.activate_great_person(unit_index)
             case "sacrifice_charges":
@@ -1375,7 +1378,7 @@ async def unit_action(
             case "teleport":
                 if target_x is None or target_y is None:
                     return "Error: teleport requires target_x and target_y of the destination city"
-                return await gs.teleport_to_city(unit_index, target_x, target_y)
+                return await gs.teleport_to_city(unit_id, target_x, target_y)
             case _:
                 return f"Error: Unknown action '{action}'. Valid: move, cancel_move, pillage, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion"
 
