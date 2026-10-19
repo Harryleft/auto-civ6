@@ -343,6 +343,45 @@ def test_lost_confirmation_unknown_bound_offmap_field_can_recover_without_resubm
     assert state.pending_action_summary is None and conn.lua.eval('#submissions')==1
 
 
+@pytest.mark.parametrize('bad_first', [False, True])
+@pytest.mark.parametrize('failure', ['unknown_key', 'row_read_error', 'field_read_error'])
+@pytest.mark.parametrize('identity_changed', [False, True])
+def test_unrelated_bad_rows_cannot_hide_readable_bound_identity_changes(bad_first, failure, identity_changed):
+    conn=LostFirstOffMapProofConn();state=GameState(conn)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_travel(196608,10,10))
+    conn.lua.execute(f'''
+boundRow=offmap[1]
+badRow={{}}
+badIndex={0 if bad_first else 1}
+if "{failure}"=="field_read_error" then
+ badRow.NameIndex=99
+ setmetatable(badRow,{{__index=function() error("row field unavailable") end}})
+end
+offmap={ '{badRow,boundRow}' if bad_first else '{boundRow,badRow}' }
+badRead=true
+local diplomacy=Players[0].GetDiplomacy
+Players[0].GetDiplomacy=function()
+ local result=diplomacy()
+ local nth=result.GetNthOffMapSpy
+ result.GetNthOffMapSpy=function(self,owner,index)
+  if badRead and "{failure}"=="row_read_error" and index==badIndex then error("row unavailable") end
+  return nth(self,owner,index)
+ end
+ return result
+end
+''')
+    if identity_changed:
+        conn.lua.execute('boundRow.Name="Other"')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_travel(196608,10,10))
+    conn.lua.execute('boundRow.Name=u.name;offmap={boundRow};badRead=false')
+    result=asyncio.run(state.spy_travel(196608,10,10))
+    if identity_changed:
+        assert 'OUTCOME_UNKNOWN' in result and state.pending_action_summary is not None
+    else:
+        assert result.startswith('SPY_ASSIGNMENT_STARTED|') and state.pending_action_summary is None
+    assert conn.lua.eval('#submissions')==1
+
+
 def test_cancelled_offmap_submission_only_confirms_original_travel():
     class CancelConn(OffMapAssignmentConn):
         async def execute_write(self,code):
