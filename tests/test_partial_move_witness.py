@@ -365,3 +365,72 @@ def test_explicit_native_refusal_never_arms_or_submits_new_witness():
     assert asyncio.run(state.move_unit(786437, 42, 29)).startswith("Error: CANNOT_MOVE_TARGET|")
     assert state.pending_action_summary is None
     assert conn.lua.eval("submissions") == conn.lua.eval("moveListenerCount()") == 0
+
+
+@pytest.mark.parametrize("fallback", [
+    "queued=29042;Events.UnitOperationSegmentComplete.Fire(0,786437)",
+    "x,y=42,29",  # Reaching the original destination cannot erase invalidation.
+    "moves=0",  # Ordinary exhaustion.
+    "unit.GetMovementMovesRemaining=function() return 0 end",  # Effective exhaustion.
+    "unit.HasMovedIntoZOC=function() return true end",
+])
+def test_observed_scope_change_cannot_confirm_through_old_paths_after_scope_returns(fallback):
+    conn = InterruptedMoveConn()
+    conn.lose_observation = True
+    state = GameState(conn)
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.move_unit(786437, 42, 29))
+    conn.lua.execute('''
+seed=1
+Events.UnitMoveComplete.Fire(0,786437,42,27)
+seed=-1896272000
+''')
+    conn.lua.execute(fallback)
+    result = asyncio.run(state.move_unit(786437, 42, 29))
+    assert "OUTCOME_UNKNOWN" in result
+    assert state.pending_action_summary is not None
+    assert conn.lua.eval("submissions") == 1
+
+
+def test_alternative_chain_mismatch_does_not_invalidate_an_independent_valid_segment():
+    conn = InterruptedMoveConn()
+    conn.lose_observation = True
+    state = GameState(conn)
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.move_unit(786437, 42, 29))
+    conn.lua.execute('''
+Events.UnitMoveComplete.Fire(0,786437,43,27)
+queued=29042
+Events.UnitOperationSegmentComplete.Fire(0,786437)
+''')
+    result = asyncio.run(state.move_unit(786437, 42, 29))
+    assert "native segment complete" in result and "now_at:42,27" in result
+    assert state.pending_action_summary is None
+    assert conn.lua.eval("submissions") == 1
+
+
+def test_scope_change_before_response_complete_blocks_previously_emitted_interruption_proof():
+    conn = InterruptedMoveConn()
+    conn.lua.execute('''
+local emit=print
+print=function(row)
+ emit(row)
+ if tostring(row):find("^MOVE_INTERRUPTED|") then seed=1 end
+end
+''')
+    state = GameState(conn)
+    result = asyncio.run(state.move_unit(786437, 42, 29))
+    assert "OUTCOME_UNKNOWN" in result
+    conn.lua.execute("seed=-1896272000;queued=29042")
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.move_unit(786437, 42, 29))
+    assert conn.lua.eval("submissions") == 1
+
+
+def test_temporarily_unknown_query_scope_does_not_latch_known_scope_invalidation():
+    conn = InterruptedMoveConn()
+    conn.lose_observation = True
+    state = GameState(conn)
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.move_unit(786437, 42, 29))
+    conn.lua.execute("GameConfiguration.GetValue=function() return nil end")
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.confirm_pending_action())
+    conn.lua.execute("GameConfiguration.GetValue=function() return seed end")
+    assert "PATH_INTERRUPTED" in asyncio.run(state.confirm_pending_action())
+    assert conn.lua.eval("submissions") == 1

@@ -14,3 +14,10 @@ Research native partial movement event contract and implement minimal request-bo
 - Confirmation keeps the four alternative listeners until the next actual move request; a lost confirmation reply cannot detach later invalidation. Repeated unknown requests, native exceptions and cancellation retain the original ActionLifecycle owner and do not resubmit.
 - Red→green: the exact T69 chain initially remained OUTCOME_UNKNOWN; after the fix it reports `(42,27)`, MP1 and an interrupted path. Focused native chain, existing movement/confirmation/scope and cancel regressions: 335 passed. `compileall` and `git diff --check` passed.
 - No live calls or parent progress edits by the implementer. Independent review and parent same-run follow-up decision/T69→T70 checkpoint remain pending.
+
+## Review correction: scope history fences all move outcomes
+
+- Reproduced the blocking Standards finding through GameState/Lua: after the new observer recorded a changed seed, restoring the seed plus an exact queued target and SegmentComplete incorrectly confirmed the old move.
+- Reserved native `invalid` for known scope mismatches; alternative-chain ordering/payload errors use `chainInvalid`. SegmentComplete now also preserves known scope mismatch history. Query guards before/after all native evidence emit a token-bound `MOVE_SCOPE_INVALID` receipt; ActionLifecycle latches it before interpreting any movement outcome.
+- Red→green covers the reported bypass and all existing arrival/exhaustion/ZOC paths, an independent valid SegmentComplete after only chain mismatch, scope change before a response completes, and recovery from a query-only unknown scope. Six directly affected test modules: 344 passed; `compileall` and `git diff --check` passed.
+- Parent reported same-run live verification #1293 PATH_INTERRUPTED, separate #1298 movement and #1303 T70. This review correction still requires independent recheck; ticket remains implemented-pending-review.
