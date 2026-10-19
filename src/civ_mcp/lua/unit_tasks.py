@@ -120,7 +120,11 @@ local ok=pcall(function()
  assert(UI.IsGameCoreBusy()==false)
  local unit=taskUnit(r.owner,r.id)
  if r.noop=="ALREADY_HEALTHY" then assert(unit:GetDamage()==0);return end
- assert(unitReady(unit)==false)
+ local ready=unitReady(unit)
+ assert(type(ready)=="boolean")
+ -- A native exploration attempt can finish immediately and leave the unit
+ -- ready (T29 live capture). Its exact event below still proves acceptance.
+ assert(ready==false or (r.kind=="automate" and not r.noop))
  if r.noop then
   assert(r.activity~=nil and UnitManager.GetActivityType(unit)==r.activity)
   return
@@ -152,6 +156,11 @@ def parse_task_confirmation(lines: list[str], unit_id: int, kind: str, token: st
     if len(rows) == 1 and len(rows[0]) == 6:
         row = rows[0]
         if row[1:4] == [token, str(unit_id), kind] and row[4].isdigit() and row[5] in labels:
-            detail = 'No new operation submitted.' if row[5].startswith('ALREADY_') else 'Native task started; completion not measured.'
+            if row[5].startswith('ALREADY_'):
+                detail = 'No new operation submitted.'
+            elif kind == 'automate':
+                detail = 'Native exploration request accepted; movement and continued exploration not measured.'
+            else:
+                detail = 'Native task started; completion not measured.'
             return f'{row[5]}|unit:{row[4]}|{detail}'
     return None
