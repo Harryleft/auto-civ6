@@ -98,7 +98,7 @@ def test_lost_purchase_reply_repeated_mcp_call_only_confirms_original():
     ('spy_travel',(196608,11,10)), ('spy_mission',(196608,'MISSION',11,10)), ('spy_escape',(196608,'DISTRICT')),
     ('make_trade_route',(196608,11,10)), ('teleport_to_city',(196608,11,10)),
     ('purchase_item',(65537,'UNIT','UNIT_WARRIOR')), ('purchase_tile',(65537,12,10)),
-    ('set_policies',({0:'POLICY'},)), ('resolve_city_capture',('keep',)),
+    ('set_policies',({0:'POLICY'},)), ('resolve_city_capture',(65537,'keep')),
     ('send_diplomatic_action',(1,'DENOUNCE')), ('form_alliance',(1,'ALLIANCE')), ('propose_peace',(1,)),
     ('respond_to_deal',(1,True)), ('diplomacy_respond',(1,'CHOICE')),
     ('negotiate_incoming_trade',(1,'fingerprint')), ('propose_trade',(1,[],[])), ('test_trade',(1,[],[])),
