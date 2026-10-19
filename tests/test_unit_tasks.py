@@ -175,7 +175,7 @@ def test_operation_activity_without_exact_task_start_stays_unknown(kind,op,label
 
 
 @pytest.mark.parametrize('kind,activity,label',[('alert',5,'ALREADY_ALERT'),('heal',4,'ALREADY_HEALING')])
-@pytest.mark.parametrize("change",["u.activity=3","u.ready=true"])
+@pytest.mark.parametrize("change",["u.activity=3","u.activity=ActivityTypes.ACTIVITY_HOLD","u.ready=true"])
 def test_existing_task_noop_requires_exact_activity_and_nonready_readback(kind,activity,label,change):
     class ChangedAfterNoopConn(TaskConn):
         async def execute_write(self,code):
@@ -327,7 +327,7 @@ def test_correct_event_cannot_substitute_for_wrong_native_activity(kind,op,label
     conn=TaskConn();state=GameState(conn);ctx=make_ctx();app_of(ctx).game=state
     conn.lua.execute('deferred=true')
     assert 'OUTCOME_UNKNOWN' in asyncio.run(server.unit_action(ctx,196608,kind))
-    conn.lua.execute(f'applyTask({op});u.activity=2')
+    conn.lua.execute(f'applyTask({op});u.activity=999')
     assert 'OUTCOME_UNKNOWN' in asyncio.run(server.unit_action(ctx,196608,kind))
     assert conn.lua.eval('#submissions')==1
 
@@ -473,3 +473,96 @@ def test_legacy_low_id_requires_readable_full_native_identity_before_submit():
     assert 'UNIT_TASK_REFUSED' in asyncio.run(state.automate_explore(0))
     assert state.pending_action_summary is None
     assert conn.lua.eval('#submissions')==0
+
+
+class AlertHoldConn(TaskConn):
+    def __init__(self):
+        super().__init__()
+        self.lua.execute('''
+turn=57;seed=-1896272000;u.id=786437;u.moves=0
+ActivityTypes.ACTIVITY_HOLD=75236491
+ActivityTypes.ACTIVITY_SENTRY=-793848223
+GameInfo.UnitOperations.UNITOPERATION_ALERT={Hash=-448283625,Index=54}
+function applyTask(op)
+ assert(op==-448283625)
+ u.ready=false;u.activity=75236491
+ Events.UnitOperationAdded.Fire(0,u.id,0,54)
+end
+''')
+
+
+@pytest.mark.parametrize('lost_reply',[False,True])
+def test_deity_alert_exact_start_hold_after_movement_confirms_without_replay(lost_reply):
+    conn=AlertHoldConn();state=GameState(conn);ctx=make_ctx();app_of(ctx).game=state
+    if lost_reply:
+        conn.lose_reply=True
+        assert 'OUTCOME_UNKNOWN' in asyncio.run(server.unit_action(ctx,786437,'alert'))
+    result=asyncio.run(server.unit_action(ctx,786437,'alert'))
+    assert result.startswith('ALERT|unit:786437')
+    assert 'Native task started; completion not measured.' in result
+    assert conn.lua.eval('#submissions')==1
+    assert conn.lua.eval('u.moves')==0
+    assert conn.lua.eval('u.activity')==75236491
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('change',[
+    'u.ready=true','u.ready=nil','u.IsReadyToMove=function() error("readiness unavailable") end',
+    'u.activity=999','UnitManager.GetActivityType=function() return nil end',
+    'UnitManager.GetActivityType=function() return "75236491" end',
+    'UnitManager.GetActivityType=function() error("activity unavailable") end',
+    'ActivityTypes.ACTIVITY_HOLD=nil','ActivityTypes.ACTIVITY_HOLD="75236491"',
+    'ActivityTypes.ACTIVITY_HOLD=0/0','ActivityTypes.ACTIVITY_HOLD=75236491.5',
+    'seed=9','turn=58','u.id=851973','u.GetOwner=function() return 1 end',
+    '__civmcpUnitTask.token="another"',
+])
+def test_started_alert_hold_still_requires_readable_facts_and_original_scope_without_replay(change):
+    conn=AlertHoldConn();state=GameState(conn);ctx=make_ctx();app_of(ctx).game=state
+    conn.lua.execute('nativeTask=applyTask;function applyTask(op) nativeTask(op);'+change+' end')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(server.unit_action(ctx,786437,'alert'))
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(server.unit_action(ctx,786437,'alert'))
+    assert state.pending_action_summary is not None
+    assert conn.lua.eval('#submissions')==1
+
+
+@pytest.mark.parametrize('event',[
+    '',
+    'Events.UnitOperationStarted.Fire(1,786437,-448283625)',
+    'Events.UnitOperationStarted.Fire(0,851973,-448283625)',
+    'Events.UnitOperationStarted.Fire(0,786437,999)',
+    'Events.UnitOperationAdded.Fire(0,786437,0,999)',
+    'Events.UnitOperationAdded.Fire(0,851973,0,54)',
+])
+def test_alert_hold_without_exact_start_remains_unknown_until_bound_event(event):
+    conn=AlertHoldConn();state=GameState(conn);ctx=make_ctx();app_of(ctx).game=state
+    conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(server.unit_action(ctx,786437,'alert'))
+    conn.lua.execute('u.ready=false;u.activity=75236491;'+event)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(server.unit_action(ctx,786437,'alert'))
+    conn.lua.execute('Events.UnitOperationStarted.Fire(0,786437,-448283625)')
+    assert asyncio.run(server.unit_action(ctx,786437,'alert')).startswith('ALERT|unit:786437')
+    assert conn.lua.eval('#submissions')==1
+
+
+def test_unrelated_hold_is_not_an_already_alert_noop():
+    conn=AlertHoldConn();state=GameState(conn);ctx=make_ctx();app_of(ctx).game=state
+    conn.lua.execute('u.ready=false;u.activity=75236491;u.allowed=false')
+    assert 'CANNOT_OPERATE' in asyncio.run(server.unit_action(ctx,786437,'alert'))
+    assert conn.lua.eval('#submissions')==0
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('kind',['heal','sleep'])
+def test_fresh_hold_does_not_relax_other_task_activity_guards(kind):
+    conn=TaskConn();state=GameState(conn);ctx=make_ctx();app_of(ctx).game=state
+    conn.lua.execute('nativeTask=applyTask;function applyTask(op) nativeTask(op);u.activity=ActivityTypes.ACTIVITY_HOLD end')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(server.unit_action(ctx,196608,kind))
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(server.unit_action(ctx,196608,kind))
+    assert conn.lua.eval('#submissions')==1
+
+
+def test_automate_exact_start_acceptance_remains_independent_of_hold_activity():
+    conn=TaskConn();state=GameState(conn);ctx=make_ctx();app_of(ctx).game=state
+    conn.lua.execute('nativeTask=applyTask;function applyTask(op) nativeTask(op);u.activity=ActivityTypes.ACTIVITY_HOLD end')
+    assert asyncio.run(server.unit_action(ctx,196608,'automate')).startswith('AUTOMATED|')
+    assert conn.lua.eval('#submissions')==1
