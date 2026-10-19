@@ -1,6 +1,6 @@
 # B01：支持用户授权的新神级基准
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 
@@ -37,7 +37,7 @@ Status: ready-for-agent
 - Existing checkpoint and public GameState/lifecycle seams; temporary files and existing FakeConn transport. Test observable acceptance/refusal, run ownership, single load submission and save protection.
 - Verify the new and old baselines, changed files, run changes and process-memory reload; do not access Steam or real saves in offline tests.
 - Live: load the exact approved original once, read identity and configuration, execute normal opening actions, confirm T2, save a distinct checkpoint and verify recovery metadata.
-- Proposed seam scope sent to the user for confirmation under to-spec / tdd.
+- User confirmed these existing seams and live scope before implementation.
 
 ## Out of Scope
 
