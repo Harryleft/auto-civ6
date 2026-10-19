@@ -1,6 +1,8 @@
 # 游戏状态变更生命周期规格
 
-**Status:** claimed
+**Status:** resolved
+
+18 票已全部合入 `codex/mutation-lifecycle`。最终离线回归 3856 项通过，冻结提交 `c64201e` 的 Standards／Spec 独立复核均无实质问题；18 个实施工作树已清理。结果与审查记录见[全量验收](../../docs/acceptance/2026-10-19-mutation-lifecycle.md)。
 
 ## Problem Statement
 
