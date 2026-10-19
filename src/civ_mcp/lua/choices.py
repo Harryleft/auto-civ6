@@ -60,11 +60,15 @@ def _government() -> tuple[str, str]:
  r.index=integer(row.Index);r.hash=integer(row.Hash)
  local current=readInt(function() return culture:GetCurrentGovernment() end)
  r.noop=current==r.index
+ assert(type(culture.SetGovernmentChangeConsidered)=="function"
+  and type(culture.GovernmentChangeConsidered)=="function","GOVERNMENT_CONSIDERATION_UNAVAILABLE")
+ readBool(function() return culture:GovernmentChangeConsidered() end)
+ -- Keeping the current government still writes its native acknowledgment.
+ assert(readBool(function() return Players[r.owner]:IsTurnActive() end)
+  and readBool(function() return Game.IsAllowStrategicCommands(r.owner) end),"CANNOT_CHANGE_GOVERNMENT")
  if not r.noop then
   assert(readBool(function() return culture:IsGovernmentUnlocked(r.hash) end),"GOVERNMENT_LOCKED")
-  assert(readBool(function() return Players[r.owner]:IsTurnActive() end)
-   and readBool(function() return Game.IsAllowStrategicCommands(r.owner) end)
-   and readBool(function() return culture:CanChangeGovernmentAtAll() end)
+  assert(readBool(function() return culture:CanChangeGovernmentAtAll() end)
    and not readBool(function() return culture:GovernmentChangeMade() end)
    and (current==-1 or readBool(function() return culture:CivicCompletedThisTurn() end)),"CANNOT_CHANGE_GOVERNMENT")
   assert(not readBool(function() return culture:IsInAnarchy() end),"ANARCHY_ALREADY_ACTIVE")
@@ -76,8 +80,15 @@ def _government() -> tuple[str, str]:
  end
 ''', '''
  local culture=Players[r.owner]:GetCulture()
+ local function confirmConsideration(fact)
+  assert(r.considerationEntered==true and r.considerationReturned==true,fact.."_CONSIDERATION_NOT_RETURNED")
+  local ok,considered=pcall(function() return culture:GovernmentChangeConsidered() end)
+  assert(ok and considered==true,fact.."_CONSIDERATION_UNCONFIRMED")
+ end
  if culture:GetCurrentGovernment()==r.index and culture:IsInAnarchy()==false then
-  return r.noop and "GOVERNMENT_UNCHANGED" or "GOVERNMENT_CHANGED",r.target
+  local label=r.noop and "GOVERNMENT_UNCHANGED" or "GOVERNMENT_CHANGED"
+  confirmConsideration(label)
+  return label,r.target
  end
  -- The native UI treats true as accepted, not as final adoption. Bind that
  -- receipt to the newly started interval before releasing this command.
@@ -85,6 +96,7 @@ def _government() -> tuple[str, str]:
   and culture:GovernmentChangeMade()==true then
   local ending=integer(culture:GetAnarchyEndTurn())
   assert(ending==r.turn+r.anarchyTurns and ending>r.turn and ending~=r.previousAnarchyEnd,"ANARCHY_INTERVAL_UNCONFIRMED")
+  confirmConsideration("GOVERNMENT_CHANGE_STARTED")
   return "GOVERNMENT_CHANGE_STARTED","target:"..r.target..",anarchy_until:"..ending..",remaining:"..r.anarchyTurns
  end
  error("GOVERNMENT_UNCONFIRMED")
@@ -124,6 +136,8 @@ def build_player_choice(operation: str, target: str | int, token: str) -> str:
     prepare, _ = _parts(operation)
     submit = ('r.accepted=Players[r.owner]:GetCulture():RequestChangeGovernment(r.hash)'
               if operation == 'change_government' else 'UI.RequestPlayerOperation(r.owner,r.op,r.params)')
+    acknowledge = ('r.considerationEntered=true; Players[r.owner]:GetCulture():SetGovernmentChangeConsidered(true); r.considerationReturned=true'
+                   if operation == 'change_government' else '')
     return _CONTEXT + f'''
 local token={json.dumps(token)}
 local ok,r=pcall(function()
@@ -140,6 +154,7 @@ if not (__civmcpPlayerChoice and __civmcpPlayerChoice.token==token) then
   {submit}
   r.returned=true
  end
+ {acknowledge}
 end
 print("OK:CHOICE_REQUESTED|"..r.operation.."|"..tostring(r.target))
 print("{SENTINEL}")
