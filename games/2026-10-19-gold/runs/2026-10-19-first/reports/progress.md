@@ -271,3 +271,5 @@ B22关闭：215f4cf首版经独立双审发现丢确认回复后监听过早退�
 #2347推进暂停于巴西军事援助议会；#2348读取唯一可投援助提案，#2349打开、#2350显式1赞成票/0favor，#2351确认T128及请求援助竞赛开始。首都间谍完成、尼普尔大学完成、重商主义完成；下一步宗教防御/工业发展/间谍及援助竞赛。#2352保存gold_20261019_t128_b22_verified911927bytes。
 
 B23 T128：#2359职业军队/魅力型领袖；#2360勇士131073原生直接升级为火枪手2818062（非逐时代升级），#2361殖民主义、#2362尼普尔37,26工业区6t/#2363首都38,26工业区8t。#2364传教士至拉格什34,26，#2365单次传播后charges3→2/城市转拜火，但PRESSURE_UNCONFIRMED；#2369科技弹窗关闭、#2370只确认仍未知。#2373纯诊断原回执绑定完整/started/entered/returned=true，错误压力读数5.96875不变，真实宗教行Pressure217.90625。已关闭旧owner，仅作纯诊断；恢复玩法前必须显式恢复T128b22verified，依原日志重作独立选择。B23进入to-spec→implement-spec。
+
+B24 T128：B23恢复后#2378–83重放独立选择。#2384首间谍2752514派往加拿大18,13已原生Started，却unknown；#2387仅确认仍未知。关闭owner作纯诊断，#2389原回执entered/returned/started true、原unit双入口absent；#2390本方off-map唯一NameIndex37/NameLOC_CITIZEN_SUMERIA_MODERN_FEMALE_8/Level1/18,13/ReturnTurn132。主源EspionageOverview独立读取offmaproster，旧工具却要求mapunit存在。B24进入to-spec→implement-spec；再次恢复同T128verified前不继续游戏。
