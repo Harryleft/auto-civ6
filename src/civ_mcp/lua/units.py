@@ -220,12 +220,9 @@ local q = {{token="{witness_token}", owner=me, id=unit:GetID(),
 __civmcpMoveSegment = q
 q.handler = function(player, unitID, hCommand, iData1)
     pcall(function()
-        if __civmcpMoveSegment ~= q or q.closed or q.done then return end
+        if __civmcpMoveSegment ~= q or q.entered ~= true then return end
         if player ~= q.owner or unitID ~= q.id then return end
-        if Game.GetLocalPlayer() ~= q.owner or Game.GetCurrentGameTurn() ~= q.turn then return end
-        local currentCfg = PlayerConfigurations[q.owner]
-        if currentCfg:GetCivilizationTypeName() ~= q.civ
-            or GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED") ~= q.seed then return end
+        if not sameScope(q) or q.closed or q.done then return end
         q.done = true
         -- Shipped UI does not type these two fields. Keep raw diagnostics;
         -- do not assume hCommand equals the MOVE_TO hash.
@@ -242,6 +239,8 @@ end
 -- T69 emitted Added(Index), MoveComplete(x,y), Deactivated(Hash,1), then
 -- Cleared(0,0), without SegmentComplete. This proves an interrupted move,
 -- not arrival. Old ALERT cleanup before Added does not belong to this chain.
+-- sameScope reserves q.invalid for the whole request's known scope changes;
+-- chainInvalid rejects only this alternative, not an independent segment.
 q.moveHandlers = {{}}
 local partialArmed = pcall(function()
     local op = GameInfo.UnitOperations.UNITOPERATION_MOVE_TO
@@ -252,7 +251,7 @@ local partialArmed = pcall(function()
             if __civmcpMoveSegment ~= q or q.entered ~= true or owner ~= q.owner or id ~= q.id then return end
             local ok = pcall(function()
                 if not sameScope(q) then q.uncertain = true;return end
-                if q.uncertain then return end
+                if q.uncertain or q.chainInvalid then return end
                 observe(a,b)
             end)
             if not ok then q.uncertain = true end
@@ -262,21 +261,21 @@ local partialArmed = pcall(function()
     end
     bind("UnitOperationAdded",function(slot,index)
         if q.moveStage == nil and slot == 0 and index == q.moveIndex then q.moveStage = "ADDED"
-        elseif q.moveStage ~= nil then q.invalid = true end
+        elseif q.moveStage ~= nil then q.chainInvalid = true end
     end)
     bind("UnitMoveComplete",function(x,y)
         if q.moveStage == "ADDED" and scopeIndex(x) and scopeIndex(y)
             and (x ~= q.fromX or y ~= q.fromY) then
             q.moveX,q.moveY,q.moveStage = x,y,"MOVED"
-        elseif q.moveStage ~= nil then q.invalid = true end
+        elseif q.moveStage ~= nil then q.chainInvalid = true end
     end)
     bind("UnitOperationDeactivated",function(hash,reason)
         if q.moveStage == "MOVED" and hash == q.moveHash and reason == 1 then q.moveStage = "DEACTIVATED"
-        elseif q.moveStage ~= nil then q.invalid = true end
+        elseif q.moveStage ~= nil then q.chainInvalid = true end
     end)
     bind("UnitOperationsCleared",function(a,b)
         if q.moveStage == "DEACTIVATED" and a == 0 and b == 0 then q.moveStage = "CLEARED"
-        elseif q.moveStage ~= nil then q.invalid = true end
+        elseif q.moveStage ~= nil then q.chainInvalid = true end
     end)
 end)
 q.moveCapable = partialArmed
@@ -557,7 +556,7 @@ pcall(function()
     local q = __civmcpMoveSegment
     if not q or not u or q.token ~= "{witness_token}" or q.targetX ~= {move_target_x}
         or q.targetY ~= {move_target_y} then return end
-    if not sameScope(q) or q.uncertain or q.moveCapable ~= true or q.moveStage ~= "CLEARED"
+    if not sameScope(q) or q.uncertain or q.chainInvalid or q.moveCapable ~= true or q.moveStage ~= "CLEARED"
         or q.entered ~= true or q.returned ~= true then return end
     local op = GameInfo.UnitOperations.UNITOPERATION_MOVE_TO
     if op.Hash ~= q.moveHash or op.Index ~= q.moveIndex or op.Hash ~= UnitOperationTypes.MOVE_TO then return end
@@ -565,7 +564,7 @@ pcall(function()
         or (q.moveX == q.fromX and q.moveY == q.fromY) then return end
     if UnitManager.GetQueuedDestination(u) ~= nil or UI.IsGameCoreBusy() ~= false
         or UI.IsProcessingMessages() ~= false then return end
-    if not sameScope(q) or q.uncertain or q.moveStage ~= "CLEARED" then return end
+    if not sameScope(q) or q.uncertain or q.chainInvalid or q.moveStage ~= "CLEARED" then return end
     q.closed = true
     -- Confirmation replies can be lost. Retain this bounded observer until
     -- the next actual request so later native events can invalidate its proof.
@@ -583,6 +582,21 @@ end)
 local original = __civmcpMoveSegment
 if u and (not original or original.token ~= "{witness_token}" or original.id ~= u:GetID()) then u = nil end
 '''
+    scope_guard = ""
+    if witness_token is not None:
+        # Fence every outcome path, including facts emitted before a callback
+        # or final getter observed a known mismatch. Python latches this token.
+        scope_guard = f'''
+local original = __civmcpMoveSegment
+if original and original.token == "{witness_token}" then
+    sameScope(original)
+    if original.invalid then
+        print("MOVE_SCOPE_INVALID|{witness_token}")
+        print("{SENTINEL}")
+        return
+    end
+end
+'''
     return f"""
 {_LUA_ACTION_SCOPE}
 local moveImpassable = false
@@ -590,6 +604,7 @@ local me = Game.GetLocalPlayer()
 local u = Players[me]:GetUnits():FindID({unit_index})
 if u and {unit_index} >= 65536 and u:GetID() ~= {unit_index} then u = nil end
 {identity_guard}
+{scope_guard}
 if u then
     local busy = "unknown"
     pcall(function() busy = tostring(UI.IsGameCoreBusy()) end)
@@ -608,6 +623,7 @@ else print("POS|GONE") end
 {path_probe}
 {diag_block}
 {witness_probe}
+{scope_guard}
 print("{SENTINEL}")
 """
 
