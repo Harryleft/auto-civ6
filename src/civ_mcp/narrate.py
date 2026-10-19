@@ -1125,8 +1125,9 @@ def _describe_trade_item(item: lq.TestTradeItem) -> str:
         return f"{name}{amt}{dur}"
     elif item.item_type == "AGREEMENT":
         if item.subtype_id.lstrip("-").isdigit():
-            return f"Agreement (subtype={item.subtype_id}, value={item.value_id})"
-        return item.subtype_id.replace("DIPLOACTION_", "").replace("_", " ").title()
+            return f"Agreement (subtype={item.subtype_id}, value={item.value_id}, duration={item.duration} turns)"
+        name = item.subtype_id.replace("DIPLOACTION_", "").replace("_", " ").title()
+        return f"{name} (duration={item.duration} turns)"
     elif item.item_type == "FAVOR":
         return f"{item.amount} diplomatic favor"
     elif item.item_type == "CITY":
