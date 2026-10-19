@@ -17,14 +17,19 @@
   "expected_configuration": {
     "game_seed": -1896272000,
     "map_seed": -1896271999,
-    "source": "original file configuration tags; pending live readback"
+    "source": "original file configuration tags; game seed confirmed by native loaded identity"
   },
   "verification": {
-    "baseline_loaded": false,
-    "identity_and_turn_read_back": false,
-    "original_sha256_unchanged": true
+    "baseline_loaded": true,
+    "identity_and_turn_read_back": true,
+    "original_sha256_unchanged": true,
+    "autonomous_net_turns": 1,
+    "final_turn": 2,
+    "checkpoint_menu_reload_verified": true,
+    "checkpoint": "gold_20261019_t002_b01_verified",
+    "run_id": "e8b4d6a62dca49bbb256e8264beb18f2"
   },
-  "status": "authorized_original_pending_live_verification",
+  "status": "authorized_original_live_verified",
   "report": "games/2026-10-19-gold/runs/2026-10-19-first/reports/progress.md",
   "note": "User authorized this exact deity original. Actual filename retains tun; never overwrite it or restore checkpoints from another run."
 }

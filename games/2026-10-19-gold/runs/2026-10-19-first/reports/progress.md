@@ -4,8 +4,12 @@
 
 | 编号 | 游戏回合 | 触发／实际表现 | 原因／处理 | 验证 |
 | --- | --- | --- | --- | --- |
-| B01 | 加载前，目标 T1 | `load_save_from_menu` 返回 `Checkpoint completion and expected identity are unavailable; no load sent.` | checkpoint 仅接受旧基准固定指纹及当前旧轮次的确认存档；补充新基准身份与轮次隔离 | 待实施与实机复验 |
+| B01 | 加载前，目标 T1 | `load_save_from_menu` 返回 `Checkpoint completion and expected identity are unavailable; no load sent.` | checkpoint 仅接受旧基准固定指纹及当前旧轮次的确认存档；补充新基准身份与轮次隔离 | 已修复：f3f919a／集成 ffd3f06；425 项离线通过；T1→T2、保存与原生菜单恢复通过 |
 
-进展：游戏进程和 FireTuner 已启动；通过原生菜单只读获取了新档身份。尚未发送新档加载，尚未推进回合。
+当前已确认 T2，身份 sumeria / seed -1896272000；已在 (40,25) 建立乌鲁克，研究采矿业，生产侦察兵，勇士向西探索。用户已确认现有 checkpoint / GameState / lifecycle 验证边界。
 
-规格已写入本轮 changes/gold-baseline 并从本地 tracker 引用。to-spec / tdd 要求确认测试 seam；已向用户提出 checkpoint / GameState / lifecycle 的现有边界及 T1→T2 实机范围，等待回复；尚未编写测试或改动运行代码。原件已逐字节归档到本轮 evidence，SHA-256 一致。
+B01：实施 f3f919a，集成 ffd3f06。相关离线 425 passed，compileall / diff --check 通过；Standards 与 Spec 两项独立审查均无实质发现。原始新旧基准不覆盖、不混用轮次。
+
+实机证据：evidence/tool-calls.jsonl 中 #2 加载原件，#19 确认 T1→T2，#20 保存，#22 原生菜单恢复同一 T2 检查点，#23–24 核对单位位置、城市人口、增长与生产队列。检查点 gold_20261019_t002_b01_verified SHA-256 80b2abac7fd93492d2c9bb68e3af1d2627ad306fce0cca481eae4e08060ea724。轮次 e8b4d6a62dca49bbb256e8264beb18f2。此恢复是技术验证，未改变游戏决策结果。
+
+原件逐字节归档到 evidence，SHA-256 一致。游戏继续，尚未终局。
