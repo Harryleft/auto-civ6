@@ -1,6 +1,6 @@
 # B02-01：确认自动探索的实际原生任务开始
 
-Status: implemented-pending-review
+Status: resolved
 Blocked by: none
 Spec: ../spec.md
 
@@ -14,3 +14,5 @@ Spec: ../spec.md
 本机 UnitPanel 的第四参 `true` 是宽松 UI 可见性检查；提交前改用 `false` 检查真实可执行资格。自动探索缺失 Added 观察器或有效 Index 时零提交拒绝。
 
 TDD：UI 可见但不可执行、真实 T11 四参事件、缺观察器／Index 均先红后绿。公共入口覆盖错字段、错任务、错 owner／完整 ID、换世界／回合、延迟事件、丢回应与取消后不重放。直接相关离线回归：`test_unit_tasks.py`、`test_unit_readiness.py`、`test_action_scope.py`、`test_server.py` 共 307 passed；compileall 与 diff --check 通过。独立审查和精确 T11 检查点实机验证待父代理完成。
+
+实机及审查：T11 单次 automate 原生开始确认、T11→T12、独立 checkpoint 保存均通过（本轮工具日志 #130–135）；Standards / Spec 无实质发现。
