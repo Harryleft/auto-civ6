@@ -1748,7 +1748,9 @@ async def recruit_great_person(ctx: Context, individual_id: int) -> str:
         individual_id: The individual's ID (from get_great_people output, shown after ability)
 
     Requires enough Great Person points for that class.
-    The GP spawns in your capital. Use get_great_people to check [CAN RECRUIT] status.
+    Confirms points spent and a new unit of the requested individual.
+    Use get_great_people to check [CAN RECRUIT] status.
+    If the outcome is unknown, repeat the same request to confirm without resubmitting.
     """
     gs = _get_game(ctx)
     return await _logged(
@@ -1770,7 +1772,8 @@ async def patronize_great_person(
         yield_type: YIELD_GOLD (default) or YIELD_FAITH
 
     Costs shown in get_great_people output under "Patronize:".
-    Requires enough gold/faith to cover the cost.
+    Requires enough gold/faith to cover the cost. Confirms the original cost and new individual.
+    If the outcome is unknown, repeat the same request to confirm without paying again.
     """
     gs = _get_game(ctx)
     return await _logged(
@@ -1783,13 +1786,14 @@ async def patronize_great_person(
 
 @mcp.tool()
 async def reject_great_person(ctx: Context, individual_id: int) -> str:
-    """Pass on a Great Person (skip to the next one in that class).
+    """Pass on the specified Great Person using points from that class.
 
     Args:
         individual_id: The individual's ID (from get_great_people output)
 
-    Costs faith. The next Great Person in that class becomes available.
-    Use when you don't want the current GP and want to save points for a better one.
+    Costs Great Person points, as determined by the native rejection cost.
+    The original candidate can remain available to other players.
+    If the outcome is unknown, repeat the same individual to confirm without another rejection.
     """
     gs = _get_game(ctx)
     return await _logged(

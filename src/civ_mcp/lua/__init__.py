@@ -85,11 +85,20 @@ from civ_mcp.lua.great_people import (  # noqa: F401
     build_activate_great_person,
     build_gp_advisor_query,
     build_great_people_query,
-    build_patronize_great_person,
-    build_recruit_great_person,
-    build_reject_great_person,
     parse_gp_advisor_response,
     parse_great_people_response,
+)
+from civ_mcp.lua.policies import (  # noqa: F401
+    build_policy_plan,
+    build_policy_confirmation,
+    build_policy_continuation,
+    parse_policy_confirmation,
+    policy_plan_ready,
+)
+from civ_mcp.lua.choices import (  # noqa: F401
+    build_player_choice,
+    build_player_choice_confirmation,
+    parse_player_choice_confirmation,
 )
 from civ_mcp.lua.governors import (  # noqa: F401
     build_governor_action,
@@ -98,13 +107,10 @@ from civ_mcp.lua.governors import (  # noqa: F401
 )
 from civ_mcp.lua.governance import (  # noqa: F401
     build_available_governments_query,
-    build_change_government,
-    build_choose_dedication,
     build_city_states_query,
     build_dedications_query,
     build_governors_query,
     build_policies_query,
-    build_set_policies,
     build_unit_promotions_query,
     build_unit_upgrade_query,
     parse_city_states_response,
@@ -259,10 +265,6 @@ from civ_mcp.lua.religion import (  # noqa: F401
     parse_religion_status_response,
 )
 from civ_mcp.lua.tech import (  # noqa: F401
-    build_set_civic,
-    build_set_civic_gamecore,
-    build_set_research,
-    build_set_research_gamecore,
     build_tech_civics_query,
     parse_tech_civics_response,
 )
@@ -309,3 +311,9 @@ from civ_mcp.lua.contribution import (  # noqa: F401
 from civ_mcp.lua.item_purchase import build_purchase_item, build_item_purchase_query, parse_item_purchase_confirmation  # noqa: F401
 
 from civ_mcp.lua.trader_actions import build_trader_action, build_trader_action_query, parse_trader_confirmation  # noqa: F401
+
+from civ_mcp.lua.great_person_pool import (  # noqa: F401
+    build_great_person_pool_action,
+    build_great_person_pool_query,
+    parse_great_person_pool_confirmation,
+)
