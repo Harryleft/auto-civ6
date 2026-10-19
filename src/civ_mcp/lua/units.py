@@ -1262,22 +1262,6 @@ print("{SENTINEL}")
 """
 
 
-def build_delete_unit(unit_index: int) -> str:
-    """Delete (disband) a unit (InGame context)."""
-    return f"""
-{_lua_get_unit(unit_index)}
-local unitInfo = GameInfo.Units[unit:GetType()]
-local uName = unitInfo and unitInfo.UnitType or "UNKNOWN"
-if UnitManager.CanStartCommand(unit, UnitCommandTypes.DELETE, true) then
-    UnitManager.RequestCommand(unit, UnitCommandTypes.DELETE)
-    print("OK:DELETED|" .. uName .. " at " .. unit:GetX() .. "," .. unit:GetY())
-else
-    {_bail("ERR:CANNOT_DELETE|Unit cannot be deleted")}
-end
-print("{SENTINEL}")
-"""
-
-
 def build_improve_tile(unit_index: int, improvement_name: str) -> str:
     """Build an improvement with a builder unit (InGame context).
 

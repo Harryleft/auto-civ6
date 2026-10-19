@@ -430,50 +430,6 @@ print("{SENTINEL}")
 """
 
 
-def build_promote_unit(unit_index: int, promotion_type: str) -> str:
-    """Apply a promotion to a unit (GameCore context).
-
-    Uses GameCore SetPromotion because InGame RequestCommand(PROMOTE)
-    silently fails (persistent bug across Games 1, 4, and 5).
-    """
-    return f"""
-{_lua_get_unit_gamecore(unit_index)}
-local x, y = unit:GetX(), unit:GetY()
-if x == -9999 then {_bail("ERR:UNIT_CONSUMED")} end
-local promo = GameInfo.UnitPromotions["{promotion_type}"]
-if promo == nil then {_bail(f"ERR:PROMOTION_NOT_FOUND|{promotion_type}")} end
-local exp = unit:GetExperience()
-if exp == nil then {_bail("ERR:NO_EXPERIENCE|Unit has no experience object")} end
--- XP-threshold gate: prevent infinite promotions from SetPromotion desync.
-local ui = GameInfo.Units[unit:GetType()]
-local promClass = ui and ui.PromotionClass or ""
-{_LUA_XP_THRESHOLD}
-if xp < xpNeeded then {_bail_lua('"ERR:INSUFFICIENT_XP|Have " .. xp .. " XP, need " .. xpNeeded .. " for promotion " .. (xpPromoCount + 1) .. " (have " .. xpPromoCount .. " already)"')} end
-local canPromote = false
-pcall(function() canPromote = exp:CanPromote(promo.Index) end)
-if not canPromote then {_bail("ERR:CANNOT_PROMOTE|Unit cannot receive this promotion (wrong class, missing prereq, or insufficient XP)")} end
-if exp:HasPromotion(promo.Index) then {_bail(f"ERR:ALREADY_HAS_PROMOTION|{promotion_type}")} end
-exp:SetPromotion(promo.Index)
-if not exp:HasPromotion(promo.Index) then {_bail("ERR:PROMOTION_FAILED|SetPromotion did not apply")} end
--- Sync engine state: zero out stored promotions so the engine stops
--- generating ENDTURN_BLOCKING_UNIT_PROMOTION notifications.
--- ChangeStoredPromotions(-1) is insufficient when stored > 1 (e.g. unit
--- earned enough XP for two promotions). Read the current count and zero it.
-local stored = 0
-pcall(function() stored = exp:GetStoredPromotions() end)
-if stored > 0 then
-    pcall(function() exp:ChangeStoredPromotions(-stored) end)
-end
--- Verify: if stored is still > 0 after zeroing, log it for diagnostics
-local storedAfter = 0
-pcall(function() storedAfter = exp:GetStoredPromotions() end)
-pcall(function() unit:SetDamage(0) end)
-local promoName = Locale.Lookup(promo.Name)
-print("OK:PROMOTED|" .. promoName .. "|stored:" .. stored .. "->" .. storedAfter)
-print("{SENTINEL}")
-"""
-
-
 def build_city_states_query() -> str:
     """List known city-states with envoy info (InGame context)."""
     return """
@@ -550,44 +506,6 @@ local gold = Players[me]:GetTreasury():GetGoldBalance()
 local cost = 0
 pcall(function() cost = unit:GetUpgradeCost() end)
 print("UPGRADE|" .. ut .. "|" .. upgradeType .. "|" .. upName:gsub("|","/") .. "|" .. math.floor(cost) .. "|" .. math.floor(gold))
-print("{SENTINEL}")
-"""
-
-
-def build_upgrade_unit(unit_index: int) -> str:
-    """Execute unit upgrade (InGame context)."""
-    return f"""
-{_lua_get_unit(unit_index)}
-local info = GameInfo.Units[unit:GetType()]
-local ut = info and info.UnitType or "UNKNOWN"
-local upgCol = info and info.UpgradeUnitCollection
-local upType = (upgCol and #upgCol > 0) and upgCol[1].UpgradeUnit or ""
-local params = {{}}
-local canUpgrade, upgradeResult = UnitManager.CanStartCommand(unit, UnitCommandTypes.UPGRADE, params, true)
-if not canUpgrade then
-    local cost = 0
-    pcall(function() cost = unit:GetUpgradeCost() end)
-    local gold = Players[me]:GetTreasury():GetGoldBalance()
-    local detail = ut
-    if upType ~= "" then detail = detail .. " -> " .. upType end
-    detail = detail .. " | cost:" .. math.floor(cost) .. "g have:" .. math.floor(gold) .. "g"
-    if upgradeResult then
-        for _, v in pairs(upgradeResult) do
-            if type(v) == "table" then
-                for _, reason in pairs(v) do
-                    if type(reason) == "string" then
-                        local clean = reason:gsub("%[ICON_[^%]]*%]", ""):gsub("%s+", " ")
-                        detail = detail .. " | " .. clean
-                    end
-                end
-            end
-        end
-    end
-    {_bail_lua('"ERR:CANNOT_UPGRADE|" .. detail')}
-end
-if upType == "" then upType = "UNKNOWN" end
-UnitManager.RequestCommand(unit, UnitCommandTypes.UPGRADE, params)
-print("OK:UPGRADED|" .. ut .. " -> " .. upType)
 print("{SENTINEL}")
 """
 
