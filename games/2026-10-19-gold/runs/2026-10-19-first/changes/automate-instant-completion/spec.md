@@ -1,6 +1,6 @@
 # B04：自动探索已接纳但单位仍就绪
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 
