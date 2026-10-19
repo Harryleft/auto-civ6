@@ -75,8 +75,6 @@ from civ_mcp.lua.congress import (  # noqa: F401
     parse_world_congress_response,
 )
 from civ_mcp.lua.economy import (  # noqa: F401
-    build_make_trade_route,
-    build_teleport_to_city,
     build_trade_capacity_check,
     build_trade_destinations_query,
     build_trade_routes_query,
@@ -319,3 +317,5 @@ from civ_mcp.lua.contribution import (  # noqa: F401
 )
 
 from civ_mcp.lua.item_purchase import build_purchase_item, build_item_purchase_query, parse_item_purchase_confirmation  # noqa: F401
+
+from civ_mcp.lua.trader_actions import build_trader_action, build_trader_action_query, parse_trader_confirmation  # noqa: F401

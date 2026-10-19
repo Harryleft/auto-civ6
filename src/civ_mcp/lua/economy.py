@@ -7,8 +7,6 @@ from civ_mcp.lua._helpers import (
     _LUA_FMT_FLAT,
     _LUA_FMT_Y,
     _LUA_YIELD_LABELS,
-    _bail,
-    _bail_lua,
     _lua_get_unit,
 )
 from civ_mcp.lua.models import TradeDestination, TraderInfo, TradeRouteStatus
@@ -470,61 +468,3 @@ def parse_trade_destinations_response(lines: list[str]) -> list[TradeDestination
     if not results and status != "EMPTY":
         raise ValueError("TRADE_DESTINATIONS_UNKNOWN|Native candidate response is incomplete")
     return results
-
-
-def build_make_trade_route(unit_index: int, target_x: int, target_y: int) -> str:
-    """Start a trade route from a trader to a target city (InGame context).
-
-    Uses the same param format as the game's TradeRouteChooser.lua:
-      PARAM_X0/Y0 = destination city, PARAM_X1/Y1 = trader origin.
-    Checks CanStartOperation first to avoid ghost route desyncs.
-    """
-    return f"""
-{_lua_get_unit(unit_index)}
-if unit:GetMovesRemaining() == 0 then {_bail("ERR:NO_MOVES|Trader has no moves remaining")} end
-local destCity = CityManager.GetCityAt({target_x}, {target_y})
-if destCity == nil then {_bail("ERR:NO_CITY|No city at ({target_x},{target_y})")} end
-local opHash = UnitOperationTypes.MAKE_TRADE_ROUTE
-local tParams = {{}}
-tParams[UnitOperationTypes.PARAM_X0] = {target_x}
-tParams[UnitOperationTypes.PARAM_Y0] = {target_y}
-tParams[UnitOperationTypes.PARAM_X1] = unit:GetX()
-tParams[UnitOperationTypes.PARAM_Y1] = unit:GetY()
-if not UnitManager.CanStartOperation(unit, opHash, nil, tParams) then
-    local pTrade = Players[me]:GetTrade()
-    local nOut = pTrade:GetNumOutgoingRoutes()
-    local cap = pTrade:GetOutgoingRouteCapacity()
-    if nOut >= cap then
-        {_bail_lua('"ERR:CAPACITY_FULL|Trade routes at capacity (" .. nOut .. "/" .. cap .. "). Build Markets/Lighthouses for more slots, or wait for current route to finish."')}
-    else
-        {_bail(f"ERR:CANNOT_START_ROUTE|CanStartOperation returned false for destination ({target_x},{target_y})")}
-    end
-end
-UnitManager.RequestOperation(unit, opHash, tParams)
-local destName = Locale.Lookup(destCity:GetName())
-print("OK:TRADE_ROUTE_STARTED|to " .. destName .. " at ({target_x},{target_y})")
-print("{SENTINEL}")
-"""
-
-
-def build_teleport_to_city(unit_index: int, target_x: int, target_y: int) -> str:
-    """Teleport a trader to a different city to change origin (InGame context).
-
-    Only works when the trader is idle (not on an active route).
-    """
-    return f"""
-{_lua_get_unit(unit_index)}
-local opInfo = GameInfo.UnitOperations["UNITOPERATION_TELEPORT_TO_CITY"]
-if opInfo == nil then {_bail("ERR:NO_TELEPORT_OP|TELEPORT_TO_CITY operation not found")} end
-local opHash = opInfo.Hash
-local tParams = {{}}
-tParams[UnitOperationTypes.PARAM_X] = {target_x}
-tParams[UnitOperationTypes.PARAM_Y] = {target_y}
-local can = UnitManager.CanStartOperation(unit, opHash, nil, tParams, true)
-if not can then {_bail(f"ERR:CANNOT_TELEPORT|Cannot teleport trader to ({target_x},{target_y}). Is the trader idle (not on an active route)?")} end
-UnitManager.RequestOperation(unit, opHash, tParams)
-local destCity = CityManager.GetCityAt({target_x}, {target_y})
-local destName = destCity and Locale.Lookup(destCity:GetName()) or "({target_x},{target_y})"
-print("OK:TELEPORTED|to " .. destName .. " at ({target_x},{target_y})")
-print("{SENTINEL}")
-"""

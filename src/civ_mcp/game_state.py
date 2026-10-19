@@ -1543,9 +1543,7 @@ class GameState:
     async def make_trade_route(
         self, unit_index: int, target_x: int, target_y: int
     ) -> str:
-        lua = lq.build_make_trade_route(unit_index, target_x, target_y)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._trader_action("trade_route", "make_trade_route", unit_index, target_x, target_y)
 
     # ------------------------------------------------------------------
     # Great Person activation (InGame context)
@@ -1571,9 +1569,32 @@ class GameState:
     async def teleport_to_city(
         self, unit_index: int, target_x: int, target_y: int
     ) -> str:
-        lua = lq.build_teleport_to_city(unit_index, target_x, target_y)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._trader_action("teleport", "teleport_to_city", unit_index, target_x, target_y)
+
+    async def _trader_action(self, kind: str, entrypoint: str, unit_id: int, x: int, y: int) -> str:
+        if any(type(value) is not int or value < 0 for value in (unit_id, x, y)):
+            return "Error: INVALID_TRADER_INTENT|Expected a full trader ID and nonnegative integer city coordinates."
+        entity, intent = ("unit", unit_id), (x, y)
+        if self._actions.matches(kind, entity, intent=intent):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            kind, entity, lq.build_trader_action_query(kind, unit_id, x, y, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"target": (x, y), "witness_token": token}, intent=intent,
+            evidence=_ActionEvidence(
+                tool="unit_action", entrypoint=entrypoint, accepted=("TRADER_REQUESTED|",), refused="ERR:TRADER_REFUSED|",
+                confirm=lambda rows: lq.parse_trader_confirmation(rows, token, kind, unit_id),
+                guidance="Repeat the original trader action and destination to confirm only; inspect get_trade_routes. ",
+            ),
+        )
+        return await self._submit_action(pending, scope, lq.build_trader_action(kind, unit_id, x, y, token))
 
     # ------------------------------------------------------------------
     # World Congress (InGame context)
