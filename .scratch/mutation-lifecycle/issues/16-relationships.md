@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 地块购买与可复用的未决动作契约
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] 关系回读绑定双方和原世界；延迟或丢回应无重复会话／回应。
 - [ ] OPEN_BORDERS 继续复用交易所有者，不重建可靠交易协议。

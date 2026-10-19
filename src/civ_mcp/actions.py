@@ -141,8 +141,13 @@ class ActionLifecycle:
             # Native errors or unrelated callback output cannot release a spend.
             refused = (len(lines) == 1 and (lines[0].startswith(pending.evidence.refused)
                        or lines[0] == "ERR:ACTION_SCOPE_NO_SUBMIT|Native action scope changed or unavailable"))
-            if not refused:
-                result = "Error: OUTCOME_UNKNOWN|Action acknowledgement unavailable"
+            if refused:
+                # The envelope proves pre-entry refusal; native reason text is
+                # data and may itself contain the string OUTCOME_UNKNOWN.
+                if self.pending is pending:
+                    self.pending = None
+                return result
+            result = "Error: OUTCOME_UNKNOWN|Action acknowledgement unavailable"
         if result.startswith(accepted):
             pending.success = result
             if pending.kind == "move":

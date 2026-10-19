@@ -525,7 +525,7 @@ print("{SENTINEL}")
 '''
 
 
-def _incoming_guard(scope: str, target: int, sid: int) -> str:
+def _incoming_guard(scope: str, target: int, sid: int, *, final: bool = False) -> str:
     """Incoming and AI-evaluation phases share this original native session."""
     return _scope() + f'''
 local me,target,sid=Game.GetLocalPlayer(),{int(target)},{int(sid)}
@@ -538,7 +538,7 @@ local function ready()
  local actionRoot=ContextPtr:LookUpControl("/InGame/DiplomacyActionView")
  local conversation=ContextPtr:LookUpControl("/InGame/DiplomacyActionView/ConversationContainer")
  if not actionRoot or not conversation or (actionRoot:IsHidden()==false and conversation:IsHidden()==false) then return false end
- if ms_OtherPlayerID~=target or ms_InitiatedByPlayerID~=target or ms_bIsDemand~=false then return false end
+ if ms_OtherPlayerID~=target or ms_InitiatedByPlayerID~=target or {'type(ms_bIsDemand)~="boolean"' if final else 'ms_bIsDemand~=false'} then return false end
  if not localPlayer or localPlayer:GetID()~=me or not otherPlayer or otherPlayer:GetID()~=target then return false end
  if DiplomacyManager.FindOpenSessionID(me,target)~=sid or DiplomacyManager.HasQueuedSession(me)~=false then return false end
  local info=DiplomacyManager.GetSessionInfo(sid)
@@ -551,8 +551,9 @@ if not ok or not isReady then print("INCOMING|NOT_READY"); return end
 '''
 
 
-def build_incoming_quote(scope: str, target: int, sid: int) -> str:
-    return _incoming_guard(scope, target, sid) + _fingerprint() + '''
+def build_incoming_quote(scope: str, target: int, sid: int, *, final: bool = False) -> str:
+    kind = 'print("INCOMING_DEMAND|"..tostring(ms_bIsDemand))\n' if final else ""
+    return _incoming_guard(scope, target, sid, final=final) + kind + _fingerprint() + '''
 local original=DealManager.GetWorkingDeal(DealDirection.INCOMING,me,target)
 local current=DealManager.GetWorkingDeal(DealDirection.OUTGOING,me,target)
 local a,b=fingerprint(original),fingerprint(current)
@@ -654,4 +655,62 @@ def build_incoming_finish(nonce: str, token: str, *, zero: bool = False) -> str:
 if not trade.incoming or not ({guard}) then print("INCOMING_FINISH|UNKNOWN"); return end
 trade.finished=true
 print("INCOMING_FINISH|CONFIRMED")
+'''
+
+
+def build_incoming_final_send(scope: str, target: int, sid: int, token: str,
+                              original: str, current: str, accept: bool, *, demand: bool = False) -> str:
+    action = 'ACCEPTED' if accept else 'REJECTED'
+    return _incoming_guard(scope, target, sid, final=True) + _fingerprint() + f'''
+if ms_bIsDemand~={str(demand).lower()} then print("INCOMING|NOT_SUBMITTED|KIND_CHANGED");return end
+local token={json.dumps(token)}
+if __civmcp_incoming and __civmcp_incoming.token==token then print("INCOMING_FINAL|ALREADY_ENTERED");return end
+local original=DealManager.GetWorkingDeal(DealDirection.INCOMING,me,target)
+local current=DealManager.GetWorkingDeal(DealDirection.OUTGOING,me,target)
+if fingerprint(original)~={json.dumps(original)} or fingerprint(current)~={json.dumps(current)} then print("INCOMING|NOT_SUBMITTED|QUOTE_CHANGED");return end
+if {str(accept).lower()} and (fingerprint(original)~=fingerprint(current) or DealManager.AreWorkingDealsEqual(me,target)~=true or Controls.AcceptDeal:IsHidden()~=false or Controls.AcceptDeal:IsDisabled()~=false) then print("INCOMING|NOT_SUBMITTED|NOT_ACCEPTABLE");return end
+local r={{token=token,sid=sid,target=target,action="{action}",demand={str(demand).lower()},original={json.dumps(original)},current={json.dumps(current)},entered=true}}
+__civmcp_incoming=r
+local result=DealManager.SendWorkingDeal(DealProposalAction.{action},me,target)
+r.returned=true
+if result==false then r.refused=true;print("INCOMING_FINAL|UNKNOWN");return end
+if not {str(accept).lower()} then
+ -- Close only the captured original incoming session. No late target lookup.
+ r.closeEntered=true
+ local closed=DiplomacyManager.CloseSession(sid)
+ r.closeReturned=true
+ if closed==false then r.refused=true end
+end
+print("INCOMING_FINAL|REQUESTED")
+'''
+
+
+def build_incoming_final_receipt(scope: str, target: int, sid: int, token: str, action: str, *, original: str, current: str, demand: bool = False) -> str:
+    return _scope() + f'''
+local ok,world=pcall(currentScope)
+if ok then print("INCOMING_WORLD|"..world) end
+if not ok or world~={json.dumps(scope)} or ContextPtr:GetID()~="DiplomacyDealView" then return end
+local r=__civmcp_incoming
+if r and r.token=={json.dumps(token)} and r.target=={target} and r.sid=={sid} and r.action=={json.dumps(action)} and r.original=={json.dumps(original)} and r.current=={json.dumps(current)} and r.demand=={str(demand).lower()} and r.entered==true and r.returned==true and not r.refused and (r.action=="ACCEPTED" or r.closeEntered==true and r.closeReturned==true) then
+ print("INCOMING_FINAL_RECEIPT|ENTERED")
+end
+'''
+
+
+def build_incoming_final_confirmation(nonce: str, token: str, action: str, *, demand: bool = False) -> str:
+    return _trade(nonce, token, incoming=True) + f'''
+if not trade.incoming or trade.action~=DealProposalAction.{action} then return end
+local complete=false
+if trade.action==DealProposalAction.REJECTED then
+ complete=trade.closed==true and DiplomacyManager.FindOpenSessionID(me,target)~=trade.sid and DiplomacyManager.HasQueuedSession(me)==false and DealManager.HasPendingDeal(me,target)==false
+else
+ local record=observer.records[trade.sid]
+ local info=DiplomacyManager.GetSessionInfo(trade.sid)
+ if record and not record.closed and record.sid==trade.sid and record.other==target and record.from==target and record.to==me and record.seq>trade.afterSeq and DiplomacyManager.FindOpenSessionID(me,target)==trade.sid and info and info.FromPlayer==target and info.ToPlayer==me and DealManager.HasPendingDeal(me,target)==false then
+  local k=record.variant
+  complete=DiplomacyManager.GetKeyName(k.StatementType)=="{'MAKE_DEMAND' if demand else 'MAKE_DEAL'}" and DiplomacyManager.GetKeyName(k.StatementSubType)=="HUMAN_ACCEPT_DEAL" and k.FromPlayer==target and k.RespondingToDealAction==0 and k.DealAction==0
+ end
+end
+if complete then trade.finished=true;print("INCOMING_FINAL|CONFIRMED")
+else print("INCOMING_FINAL|WAITING") end
 '''

@@ -918,8 +918,10 @@ async def get_trade_options(ctx: Context, other_player_id: int) -> str:
 async def respond_to_trade(ctx: Context, other_player_id: int, accept: bool) -> str:
     """Accept/reject a verified incoming offer or the owned current outgoing counter.
 
-    Rechecks the visible view, unique session, participants, and incoming data
-    before submitting. Unknown context or a different target submits nothing.
+    Rechecks the visible view, unique session, participants, and incoming data.
+    Final incoming responses retain their original terms and session until native
+    completion is witnessed. OUTCOME_UNKNOWN means repeat the same response only
+    to confirm. Unknown context or a different target submits nothing.
 
     Args:
         other_player_id: The player ID of the civilization (from get_pending_trades)
@@ -1081,9 +1083,9 @@ async def propose_peace(ctx: Context, other_player_id: int) -> str:
         other_player_id: The player ID (from get_diplomacy output)
 
     Requires being at war and past the 10-turn war cooldown.
-    Submits once and briefly checks war state. ACCEPTED confirms observed peace.
-    PROPOSED_UNCONFIRMED requires get_diplomacy before another proposal;
-    continued war alone is not a rejection and must not trigger an automatic resend.
+    Submits once and confirms bilateral peace in the original game and turn.
+    Already peaceful is a no-op. OUTCOME_UNKNOWN retains the original request;
+    repeat this tool only to confirm, without submitting another proposal.
     """
     gs = _get_game(ctx)
     return await _logged(
@@ -1163,11 +1165,12 @@ async def send_diplomatic_action(
                 DECLARE_PROTECTORATE_WAR, DECLARE_COLONIAL_WAR,
                 DECLARE_TERRITORIAL_WAR
 
-    Friendship, delegation and embassy requests submit once, then read native
-    relationship evidence. Friendship requires bilateral DECLARED_FRIEND;
-    delegation/embassy require our native presence at the target, not theirs
-    at us. ACCEPTED requires that witness. PROPOSED_UNCONFIRMED means inspect
-    get_diplomacy without resending. A legal request is not acceptance.
+    Each relationship request submits once and retains its original game, turn,
+    target and stages. OUTCOME_UNKNOWN means repeat the same call to confirm only.
+    Friendship requires bilateral DECLARED_FRIEND; delegation/embassy require our
+    native presence at the target and the exact native gold cost. War and peace
+    require bilateral state. Use dismiss_popup for a remaining diplomacy view;
+    no delayed task will close a later session.
 
     Delegations cost 25 gold and can be rejected if the civ dislikes you.
     Embassies require Writing tech. Use get_diplomacy to see available actions.
@@ -1194,10 +1197,9 @@ async def form_alliance(
         alliance_type: One of: MILITARY, RESEARCH, CULTURAL, ECONOMIC, RELIGIOUS
 
     Requires declared friendship and Diplomatic Service civic. Submits the
-    existing proposal sequence once, then waits briefly for bilateral ALLIED
-    and the exact requested native alliance type. Otherwise returns
-    PROPOSED_UNCONFIRMED; read get_diplomacy before another proposal and do not
-    automatically resend. Same-frame working-deal data is not acceptance.
+    proposal sequence once, then confirms bilateral ALLIED and the exact native
+    alliance type. OUTCOME_UNKNOWN retains the request; repeat this tool with the
+    same target/type to confirm only. Existing exact alliances are a no-op.
     Use get_trade_options to check alliance eligibility first.
     """
     gs = _get_game(ctx)
