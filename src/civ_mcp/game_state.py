@@ -854,55 +854,36 @@ class GameState:
 
     @_guard_pending_mutation
     async def set_research(self, tech_name: str) -> str:
-        lua = lq.build_set_research(tech_name)
-        lines = await self.conn.execute_write(lua)
-        result = _action_result(lines)
-        if "RESEARCHING" in result:
-            # Verify InGame actually accepted it by comparing tech INDEX.
-            # RequestPlayerOperation is fire-and-forget — it can silently no-op
-            # while GetResearchingTech() still returns the OLD tech's index (!= -1).
-            verify = await self.conn.execute_read(
-                f"local me = Game.GetLocalPlayer(); "
-                f"local idx = nil; "
-                f"for row in GameInfo.Technologies() do "
-                f'if row.TechnologyType == "{tech_name}" then idx = row.Index; break end '
-                f"end; "
-                f"local cur = Players[me]:GetTechs():GetResearchingTech(); "
-                f"print(cur == idx and 'MATCH' or 'MISMATCH:'..tostring(cur)..'~='..tostring(idx)); "
-                f'print("{lq.SENTINEL}")'
-            )
-            matched = verify and verify[0] == "MATCH"
-            if not matched:
-                # InGame silently failed — fall back to GameCore
-                gc_lua = lq.build_set_research_gamecore(tech_name)
-                gc_lines = await self.conn.execute_read(gc_lua)
-                return _action_result(gc_lines)
-        return result
+        return await self._player_choice("set_research", tech_name)
 
     @_guard_pending_mutation
     async def set_civic(self, civic_name: str) -> str:
-        lua = lq.build_set_civic(civic_name)
-        lines = await self.conn.execute_write(lua)
-        result = _action_result(lines)
-        if "PROGRESSING" in result:
-            # Verify InGame actually accepted it by comparing civic INDEX.
-            verify = await self.conn.execute_read(
-                f"local me = Game.GetLocalPlayer(); "
-                f"local idx = nil; "
-                f"for row in GameInfo.Civics() do "
-                f'if row.CivicType == "{civic_name}" then idx = row.Index; break end '
-                f"end; "
-                f"local cur = Players[me]:GetCulture():GetProgressingCivic(); "
-                f"print(cur == idx and 'MATCH' or 'MISMATCH:'..tostring(cur)..'~='..tostring(idx)); "
-                f'print("{lq.SENTINEL}")'
-            )
-            matched = verify and verify[0] == "MATCH"
-            if not matched:
-                # InGame silently failed — fall back to GameCore
-                lua_gc = lq.build_set_civic_gamecore(civic_name)
-                gc_lines = await self.conn.execute_read(lua_gc)
-                return _action_result(gc_lines)
-        return result
+        return await self._player_choice("set_civic", civic_name)
+
+    async def _player_choice(self, operation: str, target: str | int) -> str:
+        intent = (target,)
+        entity = self.pending_action_entity
+        if entity is not None and self._actions.matches(operation, entity, intent=intent):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            operation, ("player", scope.owner), lq.build_player_choice_confirmation(operation, target, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"target": target}, intent=intent,
+            evidence=_ActionEvidence(
+                tool="set_research" if operation == "set_civic" else operation, entrypoint=operation,
+                accepted=("CHOICE_REQUESTED|",), refused="ERR:CHOICE_REFUSED|",
+                confirm=lambda rows: lq.parse_player_choice_confirmation(rows, operation, target, token),
+                guidance=f"Repeat {operation} with the original target to confirm only. ",
+            ),
+        )
+        return await self._submit_action(pending, scope, lq.build_player_choice(operation, target, token))
 
     # ------------------------------------------------------------------
     # Diplomacy methods
@@ -1146,73 +1127,49 @@ class GameState:
 
     @_guard_pending_mutation
     async def set_policies(self, assignments: dict[int, str]) -> str:
-        lua = lq.build_set_policies(assignments)
-        lines = await self.conn.execute_write(lua)
-        result = _action_result(lines)
-        if result.startswith("Error") or result.startswith("POLICIES_UNCHANGED|"):
+        intent = tuple(sorted((slot, "NONE" if policy.upper() == "NONE" else policy)
+                              for slot, policy in assignments.items()))
+        entity = self.pending_action_entity
+        if entity is not None and self._actions.matches("set_policies", entity, intent=intent):
+            pending = self._actions.pending
+            result = await self.confirm_pending_action(wait=False)
+            return await self._continue_policy_plan(pending, result)
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            "set_policies", ("player", scope.owner), lq.build_policy_confirmation(token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"assignments": intent, "witness_token": token}, intent=intent,
+            evidence=_ActionEvidence(
+                tool="set_policies", entrypoint="set_policies", accepted=("POLICY_PLAN_REQUESTED|",),
+                refused="ERR:POLICY_PLAN_REFUSED|",
+                confirm=lambda rows: lq.parse_policy_confirmation(rows, token),
+                guidance="Repeat set_policies with the original assignments to confirm or continue its unstarted stage. ",
+            ),
+        )
+        # A paid plan first submits only UNLOCK_POLICIES. Its native receipt
+        # retains the complete plan even if this acknowledgement is lost.
+        result = await self._submit_action(pending, scope, lq.build_policy_plan(dict(intent), token))
+        return await self._continue_policy_plan(pending, result)
+
+    async def _continue_policy_plan(self, pending: _PendingAction, result: str) -> str:
+        if self._actions.pending is not pending or pending.details.get("scope_invalid"):
             return result
-        # Native policy application is asynchronous; only later matching
-        # reads confirm it. An old frame never proves rejection.
-        expected_slots: dict[int, str] = {}
-        plan_count = None
-        invalid_plan = False
-        for line in lines:
-            if line.startswith("POLICY_PLAN_COUNT|"):
-                try:
-                    if plan_count is not None:
-                        invalid_plan = True
-                    _, count = line.split("|")
-                    plan_count = int(count)
-                except ValueError:
-                    invalid_plan = True
-            elif line.startswith("POLICY_PLAN"):
-                try:
-                    _, slot, policy = line.split("|")
-                    index = int(slot)
-                    if index in expected_slots or not policy:
-                        invalid_plan = True
-                    expected_slots[index] = policy
-                except ValueError:
-                    invalid_plan = True
-        complete_plan = (
-            not invalid_plan and plan_count is not None and plan_count > 0
-            and len(expected_slots) == plan_count
-            and all(0 <= idx < plan_count for idx in expected_slots)
-            and all(expected_slots.get(idx) == ("NONE" if policy.upper() == "NONE" else policy)
-                    for idx, policy in assignments.items())
-        )
-        unconfirmed = (
-            "POLICIES_UNCONFIRMED|Policy change submitted once; application not confirmed. "
-            "Inspect get_policies before another change; do not automatically resend."
-        )
-        if not complete_plan:
-            return unconfirmed + (
-                "\nWARN:POLICY_PLAN_UNVERIFIED — final plan receipt missing or invalid."
-            )
-        mismatches = []
+        token = pending.details["witness_token"]
+        if not lq.policy_plan_ready(pending.observed, token):
+            return result
+        # Only the explicit owner may advance this paid, never-entered stage.
+        # Ordinary confirmation and every other mutation gate remain read-only.
         try:
-            async with asyncio.timeout(ACTION_CONFIRM_TIMEOUT):
-                while True:
-                    status = await self.get_policies()
-                    slot_map = {s.slot_index: s.current_policy for s in status.slots}
-                    mismatches = []
-                    for idx, pol in expected_slots.items():
-                        expected = None if pol.upper() == "NONE" else pol
-                        actual = slot_map.get(idx)
-                        if idx not in slot_map or actual != expected:
-                            wanted = "EMPTY" if expected is None else pol
-                            got = actual or "EMPTY"
-                            mismatches.append(f"slot {idx} (wanted {wanted}, got {got})")
-                    if set(slot_map) != set(expected_slots):
-                        mismatches.append("slot layout differs from submitted plan")
-                    if not mismatches:
-                        return "POLICIES_SET|Final policy plan confirmed by subsequent readback."
-                    await asyncio.sleep(ACTION_CONFIRM_INTERVAL)
-        except (OSError, TimeoutError, LuaError, ValueError):
-            pass
-        if mismatches:
-            unconfirmed += "\nLast read: " + ", ".join(mismatches)
-        return unconfirmed
+            await self.conn.execute_write(lq.build_policy_continuation(token))
+        except (OSError, TimeoutError, LuaError) as exc:
+            return self._pending_unknown(f"policy continuation acknowledgement unavailable: {exc}")
+        return await self.confirm_pending_action()
 
     # ------------------------------------------------------------------
     # Governor methods (InGame context)
@@ -1416,9 +1373,7 @@ class GameState:
 
     @_guard_pending_mutation
     async def choose_dedication(self, dedication_index: int) -> str:
-        lua = lq.build_choose_dedication(dedication_index)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._player_choice("choose_dedication", dedication_index)
 
     # ------------------------------------------------------------------
     # District / wonder placement queries
@@ -1486,9 +1441,7 @@ class GameState:
 
     @_guard_pending_mutation
     async def change_government(self, government_type: str) -> str:
-        lua = lq.build_change_government(government_type)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._player_choice("change_government", government_type)
 
     # ------------------------------------------------------------------
     # Great People (InGame context)
@@ -1506,17 +1459,40 @@ class GameState:
 
     @_guard_pending_mutation
     async def recruit_great_person(self, individual_id: int) -> str:
-        lua = lq.build_recruit_great_person(individual_id)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._great_person_pool_action("recruit_great_person", individual_id)
 
     @_guard_pending_mutation
     async def patronize_great_person(
         self, individual_id: int, yield_type: str = "YIELD_GOLD"
     ) -> str:
-        lua = lq.build_patronize_great_person(individual_id, yield_type)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._great_person_pool_action("patronize_great_person", individual_id, yield_type)
+
+    async def _great_person_pool_action(self, kind: str, individual: int, currency: str = "GP_POINTS") -> str:
+        if type(individual) is not int or individual < 0:
+            return "Error: INVALID_GREAT_PERSON|Expected a nonnegative individual ID."
+        if kind == "patronize_great_person" and currency not in {"YIELD_GOLD", "YIELD_FAITH"}:
+            return "Error: INVALID_CURRENCY|Expected YIELD_GOLD or YIELD_FAITH."
+        entity, intent = ("great_person", individual), (currency,)
+        if self._actions.matches(kind, entity, intent=intent):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            kind, entity, lq.build_great_person_pool_query(kind, individual, currency, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"currency": currency, "witness_token": token}, intent=intent,
+            evidence=_ActionEvidence(
+                tool=kind, entrypoint=kind, accepted=("GP_POOL_REQUESTED|",), refused="ERR:GP_POOL_REFUSED|",
+                confirm=lambda rows: lq.parse_great_person_pool_confirmation(rows, token, kind, individual, currency),
+                guidance="Repeat the original Great Person action, individual and currency to confirm only. ",
+            ),
+        )
+        return await self._submit_action(pending, scope, lq.build_great_person_pool_action(kind, individual, currency, token))
 
     async def get_religion_status(self) -> lq.ReligionStatus:
         lines = await self.conn.execute_write(lq.build_religion_status_query())
@@ -1524,9 +1500,7 @@ class GameState:
 
     @_guard_pending_mutation
     async def reject_great_person(self, individual_id: int) -> str:
-        lua = lq.build_reject_great_person(individual_id)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._great_person_pool_action("reject_great_person", individual_id)
 
     # ------------------------------------------------------------------
     # Trade route methods (InGame context)

@@ -11,12 +11,12 @@
 | 03 | [购买单位和建筑的结果确认](issues/03-purchase-item.md) | 01 | resolved |
 | 04 | [单位升级、晋升与删除的身份连续性](issues/04-unit-transforms.md) | 01 | resolved |
 | 05 | [总督任命、晋升与指派闭环](issues/05-governors.md) | 01 | resolved |
-| 06 | [科研、市政、政体与时代承诺确认](issues/06-choices.md) | 01 | ready-for-agent |
-| 07 | [政策付费解锁与换卡的部分完成](issues/07-policies.md) | 01 | ready-for-agent |
+| 06 | [科研、市政、政体与时代承诺确认](issues/06-choices.md) | 01 | resolved |
+| 07 | [政策付费解锁与换卡的部分完成](issues/07-policies.md) | 01 | resolved |
 | 08 | [自动探索、治疗、警戒与休眠确认](issues/08-readiness.md) | 01 | resolved |
 | 09 | [建造、维修、移除与道路确认](issues/09-tile-actions.md) | 01 | ready-for-agent |
 | 10 | [商路与商人转移确认](issues/10-trade-routes.md) | 01 | resolved |
-| 11 | [伟人招募、赞助和拒绝确认](issues/11-great-people-pool.md) | 01 | ready-for-agent |
+| 11 | [伟人招募、赞助和拒绝确认](issues/11-great-people-pool.md) | 01 | resolved |
 | 12 | [伟人激活与传教结果范围](issues/12-unit-effects.md) | 01 | ready-for-agent |
 | 13 | [占城决定绑定原待决城市](issues/13-city-decisions.md) | 01 | ready-for-agent |
 | 14 | [间谍旅行与任务确认](issues/14-spy-assignments.md) | 01 | ready-for-agent |
@@ -25,7 +25,7 @@
 | 17 | [议会打开、投票与提交门禁](issues/17-congress.md) | 01 | ready-for-agent |
 | 18 | [全入口收口、回归与双轴审查](issues/18-integrate-verify.md) | 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17 | ready-for-agent |
 
-01–05、08、10 已合入；06–07、09、11–17 可在各自领域独立推进。相同模块的工作可由同一实施者顺序领取，代码冲突由 merger 处理，不把资源调度伪装成业务阻塞。18 等全部领域工作完成后收口。
+01–08、10–11 已合入；09、12–17 可在各自领域独立推进。相同模块的工作可由同一实施者顺序领取，代码冲突由 merger 处理，不把资源调度伪装成业务阻塞。18 等全部领域工作完成后收口。
 
 ## Decisions-so-far
 
@@ -41,3 +41,6 @@
 - 04 已由 `codex/mutation-04` 快进合入（实现 `efc1ef3`，闭票 `c48d527`）；集成后单位转换、未决分派、作用域、GameState、生命周期和 server 六个相关测试文件共 549 项通过。详见本票 Answer。
 - 10 已由 `codex/mutation-10` 快进合入（实现 `20c114c`，闭票 `ffd62b9`）；集成后商路、单位转换、未决分派、GameState 和 server 五个相关测试文件共 459 项通过。详见本票 Resolution。
 - 08 已由 `codex/mutation-08` 快进合入（实现 `d82944f`，闭票 `44751ce`）；集成后单位任务、readiness、单位转换、商路、未决分派和 server 六个相关测试文件共 374 项通过。详见本票 Answer。
+- 06 已由 `codex/mutation-06` 合入 `7c06b94`（实现 `39012f2`，闭票 `ee3fa05`）；集成后选择、科研、市政、单位任务、readiness、GameState、未决分派和 server 八个相关测试文件共 534 项通过。详见本票 Answer。
+- 11 已由 `codex/mutation-11` 快进合入（实现 `c83ca0b`，闭票 `e236280`）；集成后伟人池、GameState、server、动作确认和购买五个相关测试文件共 522 项通过。详见本票 Answer。
+- 07 已由 `codex/mutation-07` 快进合入（实现 `1dcacb2`，闭票 `81a604e`）；集成后政策、选择、总督、GameState、未决分派和 server 六个相关测试文件共 503 项通过。详见本票 Answer。
