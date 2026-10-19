@@ -91,10 +91,9 @@ def test_native_move_listener_is_armed_before_submission_ignores_foreign_events_
     assert native.submissions == 1 and native.armedAtSubmit
     assert native.listenerCount() == 2
 
-    # A different runtime unit with the same low ID and a stale turn cannot
-    # stand in for the request's full native identity.
+    # A different runtime unit with the same low ID cannot stand in for the
+    # request's full native identity.
     conn.lua.execute('Events.UnitOperationSegmentComplete.Fire(0, 917510)')
-    conn.lua.execute('turn=55; Events.UnitOperationSegmentComplete.Fire(0, 851974); turn=54')
     assert native.listenerCount() == 2
     assert not native.__civmcpMoveSegment.done
     conn.lua.execute('Events.UnitOperationSegmentComplete.Fire(0, 851974); x=18; y=18')
@@ -104,4 +103,14 @@ def test_native_move_listener_is_armed_before_submission_ignores_foreign_events_
     assert native.__civmcpMoveSegment.closed
     assert native.submissions == 1
     conn.lua.execute('Events.UnitOperationSegmentComplete.Fire(0, 851974)')
-    assert native.otherEvents == 4 and native.listenerCount() == 1
+    assert native.otherEvents == 3 and native.listenerCount() == 1
+
+
+def test_segment_observer_known_scope_change_invalidates_move_after_scope_returns():
+    conn = MovementConn()
+    state = GameState(conn)
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.move_unit(6, 18, 18))
+    conn.lua.execute('turn=55; Events.UnitOperationSegmentComplete.Fire(0,851974); turn=54; x=18; y=18')
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.move_unit(6, 18, 18))
+    assert state.pending_action_summary is not None
+    assert conn.lua.globals().submissions == 1
