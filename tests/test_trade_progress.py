@@ -1007,3 +1007,210 @@ def test_lost_native_war_preview_reply_does_not_repeat_options_or_evaluation(qui
     assert 'cleanup confirmed' in asyncio.run(state.test_trade(1,[],intent))
     assert conn.lua.globals().requests==1
     assert list(conn.lua.globals().sent_actions.values())==[3]
+
+
+class OpenBordersTradeConn(TradeConn):
+    def __init__(self):
+        super().__init__()
+        self.setup('''
+DealAgreementTypes={OPEN_BORDERS=-242352742}
+agreement_summaries={
+ [0]={{SubType=-242352742,Duration=25,ForType=-1,IsValid=true,ValidationResult=0}},
+ [1]={{SubType=-242352742,Duration=25,ForType=-1,IsValid=true,ValidationResult=0}},
+}
+local originalWorkingDeal=DealManager.GetWorkingDeal
+DealManager.GetWorkingDeal=function(direction,from,to)
+ assert(from==0 and to==1,'working deal pair changed')
+ local result=originalWorkingDeal(direction)
+ if direction==DealDirection.OUTGOING then boundWorkingDeal=result end
+ return result
+end
+summary_reads=0
+DealManager.GetPossibleDealItems=function(from,to,kind,workingDeal,...)
+ assert(select('#',...)==0,'native summary needs exactly four arguments')
+ assert(to==(from==0 and 1 or 0) and kind==DealItemTypes.AGREEMENTS,'native option pair changed')
+ assert(workingDeal==boundWorkingDeal,'native option working deal changed')
+ summary_reads=summary_reads+1
+ return agreement_summaries[from]
+end
+''')
+
+
+@pytest.mark.parametrize('ours,theirs', [(25,25),(17,41)])
+def test_open_borders_preview_binds_each_native_summary_and_full_terms(ours,theirs,quick_trade):
+    conn=OpenBordersTradeConn();state=GameState(conn)
+    conn.setup(f'agreement_summaries[0][1].Duration={ours};agreement_summaries[1][1].Duration={theirs}')
+    terms=[{'type':'AGREEMENT','subtype':'OPEN_BORDERS'}]
+    result=asyncio.run(state.test_trade(1,terms,terms))
+    assert 'cleanup confirmed' in result and 'NOT_SUBMITTED' not in result
+    assert f'duration={ours} turns' in result and f'duration={theirs} turns' in result
+    assert conn.lua.eval('working_outgoing[1]:GetFromPlayerID()')==0
+    assert conn.lua.eval('working_outgoing[2]:GetFromPlayerID()')==1
+    assert conn.lua.eval('working_outgoing[1]:GetDuration()')==ours
+    assert conn.lua.eval('working_outgoing[2]:GetDuration()')==theirs
+    assert conn.lua.eval('working_outgoing[1]:GetSubType()')==-242352742
+    assert conn.lua.eval('working_outgoing[2]:GetSubType()')==-242352742
+    assert conn.lua.eval('working_outgoing[1]:GetValueType()')==-1
+    assert conn.lua.eval('working_outgoing[2]:GetValueType()')==-1
+    assert conn.lua.eval('__civmcp_trade_deal.original')==f'0,3,-1,-242352742,0,{ours};1,3,-1,-242352742,0,{theirs}'
+    assert list(conn.lua.globals().sent_actions.values())==[3]
+    assert not state.diplomacy_pending
+
+
+def test_open_borders_changed_by_native_validation_is_not_evaluated(quick_trade):
+    conn=OpenBordersTradeConn();state=GameState(conn)
+    conn.setup('''
+local original=DealManager.GetWorkingDeal
+DealManager.GetWorkingDeal=function(...)
+ local result=original(...)
+ result.Validate=function()
+  if working_outgoing[1] then working_outgoing[1]:SetDuration(0) end
+  return DealValidationResult.VALID
+ end
+ return result
+end
+''')
+    terms=[{'type':'AGREEMENT','subtype':'OPEN_BORDERS'}]
+    result=asyncio.run(state.test_trade(1,terms,terms))
+    assert 'NOT_SUBMITTED' in result and 'cleanup confirmed' in result
+    assert list(conn.lua.globals().sent_actions.values())==[]
+    assert not state.diplomacy_pending
+
+
+@pytest.mark.parametrize('owner',[0,1])
+@pytest.mark.parametrize('change',[
+    'agreement_summaries[OWNER]=nil',
+    'agreement_summaries[OWNER]={}',
+    'table.insert(agreement_summaries[OWNER],agreement_summaries[OWNER][1])',
+    'agreement_summaries[OWNER][1].Duration=nil',
+    'agreement_summaries[OWNER][1].Duration="25"',
+    'agreement_summaries[OWNER][1].Duration=-1',
+    'agreement_summaries[OWNER][1].IsValid=nil',
+    'agreement_summaries[OWNER][1].IsValid=false',
+    'agreement_summaries[OWNER][1].ForType="unknown"',
+    'agreement_summaries[OWNER][1].ForType=9',
+])
+def test_open_borders_unavailable_native_direction_refuses_evaluation_and_closes(change,owner,quick_trade):
+    conn=OpenBordersTradeConn();state=GameState(conn);conn.setup(change.replace('OWNER',str(owner)))
+    terms=[{'type':'AGREEMENT','subtype':'OPEN_BORDERS'}]
+    result=asyncio.run(state.test_trade(1,terms,terms))
+    assert 'NOT_SUBMITTED' in result and 'cleanup confirmed' in result
+    assert list(conn.lua.globals().sent_actions.values())==[]
+    assert not state.diplomacy_pending
+
+
+@pytest.mark.parametrize('change',[
+    'DealManager.GetPossibleDealItems=nil',
+    'DealManager.GetPossibleDealItems=function() error("unreadable") end',
+    'DealAgreementTypes.OPEN_BORDERS=nil',
+    'DealAgreementTypes.OPEN_BORDERS=false',
+    'agreement_summaries[0]={[2]=agreement_summaries[0][1]}',
+])
+def test_open_borders_native_capability_unreadable_is_zero_send_with_cleanup(change,quick_trade):
+    conn=OpenBordersTradeConn();state=GameState(conn);conn.setup(change)
+    terms=[{'type':'AGREEMENT','subtype':'OPEN_BORDERS'}]
+    result=asyncio.run(state.test_trade(1,terms,terms))
+    assert 'NOT_SUBMITTED' in result and 'cleanup confirmed' in result
+    assert list(conn.lua.globals().sent_actions.values())==[]
+    assert not state.diplomacy_pending
+
+
+def test_open_borders_native_default_value_does_not_require_optional_summary_for_type(quick_trade):
+    conn=OpenBordersTradeConn();state=GameState(conn)
+    conn.setup('agreement_summaries[0][1].ForType=nil;agreement_summaries[1][1].ForType=nil')
+    terms=[{'type':'AGREEMENT','subtype':'OPEN_BORDERS'}]
+    assert 'cleanup confirmed' in asyncio.run(state.test_trade(1,terms,terms))
+    assert conn.lua.eval('working_outgoing[1]:GetValueType()')==-1
+    assert conn.lua.eval('working_outgoing[2]:GetValueType()')==-1
+    assert list(conn.lua.globals().sent_actions.values())==[3]
+
+
+@pytest.mark.parametrize('change',[
+    'working_incoming[1]:SetDuration(0)',
+    'working_incoming[2]:SetDuration(40)',
+    'working_incoming[1]:SetValueType(9)',
+    'working_incoming[1]:SetSubType(999)',
+])
+def test_modified_open_borders_terms_are_counteroffers_never_auto_accepted(change,quick_trade):
+    class ChangedBordersConn(OpenBordersTradeConn):
+        def response_event(self,action):
+            return super().response_event(action)+';'+change
+    conn=ChangedBordersConn();state=GameState(conn)
+    terms=[{'type':'AGREEMENT','subtype':'OPEN_BORDERS'}]
+    result=asyncio.run(state.propose_trade(1,terms,terms))
+    assert 'COUNTER_OFFER|' in result and 'ACCEPTED|' not in result
+    assert list(conn.lua.globals().sent_actions.values())==[9]
+    assert state.diplomacy_pending
+
+
+def test_lost_open_borders_preview_reply_only_observes_original_duration_and_evaluation(quick_trade):
+    class LostBordersConn(OpenBordersTradeConn):
+        lost=False
+        async def execute_in_named_state(self,name,source,timeout=5):
+            rows=await super().execute_in_named_state(name,source,timeout)
+            if 'local prepared,prepareError=pcall' in source and not self.lost:
+                self.lost=True;raise TimeoutError('native open borders evaluation reply lost')
+            return rows
+    conn=LostBordersConn();state=GameState(conn)
+    terms=[{'type':'AGREEMENT','subtype':'OPEN_BORDERS'}]
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.test_trade(1,terms,terms))
+    assert 'cleanup confirmed' in asyncio.run(state.test_trade(1,terms,terms))
+    assert conn.lua.globals().summary_reads==2
+    assert conn.lua.globals().requests==1
+    assert list(conn.lua.globals().sent_actions.values())==[3]
+
+
+def test_native_validation_does_not_replace_original_economic_intent_fingerprint(quick_trade):
+    conn=TradeConn();state=GameState(conn)
+    conn.setup('''
+local original=DealManager.GetWorkingDeal
+DealManager.GetWorkingDeal=function(...)
+ local result=original(...)
+ result.Validate=function()
+  if working_outgoing[1] then working_outgoing[1]:SetAmount(19) end
+  return DealValidationResult.VALID
+ end
+ return result
+end
+''')
+    result=asyncio.run(state.propose_trade(1,[{'type':'GOLD','amount':20}],[]))
+    assert 'COUNTER_OFFER|' in result and 'ACCEPTED|' not in result
+    assert list(conn.lua.globals().sent_actions.values())==[9]
+    assert conn.lua.eval('__civmcp_trade_deal.original')=='0,1,-1,-1,20,0'
+
+
+@pytest.mark.parametrize('tamper',[
+    '__civmcp_trade_deal.sent=true',
+    '__civmcp_trade_deal.token="another"',
+    '__civmcp_trade_deal.sid=72',
+    'pending=true',
+    'GameConfiguration.GetValue=function() return 999 end',
+    'infos[71]={FromPlayer=2,ToPlayer=0}',
+    'local extra=dealFor(DealDirection.OUTGOING):AddItemOfType(DealItemTypes.GOLD,0);extra:SetAmount(777)',
+])
+def test_changed_open_borders_no_send_draft_still_requires_exact_cleanup_ownership(tamper,quick_trade):
+    class ChangedDraftConn(OpenBordersTradeConn):
+        changed=False
+        async def execute_in_named_state(self,name,source,timeout=5):
+            rows=await super().execute_in_named_state(name,source,timeout)
+            if 'local prepared,prepareError=pcall' in source and not self.changed:
+                self.changed=True;self.setup(tamper)
+            return rows
+    conn=ChangedDraftConn();state=GameState(conn)
+    conn.setup('''
+local original=DealManager.GetWorkingDeal
+DealManager.GetWorkingDeal=function(...)
+ local result=original(...)
+ result.Validate=function()
+  if working_outgoing[1] then working_outgoing[1]:SetDuration(0) end
+  return DealValidationResult.VALID
+ end
+ return result
+end
+''')
+    terms=[{'type':'AGREEMENT','subtype':'OPEN_BORDERS'}]
+    result=asyncio.run(state.test_trade(1,terms,terms))
+    assert 'OUTCOME_UNKNOWN' in result and 'cleanup confirmed' not in result
+    assert state.diplomacy_pending
+    assert list(conn.lua.globals().sent_actions.values())==[]
+    assert list(conn.lua.globals().mutations.values())==[]
