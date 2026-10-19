@@ -1,11 +1,11 @@
-# 历史归档
+# 历史设计参考
 
-本目录保存收敛为本机 MCP 之前的架构说明、评测研究、策略分析和游戏报告。文档中的网页、云服务、评测命令、反思与日记协议可能已经删除，内部旧路径也可能失效；它们不定义当前行为。
+本目录保留旧架构、接口探索和评测设计的来源，供追溯取舍。网页、云服务、反思协议等描述属于历史方案，可能已删除或未实现；当前实现与约束见[架构说明](../architecture.md)。
 
-- `architecture-diagrams.md`、`observability.md`：旧系统架构与观测方案。
-- `devlog/`：历史游戏报告。
-- `paper/`：历史场景研究。
-- `research/`、`agent-vs-agent.md`、`feature-ideas.md`：历史设计探索。
-- `agent-essays/`、`cross-game-analysis.md`：历史经验分析。
+| 资料 | 范围 |
+| --- | --- |
+| `architecture-diagrams.md`、`observability.md` | 旧系统架构与观测方案 |
+| `agent-vs-agent.md`、`feature-ideas.md` | 未落地或已经变化的设计探索 |
+| `paper/`、`research/` | 历史场景与技术研究 |
 
-当前入口见 [文档索引](../README.md)。历史存档和日志保存在 [fixtures](../../fixtures/README.md)。
+历史逐局报告、跨局分析和单局反思已归入 [games/legacy/](../../games/legacy/README.md)。当前指南见[文档导航](../README.md)。

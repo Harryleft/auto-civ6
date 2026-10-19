@@ -24,4 +24,5 @@
 | 保存、换档、结果未知、断线或挂起 | [保存与恢复](docs/agent-recovery.md) |
 | 修改代码或文档、测试、提交、审查 | [开发与验证](docs/development.md) |
 | 修改状态归属、Lua 解释或通信机制 | [当前架构](docs/architecture.md)，只读相关职责章节 |
-| 核对基准身份、历史规格或验收证据 | 基准读[存档说明](fixtures/saves/README.md)；记录读[文档索引](docs/README.md#规格与验收)并选择对应条目 |
+| 记录或查阅单局过程、回合验收、复盘和存档证据 | [对局资料](games/README.md)，按对局与测试轮次归档 |
+| 核对基准身份、工程规格或离线验收 | 基准读[存档说明](fixtures/saves/README.md)；工程记录读[文档索引](docs/README.md#规格与验收) |

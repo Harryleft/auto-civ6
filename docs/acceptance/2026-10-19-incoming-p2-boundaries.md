@@ -28,4 +28,4 @@
 
 任务前记录原生 Single 存档、全部既有本机 acceptance、检查点、仓库存档及旧验收文档，共 8,665 个文件的 SHA-256。任务后逐项核对：缺失 0、变化 0。保留原始基准、T232 获胜前存档和 T233 原生科技胜利验收，不新增实机结论。
 
-本次证据独立保存在 `~/.civ6-mcp/acceptance/20261019-incoming-p2-offline/`：`impl/` 保存各片红绿日志；`merge/final-result.json` 保存最终模块结果及源码指纹；`review-standards-final.md`、`review-spec-final.md` 保存复审；`preservation-before.json`、`preservation-after.json` 保存文件保全。既有 T233 结果仍见[终局验收](2026-10-19-turn-terminal.md)。
+本次证据独立保存在 `~/.civ6-mcp/acceptance/20261019-incoming-p2-offline/`：`impl/` 保存各片红绿日志；`merge/final-result.json` 保存最终模块结果及源码指纹；`review-standards-final.md`、`review-spec-final.md` 保存复审；`preservation-before.json`、`preservation-after.json` 保存文件保全。既有 T233 结果仍见[终局验收](../../games/benchmark-sumeria-719665280/runs/2026-10-18-t233/reports/2026-10-19-turn-terminal.md)。
