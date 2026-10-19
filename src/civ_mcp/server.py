@@ -1534,6 +1534,9 @@ async def end_turn(ctx: Context) -> str:
 
     If a response is lost or the AI takes too long, the request stays pending:
     a later call confirms it instead of sending another ACTION_ENDTURN.
+    REOPENED_LOCAL confirms the original attempt returned to the same local
+    turn with a ready-unit blocker. Handle that unit, then request a new turn
+    separately; the confirmation call never submits another action.
     Use restart_and_load explicitly when recovery is required.
     """
     return await _logged(ctx, "end_turn", {}, _get_game(ctx).end_turn)
