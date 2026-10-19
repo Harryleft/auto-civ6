@@ -1356,13 +1356,13 @@ async def unit_action(
             case "build_route":
                 return await gs.build_route(unit_index)
             case "automate":
-                return await gs.automate_explore(unit_index)
+                return await gs.automate_explore(unit_id)
             case "heal":
-                return await gs.heal_unit(unit_index)
+                return await gs.heal_unit(unit_id)
             case "alert":
-                return await gs.alert_unit(unit_index)
+                return await gs.alert_unit(unit_id)
             case "sleep":
-                return await gs.sleep_unit(unit_index)
+                return await gs.sleep_unit(unit_id)
             case "delete":
                 return await gs.delete_unit(unit_id)
             case "trade_route":

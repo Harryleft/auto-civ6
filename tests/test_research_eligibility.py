@@ -3,24 +3,34 @@
 import asyncio
 
 import pytest
+from lupa.lua51 import LuaError as NativeLuaError
 
+from civ_mcp import server
 from civ_mcp.game_state import GameState
+from test_server import make_ctx
+from civ_mcp.connection import LuaError
 from test_civic_progress import CivicConn
 
 
 class SelectionConn(CivicConn):
-    """The existing UI and GameCore paths see independently changing facts."""
+    """Native facts plus a forbidden GameCore setter counter."""
 
     def __init__(self):
         super().__init__()
         self.contexts = []
-        self.fallback_patch = None
+        self.lose_reply = False
+        self.cancel_reply = False
         self.lua.execute('''
 context="InGame"
 ui_allowed=true; gc_allowed=true; completed=false
 ui_requests=0; gc_requests=0; progress_writes=0; accept_ui=true
 current_tech=-1; current_civic=0
-local tech={Index=0,TechnologyType="TECH_POTTERY",Name="Pottery"}
+turn,seed=41,719665280
+Game.GetCurrentGameTurn=function() return turn end
+GameConfiguration={GetValue=function() return seed end}
+PlayerConfigurations={[0]={GetCivilizationTypeName=function() return "CIVILIZATION_SUMERIA" end}}
+for row in GameInfo.Civics() do row.Hash=300+row.Index end
+local tech={Index=0,Hash=200,TechnologyType="TECH_POTTERY",Name="Pottery"}
 GameInfo.Technologies=setmetatable({[0]=tech,TECH_POTTERY=tech},{__call=function()
     local delivered=false
     return function() if not delivered then delivered=true; return tech end end
@@ -49,13 +59,16 @@ culture.SetProgressingCivic=function(_,idx) gc_requests=gc_requests+1; current_c
 culture.SetCulturalProgress=function() progress_writes=progress_writes+1 end
 culture.ChangeCurrentCulturalProgress=function() progress_writes=progress_writes+1 end
 PlayerOperations={PARAM_TECH_TYPE="tech",PARAM_CIVIC_TYPE="civic",
-                  RESEARCH="research",PROGRESS_CIVIC="culture"}
-UI={RequestPlayerOperation=function(_,operation,params)
+                  PARAM_INSERT_MODE="mode",VALUE_EXCLUSIVE=1,RESEARCH="research",PROGRESS_CIVIC="culture"}
+UI={IsGameCoreBusy=function() return false end,RequestPlayerOperation=function(_,operation,params)
+    assert(params.mode==1)
     ui_requests=ui_requests+1
+    if operation=="research" then assert(params.tech==200) else assert(params.civic==301) end
     if accept_ui then
-        if operation=="research" then current_tech=params.tech
-        else current_civic=params.civic end
+        if operation=="research" then current_tech=0
+        else current_civic=1 end
     end
+    if fail_request then error('native selection failed after entry') end
 end}
 NotificationManager={GetList=function() return {} end}
 ''')
@@ -63,14 +76,23 @@ NotificationManager={GetList=function() return {} end}
     async def execute_read(self, source):
         self.contexts.append("GameCore")
         self.lua.globals().context = "GameCore"
-        if self.contexts.count("GameCore") == 2 and self.fallback_patch:
-            self.lua.execute(self.fallback_patch)
         return await super().execute_read(source)
 
     async def execute_write(self, source):
         self.contexts.append("InGame")
         self.lua.globals().context = "InGame"
-        return await super().execute_read(source)
+        before = self.lua.globals().ui_requests
+        try:
+            result = await super().execute_read(source)
+        except NativeLuaError as exc:
+            raise LuaError(str(exc)) from exc
+        if self.lua.globals().ui_requests > before:
+            if self.cancel_reply:
+                raise asyncio.CancelledError()
+            if self.lose_reply:
+                self.lose_reply = False
+                raise OSError('native selection ran; response lost')
+        return result
 
     def select(self, category):
         state = GameState(self)
@@ -83,6 +105,25 @@ NotificationManager={GetList=function() return {} end}
         return native.ui_requests, native.gc_requests, native.progress_writes
 
 
+@pytest.fixture(autouse=True)
+def quick_confirmation(monkeypatch):
+    monkeypatch.setattr('civ_mcp.game_state.ACTION_CONFIRM_TIMEOUT', .01)
+    monkeypatch.setattr('civ_mcp.game_state.ACTION_CONFIRM_INTERVAL', .001)
+
+
+@pytest.mark.parametrize('category',['tech','civic'])
+def test_delayed_selection_only_confirms_original_and_never_uses_gamecore(category):
+    conn = SelectionConn(); state = GameState(conn)
+    conn.lua.execute('accept_ui=false')
+    method,args = (state.set_research,('TECH_POTTERY',)) if category=='tech' else (state.set_civic,('CIVIC_PARTIAL',))
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(method(*args))
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(method(*args))
+    conn.lua.execute('current_tech=0; current_civic=1')
+    assert ('RESEARCHING' if category=='tech' else 'PROGRESSING') in asyncio.run(method(*args))
+    assert conn.writes==(1,0,0)
+    assert state.pending_action_summary is None
+
+
 @pytest.mark.parametrize("category", ["tech", "civic"])
 def test_native_denial_stops_before_ui_or_gamecore_submission(category):
     conn = SelectionConn()
@@ -90,7 +131,7 @@ def test_native_denial_stops_before_ui_or_gamecore_submission(category):
     result = conn.select(category)
     assert "NOT_ELIGIBLE" in result
     assert conn.writes == (0, 0, 0)
-    assert conn.contexts == ["InGame"]
+    assert set(conn.contexts) == {"InGame"}
 
 
 @pytest.mark.parametrize("category", ["tech", "civic"])
@@ -108,50 +149,27 @@ def test_already_selected_unfinished_target_only_confirms_without_writes(categor
     conn.lua.execute('current_tech=0; current_civic=1; ui_allowed=false')
     assert "ALREADY_SELECTED" in conn.select(category)
     assert conn.writes == (0, 0, 0)
-    assert conn.contexts == ["InGame"]
+    assert set(conn.contexts) == {"InGame"}
 
 
 @pytest.mark.parametrize("category", ["tech", "civic"])
-@pytest.mark.parametrize("stage", ["ui", "gc"])
 @pytest.mark.parametrize("patch", [
     'completed=nil',
     'completed=1',
     'current_tech=nil; current_civic=nil',
     'current_tech="0"; current_civic="0"',
 ])
-def test_unknown_completion_or_current_target_stops_without_writes(category, stage, patch):
+def test_unknown_completion_or_current_target_stops_without_writes(category, patch):
     conn = SelectionConn()
-    if stage == "gc":
-        conn.lua.execute('accept_ui=false')
-        conn.fallback_patch = patch
-    else:
-        conn.lua.execute(patch)
+    conn.lua.execute(patch)
     assert "ELIGIBILITY_UNKNOWN" in conn.select(category)
-    assert conn.writes == ((0, 0, 0) if stage == "ui" else (1, 0, 0))
+    assert conn.writes == (0, 0, 0)
 
 
 @pytest.mark.parametrize("category", ["tech", "civic"])
-def test_eligibility_changed_before_gamecore_fallback_is_rejected(category):
-    conn = SelectionConn()
-    conn.lua.execute('accept_ui=false; gc_allowed=false')
-    assert "NOT_ELIGIBLE" in conn.select(category)
-    assert conn.writes == (1, 0, 0)
-
-
-@pytest.mark.parametrize("category", ["tech", "civic"])
-@pytest.mark.parametrize("value", ["nil", "1", '"true"'])
-def test_gamecore_unknown_eligibility_does_not_use_previous_ui_permission(category, value):
-    conn = SelectionConn()
-    conn.lua.execute(f'accept_ui=false; gc_allowed={value}')
-    assert "ELIGIBILITY_UNKNOWN" in conn.select(category)
-    assert conn.writes == (1, 0, 0)
-
-
-@pytest.mark.parametrize("category", ["tech", "civic"])
-@pytest.mark.parametrize("stage", ["ui", "gc"])
 @pytest.mark.parametrize("api", ["completion", "current", "eligibility"])
 @pytest.mark.parametrize("native_api", ['nil', 'function() error("API unavailable") end'])
-def test_missing_or_throwing_native_selection_apis_stop_without_submission(category, stage, api, native_api):
+def test_missing_or_throwing_native_selection_apis_stop_without_submission(category, api, native_api):
     conn = SelectionConn()
     native_object, methods = (
         ("techs", {"completion": "HasTech", "current": "GetResearchingTech", "eligibility": "CanResearch"})
@@ -159,45 +177,27 @@ def test_missing_or_throwing_native_selection_apis_stop_without_submission(categ
         ("culture", {"completion": "HasCivic", "current": "GetProgressingCivic", "eligibility": "CanProgress"})
     )
     patch = f'{native_object}.{methods[api]}={native_api}'
-    if stage == "gc":
-        conn.lua.execute('accept_ui=false')
-        conn.fallback_patch = patch
-    else:
-        conn.lua.execute(patch)
+    conn.lua.execute(patch)
     assert "ELIGIBILITY_UNKNOWN" in conn.select(category)
-    assert conn.writes == ((0, 0, 0) if stage == "ui" else (1, 0, 0))
+    assert conn.writes == (0, 0, 0)
 
 
 @pytest.mark.parametrize("category", ["tech", "civic"])
-@pytest.mark.parametrize("stage", ["ui", "gc"])
-def test_completed_target_is_rejected_even_if_it_is_current(category, stage):
+def test_completed_target_is_rejected_even_if_it_is_current(category):
     conn = SelectionConn()
     patch = 'completed=true; current_tech=0; current_civic=1'
-    if stage == "gc":
-        conn.lua.execute('accept_ui=false')
-        conn.fallback_patch = patch
-    else:
-        conn.lua.execute(patch)
+    conn.lua.execute(patch)
     assert "ALREADY_COMPLETED" in conn.select(category)
-    assert conn.writes == ((0, 0, 0) if stage == "ui" else (1, 0, 0))
+    assert conn.writes == (0, 0, 0)
 
 
 @pytest.mark.parametrize("category", ["tech", "civic"])
-def test_target_selected_between_ui_readback_and_fallback_only_confirms(category):
-    conn = SelectionConn()
-    conn.lua.execute('accept_ui=false')
-    conn.fallback_patch = 'current_tech=0; current_civic=1; gc_allowed=false'
-    assert "ALREADY_SELECTED" in conn.select(category)
-    assert conn.writes == (1, 0, 0)
-
-
-@pytest.mark.parametrize("category", ["tech", "civic"])
-@pytest.mark.parametrize("accept_ui,expected_writes", [(True, (1, 0, 0)), (False, (1, 1, 0))])
-def test_native_legal_selection_still_uses_the_existing_paths(category, accept_ui, expected_writes):
+@pytest.mark.parametrize("accept_ui,expected_writes", [(True, (1, 0, 0)), (False, (1, 0, 0))])
+def test_native_legal_selection_never_switches_write_channels(category, accept_ui, expected_writes):
     conn = SelectionConn()
     conn.lua.globals().accept_ui = accept_ui
     result = conn.select(category)
-    assert ("RESEARCHING" if category == "tech" else "PROGRESSING") in result
+    assert (("RESEARCHING" if category == "tech" else "PROGRESSING") if accept_ui else "OUTCOME_UNKNOWN") in result
     assert conn.writes == expected_writes
 
 
@@ -207,3 +207,48 @@ def test_public_query_rejects_unknown_native_technology_eligibility(value):
     conn.lua.execute(f'ui_allowed={value}')
     with pytest.raises(ValueError, match="ELIGIBILITY_UNKNOWN.*TECH_POTTERY"):
         conn.query()
+
+
+@pytest.mark.parametrize('category,target,label', [
+    ('tech', 'TECH_POTTERY', 'RESEARCHING'),
+    ('civic', 'CIVIC_PARTIAL', 'PROGRESSING'),
+])
+@pytest.mark.parametrize('boundary', ['lost', 'cancelled', 'throw'])
+def test_mcp_selection_uncertain_transport_keeps_one_native_submission(category,target,label,boundary):
+    conn = SelectionConn(); state = GameState(conn); ctx = make_ctx(game=state)
+    if boundary == 'lost': conn.lose_reply = True
+    if boundary == 'cancelled': conn.cancel_reply = True
+    if boundary == 'throw': conn.lua.execute('fail_request=true')
+    if boundary == 'cancelled':
+        with pytest.raises(asyncio.CancelledError): asyncio.run(server.set_research(ctx,target,category))
+    else:
+        assert 'OUTCOME_UNKNOWN' in asyncio.run(server.set_research(ctx,target,category))
+    result = asyncio.run(server.set_research(ctx,target,category))
+    assert (label if boundary != 'throw' else 'OUTCOME_UNKNOWN') in result
+    assert conn.writes == (1,0,0)
+
+
+@pytest.mark.parametrize('category,target', [('tech','TECH_POTTERY'),('civic','CIVIC_PARTIAL')])
+def test_shared_research_mcp_blocks_switched_category_and_target_until_original_confirms(category,target):
+    conn = SelectionConn(); state = GameState(conn); ctx = make_ctx(game=state)
+    conn.lua.execute('accept_ui=false')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(server.set_research(ctx,target,category))
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(server.set_research(ctx,'TECH_OTHER','tech'))
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(server.set_research(ctx,'CIVIC_OTHER','civic'))
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.change_government('GOVERNMENT_CHIEFDOM'))
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.end_turn())
+    conn.lua.execute('current_tech=0;current_civic=1')
+    assert ('RESEARCHING' if category=='tech' else 'PROGRESSING') in asyncio.run(server.set_research(ctx,target,category))
+    assert conn.writes == (1,0,0)
+
+
+@pytest.mark.parametrize('category,target', [('tech','TECH_POTTERY'),('civic','CIVIC_PARTIAL')])
+def test_selection_world_mismatch_cannot_be_cleared_by_matching_target_in_another_world(category,target):
+    conn = SelectionConn(); state = GameState(conn); ctx = make_ctx(game=state)
+    conn.lua.execute('accept_ui=false')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(server.set_research(ctx,target,category))
+    conn.lua.execute('seed=99;current_tech=0;current_civic=1')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(server.set_research(ctx,target,category))
+    conn.lua.execute('seed=719665280')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(server.set_research(ctx,target,category))
+    assert conn.writes == (1,0,0)
