@@ -6,11 +6,32 @@
 
 **Status:** claimed
 
-- [ ] 对照 82 工具／43 变更工具和隐藏分支清单，无遗漏直接提交业务路径；任意 Lua 边界单列。
-- [ ] 直接 GameState 与 MCP 门禁一致；查询、显式恢复和回合阻塞解除保留正确许可。
+- [x] 对照 82 工具／43 变更工具和隐藏分支清单，无遗漏直接提交业务路径；任意 Lua 边界单列。
+- [x] 直接 GameState 与 MCP 门禁一致；查询、显式恢复和回合阻塞解除保留正确许可。
 - [ ] 运行全量离线回归、语法与文档检查；完成 Standards／Spec 双轴审查并修复发现。
 - [ ] 每票有提交与验证记录并标记 resolved；清理实施工作树，不 push、不替换真实对局。
 
 ## Context
 
 [父规格](../spec.md)；基线 d3450a3。测试采用父规格已声明的公开 seam，不纳入人工并发问题。
+
+
+## Answer
+
+实施提交：`3fa68cd`，基于集成 `b219479`。本票保持 **claimed**：离线收口已完成，Standards／Spec 双轴审查、最终闭票与全部工作树清理由集成负责人执行。
+
+- 已核对源码注册、公开 MCP 目录和完整覆盖表：**82 工具／43 变更／39 纯查询，遗漏 0**。补齐三项纯查询的 readOnlyHint；[完整覆盖与离线验收](../../../docs/acceptance/2026-10-19-mutation-lifecycle.md)逐项列出组合分支、未注册 GS 入口、原生 UI callbacks、任意 Lua 与显式生命周期边界，原审计保留历史基线。
+- 直接 GS 的 save/load/turn/diplomacy 门禁补齐；普通 kill/launch/任意 Lua/弹窗关闭不能绕过未知保存或替换。原动作与迁移动作同样先由原 owner 匹配意图；MCP 旧 skip/fortify 等重入不会先确认旧请求后再进入新操作。OPEN_BORDERS 别名继续交原交易 owner 匹配，错目标拒绝，其他关系动作仍受门禁。
+- MCP move/attack/fortify/skip/found_city 传递完整 ID；单位、城市查找及移动／攻击／生产回读核对原身份。兼容直接低 index 移动时仍从提交前原生记录核对实例，替代单位到达目的地不能确认旧请求。
+- 所有 scoped ActionLifecycle 请求在观察到世界／回合／玩家失配后锁存失效，恢复原世界不能追认。保留议会原生阶段所有者，仅 end_turn 可依据最新可信 REGISTERED 放行；spy_escape 没有证据需要新增 pending-turn 例外，活动通知与危险 getter guard 保持。
+- 保存未知继续由原 save_pending 与显式检查点恢复处理，没有发明自动补记、通用保存事务或跨重启意图持久化。
+
+验证：新增 **63 项**公开 GS/MCP＋真实 Lua 回归；仅引擎、连接、临时保存与进程 adapter 模拟，推进组合门禁复用既有 GameStateConn 原生协议 adapter。完整身份／scope 首轮 11 例失败，跨入口门禁及旧重入 21 例失败；低 index 替代实例、OPEN_BORDERS 别名和查询目录另有先失败后修复的证据。最终全量命令：
+
+```sh
+PYTHONPATH=src ~/Documents/ChatGPT/civ6/civ6-mcp/.venv/bin/python -B -m pytest tests/ -q
+```
+
+结果 **3563 passed in 124.08s**；日志 `/tmp/civ6-ticket18-full-reviewed.log`。此前 249／497／340 项针对回归通过；首轮全量唯一失败是旧 server 测试仍要求截断 composite ID，已按新完整身份契约更新。`compileall -q src tests`、`git diff d3450a3 HEAD --check` 通过；提交后 Markdown 检查覆盖 26 文件／155 本地链接及锚点，0 unresolved。
+
+未连接 FireTuner，未运行 scripts 实机测试，未启动、关闭、换档或修改真实对局，未 push。工作树保留供最终审查和合并，预存目录未触碰。
