@@ -288,22 +288,22 @@ async def spy_action(
             Mission types: COUNTERSPY, GAIN_SOURCES, SIPHON_FUNDS, STEAL_TECH_BOOST,
             SABOTAGE_PRODUCTION, GREAT_WORK_HEIST, RECRUIT_PARTISANS,
             NEUTRALIZE_GOVERNOR, FABRICATE_SCANDAL
-        target_x: X coordinate of the target city tile; ignored for escape
-        target_y: Y coordinate of the target city tile; ignored for escape
+        target_x: X coordinate of the city center for travel, or native mission target tile; ignored for escape
+        target_y: Y coordinate of that target; ignored for escape
 
     Travel notes:
-        - Valid targets: your own cities and city-states only.
-        - Allied civ cities are NOT valid travel targets.
-        - Travel is queued end-of-turn; spy position updates after turn ends.
+        - Native eligibility determines valid destinations; target the city center.
+        - SPY_ASSIGNMENT_STARTED confirms the bound assignment, not arrival.
+        - Travel may take multiple turns. Use end_turn and get_spies to observe it.
+        - An idle spy already at the destination needs no new travel command.
 
     Mission notes:
-        - Spy must be physically IN the target city to launch any offensive mission.
-        - Use 'travel' first, then end the turn, then launch the mission.
-        - COUNTERSPY defends your own city (spy must be in your city).
-        - get_spies shows which ops are available at the spy's current location.
+        - The spy must be in the target city. Supply the exact native target tile.
+        - Some missions require a district; a refused city-center request lists native candidates.
+        - Confirmation reports the assignment and native end turn, not success or rewards.
+        - After startup is confirmed, end_turn remains available while the mission runs.
     """
     gs = _get_game(ctx)
-    unit_index = unit_id % 65536
     params = {
         "unit_id": unit_id,
         "action": action,
@@ -315,8 +315,8 @@ async def spy_action(
         if action.lower().startswith("escape:"):
             return await gs.spy_escape(unit_id, action.split(":", 1)[1].strip().upper())
         if action.lower() == "travel":
-            return await gs.spy_travel(unit_index, target_x, target_y)
-        return await gs.spy_mission(unit_index, action.upper(), target_x, target_y)
+            return await gs.spy_travel(unit_id, target_x, target_y)
+        return await gs.spy_mission(unit_id, action.upper(), target_x, target_y)
 
     result = await _logged(ctx, "spy_action", params, _run)
     return result
@@ -785,7 +785,8 @@ async def choose_pantheon(ctx: Context, belief_type: str) -> str:
         belief_type: e.g. BELIEF_GOD_OF_THE_FORGE, BELIEF_DIVINE_SPARK
 
     Use get_pantheon_beliefs first to see options. Requires enough faith
-    and no existing pantheon.
+    and native eligibility. An existing matching pantheon is unchanged.
+    If the outcome is unknown, repeat the original belief to confirm without resubmitting.
     """
     gs = _get_game(ctx)
     return await _logged(
@@ -826,7 +827,9 @@ async def found_religion(
 
     Requires your Great Prophet to have already activated on a Holy Site
     (via UNITOPERATION_FOUND_RELIGION). Use get_religion_beliefs
-    first to see available options.
+    first to see available options. Creation and both beliefs are confirmed separately.
+    Unknown results retain completed stages; repeat the same religion and both beliefs
+    to confirm or continue only a stage that has never been submitted.
     """
     gs = _get_game(ctx)
     return await _logged(
@@ -1223,14 +1226,14 @@ async def city_action(
 
     Args:
         city_id: City ID (from get_cities output)
-        action: Currently supported: 'attack' (city ranged attack)
+        action: attack, keep, reject, raze, liberate_founder, or liberate_previous
         target_x: Target X coordinate (required for attack)
         target_y: Target Y coordinate (required for attack)
 
     For attack: city must have walls and not have fired this turn.
     Range is 2 tiles from city center.
 
-    For captured/disloyal city decisions (city_id is ignored, uses pending city):
+    For captured/disloyal city decisions, city_id must match the original pending city. Unknown results retain that city; repeating the same decision only confirms it:
     - 'keep': Keep the city (works for both captured and loyalty-flipped cities)
     - 'reject': Reject/free a disloyal city (loyalty flip only)
     - 'raze': Raze a captured city (military conquest only)
@@ -1253,8 +1256,8 @@ async def city_action(
             return await _logged(
                 ctx,
                 "resolve_city_capture",
-                {"action": action},
-                lambda: gs.resolve_city_capture(action),
+                {"city_id": city_id, "action": action},
+                lambda: gs.resolve_city_capture(city_id, action),
             )
         case _:
             return f"Error: Unknown city action '{action}'. Available: attack, keep, reject, raze, liberate_founder, liberate_previous"
@@ -1293,11 +1296,15 @@ async def unit_action(
     For teleport: provide target_x and target_y of destination city. Traders only, must be idle (not on active route).
     For improve: provide improvement name. Builder must be on the tile.
     For repair: repairs a pillaged improvement on the builder's current tile. No improvement name needed.
-    For remove_improvement: demolishes an intact improvement on the builder's current tile (e.g. to replace a farm with a mine). Costs one charge.
-    For activate: activates a Great Person on their matching district.
+    For remove_improvement: demolishes an improvement on the builder's current tile; confirms the tile result and actual charge change.
+    For activate: confirms the original Great Person activation and actual charge consumption.
+    Great Prophets confirm founding readiness; choose religion and beliefs separately.
+    Other rewards are not measured. Unknown results retain the original request; repeat only confirms.
     For sacrifice_charges: Royal Society contribution — submit once with the full native builder ID, then confirm consumed charges and project progress/completion. Builder must be on its own district with an active matching project. Unknown results retain the gate; repeat only confirms.
-    For spread_religion: spreads religion at current tile. Missionaries/Apostles only.
-    For build_route: builds road/railroad on current tile. Military Engineers only. No charges used; costs 1 Iron + 1 Coal per railroad tile.
+    For spread_religion: consumes one spread charge at the current city or unique native city target.
+    Confirms pressure growth for that unit's religion in the exact city; majority conversion is not required.
+    Ambiguous or unavailable city targets are refused. Unknown results retain the request; repeat only confirms.
+    For build_route: builds the native eligible road/railroad on the current tile. Confirms the new route and its native charge/resource costs (ordinary roads use a charge; railroads use Iron and Coal).
     For fortify/skip/found_city/automate/heal/alert/sleep/delete: no target needed.
     heal = fortify until healed (auto-wake at full HP).
     alert = sleep but auto-wake when enemy enters sight range.
@@ -1348,15 +1355,15 @@ async def unit_action(
             case "improve":
                 if not improvement:
                     return "Error: improve requires improvement name (e.g. IMPROVEMENT_FARM). To repair a pillaged improvement, use action='repair' instead."
-                return await gs.improve_tile(unit_index, improvement)
+                return await gs.improve_tile(unit_id, improvement)
             case "repair":
-                return await gs.repair_improvement(unit_index)
+                return await gs.repair_improvement(unit_id)
             case "remove_improvement":
-                return await gs.remove_improvement(unit_index)
+                return await gs.remove_improvement(unit_id)
             case "remove_feature":
-                return await gs.remove_feature(unit_index)
+                return await gs.remove_feature(unit_id)
             case "build_route":
-                return await gs.build_route(unit_index)
+                return await gs.build_route(unit_id)
             case "automate":
                 return await gs.automate_explore(unit_id)
             case "heal":
@@ -1372,11 +1379,11 @@ async def unit_action(
                     return "Error: trade_route requires target_x and target_y of destination city"
                 return await gs.make_trade_route(unit_id, target_x, target_y)
             case "activate":
-                return await gs.activate_great_person(unit_index)
+                return await gs.activate_great_person(unit_id)
             case "sacrifice_charges":
                 return await gs.sacrifice_builder_charges(unit_id)
             case "spread_religion":
-                return await gs.spread_religion(unit_index)
+                return await gs.spread_religion(unit_id)
             case "teleport":
                 if target_x is None or target_y is None:
                     return "Error: teleport requires target_x and target_y of the destination city"

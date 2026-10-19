@@ -25,8 +25,6 @@ from civ_mcp.lua.espionage import (  # noqa: F401
     build_get_spies_query,
     build_spy_escape_route,
     build_verify_spy_escape,
-    build_spy_mission,
-    build_spy_travel,
     parse_spies_response,
 )
 from civ_mcp.lua.cities import (  # noqa: F401
@@ -36,7 +34,6 @@ from civ_mcp.lua.cities import (  # noqa: F401
     build_city_production_query,
     build_city_yield_focus_query,
     build_produce_item,
-    build_resolve_city_capture,
     build_set_yield_focus,
     build_verify_production,
     parse_cities_response,
@@ -75,7 +72,6 @@ from civ_mcp.lua.economy import (  # noqa: F401
     parse_trade_routes_response,
 )
 from civ_mcp.lua.great_people import (  # noqa: F401
-    build_activate_great_person,
     build_gp_advisor_query,
     build_great_people_query,
     parse_gp_advisor_response,
@@ -247,12 +243,9 @@ from civ_mcp.lua.overview import (  # noqa: F401
     parse_overview_response,
 )
 from civ_mcp.lua.religion import (  # noqa: F401
-    build_choose_pantheon,
-    build_found_religion,
     build_pantheon_status_query,
     build_religion_beliefs_query,
     build_religion_status_query,
-    build_spread_religion,
     parse_pantheon_status_response,
     parse_religion_beliefs_response,
     parse_religion_status_response,
@@ -267,13 +260,8 @@ from civ_mcp.lua.units import (  # noqa: F401
     build_builder_tasks_query,
     build_combat_estimate_query,
     build_fortify_unit,
-    build_build_route,
-    build_improve_tile,
     build_pathing_estimate_query,
     build_post_move_visibility_query,
-    build_remove_feature,
-    build_remove_improvement,
-    build_repair_improvement,
     build_move_unit,
     build_skip_remaining_units,
     build_skip_unit,
@@ -314,4 +302,19 @@ from civ_mcp.lua.great_person_pool import (  # noqa: F401
     build_great_person_pool_action,
     build_great_person_pool_query,
     parse_great_person_pool_confirmation,
+)
+
+from civ_mcp.lua.unit_effects import (  # noqa: F401
+    build_unit_effect,
+    build_unit_effect_query,
+    parse_unit_effect_confirmation,
+)
+
+from civ_mcp.lua.religion_plan import (  # noqa: F401
+    build_pantheon_plan,
+    build_religion_plan,
+    build_religion_continuation,
+    religion_plan_ready,
+    build_religion_confirmation,
+    parse_religion_confirmation,
 )
