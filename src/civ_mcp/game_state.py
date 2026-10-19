@@ -149,7 +149,7 @@ class GameState:
             entity = (entity[0], entity[1] % 65536)
         pending = self._pending_action
         if pending is not None and (entity is None or entity == self.pending_action_entity
-                                    or pending.kind in ("pillage", "contribution")):
+                                    or pending.kind in ("pillage", "contribution", "envoy")):
             await self.confirm_pending_action()
             if self._pending_action is not None:
                 return self._pending_unknown("dependent action was not submitted")
@@ -1227,25 +1227,24 @@ class GameState:
         return lq.parse_city_states_response(lines)
 
     async def send_envoy(self, city_state_player_id: int) -> str:
-        lua = lq.build_send_envoy(city_state_player_id)
-        lines = await self.conn.execute_write(lua)
-        result = _action_result(lines)
-        # _action_result already stripped the "OK:" prefix
-        if result.startswith("ENVOY_SENT"):
-            # Verify token actually decremented (async race condition workaround)
-            await asyncio.sleep(0.1)
-            try:
-                verify_lines = await self.conn.execute_write(
-                    f"local me = Game.GetLocalPlayer(); "
-                    f"print(Players[me]:GetInfluence():GetTokensToGive()); "
-                    f'print("{lq.SENTINEL}")'
-                )
-                if verify_lines and verify_lines[0].strip().lstrip("-").isdigit():
-                    actual = int(verify_lines[0].strip())
-                    result += f" (verified remaining: {actual})"
-            except Exception:
-                log.debug("Envoy verification failed", exc_info=True)
-        return result
+        if type(city_state_player_id) is not int or not 0 <= city_state_player_id <= 62:
+            return "Error: INVALID_CITY_STATE|Expected a city-state player ID from get_city_states."
+        entity = ("player", city_state_player_id)
+        if self._actions.matches("envoy", entity):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            "envoy", entity, lq.build_envoy_query(city_state_player_id, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"witness_token": token},
+        )
+        return await self._submit_action(pending, scope, lq.build_send_envoy(city_state_player_id, token))
 
     # ------------------------------------------------------------------
     # Pantheon methods (InGame context)

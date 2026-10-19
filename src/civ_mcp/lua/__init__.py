@@ -106,7 +106,6 @@ from civ_mcp.lua.governance import (  # noqa: F401
     build_policies_query,
     build_promote_governor,
     build_promote_unit,
-    build_send_envoy,
     build_set_policies,
     build_unit_promotions_query,
     build_unit_upgrade_query,
@@ -315,6 +314,7 @@ from civ_mcp.lua.victory import (  # noqa: F401
     parse_victory_progress_response,
 )
 
+from civ_mcp.lua.envoys import build_send_envoy, build_envoy_query  # noqa: F401
 from civ_mcp.lua.contribution import (  # noqa: F401
     build_contribution_preflight, build_sacrifice_builder_charges, build_contribution_query,
 )

@@ -1460,37 +1460,6 @@ class TestPromoteGovernor:
         assert conn.exhausted
 
 
-class TestSendEnvoy:
-    """The envoy send is meant to race-proof the influence-token decrement
-    by re-reading GetTokensToGive and annotating the result."""
-
-    def test_successful_send_verifies_remaining_tokens(self, monkeypatch):
-        """On ENVOY_SENT the token count is re-read and annotated, to
-        race-proof the async influence-token decrement."""
-        monkeypatch.setattr(asyncio, "sleep", _instant_sleep)
-        gs, conn = _gs(
-            [
-                ("write", ["OK:ENVOY_SENT|Kabul"]),
-                ("write", ["2"]),  # GetTokensToGive verify readback
-            ]
-        )
-
-        async def go():
-            return await gs.send_envoy(3)
-
-        assert run(go()) == "ENVOY_SENT|Kabul (verified remaining: 2)"
-        assert conn.exhausted
-
-    def test_error_result_passes_through(self, monkeypatch):
-        monkeypatch.setattr(asyncio, "sleep", _instant_sleep)
-        gs, _ = _gs([("write", ["ERR:NO_TOKENS|no envoys available"])])
-
-        async def go():
-            return await gs.send_envoy(3)
-
-        assert run(go()) == "Error: NO_TOKENS|no envoys available"
-
-
 # ---------------------------------------------------------------------------
 # Diplomacy actions
 # ---------------------------------------------------------------------------

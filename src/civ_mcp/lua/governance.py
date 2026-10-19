@@ -514,26 +514,6 @@ print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
 
 
-def build_send_envoy(city_state_player_id: int) -> str:
-    """Send an envoy to a city-state (InGame context)."""
-    return f"""
-local me = Game.GetLocalPlayer()
-local pInfluence = Players[me]:GetInfluence()
-if pInfluence:GetTokensToGive() <= 0 then {_bail("ERR:NO_ENVOYS|No envoy tokens available")} end
-if not pInfluence:CanGiveTokensToPlayer({city_state_player_id}) then
-    {_bail(f"ERR:CANNOT_SEND|Cannot send envoy to player {city_state_player_id}")}
-end
-local params = {{}}
-params[PlayerOperations.PARAM_PLAYER_ONE] = {city_state_player_id}
-params[PlayerOperations.PARAM_FLAGS] = 0
-UI.RequestPlayerOperation(me, PlayerOperations.GIVE_INFLUENCE_TOKEN, params)
-local cfg = PlayerConfigurations[{city_state_player_id}]
-local name = cfg and Locale.Lookup(cfg:GetPlayerName()) or "Unknown"
-print("OK:ENVOY_SENT|" .. name)
-print("{SENTINEL}")
-"""
-
-
 def build_unit_upgrade_query(unit_index: int) -> str:
     """Check if a unit can upgrade and get cost/target info (InGame context)."""
     return f"""
