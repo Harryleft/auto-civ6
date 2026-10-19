@@ -1,6 +1,6 @@
 # B22：缺少原生异教徒审判动作
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 
