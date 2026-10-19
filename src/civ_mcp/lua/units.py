@@ -1201,67 +1201,6 @@ print("{SENTINEL}")
 '''
 
 
-def build_automate_explore(unit_index: int) -> str:
-    """Automate a unit's exploration (InGame context)."""
-    return f"""
-{_lua_get_unit(unit_index)}
-local hash = GameInfo.UnitOperations["UNITOPERATION_AUTOMATE_EXPLORE"].Hash
-if not UnitManager.CanStartOperation(unit, hash, nil, nil) then
-    {_bail("ERR:CANNOT_AUTOMATE|Unit cannot auto-explore")}
-end
-UnitManager.RequestOperation(unit, hash, {{}})
-print("OK:AUTOMATED|" .. unit:GetX() .. "," .. unit:GetY())
-print("{SENTINEL}")
-"""
-
-
-def build_heal_unit(unit_index: int) -> str:
-    """Fortify until healed (InGame context). Distinct from plain fortify."""
-    return f"""
-{_lua_get_unit(unit_index)}
-local hp = unit:GetMaxDamage() - unit:GetDamage()
-local maxHP = unit:GetMaxDamage()
-if hp >= maxHP then {_bail_lua('"ERR:FULL_HP|Unit already at full health (" .. hp .. "/" .. maxHP .. ")"')} end
-local healHash = GameInfo.UnitOperations["UNITOPERATION_HEAL"].Hash
-if UnitManager.CanStartOperation(unit, healHash, nil, nil) then
-    UnitManager.RequestOperation(unit, healHash, {{}})
-    print("OK:HEALING|HP:" .. hp .. "/" .. maxHP)
-else
-    {_bail("ERR:CANNOT_HEAL|Unit cannot fortify-until-healed")}
-end
-print("{SENTINEL}")
-"""
-
-
-def build_alert_unit(unit_index: int) -> str:
-    """Put unit on alert — sleeps but auto-wakes when enemy enters sight (InGame context)."""
-    return f"""
-{_lua_get_unit(unit_index)}
-if UnitManager.CanStartOperation(unit, UnitOperationTypes.ALERT, nil, nil) then
-    UnitManager.RequestOperation(unit, UnitOperationTypes.ALERT, {{}})
-    print("OK:ALERT|" .. unit:GetX() .. "," .. unit:GetY())
-else
-    {_bail("ERR:CANNOT_ALERT|Unit cannot be put on alert")}
-end
-print("{SENTINEL}")
-"""
-
-
-def build_sleep_unit(unit_index: int) -> str:
-    """Put unit to sleep — stays until manually woken (InGame context)."""
-    return f"""
-{_lua_get_unit(unit_index)}
-local sleepHash = GameInfo.UnitOperations["UNITOPERATION_SLEEP"].Hash
-if UnitManager.CanStartOperation(unit, sleepHash, nil, nil) then
-    UnitManager.RequestOperation(unit, sleepHash, {{}})
-    print("OK:SLEEPING|" .. unit:GetX() .. "," .. unit:GetY())
-else
-    {_bail("ERR:CANNOT_SLEEP|Unit cannot sleep")}
-end
-print("{SENTINEL}")
-"""
-
-
 def build_improve_tile(unit_index: int, improvement_name: str) -> str:
     """Build an improvement with a builder unit (InGame context).
 

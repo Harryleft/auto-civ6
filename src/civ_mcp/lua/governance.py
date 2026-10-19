@@ -461,23 +461,6 @@ print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
 
 
-def build_choose_dedication(dedication_index: int) -> str:
-    """Select a dedication/commemoration by its index."""
-    return f"""
-local me = Game.GetLocalPlayer()
-local pEras = Game.GetEras()
-local allowed = pEras:GetPlayerNumAllowedCommemorations(me)
-if allowed <= 0 then {_bail("ERR:NO_DEDICATION_NEEDED|No dedication selection required (already chosen or not available)")} end
-local row = GameInfo.CommemorationTypes[{dedication_index}]
-if not row then {_bail(f"ERR:INVALID_INDEX|Dedication index {dedication_index} not found")} end
-local params = {{}}
-params[PlayerOperations.PARAM_COMMEMORATION_TYPE] = {dedication_index}
-UI.RequestPlayerOperation(me, PlayerOperations.COMMEMORATE, params)
-print("OK:DEDICATION_CHOSEN|" .. row.CommemorationType)
-print("{SENTINEL}")
-"""
-
-
 def build_available_governments_query() -> str:
     """List unlocked governments with slot info (InGame context)."""
     return """
@@ -485,7 +468,7 @@ local me = Game.GetLocalPlayer()
 local pCulture = Players[me]:GetCulture()
 local curGov = pCulture:GetCurrentGovernment()
 for row in GameInfo.Governments() do
-    local unlocked = pCulture:IsGovernmentUnlocked(row.Index)
+    local unlocked = pCulture:IsGovernmentUnlocked(row.Hash)
     if unlocked then
         local isCurrent = (row.Index == curGov)
         local slots = {}
@@ -509,22 +492,6 @@ for row in GameInfo.Governments() do
 end
 print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
-
-
-def build_change_government(gov_type: str) -> str:
-    """Switch government type (InGame context)."""
-    return f"""
-local me = Game.GetLocalPlayer()
-local pCulture = Players[me]:GetCulture()
-local row = GameInfo.Governments["{gov_type}"]
-if row == nil then {_bail(f"ERR:GOV_NOT_FOUND|{gov_type}")} end
-if not pCulture:IsGovernmentUnlocked(row.Index) then {_bail(f"ERR:GOV_LOCKED|{gov_type} is not unlocked")} end
-if row.Index == pCulture:GetCurrentGovernment() then {_bail(f"ERR:ALREADY_CURRENT|{gov_type} is already your government")} end
-pCulture:SetGovernmentChangeConsidered(true)
-pCulture:RequestChangeGovernment(row.Index)
-print("OK:GOVERNMENT_CHANGED|{gov_type}|" .. Locale.Lookup(row.Name))
-print("{SENTINEL}")
-"""
 
 
 def parse_policies_response(lines: list[str]) -> GovernmentStatus:
