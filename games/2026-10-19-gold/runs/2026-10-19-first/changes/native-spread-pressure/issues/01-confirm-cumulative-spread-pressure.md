@@ -1,6 +1,6 @@
 # B23-01 Confirm spread with native cumulative religion pressure
 
-Status: implemented-pending-review
+Status: resolved
 Dependencies: none
 Spec: ../spec.md
 
@@ -18,3 +18,7 @@ Worker owns necessary code/tests/ticket in isolated worktree; parent owns live/p
 ## Independent review and original T128
 
 9538daf...97bdf16 final Spec/Standards: no material issues found. Parent #2391 explicitly restored same confirmed T128, original units/cities verified. #2377 real pre cumulative17.90625/native incoming5.96875; #2409 final ready checkpoint911719bytes. Clean refresh only, no further world reload; #2411 one spread confirms17.90625→217.90625/charges2, #2412 independent city拜火2/3; #2413 saves T128 confirmed911813bytes. Subsequent turn/save remains pending while independent B24 travel implementation finishes.
+
+## Final continuation
+
+#2446 confirms original T128→T129, #2447 saves gold_20261019_t129_b23_b24_verified906157bytes. Later same final reader #2469 atEri340.7109375→540.7109375/charges1, #2492 finalcharge original2686987 removed and cumulative548.171875→748.171875/charges0; #2494 Eri native majority12, six followers. No direct effects or replay.

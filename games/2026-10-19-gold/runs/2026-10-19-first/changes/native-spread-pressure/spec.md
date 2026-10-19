@@ -1,6 +1,6 @@
 # B23：传教确认误用城市宗教压力读数
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 

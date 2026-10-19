@@ -31,7 +31,7 @@
 | B12 | T57 | 弓手耗尽移动后警戒已原生开始，HOLD未被确认 | fresh alert 精确事件与非就绪前提下接受原生HOLD | 857865c／26c3467；372离线、双审查，#1044实机警戒确认；T58被新增B13阻塞 |
 | B11 | T55 | 开放边境条款期限0，与当前原生25不符 | 双方独立绑定原生摘要期限、完整回读和文案 | 97846e9／1344ad6；476离线，双审查，25回合边境成交及T56保存通过 |
 
-当前已确认 T128，身份 sumeria / seed -1896272000，轮次 e8b4d6a62dca49bbb256e8264beb18f2。五城44人口，工业普通时代、商人共和国、巴西研究同盟Lv1、外交VP5，已创拜火教。B01–B22已修复；最近确认检查点gold_20261019_t128_b22_verified。用户已确认现有 checkpoint / GameState / lifecycle 验证边界。
+当前已确认 T131，身份 sumeria / seed -1896272000，轮次 e8b4d6a62dca49bbb256e8264beb18f2。五城45人口，工业普通时代、商人共和国、巴西研究同盟Lv1、外交VP5，已创拜火教。B01–B23已修复，B24已确认旅行/待T132到达，B25实施中；最近确认检查点gold_20261019_t131_b25_ui_recovered。用户已确认现有 checkpoint / GameState / lifecycle 验证边界。
 
 B01：实施 f3f919a，集成 ffd3f06。相关离线 425 passed，compileall / diff --check 通过；Standards 与 Spec 两项独立审查均无实质发现。原始新旧基准不覆盖、不混用轮次。
 
@@ -281,3 +281,11 @@ B23实机传播完成，待下一回合：97bdf16，251相关测试/compile/diff
 B24首版6c5b9e1/集成9ab52a7，453相关、compile/diff通过；独立双审发现finalcitygetter后缺scope复核，Spec另发现丢确认回复后同NameIndex离图row身份变化未sticky失效，已交同worker补修。#2416–18 clean刷新后原T128、spy2752514/NameLOC_CITIZEN_SUMERIA_MODERN_FEMALE_8/Level1/40,25/idle及preoffmap0保持。未再次提交travel；无pending正常关闭MCP，等待最终补修。B23已单次传播通过，T129/save尚待B24完成后统一验证。
 
 B24最终离线481相关/双审无实质发现后，#2425原T128单次travel仍unknown；#2426正确展示intransit132，#2428关闭科技弹窗、#2429原请求仅确认仍未知。关闭owner纯诊断#2431：实际原生顺序是Removed(0,2752514)→Started(0,2752514,-1295211657,0)，原receipt entered/returned/started=true但removed未记（错误先决started）。临时诊断listener已移除。补修应按实际顺序独立记录两个原事件，仍完整要求双事件/原ID/范围/双入口缺席/新唯一离图记录；不以消失替代事件。恢复前不继续玩法。
+
+B24最终c5f7868及此前6c5b9e1/b64048a/65f44c6/ecbd5c9，最终503相关+152spyassign检查/双审无实质发现。#2432显式恢复同T128postspread61.694s，#2433–36单位/城市/宗教核对一致；clean刷新最终代码、#2438原间谍单次确认旅行开始endturn132，#2439正确在途。#2441金属铸造已完成后选弹道学；#2442–46仅处理加拿大退出对话后确认T129，#2447保存906157bytes。B23已完成nextturn/save并resolve，B24等实际132到达再resolve。
+
+T129–131：#2453–54城市+弩手将香港LineInfantry1900550打100→71；#2455–57新火枪手2818062至36,25并原生晋升Battlecry、#2475–76续37,27驻防。#2458传教士至Eri35,22但耗尽MP，#2459合法原生拒绝；#2469 T130传播累计340.7109375→540.7109375，#2481瑞典宗教已2/4；#2492最后charge传播548.171875→748.171875，#2494 Eri恢复拜火majority12/6followers。
+
+T130#2464确认野蛮人掠夺原Trader2293772/Uruk→Fortaleza，保留损失；#2478首都255Gold补Trader2883596。香港Line转Kish方向：#2472切古墙4t（大学进度保留），#2473–74己弩手1245193至41,29并把其71→52HP；#2491 T131打至34HP，该弩手仍fullHP/MP0。北面BarbLine6094852至35,21，#2495–96城市+驻弩打100→69HP。#2493铁33,24改良Mine，Builder4→3。
+
+B25 T131：#2497单次续NipTrader1966090→Cap40,25国内商路4Food3P，active2→3，但MAKEchooser阻塞确认。#2498原route确在，#2499首ready另一Trader2883596/Cap；#2500关闭普通外交view无效，#2501confirm-only仍unknown。原生截图明确chooser originUruk/不同Trader；两次显式Escape后#2504原请求只确认成功，无重发。#2505保存T131UIrecovered911846bytes，#2506纯读原receiptcleanupOKtrue/enteredreturnedtrue、native选中另一full2883596/40,25。原same-mode判断误把另一Traderchooser当旧action未收尾。B25进入to-spec→implement-spec；保持T131原Lua receipt与新Trader供最终纯确认/新publicroute验证。
