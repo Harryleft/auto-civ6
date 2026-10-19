@@ -352,11 +352,17 @@ class ActionLifecycle:
                         identity_probe = _scope_probe("ACTION_IDENTITY", bound_owner=pending.owner)
                     pending.observed = await execute(identity_probe + pending.query)
                     if pending.gamecore_query is not None:
+                        # Consume readable scope history before another await
+                        # or overwriting this response. This never interprets
+                        # completion or retires the pending owner.
+                        self._observe_probe_scopes(pending.observed)
                         core_rows = await self.conn.execute_read(pending.gamecore_query)
                         # The original InGame witness is re-read after the core
                         # getters. No partial or lost intermediate response can
                         # retire the owner or authorize another submission.
-                        pending.observed = await execute(identity_probe + pending.query) + core_rows
+                        pending.observed = await execute(identity_probe + pending.query)
+                        self._observe_probe_scopes(pending.observed)
+                        pending.observed += core_rows
                     confirmed = self._confirmed_action(pending)
                     if confirmed is not None:
                         pending.confirmed = confirmed
@@ -368,6 +374,12 @@ class ActionLifecycle:
                     await asyncio.sleep(min(interval, max(0, deadline - time.monotonic())))
         except (OSError, TimeoutError, LuaError, ValueError) as exc:
             return pending.confirmed or self.unknown(f"confirmation unavailable: {exc}")
+
+    def _observe_probe_scopes(self, lines: list[str]) -> None:
+        for line in lines:
+            row = line.split("|")
+            if len(row) == 5 and row[0] == "ACTION_IDENTITY":
+                self.observe_scope(*row[1:])
 
     def _confirmed_action(self, pending: _PendingAction) -> str | None:
         # Native callbacks can observe a scope change between Python probes.
