@@ -373,8 +373,8 @@ class TestUnitActionDispatch:
         assert run(go()) == f"<{method}>"
         assert gs.last_args(method) == (42,)
 
-    def test_composite_unit_id_is_reduced_to_an_index(self):
-        """get_units shows composite ids; the Lua layer wants id % 65536."""
+    def test_composite_unit_id_is_preserved_for_native_identity_validation(self):
+        """The Lua owner must compare the caller full ID before native submission."""
         ctx = make_ctx()
         gs = app_of(ctx).game
 
@@ -382,7 +382,7 @@ class TestUnitActionDispatch:
             return await server.unit_action(ctx, 3 * 65536 + 7, "move", 10, 11)
 
         run(go())
-        assert gs.last_args("move_unit") == (7, 10, 11)
+        assert gs.last_args("move_unit") == (3 * 65536 + 7, 10, 11)
 
     def test_cancel_move_keeps_full_runtime_identity(self):
         ctx=make_ctx();gs=app_of(ctx).game

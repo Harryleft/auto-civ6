@@ -803,16 +803,15 @@ def test_real_game_state_identity_refresh_cannot_retire_or_confirm_an_old_turn_r
     assert "End-turn outcome is pending" in asyncio.run(gs.save_game("another_checkpoint"))
 
     async def stopped():
-        return game_launcher.ProcessResult(True, "stopped")
+        raise AssertionError("An ordinary process stop must not bypass the pending turn")
 
     monkeypatch.setattr(game_launcher, "stop_game", stopped)
-    assert asyncio.run(gs.kill_game()) == "stopped"
-    assert not gs.turn_pending
-    # Only explicit, confirmed replacement can retire the old request. A newly
-    # available session can now start its own turn rather than confirm turn 50.
-    assert asyncio.run(gs.get_game_identity()) == ("sumeria", 2)
-    assert "Turn 100 -> 101" in asyncio.run(gs.end_turn())
-    assert len(conn.requests) == 2
+    assert "OUTCOME_UNKNOWN" in asyncio.run(gs.kill_game())
+    assert gs.turn_pending
+    # Direct callers use the same explicit checkpoint recovery path as MCP.
+    assert "explicit confirmed checkpoint" in asyncio.run(gs.restart_and_load())
+    assert "OUTCOME_UNKNOWN" in asyncio.run(gs.end_turn())
+    assert len(conn.requests) == 1
 
 
 def test_identity_change_during_pending_read_cannot_confirm_new_world_readiness(clock):

@@ -194,7 +194,25 @@ class ActionLifecycle:
 
     @property
     def blocks_mutations(self) -> bool:
-        return self.pending is not None and self.pending.evidence is not None
+        return self.pending is not None
+
+    @property
+    def entrypoint(self) -> str | None:
+        """Original protocols keep their owner without replacing their receipts."""
+        pending = self.pending
+        if pending is None:
+            return None
+        if pending.evidence is not None:
+            return pending.evidence.entrypoint
+        if pending.kind == "attack":
+            return "city_attack" if pending.entity[0] == "city" else "attack_unit"
+        return {
+            "move": "move_unit", "found": "found_city", "skip": "skip_unit",
+            "fortify": "fortify_unit", "cancel_move": "cancel_unit_move",
+            "pillage": "pillage_unit", "production": "set_city_production",
+            "contribution": "sacrifice_builder_charges", "city_focus": "set_city_focus",
+            "spy_escape": "spy_escape",
+        }.get(pending.kind)
 
     async def prepare_scope(self, known_identity: tuple[str, int] | None) -> _ActionScope | str:
         """Read submission identity without touching the narration baseline."""
@@ -233,7 +251,7 @@ print("{lq.SENTINEL}")
     def observe_identity(self, identity: tuple[str, int]) -> None:
         """Keep scoped requests invalid after a witnessed world replacement."""
         pending = self.pending
-        if pending is not None and (pending.evidence is not None or pending.kind in ("city_focus", "spy_escape", "contribution")) and identity != pending.identity:
+        if pending is not None and pending.identity is not None and identity != pending.identity:
             pending.details["scope_invalid"] = True
 
     def unknown(self, reason: str = "confirmation deadline reached") -> str:
@@ -287,7 +305,7 @@ print("{lq.SENTINEL}")
             return pending.confirmed or self.unknown(f"confirmation unavailable: {exc}")
 
     def _confirmed_action(self, pending: _PendingAction) -> str | None:
-        scoped = pending.evidence is not None or pending.kind in ("city_focus", "spy_escape", "contribution")
+        scoped = pending.identity is not None
         if scoped and pending.details.get("scope_invalid"):
             return None
         if pending.identity is not None:

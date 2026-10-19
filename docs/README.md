@@ -18,9 +18,11 @@ Agent 从根目录 [AGENTS.md](../AGENTS.md) 开始；命中任务后读取对�
 
 ## 规格与验收
 
+- [全量状态变更覆盖与离线验收](acceptance/2026-10-19-mutation-lifecycle.md)：82 个入口／43 个变更工具／39 个纯查询，组合与隐藏分支、共享未决门禁、显式恢复和任意 Lua 边界；接续 18 票集成与双轴审查。
+
 - [全量状态变更生命周期规格](../.scratch/mutation-lifecycle/spec.md)与[18 票任务图](../.scratch/mutation-lifecycle/map.md)：接续使者试点，人工并发明确排除，按领域迁移并汇入同一集成分支。
 
-- [全量变更操作审计与使者试点](specs/2026-10-19-mutation-audit.md)与[离线验收](acceptance/2026-10-19-envoy-lifecycle.md)：82 个工具的入口清单、43 个变更工具及分支；使者单次提交、未知保留、双侧确认；其他操作按风险分批迁移。
+- [全量变更操作审计与使者试点](specs/2026-10-19-mutation-audit.md)与[离线验收](acceptance/2026-10-19-envoy-lifecycle.md)：82 个工具的入口清单、43 个变更工具及分支；迁移前的历史基线与使者单次提交、未知保留、双侧确认；迁移后覆盖见上方全量验收。
 
 - [来约零提交与世界失效锁存](specs/2026-10-19-incoming-p2-boundaries.md)与[离线验收](acceptance/2026-10-19-incoming-p2-boundaries.md)：两项 P2、34 个新增回归、341 项相关测试；保留 T233 成果，不实机、不 push。
 
