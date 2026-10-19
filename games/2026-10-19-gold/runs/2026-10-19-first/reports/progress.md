@@ -279,3 +279,5 @@ B23实机传播完成，待下一回合：97bdf16，251相关测试/compile/diff
 #2414–15本方公开援助竞赛：巴西target2/militaryaidtype10、余24t（预计T152结束），参与0/1/3，分数0/-200/0。后续比较实际积分与资金，竞赛结果尚未知。
 
 B24首版6c5b9e1/集成9ab52a7，453相关、compile/diff通过；独立双审发现finalcitygetter后缺scope复核，Spec另发现丢确认回复后同NameIndex离图row身份变化未sticky失效，已交同worker补修。#2416–18 clean刷新后原T128、spy2752514/NameLOC_CITIZEN_SUMERIA_MODERN_FEMALE_8/Level1/40,25/idle及preoffmap0保持。未再次提交travel；无pending正常关闭MCP，等待最终补修。B23已单次传播通过，T129/save尚待B24完成后统一验证。
+
+B24最终离线481相关/双审无实质发现后，#2425原T128单次travel仍unknown；#2426正确展示intransit132，#2428关闭科技弹窗、#2429原请求仅确认仍未知。关闭owner纯诊断#2431：实际原生顺序是Removed(0,2752514)→Started(0,2752514,-1295211657,0)，原receipt entered/returned/started=true但removed未记（错误先决started）。临时诊断listener已移除。补修应按实际顺序独立记录两个原事件，仍完整要求双事件/原ID/范围/双入口缺席/新唯一离图记录；不以消失替代事件。恢复前不继续玩法。

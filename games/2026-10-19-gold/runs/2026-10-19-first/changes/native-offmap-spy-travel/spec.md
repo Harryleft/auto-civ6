@@ -43,3 +43,7 @@ Spy mission rewards/success/escape redesign, freeing captured spies, travel time
 ## Further Notes
 
 B23 concurrently fixes separate unit-effect spread pressure files; do not revert or overwrite that work. #2374 prior restore succeeded and #2375–83 replayed original independent T128 choices; #2384 introduced this travel unknown. Closed original owner for pure-only #2389–90; gameplay must resume only after explicit same-run checkpoint restore. Current confirmed checkpoint gold_20261019_t128_b22_verified/run e8b4d6a62dca49bbb256e8264beb18f2. Parent original-world command-start receipt already exact; no retry sent second operation.
+
+## Observed native travel event order
+
+Final-code first live #2425 submitted once, #2426 query correctly showed in-transit/ReturnTurn132; #2428 popup dismissed, #2429 confirm-only stillunknown. Scoped diagnostic #2431 records actual order: (1) UnitRemovedFromMap(0,2752514), (2) UnitOperationStarted(0,2752514,-1295211657,0). Receipt entered/returned/started=true, removed missing because handler incorrectly required started first. Both events belong to the entered single request. Accept these exact original events in native order (removal may precede start); still require both, same original scope and identities, dual lookup absence and unique new bound off-map record. Do not synthesize events or substitute absence for missing removal. Parent removed its temporary diagnostic listeners. Closed unknown owner was used only for pure diagnosis; explicit same-run post-spread checkpoint restore required before play.
