@@ -1,6 +1,6 @@
 # B03：原生警戒任务开始与活动状态
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 
@@ -40,3 +40,5 @@ AI strategy, periodic background processes, changes to game rules/resources, bro
 ## Further Notes
 
 Original #163 at T16; repeated #166 still unknown after HistoricMoments dismissal. evidence/b03-native-alert.txt: entered=true returned=true started=true; fullID262146; opHash-448283625 / rowIndex54; expected SENTRY -793848223, actual OPERATION1225574625; IsReadyToMove=false, core busy=false. Recovery checkpoint currently T12 gold_20261019_t012_b02_verified; parent will reproduce original choices and save a pre-alert T16 checkpoint.
+
+实机及审查完成：本轮#188确认alert原生开始，#206确认T16→T17，#207保存gold_20261019_t017_b03_confirmed；Standards / Spec均无实质发现。
