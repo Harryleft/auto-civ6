@@ -138,3 +138,5 @@ B14关闭：d691113／860e9de，28相关离线、compileall/diff-check、两项�
 B15，T69：#1258商业中心开建、#1259四次建造者1114120购买160金、#1260开拓者1048580到42,26确认；#1261弓手向42,29仅到42,27/MP1但Segment未见证。Node批次6000ms被5.4秒确认耗时耗尽，再次丢失客户端；改为持续终端MCP原样传递人工/模型明确请求，终端raw mode避免长JSON输入截断，不再依赖Node单次执行预算。#1262显式恢复T69，#1266–1268忠实重放，#1269保存gold_20261019_t069_before_archer_move。#1270持续会话下同样复现，#1273/#1275仅确认、#1274popup无效，证明移动问题独立于编排超时。规格078a131。
 
 B15取证：#1276显式恢复T69前点，#1279挂临时只读事件、#1280一次公共请求，正常关闭MCP后纯读取并移除临时监听。b15-native-move-events.txt证明Added MOVE_TO(Index19)→MoveComplete到42,27→Deactivated MOVE_TO(Hash1477390184)→Cleared；旧ALERT清理发生在MOVE Added前，不得混用。无Segment/Started，queuedDestination成功返回nil，readytrue/MP1/busyfalse。因此新增语义为“已部分位移但原路径中断”，不称目标到达。父将显式恢复T69前点后等待修复，未继续未知局面。
+
+B15复验准备：#1281显式恢复gold_20261019_t069_before_archer_move成功，#1282/1283核对苏美尔/-1896272000/T69、弓手41,27/MP2及已购四次建造者。#1286选择机械，#1290骑手原生探索接纳，#1291保存gold_20261019_t069_b15_ready（788221bytes）；无pending，clean关闭MCP，待修复只刷新代码即可实机复验，无须再次恢复世界。
