@@ -24,3 +24,5 @@ B01：实施 f3f919a，集成 ffd3f06。相关离线 425 passed，compileall / d
 B02 复现：显式 restart_and_load 同轮 T2（#92），依照原日志重放 T2→T11（#93–125），#126 确认保存 gold_20261019_t011_before_b02；#127 安装临时事件记录器，#128 仅提交一次 automate，再次未知。只读捕获 Added(0,196608,0,1)、MoveComplete(0,196608,43,28)，未出现 Started。原生行 Index=1 对应 AUTOMATE_EXPLORE（hash -1676983098）；旧实现误把 Added 第三参数当操作hash。临时诊断监听器已移除。修复验证从该 T11 检查点开始，无需再回退到 T2。
 
 B02 已完成：实施 78a4358，集成 895c642；相关离线 307 passed，compileall / diff-check 通过，两项独立审查无实质发现。#130 显式恢复 T11 后，#132 单次 automate 返回 AUTOMATED（原生任务开始，不代表后续探索完成），#134 确认 T11→T12，#135 保存 gold_20261019_t012_b02_verified。未用位移代替见证。当前检查点更新到 T12。
+
+B03，T16：战车262146警戒已开始，r.started=true、原生非就绪，但实际活动 OPERATION1225574625 与工具期待SENTRY-793848223不同，#163/#166持续未知。保留 b03-native-alert.txt，进入 to-spec → implement-spec。原MCP已关闭供只读诊断；下一步从同轮T12确认检查点显式恢复，按原操作复现T16后另存。
