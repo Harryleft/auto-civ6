@@ -21,6 +21,7 @@
 | B15 | T69 | 弓手部分位移后 MOVE_TO被原生中断清空，无SegmentComplete，工具保留unknown | 精确本次Added/MoveComplete/Deactivated/Cleared链确认中断位移 | c3d9c4b＋fbdc09f；344相关、双审复核、T70保存及最终代码T73正常移动通过 |
 | B16 | T73 | 原生CanRecruit=true、Claimant=本方，招募工具却拒绝CANDIDATE_UNAVAILABLE | 唯一当前候选按原生各Can*资格，不从Claimant推断不可用 | d9c354e／5bfe109；398相关、双审、招募/激活/尤里卡及T74保存通过 |
 | B17 | T75 | 升级已生成新fullID弩手，确认仍要求原fullID单位变type，始终unknown | 精确Started/Removed/Added/Upgraded链绑定新旧fullID和实际费用 | b10da9b；273相关、双审、升级/新单位动作/T76保存通过 |
+| B20 | T108 | 原生研究同盟有效，但工具硬编码外交部门前置而NO_CIVIC | 具体同盟原生资格及查询一致性 | to-spec；零提交拒绝，待修复 |
 | B19 | T91 | 阿玛妮原生可派城邦，但工具目标owner固定本方，城市ID冲突 | 显式目标owner绑定及原生派驻验证 | 880f1f9；80相关、双审、T91精确owner5派驻/T92保存通过 |
 | B18 | T89 | 攻击后HEAL精确started，但原生HOLD/0MP未兼容导致unknown | fresh精确HEAL及nonready/HOLD/0MP确认任务开始，回血另验 | 8cfe822；152相关、双审通过，原局T89启动/T90保存/T91回血39→59及保存通过 |
 | B14 | T68 | 港口顾问过滤原生PLOTS水地候选，报告无法放置 | 保留原生合法水地，继续排除BLOCKED和无关数组 | d691113／860e9de；28相关测试、双审查、候选/港口放置及T69保存通过 |
