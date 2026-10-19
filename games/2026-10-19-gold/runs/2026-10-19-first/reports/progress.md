@@ -5,11 +5,12 @@
 | 编号 | 游戏回合 | 触发／实际表现 | 原因／处理 | 验证 |
 | --- | --- | --- | --- | --- |
 | B01 | 加载前，目标 T1 | `load_save_from_menu` 返回 `Checkpoint completion and expected identity are unavailable; no load sent.` | checkpoint 仅接受旧基准固定指纹及当前旧轮次的确认存档；补充新基准身份与轮次隔离 | 已修复：f3f919a／集成 ffd3f06；425 项离线通过；T1→T2、保存与原生菜单恢复通过 |
-
 | B02 | T11 | 自动探索实际移动，Added 见证一直不匹配 | 区分事件参数：Added 第四参匹配原生行 Index | 78a4358／895c642；307 项离线、T11→T12 与保存通过 |
 | B03 | T16 | 警戒 started=true，但活动 OPERATION 不等于 SENTRY | 区分警戒原生开始与既有目标活动 | e040a6f／968213b；314 项离线、T16→T17 与保存通过 |
+| B04 | T29 | 探索已接纳但即时结束，单位仍就绪 | 精确接纳与持续非就绪分开 | 546a622／6d3bf7d；323项离线、T29→T30及保存通过 |
+| B05 | T31 | 商路已建立，界面仍MAKE_TRADE_ROUTE，随后移动无见证 | 补齐原生chooser收尾 | 修复中；同轮T30恢复、重放至T31并保存操作前检查点通过 |
 
-当前已确认 T2，身份 sumeria / seed -1896272000；已在 (40,25) 建立乌鲁克，研究采矿业，生产侦察兵，勇士向西探索。用户已确认现有 checkpoint / GameState / lifecycle 验证边界。
+当前已确认 T31，身份 sumeria / seed -1896272000，轮次 e8b4d6a62dca49bbb256e8264beb18f2。两城共7人口，首都学院在建；B05修复中。最近确认检查点 gold_20261019_t031_before_b05（商路前）。用户已确认现有 checkpoint / GameState / lifecycle 验证边界。
 
 B01：实施 f3f919a，集成 ffd3f06。相关离线 425 passed，compileall / diff --check 通过；Standards 与 Spec 两项独立审查均无实质发现。原始新旧基准不覆盖、不混用轮次。
 
@@ -43,3 +44,5 @@ B04，T29：#357/360 automate 持续未知；只读见证显示精确started已�
 B04完成：546a622／集成6d3bf7d，323相关离线通过，两项独立审查无实质发现。#362显式恢复同轮T25并重放，#393保存gold_20261019_t029_before_b04；刷新MCP后#396确认探索接纳，#397/398仍ready=true／AWAKE，#400后续明确移动正常。瑞典会面处理完毕后#409确认T29→T30，#410保存gold_20261019_t030_b04_verified。当前T30，首都pop6、第二城pop1，平伽拉派往首都，商人已购买用于国内发展；所有文明已会面，时代分达到22。
 
 B05，T31：#428商路确认后界面滞留MAKE_TRADE_ROUTE；#430移动没有原生segment见证，#433弹窗清理后#434确认仍未知。原生chooser请求后恢复SELECTION，工具缺少收尾。b05-native-move.txt已保留；进入to-spec→implement-spec，同公共验证边界。MCP已关闭供只读诊断，接下来显式恢复T30并重放至商路前T31。
+
+B05恢复证据：#437显式恢复同轮T30；#438–440核对身份、单位、城市；#441–447重放原T30决策并确认T31；#448保存gold_20261019_t031_before_b05；#449单位与原T31一致。正常关闭MCP后等待修复代码，不存在新的未决请求。
