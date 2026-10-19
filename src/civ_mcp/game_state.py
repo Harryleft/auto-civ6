@@ -479,10 +479,31 @@ class GameState:
         return result
 
     @_guard_pending_mutation
-    async def resolve_city_capture(self, action: str) -> str:
-        lua = lq.build_resolve_city_capture(action)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+    async def resolve_city_capture(self, city_id: int, action: str) -> str:
+        from civ_mcp.lua import city_decisions
+        entity, intent = ("city", city_id), (action,)
+        if self._actions.matches("city_decision", entity, intent=intent):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        if type(city_id) is not int or city_id < 0 or not isinstance(action, str) or action not in city_decisions.DIRECTIVES:
+            return "Error: INVALID_CITY_DECISION|Expected the pending city ID and a supported decision"
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            "city_decision", entity, city_decisions.build_city_decision_query(city_id, action, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            intent=intent, evidence=_ActionEvidence(
+                tool="resolve_city_capture", entrypoint="resolve_city_capture",
+                accepted=("CITY_DECISION_REQUESTED|",), refused="ERR:CITY_DECISION_REFUSED|",
+                confirm=lambda rows: city_decisions.parse_city_decision(rows, city_id, action, token),
+                guidance="Repeat the same decision for the original city to confirm only. ",
+            ),
+        )
+        return await self._submit_action(pending, scope, city_decisions.build_city_decision(city_id, action, token))
 
     @_guard_pending_mutation
     async def found_city(self, unit_index: int) -> str:

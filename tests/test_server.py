@@ -496,7 +496,7 @@ class TestCityAction:
             return await server.city_action(ctx, 5, action)
 
         run(go())
-        assert gs.last_args("resolve_city_capture") == (action,)
+        assert gs.last_args("resolve_city_capture") == (5, action)
 
     def test_unknown_action_lists_available(self):
         ctx = make_ctx()

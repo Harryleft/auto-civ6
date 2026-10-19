@@ -18,14 +18,14 @@
 | 10 | [商路与商人转移确认](issues/10-trade-routes.md) | 01 | resolved |
 | 11 | [伟人招募、赞助和拒绝确认](issues/11-great-people-pool.md) | 01 | resolved |
 | 12 | [伟人激活与传教结果范围](issues/12-unit-effects.md) | 01 | resolved |
-| 13 | [占城决定绑定原待决城市](issues/13-city-decisions.md) | 01 | ready-for-agent |
+| 13 | [占城决定绑定原待决城市](issues/13-city-decisions.md) | 01 | resolved |
 | 14 | [间谍旅行与任务确认](issues/14-spy-assignments.md) | 01 | ready-for-agent |
 | 15 | [万神殿与创建宗教的阶段确认](issues/15-religion.md) | 01 | ready-for-agent |
 | 16 | [外交关系和宣战清理归属](issues/16-relationships.md) | 01 | ready-for-agent |
 | 17 | [议会打开、投票与提交门禁](issues/17-congress.md) | 01 | ready-for-agent |
 | 18 | [全入口收口、回归与双轴审查](issues/18-integrate-verify.md) | 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17 | ready-for-agent |
 
-01–12 已合入；13–17 可在各自领域独立推进。相同模块的工作可由同一实施者顺序领取，代码冲突由 merger 处理，不把资源调度伪装成业务阻塞。18 等全部领域工作完成后收口。
+01–13 已合入；14–17 可在各自领域独立推进。相同模块的工作可由同一实施者顺序领取，代码冲突由 merger 处理，不把资源调度伪装成业务阻塞。18 等全部领域工作完成后收口。
 
 ## Decisions-so-far
 
@@ -45,3 +45,4 @@
 - 11 已由 `codex/mutation-11` 快进合入（实现 `c83ca0b`，闭票 `e236280`）；集成后伟人池、GameState、server、动作确认和购买五个相关测试文件共 522 项通过。详见本票 Answer。
 - 07 已由 `codex/mutation-07` 快进合入（实现 `1dcacb2`，闭票 `81a604e`）；集成后政策、选择、总督、GameState、未决分派和 server 六个相关测试文件共 503 项通过。详见本票 Answer。
 - 09 已由 `codex/mutation-09` 快进合入（实现 `48a159d`，闭票 `f6d4c89`），12 已由 `codex/mutation-12` 合入 `5a67fd2`（实现 `5b374fb`，闭票 `d59aac3`）；合并保留两组 full ID 分派与准确结果说明。地块、候选、单位效果、任务、GameState、未决分派和 server 七个相关测试文件共 554 项通过。详见两票 Answer。
+- 13 已由 `codex/mutation-13` 快进合入（实现 `2349c5e`，闭票 `9ebffde`）；集成后占城决定、地块购买、GameState、未决分派和 server 五个相关测试文件共 515 项通过。详见本票 Answer。

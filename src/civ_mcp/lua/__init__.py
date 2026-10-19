@@ -36,7 +36,6 @@ from civ_mcp.lua.cities import (  # noqa: F401
     build_city_production_query,
     build_city_yield_focus_query,
     build_produce_item,
-    build_resolve_city_capture,
     build_set_yield_focus,
     build_verify_production,
     parse_cities_response,
