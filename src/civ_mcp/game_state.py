@@ -1304,9 +1304,28 @@ class GameState:
 
     @_guard_pending_mutation
     async def choose_pantheon(self, belief_type: str) -> str:
-        lua = lq.build_choose_pantheon(belief_type)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        kind, intent = "choose_pantheon", (belief_type,)
+        entity = self.pending_action_entity
+        if entity is not None and self._actions.matches(kind, entity, intent=intent):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            kind, ("player", scope.owner), lq.build_religion_confirmation(token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"belief": belief_type, "witness_token": token}, intent=intent,
+            evidence=_ActionEvidence(
+                tool=kind, entrypoint=kind, accepted=("RELIGION_PLAN_REQUESTED|",), refused="ERR:RELIGION_PLAN_REFUSED|",
+                confirm=lambda rows: lq.parse_religion_confirmation(rows, kind, token),
+                guidance="Repeat the original pantheon choice to confirm only. ",
+            ),
+        )
+        return await self._submit_action(pending, scope, lq.build_pantheon_plan(belief_type, token))
 
     # ------------------------------------------------------------------
     # Religion founding methods (InGame context)
@@ -1321,9 +1340,47 @@ class GameState:
     async def found_religion(
         self, religion_type: str, follower_belief: str, founder_belief: str
     ) -> str:
-        lua = lq.build_found_religion(religion_type, follower_belief, founder_belief)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        kind, intent = "found_religion", (religion_type, follower_belief, founder_belief)
+        entity = self.pending_action_entity
+        if entity is not None and self._actions.matches(kind, entity, intent=intent):
+            pending = self._actions.pending
+            result = await self.confirm_pending_action(wait=False)
+            return await self._continue_religion_plan(pending, result)
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            kind, ("player", scope.owner), lq.build_religion_confirmation(token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"religion": intent, "witness_token": token}, intent=intent,
+            evidence=_ActionEvidence(
+                tool=kind, entrypoint=kind, accepted=("RELIGION_PLAN_REQUESTED|",), refused="ERR:RELIGION_PLAN_REFUSED|",
+                confirm=lambda rows: lq.parse_religion_confirmation(rows, kind, token),
+                guidance="Repeat found_religion with the original religion and both beliefs to confirm or continue only its unstarted stage. ",
+            ),
+        )
+        result = await self._submit_action(pending, scope, lq.build_religion_plan(*intent, token))
+        return await self._continue_religion_plan(pending, result)
+
+    async def _continue_religion_plan(self, pending: _PendingAction, result: str) -> str:
+        # Two ADD_BELIEF stages can follow a confirmed FOUND_RELIGION. Queries
+        # and unrelated mutation gates never call this explicit-owner continuation.
+        for _ in range(2):
+            if self._actions.pending is not pending or pending.details.get("scope_invalid"):
+                return result
+            token = pending.details["witness_token"]
+            if not lq.religion_plan_ready(pending.observed, token):
+                return result
+            try:
+                await self.conn.execute_write(lq.build_religion_continuation(token))
+            except (OSError, TimeoutError, LuaError) as exc:
+                return self._pending_unknown(f"religion continuation acknowledgement unavailable: {exc}")
+            result = await self.confirm_pending_action()
+        return result
 
     # ------------------------------------------------------------------
     # Unit upgrade methods (InGame context)
