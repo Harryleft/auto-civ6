@@ -1,6 +1,6 @@
 # B10-01：原生晋升命令与单次确认
 
-Status: implemented-pending-review
+Status: resolved
 Blocked by: none
 Spec: ../spec.md
 
@@ -16,3 +16,7 @@ promote_unit 改由 InGame 原生 PROMOTE 命令执行。以 CanStartCommand(uni
 TDD 首条原生命令／Index 参数／丢回复用例先红后绿；补充两次资格检查期间更改选项、完整 ID 或回合的零提交红绿用例，错误 receipt Index 不确认红绿用例，以及缺失 InGame stored getter 的红绿用例。外部原生 adapter 使用实测 PROMOTE=-1259482049、PARAM_PROMOTION_TYPE=-927495623、VOLLEY Index14／Hash664752614、选项14／15；直接 mutator 一旦被调用即报错。覆盖严格资格、选项不可读／不包含请求、未知事实恢复、原生异常、取消、身份／作用域改变、token 和 no-replay；保留 upgrade／delete 与显式过期通知清理。
 
 离线：unit_transforms、scope_observation_recovery、action_confirmation、action_scope、server 共 694 passed；compileall 与 diff --check 通过。工作者未操作游戏；独立审查、原局 T52 晋升及 T53 验证由父代理继续。
+
+## Verification
+
+实施3d537eb／集成6cb93e7。694相关离线、compileall、diff-check通过，Spec/Standards独立审查均无实质发现。#901当前原生严格CanStartCommand(false,true)允许655363晋升，选项14/15；#899 InGame没有GetStoredPromotions，该项可选unknown。#900保存gold_20261019_t052_b10_ready；刷新MCP原地验证#903PROMOTED，VOLLEY、damage0、moves0、storedunknown，未重启世界；#907确认T52→T53，#909保存gold_20261019_t053_b10_verified。正常nativeHP65→100，无直接状态写或兼容fallback。
