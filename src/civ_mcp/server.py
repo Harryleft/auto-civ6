@@ -1219,7 +1219,7 @@ async def form_alliance(
         other_player_id: The player ID (from get_diplomacy output)
         alliance_type: One of: MILITARY, RESEARCH, CULTURAL, ECONOMIC, RELIGIOUS
 
-    Requires declared friendship and Diplomatic Service civic. Submits the
+    Requires declared friendship and native eligibility for the selected type. Submits the
     proposal sequence once, then confirms bilateral ALLIED and the exact native
     alliance type. OUTCOME_UNKNOWN retains the request; repeat this tool with the
     same target/type to confirm only. Existing exact alliances are a no-op.

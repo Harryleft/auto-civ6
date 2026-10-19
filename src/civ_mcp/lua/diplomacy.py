@@ -21,14 +21,53 @@ from civ_mcp.lua.models import (
 )
 
 
+_LUA_ALLIANCE_ELIGIBILITY = '''
+local function nativeAllianceEligibility(diplo,target,key)
+    local ok,valid,reason=pcall(function()
+        local alliance=GameInfo.Alliances and GameInfo.Alliances[key]
+        if not alliance or alliance.AllianceType~=key or not integer(alliance.Index) or alliance.Index<0 then
+            return nil,"UNKNOWN_ALLIANCE_TYPE"
+        end
+        local actionType="DIPLOACTION_"..key
+        local action=GameInfo.DiplomaticActions and GameInfo.DiplomaticActions[actionType]
+        local binding=GameInfo.DiplomaticActions_XP1 and GameInfo.DiplomaticActions_XP1[actionType]
+        if not action or action.DiplomaticActionType~=actionType or not integer(action.Hash)
+            or not binding or binding.DiplomaticActionType~=actionType or binding.AllianceType~=key then
+            return nil,"ALLIANCE_ACTION_UNAVAILABLE"
+        end
+        -- Mirror DiplomacyStatementSupport. The engine owns civic and other
+        -- current rules; a different alliance action cannot authorize this one.
+        local eligible=diplo:IsDiplomaticActionValid(actionType,target,true)
+        if type(eligible)~="boolean" then return nil,"ALLIANCE_ELIGIBILITY_UNKNOWN" end
+        return eligible,eligible and "" or "ALLIANCE_NOT_ELIGIBLE"
+    end)
+    if not ok then return nil,"ALLIANCE_ELIGIBILITY_UNKNOWN" end
+    return valid,reason
+end
+local function anyNativeAllianceEligible(diplo,owner,target)
+    local ok,eligible=pcall(function()
+        if diplo:IsAtWarWith(target)~=false then return false end
+        local friends=matchesRelationship(nativeRelationship(target,owner),"DIPLO_STATE_DECLARED_FRIEND",
+            DiplomaticStates and DiplomaticStates.DECLARED_FRIEND)
+        if friends~=true then return false end
+        for _,kind in ipairs({"RESEARCH","CULTURAL","ECONOMIC","MILITARY","RELIGIOUS"}) do
+            if nativeAllianceEligibility(diplo,target,"ALLIANCE_"..kind)==true then return true end
+        end
+        return false
+    end)
+    return ok and eligible==true
+end
+'''
+
+
 def build_diplomacy_query() -> str:
     """Rich diplomacy query — runs in InGame context for GetDiplomaticAI access."""
-    return """
+    return _native_relationship_lua() + _LUA_ALLIANCE_ELIGIBILITY + """
 local me = Game.GetLocalPlayer()
 local pDiplo = Players[me]:GetDiplomacy()
 local pVis = PlayersVisibility[me]
 local states = {"ALLIED","DECLARED_FRIEND","FRIENDLY","NEUTRAL","UNFRIENDLY","DENOUNCED","WAR"}
-local checkActions = {"DIPLOACTION_DIPLOMATIC_DELEGATION","DIPLOACTION_DECLARE_FRIENDSHIP","DIPLOACTION_DENOUNCE","DIPLOACTION_RESIDENT_EMBASSY","DIPLOACTION_OPEN_BORDERS","DIPLOACTION_MAKE_ALLIANCE"}
+local checkActions = {"DIPLOACTION_DIPLOMATIC_DELEGATION","DIPLOACTION_DECLARE_FRIENDSHIP","DIPLOACTION_DENOUNCE","DIPLOACTION_RESIDENT_EMBASSY","DIPLOACTION_OPEN_BORDERS"}
 for i = 0, 62 do
     if i ~= me and Players[i] and Players[i]:IsAlive() and Players[i]:IsMajor() then
         local cfg = PlayerConfigurations[i]
@@ -111,6 +150,7 @@ for i = 0, 62 do
                     table.insert(avail, label)
                 end
             end
+            if anyNativeAllianceEligible(pDiplo,me,i) then table.insert(avail,"MAKE_ALLIANCE") end
             if not pDiplo:IsAtWarWith(i) then
                 local canWar = false
                 pcall(function() canWar = pDiplo:CanDeclareWarOn(i) end)
@@ -653,7 +693,7 @@ print("{SENTINEL}")
 
 def build_deal_options_query(other_player_id: int) -> str:
     """Show what both sides can trade — resources, gold, favor, agreements (InGame)."""
-    return f"""
+    return _native_relationship_lua() + _LUA_ALLIANCE_ELIGIBILITY + f"""
 local me = Game.GetLocalPlayer()
 local target = {other_player_id}
 local pDiplo = Players[me]:GetDiplomacy()
@@ -685,12 +725,7 @@ if not hasOB then pcall(function() hasOB = pDiplo:GetVisibilityOn(target) >= 2 e
 print("OB|" .. (hasOB and "1" or "0"))
 local ai = Players[target]:GetDiplomaticAI()
 local stateIdx = ai:GetDiplomaticStateIndex(me)
-local hasDiploService = false
-pcall(function()
-    local civic = GameInfo.Civics["CIVIC_DIPLOMATIC_SERVICE"]
-    if civic then hasDiploService = Players[me]:GetCulture():HasCivic(civic.Index) end
-end)
-local allianceEligible = (stateIdx == 1 and hasDiploService)
+local allianceEligible = anyNativeAllianceEligible(pDiplo,me,target)
 local currentAlliance = ""
 if stateIdx == 0 then
     local ok3, aType = pcall(function() return pDiplo:GetAllianceType(target) end)
@@ -883,7 +918,7 @@ def _build_form_alliance(other_player_id: int, alliance_type: str) -> str:
     import json
 
     alliance_key = json.dumps(f"ALLIANCE_{alliance_type.upper()}", ensure_ascii=False)
-    return _native_relationship_lua() + f"""
+    return _native_relationship_lua() + _LUA_ALLIANCE_ELIGIBILITY + f"""
 local me = Game.GetLocalPlayer()
 local target = {other_player_id}
 local allianceKey = {alliance_key}
@@ -902,12 +937,10 @@ local friends = matchesRelationship(relationship, "DIPLO_STATE_DECLARED_FRIEND",
 if allied == nil or friends == nil then {_bail("ERR:RELATIONSHIP_UNKNOWN|Native relationship unavailable; no proposal submitted")} end
 if allied then {_bail("ERR:ALREADY_ALLIED|Already in an alliance")} end
 if not friends then {_bail("ERR:NOT_FRIENDS|Must be declared friends first")} end
-local hasDiploService = false
-pcall(function()
-    local civic = GameInfo.Civics["CIVIC_DIPLOMATIC_SERVICE"]
-    if civic then hasDiploService = Players[me]:GetCulture():HasCivic(civic.Index) end
-end)
-if not hasDiploService then {_bail("ERR:NO_CIVIC|Diplomatic Service civic required for alliances")} end
+local eligible,eligibilityReason = nativeAllianceEligibility(pDiplo,target,allianceKey)
+if eligible ~= true then
+    {_bail_lua('"ERR:" .. eligibilityReason .. "|Requested native alliance action unavailable or refused; no proposal submitted"')}
+end
 local name = Locale.Lookup(PlayerConfigurations[target]:GetCivilizationShortDescription())
 if DealManager.HasPendingDeal(me, target) ~= false then {_bail("ERR:PENDING_DEAL|Existing or unknown pending deal; no alliance proposal submitted")} end
 _rel_step("clear_deal", function() return DealManager.ClearWorkingDeal(DealDirection.OUTGOING, me, target) end)
