@@ -6,6 +6,7 @@ import json
 
 from civ_mcp.lua._helpers import SENTINEL, _int
 from civ_mcp.lua.models import SpyInfo
+from civ_mcp.lua.spy_roster import SPY_ROSTER
 
 # Spy operation hashes — GameInfo.UnitOperations() returns 0 rows so we hardcode these.
 # Verified live via UnitOperationTypes enum in InGame Lua context.
@@ -99,7 +100,7 @@ def build_get_spies_query() -> str:
         f"{name}={hash_val}" for name, hash_val in _SPY_OP_HASHES.items()
     )
     sentinel = SENTINEL
-    return _spy_escape_context() + f"""
+    return _spy_escape_context() + SPY_ROSTER + f"""
 if escapeGate.status=="UNKNOWN" then print("SPY_ESCAPE_QUERY_UNKNOWN") end
 local escapeMatched=false
 local SPY_OPS = {{{op_entries}}}
@@ -170,6 +171,21 @@ for i, u in Players[me]:GetUnits():Members() do
     end
 end
 if escapeGate.status=="ACTIVE" and not escapeMatched then print("SPY_ESCAPE_QUERY_UNKNOWN") end
+local offmapOK,offmap=pcall(function() return offMapSpyRoster(me) end)
+if not offmapOK then print("SPY_TRAVEL_QUERY_UNKNOWN")
+else
+ for _,row in pairs(offmap) do
+  -- Native RefreshOperatives excludes captured/non-travelling ReturnTurn=-1.
+  if row.finish~=-1 then
+   local cityName,cityOwner="none",-1
+   local plot=Map.GetPlot(row.x,row.y)
+   local city=plot and Cities.GetPlotPurchaseCity(plot)
+   if city then cityName=Locale.Lookup(city:GetName());cityOwner=city:GetOwner() end
+   print("OFFMAP_SPY|"..Locale.Lookup(row.name).."|"..row.x.."|"..row.y.."|"..row.level
+    .."|"..row.finish.."|"..cityName.."|"..cityOwner)
+  end
+ end
+end
 print("{sentinel}")
 """
 
@@ -181,6 +197,18 @@ def parse_spies_response(lines: list[str]) -> list[SpyInfo]:
         if not line or line == SENTINEL:
             continue
         parts = line.split("|")
+        if parts[0] == "OFFMAP_SPY":
+            try:
+                if len(parts) != 8:
+                    continue
+                spies.append(SpyInfo(
+                    unit_id=None, unit_index=None, name=parts[1], x=int(parts[2]), y=int(parts[3]),
+                    rank=int(parts[4]), xp=None, moves=None, city_name=parts[6], city_owner=int(parts[7]),
+                    available_ops=[], current_mission="TRAVEL", status="in_transit", return_turn=int(parts[5]),
+                ))
+            except (ValueError, IndexError):
+                continue
+            continue
         if len(parts) < 10:
             continue
         try:

@@ -1,7 +1,17 @@
 # B24-01 Confirm native off-map spy travel and query it
 
-Status: ready-for-agent
+Status: pending-review
 Dependencies: none
 Spec: ../spec.md
 
 Isolated worker owns necessary spy code/tests/ticket, not live/progress. Read implement-spec/tdd, public MCP/GameState/nativeLua already approved. Strict identity/native off-map roster/started+removed/one-submit confirmation, fail closed if identity cannot be bound. Parent supplies real pre-spy name/level/roster after same-run recovery. Preserve neighbor B23 edits; merge integration before report. Independent merger + Spec/Standards review, parent T128/next turn/save/laterarrival before resolved.
+
+## Implementation and offline verification
+
+- `spy_assignments` now captures the original raw GetName / GetExperience:GetLevel / type / fullID and complete own map/off-map roster before travel. It requires an unambiguous identity absent from the pre-existing off-map roster, the exact original operation-start followed by original fullID removal, both native lookups absent, unchanged other spies, and exactly one new off-map identity at the bound city with a finite future ReturnTurn. No target-only or absence-only success; no NameIndex getter or actionable off-map unit ID is invented.
+- The shipped `Base/Assets/UI/PartialScreens/EspionageOverview.lua:72–138,734–766` supplies the own off-map enumeration and travel fields. Parent #2394 established the original raw Name and Level uniquely match post-travel facts, with zero pre-existing off-map rows. The B24-specific removal event still needs parent live validation; missing evidence remains pending.
+- Query includes native own travellers with `unit_id=None`, `unit_index=None`, unavailable XP/moves and ReturnTurn; captured ReturnTurn=-1 is excluded. Unknown roster reads report unknown rather than an empty spy list.
+- Existing on-map mission/noop behavior is retained. Confirmation does not retire observers on a potentially lost reply; valid scope/spy/city changes latch invalidation, unknown reads remain recoverable, and the final scope is checked again.
+- TDD red→green: off-map public travel originally remained OUTCOME_UNKNOWN; own-traveller query originally returned an empty list. The T128 individual 2752514 / raw Name / Level1 / Ottawa18,13 / ReturnTurn132 fixture now confirms exactly one travel request. A generation-change/restore regression additionally failed before sticky identity validation.
+- `uv run --locked pytest -q tests/test_spy_assignments.py tests/test_spy_escape.py tests/test_game_state.py tests/test_server.py`: **453 passed**. Compileall and `git diff --check` passed. Offline only; no game connection or push.
+- Independent Spec/Standards review and parent original-run T128 travel, next turn/save and later arrival remain pending.

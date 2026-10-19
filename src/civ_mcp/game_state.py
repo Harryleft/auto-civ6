@@ -321,6 +321,8 @@ class GameState:
         lines = await self.conn.execute_write(lq.build_get_spies_query())
         if "SPY_ESCAPE_QUERY_UNKNOWN" in lines:
             raise LuaError("Current spy escape identity or legal routes are unknown; no route was selected.")
+        if "SPY_TRAVEL_QUERY_UNKNOWN" in lines:
+            raise LuaError("Own off-map spy roster is unknown; travelling spies could not be listed.")
         return lq.parse_spies_response(lines)
 
     async def _assign_spy(self, unit_id: int, mission: str, x: int, y: int, entrypoint: str) -> str:

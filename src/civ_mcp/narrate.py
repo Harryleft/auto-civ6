@@ -153,6 +153,9 @@ def narrate_spies(spies: list[lq.SpyInfo]) -> str:
         if s.city_name != "none":
             owner_tag = " [own]" if s.city_owner == 0 else ""
             loc = f"{s.city_name}{owner_tag} ({s.x},{s.y})"
+        if s.unit_id is None:
+            lines.append(f"  [{rank_name}] {s.name} — in transit to {loc} | return_turn:{s.return_turn} | unit ID unavailable until arrival")
+            continue
         ops = ", ".join(s.available_ops) if s.available_ops else "none"
         mission_tag = (
             f" | mission: {s.current_mission}" if s.current_mission != "none" else ""
@@ -162,6 +165,8 @@ def narrate_spies(spies: list[lq.SpyInfo]) -> str:
             f"  id:{s.unit_id} [{rank_name}] {s.name} — at {loc} | moves:{s.moves}"
             f" | xp:{s.xp}{mission_tag} | ops: {ops}{escape_tag}"
         )
+    if not any(s.unit_id is not None for s in spies):
+        return "\n".join(lines)
     lines.append("")
     lines.append("Actions:")
     if any(s.is_escaping for s in spies):

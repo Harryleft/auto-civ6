@@ -115,14 +115,14 @@ class UnitInfo:
 
 @dataclass
 class SpyInfo:
-    unit_id: int  # composite ID (use with spy_action)
-    unit_index: int  # per-player index (unit_id % 65536)
+    unit_id: int | None  # Native off-map travel has no actionable unit ID.
+    unit_index: int | None  # per-player index (unit_id % 65536), if on map
     name: str  # e.g. "Artimpasa"
     x: int
     y: int
     rank: int  # 1=Recruit, 2=Agent, 3=Special Agent, 4=Senior Agent
-    xp: int
-    moves: int
+    xp: int | None
+    moves: int | None
     city_name: str  # city at current position, or "none"
     city_owner: int  # player ID of city owner, or -1
     available_ops: list[str]  # e.g. ["TRAVEL", "COUNTERSPY"]
@@ -130,6 +130,7 @@ class SpyInfo:
     is_escaping: bool = False  # True if spy is caught and needs escape route
     status: str = "idle"  # "idle", "in_transit", "on_mission", "escaping"
     escape_routes: list[str] = field(default_factory=list)  # Native legal choices only.
+    return_turn: int | None = None  # Native travelling-spy ReturnTurn, not arrival proof.
 
 
 @dataclass
