@@ -1,6 +1,6 @@
 # B19：总督派驻缺少目标城市归属
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 
