@@ -35,7 +35,9 @@
 | B24 | T128 | 间谍旅行离图后旧确认仍要求地图单位存在；实机Removed早于Started | 精确双原生事件/唯一新离图身份与在途查询 | 最终c5f7868；503相关/152最终检查/双审，T128旅行/T129保存/T132实际新fullID到达及任务通过 |
 | B25 | T131 | 原商路完成但另一Trader的同名chooser被当作旧动作未收尾 | 严格当前UI归属/未知不关闭/只读旧确认 | 5d7a732+8ea0506；126相关/双审，原receipt纯native RED→GREEN且chooser保留，新publicroute/T132保存通过 |
 
-当前已确认 T138，身份 sumeria / seed -1896272000，轮次 e8b4d6a62dca49bbb256e8264beb18f2。五城50人口，工业普通时代、商人共和国、巴西研究同盟Lv1、外交VP5，已创拜火教。B01–B25已修复，B26实施中；最近确认检查点gold_20261019_t137_spy_apostle（正在技术恢复重现T138）。用户已确认现有 checkpoint / GameState / lifecycle 验证边界。
+| B26 | T138 | 城市NO_LOS拒绝模板含Lua表字面量，concat报错导致unknown | 正确插入目标坐标，保留原生拒绝/零提交 | e7c40b3；110相关/双审，原T138明确拒绝/目标满血无新见证/独立移动/T139保存通过 |
+
+当前已确认 T139，身份 sumeria / seed -1896272000，轮次 e8b4d6a62dca49bbb256e8264beb18f2。五城51人口，工业普通时代、商人共和国、巴西研究同盟Lv1、外交VP5，已创拜火教。B01–B26已修复；最近确认检查点gold_20261019_t139_b26_verified。用户已确认现有 checkpoint / GameState / lifecycle 验证边界。
 
 B01：实施 f3f919a，集成 ffd3f06。相关离线 425 passed，compileall / diff --check 通过；Standards 与 Spec 两项独立审查均无实质发现。原始新旧基准不覆盖、不混用轮次。
 
@@ -305,3 +307,5 @@ B25最终8ea0506补齐首提未知归属与stale-mode，126相关/compile/diff�
 #2580击倒原BarbLine6094852，#2582双入口absent；#2584石35,28采石场Builder剩1。#2589击倒BarbFieldCannon6357003、#2591双入口absent。Eri农场35,21/36,22被掠夺；西面另BarbLine6291466进入工业区，T137工厂队列不可生产，#2611改Builder2t，原工厂进度保留。T138确有工作坊被掠夺，需清敌后原生repair生产。#2599T137间谍GainSources完成、#2609实际Campus20,12窃科技任务至142；#2604援助竞赛余15t，ours0/Canada0/Swede-1800。#2614 Eri265Faith购使徒3145737，#2615泛列表不等于真实候选；#2620原生仅Pilgrim/Debater/Chaplain，#2621选Debater。#2616保存T137926620bytes。T138研究同盟Lv2/化学提升，瑞典宗教3/4，需继续保护本方宗教。
 
 B26：#2622FieldCannon击倒工业区BarbLine6291466；#2623 Eri城市攻击可见Bombard6422531/34,20，NO_LOS拒绝文案模板留下Lua `{target_x}` 表导致concat RuntimeError，#2626原请求仅确认仍unknown。旧ownerclean-closed纯诊断，#2628当前T138原生targetPlot1234不在非空目标列表、CanStart=false；原城市见证仍旧T137/33,21/closed，未进入本次见证。禁止追溯释放原pending；规格cae45f0进入to-spec→implement-spec。#2629显式同run恢复T137检查点61.453s，#2630–32核对单位/城市/宗教使徒未晋升/Spy任务一致；将依原日志推进T138、晋升Debater与原Field目标后保存新准备点，再最终代码验证NO_LOS拒绝及续局。
+
+B26关闭：e7c40b3，110相关/compile/diff通过、独立双审均无实质发现。#2637同T138准备点929991bytes；最终clean刷新无重载#2638同T138，#2639/2641前后qnil且Bombard6422531/34,20满血，#2640原公共请求返回准确NO_LOS。#2643/44另一个正常Builder意图成功、#2647保存T138929929、#2648T139/#2649保存928834，未重建原pending。#2653首座Ziggurat36,24Builder最后charge消费，#2654EriWorkshop原生repair2t；宗教原生#2652仍本方3城拜火，瑞典已控制其他3文明，继续宗教防御。
