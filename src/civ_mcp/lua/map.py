@@ -824,26 +824,6 @@ print("{SENTINEL}")
 """
 
 
-def build_purchase_tile(city_id: int, x: int, y: int) -> str:
-    """Buy a tile for a city with gold (InGame context)."""
-    return f"""
-{_lua_get_city(city_id)}
-local cost = pCity:GetGold():GetPlotPurchaseCost({x}, {y})
-if cost <= 0 then {_bail(f"ERR:NOT_PURCHASABLE|Tile ({x},{y}) is not purchasable by this city")} end
-local balance = Players[me]:GetTreasury():GetGoldBalance()
-if balance < cost then
-    {_bail_lua('"ERR:INSUFFICIENT_GOLD|Need " .. cost .. " gold, have " .. math.floor(balance)')}
-end
-local tParams = {{}}
-tParams[CityCommandTypes.PARAM_PLOT_PURCHASE] = 1
-tParams[CityCommandTypes.PARAM_X] = {x}
-tParams[CityCommandTypes.PARAM_Y] = {y}
-CityManager.RequestCommand(pCity, CityCommandTypes.PURCHASE, tParams)
-print("OK:TILE_PURCHASED|({x},{y})|cost:" .. cost)
-print("{SENTINEL}")
-"""
-
-
 def parse_map_response(lines: list[str]) -> list[TileInfo]:
     tiles = []
     for line in lines:

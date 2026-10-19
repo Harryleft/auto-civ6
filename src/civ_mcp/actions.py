@@ -9,9 +9,25 @@ import asyncio
 import re
 import time
 from dataclasses import dataclass, field
+from typing import Callable
 
 from civ_mcp import lua as lq
 from civ_mcp.connection import GameConnection, LuaError
+
+
+@dataclass(frozen=True)
+class _ActionEvidence:
+    """Domain receipt rules; the lifecycle alone owns submission and retirement.
+
+    Migrated actions block new mutations while unresolved. ``confirm`` only
+    interprets observations; it must never submit or perform I/O.
+    """
+    tool: str
+    entrypoint: str
+    accepted: tuple[str, ...]
+    refused: str
+    confirm: Callable[[list[str]], str | None]
+    guidance: str
 
 
 @dataclass
@@ -27,6 +43,8 @@ class _PendingAction:
     details: dict = field(default_factory=dict)
     observed: list[str] = field(default_factory=list)
     confirmed: str | None = None
+    intent: tuple | None = None
+    evidence: _ActionEvidence | None = None
 
 
 @dataclass(frozen=True)
@@ -74,10 +92,11 @@ class ActionLifecycle:
         self.conn = connection
         self.pending: _PendingAction | None = None
 
-    def matches(self, kind: str, entity: tuple[str, int], **intent) -> bool:
+    def matches(self, kind: str, entity: tuple[str, int], *, intent: tuple | None = None, **details) -> bool:
         pending = self.pending
         return bool(pending and pending.kind == kind and pending.entity == entity
-                    and all(pending.details.get(key) == value for key, value in intent.items()))
+                    and (intent is None or pending.intent == intent)
+                    and all(pending.details.get(key) == value for key, value in details.items()))
 
     async def submit(self, pending: _PendingAction, scope: _ActionScope, code: str,
                      *, timeout: float, interval: float) -> str:
@@ -86,8 +105,9 @@ class ActionLifecycle:
         if self.pending is not None:
             same_intent = (self.pending.kind == pending.kind
                            and self.pending.entity == pending.entity
-                           and all(self.pending.details.get(key) == pending.details.get(key)
-                                   for key in ("target", "item")))
+                           and (self.pending.intent == pending.intent if pending.evidence is not None else
+                                all(self.pending.details.get(key) == pending.details.get(key)
+                                    for key in ("target", "item"))))
             confirmed = await self.confirm(timeout=timeout, interval=interval)
             if same_intent:
                 return confirmed
@@ -99,7 +119,7 @@ class ActionLifecycle:
         except (OSError, TimeoutError, LuaError) as exc:
             return pending.confirmed or self.unknown(f"submission acknowledgement unavailable: {exc}")
         result = _scoped_action_result(lines)
-        accepted = {
+        accepted = pending.evidence.accepted if pending.evidence is not None else {
             "move": ("MOVING_TO|", "CAPTURE_MOVE|"),
             "attack": ("RANGE_ATTACK", "MELEE_ATTACK", "AIR_ATTACK", "CITY_RANGE_ATTACK"),
             "found": ("FOUNDED|",),
@@ -111,15 +131,14 @@ class ActionLifecycle:
             "contribution": ("CONTRIBUTION_REQUESTED|",),
             "city_focus": ("CITY_FOCUS_REQUESTED|",),
             "spy_escape": ("SPY_ESCAPE_REQUESTED|",),
-            "envoy": ("ENVOY_REQUESTED|",),
         }[pending.kind]
-        if pending.kind == "envoy" and not result.startswith(accepted):
+        if pending.evidence is not None and not result.startswith(accepted):
             # Only our exact pre-entry refusals prove that nothing was sent.
             # Native errors or unrelated callback output cannot release a spend.
-            refused = (len(lines) == 1 and (lines[0].startswith("ERR:ENVOY_REFUSED|")
+            refused = (len(lines) == 1 and (lines[0].startswith(pending.evidence.refused)
                        or lines[0] == "ERR:ACTION_SCOPE_NO_SUBMIT|Native action scope changed or unavailable"))
             if not refused:
-                result = "Error: OUTCOME_UNKNOWN|Envoy acknowledgement unavailable"
+                result = "Error: OUTCOME_UNKNOWN|Action acknowledgement unavailable"
         if result.startswith(accepted):
             pending.success = result
             if pending.kind == "move":
@@ -164,6 +183,10 @@ class ActionLifecycle:
         kind, identifier = self.pending.entity
         return (kind, identifier % 65536 if kind == "unit" else identifier)
 
+    @property
+    def blocks_mutations(self) -> bool:
+        return self.pending is not None and self.pending.evidence is not None
+
     async def prepare_scope(self, known_identity: tuple[str, int] | None) -> _ActionScope | str:
         """Read submission identity without touching the narration baseline."""
         code = f'''
@@ -201,7 +224,7 @@ print("{lq.SENTINEL}")
     def observe_identity(self, identity: tuple[str, int]) -> None:
         """Keep scoped requests invalid after a witnessed world replacement."""
         pending = self.pending
-        if pending is not None and pending.kind in ("city_focus", "spy_escape", "contribution", "envoy") and identity != pending.identity:
+        if pending is not None and (pending.evidence is not None or pending.kind in ("city_focus", "spy_escape", "contribution")) and identity != pending.identity:
             pending.details["scope_invalid"] = True
 
     def unknown(self, reason: str = "confirmation deadline reached") -> str:
@@ -209,8 +232,8 @@ print("{lq.SENTINEL}")
         if pending is None:
             return "CONFIRMED|No pending action"
         observed = "; ".join(pending.observed) or "no confirmed observation"
-        guidance = ("Repeat send_envoy for the same player ID to confirm only; use get_city_states to inspect. "
-                    if pending.kind == "envoy" else "Use get_units/get_cities to confirm; do not resubmit. ")
+        guidance = (pending.evidence.guidance if pending.evidence is not None
+                    else "Use get_units/get_cities to confirm; do not resubmit. ")
         return (f"ERR:OUTCOME_UNKNOWN|{self.summary}|{reason}|observed:{observed}. "
                 f"{guidance}Explicit recovery is available if confirmation remains impossible.")
 
@@ -255,7 +278,8 @@ print("{lq.SENTINEL}")
             return pending.confirmed or self.unknown(f"confirmation unavailable: {exc}")
 
     def _confirmed_action(self, pending: _PendingAction) -> str | None:
-        if pending.kind in ("city_focus", "spy_escape", "contribution", "envoy") and pending.details.get("scope_invalid"):
+        scoped = pending.evidence is not None or pending.kind in ("city_focus", "spy_escape", "contribution")
+        if scoped and pending.details.get("scope_invalid"):
             return None
         if pending.identity is not None:
             rows = [line.split("|") for line in pending.observed if line.startswith("ACTION_IDENTITY|")]
@@ -265,17 +289,11 @@ print("{lq.SENTINEL}")
             identity = (fields[1].replace("CIVILIZATION_", "").lower(), int(fields[2]))
             if (identity != pending.identity or int(fields[3]) != pending.turn
                     or int(fields[4]) != pending.owner):
-                if pending.kind in ("city_focus", "spy_escape", "contribution", "envoy"):
+                if scoped:
                     pending.details["scope_invalid"] = True
                 return None
-        if pending.kind == "envoy":
-            rows = [row.split("|") for row in pending.observed if row.startswith("ENVOY_CONFIRMED|")]
-            if len(rows) == 1 and len(rows[0]) == 8:
-                row = rows[0]
-                if (row[1:4] == [pending.details["witness_token"], str(pending.owner), str(pending.entity[1])]
-                        and all(value.isdigit() for value in row[4:])
-                        and int(row[4]) - int(row[5]) == 1 and int(row[7]) > int(row[6])):
-                    return f"ENVOY_SENT|player:{row[3]}|remaining:{row[5]}|envoys:{row[6]}->{row[7]}"
+        if pending.evidence is not None:
+            return pending.evidence.confirm(pending.observed)
         if pending.kind in ("skip", "fortify"):
             rows = [row.split("|") for row in pending.observed if row.startswith("READINESS|")]
             if len(rows) != 1 or len(rows[0]) != 7:
