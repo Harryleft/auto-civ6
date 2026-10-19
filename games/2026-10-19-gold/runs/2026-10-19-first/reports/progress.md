@@ -110,3 +110,5 @@ B11关闭：97846e9／集成1344ad6，476相关离线、双独立审查通过。
 B12任务确认完成：857865c／26c3467，372相关离线、双审查无实质发现。#1020恢复T56，#1024–1041忠实重放，#1042保存gold_20261019_t057_before_b12；#1044修复后警戒确认。#1046推进唤醒探索战车为ready，并出现ENDTURN_BLOCKING_UNITS；#1049明确移动被pending门禁拒绝，#1051只确认原请求仍停T57。T58联合推进尚未完成，登记B13推进本地待办闭环。
 
 B13规格a066883：旧推进收据仅证RequestAction返回，不能独凭当前hasSent=false释放请求。计划引入本次作用域/事件见证，只允许明确确认原生本地拒绝；普通查询不退休owner，重复确认不重发。实机由父代理显式恢复T57前点，等待新收据实现后复现。
+
+B13原生取证：诊断8eb37f1／0be1adf（198相关离线），#1057单次推进、#1058只读；关闭MCP后b13-native-turn-attempt.txt证明精确本次LocalPlayerTurnEnd→操作Deactivated/Cleared→LocalPlayerTurnBegin均同T57，随后单位阻塞。UI.RequestAction返回nil，非拒绝布尔值。规格补充为同回合原生重开见证，不据当前blocker猜测；父方再次显式恢复T57供最终修复复验。
