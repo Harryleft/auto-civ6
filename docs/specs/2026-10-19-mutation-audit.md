@@ -130,7 +130,7 @@
 
 丢回应、超时、取消、原生异常、证据不全都保留 pending。同目标重入只核对原请求；不同目标和其他 MCP 变更先确认原请求；静态／游戏查询以及显式 popup／restart 恢复路径沿既有规则工作。观察到世界不匹配后锁存失效，即使回到原身份也不释放。确认完成后，下一次独立调用才代表新使者。
 
-确认能力的边界：原生接口没有请求 ID 回传给每次影响力变化，所以这是请求记录＋双侧状态变化的证据，依赖该未决期间没有人工或第三方同时修改同一玩家／城邦。同目标的外部操作若恰好制造相同增量，仍无法区分；额外消费导致计数不符则保留未知。MCP 服务进程重启也不会持久保存 Python 意图；跨进程恢复不在本试点保证内，不能宣称 exactly-once。只有将来确有并发操作者或跨进程恢复需求时，再评估原生命令关联或持久化。
+范围更新（2026-10-19，用户明确）：单一 MCP 控制游戏，人工或第三方并发操作不纳入设计和验收。使者采用请求记录与双侧状态变化确认；额外消费导致计数不符仍保持未知。MCP 服务进程重启后的意图持久化另属运行边界，不在本轮改造中扩展。
 
 原生来源：本机安装包 `Assets/Base/Assets/UI/PartialScreens/CityStates.lua` 的 `OnConfirmPlacement`（748–759 行）使用 PARAM_PLAYER_ONE＋GIVE_INFLUENCE_TOKEN，界面通过 GetTokensToGive／GetTokensReceived、CanGiveInfluence／CanReceiveInfluence／CanGiveTokensToPlayer 判断和展示；未从刷新回调推断事件参数。
 
@@ -145,3 +145,7 @@
 | 5 | 实机与运行边界 | 待实机验证。从 `benchmark_turn_1` 建立独立测试轮次，达成有使者且已相遇城邦条件后验证一次消费与原生加成；保留存档和证据。不将离线通过等同实机通过 |
 
 后续每项以“原生回读能证明什么”决定 implementation，不能把使者计数比较复制到所有动作。已有所有者继续保留，逐项迁移；不因清单数量而先造统一抽象。
+
+## 后续正式规格
+
+用户已要求按 to-spec → to-tickets → implement-spec 推进。正式[规格](../../.scratch/mutation-lifecycle/spec.md)和[逐票依赖图](../../.scratch/mutation-lifecycle/map.md)接续本次审计；后续实施状态以逐票记录为准。
