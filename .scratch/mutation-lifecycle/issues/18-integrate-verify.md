@@ -43,3 +43,15 @@ PYTHONPATH=src ~/Documents/ChatGPT/civ6/civ6-mcp/.venv/bin/python -B -m pytest t
 Standards 的单一根因是未知身份／时代／政策布局被误当成有效变化永久锁存，初审涉及 13 个新增领域文件；修复排查另覆盖 envoys／contribution 两条同类旧路径，合计 15 个领域文件。共享片段只集中有效事实、未知和实际不匹配的判断；领域费用／效果／原生事件证据仍在本域。证据完整且读数恢复后可只读确认；真的身份、时代或布局变化继续锁存，缺少原生事件不能被恢复读数补成成功。
 
 新增 152 项公开 GS/MCP＋真实 Lua 回归，原生 getter 故障由 adapter 注入。红灯分别为地块 3 例、其余守卫 36 例、时代／布局 4 例；恢复后原提交仍为 1 次，已付费政策只读确认不换卡，同意图续行只换卡一次且不再付款。相关回归 **1231 passed in 15.15s**；最终全量 **3715 passed in 125.17s**，日志 `/tmp/civ6-ticket18-review-fix-full.log`。`compileall -q src tests` 与 `git diff --check` 通过；26 个修改的 Markdown 文件／159 个本地链接及锚点，0 unresolved。
+
+### 首次复核后的修复
+
+首轮修复提交 `22b5653` 合入冻结集成 `ba9cdd8` 后，Standards 关闭原 P2，0 个剩余问题；Spec 独立复核又确认 2 个 P2：外层身份首次读取的无效事实被锁存，以及负槽数／不存在槽位类型被当作有效布局变化。Spec 初审 0 与首次复核 2 个 P2 分别保留，未改写为同一轮结论。
+
+修复统一 prepare_scope／确认／普通身份刷新的原生事实解析；序列化前检查数值类型，外层和 Lua 玩家范围均为 0–63，保留负 seed。政策槽数须非负，槽位类型／政体／时代须存在于原生目录；政体 -1 仍是有效“无政体”哨兵，确实变化仍锁存。新故障恢复保留原领域结果证据与单次提交规则。
+
+本轮新增 85 项公开 GS/MCP＋真实 Lua 回归（范围恢复文件累计 237 项），红灯为外层首读 2 例、身份刷新／类型 4 例、政策／时代值域 6 例、玩家64准备／确认 2 例。针对回归 **604 passed in 13.13s**。最新修复差异仍待两轴独立复核，18 保持 claimed。
+
+全量首轮 3799 通过／1 失败，原因是旧 Royal Society adapter 使用已变化的 Lua 源码前缀注入丢帧，故没有实际截断回应。现改为识别返回的 ACTION_IDENTITY 帧，保留原断言；相关 367 项通过。
+
+本轮最终全量 **3800 passed in 125.59s**，日志 `/tmp/civ6-ticket18-second-review-full.log`。`compileall -q src tests`、`git diff --check` 通过；26 个修改的 Markdown 文件／159 个本地链接及锚点，0 unresolved。未 push、未操作实机；工作树交回集成负责人复核与清理。

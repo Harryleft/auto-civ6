@@ -241,29 +241,31 @@ class GameState:
         """
         code = (
             "local me = Game.GetLocalPlayer() "
+            'assert(type(me)=="number" and me>=0 and me<=63 and me==math.floor(me),"PLAYER_UNAVAILABLE") '
             "local cfg = PlayerConfigurations[me] "
-            'print("GAMESEED|" .. cfg:GetCivilizationTypeName() '
-            '.. "|" .. tostring(GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED"))) '
+            "local civ = cfg:GetCivilizationTypeName() "
+            'local seed = GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED") '
+            'assert(type(civ)=="string" and type(seed)=="number" '
+            'and seed==seed and math.abs(seed)<math.huge and seed==math.floor(seed),"IDENTITY_UNAVAILABLE") '
+            'print("GAMESEED|" .. civ .. "|" .. tostring(seed)) '
             'print("---END---")'
         )
         lines = await self.conn.execute_write(code)
-        for line in lines:
-            if line.startswith("GAMESEED|"):
-                parts = line.split("|")
-                civ = parts[1].replace("CIVILIZATION_", "").lower()
-                seed = int(parts[2])
-                new_id = (civ, seed)
-                if self._game_identity is not None and new_id != self._game_identity:
-                    log.info("Game changed: %s → %s", self._game_identity, new_id)
-                    self._clear_world_caches()
-                    self._diplomacy_cleanup.invalidate_scope()
-                    self._diplomacy_progress.invalidate_scope()
-                    self._congress_progress.invalidate_scope()
-                self._turn_progress.invalidate_scope(new_id)
-                self._actions.observe_identity(new_id)
-                self._game_identity = new_id
-                return self._game_identity
-        return ("unknown", 0)
+        rows = [line.split("|") for line in lines if line.startswith("GAMESEED|")]
+        if not rows:
+            return ("unknown", 0)
+        if len(rows) != 1 or len(rows[0]) != 3:
+            raise ValueError("missing or ambiguous native identity")
+        new_id = self._actions.observe_identity(*rows[0][1:])
+        if self._game_identity is not None and new_id != self._game_identity:
+            log.info("Game changed: %s → %s", self._game_identity, new_id)
+            self._clear_world_caches()
+            self._diplomacy_cleanup.invalidate_scope()
+            self._diplomacy_progress.invalidate_scope()
+            self._congress_progress.invalidate_scope()
+        self._turn_progress.invalidate_scope(new_id)
+        self._game_identity = new_id
+        return self._game_identity
 
     # ------------------------------------------------------------------
     # Query methods

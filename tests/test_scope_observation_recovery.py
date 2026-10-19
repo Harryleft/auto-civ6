@@ -1,7 +1,7 @@
 """Unknown native scope reads may recover; observed changes remain invalid.
 
 Exercise public MCP/GameState and generated Lua. Faults replace only native
-identity getters, after the outer identity probe, to reach the retained receipt.
+identity getters at the outer identity probe or at the retained Lua receipt.
 """
 import asyncio
 
@@ -9,6 +9,7 @@ import pytest
 
 from civ_mcp import server
 from civ_mcp.game_state import GameState
+from civ_mcp.connection import LuaError
 from test_server import make_ctx
 from test_tile_purchase_confirmation import TileConn
 from test_item_purchase_confirmation import PurchaseConn
@@ -241,7 +242,9 @@ def test_observed_policy_identity_change_still_blocks_paid_plan(field):
     assert conn.lua.eval('goldBalance') == 860
 
 
-@pytest.mark.parametrize('field,changed', [('government', 2), ('slot_count', 5), ('slot_type', 20)])
+@pytest.mark.parametrize('field,changed', [
+    ('government', 2), ('government', -1), ('slot_count', 5), ('slot_count', 0), ('slot_type', 20),
+])
 def test_observed_policy_layout_change_still_blocks_paid_plan(field, changed):
     conn, state = pending_paid_policy()
     getter = POLICY_GETTERS[field]
@@ -263,3 +266,122 @@ def test_valid_scope_mismatch_latches_even_if_another_field_is_unknown():
     conn.lua.execute('Game.GetLocalPlayer=scope_original;PlayerConfigurations[0].GetCivilizationTypeName=civ_original')
     assert 'OUTCOME_UNKNOWN' in asyncio.run(state.confirm_pending_action(wait=False))
     assert conn.lua.eval('#submissions') == 1
+
+
+INVALID_NATIVE_FACTS = [
+    ('civ', value) for value in ["'unavailable'", "'CIVILIZATION_'", 'nil', 'false']
+] + [
+    (field, value) for field in ['seed', 'turn', 'owner']
+    for value in ['nil', 'false', "'123'", '1.5', '0/0', 'math.huge']
+] + [('turn', '-1'), ('owner', '-1'), ('owner', '64')]
+
+
+@pytest.mark.parametrize('field,value', INVALID_NATIVE_FACTS)
+def test_unknown_first_scope_read_recovers_without_poisoning_outer_identity(field, value):
+    conn, state = pending_purchase()
+    getter = GETTERS[field]
+    conn.lua.execute('PlayerConfigurations[64]=PlayerConfigurations[0]')
+    conn.lua.execute(f'first_original={getter};{getter}=function() return {value} end')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.confirm_pending_action(wait=False))
+    conn.lua.execute(f'{getter}=first_original')
+    result = asyncio.run(state.confirm_pending_action(wait=False))
+    assert result.startswith('TILE_PURCHASED|'), result
+    assert conn.lua.eval('#submissions') == 1
+    assert conn.lua.eval('balance') == 85.25
+
+
+@pytest.mark.parametrize('field,value', [(field, value) for field, value in INVALID_NATIVE_FACTS if field != 'turn'])
+def test_invalid_identity_refresh_does_not_poison_pending_or_cached_world(field, value):
+    conn, state = pending_purchase()
+    assert asyncio.run(state.get_game_identity()) == ('sumeria', 719665280)
+    getter = GETTERS[field]
+    conn.lua.execute(f'PlayerConfigurations[64]=PlayerConfigurations[0];fact_original={getter};'
+        f'{getter}=function() return {value} end')
+    with pytest.raises((ValueError, LuaError)):
+        asyncio.run(state.get_game_identity())
+    conn.lua.execute(f'{getter}=fact_original')
+    assert asyncio.run(state.get_game_identity()) == ('sumeria', 719665280)
+    assert asyncio.run(state.confirm_pending_action(wait=False)).startswith('TILE_PURCHASED|')
+    assert conn.lua.eval('#submissions') == 1
+
+
+@pytest.mark.parametrize('field,value', INVALID_NATIVE_FACTS)
+def test_invalid_native_fact_is_unavailable_before_capture_or_submission(field, value):
+    conn = TileConn(); state = GameState(conn)
+    conn.lua.execute(f'PlayerConfigurations[64]=PlayerConfigurations[0];{GETTERS[field]}=function() return {value} end')
+    assert 'ACTION_SCOPE_UNAVAILABLE' in asyncio.run(state.purchase_tile(65537, 11, 10))
+    assert state.pending_action_summary is None
+    assert conn.lua.eval('#submissions') == 0
+
+
+@pytest.mark.parametrize('field,value', [
+    ('owner', '1'), ('turn', '42'), ('civ', "'CIVILIZATION_ROME'"), ('seed', '-123'),
+])
+def test_valid_change_only_in_outer_probe_remains_invalid_after_original_returns(field, value):
+    conn, state = pending_purchase()
+    getter = GETTERS[field]
+    conn.lua.execute(f'''
+PlayerConfigurations[1]=PlayerConfigurations[0]
+first_original={getter};first_reads=0
+{getter}=function(...)
+ first_reads=first_reads+1
+ if first_reads==1 then return {value} end
+ return first_original(...)
+end
+''')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.confirm_pending_action(wait=False))
+    conn.lua.execute(f'{getter}=first_original')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.confirm_pending_action(wait=False))
+    assert conn.lua.eval('#submissions') == 1
+
+
+def test_unavailable_player_does_not_hide_a_valid_changed_turn():
+    conn, state = pending_purchase()
+    conn.lua.execute('PlayerConfigurations[64]=PlayerConfigurations[0];'
+        'Game.GetLocalPlayer=function() return 64 end;turn=42')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.confirm_pending_action(wait=False))
+    conn.lua.execute('Game.GetLocalPlayer=function() return 0 end;turn=41')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.confirm_pending_action(wait=False))
+    assert conn.lua.eval('#submissions') == 1
+
+
+@pytest.mark.parametrize('field,value', [
+    ('slot_count', -1), ('slot_type', -1), ('slot_type', 999), ('government', -2), ('government', 999),
+])
+def test_out_of_range_policy_fact_is_unknown_and_paid_plan_can_resume(field, value):
+    conn, state = pending_paid_policy()
+    getter = POLICY_GETTERS[field]
+    conn.lua.execute(f'layout_original={getter};{getter}=function() return {value} end')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.confirm_pending_action(wait=False))
+    conn.lua.execute(f'{getter}=layout_original')
+    finish_paid_policy(conn, state)
+
+
+def test_nonexistent_era_is_unknown_and_original_dedication_can_confirm():
+    conn = ChoiceConn(); state = GameState(conn); conn.lose_reply = True
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.choose_dedication(7))
+    conn.lua.execute('era=999')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.confirm_pending_action(wait=False))
+    conn.lua.execute('era=2')
+    assert asyncio.run(state.confirm_pending_action(wait=False)).startswith('DEDICATION_CHOSEN|')
+    assert conn.lua.eval('#submissions') == 1
+
+
+@pytest.mark.parametrize('owner', [0, 63])
+@pytest.mark.parametrize('seed', [-123, 0])
+def test_valid_player_boundaries_and_signed_seed_still_allow_original_confirmation(owner, seed):
+    conn = TileConn(); state = GameState(conn)
+    conn.lua.execute(f'''
+Game.GetLocalPlayer=function() return {owner} end
+seed={seed};PlayerConfigurations[{owner}]=PlayerConfigurations[0];Players[{owner}]=Players[0]
+city.owner={owner}
+function applyPurchase(x)
+ balance=balance-cost;plots[x].owner={owner};plots[x].purchaseCity=city
+end
+''')
+    conn.lose_reply = True
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.purchase_tile(65537, 11, 10))
+    assert asyncio.run(state.get_game_identity()) == ('sumeria', seed)
+    assert asyncio.run(state.confirm_pending_action(wait=False)).startswith('TILE_PURCHASED|')
+    assert conn.lua.eval('#submissions') == 1
+    assert conn.lua.eval('balance') == 85.25

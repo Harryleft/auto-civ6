@@ -47,6 +47,7 @@ culture={
 }
 Players[0].GetCulture=function() return culture end
 era,allowed,active,choices=2,3,{}, {7,8}
+GameInfo.Eras={[2]={EraType='ERA_CLASSICAL'},[3]={EraType='ERA_MEDIEVAL'}}
 GameInfo.CommemorationTypes={[7]={Index=7,CommemorationType='COMMEMORATION_SCIENCE'},[8]={Index=8,CommemorationType='COMMEMORATION_CULTURE'},[9]={Index=9,CommemorationType='COMMEMORATION_LOCKED'}}
 eras={
  GetCurrentEra=function() return era end,
