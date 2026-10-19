@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1175" viewBox="0 0 1200 1175">
+<rect width="1200" height="1175" fill="#ffffff"/>
+<text x="55" y="48" text-anchor="start" font-family="Noto Sans SC" font-size="32" font-weight="650" fill="#263449">总体设计：判断、执行、确认，持续循环</text>
+<text x="55" y="86" text-anchor="start" font-family="Noto Sans SC" font-size="21" font-weight="400" fill="#657185">模型选择值得做的事；Harness 让操作有依据、结果可确认。</text>
+<rect x="55" y="112" width="1090" height="888" rx="24" fill="#fafbfd" stroke="#edf0f5" stroke-width="1.5"/>
+<text x="225" y="151" text-anchor="middle" font-family="Noto Sans SC" font-size="26" font-weight="600" fill="#2e62ae">模型 / Agent</text>
+<text x="225" y="179" text-anchor="middle" font-family="Noto Sans SC" font-size="18" font-weight="400" fill="#657185">决定做什么</text>
+<text x="600" y="151" text-anchor="middle" font-family="Noto Sans SC" font-size="26" font-weight="600" fill="#258067">Harness / 执行环境</text>
+<text x="600" y="179" text-anchor="middle" font-family="Noto Sans SC" font-size="18" font-weight="400" fill="#657185">查询、操作、核实</text>
+<text x="975" y="151" text-anchor="middle" font-family="Noto Sans SC" font-size="26" font-weight="600" fill="#73539e">文明 6 游戏引擎</text>
+<text x="975" y="179" text-anchor="middle" font-family="Noto Sans SC" font-size="18" font-weight="400" fill="#657185">规则与真实状态</text>
+<rect x="95" y="202" width="260" height="47" rx="23" fill="#e6efff" stroke="#b7cdec" stroke-width="1.5"/>
+<text x="225" y="232" text-anchor="middle" font-family="Noto Sans SC" font-size="19" font-weight="400" fill="#2e62ae">规则知识：按需查询</text>
+<polyline points="225,249 225,270" fill="none" stroke="#7398c8" stroke-width="2.6"/>
+<polygon points="225,270 220,260 230,260" fill="#7398c8"/>
+<rect x="90" y="270" width="270" height="100" rx="18" fill="#ffffff" stroke="#b7cdec" stroke-width="1.5"/>
+<text x="225" y="311" text-anchor="middle" font-family="Noto Sans SC" font-size="24" font-weight="600" fill="#263449">理解局面与规则</text>
+<text x="225" y="345" text-anchor="middle" font-family="Noto Sans SC" font-size="18" font-weight="400" fill="#566376">稳定规则 + 当前事实</text>
+<rect x="465" y="270" width="270" height="100" rx="18" fill="#ffffff" stroke="#abd5c5" stroke-width="1.5"/>
+<text x="600" y="311" text-anchor="middle" font-family="Noto Sans SC" font-size="24" font-weight="600" fill="#263449">查询、整理、交回</text>
+<text x="600" y="345" text-anchor="middle" font-family="Noto Sans SC" font-size="18" font-weight="400" fill="#566376">把游戏事实交给模型</text>
+<rect x="840" y="270" width="270" height="100" rx="18" fill="#ffffff" stroke="#d1c1e3" stroke-width="1.5"/>
+<text x="975" y="311" text-anchor="middle" font-family="Noto Sans SC" font-size="24" font-weight="600" fill="#263449">当前局面</text>
+<text x="975" y="345" text-anchor="middle" font-family="Noto Sans SC" font-size="18" font-weight="400" fill="#566376">城市、单位、对手与交互</text>
+<polyline points="840,320 735,320" fill="none" stroke="#73539e" stroke-width="2.6"/>
+<polygon points="735,320 745,315 745,325" fill="#73539e"/>
+<polyline points="465,320 360,320" fill="none" stroke="#258067" stroke-width="2.6"/>
+<polygon points="360,320 370,315 370,325" fill="#258067"/>
+<polyline points="225,370 225,450" fill="none" stroke="#2e62ae" stroke-width="2.6"/>
+<polygon points="225,450 220,440 230,440" fill="#2e62ae"/>
+<text x="225" y="416" text-anchor="middle" font-family="Noto Sans SC" font-size="18" font-weight="400" fill="#2e62ae">形成可修正的判断</text>
+<rect x="90" y="450" width="270" height="100" rx="18" fill="#e6efff" stroke="#8eb2e4" stroke-width="1.5"/>
+<text x="225" y="491" text-anchor="middle" font-family="Noto Sans SC" font-size="24" font-weight="600" fill="#263449">选择下一步</text>
+<text x="225" y="525" text-anchor="middle" font-family="Noto Sans SC" font-size="18" font-weight="400" fill="#566376">围绕胜利目标：行动或待命</text>
+<rect x="465" y="450" width="270" height="100" rx="18" fill="#e3f4eb" stroke="#91c9b3" stroke-width="1.5"/>
+<text x="600" y="491" text-anchor="middle" font-family="Noto Sans SC" font-size="24" font-weight="600" fill="#263449">核对后，只提交一次</text>
+<text x="600" y="525" text-anchor="middle" font-family="Noto Sans SC" font-size="18" font-weight="400" fill="#566376">本局 · 对象 · 当前资格</text>
+<rect x="840" y="450" width="270" height="100" rx="18" fill="#eee8f6" stroke="#bca4d4" stroke-width="1.5"/>
+<text x="975" y="491" text-anchor="middle" font-family="Noto Sans SC" font-size="24" font-weight="600" fill="#263449">按规则执行</text>
+<text x="975" y="525" text-anchor="middle" font-family="Noto Sans SC" font-size="18" font-weight="400" fill="#566376">决定能否执行，产生真实变化</text>
+<polyline points="360,500 465,500" fill="none" stroke="#2e62ae" stroke-width="2.6"/>
+<polygon points="465,500 455,495 455,505" fill="#2e62ae"/>
+<text x="412" y="479" text-anchor="middle" font-family="Noto Sans SC" font-size="17" font-weight="400" fill="#2e62ae">提出要求</text>
+<polyline points="735,500 840,500" fill="none" stroke="#258067" stroke-width="2.6"/>
+<polygon points="840,500 830,495 830,505" fill="#258067"/>
+<text x="787" y="479" text-anchor="middle" font-family="Noto Sans SC" font-size="17" font-weight="400" fill="#258067">提交操作</text>
+<polyline points="600,550 600,670" fill="none" stroke="#258067" stroke-width="2.6"/>
+<polygon points="600,670 595,660 605,660" fill="#258067"/>
+<text x="614" y="615" text-anchor="start" font-family="Noto Sans SC" font-size="18" font-weight="400" fill="#258067">记录原请求</text>
+<polyline points="975,550 975,690" fill="none" stroke="#73539e" stroke-width="2.6"/>
+<polygon points="975,690 970,680 980,680" fill="#73539e"/>
+<text x="975" y="616" text-anchor="middle" font-family="Noto Sans SC" font-size="18" font-weight="400" fill="#73539e">等待处理后查证</text>
+<rect x="840" y="690" width="270" height="100" rx="18" fill="#ffffff" stroke="#d1c1e3" stroke-width="1.5"/>
+<text x="975" y="731" text-anchor="middle" font-family="Noto Sans SC" font-size="24" font-weight="600" fill="#263449">提供实际结果</text>
+<text x="975" y="765" text-anchor="middle" font-family="Noto Sans SC" font-size="18" font-weight="400" fill="#566376">对象状态、项目进度等</text>
+<polygon points="600,670 720,740 600,810 480,740" fill="#d7eee2" stroke="#72b799" stroke-width="2"/>
+<text x="600" y="747" text-anchor="middle" font-family="Noto Sans SC" font-size="22" font-weight="600" fill="#21654f">结果已确认？</text>
+<polyline points="840,740 720,740" fill="none" stroke="#73539e" stroke-width="2.6"/>
+<polygon points="720,740 730,735 730,745" fill="#73539e"/>
+<text x="780" y="720" text-anchor="middle" font-family="Noto Sans SC" font-size="17" font-weight="400" fill="#73539e">返回事实</text>
+<rect x="90" y="690" width="270" height="100" rx="18" fill="#e6efff" stroke="#8eb2e4" stroke-width="1.5"/>
+<text x="225" y="731" text-anchor="middle" font-family="Noto Sans SC" font-size="24" font-weight="600" fill="#263449">更新判断</text>
+<text x="225" y="765" text-anchor="middle" font-family="Noto Sans SC" font-size="18" font-weight="400" fill="#566376">用核实结果安排下一步</text>
+<polyline points="480,740 360,740" fill="none" stroke="#258067" stroke-width="2.6"/>
+<polygon points="360,740 370,735 370,745" fill="#258067"/>
+<text x="419" y="719" text-anchor="middle" font-family="Noto Sans SC" font-size="17" font-weight="400" fill="#258067">是：交回结果</text>
+<polyline points="225,790 225,835 40,835 40,500 90,500" fill="none" stroke="#2e62ae" stroke-width="2.6"/>
+<polygon points="90,500 80,495 80,505" fill="#2e62ae"/>
+<text x="225" y="864" text-anchor="middle" font-family="Noto Sans SC" font-size="18" font-weight="400" fill="#2e62ae">进入下一轮决策</text>
+<polyline points="600,810 600,875" fill="none" stroke="#b58732" stroke-width="2.6"/>
+<polygon points="600,875 595,865 605,865" fill="#b58732"/>
+<text x="614" y="850" text-anchor="start" font-family="Noto Sans SC" font-size="18" font-weight="400" fill="#966b25">尚未确认</text>
+<rect x="465" y="875" width="270" height="100" rx="18" fill="#fff3d9" stroke="#ddbd79" stroke-width="1.5"/>
+<text x="600" y="913" text-anchor="middle" font-family="Noto Sans SC" font-size="24" font-weight="600" fill="#805a1e">保留原请求</text>
+<text x="600" y="947" text-anchor="middle" font-family="Noto Sans SC" font-size="18" font-weight="400" fill="#805a1e">等待、查证或处理交互</text>
+<polyline points="735,925 1168,925 1168,740 1110,740" fill="none" stroke="#b58732" stroke-width="2.6" stroke-dasharray="7 5"/>
+<polygon points="1110,740 1120,735 1120,745" fill="#b58732"/>
+<text x="951" y="901" text-anchor="middle" font-family="Noto Sans SC" font-size="18" font-weight="400" fill="#966b25">继续查原动作，不重复提交</text>
+<rect x="55" y="1025" width="1090" height="120" rx="16" fill="#f6f7fa" stroke="#d8dee8" stroke-width="1.5"/>
+<text x="82" y="1064" text-anchor="start" font-family="Noto Sans SC" font-size="23" font-weight="600" fill="#3f4a60">故障恢复</text>
+<text x="82" y="1098" text-anchor="start" font-family="Noto Sans SC" font-size="20" font-weight="400" fill="#536176">先辨别正常等待、交互阻塞与故障；需要恢复时，优先从主菜单加载存档。</text>
+<text x="82" y="1128" text-anchor="start" font-family="Noto Sans SC" font-size="20" font-weight="400" fill="#536176">恢复后核对世界身份和局面；未确认的旧请求仍需明确处理。</text>
+</svg>

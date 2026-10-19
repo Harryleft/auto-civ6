@@ -1,0 +1,248 @@
+# 云文档
+## Docs
+- [云文档概述](https://open.feishu.cn/document/server-docs/docs/docs-overview.md): 飞书云文档提供在线文档、电子表格、多维表格、知识库和云空间等产品的开放能力，支持文件上传下载、文档创建编辑及管理。通过API调用实现高效的文档管理和协作，适用于多种业务场景。
+- [云文档常见问题](https://open.feishu.cn/document/server-docs/docs/faq.md): 本文档解答飞书云文档常见问题，包括应用权限与文档权限的区别、如何申请和开通权限、访问云文档资源的步骤及相关token获取方法。适用于开发者在集成飞书云文档API时遇到的权限管理和资源访问问题。
+- [云空间概述](https://open.feishu.cn/document/server-docs/docs/drive-v1/introduction.md): 飞书开放平台云空间提供管理云文档资源的接口，支持文件、文件夹、素材等多种资源操作。本文档介绍了云空间资源定义、使用限制及能力接入流程，帮助用户高效管理云文档。
+- [云空间常见问题](https://open.feishu.cn/document/server-docs/docs/drive-v1/faq.md): 飞书云空间常见问题解答，涵盖获取文件夹、文件及素材的token信息，应用身份权限开通，文件下载权限设置等。提供详细步骤和接口调用指南，帮助用户更好地管理和使用飞书云文档。
+- [文件夹概述](https://open.feishu.cn/document/docs/drive-v1/folder/folder-overview.md): 本文档介绍了飞书云空间中文件夹的基础概念、文件夹 token 的获取方式以及相关 API 列表。文件夹是用于管理文件和其他文件夹的容器，每个文件夹都有唯一的 token。你可以通过浏览器或调用开放平台接口获取文件夹的 token。
+- [获取我的空间（根文件夹）元数据](https://open.feishu.cn/document/server-docs/docs/drive-v1/folder/get-root-folder-meta.md): 获取我的空间（root folder）元数据接口用于获取用户云空间的元数据，包括文件夹的token、ID及所有者ID。支持自建和商店应用，需具备相应权限。通过访问凭证进行身份鉴权，确保数据安全。
+- [获取文件夹中的文件清单](https://open.feishu.cn/document/server-docs/docs/drive-v1/folder/list.md): 该接口用于获取用户云空间指定文件夹中的文件清单，包括名称、类型、创建时间等信息。支持自建应用和商店应用调用，权限要求灵活。接口仅获取当前层级文件信息，不支持递归获取子文件夹内容。
+- [获取文件夹元数据](https://open.feishu.cn/document/server-docs/docs/drive-v1/folder/get-folder-meta.md): 飞书开放平台提供获取文件夹元数据的API接口，通过文件夹token获取文件夹的ID、名称、创建者ID等信息，支持自建应用和商店应用调用。
+- [新建文件夹](https://open.feishu.cn/document/server-docs/docs/drive-v1/folder/create_folder.md): 通过飞书开放平台的API在云空间中创建文件夹，支持自建和商店应用。接口调用限制为5次/秒，单层节点上限1500个。提供详细的请求和响应格式及错误码说明，确保开发者顺利集成和使用。
+- [移动或删除文件夹](https://open.feishu.cn/document/server-docs/docs/drive-v1/folder/move-delete-folder.md): 飞书开放平台提供移动或删除文件夹的API接口，帮助用户高效管理云空间中的文件夹。操作类似于文件的移动与删除，用户可参考相关接口文档进行操作。
+- [查询异步任务状态](https://open.feishu.cn/document/server-docs/docs/drive-v1/file/async-task/task_check.md): 飞书开放平台提供查询异步任务状态的API，支持查询删除和移动文件夹的异步任务状态。通过GET请求获取任务执行状态，需提供task_id和access_token。
+- [文件概述](https://open.feishu.cn/document/docs/drive-v1/file/file-overview.md): 本文档介绍了飞书云空间内文件的基础概念、文件 token 的获取方式以及文件相关的 API 列表。文件包括在线文档、电子表格、多维表格等，支持通过浏览器和开放平台接口获取文件 token。
+- [获取文件元数据](https://open.feishu.cn/document/server-docs/docs/drive-v1/file/batch_query.md): 获取文件元数据接口用于通过文件token获取文件的详细信息，如标题、所有者、创建时间等。支持自建和商店应用，需相应权限。请求频率限制为1000次/分钟。接口返回文件元数据列表及失败的文档token信息。
+- [获取文件统计信息](https://open.feishu.cn/document/server-docs/docs/drive-v1/file/get.md): 获取文件统计信息接口用于获取各类文件的流量统计信息和互动信息，包括阅读人数、阅读次数和点赞数。支持自建应用和商店应用，需具备相应权限。
+- [获取文件访问记录](https://open.feishu.cn/document/server-docs/docs/drive-v1/file-view_record/list.md): 获取飞书云文档、电子表格、多维表格等文件的历史访问记录，包含访问者信息及最近访问时间。支持自建和商店应用，需获取用户基本信息或文档访问记录权限。
+- [创建云文档](https://open.feishu.cn/document/docs/drive-v1/file/create-cloud-document.md): 飞书开放平台提供创建云文档的接口，包括创建文档、电子表格和多维表格。用户可以通过模板快速创建目标文档类型，提升工作效率。详细接口文档和操作指南帮助用户轻松完成文档创建。
+- [复制文件](https://open.feishu.cn/document/server-docs/docs/drive-v1/file/copy.md): 飞书开放平台提供复制文件API，支持将用户云空间中的文件复制到其他文件夹。该异步接口不支持复制文件夹，具有节点和调用频率限制。适用于自建和商店应用，需具备相应权限。
+- [移动文件或文件夹](https://open.feishu.cn/document/server-docs/docs/drive-v1/file/move.md): 飞书开放平台提供移动文件或文件夹的API，支持将文件或文件夹移动到用户云空间的其他位置。接口不支持并发调用，频率限制为5 QPS及10000次/天。支持自建应用和商店应用，需具备相应权限。
+- [删除文件或文件夹](https://open.feishu.cn/document/server-docs/docs/drive-v1/file/delete.md): 飞书开放平台提供删除云空间内文件或文件夹的API，支持异步执行文件夹删除任务。确保应用或用户具备相应权限，接口调用频率限制为5 QPS。
+- [创建文件快捷方式](https://open.feishu.cn/document/server-docs/docs/drive-v1/file/create_shortcut.md): 通过飞书开放平台的API创建文件快捷方式，便于在云空间中管理文件。支持自建和商店应用，需权限验证。接口调用频率限5次/秒，10000次/天。
+- [搜索云文档](https://open.feishu.cn/document/server-docs/docs/drive-v1/search/document-search.md): 飞书开放平台提供搜索云文档接口，通过关键词搜索当前用户可见的云文档。支持自建应用和商店应用，需具备相应权限。可根据搜索关键词、文件数量、偏移量等参数进行定制化搜索，返回包含文件信息的列表。
+- [上传文件概述](https://open.feishu.cn/document/server-docs/docs/drive-v1/upload/multipart-upload-file-/introduction.md): 飞书开放平台提供多种文件上传接口，支持将本地文件上传至云空间。根据文件大小和网络状况选择直接上传或分片上传，确保上传成功率。注意容量限制和调用频率限制，以避免错误码。
+- [上传文件](https://open.feishu.cn/document/server-docs/docs/drive-v1/upload/upload_all.md): 通过飞书开放平台上传文件接口，将指定文件上传至云空间指定目录中。支持自建应用和商店应用，文件大小不得超过20MB，调用频率上限为5 QPS。需提供文件名称、上传点类型、云空间文件夹token、文件大小等参数。
+- [分片上传文件](https://open.feishu.cn/document/server-docs/docs/drive-v1/upload/multipart-upload-file-/upload_prepare.md): 飞书开放平台提供分片上传文件的预上传接口，帮助用户获取上传事务ID和分片策略。接口支持自建和商店应用，需满足调用频率限制。上传事务有效期为24小时，文件分片固定为4MB。
+- [分片上传文件](https://open.feishu.cn/document/server-docs/docs/drive-v1/upload/multipart-upload-file-/upload_part.md): 飞书开放平台提供分片上传文件的能力，通过上传事务 ID 和分片策略上传文件分片，支持自建应用和商店应用。接口频率限制为 5 QPS，10000 次/天。完成上传后需调用完成上传接口。
+- [分片上传文件](https://open.feishu.cn/document/server-docs/docs/drive-v1/upload/multipart-upload-file-/upload_finish.md): 飞书开放平台提供分片上传文件完成上传接口，确保文件上传成功。该接口不支持并发调用，频率限制为5 QPS，10000次/天。调用该API需具备相应权限，并使用tenant_access_token或user_access_token进行授权。
+- [下载文件](https://open.feishu.cn/document/server-docs/docs/drive-v1/download/download.md): 飞书开放平台提供下载云空间文件的API，支持分片下载。确保应用拥有文件下载权限，接口调用频率上限为5 QPS。支持自建和商店应用，需使用正确的文件token和授权信息。
+- [导入文件概述](https://open.feishu.cn/document/server-docs/docs/drive-v1/import_task/import-user-guide.md): 飞书开放平台支持将本地文件如Word、TXT、Markdown、Excel等格式导入为云文档，并放置到云空间指定目录中。本文介绍了导入文件的完整步骤，包括上传文件、创建导入任务和查询导入结果。
+- [创建导入任务](https://open.feishu.cn/document/server-docs/docs/drive-v1/import_task/create.md): 该接口用于创建导入文件任务，将本地文件导入为飞书在线云文档。支持异步操作，需要调用查询接口获取结果。前提需获取源文件的token。
+- [查询导入任务结果](https://open.feishu.cn/document/server-docs/docs/drive-v1/import_task/get.md): 飞书开放平台提供查询导入任务结果的API，通过导入任务ID轮询获取导入状态和结果。支持自建和商店应用，需具备相应权限。API响应包括任务状态、错误信息、文档URL等，帮助开发者高效管理云文档导入流程。
+- [导出云文档概述](https://open.feishu.cn/document/server-docs/docs/drive-v1/export_task/export-user-guide.md): 飞书开放平台提供导出云文档功能，支持将飞书文档、电子表格、多维表格导出为本地文件，包括 Word、Excel、PDF、CSV 格式。导出文件需在任务结束 10 分钟内下载，支持启用水印。
+- [创建导出任务](https://open.feishu.cn/document/server-docs/docs/drive-v1/export_task/create.md): 创建导出任务接口用于将飞书文档、电子表格、多维表格导出为本地文件，支持Word、Excel、PDF、CSV格式。该接口为异步操作，需通过查询接口获取结果。
+- [查询导出任务结果](https://open.feishu.cn/document/server-docs/docs/drive-v1/export_task/get.md): 飞书开放平台的导出任务结果查询接口，通过导出任务ID获取导出文件的token，支持导出PDF、XLSX等格式。确保调用者与创建者一致，权限要求包括导出云文档权限。
+- [下载导出文件](https://open.feishu.cn/document/server-docs/docs/drive-v1/export_task/download.md): 飞书开放平台提供下载导出文件的API，通过导出任务结果的token，快速获取云文档导出文件。注意导出文件需在任务结束10分钟内下载。支持自建应用，需具备相应权限。
+- [素材概述](https://open.feishu.cn/document/server-docs/docs/drive-v1/media/introduction.md): 飞书开放平台提供素材管理能力，支持在云文档中上传、下载和获取素材。素材包括图片、视频等，具有唯一token标识。通过多种接口实现素材上传与下载，支持分片上传以提高稳定性。
+- [上传素材](https://open.feishu.cn/document/server-docs/docs/drive-v1/media/upload_all.md): 飞书开放平台的上传素材接口支持将文件、图片、视频等素材上传至指定云文档中，文件大小限制为20MB。该接口适用于自建和商店应用，需具备相关权限。通过此接口，用户可在云文档中高效管理素材，提升协作效率。
+- [分片上传素材](https://open.feishu.cn/document/server-docs/docs/drive-v1/media/multipart-upload-media/upload_prepare.md): 飞书开放平台提供分片上传素材的预上传功能，通过发送初始化请求获取上传事务 ID 和分片策略，为上传素材分片做准备。接口调用频率限制为5 QPS，10000次/天，上传事务 ID 和进度在24小时内有效。
+- [分片上传素材](https://open.feishu.cn/document/server-docs/docs/drive-v1/media/multipart-upload-media/upload_part.md): 飞书开放平台提供分片上传素材功能，通过上传事务 ID 和分片策略上传素材分片，支持自建应用和商店应用。接口调用频率为5 QPS，权限包括查看、评论、编辑和管理多维表格、文档等。
+- [分片上传素材](https://open.feishu.cn/document/server-docs/docs/drive-v1/media/multipart-upload-media/upload_finish.md): 该接口用于完成飞书云文档分片上传素材的过程，需在分片全部上传后调用。支持自建和商店应用，权限要求包括查看和管理多维表格、文档、云空间等。调用频率限制为5 QPS，每天最多10000次。
+- [下载素材](https://open.feishu.cn/document/server-docs/docs/drive-v1/media/download.md): 飞书开放平台提供下载云文档素材的API，支持通过请求头添加Range参数分片下载，需具备素材下载权限。接口调用频率限制为5 QPS，10000次/天。适用于自建应用和商店应用，支持多种权限配置。
+- [获取素材临时下载链接](https://open.feishu.cn/document/server-docs/docs/drive-v1/media/batch_get_tmp_download_url.md): 获取云文档中素材的临时下载链接，链接有效期24小时。确保应用拥有素材下载权限，否则返回403状态码。支持自建和商店应用，需提供素材文件的token。接口频控特殊，支持多维表格、电子表格和文档的下载权限。
+- [文档版本概述](https://open.feishu.cn/document/server-docs/docs/drive-v1/file-version/overview.md): 飞书开放平台支持在线文档和电子表格的版本管理，提供创建、删除和查看版本的API。版本依附于文件，支持通过参数如版本号、创建时间等进行管理。适用于商店应用和自建应用，助力企业高效管理文档版本。
+- [创建文档版本](https://open.feishu.cn/document/server-docs/docs/drive-v1/file-version/create.md): 飞书开放平台提供创建文档版本的API，支持在线文档和电子表格。该接口为异步接口，需具备相应权限。支持自建应用和商店应用，通过POST请求创建文档版本，返回文档版本信息。
+- [获取文档版本列表](https://open.feishu.cn/document/server-docs/docs/drive-v1/file-version/list.md): 获取飞书云文档或电子表格的版本列表，支持分页查询和多种文档类型。通过API调用可查看、创建、删除文档版本，需具备相应权限。适用于自建应用和商店应用，帮助用户管理文档版本历史。
+- [获取文档版本信息](https://open.feishu.cn/document/server-docs/docs/drive-v1/file-version/get.md): 获取飞书云文档或电子表格指定版本信息的API，支持查看标题、标识、创建者等信息，适用于自建和商店应用。通过指定file_token和version_id获取文档版本详情，需具备相应权限。
+- [删除文档版本](https://open.feishu.cn/document/server-docs/docs/drive-v1/file-version/delete.md): 飞书开放平台提供删除文档版本的API，支持自建和商店应用。通过该接口，开发者可以删除基于在线文档或电子表格创建的版本。接口支持高频调用，需具备相应权限。
+- [订阅云文档事件](https://open.feishu.cn/document/server-docs/docs/drive-v1/event/subscribe.md): 飞书开放平台提供的云文档事件订阅接口，支持订阅文件编辑、多维表格变更等事件。仅文档拥有者和管理者可订阅，需确保应用或用户具备相关权限。支持自建应用和商店应用，提供详细的请求和响应参数说明，帮助开发者高效管理文档事件通知。
+- [查询云文档事件订阅状态](https://open.feishu.cn/document/docs/drive-v1/event/get_subscribe.md): 查询云文档事件订阅状态接口帮助用户确认文档事件的订阅情况。确保应用或用户为文档所有者或管理者，正确配置订阅方式。支持自建和商店应用，需具备相应权限。接口响应包括订阅状态及错误码信息。
+- [取消云文档事件订阅](https://open.feishu.cn/document/server-docs/docs/drive-v1/event/delete_subscribe.md): 取消云文档事件订阅接口用于停止接收文档通知，需确保应用或用户为文档所有者或管理者。支持自建和商店应用，需具备相应权限。调用频率限制为每分钟10次。
+- [多维表格字段变更](https://open.feishu.cn/document/server-docs/docs/drive-v1/event/list/bitable_field_changed.md): 飞书开放平台多维表格字段变更事件，触发文件编辑事件。支持自建和商店应用，需权限订阅。事件体包含详细字段变更信息，便于管理和操作。
+- [多维表格记录变更](https://open.feishu.cn/document/docs/bitable-v1/events/bitable_record_changed.md): 飞书开放平台的多维表格记录变更事件，当订阅的多维表格记录发生变更时触发。支持自建应用和商店应用，提供Webhook推送方式。需具备相关权限才能订阅和获取敏感字段信息。
+- [文件标题变更](https://open.feishu.cn/document/server-docs/docs/drive-v1/event/list/file-title-update.md): 云文档标题变更事件，当被订阅的云文档标题发生变更时触发。支持自建应用和商店应用，需相应权限。事件类型为drive.file.title_updated_v1，通过Webhook推送。
+- [文件已读](https://open.feishu.cn/document/server-docs/docs/drive-v1/event/list/file-read.md): 飞书开放平台提供文件已读事件，当云文档被打开时触发。支持自建和商店应用，需权限订阅。事件体包含事件类型、用户信息、文档类型等详细信息，便于开发者管理和监控文档访问情况。
+- [文件编辑](https://open.feishu.cn/document/server-docs/docs/drive-v1/event/list/file-edited.md): 飞书开放平台提供文件编辑事件订阅功能，当云文档被编辑时触发。支持自建和商店应用，需相应权限。通过Webhook推送事件，包括文档类型、操作人及订阅用户信息等。
+- [文件协作者添加](https://open.feishu.cn/document/server-docs/docs/drive-v1/event/list/file-collaborator-add.md): 飞书开放平台提供文件协作者添加事件，支持自建和商店应用。通过Webhook推送，触发时需具备查看、评论、编辑权限。事件类型为drive.file.permission_member_added_v1，适用于云文档的多种文件类型，帮助企业管理文件协作。
+- [文件协作者移除](https://open.feishu.cn/document/server-docs/docs/drive-v1/event/list/file-collaborator-remove.md): 飞书开放平台的文件协作者移除事件触发机制，支持自建和商店应用。通过Webhook推送，订阅该事件需特定权限，适用于管理云文档协作者的场景。事件体包含详细的用户和文件信息，帮助企业高效管理文档权限。
+- [文件删除到回收站](https://open.feishu.cn/document/server-docs/docs/drive-v1/event/list/delete-file-to-trash-can.md): 飞书开放平台提供文件删除到回收站事件订阅功能，当文件被删除到回收站时触发此事件。支持自建应用和商店应用，需具备相应权限。事件体包含事件ID、创建时间、文件类型等信息，支持通过Webhook推送。
+- [文件彻底删除](https://open.feishu.cn/document/server-docs/docs/drive-v1/event/list/file-deleted-completely.md): 飞书开放平台的文件彻底删除事件在被订阅文件被删除时触发，支持自建及商店应用。用户可通过Webhook接收事件通知，需具备相应权限以获取完整事件数据。事件体包含文件类型、操作人ID等信息，便于管理云文档资源。
+- [知识库概述](https://open.feishu.cn/document/server-docs/docs/wiki-v2/wiki-overview.md): 飞书知识库是面向组织的知识管理系统，通过结构化信息和层级页面树提升知识流转效率。支持通过API自动化管理，提供灵活权限管控，适合企业构建高效知识体系。
+- [知识库常见问题](https://open.feishu.cn/document/server-docs/docs/wiki-v2/wiki-qa.md): 飞书知识库常见问题解答，包括如何调用接口获取和操作知识库文档、应用授权访问知识库资源、添加应用为知识库管理员、迁移云空间文档到知识库、导入和导出知识库文档等步骤。帮助用户高效管理和使用飞书知识库。
+- [获取知识空间列表](https://open.feishu.cn/document/server-docs/docs/wiki-v2/space/list.md): 获取飞书知识空间列表接口，支持分页查询，需确认应用或机器人具备访问权限。通过tenant access token调用，返回可访问的知识空间信息。适用于自建和商店应用，权限要求包括查看和管理知识库。
+- [获取知识空间信息](https://open.feishu.cn/document/server-docs/docs/wiki-v2/space/get.md): 获取知识空间信息接口允许根据知识空间ID查询相关信息，包括类型、可见性和分享状态。支持自建应用和商店应用，需具备相应权限。接口频率限制为每分钟100次。
+- [创建知识空间](https://open.feishu.cn/document/server-docs/docs/wiki-v2/space/create.md): 飞书开放平台提供创建知识空间的API，支持自建和商店应用。用户可通过POST请求创建知识空间，需使用user_access_token进行授权。接口支持高效管理知识库，提升信息流转效率。
+- [获取知识空间成员列表](https://open.feishu.cn/document/docs/wiki-v2/space-member/list.md): 获取飞书知识空间成员和管理员列表的API，支持自建和商店应用。通过调用此接口，开发者可查看知识空间的成员信息，支持分页查询。需要相应权限进行访问。
+- [添加知识空间成员](https://open.feishu.cn/document/server-docs/docs/wiki-v2/space-member/create.md): 通过飞书开放平台API，轻松添加知识空间成员或管理员。确保调用身份为知识空间管理员，支持多种身份类型添加。注意公开知识空间仅支持添加管理员。
+- [删除知识空间成员](https://open.feishu.cn/document/server-docs/docs/wiki-v2/space-member/delete.md): 删除知识空间成员接口用于移除知识空间中的成员或管理员。根据知识空间的类型和可见性，操作可能受限。请求需具备相关权限，支持自建应用和商店应用。
+- [更新知识空间设置](https://open.feishu.cn/document/server-docs/docs/wiki-v2/space-setting/update.md): 通过飞书开放平台的API，根据space_id更新知识空间设置，需为知识空间管理员。支持自建应用和商店应用，权限要求包括更新知识空间设置和管理知识库。
+- [创建知识空间节点](https://open.feishu.cn/document/server-docs/docs/wiki-v2/space-node/create.md): 创建知识空间节点接口允许在飞书知识库中创建节点，支持自建应用和商店应用。要求拥有父节点容器编辑权限，不支持创建文件类型节点。API调用需具备相应权限，支持多种文档类型创建。
+- [获取知识空间节点信息](https://open.feishu.cn/document/server-docs/docs/wiki-v2/space-node/get_node.md): 获取飞书知识空间节点信息的API，支持自建和商店应用。需具备节点阅读权限，提供节点详细信息，如节点类型、文档创建和编辑时间、所有者等。接口调用需使用有效的access token。
+- [获取知识空间子节点列表](https://open.feishu.cn/document/server-docs/docs/wiki-v2/space-node/list.md): 获取知识空间子节点列表接口支持分页获取Wiki节点的子节点，需具备父节点阅读权限。支持自建和商店应用调用，提供丰富的权限管理和分页功能。
+- [移动知识空间节点](https://open.feishu.cn/document/server-docs/docs/wiki-v2/space-node/move.md): 移动知识空间节点API支持在Wiki内跨空间移动节点，携带子节点一起移动。需满足节点、原父节点、目的父节点的编辑权限。支持自建和商店应用，权限灵活配置。
+- [更新知识空间节点标题](https://open.feishu.cn/document/server-docs/docs/wiki-v2/space-node/update_title.md): 飞书开放平台提供更新知识空间节点标题的接口，支持文档和快捷方式。通过POST请求更新节点标题，需具备相应权限。支持自建和商店应用，接口调用频率限制为100次/分钟。
+- [创建知识空间节点副本](https://open.feishu.cn/document/server-docs/docs/wiki-v2/space-node/copy.md): 飞书开放平台提供创建知识空间节点副本的API接口，支持自建和商店应用。通过该接口，用户可以在指定位置创建节点副本，支持多种权限设置及灵活的请求参数配置。
+- [移动云空间文档至知识空间](https://open.feishu.cn/document/server-docs/docs/wiki-v2/task/move_docs_to_wiki.md): 该接口支持将云空间文档移动至知识空间，继承父页面权限。移动后文档在“知识库”显示，无法从云空间主页访问。接口为异步操作，权限要求包括文档管理、文件夹和目标节点编辑权限。
+- [获取任务结果](https://open.feishu.cn/document/server-docs/docs/wiki-v2/task/get.md): 飞书开放平台提供获取Wiki异步任务结果的API，支持自建和商店应用。通过访问特定URL并提供任务ID和类型，用户可查询任务状态和结果。权限要求为任务创建者，支持查看和管理知识库权限。
+- [搜索 Wiki](https://open.feishu.cn/document/server-docs/docs/wiki-v2/search_wiki.md): 飞书开放平台的搜索 Wiki API 允许用户通过关键词查询可见的 Wiki 内容。用户需具备查看权限，并使用 user_access_token 进行身份验证。API 支持分页查询，并返回符合条件的 Wiki 信息及访问链接。
+- [文档概述](https://open.feishu.cn/document/server-docs/docs/docs/docx-v1/docx-overview.md): 飞书开放平台云文档API提供文档和块的操作能力，包括创建、读取、编辑和删除。文档由唯一的document_id标识，块是文档的最小构建单元。支持多种块类型和父子关系，满足多样化业务需求。
+- [文档常见问题](https://open.feishu.cn/document/docs/docs/faq.md): 飞书开放平台提供丰富的文档操作API，支持插入表格、电子表格、图片、文件等多种内容。用户可以通过API实现对文档的创建、更新、获取和管理，支持多种编程语言的SDK。文档API还支持通过模板创建文档，方便用户快速生成内容。
+- [文档的数据结构](https://open.feishu.cn/document/docs/docs/data-structure/document.md): 飞书云文档的数据结构描述了在线文档的基本信息，包括唯一标识、版本、标题及展示设置等。通过API获取文档信息，支持查看和更新文档版本。文档由多个块组成，形成Block树结构，便于管理和访问。
+- [块的数据结构](https://open.feishu.cn/document/docs/docs/data-structure/block.md): 飞书开放平台文档模块中的块是文档的最小构建单元，支持多种类型如文本、图片、表格等，每个块都有唯一标识。通过API可管理和操作这些块，提升文档的结构化和交互性。了解块的数据结构和类型，助力企业高效管理文档内容。
+- [表情（Emoji）的枚举值](https://open.feishu.cn/document/docs/docs/data-structure/emoji.md): 飞书开放平台提供丰富的表情（Emoji）枚举值，涵盖人物、动物、食物、活动、地点、物体、符号等多种类别，支持在高亮块（Callout）Block中使用，帮助开发者在应用中实现更生动的用户交互体验。
+- [创建文档](https://open.feishu.cn/document/server-docs/docs/docs/docx-v1/document/create.md): 飞书开放平台提供创建docx文档的API，支持自建和商店应用。通过POST请求指定文档标题和文件夹，频率限制为每秒3次。接口需权限验证，返回文档ID等信息。
+- [获取文档基本信息](https://open.feishu.cn/document/server-docs/docs/docs/docx-v1/document/get.md): 飞书开放平台提供获取文档基本信息的API，支持获取文档标题和最新版本ID。适用于自建应用和商店应用，需具备文档权限。接口调用频率限制为每秒5次，超过限制将返回错误码。
+- [获取文档纯文本内容](https://open.feishu.cn/document/server-docs/docs/docs/docx-v1/document/raw_content.md): 获取飞书云文档纯文本内容的API接口，支持自建及商店应用。调用需具备相应文档权限，频率限制为每秒5次。接口返回文档的纯文本内容，适用于多种协作场景。
+- [获取文档所有块](https://open.feishu.cn/document/server-docs/docs/docs/docx-v1/document/list.md): 获取飞书云文档所有块的富文本内容并分页返回。支持自建和商店应用，需具备阅读或编辑权限。调用频率限制为每秒5次，超限返回错误码。适用于多种文档块类型，包括文本、标题、列表等。
+- [创建块](https://open.feishu.cn/document/server-docs/docs/docs/docx-v1/document-block/create.md): 飞书开放平台的创建块接口允许在指定父块下创建多个子块，支持多种块类型。该接口适用于自建应用和商店应用，需具备文档编辑权限。频率限制为每秒3次请求，超出限制需采用频控策略。
+- [创建嵌套块](https://open.feishu.cn/document/docs/docs/document-block/create-2.md): 飞书开放平台提供创建嵌套块的API，支持在文档中指定位置添加有父子关系的子块。该接口需要权限验证，调用频率有限制，适用于自建应用和商店应用。确保调用身份有云文档的阅读和编辑权限，支持多种文档类型的操作。
+- [更新块的内容](https://open.feishu.cn/document/server-docs/docs/docs/docx-v1/document-block/patch.md): 飞书开放平台提供更新文档块内容的API，支持自建和商店应用调用。确保拥有文档编辑权限，调用频率限制为每秒3次。接口返回更新后的富文本内容，帮助开发者灵活管理文档内容。
+- [获取块的内容](https://open.feishu.cn/document/server-docs/docs/docs/docx-v1/document-block/get.md): 飞书开放平台提供获取文档块内容的API，支持自建和商店应用。调用需具备相应权限，频率限制为每秒5次。API返回块的详细信息，包括文本样式、对齐方式等，帮助开发者高效管理和编辑云文档内容。
+- [批量更新块的内容](https://open.feishu.cn/document/server-docs/docs/docs/docx-v1/document-block/batch_update.md): 飞书开放平台提供批量更新文档块的API，支持富文本内容的更新。应用需具备云文档权限，调用频率限制为每秒3次。支持多种文本样式和元素的修改，确保高效协作与信息管理。
+- [获取所有子块](https://open.feishu.cn/document/server-docs/docs/docs/docx-v1/document-block/get-2.md): 飞书开放平台提供获取文档中指定块的所有子块的API，支持分页返回富文本内容。调用需具备云文档权限，频率限制为每秒5次。接口支持自建和商店应用，适用于多种文档类型和用户ID类型。
+- [删除块](https://open.feishu.cn/document/server-docs/docs/docs/docx-v1/document-block/batch_delete.md): 飞书开放平台提供删除文档块的API接口，支持自建和商店应用。调用前需具备文档编辑权限，限频为每秒3次。接口返回删除操作后的文档版本号，支持幂等操作。
+- [新旧版本说明](https://open.feishu.cn/document/server-docs/docs/docs/upgraded-docs-openapi-access-guide.md): 飞书开放平台于2022年6月推出新版文档接口，提供更强大的文档管理能力。新版文档与旧版文档在接口和底层数据结构上存在显著差异，现已不支持通过旧版接口创建文档。用户需根据文档类型选择合适的API进行操作。
+- [电子表格概述](https://open.feishu.cn/document/server-docs/docs/sheets-v3/overview.md): 飞书开放平台电子表格API提供数据处理、展示、分析功能。支持表格、工作表、范围等基础概念，允许用户进行数据读取、写入、筛选等操作。通过API可实现电子表格的创建、修改、数据插入等多种操作，满足企业高效数据管理需求。
+- [电子表格常见问题](https://open.feishu.cn/document/server-docs/docs/sheets-v3/sheets-faq.md): 飞书开放平台提供电子表格API，支持获取表格token、权限管理、数据插入等功能。用户可通过API获取表格标识、设置权限、插入数据、下载图片等操作，满足企业多样化需求。常见问题包括权限设置、接口版本兼容等，帮助用户高效使用电子表格功能。
+- [创建电子表格](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet/create.md): 通过飞书开放平台API在云空间中创建电子表格，支持自定义标题和文件夹位置。提供详细的请求和响应格式，适用于自建和商店应用。了解权限要求及错误码处理，确保顺畅调用。
+- [修改电子表格属性](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet/patch.md): 该接口用于修改飞书电子表格的属性，支持修改电子表格标题。通过PATCH请求，开发者可在自建应用或商店应用中调用此API，需具备相应权限。接口频率限制为20次/分钟。
+- [获取电子表格信息](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet/get.md): 通过电子表格 token 获取其基础信息，包括所有者和 URL。确保调用身份具备文档权限，支持自建和商店应用。接口频率限制为每分钟100次，需通过特定权限调用。
+- [操作工作表](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet/operate-sheets.md): 飞书开放平台的电子表格操作接口允许开发者通过API对工作表进行增加、复制和删除操作。支持自建和商店应用，提供灵活的权限管理。用户可通过token鉴权，确保数据安全。
+- [更新工作表属性](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet/update-sheet-properties.md): 更新飞书电子表格中的工作表属性，包括标题、位置、隐藏、冻结、保护等。支持自建应用和商店应用调用，需权限验证。通过POST请求更新，支持多次操作。
+- [获取工作表](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet/query.md): 通过飞书开放平台API获取电子表格中的工作表信息，包括ID、标题、索引位置等。确保调用身份具备相应权限，支持自建和商店应用。接口频率限制为每分钟100次。
+- [查询工作表](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet/get.md): 查询飞书工作表属性信息，包括标题、索引、隐藏状态等。需确保调用身份具备电子表格权限。支持自建和商店应用，通过API获取工作表详细信息，提升数据管理效率。
+- [增加行列](https://open.feishu.cn/document/server-docs/docs/sheets-v3/sheet-rowcol/add-rows-or-columns.md): 飞书开放平台提供电子表格API，支持在工作表中增加行列。接口支持自建和商店应用，单次最多增加5000行或列，需在行末尾或列末尾新增。调用需权限认证，支持查看、评论、编辑和管理云空间文件权限。
+- [插入行列](https://open.feishu.cn/document/server-docs/docs/sheets-v3/sheet-rowcol/insert-rows-or-columns.md): 飞书开放平台提供插入行列接口，支持在电子表格指定位置插入空白行或列。每次调用最多插入5000行或列，适用于自建和商店应用。权限要求包括查看、评论、编辑和管理云空间及电子表格。
+- [更新行列](https://open.feishu.cn/document/server-docs/docs/sheets-v3/sheet-rowcol/update-rows-or-columns.md): 飞书开放平台提供更新电子表格行列属性的API，支持设置行高列宽及隐藏行列。单次调用最多支持5000行或列，适用于自建和商店应用。通过访问凭证进行身份鉴权，确保数据安全。
+- [移动行列](https://open.feishu.cn/document/server-docs/docs/sheets-v3/sheet-rowcol/move_dimension.md): 飞书开放平台提供的电子表格API支持移动行列操作，通过指定源位置和目标位置实现行列移动。支持自建和商店应用，需具备相应权限。请求频率限制为每分钟100次，并提供详细错误码帮助排查问题。
+- [删除行列](https://open.feishu.cn/document/server-docs/docs/sheets-v3/sheet-rowcol/-delete-rows-or-columns.md): 飞书开放平台提供删除电子表格行列的API，支持自建和商店应用。每次调用最多删除5000行或列，确保至少保留一行一列。通过权限认证后，开发者可灵活管理电子表格的数据结构。
+- [合并单元格](https://open.feishu.cn/document/server-docs/docs/sheets-v3/data-operation/merge-cells.md): 飞书开放平台提供合并电子表格单元格的API，支持自建和商店应用。用户可通过指定范围和合并方式，实现单元格的合并操作。接口请求频率限制为每秒100次，需具备相应权限。
+- [拆分单元格](https://open.feishu.cn/document/server-docs/docs/sheets-v3/data-operation/split-cells.md): 飞书开放平台提供拆分电子表格单元格的API，支持自建和商店应用。单次操作范围限制为5000行和100列。通过POST请求拆分指定范围的单元格，需使用访问凭证进行身份鉴权。
+- [查找单元格](https://open.feishu.cn/document/server-docs/docs/sheets-v3/data-operation/find.md): 飞书开放平台提供查找电子表格单元格的API，支持自建和商店应用。通过指定查找条件和范围，快速定位符合条件的单元格。支持大小写匹配、正则表达式和公式查找，提升数据处理效率。
+- [替换单元格](https://open.feishu.cn/document/server-docs/docs/sheets-v3/data-operation/replace.md): 飞书开放平台的电子表格API支持在指定范围内查找并替换单元格，单次最多可替换5000个单元格。支持自建和商店应用，需相应权限。API请求通过POST方法，支持正则表达式和大小写匹配。
+- [设置单元格样式](https://open.feishu.cn/document/server-docs/docs/sheets-v3/data-operation/set-cell-style.md): 飞书开放平台提供设置电子表格单元格样式的API，支持设置字体、背景、边框等样式。单次设置限制为5000行100列，边框样式更新限制为30000个单元格。支持自建应用和商店应用调用，需获取访问凭证进行鉴权。
+- [批量设置单元格样式](https://open.feishu.cn/document/server-docs/docs/sheets-v3/data-operation/batch-set-cell-style.md): 飞书开放平台提供批量设置电子表格单元格样式的API，支持设置字体、背景、边框等。单次操作可覆盖多达5,000行100列，适合自建和商店应用。通过RESTful接口，开发者可灵活管理电子表格样式，提升文档处理效率。
+- [插入数据](https://open.feishu.cn/document/server-docs/docs/sheets-v3/data-operation/prepend-data.md): 飞书开放平台提供电子表格数据插入API，支持在指定范围上方插入数据。单次写入限制为5000行、100列，单元格字符建议不超40000。需具备编辑权限，支持自建及商店应用。
+- [追加数据](https://open.feishu.cn/document/server-docs/docs/sheets-v3/data-operation/append-data.md): 飞书开放平台提供电子表格数据追加功能，通过API在指定范围内追加数据，支持自建和商店应用。单次写入范围限制为5000行和100列，需确保调用身份具备必要权限。
+- [写入图片](https://open.feishu.cn/document/server-docs/docs/sheets-v3/data-operation/write-images.md): 飞书开放平台提供向电子表格单元格写入图片的API，支持多种图片格式。通过POST请求，开发者可向指定单元格传入图片二进制流。该接口适用于自建和商店应用，需具备相应权限。
+- [读取单个范围](https://open.feishu.cn/document/server-docs/docs/sheets-v3/data-operation/reading-a-single-range.md): 了解如何使用飞书开放平台的API读取电子表格中单个范围的数据。确保拥有必要的文档权限，使用GET请求获取指定范围的数据，支持自建和商店应用。
+- [读取多个范围](https://open.feishu.cn/document/server-docs/docs/sheets-v3/data-operation/reading-multiple-ranges.md): 飞书开放平台提供电子表格多范围数据读取接口，支持自建和商店应用。调用此接口需具备相应文档权限，返回数据最大限制为10MB。接口不支持跨表引用和数组公式计算。
+- [向单个范围写入数据](https://open.feishu.cn/document/server-docs/docs/sheets-v3/data-operation/write-data-to-a-single-range.md): 了解如何使用飞书开放平台的API向电子表格的指定范围写入数据。支持自建和商店应用，需具备相应权限。接口限制每次写入不超过5000行、100列。确保调用者身份已授权，否则将返回错误码。
+- [向多个范围写入数据](https://open.feishu.cn/document/server-docs/docs/sheets-v3/data-operation/write-data-to-multiple-ranges.md): 飞书开放平台提供向多个电子表格范围写入数据的API，支持自建和商店应用。单次写入限制为5000行、100列，需具备编辑权限。通过此API，用户可高效管理和更新表格数据，提升协作效率。
+- [支持写入数据类型](https://open.feishu.cn/document/server-docs/docs/sheets-v3/data-types-supported-by-sheets.md): 本文档介绍飞书电子表格V2版本接口支持写入的数据类型，包括字符串、数字、日期、链接、邮箱、@人、公式、@文档、下拉列表及局部样式等。通过这些接口，用户可以灵活地在飞书电子表格中进行数据操作和样式设置，提升数据处理效率。
+- [支持数字格式类型](https://open.feishu.cn/document/server-docs/docs/sheets-v3/data-formats-supported-by-sheets.md): 飞书开放平台支持多种电子表格数据格式，包括纯文本、数字、百分比、科学计数、货币格式以及日期和时间格式，满足不同业务场景的数据处理需求。
+- [筛选指南](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet-filter/filter-user-guide.md): 飞书开放平台提供电子表格筛选功能，支持多种筛选条件和范围设置。用户可通过API创建、更新、获取和删除筛选条件，实现对工作表数据的灵活管理。支持多值、数字、文本、颜色等筛选类型，满足多样化数据处理需求。
+- [创建筛选](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet-filter/create.md): 通过飞书开放平台的电子表格API，开发者可以在指定工作表范围内设置筛选条件，创建筛选。支持自建和商店应用，需具备相应权限。
+- [更新筛选](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet-filter/update.md): 飞书开放平台提供更新电子表格工作表筛选条件的API，支持自建和商店应用。通过此接口，开发者可以在指定列中设置多种筛选类型，如文本、数字、颜色等，提升数据管理效率。
+- [获取筛选](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet-filter/get.md): 飞书开放平台提供获取电子表格中工作表详细筛选信息的API，包括筛选范围、条件及被过滤行。支持自建和商店应用，需相应权限。
+- [删除筛选](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet-filter/delete.md): 飞书开放平台提供删除电子表格中指定工作表筛选的API。支持自建和商店应用，需具备相应权限。通过DELETE请求删除筛选，确保高效管理电子表格数据。
+- [创建筛选视图](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet-filter_view/create.md): 在飞书中创建电子表格的筛选视图，指定工作表的筛选范围。支持自建应用和商店应用，单个工作表最多可创建150个筛选视图。
+- [更新筛选视图](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet-filter_view/patch.md): 飞书开放平台提供更新筛选视图的API，支持自建和商店应用。通过该API可更新电子表格的筛选视图名称或筛选范围，确保数据管理更加灵活高效。
+- [查询筛选视图](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet-filter_view/query.md): 查询飞书电子表格指定工作表的所有筛选视图及其基本信息，支持自建和商店应用。通过API获取视图ID、名称和筛选范围，确保权限后可调用。
+- [获取筛选视图](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet-filter_view/get.md): 获取指定筛选视图的信息，包括ID、名称和筛选范围。支持自建应用和商店应用，需具备相应权限。
+- [删除筛选视图](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet-filter_view/delete.md): 飞书开放平台提供删除电子表格筛选视图的API接口，支持自建和商店应用。通过HTTP DELETE方法，开发者可删除指定的筛选视图，需具备相应权限和有效的access token。
+- [筛选视图的筛选条件指南](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet-filter_view/spreadsheet-sheet-filter_view-condition/filter-view-condition-user-guide.md): 飞书开放平台提供电子表格筛选视图功能，允许用户在独立界面按特定条件筛选数据，不影响其他协作者。本文档介绍筛选条件参数及方法列表，帮助用户创建、更新、查询和删除筛选条件。
+- [创建筛选条件](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet-filter_view/spreadsheet-sheet-filter_view-condition/create.md): 通过飞书开放平台的API在电子表格中创建筛选条件，支持自建和商店应用。用户可指定筛选类型、比较类型和参数，提升数据管理效率。
+- [更新筛选条件](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet-filter_view/spreadsheet-sheet-filter_view-condition/update.md): 飞书开放平台提供更新电子表格筛选条件的API，支持自建应用和商店应用。通过该接口，开发者可以更新筛选视图指定列的筛选条件，包括筛选类型、比较类型和筛选参数。
+- [查询筛选条件](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet-filter_view/spreadsheet-sheet-filter_view-condition/query.md): 飞书开放平台提供查询电子表格筛选视图条件的API，支持自建和商店应用。通过该接口，开发者可获取筛选视图的所有筛选条件，包括筛选类型、比较类型和参数等，助力企业高效管理数据。
+- [获取筛选条件](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet-filter_view/spreadsheet-sheet-filter_view-condition/get.md): 获取飞书电子表格中筛选视图某列的筛选条件，包括筛选类型、比较类型和筛选参数。支持自建应用和商店应用，需具备相应权限。
+- [删除筛选条件](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet-filter_view/spreadsheet-sheet-filter_view-condition/delete.md): 飞书开放平台提供删除电子表格筛选视图指定列所有筛选条件的API。支持自建应用和商店应用，需具备相应权限。通过DELETE请求删除筛选条件，确保高效管理电子表格数据。
+- [增加保护范围](https://open.feishu.cn/document/server-docs/docs/sheets-v3/protect-range/add-locked-cells.md): 飞书开放平台提供电子表格保护范围设置功能，支持对行或列进行保护，确保数据安全。用户可通过API设置多个保护范围，限制协作者权限。单次调用最多支持5000行或列，适用于自建和商店应用。
+- [修改保护范围](https://open.feishu.cn/document/server-docs/docs/sheets-v3/protect-range/modify-protection-scopes.md): 修改电子表格工作表中指定的保护范围，支持自建应用和商店应用。单次调用最多支持修改10个保护范围。需要具备相应的权限，如查看、评论、编辑和管理云空间中所有文件或电子表格。
+- [获取保护范围](https://open.feishu.cn/document/server-docs/docs/sheets-v3/protect-range/retrieve-protection-scopes.md): 获取飞书电子表格中指定保护范围的信息，包括行列索引、编辑用户ID及备注等。单次调用最多获取5个范围，不支持多区域范围。支持自建和商店应用，需具备相应权限。
+- [删除保护范围](https://open.feishu.cn/document/server-docs/docs/sheets-v3/protect-range/delete-protection-scopes.md): 飞书开放平台提供删除电子表格保护范围的API，支持单次最多删除10个保护范围。该API支持自建应用和商店应用，需通过访问凭证进行身份鉴权。
+- [数据校验概述](https://open.feishu.cn/document/server-docs/docs/sheets-v3/datavalidation/datavalidation-guide.md): 飞书电子表格数据校验功能通过下拉列表限制单元格数据类型和用户输入，确保数据准确性和规范性。支持设置颜色、单选多选属性，适用于信息整理和分类场景。提供设置、更新、查询和删除下拉列表的API接口。
+- [设置下拉列表](https://open.feishu.cn/document/server-docs/docs/sheets-v3/datavalidation/set-dropdown.md): 在飞书电子表格中设置下拉列表，支持多选和样式配置，适用于自建和商店应用。单次调用最多支持5000行、100列。权限要求包括查看、评论、编辑和管理云空间及电子表格。
+- [更新下拉列表设置](https://open.feishu.cn/document/server-docs/docs/sheets-v3/datavalidation/update-datavalidation.md): 更新飞书电子表格中下拉列表的设置，支持修改选项和属性，包括多选支持和选项样式。通过API调用，开发者可灵活管理电子表格的数据验证规则，提升数据处理的准确性和效率。
+- [查询下拉列表设置](https://open.feishu.cn/document/server-docs/docs/sheets-v3/datavalidation/query-datavalidation.md): 飞书开放平台提供的API，允许查询电子表格中指定范围的下拉列表设置信息。支持自建应用和商店应用，需具备相应权限。接口支持高频率调用，单次查询范围限制为5000行、100列。
+- [删除下拉列表设置](https://open.feishu.cn/document/server-docs/docs/sheets-v3/datavalidation/delete-datavalidation.md): 飞书开放平台提供删除电子表格工作表指定范围中下拉列表设置的API，支持自建应用和商店应用。单次请求可指定多个范围，单个范围不可超过5,000个单元格，总数不可超过100个。
+- [条件格式概述](https://open.feishu.cn/document/server-docs/docs/sheets-v3/conditionformat/condition-format-guide.md): 条件格式用于根据指定条件更改单元格外观，支持多种规则类型与样式设置。单个工作表最多支持20个条件格式，单次操作最多10个。提供创建、更新、获取、删除条件格式的API接口，满足自建与应用商店应用的需求。
+- [批量创建条件格式](https://open.feishu.cn/document/server-docs/docs/sheets-v3/conditionformat/condition-format-set.md): 飞书开放平台电子表格条件格式批量创建接口，支持在指定区域内设置样式，最多支持创建10个条件格式。接口频率限制为100次/秒，适用于自建和商店应用。
+- [批量更新条件格式](https://open.feishu.cn/document/server-docs/docs/sheets-v3/conditionformat/condition-format-update.md): 飞书开放平台提供批量更新电子表格条件格式的API，支持跨工作表更新多个条件格式，单次调用最多支持更新10个条件格式。该接口为全量更新接口，若非必填参数不传值，将改变原有配置。
+- [批量获取条件格式](https://open.feishu.cn/document/server-docs/docs/sheets-v3/conditionformat/condition-format-get.md): 通过工作表 ID 批量获取条件格式信息，支持查询最多 10 个工作表的条件格式。此接口适用于自建应用和商店应用，需具备相应权限。
+- [批量删除条件格式](https://open.feishu.cn/document/server-docs/docs/sheets-v3/conditionformat/condition-format-delete.md): 飞书开放平台提供批量删除电子表格条件格式的API，支持跨工作表删除多个条件格式。单次调用最多删除10个条件格式，需具备相应权限。
+- [浮动图片概述](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet-float_image/float-image-user-guide.md): 飞书开放平台提供电子表格中的浮动图片功能，支持图片悬浮在单元格上方，大小可调。需先上传图片素材，表格最多支持4000张不同图片。提供创建、更新、获取、查询和删除浮动图片的API接口，便于管理和使用图片。
+- [创建浮动图片](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet-float_image/create.md): 飞书开放平台提供在电子表格中创建浮动图片的接口，支持自建应用和商店应用。通过上传图片并获取file_token，可在指定位置创建浮动图片。单个表格最多支持4000张图片。
+- [更新浮动图片](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet-float_image/patch.md): 飞书开放平台提供更新电子表格中浮动图片位置和尺寸的API。支持自建应用和商店应用，需具备相应权限。通过PATCH请求，开发者可调整浮动图片的宽高及偏移量，提高文档编辑的灵活性和精确度。
+- [获取浮动图片](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet-float_image/get.md): 获取飞书电子表格内指定浮动图片参数信息的API，支持自建和商店应用。通过GET请求获取图片的ID、token、位置、尺寸等信息，需具备相应权限。
+- [查询浮动图片](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet-float_image/query.md): 飞书开放平台提供查询电子表格工作表内浮动图片信息的API，支持自建和商店应用。通过获取浮动图片的参数信息，实现图片的增删改查操作，提升文档管理效率。
+- [删除浮动图片](https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet-float_image/delete.md): 飞书开放平台提供删除电子表格工作表内指定浮动图片的API。支持自建和商店应用，通过权限验证后可调用。用户需提供电子表格token、工作表ID及浮动图片ID。API请求频率限制为每分钟100次，确保高效管理电子表格资源。
+- [多维表格概述](https://open.feishu.cn/document/server-docs/docs/bitable-v1/bitable-overview.md): 多维表格（Base）是飞书提供的全新业务管理工具，支持高效在线协同数据和个性化应用构建。通过多维表格 API，用户可以实现业务系统的无缝连接和数据实时同步，重构工作应用和团队协同模式。
+- [多维表格常见问题](https://open.feishu.cn/document/docs/bitable-v1/faq.md): 飞书开放平台提供多维表格常见问题解答，包括如何获取附件的file_token、下载数据表记录中的附件，以及解决NotFound错误码等问题，帮助开发者更好地使用多维表格API。
+- [数据结构概述](https://open.feishu.cn/document/server-docs/docs/bitable-v1/bitable-structure.md): 多维表格是一个由数据表、记录和字段组成的应用。每个表格由唯一标识的app_token构成，包含多种字段类型和视图，支持丰富的数据操作和关联。字段类型包括文本、数字、日期等，支持复杂数据结构和自定义视图。
+- [创建多维表格](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app/create.md): 在指定文件夹中创建一个多维表格，包含一个空白的数据表。支持自建应用和商店应用，需具备相应权限。可通过模板创建并复制多维表格。
+- [复制多维表格](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app/copy.md): 飞书开放平台提供复制多维表格API，支持将多维表格复制到指定文件夹。调用需具备文档权限，支持自建及商店应用。接口频率为20次/分钟，支持复制结构或内容。
+- [获取多维表格元数据](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app/get.md): 通过飞书开放平台获取多维表格的元数据信息，包括名称、版本号及高级权限状态。支持自建及商店应用，提供多种权限选项。接口频率限制为20次/秒，需使用正确的app_token进行请求。
+- [更新多维表格元数据](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app/update.md): 更新飞书多维表格元数据，包括名称和高级权限设置。支持自建和商店应用，通过API修改多维表格名称和权限。注意此操作非原子，可能部分成功。
+- [新增一个数据表](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table/create.md): 飞书开放平台提供新增多维表格数据表的API，支持自建和商店应用。用户可通过此接口创建最多100个数据表，默认仅包含索引字段，也可指定初始字段。确保调用身份具备多维表格编辑权限以避免403或400错误。
+- [新增多个数据表](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table/batch_create.md): 飞书开放平台提供新增多个数据表的能力，支持指定数据表名称，最多可新增100个数据表。该API支持自建应用和商店应用，调用需具备相应权限。
+- [更新数据表](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table/patch.md): 飞书开放平台的多维表格API支持更新数据表名称，适用于自建和商店应用。通过PATCH请求修改表名，需具备相应权限。接口支持高频调用，提供详细的错误码和排查建议，确保安全可靠的操作体验。
+- [列出数据表](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table/list.md): 飞书开放平台提供列出多维表格数据表的API，支持获取数据表的ID、版本号及名称。适用于自建和商店应用，需具备相应权限。接口支持分页查询，确保高效数据管理和操作。
+- [删除一个数据表](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table/delete.md): 飞书开放平台提供删除多维表格数据表的API，适用于自建和商店应用。删除时需注意，若多维表格中仅剩最后一张数据表，则不允许删除。此API支持通过app_token和table_id进行操作，确保数据安全与权限控制。
+- [删除多个数据表](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table/batch_delete.md): 飞书开放平台提供删除多个数据表的API接口，适用于多维表格管理。用户可通过HTTP POST请求删除数据表，但若表格仅剩最后一张则无法删除。接口支持自建和商店应用，需具备相应权限。
+- [新增视图](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table-view/create.md): 在飞书多维表格中新增视图，支持表格、看板、画册、甘特和表单视图类型。视图数量上限为200。通过API进行视图的创建、更新或删除，需具备相应权限。接口支持自建应用和商店应用，调用频率限制为10次/秒。
+- [更新视图](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table-view/patch.md): 飞书开放平台的多维表格更新视图功能允许用户增量更新视图信息，包括视图名称和属性设置等。通过调用相关API，用户可以设置视图的筛选条件，实现对多维表格的灵活管理。该功能支持自建应用和商店应用，提供丰富的权限设置以确保安全性。
+- [列出视图](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table-view/list.md): 飞书开放平台提供的多维表格API支持列出数据表中的所有视图。通过GET请求获取视图信息，支持分页查询。适用于自建和商店应用，需具备相应权限。接口频率限制为每秒20次，确保高效的数据管理和视图操作。
+- [获取视图](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table-view/get.md): 通过飞书开放平台的多维表格API，根据视图ID获取视图信息，包括名称、类型和属性等。支持自建和商店应用，需具备相应权限。接口请求频率限制为20次/秒，提供详细错误码帮助排查问题。
+- [删除视图](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table-view/delete.md): 飞书开放平台提供删除多维表格视图的API，支持自建和商店应用。通过DELETE请求删除指定视图，需提供app_token、table_id和view_id。接口频率限制为10次/秒，需权限验证。
+- [多维表格记录数据结构](https://open.feishu.cn/document/docs/bitable-v1/app-table-record/bitable-record-data-structure-overview.md): 多维表格记录数据结构详解，涵盖各字段类型及其值的结构示例。支持文本、数字、日期、人员、附件等多种数据类型，帮助开发者灵活管理和操作多维表格中的记录数据。
+- [记录筛选参数填写说明](https://open.feishu.cn/document/docs/bitable-v1/app-table-record/record-filter-guide.md): 本指南介绍如何在飞书多维表格的记录查询接口中使用filter参数进行记录筛选。通过设置filter的结构和条件，用户可以根据字段、运算符和值组合筛选出所需记录。支持多种字段类型和逻辑连接词，提供详细示例帮助用户理解和应用。
+- [新增记录](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table-record/create.md): 在飞书多维表格中通过API新增记录，需确保拥有编辑权限。该接口支持多种字段类型，如文本、数字、日期等。调用时需提供正确的app_token和table_id，并遵循请求频率限制。
+- [更新记录](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table-record/update.md): 飞书开放平台多维表格API支持更新数据表记录，需确保调用身份具备编辑权限。支持增量更新，灵活操作字段。通过PUT请求更新记录，适用于自建和商店应用。
+- [查询记录](https://open.feishu.cn/document/docs/bitable-v1/app-table-record/search.md): 飞书开放平台提供的多维表格查询记录接口，支持分页查询最多500行记录。确保调用身份拥有多维表格管理权限以获取完整数据。接口支持自建和商店应用，需配置适当权限。
+- [删除记录](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table-record/delete.md): 飞书开放平台提供删除多维表格记录的API，支持自建和商店应用。用户需具备编辑权限，接口调用频率限制为50次/秒。路径参数包括app_token、table_id和record_id，确保正确权限以避免403错误。
+- [新增多条记录](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table-record/batch_create.md): 飞书开放平台提供多维表格API，支持在数据表中批量新增记录。用户需确保拥有编辑权限，单次调用最多新增1000条记录。此API适用于自建和商店应用，需满足权限要求。
+- [更新多条记录](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table-record/batch_update.md): 飞书开放平台提供更新多维表格中多条记录的API，支持单次更新最多1,000条记录。确保调用身份具备多维表格编辑权限，支持自建和商店应用。接口遵循RESTful风格，需传入正确格式的数据以更新记录。
+- [批量获取记录](https://open.feishu.cn/document/docs/bitable-v1/app-table-record/batch_get.md): 通过飞书开放平台的多维表格 API，开发者可以批量获取记录信息，支持最多查询 100 条记录。确保拥有相应权限以避免数据返回为空。该 API 适用于自建和商店应用，提供高效的数据管理与查询能力。
+- [删除多条记录](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table-record/batch_delete.md): 飞书开放平台的多维表格API支持批量删除记录，单次最多删除500条。调用前需确保有编辑权限，适用于自建和商店应用。请求频率限制为50次/秒，支持多种错误码反馈。
+- [字段编辑指南](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table-field/guide.md): 飞书开放平台多维表格字段编辑指南，详细介绍字段类型及其属性配置，如条码、数字、货币、单选、多选等。支持多种格式设置和自定义规则，帮助用户灵活管理数据。
+- [附件字段说明](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table-field/attachment.md): 飞书开放平台的多维表格附件字段支持文件的上传、更新和下载操作。通过获取文件的file_token，可以实现文件的临时下载和永久下载。接口提供了文件的名称、大小、类型等信息，便于管理和操作多维表格中的附件。
+- [新增字段](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table-field/create.md): 飞书开放平台的多维表格API支持在数据表中新增字段，满足企业自建和商店应用的需求。通过POST请求，开发者可灵活定义字段属性，支持多种字段类型和编辑模式，提升数据管理效率。
+- [更新字段](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table-field/update.md): 飞书开放平台提供多维表格字段更新接口，支持自建和商店应用。通过此接口，开发者可以在数据表中更新字段属性，满足多样化业务需求。接口需具备特定权限，支持多种字段类型和属性设置，确保灵活性与安全性。
+- [列出字段](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table-field/list.md): 通过飞书开放平台的多维表格API，开发者可以根据app_token和table_id获取数据表的所有字段信息。此API支持自建和商店应用，提供字段读取权限。支持分页查询和多种字段类型，帮助管理和编辑多维表格数据。
+- [删除字段](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table-field/delete.md): 该接口用于在多维表格中删除字段，支持自建应用和商店应用。通过 DELETE 方法调用，需提供 app_token、table_id 和 field_id。接口频率限制为每秒 10 次，需具备相应权限。返回字段删除状态及错误码说明。
+- [复制仪表盘](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-dashboard/copy.md): 飞书开放平台提供多维表格仪表盘复制功能，支持自建和商店应用。用户需具备访问权限，通过API复制现有仪表盘。接口频率限制为10次/秒，确保调用身份已授权。
+- [列出仪表盘](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-dashboard/list.md): 通过飞书开放平台的多维表格API，轻松获取多维表格中的所有仪表盘信息。支持自建和商店应用，确保调用身份具备必要权限即可。接口提供分页功能，便于管理和访问大规模数据。
+- [更新表单元数据](https://open.feishu.cn/document/server-docs/docs/bitable-v1/form/patch-2.md): 飞书开放平台的多维表格API支持更新表单元数据，允许修改表单名称、描述和共享设置。通过PATCH请求可实现灵活的表单管理，适用于自建应用和商店应用。接口使用需满足权限要求，并提供详细错误码帮助排查问题。
+- [获取表单元数据](https://open.feishu.cn/document/server-docs/docs/bitable-v1/form/get.md): 飞书开放平台提供获取多维表格表单元数据的API，支持查询表单名称、描述、是否共享等信息。该API适用于自建应用和商店应用，需具备相应权限。接口频率限制为20次/秒。
+- [更新表单问题](https://open.feishu.cn/document/server-docs/docs/bitable-v1/form/patch.md): 飞书开放平台提供更新多维表格表单问题的API，支持自建和商店应用。通过PATCH方法更新表单中的问题项，需提供表单的唯一标识form_id。该API支持高频调用，并需适当权限。
+- [列出表单问题](https://open.feishu.cn/document/server-docs/docs/bitable-v1/form/list.md): 飞书开放平台提供列出多维表格表单问题的API，支持自建应用和商店应用，帮助开发者获取表单中的所有问题项。通过调用该API，可以高效管理和查看多维表格中的表单数据。
+- [高级权限概述](https://open.feishu.cn/document/server-docs/docs/bitable-v1/advanced-permission/advanced-permission-guide.md): 飞书多维表格高级权限允许所有者或有管理权限的用户通过API设置自定义角色和协作者，管理查看和编辑权限。确保多维表格已开启高级权限后，可进行角色和协作者的设置和管理。
+- [删除自定义角色](https://open.feishu.cn/document/server-docs/docs/bitable-v1/advanced-permission/app-role/delete.md): 飞书开放平台提供删除自定义角色API，支持自建和商店应用。通过调用该API，用户可以删除多维表格中的自定义角色。接口遵循RESTful风格，需提供app_token和role_id作为路径参数，并使用DELETE方法进行请求。
+- [批量删除协作者](https://open.feishu.cn/document/server-docs/docs/bitable-v1/advanced-permission/app-role-member/batch_delete.md): 飞书开放平台提供批量删除多维表格自定义角色协作者的API，支持自建应用和商店应用。通过POST请求删除协作者，需具备相应权限。
+- [批量新增协作者](https://open.feishu.cn/document/server-docs/docs/bitable-v1/advanced-permission/app-role-member/batch_create.md): 飞书开放平台提供批量新增多维表格协作者的API，支持自建和商店应用。通过POST请求，开发者可批量添加自定义角色的协作者，需具备多维表格操作权限。接口支持多种协作者ID类型，确保灵活性和高效性。
+- [列出协作者](https://open.feishu.cn/document/server-docs/docs/bitable-v1/advanced-permission/app-role-member/list.md): 飞书开放平台提供多维表格高级权限管理功能，通过列出协作者接口，开发者可以获取自定义角色的协作者列表。此接口支持自建应用和商店应用，帮助企业高效管理协作权限。
+- [新增协作者](https://open.feishu.cn/document/server-docs/docs/bitable-v1/advanced-permission/app-role-member/create.md): 飞书开放平台提供新增多维表格自定义角色协作者的API接口，支持自建应用和商店应用。通过调用该API，开发者可以为多维表格添加协作者，并进行权限管理。
+- [删除协作者](https://open.feishu.cn/document/server-docs/docs/bitable-v1/advanced-permission/app-role-member/delete.md): 飞书开放平台提供删除多维表格自定义角色协作者的API，通过HTTP DELETE请求删除指定协作者。支持自建和商店应用，需具备多维表格相关权限。接口频率限制为10次/秒，需提供有效的access_token。
+- [画板概述](https://open.feishu.cn/document/docs/board-v1/overview.md): 飞书画板是简洁高效的图形创作工具，支持实时协作。通过画板 API，可将画板接入内部业务系统，提升业务流程效率。画板由唯一标识的whiteboard_id和节点组成，节点构成节点树。
+- [数据结构](https://open.feishu.cn/document/docs/board-v1/data-structure.md): 本页面介绍飞书开放平台中画板节点的数据结构，涵盖节点类型、基础图形细分、节点属性及数据结构。节点分为容器和非容器类型，支持多种图形类型及属性配置，便于开发者创建和管理画板内容。
+- [获取所有节点](https://open.feishu.cn/document/docs/board-v1/whiteboard-node/list.md): 飞书开放平台提供获取画板内所有节点的API，支持自建和商店应用。通过该API，开发者可以获取节点的详细信息，包括节点类型、位置、大小、文本内容等。此接口需具备查看画板节点权限。
+- [获取画板缩略图片](https://open.feishu.cn/document/docs/board-v1/whiteboard/download_as_image.md): 获取飞书画板缩略图片的API，通过指定画板ID下载为PNG格式的二进制图片流。支持自建和商店应用，需具备查看画板节点权限。接口频率限制为每秒10次，成功响应返回二进制流。
+- [权限概述](https://open.feishu.cn/document/server-docs/docs/permission/overview.md): 飞书开放平台云文档权限概述，介绍权限成员和设置。权限成员包括文档所有者和协作者，权限设置分为v1和v2版本，控制文档分享和传播行为。提供API接口实现权限管理，支持多种访问凭证和权限要求，适用于商店和自建应用。
+- [权限常见问题](https://open.feishu.cn/document/server-docs/docs/permission/faq.md): 飞书开放平台提供云文档权限管理的常见问题解答，包括如何获取应用和用户访问凭证、分享文档权限、转移文件所有权等。通过API接口实现对权限的灵活控制，支持应用与用户间的文档协作与访问权限管理。
+- [批量增加协作者权限](https://open.feishu.cn/document/docs/permission/permission-member/batch_create.md): 该接口允许根据云文档token批量添加用户为协作者，需具备相关权限。支持自建及商店应用，提供灵活的权限管理与通知选项，适用于多种文档类型。
+- [转移云文档所有者](https://open.feishu.cn/document/server-docs/docs/permission/permission-member/transfer_owner.md): 飞书开放平台提供的转移所有者接口允许根据云文档token和用户信息转移文件所有者。支持自建应用和商店应用，权限要求包括查看、编辑和管理云文档等。接口频率限制为100次/分钟，确保调用身份为云文档的所有者以避免权限问题。
+- [判断用户云文档权限](https://open.feishu.cn/document/server-docs/docs/permission/permission-member/auth.md): 该接口用于判断当前登录用户是否具有特定云文档权限，支持自建和商店应用。通过文件token和类型判断权限，提供查看、编辑、管理等多种权限选项。接口调用需授权，支持多种文件类型的权限判断，确保用户权限管理的灵活性和安全性。
+- [获取云文档协作者](https://open.feishu.cn/document/server-docs/docs/permission/permission-member/list.md): 获取协作者列表接口允许根据文件token查询协作者，支持人、群、组织架构、用户组、知识库成员五种类型。确保应用或用户具有文档分享权限，支持自建及商店应用。通过指定权限和字段获取协作者详细信息，提升文档协作效率。
+- [增加协作者权限](https://open.feishu.cn/document/server-docs/docs/permission/permission-member/create.md): 飞书开放平台提供增加协作者权限的API，允许用户根据云文档的token为其他用户添加权限。调用该接口需具备相应权限，支持自建应用和商店应用。通过设置可见性和权限角色，灵活管理文档协作者。
+- [更新协作者权限](https://open.feishu.cn/document/server-docs/docs/permission/permission-member/update.md): 更新协作者权限接口用于根据文件的token更新文档协作者权限，适用于自建和商店应用。通过PUT请求，支持查看、编辑、管理等权限的更新。确保协作者已存在，未授权需先调用增加权限接口。
+- [移除云文档协作者权限](https://open.feishu.cn/document/server-docs/docs/permission/permission-member/delete.md): 飞书开放平台提供的移除协作者权限接口，允许开发者通过文件token删除文档协作者的权限。支持自建应用和商店应用，需具备相应权限。接口遵循RESTful风格，支持多种文件类型，确保安全高效的权限管理。
+- [启用云文档密码](https://open.feishu.cn/document/server-docs/docs/permission/permission-public/permission-public-password/create.md): 该接口用于根据filetoken开启云文档的密码。需先设置文档为可公开访问。支持自建和商店应用，权限要求包括查看、编辑和管理知识库、文档等。
+- [刷新云文档密码](https://open.feishu.cn/document/server-docs/docs/permission/permission-public/permission-public-password/update.md): 该接口用于根据 filetoken 刷新云文档的密码。调用前需更新文档权限为可公开阅读/编辑。支持自建和商店应用，需具备相关权限。通过 PUT 请求刷新密码，返回新密码。
+- [停用云文档密码](https://open.feishu.cn/document/server-docs/docs/permission/permission-public/permission-public-password/delete.md): 通过飞书开放平台的关闭密码接口，开发者可以根据文件token关闭云文档的密码。此操作需先更新文档权限为可公开阅读/编辑。支持自建和商店应用，需具备特定权限。
+- [获取云文档权限设置](https://open.feishu.cn/document/server-docs/docs/permission/permission-public/get-2.md): 获取云文档权限设置接口允许开发者根据文件token查询文档权限。支持自建和商店应用，需具备特定权限。通过此接口，用户可查看文档的分享、评论、复制等权限设置，确保文档安全管理。
+- [更新云文档权限设置](https://open.feishu.cn/document/server-docs/docs/permission/permission-public/patch-2.md): 更新云文档权限设置接口，通过filetoken修改文档权限。支持自建和商店应用，权限设置包括查看、编辑、管理等。接口调用需权限验证，支持多种文档类型。
+- [获取云文档所有评论](https://open.feishu.cn/document/server-docs/docs/CommentAPI/list.md): 飞书开放平台提供获取云文档评论的API，通过文档Token分页获取评论信息，包括评论ID、内容、用户ID等。支持全局和局部评论，默认每页返回50条。适用于自建和商店应用，需相应权限。
+- [批量获取评论](https://open.feishu.cn/document/server-docs/docs/CommentAPI/batch_query.md): 飞书开放平台提供批量获取云文档评论的API，通过评论ID列表获取评论信息，包括评论内容、用户ID等。支持自建应用和商店应用，需具备相应权限。接口支持返回全局和局部评论，帮助企业高效管理文档评论。
+- [解决/恢复评论](https://open.feishu.cn/document/server-docs/docs/CommentAPI/patch.md): 通过飞书开放平台的API，用户可以解决或恢复云文档中的评论。该API支持自建应用和商店应用，需具备相应权限。接口请求包括路径参数、查询参数及请求体，返回标准响应体和错误码。
+- [添加全文评论](https://open.feishu.cn/document/server-docs/docs/CommentAPI/create.md): 飞书开放平台提供添加全文评论API，支持在文档中添加全局评论。自建和商店应用均可使用，需具备相关权限。接口支持高频调用，确保高效的文档协作和评论管理。
+- [获取全文评论](https://open.feishu.cn/document/server-docs/docs/CommentAPI/get.md): 获取飞书云文档中某条全文评论的API接口，支持自建和商店应用。通过GET请求获取评论详情，需具备相应权限。接口支持查看、评论、编辑和管理文档及云空间文件，返回评论ID、用户ID、创建时间等信息。
+- [获取回复信息](https://open.feishu.cn/document/server-docs/docs/CommentAPI/list-2.md): 飞书开放平台提供获取回复信息的接口，通过评论ID获取回复内容，包括回复ID、回复内容、回复人用户ID等。支持自建应用和商店应用，需具备相应权限。
+- [更新回复的内容](https://open.feishu.cn/document/server-docs/docs/CommentAPI/update.md): 更新云文档中评论回复的内容，支持自建和商店应用。通过PUT请求修改指定回复，需具备相应权限。接口频率限制为每分钟1000次，每秒50次。
+- [删除回复](https://open.feishu.cn/document/server-docs/docs/CommentAPI/delete.md): 飞书开放平台提供删除云文档中某条回复的API接口，支持自建和商店应用。通过DELETE请求删除指定回复，需具备相应权限。接口频率限制为1000次/分钟、50次/秒。
+- [获取订阅状态](https://open.feishu.cn/document/server-docs/docs/docs-assistant/file-subscription/get.md): 通过飞书开放平台的云文档助手API，获取订阅状态。支持自建应用和商店应用，需具备相应权限。提供详细的请求和响应格式，帮助开发者高效管理文档订阅状态。
+- [创建订阅](https://open.feishu.cn/document/server-docs/docs/docs-assistant/file-subscription/create.md): 飞书开放平台提供创建文档订阅功能，支持文档评论订阅。通过API订阅后，文档评论更新将由云文档助手推送给用户。支持自建应用和商店应用，需具备相应权限。
+- [更新订阅状态](https://open.feishu.cn/document/server-docs/docs/docs-assistant/file-subscription/patch.md): 飞书开放平台提供更新订阅状态API，允许根据订阅ID更新云文档的订阅状态。支持自建应用和商店应用，需具备相应权限。通过PATCH请求更新订阅状态，确保信息同步和管理。
+- [获取云文档内容](https://open.feishu.cn/document/docs/docs-v1/get.md): 飞书开放平台提供获取云文档内容的API，支持获取新版文档的Markdown格式内容。适用于自建应用和商店应用，需具备查看云文档内容权限。通过API可获取文档内容，提升信息管理效率。
+- [文件夹下文件创建](https://open.feishu.cn/document/docs/drive-v1/event/list/created_in_folder.md): 飞书开放平台提供文件夹下文件创建事件订阅功能，支持自建和商店应用。通过Webhook推送，当订阅的文件夹中新建文件时触发事件，获取文件类型、文件和文件夹Token等信息。
+- [文件协作者权限申请](https://open.feishu.cn/document/docs/drive-v1/event/list/permission_member_applied.md): 飞书开放平台提供文件协作者权限申请事件，当用户申请文件协作者权限时触发。支持自建应用和商店应用，权限包括阅读、编辑和管理。通过Webhook推送事件，需具备相关权限。
+- [获取云文档的点赞者列表](https://open.feishu.cn/document/docs/drive-v1/like/list.md): 飞书开放平台介绍应用、权限体系及多种业务域的OpenAPI。包括应用类型、形态，机器人类型，以及通讯录、消息等业务域接口。助力企业将系统与飞书集成，提升协同效率。
+- [多维表格中添加子记录](https://open.feishu.cn/document/docs/bitable-v1/app-table-record/add-a-sub-record-in-a-base-table.md): 飞书开放平台介绍应用、权限体系、API等，涵盖多种业务域，支持企业自建与应用商店应用，有多种应用形态，可实现高效协同。
+- [新增自定义角色](https://open.feishu.cn/document/docs/bitable-v1/advanced-permission/app-role/create-2.md): 飞书开放平台介绍应用、权限体系及多种业务域的OpenAPI。包括应用类型、形态，机器人类型，以及通讯录、消息等业务域。帮助企业连接系统，实现高效协同。
+- [更新自定义角色](https://open.feishu.cn/document/docs/bitable-v1/advanced-permission/app-role/update-2.md): 飞书开放平台介绍应用、权限、API等，涵盖多种业务域，支持企业自建与应用商店应用，有多种应用形态，可实现高效协同。
+- [列出自定义角色](https://open.feishu.cn/document/docs/bitable-v1/advanced-permission/app-role/list-2.md): 飞书开放平台介绍应用、权限体系及多种业务域的OpenAPI。包括应用类型、形态，机器人类型，以及通讯录、消息等业务域的接口能力。
+- [列出自动化流程](https://open.feishu.cn/document/docs/bitable-v1/app-workflow/list.md): 飞书开放平台提供列出多维表格自动化流程的API接口，支持自建应用和商店应用。通过GET请求获取自动化流程信息，需具备相应权限。接口频率限制为20次/秒。
+- [更新自动化流程状态](https://open.feishu.cn/document/docs/bitable-v1/app-workflow/update.md): 飞书开放平台提供更新多维表格自动化流程状态的API接口，支持开启或关闭自动化流程。该接口适用于自建应用和商店应用，需具备相应权限。
+- [Markdown/HTML 内容转换为文档块](https://open.feishu.cn/document/ukTMukTMukTM/uUDN04SN0QjL1QDN/document-docx/docx-v1/document/convert.md): 飞书开放平台介绍应用、权限体系及多业务域API。包括应用类型、形态，机器人类型，权限维度，及通讯录、消息等API。
+- [获取画板主题](https://open.feishu.cn/document/ukTMukTMukTM/uUDN04SN0QjL1QDN/board-v1/whiteboard/theme.md): 该文档介绍获取画板主题的 API，包括请求与响应相关信息。请求基本信息有 HTTP URL、方法、频率限制、支持应用类型和权限要求等；请求头需 Authorization，路径参数含 whiteboard_id。响应体包含 code、msg、data 和 theme 等。还列出了不同 HTTP 状态码对应的错误码、描述及排查建议，如参数格式错误、认证失败等情况。 

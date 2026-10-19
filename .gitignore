@@ -54,3 +54,10 @@ docs/analysis/
 # Local drafts and archived dependencies/build residue
 /.scratch/
 /.local/
+
+# Local system and test caches
+.pytest_cache/
+
+# Independent Git repositories keep their own history and working trees.
+/civ6-mcp/
+/materials/harness-sharing/2026-10-19/demo/

@@ -1,0 +1,1232 @@
+{
+  "status": "NOT_APPLIED",
+  "board": "USiHwFpxbhfDZUbwuKMcKQRcn7g",
+  "node_count": 70,
+  "palette": {
+    "agent": {
+      "main": "#2E62AE",
+      "border": "#A7C3E8",
+      "fill": "#E8F0FC"
+    },
+    "harness": {
+      "main": "#258067",
+      "border": "#9DCDBB",
+      "fill": "#E6F3ED"
+    },
+    "game": {
+      "main": "#73539E",
+      "border": "#C7B3DB",
+      "fill": "#EFE8F6"
+    },
+    "pending": {
+      "main": "#A47725",
+      "border": "#DABC77",
+      "fill": "#FFF4DA"
+    }
+  },
+  "changes": [
+    {
+      "id": "o1:12",
+      "type": "composite_shape",
+      "text": "",
+      "reason": [
+        "统一同角色边框色",
+        "统一同角色浅填充色"
+      ],
+      "fields": {
+        "style": {
+          "from": {
+            "border_color": "#ddbd79",
+            "border_color_type": 1,
+            "border_opacity": 100,
+            "border_radius": {
+              "bottom_left": 18,
+              "bottom_right": 18,
+              "top_left": 18,
+              "top_right": 18
+            },
+            "border_style": "solid",
+            "border_width": "narrow",
+            "fill_color": "#fff3d9",
+            "fill_color_type": 1,
+            "fill_opacity": 100
+          },
+          "to": {
+            "border_color": "#DABC77",
+            "border_color_type": 1,
+            "border_opacity": 100,
+            "border_radius": {
+              "bottom_left": 18,
+              "bottom_right": 18,
+              "top_left": 18,
+              "top_right": 18
+            },
+            "border_style": "solid",
+            "border_width": "narrow",
+            "fill_color": "#FFF4DA",
+            "fill_color_type": 1,
+            "fill_opacity": 100
+          }
+        }
+      }
+    },
+    {
+      "id": "d1:14",
+      "type": "image",
+      "text": "",
+      "reason": [
+        "仅替换原 SVG 箭头色，不改节点类型和几何"
+      ],
+      "fields": {
+        "image": {
+          "from": {
+            "token": "<svg viewBox=\"1107.5 732.5 15 15\" width=\"15\" height=\"15\" xmlns=\"http://www.w3.org/2000/svg\"><polygon points=\"1110,740 1120,735 1120,745\" fill=\"#B58732\" /></svg>"
+          },
+          "to": {
+            "token": "<svg viewBox=\"1107.5 732.5 15 15\" width=\"15\" height=\"15\" xmlns=\"http://www.w3.org/2000/svg\"><polygon points=\"1110,740 1120,735 1120,745\" fill=\"#A47725\" /></svg>"
+          }
+        }
+      }
+    },
+    {
+      "id": "d1:1",
+      "type": "image",
+      "text": "",
+      "reason": [
+        "仅替换原 SVG 箭头色，不改节点类型和几何"
+      ],
+      "fields": {
+        "image": {
+          "from": {
+            "token": "<svg viewBox=\"217.5 257.5 15 15\" width=\"15\" height=\"15\" xmlns=\"http://www.w3.org/2000/svg\"><polygon points=\"225,270 220,260 230,260\" fill=\"#7398C8\" /></svg>"
+          },
+          "to": {
+            "token": "<svg viewBox=\"217.5 257.5 15 15\" width=\"15\" height=\"15\" xmlns=\"http://www.w3.org/2000/svg\"><polygon points=\"225,270 220,260 230,260\" fill=\"#2E62AE\" /></svg>"
+          }
+        }
+      }
+    },
+    {
+      "id": "o1:7",
+      "type": "composite_shape",
+      "text": "",
+      "reason": [
+        "统一同角色边框色",
+        "统一同角色浅填充色"
+      ],
+      "fields": {
+        "style": {
+          "from": {
+            "border_color": "#8eb2e4",
+            "border_color_type": 1,
+            "border_opacity": 100,
+            "border_radius": {
+              "bottom_left": 18,
+              "bottom_right": 18,
+              "top_left": 18,
+              "top_right": 18
+            },
+            "border_style": "solid",
+            "border_width": "narrow",
+            "fill_color": "#e6efff",
+            "fill_color_type": 1,
+            "fill_opacity": 100
+          },
+          "to": {
+            "border_color": "#A7C3E8",
+            "border_color_type": 1,
+            "border_opacity": 100,
+            "border_radius": {
+              "bottom_left": 18,
+              "bottom_right": 18,
+              "top_left": 18,
+              "top_right": 18
+            },
+            "border_style": "solid",
+            "border_width": "narrow",
+            "fill_color": "#E8F0FC",
+            "fill_color_type": 1,
+            "fill_opacity": 100
+          }
+        }
+      }
+    },
+    {
+      "id": "c1:12",
+      "type": "connector",
+      "text": "",
+      "reason": [
+        "统一箭线语义色"
+      ],
+      "fields": {
+        "style": {
+          "from": {
+            "border_color": "#b58732",
+            "border_color_type": 1,
+            "border_opacity": 100,
+            "border_style": "solid",
+            "border_width": "narrow"
+          },
+          "to": {
+            "border_color": "#A47725",
+            "border_color_type": 1,
+            "border_opacity": 100,
+            "border_style": "solid",
+            "border_width": "narrow"
+          }
+        }
+      }
+    },
+    {
+      "id": "a1:32",
+      "type": "text_shape",
+      "text": "用核实结果规划下一步",
+      "reason": [
+        "统一中性说明色"
+      ],
+      "fields": {
+        "text": {
+          "from": {
+            "angle": 0,
+            "font_size": 18,
+            "font_weight": "regular",
+            "horizontal_align": "center",
+            "italic": false,
+            "line_through": false,
+            "text": "用核实结果规划下一步",
+            "text_background_color_type": 0,
+            "text_color": "#566376",
+            "text_color_type": 1,
+            "theme_text_background_color_code": -1,
+            "underline": false,
+            "vertical_align": "mid"
+          },
+          "to": {
+            "angle": 0,
+            "font_size": 18,
+            "font_weight": "regular",
+            "horizontal_align": "center",
+            "italic": false,
+            "line_through": false,
+            "text": "用核实结果规划下一步",
+            "text_background_color_type": 0,
+            "text_color": "#657185",
+            "text_color_type": 1,
+            "theme_text_background_color_code": -1,
+            "underline": false,
+            "vertical_align": "mid"
+          }
+        }
+      }
+    },
+    {
+      "id": "c1:1",
+      "type": "connector",
+      "text": "",
+      "reason": [
+        "统一箭线语义色"
+      ],
+      "fields": {
+        "style": {
+          "from": {
+            "border_color": "#7398c8",
+            "border_color_type": 1,
+            "border_opacity": 100,
+            "border_style": "solid",
+            "border_width": "narrow"
+          },
+          "to": {
+            "border_color": "#2E62AE",
+            "border_color_type": 1,
+            "border_opacity": 100,
+            "border_style": "solid",
+            "border_width": "narrow"
+          }
+        }
+      }
+    },
+    {
+      "id": "o1:4",
+      "type": "composite_shape",
+      "text": "",
+      "reason": [
+        "统一同角色边框色"
+      ],
+      "fields": {
+        "style": {
+          "from": {
+            "border_color": "#b7cdec",
+            "border_color_type": 1,
+            "border_opacity": 100,
+            "border_radius": {
+              "bottom_left": 18,
+              "bottom_right": 18,
+              "top_left": 18,
+              "top_right": 18
+            },
+            "border_style": "solid",
+            "border_width": "narrow",
+            "fill_color": "#ffffff",
+            "fill_color_type": 1,
+            "fill_opacity": 100
+          },
+          "to": {
+            "border_color": "#A7C3E8",
+            "border_color_type": 1,
+            "border_opacity": 100,
+            "border_radius": {
+              "bottom_left": 18,
+              "bottom_right": 18,
+              "top_left": 18,
+              "top_right": 18
+            },
+            "border_style": "solid",
+            "border_width": "narrow",
+            "fill_color": "#ffffff",
+            "fill_color_type": 1,
+            "fill_opacity": 100
+          }
+        }
+      }
+    },
+    {
+      "id": "a1:30",
+      "type": "text_shape",
+      "text": "返回事实",
+      "reason": [
+        "操作说明字号统一为18",
+        "说明居中并统一距水平箭线18"
+      ],
+      "fields": {
+        "height": {
+          "from": 24.615999221801758,
+          "to": 26.064
+        },
+        "text": {
+          "from": {
+            "angle": 0,
+            "font_size": 17,
+            "font_weight": "regular",
+            "horizontal_align": "center",
+            "italic": false,
+            "line_through": false,
+            "text": "返回事实",
+            "text_background_color_type": 0,
+            "text_color": "#73539e",
+            "text_color_type": 1,
+            "theme_text_background_color_code": -1,
+            "underline": false,
+            "vertical_align": "mid"
+          },
+          "to": {
+            "angle": 0,
+            "font_size": 18,
+            "font_weight": "regular",
+            "horizontal_align": "center",
+            "italic": false,
+            "line_through": false,
+            "text": "返回事实",
+            "text_background_color_type": 0,
+            "text_color": "#73539e",
+            "text_color_type": 1,
+            "theme_text_background_color_code": -1,
+            "underline": false,
+            "vertical_align": "mid"
+          }
+        },
+        "width": {
+          "from": 68,
+          "to": 72.0
+        },
+        "x": {
+          "from": 746,
+          "to": 744.0
+        },
+        "y": {
+          "from": 699.99951171875,
+          "to": 695.936
+        }
+      }
+    },
+    {
+      "id": "o1:8",
+      "type": "composite_shape",
+      "text": "",
+      "reason": [
+        "统一同角色边框色",
+        "统一同角色浅填充色"
+      ],
+      "fields": {
+        "style": {
+          "from": {
+            "border_color": "#91c9b3",
+            "border_color_type": 1,
+            "border_opacity": 100,
+            "border_radius": {
+              "bottom_left": 18,
+              "bottom_right": 18,
+              "top_left": 18,
+              "top_right": 18
+            },
+            "border_style": "solid",
+            "border_width": "narrow",
+            "fill_color": "#e3f4eb",
+            "fill_color_type": 1,
+            "fill_opacity": 100
+          },
+          "to": {
+            "border_color": "#9DCDBB",
+            "border_color_type": 1,
+            "border_opacity": 100,
+            "border_radius": {
+              "bottom_left": 18,
+              "bottom_right": 18,
+              "top_left": 18,
+              "top_right": 18
+            },
+            "border_style": "solid",
+            "border_width": "narrow",
+            "fill_color": "#E6F3ED",
+            "fill_color_type": 1,
+            "fill_opacity": 100
+          }
+        }
+      }
+    },
+    {
+      "id": "a1:19",
+      "type": "text_shape",
+      "text": "核对后，只提交一次",
+      "reason": [
+        "第二行卡片标题居中且共用基线"
+      ],
+      "fields": {
+        "x": {
+          "from": 465.5,
+          "to": 466.0
+        }
+      }
+    },
+    {
+      "id": "a1:23",
+      "type": "text_shape",
+      "text": "提出要求",
+      "reason": [
+        "操作说明字号统一为18",
+        "说明居中并统一距水平箭线18"
+      ],
+      "fields": {
+        "height": {
+          "from": 24.615999221801758,
+          "to": 26.064
+        },
+        "text": {
+          "from": {
+            "angle": 0,
+            "font_size": 17,
+            "font_weight": "regular",
+            "horizontal_align": "center",
+            "italic": false,
+            "line_through": false,
+            "text": "提出要求",
+            "text_background_color_type": 0,
+            "text_color": "#2e62ae",
+            "text_color_type": 1,
+            "theme_text_background_color_code": -1,
+            "underline": false,
+            "vertical_align": "mid"
+          },
+          "to": {
+            "angle": 0,
+            "font_size": 18,
+            "font_weight": "regular",
+            "horizontal_align": "center",
+            "italic": false,
+            "line_through": false,
+            "text": "提出要求",
+            "text_background_color_type": 0,
+            "text_color": "#2e62ae",
+            "text_color_type": 1,
+            "theme_text_background_color_code": -1,
+            "underline": false,
+            "vertical_align": "mid"
+          }
+        },
+        "width": {
+          "from": 68,
+          "to": 72.0
+        },
+        "x": {
+          "from": 378,
+          "to": 376.5
+        },
+        "y": {
+          "from": 458.99951171875,
+          "to": 455.936
+        }
+      }
+    },
+    {
+      "id": "a1:24",
+      "type": "text_shape",
+      "text": "提交操作",
+      "reason": [
+        "操作说明字号统一为18",
+        "说明居中并统一距水平箭线18"
+      ],
+      "fields": {
+        "height": {
+          "from": 24.615999221801758,
+          "to": 26.064
+        },
+        "text": {
+          "from": {
+            "angle": 0,
+            "font_size": 17,
+            "font_weight": "regular",
+            "horizontal_align": "center",
+            "italic": false,
+            "line_through": false,
+            "text": "提交操作",
+            "text_background_color_type": 0,
+            "text_color": "#258067",
+            "text_color_type": 1,
+            "theme_text_background_color_code": -1,
+            "underline": false,
+            "vertical_align": "mid"
+          },
+          "to": {
+            "angle": 0,
+            "font_size": 18,
+            "font_weight": "regular",
+            "horizontal_align": "center",
+            "italic": false,
+            "line_through": false,
+            "text": "提交操作",
+            "text_background_color_type": 0,
+            "text_color": "#258067",
+            "text_color_type": 1,
+            "theme_text_background_color_code": -1,
+            "underline": false,
+            "vertical_align": "mid"
+          }
+        },
+        "width": {
+          "from": 68,
+          "to": 72.0
+        },
+        "x": {
+          "from": 753,
+          "to": 751.5
+        },
+        "y": {
+          "from": 458.99951171875,
+          "to": 455.936
+        }
+      }
+    },
+    {
+      "id": "a1:37",
+      "type": "text_shape",
+      "text": "等待、查证或处理交互",
+      "reason": [
+        "双行卡片说明相对顶部间距一致"
+      ],
+      "fields": {
+        "y": {
+          "from": 925.822998046875,
+          "to": 928.823
+        }
+      }
+    },
+    {
+      "id": "o1:10",
+      "type": "composite_shape",
+      "text": "",
+      "reason": [
+        "统一同角色边框色"
+      ],
+      "fields": {
+        "style": {
+          "from": {
+            "border_color": "#d1c1e3",
+            "border_color_type": 1,
+            "border_opacity": 100,
+            "border_radius": {
+              "bottom_left": 18,
+              "bottom_right": 18,
+              "top_left": 18,
+              "top_right": 18
+            },
+            "border_style": "solid",
+            "border_width": "narrow",
+            "fill_color": "#ffffff",
+            "fill_color_type": 1,
+            "fill_opacity": 100
+          },
+          "to": {
+            "border_color": "#C7B3DB",
+            "border_color_type": 1,
+            "border_opacity": 100,
+            "border_radius": {
+              "bottom_left": 18,
+              "bottom_right": 18,
+              "top_left": 18,
+              "top_right": 18
+            },
+            "border_style": "solid",
+            "border_width": "narrow",
+            "fill_color": "#ffffff",
+            "fill_color_type": 1,
+            "fill_opacity": 100
+          }
+        }
+      }
+    },
+    {
+      "id": "c1:13",
+      "type": "connector",
+      "text": "",
+      "reason": [
+        "统一箭线语义色"
+      ],
+      "fields": {
+        "style": {
+          "from": {
+            "border_color": "#b58732",
+            "border_color_type": 1,
+            "border_dasharrays": [
+              7,
+              5
+            ],
+            "border_opacity": 100,
+            "border_style": "dash",
+            "border_width": "narrow"
+          },
+          "to": {
+            "border_color": "#A47725",
+            "border_color_type": 1,
+            "border_dasharrays": [
+              7,
+              5
+            ],
+            "border_opacity": 100,
+            "border_style": "dash",
+            "border_width": "narrow"
+          }
+        }
+      }
+    },
+    {
+      "id": "a1:28",
+      "type": "text_shape",
+      "text": "对象状态、项目进度等",
+      "reason": [
+        "统一中性说明色"
+      ],
+      "fields": {
+        "text": {
+          "from": {
+            "angle": 0,
+            "font_size": 18,
+            "font_weight": "regular",
+            "horizontal_align": "center",
+            "italic": false,
+            "line_through": false,
+            "text": "对象状态、项目进度等",
+            "text_background_color_type": 0,
+            "text_color": "#566376",
+            "text_color_type": 1,
+            "theme_text_background_color_code": -1,
+            "underline": false,
+            "vertical_align": "mid"
+          },
+          "to": {
+            "angle": 0,
+            "font_size": 18,
+            "font_weight": "regular",
+            "horizontal_align": "center",
+            "italic": false,
+            "line_through": false,
+            "text": "对象状态、项目进度等",
+            "text_background_color_type": 0,
+            "text_color": "#657185",
+            "text_color_type": 1,
+            "theme_text_background_color_code": -1,
+            "underline": false,
+            "vertical_align": "mid"
+          }
+        }
+      }
+    },
+    {
+      "id": "a1:33",
+      "type": "text_shape",
+      "text": "是：交回结果",
+      "reason": [
+        "操作说明字号统一为18",
+        "说明居中并统一距水平箭线18"
+      ],
+      "fields": {
+        "height": {
+          "from": 24.615999221801758,
+          "to": 26.064
+        },
+        "text": {
+          "from": {
+            "angle": 0,
+            "font_size": 17,
+            "font_weight": "regular",
+            "horizontal_align": "center",
+            "italic": false,
+            "line_through": false,
+            "text": "是：交回结果",
+            "text_background_color_type": 0,
+            "text_color": "#258067",
+            "text_color_type": 1,
+            "theme_text_background_color_code": -1,
+            "underline": false,
+            "vertical_align": "mid"
+          },
+          "to": {
+            "angle": 0,
+            "font_size": 18,
+            "font_weight": "regular",
+            "horizontal_align": "center",
+            "italic": false,
+            "line_through": false,
+            "text": "是：交回结果",
+            "text_background_color_type": 0,
+            "text_color": "#258067",
+            "text_color_type": 1,
+            "theme_text_background_color_code": -1,
+            "underline": false,
+            "vertical_align": "mid"
+          }
+        },
+        "width": {
+          "from": 102,
+          "to": 108.0
+        },
+        "x": {
+          "from": 368,
+          "to": 366.0
+        },
+        "y": {
+          "from": 698.99951171875,
+          "to": 695.936
+        }
+      }
+    },
+    {
+      "id": "d1:13",
+      "type": "image",
+      "text": "",
+      "reason": [
+        "仅替换原 SVG 箭头色，不改节点类型和几何"
+      ],
+      "fields": {
+        "image": {
+          "from": {
+            "token": "<svg viewBox=\"592.5 862.5 15 15\" width=\"15\" height=\"15\" xmlns=\"http://www.w3.org/2000/svg\"><polygon points=\"600,875 595,865 605,865\" fill=\"#B58732\" /></svg>"
+          },
+          "to": {
+            "token": "<svg viewBox=\"592.5 862.5 15 15\" width=\"15\" height=\"15\" xmlns=\"http://www.w3.org/2000/svg\"><polygon points=\"600,875 595,865 605,865\" fill=\"#A47725\" /></svg>"
+          }
+        }
+      }
+    },
+    {
+      "id": "a1:7",
+      "type": "text_shape",
+      "text": "文明 6 游戏引擎",
+      "reason": [
+        "角色标题列中心与基线对齐"
+      ],
+      "fields": {
+        "y": {
+          "from": 120.41100311279297,
+          "to": 120.175
+        }
+      }
+    },
+    {
+      "id": "o1:3",
+      "type": "composite_shape",
+      "text": "",
+      "reason": [
+        "统一同角色边框色",
+        "统一同角色浅填充色"
+      ],
+      "fields": {
+        "style": {
+          "from": {
+            "border_color": "#b7cdec",
+            "border_color_type": 1,
+            "border_opacity": 100,
+            "border_radius": {
+              "bottom_left": 23,
+              "bottom_right": 23,
+              "top_left": 23,
+              "top_right": 23
+            },
+            "border_style": "solid",
+            "border_width": "narrow",
+            "fill_color": "#e6efff",
+            "fill_color_type": 1,
+            "fill_opacity": 100
+          },
+          "to": {
+            "border_color": "#A7C3E8",
+            "border_color_type": 1,
+            "border_opacity": 100,
+            "border_radius": {
+              "bottom_left": 23,
+              "bottom_right": 23,
+              "top_left": 23,
+              "top_right": 23
+            },
+            "border_style": "solid",
+            "border_width": "narrow",
+            "fill_color": "#E8F0FC",
+            "fill_color_type": 1,
+            "fill_opacity": 100
+          }
+        }
+      }
+    },
+    {
+      "id": "a1:35",
+      "type": "text_shape",
+      "text": "尚未确认",
+      "reason": [
+        "未确认分支保持统一警示色",
+        "垂直箭线旁说明净距统一为16"
+      ],
+      "fields": {
+        "text": {
+          "from": {
+            "angle": 0,
+            "font_size": 18,
+            "font_weight": "regular",
+            "horizontal_align": "left",
+            "italic": false,
+            "line_through": false,
+            "text": "尚未确认",
+            "text_background_color_type": 0,
+            "text_color": "#966b25",
+            "text_color_type": 1,
+            "theme_text_background_color_code": -1,
+            "underline": false,
+            "vertical_align": "mid"
+          },
+          "to": {
+            "angle": 0,
+            "font_size": 18,
+            "font_weight": "regular",
+            "horizontal_align": "left",
+            "italic": false,
+            "line_through": false,
+            "text": "尚未确认",
+            "text_background_color_type": 0,
+            "text_color": "#A47725",
+            "text_color_type": 1,
+            "theme_text_background_color_code": -1,
+            "underline": false,
+            "vertical_align": "mid"
+          }
+        },
+        "x": {
+          "from": 614,
+          "to": 616
+        }
+      }
+    },
+    {
+      "id": "a1:36",
+      "type": "text_shape",
+      "text": "保留原请求",
+      "reason": [
+        "双行卡片标题相对顶部间距一致"
+      ],
+      "fields": {
+        "y": {
+          "from": 884.7639770507812,
+          "to": 887.764
+        }
+      }
+    },
+    {
+      "id": "a1:38",
+      "type": "text_shape",
+      "text": "继续查原动作，不重复提交",
+      "reason": [
+        "未确认分支保持统一警示色"
+      ],
+      "fields": {
+        "text": {
+          "from": {
+            "angle": 0,
+            "font_size": 18,
+            "font_weight": "regular",
+            "horizontal_align": "center",
+            "italic": false,
+            "line_through": false,
+            "text": "继续查原动作，不重复提交",
+            "text_background_color_type": 0,
+            "text_color": "#966b25",
+            "text_color_type": 1,
+            "theme_text_background_color_code": -1,
+            "underline": false,
+            "vertical_align": "mid"
+          },
+          "to": {
+            "angle": 0,
+            "font_size": 18,
+            "font_weight": "regular",
+            "horizontal_align": "center",
+            "italic": false,
+            "line_through": false,
+            "text": "继续查原动作，不重复提交",
+            "text_background_color_type": 0,
+            "text_color": "#A47725",
+            "text_color_type": 1,
+            "theme_text_background_color_code": -1,
+            "underline": false,
+            "vertical_align": "mid"
+          }
+        }
+      }
+    },
+    {
+      "id": "a1:3",
+      "type": "text_shape",
+      "text": "Agent",
+      "reason": [
+        "角色标题列中心与基线对齐"
+      ],
+      "fields": {
+        "x": {
+          "from": 171.4459991455078,
+          "to": 187.80701446533203
+        }
+      }
+    },
+    {
+      "id": "a1:10",
+      "type": "text_shape",
+      "text": "理解局面与规则",
+      "reason": [
+        "首行卡片标题居中且共用基线"
+      ],
+      "fields": {
+        "x": {
+          "from": 124.01705932617188,
+          "to": 120.5
+        }
+      }
+    },
+    {
+      "id": "a1:14",
+      "type": "text_shape",
+      "text": "当前局面",
+      "reason": [
+        "首行卡片标题居中且共用基线"
+      ],
+      "fields": {
+        "x": {
+          "from": 919.5,
+          "to": 914.0
+        },
+        "y": {
+          "from": 298.75482177734375,
+          "to": 302.624
+        }
+      }
+    },
+    {
+      "id": "d1:9",
+      "type": "image",
+      "text": "",
+      "reason": [
+        "判定菱形沿用 Harness 绿色"
+      ],
+      "fields": {
+        "image": {
+          "from": {
+            "token": "<svg viewBox=\"475 665 250 150\" width=\"250\" height=\"150\" xmlns=\"http://www.w3.org/2000/svg\"><polygon points=\"600,670 720,740 600,810 480,740\" fill=\"#D7EEE2\" stroke=\"#72B799\" stroke-width=\"2\" /></svg>"
+          },
+          "to": {
+            "token": "<svg viewBox=\"475 665 250 150\" width=\"250\" height=\"150\" xmlns=\"http://www.w3.org/2000/svg\"><polygon points=\"600,670 720,740 600,810 480,740\" fill=\"#DDEFE6\" stroke=\"#75B79D\" stroke-width=\"2\" /></svg>"
+          }
+        }
+      }
+    },
+    {
+      "id": "a1:16",
+      "type": "text_shape",
+      "text": "形成可修正的判断",
+      "reason": [
+        "垂直箭线旁说明净距统一为16"
+      ],
+      "fields": {
+        "x": {
+          "from": 232.5,
+          "to": 241
+        }
+      }
+    },
+    {
+      "id": "a1:17",
+      "type": "text_shape",
+      "text": "下一步规划",
+      "reason": [
+        "第二行卡片标题居中且共用基线"
+      ],
+      "fields": {
+        "x": {
+          "from": 149.5,
+          "to": 165.0
+        },
+        "y": {
+          "from": 483.6155090332031,
+          "to": 482.624
+        }
+      }
+    },
+    {
+      "id": "a1:21",
+      "type": "text_shape",
+      "text": "按规则执行",
+      "reason": [
+        "第二行卡片标题居中且共用基线"
+      ],
+      "fields": {
+        "x": {
+          "from": 902.4999389648438,
+          "to": 899.5
+        }
+      }
+    },
+    {
+      "id": "a1:25",
+      "type": "text_shape",
+      "text": "记录原请求",
+      "reason": [
+        "垂直箭线旁说明净距统一为16"
+      ],
+      "fields": {
+        "x": {
+          "from": 614,
+          "to": 616
+        }
+      }
+    },
+    {
+      "id": "a1:5",
+      "type": "text_shape",
+      "text": "Harness",
+      "reason": [
+        "角色标题列中心与基线对齐"
+      ],
+      "fields": {
+        "x": {
+          "from": 522.946044921875,
+          "to": 548.0520172119141
+        }
+      }
+    },
+    {
+      "id": "o1:5",
+      "type": "composite_shape",
+      "text": "",
+      "reason": [
+        "统一同角色边框色"
+      ],
+      "fields": {
+        "style": {
+          "from": {
+            "border_color": "#abd5c5",
+            "border_color_type": 1,
+            "border_opacity": 100,
+            "border_radius": {
+              "bottom_left": 18,
+              "bottom_right": 18,
+              "top_left": 18,
+              "top_right": 18
+            },
+            "border_style": "solid",
+            "border_width": "narrow",
+            "fill_color": "#ffffff",
+            "fill_color_type": 1,
+            "fill_opacity": 100
+          },
+          "to": {
+            "border_color": "#9DCDBB",
+            "border_color_type": 1,
+            "border_opacity": 100,
+            "border_radius": {
+              "bottom_left": 18,
+              "bottom_right": 18,
+              "top_left": 18,
+              "top_right": 18
+            },
+            "border_style": "solid",
+            "border_width": "narrow",
+            "fill_color": "#ffffff",
+            "fill_color_type": 1,
+            "fill_opacity": 100
+          }
+        }
+      }
+    },
+    {
+      "id": "o1:9",
+      "type": "composite_shape",
+      "text": "",
+      "reason": [
+        "统一同角色边框色",
+        "统一同角色浅填充色"
+      ],
+      "fields": {
+        "style": {
+          "from": {
+            "border_color": "#bca4d4",
+            "border_color_type": 1,
+            "border_opacity": 100,
+            "border_radius": {
+              "bottom_left": 18,
+              "bottom_right": 18,
+              "top_left": 18,
+              "top_right": 18
+            },
+            "border_style": "solid",
+            "border_width": "narrow",
+            "fill_color": "#eee8f6",
+            "fill_color_type": 1,
+            "fill_opacity": 100
+          },
+          "to": {
+            "border_color": "#C7B3DB",
+            "border_color_type": 1,
+            "border_opacity": 100,
+            "border_radius": {
+              "bottom_left": 18,
+              "bottom_right": 18,
+              "top_left": 18,
+              "top_right": 18
+            },
+            "border_style": "solid",
+            "border_width": "narrow",
+            "fill_color": "#EFE8F6",
+            "fill_color_type": 1,
+            "fill_opacity": 100
+          }
+        }
+      }
+    },
+    {
+      "id": "o1:6",
+      "type": "composite_shape",
+      "text": "",
+      "reason": [
+        "统一同角色边框色"
+      ],
+      "fields": {
+        "style": {
+          "from": {
+            "border_color": "#d1c1e3",
+            "border_color_type": 1,
+            "border_opacity": 100,
+            "border_radius": {
+              "bottom_left": 18,
+              "bottom_right": 18,
+              "top_left": 18,
+              "top_right": 18
+            },
+            "border_style": "solid",
+            "border_width": "narrow",
+            "fill_color": "#ffffff",
+            "fill_color_type": 1,
+            "fill_opacity": 100
+          },
+          "to": {
+            "border_color": "#C7B3DB",
+            "border_color_type": 1,
+            "border_opacity": 100,
+            "border_radius": {
+              "bottom_left": 18,
+              "bottom_right": 18,
+              "top_left": 18,
+              "top_right": 18
+            },
+            "border_style": "solid",
+            "border_width": "narrow",
+            "fill_color": "#ffffff",
+            "fill_color_type": 1,
+            "fill_opacity": 100
+          }
+        }
+      }
+    },
+    {
+      "id": "a1:26",
+      "type": "text_shape",
+      "text": "等待处理后查证",
+      "reason": [
+        "垂直箭线旁说明净距统一为16"
+      ],
+      "fields": {
+        "x": {
+          "from": 842.5,
+          "to": 833
+        }
+      }
+    },
+    {
+      "id": "o1:11",
+      "type": "composite_shape",
+      "text": "",
+      "reason": [
+        "统一同角色边框色",
+        "统一同角色浅填充色"
+      ],
+      "fields": {
+        "style": {
+          "from": {
+            "border_color": "#8eb2e4",
+            "border_color_type": 1,
+            "border_opacity": 100,
+            "border_radius": {
+              "bottom_left": 18,
+              "bottom_right": 18,
+              "top_left": 18,
+              "top_right": 18
+            },
+            "border_style": "solid",
+            "border_width": "narrow",
+            "fill_color": "#e6efff",
+            "fill_color_type": 1,
+            "fill_opacity": 100
+          },
+          "to": {
+            "border_color": "#A7C3E8",
+            "border_color_type": 1,
+            "border_opacity": 100,
+            "border_radius": {
+              "bottom_left": 18,
+              "bottom_right": 18,
+              "top_left": 18,
+              "top_right": 18
+            },
+            "border_style": "solid",
+            "border_width": "narrow",
+            "fill_color": "#E8F0FC",
+            "fill_color_type": 1,
+            "fill_opacity": 100
+          }
+        }
+      }
+    }
+  ]
+}
