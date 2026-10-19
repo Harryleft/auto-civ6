@@ -16,7 +16,7 @@ class TargetMovementConn(MovementConn):
 can_target, war, perform_move = false, false, true
 checks, target_checks = {}, 0
 UnitOperationTypes.PARAM_MODIFIERS=4
-UnitOperationMoveModifiers={NONE=0, ATTACK=8}
+UnitOperationMoveModifiers={NONE=0, ATTACK=16,MOVE_IGNORE_UNEXPLORED_DESTINATION=16384}
 unit.GetMovesRemaining=function() return 3 end
 unit.GetMovementMovesRemaining=function() return 3 end
 Players[0].GetDiplomacy=function() return {
@@ -43,6 +43,68 @@ end
 
 def run(awaitable):
     return asyncio.run(awaitable)
+
+
+def test_fog_destination_uses_native_ignore_flag_in_the_same_checked_and_submitted_params(short_confirmation):
+    conn=TargetMovementConn()
+    conn.lua.execute('''
+can_target=true
+PlayersVisibility[0].IsVisible=function() return false end
+UnitManager.RequestOperation=function(u,operation,params)
+ submissions=submissions+1;submitted_params=params
+ if params[4]==16384 then
+  x,y=params[2],params[3]
+  Events.UnitOperationSegmentComplete.Fire(0,u:GetID())
+ end
+end
+''')
+    result=run(GameState(conn).move_unit(6,20,17))
+    assert 'now_at:20,17' in result
+    assert conn.lua.eval('checked_params==submitted_params')
+    assert conn.lua.eval('checked_params[4]')==16384
+    assert conn.lua.globals().submissions==1
+
+
+@pytest.mark.parametrize('unavailable',[
+    'UnitOperationMoveModifiers=nil',
+    'UnitOperationMoveModifiers.MOVE_IGNORE_UNEXPLORED_DESTINATION=nil',
+    'UnitOperationMoveModifiers.MOVE_IGNORE_UNEXPLORED_DESTINATION=false',
+    'UnitOperationMoveModifiers.MOVE_IGNORE_UNEXPLORED_DESTINATION="16384"',
+    'UnitOperationMoveModifiers.MOVE_IGNORE_UNEXPLORED_DESTINATION=0',
+    'UnitOperationMoveModifiers.MOVE_IGNORE_UNEXPLORED_DESTINATION=-1',
+    'UnitOperationMoveModifiers.MOVE_IGNORE_UNEXPLORED_DESTINATION=1.5',
+    'UnitOperationMoveModifiers.MOVE_IGNORE_UNEXPLORED_DESTINATION=math.huge',
+    'UnitOperationMoveModifiers.MOVE_IGNORE_UNEXPLORED_DESTINATION=0/0',
+    'UnitOperationTypes.PARAM_MODIFIERS=nil',
+])
+def test_unavailable_fog_modifier_refuses_before_request_or_witness(unavailable):
+    conn=TargetMovementConn();conn.lua.execute('can_target=true;'+unavailable)
+    state=GameState(conn)
+    result=run(state.move_unit(6,20,17))
+    assert result.startswith('Error: MOVE_MODIFIER_UNAVAILABLE|')
+    assert conn.lua.globals().submissions==0
+    assert conn.lua.globals().listenerCount()==1
+    assert conn.lua.globals().__civmcpMoveSegment is None
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('attack',['nil','false','"16"','0','-1','1.5','math.huge','0/0'])
+def test_missing_or_malformed_hostile_attack_flag_is_refused_before_submission(attack):
+    conn=TargetMovementConn()
+    conn.lua.execute('''
+can_target=true;war=true
+GameInfo.Units[2]={UnitType="UNIT_BUILDER",FormationClass="FORMATION_CLASS_CIVILIAN"}
+local enemy={GetOwner=function() return 2 end,GetType=function() return 2 end}
+Map.GetUnitsAt=function() return {Units=function()
+ local used=false
+ return function() if not used then used=true;return enemy end end
+end} end
+UnitOperationMoveModifiers.ATTACK='''+attack)
+    state=GameState(conn)
+    assert run(state.move_unit(6,20,17)).startswith('Error: MOVE_MODIFIER_UNAVAILABLE|')
+    assert conn.lua.globals().submissions==0
+    assert conn.lua.globals().listenerCount()==1
+    assert state.pending_action_summary is None
 
 
 @pytest.mark.parametrize("after_path", [
@@ -139,7 +201,7 @@ def test_target_rejected_before_request_or_witness_and_next_legal_move_remains_a
     assert native.submissions == 1 and state.pending_action_summary is None
 
 
-@pytest.mark.parametrize("owner, at_war, modifier", [(0, False, None), (3, False, None), (2, True, 8)])
+@pytest.mark.parametrize("owner, at_war, modifier", [(0, False, 16384), (3, False, 16384), (2, True, 16400)])
 def test_only_a_native_war_target_adds_attack_and_the_final_parameters_are_validated(owner, at_war, modifier):
     conn = TargetMovementConn()
     conn.lua.globals().war = at_war
