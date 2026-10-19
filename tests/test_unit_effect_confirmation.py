@@ -54,7 +54,10 @@ targets={plots={300},modifiers={1}}
 UnitManager.GetOperationTargets=function(unit,op) assert(unit.id==196608 and op==32);return targets end
 beliefs,createdReligion,hasProphet=0,-1,true
 Players[0].GetReligion=function() return {GetNumBeliefsEarned=function() return beliefs end,
- GetReligionTypeCreated=function() return createdReligion end,HasReligiousFoundingUnit=function() return hasProphet end} end
+ GetReligionTypeCreated=function() return createdReligion end,HasReligiousFoundingUnit=function()
+  if unreadable_founding_flag then error('founding flag unreadable') end
+  return hasProphet
+ end} end
 UnitManager.CanStartCommand=function(unit,op,visible,results) assert(visible==nil or visible==false);return unit.allowed end
 UnitManager.CanStartOperation=function(unit,op,params,targets,results) return unit.allowed end
 function removeUnit()
@@ -70,7 +73,7 @@ function applyEffect(op)
   if u.charges==0 then removeUnit() end
  elseif op==31 then
   Events.UnitOperationStarted.Fire(0,196608,31)
-  beliefs=2;hasProphet=false;removeUnit()
+  beliefs=2;hasProphet=true;removeUnit()
  else
   Events.UnitOperationStarted.Fire(0,196608,32)
   u.spreads=u.spreads-1;city.pressure=300
@@ -137,7 +140,8 @@ def test_t125_native_eligible_zero_charge_prophet_with_false_aggregate_flag_subm
     conn.lua.execute('''
 turn=125;seed=-1896272000;hasProphet=false;deferred=true
 units[196608]=nil;u.id=2621451;units[2621451]=u
-u.individual=114;u.x=39;u.y=26;u.moves=2.25
+u.individual=114;u.class=4;u.kind=13;u.x=39;u.y=26;u.moves=2.25
+GameInfo.Units[13]={UnitType='UNIT_GREAT_PROPHET'}
 GameInfo.UnitOperations.UNITOPERATION_FOUND_RELIGION.Hash=-953161477
 UnitManager.CanStartOperation=function(unit,op,unused,params,check)
  assert(unit==u and unit.id==2621451 and unit.individual==114 and unit.charges==0)
@@ -146,7 +150,7 @@ UnitManager.CanStartOperation=function(unit,op,unused,params,check)
 end
 function applyProphetEffect()
  Events.UnitOperationStarted.Fire(0,2621451,-953161477)
- beliefs=2
+ beliefs=2;hasProphet=true
  units[2621451]=nil
  Events.UnitRemovedFromMap.Fire(0,2621451)
 end
@@ -335,7 +339,7 @@ def test_false_aggregate_flag_never_authorizes_prophet_without_exact_native_elig
 def test_prophet_ready_state_with_wrong_operation_event_keeps_original_request_pending(event):
     conn = EffectConn('prophet'); state = GameState(conn); conn.lua.execute('deferred=true')
     assert 'OUTCOME_UNKNOWN' in asyncio.run(state.activate_great_person(196608))
-    conn.lua.execute('beliefs=2;' + event)
+    conn.lua.execute('beliefs=2;hasProphet=true;' + event)
     assert 'OUTCOME_UNKNOWN' in asyncio.run(state.activate_great_person(196608))
     assert state.pending_action_kind == 'activate_great_person'
     assert conn.lua.eval('#submissions') == 1
@@ -345,7 +349,7 @@ def test_prophet_ready_state_with_wrong_operation_event_keeps_original_request_p
 def test_prophet_exact_start_and_beliefs_still_require_original_unit_identity(setup):
     conn = EffectConn('prophet'); state = GameState(conn); conn.lua.execute('deferred=true')
     assert 'OUTCOME_UNKNOWN' in asyncio.run(state.activate_great_person(196608))
-    conn.lua.execute('Events.UnitOperationStarted.Fire(0,196608,31);beliefs=2;' + setup)
+    conn.lua.execute('Events.UnitOperationStarted.Fire(0,196608,31);beliefs=2;hasProphet=true;' + setup)
     assert 'OUTCOME_UNKNOWN' in asyncio.run(state.activate_great_person(196608))
     assert state.pending_action_kind == 'activate_great_person'
     assert conn.lua.eval('#submissions') == 1
@@ -384,7 +388,10 @@ def test_spread_on_actual_city_plot_does_not_require_guessing_adjacent_targets()
     assert conn.lua.eval('submissions[1].params.x') == 20
 
 
-@pytest.mark.parametrize('setup', ['beliefs=0', 'hasProphet=true', 'createdReligion=4'])
+@pytest.mark.parametrize('setup', [
+    'beliefs=0', 'hasProphet=false', 'hasProphet=nil', 'hasProphet=1',
+    'unreadable_founding_flag=true', 'createdReligion=4',
+])
 def test_prophet_operation_without_original_founding_readiness_remains_unknown(setup):
     conn = EffectConn('prophet'); state = GameState(conn); conn.lua.execute('deferred=true')
     assert 'OUTCOME_UNKNOWN' in asyncio.run(state.activate_great_person(196608))
@@ -396,7 +403,7 @@ def test_prophet_operation_without_original_founding_readiness_remains_unknown(s
 def test_prophet_readiness_is_measured_even_if_native_unit_remains_until_religion_selection():
     conn = EffectConn('prophet'); state = GameState(conn); conn.lua.execute('deferred=true')
     assert 'OUTCOME_UNKNOWN' in asyncio.run(state.activate_great_person(196608))
-    conn.lua.execute('Events.UnitOperationStarted.Fire(0,196608,31);beliefs=2;hasProphet=false')
+    conn.lua.execute('Events.UnitOperationStarted.Fire(0,196608,31);beliefs=2;hasProphet=true')
     assert asyncio.run(state.activate_great_person(196608)).startswith('RELIGION_FOUNDING_READY|')
     assert conn.lua.eval('u.charges') == 0
     assert conn.lua.eval('units[196608] ~= nil') is True
@@ -406,7 +413,7 @@ def test_prophet_readiness_is_measured_even_if_native_unit_remains_until_religio
 @pytest.mark.parametrize('kind,method,setup', [
     ('great_person', 'activate_great_person', 'u.charges=1'),
     ('spread', 'spread_religion', 'u.spreads=1;city.pressure=300'),
-    ('prophet', 'activate_great_person', 'beliefs=2;hasProphet=false'),
+    ('prophet', 'activate_great_person', 'beliefs=2;hasProphet=true'),
 ])
 def test_charge_or_ready_state_without_exact_native_event_does_not_confirm(kind, method, setup):
     conn = EffectConn(kind); state = GameState(conn); conn.lua.execute('deferred=true')
