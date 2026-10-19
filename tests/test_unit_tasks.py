@@ -33,7 +33,7 @@ UnitManager.CanStartOperation=function(unit,op,params,check)
 end
 function applyTask(op)
  u.ready=false
- u.activity=({[12]=1,[20]=3,[21]=4,[22]=3})[op]
+ u.activity=({[12]=1,[20]=3,[21]=3,[22]=3})[op]
  if op==20 then Events.UnitOperationAdded.Fire(0,u.id,0,1)
  else Events.UnitOperationStarted.Fire(0,u.id,op) end
 end
@@ -118,6 +118,28 @@ def test_other_started_tasks_still_require_nonready_state(kind,op):
     assert conn.lua.eval('#submissions')==1
 
 
+def test_deity_heal_start_confirms_native_operation_activity_without_claiming_hp_gain():
+    conn=TaskConn();state=GameState(conn);ctx=make_ctx();app_of(ctx).game=state
+    # T48: exact HEAL start, ready=false, OPERATION, existing 15 damage.
+    conn.lua.execute('''
+turn=48;seed=-1896272000;u.id=262146;u.damage=15
+ActivityTypes.ACTIVITY_OPERATION=1225574625
+ActivityTypes.ACTIVITY_HEAL=-1298237662
+GameInfo.UnitOperations.UNITOPERATION_HEAL={Hash=2126026491,Index=13}
+function applyTask(op)
+ assert(op==2126026491)
+ u.ready=false;u.activity=1225574625
+ Events.UnitOperationStarted.Fire(0,u.id,op)
+end
+''')
+    result=asyncio.run(server.unit_action(ctx,262146,'heal'))
+    assert result.startswith('HEALING|unit:262146')
+    assert 'completion not measured' in result
+    assert conn.lua.eval('u.damage')==15
+    assert conn.lua.eval('#submissions')==1
+    assert state.pending_action_summary is None
+
+
 def test_deity_alert_start_confirms_native_operation_activity():
     conn=TaskConn();state=GameState(conn);ctx=make_ctx();app_of(ctx).game=state
     # T16 actual alert: exact start seen, nonready, OPERATION rather than SENTRY.
@@ -137,24 +159,24 @@ end
     assert state.pending_action_summary is None
 
 
-@pytest.mark.parametrize('event',[
-    '',
-    'Events.UnitOperationStarted.Fire(0,262144,22)',
-    'Events.UnitOperationStarted.Fire(0,196608,21)',
-])
-def test_operation_activity_without_exact_alert_start_stays_unknown(event):
-    conn=TaskConn();state=GameState(conn)
+@pytest.mark.parametrize('kind,op,label',[('alert',22,'ALERT'),('heal',21,'HEALING')])
+@pytest.mark.parametrize('event',['missing','wrong_unit','wrong_operation'])
+def test_operation_activity_without_exact_task_start_stays_unknown(kind,op,label,event):
+    conn=TaskConn();state=GameState(conn);ctx=make_ctx();app_of(ctx).game=state
     conn.lua.execute('deferred=true')
-    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.alert_unit(196608))
-    conn.lua.execute('u.ready=false;u.activity=3;'+event)
-    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.alert_unit(196608))
-    conn.lua.execute('Events.UnitOperationStarted.Fire(0,196608,22)')
-    assert asyncio.run(state.alert_unit(196608)).startswith('ALERT|')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(server.unit_action(ctx,196608,kind))
+    conn.lua.execute('u.ready=false;u.activity=3')
+    if event=='wrong_unit': conn.lua.execute(f'Events.UnitOperationStarted.Fire(0,262144,{op})')
+    if event=='wrong_operation': conn.lua.execute('Events.UnitOperationStarted.Fire(0,196608,999)')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(server.unit_action(ctx,196608,kind))
+    conn.lua.execute(f'Events.UnitOperationStarted.Fire(0,196608,{op})')
+    assert asyncio.run(server.unit_action(ctx,196608,kind)).startswith(label+'|')
     assert conn.lua.eval('#submissions')==1
 
 
+@pytest.mark.parametrize('kind,activity,label',[('alert',5,'ALREADY_ALERT'),('heal',4,'ALREADY_HEALING')])
 @pytest.mark.parametrize("change",["u.activity=3","u.ready=true"])
-def test_alert_noop_requires_original_sentry_and_nonready_readback(change):
+def test_existing_task_noop_requires_exact_activity_and_nonready_readback(kind,activity,label,change):
     class ChangedAfterNoopConn(TaskConn):
         async def execute_write(self,code):
             rows=await super().execute_write(code)
@@ -162,15 +184,16 @@ def test_alert_noop_requires_original_sentry_and_nonready_readback(change):
                 self.lua.execute(change)
             return rows
     conn=ChangedAfterNoopConn();state=GameState(conn)
-    conn.lua.execute('u.ready=false;u.activity=5;u.allowed=false')
-    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.alert_unit(196608))
+    ctx=make_ctx();app_of(ctx).game=state
+    conn.lua.execute(f'u.ready=false;u.activity={activity};u.allowed=false')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(server.unit_action(ctx,196608,kind))
     assert conn.lua.eval('#submissions')==0
-    conn.lua.execute('u.activity=5;u.ready=false')
-    assert asyncio.run(state.alert_unit(196608)).startswith('ALREADY_ALERT|')
+    conn.lua.execute(f'u.activity={activity};u.ready=false')
+    assert asyncio.run(server.unit_action(ctx,196608,kind)).startswith(label+'|')
     assert conn.lua.eval('#submissions')==0
 
 
-@pytest.mark.parametrize('kind,op',[('heal',21),('sleep',12)])
+@pytest.mark.parametrize('kind,op',[('sleep',12)])
 def test_operation_activity_does_not_relax_other_task_activity_guards(kind,op):
     conn=TaskConn();state=GameState(conn);ctx=make_ctx();app_of(ctx).game=state
     conn.lua.execute('deferred=true')
@@ -178,6 +201,22 @@ def test_operation_activity_does_not_relax_other_task_activity_guards(kind,op):
     conn.lua.execute(f'applyTask({op});u.activity=3')
     assert 'OUTCOME_UNKNOWN' in asyncio.run(server.unit_action(ctx,196608,kind))
     assert conn.lua.eval('#submissions')==1
+
+
+@pytest.mark.parametrize('unconfirmed',[
+    'u.ready=true', 'u.ready=nil', 'u.IsReadyToMove=function() error("ready unknown") end',
+    'u.activity=2', 'UnitManager.GetActivityType=function() return nil end',
+    'UnitManager.GetActivityType=function() error("activity unreadable") end',
+    'ActivityTypes.ACTIVITY_OPERATION=nil', 'ActivityTypes.ACTIVITY_OPERATION="3"',
+    'seed=9', 'turn=42', 'u.id=262144', '__civmcpUnitTask.token="other"',
+])
+def test_native_heal_start_retains_unknown_readback_and_ownership_without_replay(unconfirmed):
+    conn=TaskConn();state=GameState(conn)
+    conn.lua.execute('nativeTask=applyTask;function applyTask(op) nativeTask(op);'+unconfirmed+' end')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.heal_unit(196608))
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.heal_unit(196608))
+    assert conn.lua.eval('#submissions')==1
+    assert state.pending_action_summary is not None
 
 
 def test_deity_added_event_confirms_native_operation_index_in_fourth_field():
