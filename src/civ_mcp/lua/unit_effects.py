@@ -191,8 +191,20 @@ local armed=pcall(function()
  for name,handler in pairs(r.handlers) do Events[name].Add(handler) end
 end)
 if not armed then retireEffect(r);print("ERR:UNIT_EFFECT_REFUSED|OBSERVER_UNAVAILABLE");print("{SENTINEL}");return end
+local condemnActor
+if r.mode=="condemn" then
+ local entryOK,actor=pcall(function()
+  local actor=effectUnit(r.owner,r.id)
+  assert(sameCondemnUnit(r,actor,r) and sameScope(r))
+  return actor
+ end)
+ if not entryOK then
+  retireEffect(r);print("ERR:UNIT_EFFECT_REFUSED|IDENTITY_OR_SCOPE_CHANGED_OR_UNAVAILABLE");print("{SENTINEL}");return
+ end
+ condemnActor=actor
+end
 r.entered=true
-if r.command then UnitManager.RequestCommand(effectUnit(r.owner,r.id),r.command)
+if r.command then UnitManager.RequestCommand(condemnActor or effectUnit(r.owner,r.id),r.command)
 else UnitManager.RequestOperation(effectUnit(r.owner,r.id),r.operation,r.params) end
 r.returned=true
 print("OK:UNIT_EFFECT_REQUESTED|"..r.kind.."|unit:{unit_id}")
@@ -270,7 +282,10 @@ local ok,detail,target=pcall(function()
  return "charges_remaining:"..remaining,"city:"..r.city.owner..":"..r.city.id.." pressure:"..r.pressure.."->"..current
 end)
 if ok then
- retireEffect(r)
+ -- A confirmation response can be lost before ActionLifecycle retires its
+ -- owner. Condemn's witnesses must still latch later scope changes. The next
+ -- actual unit-effect request replaces and retires these bounded listeners.
+ if r.mode~="condemn" then retireEffect(r) end
  local subject=r.mode=="condemn" and (r.target.owner..":"..r.target.id) or (r.individual or r.religion)
  print("UNIT_EFFECT_CONFIRMED|"..r.token.."|"..r.kind.."|"..r.id.."|"..r.mode.."|"..subject
   .."|"..detail.."|"..target)
