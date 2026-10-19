@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from civ_mcp.lua._helpers import (
+    _LUA_ACTION_SCOPE,
     _LUA_KNOWN_RESOURCE,
     _LUA_RES_VISIBLE,
     SENTINEL,
@@ -208,11 +209,14 @@ end
 if prior and prior.handler then
     pcall(function() Events.UnitOperationSegmentComplete.Remove(prior.handler) end)
 end
+for name,handler in pairs(prior and prior.moveHandlers or {{}}) do
+    pcall(function() Events[name].Remove(handler) end)
+end
 local cfg = PlayerConfigurations[me]
 local q = {{token="{witness_token}", owner=me, id=unit:GetID(),
     civ=cfg:GetCivilizationTypeName(), seed=GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED"),
     turn=Game.GetCurrentGameTurn(), fromX=fromX, fromY=fromY,
-    targetX={target_x}, targetY={target_y}, done=false, closed=false}}
+    targetX={target_x}, targetY={target_y}, done=false, closed=false, entered=false, returned=false}}
 __civmcpMoveSegment = q
 q.handler = function(player, unitID, hCommand, iData1)
     pcall(function()
@@ -235,8 +239,55 @@ if not armed then
     pcall(function() Events.UnitOperationSegmentComplete.Remove(q.handler) end)
     {_bail("ERR:MOVE_WITNESS_UNAVAILABLE|Native movement witness unavailable; no move submitted.")}
 end
+-- T69 emitted Added(Index), MoveComplete(x,y), Deactivated(Hash,1), then
+-- Cleared(0,0), without SegmentComplete. This proves an interrupted move,
+-- not arrival. Old ALERT cleanup before Added does not belong to this chain.
+q.moveHandlers = {{}}
+local partialArmed = pcall(function()
+    local op = GameInfo.UnitOperations.UNITOPERATION_MOVE_TO
+    assert(scopeIndex(op.Index) and scopeInteger(op.Hash) and op.Hash == UnitOperationTypes.MOVE_TO)
+    q.moveIndex,q.moveHash = op.Index,op.Hash
+    local function bind(name,observe)
+        local handler = function(owner,id,a,b)
+            if __civmcpMoveSegment ~= q or q.entered ~= true or owner ~= q.owner or id ~= q.id then return end
+            local ok = pcall(function()
+                if not sameScope(q) then q.uncertain = true;return end
+                if q.uncertain then return end
+                observe(a,b)
+            end)
+            if not ok then q.uncertain = true end
+        end
+        q.moveHandlers[name] = handler
+        Events[name].Add(handler)
+    end
+    bind("UnitOperationAdded",function(slot,index)
+        if q.moveStage == nil and slot == 0 and index == q.moveIndex then q.moveStage = "ADDED"
+        elseif q.moveStage ~= nil then q.invalid = true end
+    end)
+    bind("UnitMoveComplete",function(x,y)
+        if q.moveStage == "ADDED" and scopeIndex(x) and scopeIndex(y)
+            and (x ~= q.fromX or y ~= q.fromY) then
+            q.moveX,q.moveY,q.moveStage = x,y,"MOVED"
+        elseif q.moveStage ~= nil then q.invalid = true end
+    end)
+    bind("UnitOperationDeactivated",function(hash,reason)
+        if q.moveStage == "MOVED" and hash == q.moveHash and reason == 1 then q.moveStage = "DEACTIVATED"
+        elseif q.moveStage ~= nil then q.invalid = true end
+    end)
+    bind("UnitOperationsCleared",function(a,b)
+        if q.moveStage == "DEACTIVATED" and a == 0 and b == 0 then q.moveStage = "CLEARED"
+        elseif q.moveStage ~= nil then q.invalid = true end
+    end)
+end)
+q.moveCapable = partialArmed
+if not partialArmed then
+    -- Older contexts can still confirm with the existing SegmentComplete
+    -- contract; an incomplete alternative observer supplies no evidence.
+    for name,handler in pairs(q.moveHandlers) do pcall(function() Events[name].Remove(handler) end) end
+end
 """
     return f"""
+{_LUA_ACTION_SCOPE}
 {_lua_get_unit(unit_index)}
 if unit:GetMovesRemaining() <= 0 then
     {_bail("ERR:NO_MOVES|Unit has no movement points remaining this turn. Use skip or wait until next turn.")}
@@ -365,7 +416,9 @@ if not pathOK or pathStatus ~= "VALID" then
     {_bail("ERR:PATH_UNKNOWN|Native movement path unavailable or unverified; no move submitted.")}
 end
 {witness}
+{"q.entered = true" if witness_token is not None else ""}
 UnitManager.RequestOperation(unit, UnitOperationTypes.MOVE_TO, params)
+{"q.returned = true" if witness_token is not None else ""}
 local tag = hasHostile and "OK:CAPTURE_MOVE|" or "OK:MOVING_TO|"
 print(tag .. {target_x} .. "," .. {target_y} .. "|from:" .. fromX .. "," .. fromY)
 print("{SENTINEL}")
@@ -378,7 +431,7 @@ def build_unit_position_query(
     move_target_y: int | None = None,
     *, witness_token: str | None = None,
 ) -> str:
-    """InGame gameplay read-only probe; retires only its own event listener.
+    """InGame gameplay read-only probe with request-bound native witnesses.
 
     Native effective movement / ZOC facts are optional on unsupported contexts.
     Their absence must remain unknown, not become a zero or false value.
@@ -499,6 +552,29 @@ pcall(function()
     end
 end)
 """
+        witness_probe += f"""
+pcall(function()
+    local q = __civmcpMoveSegment
+    if not q or not u or q.token ~= "{witness_token}" or q.targetX ~= {move_target_x}
+        or q.targetY ~= {move_target_y} then return end
+    if not sameScope(q) or q.uncertain or q.moveCapable ~= true or q.moveStage ~= "CLEARED"
+        or q.entered ~= true or q.returned ~= true then return end
+    local op = GameInfo.UnitOperations.UNITOPERATION_MOVE_TO
+    if op.Hash ~= q.moveHash or op.Index ~= q.moveIndex or op.Hash ~= UnitOperationTypes.MOVE_TO then return end
+    if u:GetOwner() ~= q.owner or u:GetID() ~= q.id or u:GetX() ~= q.moveX or u:GetY() ~= q.moveY
+        or (q.moveX == q.fromX and q.moveY == q.fromY) then return end
+    if UnitManager.GetQueuedDestination(u) ~= nil or UI.IsGameCoreBusy() ~= false
+        or UI.IsProcessingMessages() ~= false then return end
+    if not sameScope(q) or q.uncertain or q.moveStage ~= "CLEARED" then return end
+    q.closed = true
+    -- Confirmation replies can be lost. Retain this bounded observer until
+    -- the next actual request so later native events can invalidate its proof.
+    print("MOVE_INTERRUPTED|" .. q.token .. "|" .. q.owner .. "|" .. q.id .. "|" .. q.civ
+        .. "|" .. q.seed .. "|" .. q.turn .. "|" .. q.fromX .. "|" .. q.fromY
+        .. "|" .. q.targetX .. "|" .. q.targetY .. "|" .. q.moveX .. "|" .. q.moveY
+        .. "|entered:true|returned:true|chain:CLEARED|queue:nil")
+end)
+"""
     # Legacy direct callers can supply a low index. The pre-submission native
     # record still binds the generation; a replacement at the goal is not it.
     identity_guard = ""
@@ -508,6 +584,7 @@ local original = __civmcpMoveSegment
 if u and (not original or original.token ~= "{witness_token}" or original.id ~= u:GetID()) then u = nil end
 '''
     return f"""
+{_LUA_ACTION_SCOPE}
 local moveImpassable = false
 local me = Game.GetLocalPlayer()
 local u = Players[me]:GetUnits():FindID({unit_index})
