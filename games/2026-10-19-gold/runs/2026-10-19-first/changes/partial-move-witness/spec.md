@@ -44,3 +44,7 @@ Generic movement policy, weakening all movement to position-only success, forced
 ## Further Notes
 
 #1261 first reproduction was followed by a Node batch timeout; #1262 explicitly restored confirmed T69 and #1266–1268 faithfully replayed prior actions. #1269 gold_20261019_t069_before_archer_move is788358bytes. Persistent terminal MCP reproduces #1270, token222e6e5c3e2a45d3a164c06552e1a279, origin41,27/target42,29/current42,27/moves1/busyfalse/donefalse; repeated #1273/#1275 unchanged. Same run e8b4d6a62dca49bbb256e8264beb18f2, CIVILIZATION_SUMERIA/-1896272000/T69/player0. Raw original reset diagnostic t069-client-reset-move.txt; pending original process remains owned until explicit evidence/recovery steps.
+
+## Native evidence refinement
+
+#1276显式恢复T69前点，#1279临时纯监听、#1280一次公共请求。b15-native-move-events.txt：本次tokenfc5159bbda1044fc9504c9a73bd79744；旧ALERT停用/清理在前，随后UnitOperationAdded(0,786437,0,19)→UnitMoveComplete(0,786437,42,27)→UnitOperationDeactivated(0,786437,1477390184,1)→UnitOperationsCleared(0,786437,0,0)。MOVE_TO Hash1477390184/Index19；没有Started/SegmentComplete。当前位置42,27/MP1/readytrue、GetQueuedDestination成功返回nil，busy/processingfalse。这是原移动已接纳、实际部分位移、随后中断并清空目标；新增最窄分支应据此确认INTERRUPTED，不要求不存在的exactqueue，也不能冒称SegmentComplete/到达。旧Segment+exactqueue正常完成判断保留。新增分支必须绑定entry/return与精确事件链，尤其忽略本次MOVE Added之前清除旧ALERT的事件；失配或证据缺失继续unknown。
