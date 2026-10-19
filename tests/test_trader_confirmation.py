@@ -15,6 +15,10 @@ class TraderConn(ReadyConn):
         self.lose_reply=False
         self.lua.execute('''
 capacity,allowed=2,true
+InterfaceModeTypes={SELECTION=1,MAKE_TRADE_ROUTE=-1756334557,TELEPORT_TO_CITY=3,DIPLOMACY=4}
+mode,modeChanges=InterfaceModeTypes.SELECTION,{}
+UI.GetInterfaceMode=function() return mode end
+UI.SetInterfaceMode=function(value) mode=value;table.insert(modeChanges,value) end
 local unit=units[196608];unit.x=10;unit.y=10;unit.owner=0;unit.kind=5
 unit.GetX=function(self) return self.x end
 unit.GetY=function(self) return self.y end
@@ -77,8 +81,81 @@ def quick_confirmation(monkeypatch):
     monkeypatch.setattr('civ_mcp.game_state.ACTION_CONFIRM_INTERVAL',.001)
 
 
+@pytest.mark.parametrize('method,x,y,chooser',[
+    ('make_trade_route',30,30,'MAKE_TRADE_ROUTE'),
+    ('teleport_to_city',20,20,'TELEPORT_TO_CITY'),
+])
+def test_native_trader_operation_returns_its_chooser_to_selection(method,x,y,chooser):
+    conn=TraderConn();state=GameState(conn)
+    conn.lua.execute('mode=InterfaceModeTypes.'+chooser)
+    result=asyncio.run(getattr(state,method)(196608,x,y))
+    assert result.startswith('TRADE_ROUTE_STARTED|' if method=='make_trade_route' else 'TELEPORTED|')
+    assert conn.lua.eval('mode')==1
+    assert conn.lua.eval('#modeChanges')==1
+    assert conn.lua.eval('#submissions')==1
+
+
+def test_established_route_with_failed_cleanup_stays_explicit_and_never_replays():
+    conn=TraderConn();state=GameState(conn)
+    conn.lua.execute('''
+mode=InterfaceModeTypes.MAKE_TRADE_ROUTE;cleanupCalls=0
+UI.SetInterfaceMode=function(value) cleanupCalls=cleanupCalls+1;error('UI cleanup failed') end
+''')
+    result=asyncio.run(state.make_trade_route(196608,30,30))
+    assert 'OUTCOME_UNKNOWN' in result
+    assert 'ROUTE_ESTABLISHED_INTERFACE_CLEANUP_UNCONFIRMED' in result
+    assert conn.lua.eval('activeCount()')==1
+    assert conn.lua.eval('cleanupCalls')==1
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.make_trade_route(196608,30,30))
+    assert conn.lua.eval('cleanupCalls')==1
+    # A subsequent native/UI action may close the chooser; confirmation is read-only.
+    conn.lua.execute('mode=InterfaceModeTypes.SELECTION')
+    assert asyncio.run(state.make_trade_route(196608,30,30)).startswith('TRADE_ROUTE_STARTED|')
+    assert conn.lua.eval('#submissions')==1
+    assert conn.lua.eval('cleanupCalls')==1
+
+
+@pytest.mark.parametrize('method,x,y,chooser',[
+    ('make_trade_route',30,30,'MAKE_TRADE_ROUTE'),
+    ('teleport_to_city',20,20,'TELEPORT_TO_CITY'),
+])
+@pytest.mark.parametrize('new_mode',[False,True])
+def test_trader_cleanup_preserves_unrelated_interface_mode(method,x,y,chooser,new_mode):
+    conn=TraderConn();state=GameState(conn)
+    conn.lua.execute('mode=InterfaceModeTypes.'+(chooser if new_mode else 'DIPLOMACY'))
+    if new_mode:
+        conn.lua.execute('nativeApply=applyTrader;function applyTrader(op,p) nativeApply(op,p);mode=InterfaceModeTypes.DIPLOMACY end')
+    assert 'OUTCOME_UNKNOWN' not in asyncio.run(getattr(state,method)(196608,x,y))
+    assert conn.lua.eval('mode')==4
+    assert conn.lua.eval('#modeChanges')==0
+    assert conn.lua.eval('#submissions')==1
+
+
+def test_closed_route_chooser_cannot_replace_exact_route_evidence():
+    conn=TraderConn();state=GameState(conn)
+    conn.lua.execute('deferred=true;mode=InterfaceModeTypes.MAKE_TRADE_ROUTE')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.make_trade_route(196608,30,30))
+    assert conn.lua.eval('mode')==1
+    assert conn.lua.eval('activeCount()')==0
+    conn.lua.execute('applyTrader(submissions[1].op,submissions[1].params)')
+    assert asyncio.run(state.make_trade_route(196608,30,30)).startswith('TRADE_ROUTE_STARTED|')
+    assert conn.lua.eval('#submissions')==1
+    assert conn.lua.eval('#modeChanges')==1
+
+
+def test_unknown_interface_read_after_route_acceptance_stays_unknown_without_replay():
+    conn=TraderConn();state=GameState(conn)
+    conn.lua.execute('nativeApply=applyTrader;function applyTrader(op,p) nativeApply(op,p);UI.GetInterfaceMode=function() return nil end end')
+    result=asyncio.run(state.make_trade_route(196608,30,30))
+    assert 'ROUTE_ESTABLISHED_INTERFACE_CLEANUP_UNCONFIRMED' in result
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.make_trade_route(196608,30,30))
+    assert conn.lua.eval('activeCount()')==1
+    assert conn.lua.eval('#submissions')==1
+
+
 def test_lost_route_reply_repeated_mcp_call_only_confirms_original_trader():
     conn=TraderConn(); state=GameState(conn); ctx=make_ctx(); app_of(ctx).game=state
+    conn.lua.execute('mode=InterfaceModeTypes.MAKE_TRADE_ROUTE')
     conn.lose_reply=True
     assert 'OUTCOME_UNKNOWN' in asyncio.run(server.unit_action(ctx,196608,'trade_route',30,30))
     assert state.pending_action_kind=='trade_route'
@@ -87,6 +164,8 @@ def test_lost_route_reply_repeated_mcp_call_only_confirms_original_trader():
     assert '0:65537->1:65539' in result
     assert conn.lua.eval('#submissions')==1
     assert conn.lua.eval('activeCount()')==1
+    assert conn.lua.eval('mode')==1
+    assert conn.lua.eval('#modeChanges')==1
     assert state.pending_action_summary is None
 
 
@@ -183,6 +262,9 @@ def test_transfer_requires_original_unit_at_original_destination(change):
     'origin.owner=1', 'foreign=nil', 'GameInfo.Units[5].MakeTradeRoute=false',
     'units[196608].id=262144', 'units[196608].owner=1',
     'UnitManager.RequestOperation=nil', 'busy=true',
+    'UI.GetInterfaceMode=nil', 'UI.SetInterfaceMode=nil',
+    'UI.GetInterfaceMode=function() return nil end',
+    'InterfaceModeTypes.MAKE_TRADE_ROUTE=nil', 'InterfaceModeTypes.SELECTION=nil',
     'origin.routes={{TraderUnitID=196608,OriginCityPlayer=0,OriginCityID=65537,DestinationCityPlayer=0,DestinationCityID=65538}}',
 ])
 def test_native_route_refusal_is_zero_submission(setup):
