@@ -1221,14 +1221,14 @@ async def city_action(
 
     Args:
         city_id: City ID (from get_cities output)
-        action: Currently supported: 'attack' (city ranged attack)
+        action: attack, keep, reject, raze, liberate_founder, or liberate_previous
         target_x: Target X coordinate (required for attack)
         target_y: Target Y coordinate (required for attack)
 
     For attack: city must have walls and not have fired this turn.
     Range is 2 tiles from city center.
 
-    For captured/disloyal city decisions (city_id is ignored, uses pending city):
+    For captured/disloyal city decisions, city_id must match the original pending city. Unknown results retain that city; repeating the same decision only confirms it:
     - 'keep': Keep the city (works for both captured and loyalty-flipped cities)
     - 'reject': Reject/free a disloyal city (loyalty flip only)
     - 'raze': Raze a captured city (military conquest only)
@@ -1251,8 +1251,8 @@ async def city_action(
             return await _logged(
                 ctx,
                 "resolve_city_capture",
-                {"action": action},
-                lambda: gs.resolve_city_capture(action),
+                {"city_id": city_id, "action": action},
+                lambda: gs.resolve_city_capture(city_id, action),
             )
         case _:
             return f"Error: Unknown city action '{action}'. Available: attack, keep, reject, raze, liberate_founder, liberate_previous"

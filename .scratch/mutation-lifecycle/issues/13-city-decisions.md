@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 地块购买与可复用的未决动作契约
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] 传入城市 ID 必须匹配原待决城市，提交前拒绝错误对象。
 - [ ] 结果确认后不在同一次重入中处理下一座城。
