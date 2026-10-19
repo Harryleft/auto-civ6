@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import uuid
+
 from civ_mcp.lua._helpers import SENTINEL
 from civ_mcp.lua.models import GameNotification
 from civ_mcp.lua.turn_readiness import LUA_TURN_READINESS
@@ -67,12 +70,14 @@ print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
 
 
-def build_end_turn(expected_turn: int | None = None, expected_world: tuple[str, int, int] | None = None) -> str:
+def build_end_turn(expected_turn: int | None = None, expected_world: tuple[str, int, int] | None = None,
+                   *, request_token: str | None = None) -> str:
     """Final native guard and submission share one InGame block.
 
     NOT_SUBMITTED is emitted only before RequestAction. Errors/response loss
     after entry remain unknown; no native unready action is ever requested.
     """
+    token = json.dumps(request_token or uuid.uuid4().hex)
     expected = "Game.GetCurrentGameTurn()" if expected_turn is None else str(int(expected_turn))
     world = "nil" if expected_world is None else repr("|".join(map(str, expected_world)))
     return LUA_TURN_WORLD + LUA_TURN_READINESS + """
@@ -123,10 +128,60 @@ if UI.GetInterfaceMode() ~= InterfaceModeTypes.SELECTION then
 end
 reason = scopeReason()
 if reason then stop(reason); return end
-UI.RequestAction(ActionTypes.ACTION_ENDTURN)
+-- B13 temporary evidence only. These generic events never authorize retirement.
+local function retireAttempt(r)
+    if r and r.handlers then
+        for name,handler in pairs(r.handlers) do
+            pcall(function() Events[name].Remove(handler) end)
+        end
+        r.handlers={}
+    end
+end
+retireAttempt(__civmcpTurnAttempt)
+local attempt={token=REQUEST_TOKEN,scope=expectedWorld.."|"..expected,owner=me,turn=expected,
+    events={},handlers={},available={},dropped=0,diagnosticOnly=true}
+__civmcpTurnAttempt=attempt
+for _,name in ipairs({"EndTurnBlockingChanged","EndTurnDirty","UnitOperationSegmentComplete",
+    "UnitOperationsCleared","UnitOperationDeactivated","LocalPlayerTurnEnd","LocalPlayerTurnBegin",
+    "LocalPlayerTurnUnready","GameCoreEventPublishComplete","GameCoreEventPlaybackComplete"}) do
+    local event=Events and Events[name]
+    if event and type(event.Add)=="function" and type(event.Remove)=="function" then
+        local function capture(...)
+            if __civmcpTurnAttempt~=attempt then return end
+            if #attempt.events>=128 then
+                attempt.dropped=attempt.dropped+1;retireAttempt(attempt);return
+            end
+            local args={}
+            for index=1,select('#',...) do
+                local value=select(index,...)
+                args[index]=type(value)..":"..tostring(value):sub(1,160)
+            end
+            local scope=turnWorld()
+            table.insert(attempt.events,{seq=#attempt.events+1,name=name,args=args,scope=scope or "UNKNOWN",
+                phase=attempt.returned and "after_return" or (attempt.entered and "in_call" or "armed")})
+            if scope and scope~=attempt.scope then
+                attempt.scopeChanged=true;retireAttempt(attempt)
+            end
+        end
+        local function handler(...)
+            if not pcall(capture,...) then attempt.captureFailed=true end
+        end
+        attempt.handlers[name]=handler
+        attempt.available[name]=pcall(event.Add,handler)
+    else attempt.available[name]=false end
+end
+reason=scopeReason()
+if reason then retireAttempt(attempt);stop(reason);return end
+attempt.entered=true
+local result=UI.RequestAction(ActionTypes.ACTION_ENDTURN)
+attempt.returned=true
+attempt.returnType=type(result)
+-- Preserve nil explicitly; no return value is interpreted as an acceptance/refusal.
+attempt.returnValue=result
+if result==nil then attempt.returnValue="nil" end
 print("END_TURN|SUBMITTED")
 print("{SENTINEL}")
-""".replace("EXPECTED_TURN", expected).replace("EXPECTED_WORLD", world).replace("{SENTINEL}", SENTINEL)
+""".replace("EXPECTED_TURN", expected).replace("EXPECTED_WORLD", world).replace("REQUEST_TOKEN", token).replace("{SENTINEL}", SENTINEL)
 
 
 def build_notifications_query() -> str:

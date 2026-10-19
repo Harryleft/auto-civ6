@@ -401,3 +401,20 @@ def test_world_evidence_survives_later_read_cancellation(monkeypatch, observatio
         assert len(conn.requests) == 1
 
     asyncio.run(scenario())
+
+
+def test_diagnostic_attempt_token_is_stable_and_observation_never_retires_or_resends(clock):
+    import re
+    conn=GameStateConn();conn.advance=False;conn.send_error=ConnectionError('response lost')
+    state=GameState(conn)
+    assert 'result unknown' in asyncio.run(state.end_turn())
+    first=asyncio.run(state.get_turn_status())
+    token=re.search(r'attempt_token=([a-f0-9]{32})',first).group(1)
+    conn.send_error=None
+    assert 'WAITING:' in asyncio.run(state.end_turn())
+    assert f'attempt_token={token}' in asyncio.run(state.get_turn_status())
+    assert state.turn_pending and len(conn.requests)==1
+    conn.turn=51
+    assert 'Turn 50 -> 51' in asyncio.run(state.end_turn())
+    assert 'attempt_token=unknown' in asyncio.run(state.get_turn_status())
+    assert not state.turn_pending and len(conn.requests)==1

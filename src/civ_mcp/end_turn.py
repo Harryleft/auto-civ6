@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import re
 import time
+import uuid
 from typing import Callable, Protocol
 from dataclasses import dataclass, field
 
@@ -362,6 +363,7 @@ class TurnProgress:
     def reset(self) -> None:
         self.pending = False
         self.from_turn: int | None = None
+        self.attempt_token: str | None = None
         self.baseline: lq.TurnSnapshot | None = None
         self._scope_invalid = False
         self.world: WorldIdentity | None = None
@@ -398,6 +400,7 @@ class TurnProgress:
             "has_sent_turn_complete", "can_end_turn", "can_unready_turn", "interface_mode")]
         elapsed = now - self.submitted_at if self.submitted_at is not None else None
         facts += [f"world_identity={self.scope_state(status)}", f"pending={str(self.pending).lower()}", f"from_turn={value(self.from_turn)}",
+                  f"attempt_token={value(self.attempt_token)}",
                   f"elapsed={elapsed:g}s" if elapsed is not None else "elapsed=unknown",
                   f"phase_unchanged={now-self.phase_changed_at:g}s" if self.phase_changed_at is not None else "phase_unchanged=unknown",
                   f"last_observed_age={now-self.last_observed_at:g}s" if self.last_observed_at is not None else "last_observed_age=unknown",
@@ -543,8 +546,9 @@ class TurnProgress:
                 self.pending = True
                 self.from_turn = turn_before
                 self.submitted_at = time.monotonic()
+                self.attempt_token = uuid.uuid4().hex
                 try:
-                    receipt = await gs.conn.execute_write(lq.build_end_turn(turn_before, self.world))
+                    receipt = await gs.conn.execute_write(lq.build_end_turn(turn_before, self.world, request_token=self.attempt_token))
                     refused = [line for line in receipt if line.startswith("END_TURN|NOT_SUBMITTED|")]
                     if len(refused) == 1 and "END_TURN|SUBMITTED" not in receipt:
                         reason = refused[0].split("|", 2)[2]
