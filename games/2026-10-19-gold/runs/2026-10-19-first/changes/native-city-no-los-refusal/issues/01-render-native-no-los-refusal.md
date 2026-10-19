@@ -1,6 +1,6 @@
 # B26-01 Render native city NO_LOS refusal without submitting a shot
 
-Status: ready-for-agent
+Status: pending-review
 Dependencies: none
 Spec: ../spec.md
 
