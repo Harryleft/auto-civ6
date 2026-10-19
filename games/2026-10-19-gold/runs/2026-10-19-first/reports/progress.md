@@ -273,3 +273,7 @@ B22关闭：215f4cf首版经独立双审发现丢确认回复后监听过早退�
 B23 T128：#2359职业军队/魅力型领袖；#2360勇士131073原生直接升级为火枪手2818062（非逐时代升级），#2361殖民主义、#2362尼普尔37,26工业区6t/#2363首都38,26工业区8t。#2364传教士至拉格什34,26，#2365单次传播后charges3→2/城市转拜火，但PRESSURE_UNCONFIRMED；#2369科技弹窗关闭、#2370只确认仍未知。#2373纯诊断原回执绑定完整/started/entered/returned=true，错误压力读数5.96875不变，真实宗教行Pressure217.90625。已关闭旧owner，仅作纯诊断；恢复玩法前必须显式恢复T128b22verified，依原日志重作独立选择。B23进入to-spec→implement-spec。
 
 B24 T128：B23恢复后#2378–83重放独立选择。#2384首间谍2752514派往加拿大18,13已原生Started，却unknown；#2387仅确认仍未知。关闭owner作纯诊断，#2389原回执entered/returned/started true、原unit双入口absent；#2390本方off-map唯一NameIndex37/NameLOC_CITIZEN_SUMERIA_MODERN_FEMALE_8/Level1/18,13/ReturnTurn132。主源EspionageOverview独立读取offmaproster，旧工具却要求mapunit存在。B24进入to-spec→implement-spec；再次恢复同T128verified前不继续游戏。
+
+B23实机传播完成，待下一回合：97bdf16，251相关测试/compile/diff通过，独立Spec/Standards无实质发现。#2391显式恢复同T128成功60.276s，#2392–94核对单位/城市与原spy Name/Level/preoffmap0；#2395–2400重放职业军队/升级/殖民主义/两工业区及传教士移动。#2403建造者向铁矿仅至35,23 MP0.25，#2407取消旧移动并#2408单独skip；#2404–06原火枪手回34,22校园驻防、追猎者36,24驻防。#2409保存T128_b23_b24_ready911719bytes。clean刷新97bdf16，无世界重载，#2411单次传播确认原拉格什religion12累计压力17.90625→217.90625/charges剩2；#2412独立确认拜火2/3。#2413保存gold_20261019_t128_b23_spread_confirmed_b24_ready911813bytes。当前无pending，原spy2752514仍40,25/idle，等待B24最终代码再原T128派遣。
+
+#2414–15本方公开援助竞赛：巴西target2/militaryaidtype10、余24t（预计T152结束），参与0/1/3，分数0/-200/0。后续比较实际积分与资金，竞赛结果尚未知。
