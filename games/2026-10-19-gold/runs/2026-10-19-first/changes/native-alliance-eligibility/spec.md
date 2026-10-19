@@ -1,6 +1,6 @@
 # B20：研究同盟被错误市政前置拦截
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 
