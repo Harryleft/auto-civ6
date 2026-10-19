@@ -55,3 +55,13 @@ Standards 的单一根因是未知身份／时代／政策布局被误当成有�
 全量首轮 3799 通过／1 失败，原因是旧 Royal Society adapter 使用已变化的 Lua 源码前缀注入丢帧，故没有实际截断回应。现改为识别返回的 ACTION_IDENTITY 帧，保留原断言；相关 367 项通过。
 
 本轮最终全量 **3800 passed in 125.59s**，日志 `/tmp/civ6-ticket18-second-review-full.log`。`compileall -q src tests`、`git diff --check` 通过；26 个修改的 Markdown 文件／159 个本地链接及锚点，0 unresolved。未 push、未操作实机；工作树交回集成负责人复核与清理。
+
+### 第二次复核后的修复
+
+第二轮修复 `21ff615` 合入冻结集成 `2643c1d` 后，Spec 独立关闭前轮 2 个 P2，新增 0；Standards 原 P2 保持关闭，本轮新增 1 个 P2：外层身份探针要求四字段同时有效，一个未知字段会掩盖另一个有效的世界／回合／玩家变化。两轴历史分别保留，本轮 Standards 修复仍待独立复核，18 保持 claimed。
+
+公共探针逐字段隔离 getter 异常并验证原生类型，保留每个有效读数；确认按原绑定玩家读取文明，任何有效失配先锁存，部分未知仍不能确认成功。准备提交继续要求完整有效身份；普通身份刷新复用同一探针，完整 GAME_SCOPE 交当前动作比较，GAMESEED 与二元身份返回接口保留；世界身份不完整时不更新缓存。玩家 0–63、signed seed、政体 -1 与原生目录校验语义保持。
+
+新增 **56 项**公开 GameState／MCP＋真实 Lua 回归，采用没有内层身份守卫的时代承诺入口：四字段混合失配 24 项、单字段未知后恢复 20 项、普通身份刷新 12 项。红灯分别为 seed nil／throw 掩盖回合变化 2 例、普通身份刷新文明／seed 组合 6 例、玩家未知掩盖原玩家文明变化 2 例；收尾核对再补普通身份刷新玩家／回合组合 6 例红灯。有效变化后恢复原值仍保持未知；只有未知读数的请求可在恢复后只读确认，提交数始终为 1。
+
+针对回归 **574 passed in 13.48s**，日志 `/tmp/civ6-review-third-targeted-final.log`；最终全量 **3856 passed in 127.55s**，日志 `/tmp/civ6-ticket18-third-review-final.log`。`compileall -q src tests`、`git diff d3450a3 HEAD --check` 与工作区差异检查通过；26 个修改的 Markdown 文件／159 个本地链接及锚点，0 unresolved。未 push、未操作实机；工作树保留供最终合入、独立双轴复核与清理。

@@ -61,11 +61,8 @@ class _ActionScope:
     def from_fields(cls, civilization: str, seed: str, turn: str, owner: str) -> _ActionScope:
         """Validate native facts before either capturing or invalidating scope."""
         _, seed_value = _native_game_identity(civilization, seed)
-        if not all(re.fullmatch(r"[0-9]+", value) for value in (turn, owner)):
-            raise ValueError("no valid local turn or player")
-        if int(owner) > 63:
-            raise ValueError("native player outside 0..63")
-        return cls(civilization, seed_value, int(turn), int(owner))
+        return cls(civilization, seed_value, _native_integer(turn, minimum=0),
+                   _native_integer(owner, minimum=0, maximum=63))
 
     @property
     def identity(self) -> tuple[str, int]:
@@ -92,33 +89,52 @@ end
 {code}'''
 
 
-def _native_game_identity(civilization: str, seed: str) -> tuple[str, int]:
+def _native_civilization(civilization: str) -> str:
     if not re.fullmatch(r"CIVILIZATION_[A-Z0-9_]+", civilization):
         raise ValueError("invalid native civilization")
-    if not re.fullmatch(r"-?[0-9]+", seed):
-        raise ValueError("invalid native seed")
-    return civilization.removeprefix("CIVILIZATION_").lower(), int(seed)
+    return civilization.removeprefix("CIVILIZATION_").lower()
 
 
-def _scope_probe(tag: str) -> str:
+def _native_integer(value: str, *, minimum: int | None = None, maximum: int | None = None) -> int:
+    if not re.fullmatch(r"-?[0-9]+", value):
+        raise ValueError("invalid native integer")
+    number = int(value)
+    if (minimum is not None and number < minimum) or (maximum is not None and number > maximum):
+        raise ValueError("native integer outside valid range")
+    return number
+
+
+def _native_game_identity(civilization: str, seed: str) -> tuple[str, int]:
+    return _native_civilization(civilization), _native_integer(seed)
+
+
+def _scope_probe(tag: str, *, bound_owner: int | None = None, game_identity: bool = False) -> str:
     # Preserve native types before serialization: tostring("42") otherwise
     # makes an unavailable numeric getter indistinguishable from a valid fact.
+    # Read independently: an unavailable seed must not hide a changed turn.
+    identity_row = 'print("GAMESEED|" .. civ .. "|" .. tostring(seed))' if game_identity else ''
+    # Confirmation already knows whose civilization the request belongs to.
+    # Reading that player does not depend on a readable current local player.
+    civilization_owner = 'owner' if bound_owner is None else str(bound_owner)
     return f'''
-local actionScopeOK,actionScope=pcall(function()
+do
     local function integer(value)
         return type(value)=="number" and value==value and math.abs(value)<math.huge and value==math.floor(value)
     end
-    local owner=Game.GetLocalPlayer()
-    local civ=PlayerConfigurations[owner]:GetCivilizationTypeName()
-    local seed=GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")
-    local turn=Game.GetCurrentGameTurn()
-    assert(type(civ)=="string" and integer(seed) and integer(turn) and turn>=0
-           and integer(owner) and owner>=0 and owner<=63)
-    return {{civ,seed,turn,owner}}
-end)
-if actionScopeOK then
-    print("{tag}|" .. actionScope[1] .. "|" .. tostring(actionScope[2])
-          .. "|" .. tostring(actionScope[3]) .. "|" .. tostring(actionScope[4]))
+    local function read(getter, valid)
+        local ok,value=pcall(getter)
+        if ok and valid(value) then return value end
+        return ""
+    end
+    local owner=read(function() return Game.GetLocalPlayer() end,
+        function(value) return integer(value) and value>=0 and value<=63 end)
+    local civ=read(function() return PlayerConfigurations[{civilization_owner}]:GetCivilizationTypeName() end,
+        function(value) return type(value)=="string" and value:match("^CIVILIZATION_[A-Z0-9_]+$")~=nil end)
+    local seed=read(function() return GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED") end,integer)
+    local turn=read(function() return Game.GetCurrentGameTurn() end,
+        function(value) return integer(value) and value>=0 end)
+    print("{tag}|" .. civ .. "|" .. tostring(seed) .. "|" .. tostring(turn) .. "|" .. tostring(owner))
+    {identity_row}
 end
 '''
 
@@ -272,11 +288,32 @@ class ActionLifecycle:
 
     def observe_identity(self, civilization: str, seed: str) -> tuple[str, int]:
         """Only a valid native identity can invalidate a retained request."""
-        identity = _native_game_identity(civilization, seed)
+        self.observe_scope(civilization, seed)
+        return _native_game_identity(civilization, seed)
+
+    def observe_scope(self, civilization: str, seed: str,
+                      turn: str | None = None, owner: str | None = None) -> bool:
+        """Retain each valid mismatch even when another native field is unknown."""
         pending = self.pending
-        if pending is not None and pending.identity is not None and identity != pending.identity:
-            pending.details["scope_invalid"] = True
-        return identity
+        identity = pending.identity if pending is not None else None
+        fields = [
+            (civilization, _native_civilization, identity[0] if identity else None),
+            (seed, _native_integer, identity[1] if identity else None),
+            (turn, lambda value: _native_integer(value, minimum=0), pending.turn if pending else None),
+            (owner, lambda value: _native_integer(value, minimum=0, maximum=63), pending.owner if pending else None),
+        ]
+        known = True
+        for value, parse, expected in fields:
+            if value is None:
+                continue
+            try:
+                observed = parse(value)
+            except ValueError:
+                known = False
+            else:
+                if identity is not None and expected is not None and observed != expected:
+                    pending.details["scope_invalid"] = True
+        return known
 
     def unknown(self, reason: str = "confirmation deadline reached") -> str:
         pending = self.pending
@@ -309,7 +346,7 @@ class ActionLifecycle:
                     execute = self.conn.execute_write if pending.context == "write" else self.conn.execute_read
                     identity_probe = ""
                     if pending.identity is not None:
-                        identity_probe = _scope_probe("ACTION_IDENTITY")
+                        identity_probe = _scope_probe("ACTION_IDENTITY", bound_owner=pending.owner)
                     pending.observed = await execute(identity_probe + pending.query)
                     confirmed = self._confirmed_action(pending)
                     if confirmed is not None:
@@ -331,11 +368,8 @@ class ActionLifecycle:
             rows = [line.split("|") for line in pending.observed if line.startswith("ACTION_IDENTITY|")]
             if len(rows) != 1 or len(rows[0]) != 5:
                 return None
-            scope = _ActionScope.from_fields(*rows[0][1:])
-            if (scope.identity != pending.identity or scope.turn != pending.turn
-                    or scope.owner != pending.owner):
-                if scoped:
-                    pending.details["scope_invalid"] = True
+            complete = self.observe_scope(*rows[0][1:])
+            if not complete or pending.details.get("scope_invalid"):
                 return None
         if pending.evidence is not None:
             return pending.evidence.confirm(pending.observed)

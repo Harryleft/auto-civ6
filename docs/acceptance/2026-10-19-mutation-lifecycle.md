@@ -92,7 +92,11 @@ git diff --check
 
 首轮修复的 TDD 红灯分别为地块购买 3 例、其余共享范围守卫 36 例、时代与政策布局 4 例。该轮新增 [152 项公开入口回归](../../tests/test_scope_observation_recovery.py)，使用真实 GameState／MCP 和实际 Lua，仅在原生 adapter 注入 getter 抛错、nil、缺失、非预期类型或 NaN。已有结果证据完整时，恢复读数可确认且提交数保持 1；有效玩家／文明／seed／回合、时代或政策布局变化仍锁存。政策已付款时，只读恢复不换卡，同意图续行只提交一次换卡，金币余额保持 860。
 
-首轮相关回归 **1231 passed in 15.15s**，日志 `/tmp/civ6-review-scope-related.log`；该轮全量 **3715 passed in 125.17s**，日志 `/tmp/civ6-ticket18-review-fix-full.log`。`compileall -q src tests` 和 `git diff --check` 通过；26 个修改的 Markdown 文件／159 个本地链接及锚点，0 unresolved。Standards 对 `ba9cdd8` 的首次复核已关闭原 P2，**0 个剩余问题**；本次后续修复尚待独立复核。
+首轮相关回归 **1231 passed in 15.15s**，日志 `/tmp/civ6-review-scope-related.log`；该轮全量 **3715 passed in 125.17s**，日志 `/tmp/civ6-ticket18-review-fix-full.log`。`compileall -q src tests` 和 `git diff --check` 通过；26 个修改的 Markdown 文件／159 个本地链接及锚点，0 unresolved。Standards 对 `ba9cdd8` 的首次复核已关闭原 P2，**当轮 0 个剩余问题**。
+
+对第二轮修复后的冻结集成 `2643c1d`，Standards 原 P2 保持关闭，新增 **1 个 P2**：公共外层身份探针只在四字段全部有效时输出事实，未知字段会掩盖另一个有效变化。没有内层身份守卫的时代承诺可在 seed 未知、回合已变化后，因原值恢复而错误确认旧请求。
+
+本轮修复逐字段隔离 getter 异常、验证原生类型并保留有效事实；确认按原绑定玩家读取文明。Python 先锁存任何有效失配，身份全部有效且匹配才消费领域完成证据；准备提交仍要求完整身份。普通身份刷新复用同一探针，将完整 GAME_SCOPE 交当前动作比较，保留 GAMESEED 与二元身份返回接口；世界身份不完整时不更新缓存，有效玩家／回合变化也会锁存。本轮新增 **56 项**公开 GameState／MCP＋真实 Lua 回归：混合失配 24 项、纯未知恢复 20 项、普通身份刷新 12 项。红灯为原 seed／回合复现 2 例、身份刷新文明／seed 组合 6 例、未知玩家与变化文明 2 例，再补普通刷新玩家／回合组合 6 例；全部验证单次提交。针对回归 **574 passed in 13.48s**，日志 `/tmp/civ6-review-third-targeted-final.log`。本轮新增 P2 的修复仍待独立 Standards 复核。
 
 ## Spec
 
@@ -100,8 +104,12 @@ git diff --check
 
 本次修复统一外层准备与确认的身份解析，普通身份刷新也先验证原生文明与 seed 再影响未决状态或缓存。原生数值在序列化前检查类型，避免字符串 `"42"` 被误当成数字 42；外层与 Lua 记录都要求玩家为 0–63、回合非负，seed 保留负整数语义。政策槽数要求非负，槽位类型与政体必须存在于原生目录；政体 `-1` 保留原生“无政体”的有效语义。时代必须存在于原生 Eras 目录。
 
-该轮新增 **85 项**公开入口回归，范围恢复测试累计 **237 项**。红灯包括外层首读 2 例、身份刷新与数字字符串 4 例、政策／时代值域 6 例、玩家 64 的准备／确认 2 例。验证同时保留有效不匹配锁存、未知玩家不掩盖有效回合变化、玩家 0／63 与负／零 seed 可正常完成，以及原政策单次付款和显式续行。针对回归 **604 passed in 13.13s**，日志 `/tmp/civ6-review-second-targeted.log`。这两个问题的最新修复仍待独立 Spec 复核，未计为通过。
+该轮新增 **85 项**公开入口回归，范围恢复测试累计 **237 项**。红灯包括外层首读 2 例、身份刷新与数字字符串 4 例、政策／时代值域 6 例、玩家 64 的准备／确认 2 例。验证同时保留有效不匹配锁存、未知玩家不掩盖有效回合变化、玩家 0／63 与负／零 seed 可正常完成，以及原政策单次付款和显式续行。针对回归 **604 passed in 13.13s**，日志 `/tmp/civ6-review-second-targeted.log`。第二轮修复 `21ff615` 合入冻结集成 `2643c1d` 后，Spec 独立关闭这两个 P2，**新增 0**；本轮 Standards 新发现的修复仍待两轴独立复核。
 
 本轮全量首轮为 3799 通过／1 失败：旧皇家学会贡献测试依赖 `local actionMe =` 源码前缀识别确认帧，统一探针后未注入预期的丢帧。adapter 已改为识别实际返回的 ACTION_IDENTITY 帧，保留原行为断言；相关 **367 passed in 3.71s**，日志 `/tmp/civ6-review-second-contribution.log`。
 
 本轮最终全量 **3800 passed in 125.59s**，日志 `/tmp/civ6-ticket18-second-review-full.log`。`compileall -q src tests`、`git diff --check` 通过；26 个修改的 Markdown 文件／159 个本地链接及锚点，0 unresolved。最新代码只完成实现者验证，两轴独立复核、闭票与工作树清理仍由集成负责人执行。
+
+## 第二次复核后验证
+
+范围恢复回归累计 **293 项**，代码修改限于公共动作身份读取／比较与普通身份刷新。最终全量 **3856 passed in 127.55s**，日志 `/tmp/civ6-ticket18-third-review-final.log`。`compileall -q src tests`、`git diff d3450a3 HEAD --check` 与工作区差异检查通过；26 个修改的 Markdown 文件／159 个本地链接及锚点，0 unresolved。18 保持 claimed，等待本轮修复的独立双轴复核；未 push、未操作实机，工作树由最终集成环节清理。
