@@ -267,6 +267,16 @@ local fromX, fromY = unit:GetX(), unit:GetY()
 local params = {{}}
 params[UnitOperationTypes.PARAM_X] = {target_x}
 params[UnitOperationTypes.PARAM_Y] = {target_y}
+-- Civ6Common.RequestMoveOperation permits destinations outside current sight.
+-- Keep its fog flag separate from authorization for hostile target capture.
+local flagOK,ignoreFog = pcall(function() return UnitOperationMoveModifiers.MOVE_IGNORE_UNEXPLORED_DESTINATION end)
+local function movementFlag(value)
+    return type(value)=="number" and value>0 and value<math.huge and value==math.floor(value)
+end
+if not flagOK or not movementFlag(ignoreFog) or UnitOperationTypes.PARAM_MODIFIERS==nil then
+    {_bail("ERR:MOVE_MODIFIER_UNAVAILABLE|Native fog movement modifier unavailable; no move submitted.")}
+end
+params[UnitOperationTypes.PARAM_MODIFIERS] = ignoreFog
 -- Foreign units may be allies or neutral. Only an existing native war
 -- authorizes the ATTACK modifier needed for hostile civilian capture.
 local hasHostile = false
@@ -285,7 +295,11 @@ if tgtUnits then
     end
 end
 if hasHostile then
-    params[UnitOperationTypes.PARAM_MODIFIERS] = UnitOperationMoveModifiers.ATTACK
+    local attack = UnitOperationMoveModifiers.ATTACK
+    if not movementFlag(attack) then
+        {_bail("ERR:MOVE_MODIFIER_UNAVAILABLE|Native hostile movement modifier unavailable; no move submitted.")}
+    end
+    params[UnitOperationTypes.PARAM_MODIFIERS] = ignoreFog + attack
 end
 -- General movement eligibility does not validate this destination. Use the
 -- final parameters before arming a witness or submitting any operation.
