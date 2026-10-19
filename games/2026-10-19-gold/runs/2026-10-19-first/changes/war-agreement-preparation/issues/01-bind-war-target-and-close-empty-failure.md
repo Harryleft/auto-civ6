@@ -1,6 +1,6 @@
 # B08-01：完整战争条款与失败空草稿收尾
 
-Status: implemented-pending-review
+Status: resolved
 Blocked by: none
 Spec: ../spec.md
 
@@ -16,3 +16,7 @@ propose_trade 保留 joint_war_target 为显式 WAR_AGREEMENT 请求意图，并
 失败准备的 abort 继续要求原世界、原观察者／会话／参与者、receipt token/sid/target、failed=true／sent=false，且无 queued/pending 替换。除旧精确指纹路径外，仅允许原生可读且 ItemCount=0、指纹为空的当前草稿退出。不同非空或不可读草稿仍未知；不调用通用 clear、不重发原请求。失败原因与原生可选项写入 receipt，安全清理后返回给模型。
 
 TDD：server target 传播、WarType selector、漏目标拒绝、原生 ongoing-war 条款、无绑定旧 war item、原生清空 failed draft、读取错误分类均先红后绿。补充双方新战争同类型、缺／歧义／改变选项、目标／WarType counter、lost preview不重发，以及12项空草稿 ownership 篡改拒绝。最终 trade_progress／server／diplomacy_context_lua／incoming_negotiation／incoming_final_response／diplomacy_cleanup 共 452 passed；compileall 与 diff --check 通过。独立审查与 T44 实机预览／防御／推进由主代理继续。
+
+## Verification
+
+实施a9665fc，集成5d9991c。452相关离线通过，Spec/Standards独立审查均无实质发现。原T44新MCP实测#711–713三次战争交易预览正常返回REJECTED并确认原生关闭，未成交；#714无未决外交。后续普通经济交易可继续（预览条件与发送评价结果不同，按发送原生拒绝保留未成交，#724明确退出）；#727确认T44→T45，战争和伤害保留，#731保存gold_20261019_t045_b08_verified。同轮run_id保持不变。
