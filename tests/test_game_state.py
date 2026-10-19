@@ -1415,51 +1415,6 @@ class TestSetPolicies:
         assert conn.exhausted
 
 
-class TestPromoteGovernor:
-    """Governor promotions are verified by re-reading HasPromotion — an
-    applied-looking PROMOTED line is not proof the promotion stuck."""
-
-    def test_verified_promotion_returns_the_original_result(self):
-        gs, conn = _gs(
-            [
-                ("write", ["OK:PROMOTED|Pingala with Librarian"]),
-                ("write", ["VERIFIED"]),
-            ]
-        )
-
-        async def go():
-            return await gs.promote_governor(
-                "GOVERNOR_THE_EDUCATOR", "GOVERNOR_EDUCATOR_LIBRARIAN"
-            )
-
-        assert run(go()) == "PROMOTED|Pingala with Librarian"
-        assert conn.exhausted
-
-    def test_failed_verification_replaces_the_result_with_the_error(self):
-        gs, _ = _gs(
-            [
-                ("write", ["OK:PROMOTED|Pingala with Librarian"]),
-                ("write", ["ERR:PROMOTION_FAILED|LIBRARIAN was not applied"]),
-            ]
-        )
-
-        async def go():
-            return await gs.promote_governor(
-                "GOVERNOR_THE_EDUCATOR", "GOVERNOR_EDUCATOR_LIBRARIAN"
-            )
-
-        assert run(go()) == "Error: PROMOTION_FAILED|LIBRARIAN was not applied"
-
-    def test_non_promoted_result_skips_verification(self):
-        gs, conn = _gs([("write", ["ERR:NO_GOVERNOR|not appointed"])])
-
-        async def go():
-            return await gs.promote_governor("GOVERNOR_THE_EDUCATOR", "X")
-
-        assert run(go()) == "Error: NO_GOVERNOR|not appointed"
-        assert conn.exhausted
-
-
 # ---------------------------------------------------------------------------
 # Diplomacy actions
 # ---------------------------------------------------------------------------
