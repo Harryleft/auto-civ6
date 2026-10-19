@@ -779,12 +779,35 @@ class GameState:
         item_name: str,
         yield_type: str = "YIELD_GOLD",
     ) -> str:
-        blocked = await self._action_gate(("city", city_id))
+        if (type(city_id) is not int or city_id < 0 or not isinstance(item_type, str)
+                or not isinstance(item_name, str) or not isinstance(yield_type, str)):
+            return "Error: INVALID_PURCHASE|Expected a full city ID and UNIT/BUILDING item with GOLD/FAITH currency."
+        item_type, item_name, yield_type = item_type.upper(), item_name.upper(), yield_type.upper()
+        if (item_type not in {"UNIT", "BUILDING"} or yield_type not in {"YIELD_GOLD", "YIELD_FAITH"}
+                or not re.fullmatch(r"[A-Z][A-Z0-9_]*", item_name)):
+            return "Error: INVALID_PURCHASE|Only UNIT/BUILDING and YIELD_GOLD/YIELD_FAITH are supported."
+        entity, intent = ("city", city_id), (item_type, item_name, yield_type)
+        if self._actions.matches("purchase_item", entity, intent=intent):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
         if blocked:
             return blocked
-        lua = lq.build_purchase_item(city_id, item_type, item_name, yield_type)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            "purchase_item", entity, lq.build_item_purchase_query(city_id, item_type, item_name, yield_type, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"item": item_name, "currency": yield_type, "witness_token": token}, intent=intent,
+            evidence=_ActionEvidence(
+                tool="purchase_item", entrypoint="purchase_item", accepted=("ITEM_PURCHASE_REQUESTED|",),
+                refused="ERR:ITEM_PURCHASE_REFUSED|",
+                confirm=lambda rows: lq.parse_item_purchase_confirmation(rows, token, city_id, item_name, yield_type),
+                guidance="Repeat purchase_item with the original city, product and currency to confirm only. ",
+            ),
+        )
+        return await self._submit_action(pending, scope, lq.build_purchase_item(city_id, item_type, item_name, yield_type, token))
 
     async def list_city_production(self, city_id: int) -> list[lq.ProductionOption]:
         lua = lq.build_city_production_query(city_id)
