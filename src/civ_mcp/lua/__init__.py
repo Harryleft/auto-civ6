@@ -36,7 +36,6 @@ from civ_mcp.lua.cities import (  # noqa: F401
     build_city_production_query,
     build_city_yield_focus_query,
     build_produce_item,
-    build_purchase_item,
     build_resolve_city_capture,
     build_set_yield_focus,
     build_verify_production,
@@ -94,9 +93,12 @@ from civ_mcp.lua.great_people import (  # noqa: F401
     parse_gp_advisor_response,
     parse_great_people_response,
 )
+from civ_mcp.lua.governors import (  # noqa: F401
+    build_governor_action,
+    build_governor_confirmation,
+    parse_governor_confirmation,
+)
 from civ_mcp.lua.governance import (  # noqa: F401
-    build_appoint_governor,
-    build_assign_governor,
     build_available_governments_query,
     build_change_government,
     build_choose_dedication,
@@ -104,7 +106,6 @@ from civ_mcp.lua.governance import (  # noqa: F401
     build_dedications_query,
     build_governors_query,
     build_policies_query,
-    build_promote_governor,
     build_set_policies,
     build_unit_promotions_query,
     build_unit_upgrade_query,
@@ -315,3 +316,5 @@ from civ_mcp.lua.tile_purchase import build_purchase_tile, build_tile_purchase_q
 from civ_mcp.lua.contribution import (  # noqa: F401
     build_contribution_preflight, build_sacrifice_builder_charges, build_contribution_query,
 )
+
+from civ_mcp.lua.item_purchase import build_purchase_item, build_item_purchase_query, parse_item_purchase_confirmation  # noqa: F401
