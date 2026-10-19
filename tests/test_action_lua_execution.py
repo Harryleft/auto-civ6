@@ -42,7 +42,8 @@ unit = {
 }
 Players = {[0]={GetUnits=function() return {FindID=function() return unit end} end}}
 GameInfo = {Units={[1]={FormationClass="FORMATION_CLASS_LAND_COMBAT"}}}
-UnitOperationTypes = {MOVE_TO=1, PARAM_X=2, PARAM_Y=3}
+UnitOperationTypes = {MOVE_TO=1, PARAM_X=2, PARAM_Y=3, PARAM_MODIFIERS=4}
+UnitOperationMoveModifiers={ATTACK=16,MOVE_IGNORE_UNEXPLORED_DESTINATION=16384}
 UnitManager = {
     GetUnit=function() return unit end,
     CanStartOperation=function() return true end,
