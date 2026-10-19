@@ -5,8 +5,8 @@ from civ_mcp.lua._helpers import SENTINEL, _LUA_ACTION_SCOPE
 from civ_mcp.lua.units import _LUA_UNIT_READINESS
 
 
-# Native UnitOperationStarted/Added bind the exact operation. Automation has
-# no supported current-task getter; report observed start, never explored results.
+# Native Started carries the operation hash; Added carries its row Index in
+# the fourth field. Automation start does not prove future exploration results.
 _TASKS = {
     'automate': ('AUTOMATE_EXPLORE', 'AUTOMATED', None),
     'heal': ('HEAL', 'HEALING', 'ACTIVITY_HEAL'),
@@ -60,15 +60,24 @@ local ok,r=pcall(function()
  end
  local op=GameInfo.UnitOperations["UNITOPERATION_{operation}"]
  assert(op and type(op.Hash)=="number","OPERATION_UNAVAILABLE")
- assert(UnitManager.CanStartOperation(unit,op.Hash,nil,true)==true,"CANNOT_OPERATE")
+ -- UnitPanel's fourth argument true is only its loose UI visibility check.
+ assert(UnitManager.CanStartOperation(unit,op.Hash,nil,false)==true,"CANNOT_OPERATE")
  assert(type(UnitManager.RequestOperation)=="function","OPERATION_UNAVAILABLE")
+ if "{kind}"=="automate" then assert(scopeIndex(op.Index),"OPERATION_INDEX_UNAVAILABLE") end
  local events={{}}
+ local addedAvailable=false
  for _,name in ipairs({{"UnitOperationStarted","UnitOperationAdded"}}) do
   local event=Events and Events[name]
-  if event and type(event.Add)=="function" and type(event.Remove)=="function" then table.insert(events,name) end
+  if event and type(event.Add)=="function" and type(event.Remove)=="function"
+   and (name~="UnitOperationAdded" or scopeIndex(op.Index)) then
+   table.insert(events,name)
+   if name=="UnitOperationAdded" then addedAvailable=true end
+  end
  end
- assert(#events>0,"OPERATION_OBSERVER_UNAVAILABLE")
- r.op=op.Hash;r.events=events
+ -- Automation emitted Added but no Started in the real engine. Require its
+ -- usable observer before submission, rather than hoping Started will fire.
+ assert(#events>0 and ("{kind}"~="automate" or addedAvailable),"OPERATION_OBSERVER_UNAVAILABLE")
+ r.op=op.Hash;r.opIndex=op.Index;r.events=events
  return r
 end)
 if not ok then print("ERR:UNIT_TASK_REFUSED|"..tostring(r));print("{SENTINEL}");return end
@@ -77,9 +86,18 @@ __civmcpUnitTask=r
 if r.noop then print("OK:UNIT_TASK_NOOP|"..r.id);print("{SENTINEL}");return end
 local armed=pcall(function()
  for _,name in ipairs(r.events) do
-  r.handlers[name]=function(owner,id,op)
-   if __civmcpUnitTask==r and r.entered==true and owner==r.owner and id==r.id and op==r.op
+  local function accept(owner,id,matches)
+   if __civmcpUnitTask==r and r.entered==true and owner==r.owner and id==r.id and matches
     and sameScope(r) then r.started=true end
+  end
+  if name=="UnitOperationStarted" then
+   r.handlers[name]=function(owner,id,operationHash) accept(owner,id,operationHash==r.op) end
+  else
+   -- T11 native Added carries row Index in field four; field three is not
+   -- the operation hash and is not used as task identity.
+   r.handlers[name]=function(owner,id,unused,operationIndex)
+    accept(owner,id,r.opIndex~=nil and operationIndex==r.opIndex)
+   end
   end
   Events[name].Add(r.handlers[name])
  end
