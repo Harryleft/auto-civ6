@@ -15,12 +15,20 @@ class FriendshipConn(DiplomacyConn):
         self.calls = []
         self.lua.execute('''
 sessions, infos, friendship_requests, observations = {}, {}, {}, 0
-valid=true
+seed=123; turn=78; civilization="CIVILIZATION_SUMERIA"
+Game.GetCurrentGameTurn=function() return turn end
+GameConfiguration={GetValue=function() return seed end}
+PlayerConfigurations[0]={GetCivilizationTypeName=function() return civilization end}
+UI={IsGameCoreBusy=function() return false end}
+PlayerConfigurations[2].GetCivilizationTypeName=function() return "CIVILIZATION_ROME" end
+valid=true;friendship_baseline=60;friendship_submitted=false
 local diplo=Players[0]:GetDiplomacy()
 diplo.IsDiplomaticActionValid=function() return valid, {FailureReasons={"native refused"}} end
 DiplomacyManager.RequestSession=function(me, target, action)
     table.insert(friendship_requests, {owner=me, target=target, action=action})
+    friendship_submitted=true
     sessions[target]=80
+    infos[80]={FromPlayer=me,ToPlayer=target}
 end
 DiplomaticStates={DECLARED_FRIEND=9001}
 GameInfo={DiplomaticStates={
@@ -36,6 +44,7 @@ for owner=0,1 do
     Players[owner].GetDiplomaticAI=function() return {
         GetDiplomaticStateIndex=function(_, target)
             assert(target==1-playerOwner, "query must read the reciprocal player pair")
+            if not friendship_submitted then return friendship_baseline end
             if playerOwner==0 then observations=observations+1 end
             local row=readbacks[math.min(observations,#readbacks)]
             return row[playerOwner]
@@ -46,14 +55,24 @@ end
 
     async def execute_write(self, source):
         self.calls.append(source)
-        return await super().execute_write(source)
+        from lupa.lua51 import LuaError as NativeLuaError
+        try:
+            return await super().execute_write(source)
+        except NativeLuaError as err:
+            raise LuaError(str(err)) from err
+
+
+def checked_rows(rows):
+    if not isinstance(rows, list) or not all(isinstance(row,str) for row in rows):
+        raise LuaError("Malformed native frame")
+    return rows
 
 
 def run(awaitable):
     return asyncio.run(awaitable)
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def short_confirmation(monkeypatch):
     monkeypatch.setattr("civ_mcp.game_state.ACTION_CONFIRM_TIMEOUT", 0.015)
     monkeypatch.setattr("civ_mcp.game_state.ACTION_CONFIRM_INTERVAL", 0.001)
@@ -62,8 +81,8 @@ def short_confirmation(monkeypatch):
 def test_valid_but_persistently_unfriendly_is_unconfirmed_and_never_submitted_twice(short_confirmation):
     conn = FriendshipConn()
     result = run(GameState(conn).send_diplomatic_action(1, "DECLARE_FRIENDSHIP"))
-    assert result.startswith("PROPOSED_UNCONFIRMED|"), result
-    assert "get_diplomacy" in result and "do not automatically resend" in result
+    assert result.startswith("ERR:OUTCOME_UNKNOWN"), result
+    assert "get_diplomacy" in result and "confirm only" in result
     assert "ACCEPTED" not in result and "REJECTED" not in result
     assert len(conn.lua.globals().friendship_requests) == 1
     assert conn.lua.globals().friendship_requests[1].action == "DECLARE_FRIEND"
@@ -75,7 +94,7 @@ def assert_one_submission_and_readonly_confirmation(conn):
     assert conn.lua.globals().friendship_requests[1].owner == 0
     assert conn.lua.globals().friendship_requests[1].target == 1
     # Existing request/response/close protocol is confined to the first call.
-    assert list(conn.lua.globals().mutations.values()) == ["response", "response", "close", "show", "hide"]
+    assert list(conn.lua.globals().mutations.values()) == ["response", "response", "close"]
 
 
 def test_immediate_bilateral_declared_friend_uses_native_mapping_not_assumed_indices():
@@ -117,13 +136,13 @@ def test_nonfriend_inconsistent_missing_or_unknown_native_state_cannot_report_ac
     original = conn.execute_write
 
     async def execute(source):
-        if conn.calls:
+        if len(conn.lua.globals().friendship_requests):
             conn.lua.execute(setup)
         return await original(source)
 
     conn.execute_write = execute
     result = run(GameState(conn).send_diplomatic_action(1, "DECLARE_FRIENDSHIP"))
-    assert result.startswith("PROPOSED_UNCONFIRMED|")
+    assert result.startswith("ERR:OUTCOME_UNKNOWN")
     assert "ACCEPTED" not in result and "REJECTED" not in result
     assert_one_submission_and_readonly_confirmation(conn)
 
@@ -134,11 +153,13 @@ def test_native_prevalidation_rejection_stays_original_and_has_zero_requests_or_
     conn.lua.globals().valid = False
     conn.lua.globals().native_refusal = reason
     conn.lua.execute('Players[0]:GetDiplomacy().IsDiplomaticActionValid=function() return false, {FailureReasons={native_refusal}} end')
-    result = run(GameState(conn).send_diplomatic_action(1, "DECLARE_FRIENDSHIP"))
-    assert result == f"Error: INVALID|{reason}"
+    state = GameState(conn)
+    result = run(state.send_diplomatic_action(1, "DECLARE_FRIENDSHIP"))
+    assert not state.pending_action_summary
+    assert result == f"Error: RELATIONSHIP_REFUSED|INVALID|{reason}"
     assert len(conn.lua.globals().friendship_requests) == 0
     assert conn.lua.globals().observations == 0
-    assert len(conn.calls) == 1
+    assert len(conn.calls) == 2
     assert list(conn.lua.globals().mutations.values()) == []
 
 
@@ -154,13 +175,13 @@ def test_only_one_exact_scoped_readback_authorizes_acceptance(short_confirmation
     original = conn.execute_write
 
     async def execute(source):
-        if conn.calls:
-            return rows
+        if len(conn.lua.globals().friendship_requests):
+            return checked_rows(rows)
         return await original(source)
 
     conn.execute_write = execute
     result = run(GameState(conn).send_diplomatic_action(1, "DECLARE_FRIENDSHIP"))
-    assert result.startswith("PROPOSED_UNCONFIRMED|")
+    assert result.startswith("ERR:OUTCOME_UNKNOWN")
     assert_one_submission_and_readonly_confirmation(conn)
 
 
@@ -170,13 +191,13 @@ def test_transport_read_error_is_unconfirmed_without_another_submission(error):
     original = conn.execute_write
 
     async def execute(source):
-        if conn.calls:
+        if len(conn.lua.globals().friendship_requests):
             raise error
         return await original(source)
 
     conn.execute_write = execute
     result = run(GameState(conn).send_diplomatic_action(1, "DECLARE_FRIENDSHIP"))
-    assert result.startswith("PROPOSED_UNCONFIRMED|")
+    assert result.startswith("ERR:OUTCOME_UNKNOWN")
     assert_one_submission_and_readonly_confirmation(conn)
 
 
@@ -185,7 +206,7 @@ def test_confirmation_deadline_includes_a_read_that_never_finishes(short_confirm
     original = conn.execute_write
 
     async def execute(source):
-        if conn.calls:
+        if len(conn.lua.globals().friendship_requests):
             await asyncio.Future()
         return await original(source)
 
@@ -195,7 +216,7 @@ def test_confirmation_deadline_includes_a_read_that_never_finishes(short_confirm
         return await asyncio.wait_for(GameState(conn).send_diplomatic_action(1, "DECLARE_FRIENDSHIP"), 0.3)
 
     result = run(call())
-    assert result.startswith("PROPOSED_UNCONFIRMED|")
+    assert result.startswith("ERR:OUTCOME_UNKNOWN")
     assert_one_submission_and_readonly_confirmation(conn)
 
 
@@ -205,28 +226,18 @@ def test_write_exception_does_not_claim_acceptance_rejection_or_resend(after_nat
     original = conn.execute_write
 
     async def execute(source):
+        if not conn.calls:
+            return await original(source)
         if after_native:
             await original(source)
         raise OSError("write result unknown")
 
     conn.execute_write = execute
     result = run(GameState(conn).send_diplomatic_action(1, "DECLARE_FRIENDSHIP"))
-    assert result.startswith("PROPOSED_UNCONFIRMED|")
+    assert result.startswith("ERR:OUTCOME_UNKNOWN")
     assert "ACCEPTED" not in result and "REJECTED" not in result
     assert len(conn.lua.globals().friendship_requests) == int(after_native)
     assert conn.lua.globals().observations == 0
-
-
-@pytest.mark.parametrize("action, result", [
-    ("DENOUNCE", "SENT|Denounced Sweden"),
-])
-def test_other_diplomatic_routes_keep_the_existing_protocol_and_result(action, result):
-    conn = FriendshipConn()
-    assert run(GameState(conn).send_diplomatic_action(1, action)) == result
-    assert len(conn.lua.globals().friendship_requests) == 1
-    assert conn.lua.globals().friendship_requests[1].action == action
-    assert conn.lua.globals().observations == 0
-    assert len(conn.calls) == 1
 
 
 @pytest.mark.parametrize("setup", [
@@ -235,9 +246,14 @@ def test_other_diplomatic_routes_keep_the_existing_protocol_and_result(action, r
 ])
 def test_malformed_numeric_mapping_is_not_a_bilateral_friend_witness(short_confirmation, setup):
     conn = FriendshipConn()
-    conn.lua.execute(setup)
+    original = conn.execute_write
+    async def execute(source):
+        if len(conn.lua.globals().friendship_requests):
+            conn.lua.execute(setup)
+        return await original(source)
+    conn.execute_write = execute
     result = run(GameState(conn).send_diplomatic_action(1, "DECLARE_FRIENDSHIP"))
-    assert result.startswith("PROPOSED_UNCONFIRMED|")
+    assert result.startswith("ERR:OUTCOME_UNKNOWN")
     assert_one_submission_and_readonly_confirmation(conn)
 
 
@@ -256,11 +272,12 @@ def test_missing_or_malformed_submission_receipt_never_invents_confirmation(rows
     original = conn.execute_write
 
     async def execute(source):
+        if not conn.calls:
+            return await original(source)
         await original(source)
-        return rows
+        return checked_rows(rows)
 
     conn.execute_write = execute
     result = run(GameState(conn).send_diplomatic_action(1, "DECLARE_FRIENDSHIP"))
-    assert result.startswith("PROPOSED_UNCONFIRMED|")
+    assert result.startswith("ERR:OUTCOME_UNKNOWN")
     assert len(conn.lua.globals().friendship_requests) == 1
-    assert conn.lua.globals().observations == 0

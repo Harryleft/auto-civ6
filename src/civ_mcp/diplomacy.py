@@ -86,11 +86,11 @@ class DiplomacyProgress:
         return (not self.scope_invalid and expected is not None and observed == [expected]
                 and all(allowed))
 
-    async def incoming_quote(self, conn, sid: int, target: int, *, gs=None) -> dict | None:
+    async def incoming_quote(self, conn, sid: int, target: int, *, gs=None, final: bool = False) -> dict | None:
         if self.scope_invalid or (self.incoming is None and not await self.ensure_observer(conn)):
             return None
         try:
-            rows = await _named(conn, "DiplomacyDealView", native.build_incoming_quote(self.observer_scope, target, sid))
+            rows = await _named(conn, "DiplomacyDealView", native.build_incoming_quote(self.observer_scope, target, sid, final=final))
             if not self._incoming_world_allowed(gs, rows):
                 return None
             data = {}
@@ -101,6 +101,11 @@ class DiplomacyProgress:
                 data[name.lower()] = values[0]
             if data["scope"] != self.observer_scope or data["session"] != f"{sid}|{target}":
                 return None
+            if final:
+                kinds = [row.split("|", 1)[1] for row in rows if row.startswith("INCOMING_DEMAND|")]
+                if kinds not in (["true"], ["false"]):
+                    return None
+                data["demand"] = kinds == ["true"]
             data["fingerprint"] = hashlib.sha256("\n".join(rows).encode()).hexdigest()
             return data
         except (OSError, TimeoutError, LuaError):
@@ -178,6 +183,8 @@ class DiplomacyProgress:
         attempt = self.incoming
         if attempt is None or self.scope_invalid or not gs.allows_incoming_trade_world(attempt.scope):
             return self.trade_summary()
+        if attempt.action in ("ACCEPTED", "REJECTED"):
+            return await self.confirm_incoming_final(gs)
         try:
             async with asyncio.timeout(TRADE_CONFIRM_SECONDS):
                 while True:
@@ -280,7 +287,8 @@ class DiplomacyProgress:
         if self.scope_invalid:
             return "ERR:OUTCOME_UNKNOWN|Diplomacy world changed; explicit protected recovery required."
         if self.incoming is not None:
-            return f"ERR:OUTCOME_UNKNOWN|Incoming {self.incoming.action} with player {self.incoming.target} is pending; repeat negotiate_incoming_trade only confirms, never resends."
+            tool = "respond_to_deal" if self.incoming.action in ("ACCEPTED", "REJECTED") else "negotiate_incoming_trade"
+            return f"ERR:OUTCOME_UNKNOWN|Incoming {self.incoming.action} with player {self.incoming.target} is pending; repeat {tool} only confirms, never resends."
         if self.trade is not None:
             return (f"ERR:OUTCOME_UNKNOWN|Trade attempt {self.trade.phase} with player {self.trade.target} is pending. "
                     "Repeat the original trade tool only to confirm; no RequestSession, proposal or response will be resent.")
@@ -491,9 +499,70 @@ class DiplomacyProgress:
             return self.trade_summary()
         return await self.resume_trade(gs)
 
+    async def respond_incoming(self, gs, target: int, accept: bool) -> str:
+        action = "ACCEPTED" if accept else "REJECTED"
+        if self.incoming is not None:
+            if self.incoming.target == target and self.incoming.action == action:
+                return await self.confirm_incoming_final(gs)
+            return self.trade_summary()
+        if self.scope_invalid or self.trade is not None or self.response is not None or gs.save_pending or gs.replacement_pending or gs.pending_action_summary or gs._diplomacy_cleanup.pending:
+            return "ERR:NOT_SUBMITTED|Another action or diplomacy attempt is pending."
+        context = await gs.get_pending_deals()
+        if context.status != "INCOMING" or len(context.sessions) != 1 or context.sessions[0].other_player_id != target:
+            return f"ERR:NOT_SUBMITTED|{context.status}: {context.reason}; no verified incoming negotiation for this target."
+        sid = context.sessions[0].session_id
+        quote = await self.incoming_quote(gs.conn, sid, target, final=True)
+        if quote is None or not gs.allows_incoming_trade_world(quote["scope"]):
+            return "ERR:NOT_SUBMITTED|Incoming quote or original world is unknown."
+        if accept and quote["phase"] != "ACCEPTABLE":
+            return "ERR:NOT_ACCEPTABLE|Current native incoming terms cannot be accepted."
+        attempt = IncomingAttempt(uuid.uuid4().hex, target, sid, quote["scope"], action, demand=quote["demand"], original=quote["original"], current=quote["current"])
+        self.incoming = attempt
+        try:
+            rows = await _named(gs.conn, "DiplomacyActionView", native.build_incoming_arm(self.nonce, attempt.token, target, sid, action))
+            if not self._incoming_world_allowed(gs, rows):
+                return self.trade_summary()
+            statuses = [row for row in rows if row.startswith("INCOMING|")]
+            if statuses == ["INCOMING|NOT_ARMED"]:
+                self.incoming = None
+                return "ERR:NOT_SUBMITTED|Original incoming session could not be armed."
+            if statuses != ["INCOMING|ARMED"]:
+                return self.trade_summary()
+            rows = await _named(gs.conn, "DiplomacyDealView", native.build_incoming_final_send(attempt.scope, target, sid, attempt.token, quote["original"], quote["current"], accept, demand=attempt.demand))
+            if not self._incoming_world_allowed(gs, rows):
+                return self.trade_summary()
+            if any(row.startswith("INCOMING|NOT_SUBMITTED|") for row in rows) or "INCOMING|NOT_READY" in rows:
+                finished = await _named(gs.conn, "DiplomacyActionView", native.build_incoming_finish(self.nonce, attempt.token, zero=True))
+                if self._incoming_world_allowed(gs, finished) and "INCOMING_FINISH|CONFIRMED" in finished:
+                    self.incoming = None
+                    return "ERR:NOT_SUBMITTED|Incoming quote changed before response; no response sent."
+        except (OSError, TimeoutError, LuaError):
+            return self.trade_summary()
+        return await self.confirm_incoming_final(gs)
+
+    async def confirm_incoming_final(self, gs) -> str:
+        attempt = self.incoming
+        if attempt is None or self.scope_invalid or not gs.allows_incoming_trade_world(attempt.scope):
+            return self.trade_summary()
+        try:
+            async with asyncio.timeout(TRADE_CONFIRM_SECONDS):
+                while True:
+                    receipt = await _named(gs.conn, "DiplomacyDealView", native.build_incoming_final_receipt(attempt.scope, attempt.target, attempt.sid, attempt.token, attempt.action, original=attempt.original, current=attempt.current, demand=attempt.demand))
+                    if not self._incoming_world_allowed(gs, receipt) or "INCOMING_FINAL_RECEIPT|ENTERED" not in receipt:
+                        return self.trade_summary()
+                    rows = await _named(gs.conn, "DiplomacyActionView", native.build_incoming_final_confirmation(self.nonce, attempt.token, attempt.action, demand=attempt.demand))
+                    if not self._incoming_world_allowed(gs, rows):
+                        return self.trade_summary()
+                    if "INCOMING_FINAL|CONFIRMED" in rows:
+                        self.incoming = None
+                        return f"DEAL_{attempt.action}|Native final response confirmed for player {attempt.target}."
+                    await asyncio.sleep(TRADE_POLL_SECONDS)
+        except (OSError, TimeoutError, LuaError):
+            return self.trade_summary()
+
     async def respond_counter(self, gs, target: int, accept: bool) -> str | None:
         if self.incoming is not None:
-            return self.trade_summary()
+            return await self.respond_incoming(gs, target, accept)
         attempt = self.trade
         if attempt is None:
             return None
@@ -527,6 +596,9 @@ class IncomingAttempt:
     sid: int
     scope: str
     action: str
+    demand: bool = False
+    original: str | None = None
+    current: str | None = None
 
 
 @dataclass
