@@ -281,6 +281,67 @@ end
     assert conn.lua.eval('#submissions')==1
 
 
+@pytest.mark.parametrize('value', ['9', 'nil'])
+def test_last_pre_entry_getter_scope_change_or_unknown_proves_zero_submission(value):
+    conn=OffMapAssignmentConn();state=GameState(conn)
+    conn.lua.execute(f'''
+city.GetY=function(self)
+ if __civmcpSpyAssignment then seed={value} end
+ return self.y
+end
+''')
+    result=asyncio.run(state.spy_travel(196608,10,10))
+    assert 'SPY_ASSIGNMENT_REFUSED' in result
+    assert conn.lua.eval('#submissions')==0 and conn.lua.eval('#offmap')==0
+    assert state.pending_action_summary is None
+
+
+class LostFirstOffMapProofConn(OffMapAssignmentConn):
+    def __init__(self):
+        super().__init__()
+        self.drop_proof=True
+
+    async def execute_write(self,code):
+        rows=await super().execute_write(code)
+        if self.drop_proof and any(row.startswith('SPY_ASSIGNMENT_CONFIRMED|') for row in rows):
+            self.drop_proof=False
+            raise OSError('first completed travel confirmation lost')
+        return rows
+
+
+@pytest.mark.parametrize('change,restore', [
+    ('offmap[1].Name="Other"', 'offmap[1].Name=u.name'),
+    ('offmap[1].Level=2', 'offmap[1].Level=1'),
+    ('offmap[1].XLocation=11', 'offmap[1].XLocation=10'),
+    ('offmap[1].YLocation=11', 'offmap[1].YLocation=10'),
+    ('offmap[1].ReturnTurn=50', 'offmap[1].ReturnTurn=49'),
+    ('offmap[1].NameIndex=38', 'offmap[1].NameIndex=37'),
+    ('offmap[1].Name="Other";offmap[1].Level=nil', 'offmap[1].Name=u.name;offmap[1].Level=1'),
+])
+def test_lost_confirmation_bound_offmap_identity_change_stays_invalid_after_restore(change, restore):
+    conn=LostFirstOffMapProofConn();state=GameState(conn)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_travel(196608,10,10))
+    conn.lua.execute(change)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_travel(196608,10,10))
+    conn.lua.execute(restore)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_travel(196608,10,10))
+    assert state.pending_action_summary is not None and conn.lua.eval('#submissions')==1
+
+
+@pytest.mark.parametrize('field,value', [
+    ('Name','u.name'),('Level','1'),('XLocation','10'),('YLocation','10'),
+    ('ReturnTurn','49'),('NameIndex','37'),
+])
+def test_lost_confirmation_unknown_bound_offmap_field_can_recover_without_resubmit(field,value):
+    conn=LostFirstOffMapProofConn();state=GameState(conn)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_travel(196608,10,10))
+    conn.lua.execute(f'offmap[1].{field}=nil')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_travel(196608,10,10))
+    conn.lua.execute(f'offmap[1].{field}={value}')
+    assert asyncio.run(state.spy_travel(196608,10,10)).startswith('SPY_ASSIGNMENT_STARTED|')
+    assert state.pending_action_summary is None and conn.lua.eval('#submissions')==1
+
+
 def test_cancelled_offmap_submission_only_confirms_original_travel():
     class CancelConn(OffMapAssignmentConn):
         async def execute_write(self,code):

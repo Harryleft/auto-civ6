@@ -36,7 +36,7 @@ end
 
 def build_spy_assignment(unit_id: int, mission: str, x: int, y: int, token: str) -> str:
     return _CONTEXT + f'''
-local ok,r,selected=pcall(function()
+local ok,r=pcall(function()
  assert(UI.IsGameCoreBusy()==false,"CORE_BUSY_OR_UNKNOWN")
  local owner=Game.GetLocalPlayer()
  local civ=PlayerConfigurations[owner]:GetCivilizationTypeName()
@@ -104,7 +104,7 @@ local ok,r,selected=pcall(function()
   x={x},y={y},plot=integer(plot:GetIndex()),city=cityId,cityOwner=cityOwner,cityX=cityX,cityY=cityY,
   operation=op.Hash,index=op.Index,params=params,noop=noop,unitType=spy:GetType(),
   spyIdentity=identity,mapRoster=mapRoster,offRoster=offRoster,offCount=offCount,
-  civ=civ,seed=seed,turn=turn}},spy
+  civ=civ,seed=seed,turn=turn}}
 end)
 if not ok then print("ERR:SPY_ASSIGNMENT_REFUSED|"..tostring(r));print("{SENTINEL}");return end
 retireAssignment(__civmcpSpyAssignment)
@@ -123,7 +123,7 @@ local armed=pcall(function()
  if r.mission=="TRAVEL" then Events.UnitRemovedFromMap.Add(r.removalHandler) end
 end)
 if not armed then retireAssignment(r);print("ERR:SPY_ASSIGNMENT_REFUSED|OPERATION_OBSERVER_UNAVAILABLE");print("{SENTINEL}");return end
-local ready=pcall(function()
+local ready,current=pcall(function()
  assert(sameScope(r),"SCOPE_CHANGED_BEFORE_ENTRY")
  local current=spyFor(r.owner,r.id)
  assert(current:GetType()==r.unitType,"SPY_ID_CHANGED")
@@ -132,10 +132,14 @@ local ready=pcall(function()
  local target=plot and Cities.GetPlotPurchaseCity(plot)
  assert(plot and plot:GetIndex()==r.plot and target and target:GetID()==r.city
   and target:GetOwner()==r.cityOwner and target:GetX()==r.cityX and target:GetY()==r.cityY,"TARGET_CITY_CHANGED")
+ -- No native identity/target getter may sit between this final scope check
+ -- and entry. Submit the unit that was just verified, not the earlier handle.
+ assert(sameScope(r),"SCOPE_CHANGED_BEFORE_ENTRY")
+ return current
 end)
 if not ready then retireAssignment(r);print("ERR:SPY_ASSIGNMENT_REFUSED|IDENTITY_CHANGED_BEFORE_ENTRY");print("{SENTINEL}");return end
 r.entered=true
-UnitManager.RequestOperation(selected,r.operation,r.params)
+UnitManager.RequestOperation(current,r.operation,r.params)
 r.returned=true
 print("OK:SPY_ASSIGNMENT_REQUESTED|"..r.id)
 print("{SENTINEL}")
@@ -183,18 +187,32 @@ local ok,finish=pcall(function()
   end
   for id,_ in pairs(r.mapRoster) do assert(id==r.id or remaining[id]~=nil) end
   assert(not r.invalid)
-  local roster,count=offMapSpyRoster(r.owner)
+  local roster,count=offMapSpyRoster(r.owner,function(key,row)
+   local bound=r.offMapIdentity
+   if bound and key==bound.key then
+    assignmentValue(r,function() return spyName(row.Name) end,function(v) return type(v)=="string" end,bound.row.name)
+    assignmentValue(r,function() return spyInteger(row.Level,1) end,scopeIndex,bound.row.level)
+    assignmentValue(r,function() return spyInteger(row.XLocation,-9999) end,scopeInteger,bound.row.x)
+    assignmentValue(r,function() return spyInteger(row.YLocation,-9999) end,scopeInteger,bound.row.y)
+    assignmentValue(r,function() return spyInteger(row.ReturnTurn,-1) end,scopeInteger,bound.row.finish)
+   end
+  end)
+  if r.offMapIdentity and roster[r.offMapIdentity.key]==nil then r.invalid=true end
+  assert(not r.invalid)
   assert(count==r.offCount+1)
   for key,old in pairs(r.offRoster) do assert(sameOffMapSpy(roster[key],old)) end
-  local found=nil
+  local found,foundKey=nil,nil
   for key,row in pairs(roster) do
    if r.offRoster[key]==nil then
     assert(found==nil and sameSpyIdentity(row,r.spyIdentity)
      and row.x==r.x and row.y==r.y and row.finish>r.turn)
-    found=row
+    found,foundKey=row,key
    end
   end
   assert(found and sameScope(r))
+  -- Retain the normalized identity even if this confirmation reply is lost.
+  -- Later readable changes cannot be cleared by restoring the old values.
+  if not r.offMapIdentity then r.offMapIdentity={{key=foundKey,row=found}} end
   return found.finish
  end
  local spy=spyFor(r.owner,r.id)
