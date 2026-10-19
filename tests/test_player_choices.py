@@ -18,6 +18,7 @@ class ChoiceConn(ReadyConn):
         self.cancel_reply = False
         self.lua.execute('''
 government,anarchy,endTurn,anarchyTurns=0,false,-1,0
+considered,considerationCalls=false,0
 unlocked,eligible,made,civicCompleted,accepted=true,true,false,true,true
 local row={Index=2,Hash=402,GovernmentType='GOVERNMENT_OLIGARCHY',Name='Oligarchy'}
 GameInfo.Governments={[2]=row,[402]=row,GOVERNMENT_OLIGARCHY=row}
@@ -29,6 +30,10 @@ function applyGovernment()
  else government=2 end
 end
 culture={
+ GovernmentChangeConsidered=function() return considered end,
+ SetGovernmentChangeConsidered=function(_,value)
+  assert(value==true);considerationCalls=considerationCalls+1;considered=true
+ end,
  GetCurrentGovernment=function() return government end,
  IsGovernmentUnlocked=function(_,hash) assert(hash==402,'unlocked needs Hash');return unlocked end,
  CanChangeGovernmentAtAll=function() return eligible end,
@@ -68,8 +73,9 @@ end
 
     async def execute_write(self, code):
         before = self.lua.eval('#submissions')
+        ack_before = self.lua.eval('considerationCalls')
         rows = await super().execute_write(code)
-        if self.lua.eval('#submissions') > before:
+        if self.lua.eval('#submissions') > before or self.lua.eval('considerationCalls') > ack_before:
             if self.cancel_reply:
                 raise asyncio.CancelledError()
             if self.lose_reply:
@@ -84,10 +90,111 @@ def quick_confirmation(monkeypatch):
     monkeypatch.setattr('civ_mcp.game_state.ACTION_CONFIRM_INTERVAL', .001)
 
 
+@pytest.mark.parametrize('already_selected',[False,True])
+def test_explicit_government_choice_acknowledges_native_consideration(already_selected):
+    conn=ChoiceConn();state=GameState(conn);ctx=make_ctx(game=state)
+    if already_selected:
+        # T42: the adopted government is deliberate, but considered remains false.
+        conn.lua.execute('government=2;made=true')
+    result=asyncio.run(server.change_government(ctx,GOV))
+    assert result.startswith('GOVERNMENT_UNCHANGED|' if already_selected else 'GOVERNMENT_CHANGED|')
+    assert conn.lua.eval('considered') is True
+    assert conn.lua.eval('considerationCalls')==1
+    assert conn.lua.eval('#submissions')==(0 if already_selected else 1)
+
+
+@pytest.mark.parametrize('patch',[
+    'culture.SetGovernmentChangeConsidered=nil',
+    'culture.GovernmentChangeConsidered=nil',
+    'culture.GovernmentChangeConsidered=function() error("consideration unreadable") end',
+    'culture.GovernmentChangeConsidered=function() return "false" end',
+])
+@pytest.mark.parametrize('already_selected',[False,True])
+def test_unavailable_consideration_api_refuses_before_government_change(patch,already_selected):
+    conn=ChoiceConn();state=GameState(conn)
+    if already_selected: conn.lua.execute('government=2')
+    conn.lua.execute(patch)
+    assert asyncio.run(state.change_government(GOV)).startswith('Error: CHOICE_REFUSED|')
+    assert conn.lua.eval('#submissions')==0
+    assert conn.lua.eval('considerationCalls')==0
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('acknowledge',[
+    'considerationCalls=considerationCalls+1',
+    'considerationCalls=considerationCalls+1;error("acknowledgment failed")',
+    'considerationCalls=considerationCalls+1;considered=true;error("failed after acknowledgment")',
+])
+@pytest.mark.parametrize('already_selected',[False,True])
+def test_failed_consideration_keeps_government_facts_but_never_replays(acknowledge,already_selected):
+    conn=ChoiceConn();state=GameState(conn)
+    if already_selected: conn.lua.execute('government=2')
+    conn.lua.execute('culture.SetGovernmentChangeConsidered=function() '+acknowledge+' end')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.change_government(GOV))
+    again=asyncio.run(state.change_government(GOV))
+    assert 'OUTCOME_UNKNOWN' in again and 'CONSIDERATION_' in again
+    assert conn.lua.eval('government')==2
+    assert conn.lua.eval('considerationCalls')==1
+    assert conn.lua.eval('#submissions')==(0 if already_selected else 1)
+
+
+@pytest.mark.parametrize('read_failure',[
+    'return nil', 'return "true"', 'error("consideration read failed")',
+])
+def test_consideration_read_failure_after_acceptance_remains_pending_until_readable(read_failure):
+    conn=ChoiceConn();state=GameState(conn)
+    conn.lua.execute('''
+culture.SetGovernmentChangeConsidered=function()
+ considerationCalls=considerationCalls+1;considered=true
+ culture.GovernmentChangeConsidered=function() '''+read_failure+''' end
+end
+''')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.change_government(GOV))
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.change_government(GOV))
+    conn.lua.execute('culture.GovernmentChangeConsidered=function() return considered end')
+    assert asyncio.run(state.change_government(GOV)).startswith('GOVERNMENT_CHANGED|')
+    assert conn.lua.eval('considerationCalls')==1
+    assert conn.lua.eval('#submissions')==1
+
+
+@pytest.mark.parametrize('patch',[
+    'Players[0].IsTurnActive=function() return false end',
+    'Players[0].IsTurnActive=function() return nil end',
+    'Game.IsAllowStrategicCommands=function() return false end',
+    'Game.IsAllowStrategicCommands=function() error("strategic commands unknown") end',
+])
+def test_same_government_acknowledgment_requires_active_allowed_turn(patch):
+    conn=ChoiceConn();state=GameState(conn)
+    conn.lua.execute('government=2;'+patch)
+    assert asyncio.run(state.change_government(GOV)).startswith('Error: CHOICE_REFUSED|')
+    assert conn.lua.eval('considerationCalls')==0
+    assert conn.lua.eval('#submissions')==0
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('boundary',['lost','cancelled'])
+def test_current_government_acknowledgment_lost_reply_only_confirms_original(boundary):
+    conn=ChoiceConn();state=GameState(conn);ctx=make_ctx(game=state)
+    conn.lua.execute('government=2;made=true')
+    if boundary=='lost': conn.lose_reply=True
+    else: conn.cancel_reply=True
+    if boundary=='cancelled':
+        with pytest.raises(asyncio.CancelledError):
+            asyncio.run(server.change_government(ctx,GOV))
+    else:
+        assert 'OUTCOME_UNKNOWN' in asyncio.run(server.change_government(ctx,GOV))
+    assert asyncio.run(server.change_government(ctx,GOV)).startswith('GOVERNMENT_UNCHANGED|')
+    assert conn.lua.eval('considered') is True
+    assert conn.lua.eval('considerationCalls')==1
+    assert conn.lua.eval('#submissions')==0
+    assert state.pending_action_summary is None
+
+
 def test_delayed_government_change_confirms_target_without_resending():
     conn = ChoiceConn(); state = GameState(conn); ctx = make_ctx(game=state)
     conn.lua.execute('deferred=true')
     assert 'OUTCOME_UNKNOWN' in asyncio.run(server.change_government(ctx,GOV))
+    assert conn.lua.eval('considered') is True
     conn.lua.execute('applyGovernment()')
     assert asyncio.run(server.change_government(ctx,GOV)).startswith('GOVERNMENT_CHANGED|')
     assert conn.lua.eval('#submissions') == 1
@@ -117,6 +224,7 @@ def test_delayed_dedication_confirms_only_the_requested_active_choice():
     conn.lua.execute('applyDedication(7)')
     assert asyncio.run(server.choose_dedication(ctx,7)).startswith('DEDICATION_CHOSEN|')
     assert conn.lua.eval('#submissions') == 1
+    assert conn.lua.eval('considerationCalls') == 0
     assert state.pending_action_summary is None
 
 
