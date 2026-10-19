@@ -1,0 +1,905 @@
+{
+  "source": "../evidence/tool-calls.jsonl",
+  "run_id": "e8b4d6a62dca49bbb256e8264beb18f2",
+  "review_date": "2026-10-20",
+  "scope": "Read-only review of existing records; no game reload or new gameplay. Request IDs identify historical calls, including confirmation and technical-recovery branches; they are not counts of unique game effects.",
+  "records": [
+    {
+      "at": 1792425213.517003,
+      "request": {
+        "id": 579,
+        "tool": "get_victory_progress",
+        "args": {}
+      },
+      "response": {
+        "id": 579,
+        "tool": "get_victory_progress",
+        "text": "=== VICTORY PROGRESS ===\nEnabled: Domination, Culture, VICTORY_DEFAULT, Diplomatic, Religious, Score, Science\n\nSCIENCE\n  苏美尔: 0/33.5 VP | 9 techs | 0 spaceports | native progress/turn 0\n  瑞典: 0/33.5 VP | 11 techs | 0 spaceports | native progress/turn 0\n  巴西: 0/33.5 VP | 9 techs | 0 spaceports | native progress/turn 0\n  加拿大: 0/33.5 VP | 10 techs | 0 spaceports | native progress/turn 0\n  发射地球卫星: locked | prerequisite TECH_ROCKETRY (researched=False)\n  启动登月计划: locked | prerequisite TECH_SATELLITES (researched=False)\n  启动火星殖民: locked | prerequisite TECH_NANOTECHNOLOGY (researched=False)\n  启动系外行星探索: locked | prerequisite TECH_SMART_MATERIALS (researched=False)\n\nDOMINATION (original capitals)\n  苏美尔: original capital held\n  瑞典: original capital held\n  巴西: original capital held\n  加拿大: original capital held\n\nCULTURE\n  苏美尔: tourism 0 | domestic tourists 2 | visiting tourists 0/8\n  瑞典: tourism 14 | domestic tourists 4 | visiting tourists 0/8\n  巴西: tourism 0 | domestic tourists 7 | visiting tourists 0/8\n  加拿大: tourism 0 | domestic tourists 7 | visiting tourists 0/8\n  Our tourists from 瑞典: 0 | their domestic tourists: 4\n  Our tourists from 巴西: 0 | their domestic tourists: 7\n  Our tourists from 加拿大: 0 | their domestic tourists: 7\n\nRELIGION (founded 1/3)\n  苏美尔: majority=none | religion cities 0 | founded religion=False\n  瑞典: majority=RELIGION_PROTESTANTISM | religion cities 4 | founded religion=True (新教)\n  巴西: majority=none | religion cities 0 | founded religion=False\n  加拿大: majority=none | religion cities 0 | founded religion=False\n\nDIPLOMATIC\n  苏美尔: 0/20 VP\n  瑞典: 0/20 VP\n  巴西: 0/20 VP\n  加拿大: 0/20 VP\n\nSCORE AND CIVILIZATION DATA\n  瑞典: score 172 | 4 cities | science 18.3 | culture 15.6 | gold +18.9 | military 116 | civics 8\n  巴西: score 126 | 4 cities | science 27.8 | culture 36.6 | gold +29.4 | military 132 | civics 10\n  加拿大: score 118 | 4 cities | science 26.9 | culture 17.3 | gold +34.1 | military 155 | civics 8\n  苏美尔: score 77 | 2 cities | science 10.2 | culture 12.4 | gold +22.4 | military 53 | civics 5\n\nDEMOGRAPHICS\n  Population: rank 4 | ours 10 | best 21 | average 17.2 | worst 10\n  Soldiers: rank 4 | ours 53 | best 155 | average 114 | worst 53\n  CropYield: rank 4 | ours 30 | best 65 | average 54.2 | worst 30\n  GNP: rank 3 | ours 22.4 | best 34.1 | average 26.2 | worst 18.9\n  Land: rank 4 | ours 20 | best 49 | average 39.2 | worst 20\n  Goods: rank 4 | ours 10.8 | best 43.7 | average 30.1 | worst 10.8",
+        "isError": false,
+        "elapsed": 0.069
+      }
+    },
+    {
+      "at": 1792432421.771265,
+      "request": {
+        "id": 1128,
+        "tool": "get_victory_progress",
+        "args": {}
+      },
+      "response": {
+        "id": 1128,
+        "tool": "get_victory_progress",
+        "text": "=== VICTORY PROGRESS ===\nEnabled: Domination, Culture, VICTORY_DEFAULT, Diplomatic, Religious, Score, Science\n\nSCIENCE\n  苏美尔: 0/33.5 VP | 15 techs | 0 spaceports | native progress/turn 0\n  瑞典: 0/33.5 VP | 17 techs | 0 spaceports | native progress/turn 0\n  巴西: 0/33.5 VP | 15 techs | 0 spaceports | native progress/turn 0\n  加拿大: 0/33.5 VP | 22 techs | 0 spaceports | native progress/turn 0\n  发射地球卫星: locked | prerequisite TECH_ROCKETRY (researched=False)\n  启动登月计划: locked | prerequisite TECH_SATELLITES (researched=False)\n  启动火星殖民: locked | prerequisite TECH_NANOTECHNOLOGY (researched=False)\n  启动系外行星探索: locked | prerequisite TECH_SMART_MATERIALS (researched=False)\n\nDOMINATION (original capitals)\n  苏美尔: original capital held\n  瑞典: original capital held\n  巴西: original capital held\n  加拿大: original capital held\n\nCULTURE\n  苏美尔: tourism 0 | domestic tourists 6 | visiting tourists 0/19\n  瑞典: tourism 16 | domestic tourists 16 | visiting tourists 0/19\n  巴西: tourism 12 | domestic tourists 18 | visiting tourists 0/17\n  加拿大: tourism 3 | domestic tourists 15 | visiting tourists 0/19\n  Our tourists from 瑞典: 0 | their domestic tourists: 16\n  Our tourists from 巴西: 0 | their domestic tourists: 18\n  Our tourists from 加拿大: 0 | their domestic tourists: 15\n\nRELIGION (founded 2/3)\n  苏美尔: majority=RELIGION_PROTESTANTISM | religion cities 0 | founded religion=False\n  瑞典: majority=RELIGION_PROTESTANTISM | religion cities 12 | founded religion=True (新教)\n  巴西: majority=RELIGION_CATHOLICISM | religion cities 3 | founded religion=True (天主教)\n  加拿大: majority=none | religion cities 0 | founded religion=False\n\nDIPLOMATIC\n  苏美尔: 0/20 VP\n  瑞典: 0/20 VP\n  巴西: 0/20 VP\n  加拿大: 0/20 VP\n\nSCORE AND CIVILIZATION DATA\n  瑞典: score 258 | 5 cities | science 54.2 | culture 45.6 | gold +31.3 | military 89 | civics 13\n  巴西: score 231 | 4 cities | science 52.8 | culture 46.2 | gold +11.9 | military 175 | civics 14\n  加拿大: score 222 | 5 cities | science 73.9 | culture 39.2 | gold +29.7 | military 186 | civics 14\n  苏美尔: score 127 | 3 cities | science 24.4 | culture 16.4 | gold +24.7 | military 165 | civics 11\n\nDEMOGRAPHICS\n  Population: rank 4 | ours 14 | best 34 | average 26 | worst 14\n  Soldiers: rank 3 | ours 165 | best 186 | average 153.8 | worst 89\n  CropYield: rank 4 | ours 44 | best 102 | average 80.2 | worst 44\n  GNP: rank 3 | ours 24.7 | best 31.3 | average 24.4 | worst 11.9\n  Land: rank 4 | ours 35 | best 71 | average 57 | worst 35\n  Goods: rank 4 | ours 25.8 | best 53.2 | average 41.1 | worst 25.8",
+        "isError": false,
+        "elapsed": 0.054
+      }
+    },
+    {
+      "at": 1792439476.799367,
+      "request": {
+        "id": 1666,
+        "tool": "get_victory_progress",
+        "args": {}
+      },
+      "response": {
+        "id": 1666,
+        "tool": "get_victory_progress",
+        "text": "=== VICTORY PROGRESS ===\nEnabled: Domination, Culture, VICTORY_DEFAULT, Diplomatic, Religious, Score, Science\n\nSCIENCE\n  苏美尔: 0/33.5 VP | 23 techs | 0 spaceports | native progress/turn 0\n  瑞典: 0/33.5 VP | 25 techs | 0 spaceports | native progress/turn 0\n  巴西: 0/33.5 VP | 28 techs | 0 spaceports | native progress/turn 0\n  加拿大: 0/33.5 VP | 30 techs | 0 spaceports | native progress/turn 0\n  发射地球卫星: locked | prerequisite TECH_ROCKETRY (researched=False)\n  启动登月计划: locked | prerequisite TECH_SATELLITES (researched=False)\n  启动火星殖民: locked | prerequisite TECH_NANOTECHNOLOGY (researched=False)\n  启动系外行星探索: locked | prerequisite TECH_SMART_MATERIALS (researched=False)\n\nDOMINATION (original capitals)\n  苏美尔: original capital held\n  瑞典: original capital held\n  巴西: original capital held\n  加拿大: original capital held\n\nCULTURE\n  苏美尔: tourism 0 | domestic tourists 12 | visiting tourists 0/38\n  瑞典: tourism 30 | domestic tourists 34 | visiting tourists 3/38\n  巴西: tourism 22 | domestic tourists 37 | visiting tourists 0/35\n  加拿大: tourism 24 | domestic tourists 33 | visiting tourists 0/38\n  Our tourists from 瑞典: 0 | their domestic tourists: 34\n  Our tourists from 巴西: 0 | their domestic tourists: 37\n  Our tourists from 加拿大: 0 | their domestic tourists: 33\n\nRELIGION (founded 2/3)\n  苏美尔: majority=RELIGION_PROTESTANTISM | religion cities 0 | founded religion=False\n  瑞典: majority=RELIGION_PROTESTANTISM | religion cities 17 | founded religion=True (新教)\n  巴西: majority=RELIGION_CATHOLICISM | religion cities 7 | founded religion=True (天主教)\n  加拿大: majority=none | religion cities 0 | founded religion=False\n\nDIPLOMATIC\n  苏美尔: 2/20 VP\n  瑞典: 1/20 VP\n  巴西: 1/20 VP\n  加拿大: 1/20 VP\n\nSCORE AND CIVILIZATION DATA\n  瑞典: score 401 | 6 cities | science 126.7 | culture 59 | gold +35.9 | military 223 | civics 19\n  巴西: score 358 | 5 cities | science 66.2 | culture 113 | gold +43.7 | military 210 | civics 20\n  加拿大: score 335 | 5 cities | science 93.3 | culture 76.6 | gold +63.1 | military 58 | civics 19\n  苏美尔: score 205 | 4 cities | science 45.6 | culture 27.2 | gold +17.1 | military 146 | civics 15\n\nDEMOGRAPHICS\n  Population: rank 4 | ours 24 | best 51 | average 37.8 | worst 24\n  Soldiers: rank 3 | ours 146 | best 223 | average 159.2 | worst 58\n  CropYield: rank 4 | ours 67 | best 131 | average 105 | worst 67\n  GNP: rank 4 | ours 17.1 | best 63.1 | average 39.9 | worst 17.1\n  Land: rank 4 | ours 53 | best 94 | average 79.5 | worst 53\n  Goods: rank 4 | ours 28.3 | best 85.5 | average 58.9 | worst 28.3",
+        "isError": false,
+        "elapsed": 0.06
+      }
+    },
+    {
+      "at": 1792442655.833109,
+      "request": {
+        "id": 2035,
+        "tool": "get_victory_progress",
+        "args": {}
+      },
+      "response": {
+        "id": 2035,
+        "tool": "get_victory_progress",
+        "text": "=== VICTORY PROGRESS ===\nEnabled: Domination, Culture, VICTORY_DEFAULT, Diplomatic, Religious, Score, Science\n\nSCIENCE\n  苏美尔: 0/33.5 VP | 29 techs | 0 spaceports | native progress/turn 0\n  瑞典: 0/33.5 VP | 28 techs | 0 spaceports | native progress/turn 0\n  巴西: 0/33.5 VP | 32 techs | 0 spaceports | native progress/turn 0\n  加拿大: 0/33.5 VP | 35 techs | 0 spaceports | native progress/turn 0\n  发射地球卫星: locked | prerequisite TECH_ROCKETRY (researched=False)\n  启动登月计划: locked | prerequisite TECH_SATELLITES (researched=False)\n  启动火星殖民: locked | prerequisite TECH_NANOTECHNOLOGY (researched=False)\n  启动系外行星探索: locked | prerequisite TECH_SMART_MATERIALS (researched=False)\n\nDOMINATION (original capitals)\n  苏美尔: original capital held\n  瑞典: original capital held\n  巴西: original capital held\n  加拿大: original capital held\n\nCULTURE\n  苏美尔: tourism 0 | domestic tourists 24 | visiting tourists 0/64\n  瑞典: tourism 48 | domestic tourists 58 | visiting tourists 6/64\n  巴西: tourism 30 | domestic tourists 63 | visiting tourists 3/59\n  加拿大: tourism 45 | domestic tourists 54 | visiting tourists 3/64\n  Our tourists from 瑞典: 0 | their domestic tourists: 58\n  Our tourists from 巴西: 0 | their domestic tourists: 63\n  Our tourists from 加拿大: 0 | their domestic tourists: 54\n\nRELIGION (founded 2/3)\n  苏美尔: majority=RELIGION_PROTESTANTISM | religion cities 0 | founded religion=False\n  瑞典: majority=RELIGION_PROTESTANTISM | religion cities 21 | founded religion=True (新教)\n  巴西: majority=RELIGION_PROTESTANTISM | religion cities 4 | founded religion=True (天主教)\n  加拿大: majority=none | religion cities 0 | founded religion=False\n\nDIPLOMATIC\n  苏美尔: 4/20 VP\n  瑞典: 1/20 VP\n  巴西: 1/20 VP\n  加拿大: 1/20 VP\n\nSCORE AND CIVILIZATION DATA\n  瑞典: score 485 | 7 cities | science 107.3 | culture 117.5 | gold +21.6 | military 274 | civics 23\n  巴西: score 443 | 6 cities | science 95.1 | culture 97.4 | gold +51.8 | military 69 | civics 23\n  加拿大: score 411 | 5 cities | science 134.3 | culture 111 | gold +105.8 | military 142 | civics 21\n  苏美尔: score 256 | 4 cities | science 72 | culture 45.7 | gold +63.8 | military 277 | civics 19\n\nDEMOGRAPHICS\n  Population: rank 4 | ours 31 | best 60 | average 46.2 | worst 31\n  Soldiers: rank 1 | ours 277 | best 277 | average 190.5 | worst 69\n  CropYield: rank 4 | ours 91 | best 147 | average 130 | worst 91\n  GNP: rank 2 | ours 63.8 | best 105.8 | average 60.8 | worst 21.6\n  Land: rank 4 | ours 65 | best 116 | average 96.8 | worst 65\n  Goods: rank 4 | ours 44.5 | best 146.3 | average 85.4 | worst 44.5\n\nVictory risk (heuristic; not a terminal result):\n  瑞典: founded religion is majority in 3/4 civilizations\nInspect get_victory_progress and reassess the victory route; no exact remaining-turn estimate.",
+        "isError": false,
+        "elapsed": 0.071
+      }
+    },
+    {
+      "at": 1792442670.652288,
+      "request": {
+        "id": 2041,
+        "tool": "get_religion_spread",
+        "args": {}
+      },
+      "response": {
+        "id": 2041,
+        "tool": "get_religion_spread",
+        "text": "Religious Victory Tracker:\n  新教: majority in 3/4 civilizations !! IMMINENT\n\n苏美尔:\n  乌鲁克 (pop 11) — 新教 (新教:8, 天主教:0)\n  埃利都 (pop 9) — 新教 (新教:5, 天主教:3)\n  尼普尔 (pop 7) — 新教 (新教:7, 天主教:0)\n  基什 (pop 4) — 新教 (新教:3, 天主教:0)\n瑞典:\n  斯德哥尔摩 (pop 13) — 新教 (新教:12)\n  厄勒布鲁 (pop 8) — 新教 (新教:7)\n  林雪平 (pop 13) — 新教 (新教:13)\n  乌普萨拉 (pop 12) — 新教 (新教:11, 天主教:0)\n  马尔默 (pop 8) — 新教 (新教:7, 天主教:1)\n  蒙特利尔 (pop 2) — 新教 (新教:2, 天主教:0)\n  延雪平 (pop 4) — 新教 (新教:4)\n巴西:\n  里约热内卢 (pop 12) — 新教 (天主教:1, 新教:8)\n  巴西利亚 (pop 9) — 天主教 (天主教:7, 新教:1)\n  福塔雷萨 (pop 13) — 新教 (新教:8, 天主教:2)\n  阿雷格里港 (pop 6) — 天主教 (天主教:6, 新教:0)\n  圣保罗 (pop 4) — 新教 (新教:3, 天主教:1)\n  萨尔瓦多 (pop 3) — 新教 (新教:2, 天主教:1)\n加拿大:\n  渥太华 (pop 13) — 天主教 (新教:1, 天主教:7)\n  哈利法克斯 (pop 8) — 新教 (新教:7, 天主教:0)\n  夏洛特顿 (pop 6) — 天主教 (新教:2, 天主教:3)",
+        "isError": false,
+        "elapsed": 0.039
+      }
+    },
+    {
+      "at": 1792442701.7468228,
+      "request": {
+        "id": 2045,
+        "tool": "set_city_production",
+        "args": {
+          "city_id": 131073,
+          "item_type": "district",
+          "item_name": "DISTRICT_HOLY_SITE",
+          "target_x": 34,
+          "target_y": 24
+        }
+      },
+      "response": {
+        "id": 2045,
+        "tool": "set_city_production",
+        "text": "PRODUCING|DISTRICT_HOLY_SITE|16 turns",
+        "isError": false,
+        "elapsed": 0.122
+      }
+    },
+    {
+      "at": 1792442970.544527,
+      "request": {
+        "id": 2091,
+        "tool": "set_city_production",
+        "args": {
+          "city_id": 65536,
+          "item_type": "district",
+          "item_name": "DISTRICT_HOLY_SITE",
+          "target_x": 39,
+          "target_y": 26
+        }
+      },
+      "response": {
+        "id": 2091,
+        "tool": "set_city_production",
+        "text": "PRODUCING|DISTRICT_HOLY_SITE|7 turns",
+        "isError": false,
+        "elapsed": 0.123
+      }
+    },
+    {
+      "at": 1792443139.626806,
+      "request": {
+        "id": 2118,
+        "tool": "get_world_congress",
+        "args": {}
+      },
+      "response": {
+        "id": 2118,
+        "tool": "get_world_congress",
+        "text": "World Congress: IN SESSION | native stage: STAGE1 | local request: STALE\nNative proposal eligibility: EMPTY (no eligible proposals); no default proposal votes are supplied.\nFavor: 70 | Resolution vote costs (cumulative): 1=0, 2=6, 3=18, 4=36, 5=60\n\nResolution #1: 雇佣兵公司 (hash: -1027166762)\n  Target type: YIELD\n  Option A: 下次世界议会召开前，使用此类型货币建造或购买军事单位时花费+100%。\n  Option B: 下次世界议会召开前，使用此类型货币建造或购买军事单位时花费-50%。\n  Targets: [target=0] 生产力, [target=1] 金币, [target=2] 信仰值\n  -> queue_wc_votes(votes='[{\"hash\": -1027166762, \"option\": 1or2, \"target\": 0, \"votes\": 1}]')\nResolution #2: 世界宗教 (hash: -1311232414)\n  Target type: RELIGION\n  Option A: 为此 [ICON_Religion] 宗教的所有单位+10战斗力（普通及宗教战斗力）。\n  Option B: 所有文明可对所选宗教的单位进行“异教徒审判”，审判后可获得25点 [ICON_Favor] 外交支持。\n  Targets: [target=0] 新教, [target=1] 天主教\n  -> queue_wc_votes(votes='[{\"hash\": -1311232414, \"option\": 1or2, \"target\": 0, \"votes\": 1}]')",
+        "isError": false,
+        "elapsed": 0.059
+      }
+    },
+    {
+      "at": 1792443158.358756,
+      "request": {
+        "id": 2121,
+        "tool": "end_turn",
+        "args": {}
+      },
+      "response": {
+        "id": 2121,
+        "tool": "end_turn",
+        "text": "Turn 115 -> 116\nResources: HORSES 33/33 (+2/t), IRON 33/33 (+2/t), NITER 17/33 (+0/t)\n\n== Events ==\n  -- Your 追猎者 (UNIT_COURSER) healed 4 HP. HP: 100/100.\n\n== Notifications ==\n  - 风暴逐渐减弱 — 名为米格尔的5级飓风已经减弱并逐渐消逝。（本回合内造成了1个单元格受损；失去0点 [ICON_CITIZEN] 人口；0个单位遇害；0个单元格增加肥沃度）\n  - 世界议会奖赏您 1 外交胜利点数。\n  - 指挥单位 — 移动1个单位或让它执行1项任务。\nVictory risk (heuristic; not a terminal result):\n  瑞典: founded religion is majority in 3/4 civilizations\nInspect get_victory_progress and reassess the victory route; no exact remaining-turn estimate.",
+        "isError": false,
+        "elapsed": 0.54
+      }
+    },
+    {
+      "at": 1792443279.098791,
+      "request": {
+        "id": 2142,
+        "tool": "run_lua",
+        "args": {
+          "context": "ingame",
+          "code": "local r=Game.GetWorldCongress():GetReview(0); for _,v in pairs(r.Resolutions or {}) do if type(v)=='table' then print('RESULT',v.Type,v.ChosenOption,v.ChosenThing) for p,s in pairs(v.PlayerSelections or {}) do print('VOTE',p,s.OptionChosen,s.Votes,s.Target) end end end"
+        }
+      },
+      "response": {
+        "id": 2142,
+        "tool": "run_lua",
+        "text": "RESULT\t4\tLOC_WORLD_CONGRESS_BUFF_PRODUCTION_YIELD_DESC\tLOC_YIELD_FAITH_NAME\nVOTE\t0\t2\t1\tnil\nVOTE\t1\t2\t14\tnil\nVOTE\t2\t2\t7\tnil\nVOTE\t3\t2\t6\tnil\nRESULT\t3\tLOC_WORLD_CONGRESS_BAN_RELIGION_DESC\tLOC_RELIGION_PROTESTANTISM\nVOTE\t0\t2\t5\tnil\nVOTE\t1\t1\t1\tnil\nVOTE\t2\t1\t1\tnil\nVOTE\t3\t1\t1\tnil",
+        "isError": false,
+        "elapsed": 0.04
+      }
+    },
+    {
+      "at": 1792443640.167312,
+      "request": {
+        "id": 2177,
+        "tool": "get_religion_spread",
+        "args": {}
+      },
+      "response": {
+        "id": 2177,
+        "tool": "get_religion_spread",
+        "text": "Religious Victory Tracker:\n  新教: majority in 3/4 civilizations !! IMMINENT\n\n苏美尔:\n  乌鲁克 (pop 12) — 新教 (新教:9, 天主教:0)\n  埃利都 (pop 10) — 新教 (新教:6, 天主教:3)\n  尼普尔 (pop 9) — 新教 (新教:9, 天主教:0)\n  基什 (pop 5) — 新教 (新教:4, 天主教:0)\n  拉格什 (pop 1) — none (新教:0)\n瑞典:\n  斯德哥尔摩 (pop 13) — 新教 (新教:12)\n  厄勒布鲁 (pop 8) — 新教 (新教:8)\n  林雪平 (pop 14) — 新教 (新教:14)\n  乌普萨拉 (pop 13) — 新教 (新教:12, 天主教:0)\n  马尔默 (pop 9) — 新教 (新教:9, 天主教:0)\n  蒙特利尔 (pop 2) — 新教 (新教:2, 天主教:0)\n  延雪平 (pop 5) — 新教 (新教:5)\n巴西:\n  里约热内卢 (pop 14) — 新教 (新教:11)\n  巴西利亚 (pop 11) — 新教 (天主教:2, 新教:7)\n  福塔雷萨 (pop 14) — 新教 (新教:11, 天主教:0)\n  阿雷格里港 (pop 7) — 新教 (天主教:2, 新教:4)\n  圣保罗 (pop 5) — 新教 (新教:3, 天主教:2)\n  萨尔瓦多 (pop 4) — 新教 (新教:3, 天主教:1)\n加拿大:\n  渥太华 (pop 13) — 天主教 (新教:2, 天主教:7)\n  温尼伯 (pop 15) — none (新教:4, 天主教:4)\n  哈利法克斯 (pop 9) — 新教 (新教:8, 天主教:0)\n  夏洛特顿 (pop 7) — none (新教:3, 天主教:3)",
+        "isError": false,
+        "elapsed": 0.035
+      }
+    },
+    {
+      "at": 1792444145.414355,
+      "request": {
+        "id": 2240,
+        "tool": "purchase_item",
+        "args": {
+          "city_id": 131073,
+          "item_type": "BUILDING",
+          "item_name": "BUILDING_TEMPLE",
+          "yield_type": "YIELD_GOLD"
+        }
+      },
+      "response": {
+        "id": 2240,
+        "tool": "purchase_item",
+        "text": "PURCHASED|BUILDING_TEMPLE|city:131073|YIELD_GOLD|building:12|cost:320|balance:407.6328125->87.6328125",
+        "isError": false,
+        "elapsed": 0.121
+      }
+    },
+    {
+      "at": 1792444878.930597,
+      "request": {
+        "id": 2284,
+        "tool": "found_religion",
+        "args": {
+          "religion_type": "RELIGION_ZOROASTRIANISM",
+          "follower_belief": "BELIEF_WORK_ETHIC",
+          "founder_belief": "BELIEF_WORLD_CHURCH"
+        }
+      },
+      "response": {
+        "id": 2284,
+        "tool": "found_religion",
+        "text": "RELIGION_FOUNDED|RELIGION_ZOROASTRIANISM|BELIEF_WORK_ETHIC|BELIEF_WORLD_CHURCH",
+        "isError": false,
+        "elapsed": 5.34
+      }
+    },
+    {
+      "at": 1792444894.355741,
+      "request": {
+        "id": 2285,
+        "tool": "get_religion_spread",
+        "args": {}
+      },
+      "response": {
+        "id": 2285,
+        "tool": "get_religion_spread",
+        "text": "Religious Victory Tracker:\n  新教: majority in 3/4 civilizations !! IMMINENT\n\n苏美尔:\n  乌鲁克 (pop 13) — 拜火教 (拜火教:11)\n  埃利都 (pop 11) — 拜火教 (拜火教:10)\n  尼普尔 (pop 9) — 新教 (新教:9, 天主教:0)\n  基什 (pop 6) — 新教 (新教:5, 天主教:0)\n  拉格什 (pop 2) — 新教 (新教:2)\n瑞典:\n  斯德哥尔摩 (pop 13) — 新教 (新教:12)\n  厄勒布鲁 (pop 8) — 新教 (新教:8)\n  林雪平 (pop 14) — 新教 (新教:14)\n  乌普萨拉 (pop 13) — 新教 (新教:12, 天主教:0)\n  马尔默 (pop 9) — 新教 (新教:9, 天主教:0)\n  蒙特利尔 (pop 2) — 新教 (新教:2, 天主教:0)\n  延雪平 (pop 5) — 新教 (新教:5)\n巴西:\n  里约热内卢 (pop 15) — 新教 (新教:12)\n  巴西利亚 (pop 12) — 新教 (天主教:2, 新教:8)\n  福塔雷萨 (pop 14) — 新教 (新教:11, 天主教:0)\n  阿雷格里港 (pop 7) — 新教 (天主教:2, 新教:4)\n  圣保罗 (pop 6) — 新教 (新教:4, 天主教:2)\n  萨尔瓦多 (pop 5) — 新教 (新教:4, 天主教:1)\n加拿大:\n  渥太华 (pop 14) — 天主教 (新教:2, 天主教:8)\n  温尼伯 (pop 16) — none (新教:5, 天主教:4)\n  哈利法克斯 (pop 9) — 新教 (新教:8, 天主教:0)\n  夏洛特顿 (pop 7) — none (新教:3, 天主教:3)",
+        "isError": false,
+        "elapsed": 0.034
+      }
+    },
+    {
+      "at": 1792445081.458156,
+      "request": {
+        "id": 2296,
+        "tool": "purchase_item",
+        "args": {
+          "city_id": 131073,
+          "item_type": "UNIT",
+          "item_name": "UNIT_MISSIONARY",
+          "yield_type": "YIELD_FAITH"
+        }
+      },
+      "response": {
+        "id": 2296,
+        "tool": "purchase_item",
+        "text": "Error: ITEM_PURCHASE_REFUSED|CANNOT_PURCHASE\nstack traceback:\n\t[C]: in function 'assert'\n\t[string \"do...\"]:86: in function '(anonymous)'\n\t[C]: in function 'pcall'\n\t[string \"do...\"]:65: in function '(anonymous)'\n\t[string \"do...\"]:110: in function '(main chunk)'",
+        "isError": false,
+        "elapsed": 0.084
+      }
+    },
+    {
+      "at": 1792445144.780874,
+      "request": {
+        "id": 2299,
+        "tool": "purchase_item",
+        "args": {
+          "city_id": 65536,
+          "item_type": "UNIT",
+          "item_name": "UNIT_MISSIONARY",
+          "yield_type": "YIELD_FAITH"
+        }
+      },
+      "response": {
+        "id": 2299,
+        "tool": "purchase_item",
+        "text": "PURCHASED|UNIT_MISSIONARY|city:65536|YIELD_FAITH|unit:2686987|cost:100|balance:114.09765625->14.09765625",
+        "isError": false,
+        "elapsed": 0.126
+      }
+    },
+    {
+      "at": 1792445544.330199,
+      "request": {
+        "id": 2318,
+        "tool": "run_lua",
+        "args": {
+          "context": "ingame",
+          "code": "local u=UnitManager.GetUnit(0,1); print('CONDEMN_WARRIOR',UnitManager.CanStartCommand(u,UnitCommandTypes.CONDEMN_HERETIC,false,true)); for _,t in Players[1]:GetUnits():Members() do local k=GameInfo.Units[t:GetType()].UnitType; if (k=='UNIT_APOSTLE' or k=='UNIT_MISSIONARY') and PlayersVisibility[0]:IsVisible(t:GetX(),t:GetY()) then print('VISIBLE_RELIGIOUS',t:GetOwner(),t:GetID(),k,t:GetX(),t:GetY(),t:GetReligionType()) end end"
+        }
+      },
+      "response": {
+        "id": 2318,
+        "tool": "run_lua",
+        "text": "CONDEMN_WARRIOR\tfalse\tnil\nVISIBLE_RELIGIOUS\t1\t5767168\tUNIT_APOSTLE\t34\t23\t8\nVISIBLE_RELIGIOUS\t1\t5570570\tUNIT_APOSTLE\t35\t15\t8\nVISIBLE_RELIGIOUS\t1\t2424849\tUNIT_MISSIONARY\t36\t24\t8\nVISIBLE_RELIGIOUS\t1\t5177367\tUNIT_APOSTLE\t36\t15\t8",
+        "isError": false,
+        "elapsed": 0.049
+      }
+    },
+    {
+      "at": 1792445630.7305448,
+      "request": {
+        "id": 2322,
+        "tool": "unit_action",
+        "args": {
+          "unit_id": 2424845,
+          "action": "condemn_heretic"
+        }
+      },
+      "response": {
+        "id": 2322,
+        "tool": "unit_action",
+        "text": "Error: Unknown action 'condemn_heretic'. Valid: move, cancel_move, pillage, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion",
+        "isError": false,
+        "elapsed": 0.004
+      }
+    },
+    {
+      "at": 1792446348.988105,
+      "request": {
+        "id": 2341,
+        "tool": "unit_action",
+        "args": {
+          "unit_id": 2424845,
+          "action": "condemn_heretic"
+        }
+      },
+      "response": {
+        "id": 2341,
+        "tool": "unit_action",
+        "text": "HERETIC_CONDEMNED|unit:2424845|target:1:5767168|type:4 religion:8|at:34,23|Target removal confirmed; rewards not measured.",
+        "isError": false,
+        "elapsed": 0.163
+      }
+    },
+    {
+      "at": 1792446361.1017659,
+      "request": {
+        "id": 2344,
+        "tool": "run_lua",
+        "args": {
+          "context": "ingame",
+          "code": "local a=UnitManager.GetUnit(0,13);print('ACTOR_AFTER',a:GetID(),a:GetType(),a:GetX(),a:GetY(),a:GetMovesRemaining());print('TARGET_AFTER',UnitManager.GetUnit(1,0),Players[1]:GetUnits():FindID(5767168));for _,c in Players[0]:GetCities():Members()do print('CITY_AFTER',c:GetID(),c:GetReligion():GetMajorityReligion());for _,r in ipairs(c:GetReligion():GetReligionsInCity())do if r.Religion==8 or r.Religion==12 then print('REL_AFTER',r.Religion,r.Followers,r.Pressure)end end end"
+        }
+      },
+      "response": {
+        "id": 2344,
+        "tool": "run_lua",
+        "text": "ACTOR_AFTER\t2424845\t51\t34\t23\t0\nTARGET_AFTER\tnil\tnil\nCITY_AFTER\t65536\t12\nREL_AFTER\t12\t11\t2600\nREL_AFTER\t8\t0\t15.9375\nCITY_AFTER\t131073\t8\nREL_AFTER\t12\t4\t319.8203125\nREL_AFTER\t8\t6\t589.765625\nCITY_AFTER\t196610\t8\nREL_AFTER\t8\t10\t1395.7109375\nREL_AFTER\t12\t0\t11.9375\nCITY_AFTER\t262147\t8\nREL_AFTER\t8\t5\t656.203125\nREL_AFTER\t12\t0\t11.9375\nCITY_AFTER\t327684\t8\nREL_AFTER\t8\t2\t259.6640625\nREL_AFTER\t12\t0\t11.9375",
+        "isError": false,
+        "elapsed": 0.032
+      }
+    },
+    {
+      "at": 1792446374.240617,
+      "request": {
+        "id": 2346,
+        "tool": "unit_action",
+        "args": {
+          "unit_id": 1507336,
+          "action": "condemn_heretic"
+        }
+      },
+      "response": {
+        "id": 2346,
+        "tool": "unit_action",
+        "text": "HERETIC_CONDEMNED|unit:1507336|target:1:2424849|type:3 religion:8|at:36,24|Target removal confirmed; rewards not measured.",
+        "isError": false,
+        "elapsed": 0.154
+      }
+    },
+    {
+      "at": 1792447069.079975,
+      "request": {
+        "id": 2411,
+        "tool": "unit_action",
+        "args": {
+          "unit_id": 2686987,
+          "action": "spread_religion"
+        }
+      },
+      "response": {
+        "id": 2411,
+        "tool": "unit_action",
+        "text": "RELIGION_SPREAD|unit:2686987|religion:12|charges_remaining:2|city:0:327684 pressure:17.90625->217.90625|Pressure increase confirmed.",
+        "isError": false,
+        "elapsed": 0.173
+      }
+    },
+    {
+      "at": 1792448396.055702,
+      "request": {
+        "id": 2465,
+        "tool": "get_game_overview",
+        "args": {}
+      },
+      "response": {
+        "id": 2465,
+        "tool": "get_game_overview",
+        "text": "Turn 130 | 苏美尔 (吉尔伽美什) | Score: 358 | 神\nGold: 577 (+93/turn) | Income: 138 | Maintenance: -45 (units: 22) | Science: 114.8 | Culture: 54.3 | Faith: 109 | Favor: 113 (+4/turn)\nResearch: 弹道学 | Civic: 殖民主义\nCities: 5 | Population: 44 | Units: 12 — 3 弩手, 3 商人, 2 火枪手, 1 建造者, 1 传教士, 1 追猎者, 1 散兵\nIdentity: civilization_type=CIVILIZATION_SUMERIA | leader_type=LEADER_GILGAMESH\nScore categories (GetCategoryScore, positive-weight): 市政 [CATEGORY_CIVICS]: 72; 帝国 [CATEGORY_EMPIRE]: 116; 伟人 [CATEGORY_GREAT_PEOPLE]: 25; 宗教 [CATEGORY_RELIGION]: 10; 科技 [CATEGORY_TECH]: 74; 奇观 [CATEGORY_WONDER]: 0; 时代得分 [CATEGORY_ERA_SCORE]: 61\nDiagnostic category sum: 358 (matches official GetScore).\nExplored: 96% of land (432/449 tiles)\nReligion: 拜火教 (3/3 slots)\nEra: 工业时代 | Current age: Normal\nEra score: 61 | Next-era thresholds (Dark: 65, Golden: 78)\nRankings: 瑞典 581 > 巴西 510 > 加拿大 480 > 苏美尔 358",
+        "isError": false,
+        "elapsed": 0.176
+      }
+    },
+    {
+      "at": 1792448410.7664251,
+      "request": {
+        "id": 2469,
+        "tool": "unit_action",
+        "args": {
+          "unit_id": 2686987,
+          "action": "spread_religion"
+        }
+      },
+      "response": {
+        "id": 2469,
+        "tool": "unit_action",
+        "text": "RELIGION_SPREAD|unit:2686987|religion:12|charges_remaining:1|city:0:131073 pressure:340.7109375->540.7109375|Pressure increase confirmed.",
+        "isError": false,
+        "elapsed": 0.173
+      }
+    },
+    {
+      "at": 1792448483.3188229,
+      "request": {
+        "id": 2481,
+        "tool": "get_religion_spread",
+        "args": {}
+      },
+      "response": {
+        "id": 2481,
+        "tool": "get_religion_spread",
+        "text": "Religious Victory Tracker:\n  新教: majority in 2/4 civilizations\n\n苏美尔:\n  乌鲁克 (pop 13) — 拜火教 (拜火教:11, 新教:0)\n  埃利都 (pop 12) — none (拜火教:5, 新教:5)\n  尼普尔 (pop 10) — 新教 (新教:9, 天主教:0, 拜火教:0)\n  基什 (pop 6) — 新教 (新教:5, 天主教:0, 拜火教:0)\n  拉格什 (pop 3) — 拜火教 (新教:1, 拜火教:2)\n瑞典:\n  斯德哥尔摩 (pop 13) — 新教 (新教:12)\n  厄勒布鲁 (pop 8) — 新教 (新教:8)\n  林雪平 (pop 14) — 新教 (新教:14)\n  乌普萨拉 (pop 14) — 新教 (新教:13, 天主教:0)\n  马尔默 (pop 9) — 新教 (新教:9, 天主教:0, 拜火教:0)\n  延雪平 (pop 5) — 新教 (新教:5, 拜火教:0)\n巴西:\n  里约热内卢 (pop 15) — 新教 (新教:10, 拜火教:0, 天主教:2)\n  巴西利亚 (pop 13) — 新教 (天主教:3, 新教:8)\n  福塔雷萨 (pop 15) — 新教 (新教:10, 天主教:2, 拜火教:0)\n  阿雷格里港 (pop 7) — 新教 (天主教:2, 新教:5)\n  圣保罗 (pop 6) — 新教 (新教:3, 天主教:3, 拜火教:0)\n加拿大:\n  渥太华 (pop 13) — 天主教 (新教:2, 天主教:7)\n  温尼伯 (pop 17) — none (新教:5, 天主教:4)\n  哈利法克斯 (pop 9) — 新教 (新教:8, 天主教:0)\n  夏洛特顿 (pop 8) — 新教 (新教:4, 天主教:3)",
+        "isError": false,
+        "elapsed": 0.045
+      }
+    },
+    {
+      "at": 1792448640.769824,
+      "request": {
+        "id": 2492,
+        "tool": "unit_action",
+        "args": {
+          "unit_id": 2686987,
+          "action": "spread_religion"
+        }
+      },
+      "response": {
+        "id": 2492,
+        "tool": "unit_action",
+        "text": "RELIGION_SPREAD|unit:2686987|religion:12|charges_remaining:0|city:0:131073 pressure:548.171875->748.171875|Pressure increase confirmed.",
+        "isError": false,
+        "elapsed": 0.186
+      }
+    },
+    {
+      "at": 1792448651.232977,
+      "request": {
+        "id": 2494,
+        "tool": "run_lua",
+        "args": {
+          "context": "ingame",
+          "code": "local u=UnitManager.GetUnit(0,9);print('CBOW_POSTSHOT',u:GetID(),u:GetMovesRemaining(),u:GetDamage(),u:IsReadyToMove());local c=Players[0]:GetCities():FindID(131073);print('ERI_RELIGION',c:GetReligion():GetMajorityReligion());for _,r in ipairs(c:GetReligion():GetReligionsInCity())do print('ERI_ROW',r.Religion,r.Followers,r.Pressure)end"
+        }
+      },
+      "response": {
+        "id": 2494,
+        "tool": "run_lua",
+        "text": "CBOW_POSTSHOT\t1245193\t0\t0\tfalse\nERI_RELIGION\t12\nERI_ROW\t-1\t2\t200\nERI_ROW\t12\t6\t748.171875\nERI_ROW\t8\t4\t443.46875",
+        "isError": false,
+        "elapsed": 0.041
+      }
+    },
+    {
+      "at": 1792449417.0363798,
+      "request": {
+        "id": 2512,
+        "tool": "get_game_overview",
+        "args": {}
+      },
+      "response": {
+        "id": 2512,
+        "tool": "get_game_overview",
+        "text": "Turn 131 | 苏美尔 (吉尔伽美什) | Score: 359 | 神\nGold: 408 (+83/turn) | Income: 128 | Maintenance: -45 (units: 22) | Science: 114.3 | Culture: 54.4 | Faith: 132 | Favor: 117 (+4/turn)\nResearch: 弹道学 | Civic: 殖民主义\nCities: 5 | Population: 45 | Units: 12 — 4 商人, 3 弩手, 2 火枪手, 1 建造者, 1 散兵, 1 追猎者\nIdentity: civilization_type=CIVILIZATION_SUMERIA | leader_type=LEADER_GILGAMESH\nScore categories (GetCategoryScore, positive-weight): 市政 [CATEGORY_CIVICS]: 72; 帝国 [CATEGORY_EMPIRE]: 117; 伟人 [CATEGORY_GREAT_PEOPLE]: 25; 宗教 [CATEGORY_RELIGION]: 10; 科技 [CATEGORY_TECH]: 74; 奇观 [CATEGORY_WONDER]: 0; 时代得分 [CATEGORY_ERA_SCORE]: 62\nDiagnostic category sum: 360 (differs from official GetScore: 359; native aggregate and category readings are inconsistent).\nExplored: 96% of land (432/449 tiles)\nReligion: 拜火教 (3/3 slots)\nEra: 工业时代 | Current age: Normal\nEra score: 62 | Next-era thresholds (Dark: 65, Golden: 78)\nRankings: 瑞典 582 > 巴西 520 > 加拿大 481 > 苏美尔 359",
+        "isError": false,
+        "elapsed": 0.788
+      }
+    },
+    {
+      "at": 1792449835.099788,
+      "request": {
+        "id": 2552,
+        "tool": "get_game_overview",
+        "args": {}
+      },
+      "response": {
+        "id": 2552,
+        "tool": "get_game_overview",
+        "text": "Turn 134 | 苏美尔 (吉尔伽美什) | Score: 368 | 神\nGold: 651 (+78/turn) | Income: 128 | Maintenance: -51 (units: 26) | Science: 114.0 | Culture: 69.6 | Faith: 201 | Favor: 129 (+4/turn)\nResearch: None | Civic: 土木工程\nCities: 5 | Population: 48 | Units: 13 — 4 商人, 3 弩手, 2 火枪手, 1 间谍, 1 建造者, 1 追猎者, 1 散兵\nIdentity: civilization_type=CIVILIZATION_SUMERIA | leader_type=LEADER_GILGAMESH\nScore categories (GetCategoryScore, positive-weight): 市政 [CATEGORY_CIVICS]: 75; 帝国 [CATEGORY_EMPIRE]: 124; 伟人 [CATEGORY_GREAT_PEOPLE]: 25; 宗教 [CATEGORY_RELIGION]: 10; 科技 [CATEGORY_TECH]: 76; 奇观 [CATEGORY_WONDER]: 0; 时代得分 [CATEGORY_ERA_SCORE]: 64\nDiagnostic category sum: 374 (differs from official GetScore: 368; native aggregate and category readings are inconsistent).\nExplored: 97% of land (438/449 tiles)\nReligion: 拜火教 (3/3 slots)\nEra: 工业时代 | Current age: Normal\nEra score: 64 | Next-era thresholds (Dark: 65, Golden: 78)\nRankings: 瑞典 614 > 巴西 537 > 加拿大 487 > 苏美尔 368",
+        "isError": false,
+        "elapsed": 0.197
+      }
+    },
+    {
+      "at": 1792449955.2119,
+      "request": {
+        "id": 2575,
+        "tool": "get_victory_progress",
+        "args": {}
+      },
+      "response": {
+        "id": 2575,
+        "tool": "get_victory_progress",
+        "text": "=== VICTORY PROGRESS ===\nEnabled: Domination, Culture, VICTORY_DEFAULT, Diplomatic, Religious, Score, Science\n\nSCIENCE\n  苏美尔: 0/33.5 VP | 38 techs | 0 spaceports | native progress/turn 0\n  瑞典: 0/33.5 VP | 38 techs | 0 spaceports | native progress/turn 0\n  巴西: 0/33.5 VP | 40 techs | 0 spaceports | native progress/turn 0\n  加拿大: 0/33.5 VP | 42 techs | 0 spaceports | native progress/turn 0\n  发射地球卫星: locked | prerequisite TECH_ROCKETRY (researched=False)\n  启动登月计划: locked | prerequisite TECH_SATELLITES (researched=False)\n  启动火星殖民: locked | prerequisite TECH_NANOTECHNOLOGY (researched=False)\n  启动系外行星探索: locked | prerequisite TECH_SMART_MATERIALS (researched=False)\n\nDOMINATION (original capitals)\n  苏美尔: original capital held\n  瑞典: original capital held\n  巴西: original capital held\n  加拿大: original capital held\n\nCULTURE\n  苏美尔: tourism 12 | domestic tourists 37 | visiting tourists 0/102\n  瑞典: tourism 72 | domestic tourists 101 | visiting tourists 10/100\n  巴西: tourism 55 | domestic tourists 99 | visiting tourists 8/102\n  加拿大: tourism 59 | domestic tourists 85 | visiting tourists 7/102\n  Our tourists from 瑞典: 0 | their domestic tourists: 101\n  Our tourists from 巴西: 0 | their domestic tourists: 99\n  Our tourists from 加拿大: 0 | their domestic tourists: 85\n\nRELIGION (founded 3/3)\n  苏美尔: majority=RELIGION_ZOROASTRIANISM | religion cities 3 | founded religion=True (拜火教)\n  瑞典: majority=RELIGION_PROTESTANTISM | religion cities 21 | founded religion=True (新教)\n  巴西: majority=RELIGION_PROTESTANTISM | religion cities 0 | founded religion=True (天主教)\n  加拿大: majority=none | religion cities 0 | founded religion=False\n\nDIPLOMATIC\n  苏美尔: 5/20 VP\n  瑞典: 2/20 VP\n  巴西: 1/20 VP\n  加拿大: 1/20 VP\n\nSCORE AND CIVILIZATION DATA\n  瑞典: score 622 | 6 cities | science 119.8 | culture 135.3 | gold +66.3 | military 318 | civics 28\n  巴西: score 544 | 5 cities | science 138.2 | culture 146.9 | gold +58.5 | military 37 | civics 28\n  加拿大: score 522 | 6 cities | science 169.3 | culture 134.7 | gold +133 | military 151 | civics 25\n  苏美尔: score 374 | 5 cities | science 118.3 | culture 69.6 | gold +72.5 | military 394 | civics 25\n\nDEMOGRAPHICS\n  Population: rank 4 | ours 48 | best 64 | average 57.2 | worst 48\n  Soldiers: rank 1 | ours 394 | best 394 | average 225 | worst 37\n  CropYield: rank 4 | ours 136 | best 175 | average 158.8 | worst 136\n  GNP: rank 2 | ours 72.5 | best 133 | average 82.6 | worst 58.5\n  Land: rank 4 | ours 86 | best 131 | average 114.5 | worst 86\n  Goods: rank 4 | ours 97 | best 178.9 | average 137.4 | worst 97",
+        "isError": false,
+        "elapsed": 0.071
+      }
+    },
+    {
+      "at": 1792450226.661577,
+      "request": {
+        "id": 2613,
+        "tool": "get_game_overview",
+        "args": {}
+      },
+      "response": {
+        "id": 2613,
+        "tool": "get_game_overview",
+        "text": "Turn 137 | 苏美尔 (吉尔伽美什) | Score: 377 | 神\nGold: 148 (+71/turn) | Income: 128 | Maintenance: -57 (units: 30) | Science: 117.2 | Culture: 69.8 | Faith: 272 | Favor: 142 (+4/turn)\nResearch: 经济 | Civic: 土木工程\nCities: 5 | Population: 49 | Units: 13 — 4 商人, 2 火枪手, 2 野战加农炮, 1 建造者, 1 弩手, 1 追猎者, 1 间谍, 1 散兵\nIdentity: civilization_type=CIVILIZATION_SUMERIA | leader_type=LEADER_GILGAMESH\nScore categories (GetCategoryScore, positive-weight): 市政 [CATEGORY_CIVICS]: 75; 帝国 [CATEGORY_EMPIRE]: 128; 伟人 [CATEGORY_GREAT_PEOPLE]: 25; 宗教 [CATEGORY_RELIGION]: 10; 科技 [CATEGORY_TECH]: 76; 奇观 [CATEGORY_WONDER]: 0; 时代得分 [CATEGORY_ERA_SCORE]: 64\nDiagnostic category sum: 378 (differs from official GetScore: 377; native aggregate and category readings are inconsistent).\nExplored: 97% of land (438/449 tiles)\nReligion: 拜火教 (3/3 slots)\nEra: 工业时代 | Current age: Normal\nEra score: 64 | Next-era thresholds (Dark: 65, Golden: 78)\nRankings: 瑞典 629 > 巴西 547 > 加拿大 543 > 苏美尔 377",
+        "isError": false,
+        "elapsed": 0.192
+      }
+    },
+    {
+      "at": 1792450246.7323022,
+      "request": {
+        "id": 2614,
+        "tool": "purchase_item",
+        "args": {
+          "city_id": 131073,
+          "item_type": "UNIT",
+          "item_name": "UNIT_APOSTLE",
+          "yield_type": "YIELD_FAITH"
+        }
+      },
+      "response": {
+        "id": 2614,
+        "tool": "purchase_item",
+        "text": "PURCHASED|UNIT_APOSTLE|city:131073|YIELD_FAITH|unit:3145737|cost:265|balance:272.09765625->7.09765625",
+        "isError": false,
+        "elapsed": 0.13
+      }
+    },
+    {
+      "at": 1792450285.688163,
+      "request": {
+        "id": 2618,
+        "tool": "end_turn",
+        "args": {}
+      },
+      "response": {
+        "id": 2618,
+        "tool": "end_turn",
+        "text": "Turn 137 -> 138\nResources: COAL 33/33 (+6/t), HORSES 33/33 (+2/t), IRON 33/33 (+4/t), NITER 20/33 (+2/t)\n\n== Events ==\n  -- 埃利都 grew to population 13.\n\n== Action Required ==\n  * 单位可升级 — 使徒可升级。  -> Use: get_unit_promotions(unit_id=...) then promote_unit()\n\n== Notifications ==\n  - 建筑被掠夺 — 您在埃利都的工作坊遭到了野蛮人的掠夺。\n  - 科技提升 — 科技已提升：化学！\n  - 您与佩德罗二世的同盟等级已提升。\n  - 需要更多住房 — 埃利都需要更多 [ICON_Housing] 住房来保持发展。如果情况继续，我们会很难获得新 [ICON_Citizen] 公民。\n  - 需要更高的宜居度 — 埃利都需要更高的 [ICON_Amenities] 宜居度以保持高生产力。如果情况变糟，国民可能会揭竿起义！\n  - 指挥单位 — 移动1个单位或让它执行1项任务。\n  - 城市远程攻击 — 您的城市可执行远程攻击。\nVictory risk (heuristic; not a terminal result):\n  瑞典: founded religion is majority in 3/4 civilizations\nInspect get_victory_progress and reassess the victory route; no exact remaining-turn estimate.",
+        "isError": false,
+        "elapsed": 5.8
+      }
+    },
+    {
+      "at": 1792450296.503784,
+      "request": {
+        "id": 2619,
+        "tool": "get_units",
+        "args": {}
+      },
+      "response": {
+        "id": 2619,
+        "tool": "get_units",
+        "text": "14 units:\n  散兵 (UNIT_SKIRMISHER) at (54,31) — CS:20 RS:30 moves 3/3 [id:1769472, idx:0]\n  野战加农炮 (UNIT_FIELD_CANNON) at (41,29) — CS:50 RS:60 moves 2/2 [id:3080193, idx:1]\n  野战加农炮 (UNIT_FIELD_CANNON) at (35,22) — CS:50 RS:60 moves 2/2 [id:3014658, idx:2]\n    >> CAN ATTACK: UNIT_LINE_INFANTRY@33,21(34hp)\n  建造者 (UNIT_BUILDER) at (35,26) — moves 2/2 charges:1 [id:2555908, idx:4]\n  商人 (UNIT_TRADER) at (38,19) — moves 3/3 [ON ROUTE: 乌鲁克 -> 里约热内卢 (International)] [id:2097157, idx:5]\n  弩手 (UNIT_CROSSBOWMAN) at (37,28) — CS:30 RS:40 moves 2/2 **CAN UPGRADE to UNIT_FIELD_CANNON (100g)** [id:1572870, idx:6]\n  商人 (UNIT_TRADER) at (41,28) — moves 2/2 [ON ROUTE: 基什 -> 里约热内卢 (International)] [id:2031623, idx:7]\n  追猎者 (UNIT_COURSER) at (36,24) — CS:46 moves 5/5 [id:1507336, idx:8]\n  使徒 (UNIT_APOSTLE) at (34,24) — moves 4/4 charges:3 [ZOROASTRIANISM] [id:3145737, idx:9]\n  商人 (UNIT_TRADER) at (39,26) — moves 2/2 [ON ROUTE: 尼普尔 -> 乌鲁克 (Domestic)] [id:1966090, idx:10]\n  拉泽娜 (UNIT_SPY) at (20,12) — moves 1/1 [id:2949131, idx:11]\n  商人 (UNIT_TRADER) at (35,22) — moves 2/2 [ON ROUTE: 乌鲁克 -> 埃利都 (Domestic)] [id:2883596, idx:12]\n  火枪手 (UNIT_MUSKETMAN) at (34,22) — CS:55 moves 2/2 [id:2424845, idx:13]\n    >> CAN ATTACK: UNIT_LINE_INFANTRY@33,21(34hp)\n  火枪手 (UNIT_MUSKETMAN) at (37,27) — CS:55 moves 2/2 [id:2818062, idx:14]\n\nNearby threats (8):\n  Barbarian (5 units):\n    UNIT_LINE_INFANTRY at (33,21) — CS:65 HP:34/100 (1 tiles away)\n    UNIT_PIKE_AND_SHOT at (37,19) — CS:55 HP:100/100 (1 tiles away)\n    UNIT_BOMBARD at (34,20) — CS:45 HP:100/100 (2 tiles away)\n    UNIT_FIELD_CANNON at (34,19) — CS:50 RS:60 HP:37/100 (3 tiles away)\n    UNIT_RANGER at (35,19) — CS:45 RS:60 HP:100/100 (3 tiles away)\n  瑞典 (3 units):\n    UNIT_SWEDEN_CAROLEAN at (32,21) — CS:55 HP:100/100 (2 tiles away)\n    UNIT_LINE_INFANTRY at (31,21) — CS:65 HP:100/100 (3 tiles away)\n    UNIT_LINE_INFANTRY at (32,20) — CS:65 HP:100/100 (3 tiles away)",
+        "isError": false,
+        "elapsed": 0.143
+      }
+    },
+    {
+      "at": 1792450296.647337,
+      "request": {
+        "id": 2620,
+        "tool": "run_lua",
+        "args": {
+          "context": "ingame",
+          "code": "local u=Players[0]:GetUnits():FindID(3145737);local ok,r=UnitManager.CanStartCommand(u,UnitCommandTypes.PROMOTE,false,true);print('APOSTLE_CAN_PROMOTE',ok);for _,idx in pairs(r and r[UnitCommandResults.PROMOTIONS] or {}) do local p=GameInfo.UnitPromotions[idx];print('APOSTLE_OPTION',idx,p and p.UnitPromotionType) end"
+        }
+      },
+      "response": {
+        "id": 2620,
+        "tool": "run_lua",
+        "text": "APOSTLE_CAN_PROMOTE\ttrue\nAPOSTLE_OPTION\t94\tPROMOTION_PILGRIM\nAPOSTLE_OPTION\t97\tPROMOTION_DEBATER\nAPOSTLE_OPTION\t99\tPROMOTION_CHAPLAIN",
+        "isError": false,
+        "elapsed": 0.038
+      }
+    },
+    {
+      "at": 1792450312.599199,
+      "request": {
+        "id": 2621,
+        "tool": "promote_unit",
+        "args": {
+          "unit_id": 3145737,
+          "promotion_type": "PROMOTION_DEBATER"
+        }
+      },
+      "response": {
+        "id": 2621,
+        "tool": "promote_unit",
+        "text": "PROMOTED|unit:3145737|PROMOTION_DEBATER,damage:0,moves:0,stored_promotions:unknown|Use dismiss_popup if a stale promotion notification remains.",
+        "isError": false,
+        "elapsed": 0.114
+      }
+    },
+    {
+      "at": 1792451009.367946,
+      "request": {
+        "id": 2652,
+        "tool": "get_religion_spread",
+        "args": {}
+      },
+      "response": {
+        "id": 2652,
+        "tool": "get_religion_spread",
+        "text": "Religious Victory Tracker:\n  拜火教: majority in 1/4 civilizations\n  新教: majority in 3/4 civilizations !! IMMINENT\n\n苏美尔:\n  乌鲁克 (pop 14) — 拜火教 (拜火教:12, 新教:0)\n  埃利都 (pop 13) — 拜火教 (拜火教:7, 新教:5)\n  尼普尔 (pop 12) — 新教 (新教:11, 天主教:0, 拜火教:1)\n  基什 (pop 7) — 新教 (新教:5, 天主教:0, 拜火教:1)\n  拉格什 (pop 5) — 拜火教 (新教:2, 拜火教:3)\n瑞典:\n  斯德哥尔摩 (pop 13) — 新教 (新教:12)\n  厄勒布鲁 (pop 9) — 新教 (新教:9)\n  林雪平 (pop 14) — 新教 (新教:14)\n  乌普萨拉 (pop 14) — 新教 (新教:13, 天主教:0)\n  马尔默 (pop 10) — 新教 (新教:9, 天主教:1, 拜火教:0)\n  延雪平 (pop 5) — 新教 (新教:5, 拜火教:0)\n巴西:\n  里约热内卢 (pop 16) — 新教 (新教:10, 拜火教:0, 天主教:3)\n  巴西利亚 (pop 14) — 新教 (天主教:5, 新教:8)\n  福塔雷萨 (pop 15) — 新教 (新教:9, 天主教:3, 拜火教:0)\n  阿雷格里港 (pop 8) — 新教 (天主教:2, 新教:5)\n  圣保罗 (pop 6) — 新教 (新教:4, 天主教:2, 拜火教:0)\n加拿大:\n  渥太华 (pop 13) — 新教 (新教:8, 天主教:0)\n  温尼伯 (pop 18) — 新教 (新教:10, 天主教:1)\n  哈利法克斯 (pop 9) — 新教 (新教:8, 天主教:0)\n  夏洛特顿 (pop 9) — 新教 (新教:5, 天主教:3)\n  蒙特利尔 (pop 2) — 新教 (新教:2, 天主教:0, 拜火教:0)",
+        "isError": false,
+        "elapsed": 0.042
+      }
+    },
+    {
+      "at": 1792451117.91167,
+      "request": {
+        "id": 2659,
+        "tool": "run_lua",
+        "args": {
+          "context": "ingame",
+          "code": "local u=Players[0]:GetUnits():FindID(3145737);local row=GameInfo.UnitOperations['UNITOPERATION_LAUNCH_INQUISITION'];print('INQ_GETTER_TYPE',type(Players[0]:GetReligion().HasLaunchedInquisition));print('INQ_OPERATION',row and row.Hash,UnitOperationTypes.LAUNCH_INQUISITION);print('ACTOR',u:GetOwner(),u:GetID(),u:GetType(),u:GetX(),u:GetY(),u:GetMovesRemaining(),u:GetSpreadCharges());print('NATIVE_CAN_INQUISITION',UnitManager.CanStartOperation(u,row.Hash,nil,{}));print('BOMBARD_DEAD',UnitManager.GetUnit(63,6422531%65536)==nil,Players[63]:GetUnits():FindID(6422531)==nil)"
+        }
+      },
+      "response": {
+        "id": 2659,
+        "tool": "run_lua",
+        "text": "INQ_GETTER_TYPE\tfunction\nINQ_OPERATION\t-1128148313\tnil\nACTOR\t0\t3145737\t4\t34\t24\t4\t3\nNATIVE_CAN_INQUISITION\ttrue\nBOMBARD_DEAD\ttrue\ttrue",
+        "isError": false,
+        "elapsed": 0.423
+      }
+    },
+    {
+      "at": 1792451144.6646888,
+      "request": {
+        "id": 2663,
+        "tool": "unit_action",
+        "args": {
+          "unit_id": 3145737,
+          "action": "launch_inquisition"
+        }
+      },
+      "response": {
+        "id": 2663,
+        "tool": "unit_action",
+        "text": "Error: Unknown action 'launch_inquisition'. Valid: move, cancel_move, pillage, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion, condemn_heretic",
+        "isError": false,
+        "elapsed": 0.002
+      }
+    },
+    {
+      "at": 1792452862.6949701,
+      "request": {
+        "id": 2688,
+        "tool": "unit_action",
+        "args": {
+          "unit_id": 3145737,
+          "action": "launch_inquisition"
+        }
+      },
+      "response": {
+        "id": 2688,
+        "tool": "unit_action",
+        "text": "INQUISITION_LAUNCHED|unit:3145737|religion:12|launched:false->true|at:34,24|Apostle consumption confirmed.",
+        "isError": false,
+        "elapsed": 0.337
+      }
+    },
+    {
+      "at": 1792452879.793597,
+      "request": {
+        "id": 2689,
+        "tool": "run_lua",
+        "args": {
+          "context": "gamecore",
+          "code": "print('CORE_POST_INQ',Game.GetCurrentGameTurn(),Players[0]:GetReligion():GetReligionTypeCreated(),Players[0]:GetReligion():HasLaunchedInquisition())"
+        }
+      },
+      "response": {
+        "id": 2689,
+        "tool": "run_lua",
+        "text": "CORE_POST_INQ\t139\t12\ttrue",
+        "isError": false,
+        "elapsed": 0.034
+      }
+    },
+    {
+      "at": 1792452879.8284109,
+      "request": {
+        "id": 2690,
+        "tool": "run_lua",
+        "args": {
+          "context": "ingame",
+          "code": "local r=__civmcpUnitEffect;print('IG_RECEIPT',r.token,r.id,r.operation,r.entered,r.returned,r.started,r.removed);print('ACTOR_ABSENT',UnitManager.GetUnit(0,3145737%65536)==nil,Players[0]:GetUnits():FindID(3145737)==nil);print('INQ_UNLOCK',Players[0]:GetCities():FindID(131073):GetBuildQueue():CanProduce(GameInfo.Units.UNIT_INQUISITOR.Hash,true));for _,u in Players[0]:GetUnits():Members() do if u:IsReadyToMove() then print('READY',u:GetID(),u:GetX(),u:GetY(),u:GetMovesRemaining()) end end"
+        }
+      },
+      "response": {
+        "id": 2690,
+        "tool": "run_lua",
+        "text": "IG_RECEIPT\t8d79cb8065ed4f7abda1d7674473b2f2\t3145737\t-1128148313\ttrue\ttrue\ttrue\ttrue\nACTOR_ABSENT\ttrue\ttrue\nINQ_UNLOCK\ttrue",
+        "isError": false,
+        "elapsed": 0.043
+      }
+    },
+    {
+      "at": 1792453101.088574,
+      "request": {
+        "id": 2699,
+        "tool": "get_game_overview",
+        "args": {}
+      },
+      "response": {
+        "id": 2699,
+        "tool": "get_game_overview",
+        "text": "Turn 140 | 苏美尔 (吉尔伽美什) | Score: 383 | 神\nGold: 354 (+52/turn) | Income: 109 | Maintenance: -57 (units: 30) | Science: 112.1 | Culture: 69.0 | Faith: 77 | Favor: 157 (+5/turn)\nResearch: None | Civic: 土木工程\nCities: 5 | Population: 51 | Units: 13 — 4 商人, 2 火枪手, 2 野战加农炮, 1 建造者, 1 散兵, 1 间谍, 1 弩手, 1 追猎者\nIdentity: civilization_type=CIVILIZATION_SUMERIA | leader_type=LEADER_GILGAMESH\nScore categories (GetCategoryScore, positive-weight): 市政 [CATEGORY_CIVICS]: 75; 帝国 [CATEGORY_EMPIRE]: 133; 伟人 [CATEGORY_GREAT_PEOPLE]: 25; 宗教 [CATEGORY_RELIGION]: 10; 科技 [CATEGORY_TECH]: 78; 奇观 [CATEGORY_WONDER]: 0; 时代得分 [CATEGORY_ERA_SCORE]: 67\nDiagnostic category sum: 388 (differs from official GetScore: 383; native aggregate and category readings are inconsistent).\nExplored: 97% of land (438/449 tiles)\nReligion: 拜火教 (3/3 slots)\nEra: 工业时代 | Current age: Normal\nEra score: 67 | Next-era thresholds (Dark: 65, Golden: 78)\nRankings: 瑞典 644 > 巴西 557 > 加拿大 553 > 苏美尔 383",
+        "isError": false,
+        "elapsed": 0.163
+      }
+    },
+    {
+      "at": 1792453243.557767,
+      "request": {
+        "id": 2726,
+        "tool": "propose_peace",
+        "args": {
+          "other_player_id": 1
+        }
+      },
+      "response": {
+        "id": 2726,
+        "tool": "propose_peace",
+        "text": "ACCEPTED|Peace established with 瑞典",
+        "isError": false,
+        "elapsed": 0.287
+      }
+    },
+    {
+      "at": 1792453294.756968,
+      "request": {
+        "id": 2732,
+        "tool": "get_world_congress",
+        "args": {}
+      },
+      "response": {
+        "id": 2732,
+        "tool": "get_world_congress",
+        "text": "World Congress: IN SESSION | native stage: STAGE1 | local request: NONE\nNo local tool request recorded; this is not proof votes are absent. Use queue_wc_votes only for new explicit choices; [] requires a verified no-choice stage.\nNative proposal eligibility: EMPTY (no eligible proposals); no default proposal votes are supplied.\nFavor: 157 | Resolution vote costs (cumulative): 1=0, 2=6, 3=18, 4=36, 5=60, 6=90, 7=126\n\nResolution #1: 移民条约 (hash: -1699105862)\n  Target type: PLAYER\n  Option A: 该文明的城市 [ICON_Citizen] 人口增长+20%，但每回合将-5忠诚度。\n  Option B: 该文明的城市每回合+5忠诚度，但 [ICON_Citizen] 人口增长将-20%。\n  Targets: [target=0] Unmet Player, [target=1] 瑞典, [target=2] 巴西, [target=3] 加拿大\n  -> queue_wc_votes(votes='[{\"hash\": -1699105862, \"option\": 1or2, \"target\": 0, \"votes\": 1}]')\nResolution #2: 军事顾问 (hash: -1229858121)\n  Target type: UNITPROMOTIONCLASS\n  Option A: 拥有所选升级类型的单位+5战斗力。\n  Option B: 拥有所选升级类型的单位-5战斗力。\n  Targets: [target=0] 侦察, [target=1] 近战, [target=2] 远程攻击, [target=3] 攻城, [target=4] 抗骑兵, [target=5] 轻骑兵, [target=6] 重骑兵\n  -> queue_wc_votes(votes='[{\"hash\": -1229858121, \"option\": 1or2, \"target\": 0, \"votes\": 1}]')",
+        "isError": false,
+        "elapsed": 0.045
+      }
+    },
+    {
+      "at": 1792453315.618992,
+      "request": {
+        "id": 2735,
+        "tool": "end_turn",
+        "args": {}
+      },
+      "response": {
+        "id": 2735,
+        "tool": "end_turn",
+        "text": "Turn 140 -> 141\nResources: COAL 33/33 (+6/t), HORSES 33/33 (+2/t), IRON 33/33 (+4/t), NITER 26/33 (+2/t)\n\n== Events ==\n  >> 埃利都 production queue changed from BUILDING_WORKSHOP; completion unconfirmed. Now: invalid queue (nonempty, zero item hash; unchanged).\n  -- 乌鲁克 grew to population 15.\n\n== Action Required ==\n  * 选择生产项目 — 该城市的生产已完成。选择我们下一步生产的东西。  -> Use: set_city_production(city_id=..., item_type=..., item_name=...)\n\n== Notifications ==\n  - 环游世界 — 您的子民欢庆历史时刻的到来！继为数不多的前人之后，苏美尔也完成了环球旅行。（+3时代得分）\n  - 失去宗主国地位 — 在他国派遣更多 [ICON_Envoy] 使者后，您不再是非斯城邦的宗主国。\n  - 蛮族靠近 — 我们发现野蛮人正在接近我们的城市埃利都。\n  - 可以使用信仰值购买 — 您已累积了足够 [ICON_Faith] 信仰值来购买审判官。\n  - 世界议会奖赏您 1 外交胜利点数。\n  - 首座大型城市 — 您的子民欢庆历史时刻的到来！乌鲁克进一步发展，成为了我们的最大城市。（+1时代得分）\n  - 市政提升 — 已提升市政：城市化！\n  - 需要更多住房 — 乌鲁克需要更多 [ICON_Housing] 住房来保持发展。如果情况继续，我们会很难获得新 [ICON_Citizen] 公民。\n  - 需要更高的宜居度 — 乌鲁克需要更高的 [ICON_Amenities] 宜居度以保持高生产力。如果情况变糟，国民可能会揭竿起义！\n  - 指挥单位 — 移动1个单位或让它执行1项任务。\n  - 城市远程攻击 — 您的城市可执行远程攻击。\nVictory risk (heuristic; not a terminal result):\n  瑞典: founded religion is majority in 3/4 civilizations\nInspect get_victory_progress and reassess the victory route; no exact remaining-turn estimate.",
+        "isError": false,
+        "elapsed": 0.482
+      }
+    },
+    {
+      "at": 1792453333.748727,
+      "request": {
+        "id": 2741,
+        "tool": "purchase_item",
+        "args": {
+          "city_id": 131073,
+          "item_type": "UNIT",
+          "item_name": "UNIT_INQUISITOR",
+          "yield_type": "YIELD_FAITH"
+        }
+      },
+      "response": {
+        "id": 2741,
+        "tool": "purchase_item",
+        "text": "PURCHASED|UNIT_INQUISITOR|city:131073|YIELD_FAITH|unit:3342342|cost:100|balance:102->2",
+        "isError": false,
+        "elapsed": 0.112
+      }
+    },
+    {
+      "at": 1792453395.251169,
+      "request": {
+        "id": 2748,
+        "tool": "end_turn",
+        "args": {}
+      },
+      "response": {
+        "id": 2748,
+        "tool": "end_turn",
+        "text": "GAME OVER — DEFEAT. 克里斯蒂娜 of 瑞典 won a Religious victory.",
+        "isError": false,
+        "elapsed": 11.776
+      }
+    },
+    {
+      "at": 1792453422.9616551,
+      "request": {
+        "id": 2749,
+        "tool": "get_game_overview",
+        "args": {}
+      },
+      "response": {
+        "id": 2749,
+        "tool": "get_game_overview",
+        "text": "Turn 141 | 苏美尔 (吉尔伽美什) | Score: 391 | 神\nGold: 334 (+75/turn) | Income: 135 | Maintenance: -60 (units: 32) | Science: 117.1 | Culture: 71.8 | Faith: 2 | Favor: 108 (+5/turn)\nResearch: 零件规格化 | Civic: 土木工程\nCities: 5 | Population: 52 | Units: 14 — 4 商人, 3 野战加农炮, 2 火枪手, 1 散兵, 1 建造者, 1 间谍, 1 审判官, 1 追猎者\nIdentity: civilization_type=CIVILIZATION_SUMERIA | leader_type=LEADER_GILGAMESH\nScore categories (GetCategoryScore, positive-weight): 市政 [CATEGORY_CIVICS]: 75; 帝国 [CATEGORY_EMPIRE]: 134; 伟人 [CATEGORY_GREAT_PEOPLE]: 25; 宗教 [CATEGORY_RELIGION]: 10; 科技 [CATEGORY_TECH]: 78; 奇观 [CATEGORY_WONDER]: 0; 时代得分 [CATEGORY_ERA_SCORE]: 71\nDiagnostic category sum: 393 (differs from official GetScore: 391; native aggregate and category readings are inconsistent).\nExplored: 97% of land (438/449 tiles)\nReligion: 拜火教 (3/3 slots)\nEra: 工业时代 | Current age: Normal\nEra score: 71 | Next-era thresholds (Dark: 65, Golden: 78)\nRankings: 瑞典 652 > 加拿大 568 > 巴西 559 > 苏美尔 391\n\nGAME OVER: DEFEAT — 瑞典, VICTORY_RELIGIOUS",
+        "isError": false,
+        "elapsed": 0.184
+      }
+    },
+    {
+      "at": 1792453423.1466482,
+      "request": {
+        "id": 2750,
+        "tool": "get_victory_progress",
+        "args": {}
+      },
+      "response": {
+        "id": 2750,
+        "tool": "get_victory_progress",
+        "text": "=== VICTORY PROGRESS ===\nEnabled: Domination, Culture, VICTORY_DEFAULT, Diplomatic, Religious, Score, Science\n\nSCIENCE\n  苏美尔: 0/33.5 VP | 39 techs | 0 spaceports | native progress/turn 0\n  瑞典: 0/33.5 VP | 40 techs | 0 spaceports | native progress/turn 0\n  巴西: 0/33.5 VP | 41 techs | 0 spaceports | native progress/turn 0\n  加拿大: 0/33.5 VP | 43 techs | 0 spaceports | native progress/turn 0\n  发射地球卫星: locked | prerequisite TECH_ROCKETRY (researched=False)\n  启动登月计划: locked | prerequisite TECH_SATELLITES (researched=False)\n  启动火星殖民: locked | prerequisite TECH_NANOTECHNOLOGY (researched=False)\n  启动系外行星探索: locked | prerequisite TECH_SMART_MATERIALS (researched=False)\n\nDOMINATION (original capitals)\n  苏美尔: original capital held\n  瑞典: original capital held\n  巴西: original capital held\n  加拿大: original capital held\n\nCULTURE\n  苏美尔: tourism 12 | domestic tourists 43 | visiting tourists 0/111\n  瑞典: tourism 72 | domestic tourists 110 | visiting tourists 12/107\n  巴西: tourism 55 | domestic tourists 106 | visiting tourists 8/111\n  加拿大: tourism 65 | domestic tourists 92 | visiting tourists 9/111\n  Our tourists from 瑞典: 0 | their domestic tourists: 110\n  Our tourists from 巴西: 0 | their domestic tourists: 106\n  Our tourists from 加拿大: 0 | their domestic tourists: 92\n\nRELIGION (founded 3/3)\n  苏美尔: majority=RELIGION_ZOROASTRIANISM | religion cities 3 | founded religion=True (拜火教)\n  瑞典: majority=RELIGION_PROTESTANTISM | religion cities 25 | founded religion=True (新教)\n  巴西: majority=RELIGION_PROTESTANTISM | religion cities 0 | founded religion=True (天主教)\n  加拿大: majority=RELIGION_PROTESTANTISM | religion cities 0 | founded religion=False\n\nDIPLOMATIC\n  苏美尔: 6/20 VP\n  瑞典: 2/20 VP\n  巴西: 2/20 VP\n  加拿大: 2/20 VP\n\nSCORE AND CIVILIZATION DATA\n  瑞典: score 652 | 6 cities | science 135.3 | culture 155.6 | gold +56.1 | military 435 | civics 30\n  加拿大: score 568 | 7 cities | science 175.6 | culture 162 | gold +135 | military 139 | civics 27\n  巴西: score 559 | 5 cities | science 118.3 | culture 127.1 | gold +59.6 | military 85 | civics 28\n  苏美尔: score 391 | 5 cities | science 117.1 | culture 71.8 | gold +74.8 | military 398 | civics 25\n\nDEMOGRAPHICS\n  Population: rank 4 | ours 52 | best 65 | average 59.8 | worst 52\n  Soldiers: rank 2 | ours 398 | best 435 | average 264.2 | worst 85\n  CropYield: rank 4 | ours 140 | best 176 | average 159.2 | worst 140\n  GNP: rank 2 | ours 74.8 | best 135 | average 81.4 | worst 56.1\n  Land: rank 4 | ours 87 | best 138 | average 119.8 | worst 87\n  Goods: rank 4 | ours 109.1 | best 209.1 | average 152.7 | worst 109.1\n\nVictory risk (heuristic; not a terminal result):\n  瑞典: founded religion is majority in 3/4 civilizations\nInspect get_victory_progress and reassess the victory route; no exact remaining-turn estimate.",
+        "isError": false,
+        "elapsed": 0.051
+      }
+    },
+    {
+      "at": 1792453437.19887,
+      "request": {
+        "id": 2752,
+        "tool": "run_lua",
+        "args": {
+          "context": "gamecore",
+          "code": "local w,v=Game.GetWinningTeam(); print('FINAL_WINNER',w,v,GameInfo.Victories[v] and GameInfo.Victories[v].VictoryType); print('FINAL_TURN',Game.GetCurrentGameTurn()); for i=0,3 do local p=Players[i]; print('FINAL_PLAYER',i,p:GetTeam(),p:IsAlive()); if i==0 then for _,c in p:GetCities():Members() do print('FINAL_CITY',c:GetID(),c:GetPopulation(),c:GetReligion():GetMajorityReligion()); for _,r in ipairs(c:GetReligion():GetReligionsInCity()) do print('FINAL_PRESSURE',c:GetID(),r.Religion,r.Followers,r.Pressure) end end end end"
+        }
+      },
+      "response": {
+        "id": 2752,
+        "tool": "run_lua",
+        "text": "Error: ERR:Runtime Error: [string \"do...\"]:9: function expected instead of nil\nstack traceback:\n\t[string \"do...\"]:9: in function '(anonymous)'\n\t[string \"do...\"]:10: in function '(main chunk)'\r\nLua callstack:\r\n",
+        "isError": false,
+        "elapsed": 0.036
+      }
+    },
+    {
+      "at": 1792453472.040224,
+      "request": {
+        "id": 2753,
+        "tool": "run_lua",
+        "args": {
+          "context": "gamecore",
+          "code": "print('FINAL_TURN',Game.GetCurrentGameTurn()); for i=0,3 do local p=Players[i]; print('FINAL_PLAYER',i,p:GetTeam(),p:IsAlive()); if i==0 then for _,c in p:GetCities():Members() do print('FINAL_CITY',c:GetID(),c:GetPopulation(),c:GetReligion():GetMajorityReligion()); for _,r in ipairs(c:GetReligion():GetReligionsInCity()) do print('FINAL_PRESSURE',c:GetID(),r.Religion,r.Followers,r.Pressure) end end end end"
+        }
+      },
+      "response": {
+        "id": 2753,
+        "tool": "run_lua",
+        "text": "Error: ERR:Runtime Error: [string \"do...\"]:9: function expected instead of nil\nstack traceback:\n\t[string \"do...\"]:9: in function '(anonymous)'\n\t[string \"do...\"]:10: in function '(main chunk)'\r\nLua callstack:\r\n",
+        "isError": false,
+        "elapsed": 0.4
+      }
+    },
+    {
+      "at": 1792453492.183564,
+      "request": {
+        "id": 2754,
+        "tool": "save_game",
+        "args": {
+          "save_name": "gold_20261019_t141_terminal_defeat"
+        }
+      },
+      "response": {
+        "id": 2754,
+        "tool": "save_game",
+        "text": "Error: GAME_OVER|Saving is unavailable at the confirmed terminal boundary; no save submitted. Keep the last confirmed checkpoint and terminal evidence.",
+        "isError": false,
+        "elapsed": 0.42
+      }
+    }
+  ]
+}
