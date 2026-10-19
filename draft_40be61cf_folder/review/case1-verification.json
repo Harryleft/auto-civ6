@@ -1,0 +1,122 @@
+{
+  "board_token": "redacted-resource-002",
+  "cloud_update_succeeded": true,
+  "original_node_count": 41,
+  "final_node_count": 41,
+  "changed_text_nodes": 21,
+  "geometry_unchanged": true,
+  "connectors_unchanged": true,
+  "original_explicit_styles_unchanged": true,
+  "inline_svg_normalized_nodes": 6,
+  "svg_content_unchanged": true,
+  "preview_file": "case1-final-refresh.jpg",
+  "preview_visual_check": "passed: complete text, no unintended wraps, no overlap",
+  "required_fact_present": true,
+  "text_changes": [
+    {
+      "z": 1,
+      "before": "案例一：把规则解释与当前可执行资格分开",
+      "after": "案例一：工具说“可选”，游戏却不允许"
+    },
+    {
+      "z": 2,
+      "before": "旧图表示已发现的缺陷路径；右侧包含输入修复与模型决策两种不同责任",
+      "after": "研究项目有解锁顺序；本局顺序被随机打乱，固定解锁表会给出错误选项。"
+    },
+    {
+      "z": 3,
+      "before": "修复前：静态候选失真",
+      "after": "修复前：选项有误"
+    },
+    {
+      "z": 4,
+      "before": "修复后：规则＋事实＋原生资格",
+      "after": "修复后：向游戏核对能否研究"
+    },
+    {
+      "z": 6,
+      "before": "按静态先决关系",
+      "after": "按固定解锁表"
+    },
+    {
+      "z": 7,
+      "before": "推导可研究候选",
+      "after": "列出可研究项目"
+    },
+    {
+      "z": 9,
+      "before": "候选显示“可选”",
+      "after": "显示可选"
+    },
+    {
+      "z": 10,
+      "before": "本局随机树未必允许",
+      "after": "本局解锁顺序已打乱"
+    },
+    {
+      "z": 12,
+      "before": "输入与原生资格冲突",
+      "after": "游戏实际不允许"
+    },
+    {
+      "z": 13,
+      "before": "模型可能据此误判",
+      "after": "模型可能选错目标"
+    },
+    {
+      "z": 15,
+      "before": "世界知识解释机制",
+      "after": "查询时和提交前"
+    },
+    {
+      "z": 16,
+      "before": "查询本局候选与动态状态",
+      "after": "都向游戏核对"
+    },
+    {
+      "z": 18,
+      "before": "原生资格",
+      "after": "游戏当前"
+    },
+    {
+      "z": 19,
+      "before": "是否明确允许？",
+      "after": "明确允许吗？"
+    },
+    {
+      "z": 21,
+      "before": "允许：Agent 比较瓶颈",
+      "after": "模型比较研究选项"
+    },
+    {
+      "z": 22,
+      "before": "决定做什么、是否值得做",
+      "after": "决定研究什么、是否值得"
+    },
+    {
+      "z": 24,
+      "before": "不允许／未知：返回限制",
+      "after": "不允许或不明确"
+    },
+    {
+      "z": 25,
+      "before": "不提交研究动作",
+      "after": "就不提交研究"
+    },
+    {
+      "z": 38,
+      "before": "T195：静态列表可选",
+      "after": "T195（第195回合）"
+    },
+    {
+      "z": 39,
+      "before": "原生 CanProgress=false",
+      "after": "工具可选，游戏不允许"
+    },
+    {
+      "z": 40,
+      "before": "资格正确解决“能否做”；胜利路线仍由模型依据目标、资源和对手进度判断。",
+      "after": "游戏确认能否研究；模型根据目标、资源和对手进度判断是否值得。"
+    }
+  ]
+}

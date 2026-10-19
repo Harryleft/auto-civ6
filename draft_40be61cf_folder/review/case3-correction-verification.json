@@ -1,0 +1,40 @@
+{
+  "board_token": "redacted-resource-004",
+  "cloud_update_succeeded": true,
+  "node_count": 74,
+  "exact_text_changes": [
+    {
+      "before": "固定当前对局和回合",
+      "after": "记录当前对局和回合"
+    },
+    {
+      "before": "次数减少＋项目推进",
+      "after": "建造者已消耗"
+    },
+    {
+      "before": "两项都有？",
+      "after": "且对应项目推进？"
+    },
+    {
+      "before": "仍不确定：继续拦截新操作",
+      "after": "仍不确定：阻止依赖操作"
+    }
+  ],
+  "geometry_changes_for_single_line_fit": [
+    {
+      "field": "x",
+      "before": 842.5,
+      "after": 792.5
+    },
+    {
+      "field": "width",
+      "before": 125,
+      "after": 225
+    }
+  ],
+  "other_geometry_unchanged": true,
+  "connectors_unchanged": true,
+  "svg_content_unchanged": true,
+  "preview": "case3-final-preview.jpg",
+  "visual_check": "passed"
+}

@@ -1,0 +1,63 @@
+{
+  "board_token": "redacted-resource-003",
+  "attempt": 1,
+  "success": false,
+  "error_code": 99992402,
+  "error_message": "field validation failed",
+  "log_id": "2026101908411305743134803131666A4F",
+  "cloud_preserved": true,
+  "schema_conflict": {
+    "field": "image.token",
+    "documented_length": "22-27",
+    "actual": [
+      {
+        "id": "d1:3",
+        "type": "image",
+        "image_token_length": 164,
+        "starts_with_svg": true
+      },
+      {
+        "id": "d1:4",
+        "type": "image",
+        "image_token_length": 164,
+        "starts_with_svg": true
+      },
+      {
+        "id": "d1:6",
+        "type": "image",
+        "image_token_length": 164,
+        "starts_with_svg": true
+      },
+      {
+        "id": "d1:8",
+        "type": "image",
+        "image_token_length": 164,
+        "starts_with_svg": true
+      },
+      {
+        "id": "d1:1",
+        "type": "image",
+        "image_token_length": 206,
+        "starts_with_svg": true
+      },
+      {
+        "id": "d1:2",
+        "type": "image",
+        "image_token_length": 164,
+        "starts_with_svg": true
+      },
+      {
+        "id": "d1:7",
+        "type": "image",
+        "image_token_length": 164,
+        "starts_with_svg": true
+      },
+      {
+        "id": "d1:5",
+        "type": "image",
+        "image_token_length": 164,
+        "starts_with_svg": true
+      }
+    ]
+  }
+}

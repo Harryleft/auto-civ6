@@ -1,0 +1,74 @@
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "assessment": {
+      "status": "passed"
+    },
+    "profile": {
+      "word_count": 4637,
+      "char_count": 5048,
+      "block_count": 126,
+      "blocks": [
+        {
+          "type": "p",
+          "count": 80,
+          "ratio": 0.634921
+        },
+        {
+          "type": "tr",
+          "count": 17,
+          "ratio": 0.134921
+        },
+        {
+          "type": "h2",
+          "count": 8,
+          "ratio": 0.063492
+        },
+        {
+          "type": "h1",
+          "count": 6,
+          "ratio": 0.047619
+        },
+        {
+          "type": "whiteboard",
+          "count": 4,
+          "ratio": 0.031746
+        },
+        {
+          "type": "table",
+          "count": 3,
+          "ratio": 0.02381
+        },
+        {
+          "type": "tbody",
+          "count": 3,
+          "ratio": 0.02381
+        },
+        {
+          "type": "thead",
+          "count": 3,
+          "ratio": 0.02381
+        },
+        {
+          "type": "img",
+          "count": 1,
+          "ratio": 0.007937
+        },
+        {
+          "type": "title",
+          "count": 1,
+          "ratio": 0.007937
+        }
+      ]
+    }
+  },
+  "_notice": {
+    "skills": {
+      "command": "lark-cli update",
+      "current": "1.0.97",
+      "message": "lark-cli skills 1.0.97 out of sync with binary 1.0.98, run: lark-cli update",
+      "target": "1.0.98"
+    }
+  }
+}

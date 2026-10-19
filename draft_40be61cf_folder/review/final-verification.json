@@ -1,0 +1,18 @@
+{
+  "document_url": "PRIVATE_DOCUMENT_URL_REDACTED",
+  "revision_id": 26,
+  "before_body_chars": 5000,
+  "after_body_chars": 3494,
+  "three_cases_problem_mechanism_evidence_verified": true,
+  "three_cloud_diagram_previews_checked": true,
+  "original_resource_tokens_retained": true,
+  "source_links_retained": true,
+  "previews": [
+    "case1-final-refresh.jpg",
+    "case2-after.jpg",
+    "case3-final-preview.jpg"
+  ],
+  "existing_game_saves_modified": false,
+  "game_run": false,
+  "push": false
+}
