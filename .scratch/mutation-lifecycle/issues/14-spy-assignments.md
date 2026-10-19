@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 地块购买与可复用的未决动作契约
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] 旅行安排与到达、任务安排与最终成败分开表达。
 - [ ] 延迟、取消、丢回应只确认原安排；不覆盖 escape 所有者。

@@ -277,25 +277,43 @@ class GameState:
             raise LuaError("Current spy escape identity or legal routes are unknown; no route was selected.")
         return lq.parse_spies_response(lines)
 
-    @_guard_pending_mutation
-    async def spy_travel(self, unit_index: int, target_x: int, target_y: int) -> str:
-        blocked = await self._action_gate(("unit", unit_index))
+    async def _assign_spy(self, unit_id: int, mission: str, x: int, y: int, entrypoint: str) -> str:
+        from civ_mcp.lua import spy_assignments
+        mission = mission.upper() if isinstance(mission, str) else mission
+        entity, intent = ("unit", unit_id), (mission, x, y)
+        if self._actions.matches("spy_assignment", entity, intent=intent):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
         if blocked:
             return blocked
-        lua = lq.build_spy_travel(unit_index, target_x, target_y)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        if (any(type(v) is not int or v < 0 for v in (unit_id, x, y))
+                or not isinstance(mission, str) or mission not in spy_assignments.OPERATIONS):
+            return "Error: INVALID_SPY_ASSIGNMENT|Expected unit ID, target coordinates and a supported mission"
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            "spy_assignment", entity, spy_assignments.build_spy_assignment_query(unit_id, mission, x, y, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            intent=intent, evidence=_ActionEvidence(
+                tool="spy_action", entrypoint=entrypoint, accepted=("SPY_ASSIGNMENT_REQUESTED|", "SPY_ASSIGNMENT_NOOP|"),
+                refused="ERR:SPY_ASSIGNMENT_REFUSED|",
+                confirm=lambda rows: spy_assignments.parse_spy_assignment(rows, unit_id, mission, token),
+                guidance="Repeat the original spy assignment to confirm its start only. ",
+            ),
+        )
+        return await self._submit_action(pending, scope, spy_assignments.build_spy_assignment(unit_id, mission, x, y, token))
+
+    @_guard_pending_mutation
+    async def spy_travel(self, unit_index: int, target_x: int, target_y: int) -> str:
+        return await self._assign_spy(unit_index, "TRAVEL", target_x, target_y, "spy_travel")
 
     @_guard_pending_mutation
     async def spy_mission(
         self, unit_index: int, mission_type: str, target_x: int, target_y: int
     ) -> str:
-        blocked = await self._action_gate(("unit", unit_index))
-        if blocked:
-            return blocked
-        lua = lq.build_spy_mission(unit_index, mission_type, target_x, target_y)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._assign_spy(unit_index, mission_type, target_x, target_y, "spy_mission")
 
     @_guard_pending_mutation
     async def spy_escape(self, unit_id: int, district_type: str) -> str:
