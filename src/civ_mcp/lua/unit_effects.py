@@ -1,4 +1,4 @@
-"""Charge-consuming unit actions with original-unit native effect evidence."""
+"""Unit commands and operations with original-unit native effect evidence."""
 import json
 
 from civ_mcp.lua._helpers import SENTINEL, _LUA_ACTION_SCOPE
@@ -48,6 +48,44 @@ local function retireEffect(r)
  if not r or not r.handlers then return end
  for name,handler in pairs(r.handlers) do pcall(function() Events[name].Remove(handler) end) end
 end
+local function condemnTarget(owner,x,y)
+ assert(PlayersVisibility[owner]:IsVisible(x,y)==true,"TARGET_NOT_VISIBLE")
+ -- WorldInput inspects ANY layer; the default plot layer omits religious units.
+ assert(scopeInteger(MapLayers.ANY),"TARGET_LAYER_UNAVAILABLE")
+ local units=Units.GetUnitsInPlotLayerID(x,y,MapLayers.ANY)
+ assert(type(units)=="table","TARGET_UNAVAILABLE")
+ local target
+ for _,unit in ipairs(units) do
+  local other=unit:GetOwner()
+  assert(scopePlayer(other),"TARGET_OWNER_UNAVAILABLE")
+  if other~=owner then
+   local entry=GameInfo.Units[unit:GetType()]
+   assert(entry,"TARGET_TYPE_UNAVAILABLE")
+   assert(type(entry.TrackReligion)=="boolean","TARGET_TYPE_UNAVAILABLE")
+   if entry.TrackReligion==true then
+    assert(type(entry.ReligiousStrength)=="number" and entry.ReligiousStrength>0
+     and entry.ReligiousStrength<math.huge,"TARGET_TYPE_UNAVAILABLE")
+    assert(target==nil,"AMBIGUOUS_RELIGIOUS_TARGET")
+    target={owner=other,id=count(unit:GetID()),unitType=count(unit:GetType()),religion=count(unit:GetReligionType()),
+     x=unit:GetX(),y=unit:GetY()}
+    assert(target.religion>0 and target.x==x and target.y==y,"TARGET_IDENTITY_UNAVAILABLE")
+   end
+  end
+ end
+ assert(target,"NO_RELIGIOUS_TARGET")
+ return target
+end
+local function sameCondemnUnit(r,unit,before)
+ local known=true
+ local checks={{"GetID","id"},{"GetOwner","owner"},{"GetType","unitType"},{"GetX","x"},{"GetY","y"}}
+ if before.religion~=nil then table.insert(checks,{"GetReligionType","religion"}) end
+ for _,check in ipairs(checks) do
+  local ok,value=pcall(function() return unit[check[1]](unit) end)
+  local valid=ok and (check[2]=="owner" and scopePlayer(value) or check[2]~="owner" and scopeIndex(value))
+  if not valid then known=false elseif value~=before[check[2]] then r.invalid=true end
+ end
+ return known and not r.invalid
+end
 '''
 
 
@@ -62,7 +100,21 @@ local ok,r=pcall(function()
   unitType=unit:GetType(),x=unit:GetX(),y=unit:GetY(),handlers={{}},
   civ=PlayerConfigurations[owner]:GetCivilizationTypeName(),
   seed=GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED"),turn=Game.GetCurrentGameTurn()}}
- if r.kind=="spread_religion" then
+ if r.kind=="condemn_heretic" then
+  r.mode="condemn"
+  assert(scopeIndex(r.unitType) and scopeIndex(r.x) and scopeIndex(r.y),"UNIT_IDENTITY_UNAVAILABLE")
+  r.target=condemnTarget(owner,r.x,r.y)
+  local command=GameInfo.UnitCommands["UNITCOMMAND_CONDEMN_HERETIC"]
+  assert(command and command.CommandType=="UNITCOMMAND_CONDEMN_HERETIC"
+   and scopeInteger(command.Hash) and scopeIndex(command.Index)
+   and type(UnitManager.RequestCommand)=="function","COMMAND_UNAVAILABLE")
+  assert(UnitManager.CanStartCommand(unit,command.Hash,false,true)==true,"CANNOT_CONDEMN")
+  local current=condemnTarget(owner,r.x,r.y)
+  for key,value in pairs(r.target) do assert(current[key]==value,"TARGET_CHANGED") end
+  assert(unit:GetID()==r.id and unit:GetOwner()==r.owner and unit:GetType()==r.unitType
+   and unit:GetX()==r.x and unit:GetY()==r.y,"UNIT_ID_CHANGED")
+  r.command=command.Hash
+ elseif r.kind=="spread_religion" then
   r.mode="spread";r.religion=count(unit:GetReligionType());r.charges=count(unit:GetSpreadCharges())
   assert(r.religion>0 and r.charges>0,"NO_RELIGION_OR_CHARGES")
   local op=GameInfo.UnitOperations["UNITOPERATION_SPREAD_RELIGION"]
@@ -99,6 +151,7 @@ local ok,r=pcall(function()
   end
  end
  r.event="UnitGreatPersonActivated"
+ if r.mode=="condemn" then r.event="UnitCommandStarted" end
  if r.operation then
   r.event="UnitOperationStarted"
   assert(type(UnitManager.RequestOperation)=="function","OPERATION_UNAVAILABLE")
@@ -114,7 +167,12 @@ if not ok then print("ERR:UNIT_EFFECT_REFUSED|"..tostring(r));print("{SENTINEL}"
 retireEffect(__civmcpUnitEffect)
 __civmcpUnitEffect=r
 -- Keep only scalar identities. Final-charge activation can destroy userdata inside RequestCommand.
-if r.mode=="great_person" then
+if r.mode=="condemn" then
+ r.handlers.UnitCommandStarted=function(owner,id,command)
+  if __civmcpUnitEffect~=r or not r.entered or owner~=r.owner or id~=r.id or not sameScope(r) then return end
+  if command==r.command then r.started=true else r.invalid=true end
+ end
+elseif r.mode=="great_person" then
  r.handlers.UnitGreatPersonActivated=function(owner,id,class,individual)
   if __civmcpUnitEffect==r and r.entered and owner==r.owner and id==r.id
    and class==r.class and individual==r.individual and sameScope(r) then r.activated=true end
@@ -126,14 +184,15 @@ else
  end
 end
 r.handlers.UnitRemovedFromMap=function(owner,id)
- if __civmcpUnitEffect==r and r.entered and owner==r.owner and id==r.id and sameScope(r) then r.removed=true end
+ local target=r.mode=="condemn" and r.target or r
+ if __civmcpUnitEffect==r and r.entered and owner==target.owner and id==target.id and sameScope(r) then r.removed=true end
 end
 local armed=pcall(function()
  for name,handler in pairs(r.handlers) do Events[name].Add(handler) end
 end)
 if not armed then retireEffect(r);print("ERR:UNIT_EFFECT_REFUSED|OBSERVER_UNAVAILABLE");print("{SENTINEL}");return end
 r.entered=true
-if r.mode=="great_person" then UnitManager.RequestCommand(effectUnit(r.owner,r.id),r.command)
+if r.command then UnitManager.RequestCommand(effectUnit(r.owner,r.id),r.command)
 else UnitManager.RequestOperation(effectUnit(r.owner,r.id),r.operation,r.params) end
 r.returned=true
 print("OK:UNIT_EFFECT_REQUESTED|"..r.kind.."|unit:{unit_id}")
@@ -150,10 +209,31 @@ local ok,detail,target=pcall(function()
  reason="SCOPE_CHANGED";assert(sameScope(r))
  reason="REQUEST_NOT_RETURNED";assert(r.entered==true and r.returned==true)
  reason="CORE_BUSY_OR_UNKNOWN";assert(UI.IsGameCoreBusy()==false)
+ if r.mode=="condemn" then
+  -- Observe still-live original identities before event/effect completeness.
+  -- A known change cannot later borrow removal of the restored identity.
+  reason="UNIT_ID_CHANGED"
+  local actor=UnitManager.GetUnit(r.owner,r.id%65536)
+  assert(actor and sameCondemnUnit(r,actor,r))
+  reason="TARGET_ID_CHANGED"
+  local native=UnitManager.GetUnit(r.target.owner,r.target.id%65536)
+  local owned=Players[r.target.owner]:GetUnits():FindID(r.target.id)
+  if native then assert(sameCondemnUnit(r,native,r.target)) end
+  if owned then assert(sameCondemnUnit(r,owned,r.target)) end
+ end
  reason="ACTIVATION_NOT_OBSERVED"
  if r.mode=="great_person" then assert(r.activated==true) else assert(r.started==true) end
  reason="UNIT_ID_CHANGED"
  local unit=UnitManager.GetUnit(r.owner,r.id%65536)
+ if r.mode=="condemn" then
+  assert(unit and unit:GetID()==r.id and unit:GetOwner()==r.owner and unit:GetType()==r.unitType)
+  assert(unit:GetX()==r.x and unit:GetY()==r.y)
+  reason="TARGET_REMOVAL_UNCONFIRMED"
+  assert(r.removed==true and UnitManager.GetUnit(r.target.owner,r.target.id%65536)==nil
+   and Players[r.target.owner]:GetUnits():FindID(r.target.id)==nil)
+  reason="SCOPE_CHANGED";assert(sameScope(r))
+  return "type:"..r.target.unitType.." religion:"..r.target.religion,"at:"..r.x..","..r.y
+ end
  local remaining
  if unit then
   assert(unit:GetID()==r.id and unit:GetOwner()==r.owner and unit:GetType()==r.unitType)
@@ -191,7 +271,8 @@ local ok,detail,target=pcall(function()
 end)
 if ok then
  retireEffect(r)
- print("UNIT_EFFECT_CONFIRMED|"..r.token.."|"..r.kind.."|"..r.id.."|"..r.mode.."|"..(r.individual or r.religion)
+ local subject=r.mode=="condemn" and (r.target.owner..":"..r.target.id) or (r.individual or r.religion)
+ print("UNIT_EFFECT_CONFIRMED|"..r.token.."|"..r.kind.."|"..r.id.."|"..r.mode.."|"..subject
   .."|"..detail.."|"..target)
 else print("UNIT_EFFECT_OBSERVED|{token}|"..reason) end
 print("{SENTINEL}")
@@ -203,6 +284,8 @@ def parse_unit_effect_confirmation(lines: list[str], kind: str, unit_id: int, to
     if len(rows) == 1 and len(rows[0]) == 8:
         row = rows[0]
         if row[1:4] == [token, kind, str(unit_id)]:
+            if row[4] == "condemn" and kind == "condemn_heretic":
+                return f"HERETIC_CONDEMNED|unit:{unit_id}|target:{row[5]}|{row[6]}|{row[7]}|Target removal confirmed; rewards not measured."
             if row[4] == "spread":
                 return f"RELIGION_SPREAD|unit:{unit_id}|religion:{row[5]}|{row[6]}|{row[7]}|Pressure increase confirmed."
             if row[4] == "prophet":

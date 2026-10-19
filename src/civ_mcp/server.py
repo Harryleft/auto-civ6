@@ -1296,7 +1296,7 @@ async def unit_action(
 
     Args:
         unit_id: The unit's composite ID (from get_units output)
-        action: One of: move, cancel_move, pillage, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion
+        action: One of: move, cancel_move, pillage, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion, condemn_heretic
         target_x: Target X coordinate (required for move/attack/trade_route/teleport)
         target_y: Target Y coordinate (required for move/attack/trade_route/teleport)
         improvement: Improvement type for builders (required for improve), e.g.
@@ -1324,6 +1324,8 @@ async def unit_action(
     For spread_religion: consumes one spread charge at the current city or unique native city target.
     Confirms pressure growth for that unit's religion in the exact city; majority conversion is not required.
     Ambiguous or unavailable city targets are refused. Unknown results retain the request; repeat only confirms.
+    For condemn_heretic: native eligibility is required for the unique visible foreign religious unit on the actor's tile.
+    Submits once and confirms the original command and target removal; rewards are not measured. Unknown results retain the request; repeat only confirms.
     For build_route: builds the native eligible road/railroad on the current tile. Confirms the new route and its native charge/resource costs (ordinary roads use a charge; railroads use Iron and Coal).
     For fortify/skip/found_city/automate/heal/alert/sleep/delete: no target needed.
     heal = fortify until healed (auto-wake at full HP).
@@ -1404,12 +1406,14 @@ async def unit_action(
                 return await gs.sacrifice_builder_charges(unit_id)
             case "spread_religion":
                 return await gs.spread_religion(unit_id)
+            case "condemn_heretic":
+                return await gs.condemn_heretic(unit_id)
             case "teleport":
                 if target_x is None or target_y is None:
                     return "Error: teleport requires target_x and target_y of the destination city"
                 return await gs.teleport_to_city(unit_id, target_x, target_y)
             case _:
-                return f"Error: Unknown action '{action}'. Valid: move, cancel_move, pillage, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion"
+                return f"Error: Unknown action '{action}'. Valid: move, cancel_move, pillage, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion, condemn_heretic"
 
     result = await _logged(ctx, "unit_action", params, _run)
     return result
