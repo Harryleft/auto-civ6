@@ -566,3 +566,117 @@ def test_automate_exact_start_acceptance_remains_independent_of_hold_activity():
     conn.lua.execute('nativeTask=applyTask;function applyTask(op) nativeTask(op);u.activity=ActivityTypes.ACTIVITY_HOLD end')
     assert asyncio.run(server.unit_action(ctx,196608,'automate')).startswith('AUTOMATED|')
     assert conn.lua.eval('#submissions')==1
+
+
+class HealHoldConn(TaskConn):
+    def __init__(self):
+        super().__init__()
+        self.lua.execute('''
+turn=89;seed=-1896272000;u.id=1376259;u.moves=0;u.damage=61
+u.GetX=function() return 35 end;u.GetY=function() return 22 end
+ActivityTypes.ACTIVITY_HEAL=-1298237662
+ActivityTypes.ACTIVITY_OPERATION=1225574625
+ActivityTypes.ACTIVITY_HOLD=75236491
+GameInfo.UnitOperations.UNITOPERATION_HEAL={Hash=2126026491,Index=13}
+function applyTask(op)
+ assert(op==2126026491)
+ u.ready=false;u.activity=75236491
+ Events.UnitOperationStarted.Fire(0,u.id,2126026491)
+end
+''')
+
+
+@pytest.mark.parametrize('lost_reply',[False,True])
+def test_t89_fresh_exact_heal_start_in_zero_move_hold_confirms_without_claiming_recovery(lost_reply):
+    conn=HealHoldConn();state=GameState(conn);ctx=make_ctx();app_of(ctx).game=state
+    if lost_reply:
+        conn.lose_reply=True
+        assert 'OUTCOME_UNKNOWN' in asyncio.run(server.unit_action(ctx,1376259,'heal'))
+    result=asyncio.run(server.unit_action(ctx,1376259,'heal'))
+    assert result.startswith('HEALING|unit:1376259|')
+    assert 'Native task started; completion not measured.' in result
+    assert state.pending_action_summary is None
+    assert conn.lua.eval('#submissions')==1
+    assert conn.lua.eval('u.damage')==61 and conn.lua.eval('u.moves')==0
+
+
+def test_heal_hold_move_read_cannot_bypass_scope_invalidation_before_reply():
+    conn=HealHoldConn();state=GameState(conn)
+    conn.lua.execute('''
+u.GetMovesRemaining=function()
+ seed=1
+ Events.UnitOperationStarted.Fire(0,1376259,2126026491)
+ seed=-1896272000
+ return 0
+end
+''')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.heal_unit(1376259))
+    assert state.pending_action_summary is not None
+    assert conn.lua.eval('#submissions')==1
+
+
+@pytest.mark.parametrize('change',[
+    'u.moves=1','u.moves=-1','u.moves=nil','u.moves="0"','u.moves=false',
+    'u.moves=0/0','u.moves=math.huge',
+    'u.GetMovesRemaining=function() error("moves unavailable") end',
+    'u.GetMovesRemaining=nil','u.ready=true','u.ready=nil','u.activity=999',
+    'ActivityTypes.ACTIVITY_HOLD=nil','ActivityTypes.ACTIVITY_HOLD="75236491"',
+    '__civmcpUnitTask.started=nil','__civmcpUnitTask.entered=false',
+    '__civmcpUnitTask.token="stale"','u.id=1441795','u.GetOwner=function() return 1 end',
+    'seed=1','turn=90',
+])
+def test_fresh_heal_hold_requires_zero_moves_and_the_original_readable_witness(change):
+    conn=HealHoldConn();state=GameState(conn)
+    conn.lua.execute('nativeTask=applyTask;function applyTask(op) nativeTask(op);'+change+' end')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.heal_unit(1376259))
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.heal_unit(1376259))
+    assert state.pending_action_summary is not None
+    assert conn.lua.eval('#submissions')==1
+
+
+@pytest.mark.parametrize('event',[
+    '',
+    'Events.UnitOperationStarted.Fire(1,1376259,2126026491)',
+    'Events.UnitOperationStarted.Fire(0,1441795,2126026491)',
+    'Events.UnitOperationStarted.Fire(0,1376259,-448283625)',
+    'Events.UnitOperationAdded.Fire(0,1376259,0,54)',
+])
+def test_zero_move_hold_alone_cannot_confirm_heal_or_authorize_a_replay(event):
+    conn=HealHoldConn();state=GameState(conn)
+    conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.heal_unit(1376259))
+    conn.lua.execute('u.ready=false;u.activity=75236491;'+event)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.heal_unit(1376259))
+    conn.lua.execute('Events.UnitOperationStarted.Fire(0,1376259,2126026491)')
+    assert asyncio.run(state.heal_unit(1376259)).startswith('HEALING|unit:1376259|')
+    assert conn.lua.eval('#submissions')==1
+
+
+def test_zero_move_hold_does_not_become_an_already_healing_noop():
+    conn=HealHoldConn();state=GameState(conn)
+    conn.lua.execute('u.ready=false;u.activity=75236491;u.allowed=false')
+    assert 'CANNOT_OPERATE' in asyncio.run(state.heal_unit(1376259))
+    assert state.pending_action_summary is None
+    assert conn.lua.eval('#submissions')==0
+
+
+def test_already_healing_noop_cannot_use_the_fresh_hold_alternative():
+    class ChangedAfterNoopConn(HealHoldConn):
+        async def execute_write(self,code):
+            rows=await super().execute_write(code)
+            if any(row.startswith('OK:UNIT_TASK_NOOP|') for row in rows):
+                self.lua.execute('u.activity=75236491')
+            return rows
+    conn=ChangedAfterNoopConn();state=GameState(conn)
+    conn.lua.execute('u.ready=false;u.activity=-1298237662;u.allowed=false')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.heal_unit(1376259))
+    assert conn.lua.eval('#submissions')==0
+    conn.lua.execute('u.activity=-1298237662')
+    assert asyncio.run(state.heal_unit(1376259)).startswith('ALREADY_HEALING|')
+
+
+def test_healthy_noop_stays_available_in_zero_move_hold_without_a_native_request():
+    conn=HealHoldConn();state=GameState(conn)
+    conn.lua.execute('u.damage=0;u.ready=false;u.activity=75236491;u.allowed=false')
+    assert asyncio.run(state.heal_unit(1376259)).startswith('ALREADY_HEALTHY|')
+    assert conn.lua.eval('#submissions')==0
