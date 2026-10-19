@@ -1,7 +1,7 @@
 """Retained policy plan: payment and native slot submission have separate evidence."""
 import json
 
-from civ_mcp.lua._helpers import SENTINEL
+from civ_mcp.lua._helpers import SENTINEL, _LUA_ACTION_SCOPE
 from civ_mcp.lua.governance import _LUA_POLICY_PAYMENT
 
 
@@ -147,19 +147,17 @@ print("{SENTINEL}")
 '''
 
 
-_OBSERVE = _FACTS + '''
+_OBSERVE = _LUA_ACTION_SCOPE + _FACTS + '''
 local function observe(r,token)
  assert(type(r)=="table" and r.token==token,"POLICY_RECEIPT_UNAVAILABLE")
- local me=Game.GetLocalPlayer()
- if me~=r.owner or PlayerConfigurations[me]:GetCivilizationTypeName()~=r.civ
-  or GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")~=r.seed or Game.GetCurrentGameTurn()~=r.turn then
-  r.invalid="POLICY_SCOPE_CHANGED"
- end
- assert(not r.invalid,r.invalid)
+ assert(sameScope(r),r.invalid==true and "POLICY_SCOPE_CHANGED" or r.invalid or "POLICY_SCOPE_UNAVAILABLE")
  assert(UI.IsGameCoreBusy()==false,"CORE_BUSY_OR_UNKNOWN")
+ local me=r.owner
  local pCulture=Players[me]:GetCulture()
- if pCulture:GetCurrentGovernment()~=r.government or pCulture:GetNumPolicySlots()~=r.count then r.invalid="POLICY_LAYOUT_CHANGED" end
- for slot=0,r.count-1 do if pCulture:GetSlotType(slot)~=r.types[slot] then r.invalid="POLICY_LAYOUT_CHANGED" end end
+ -- Missing layout facts block this read; only valid changes retire the plan.
+ if integer(pCulture:GetCurrentGovernment())~=r.government then r.invalid="POLICY_LAYOUT_CHANGED" end
+ if integer(pCulture:GetNumPolicySlots())~=r.count then r.invalid="POLICY_LAYOUT_CHANGED" end
+ for slot=0,r.count-1 do if integer(pCulture:GetSlotType(slot))~=r.types[slot] then r.invalid="POLICY_LAYOUT_CHANGED" end end
  assert(not r.invalid,r.invalid)
  if r.noop or r.policyEntered then
   assert(r.noop or r.policyReturned==true and r.paid==true,"POLICY_REQUEST_NOT_RETURNED")

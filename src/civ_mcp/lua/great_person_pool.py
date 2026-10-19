@@ -1,10 +1,10 @@
 """Great Person pool requests bind the original individual and resource baseline."""
 import json
 
-from civ_mcp.lua._helpers import SENTINEL
+from civ_mcp.lua._helpers import SENTINEL, _LUA_ACTION_SCOPE
 
 
-_CONTEXT = '''
+_CONTEXT = _LUA_ACTION_SCOPE + '''
 local function amount(value)
  assert(type(value)=="number" and value>=0 and value<math.huge,"RESOURCE_UNAVAILABLE")
  return value
@@ -22,15 +22,6 @@ local function ownedUnits(owner)
   result[id]=unit
  end
  return result
-end
-local function sameScope(r)
- local ok,same=pcall(function()
-  return Game.GetLocalPlayer()==r.owner and Game.GetCurrentGameTurn()==r.turn
-   and PlayerConfigurations[r.owner]:GetCivilizationTypeName()==r.civ
-   and GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")==r.seed
- end)
- if not ok or not same then r.invalid=true end
- return not r.invalid
 end
 '''
 

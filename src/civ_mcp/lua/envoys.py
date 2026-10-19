@@ -1,7 +1,7 @@
 """One envoy request and its scoped, two-sided influence readback."""
 import json
 
-from civ_mcp.lua._helpers import SENTINEL
+from civ_mcp.lua._helpers import SENTINEL, _LUA_ACTION_SCOPE
 
 
 def parse_envoy_confirmation(lines: list[str], token: str, owner: int, target: int) -> str | None:
@@ -15,7 +15,7 @@ def parse_envoy_confirmation(lines: list[str], token: str, owner: int, target: i
     return None
 
 
-_CONTEXT = '''
+_CONTEXT = _LUA_ACTION_SCOPE + '''
 local function count(value)
  assert(type(value)=="number" and value>=0 and value%1==0,"INFLUENCE_COUNT_UNAVAILABLE")
  return value
@@ -28,15 +28,6 @@ local function readInfluence(owner,target)
  assert(received:CanReceiveInfluence()==true,"NOT_A_CITY_STATE")
  return count(influence:GetTokensToGive()),count(received:GetTokensReceived(owner)),
   PlayerConfigurations[target]:GetCivilizationTypeName()
-end
-local function sameScope(r)
- local ok,same=pcall(function()
-  return Game.GetLocalPlayer()==r.owner and Game.GetCurrentGameTurn()==r.turn
-   and PlayerConfigurations[r.owner]:GetCivilizationTypeName()==r.civ
-   and GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")==r.seed
- end)
- if not ok or not same then r.invalid=true end
- return not r.invalid
 end
 '''
 

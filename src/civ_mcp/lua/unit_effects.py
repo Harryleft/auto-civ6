@@ -1,10 +1,10 @@
 """Charge-consuming unit actions with original-unit native effect evidence."""
 import json
 
-from civ_mcp.lua._helpers import SENTINEL
+from civ_mcp.lua._helpers import SENTINEL, _LUA_ACTION_SCOPE
 
 
-_CONTEXT = '''
+_CONTEXT = _LUA_ACTION_SCOPE + '''
 local function count(value)
  assert(type(value)=="number" and value>=0 and value<math.huge and value%1==0,"COUNT_UNAVAILABLE")
  return value
@@ -43,15 +43,6 @@ local function spreadTarget(unit,operation)
  end
  assert(target,"TARGET_UNAVAILABLE")
  return target
-end
-local function sameScope(r)
- local ok,same=pcall(function()
-  return Game.GetLocalPlayer()==r.owner and Game.GetCurrentGameTurn()==r.turn
-   and PlayerConfigurations[r.owner]:GetCivilizationTypeName()==r.civ
-   and GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")==r.seed
- end)
- if not ok or not same then r.invalid=true end
- return not r.invalid
 end
 local function retireEffect(r)
  if not r or not r.handlers then return end

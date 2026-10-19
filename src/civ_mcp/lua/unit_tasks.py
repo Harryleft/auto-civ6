@@ -1,7 +1,7 @@
 """Native unit task selection; task start is distinct from its eventual result."""
 import json
 
-from civ_mcp.lua._helpers import SENTINEL
+from civ_mcp.lua._helpers import SENTINEL, _LUA_ACTION_SCOPE
 from civ_mcp.lua.units import _LUA_UNIT_READINESS
 
 
@@ -14,7 +14,7 @@ _TASKS = {
     'sleep': ('SLEEP', 'SLEEPING', 'ACTIVITY_SLEEP'),
 }
 
-_CONTEXT = _LUA_UNIT_READINESS + '''
+_CONTEXT = _LUA_ACTION_SCOPE + _LUA_UNIT_READINESS + '''
 local function taskUnit(owner,id)
  local unit=UnitManager.GetUnit(owner,id%65536)
  assert(unit and unit:GetOwner()==owner,"UNIT_ID_CHANGED")
@@ -23,15 +23,6 @@ local function taskUnit(owner,id)
  assert(id<65536 or fullId==id,"UNIT_ID_CHANGED")
  assert(unit:GetX()~=-9999,"UNIT_CONSUMED")
  return unit
-end
-local function taskScope(r)
- local ok,same=pcall(function()
-  return Game.GetLocalPlayer()==r.owner and Game.GetCurrentGameTurn()==r.turn
-   and PlayerConfigurations[r.owner]:GetCivilizationTypeName()==r.civ
-   and GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")==r.seed
- end)
- if not ok or not same then r.invalid=true end
- return not r.invalid
 end
 local function retireTask(r)
  for _,name in ipairs({"UnitOperationStarted","UnitOperationAdded"}) do
@@ -88,7 +79,7 @@ local armed=pcall(function()
  for _,name in ipairs(r.events) do
   r.handlers[name]=function(owner,id,op)
    if __civmcpUnitTask==r and r.entered==true and owner==r.owner and id==r.id and op==r.op
-    and taskScope(r) then r.started=true end
+    and sameScope(r) then r.started=true end
   end
   Events[name].Add(r.handlers[name])
  end
@@ -107,7 +98,7 @@ def build_task_query(unit_id: int, kind: str, token: str) -> str:
 local r=__civmcpUnitTask
 local ok=pcall(function()
  assert(type(r)=="table" and r.token=={json.dumps(token)} and r.requested=={unit_id} and r.kind=={json.dumps(kind)})
- assert(taskScope(r))
+ assert(sameScope(r))
  assert(UI.IsGameCoreBusy()==false)
  local unit=taskUnit(r.owner,r.id)
  if r.noop=="ALREADY_HEALTHY" then assert(unit:GetDamage()==0);return end

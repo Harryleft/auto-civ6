@@ -1,10 +1,10 @@
 """Economic trader operations, bound to full unit and both native city identities."""
 import json
 
-from civ_mcp.lua._helpers import SENTINEL
+from civ_mcp.lua._helpers import SENTINEL, _LUA_ACTION_SCOPE
 
 
-_CONTEXT = '''
+_CONTEXT = _LUA_ACTION_SCOPE + '''
 local function integer(value)
  assert(type(value)=="number" and value>=0 and value%1==0,"IDENTITY_OR_COUNT_UNAVAILABLE")
  return value
@@ -38,15 +38,6 @@ local function routesFor(owner)
   end
  end
  return result,integer(Players[owner]:GetTrade():GetOutgoingRouteCapacity())
-end
-local function sameScope(r)
- local ok,same=pcall(function()
-  return Game.GetLocalPlayer()==r.owner and Game.GetCurrentGameTurn()==r.turn
-   and PlayerConfigurations[r.owner]:GetCivilizationTypeName()==r.civ
-   and GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")==r.seed
- end)
- if not ok or not same then r.invalid=true end
- return not r.invalid
 end
 '''
 

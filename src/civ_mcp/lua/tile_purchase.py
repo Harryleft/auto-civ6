@@ -1,10 +1,10 @@
 """Native tile purchase receipt: exact city, target plot, and gold consumption."""
 import json
 
-from civ_mcp.lua._helpers import SENTINEL
+from civ_mcp.lua._helpers import SENTINEL, _LUA_ACTION_SCOPE
 
 
-_CONTEXT = '''
+_CONTEXT = _LUA_ACTION_SCOPE + '''
 local function number(value)
  assert(type(value)=="number" and value==value and value~=math.huge and value~=-math.huge,"NUMBER_UNAVAILABLE")
  return value
@@ -13,15 +13,6 @@ local function cityFor(owner,id)
  local city=CityManager.GetCity(owner,id%65536)
  assert(city and city:GetOwner()==owner and city:GetID()==id,"CITY_ID_CHANGED")
  return city
-end
-local function sameScope(r)
- local ok,same=pcall(function()
-  return Game.GetLocalPlayer()==r.owner and Game.GetCurrentGameTurn()==r.turn
-   and PlayerConfigurations[r.owner]:GetCivilizationTypeName()==r.civ
-   and GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")==r.seed
- end)
- if not ok or not same then r.invalid=true end
- return not r.invalid
 end
 '''
 

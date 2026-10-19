@@ -1,12 +1,12 @@
 """Confirm spy assignment starts independently of their multi-turn results."""
 import json
-from civ_mcp.lua._helpers import SENTINEL
+from civ_mcp.lua._helpers import SENTINEL, _LUA_ACTION_SCOPE
 from civ_mcp.lua.espionage import _SPY_OP_HASHES
 
 
 OPERATIONS = {name: 'UNITOPERATION_SPY_' + ('TRAVEL_NEW_CITY' if name == 'TRAVEL' else name)
               for name in _SPY_OP_HASHES}
-_CONTEXT = '''
+_CONTEXT = _LUA_ACTION_SCOPE + '''
 local function integer(v)
  assert(type(v)=="number" and v>=0 and v<math.huge and v==math.floor(v),"NUMBER_UNAVAILABLE")
  return v
@@ -19,15 +19,6 @@ local function spyFor(owner,id)
  local info=GameInfo.Units[spy:GetType()]
  assert(info and info.UnitType=="UNIT_SPY","NOT_A_SPY")
  return spy
-end
-local function sameScope(r)
- local ok,same=pcall(function()
-  return Game.GetLocalPlayer()==r.owner and Game.GetCurrentGameTurn()==r.turn
-   and PlayerConfigurations[r.owner]:GetCivilizationTypeName()==r.civ
-   and GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")==r.seed
- end)
- if not ok or not same then r.invalid=true end
- return not r.invalid
 end
 local function retireAssignment(r)
  if r and r.handler then pcall(function() Events.UnitOperationStarted.Remove(r.handler) end) end

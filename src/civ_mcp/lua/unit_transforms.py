@@ -1,10 +1,10 @@
 """Unit transformations retain full native identity and their original effects."""
 import json
 
-from civ_mcp.lua._helpers import SENTINEL
+from civ_mcp.lua._helpers import SENTINEL, _LUA_ACTION_SCOPE
 
 
-_CONTEXT = '''
+_CONTEXT = _LUA_ACTION_SCOPE + '''
 local function number(v)
  assert(type(v)=="number" and v==v and v~=math.huge and v~=-math.huge,"NUMBER_UNAVAILABLE")
  return v
@@ -13,15 +13,6 @@ local function unitFor(owner,id)
  local unit=UnitManager.GetUnit(owner,id%65536)
  assert(unit and unit:GetOwner()==owner and (id<65536 or unit:GetID()==id),"UNIT_ID_CHANGED")
  return unit
-end
-local function sameScope(r)
- local ok,same=pcall(function()
-  return Game.GetLocalPlayer()==r.owner and Game.GetCurrentGameTurn()==r.turn
-   and PlayerConfigurations[r.owner]:GetCivilizationTypeName()==r.civ
-   and GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")==r.seed
- end)
- if not ok or not same then r.invalid=true end
- return not r.invalid
 end
 '''
 

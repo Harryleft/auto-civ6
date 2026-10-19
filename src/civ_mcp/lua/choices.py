@@ -108,7 +108,8 @@ def _parts(operation: str) -> tuple[str, str]:
  end
 ''', '''
  local eras=Game.GetEras()
- if eras:GetCurrentEra()~=r.era then r.invalid=true end
+ local era=integer(eras:GetCurrentEra());assert(era>=0,"ERA_UNAVAILABLE")
+ if era~=r.era then r.invalid=true end
  assert(not r.invalid,"ERA_CHANGED")
  assert(includes(eras:GetPlayerActiveCommemorations(r.owner),r.index),"DEDICATION_UNCONFIRMED")
  return r.noop and "DEDICATION_UNCHANGED" or "DEDICATION_CHOSEN",r.name
