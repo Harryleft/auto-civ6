@@ -65,6 +65,8 @@ class FakeConn:
             return self.diplomacy_probe(self) if callable(self.diplomacy_probe) else self.diplomacy_probe
         if "WC_PHASE|" in lua:
             return self.congress_phase(self) if callable(self.congress_phase) else self.congress_phase
+        if "TURN_REOPENED|" in lua:
+            return ["TURN_REOPENED|UNKNOWN"]
         if "ACTION_ENDTURN" in lua:
             if self.advance:
                 self.turn += 1
