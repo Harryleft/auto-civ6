@@ -187,9 +187,11 @@ local ok,finish=pcall(function()
   end
   for id,_ in pairs(r.mapRoster) do assert(id==r.id or remaining[id]~=nil) end
   assert(not r.invalid)
-  local roster,count=offMapSpyRoster(r.owner,function(key,row)
+  local roster,count=offMapSpyRoster(r.owner,function(rows)
    local bound=r.offMapIdentity
-   if bound and key==bound.key then
+   if bound then
+    local row=rows[bound.key]
+    if row==nil then r.invalid=true;return end
     assignmentValue(r,function() return spyName(row.Name) end,function(v) return type(v)=="string" end,bound.row.name)
     assignmentValue(r,function() return spyInteger(row.Level,1) end,scopeIndex,bound.row.level)
     assignmentValue(r,function() return spyInteger(row.XLocation,-9999) end,scopeInteger,bound.row.x)
