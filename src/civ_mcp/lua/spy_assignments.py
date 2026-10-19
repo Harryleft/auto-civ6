@@ -187,19 +187,18 @@ local ok,finish=pcall(function()
   end
   for id,_ in pairs(r.mapRoster) do assert(id==r.id or remaining[id]~=nil) end
   assert(not r.invalid)
-  local roster,count=offMapSpyRoster(r.owner,function(rows)
+  local roster,count=offMapSpyRoster(r.owner,function(key,row)
    local bound=r.offMapIdentity
-   if bound then
-    local row=rows[bound.key]
-    if row==nil then r.invalid=true;return end
+   if bound and key==bound.key then
     assignmentValue(r,function() return spyName(row.Name) end,function(v) return type(v)=="string" end,bound.row.name)
     assignmentValue(r,function() return spyInteger(row.Level,1) end,scopeIndex,bound.row.level)
     assignmentValue(r,function() return spyInteger(row.XLocation,-9999) end,scopeInteger,bound.row.x)
     assignmentValue(r,function() return spyInteger(row.YLocation,-9999) end,scopeInteger,bound.row.y)
     assignmentValue(r,function() return spyInteger(row.ReturnTurn,-1) end,scopeInteger,bound.row.finish)
    end
+  end,function(rows)
+   if r.offMapIdentity and rows[r.offMapIdentity.key]==nil then r.invalid=true end
   end)
-  if r.offMapIdentity and roster[r.offMapIdentity.key]==nil then r.invalid=true end
   assert(not r.invalid)
   assert(count==r.offCount+1)
   for key,old in pairs(r.offRoster) do assert(sameOffMapSpy(roster[key],old)) end

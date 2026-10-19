@@ -30,22 +30,28 @@ local function mapSpyRoster(owner)
  end
  return roster
 end
-local function offMapSpyRoster(owner,observe)
+local function offMapSpyRoster(owner,observeRow,observeKeys)
  local diplomacy=Players[owner]:GetDiplomacy()
  assert(type(diplomacy.GetNumSpiesOffMap)=="function" and type(diplomacy.GetNthOffMapSpy)=="function",
   "SPY_OFFMAP_API_UNAVAILABLE")
  local count=spyInteger(diplomacy:GetNumSpiesOffMap(),0)
  local rows={}
+ local complete=true
  for index=0,count-1 do
-  local row=diplomacy:GetNthOffMapSpy(owner,index)
-  assert(type(row)=="table","SPY_OFFMAP_ROW_UNAVAILABLE")
-  local key=spyInteger(row.NameIndex,0)
-  assert(rows[key]==nil,"SPY_OFFMAP_DUPLICATE_IDENTITY")
-  rows[key]=row
+  local ok=pcall(function()
+   local row=diplomacy:GetNthOffMapSpy(owner,index)
+   assert(type(row)=="table","SPY_OFFMAP_ROW_UNAVAILABLE")
+   local key=spyInteger(row.NameIndex,0)
+   -- Observe every identifiable bound row even if another row is unreadable.
+   if observeRow then observeRow(key,row) end
+   assert(rows[key]==nil,"SPY_OFFMAP_DUPLICATE_IDENTITY")
+   rows[key]=row
+  end)
+  if not ok then complete=false end
  end
- -- The complete native key set is known before normalizing row fields.
- -- Unknown Level/Name must not hide the known absence of a bound NameIndex.
- if observe then observe(rows) end
+ -- Missing keys are evidence only when every native row/key was readable.
+ if complete and observeKeys then observeKeys(rows) end
+ assert(complete,"SPY_OFFMAP_ROSTER_UNKNOWN")
  local roster={}
  for key,row in pairs(rows) do
   roster[key]={name=spyName(row.Name),level=spyInteger(row.Level,1),
