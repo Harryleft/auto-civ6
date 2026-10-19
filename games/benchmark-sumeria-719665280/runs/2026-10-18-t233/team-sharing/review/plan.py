@@ -1,6 +1,6 @@
 from pathlib import Path
 import json
-p=Path('draft_40be61cf_folder/review')
+p=Path(__file__).resolve().parent
 base='https://github.com/Harryleft/auto-civ6/blob/37c3593/docs/acceptance/'
 def link(file,label):return f'<a href="{base}{file}">{label}</a>'
 ops=[]

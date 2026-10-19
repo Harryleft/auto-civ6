@@ -70,4 +70,4 @@ Standards 的单一根因是未知身份／时代／政策布局被误当成有�
 
 最终审查冻结 `c64201e`，修复差异 `2643c1d...c64201e`。Standards 本轮关闭最后一个 P2，遗留 0、新增 0，累计发现的两个 P2 均已关闭；独立 8 组 ChoiceConn 故障验证中，读数恢复后正确确认或继续失效，原生提交均为 1 次。Spec 前轮两个 P2 已关闭，本轮新增 0，独立 56 项公开入口真实 Lua 测试通过（1.26s）。两轴均报告 No material issues found，完整结论分别保留在验收文档。
 
-18 个实施工作树已不使用 force 安全移除，分支保留；`git worktree list` 仅主检出，清理日志 `/tmp/civ6-mutation-worktree-cleanup.json`。最终 `src`／`tests` 与受测 `31ae3f5` 的 Git tree 完全相同，本次仅文档闭票，不重复全量。全部 18 票与规格 resolved，无剩余验收项；原 `draft_40be61cf_folder/` 保留。
+18 个实施工作树已不使用 force 安全移除，分支保留；`git worktree list` 仅主检出，清理日志 `/tmp/civ6-mutation-worktree-cleanup.json`。最终 `src`／`tests` 与受测 `31ae3f5` 的 Git tree 完全相同，本次仅文档闭票，不重复全量。全部 18 票与规格 resolved，无剩余验收项；原分享稿已保留，现归档于[团队分享资料](../../../games/benchmark-sumeria-719665280/runs/2026-10-18-t233/team-sharing/README.md)。
