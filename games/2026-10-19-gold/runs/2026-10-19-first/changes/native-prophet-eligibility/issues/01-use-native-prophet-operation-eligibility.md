@@ -13,3 +13,9 @@ Implement through existing public unit-effect lifecycle. Worker owns necessary c
 - All prophet regressions now begin with aggregate false. Covered native false/unknown/error/unavailable eligibility with zero submission; wrong owner/full unit/individual/class/position/event; sticky changed scope; readiness without event; lost/cancelled replies and confirm-only reentry. Non-prophet activation and spread regressions remain intact.
 - `uv run --locked pytest -q tests/test_unit_effect_confirmation.py` — **113 passed**. `uv run --locked python -m compileall -q src tests/test_unit_effect_confirmation.py` and `git diff --check` passed.
 - Implementer did not access the live game. Independent review and parent original T125 activation/readiness/later religion-choice verification remain pending.
+
+## Native post-state correction
+
+- Parent #2275 receipt and religion readback, added to the spec at811888d, show exact original activation/start/removal with earned beliefs0→2, religion still uncreated and aggregate founding-readiness flag false→true. Updated only the post flag requirement to strict true; other result evidence is unchanged.
+- Updated the public T125 fixture to native class4/type13 and the observed false→true transition. Before this correction it remained unknown after the exact native effect; after correction it confirms readiness with one submission. All prophet native effects now use the observed true post flag. False/nil/non-boolean/unreadable post flags remain unknown; wrong-event/identity tests also have a true post flag so that independent constraints are exercised.
+- `uv run --locked pytest -q tests/test_unit_effect_confirmation.py` — **116 passed**. Compileall for `src` and this test file, plus `git diff --check`, passed. Parent restored-world live verification and independent review remain pending; no live calls by implementer.

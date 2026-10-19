@@ -178,7 +178,7 @@ local ok,detail,target=pcall(function()
   reason="FOUNDING_READINESS_UNCONFIRMED"
   local religion=Players[r.owner]:GetReligion()
   local earned=count(religion:GetNumBeliefsEarned())
-  assert(earned>r.beliefs and religion:GetReligionTypeCreated()==r.created and religion:HasReligiousFoundingUnit()==false)
+  assert(earned>r.beliefs and religion:GetReligionTypeCreated()==r.created and religion:HasReligiousFoundingUnit()==true)
   return "beliefs_earned:"..r.beliefs.."->"..earned,"at:"..r.x..","..r.y
  end
  reason="CITY_ID_CHANGED"
