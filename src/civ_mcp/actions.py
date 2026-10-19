@@ -361,6 +361,12 @@ class ActionLifecycle:
             return pending.confirmed or self.unknown(f"confirmation unavailable: {exc}")
 
     def _confirmed_action(self, pending: _PendingAction) -> str | None:
+        # Native callbacks can observe a scope change between Python probes.
+        # Its original token invalidates the whole move, including arrival,
+        # exhaustion and the older SegmentComplete confirmation paths.
+        if (pending.kind == "move" and pending.details.get("witness_token")
+                and f"MOVE_SCOPE_INVALID|{pending.details['witness_token']}" in pending.observed):
+            pending.details["scope_invalid"] = True
         scoped = pending.identity is not None
         if scoped and pending.details.get("scope_invalid"):
             return None
