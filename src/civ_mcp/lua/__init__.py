@@ -93,6 +93,11 @@ from civ_mcp.lua.great_people import (  # noqa: F401
     parse_gp_advisor_response,
     parse_great_people_response,
 )
+from civ_mcp.lua.choices import (  # noqa: F401
+    build_player_choice,
+    build_player_choice_confirmation,
+    parse_player_choice_confirmation,
+)
 from civ_mcp.lua.governors import (  # noqa: F401
     build_governor_action,
     build_governor_confirmation,
@@ -100,8 +105,6 @@ from civ_mcp.lua.governors import (  # noqa: F401
 )
 from civ_mcp.lua.governance import (  # noqa: F401
     build_available_governments_query,
-    build_change_government,
-    build_choose_dedication,
     build_city_states_query,
     build_dedications_query,
     build_governors_query,
@@ -263,10 +266,6 @@ from civ_mcp.lua.religion import (  # noqa: F401
     parse_religion_status_response,
 )
 from civ_mcp.lua.tech import (  # noqa: F401
-    build_set_civic,
-    build_set_civic_gamecore,
-    build_set_research,
-    build_set_research_gamecore,
     build_tech_civics_query,
     parse_tech_civics_response,
 )

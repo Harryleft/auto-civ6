@@ -817,55 +817,36 @@ class GameState:
 
     @_guard_pending_mutation
     async def set_research(self, tech_name: str) -> str:
-        lua = lq.build_set_research(tech_name)
-        lines = await self.conn.execute_write(lua)
-        result = _action_result(lines)
-        if "RESEARCHING" in result:
-            # Verify InGame actually accepted it by comparing tech INDEX.
-            # RequestPlayerOperation is fire-and-forget — it can silently no-op
-            # while GetResearchingTech() still returns the OLD tech's index (!= -1).
-            verify = await self.conn.execute_read(
-                f"local me = Game.GetLocalPlayer(); "
-                f"local idx = nil; "
-                f"for row in GameInfo.Technologies() do "
-                f'if row.TechnologyType == "{tech_name}" then idx = row.Index; break end '
-                f"end; "
-                f"local cur = Players[me]:GetTechs():GetResearchingTech(); "
-                f"print(cur == idx and 'MATCH' or 'MISMATCH:'..tostring(cur)..'~='..tostring(idx)); "
-                f'print("{lq.SENTINEL}")'
-            )
-            matched = verify and verify[0] == "MATCH"
-            if not matched:
-                # InGame silently failed — fall back to GameCore
-                gc_lua = lq.build_set_research_gamecore(tech_name)
-                gc_lines = await self.conn.execute_read(gc_lua)
-                return _action_result(gc_lines)
-        return result
+        return await self._player_choice("set_research", tech_name)
 
     @_guard_pending_mutation
     async def set_civic(self, civic_name: str) -> str:
-        lua = lq.build_set_civic(civic_name)
-        lines = await self.conn.execute_write(lua)
-        result = _action_result(lines)
-        if "PROGRESSING" in result:
-            # Verify InGame actually accepted it by comparing civic INDEX.
-            verify = await self.conn.execute_read(
-                f"local me = Game.GetLocalPlayer(); "
-                f"local idx = nil; "
-                f"for row in GameInfo.Civics() do "
-                f'if row.CivicType == "{civic_name}" then idx = row.Index; break end '
-                f"end; "
-                f"local cur = Players[me]:GetCulture():GetProgressingCivic(); "
-                f"print(cur == idx and 'MATCH' or 'MISMATCH:'..tostring(cur)..'~='..tostring(idx)); "
-                f'print("{lq.SENTINEL}")'
-            )
-            matched = verify and verify[0] == "MATCH"
-            if not matched:
-                # InGame silently failed — fall back to GameCore
-                lua_gc = lq.build_set_civic_gamecore(civic_name)
-                gc_lines = await self.conn.execute_read(lua_gc)
-                return _action_result(gc_lines)
-        return result
+        return await self._player_choice("set_civic", civic_name)
+
+    async def _player_choice(self, operation: str, target: str | int) -> str:
+        intent = (target,)
+        entity = self.pending_action_entity
+        if entity is not None and self._actions.matches(operation, entity, intent=intent):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            operation, ("player", scope.owner), lq.build_player_choice_confirmation(operation, target, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"target": target}, intent=intent,
+            evidence=_ActionEvidence(
+                tool="set_research" if operation == "set_civic" else operation, entrypoint=operation,
+                accepted=("CHOICE_REQUESTED|",), refused="ERR:CHOICE_REFUSED|",
+                confirm=lambda rows: lq.parse_player_choice_confirmation(rows, operation, target, token),
+                guidance=f"Repeat {operation} with the original target to confirm only. ",
+            ),
+        )
+        return await self._submit_action(pending, scope, lq.build_player_choice(operation, target, token))
 
     # ------------------------------------------------------------------
     # Diplomacy methods
@@ -1410,9 +1391,7 @@ class GameState:
 
     @_guard_pending_mutation
     async def choose_dedication(self, dedication_index: int) -> str:
-        lua = lq.build_choose_dedication(dedication_index)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._player_choice("choose_dedication", dedication_index)
 
     # ------------------------------------------------------------------
     # District / wonder placement queries
@@ -1480,9 +1459,7 @@ class GameState:
 
     @_guard_pending_mutation
     async def change_government(self, government_type: str) -> str:
-        lua = lq.build_change_government(government_type)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._player_choice("change_government", government_type)
 
     # ------------------------------------------------------------------
     # Great People (InGame context)
