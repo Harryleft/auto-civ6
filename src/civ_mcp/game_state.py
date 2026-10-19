@@ -14,7 +14,7 @@ from functools import wraps
 
 from civ_mcp.actions import (
     ActionLifecycle, _ActionScope, _ActionEvidence, _PendingAction, _action_result, _extract_pre_hp,
-    _extract_post_hp, _extract_city_defense, _format_attack_followup,
+    _extract_post_hp, _extract_city_defense, _format_attack_followup, _scope_probe,
 )
 from civ_mcp import lua as lq
 from civ_mcp.connection import GameConnection, LuaError
@@ -239,18 +239,13 @@ class GameState:
         Always queries the game so we detect new-game loads.  When the
         identity changes, observation caches expire without retiring requests.
         """
-        code = (
-            "local me = Game.GetLocalPlayer() "
-            'assert(type(me)=="number" and me>=0 and me<=63 and me==math.floor(me),"PLAYER_UNAVAILABLE") '
-            "local cfg = PlayerConfigurations[me] "
-            "local civ = cfg:GetCivilizationTypeName() "
-            'local seed = GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED") '
-            'assert(type(civ)=="string" and type(seed)=="number" '
-            'and seed==seed and math.abs(seed)<math.huge and seed==math.floor(seed),"IDENTITY_UNAVAILABLE") '
-            'print("GAMESEED|" .. civ .. "|" .. tostring(seed)) '
-            'print("---END---")'
-        )
+        code = _scope_probe("GAME_SCOPE", game_identity=True) + f'print("{lq.SENTINEL}")'
         lines = await self.conn.execute_write(code)
+        scopes = [line.split("|") for line in lines if line.startswith("GAME_SCOPE|")]
+        if scopes:
+            if len(scopes) != 1 or len(scopes[0]) != 5:
+                raise ValueError("missing or ambiguous native scope")
+            self._actions.observe_scope(*scopes[0][1:])
         rows = [line.split("|") for line in lines if line.startswith("GAMESEED|")]
         if not rows:
             return ("unknown", 0)

@@ -345,6 +345,71 @@ def test_unavailable_player_does_not_hide_a_valid_changed_turn():
     assert conn.lua.eval('#submissions') == 1
 
 
+@pytest.mark.parametrize('unknown,changed', [
+    (unknown, changed) for unknown in GETTERS for changed in GETTERS if unknown != changed
+])
+@pytest.mark.parametrize('fault', ['nil', 'throw'])
+def test_dedication_unknown_field_does_not_hide_valid_scope_change(unknown, changed, fault):
+    conn = ChoiceConn(); state = GameState(conn); conn.lose_reply = True
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(server.choose_dedication(make_ctx(game=state), 7))
+    replace_fact(conn, GETTERS[unknown], fault)
+    changed_value = {'civ': "'CIVILIZATION_ROME'", 'seed': '-123', 'turn': '42', 'owner': '1'}[changed]
+    conn.lua.execute(f'changed_original={GETTERS[changed]};'
+        f'{GETTERS[changed]}=function() return {changed_value} end')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.confirm_pending_action(wait=False))
+    conn.lua.execute(f'{GETTERS[unknown]}=fact_original;{GETTERS[changed]}=changed_original')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.confirm_pending_action(wait=False))
+    assert state.pending_action_blocks_mutations
+    assert conn.lua.eval('#submissions') == 1
+
+
+@pytest.mark.parametrize('field', GETTERS)
+@pytest.mark.parametrize('fault', ['nil', 'throw', 'missing', 'malformed', 'nan'])
+def test_dedication_unknown_scope_alone_can_recover_original_choice(field, fault):
+    conn = ChoiceConn(); state = GameState(conn); conn.lose_reply = True
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(server.choose_dedication(make_ctx(game=state), 7))
+    replace_fact(conn, GETTERS[field], fault)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.confirm_pending_action(wait=False))
+    conn.lua.execute(f'{GETTERS[field]}=fact_original')
+    assert asyncio.run(state.confirm_pending_action(wait=False)).startswith('DEDICATION_CHOSEN|')
+    assert not state.pending_action_blocks_mutations
+    assert conn.lua.eval('#submissions') == 1
+
+
+@pytest.mark.parametrize('unknown,changed', [
+    ('seed', 'civ'), ('civ', 'seed'), ('owner', 'seed'), ('seed', 'owner'), ('seed', 'turn'),
+])
+@pytest.mark.parametrize('fault', ['nil', 'throw'])
+def test_identity_refresh_retains_valid_change_despite_another_unknown_field(unknown, changed, fault):
+    conn = ChoiceConn(); state = GameState(conn); conn.lose_reply = True
+    assert asyncio.run(state.get_game_identity()) == ('sumeria', 719665280)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.choose_dedication(7))
+    replace_fact(conn, GETTERS[unknown], fault)
+    changed_value = {'civ': "'CIVILIZATION_ROME'", 'seed': '-123', 'owner': '1', 'turn': '42'}[changed]
+    conn.lua.execute(f'PlayerConfigurations[1]=PlayerConfigurations[0];changed_original={GETTERS[changed]};'
+        f'{GETTERS[changed]}=function() return {changed_value} end')
+    with pytest.raises((ValueError, LuaError)):
+        asyncio.run(state.get_game_identity())
+    conn.lua.execute(f'{GETTERS[unknown]}=fact_original;{GETTERS[changed]}=changed_original')
+    assert asyncio.run(state.get_game_identity()) == ('sumeria', 719665280)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.confirm_pending_action(wait=False))
+    assert state.pending_action_blocks_mutations
+    assert conn.lua.eval('#submissions') == 1
+
+
+@pytest.mark.parametrize('field,value', [('owner', '1'), ('turn', '42')])
+def test_identity_refresh_keeps_pending_scope_change_when_world_identity_is_unchanged(field, value):
+    conn = ChoiceConn(); state = GameState(conn); conn.lose_reply = True
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.choose_dedication(7))
+    conn.lua.execute(f'PlayerConfigurations[1]=PlayerConfigurations[0];fact_original={GETTERS[field]};'
+        f'{GETTERS[field]}=function() return {value} end')
+    assert asyncio.run(state.get_game_identity()) == ('sumeria', 719665280)
+    conn.lua.execute(f'{GETTERS[field]}=fact_original')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.confirm_pending_action(wait=False))
+    assert state.pending_action_blocks_mutations
+    assert conn.lua.eval('#submissions') == 1
+
+
 @pytest.mark.parametrize('field,value', [
     ('slot_count', -1), ('slot_type', -1), ('slot_type', 999), ('government', -2), ('government', 999),
 ])
