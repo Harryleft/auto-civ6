@@ -13,7 +13,7 @@ from civ_mcp.connection import LuaError
 from test_server import make_ctx
 from test_tile_purchase_confirmation import TileConn
 from test_item_purchase_confirmation import PurchaseConn
-from test_unit_transforms import TransformConn
+from test_unit_transforms import TransformConn, PromotionConn
 from test_unit_tasks import TaskConn
 from test_tile_actions import TileActionConn
 from test_trader_confirmation import TraderConn
@@ -91,6 +91,7 @@ DOMAINS = [
     (TileConn, 'purchase_tile', (65537, 11, 10), 'TILE_PURCHASED|'),
     (PurchaseConn, 'purchase_item', (65537, 'UNIT', 'UNIT_WARRIOR'), 'PURCHASED|'),
     (TransformConn, 'upgrade_unit', (196608,), 'UPGRADED|'),
+    (PromotionConn, 'promote_unit', (196608, 'PROMOTION_VOLLEY'), 'PROMOTED|'),
     (TaskConn, 'automate_explore', (196608,), 'AUTOMATED|'),
     (TileActionConn, 'improve_tile', (196608, 'IMPROVEMENT_FARM'), 'IMPROVED|'),
     (TraderConn, 'make_trade_route', (196608, 30, 30), 'TRADE_ROUTE_STARTED|'),
