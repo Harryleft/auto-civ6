@@ -322,23 +322,78 @@ print("TRADE|EVALUATION_RESTORED")
 '''
 
 
+def _native_agreements() -> str:
+    """Read native option lists for the bound pair and working deal."""
+    return '''
+local function agreementInteger(value)
+ return type(value)=="number" and value==value and math.abs(value)<math.huge and value==math.floor(value)
+end
+local function nativeAgreementItems(reason,...)
+ local ok,entries=pcall(DealManager.GetPossibleDealItems,...)
+ assert(ok and type(entries)=="table",reason)
+ local count=0
+ for key in pairs(entries) do assert(agreementInteger(key) and key>0,reason);count=count+1 end
+ for index=1,count do assert(type(entries[index])=="table",reason) end
+ return entries
+end
+'''
+
+
+def _open_borders() -> str:
+    """Mirror the native ordinary agreement click; no duration/price policy."""
+    return '''
+local openBordersTerms={}
+local function checkOpenBorders()
+ local seen={}
+ for item in deal:Items() do
+  if item:GetType()==DealItemTypes.AGREEMENTS and item:GetSubType()==DealAgreementTypes.OPEN_BORDERS then
+   local owner=item:GetFromPlayerID()
+   local expected=openBordersTerms[owner]
+   assert(expected and not seen[owner] and item:GetDuration()==expected.duration
+    and item:GetValueType()==expected.value,"OPEN_BORDERS_ITEM_UNCONFIRMED")
+   seen[owner]=true
+  end
+ end
+ for owner in pairs(openBordersTerms) do assert(seen[owner],"OPEN_BORDERS_ITEM_UNCONFIRMED") end
+end
+local function addOpenBorders(from)
+ assert(openBordersTerms[from]==nil,"OPEN_BORDERS_DUPLICATE")
+ assert(type(DealManager.GetPossibleDealItems)=="function" and DealAgreementTypes
+  and agreementInteger(DealAgreementTypes.OPEN_BORDERS),"OPEN_BORDERS_OPTIONS_UNAVAILABLE")
+ local subtype=DealAgreementTypes.OPEN_BORDERS
+ local other=from==me and target or me
+ local entries=nativeAgreementItems("OPEN_BORDERS_OPTIONS_UNREADABLE",from,other,DealItemTypes.AGREEMENTS,deal)
+ local selected,count=nil,0
+ for _,entry in ipairs(entries) do
+  assert(agreementInteger(entry.SubType),"OPEN_BORDERS_OPTIONS_UNREADABLE")
+  if entry.SubType==subtype then selected=entry;count=count+1 end
+ end
+ assert(count==1,"OPEN_BORDERS_OPTIONS_MISSING_OR_AMBIGUOUS")
+ assert(type(selected.IsValid)=="boolean" and agreementInteger(selected.Duration) and selected.Duration>=0,
+  "OPEN_BORDERS_OPTIONS_UNREADABLE")
+ assert(selected.IsValid==true,"OPEN_BORDERS_NOT_ELIGIBLE")
+ local duration,value=selected.Duration,selected.ForType
+ assert(value==nil or agreementInteger(value),"OPEN_BORDERS_OPTIONS_UNREADABLE")
+ local item=deal:AddItemOfType(DealItemTypes.AGREEMENTS,from)
+ assert(item,"OPEN_BORDERS_ITEM_UNAVAILABLE")
+ item:SetSubType(subtype);item:SetDuration(duration)
+ -- Ordinary native agreements retain AddItem's value; never invent one.
+ local actualValue=item:GetValueType()
+ assert(agreementInteger(actualValue) and (value==nil or actualValue==value),"OPEN_BORDERS_ITEM_UNCONFIRMED")
+ assert(item:GetFromPlayerID()==from and item:GetType()==DealItemTypes.AGREEMENTS
+  and item:GetSubType()==subtype and item:GetDuration()==duration,"OPEN_BORDERS_ITEM_UNCONFIRMED")
+ openBordersTerms[from]={duration=duration,value=actualValue}
+ return 1
+end
+'''
+
+
 def _war_agreements() -> str:
     """Mirror the shipped agreement option selector, without ranking war types."""
     return '''
-local function warInteger(value)
- return type(value)=="number" and value==value and math.abs(value)<math.huge and value==math.floor(value)
-end
-local function warList(value)
- assert(type(value)=="table","WAR_OPTIONS_UNREADABLE")
- local count=0
- for key in pairs(value) do assert(warInteger(key) and key>0,"WAR_OPTIONS_UNREADABLE");count=count+1 end
- for index=1,count do assert(type(value[index])=="table","WAR_OPTIONS_UNREADABLE") end
- return value
-end
+local warInteger=agreementInteger
 local function nativeWarItems(...)
- local ok,entries=pcall(DealManager.GetPossibleDealItems,...)
- assert(ok,"WAR_OPTIONS_UNREADABLE")
- return warList(entries)
+ return nativeAgreementItems("WAR_OPTIONS_UNREADABLE",...)
 end
 local function addWarAgreement(from,enemy,selectedType)
  assert(from==target and warInteger(enemy) and enemy>=0 and enemy<=63 and enemy~=me and enemy~=target,"WAR_TARGET_UNAVAILABLE")
@@ -412,14 +467,32 @@ def build_trade_send(scope: str, target: int, sid: int, token: str, offer: list[
                 war_type = "nil" if item.get("war_type") is None else json.dumps(item["war_type"])
                 enemy = "nil" if item.get("target") is None else json.dumps(item["target"])
                 parts.append(f"expectedItems=expectedItems+addWarAgreement({owner},{enemy},{war_type})")
+            elif item["type"].upper() == "AGREEMENT" and item.get("subtype") == "OPEN_BORDERS":
+                parts.append(f"expectedItems=expectedItems+addOpenBorders({owner})")
             else:
                 parts.append("expectedItems=expectedItems+1\n" + _lua_deal_item(owner, item))
     items = '\n'.join(parts)
+    has_war = any(item['type'].upper() == 'WAR_AGREEMENT' for item in offer + request)
+    has_borders = any(item['type'].upper() == 'AGREEMENT' and item.get('subtype') == 'OPEN_BORDERS' for item in offer + request)
+    borders_check = f'''
+if prepared then prepared,prepareError=pcall(checkOpenBorders) end
+-- This failed owned no-send draft may have been edited by native validation.
+-- Refresh only its cleanup witness; submitted intent keeps its original terms.
+if not prepared then
+ local guardOK,stillOwned=pcall(ready)
+ if guardOK and stillOwned and receipt==__civmcp_trade_deal and receipt.token=={json.dumps(token)}
+  and receipt.sid==sid and receipt.target==target and receipt.sent==false then
+  receipt.original=fingerprint(deal)
+ end
+end
+''' if has_borders else ''
     return _deal_guard(scope, target, sid) + _fingerprint() + f'''
 local deal=DealManager.GetWorkingDeal(DealDirection.OUTGOING,me,target)
 if not deal or deal:GetItemCount()~=0 then print("TRADE|NOT_SUBMITTED|NOT_EMPTY"); return end
 __civmcp_trade_deal={{token={json.dumps(token)},sid=sid,target=target,sent=false}}
-{_war_agreements() if any(item['type'].upper() == 'WAR_AGREEMENT' for item in offer + request) else ''}
+{_native_agreements() if has_war or has_borders else ''}
+{_war_agreements() if has_war else ''}
+{_open_borders() if has_borders else ''}
 local expectedItems=0
 local prepared,prepareError=pcall(function()
 {items}
@@ -427,6 +500,7 @@ end)
 local receipt=__civmcp_trade_deal
 receipt.original=fingerprint(deal)
 local valid,isValid=pcall(function() return deal:GetItemCount()>0 and deal:Validate()==DealValidationResult.VALID and deal:IsValid()==true end)
+{borders_check}
 if not prepared or deal:GetItemCount()~=expectedItems or not valid or isValid~=true then
  receipt.failed=true
  receipt.reason=not prepared and tostring(prepareError) or "TERMS_UNAVAILABLE"
