@@ -361,47 +361,6 @@ end)
 ''' + build_attack_followup_query(target_x, target_y)
 
 
-def build_resolve_city_capture(action: str) -> str:
-    """InGame context: resolve a 'Keep or Free City' / 'Raze City' blocker.
-
-    action: 'keep', 'reject', 'raze', 'liberate_founder', 'liberate_previous'
-    Tries GetNextRebelledCity first (loyalty flip), then GetNextCapturedCity (conquest).
-    """
-    directive_map = {
-        "keep": "CityDestroyDirectives.KEEP",
-        "reject": "CityDestroyDirectives.REJECT",
-        "raze": "CityDestroyDirectives.RAZE",
-        "liberate_founder": "CityDestroyDirectives.LIBERATE_FOUNDER",
-        "liberate_previous": "CityDestroyDirectives.LIBERATE_PREVIOUS_OWNER",
-    }
-    directive = directive_map.get(action)
-    if not directive:
-        valid = ", ".join(directive_map.keys())
-        return _bail(f"ERR:INVALID_ACTION|Valid actions: {valid}")
-
-    return f"""
-local me = Game.GetLocalPlayer()
-local player = Players[me]
-local city = player:GetCities():GetNextRebelledCity()
-local source = "rebelled"
-if city == nil then
-    city = player:GetCities():GetNextCapturedCity()
-    source = "captured"
-end
-if city == nil then {_bail("ERR:NO_PENDING_CITY|No rebelled or captured city pending decision")} end
-local name = Locale.Lookup(city:GetName())
-local pop = city:GetPopulation()
-local cid = city:GetID()
-local params = {{}}
-params[UnitOperationTypes.PARAM_FLAGS] = {directive}
-local canDo = CityManager.CanStartCommand(city, CityCommandTypes.DESTROY, params)
-if not canDo then {_bail_lua(f'"ERR:CANNOT_{action.upper()}|Cannot {action} " .. name .. " (CanStartCommand returned false)"')} end
-CityManager.RequestCommand(city, CityCommandTypes.DESTROY, params)
-print("OK:{action.upper()}|" .. name .. " (pop " .. pop .. ", id:" .. cid .. ", " .. source .. ")")
-print("{SENTINEL}")
-"""
-
-
 def build_city_production_query(city_id: int) -> str:
     """Returns Lua that lists what the city can produce. Actual production setting
     needs the item type, so this is a two-step process: list, then set."""
