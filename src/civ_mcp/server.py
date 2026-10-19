@@ -1292,9 +1292,13 @@ async def unit_action(
     For improve: provide improvement name. Builder must be on the tile.
     For repair: repairs a pillaged improvement on the builder's current tile. No improvement name needed.
     For remove_improvement: demolishes an intact improvement on the builder's current tile (e.g. to replace a farm with a mine). Costs one charge.
-    For activate: activates a Great Person on their matching district.
+    For activate: confirms the original Great Person activation and actual charge consumption.
+    Great Prophets confirm founding readiness; choose religion and beliefs separately.
+    Other rewards are not measured. Unknown results retain the original request; repeat only confirms.
     For sacrifice_charges: Royal Society contribution — submit once with the full native builder ID, then confirm consumed charges and project progress/completion. Builder must be on its own district with an active matching project. Unknown results retain the gate; repeat only confirms.
-    For spread_religion: spreads religion at current tile. Missionaries/Apostles only.
+    For spread_religion: consumes one spread charge at the current city or unique native city target.
+    Confirms pressure growth for that unit's religion in the exact city; majority conversion is not required.
+    Ambiguous or unavailable city targets are refused. Unknown results retain the request; repeat only confirms.
     For build_route: builds road/railroad on current tile. Military Engineers only. No charges used; costs 1 Iron + 1 Coal per railroad tile.
     For fortify/skip/found_city/automate/heal/alert/sleep/delete: no target needed.
     heal = fortify until healed (auto-wake at full HP).
@@ -1370,11 +1374,11 @@ async def unit_action(
                     return "Error: trade_route requires target_x and target_y of destination city"
                 return await gs.make_trade_route(unit_id, target_x, target_y)
             case "activate":
-                return await gs.activate_great_person(unit_index)
+                return await gs.activate_great_person(unit_id)
             case "sacrifice_charges":
                 return await gs.sacrifice_builder_charges(unit_id)
             case "spread_religion":
-                return await gs.spread_religion(unit_index)
+                return await gs.spread_religion(unit_id)
             case "teleport":
                 if target_x is None or target_y is None:
                     return "Error: teleport requires target_x and target_y of the destination city"

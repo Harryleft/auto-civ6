@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from civ_mcp.lua._helpers import SENTINEL, _bail, _bail_lua, _lua_get_unit
+from civ_mcp.lua._helpers import SENTINEL, _bail
 from civ_mcp.lua.models import (
     BeliefInfo,
     CityReligionInfo,
@@ -215,39 +215,6 @@ p3[PlayerOperations.PARAM_BELIEF_TYPE] = founder.Hash
 UI.RequestPlayerOperation(me, PlayerOperations.ADD_BELIEF, p3)
 
 print("OK:RELIGION_FOUNDED|" .. Locale.Lookup(relRow.Name) .. "|" .. Locale.Lookup(follower.Name) .. "|" .. Locale.Lookup(founder.Name))
-print("{SENTINEL}")
-"""
-
-
-def build_spread_religion(unit_index: int) -> str:
-    """Spread religion at the current tile (InGame context).
-
-    Works for Missionaries and Apostles. Consumes a spread charge.
-    """
-    return f"""
-{_lua_get_unit(unit_index)}
-local ux, uy = unit:GetX(), unit:GetY()
-local uInfo = GameInfo.Units[unit:GetType()]
-local uName = uInfo and uInfo.UnitType or "UNKNOWN"
-local charges = unit:GetSpreadCharges()
-if charges <= 0 then
-    {_bail_lua('"ERR:NO_CHARGES|" .. uName .. " has no spread charges remaining"')}
-end
-if unit:GetMovesRemaining() <= 0 then
-    {_bail_lua('"ERR:NO_MOVES|" .. uName .. " has no moves remaining — wait until next turn"')}
-end
-local opRow = GameInfo.UnitOperations["UNITOPERATION_SPREAD_RELIGION"]
-if not opRow then {_bail("ERR:CANNOT_SPREAD|UNITOPERATION_SPREAD_RELIGION not found in GameInfo")} end
-local params = {{}}
-params[UnitOperationTypes.PARAM_X] = ux
-params[UnitOperationTypes.PARAM_Y] = uy
-local canStart = UnitManager.CanStartOperation(unit, opRow.Hash, nil, params, true)
-if not canStart then
-    {_bail_lua('"ERR:CANNOT_SPREAD|Cannot spread religion here (" .. ux .. "," .. uy .. "). Must be in or adjacent to a city with a different majority religion."')}
-end
-UnitManager.RequestOperation(unit, opRow.Hash, params)
-local newCharges = unit:GetSpreadCharges()
-print("OK:RELIGION_SPREAD|" .. Locale.Lookup(unit:GetName()) .. " spread religion at " .. ux .. "," .. uy .. " (charges remaining: " .. newCharges .. ")")
 print("{SENTINEL}")
 """
 

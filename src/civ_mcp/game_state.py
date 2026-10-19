@@ -1555,15 +1555,36 @@ class GameState:
 
     @_guard_pending_mutation
     async def activate_great_person(self, unit_index: int) -> str:
-        lua = lq.build_activate_great_person(unit_index)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._unit_effect("activate_great_person", unit_index)
+
+    async def _unit_effect(self, kind: str, unit_id: int) -> str:
+        if type(unit_id) is not int or unit_id < 0:
+            return "Error: INVALID_UNIT_ID|Expected the original full unit ID."
+        entity, intent = ("unit", unit_id), ()
+        if self._actions.matches(kind, entity, intent=intent):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            kind, entity, lq.build_unit_effect_query(kind, unit_id, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"witness_token": token}, intent=intent,
+            evidence=_ActionEvidence(
+                tool="unit_action", entrypoint=kind, accepted=("UNIT_EFFECT_REQUESTED|",), refused="ERR:UNIT_EFFECT_REFUSED|",
+                confirm=lambda rows: lq.parse_unit_effect_confirmation(rows, kind, unit_id, token),
+                guidance="Repeat the original unit effect to confirm only; rewards beyond reported evidence remain unmeasured. ",
+            ),
+        )
+        return await self._submit_action(pending, scope, lq.build_unit_effect(kind, unit_id, token))
 
     @_guard_pending_mutation
     async def spread_religion(self, unit_index: int) -> str:
-        lua = lq.build_spread_religion(unit_index)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._unit_effect("spread_religion", unit_index)
 
     # ------------------------------------------------------------------
     # Trader teleport (InGame context)
