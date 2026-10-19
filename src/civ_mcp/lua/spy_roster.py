@@ -35,15 +35,19 @@ local function offMapSpyRoster(owner,observe)
  assert(type(diplomacy.GetNumSpiesOffMap)=="function" and type(diplomacy.GetNthOffMapSpy)=="function",
   "SPY_OFFMAP_API_UNAVAILABLE")
  local count=spyInteger(diplomacy:GetNumSpiesOffMap(),0)
- local roster={}
+ local rows={}
  for index=0,count-1 do
   local row=diplomacy:GetNthOffMapSpy(owner,index)
   assert(type(row)=="table","SPY_OFFMAP_ROW_UNAVAILABLE")
   local key=spyInteger(row.NameIndex,0)
-  -- An assignment can observe its already-bound row before normalization:
-  -- one unknown field must not hide a different field's known identity change.
-  if observe then observe(key,row) end
-  assert(roster[key]==nil,"SPY_OFFMAP_DUPLICATE_IDENTITY")
+  assert(rows[key]==nil,"SPY_OFFMAP_DUPLICATE_IDENTITY")
+  rows[key]=row
+ end
+ -- The complete native key set is known before normalizing row fields.
+ -- Unknown Level/Name must not hide the known absence of a bound NameIndex.
+ if observe then observe(rows) end
+ local roster={}
+ for key,row in pairs(rows) do
   roster[key]={name=spyName(row.Name),level=spyInteger(row.Level,1),
    x=spyInteger(row.XLocation,-9999),y=spyInteger(row.YLocation,-9999),
    finish=spyInteger(row.ReturnTurn,-1)}

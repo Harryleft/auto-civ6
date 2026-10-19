@@ -316,6 +316,7 @@ class LostFirstOffMapProofConn(OffMapAssignmentConn):
     ('offmap[1].YLocation=11', 'offmap[1].YLocation=10'),
     ('offmap[1].ReturnTurn=50', 'offmap[1].ReturnTurn=49'),
     ('offmap[1].NameIndex=38', 'offmap[1].NameIndex=37'),
+    ('offmap[1].NameIndex=38;offmap[1].Level=nil', 'offmap[1].NameIndex=37;offmap[1].Level=1'),
     ('offmap[1].Name="Other";offmap[1].Level=nil', 'offmap[1].Name=u.name;offmap[1].Level=1'),
 ])
 def test_lost_confirmation_bound_offmap_identity_change_stays_invalid_after_restore(change, restore):
