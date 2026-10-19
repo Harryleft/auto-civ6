@@ -70,8 +70,8 @@ def test_t127_native_condemn_heretic_confirms_original_target_removal_without_cl
     assert conn.lua.eval('submissions[1].op') == -597630620
     assert conn.lua.eval('units[5767168]') is None
     assert state.pending_action_summary is None
-    assert conn.lua.eval('Events.UnitCommandStarted.Count()') == 0
-    assert conn.lua.eval('Events.UnitRemovedFromMap.Count()') == 0
+    assert conn.lua.eval('Events.UnitCommandStarted.Count()') == 1
+    assert conn.lua.eval('Events.UnitRemovedFromMap.Count()') == 1
 
 
 def test_target_change_during_native_eligibility_refuses_before_command_entry():
@@ -217,3 +217,58 @@ def test_pending_condemnation_blocks_other_mutations_save_and_turn_without_retar
     conn.lua.execute('applyCondemn()')
     assert asyncio.run(state.condemn_heretic(2424845)).startswith('HERETIC_CONDEMNED|')
     assert conn.lua.eval('#submissions') == 1
+
+
+@pytest.mark.parametrize('event', [
+    None,
+    'Events.UnitCommandStarted.Fire(0,2424845,-597630620,0)',
+    'Events.UnitRemovedFromMap.Fire(1,5767168)',
+])
+def test_lost_confirmation_reply_keeps_scope_witness_until_the_owner_can_retire(event):
+    class LostConfirmConn(CondemnConn):
+        lose_confirmation = True
+
+        async def execute_write(self, code):
+            rows = await super().execute_write(code)
+            if self.lose_confirmation and any(row.startswith('UNIT_EFFECT_CONFIRMED|') for row in rows):
+                self.lose_confirmation = False
+                raise OSError('native confirmation ran; response lost')
+            return rows
+
+    conn = LostConfirmConn(); state = GameState(conn)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.condemn_heretic(2424845))
+    if event is None:
+        assert asyncio.run(state.condemn_heretic(2424845)).startswith('HERETIC_CONDEMNED|')
+        assert state.pending_action_summary is None
+    else:
+        conn.lua.execute('seed=1;' + event + ';seed=-1896272000')
+        assert 'OUTCOME_UNKNOWN' in asyncio.run(state.condemn_heretic(2424845))
+        assert state.pending_action_kind == 'condemn_heretic'
+    assert conn.lua.eval('#submissions') == 1
+
+
+@pytest.mark.parametrize('setup', [
+    'UnitManager.CanStartCommand=function() seed=1;return true end',
+    'UnitManager.CanStartCommand=function() seed=nil;return true end',
+    'local subscribe=Events.UnitCommandStarted.Add;Events.UnitCommandStarted.Add=function(f) subscribe(f);turn=128 end',
+    'u.GetOwner=function(self) if Events.UnitCommandStarted.Count()>0 then seed=1 end;return self.owner end',
+])
+def test_changed_or_unavailable_final_scope_refuses_before_entry(setup):
+    conn = CondemnConn(); state = GameState(conn)
+    conn.lua.execute(setup)
+    assert asyncio.run(state.condemn_heretic(2424845)).startswith('Error: UNIT_EFFECT_REFUSED|')
+    assert conn.lua.eval('#submissions') == 0
+    assert conn.lua.eval('units[5767168] ~= nil') is True
+    assert state.pending_action_summary is None
+    assert conn.lua.eval('Events.UnitCommandStarted.Count()') == 0
+    assert conn.lua.eval('Events.UnitRemovedFromMap.Count()') == 0
+
+
+def test_next_actual_unit_effect_replaces_retained_confirmation_listeners():
+    conn = CondemnConn(); state = GameState(conn)
+    assert asyncio.run(state.condemn_heretic(2424845)).startswith('HERETIC_CONDEMNED|')
+    conn.lua.execute('enemy.id=5832705;units[enemy.id]=enemy;deferred=true')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.condemn_heretic(2424845))
+    assert conn.lua.eval('#submissions') == 2
+    assert conn.lua.eval('Events.UnitCommandStarted.Count()') == 1
+    assert conn.lua.eval('Events.UnitRemovedFromMap.Count()') == 1
