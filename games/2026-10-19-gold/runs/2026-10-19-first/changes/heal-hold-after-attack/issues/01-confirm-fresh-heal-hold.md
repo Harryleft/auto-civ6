@@ -1,6 +1,6 @@
 # B18-01 Confirm fresh native HEAL in exhausted HOLD
 
-Status: implemented-pending-review
+Status: resolved
 Dependencies: none
 Spec: ../spec.md
 
@@ -13,3 +13,7 @@ Implement the narrow native HEAL/HOLD task-start confirmation through existing p
 - A second red→green covers a native callback observing a changed seed during the new movement read: the final fresh-task scope check prevents success after that known invalidation.
 - `tests/test_unit_tasks.py`: 152 passed, including ordinary HEAL/OPERATION, alert/sleep/automation and strict healthy/already-healing behavior. `compileall` and `git diff --check` passed.
 - No implementer live calls or parent progress edits. Independent reviews and parent same-run T89 start→T90 checkpoint/later HP readback remain pending.
+
+## Review and same-run validation
+
+Implementation8cfe822; independent Spec and Standards reviews of c6f0bd7...8cfe822 found no material issues. Parent restored confirmed same-runT85 (#1615), replayed original decisions throughT89 (#1618–1655), saved pre-heal (#1656), refreshed only the clean MCP client and confirmed one HEAL start (#1659). T90 and checkpoint (#1660/#1664) confirmed. HP stayed39 after the attack turn; a separate explicit healT90 (#1668) led to T91 actualHP59 (#1693/#1695), checkpoint#1697. No synthetic recovery or duplicated native submit.

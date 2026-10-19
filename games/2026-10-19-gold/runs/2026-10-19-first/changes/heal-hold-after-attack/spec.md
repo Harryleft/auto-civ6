@@ -1,6 +1,6 @@
 # B18：攻击后休整停在原生HOLD无法确认
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 
