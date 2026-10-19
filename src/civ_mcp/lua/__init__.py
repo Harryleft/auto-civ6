@@ -94,9 +94,12 @@ from civ_mcp.lua.great_people import (  # noqa: F401
     parse_gp_advisor_response,
     parse_great_people_response,
 )
+from civ_mcp.lua.governors import (  # noqa: F401
+    build_governor_action,
+    build_governor_confirmation,
+    parse_governor_confirmation,
+)
 from civ_mcp.lua.governance import (  # noqa: F401
-    build_appoint_governor,
-    build_assign_governor,
     build_available_governments_query,
     build_change_government,
     build_choose_dedication,
@@ -104,7 +107,6 @@ from civ_mcp.lua.governance import (  # noqa: F401
     build_dedications_query,
     build_governors_query,
     build_policies_query,
-    build_promote_governor,
     build_promote_unit,
     build_set_policies,
     build_unit_promotions_query,

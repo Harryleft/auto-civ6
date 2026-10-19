@@ -1165,43 +1165,44 @@ class GameState:
 
     @_guard_pending_mutation
     async def appoint_governor(self, governor_type: str) -> str:
-        lua = lq.build_appoint_governor(governor_type)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._governor_action("appoint_governor", governor_type)
+
+    async def _governor_action(self, operation: str, governor_type: str,
+                               *, promotion_type: str | None = None, city_id: int | None = None) -> str:
+        intent = (governor_type, promotion_type, city_id)
+        entity = self.pending_action_entity
+        if entity is not None and self._actions.matches(operation, entity, intent=intent):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        options = {"promotion_type": promotion_type, "city_id": city_id}
+        pending = _PendingAction(
+            operation, ("player", scope.owner),
+            lq.build_governor_confirmation(operation, governor_type, token, **options),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"governor": governor_type, "promotion": promotion_type, "city": city_id}, intent=intent,
+            evidence=_ActionEvidence(
+                tool=operation, entrypoint=operation, accepted=("GOVERNOR_REQUESTED|",),
+                refused="ERR:GOVERNOR_REFUSED|",
+                confirm=lambda rows: lq.parse_governor_confirmation(rows, operation, governor_type, token),
+                guidance=f"Repeat {operation} with the original governor and target to confirm only. ",
+            ),
+        )
+        return await self._submit_action(pending, scope,
+            lq.build_governor_action(operation, governor_type, token, **options))
 
     @_guard_pending_mutation
     async def assign_governor(self, governor_type: str, city_id: int) -> str:
-        lua = lq.build_assign_governor(governor_type, city_id)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._governor_action("assign_governor", governor_type, city_id=city_id)
 
     @_guard_pending_mutation
     async def promote_governor(self, governor_type: str, promotion_type: str) -> str:
-        lua = lq.build_promote_governor(governor_type, promotion_type)
-        lines = await self.conn.execute_write(lua)
-        result = _action_result(lines)
-        if "PROMOTED" in result:
-            # Verify promotion actually applied (RequestPlayerOperation is async)
-            verify = await self.conn.execute_write(
-                f"local me = Game.GetLocalPlayer(); "
-                f"local pGovs = Players[me]:GetGovernors(); "
-                f'local gov = GameInfo.Governors["{governor_type}"]; '
-                f'local promo = GameInfo.GovernorPromotions["{promotion_type}"]; '
-                f"if gov and promo then "
-                f"  local g = pGovs:GetGovernor(gov.Hash); "
-                f"  if g and g:HasPromotion(promo.Index) then "
-                f'    print("VERIFIED") '
-                f"  else "
-                f'    print("ERR:PROMOTION_FAILED|{promotion_type} was not applied") '
-                f"  end "
-                f"else "
-                f'  print("ERR:LOOKUP_FAILED") '
-                f"end; "
-                f'print("{lq.SENTINEL}")'
-            )
-            if any("ERR:" in l for l in verify):
-                return _action_result(verify)
-        return result
+        return await self._governor_action("promote_governor", governor_type, promotion_type=promotion_type)
 
     # ------------------------------------------------------------------
     # Promotion methods
