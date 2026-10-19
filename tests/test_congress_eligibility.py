@@ -99,9 +99,10 @@ UI = {RequestPlayerOperation=record_operation, RequestAction=record_action}
 """)
 
     async def execute_write(self, code):
+        before = (len(self.operations), len(self.actions), len(self.opens))
         self.rows.clear()
         self.lua.execute(code)
-        if self.lose_reply:
+        if self.lose_reply and before != (len(self.operations), len(self.actions), len(self.opens)):
             self.lose_reply = False
             raise ConnectionError("lost after native execution")
         return [row for row in self.rows if row != "---END---"]

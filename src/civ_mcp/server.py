@@ -80,9 +80,16 @@ async def _logged(
     async with app.lock:
         start = time.monotonic()
         try:
+            congress_blocked = None
+            if (getattr(app.game, 'congress_pending', False) is True
+                and not tool_name.startswith(('get_', 'list_'))
+                and tool_name not in {'open_world_congress', 'queue_wc_votes', 'end_turn', 'dismiss_popup', 'restart_and_load', 'search_knowledge'}):
+                congress_blocked = await app.game.congress_gate()
             # Only these static readers bypass game-state access and pending gates.
             if tool_name in {"search_knowledge", "get_knowledge"}:
                 result = await fn()
+            elif congress_blocked:
+                result = congress_blocked
             elif (
                 (app.game.replacement_pending or app.game.save_pending)
                 and not tool_name.startswith(("get_", "list_"))
@@ -1843,6 +1850,8 @@ async def open_world_congress(ctx: Context) -> str:
     only reports visibility. Empty/unknown stages and submitted requests never
     trigger the Intro event; no votes, submission, or continuation are chosen.
     A lost response only permits inspection of the existing start, not replay.
+    The original start remains a gameplay gate until its exact UI receipt is
+    confirmed. A repeated call only confirms that start.
     """
     gs = _get_game(ctx)
     return await _logged(ctx, "open_world_congress", {}, gs.open_world_congress)
@@ -1874,6 +1883,9 @@ async def queue_wc_votes(ctx: Context, votes: str) -> str:
     executes immediately. Repeats/lost replies inspect the existing request;
     partial or unknown submissions never replay votes or continuation. Read
     get_world_congress before voting and choose every option explicitly.
+    The original plan remains pending until its native stage advances. A query
+    never resumes or retires it. REGISTERED permits explicit end_turn to trigger
+    the native stage event; registration does not mean any vote was cast.
     """
     gs = _get_game(ctx)
 

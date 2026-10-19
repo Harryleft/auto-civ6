@@ -67,11 +67,15 @@ def test_duplicate_resolution_is_rejected_instead_of_silently_overwriting():
 
 
 def test_explicit_preferences_are_registered_without_defaults():
-    conn = FakeConn()
+    from test_congress_eligibility import CongressConn, proposal_status
+    conn = CongressConn(proposal_status(), stage="NONE")
+    conn.lua.globals().in_session = False
     votes = [VOTE, {"hash": 13, "option": 1, "target": 2, "votes": 8}]
-    result = asyncio.run(GameState(conn).queue_wc_votes(votes))
-    assert result == "WC_VOTER_REGISTERED"
-    assert len(conn.calls) == 1
+    state = GameState(conn)
+    result = asyncio.run(state.queue_wc_votes(votes))
+    assert "WC_VOTER_REGISTERED" in result
+    assert state.congress_pending
+    assert conn.operations == conn.actions == []
 
 
 @pytest.mark.parametrize("target", [0, 2, "YIELD_SCIENCE", 'DISTRICT_"QUOTED"'])
@@ -126,20 +130,14 @@ def test_read_congress_distinguishes_requested_local_continuation_from_voting_re
 
 
 def test_lost_vote_reply_reports_unknown_and_repeat_only_requests_native_record_status():
-    class LostReply(FakeConn):
-        async def execute_write(self, lua):
-            self.calls.append(lua)
-            if len(self.calls) == 1:
-                raise ConnectionError("lost after possible native submission")
-            return ["OK:WC_REQUEST|CONTINUE_REQUESTED|stage:STAGE1|token:original"]
-
-    conn = LostReply()
+    from test_congress_confirmation import LifecycleCongressConn, PLAN
+    conn = LifecycleCongressConn()
     state = GameState(conn)
-    assert "OUTCOME_UNKNOWN" in asyncio.run(state.queue_wc_votes([VOTE]))
-    assert "CONTINUE_REQUESTED" in asyncio.run(state.queue_wc_votes([VOTE]))
-    for code in conn.calls:
-        assert code.index("local prior = __civmcp_wc_request") < code.index("WORLD_CONGRESS_RESOLUTION_VOTE,")
-        assert 'print("---END---"); return' in code
+    conn.drop = True
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.queue_wc_votes(PLAN))
+    assert "CONTINUE_REQUESTED" in asyncio.run(state.queue_wc_votes(PLAN))
+    assert len(conn.operations) == 2
+    assert conn.actions == ['continue']
 
 
 def test_native_popup_close_only_runs_for_visible_popup_and_does_not_accept_again():
@@ -151,15 +149,13 @@ def test_native_popup_close_only_runs_for_visible_popup_and_does_not_accept_agai
 
 
 def test_empty_explicit_plan_requires_native_no_choices_and_has_one_common_submit_pair():
-    conn = FakeConn()
-    assert asyncio.run(GameState(conn).queue_wc_votes([])) == "WC_VOTER_REGISTERED"
-    code = conn.calls[0]
-    assert "votes={}" in code
-    assert 'if nowStage == "STAGE1" then ress = wc:GetResolutions(me) end' in code
-    assert "Explicit proposal votes are required" in code
-    assert "if #plan > 0 then" in code
-    assert code.count("WORLD_CONGRESS_SUBMIT_TURN, {}") == 1
-    assert code.count("UI.RequestAction(ActionTypes.ACTION_ENDTURN)") == 1
+    from test_congress_eligibility import CongressConn, proposal_status
+    conn = CongressConn(proposal_status())
+    state = GameState(conn)
+    assert "WC_STAGE_CONTINUE_REQUESTED" in asyncio.run(state.queue_wc_votes([]))
+    assert state.congress_pending
+    assert conn.operations == [(0, 'submit', {})]
+    assert conn.actions == ['continue']
 
 
 def test_congress_native_query_is_read_only_and_scope_and_no_replay_guards_precede_spending():

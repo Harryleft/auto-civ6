@@ -106,6 +106,57 @@ def build_congress_phase_query(*, sentinel: bool = True) -> str:
     return _native_stage_lua() + _congress_phase_rows_lua(sentinel=sentinel)
 
 
+def build_congress_receipt(kind: str, token: str) -> str:
+    """Read an exact local request plus current world; never invoke its handler."""
+    record = "__civmcp_wc_open" if kind == "open" else "__civmcp_wc_request"
+    return _native_stage_lua() + f'''
+local me=Game.GetLocalPlayer()
+local civ=PlayerConfigurations[me]:GetCivilizationTypeName()
+local seed=GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")
+local turn=Game.GetCurrentGameTurn()
+local wc=Game.GetWorldCongress()
+local session=wc and wc:IsInSession() or false
+local stage=congressStage(Game.GetCurrentTurnSegment(),session)
+print("WC_SCOPE|"..me.."|"..civ.."|"..seed.."|"..turn.."|"..stage)
+local q={record}
+if q and q.token=="{token}" then
+ local same=q.owner==me and q.civ==civ and q.seed==seed
+ local state=q.state
+ if not same or turn<q.turn then state="STALE"
+ elseif q.state=="FAILED" then state="FAILED" -- Native pre-validation sent no vote.
+ elseif "{kind}"=="open" then
+  local intro=ContextPtr:LookUpControl("/InGame/WorldCongressIntro")
+  local popup=ContextPtr:LookUpControl("/InGame/WorldCongressPopup")
+  if turn~=q.turn or stage~=q.stage then state="STALE"
+  elseif popup and intro and popup:IsVisible() and not intro:IsVisible() then state="OPENED" end
+ elseif q.state=="CONTINUE_REQUESTED" and q.continued and turn<=q.turn+1
+   and ((q.stage=="STAGE1" and (stage=="STAGE2" or stage=="RESOLUTION"))
+    or (q.stage=="STAGE2" and stage=="RESOLUTION") or (not session and stage=="NONE")) then
+  state="FINISHED"
+ elseif turn~=q.turn then state="STALE" end
+ print("WC_RECEIPT|"..q.token.."|"..state.."|"..q.stage.."|"..q.turn.."|"..(q.summary or ""))
+end
+print("{SENTINEL}")
+'''
+
+
+def build_congress_scope_guard(world: tuple[str, str, str], turn: int, stage: str) -> str:
+    """Recheck the observed world and native stage before any handler/UI entry."""
+    import json
+
+    owner, civ, seed = world
+    return _native_stage_lua() + f'''
+local scopeWC=Game.GetWorldCongress()
+if Game.GetLocalPlayer()~={int(owner)}
+ or PlayerConfigurations[{int(owner)}]:GetCivilizationTypeName()~={json.dumps(civ)}
+ or GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")~={int(seed)}
+ or Game.GetCurrentGameTurn()~={turn}
+ or congressStage(Game.GetCurrentTurnSegment(),scopeWC and scopeWC:IsInSession())~={json.dumps(stage)} then
+ print("ERR:WC_SCOPE_REFUSED|World or stage changed before entry; no request submitted.")
+ print("{SENTINEL}"); return end
+'''
+
+
 def _congress_phase_rows_lua(*, sentinel: bool) -> str:
     ending = f'print("{SENTINEL}")' if sentinel else ""
     return f"""
@@ -120,10 +171,11 @@ if phaseQ then
     local cfg = PlayerConfigurations[phaseMe]
     local same = phaseQ.owner == phaseMe and phaseQ.civ == cfg:GetCivilizationTypeName()
         and phaseQ.seed == GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")
-        and phaseQ.turn == Game.GetCurrentGameTurn()
-    if same and not phaseSession and phaseStage == "NONE" and phaseQ.state == "CONTINUE_REQUESTED" then
+    local sameTurn = phaseQ.turn == Game.GetCurrentGameTurn()
+    if same and not phaseSession and phaseStage == "NONE" and phaseQ.state == "CONTINUE_REQUESTED"
+        and phaseQ.continued and Game.GetCurrentGameTurn() >= phaseQ.turn and Game.GetCurrentGameTurn() <= phaseQ.turn + 1 then
         phaseReceipt = "FINISHED"
-    elseif same and (phaseQ.stage == phaseStage or phaseQ.state == "REGISTERED") then
+    elseif same and sameTurn and (phaseQ.stage == phaseStage or phaseQ.state == "REGISTERED") then
         phaseReceipt = phaseQ.state
     elseif phaseSession then phaseReceipt = "STALE" end
 end
@@ -147,11 +199,11 @@ def parse_congress_phase(lines: list[str]) -> tuple[bool, str, int, str]:
     return session == "true", stage, int(turn), receipt
 
 
-def build_open_world_congress() -> str:
+def build_open_world_congress(*, token: str | None = None) -> str:
     """Explicit Intro acceptance, only when native voting choices cannot auto-submit."""
     import uuid
 
-    token = uuid.uuid4().hex
+    token = token or uuid.uuid4().hex
     return f"""
 local me = Game.GetLocalPlayer()
 local cfg = PlayerConfigurations[me]
@@ -186,7 +238,7 @@ if prior and not sameOpen and prior.state ~= "OPENED" then
     {_bail("ERR:OUTCOME_UNKNOWN|Previous congress start remains unknown; no start event resent.")}
 end
 if popup:IsVisible() and not intro:IsVisible() then
-    if sameOpen then prior.state = "OPENED" end
+    __civmcp_wc_open = {{token="{token}", owner=me, civ=civ, seed=seed, turn=turn, stage=stage, state="OPENED"}}
     print("OK:WC_VOTING_ALREADY_OPEN|stage:" .. stage .. "|turn:" .. turn)
     print("{SENTINEL}"); return
 end
@@ -442,48 +494,7 @@ def parse_world_congress_response(lines: list[str]) -> WorldCongressStatus:
     return status
 
 
-def build_congress_vote(
-    resolution_hash: int, option: int, target_index: int, num_votes: int
-) -> str:
-    """Vote on a World Congress resolution (InGame context).
-
-    option: 1=A, 2=B
-    target_index: 0-based index into PossibleTargets
-    num_votes: total votes to commit (A.votes + B.votes = this value, allocated to chosen option)
-    """
-    return f"""
-local me = Game.GetLocalPlayer()
-local kParams = {{}}
-kParams[PlayerOperations.PARAM_RESOLUTION_TYPE] = {resolution_hash}
-kParams[PlayerOperations.PARAM_WORLD_CONGRESS_VOTES] = {num_votes}
-kParams[PlayerOperations.PARAM_RESOLUTION_OPTION] = {option}
-kParams[PlayerOperations.PARAM_RESOLUTION_SELECTION] = {target_index}
-UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_RESOLUTION_VOTE, kParams)
-print("OK:VOTED|res:{resolution_hash}|option:{option}|target:{target_index}|votes:{num_votes}")
-print("{SENTINEL}")
-"""
-
-
-def build_congress_submit() -> str:
-    """Submit all World Congress votes and resume turn processing (InGame context).
-
-    Mirrors WorldCongressPopup.lua OnAccept(): submit votes then ACTION_ENDTURN
-    to resume turn-segment processing after the WC stage.
-    """
-    return """
-local me = Game.GetLocalPlayer()
-local intro = ContextPtr:LookUpControl("/InGame/WorldCongressIntro")
-if intro then intro:SetHide(true) end
-local popup = ContextPtr:LookUpControl("/InGame/WorldCongressPopup")
-if popup then popup:SetHide(true) end
-UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_SUBMIT_TURN, {})
-UI.RequestAction(ActionTypes.ACTION_ENDTURN)
-print("OK:CONGRESS_SUBMITTED")
-print("{SENTINEL}")
-""".replace("{SENTINEL}", SENTINEL)
-
-
-def build_register_wc_voter(votes: list[dict] | None = None) -> str:
+def build_register_wc_voter(votes: list[dict] | None = None, *, token: str | None = None) -> str:
     """Register an ordered, complete native-stage resolution/proposal plan.
 
     Resolution entries retain hash/option/target/votes. Proposal entries use
@@ -527,7 +538,7 @@ def build_register_wc_voter(votes: list[dict] | None = None) -> str:
         entries.append(f'{{kind="{kind}", key={json.dumps(key, ensure_ascii=False)}, o={o}, v={n}{details}}}')
     prefs_lua = "{" + ", ".join(entries) + "}"
 
-    token = uuid.uuid4().hex
+    token = token or uuid.uuid4().hex
     return f"""
 local me = Game.GetLocalPlayer()
 local cfg = PlayerConfigurations[me]
@@ -695,7 +706,10 @@ local function handler(eventPlayer)
             params[PlayerOperations.PARAM_WORLD_CONGRESS_VOTES] = item.count
             params[PlayerOperations.PARAM_RESOLUTION_OPTION] = item.pref.o
             params[PlayerOperations.PARAM_RESOLUTION_SELECTION] = item.target
-            UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_RESOLUTION_VOTE, params)
+            if UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_RESOLUTION_VOTE, params) == false then
+                print("ERR:OUTCOME_UNKNOWN|WC_REQUEST|" .. q.state .. "|Native resolution request returned false")
+                return
+            end
         end
     end
     for _, item in ipairs(plan) do
@@ -704,13 +718,23 @@ local function handler(eventPlayer)
             params[PlayerOperations.PARAM_PLAYER_ONE] = item.proposal.data.Sender
             params[PlayerOperations.PARAM_PLAYER_TWO] = item.proposal.data.Target
             params[PlayerOperations.PARAM_WORLD_CONGRESS_VOTES] = item.count * (item.pref.o == 1 and 1 or -1)
-            UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_DISCUSSION_VOTE, params)
+            if UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_DISCUSSION_VOTE, params) == false then
+                print("ERR:OUTCOME_UNKNOWN|WC_REQUEST|" .. q.state .. "|Native proposal request returned false")
+                return
+            end
         end
     end
     q.state = "SUBMIT_REQUESTED"
-    UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_SUBMIT_TURN, {{}})
+    if UI.RequestPlayerOperation(me, PlayerOperations.WORLD_CONGRESS_SUBMIT_TURN, {{}}) == false then
+        print("ERR:OUTCOME_UNKNOWN|WC_REQUEST|" .. q.state .. "|Native submit returned false")
+        return
+    end
     q.state = "CONTINUE_REQUESTED"
-    UI.RequestAction(ActionTypes.ACTION_ENDTURN)
+    if UI.RequestAction(ActionTypes.ACTION_ENDTURN) == false then
+        print("ERR:OUTCOME_UNKNOWN|WC_REQUEST|" .. q.state .. "|Native continuation returned false")
+        return
+    end
+    q.continued = true
     -- Native close routes dequeue/input cleanup; never raw SetHide, OnAccept,
     -- or ResumeCongress, any of which could duplicate voting/skip owned locks.
     pcall(function()
