@@ -38,7 +38,9 @@ local ok,r=pcall(function()
  for _,e in ipairs(gp:GetTimeline()) do
   if e.Individual=={individual} then assert(entry==nil,"AMBIGUOUS_CANDIDATE");entry=e end
  end
- assert(entry and (entry.Claimant==nil or entry.Claimant==-1),"CANDIDATE_UNAVAILABLE")
+ -- The native current-timeline UI uses each operation's Can* result. Claimant
+ -- may already be the local player before recruitment; it is not eligibility.
+ assert(entry,"CANDIDATE_UNAVAILABLE")
  local class=entry.Class
  assert(type(class)=="number" and class>=0 and class%1==0,"CLASS_UNAVAILABLE")
  local params={{}}
