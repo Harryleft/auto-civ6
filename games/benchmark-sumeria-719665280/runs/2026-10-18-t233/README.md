@@ -14,4 +14,6 @@
 
 本轮的[修复规格与工作项](changes/)和[全部报告](reports/)分别保存；赛后分析见[科技胜利复盘](reports/2026-10-19-victory-analysis.md)。终局前的可恢复成果为 `benchmark_terminal_20261019_t232_pre_victory.Civ6Save`；终局事实和截图另存，未用终局后新保存冒充已确认结果。
 
+本轮的 [Agent 与 Harness 团队分享](team-sharing/README.md) 保存分享稿、图表、云端回读与校对材料。
+
 完整原始证据仍位于 `~/.civ6-mcp/acceptance/20261018-turn-terminal121/`，前期各阶段位置见对应原报告。后续恢复继续遵守[同轮已确认检查点规则](../../../../docs/agent-recovery.md#检查点与测试轮次)，本次整理不改变任何存档或证据。返回[对局轮次索引](../../README.md)。

@@ -11,7 +11,7 @@
 <tr><td><p>对手为巴西、瑞典、加拿大</p></td><td><p>根据公开身份查询对手能力，再持续观察其胜利进度。</p></td></tr>
 <tr><td><p>T1 → T233，共 232 个净回合推进</p></td><td><p>必须跨越长期状态变化、异步交互、故障恢复和终局结算。</p></td></tr>
 </tbody></table>
-<img path="@./draft_40be61cf_folder/t233-victory.png" caption="T233 原生科技胜利界面。可恢复成果保留在 T232 获胜前存档，T233 通过原生终局读取和截图验收。"/>
+<img path="@./games/benchmark-sumeria-719665280/runs/2026-10-18-t233/team-sharing/t233-victory.png" caption="T233 原生科技胜利界面。可恢复成果保留在 T232 获胜前存档，T233 通过原生终局读取和截图验收。"/>
 <p>终局原生读取确认 VICTORY_TECHNOLOGY；飞行进度 37/33.5、速度 5，外交点仍为 19/20。<a href="https://github.com/Harryleft/auto-civ6/blob/37c3593/docs/acceptance/2026-10-19-turn-terminal.md">终局与存档验收记录</a></p>
 <h1 seq="auto">Agent 与 Harness 各自负责什么（5 分钟）</h1>
 <p>这里的 Harness，指包在模型与游戏之间的执行环境：MCP 工具、原生状态查询、请求生命周期、事件确认、未决动作门禁、弹窗与外交会话处理、存档恢复及验收证据。它让模型能够安全地理解和操作游戏，但不替模型写死一套获胜脚本。</p>
@@ -21,14 +21,14 @@
 <tr><td><p>可修正判断</p></td><td><p>目标、瓶颈、机会成本、下一步动作与重新评估条件。由 Agent 决定。</p></td><td><p>科技主线、外交备用；骑兵留守回血；保留航天所需资源。</p></td></tr>
 <tr><td><p>执行与确认</p></td><td><p>动作是否允许提交、结果属于哪次请求、未知时哪些操作必须阻止。</p></td><td><p>单次提交、原请求续查、会话退出、跨世界身份核对。</p></td></tr>
 </tbody></table>
-<whiteboard type="svg" path="@./draft_40be61cf_folder/01-loop.svg"/>
+<whiteboard type="svg" path="@./games/benchmark-sumeria-719665280/runs/2026-10-18-t233/team-sharing/01-loop.svg"/>
 <p>图中蓝色部分是模型的判断过程，绿色部分是执行环境的约束与证据链。执行结果分为“已确认”“明确未提交”和“尚不确定”；未知结果保留原请求，不直接按失败重发，也不假定成功进入后续步骤。</p>
 <p><b>行动能力不等于行动必要性。</b>T99 一名骑兵还有 4 点移动力，但只有 53 点生命值。留守治疗后，T100、T101 生命值升至 73、93。Harness 应提供真实移动力与待办状态；是否移动、待命或治疗，需要结合全局威胁和任务价值决定，不能靠“还有移动力就必须移动”驱动流程。</p>
 <p>知识入口也采用渐进式披露：开局查询自身文明和领袖；遇到对手后按公开身份查其能力；只有涉及具体机制时再深入读取。每轮决策优先补充变化的事实，不必重复加载全部规则。<a href="https://github.com/Harryleft/auto-civ6/blob/37c3593/docs/architecture.md">执行环境架构</a> · <a href="https://github.com/Harryleft/auto-civ6/blob/37c3593/docs/acceptance/2026-10-18-turn101-scheduling.md">调度与待命验收</a></p>
 <h1 seq="auto">决策输入：从“规则上可能”到“本局确实可做”（5 分钟）</h1>
 <h2 seq="auto">故障与修复</h2>
 <p>T195，静态市政前置关系将部分未来市政列为可选，但本局原生 CanProgress 返回 false。随机树下，静态关系不足以证明当前解锁。如果模型把这样的候选当成真实选项，后续即使推理连贯，也是在错误的可行动作集合上优化。</p>
-<whiteboard type="svg" path="@./draft_40be61cf_folder/02-observation.svg"/>
+<whiteboard type="svg" path="@./games/benchmark-sumeria-719665280/runs/2026-10-18-t233/team-sharing/02-observation.svg"/>
 <p>修复后，查询入口使用当前原生资格，写入入口再次检查资格、已完成状态和当前目标。明确 false、查询缺失、异常或非布尔结果均不提交；重复选择当前目标只确认现状。知识负责解释“为何需要它”，原生状态负责回答“现在能不能选”。</p>
 <p>T196 实机验证中，候选不再包含原生禁用的 Global Warming Mitigation 和 Near Future Governance；Globalization 原生资格为 true，重复选择返回 ALREADY_SELECTED。相关 3 个模块的 266 项离线测试通过，覆盖资格与零写入边界。<a href="https://github.com/Harryleft/auto-civ6/blob/37c3593/docs/acceptance/2026-10-19-native-civic-eligibility.md">原生科技／市政资格验收</a></p>
 <h2 seq="auto">可信事实怎样改变胜利路线判断</h2>
@@ -38,7 +38,7 @@
 <h1 seq="auto">异步外交：成交、退出与等待是三件事（6 分钟）</h1>
 <h2 seq="auto">旧流程为何会卡住</h2>
 <p>交易评估和成交都需要游戏引擎异步处理。旧路径在请求后立即读取缓存，可能把评估中的接受或拒绝当成最终结果，又过早关闭界面；另一处关闭只隐藏了窗口，没有执行释放原生外交事件的 Close。屏幕看似已退出，游戏事件仍未结束，随后结束回合就可能长时间等待。</p>
-<whiteboard type="svg" path="@./draft_40be61cf_folder/03-diplomacy.svg"/>
+<whiteboard type="svg" path="@./games/benchmark-sumeria-719665280/runs/2026-10-18-t233/team-sharing/03-diplomacy.svg"/>
 <p>修复后，每次尝试绑定世界、参与者、会话和请求身份，只提交一次，并等待与本次尝试匹配的原生响应。<b>愿意接受某个报价，不代表交易已经成交。</b>收到评估后，Agent 决定继续试价、明确成交或退出；执行环境负责区分这些阶段，并在原生会话结束后确认原 end_turn。</p>
 <h2 seq="auto">实战：有限试价，而非首次可接受就成交</h2>
 <p>瑞典和约过程中，用户先协助完成了一次界面改价；随后补齐了来约编辑与原生评估能力。T138 至 T139，尝试 50、25、12 的报价均被拒绝；调用原生 Equalize 后得到每回合 3 金币的可接受报价，再由 Agent 明确选择成交。实际读回确认和平、巨作和 3 金币／回合、持续 30 回合，之后游戏继续推进。</p>
@@ -49,7 +49,7 @@
 <h1 seq="auto">皇家学会：未知结果、弹窗与恢复如何解耦（6 分钟）</h1>
 <h2 seq="auto">不能把“暂时没变化”当成失败</h2>
 <p>皇家学会允许建造者消耗全部劳动力，为区域项目贡献生产力。旧实现发出贡献请求后立即读取劳动力，读数尚未变化时可能再次请求，甚至进入 Immediate 回退。对于会消耗单位的动作，第一次请求是否生效尚不确定时再次写入，会破坏后续归因与安全边界。</p>
-<whiteboard type="svg" path="@./draft_40be61cf_folder/04-contribution.svg"/>
+<whiteboard type="svg" path="@./games/benchmark-sumeria-719665280/runs/2026-10-18-t233/team-sharing/04-contribution.svg"/>
 <p>修复将一次贡献绑定到世界、回合、完整单位 ID、城市、区域、项目和请求 token；先安装观察，再单次提交。确认同时需要<b>单位消耗证据与对应项目进展／完成证据</b>。实际事件中，劳动力、单位移除和命令事件存在乱序，贡献回调甚至出现 6→12，而普通农场消耗为 6→5。字段名称和事件先后都不能直接替代语义判断。</p>
 <p>T191，6 次劳动力贡献后，月球项目进度从 374 增至 530；再次使用旧单位 ID 返回 UNIT_NOT_FOUND，且不再写入。随后菜单恢复保留了项目进度与单位已消耗状态。相关 9 个模块 601 项离线测试覆盖单次提交、身份隔离和事件乱序。<a href="https://github.com/Harryleft/auto-civ6/blob/37c3593/docs/acceptance/2026-10-19-royal-society-contribution.md">皇家学会贡献验收</a></p>
 <h2 seq="auto">保护门禁也可能形成循环等待</h2>

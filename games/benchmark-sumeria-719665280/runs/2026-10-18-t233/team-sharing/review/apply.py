@@ -1,6 +1,6 @@
 from pathlib import Path
 import json,subprocess,xml.etree.ElementTree as E,re
-p=Path('draft_40be61cf_folder/review')
+p=Path(__file__).resolve().parent
 doc='redacted-document-001'
 ops=json.load(open(p/'patch-plan.json'))
 def root(d):return E.fromstring('<root>'+d['content']+'</root>')
@@ -29,7 +29,7 @@ print('before chars',len(re.sub(r'\s+','',''.join(old.itertext()))),'after chars
 for n,op in enumerate(ops,1):
  current=fetch(p/'latest.json');r=root(current);es=list(r);a,b=bounds(es,op)
  path=p/f'patch-{n:02}.xml';path.write_text(op['content'])
- argv=['lark-cli','docs','+update','--as','user','--doc',doc,'--doc-format','xml','--command','block_replace','--revision-id',str(current['revision_id']),'--content','@./'+str(path)]
+ argv=['lark-cli','docs','+update','--as','user','--doc',doc,'--doc-format','xml','--command','block_replace','--revision-id',str(current['revision_id']),'--content','@'+str(path)]
  if a==b:argv+=['--block-id',es[a].get('id')]
  else:argv+=['--start-block-id',es[a].get('id'),'--end-block-id',es[b].get('id')]
  out=subprocess.run(argv,capture_output=True,text=True);(p/f'patch-{n:02}-result.json').write_text(out.stdout or out.stderr)
