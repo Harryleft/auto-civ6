@@ -2,7 +2,7 @@
 
 **Status:** resolved
 
-18 票已全部合入 `codex/mutation-lifecycle`。最终离线回归 3856 项通过，冻结提交 `c64201e` 的 Standards／Spec 独立复核均无实质问题；18 个实施工作树已清理。结果与审查记录见[全量验收](../../docs/acceptance/2026-10-19-mutation-lifecycle.md)。
+18 票已全部合入 `codex/mutation-lifecycle`。最终离线回归 3856 项通过，冻结提交 `c64201e` 的 Standards／Spec 独立复核均无实质问题；18 个实施工作树已清理。结果与审查记录见[全量验收](../../acceptance/2026-10-19-mutation-lifecycle.md)。
 
 ## Problem Statement
 
@@ -86,6 +86,6 @@
 
 ## Further Notes
 
-基线为使者试点提交 d3450a3。调研事实、入口计数和剩余缺口见[全量审计](../../docs/specs/2026-10-19-mutation-audit.md)，已有验证见[使者验收](../../docs/acceptance/2026-10-19-envoy-lifecycle.md)。这些是设计输入，不是其余工作项已经完成的证明。
+基线为使者试点提交 d3450a3。调研事实、入口计数和剩余缺口见[全量审计](../2026-10-19-mutation-audit.md)，已有验证见[使者验收](../../acceptance/2026-10-19-envoy-lifecycle.md)。这些是设计输入，不是其余工作项已经完成的证明。
 
 本地 Markdown tracker 使用 ready-for-agent → claimed → resolved。每票附实际提交和验证结果，整体验收不得用一票完成替代全量实现。

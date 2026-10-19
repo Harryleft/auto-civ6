@@ -1,6 +1,6 @@
 # 全量状态变更生命周期覆盖与离线验收
 
-2026-10-19；基线 `d3450a3`，按[批准规格](../../.scratch/mutation-lifecycle/spec.md)和[18 票任务图](../../.scratch/mutation-lifecycle/map.md)完成全部实施。最终离线回归 **3856 passed in 127.55s**；冻结集成 `c64201e` 的 Standards／Spec 独立复核均为 **No material issues found**。18 票及规格已 resolved，18 个实施工作树已安全清理，分支保留。
+2026-10-19；基线 `d3450a3`，按[批准规格](../specs/2026-10-19-mutation-lifecycle/spec.md)和[18 票任务图](../specs/2026-10-19-mutation-lifecycle/map.md)完成全部实施。最终离线回归 **3856 passed in 127.55s**；冻结集成 `c64201e` 的 Standards／Spec 独立复核均为 **No material issues found**。18 票及规格已 resolved，18 个实施工作树已安全清理，分支保留。
 
 [原始审计](../specs/2026-10-19-mutation-audit.md)保留迁移前的事实；本页记录迁移后的覆盖和证据，不用历史实机记录代替本次验证。
 
@@ -82,7 +82,7 @@ PYTHONPATH=src ~/Documents/ChatGPT/civ6/civ6-mcp/.venv/bin/python -B -m pytest t
 git diff --check
 ```
 
-本次仅离线验证，未连接 FireTuner，未运行 scripts 下实机脚本，未启动／关闭／换档真实游戏，未 push。各票原生依据及领域故障覆盖保留在[工作项](../../.scratch/mutation-lifecycle/map.md)的 Answer 中。
+本次仅离线验证，未连接 FireTuner，未运行 scripts 下实机脚本，未启动／关闭／换档真实游戏，未 push。各票原生依据及领域故障覆盖保留在[工作项](../specs/2026-10-19-mutation-lifecycle/map.md)的 Answer 中。
 
 ## Standards
 
