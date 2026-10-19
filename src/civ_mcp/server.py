@@ -804,7 +804,7 @@ async def choose_pantheon(ctx: Context, belief_type: str) -> str:
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations={"readOnlyHint": True})
 async def get_religion_beliefs(ctx: Context) -> str:
     """Get religion founding status, available religions, and available beliefs.
 
@@ -867,7 +867,7 @@ async def upgrade_unit(ctx: Context, unit_id: int) -> str:
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations={"readOnlyHint": True})
 async def get_dedications(ctx: Context) -> str:
     """Get current era age, available dedications, and active ones.
 
@@ -1190,7 +1190,7 @@ async def send_diplomatic_action(
     gs = _get_game(ctx)
     return await _logged(
         ctx,
-        "send_diplomatic_action",
+        "propose_trade" if action.upper() == "OPEN_BORDERS" else "send_diplomatic_action",
         {"other_player_id": other_player_id, "action": action},
         lambda: gs.send_diplomatic_action(other_player_id, action),
     )
@@ -1344,7 +1344,7 @@ async def unit_action(
             case "move":
                 if target_x is None or target_y is None:
                     return "Error: move requires target_x and target_y"
-                return await gs.move_unit(unit_index, target_x, target_y)
+                return await gs.move_unit(unit_id, target_x, target_y)
             case "cancel_move":
                 return await gs.cancel_unit_move(unit_id)
             case "pillage":
@@ -1352,13 +1352,13 @@ async def unit_action(
             case "attack":
                 if target_x is None or target_y is None:
                     return "Error: attack requires target_x and target_y"
-                return await gs.attack_unit(unit_index, target_x, target_y)
+                return await gs.attack_unit(unit_id, target_x, target_y)
             case "fortify":
-                return await gs.fortify_unit(unit_index)
+                return await gs.fortify_unit(unit_id)
             case "skip":
-                return await gs.skip_unit(unit_index)
+                return await gs.skip_unit(unit_id)
             case "found_city":
-                return await gs.found_city(unit_index)
+                return await gs.found_city(unit_id)
             case "improve":
                 if not improvement:
                     return "Error: improve requires improvement name (e.g. IMPROVEMENT_FARM). To repair a pillaged improvement, use action='repair' instead."
@@ -1734,7 +1734,7 @@ async def get_great_people(ctx: Context) -> str:
     return await _logged(ctx, "get_great_people", {}, _run)
 
 
-@mcp.tool()
+@mcp.tool(annotations={"readOnlyHint": True})
 async def get_gp_advisor(ctx: Context, unit_index: int) -> str:
     """Show best cities to activate a Great Person, ranked by suitability.
 

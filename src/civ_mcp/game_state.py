@@ -38,7 +38,7 @@ VICTORY_REPORT_TIMEOUT = 5.0
 
 
 def _guard_pending_mutation(method):
-    """Keep direct callers behind the same migrated-action gate as MCP.
+    """Keep direct callers behind the same pending gates as MCP.
 
     The owning entrypoint handles matching before confirmation, so one repeated
     call cannot confirm the old spend and accidentally submit a second spend.
@@ -46,13 +46,30 @@ def _guard_pending_mutation(method):
     """
     @wraps(method)
     async def guarded(self, *args, **kwargs):
-        if self.congress_pending and method.__name__ not in {'open_world_congress', 'queue_wc_votes'}:
+        name = method.__name__
+        if name == "send_diplomatic_action":
+            action = kwargs.get("action", args[1] if len(args) > 1 else None)
+            if isinstance(action, str) and action.upper() == "OPEN_BORDERS":
+                name = "propose_trade"  # This alias resumes the same trade owner.
+        if self.replacement_pending or self.save_pending:
+            return "ERR:OUTCOME_UNKNOWN|Load or save completion is not confirmed; inspect or recover before gameplay."
+        if self.diplomacy_pending and name not in {
+            "test_trade", "propose_trade", "negotiate_incoming_trade",
+            "respond_to_deal", "diplomacy_respond",
+        }:
+            return "ERR:OUTCOME_UNKNOWN|Native diplomacy attempt is pending; confirm its original request or use explicit recovery."
+        if self.turn_pending and name not in {
+            "diplomacy_respond", "respond_to_deal", "negotiate_incoming_trade",
+            "open_world_congress", "queue_wc_votes",
+        }:
+            return "ERR:OUTCOME_UNKNOWN|End-turn outcome is pending; confirm end_turn before gameplay."
+        if self.congress_pending and name not in {"open_world_congress", "queue_wc_votes"}:
             blocked = await self.congress_gate()
             if blocked:
                 return blocked
-        pending = self._actions.pending
-        if (pending is not None and pending.evidence is not None
-                and pending.evidence.entrypoint != method.__name__):
+        # Owners must match the intent before a generic gate can retire it.
+        # This applies equally to the original movement/production protocols.
+        if self._actions.pending is not None and self._actions.entrypoint != name:
             blocked = await self._action_gate()
             if blocked:
                 return blocked
@@ -170,7 +187,16 @@ class GameState:
     @property
     def pending_action_tool(self) -> str | None:
         pending = self._actions.pending
-        return pending.evidence.tool if pending is not None and pending.evidence is not None else None
+        if pending is None:
+            return None
+        if pending.evidence is not None:
+            return pending.evidence.tool
+        entrypoint = self._actions.entrypoint
+        if entrypoint == "spy_escape":
+            return "spy_action"
+        if pending.entity[0] == "unit":
+            return "unit_action"
+        return entrypoint
 
     def _pending_unknown(self, reason: str = "confirmation deadline reached") -> str:
         return self._actions.unknown(reason)
@@ -2062,8 +2088,8 @@ class GameState:
             blocked = await self.congress_gate(allow_registered_turn=True)
             if blocked:
                 return blocked
-        if self.save_pending:
-            return "ERR:OUTCOME_UNKNOWN|Save completion is not confirmed; inspect or recover before advancing."
+        if self.save_pending or getattr(self, "replacement_pending", False):
+            return "ERR:OUTCOME_UNKNOWN|Load or save completion is not confirmed; inspect or recover before advancing."
         progress = getattr(self, "_diplomacy_progress", None)
         if progress is not None:
             if progress.incoming is not None:
@@ -2079,6 +2105,8 @@ class GameState:
         """Dismiss any blocking popup or UI overlay."""
         from civ_mcp.game_lifecycle import dismiss_popup
 
+        if self.replacement_pending or self.save_pending:
+            return "ERR:OUTCOME_UNKNOWN|Load or save completion is not confirmed; inspect or recover before dismissal."
         if self._diplomacy_progress.incoming is not None:
             return self._diplomacy_progress.trade_summary()
         if self._diplomacy_progress.trade is not None:

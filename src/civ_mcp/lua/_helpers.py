@@ -63,7 +63,8 @@ def _lua_get_unit(unit_index: int) -> str:
     return (
         f"local me = Game.GetLocalPlayer() "
         f"local unit = UnitManager.GetUnit(me, {unit_index}) "
-        f"if unit == nil then {_bail('ERR:UNIT_NOT_FOUND')} end"
+        f"if unit == nil then {_bail('ERR:UNIT_NOT_FOUND')} end "
+        f"if {unit_index} >= 65536 and unit:GetID() ~= {unit_index} then {_bail('ERR:UNIT_ID_CHANGED')} end"
     )
 
 
@@ -72,7 +73,8 @@ def _lua_get_unit_gamecore(unit_index: int) -> str:
     return (
         f"local me = Game.GetLocalPlayer() "
         f"local unit = Players[me]:GetUnits():FindID({unit_index}) "
-        f"if unit == nil then {_bail('ERR:UNIT_NOT_FOUND')} end"
+        f"if unit == nil then {_bail('ERR:UNIT_NOT_FOUND')} end "
+        f"if {unit_index} >= 65536 and unit:GetID() ~= {unit_index} then {_bail('ERR:UNIT_ID_CHANGED')} end"
     )
 
 
@@ -81,7 +83,8 @@ def _lua_get_city(city_id: int) -> str:
     return (
         f"local me = Game.GetLocalPlayer() "
         f"local pCity = CityManager.GetCity(me, {city_id} % 65536) "
-        f"if pCity == nil then {_bail('ERR:CITY_NOT_FOUND')} end"
+        f"if pCity == nil then {_bail('ERR:CITY_NOT_FOUND')} end "
+        f"if pCity:GetID() ~= {city_id} then {_bail('ERR:CITY_ID_CHANGED')} end"
     )
 
 

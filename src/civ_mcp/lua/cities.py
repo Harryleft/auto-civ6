@@ -664,7 +664,7 @@ end
     return f"""
 local me = Game.GetLocalPlayer()
 local pCity = Players[me]:GetCities():FindID({city_id} % 65536)
-if pCity == nil then print("NOT_FOUND"); print("{SENTINEL}"); return end
+if pCity == nil or pCity:GetID() ~= {city_id} then print("NOT_FOUND"); print("{SENTINEL}"); return end
 local bq = pCity:GetBuildQueue()
 {current_item}
 -- GameCore GetTurnsLeft is not implemented on macOS. Confirmation uses

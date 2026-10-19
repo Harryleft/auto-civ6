@@ -67,14 +67,14 @@ def test_resolved_unit_action_allows_next_mcp_command():
     game = PendingGame("CONFIRMED|move reached destination")
     result = asyncio.run(server.unit_action(context(game), 65536 + 7, "fortify"))
     assert result == "FORTIFIED"
-    assert game.actions == [("fortify", 7)]
+    assert game.actions == [("fortify", 65536 + 7)]
 
 
 def test_other_unit_does_not_depend_on_pending_position():
     game = PendingGame("ERR:OUTCOME_UNKNOWN|move unit 7 is unconfirmed")
     result = asyncio.run(server.unit_action(context(game), 65536 + 8, "fortify"))
     assert result == "FORTIFIED"
-    assert game.actions == [("fortify", 8)]
+    assert game.actions == [("fortify", 65536 + 8)]
 
 
 @pytest.mark.parametrize("pending_flag", ["replacement_pending", "save_pending", "diplomacy_pending", "turn_pending"])

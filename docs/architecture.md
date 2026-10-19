@@ -13,7 +13,8 @@ server.py：参数、工具入口、结果文本
 game_state.py：领域 interface、查询、存档替换
   ├─ actions.py：动作提交与确认
   ├─ end_turn.py：推进请求与确认
-  └─ diplomacy.py：外交回应与交易阶段
+  ├─ diplomacy.py：外交回应与交易阶段
+  └─ congress.py：原议会票单与阶段门禁
   ▼
 lua/：按游戏领域构造与解析 Lua
   ▼
@@ -23,7 +24,7 @@ connection.py / tuner_client.py：FireTuner 通信
 Civilization VI
 ```
 
-游戏规则由引擎执行。GameCore 提供状态读取，InGame 发出操作，FrontEnd 提供主菜单读档。领域查询和动作保持独立，工具返回必要事实和回读结果供模型决策。
+游戏规则由引擎执行。GameCore 与 InGame 按原生 API 可用性读取／提交，FrontEnd 提供主菜单读档。FireTuner 的 read／write 名称选择上下文，不代表该 Lua 是否改变状态；晋升在 GameCore 提交，仍由同一动作所有者确认。领域查询和动作保持独立，工具返回必要事实和回读结果供模型决策。
 
 ## 动作确认
 
@@ -31,7 +32,9 @@ Civilization VI
 
 使者沿用同一所有者，`lua/envoys.py` 保存请求记录与原生双侧计数。同目标重入只确认原请求，只有可用使者减少一枚且指定城邦收到的使者增加才报告完成；世界变化、取消、丢回应与不完整证据保留未决。MCP 的其他变更先经过该全局消费门禁。运行模型为单一 MCP 控制游戏；本项目不处理人工并发操作，不提供跨服务重启的意图持久化。
 
-该约束尚未覆盖所有工具：购买、部分治理／单位动作等仍直接提交，另有仅局部回读的路径。完整入口、状态归属和逐项迁移顺序见[变更操作审计](specs/2026-10-19-mutation-audit.md)。
+购买、治理、单位任务、地块操作、伟人、占城决定、间谍指派、宗教及关系操作均已纳入已有所有者。普通动作保留完整对象与原意图；多阶段仅原入口可继续尚未进入的步骤。所有 scoped pending 见到世界／回合／玩家不匹配后锁存失效，返回原世界不能追认。完整覆盖、43 个变更入口及任意 Lua／显式生命周期边界见[全量覆盖与离线验收](acceptance/2026-10-19-mutation-lifecycle.md)；[原始审计](specs/2026-10-19-mutation-audit.md)保留迁移前基线。
+
+MCP 与直接 GameState 都先保护 save／load、外交、推进、议会及普通动作未决。原所有者先匹配同意图，确认旧请求后本次调用结束；纯查询、归属明确的阻塞解除和已确认检查点恢复保留通路。旧动作与新迁移动作共享该规则，普通进程启动／关闭或任意 Lua 不再绕过门禁。
 
 ## 回合推进
 
@@ -53,7 +56,7 @@ Civilization VI
 
 GameState 拥有完整会话替换；`game_launcher.py` 负责原生进程操作，`game_lifecycle.py` 负责原生菜单、加载和文件事实。MCP 只调度和展示，不写入私有门禁、重置会话或清理索引。菜单路径与完整重启复用同一加载确认。入口、时限和完成条件见[保存与恢复](agent-recovery.md)。
 
-`replacement_pending` 只表示替换未知，保存未知由 `save_pending` 提供。`reset_session` 在显式受保护替换中退役旧动作和推进，但保留替换门禁；普通身份刷新只清观察缓存，保留未决请求。旧保存列表索引随显式替换清理。
+`replacement_pending` 只表示替换未知，保存未知由 `save_pending` 提供。保存进入可能提交的 await 前即设门禁；取消、原生异常、文件或最终身份验证不完整时保持未知。重复保存不重发，长期未知沿显式检查点恢复处理。`reset_session` 在显式受保护替换中退役旧动作和推进，但保留替换门禁；普通身份刷新只清观察缓存，保留未决请求。旧保存列表索引随显式替换清理。
 
 `NativeTransition` 提供原生转换状态，`ProcessResult` 提供进程事实，展示文案不承担完成判断。原生加载调用已进入后抛错只能得到 unknown；前置条件能够证明未调用时才允许 not_submitted。重连用于发现和回读，不重放已发出的块。
 
@@ -70,3 +73,8 @@ GameState 拥有完整会话替换；`game_launcher.py` 负责原生进程操作
 `open_world_congress` 独立于纯查询，在已确认的原生投票阶段、存在可投选择且本阶段未提交时，执行 Intro 的 DequeuePopup → ShowWorldCongress 开始路径。开始前记录文明、种子、回合及阶段；已请求或丢应答只核对可见状态，不重复事件。原普通推进未决时可以打开议会，其他未决动作、保存及加载门禁保持。无选择或未知提案不走开始路径，以免原生 UI 自动提交与显式票计划重复。
 
 议会查询、显式打开和显式票单共用原生阶段与提案可投资格解释。`proposal_status` 的 `CHOICES` 表示存在可投提案，`EMPTY` 表示没有可投提案（可能仍有禁投行），`UNKNOWN` 表示资格未核实；resolutions 另行按当前阶段处理，Stage2 不重投旧决议。共享解释不合并三种操作，也不引入默认投票。
+
+
+`CongressProgress` 只保存原意图、token、原世界／回合与观测结果，票单和 entered／returned 阶段仍在原生 Lua。`open_world_congress`／`queue_wc_votes` 原入口匹配后只确认旧请求；直接分项 vote／submit 入口收敛为完整票计划。投票、提交、继续任一原生调用 false 或异常即停止后续步骤，部分完成不重放。
+
+已登记 REGISTERED 票单可由显式 `end_turn` 触发；只有该入口允许最新可信登记状态保留计划并放行。阶段继续以原生阶段／回合变化确认，不照搬普通动作严格同回合规则。`WC_STAGE_FINISHED` 只表示原阶段结束，分配数只表示请求的票单，不表示实付外交支持或议会结果。

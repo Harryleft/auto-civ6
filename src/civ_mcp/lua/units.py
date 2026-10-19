@@ -485,10 +485,20 @@ pcall(function()
     end
 end)
 """
+    # Legacy direct callers can supply a low index. The pre-submission native
+    # record still binds the generation; a replacement at the goal is not it.
+    identity_guard = ""
+    if witness_token is not None and unit_index < 65536:
+        identity_guard = f'''
+local original = __civmcpMoveSegment
+if u and (not original or original.token ~= "{witness_token}" or original.id ~= u:GetID()) then u = nil end
+'''
     return f"""
 local moveImpassable = false
 local me = Game.GetLocalPlayer()
 local u = Players[me]:GetUnits():FindID({unit_index})
+if u and {unit_index} >= 65536 and u:GetID() ~= {unit_index} then u = nil end
+{identity_guard}
 if u then
     local busy = "unknown"
     pcall(function() busy = tostring(UI.IsGameCoreBusy()) end)
@@ -734,6 +744,7 @@ def build_attack_followup_query(target_x: int, target_y: int, attacker_index: in
         attacker_probe = f"""
 local me = Game.GetLocalPlayer()
 local attacker = Players[me]:GetUnits():FindID({attacker_index})
+if attacker and {attacker_index} >= 65536 and attacker:GetID() ~= {attacker_index} then attacker = nil end
 if attacker then
     local busy = "unknown"
     pcall(function() busy = tostring(UI.IsGameCoreBusy()) end)
