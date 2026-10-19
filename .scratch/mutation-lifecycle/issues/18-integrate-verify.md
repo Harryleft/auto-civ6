@@ -32,6 +32,6 @@
 PYTHONPATH=src ~/Documents/ChatGPT/civ6/civ6-mcp/.venv/bin/python -B -m pytest tests/ -q
 ```
 
-结果 **3563 passed in 124.08s**；日志 `/tmp/civ6-ticket18-full-reviewed.log`。此前 249／497／340 项针对回归通过；首轮全量唯一失败是旧 server 测试仍要求截断 composite ID，已按新完整身份契约更新。`compileall -q src tests`、`git diff d3450a3 HEAD --check` 通过；提交后 Markdown 检查覆盖 26 文件／155 本地链接及锚点，0 unresolved。
+结果 **3563 passed in 124.08s**；日志 `/tmp/civ6-ticket18-full-reviewed.log`。此前 249／497／340 项针对回归通过；首轮全量唯一失败是旧 server 测试仍要求截断 composite ID，已按新完整身份契约更新。`compileall -q src tests`、`git diff d3450a3 HEAD --check` 通过；提交后 Markdown 检查覆盖 26 文件／156 本地链接及锚点，0 unresolved。
 
 未连接 FireTuner，未运行 scripts 实机测试，未启动、关闭、换档或修改真实对局，未 push。工作树保留供最终审查和合并，预存目录未触碰。
