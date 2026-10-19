@@ -277,3 +277,5 @@ B24 T128：B23恢复后#2378–83重放独立选择。#2384首间谍2752514派�
 B23实机传播完成，待下一回合：97bdf16，251相关测试/compile/diff通过，独立Spec/Standards无实质发现。#2391显式恢复同T128成功60.276s，#2392–94核对单位/城市与原spy Name/Level/preoffmap0；#2395–2400重放职业军队/升级/殖民主义/两工业区及传教士移动。#2403建造者向铁矿仅至35,23 MP0.25，#2407取消旧移动并#2408单独skip；#2404–06原火枪手回34,22校园驻防、追猎者36,24驻防。#2409保存T128_b23_b24_ready911719bytes。clean刷新97bdf16，无世界重载，#2411单次传播确认原拉格什religion12累计压力17.90625→217.90625/charges剩2；#2412独立确认拜火2/3。#2413保存gold_20261019_t128_b23_spread_confirmed_b24_ready911813bytes。当前无pending，原spy2752514仍40,25/idle，等待B24最终代码再原T128派遣。
 
 #2414–15本方公开援助竞赛：巴西target2/militaryaidtype10、余24t（预计T152结束），参与0/1/3，分数0/-200/0。后续比较实际积分与资金，竞赛结果尚未知。
+
+B24首版6c5b9e1/集成9ab52a7，453相关、compile/diff通过；独立双审发现finalcitygetter后缺scope复核，Spec另发现丢确认回复后同NameIndex离图row身份变化未sticky失效，已交同worker补修。#2416–18 clean刷新后原T128、spy2752514/NameLOC_CITIZEN_SUMERIA_MODERN_FEMALE_8/Level1/40,25/idle及preoffmap0保持。未再次提交travel；无pending正常关闭MCP，等待最终补修。B23已单次传播通过，T129/save尚待B24完成后统一验证。
