@@ -135,90 +135,80 @@ print("{SENTINEL}")
 '''
 
 
-_CORE_CONTEXT = _CONTEXT.replace(
-    'local unit=UnitManager.GetUnit(owner,id%65536)',
-    'local unit=Players[owner]:GetUnits():FindID(id%65536)',
-)
-
-
 def build_promote(unit_id: int, promotion: str, token: str) -> str:
-    # SetPromotion is the existing verified GameCore path; InGame PROMOTE has
-    # historically returned without applying. Never retry via a second channel.
-    return _CORE_CONTEXT + f'''
-local ok,r=pcall(function()
+    # Mirror UnitPromotionPopup: PROMOTIONS contains row indices, not hashes.
+    # The native command alone controls XP, recovery and movement expenditure.
+    return _CONTEXT + f'''
+local function eligible(unit,index)
+ local allowed,results=UnitManager.CanStartCommand(unit,UnitCommandTypes.PROMOTE,false,true)
+ assert(allowed==true,"CANNOT_PROMOTE")
+ assert(type(results)=="table","PROMOTION_OPTIONS_UNAVAILABLE")
+ local options=results[UnitCommandResults.PROMOTIONS]
+ assert(type(options)=="table","PROMOTION_OPTIONS_UNAVAILABLE")
+ local matches=0
+ for _,option in pairs(options) do
+  assert(scopeIndex(option),"PROMOTION_OPTION_UNREADABLE")
+  if option==index then matches=matches+1 end
+ end
+ assert(matches==1,"PROMOTION_NOT_ELIGIBLE")
+ assert(unit:GetExperience():HasPromotion(index)==false,"ALREADY_HAS_PROMOTION_OR_UNKNOWN")
+end
+local ok,r,unit,parameters=pcall(function()
+ assert(UI.IsGameCoreBusy()==false,"CORE_BUSY_OR_UNKNOWN")
+ assert(type(UnitManager.RequestCommand)=="function" and scopeInteger(UnitCommandTypes.PROMOTE)
+  and scopeInteger(UnitCommandTypes.PARAM_PROMOTION_TYPE) and UnitCommandResults.PROMOTIONS~=nil,
+  "PROMOTION_COMMAND_UNAVAILABLE")
  local owner=Game.GetLocalPlayer()
  local unit=unitFor(owner,{unit_id})
- assert(unit:GetX()~=-9999,"UNIT_CONSUMED")
+ assert(scopeIndex(unit:GetID()) and unit:GetX()~=-9999,"UNIT_CONSUMED_OR_UNKNOWN")
  local promo=GameInfo.UnitPromotions[{json.dumps(promotion)}]
- assert(promo and type(promo.Index)=="number","PROMOTION_UNAVAILABLE")
- local info=GameInfo.Units[unit:GetType()]
- assert(info and info.PromotionClass==promo.PromotionClass,"WRONG_PROMOTION_CLASS")
- local exp=unit:GetExperience()
- assert(exp and exp:HasPromotion(promo.Index)==false,"ALREADY_HAS_PROMOTION_OR_UNKNOWN")
- assert(exp:CanPromote(promo.Index)==true,"CANNOT_PROMOTE")
- -- CanPromote alone describes the unit's availability. Bind the requested
- -- promotion's OR-prerequisites as the existing promotion query does.
- local hasPrereq,metPrereq=false,false
- for prereq in GameInfo.UnitPromotionPrereqs() do
-  if prereq.UnitPromotion==promo.UnitPromotionType then
-   hasPrereq=true
-   local required=GameInfo.UnitPromotions[prereq.PrereqUnitPromotion]
-   assert(required and type(required.Index)=="number","PROMOTION_PREREQUISITE_UNAVAILABLE")
-   local has=exp:HasPromotion(required.Index)
-   assert(type(has)=="boolean","PROMOTION_PREREQUISITE_UNKNOWN")
-   if has then metPrereq=true end
-  end
- end
- assert(not hasPrereq or metPrereq,"PROMOTION_PREREQUISITE_NOT_MET")
- assert(number(exp:GetExperiencePoints())>=number(exp:GetExperienceForNextLevel()),"INSUFFICIENT_XP")
- local stored=number(exp:GetStoredPromotions())
- assert(stored>=0 and stored==math.floor(stored),"STORED_PROMOTIONS_UNKNOWN")
- local damage=number(unit:GetDamage())
- assert(damage>=0,"DAMAGE_UNKNOWN")
- assert(type(exp.SetPromotion)=="function" and type(exp.ChangeStoredPromotions)=="function"
-  and type(unit.SetDamage)=="function","PROMOTION_CAPABILITY_UNAVAILABLE")
- return {{token={json.dumps(token)},owner=owner,id=unit:GetID(),requested={unit_id},
-  promotion={json.dumps(promotion)},index=promo.Index,stored=stored,damage=damage,
+ assert(promo and scopeIndex(promo.Index),"PROMOTION_UNAVAILABLE")
+ assert(unit:GetExperience():HasPromotion(promo.Index)==false,"ALREADY_HAS_PROMOTION_OR_UNKNOWN")
+ local receipt={{token={json.dumps(token)},owner=owner,id=unit:GetID(),requested={unit_id},
+  promotion={json.dumps(promotion)},index=promo.Index,
   civ=PlayerConfigurations[owner]:GetCivilizationTypeName(),
   seed=GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED"),turn=Game.GetCurrentGameTurn()}}
+ eligible(unit,receipt.index)
+ local parameters={{[UnitCommandTypes.PARAM_PROMOTION_TYPE]=receipt.index}}
+ -- Refuse a changed identity/choice while still before native entry.
+ unit=unitFor(receipt.owner,receipt.id)
+ assert(sameScope(receipt),"PROMOTION_SCOPE_CHANGED")
+ eligible(unit,receipt.index)
+ unit=unitFor(receipt.owner,receipt.id)
+ assert(sameScope(receipt),"PROMOTION_SCOPE_CHANGED")
+ return receipt,unit,parameters
 end)
 if not ok then print("ERR:UNIT_PROMOTION_REFUSED|"..tostring(r));print("{SENTINEL}");return end
 __civmcpPromotion=r
-local unit=unitFor(r.owner,r.id)
-local exp=unit:GetExperience()
-r.promotionEntered=true
-exp:SetPromotion(r.index)
-r.promotionReturned=true
--- Later side effects belong to this one dispatch. A failed/partial dispatch
--- keeps the receipt; confirmation never repeats healing or stored changes.
-if exp:HasPromotion(r.index)==true then
- r.storedEntered=true
- if r.stored>0 then exp:ChangeStoredPromotions(-r.stored) end
- r.storedReturned=true
- r.healEntered=true
- if r.damage>0 then unit:SetDamage(0) end
- r.healReturned=true
-end
+r.entered=true
+UnitManager.RequestCommand(unit,UnitCommandTypes.PROMOTE,parameters)
+r.returned=true
 print("OK:UNIT_PROMOTION_REQUESTED|"..r.id)
 print("{SENTINEL}")
 '''
 
 
 def build_promote_query(unit_id: int, promotion: str, token: str) -> str:
-    return _CORE_CONTEXT + f'''
+    return _CONTEXT + f'''
 local r=__civmcpPromotion
-local ok=pcall(function()
+local ok,details=pcall(function()
  assert(type(r)=="table" and r.token=={json.dumps(token)} and r.requested=={unit_id}
   and r.promotion=={json.dumps(promotion)})
- assert(sameScope(r))
- assert(r.promotionEntered==true and r.promotionReturned==true
-  and r.storedEntered==true and r.storedReturned==true
-  and r.healEntered==true and r.healReturned==true)
+ assert(sameScope(r) and r.entered==true and r.returned==true)
+ assert(UI.IsGameCoreBusy()==false)
+ assert(GameInfo.UnitPromotions[r.promotion].Index==r.index)
  local unit=unitFor(r.owner,r.id)
  local exp=unit:GetExperience()
- assert(exp:HasPromotion(r.index)==true and exp:GetStoredPromotions()==0 and unit:GetDamage()==0)
+ assert(exp:HasPromotion(r.index)==true)
+ local damage=number(unit:GetDamage())
+ local moves=number(unit:GetMovesRemaining())
+ assert(damage>=0 and moves>=0)
+ -- This counter is absent from the shipped InGame experience object.
+ local storedOK,stored=pcall(function() return exp:GetStoredPromotions() end)
+ if not storedOK or not scopeIndex(stored) then stored="unknown" end
+ return r.promotion..",damage:"..damage..",moves:"..moves..",stored_promotions:"..stored
 end)
-if ok then print("UNIT_TRANSFORM_CONFIRMED|{token}|{unit_id}|PROMOTED|"..r.id.."|"..r.promotion)
+if ok then print("UNIT_TRANSFORM_CONFIRMED|{token}|{unit_id}|PROMOTED|"..r.id.."|"..details)
 else print("UNIT_TRANSFORM_OBSERVED|{token}|UNKNOWN") end
 print("{SENTINEL}")
 '''
