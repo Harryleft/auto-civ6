@@ -135,12 +135,16 @@ local ok=pcall(function()
   local operation=ActivityTypes and ActivityTypes.ACTIVITY_OPERATION
   local hold=ActivityTypes and ActivityTypes.ACTIVITY_HOLD
   -- Native alert (T16) and heal (T48) can remain OPERATION after exact start.
-  -- Alert after exhausted movement can instead remain HOLD (T57).
+  -- Alert after exhausted movement can instead remain HOLD (T57), as can
+  -- fresh HEAL after attacking with no movement left (T89).
   -- This confirms task selection, not later sentry activity or HP recovery.
   assert(current==r.activity
    or ((r.kind=="alert" or r.kind=="heal") and scopeInteger(operation) and current==operation)
-   or (r.kind=="alert" and scopeInteger(hold) and current==hold))
+   or (r.kind=="alert" and scopeInteger(hold) and current==hold)
+   or (r.kind=="heal" and scopeInteger(hold) and current==hold and unit:GetMovesRemaining()==0))
  end
+ -- Native readbacks can dispatch events that invalidate the original scope.
+ assert(sameScope(r))
 end)
 if ok then
  retireTask(r)
