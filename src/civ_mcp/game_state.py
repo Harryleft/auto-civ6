@@ -277,25 +277,43 @@ class GameState:
             raise LuaError("Current spy escape identity or legal routes are unknown; no route was selected.")
         return lq.parse_spies_response(lines)
 
-    @_guard_pending_mutation
-    async def spy_travel(self, unit_index: int, target_x: int, target_y: int) -> str:
-        blocked = await self._action_gate(("unit", unit_index))
+    async def _assign_spy(self, unit_id: int, mission: str, x: int, y: int, entrypoint: str) -> str:
+        from civ_mcp.lua import spy_assignments
+        mission = mission.upper() if isinstance(mission, str) else mission
+        entity, intent = ("unit", unit_id), (mission, x, y)
+        if self._actions.matches("spy_assignment", entity, intent=intent):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
         if blocked:
             return blocked
-        lua = lq.build_spy_travel(unit_index, target_x, target_y)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        if (any(type(v) is not int or v < 0 for v in (unit_id, x, y))
+                or not isinstance(mission, str) or mission not in spy_assignments.OPERATIONS):
+            return "Error: INVALID_SPY_ASSIGNMENT|Expected unit ID, target coordinates and a supported mission"
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            "spy_assignment", entity, spy_assignments.build_spy_assignment_query(unit_id, mission, x, y, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            intent=intent, evidence=_ActionEvidence(
+                tool="spy_action", entrypoint=entrypoint, accepted=("SPY_ASSIGNMENT_REQUESTED|", "SPY_ASSIGNMENT_NOOP|"),
+                refused="ERR:SPY_ASSIGNMENT_REFUSED|",
+                confirm=lambda rows: spy_assignments.parse_spy_assignment(rows, unit_id, mission, token),
+                guidance="Repeat the original spy assignment to confirm its start only. ",
+            ),
+        )
+        return await self._submit_action(pending, scope, spy_assignments.build_spy_assignment(unit_id, mission, x, y, token))
+
+    @_guard_pending_mutation
+    async def spy_travel(self, unit_index: int, target_x: int, target_y: int) -> str:
+        return await self._assign_spy(unit_index, "TRAVEL", target_x, target_y, "spy_travel")
 
     @_guard_pending_mutation
     async def spy_mission(
         self, unit_index: int, mission_type: str, target_x: int, target_y: int
     ) -> str:
-        blocked = await self._action_gate(("unit", unit_index))
-        if blocked:
-            return blocked
-        lua = lq.build_spy_mission(unit_index, mission_type, target_x, target_y)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._assign_spy(unit_index, mission_type, target_x, target_y, "spy_mission")
 
     @_guard_pending_mutation
     async def spy_escape(self, unit_id: int, district_type: str) -> str:
@@ -479,10 +497,31 @@ class GameState:
         return result
 
     @_guard_pending_mutation
-    async def resolve_city_capture(self, action: str) -> str:
-        lua = lq.build_resolve_city_capture(action)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+    async def resolve_city_capture(self, city_id: int, action: str) -> str:
+        from civ_mcp.lua import city_decisions
+        entity, intent = ("city", city_id), (action,)
+        if self._actions.matches("city_decision", entity, intent=intent):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        if type(city_id) is not int or city_id < 0 or not isinstance(action, str) or action not in city_decisions.DIRECTIVES:
+            return "Error: INVALID_CITY_DECISION|Expected the pending city ID and a supported decision"
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            "city_decision", entity, city_decisions.build_city_decision_query(city_id, action, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            intent=intent, evidence=_ActionEvidence(
+                tool="resolve_city_capture", entrypoint="resolve_city_capture",
+                accepted=("CITY_DECISION_REQUESTED|",), refused="ERR:CITY_DECISION_REFUSED|",
+                confirm=lambda rows: city_decisions.parse_city_decision(rows, city_id, action, token),
+                guidance="Repeat the same decision for the original city to confirm only. ",
+            ),
+        )
+        return await self._submit_action(pending, scope, city_decisions.build_city_decision(city_id, action, token))
 
     @_guard_pending_mutation
     async def found_city(self, unit_index: int) -> str:
@@ -705,41 +744,47 @@ class GameState:
         )
         return await self._submit_action(pending, scope, transforms.build_delete(unit_index, token))
 
-    @_guard_pending_mutation
-    async def improve_tile(self, unit_index: int, improvement_name: str) -> str:
-        blocked = await self._action_gate(("unit", unit_index))
+    async def _change_unit_tile(self, unit_id: int, kind: str, entrypoint: str, improvement: str = "") -> str:
+        from civ_mcp.lua import tile_actions
+        entity, intent = ("unit", unit_id), (kind, improvement)
+        if self._actions.matches("tile_action", entity, intent=intent):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
         if blocked:
             return blocked
-        lua = lq.build_improve_tile(unit_index, improvement_name)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        if type(unit_id) is not int or unit_id < 0 or not isinstance(improvement, str):
+            return "Error: INVALID_TILE_ACTION|Expected a unit ID and improvement name"
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            "tile_action", entity, tile_actions.build_tile_action_query(unit_id, kind, improvement, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            intent=intent, evidence=_ActionEvidence(
+                tool="unit_action", entrypoint=entrypoint, accepted=("TILE_ACTION_REQUESTED|", "TILE_ACTION_NOOP|"),
+                refused="ERR:TILE_ACTION_REFUSED|",
+                confirm=lambda rows: tile_actions.parse_tile_action(rows, unit_id, kind, token),
+                guidance=f"Repeat {kind} with the original unit and parameters to confirm only. ",
+            ),
+        )
+        return await self._submit_action(pending, scope, tile_actions.build_tile_action(unit_id, kind, improvement, token))
+
+    @_guard_pending_mutation
+    async def improve_tile(self, unit_index: int, improvement_name: str) -> str:
+        return await self._change_unit_tile(unit_index, "improve", "improve_tile", improvement_name)
 
     @_guard_pending_mutation
     async def remove_feature(self, unit_index: int) -> str:
-        blocked = await self._action_gate(("unit", unit_index))
-        if blocked:
-            return blocked
-        lua = lq.build_remove_feature(unit_index)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._change_unit_tile(unit_index, "remove_feature", "remove_feature")
 
     @_guard_pending_mutation
     async def repair_improvement(self, unit_index: int) -> str:
-        blocked = await self._action_gate(("unit", unit_index))
-        if blocked:
-            return blocked
-        lua = lq.build_repair_improvement(unit_index)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._change_unit_tile(unit_index, "repair", "repair_improvement")
 
     @_guard_pending_mutation
     async def remove_improvement(self, unit_index: int) -> str:
-        blocked = await self._action_gate(("unit", unit_index))
-        if blocked:
-            return blocked
-        lua = lq.build_remove_improvement(unit_index)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._change_unit_tile(unit_index, "remove_improvement", "remove_improvement")
 
     @_guard_pending_mutation
     async def sacrifice_builder_charges(self, unit_id: int) -> str:
@@ -770,12 +815,7 @@ class GameState:
 
     @_guard_pending_mutation
     async def build_route(self, unit_index: int) -> str:
-        blocked = await self._action_gate(("unit", unit_index))
-        if blocked:
-            return blocked
-        lua = lq.build_build_route(unit_index)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._change_unit_tile(unit_index, "build_route", "build_route")
 
     @_guard_pending_mutation
     async def set_city_production(
@@ -1186,9 +1226,28 @@ class GameState:
 
     @_guard_pending_mutation
     async def choose_pantheon(self, belief_type: str) -> str:
-        lua = lq.build_choose_pantheon(belief_type)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        kind, intent = "choose_pantheon", (belief_type,)
+        entity = self.pending_action_entity
+        if entity is not None and self._actions.matches(kind, entity, intent=intent):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            kind, ("player", scope.owner), lq.build_religion_confirmation(token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"belief": belief_type, "witness_token": token}, intent=intent,
+            evidence=_ActionEvidence(
+                tool=kind, entrypoint=kind, accepted=("RELIGION_PLAN_REQUESTED|",), refused="ERR:RELIGION_PLAN_REFUSED|",
+                confirm=lambda rows: lq.parse_religion_confirmation(rows, kind, token),
+                guidance="Repeat the original pantheon choice to confirm only. ",
+            ),
+        )
+        return await self._submit_action(pending, scope, lq.build_pantheon_plan(belief_type, token))
 
     # ------------------------------------------------------------------
     # Religion founding methods (InGame context)
@@ -1203,9 +1262,47 @@ class GameState:
     async def found_religion(
         self, religion_type: str, follower_belief: str, founder_belief: str
     ) -> str:
-        lua = lq.build_found_religion(religion_type, follower_belief, founder_belief)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        kind, intent = "found_religion", (religion_type, follower_belief, founder_belief)
+        entity = self.pending_action_entity
+        if entity is not None and self._actions.matches(kind, entity, intent=intent):
+            pending = self._actions.pending
+            result = await self.confirm_pending_action(wait=False)
+            return await self._continue_religion_plan(pending, result)
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            kind, ("player", scope.owner), lq.build_religion_confirmation(token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"religion": intent, "witness_token": token}, intent=intent,
+            evidence=_ActionEvidence(
+                tool=kind, entrypoint=kind, accepted=("RELIGION_PLAN_REQUESTED|",), refused="ERR:RELIGION_PLAN_REFUSED|",
+                confirm=lambda rows: lq.parse_religion_confirmation(rows, kind, token),
+                guidance="Repeat found_religion with the original religion and both beliefs to confirm or continue only its unstarted stage. ",
+            ),
+        )
+        result = await self._submit_action(pending, scope, lq.build_religion_plan(*intent, token))
+        return await self._continue_religion_plan(pending, result)
+
+    async def _continue_religion_plan(self, pending: _PendingAction, result: str) -> str:
+        # Two ADD_BELIEF stages can follow a confirmed FOUND_RELIGION. Queries
+        # and unrelated mutation gates never call this explicit-owner continuation.
+        for _ in range(2):
+            if self._actions.pending is not pending or pending.details.get("scope_invalid"):
+                return result
+            token = pending.details["witness_token"]
+            if not lq.religion_plan_ready(pending.observed, token):
+                return result
+            try:
+                await self.conn.execute_write(lq.build_religion_continuation(token))
+            except (OSError, TimeoutError, LuaError) as exc:
+                return self._pending_unknown(f"religion continuation acknowledgement unavailable: {exc}")
+            result = await self.confirm_pending_action()
+        return result
 
     # ------------------------------------------------------------------
     # Unit upgrade methods (InGame context)
@@ -1414,15 +1511,36 @@ class GameState:
 
     @_guard_pending_mutation
     async def activate_great_person(self, unit_index: int) -> str:
-        lua = lq.build_activate_great_person(unit_index)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._unit_effect("activate_great_person", unit_index)
+
+    async def _unit_effect(self, kind: str, unit_id: int) -> str:
+        if type(unit_id) is not int or unit_id < 0:
+            return "Error: INVALID_UNIT_ID|Expected the original full unit ID."
+        entity, intent = ("unit", unit_id), ()
+        if self._actions.matches(kind, entity, intent=intent):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            kind, entity, lq.build_unit_effect_query(kind, unit_id, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"witness_token": token}, intent=intent,
+            evidence=_ActionEvidence(
+                tool="unit_action", entrypoint=kind, accepted=("UNIT_EFFECT_REQUESTED|",), refused="ERR:UNIT_EFFECT_REFUSED|",
+                confirm=lambda rows: lq.parse_unit_effect_confirmation(rows, kind, unit_id, token),
+                guidance="Repeat the original unit effect to confirm only; rewards beyond reported evidence remain unmeasured. ",
+            ),
+        )
+        return await self._submit_action(pending, scope, lq.build_unit_effect(kind, unit_id, token))
 
     @_guard_pending_mutation
     async def spread_religion(self, unit_index: int) -> str:
-        lua = lq.build_spread_religion(unit_index)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._unit_effect("spread_religion", unit_index)
 
     # ------------------------------------------------------------------
     # Trader teleport (InGame context)

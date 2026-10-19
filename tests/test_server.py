@@ -496,7 +496,7 @@ class TestCityAction:
             return await server.city_action(ctx, 5, action)
 
         run(go())
-        assert gs.last_args("resolve_city_capture") == (action,)
+        assert gs.last_args("resolve_city_capture") == (5, action)
 
     def test_unknown_action_lists_available(self):
         ctx = make_ctx()
@@ -776,7 +776,7 @@ class TestSpyAction:
         assert gs.last_args("spy_escape") == (2949124, "DISTRICT_HARBOR")
         assert gs.called("spy_mission") == []
 
-    def test_travel_uses_the_unit_index(self):
+    def test_travel_preserves_the_full_unit_id(self):
         ctx = make_ctx()
         gs = app_of(ctx).game
 
@@ -784,7 +784,7 @@ class TestSpyAction:
             return await server.spy_action(ctx, 65536 + 4, "travel", 10, 11)
 
         run(go())
-        assert gs.last_args("spy_travel") == (4, 10, 11)
+        assert gs.last_args("spy_travel") == (65540, 10, 11)
 
     def test_mission_names_are_uppercased(self):
         ctx = make_ctx()
