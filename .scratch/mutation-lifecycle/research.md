@@ -20,7 +20,7 @@
 | 宗教创建 | ReligionScreen 通过已赚取信条数、已装备信条集合和宗教归属决定阶段；三个原生命令分开提交 | 读取精确宗教与两个信条，保留已进入阶段；通知尚未清除不等于创建失败 |
 | 商路 | TradeSupport 与 TradeOverview 的路线数据包含 TraderUnitID 和始末城市 owner／ID | 使用完整路线关联，不能用路线总数或任意同类商人确认 |
 | 占城决定 | 原版 RazeCity 保存选中城市；当前 builder 每次重新取队首 | 保存请求 city_id 与原待决来源，重入不得处理下一城 |
-| 来约响应遗漏 | respond_to_deal 的 outgoing counter 有 DiplomacyProgress；无 outgoing attempt 时仍走直接 SendWorkingDeal fallback | 18 收口须将该 incoming 分支纳入现有外交所有者；不能仅按方法名称认定已有覆盖 |
+| 来约响应遗漏 | respond_to_deal 的 outgoing counter 有 DiplomacyProgress；无 outgoing attempt 时仍走直接 SendWorkingDeal fallback | 16 外交票接入现有所有者，18 复核；不能仅按方法名称认定已有覆盖 |
 
 测试 seam：公开 MCP／GameState，真实所有者与真实生成 Lua；只模拟原生引擎、连接和临时文件。人工并发明确不在范围内。
 
