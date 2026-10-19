@@ -294,7 +294,7 @@ if not inTargets then
     if totalTargets == 0 then
         {_bail("ERR:ALREADY_FIRED|City already attacked this turn")}
     else
-        {_bail_lua('"ERR:NO_LOS|Line of sight to (" .. {target_x} .. "," .. {target_y} .. ") is blocked from (" .. cx .. "," .. cy .. ")"')}
+        {_bail_lua(f'"ERR:NO_LOS|Line of sight to ({target_x},{target_y}) is blocked from (" .. cx .. "," .. cy .. ")"')}
     end
 end
 local canAttack = CityManager.CanStartCommand(pCity, CityCommandTypes.RANGE_ATTACK, true, params, false)
