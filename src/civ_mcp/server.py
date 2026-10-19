@@ -1291,11 +1291,11 @@ async def unit_action(
     For teleport: provide target_x and target_y of destination city. Traders only, must be idle (not on active route).
     For improve: provide improvement name. Builder must be on the tile.
     For repair: repairs a pillaged improvement on the builder's current tile. No improvement name needed.
-    For remove_improvement: demolishes an intact improvement on the builder's current tile (e.g. to replace a farm with a mine). Costs one charge.
+    For remove_improvement: demolishes an improvement on the builder's current tile; confirms the tile result and actual charge change.
     For activate: activates a Great Person on their matching district.
     For sacrifice_charges: Royal Society contribution — submit once with the full native builder ID, then confirm consumed charges and project progress/completion. Builder must be on its own district with an active matching project. Unknown results retain the gate; repeat only confirms.
     For spread_religion: spreads religion at current tile. Missionaries/Apostles only.
-    For build_route: builds road/railroad on current tile. Military Engineers only. No charges used; costs 1 Iron + 1 Coal per railroad tile.
+    For build_route: builds the native eligible road/railroad on the current tile. Confirms the new route and its native charge/resource costs (ordinary roads use a charge; railroads use Iron and Coal).
     For fortify/skip/found_city/automate/heal/alert/sleep/delete: no target needed.
     heal = fortify until healed (auto-wake at full HP).
     alert = sleep but auto-wake when enemy enters sight range.
@@ -1346,15 +1346,15 @@ async def unit_action(
             case "improve":
                 if not improvement:
                     return "Error: improve requires improvement name (e.g. IMPROVEMENT_FARM). To repair a pillaged improvement, use action='repair' instead."
-                return await gs.improve_tile(unit_index, improvement)
+                return await gs.improve_tile(unit_id, improvement)
             case "repair":
-                return await gs.repair_improvement(unit_index)
+                return await gs.repair_improvement(unit_id)
             case "remove_improvement":
-                return await gs.remove_improvement(unit_index)
+                return await gs.remove_improvement(unit_id)
             case "remove_feature":
-                return await gs.remove_feature(unit_index)
+                return await gs.remove_feature(unit_id)
             case "build_route":
-                return await gs.build_route(unit_index)
+                return await gs.build_route(unit_id)
             case "automate":
                 return await gs.automate_explore(unit_id)
             case "heal":
