@@ -227,7 +227,7 @@ local ok,id=pcall(function()
     local first=p:GetUnits():GetFirstReadyUnit()
     assert(unit and first and unit:GetOwner()==r.owner and unit:GetID()==r.unit and unit:GetX()~=-9999
         and first:GetOwner()==r.owner and first:GetID()==r.unit and unit:IsReadyToMove()==true)
-    assert(sameAttemptScope())
+    assert(sameAttemptScope() and not r.uncertain)
     return r.unit
 end)
 -- A proof reply can be lost. Keep witnesses until native invalidation or the
