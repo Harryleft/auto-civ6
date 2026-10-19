@@ -1,0 +1,12 @@
+{
+  "repository": "https://github.com/ayghri/i-have-adhd",
+  "commit": "1ecea1993b7fce257ffbd686c070948b5e07eda6",
+  "source_path": "skills/i-have-adhd",
+  "destination": ".codex/skills/i-have-adhd",
+  "installed_at": "2026-10-19T04:53:25.973646+00:00",
+  "files_sha256": {
+    "SKILL.md": "88955c019bbb1419ff4b49dbb1f80a867467de6233d7865af2e06a7d7b76c7d3",
+    "agents/gemini.toml": "5108a6123beb9df24846e0dd3f902c652d18522dfbc56e5762032ea383041c62",
+    "agents/openai.yaml": "2c51291283dcefdca43ca6b0c08172f225c7c26a9783ec444d6bdfa51ca96f8f"
+  }
+}
