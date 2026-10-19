@@ -22,10 +22,10 @@
 | 14 | [间谍旅行与任务确认](issues/14-spy-assignments.md) | 01 | resolved |
 | 15 | [万神殿与创建宗教的阶段确认](issues/15-religion.md) | 01 | resolved |
 | 16 | [外交关系和宣战清理归属](issues/16-relationships.md) | 01 | ready-for-agent |
-| 17 | [议会打开、投票与提交门禁](issues/17-congress.md) | 01 | ready-for-agent |
+| 17 | [议会打开、投票与提交门禁](issues/17-congress.md) | 01 | resolved |
 | 18 | [全入口收口、回归与双轴审查](issues/18-integrate-verify.md) | 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17 | ready-for-agent |
 
-01–15 已合入；16–17 可在各自领域独立推进。相同模块的工作可由同一实施者顺序领取，代码冲突由 merger 处理，不把资源调度伪装成业务阻塞。18 等全部领域工作完成后收口。
+01–15、17 已合入；16 继续完成外交关系领域。18 等全部领域工作完成后收口。
 
 ## Decisions-so-far
 
@@ -48,3 +48,4 @@
 - 13 已由 `codex/mutation-13` 快进合入（实现 `2349c5e`，闭票 `9ebffde`）；集成后占城决定、地块购买、GameState、未决分派和 server 五个相关测试文件共 515 项通过。详见本票 Answer。
 - 15 已由 `codex/mutation-15` 快进合入（实现 `82d7ee2`，闭票 `a537ba5`）；集成后宗教阶段、单位效果、政策阶段、GameState、未决分派和 server 六个相关测试文件共 617 项通过。详见本票 Answer。
 - 14 已由 `codex/mutation-14` 合入 `010952a`（实现 `98d0885`，闭票 `e67b8c0`）；集成后间谍指派、escape、回合、GameState、未决分派和 server 六个相关测试文件共 552 项通过。详见本票 Answer。
+- 17 已由 `codex/mutation-17` 快进合入（实现 `cc36207`、`bedb8f8`，闭票 `179d60f`）；集成后议会确认、票单、打开、回合、原生推进、GameState、未决分派和 server 八个相关测试文件共 563 项通过。详见本票 Answer。
