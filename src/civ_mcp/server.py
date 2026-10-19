@@ -1368,7 +1368,7 @@ async def unit_action(
             case "trade_route":
                 if target_x is None or target_y is None:
                     return "Error: trade_route requires target_x and target_y of destination city"
-                return await gs.make_trade_route(unit_index, target_x, target_y)
+                return await gs.make_trade_route(unit_id, target_x, target_y)
             case "activate":
                 return await gs.activate_great_person(unit_index)
             case "sacrifice_charges":
@@ -1378,7 +1378,7 @@ async def unit_action(
             case "teleport":
                 if target_x is None or target_y is None:
                     return "Error: teleport requires target_x and target_y of the destination city"
-                return await gs.teleport_to_city(unit_index, target_x, target_y)
+                return await gs.teleport_to_city(unit_id, target_x, target_y)
             case _:
                 return f"Error: Unknown action '{action}'. Valid: move, cancel_move, pillage, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion"
 
