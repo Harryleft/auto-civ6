@@ -46,6 +46,10 @@ def _guard_pending_mutation(method):
     """
     @wraps(method)
     async def guarded(self, *args, **kwargs):
+        if self.congress_pending and method.__name__ not in {'open_world_congress', 'queue_wc_votes'}:
+            blocked = await self.congress_gate()
+            if blocked:
+                return blocked
         pending = self._actions.pending
         if (pending is not None and pending.evidence is not None
                 and pending.evidence.entrypoint != method.__name__):
@@ -81,6 +85,21 @@ class GameState:
         self._diplomacy_cleanup = DiplomacyViewCleanup()
         from civ_mcp.diplomacy import DiplomacyProgress
         self._diplomacy_progress = DiplomacyProgress()
+        from civ_mcp.congress import CongressProgress
+        self._congress_progress = CongressProgress()
+
+    @property
+    def congress_pending(self) -> bool:
+        return self._congress_progress.pending
+
+    async def congress_gate(self, *, allow_registered_turn: bool = False) -> str | None:
+        if not self.congress_pending:
+            return None
+        result = await self._congress_progress.confirm(self.conn)
+        request = self._congress_progress.request
+        if request and not (allow_registered_turn and request.state == 'REGISTERED' and not request.invalidated):
+            return result
+        return None
 
     @property
     def diplomacy_pending(self) -> bool:
@@ -166,6 +185,9 @@ class GameState:
                                            interval=ACTION_CONFIRM_INTERVAL)
 
     async def _action_gate(self, entity: tuple[str, int] | None = None) -> str | None:
+        blocked = await self.congress_gate()
+        if blocked:
+            return blocked
         if self._pending_load or self._pending_save:
             return "ERR:OUTCOME_UNKNOWN|Load or save completion is not confirmed; inspect or recover before gameplay."
         if self._diplomacy_progress.pending:
@@ -210,6 +232,7 @@ class GameState:
                     self._clear_world_caches()
                     self._diplomacy_cleanup.invalidate_scope()
                     self._diplomacy_progress.invalidate_scope()
+                    self._congress_progress.invalidate_scope()
                 self._turn_progress.invalidate_scope(new_id)
                 self._actions.observe_identity(new_id)
                 self._game_identity = new_id
@@ -1696,40 +1719,26 @@ class GameState:
             await self.confirm_pending_action()
             if self._pending_action is not None:
                 return self._pending_unknown("Congress was not opened")
-        try:
-            lines = await self.conn.execute_write(lq.build_open_world_congress())
-        except (OSError, TimeoutError, LuaError) as exc:
-            return (f"ERR:OUTCOME_UNKNOWN|Congress start may have executed: {exc}. "
-                    "Inspect the existing start record and UI; no automatic resend.")
-        result = _action_result(lines)
-        if not any(line.startswith(("OK:WC_VOTING_OPEN|", "OK:WC_VOTING_ALREADY_OPEN|", "ERR:")) for line in lines):
-            return "ERR:OUTCOME_UNKNOWN|Congress start returned no valid status; inspect without resending."
-        return result
+        return await self._congress_progress.submit(
+            self.conn, 'open', allows_world=self._turn_progress.allows_diplomacy_world)
 
     @_guard_pending_mutation
     async def vote_world_congress(
         self, resolution_hash: int, option: int, target_index: int, num_votes: int
     ) -> str:
-        lua = lq.build_congress_vote(resolution_hash, option, target_index, num_votes)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return "ERR:WC_EXPLICIT_PLAN_REQUIRED|Use queue_wc_votes with the complete explicit native-stage plan."
 
     @_guard_pending_mutation
     async def submit_congress(self) -> str:
-        lua = lq.build_congress_submit()
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return "ERR:WC_EXPLICIT_PLAN_REQUIRED|Use queue_wc_votes with the complete explicit native-stage plan."
 
     @_guard_pending_mutation
     async def queue_wc_votes(self, votes: list[dict]) -> str:
         """Submit one explicit native-stage plan, or report its existing record."""
-        lua = lq.build_register_wc_voter(votes=votes)
-        try:
-            lines = await self.conn.execute_write(lua)
-        except (OSError, TimeoutError, LuaError) as exc:
-            return (f"ERR:OUTCOME_UNKNOWN|World Congress request may have executed: {exc}. "
-                    "Use get_world_congress; no automatic vote/submission/continuation replay.")
-        return _action_result(lines)
+        if self._pending_load or self._pending_save:
+            return "ERR:OUTCOME_UNKNOWN|Load/save must be confirmed before Congress voting."
+        return await self._congress_progress.submit(
+            self.conn, 'votes', votes, allows_world=self._turn_progress.allows_diplomacy_world)
 
     # ------------------------------------------------------------------
     # City yield focus (InGame context)
@@ -2148,6 +2157,10 @@ class GameState:
 
     async def end_turn(self) -> str:
         """End the turn with snapshot-diff event detection."""
+        if getattr(self, 'congress_pending', False):
+            blocked = await self.congress_gate(allow_registered_turn=True)
+            if blocked:
+                return blocked
         if self.save_pending:
             return "ERR:OUTCOME_UNKNOWN|Save completion is not confirmed; inspect or recover before advancing."
         progress = getattr(self, "_diplomacy_progress", None)
@@ -2306,7 +2319,7 @@ class GameState:
         if self._pending_load and not recovering:
             return "ERR:OUTCOME_UNKNOWN|An earlier load is unconfirmed; inspect state or use explicit recovery, not another load."
         if not recovering and (
-            self._pending_save or self._pending_end_turn or self.diplomacy_pending
+            self._pending_save or self._pending_end_turn or self.diplomacy_pending or self.congress_pending
             or self.pending_action_entity is not None
         ):
             return "ERR:OUTCOME_UNKNOWN|An action/save/end-turn is pending; confirm it or use explicit restart_and_load before replacing the session."

@@ -21,30 +21,23 @@ class OpenConn:
 
 
 def test_explicit_open_enters_native_voting_without_casting_or_advancing():
-    conn = OpenConn([["OK:WC_VOTING_OPEN|stage:STAGE1|turn:67"]])
+    from test_congress_confirmation import LifecycleCongressConn
+    conn = LifecycleCongressConn()
     result = asyncio.run(GameState(conn).open_world_congress())
     assert result == "WC_VOTING_OPEN|stage:STAGE1|turn:67"
-    assert len(conn.calls) == 1
-    code = conn.calls[0]
-    assert code.index("UIManager:DequeuePopup(intro)") < code.index("LuaEvents.WorldCongressIntro_ShowWorldCongress()")
-    assert "RequestPlayerOperation" not in code
-    assert "RequestAction" not in code
-    assert "SetHide(" not in code
-    assert code.count("LuaEvents.WorldCongressIntro_ShowWorldCongress()") == 1
+    assert conn.opens == ["open"]
+    assert conn.operations == conn.actions == []
 
 
 def test_lost_open_reply_then_repeated_call_only_confirms_visible_voting():
-    conn = OpenConn([ConnectionError("lost"), ["OK:WC_VOTING_ALREADY_OPEN|stage:STAGE1|turn:67"]])
+    from test_congress_confirmation import LifecycleCongressConn
+    conn = LifecycleCongressConn()
     state = GameState(conn)
+    conn.drop = True
     assert "OUTCOME_UNKNOWN" in asyncio.run(state.open_world_congress())
     assert "WC_VOTING_ALREADY_OPEN" in asyncio.run(state.open_world_congress())
-    for code in conn.calls:
-        event = code.index("LuaEvents.WorldCongressIntro_ShowWorldCongress()")
-        assert code.index("if sameOpen then") < event
-        assert code.index('state="REQUESTED"') < event
-        assert code.index("if popup:IsVisible() and not intro:IsVisible() then") < event
-        for field in ("prior.owner == me", "prior.civ == civ", "prior.seed == seed", "prior.turn == turn", "prior.stage == stage"):
-            assert field in code
+    assert conn.opens == ["open"]
+    assert conn.operations == conn.actions == []
 
 
 def test_unknown_or_empty_native_response_does_not_claim_open():
