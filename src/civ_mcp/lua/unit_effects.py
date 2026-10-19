@@ -83,7 +83,9 @@ local ok,r=pcall(function()
    local religion=Players[owner]:GetReligion()
    r.beliefs=count(religion:GetNumBeliefsEarned())
    r.created=religion:GetReligionTypeCreated()
-   assert(type(r.created)=="number" and r.created<0 and religion:HasReligiousFoundingUnit()==true,"FOUNDING_NOT_AVAILABLE")
+   -- The aggregate founding-unit flag can be false for an eligible prophet.
+   -- Exact FOUND_RELIGION eligibility below decides whether to submit.
+   assert(type(r.created)=="number" and r.created<0,"FOUNDING_NOT_AVAILABLE")
    local op=GameInfo.UnitOperations["UNITOPERATION_FOUND_RELIGION"]
    assert(op and type(op.Hash)=="number","OPERATION_UNAVAILABLE")
    r.operation=op.Hash;r.params={{}}
