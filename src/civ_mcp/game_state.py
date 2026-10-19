@@ -10,9 +10,10 @@ import asyncio
 import logging
 import re
 import uuid
+from functools import wraps
 
 from civ_mcp.actions import (
-    ActionLifecycle, _ActionScope, _PendingAction, _action_result, _extract_pre_hp,
+    ActionLifecycle, _ActionScope, _ActionEvidence, _PendingAction, _action_result, _extract_pre_hp,
     _extract_post_hp, _extract_city_defense, _format_attack_followup,
 )
 from civ_mcp import lua as lq
@@ -34,6 +35,25 @@ LOAD_TIMEOUT = 180.0
 ACTION_CONFIRM_TIMEOUT = 5.0
 ACTION_CONFIRM_INTERVAL = 0.15
 VICTORY_REPORT_TIMEOUT = 5.0
+
+
+def _guard_pending_mutation(method):
+    """Keep direct callers behind the same migrated-action gate as MCP.
+
+    The owning entrypoint handles matching before confirmation, so one repeated
+    call cannot confirm the old spend and accidentally submit a second spend.
+    Popup dismissal and explicit recovery remain separate lifecycle operations.
+    """
+    @wraps(method)
+    async def guarded(self, *args, **kwargs):
+        pending = self._actions.pending
+        if (pending is not None and pending.evidence is not None
+                and pending.evidence.entrypoint != method.__name__):
+            blocked = await self._action_gate()
+            if blocked:
+                return blocked
+        return await method(self, *args, **kwargs)
+    return guarded
 
 
 class GameState:
@@ -124,6 +144,15 @@ class GameState:
         pending = self._actions.pending
         return pending.kind if pending else None
 
+    @property
+    def pending_action_blocks_mutations(self) -> bool:
+        return self._actions.blocks_mutations
+
+    @property
+    def pending_action_tool(self) -> str | None:
+        pending = self._actions.pending
+        return pending.evidence.tool if pending is not None and pending.evidence is not None else None
+
     def _pending_unknown(self, reason: str = "confirmation deadline reached") -> str:
         return self._actions.unknown(reason)
 
@@ -149,7 +178,8 @@ class GameState:
             entity = (entity[0], entity[1] % 65536)
         pending = self._pending_action
         if pending is not None and (entity is None or entity == self.pending_action_entity
-                                    or pending.kind in ("pillage", "contribution", "envoy")):
+                                    or self.pending_action_blocks_mutations
+                                    or pending.kind in ("pillage", "contribution")):
             await self.confirm_pending_action()
             if self._pending_action is not None:
                 return self._pending_unknown("dependent action was not submitted")
@@ -247,6 +277,7 @@ class GameState:
             raise LuaError("Current spy escape identity or legal routes are unknown; no route was selected.")
         return lq.parse_spies_response(lines)
 
+    @_guard_pending_mutation
     async def spy_travel(self, unit_index: int, target_x: int, target_y: int) -> str:
         blocked = await self._action_gate(("unit", unit_index))
         if blocked:
@@ -255,6 +286,7 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
+    @_guard_pending_mutation
     async def spy_mission(
         self, unit_index: int, mission_type: str, target_x: int, target_y: int
     ) -> str:
@@ -265,6 +297,7 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
+    @_guard_pending_mutation
     async def spy_escape(self, unit_id: int, district_type: str) -> str:
         if type(unit_id) is not int or unit_id < 0:
             raise ValueError("A full native spy identity is required")
@@ -347,6 +380,7 @@ class GameState:
     # Action methods (run in InGame context for UnitManager access)
     # ------------------------------------------------------------------
 
+    @_guard_pending_mutation
     async def move_unit(self, unit_index: int, target_x: int, target_y: int) -> str:
         details = {"target": (target_x, target_y), "witness_token": uuid.uuid4().hex}
         if self._actions.matches("move", ("unit", unit_index), target=details["target"]):
@@ -390,9 +424,11 @@ class GameState:
                 log.debug("Post-move visibility unavailable", exc_info=True)
         return result
 
+    @_guard_pending_mutation
     async def attack_unit(self, unit_index: int, target_x: int, target_y: int) -> str:
         return await self._attack_and_confirm(("unit", unit_index), target_x, target_y)
 
+    @_guard_pending_mutation
     async def city_attack(self, city_id: int, target_x: int, target_y: int) -> str:
         return await self._attack_and_confirm(("city", city_id), target_x, target_y)
 
@@ -442,11 +478,13 @@ class GameState:
             return result + "\n" + estimate_str
         return result
 
+    @_guard_pending_mutation
     async def resolve_city_capture(self, action: str) -> str:
         lua = lq.build_resolve_city_capture(action)
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
+    @_guard_pending_mutation
     async def found_city(self, unit_index: int) -> str:
         if self._actions.matches("found", ("unit", unit_index)):
             return await self.confirm_pending_action()
@@ -493,12 +531,15 @@ class GameState:
         lines = await self.conn.execute_read(lua)
         return lq.parse_settle_advisor_response(lines)
 
+    @_guard_pending_mutation
     async def fortify_unit(self, unit_index: int) -> str:
         return await self._set_unit_readiness(unit_index, "fortify")
 
+    @_guard_pending_mutation
     async def skip_unit(self, unit_index: int) -> str:
         return await self._set_unit_readiness(unit_index, "skip")
 
+    @_guard_pending_mutation
     async def cancel_unit_move(self, unit_index: int) -> str:
         if self._actions.matches("cancel_move", ("unit", unit_index)):
             return await self.confirm_pending_action()
@@ -516,6 +557,7 @@ class GameState:
         )
         return await self._submit_action(pending, scope, lq.build_cancel_unit_move(unit_index, token))
 
+    @_guard_pending_mutation
     async def pillage_unit(self, unit_id: int) -> str:
         if self._actions.matches("pillage", ("unit", unit_id)):
             return await self.confirm_pending_action()
@@ -565,6 +607,7 @@ class GameState:
         build = lq.build_skip_unit if kind == "skip" else lq.build_fortify_unit
         return await self._submit_action(pending, scope, build(unit_index, token))
 
+    @_guard_pending_mutation
     async def skip_remaining_units(self) -> str:
         blocked = await self._action_gate()
         if blocked:
@@ -593,26 +636,31 @@ class GameState:
                 return "SKIP_BATCH_STOPPED|" + "\n".join(results)
         return f"SKIPPED|{len(candidates)} candidates checked" + ("\n" + "\n".join(results) if results else "")
 
+    @_guard_pending_mutation
     async def automate_explore(self, unit_index: int) -> str:
         lua = lq.build_automate_explore(unit_index)
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
+    @_guard_pending_mutation
     async def heal_unit(self, unit_index: int) -> str:
         lua = lq.build_heal_unit(unit_index)
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
+    @_guard_pending_mutation
     async def alert_unit(self, unit_index: int) -> str:
         lua = lq.build_alert_unit(unit_index)
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
+    @_guard_pending_mutation
     async def sleep_unit(self, unit_index: int) -> str:
         lua = lq.build_sleep_unit(unit_index)
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
+    @_guard_pending_mutation
     async def delete_unit(self, unit_index: int) -> str:
         blocked = await self._action_gate(("unit", unit_index))
         if blocked:
@@ -621,6 +669,7 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
+    @_guard_pending_mutation
     async def improve_tile(self, unit_index: int, improvement_name: str) -> str:
         blocked = await self._action_gate(("unit", unit_index))
         if blocked:
@@ -629,6 +678,7 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
+    @_guard_pending_mutation
     async def remove_feature(self, unit_index: int) -> str:
         blocked = await self._action_gate(("unit", unit_index))
         if blocked:
@@ -637,6 +687,7 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
+    @_guard_pending_mutation
     async def repair_improvement(self, unit_index: int) -> str:
         blocked = await self._action_gate(("unit", unit_index))
         if blocked:
@@ -645,6 +696,7 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
+    @_guard_pending_mutation
     async def remove_improvement(self, unit_index: int) -> str:
         blocked = await self._action_gate(("unit", unit_index))
         if blocked:
@@ -653,6 +705,7 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
+    @_guard_pending_mutation
     async def sacrifice_builder_charges(self, unit_id: int) -> str:
         if type(unit_id) is not int or unit_id < 0:
             raise ValueError("A full native builder identity is required")
@@ -679,6 +732,7 @@ class GameState:
         )
         return await self._submit_action(pending, scope, lq.build_sacrifice_builder_charges(unit_id, fingerprint, token))
 
+    @_guard_pending_mutation
     async def build_route(self, unit_index: int) -> str:
         blocked = await self._action_gate(("unit", unit_index))
         if blocked:
@@ -687,6 +741,7 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
+    @_guard_pending_mutation
     async def set_city_production(
         self,
         city_id: int,
@@ -716,6 +771,7 @@ class GameState:
             city_id, item_type, item_name, target_x, target_y,
         ))
 
+    @_guard_pending_mutation
     async def purchase_item(
         self,
         city_id: int,
@@ -736,6 +792,7 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         return lq.parse_city_production_response(lines)
 
+    @_guard_pending_mutation
     async def set_research(self, tech_name: str) -> str:
         lua = lq.build_set_research(tech_name)
         lines = await self.conn.execute_write(lua)
@@ -762,6 +819,7 @@ class GameState:
                 return _action_result(gc_lines)
         return result
 
+    @_guard_pending_mutation
     async def set_civic(self, civic_name: str) -> str:
         lua = lq.build_set_civic(civic_name)
         lines = await self.conn.execute_write(lua)
@@ -803,6 +861,7 @@ class GameState:
         await self._diplomacy_progress.describe_incoming(self.conn, context)
         return context
 
+    @_guard_pending_mutation
     async def diplomacy_respond(self, other_player_id: int, response: str) -> str:
         sessions = await self.get_diplomacy_sessions()
         if self._diplomacy_progress.response is not None:
@@ -812,6 +871,7 @@ class GameState:
             return "ERR:OUTCOME_UNKNOWN|Current dialogue is not verified; no response submitted."
         return await self._diplomacy_progress.respond(self.conn, candidates[0].session_id, other_player_id, response)
 
+    @_guard_pending_mutation
     async def send_diplomatic_action(self, other_player_id: int, action: str) -> str:
         if action.upper() == "OPEN_BORDERS":
             # Session-based OPEN_BORDERS causes AI turn hang.
@@ -958,6 +1018,7 @@ class GameState:
         await self._diplomacy_progress.describe_incoming(self.conn, context)
         return context
 
+    @_guard_pending_mutation
     async def respond_to_deal(self, other_player_id: int, accept: bool) -> str:
         owned = await self._diplomacy_progress.respond_counter(self, other_player_id, accept)
         if owned is not None:
@@ -966,16 +1027,20 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
+    @_guard_pending_mutation
     async def negotiate_incoming_trade(self, other_player_id: int, expected_fingerprint: str, *, our_gold: int | None = None, their_gold: int | None = None, our_gpt: int | None = None, their_gpt: int | None = None, mode: str = "inspect") -> str:
         edits = {key: value for key, value in {"our_gold": our_gold, "their_gold": their_gold, "our_gpt": our_gpt, "their_gpt": their_gpt}.items() if value is not None}
         return await self._diplomacy_progress.negotiate_incoming(self, other_player_id, expected_fingerprint, edits, mode)
 
+    @_guard_pending_mutation
     async def propose_trade(self, other_player_id: int, offer_items: list[dict], request_items: list[dict]) -> str:
         return await self._diplomacy_progress.run_trade(self, other_player_id, offer_items, request_items, preview=False)
 
+    @_guard_pending_mutation
     async def test_trade(self, other_player_id: int, offer_items: list[dict], request_items: list[dict]) -> str:
         return await self._diplomacy_progress.run_trade(self, other_player_id, offer_items, request_items, preview=True)
 
+    @_guard_pending_mutation
     async def propose_peace(self, other_player_id: int) -> str:
         lua = lq.build_propose_peace(other_player_id)
         lines = await self.conn.execute_write(lua)
@@ -1000,6 +1065,7 @@ class GameState:
             "Query get_diplomacy before another proposal; do not automatically resend."
         )
 
+    @_guard_pending_mutation
     async def form_alliance(self, other_player_id: int, alliance_type: str) -> str:
         requested = alliance_type.upper()
         lua = lq.build_form_alliance(other_player_id, requested)
@@ -1018,6 +1084,7 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         return lq.parse_policies_response(lines)
 
+    @_guard_pending_mutation
     async def set_policies(self, assignments: dict[int, str]) -> str:
         lua = lq.build_set_policies(assignments)
         lines = await self.conn.execute_write(lua)
@@ -1096,16 +1163,19 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         return lq.parse_governors_response(lines)
 
+    @_guard_pending_mutation
     async def appoint_governor(self, governor_type: str) -> str:
         lua = lq.build_appoint_governor(governor_type)
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
+    @_guard_pending_mutation
     async def assign_governor(self, governor_type: str, city_id: int) -> str:
         lua = lq.build_assign_governor(governor_type, city_id)
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
+    @_guard_pending_mutation
     async def promote_governor(self, governor_type: str, promotion_type: str) -> str:
         lua = lq.build_promote_governor(governor_type, promotion_type)
         lines = await self.conn.execute_write(lua)
@@ -1143,6 +1213,7 @@ class GameState:
         lines = await self.conn.execute_read(lua)
         return lq.parse_unit_promotions_response(lines)
 
+    @_guard_pending_mutation
     async def promote_unit(self, unit_id: int, promotion_type: str) -> str:
         unit_index = unit_id % 65536
         blocked = await self._action_gate(("unit", unit_index))
@@ -1226,6 +1297,7 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         return lq.parse_city_states_response(lines)
 
+    @_guard_pending_mutation
     async def send_envoy(self, city_state_player_id: int) -> str:
         if type(city_state_player_id) is not int or not 0 <= city_state_player_id <= 62:
             return "Error: INVALID_CITY_STATE|Expected a city-state player ID from get_city_states."
@@ -1242,7 +1314,12 @@ class GameState:
         pending = _PendingAction(
             "envoy", entity, lq.build_envoy_query(city_state_player_id, token),
             context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"witness_token": token},
+            details={"witness_token": token}, intent=(),
+            evidence=_ActionEvidence(
+                tool="send_envoy", entrypoint="send_envoy", accepted=("ENVOY_REQUESTED|",), refused="ERR:ENVOY_REFUSED|",
+                confirm=lambda rows: lq.parse_envoy_confirmation(rows, token, scope.owner, city_state_player_id),
+                guidance="Repeat send_envoy for the same player ID to confirm only; use get_city_states to inspect. ",
+            ),
         )
         return await self._submit_action(pending, scope, lq.build_send_envoy(city_state_player_id, token))
 
@@ -1255,6 +1332,7 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         return lq.parse_pantheon_status_response(lines)
 
+    @_guard_pending_mutation
     async def choose_pantheon(self, belief_type: str) -> str:
         lua = lq.build_choose_pantheon(belief_type)
         lines = await self.conn.execute_write(lua)
@@ -1269,6 +1347,7 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         return lq.parse_religion_beliefs_response(lines)
 
+    @_guard_pending_mutation
     async def found_religion(
         self, religion_type: str, follower_belief: str, founder_belief: str
     ) -> str:
@@ -1286,6 +1365,7 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
+    @_guard_pending_mutation
     async def upgrade_unit(self, unit_id: int) -> str:
         unit_index = unit_id % 65536
         blocked = await self._action_gate(("unit", unit_index))
@@ -1304,6 +1384,7 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         return lq.parse_dedications_response(lines)
 
+    @_guard_pending_mutation
     async def choose_dedication(self, dedication_index: int) -> str:
         lua = lq.build_choose_dedication(dedication_index)
         lines = await self.conn.execute_write(lua)
@@ -1343,15 +1424,37 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         return lq.parse_purchasable_tiles_response(lines)
 
+    @_guard_pending_mutation
     async def purchase_tile(self, city_id: int, x: int, y: int) -> str:
-        lua = lq.build_purchase_tile(city_id, x, y)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        if any(type(value) is not int or value < 0 for value in (city_id, x, y)):
+            return "Error: INVALID_TILE_PURCHASE|Expected a full city ID and nonnegative integer coordinates."
+        entity, intent = ("city", city_id), (x, y)
+        if self._actions.matches("purchase_tile", entity, intent=intent):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            "purchase_tile", entity, lq.build_tile_purchase_query(city_id, x, y, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"target": (x, y), "witness_token": token}, intent=intent,
+            evidence=_ActionEvidence(
+                tool="purchase_tile", entrypoint="purchase_tile", accepted=("TILE_PURCHASE_REQUESTED|",), refused="ERR:TILE_PURCHASE_REFUSED|",
+                confirm=lambda rows: lq.parse_tile_purchase_confirmation(rows, token, city_id, x, y),
+                guidance="Repeat purchase_tile with the original city and coordinates to confirm only. ",
+            ),
+        )
+        return await self._submit_action(pending, scope, lq.build_purchase_tile(city_id, x, y, token))
 
     # ------------------------------------------------------------------
     # Government change (InGame context)
     # ------------------------------------------------------------------
 
+    @_guard_pending_mutation
     async def change_government(self, government_type: str) -> str:
         lua = lq.build_change_government(government_type)
         lines = await self.conn.execute_write(lua)
@@ -1371,11 +1474,13 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         return lq.parse_gp_advisor_response(lines)
 
+    @_guard_pending_mutation
     async def recruit_great_person(self, individual_id: int) -> str:
         lua = lq.build_recruit_great_person(individual_id)
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
+    @_guard_pending_mutation
     async def patronize_great_person(
         self, individual_id: int, yield_type: str = "YIELD_GOLD"
     ) -> str:
@@ -1387,6 +1492,7 @@ class GameState:
         lines = await self.conn.execute_write(lq.build_religion_status_query())
         return lq.parse_religion_status_response(lines)
 
+    @_guard_pending_mutation
     async def reject_great_person(self, individual_id: int) -> str:
         lua = lq.build_reject_great_person(individual_id)
         lines = await self.conn.execute_write(lua)
@@ -1410,6 +1516,7 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         return lq.parse_trade_destinations_response(lines)
 
+    @_guard_pending_mutation
     async def make_trade_route(
         self, unit_index: int, target_x: int, target_y: int
     ) -> str:
@@ -1421,11 +1528,13 @@ class GameState:
     # Great Person activation (InGame context)
     # ------------------------------------------------------------------
 
+    @_guard_pending_mutation
     async def activate_great_person(self, unit_index: int) -> str:
         lua = lq.build_activate_great_person(unit_index)
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
+    @_guard_pending_mutation
     async def spread_religion(self, unit_index: int) -> str:
         lua = lq.build_spread_religion(unit_index)
         lines = await self.conn.execute_write(lua)
@@ -1435,6 +1544,7 @@ class GameState:
     # Trader teleport (InGame context)
     # ------------------------------------------------------------------
 
+    @_guard_pending_mutation
     async def teleport_to_city(
         self, unit_index: int, target_x: int, target_y: int
     ) -> str:
@@ -1453,6 +1563,7 @@ class GameState:
             raise LuaError("World Congress status is unknown")
         return lq.parse_world_congress_response(lines)
 
+    @_guard_pending_mutation
     async def open_world_congress(self) -> str:
         """Explicitly enter a verified nonempty voting UI, never cast votes."""
         if self._pending_load or self._pending_save:
@@ -1471,6 +1582,7 @@ class GameState:
             return "ERR:OUTCOME_UNKNOWN|Congress start returned no valid status; inspect without resending."
         return result
 
+    @_guard_pending_mutation
     async def vote_world_congress(
         self, resolution_hash: int, option: int, target_index: int, num_votes: int
     ) -> str:
@@ -1478,11 +1590,13 @@ class GameState:
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
+    @_guard_pending_mutation
     async def submit_congress(self) -> str:
         lua = lq.build_congress_submit()
         lines = await self.conn.execute_write(lua)
         return _action_result(lines)
 
+    @_guard_pending_mutation
     async def queue_wc_votes(self, votes: list[dict]) -> str:
         """Submit one explicit native-stage plan, or report its existing record."""
         lua = lq.build_register_wc_voter(votes=votes)
@@ -1497,6 +1611,7 @@ class GameState:
     # City yield focus (InGame context)
     # ------------------------------------------------------------------
 
+    @_guard_pending_mutation
     async def set_city_focus(self, city_id: int, focus: str) -> str:
         if type(city_id) is not int or city_id < 0 or not isinstance(focus, str):
             return "Error: FOCUS_INVALID|A native city ID and yield name are required."
@@ -1985,6 +2100,7 @@ class GameState:
         """A replacement is unconfirmed; save uncertainty is tracked separately."""
         return self._pending_load
 
+    @_guard_pending_mutation
     async def load_save(self, save_index: int) -> str:
         """Resolve only a displayed index, then use the single verified loader."""
         from civ_mcp.game_lifecycle import listed_save_name
@@ -1994,14 +2110,17 @@ class GameState:
             return "Error: No matching cached save index; call list_saves or use load_game_save with an explicit confirmed name."
         return await self.load_game_save(name)
 
+    @_guard_pending_mutation
     async def load_game_save(self, save_name: str) -> str:
         """Load once from MainMenu and confirm identity, readiness and snapshot."""
         return await self._replace_save(save_name)
 
+    @_guard_pending_mutation
     async def reload_game_save(self, save_name: str) -> str:
         """Replace through the native menu while preserving the process."""
         return await self._replace_save(save_name, return_to_menu=True)
 
+    @_guard_pending_mutation
     async def kill_game(self) -> str:
         """Explicit process stop; clear state only when shutdown is confirmed."""
         from civ_mcp import game_launcher, game_lifecycle
@@ -2015,6 +2134,7 @@ class GameState:
             self._pending_load = False
         return result.message
 
+    @_guard_pending_mutation
     async def launch_game(self) -> str:
         from civ_mcp import game_launcher
 
@@ -2151,6 +2271,7 @@ class GameState:
                 return "Error: MainMenu was not ready within 180 seconds; no load command was sent."
             return "ERR:OUTCOME_UNKNOWN|Session replacement was not confirmed within 180 seconds. Use explicit restart_and_load for fault recovery."
 
+    @_guard_pending_mutation
     async def execute_lua(self, code: str, context: str = "gamecore") -> str:
         """Escape hatch: run arbitrary Lua code."""
         from civ_mcp.game_lifecycle import execute_lua

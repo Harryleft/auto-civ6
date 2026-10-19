@@ -124,7 +124,6 @@ from civ_mcp.lua.map import (  # noqa: F401
     build_map_area_query,
     build_ownership_delta,
     build_purchasable_tiles_query,
-    build_purchase_tile,
     build_revealed_tiles_seed_query,
     build_settle_advisor_query,
     build_static_map_dump,
@@ -314,7 +313,8 @@ from civ_mcp.lua.victory import (  # noqa: F401
     parse_victory_progress_response,
 )
 
-from civ_mcp.lua.envoys import build_send_envoy, build_envoy_query  # noqa: F401
+from civ_mcp.lua.envoys import build_send_envoy, build_envoy_query, parse_envoy_confirmation  # noqa: F401
+from civ_mcp.lua.tile_purchase import build_purchase_tile, build_tile_purchase_query, parse_tile_purchase_confirmation  # noqa: F401
 from civ_mcp.lua.contribution import (  # noqa: F401
     build_contribution_preflight, build_sacrifice_builder_charges, build_contribution_query,
 )
