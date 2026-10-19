@@ -16,4 +16,4 @@ Spec: ../spec.md
 
 ## Answer
 
-实施 f3f919a，合入 ffd3f06。425 项相关离线通过；独立 Standards / Spec 无实质发现。T1→T2、独立保存和原生菜单恢复核对通过，见 ../../../../reports/progress.md 及本轮 evidence/tool-calls.jsonl。
+实施 f3f919a，合入 ffd3f06。425 项相关离线通过；独立 Standards / Spec 无实质发现。T1→T2、独立保存和原生菜单恢复核对通过，见 ../../../reports/progress.md 及本轮 evidence/tool-calls.jsonl。
