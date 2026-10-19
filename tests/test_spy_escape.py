@@ -25,7 +25,8 @@ EndTurnBlockingTypes={ENDTURN_BLOCKING_SPY_CHOOSE_ESCAPE_ROUTE=7}
 NotificationManager={GetList=function() return blocked and {91} or {} end,
  Find=function() return {IsDismissed=function() return dismissed end,GetEndTurnBlocking=function() return 7 end} end}
 Players[0].GetDiplomacy=function() return {GetNextEscapingSpyID=function()
- dangerous_reads=dangerous_reads+1;if not blocked or dismissed then error("dangerous lookup without gate") end;return pending_spy end} end
+ dangerous_reads=dangerous_reads+1;if not blocked or dismissed then error("dangerous lookup without gate") end;return pending_spy end,
+ GetNumSpiesOffMap=function() return 0 end,GetNthOffMapSpy=function() return nil end} end
 city={GetID=function() return 65537 end,GetOwner=function() return 1 end,GetName=function() return "Orebo" end,
  GetDistricts=function() return {HasDistrict=function(_,i) return i==0 or (i==2 and has_harbor) end} end}
 Cities={GetPlotPurchaseCity=function() if not city_missing then return city end end}

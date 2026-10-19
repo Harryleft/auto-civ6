@@ -263,6 +263,8 @@ async def get_spies(ctx: Context) -> str:
     Shows each spy's composite id (needed for spy_action), current location,
     rank (Recruit/Agent/Special Agent/Senior Agent), XP, and which operations
     are available at their current position.
+    Native off-map travellers show destination and return turn, with no
+    actionable unit ID until the engine creates their on-map unit again.
 
     Note: offensive missions only become available once the spy has physically
     arrived in the target city. Use spy_action with action='travel' first.

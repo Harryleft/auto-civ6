@@ -2,11 +2,12 @@
 import json
 from civ_mcp.lua._helpers import SENTINEL, _LUA_ACTION_SCOPE
 from civ_mcp.lua.espionage import _SPY_OP_HASHES
+from civ_mcp.lua.spy_roster import SPY_ROSTER
 
 
 OPERATIONS = {name: 'UNITOPERATION_SPY_' + ('TRAVEL_NEW_CITY' if name == 'TRAVEL' else name)
               for name in _SPY_OP_HASHES}
-_CONTEXT = _LUA_ACTION_SCOPE + '''
+_CONTEXT = _LUA_ACTION_SCOPE + SPY_ROSTER + '''
 local function integer(v)
  assert(type(v)=="number" and v>=0 and v<math.huge and v==math.floor(v),"NUMBER_UNAVAILABLE")
  return v
@@ -22,6 +23,13 @@ local function spyFor(owner,id)
 end
 local function retireAssignment(r)
  if r and r.handler then pcall(function() Events.UnitOperationStarted.Remove(r.handler) end) end
+ if r and r.removalHandler then pcall(function() Events.UnitRemovedFromMap.Remove(r.removalHandler) end) end
+end
+local function assignmentValue(r,read,valid,expected)
+ local ok,value=pcall(read)
+ if not ok or not valid(value) then return false end
+ if value~=expected then r.invalid=true end
+ return true
 end
 '''
 
@@ -31,6 +39,8 @@ def build_spy_assignment(unit_id: int, mission: str, x: int, y: int, token: str)
 local ok,r,selected=pcall(function()
  assert(UI.IsGameCoreBusy()==false,"CORE_BUSY_OR_UNKNOWN")
  local owner=Game.GetLocalPlayer()
+ local civ=PlayerConfigurations[owner]:GetCivilizationTypeName()
+ local seed,turn=GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED"),Game.GetCurrentGameTurn()
  local spy=spyFor(owner,{unit_id})
  -- GetSpyOperation is an index; direct GameInfo indexing works even when its iterator is empty.
  local op=GameInfo.UnitOperations[{json.dumps(OPERATIONS[mission])}]
@@ -75,11 +85,26 @@ local ok,r,selected=pcall(function()
  assert(type(UnitManager.RequestOperation)=="function","OPERATION_UNAVAILABLE")
  assert(Events.UnitOperationStarted and type(Events.UnitOperationStarted.Add)=="function"
   and type(Events.UnitOperationStarted.Remove)=="function","OPERATION_OBSERVER_UNAVAILABLE")
+ local identity,mapRoster,offRoster,offCount
+ if "{mission}"=="TRAVEL" and not noop then
+  assert(Events.UnitRemovedFromMap and type(Events.UnitRemovedFromMap.Add)=="function"
+   and type(Events.UnitRemovedFromMap.Remove)=="function","REMOVAL_OBSERVER_UNAVAILABLE")
+  identity=spyIdentity(spy)
+  local found=Players[owner]:GetUnits():FindID(spy:GetID())
+  assert(found and found:GetID()==spy:GetID() and found:GetOwner()==owner,"SPY_LOOKUP_UNAVAILABLE")
+  mapRoster=mapSpyRoster(owner)
+  assert(sameSpyIdentity(mapRoster[spy:GetID()],identity),"SPY_ROSTER_ID_UNAVAILABLE")
+  for id,other in pairs(mapRoster) do
+   assert(id==spy:GetID() or not sameSpyIdentity(other,identity),"SPY_IDENTITY_AMBIGUOUS")
+  end
+  offRoster,offCount=offMapSpyRoster(owner)
+  for _,other in pairs(offRoster) do assert(not sameSpyIdentity(other,identity),"SPY_IDENTITY_ALREADY_OFFMAP") end
+ end
  return {{token={json.dumps(token)},requested={unit_id},id=spy:GetID(),owner=owner,mission={json.dumps(mission)},
   x={x},y={y},plot=integer(plot:GetIndex()),city=cityId,cityOwner=cityOwner,cityX=cityX,cityY=cityY,
-  operation=op.Hash,index=op.Index,params=params,noop=noop,
-  civ=PlayerConfigurations[owner]:GetCivilizationTypeName(),
-  seed=GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED"),turn=Game.GetCurrentGameTurn()}},spy
+  operation=op.Hash,index=op.Index,params=params,noop=noop,unitType=spy:GetType(),
+  spyIdentity=identity,mapRoster=mapRoster,offRoster=offRoster,offCount=offCount,
+  civ=civ,seed=seed,turn=turn}},spy
 end)
 if not ok then print("ERR:SPY_ASSIGNMENT_REFUSED|"..tostring(r));print("{SENTINEL}");return end
 retireAssignment(__civmcpSpyAssignment)
@@ -89,8 +114,26 @@ r.handler=function(owner,id,operation)
  if __civmcpSpyAssignment==r and r.entered==true and owner==r.owner and id==r.id
   and operation==r.operation and sameScope(r) then r.started=true end
 end
-local armed=pcall(function() Events.UnitOperationStarted.Add(r.handler) end)
+r.removalHandler=function(owner,id)
+ if __civmcpSpyAssignment==r and r.entered==true and r.started==true and owner==r.owner and id==r.id
+  and sameScope(r) then r.removed=true end
+end
+local armed=pcall(function()
+ Events.UnitOperationStarted.Add(r.handler)
+ if r.mission=="TRAVEL" then Events.UnitRemovedFromMap.Add(r.removalHandler) end
+end)
 if not armed then retireAssignment(r);print("ERR:SPY_ASSIGNMENT_REFUSED|OPERATION_OBSERVER_UNAVAILABLE");print("{SENTINEL}");return end
+local ready=pcall(function()
+ assert(sameScope(r),"SCOPE_CHANGED_BEFORE_ENTRY")
+ local current=spyFor(r.owner,r.id)
+ assert(current:GetType()==r.unitType,"SPY_ID_CHANGED")
+ if r.spyIdentity then assert(sameSpyIdentity(spyIdentity(current),r.spyIdentity),"SPY_ID_CHANGED") end
+ local plot=Map.GetPlot(r.x,r.y)
+ local target=plot and Cities.GetPlotPurchaseCity(plot)
+ assert(plot and plot:GetIndex()==r.plot and target and target:GetID()==r.city
+  and target:GetOwner()==r.cityOwner and target:GetX()==r.cityX and target:GetY()==r.cityY,"TARGET_CITY_CHANGED")
+end)
+if not ready then retireAssignment(r);print("ERR:SPY_ASSIGNMENT_REFUSED|IDENTITY_CHANGED_BEFORE_ENTRY");print("{SENTINEL}");return end
 r.entered=true
 UnitManager.RequestOperation(selected,r.operation,r.params)
 r.returned=true
@@ -106,16 +149,58 @@ local ok,finish=pcall(function()
  assert(type(r)=="table" and r.token=={json.dumps(token)} and r.requested=={unit_id}
   and r.mission=={json.dumps(mission)} and r.x=={x} and r.y=={y})
  assert(sameScope(r))
- if not r.noop then assert(r.entered==true and r.returned==true and r.started==true) end
  assert(UI.IsGameCoreBusy()==false)
- local spy=spyFor(r.owner,r.id)
  local plot=Map.GetPlot(r.x,r.y)
- assert(plot and plot:GetIndex()==r.plot)
+ assert(plot)
+ local known=assignmentValue(r,function() return plot:GetIndex() end,scopeIndex,r.plot)
  local city=Cities.GetPlotPurchaseCity(plot)
- assert(city and city:GetID()==r.city and city:GetOwner()==r.cityOwner and city:GetX()==r.cityX and city:GetY()==r.cityY)
+ assert(city)
+ local function check(read,valid,expected)
+  if not assignmentValue(r,read,valid,expected) then known=false end
+ end
+ check(function() return city:GetID() end,scopeIndex,r.city)
+ check(function() return city:GetOwner() end,scopePlayer,r.cityOwner)
+ check(function() return city:GetX() end,scopeIndex,r.cityX)
+ check(function() return city:GetY() end,scopeIndex,r.cityY)
+ local unit=UnitManager.GetUnit(r.owner,r.id%65536)
+ if unit then
+  check(function() return unit:GetID() end,scopeIndex,r.id)
+  check(function() return unit:GetOwner() end,scopePlayer,r.owner)
+  check(function() return unit:GetType() end,scopeIndex,r.unitType)
+  if r.spyIdentity then
+   check(function() return unit:GetName() end,function(v) return type(v)=="string" and #v>0 end,r.spyIdentity.name)
+   check(function() return unit:GetExperience():GetLevel() end,function(v) return scopeIndex(v) and v>=1 end,r.spyIdentity.level)
+  end
+ end
+ assert(known and not r.invalid)
+ if not r.noop then assert(r.entered==true and r.returned==true and r.started==true) end
+ if r.mission=="TRAVEL" and not r.noop and unit==nil then
+  assert(Players[r.owner]:GetUnits():FindID(r.id)==nil and r.removed==true)
+  local remaining=mapSpyRoster(r.owner)
+  for id,identity in pairs(remaining) do
+   if id==r.id or not sameSpyIdentity(identity,r.mapRoster[id])
+    or identity.unitType~=r.mapRoster[id].unitType then r.invalid=true end
+  end
+  for id,_ in pairs(r.mapRoster) do assert(id==r.id or remaining[id]~=nil) end
+  assert(not r.invalid)
+  local roster,count=offMapSpyRoster(r.owner)
+  assert(count==r.offCount+1)
+  for key,old in pairs(r.offRoster) do assert(sameOffMapSpy(roster[key],old)) end
+  local found=nil
+  for key,row in pairs(roster) do
+   if r.offRoster[key]==nil then
+    assert(found==nil and sameSpyIdentity(row,r.spyIdentity)
+     and row.x==r.x and row.y==r.y and row.finish>r.turn)
+    found=row
+   end
+  end
+  assert(found and sameScope(r))
+  return found.finish
+ end
+ local spy=spyFor(r.owner,r.id)
  if r.noop then
   assert(spy:GetSpyOperation()==-1 and spy:GetX()==r.x and spy:GetY()==r.y)
-  return 0
+  assert(sameScope(r));return 0
  end
  local index=spy:GetSpyOperation()
  local operation=GameInfo.UnitOperations[index]
@@ -125,10 +210,11 @@ local ok,finish=pcall(function()
  -- Travel can stay at its origin or use the native in-transit coordinates.
  -- The exact request, started event and current operation prove assignment, not arrival.
  if r.mission~="TRAVEL" then assert(spy:GetX()==r.x and spy:GetY()==r.y) end
- return ends
+ assert(sameScope(r));return ends
 end)
 if ok then
- retireAssignment(r)
+ -- Confirmation is read-only. A lost reply must leave all original observers
+ -- and scope invalidation available for a later confirmation-only call.
  print("SPY_ASSIGNMENT_CONFIRMED|{token}|{unit_id}|{mission}|"..r.id.."|"..r.cityOwner..","..r.city.."|{x},{y}|"..finish.."|"..(r.noop and "SPY_ALREADY_AT_DESTINATION" or "SPY_ASSIGNMENT_STARTED"))
 else print("SPY_ASSIGNMENT_OBSERVED|{token}|UNKNOWN") end
 print("{SENTINEL}")

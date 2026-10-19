@@ -17,8 +17,11 @@ function event()
  return {Add=function(f) listeners[f]=true end,Remove=function(f) listeners[f]=nil end,
  Fire=function(...) for f in pairs(listeners) do f(...) end end}
 end
-Events={UnitOperationStarted=event()}
+Events={UnitOperationStarted=event(),UnitRemovedFromMap=event()}
 u=units[196608];u.x=19;u.y=17;u.op=-1;u.finish=-1
+u.name='LOC_CITIZEN_SUMERIA_MODERN_FEMALE_8';u.level=1
+u.GetName=function(self) return self.name end
+u.GetExperience=function(self) return {GetLevel=function() return self.level end} end
 u.GetX=function(self) return self.x end;u.GetY=function(self) return self.y end
 u.GetType=function() return 1 end
 u.GetSpyOperation=function(self) return self.op end
@@ -68,7 +71,13 @@ UnitManager.RequestOperation=function(unit,op,params)
  if fail_request then error('native threw after assignment') end
 end
 unsafeReads=0
-Players[0].GetDiplomacy=function() return {GetNextEscapingSpyID=function() unsafeReads=unsafeReads+1;error('unsafe getter') end} end
+offmap={}
+Players[0].GetUnits=function() return {Members=function() return pairs(units) end,
+ FindID=function(_,id) return units[id] end} end
+Players[0].GetDiplomacy=function() return {
+ GetNumSpiesOffMap=function() return #offmap end,
+ GetNthOffMapSpy=function(_,owner,index) assert(owner==0);return offmap[index+1] end,
+ GetNextEscapingSpyID=function() unsafeReads=unsafeReads+1;error('unsafe getter') end} end
 ''')
 
     async def execute_write(self,code):
@@ -82,6 +91,230 @@ Players[0].GetDiplomacy=function() return {GetNextEscapingSpyID=function() unsaf
 def quick_confirmation(monkeypatch):
     monkeypatch.setattr('civ_mcp.game_state.ACTION_CONFIRM_TIMEOUT',.01)
     monkeypatch.setattr('civ_mcp.game_state.ACTION_CONFIRM_INTERVAL',.001)
+
+
+class OffMapAssignmentConn(AssignmentConn):
+    def __init__(self):
+        super().__init__()
+        self.lua.execute('''
+travelFinish=49
+function applyAssignment(op,params)
+ if emitStarted~=false then Events.UnitOperationStarted.Fire(startOwner or 0,startId or u.id,startOperation or op) end
+ units[u.id]=nil
+ if emitRemoved~=false then Events.UnitRemovedFromMap.Fire(removeOwner or 0,removeId or u.id) end
+ offmap={{NameIndex=37,Name=u.name,Level=u.level,XLocation=params.x,YLocation=params.y,ReturnTurn=travelFinish}}
+end
+''')
+
+
+def test_native_offmap_travel_confirms_original_removed_spy_and_future_return_turn():
+    conn=OffMapAssignmentConn();state=GameState(conn);ctx=make_ctx();app_of(ctx).game=state
+    conn.lua.execute('''
+turn=128;travelFinish=132
+units[196608]=nil;u.id=2752514;units[u.id]=u;u.x=40;u.y=25
+city.id=65536;city.owner=3;city.x=18;city.y=13;plot.x=18;plot.y=13
+Map.GetPlot=function(x,y) if x==18 and y==13 then return plot end end
+UnitManager.CanStartOperation=function(unit,op,target,params)
+ assert(unit==u and op==-1295211657 and target==plot and params.x==18 and params.y==13);return true
+end
+''')
+    result=asyncio.run(server.spy_action(ctx,2752514,'travel',18,13))
+    assert result.startswith('SPY_ASSIGNMENT_STARTED|spy:2752514|TRAVEL|target:18,13|city:3,65536')
+    assert 'end_turn:132' in result
+    assert conn.lua.eval('#submissions')==1
+    assert conn.lua.eval('UnitManager.GetUnit(0,2752514%65536)==nil and Players[0]:GetUnits():FindID(2752514)==nil')
+    assert state.pending_action_summary is None
+
+
+def test_public_query_includes_own_offmap_travel_without_fabricating_actionable_unit_id():
+    from civ_mcp.narrate import narrate_spies
+    conn=OffMapAssignmentConn();state=GameState(conn);ctx=make_ctx();app_of(ctx).game=state
+    conn.lua.execute('''
+units={}
+offmap={{NameIndex=37,Name=u.name,Level=1,XLocation=10,YLocation=10,ReturnTurn=49}}
+Locale={Lookup=function(value) return value end}
+city.GetName=function() return 'Target City' end
+EndTurnBlockingTypes={ENDTURN_BLOCKING_SPY_CHOOSE_ESCAPE_ROUTE=7}
+NotificationManager={GetList=function() return {} end}
+''')
+    spies=asyncio.run(state.get_spies())
+    assert len(spies)==1
+    spy=spies[0]
+    assert spy.unit_id is None and spy.unit_index is None
+    assert spy.status=='in_transit' and spy.return_turn==49
+    assert (spy.x,spy.y)==(10,10) and spy.available_ops==[]
+    text=narrate_spies(spies)
+    assert 'in transit' in text and 'return_turn:49' in text
+    assert 'id:0' not in text and 'spy_action' not in text
+    assert conn.lua.eval('#submissions')==0 and conn.lua.eval('unsafeReads')==0
+
+
+def test_observed_spy_generation_change_stays_invalid_after_original_id_returns():
+    conn=OffMapAssignmentConn();state=GameState(conn);conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_travel(196608,10,10))
+    conn.lua.execute('u.id=262144')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_travel(196608,10,10))
+    conn.lua.execute('u.id=196608;applyAssignment(-1295211657,{x=10,y=10})')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_travel(196608,10,10))
+    assert conn.lua.eval('#submissions')==1
+
+
+@pytest.mark.parametrize('setup', [
+    'u.name=nil', 'u.name=""', 'u.level=nil', 'u.level=0',
+    'Events.UnitRemovedFromMap=nil',
+    'Players[0].GetUnits=function() return {Members=function() return pairs(units) end} end',
+    'Players[0].GetDiplomacy=function() return {} end',
+    'Players[0].GetDiplomacy=function() return {GetNumSpiesOffMap=function() return nil end,GetNthOffMapSpy=function() end} end',
+    'offmap={{NameIndex=37,Name=u.name,Level=u.level,XLocation=10,YLocation=10,ReturnTurn=49}}',
+    'offmap={{Name="Other",Level=1,XLocation=10,YLocation=10,ReturnTurn=49}}',
+    'offmap={{NameIndex=10,Name="Other",Level=1,XLocation=10,YLocation=10,ReturnTurn=49}};offmap[2]=offmap[1]',
+    'other=addUnit(196609,true,0,0);other.GetType=u.GetType;other.GetName=u.GetName;other.GetExperience=u.GetExperience;other.name=u.name;other.level=u.level',
+    'local add=Events.UnitOperationStarted.Add;Events.UnitOperationStarted.Add=function(handler) add(handler);u.name="Different" end',
+])
+def test_unbindable_native_travel_identity_or_roster_refuses_before_mutation(setup):
+    conn=OffMapAssignmentConn();state=GameState(conn);conn.lua.execute(setup)
+    assert 'SPY_ASSIGNMENT_REFUSED' in asyncio.run(state.spy_travel(196608,10,10))
+    assert conn.lua.eval('#submissions')==0
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('setup', [
+    'emitStarted=false', 'startOwner=1', 'startId=262144', 'startOperation=-311249027',
+    'emitRemoved=false', 'removeOwner=1', 'removeId=262144',
+    'travelFinish=41', 'travelFinish=-1',
+    'local apply=applyAssignment;applyAssignment=function(op,p) apply(op,p);offmap[1].Name="Other" end',
+    'local apply=applyAssignment;applyAssignment=function(op,p) apply(op,p);offmap[1].Level=2 end',
+    'local apply=applyAssignment;applyAssignment=function(op,p) apply(op,p);offmap[1].XLocation=11 end',
+    'local apply=applyAssignment;applyAssignment=function(op,p) apply(op,p);offmap[1].YLocation=11 end',
+    'local apply=applyAssignment;applyAssignment=function(op,p) apply(op,p);offmap[1].ReturnTurn=nil end',
+    'local apply=applyAssignment;applyAssignment=function(op,p) apply(op,p);offmap[1].NameIndex=nil end',
+    'local apply=applyAssignment;applyAssignment=function(op,p) apply(op,p);offmap[2]=offmap[1] end',
+    'local apply=applyAssignment;applyAssignment=function(op,p) apply(op,p);offmap={} end',
+    'local apply=applyAssignment;applyAssignment=function(op,p) apply(op,p);units[u.id]=u end',
+    'local apply=applyAssignment;applyAssignment=function(op,p) apply(op,p);Players[0].GetUnits=function() return {Members=function() return pairs(units) end,FindID=function() return u end} end end',
+])
+def test_absence_target_or_partial_offmap_facts_cannot_confirm_original_spy(setup):
+    conn=OffMapAssignmentConn();state=GameState(conn);conn.lua.execute(setup)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_travel(196608,10,10))
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_travel(196608,10,10))
+    assert conn.lua.eval('#submissions')==1
+    assert state.pending_action_summary is not None
+
+
+def test_existing_unrelated_offmap_roster_must_be_preserved_and_new_identity_unique():
+    conn=OffMapAssignmentConn();state=GameState(conn)
+    conn.lua.execute('''
+offmap={{NameIndex=12,Name="Other",Level=2,XLocation=11,YLocation=10,ReturnTurn=50}}
+local apply=applyAssignment
+applyAssignment=function(op,p)
+ local old=offmap[1];apply(op,p);offmap[2]=offmap[1];offmap[1]=old
+end
+''')
+    assert asyncio.run(state.spy_travel(196608,10,10)).startswith('SPY_ASSIGNMENT_STARTED|')
+    assert conn.lua.eval('#submissions')==1
+
+
+@pytest.mark.parametrize('change,restore', [
+    ('city.id=131073', 'city.id=65537'), ('city.owner=2', 'city.owner=1'),
+    ('u.name="Other"', 'u.name="LOC_CITIZEN_SUMERIA_MODERN_FEMALE_8"'),
+    ('u.level=2', 'u.level=1'),
+    ('GameInfo.Units[2]={UnitType="UNIT_WARRIOR"};u.GetType=function() return 2 end', 'u.GetType=function() return 1 end'),
+])
+def test_observed_spy_or_city_identity_change_is_sticky(change, restore):
+    conn=OffMapAssignmentConn();state=GameState(conn);conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_travel(196608,10,10))
+    conn.lua.execute(change)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_travel(196608,10,10))
+    conn.lua.execute(restore+';applyAssignment(-1295211657,{x=10,y=10})')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_travel(196608,10,10))
+    assert conn.lua.eval('#submissions')==1
+
+
+def test_unknown_city_field_does_not_poison_later_complete_offmap_confirmation():
+    conn=OffMapAssignmentConn();state=GameState(conn);conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_travel(196608,10,10))
+    conn.lua.execute('city.id=nil')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_travel(196608,10,10))
+    conn.lua.execute('city.id=65537;applyAssignment(-1295211657,{x=10,y=10})')
+    assert asyncio.run(state.spy_travel(196608,10,10)).startswith('SPY_ASSIGNMENT_STARTED|')
+
+
+def test_lost_offmap_submit_reply_confirms_once_and_pending_gates_remain_closed():
+    conn=OffMapAssignmentConn();state=GameState(conn);conn.lose_reply=True
+    conn.lua.execute('emitRemoved=false')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_travel(196608,10,10))
+    for call in [lambda: state.spy_travel(196609,10,10),state.end_turn,lambda: state.save_game('offmap_unknown')]:
+        assert 'OUTCOME_UNKNOWN' in asyncio.run(call())
+    conn.lua.execute('Events.UnitRemovedFromMap.Fire(0,u.id)')
+    assert asyncio.run(state.spy_travel(196608,10,10)).startswith('SPY_ASSIGNMENT_STARTED|')
+    assert conn.lua.eval('#submissions')==1
+
+
+def test_lost_confirmation_keeps_observers_to_latch_native_scope_change():
+    class LostConfirmationConn(OffMapAssignmentConn):
+        async def execute_write(self,code):
+            rows=await super().execute_write(code)
+            if any(row.startswith('SPY_ASSIGNMENT_CONFIRMED|') for row in rows):
+                self.lua.execute('seed=9;Events.UnitOperationStarted.Fire(0,u.id,-1295211657);seed=719665280')
+                raise OSError('confirmation reply lost')
+            return rows
+    conn=LostConfirmationConn();state=GameState(conn)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_travel(196608,10,10))
+    assert conn.lua.eval('__civmcpSpyAssignment.invalid')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_travel(196608,10,10))
+    assert conn.lua.eval('#submissions')==1
+
+
+def test_final_scope_recheck_blocks_offmap_roster_read_that_changes_world():
+    conn=OffMapAssignmentConn();state=GameState(conn);conn.lua.execute('''
+local original=Players[0].GetDiplomacy
+Players[0].GetDiplomacy=function()
+ local result=original()
+ local read=result.GetNthOffMapSpy
+ result.GetNthOffMapSpy=function(self,owner,index) local row=read(self,owner,index);seed=9;return row end
+ return result
+end
+''')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_travel(196608,10,10))
+    conn.lua.execute('seed=719665280')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_travel(196608,10,10))
+    assert conn.lua.eval('#submissions')==1
+
+
+def test_cancelled_offmap_submission_only_confirms_original_travel():
+    class CancelConn(OffMapAssignmentConn):
+        async def execute_write(self,code):
+            before=self.lua.eval('#submissions');rows=await super().execute_write(code)
+            if self.lua.eval('#submissions')>before:
+                raise asyncio.CancelledError()
+            return rows
+    conn=CancelConn();state=GameState(conn)
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(state.spy_travel(196608,10,10))
+    assert asyncio.run(state.spy_travel(196608,10,10)).startswith('SPY_ASSIGNMENT_STARTED|')
+    assert conn.lua.eval('#submissions')==1
+
+
+@pytest.mark.parametrize('row', [
+    '{NameIndex=37,Name="Spy",Level=1,XLocation=10,YLocation=10,ReturnTurn=-1}',
+    '{NameIndex=37,Name="Spy",Level=1,XLocation=10,YLocation=10}',
+])
+def test_query_does_not_report_captured_or_unknown_rows_as_travelling(row):
+    from civ_mcp.connection import LuaError
+    conn=OffMapAssignmentConn();state=GameState(conn)
+    conn.lua.execute('''
+units={}
+Locale={Lookup=function(value) return value end}
+EndTurnBlockingTypes={ENDTURN_BLOCKING_SPY_CHOOSE_ESCAPE_ROUTE=7}
+NotificationManager={GetList=function() return {} end}
+offmap={'''+row+'''}
+''')
+    if 'ReturnTurn=-1' in row:
+        assert asyncio.run(state.get_spies())==[]
+    else:
+        with pytest.raises(LuaError,match='off-map spy roster is unknown'):
+            asyncio.run(state.get_spies())
+    assert conn.lua.eval('#submissions')==0
 
 
 def test_lost_travel_reply_only_confirms_bound_assignment_start():
