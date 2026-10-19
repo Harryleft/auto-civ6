@@ -82,7 +82,6 @@ from civ_mcp.lua.economy import (  # noqa: F401
     parse_trade_routes_response,
 )
 from civ_mcp.lua.great_people import (  # noqa: F401
-    build_activate_great_person,
     build_gp_advisor_query,
     build_great_people_query,
     parse_gp_advisor_response,
@@ -259,7 +258,6 @@ from civ_mcp.lua.religion import (  # noqa: F401
     build_pantheon_status_query,
     build_religion_beliefs_query,
     build_religion_status_query,
-    build_spread_religion,
     parse_pantheon_status_response,
     parse_religion_beliefs_response,
     parse_religion_status_response,
@@ -316,4 +314,10 @@ from civ_mcp.lua.great_person_pool import (  # noqa: F401
     build_great_person_pool_action,
     build_great_person_pool_query,
     parse_great_person_pool_confirmation,
+)
+
+from civ_mcp.lua.unit_effects import (  # noqa: F401
+    build_unit_effect,
+    build_unit_effect_query,
+    parse_unit_effect_confirmation,
 )
