@@ -1,6 +1,6 @@
 # B12：耗尽移动力后的警戒开始确认
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 
@@ -41,3 +41,5 @@ Generic task relaxation, guaranteed future sentry, game strategy automation, dir
 ## Further Notes
 
 Evidence b12-native-alert.txt: token875307fbbf9b4e63b1662ca88997b018, unit786437, expectedSENTRY=-793848223, actualHOLD=75236491, operationHash=-448283625/Index54, entered/returned/started=true, ready=false, moves0, CIVILIZATION_SUMERIA/-1896272000/T57/player0. Original confirmation #1017/#1019, popup cleanup#1018 no effect. Restore gold_20261019_t056_b11_verified (#990), run e8b4d6a62dca49bbb256e8264beb18f2.
+
+Validation: 857865c／集成26c3467；372相关测试、compileall/diff-check通过，Spec与Standards独立审查无实质发现。#1020恢复T56，#1024–1041忠实重放，#1042保存T57警戒前检查点；#1044原生警戒开始确认成功。随后#1046推进被战车新本地待办阻塞，#1049单位处理被pending门禁拒绝，#1051确认保留原请求；T58联验转B13继续，未声称已推进。
