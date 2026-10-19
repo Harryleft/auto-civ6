@@ -1,6 +1,6 @@
 # B07：政体选择后确认原生考虑提醒
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 
