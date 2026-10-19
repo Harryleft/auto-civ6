@@ -39,6 +39,60 @@ local function routesFor(owner)
  end
  return result,integer(Players[owner]:GetTrade():GetOutgoingRouteCapacity())
 end
+local function selectedTrader(unit)
+ assert(unit,"SELECTED_TRADER_UNAVAILABLE")
+ local s={owner=integer(unit:GetOwner()),id=integer(unit:GetID()),unitType=integer(unit:GetType()),
+  x=integer(unit:GetX()),y=integer(unit:GetY()),moves=unit:GetMovesRemaining(),activity=UnitManager.GetActivityType(unit)}
+ assert(scopePlayer(s.owner) and type(s.moves)=="number" and s.moves>0 and s.moves<math.huge
+  and scopeInteger(ActivityTypes.ACTIVITY_AWAKE) and s.activity==ActivityTypes.ACTIVITY_AWAKE,"SELECTED_TRADER_NOT_READY")
+ local row=GameInfo.Units[s.unitType]
+ assert(row and row.MakeTradeRoute==true,"SELECTED_NOT_A_TRADER")
+ return s
+end
+local function anotherTraderOwnsChooser(r)
+ -- TradeRouteChooser.CheckNeedsToOpen follows the current head selection.
+ -- This is current UI context, never a new route intent stored on the receipt.
+ local s=selectedTrader(UI.GetHeadSelectedUnit())
+ assert(s.owner==r.owner and s.id~=r.unit,"CHOOSER_NOT_ANOTHER_OWNED_TRADER")
+ local native=selectedTrader(UnitManager.GetUnit(s.owner,s.id%65536))
+ local owned=selectedTrader(Players[s.owner]:GetUnits():FindID(s.id))
+ for key,value in pairs(s) do assert(native[key]==value and owned[key]==value,"SELECTED_TRADER_INCONSISTENT") end
+ local city=cityAt(s.x,s.y)
+ assert(city.owner==r.owner,"SELECTED_TRADER_CITY_NOT_OWNED")
+ local routes=routesFor(r.owner)
+ for _,route in ipairs(routes) do assert(route.TraderUnitID~=s.id,"SELECTED_TRADER_HAS_ROUTE") end
+ local current=selectedTrader(UI.GetHeadSelectedUnit())
+ for key,value in pairs(s) do assert(current[key]==value,"SELECTION_CHANGED") end
+ assert(UI.GetInterfaceMode()==r.chooser,"CHOOSER_CHANGED")
+ return true
+end
+local function originalIdentity(r,entity,before)
+ local known=true
+ local getters={id="GetID",owner="GetOwner",unitType="GetType",x="GetX",y="GetY"}
+ for key,expected in pairs(before) do
+  local ok,value=pcall(function() return entity[getters[key]](entity) end)
+  local valid=ok and (key=="owner" and scopePlayer(value) or key~="owner" and scopeIndex(value))
+  if not valid then known=false elseif value~=expected then r.invalid=true end
+ end
+ return known and not r.invalid
+end
+local function originalRouteEntities(r)
+ local known=true
+ local function observe(read,before)
+  local ok,entity=pcall(read)
+  if not ok or not entity then known=false;return nil end
+  if not originalIdentity(r,entity,before) then known=false end
+  return entity
+ end
+ local unit=observe(function() return UnitManager.GetUnit(r.owner,r.unit%65536) end,
+  {id=r.unit,owner=r.owner,unitType=r.unitType})
+ for _,city in ipairs({r.origin,r.destination}) do
+  observe(function() return CityManager.GetCityAt(city.x,city.y) end,city)
+ end
+ assert(known and not r.invalid,"ORIGINAL_IDENTITY_CHANGED_OR_UNAVAILABLE")
+ local row=GameInfo.Units[r.unitType];assert(row and row.MakeTradeRoute==true,"NOT_A_TRADER")
+ return unit
+end
 '''
 
 
@@ -94,6 +148,11 @@ if not (__civmcpTraderAction and __civmcpTraderAction.token==token) then
   local mode=UI.GetInterfaceMode()
   assert(scopeInteger(mode),"INTERFACE_MODE_UNKNOWN")
   if mode==r.chooser then
+   if r.kind=="trade_route" then
+    local known,another=pcall(anotherTraderOwnsChooser,r)
+    assert(sameScope(r),"SCOPE_CHANGED")
+    if known and another then return end
+   end
    UI.SetInterfaceMode(r.selection)
    assert(UI.GetInterfaceMode()==r.selection,"INTERFACE_TRANSITION_UNCONFIRMED")
   end
@@ -114,8 +173,14 @@ local ok,active,capacity=pcall(function()
  reason="SCOPE_CHANGED";assert(sameScope(r))
  reason="REQUEST_NOT_RETURNED";assert(r.entered==true and r.returned==true)
  reason="CORE_BUSY_OR_UNKNOWN";assert(UI.IsGameCoreBusy()==false)
- reason="TRADER_CHANGED";local unit=traderFor(r.owner,r.unit);assert(unit:GetType()==r.unitType)
- reason="CITY_CHANGED";assert(sameCity(r.origin) and sameCity(r.destination))
+ reason="TRADER_CHANGED"
+ local unit
+ if r.kind=="trade_route" then
+  unit=originalRouteEntities(r)
+ else
+  unit=traderFor(r.owner,r.unit);assert(unit:GetType()==r.unitType)
+  reason="CITY_CHANGED";assert(sameCity(r.origin) and sameCity(r.destination))
+ end
  reason="ROUTE_UNCONFIRMED"
  local routes,capacity=routesFor(r.owner)
  local matches=0
@@ -136,9 +201,16 @@ local ok,active,capacity=pcall(function()
  -- Confirmation only reads: it never repeats the economic operation or cleanup.
  reason=(r.kind=="trade_route" and "ROUTE_ESTABLISHED" or "TRANSFER_ESTABLISHED").."_INTERFACE_CLEANUP_UNCONFIRMED"
  local mode=UI.GetInterfaceMode()
- assert(scopeInteger(mode) and mode~=r.chooser)
+ assert(scopeInteger(mode))
+ if mode==r.chooser then assert(r.kind=="trade_route" and anotherTraderOwnsChooser(r)) end
+ if r.kind=="trade_route" then originalRouteEntities(r) end
  return #routes,capacity
 end)
+-- Failed/unknown entity or selection reads must not hide a known scope change
+-- caused by a later native getter. Always observe scope after all those reads.
+if type(r)=="table" and r.token=={json.dumps(token)} and not sameScope(r) then
+ ok=false;reason="SCOPE_CHANGED"
+end
 if ok then
  print("TRADER_CONFIRMED|"..r.token.."|"..r.kind.."|"..r.unit.."|"..r.origin.owner..":"..r.origin.id
   .."->"..r.destination.owner..":"..r.destination.id.."|at:{x},{y}|routes:"..active.."/"..capacity)
