@@ -288,22 +288,22 @@ async def spy_action(
             Mission types: COUNTERSPY, GAIN_SOURCES, SIPHON_FUNDS, STEAL_TECH_BOOST,
             SABOTAGE_PRODUCTION, GREAT_WORK_HEIST, RECRUIT_PARTISANS,
             NEUTRALIZE_GOVERNOR, FABRICATE_SCANDAL
-        target_x: X coordinate of the target city tile; ignored for escape
-        target_y: Y coordinate of the target city tile; ignored for escape
+        target_x: X coordinate of the city center for travel, or native mission target tile; ignored for escape
+        target_y: Y coordinate of that target; ignored for escape
 
     Travel notes:
-        - Valid targets: your own cities and city-states only.
-        - Allied civ cities are NOT valid travel targets.
-        - Travel is queued end-of-turn; spy position updates after turn ends.
+        - Native eligibility determines valid destinations; target the city center.
+        - SPY_ASSIGNMENT_STARTED confirms the bound assignment, not arrival.
+        - Travel may take multiple turns. Use end_turn and get_spies to observe it.
+        - An idle spy already at the destination needs no new travel command.
 
     Mission notes:
-        - Spy must be physically IN the target city to launch any offensive mission.
-        - Use 'travel' first, then end the turn, then launch the mission.
-        - COUNTERSPY defends your own city (spy must be in your city).
-        - get_spies shows which ops are available at the spy's current location.
+        - The spy must be in the target city. Supply the exact native target tile.
+        - Some missions require a district; a refused city-center request lists native candidates.
+        - Confirmation reports the assignment and native end turn, not success or rewards.
+        - After startup is confirmed, end_turn remains available while the mission runs.
     """
     gs = _get_game(ctx)
-    unit_index = unit_id % 65536
     params = {
         "unit_id": unit_id,
         "action": action,
@@ -315,8 +315,8 @@ async def spy_action(
         if action.lower().startswith("escape:"):
             return await gs.spy_escape(unit_id, action.split(":", 1)[1].strip().upper())
         if action.lower() == "travel":
-            return await gs.spy_travel(unit_index, target_x, target_y)
-        return await gs.spy_mission(unit_index, action.upper(), target_x, target_y)
+            return await gs.spy_travel(unit_id, target_x, target_y)
+        return await gs.spy_mission(unit_id, action.upper(), target_x, target_y)
 
     result = await _logged(ctx, "spy_action", params, _run)
     return result
