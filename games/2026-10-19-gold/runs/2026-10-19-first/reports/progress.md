@@ -16,7 +16,7 @@
 
 | B09 | T48 | heal原生已开始，但活动OPERATION不等于HEAL导致未知 | fresh heal精确开始且非就绪时兼容OPERATION，noop仍严格 | 20e82b6／39800c0；342离线，双审查，T48→T49实测及保存通过 |
 
-当前已确认 T49，身份 sumeria / seed -1896272000，轮次 e8b4d6a62dca49bbb256e8264beb18f2。两城共10人口，古典黄金时代与寡头政体；瑞典/纳斯卡突袭战争中，市政广场在建，第二城转产弓箭手。B01–B09已修复。最近确认检查点 gold_20261019_t049_b09_verified。用户已确认现有 checkpoint / GameState / lifecycle 验证边界。
+当前已确认 T52，身份 sumeria / seed -1896272000，轮次 e8b4d6a62dca49bbb256e8264beb18f2。两城共11人口，古典黄金时代与寡头政体；瑞典/纳斯卡战争中，两城满血，3弓手/战车/骑手/勇士，市政广场完成、第二城学院恢复建设。B01–B09已修复，B10实施中。最近确认检查点 gold_20261019_t052_native_promotion_ready。用户已确认现有 checkpoint / GameState / lifecycle 验证边界。
 
 B01：实施 f3f919a，集成 ffd3f06。相关离线 425 passed，compileall / diff --check 通过；Standards 与 Spec 两项独立审查均无实质发现。原始新旧基准不覆盖、不混用轮次。
 
@@ -86,3 +86,5 @@ B09关闭：20e82b6／集成39800c0，342相关离线通过，双独立审查无
 ## B10，T52原生晋升
 
 T50购买第3弓手、T51清除首都附近11HP瑞典勇士占位，T52首都骑手完成；两城满血，战车84HP、前线弓手65HP、敌两勇士11/38HP。#878保存gold_20261019_t052_before_promotion。弓手655363可晋升，#879原生CanStartCommand确认PROMOTE可用、选项14齐射/15驻军；旧工具直接SetPromotion/ChangeStoredPromotions/SetDamage，未调用。登记B10进入to-spec→implement-spec，改用原生命令。当前无未决动作，无需重启世界。非斯使者3，但巴西/加拿大各4，仍无宗主，先前取得宗主的表述以原生#848竞争数据纠正。
+
+T52独立防守操作：#880首都建造者3回合；#881换征兵政策因金币33.46<35被原生拒绝，未提交，留待新市政免费更换。#882/884骑手沿道路到(37,25)后清除(36,25)瑞典勇士占位，83HP；#887开拓者开始向西，在(38,25)弓手同格，0MP。#888保存gold_20261019_t052_native_promotion_ready，无pending；待晋升弓手655363仍65HP、2MP，未执行旧兼容写法。
