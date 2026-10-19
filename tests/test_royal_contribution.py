@@ -278,7 +278,7 @@ def test_stale_confirmation_frame_does_not_finish_until_both_changes_are_visible
     class StaleConn(ContributionConn):
         async def execute_write(self, source):
             rows = await super().execute_write(source)
-            if source.startswith('local actionMe =') and not self.fresh:
+            if any(row.startswith('ACTION_IDENTITY|') for row in rows) and not self.fresh:
                 return [row for row in rows if row.startswith('ACTION_IDENTITY|')]
             return rows
         fresh = False

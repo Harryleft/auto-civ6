@@ -12,6 +12,7 @@ local function scopeInteger(value)
  return type(value)=="number" and value==value and math.abs(value)<math.huge and value==math.floor(value)
 end
 local function scopeIndex(value) return scopeInteger(value) and value>=0 end
+local function scopePlayer(value) return scopeIndex(value) and value<=63 end
 local function sameScope(r)
  if r.invalid then return false end
  local known=true
@@ -20,7 +21,7 @@ local function sameScope(r)
   if not ok or not valid(value) then known=false
   elseif value~=expected then r.invalid=true end
  end
- check(function() return Game.GetLocalPlayer() end,scopeIndex,r.owner)
+ check(function() return Game.GetLocalPlayer() end,scopePlayer,r.owner)
  check(function() return Game.GetCurrentGameTurn() end,scopeIndex,r.turn)
  check(function() return PlayerConfigurations[r.owner]:GetCivilizationTypeName() end,
   function(value) return type(value)=="string" and value:match("^CIVILIZATION_[A-Z0-9_]+$")~=nil end,r.civ)

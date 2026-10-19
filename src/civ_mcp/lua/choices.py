@@ -15,6 +15,9 @@ end
 local function readInt(fn)
  local ok,value=pcall(fn);assert(ok,"ELIGIBILITY_UNKNOWN");return integer(value)
 end
+local function eraIndex(value)
+ integer(value);assert(value>=0 and GameInfo.Eras[value]~=nil,"ERA_UNAVAILABLE");return value
+end
 local function includes(values,target)
  assert(type(values)=="table","CHOICES_UNAVAILABLE")
  for _,value in ipairs(values) do if integer(value)==target then return true end end
@@ -97,7 +100,7 @@ def _parts(operation: str) -> tuple[str, str]:
  r.index=integer(r.target)
  local row=GameInfo.CommemorationTypes[r.index];assert(row and row.Index==r.index,"DEDICATION_NOT_FOUND")
  r.name=row.CommemorationType
- r.era=integer(eras:GetCurrentEra());assert(r.era>=0,"ERA_UNAVAILABLE")
+ r.era=eraIndex(eras:GetCurrentEra())
  r.noop=includes(eras:GetPlayerActiveCommemorations(r.owner),r.index)
  if not r.noop then
   assert(integer(eras:GetPlayerNumAllowedCommemorations(r.owner))>0,"NO_DEDICATION_NEEDED")
@@ -108,7 +111,7 @@ def _parts(operation: str) -> tuple[str, str]:
  end
 ''', '''
  local eras=Game.GetEras()
- local era=integer(eras:GetCurrentEra());assert(era>=0,"ERA_UNAVAILABLE")
+ local era=eraIndex(eras:GetCurrentEra())
  if era~=r.era then r.invalid=true end
  assert(not r.invalid,"ERA_CHANGED")
  assert(includes(eras:GetPlayerActiveCommemorations(r.owner),r.index),"DEDICATION_UNCONFIRMED")

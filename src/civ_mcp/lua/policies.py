@@ -21,6 +21,18 @@ end
 local function boolean(value)
  assert(type(value)=="boolean","POLICY_FACT_UNKNOWN");return value
 end
+local function government(value)
+ integer(value)
+ -- -1 is the native no-government sentinel; other values must name a row.
+ assert(value==-1 or GameInfo.Governments[value]~=nil,"GOVERNMENT_UNKNOWN")
+ return value
+end
+local function slotCount(value)
+ integer(value);assert(value>=0,"POLICY_SLOT_COUNT_UNKNOWN");return value
+end
+local function slotType(value)
+ integer(value);assert(GameInfo.GovernmentSlots[value]~=nil,"UNKNOWN_SLOT_TYPE");return value
+end
 """
 
 
@@ -32,7 +44,7 @@ local ok,r=pcall(function()
 assert(UI.IsGameCoreBusy()==false,"CORE_BUSY_OR_UNKNOWN")
 local me = Game.GetLocalPlayer()
 local pCulture = Players[me]:GetCulture()
-local numSlots = integer(pCulture:GetNumPolicySlots())
+local numSlots = slotCount(pCulture:GetNumPolicySlots())
 if numSlots <= 0 then {_fail("ERR:NO_GOVERNMENT|No government selected")} end
 local requested = {{{entries}}}
 local current, final, origins = {{}}, {{}}, {{}}
@@ -66,8 +78,7 @@ for slot = 0, numSlots - 1 do
 end
 local clearList, addList, types = {{}}, {{}}, {{}}
 for slot = 0, numSlots - 1 do
-    types[slot] = integer(pCulture:GetSlotType(slot))
-    assert(GameInfo.GovernmentSlots[types[slot]],"UNKNOWN_SLOT_TYPE")
+    types[slot] = slotType(pCulture:GetSlotType(slot))
     local index = final[slot]
     if index >= 0 then
         local policy = GameInfo.Policies[index]
@@ -101,7 +112,7 @@ for slot = 0, numSlots - 1 do
 end
 local r={{token={json.dumps(token)},owner=me,civ=PlayerConfigurations[me]:GetCivilizationTypeName(),
  seed=GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED"),turn=Game.GetCurrentGameTurn(),
- government=integer(pCulture:GetCurrentGovernment()),count=numSlots,types=types,
+ government=government(pCulture:GetCurrentGovernment()),count=numSlots,types=types,
  current=current,final=final,origins=origins,requested=requested,clear=clearList,add=addList,noop=not changed}}
 assert(r.government>=0,"NO_GOVERNMENT")
 if r.noop then return r end
@@ -155,9 +166,9 @@ local function observe(r,token)
  local me=r.owner
  local pCulture=Players[me]:GetCulture()
  -- Missing layout facts block this read; only valid changes retire the plan.
- if integer(pCulture:GetCurrentGovernment())~=r.government then r.invalid="POLICY_LAYOUT_CHANGED" end
- if integer(pCulture:GetNumPolicySlots())~=r.count then r.invalid="POLICY_LAYOUT_CHANGED" end
- for slot=0,r.count-1 do if integer(pCulture:GetSlotType(slot))~=r.types[slot] then r.invalid="POLICY_LAYOUT_CHANGED" end end
+ if government(pCulture:GetCurrentGovernment())~=r.government then r.invalid="POLICY_LAYOUT_CHANGED" end
+ if slotCount(pCulture:GetNumPolicySlots())~=r.count then r.invalid="POLICY_LAYOUT_CHANGED" end
+ for slot=0,r.count-1 do if slotType(pCulture:GetSlotType(slot))~=r.types[slot] then r.invalid="POLICY_LAYOUT_CHANGED" end end
  assert(not r.invalid,r.invalid)
  if r.noop or r.policyEntered then
   assert(r.noop or r.policyReturned==true and r.paid==true,"POLICY_REQUEST_NOT_RETURNED")

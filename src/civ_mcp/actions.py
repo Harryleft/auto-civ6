@@ -57,6 +57,16 @@ class _ActionScope:
     turn: int
     owner: int
 
+    @classmethod
+    def from_fields(cls, civilization: str, seed: str, turn: str, owner: str) -> _ActionScope:
+        """Validate native facts before either capturing or invalidating scope."""
+        _, seed_value = _native_game_identity(civilization, seed)
+        if not all(re.fullmatch(r"[0-9]+", value) for value in (turn, owner)):
+            raise ValueError("no valid local turn or player")
+        if int(owner) > 63:
+            raise ValueError("native player outside 0..63")
+        return cls(civilization, seed_value, int(turn), int(owner))
+
     @property
     def identity(self) -> tuple[str, int]:
         return self.civilization.removeprefix("CIVILIZATION_").lower(), self.seed
@@ -80,6 +90,37 @@ do
     end
 end
 {code}'''
+
+
+def _native_game_identity(civilization: str, seed: str) -> tuple[str, int]:
+    if not re.fullmatch(r"CIVILIZATION_[A-Z0-9_]+", civilization):
+        raise ValueError("invalid native civilization")
+    if not re.fullmatch(r"-?[0-9]+", seed):
+        raise ValueError("invalid native seed")
+    return civilization.removeprefix("CIVILIZATION_").lower(), int(seed)
+
+
+def _scope_probe(tag: str) -> str:
+    # Preserve native types before serialization: tostring("42") otherwise
+    # makes an unavailable numeric getter indistinguishable from a valid fact.
+    return f'''
+local actionScopeOK,actionScope=pcall(function()
+    local function integer(value)
+        return type(value)=="number" and value==value and math.abs(value)<math.huge and value==math.floor(value)
+    end
+    local owner=Game.GetLocalPlayer()
+    local civ=PlayerConfigurations[owner]:GetCivilizationTypeName()
+    local seed=GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")
+    local turn=Game.GetCurrentGameTurn()
+    assert(type(civ)=="string" and integer(seed) and integer(turn) and turn>=0
+           and integer(owner) and owner>=0 and owner<=63)
+    return {{civ,seed,turn,owner}}
+end)
+if actionScopeOK then
+    print("{tag}|" .. actionScope[1] .. "|" .. tostring(actionScope[2])
+          .. "|" .. tostring(actionScope[3]) .. "|" .. tostring(actionScope[4]))
+end
+'''
 
 
 def _scoped_action_result(lines: list[str]) -> str:
@@ -216,43 +257,26 @@ class ActionLifecycle:
 
     async def prepare_scope(self, known_identity: tuple[str, int] | None) -> _ActionScope | str:
         """Read submission identity without touching the narration baseline."""
-        code = f'''
-local ok, scope = pcall(function()
-    local owner = Game.GetLocalPlayer()
-    return {{PlayerConfigurations[owner]:GetCivilizationTypeName(),
-            GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED"),
-            Game.GetCurrentGameTurn(), owner}}
-end)
-if ok then
-    print("ACTION_SCOPE|" .. tostring(scope[1]) .. "|" .. tostring(scope[2])
-          .. "|" .. tostring(scope[3]) .. "|" .. tostring(scope[4]))
-end
-print("{lq.SENTINEL}")
-'''
+        code = _scope_probe("ACTION_SCOPE") + f'print("{lq.SENTINEL}")'
         try:
             lines = await self.conn.execute_write(code)
             rows = [row.split("|") for row in lines if row.startswith("ACTION_SCOPE|")]
             if len(rows) != 1 or len(rows[0]) != 5:
                 raise ValueError("missing or ambiguous native scope")
-            _, civ, seed, turn, owner = rows[0]
-            if not re.fullmatch(r"CIVILIZATION_[A-Z0-9_]+", civ):
-                raise ValueError("invalid civilization")
-            if not all(re.fullmatch(r"-?\d+", value) for value in (seed, turn, owner)):
-                raise ValueError("invalid native scope numbers")
-            scope = _ActionScope(civ, int(seed), int(turn), int(owner))
-            if scope.turn < 0 or scope.owner < 0:
-                raise ValueError("no local turn or player")
+            scope = _ActionScope.from_fields(*rows[0][1:])
             if known_identity is not None and scope.identity != known_identity:
                 raise ValueError("world changed; read the current game before acting")
             return scope
         except (OSError, TimeoutError, LuaError, ValueError) as exc:
             return f"Error: ACTION_SCOPE_UNAVAILABLE|{exc}; no action submitted."
 
-    def observe_identity(self, identity: tuple[str, int]) -> None:
-        """Keep scoped requests invalid after a witnessed world replacement."""
+    def observe_identity(self, civilization: str, seed: str) -> tuple[str, int]:
+        """Only a valid native identity can invalidate a retained request."""
+        identity = _native_game_identity(civilization, seed)
         pending = self.pending
         if pending is not None and pending.identity is not None and identity != pending.identity:
             pending.details["scope_invalid"] = True
+        return identity
 
     def unknown(self, reason: str = "confirmation deadline reached") -> str:
         pending = self.pending
@@ -285,12 +309,7 @@ print("{lq.SENTINEL}")
                     execute = self.conn.execute_write if pending.context == "write" else self.conn.execute_read
                     identity_probe = ""
                     if pending.identity is not None:
-                        identity_probe = (
-                            "local actionMe = Game.GetLocalPlayer(); "
-                            "local actionCfg = PlayerConfigurations[actionMe]; "
-                            'print("ACTION_IDENTITY|" .. actionCfg:GetCivilizationTypeName() .. "|" '
-                            '.. tostring(GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")) .. "|" .. Game.GetCurrentGameTurn() .. "|" .. actionMe); '
-                        )
+                        identity_probe = _scope_probe("ACTION_IDENTITY")
                     pending.observed = await execute(identity_probe + pending.query)
                     confirmed = self._confirmed_action(pending)
                     if confirmed is not None:
@@ -312,10 +331,9 @@ print("{lq.SENTINEL}")
             rows = [line.split("|") for line in pending.observed if line.startswith("ACTION_IDENTITY|")]
             if len(rows) != 1 or len(rows[0]) != 5:
                 return None
-            fields = rows[0]
-            identity = (fields[1].replace("CIVILIZATION_", "").lower(), int(fields[2]))
-            if (identity != pending.identity or int(fields[3]) != pending.turn
-                    or int(fields[4]) != pending.owner):
+            scope = _ActionScope.from_fields(*rows[0][1:])
+            if (scope.identity != pending.identity or scope.turn != pending.turn
+                    or scope.owner != pending.owner):
                 if scoped:
                     pending.details["scope_invalid"] = True
                 return None

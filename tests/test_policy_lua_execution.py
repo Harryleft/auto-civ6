@@ -49,7 +49,8 @@ UI = {IsGameCoreBusy=function() return busy end,RequestPlayerOperation=function(
  if not ignoreUnlock then applyUnlock() end
  if throwUnlock then error('native unlock failed after entry') end
 end}
-GameInfo = {Governments={[0]={GovernmentType='GOVERNMENT_TEST',Name='Test'}}}
+GameInfo = {Governments={[0]={GovernmentType='GOVERNMENT_TEST',Name='Test'},
+ [2]={GovernmentType='GOVERNMENT_OLIGARCHY',Name='Oligarchy'}}}
 local entries = {
     {Index=1,Hash=101,PolicyType='POLICY_NATURAL_PHILOSOPHY',GovernmentSlotType='SLOT_ECONOMIC'},
     {Index=2,Hash=102,PolicyType='POLICY_CIVIL_PRESTIGE',GovernmentSlotType='SLOT_ECONOMIC'},
