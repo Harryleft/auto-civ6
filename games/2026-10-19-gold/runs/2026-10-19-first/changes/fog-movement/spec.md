@@ -1,6 +1,6 @@
 # B06：普通移动缺少原生迷雾目标标志
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 

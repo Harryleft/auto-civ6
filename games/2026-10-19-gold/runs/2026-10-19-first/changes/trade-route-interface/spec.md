@@ -1,6 +1,6 @@
 # B05：商路建立后的原生界面清理
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 
