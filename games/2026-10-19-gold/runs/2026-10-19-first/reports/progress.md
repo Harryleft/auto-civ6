@@ -37,7 +37,9 @@
 
 | B26 | T138 | 城市NO_LOS拒绝模板含Lua表字面量，concat报错导致unknown | 正确插入目标坐标，保留原生拒绝/零提交 | e7c40b3；110相关/双审，原T138明确拒绝/目标满血无新见证/独立移动/T139保存通过 |
 
-当前已确认 T139，身份 sumeria / seed -1896272000，轮次 e8b4d6a62dca49bbb256e8264beb18f2。五城51人口，工业普通时代、商人共和国、巴西研究同盟Lv1、外交VP5，已创拜火教。B01–B26已修复，B27实施中；最近确认检查点gold_20261019_t139_b27_ready。用户已确认现有 checkpoint / GameState / lifecycle 验证边界。
+| B27 | T139 | 缺少启动宗教审判动作；实机 InGame 缓存 false／GameCore true 导致消耗后未知 | 原生操作单提交、精确消耗事件和双查询缺席，按绑定作用域的 Core false→true 确认；所有中间身份变化保持失效 | dd925e3；797相关/247定向复核、最终双审，#2688启动/#2689–90独立核对/T140及保存通过 |
+
+当前已确认 T140，身份 sumeria / seed -1896272000，轮次 e8b4d6a62dca49bbb256e8264beb18f2。五城51人口，工业普通时代、商人共和国、巴西研究同盟Lv2、外交VP5，已创拜火教并启动宗教审判。B01–B27已修复；最近确认检查点gold_20261019_t140_b27_verified。用户已确认现有 checkpoint / GameState / lifecycle 验证边界。
 
 B01：实施 f3f919a，集成 ffd3f06。相关离线 425 passed，compileall / diff --check 通过；Standards 与 Spec 两项独立审查均无实质发现。原始新旧基准不覆盖、不混用轮次。
 
@@ -317,3 +319,7 @@ B27 T139：#2659原使徒3145737/type4/owner0/34,24/4MP/3charges，实际GameInf
 B27首版fc17d54/集成6dac378，637相关/compile/diff及独立双审通过；#2665–67 clean刷新同T139原Apostle/原生CanStarttrue、InGameflagfalse、InqCanProducefalse。#2668单次启动后unknown，#2669使徒已消耗、#2670可选Inquisitor出现，#2671显式关闭历史弹窗/#2672原请求仅确认仍未知。关闭旧owner仅纯诊断，#2674同token原receipt entered/returned/started/removed全true、invalidnil、双lookupnil，但InGameflagfalse；#2675权威GameCoreflagtrue/religion12，#2676InGame带/不带religion参数均false。原因是Core与界面缓存不同，不能用CanProduce代替原宗教结果；a12b3f7扩规格绑定跨context权威旗标及原动作scope/见证，同worker补修。#2677一次显式恢复同T139ready，恢复确认前无玩法。实际时代分#2673已65，原生启动审判取得1分，未把Ziggurat误记为已加分。
 
 B27跨context准备与审查：#2677同T139ready恢复成功61.881s，#2678–79核对原Apostle/城市与已做独立orders，#2680权威Core flagfalse/created12、#2681Cacheflagfalse/原Apostle4MP3charges/religion12/CanStarttrue、InqCanProducefalse；clean关闭MCP，无pending。跨context补修8c1280c，787相关/compile/diff通过，单owner IG→Core→IG组合证据。#2682–84 clean刷新仅核同T139原Apostle和Coreprefalse，未再次启动。独立双审同发现首IG ACTION_IDENTITY被覆盖、未observe造成临时有效seed失配后恢复仍误确认的边界，已交同worker补锁存；原世界再次clean关闭等最终代码，无需恢复。
+
+## T139–T140 宗教审判验证
+
+B27 最终代码 dd925e3，双独立复核无实质发现。#2688 原局 T139 单次启动审判，使徒3145737消耗；#2689 Core旗标true、#2690精确原生Started/Removed与双查询缺席、审判官可生产均独立确认。#2694推进T140，#2695保存 gold_20261019_t140_b27_verified（930662 bytes）。T140经济学、尼普尔工坊和拉格什港口完成；时代分67，拜火教仍占本方3/5城。

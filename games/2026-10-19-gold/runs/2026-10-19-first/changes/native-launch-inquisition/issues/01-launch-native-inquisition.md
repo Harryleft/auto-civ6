@@ -1,6 +1,6 @@
 # B27-01 Launch native inquisition with bound consuming apostle proof
 
-Status: pending-review
+Status: resolved
 Dependencies: none
 Spec: ../spec.md
 
@@ -33,3 +33,9 @@ Isolated worker owns necessary unit-action/GameState/native Lua/tests and this t
 
 - Both review axes reproduced a first InGame ACTION_IDENTITY seed mismatch that was overwritten by the final response. Six public real-Lua cases first incorrectly released the owner, including an unknown owner field and a later lost/cancelled Core response. ActionLifecycle now consumes every readable scope field in each received InGame probe before another await or response replacement, using the existing sticky scope observer. This does not parse completion or retire the owner from the first witness; default None actions retain their original path.
 - Added unknown-first-probe recovery and final-probe mismatch/unknown-peer cases. The same eight affected test files now report **797 passed**; compileall and diff check passed. Worker performed no game action; review recheck and parent final native checks remain pending.
+
+## Final review and native validation
+
+- Final implementation `dd925e3`; independent Spec and Standards rechecks both reported No material issues. Related tests: **797 passed**; Standards targeted recheck: **247 passed**. Compileall and diff checks passed.
+- Original T139 final request #2688 submitted exactly one native launch for Apostle3145737. Returned INQUISITION_LAUNCHED: original apostle consumed, religion12, authoritative Core flag false→true. Independent #2689 Core read confirmed true; #2690 exact token `8d79cb8065ed4f7abda1d7674473b2f2` confirmed Started/Removed plus dual absence and native inquisitor eligibility. The InGame cached flag is not used as authority.
+- #2691 saved the post-launch state; #2692 paused for HistoricMoments, #2693 explicitly dismissed it, #2694 confirmed T139→T140; #2695 saved `gold_20261019_t140_b27_verified` (930662 bytes). No repeat launch or setters. Original game continues.
