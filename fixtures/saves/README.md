@@ -11,3 +11,5 @@
 旧 Ground Control、Snowflake、Cry Havoc 存档已从当前项目移除，可从 Git 历史找回，不再用于测试。本机旧存档移入 `~/.civ6-mcp/save-archive/`，归档清单保留原路径和 SHA-256。
 
 本机保留结果存档 `benchmark_after_20_turns`（原始第 1 回合净推进 20 回合，游戏显示第 21 回合），供查看本次验收结果；后续新测试仍从 `benchmark_turn_1` 开始。结果文件与完整工具证据保存在本机验收目录，不作为另一张基准加入仓库。
+
+各次加载原件后产生的测试轮次、阶段报告和终局记录见[苏美尔对局资料](../../games/benchmark-sumeria-719665280/README.md)。原始存档仍位于本目录，不随对局文档迁移。

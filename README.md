@@ -62,7 +62,7 @@ args = ["run", "--directory", "/absolute/path/to/civ6-mcp", "civ-mcp"]
 
 - Agent 协作从 [AGENTS.md](AGENTS.md) 开始，按任务选择材料。
 - 修改、离线测试、实机脚本和提交约束见[开发与验证](docs/development.md)。实机脚本会操作或替换当前对局，独立于离线检查。
-- 实现关系见[当前架构](docs/architecture.md)，历史规格与验收见[文档导航](docs/README.md#规格与验收)。
+- 实现关系、工程规格与离线验收见[文档导航](docs/README.md)；逐局过程、阶段验收与复盘见[对局资料](games/README.md)。
 - 安装唯一基准或分析旧日志时读[存档与历史数据](fixtures/README.md)。
 
 ## License
