@@ -1909,6 +1909,8 @@ class GameState:
 
     async def end_turn(self) -> str:
         """End the turn with snapshot-diff event detection."""
+        if self.save_pending:
+            return "ERR:OUTCOME_UNKNOWN|Save completion is not confirmed; inspect or recover before advancing."
         progress = getattr(self, "_diplomacy_progress", None)
         if progress is not None:
             if progress.incoming is not None:
@@ -1938,7 +1940,7 @@ class GameState:
 
     async def save_game(self, save_name: str) -> str:
         """Save a confirmed active turn without resetting the current session."""
-        from civ_mcp.game_lifecycle import _validate_save_name, save_game
+        from civ_mcp.game_lifecycle import _validate_save_name, save_game_result
 
         error = _validate_save_name(save_name)
         if error:
@@ -1954,10 +1956,14 @@ class GameState:
         before = await self.get_game_overview()
         if identity == ("unknown", 0) or before.turn <= 0:
             return "Error: Current game identity and turn must be confirmed before saving."
-        result = await save_game(self.conn, save_name)
-        if not result.startswith("Saved:"):
-            if "OUTCOME_UNKNOWN" in result:
-                self._pending_save = True
+        # Install the barrier before the first possible native submission. It
+        # survives cancellation, including cancellation during post-save reads.
+        self._pending_save = True
+        saved = await save_game_result(self.conn, save_name)
+        result = saved.message
+        if saved.status != "confirmed":
+            if saved.status == "not_submitted":
+                self._pending_save = False
             return result
         try:
             after_identity = await self.get_game_identity()
@@ -1973,6 +1979,7 @@ class GameState:
         if error:
             self._pending_save = True
             return error
+        self._pending_save = False
         return f"{result} Civilization {identity[0]}, seed {identity[1]}, turn {after.turn}."
 
     @property

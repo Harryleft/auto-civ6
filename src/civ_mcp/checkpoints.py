@@ -16,6 +16,9 @@ CHECKPOINT_DIR = Path.home() / ".civ6-mcp" / "checkpoints"
 BASELINE_SHA256 = "688b12eddbf1ec6bdb44da4f558d39191e96a6893a538f57ccc531beb5339ffd"
 # Short-lived evidence between native completion and GameState post-checks.
 _completed: dict[str, str] = {}
+# Revoke before touching disk: a failed metadata unlink must not leave an old
+# checkpoint usable while the same native save may still be writing.
+_revoked: set[str] = set()
 
 
 def _current_run() -> str | None:
@@ -41,6 +44,7 @@ def begin_baseline_run() -> str | None:
         temporary.write_text(json.dumps({"run_id": uuid.uuid4().hex, "baseline_sha256": BASELINE_SHA256}), encoding="utf-8")
         temporary.replace(target)
         _completed.clear()
+        _revoked.clear()
     except OSError as exc:
         return f"ERR:OUTCOME_UNKNOWN|Baseline loaded but run ownership could not be recorded: {exc}"
     return None
@@ -64,6 +68,7 @@ def _digest(name: str) -> str:
 
 def forget_completion(name: str) -> None:
     name = name.removesuffix(".Civ6Save")
+    _revoked.add(name)
     _completed.pop(name, None)
     # A new attempted overwrite must not leave an older record eligible while
     # its file may still be writing, even if the first observation is unchanged.
@@ -127,6 +132,7 @@ def record_checkpoint(
         temporary = target.with_suffix(".tmp")
         temporary.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
         temporary.replace(target)
+        _revoked.discard(name)
     except (OSError, ValueError) as exc:
         return f"ERR:OUTCOME_UNKNOWN|Checkpoint record could not be confirmed: {exc}"
     return None
@@ -134,6 +140,8 @@ def record_checkpoint(
 
 def _verified_record(name: str) -> dict | None:
     name = name.removesuffix(".Civ6Save")
+    if name in _revoked:
+        return None
     try:
         digest = _digest(name)
         target = CHECKPOINT_DIR / (hashlib.sha256(name.encode()).hexdigest() + ".json")
