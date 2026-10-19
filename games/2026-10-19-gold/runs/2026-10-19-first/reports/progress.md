@@ -35,7 +35,7 @@
 | B24 | T128 | 间谍旅行离图后旧确认仍要求地图单位存在；实机Removed早于Started | 精确双原生事件/唯一新离图身份与在途查询 | 最终c5f7868；503相关/152最终检查/双审，T128旅行/T129保存/T132实际新fullID到达及任务通过 |
 | B25 | T131 | 原商路完成但另一Trader的同名chooser被当作旧动作未收尾 | 严格当前UI归属/未知不关闭/只读旧确认 | 5d7a732+8ea0506；126相关/双审，原receipt纯native RED→GREEN且chooser保留，新publicroute/T132保存通过 |
 
-当前已确认 T132，身份 sumeria / seed -1896272000，轮次 e8b4d6a62dca49bbb256e8264beb18f2。五城46人口，工业普通时代、商人共和国、巴西研究同盟Lv1、外交VP5，已创拜火教。B01–B25已修复，B24已于T132实际到达；最近确认检查点gold_20261019_t132_b24_b25_verified。用户已确认现有 checkpoint / GameState / lifecycle 验证边界。
+当前已确认 T138，身份 sumeria / seed -1896272000，轮次 e8b4d6a62dca49bbb256e8264beb18f2。五城50人口，工业普通时代、商人共和国、巴西研究同盟Lv1、外交VP5，已创拜火教。B01–B25已修复，B26实施中；最近确认检查点gold_20261019_t137_spy_apostle（正在技术恢复重现T138）。用户已确认现有 checkpoint / GameState / lifecycle 验证边界。
 
 B01：实施 f3f919a，集成 ffd3f06。相关离线 425 passed，compileall / diff --check 通过；Standards 与 Spec 两项独立审查均无实质发现。原始新旧基准不覆盖、不混用轮次。
 
@@ -297,3 +297,11 @@ B25 T131：#2497单次续NipTrader1966090→Cap40,25国内商路4Food3P，active
 B25首版5d7a732：115相关/compile/diff通过。未重载世界，#2512仍原T131；#2513确认当前MAKE/head2883596/40,25及原token保持，#2514最终纯native query对原1966090回执返回TRADER_CONFIRMED/routes3of4，#2515当前MAKE/head/token原样保持；对应旧代码#2511真实RED→新代码GREEN，未重建Pythonpending或重发旧商路。独立Spec发现首次提交的其他Trader身份读取未知仍会fallback关闭chooser，Standards发现归属getter期间mode已改外交后仍按旧mode关闭；均交同一worker补修。暂不进行新经济动作，保留T131供最终实测。
 
 B25最终8ea0506补齐首提未知归属与stale-mode，126相关/compile/diff通过、Spec/Standards最终均无实质发现。无世界重载，#2517–19最终代码对同原T131回执纯确认成功且MAKE/head2883596不变；#2521新Trader普通公共商路→Eri确认，#2522四条route一致；#2523确认T132、#2525保存916405bytes。B24间谍#2524实际以新full2949131到达Ottawa18,13，#2530正常GAIN_SOURCES end137。B24/B25均resolve，继续原局。
+
+## T133–T138：工业建设、宗教防御与B26
+
+#2536殖民主义完成，#2540/2550两使者使NanMadol6→8恢复宗主/文化54→69；#2541土木工程，#2543森林33,25伐木场。#2551T134弹道学完成，#2559/60巴西友好及研究同盟续签；#2561/62原生升级两弩手为FieldCannon3014658/3080193，分别100Gold。#2563经济学、#2564Eri工厂、#2565Nip工坊、#2566Kish恢复大学。#2571T135首都工业区完成，#2576买工坊520Gold、#2578工厂8t；原生距离#2558首都38,26工厂将覆盖全部五城，Eri工厂区域与首都部分重叠，后续保留其伟人点/三工厂市政提升价值。
+
+#2580击倒原BarbLine6094852，#2582双入口absent；#2584石35,28采石场Builder剩1。#2589击倒BarbFieldCannon6357003、#2591双入口absent。Eri农场35,21/36,22被掠夺；西面另BarbLine6291466进入工业区，T137工厂队列不可生产，#2611改Builder2t，原工厂进度保留。T138确有工作坊被掠夺，需清敌后原生repair生产。#2599T137间谍GainSources完成、#2609实际Campus20,12窃科技任务至142；#2604援助竞赛余15t，ours0/Canada0/Swede-1800。#2614 Eri265Faith购使徒3145737，#2615泛列表不等于真实候选；#2620原生仅Pilgrim/Debater/Chaplain，#2621选Debater。#2616保存T137926620bytes。T138研究同盟Lv2/化学提升，瑞典宗教3/4，需继续保护本方宗教。
+
+B26：#2622FieldCannon击倒工业区BarbLine6291466；#2623 Eri城市攻击可见Bombard6422531/34,20，NO_LOS拒绝文案模板留下Lua `{target_x}` 表导致concat RuntimeError，#2626原请求仅确认仍unknown。旧ownerclean-closed纯诊断，#2628当前T138原生targetPlot1234不在非空目标列表、CanStart=false；原城市见证仍旧T137/33,21/closed，未进入本次见证。禁止追溯释放原pending；规格cae45f0进入to-spec→implement-spec。#2629显式同run恢复T137检查点61.453s，#2630–32核对单位/城市/宗教使徒未晋升/Spy任务一致；将依原日志推进T138、晋升Debater与原Field目标后保存新准备点，再最终代码验证NO_LOS拒绝及续局。
