@@ -72,7 +72,9 @@
 
 红灯证据：完整身份／来源锁存首轮 11 例失败；跨所有者门禁和旧 skip 重入首轮 21 例失败；公开工具目录在三项查询缺少 readOnlyHint 时失败；兼容低 index 的移动被替代单位到达目标误确认，以及 OPEN_BORDERS 别名无法重入原交易，也各自先复现失败再修复。修复后新增 63 项通过。旧入口假数据中两项 low-ID 期望更新为 full-ID；旧直接 kill_game 绕过推进的期望改为与 MCP 一致阻止，恢复仍交已确认检查点。
 
-相关回归已通过 249 项身份与旧动作测试、497 项门禁／推进／保存／议会／交易测试。最终全量结果、语法与链接检查见本票 Answer；双轴审查及闭票记录由最终集成补充。
+最终全量离线回归：**3563 passed in 124.08s**，覆盖 `tests/`，其中本票新增 63 项。此前相关回归为 249 项身份与旧动作测试、497 项门禁／推进／保存／议会／交易测试。`compileall -q src tests`、基线至 HEAD 的 `git diff --check` 通过；26 个修改的 Markdown 文件中 155 个本地链接／锚点全部可解析。源码注册与公开工具目录逐名一致，43 项变更入口在覆盖表中遗漏为 0。
+
+实施提交 `3fa68cd`，基于已集成 01–17 的 `b219479`。18 保持 claimed；Standards／Spec 双轴审查、最终闭票和工作树清理待集成环节执行。
 
 ```bash
 PYTHONPATH=src ~/Documents/ChatGPT/civ6/civ6-mcp/.venv/bin/python -B -m pytest tests/ -q
