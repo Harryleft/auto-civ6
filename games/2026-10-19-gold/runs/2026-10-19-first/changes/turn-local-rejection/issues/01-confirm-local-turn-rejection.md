@@ -1,6 +1,6 @@
 # B13-01 Confirm native local turn rejection
 
-Status: implemented-pending-review
+Status: resolved
 Dependencies: none
 Spec: ../spec.md
 
@@ -42,3 +42,5 @@ Standards审查两项均已红→绿修正。其一，SETTLED后的周期Playbac
 其二，证明query现在完全只读，不在回复送达前拆监听，也不添加会遭遇相同丢回应窗口的ack RPC。监听保留至原生回调确认失效或下一次实际请求统一清理；Python收到有效证明才退休owner。确认回复丢失后，blocker消失再恢复、跨world／turn后恢复、unready均仍会捕获并阻止复用旧证明。外部原生adapter计数验证新请求后监听清零，原正常推进与单次提交契约保留。
 
 最终离线同5模块共446 passed，compileall、diff --check通过；无剩余离线失败。父代理已记录初版正常实机闭环#1066pending→#1068REOPENED_LOCAL→#1070普通移动→#1073T58→#1074保存，本次审查负向修正尚待独立复核。票据保持implemented-pending-review，由父代理完成复核后关闭。
+
+Final validation: d2a5c1d／a0e3e5c原生重开闭环；审查补修4c4bf42／0603f17、d71b4dd／f135b81，最终Spec/Standards均无实质问题。446相关五模块通过；最终末尾guard变更后68项turn_reopened重跑通过，compileall/diff-check通过。实机#1066保留pending、#1067纯查询不释放、#1068REOPENED_LOCAL、#1070正常单位移动、#1073新请求T58、#1074同轮保存；最终代码刷新后#1136继续T62→T63，未回档，未制造丢回复。
