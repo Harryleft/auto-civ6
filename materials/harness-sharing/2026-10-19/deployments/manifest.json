@@ -1,0 +1,25 @@
+{
+  "archives": [
+    {
+      "file": "explainer-v1.tar.gz",
+      "version": "初版说明页",
+      "sha256": "56e0845f3fe170cc24e22122a32392309748d7319fef542087e46a3fb32455a1",
+      "index_html_sha256": "c30092b7d8227000d8e65ed22a74112143081592d22235ccdeda7b4b34277807",
+      "matches_current_demo": false
+    },
+    {
+      "file": "interactive-prototype.tar.gz",
+      "version": "交互原型",
+      "sha256": "42bc709f98237b7574b845219080f76f06c324c0ccb44a3bbb58099604771b58",
+      "index_html_sha256": "84e67398e9304f18256cb0fa761f4fb9f84b650aad414c77a83fb9fb10aa227a",
+      "matches_current_demo": false
+    },
+    {
+      "file": "sequence-prototype.tar.gz",
+      "version": "三方时序图原型",
+      "sha256": "9f832b0e1589ae18ad45f2afeaab2cd357bc5f202f5a458074f6c546ae047df1",
+      "index_html_sha256": "e7e77553543955b665ab210ab39c97fc5fb9a0cd6a11a005a5839f2d440d04c3",
+      "matches_current_demo": true
+    }
+  ]
+}

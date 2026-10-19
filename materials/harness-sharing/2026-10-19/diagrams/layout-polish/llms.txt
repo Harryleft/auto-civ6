@@ -1,0 +1,119 @@
+# 飞书开放平台
+
+> 飞书是先进企业协作与管理平台，一站式整合了即时消息、日历、云文档、视频会议等功能，通过顺畅沟通与高效协同，助力企业或团队组织升级。飞书开放平台是飞书利用对外开放的众多 OpenAPI，帮助飞书客户企业将自己的系统与飞书连接集成，打破系统间的壁垒，让信息传递更高效。
+
+## 飞书开放平台提供能力介绍
+
+**应用**: 应用是开发者向内部或外部用户提供服务的载体，通常表现为机器人、网页等形态，也是开发者调用飞书所提供的开放能力（API）的载体。
+
+- 应用类型
+
+- 企业自建应用：由企业内部人员或企业授权的开发人员进行开发，只能在同一企业内发布和使用。
+- 应用商店应用：由第三方服务商开发，在飞书应用中心发布，所有飞书租户均可安装和使用。
+
+- 应用形态：根据应用的能力形态，飞书应用主要可分为[机器人](https://open.feishu.cn/document/client-docs/bot-v3/bot-overview.md)、[网页](https://open.feishu.cn/document/client-docs/h5/introduction)、小组件([云文档小组件](https://open.feishu.cn/document/client-docs/docs-add-on/docs-add-on-introduction.md)、[多维表格插件概述](https://open.feishu.cn/document/base-extensions/base-extension-introduction.md)、[工作台小组件概述](https://open.feishu.cn/document/client-docs/block/hosting-scenario-introduction/workplace.md))三类，也可以开发纯服务端应用。
+
+**应用鉴权**
+
+- **API 权限（Scope）**: 在开发应用过程中，你可能需要调用服务端 API 或监听已订阅的事件，该类操作可能涉及访问企业、用户的隐私信息，也可能需要操作企业、用户的应用数据。出于安全考虑，你需要为应用申请相应的权限，并且由企业管理员审核通过后，应用才可以进行后续的 API 调用或事件监听。[了解更多](https://open.feishu.cn/document/server-docs/application-scope/introduction.md)
+
+- **访问凭证（access_token）**
+- tenant_access_token : 以应用身份调用 API 时需要使用的凭证，可读写的数据范围由应用的数据权限范围决定。该访问凭证适用于无需用户登录的自动化操作，例如应用机器人调用发送消息接口，向指定会话推送消息通知。[自建应用获取 tenant_access_token](https://open.feishu.cn/document/server-docs/authentication-management/access-token/tenant_access_token_internal.md)
+- user_access_token: 以用户身份调用 API 时需要使用的凭证，可读写的数据范围由用户权限决定。该访问凭证适用于用户授权登录后代理用户的操作，例如，以 user_access_token 调用创建多维表格接口，创建出来的多维表格的所有者是 user_access_token 对应的用户。获取 user_access_token 是标准的 OAuth 2.0 [了解更多](https://open.feishu.cn/document/sso/web-application-end-user-consent/guide.md)
+- **可用范围**: 应用可用范围定义了哪些用户群体（部门、个人）可以使用该应用，其他成员便无法使用该应用，从而实现权限控制。[了解更多](https://open.feishu.cn/document/home/introduction-to-scope-and-authorization/availability.md)
+
+- **数据权限**: 应用的数据权限是指以 tenant_access_token 访问业务资源时可获取的数据范围。当应用申请了应用身份权限（例如，通讯录、飞书人事企业版）后，还需要配置相应的数据权限并提交审核，待审核通过后权限生效，才可以成功调用 API 获取数据，否则调用 API 时会返回权限错误。[了解更多](https://open.feishu.cn/document/api-call-guide/calling-process/configure-app-data-permissions.md)
+
+**事件和回调订阅**
+
+- **事件订阅**：应用可以及时响应飞书中的变更事件。当事件发生时，飞书会按照你配置的订阅方式发送事件消息。[了解更多](https://open.feishu.cn/document/server-docs/event-subscription-guide/overview.md)
+
+- **回调**： 适用于需要对用户行为进行同步响应的业务场景，即当用户在飞书中触发某些操作时，前端加载等待服务端返回响应数据。待服务端返回响应结果时，前端加载完成，并向用户展示返回的响应结果。[了解更多](https://open.feishu.cn/document/event-subscription-guide/callback-subscription/callback-overview.md)
+
+- **订阅方式**
+
+- **使用长连接接收** 由飞书 SDK 内提供的能力，你可以通过集成飞书 SDK 与飞书建立一条 WebSocket 全双工通道。后续当应用订阅的事件或回调发生时，飞书会通过该通道向你的服务器发送消息。[了解更多](https://open.feishu.cn/document/server-docs/event-subscription-guide/event-subscription-configure-/request-url-configuration-case.md)
+
+- **发送至开发者服务器** 传统的 Webhook 模式，该方式需要你提供用于接收事件或回调消息的服务器公网地址。后续当应用订阅的事件或回调发生时，飞书会向服务器的公网地址发送 HTTP POST 请求，请求内包含事件或回调数据。[了解更多](https://open.feishu.cn/document/event-subscription-guide/event-subscriptions/event-subscription-configure-/choose-a-subscription-mode/send-notifications-to-developers-server.md)
+
+**服务端 SDK**
+
+飞书开放平台提供了服务端 SDK，将访问凭证（access token）的获取与维护、数据加解密、请求验签逻辑内置处理，支持完备的类型系统，对外提供语义化的编程接口，以提高实际的编码体验。
+
+- [oapi-sdk-go](https://github.com/larksuite/oapi-sdk-go)
+- [oapi-sdk-python](https://github.com/larksuite/oapi-sdk-python)
+- [oapi-sdk-java](https://github.com/larksuite/oapi-sdk-java)
+- [oapi-sdk-nodejs](https://github.com/larksuite/node-sdk)
+
+**示例代码**
+
+- [lark-samples](https://github.com/larksuite/lark-samples)
+- [oapi-sdk-go-demo](https://github.com/larksuite/oapi-sdk-go-demo)
+- [oapi-sdk-python-demo](https://github.com/larksuite/oapi-sdk-python-demo)
+- [oapi-sdk-java-demo](https://github.com/larksuite/oapi-sdk-java-demo)
+
+**API 调用流程**
+
+1. 创建应用。在[开发者后台](https://open.feishu.cn/app)，根据实际需求，创建自建应用或者商店应用。（仅拥有 ISV 资质的用户可以创建商店应用）
+
+2. [获取访问凭证](https://open.feishu.cn/document/server-docs/api-call-guide/calling-process/get-access-token.md)。调用 API 时，必须在 HTTP Header 中携带访问凭证，以便获取权限范围内的资源信息。
+
+3. [申请 API 权限](https://open.feishu.cn/document/server-docs/application-scope/introduction.md)。不同的 API 有不同的接口权限和字段权限要求。如需调用 API 则需先申请相匹配的 API 权限。如果涉及到访问敏感字段，还需申请访问敏感字段的权限。
+
+4. [调用 API](https://open.feishu.cn/document/server-docs/api-call-guide/calling-process/get-.md)。当你根据实际需要完成以上配置步骤后，即可开始调用 API，API 的具体介绍与参数说明可以参考相应的 API 文档。
+
+## Docs
+- [开发指南](https://open.feishu.cn/llms-docs/zh-CN/llms-developer-guides.txt)
+- [飞书卡片](https://open.feishu.cn/llms-docs/zh-CN/llms-feishu-card.txt)
+- [开发教程](https://open.feishu.cn/llms-docs/zh-CN/llms-developer-tutorials.txt)
+- [API 调用指南](https://open.feishu.cn/llms-docs/zh-CN/llms-api-call-guide.txt)
+- [服务端 SDK](https://open.feishu.cn/llms-docs/zh-CN/llms-server-side-sdk.txt)
+- [事件与回调](https://open.feishu.cn/llms-docs/zh-CN/llms-events-and-callbacks.txt)
+- [认证及授权](https://open.feishu.cn/llms-docs/zh-CN/llms-authenticate-and-authorize.txt)
+- [通讯录](https://open.feishu.cn/llms-docs/zh-CN/llms-contacts.txt)
+- [消息](https://open.feishu.cn/llms-docs/zh-CN/llms-messaging.txt)
+- [群组](https://open.feishu.cn/llms-docs/zh-CN/llms-group-chat.txt)
+- [消息流](https://open.feishu.cn/llms-docs/zh-CN/llms-feed.txt)
+- [企业自定义群标签](https://open.feishu.cn/llms-docs/zh-CN/llms-organization-custom-group-label.txt)
+- [云文档](https://open.feishu.cn/llms-docs/zh-CN/llms-docs.txt)
+- [日历](https://open.feishu.cn/llms-docs/zh-CN/llms-calendar.txt)
+- [视频会议](https://open.feishu.cn/llms-docs/zh-CN/llms-video-conferencing.txt)
+- [考勤打卡](https://open.feishu.cn/llms-docs/zh-CN/llms-attendance.txt)
+- [审批](https://open.feishu.cn/llms-docs/zh-CN/llms-approval.txt)
+- [机器人](https://open.feishu.cn/llms-docs/zh-CN/llms-bot.txt)
+- [服务台](https://open.feishu.cn/llms-docs/zh-CN/llms-help-desk.txt)
+- [任务](https://open.feishu.cn/llms-docs/zh-CN/llms-tasks.txt)
+- [邮箱](https://open.feishu.cn/llms-docs/zh-CN/llms-email.txt)
+- [应用信息](https://open.feishu.cn/llms-docs/zh-CN/llms-app-information.txt)
+- [企业信息](https://open.feishu.cn/llms-docs/zh-CN/llms-company-information.txt)
+- [认证信息](https://open.feishu.cn/llms-docs/zh-CN/llms-verification-information.txt)
+- [个人设置](https://open.feishu.cn/llms-docs/zh-CN/llms-personal-settings.txt)
+- [搜索](https://open.feishu.cn/llms-docs/zh-CN/llms-search.txt)
+- [AI 能力](https://open.feishu.cn/llms-docs/zh-CN/llms-ai.txt)
+- [飞书 aPaaS](https://open.feishu.cn/llms-docs/zh-CN/llms-feishu-apaas.txt)
+- [飞书 Aily](https://open.feishu.cn/llms-docs/zh-CN/llms-aily.txt)
+- [管理后台](https://open.feishu.cn/llms-docs/zh-CN/llms-admin.txt)
+- [公司圈](https://open.feishu.cn/llms-docs/zh-CN/llms-moments.txt)
+- [飞书人事（标准版）](https://open.feishu.cn/llms-docs/zh-CN/llms-feishu-corehr---(standard-version).txt)
+- [飞书人事（企业版）](https://open.feishu.cn/llms-docs/zh-CN/llms-feishu-people(enterprise-edition).txt)
+- [Payroll](https://open.feishu.cn/llms-docs/zh-CN/llms-payroll.txt)
+- [招聘](https://open.feishu.cn/llms-docs/zh-CN/llms-hire.txt)
+- [OKR](https://open.feishu.cn/llms-docs/zh-CN/llms-okr.txt)
+- [实名认证](https://open.feishu.cn/llms-docs/zh-CN/llms-identity-authentication.txt)
+- [智能门禁](https://open.feishu.cn/llms-docs/zh-CN/llms-smart-access-control.txt)
+- [绩效](https://open.feishu.cn/llms-docs/zh-CN/llms-performance.txt)
+- [飞书词典](https://open.feishu.cn/llms-docs/zh-CN/llms-lingo.txt)
+- [安全合规](https://open.feishu.cn/llms-docs/zh-CN/llms-security_and_compliance.txt)
+- [妙记](https://open.feishu.cn/llms-docs/zh-CN/llms-minutes.txt)
+- [工作台](https://open.feishu.cn/llms-docs/zh-CN/llms-workplace.txt)
+- [飞书主数据](https://open.feishu.cn/llms-docs/zh-CN/llms-feishu-master-data-management.txt)
+- [汇报](https://open.feishu.cn/llms-docs/zh-CN/llms-report.txt)
+- [eLearning](https://open.feishu.cn/llms-docs/zh-CN/llms-elearning.txt)
+- [网页应用](https://open.feishu.cn/llms-docs/zh-CN/llms-web-app.txt)
+- [工作台小组件](https://open.feishu.cn/llms-docs/zh-CN/llms-blocks.txt)
+- [云文档小组件](https://open.feishu.cn/llms-docs/zh-CN/llms-docs-add-ons.txt)
+- [多维表格插件](https://open.feishu.cn/llms-docs/zh-CN/llms-base-extension.txt)
+- [llms.txt](https://open.feishu.cn/llms-docs/zh-CN/llms-.txt)
+- [组织架构](https://open.feishu.cn/llms-docs/zh-CN/llms-organization.txt)
+- [关联组织](https://open.feishu.cn/llms-docs/zh-CN/llms-trust-party.txt)
+- [MCP](https://open.feishu.cn/llms-docs/zh-CN/llms-mcp.txt)
