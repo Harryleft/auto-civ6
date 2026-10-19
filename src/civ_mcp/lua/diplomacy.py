@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from civ_mcp.lua._helpers import SENTINEL, _bail, _bail_lua, _lua_close_diplo_session
+from civ_mcp.lua._helpers import SENTINEL, _bail, _bail_lua
 from civ_mcp.lua.models import (
     AgendaInfo,
     CivInfo,
@@ -392,7 +392,9 @@ print("{SENTINEL}")
 """
 
 
-def build_send_diplo_action(other_player_id: int, action_name: str) -> str:
+# Submission bodies below run only inside relationships.build_request, whose
+# receipt-local _rel_step and _rel_session bind all native mutations.
+def _build_send_diplo_action(other_player_id: int, action_name: str) -> str:
     """Send a native action; access/friendship need later native witnesses.
 
     action_name is e.g. DIPLOMATIC_DELEGATION, DECLARE_FRIENDSHIP, DENOUNCE,
@@ -503,10 +505,9 @@ if not valid then
     {_bail_lua('"ERR:INVALID|" .. reasons')}
 end"""
 
-    # War declarations leave the session open so the leader animation plays.
-    # Python schedules cleanup after ~8s via build_war_diplo_cleanup().
-    close_session_lua = "" if is_war else "    DiplomacyManager.CloseSession(sid)"
-    cleanup_lua = "" if is_war else _lua_close_diplo_session()
+    # Leave war views to explicit, session-scoped DiplomacyViewCleanup.
+    close_session_lua = "" if is_war else '    _rel_step("close", function() return DiplomacyManager.CloseSession(sid) end)'
+    cleanup_lua = ""  # Explicit view cleanup owns later UI dismissal.
 
     return f"""
 {validation_block}
@@ -514,14 +515,15 @@ end"""
 -- Mass-closing sessions via IsSessionIDOpen loop corrupts AI diplomacy state.
 local staleSid = DiplomacyManager.FindOpenSessionID(me, target)
 if staleSid and staleSid >= 0 then
-    DiplomacyManager.CloseSession(staleSid)
+    _rel_step("close_stale", function() return DiplomacyManager.CloseSession(staleSid) end)
 end
 -- Open session with the correct action string
-DiplomacyManager.RequestSession(me, target, "{session_str}")
+_rel_step("request", function() return DiplomacyManager.RequestSession(me, target, "{session_str}") end)
 local sid = DiplomacyManager.FindOpenSessionID(me, target)
 if sid and sid >= 0 then
-    DiplomacyManager.AddResponse(sid, me, "POSITIVE")
-    DiplomacyManager.AddResponse(sid, me, "POSITIVE")
+    _rel_session(sid)
+    _rel_step("response1", function() return DiplomacyManager.AddResponse(sid, me, "POSITIVE") end)
+    _rel_step("response2", function() return DiplomacyManager.AddResponse(sid, me, "POSITIVE") end)
 {close_session_lua}
 end
 {cleanup_lua}
@@ -647,46 +649,6 @@ if ok then status = result end
 print("ALLIANCE|" .. me .. "|" .. target .. "|" .. status)
 print("{SENTINEL}")
 """
-
-
-def build_war_close_session(other_player_id: int) -> str:
-    """Phase 1: close the war diplomacy session (InGame context).
-
-    After this, DiplomacyActionView transitions to OVERVIEW_MODE (intel screen).
-    Must wait ~1s for the engine event to process before phase 2.
-    """
-    sentinel = SENTINEL
-    return f"""
-local me = Game.GetLocalPlayer()
-local target = {other_player_id}
-local sid = DiplomacyManager.FindOpenSessionID(me, target)
-if sid and sid >= 0 then
-    DiplomacyManager.CloseSession(sid)
-end
-print("OK:SESSION_CLOSED")
-print("{sentinel}")
-"""
-
-
-def build_war_dismiss_view() -> str:
-    """Phase 2: force-dismiss DiplomacyActionView from OVERVIEW_MODE (InGame context).
-
-    NaturalWonderPopup_Shown triggers OnBlockingPopupShown → OnForceClose →
-    CloseFocusedState(true) → Close() which calls UninitializeView + ShowIngameUI
-    (balancing InitializeView's HideIngameUI).  NaturalWonderPopup_Closed then
-    balances NW's own BulkHide(true) entry.
-
-    Must be called in a SEPARATE Lua execution from CloseSession — the engine
-    fires OnDiplomacySessionClosed asynchronously, so the view needs a frame to
-    transition from CONVERSATION_MODE to OVERVIEW_MODE first.
-    """
-    return """
-LuaEvents.NaturalWonderPopup_Shown()
-LuaEvents.NaturalWonderPopup_Closed()
-pcall(function() Events.HideLeaderScreen() end)
-print("OK:VIEW_DISMISSED")
-print("{SENTINEL}")
-""".replace("{SENTINEL}", SENTINEL)
 
 
 def build_deal_options_query(other_player_id: int) -> str:
@@ -825,40 +787,6 @@ def build_pending_deals_query() -> str:
     return build_diplomacy_session_query()
 
 
-def build_respond_to_deal(other_player_id: int, accept: bool) -> str:
-    """Submit only against a verified current incoming deal/demand for this target."""
-    action = "DealProposalAction.ACCEPTED" if accept else "DealProposalAction.REJECTED"
-    verb = "ACCEPTED" if accept else "REJECTED"
-    guard = ""
-    if accept:
-        from civ_mcp.lua.trade import _fingerprint
-        guard = _fingerprint() + """
-local acceptable = pcall(function()
-    local outgoing = DealManager.GetWorkingDeal(DealDirection.OUTGOING, me, target)
-    local incoming = DealManager.GetWorkingDeal(DealDirection.INCOMING, me, target)
-    local control = ContextPtr:LookUpControl("/InGame/DiplomacyDealView/AcceptDeal")
-    if not control or control:IsHidden() ~= false or control:IsDisabled() ~= false then error("NATIVE_ACCEPT_UNAVAILABLE") end
-    if DealManager.HasPendingDeal(me,target) ~= false or DealManager.AreWorkingDealsEqual(me,target) ~= true then error("UNEVALUATED_TERMS") end
-    local original,current = fingerprint(incoming),fingerprint(outgoing)
-    if not original or original ~= current then error("TERMS_CHANGED") end
-end)
-if not acceptable then print("ERR:NOT_ACCEPTABLE|Current terms are edited, rejected, pending or unknown; no final acceptance sent."); print("---END---"); return end
-"""
-    return _LUA_DIPLOMACY_CONTEXT + f"""
-local target = {other_player_id}
-if context.status ~= "INCOMING" or context.other ~= target then
-    {_bail_lua('"ERR:NO_CURRENT_PROPOSAL|" .. context.status .. "|" .. context.reason .. "|Target must match the verified current incoming view"')}
-end
-local sid = context.sessions[1].sid
-{guard}
-DealManager.SendWorkingDeal({action}, me, target)
-{_lua_close_diplo_session()}
-local name = Locale.Lookup(PlayerConfigurations[target]:GetCivilizationShortDescription())
-print("OK:DEAL_{verb}|" .. name)
-print("{SENTINEL}")
-"""
-
-
 def _lua_deal_item(from_var: str, item: dict) -> str:
     """Generate Lua snippet to add one item to the working deal.
 
@@ -945,7 +873,7 @@ def parse_test_trade_response(lines: list[str]) -> TestTradeResult:
     return result
 
 
-def build_form_alliance(other_player_id: int, alliance_type: str) -> str:
+def _build_form_alliance(other_player_id: int, alliance_type: str) -> str:
     """Form an alliance with another civilization (InGame context).
 
     alliance_type: MILITARY, RESEARCH, CULTURAL, ECONOMIC, RELIGIOUS
@@ -979,28 +907,30 @@ pcall(function()
 end)
 if not hasDiploService then {_bail("ERR:NO_CIVIC|Diplomatic Service civic required for alliances")} end
 local name = Locale.Lookup(PlayerConfigurations[target]:GetCivilizationShortDescription())
-if not DealManager.HasPendingDeal(me, target) then
-    DealManager.ClearWorkingDeal(DealDirection.OUTGOING, me, target)
-end
+if DealManager.HasPendingDeal(me, target) ~= false then {_bail("ERR:PENDING_DEAL|Existing or unknown pending deal; no alliance proposal submitted")} end
+_rel_step("clear_deal", function() return DealManager.ClearWorkingDeal(DealDirection.OUTGOING, me, target) end)
 local deal = DealManager.GetWorkingDeal(DealDirection.OUTGOING, me, target)
 if not deal then {_bail("ERR:NO_DEAL_OBJECT|Failed to get working deal")} end
-do local ai_item = deal:AddItemOfType(DealItemTypes.AGREEMENTS, me)
-if ai_item then ai_item:SetSubType(DealAgreementTypes.ALLIANCE) pcall(function() ai_item:SetValueType(type_idx) end) end end
-DiplomacyManager.RequestSession(me, target, "MAKE_DEAL")
-DealManager.SendWorkingDeal(DealProposalAction.PROPOSED, me, target)
+local ai_item = _rel_step("add_item", function() return deal:AddItemOfType(DealItemTypes.AGREEMENTS, me) end)
+assert(ai_item,"ALLIANCE_ITEM_MISSING")
+_rel_step("subtype", function() return ai_item:SetSubType(DealAgreementTypes.ALLIANCE) end)
+_rel_step("alliance_type", function() return ai_item:SetValueType(type_idx) end)
+_rel_step("request", function() return DiplomacyManager.RequestSession(me, target, "MAKE_DEAL") end)
+_rel_step("proposed", function() return DealManager.SendWorkingDeal(DealProposalAction.PROPOSED, me, target) end)
 local sid = DiplomacyManager.FindOpenSessionID(me, target)
 if sid and sid >= 0 then
+    _rel_session(sid)
     local ok, respDeal = pcall(function()
         return DealManager.GetWorkingDeal(DealDirection.INCOMING, me, target)
     end)
     if ok and respDeal then
         local itemCount = 0
         pcall(function() itemCount = respDeal:GetItemCount() or 0 end)
-        if itemCount > 0 then
-            DealManager.SendWorkingDeal(DealProposalAction.ACCEPTED, me, target)
+        if itemCount > 0 and DealManager.AreWorkingDealsEqual(me, target) == true then
+            _rel_step("accepted", function() return DealManager.SendWorkingDeal(DealProposalAction.ACCEPTED, me, target) end)
         end
     end
-    {_lua_close_diplo_session()}
+    _rel_step("close", function() return DiplomacyManager.CloseSession(sid) end)
 end
 -- A working deal and same-frame relation are not an acceptance witness.
 print("OK:PROPOSED|" .. name)
@@ -1009,12 +939,12 @@ print("{SENTINEL}")
 """
 
 
-def build_propose_peace(other_player_id: int) -> str:
+def _build_propose_peace(other_player_id: int) -> str:
     """Propose white peace to a civilization we're at war with (InGame context).
 
     Session type is "MAKE_PEACE" (not "PROPOSE_PEACE_DEAL" which silently fails).
-    After sending the deal, close the session with NEGATIVE+CloseSession loop,
-    then ShowIngameUI + Events.HideLeaderScreen() to restore HUD and dismiss 3D leader.
+    The relationship receipt owns every phase and captures the original session.
+    Later view dismissal belongs to the explicit diplomacy cleanup lifecycle.
     """
     return f"""
 local me = Game.GetLocalPlayer()
@@ -1024,23 +954,14 @@ if not pDiplo:IsAtWarWith(target) then {_bail("ERR:NOT_AT_WAR|Not at war with pl
 local canPeace = pDiplo:CanMakePeaceWith(target)
 if not canPeace then {_bail("ERR:CANNOT_MAKE_PEACE|10-turn war cooldown or other restriction")} end
 local name = Locale.Lookup(PlayerConfigurations[target]:GetCivilizationShortDescription())
-DiplomacyManager.RequestSession(me, target, "MAKE_PEACE")
+_rel_step("request", function() return DiplomacyManager.RequestSession(me, target, "MAKE_PEACE") end)
 local sid = DiplomacyManager.FindOpenSessionID(me, target)
+if sid and sid >= 0 then _rel_session(sid) end
 if not sid or sid < 0 then {_bail("ERR:NO_SESSION|Failed to open peace deal session")} end
-DealManager.ClearWorkingDeal(DealDirection.OUTGOING, me, target)
-DealManager.SendWorkingDeal(DealProposalAction.PROPOSED, me, target)
-{_lua_close_diplo_session()}
+_rel_step("clear_deal", function() return DealManager.ClearWorkingDeal(DealDirection.OUTGOING, me, target) end)
+_rel_step("proposed", function() return DealManager.SendWorkingDeal(DealProposalAction.PROPOSED, me, target) end)
+_rel_step("close", function() return DiplomacyManager.CloseSession(sid) end)
 print("OK:PROPOSED|" .. name)
-print("{SENTINEL}")
-"""
-
-
-def build_check_war_state(other_player_id: int) -> str:
-    """Check if we're still at war with a player (InGame context)."""
-    return f"""
-local me = Game.GetLocalPlayer()
-local atWar = Players[me]:GetDiplomacy():IsAtWarWith({other_player_id})
-print(atWar and "AT_WAR" or "AT_PEACE")
 print("{SENTINEL}")
 """
 
