@@ -4,6 +4,31 @@ from __future__ import annotations
 
 SENTINEL = "---END---"
 
+# Receipt scope checks share only the distinction between an unavailable read
+# and an observed change. Unknown getters must not poison later confirmation;
+# a valid mismatch remains sticky even if a different getter is unavailable.
+_LUA_ACTION_SCOPE = '''
+local function scopeInteger(value)
+ return type(value)=="number" and value==value and math.abs(value)<math.huge and value==math.floor(value)
+end
+local function scopeIndex(value) return scopeInteger(value) and value>=0 end
+local function sameScope(r)
+ if r.invalid then return false end
+ local known=true
+ local function check(read,valid,expected)
+  local ok,value=pcall(read)
+  if not ok or not valid(value) then known=false
+  elseif value~=expected then r.invalid=true end
+ end
+ check(function() return Game.GetLocalPlayer() end,scopeIndex,r.owner)
+ check(function() return Game.GetCurrentGameTurn() end,scopeIndex,r.turn)
+ check(function() return PlayerConfigurations[r.owner]:GetCivilizationTypeName() end,
+  function(value) return type(value)=="string" and value:match("^CIVILIZATION_[A-Z0-9_]+$")~=nil end,r.civ)
+ check(function() return GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED") end,scopeInteger,r.seed)
+ return known and not r.invalid
+end
+'''
+
 # Item type → GameInfo table name (shared by produce + purchase builders)
 _ITEM_TABLE_MAP: dict[str, str] = {
     "UNIT": "Units",

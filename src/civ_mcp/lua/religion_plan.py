@@ -1,22 +1,13 @@
 """Religion choices retain original targets and confirm each native phase."""
 import json
 
-from civ_mcp.lua._helpers import SENTINEL
+from civ_mcp.lua._helpers import SENTINEL, _LUA_ACTION_SCOPE
 
 
-_FACTS = '''
+_FACTS = _LUA_ACTION_SCOPE + '''
 local function integer(value)
  assert(type(value)=="number" and math.abs(value)<math.huge and value%1==0,"FACT_UNAVAILABLE")
  return value
-end
-local function sameScope(r)
- local ok,same=pcall(function()
-  return Game.GetLocalPlayer()==r.owner and Game.GetCurrentGameTurn()==r.turn
-   and PlayerConfigurations[r.owner]:GetCivilizationTypeName()==r.civ
-   and GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")==r.seed
- end)
- if not ok or not same then r.invalid=true end
- return not r.invalid
 end
 local function available(belief,religion)
  local gameReligion=Game.GetReligion()

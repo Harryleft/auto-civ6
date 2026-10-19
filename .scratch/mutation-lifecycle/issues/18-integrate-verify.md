@@ -18,7 +18,7 @@
 
 ## Answer
 
-实施提交：`3fa68cd`，基于集成 `b219479`。本票保持 **claimed**：离线收口已完成，Standards／Spec 双轴审查、最终闭票与全部工作树清理由集成负责人执行。
+初始实施提交：`3fa68cd`，基于集成 `b219479`。本票保持 **claimed**：离线收口与初审发现修复已完成，Standards／Spec 修复差异复核、最终闭票与全部工作树清理由集成负责人执行。
 
 - 已核对源码注册、公开 MCP 目录和完整覆盖表：**82 工具／43 变更／39 纯查询，遗漏 0**。补齐三项纯查询的 readOnlyHint；[完整覆盖与离线验收](../../../docs/acceptance/2026-10-19-mutation-lifecycle.md)逐项列出组合分支、未注册 GS 入口、原生 UI callbacks、任意 Lua 与显式生命周期边界，原审计保留历史基线。
 - 直接 GS 的 save/load/turn/diplomacy 门禁补齐；普通 kill/launch/任意 Lua/弹窗关闭不能绕过未知保存或替换。原动作与迁移动作同样先由原 owner 匹配意图；MCP 旧 skip/fortify 等重入不会先确认旧请求后再进入新操作。OPEN_BORDERS 别名继续交原交易 owner 匹配，错目标拒绝，其他关系动作仍受门禁。
@@ -32,6 +32,14 @@
 PYTHONPATH=src ~/Documents/ChatGPT/civ6/civ6-mcp/.venv/bin/python -B -m pytest tests/ -q
 ```
 
-结果 **3563 passed in 124.08s**；日志 `/tmp/civ6-ticket18-full-reviewed.log`。此前 249／497／340 项针对回归通过；首轮全量唯一失败是旧 server 测试仍要求截断 composite ID，已按新完整身份契约更新。`compileall -q src tests`、`git diff d3450a3 HEAD --check` 通过；提交后 Markdown 检查覆盖 26 文件／156 本地链接及锚点，0 unresolved。
+初审冻结前结果 **3563 passed in 124.08s**；日志 `/tmp/civ6-ticket18-full-reviewed.log`。此前 249／497／340 项针对回归通过；首轮全量唯一失败是旧 server 测试仍要求截断 composite ID，已按新完整身份契约更新。`compileall -q src tests`、`git diff d3450a3 HEAD --check` 通过；提交后 Markdown 检查覆盖 26 文件／156 本地链接及锚点，0 unresolved。
 
 未连接 FireTuner，未运行 scripts 实机测试，未启动、关闭、换档或修改真实对局，未 push。工作树保留供最终审查和合并，预存目录未触碰。
+
+### 初审修复
+
+基于冻结集成 `7e3a2a9`：Standards 初审 **1 个 P2、0 个独立 smell**，Spec 初审 **No material issues found（0）**。两轴原始结论及待复核状态分别保留于验收文档，未将实现者的测试通过计作独立复核通过。
+
+Standards 的单一根因是未知身份／时代／政策布局被误当成有效变化永久锁存，初审涉及 13 个新增领域文件；修复排查另覆盖 envoys／contribution 两条同类旧路径，合计 15 个领域文件。共享片段只集中有效事实、未知和实际不匹配的判断；领域费用／效果／原生事件证据仍在本域。证据完整且读数恢复后可只读确认；真的身份、时代或布局变化继续锁存，缺少原生事件不能被恢复读数补成成功。
+
+新增 152 项公开 GS/MCP＋真实 Lua 回归，原生 getter 故障由 adapter 注入。红灯分别为地块 3 例、其余守卫 36 例、时代／布局 4 例；恢复后原提交仍为 1 次，已付费政策只读确认不换卡，同意图续行只换卡一次且不再付款。相关回归 **1231 passed in 15.15s**；最终全量 **3715 passed in 125.17s**，日志 `/tmp/civ6-ticket18-review-fix-full.log`。`compileall -q src tests` 与 `git diff --check` 通过；26 个修改的 Markdown 文件／159 个本地链接及锚点，0 unresolved。

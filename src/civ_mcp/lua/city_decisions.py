@@ -1,11 +1,11 @@
 """A city decision owns one native pending city, never the next queue item."""
 import json
-from civ_mcp.lua._helpers import SENTINEL
+from civ_mcp.lua._helpers import SENTINEL, _LUA_ACTION_SCOPE
 
 
 DIRECTIVES = {'keep': 'KEEP', 'reject': 'REJECT', 'raze': 'RAZE',
               'liberate_founder': 'LIBERATE_FOUNDER', 'liberate_previous': 'LIBERATE_PREVIOUS_OWNER'}
-_CONTEXT = '''
+_CONTEXT = _LUA_ACTION_SCOPE + '''
 local function integer(v)
  assert(type(v)=="number" and v>=0 and v<math.huge and v==math.floor(v),"NUMBER_UNAVAILABLE")
  return v
@@ -14,15 +14,6 @@ local function pendingCity(owner,source)
  local cities=Players[owner]:GetCities()
  if source=="captured" then return cities:GetNextCapturedCity() end
  return cities:GetNextRebelledCity()
-end
-local function sameScope(r)
- local ok,same=pcall(function()
-  return Game.GetLocalPlayer()==r.owner and Game.GetCurrentGameTurn()==r.turn
-   and PlayerConfigurations[r.owner]:GetCivilizationTypeName()==r.civ
-   and GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")==r.seed
- end)
- if not ok or not same then r.invalid=true end
- return not r.invalid
 end
 local function retireDecision(r)
  for name,handler in pairs(r and r.handlers or {}) do pcall(function() Events[name].Remove(handler) end) end

@@ -1,10 +1,10 @@
 """Purchase receipts bind the original city, currency and newly created product."""
 import json
 
-from civ_mcp.lua._helpers import SENTINEL
+from civ_mcp.lua._helpers import SENTINEL, _LUA_ACTION_SCOPE
 
 
-_CONTEXT = '''
+_CONTEXT = _LUA_ACTION_SCOPE + '''
 local function number(value)
  assert(type(value)=="number" and value==value and value~=math.huge and value~=-math.huge,"NUMBER_UNAVAILABLE")
  return value
@@ -17,15 +17,6 @@ end
 local function balanceFor(owner,currency)
  if currency=="YIELD_FAITH" then return number(Players[owner]:GetReligion():GetFaithBalance()) end
  return number(Players[owner]:GetTreasury():GetGoldBalance())
-end
-local function sameScope(r)
- local ok,same=pcall(function()
-  return Game.GetLocalPlayer()==r.owner and Game.GetCurrentGameTurn()==r.turn
-   and PlayerConfigurations[r.owner]:GetCivilizationTypeName()==r.civ
-   and GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")==r.seed
- end)
- if not ok or not same then r.invalid=true end
- return not r.invalid
 end
 local function sameCity(city,r)
  return city and city:GetID()==r.city and city:GetOwner()==r.owner

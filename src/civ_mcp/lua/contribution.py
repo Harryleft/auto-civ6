@@ -1,10 +1,10 @@
 """Royal Society single-submit command and request-bound native evidence."""
 import json
 
-from civ_mcp.lua._helpers import SENTINEL, _bail, _lua_get_unit
+from civ_mcp.lua._helpers import SENTINEL, _LUA_ACTION_SCOPE, _bail, _lua_get_unit
 
 
-_CONTEXT = '''
+_CONTEXT = _LUA_ACTION_SCOPE + '''
 local function targetAt(x,y,owner)
  local plot=Map.GetPlot(x,y)
  assert(plot and plot:GetOwner()==owner,"DISTRICT_OWNER_CHANGED")
@@ -46,15 +46,6 @@ local function prepareContribution(unit,me,id)
  local fingerprint=table.concat({id,target,project.Index,project.Hash,charges,progress,cost},",")
  return {id=id,x=x,y=y,city=city:GetID(),project=project.Index,hash=project.Hash,
          target=target,charges=charges,progress=progress,cost=cost,fingerprint=fingerprint,command=command.Hash}
-end
-local function sameScope(r)
- local ok,same=pcall(function()
-  return Game.GetLocalPlayer()==r.owner and Game.GetCurrentGameTurn()==r.turn
-   and PlayerConfigurations[r.owner]:GetCivilizationTypeName()==r.civ
-   and GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")==r.seed
- end)
- if not ok or not same then r.invalid=true;return false end
- return not r.invalid
 end
 local function retireContribution(r)
  if r then

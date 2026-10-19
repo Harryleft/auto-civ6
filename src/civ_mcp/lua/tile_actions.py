@@ -1,14 +1,14 @@
 """Bound tile effects and the native unit/charge facts that produced them."""
 import json
 
-from civ_mcp.lua._helpers import SENTINEL
+from civ_mcp.lua._helpers import SENTINEL, _LUA_ACTION_SCOPE
 
 
 _OPERATIONS = {'improve': ('BUILD_IMPROVEMENT', 'IMPROVED'), 'repair': ('REPAIR', 'REPAIRED'),
     'remove_feature': ('REMOVE_FEATURE', 'REMOVED_FEATURE'),
     'remove_improvement': ('REMOVE_IMPROVEMENT', 'REMOVED_IMPROVEMENT'),
     'build_route': ('BUILD_ROUTE', 'ROUTE_BUILT')}
-_CONTEXT = '''
+_CONTEXT = _LUA_ACTION_SCOPE + '''
 local function integer(v)
  assert(type(v)=="number" and v>=0 and v<math.huge and v==math.floor(v),"NUMBER_UNAVAILABLE")
  return v
@@ -19,15 +19,6 @@ local function unitFor(owner,id)
  local fullId=integer(unit:GetID())
  assert(id<65536 or fullId==id,"UNIT_ID_CHANGED")
  return unit
-end
-local function sameScope(r)
- local ok,same=pcall(function()
-  return Game.GetLocalPlayer()==r.owner and Game.GetCurrentGameTurn()==r.turn
-   and PlayerConfigurations[r.owner]:GetCivilizationTypeName()==r.civ
-   and GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")==r.seed
- end)
- if not ok or not same then r.invalid=true end
- return not r.invalid
 end
 local function routeCosts(owner,unit)
  local info=GameInfo.Units[unit:GetType()]
