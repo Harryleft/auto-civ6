@@ -234,3 +234,45 @@ def test_unknown_original_chooser_owner_keeps_save_turn_and_other_mutation_gates
     conn.lua.execute('selected=other')
     assert asyncio.run(state.make_trade_route(1966090,40,25)).startswith('TRADE_ROUTE_STARTED|')
     assert conn.lua.eval('#submissions')==1
+
+
+@pytest.mark.parametrize('change',[
+    'other.GetType=function() return nil end',
+    "other.GetType=function() error('unreadable type') end",
+    'other.owner=1', 'other.kind=99', 'selected=nil',
+    'other.moves=0', 'other.activity=ActivityTypes.ACTIVITY_SLEEP',
+    'origin.routes[1].TraderUnitID=other.id',
+    'Players[0].GetUnits=function() return {FindID=function() return original end} end',
+])
+def test_first_entry_cleanup_keeps_unknown_or_inconsistent_other_chooser_pending(change):
+    conn=ChooserOwnerConn();state=GameState(conn)
+    conn.lua.execute('''
+local apply=applyTrader
+function applyTrader(op,params)
+ apply(op,params)
+ '''+change+'''
+end
+''')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.make_trade_route(1966090,40,25))
+    assert conn.lua.eval('mode')==conn.lua.eval('InterfaceModeTypes.MAKE_TRADE_ROUTE')
+    assert conn.lua.eval('#modeChanges')==0
+    assert conn.lua.eval('#submissions')==1
+    assert state.pending_action_kind=='trade_route'
+
+
+def test_entry_cleanup_preserves_mode_changed_by_selected_unit_getter():
+    conn=ChooserOwnerConn();state=GameState(conn)
+    conn.lua.execute('UI.GetHeadSelectedUnit=function() mode=InterfaceModeTypes.DIPLOMACY;return other end')
+    assert asyncio.run(state.make_trade_route(1966090,40,25)).startswith('TRADE_ROUTE_STARTED|')
+    assert conn.lua.eval('mode')==conn.lua.eval('InterfaceModeTypes.DIPLOMACY')
+    assert conn.lua.eval('#modeChanges')==0
+    assert conn.lua.eval('#submissions')==1
+
+
+def test_entry_cleanup_does_not_overwrite_unknown_mode_after_selection_read():
+    conn=ChooserOwnerConn();state=GameState(conn)
+    conn.lua.execute('UI.GetHeadSelectedUnit=function() mode=nil;return other end')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.make_trade_route(1966090,40,25))
+    assert conn.lua.eval('mode') is None
+    assert conn.lua.eval('#modeChanges')==0
+    assert conn.lua.eval('#submissions')==1

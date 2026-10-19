@@ -20,6 +20,9 @@ mode,modeChanges=InterfaceModeTypes.SELECTION,{}
 UI.GetInterfaceMode=function() return mode end
 UI.SetInterfaceMode=function(value) mode=value;table.insert(modeChanges,value) end
 local unit=units[196608];unit.x=10;unit.y=10;unit.owner=0;unit.kind=5
+UI.GetHeadSelectedUnit=function() return unit end
+Players[0].GetUnits=function() return {Members=function() return pairs(units) end,
+ FindID=function(_,id) return units[id] end} end
 unit.GetX=function(self) return self.x end
 unit.GetY=function(self) return self.y end
 unit.GetOwner=function(self) return self.owner end

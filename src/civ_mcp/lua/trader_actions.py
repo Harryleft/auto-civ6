@@ -39,14 +39,20 @@ local function routesFor(owner)
  end
  return result,integer(Players[owner]:GetTrade():GetOutgoingRouteCapacity())
 end
-local function selectedTrader(unit)
+local function traderIdentity(unit)
  assert(unit,"SELECTED_TRADER_UNAVAILABLE")
  local s={owner=integer(unit:GetOwner()),id=integer(unit:GetID()),unitType=integer(unit:GetType()),
-  x=integer(unit:GetX()),y=integer(unit:GetY()),moves=unit:GetMovesRemaining(),activity=UnitManager.GetActivityType(unit)}
- assert(scopePlayer(s.owner) and type(s.moves)=="number" and s.moves>0 and s.moves<math.huge
-  and scopeInteger(ActivityTypes.ACTIVITY_AWAKE) and s.activity==ActivityTypes.ACTIVITY_AWAKE,"SELECTED_TRADER_NOT_READY")
+  x=integer(unit:GetX()),y=integer(unit:GetY())}
+ assert(scopePlayer(s.owner),"SELECTED_OWNER_UNAVAILABLE")
  local row=GameInfo.Units[s.unitType]
  assert(row and row.MakeTradeRoute==true,"SELECTED_NOT_A_TRADER")
+ return s
+end
+local function selectedTrader(unit)
+ local s=traderIdentity(unit)
+ s.moves=unit:GetMovesRemaining();s.activity=UnitManager.GetActivityType(unit)
+ assert(type(s.moves)=="number" and s.moves>0 and s.moves<math.huge
+  and scopeInteger(ActivityTypes.ACTIVITY_AWAKE) and s.activity==ActivityTypes.ACTIVITY_AWAKE,"SELECTED_TRADER_NOT_READY")
  return s
 end
 local function anotherTraderOwnsChooser(r)
@@ -65,6 +71,21 @@ local function anotherTraderOwnsChooser(r)
  for key,value in pairs(s) do assert(current[key]==value,"SELECTION_CHANGED") end
  assert(UI.GetInterfaceMode()==r.chooser,"CHOOSER_CHANGED")
  return true
+end
+local function currentChooserOwner(r)
+ local selected=traderIdentity(UI.GetHeadSelectedUnit())
+ if selected.owner==r.owner and selected.id==r.unit then
+  assert(selected.unitType==r.unitType,"ORIGINAL_SELECTED_TYPE_CHANGED")
+  local native=traderIdentity(UnitManager.GetUnit(r.owner,r.unit%65536))
+  local owned=traderIdentity(Players[r.owner]:GetUnits():FindID(r.unit))
+  local current=traderIdentity(UI.GetHeadSelectedUnit())
+  for key,value in pairs(selected) do
+   assert(native[key]==value and owned[key]==value and current[key]==value,"ORIGINAL_SELECTION_INCONSISTENT")
+  end
+  return "original"
+ end
+ assert(anotherTraderOwnsChooser(r))
+ return "other"
 end
 local function originalIdentity(r,entity,before)
  local known=true
@@ -149,9 +170,15 @@ if not (__civmcpTraderAction and __civmcpTraderAction.token==token) then
   assert(scopeInteger(mode),"INTERFACE_MODE_UNKNOWN")
   if mode==r.chooser then
    if r.kind=="trade_route" then
-    local known,another=pcall(anotherTraderOwnsChooser,r)
+    local known,owner=pcall(currentChooserOwner,r)
+    -- Selection reads can open another mode. Never act on the earlier mode.
+    local currentMode=UI.GetInterfaceMode()
     assert(sameScope(r),"SCOPE_CHANGED")
-    if known and another then return end
+    assert(scopeInteger(currentMode),"INTERFACE_MODE_UNKNOWN")
+    if currentMode~=r.chooser then return end
+    assert(known,"CHOOSER_OWNER_UNKNOWN")
+    if owner=="other" then return end
+    assert(owner=="original","CHOOSER_OWNER_UNKNOWN")
    end
    UI.SetInterfaceMode(r.selection)
    assert(UI.GetInterfaceMode()==r.selection,"INTERFACE_TRANSITION_UNCONFIRMED")
