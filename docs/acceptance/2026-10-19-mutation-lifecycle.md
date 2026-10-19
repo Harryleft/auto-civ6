@@ -116,6 +116,6 @@ git diff --check
 
 ## 最终验证与清理
 
-范围恢复回归累计 **293 项**，代码修改限于公共动作身份读取／比较与普通身份刷新。最终全量 **3856 passed in 127.55s**，日志 `/tmp/civ6-ticket18-third-review-final.log`。`compileall -q src tests`、`git diff d3450a3 HEAD --check` 与工作区差异检查通过；最终源码与测试的 Git tree 均与受测 `31ae3f5` 完全一致。闭票仅改文档，复用全量结果；最终 26 个 Markdown 文件／160 个本地链接及锚点检查，0 unresolved。
+范围恢复回归累计 **293 项**，最后一轮代码修复限于公共动作身份读取／比较与普通身份刷新。最终全量 **3856 passed in 127.55s**，日志 `/tmp/civ6-ticket18-third-review-final.log`。`compileall -q src tests`、`git diff d3450a3 HEAD --check` 与工作区差异检查通过；最终源码与测试的 Git tree 均与受测 `31ae3f5` 完全一致。闭票仅改文档，复用全量结果；最终 26 个 Markdown 文件／160 个本地链接及锚点检查，0 unresolved。
 
 18 个实施工作树均未使用 force 安全移除，分支保留，`git worktree list` 仅主检出；清理日志 `/tmp/civ6-mutation-worktree-cleanup.json`。01–18 与规格全部 resolved，无剩余验收项；原未跟踪目录 `draft_40be61cf_folder/` 保留。未 push、未操作实机。
