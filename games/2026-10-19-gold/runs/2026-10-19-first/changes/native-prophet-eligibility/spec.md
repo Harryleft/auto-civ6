@@ -1,6 +1,6 @@
 # B21：原生可创教的预言家被聚合标记拦截
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 

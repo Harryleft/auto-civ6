@@ -1,6 +1,6 @@
 # B21-01 Use native prophet operation eligibility
 
-Status: implemented-pending-review
+Status: resolved
 Dependencies: none
 Spec: ../spec.md
 
@@ -19,3 +19,7 @@ Implement through existing public unit-effect lifecycle. Worker owns necessary c
 - Parent #2275 receipt and religion readback, added to the spec at811888d, show exact original activation/start/removal with earned beliefs0→2, religion still uncreated and aggregate founding-readiness flag false→true. Updated only the post flag requirement to strict true; other result evidence is unchanged.
 - Updated the public T125 fixture to native class4/type13 and the observed false→true transition. Before this correction it remained unknown after the exact native effect; after correction it confirms readiness with one submission. All prophet native effects now use the observed true post flag. False/nil/non-boolean/unreadable post flags remain unknown; wrong-event/identity tests also have a true post flag so that independent constraints are exercised.
 - `uv run --locked pytest -q tests/test_unit_effect_confirmation.py` — **116 passed**. Compileall for `src` and this test file, plus `git diff --check`, passed. Parent restored-world live verification and independent review remain pending; no live calls by implementer.
+
+## Final review and live verification
+
+Final implementation24bdc8d+1e4f28d/integratione48d160;116 relevant tests, compile/diffcheck, final independent Spec and Standards review both no material issues. #2276 explicitly restored original same-run T125ready; #2277–2279 overview/units/cities and original prophet2621451/114/39,26/MP2.25 confirmed; clean-refreshed final code only. #2281 one native activation confirms earned0→2, without claiming a religion. #2282 first founding phase confirmed, transient refused TCP connection before continuation; #2283 ordinary read shows requested religion; #2284 same request continues only unstarted phases and confirms religion and both exact beliefs. #2285 both original holy-site cities converted. #2288–2294 explicit historic popup and Canadian incoming deal handled, then T125→126 verified; #2295 savegold_20261019_t126_b21_verified. No setters or synthetic event, no favorable RNG reload; replay was this one activation from the exact preactivation checkpoint.

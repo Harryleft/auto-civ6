@@ -21,7 +21,7 @@
 | B15 | T69 | 弓手部分位移后 MOVE_TO被原生中断清空，无SegmentComplete，工具保留unknown | 精确本次Added/MoveComplete/Deactivated/Cleared链确认中断位移 | c3d9c4b＋fbdc09f；344相关、双审复核、T70保存及最终代码T73正常移动通过 |
 | B16 | T73 | 原生CanRecruit=true、Claimant=本方，招募工具却拒绝CANDIDATE_UNAVAILABLE | 唯一当前候选按原生各Can*资格，不从Claimant推断不可用 | d9c354e／5bfe109；398相关、双审、招募/激活/尤里卡及T74保存通过 |
 | B17 | T75 | 升级已生成新fullID弩手，确认仍要求原fullID单位变type，始终unknown | 精确Started/Removed/Added/Upgraded链绑定新旧fullID和实际费用 | b10da9b；273相关、双审、升级/新单位动作/T76保存通过 |
-| B21 | T125 | 零charge预言家原生FOUND_RELIGION=true，聚合标记false导致拒绝；补预检后后置反向标记仍unknown | 按具体原生操作资格及实际false→true/earned0→2结果确认 | 24bdc8d预检113相关/双审通过；后置补修中，原T125ready已保存 |
+| B21 | T125 | 零charge预言家原生FOUND_RELIGION=true，聚合标记false导致拒绝；补预检后后置反向标记仍unknown | 按具体原生操作资格及实际false→true/earned0→2结果确认 | 24bdc8d+1e4f28d／e48d160；116相关、最终双审、原T125单次激活/创教/T126保存通过 |
 | B20 | T108 | 原生研究同盟有效，但工具硬编码外交部门前置而NO_CIVIC | 具体同盟原生资格及查询一致性 | f06742d；129相关、独立双审通过，原T108一次提案/研究同盟确认、T109保存通过 |
 | B19 | T91 | 阿玛妮原生可派城邦，但工具目标owner固定本方，城市ID冲突 | 显式目标owner绑定及原生派驻验证 | 880f1f9；80相关、双审、T91精确owner5派驻/T92保存通过 |
 | B18 | T89 | 攻击后HEAL精确started，但原生HOLD/0MP未兼容导致unknown | fresh精确HEAL及nonready/HOLD/0MP确认任务开始，回血另验 | 8cfe822；152相关、双审通过，原局T89启动/T90保存/T91回血39→59及保存通过 |
@@ -30,7 +30,7 @@
 | B12 | T57 | 弓手耗尽移动后警戒已原生开始，HOLD未被确认 | fresh alert 精确事件与非就绪前提下接受原生HOLD | 857865c／26c3467；372离线、双审查，#1044实机警戒确认；T58被新增B13阻塞 |
 | B11 | T55 | 开放边境条款期限0，与当前原生25不符 | 双方独立绑定原生摘要期限、完整回读和文案 | 97846e9／1344ad6；476离线，双审查，25回合边境成交及T56保存通过 |
 
-当前已确认 T125，身份 sumeria / seed -1896272000，轮次 e8b4d6a62dca49bbb256e8264beb18f2。五城41人口，工业普通时代、商人共和国、巴西研究同盟Lv1、外交VP5。B01–B20已修复；B21后置确认补修中，最近确认检查点gold_20261019_t125_b21_ready893389bytes。用户已确认现有 checkpoint / GameState / lifecycle 验证边界。
+当前已确认 T126，身份 sumeria / seed -1896272000，轮次 e8b4d6a62dca49bbb256e8264beb18f2。五城43人口，工业普通时代、商人共和国、巴西研究同盟Lv1、外交VP5，已创拜火教。B01–B21已修复；最近确认检查点gold_20261019_t126_b21_verified。用户已确认现有 checkpoint / GameState / lifecycle 验证边界。
 
 B01：实施 f3f919a，集成 ffd3f06。相关离线 425 passed，compileall / diff --check 通过；Standards 与 Spec 两项独立审查均无实质发现。原始新旧基准不覆盖、不混用轮次。
 
@@ -252,3 +252,7 @@ T122#2208招募达尔文2490370/138/365点；经36,25→34,22→32,21→31,19安
 B21：#2247自然招募琐罗亚斯德2621451/114、扣40点，#2248至首都圣地39,26；#2249激活零提交FOUNDING_NOT_AVAILABLE。#2251原生created=-1/earned0/HasReligiousFoundingUnit=false，但该原始单位MP2.25且FOUND_RELIGION CanStartOperation=true。规格f703ffd，24bdc8d移除聚合标记预检，113相关测试及独立双审通过。#2267保存原T125就绪893389bytes，clean刷新代码、不重载世界；#2269单次激活已经原生消耗预言家，但后置仍FOUNDING_READINESS_UNCONFIRMED，#2273仅确认失败。未选择宗教/信条。
 
 未决原客户端关闭后，仅作纯诊断：#2275原生回执精确token/2621451/114/class4/type13/39,26/原世界T125、entered/returned/started/removed全true、原单位双入口absent；玩家created仍-1、earned2、HasReligiousFoundingUnit=true。旧后置错误要求false。811888d追加实际false→true/0→2证据，补修中；#2276已单次请求显式恢复gold_20261019_t125_b21_ready，供最终代码重验这一激活。恢复完成前不继续玩法，后续在此记录实际结果。
+
+B21关闭：最终24bdc8d+1e4f28d、集成e48d160，116相关及编译/diff检查通过；f703ffd...e48d160最终Spec/Standards双审无实质发现。#2276显式恢复T125ready成功，#2277–2279原预言家位置/MP、单位/城市确认；仅clean刷新最终代码，#2281单次激活确认earned0→2。#2282宗教创建阶段已确认后遇一次TCP拒连，进程仍在；#2283只读已创拜火教、#2284原请求只续未开始信条阶段，确认职业道德/普世教会，没有重发创教阶段。#2285首都13人与埃利都11人已转拜火，另尼普尔/基什/拉格什仍新教3/5，本方尚未摆脱瑞典宗教多数；下一步以本方传教士转小城拉格什。
+
+#2286 T125胜利复核：各方仍无太空港/科学VP，本方35科技/科学99.6，AI最高加拿大39科技/科学157.8；外交VP5。#2288–2294明确关闭历史时刻并接受加拿大来约2煤换其开放边境25t+2GPT30t，退出后确认T126。启蒙运动完成/科学理论提升，基什图书馆完成、尼普尔pop10、拉格什pop3、火枪手恢复100HP，煤6/+6t。#2295保存gold_20261019_t126_b21_verified。B21工作树清理，分支保留；游戏继续。
