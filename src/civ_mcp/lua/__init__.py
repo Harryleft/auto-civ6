@@ -36,7 +36,6 @@ from civ_mcp.lua.cities import (  # noqa: F401
     build_city_production_query,
     build_city_yield_focus_query,
     build_produce_item,
-    build_purchase_item,
     build_resolve_city_capture,
     build_set_yield_focus,
     build_verify_production,
@@ -320,3 +319,5 @@ from civ_mcp.lua.tile_purchase import build_purchase_tile, build_tile_purchase_q
 from civ_mcp.lua.contribution import (  # noqa: F401
     build_contribution_preflight, build_sacrifice_builder_charges, build_contribution_query,
 )
+
+from civ_mcp.lua.item_purchase import build_purchase_item, build_item_purchase_query, parse_item_purchase_confirmation  # noqa: F401
