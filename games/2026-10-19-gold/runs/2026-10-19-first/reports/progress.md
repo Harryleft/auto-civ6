@@ -140,3 +140,5 @@ B15，T69：#1258商业中心开建、#1259四次建造者1114120购买160金、
 B15取证：#1276显式恢复T69前点，#1279挂临时只读事件、#1280一次公共请求，正常关闭MCP后纯读取并移除临时监听。b15-native-move-events.txt证明Added MOVE_TO(Index19)→MoveComplete到42,27→Deactivated MOVE_TO(Hash1477390184)→Cleared；旧ALERT清理发生在MOVE Added前，不得混用。无Segment/Started，queuedDestination成功返回nil，readytrue/MP1/busyfalse。因此新增语义为“已部分位移但原路径中断”，不称目标到达。父将显式恢复T69前点后等待修复，未继续未知局面。
 
 B15复验准备：#1281显式恢复gold_20261019_t069_before_archer_move成功，#1282/1283核对苏美尔/-1896272000/T69、弓手41,27/MP2及已购四次建造者。#1286选择机械，#1290骑手原生探索接纳，#1291保存gold_20261019_t069_b15_ready（788221bytes）；无pending，clean关闭MCP，待修复只刷新代码即可实机复验，无须再次恢复世界。
+
+B15首次实机闭环：c3d9c4b合入，335相关离线（最后67聚焦重跑）通过，Spec审查无问题。#1293单次原目标确认PATH_INTERRUPTED/42,27/MP1，#1294/1295回读无pending；#1297原生路径可达后#1298另一次决策到43,28，#1303确认T70，#1304保存gold_20261019_t070_b15_partial_verified（788989bytes）。Standards审查发现新scope失效标记可被旧Segment分支绕过，原实施者继续补修，票据暂不关闭。T70农场35,23完成，明确取消下一回合队列并skip后#1317推进T71；T72机械完成，转数学，香蕉种植园36,23完成，开拓者在41,29受弓手42,29护送。
