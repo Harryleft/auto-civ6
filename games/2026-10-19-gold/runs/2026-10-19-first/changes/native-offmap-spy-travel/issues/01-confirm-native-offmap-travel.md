@@ -15,3 +15,9 @@ Isolated worker owns necessary spy code/tests/ticket, not live/progress. Read im
 - TDD red→green: off-map public travel originally remained OUTCOME_UNKNOWN; own-traveller query originally returned an empty list. The T128 individual 2752514 / raw Name / Level1 / Ottawa18,13 / ReturnTurn132 fixture now confirms exactly one travel request. A generation-change/restore regression additionally failed before sticky identity validation.
 - `uv run --locked pytest -q tests/test_spy_assignments.py tests/test_spy_escape.py tests/test_game_state.py tests/test_server.py`: **453 passed**. Compileall and `git diff --check` passed. Offline only; no game connection or push.
 - Independent Spec/Standards review and parent original-run T128 travel, next turn/save and later arrival remain pending.
+
+## Review repair
+
+- Both review axes found a pre-entry scope gap: the last city getter could change the world after the prior scope check. Public changed/unknown seed fixtures first reproduced an actual submission; the final full scope check now runs after all final getters, and RequestOperation receives the just-validated spy. Both fixtures prove zero submission.
+- Spec review found that a lost successful confirmation left the native off-map row unbound. Name/Level/coordinates/ReturnTurn/NameIndex change-and-restore fixtures first incorrectly confirmed after restoration. The original normalized NameIndex row is now retained with the receipt; known changes latch invalidation, including a known Name change alongside unknown Level. Unknown fields alone can recover and confirm without resubmission.
+- The same affected test command after these repairs: **468 passed**. Compileall and diff check passed. Review recheck and all parent live gates remain pending; no real game action was performed by the worker.

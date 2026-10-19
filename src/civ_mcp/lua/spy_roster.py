@@ -30,7 +30,7 @@ local function mapSpyRoster(owner)
  end
  return roster
 end
-local function offMapSpyRoster(owner)
+local function offMapSpyRoster(owner,observe)
  local diplomacy=Players[owner]:GetDiplomacy()
  assert(type(diplomacy.GetNumSpiesOffMap)=="function" and type(diplomacy.GetNthOffMapSpy)=="function",
   "SPY_OFFMAP_API_UNAVAILABLE")
@@ -40,6 +40,9 @@ local function offMapSpyRoster(owner)
   local row=diplomacy:GetNthOffMapSpy(owner,index)
   assert(type(row)=="table","SPY_OFFMAP_ROW_UNAVAILABLE")
   local key=spyInteger(row.NameIndex,0)
+  -- An assignment can observe its already-bound row before normalization:
+  -- one unknown field must not hide a different field's known identity change.
+  if observe then observe(key,row) end
   assert(roster[key]==nil,"SPY_OFFMAP_DUPLICATE_IDENTITY")
   roster[key]={name=spyName(row.Name),level=spyInteger(row.Level,1),
    x=spyInteger(row.XLocation,-9999),y=spyInteger(row.YLocation,-9999),
