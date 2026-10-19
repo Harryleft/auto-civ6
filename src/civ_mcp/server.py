@@ -715,6 +715,8 @@ async def promote_unit(ctx: Context, unit_id: int, promotion_type: str) -> str:
         promotion_type: e.g. PROMOTION_BATTLECRY, PROMOTION_TORTOISE
 
     Use get_unit_promotions first to see available options.
+    Unknown outcomes retain the original promotion; repeating only confirms.
+    Use dismiss_popup for a stale promotion notification after confirmation.
     """
     gs = _get_game(ctx)
     return await _logged(
@@ -1313,7 +1315,7 @@ async def unit_action(
         # Move/attack/founding reconcile their own pending requests. Other
         # commands must not change that unit before its outcome is known.
         if (
-            action.lower() not in {"move", "attack", "found_city", "cancel_move", "pillage", "sacrifice_charges"}
+            action.lower() not in {"move", "attack", "found_city", "cancel_move", "pillage", "sacrifice_charges", "delete"}
             and (getattr(gs, "pending_action_entity", None) == ("unit", unit_index)
                  or getattr(gs, "pending_action_kind", None) in ("pillage", "contribution"))
         ):
@@ -1361,7 +1363,7 @@ async def unit_action(
             case "sleep":
                 return await gs.sleep_unit(unit_index)
             case "delete":
-                return await gs.delete_unit(unit_index)
+                return await gs.delete_unit(unit_id)
             case "trade_route":
                 if target_x is None or target_y is None:
                     return "Error: trade_route requires target_x and target_y of destination city"

@@ -45,6 +45,9 @@ class _PendingAction:
     confirmed: str | None = None
     intent: tuple | None = None
     evidence: _ActionEvidence | None = None
+    # FireTuner names contexts read (GameCore) / write (InGame); a GameCore
+    # mutation still uses the same pending owner and single-submission guard.
+    submit_context: str = "write"
 
 
 @dataclass(frozen=True)
@@ -115,7 +118,8 @@ class ActionLifecycle:
                 return self.unknown("dependent action was not submitted")
         self.pending = pending
         try:
-            lines = await self.conn.execute_write(scope.guard(code))
+            execute = self.conn.execute_read if pending.submit_context == "read" else self.conn.execute_write
+            lines = await execute(scope.guard(code))
         except (OSError, TimeoutError, LuaError) as exc:
             return pending.confirmed or self.unknown(f"submission acknowledgement unavailable: {exc}")
         result = _scoped_action_result(lines)

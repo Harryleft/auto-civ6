@@ -287,6 +287,8 @@ do
     end
 end
 """]
+    from civ_mcp.lua.unit_transforms import build_stale_promotion_cleanup
+    checks.append(build_stale_promotion_cleanup())
     for name in popup_names:
         checks.append(
             f'do local c = ContextPtr:LookUpControl("/InGame/{name}") '
@@ -330,6 +332,7 @@ end
         "end"
     )
     pending_deal = False
+    pending_promotion = False
     pending_diplomacy = False
     diplomacy_view_present = False
     try:
@@ -345,6 +348,8 @@ end
                     pending_deal = True
                 elif "DiplomacyActionView" in line:
                     pending_diplomacy = True
+                elif "UnitPromotion" in line:
+                    pending_promotion = True
     except ConnectionError:
         raise  # dead transport is not "no popups" — surface it
     except Exception as e:
@@ -395,6 +400,9 @@ end
         pending_diplomacy = False
     elif cleanup_result is not None:
         unknown = (unknown + " " if unknown else "") + cleanup_result.message
+
+    if pending_promotion:
+        unknown = (unknown + " " if unknown else "") + "Promotion notification retained: a choice remains or eligibility is unavailable; use get_unit_promotions."
 
     # Final phase: dismiss Windows-level crash dialogs (Firaxis Crash
     # Reporter, Unhandled Exception).  These are Win32 dialogs that appear
