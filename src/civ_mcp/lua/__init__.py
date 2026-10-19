@@ -269,14 +269,11 @@ from civ_mcp.lua.tech import (  # noqa: F401
     parse_tech_civics_response,
 )
 from civ_mcp.lua.units import (  # noqa: F401
-    build_alert_unit,
     build_attack_followup_query,
     build_attack_unit,
-    build_automate_explore,
     build_builder_tasks_query,
     build_combat_estimate_query,
     build_fortify_unit,
-    build_heal_unit,
     build_build_route,
     build_improve_tile,
     build_pathing_estimate_query,
@@ -290,7 +287,6 @@ from civ_mcp.lua.units import (  # noqa: F401
     build_cancel_unit_move,
     build_cancel_unit_move_query,
     build_unit_readiness_query,
-    build_sleep_unit,
     build_fog_neighbor_query,
     build_threat_scan_query,
     build_unit_position_query,
