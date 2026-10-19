@@ -37,7 +37,7 @@
 
 | B26 | T138 | 城市NO_LOS拒绝模板含Lua表字面量，concat报错导致unknown | 正确插入目标坐标，保留原生拒绝/零提交 | e7c40b3；110相关/双审，原T138明确拒绝/目标满血无新见证/独立移动/T139保存通过 |
 
-当前已确认 T139，身份 sumeria / seed -1896272000，轮次 e8b4d6a62dca49bbb256e8264beb18f2。五城51人口，工业普通时代、商人共和国、巴西研究同盟Lv1、外交VP5，已创拜火教。B01–B26已修复；最近确认检查点gold_20261019_t139_b26_verified。用户已确认现有 checkpoint / GameState / lifecycle 验证边界。
+当前已确认 T139，身份 sumeria / seed -1896272000，轮次 e8b4d6a62dca49bbb256e8264beb18f2。五城51人口，工业普通时代、商人共和国、巴西研究同盟Lv1、外交VP5，已创拜火教。B01–B26已修复，B27实施中；最近确认检查点gold_20261019_t139_b27_ready。用户已确认现有 checkpoint / GameState / lifecycle 验证边界。
 
 B01：实施 f3f919a，集成 ffd3f06。相关离线 425 passed，compileall / diff --check 通过；Standards 与 Spec 两项独立审查均无实质发现。原始新旧基准不覆盖、不混用轮次。
 
@@ -309,3 +309,7 @@ B25最终8ea0506补齐首提未知归属与stale-mode，126相关/compile/diff�
 B26：#2622FieldCannon击倒工业区BarbLine6291466；#2623 Eri城市攻击可见Bombard6422531/34,20，NO_LOS拒绝文案模板留下Lua `{target_x}` 表导致concat RuntimeError，#2626原请求仅确认仍unknown。旧ownerclean-closed纯诊断，#2628当前T138原生targetPlot1234不在非空目标列表、CanStart=false；原城市见证仍旧T137/33,21/closed，未进入本次见证。禁止追溯释放原pending；规格cae45f0进入to-spec→implement-spec。#2629显式同run恢复T137检查点61.453s，#2630–32核对单位/城市/宗教使徒未晋升/Spy任务一致；将依原日志推进T138、晋升Debater与原Field目标后保存新准备点，再最终代码验证NO_LOS拒绝及续局。
 
 B26关闭：e7c40b3，110相关/compile/diff通过、独立双审均无实质发现。#2637同T138准备点929991bytes；最终clean刷新无重载#2638同T138，#2639/2641前后qnil且Bombard6422531/34,20满血，#2640原公共请求返回准确NO_LOS。#2643/44另一个正常Builder意图成功、#2647保存T138929929、#2648T139/#2649保存928834，未重建原pending。#2653首座Ziggurat36,24Builder最后charge消费，#2654EriWorkshop原生repair2t；宗教原生#2652仍本方3城拜火，瑞典已控制其他3文明，继续宗教防御。
+
+T139 B26后续合法城市攻击#2655对已到35,20的原Bombard6422531造成51伤害，#2656Field补击、#2659双入口absent，合法发射链保持。#2653首Ziggurat36,24完成并实际耗尽旧Builder，#2662当前EraScore仍64，不把特色改良推断为已获时代分。新4chargeBuilder3211267留Eri城内skip，待清除35,21新Line后安全修复两农场；#2654Workshoprepair2t。
+
+B27 T139：#2659原使徒3145737/type4/owner0/34,24/4MP/3charges，实际GameInfo UNITOPERATION_LAUNCH_INQUISITION.Hash=-1128148313，UnitOperationTypes对应枚举nil；CanStartOperation(unit,hash,nil,{})=true。#2661 HasLaunchedInquisition=false、owncreatedreligion12=actorreligion12、row.LaunchInquisitiontrue。#2663公共launch_inquisition缺失，零提交/无pending；#2664保存T139928587bytes。规格d1834c9进入to-spec→implement-spec，保持同T139原Apostle供最终flagfalse→true/原生消耗见证验证。首选持续科研/工业发展，宗教防御须防止新教支配第四文明；主胜利路线仍科学，外交5VP及巴西援助竞赛作为可行备选。
