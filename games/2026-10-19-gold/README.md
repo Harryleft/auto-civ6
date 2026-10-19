@@ -2,6 +2,8 @@
 
 用户于 2026-10-19 授权从新建神级存档逐步推进至原生终局；遇到工具阻塞时按 to-spec → implement-spec 修复，保留发生回合和验证证据。
 
+已完成：T141结束阶段，瑞典克里斯蒂娜取得宗教胜利，苏美尔失败。27个阻塞均已修复并记录实机验证；最后确认存档 gold_20261019_t141_progress。参见[终局证据](runs/2026-10-19-first/reports/terminal-evidence.json)与[原生结果截图](runs/2026-10-19-first/evidence/t141-native-defeat.png)。
+
 - 用户输入名称：`benchmark_gold_turn_1`；唯一匹配的实际文件名：`benchmark_gold_tun_1.Civ6Save`。
 - 原生菜单元数据：T1、CIVILIZATION_SUMERIA / LEADER_GILGAMESH、DIFFICULTY_DEITY、GAMESPEED_QUICK、MAPSIZE_TINY、四叶草、RULESET_EXPANSION_2。
 - 原件 SHA-256：`0d25d557e68b0efbd1aed7e66de9b8434f3a9ac9d321291d45cbe9df83fe3abf`，396382 bytes。

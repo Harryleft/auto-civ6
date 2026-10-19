@@ -1,0 +1,112 @@
+{
+  "run_id": "e8b4d6a62dca49bbb256e8264beb18f2",
+  "terminal_turn": 141,
+  "result": "DEFEAT",
+  "winner_player_id": 1,
+  "winner": "Sweden / Kristina",
+  "victory_type": "VICTORY_RELIGIOUS",
+  "native_screenshot": "../evidence/t141-native-defeat.png",
+  "screenshot_sha256": "543a5dcff85c6ef90f31ba389157e30ec12dfdf969fe6dd3ac25a1e76dfb67fb",
+  "last_checkpoint": {
+    "name": "gold_20261019_t141_progress",
+    "turn": 141,
+    "bytes": 937501,
+    "sha256": "916e5d1ba215a68eff308d43b612e3130c68c768881da9daddf7d82dd4703592"
+  },
+  "calls": [
+    {
+      "at": 1792453389.728117,
+      "request": {
+        "id": 2747,
+        "tool": "save_game",
+        "args": {
+          "save_name": "gold_20261019_t141_progress"
+        }
+      },
+      "response": {
+        "id": 2747,
+        "tool": "save_game",
+        "text": "Saved: gold_20261019_t141_progress; native completion and file confirmed (937501 bytes). Civilization sumeria, seed -1896272000, turn 141.",
+        "isError": false,
+        "elapsed": 0.877
+      }
+    },
+    {
+      "at": 1792453395.251169,
+      "request": {
+        "id": 2748,
+        "tool": "end_turn",
+        "args": {}
+      },
+      "response": {
+        "id": 2748,
+        "tool": "end_turn",
+        "text": "GAME OVER — DEFEAT. 克里斯蒂娜 of 瑞典 won a Religious victory.",
+        "isError": false,
+        "elapsed": 11.776
+      }
+    },
+    {
+      "at": 1792453422.9616551,
+      "request": {
+        "id": 2749,
+        "tool": "get_game_overview",
+        "args": {}
+      },
+      "response": {
+        "id": 2749,
+        "tool": "get_game_overview",
+        "text": "Turn 141 | 苏美尔 (吉尔伽美什) | Score: 391 | 神\nGold: 334 (+75/turn) | Income: 135 | Maintenance: -60 (units: 32) | Science: 117.1 | Culture: 71.8 | Faith: 2 | Favor: 108 (+5/turn)\nResearch: 零件规格化 | Civic: 土木工程\nCities: 5 | Population: 52 | Units: 14 — 4 商人, 3 野战加农炮, 2 火枪手, 1 散兵, 1 建造者, 1 间谍, 1 审判官, 1 追猎者\nIdentity: civilization_type=CIVILIZATION_SUMERIA | leader_type=LEADER_GILGAMESH\nScore categories (GetCategoryScore, positive-weight): 市政 [CATEGORY_CIVICS]: 75; 帝国 [CATEGORY_EMPIRE]: 134; 伟人 [CATEGORY_GREAT_PEOPLE]: 25; 宗教 [CATEGORY_RELIGION]: 10; 科技 [CATEGORY_TECH]: 78; 奇观 [CATEGORY_WONDER]: 0; 时代得分 [CATEGORY_ERA_SCORE]: 71\nDiagnostic category sum: 393 (differs from official GetScore: 391; native aggregate and category readings are inconsistent).\nExplored: 97% of land (438/449 tiles)\nReligion: 拜火教 (3/3 slots)\nEra: 工业时代 | Current age: Normal\nEra score: 71 | Next-era thresholds (Dark: 65, Golden: 78)\nRankings: 瑞典 652 > 加拿大 568 > 巴西 559 > 苏美尔 391\n\nGAME OVER: DEFEAT — 瑞典, VICTORY_RELIGIOUS",
+        "isError": false,
+        "elapsed": 0.184
+      }
+    },
+    {
+      "at": 1792453423.1466482,
+      "request": {
+        "id": 2750,
+        "tool": "get_victory_progress",
+        "args": {}
+      },
+      "response": {
+        "id": 2750,
+        "tool": "get_victory_progress",
+        "text": "=== VICTORY PROGRESS ===\nEnabled: Domination, Culture, VICTORY_DEFAULT, Diplomatic, Religious, Score, Science\n\nSCIENCE\n  苏美尔: 0/33.5 VP | 39 techs | 0 spaceports | native progress/turn 0\n  瑞典: 0/33.5 VP | 40 techs | 0 spaceports | native progress/turn 0\n  巴西: 0/33.5 VP | 41 techs | 0 spaceports | native progress/turn 0\n  加拿大: 0/33.5 VP | 43 techs | 0 spaceports | native progress/turn 0\n  发射地球卫星: locked | prerequisite TECH_ROCKETRY (researched=False)\n  启动登月计划: locked | prerequisite TECH_SATELLITES (researched=False)\n  启动火星殖民: locked | prerequisite TECH_NANOTECHNOLOGY (researched=False)\n  启动系外行星探索: locked | prerequisite TECH_SMART_MATERIALS (researched=False)\n\nDOMINATION (original capitals)\n  苏美尔: original capital held\n  瑞典: original capital held\n  巴西: original capital held\n  加拿大: original capital held\n\nCULTURE\n  苏美尔: tourism 12 | domestic tourists 43 | visiting tourists 0/111\n  瑞典: tourism 72 | domestic tourists 110 | visiting tourists 12/107\n  巴西: tourism 55 | domestic tourists 106 | visiting tourists 8/111\n  加拿大: tourism 65 | domestic tourists 92 | visiting tourists 9/111\n  Our tourists from 瑞典: 0 | their domestic tourists: 110\n  Our tourists from 巴西: 0 | their domestic tourists: 106\n  Our tourists from 加拿大: 0 | their domestic tourists: 92\n\nRELIGION (founded 3/3)\n  苏美尔: majority=RELIGION_ZOROASTRIANISM | religion cities 3 | founded religion=True (拜火教)\n  瑞典: majority=RELIGION_PROTESTANTISM | religion cities 25 | founded religion=True (新教)\n  巴西: majority=RELIGION_PROTESTANTISM | religion cities 0 | founded religion=True (天主教)\n  加拿大: majority=RELIGION_PROTESTANTISM | religion cities 0 | founded religion=False\n\nDIPLOMATIC\n  苏美尔: 6/20 VP\n  瑞典: 2/20 VP\n  巴西: 2/20 VP\n  加拿大: 2/20 VP\n\nSCORE AND CIVILIZATION DATA\n  瑞典: score 652 | 6 cities | science 135.3 | culture 155.6 | gold +56.1 | military 435 | civics 30\n  加拿大: score 568 | 7 cities | science 175.6 | culture 162 | gold +135 | military 139 | civics 27\n  巴西: score 559 | 5 cities | science 118.3 | culture 127.1 | gold +59.6 | military 85 | civics 28\n  苏美尔: score 391 | 5 cities | science 117.1 | culture 71.8 | gold +74.8 | military 398 | civics 25\n\nDEMOGRAPHICS\n  Population: rank 4 | ours 52 | best 65 | average 59.8 | worst 52\n  Soldiers: rank 2 | ours 398 | best 435 | average 264.2 | worst 85\n  CropYield: rank 4 | ours 140 | best 176 | average 159.2 | worst 140\n  GNP: rank 2 | ours 74.8 | best 135 | average 81.4 | worst 56.1\n  Land: rank 4 | ours 87 | best 138 | average 119.8 | worst 87\n  Goods: rank 4 | ours 109.1 | best 209.1 | average 152.7 | worst 109.1\n\nVictory risk (heuristic; not a terminal result):\n  瑞典: founded religion is majority in 3/4 civilizations\nInspect get_victory_progress and reassess the victory route; no exact remaining-turn estimate.",
+        "isError": false,
+        "elapsed": 0.051
+      }
+    },
+    {
+      "at": 1792453423.19766,
+      "request": {
+        "id": 2751,
+        "tool": "get_cities",
+        "args": {}
+      },
+      "response": {
+        "id": 2751,
+        "tool": "get_cities",
+        "text": "5 cities:\n  乌鲁克 (pop 15) at (40,25) — Food 41 Prod 33 Gold 48 Sci 58 Cul 37 | Housing 16 Amenities 8 | Growth: 2/120 food (22t, +11.0/t) | Building: BUILDING_FACTORY (1 turns) | Walls 100/100 Garrison 200/200 Def:61 Gar:none [id:65536]\n    !! SLOW GROWTH: 22 turns to next pop — needs farm, granary, or trade route\n    Districts: CAMPUS(40,26) GOVERNMENT(40,27) COMMERCIAL_HUB(41,25) HOLY_SITE(39,26) INDUSTRIAL_ZONE(38,26)\n    Buildings: MONUMENT, PALACE, GRANARY, LIBRARY, SHRINE, WALLS, MARKET, UNIVERSITY, WORKSHOP, GOV_TALL\n  埃利都 (pop 13) at (35,22) — Food 32 Prod 22 Gold 9 Sci 22 Cul 6 | Housing 14 Amenities 6 | Growth: 6/102 food (38t, +6.0/t) | Building: BUILDING_FACTORY (7 turns) | Walls 87/100 Garrison 200/200 Def:59 Gar:FIELD_CANNON [id:131073]\n    !! SLOW GROWTH: 38 turns to next pop — needs farm, granary, or trade route\n    >> CAN ATTACK: UNIT_FIELD_CANNON@34,19(100hp)\n    >> CAN ATTACK: UNIT_RANGER@35,19(100hp)\n    >> CAN ATTACK: UNIT_FIELD_CANNON@36,20(100hp)\n    Districts: CAMPUS(34,22) INDUSTRIAL_ZONE(33,21) HOLY_SITE(34,24)\n    Buildings: MONUMENT, GRANARY, LIBRARY, SHRINE, WALLS, TEMPLE, UNIVERSITY, WORKSHOP\n    !! PILLAGED TILES: FARM (36,22) (send builder to repair)\n  尼普尔 (pop 12) at (37,28) — Food 37 Prod 26 Gold 13 Sci 21 Cul 10 | Housing 14 Amenities 6 | Growth: 28/93 food (5t, +13.0/t) | Building: BUILDING_SHIPYARD (6 turns) | Walls 100/100 Garrison 200/200 Def:59 Gar:FIELD_CANNON [id:196610]\n    >> CAN ATTACK: UNIT_LINE_INFANTRY@38,31(90hp)\n    Districts: HARBOR(36,29) CAMPUS(39,28) INDUSTRIAL_ZONE(37,26)\n    Buildings: MONUMENT, GRANARY, LIBRARY, WALLS, LIGHTHOUSE, UNIVERSITY, WORKSHOP\n  基什 (pop 7) at (42,29) — Food 16 Prod 15 Gold 18 Sci 18 Cul 8 | Housing 10 Amenities 4 | Growth: 15/52 food (19t, +2.0/t) | Building: BUILDING_UNIVERSITY (1 turns) | Walls 100/100 Garrison 200/200 Def:55 Gar:none [id:262147]\n    !! SLOW GROWTH: 19 turns to next pop — needs farm, granary, or trade route\n    >> CAN ATTACK: UNIT_BUILDER@40,30(100hp)\n    Districts: CAMPUS(41,28)\n    Buildings: MONUMENT, GRANARY, LIBRARY, WALLS\n  拉格什 (pop 5) at (34,26) — Food 14 Prod 13 Gold 8 Sci 3 Cul 7 | Housing 6 Amenities 2 | Growth: 13/36 food (14t, +4.0/t) | Building: BUILDING_LIGHTHOUSE (5 turns) | HP:200/200 Def:47 Gar:none [id:327684]\n    Districts: HARBOR(33,26)\n    Buildings: MONUMENT, GRANARY\n\nCity Distances:\n  乌鲁克 <-> 埃利都: 7 tiles\n  乌鲁克 <-> 尼普尔: 5 tiles\n  乌鲁克 <-> 基什: 4 tiles\n  乌鲁克 <-> 拉格什: 7 tiles\n  埃利都 <-> 尼普尔: 6 tiles\n  埃利都 <-> 基什: 11 tiles\n  埃利都 <-> 拉格什: 4 tiles\n  尼普尔 <-> 基什: 6 tiles\n  尼普尔 <-> 拉格什: 4 tiles\n  基什 <-> 拉格什: 10 tiles",
+        "isError": false,
+        "elapsed": 0.057
+      }
+    },
+    {
+      "at": 1792453492.183564,
+      "request": {
+        "id": 2754,
+        "tool": "save_game",
+        "args": {
+          "save_name": "gold_20261019_t141_terminal_defeat"
+        }
+      },
+      "response": {
+        "id": 2754,
+        "tool": "save_game",
+        "text": "Error: GAME_OVER|Saving is unavailable at the confirmed terminal boundary; no save submitted. Keep the last confirmed checkpoint and terminal evidence.",
+        "isError": false,
+        "elapsed": 0.42
+      }
+    }
+  ]
+}
