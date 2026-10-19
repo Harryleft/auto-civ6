@@ -121,9 +121,18 @@ local ok=pcall(function()
  local unit=taskUnit(r.owner,r.id)
  if r.noop=="ALREADY_HEALTHY" then assert(unit:GetDamage()==0);return end
  assert(unitReady(unit)==false)
- if r.activity~=nil then assert(UnitManager.GetActivityType(unit)==r.activity) end
- if r.noop then return end
+ if r.noop then
+  assert(r.activity~=nil and UnitManager.GetActivityType(unit)==r.activity)
+  return
+ end
  assert(r.entered==true and r.returned==true and r.started==true)
+ if r.activity~=nil then
+  local current=UnitManager.GetActivityType(unit)
+  local operation=ActivityTypes and ActivityTypes.ACTIVITY_OPERATION
+  -- Native alert remains OPERATION after its exact start (T16 live capture).
+  -- This confirms selection, not arrival at the later SENTRY activity.
+  assert(current==r.activity or (r.kind=="alert" and scopeInteger(operation) and current==operation))
+ end
 end)
 if ok then
  retireTask(r)
