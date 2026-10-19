@@ -31,7 +31,11 @@
 | B12 | T57 | 弓手耗尽移动后警戒已原生开始，HOLD未被确认 | fresh alert 精确事件与非就绪前提下接受原生HOLD | 857865c／26c3467；372离线、双审查，#1044实机警戒确认；T58被新增B13阻塞 |
 | B11 | T55 | 开放边境条款期限0，与当前原生25不符 | 双方独立绑定原生摘要期限、完整回读和文案 | 97846e9／1344ad6；476离线，双审查，25回合边境成交及T56保存通过 |
 
-当前已确认 T131，身份 sumeria / seed -1896272000，轮次 e8b4d6a62dca49bbb256e8264beb18f2。五城45人口，工业普通时代、商人共和国、巴西研究同盟Lv1、外交VP5，已创拜火教。B01–B23已修复，B24已确认旅行/待T132到达，B25实施中；最近确认检查点gold_20261019_t131_b25_ui_recovered。用户已确认现有 checkpoint / GameState / lifecycle 验证边界。
+| B23 | T128 | 传播已扣charge/转换城市，但把每回合流入压力当累计压力而unknown | 按原生宗教行累计Pressure确认 | 97bdf16；251相关/双审，原T128传播/T129保存及后续传播通过 |
+| B24 | T128 | 间谍旅行离图后旧确认仍要求地图单位存在；实机Removed早于Started | 精确双原生事件/唯一新离图身份与在途查询 | 最终c5f7868；503相关/152最终检查/双审，T128旅行/T129保存/T132实际新fullID到达及任务通过 |
+| B25 | T131 | 原商路完成但另一Trader的同名chooser被当作旧动作未收尾 | 严格当前UI归属/未知不关闭/只读旧确认 | 5d7a732+8ea0506；126相关/双审，原receipt纯native RED→GREEN且chooser保留，新publicroute/T132保存通过 |
+
+当前已确认 T132，身份 sumeria / seed -1896272000，轮次 e8b4d6a62dca49bbb256e8264beb18f2。五城46人口，工业普通时代、商人共和国、巴西研究同盟Lv1、外交VP5，已创拜火教。B01–B25已修复，B24已于T132实际到达；最近确认检查点gold_20261019_t132_b24_b25_verified。用户已确认现有 checkpoint / GameState / lifecycle 验证边界。
 
 B01：实施 f3f919a，集成 ffd3f06。相关离线 425 passed，compileall / diff --check 通过；Standards 与 Spec 两项独立审查均无实质发现。原始新旧基准不覆盖、不混用轮次。
 
@@ -291,3 +295,5 @@ T130#2464确认野蛮人掠夺原Trader2293772/Uruk→Fortaleza，保留损失�
 B25 T131：#2497单次续NipTrader1966090→Cap40,25国内商路4Food3P，active2→3，但MAKEchooser阻塞确认。#2498原route确在，#2499首ready另一Trader2883596/Cap；#2500关闭普通外交view无效，#2501confirm-only仍unknown。原生截图明确chooser originUruk/不同Trader；两次显式Escape后#2504原请求只确认成功，无重发。#2505保存T131UIrecovered911846bytes，#2506纯读原receiptcleanupOKtrue/enteredreturnedtrue、native选中另一full2883596/40,25。原same-mode判断误把另一Traderchooser当旧action未收尾。B25进入to-spec→implement-spec；保持T131原Lua receipt与新Trader供最终纯确认/新publicroute验证。
 
 B25首版5d7a732：115相关/compile/diff通过。未重载世界，#2512仍原T131；#2513确认当前MAKE/head2883596/40,25及原token保持，#2514最终纯native query对原1966090回执返回TRADER_CONFIRMED/routes3of4，#2515当前MAKE/head/token原样保持；对应旧代码#2511真实RED→新代码GREEN，未重建Pythonpending或重发旧商路。独立Spec发现首次提交的其他Trader身份读取未知仍会fallback关闭chooser，Standards发现归属getter期间mode已改外交后仍按旧mode关闭；均交同一worker补修。暂不进行新经济动作，保留T131供最终实测。
+
+B25最终8ea0506补齐首提未知归属与stale-mode，126相关/compile/diff通过、Spec/Standards最终均无实质发现。无世界重载，#2517–19最终代码对同原T131回执纯确认成功且MAKE/head2883596不变；#2521新Trader普通公共商路→Eri确认，#2522四条route一致；#2523确认T132、#2525保存916405bytes。B24间谍#2524实际以新full2949131到达Ottawa18,13，#2530正常GAIN_SOURCES end137。B24/B25均resolve，继续原局。

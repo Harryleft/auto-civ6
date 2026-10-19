@@ -1,6 +1,6 @@
 # B24-01 Confirm native off-map spy travel and query it
 
-Status: pending-review
+Status: resolved
 Dependencies: none
 Spec: ../spec.md
 
@@ -24,3 +24,7 @@ Isolated worker owns necessary spy code/tests/ticket, not live/progress. Read im
 - Standards follow-up: a readable NameIndex change combined with unknown Level still hid the bound key's absence during normalization. The exact lost-confirmation/change-and-restore fixture first reproduced incorrect release. Native raw keys are now fully collected before field normalization, so known bound-key absence latches even if Level is unknown. Unknown key/field alone remains recoverable. The affected test command now reports **469 passed**; compileall and diff check passed. Live validation remains pending.
 - Spec follow-up: a separate unreadable row/key still prevented observing a readable bound-row change. Four red fixtures reproduced incorrect release with bad-key or row-getter errors before/after the bound row. Each identifiable raw row is now observed immediately, row read/key errors are collected while remaining rows are inspected, and bound-key absence is checked only with a complete key set. A 12-case matrix also covers field-getter errors and unknown-only recovery in both positions. The affected test command reports **481 passed**; compileall and diff check passed. No live action was performed.
 - Native-order repair: parent #2431 captured `UnitRemovedFromMap(0,2752514)` before `UnitOperationStarted(0,2752514,-1295211657,0)`. The same T128 public fixture first stayed unknown with this order. Removed now records only after entry and exact owner/fullID/scope, independently of Started timing; confirmation still requires both events and all existing absence/identity/city proof. Both event orders, either missing/wrong event, and changed/unknown removal scope are covered. Related checks: **503 passed**; after adding the native fourth Started argument, the spy-assignment file reran **152 passed**. Compileall/diff check passed. Worker did not connect to the game; parent final same-run travel/advance/save/arrival checks remain pending.
+
+## Parent final verification
+
+Finalc5f7868 with prior review repairs,503 related/152 final spy checks and compile/diff passed; both independent final review axes no material issues. #2432 explicitly restored the same confirmed original-runT128 post-spread checkpoint;#2433–36 checked identities/world. Final clean client#2438 sent travel once and confirmed end132;#2439 exposes only in-transit identity, not an invented unit ID. #2446 confirmsT129 and#2447 saves. Actual#2523T132 native new spy event at18,13, and#2524 public get_spies returns new full2949131/Recruit/拉泽娜 atOttawa, now actionable. #2525 original-run T132 save916405bytes, then#2530 normal GAIN_SOURCES confirms end137 for arrived spy. Original full2752514 is not reused after native replacement. Resolved after actual arrival, not merely transit start.
