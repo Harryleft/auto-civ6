@@ -117,7 +117,8 @@ async def _logged(
                     dependent = (
                         # Native information popups may hold the submitted command's
                         # events. Explicit close preserves its receipt and pending gate.
-                        (getattr(app.game, "pending_action_kind", None) in ("contribution", "envoy")
+                        ((getattr(app.game, "pending_action_blocks_mutations", False) is True
+                          or getattr(app.game, "pending_action_kind", None) == "contribution")
                          and tool_name not in {"restart_and_load", "dismiss_popup"})
                         or (entity[0] == "unit" and isinstance(unit_id, int)
                          and (entity[1] == unit_id % 65536
@@ -128,7 +129,8 @@ async def _logged(
                     )
                 # These tracked methods reconcile repeated intents themselves.
                 if dependent and not (
-                    tool_name in {"set_city_production", "send_envoy"}
+                    tool_name == getattr(app.game, "pending_action_tool", None)
+                    or tool_name == "set_city_production"
                     or (tool_name == "unit_action" and entity[0] == "unit")
                 ):
                     confirmation = await app.game.confirm_pending_action()
