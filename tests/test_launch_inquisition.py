@@ -284,6 +284,103 @@ def test_unknown_core_postflag_recovers_while_ingame_cache_stays_false():
     assert conn.lua.eval('#submissions')==1
 
 
+@pytest.mark.parametrize('unknown_owner', [False,True])
+@pytest.mark.parametrize('core_exit', ['normal','lost','cancelled'])
+def test_first_ingame_probe_scope_change_stays_invalid_before_core_await(unknown_owner,core_exit):
+    class CoreInterruptionConn(InquisitionConn):
+        async def execute_read(self,code):
+            rows=await super().execute_read(code)
+            if not getattr(self,'interrupted',False) and any(row.startswith('INQUISITION_CORE_CONFIRMED|') for row in rows):
+                self.interrupted=True
+                if core_exit=='lost':raise OSError('core response lost after first InGame probe')
+                if core_exit=='cancelled':raise asyncio.CancelledError()
+            return rows
+    conn=CoreInterruptionConn();state=GameState(conn)
+    conn.lua.execute('''
+local read=GameConfiguration.GetValue
+GameConfiguration.GetValue=function()
+ if __civmcpUnitEffect and __civmcpUnitEffect.returned==true and not faultSeed then
+  faultSeed=true;return 9
+ end
+ return read()
+end
+''')
+    if unknown_owner:
+        conn.lua.execute('''
+local read=Game.GetLocalPlayer
+Game.GetLocalPlayer=function()
+ if __civmcpUnitEffect and __civmcpUnitEffect.returned==true and not faultOwner then
+  faultOwner=true;return nil
+ end
+ return read()
+end
+''')
+    if core_exit=='cancelled':
+        with pytest.raises(asyncio.CancelledError):asyncio.run(state.launch_inquisition(3145737))
+    else:
+        assert 'OUTCOME_UNKNOWN' in asyncio.run(state.launch_inquisition(3145737))
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.launch_inquisition(3145737))
+    assert state.pending_action_summary is not None and conn.lua.eval('#submissions')==1
+
+
+@pytest.mark.parametrize('core_exit', ['lost','cancelled'])
+def test_unknown_first_probe_does_not_poison_recovery_after_core_interruption(core_exit):
+    class CoreInterruptionConn(InquisitionConn):
+        async def execute_read(self,code):
+            rows=await super().execute_read(code)
+            if not getattr(self,'interrupted',False) and any(row.startswith('INQUISITION_CORE_CONFIRMED|') for row in rows):
+                self.interrupted=True
+                if core_exit=='lost':raise OSError('core response lost')
+                raise asyncio.CancelledError()
+            return rows
+    conn=CoreInterruptionConn();state=GameState(conn)
+    conn.lua.execute('''
+local read=GameConfiguration.GetValue
+GameConfiguration.GetValue=function()
+ if __civmcpUnitEffect and __civmcpUnitEffect.returned==true and not faultSeed then
+  faultSeed=true;return nil
+ end
+ return read()
+end
+''')
+    if core_exit=='cancelled':
+        with pytest.raises(asyncio.CancelledError):asyncio.run(state.launch_inquisition(3145737))
+    else:
+        assert 'OUTCOME_UNKNOWN' in asyncio.run(state.launch_inquisition(3145737))
+    assert state.pending_action_summary is not None
+    assert asyncio.run(state.launch_inquisition(3145737)).startswith('INQUISITION_LAUNCHED|')
+    assert conn.lua.eval('#submissions')==1
+
+
+@pytest.mark.parametrize('unknown_owner', [False,True])
+def test_final_ingame_probe_also_retains_known_scope_change_with_unknown_peer(unknown_owner):
+    class FinalProbeConn(InquisitionConn):
+        async def execute_read(self,code):
+            rows=await super().execute_read(code)
+            if any(row.startswith('INQUISITION_CORE_CONFIRMED|') for row in rows):
+                self.lua.execute('finalProbe=true')
+            return rows
+    conn=FinalProbeConn();state=GameState(conn)
+    conn.lua.execute('''
+local read=GameConfiguration.GetValue
+GameConfiguration.GetValue=function()
+ if finalProbe and not faultSeed then faultSeed=true;return 9 end
+ return read()
+end
+''')
+    if unknown_owner:
+        conn.lua.execute('''
+local read=Game.GetLocalPlayer
+Game.GetLocalPlayer=function()
+ if finalProbe and not faultOwner then faultOwner=true;return nil end
+ return read()
+end
+''')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.launch_inquisition(3145737))
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.launch_inquisition(3145737))
+    assert state.pending_action_summary is not None and conn.lua.eval('#submissions')==1
+
+
 @pytest.mark.parametrize('setup', [
     'u.allowed=false','u.allowed=nil','launched=true','launched=nil','launched="false"',
     'religion.HasLaunchedInquisition=nil','religion.GetReligionTypeCreated=nil',
