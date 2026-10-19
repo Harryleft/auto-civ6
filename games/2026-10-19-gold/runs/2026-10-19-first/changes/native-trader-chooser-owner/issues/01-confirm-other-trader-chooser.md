@@ -1,6 +1,6 @@
 # B25-01 Confirm completed route with another trader's chooser
 
-Status: implemented-pending-review
+Status: resolved
 Dependencies: none
 Spec: ../spec.md
 
@@ -21,3 +21,7 @@ Worker owns necessary trader code/tests/ticket in isolated worktree. Parent owns
 - Cleanup rereads interface mode after ownership getters and rechecks scope before any UI write. A mode changed to DIPLOMACY is preserved, and unknown mode stays pending; the earlier MAKE_TRADE_ROUTE observation no longer authorizes a stale UI write.
 - First-submission red→green regressions cover both review findings, including nil/error GetType, foreign/nontrader/absent/inconsistent selection, no movement, active route, changed mode and unknown mode. The legacy trader fixture now supplies the native head selection and player-unit lookup instead of treating missing ownership facts as implicit original ownership.
 - `uv run --locked pytest -q tests/test_trader_chooser_owner.py tests/test_trader_confirmation.py` — **126 passed**. Compileall for `src` and both affected test files, plus `git diff --check`, passed. Parent #2514 already recorded pure-native GREEN and #2515 preserved the old receipt/other chooser; independent re-review and public new-trader route/next-turn/checkpoint validation remain pending.
+
+## Parent final verification
+
+Final code5d7a732+8ea0506, both independent review axes report no material issues;126 related tests, compile/diff passed. No world reload: final clean MCP#2516 stillT131. #2517 native MAKE/head2883596/40,25 plus original token/full1966090 remain;#2518 final pure query confirms original exact route/routes3of4;#2519 same chooser/selection/token preserved. This is real native RED#2511→GREEN#2518 against the frozen original receipt, with no reconstructed Python pending owner, no UI write and no original route replay. Offline public tests cover retained pending ownership/lost replies. #2521 ordinary public route for new2883596→Eri35,22 confirms/routes4of4;#2522 independent route list agrees. #2523 confirmsT132;#2525 saves gold_20261019_t132_b24_b25_verified916405bytes. Original T131 economic request itself preceded final code and was confirmed using explicit UI Escape at#2504; evidence levels remain distinct.
