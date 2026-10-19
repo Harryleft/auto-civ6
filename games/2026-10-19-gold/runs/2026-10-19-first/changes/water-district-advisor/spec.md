@@ -1,6 +1,6 @@
 # B14：区域顾问遗漏合法水地块
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 
@@ -41,3 +41,5 @@ Global adjacency redesign, purchasing tiles automatically, choosing districts in
 ## Further Notes
 
 #1186/#1218 harbor advisor no-valid result; T68 #1227 pure native: PLOTS_KEY=1933683541; TARGET|1933683541|1776|36,29|water=true. Other array745888826 includes1659=(39,27) mountain and is not eligible. #1226 save782132bytes, CIVILIZATION_SUMERIA/-1896272000/T68/player0, run e8b4d6a62dca49bbb256e8264beb18f2. Earlier E01 orchestration recovery completed #1190–1210 with exact prior Congress votes and T66 decisions; no new game outcome selected.
+
+Validation: d691113／集成860e9de，22原生advisor/scheduling与6 GameState/MCP相关测试通过，compileall/diff-check通过；Spec/Standards独立审查无实质问题。#1236候选返回(36,29)，#1237原生区域生产确认，#1238回读HARBOR(36,29)；#1251确认T68→T69，#1252保存gold_20261019_t069_b14_verified，788382bytes，同轮身份不变。未重启世界，未将原有估算当作已建成收益。
