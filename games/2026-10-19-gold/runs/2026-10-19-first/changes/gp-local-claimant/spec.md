@@ -1,6 +1,6 @@
 # B16：本方候选人被伟人池预检查拒绝
 
-Status: ready-for-agent
+Status: pending-review
 
 ## Problem Statement
 
@@ -8,13 +8,13 @@ T73已累积82.296875/80科学家点数，原生候选奥马尔·海亚姆133的
 
 ## Solution
 
-遵从原生伟人池候选与各操作资格，允许本方具备资格的候选招募；继续拒绝他方候选、歧义、未知资格和不足资源。招募成功仍须确认原始资源变化和新产生的对应伟人单位，不以Claimant字段代替招募完成。
+遵从原生伟人池当前唯一候选与各操作资格，允许具备本操作资格的候选招募；继续拒绝歧义、未知资格和不足资源。原生 Can* 对他方或不可用候选返回 false 时拒绝；不自行赋予 Claimant 资格语义。招募成功仍须确认原始资源变化和新产生的对应伟人单位，不以 Claimant 字段代替招募完成。
 
 ## User Stories
 
 1. As a player, I want an eligible local candidate recruitable, so that earned Great Person points can be spent.
 2. As a player, I want native eligibility respected, so that timeline assignment is not mistaken for completed recruitment.
-3. As a player, I want other-player candidates refused, so that their recruitment rights remain intact.
+3. As a player, I want native ineligibility for other-player candidates respected, so that their recruitment rights remain intact.
 4. As a maintainer, I want missing or malformed candidate data refused, so that uncertain state cannot authorize a request.
 5. As a player, I want current candidate identity bound, so that another individual cannot be recruited accidentally.
 6. As a maintainer, I want recruit, reject and patronize separately checked, so that one operation's permission cannot authorize another.
@@ -28,13 +28,13 @@ T73已累积82.296875/80科学家点数，原生候选奥马尔·海亚姆133的
 ## Implementation Decisions
 
 - Read the shipped native Great People UI and actual timeline/Can* facts before finalizing the candidate contract. Keep GameState, ActionLifecycle and native pool request boundaries.
-- Correct only the candidate precondition needed for the native local reservation. Retain each operation's native eligibility, resource baseline, single submit and exact new-unit confirmation. No direct spawn, point or resource setter.
-- Do not broaden this into unrelated Great Person UI or strategic policy changes. Unknown, ambiguous and foreign claimant cases remain refused or pending as appropriate.
+- Correct only the candidate precondition. The shipped `Base/Assets/UI/Popups/GreatPeoplePopup.lua:700–738` reads `GetTimeline()` and each operation's `CanRecruitPerson` / `CanRejectPerson` / `CanPatronizePerson` independently. Its Claimant filter applies only to the past timeline; this does not establish Claimant as current-operation eligibility. Bind the unique current individual and require the requested native Can* result to be exactly true.
+- Retain resource baseline, single submit and exact new-unit confirmation. No direct spawn, point or resource setter. Do not broaden this into unrelated Great Person UI or strategic policy changes. Missing or duplicate candidates and false/unknown operation eligibility remain refused; existing pending behavior is preserved.
 - No unresolved gameplay mutation exists: the refusal happened before submit. Parent owns live checks; a clean client code refresh does not require world restoration.
 
 ## Testing Decisions
 
-Use the previously approved public GameState/MCP/native Lua seams. Red→green the native T73 local Claimant=owner, CanRecruit=true, points above80 scenario; confirm one request, actual80-point spend and exact new133 unit. Check foreign claimant, unknown/malformed claimant, duplicate/missing candidate, native ineligibility, ordinary unclaimed compatibility, and retained pending/confirmation behavior. Parent validates actual recruitment, legal activation, education boost and subsequent turn/save in the original run.
+Use the previously approved public GameState/MCP/native Lua seams. Red→green the native T73 local Claimant=owner, CanRecruit=true, points above80 scenario; confirm one request, actual80-point spend and exact new133 unit. Check native false for a foreign candidate, false/unknown/malformed operation eligibility, duplicate/missing candidate, invalid class/cost, ordinary unclaimed compatibility, separate reject and gold/faith patronage eligibility, and retained pending/confirmation behavior. Parent validates actual recruitment, legal activation, education boost and subsequent turn/save in the original run.
 
 ## Out of Scope
 

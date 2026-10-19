@@ -33,7 +33,11 @@ function addGP(id,individual)
  units[id]=u
 end
 function available(individual)
- for _,e in ipairs(current) do if e.Individual==individual then return not passed[individual] and e.Claimant==nil end end
+ for _,e in ipairs(current) do
+  if e.Individual==individual then
+   return not passed[individual] and (e.Claimant==nil or e.Claimant==-1 or e.Claimant==0)
+  end
+ end
  return false
 end
 gp={
@@ -81,6 +85,30 @@ end
 def quick_confirmation(monkeypatch):
     monkeypatch.setattr('civ_mcp.game_state.ACTION_CONFIRM_TIMEOUT', .01)
     monkeypatch.setattr('civ_mcp.game_state.ACTION_CONFIRM_INTERVAL', .001)
+
+
+def test_t73_local_timeline_candidate_can_recruit_with_native_eligibility():
+    conn = GreatPeopleConn(); state = GameState(conn); ctx = make_ctx(); app_of(ctx).game = state
+    conn.lua.execute('''
+points=82.296875
+current={{Individual=133,Class=5,Cost=80,Claimant=0}}
+GameInfo.GreatPersonIndividuals[133]={Name='Omar Khayyam'}
+gp.CanRecruitPerson=function(_,owner,id) return owner==0 and id==133 end
+Players[0].GetGreatPeoplePoints=function()
+ return {GetPointsTotal=function(_,class) assert(class==5);return points end}
+end
+function applyPool(op,p)
+ assert(op==10 and p.individual==133)
+ points=points-80
+ addGP(262144,133)
+ current={{Individual=134,Class=5,Cost=120}}
+end
+''')
+    result = asyncio.run(server.recruit_great_person(ctx, 133))
+    assert result.startswith('RECRUITED|Omar Khayyam|individual:133|gp_points_cost:80|unit:262144')
+    assert conn.lua.eval('points') == 2.296875
+    assert conn.lua.eval('#submissions') == 1
+    assert state.pending_action_summary is None
 
 
 def test_lost_patronage_reply_repeated_public_call_only_confirms_original_person():
@@ -131,8 +159,11 @@ def test_delayed_rejection_spends_class_points_without_advancing_or_rejecting_ne
     ('patronize_great_person', 'YIELD_FAITH', 'PATRONIZED|', 'faith', 450),
     ('reject_great_person', None, 'REJECTED|', 'points', 130),
 ])
-def test_normal_public_actions_confirm_native_resource_and_original_individual(method, currency, prefix, resource, remaining):
+@pytest.mark.parametrize('claimant', [None, -1, 0])
+def test_normal_public_actions_confirm_native_resource_and_original_individual(method, currency, prefix, resource, remaining, claimant):
     conn = GreatPeopleConn(); state = GameState(conn); ctx = make_ctx(); app_of(ctx).game = state
+    if claimant is not None:
+        conn.lua.execute(f'current[1].Claimant={claimant}')
     args = (42,) if currency is None else (42, currency)
     result = asyncio.run(getattr(server, method)(ctx, *args))
     assert result.startswith(prefix)
@@ -154,6 +185,7 @@ def test_lost_and_cancelled_request_keeps_original_pool_intent(method):
             return rows
     for conn in (GreatPeopleConn(), CancelConn()):
         state = GameState(conn); ctx = make_ctx(); app_of(ctx).game = state
+        conn.lua.execute('current[1].Claimant=0')
         if type(conn) is GreatPeopleConn:
             conn.lose_reply = True
             assert 'OUTCOME_UNKNOWN' in asyncio.run(getattr(server, method)(ctx, 42))
@@ -195,13 +227,45 @@ def test_deferred_request_repeated_before_completion_never_resubmits(method):
 
 @pytest.mark.parametrize('setup', [
     'allowed=false', 'allowed=nil', 'busy=true', 'current={}',
-    'current[1].Claimant=0', 'current[1].Class=nil',
+    'current[1].Claimant=1', 'current[1].Class=nil',
     'current[2]=current[1]', 'UI.RequestPlayerOperation=nil',
 ])
 @pytest.mark.parametrize('method', ['recruit_great_person', 'patronize_great_person', 'reject_great_person'])
 def test_native_eligibility_or_identity_refusal_proves_zero_submission(method, setup):
     conn = GreatPeopleConn(); state = GameState(conn); conn.lua.execute(setup)
     assert asyncio.run(getattr(state, method)(42)).startswith('Error: GP_POOL_REFUSED|')
+    assert conn.lua.eval('#submissions') == 0
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('method,native_method', [
+    ('recruit_great_person', 'CanRecruitPerson'),
+    ('reject_great_person', 'CanRejectPerson'),
+    ('patronize_great_person', 'CanPatronizePerson'),
+])
+@pytest.mark.parametrize('result', ['false', 'nil', '1', '"true"'])
+def test_only_requested_native_operation_can_authorize_local_candidate(method, native_method, result):
+    conn = GreatPeopleConn(); state = GameState(conn); ctx = make_ctx(); app_of(ctx).game = state
+    conn.lua.execute(f'''
+current[1].Claimant=0
+gp.CanRecruitPerson=function() return true end
+gp.CanRejectPerson=function() return true end
+gp.CanPatronizePerson=function() return true end
+gp.{native_method}=function() return {result} end
+''')
+    assert asyncio.run(getattr(server, method)(ctx, 42)).startswith('Error: GP_POOL_REFUSED|')
+    assert conn.lua.eval('#submissions') == 0
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('currency,denied_yield', [('YIELD_GOLD', 2), ('YIELD_FAITH', 5)])
+def test_patronage_requires_native_permission_for_requested_currency(currency, denied_yield):
+    conn = GreatPeopleConn(); state = GameState(conn)
+    conn.lua.execute(f'''
+current[1].Claimant=0
+gp.CanPatronizePerson=function(_,owner,id,yield) return yield~={denied_yield} end
+''')
+    assert asyncio.run(state.patronize_great_person(42, currency)).startswith('Error: GP_POOL_REFUSED|')
     assert conn.lua.eval('#submissions') == 0
     assert state.pending_action_summary is None
 
