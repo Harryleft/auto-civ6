@@ -99,16 +99,22 @@ class OffMapAssignmentConn(AssignmentConn):
         self.lua.execute('''
 travelFinish=49
 function applyAssignment(op,params)
- if emitStarted~=false then Events.UnitOperationStarted.Fire(startOwner or 0,startId or u.id,startOperation or op) end
- units[u.id]=nil
- if emitRemoved~=false then Events.UnitRemovedFromMap.Fire(removeOwner or 0,removeId or u.id) end
+ local function remove()
+  units[u.id]=nil
+  if emitRemoved~=false then Events.UnitRemovedFromMap.Fire(removeOwner or 0,removeId or u.id) end
+ end
+ if removedFirst then remove() end
+ if emitStarted~=false then Events.UnitOperationStarted.Fire(startOwner or 0,startId or u.id,startOperation or op,0) end
+ if not removedFirst then remove() end
  offmap={{NameIndex=37,Name=u.name,Level=u.level,XLocation=params.x,YLocation=params.y,ReturnTurn=travelFinish}}
 end
 ''')
 
 
-def test_native_offmap_travel_confirms_original_removed_spy_and_future_return_turn():
+@pytest.mark.parametrize('removed_first', [False, True])
+def test_native_offmap_travel_confirms_original_removed_spy_and_future_return_turn(removed_first):
     conn=OffMapAssignmentConn();state=GameState(conn);ctx=make_ctx();app_of(ctx).game=state
+    conn.lua.execute(f'removedFirst={str(removed_first).lower()}')
     conn.lua.execute('''
 turn=128;travelFinish=132
 units[196608]=nil;u.id=2752514;units[u.id]=u;u.x=40;u.y=25
@@ -193,8 +199,27 @@ def test_unbindable_native_travel_identity_or_roster_refuses_before_mutation(set
     'local apply=applyAssignment;applyAssignment=function(op,p) apply(op,p);units[u.id]=u end',
     'local apply=applyAssignment;applyAssignment=function(op,p) apply(op,p);Players[0].GetUnits=function() return {Members=function() return pairs(units) end,FindID=function() return u end} end end',
 ])
-def test_absence_target_or_partial_offmap_facts_cannot_confirm_original_spy(setup):
-    conn=OffMapAssignmentConn();state=GameState(conn);conn.lua.execute(setup)
+@pytest.mark.parametrize('removed_first', [False, True])
+def test_absence_target_or_partial_offmap_facts_cannot_confirm_original_spy(setup, removed_first):
+    conn=OffMapAssignmentConn();state=GameState(conn)
+    conn.lua.execute(f'removedFirst={str(removed_first).lower()}')
+    conn.lua.execute(setup)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_travel(196608,10,10))
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_travel(196608,10,10))
+    assert conn.lua.eval('#submissions')==1
+    assert state.pending_action_summary is not None
+
+
+@pytest.mark.parametrize('seed_during_removal', ['9', 'nil'])
+def test_removal_before_started_in_changed_or_unknown_scope_cannot_confirm(seed_during_removal):
+    conn=OffMapAssignmentConn();state=GameState(conn)
+    conn.lua.execute(f'''
+removedFirst=true
+local fire=Events.UnitRemovedFromMap.Fire
+Events.UnitRemovedFromMap.Fire=function(owner,id)
+ seed={seed_during_removal};fire(owner,id);seed=719665280
+end
+''')
     assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_travel(196608,10,10))
     assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_travel(196608,10,10))
     assert conn.lua.eval('#submissions')==1

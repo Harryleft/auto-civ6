@@ -115,7 +115,9 @@ r.handler=function(owner,id,operation)
   and operation==r.operation and sameScope(r) then r.started=true end
 end
 r.removalHandler=function(owner,id)
- if __civmcpSpyAssignment==r and r.entered==true and r.started==true and owner==r.owner and id==r.id
+ -- Native travel can remove the map unit before emitting OperationStarted.
+ -- Both exact events are required at confirmation; neither proves the other.
+ if __civmcpSpyAssignment==r and r.entered==true and owner==r.owner and id==r.id
   and sameScope(r) then r.removed=true end
 end
 local armed=pcall(function()
