@@ -250,7 +250,7 @@ for row in GameInfo.Governors() do
         for promo in GameInfo.GovernorPromotionSets() do
             if promo.GovernorType == row.GovernorType then
                 local promoRow = GameInfo.GovernorPromotions[promo.GovernorPromotion]
-                if promoRow and not g:HasPromotion(promoRow.Index) then
+                if promoRow and not g:HasPromotion(promoRow.Hash) then
                     local pName = Locale.Lookup(promoRow.Name)
                     local pDesc = Locale.Lookup(promoRow.Description):gsub("|", "/"):gsub("\\n", " ")
                     local lvl = promoRow.Level or 0
@@ -283,95 +283,6 @@ for gov in GameInfo.Governors() do
 end
 print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
-
-
-def build_appoint_governor(governor_type: str) -> str:
-    """Appoint a new governor (InGame context)."""
-    return f"""
-local me = Game.GetLocalPlayer()
-local pGovs = Players[me]:GetGovernors()
-if not pGovs:CanAppoint() then {_bail("ERR:CANNOT_APPOINT|No governor points available")} end
-local gov = GameInfo.Governors["{governor_type}"]
-if gov == nil then {_bail(f"ERR:GOVERNOR_NOT_FOUND|{governor_type}")} end
-if PlayerOperations.APPOINT_GOVERNOR == nil then {_bail("ERR:API_MISSING|PlayerOperations.APPOINT_GOVERNOR is nil")} end
-if PlayerOperations.PARAM_GOVERNOR_TYPE == nil then {_bail("ERR:API_MISSING|PlayerOperations.PARAM_GOVERNOR_TYPE is nil")} end
-local prePts = pGovs:GetGovernorPointsSpent()
-local params = {{}}
-params[PlayerOperations.PARAM_GOVERNOR_TYPE] = gov.Index
-UI.RequestPlayerOperation(me, PlayerOperations.APPOINT_GOVERNOR, params)
-local postPts = pGovs:GetGovernorPointsSpent()
-if postPts > prePts then
-    print("OK:APPOINTED|" .. Locale.Lookup(gov.Name) .. " (" .. Locale.Lookup(gov.Title) .. ")")
-else
-    print("OK:APPOINT_REQUESTED|" .. Locale.Lookup(gov.Name) .. " — verify with get_governors()")
-end
-print("{SENTINEL}")
-"""
-
-
-def build_assign_governor(governor_type: str, city_id: int) -> str:
-    """Assign a governor to a city (InGame context)."""
-    return f"""
-{_lua_get_city(city_id)}
-local gov = GameInfo.Governors["{governor_type}"]
-if gov == nil then {_bail(f"ERR:GOVERNOR_NOT_FOUND|{governor_type}")} end
-if PlayerOperations.ASSIGN_GOVERNOR == nil then {_bail("ERR:API_MISSING|PlayerOperations.ASSIGN_GOVERNOR is nil")} end
-local params = {{}}
-params[PlayerOperations.PARAM_GOVERNOR_TYPE] = gov.Index
-params[PlayerOperations.PARAM_CITY_DEST] = pCity:GetID()
-params[PlayerOperations.PARAM_PLAYER_ONE] = me
-UI.RequestPlayerOperation(me, PlayerOperations.ASSIGN_GOVERNOR, params)
-print("OK:ASSIGNED|" .. Locale.Lookup(gov.Name) .. " to " .. Locale.Lookup(pCity:GetName()))
-print("{SENTINEL}")
-"""
-
-
-def build_promote_governor(governor_type: str, promotion_type: str) -> str:
-    """Promote a governor with a new ability (InGame context).
-
-    Uses PROMOTE_GOVERNOR operation (NOT APPOINT_GOVERNOR).
-    Both governor and promotion use .Index (NOT .Hash).
-    Source: GovernorDetailsPanel.lua — SetVoid1(m_GovernorIndex), SetVoid2(kPromotion.Index)
-    """
-    return f"""
-local me = Game.GetLocalPlayer()
-local pGovs = Players[me]:GetGovernors()
-local gov = GameInfo.Governors["{governor_type}"]
-if gov == nil then {_bail(f"ERR:GOVERNOR_NOT_FOUND|{governor_type}")} end
-if not pGovs:HasGovernor(gov.Hash) then {_bail(f"ERR:NOT_APPOINTED|{governor_type} not appointed")} end
-local promo = GameInfo.GovernorPromotions["{promotion_type}"]
-if promo == nil then {_bail(f"ERR:PROMOTION_NOT_FOUND|{promotion_type}")} end
-local g = pGovs:GetGovernor(gov.Hash)
--- Check HasPromotion BEFORE CanPromoteGovernor so the agent gets
--- a specific "already earned" error instead of a generic "can't promote"
-if g:HasPromotion(promo.Index) then {_bail(f"ERR:ALREADY_PROMOTED|{promotion_type} already earned")} end
-local pts = pGovs:GetGovernorPoints() - pGovs:GetGovernorPointsSpent()
-if pts <= 0 then {_bail("ERR:CANNOT_PROMOTE|No governor points available (0 remaining)")} end
-if not pGovs:CanPromoteGovernor(gov.Hash) then {_bail("ERR:CANNOT_PROMOTE|Governor has no available promotions")} end
--- Check prerequisites (OR-based: need at least one satisfied)
-local prereqs = {{}}
-for row in GameInfo.GovernorPromotionPrereqs() do
-    if row.GovernorPromotionType == "{promotion_type}" then
-        table.insert(prereqs, row.PrereqGovernorPromotion)
-    end
-end
-if #prereqs > 0 then
-    local anyMet = false
-    local names = {{}}
-    for _, reqType in ipairs(prereqs) do
-        local reqRow = GameInfo.GovernorPromotions[reqType]
-        if reqRow and g:HasPromotion(reqRow.Index) then anyMet = true; break end
-        if reqRow then table.insert(names, Locale.Lookup(reqRow.Name)) end
-    end
-    if not anyMet then print("ERR:PREREQ_NOT_MET|{promotion_type} requires one of: " .. table.concat(names, ", ")); print("{SENTINEL}"); return end
-end
-local params = {{}}
-params[PlayerOperations.PARAM_GOVERNOR_TYPE] = gov.Index
-params[PlayerOperations.PARAM_GOVERNOR_PROMOTION_TYPE] = promo.Index
-UI.RequestPlayerOperation(me, PlayerOperations.PROMOTE_GOVERNOR, params)
-print("OK:PROMOTED|" .. Locale.Lookup(gov.Name) .. " with " .. Locale.Lookup(promo.Name))
-print("{SENTINEL}")
-"""
 
 
 def build_unit_promotions_query(unit_index: int) -> str:

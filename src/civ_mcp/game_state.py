@@ -797,12 +797,35 @@ class GameState:
         item_name: str,
         yield_type: str = "YIELD_GOLD",
     ) -> str:
-        blocked = await self._action_gate(("city", city_id))
+        if (type(city_id) is not int or city_id < 0 or not isinstance(item_type, str)
+                or not isinstance(item_name, str) or not isinstance(yield_type, str)):
+            return "Error: INVALID_PURCHASE|Expected a full city ID and UNIT/BUILDING item with GOLD/FAITH currency."
+        item_type, item_name, yield_type = item_type.upper(), item_name.upper(), yield_type.upper()
+        if (item_type not in {"UNIT", "BUILDING"} or yield_type not in {"YIELD_GOLD", "YIELD_FAITH"}
+                or not re.fullmatch(r"[A-Z][A-Z0-9_]*", item_name)):
+            return "Error: INVALID_PURCHASE|Only UNIT/BUILDING and YIELD_GOLD/YIELD_FAITH are supported."
+        entity, intent = ("city", city_id), (item_type, item_name, yield_type)
+        if self._actions.matches("purchase_item", entity, intent=intent):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
         if blocked:
             return blocked
-        lua = lq.build_purchase_item(city_id, item_type, item_name, yield_type)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            "purchase_item", entity, lq.build_item_purchase_query(city_id, item_type, item_name, yield_type, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"item": item_name, "currency": yield_type, "witness_token": token}, intent=intent,
+            evidence=_ActionEvidence(
+                tool="purchase_item", entrypoint="purchase_item", accepted=("ITEM_PURCHASE_REQUESTED|",),
+                refused="ERR:ITEM_PURCHASE_REFUSED|",
+                confirm=lambda rows: lq.parse_item_purchase_confirmation(rows, token, city_id, item_name, yield_type),
+                guidance="Repeat purchase_item with the original city, product and currency to confirm only. ",
+            ),
+        )
+        return await self._submit_action(pending, scope, lq.build_purchase_item(city_id, item_type, item_name, yield_type, token))
 
     async def list_city_production(self, city_id: int) -> list[lq.ProductionOption]:
         lua = lq.build_city_production_query(city_id)
@@ -1183,43 +1206,44 @@ class GameState:
 
     @_guard_pending_mutation
     async def appoint_governor(self, governor_type: str) -> str:
-        lua = lq.build_appoint_governor(governor_type)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._governor_action("appoint_governor", governor_type)
+
+    async def _governor_action(self, operation: str, governor_type: str,
+                               *, promotion_type: str | None = None, city_id: int | None = None) -> str:
+        intent = (governor_type, promotion_type, city_id)
+        entity = self.pending_action_entity
+        if entity is not None and self._actions.matches(operation, entity, intent=intent):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        options = {"promotion_type": promotion_type, "city_id": city_id}
+        pending = _PendingAction(
+            operation, ("player", scope.owner),
+            lq.build_governor_confirmation(operation, governor_type, token, **options),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"governor": governor_type, "promotion": promotion_type, "city": city_id}, intent=intent,
+            evidence=_ActionEvidence(
+                tool=operation, entrypoint=operation, accepted=("GOVERNOR_REQUESTED|",),
+                refused="ERR:GOVERNOR_REFUSED|",
+                confirm=lambda rows: lq.parse_governor_confirmation(rows, operation, governor_type, token),
+                guidance=f"Repeat {operation} with the original governor and target to confirm only. ",
+            ),
+        )
+        return await self._submit_action(pending, scope,
+            lq.build_governor_action(operation, governor_type, token, **options))
 
     @_guard_pending_mutation
     async def assign_governor(self, governor_type: str, city_id: int) -> str:
-        lua = lq.build_assign_governor(governor_type, city_id)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._governor_action("assign_governor", governor_type, city_id=city_id)
 
     @_guard_pending_mutation
     async def promote_governor(self, governor_type: str, promotion_type: str) -> str:
-        lua = lq.build_promote_governor(governor_type, promotion_type)
-        lines = await self.conn.execute_write(lua)
-        result = _action_result(lines)
-        if "PROMOTED" in result:
-            # Verify promotion actually applied (RequestPlayerOperation is async)
-            verify = await self.conn.execute_write(
-                f"local me = Game.GetLocalPlayer(); "
-                f"local pGovs = Players[me]:GetGovernors(); "
-                f'local gov = GameInfo.Governors["{governor_type}"]; '
-                f'local promo = GameInfo.GovernorPromotions["{promotion_type}"]; '
-                f"if gov and promo then "
-                f"  local g = pGovs:GetGovernor(gov.Hash); "
-                f"  if g and g:HasPromotion(promo.Index) then "
-                f'    print("VERIFIED") '
-                f"  else "
-                f'    print("ERR:PROMOTION_FAILED|{promotion_type} was not applied") '
-                f"  end "
-                f"else "
-                f'  print("ERR:LOOKUP_FAILED") '
-                f"end; "
-                f'print("{lq.SENTINEL}")'
-            )
-            if any("ERR:" in l for l in verify):
-                return _action_result(verify)
-        return result
+        return await self._governor_action("promote_governor", governor_type, promotion_type=promotion_type)
 
     # ------------------------------------------------------------------
     # Promotion methods
