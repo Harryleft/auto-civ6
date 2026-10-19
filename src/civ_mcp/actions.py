@@ -497,8 +497,11 @@ class ActionLifecycle:
                 # The pre-submission record survives a lost acknowledgement;
                 # never install a listener retrospectively to fill that gap.
                 witness = self._move_witness(pending, meta)
+                interrupted = self._interrupted_move_witness(pending, meta)
                 if origin is None and witness is not None:
                     origin = witness[0]
+                if origin is None and interrupted is not None:
+                    origin = interrupted[0]
                 suffix = f"|now_at:{x},{y}"
                 if origin:
                     suffix += f"|(moved dx:{x-origin[0]:+d} dy:{y-origin[1]:+d})"
@@ -519,11 +522,18 @@ class ActionLifecycle:
                     if moves is not None:
                         suffix += f"|moves_remaining:{moves:g}"
                     return pending.success + suffix + f"|STOPPED_MID_PATH ({native_stop})"
+                queued = [row for row in pending.observed if row.startswith("QUEUED_TARGET|")]
+                # A native MOVE_TO can move, then clear its path without a
+                # SegmentComplete event. Report interruption, not arrival.
+                if (interrupted is not None and interrupted == (origin, (x, y))
+                        and origin is not None and (x, y) != origin and (x, y) != target
+                        and busy == "false" and moves is not None and moves > 0 and not queued):
+                    return (pending.success + suffix + f"|moves_remaining:{moves:g}"
+                            "|PATH_INTERRUPTED (native move cleared)")
                 # Completion belongs to the submitted segment. A new path
                 # may backtrack or disappear after units block its route;
                 # its turn labels cannot invalidate the native event.
                 # Keep the full request identity and queued target checks.
-                queued = [row for row in pending.observed if row.startswith("QUEUED_TARGET|")]
                 if (witness is not None and witness[1] and witness[0] == origin
                         and len(queued) == 1
                         and origin is not None and (x, y) != origin and busy == "false"
@@ -569,6 +579,31 @@ class ActionLifecycle:
             return True
         except ValueError:
             return False
+
+    def _interrupted_move_witness(
+        self, pending: _PendingAction, meta: dict[str, str],
+    ) -> tuple[tuple[int, int], tuple[int, int]] | None:
+        """Only the request-bound native event chain proves a cleared partial move."""
+        rows = [row.split("|") for row in pending.observed if row.startswith("MOVE_INTERRUPTED|")]
+        if len(rows) != 1 or len(rows[0]) != 17 or pending.identity is None or pending.turn is None:
+            return None
+        row = rows[0]
+        try:
+            identifier = _native_integer(row[3], minimum=0)
+            if (row[1] != pending.details.get("witness_token")
+                    or row[2] != str(pending.owner) or row[2] != meta.get("owner") or row[3] != meta.get("id")
+                    or identifier % 65536 != pending.entity[1] % 65536
+                    or pending.entity[1] >= 65536 and identifier != pending.entity[1]
+                    or _native_game_identity(row[4], row[5]) != pending.identity
+                    or _native_integer(row[6], minimum=0) != pending.turn
+                    or tuple(_native_integer(v, minimum=0) for v in row[9:11]) != pending.details["target"]
+                    or row[13:] != ["entered:true", "returned:true", "chain:CLEARED", "queue:nil"]):
+                return None
+            origin = tuple(_native_integer(v, minimum=0) for v in row[7:9])
+            position = tuple(_native_integer(v, minimum=0) for v in row[11:13])
+            return origin, position
+        except ValueError:
+            return None
 
     def _move_witness(self, pending: _PendingAction, meta: dict[str, str]) -> tuple[tuple[int, int], bool, list[str]] | None:
         """Validate the native request record, including the full runtime ID."""
