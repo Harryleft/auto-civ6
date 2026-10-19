@@ -19,6 +19,14 @@ local research={Index=23,AllianceType="ALLIANCE_RESEARCH"}
 local military={Index=9,AllianceType="ALLIANCE_MILITARY"}
 GameInfo.Alliances={ALLIANCE_RESEARCH=research, [23]=research,
                    ALLIANCE_MILITARY=military, [9]=military}
+GameInfo.DiplomaticActions={
+ DIPLOACTION_ALLIANCE_RESEARCH={DiplomaticActionType="DIPLOACTION_ALLIANCE_RESEARCH",Hash=430927667},
+ DIPLOACTION_ALLIANCE_MILITARY={DiplomaticActionType="DIPLOACTION_ALLIANCE_MILITARY",Hash=123},
+}
+GameInfo.DiplomaticActions_XP1={
+ DIPLOACTION_ALLIANCE_RESEARCH={DiplomaticActionType="DIPLOACTION_ALLIANCE_RESEARCH",AllianceType="ALLIANCE_RESEARCH"},
+ DIPLOACTION_ALLIANCE_MILITARY={DiplomaticActionType="DIPLOACTION_ALLIANCE_MILITARY",AllianceType="ALLIANCE_MILITARY"},
+}
 has_civic=true
 Players[0].GetCulture=function() return {HasCivic=function() return has_civic end} end
 submitted, pre_state, observations=false,1,0
@@ -143,7 +151,7 @@ def test_nonallied_wrong_type_missing_or_inconsistent_native_witness_remains_unc
     ('Players[1].IsAlive=function() return false end', "INVALID_PLAYER"),
     ('Players[0]:GetDiplomacy().HasMet=function() return false end', "NOT_MET"),
     ('Players[0]:GetDiplomacy().IsAtWarWith=function() return true end', "AT_WAR"),
-    ('has_civic=false', "NO_CIVIC"),
+    ('valid=false', "ALLIANCE_NOT_ELIGIBLE"),
 ])
 def test_native_prechecks_reject_before_any_deal_mutation_or_confirmation(setup, error):
     conn = AllianceConn()

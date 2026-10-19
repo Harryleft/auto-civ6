@@ -1102,11 +1102,11 @@ def narrate_deal_options(opts: lq.DealOptions) -> str:
         lines.append(f"  Alliance: {opts.current_alliance} (active)")
     elif opts.alliance_eligible:
         lines.append(
-            "  Alliance: eligible (MILITARY, RESEARCH, CULTURAL, ECONOMIC, RELIGIOUS)"
+            "  Alliance: at least one native type is eligible; form_alliance checks the selected type"
         )
     else:
         lines.append(
-            "  Alliance: not eligible (requires declared friendship + Diplomatic Service civic)"
+            "  Alliance: no currently verified eligible native type"
         )
     return "\n".join(lines)
 
