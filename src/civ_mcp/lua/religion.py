@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from civ_mcp.lua._helpers import SENTINEL, _bail
+from civ_mcp.lua._helpers import SENTINEL
 from civ_mcp.lua.models import (
     BeliefInfo,
     CityReligionInfo,
@@ -50,22 +50,6 @@ if not hasPantheon then
 end
 print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
-
-
-def build_choose_pantheon(belief_type: str) -> str:
-    """Found a pantheon with the specified belief (InGame context)."""
-    return f"""
-local me = Game.GetLocalPlayer()
-local pReligion = Players[me]:GetReligion()
-if pReligion:GetPantheon() >= 0 then {_bail("ERR:ALREADY_HAS_PANTHEON|You already have a pantheon")} end
-local belief = GameInfo.Beliefs["{belief_type}"]
-if belief == nil then {_bail(f"ERR:BELIEF_NOT_FOUND|{belief_type}")} end
-local params = {{}}
-params[PlayerOperations.PARAM_BELIEF_TYPE] = belief.Hash
-UI.RequestPlayerOperation(me, PlayerOperations.FOUND_PANTHEON, params)
-print("OK:PANTHEON_FOUNDED|" .. Locale.Lookup(belief.Name))
-print("{SENTINEL}")
-"""
 
 
 def build_religion_beliefs_query() -> str:
@@ -177,46 +161,6 @@ def parse_religion_beliefs_response(lines: list[str]) -> ReligionFoundingStatus:
                 )
                 status.beliefs_by_class.setdefault(cls, []).append(opt)
     return status
-
-
-def build_found_religion(
-    religion_type: str, follower_belief: str, founder_belief: str
-) -> str:
-    """Found a religion with chosen name and beliefs (InGame context).
-
-    Requires Great Prophet already activated on Holy Site (UNITOPERATION_FOUND_RELIGION).
-    """
-    return f"""
-local me = Game.GetLocalPlayer()
-local pRel = Players[me]:GetReligion()
-if pRel:GetReligionTypeCreated() >= 0 then
-    {_bail("ERR:ALREADY_FOUNDED|You already have a religion")}
-end
-local relRow = GameInfo.Religions["{religion_type}"]
-if not relRow then {_bail(f"ERR:RELIGION_NOT_FOUND|{religion_type}")} end
-local follower = GameInfo.Beliefs["{follower_belief}"]
-if not follower then {_bail(f"ERR:BELIEF_NOT_FOUND|{follower_belief}")} end
-local founder = GameInfo.Beliefs["{founder_belief}"]
-if not founder then {_bail(f"ERR:BELIEF_NOT_FOUND|{founder_belief}")} end
-
--- Step 1: Found religion with chosen type
-local params = {{}}
-params[PlayerOperations.PARAM_RELIGION_TYPE] = relRow.Hash
-UI.RequestPlayerOperation(me, PlayerOperations.FOUND_RELIGION, params)
-
--- Step 2: Add follower belief
-local p2 = {{}}
-p2[PlayerOperations.PARAM_BELIEF_TYPE] = follower.Hash
-UI.RequestPlayerOperation(me, PlayerOperations.ADD_BELIEF, p2)
-
--- Step 3: Add founder belief
-local p3 = {{}}
-p3[PlayerOperations.PARAM_BELIEF_TYPE] = founder.Hash
-UI.RequestPlayerOperation(me, PlayerOperations.ADD_BELIEF, p3)
-
-print("OK:RELIGION_FOUNDED|" .. Locale.Lookup(relRow.Name) .. "|" .. Locale.Lookup(follower.Name) .. "|" .. Locale.Lookup(founder.Name))
-print("{SENTINEL}")
-"""
 
 
 def parse_pantheon_status_response(lines: list[str]) -> PantheonStatus:

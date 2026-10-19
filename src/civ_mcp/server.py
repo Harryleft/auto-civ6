@@ -785,7 +785,8 @@ async def choose_pantheon(ctx: Context, belief_type: str) -> str:
         belief_type: e.g. BELIEF_GOD_OF_THE_FORGE, BELIEF_DIVINE_SPARK
 
     Use get_pantheon_beliefs first to see options. Requires enough faith
-    and no existing pantheon.
+    and native eligibility. An existing matching pantheon is unchanged.
+    If the outcome is unknown, repeat the original belief to confirm without resubmitting.
     """
     gs = _get_game(ctx)
     return await _logged(
@@ -826,7 +827,9 @@ async def found_religion(
 
     Requires your Great Prophet to have already activated on a Holy Site
     (via UNITOPERATION_FOUND_RELIGION). Use get_religion_beliefs
-    first to see available options.
+    first to see available options. Creation and both beliefs are confirmed separately.
+    Unknown results retain completed stages; repeat the same religion and both beliefs
+    to confirm or continue only a stage that has never been submitted.
     """
     gs = _get_game(ctx)
     return await _logged(

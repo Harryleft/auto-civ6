@@ -250,8 +250,6 @@ from civ_mcp.lua.overview import (  # noqa: F401
     parse_overview_response,
 )
 from civ_mcp.lua.religion import (  # noqa: F401
-    build_choose_pantheon,
-    build_found_religion,
     build_pantheon_status_query,
     build_religion_beliefs_query,
     build_religion_status_query,
@@ -317,4 +315,13 @@ from civ_mcp.lua.unit_effects import (  # noqa: F401
     build_unit_effect,
     build_unit_effect_query,
     parse_unit_effect_confirmation,
+)
+
+from civ_mcp.lua.religion_plan import (  # noqa: F401
+    build_pantheon_plan,
+    build_religion_plan,
+    build_religion_continuation,
+    religion_plan_ready,
+    build_religion_confirmation,
+    parse_religion_confirmation,
 )
