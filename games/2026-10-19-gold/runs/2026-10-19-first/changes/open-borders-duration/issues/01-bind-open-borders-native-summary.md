@@ -1,6 +1,6 @@
 # B11-01：绑定开放边境期限与完整原生条款
 
-Status: implemented-pending-review
+Status: resolved
 Blocked by: none
 Spec: ../spec.md
 
@@ -18,3 +18,7 @@ OPEN_BORDERS 的每个方向独立调用同一 working deal／原生参与者对
 TDD：双方 25 回合和独立 17／41 回合先红后绿；原生 Validate 改期限的零发送及安全清理先红后绿；经济 Validate 改价仍是反报价的回归先红后绿；公共预览显示双方期限先红后绿。补充双方摘要缺失／歧义／不可读／无效、原生值回读、期限／value／subtype 反报价、丢回复不重复读选项或评估、失败清理归属门禁，既有普通经济及 war 回归继续通过。
 
 离线：trade_progress、diplomacy_context_lua、diplomacy_cleanup、server、incoming_negotiation、narrate 共 476 passed；compileall 与 diff --check 通过。工作者未连接游戏；独立审查及 T55 原局准确条款的接受／拒绝核对由父代理继续，未保证 AI 接受。
+
+## Verification
+
+实施97846e9／集成1344ad6；476相关离线、compileall、diff-check通过，双独立审查无实质发现。#967同T55预览显示双方duration25，#968原报价5GPT仍被INSPECT拒绝，期限错误不是全部拒绝的已证原因。#971明确退出，正常议价#973以10外交支持换4GPT/30回合及双方开放边境25回合成交；#975退出对话，#976只确认原请求并清理，#977边境active/外交支持13→3。瑞典后续主动以3金币+1GPT+其开放边境换3外交支持，#984接受；#987确认T56、#990保存gold_20261019_t056_b11_verified。没有保证AI报价原样必成交或扩改计价。

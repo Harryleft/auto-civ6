@@ -1,6 +1,6 @@
 # B11：开放边境的原生期限绑定
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 
