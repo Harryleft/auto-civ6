@@ -44,3 +44,7 @@ Automatic unit moves/skip/force-end, changing user options, generic cancellation
 ## Further Notes
 
 Evidence tool-calls.jsonl #1044–1051. Native shipped Base ActionPanel DoEndTurn handles local blocking units by selecting a ready unit; RequestAction is used only without such a blocker. Native engine can reveal a newly awake unit after RequestAction. Existing SUBMITTED currently only means the Lua RequestAction call returned; it is not proof HasSentTurnComplete became true. Original T57 identity CIVILIZATION_SUMERIA/-1896272000/player0, same run e8b4d6a62dca49bbb256e8264beb18f2. Latest pre-pending confirmed save #1042 gold_20261019_t057_before_b12.
+
+## Native evidence refinement
+
+诊断提交8eb37f1／集成0be1adf；#1057单次T57提交，token01bdbe67f1514c5ba9e87caba668c287。entered/returned=true，RequestAction返回nil，不能据返回值认定拒绝。真实顺序：LocalPlayerTurnEnd → UnitOperationDeactivated(0,262146,-1676983098,1) → UnitOperationsCleared → LocalPlayerTurnBegin，全部同scope CIVILIZATION_SUMERIA|-1896272000|0|57；随后BlockingChanged(0,23669119)、PlaybackComplete，cart ready=true。原生是同回合重新开启，不是“仍等其他玩家”。以精确本次End→Begin同回合见证及最终原生待办/未送完成/非忙/不可unready等完整事实确认本次attempt为REOPENED_LOCAL；普通blocker或Publish单独仍不足。只在显式end_turn确认退休本次attempt，返回未推进及新待办，不自动重发。最小化最终观察器，移除无用泛诊断。
