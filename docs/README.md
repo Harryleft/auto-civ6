@@ -30,7 +30,7 @@
 
 | 主题 | 入口 |
 | --- | --- |
-| 唯一原始基准与文件指纹 | [存档说明](../fixtures/saves/README.md) |
+| 受信原始基准与文件指纹 | [存档说明](../fixtures/saves/README.md) |
 | 存档结构分析 | [存档格式研究](save-file-format.md) |
 | macOS Aspyr 启动器配置 | [启动器说明](research/bypassing_aspyr_launcher.md) |
 | 旧架构与设计探索的来源 | [设计归档](archive/README.md)；仅作历史参考 |

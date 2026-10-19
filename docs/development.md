@@ -54,7 +54,7 @@ git diff --check
 
 ## 实机验收
 
-只有任务已授权操作真实游戏时才进入本节。运行前核对[唯一测试基准](../fixtures/saves/README.md)和[检查点规则](agent-recovery.md#检查点与测试轮次)，保护存档及已有证据。
+只有任务已授权操作真实游戏时才进入本节。运行前核对[受信测试基准](../fixtures/saves/README.md)和[检查点规则](agent-recovery.md#检查点与测试轮次)，保护存档及已有证据。
 
 `integration_turns.py` 通过 stdio MCP 调用同一工具实现。以下命令会替换当前对局；已有对局时，当前驱动会完整重启并加载原始基准：
 

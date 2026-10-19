@@ -26,3 +26,24 @@ def test_run_ownership_survives_in_memory_completion_loss(monkeypatch, tmp_path)
     importlib.reload(checkpoints)
     monkeypatch.setattr(checkpoints, "CHECKPOINT_DIR", tmp_path / "records")
     assert checkpoints.expected_checkpoint("result") == ("sumeria", 719665280, 21)
+
+
+def test_deity_run_survives_restart_and_isolated_from_old_baseline(monkeypatch, tmp_path):
+    monkeypatch.setattr(checkpoints, "CHECKPOINT_DIR", tmp_path / "records")
+    monkeypatch.setattr(game_launcher, "SINGLE_SAVE_DIR", str(tmp_path))
+    assert checkpoints.begin_baseline_run() is None
+    (tmp_path / "old.Civ6Save").write_bytes(b"old run checkpoint")
+    checkpoints.mark_complete("old")
+    assert checkpoints.record_checkpoint("old", ("sumeria", 719665280), 21) is None
+    assert checkpoints.begin_baseline_run("benchmark_gold_tun_1") is None
+    assert checkpoints.expected_checkpoint("old") is None
+    (tmp_path / "deity.Civ6Save").write_bytes(b"deity run checkpoint")
+    checkpoints.mark_complete("deity")
+    assert checkpoints.record_checkpoint("deity", ("sumeria", -1896272000), 2) is None
+    importlib.reload(checkpoints)
+    monkeypatch.setattr(checkpoints, "CHECKPOINT_DIR", tmp_path / "records")
+    assert checkpoints.expected_checkpoint("deity") == ("sumeria", -1896272000, 2)
+    assert checkpoints.begin_baseline_run("benchmark_gold_tun_1") is None
+    assert checkpoints.expected_checkpoint("deity") is None
+    assert checkpoints.begin_baseline_run() is None
+    assert checkpoints.expected_checkpoint("deity") is None

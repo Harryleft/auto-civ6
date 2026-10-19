@@ -1368,14 +1368,15 @@ class TestSaveTools:
         assert run(server.load_game_save(ctx, "MySave")).startswith("Loaded MySave:")
         assert checkpoints.expected_checkpoint("MySave") == ("rome", 4242, 12)
 
+    @pytest.mark.parametrize("name,seed", [("benchmark_turn_1", 719665280), ("benchmark_gold_tun_1", -1896272000)])
     @pytest.mark.parametrize("matches", [True, False])
-    def test_only_verified_baseline_load_rotates_current_run(self, monkeypatch, tmp_path, matches):
+    def test_only_verified_baseline_load_rotates_current_run(self, monkeypatch, tmp_path, matches, name, seed):
         from civ_mcp import checkpoints
         from pathlib import Path
         ctx, gs = self.prepare_menu_load()
-        original = Path(__file__).resolve().parents[1] / "fixtures" / "saves" / "benchmark_turn_1.Civ6Save"
+        original = Path(__file__).resolve().parents[1] / "fixtures" / "saves" / f"{name}.Civ6Save"
         (tmp_path / original.name).write_bytes(original.read_bytes())
-        gs.conn.identity = ("sumeria", 719665280) if matches else ("rome", 4242)
+        gs.conn.identity = ("sumeria", seed) if matches else ("rome", 4242)
         gs.conn.overview_turn = 1
         original_read = gs.conn.execute_read
         original_write = gs.conn.execute_write
@@ -1389,7 +1390,7 @@ class TestSaveTools:
             return await original_write(code, timeout)
         gs.conn.execute_read = turn_one_read
         gs.conn.execute_write = turn_one_write
-        result = run(server.load_game_save(ctx, "benchmark_turn_1"))
+        result = run(server.load_game_save(ctx, name))
         assert result.startswith("Loaded" if matches else "ERR:OUTCOME_UNKNOWN")
         assert (checkpoints.expected_checkpoint("MySave") is None) == matches
         assert len(gs.conn.load_calls) == 1

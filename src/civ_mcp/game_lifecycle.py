@@ -463,8 +463,8 @@ async def save_game_result(conn: GameConnection, name: str) -> NativeTransition:
     if error:
         return NativeTransition("not_submitted", error)
     name = name.removesuffix(".Civ6Save")
-    if name.rstrip(" .").casefold() == "benchmark_turn_1":
-        return NativeTransition("not_submitted", "Error: The original benchmark_turn_1 baseline cannot be overwritten.")
+    if checkpoints.is_original_baseline_name(name):
+        return NativeTransition("not_submitted", "Error: An original baseline cannot be overwritten.")
     path = Path(SINGLE_SAVE_DIR) / f"{name}.Civ6Save"
 
     def fingerprint():
