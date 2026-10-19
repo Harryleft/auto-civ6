@@ -107,13 +107,16 @@ Events={SaveComplete={
     Add=function(handler) save_adds=save_adds+1; listeners[handler]=true end,
     Remove=function(handler) listeners[handler]=nil end,
 }}
+function emit_save_complete()
+    local callbacks={}
+    for handler in pairs(listeners) do table.insert(callbacks,handler) end
+    for _,handler in ipairs(callbacks) do handler() end
+end
 Network={SaveGame=function(file)
     save_requests=save_requests+1
     if finish_save then
         write_save(file.Name)
-        local callbacks={}
-        for handler in pairs(listeners) do table.insert(callbacks,handler) end
-        for _,handler in ipairs(callbacks) do handler() end
+        emit_save_complete()
     end
     return true
 end}
@@ -307,6 +310,221 @@ def test_a_hung_possible_submission_invalidates_old_recovery_even_when_save_file
     assert state.save_pending
     assert checkpoints.expected_checkpoint('checkpoint') is None
     assert conn.lua.globals().save_requests==2
+
+
+def test_cancelled_save_preserves_pending_and_invalidates_old_checkpoint(save_environment):
+    from civ_mcp import checkpoints,server
+    from test_server import make_ctx
+    conn=SaveBoundaryConn(save_environment)
+    conn.lua.execute('winner=nil')
+    state=GameState(conn)
+    ctx=make_ctx(game=state)
+    assert run(state.save_game('checkpoint')).startswith('Saved:')
+    conn.lua.execute('finish_save=false')
+    original=conn.execute_write
+
+    async def cancel_after_native_entry():
+        entered=asyncio.Event()
+
+        async def execute(source,**kwargs):
+            requests=conn.lua.globals().save_requests
+            result=await original(source,**kwargs)
+            if conn.lua.globals().save_requests>requests:
+                entered.set()
+                await asyncio.Future()
+            return result
+
+        conn.execute_write=execute
+        task=asyncio.create_task(server.save_game(ctx,'checkpoint'))
+        await entered.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    run(cancel_after_native_entry())
+    assert state.save_pending
+    assert checkpoints.expected_checkpoint('checkpoint') is None
+    calls=len(conn.calls)
+    assert run(state.save_game('another')).startswith('ERR:OUTCOME_UNKNOWN|')
+    assert run(state.reload_game_save('checkpoint')).startswith('ERR:OUTCOME_UNKNOWN|')
+    assert run(state.end_turn()).startswith('ERR:OUTCOME_UNKNOWN|')
+    assert run(server.end_turn(ctx)).startswith('ERR:OUTCOME_UNKNOWN|')
+    assert run(server.run_lua(ctx,'print("unexpected")')).startswith('ERR:OUTCOME_UNKNOWN|')
+    assert conn.lua.globals().save_requests==2
+    assert len(conn.calls)==calls
+    assert run(state.get_game_identity())==('sumeria',719665280)
+    assert state.save_pending
+
+
+@pytest.mark.parametrize('failure',['throw','false'])
+@pytest.mark.parametrize('lost_reply',[False,True])
+def test_native_save_failure_without_completion_never_confirms_a_fresh_file(save_environment,failure,lost_reply):
+    from civ_mcp import checkpoints
+    conn=SaveBoundaryConn(save_environment)
+    conn.lua.execute('winner=nil')
+    conn.lua.globals().save_failure=failure
+    conn.lua.execute('''
+Network.SaveGame=function(file)
+    save_requests=save_requests+1
+    write_save(file.Name)
+    if save_failure=='throw' then error('native failed after file creation') end
+    return false
+end
+''')
+    original=conn.execute_write
+
+    async def execute(source,**kwargs):
+        result=await original(source,**kwargs)
+        if lost_reply and 'Network.SaveGame' in source:
+            raise ConnectionError('save response lost')
+        return result
+
+    conn.execute_write=execute
+    state=GameState(conn)
+    result=run(state.save_game('checkpoint'))
+    assert result.startswith('ERR:OUTCOME_UNKNOWN|'),result
+    assert state.save_pending
+    assert (save_environment/'checkpoint.Civ6Save').exists()
+    assert checkpoints.expected_checkpoint('checkpoint') is None
+    assert run(state.save_game('another')).startswith('ERR:OUTCOME_UNKNOWN|')
+    assert conn.lua.globals().save_requests==1
+
+
+def test_cancellation_during_final_identity_read_keeps_the_completed_file_untrusted(save_environment):
+    from civ_mcp import checkpoints
+    conn=SaveBoundaryConn(save_environment)
+    conn.lua.execute('winner=nil')
+    original=conn.execute_write
+
+    async def execute(source,**kwargs):
+        if conn.lua.globals().save_requests and 'GAMESEED|' in source:
+            raise asyncio.CancelledError()
+        return await original(source,**kwargs)
+
+    conn.execute_write=execute
+    state=GameState(conn)
+    with pytest.raises(asyncio.CancelledError):
+        run(state.save_game('checkpoint'))
+    assert state.save_pending
+    assert (save_environment/'checkpoint.Civ6Save').exists()
+    assert checkpoints.expected_checkpoint('checkpoint') is None
+    assert conn.lua.globals().save_requests==1
+
+
+@pytest.mark.parametrize('setup',[
+    'Network.SaveGame=nil',
+    'SaveLocations=nil',
+    'SaveTypes.SINGLE_PLAYER=nil',
+    'Events.SaveComplete.Add=function() error("listener unavailable") end',
+])
+def test_native_save_capability_refusal_preserves_checkpoint_and_allows_later_save(save_environment,setup):
+    from civ_mcp import checkpoints
+    conn=SaveBoundaryConn(save_environment)
+    conn.lua.execute('winner=nil')
+    state=GameState(conn)
+    assert run(state.save_game('checkpoint')).startswith('Saved:')
+    expected=checkpoints.expected_checkpoint('checkpoint')
+    conn.lua.execute('original_save=Network.SaveGame; original_locations=SaveLocations; original_types=SaveTypes.SINGLE_PLAYER; original_add=Events.SaveComplete.Add')
+    conn.lua.execute(setup)
+    result=run(state.save_game('checkpoint'))
+    assert result.startswith('Error:'),result
+    assert not state.save_pending
+    assert checkpoints.expected_checkpoint('checkpoint')==expected
+    assert conn.lua.globals().save_requests==1
+    conn.lua.execute('Network.SaveGame=original_save; SaveLocations=original_locations; SaveTypes.SINGLE_PLAYER=original_types; Events.SaveComplete.Add=original_add')
+    assert run(state.save_game('checkpoint')).startswith('Saved:')
+    assert conn.lua.globals().save_requests==2
+
+
+def test_unknown_overwrite_cannot_reuse_old_record_when_record_removal_fails(save_environment,monkeypatch):
+    from pathlib import Path
+    from civ_mcp import checkpoints
+    conn=SaveBoundaryConn(save_environment)
+    conn.lua.execute('winner=nil')
+    state=GameState(conn)
+    assert run(state.save_game('checkpoint')).startswith('Saved:')
+    assert checkpoints.expected_checkpoint('checkpoint') is not None
+    conn.lua.execute('finish_save=false')
+    original_unlink=Path.unlink
+
+    def unlink(path,*args,**kwargs):
+        if path.parent==checkpoints.CHECKPOINT_DIR:
+            raise PermissionError('checkpoint directory became read-only')
+        return original_unlink(path,*args,**kwargs)
+
+    monkeypatch.setattr(Path,'unlink',unlink)
+    assert run(state.save_game('checkpoint')).startswith('ERR:OUTCOME_UNKNOWN|')
+    assert state.save_pending
+    assert checkpoints.expected_checkpoint('checkpoint') is None
+    assert run(state.restart_and_load('checkpoint')).startswith('Error: Checkpoint')
+    assert conn.lua.globals().save_requests==2
+
+
+@pytest.mark.parametrize('failure',['throw','false'])
+@pytest.mark.parametrize('event_first',[False,True])
+def test_native_failure_can_confirm_only_after_both_real_completion_and_exact_file(save_environment,failure,event_first):
+    from civ_mcp import checkpoints
+    conn=SaveBoundaryConn(save_environment)
+    conn.lua.execute('winner=nil')
+    conn.lua.globals().save_failure=failure
+    conn.lua.globals().event_first=event_first
+    conn.lua.execute('''
+Network.SaveGame=function(file)
+    save_requests=save_requests+1
+    if event_first then emit_save_complete() else write_save(file.Name) end
+    if save_failure=='throw' then error('native return failed') end
+    return false
+end
+''')
+    state=GameState(conn)
+    original=conn.execute_write
+
+    async def go():
+        entered,release=asyncio.Event(),asyncio.Event()
+
+        async def execute(source,**kwargs):
+            requests=conn.lua.globals().save_requests
+            result=await original(source,**kwargs)
+            if conn.lua.globals().save_requests>requests:
+                entered.set()
+                await release.wait()
+            return result
+
+        conn.execute_write=execute
+        task=asyncio.create_task(state.save_game('checkpoint'))
+        await entered.wait()
+        assert state.save_pending and not task.done()
+        assert checkpoints.expected_checkpoint('checkpoint') is None
+        if event_first:
+            conn.lua.globals().write_save('checkpoint')
+        else:
+            conn.lua.globals().emit_save_complete()
+        release.set()
+        return await task
+
+    assert run(go()).startswith('Saved:')
+    assert not state.save_pending
+    assert checkpoints.expected_checkpoint('checkpoint')==('sumeria',719665280,244)
+    assert conn.lua.globals().save_requests==1
+
+
+def test_unreadable_save_path_is_refused_before_native_submission(save_environment,monkeypatch):
+    from pathlib import Path
+    conn=SaveBoundaryConn(save_environment)
+    conn.lua.execute('winner=nil')
+    state=GameState(conn)
+    original_stat=Path.stat
+
+    def stat(path,*args,**kwargs):
+        if path==save_environment/'checkpoint.Civ6Save':
+            raise PermissionError('save directory unavailable')
+        return original_stat(path,*args,**kwargs)
+
+    monkeypatch.setattr(Path,'stat',stat)
+    result=run(state.save_game('checkpoint'))
+    assert result.startswith('Error:'),result
+    assert not state.save_pending
+    assert conn.lua.globals().save_requests==conn.lua.globals().save_adds==0
 
 
 def test_living_teammate_display_does_not_change_the_official_result_or_type():

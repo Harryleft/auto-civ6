@@ -1754,10 +1754,10 @@ class TestSaveCheckpoint:
             saves.append(name)
             (tmp_path / (name + ".Civ6Save")).write_bytes(b"completed-save")
             checkpoints.mark_complete(name)
-            return "Saved: checkpoint; file confirmed (100 bytes)."
+            return game_lifecycle.NativeTransition("confirmed", "Saved: checkpoint; file confirmed (100 bytes).")
         monkeypatch.setattr(gs, "get_game_identity", identity)
         monkeypatch.setattr(gs, "get_game_overview", overview)
-        monkeypatch.setattr(game_lifecycle, "save_game", save)
+        monkeypatch.setattr(game_lifecycle, "save_game_result", save)
         return gs, conn, saves
 
     def test_confirmed_checkpoint_includes_identity_and_turn(self, monkeypatch, tmp_path):

@@ -282,9 +282,9 @@ class TestSaveGame:
         assert run(gl.save_game(conn, name)).startswith("Error:")
         assert conn.writes == []
 
-    def test_explicit_rejection_is_not_reported_as_saved(self):
+    def test_native_false_return_cannot_prove_no_submission(self):
         conn = FakeConn(on_write=lambda lua: ["MCP_SAVE|false"])
-        assert run(gl.save_game(conn, "checkpoint")).startswith("Error: Civ VI rejected")
+        assert run(gl.save_game(conn, "checkpoint")).startswith("ERR:OUTCOME_UNKNOWN")
         assert sum("Network.SaveGame" in code for code in conn.writes) == 1
 
     @pytest.mark.parametrize("name", ["", "a/b", "a\\b", "bad\x01name", ".", "..", ".Civ6Save"])

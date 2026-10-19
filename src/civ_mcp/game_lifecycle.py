@@ -442,7 +442,7 @@ def _lua_escape(value: str) -> str:
 _filesystem_save_names: list[str] = []
 
 
-async def save_game(conn: GameConnection, name: str) -> str:
+async def save_game_result(conn: GameConnection, name: str) -> NativeTransition:
     """Submit once; require native SaveComplete and the exact fresh file.
 
     Network.SaveGame only acknowledges submission. Never replay a lost
@@ -453,10 +453,10 @@ async def save_game(conn: GameConnection, name: str) -> str:
 
     error = _validate_save_name(name)
     if error:
-        return error
+        return NativeTransition("not_submitted", error)
     name = name.removesuffix(".Civ6Save")
     if name.rstrip(" .").casefold() == "benchmark_turn_1":
-        return "Error: The original benchmark_turn_1 baseline cannot be overwritten."
+        return NativeTransition("not_submitted", "Error: The original benchmark_turn_1 baseline cannot be overwritten.")
     path = Path(SINGLE_SAVE_DIR) / f"{name}.Civ6Save"
 
     def fingerprint():
@@ -466,7 +466,10 @@ async def save_game(conn: GameConnection, name: str) -> str:
         except FileNotFoundError:
             return None
 
-    before = fingerprint()
+    try:
+        before = fingerprint()
+    except OSError as exc:
+        return NativeTransition("not_submitted", f"Error: Save path unavailable; no save submitted: {exc}")
     # The installed native automation tests explicitly wait for SaveComplete.
     # It has no filename argument, so arm before our single request, bind the
     # listener to this token, and also require this exact file to become fresh.
@@ -488,6 +491,12 @@ local stateOK, terminal = pcall(function()
 end);
 if not stateOK then print("MCP_SAVE_STATE_UNAVAILABLE"); print("{lq.SENTINEL}"); return; end;
 if terminal then print("MCP_SAVE_TERMINAL"); print("{lq.SENTINEL}"); return; end;
+local available = pcall(function()
+  assert(type(Network.SaveGame) == "function");
+  assert(SaveLocations.LOCAL_STORAGE ~= nil and SaveTypes.SINGLE_PLAYER ~= nil);
+  assert(type(Events.SaveComplete.Add) == "function" and type(Events.SaveComplete.Remove) == "function");
+end);
+if not available then print("MCP_SAVE_UNAVAILABLE"); print("{lq.SENTINEL}"); return; end;
 if prior and prior.handler then pcall(function() Events.SaveComplete.Remove(prior.handler); end); end;
 local q = {{token="{token}", done=false}};
 __civmcpSaveCompletion = q;
@@ -496,7 +505,11 @@ q.handler = function()
   Events.SaveComplete.Remove(q.handler);
 end;
 local armed = pcall(function() Events.SaveComplete.Add(q.handler); end);
-if not armed then q.done = true; print("MCP_SAVE_UNAVAILABLE"); print("{lq.SENTINEL}"); return; end;
+if not armed then
+  pcall(function() Events.SaveComplete.Remove(q.handler); end);
+  __civmcpSaveCompletion = nil;
+  print("MCP_SAVE_UNAVAILABLE"); print("{lq.SENTINEL}"); return;
+end;
 local gf = {{}};
 gf.Name = "{_lua_escape(name)}";
 gf.Location = SaveLocations.LOCAL_STORAGE;
@@ -504,7 +517,8 @@ gf.Type = SaveTypes.SINGLE_PLAYER;
 gf.IsAutosave = false;
 gf.IsQuicksave = false;
 local ok, result = pcall(function() return Network.SaveGame(gf); end);
-if not ok or result == false then q.done = true; end;
+-- Entering SaveGame may start a write even if it throws or returns false.
+-- Only the SaveComplete handler supplies completion evidence.
 print("MCP_SAVE|" .. tostring(ok and result ~= false));
 if not ok then print("MCP_SAVE_ERROR|" .. tostring(result)); end;
 print("{lq.SENTINEL}");
@@ -536,15 +550,13 @@ print("{lq.SENTINEL}");
                 if not unsubmitted.intersection(lines):
                     checkpoints.forget_completion(name)
             if "MCP_SAVE_PENDING" in lines:
-                return "ERR:OUTCOME_UNKNOWN|Earlier native save completion is unresolved; no new save submitted. Use explicit recovery."
+                return NativeTransition("unknown", "ERR:OUTCOME_UNKNOWN|Earlier native save completion is unresolved; no new save submitted. Use explicit recovery.")
             if "MCP_SAVE_UNAVAILABLE" in lines:
-                return "Error: Native save completion event unavailable; no save submitted."
+                return NativeTransition("not_submitted", "Error: Native save operation or completion event unavailable; no save submitted.")
             if "MCP_SAVE_TERMINAL" in lines:
-                return "Error: GAME_OVER|Saving is unavailable at the confirmed terminal boundary; no save submitted. Keep the last confirmed checkpoint and terminal evidence."
+                return NativeTransition("not_submitted", "Error: GAME_OVER|Saving is unavailable at the confirmed terminal boundary; no save submitted. Keep the last confirmed checkpoint and terminal evidence.")
             if "MCP_SAVE_STATE_UNAVAILABLE" in lines:
-                return "Error: SAVE_STATE_UNAVAILABLE|Native terminal state unavailable; no save submitted."
-            if "MCP_SAVE|false" in lines:
-                return f"Error: Civ VI rejected save {name!r}: {lines!r}"
+                return NativeTransition("not_submitted", "Error: SAVE_STATE_UNAVAILABLE|Native terminal state unavailable; no save submitted.")
             while True:
                 current = fingerprint()
                 if current and current != before and current[1] > 0:
@@ -554,10 +566,10 @@ print("{lq.SENTINEL}");
                         observed = []
                     if "MCP_SAVE_COMPLETE|true" in observed and fingerprint() == current:
                         checkpoints.mark_complete(name)
-                        return f"Saved: {name}; native completion and file confirmed ({current[1]} bytes)."
+                        return NativeTransition("confirmed", f"Saved: {name}; native completion and file confirmed ({current[1]} bytes).")
                 await asyncio.sleep(SAVE_POLL_INTERVAL)
     except (TimeoutError, OSError):
-        return (
+        return NativeTransition("unknown",
             f"ERR:OUTCOME_UNKNOWN|Save {name!r} was attempted once; a fresh "
             "nonempty file and native completion were not both confirmed. "
             "Inspect the save; do not use it for recovery or resend blindly."
@@ -580,6 +592,10 @@ print("{lq.SENTINEL}");
             except (OSError, TimeoutError, LuaError):
                 log.warning("Save completion listener cleanup could not be confirmed")
 
+
+async def save_game(conn: GameConnection, name: str) -> str:
+    """Display wrapper; sequencing uses the native transition facts."""
+    return (await save_game_result(conn, name)).message
 
 
 
