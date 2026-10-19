@@ -1216,7 +1216,7 @@ class GameState:
         token = uuid.uuid4().hex
         pending = _PendingAction(
             "promote_unit", entity, transforms.build_promote_query(unit_id, promotion_type, token),
-            context="read", submit_context="read", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            context="write", submit_context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
             intent=intent, evidence=_ActionEvidence(
                 tool="promote_unit", entrypoint="promote_unit", accepted=("UNIT_PROMOTION_REQUESTED|",),
                 refused="ERR:UNIT_PROMOTION_REFUSED|",
