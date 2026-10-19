@@ -93,10 +93,45 @@ local function sameEffectEntity(r,unit,before)
  if before.religion~=nil then table.insert(checks,{"GetReligionType","religion"}) end
  for _,check in ipairs(checks) do
   local ok,value=pcall(function() return unit[check[1]](unit) end)
-  local valid=ok and (check[2]=="owner" and scopePlayer(value) or check[2]~="owner" and scopeIndex(value))
+  local valid=ok and (check[2]=="owner" and scopePlayer(value)
+   or check[2]=="religion" and scopeInteger(value) and value>=-1
+   or check[2]~="owner" and check[2]~="religion" and scopeIndex(value))
   if not valid then known=false elseif value~=before[check[2]] then r.invalid=true end
  end
  return known and not r.invalid
+end
+local function inquisitionFacts(r)
+ -- Read both actor views and founder state independently. A missing getter
+ -- must not hide a readable identity change in another original fact.
+ local known=true
+ local function read(getter)
+  local ok,value=pcall(getter)
+  if not ok then known=false end
+  return ok,value
+ end
+ local nativeOK,native=read(function() return UnitManager.GetUnit(r.owner,r.id%65536) end)
+ local ownedOK,owned=read(function() return Players[r.owner]:GetUnits():FindID(r.id) end)
+ local function inspect(unit)
+  if unit then
+   local ok,matching=pcall(sameEffectEntity,r,unit,r)
+   if not ok or not matching then known=false end
+  end
+ end
+ inspect(native);inspect(owned)
+ local religionOK,religion=read(function() return Players[r.owner]:GetReligion() end)
+ local flag
+ if religionOK and religion then
+  local createdOK,created=read(function() return religion:GetReligionTypeCreated() end)
+  if not createdOK or not scopeInteger(created) or created< -1 then known=false
+  elseif created~=r.created then r.invalid=true end
+  local flagOK,value=read(function() return religion:HasLaunchedInquisition() end)
+  if not flagOK or type(value)~="boolean" then known=false
+  else
+   flag=value
+   if value then r.launchedObserved=true elseif r.launchedObserved then r.invalid=true end
+  end
+ else known=false end
+ return known and nativeOK and ownedOK and not r.invalid,native,owned,flag
 end
 '''
 
@@ -107,12 +142,27 @@ local ok,r=pcall(function()
  assert(__civmcpUnitEffect==nil or type(__civmcpUnitEffect)=="table","RECEIPT_STORAGE_UNAVAILABLE")
  assert(UI.IsGameCoreBusy()==false,"CORE_BUSY_OR_UNKNOWN")
  local owner=Game.GetLocalPlayer()
+ local civ=PlayerConfigurations[owner]:GetCivilizationTypeName()
+ local seed,turn=GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED"),Game.GetCurrentGameTurn()
  local unit=effectUnit(owner,{unit_id})
  local r={{token={json.dumps(token)},kind={json.dumps(kind)},id={unit_id},owner=owner,
   unitType=unit:GetType(),x=unit:GetX(),y=unit:GetY(),handlers={{}},
-  civ=PlayerConfigurations[owner]:GetCivilizationTypeName(),
-  seed=GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED"),turn=Game.GetCurrentGameTurn()}}
- if r.kind=="condemn_heretic" then
+  civ=civ,seed=seed,turn=turn}}
+ if r.kind=="launch_inquisition" then
+  r.mode="inquisition"
+  assert(scopeIndex(r.unitType) and scopeIndex(r.x) and scopeIndex(r.y),"UNIT_IDENTITY_UNAVAILABLE")
+  local info=GameInfo.Units[r.unitType]
+  assert(info and info.UnitType=="UNIT_APOSTLE" and info.LaunchInquisition==true,"NOT_AN_ELIGIBLE_APOSTLE")
+  r.religion=count(unit:GetReligionType())
+  local religion=Players[owner]:GetReligion()
+  r.created=count(religion:GetReligionTypeCreated())
+  assert(r.created>0 and r.religion==r.created,"OWN_FOUNDED_RELIGION_REQUIRED")
+  assert(religion:HasLaunchedInquisition()==false,"INQUISITION_ALREADY_LAUNCHED_OR_UNKNOWN")
+  local op=GameInfo.UnitOperations["UNITOPERATION_LAUNCH_INQUISITION"]
+  assert(op and op.OperationType=="UNITOPERATION_LAUNCH_INQUISITION"
+   and scopeInteger(op.Hash),"OPERATION_UNAVAILABLE")
+  r.operation=op.Hash;r.params={{}}
+ elseif r.kind=="condemn_heretic" then
   r.mode="condemn"
   assert(scopeIndex(r.unitType) and scopeIndex(r.x) and scopeIndex(r.y),"UNIT_IDENTITY_UNAVAILABLE")
   r.target=condemnTarget(owner,r.x,r.y)
@@ -168,7 +218,11 @@ local ok,r=pcall(function()
  if r.operation then
   r.event="UnitOperationStarted"
   assert(type(UnitManager.RequestOperation)=="function","OPERATION_UNAVAILABLE")
-  assert(unit:GetMovesRemaining()>0 and UnitManager.CanStartOperation(unit,r.operation,nil,r.params,true)==true,"CANNOT_OPERATE")
+  if r.mode=="inquisition" then
+   assert(UnitManager.CanStartOperation(unit,r.operation,nil,r.params)==true,"CANNOT_LAUNCH_INQUISITION")
+  else
+   assert(unit:GetMovesRemaining()>0 and UnitManager.CanStartOperation(unit,r.operation,nil,r.params,true)==true,"CANNOT_OPERATE")
+  end
  end
  for _,name in ipairs({{r.event,"UnitRemovedFromMap"}}) do
   assert(Events and Events[name] and type(Events[name].Add)=="function"
@@ -205,8 +259,17 @@ local armed=pcall(function()
 end)
 if not armed then retireEffect(r);print("ERR:UNIT_EFFECT_REFUSED|OBSERVER_UNAVAILABLE");print("{SENTINEL}");return end
 local resolvedUnit
-if r.mode=="condemn" or r.mode=="spread" then
+if r.mode=="condemn" or r.mode=="spread" or r.mode=="inquisition" then
  local entryOK,actor=pcall(function()
+  if r.mode=="inquisition" then
+   local known,current,owned,flag=inquisitionFacts(r)
+   assert(known and current and owned and flag==false)
+   assert(UnitManager.CanStartOperation(current,r.operation,nil,r.params)==true,"CANNOT_LAUNCH_INQUISITION")
+   known,current,owned,flag=inquisitionFacts(r)
+   local scopeKnown=sameScope(r)
+   assert(known and current and owned and flag==false and scopeKnown)
+   return current
+  end
   local actor=effectUnit(r.owner,r.id)
   assert(sameEffectEntity(r,actor,r))
   if r.mode=="spread" then
@@ -237,7 +300,17 @@ local r=__civmcpUnitEffect
 local reason="RECEIPT_MISSING_OR_MISMATCHED"
 local ok,detail,target=pcall(function()
  assert(type(r)=="table" and r.token=={json.dumps(token)} and r.kind=={json.dumps(kind)} and r.id=={unit_id})
- reason="SCOPE_CHANGED";assert(sameScope(r))
+ local scopeKnown=sameScope(r)
+ if r.mode=="inquisition" then
+  local known,native,owned,flag=inquisitionFacts(r)
+  local busyOK,busy=pcall(function() return UI.IsGameCoreBusy() end)
+  local finalScope=sameScope(r)
+  assert(known and scopeKnown and finalScope and busyOK and busy==false)
+  assert(r.entered==true and r.returned==true and r.started==true and r.removed==true)
+  assert(native==nil and owned==nil and flag==true)
+  return "launched:false->true","at:"..r.x..","..r.y
+ end
+ reason="SCOPE_CHANGED";assert(scopeKnown)
  reason="REQUEST_NOT_RETURNED";assert(r.entered==true and r.returned==true)
  reason="CORE_BUSY_OR_UNKNOWN";assert(UI.IsGameCoreBusy()==false)
  if r.mode=="condemn" then
@@ -311,9 +384,9 @@ local ok,detail,target=pcall(function()
 end)
 if ok then
  -- A confirmation response can be lost before ActionLifecycle retires its
- -- owner. Spread/condemn witnesses must still latch later scope changes. The next
+ -- owner. Consuming religious witnesses must still latch later scope changes. The next
  -- actual unit-effect request replaces and retires these bounded listeners.
- if r.mode~="condemn" and r.mode~="spread" then retireEffect(r) end
+ if r.mode~="condemn" and r.mode~="spread" and r.mode~="inquisition" then retireEffect(r) end
  local subject=r.mode=="condemn" and (r.target.owner..":"..r.target.id) or (r.individual or r.religion)
  print("UNIT_EFFECT_CONFIRMED|"..r.token.."|"..r.kind.."|"..r.id.."|"..r.mode.."|"..subject
   .."|"..detail.."|"..target)
@@ -327,6 +400,8 @@ def parse_unit_effect_confirmation(lines: list[str], kind: str, unit_id: int, to
     if len(rows) == 1 and len(rows[0]) == 8:
         row = rows[0]
         if row[1:4] == [token, kind, str(unit_id)]:
+            if row[4] == "inquisition" and kind == "launch_inquisition":
+                return f"INQUISITION_LAUNCHED|unit:{unit_id}|religion:{row[5]}|{row[6]}|{row[7]}|Apostle consumption confirmed."
             if row[4] == "condemn" and kind == "condemn_heretic":
                 return f"HERETIC_CONDEMNED|unit:{unit_id}|target:{row[5]}|{row[6]}|{row[7]}|Target removal confirmed; rewards not measured."
             if row[4] == "spread":

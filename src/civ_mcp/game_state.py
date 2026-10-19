@@ -1610,6 +1610,10 @@ class GameState:
     async def condemn_heretic(self, unit_index: int) -> str:
         return await self._unit_effect("condemn_heretic", unit_index)
 
+    @_guard_pending_mutation
+    async def launch_inquisition(self, unit_index: int) -> str:
+        return await self._unit_effect("launch_inquisition", unit_index)
+
     # ------------------------------------------------------------------
     # Trader teleport (InGame context)
     # ------------------------------------------------------------------
