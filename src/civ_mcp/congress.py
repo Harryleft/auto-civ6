@@ -82,6 +82,8 @@ class CongressProgress:
                 if state == 'OPENED':
                     return f"WC_VOTING_ALREADY_OPEN|stage:{stage}|turn:{turn}"
                 if state == 'FAILED':
+                    if q.kind == 'open':
+                        return 'ERR:WC_OPEN_REFUSED|Original start failed before entry; no start event submitted.'
                     return 'ERR:WC_VOTE_PREFERENCES|Original plan failed before any vote; no votes submitted.'
                 return f"WC_STAGE_FINISHED|stage:{stage}|requested allocation:{allocation}|Native stage advanced; voting outcomes require review."
             return f"{self.unknown()} WC_REQUEST|{state}|stage:{stage}|allocation:{allocation}"
@@ -111,7 +113,7 @@ class CongressProgress:
             rows = await conn.execute_write(guard + code)
         except (OSError, TimeoutError, LuaError):
             return self.unknown()
-        refusals = ('ERR:WC_SCOPE_REFUSED|', 'ERR:WC_OPEN_UNAVAILABLE|', 'ERR:WC_CHOICES_UNKNOWN|',
+        refusals = ('ERR:WC_SCOPE_REFUSED|', 'ERR:WC_OPEN_REFUSED|', 'ERR:WC_OPEN_UNAVAILABLE|', 'ERR:WC_CHOICES_UNKNOWN|',
                     'ERR:WC_NO_CHOICES|', 'ERR:WC_PHASE_UNKNOWN|', 'ERR:WC_PAUSED|', 'ERR:WC_VOTE_PREFERENCES|')
         if any(row.startswith(refusals) for row in rows):
             self.request = None

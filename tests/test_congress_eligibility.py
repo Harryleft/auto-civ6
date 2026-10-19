@@ -321,7 +321,7 @@ def test_completed_stage1_receipt_does_not_confirm_or_revote_stage2():
 def test_missing_native_ui_context_never_starts_voting():
     conn = CongressConn(proposal_status({}))
     conn.lua.execute("ContextPtr.LookUpControl=function() return nil end")
-    assert "OUTCOME_UNKNOWN" in asyncio.run(GameState(conn).open_world_congress())
+    assert "WC_OPEN_REFUSED" in asyncio.run(GameState(conn).open_world_congress())
     assert conn.opens == conn.operations == conn.actions == []
 
 

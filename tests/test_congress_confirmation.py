@@ -333,3 +333,13 @@ def test_registered_plan_native_rejection_after_turn_change_releases_without_vot
     assert 'WC_VOTE_PREFERENCES' in asyncio.run(state.queue_wc_votes(PLAN))
     assert not state.congress_pending
     assert conn.operations == conn.actions == []
+
+
+def test_missing_open_context_is_known_zero_submission_and_does_not_leave_a_gate():
+    conn, state, _ = setup()
+    conn.lua.execute('old_lookup=ContextPtr.LookUpControl; ContextPtr.LookUpControl=function() return nil end')
+    assert 'WC_OPEN_REFUSED' in asyncio.run(state.open_world_congress())
+    assert not state.congress_pending
+    conn.lua.execute('ContextPtr.LookUpControl=old_lookup')
+    assert 'WC_VOTING_OPEN' in asyncio.run(state.open_world_congress())
+    assert conn.opens == ['open']

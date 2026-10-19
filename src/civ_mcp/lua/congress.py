@@ -229,12 +229,12 @@ end
 local intro = ContextPtr:LookUpControl("/InGame/WorldCongressIntro")
 local popup = ContextPtr:LookUpControl("/InGame/WorldCongressPopup")
 if not intro or not popup then
-    {_bail("ERR:OUTCOME_UNKNOWN|Congress UI context missing; no start event sent.")}
+    {_bail("ERR:WC_OPEN_REFUSED|Congress UI context missing; no start event sent.")}
 end
 local prior = __civmcp_wc_open
 local sameOpen = prior and prior.owner == me and prior.civ == civ and prior.seed == seed
-    and prior.turn == turn and prior.stage == stage
-if prior and not sameOpen and prior.state ~= "OPENED" then
+    and prior.turn == turn and prior.stage == stage and prior.state ~= "FAILED"
+if prior and not sameOpen and prior.state ~= "OPENED" and prior.state ~= "FAILED" then
     {_bail("ERR:OUTCOME_UNKNOWN|Previous congress start remains unknown; no start event resent.")}
 end
 if popup:IsVisible() and not intro:IsVisible() then
@@ -246,7 +246,7 @@ if sameOpen then
     {_bail("ERR:OUTCOME_UNKNOWN|Congress start already requested but voting UI is not confirmed; no start event resent.")}
 end
 if not intro:IsVisible() or popup:IsVisible() then
-    {_bail("ERR:OUTCOME_UNKNOWN|Congress Intro visibility is ambiguous; no start event sent.")}
+    {_bail("ERR:WC_OPEN_REFUSED|Congress Intro visibility is ambiguous; no start event sent.")}
 end
 -- Native HasChoices tests allocated resolution/proposal widgets. Reproduce
 -- only its proven source-data prerequisites; never call the start route for
@@ -281,7 +281,8 @@ __civmcp_wc_open = q
 if Game.GetLocalPlayer() ~= me or PlayerConfigurations[me]:GetCivilizationTypeName() ~= civ
     or GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED") ~= seed or Game.GetCurrentGameTurn() ~= turn
     or Game.GetCurrentTurnSegment() ~= segment then
-    {_bail("ERR:OUTCOME_UNKNOWN|Congress scope changed; no start event sent.")}
+    q.state = "FAILED"
+    {_bail("ERR:WC_OPEN_REFUSED|Congress scope changed; no start event sent.")}
 end
 UIManager:DequeuePopup(intro)
 LuaEvents.WorldCongressIntro_ShowWorldCongress()
