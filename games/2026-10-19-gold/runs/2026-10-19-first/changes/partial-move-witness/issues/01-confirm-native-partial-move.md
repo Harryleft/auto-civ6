@@ -1,6 +1,6 @@
 # B15-01 Confirm native partial move witness
 
-Status: implemented-pending-review
+Status: resolved
 Dependencies: none
 Spec: ../spec.md
 
@@ -14,6 +14,12 @@ Research native partial movement event contract and implement minimal request-bo
 - Confirmation keeps the four alternative listeners until the next actual move request; a lost confirmation reply cannot detach later invalidation. Repeated unknown requests, native exceptions and cancellation retain the original ActionLifecycle owner and do not resubmit.
 - Red→green: the exact T69 chain initially remained OUTCOME_UNKNOWN; after the fix it reports `(42,27)`, MP1 and an interrupted path. Focused native chain, existing movement/confirmation/scope and cancel regressions: 335 passed. `compileall` and `git diff --check` passed.
 - No live calls or parent progress edits by the implementer. Independent review and parent same-run follow-up decision/T69→T70 checkpoint remain pending.
+
+## Review and live verification
+
+- Initial implementation c3d9c4b passed Spec review. Standards found native scope invalidation could be bypassed through the old SegmentComplete branch. Follow-up fbdc09f separates chain invalidation and request-wide scope invalidation; all completion branches respect the latter. Red→green regression and344 related tests passed; compileall/diff-check passed. Both independent axes re-reviewed without material findings.
+- Parent #1293 confirmed exact T69 PATH_INTERRUPTED at42,27/MP1, #1298 separately moved to43,28, #1303 advanced T70 and #1304 saved788989bytes. Original pending scenario was explicitly restored before this replay.
+- Clean client refresh loaded final fbdc09f without restoring the world. #1348 confirmed original T73 identity; #1350 performed normal builder partial movement under final code. No stale receipt or second original submission was used. Subsequent T73 checkpoint gold_20261019_t073_kish_founded confirmed802043bytes.
 
 ## Review correction: scope history fences all move outcomes
 
