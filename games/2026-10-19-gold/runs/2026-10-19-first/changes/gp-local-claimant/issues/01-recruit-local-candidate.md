@@ -1,6 +1,6 @@
 # B16-01 Respect native local candidate eligibility
 
-Status: pending-review
+Status: resolved
 Dependencies: none
 Spec: ../spec.md
 
@@ -12,4 +12,4 @@ Verify the native claimant contract and repair the narrow candidate refusal thro
 - TDD: the exact T73 individual 133 / class 5 / Claimant 0 / 82.296875 points fixture first failed with CANDIDATE_UNAVAILABLE. After the narrow correction, the public MCP result confirms a new individual 133 unit and exactly 80 points spent.
 - Public Lua-seam regression covers local and unclaimed recruit/reject/gold/faith patronage, each operation and currency's independent permission, native false/unknown/malformed refusal, foreign native ineligibility, missing/duplicate candidate, and existing resource/identity/scope/lost-response confirmation.
 - Offline validation: `uv run --locked pytest -q tests/test_great_person_pool_confirmation.py tests/test_game_state.py tests/test_server.py` — 398 passed. `uv run --locked python -m compileall -q src tests` and `git diff --check` passed.
-- Independent Spec/Standards review and parent same-run live validation remain pending.
+- Independent Spec/Standards review reported no material findings. Parent clean-refreshed with no pending mutation and no world restore. #1355 recruited133 with80 points consumed/newunit1179657; #1356 read the unit, #1359 moved to Campus40,26, #1360 confirmed native activation/charge0. #1361 reports Education, Tactics, Castles and Mercenaries boosted (Education from recruitment, others from activation). #1362 advanced T73→T74; #1363 confirmed805703byte checkpoint gold_20261019_t074_b16_verified. No point/resource/unit setter used.

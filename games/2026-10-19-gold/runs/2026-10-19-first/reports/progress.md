@@ -19,7 +19,7 @@
 | B10 | T52 | 晋升工具直接修改晋升/经验/伤害，不适用本局 | 改为严格原生PROMOTE选项Index单提交与实际结果确认 | 3d537eb／6cb93e7；694离线，双审查，原生齐射及T53保存通过 |
 
 | B15 | T69 | 弓手部分位移后 MOVE_TO被原生中断清空，无SegmentComplete，工具保留unknown | 精确本次Added/MoveComplete/Deactivated/Cleared链确认中断位移 | c3d9c4b＋fbdc09f；344相关、双审复核、T70保存及最终代码T73正常移动通过 |
-| B16 | T73 | 原生CanRecruit=true、Claimant=本方，招募工具却拒绝CANDIDATE_UNAVAILABLE | 核对并修正本地候选归属预检查，保留原生资格与结果确认 | to-spec；零提交，T73前点已保存 |
+| B16 | T73 | 原生CanRecruit=true、Claimant=本方，招募工具却拒绝CANDIDATE_UNAVAILABLE | 唯一当前候选按原生各Can*资格，不从Claimant推断不可用 | d9c354e／5bfe109；398相关、双审、招募/激活/尤里卡及T74保存通过 |
 | B14 | T68 | 港口顾问过滤原生PLOTS水地候选，报告无法放置 | 保留原生合法水地，继续排除BLOCKED和无关数组 | d691113／860e9de；28相关测试、双审查、候选/港口放置及T69保存通过 |
 | B13 | T57 | 推进请求唤醒探索单位后，本地单位待办与pending门禁互相阻塞 | 研究并绑定本次请求原生本地拒绝见证，未知不猜测清除 | d2a5c1d及两轮审查补修／最终f135b81；446相关+最终定向68通过，双审复核通过，T58闭环及最终T63继续通过 |
 | B12 | T57 | 弓手耗尽移动后警戒已原生开始，HOLD未被确认 | fresh alert 精确事件与非就绪前提下接受原生HOLD | 857865c／26c3467；372离线、双审查，#1044实机警戒确认；T58被新增B13阻塞 |
