@@ -117,7 +117,7 @@ async def _logged(
                     dependent = (
                         # Native information popups may hold the submitted command's
                         # events. Explicit close preserves its receipt and pending gate.
-                        (getattr(app.game, "pending_action_kind", None) == "contribution"
+                        (getattr(app.game, "pending_action_kind", None) in ("contribution", "envoy")
                          and tool_name not in {"restart_and_load", "dismiss_popup"})
                         or (entity[0] == "unit" and isinstance(unit_id, int)
                          and (entity[1] == unit_id % 65536
@@ -127,7 +127,10 @@ async def _logged(
                         or (entity[0] == "unit" and tool_name == "skip_remaining_units")
                     )
                 # These tracked methods reconcile repeated intents themselves.
-                if dependent and tool_name not in {"unit_action", "set_city_production"}:
+                if dependent and not (
+                    tool_name in {"set_city_production", "send_envoy"}
+                    or (tool_name == "unit_action" and entity[0] == "unit")
+                ):
                     confirmation = await app.game.confirm_pending_action()
                     if app.game.pending_action_entity == entity:
                         result = confirmation
@@ -745,6 +748,8 @@ async def send_envoy(ctx: Context, player_id: int) -> str:
         player_id: The city-state's player ID (from get_city_states)
 
     Requires available envoy tokens. Use get_city_states to see options.
+    If OUTCOME_UNKNOWN, repeat with the same player_id to confirm the original
+    request only. A new envoy requires a separate call after confirmation.
     """
     gs = _get_game(ctx)
     return await _logged(

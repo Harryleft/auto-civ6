@@ -18,6 +18,8 @@ Agent 从根目录 [AGENTS.md](../AGENTS.md) 开始；命中任务后读取对�
 
 ## 规格与验收
 
+- [全量变更操作审计与使者试点](specs/2026-10-19-mutation-audit.md)与[离线验收](acceptance/2026-10-19-envoy-lifecycle.md)：82 个工具的入口清单、43 个变更工具及分支；使者单次提交、未知保留、双侧确认；其他操作按风险分批迁移。
+
 - [来约零提交与世界失效锁存](specs/2026-10-19-incoming-p2-boundaries.md)与[离线验收](acceptance/2026-10-19-incoming-p2-boundaries.md)：两项 P2、34 个新增回归、341 项相关测试；保留 T233 成果，不实机、不 push。
 
 - [T233 终局修复合入 main](acceptance/2026-10-19-terminal-main-merge.md)：已验证集成树完整合入、存档与胜利证据哈希保全，未 push。

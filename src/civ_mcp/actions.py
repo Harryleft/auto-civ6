@@ -111,7 +111,15 @@ class ActionLifecycle:
             "contribution": ("CONTRIBUTION_REQUESTED|",),
             "city_focus": ("CITY_FOCUS_REQUESTED|",),
             "spy_escape": ("SPY_ESCAPE_REQUESTED|",),
+            "envoy": ("ENVOY_REQUESTED|",),
         }[pending.kind]
+        if pending.kind == "envoy" and not result.startswith(accepted):
+            # Only our exact pre-entry refusals prove that nothing was sent.
+            # Native errors or unrelated callback output cannot release a spend.
+            refused = (len(lines) == 1 and (lines[0].startswith("ERR:ENVOY_REFUSED|")
+                       or lines[0] == "ERR:ACTION_SCOPE_NO_SUBMIT|Native action scope changed or unavailable"))
+            if not refused:
+                result = "Error: OUTCOME_UNKNOWN|Envoy acknowledgement unavailable"
         if result.startswith(accepted):
             pending.success = result
             if pending.kind == "move":
@@ -193,7 +201,7 @@ print("{lq.SENTINEL}")
     def observe_identity(self, identity: tuple[str, int]) -> None:
         """Keep scoped requests invalid after a witnessed world replacement."""
         pending = self.pending
-        if pending is not None and pending.kind in ("city_focus", "spy_escape", "contribution") and identity != pending.identity:
+        if pending is not None and pending.kind in ("city_focus", "spy_escape", "contribution", "envoy") and identity != pending.identity:
             pending.details["scope_invalid"] = True
 
     def unknown(self, reason: str = "confirmation deadline reached") -> str:
@@ -201,8 +209,10 @@ print("{lq.SENTINEL}")
         if pending is None:
             return "CONFIRMED|No pending action"
         observed = "; ".join(pending.observed) or "no confirmed observation"
+        guidance = ("Repeat send_envoy for the same player ID to confirm only; use get_city_states to inspect. "
+                    if pending.kind == "envoy" else "Use get_units/get_cities to confirm; do not resubmit. ")
         return (f"ERR:OUTCOME_UNKNOWN|{self.summary}|{reason}|observed:{observed}. "
-                "Use get_units/get_cities to confirm; do not resubmit. Explicit recovery is available if confirmation remains impossible.")
+                f"{guidance}Explicit recovery is available if confirmation remains impossible.")
 
     async def confirm(self, *, wait: bool = True, timeout: float = 5.0, interval: float = 0.15) -> str:
         """Only observe a previously submitted action; never replay its mutation.
@@ -245,7 +255,7 @@ print("{lq.SENTINEL}")
             return pending.confirmed or self.unknown(f"confirmation unavailable: {exc}")
 
     def _confirmed_action(self, pending: _PendingAction) -> str | None:
-        if pending.kind in ("city_focus", "spy_escape", "contribution") and pending.details.get("scope_invalid"):
+        if pending.kind in ("city_focus", "spy_escape", "contribution", "envoy") and pending.details.get("scope_invalid"):
             return None
         if pending.identity is not None:
             rows = [line.split("|") for line in pending.observed if line.startswith("ACTION_IDENTITY|")]
@@ -255,9 +265,17 @@ print("{lq.SENTINEL}")
             identity = (fields[1].replace("CIVILIZATION_", "").lower(), int(fields[2]))
             if (identity != pending.identity or int(fields[3]) != pending.turn
                     or int(fields[4]) != pending.owner):
-                if pending.kind in ("city_focus", "spy_escape", "contribution"):
+                if pending.kind in ("city_focus", "spy_escape", "contribution", "envoy"):
                     pending.details["scope_invalid"] = True
                 return None
+        if pending.kind == "envoy":
+            rows = [row.split("|") for row in pending.observed if row.startswith("ENVOY_CONFIRMED|")]
+            if len(rows) == 1 and len(rows[0]) == 8:
+                row = rows[0]
+                if (row[1:4] == [pending.details["witness_token"], str(pending.owner), str(pending.entity[1])]
+                        and all(value.isdigit() for value in row[4:])
+                        and int(row[4]) - int(row[5]) == 1 and int(row[7]) > int(row[6])):
+                    return f"ENVOY_SENT|player:{row[3]}|remaining:{row[5]}|envoys:{row[6]}->{row[7]}"
         if pending.kind in ("skip", "fortify"):
             rows = [row.split("|") for row in pending.observed if row.startswith("READINESS|")]
             if len(rows) != 1 or len(rows[0]) != 7:
