@@ -316,3 +316,19 @@ def test_lost_proof_reply_keeps_late_scope_and_unready_invalidation(event,clock)
     assert 'REOPENED_LOCAL' not in asyncio.run(state.end_turn())
     assert state.turn_pending and conn.native.lua.eval('requests')==1
     assert conn.native.lua.eval('native_watchers')==0
+
+
+def test_unknown_scope_unready_during_final_getter_cannot_confirm_same_query(clock):
+    conn=ReopenedConn();state=GameState(conn);asyncio.run(state.end_turn())
+    conn.native.lua.execute('''
+UI.CanEndTurn=function()
+ local original=GameConfiguration.GetValue
+ GameConfiguration.GetValue=function() return nil end
+ Events.LocalPlayerTurnUnready.Fire()
+ GameConfiguration.GetValue=original
+ return true
+end
+''')
+    assert 'REOPENED_LOCAL' not in asyncio.run(state.end_turn())
+    assert state.turn_pending and conn.native.lua.eval('requests')==1
+    assert 'End-turn outcome is pending' in asyncio.run(state.skip_unit(262146))
