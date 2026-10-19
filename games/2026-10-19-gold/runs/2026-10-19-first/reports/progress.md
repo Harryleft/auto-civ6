@@ -289,3 +289,5 @@ T129–131：#2453–54城市+弩手将香港LineInfantry1900550打100→71；#2
 T130#2464确认野蛮人掠夺原Trader2293772/Uruk→Fortaleza，保留损失；#2478首都255Gold补Trader2883596。香港Line转Kish方向：#2472切古墙4t（大学进度保留），#2473–74己弩手1245193至41,29并把其71→52HP；#2491 T131打至34HP，该弩手仍fullHP/MP0。北面BarbLine6094852至35,21，#2495–96城市+驻弩打100→69HP。#2493铁33,24改良Mine，Builder4→3。
 
 B25 T131：#2497单次续NipTrader1966090→Cap40,25国内商路4Food3P，active2→3，但MAKEchooser阻塞确认。#2498原route确在，#2499首ready另一Trader2883596/Cap；#2500关闭普通外交view无效，#2501confirm-only仍unknown。原生截图明确chooser originUruk/不同Trader；两次显式Escape后#2504原请求只确认成功，无重发。#2505保存T131UIrecovered911846bytes，#2506纯读原receiptcleanupOKtrue/enteredreturnedtrue、native选中另一full2883596/40,25。原same-mode判断误把另一Traderchooser当旧action未收尾。B25进入to-spec→implement-spec；保持T131原Lua receipt与新Trader供最终纯确认/新publicroute验证。
+
+B25首版5d7a732：115相关/compile/diff通过。未重载世界，#2512仍原T131；#2513确认当前MAKE/head2883596/40,25及原token保持，#2514最终纯native query对原1966090回执返回TRADER_CONFIRMED/routes3of4，#2515当前MAKE/head/token原样保持；对应旧代码#2511真实RED→新代码GREEN，未重建Pythonpending或重发旧商路。独立Spec发现首次提交的其他Trader身份读取未知仍会fallback关闭chooser，Standards发现归属getter期间mode已改外交后仍按旧mode关闭；均交同一worker补修。暂不进行新经济动作，保留T131供最终实测。
