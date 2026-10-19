@@ -15,8 +15,19 @@ local function effectUnit(owner,id)
  return unit
 end
 local function pressure(city,religion)
- local value=city:GetReligion():GetTotalPressureOnCity(religion)
- assert(type(value)=="number" and value>=0 and value<math.huge,"PRESSURE_UNAVAILABLE")
+ -- CityBannerManager calls row.Pressure LifetimePressure; its separate
+ -- GetTotalPressureOnCity reading is not the accumulated spread effect.
+ local rows=city:GetReligion():GetReligionsInCity()
+ assert(type(rows)=="table","PRESSURE_UNAVAILABLE")
+ local seen,value={},0
+ for _,row in pairs(rows) do
+  assert(type(row)=="table" and scopeInteger(row.Religion) and row.Religion>=-1
+   and not seen[row.Religion],"PRESSURE_UNAVAILABLE")
+  assert(type(row.Pressure)=="number" and row.Pressure>=0 and row.Pressure<math.huge,"PRESSURE_UNAVAILABLE")
+  seen[row.Religion]=true
+  if row.Religion==religion then value=row.Pressure end
+ end
+ -- Absence means zero only after every native record has been validated.
  return value
 end
 local function cityAt(x,y)
@@ -75,9 +86,10 @@ local function condemnTarget(owner,x,y)
  assert(target,"NO_RELIGIOUS_TARGET")
  return target
 end
-local function sameCondemnUnit(r,unit,before)
+local function sameEffectEntity(r,unit,before)
  local known=true
- local checks={{"GetID","id"},{"GetOwner","owner"},{"GetType","unitType"},{"GetX","x"},{"GetY","y"}}
+ local checks={{"GetID","id"},{"GetOwner","owner"},{"GetX","x"},{"GetY","y"}}
+ if before.unitType~=nil then table.insert(checks,{"GetType","unitType"}) end
  if before.religion~=nil then table.insert(checks,{"GetReligionType","religion"}) end
  for _,check in ipairs(checks) do
   local ok,value=pcall(function() return unit[check[1]](unit) end)
@@ -115,6 +127,7 @@ local ok,r=pcall(function()
    and unit:GetX()==r.x and unit:GetY()==r.y,"UNIT_ID_CHANGED")
   r.command=command.Hash
  elseif r.kind=="spread_religion" then
+  assert(scopeIndex(r.unitType) and scopeIndex(r.x) and scopeIndex(r.y),"UNIT_IDENTITY_UNAVAILABLE")
   r.mode="spread";r.religion=count(unit:GetReligionType());r.charges=count(unit:GetSpreadCharges())
   assert(r.religion>0 and r.charges>0,"NO_RELIGION_OR_CHARGES")
   local op=GameInfo.UnitOperations["UNITOPERATION_SPREAD_RELIGION"]
@@ -191,21 +204,27 @@ local armed=pcall(function()
  for name,handler in pairs(r.handlers) do Events[name].Add(handler) end
 end)
 if not armed then retireEffect(r);print("ERR:UNIT_EFFECT_REFUSED|OBSERVER_UNAVAILABLE");print("{SENTINEL}");return end
-local condemnActor
-if r.mode=="condemn" then
+local resolvedUnit
+if r.mode=="condemn" or r.mode=="spread" then
  local entryOK,actor=pcall(function()
   local actor=effectUnit(r.owner,r.id)
-  assert(sameCondemnUnit(r,actor,r) and sameScope(r))
+  assert(sameEffectEntity(r,actor,r))
+  if r.mode=="spread" then
+   local city=CityManager.GetCityAt(r.city.x,r.city.y)
+   assert(city and sameEffectEntity(r,city,r.city) and pressure(city,r.religion)==r.pressure)
+   assert(sameEffectEntity(r,actor,r) and sameEffectEntity(r,city,r.city))
+  end
+  assert(sameScope(r))
   return actor
  end)
  if not entryOK then
   retireEffect(r);print("ERR:UNIT_EFFECT_REFUSED|IDENTITY_OR_SCOPE_CHANGED_OR_UNAVAILABLE");print("{SENTINEL}");return
  end
- condemnActor=actor
+ resolvedUnit=actor
 end
 r.entered=true
-if r.command then UnitManager.RequestCommand(condemnActor or effectUnit(r.owner,r.id),r.command)
-else UnitManager.RequestOperation(effectUnit(r.owner,r.id),r.operation,r.params) end
+if r.command then UnitManager.RequestCommand(resolvedUnit or effectUnit(r.owner,r.id),r.command)
+else UnitManager.RequestOperation(resolvedUnit or effectUnit(r.owner,r.id),r.operation,r.params) end
 r.returned=true
 print("OK:UNIT_EFFECT_REQUESTED|"..r.kind.."|unit:{unit_id}")
 print("{SENTINEL}")
@@ -226,12 +245,19 @@ local ok,detail,target=pcall(function()
   -- A known change cannot later borrow removal of the restored identity.
   reason="UNIT_ID_CHANGED"
   local actor=UnitManager.GetUnit(r.owner,r.id%65536)
-  assert(actor and sameCondemnUnit(r,actor,r))
+  assert(actor and sameEffectEntity(r,actor,r))
   reason="TARGET_ID_CHANGED"
   local native=UnitManager.GetUnit(r.target.owner,r.target.id%65536)
   local owned=Players[r.target.owner]:GetUnits():FindID(r.target.id)
-  if native then assert(sameCondemnUnit(r,native,r.target)) end
-  if owned then assert(sameCondemnUnit(r,owned,r.target)) end
+  if native then assert(sameEffectEntity(r,native,r.target)) end
+  if owned then assert(sameEffectEntity(r,owned,r.target)) end
+ elseif r.mode=="spread" then
+  reason="UNIT_ID_CHANGED"
+  local actor=UnitManager.GetUnit(r.owner,r.id%65536)
+  if actor then assert(sameEffectEntity(r,actor,r)) end
+  reason="CITY_ID_CHANGED"
+  local city=CityManager.GetCityAt(r.city.x,r.city.y)
+  assert(city and sameEffectEntity(r,city,r.city))
  end
  reason="ACTIVATION_NOT_OBSERVED"
  if r.mode=="great_person" then assert(r.activated==true) else assert(r.started==true) end
@@ -274,18 +300,20 @@ local ok,detail,target=pcall(function()
   return "beliefs_earned:"..r.beliefs.."->"..earned,"at:"..r.x..","..r.y
  end
  reason="CITY_ID_CHANGED"
- local city=cityAt(r.city.x,r.city.y)
- assert(city and city:GetID()==r.city.id and city:GetOwner()==r.city.owner)
+ local city=CityManager.GetCityAt(r.city.x,r.city.y)
+ assert(city and sameEffectEntity(r,city,r.city))
  reason="PRESSURE_UNCONFIRMED"
  local current=pressure(city,r.religion)
  assert(current>r.pressure)
+ if unit then assert(sameEffectEntity(r,unit,r)) end
+ assert(sameEffectEntity(r,city,r.city) and sameScope(r))
  return "charges_remaining:"..remaining,"city:"..r.city.owner..":"..r.city.id.." pressure:"..r.pressure.."->"..current
 end)
 if ok then
  -- A confirmation response can be lost before ActionLifecycle retires its
- -- owner. Condemn's witnesses must still latch later scope changes. The next
+ -- owner. Spread/condemn witnesses must still latch later scope changes. The next
  -- actual unit-effect request replaces and retires these bounded listeners.
- if r.mode~="condemn" then retireEffect(r) end
+ if r.mode~="condemn" and r.mode~="spread" then retireEffect(r) end
  local subject=r.mode=="condemn" and (r.target.owner..":"..r.target.id) or (r.individual or r.religion)
  print("UNIT_EFFECT_CONFIRMED|"..r.token.."|"..r.kind.."|"..r.id.."|"..r.mode.."|"..subject
   .."|"..detail.."|"..target)

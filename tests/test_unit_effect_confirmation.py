@@ -47,6 +47,7 @@ city.GetOwner=function(self) return self.owner end
 city.GetX=function(self) return self.x end
 city.GetY=function(self) return self.y end
 city.GetReligion=function(self) return {GetTotalPressureOnCity=function(_,religion) assert(religion==4);return self.pressure end,
+ GetReligionsInCity=function() return {{Religion=4,Pressure=self.pressure}} end,
  GetMajorityReligion=function() return self.majority end} end
 CityManager={GetCityAt=function(x,y) if city and x==city.x and y==city.y then return city end end}
 Map={GetPlotByIndex=function(id) if id==300 then return {GetX=function() return 20 end,GetY=function() return 17 end} end end}
@@ -201,9 +202,9 @@ def test_normal_public_effect_has_exact_native_submission_and_completion(kind, a
     assert conn.lua.eval('submissions[1].id') == 196608
     assert conn.lua.eval('submissions[1].op') == op
     assert state.pending_action_summary is None
-    assert conn.lua.eval('Events.UnitRemovedFromMap.Count()') == 0
+    assert conn.lua.eval('Events.UnitRemovedFromMap.Count()') == (1 if kind == 'spread' else 0)
     assert conn.lua.eval('Events.UnitGreatPersonActivated.Count()') == 0
-    assert conn.lua.eval('Events.UnitOperationStarted.Count()') == 0
+    assert conn.lua.eval('Events.UnitOperationStarted.Count()') == (1 if kind == 'spread' else 0)
 
 
 @pytest.mark.parametrize('kind,action,method,op,prefix', CASES)
