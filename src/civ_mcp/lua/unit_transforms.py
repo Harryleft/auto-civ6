@@ -43,15 +43,77 @@ local ok,r=pcall(function()
   else resourceCost=0 end
  end
  assert(type(UnitManager.RequestCommand)=="function","COMMAND_UNAVAILABLE")
+ local owned={{}}
+ for _,other in Players[owner]:GetUnits():Members() do
+  local id=other:GetID()
+  assert(scopeIndex(id) and other:GetOwner()==owner and not owned[id],"OWNED_IDS_UNAVAILABLE")
+  owned[id]=true
+ end
+ local id,x,y=unit:GetID(),unit:GetX(),unit:GetY()
+ assert(scopeIndex(id) and owned[id] and scopeIndex(x) and scopeIndex(y),"UPGRADE_SOURCE_UNAVAILABLE")
+ assert(scopeInteger(UnitCommandTypes.UPGRADE),"COMMAND_UNAVAILABLE")
  return {{token=token,owner=owner,id=unit:GetID(),requested={unit_id},before=before,target=target,
+  owned=owned,x=x,y=y,command=UnitCommandTypes.UPGRADE,
   cost=cost,balance=balance,resource=resource,resourceCost=resourceCost,stock=stock,
   civ=PlayerConfigurations[owner]:GetCivilizationTypeName(),
   seed=GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED"),turn=Game.GetCurrentGameTurn()}}
 end)
 if not ok then print("ERR:UNIT_UPGRADE_REFUSED|"..tostring(r));print("{SENTINEL}");return end
+local previous=__civmcpUpgrade
+for name,handler in pairs(previous and previous.handlers or {{}}) do
+ pcall(function() Events[name].Remove(handler) end)
+end
 __civmcpUpgrade=r
+r.handlers={{}}
+local armed=pcall(function()
+ local function bind(name,observe)
+  local event=Events[name]
+  assert(type(event.Add)=="function" and type(event.Remove)=="function")
+  local handler=function(owner,id,a,b,c)
+   if __civmcpUpgrade~=r or r.entered~=true or owner~=r.owner then return end
+   local known=pcall(function()
+    -- invalid belongs to scope history and constrains both completion paths.
+    -- chainInvalid/uncertain only reject the replacement event chain.
+    if not sameScope(r) then r.uncertain=true;return end
+    if not r.chainInvalid and not r.uncertain then observe(id,a,b,c) end
+   end)
+   if not known then r.uncertain=true end
+  end
+  r.handlers[name]=handler
+  event.Add(handler)
+ end
+ bind("UnitCommandStarted",function(id,command,a,b)
+  if id~=r.id then return end
+  if command==r.command and a==0 and b==0 then
+   -- The engine repeats this exact Started after Upgraded; it is not a retry.
+   if r.stage==nil then r.stage="STARTED" end
+  else r.chainInvalid=true end
+ end)
+ bind("UnitRemovedFromMap",function(id)
+  if id==r.id then
+   if r.stage=="STARTED" then r.stage="REMOVED" else r.chainInvalid=true end
+  elseif id==r.newID then r.chainInvalid=true end
+ end)
+ bind("UnitAddedToMap",function(id,x,y)
+  if r.stage~="REMOVED" and r.stage~="ADDED" and r.stage~="UPGRADED" then return end
+  if not scopeIndex(id) or not scopeIndex(x) or not scopeIndex(y) then r.uncertain=true;return end
+  if id==r.id then r.chainInvalid=true;return end
+  if x~=r.x or y~=r.y then return end
+  if r.stage~="REMOVED" or r.owned[id] then r.chainInvalid=true;return end
+  r.newID,r.stage=id,"ADDED"
+ end)
+ bind("UnitUpgraded",function(id,target)
+  if r.stage=="ADDED" and id==r.newID and target==r.target then r.stage="UPGRADED"
+  else r.chainInvalid=true end
+ end)
+end)
+r.replacementCapable=armed
+if not armed then
+ -- A context without these events can still prove an existing same-ID upgrade.
+ for name,handler in pairs(r.handlers) do pcall(function() Events[name].Remove(handler) end) end
+end
 r.entered=true
-UnitManager.RequestCommand(unitFor(r.owner,r.id),UnitCommandTypes.UPGRADE,{{}})
+UnitManager.RequestCommand(unitFor(r.owner,r.id),r.command,{{}})
 r.returned=true
 print("OK:UNIT_UPGRADE_REQUESTED|"..r.id)
 print("{SENTINEL}")
@@ -61,17 +123,36 @@ print("{SENTINEL}")
 def build_upgrade_query(unit_id: int, token: str) -> str:
     return _CONTEXT + f'''
 local r=__civmcpUpgrade
-local ok=pcall(function()
+local ok,id,details=pcall(function()
  assert(type(r)=="table" and r.token=={json.dumps(token)} and r.requested=={unit_id})
  assert(sameScope(r) and r.entered==true and r.returned==true)
  assert(UI.IsGameCoreBusy()==false)
- assert(unitFor(r.owner,r.id):GetType()==r.target)
+ local original=UnitManager.GetUnit(r.owner,r.id%65536)
+ local id=r.id
+ local details="type:"..r.before.."->"..r.target
+ local replaced=not (original and original:GetID()==r.id)
+ if not replaced then
+  assert(original:GetOwner()==r.owner and original:GetType()==r.target)
+ else
+  assert(r.replacementCapable==true and r.stage=="UPGRADED" and not r.chainInvalid and not r.uncertain)
+  assert(scopeIndex(r.newID) and r.newID~=r.id and r.owned[r.id] and not r.owned[r.newID])
+  local replacement=unitFor(r.owner,r.newID)
+  assert(replacement:GetID()==r.newID and replacement:GetType()==r.target
+   and replacement:GetX()==r.x and replacement:GetY()==r.y)
+  id=r.newID
+  details=details..",old_unit:"..r.id..",replacement:confirmed"
+ end
  assert(number(Players[r.owner]:GetTreasury():GetGoldBalance())==r.balance-r.cost)
  if r.resource>=0 then
   assert(number(Players[r.owner]:GetResources():GetResourceAmount(r.resource))==r.stock-r.resourceCost)
  end
+ -- Resource getters can dispatch events. Recheck shared scope and the chain
+ -- immediately before emitting either proof; never detach on a pure read.
+ assert(sameScope(r))
+ if replaced then assert(r.stage=="UPGRADED" and not r.chainInvalid and not r.uncertain) end
+ return id,details
 end)
-if ok then print("UNIT_TRANSFORM_CONFIRMED|{token}|{unit_id}|UPGRADED|"..r.id.."|type:"..r.before.."->"..r.target)
+if ok then print("UNIT_TRANSFORM_CONFIRMED|{token}|{unit_id}|UPGRADED|"..id.."|"..details)
 else print("UNIT_TRANSFORM_OBSERVED|{token}|UNKNOWN") end
 print("{SENTINEL}")
 '''
