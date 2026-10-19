@@ -1153,24 +1153,39 @@ class GameState:
         return await self._governor_action("appoint_governor", governor_type)
 
     async def _governor_action(self, operation: str, governor_type: str,
-                               *, promotion_type: str | None = None, city_id: int | None = None) -> str:
-        intent = (governor_type, promotion_type, city_id)
+                               *, promotion_type: str | None = None, city_id: int | None = None,
+                               target_owner: int | None = None) -> str:
+        if operation == "assign_governor":
+            if type(city_id) is not int or city_id < 0:
+                return "Error: INVALID_CITY_ID|Expected a nonnegative full city ID"
+            if target_owner is not None and (type(target_owner) is not int or not 0 <= target_owner <= 63):
+                return "Error: INVALID_TARGET_OWNER|Expected a player ID from 0 to 63"
+            if target_owner is None and self._actions.pending is not None:
+                target_owner = self._actions.pending.owner
+        intent = (governor_type, promotion_type, city_id, target_owner)
         entity = self.pending_action_entity
-        if entity is not None and self._actions.matches(operation, entity, intent=intent):
-            return await self.confirm_pending_action()
+        if entity is not None and self._actions.matches(operation, entity):
+            if self._actions.matches(operation, entity, intent=intent):
+                return await self.confirm_pending_action()
+            if operation == "assign_governor":
+                return self._pending_unknown("governor target changed; confirm the original request before a new assignment")
         blocked = await self._action_gate()
         if blocked:
             return blocked
         scope = await self._actions.prepare_scope(self._game_identity)
         if isinstance(scope, str):
             return scope
+        if operation == "assign_governor" and target_owner is None:
+            target_owner = scope.owner
+            intent = (governor_type, promotion_type, city_id, target_owner)
         token = uuid.uuid4().hex
-        options = {"promotion_type": promotion_type, "city_id": city_id}
+        options = {"promotion_type": promotion_type, "city_id": city_id, "target_owner": target_owner}
         pending = _PendingAction(
             operation, ("player", scope.owner),
             lq.build_governor_confirmation(operation, governor_type, token, **options),
             context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"governor": governor_type, "promotion": promotion_type, "city": city_id}, intent=intent,
+            details={"governor": governor_type, "promotion": promotion_type, "city": city_id,
+                     "target_owner": target_owner}, intent=intent,
             evidence=_ActionEvidence(
                 tool=operation, entrypoint=operation, accepted=("GOVERNOR_REQUESTED|",),
                 refused="ERR:GOVERNOR_REFUSED|",
@@ -1182,8 +1197,9 @@ class GameState:
             lq.build_governor_action(operation, governor_type, token, **options))
 
     @_guard_pending_mutation
-    async def assign_governor(self, governor_type: str, city_id: int) -> str:
-        return await self._governor_action("assign_governor", governor_type, city_id=city_id)
+    async def assign_governor(self, governor_type: str, city_id: int, target_owner: int | None = None) -> str:
+        return await self._governor_action("assign_governor", governor_type, city_id=city_id,
+                                         target_owner=target_owner)
 
     @_guard_pending_mutation
     async def promote_governor(self, governor_type: str, promotion_type: str) -> str:

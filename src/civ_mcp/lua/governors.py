@@ -1,10 +1,10 @@
 """Single native governor requests and their title/target evidence."""
 import json
 
-from civ_mcp.lua._helpers import SENTINEL
+from civ_mcp.lua._helpers import SENTINEL, _LUA_ACTION_SCOPE
 
 
-_CONTEXT = '''
+_CONTEXT = _LUA_ACTION_SCOPE + '''
 local function integer(value)
  assert(type(value)=="number" and value==value and math.abs(value)<math.huge and value==math.floor(value),"NUMBER_UNAVAILABLE")
  return value
@@ -18,7 +18,8 @@ end
 
 
 def build_governor_action(operation: str, governor_type: str, token: str,
-                          *, promotion_type: str | None = None, city_id: int | None = None) -> str:
+                          *, promotion_type: str | None = None, city_id: int | None = None,
+                          target_owner: int | None = None) -> str:
     return _CONTEXT + f'''
 local token={json.dumps(token)}
 local ok,r=pcall(function()
@@ -54,14 +55,21 @@ local ok,r=pcall(function()
   r.params={{[PlayerOperations.PARAM_GOVERNOR_TYPE]=gov.Index,[PlayerOperations.PARAM_GOVERNOR_PROMOTION_TYPE]=promo.Index}}
  elseif r.operation=="assign_governor" then
   assert(has,"GOVERNOR_NOT_APPOINTED")
-  local city=cityFor(owner,{city_id if city_id is not None else 'nil'})
+  r.civ=PlayerConfigurations[owner]:GetCivilizationTypeName()
+  r.seed=GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED");r.turn=Game.GetCurrentGameTurn()
+  r.targetOwner=integer({json.dumps(target_owner) if target_owner is not None else 'owner'})
+  assert(r.targetOwner>=0 and r.targetOwner<=63,"TARGET_OWNER_UNAVAILABLE")
+  local city=cityFor(r.targetOwner,{city_id if city_id is not None else 'nil'})
   local assigned=pg:GetGovernor(gov.Hash):GetAssignedCity()
   r.city=city:GetID();r.cityX=integer(city:GetX());r.cityY=integer(city:GetY())
-  r.noop=assigned~=nil and assigned:GetID()==r.city and assigned:GetOwner()==owner
+  assert(r.cityX>=0 and r.cityY>=0,"CITY_POSITION_UNAVAILABLE")
+  r.noop=assigned~=nil and assigned:GetID()==r.city and assigned:GetOwner()==r.targetOwner
+   and assigned:GetX()==r.cityX and assigned:GetY()==r.cityY
   if not r.noop then assert(pg:CanAssignGovernor(gov.Hash,city,true)==true,"CANNOT_ASSIGN") end
   r.op=PlayerOperations.ASSIGN_GOVERNOR
   r.params={{[PlayerOperations.PARAM_GOVERNOR_TYPE]=gov.Index,
-   [PlayerOperations.PARAM_CITY_DEST]=r.city,[PlayerOperations.PARAM_PLAYER_ONE]=owner}}
+   [PlayerOperations.PARAM_CITY_DEST]=r.city,[PlayerOperations.PARAM_PLAYER_ONE]=r.targetOwner}}
+  assert(sameScope(r),"ASSIGNMENT_SCOPE_CHANGED")
  end
  if not r.noop then
   if r.operation~="assign_governor" then assert(integer(pg:GetGovernorPoints())>r.spent,"NO_GOVERNOR_TITLES") end
@@ -84,7 +92,8 @@ print("{SENTINEL}")
 
 
 def build_governor_confirmation(operation: str, governor_type: str, token: str,
-                               *, promotion_type: str | None = None, city_id: int | None = None) -> str:
+                               *, promotion_type: str | None = None, city_id: int | None = None,
+                               target_owner: int | None = None) -> str:
     return _CONTEXT + f'''
 local r=__civmcpGovernor
 local ok,detail=pcall(function()
@@ -105,12 +114,14 @@ local ok,detail=pcall(function()
   return "promotion:"..r.promotion..",spent:"..spent
  end
  if r.operation=="assign_governor" then
-  assert(r.city=={city_id if city_id is not None else 'nil'},"CITY_TARGET_CHANGED")
-  local city=cityFor(r.owner,r.city)
+  assert(sameScope(r),"ASSIGNMENT_SCOPE_CHANGED")
+  assert(r.city=={city_id if city_id is not None else 'nil'}
+   and r.targetOwner=={json.dumps(target_owner) if target_owner is not None else 'r.owner'},"CITY_TARGET_CHANGED")
+  local city=cityFor(r.targetOwner,r.city)
   assert(city:GetX()==r.cityX and city:GetY()==r.cityY,"CITY_POSITION_CHANGED")
   local governor=pg:GetGovernor(r.hash)
   local assigned=governor:GetAssignedCity()
-  assert(assigned and assigned:GetID()==r.city and assigned:GetOwner()==r.owner
+  assert(assigned and assigned:GetID()==r.city and assigned:GetOwner()==r.targetOwner
    and assigned:GetX()==r.cityX and assigned:GetY()==r.cityY,"ASSIGNMENT_UNCONFIRMED")
   -- Assignment finishes here; establishment is a later game process. Missing
   -- progress metadata must not keep an already assigned governor pending.
@@ -119,7 +130,8 @@ local ok,detail=pcall(function()
    assert(type(established)=="boolean")
    return established,established and 0 or integer(governor:GetTurnsToEstablish())
   end)
-  return "city:"..r.city..",established:"..(reportOK and tostring(established) or "unknown")
+  assert(sameScope(r),"ASSIGNMENT_SCOPE_CHANGED")
+  return "target_owner:"..r.targetOwner..",city:"..r.city..",established:"..(reportOK and tostring(established) or "unknown")
    ..",turns:"..(reportOK and tostring(turns) or "unknown")
  end
  return "spent:"..spent

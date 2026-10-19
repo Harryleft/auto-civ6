@@ -655,12 +655,18 @@ async def appoint_governor(ctx: Context, governor_type: str) -> str:
 
 
 @mcp.tool()
-async def assign_governor(ctx: Context, governor_type: str, city_id: int) -> str:
+async def assign_governor(
+    ctx: Context, governor_type: str, city_id: Annotated[int, Field(ge=0, strict=True)],
+    target_owner: Annotated[int, Field(ge=0, le=63, strict=True)] | None = None,
+) -> str:
     """Assign an appointed governor to a city.
 
     Args:
         governor_type: The governor type (from get_governors output)
-        city_id: The city ID (from get_cities output)
+        city_id: Full city ID belonging to target_owner. get_cities lists your cities;
+            inspect foreign city GetID/GetOwner/coordinates with read-only run_lua.
+        target_owner: Destination player ID (get_city_states lists city-state player IDs).
+            Omit to use your local player. Native rules decide assignment eligibility.
 
     Governor must already be appointed. Takes several turns to establish.
     """
@@ -668,8 +674,8 @@ async def assign_governor(ctx: Context, governor_type: str, city_id: int) -> str
     return await _logged(
         ctx,
         "assign_governor",
-        {"governor_type": governor_type, "city_id": city_id},
-        lambda: gs.assign_governor(governor_type, city_id),
+        {"governor_type": governor_type, "city_id": city_id, "target_owner": target_owner},
+        lambda: gs.assign_governor(governor_type, city_id, target_owner=target_owner),
     )
 
 
