@@ -4,6 +4,17 @@ import json
 from civ_mcp.lua._helpers import SENTINEL
 
 
+def parse_envoy_confirmation(lines: list[str], token: str, owner: int, target: int) -> str | None:
+    rows = [row.split("|") for row in lines if row.startswith("ENVOY_CONFIRMED|")]
+    if len(rows) == 1 and len(rows[0]) == 8:
+        row = rows[0]
+        if (row[1:4] == [token, str(owner), str(target)]
+                and all(value.isdigit() for value in row[4:])
+                and int(row[4]) - int(row[5]) == 1 and int(row[7]) > int(row[6])):
+            return f"ENVOY_SENT|player:{row[3]}|remaining:{row[5]}|envoys:{row[6]}->{row[7]}"
+    return None
+
+
 _CONTEXT = '''
 local function count(value)
  assert(type(value)=="number" and value>=0 and value%1==0,"INFLUENCE_COUNT_UNAVAILABLE")
