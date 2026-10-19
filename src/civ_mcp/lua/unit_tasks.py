@@ -133,9 +133,9 @@ local ok=pcall(function()
  if r.activity~=nil then
   local current=UnitManager.GetActivityType(unit)
   local operation=ActivityTypes and ActivityTypes.ACTIVITY_OPERATION
-  -- Native alert remains OPERATION after its exact start (T16 live capture).
-  -- This confirms selection, not arrival at the later SENTRY activity.
-  assert(current==r.activity or (r.kind=="alert" and scopeInteger(operation) and current==operation))
+  -- Native alert (T16) and heal (T48) can remain OPERATION after exact start.
+  -- This confirms task selection, not later sentry activity or HP recovery.
+  assert(current==r.activity or ((r.kind=="alert" or r.kind=="heal") and scopeInteger(operation) and current==operation))
  end
 end)
 if ok then
