@@ -15,7 +15,7 @@ from civ_mcp.connection import GameConnection, LuaError
 from civ_mcp.game_lifecycle import visible_information_popups
 from civ_mcp.lua.congress import build_congress_phase_query, parse_congress_phase
 from civ_mcp.lua.turn_readiness import build_turn_readiness_query
-from civ_mcp.lua.notifications import LUA_TURN_WORLD
+from civ_mcp.lua.notifications import LUA_TURN_WORLD, build_turn_reopened_query
 
 class TurnContext(Protocol):
     """The deliberate collaboration used by turn advancement, not all GameState."""
@@ -354,7 +354,8 @@ class TurnProgress:
     """Own one submitted turn and its immutable reporting baseline.
 
     Cache refreshes belong to observations; only this module may retire a
-    submitted request after readiness or a terminal-game witness confirms it.
+    submitted request after later-turn readiness, terminal outcome, or the
+    exact native same-turn reopening cycle confirms its result.
     """
 
     def __init__(self) -> None:
@@ -488,6 +489,7 @@ class TurnProgress:
 
     async def execute(self, gs: TurnContext) -> str:
         """Send at most one request and preserve uncertainty until advancement is seen."""
+        confirming = self.pending
         if self._scope_invalid:
             return self._scope_error()
         if gs.pending_action_summary:
@@ -633,6 +635,21 @@ class TurnProgress:
                         )
                     if (turn_after == turn_before and status.phase == "LOCAL_ACTION_REQUIRED"
                             and status.has_sent_turn_complete is False):
+                        if confirming and self.attempt_token is not None:
+                            try:
+                                rows = await gs.conn.execute_write(build_turn_reopened_query(
+                                    self.attempt_token, turn_before, self.world))
+                                expected = ["TURN_REOPENED", self.attempt_token, str(turn_before), "ENDTURN_BLOCKING_UNITS"]
+                                evidence = [row.split("|") for row in rows if row.startswith("TURN_REOPENED|")]
+                                if (len(evidence) == 1 and len(evidence[0]) == 5
+                                        and evidence[0][:4] == expected and evidence[0][4].isdigit()):
+                                    unit = evidence[0][4]
+                                    self.reset()
+                                    return (f"REOPENED_LOCAL|Turn {turn_before} remains active; no turn advanced. "
+                                            f"ENDTURN_BLOCKING_UNITS: unit {unit} is ready. "
+                                            "This attempt is confirmed and retired; choose a unit action, then request end_turn separately.")
+                            except (OSError, TimeoutError, LuaError, ValueError):
+                                self.read_failures += 1
                         return ("Turn paused — local action required while native turn completion remains unconfirmed. "
                                 + self.describe(status)
                                 + "\nThe existing request is preserved and was not resent. Inspect get_turn_status; use explicit recovery if completion cannot be confirmed.")

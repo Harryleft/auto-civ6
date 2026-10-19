@@ -128,60 +128,104 @@ if UI.GetInterfaceMode() ~= InterfaceModeTypes.SELECTION then
 end
 reason = scopeReason()
 if reason then stop(reason); return end
--- B13 temporary evidence only. These generic events never authorize retirement.
+-- A same-turn local reopening needs this request's complete native sequence.
 local function retireAttempt(r)
     if r and r.handlers then
-        for name,handler in pairs(r.handlers) do
-            pcall(function() Events[name].Remove(handler) end)
-        end
+        for name,handler in pairs(r.handlers) do pcall(function() Events[name].Remove(handler) end) end
         r.handlers={}
     end
 end
+local function integer(value)
+    return type(value)=="number" and value==value and math.abs(value)<math.huge and value==math.floor(value)
+end
 retireAttempt(__civmcpTurnAttempt)
-local attempt={token=REQUEST_TOKEN,scope=expectedWorld.."|"..expected,owner=me,turn=expected,
-    events={},handlers={},available={},dropped=0,diagnosticOnly=true}
+local attempt={schema=2,token=REQUEST_TOKEN,scope=expectedWorld.."|"..expected,owner=me,turn=expected,
+    stage="ENTERED",handlers={},capable=true}
 __civmcpTurnAttempt=attempt
-for _,name in ipairs({"EndTurnBlockingChanged","EndTurnDirty","UnitOperationSegmentComplete",
-    "UnitOperationsCleared","UnitOperationDeactivated","LocalPlayerTurnEnd","LocalPlayerTurnBegin",
-    "LocalPlayerTurnUnready","GameCoreEventPublishComplete","GameCoreEventPlaybackComplete"}) do
+local readable=pcall(function()
+    attempt.op=GameInfo.UnitOperations.UNITOPERATION_AUTOMATE_EXPLORE.Hash
+    attempt.none=EndTurnBlockingTypes.NO_ENDTURN_BLOCKING
+    attempt.blocker=EndTurnBlockingTypes.ENDTURN_BLOCKING_UNITS
+    assert(integer(attempt.op) and integer(attempt.none) and integer(attempt.blocker) and attempt.none~=attempt.blocker)
+end)
+attempt.capable=readable
+for _,name in ipairs({"LocalPlayerTurnEnd","UnitOperationDeactivated","UnitOperationsCleared",
+    "LocalPlayerTurnBegin","EndTurnBlockingChanged","GameCoreEventPlaybackComplete",
+    "LocalPlayerTurnUnready","LocalPlayerChanged"}) do
     local event=Events and Events[name]
+    local function capture(a,b,c)
+        if __civmcpTurnAttempt~=attempt or attempt.entered~=true or attempt.invalid then return end
+        if turnWorld()~=attempt.scope then attempt.invalid=true;retireAttempt(attempt);return end
+        local stage=attempt.stage
+        if name=="LocalPlayerTurnUnready" or name=="LocalPlayerChanged" then attempt.invalid=true
+        elseif name=="LocalPlayerTurnEnd" then
+            if stage=="ENTERED" then attempt.stage="ENDED" else attempt.invalid=true end
+        elseif name=="UnitOperationDeactivated" and stage=="ENDED" then
+            if a==attempt.owner and integer(b) and b>=0 and c==attempt.op then
+                attempt.unit=b;attempt.stage="DEACTIVATED"
+            end
+        elseif name=="UnitOperationsCleared" and stage=="DEACTIVATED" then
+            if a==attempt.owner and b==attempt.unit then attempt.stage="CLEARED" end
+        elseif name=="LocalPlayerTurnBegin" then
+            if stage=="CLEARED" then attempt.stage="REOPENED" else attempt.invalid=true end
+        elseif name=="EndTurnBlockingChanged" then
+            if stage=="REOPENED" and a==attempt.none and b==attempt.blocker then attempt.stage="BLOCKED"
+            elseif stage=="BLOCKED" or stage=="SETTLED" then attempt.invalid=true end
+        elseif name=="GameCoreEventPlaybackComplete" and stage=="BLOCKED" then attempt.stage="SETTLED" end
+        if attempt.invalid then retireAttempt(attempt) end
+    end
     if event and type(event.Add)=="function" and type(event.Remove)=="function" then
-        local function capture(...)
-            if __civmcpTurnAttempt~=attempt then return end
-            if #attempt.events>=128 then
-                attempt.dropped=attempt.dropped+1;retireAttempt(attempt);return
-            end
-            local args={}
-            for index=1,select('#',...) do
-                local value=select(index,...)
-                args[index]=type(value)..":"..tostring(value):sub(1,160)
-            end
-            local scope=turnWorld()
-            table.insert(attempt.events,{seq=#attempt.events+1,name=name,args=args,scope=scope or "UNKNOWN",
-                phase=attempt.returned and "after_return" or (attempt.entered and "in_call" or "armed")})
-            if scope and scope~=attempt.scope then
-                attempt.scopeChanged=true;retireAttempt(attempt)
-            end
-        end
         local function handler(...)
-            if not pcall(capture,...) then attempt.captureFailed=true end
+            if not pcall(capture,...) then attempt.invalid=true;retireAttempt(attempt) end
         end
         attempt.handlers[name]=handler
-        attempt.available[name]=pcall(event.Add,handler)
-    else attempt.available[name]=false end
+        if not pcall(event.Add,handler) then attempt.capable=false end
+    else attempt.capable=false end
 end
+if not attempt.capable then retireAttempt(attempt) end
 reason=scopeReason()
 if reason then retireAttempt(attempt);stop(reason);return end
 attempt.entered=true
-local result=UI.RequestAction(ActionTypes.ACTION_ENDTURN)
+UI.RequestAction(ActionTypes.ACTION_ENDTURN)
 attempt.returned=true
-attempt.returnType=type(result)
--- Preserve nil explicitly; no return value is interpreted as an acceptance/refusal.
-attempt.returnValue=result
-if result==nil then attempt.returnValue="nil" end
 print("END_TURN|SUBMITTED")
 print("{SENTINEL}")
 """.replace("EXPECTED_TURN", expected).replace("EXPECTED_WORLD", world).replace("REQUEST_TOKEN", token).replace("{SENTINEL}", SENTINEL)
+
+
+def build_turn_reopened_query(token: str, expected_turn: int, expected_world: tuple[str, int, int]) -> str:
+    scope=json.dumps("|".join(map(str, (*expected_world, expected_turn))))
+    return LUA_TURN_WORLD + f'''
+local r=__civmcpTurnAttempt
+local ok,id=pcall(function()
+    assert(type(r)=="table" and r.schema==2 and r.token=={json.dumps(token)} and r.scope=={scope}
+        and r.owner=={expected_world[2]} and r.turn=={expected_turn})
+    local function sameAttemptScope()
+        local scope=turnWorld()
+        if scope and scope~=r.scope then r.invalid=true end
+        return scope==r.scope and not r.invalid
+    end
+    assert(sameAttemptScope() and r.capable==true and r.entered==true and r.returned==true and r.stage=="SETTLED")
+    local p=Players[r.owner]
+    assert(p:IsTurnActive()==true and p:IsTurnActiveComplete()==true)
+    assert(UI.IsProcessingMessages()==false and UI.IsGameCoreBusy()==false
+        and UI.HasSentTurnComplete()==false and p:CanUnreadyTurn()==false and UI.CanEndTurn()==true)
+    assert(EndTurnBlockingTypes.ENDTURN_BLOCKING_UNITS==r.blocker
+        and NotificationManager.GetFirstEndTurnBlocking(r.owner)==r.blocker)
+    local unit=UnitManager.GetUnit(r.owner,r.unit%65536)
+    local first=p:GetUnits():GetFirstReadyUnit()
+    assert(unit and first and unit:GetOwner()==r.owner and unit:GetID()==r.unit and unit:GetX()~=-9999
+        and first:GetOwner()==r.owner and first:GetID()==r.unit and unit:IsReadyToMove()==true)
+    assert(sameAttemptScope())
+    return r.unit
+end)
+if ok then
+    for name,handler in pairs(r.handlers) do pcall(function() Events[name].Remove(handler) end) end
+    r.handlers={{}}
+    print("TURN_REOPENED|{token}|{expected_turn}|ENDTURN_BLOCKING_UNITS|"..id)
+else print("TURN_REOPENED|UNKNOWN") end
+print("{SENTINEL}")
+'''
 
 
 def build_notifications_query() -> str:
