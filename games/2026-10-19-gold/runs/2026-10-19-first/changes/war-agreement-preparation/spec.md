@@ -1,6 +1,6 @@
 # B08：战争交易目标与失败准备退出
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 
