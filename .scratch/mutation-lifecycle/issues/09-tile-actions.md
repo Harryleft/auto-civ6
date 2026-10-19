@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 地块购买与可复用的未决动作契约
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] 拒绝不合法原生操作，移除 CanStartOperation=false 仍盲发的路径。
 - [ ] 绑定单位和原地块；正确区分无变化、完成与未知。

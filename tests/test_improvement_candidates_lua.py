@@ -82,8 +82,26 @@ def test_missing_native_improvement_eligibility_is_unknown_and_query_remains_rea
 
 
 def test_rejected_improvement_hint_includes_own_native_allowed_trait_content_without_submitting():
-    conn = builder_conn()
-    result = asyncio.run(state_for(conn).improve_tile(8, 'IMPROVEMENT_GREAT_WALL'))
-    assert result.startswith('Error: CANNOT_IMPROVE|'), result
+    from civ_mcp.game_state import GameState
+    from test_tile_actions import TileActionConn
+
+    conn = TileActionConn()
+    conn.lua.execute("""
+local improvements={
+ {Index=6,ImprovementType='IMPROVEMENT_FARM',Hash=106,Buildable=true},
+ {Index=7,ImprovementType='IMPROVEMENT_ZIGGURAT',Hash=107,Buildable=true,TraitType='TRAIT_CIVILIZATION_IMPROVEMENT_ZIGGURAT'},
+ {Index=8,ImprovementType='IMPROVEMENT_GREAT_WALL',Hash=108,Buildable=true,TraitType='TRAIT_CIVILIZATION_IMPROVEMENT_GREAT_WALL'},
+ {Index=9,ImprovementType='IMPROVEMENT_UNKNOWN',Hash=109,Buildable=true},
+}
+GameInfo.Improvements=rows(improvements,{IMPROVEMENT_GREAT_WALL=improvements[3]})
+UnitManager.CanStartOperation=function(unit,op,unknown,params,check)
+ assert(op==31 and unknown==nil and check==true)
+ assert(params.x==19 and params.y==17)
+ if params.improvement==109 then error('eligibility unavailable') end
+ return params.improvement==106 or params.improvement==107
+end
+""")
+    result = asyncio.run(GameState(conn).improve_tile(196608, 'IMPROVEMENT_GREAT_WALL'))
+    assert result.startswith('Error: TILE_ACTION_REFUSED|'), result
     assert 'IMPROVEMENT_FARM, IMPROVEMENT_ZIGGURAT' in result
-    assert conn.operations == []
+    assert conn.lua.eval('#submissions') == 0

@@ -705,41 +705,47 @@ class GameState:
         )
         return await self._submit_action(pending, scope, transforms.build_delete(unit_index, token))
 
-    @_guard_pending_mutation
-    async def improve_tile(self, unit_index: int, improvement_name: str) -> str:
-        blocked = await self._action_gate(("unit", unit_index))
+    async def _change_unit_tile(self, unit_id: int, kind: str, entrypoint: str, improvement: str = "") -> str:
+        from civ_mcp.lua import tile_actions
+        entity, intent = ("unit", unit_id), (kind, improvement)
+        if self._actions.matches("tile_action", entity, intent=intent):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
         if blocked:
             return blocked
-        lua = lq.build_improve_tile(unit_index, improvement_name)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        if type(unit_id) is not int or unit_id < 0 or not isinstance(improvement, str):
+            return "Error: INVALID_TILE_ACTION|Expected a unit ID and improvement name"
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            "tile_action", entity, tile_actions.build_tile_action_query(unit_id, kind, improvement, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            intent=intent, evidence=_ActionEvidence(
+                tool="unit_action", entrypoint=entrypoint, accepted=("TILE_ACTION_REQUESTED|", "TILE_ACTION_NOOP|"),
+                refused="ERR:TILE_ACTION_REFUSED|",
+                confirm=lambda rows: tile_actions.parse_tile_action(rows, unit_id, kind, token),
+                guidance=f"Repeat {kind} with the original unit and parameters to confirm only. ",
+            ),
+        )
+        return await self._submit_action(pending, scope, tile_actions.build_tile_action(unit_id, kind, improvement, token))
+
+    @_guard_pending_mutation
+    async def improve_tile(self, unit_index: int, improvement_name: str) -> str:
+        return await self._change_unit_tile(unit_index, "improve", "improve_tile", improvement_name)
 
     @_guard_pending_mutation
     async def remove_feature(self, unit_index: int) -> str:
-        blocked = await self._action_gate(("unit", unit_index))
-        if blocked:
-            return blocked
-        lua = lq.build_remove_feature(unit_index)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._change_unit_tile(unit_index, "remove_feature", "remove_feature")
 
     @_guard_pending_mutation
     async def repair_improvement(self, unit_index: int) -> str:
-        blocked = await self._action_gate(("unit", unit_index))
-        if blocked:
-            return blocked
-        lua = lq.build_repair_improvement(unit_index)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._change_unit_tile(unit_index, "repair", "repair_improvement")
 
     @_guard_pending_mutation
     async def remove_improvement(self, unit_index: int) -> str:
-        blocked = await self._action_gate(("unit", unit_index))
-        if blocked:
-            return blocked
-        lua = lq.build_remove_improvement(unit_index)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._change_unit_tile(unit_index, "remove_improvement", "remove_improvement")
 
     @_guard_pending_mutation
     async def sacrifice_builder_charges(self, unit_id: int) -> str:
@@ -770,12 +776,7 @@ class GameState:
 
     @_guard_pending_mutation
     async def build_route(self, unit_index: int) -> str:
-        blocked = await self._action_gate(("unit", unit_index))
-        if blocked:
-            return blocked
-        lua = lq.build_build_route(unit_index)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._change_unit_tile(unit_index, "build_route", "build_route")
 
     @_guard_pending_mutation
     async def set_city_production(
