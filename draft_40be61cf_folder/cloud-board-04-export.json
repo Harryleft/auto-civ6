@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "preview_image_path": "./draft_40be61cf_folder/cloud-board-04.jpg",
+    "size_bytes": 532988
+  },
+  "_notice": {
+    "skills": {
+      "command": "lark-cli update",
+      "current": "1.0.97",
+      "message": "lark-cli skills 1.0.97 out of sync with binary 1.0.98, run: lark-cli update",
+      "target": "1.0.98"
+    }
+  }
+}

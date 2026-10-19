@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "identity": "user",
+  "data": {
+    "created_node_ids": "c1:8,a1:23,a1:24,a1:25,a1:26,o1:10,c1:9,a1:27,a1:28,o1:11,a1:29,p1:1,p1:2,p1:3,p1:4,o1:12,a1:30,o1:13,a1:31,a1:32,c1:10,p1:5,a1:33,p1:6,p1:7,o1:14,a1:34,o1:15,a1:35,a1:36,a1:37,a1:38,a1:39,a1:40,c1:11,c1:12,a1:41,o1:16,a1:42,p1:8,a1:43,o1:17,o1:18,c1:13,a1:44,c1:14"
+  },
+  "_notice": {
+    "skills": {
+      "command": "lark-cli update",
+      "current": "1.0.97",
+      "message": "lark-cli skills 1.0.97 out of sync with binary 1.0.98, run: lark-cli update",
+      "target": "1.0.98"
+    }
+  }
+}

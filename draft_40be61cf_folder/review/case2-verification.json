@@ -1,0 +1,18 @@
+{
+  "board_token": "redacted-resource-003",
+  "write_ok": true,
+  "node_count_before": 46,
+  "node_count_after": 46,
+  "text_changes": 19,
+  "geometry_preserved": true,
+  "connector_properties_preserved": true,
+  "embedded_svg_sources_preserved": true,
+  "cloud_text_matches_proposal": true,
+  "visual_review": {
+    "file": "case2-after.jpg",
+    "passed": true,
+    "observations": "全部文字完整可读；无重叠或溢出；愿意接受与成交、隐藏窗口与结束外交会话均可区分；菱形与箭头完整保留。"
+  },
+  "normalized_nodes": 8,
+  "node_ids_reassigned_by_api": true
+}

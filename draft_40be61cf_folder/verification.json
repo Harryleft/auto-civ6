@@ -1,0 +1,23 @@
+{
+  "document_url": "PRIVATE_DOCUMENT_URL_REDACTED",
+  "revision": 5,
+  "profile_check": "passed",
+  "body_matches_draft_except_whitespace": true,
+  "counts": {
+    "h1": 6,
+    "h2": 8,
+    "table": 3,
+    "whiteboard": 4,
+    "img": 1
+  },
+  "cloud_board_previews_visually_checked": [
+    "01",
+    "02",
+    "03",
+    "04"
+  ],
+  "victory_image_download_matches_original": true,
+  "existing_game_files_modified": false,
+  "game_test_run": false,
+  "pushed": false
+}
