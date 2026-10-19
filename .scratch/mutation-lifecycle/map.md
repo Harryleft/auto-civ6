@@ -2,7 +2,7 @@
 
 **Status:** ready-for-agent
 
-[规格](spec.md)；本地 Markdown tracker；基线 `d3450a3`。
+[规格](spec.md)；[实施调研](research.md)；本地 Markdown tracker；基线 `d3450a3`。
 
 | 票 | 交付 | Blocked by | 状态 |
 | --- | --- | --- | --- |
