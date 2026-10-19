@@ -589,7 +589,7 @@ local results = {{}}
 local dType = "{district_type}"
 for _, pIdx in ipairs(plotIndices) do
     local plot = Map.GetPlotByIndex(pIdx)
-    if plot and not plot:IsWater() and not plot:IsImpassable() and not plot:IsMountain() then
+    if plot and not plot:IsImpassable() and not plot:IsMountain() then
         local px, py = plot:GetX(), plot:GetY()
         local adj_s, adj_p, adj_g, adj_f, adj_c = 0, 0, 0, 0, 0
         local mountains, jungles, forests, districts, rivers = 0, 0, 0, 0, 0
