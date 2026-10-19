@@ -642,8 +642,8 @@ class TestProposeTrade:
             {"type": "RESOURCE", "name": "RESOURCE_TEA", "amount": 1, "duration": 30},
         ]
 
-    def test_joint_war_is_added_to_both_sides(self):
-        """Joint war is mutual: both offer and request carry the agreement."""
+    def test_war_target_is_preserved_as_native_agreement_intent(self):
+        """Native eligibility determines ongoing-war versus mutual-war terms."""
         ctx = make_ctx()
         gs = app_of(ctx).game
 
@@ -652,8 +652,20 @@ class TestProposeTrade:
 
         run(go())
         _pid, offer, request = gs.last_args("propose_trade")
-        assert offer == [{"type": "AGREEMENT", "subtype": "JOINT_WAR"}]
-        assert request == [{"type": "AGREEMENT", "subtype": "JOINT_WAR"}]
+        assert offer == []
+        assert request == [{"type": "WAR_AGREEMENT", "target": 5}]
+
+    def test_explicit_native_war_type_is_preserved_with_target(self):
+        ctx=make_ctx();gs=app_of(ctx).game
+        run(server.propose_trade(ctx,2,joint_war_target=5,joint_war_type=1941490022,mode="test"))
+        _pid,offer,request=gs.last_args("test_trade")
+        assert offer==[]
+        assert request==[{"type":"WAR_AGREEMENT","target":5,"war_type":1941490022}]
+
+    def test_war_type_without_target_is_rejected_before_economic_trade(self):
+        ctx=make_ctx()
+        result=run(server.propose_trade(ctx,2,offer_gold=100,joint_war_type=1941490022))
+        assert result.startswith("Error:") and "joint_war_target" in result
 
     def test_open_borders_and_favor(self):
         ctx = make_ctx()

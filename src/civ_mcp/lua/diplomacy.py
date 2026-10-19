@@ -818,7 +818,9 @@ def _lua_deal_item(from_var: str, item: dict) -> str:
             f"if fi then fi:SetAmount({amount}) end end"
         )
     elif t == "AGREEMENT":
-        subtype = item["subtype"]  # "OPEN_BORDERS", "JOINT_WAR", "ALLIANCE"
+        subtype = item["subtype"]  # "OPEN_BORDERS", "ALLIANCE"
+        if subtype in {"JOINT_WAR", "THIRD_PARTY_WAR"}:
+            return 'error("WAR_AGREEMENT_REQUIRES_EXPLICIT_TARGET_AND_NATIVE_OPTION")'
         return (
             f"do local ai = deal:AddItemOfType(DealItemTypes.AGREEMENTS, {from_var}) "
             f"if ai then ai:SetSubType(DealAgreementTypes.{subtype}) end end"

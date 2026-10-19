@@ -93,6 +93,8 @@ local function item(kind,owner)
  value.GetValueTypeID=function() return "" end; value.GetSubTypeID=function() return "" end
  value.SetAmount=function(self,n) self.amount=n end; value.SetDuration=function(self,n) self.duration=n end
  value.SetValueType=function(self,n) self.value=n end; value.SetSubType=function(self,n) self.subtype=n end
+ value.SetParameterValue=function(self,key,n) self.parameters=self.parameters or {};self.parameters[key]=n end
+ value.GetParameterValue=function(self,key) return self.parameters and self.parameters[key] end
  return value
 end
 function dealFor(direction)
@@ -481,7 +483,7 @@ def test_inspect_acceptance_is_evaluation_until_fresh_final_accepted_response(qu
     assert state.diplomacy_pending
 
 
-@pytest.mark.parametrize("marker", ["local prepared=pcall", "No EQUALIZE/PROPOSED", "DIPLOMACY_NATIVE_CLOSE"])
+@pytest.mark.parametrize("marker", ["local prepared,prepareError=pcall", "No EQUALIZE/PROPOSED", "DIPLOMACY_NATIVE_CLOSE"])
 @pytest.mark.parametrize("error", [asyncio.CancelledError, TimeoutError])
 def test_partial_terms_failure_cancellation_or_lost_reply_only_confirms_native_exit(marker,error,quick_trade):
     class InterruptedConn(TradeConn):
@@ -523,7 +525,7 @@ def test_partial_terms_failure_never_closes_replaced_world_owner_session_or_term
         interrupted=False
         async def execute_in_named_state(self,name,source,timeout=5):
             rows=await super().execute_in_named_state(name,source,timeout)
-            if "local prepared=pcall" in source and not self.interrupted:
+            if "local prepared,prepareError=pcall" in source and not self.interrupted:
                 self.interrupted=True
                 raise asyncio.CancelledError()
             return rows
@@ -831,3 +833,177 @@ def test_entered_accept_lost_reply_confirms_human_final_once(error,quick_trade):
         assert list(conn.lua.globals().sent_actions.values())==[9,1]
         assert conn.lua.globals().requests==1
     asyncio.run(scenario())
+
+
+def test_failed_no_send_draft_cleared_by_native_ui_closes_only_owned_session(quick_trade):
+    class ClearedConn(TradeConn):
+        async def execute_in_named_state(self,name,source,timeout=5):
+            rows=await super().execute_in_named_state(name,source,timeout)
+            if 'local prepared,prepareError=pcall' in source:
+                self.setup('working_outgoing={}')
+            return rows
+    conn=ClearedConn();fail_favor_preparation(conn);state=GameState(conn)
+    result=asyncio.run(state.test_trade(1,[{'type':'GOLD','amount':20},{'type':'FAVOR','amount':20}],[]))
+    assert 'NOT_SUBMITTED' in result and 'cleanup confirmed' in result
+    assert not state.diplomacy_pending
+    assert conn.lua.globals().requests==1
+    assert list(conn.lua.globals().sent_actions.values())==[]
+    assert list(conn.lua.globals().mutations.values())==['close']
+
+
+class WarTradeConn(TradeConn):
+    def __init__(self):
+        super().__init__()
+        self.setup('''
+DealAgreementTypes={JOINT_WAR=594401930,THIRD_PARTY_WAR=-1258934878}
+DealValidationResult.MISSING_DEPENDENCY=2
+war_options={ [0]={[594401930]={},[-1258934878]={}},
+              [1]={[594401930]={},[-1258934878]={
+                {SubType=-1258934878,ForType=2,Parameters={WarType=1941490022}},
+              }} }
+DealManager.GetPossibleDealItems=function(from,to,kind,subtype,forDeal)
+ assert(to==(from==0 and 1 or 0) and kind==DealItemTypes.AGREEMENTS)
+ if forDeal==nil then
+  return {{SubType=DealAgreementTypes.JOINT_WAR,Duration=25,IsValid=false,ValidationResult=2},
+          {SubType=DealAgreementTypes.THIRD_PARTY_WAR,Duration=25,IsValid=false,ValidationResult=2}}
+ end
+ return war_options[from][subtype]
+end
+''')
+
+
+def test_native_ongoing_war_agreement_binds_counterpart_target_type_and_duration(quick_trade):
+    conn=WarTradeConn();state=GameState(conn)
+    result=asyncio.run(state.test_trade(1,[],[{'type':'WAR_AGREEMENT','target':2}]))
+    assert 'cleanup confirmed' in result and 'NOT_SUBMITTED' not in result
+    assert conn.lua.eval('#working_outgoing')==1
+    assert conn.lua.eval('working_outgoing[1]:GetFromPlayerID()')==1
+    assert conn.lua.eval('working_outgoing[1]:GetSubType()')==-1258934878
+    assert conn.lua.eval('working_outgoing[1]:GetValueType()')==2
+    assert conn.lua.eval('working_outgoing[1]:GetDuration()')==25
+    assert conn.lua.eval('working_outgoing[1]:GetParameterValue("WarType")')==1941490022
+    assert list(conn.lua.globals().sent_actions.values())==[3]
+
+
+def test_unbound_legacy_joint_war_item_is_not_evaluated(quick_trade):
+    conn=WarTradeConn();state=GameState(conn)
+    result=asyncio.run(state.test_trade(1,[],[{'type':'AGREEMENT','subtype':'JOINT_WAR'}]))
+    assert 'NOT_SUBMITTED' in result and 'cleanup confirmed' in result
+    assert list(conn.lua.globals().sent_actions.values())==[]
+
+
+def test_native_mutual_new_war_requires_both_sides_with_same_war_type(quick_trade):
+    conn=WarTradeConn();state=GameState(conn)
+    conn.setup('''
+war_options[1][DealAgreementTypes.THIRD_PARTY_WAR]={}
+for _,owner in ipairs({0,1}) do
+ war_options[owner][DealAgreementTypes.JOINT_WAR]={{SubType=DealAgreementTypes.JOINT_WAR,ForType=2,Parameters={WarType=1941490022}}}
+end
+''')
+    result=asyncio.run(state.test_trade(1,[],[{'type':'WAR_AGREEMENT','target':2}]))
+    assert 'cleanup confirmed' in result and 'NOT_SUBMITTED' not in result
+    assert conn.lua.eval('#working_outgoing')==2
+    assert conn.lua.eval('working_outgoing[1]:GetFromPlayerID()')==0
+    assert conn.lua.eval('working_outgoing[2]:GetFromPlayerID()')==1
+    for index in (1,2):
+        assert conn.lua.eval(f'working_outgoing[{index}]:GetValueType()')==2
+        assert conn.lua.eval(f'working_outgoing[{index}]:GetParameterValue("WarType")')==1941490022
+        assert conn.lua.eval(f'working_outgoing[{index}]:GetDuration()')==25
+    assert list(conn.lua.globals().sent_actions.values())==[3]
+
+
+@pytest.mark.parametrize('patch,reason',[
+    ('war_options[1][DealAgreementTypes.THIRD_PARTY_WAR]={}','WAR_OPTIONS_NONE'),
+    ('war_options[1][DealAgreementTypes.THIRD_PARTY_WAR]=nil','WAR_OPTIONS_UNREADABLE'),
+    ('DealManager.GetPossibleDealItems=nil','WAR_OPTIONS_UNAVAILABLE'),
+    ('DealManager.GetPossibleDealItems=function() error("native choices read failed") end','WAR_OPTIONS_UNREADABLE'),
+    ('war_options[1][DealAgreementTypes.THIRD_PARTY_WAR][1].Parameters=nil','WAR_OPTIONS_UNREADABLE'),
+    ('war_options[1][DealAgreementTypes.THIRD_PARTY_WAR][1].ForType=7','WAR_OPTIONS_NONE'),
+    ('war_options[1][DealAgreementTypes.THIRD_PARTY_WAR][1].Parameters.WarType="unknown"','WAR_OPTIONS_UNREADABLE'),
+    ('war_options[1][DealAgreementTypes.THIRD_PARTY_WAR]={};war_options[1][DealAgreementTypes.JOINT_WAR]={{SubType=DealAgreementTypes.JOINT_WAR,ForType=2,Parameters={WarType=1941490022}}}','WAR_OPTIONS_NONE'),
+])
+def test_unavailable_or_changed_native_war_options_never_evaluate_and_cleanup_owned_draft(patch,reason,quick_trade):
+    conn=WarTradeConn();state=GameState(conn);conn.setup(patch)
+    result=asyncio.run(state.test_trade(1,[],[{'type':'WAR_AGREEMENT','target':2}]))
+    assert reason in result and 'NOT_SUBMITTED' in result and 'cleanup confirmed' in result
+    assert list(conn.lua.globals().sent_actions.values())==[]
+    assert not state.diplomacy_pending
+
+
+@pytest.mark.parametrize('selected',[None,1941490022,-999])
+def test_ambiguous_native_war_types_require_explicit_matching_selector(selected,quick_trade):
+    conn=WarTradeConn();state=GameState(conn)
+    conn.setup('''table.insert(war_options[1][DealAgreementTypes.THIRD_PARTY_WAR],
+ {SubType=DealAgreementTypes.THIRD_PARTY_WAR,ForType=2,Parameters={WarType=2000000000}})''')
+    intent={'type':'WAR_AGREEMENT','target':2}
+    if selected is not None: intent['war_type']=selected
+    result=asyncio.run(state.test_trade(1,[],[intent]))
+    if selected==1941490022:
+        assert 'NOT_SUBMITTED' not in result
+        assert conn.lua.eval('working_outgoing[1]:GetParameterValue("WarType")')==selected
+        assert list(conn.lua.globals().sent_actions.values())==[3]
+    else:
+        assert ('WAR_OPTIONS_AMBIGUOUS' if selected is None else 'WAR_OPTIONS_NONE') in result
+        assert 'THIRD_PARTY_WAR:1941490022' in result and 'THIRD_PARTY_WAR:2000000000' in result
+        assert list(conn.lua.globals().sent_actions.values())==[]
+    assert 'cleanup confirmed' in result
+
+
+@pytest.mark.parametrize('tamper',[
+    '__civmcp_trade_deal.sent=true', '__civmcp_trade_deal.failed=false',
+    '__civmcp_trade_deal.token="other"','__civmcp_trade_deal.sid=72',
+    '__civmcp_trade_deal.target=2', '__civmcp_diplomacy.nonce="other"',
+    'pending=true', 'DiplomacyManager.HasQueuedSession=function() return true end',
+    'infos[71]={FromPlayer=2,ToPlayer=0}', 'GameConfiguration.GetValue=function() return 99 end',
+    'local new=dealFor(DealDirection.OUTGOING):AddItemOfType(DealItemTypes.GOLD,0);new:SetAmount(777)',
+    'DealManager.GetWorkingDeal=function() return nil end',
+])
+def test_native_empty_failed_draft_never_weakens_original_ownership_guards(tamper,quick_trade):
+    class InterruptedEmptyConn(TradeConn):
+        interrupted=False
+        async def execute_in_named_state(self,name,source,timeout=5):
+            rows=await super().execute_in_named_state(name,source,timeout)
+            if 'local prepared,prepareError=pcall' in source and not self.interrupted:
+                self.interrupted=True;self.setup('working_outgoing={}')
+                raise asyncio.CancelledError()
+            return rows
+    async def scenario():
+        conn=InterruptedEmptyConn();fail_favor_preparation(conn);state=GameState(conn)
+        terms=[{'type':'GOLD','amount':20},{'type':'FAVOR','amount':20}]
+        with pytest.raises(asyncio.CancelledError): await state.test_trade(1,terms,[])
+        conn.setup(tamper)
+        assert 'OUTCOME_UNKNOWN' in await state.test_trade(1,terms,[])
+        assert state.diplomacy_pending
+        assert list(conn.lua.globals().sent_actions.values())==[]
+        assert list(conn.lua.globals().mutations.values())==[]
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize('change',[
+    'working_incoming[1]:SetValueType(7)',
+    'working_incoming[1]:SetParameterValue("WarType",2000000000)',
+])
+def test_war_target_and_type_change_are_counteroffers_never_auto_accepted(change,quick_trade):
+    class ChangedWarConn(WarTradeConn):
+        def response_event(self,action):
+            return super().response_event(action)+';'+change
+    conn=ChangedWarConn();state=GameState(conn)
+    result=asyncio.run(state.propose_trade(1,[],[{'type':'WAR_AGREEMENT','target':2}]))
+    assert 'COUNTER_OFFER|' in result and 'ACCEPTED|' not in result
+    assert list(conn.lua.globals().sent_actions.values())==[9]
+    assert state.diplomacy_pending
+
+
+def test_lost_native_war_preview_reply_does_not_repeat_options_or_evaluation(quick_trade):
+    class LostWarConn(WarTradeConn):
+        lost=False
+        async def execute_in_named_state(self,name,source,timeout=5):
+            rows=await super().execute_in_named_state(name,source,timeout)
+            if 'local prepared,prepareError=pcall' in source and not self.lost:
+                self.lost=True;raise TimeoutError('native war preview ran; reply lost')
+            return rows
+    conn=LostWarConn();state=GameState(conn);intent=[{'type':'WAR_AGREEMENT','target':2}]
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.test_trade(1,[],intent))
+    assert 'cleanup confirmed' in asyncio.run(state.test_trade(1,[],intent))
+    assert conn.lua.globals().requests==1
+    assert list(conn.lua.globals().sent_actions.values())==[3]
