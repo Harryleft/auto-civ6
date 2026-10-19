@@ -1,6 +1,6 @@
 # B09：休整任务原生开始确认
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 

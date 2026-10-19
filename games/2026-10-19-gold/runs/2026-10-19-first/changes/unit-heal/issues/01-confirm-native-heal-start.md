@@ -1,6 +1,6 @@
 # B09-01：精确休整开始的 OPERATION 活动确认
 
-Status: implemented-pending-review
+Status: resolved
 Blocked by: none
 Spec: ../spec.md
 
@@ -14,3 +14,7 @@ Spec: ../spec.md
 TDD：原生 T48 fullID262146、HEAL Hash2126026491／Index13、OPERATION1225574625、ready=false、damage15 用例先红后绿。heal 外部 adapter 使用 OPERATION，让既有丢回应／取消／延迟测试覆盖实测状态；复用 alert 的负向测试验证缺事件／错操作／错完整 ID 和严格 no-op，补充 heal ready=true／未知、活动未知／错误、缺 OPERATION 枚举、世界／回合／token／完整单位改变均保持未知且只提交一次。真实用例确认 damage15 未被测试动作修改。
 
 unit_tasks／unit_readiness／action_scope／server 共 342 passed；compileall 和 diff --check 通过。独立审查及同轮 T48→T49 实机验收由父代理继续；工作者未操作游戏。
+
+## Verification
+
+实施20e82b6／集成39800c0。342相关离线、compileall、diff-check通过；Spec/Standards双独立审查均无实质发现。初次重启#790短暂旧端口关闭，菜单加载#792保持未知；按用户提示从应用菜单Quit并确认正常退出后#793成功恢复同轮T45。#794–826忠实重放，#827保存gold_20261019_t048_before_b09。#828单次heal返回HEALING，#829无待办，#830确认T49；原生战车15HP恢复至100，商路被瑞典掠夺的结果保留。#833保存gold_20261019_t049_b09_verified。
