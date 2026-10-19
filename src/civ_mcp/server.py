@@ -1326,7 +1326,7 @@ async def unit_action(
     For spread_religion: consumes one spread charge at the current city or unique native city target.
     Confirms pressure growth for that unit's religion in the exact city; majority conversion is not required.
     For launch_inquisition: an eligible owned apostle launches its founded religion's inquisition.
-    Confirms the native false-to-true launch flag and consumption of that exact apostle.
+    Confirms the GameCore false-to-true launch flag and consumption of that exact apostle.
     Ambiguous or unavailable city targets are refused. Unknown results retain the request; repeat only confirms.
     For condemn_heretic: native eligibility is required for the unique visible foreign religious unit on the actor's tile.
     Submits once and confirms the original command and target removal; rewards are not measured. Unknown results retain the request; repeat only confirms.

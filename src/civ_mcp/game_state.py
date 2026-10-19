@@ -1590,17 +1590,31 @@ class GameState:
         if isinstance(scope, str):
             return scope
         token = uuid.uuid4().hex
+        core_religion = None
+        core_query = None
+        if kind == "launch_inquisition":
+            from civ_mcp.lua import inquisition
+            try:
+                rows = await self.conn.execute_read(scope.guard(inquisition.build_core_preflight(
+                    unit_id, token, scope.owner, scope.civilization, scope.seed, scope.turn)))
+                core_religion = inquisition.parse_core_preflight(
+                    rows, unit_id, token, scope.owner, scope.civilization, scope.seed, scope.turn)
+                if core_religion is None:
+                    return "Error: UNIT_EFFECT_REFUSED|GAMECORE_PREFLIGHT_UNCONFIRMED|" + "; ".join(rows)
+                core_query = inquisition.build_core_query(unit_id, token, core_religion)
+            except (OSError, TimeoutError, LuaError, ValueError) as exc:
+                return f"Error: UNIT_EFFECT_REFUSED|GAMECORE_PREFLIGHT_UNAVAILABLE|{exc}; no action submitted."
         pending = _PendingAction(
             kind, entity, lq.build_unit_effect_query(kind, unit_id, token),
             context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"witness_token": token}, intent=intent,
+            details={"witness_token": token}, intent=intent, gamecore_query=core_query,
             evidence=_ActionEvidence(
                 tool="unit_action", entrypoint=kind, accepted=("UNIT_EFFECT_REQUESTED|",), refused="ERR:UNIT_EFFECT_REFUSED|",
                 confirm=lambda rows: lq.parse_unit_effect_confirmation(rows, kind, unit_id, token),
                 guidance="Repeat the original unit effect to confirm only; rewards beyond reported evidence remain unmeasured. ",
             ),
         )
-        return await self._submit_action(pending, scope, lq.build_unit_effect(kind, unit_id, token))
+        return await self._submit_action(pending, scope, lq.build_unit_effect(kind, unit_id, token, core_religion=core_religion))
 
     @_guard_pending_mutation
     async def spread_religion(self, unit_index: int) -> str:

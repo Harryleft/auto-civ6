@@ -60,6 +60,25 @@ UnitManager.RequestOperation=function(unit,op,params)
  if fail_request then error('entered launch failed after effect') end
 end
 ''')
+        self.core=ReadyConn()
+        self.core.lua.globals().readNativeFlag=lambda: self.lua.eval('religion:HasLaunchedInquisition()')
+        self.core.lua.globals().readNativeCreated=lambda: self.lua.eval('founded')
+        self.core.lua.globals().readNativeSeed=lambda: self.lua.eval('seed')
+        self.core.lua.globals().readNativeTurn=lambda: self.lua.eval('turn')
+        self.core.lua.globals().readNativeOwner=lambda: self.lua.eval('Game.GetLocalPlayer()')
+        self.core.lua.globals().readNativeCiv=lambda: self.lua.eval('PlayerConfigurations[0]:GetCivilizationTypeName()')
+        self.core.lua.execute('''
+Game.GetLocalPlayer=function() return readNativeOwner() end
+Game.GetCurrentGameTurn=function() return readNativeTurn() end
+GameConfiguration.GetValue=function() return readNativeSeed() end
+PlayerConfigurations[0].GetCivilizationTypeName=function() return readNativeCiv() end
+coreReligion={HasLaunchedInquisition=function() return readNativeFlag() end,
+ GetReligionTypeCreated=function() return readNativeCreated() end}
+Players[0].GetReligion=function() return coreReligion end
+''')
+
+    async def execute_read(self,code):
+        return await self.core.execute_write(code)
 
     async def execute_write(self, code):
         before = self.lua.eval('#submissions')
@@ -85,6 +104,184 @@ def test_t139_public_action_launches_native_inquisition_and_consumes_original_ap
     assert conn.lua.eval('#submissions')==1 and conn.lua.eval('launched')
     assert conn.lua.eval('UnitManager.GetUnit(0,9)==nil and Players[0]:GetUnits():FindID(3145737)==nil')
     assert state.pending_action_summary is None
+
+
+def test_real_native_context_split_uses_gamecore_flag_with_ingame_consumption_witness():
+    conn=InquisitionConn();state=GameState(conn);ctx=make_ctx();app_of(ctx).game=state
+    conn.lua.execute('religion.HasLaunchedInquisition=function() return false end')
+    conn.core.lua.globals().readNativeFlag=lambda: conn.lua.eval('launched')
+    result=asyncio.run(server.unit_action(ctx,3145737,'launch_inquisition'))
+    assert result.startswith('INQUISITION_LAUNCHED|unit:3145737|religion:12|')
+    assert conn.lua.eval('religion:HasLaunchedInquisition()') is False
+    assert conn.core.lua.eval('coreReligion:HasLaunchedInquisition()') is True
+    assert conn.lua.eval('#submissions')==1 and state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('core_flag', ['true','nil','"false"'])
+def test_authoritative_core_preflag_must_be_false_even_with_cached_ingame_false(core_flag):
+    conn=InquisitionConn();state=GameState(conn)
+    conn.core.lua.execute(f'coreReligion.HasLaunchedInquisition=function() return {core_flag} end')
+    assert asyncio.run(state.launch_inquisition(3145737)).startswith('Error: UNIT_EFFECT_REFUSED|GAMECORE_PREFLIGHT')
+    assert conn.lua.eval('#submissions')==0 and state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('phase', ['preflight','confirmation'])
+def test_lost_gamecore_reply_never_replays_the_consuming_operation(phase):
+    class LostCoreConn(InquisitionConn):
+        async def execute_read(self,code):
+            rows=await super().execute_read(code)
+            tag='INQUISITION_CORE_PREPARED|' if phase=='preflight' else 'INQUISITION_CORE_CONFIRMED|'
+            if not getattr(self,'dropped',False) and any(row.startswith(tag) for row in rows):
+                self.dropped=True
+                raise OSError('GameCore reply lost')
+            return rows
+    conn=LostCoreConn();state=GameState(conn)
+    result=asyncio.run(state.launch_inquisition(3145737))
+    if phase=='preflight':
+        assert result.startswith('Error: UNIT_EFFECT_REFUSED|')
+        assert conn.lua.eval('#submissions')==0 and state.pending_action_summary is None
+    else:
+        assert 'OUTCOME_UNKNOWN' in result and state.pending_action_summary is not None
+    assert asyncio.run(state.launch_inquisition(3145737)).startswith('INQUISITION_LAUNCHED|')
+    assert conn.lua.eval('#submissions')==1
+
+
+@pytest.mark.parametrize('phase', ['core','final_ingame'])
+def test_cancelled_cross_context_confirmation_retains_the_original_owner(phase):
+    class CancelProofConn(InquisitionConn):
+        async def execute_read(self,code):
+            rows=await super().execute_read(code)
+            if any(row.startswith('INQUISITION_CORE_CONFIRMED|') for row in rows):
+                self.core_seen=True
+                if phase=='core' and not getattr(self,'cancelled',False):
+                    self.cancelled=True
+                    raise asyncio.CancelledError()
+            return rows
+        async def execute_write(self,code):
+            rows=await super().execute_write(code)
+            if (phase=='final_ingame' and getattr(self,'core_seen',False) and not getattr(self,'cancelled',False)
+                    and any(row.startswith('UNIT_EFFECT_CONFIRMED|') for row in rows)):
+                self.cancelled=True
+                raise asyncio.CancelledError()
+            return rows
+    conn=CancelProofConn();state=GameState(conn)
+    with pytest.raises(asyncio.CancelledError):asyncio.run(state.launch_inquisition(3145737))
+    assert state.pending_action_summary is not None and conn.lua.eval('#submissions')==1
+    assert asyncio.run(state.launch_inquisition(3145737)).startswith('INQUISITION_LAUNCHED|')
+    assert conn.lua.eval('#submissions')==1
+
+
+def test_final_ingame_confirmation_reply_loss_can_only_confirm_the_original_request():
+    conn=LostProofConn();state=GameState(conn)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.launch_inquisition(3145737))
+    assert conn.core.lua.eval('__civmcpInquisitionCore.launchedObserved')
+    assert asyncio.run(state.launch_inquisition(3145737)).startswith('INQUISITION_LAUNCHED|')
+    assert conn.lua.eval('#submissions')==1
+
+
+@pytest.mark.parametrize('change,restore', [
+    ('GameConfiguration.GetValue=function() return 9 end','GameConfiguration.GetValue=function() return readNativeSeed() end'),
+    ('Game.GetCurrentGameTurn=function() return 140 end','Game.GetCurrentGameTurn=function() return readNativeTurn() end'),
+    ('Game.GetLocalPlayer=function() return 1 end','Game.GetLocalPlayer=function() return readNativeOwner() end'),
+    ('PlayerConfigurations[0].GetCivilizationTypeName=function() return "CIVILIZATION_SWEDEN" end','PlayerConfigurations[0].GetCivilizationTypeName=function() return readNativeCiv() end'),
+    ('coreReligion.GetReligionTypeCreated=function() return 13 end;coreReligion.HasLaunchedInquisition=function() return nil end',
+     'coreReligion.GetReligionTypeCreated=function() return readNativeCreated() end;coreReligion.HasLaunchedInquisition=function() return readNativeFlag() end'),
+    ('GameConfiguration.GetValue=function() return nil end;coreReligion.GetReligionTypeCreated=function() return 13 end',
+     'GameConfiguration.GetValue=function() return readNativeSeed() end;coreReligion.GetReligionTypeCreated=function() return readNativeCreated() end'),
+])
+def test_readable_core_context_or_religion_changes_stay_invalid_with_unknown_peers(change, restore):
+    conn=InquisitionConn();state=GameState(conn);conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.launch_inquisition(3145737))
+    conn.core.lua.execute(change)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.launch_inquisition(3145737))
+    conn.core.lua.execute(restore)
+    conn.lua.execute('applyLaunch()')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.launch_inquisition(3145737))
+    assert conn.lua.eval('#submissions')==1
+
+
+def test_world_change_after_core_proof_is_caught_by_final_ingame_reread():
+    class ChangeAfterCoreConn(InquisitionConn):
+        async def execute_read(self,code):
+            rows=await super().execute_read(code)
+            if not getattr(self,'changed',False) and any(row.startswith('INQUISITION_CORE_CONFIRMED|') for row in rows):
+                self.changed=True;self.lua.execute('seed=9')
+            return rows
+    conn=ChangeAfterCoreConn();state=GameState(conn)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.launch_inquisition(3145737))
+    conn.lua.execute('seed=-1896272000')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.launch_inquisition(3145737))
+    assert conn.lua.eval('#submissions')==1
+
+
+def test_late_core_flag_getter_scope_change_cannot_confirm_and_restore_cannot_clear_it():
+    conn=InquisitionConn();state=GameState(conn)
+    conn.core.lua.execute('''
+coreReligion.HasLaunchedInquisition=function()
+ local value=readNativeFlag()
+ if value then GameConfiguration.GetValue=function() return 9 end end
+ return value
+end
+''')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.launch_inquisition(3145737))
+    conn.core.lua.execute('GameConfiguration.GetValue=function() return readNativeSeed() end;coreReligion.HasLaunchedInquisition=function() return readNativeFlag() end')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.launch_inquisition(3145737))
+    assert conn.lua.eval('#submissions')==1
+
+
+@pytest.mark.parametrize('setup,reason', [
+    ('emitStarted=false','STARTED_OR_REMOVED_EVENT_MISSING'),
+    ('keep_native=true','DUAL_UNIT_ABSENCE_UNCONFIRMED'),
+    ('setFlag=false','CORE_LAUNCH_FLAG_STILL_FALSE'),
+])
+def test_unknown_output_names_the_actual_incomplete_evidence(setup,reason):
+    conn=InquisitionConn();state=GameState(conn);conn.lua.execute(setup)
+    result=asyncio.run(state.launch_inquisition(3145737))
+    assert 'OUTCOME_UNKNOWN' in result and reason in result
+    assert 'RECEIPT_MISSING_OR_MISMATCHED' not in result
+
+
+@pytest.mark.parametrize('receipt', ['core','ingame'])
+def test_missing_original_context_receipt_cannot_be_replaced_by_the_other_context(receipt):
+    conn=InquisitionConn();state=GameState(conn);conn.lose_reply=True
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.launch_inquisition(3145737))
+    if receipt=='core':conn.core.lua.execute('__civmcpInquisitionCore=nil')
+    else:conn.lua.execute('__civmcpUnitEffect=nil')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.launch_inquisition(3145737))
+    assert conn.lua.eval('#submissions')==1 and state.pending_action_summary is not None
+
+
+@pytest.mark.parametrize('corruption', ['token','owner','religion','turn','seed','duplicate','unknown'])
+def test_mismatched_or_ambiguous_core_proof_cannot_confirm_the_ingame_request(corruption):
+    class CorruptCoreReplyConn(InquisitionConn):
+        async def execute_read(self,code):
+            rows=await super().execute_read(code)
+            if not getattr(self,'clean',False) and any(row.startswith('INQUISITION_CORE_CONFIRMED|') for row in rows):
+                if corruption=='duplicate':return rows+rows
+                if corruption=='unknown':return rows+['INQUISITION_CORE_OBSERVED|unknown|CORE_RELIGION_OR_FLAG_UNKNOWN']
+                parts=rows[0].split('|')
+                index={'token':1,'owner':3,'religion':4,'seed':6,'turn':7}[corruption]
+                parts[index]='other' if corruption=='token' else '99'
+                return ['|'.join(parts)]
+            return rows
+    conn=CorruptCoreReplyConn();state=GameState(conn)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.launch_inquisition(3145737))
+    assert state.pending_action_summary is not None and conn.lua.eval('#submissions')==1
+    conn.clean=True
+    assert asyncio.run(state.launch_inquisition(3145737)).startswith('INQUISITION_LAUNCHED|')
+    assert conn.lua.eval('#submissions')==1
+
+
+def test_unknown_core_postflag_recovers_while_ingame_cache_stays_false():
+    conn=InquisitionConn();state=GameState(conn)
+    conn.lua.execute('religion.HasLaunchedInquisition=function() return false end')
+    conn.core.lua.globals().readNativeFlag=lambda: conn.lua.eval('launched')
+    conn.core.lua.execute('coreReligion.HasLaunchedInquisition=function() if readNativeFlag() then return nil end;return false end')
+    result=asyncio.run(state.launch_inquisition(3145737))
+    assert 'OUTCOME_UNKNOWN' in result and 'CORE_RELIGION_OR_FLAG_UNKNOWN' in result
+    conn.core.lua.execute('coreReligion.HasLaunchedInquisition=function() return readNativeFlag() end')
+    assert asyncio.run(state.launch_inquisition(3145737)).startswith('INQUISITION_LAUNCHED|')
+    assert conn.lua.eval('#submissions')==1
 
 
 @pytest.mark.parametrize('setup', [
@@ -180,8 +377,8 @@ def test_unknown_result_field_can_recover_without_resubmitting(change, restore):
 def test_final_getter_changed_or_unknown_scope_refuses_before_native_entry(scope_value):
     conn=InquisitionConn();state=GameState(conn)
     conn.lua.execute(f'''
-local read=religion.HasLaunchedInquisition
-religion.HasLaunchedInquisition=function()
+local read=religion.GetReligionTypeCreated
+religion.GetReligionTypeCreated=function()
  if __civmcpUnitEffect then
   lateReads=(lateReads or 0)+1
   if lateReads==2 then seed={scope_value} end
@@ -227,9 +424,16 @@ def test_cancelled_submit_retains_original_intent_for_read_only_confirmation():
 
 
 class LostProofConn(InquisitionConn):
+    async def execute_read(self,code):
+        rows=await super().execute_read(code)
+        if any(row.startswith('INQUISITION_CORE_CONFIRMED|') for row in rows):
+            self.core_seen=True
+        return rows
+
     async def execute_write(self,code):
         rows=await super().execute_write(code)
-        if not getattr(self,'dropped',False) and any(row.startswith('UNIT_EFFECT_CONFIRMED|') for row in rows):
+        if (getattr(self,'core_seen',False) and not getattr(self,'dropped',False)
+                and any(row.startswith('UNIT_EFFECT_CONFIRMED|') for row in rows)):
             self.dropped=True
             raise OSError('confirmed result reply lost')
         return rows

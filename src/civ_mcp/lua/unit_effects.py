@@ -103,6 +103,7 @@ end
 local function inquisitionFacts(r)
  -- Read both actor views and founder state independently. A missing getter
  -- must not hide a readable identity change in another original fact.
+ -- InGame's launch flag is a stale UI cache; GameCore owns that result proof.
  local known=true
  local function read(getter)
   local ok,value=pcall(getter)
@@ -119,24 +120,17 @@ local function inquisitionFacts(r)
  end
  inspect(native);inspect(owned)
  local religionOK,religion=read(function() return Players[r.owner]:GetReligion() end)
- local flag
  if religionOK and religion then
   local createdOK,created=read(function() return religion:GetReligionTypeCreated() end)
   if not createdOK or not scopeInteger(created) or created< -1 then known=false
   elseif created~=r.created then r.invalid=true end
-  local flagOK,value=read(function() return religion:HasLaunchedInquisition() end)
-  if not flagOK or type(value)~="boolean" then known=false
-  else
-   flag=value
-   if value then r.launchedObserved=true elseif r.launchedObserved then r.invalid=true end
-  end
  else known=false end
- return known and nativeOK and ownedOK and not r.invalid,native,owned,flag
+ return known and nativeOK and ownedOK and not r.invalid,native,owned
 end
 '''
 
 
-def build_unit_effect(kind: str, unit_id: int, token: str) -> str:
+def build_unit_effect(kind: str, unit_id: int, token: str, *, core_religion: int | None = None) -> str:
     return _CONTEXT + f'''
 local ok,r=pcall(function()
  assert(__civmcpUnitEffect==nil or type(__civmcpUnitEffect)=="table","RECEIPT_STORAGE_UNAVAILABLE")
@@ -155,9 +149,9 @@ local ok,r=pcall(function()
   assert(info and info.UnitType=="UNIT_APOSTLE" and info.LaunchInquisition==true,"NOT_AN_ELIGIBLE_APOSTLE")
   r.religion=count(unit:GetReligionType())
   local religion=Players[owner]:GetReligion()
-  r.created=count(religion:GetReligionTypeCreated())
-  assert(r.created>0 and r.religion==r.created,"OWN_FOUNDED_RELIGION_REQUIRED")
-  assert(religion:HasLaunchedInquisition()==false,"INQUISITION_ALREADY_LAUNCHED_OR_UNKNOWN")
+  r.created={core_religion if core_religion is not None else 'nil'}
+  assert(scopeIndex(r.created) and r.created>0 and r.religion==r.created
+   and religion:GetReligionTypeCreated()==r.created,"OWN_FOUNDED_RELIGION_REQUIRED")
   local op=GameInfo.UnitOperations["UNITOPERATION_LAUNCH_INQUISITION"]
   assert(op and op.OperationType=="UNITOPERATION_LAUNCH_INQUISITION"
    and scopeInteger(op.Hash),"OPERATION_UNAVAILABLE")
@@ -262,12 +256,12 @@ local resolvedUnit
 if r.mode=="condemn" or r.mode=="spread" or r.mode=="inquisition" then
  local entryOK,actor=pcall(function()
   if r.mode=="inquisition" then
-   local known,current,owned,flag=inquisitionFacts(r)
-   assert(known and current and owned and flag==false)
+   local known,current,owned=inquisitionFacts(r)
+   assert(known and current and owned)
    assert(UnitManager.CanStartOperation(current,r.operation,nil,r.params)==true,"CANNOT_LAUNCH_INQUISITION")
-   known,current,owned,flag=inquisitionFacts(r)
+   known,current,owned=inquisitionFacts(r)
    local scopeKnown=sameScope(r)
-   assert(known and current and owned and flag==false and scopeKnown)
+   assert(known and current and owned and scopeKnown)
    return current
   end
   local actor=effectUnit(r.owner,r.id)
@@ -302,13 +296,18 @@ local ok,detail,target=pcall(function()
  assert(type(r)=="table" and r.token=={json.dumps(token)} and r.kind=={json.dumps(kind)} and r.id=={unit_id})
  local scopeKnown=sameScope(r)
  if r.mode=="inquisition" then
-  local known,native,owned,flag=inquisitionFacts(r)
+  local known,native,owned=inquisitionFacts(r)
   local busyOK,busy=pcall(function() return UI.IsGameCoreBusy() end)
   local finalScope=sameScope(r)
-  assert(known and scopeKnown and finalScope and busyOK and busy==false)
-  assert(r.entered==true and r.returned==true and r.started==true and r.removed==true)
-  assert(native==nil and owned==nil and flag==true)
-  return "launched:false->true","at:"..r.x..","..r.y
+  reason="INGAME_SCOPE_OR_IDENTITY_CHANGED";assert(not r.invalid)
+  reason="INGAME_SCOPE_UNKNOWN";assert(scopeKnown and finalScope)
+  reason="INGAME_UNIT_OR_RELIGION_UNKNOWN";assert(known)
+  reason="CORE_BUSY_OR_UNKNOWN";assert(busyOK and busy==false)
+  reason="REQUEST_NOT_RETURNED";assert(r.entered==true and r.returned==true)
+  reason="STARTED_OR_REMOVED_EVENT_MISSING";assert(r.started==true and r.removed==true)
+  reason="DUAL_UNIT_ABSENCE_UNCONFIRMED";assert(native==nil and owned==nil)
+  print("INQUISITION_INGAME_WITNESS|"..r.token.."|"..r.id.."|"..r.owner.."|"..r.created.."|"..r.civ.."|"..r.seed.."|"..r.turn.."|events+absent")
+  return "apostle:removed","at:"..r.x..","..r.y
  end
  reason="SCOPE_CHANGED";assert(scopeKnown)
  reason="REQUEST_NOT_RETURNED";assert(r.entered==true and r.returned==true)
@@ -401,7 +400,16 @@ def parse_unit_effect_confirmation(lines: list[str], kind: str, unit_id: int, to
         row = rows[0]
         if row[1:4] == [token, kind, str(unit_id)]:
             if row[4] == "inquisition" and kind == "launch_inquisition":
-                return f"INQUISITION_LAUNCHED|unit:{unit_id}|religion:{row[5]}|{row[6]}|{row[7]}|Apostle consumption confirmed."
+                if any(line.startswith(('INQUISITION_CORE_OBSERVED|','UNIT_EFFECT_OBSERVED|')) for line in lines):
+                    return None
+                native = [line.split('|') for line in lines if line.startswith('INQUISITION_INGAME_WITNESS|')]
+                core = [line.split('|') for line in lines if line.startswith('INQUISITION_CORE_CONFIRMED|')]
+                if not (len(native) == len(core) == 1 and len(native[0]) == len(core[0]) == 9
+                        and native[0][1:8] == core[0][1:8]
+                        and native[0][1:3] == [token, str(unit_id)] and native[0][4] == row[5]
+                        and native[0][8] == 'events+absent' and core[0][8] == 'false->true'):
+                    return None
+                return f"INQUISITION_LAUNCHED|unit:{unit_id}|religion:{row[5]}|launched:false->true|{row[7]}|Apostle consumption confirmed."
             if row[4] == "condemn" and kind == "condemn_heretic":
                 return f"HERETIC_CONDEMNED|unit:{unit_id}|target:{row[5]}|{row[6]}|{row[7]}|Target removal confirmed; rewards not measured."
             if row[4] == "spread":

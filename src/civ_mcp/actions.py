@@ -48,6 +48,9 @@ class _PendingAction:
     # FireTuner names contexts read (GameCore) / write (InGame); a GameCore
     # mutation still uses the same pending owner and single-submission guard.
     submit_context: str = "write"
+    # Inquisition's authoritative flag lives in GameCore while its exact
+    # command/removal receipt lives in InGame. None keeps the ordinary path.
+    gamecore_query: str | None = None
 
 
 @dataclass(frozen=True)
@@ -348,6 +351,12 @@ class ActionLifecycle:
                     if pending.identity is not None:
                         identity_probe = _scope_probe("ACTION_IDENTITY", bound_owner=pending.owner)
                     pending.observed = await execute(identity_probe + pending.query)
+                    if pending.gamecore_query is not None:
+                        core_rows = await self.conn.execute_read(pending.gamecore_query)
+                        # The original InGame witness is re-read after the core
+                        # getters. No partial or lost intermediate response can
+                        # retire the owner or authorize another submission.
+                        pending.observed = await execute(identity_probe + pending.query) + core_rows
                     confirmed = self._confirmed_action(pending)
                     if confirmed is not None:
                         pending.confirmed = confirmed
