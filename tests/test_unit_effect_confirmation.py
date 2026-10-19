@@ -86,7 +86,7 @@ UnitManager.RequestCommand=request
 UnitManager.RequestOperation=request
 ''')
         if kind == 'prophet':
-            self.lua.execute('u.kind=2;u.class=7;u.charges=0')
+            self.lua.execute('u.kind=2;u.class=7;u.charges=0;hasProphet=false')
         elif kind == 'spread':
             self.lua.execute('u.kind=3')
 
@@ -127,6 +127,38 @@ def test_prophet_with_zero_action_charges_confirms_readiness_without_claiming_re
     result = asyncio.run(server.unit_action(ctx, 196608, 'activate'))
     assert result.startswith('RELIGION_FOUNDING_READY|unit:196608|individual:42|')
     assert 'beliefs_earned:0->2' in result
+    assert conn.lua.eval('createdReligion') == -1
+    assert conn.lua.eval('#submissions') == 1
+    assert state.pending_action_summary is None
+
+
+def test_t125_native_eligible_zero_charge_prophet_with_false_aggregate_flag_submits_once():
+    conn = EffectConn('prophet'); state = GameState(conn); ctx = make_ctx(); app_of(ctx).game = state
+    conn.lua.execute('''
+turn=125;seed=-1896272000;hasProphet=false;deferred=true
+units[196608]=nil;u.id=2621451;units[2621451]=u
+u.individual=114;u.x=39;u.y=26;u.moves=2.25
+GameInfo.UnitOperations.UNITOPERATION_FOUND_RELIGION.Hash=-953161477
+UnitManager.CanStartOperation=function(unit,op,unused,params,check)
+ assert(unit==u and unit.id==2621451 and unit.individual==114 and unit.charges==0)
+ assert(op==-953161477 and unused==nil and params.x==39 and params.y==26 and check==true)
+ return true
+end
+function applyProphetEffect()
+ Events.UnitOperationStarted.Fire(0,2621451,-953161477)
+ beliefs=2
+ units[2621451]=nil
+ Events.UnitRemovedFromMap.Fire(0,2621451)
+end
+''')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(server.unit_action(ctx, 2621451, 'activate'))
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(server.unit_action(ctx, 2621451, 'activate'))
+    assert conn.lua.eval('submissions[1].id') == 2621451
+    assert conn.lua.eval('submissions[1].op') == -953161477
+    conn.lua.execute('applyProphetEffect()')
+    result = asyncio.run(server.unit_action(ctx, 2621451, 'activate'))
+    assert result.startswith('RELIGION_FOUNDING_READY|unit:2621451|individual:114|beliefs_earned:0->2|at:39,26|')
+    assert 'Choose religion and beliefs separately' in result
     assert conn.lua.eval('createdReligion') == -1
     assert conn.lua.eval('#submissions') == 1
     assert state.pending_action_summary is None
@@ -267,7 +299,6 @@ def test_mcp_keeps_composite_unit_identity(kind, action, method, op, prefix):
     ('great_person', 'activate_great_person', 'Events.UnitGreatPersonActivated=nil'),
     ('great_person', 'activate_great_person', 'UnitManager.RequestCommand=nil'),
     ('prophet', 'activate_great_person', 'createdReligion=4'),
-    ('prophet', 'activate_great_person', 'hasProphet=false'),
     ('prophet', 'activate_great_person', 'beliefs=nil'),
     ('prophet', 'activate_great_person', 'u.moves=0'),
     ('spread', 'spread_religion', 'u.spreads=0'),
@@ -282,6 +313,42 @@ def test_missing_required_native_resource_or_observer_refuses_before_submission(
     assert asyncio.run(getattr(state, method)(196608)).startswith('Error: UNIT_EFFECT_REFUSED|')
     assert conn.lua.eval('#submissions') == 0
     assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('setup', [
+    'UnitManager.CanStartOperation=nil',
+    "UnitManager.CanStartOperation=function() error('eligibility unreadable') end",
+    'UnitManager.CanStartOperation=function() return 1 end',
+])
+def test_false_aggregate_flag_never_authorizes_prophet_without_exact_native_eligibility(setup):
+    conn = EffectConn('prophet'); state = GameState(conn); conn.lua.execute(setup)
+    assert asyncio.run(state.activate_great_person(196608)).startswith('Error: UNIT_EFFECT_REFUSED|')
+    assert conn.lua.eval('#submissions') == 0
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('event', [
+    'Events.UnitOperationStarted.Fire(1,196608,31)',
+    'Events.UnitOperationStarted.Fire(0,262144,31)',
+    'Events.UnitOperationStarted.Fire(0,196608,32)',
+])
+def test_prophet_ready_state_with_wrong_operation_event_keeps_original_request_pending(event):
+    conn = EffectConn('prophet'); state = GameState(conn); conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.activate_great_person(196608))
+    conn.lua.execute('beliefs=2;' + event)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.activate_great_person(196608))
+    assert state.pending_action_kind == 'activate_great_person'
+    assert conn.lua.eval('#submissions') == 1
+
+
+@pytest.mark.parametrize('setup', ['u.individual=115', 'u.class=8', 'u.owner=1', 'u.id=262144', 'u.x=20'])
+def test_prophet_exact_start_and_beliefs_still_require_original_unit_identity(setup):
+    conn = EffectConn('prophet'); state = GameState(conn); conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.activate_great_person(196608))
+    conn.lua.execute('Events.UnitOperationStarted.Fire(0,196608,31);beliefs=2;' + setup)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.activate_great_person(196608))
+    assert state.pending_action_kind == 'activate_great_person'
+    assert conn.lua.eval('#submissions') == 1
 
 
 @pytest.mark.parametrize('setup', [
@@ -375,20 +442,22 @@ def test_native_throw_after_effect_is_unknown_and_never_replayed(kind, action, m
     ('seed=123', 'seed=719665280'), ('turn=42', 'turn=41'),
     ('PlayerConfigurations[1]=PlayerConfigurations[0];Game.GetLocalPlayer=function() return 1 end', 'Game.GetLocalPlayer=function() return 0 end'),
 ])
-def test_changed_world_turn_or_owner_cannot_confirm_even_after_returning(change, restore):
-    conn = EffectConn(); state = GameState(conn); conn.lua.execute('deferred=true')
+@pytest.mark.parametrize('kind,op', [('great_person', 30), ('prophet', 31)])
+def test_changed_world_turn_or_owner_cannot_confirm_even_after_returning(change, restore, kind, op):
+    conn = EffectConn(kind); state = GameState(conn); conn.lua.execute('deferred=true')
     assert 'OUTCOME_UNKNOWN' in asyncio.run(state.activate_great_person(196608))
-    conn.lua.execute('applyEffect(30);' + change)
+    conn.lua.execute(f'applyEffect({op});' + change)
     assert 'OUTCOME_UNKNOWN' in asyncio.run(state.activate_great_person(196608))
     conn.lua.execute(restore)
     assert 'OUTCOME_UNKNOWN' in asyncio.run(state.activate_great_person(196608))
     assert conn.lua.eval('#submissions') == 1
 
 
-def test_world_change_in_native_callback_is_sticky_even_before_confirmation_read():
-    conn = EffectConn(); state = GameState(conn); conn.lua.execute('deferred=true')
+@pytest.mark.parametrize('kind,op', [('great_person', 30), ('prophet', 31)])
+def test_world_change_in_native_callback_is_sticky_even_before_confirmation_read(kind, op):
+    conn = EffectConn(kind); state = GameState(conn); conn.lua.execute('deferred=true')
     assert 'OUTCOME_UNKNOWN' in asyncio.run(state.activate_great_person(196608))
-    conn.lua.execute('seed=123;applyEffect(30);seed=719665280')
+    conn.lua.execute(f'seed=123;applyEffect({op});seed=719665280')
     assert 'OUTCOME_UNKNOWN' in asyncio.run(state.activate_great_person(196608))
     assert conn.lua.eval('#submissions') == 1
 
