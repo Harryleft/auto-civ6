@@ -20,7 +20,7 @@
 
 初始实施提交 `3fa68cd`，最终受测代码提交 `31ae3f5`；冻结集成 `c64201e` 的 Standards／Spec 独立复核均为 **No material issues found**。最终全量 **3856 passed in 127.55s**，18 个实施工作树已安全清理，本票及规格已 resolved。以下保留各轮实施与审查历史；claimed／待复核均为当时状态。
 
-- 已核对源码注册、公开 MCP 目录和完整覆盖表：**82 工具／43 变更／39 纯查询，遗漏 0**。补齐三项纯查询的 readOnlyHint；[完整覆盖与离线验收](../../../docs/acceptance/2026-10-19-mutation-lifecycle.md)逐项列出组合分支、未注册 GS 入口、原生 UI callbacks、任意 Lua 与显式生命周期边界，原审计保留历史基线。
+- 已核对源码注册、公开 MCP 目录和完整覆盖表：**82 工具／43 变更／39 纯查询，遗漏 0**。补齐三项纯查询的 readOnlyHint；[完整覆盖与离线验收](../../../acceptance/2026-10-19-mutation-lifecycle.md)逐项列出组合分支、未注册 GS 入口、原生 UI callbacks、任意 Lua 与显式生命周期边界，原审计保留历史基线。
 - 直接 GS 的 save/load/turn/diplomacy 门禁补齐；普通 kill/launch/任意 Lua/弹窗关闭不能绕过未知保存或替换。原动作与迁移动作同样先由原 owner 匹配意图；MCP 旧 skip/fortify 等重入不会先确认旧请求后再进入新操作。OPEN_BORDERS 别名继续交原交易 owner 匹配，错目标拒绝，其他关系动作仍受门禁。
 - MCP move/attack/fortify/skip/found_city 传递完整 ID；单位、城市查找及移动／攻击／生产回读核对原身份。兼容直接低 index 移动时仍从提交前原生记录核对实例，替代单位到达目的地不能确认旧请求。
 - 所有 scoped ActionLifecycle 请求在观察到世界／回合／玩家失配后锁存失效，恢复原世界不能追认。保留议会原生阶段所有者，仅 end_turn 可依据最新可信 REGISTERED 放行；spy_escape 没有证据需要新增 pending-turn 例外，活动通知与危险 getter guard 保持。
@@ -70,4 +70,4 @@ Standards 的单一根因是未知身份／时代／政策布局被误当成有�
 
 最终审查冻结 `c64201e`，修复差异 `2643c1d...c64201e`。Standards 本轮关闭最后一个 P2，遗留 0、新增 0，累计发现的两个 P2 均已关闭；独立 8 组 ChoiceConn 故障验证中，读数恢复后正确确认或继续失效，原生提交均为 1 次。Spec 前轮两个 P2 已关闭，本轮新增 0，独立 56 项公开入口真实 Lua 测试通过（1.26s）。两轴均报告 No material issues found，完整结论分别保留在验收文档。
 
-18 个实施工作树已不使用 force 安全移除，分支保留；`git worktree list` 仅主检出，清理日志 `/tmp/civ6-mutation-worktree-cleanup.json`。最终 `src`／`tests` 与受测 `31ae3f5` 的 Git tree 完全相同，本次仅文档闭票，不重复全量。全部 18 票与规格 resolved，无剩余验收项；原分享稿已保留，现归档于[团队分享资料](../../../games/benchmark-sumeria-719665280/runs/2026-10-18-t233/team-sharing/README.md)。
+18 个实施工作树已不使用 force 安全移除，分支保留；`git worktree list` 仅主检出，清理日志 `/tmp/civ6-mutation-worktree-cleanup.json`。最终 `src`／`tests` 与受测 `31ae3f5` 的 Git tree 完全相同，本次仅文档闭票，不重复全量。全部 18 票与规格 resolved，无剩余验收项；原分享稿已保留，现归档于[团队分享资料](../../../../games/benchmark-sumeria-719665280/runs/2026-10-18-t233/team-sharing/README.md)。

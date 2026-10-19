@@ -148,4 +148,4 @@
 
 ## 后续正式规格
 
-用户已要求按 to-spec → to-tickets → implement-spec 推进。正式[规格](../../.scratch/mutation-lifecycle/spec.md)和[逐票依赖图](../../.scratch/mutation-lifecycle/map.md)接续本次审计；后续实施状态以逐票记录为准。
+用户已要求按 to-spec → to-tickets → implement-spec 推进。正式[规格](2026-10-19-mutation-lifecycle/spec.md)和[逐票依赖图](2026-10-19-mutation-lifecycle/map.md)接续本次审计；后续实施状态以逐票记录为准。
