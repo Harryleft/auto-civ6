@@ -70,7 +70,13 @@ local ok,r=pcall(function()
  assert(operation~=nil and type(UnitManager.RequestOperation)=="function","OPERATION_UNAVAILABLE")
  -- TradeRouteChooser and TradeOriginChooser both use these four arguments.
  assert(UnitManager.CanStartOperation(unit,operation,nil,params)==true,"CANNOT_START_OPERATION")
- return {{token=token,kind=kind,owner=owner,unit={unit_id},unitType=unit:GetType(),
+ local chooserName=kind=="trade_route" and "MAKE_TRADE_ROUTE" or "TELEPORT_TO_CITY"
+ local chooser=InterfaceModeTypes and InterfaceModeTypes[chooserName]
+ local selection=InterfaceModeTypes and InterfaceModeTypes.SELECTION
+ assert(scopeInteger(chooser) and scopeInteger(selection) and chooser~=selection,"INTERFACE_MODE_UNAVAILABLE")
+ assert(type(UI.GetInterfaceMode)=="function" and type(UI.SetInterfaceMode)=="function","INTERFACE_API_UNAVAILABLE")
+ assert(scopeInteger(UI.GetInterfaceMode()),"INTERFACE_MODE_UNKNOWN")
+ return {{token=token,kind=kind,owner=owner,unit={unit_id},unitType=unit:GetType(),chooser=chooser,selection=selection,
   origin=origin,destination=destination,active=#routes,capacity=capacity,params=params,operation=operation,
   civ=PlayerConfigurations[owner]:GetCivilizationTypeName(),
   seed=GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED"),turn=Game.GetCurrentGameTurn()}}
@@ -81,6 +87,17 @@ if not (__civmcpTraderAction and __civmcpTraderAction.token==token) then
  r.entered=true
  UnitManager.RequestOperation(traderFor(r.owner,r.unit),r.operation,r.params)
  r.returned=true
+ -- Both shipped trader choosers return to SELECTION after RequestOperation.
+ -- A native event may have opened a different mode; preserve it.
+ r.cleanupOK,r.cleanupError=pcall(function()
+  assert(sameScope(r),"SCOPE_CHANGED")
+  local mode=UI.GetInterfaceMode()
+  assert(scopeInteger(mode),"INTERFACE_MODE_UNKNOWN")
+  if mode==r.chooser then
+   UI.SetInterfaceMode(r.selection)
+   assert(UI.GetInterfaceMode()==r.selection,"INTERFACE_TRANSITION_UNCONFIRMED")
+  end
+ end)
 end
 print("OK:TRADER_REQUESTED|"..kind.."|unit:{unit_id}")
 print("{SENTINEL}")
@@ -115,6 +132,11 @@ local ok,active,capacity=pcall(function()
   reason="TRANSFER_UNCONFIRMED"
   assert(matches==0 and #routes==r.active and unit:GetX()==r.destination.x and unit:GetY()==r.destination.y)
  end
+ -- Route/relocation evidence is established before checking UI readiness.
+ -- Confirmation only reads: it never repeats the economic operation or cleanup.
+ reason=(r.kind=="trade_route" and "ROUTE_ESTABLISHED" or "TRANSFER_ESTABLISHED").."_INTERFACE_CLEANUP_UNCONFIRMED"
+ local mode=UI.GetInterfaceMode()
+ assert(scopeInteger(mode) and mode~=r.chooser)
  return #routes,capacity
 end)
 if ok then
