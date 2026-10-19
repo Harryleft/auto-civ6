@@ -87,6 +87,13 @@ from civ_mcp.lua.great_people import (  # noqa: F401
     parse_gp_advisor_response,
     parse_great_people_response,
 )
+from civ_mcp.lua.policies import (  # noqa: F401
+    build_policy_plan,
+    build_policy_confirmation,
+    build_policy_continuation,
+    parse_policy_confirmation,
+    policy_plan_ready,
+)
 from civ_mcp.lua.choices import (  # noqa: F401
     build_player_choice,
     build_player_choice_confirmation,
@@ -103,7 +110,6 @@ from civ_mcp.lua.governance import (  # noqa: F401
     build_dedications_query,
     build_governors_query,
     build_policies_query,
-    build_set_policies,
     build_unit_promotions_query,
     build_unit_upgrade_query,
     parse_city_states_response,
