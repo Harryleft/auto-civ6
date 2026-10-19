@@ -24,7 +24,7 @@ connection.py / tuner_client.py：FireTuner 通信
 Civilization VI
 ```
 
-游戏规则由引擎执行。GameCore 与 InGame 按原生 API 可用性读取／提交，FrontEnd 提供主菜单读档。FireTuner 的 read／write 名称选择上下文，不代表该 Lua 是否改变状态；晋升在 GameCore 提交，仍由同一动作所有者确认。领域查询和动作保持独立，工具返回必要事实和回读结果供模型决策。
+游戏规则由引擎执行。GameCore 与 InGame 按原生 API 可用性读取／提交，FrontEnd 提供主菜单读档。FireTuner 的 read／write 名称选择上下文，不代表该 Lua 是否改变状态；晋升在 InGame 绑定原生可选项的 Index 并提交 PROMOTE，由引擎处理经验、恢复与行动力，同一动作所有者确认实际晋升及回读数值。领域查询和动作保持独立，工具返回必要事实和回读结果供模型决策。
 
 ## 动作确认
 

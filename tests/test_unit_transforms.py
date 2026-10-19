@@ -143,43 +143,42 @@ class PromotionConn(TransformConn):
         super().__init__()
         self.lua.execute('''
 promotions,stored,xp,heals,clears={},2,100,0,0
-UnitCommandTypes.PROMOTE=23
+options={14,15};eligibilityCalls=0
+UnitCommandTypes.PROMOTE=-1259482049
+UnitCommandTypes.PARAM_PROMOTION_TYPE=-927495623
+UnitCommandResults.PROMOTIONS='promotions'
 UnitManager.CanStartCommand=function(unit,command,visible,check)
- assert(visible==false and check==true)
- if command==23 then return not promotions[7] or unit.id~=196608 end
+ assert(check==true)
+ if command==-1259482049 then
+  assert(visible==false)
+  eligibilityCalls=eligibilityCalls+1
+  return unit.allowed and (not promotions[14] or unit.id~=196608),{promotions=options}
+ end
+ assert(visible==false)
  return unit.allowed,{type=targetType}
 end
 Locale={Lookup=function(s) return s end}
-GameInfo.UnitPromotionPrereqs=function() return function() end end
-local promo={Index=7,UnitPromotionType='PROMOTION_BATTLECRY',Name='Battlecry',PromotionClass='MELEE'}
-GameInfo.Units[1].PromotionClass='MELEE'
-GameInfo.UnitPromotions=setmetatable({PROMOTION_BATTLECRY=promo,[7]=promo},{__call=function()
- local done=false
- return function() if not done then done=true;return promo end end
-end})
+local promo={Index=14,Hash=664752614,UnitPromotionType='PROMOTION_VOLLEY',Name='Volley'}
+GameInfo.UnitPromotions={PROMOTION_VOLLEY=promo,[14]=promo}
 exp={HasPromotion=function(self,id) return promotions[id]==true end,
- CanPromote=function(self,id) return u.allowed end,
- GetExperiencePoints=function() return xp end,
- GetExperienceForNextLevel=function() return 15 end,
  GetStoredPromotions=function() return stored end,
- SetPromotion=function(self,id)
-  assert(nativeContext=='gamecore','wrong mutation context')
-  table.insert(submissions,{id=u.id,promotion=id})
-  if not deferred then promotions[id]=true end
-  if failStage=='promotion' then error('promotion throw') end
- end,
- ChangeStoredPromotions=function(self,n)
-  clears=clears+1;stored=stored+n
-  if failStage=='stored' then error('stored throw') end
- end}
+ SetPromotion=function() error('direct promotion forbidden') end,
+ ChangeStoredPromotions=function() clears=clears+1;error('direct XP write forbidden') end}
 u.GetExperience=function() return exp end
-u.SetDamage=function(self,n)
- heals=heals+1;self.damage=n
- if failStage=='heal' then error('heal throw') end
+u.SetDamage=function() heals=heals+1;error('direct healing forbidden') end
+function applyPromotion()
+ promotions[14]=true;stored=1;u.damage=10;u.moves=0
+end
+UnitManager.RequestCommand=function(unit,command,parameters)
+ assert(nativeContext=='ingame','native command belongs in InGame')
+ assert(command==-1259482049 and parameters[-927495623]==14,'exact native index required')
+ table.insert(submissions,{id=unit.id,command=command,promotion=parameters[-927495623]})
+ if not deferred then applyPromotion() end
+ if fail_request then error('native threw after entry') end
 end
 Players[0].GetUnits=function() return {
  Members=function() return pairs(units) end,
- FindID=function(self,id) assert(nativeContext=='gamecore');return UnitManager.GetUnit(0,id) end}
+ FindID=function(self,id) return UnitManager.GetUnit(0,id) end}
 end
 ''')
 
@@ -189,57 +188,86 @@ end
 
     async def execute_read(self,code):
         self.lua.execute("nativeContext='gamecore'")
-        before=self.lua.eval('#submissions')
-        rows=await ReadyConn.execute_write(self,code)
-        if self.lose_reply and self.lua.eval('#submissions')>before:
-            self.lose_reply=False
-            raise OSError('GameCore response lost')
-        return rows
+        return await ReadyConn.execute_write(self,code)
 
 
-def test_promotion_uses_gamecore_and_lost_reply_never_repeats_heal_or_stored_cleanup():
+def test_promotion_native_index_in_game_and_lost_reply_confirms_actual_engine_result():
     conn=PromotionConn();state=GameState(conn);ctx=make_ctx();app_of(ctx).game=state
     conn.lose_reply=True
-    assert 'OUTCOME_UNKNOWN' in asyncio.run(server.promote_unit(ctx,196608,'PROMOTION_BATTLECRY'))
-    assert asyncio.run(server.promote_unit(ctx,196608,'PROMOTION_BATTLECRY')).startswith('PROMOTED|')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(server.promote_unit(ctx,196608,'PROMOTION_VOLLEY'))
+    result=asyncio.run(server.promote_unit(ctx,196608,'PROMOTION_VOLLEY'))
+    assert result.startswith('PROMOTED|unit:196608|PROMOTION_VOLLEY')
+    assert 'damage:10' in result and 'moves:0' in result and 'stored_promotions:1' in result
     assert conn.lua.eval('#submissions')==1
-    assert conn.lua.eval('heals')==1
-    assert conn.lua.eval('clears')==1
-    assert conn.lua.eval('stored')==0
-    assert conn.lua.eval('u.damage')==0
+    assert conn.lua.eval('submissions[1].promotion')==14
+    assert conn.lua.eval('heals')==0
+    assert conn.lua.eval('clears')==0
+    assert conn.lua.eval('stored')==1
+    assert conn.lua.eval('u.damage')==10
 
 
-@pytest.mark.parametrize('stage', ['promotion','stored','heal'])
-def test_promotion_partial_exception_retains_all_completed_steps_without_replaying(stage):
-    conn=PromotionConn();state=GameState(conn);conn.lua.globals().failStage=stage
-    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.promote_unit(196608,'PROMOTION_BATTLECRY'))
-    before=(conn.lua.eval('#submissions'),conn.lua.eval('clears'),conn.lua.eval('heals'))
-    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.promote_unit(196608,'PROMOTION_BATTLECRY'))
+def test_promotion_unreturned_native_command_keeps_gate_without_replaying():
+    conn=PromotionConn();state=GameState(conn);conn.lua.execute('fail_request=true')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.promote_unit(196608,'PROMOTION_VOLLEY'))
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.promote_unit(196608,'PROMOTION_VOLLEY'))
     assert 'OUTCOME_UNKNOWN' in asyncio.run(state.upgrade_unit(196608))
-    assert before==(conn.lua.eval('#submissions'),conn.lua.eval('clears'),conn.lua.eval('heals'))
+    assert conn.lua.eval('#submissions')==1
+    assert conn.lua.eval('promotions[14]')
+    assert conn.lua.eval('heals')==0
+    assert conn.lua.eval('clears')==0
 
 
 @pytest.mark.parametrize('setup', [
-    'u.id=262144','u.allowed=false','xp=0','stored=nil','u.damage=nil',
-    'promotions[7]=true','exp.ChangeStoredPromotions=nil','u.SetDamage=nil',
+    'u.id=262144','u.allowed=false','u.GetOwner=function() return 1 end','u.GetX=function() return -9999 end',
+    'promotions[14]=true','busy=true','exp.HasPromotion=function() return nil end',
+    'UnitManager.RequestCommand=nil','UnitManager.CanStartCommand=nil',
+    'UnitCommandTypes.PROMOTE=nil','UnitCommandTypes.PARAM_PROMOTION_TYPE=nil',
+    'UnitCommandResults.PROMOTIONS=nil','GameInfo.UnitPromotions.PROMOTION_VOLLEY.Index=nil',
+    'UnitCommandTypes.PROMOTE=false','UnitCommandTypes.PARAM_PROMOTION_TYPE=false',
+    'UnitManager.CanStartCommand=function() return nil end',
+    'UnitManager.CanStartCommand=function() return true,nil end',
+    'UnitManager.CanStartCommand=function() return true,{} end',
+    'options={}','options={8}','options={664752614}','options={"14"}','options={14,14}',
 ])
-def test_promotion_ineligible_or_stale_identity_does_not_heal_or_clear_stored(setup):
+def test_promotion_ineligible_or_unreadable_native_choice_does_not_submit(setup):
     conn=PromotionConn();state=GameState(conn);conn.lua.execute(setup)
-    assert 'UNIT_PROMOTION_REFUSED' in asyncio.run(state.promote_unit(196608,'PROMOTION_BATTLECRY'))
+    assert 'UNIT_PROMOTION_REFUSED' in asyncio.run(state.promote_unit(196608,'PROMOTION_VOLLEY'))
     assert conn.lua.eval('#submissions')==0
     assert conn.lua.eval('clears')==0
     assert conn.lua.eval('heals')==0
     assert state.pending_action_summary is None
 
 
-def test_promotion_delayed_heal_is_observed_without_healing_again():
+def test_promotion_delayed_exact_result_is_observed_without_second_command():
+    conn=PromotionConn();state=GameState(conn);conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.promote_unit(196608,'PROMOTION_VOLLEY'))
+    conn.lua.execute('promotions[8]=true')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.promote_unit(196608,'PROMOTION_VOLLEY'))
+    conn.lua.execute('applyPromotion()')
+    assert asyncio.run(state.promote_unit(196608,'PROMOTION_VOLLEY')).startswith('PROMOTED|')
+    assert conn.lua.eval('#submissions')==1
+    assert conn.lua.eval('heals')==0
+    assert conn.lua.eval('clears')==0
+
+
+@pytest.mark.parametrize('at_call', [1,2])
+@pytest.mark.parametrize('change', ['options={8}','u.allowed=false','u.id=262144','turn=42'])
+def test_changed_native_promotion_option_or_identity_is_refused_before_entry(change,at_call):
     conn=PromotionConn();state=GameState(conn)
-    conn.lua.execute('u.SetDamage=function(self,n) heals=heals+1 end')
-    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.promote_unit(196608,'PROMOTION_BATTLECRY'))
-    conn.lua.execute('u.damage=0')
-    assert asyncio.run(state.promote_unit(196608,'PROMOTION_BATTLECRY')).startswith('PROMOTED|')
-    assert conn.lua.eval('heals')==1
-    assert conn.lua.eval('clears')==1
+    conn.lua.execute('''
+local original=UnitManager.CanStartCommand
+UnitManager.CanStartCommand=function(...)
+ local allowed,results=original(...)
+ if eligibilityCalls=='''+str(at_call)+''' then
+'''+change+'''
+  return u.allowed,{promotions=options}
+ end
+ return allowed,results
+end
+''')
+    assert 'UNIT_PROMOTION_REFUSED' in asyncio.run(state.promote_unit(196608,'PROMOTION_VOLLEY'))
+    assert conn.lua.eval('#submissions')==0
+    assert state.pending_action_summary is None
 
 
 def test_deletion_needs_exact_removal_event_and_fresh_absence():
@@ -284,7 +312,7 @@ def test_cancelled_native_return_can_only_confirm_original(kind):
             if self.lua.eval('#submissions')>before: raise asyncio.CancelledError()
             return rows
     conn=CancelConn();state=GameState(conn)
-    method=getattr(state,kind+'_unit');args=(196608,'PROMOTION_BATTLECRY') if kind=='promote' else (196608,)
+    method=getattr(state,kind+'_unit');args=(196608,'PROMOTION_VOLLEY') if kind=='promote' else (196608,)
     with pytest.raises(asyncio.CancelledError): asyncio.run(method(*args))
     assert state.pending_action_summary is not None
     assert 'OUTCOME_UNKNOWN' not in asyncio.run(method(*args))
@@ -296,7 +324,7 @@ def test_cancelled_native_return_can_only_confirm_original(kind):
 def test_changed_world_latches_before_original_world_returns(kind):
     conn={'upgrade':TransformConn,'delete':DeleteConn,'promote':PromotionConn}[kind]()
     state=GameState(conn);conn.lose_reply=True
-    method=getattr(state,kind+'_unit');args=(196608,'PROMOTION_BATTLECRY') if kind=='promote' else (196608,)
+    method=getattr(state,kind+'_unit');args=(196608,'PROMOTION_VOLLEY') if kind=='promote' else (196608,)
     assert 'OUTCOME_UNKNOWN' in asyncio.run(method(*args))
     conn.lua.execute('seed=11')
     assert 'OUTCOME_UNKNOWN' in asyncio.run(method(*args))
@@ -328,13 +356,13 @@ def test_explicit_popup_cleanup_resolves_stale_promotion_notification_without_re
     async def no_dialogs(): return []
     monkeypatch.setattr(game_launcher,'dismiss_crash_dialogs',no_dialogs)
     conn=PromotionPopupConn();state=GameState(conn)
-    assert asyncio.run(state.promote_unit(196608,'PROMOTION_BATTLECRY')).startswith('PROMOTED|')
+    assert asyncio.run(state.promote_unit(196608,'PROMOTION_VOLLEY')).startswith('PROMOTED|')
     assert 'UnitPromotion' in asyncio.run(state.dismiss_popup())
     assert conn.lua.eval('notificationDismissed')
     asyncio.run(state.dismiss_popup())
     assert conn.lua.eval('notificationDismissCalls')==1
-    assert conn.lua.eval('heals')==1
-    assert conn.lua.eval('clears')==1
+    assert conn.lua.eval('heals')==0
+    assert conn.lua.eval('clears')==0
 
 
 @pytest.mark.parametrize('setup',[
@@ -348,27 +376,23 @@ def test_popup_cleanup_preserves_real_or_unknown_promotion_choices(monkeypatch,s
     async def no_dialogs(): return []
     monkeypatch.setattr(game_launcher,'dismiss_crash_dialogs',no_dialogs)
     conn=PromotionPopupConn();state=GameState(conn)
-    assert asyncio.run(state.promote_unit(196608,'PROMOTION_BATTLECRY')).startswith('PROMOTED|')
+    assert asyncio.run(state.promote_unit(196608,'PROMOTION_VOLLEY')).startswith('PROMOTED|')
     conn.lua.execute(setup)
     assert 'Promotion notification retained' in asyncio.run(state.dismiss_popup())
     assert not conn.lua.eval('notificationDismissed')
     assert conn.lua.eval('notificationDismissCalls')==0
-    assert conn.lua.eval('clears')==1
-    assert conn.lua.eval('heals')==1
+    assert conn.lua.eval('clears')==0
+    assert conn.lua.eval('heals')==0
 
 
-def test_promotion_missing_prerequisite_is_rejected_before_native_mutation():
+def test_native_eligibility_is_authoritative_without_compatibility_xp_or_mutators():
     conn=PromotionConn();state=GameState(conn)
     conn.lua.execute('''
-GameInfo.UnitPromotionPrereqs=function()
- local done=false
- return function() if not done then done=true;return {UnitPromotion='PROMOTION_BATTLECRY',PrereqUnitPromotion='PROMOTION_PREREQUISITE'} end end
-end
-GameInfo.UnitPromotions.PROMOTION_PREREQUISITE={Index=8}
+xp=0;exp.CanPromote=nil;exp.GetExperiencePoints=nil;exp.GetExperienceForNextLevel=nil
+exp.SetPromotion=nil;exp.ChangeStoredPromotions=nil;u.SetDamage=nil
 ''')
-    assert 'UNIT_PROMOTION_REFUSED' in asyncio.run(state.promote_unit(196608,'PROMOTION_BATTLECRY'))
-    assert conn.lua.eval('#submissions')==0
-    assert conn.lua.eval('u.damage')==30
+    assert asyncio.run(state.promote_unit(196608,'PROMOTION_VOLLEY')).startswith('PROMOTED|')
+    assert conn.lua.eval('#submissions')==1
 
 
 def test_legacy_low_id_delete_retry_cannot_confirm_then_delete_replacement():
@@ -392,7 +416,7 @@ def test_scope_changed_between_prepare_and_native_submission_sends_nothing(kind)
             if '-- ACTION_SUBMIT_SCOPE|' in code: self.lua.execute('turn=42')
             return await super().execute_read(code)
     conn=ChangedConn();state=GameState(conn)
-    method=getattr(state,kind+'_unit');args=(196608,'PROMOTION_BATTLECRY') if kind=='promote' else (196608,)
+    method=getattr(state,kind+'_unit');args=(196608,'PROMOTION_VOLLEY') if kind=='promote' else (196608,)
     assert 'ACTION_SCOPE_NO_SUBMIT' in asyncio.run(method(*args))
     assert conn.lua.eval('#submissions')==0
     assert state.pending_action_summary is None
@@ -415,9 +439,51 @@ def test_upgrade_wrong_full_id_cannot_supply_target_effect_on_confirmation():
 
 def test_promotion_already_granted_is_a_no_submit_result_without_rehealing():
     conn=PromotionConn();state=GameState(conn)
-    assert asyncio.run(state.promote_unit(196608,'PROMOTION_BATTLECRY')).startswith('PROMOTED|')
+    assert asyncio.run(state.promote_unit(196608,'PROMOTION_VOLLEY')).startswith('PROMOTED|')
     conn.lua.execute('u.damage=10')
-    assert 'ALREADY_HAS_PROMOTION' in asyncio.run(state.promote_unit(196608,'PROMOTION_BATTLECRY'))
+    assert 'ALREADY_HAS_PROMOTION' in asyncio.run(state.promote_unit(196608,'PROMOTION_VOLLEY'))
     assert conn.lua.eval('#submissions')==1
     assert conn.lua.eval('u.damage')==10
-    assert conn.lua.eval('heals')==1
+    assert conn.lua.eval('heals')==0
+
+
+def test_native_promotion_confirmation_does_not_require_gamecore_stored_counter():
+    conn=PromotionConn();state=GameState(conn)
+    conn.lua.execute('exp.GetStoredPromotions=nil')
+    result=asyncio.run(state.promote_unit(196608,'PROMOTION_VOLLEY'))
+    assert result.startswith('PROMOTED|')
+    assert 'damage:10' in result and 'moves:0' in result
+    assert 'stored_promotions:unknown' in result
+    assert conn.lua.eval('#submissions')==1
+
+
+@pytest.mark.parametrize('change', [
+    "__civmcpPromotion.token='another-token'",
+    '__civmcpPromotion.owner=1',
+    '__civmcpPromotion.id=262144',
+    '__civmcpPromotion.requested=262144',
+    "__civmcpPromotion.promotion='PROMOTION_OTHER'",
+    '__civmcpPromotion.index=8;promotions[8]=true',
+    '__civmcpPromotion.entered=false',
+    '__civmcpPromotion.returned=false',
+    'u.id=262144',
+    'u.GetOwner=function() return 1 end',
+])
+def test_native_promotion_wrong_receipt_or_full_identity_cannot_confirm(change):
+    conn=PromotionConn();state=GameState(conn);conn.lose_reply=True
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.promote_unit(196608,'PROMOTION_VOLLEY'))
+    conn.lua.execute(change)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.promote_unit(196608,'PROMOTION_VOLLEY'))
+    assert state.pending_action_summary is not None
+    assert conn.lua.eval('#submissions')==1
+
+
+@pytest.mark.parametrize('getter', ['exp.HasPromotion','u.GetDamage','u.GetMovesRemaining'])
+def test_native_promotion_temporarily_unreadable_result_recovers_without_resubmission(getter):
+    conn=PromotionConn();state=GameState(conn);conn.lose_reply=True
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.promote_unit(196608,'PROMOTION_VOLLEY'))
+    conn.lua.execute(f'original={getter};{getter}=function() return nil end')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.promote_unit(196608,'PROMOTION_VOLLEY'))
+    conn.lua.execute(f'{getter}=original')
+    assert asyncio.run(state.promote_unit(196608,'PROMOTION_VOLLEY')).startswith('PROMOTED|')
+    assert conn.lua.eval('#submissions')==1
