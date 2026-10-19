@@ -14,26 +14,28 @@ class TaskConn(ReadyConn):
         self.lose_reply=False
         self.lua.execute('''
 ActivityTypes.ACTIVITY_HEAL=4;ActivityTypes.ACTIVITY_SENTRY=5
-GameInfo.UnitOperations.UNITOPERATION_AUTOMATE_EXPLORE={Hash=20}
-GameInfo.UnitOperations.UNITOPERATION_HEAL={Hash=21}
-GameInfo.UnitOperations.UNITOPERATION_ALERT={Hash=22}
+GameInfo.UnitOperations.UNITOPERATION_AUTOMATE_EXPLORE={Hash=20,Index=1}
+GameInfo.UnitOperations.UNITOPERATION_HEAL={Hash=21,Index=2}
+GameInfo.UnitOperations.UNITOPERATION_ALERT={Hash=22,Index=3}
 function event()
  local listeners={}
  return {Add=function(f) listeners[f]=true end,Remove=function(f) listeners[f]=nil end,
  Fire=function(...) for f in pairs(listeners) do f(...) end end}
 end
 Events={UnitOperationStarted=event(),UnitOperationAdded=event()}
+GameInfo.UnitOperations.UNITOPERATION_SLEEP.Index=4
 u=units[196608];u.damage=25
 u.GetDamage=function(self) return self.damage end
 u.GetMaxDamage=function() return 100 end
 UnitManager.CanStartOperation=function(unit,op,params,check)
- assert(params==nil and check==true)
+ assert(params==nil and check==false)
  return unit.allowed
 end
 function applyTask(op)
  u.ready=false
  u.activity=({[12]=1,[20]=3,[21]=4,[22]=5})[op]
- Events.UnitOperationStarted.Fire(0,u.id,op)
+ if op==20 then Events.UnitOperationAdded.Fire(0,u.id,0,1)
+ else Events.UnitOperationStarted.Fire(0,u.id,op) end
 end
 UnitManager.RequestOperation=function(unit,op,params)
  table.insert(submissions,{id=unit.id,op=op})
@@ -55,6 +57,53 @@ end
 def quick_confirmation(monkeypatch):
     monkeypatch.setattr('civ_mcp.game_state.ACTION_CONFIRM_TIMEOUT',.01)
     monkeypatch.setattr('civ_mcp.game_state.ACTION_CONFIRM_INTERVAL',.001)
+
+
+def test_deity_added_event_confirms_native_operation_index_in_fourth_field():
+    conn=TaskConn();state=GameState(conn)
+    # T11 native capture: Added(0,196608,0,1), no Started event.
+    conn.lua.execute('''
+GameInfo.UnitOperations.UNITOPERATION_AUTOMATE_EXPLORE={Hash=-1676983098,Index=1}
+function applyTask(op)
+ assert(op==-1676983098)
+ u.ready=false;u.activity=3;u.moves=0
+ Events.UnitOperationAdded.Fire(0,u.id,0,1)
+end
+''')
+    assert asyncio.run(state.automate_explore(196608)).startswith('AUTOMATED|unit:196608')
+    assert conn.lua.eval('#submissions')==1
+    assert state.pending_action_summary is None
+
+
+def test_added_event_requires_exact_owner_full_unit_and_fourth_field_task_index():
+    conn=TaskConn();state=GameState(conn)
+    conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.automate_explore(196608))
+    conn.lua.execute('u.ready=false;u.activity=3;u.moves=0')
+    for event in [
+        '1,196608,0,1',  # another owner
+        '0,262144,0,1',  # replacement with the same low unit index
+        '0,0,0,1',       # low index cannot stand in for the full unit ID
+        '0,196608,1,19', # right index in the wrong field, different task
+        '0,196608,20',   # old fake hash payload is not a native Added witness
+        '0,196608,0,20', # hash cannot replace the fourth field row Index
+    ]:
+        conn.lua.execute('Events.UnitOperationAdded.Fire('+event+')')
+        assert 'OUTCOME_UNKNOWN' in asyncio.run(state.automate_explore(196608))
+    conn.lua.execute('Events.UnitOperationAdded.Fire(0,196608,0,1)')
+    assert asyncio.run(state.automate_explore(196608)).startswith('AUTOMATED|')
+    assert conn.lua.eval('#submissions')==1
+
+
+@pytest.mark.parametrize('changed,restored',[('turn=42','turn=41'),('seed=9','seed=719665280')])
+def test_added_event_from_changed_scope_cannot_confirm_after_scope_returns(changed,restored):
+    conn=TaskConn();state=GameState(conn)
+    conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.automate_explore(196608))
+    conn.lua.execute(changed+';u.ready=false;Events.UnitOperationAdded.Fire(0,196608,0,1)')
+    conn.lua.execute(restored+';Events.UnitOperationAdded.Fire(0,196608,0,1)')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.automate_explore(196608))
+    assert conn.lua.eval('#submissions')==1
 
 
 def test_lost_automate_reply_is_confirmed_without_replacing_native_task():
@@ -123,12 +172,26 @@ def test_correct_event_cannot_substitute_for_wrong_native_activity(kind,op,label
     assert conn.lua.eval('#submissions')==1
 
 
+def test_ui_visible_but_currently_ineligible_task_is_not_submitted():
+    conn=TaskConn();state=GameState(conn)
+    # Native UnitPanel distinguishes the loose UI check (true) from real
+    # eligibility (false); a visible action can still be disabled.
+    conn.lua.execute('UnitManager.CanStartOperation=function(unit,op,params,uiCheck) return uiCheck==true end')
+    assert 'CANNOT_OPERATE' in asyncio.run(state.automate_explore(196608))
+    assert conn.lua.eval('#submissions')==0
+    assert state.pending_action_summary is None
+
+
 @pytest.mark.parametrize('setup',[
     'u.allowed=false','u.allowed=nil','UnitManager.CanStartOperation=nil',
     'UnitManager.CanStartOperation=function() error("unknown") end',
     'UnitManager.RequestOperation=nil','Events={}','u.id=262144',
     'u.IsReadyToMove=nil','busy=true','busy=nil',
     'GameInfo.UnitOperations.UNITOPERATION_AUTOMATE_EXPLORE=nil',
+    'GameInfo.UnitOperations.UNITOPERATION_AUTOMATE_EXPLORE.Index=nil',
+    'GameInfo.UnitOperations.UNITOPERATION_AUTOMATE_EXPLORE.Index=-1',
+    'GameInfo.UnitOperations.UNITOPERATION_AUTOMATE_EXPLORE.Index=1.5',
+    'Events.UnitOperationAdded=nil',
 ])
 def test_task_preflight_refusal_is_zero_submission(setup):
     conn=TaskConn();state=GameState(conn);conn.lua.execute(setup)
@@ -188,7 +251,7 @@ def test_added_event_can_prove_start_when_started_event_is_unavailable():
     conn.lua.execute('''
 Events.UnitOperationStarted=nil
 function applyTask(op)
- u.ready=false;u.activity=3;Events.UnitOperationAdded.Fire(0,u.id,op)
+ u.ready=false;u.activity=3;Events.UnitOperationAdded.Fire(0,u.id,0,1)
 end
 ''')
     assert asyncio.run(state.automate_explore(196608)).startswith('AUTOMATED|')
