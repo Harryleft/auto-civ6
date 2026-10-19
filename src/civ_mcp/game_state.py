@@ -1487,17 +1487,40 @@ class GameState:
 
     @_guard_pending_mutation
     async def recruit_great_person(self, individual_id: int) -> str:
-        lua = lq.build_recruit_great_person(individual_id)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._great_person_pool_action("recruit_great_person", individual_id)
 
     @_guard_pending_mutation
     async def patronize_great_person(
         self, individual_id: int, yield_type: str = "YIELD_GOLD"
     ) -> str:
-        lua = lq.build_patronize_great_person(individual_id, yield_type)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._great_person_pool_action("patronize_great_person", individual_id, yield_type)
+
+    async def _great_person_pool_action(self, kind: str, individual: int, currency: str = "GP_POINTS") -> str:
+        if type(individual) is not int or individual < 0:
+            return "Error: INVALID_GREAT_PERSON|Expected a nonnegative individual ID."
+        if kind == "patronize_great_person" and currency not in {"YIELD_GOLD", "YIELD_FAITH"}:
+            return "Error: INVALID_CURRENCY|Expected YIELD_GOLD or YIELD_FAITH."
+        entity, intent = ("great_person", individual), (currency,)
+        if self._actions.matches(kind, entity, intent=intent):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            kind, entity, lq.build_great_person_pool_query(kind, individual, currency, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"currency": currency, "witness_token": token}, intent=intent,
+            evidence=_ActionEvidence(
+                tool=kind, entrypoint=kind, accepted=("GP_POOL_REQUESTED|",), refused="ERR:GP_POOL_REFUSED|",
+                confirm=lambda rows: lq.parse_great_person_pool_confirmation(rows, token, kind, individual, currency),
+                guidance="Repeat the original Great Person action, individual and currency to confirm only. ",
+            ),
+        )
+        return await self._submit_action(pending, scope, lq.build_great_person_pool_action(kind, individual, currency, token))
 
     async def get_religion_status(self) -> lq.ReligionStatus:
         lines = await self.conn.execute_write(lq.build_religion_status_query())
@@ -1505,9 +1528,7 @@ class GameState:
 
     @_guard_pending_mutation
     async def reject_great_person(self, individual_id: int) -> str:
-        lua = lq.build_reject_great_person(individual_id)
-        lines = await self.conn.execute_write(lua)
-        return _action_result(lines)
+        return await self._great_person_pool_action("reject_great_person", individual_id)
 
     # ------------------------------------------------------------------
     # Trade route methods (InGame context)
