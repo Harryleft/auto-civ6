@@ -999,6 +999,7 @@ async def propose_trade(
     request_open_borders: bool = False,
     joint_war_target: int = 0,
     mode: str = "send",
+    joint_war_type: int | None = None,
 ) -> str:
     """Propose a trade deal to another civilization.
 
@@ -1014,13 +1015,16 @@ async def propose_trade(
         request_resources: Comma-separated resource types to request
         request_favor: Diplomatic favor to request from them
         request_open_borders: True to request their open borders
-        joint_war_target: Player ID of a third civ to declare joint war against
+        joint_war_target: Third-party target for native joint war or joining an existing war
+        joint_war_type: Explicit native WarType hash if multiple eligible options exist; omitted requires a unique option
         mode: "send" to commit the deal, "test" to preview AI's counter-offer without committing
 
     Examples: Gift 100 gold: offer_gold=100. Trade silk for 3 gpt: offer_resources="RESOURCE_SILK", request_gold_per_turn=3.
     Mutual open borders: offer_open_borders=True, request_open_borders=True.
     Test a deal first: mode="test" to see what the AI thinks is fair, then mode="send" to commit.
     """
+    if joint_war_type is not None and joint_war_target <= 0:
+        return "Error: joint_war_type requires an explicit joint_war_target"
     gs = _get_game(ctx)
 
     offer_items: list[dict] = []
@@ -1054,9 +1058,12 @@ async def propose_trade(
     if request_open_borders:
         request_items.append({"type": "AGREEMENT", "subtype": "OPEN_BORDERS"})
     if joint_war_target > 0:
-        # Joint war is mutual — both sides commit
-        offer_items.append({"type": "AGREEMENT", "subtype": "JOINT_WAR"})
-        request_items.append({"type": "AGREEMENT", "subtype": "JOINT_WAR"})
+        # Keep the chosen target. Native options distinguish a request to join
+        # an existing war from a mutual declaration; neither is guessed here.
+        war_item = {"type": "WAR_AGREEMENT", "target": joint_war_target}
+        if joint_war_type is not None:
+            war_item["war_type"] = joint_war_type
+        request_items.append(war_item)
 
     if not offer_items and not request_items:
         return "Error: must specify at least one offer or request item"

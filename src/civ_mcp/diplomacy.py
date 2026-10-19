@@ -386,8 +386,9 @@ class DiplomacyProgress:
                     if attempt.phase == "TERMS_ENTERED":
                         rows = await _named(gs.conn, "DiplomacyDealView", native.build_trade_deal_receipt(self.observer_scope, attempt.token))
                         originals = [row.split("|", 1)[1] for row in rows if row.startswith("TRADE_ORIGINAL|")]
-                        if any(row.startswith("TRADE_PREPARE|NOT_SUBMITTED|") for row in rows):
-                            attempt.result = "ERR:NOT_SUBMITTED|Native terms unavailable; no proposal or equalize was sent."
+                        failures = [row.split("|", 2)[2] for row in rows if row.startswith("TRADE_PREPARE|NOT_SUBMITTED|")]
+                        if failures:
+                            attempt.result = "ERR:NOT_SUBMITTED|" + failures[0] + "; no proposal or equalize was sent."
                             attempt.phase = "PREPARE_EXIT_READY"
                         else:
                             if not originals:

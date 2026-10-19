@@ -322,21 +322,114 @@ print("TRADE|EVALUATION_RESTORED")
 '''
 
 
+def _war_agreements() -> str:
+    """Mirror the shipped agreement option selector, without ranking war types."""
+    return '''
+local function warInteger(value)
+ return type(value)=="number" and value==value and math.abs(value)<math.huge and value==math.floor(value)
+end
+local function warList(value)
+ assert(type(value)=="table","WAR_OPTIONS_UNREADABLE")
+ local count=0
+ for key in pairs(value) do assert(warInteger(key) and key>0,"WAR_OPTIONS_UNREADABLE");count=count+1 end
+ for index=1,count do assert(type(value[index])=="table","WAR_OPTIONS_UNREADABLE") end
+ return value
+end
+local function nativeWarItems(...)
+ local ok,entries=pcall(DealManager.GetPossibleDealItems,...)
+ assert(ok,"WAR_OPTIONS_UNREADABLE")
+ return warList(entries)
+end
+local function addWarAgreement(from,enemy,selectedType)
+ assert(from==target and warInteger(enemy) and enemy>=0 and enemy<=63 and enemy~=me and enemy~=target,"WAR_TARGET_UNAVAILABLE")
+ assert(selectedType==nil or warInteger(selectedType),"WAR_TYPE_UNAVAILABLE")
+ assert(type(DealManager.GetPossibleDealItems)=="function" and DealAgreementTypes
+  and warInteger(DealAgreementTypes.JOINT_WAR) and warInteger(DealAgreementTypes.THIRD_PARTY_WAR),"WAR_OPTIONS_UNAVAILABLE")
+ local function options(owner,subtype)
+  local other=owner==me and target or me
+  -- Native ShowAgreementOptionPopup uses this exact working deal and pair.
+  local details=nativeWarItems(owner,other,DealItemTypes.AGREEMENTS,subtype,deal)
+  local matching={}
+  for _,entry in ipairs(details) do
+   assert(entry.SubType==subtype and warInteger(entry.ForType) and type(entry.Parameters)=="table"
+    and warInteger(entry.Parameters.WarType),"WAR_OPTIONS_UNREADABLE")
+   if entry.ForType==enemy then table.insert(matching,entry) end
+  end
+  if #matching==0 then return {} end
+  -- Duration comes from PopulateAvailableAgreements, not the target popup.
+  local summaries=nativeWarItems(owner,other,DealItemTypes.AGREEMENTS,deal)
+  local duration,found=nil,0
+  for _,entry in ipairs(summaries) do
+   if entry.SubType==subtype then
+    found=found+1
+    assert(warInteger(entry.Duration) and entry.Duration>=0 and type(entry.IsValid)=="boolean","WAR_OPTIONS_UNREADABLE")
+    if entry.IsValid or (DealValidationResult.MISSING_DEPENDENCY~=nil and entry.ValidationResult==DealValidationResult.MISSING_DEPENDENCY) then duration=entry.Duration end
+   end
+  end
+  assert(found==1,"WAR_OPTIONS_UNREADABLE")
+  if duration==nil then return {} end
+  local result={}
+  for _,entry in ipairs(matching) do table.insert(result,{owner=owner,subtype=subtype,enemy=enemy,warType=entry.Parameters.WarType,duration=duration}) end
+  return result
+ end
+ local candidates={}
+ for _,entry in ipairs(options(target,DealAgreementTypes.THIRD_PARTY_WAR)) do
+  table.insert(candidates,{name="THIRD_PARTY_WAR",warType=entry.warType,items={entry}})
+ end
+ local ours=options(me,DealAgreementTypes.JOINT_WAR)
+ local theirs=options(target,DealAgreementTypes.JOINT_WAR)
+ for _,own in ipairs(ours) do
+  for _,other in ipairs(theirs) do
+   if own.warType==other.warType then table.insert(candidates,{name="JOINT_WAR",warType=own.warType,items={own,other}}) end
+  end
+ end
+ local eligible,descriptions={},{}
+ for _,candidate in ipairs(candidates) do
+  table.insert(descriptions,candidate.name..":"..candidate.warType)
+  if selectedType==nil or selectedType==candidate.warType then table.insert(eligible,candidate) end
+ end
+ assert(#eligible>0,"WAR_OPTIONS_NONE eligible="..table.concat(descriptions,","))
+ assert(#eligible==1,"WAR_OPTIONS_AMBIGUOUS eligible="..table.concat(descriptions,","))
+ for _,entry in ipairs(eligible[1].items) do
+  local item=deal:AddItemOfType(DealItemTypes.AGREEMENTS,entry.owner)
+  assert(item,"WAR_ITEM_UNAVAILABLE")
+  item:SetSubType(entry.subtype);item:SetDuration(entry.duration);item:SetValueType(entry.enemy)
+  item:SetParameterValue("WarType",entry.warType)
+  assert(item:GetFromPlayerID()==entry.owner and item:GetSubType()==entry.subtype and item:GetDuration()==entry.duration
+   and item:GetValueType()==entry.enemy and item:GetParameterValue("WarType")==entry.warType,"WAR_ITEM_UNCONFIRMED")
+ end
+ return #eligible[1].items
+end
+'''
+
+
 def build_trade_send(scope: str, target: int, sid: int, token: str, offer: list[dict], request: list[dict], action: str) -> str:
     from civ_mcp.lua.diplomacy import _lua_deal_item
-    items = '\n'.join([*(_lua_deal_item("me", item) for item in offer), *(_lua_deal_item("target", item) for item in request)])
+    parts = []
+    for owner, entries in (("me", offer), ("target", request)):
+        for item in entries:
+            if item["type"].upper() == "WAR_AGREEMENT":
+                war_type = "nil" if item.get("war_type") is None else json.dumps(item["war_type"])
+                enemy = "nil" if item.get("target") is None else json.dumps(item["target"])
+                parts.append(f"expectedItems=expectedItems+addWarAgreement({owner},{enemy},{war_type})")
+            else:
+                parts.append("expectedItems=expectedItems+1\n" + _lua_deal_item(owner, item))
+    items = '\n'.join(parts)
     return _deal_guard(scope, target, sid) + _fingerprint() + f'''
 local deal=DealManager.GetWorkingDeal(DealDirection.OUTGOING,me,target)
 if not deal or deal:GetItemCount()~=0 then print("TRADE|NOT_SUBMITTED|NOT_EMPTY"); return end
 __civmcp_trade_deal={{token={json.dumps(token)},sid=sid,target=target,sent=false}}
-local prepared=pcall(function()
+{_war_agreements() if any(item['type'].upper() == 'WAR_AGREEMENT' for item in offer + request) else ''}
+local expectedItems=0
+local prepared,prepareError=pcall(function()
 {items}
 end)
 local receipt=__civmcp_trade_deal
 receipt.original=fingerprint(deal)
 local valid,isValid=pcall(function() return deal:GetItemCount()>0 and deal:Validate()==DealValidationResult.VALID and deal:IsValid()==true end)
-if not prepared or deal:GetItemCount()~={len(offer)+len(request)} or not valid or isValid~=true then
+if not prepared or deal:GetItemCount()~=expectedItems or not valid or isValid~=true then
  receipt.failed=true
+ receipt.reason=not prepared and tostring(prepareError) or "TERMS_UNAVAILABLE"
  print("TRADE_PREPARE|NOT_SUBMITTED|TERMS_UNAVAILABLE"); return
 end
 if not receipt.original then receipt.failed=true; print("TRADE_PREPARE|NOT_SUBMITTED|TERMS_UNKNOWN"); return end
@@ -400,11 +493,17 @@ def build_trade_abort_prepare(scope: str, target: int, sid: int, token: str) -> 
     return _deal_guard(scope, target, sid) + _fingerprint() + f'''
 local receipt=__civmcp_trade_deal
 local deal=DealManager.GetWorkingDeal(DealDirection.OUTGOING,me,target)
-if not receipt or receipt.token~={json.dumps(token)} or receipt.sid~=sid or receipt.target~=target or receipt.sent~=false or receipt.failed~=true or not receipt.original or fingerprint(deal)~=receipt.original then print("TRADE_EXIT|NOT_SUBMITTED"); return end
+if not receipt or receipt.token~={json.dumps(token)} or receipt.sid~=sid or receipt.target~=target or receipt.sent~=false or receipt.failed~=true or type(receipt.original)~="string" then print("TRADE_EXIT|NOT_SUBMITTED"); return end
+local readable,signature,count=pcall(function() return fingerprint(deal),deal:GetItemCount() end)
+if not readable or signature==nil or type(count)~="number" or count<0 or count>=math.huge or count~=math.floor(count) then print("TRADE_EXIT|NOT_SUBMITTED"); return end
+local empty=signature=="" and count==0
+local matching=signature==receipt.original and (signature~="" or count==0)
+if not empty and not matching then print("TRADE_EXIT|NOT_SUBMITTED"); return end
 if type(OnRefuseDeal)~="function" then print("TRADE_EXIT|NOT_SUBMITTED"); return end
 receipt.exitEntered=true
--- No EQUALIZE/PROPOSED was entered. Exit only this still-matching local session;
--- keep partial terms untouched rather than clear an unowned/replaced deal.
+-- No EQUALIZE/PROPOSED was entered. The native UI may clear failed terms.
+-- Exit only this still-owned session with matching terms or a verified empty
+-- draft; never clear a changed nonempty deal or infer that a send failed.
 OnRefuseDeal()
 receipt.exitReturned=true
 print("TRADE_EXIT|REQUESTED")
@@ -427,7 +526,7 @@ if currentScope()~={json.dumps(scope)} or ContextPtr:GetID()~="DiplomacyDealView
 local receipt=__civmcp_trade_deal
 if not receipt or receipt.token~={json.dumps(token)} then print("TRADE_RECEIPT|UNKNOWN"); return end
 if receipt.sent~=true and receipt.failed~=true then print("TRADE_RECEIPT|UNKNOWN"); return end
-if receipt.failed and receipt.sent==false then print("TRADE_PREPARE|NOT_SUBMITTED|TERMS_UNAVAILABLE") end
+if receipt.failed and receipt.sent==false then print("TRADE_PREPARE|NOT_SUBMITTED|"..(receipt.reason or "TERMS_UNAVAILABLE")) end
 if receipt.original then print("TRADE_ORIGINAL|"..receipt.original) end
 print(ContextPtr:IsHidden() and "TRADE_VIEW|HIDDEN" or "TRADE_VIEW|VISIBLE")
 '''
