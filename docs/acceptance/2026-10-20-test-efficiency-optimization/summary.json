@@ -1,0 +1,121 @@
+{
+  "baseline_source_commit": "34887fc14c4f42436fb722f3075bccca797b604f",
+  "optimized_source_commit": "2328e689488b55e75d562e54df386c71be812bc8",
+  "baseline": {
+    "pytest_wall_seconds": 150.84,
+    "plugin_elapsed_seconds": 150.75795029103756,
+    "phase_seconds": 146.02358039660612,
+    "outcomes": {
+      "passed": 5233,
+      "failed": 2
+    }
+  },
+  "optimized": {
+    "pytest_wall_seconds": 88.95,
+    "plugin_elapsed_seconds": 88.87266754097072,
+    "phase_seconds": 86.6335361993406,
+    "outcomes": {
+      "passed": 5235
+    }
+  },
+  "wall_seconds_saved": 61.89,
+  "wall_reduction_percent": 41.030230708035006,
+  "collection": {
+    "cases": 5235,
+    "executed_test_files": 101,
+    "added": [],
+    "removed": [],
+    "sorted_nodeids_sha256": "b427e55b55db9f735ebe92d10237c54e40fbfcfdad51a5f71dfc9f9099c737b8"
+  },
+  "assertion_preservation": {
+    "files": [
+      {
+        "file": "tests/test_action_confirmation.py",
+        "test_definitions": 40,
+        "assert_statements": 121,
+        "unchanged_after_fixture_name_normalization": true
+      },
+      {
+        "file": "tests/test_action_lua_execution.py",
+        "test_definitions": 2,
+        "assert_statements": 15,
+        "unchanged_after_fixture_name_normalization": true
+      },
+      {
+        "file": "tests/test_knowledge_combat.py",
+        "test_definitions": 5,
+        "assert_statements": 32,
+        "unchanged_after_fixture_name_normalization": true
+      },
+      {
+        "file": "tests/test_knowledge_diplomacy.py",
+        "test_definitions": 4,
+        "assert_statements": 13,
+        "unchanged_after_fixture_name_normalization": true
+      },
+      {
+        "file": "tests/test_knowledge_economy.py",
+        "test_definitions": 5,
+        "assert_statements": 15,
+        "unchanged_after_fixture_name_normalization": true
+      },
+      {
+        "file": "tests/test_knowledge_resources.py",
+        "test_definitions": 3,
+        "assert_statements": 13,
+        "unchanged_after_fixture_name_normalization": true
+      },
+      {
+        "file": "tests/test_knowledge_victory.py",
+        "test_definitions": 6,
+        "assert_statements": 18,
+        "unchanged_after_fixture_name_normalization": true
+      },
+      {
+        "file": "tests/test_mutation_entry_audit.py",
+        "test_definitions": 16,
+        "assert_statements": 54,
+        "unchanged_after_fixture_name_normalization": true
+      },
+      {
+        "file": "tests/test_server.py",
+        "test_definitions": 116,
+        "assert_statements": 291,
+        "unchanged_after_fixture_name_normalization": true
+      }
+    ],
+    "definitions": 197,
+    "assert_statements": 572
+  },
+  "groups": {
+    "read_only_knowledge": {
+      "cases": 23,
+      "baseline_phase_seconds": 63.281772580055986,
+      "optimized_phase_seconds": 27.43902017234359
+    },
+    "action_confirmation": {
+      "cases": 71,
+      "baseline_phase_seconds": 9.271067171124741,
+      "optimized_phase_seconds": 0.170480040658731
+    },
+    "unrelated_five_second_waits": {
+      "cases": 3,
+      "baseline_phase_seconds": 15.031055792002007,
+      "optimized_phase_seconds": 0.3083264560555108
+    },
+    "open_borders_adapter": {
+      "cases": 2,
+      "baseline_phase_seconds": 0.0889872110565193,
+      "optimized_phase_seconds": 0.09403066703816876
+    }
+  },
+  "focused": {
+    "pytest_wall_seconds": 32.9,
+    "outcomes": {
+      "passed": 495
+    }
+  },
+  "command": ".venv/bin/python -m pytest tests -q -p civ6_audit_plugin -p no:cacheprovider --durations=30 --junitxml=<evidence>/full/results.xml",
+  "raw_evidence_directory": ".local/test-audit/2026-10-20-optimization/",
+  "limitations": "One baseline run and one optimized full run on the same local environment; cache and system load were not controlled."
+}
