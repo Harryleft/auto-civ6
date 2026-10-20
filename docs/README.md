@@ -7,7 +7,8 @@
 | 任务 | 入口 |
 | --- | --- |
 | 安装依赖、配置 FireTuner 或 MCP 客户端 | [安装与启动](../README.md#安装与启动) |
-| 查询、动作、推进回合和世界议会 | [游戏操作](agent-playbook.md) |
+| 查询、常规动作和推进回合 | [游戏操作](agent-playbook.md) |
+| 议会、国家间交易、外交对话、强制选择和信息弹窗 | [特殊操作指南](agent-special-operations.md) |
 | 每局必看的六项指标、各胜利路线的先行信号与响应准备 | [策略检查清单](agent-checklist.md) |
 | 扩张、胜利路线和对手预警 | [获胜决策](agent-strategy.md) |
 | 赛后比较与因果归因 | [复盘方法](replay-analysis.md) |
