@@ -4,6 +4,7 @@
 
 | 主题 | 规格／审计 | 工作项 | 验收 |
 | --- | --- | --- | --- |
+| 宗教防御原生接口修复 | [规格与四票](2026-10-20-religion-native-fixes/spec.md) | Q01／M01／C01／P01均resolved | [原局T139–144实机验收](../../games/2026-10-19-gold/runs/2026-10-19-first/religion-native-validation-2026-10-20/acceptance.md) |
 | 宗教防御工具链 | [规格](2026-10-20-religion-defense/spec.md) | [工作项](2026-10-20-religion-defense/map.md) | [离线验收与审查](../acceptance/2026-10-20-religion-defense.md) |
 | 状态变更全量覆盖 | [审计](2026-10-19-mutation-audit.md)、[改造记录](2026-10-19-mutation-lifecycle/README.md)、[生命周期规格](2026-10-19-mutation-lifecycle/spec.md) | [18 票任务图](2026-10-19-mutation-lifecycle/map.md) | [全量验收](../acceptance/2026-10-19-mutation-lifecycle.md)、[使者试点](../acceptance/2026-10-19-envoy-lifecycle.md) |
 | 四项架构深化 | [规格](2026-10-17-architecture-deepening.md) | [工作项](2026-10-17-architecture-deepening-tickets.md) | [验收](../acceptance/2026-10-17-architecture-deepening.md) |

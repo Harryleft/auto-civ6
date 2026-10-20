@@ -13,3 +13,5 @@
 - [本轮过程](runs/2026-10-19-first/reports/progress.md)；[B01 规格](runs/2026-10-19-first/changes/gold-baseline/spec.md)。
 
 旧不朽地图及其检查点保留；本局不使用旧局结果存档恢复。
+
+后续工具验证：[宗教防御原局检查点实机验收](runs/2026-10-19-first/religion-native-validation-2026-10-20/acceptance.md)，T139–144，查询／宗教层移动／和平神学战／三次清除及最后charge原生消耗通过。保留原T141终局，未新开下一局。
