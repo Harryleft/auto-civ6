@@ -1,0 +1,104 @@
+{
+  "original_run_id": "e8b4d6a62dca49bbb256e8264beb18f2",
+  "purpose": "Original-terminal evidence preserved before loading same-run checkpoints for authorized native acceptance. No new baseline/game.",
+  "files": [
+    {
+      "path": "games/2026-10-19-gold/runs/2026-10-19-first/evidence/t141-native-defeat.png",
+      "bytes": 606886,
+      "sha256": "543a5dcff85c6ef90f31ba389157e30ec12dfdf969fe6dd3ac25a1e76dfb67fb"
+    },
+    {
+      "path": "games/2026-10-19-gold/runs/2026-10-19-first/reports/terminal-evidence.json",
+      "bytes": 9745,
+      "sha256": "983755b5e54c672b34a03e7721ee046e2fde09f8a03b424a983972c877dadeb6"
+    },
+    {
+      "path": "games/2026-10-19-gold/runs/2026-10-19-first/reports/progress.md",
+      "bytes": 68928,
+      "sha256": "cb7239ff0500486b8337b456ae47d6da951114528f087163a64b53a76a5ca9f5"
+    },
+    {
+      "path": "games/2026-10-19-gold/runs/2026-10-19-first/evidence/tool-calls.jsonl",
+      "bytes": 2767896,
+      "sha256": "c2624b270c1bb0cc4ca27fbef25aaa4a3936ad3da35a476796507c42b5af0587"
+    },
+    {
+      "path": "~/Library/Application Support/Sid Meier's Civilization VI/Sid Meier's Civilization VI/Saves/Single/gold_20261019_t141_progress.Civ6Save",
+      "bytes": 937501,
+      "sha256": "916e5d1ba215a68eff308d43b612e3130c68c768881da9daddf7d82dd4703592",
+      "turn": 141,
+      "checkpoint": {
+        "name": "gold_20261019_t141_progress",
+        "sha256": "916e5d1ba215a68eff308d43b612e3130c68c768881da9daddf7d82dd4703592",
+        "civilization": "sumeria",
+        "seed": -1896272000,
+        "turn": 141,
+        "run_id": "e8b4d6a62dca49bbb256e8264beb18f2",
+        "score": {
+          "official": 391,
+          "categories": {
+            "CATEGORY_CIVICS": 75,
+            "CATEGORY_EMPIRE": 134,
+            "CATEGORY_GREAT_PEOPLE": 25,
+            "CATEGORY_RELIGION": 10,
+            "CATEGORY_TECH": 78,
+            "CATEGORY_WONDER": 0,
+            "CATEGORY_ERA_SCORE": 71
+          }
+        }
+      }
+    },
+    {
+      "path": "~/Library/Application Support/Sid Meier's Civilization VI/Sid Meier's Civilization VI/Saves/Single/gold_20261019_t139_b27_ready.Civ6Save",
+      "bytes": 928587,
+      "sha256": "f6d5011a22bddee8cb087f95668893d15419a21e21765f283e2b94765932d1f6",
+      "turn": 139,
+      "checkpoint": {
+        "name": "gold_20261019_t139_b27_ready",
+        "sha256": "f6d5011a22bddee8cb087f95668893d15419a21e21765f283e2b94765932d1f6",
+        "civilization": "sumeria",
+        "seed": -1896272000,
+        "turn": 139,
+        "run_id": "e8b4d6a62dca49bbb256e8264beb18f2",
+        "score": {
+          "official": 379,
+          "categories": {
+            "CATEGORY_CIVICS": 75,
+            "CATEGORY_EMPIRE": 130,
+            "CATEGORY_GREAT_PEOPLE": 25,
+            "CATEGORY_RELIGION": 10,
+            "CATEGORY_TECH": 76,
+            "CATEGORY_WONDER": 0,
+            "CATEGORY_ERA_SCORE": 64
+          }
+        }
+      }
+    },
+    {
+      "path": "~/Library/Application Support/Sid Meier's Civilization VI/Sid Meier's Civilization VI/Saves/Single/gold_20261019_t137_spy_apostle.Civ6Save",
+      "bytes": 926620,
+      "sha256": "7773a72503283d86b0eb495a8396a48088aec9c2d8c66e843eb2c51b38f98d5b",
+      "turn": 137,
+      "checkpoint": {
+        "name": "gold_20261019_t137_spy_apostle",
+        "sha256": "7773a72503283d86b0eb495a8396a48088aec9c2d8c66e843eb2c51b38f98d5b",
+        "civilization": "sumeria",
+        "seed": -1896272000,
+        "turn": 137,
+        "run_id": "e8b4d6a62dca49bbb256e8264beb18f2",
+        "score": {
+          "official": 377,
+          "categories": {
+            "CATEGORY_CIVICS": 75,
+            "CATEGORY_EMPIRE": 128,
+            "CATEGORY_GREAT_PEOPLE": 25,
+            "CATEGORY_RELIGION": 10,
+            "CATEGORY_TECH": 76,
+            "CATEGORY_WONDER": 0,
+            "CATEGORY_ERA_SCORE": 64
+          }
+        }
+      }
+    }
+  ]
+}
