@@ -293,3 +293,83 @@ def test_successful_native_nil_war_change_result_allows_peace_religious_attack()
     assert result.startswith('RELIGIOUS_COMBAT_CONFIRMED|unit:196608|target:1:5767169|')
     assert conn.lua.eval('#submissions') == 1
     assert state.pending_action_summary is None
+
+
+def test_readable_target_x_change_latches_when_y_getter_is_unknown():
+    conn = ReligiousCombatConn(); state = GameState(conn)
+    conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.religious_attack(196608, 20, 17))
+    conn.lua.execute("enemy.x=21;enemy.GetY=function() error('unknown Y') end")
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.religious_attack(196608, 20, 17))
+    conn.lua.execute('enemy.x=20;enemy.GetY=u.GetY;applyCombat()')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.religious_attack(196608, 20, 17))
+    assert state.pending_action_kind == 'religious_attack'
+    assert conn.lua.eval('#submissions') == 1
+
+
+@pytest.mark.parametrize('subject', ['u', 'enemy'])
+@pytest.mark.parametrize('changed_axis', ['x', 'y'])
+@pytest.mark.parametrize('observation', ['probe', 'callback'])
+@pytest.mark.parametrize('unavailable', ['throw', 'nil'])
+def test_each_readable_coordinate_mismatch_stays_invalid_beside_unknown_sibling(
+    subject, changed_axis, observation, unavailable,
+):
+    conn = ReligiousCombatConn(); state = GameState(conn)
+    conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.religious_attack(196608, 20, 17))
+    unknown_method = 'GetY' if changed_axis == 'x' else 'GetX'
+    changed_value = 21 if changed_axis == 'x' else 18
+    unknown_body = "error('coordinate unavailable')" if unavailable == 'throw' else 'return nil'
+    conn.lua.execute(f'''
+savedCoordinate={subject}.{changed_axis}
+savedGetter={subject}.{unknown_method}
+{subject}.{changed_axis}={changed_value}
+{subject}.{unknown_method}=function() {unknown_body} end
+''')
+    if observation == 'probe':
+        assert 'OUTCOME_UNKNOWN' in asyncio.run(state.religious_attack(196608, 20, 17))
+    else:
+        # The mismatch exists only inside the native event callback window.
+        conn.lua.execute('Events.UnitOperationStarted.Fire(0,196608,7)')
+    conn.lua.execute(f'{subject}.{changed_axis}=savedCoordinate;{subject}.{unknown_method}=savedGetter;applyCombat()')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.religious_attack(196608, 20, 17))
+    assert state.pending_action_kind == 'religious_attack'
+    assert conn.lua.eval('#submissions') == 1
+
+
+def test_partial_actor_coordinate_on_approved_path_can_recover_without_replay():
+    conn = ReligiousCombatConn(); state = GameState(conn)
+    conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.religious_attack(196608, 20, 17))
+    conn.lua.execute("u.x=20;u.GetY=function() error('unknown Y') end")
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.religious_attack(196608, 20, 17))
+    conn.lua.execute('u.GetY=enemy.GetY;applyCombat()')
+    result = asyncio.run(state.religious_attack(196608, 20, 17))
+    assert result.startswith('RELIGIOUS_COMBAT_CONFIRMED|unit:196608|target:1:5767169|')
+    assert state.pending_action_summary is None
+    assert conn.lua.eval('#submissions') == 1
+
+
+def test_actor_can_enter_original_target_plot_and_confirm_native_combat():
+    conn = ReligiousCombatConn(); state = GameState(conn)
+    conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.religious_attack(196608, 20, 17))
+    conn.lua.execute('u.x=20;u.y=17;applyCombat()')
+    assert asyncio.run(state.religious_attack(196608, 20, 17)).startswith('RELIGIOUS_COMBAT_CONFIRMED|')
+    assert conn.lua.eval('#submissions') == 1
+
+
+def test_complete_actor_coordinates_must_match_one_path_point_not_separate_components():
+    conn = ReligiousCombatConn(); state = GameState(conn)
+    conn.lua.execute('''
+plots[301]={GetX=function() return 19 end,GetY=function() return 18 end,GetIndex=function() return 301 end}
+path={plots={299,301,300},turns={1,1,1}}
+deferred=true
+''')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.religious_attack(196608, 20, 17))
+    # X=20 and Y=18 each occur on the native path, but never together.
+    conn.lua.execute('u.x=20;u.y=18')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.religious_attack(196608, 20, 17))
+    conn.lua.execute('u.x=19;u.y=17;applyCombat()')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.religious_attack(196608, 20, 17))
+    assert conn.lua.eval('#submissions') == 1
