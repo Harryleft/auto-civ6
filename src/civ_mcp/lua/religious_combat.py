@@ -63,12 +63,23 @@ local function matching(r,unit,s,actor)
  end
  local ox,x=pcall(function() return unit:GetX() end)
  local oy,y=pcall(function() return unit:GetY() end)
- if not ox or not scopeIndex(x) or not oy or not scopeIndex(y) then known=false
- elseif actor and r.entered then
-  local onPath=false
-  for _,point in ipairs(r.path) do if point.x==x and point.y==y then onPath=true end end
-  if not onPath then r.invalid=true end
- elseif x~=s.x or y~=s.y then r.invalid=true end
+ local knownX,knownY=ox and scopeIndex(x),oy and scopeIndex(y)
+ if not knownX or not knownY then known=false end
+ if actor and r.entered then
+  -- A partial coordinate can still disprove every approved path point.
+  -- Do not let an unreadable sibling hide that observed mismatch.
+  local onX,onY,onPoint=false,false,false
+  for _,point in ipairs(r.path) do
+   if knownX and point.x==x then onX=true end
+   if knownY and point.y==y then onY=true end
+   if knownX and knownY and point.x==x and point.y==y then onPoint=true end
+  end
+  if (knownX and not onX) or (knownY and not onY)
+   or (knownX and knownY and not onPoint) then r.invalid=true end
+ else
+  if knownX and x~=s.x then r.invalid=true end
+  if knownY and y~=s.y then r.invalid=true end
+ end
  return known and not r.invalid
 end
 local function facts(r,s,actor)
