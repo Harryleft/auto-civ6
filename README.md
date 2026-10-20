@@ -35,4 +35,6 @@ args = ["run", "--directory", "/absolute/path/to/auto-civ6", "civ-mcp"]
 
 > 读取当前概览、单位和城市，根据真实状态完成当前回合；先解决阻塞，再推进回合。动作结果不明确时先查询确认。
 
-具体操作见[游戏操作指南](docs/agent-playbook.md)，读档与故障处理见[保存与恢复](docs/agent-recovery.md)。只查[离线规则知识](civ6_knowledge/README.md#mcp-查询)时无需启动游戏。
+以获胜为目标开局或续局时，先读[策略检查清单](docs/agent-checklist.md)。常规动作见[游戏操作指南](docs/agent-playbook.md)，议会、交易和外交等交互见[特殊操作指南](docs/agent-special-operations.md)，读档与故障处理见[保存与恢复](docs/agent-recovery.md)。只查[离线规则知识](civ6_knowledge/README.md#mcp-查询)时无需启动游戏。
+
+代码、文档修改及验证见[开发与验证](docs/development.md)；完整入口见[文档导航](docs/README.md)。

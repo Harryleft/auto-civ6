@@ -4,6 +4,8 @@
 
 ## 当前指南
 
+### 游戏操作
+
 | 任务 | 入口 |
 | --- | --- |
 | 安装依赖、配置 FireTuner 或 MCP 客户端 | [安装与启动](../README.md#安装与启动) |
@@ -13,9 +15,14 @@
 | 扩张、胜利路线和对手预警 | [获胜决策](agent-strategy.md) |
 | 赛后比较与因果归因 | [复盘方法](replay-analysis.md) |
 | 保存、换档、未知结果和恢复 | [保存与恢复](agent-recovery.md) |
+| 规则、解锁条件和稳定机制 | [知识查询](../civ6_knowledge/README.md#mcp-查询) |
+
+### 开发操作
+
+| 任务 | 入口 |
+| --- | --- |
 | 代码、测试、提交和文档归档 | [开发与验证](development.md) |
 | 状态归属、Lua 和通信机制 | [当前架构](architecture.md) |
-| 规则、解锁条件和稳定机制 | [知识查询](../civ6_knowledge/README.md#mcp-查询) |
 
 ## 规格与验收
 
