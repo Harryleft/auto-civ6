@@ -104,8 +104,11 @@ local function eligible(r,unit)
  for _,key in ipairs({"owner","id","unitType","religion","x","y"}) do assert(target[key]==r.target[key],"TARGET_CHANGED") end
  assert(target.hp==r.target.hp,"TARGET_HP_CHANGED")
  assert(matching(r,unit,r.actor,true) and hp(unit)==r.actor.hp,"ACTOR_CHANGED")
- local wars=CombatManager.IsAttackChangeWarState(r.actor.component,r.target.x,r.target.y)
- assert(type(wars)=="table" and next(wars)==nil,"WAR_STATE_CHANGE_OR_UNKNOWN")
+ assert(type(CombatManager.IsAttackChangeWarState)=="function","WAR_STATE_UNKNOWN")
+ local warOK,wars=pcall(CombatManager.IsAttackChangeWarState,r.actor.component,r.target.x,r.target.y)
+ -- Civ6Common: a successful nil or empty list has no war declaration target.
+ -- Missing/throwing API and malformed values remain unavailable, not peace.
+ assert(warOK and (wars==nil or type(wars)=="table" and next(wars)==nil),"WAR_STATE_CHANGE_OR_UNKNOWN")
  local preview=CombatManager.SimulateAttackInto(r.actor.component,nil,r.target.x,r.target.y)
  assert(scopeInteger(CombatTypes.RELIGIOUS) and type(preview)=="table"
   and preview[CombatResultParameters.COMBAT_TYPE]==CombatTypes.RELIGIOUS,"NOT_RELIGIOUS_PREVIEW")

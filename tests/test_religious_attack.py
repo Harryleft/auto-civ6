@@ -81,7 +81,11 @@ def test_native_peace_religious_attack_confirms_exact_combat_and_hp_effect_once(
     'path.turns[2]=nil', 'path.turns[4]=1', 'path.plots={299}', 'u.moves=0',
     'u.HasMovedIntoZOC=function() return true end',
     'CombatManager.IsAttackChangeWarState=nil',
-    'CombatManager.IsAttackChangeWarState=function() return nil end',
+    "CombatManager.IsAttackChangeWarState=function() error('unreadable native war state') end",
+    'CombatManager.IsAttackChangeWarState=function() return false end',
+    'CombatManager.IsAttackChangeWarState=function() return 0 end',
+    "CombatManager.IsAttackChangeWarState=function() return 'unknown' end",
+    'CombatManager.IsAttackChangeWarState=function() return {unexpected=true} end',
     'CombatManager.IsAttackChangeWarState=function() return {1} end',
     'CombatManager.SimulateAttackInto=function() return {[0]={[2]=u:GetComponentID()},[1]={[2]=enemy:GetComponentID()},[3]=0} end',
     'CombatManager.SimulateAttackInto=function() return {[0]={[2]=u:GetComponentID()},[1]={[2]={type=1,player=1,id=999}},[3]=4} end',
@@ -278,3 +282,14 @@ def test_unknown_scope_beside_known_entity_mismatch_cannot_recover_after_restora
     conn.lua.execute('seed=719665280;enemy.religion=8;applyCombat()')
     assert 'OUTCOME_UNKNOWN' in asyncio.run(state.religious_attack(196608,20,17))
     assert conn.lua.eval('#submissions')==1
+
+
+def test_successful_native_nil_war_change_result_allows_peace_religious_attack():
+    conn = ReligiousCombatConn()
+    state = GameState(conn)
+    conn.lua.execute('CombatManager.IsAttackChangeWarState=function() return nil end')
+    result = asyncio.run(server.unit_action(
+        make_ctx(game=state), 196608, 'religious_attack', target_x=20, target_y=17))
+    assert result.startswith('RELIGIOUS_COMBAT_CONFIRMED|unit:196608|target:1:5767169|')
+    assert conn.lua.eval('#submissions') == 1
+    assert state.pending_action_summary is None
