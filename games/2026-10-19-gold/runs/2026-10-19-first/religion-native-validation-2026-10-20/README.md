@@ -18,3 +18,9 @@
 | M01 跨层移动误拒绝 | T139#18，#20原生move资格true/完整当前回合path | 共享civilian formation不等于同层，进入to-spec→implement-spec |
 
 #21已保存专用gold_val_20261020_t139_query_move_ready（929031bytes）。Apostle3145737在35,24，本方Builder3211267仍35,22，原生世界保持T139，无未决动作；修复后保留此现场验收。T141#9清除资格拒绝后#10实际次数3/MP0/无receipt，属于合法零提交，并非清除动作成功。
+
+## 第一轮修复与查询复验
+
+- 固定审查范围4e7ebb4…aa3f5b4：Q01 2910c63（集成8111057），M01 3bfbc4c（集成aa3f5b4）。Q01真实macOS Lua UTF-8 locale下RED→GREEN；248相关测试通过。M01公共MCP／GameState／实际Lua路径247项通过。Spec独立审查无实质问题；Standards发现目标宗教层占用未查可见性，交同M01 worker补修，故尚不关闭M01。
+- #22／#23：重新启动83工具的新stdio服务，先确认仍T139、苏美尔／吉尔伽美什，再调用宗教查询。城市名正确为“乌鲁克”；InGame与GameCore范围一致、faith54.3984375／inquisitionfalse；和平外方使徒5570570仍在38,21、本方使徒3145737在35,24且2MP。Q01实机通过。
+- #23后只有只读请求，干净关闭服务，无未决动作；未换档或推进。7项原证据／原检查点指纹再次全部一致。
