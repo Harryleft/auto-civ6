@@ -1,6 +1,6 @@
 # R03 原生和平神学战斗
 
-Status: ready-for-agent
+Status: in-progress
 Label: ready-for-agent
 Dependencies: none
 Spec: ../spec.md

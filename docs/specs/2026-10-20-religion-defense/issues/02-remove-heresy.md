@@ -1,6 +1,6 @@
 # R02 原生清除异教
 
-Status: ready-for-agent
+Status: in-progress
 Label: ready-for-agent
 Dependencies: none
 Spec: ../spec.md
