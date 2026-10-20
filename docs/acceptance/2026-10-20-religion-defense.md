@@ -19,7 +19,7 @@
 
 集成流程测试：`tests/test_religion_defense_workflow.py`，5 项通过。回归 RED 使用实施前 `4224de2` 的离线源码快照运行新增流程测试，公开 `get_religion_defense` 缺失而失败；当前实现同一测试转绿。R02 的动作入口、城市消失、同次探测隐藏身份变化、最终 charge getter 变化等 RED→GREEN，以及 R01／R03 的逐项回归，由对应工作单记录。
 
-受影响回归命令及最终数量在本工作单实施完成时登记；独立 Spec／Standards 审查由父任务另行记录，不预先宣称通过。
+受测版本为 `1b557e3`：集成 `f44dcd8`，包含 R04 流程提交 `4b49dc1`。下列 15 个受影响套件共 **1288 passed in 36.05s**，包含 5 项新增跨特性流程。`compileall`、`git diff --check` 通过；3 份本次操作／验收文档的 26 个本地链接及锚点通过。独立 Spec／Standards 审查仍待执行，由父任务后续记录。
 
 ```bash
 uv run --locked pytest -q \
