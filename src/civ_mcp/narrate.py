@@ -1904,7 +1904,7 @@ def narrate_victory_progress(vp: lq.VictoryProgress) -> str:
             founded = vp.religion_founded_names.get(player.name)
             detail = (
                 f"  {player.name}: majority={majority} | "
-                f"religion cities {player.religion_cities} | founded religion={player.has_religion if player.has_religion is not None else 'unknown'}"
+                f"native religion cities {player.religion_cities} (engine statistic; not owned-city count) | founded religion={player.has_religion if player.has_religion is not None else 'unknown'}"
             )
             if founded:
                 detail += f" ({founded})"
