@@ -1,9 +1,13 @@
 """Real GameState and Lua 5.1; only the engine/transport adapter is simulated."""
 import asyncio
 
+import pytest
 from lupa.lua51 import LuaRuntime
 
 from civ_mcp.game_state import GameState
+
+
+pytestmark = pytest.mark.usefixtures('fast_action_confirmation')
 
 
 class MovementConn:

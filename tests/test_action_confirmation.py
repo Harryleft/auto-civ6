@@ -8,6 +8,9 @@ from civ_mcp.lua import TurnSnapshot
 from action_scope_support import DEFAULT_SCOPE, scope_rows, with_action_identity
 
 
+pytestmark = pytest.mark.usefixtures('fast_action_confirmation')
+
+
 class Engine:
     def __init__(self, writes=(), reads=()):
         self.writes = list(writes)

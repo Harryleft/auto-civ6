@@ -106,7 +106,7 @@ def test_production_readback_rejects_same_queue_in_replacement_city():
     assert conn.lua.eval('#submissions') == 1
 
 from test_terminal_boundary_lua import SaveBoundaryConn, save_environment
-from test_trade_progress import TradeConn, quick_trade
+from test_trade_progress import OpenBordersTradeConn, TradeConn, quick_trade
 from test_end_turn import GameStateConn
 
 
@@ -238,8 +238,7 @@ def test_full_id_mcp_movement_can_complete_and_old_low_index_direct_api_still_wo
 
 @pytest.mark.parametrize('mcp_entry', [False, True])
 def test_open_borders_alias_reenters_its_original_trade_owner(mcp_entry, quick_trade):
-    conn = TradeConn(); state = GameState(conn); ctx = context(state)
-    conn.setup('DealAgreementTypes={OPEN_BORDERS=5}')
+    conn = OpenBordersTradeConn(); state = GameState(conn); ctx = context(state)
     conn.deliver_events = False
     def call():
         return (server.send_diplomatic_action(ctx, 1, 'OPEN_BORDERS') if mcp_entry
