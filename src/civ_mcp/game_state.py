@@ -1668,6 +1668,34 @@ class GameState:
         return await self._unit_effect("condemn_heretic", unit_index)
 
     @_guard_pending_mutation
+    async def religious_attack(self, unit_id: int, target_x: int, target_y: int) -> str:
+        from civ_mcp.lua import religious_combat
+        if any(type(value) is not int or value < 0 for value in (unit_id, target_x, target_y)):
+            return "Error: INVALID_RELIGIOUS_ATTACK|Expected full unit ID and nonnegative integer coordinates."
+        kind, entity, intent = "religious_attack", ("unit", unit_id), (target_x, target_y)
+        if self._actions.matches(kind, entity, intent=intent):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            kind, entity, religious_combat.build_religious_attack_query(unit_id, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"witness_token": token}, intent=intent,
+            evidence=_ActionEvidence(
+                tool="unit_action", entrypoint=kind, accepted=("RELIGIOUS_ATTACK_REQUESTED|",),
+                refused="ERR:RELIGIOUS_ATTACK_REFUSED|",
+                confirm=lambda rows: religious_combat.parse_religious_attack(rows, unit_id, token),
+                guidance="Repeat the same religious_attack to confirm only; no automatic resubmission. ",
+            ),
+        )
+        return await self._submit_action(pending, scope, religious_combat.build_religious_attack(unit_id, target_x, target_y, token))
+
+    @_guard_pending_mutation
     async def launch_inquisition(self, unit_index: int) -> str:
         return await self._unit_effect("launch_inquisition", unit_index)
 
