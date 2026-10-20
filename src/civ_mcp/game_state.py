@@ -17,6 +17,7 @@ from civ_mcp.actions import (
     _extract_post_hp, _extract_city_defense, _format_attack_followup, _scope_probe,
 )
 from civ_mcp import lua as lq
+from civ_mcp.lua import religion_defense
 from civ_mcp.connection import GameConnection, LuaError
 from civ_mcp.end_turn import TurnProgress
 from civ_mcp.narrate import (
@@ -1536,6 +1537,20 @@ class GameState:
             ),
         )
         return await self._submit_action(pending, scope, lq.build_great_person_pool_action(kind, individual, currency, token))
+
+    async def get_religion_defense(self) -> religion_defense.ReligionDefense:
+        """Read current scoped facts without changing any pending owner or UI."""
+        report = religion_defense.ReligionDefense()
+        for context, execute, query in (
+            ("InGame", self.conn.execute_write, religion_defense.build_query),
+            ("GameCore", self.conn.execute_read, religion_defense.build_core_query),
+            ("InGame:final", self.conn.execute_write, religion_defense.build_final_scope_query),
+        ):
+            try:
+                report.add(await execute(query()))
+            except (LuaError, OSError, asyncio.IncompleteReadError) as exc:
+                report.unavailable.append(f"{context}: {type(exc).__name__}")
+        return report
 
     async def get_religion_status(self) -> lq.ReligionStatus:
         lines = await self.conn.execute_write(lq.build_religion_status_query())
