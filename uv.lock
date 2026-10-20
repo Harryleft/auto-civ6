@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -110,6 +110,7 @@ version = "1.1.11"
 source = { editable = "." }
 dependencies = [
     { name = "mcp" },
+    { name = "pywin32", marker = "sys_platform == 'win32'" },
 ]
 
 [package.dev-dependencies]
@@ -119,7 +120,10 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "mcp", specifier = ">=1.20" }]
+requires-dist = [
+    { name = "mcp", specifier = ">=1.20" },
+    { name = "pywin32", marker = "sys_platform == 'win32'", specifier = ">=311" },
+]
 
 [package.metadata.requires-dev]
 dev = [

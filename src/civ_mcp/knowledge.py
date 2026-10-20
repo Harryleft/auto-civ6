@@ -53,7 +53,9 @@ async def _query(arguments: list[str], *, entry_id: str | None = None,
         if not isinstance(snapshot, dict) or snapshot.get('profile') != manifest['profile']:
             raise ValueError('Knowledge profile differs from source snapshot')
         process = await asyncio.create_subprocess_exec(
-            sys.executable, '-B', str(script), '--root', str(root), *arguments,
+            sys.executable, '-X', 'utf8', '-B', str(script), '--root', str(root), *arguments,
+            # 知识 CLI 不读取输入，避免继承 MCP 管道并在 Windows 下阻塞。
+            stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
         try:

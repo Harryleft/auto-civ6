@@ -29,6 +29,8 @@ args = ["run", "--directory", "/absolute/path/to/auto-civ6", "civ-mcp"]
 
 其他 stdio MCP 客户端使用相同命令与参数，也可参考 [.mcp.json](.mcp.json)。客户端会启动服务；手动启动可运行 `uv run civ-mcp`。
 
+Windows 安装、FireTuner 配置、中文编码和存档目录设置见 [Windows 运行说明](docs/windows.md)。macOS 继续使用上面的安装方式和原有启动设置。
+
 ### 开始使用
 
 连接后，可向模型发送：

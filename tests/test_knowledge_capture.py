@@ -1,11 +1,14 @@
 """Public offline capture CLI; all game inputs are isolated temporary files."""
 from datetime import datetime
 import json
+import os
 import plistlib
 import sqlite3
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'civ6_knowledge' / 'capture.py'
 
@@ -30,12 +33,14 @@ def setup_inputs(tmp_path):
                            ('ProposalTypes', 'ProposalType'), ('VotingBlockers', 'VotingBlockerType')]:
             con.execute(f'CREATE TABLE {table} ({key} TEXT, Name TEXT)')
         con.execute("INSERT INTO Technologies VALUES ('TECH_WRITING','LOC_WRITING')")
+    con.close()
     with sqlite3.connect(user / 'Cache/DebugLocalization.sqlite') as con:
         con.execute('CREATE TABLE LocalizedText (Language TEXT,Tag TEXT,Text TEXT)')
         con.executemany('INSERT INTO LocalizedText VALUES (?,?,?)', [
             ('zh_Hans_CN', 'LOC_WRITING', '写作'), ('en_US', 'LOC_WRITING', 'Writing'),
             ('en_US', 'LOC_UNRELATED', 'unrelated'),
         ])
+    con.close()
     return game, user, manifest
 
 
@@ -45,6 +50,21 @@ def capture(tmp_path, game, user, manifest):
                              '--user-root', str(user), '--steam-manifest', str(manifest),
                              '--output', str(output)], text=True, capture_output=True)
     return result, output
+
+
+@pytest.mark.skipif(sys.platform != 'win32', reason='验证 Windows 默认代码页下的文件编码')
+def test_capture_writes_utf8_without_inherited_utf8_mode(tmp_path):
+    game, user, manifest = setup_inputs(tmp_path)
+    output = tmp_path / 'knowledge/sources/snapshot.json'
+    env = dict(os.environ, PYTHONUTF8='0')
+    result = subprocess.run(
+        [sys.executable, '-X', 'utf8=0', str(SCRIPT), '--game-root', str(game),
+         '--user-root', str(user), '--steam-manifest', str(manifest), '--output', str(output)],
+        stdin=subprocess.DEVNULL, capture_output=True, env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    data = json.loads(output.read_bytes().decode('utf-8'))
+    assert data['localization']['LOC_WRITING']['zh_Hans_CN'] == '写作'
 
 
 def test_capture_is_portable_versioned_and_keeps_raw_facts(tmp_path):

@@ -7,13 +7,13 @@ from pathlib import Path
 
 def _get_version() -> str:
     try:
-        return importlib.metadata.version("civ-mcp")
+        return importlib.metadata.version("civ6-mcp")
     except importlib.metadata.PackageNotFoundError:
         pass
     # Fallback: read from pyproject.toml (uv run doesn't install metadata)
     pyproject = Path(__file__).resolve().parent.parent.parent / "pyproject.toml"
     if pyproject.exists():
-        for line in pyproject.read_text().splitlines():
+        for line in pyproject.read_text(encoding="utf-8").splitlines():
             if line.strip().startswith("version =") or line.strip().startswith(
                 "version="
             ):
@@ -26,7 +26,10 @@ def _get_git_sha() -> str:
         return subprocess.check_output(
             ["git", "rev-parse", "--short", "HEAD"],
             stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
             text=True,
+            encoding="utf-8",
+            timeout=5,
         ).strip()
     except Exception:
         return ""
@@ -42,7 +45,10 @@ def _get_git_describe() -> str:
         return subprocess.check_output(
             ["git", "describe", "--tags", "--always", "--dirty"],
             stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
             text=True,
+            encoding="utf-8",
+            timeout=5,
         ).strip()
     except Exception:
         return ""

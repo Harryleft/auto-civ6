@@ -465,7 +465,8 @@ class TestBoundedStateRediscovery:
             await asyncio.sleep(0)
             refresh = asyncio.create_task(conn.rediscover_states(timeout=0.005))
             try:
-                await asyncio.sleep(0.015)
+                # 等待有界完成，避免依赖 Windows 无法保证的 15 毫秒调度精度。
+                await asyncio.wait({refresh}, timeout=0.2)
                 assert refresh.done(), "state discovery waited beyond its budget on another command"
                 with pytest.raises(TimeoutError):
                     await refresh
