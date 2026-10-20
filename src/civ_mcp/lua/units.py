@@ -300,13 +300,50 @@ end
 -- Pre-check: stacking conflict at target tile
 local unitInfo = GameInfo.Units[unit:GetType()]
 local isCivilian = (unitInfo and unitInfo.FormationClass == "FORMATION_CLASS_CIVILIAN")
+local religiousMover = false
+if isCivilian and unitInfo.TrackReligion == true then
+    -- FormationClass is shared by builders and apostles, not their placement
+    -- layer. Shipped TunerMapPanel.lua names GameCore's religious layer 3 and
+    -- reads it with this plot overload. Require actual actor membership;
+    -- missing layer facts must never turn the old conflict into permission.
+    local layerOK, occupied = pcall(function()
+        local function religiousUnits(x,y)
+            local plot = Map.GetPlot(x,y)
+            assert(plot)
+            local units = Units.GetUnitsInPlotLayerID(plot,3)
+            assert(type(units) == "table")
+            local count = 0
+            for key,other in pairs(units) do
+                assert(scopeIndex(key) and key > 0)
+                assert(scopeIndex(other:GetID()) and scopePlayer(other:GetOwner()))
+                assert(other:GetX() == x and other:GetY() == y)
+                count = count + 1
+            end
+            for i=1,count do assert(units[i] ~= nil) end
+            return units
+        end
+        local found = 0
+        for _,other in ipairs(religiousUnits(unit:GetX(),unit:GetY())) do
+            if other:GetID() == unit:GetID() and other:GetOwner() == me then found = found + 1 end
+        end
+        assert(found == 1)
+        return #religiousUnits({target_x},{target_y}) > 0
+    end)
+    if not layerOK then
+        {_bail("ERR:MOVE_LAYER_UNKNOWN|Native religious placement layer unavailable or unverified; no move submitted.")}
+    end
+    if occupied then
+        {_bail("ERR:STACKING_CONFLICT|Native religious placement layer is occupied; no move submitted.")}
+    end
+    religiousMover = true
+end
 local tgtUnits = Map.GetUnitsAt({target_x}, {target_y})
 if tgtUnits then
     for other in tgtUnits:Units() do
         if other:GetOwner() == me then
             local otherInfo = GameInfo.Units[other:GetType()]
             local otherCivilian = (otherInfo and otherInfo.FormationClass == "FORMATION_CLASS_CIVILIAN")
-            if isCivilian == otherCivilian then
+            if isCivilian == otherCivilian and not religiousMover then
                 local otherName = otherInfo and otherInfo.UnitType or "unit"
                 {_bail_lua(f'"ERR:STACKING_CONFLICT|Friendly " .. otherName .. " already on ({target_x},{target_y}). Cannot stack same formation class."')}
             end
