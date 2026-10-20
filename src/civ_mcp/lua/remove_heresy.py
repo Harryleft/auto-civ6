@@ -56,9 +56,21 @@ local function cityTarget(unit,operation,owner)
     and current:GetX()==x and current:GetY()==y,"CITY_TARGET_CHANGED")
   end
  end
+ -- Missing/colliding native enum keys cannot prove that coordinate targets
+ -- are absent: nil/nil would otherwise silently activate the center fallback.
+ local plotsKey,modifiersKey,targetMarker=UnitOperationResults.PLOTS,
+  UnitOperationResults.MODIFIERS,UnitOperationResults.MODIFIER_IS_TARGET
+ assert(scopeInteger(plotsKey) and scopeInteger(modifiersKey) and scopeInteger(targetMarker)
+  and plotsKey~=modifiersKey and plotsKey~=targetMarker and modifiersKey~=targetMarker,
+  "NATIVE_TARGET_KEYS_UNAVAILABLE")
+ for _,name in ipairs({"ADDITIONAL_DESCRIPTION","FAILURE_REASONS"}) do
+  local key=UnitOperationResults[name]
+  assert(key==nil or (scopeInteger(key) and key~=plotsKey and key~=modifiersKey and key~=targetMarker),
+   "NATIVE_TARGET_KEYS_UNAVAILABLE")
+ end
  local results=UnitManager.GetOperationTargets(unit,operation)
  assert(type(results)=="table","NATIVE_TARGET_UNCONFIRMED")
- local plots,modifiers=results[UnitOperationResults.PLOTS],results[UnitOperationResults.MODIFIERS]
+ local plots,modifiers=results[plotsKey],results[modifiersKey]
  if plots==nil and modifiers==nil then
   assert(center,"NATIVE_TARGET_UNCONFIRMED")
   confirmCenter()
@@ -73,7 +85,7 @@ local function cityTarget(unit,operation,owner)
  local target
  for i,modifier in pairs(modifiers) do
   assert(scopeIndex(i) and scopeInteger(modifier) and plots[i]~=nil,"NATIVE_TARGET_UNCONFIRMED")
-  if modifier==UnitOperationResults.MODIFIER_IS_TARGET then
+  if modifier==targetMarker then
    local plot=Map.GetPlotByIndex(plots[i]);assert(plot,"NATIVE_TARGET_UNCONFIRMED")
    local px,py=plot:GetX(),plot:GetY()
    assert(scopeIndex(px) and scopeIndex(py),"NATIVE_TARGET_UNCONFIRMED")
