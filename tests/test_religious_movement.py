@@ -40,6 +40,7 @@ Units={GetUnitsInPlotLayerID=function(p,layer)
  if p:GetX()==x and p:GetY()==y then return {unit} end
  return {}
 end}
+PlayersVisibility[0].IsUnitVisible=function() return true end
 can_target=true
 UnitManager.GetMoveToPathEx=function(_,destination)
  assert(destination==1355)
@@ -162,3 +163,52 @@ def test_unconfirmed_religious_move_keeps_single_owner_when_native_layer_later_c
     assert "OUTCOME_UNKNOWN" in run(state.move_unit(3145737, 34, 24))
     assert conn.lua.globals().submissions == conn.lua.globals().target_checks == 1
     assert state.pending_action_summary is not None
+
+
+@pytest.mark.parametrize("visibility", ["false", "nil", "'true'", "error('unavailable')"])
+@pytest.mark.parametrize("occupied", [False, True])
+def test_unseen_or_unknown_plot_does_not_read_or_disclose_religious_occupancy(visibility, occupied):
+    conn = religious_mover()
+    conn.lua.globals().occupied_target = occupied
+    conn.lua.execute('''
+target_layer_reads=0
+local original=Units.GetUnitsInPlotLayerID
+Units.GetUnitsInPlotLayerID=function(p,l)
+ if p:GetY()==22 then
+  target_layer_reads=target_layer_reads+1
+  if occupied_target then return {builder_unit} end
+ end
+ return original(p,l)
+end
+PlayersVisibility[0].IsVisible=function(_,px,py)
+ if py==22 then VISIBILITY end
+ return true
+end
+'''.replace("VISIBILITY", visibility if visibility.startswith("error(") else "return " + visibility))
+    state = GameState(conn)
+    result = run(server.unit_action(make_ctx(game=state), 3145737, "move", 35, 22))
+    assert result == "Error: MOVE_LAYER_UNKNOWN|Native religious placement layer unavailable or unverified; no move submitted."
+    assert conn.lua.globals().target_layer_reads == 0
+    assert conn.lua.globals().submissions == 0
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize("visibility", ["false", "nil", "'true'", "error('unavailable')"])
+def test_unseen_or_unknown_unit_does_not_disclose_target_layer_occupancy(visibility):
+    conn = religious_mover()
+    conn.lua.execute('''
+local original=Units.GetUnitsInPlotLayerID
+Units.GetUnitsInPlotLayerID=function(p,l)
+ if p:GetY()==22 then return {builder_unit} end
+ return original(p,l)
+end
+PlayersVisibility[0].IsUnitVisible=function(_,u)
+ if u==builder_unit then VISIBILITY end
+ return true
+end
+'''.replace("VISIBILITY", visibility if visibility.startswith("error(") else "return " + visibility))
+    state = GameState(conn)
+    result = run(server.unit_action(make_ctx(game=state), 3145737, "move", 35, 22))
+    assert result == "Error: MOVE_LAYER_UNKNOWN|Native religious placement layer unavailable or unverified; no move submitted."
+    assert conn.lua.globals().submissions == 0
+    assert state.pending_action_summary is None
