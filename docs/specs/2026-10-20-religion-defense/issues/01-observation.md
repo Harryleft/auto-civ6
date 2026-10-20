@@ -1,6 +1,6 @@
 # R01 宗教防御只读查询
 
-Status: ready-for-agent
+Status: in-progress
 Label: ready-for-agent
 Dependencies: none
 Spec: ../spec.md
