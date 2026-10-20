@@ -1,0 +1,20 @@
+# 宗教防御工具链实机验收
+
+用户于2026-10-20明确授权重载MCP服务，从本局已确认检查点完成原生验收；不新开下一局，保留原终局证据。原始对局仍为T141瑞典宗教胜利，本目录中的恢复与新动作仅为工具验证，不改写原局结果。
+
+- 当前代码起点：3b47465，集成分支codex/gold-terminal。
+- 原轮次：e8b4d6a62dca49bbb256e8264beb18f2，Sumeria/Gilgamesh，seed -1896272000。
+- [原证据指纹与检查点](preserved-evidence.json)，原始日志不追加；新工具请求在独立evidence/tool-calls.jsonl。
+- fresh stdio MCP服务#1先查询当前状态：游戏未运行，明确连接拒绝；#2启动已有Civilization VI进程及FireTuner，服务工具目录83项。
+- #3仅请求加载原确认 gold_20261019_t141_progress，SHA916e5d1ba215a68eff308d43b612e3130c68c768881da9daddf7d82dd4703592。加载确认后先核对概览、单位、城市和宗教，再测试原生资格、目标和效果。
+
+验收覆盖：当前宗教查询、清除异教普通/最后charge、和平神学战斗、效果回读/后续合法动作及保存、相关未知/资格拒绝。真实引擎中不伪造事件、不直接改资源/伤害/科技/地图。遇到阻塞进入to-spec→implement-spec，沿现有公共MCP/GameState/Lua及真实原生边界验证，未知不重发。
+
+## 已观察问题
+
+| 问题 | 回合／证据 | 处理 |
+| --- | --- | --- |
+| Q01 UTF-8城市名 | T141#7、T139#14，#20原生中文与字节对照 | 宗教查询的%c过滤破坏byte129，进入to-spec→implement-spec |
+| M01 跨层移动误拒绝 | T139#18，#20原生move资格true/完整当前回合path | 共享civilian formation不等于同层，进入to-spec→implement-spec |
+
+#21已保存专用gold_val_20261020_t139_query_move_ready（929031bytes）。Apostle3145737在35,24，本方Builder3211267仍35,22，原生世界保持T139，无未决动作；修复后保留此现场验收。T141#9清除资格拒绝后#10实际次数3/MP0/无receipt，属于合法零提交，并非清除动作成功。
