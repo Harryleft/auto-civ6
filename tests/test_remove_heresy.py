@@ -353,3 +353,116 @@ end
 ''')
     assert asyncio.run(state.remove_heresy(196608)).startswith('Error: REMOVE_HERESY_REFUSED|')
     assert conn.lua.eval('#submissions') == 0
+
+
+def test_native_description_only_self_city_purge_confirms_through_public_tool():
+    conn = PurgeConn(); state = GameState(conn)
+    conn.lua.execute("targets={[-1554772595]={'10 followers'}}")
+    result = asyncio.run(server.unit_action(make_ctx(game=state), 196608, 'remove_heresy'))
+    assert result.startswith('HERESY_REMOVED|unit:196608|religion:12|charges_remaining:2|city:0:65539|')
+    assert '8:400->120' in result and '9:200->60' in result
+    assert conn.lua.eval('#submissions') == 1
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('setup', [
+    'u.x=34',
+    'city.owner=1',
+    'city=nil',
+    'city.id=nil',
+    "city.GetOwner=function() error('unknown owner') end",
+    'CityManager.GetCityAt=function() return city end;city.x=36',
+    'u.allowed=false', 'u.allowed=nil',
+    "UnitManager.CanStartOperation=function() error('unknown eligibility') end",
+    'UnitManager.CanStartOperation=function() u.x=34;return true end',
+    'UnitManager.CanStartOperation=function() city.id=131075;return true end',
+    'UnitManager.CanStartOperation=function() city.GetID=function() return nil end;return true end',
+    'UnitManager.CanStartOperation=function() city=nil;return true end',
+    'UnitManager.CanStartOperation=function() city.owner=1;return true end',
+    'UnitManager.CanStartOperation=function() targets={plots={300}};return true end',
+])
+def test_description_only_purge_requires_exact_stable_owned_center_and_native_permission(setup):
+    conn = PurgeConn(); state = GameState(conn)
+    conn.lua.execute("targets={[-1554772595]={'10 followers'}};" + setup)
+    result = asyncio.run(server.unit_action(make_ctx(game=state), 196608, 'remove_heresy'))
+    assert result.startswith('Error: REMOVE_HERESY_REFUSED|')
+    assert conn.lua.eval('#submissions') == 0
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('targets', [
+    '{plots={300}}', '{modifiers={1}}',
+    '{plots=false,modifiers={1}}', '{plots={300},modifiers=false}',
+    '{plots={300,999},modifiers={1}}', '{plots={300},modifiers={1,1}}',
+    '{plots={300},modifiers={false}}', '{plots={false},modifiers={1}}',
+    '{plots={300},modifiers={}}', '{plots={},modifiers={1}}',
+])
+def test_exact_center_cannot_override_partial_or_malformed_native_coordinate_targets(targets):
+    conn = PurgeConn(); state = GameState(conn)
+    conn.lua.execute('targets=' + targets)
+    result = asyncio.run(server.unit_action(make_ctx(game=state), 196608, 'remove_heresy'))
+    assert result.startswith('Error: REMOVE_HERESY_REFUSED|')
+    assert conn.lua.eval('#submissions') == 0
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('other_owner,targets', [
+    (0, '{plots={301},modifiers={1}}'),
+    (1, '{plots={301},modifiers={1}}'),
+    (0, '{plots={300,301},modifiers={1,1}}'),
+])
+def test_exact_center_cannot_override_conflicting_or_ambiguous_actual_native_city(other_owner, targets):
+    conn = PurgeConn(); state = GameState(conn)
+    conn.lua.execute('''
+other={id=131075,owner=''' + str(other_owner) + ''',x=36,y=22}
+for _,name in ipairs({'GetID','GetOwner','GetX','GetY'}) do other[name]=city[name] end
+CityManager.GetCityAt=function(x,y)
+ if x==35 and y==22 then return city elseif x==36 and y==22 then return other end
+end
+Map.GetPlotByIndex=function(id)
+ if id==300 or id==301 then return {GetX=function() return id==300 and 35 or 36 end,GetY=function() return 22 end} end
+end
+targets=''' + targets)
+    result = asyncio.run(server.unit_action(make_ctx(game=state), 196608, 'remove_heresy'))
+    assert result.startswith('Error: REMOVE_HERESY_REFUSED|')
+    assert conn.lua.eval('#submissions') == 0
+    assert state.pending_action_summary is None
+
+
+def test_off_center_purge_still_uses_exact_unique_actual_native_city_target():
+    conn = PurgeConn(); state = GameState(conn); conn.lua.execute('u.x=34')
+    result = asyncio.run(server.unit_action(make_ctx(game=state), 196608, 'remove_heresy'))
+    assert result.startswith('HERESY_REMOVED|unit:196608|religion:12|charges_remaining:2|city:0:65539|')
+    assert conn.lua.eval('#submissions') == 1
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('charges,lose_reply', [(3, True), (1, False), (1, True)])
+def test_description_only_self_city_preserves_final_consumption_and_lost_reply_ownership(charges, lose_reply):
+    conn = PurgeConn(); state = GameState(conn)
+    conn.lua.execute("targets={[-1554772595]={'10 followers'}};u.spreads=" + str(charges))
+    conn.lose_reply = lose_reply
+    ctx = make_ctx(game=state)
+    result = asyncio.run(server.unit_action(ctx, 196608, 'remove_heresy'))
+    if lose_reply:
+        assert 'OUTCOME_UNKNOWN' in result
+        assert state.pending_action_kind == 'remove_heresy'
+        result = asyncio.run(server.unit_action(ctx, 196608, 'remove_heresy'))
+    assert f'charges_remaining:{charges-1}' in result
+    assert result.startswith('HERESY_REMOVED|')
+    assert conn.lua.eval('#submissions') == 1
+    assert state.pending_action_summary is None
+
+
+def test_native_target_discovery_cannot_change_the_exact_center_before_binding():
+    conn = PurgeConn(); state = GameState(conn)
+    conn.lua.execute('''
+UnitManager.GetOperationTargets=function()
+ city.id=131075
+ return {[-1554772595]={'10 followers'}}
+end
+''')
+    result = asyncio.run(server.unit_action(make_ctx(game=state), 196608, 'remove_heresy'))
+    assert result.startswith('Error: REMOVE_HERESY_REFUSED|')
+    assert conn.lua.eval('#submissions') == 0
+    assert state.pending_action_summary is None

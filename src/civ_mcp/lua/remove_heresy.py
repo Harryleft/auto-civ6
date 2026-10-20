@@ -37,26 +37,59 @@ local function pressures(city)
  return values
 end
 local function cityTarget(unit,operation,owner)
- -- Generic UnitPanel REMOVE_HERESY has no coordinates. Bind only a unique
- -- actual native operation target; no nearest/current-city guess.
+ -- UnitPanel's self-action can return description-only results. An exact
+ -- owned city center is authoritative then; no adjacent/nearest-city guess.
+ local x,y=unit:GetX(),unit:GetY()
+ assert(scopeIndex(x) and scopeIndex(y),"UNIT_POSITION_UNAVAILABLE")
+ local center=CityManager.GetCityAt(x,y)
+ local centerID
+ if center then
+  assert(center:GetOwner()==owner,"OWNED_CITY_REQUIRED")
+  assert(center:GetX()==x and center:GetY()==y,"CITY_POSITION_CHANGED")
+  centerID=center:GetID()
+  assert(scopeIndex(centerID),"CITY_IDENTITY_UNAVAILABLE")
+ end
+ local function confirmCenter()
+  if center then
+   local current=CityManager.GetCityAt(x,y)
+   assert(current and current:GetID()==centerID and current:GetOwner()==owner
+    and current:GetX()==x and current:GetY()==y,"CITY_TARGET_CHANGED")
+  end
+ end
  local results=UnitManager.GetOperationTargets(unit,operation)
  assert(type(results)=="table","NATIVE_TARGET_UNCONFIRMED")
  local plots,modifiers=results[UnitOperationResults.PLOTS],results[UnitOperationResults.MODIFIERS]
+ if plots==nil and modifiers==nil then
+  assert(center,"NATIVE_TARGET_UNCONFIRMED")
+  confirmCenter()
+  return center
+ end
+ -- If either coordinate field is supplied, all native target facts must be
+ -- readable and agree with the center. Never hide partial/conflicting rows.
  assert(type(plots)=="table" and type(modifiers)=="table","NATIVE_TARGET_UNCONFIRMED")
+ for i,plot in pairs(plots) do
+  assert(scopeIndex(i) and scopeIndex(plot) and modifiers[i]~=nil,"NATIVE_TARGET_UNCONFIRMED")
+ end
  local target
  for i,modifier in pairs(modifiers) do
+  assert(scopeIndex(i) and scopeInteger(modifier) and plots[i]~=nil,"NATIVE_TARGET_UNCONFIRMED")
   if modifier==UnitOperationResults.MODIFIER_IS_TARGET then
    local plot=Map.GetPlotByIndex(plots[i]);assert(plot,"NATIVE_TARGET_UNCONFIRMED")
-   local city=CityManager.GetCityAt(plot:GetX(),plot:GetY())
-   if city then
-    assert(city:GetOwner()==owner,"OWNED_CITY_REQUIRED")
-    assert(target==nil,"AMBIGUOUS_CITY_TARGET")
-    assert(city:GetX()==plot:GetX() and city:GetY()==plot:GetY(),"CITY_POSITION_CHANGED")
-    target=city
+   local px,py=plot:GetX(),plot:GetY()
+   assert(scopeIndex(px) and scopeIndex(py),"NATIVE_TARGET_UNCONFIRMED")
+   local city=CityManager.GetCityAt(px,py)
+   assert(city,"NATIVE_TARGET_UNCONFIRMED")
+   assert(city:GetOwner()==owner,"OWNED_CITY_REQUIRED")
+   assert(target==nil,"AMBIGUOUS_CITY_TARGET")
+   assert(scopeIndex(city:GetID()) and city:GetX()==px and city:GetY()==py,"CITY_POSITION_CHANGED")
+   if center then
+    assert(city:GetID()==centerID and px==x and py==y,"CITY_TARGET_CHANGED")
    end
+   target=city
   end
  end
  assert(target,"NATIVE_TARGET_UNCONFIRMED")
+ confirmCenter()
  return target
 end
 local function facts(r)
