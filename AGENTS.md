@@ -27,3 +27,10 @@
 | 修改状态归属、Lua 解释或通信机制 | [当前架构](docs/architecture.md) |
 | 记录或查阅单局过程、回合验收、复盘和存档证据 | [对局资料](games/README.md) |
 | 核对基准身份、工程规格或离线验收 | [存档说明](fixtures/saves/README.md) [文档索引](docs/README.md#规格与验收) |
+
+## 基准测试存档
+
+| 序号 | 基准测试地图名称 | 在项目中的位置 | 简要介绍（领袖、难度、对手） |
+| --- | --- | --- | --- |
+| 1 | `benchmark_turn_1` | [fixtures/saves/benchmark_turn_1.Civ6Save](fixtures/saves/benchmark_turn_1.Civ6Save) | 盘古大陆、极小；苏美尔／吉尔伽美什；不朽；对手：瑞典、巴西、加拿大 |
+| 2 | `benchmark_gold_tun_1` | [fixtures/saves/benchmark_gold_tun_1.Civ6Save](fixtures/saves/benchmark_gold_tun_1.Civ6Save) | 四叶草、极小；苏美尔／吉尔伽美什；神级；对手：瑞典、巴西、加拿大 |
