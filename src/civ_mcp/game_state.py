@@ -1632,6 +1632,34 @@ class GameState:
         return await self._submit_action(pending, scope, lq.build_unit_effect(kind, unit_id, token, core_religion=core_religion))
 
     @_guard_pending_mutation
+    async def remove_heresy(self, unit_index: int) -> str:
+        from civ_mcp.lua import remove_heresy
+        if type(unit_index) is not int or unit_index < 0:
+            return "Error: INVALID_UNIT_ID|Expected the original full unit ID."
+        entity, intent = ("unit", unit_index), ()
+        if self._actions.matches("remove_heresy", entity, intent=intent):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            "remove_heresy", entity, remove_heresy.build_remove_heresy_query(unit_index, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"witness_token": token}, intent=intent,
+            evidence=_ActionEvidence(
+                tool="unit_action", entrypoint="remove_heresy", accepted=("REMOVE_HERESY_REQUESTED|",),
+                refused="ERR:REMOVE_HERESY_REFUSED|",
+                confirm=lambda rows: remove_heresy.parse_remove_heresy_confirmation(rows, unit_index, token),
+                guidance="Repeat the original remove_heresy action to confirm only; do not spend another charge. ",
+            ),
+        )
+        return await self._submit_action(pending, scope, remove_heresy.build_remove_heresy(unit_index, token))
+
+    @_guard_pending_mutation
     async def spread_religion(self, unit_index: int) -> str:
         return await self._unit_effect("spread_religion", unit_index)
 
