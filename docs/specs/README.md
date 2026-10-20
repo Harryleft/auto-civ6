@@ -4,6 +4,7 @@
 
 | 主题 | 规格／审计 | 工作项 | 验收 |
 | --- | --- | --- | --- |
+| 宗教防御工具链 | [规格](2026-10-20-religion-defense/spec.md) | [工作项](2026-10-20-religion-defense/map.md) | 实施与离线验证中；不重开游戏 |
 | 状态变更全量覆盖 | [审计](2026-10-19-mutation-audit.md)、[改造记录](2026-10-19-mutation-lifecycle/README.md)、[生命周期规格](2026-10-19-mutation-lifecycle/spec.md) | [18 票任务图](2026-10-19-mutation-lifecycle/map.md) | [全量验收](../acceptance/2026-10-19-mutation-lifecycle.md)、[使者试点](../acceptance/2026-10-19-envoy-lifecycle.md) |
 | 四项架构深化 | [规格](2026-10-17-architecture-deepening.md) | [工作项](2026-10-17-architecture-deepening-tickets.md) | [验收](../acceptance/2026-10-17-architecture-deepening.md) |
 | 结束回合的世界身份绑定 | [规格](2026-10-18-end-turn-world-scope.md) | [工作项](2026-10-18-end-turn-world-scope-tickets.md) | [验收](../acceptance/2026-10-18-end-turn-world-scope.md) |
