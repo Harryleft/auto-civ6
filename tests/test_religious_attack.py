@@ -72,6 +72,42 @@ def test_native_peace_religious_attack_confirms_exact_combat_and_hp_effect_once(
     assert state.pending_action_summary is None
 
 
+def test_native_theological_kill_confirms_without_matching_generic_operation_started():
+    conn = ReligiousCombatConn(); state = GameState(conn)
+    # T140 native transcript: no matching Started witness, exact combat, a damaged
+    # defender removed from both lookups, and the surviving attacker at 86 HP.
+    conn.lua.execute('''
+enemy.damage=46
+function applyCombat()
+ Events.CombatVisEnd.Fire({[0]={componentType=1,playerID=0,componentID=196608},[1]={componentType=1,playerID=1,componentID=5767169}})
+ u.damage=14;u.x=20
+ units[enemy.id]=nil;Events.UnitRemovedFromMap.Fire(1,5767169)
+end
+''')
+    result = asyncio.run(server.unit_action(
+        make_ctx(game=state), 196608, 'religious_attack', target_x=20, target_y=17))
+    assert result == ('RELIGIOUS_COMBAT_CONFIRMED|unit:196608|target:1:5767169|'
+                      'attacker_hp:100->86|defender_hp:54->0')
+    assert conn.lua.eval('#submissions') == 1
+    assert state.pending_action_summary is None
+
+
+def test_exact_combat_and_damage_confirm_without_matching_generic_start():
+    conn = ReligiousCombatConn(); state = GameState(conn)
+    conn.lua.execute('''
+function applyCombat()
+ Events.CombatVisEnd.Fire({[0]={componentType=1,playerID=0,componentID=196608},[1]={componentType=1,playerID=1,componentID=5767169}})
+ enemy.damage=35
+end
+''')
+    result = asyncio.run(server.unit_action(
+        make_ctx(game=state), 196608, 'religious_attack', target_x=20, target_y=17))
+    assert result.startswith('RELIGIOUS_COMBAT_CONFIRMED|unit:196608|')
+    assert 'defender_hp:100->65' in result
+    assert state.pending_action_summary is None
+    assert conn.lua.eval('#submissions') == 1
+
+
 @pytest.mark.parametrize('setup', [
     'u.allowed=false', 'u.allowed=nil', 'u.allowed=1', 'busy=true',
     'visible=false', 'visible=nil', 'unitVisible=false', 'unitVisible=nil',
@@ -109,7 +145,7 @@ def test_same_plot_military_layer_does_not_steal_religious_target():
 @pytest.mark.parametrize('events', [
     'enemy.damage=35',
     'Events.UnitOperationStarted.Fire(0,196608,7);enemy.damage=35',
-    'Events.CombatVisEnd.Fire({[0]={componentType=1,playerID=0,componentID=196608},[1]={componentType=1,playerID=1,componentID=5767169}});enemy.damage=35',
+    'Events.CombatVisEnd.Fire({[0]={componentType=1,playerID=0,componentID=196608},[1]={componentType=1,playerID=1,componentID=5767169}})',
     'Events.UnitOperationStarted.Fire(0,196608,7);Events.CombatVisEnd.Fire({[0]={componentType=1,playerID=0,componentID=196608},[1]={componentType=1,playerID=1,componentID=5832705}});enemy.damage=35',
     'Events.UnitOperationStarted.Fire(0,196608,7);Events.CombatVisEnd.Fire({[0]={componentType=1,playerID=1,componentID=196608},[1]={componentType=1,playerID=1,componentID=5767169}});enemy.damage=35',
     'Events.UnitOperationStarted.Fire(0,196608,8);applyCombat()',
