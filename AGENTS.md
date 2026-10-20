@@ -17,13 +17,13 @@
 
 | 任务触发条件 | 读取位置 |
 | --- | --- |
-| 启动、配置或连接游戏 | [游戏操作：开始运行](docs/agent-playbook.md#开始运行)；需要安装或客户端配置时再读 [README](README.md#安装与启动) |
-| 开局、续局或推进以获胜为目标的对局 | 必读并执行[每局策略检查清单](docs/agent-checklist.md)：六项检查、所有启用胜利的先行信号、准备时间与效果复核 |
+| 启动、配置或连接游戏 | [游戏操作：开始运行](docs/agent-playbook.md#开始运行) [README](README.md#安装与启动) |
+| 开局、续局或推进以获胜为目标的对局 | [每局策略检查清单](docs/agent-checklist.md) |
 | 查询、执行动作、推进回合或处理议会 | [游戏操作](docs/agent-playbook.md) |
-| 开局识别文明／领袖、理解已相遇对手，或制定与调整策略 | [获胜决策](docs/agent-strategy.md)：区分稳定规则、动态事实和可修正判断 |
-| 文明／领袖能力、专属内容或通用机制不清楚 | [知识 MCP 查询](civ6_knowledge/README.md#mcp-查询)：先定位规则，再用游戏工具核对本局候选与费用 |
+| 开局识别文明／领袖、理解已相遇对手，或制定与调整策略 | [获胜决策](docs/agent-strategy.md) |
+| 文明／领袖能力、专属内容或通用机制不清楚 | [知识 MCP 查询](civ6_knowledge/README.md#mcp-查询) |
 | 保存、换档、结果未知、断线或挂起 | [保存与恢复](docs/agent-recovery.md) |
 | 修改代码或文档、测试、提交、审查 | [开发与验证](docs/development.md) |
-| 修改状态归属、Lua 解释或通信机制 | [当前架构](docs/architecture.md)，只读相关职责章节 |
-| 记录或查阅单局过程、回合验收、复盘和存档证据 | [对局资料](games/README.md)，按对局与测试轮次归档 |
-| 核对基准身份、工程规格或离线验收 | 基准读[存档说明](fixtures/saves/README.md)；工程记录读[文档索引](docs/README.md#规格与验收) |
+| 修改状态归属、Lua 解释或通信机制 | [当前架构](docs/architecture.md) |
+| 记录或查阅单局过程、回合验收、复盘和存档证据 | [对局资料](games/README.md) |
+| 核对基准身份、工程规格或离线验收 | [存档说明](fixtures/saves/README.md) [文档索引](docs/README.md#规格与验收) |
