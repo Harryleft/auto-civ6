@@ -24,3 +24,8 @@
 - 固定审查范围4e7ebb4…aa3f5b4：Q01 2910c63（集成8111057），M01 3bfbc4c（集成aa3f5b4）。Q01真实macOS Lua UTF-8 locale下RED→GREEN；248相关测试通过。M01公共MCP／GameState／实际Lua路径247项通过。Spec独立审查无实质问题；Standards发现目标宗教层占用未查可见性，交同M01 worker补修，故尚不关闭M01。
 - #22／#23：重新启动83工具的新stdio服务，先确认仍T139、苏美尔／吉尔伽美什，再调用宗教查询。城市名正确为“乌鲁克”；InGame与GameCore范围一致、faith54.3984375／inquisitionfalse；和平外方使徒5570570仍在38,21、本方使徒3145737在35,24且2MP。Q01实机通过。
 - #23后只有只读请求，干净关闭服务，无未决动作；未换档或推进。7项原证据／原检查点指纹再次全部一致。
+
+- M01可见性补修4b87cc7，集成84dbedd，两轴复审均无实质问题；259项相关测试通过。#24发现游戏进程已退出，无未决；#25启动游戏，#26只加载本轮专用T139检查点，#27–29重新核对身份/实体。
+- #30使徒3145737从35,24进入35,22成功；#31原生ANY层回读确认与建造者3211267、野战加农炮3014658三者同格，warfalse；#32保存gold_val_20261020_t139_layer_pass（929002bytes）。M01实机通过。
+- #34确认T139→T140。#35当前宗教查询确认外方使徒5570570已到36,23、和平，#37保存gold_val_20261020_t140_peace_combat_ready（929153bytes）。
+- C01：T140#38宗教攻击实际发生，但返回OUTCOME_UNKNOWN（COMBAT_WITNESS_INCOMPLETE）；#39run_lua被原未决门禁拦截，没有执行；#40/41只读回读显示本方使徒HP100→86/位置35,22→36,23、瑞典目标消失与周边异教压力减少。干净关闭原owner后只读diagnostic确认entered/returned=true、started=nil、combat=true、target.removed=true、目标两条原生查找均缺失、invalid=nil、warfalse。诊断输出独立保存在evidence/t140-combat-receipt-diagnostic.json；没有重发动作或释放旧结果。进入C01 to-spec→implement-spec；修复后须显式恢复#37原战前检查点再进行任何游戏动作，旧#38保留未知事实。
