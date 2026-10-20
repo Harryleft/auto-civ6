@@ -10,3 +10,5 @@ Integration: codex/gold-terminal
 | [R04](issues/04-integrated-validation.md) | R01–R03 | 公共流程与文档验收 |
 
 所有实施完成后，经 merger 集成及 Spec／Standards 独立双审，修复发现，再关闭工作项与清理工作树。
+
+原生调用依据：[本机第一方 API 契约](native-contracts.md)。没有在终局世界中试运行；不明确的返回形状必须保守拒绝并留作未来实机核对。
