@@ -24,7 +24,7 @@ def main():
     malformed = 0
 
     print(f"Reading {CENTRAL_LOG}...")
-    with open(CENTRAL_LOG) as f:
+    with open(CENTRAL_LOG, encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -52,7 +52,7 @@ def main():
         if path.exists():
             skipped += 1
             continue
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines) + "\n")
         written += 1
         print(f"  {path.name}: {len(lines)} entries")

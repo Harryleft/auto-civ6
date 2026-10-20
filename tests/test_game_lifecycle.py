@@ -17,6 +17,7 @@ import socket
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -35,15 +36,10 @@ def isolated_lifecycle(monkeypatch, tmp_path):
 
     monkeypatch.setattr(subprocess, "run", external_call)
     monkeypatch.setattr(subprocess, "Popen", external_call)
-    real_socket = socket.socket
-
-    def local_socket(family=socket.AF_INET, *args, **kwargs):
-        # asyncio uses an AF_UNIX socketpair for its internal wake-up pipe.
-        if family == socket.AF_UNIX:
-            return real_socket(family, *args, **kwargs)
-        return external_call(family, *args, **kwargs)
-
-    monkeypatch.setattr(socket, "socket", local_socket)
+    # 隔离被测模块，不替换 Windows 事件循环依赖的全局 socket 类型。
+    monkeypatch.setattr(game_launcher, "socket", SimpleNamespace(
+        socket=external_call, AF_INET=socket.AF_INET, SOCK_STREAM=socket.SOCK_STREAM,
+    ))
     auto = tmp_path / "Single" / "auto"
     auto.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(game_launcher, "SAVE_DIR", str(auto))
@@ -163,7 +159,7 @@ def no_crash_dialogs(monkeypatch):
 class TestSaveGame:
     @pytest.fixture(autouse=True)
     def fast_confirmation(self, monkeypatch):
-        monkeypatch.setattr(gl, "SAVE_CONFIRM_TIMEOUT", 0.03)
+        monkeypatch.setattr(gl, "SAVE_CONFIRM_TIMEOUT", 0.1 if sys.platform == "win32" else 0.03)
         monkeypatch.setattr(gl, "SAVE_POLL_INTERVAL", 0.001)
 
     def test_partial_file_is_not_confirmed_until_native_save_complete(self):
@@ -313,7 +309,12 @@ class TestSaveGame:
 
     def test_save_name_cannot_inject_lua(self):
         conn = FakeConn(on_write=lambda lua: ["MCP_SAVE|false"])
-        run(gl.save_game(conn, 'evil"; print("pwned"); --'))
+        result = run(gl.save_game(conn, 'evil"; print("pwned"); --'))
+        if sys.platform == "win32":
+            # Windows 文件名不允许引号，应在提交 Lua 前明确拒绝。
+            assert result.startswith("Error:")
+            assert conn.writes == []
+            return
         assert 'gf.Name = "evil\\"; print(\\"pwned\\"); --"' in conn.writes[0]
         assert 'gf.Name = "evil"; print("pwned"); --"' not in conn.writes[0]
 

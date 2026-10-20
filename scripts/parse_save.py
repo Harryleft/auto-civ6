@@ -572,7 +572,7 @@ def main():
     rows = timelines_to_diary_rows(players, meta)
 
     # Output
-    out = open(args.output, "w") if args.output else sys.stdout
+    out = open(args.output, "w", encoding="utf-8", newline="") if args.output else sys.stdout
     try:
         if args.csv:
             if not rows:
@@ -601,5 +601,6 @@ def main():
 if __name__ == "__main__":
     import signal
 
-    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+    if hasattr(signal, "SIGPIPE"):
+        signal.signal(signal.SIGPIPE, signal.SIG_DFL)
     main()

@@ -27,6 +27,7 @@ import sys
 import time
 from pathlib import Path
 from dataclasses import dataclass
+from civ_mcp.platform_paths import single_save_directory, windows_steam_roots
 
 log = logging.getLogger(__name__)
 
@@ -38,21 +39,12 @@ STEAM_RELEASE_TIMEOUT = 30.0
 _ALLOWED_PROCESS_PATTERNS = ["Civ6"]
 
 # Platform-specific paths
+SINGLE_SAVE_DIR = single_save_directory()
 if sys.platform == "darwin":
-    SINGLE_SAVE_DIR = os.path.expanduser(
-        "~/Library/Application Support/Sid Meier's Civilization VI/"
-        "Sid Meier's Civilization VI/Saves/Single"
-    )
     _PROCESS_NAMES = ["Civ6_Exe_Child", "Civ6_Exe", "CivilizationVI", "Civ6"]
 elif sys.platform == "win32":
-    SINGLE_SAVE_DIR = os.path.expanduser(
-        "~/Documents/My Games/Sid Meier's Civilization VI/Saves/Single"
-    )
     _PROCESS_NAMES = ["CivilizationVI.exe", "CivilizationVI_DX12.exe"]
 else:
-    SINGLE_SAVE_DIR = os.path.expanduser(
-        "~/.local/share/aspyr-media/Sid Meier's Civilization VI/Saves/Single"
-    )
     _PROCESS_NAMES = ["Civ6", "Civ6_Sub", "CivilizationVI"]
 
 SAVE_DIR = os.path.join(SINGLE_SAVE_DIR, "auto")
@@ -74,8 +66,10 @@ def is_game_running() -> bool:
             try:
                 result = subprocess.run(
                     ["tasklist", "/FI", f"IMAGENAME eq {name}", "/NH"],
+                    stdin=subprocess.DEVNULL,
                     capture_output=True,
                     text=True,
+                    errors="replace",
                     timeout=5,
                 )
                 if name.lower() in result.stdout.lower():
@@ -89,6 +83,7 @@ def is_game_running() -> bool:
         try:
             result = subprocess.run(
                 ["pgrep", "-x", name],
+                stdin=subprocess.DEVNULL,
                 capture_output=True,
                 timeout=5,
             )
@@ -124,6 +119,7 @@ def _dismiss_crash_dialog() -> bool:
     try:
         result = subprocess.run(
             ["osascript", "-e", script],
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
             timeout=5,
@@ -144,8 +140,10 @@ def _kill_game_sync() -> str:
             try:
                 result = subprocess.run(
                     ["taskkill", "/F", "/IM", name],
+                    stdin=subprocess.DEVNULL,
                     capture_output=True,
                     text=True,
+                    errors="replace",
                     timeout=10,
                 )
                 if result.returncode == 0:
@@ -159,6 +157,7 @@ def _kill_game_sync() -> str:
             try:
                 subprocess.run(
                     ["pkill", "-9", "-x", name],
+                    stdin=subprocess.DEVNULL,
                     capture_output=True,
                     timeout=10,
                 )
@@ -224,26 +223,18 @@ def _find_game_exe_win32() -> str | None:
     if sys.platform != "win32":
         return None
 
-    # Standard Steam install locations
-    steam_roots = [
-        os.path.expandvars(r"C:\Program Files (x86)\Steam"),
-        os.path.expandvars(r"C:\Program Files\Steam"),
-    ]
+    # 优先使用实际注册的 Steam 位置，兼容非 C 盘安装。
+    steam_roots = windows_steam_roots()
 
     for steam_root in steam_roots:
         vdf_path = os.path.join(steam_root, "steamapps", "libraryfolders.vdf")
-        if not os.path.exists(vdf_path):
-            continue
-
         try:
-            with open(vdf_path, encoding="utf-8") as f:
-                content = f.read()
+            content = Path(vdf_path).read_text(encoding="utf-8") if os.path.isfile(vdf_path) else ""
 
             # Parse library paths and app IDs from VDF
             import re
 
             libs = re.findall(r'"path"\s+"([^"]+)"', content)
-            apps = re.findall(r'"289070"', content)
 
             # Check default library first
             default_exe = os.path.join(
@@ -328,6 +319,35 @@ def _wait_for_steam_release() -> str | None:
     return "FAILED: Steam still tracks Civ6 after exit; no launch submitted."
 
 
+def _launch_windows_application(command: list[str]) -> None:
+    """委托交互式桌面启动应用，避免 MCP 退出时清理 Steam 和游戏。"""
+    try:
+        import pythoncom
+        import win32com.client
+
+        # 此函数由工作线程调用，COM 初始化与释放必须在同一线程完成。
+        pythoncom.CoInitialize()
+        try:
+            # 取现有桌面的 Application；新建 Shell.Application 仍可能在 MCP 内执行。
+            windows = win32com.client.Dispatch("{9BA05972-F6A8-11CF-A442-00A0C90A8F39}")
+            # SWC_DESKTOP=8，SWFO_NEEDDISPATCH=1，不要求用户打开文件管理器窗口。
+            desktop = windows.FindWindowSW(0, 0, 8, 0, 1)
+            shell = desktop.Document.Application
+            try:
+                shell.ShellExecute(
+                    command[0], subprocess.list2cmdline(command[1:]), "", "open", 1,
+                )
+            finally:
+                del shell
+                del desktop
+                del windows
+        finally:
+            pythoncom.CoUninitialize()
+    except Exception as exc:
+        # 不回退到受 MCP 作业对象管理的 Popen，以免重现会话结束即退出。
+        raise OSError(f"Windows desktop launch failed: {exc}") from exc
+
+
 def _launch_game_sync() -> str:
     """Launch Civ 6 and wait for the FireTuner port to open. Blocking.
 
@@ -352,18 +372,22 @@ def _launch_game_sync() -> str:
     if sys.platform == "darwin":
         subprocess.run(
             ["open", f"steam://run/{STEAM_APP_ID}"],
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             timeout=10,
         )
     elif sys.platform == "win32":
-        subprocess.Popen(
-            ["cmd", "/c", "start", f"steam://run/{STEAM_APP_ID}"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        # 使用桌面 Shell 代理，Steam 及游戏不归 MCP 客户端进程树管理。
+        steam_exe = next((os.path.join(root, "steam.exe") for root in windows_steam_roots()
+                          if os.path.isfile(os.path.join(root, "steam.exe"))), None)
+        launch_command = [steam_exe, "-applaunch", STEAM_APP_ID] if steam_exe else [
+            f"steam://run/{STEAM_APP_ID}"
+        ]
+        _launch_windows_application(launch_command)
     else:
         subprocess.Popen(
             ["steam", f"-applaunch", STEAM_APP_ID],
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
@@ -378,11 +402,7 @@ def _launch_game_sync() -> str:
         exe = _find_game_exe_win32()
         if exe:
             log.info("steam://run failed, trying direct exe: %s", exe)
-            subprocess.Popen(
-                [exe],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
+            _launch_windows_application([exe])
             waited = _wait_for_game_process(timeout=60)
 
     if waited is None:

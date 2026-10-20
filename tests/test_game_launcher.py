@@ -17,6 +17,7 @@ from types import SimpleNamespace
 import pytest
 
 from civ_mcp import game_launcher as gl
+from civ_mcp import platform_paths
 
 
 @pytest.fixture(autouse=True)
@@ -26,20 +27,17 @@ def isolated_launcher(monkeypatch, tmp_path):
 
     monkeypatch.setattr(subprocess, "run", external_call)
     monkeypatch.setattr(subprocess, "Popen", external_call)
-    real_socket = socket.socket
-
-    def local_socket(family=socket.AF_INET, *args, **kwargs):
-        # asyncio uses an AF_UNIX socketpair for its internal wake-up pipe.
-        if family == socket.AF_UNIX:
-            return real_socket(family, *args, **kwargs)
-        return external_call(family, *args, **kwargs)
-
-    monkeypatch.setattr(socket, "socket", local_socket)
+    monkeypatch.setattr(gl, "_launch_windows_application", external_call)
+    # 只隔离启动器的套接字入口，避免替换 Windows 事件循环使用的 socket 类型。
+    monkeypatch.setattr(gl, "socket", SimpleNamespace(
+        socket=external_call, AF_INET=socket.AF_INET, SOCK_STREAM=socket.SOCK_STREAM,
+    ))
     monkeypatch.setattr(sys, "platform", "darwin")
     monkeypatch.setattr(time, "sleep", lambda _: None)
     monkeypatch.setattr(gl, "STEAM_PROCESS_LOG", tmp_path / "gameprocess_log.txt")
     monkeypatch.setattr(gl, "SAVE_DIR", str(tmp_path / "auto"))
     monkeypatch.setattr(gl, "SINGLE_SAVE_DIR", str(tmp_path))
+    monkeypatch.setattr(platform_paths, "windows_registry_path", lambda *args: None)
 
 
 def _cp(returncode=0, stdout=""):
@@ -164,7 +162,7 @@ class TestTunerPort:
             connect=lambda addr: calls.append(("connect", addr)),
             close=lambda: calls.append(("close",)),
         )
-        monkeypatch.setattr(socket, "socket", lambda *args: sock)
+        monkeypatch.setattr(gl.socket, "socket", lambda *args: sock)
         assert gl._is_tuner_port_open()
         assert calls == [("timeout", 2), ("connect", ("127.0.0.1", 4318)), ("close",)]
 
@@ -174,7 +172,7 @@ class TestTunerPort:
         def refused(addr):
             raise exc
 
-        monkeypatch.setattr(socket, "socket", lambda *args: SimpleNamespace(
+        monkeypatch.setattr(gl.socket, "socket", lambda *args: SimpleNamespace(
             settimeout=lambda _: None, connect=refused, close=lambda: closed.append(True),
         ))
         assert not gl._is_tuner_port_open()
@@ -233,13 +231,14 @@ class TestLaunch:
     @pytest.mark.parametrize("platform, expected", [
         ("darwin", ["open", "steam://run/289070"]),
         ("linux", ["steam", "-applaunch", "289070"]),
-        ("win32", ["cmd", "/c", "start", "steam://run/289070"]),
+        ("win32", ["steam://run/289070"]),
     ])
     def test_launch_command_by_platform(self, monkeypatch, platform, expected):
         monkeypatch.setattr(sys, "platform", platform)
         calls = []
         monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: calls.append(cmd) or _cp())
         monkeypatch.setattr(subprocess, "Popen", lambda cmd, **kw: calls.append(cmd))
+        monkeypatch.setattr(gl, "_launch_windows_application", calls.append)
         assert "FireTuner port is open" in gl._launch_game_sync()
         assert calls == [expected]
 

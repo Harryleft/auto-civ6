@@ -135,7 +135,7 @@ def xml_fields(node):
 def installed_inputs(game_root):
     inputs, rows, gaps, text_inputs, captured_hashes = {}, [], [], [], {}
     for manifest in sorted((game_root / 'Assets/DLC').glob('*/*.modinfo')):
-        logical_manifest = 'game/Contents/' + str(manifest.relative_to(game_root))
+        logical_manifest = 'game/Contents/' + manifest.relative_to(game_root).as_posix()
         inputs[logical_manifest] = (manifest, logical_manifest)
         captured_hashes[logical_manifest] = digest(manifest)
         root = ET.parse(manifest).getroot()
@@ -150,7 +150,7 @@ def installed_inputs(game_root):
                     gaps.append({'path': relative, 'package': root.get('id'), 'manifest': logical_manifest,
                                  'action': action.get('id'), 'criteria': action.get('criteria'), 'status': 'missing_or_external_input'})
                     continue
-                logical = 'game/Contents/' + str(file.relative_to(game_root.resolve()))
+                logical = 'game/Contents/' + file.relative_to(game_root.resolve()).as_posix()
                 inputs[logical] = (file, logical)
                 captured_hashes.setdefault(logical, digest(file))
                 if action.tag == 'UpdateText':
@@ -253,7 +253,7 @@ def read_text(path: Path, tables: dict, xml_inputs: list) -> tuple[dict, dict]:
 
 
 def startup_version(path: Path) -> tuple[str, datetime]:
-    lines = path.read_text().splitlines()
+    lines = path.read_text(encoding='utf-8').splitlines()
     versions = [(index, re.search(r'Game Version\s*=\s*(.+)', line))
                 for index, line in enumerate(lines) if 'Game Version' in line]
     versions = [(index, match) for index, match in versions if match]
@@ -298,7 +298,7 @@ def capture(game_root: Path, user_root: Path, steam_manifest: Path) -> dict:
             inputs[relative] = (p, 'game/Contents/' + relative)
     text_root = game_root / 'Assets/DLC/Expansion2/Text'
     xml_paths = sorted((text_root / 'en_US').glob('*.xml')) + [p for p in [text_root / 'Expansion2_Translations_Text.xml', text_root / 'Expansion2_Translations_ConfigText.xml'] if p.is_file()]
-    xml_inputs = [(p, 'game/Contents/' + str(p.relative_to(game_root))) for p in xml_paths]
+    xml_inputs = [(p, 'game/Contents/' + p.relative_to(game_root).as_posix()) for p in xml_paths]
     installed_files, installed_rows, installed_gaps, installed_text, installed_hashes = installed_inputs(game_root)
     inputs.update(installed_files)
     # Preserve the established Expansion2 fallback before supplementing other
@@ -318,7 +318,7 @@ def capture(game_root: Path, user_root: Path, steam_manifest: Path) -> dict:
     version, started = startup_version(inputs['startup'][0])
     if inputs['gameplay'][0].stat().st_mtime < started.timestamp():
         raise ValueError('gameplay cache is older than startup; source version binding is stale')
-    build = re.search(r'"buildid"\s*"([0-9]+)"', steam_manifest.read_text())
+    build = re.search(r'"buildid"\s*"([0-9]+)"', steam_manifest.read_text(encoding='utf-8'))
     if not version or not build or not bundle.get('CFBundleShortVersionString') or not bundle.get('CFBundleVersion'):
         raise ValueError('missing game, bundle or Steam version evidence')
     tables, missing = read_tables(inputs['gameplay'][0])
@@ -339,7 +339,7 @@ def capture(game_root: Path, user_root: Path, steam_manifest: Path) -> dict:
         'language_preference': ['zh_Hans_CN', 'en_US'],
         'missing_optional_tables': missing,
     }
-    lines = inputs['modding'][0].read_text(errors='replace').splitlines()
+    lines = inputs['modding'][0].read_text(encoding='utf-8', errors='replace').splitlines()
     start = next((i for i in range(len(lines) - 1, -1, -1) if 'Enabled Mods (in no particular order)' in lines[i]), None)
     mods = []
     if start is not None:
@@ -355,7 +355,7 @@ def capture(game_root: Path, user_root: Path, steam_manifest: Path) -> dict:
     evidence = []
     for name, relative, first, last in CODE_RANGES:
         if relative in inputs:
-            content = inputs[relative][0].read_text().splitlines()
+            content = inputs[relative][0].read_text(encoding='utf-8').splitlines()
             evidence.append({'id': name, 'path': inputs[relative][1], 'line_start': first,
                              'line_end': min(last, len(content)), 'sha256': hashes[relative],
                              'text': '\n'.join(content[first - 1:last]),
@@ -391,7 +391,7 @@ def main() -> int:
         data = capture(args.game_root, args.user_root, args.steam_manifest)
         output.parent.mkdir(parents=True, exist_ok=True)
         temp = output.with_suffix('.tmp')
-        temp.write_text(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + '\n')
+        temp.write_text(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + '\n', encoding='utf-8')
         temp.replace(output)
         print(json.dumps({'status': 'captured', 'tables': len(data['tables']), 'game_version': data['profile']['game_version']}, ensure_ascii=False))
         return 0

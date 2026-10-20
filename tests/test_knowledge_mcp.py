@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 
 import anyio
 import pytest
@@ -227,18 +228,51 @@ def test_broken_knowledge_or_cli_is_explicit_error_and_is_not_repaired(monkeypat
 def test_cli_timeout_is_bounded_and_reaps_its_child_without_repair_or_retry(monkeypatch, tmp_path):
     from civ_mcp import knowledge
 
+    spawned = []
+    ready_times = []
+    create_process = asyncio.create_subprocess_exec
+
+    async def track_process(*args, **kwargs):
+        process = await create_process(*args, **kwargs)
+        spawned.append(process)
+        # 先确认测试脚本就绪，再开始极短的查询超时；不把系统启动延迟当成清理失败。
+        try:
+            assert (await asyncio.wait_for(process.stdout.readline(), timeout=15)).strip() == b'ready'
+            ready_times.append(time.monotonic())
+        except BaseException:
+            if process.returncode is None:
+                process.kill()
+            await process.communicate()
+            raise
+        return process
+
+    monkeypatch.setattr(asyncio, 'create_subprocess_exec', track_process)
     root = build(tmp_path)
     monkeypatch.setenv('CIV6_KNOWLEDGE_DIR', str(root))
-    monkeypatch.setattr(knowledge, 'QUERY_TIMEOUT', .2)
+    monkeypatch.setattr(knowledge, 'QUERY_TIMEOUT', .5 if sys.platform == 'win32' else .2)
     pid_file = tmp_path / 'cli-pid'
     (root / 'query.py').write_text(
         'from pathlib import Path\nimport os, time\n'
-        + 'Path(' + repr(str(pid_file)) + ").write_text(str(os.getpid()))\ntime.sleep(10)\n")
+        + 'Path(' + repr(str(pid_file)) + ").write_text(str(os.getpid()))\n"
+        + "print('ready', flush=True)\ntime.sleep(10)\n")
     before = fingerprints(root)
     result = json.loads(asyncio.run(server.search_knowledge(make_ctx(game=None), 'writing')))
     assert result['status'] == 'error' and 'timed out' in result['error']
-    with pytest.raises(ProcessLookupError):
-        os.kill(int(pid_file.read_text()), 0)
+    assert time.monotonic() - ready_times[0] < 5, '超时清理仍在等待测试 CLI 的 10 秒睡眠结束'
+    # 直接核对该次启动的进程已被回收，避免 Windows 的 os.kill(pid, 0) 差异。
+    assert len(spawned) == 1
+    assert spawned[0].returncode is not None
+    pid = int(pid_file.read_text())
+    if sys.platform == 'win32':
+        # 虚拟环境启动器与实际解释器可能有不同 PID，额外检查实际 CLI。
+        result = subprocess.run(
+            ['tasklist', '/FI', f'PID eq {pid}', '/FO', 'CSV', '/NH'],
+            capture_output=True, text=True, check=True,
+        )
+        assert f'"{pid}"' not in result.stdout
+    else:
+        with pytest.raises(ProcessLookupError):
+            os.kill(pid, 0)
     assert fingerprints(root) == before
 
 

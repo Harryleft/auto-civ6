@@ -9,7 +9,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def cli(root, *args, ok=True):
-    result = subprocess.run([sys.executable, str(ROOT / 'civ6_knowledge/query.py'), '--root', str(root), *args], capture_output=True, text=True)
+    # 子进程不会继承父解释器的 -X utf8，查询输出与读取端显式采用同一编码。
+    result = subprocess.run(
+        [sys.executable, '-X', 'utf8', str(ROOT / 'civ6_knowledge/query.py'), '--root', str(root), *args],
+        stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding='utf-8',
+    )
     assert result.returncode == (0 if ok else 2), result.stderr + result.stdout
     return json.loads(result.stdout)
 
