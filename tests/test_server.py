@@ -1172,7 +1172,7 @@ class TestEndTurn:
 
 class TestSaveTools:
     @pytest.mark.parametrize("pending", ["save", "end_turn", "action"])
-    def test_direct_menu_load_cannot_bypass_unresolved_work(self, pending):
+    def test_direct_menu_load_cannot_bypass_unresolved_work(self, pending, fast_action_confirmation):
         from civ_mcp.game_state import _PendingAction
         ctx, gs = self.prepare_real_menu_load()
         if pending == "action":
@@ -1705,7 +1705,7 @@ class TestMenuReload:
         assert gs.conn.load_calls == []
 
     @pytest.mark.parametrize("pending", ["action", "save", "load", "end_turn"])
-    def test_unresolved_operation_prevents_exit_or_load(self, pending):
+    def test_unresolved_operation_prevents_exit_or_load(self, pending, fast_action_confirmation):
         from civ_mcp.game_state import _PendingAction
         ctx, gs = TestSaveTools().prepare_real_menu_load()
         gs.conn.frontend = False
