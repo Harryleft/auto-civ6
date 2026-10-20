@@ -483,6 +483,7 @@ async def save_game_result(conn: GameConnection, name: str) -> NativeTransition:
     # listener to this token, and also require this exact file to become fresh.
     # No end-turn/save request may overlap this serialized active-turn operation.
     token = uuid.uuid4().hex
+    popup_names = ", ".join(json.dumps(name) for name in INFORMATION_POPUPS)
     code = f"""
 local prior = __civmcpSaveCompletion;
 if prior and not prior.done then print("MCP_SAVE_PENDING"); print("{lq.SENTINEL}"); return; end;
@@ -499,6 +500,24 @@ local stateOK, terminal = pcall(function()
 end);
 if not stateOK then print("MCP_SAVE_STATE_UNAVAILABLE"); print("{lq.SENTINEL}"); return; end;
 if terminal then print("MCP_SAVE_TERMINAL"); print("{lq.SENTINEL}"); return; end;
+-- 在同一原生调用中检查动画与弹窗，避免检查后到保存前出现界面竞态。
+local uiKnown, blockingPopup = pcall(function()
+  for _, name in ipairs({{{popup_names}}}) do
+    local c = ContextPtr:LookUpControl("/InGame/" .. name);
+    if c ~= nil then
+      local hidden = c:IsHidden(); assert(type(hidden) == "boolean");
+      if not hidden then return name; end;
+    end;
+  end;
+  local mode = UI.GetInterfaceMode();
+  assert(type(mode) == "number" and type(InterfaceModeTypes.CINEMATIC) == "number");
+  if mode == InterfaceModeTypes.CINEMATIC then return "cinematic_camera"; end;
+end);
+if not uiKnown then print("MCP_SAVE_UI_UNAVAILABLE"); print("{lq.SENTINEL}"); return; end;
+if blockingPopup then
+  print("MCP_SAVE_POPUP_BLOCKED"); print("MCP_SAVE_POPUP|" .. blockingPopup);
+  print("{lq.SENTINEL}"); return;
+end;
 local available = pcall(function()
   assert(type(Network.SaveGame) == "function");
   assert(SaveLocations.LOCAL_STORAGE ~= nil and SaveTypes.SINGLE_PLAYER ~= nil);
@@ -554,7 +573,8 @@ print("{lq.SENTINEL}");
                 # submission may have occurred, including cancellation/lost
                 # replies; a proven zero-submit refusal preserves old records.
                 unsubmitted = {"MCP_SAVE_PENDING", "MCP_SAVE_UNAVAILABLE",
-                               "MCP_SAVE_TERMINAL", "MCP_SAVE_STATE_UNAVAILABLE"}
+                                "MCP_SAVE_TERMINAL", "MCP_SAVE_STATE_UNAVAILABLE",
+                                "MCP_SAVE_POPUP_BLOCKED", "MCP_SAVE_UI_UNAVAILABLE"}
                 if not unsubmitted.intersection(lines):
                     checkpoints.forget_completion(name)
             if "MCP_SAVE_PENDING" in lines:
@@ -565,6 +585,11 @@ print("{lq.SENTINEL}");
                 return NativeTransition("not_submitted", "Error: GAME_OVER|Saving is unavailable at the confirmed terminal boundary; no save submitted. Keep the last confirmed checkpoint and terminal evidence.")
             if "MCP_SAVE_STATE_UNAVAILABLE" in lines:
                 return NativeTransition("not_submitted", "Error: SAVE_STATE_UNAVAILABLE|Native terminal state unavailable; no save submitted.")
+            if "MCP_SAVE_POPUP_BLOCKED" in lines:
+                popup = next((row.split("|", 1)[1] for row in lines if row.startswith("MCP_SAVE_POPUP|")), "information popup")
+                return NativeTransition("not_submitted", f"Error: SAVE_POPUP_BLOCKED|{popup}; dismiss_popup before saving; no save submitted.")
+            if "MCP_SAVE_UI_UNAVAILABLE" in lines:
+                return NativeTransition("not_submitted", "Error: SAVE_UI_UNAVAILABLE|Native popup visibility unavailable; no save submitted.")
             while True:
                 current = fingerprint()
                 if current and current != before and current[1] > 0:

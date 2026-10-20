@@ -54,43 +54,9 @@ for i, u in p:GetUnits():Members() do
 end
 local myScore = p:GetScore()
 local favor = p:GetFavor()
-local favorPerTurn = 0
+-- 使用原生净收益，包含城墙、奇观加成和外交惩罚。
+local favorPerTurn = p:GetFavorPerTurn()
 local pDiplo = p:GetDiplomacy()
--- 1. Government tier bonus (govRow.Tier is a string like "GOVERNMENT_TIER_1")
-local govIdx = cu:GetCurrentGovernment()
-if govIdx >= 0 then
-    local govRow = GameInfo.Governments[govIdx]
-    if govRow and govRow.Tier then
-        local n = tonumber(tostring(govRow.Tier):match("(%d+)$")) or 0
-        favorPerTurn = favorPerTurn + math.max(1, n)
-    end
-end
--- 2. Alliances (level-based, +1 per alliance level)
-for i = 0, 62 do
-    if i ~= id and Players[i] and Players[i]:IsAlive() and Players[i]:IsMajor() and pDiplo:HasMet(i) then
-        local ok, ai = pcall(function() return Players[i]:GetDiplomaticAI() end)
-        if ok and ai then
-            local ok2, stateIdx = pcall(function() return ai:GetDiplomaticStateIndex(id) end)
-            if ok2 and stateIdx then
-                local si = tonumber(stateIdx) or -1
-                if si == 0 then
-                    local ok3, aLvl = pcall(function() return pDiplo:GetAllianceLevel(i) end)
-                    favorPerTurn = favorPerTurn + (tonumber(ok3 and aLvl) or 1)
-                end
-            end
-        end
-    end
-end
--- 3. Suzerainties (+1 each)
-for i = 0, 62 do
-    if Players[i] and Players[i]:IsAlive() then
-        local ok, canRecv = pcall(function() return Players[i]:GetInfluence():CanReceiveInfluence() end)
-        if ok and canRecv then
-            local suzID = Players[i]:GetInfluence():GetSuzerain()
-            if suzID == id then favorPerTurn = favorPerTurn + 1 end
-        end
-    end
-end
 print(Game.GetCurrentGameTurn() .. "|" .. id .. "|" .. Locale.Lookup(cfg:GetCivilizationShortDescription()):gsub("|", "/") .. "|" .. Locale.Lookup(cfg:GetLeaderName()):gsub("|", "/") .. "|" .. string.format("%.1f", tr:GetGoldBalance()) .. "|" .. string.format("%.1f", tr:GetGoldYield() - tr:GetTotalMaintenance()) .. "|" .. string.format("%.1f", te:GetScienceYield()) .. "|" .. string.format("%.1f", cu:GetCultureYield()) .. "|" .. string.format("%.1f", re:GetFaithBalance()) .. "|" .. techName .. "|" .. civicName .. "|" .. nCities .. "|" .. nUnits .. "|" .. myScore .. "|" .. favor .. "|" .. favorPerTurn .. "|" .. totalPop .. "|" .. string.format("%.1f", tr:GetGoldYield()) .. "|" .. string.format("%.1f", tr:GetTotalMaintenance()))
 print("IDENTITY|" .. id .. "|" .. civilizationType .. "|" .. leaderType)
 -- These scores are already weighted by the engine. Keep GetScore above intact;

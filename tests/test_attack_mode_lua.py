@@ -121,6 +121,23 @@ def state_for(conn):
     return state
 
 
+def test_native_civilian_entry_without_attack_consumption_confirms_once():
+    conn = AttackConn()
+    conn.lua.execute('''
+unitInfo.RangedCombat=0;unitInfo.Range=0;enemyInfo.Combat=0
+enemyInfo.UnitType='UNIT_MILITARY_ENGINEER'
+UnitManager.RequestOperation=function(_,op,params)
+    record_operation(op,params)
+    x=params.x;y=params.y;moves=moves-1
+end
+''')
+    result = asyncio.run(state_for(conn).attack_unit(8, 19, 16))
+    assert "CIVILIAN_TILE_ENTERED" in result
+    assert "origin_x:20|origin_y:16|moves_before:2" in result
+    assert "Target fate unknown" in result
+    assert len(conn.operations) == 1
+
+
 def test_adjacent_ranged_target_refusal_never_becomes_a_melee_move_or_preview():
     conn = AttackConn()
     state = state_for(conn)

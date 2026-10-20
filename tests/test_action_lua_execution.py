@@ -118,3 +118,46 @@ def test_segment_observer_known_scope_change_invalidates_move_after_scope_return
     assert "OUTCOME_UNKNOWN" in asyncio.run(state.move_unit(6, 18, 18))
     assert state.pending_action_summary is not None
     assert conn.lua.globals().submissions == 1
+
+
+@pytest.mark.parametrize('change', [None, 'wrong_event', 'no_event', 'no_zoc', 'wrong_queue', 'busy'])
+def test_stationary_zoc_segment_requires_exact_native_request_and_queue(change):
+    from civ_mcp import server
+    from test_server import app_of, make_ctx
+
+    conn = MovementConn()
+    conn.lose_observation = False
+    conn.lua.execute('''
+unit.GetMovementMovesRemaining=function() return 1 end
+unit.HasMovedIntoZOC=function() return true end
+UnitManager.GetQueuedDestination=function() return 18018 end
+UnitManager.RequestOperation=function()
+ submissions=submissions+1
+ Events.UnitOperationSegmentComplete.Fire(0,851974)
+end
+''')
+    if change == 'wrong_event':
+        conn.lua.execute('UnitManager.RequestOperation=function() submissions=submissions+1;Events.UnitOperationSegmentComplete.Fire(0,917510) end')
+    elif change == 'no_event':
+        conn.lua.execute('UnitManager.RequestOperation=function() submissions=submissions+1 end')
+    elif change == 'no_zoc':
+        conn.lua.execute('unit.HasMovedIntoZOC=function() return false end')
+    elif change == 'wrong_queue':
+        conn.lua.execute('UnitManager.GetQueuedDestination=function() return 18017 end')
+    elif change == 'busy':
+        conn.lua.execute('local request=UnitManager.RequestOperation;UnitManager.RequestOperation=function() request();UI.IsGameCoreBusy=function() return true end end')
+    state = GameState(conn)
+    ctx = make_ctx()
+    app_of(ctx).game = state
+    args = dict(unit_id=851974, action='move', target_x=18, target_y=18)
+    result = asyncio.run(server.unit_action(ctx, **args))
+    if change is None:
+        assert 'BLOCKED (native segment complete in zone of control; no displacement)' in result
+        assert 'now_at:19,17' in result
+        assert state.pending_action_summary is None
+        assert conn.lua.globals().__civmcpMoveSegment.closed is True
+    else:
+        assert 'OUTCOME_UNKNOWN' in result
+        assert state.pending_action_summary is not None
+        assert 'OUTCOME_UNKNOWN' in asyncio.run(server.unit_action(ctx, **args))
+    assert conn.lua.globals().submissions == 1

@@ -1,5 +1,6 @@
 """Policy plans execute real Lua through GameState; only native APIs are faked."""
 import asyncio
+import sys
 
 import pytest
 from lupa.lua51 import LuaRuntime, LuaError as NativeLuaError
@@ -12,7 +13,7 @@ from civ_mcp.connection import LuaError
 
 @pytest.fixture(autouse=True)
 def short_policy_confirmation(monkeypatch):
-    monkeypatch.setattr("civ_mcp.game_state.ACTION_CONFIRM_TIMEOUT", 0.02)
+    monkeypatch.setattr("civ_mcp.game_state.ACTION_CONFIRM_TIMEOUT", 0.1 if sys.platform == "win32" else 0.02)
     monkeypatch.setattr("civ_mcp.game_state.ACTION_CONFIRM_INTERVAL", 0.001)
 
 

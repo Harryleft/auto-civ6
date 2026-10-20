@@ -1,6 +1,7 @@
 """Execute friendship submission and native-state reads through real GameState/Lua."""
 
 import asyncio
+import sys
 
 import pytest
 
@@ -74,7 +75,8 @@ def run(awaitable):
 
 @pytest.fixture(autouse=True)
 def short_confirmation(monkeypatch):
-    monkeypatch.setattr("civ_mcp.game_state.ACTION_CONFIRM_TIMEOUT", 0.015)
+    # Windows 的调度粒度可能已超过 15 毫秒，给多次只读观察留出预算。
+    monkeypatch.setattr("civ_mcp.game_state.ACTION_CONFIRM_TIMEOUT", 0.1 if sys.platform == "win32" else 0.015)
     monkeypatch.setattr("civ_mcp.game_state.ACTION_CONFIRM_INTERVAL", 0.001)
 
 

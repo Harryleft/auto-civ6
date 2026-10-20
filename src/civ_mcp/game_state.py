@@ -977,12 +977,28 @@ class GameState:
     # Diplomacy methods
     # ------------------------------------------------------------------
 
-    async def get_diplomacy_sessions(self) -> lq.DiplomacyContext:
+    async def _read_diplomacy_context(self) -> lq.DiplomacyContext:
+        """先读公共上下文；多个会话时在原生领袖界面核对当前对象。"""
         lua = lq.build_diplomacy_session_query()
         lines = await self.conn.execute_write(lua)
         if "CONTEXT_COMPLETE" not in lines:
             raise LuaError("Diplomacy session status is unknown")
         context = lq.parse_diplomacy_sessions(lines)
+        execute = getattr(self.conn, "execute_in_named_state", None)
+        if context.status == "UNKNOWN" and context.reason == "MULTIPLE_SESSIONS" and execute is not None:
+            try:
+                rows = await execute("DiplomacyActionView", lua)
+                if "CONTEXT_COMPLETE" in rows:
+                    return lq.parse_diplomacy_sessions(rows)
+            except (OSError, TimeoutError, LuaError):
+                # 原生证据缺失时保留 UNKNOWN，不猜测当前玩家。
+                pass
+        return context
+
+    async def get_diplomacy_sessions(self) -> lq.DiplomacyContext:
+        # 在没有会话时也开始观察，避免首次会面语句先于观察器到达。
+        await self._diplomacy_progress.ensure_observer(self.conn)
+        context = await self._read_diplomacy_context()
         for session in context.sessions:
             keys, _ = await self._diplomacy_progress.choices(self.conn, session.session_id, session.other_player_id)
             session.choice_status = "KNOWN" if keys is not None else "UNKNOWN"
@@ -1050,11 +1066,7 @@ class GameState:
         return lq.parse_deal_options_response(lines)
 
     async def get_pending_deals(self) -> lq.DiplomacyContext:
-        lua = lq.build_pending_deals_query()
-        lines = await self.conn.execute_write(lua)
-        if "CONTEXT_COMPLETE" not in lines:
-            raise LuaError("Pending deal status is unknown")
-        context = lq.parse_pending_deals_response(lines)
+        context = await self._read_diplomacy_context()
         context.outgoing_summary = await self._diplomacy_progress.outgoing_report(self.conn)
         await self._diplomacy_progress.describe_incoming(self.conn, context)
         return context
@@ -1248,6 +1260,36 @@ class GameState:
     # ------------------------------------------------------------------
     # City-state / Envoy methods (InGame context)
     # ------------------------------------------------------------------
+
+    @_guard_pending_mutation
+    async def close_diplomacy_session(self, other_player_id: int) -> str:
+        """由调用方明确取消指定会话，不推断或代选对话回应。"""
+        from civ_mcp.lua import diplomacy_close
+
+        if type(other_player_id) is not int or not 0 <= other_player_id <= 62:
+            return "Error: INVALID_PLAYER_ID|Expected a verified diplomacy participant."
+        entity = ("player", other_player_id)
+        if self._actions.matches("close_diplomacy_session", entity):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            "close_diplomacy_session", entity, diplomacy_close.build_query(other_player_id, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"witness_token": token}, intent=(),
+            evidence=_ActionEvidence(
+                tool="close_diplomacy_session", entrypoint="close_diplomacy_session",
+                accepted=("DIPLOMACY_CLOSE_REQUESTED|",), refused="ERR:DIPLOMACY_CLOSE_REFUSED|",
+                confirm=lambda rows: diplomacy_close.parse_confirmation(rows, other_player_id, token),
+                guidance="Repeat close_diplomacy_session for the same player to confirm only. ",
+            ),
+        )
+        return await self._submit_action(pending, scope, diplomacy_close.build_close(other_player_id, token))
 
     async def get_city_states(self) -> lq.EnvoyStatus:
         lua = lq.build_city_states_query()
@@ -1606,7 +1648,19 @@ class GameState:
             return scope
         token = uuid.uuid4().hex
         core_religion = None
+        core_followers = None
         core_query = None
+        if kind == "spread_religion":
+            from civ_mcp.lua import spread_followers
+            try:
+                rows = await self.conn.execute_read(scope.guard(spread_followers.build_preflight(
+                    unit_id, token, scope.owner, scope.civilization, scope.seed, scope.turn)))
+                core_followers = spread_followers.parse_preflight(rows, unit_id, token, scope.owner)
+                if core_followers is not None:
+                    core_query = spread_followers.build_query(unit_id, token)
+            except (OSError, TimeoutError, LuaError, ValueError):
+                # 独立读数不可用时仍只能依靠既有实际压力增加证明，不能放宽成功条件。
+                pass
         if kind == "launch_inquisition":
             from civ_mcp.lua import inquisition
             try:
@@ -1629,7 +1683,8 @@ class GameState:
                 guidance="Repeat the original unit effect to confirm only; rewards beyond reported evidence remain unmeasured. ",
             ),
         )
-        return await self._submit_action(pending, scope, lq.build_unit_effect(kind, unit_id, token, core_religion=core_religion))
+        return await self._submit_action(pending, scope, lq.build_unit_effect(
+            kind, unit_id, token, core_religion=core_religion, core_followers=core_followers))
 
     @_guard_pending_mutation
     async def remove_heresy(self, unit_index: int) -> str:
@@ -2048,7 +2103,7 @@ class GameState:
         for name, sa in after_stk.items():
             sb = before_stk.get(name)
             if sb and sb.amount > 0 and sa.amount == 0:
-                net = sa.per_turn - sa.demand + sa.imported
+                net = sa.per_turn - sa.demand
                 events.append(
                     lq.TurnEvent(
                         priority=2,
@@ -2082,7 +2137,7 @@ class GameState:
             if visible:
                 parts = []
                 for s in visible:
-                    net = s.per_turn - s.demand + s.imported
+                    net = s.per_turn - s.demand
                     parts.append(f"{s.name} {s.amount}/{s.cap} ({net:+d}/t)")
                 lines.append(f"Resources: {', '.join(parts)}")
 

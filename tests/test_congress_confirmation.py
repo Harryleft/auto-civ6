@@ -325,6 +325,30 @@ def test_registered_receipt_read_failure_does_not_allow_end_turn_from_cached_reg
     assert conn.operations == conn.actions == []
 
 
+def test_completed_plan_recheck_after_end_turn_gate_never_registers_a_future_vote():
+    conn, state, ctx = setup()
+    asyncio.run(server.queue_wc_votes(ctx, json.dumps(PLAN)))
+    conn.lua.execute('turn=68; in_session=false; segment="TURNSEG_NORMAL"')
+    assert asyncio.run(state.congress_gate()) is None
+    assert not state.congress_pending
+    token = conn.lua.globals().__civmcp_wc_request.token
+    for _ in range(2):
+        assert 'WC_STAGE_FINISHED' in asyncio.run(server.queue_wc_votes(ctx, json.dumps(PLAN)))
+        assert not state.congress_pending
+        assert conn.lua.globals().__civmcp_wc_request.token == token
+    assert len(conn.operations) == 2 and conn.actions == ['continue']
+
+
+def test_completed_plan_can_be_submitted_at_a_new_native_voting_stage():
+    conn, state, _ = setup()
+    asyncio.run(state.queue_wc_votes(PLAN))
+    conn.lua.execute('turn=68; in_session=false; segment="TURNSEG_NORMAL"')
+    asyncio.run(state.congress_gate())
+    conn.lua.execute('in_session=true; segment="TURNSEG_WORLDCONGRESS_1"')
+    assert 'CONTINUE_REQUESTED' in asyncio.run(state.queue_wc_votes(PLAN))
+    assert len(conn.operations) == 4 and conn.actions == ['continue', 'continue']
+
+
 def test_registered_plan_native_rejection_after_turn_change_releases_without_voting():
     conn, state, _ = setup()
     conn.lua.execute('in_session=false; segment="TURNSEG_NORMAL"')

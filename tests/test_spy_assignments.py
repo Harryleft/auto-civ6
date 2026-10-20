@@ -31,9 +31,11 @@ local travel={Index=12,Hash=-1295211657,OperationType='UNITOPERATION_SPY_TRAVEL_
 local gain={Index=13,Hash=-311249027,OperationType='UNITOPERATION_SPY_GAIN_SOURCES'}
 local funds={Index=14,Hash=574548564,OperationType='UNITOPERATION_SPY_SIPHON_FUNDS'}
 local counter={Index=15,Hash=-2005926703,OperationType='UNITOPERATION_SPY_COUNTERSPY'}
-GameInfo.UnitOperations=setmetatable({[12]=travel,[13]=gain,[14]=funds,[15]=counter,
+local rocketry={Index=40,Hash=-1021949976,OperationType='UNITOPERATION_SPY_DISRUPT_ROCKETRY'}
+GameInfo.UnitOperations=setmetatable({[12]=travel,[13]=gain,[14]=funds,[15]=counter,[40]=rocketry,
  UNITOPERATION_SPY_TRAVEL_NEW_CITY=travel,UNITOPERATION_SPY_GAIN_SOURCES=gain,
- UNITOPERATION_SPY_SIPHON_FUNDS=funds,UNITOPERATION_SPY_COUNTERSPY=counter},
+ UNITOPERATION_SPY_SIPHON_FUNDS=funds,UNITOPERATION_SPY_COUNTERSPY=counter,
+ UNITOPERATION_SPY_DISRUPT_ROCKETRY=rocketry},
  {__call=function() return function() return nil end end})
 UnitOperationTypes={PARAM_X='x',PARAM_Y='y',PARAM_X0='x',PARAM_Y0='y'}
 UnitOperationResults={PLOTS='plots'}
@@ -62,6 +64,7 @@ function applyAssignment(op,params)
  if op==-1295211657 then u.op=12;u.x=-9999;u.y=-9999
  elseif op==-311249027 then u.op=13;u.x=params.x;u.y=params.y
  elseif op==574548564 then u.op=14;u.x=params.x;u.y=params.y
+ elseif op==-1021949976 then u.op=40;u.x=params.x;u.y=params.y
  else u.op=15;u.x=params.x;u.y=params.y end
  u.finish=49
 end
@@ -455,7 +458,7 @@ def test_lost_travel_reply_only_confirms_bound_assignment_start():
     assert state.pending_action_summary is None
 
 
-@pytest.mark.parametrize('mission,x,op', [('GAIN_SOURCES',10,13),('SIPHON_FUNDS',11,14),('COUNTERSPY',11,15)])
+@pytest.mark.parametrize('mission,x,op', [('GAIN_SOURCES',10,13),('SIPHON_FUNDS',11,14),('COUNTERSPY',11,15),('DISRUPT_ROCKETRY',11,40)])
 def test_mission_confirms_exact_native_target_assignment_not_mission_outcome(mission,x,op):
     conn=AssignmentConn();state=GameState(conn);ctx=make_ctx();app_of(ctx).game=state
     conn.lua.execute('u.x=10;u.y=10');conn.lose_reply=True

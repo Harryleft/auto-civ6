@@ -135,6 +135,8 @@ local function readChoices()
  if not info or not ((info.FromPlayer==me and info.ToPlayer==target) or (info.FromPlayer==target and info.ToPlayer==me)) then return nil,"PARTICIPANTS_UNKNOWN" end
  local conversation=ContextPtr:LookUpControl("/InGame/DiplomacyActionView/ConversationContainer")
  if ContextPtr:IsHidden() or not conversation or conversation:IsHidden() then return nil,"NO_CURRENT_CONVERSATION" end
+ -- 排队会话的旧语句不能借当前领袖的按钮提交。
+ if type(GetSelectedPlayerID)=="function" and GetSelectedPlayerID()~=target then return nil,"CURRENT_TARGET_CHANGED" end
  local k=record.variant
  local kind=DiplomacyManager.GetKeyName(k.StatementType)
  local subtype=DiplomacyManager.GetKeyName(k.StatementSubType)

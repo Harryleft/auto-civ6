@@ -216,7 +216,7 @@ class ActionLifecycle:
                     pending.details["origin"] = tuple(map(int, origin.groups()))
             elif pending.kind == "attack":
                 pending.details["pre_hp"] = _extract_pre_hp(result)
-                for name in ("target_owner", "target_id", "attacks_before"):
+                for name in ("target_owner", "target_id", "attacks_before", "civilian_entry", "origin_x", "origin_y", "moves_before"):
                     match = re.search(rf"\|{name}:(\d+)", result)
                     if match:
                         pending.details[name] = int(match[1])
@@ -502,6 +502,21 @@ class ActionLifecycle:
             core_status = next((line.split("|", 1)[1] for line in pending.observed if line.startswith("CORE_BUSY|")), metadata.get("busy", "unknown"))
             core_rows = [line for line in pending.observed if line.startswith("CORE_BUSY|")]
             city_started = core_rows == ["CORE_BUSY|false"] and self._city_attack_witness(pending)
+            civilian_entry = False
+            if (pending.entity[0] == "unit" and pending.success.startswith("MELEE_ATTACK|")
+                    and pending.details.get("civilian_entry") == 1 and metadata.get("busy") == "false"
+                    and core_rows == ["CORE_BUSY|false"]):
+                try:
+                    origin = (pending.details["origin_x"], pending.details["origin_y"])
+                    position = (int(metadata["x"]), int(metadata["y"]))
+                    civilian_entry = (origin != pending.details["target"]
+                                      and position == pending.details["target"]
+                                      and 0 <= float(metadata["moves"]) < pending.details["moves_before"])
+                except (KeyError, ValueError):
+                    pass
+            if civilian_entry:
+                # 只确认原指令已进入平民所在格，不将目标消失推断为击杀或俘获。
+                return pending.success + "|CIVILIAN_TILE_ENTERED|Target fate unknown; no kill or capture reward measured."
             if (changed or consumed or city_started) and core_status == "false":
                 damage = f"|damage dealt:{pre_hp-post_hp}" if pre_hp is not None and post_hp is not None else ""
                 # Missing from the original tile is not evidence of death. The
@@ -550,6 +565,16 @@ class ActionLifecycle:
                         suffix += f"|moves_remaining:{moves:g}"
                     return pending.success + suffix + f"|STOPPED_MID_PATH ({native_stop})"
                 queued = [row for row in pending.observed if row.startswith("QUEUED_TARGET|")]
+                # 控制区内再次移动可能原地结束本段；仅凭控制区或队列不能确认。
+                # 要求原请求的完整身份事件、原位置和目标队列同时匹配。
+                if (witness is not None and witness[1] and witness[0] == origin
+                        and origin is not None and (x, y) == origin and (x, y) != target
+                        and busy == "false" and meta.get("zoc") == "true"
+                        and moves is not None and moves > 0
+                        and queued == [f"QUEUED_TARGET|{target[0]}|{target[1]}"]):
+                    return (pending.success + suffix
+                            + "|BLOCKED (native segment complete in zone of control; no displacement)"
+                            + "|" + "|".join(witness[2]))
                 # A native MOVE_TO can move, then clear its path without a
                 # SegmentComplete event. Report interruption, not arrival.
                 if (interrupted is not None and interrupted == (origin, (x, y))

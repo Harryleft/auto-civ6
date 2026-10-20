@@ -70,18 +70,14 @@ if relCreated >= 0 then
 end
 print("STATUS|relCreated=" .. relCreated .. "|pantheon=" .. pantheon .. "|faith=" .. string.format("%.0f", faith))
 
--- Collect taken beliefs across all players
-local takenBeliefs = {}
-for i = 0, 62 do
-    if Players[i] and Players[i]:IsAlive() then
-        pcall(function()
-            local pr = Players[i]:GetReligion()
-            if pr then
-                local pan = pr:GetPantheon()
-                if pan >= 0 then takenBeliefs[pan] = true end
-            end
-        end)
-    end
+-- 与创教提交使用相同原生判断，排除已占用信条及当前宗教的类别限制。
+local gameReligion = Game.GetReligion()
+local function beliefAvailable(index)
+    local inPantheon = gameReligion:IsInSomePantheon(index)
+    local inReligion = gameReligion:IsInSomeReligion(index)
+    local tooMany = gameReligion:IsTooManyForReligion(index, relCreated)
+    assert(type(inPantheon)=="boolean" and type(inReligion)=="boolean" and type(tooMany)=="boolean", "BELIEF_AVAILABILITY_UNKNOWN")
+    return not inPantheon and not inReligion and not tooMany
 end
 
 -- Collect taken religions
@@ -109,7 +105,7 @@ end
 local classes = {"BELIEF_CLASS_FOLLOWER", "BELIEF_CLASS_FOUNDER", "BELIEF_CLASS_ENHANCER", "BELIEF_CLASS_WORSHIP"}
 for _, cls in ipairs(classes) do
     for belief in GameInfo.Beliefs() do
-        if belief.BeliefClassType == cls and not takenBeliefs[belief.Index] then
+        if belief.BeliefClassType == cls and beliefAvailable(belief.Index) then
             local name = Locale.Lookup(belief.Name):gsub("|", "/")
             local desc = Locale.Lookup(belief.Description):gsub("|", "/"):gsub("\\n", " ")
             print("BELIEF|" .. cls .. "|" .. belief.BeliefType .. "|" .. name .. "|" .. desc)
