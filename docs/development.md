@@ -48,6 +48,15 @@ git diff --check
 
 现有测试采用 GameState／FakeConn、内存 FireTuner 流、Lua 5.1 执行、快照差分和临时存档目录；在这些位置验证可观察行为，不复制自有状态机，也不以源码字符串断言代替关键时序验证。
 
+共享夹具定义在 [tests/conftest.py](../tests/conftest.py)，按待验证行为选择：
+
+| 夹具 | 适用范围 | 隔离要求 |
+| --- | --- | --- |
+| `committed_knowledge_root` | 对已提交快照进行只读 CLI 查询，在一次 pytest 会话内复用完整构建 | 修改输入、损坏产物或迁移路径的测试使用独立临时目录；查询继续经过正式版本与指纹检查 |
+| `fast_action_confirmation` | 使用脚本化回应验证多次观察、未决门禁和单次提交，显式缩短测试确认等待 | 验证截止时间或取消的测试自行控制预算与时序；游戏运行层默认等待不随测试优化改变 |
+
+优化测试耗时时保留行为断言，核对参数展开后的用例清单，并使用相同计时口径比较结果。一次运行的耗时不作为固定性能门槛；已有实测与复现方法见[测试优化验收](acceptance/2026-10-20-test-efficiency-optimization.md)。
+
 纯文档修改检查本地链接及锚点、命令与实现、关键约束覆盖和 `git diff --check`；不为排版重跑游戏流程或全量测试。开发依赖和版本以 `pyproject.toml`、`uv.lock` 为准。
 
 `scripts/test_connection.py`、`scripts/test_game_state.py`、`scripts/test_queries.py`、`scripts/integration_turns.py` 会连接真实游戏，不能作为离线检查运行。

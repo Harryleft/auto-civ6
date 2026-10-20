@@ -39,6 +39,7 @@
 - 全量回归：**5,235 项通过，88.95 秒**，收集清单逐项对比，无新增、删除或跳过实例。
 - 断言保留：修改文件中的 197 个测试函数、572 条 `assert` 经 AST 比较，在统一夹具变量名后完全一致；查询入口和行为断言继续执行。
 - `.venv/bin/python -m compileall -q src tests` 与 `git diff --check` 通过。
+- 远程 CI：包含受测代码的 `353cfaa` 已通过 [Python 离线测试](https://github.com/Harryleft/auto-civ6/actions/runs/39384017446)。该结果对应此提交，不替代后续提交的 CI 状态。
 - 未加载审计期间的 `optimize_probe`、`adapter_probe` 或其他替换插件；本次结果来自提交的测试代码。没有操作真实游戏。
 
 [机器可读摘要](2026-10-20-test-efficiency-optimization/summary.json)保留受测提交、完整实例清单摘要、各组耗时和断言对比结果；[逐文件耗时](2026-10-20-test-efficiency-optimization/files.csv)覆盖 101 个实际执行测试文件。原始日志、JUnit、收集清单、三阶段计时和比较脚本保存在本机忽略目录 `.local/test-audit/2026-10-20-optimization/`，原始基线仍在 `.local/test-audit/2026-10-20/`。
