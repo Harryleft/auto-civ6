@@ -14,7 +14,8 @@ local function religionID(v) if v==-1 or integer(v) then return v end;return nil
 local function boolean(v) if type(v)=='boolean' then return v end;return nil end
 local function wire(v)
  if v==nil then return 'unknown' end
- return tostring(v):gsub('|','/'):gsub('%c',' ')
+ -- %c is locale-sensitive and can classify UTF-8 continuation bytes as controls.
+ return tostring(v):gsub('|','/'):gsub('[%z\1-\31\127]',' ')
 end
 local function emit(tag,...) local a={tag};for i=1,select('#',...) do a[#a+1]=wire(select(i,...)) end;print(table.concat(a,'|')) end
 local function scope(label)
