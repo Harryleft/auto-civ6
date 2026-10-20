@@ -1626,7 +1626,9 @@ class TestMcpProtocol:
                     assert initialization.serverInfo.name == "Civilization VI"
                     tools = (await session.list_tools()).tools
                     names = {tool.name for tool in tools}
-                    assert len(names) == 82
+                    assert len(names) == 83
+                    defense = next(tool for tool in tools if tool.name == "get_religion_defense")
+                    assert defense.annotations.readOnlyHint is True
                     assert "negotiate_incoming_trade" in names
                     negotiation = next(tool.inputSchema for tool in tools if tool.name == "negotiate_incoming_trade")
                     assert negotiation["required"] == ["other_player_id", "expected_fingerprint"]

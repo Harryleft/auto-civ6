@@ -35,7 +35,7 @@ def test_victory_progress_reports_observed_fields_without_strategy_score():
         "35% | 7 turns | Rome", "prerequisite TECH_SATELLITES (researched=True)",
         "cost 600", "original capital lost", "tourism 34 | domestic tourists 81",
         "Our tourists from Greece: 14 | their domestic tourists: 52", "founded 3/5",
-        "majority=Buddhism", "religion cities 3", "9/20 VP", "score 123",
+        "majority=Buddhism", "native religion cities 3 (engine statistic; not owned-city count)", "9/20 VP", "score 123",
         "science 67.5", "culture 41.2", "gold -3.5", "military 456", "civics 19",
         "Land: rank 2 | ours 50 | best 80 | average 60 | worst 40",
     ):

@@ -1961,6 +1961,22 @@ async def get_victory_progress(ctx: Context) -> str:
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
+async def get_religion_defense(ctx: Context) -> str:
+    """Read owned-city religion pressure stocks/flow, visible religious units,
+    exact current native condemn qualifications, faith and scoped inquisition facts.
+    Hidden units/cities are excluded; partial/conflicting facts remain explicit.
+    This query does not execute defense or change pending actions.
+    """
+    from civ_mcp.lua.religion_defense import narrate
+    gs = _get_game(ctx)
+
+    async def _run():
+        return narrate(await gs.get_religion_defense())
+
+    return await _logged(ctx, "get_religion_defense", {}, _run)
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
 async def get_religion_spread(ctx: Context) -> str:
     """Get per-city religion breakdown across all visible cities.
 
