@@ -24,6 +24,26 @@
 - `skip` 只跳过本回合，`skip_remaining_units` 只处理当前就绪单位；驻防、治疗或警戒由模型显式选择。历史驻防回合数不表示单位当前仍在待命。
 - 掠夺由模型根据目标价值、反击风险和撤退路线决定。单位已在敌方目标格时，用 `unit_action(unit_id=..., action="pillage")` 显式掠夺一次；原生规则核对战争与资格，不自动移动或连续掠夺。区域内建筑与区域本体分别受损，后续层需重新判断、明确调用。`PILLAGED` 只确认所列原生损坏，未测量收益；未知时确认原请求，不追加掠夺。
 
+## 宗教防御
+
+`get_religion_defense` 读取当前世界、回合、本地玩家及 InGame／GameCore 范围，列出自有城市的多数宗教、信徒、累计压力 `accumulated_pressure` 与流入压力 `incoming_pressure`，以及当前可见的外方宗教单位。隐藏单位和外方城市细节不在查询范围内；空列表不能证明地图上没有传教士。
+
+先检查范围、`partial`／`unknown` 与冲突说明，再读取逐城事实。`owned_city_majorities` 来自本方城市逐项计数；`native_religion_city_stat` 保留引擎统计含义，不能当成本方城市数。审判已启动只表示购买前提之一，不表示城市压力已清除。多数宗教、信徒与累计压力分别保留原生读数，不从某一个指标推定下一回合安全。
+
+| 目的 | 入口与确认边界 |
+| --- | --- |
+| 当前谴责资格 | 查询返回同格、唯一可见宗教目标与本方 actor 的 `native_can_condemn`；执行仍使用 `unit_action(action="condemn_heretic")` 并重新核对原生资格。战争、议会决议与其他限制不能相互代替。 |
+| 清除异教 | 对当前符合原生资格的审判官调用 `unit_action(unit_id=unit_id, action="remove_heresy")`，不传城市坐标。工具只绑定原生返回的唯一自有城市目标，确认精确操作事件、一次 charge 消耗和异教累计压力实际下降后返回 `HERESY_REMOVED`。不推定本教压力增加或城市转化。 |
+| 神学攻击 | 对本次查询可见的异教宗教单位调用 `unit_action(unit_id=unit_id, action="religious_attack", target_x=target_x, target_y=target_y)`。原生宗教预演、实际目标和本回合路径都须匹配；不自动宣战。`RELIGIOUS_COMBAT_CONFIRMED` 需要原始操作和精确战斗参与者事件，加实际伤害或原生移除证据。移动或排队本身不能确认战斗。 |
+
+议会信息只读取当前 active resolutions，保留原始目标与选项。不能唯一对应当前宗教、效果或权限来源时，返回 `unknown`；历史会议回顾不能证明和平谴责权限仍生效。具体单位能否谴责，以本次原生资格为准。
+
+清除异教返回 `NATIVE_TARGET_UNCONFIRMED`，表示无法从当前原生目标结果确定实际作用城市，本次未提交。不要补猜最近城市或复制传教坐标重发。确认后的动作可用 `get_religion_defense` 刷新逐城压力和单位；查询不会消耗行动、关闭 UI 或释放未决门禁。
+
+返回 `OUTCOME_UNKNOWN` 时，保留原 actor、目标坐标和意图；只用完全相同的动作确认原请求。只读查询即使看到压力下降或目标消失，也不退役原请求。保存、推进和其他动作继续受门禁保护。原请求已确认后，再次相同调用属于新动作，可能再次消耗 charge。恢复操作按[未知结果处理](agent-recovery.md#结果未知)执行。
+
+本工具链的离线范围与待执行的原生验证见[宗教防御验收](acceptance/2026-10-20-religion-defense.md)。模型按本局局面选择是否防御；Runtime 不设固定城市比例、强制回合检查或后台防御策略。
+
 ## 推进回合
 
 1. 完成当前策略所需动作，读取必要的回读结果。
