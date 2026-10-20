@@ -278,3 +278,33 @@ def test_native_command_failure_reasons_do_not_become_inferred_permission_source
     result = query(conn)
     assert 'actor=196608 failure_reason=LOC_RELIGION_SAME_AS_CITY' in result
     assert 'permission_source=unknown expiry=unknown' in result
+
+
+def test_t131_native_half_population_majority_is_not_overruled_by_derived_threshold():
+    # Original run #2494: Eridu had 12 people, own religion 6, Protestant 4,
+    # and no religion 2; the native majority getter still returned religion 12.
+    # Pressure stocks below are adapter fixtures, not historical measurements.
+    conn = DefenseConn()
+    conn.lua.execute('''
+turn,coreTurn=131,131
+cities[2]=makeCity(131073,'Eridu',12,{
+ {Religion=12,Followers=6,Pressure=1200},
+ {Religion=7,Followers=4,Pressure=500},
+ {Religion=-1,Followers=2,Pressure=100}})
+cities[2].GetPopulation=function() return 12 end
+cities[2].GetX=function() return 35 end;cities[2].GetY=function() return 22 end
+''')
+    result = query(conn)
+    assert 'name=Eridu plot=35,22 population=12 majority=12' in result
+    assert 'city=131073 native majority=12 disagrees' not in result
+    assert 'city=131073 follower_majority_consistency=unknown' in result
+
+
+def test_half_owned_city_count_does_not_overrule_native_majority():
+    conn = DefenseConn()
+    conn.lua.execute('cities[2].majority=7;cities[2].rows[1].Followers=2;cities[2].rows[2].Followers=3')
+    result = query(conn)
+    assert 'owned_city_majorities: religion=12 count=1 / owned_cities=2' in result
+    assert 'owned_city_majorities: religion=7 count=1 / owned_cities=2' in result
+    assert 'disagrees with native_majority=12' not in result
+    assert 'owned_city_majority_consistency=unknown' in result

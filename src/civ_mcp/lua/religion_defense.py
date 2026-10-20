@@ -229,8 +229,13 @@ def narrate(report: ReligionDefense) -> str:
     for religion, count in sorted(counts.items()):
         lines.append(f'owned_city_majorities: religion={religion} count={count} / owned_cities={total}' + ('' if majority_complete else ' (partial)'))
     if majority_complete:
-        majority = next((r for r, n in counts.items() if r != '-1' and n > len(cities) / 2), '-1')
-        if ig[3] != 'unknown' and ig[3] != majority:
+        # A strict majority proves a contradiction with a different native value.
+        # No strict majority does NOT prove the native no-religion sentinel: the
+        # native boundary/tie rule is not established by these count observations.
+        majority = next((r for r, n in counts.items() if r != '-1' and n > len(cities) / 2), None)
+        if majority is None:
+            lines.append('owned_city_majority_consistency=unknown (native boundary rule not inferred)')
+        elif ig[3] != 'unknown' and ig[3] != majority:
             conflicts.append(f'owned-city majority={majority} disagrees with native_majority={ig[3]}')
     for p in records('RD_PRESSURE'):
         if len(p) == 5:
@@ -242,8 +247,12 @@ def narrate(report: ReligionDefense) -> str:
         stocks = [r for r in records('RD_PRESSURE') if len(r) == 5 and r[0] == city[0]]
         if any(not r[2].isdigit() for r in stocks):
             continue
-        follower_majority = next((r[1] for r in stocks if r[1] != '-1' and int(r[2]) > int(city[5]) / 2), '-1')
-        if follower_majority != city[6]:
+        follower_majority = next((r[1] for r in stocks if r[1] != '-1' and int(r[2]) > int(city[5]) / 2), None)
+        if follower_majority is None:
+            # Native T131 Eridu reported religion 12 with 6/12 followers. Do not
+            # replace that observation with an invented strict >50% necessity.
+            lines.append(f'city={city[0]} follower_majority_consistency=unknown (native boundary rule not inferred)')
+        elif follower_majority != city[6]:
             conflicts.append(f'city={city[0]} native majority={city[6]} disagrees with follower majority={follower_majority}')
     for c in records('RD_CITY_PRESSURE'):
         if len(c) == 2:
