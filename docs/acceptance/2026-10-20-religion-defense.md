@@ -57,3 +57,19 @@ Spec 的 P1 可经公开 GameState 与实际 Lua 复现：神学攻击提交后�
 | 议会资格变化 | 核对当前 active resolutions 和会议剩余原始值，分别记录当前谴责资格与可读权限来源。来源／宗教／效果无法唯一确定时应保持 unknown，不引用历史回顾补猜。 |
 
 未决结果按照[保存与恢复](../agent-recovery.md#结果未知)处理。上述清单不授权新游戏、重放、直接改数值、合成原生事件或有利结果回档。
+
+## 最终独立审查
+
+固定比较基点 `4224de2`，首次审查 HEAD `d47d200`；补修后固定 HEAD `af85d28`。范围均先核对真实非空 diff 和提交列表；两轴独立执行，没有游戏连接。
+
+### Standards
+
+No material issues found. 首轮无实质发现；对 `1443382` 坐标补修的复核仍无实质发现，独立执行神学套件 **99 passed**。
+
+### Spec
+
+首轮发现 1 项 P1：目标已知 X 变化可被未知 Y 遮蔽，恢复后错误释放 pending。统一实施者以公开 GameState／实际 Lua RED→GREEN 修复 `1443382`，新增 20 项坐标／回调／合法路径回归。最终 No material issues found；原审阅者独立重跑原复现，恢复后仍为 OUTCOME_UNKNOWN，invalid=True、pending 保留、submissions=1；独立神学套件 **99 passed**。
+
+最终相关回归为 **1308 passed in 35.68s**（受测生产代码 `1443382`，集成 `af85d28`），compileall／diff 检查通过。原始 1288 项与此次结果是前后版本，不相加为一个通过总数。R01–R04 按已约定的离线交付范围全部 resolved；原生动作清单仍未执行。
+
+新建 stdio 服务已确认 83 个公开工具，含 `get_religion_defense` 与两个 `unit_action` 新动作。已运行的旧 MCP 服务不会自动导入源码变动，需要重载服务后使用新入口；不需要为此重启游戏。
