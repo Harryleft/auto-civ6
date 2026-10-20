@@ -1,6 +1,7 @@
 """Read-only religious defense via public MCP/GameState and executed Lua 5.1."""
 import asyncio
 
+import pytest
 from lupa.lua51 import LuaRuntime, LuaError as NativeLuaError
 
 from civ_mcp import server
@@ -92,6 +93,44 @@ UI={RequestPlayerOperation=function() mutations=mutations+1;error('read query mu
 def query(conn):
     ctx = make_ctx(); app_of(ctx).game = GameState(conn)
     return asyncio.run(server.get_religion_defense(ctx))
+
+
+@pytest.fixture
+def native_utf8_control_locale():
+    """Exercise macOS libc's real C1 classification without retaining a locale change."""
+    lua = LuaRuntime()
+    previous = lua.eval('os.setlocale(nil, "ctype")')
+    try:
+        for candidate in ('en_US.UTF-8', 'C.UTF-8', 'UTF-8'):
+            selected = lua.eval('os.setlocale')(candidate, 'ctype')
+            if selected and lua.eval('string.char(129):match("%c") ~= nil'):
+                yield selected
+                return
+        pytest.skip('native UTF-8 libc locale with C1 control classification unavailable')
+    finally:
+        assert lua.eval('os.setlocale')(previous, 'ctype') is not None
+
+
+def test_public_query_preserves_native_utf8_names_in_control_sensitive_locale(native_utf8_control_locale):
+    conn = DefenseConn()
+    conn.lua.globals().cities[1].name = '乌鲁克 — Αθήνα 🏛️'
+
+    result = query(conn)
+
+    assert 'city=65536 owner=0 name=乌鲁克 — Αθήνα 🏛️ plot=34,26 population=5 majority=12' in result
+    assert 'owned_cities_scan=complete; owned_cities=2' in result
+
+
+@pytest.mark.parametrize('control_code', [*range(32), 127])
+def test_public_query_sanitizes_each_ascii_control_and_pipe_without_damaging_utf8(control_code):
+    conn = DefenseConn()
+    conn.lua.globals().cities[1].name = '乌鲁克|' + chr(control_code) + 'Αθήνα 🏛️\u0081'
+
+    result = query(conn)
+
+    assert 'city=65536 owner=0 name=乌鲁克/ Αθήνα 🏛️\u0081 plot=34,26 population=5 majority=12' in result
+    assert 'owned_cities_scan=complete; owned_cities=2' in result
+    assert 'city=65536 religion=12 followers=4 accumulated_pressure=1200' in result
 
 
 def test_public_query_reports_owned_pressure_and_visible_peaceful_religious_layer():
