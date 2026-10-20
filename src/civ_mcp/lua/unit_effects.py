@@ -130,7 +130,8 @@ end
 '''
 
 
-def build_unit_effect(kind: str, unit_id: int, token: str, *, core_religion: int | None = None) -> str:
+def build_unit_effect(kind: str, unit_id: int, token: str, *, core_religion: int | None = None, core_followers: tuple | None = None) -> str:
+    follower_lua = "nil" if core_followers is None else "{" + ",".join(map(str, core_followers)) + "}"
     return _CONTEXT + f'''
 local ok,r=pcall(function()
  assert(__civmcpUnitEffect==nil or type(__civmcpUnitEffect)=="table","RECEIPT_STORAGE_UNAVAILABLE")
@@ -180,6 +181,12 @@ local ok,r=pcall(function()
   local city=spreadTarget(unit,r.operation)
   r.city={{id=count(city:GetID()),owner=count(city:GetOwner()),x=city:GetX(),y=city:GetY()}}
   r.pressure=pressure(city,r.religion)
+   r.coreFollowers={follower_lua}
+   if r.coreFollowers then
+    local f=r.coreFollowers
+    assert(r.city.owner==owner and r.city.id==f[1] and r.city.x==f[2] and r.city.y==f[3]
+     and r.religion==f[4],"CORE_CITY_OR_RELIGION_CHANGED")
+   end
   r.params={{}}
   r.params[UnitOperationTypes.PARAM_X],r.params[UnitOperationTypes.PARAM_Y]=r.city.x,r.city.y
  else
@@ -376,10 +383,14 @@ local ok,detail,target=pcall(function()
  assert(city and sameEffectEntity(r,city,r.city))
  reason="PRESSURE_UNCONFIRMED"
  local current=pressure(city,r.religion)
- assert(current>r.pressure)
+  assert(current>r.pressure or (current==r.pressure and r.coreFollowers))
  if unit then assert(sameEffectEntity(r,unit,r)) end
  assert(sameEffectEntity(r,city,r.city) and sameScope(r))
- return "charges_remaining:"..remaining,"city:"..r.city.owner..":"..r.city.id.." pressure:"..r.pressure.."->"..current
+  if current==r.pressure then
+   print("SPREAD_INGAME_WITNESS|"..r.token.."|"..r.id.."|"..r.owner.."|"..r.religion.."|"..r.city.id.."|"..r.civ.."|"..r.seed.."|"..r.turn)
+   return "charges_remaining:"..remaining,"city:"..r.city.owner..":"..r.city.id.." pressure:unchanged"
+  end
+  return "charges_remaining:"..remaining,"city:"..r.city.owner..":"..r.city.id.." pressure:"..r.pressure.."->"..current
 end)
 if ok then
  -- A confirmation response can be lost before ActionLifecycle retires its
@@ -413,6 +424,18 @@ def parse_unit_effect_confirmation(lines: list[str], kind: str, unit_id: int, to
             if row[4] == "condemn" and kind == "condemn_heretic":
                 return f"HERETIC_CONDEMNED|unit:{unit_id}|target:{row[5]}|{row[6]}|{row[7]}|Target removal confirmed; rewards not measured."
             if row[4] == "spread":
+                if "pressure:unchanged" in row[7]:
+                    native = [line.split('|') for line in lines if line.startswith('SPREAD_INGAME_WITNESS|')]
+                    core = [line.split('|') for line in lines if line.startswith('SPREAD_CORE_CONFIRMED|')]
+                    if not (len(native) == len(core) == 1 and len(native[0]) == 9 and len(core[0]) == 11
+                            and native[0][1:] == core[0][1:9] and native[0][1:3] == [token, str(unit_id)]
+                            and core[0][4] == row[5] and core[0][9].isdigit() and core[0][10].isdigit()
+                            and int(core[0][10]) > int(core[0][9])
+                            and row[7] == f"city:{core[0][3]}:{core[0][5]} pressure:unchanged"
+                            and not any(line.startswith('SPREAD_CORE_OBSERVED|') for line in lines)):
+                        return None
+                    return (f"RELIGION_SPREAD|unit:{unit_id}|religion:{row[5]}|{row[6]}|{row[7]}"
+                            f"|GameCore followers:{core[0][9]}->{core[0][10]}; UI pressure unchanged.")
                 return f"RELIGION_SPREAD|unit:{unit_id}|religion:{row[5]}|{row[6]}|{row[7]}|Pressure increase confirmed."
             if row[4] == "prophet":
                 return f"RELIGION_FOUNDING_READY|unit:{unit_id}|individual:{row[5]}|{row[6]}|{row[7]}|Choose religion and beliefs separately."

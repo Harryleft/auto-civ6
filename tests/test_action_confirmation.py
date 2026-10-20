@@ -166,6 +166,38 @@ def test_matching_hp_of_different_enemy_does_not_confirm_attack():
     assert state.pending_action_summary
 
 
+@pytest.mark.parametrize("change", [None, "military", "same_origin", "no_movement", "wrong_tile", "busy", "missing_position", "ranged"])
+def test_civilian_entry_requires_original_ack_and_actual_completed_movement(change):
+    ack = "OK:MELEE_ATTACK|pre_hp:100/100|target_owner:2|target_id:123|attacks_before:1|civilian_entry:1|origin_x:11|origin_y:20|moves_before:4"
+    observed = "ATTACKER|hp:100|moves:3|attacks:1|busy:false|x:12|y:20"
+    if change == "military":
+        ack = ack.replace("civilian_entry:1", "civilian_entry:0")
+    elif change == "same_origin":
+        ack = ack.replace("origin_x:11", "origin_x:12")
+    elif change == "no_movement":
+        observed = observed.replace("moves:3", "moves:4")
+    elif change == "wrong_tile":
+        observed = observed.replace("x:12", "x:11")
+    elif change == "busy":
+        observed = observed.replace("busy:false", "busy:true")
+    elif change == "missing_position":
+        observed = observed.replace("|x:12|y:20", "")
+    elif change == "ranged":
+        ack = ack.replace("MELEE_ATTACK", "RANGE_ATTACK")
+    engine = Engine(writes=[[], [ack], [observed, "CORE_BUSY|false"], ConnectionError("lost")])
+    state = GameState(engine)
+    state.dismiss_popup = no_dismiss
+    result = asyncio.run(state.attack_unit(2, 12, 20))
+    if change is None:
+        assert "CIVILIAN_TILE_ENTERED" in result
+        assert "Target fate unknown" in result
+        assert state.pending_action_summary is None
+    else:
+        assert "OUTCOME_UNKNOWN" in result
+        assert state.pending_action_summary
+    assert sum("RequestOperation" in source for source in engine.submissions) == 1
+
+
 def test_confirmation_in_another_world_does_not_clear_unknown():
     engine = Engine(writes=[["OK:PRODUCING|UNIT_SCOUT"]], reads=[["ACTION_IDENTITY|CIVILIZATION_ROME|11|1", "CONFIRMED|queue verified"], ConnectionError("lost")])
     state = GameState(engine)

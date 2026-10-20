@@ -500,6 +500,9 @@ for row in GameInfo.Resources() do
             local accum = pRes:GetResourceAccumulationPerTurn(row.Index)
             local demand = pRes:GetUnitResourceDemandPerTurn(row.Index)
             local imported = pRes:GetResourceImportPerTurn(row.Index)
+            -- 与原生顶栏一致：总收入包含进口和奖励，总消耗包含发电。
+            accum = accum + imported + pRes:GetBonusResourcePerTurn(row.Index)
+            demand = demand + pRes:GetPowerResourceDemandPerTurn(row.Index)
             local rName = row.ResourceType:gsub("RESOURCE_", "")
             print("STOCKPILE|" .. rName .. "|" .. amt .. "|" .. cap .. "|" .. accum .. "|" .. demand .. "|" .. imported)
         elseif cls == "luxury" then
@@ -964,6 +967,9 @@ for row in GameInfo.Resources() do
         local accum = pRes:GetResourceAccumulationPerTurn(row.Index)
         local demand = pRes:GetUnitResourceDemandPerTurn(row.Index)
         local imported = pRes:GetResourceImportPerTurn(row.Index)
+        -- 与帝国资源查询保持相同的完整收支口径。
+        accum = accum + imported + pRes:GetBonusResourcePerTurn(row.Index)
+        demand = demand + pRes:GetPowerResourceDemandPerTurn(row.Index)
         local rName = row.ResourceType:gsub("RESOURCE_", "")
         print("STOCKPILE|" .. rName .. "|" .. amt .. "|" .. cap .. "|" .. accum .. "|" .. demand .. "|" .. imported)
     end

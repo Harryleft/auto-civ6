@@ -513,9 +513,9 @@ class ResourceStockpile:
     name: str
     amount: int
     cap: int
-    per_turn: int  # accumulation per turn
-    demand: int  # unit upkeep demand per turn
-    imported: int  # from trade deals
+    per_turn: int  # 每回合总收入，包含本土、进口和奖励
+    demand: int  # 每回合单位和发电的总消耗
+    imported: int  # 总收入中的进口部分，不重复相加
 
 
 @dataclass

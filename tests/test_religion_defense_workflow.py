@@ -204,10 +204,21 @@ def test_fresh_stdio_metadata_advertises_defense_without_any_network_connection(
     child = '''
 import socket
 
+original_connect = socket.socket.connect
+original_socketpair = socket.socketpair
+
 def forbidden_connection(*args, **kwargs):
     raise AssertionError("Metadata discovery must not connect to FireTuner or any network")
 
 socket.socket.connect = forbidden_connection
+def internal_socketpair(*args, **kwargs):
+    # Windows 用回环 TCP 构造内部唤醒管道，构造期间只放行标准库 socketpair。
+    socket.socket.connect = original_connect
+    try:
+        return original_socketpair(*args, **kwargs)
+    finally:
+        socket.socket.connect = forbidden_connection
+socket.socketpair = internal_socketpair
 from civ_mcp.server import main
 main()
 '''

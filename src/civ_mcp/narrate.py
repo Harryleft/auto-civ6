@@ -180,7 +180,7 @@ def narrate_spies(spies: list[lq.SpyInfo]) -> str:
         " — spy must already be in target city"
     )
     lines.append(
-        "  Mission types: COUNTERSPY, GAIN_SOURCES, SIPHON_FUNDS, STEAL_TECH_BOOST,"
+        "  Mission types: COUNTERSPY, GAIN_SOURCES, SIPHON_FUNDS, STEAL_TECH_BOOST, DISRUPT_ROCKETRY,"
         " SABOTAGE_PRODUCTION, GREAT_WORK_HEIST, RECRUIT_PARTISANS,"
         " NEUTRALIZE_GOVERNOR, FABRICATE_SCANDAL"
     )

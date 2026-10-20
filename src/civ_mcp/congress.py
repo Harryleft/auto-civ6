@@ -29,12 +29,14 @@ class CongressRequest:
 class CongressProgress:
     def __init__(self):
         self.request: CongressRequest | None = None
+        self.completed: tuple[CongressRequest, str] | None = None
 
     @property
     def pending(self) -> bool:
         return self.request is not None
 
     def invalidate_scope(self) -> None:
+        self.completed = None
         if self.request:
             self.request.invalidated = True
 
@@ -85,7 +87,9 @@ class CongressProgress:
                     if q.kind == 'open':
                         return 'ERR:WC_OPEN_REFUSED|Original start failed before entry; no start event submitted.'
                     return 'ERR:WC_VOTE_PREFERENCES|Original plan failed before any vote; no votes submitted.'
-                return f"WC_STAGE_FINISHED|stage:{stage}|requested allocation:{allocation}|Native stage advanced; voting outcomes require review."
+                result = f"WC_STAGE_FINISHED|stage:{stage}|requested allocation:{allocation}|Native stage advanced; voting outcomes require review."
+                self.completed = (q, result)
+                return result
             return f"{self.unknown()} WC_REQUEST|{state}|stage:{stage}|allocation:{allocation}"
         except (OSError, TimeoutError, LuaError, ValueError):
             return self.unknown()
@@ -105,6 +109,13 @@ class CongressProgress:
             world, turn, stage = self.scope(await conn.execute_write(build_congress_receipt(kind, token)))
         except (OSError, TimeoutError, LuaError, ValueError):
             return 'ERR:OUTCOME_UNKNOWN|Congress scope unavailable; no request submitted.'
+        # 结束回合也可能消费完成回执；紧接着的同计划重查不能登记未来投票。
+        if self.completed:
+            previous, result = self.completed
+            if (previous.kind == kind and previous.intent == intent
+                    and previous.world == world and stage == 'NONE'
+                    and previous.turn <= turn <= previous.turn + 1):
+                return result
         if allows_world is not None and not allows_world((world[1], int(world[2]), int(world[0]))):
             return 'ERR:OUTCOME_UNKNOWN|Congress cannot resolve a pending end-turn from another or unknown world; no request submitted.'
         guard = build_congress_scope_guard(world, turn, stage)

@@ -10,6 +10,9 @@ from test_unit_readiness import ReadyConn
 
 
 class EffectConn(ReadyConn):
+    async def execute_read(self, code):
+        return await ReadyConn.execute_write(self, code)
+
     def __init__(self, kind='great_person'):
         super().__init__()
         self.lose_reply = False

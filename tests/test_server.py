@@ -993,17 +993,16 @@ def isolated_server(monkeypatch, tmp_path):
     def external_call(*args, **kwargs):
         raise AssertionError("Test attempted an external process or socket call")
 
-    real_socket = socket.socket
-
-    def local_socket(family=socket.AF_INET, *args, **kwargs):
-        if family == socket.AF_UNIX:
-            return real_socket(family, *args, **kwargs)
-        return external_call(family, *args, **kwargs)
-
     async def external_process():
         raise AssertionError("Test attempted a real game lifecycle action")
 
-    monkeypatch.setattr(socket, "socket", local_socket)
+    # 只拦截游戏通信与启动器，保留 Windows 事件循环的内部套接字类型。
+    monkeypatch.setattr(game_launcher, "socket", SimpleNamespace(
+        socket=external_call, AF_INET=socket.AF_INET, SOCK_STREAM=socket.SOCK_STREAM,
+    ))
+    async def external_connection(*args, **kwargs):
+        return external_call(*args, **kwargs)
+    monkeypatch.setattr(server.GameConnection, "connect", external_connection)
     monkeypatch.setattr(subprocess, "run", external_call)
     monkeypatch.setattr(subprocess, "Popen", external_call)
     monkeypatch.setattr(game_launcher, "kill_game", external_process)
@@ -1626,7 +1625,9 @@ class TestMcpProtocol:
                     assert initialization.serverInfo.name == "Civilization VI"
                     tools = (await session.list_tools()).tools
                     names = {tool.name for tool in tools}
-                    assert len(names) == 83
+                    assert len(names) == 84
+                    close_schema = next(tool.inputSchema for tool in tools if tool.name == "close_diplomacy_session")
+                    assert close_schema["required"] == ["other_player_id"]
                     defense = next(tool for tool in tools if tool.name == "get_religion_defense")
                     assert defense.annotations.readOnlyHint is True
                     assert "negotiate_incoming_trade" in names

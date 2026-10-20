@@ -72,6 +72,7 @@ for owner=0,3 do
             GetDiplomaticModifiers=function() return {} end} end,
         GetCities=function() return collection end,GetUnits=function() return collection end,
         GetScore=function() return 10 end,GetFavor=function() return 0 end,
+        GetFavorPerTurn=function() return 0 end,
         GetTreasury=function() return {
             GetGoldBalance=function() return 30 end,GetGoldYield=function() return 5 end,
             GetTotalMaintenance=function() return 1 end} end,
@@ -114,6 +115,16 @@ def test_overview_returns_native_civilization_and_leader_ids_alongside_localized
     text = narrate_overview(overview)
     assert "CIVILIZATION_BABYLON_STK" in text
     assert "LEADER_HAMMURABI" in text
+
+
+@pytest.mark.parametrize("native_rate", [12, 0, -7])
+def test_overview_uses_native_net_favor_including_bonuses_and_penalties(native_rate):
+    conn = IdentityConn()
+    # 原生收益包含四座文艺复兴城墙，或因外交惩罚降到零和负数。
+    conn.lua.execute(f"Players[0].GetFavorPerTurn=function() return {native_rate} end")
+    overview = asyncio.run(GameState(conn).get_game_overview())
+    assert overview.favor_per_turn == native_rate
+    assert f"({native_rate:+d}/turn)" in narrate_overview(overview)
 
 
 def test_diplomacy_keeps_variants_distinct_and_never_reads_unmet_identity():

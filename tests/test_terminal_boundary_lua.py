@@ -1,6 +1,7 @@
 """Terminal outcome and save boundaries through real GameState and Lua 5.1."""
 
 import asyncio
+import sys
 
 import pytest
 
@@ -101,6 +102,8 @@ class SaveBoundaryConn(TerminalConn):
 GameConfiguration={GetValue=function() return 719665280 end}
 PlayerConfigurations[0].GetCivilizationTypeName=function() return "CIVILIZATION_SUMERIA" end
 save_requests,save_adds=0,0
+UI={GetInterfaceMode=function() return 1 end}
+InterfaceModeTypes={SELECTION=1,CINEMATIC=2}
 finish_save=true
 local listeners={}
 Events={SaveComplete={
@@ -139,7 +142,8 @@ def save_environment(monkeypatch,tmp_path):
     from civ_mcp import checkpoints,game_launcher,game_lifecycle
     monkeypatch.setattr(game_launcher,'SINGLE_SAVE_DIR',str(tmp_path))
     monkeypatch.setattr(checkpoints,'CHECKPOINT_DIR',tmp_path/'metadata')
-    monkeypatch.setattr(game_lifecycle,'SAVE_CONFIRM_TIMEOUT',0.03)
+    # 文件与事件双证据测试保留 Windows 调度余量，不改变运行层实际超时。
+    monkeypatch.setattr(game_lifecycle,'SAVE_CONFIRM_TIMEOUT',0.2 if sys.platform == 'win32' else 0.03)
     monkeypatch.setattr(game_lifecycle,'SAVE_POLL_INTERVAL',0.001)
     assert checkpoints.begin_baseline_run() is None
     return tmp_path

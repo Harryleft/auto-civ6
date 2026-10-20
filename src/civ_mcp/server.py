@@ -295,7 +295,7 @@ async def spy_action(
             'escape:DISTRICT_HARBOR', 'escape:DISTRICT_COMMERCIAL_HUB', or
             'escape:DISTRICT_CITY_CENTER'. No route is chosen automatically.
             Mission types: COUNTERSPY, GAIN_SOURCES, SIPHON_FUNDS, STEAL_TECH_BOOST,
-            SABOTAGE_PRODUCTION, GREAT_WORK_HEIST, RECRUIT_PARTISANS,
+            SABOTAGE_PRODUCTION, DISRUPT_ROCKETRY, GREAT_WORK_HEIST, RECRUIT_PARTISANS,
             NEUTRALIZE_GOVERNOR, FABRICATE_SCANDAL
         target_x: X coordinate of the city center for travel, or native mission target tile; ignored for escape
         target_y: Y coordinate of that target; ignored for escape
@@ -1172,6 +1172,21 @@ async def respond_to_diplomacy(
         "respond_to_diplomacy",
         {"other_player_id": other_player_id, "response": response},
         lambda: gs.diplomacy_respond(other_player_id, response),
+    )
+
+
+@mcp.tool()
+async def close_diplomacy_session(ctx: Context, other_player_id: int) -> str:
+    """明确放弃一个已核验参与者的现有原生外交会话。
+
+    先读取 get_pending_diplomacy。没有当前语句或界面时也可明确取消，
+    不代选对话、不接受交易。既有未知动作必须先确认或显式恢复。
+    重复调用只确认原始关闭事件与会话缺席，不再次提交关闭。
+    """
+    gs = _get_game(ctx)
+    return await _logged(
+        ctx, "close_diplomacy_session", {"other_player_id": other_player_id},
+        lambda: gs.close_diplomacy_session(other_player_id),
     )
 
 

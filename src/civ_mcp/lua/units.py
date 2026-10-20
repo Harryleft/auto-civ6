@@ -585,11 +585,14 @@ pcall(function()
     local nativeStop = u:GetMovesRemaining() <= 0
     pcall(function() nativeStop = nativeStop or u:GetMovementMovesRemaining() <= 0 end)
     pcall(function() nativeStop = nativeStop or u:HasMovedIntoZOC() end)
+    -- 原地受控制区阻挡的精确结束段也必须释放原观察器。
+    local stationaryZoc = false
+    pcall(function() stationaryZoc = not moved and u:HasMovedIntoZOC() == true end)
     -- This event completes the original segment, even if a newly planned
     -- route now backtracks or is unavailable. It does not prove arrival.
     local segmentStop = q.done and queuedMatches
     if reached or u:GetMovesRemaining() <= 0 or nativeStop and moved
-        or segmentStop and moved or moveImpassable and not moved then
+        or segmentStop and (moved or stationaryZoc) or moveImpassable and not moved then
         q.closed = true
         pcall(function() Events.UnitOperationSegmentComplete.Remove(q.handler) end)
     end
@@ -830,6 +833,11 @@ local enemyHP = enemy:GetMaxDamage() - enemy:GetDamage()
 local enemyMaxHP = enemy:GetMaxDamage()
 local myHP = unit:GetMaxDamage() - unit:GetDamage()
 local beforeTag = "|target_owner:" .. enemyOwner .. "|target_id:" .. enemy:GetID() .. "|attacks_before:" .. unit:GetAttacksRemaining()
+local enemyInfo = GameInfo.Units[enemy:GetType()]
+if not isRanged and not isAir and enemyInfo and enemyInfo.Combat == 0 then
+    -- 平民格进入通常不消耗攻击次数，保留提交前位置和移动力供确认。
+    beforeTag = beforeTag .. "|civilian_entry:1|origin_x:" .. ux .. "|origin_y:" .. uy .. "|moves_before:" .. unit:GetMovesRemaining()
+end
 local params = {{}}
 params[UnitOperationTypes.PARAM_X] = {target_x}
 params[UnitOperationTypes.PARAM_Y] = {target_y}
@@ -899,7 +907,7 @@ if attacker and {attacker_index} >= 65536 and attacker:GetID() ~= {attacker_inde
 if attacker then
     local busy = "unknown"
     pcall(function() busy = tostring(UI.IsGameCoreBusy()) end)
-    print("ATTACKER|hp:" .. (attacker:GetMaxDamage()-attacker:GetDamage()) .. "|moves:" .. attacker:GetMovesRemaining() .. "|attacks:" .. attacker:GetAttacksRemaining() .. "|busy:" .. busy)
+    print("ATTACKER|hp:" .. (attacker:GetMaxDamage()-attacker:GetDamage()) .. "|moves:" .. attacker:GetMovesRemaining() .. "|attacks:" .. attacker:GetAttacksRemaining() .. "|busy:" .. busy .. "|x:" .. attacker:GetX() .. "|y:" .. attacker:GetY())
 else print("ATTACKER|gone") end
 """
     return f"""

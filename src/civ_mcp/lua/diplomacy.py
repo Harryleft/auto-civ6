@@ -206,7 +206,7 @@ print("{SENTINEL}")
 
 # Working deals outlive their statement. Native ActionView shows DealView for both
 # MAKE_DEAL and MAKE_DEMAND; no cross-context active-statement getter is available.
-# Associate UI only with one verified player pair, never with cached item count.
+# 仅将界面关联到已核验的当前玩家，不使用交易缓存推断会话。
 _LUA_DIPLOMACY_CONTEXT = """
 local me = Game.GetLocalPlayer()
 local function readDiplomacyContext()
@@ -245,7 +245,24 @@ local function readDiplomacyContext()
             c.sessions[#c.sessions + 1] = {sid=candidate.sid, other=other, incoming=incoming}
         else invalidPair = true end
     end
-    if #candidates ~= 1 then c.reason="MULTIPLE_SESSIONS"; return c end
+    if #candidates ~= 1 then
+        -- 只有领袖界面自身的原生读取器能区分正在显示和排队的会话。
+        local ok, selected = pcall(function()
+            if ContextPtr:GetID() ~= "DiplomacyActionView" then return nil end
+            return GetSelectedPlayerID()
+        end)
+        local active = nil
+        if ok and type(selected) == "number" and not invalidPair then
+            for _, item in ipairs(c.sessions) do
+                if item.other == selected then
+                    if active then c.reason="MULTIPLE_SESSIONS"; return c end
+                    active = item
+                end
+            end
+        end
+        if not active then c.reason="MULTIPLE_SESSIONS"; return c end
+        c.sessions = {active}
+    end
     if invalidPair then c.reason="SESSION_PARTICIPANTS_UNKNOWN"; return c end
     local session = c.sessions[1]
     c.other = session.other
