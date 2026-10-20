@@ -28,7 +28,7 @@
 ### 已由第一方证明
 
 - `Base/Assets/Text/Vanilla_zh_Hans_CN.xml:47177–47187`：Missionary 和 Guru 不能发起神学战争但能防御；Apostle、Inquisitor 可发起。不要仅凭 ReligiousStrength>0 推定可主动攻击。真正资格仍由原生 CanStartOperation + preview 决定。
-- `Base/Assets/UI/Civ6Common.lua:102–130`：`MoveUnitToPlot` 首先对 visible plot 调用 **`CombatManager.IsAttackChangeWarState(kUnit:GetComponentID(),plotX,plotY)`**；非空 list 会进入宣战确认。和平宗教战若该API不可读或返回将宣战对象，工具应拒绝/未知，不能自动宣战或以外交是否在战代替原生校验。
+- `Base/Assets/UI/Civ6Common.lua:102–130`：`MoveUnitToPlot` 首先对 visible plot 调用 **`CombatManager.IsAttackChangeWarState(kUnit:GetComponentID(),plotX,plotY)`**；官方代码以 `results ~= nil and #results > 0` 识别宣战对象：成功调用返回 nil 或空表均不要求宣战。API缺失、抛错或畸形结果不可当 nil 成功；返回将宣战对象时工具拒绝，不能自动宣战或以外交是否在战代替原生校验。
 - `.../Civ6Common.lua:137–166`：普通非远程攻击采用 **`UnitOperationTypes.MOVE_TO`**；参数 `PARAM_X`, `PARAM_Y`，`PARAM_MODIFIERS=UnitOperationMoveModifiers.ATTACK + MOVE_IGNORE_UNEXPLORED_DESTINATION`（UI通用交互支持迷雾）。为避免误入未知，可限制visible且仅ATTACK，沿用repo已有即时攻击限制。没有找到独立 `THEOLOGICAL_COMBAT` operation。
 - `Base/Assets/UI/WorldInput.lua:951–953`：`UnitManager.GetMoveToPathEx(kUnit,endPlotId)` 返回 `pathInfo.plots/.turns`。
 - `.../WorldInput.lua:1033–1050`：用 **`Units.GetUnitsInPlotLayerID(x,y,MapLayers.ANY)`** 获取目标格单位，需同时 `PlayersVisibility:IsVisible(x,y)` 与 `IsUnitVisible(pUnit)`；这能包含宗教层，不应用默认 map layer。
@@ -67,3 +67,7 @@
 4. active WorldReligion row能否稳定提供effect/target数字ID；UI只展示LOC字段，语义映射不能猜。
 
 本笔记不建议加载/重开下一局；若当前终局无法产生合法候选，可以完成只读与离线验证，明确实机动作验收尚未覆盖，并为下一次获授权存档测试列出精确case。
+
+## 原局逐城多数的边界证据
+
+T131 #2494 同一原生读取显示埃利都人口12，拜火教6／新教4／无教2，GetMajorityReligion() 为拜火教12。因此不能用自造的严格 followers > population/2 公式否定原生多数。查询应保留原生事实和准确ownedcounts，仅把有依据的确定矛盾标为conflict；阈值边界不推断成安全或无多数。此为历史观测，不是新增实机验证。

@@ -1,6 +1,6 @@
 # R04 集成验证与操作文档
 
-Status: ready-for-agent
+Status: in-progress
 Label: ready-for-agent
 Dependencies: R01, R02, R03
 Spec: ../spec.md
