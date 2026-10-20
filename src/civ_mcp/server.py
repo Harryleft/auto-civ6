@@ -1298,7 +1298,7 @@ async def unit_action(
 
     Args:
         unit_id: The unit's composite ID (from get_units output)
-        action: One of: move, cancel_move, pillage, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion, launch_inquisition, condemn_heretic
+        action: One of: move, cancel_move, pillage, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion, launch_inquisition, condemn_heretic, remove_heresy
         target_x: Target X coordinate (required for move/attack/trade_route/teleport)
         target_y: Target Y coordinate (required for move/attack/trade_route/teleport)
         improvement: Improvement type for builders (required for improve), e.g.
@@ -1325,6 +1325,8 @@ async def unit_action(
     For sacrifice_charges: Royal Society contribution — submit once with the full native builder ID, then confirm consumed charges and project progress/completion. Builder must be on its own district with an active matching project. Unknown results retain the gate; repeat only confirms.
     For spread_religion: consumes one spread charge at the current city or unique native city target.
     Confirms pressure growth for that unit's religion in the exact city; majority conversion is not required.
+    For remove_heresy: an eligible inquisitor removes foreign pressure from its unique native owned-city target.
+    Confirms the original operation, charge consumption and actual accumulated pressure decrease.
     For launch_inquisition: an eligible owned apostle launches its founded religion's inquisition.
     Confirms the GameCore false-to-true launch flag and consumption of that exact apostle.
     Ambiguous or unavailable city targets are refused. Unknown results retain the request; repeat only confirms.
@@ -1408,6 +1410,8 @@ async def unit_action(
                 return await gs.activate_great_person(unit_id)
             case "sacrifice_charges":
                 return await gs.sacrifice_builder_charges(unit_id)
+            case "remove_heresy":
+                return await gs.remove_heresy(unit_id)
             case "spread_religion":
                 return await gs.spread_religion(unit_id)
             case "launch_inquisition":
@@ -1419,7 +1423,7 @@ async def unit_action(
                     return "Error: teleport requires target_x and target_y of the destination city"
                 return await gs.teleport_to_city(unit_id, target_x, target_y)
             case _:
-                return f"Error: Unknown action '{action}'. Valid: move, cancel_move, pillage, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion, launch_inquisition, condemn_heretic"
+                return f"Error: Unknown action '{action}'. Valid: move, cancel_move, pillage, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion, launch_inquisition, condemn_heretic, remove_heresy"
 
     result = await _logged(ctx, "unit_action", params, _run)
     return result
