@@ -33,16 +33,16 @@
 | 目的 | 入口与确认边界 |
 | --- | --- |
 | 当前谴责资格 | 查询返回同格、唯一可见宗教目标与本方 actor 的 `native_can_condemn`；执行仍使用 `unit_action(action="condemn_heretic")` 并重新核对原生资格。战争、议会决议与其他限制不能相互代替。 |
-| 清除异教 | 对当前符合原生资格的审判官调用 `unit_action(unit_id=unit_id, action="remove_heresy")`，不传城市坐标。工具只绑定原生返回的唯一自有城市目标，确认精确操作事件、一次 charge 消耗和异教累计压力实际下降后返回 `HERESY_REMOVED`。不推定本教压力增加或城市转化。 |
+| 清除异教 | 对当前符合原生资格的审判官调用 `unit_action(unit_id=unit_id, action="remove_heresy")`，不传城市坐标。工具绑定精确所在自有城中心，或原生返回的唯一自有城市目标；若原生坐标存在则须完整且一致，确认精确操作事件、一次 charge 消耗和异教累计压力实际下降后返回 `HERESY_REMOVED`。不推定本教压力增加或城市转化。 |
 | 神学攻击 | 对本次查询可见的异教宗教单位调用 `unit_action(unit_id=unit_id, action="religious_attack", target_x=target_x, target_y=target_y)`。原生宗教预演、实际目标和本回合路径都须匹配；不自动宣战。`RELIGIOUS_COMBAT_CONFIRMED` 需要原始操作和精确战斗参与者事件，加实际伤害或原生移除证据。移动或排队本身不能确认战斗。 |
 
 议会信息只读取当前 active resolutions，保留原始目标与选项。不能唯一对应当前宗教、效果或权限来源时，返回 `unknown`；历史会议回顾不能证明和平谴责权限仍生效。具体单位能否谴责，以本次原生资格为准。
 
-清除异教返回 `NATIVE_TARGET_UNCONFIRMED`，表示无法从当前原生目标结果确定实际作用城市，本次未提交。不要补猜最近城市或复制传教坐标重发。确认后的动作可用 `get_religion_defense` 刷新逐城压力和单位；查询不会消耗行动、关闭 UI 或释放未决门禁。
+清除异教返回 `NATIVE_TARGET_UNCONFIRMED`，表示既非可核实的精确自有城中心，也无法从当前原生目标结果确定实际作用城市，本次未提交。不要补猜最近城市或复制传教坐标重发。确认后的动作可用 `get_religion_defense` 刷新逐城压力和单位；查询不会消耗行动、关闭 UI 或释放未决门禁。
 
 返回 `OUTCOME_UNKNOWN` 时，保留原 actor、目标坐标和意图；只用完全相同的动作确认原请求。只读查询即使看到压力下降或目标消失，也不退役原请求。保存、推进和其他动作继续受门禁保护。原请求已确认后，再次相同调用属于新动作，可能再次消耗 charge。恢复操作按[未知结果处理](agent-recovery.md#结果未知)执行。
 
-本工具链的离线范围与待执行的原生验证见[宗教防御验收](acceptance/2026-10-20-religion-defense.md)。模型按本局局面选择是否防御；Runtime 不设固定城市比例、强制回合检查或后台防御策略。
+本工具链的[离线验收](acceptance/2026-10-20-religion-defense.md)与[原局实机验收](../games/2026-10-19-gold/runs/2026-10-19-first/religion-native-validation-2026-10-20/acceptance.md)分别保留。模型按本局局面选择是否防御；Runtime 不设固定城市比例、强制回合检查或后台防御策略。
 
 ## 推进回合
 

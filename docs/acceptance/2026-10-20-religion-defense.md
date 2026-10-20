@@ -1,5 +1,7 @@
 # 宗教防御工具链离线验收
 
+后续状态：2026-10-20已按用户新增授权完成[原局检查点实机验收](../../games/2026-10-19-gold/runs/2026-10-19-first/religion-native-validation-2026-10-20/acceptance.md)及原生接口补修。下文保留首次离线交付时的范围、待办与审查历史；当前清除城心绑定、战斗见证和实际通过以该实机记录为准。
+
 2026-10-20；对应[规格与四项工作单](../specs/2026-10-20-religion-defense/spec.md)。本次补齐只读观测、原生清除异教和神学攻击入口，使用公开 MCP／GameState → 现有 ActionLifecycle → 实际生成的 Lua 5.1 → 原生 API adapter 验证。没有连接 FireTuner，没有启动、重启、加载或推进游戏；原局 T141 终局和存档保持原状。
 
 ## 验证范围

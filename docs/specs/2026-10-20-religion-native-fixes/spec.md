@@ -48,7 +48,7 @@ Validation evidence is separate under original run religion-native-validation-20
 
 ## C01 Native combat completion without UnitOperationStarted
 
-T140 public religious_attack #38 entered and returned once, actual CombatVisEnd matched the exact attacker/defender, target5570570 had exact UnitRemovedFromMap plus absence from both native lookups, actor3145737 HP100→86 and position35,22→36,23, war remainedfalse. Read-only receipt diagnostic records started=nil, combat=true, invalid=nil. The native engine did not supply the optional generic movement-start event for this completed theological kill; requiring it leaves a legitimate combat permanently pending.
+T140 public religious_attack #38 entered and returned once, actual CombatVisEnd matched the exact attacker/defender, target5570570 had exact UnitRemovedFromMap plus absence from both native lookups, actor3145737 HP100→86 and position35,22→36,23, war remainedfalse. Read-only receipt diagnostic records started=nil, combat=true, invalid=nil. This completed theological kill has no matched generic movement-start witness; its exact native omission or argument-shape cause is unproven; requiring it leaves a legitimate combat permanently pending.
 
 9. As a player, I want exact native theological combat and HP/removal proof accepted when the engine omits the generic operation-start event, so that a completed defense does not block the session.
 10. As a player, I want missing actual combat participation, wrong identities, wrong operation events, stale scope, ambiguous HP/removal or lost request return to remain unknown, so that removing the redundant witness does not turn a move or disappearance into combat success.
@@ -67,3 +67,7 @@ T142#95 Inquisitor3276804 entered Eridu35,22; #96 proves moves2/charges3, strict
 Implementation decision: align the exact city-center case with the existing spread-religion prior art: CityManager.GetCityAt(actor.x,actor.y) must return the same owned city center and stable scalar identity, actor/location/religion/charge and native strict qualification must still match immediately before the single no-parameter RequestOperation. When actual native target coordinates are present, they must identify the same unique owned city and cannot be ignored in favor of the center; malformed/partial contradictory targets remain refused. Off-center operation continues requiring unique actual native target plots. No nearest-city, owner-of-territory or localized-tooltip inference. Existing charge/pressure/removal/unknown and scope protections remain intact. P01 supersedes the earlier blanket requirement for returned PLOTS in the exact self-city case only.
 
 Tests use public MCP/GameState/executed Lua with the native description-only target transcript, positive exact own center and negative foreign/off-center/moved actor/changed or unreadable city/contradictory targets/native false or unknown/last charge and lost replies. Parent repeats actual T142 current exact scene after fresh service, checks pressure and charge, then validates final charge and continuation/save. No direct engine operation bypass.
+
+## Completion
+
+Q01/M01/C01/P01全部resolved；集成生产代码ec9824a，两轴最终无实质问题。T139查询/移动、T140和平神学战、T142普通清除、T144最后charge及后续动作/保存原生通过，原终局7项指纹不变。详细结果随原轮次独立归档。
