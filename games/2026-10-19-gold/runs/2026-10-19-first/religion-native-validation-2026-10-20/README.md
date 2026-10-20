@@ -29,3 +29,8 @@
 - #30使徒3145737从35,24进入35,22成功；#31原生ANY层回读确认与建造者3211267、野战加农炮3014658三者同格，warfalse；#32保存gold_val_20261020_t139_layer_pass（929002bytes）。M01实机通过。
 - #34确认T139→T140。#35当前宗教查询确认外方使徒5570570已到36,23、和平，#37保存gold_val_20261020_t140_peace_combat_ready（929153bytes）。
 - C01：T140#38宗教攻击实际发生，但返回OUTCOME_UNKNOWN（COMBAT_WITNESS_INCOMPLETE）；#39run_lua被原未决门禁拦截，没有执行；#40/41只读回读显示本方使徒HP100→86/位置35,22→36,23、瑞典目标消失与周边异教压力减少。干净关闭原owner后只读diagnostic确认entered/returned=true、started=nil、combat=true、target.removed=true、目标两条原生查找均缺失、invalid=nil、warfalse。诊断输出独立保存在evidence/t140-combat-receipt-diagnostic.json；没有重发动作或释放旧结果。进入C01 to-spec→implement-spec；修复后须显式恢复#37原战前检查点再进行任何游戏动作，旧#38保留未知事实。
+
+- C01修复a2be8bf／集成6425b31，226相关测试通过，两轴审查均无实质问题。#43显式恢复#37战前检查点并#44–46核对；#47一次公共神学攻击返回CONFIRMED（100→86／54→0）；#49独立原生查找目标双缺席、warfalse、exactCombatVisEnd/removaltrue，#50保存gold_val_20261020_t140_peace_combat_pass（928976bytes）。C01实机通过。#48诊断因Lua零返回值传tostring失败，#49仅修正只读查询，不涉及再次攻击。
+- #59–64明确处理巴西要求停止传教：POSITIVE一次进入后先返回unknown；原生变为“谢谢”／EXIT，#62仅确认原请求，#63退出，#64无外交待办。随后瑞典对话、议会、历史时刻弹窗均按原生当前选项处理，#75T140→141、#92T141→142。
+- #78原使徒启动审判且消费确认；#80花100信仰买Inquisitor3276804，#89保存独立T141买后检查点（937143bytes），#92进入T142。原局T141失败结果不改写。
+- P01：T142#95审判官到35,22，#96严格资格true、2MP/3charges；原生GetOperationTargets仅效果说明（预计10信徒）而无PLOTS/MODIFIERS；原城市131073异教stock406.8515625。#97零提交NATIVE_TARGET_UNCONFIRMED，进入P01 to-spec→implement-spec。#98保存gold_val_20261020_t142_purge_ready（939896bytes），干净关闭无未决owner；保持此现场待修复复验。
