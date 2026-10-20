@@ -1,6 +1,6 @@
 # 保存与恢复
 
-保存、加载、断线、挂起或结果未知时读取本指南。新测试核对[受信测试基准](../fixtures/saves/README.md)及其 JSON 清单；日常动作流程见[游戏操作](agent-playbook.md)。
+保存、加载、断线、挂起或结果未知时读取本指南。新测试核对[受信测试基准](../fixtures/saves/README.md)及其 JSON 清单；日常动作流程见[游戏操作](agent-playbook.md)，具体交互待办见[特殊操作指南](agent-special-operations.md)。
 
 ## 选择入口
 
