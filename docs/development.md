@@ -54,7 +54,7 @@ git diff --check
 
 ## 实机验收
 
-只有任务已授权操作真实游戏时才进入本节。运行前核对[受信测试基准](../fixtures/saves/README.md)和[检查点规则](agent-recovery.md#检查点与测试轮次)，保护存档及已有证据。
+只有任务已授权操作真实游戏时才进入本节。运行前核对[受信原始基准](../fixtures/saves/README.md)和[检查点规则](agent-recovery.md#检查点与测试轮次)，保护存档及已有证据。
 
 `integration_turns.py` 通过 stdio MCP 调用同一工具实现。以下命令会替换当前对局；已有对局时，当前驱动会完整重启并加载原始基准：
 
@@ -62,7 +62,7 @@ git diff --check
 uv run --locked python scripts/integration_turns.py --save benchmark_turn_1 --turns 10 --timeout 900
 ```
 
-CLI 默认且仅允许 `benchmark_turn_1`，省略 `--save` 也从原始基准开始。当前驱动使用固定测试策略处理单位、科研文化和生产项；策略只属于测试驱动，不移入 Runtime。未知结果、挂起、不支持的阻塞或预算耗尽时退出，不自动恢复／重发。检查点续测和菜单换档验证通过相应 MCP 工具执行。
+CLI 默认且仅允许 `benchmark_turn_1`，省略 `--save` 也从原始基准开始。当前驱动使用固定测试策略处理单位、科研文化和生产项；策略只属于测试驱动，不移入 Runtime。结果未知、挂起、不支持的阻塞或预算耗尽时退出，不自动恢复／重发。检查点续测和菜单换档验证通过相应 MCP 工具执行。
 
 完成记录写入所属对局／轮次的 `reports/`，包含使用的存档及来源、实际动作、净推进回合、阻塞与恢复、结果文件及未验证项。旧验收不能替代本次实测；只做离线验证时明确报告未连接游戏。
 

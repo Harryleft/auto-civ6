@@ -14,7 +14,7 @@
 | 每局必看的六项指标、各胜利路线的先行信号与响应准备 | [策略检查清单](agent-checklist.md) |
 | 扩张、胜利路线和对手预警 | [获胜决策](agent-strategy.md) |
 | 赛后比较与因果归因 | [复盘方法](replay-analysis.md) |
-| 保存、换档、未知结果和恢复 | [保存与恢复](agent-recovery.md) |
+| 保存、换档、结果未知和恢复 | [保存与恢复](agent-recovery.md) |
 | 规则、解锁条件和稳定机制 | [知识查询](../civ6_knowledge/README.md#mcp-查询) |
 
 ### 开发操作
