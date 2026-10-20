@@ -17,6 +17,10 @@ u.kind=5;u.religion=12;u.spreads=3;u.x=35;u.y=22
 GameInfo.Units[5]={UnitType='UNIT_INQUISITOR'}
 GameInfo.UnitOperations.UNITOPERATION_REMOVE_HERESY={OperationType='UNITOPERATION_REMOVE_HERESY',Hash=77}
 OperationResultsTypes={NO_TARGETS=0}
+-- First-party constants observed by native T142 request #101.
+UnitOperationResults={PLOTS=1933683541,MODIFIERS=628984671,MODIFIER_IS_TARGET=889110605,
+ ADDITIONAL_DESCRIPTION=-1554772595,FAILURE_REASONS=-2028665063}
+targets={[1933683541]={300},[628984671]={889110605}}
 city.owner=0;city.x=35;city.y=22
 religionRows={{Religion=-1,Pressure=40},{Religion=8,Pressure=400},{Religion=9,Pressure=200},{Religion=12,Pressure=100}}
 city.GetReligion=function() return {GetReligionsInCity=function() return religionRows end} end
@@ -115,9 +119,9 @@ city.GetReligion=function() city.owner=1;return {GetReligionsInCity=function() r
     'u.allowed=false', 'u.allowed=nil',
     "UnitManager.CanStartOperation=function() error('unknown eligibility') end",
     'u.kind=3', 'u.religion=0', 'u.spreads=0',
-    'city.owner=1', 'targets={plots={},modifiers={}}',
-    'targets=nil', 'targets={plots={300,300},modifiers={1,1}}',
-    'targets={plots={999},modifiers={1}}',
+    'city.owner=1', 'targets={[1933683541]={},[628984671]={}}',
+    'targets=nil', 'targets={[1933683541]={300,300},[628984671]={889110605,889110605}}',
+    'targets={[1933683541]={999},[628984671]={889110605}}',
     'UnitManager.GetOperationTargets=function() return nil end',
     'religionRows=nil', 'religionRows=false',
     'religionRows={{Pressure=400}}',
@@ -379,7 +383,7 @@ def test_native_description_only_self_city_purge_confirms_through_public_tool():
     'UnitManager.CanStartOperation=function() city.GetID=function() return nil end;return true end',
     'UnitManager.CanStartOperation=function() city=nil;return true end',
     'UnitManager.CanStartOperation=function() city.owner=1;return true end',
-    'UnitManager.CanStartOperation=function() targets={plots={300}};return true end',
+    'UnitManager.CanStartOperation=function() targets={[1933683541]={300}};return true end',
 ])
 def test_description_only_purge_requires_exact_stable_owned_center_and_native_permission(setup):
     conn = PurgeConn(); state = GameState(conn)
@@ -391,11 +395,11 @@ def test_description_only_purge_requires_exact_stable_owned_center_and_native_pe
 
 
 @pytest.mark.parametrize('targets', [
-    '{plots={300}}', '{modifiers={1}}',
-    '{plots=false,modifiers={1}}', '{plots={300},modifiers=false}',
-    '{plots={300,999},modifiers={1}}', '{plots={300},modifiers={1,1}}',
-    '{plots={300},modifiers={false}}', '{plots={false},modifiers={1}}',
-    '{plots={300},modifiers={}}', '{plots={},modifiers={1}}',
+    '{[1933683541]={300}}', '{[628984671]={889110605}}',
+    '{[1933683541]=false,[628984671]={889110605}}', '{[1933683541]={300},[628984671]=false}',
+    '{[1933683541]={300,999},[628984671]={889110605}}', '{[1933683541]={300},[628984671]={889110605,889110605}}',
+    '{[1933683541]={300},[628984671]={false}}', '{[1933683541]={false},[628984671]={889110605}}',
+    '{[1933683541]={300},[628984671]={}}', '{[1933683541]={},[628984671]={889110605}}',
 ])
 def test_exact_center_cannot_override_partial_or_malformed_native_coordinate_targets(targets):
     conn = PurgeConn(); state = GameState(conn)
@@ -407,9 +411,9 @@ def test_exact_center_cannot_override_partial_or_malformed_native_coordinate_tar
 
 
 @pytest.mark.parametrize('other_owner,targets', [
-    (0, '{plots={301},modifiers={1}}'),
-    (1, '{plots={301},modifiers={1}}'),
-    (0, '{plots={300,301},modifiers={1,1}}'),
+    (0, '{[1933683541]={301},[628984671]={889110605}}'),
+    (1, '{[1933683541]={301},[628984671]={889110605}}'),
+    (0, '{[1933683541]={300,301},[628984671]={889110605,889110605}}'),
 ])
 def test_exact_center_cannot_override_conflicting_or_ambiguous_actual_native_city(other_owner, targets):
     conn = PurgeConn(); state = GameState(conn)
@@ -462,6 +466,39 @@ UnitManager.GetOperationTargets=function()
  return {[-1554772595]={'10 followers'}}
 end
 ''')
+    result = asyncio.run(server.unit_action(make_ctx(game=state), 196608, 'remove_heresy'))
+    assert result.startswith('Error: REMOVE_HERESY_REFUSED|')
+    assert conn.lua.eval('#submissions') == 0
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('setup', [
+    'UnitOperationResults.PLOTS=nil;UnitOperationResults.MODIFIERS=nil',
+    'UnitOperationResults.PLOTS=nil',
+    "UnitOperationResults.PLOTS='unknown'",
+    "UnitOperationResults.MODIFIERS='unknown'",
+    'UnitOperationResults.PLOTS=1.5',
+    'UnitOperationResults.MODIFIERS=UnitOperationResults.PLOTS',
+    'UnitOperationResults.MODIFIER_IS_TARGET=UnitOperationResults.PLOTS',
+    'UnitOperationResults.MODIFIER_IS_TARGET=UnitOperationResults.MODIFIERS',
+    'UnitOperationResults.MODIFIERS=nil',
+    "UnitOperationResults.PLOTS='unknown';UnitOperationResults.MODIFIERS='unknown'",
+    'UnitOperationResults.PLOTS=false;UnitOperationResults.MODIFIERS={}',
+    'UnitOperationResults.PLOTS=0/0',
+    "UnitOperationResults.PLOTS=''",
+    'UnitOperationResults.MODIFIER_IS_TARGET=nil',
+    'UnitOperationResults.MODIFIER_IS_TARGET=false',
+    'UnitOperationResults.MODIFIER_IS_TARGET=math.huge',
+    'UnitOperationResults.ADDITIONAL_DESCRIPTION=UnitOperationResults.PLOTS',
+    'UnitOperationResults.ADDITIONAL_DESCRIPTION=UnitOperationResults.MODIFIERS',
+])
+@pytest.mark.parametrize('target_rows', [
+    '{[1933683541]={999},[628984671]={889110605}}',
+    "{[-1554772595]={'10 followers'}}",
+])
+def test_unknown_or_conflicting_native_target_keys_cannot_hide_coordinate_targets(setup, target_rows):
+    conn = PurgeConn(); state = GameState(conn)
+    conn.lua.execute('targets=' + target_rows + ';' + setup)
     result = asyncio.run(server.unit_action(make_ctx(game=state), 196608, 'remove_heresy'))
     assert result.startswith('Error: REMOVE_HERESY_REFUSED|')
     assert conn.lua.eval('#submissions') == 0
