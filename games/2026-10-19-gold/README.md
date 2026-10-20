@@ -1,5 +1,7 @@
 # 神级苏美尔：benchmark_gold_tun_1
 
+最新Windows轮次已完成：第243回合原生苏美尔外交胜利（20/20），4城66人口保留，见[终局与香港收益](runs/2026-10-20-windows-full-game-01/reports/final.md)及[原生证据](runs/2026-10-20-windows-full-game-01/reports/terminal-evidence.json)。下方第141回合宗教失败属于较早独立轮次，保留历史结果。
+
 用户于 2026-10-19 授权从新建神级存档逐步推进至原生终局；遇到工具阻塞时按 to-spec → implement-spec 修复，保留发生回合和验证证据。
 
 已完成：T141结束阶段，瑞典克里斯蒂娜取得宗教胜利，苏美尔失败。27个阻塞均已修复并记录实机验证；最后确认存档 gold_20261019_t141_progress。参见[终局证据](runs/2026-10-19-first/reports/terminal-evidence.json)与[原生结果截图](runs/2026-10-19-first/evidence/t141-native-defeat.png)。
@@ -15,3 +17,7 @@
 旧不朽地图及其检查点保留；本局不使用旧局结果存档恢复。
 
 后续工具验证：[宗教防御原局检查点实机验收](runs/2026-10-19-first/religion-native-validation-2026-10-20/acceptance.md)，T139–144，查询／宗教层移动／和平神学战／三次清除及最后charge原生消耗通过。保留原T141终局，未新开下一局。
+
+## 2026-10-20 Windows 完整对局
+
+用户再次授权从原始神级第1回合开始，持续推进至原生终局；后续明确授权类似阻塞自行诊断、修复、测试并继续，无需等待implement-spec。本轮独立于上述历史终局与兼容性测试，已于243回合原生外交获胜，入口见[Windows完整对局01](runs/2026-10-20-windows-full-game-01/README.md)。

@@ -1,0 +1,48 @@
+{
+  "run_id": "44138f888bef42dabb57f55030244f98",
+  "confirmed_at_utc": "2026-10-20T20:15:57.925059+00:00",
+  "turn": 243,
+  "civilization_type": "CIVILIZATION_SUMERIA",
+  "seed": -1896272000,
+  "local_team": 0,
+  "winning_team": 0,
+  "victory_selector": 6,
+  "victory_type": "VICTORY_DIPLOMATIC",
+  "outcome": "VICTORY",
+  "diplomatic_points": 20,
+  "diplomatic_points_required": 20,
+  "native_end_turn_response": "GAME OVER — VICTORY! You won a Diplomatic victory!",
+  "native_gamecore_response": "TERMINAL\t243\t0\t6\tVICTORY_DIPLOMATIC\nLOCAL_TEAM\t0\nIDENTITY\tCIVILIZATION_SUMERIA\t-1896272000",
+  "journal": "../evidence/mcp-calls.jsonl",
+  "confirmation_request_ids": [4526, 4527],
+  "cities_retained": 4,
+  "population": 66,
+  "hong_kong": {
+    "suzerain_player": 0,
+    "effective_envoys": 24,
+    "actual_envoys_sent": 10,
+    "revealed_land_tiles": 5,
+    "revealed_water_tiles": 25,
+    "city_population": 11
+  },
+  "verified_preterminal_saves": [
+    {
+      "name": "full01_20261020_t241_start.Civ6Save",
+      "bytes": 1119546,
+      "sha256": "99c3cd09158558ecba8739f2ad9f45e2b4dbfbc1a8e927803242e2688de983dc"
+    },
+    {
+      "name": "full01_20261020_t242_start.Civ6Save",
+      "bytes": 1124142,
+      "sha256": "bea762801c76fd94ddeb2c3bee063d18b296d582c52c5cc0264be71996749038"
+    }
+  ],
+  "targeted_tests": {"passed": 334, "duration_seconds": 15.36},
+  "limitations": [
+    "达成20点是第242回合；正式原生判胜在第243回合，不能混同。",
+    "对局期间存在明确记录的技术恢复，不能称为1至243回合零中断运行。",
+    "第110回合原生崩溃根因仍未确定。",
+    "本轮仅实测Windows，未模拟或重测macOS。",
+    "香港征服方案未实际执行，收益比较不是对照实验。"
+  ]
+}
