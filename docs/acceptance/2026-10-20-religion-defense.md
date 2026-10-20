@@ -19,7 +19,7 @@
 
 集成流程测试：`tests/test_religion_defense_workflow.py`，5 项通过。回归 RED 使用实施前 `4224de2` 的离线源码快照运行新增流程测试，公开 `get_religion_defense` 缺失而失败；当前实现同一测试转绿。R02 的动作入口、城市消失、同次探测隐藏身份变化、最终 charge getter 变化等 RED→GREEN，以及 R01／R03 的逐项回归，由对应工作单记录。
 
-受测版本为 `1b557e3`：集成 `f44dcd8`，包含 R04 流程提交 `4b49dc1`。下列 15 个受影响套件共 **1288 passed in 36.05s**，包含 5 项新增跨特性流程。`compileall`、`git diff --check` 通过；3 份本次操作／验收文档的 26 个本地链接及锚点通过。独立 Spec／Standards 审查仍待执行，由父任务后续记录。
+受测版本为 `1b557e3`：集成 `f44dcd8`，包含 R04 流程提交 `4b49dc1`。下列 15 个受影响套件共 **1288 passed in 36.05s**，包含 5 项新增跨特性流程。`compileall`、`git diff --check` 通过；3 份本次操作／验收文档的 26 个本地链接及锚点通过。首次独立双审已对固定版本 `d47d200` 执行：Standards 未发现实质问题，Spec 发现 1 个 P1 坐标失效锁存问题。补修后仍待原审阅者复核，不预先记为审查通过。
 
 ```bash
 uv run --locked pytest -q \
@@ -33,6 +33,12 @@ uv run --locked pytest -q \
 uv run --locked python -m compileall -q src tests
 git diff --check
 ```
+
+## 独立审查后的坐标补修
+
+Spec 的 P1 可经公开 GameState 与实际 Lua 复现：神学攻击提交后，目标 X 从 20 变为 21，同时 Y getter 抛错；首次确认保留未知，但恢复坐标再触发原战斗时，旧实现错误确认成功并清除 pending。提交 `1443382` 将每个可读坐标独立比较并锁存不匹配。攻击者已进入操作后，任一已知坐标若不可能属于批准路径就锁存失效；坐标完整时还须同时属于同一个路径点。
+
+原始复现测试先实际失败，再在修复后通过。新增 20 项回归覆盖目标／攻击者、X／Y、确认探测／瞬时原生 callback、getter 抛错／nil，以及合法路径上的部分未知可恢复、进入目标格可确认、完整坐标不能拼接不同路径点。专项与跨特性流程合计 **104 passed in 2.44s**；未知或已锁存失效始终保留原动作，原生提交数为 1。补修版本 `1443382` 的同一组 15 套件共 **1308 passed in 35.68s**，`compileall` 与 `git diff --check` 通过；独立审查状态为待复核。
 
 ## 尚未执行的原生验收
 
