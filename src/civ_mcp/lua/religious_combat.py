@@ -234,7 +234,10 @@ local ok,detail=pcall(function()
  local finalScope=sameScope(r)
  assert(not r.invalid,"IDENTITY_CHANGED")
  assert(scoped and finalScope and actorKnown and targetKnown,"IDENTITY_OR_HP_UNKNOWN")
- assert(r.entered and r.returned and r.started and r.combat,"COMBAT_WITNESS_INCOMPLETE")
+ -- The native transcript has no matching generic Started witness. Exact combat
+ -- participants plus independent effects prove completion; a received wrong
+ -- operation still latches invalid above through the supplementary observer.
+ assert(r.entered and r.returned and r.combat,"COMBAT_WITNESS_INCOMPLETE")
  assert(actorHP<r.actor.hp or targetHP<r.target.hp,"COMBAT_EFFECT_UNCONFIRMED")
  return "target:"..r.target.owner..":"..r.target.id.."|attacker_hp:"..r.actor.hp.."->"..actorHP
   .."|defender_hp:"..r.target.hp.."->"..targetHP
