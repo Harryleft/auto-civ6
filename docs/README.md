@@ -39,6 +39,7 @@
 
 | 主题 | 入口 |
 | --- | --- |
+| 对局、操作确认和策略观察的统一术语 | [术语表](../GLOSSARY.md) |
 | 受信原始基准与文件指纹 | [存档说明](../fixtures/saves/README.md) |
 | 存档结构分析 | [存档格式研究](save-file-format.md) |
 | macOS Aspyr 启动器配置 | [启动器说明](research/bypassing_aspyr_launcher.md) |
