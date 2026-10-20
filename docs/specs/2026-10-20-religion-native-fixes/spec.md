@@ -45,3 +45,14 @@ New game/baseline, original-terminal changes, game setters, broad movement refac
 ## Further Notes
 
 Validation evidence is separate under original run religion-native-validation-2026-10-20. The user has explicitly authorized same-run checkpoint recovery and native actions for acceptance. Native no-moves refusal at T141 was legitimate and consumed no charge; do not falsely classify it as an implementation bug.
+
+## C01 Native combat completion without UnitOperationStarted
+
+T140 public religious_attack #38 entered and returned once, actual CombatVisEnd matched the exact attacker/defender, target5570570 had exact UnitRemovedFromMap plus absence from both native lookups, actor3145737 HP100→86 and position35,22→36,23, war remainedfalse. Read-only receipt diagnostic records started=nil, combat=true, invalid=nil. The native engine did not supply the optional generic movement-start event for this completed theological kill; requiring it leaves a legitimate combat permanently pending.
+
+9. As a player, I want exact native theological combat and HP/removal proof accepted when the engine omits the generic operation-start event, so that a completed defense does not block the session.
+10. As a player, I want missing actual combat participation, wrong identities, wrong operation events, stale scope, ambiguous HP/removal or lost request return to remain unknown, so that removing the redundant witness does not turn a move or disappearance into combat success.
+
+Implementation decision: retain one native request and its returned flag, exact current-scope combat-participant event, independent HP/removal effects and identity/path latches. Generic UnitOperationStarted is supplementary: any observed wrong actor operation still invalidates, but absence alone cannot disprove the exact native theological battle. Do not fabricate events or relax CombatVisEnd/removal/dual-lookup proof. Preserve unresolved original request; closing its owner does not permit gameplay. Parent explicitly restores the pre-request confirmed T140 checkpoint before replay on fresh service.
+
+Test C01 at existing public MCP/GameState/executed-Lua seam with native transcript's missing start + exact combat/removal/HP, and paired negative missing combat/effect, mismatched operations/identity/scope, entered-throw, unknown/lost-reply. Live replay only from gold_val_20261020_t140_peace_combat_ready (929153bytes), same run, one public attack and independent readback/save. Original #38 remains recorded unknown; replay receives new IDs, no retcon.
