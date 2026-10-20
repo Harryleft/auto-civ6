@@ -307,7 +307,7 @@ if isCivilian and unitInfo.TrackReligion == true then
     -- reads it with this plot overload. Require actual actor membership;
     -- missing layer facts must never turn the old conflict into permission.
     local layerOK, occupied = pcall(function()
-        local function religiousUnits(x,y)
+        local function religiousUnits(x,y,visibility)
             local plot = Map.GetPlot(x,y)
             assert(plot)
             local units = Units.GetUnitsInPlotLayerID(plot,3)
@@ -315,6 +315,7 @@ if isCivilian and unitInfo.TrackReligion == true then
             local count = 0
             for key,other in pairs(units) do
                 assert(scopeIndex(key) and key > 0)
+                if visibility then assert(visibility:IsUnitVisible(other) == true) end
                 assert(scopeIndex(other:GetID()) and scopePlayer(other:GetOwner()))
                 assert(other:GetX() == x and other:GetY() == y)
                 count = count + 1
@@ -327,7 +328,13 @@ if isCivilian and unitInfo.TrackReligion == true then
             if other:GetID() == unit:GetID() and other:GetOwner() == me then found = found + 1 end
         end
         assert(found == 1)
-        return #religiousUnits({target_x},{target_y}) > 0
+        -- Placement enumeration can include units hidden from this player.
+        -- Do not inspect fog occupancy, or turn an unseen unit into a known
+        -- conflict. Unknown visibility uses the same information-free refusal.
+        local visibility = PlayersVisibility[me]
+        assert(visibility:IsVisible({target_x},{target_y}) == true)
+        local targets = religiousUnits({target_x},{target_y},visibility)
+        return #targets > 0
     end)
     if not layerOK then
         {_bail("ERR:MOVE_LAYER_UNKNOWN|Native religious placement layer unavailable or unverified; no move submitted.")}
