@@ -6,4 +6,6 @@
 
 [final-readback.json](final-readback.json) 保留完整云端回读；[final-verification.json](final-verification.json) 为交付检查记录。
 
+以上为当时的交付结果。当前公开文件已对私有链接、云端资源和用户标识脱敏；记录中的“原 token 更新”和指纹描述原始验收，不表示公开占位符仍能访问云端资源。
+
 返回[团队分享资料](../README.md)。
