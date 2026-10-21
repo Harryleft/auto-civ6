@@ -45,6 +45,20 @@
     "report": "reports/2026-10-21-great-work-creation.md",
     "original_terminal_unchanged": true
   },
+  "victory_reproduction": {
+    "description": "后续原生胜利补拍，独立于原局年表；242读档三次未判胜，改从同局241重走至243成功",
+    "reproduced_on": "2026-10-21",
+    "requested_checkpoint_turn": 242,
+    "successful_checkpoint_turn": 241,
+    "terminal_turn": 243,
+    "outcome": "VICTORY",
+    "victory_type": "VICTORY_DIPLOMATIC",
+    "report": "reports/2026-10-21-victory-reproduction/README.md",
+    "metadata": "reports/2026-10-21-victory-reproduction/reproduction.json",
+    "verification": "reports/2026-10-21-victory-reproduction/terminal-verification.json",
+    "screenshot": "reports/2026-10-21-victory-reproduction/t243-diplomatic-victory-reproduced.jpg",
+    "original_terminal_unchanged": true
+  },
   "publication": {
     "url": "https://empire-chronicle.dongchao.chatgpt.site",
     "platform": "Sites",
@@ -72,6 +86,30 @@
     "algorithm": "sha256",
     "manifest_excludes_itself": true,
     "files": [
+      {
+        "path": "reports/2026-10-21-victory-reproduction/README.md",
+        "bytes": 3193,
+        "sha256": "d36a097408c1bac80acaf1854f14e4eaa378f5772e3ba2089532f3e2028a1c90",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/2026-10-21-victory-reproduction/reproduction.json",
+        "bytes": 3742,
+        "sha256": "27fbd0db533ce89393b8480a56830cdc4eef7b23b53a1dce32c6ceacd78f61b2",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/2026-10-21-victory-reproduction/t243-diplomatic-victory-reproduced.jpg",
+        "bytes": 184367,
+        "sha256": "285dede8d1982599b445163a7652fdf323e54c958a38b9ad3fdc2b805a0a44fe",
+        "content_mode": "original_bytes"
+      },
+      {
+        "path": "reports/2026-10-21-victory-reproduction/terminal-verification.json",
+        "bytes": 3985,
+        "sha256": "33a351e5931c623955a5160e8c08a99bacf9c99f999d00eeedadc3305f67247a",
+        "content_mode": "lf_text"
+      },
       {
         "path": "changes/2026-10-20-multiple-diplomacy-sessions/issues/D01-multiple-diplomacy-sessions.md",
         "bytes": 1675,
@@ -170,8 +208,8 @@
       },
       {
         "path": "README.md",
-        "bytes": 4606,
-        "sha256": "cd0f3710345ee9f76857d02df536110dc787af8d3cd9319c5f683523450c16e0",
+        "bytes": 4904,
+        "sha256": "86138f174c475c28e158299bd239a4f94999a7ba5d1d4f9fde026445c563cb9b",
         "content_mode": "lf_text"
       },
       {

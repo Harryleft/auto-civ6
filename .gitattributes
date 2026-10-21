@@ -8,3 +8,5 @@ games/2026-10-19-gold/runs/2026-10-20-windows-full-game-01/checkpoints/*.Civ6Sav
 games/2026-10-19-gold/runs/2026-10-20-windows-full-game-01/chronicle/*.html -text whitespace=-blank-at-eof
 games/2026-10-19-gold/runs/2026-10-20-windows-full-game-01/chronicle/data/*.json text eol=lf
 games/2026-10-19-gold/runs/2026-10-20-windows-full-game-01/chronicle/data/*.csv text eol=lf
+# 胜利复现的原生截图必须按二进制保存，避免全目录文本规则转换换行。
+games/2026-10-19-gold/runs/2026-10-20-windows-full-game-01/reports/2026-10-21-victory-reproduction/*.jpg binary
