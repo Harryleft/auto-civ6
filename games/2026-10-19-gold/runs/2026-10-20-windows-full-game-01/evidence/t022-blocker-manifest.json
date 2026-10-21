@@ -1,0 +1,32 @@
+{
+  "status": "fixed-and-verified-to-turn-23",
+  "round_id": "44138f888bef42dabb57f55030244f98",
+  "turn": 22,
+  "civilization_type": "CIVILIZATION_SUMERIA",
+  "leader_type": "LEADER_GILGAMESH",
+  "seed": -1896272000,
+  "git_head": "25262d2984f529dad3439bd65070b04d8e8ae21b",
+  "source_log": "mcp-calls.jsonl",
+  "evidence_request_ids": [218, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230],
+  "diplomacy_players": [2, 3],
+  "blocking_reason": "MULTIPLE_SESSIONS",
+  "additional_native_blocker": "ENDTURN_BLOCKING_RESEARCH",
+  "end_turn_pending_at_request_225": false,
+  "save_directory": "%USERPROFILE%\\Documents\\My Games\\Sid Meier's Civilization VI\\Saves\\Single",
+  "blocked_scene": {
+    "name": "full01_20261020_t022_diplomacy_blocked",
+    "bytes": 632749,
+    "sha256": "3ab84e7f9ae57adf895d71c6cb4fdf4c318c91b34c36ffaa321c0d43324ce5c2",
+    "native_save_confirmed": true,
+    "diplomacy_restoration_after_reload_verified": false
+  },
+  "before_trigger": {
+    "name": "full01_20261020_t022_start",
+    "bytes": 631554,
+    "sha256": "c7f0144fd423ec6fc763992c3953feb509a6b0e088acfe4e92fc93f20e534467",
+    "native_save_confirmed": true,
+    "scout_id": 196608,
+    "scout_position": [36, 22],
+    "trigger_destination": [34, 22]
+  }
+}

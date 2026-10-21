@@ -41,6 +41,13 @@ docs/paper/
 # Per-game raw evidence stays local; reports and manifests can be tracked.
 /games/**/evidence/
 
+# 用户要求归档此轮完整过程，仅开放下列三份已检查的原始证据。
+!/games/2026-10-19-gold/runs/2026-10-20-windows-full-game-01/evidence/
+/games/2026-10-19-gold/runs/2026-10-20-windows-full-game-01/evidence/*
+!/games/2026-10-19-gold/runs/2026-10-20-windows-full-game-01/evidence/mcp-calls.jsonl
+!/games/2026-10-19-gold/runs/2026-10-20-windows-full-game-01/evidence/great-work-followup.jsonl
+!/games/2026-10-19-gold/runs/2026-10-20-windows-full-game-01/evidence/t022-blocker-manifest.json
+
 # CivBench eval artifacts
 evals/saves/*.Civ6Save  # benchmark saves are tracked
 evals/.resume_context.md

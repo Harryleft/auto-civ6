@@ -1,2 +1,10 @@
 # 知识快照及配套文件按原始字节校验，Windows 检出也必须保持 LF。
 civ6_knowledge/** text eol=lf
+# 本轮存档、原始证据及网页快照保持归档指纹所对应的原始字节。
+games/2026-10-19-gold/runs/2026-10-20-windows-full-game-01/** text eol=lf
+games/2026-10-19-gold/runs/2026-10-20-windows-full-game-01/evidence/*.jsonl -text whitespace=cr-at-eol
+games/2026-10-19-gold/runs/2026-10-20-windows-full-game-01/evidence/t022-blocker-manifest.json -text
+games/2026-10-19-gold/runs/2026-10-20-windows-full-game-01/checkpoints/*.Civ6Save binary
+games/2026-10-19-gold/runs/2026-10-20-windows-full-game-01/chronicle/*.html -text whitespace=-blank-at-eof
+games/2026-10-19-gold/runs/2026-10-20-windows-full-game-01/chronicle/data/*.json text eol=lf
+games/2026-10-19-gold/runs/2026-10-20-windows-full-game-01/chronicle/data/*.csv text eol=lf
