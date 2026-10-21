@@ -1,0 +1,32 @@
+{
+  "run_id": "44138f888bef42dabb57f55030244f98",
+  "civilization_type": "CIVILIZATION_SUMERIA",
+  "seed": -1896272000,
+  "scope": "同轮已确认检查点的独立修复验收，原第243回合胜利记录保留",
+  "from_turn": 239,
+  "to_turn": 241,
+  "journal": "../evidence/great-work-followup.jsonl",
+  "source_checkpoint": {
+    "name": "full01_20261020_t239_start.Civ6Save",
+    "bytes": 1111840,
+    "sha256": "82e984704ded3eda5ab4b3b65b45c2451085ae4d00c5637a868b81f317c3137c"
+  },
+  "creations": [
+    {"turn": 239, "request_id": 108, "unit_id": 3276816, "individual": 29, "work": "GREATWORK_HOKUSAI_1", "index": 98, "city": 65536, "building": 23, "slot": 2},
+    {"turn": 239, "request_id": 111, "unit_id": 3735569, "individual": 168, "work": "GREATWORK_TOLSTOY_1", "index": 99, "city": 262147, "building": 14, "slot": 0},
+    {"turn": 240, "request_id": 128, "unit_id": 3735569, "individual": 168, "work": "GREATWORK_TOLSTOY_2", "index": 100, "city": 262147, "building": 14, "slot": 1},
+    {"turn": 240, "request_id": 133, "unit_id": 3276816, "individual": 29, "work": "GREATWORK_HOKUSAI_2", "index": 101, "city": 131073, "building": 23, "slot": 0},
+    {"turn": 241, "request_id": 148, "unit_id": 3276816, "individual": 29, "work": "GREATWORK_HOKUSAI_3", "index": 102, "city": 131073, "building": 23, "slot": 1}
+  ],
+  "independent_verification_request": 149,
+  "original_creators_absent_in_both_views": [3276816, 3735569],
+  "final_confirmation_code_request": 161,
+  "native_eligibility_refusal_request": 155,
+  "final_save": {
+    "name": "greatwork_20261021_t241_final.Civ6Save",
+    "bytes": 1120432,
+    "sha256": "8411d822875738a77941b02d5dc3f8689b3b4967dbc0252f9506e95f03d878bb"
+  },
+  "tests": {"passed": 443, "new_cases": 39, "skipped": 0, "duration_seconds": 28.15},
+  "limitations": ["音乐家仅离线验证", "未重测Mac实机", "不测量作品文化或旅游收益", "本次不是全库测试或整局稳定性验收"]
+}

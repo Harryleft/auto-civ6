@@ -2,6 +2,7 @@
 import json
 
 from civ_mcp.lua._helpers import SENTINEL, _LUA_ACTION_SCOPE
+from civ_mcp.lua.great_works import LUA_GREAT_WORK
 
 
 _CONTEXT = _LUA_ACTION_SCOPE + '''
@@ -127,7 +128,7 @@ local function inquisitionFacts(r)
  else known=false end
  return known and nativeOK and ownedOK and not r.invalid,native,owned
 end
-'''
+''' + LUA_GREAT_WORK
 
 
 def build_unit_effect(kind: str, unit_id: int, token: str, *, core_religion: int | None = None, core_followers: tuple | None = None) -> str:
@@ -207,7 +208,9 @@ local ok,r=pcall(function()
    r.operation=op.Hash;r.params={{}}
    r.params[UnitOperationTypes.PARAM_X],r.params[UnitOperationTypes.PARAM_Y]=r.x,r.y
   else
-   assert(r.charges>0,"NO_CHARGES")
+   if culturalUnits[GameInfo.Units[r.unitType].UnitType] then
+    r.mode="great_work";prepareGreatWork(r)
+   else assert(r.charges>0,"NO_CHARGES") end
    local command=GameInfo.UnitCommands["UNITCOMMAND_ACTIVATE_GREAT_PERSON"]
    assert(command and type(command.Hash)=="number" and type(UnitManager.RequestCommand)=="function","COMMAND_UNAVAILABLE")
    assert(UnitManager.CanStartCommand(unit,command.Hash,false,true)==true,"CANNOT_ACTIVATE")
@@ -225,7 +228,9 @@ local ok,r=pcall(function()
    assert(unit:GetMovesRemaining()>0 and UnitManager.CanStartOperation(unit,r.operation,nil,r.params,true)==true,"CANNOT_OPERATE")
   end
  end
- for _,name in ipairs({{r.event,"UnitRemovedFromMap"}}) do
+ local eventNames={{r.event,"UnitRemovedFromMap"}}
+ if r.mode=="great_work" then table.insert(eventNames,"GreatWorkCreated") end
+ for _,name in ipairs(eventNames) do
   assert(Events and Events[name] and type(Events[name].Add)=="function"
    and type(Events[name].Remove)=="function","OBSERVER_UNAVAILABLE")
  end
@@ -240,7 +245,7 @@ if r.mode=="condemn" then
   if __civmcpUnitEffect~=r or not r.entered or owner~=r.owner or id~=r.id or not sameScope(r) then return end
   if command==r.command then r.started=true else r.invalid=true end
  end
-elseif r.mode=="great_person" then
+elseif r.mode=="great_person" or r.mode=="great_work" then
  r.handlers.UnitGreatPersonActivated=function(owner,id,class,individual)
   if __civmcpUnitEffect==r and r.entered and owner==r.owner and id==r.id
    and class==r.class and individual==r.individual and sameScope(r) then r.activated=true end
@@ -249,6 +254,14 @@ else
  r.handlers.UnitOperationStarted=function(owner,id,operation)
   if __civmcpUnitEffect==r and r.entered and owner==r.owner and id==r.id
    and operation==r.operation and sameScope(r) then r.started=true end
+ end
+end
+if r.mode=="great_work" then
+ r.handlers.GreatWorkCreated=function(owner,creator,x,y,building,index)
+  if __civmcpUnitEffect~=r or not r.entered or owner~=r.owner or creator~=r.id or not sameScope(r) then return end
+  local prior=r.createdWork
+  if prior and (prior.x~=x or prior.y~=y or prior.building~=building or prior.index~=index) then r.invalid=true end
+  r.createdWork={{x=x,y=y,building=building,index=index}}
  end
 end
 r.handlers.UnitRemovedFromMap=function(owner,id)
@@ -260,7 +273,7 @@ local armed=pcall(function()
 end)
 if not armed then retireEffect(r);print("ERR:UNIT_EFFECT_REFUSED|OBSERVER_UNAVAILABLE");print("{SENTINEL}");return end
 local resolvedUnit
-if r.mode=="condemn" or r.mode=="spread" or r.mode=="inquisition" then
+if r.mode=="condemn" or r.mode=="spread" or r.mode=="inquisition" or r.mode=="great_work" then
  local entryOK,actor=pcall(function()
   if r.mode=="inquisition" then
    local known,current,owned=inquisitionFacts(r)
@@ -273,6 +286,11 @@ if r.mode=="condemn" or r.mode=="spread" or r.mode=="inquisition" then
   end
   local actor=effectUnit(r.owner,r.id)
   assert(sameEffectEntity(r,actor,r))
+  if r.mode=="great_work" then
+   local gp=actor:GetGreatPerson()
+   assert(gp:GetIndividual()==r.individual and gp:GetClass()==r.class,"GREAT_WORK_ACTOR_CHANGED")
+   assert(UnitManager.CanStartCommand(actor,r.command,false,true)==true,"CANNOT_ACTIVATE")
+  end
   if r.mode=="spread" then
    local city=CityManager.GetCityAt(r.city.x,r.city.y)
    assert(city and sameEffectEntity(r,city,r.city) and pressure(city,r.religion)==r.pressure)
@@ -337,9 +355,13 @@ local ok,detail,target=pcall(function()
   reason="CITY_ID_CHANGED"
   local city=CityManager.GetCityAt(r.city.x,r.city.y)
   assert(city and sameEffectEntity(r,city,r.city))
+ elseif r.mode=="great_work" then
+  reason="GREAT_WORK_ACTOR_UNKNOWN";observeGreatWorkActor(r)
+  if r.createdWork then reason="GREAT_WORK_CITY_UNKNOWN";observeGreatWorkCity(r) end
  end
  reason="ACTIVATION_NOT_OBSERVED"
- if r.mode=="great_person" then assert(r.activated==true) else assert(r.started==true) end
+ if r.mode=="great_person" or r.mode=="great_work" then assert(r.activated==true) else assert(r.started==true) end
+ if r.mode=="great_work" then reason="GREAT_WORK_UNCONFIRMED";return confirmGreatWork(r) end
  reason="UNIT_ID_CHANGED"
  local unit=UnitManager.GetUnit(r.owner,r.id%65536)
  if r.mode=="condemn" then
@@ -441,4 +463,6 @@ def parse_unit_effect_confirmation(lines: list[str], kind: str, unit_id: int, to
                 return f"RELIGION_FOUNDING_READY|unit:{unit_id}|individual:{row[5]}|{row[6]}|{row[7]}|Choose religion and beliefs separately."
             if row[4] == "great_person":
                 return f"GP_ACTIVATED|unit:{unit_id}|individual:{row[5]}|{row[6]}|{row[7]}|Activation confirmed; rewards not measured."
+            if row[4] == "great_work" and kind == "activate_great_person":
+                return f"GREAT_WORK_CREATED|unit:{unit_id}|individual:{row[5]}|{row[6]}|{row[7]}|Creation confirmed; yields not measured."
     return None

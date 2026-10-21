@@ -12,6 +12,7 @@
 | Windows 兼容 | [编码、路径、进程与分批离线验证](2026-10-20-windows-compatibility.md)、[神级净推进 10 回合](../../games/2026-10-19-gold/runs/2026-10-20-windows-compatibility-t001-t011/reports/windows-compatibility.md) |
 | Windows 稳定性续查 | [旧 MCP 超时与会话清理联动退出](2026-10-20-windows-stability-followup.md)、[第 11→21 回合与断开重连](../../games/2026-10-19-gold/runs/2026-10-20-windows-compatibility-t001-t011/reports/windows-stability-followup.md) |
 | Windows 完整对局复核 | [问题、修复、测试及遗留项汇总](2026-10-21-windows-full-game-review.md)、[第 243 回合原生外交胜利](../../games/2026-10-19-gold/runs/2026-10-20-windows-full-game-01/reports/final.md) |
+| 文化伟人创作 | [普通次数为零的修复、443 项回归与五件巨作实机验收](../../games/2026-10-19-gold/runs/2026-10-20-windows-full-game-01/reports/2026-10-21-great-work-creation.md) |
 | 测试效益与耗时 | [全量分类、慢测试及临时提速实验](2026-10-20-test-efficiency-audit.md)、[替身修复与全量耗时对比](2026-10-20-test-efficiency-optimization.md) |
 
 这里的通过记录只适用于对应受测版本；当前任务按[开发与验证](../development.md#离线验证)选择必要检查。

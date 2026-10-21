@@ -1334,8 +1334,10 @@ async def unit_action(
     For improve: provide improvement name. Builder must be on the tile.
     For repair: repairs a pillaged improvement on the builder's current tile. No improvement name needed.
     For remove_improvement: demolishes an improvement on the builder's current tile; confirms the tile result and actual charge change.
-    For activate: confirms the original Great Person activation and actual charge consumption.
+    For activate: ordinary Great People confirm the original activation and action charge consumption.
     Great Prophets confirm founding readiness; choose religion and beliefs separately.
+    作家、艺术家、音乐家的普通行动次数为零不代表不能创作，以原生激活资格为准。
+    创作成功须同时确认原单位激活、新巨作创建及匹配作品进入本方原空槽位。
     Other rewards are not measured. Unknown results retain the original request; repeat only confirms.
     For sacrifice_charges: Royal Society contribution — submit once with the full native builder ID, then confirm consumed charges and project progress/completion. Builder must be on its own district with an active matching project. Unknown results retain the gate; repeat only confirms.
     For spread_religion: consumes one spread charge at the current city or unique native city target.
