@@ -1,5 +1,15 @@
 # Windows 神级完整对局 01
 
+## 完整归档入口
+
+- [互动编年史与JSON／CSV年表](chronicle/README.md)：十二卷、243回合、119条初见地形；[公开站点](https://empire-chronicle.dongchao.chatgpt.site)。
+- [逐回合OODA复盘](reports/ooda-review.md)：每回合的观察、取舍、动作与反馈。
+- [原局操作日志](evidence/mcp-calls.jsonl)：4036条请求记录；[后续巨作测试日志](evidence/great-work-followup.jsonl)保持独立。
+- [原局关键存档](checkpoints/README.md)：本轮T1、T241、T242可加载副本及完整本机过程指纹清单。
+- [归档指纹与来源](chronicle/manifest.json)。
+
+本次归档不连接或推进游戏。以下终局、修复与历史过程记录保留原意。
+
 2026-10-21 后续修复：作家、艺术家创作路径已通过同轮检查点的独立 239→241 验证，共五件巨作、两名原伟人最终消耗；443 项相关测试通过，见[创作修复验收](reports/2026-10-21-great-work-creation.md)。原终局与历史记录保留。
 
 已完成：第243回合，原生确认苏美尔外交胜利，20/20点、4城66人口保留。GameCore获胜队伍0、类型VICTORY_DIPLOMATIC，公开end_turn返回GAME OVER — VICTORY，已停止游戏动作。香港保留并维持本方宗主；已揭示领地5格陆地、25格水域，不足以通过征服解决陆地约束。最终相关联合回归334项通过。详见[终局与香港收益](reports/final.md)、[结构化原生证据](reports/terminal-evidence.json)。110原生崩溃根因仍未确定，期间技术恢复均已记录；不能称为全程零中断。以下旧状态仅为历史记录。

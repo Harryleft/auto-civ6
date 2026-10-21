@@ -1,0 +1,387 @@
+{
+  "schema_version": 1,
+  "archived_on": "2026-10-21",
+  "path_base": "run_root",
+  "run_id": "44138f888bef42dabb57f55030244f98",
+  "identity": {
+    "civilization_type": "CIVILIZATION_SUMERIA",
+    "leader_type": "LEADER_GILGAMESH",
+    "difficulty": "DIFFICULTY_DEITY",
+    "speed": "GAMESPEED_QUICK",
+    "map_size": "MAPSIZE_TINY",
+    "map": "FourLeafClover",
+    "ruleset": "RULESET_EXPANSION_2",
+    "game_seed": -1896272000,
+    "map_seed": -1896271999
+  },
+  "original_game": {
+    "first_turn": 1,
+    "last_turn": 243,
+    "outcome": "VICTORY",
+    "victory_type": "VICTORY_DIPLOMATIC",
+    "cities_retained": 4,
+    "population": 66,
+    "diplomatic_points": 20,
+    "terminal_evidence": "reports/terminal-evidence.json",
+    "journal": "evidence/mcp-calls.jsonl",
+    "journal_lines": 4077,
+    "request_records": 4036,
+    "ready_events": 21,
+    "closed_events": 20,
+    "pre_game_knowledge_requests": 3,
+    "chronicle_turns": 243,
+    "chapters": 12,
+    "terrain_first_observations": 119
+  },
+  "separate_test_branch": {
+    "description": "后续巨作修复验收，不并入原局年表",
+    "replayed_turns": [
+      239,
+      240,
+      241
+    ],
+    "journal": "evidence/great-work-followup.jsonl",
+    "journal_lines": 86,
+    "report": "reports/2026-10-21-great-work-creation.md",
+    "original_terminal_unchanged": true
+  },
+  "publication": {
+    "url": "https://empire-chronicle.dongchao.chatgpt.site",
+    "platform": "Sites",
+    "access": "public",
+    "version": 1,
+    "site_source_commit_sha": "aaa66ada6ef2b06b1c13b172bde1a362f8e1603f",
+    "standalone_snapshot": "chronicle/index.html",
+    "editable_fragment": "chronicle/empire-chronicle.html",
+    "structured_timeline": "chronicle/data/chronicle.json",
+    "spreadsheet_timeline": "chronicle/data/timeline.csv"
+  },
+  "checkpoints": {
+    "manifest": "checkpoints/manifest.json",
+    "included_in_git": 3,
+    "local_inventory_count": 241,
+    "all_local_checkpoint_bytes": 213137099,
+    "selected_turns": [
+      1,
+      241,
+      242
+    ],
+    "terminal_turn_243_save_created": false
+  },
+  "integrity": {
+    "algorithm": "sha256",
+    "manifest_excludes_itself": true,
+    "files": [
+      {
+        "path": "changes/2026-10-20-multiple-diplomacy-sessions/issues/D01-multiple-diplomacy-sessions.md",
+        "bytes": 1675,
+        "sha256": "d9e6ef6109193b3846e365e7267cb8e3627057e6f712d2cc3c7a5a5c4b225a87",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "changes/2026-10-20-multiple-diplomacy-sessions/README.md",
+        "bytes": 972,
+        "sha256": "31f30035168334a16e46866508b18402834bb888d98f6c8d88dd5cab53c9e760",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "changes/2026-10-20-multiple-diplomacy-sessions/spec.md",
+        "bytes": 7903,
+        "sha256": "aadd6f8e49d2f1cb845b95e484fdd982c30d061537f24fac29461526d3f15673",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "checkpoints/full01_20261020_t001_start.Civ6Save",
+        "bytes": 397279,
+        "sha256": "d0156059cb41b32cf678e7fda1fb1aaaca1757ae958dba719820e2a5cb8dfa73",
+        "content_mode": "original_bytes"
+      },
+      {
+        "path": "checkpoints/full01_20261020_t241_start.Civ6Save",
+        "bytes": 1119546,
+        "sha256": "99c3cd09158558ecba8739f2ad9f45e2b4dbfbc1a8e927803242e2688de983dc",
+        "content_mode": "original_bytes"
+      },
+      {
+        "path": "checkpoints/full01_20261020_t242_start.Civ6Save",
+        "bytes": 1124142,
+        "sha256": "bea762801c76fd94ddeb2c3bee063d18b296d582c52c5cc0264be71996749038",
+        "content_mode": "original_bytes"
+      },
+      {
+        "path": "checkpoints/manifest.json",
+        "bytes": 56660,
+        "sha256": "e0c8098c7f3a832a12483f2369de7952a1c7545a1fa4c5ea89c79794c5c36506",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "checkpoints/README.md",
+        "bytes": 2070,
+        "sha256": "e117e69b11e387c30a2b341874423f6e22f642acb65d8c15bf19b0df8e0bd269",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "chronicle/data/chronicle.json",
+        "bytes": 219825,
+        "sha256": "0e0d042f2d7a648e47830160de19d49791c092623ecf70d8a94898d96d4c5ea2",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "chronicle/data/timeline.csv",
+        "bytes": 157805,
+        "sha256": "21251cd72d44b0e0177d9a33e4ba634c6162d5763212c3044e1d3dbee6f9f350",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "chronicle/empire-chronicle.html",
+        "bytes": 196690,
+        "sha256": "6dc64162fce2b0c54daf397dc19182f5d2612aca27c8c05200f47b1a124aa22f",
+        "content_mode": "original_bytes"
+      },
+      {
+        "path": "chronicle/index.html",
+        "bytes": 336776,
+        "sha256": "3b3733ad1ca6f9af70ec3128227bbb8e757dd6b84e7b2d739e0aa75b2f69e713",
+        "content_mode": "original_bytes"
+      },
+      {
+        "path": "chronicle/README.md",
+        "bytes": 3015,
+        "sha256": "246e44523522a5f766bc231fc0130a60fe6775b9ba5d142cbf89abd5dcced2b1",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "evidence/great-work-followup.jsonl",
+        "bytes": 165102,
+        "sha256": "7a39434468a45c5140b8f724983e60e890ddbd2e4c589592e090d3f2b4918cef",
+        "content_mode": "original_bytes"
+      },
+      {
+        "path": "evidence/mcp-calls.jsonl",
+        "bytes": 8810112,
+        "sha256": "d90d226c1c11b01b5be9e35e44f06b4d44a36ccd4949d7f625a7f7afdd18d5ea",
+        "content_mode": "original_bytes"
+      },
+      {
+        "path": "evidence/t022-blocker-manifest.json",
+        "bytes": 1251,
+        "sha256": "e9726ed14fa3a5ad27c630dc14d0f907ef54c0a40e48e107da0586af37c91722",
+        "content_mode": "original_bytes"
+      },
+      {
+        "path": "README.md",
+        "bytes": 4606,
+        "sha256": "cd0f3710345ee9f76857d02df536110dc787af8d3cd9319c5f683523450c16e0",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/2026-10-21-great-work-creation.md",
+        "bytes": 6419,
+        "sha256": "e7e90dedfd606d41ae4e0c680e4e728f6e27757fd6e8d085995d99bea9a1baa9",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/final.md",
+        "bytes": 5480,
+        "sha256": "2e542beb6e8e8221770caa4437e3de1caf4b0ed2c18a3670ed73fc8c884dd919",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/great-work-evidence.json",
+        "bytes": 1954,
+        "sha256": "76eb1d47338963f7c180fbd315495dee8714d77eb03c8092f108f485b750bc3c",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/ooda/great-work-test-239-241.md",
+        "bytes": 6661,
+        "sha256": "cf9fd8c87455da3ce0e2e1f9df4de6fd602717e901a7a1478cbe6994cf6904ed",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/ooda/turns-001-020.md",
+        "bytes": 23473,
+        "sha256": "a24d942f91ad6a86acd476f5f9365be410da629b933f9e29c13940b96b07311a",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/ooda/turns-021-040.md",
+        "bytes": 32116,
+        "sha256": "7850307107aee574d5c37410b3d5b78e8acf614e5b41de5bdbbd460d3ecae970",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/ooda/turns-041-060.md",
+        "bytes": 34947,
+        "sha256": "e57c1ac8a4e581ecad206ca54ecd6afb3ab5eef3046bc5fc5459e47bd238fed9",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/ooda/turns-061-080.md",
+        "bytes": 39364,
+        "sha256": "7a64fcdc0988a3c0e91d5da9c869d8251f79aadbda1fc3c78e26cb981cd41d9c",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/ooda/turns-081-100.md",
+        "bytes": 32525,
+        "sha256": "6e8d134ebe8d9f74e4e0cb48dcef250547d85a1aa2fa4594a8e6999f078d7045",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/ooda/turns-101-120.md",
+        "bytes": 30551,
+        "sha256": "a9ecae4295fa01bc4a809a2e60e507960b903c45bae989fc6bc8729add139672",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/ooda/turns-121-140.md",
+        "bytes": 35414,
+        "sha256": "557d4f916eea3bbb461171377a631b74714af8e998956a93c915c749a79e18a5",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/ooda/turns-141-160.md",
+        "bytes": 33469,
+        "sha256": "aa60cf48a71a522c820d42f6e2185ec3a673ccea8a9805b412f2c09108029e35",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/ooda/turns-161-180.md",
+        "bytes": 40902,
+        "sha256": "de666471921173db564690292441b2554924f8304e3695be4961b6aca1ee7067",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/ooda/turns-181-200.md",
+        "bytes": 33002,
+        "sha256": "82757748bf7a6b395231c41e2605619b84eede2a6287c7ce5b81d09e6519e397",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/ooda/turns-201-220.md",
+        "bytes": 52304,
+        "sha256": "f5634e8f0636dd675f33748723eb001cb48254d2068359963f2356ba65c48996",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/ooda/turns-221-240.md",
+        "bytes": 40756,
+        "sha256": "9e026ab73175a02a3265da099dc89d0e86afac7f69ba47f5e815bf34aab00383",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/ooda/turns-241-243.md",
+        "bytes": 4081,
+        "sha256": "0a269662b20ac9cc0a524cde23bc2bca2e1a3ead47f3a2cbd09fbbaf1a3ca21e",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/ooda-review.md",
+        "bytes": 10927,
+        "sha256": "d704e4f1e37b951223a8e4bb9fdd1e928d8dde056c4079ba33404f2c94b73ac1",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/progress.md",
+        "bytes": 50274,
+        "sha256": "22ba5080ab97ce801fd81c9321d67bc2e50ccffc736e2dcc725d79f26e9fbf5e",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/t022-diplomacy-blocker.md",
+        "bytes": 6065,
+        "sha256": "d7a9e7fa4e93dc21f8ff01285e21b5143d23b45715440303e7d275e2c3558eae",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/t023-access-refusal-blocker.md",
+        "bytes": 2577,
+        "sha256": "271330f6c34732b1a105061fadfd2d30f766b33bbe9d74ce24fa13faa40a90ad",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/t038-belief-availability.md",
+        "bytes": 1978,
+        "sha256": "8969a30e73aab34b6cc507119bdc238d160639de221576686f343c6d3c15328a",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/t063-hidden-diplomacy.md",
+        "bytes": 2325,
+        "sha256": "38230fa47c13de49a12c87fbeb4682488622ff6947ff246a984625db702919ff",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/t063-spread-pressure-blocker.md",
+        "bytes": 4979,
+        "sha256": "d965a123c1e41c15f70127c66f3cf8b149030dda60878c49c40f11b25bf6aa2c",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/t098-congress-recheck.md",
+        "bytes": 2104,
+        "sha256": "76e3974497b8a6bf33777c6b9beebfb607bbbec8b4885b099e637f77a5e0496e",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/t110-native-crash.md",
+        "bytes": 2824,
+        "sha256": "870fbf4d204427e9c156ff0b914115adc2492ba90c598fc98e636819cc0cf35b",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/t131-friendship-refusal.md",
+        "bytes": 2045,
+        "sha256": "f7f05a0982a9f126e7f242b63714a51eff3811041bc8f3f92443b5a263f93a8a",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/t138-save-popup.md",
+        "bytes": 2569,
+        "sha256": "9fbfb7a05996545896859c6ae16a556f432333397c7244572be02d6e01123da1",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/t159-civilian-entry.md",
+        "bytes": 1738,
+        "sha256": "4399c10fd279974e49c6eeb647e60e100eb27e1af555a8bc4d6dd6e31a005719",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/t179-rocketry-operation.md",
+        "bytes": 1428,
+        "sha256": "724f74ac1d269a816b023eea6254d9e4ee8ba7acd1f5ac19f8b81fa162f36a7d",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/t214-stationary-zoc.md",
+        "bytes": 3063,
+        "sha256": "d3ed683b0d4dddfffd1aa28dc676656400b909228670ffb066577e6674d49d16",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/t228-resource-income.md",
+        "bytes": 1558,
+        "sha256": "5cb135145cac2d9c13302d55978b966247537248e105d1f6df8f7008ea09d893",
+        "content_mode": "lf_text"
+      },
+      {
+        "path": "reports/terminal-evidence.json",
+        "bytes": 1778,
+        "sha256": "f9ff882832eb67572bae510c98b42f5f9a093ed168dee1c2d770d3d85788e9d1",
+        "content_mode": "lf_text"
+      }
+    ],
+    "text_line_endings": "lf"
+  },
+  "limitations": [
+    "原局存在技术恢复与一次已确认原生崩溃，不能描述为零中断。",
+    "第110回合原生崩溃根因未确定。",
+    "第242回合外交点数达标，第243回合才原生判胜。",
+    "年表叙事属于基于记录的复盘，不补造未记录的独立取舍。",
+    "地形按日志初见记录复原，不代表实时疆界、道路、改良或战线。",
+    "未在本次归档中加载或推进游戏；关键存档校验的是字节指纹。",
+    "其余过程存档仅登记指纹，二进制仍保留本机。"
+  ]
+}
