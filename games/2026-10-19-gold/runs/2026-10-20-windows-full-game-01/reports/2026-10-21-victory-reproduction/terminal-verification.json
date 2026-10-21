@@ -1,0 +1,86 @@
+{
+  "description": "复现胜利后的四次终局回读，非完整操作日志；end_turn 已判胜后零提交返回，未推进至第244回合。",
+  "records": [
+    {
+      "sequence": 1,
+      "observed_at_utc": "2026-10-21T13:28:06.326Z",
+      "tool": "end_turn",
+      "args": {},
+      "response": {
+        "content": [
+          {
+            "type": "text",
+            "text": "GAME OVER — VICTORY! You won a Diplomatic victory!"
+          }
+        ],
+        "structuredContent": {
+          "result": "GAME OVER — VICTORY! You won a Diplomatic victory!"
+        },
+        "isError": false
+      }
+    },
+    {
+      "sequence": 2,
+      "observed_at_utc": "2026-10-21T13:28:08.404Z",
+      "tool": "run_lua",
+      "args": {
+        "context": "gamecore",
+        "code": "local w,v=Game.GetWinningTeam(); local r=v and GameInfo.Victories[v]; print('TERMINAL',Game.GetCurrentGameTurn(),w,v,r and r.VictoryType); print('LOCAL_TEAM',Players[0]:GetTeam()); print('IDENTITY',PlayerConfigurations[0]:GetCivilizationTypeName(),GameConfiguration.GetValue('GAME_SYNC_RANDOM_SEED'))"
+      },
+      "response": {
+        "content": [
+          {
+            "type": "text",
+            "text": "TERMINAL\t243\t0\t6\tVICTORY_DIPLOMATIC\nLOCAL_TEAM\t0\nIDENTITY\tCIVILIZATION_SUMERIA\t-1896272000"
+          }
+        ],
+        "structuredContent": {
+          "result": "TERMINAL\t243\t0\t6\tVICTORY_DIPLOMATIC\nLOCAL_TEAM\t0\nIDENTITY\tCIVILIZATION_SUMERIA\t-1896272000"
+        },
+        "isError": false
+      }
+    },
+    {
+      "sequence": 3,
+      "observed_at_utc": "2026-10-21T13:28:10.174Z",
+      "tool": "run_lua",
+      "args": {
+        "context": "ingame",
+        "code": "local function read(k,f) local ok,v=pcall(f); print(k..'='..tostring(v)..' ok='..tostring(ok)) end; read('turn',function() return Game.GetCurrentGameTurn() end); read('civ',function() return PlayerConfigurations[Game.GetLocalPlayer()]:GetCivilizationTypeName() end); read('team',function() return Players[Game.GetLocalPlayer()]:GetTeam() end); read('seed',function() return GameConfiguration.GetValue('GAME_SYNC_RANDOM_SEED') end); read('map_seed',function() return MapConfiguration.GetValue('RANDOM_SEED') end); read('difficulty',function() local hash=PlayerConfigurations[Game.GetLocalPlayer()]:GetHandicapTypeID(); for d in GameInfo.Difficulties() do if GameConfiguration.MakeHash(d.DifficultyType)==hash then return d.DifficultyType end end end); read('diplo',function() return Players[Game.GetLocalPlayer()]:GetStats():GetDiplomaticVictoryPoints() end); local w,v=Game.GetWinningTeam(); print('winner='..tostring(w)..' selector='..tostring(v))"
+      },
+      "response": {
+        "content": [
+          {
+            "type": "text",
+            "text": "turn=243 ok=true\nciv=CIVILIZATION_SUMERIA ok=true\nteam=0 ok=true\nseed=-1896272000 ok=true\nmap_seed=-1896271999 ok=true\ndifficulty=DIFFICULTY_DEITY ok=true\ndiplo=20 ok=true\nwinner=0 selector=6"
+          }
+        ],
+        "structuredContent": {
+          "result": "turn=243 ok=true\nciv=CIVILIZATION_SUMERIA ok=true\nteam=0 ok=true\nseed=-1896272000 ok=true\nmap_seed=-1896271999 ok=true\ndifficulty=DIFFICULTY_DEITY ok=true\ndiplo=20 ok=true\nwinner=0 selector=6"
+        },
+        "isError": false
+      }
+    },
+    {
+      "sequence": 4,
+      "observed_at_utc": "2026-10-21T13:28:11.947Z",
+      "tool": "run_lua",
+      "args": {
+        "context": "gamecore",
+        "code": "local count,pop=0,0; for _,c in Players[Game.GetLocalPlayer()]:GetCities():Members() do count=count+1; pop=pop+c:GetPopulation() end; print('cities='..count..' population='..pop..' turn='..Game.GetCurrentGameTurn())"
+      },
+      "response": {
+        "content": [
+          {
+            "type": "text",
+            "text": "cities=4 population=66 turn=243"
+          }
+        ],
+        "structuredContent": {
+          "result": "cities=4 population=66 turn=243"
+        },
+        "isError": false
+      }
+    }
+  ]
+}

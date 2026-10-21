@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "description": "2026-10-21 实机复现补拍，独立于原局历史证据",
+  "original_run_id": "44138f888bef42dabb57f55030244f98",
+  "confirmed_at_utc": "2026-10-21T13:25:42.999Z",
+  "requested_checkpoint": {
+    "path": "../../checkpoints/full01_20261020_t242_start.Civ6Save",
+    "bytes": 1124142,
+    "sha256": "bea762801c76fd94ddeb2c3bee063d18b296d582c52c5cc0264be71996749038"
+  },
+  "attempts": [
+    {
+      "checkpoint_turn": 242,
+      "recovery": "reload_game_save",
+      "research": "TECH_OFFWORLD_MISSION",
+      "civic": "CIVIC_CULTURAL_HERITAGE",
+      "envoys_sent": [],
+      "advanced_to": 243,
+      "diplomatic_points": 20,
+      "winning_team": null
+    },
+    {
+      "checkpoint_turn": 242,
+      "recovery": "reload_game_save",
+      "research": "TECH_OFFWORLD_MISSION",
+      "civic": "CIVIC_CULTURAL_HERITAGE",
+      "envoys_sent": [
+        9,
+        7,
+        7
+      ],
+      "advanced_to": 243,
+      "diplomatic_points": 20,
+      "winning_team": null
+    },
+    {
+      "checkpoint_turn": 242,
+      "recovery": "restart_and_load",
+      "research": "TECH_OFFWORLD_MISSION",
+      "civic": "CIVIC_CULTURAL_HERITAGE",
+      "envoys_sent": [
+        9,
+        7,
+        7
+      ],
+      "advanced_to": 243,
+      "diplomatic_points": 20,
+      "winning_team": null
+    }
+  ],
+  "successful_recovery": {
+    "checkpoint": "../../checkpoints/full01_20261020_t241_start.Civ6Save",
+    "bytes": 1119546,
+    "sha256": "99c3cd09158558ecba8739f2ad9f45e2b4dbfbc1a8e927803242e2688de983dc",
+    "turns": [
+      241,
+      242,
+      243
+    ],
+    "production_city_ids": [
+      131073,
+      262147
+    ],
+    "project": "PROJECT_ENHANCE_DISTRICT_CAMPUS",
+    "research": "TECH_OFFWORLD_MISSION",
+    "civic": "CIVIC_CULTURAL_HERITAGE",
+    "envoys_sent": [
+      9,
+      7,
+      7
+    ],
+    "diplomatic_points_before": 19,
+    "diplomatic_points_after": 20
+  },
+  "outcome": {
+    "turn": 243,
+    "civilization_type": "CIVILIZATION_SUMERIA",
+    "leader_type": "LEADER_GILGAMESH",
+    "difficulty": "DIFFICULTY_DEITY",
+    "game_seed": -1896272000,
+    "map_seed": -1896271999,
+    "local_team": 0,
+    "winning_team": 0,
+    "victory_selector": 6,
+    "victory_type": "VICTORY_DIPLOMATIC",
+    "diplomatic_points": 20,
+    "diplomatic_points_required": 20,
+    "cities": 4,
+    "population": 66,
+    "advanced_to_244": false,
+    "terminal_verification": "terminal-verification.json"
+  },
+  "screenshot": {
+    "path": "t243-diplomatic-victory-reproduced.jpg",
+    "saved_at_utc": "2026-10-21T13:26:33.557Z",
+    "mime_type": "image/jpeg",
+    "width": 1707,
+    "height": 960,
+    "bytes": 184367,
+    "sha256": "285dede8d1982599b445163a7652fdf323e54c958a38b9ad3fdc2b805a0a44fe",
+    "method": "computer-use @oai/sky get_window_state 原始 JPEG，未裁切、拼接或添加文字"
+  },
+  "preserved_pre_replay_state": {
+    "save_name": "victory_repro_20261021_before_restore_t243",
+    "bytes": 1127897,
+    "turn": 243,
+    "location": "本机原生 Single 存档目录"
+  },
+  "limitations": [
+    "指定第242回合存档的三次回放未触发判胜；本截图实际来自同局第241回合检查点重走至243，不能称为直接从242读档成功。",
+    "怀疑20点达成后的待判胜状态在存档重载时丢失；已用相邻检查点绕开，尚未定位引擎内部根因。",
+    "第242回合直接重载时官方总分711变716，分类分数向量不变；分数不是完整世界状态相等证明。",
+    "本记录为操作摘要；terminal-verification.json 仅含胜利后的四次实测回读，非完整复现调用日志。",
+    "本截图为2026-10-21后续补拍，未替换原局终局证据或追加原始1至243回合年表。"
+  ]
+}
