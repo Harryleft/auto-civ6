@@ -8,7 +8,7 @@
 
 | 任务 | 入口 |
 | --- | --- |
-| 安装依赖、配置 FireTuner 或 MCP 客户端 | [安装与启动](../README.md#安装与启动) |
+| 安装依赖、配置 FireTuner 或 MCP 客户端 | [安装与连接](installation.md)；[AI 安装提示词](../README.md#安装与启动) |
 | 查询、常规动作和推进回合 | [游戏操作](agent-playbook.md) |
 | 议会、国家间交易、外交对话、强制选择和信息弹窗 | [特殊操作指南](agent-special-operations.md) |
 | 每局必看的六项指标、各胜利路线的先行信号与响应准备 | [策略检查清单](agent-checklist.md) |
@@ -42,5 +42,6 @@
 | 对局、操作确认和策略观察的统一术语 | [术语表](../GLOSSARY.md) |
 | 受信原始基准与文件指纹 | [存档说明](../fixtures/saves/README.md) |
 | 存档结构分析 | [存档格式研究](save-file-format.md) |
-| macOS Aspyr 启动器配置 | [启动器说明](research/bypassing_aspyr_launcher.md) |
+| Windows Steam、编码和存档目录 | [Windows 运行说明](windows.md) |
+| macOS Aspyr 启动器排查的历史方案 | [启动器调研](research/bypassing_aspyr_launcher.md) |
 | 旧架构与设计探索的来源 | [设计归档](archive/README.md)；仅作历史参考 |

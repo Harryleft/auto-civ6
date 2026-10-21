@@ -27,7 +27,7 @@
 
 | 任务触发条件 | 读取位置 |
 | --- | --- |
-| 启动、配置或连接游戏 | [游戏操作：开始运行](docs/agent-playbook.md#开始运行) [README](README.md#安装与启动) |
+| 启动、配置或连接游戏 | [安装与连接](docs/installation.md) [游戏操作：开始运行](docs/agent-playbook.md#开始运行) |
 | 开局、续局或推进以获胜为目标的对局 | [每局策略检查清单](docs/agent-checklist.md) |
 | 查询、执行常规动作或推进回合 | [游戏操作](docs/agent-playbook.md) |
 | 开局识别文明／领袖、理解已相遇对手，或制定与调整策略 | [获胜决策](docs/agent-strategy.md) |
