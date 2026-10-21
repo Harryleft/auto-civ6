@@ -12,6 +12,14 @@ wheels/
 # Claude Code user settings
 .claude/
 
+# Machine-local credentials and MCP overrides
+.env
+.env.*
+!.env.example
+!.env.sample
+.mcp.local.json
+/.codex/config.toml
+
 # OS files
 .DS_Store
 **/.DS_Store
