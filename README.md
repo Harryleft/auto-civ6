@@ -27,8 +27,10 @@
 将下面这段提示词复制给 **Codex 或 Claude Code**：
 
 ```text
-请帮我在本机安装并启动 https://github.com/Harryleft/auto-civ6，让我能在当前 Codex 或 Claude Code 中通过 MCP 操作《文明 VI：风云变幻》。先识别操作系统并检查已有环境；如果项目已在本地，复用现有目录。阅读项目 AGENTS.md，按对应平台说明（macOS：docs/research/bypassing_aspyr_launcher.md；Windows：docs/windows.md）补齐 Python 3.12+、uv 和项目依赖，运行 uv sync --locked。参考 .mcp.json 为当前客户端配置 civ6 stdio MCP，使用 uv run --locked --directory <项目绝对路径> civ-mcp，并设置 PYTHONUTF8=1，保留其他已有配置。检查并启用 FireTuner、关闭自动结束回合，启动 Steam 版游戏并确认本机 4318 端口可连接，然后重新加载 MCP 服务。保留现有存档和对局；需要重启或换档时遵循 docs/agent-recovery.md，仅加载我指定的存档，未指定时先问我。载入后调用 get_game_overview 验证连接与当前对局，确认后停下，不推进回合。缺少 Steam、游戏或必须由我完成的权限操作时，明确告诉我需要做什么；最后报告实际完成情况和剩余阻碍。
+请帮我在本机安装并启动 https://github.com/Harryleft/auto-civ6，让我能在当前 Codex 或 Claude Code 中通过 MCP 操作《文明 VI：风云变幻》。先识别操作系统并检查已有环境；如果项目已在本地，复用现有目录。阅读 AGENTS.md 和 docs/installation.md，完成依赖安装、当前客户端的 civ6 MCP 配置、FireTuner 配置及游戏启动，保留其他已有配置和存档。需要重启或换档时遵循 docs/agent-recovery.md，仅加载我指定的存档，未指定时先问我。载入后调用 get_game_overview 验证连接与当前对局，确认后停下，不推进回合。缺少 Steam、游戏或必须由我完成的权限操作时，明确告诉我需要做什么；最后报告实际完成情况和剩余阻碍。
 ```
+
+[安装与连接参考](docs/installation.md)
 
 ## 开始使用
 

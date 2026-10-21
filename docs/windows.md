@@ -1,16 +1,10 @@
 # Windows 运行说明
 
-项目保留 macOS 现有运行方式，同时支持 Windows 上的 Steam 版《文明 VI：风云变幻》。需要 Python 3.12+、uv 和 stdio MCP 客户端。
+本页补充 Windows 上 Steam 库、中文编码、桌面进程及存档目录的处理。通用依赖、FireTuner 设置和连接验收见[安装与连接](installation.md)。
 
 ## 安装与连接
 
-```powershell
-git clone https://github.com/Harryleft/auto-civ6.git
-Set-Location auto-civ6
-uv sync --locked
-```
-
-此命令会在 Windows 上安装桌面启动所需的 `pywin32`；macOS 不安装这项平台依赖。
+`uv sync --locked` 在 Windows 上安装桌面启动所需的 `pywin32`；macOS 不安装这项平台依赖。
 
 启用游戏配置中的 `EnableTuner 1`，在用户选项中设置 `AutoEndTurn 0`，重启游戏再加载存档。当前版本的 Windows 配置通常在 `%LOCALAPPDATA%\Firaxis Games\Sid Meier's Civilization VI\AppOptions.txt` 和 `UserOptions.txt`；先检查实际存在的文件，不直接新建或覆盖整份配置。
 
