@@ -48,39 +48,11 @@
 
 ## 安装与启动
 
-需要 **Python 3.12+**、[uv](https://docs.astral.sh/uv/)、支持 stdio 的 MCP 客户端，以及 **Steam 版 Civilization VI：Gathering Storm（风云变幻）**。支持 macOS 和 Windows。
+将下面这段提示词复制给 **Codex 或 Claude Code**：
 
-### 1. 安装项目
-
-```bash
-git clone https://github.com/Harryleft/auto-civ6.git
-cd auto-civ6
-uv sync --locked
+```text
+请帮我在本机安装并启动 https://github.com/Harryleft/auto-civ6，让我能在当前 Codex 或 Claude Code 中通过 MCP 操作《文明 VI：风云变幻》。先识别操作系统并检查已有环境；如果项目已在本地，复用现有目录。阅读项目 AGENTS.md，按对应平台说明（macOS：docs/research/bypassing_aspyr_launcher.md；Windows：docs/windows.md）补齐 Python 3.12+、uv 和项目依赖，运行 uv sync --locked。参考 .mcp.json 为当前客户端配置 civ6 stdio MCP，使用 uv run --locked --directory <项目绝对路径> civ-mcp，并设置 PYTHONUTF8=1，保留其他已有配置。检查并启用 FireTuner、关闭自动结束回合，启动 Steam 版游戏并确认本机 4318 端口可连接，然后重新加载 MCP 服务。保留现有存档和对局；需要重启或换档时遵循 docs/agent-recovery.md，仅加载我指定的存档，未指定时先问我。载入后调用 get_game_overview 验证连接与当前对局，确认后停下，不推进回合。缺少 Steam、游戏或必须由我完成的权限操作时，明确告诉我需要做什么；最后报告实际完成情况和剩余阻碍。
 ```
-
-### 2. 配置游戏
-
-启用 FireTuner，关闭自动结束回合，重启游戏并加载存档。FireTuner 使用本机 TCP 端口 `4318`。
-
-| 平台 | 配置与启动说明 |
-| :--- | :--- |
-| macOS | [Steam 与 Aspyr 启动设置](docs/research/bypassing_aspyr_launcher.md) |
-| Windows | [安装、FireTuner、中文编码与存档目录](docs/windows.md) |
-
-### 3. 配置 MCP 客户端
-
-以 Codex 为例，在配置中填写项目的绝对路径：
-
-```toml
-[mcp_servers.civ6]
-command = "uv"
-args = ["run", "--locked", "--directory", "/absolute/path/to/auto-civ6", "civ-mcp"]
-
-[mcp_servers.civ6.env]
-PYTHONUTF8 = "1"
-```
-
-Windows 路径示例与超时设置见[Windows 运行说明](docs/windows.md#安装与连接)。其他 stdio MCP 客户端使用相同入口，也可参考 [.mcp.json](.mcp.json)。客户端会启动服务；手动启动可运行 `uv run --locked civ-mcp`。更新代码后，重新加载 MCP 服务以使用新版本。
 
 ## 开始使用
 
