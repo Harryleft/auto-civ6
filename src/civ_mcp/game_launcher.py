@@ -575,7 +575,9 @@ async def start_game() -> ProcessResult:
     """Launch once; presentation text cannot establish process readiness."""
     message = await launch_game()
     running = await asyncio.to_thread(is_game_running)
-    ready = running and await asyncio.to_thread(_is_tuner_port_open)
+    # A successful startup probe can briefly occupy FireTuner's sole client
+    # slot. Recheck readiness within a bounded window without launching again.
+    ready = running and await asyncio.to_thread(_wait_for_tuner_port, timeout=30)
     return ProcessResult(ready, message)
 
 

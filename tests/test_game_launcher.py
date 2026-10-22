@@ -155,6 +155,23 @@ class TestCrashDialogs:
 
 
 class TestTunerPort:
+    def test_start_game_tolerates_transient_second_probe(self, monkeypatch):
+        import asyncio
+
+        launches = []
+        async def launch_once():
+            launches.append(True)
+            return "Game launched. FireTuner port is open."
+
+        states = iter([False, True])
+        monkeypatch.setattr(gl, "launch_game", launch_once)
+        monkeypatch.setattr(gl, "is_game_running", lambda: True)
+        monkeypatch.setattr(gl, "_is_tuner_port_open", lambda: next(states))
+        monkeypatch.setattr(gl.time, "sleep", lambda _: None)
+        result = asyncio.run(gl.start_game())
+        assert result.confirmed
+        assert launches == [True]
+
     def test_probe_targets_local_firetuner_and_closes_on_success(self, monkeypatch):
         calls = []
         sock = SimpleNamespace(
