@@ -1,0 +1,26 @@
+{
+  "save_name": "benchmark_gold_v2",
+  "sha256": "cb84122718eac4e4e21514de1e6cb9fa2f850d9036c2180656cf92b354f85dff",
+  "size_bytes": 931710,
+  "civilization": "CIVILIZATION_CHINA",
+  "leader": "LEADER_QIN",
+  "game_seed": 1501391872,
+  "map_seed": 1501391873,
+  "turn": 1,
+  "difficulty": "DIFFICULTY_DEITY",
+  "speed": "GAMESPEED_QUICK",
+  "ruleset": "RULESET_EXPANSION_2",
+  "map_dimensions": [
+    130,
+    66
+  ],
+  "source": "user-created original, authorized 2026-10-22",
+  "file": "benchmark_gold_v2.Civ6Save",
+  "status": "original_load_identity_and_readiness_verified",
+  "verification": {
+    "loaded_civilization": "china",
+    "loaded_seed": 1501391872,
+    "loaded_turn": 1,
+    "native_loader_verified": true
+  }
+}

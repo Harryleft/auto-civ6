@@ -16,6 +16,10 @@ CHECKPOINT_DIR = Path.home() / ".civ6-mcp" / "checkpoints"
 BASELINE_SHA256 = "688b12eddbf1ec6bdb44da4f558d39191e96a6893a538f57ccc531beb5339ffd"
 # Names select an approved original; exact file contents establish trust.
 _BASELINES = {
+    "benchmark_gold_v2": (
+        "cb84122718eac4e4e21514de1e6cb9fa2f850d9036c2180656cf92b354f85dff",
+        ("china", 1501391872, 1),
+    ),
     "benchmark_turn_1": (BASELINE_SHA256, ("sumeria", 719665280, 1)),
     "benchmark_gold_tun_1": (
         "0d25d557e68b0efbd1aed7e66de9b8434f3a9ac9d321291d45cbe9df83fe3abf",
