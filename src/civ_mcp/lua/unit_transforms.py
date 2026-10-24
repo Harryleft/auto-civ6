@@ -144,7 +144,18 @@ local ok,id,details=pcall(function()
  end
  assert(number(Players[r.owner]:GetTreasury():GetGoldBalance())==r.balance-r.cost)
  if r.resource>=0 then
-  assert(number(Players[r.owner]:GetResources():GetResourceAmount(r.resource))==r.stock-r.resourceCost)
+  local stock=number(Players[r.owner]:GetResources():GetResourceAmount(r.resource))
+  if replaced then
+   -- The exact Started/Removed/Added/Upgraded chain proves this original
+   -- replacement. Inventory is aggregate state, not a resource debit receipt:
+   -- accrual/cache refresh can coexist with the upgrade in the same turn.
+   -- Report quote and net change separately; never claim the quote was paid.
+   details=details..",resource_quote:"..r.resourceCost..",resource_net_change:"..(stock-r.stock)
+  else
+   -- Without a replacement event chain, retain the existing corroboration
+   -- for a same-ID type change. A net difference cannot substitute for proof.
+   assert(stock==r.stock-r.resourceCost)
+  end
  end
  -- Resource getters can dispatch events. Recheck shared scope and the chain
  -- immediately before emitting either proof; never detach on a pure read.

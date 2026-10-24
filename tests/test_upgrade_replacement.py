@@ -196,7 +196,7 @@ end
     assert conn.lua.eval("#submissions") == 1
 
 
-def test_replacement_waits_for_exact_strategic_resource_payment():
+def test_replacement_reports_quote_and_observed_stock_without_claiming_a_debit():
     conn = ReplacementConn()
     conn.lua.execute('''
 stock=14
@@ -205,9 +205,10 @@ u.GetUpgradeResourceCost=function() return 3,5 end
 Players[0].GetResources=function() return {GetResourceAmount=function(_,resource) assert(resource==3);return stock end} end
 ''')
     state = GameState(conn)
-    assert "OUTCOME_UNKNOWN" in asyncio.run(state.upgrade_unit(655363))
-    conn.lua.execute("stock=9")
-    assert "UPGRADED|unit:1245193|" in asyncio.run(state.upgrade_unit(655363))
+    result=asyncio.run(state.upgrade_unit(655363))
+    assert result.startswith("UPGRADED|unit:1245193|")
+    assert "resource_quote:5,resource_net_change:0" in result
+    assert state.pending_action_summary is None
     assert conn.lua.eval("#submissions") == 1
 
 
@@ -381,3 +382,40 @@ end
     assert "UPGRADED|unit:1245193|type:47->48" == asyncio.run(state.upgrade_unit(1245193))
     assert conn.lua.eval("upgradeListeners()") == 4
     assert conn.lua.eval("#submissions") == 2
+
+
+def test_replacement_upgrade_separates_native_completion_from_net_resource_change():
+    """T117: exact replacement, 165 gold paid, quote 13 iron, net debit 11."""
+    conn=ReplacementConn()
+    conn.lua.execute('''
+GameInfo.Units_XP2={};stock=33
+u.GetUpgradeResourceCost=function() return 43,13 end
+Players[0].GetResources=function() return {GetResourceAmount=function(_,id) assert(id==43);return stock end} end
+local apply=applyReplacement
+applyReplacement=function() apply();stock=stock-13+2 end
+''')
+    state=GameState(conn);ctx=make_ctx();app_of(ctx).game=state
+    result=asyncio.run(server.upgrade_unit(ctx,655363))
+    assert result.startswith('UPGRADED|unit:1245193|'),result
+    assert 'resource_quote:13,resource_net_change:-11' in result
+    assert state.pending_action_summary is None and conn.lua.eval('#submissions')==1
+    assert conn.lua.eval('balance')==54.01953125 and conn.lua.eval('stock')==22
+
+
+@pytest.mark.parametrize('change',[
+    'Events.UnitUpgraded.Fire=function() end',
+    'local f=Events.UnitAddedToMap.Fire;Events.UnitAddedToMap.Fire=function(owner,id,x,y) f(owner,id,x+1,y) end',
+])
+def test_net_resource_change_never_substitutes_for_exact_upgrade_chain(change):
+    conn=ReplacementConn()
+    conn.lua.execute('''
+GameInfo.Units_XP2={};stock=33
+u.GetUpgradeResourceCost=function() return 43,13 end
+Players[0].GetResources=function() return {GetResourceAmount=function(_,id) return stock end} end
+local apply=applyReplacement
+applyReplacement=function() apply();stock=22 end
+'''+change)
+    state=GameState(conn)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.upgrade_unit(655363))
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.upgrade_unit(655363))
+    assert state.pending_action_summary is not None and conn.lua.eval('#submissions')==1
