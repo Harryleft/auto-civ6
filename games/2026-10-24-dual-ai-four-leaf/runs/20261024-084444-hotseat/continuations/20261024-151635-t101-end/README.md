@@ -85,3 +85,13 @@ T196 检查点 `dual_endurance_20261024_151635_e1_t196.Civ6Save`，949,548 字�
 `e156ec5` 增加活着单位的独立次数凭据：原生操作事件与 InGame 原次数精确递减一枚，须与同一 Core 单位当前次数、身份、位置和宗教一致，才能报告 `RELIGION_SPREAD_EXECUTED`。确认前后复核实体；未知字段不能掩盖已读到的身份变化，恢复旧值不能追认已失效凭据。缺失读数、两端次数不一致、无事件或身份变化仍保留未决。845 项直接相关测试通过。
 
 原 token 纯查询确认后，显式归档原请求，实际 Codex 原会话继续 T196；未重发传播、回档或修改资源，处理耗时 453.175952 秒计入总耗时。证据：`evidence/t196-spread-original-readback.json`、`t196-live-charge-confirmation.json`、`forward-confirmation196.json` 与原未决记录。
+
+## T217 议会跨回合交接确认
+
+T206、T216 检查点原件和副本均已核对。T216 的 `dual_endurance_20261024_151635_e1_t216.Civ6Save` 为 970,766 字节，SHA-256 `7f803779f5cdf09637f48b690ed4bb85cf5c82de25ae660385ef4ec10202173c`。此时苏美尔 4 城／53 人口／445 分，瑞典 6 城／58 人口／466 分，累计活动计时约 868.24 分钟；尚未出现原生全局胜负。
+
+T217 瑞典投票原 token `8e4a5f062d744b66baf51fb198067f7e` 的原生状态为 `CONTINUE_REQUESTED`、`continued=true`。本届议会随后关闭，正常回合段开始，热座直接交给 T218 苏美尔人类席位并暂停。原热座确认只接受同一回合交给另一人类，普通议会确认又要求本地所有者不变，因而请求仍保留未知；未重复投票或继续。
+
+`18a28e3` 保留普通单人范围规则，只在原热座 token、文明／种子、继续标记、双方人类与对方原生暂停交接均一致时，额外接受“原回合 +1、议会明确关闭且处于正常段”的完成凭据。已观察世界变化会锁存失效；未知会期、仍在议会段、超出一回合或无继续标记均保留未决。固定席位入口最多等待 8 秒只读确认原交接，超时不重发，569 项相关离线测试通过。
+
+原 token 纯查询取得 `HS_HANDOFF|from:1|to:0|turn:218|...|stage_finished:true` 后显式归档原共享请求，由实际 Codex 原会话开始 T218。处理耗时 572.799244 秒计入总耗时，无原生重复提交、回档或资源修改。证据：`evidence/t217-congress-original-readback.json`、`t217-confirmed-next-turn-handoff.json`、`forward-confirmation217.json` 与归档原请求。
