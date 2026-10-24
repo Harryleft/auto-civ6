@@ -1,0 +1,27 @@
+{
+  "type": "continuation",
+  "parent_run": "games/2026-10-24-dual-ai-four-leaf/runs/20261024-084444-hotseat/continuations/20261024-090636-t002-t100",
+  "start_checkpoint": "dual_endurance_20261024_090636_e1_t101",
+  "start_sha256": "fc46307184504db8e7ca22426a0f0516357021b8055d91eeca6de598e50d84a9",
+  "start_turn": 101,
+  "target": "native_game_terminal",
+  "scope": "Actual Codex Sumeria and actual Claude Code Sweden, same native hotseat match",
+  "status": "paused",
+  "previous_stage_seconds": 20717.576826334,
+  "current_timeline": 1,
+  "offline_validation": "466 affected tests passed",
+  "recovery_count": 0,
+  "forward_confirmation_count": 1,
+  "source_commits": [
+    "d6b390d",
+    "33c8328",
+    "e18c7d5"
+  ],
+  "paused_at": 1792834688.3242536,
+  "paused_turn": 136,
+  "paused_seat": 1,
+  "pause_checkpoint": "dual_endurance_20261024_151635_e1_t136",
+  "pause_sha256": "814177e6bf21b7a1199db3b961a02c7543179bb92ac2d6c9b24b3e32a3b64a11",
+  "stage_seconds_until_pause": 8492.787967681885,
+  "cumulative_seconds_until_pause": 29210.364794015884
+}
