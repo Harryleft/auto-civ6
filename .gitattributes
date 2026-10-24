@@ -10,3 +10,5 @@ games/2026-10-19-gold/runs/2026-10-20-windows-full-game-01/chronicle/data/*.json
 games/2026-10-19-gold/runs/2026-10-20-windows-full-game-01/chronicle/data/*.csv text eol=lf
 # 胜利复现的原生截图必须按二进制保存，避免全目录文本规则转换换行。
 games/2026-10-19-gold/runs/2026-10-20-windows-full-game-01/reports/2026-10-21-victory-reproduction/*.jpg binary
+# pstack 上游包保留原始字节与空白；完整性由安装清单中的 SHA-256 校验。
+.codex/skill-sources/pstack/** -text whitespace=-blank-at-eol,-blank-at-eof
