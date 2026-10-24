@@ -6,16 +6,18 @@
   "start_turn": 101,
   "target": "native_game_terminal",
   "scope": "Actual Codex Sumeria and actual Claude Code Sweden, same native hotseat match",
-  "status": "paused",
+  "status": "running_after_explicit_prophet_confirmation",
   "previous_stage_seconds": 20717.576826334,
   "current_timeline": 1,
-  "offline_validation": "466 affected tests passed",
+  "offline_validation": "742 directly related tests passed after T181 confirmation fix",
   "recovery_count": 0,
-  "forward_confirmation_count": 1,
+  "forward_confirmation_count": 2,
   "source_commits": [
     "d6b390d",
     "33c8328",
-    "e18c7d5"
+    "e18c7d5",
+    "55f0cc6",
+    "ab4f7eb"
   ],
   "paused_at": 1792834688.3242536,
   "paused_turn": 136,
@@ -23,5 +25,9 @@
   "pause_checkpoint": "dual_endurance_20261024_151635_e1_t136",
   "pause_sha256": "814177e6bf21b7a1199db3b961a02c7543179bb92ac2d6c9b24b3e32a3b64a11",
   "stage_seconds_until_pause": 8492.787967681885,
-  "cumulative_seconds_until_pause": 29210.364794015884
+  "cumulative_seconds_until_pause": 29210.364794015884,
+  "resumed_at": 1792840385.852362,
+  "pause_seconds": 5697.528108358383,
+  "latest_verified_checkpoint": "dual_endurance_20261024_151635_e1_t176",
+  "latest_verified_checkpoint_sha256": "bacc9f379fa03405a1fa58b303e6d00e2c6dc3e09c15d16e5795ab1ef508795a"
 }
