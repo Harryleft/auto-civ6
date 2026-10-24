@@ -1,6 +1,6 @@
 # 调试 CLI
 
-`civ6` 提供离线诊断、验证、测试、日志查询，以及前台 `debug` 会话。前四类命令不连接 FireTuner；`debug` 只有收到明确工具调用才可能访问真实游戏。`civ-mcp` 仍是游戏 MCP 服务入口。
+`civ6` 提供离线诊断、验证、测试、日志查询，以及前台 `debug` 会话。`doctor`、`verify knowledge`、`test` 和 `logs` 不连接 FireTuner；`verify state` 明确访问当前真实游戏，`debug` 在收到查询或工具调用时访问游戏。`civ-mcp` 仍是游戏 MCP 服务入口。
 
 ## 安装与调用
 
@@ -14,6 +14,7 @@
 uv run --locked civ6 doctor
 uv run --locked civ6 debug --offline
 uv run --locked civ6 verify knowledge
+uv run --locked civ6 verify state --expect-turn 136 --expect-civilization CIVILIZATION_SWEDEN
 uv run --locked civ6 test --list
 uv run --locked civ6 test actions
 uv run --locked civ6 test knowledge --collect-only
@@ -29,6 +30,7 @@ uv run --locked civ6 logs timeline --file .scratch/action-sample.jsonl --since 2
 | --- | --- |
 | `doctor` | 检查 Python、实际代码目录、运行依赖、开发依赖、知识包完整性、真实 stdio MCP 初始化及工具发现；不调用游戏工具。缺少 pytest 或 lupa 记 `NOT_RUN`，不阻止知识路径。 |
 | `verify knowledge` | 使用当前知识包验证搜索「写作」及 `TECH_WRITING` 的摘要、规则、证据读取；比较 CLI 与真实 MCP 返回，保留静态适用范围，核对知识文件未变。 |
+| `verify state` | 对已运行游戏执行有界只读验收，核对世界身份、玩家／回合、实体数量与范围、同一 MCP 进程和无未决上下文；不启动、加载或推进游戏。 |
 | `test --list` | 显示领域与测试文件，不运行测试。 |
 | `test <领域>` | 只执行显式登记的 `tests/` 文件，返回 pytest 原始退出码及证据。`--collect-only` 只验证收集，`data.collection_only=true`，不代表测试用例已通过。 |
 | `logs list` | 列出动作日志文件，按修改时间从新到旧排序；目录尚不存在时返回空列表。 |
@@ -67,6 +69,48 @@ quit
 COMMANDS
 ```
 
+## 自动实机只读验收
+
+`civ6 verify state` 启动一个 MCP 会话，先检查其 pending，再查询概览和结构化 `get_game_snapshot`，最后核对服务身份及 pending，关闭自有 MCP。stdout 只输出一份 JSON；详细事件和原始响应保留在证据目录。可选 `--expect-turn`、`--expect-civilization` 约束预期现场，不匹配返回 `BLOCKED`，不自动换档。每个 RPC 的默认超时为 300 秒，可用 `--timeout` 调整。
+
+快照直接返回原生数据，包含文明／种子／玩家／回合、两次概览、城市和地图内单位。读取前后核对世界和玩家回合，城市须匹配所有者和种子，城市数须与概览一致，实体 ID 须唯一。单位列表可能省略离开地图的间谍，所以只检查列表数不超过概览数，不把未列出的单位解释为不存在。它不是引擎的原子快照，也不证明迷雾外事实。
+
+存在任一未决动作、推进、外交、议会、保存或加载时，结构化快照在游戏 I/O 前返回 `blocked`；自动验收不会借普通实体查询消费确认。读取失败、身份变化、字段未知或范围检查不全，均不能获得通过。`get_runtime_status` 仍仅表示本服务内存，不能检测另一个 MCP 进程的意图；运行前须明确唯一控制通道。
+
+该命令使用 `mode=live`，成功时 `game_verification=passed_readonly`，未确认时为 `unconfirmed_readonly`。这只覆盖只读验收；实际动作、保存、加载和回合推进须分别验证。会话内也可运行 `verify state`，使用当前 MCP 和 pending 上下文，结果写入 `verification` 事件；前台会话最终的 `PASS` 仍只表示正常退出。
+
+## 会话内领域子命令
+
+以下命令在 `civ6 debug` 的 stdin 中运行，全部复用当前会话及既有 Runtime。用 `help unit` 或 `unit --help` 发现直接子命令，再用 `unit move --help` 查看参数、示例和副作用范围。带空格的参数使用引号；参数不经过 shell 展开。
+
+| 命令组 | 子命令 | 对应工具 |
+| --- | --- | --- |
+| `unit` | `list`、`move ID X Y`、`action ID ACTION [--x X --y Y] [--improvement TYPE]` | `get_units`、`unit_action` |
+| `city` | `list`、`production ID`、`set-production ID TYPE NAME [--x X --y Y]` | `get_cities`、`get_city_production`、`set_city_production` |
+| `research` | `show`、`set ID [--category CATEGORY]` | `get_tech_civics`、`set_research` |
+| `turn` | `status`、`end` | `get_turn_status`、`end_turn` |
+| `save` | `list`、`create NAME`、`reload NAME`、`load NAME` | `list_saves`、`save_game`、`reload_game_save`、`load_game_save` |
+| `knowledge` | `search QUERY [--topic TOPIC] [--limit N]`、`show ID [--level LEVEL]` | `search_knowledge`、`get_knowledge` |
+
+`CATEGORY` 为 `tech` 或 `civic`，`LEVEL` 为 `summary`、`rule` 或 `evidence`。所有变更子命令支持末尾 `--dry-run`；参数先转换为对应公开工具的原生字段，再复用同一 schema 校验、offline 限制、进程身份核对、传输未知门禁和证据记录。没有批量动作、自动处理阻塞或透明重试。`call` 仍可访问其余工具，不需要为发现全部工具一次性展开参数。
+
+`save create` 可能覆盖同名普通存档，必须使用独立名称；`save reload` 丢失保存后现场，`save load` 仅从主菜单加载。原有生命周期工具的文件系统回退当前只扫描 Single 存档，不能据此声明 Hotseat 恢复可用。`turn end` 是普通游戏工具，不替代双 AI 热座轮次的专用席位交接流程。
+
+```text
+state overview
+unit list
+unit move 851974 27 23 --dry-run
+city production 65536
+research show
+turn status
+save create my_new_checkpoint --dry-run
+knowledge search 写作 --limit 5
+knowledge show TECH_WRITING --level rule
+verify state
+pending
+quit
+```
+
 ## 副作用预演
 
 标准选项拼写为 `--dry-run`。可能改变游戏状态的调用先使用会话内 `call --dry-run TOOL JSON_OBJECT`。该入口只校验工具名称、严格 JSON 和真实输入 schema，返回 `event=dry_run`、原参数、`schema_valid=true`、`would_send=false`；未明确标为只读的工具按 `potentially_mutating=true` 展示。预演仍写本地证据。
@@ -89,12 +133,13 @@ state overview
 state units
 state cities
 state turn
+state snapshot
 call get_units {}
 pending
 quit
 ```
 
-`state` 是对应公开 MCP 查询的别名。`call TOOL JSON_OBJECT` 只调用工具列表中实际存在的入口；省略参数等同 `{}`。JSON 不能有重复键、NaN 或 Infinity。CLI 按实际发现的 `inputSchema` 在发送前校验参数，MCP 仍执行服务端校验；动作确认与门禁仍由现有 Runtime 所有者处理；CLI 不调用内部 setter 或清理未决状态。使用实体 ID 和坐标前须先查询真实状态。
+`state` 是对应公开 MCP 查询的别名，`state snapshot` 返回结构化当前玩家快照。`call TOOL JSON_OBJECT` 只调用工具列表中实际存在的入口；省略参数等同 `{}`。JSON 不能有重复键、NaN 或 Infinity。CLI 按实际发现的 `inputSchema` 在发送前校验参数，MCP 仍执行服务端校验；动作确认与门禁仍由现有 Runtime 所有者处理；CLI 不调用内部 setter 或清理未决状态。使用实体 ID 和坐标前须先查询真实状态。
 
 `pending` 调用 `get_runtime_status`：返回本服务的 UUID、PID、连接标记、动作摘要与动作／推进／外交／议会／保存／替换的未决事实。该工具只读取所有者内存，不查询游戏、确认请求、刷新缓存或清门禁。`connected=false` 不表示世界不存在，`has_pending=false` 不证明别的 MCP 进程没有未决请求。
 

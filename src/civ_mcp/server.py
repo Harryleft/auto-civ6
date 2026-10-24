@@ -19,6 +19,7 @@ from civ_mcp import narrate as nr
 from civ_mcp.connection import GameConnection, LuaError
 from civ_mcp.game_state import GameState
 from civ_mcp.logger import GameLogger
+from civ_mcp.snapshot import pending_facts, read_snapshot
 
 log = logging.getLogger(__name__)
 
@@ -177,12 +178,7 @@ async def get_runtime_status(ctx: Context) -> str:
     # never grow into a confirmation path when domain gates change.
     async with app.lock:
         game = app.game
-        pending = {
-            "action": game.pending_action_summary is not None,
-            "turn": game.turn_pending, "diplomacy": game.diplomacy_pending,
-            "congress": game.congress_pending, "save": game.save_pending,
-            "replacement": game.replacement_pending,
-        }
+        pending = pending_facts(game)
         return json.dumps({
             "schema_version": 1, "session_id": app.session_id, "process_id": os.getpid(),
             "connected": game.conn.is_connected, "pending": pending,
@@ -190,6 +186,24 @@ async def get_runtime_status(ctx: Context) -> str:
                        "entity": game.pending_action_entity},
             "has_pending": any(pending.values()), "scope": "server_memory",
         }, ensure_ascii=False)
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_game_snapshot(ctx: Context) -> str:
+    """Read structured current-player identity, overview, units and cities.
+
+    Refuses all pending operations before game I/O. Checks identity/player/turn
+    across the reads and entity counts/scopes. Not an atomic engine snapshot;
+    off-map units and hidden foreign entities are outside its listed scope.
+    Does not submit actions, dismiss UI, load saves or confirm pending requests.
+    """
+    async def read():
+        try:
+            return json.dumps(await read_snapshot(_get_game(ctx)), ensure_ascii=False, allow_nan=False)
+        except (LuaError, OSError, ValueError, TimeoutError) as exc:
+            return json.dumps({"schema_version": 1, "scope": "current_player", "status": "unknown",
+                               "error": f"{type(exc).__name__}: {exc}"}, ensure_ascii=False)
+    return await _logged(ctx, "get_game_snapshot", {}, read)
 
 
 @mcp.tool(annotations={"readOnlyHint": True, "idempotentHint": True})

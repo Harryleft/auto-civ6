@@ -15,6 +15,7 @@ from test_action_confirmation import Engine, no_dismiss
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--receipt", type=Path, required=True)
+parser.add_argument("--snapshot", choices=("ready", "pending", "changed-turn", "read-error"))
 args = parser.parse_args()
 game_state.ACTION_CONFIRM_TIMEOUT = .05
 game_state.ACTION_CONFIRM_INTERVAL = .001
@@ -40,6 +41,36 @@ async def auxiliary_query():
 
 game.get_threat_scan = auxiliary_query
 game.get_trade_routes = auxiliary_query
+
+
+if args.snapshot:
+    from civ_mcp.lua import GameOverview
+    overview_reads = 0
+
+    async def identity():
+        return ("rome", 4242)
+
+    async def overview(**kwargs):
+        global overview_reads
+        overview_reads += 1
+        if args.snapshot == "read-error":
+            raise ConnectionError("scripted transport unavailable")
+        return GameOverview(turn=13 if args.snapshot == "changed-turn" and overview_reads >= 3 else 12,
+            player_id=0, civ_name="Rome", leader_name="Trajan", gold=100, gold_per_turn=5,
+            science_yield=10, culture_yield=8, faith=3, current_research="TECH_POTTERY",
+            current_civic="CIVIC_CODE_OF_LAWS", num_cities=0, num_units=0,
+            civilization_type="CIVILIZATION_ROME", leader_type="LEADER_TRAJAN")
+
+    async def cities():
+        return [], []
+
+    game.get_game_identity = identity
+    game.get_game_overview = overview
+    game.get_cities = cities
+    game.check_game_over = auxiliary_query
+    game._revealed_tiles = set()
+    if args.snapshot == "pending":
+        game._pending_save = True
 
 
 class Logger:

@@ -9,7 +9,7 @@
 | 修改对象 | 主要实现与相关验证 |
 | --- | --- |
 | MCP 参数、工具调度、整体串行和日志 | `server.py`；工具许可分类留在调度端，只消费公共未决事实。 |
-| CLI、前台会话、证据与离线命令 | `cli.py`、`devtools/`；使用 `tests/test_dev_cli.py`、`tests/test_debug_cli.py` 验证命令与 stdio；实机控制只通过现有 MCP。 |
+| CLI、前台会话、证据与离线命令 | `cli.py`、`devtools/`；结构化只读快照在 `snapshot.py`；使用 `tests/test_dev_cli.py`、`tests/test_debug_cli.py`、`tests/test_session_commands.py` 验证命令与 stdio；实机控制只通过现有 MCP。 |
 | 领域准备、查询、完整存档替换 | `game_state.py`；通过真实 GameState／MCP 入口验证。 |
 | 动作锁存、单次提交、回应与证据确认 | `actions.py` 的 ActionLifecycle；各动作保留自身原生见证。 |
 | 推进请求、起始回合和差分基线 | `end_turn.py` 的 TurnProgress；报告读取失败不改变已确认推进。 |
@@ -50,7 +50,7 @@ CLI 保持可组合：业务结果写 stdout 的 JSON／JSONL，终端提示写 
 
 ## 离线验证
 
-日常诊断可用 `uv run --locked civ6 doctor`，知识完整路径可用 `uv run --locked civ6 verify knowledge`。`civ6 test --list` 显示已登记的定向测试，`civ6 logs` 读取现有动作日志。命令统一输出 JSON 并保留运行证据，详见[离线调试 CLI](cli.md)。
+日常诊断可用 `uv run --locked civ6 doctor`，知识完整路径可用 `uv run --locked civ6 verify knowledge`。`civ6 test --list` 显示已登记的定向测试，`civ6 logs` 读取现有动作日志。命令统一输出 JSON 并保留运行证据；`verify state` 是明确的实机路径，不属于离线检查。详见[离线调试 CLI](cli.md)。
 
 代码修改只运行受影响模块的测试；由改动范围选择文件，例如交易生命周期修改：
 

@@ -1625,7 +1625,7 @@ class TestMcpProtocol:
                     assert initialization.serverInfo.name == "Civilization VI"
                     tools = (await session.list_tools()).tools
                     names = {tool.name for tool in tools}
-                    assert len(names) == 85
+                    assert len(names) == 86
                     runtime_tool = next(tool for tool in tools if tool.name == "get_runtime_status")
                     assert runtime_tool.annotations.readOnlyHint is True
                     assert runtime_tool.annotations.idempotentHint is True

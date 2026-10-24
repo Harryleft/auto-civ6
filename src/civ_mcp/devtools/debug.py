@@ -14,20 +14,22 @@ from typing import Callable, TextIO
 
 from civ_mcp.devtools.evidence import CommandError, Evidence, now
 from civ_mcp.devtools.knowledge import check_interpreter
+from civ_mcp.devtools.commands import GROUPS, HelpRequested, domain_parser, parse_command
 
 
 OFFLINE_TOOLS = {"get_runtime_status", "search_knowledge", "get_knowledge"}
 STATES = {"overview": "get_game_overview", "units": "get_units", "cities": "get_cities",
-          "turn": "get_turn_status"}
+          "turn": "get_turn_status", "snapshot": "get_game_snapshot"}
 HELP = {
     "overview": {"description": "Choose a topic; tool schemas are disclosed by tools NAME.",
-                 "topics": ["tools", "pending", "state", "call", "quit"],
+                 "topics": ["tools", "pending", "state", *GROUPS, "verify", "call", "quit"],
                  "usage": "help [TOPIC]", "output": "One JSON object per line; prompts use stderr."},
     "tools": {"usage": "tools [NAME]", "description": "List names, or inspect one tool's inputSchema and annotations.",
               "examples": ["tools", "tools unit_action"]},
     "pending": {"usage": "pending", "description": "Read server memory and local transport_unknown without game I/O or clearing pending."},
-    "state": {"usage": "state overview|units|cities|turn", "aliases": STATES,
+    "state": {"usage": "state overview|units|cities|turn|snapshot", "aliases": STATES,
               "description": "Query current game state through MCP. These queries are unavailable in --offline mode."},
+    "verify": {"usage": "verify state", "description": "Run a bounded live read-only snapshot check in this same MCP session; no game mutations or retries."},
     "call": {"usage": "call [--dry-run] TOOL [JSON_OBJECT]",
              "description": "Validate against tools TOOL inputSchema, then explicitly send once. Use --dry-run before a potentially destructive call.",
              "dry_run": "Returns a schema-checked plan without sending the target tool or reading game state. Does not check gameplay prerequisites or confirm pending.",
@@ -245,11 +247,16 @@ class DebugSession:
                 self.evidence.json("transport-unknown", unknown)
             self.event("tool_outcome_unknown", request=request["sequence"], **unknown,
                        hint="Use pending and read-only inspection; retain this process and do not replay the unknown mutation.")
-            return
+            return None
         self.evidence.json(f"debug-response-{request['sequence']:06}", result.model_dump(mode="json"))
         self.event("tool_result", request=request["sequence"], tool=tool,
                    is_error=bool(result.isError), result=result.model_dump(mode="json"),
                    hint=f"Inspect the original MCP error, tools {tool} and pending before changing arguments; never blindly replay an unknown request." if result.isError else None)
+        return result
+
+    async def verify_state(self, *, expected_turn: int | None = None, expected_civilization: str | None = None):
+        from civ_mcp.devtools.live import verify_session
+        return await verify_session(self, expected_turn=expected_turn, expected_civilization=expected_civilization)
 
     async def close_request(self, abandon: bool, eof: bool = False, *, dry_run: bool = False) -> bool:
         try:
@@ -277,10 +284,22 @@ class DebugSession:
         if not parts:
             return False
         head = parts[0]
-        if head in HELP and parts == [head, "--help"]:
+        if head in GROUPS:
+            try:
+                intent = parse_command(line)
+            except HelpRequested as help_request:
+                self.event("help", topic=head, **help_request.document)
+            else:
+                await self.call(intent.tool, intent.arguments, dry_run=intent.dry_run)
+        elif head == "verify" and parts == ["verify", "state"]:
+            await self.verify_state()
+        elif head in HELP and parts == [head, "--help"]:
             self.event("help", topic=head, **HELP[head])
         elif head in {"help", "--help"} and len(parts) <= 2:
             topic = parts[1] if len(parts) == 2 else "overview"
+            if topic in GROUPS:
+                self.event("help", topic=topic, **domain_parser(topic).help_document())
+                return False
             if topic not in HELP:
                 raise CommandError("INVALID_DEBUG_COMMAND", f"Unknown help topic: {topic}")
             self.event("help", topic=topic, **HELP[topic])
@@ -315,7 +334,7 @@ class DebugSession:
 
 
 async def serve(evidence: Evidence, state: dict, *, offline: bool, timeout: float,
-                source: TextIO, emit: Callable[[dict], None], server=None) -> str:
+                source: TextIO | None, emit: Callable[[dict], None], server=None, driver=None) -> str:
     from mcp import ClientSession
     from mcp.client.stdio import StdioServerParameters, stdio_client
 
@@ -337,6 +356,10 @@ async def serve(evidence: Evidence, state: dict, *, offline: bool, timeout: floa
                     evidence.json("debug-initialize", initialized.model_dump(mode="json"))
                     debug = DebugSession(client, evidence, state, emit, offline)
                     await debug.start()
+                    if driver is not None:
+                        status = await driver(debug)
+                        await debug.close_request(False, eof=True)
+                        return "BLOCKED" if state["unresolved_on_exit"] else status
                     while True:
                         if source.isatty():
                             print("civ6> ", file=sys.stderr, end="", flush=True)
@@ -368,19 +391,24 @@ def run_debug(evidence: Evidence, state: dict, *, offline: bool, timeout: float)
         print(json.dumps(value, ensure_ascii=False, allow_nan=False), flush=True)
 
     with keep_session_on_interrupt():
-        try:
-            return asyncio.run(serve(evidence, state, offline=offline, timeout=timeout, source=sys.stdin, emit=emit))
-        except ExceptionGroup as group:
-            def leaf(error):
-                if isinstance(error, CommandError):
-                    return error
-                if isinstance(error, BaseExceptionGroup):
-                    for child in error.exceptions:
-                        found = leaf(child)
-                        if found:
-                            return found
-                return None
-            error = leaf(group)
-            if error:
-                raise error from group
-            raise
+        return run_session(serve(evidence, state, offline=offline, timeout=timeout, source=sys.stdin, emit=emit))
+
+
+def run_session(operation):
+    """Keep actionable protocol errors when the SDK wraps task groups."""
+    try:
+        return asyncio.run(operation)
+    except ExceptionGroup as group:
+        def leaf(error):
+            if isinstance(error, CommandError):
+                return error
+            if isinstance(error, BaseExceptionGroup):
+                for child in error.exceptions:
+                    found = leaf(child)
+                    if found:
+                        return found
+            return None
+        error = leaf(group)
+        if error:
+            raise error from group
+        raise

@@ -91,6 +91,14 @@ def parser() -> Parser:
         epilog="Example: civ6 verify knowledge --output .scratch/my-new-proof. Input knowledge files remain unchanged.")
     common(knowledge)
     knowledge.add_argument("--knowledge-dir", help="Complete knowledge package; default PROJECT/civ6_knowledge")
+    state = verification.add_parser("state", help="Verify the current real game without mutations",
+        description="Use one MCP session to read native identity/overview/entities and inspect pending. No load, actions, turn advance or retries.",
+        epilog="Example: civ6 verify state --expect-turn 136 --expect-civilization CIVILIZATION_SWEDEN. "
+               "Requires an already running game and exclusive control; never starts or replaces it.")
+    common(state)
+    state.add_argument("--timeout", type=positive, default=300, help="Per-RPC timeout in seconds; default 300")
+    state.add_argument("--expect-turn", type=int, help="Require this current game turn; mismatch is BLOCKED")
+    state.add_argument("--expect-civilization", help="Require this native CIVILIZATION_* ID; mismatch is BLOCKED")
     test = commands.add_parser("test", help="Run a named selection of isolated tests",
         description="Discover domains with --list, then run one registered offline selection.",
         epilog="Example: civ6 test turns -- -k pending -x. After --: -q/-v/-vv/-x, -k EXPR, -m EXPR, "
@@ -134,6 +142,10 @@ def parser() -> Parser:
 def execute(args: argparse.Namespace, evidence: Evidence, extra: list[str], data: dict) -> str:
     if extra and args.command != "test":
         raise CommandError("INVALID_ARGUMENT", "Arguments after -- are only accepted by test")
+    if args.command == "verify" and args.feature == "state":
+        from civ_mcp.devtools.live import verify_live
+        return verify_live(evidence, data, timeout=args.timeout, expected_turn=args.expect_turn,
+                           expected_civilization=args.expect_civilization)
     if args.command in {"doctor", "verify"}:
         from civ_mcp.devtools.knowledge import doctor, knowledge_root, verify
         root = knowledge_root(evidence, args.knowledge_dir)

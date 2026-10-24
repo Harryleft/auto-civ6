@@ -15,6 +15,7 @@
 | 文化伟人创作 | [普通次数为零的修复、443 项回归与五件巨作实机验收](../../games/2026-10-19-gold/runs/2026-10-20-windows-full-game-01/reports/2026-10-21-great-work-creation.md) |
 | 测试效益与耗时 | [全量分类、慢测试及临时提速实验](2026-10-20-test-efficiency-audit.md)、[替身修复与全量耗时对比](2026-10-20-test-efficiency-optimization.md) |
 | 离线调试 CLI | [doctor、知识验证、领域测试与日志查询](2026-10-24-offline-cli.md) |
+| CLI 领域化与自动实机验收 | [领域子命令、结构化快照与状态验收](2026-10-24-cli-domains.md) |
 | CLI 接口约定 | [组合、dry-run、分层帮助与错误修正](2026-10-24-cli-contract.md) |
 | 前台调试会话 | [同一 MCP 进程、pending 查看、显式调用与退出](2026-10-24-foreground-debug.md) |
 

@@ -44,12 +44,13 @@ raise SystemExit(main())
         text=True, encoding='utf-8')
 
 
-def run_fake(tmp_path, text, timeout=5):
+def run_fake(tmp_path, text, timeout=5, scenario=None):
     receipt = tmp_path / "engine.json"
     evidence = Evidence(ROOT, ["debug-test"], str(tmp_path / "evidence"))
     state, events = {}, []
     params = StdioServerParameters(command=sys.executable,
-        args=[str(ROOT / "tests/fake_debug_server.py"), "--receipt", str(receipt)], cwd=str(ROOT))
+        args=[str(ROOT / "tests/fake_debug_server.py"), "--receipt", str(receipt),
+              *(["--snapshot", scenario] if scenario else [])], cwd=str(ROOT))
     status = asyncio.run(serve(evidence, state, offline=False, timeout=timeout,
                               source=StringIO(text), emit=events.append, server=params))
     return status, state, events, json.loads(receipt.read_text()), evidence

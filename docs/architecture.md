@@ -80,3 +80,9 @@ GameState 拥有完整会话替换；`game_launcher.py` 负责原生进程操作
 `CongressProgress` 只保存原意图、token、原世界／回合与观测结果，票单和 entered／returned 阶段仍在原生 Lua。`open_world_congress`／`queue_wc_votes` 原入口匹配后只确认旧请求；直接分项 vote／submit 入口收敛为完整票计划。投票、提交、继续任一原生调用 false 或异常即停止后续步骤，部分完成不重放。
 
 已登记 REGISTERED 票单可由显式 `end_turn` 触发；只有该入口允许最新可信登记状态保留计划并放行。阶段继续以原生阶段／回合变化确认，不照搬普通动作严格同回合规则。`WC_STAGE_FINISHED` 只表示原阶段结束，分配数只表示请求的票单，不表示实付外交支持或议会结果。
+
+## CLI 只读验收与领域命令
+
+前台领域子命令在 `devtools/commands.py` 将参数转换为公开 MCP 工具调用，不持有另一份游戏状态或确认逻辑。`verify state` 使用同一前台客户端执行有界只读检查，不自动重启、加载、推进或解决阻塞；一次性入口独立建会话，不能继承其他进程的 pending。
+
+`get_game_snapshot` 在整体工具锁内委托 `snapshot.py` 采集公开领域数据，并检查读取前后世界身份、玩家回合和实体范围。普通 `get_units`／`get_cities` 可能顺带只读确认已有动作；该快照入口在任何游戏 I/O 前拒绝全部 pending，避免自动验收触发这条确认路径。快照不拥有、复制或退役请求；身份刷新仍可能记录已观察到的世界变化，不能据此清门禁。数据有 `ready`／`blocked`／`unknown` 状态，只有完整约定检查通过才允许 CLI 授予只读验收通过。

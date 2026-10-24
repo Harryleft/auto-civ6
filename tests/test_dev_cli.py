@@ -177,7 +177,7 @@ def test_process_timeout_retains_partial_receipt(tmp_path):
 
 
 @pytest.mark.parametrize('command,children', [([], ['doctor', 'verify', 'test', 'debug', 'logs']),
-    (['logs'], ['list', 'show', 'timeline']), (['verify'], ['knowledge']), (['debug'], [])])
+    (['logs'], ['list', 'show', 'timeline']), (['verify'], ['knowledge', 'state']), (['debug'], [])])
 def test_help_discloses_one_level_and_supports_json_without_side_effects(tmp_path, command, children):
     output = tmp_path / 'unused'
     prefix = [sys.executable, '-m', 'civ_mcp.cli', '--output', str(output)]

@@ -6,11 +6,17 @@
 
 - `state.overview`：回读当前文明、回合、产出和终局状态。
 - `state.entities`：城市和单位 ID 可对应概览；隐藏、未知与不存在保持区别。
+- `state.snapshot`、`state.identity`、`session.pending`：结构化快照的世界／玩家／回合、实体范围、服务身份及无未决上下文检查。
 
 ## How to get to it (user POV)
 
 - 已连接的 `civ6` MCP：`get_game_overview()`、`get_cities()`、`get_units()`。
+- 已授权且已有唯一活动现场：`uv run --locked civ6 verify state --expect-turn TURN --expect-civilization CIVILIZATION_ID` 自动执行有界只读验收；前台会话内可用 `verify state` 复用当前上下文。完整命令及范围见[调试 CLI](../../../../docs/cli.md#自动实机只读验收)。
 - 安装连接入口见[安装与连接](../../../../docs/installation.md)，只有任务要求启动游戏时才进入启动流程。
+
+## 自动验收
+
+核对任务要求的现场及控制通道后运行 `verify state`，读取顶层 `status`、`game_verification` 和 `data.verification`。`passed_readonly` 只覆盖结构化快照与会话检查；原始数据、逐项检查和 RPC 保留在证据中。有 pending 时先保留并按原入口确认，自动验收不得用实体查询消费它。读取失败、身份不符或范围未知不授予通过；该命令不加载、保存、推进或重启游戏。
 
 ## Driving it with civ6 MCP
 
