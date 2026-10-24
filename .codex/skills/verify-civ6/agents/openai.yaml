@@ -1,0 +1,4 @@
+interface:
+  display_name: "Civ6 验证"
+  short_description: "验证知识 CLI、stdio MCP 与游戏生命周期，区分离线证据和实机结果"
+  default_prompt: "使用 $verify-civ6 验证本次改动，按影响范围选择功能并报告证据与未验证项。"
