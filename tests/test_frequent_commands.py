@@ -74,5 +74,3 @@ def test_every_mutation_preview_uses_real_stdio_without_game_submission(tmp_path
     assert status=='PASS' and engine['submissions']==0 and state['tool_calls']==0
     assert len([row for row in events if row['event']=='dry_run'])==len(lines)
     assert not any(row['event']=='command_blocked' for row in events)
-
-
