@@ -471,6 +471,53 @@ def test_mission_confirms_exact_native_target_assignment_not_mission_outcome(mis
     assert conn.lua.eval('unsafeReads')==0
 
 
+def test_t233_own_counterspy_assignment_state_confirms_without_matching_started_event():
+    conn=AssignmentConn();state=GameState(conn);ctx=make_ctx();app_of(ctx).game=state
+    conn.lua.execute('u.x=10;u.y=10;city.owner=0;Events.UnitOperationStarted.Fire=function() end')
+    result=asyncio.run(server.spy_action(ctx,196608,'COUNTERSPY',11,10))
+    assert result.startswith('SPY_ASSIGNMENT_STARTED|spy:196608|COUNTERSPY|target:11,10|city:0,65537|end_turn:49')
+    assert 'confirmation:native_assignment|start_event:unobserved' in result
+    assert conn.lua.eval('#submissions')==1
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('change', [
+    'u.op=-1', 'u.op=13', 'u.finish=41', 'u.finish=nil', 'u.x=10;u.y=10',
+    'city.owner=1', 'u.id=262144', '__civmcpSpyAssignment.returned=false',
+])
+def test_counterspy_state_proof_needs_exact_started_assignment_even_without_event(change):
+    conn=AssignmentConn();state=GameState(conn)
+    conn.lua.execute('u.x=10;u.y=10;city.owner=0;Events.UnitOperationStarted.Fire=function() end;deferred=true')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_mission(196608,'COUNTERSPY',11,10))
+    conn.lua.execute('applyAssignment(-2005926703,{x=11,y=10});'+change)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_mission(196608,'COUNTERSPY',11,10))
+    assert conn.lua.eval('#submissions')==1
+    assert state.pending_action_summary is not None
+
+
+def test_counterspy_state_proof_does_not_replace_already_active_assignment():
+    conn=AssignmentConn();state=GameState(conn)
+    conn.lua.execute('u.x=10;u.y=10;city.owner=0;u.op=15;u.finish=49;Events.UnitOperationStarted.Fire=function() end')
+    assert 'SPY_ASSIGNMENT_REFUSED' in asyncio.run(state.spy_mission(196608,'COUNTERSPY',11,10))
+    assert conn.lua.eval('#submissions')==0
+
+
+def test_other_spy_missions_still_need_matching_start_event():
+    conn=AssignmentConn();state=GameState(conn)
+    conn.lua.execute('u.x=10;u.y=10;city.owner=0;Events.UnitOperationStarted.Fire=function() end')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_mission(196608,'SIPHON_FUNDS',11,10))
+    assert conn.lua.eval('#submissions')==1
+
+
+def test_lost_counterspy_reply_confirms_original_native_assignment_without_replay():
+    conn=AssignmentConn();state=GameState(conn);conn.lose_reply=True
+    conn.lua.execute('u.x=10;u.y=10;city.owner=0;Events.UnitOperationStarted.Fire=function() end')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spy_mission(196608,'COUNTERSPY',11,10))
+    assert 'confirmation:native_assignment' in asyncio.run(state.spy_mission(196608,'COUNTERSPY',11,10))
+    assert conn.lua.eval('#submissions')==1
+    assert state.pending_action_summary is None
+
+
 def test_travel_already_at_destination_is_noop_without_an_assignment():
     conn=AssignmentConn();state=GameState(conn);conn.lua.execute('u.x=10;u.y=10;u.allowed=false')
     result=asyncio.run(state.spy_travel(196608,10,10))

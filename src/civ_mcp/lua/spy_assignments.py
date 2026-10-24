@@ -151,7 +151,7 @@ print("{SENTINEL}")
 def build_spy_assignment_query(unit_id: int, mission: str, x: int, y: int, token: str) -> str:
     return _CONTEXT + f'''
 local r=__civmcpSpyAssignment
-local ok,finish=pcall(function()
+local ok,finish,nativeAssignment=pcall(function()
  assert(type(r)=="table" and r.token=={json.dumps(token)} and r.requested=={unit_id}
   and r.mission=={json.dumps(mission)} and r.x=={x} and r.y=={y})
  assert(sameScope(r))
@@ -179,7 +179,14 @@ local ok,finish=pcall(function()
   end
  end
  assert(known and not r.invalid)
- if not r.noop then assert(r.entered==true and r.returned==true and r.started==true) end
+ -- Submission preflight requires an idle spy. T233 exposed an exact active
+ -- own-city COUNTERSPY assignment without the matching Started witness. Its
+ -- operation/target/future deadline below prove assignment, not mission outcome.
+ local stateProof=r.mission=="COUNTERSPY" and r.cityOwner==r.owner
+ if not r.noop then
+  assert(r.entered==true and r.returned==true)
+  assert(r.started==true or stateProof)
+ end
  if r.mission=="TRAVEL" and not r.noop and unit==nil then
   assert(Players[r.owner]:GetUnits():FindID(r.id)==nil and r.removed==true)
   local remaining=mapSpyRoster(r.owner)
@@ -231,12 +238,12 @@ local ok,finish=pcall(function()
  -- Travel can stay at its origin or use the native in-transit coordinates.
  -- The exact request, started event and current operation prove assignment, not arrival.
  if r.mission~="TRAVEL" then assert(spy:GetX()==r.x and spy:GetY()==r.y) end
- assert(sameScope(r));return ends
+ assert(sameScope(r));return ends,stateProof and r.started~=true
 end)
 if ok then
  -- Confirmation is read-only. A lost reply must leave all original observers
  -- and scope invalidation available for a later confirmation-only call.
- print("SPY_ASSIGNMENT_CONFIRMED|{token}|{unit_id}|{mission}|"..r.id.."|"..r.cityOwner..","..r.city.."|{x},{y}|"..finish.."|"..(r.noop and "SPY_ALREADY_AT_DESTINATION" or "SPY_ASSIGNMENT_STARTED"))
+ print("SPY_ASSIGNMENT_CONFIRMED|{token}|{unit_id}|{mission}|"..r.id.."|"..r.cityOwner..","..r.city.."|{x},{y}|"..finish.."|"..(r.noop and "SPY_ALREADY_AT_DESTINATION" or "SPY_ASSIGNMENT_STARTED")..(nativeAssignment and "|proof:native_counterspy_assignment" or ""))
 else print("SPY_ASSIGNMENT_OBSERVED|{token}|UNKNOWN") end
 print("{SENTINEL}")
 '''
@@ -244,9 +251,14 @@ print("{SENTINEL}")
 
 def parse_spy_assignment(lines: list[str], unit_id: int, mission: str, token: str) -> str | None:
     rows = [line.split('|') for line in lines if line.startswith('SPY_ASSIGNMENT_CONFIRMED|')]
-    if len(rows) == 1 and len(rows[0]) == 9:
+    if len(rows) == 1 and len(rows[0]) in (9, 10):
         row = rows[0]
+        if len(row) == 10 and not (mission == 'COUNTERSPY' and row[8] == 'SPY_ASSIGNMENT_STARTED'
+                                  and row[9] == 'proof:native_counterspy_assignment'):
+            return None
         if row[1:4] == [token, str(unit_id), mission] and row[4].isdigit() and row[7].isdigit() and row[8] in {"SPY_ASSIGNMENT_STARTED", "SPY_ALREADY_AT_DESTINATION"}:
             suffix = f'|end_turn:{row[7]}' if row[8] == 'SPY_ASSIGNMENT_STARTED' else ''
+            if len(row) == 10:
+                suffix += '|confirmation:native_assignment|start_event:unobserved'
             return f'{row[8]}|spy:{row[4]}|{mission}|target:{row[6]}|city:{row[5]}' + suffix
     return None
