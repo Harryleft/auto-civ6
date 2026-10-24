@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from datetime import timedelta
 import json
 import os
+import re
 import signal
 import sys
 import threading
@@ -136,6 +137,24 @@ def strict_json(value: str) -> dict:
         raise CommandError("INVALID_JSON", str(exc)) from exc
 
 
+def tool_error(tool: str, result) -> dict | None:
+    """Recognize only the server's explicit error envelopes, never infer success."""
+    texts = [item.text for item in result.content if item.type == "text"]
+    legacy = next((text for text in texts if text.startswith(("Error:", "ERR:"))), None)
+    if not result.isError and legacy is None:
+        return None
+    message = legacy or "\n".join(texts) or "MCP reported a tool error without text"
+    match = re.match(r"^(?:Error:\s*)?ERR:([A-Z][A-Z0-9_]*)\b", message)
+    code = match[1] if match else "MCP_TOOL_ERROR" if result.isError else "TOOL_REPORTED_ERROR"
+    hint = f"Inspect the original error, tools {tool} and pending before correcting arguments; never blindly replay an unknown request."
+    if code == "NO_TILES":
+        hint = "Use city production CITY_ID and current state to choose a different eligible city/district, then query city district CITY_ID DISTRICT_TYPE. No construction was submitted."
+    elif code == "OUTCOME_UNKNOWN":
+        hint = "Retain this session; use pending and read-only inspection, then confirm only through the original tool with its original arguments. Do not resubmit a new intent."
+    return {"code": code, "message": message, "hint": hint,
+            "details": {"tool": tool, "source": "protocol" if result.isError else "legacy_text"}}
+
+
 @contextmanager
 def keep_session_on_interrupt():
     previous = signal.getsignal(signal.SIGINT)
@@ -249,9 +268,10 @@ class DebugSession:
                        hint="Use pending and read-only inspection; retain this process and do not replay the unknown mutation.")
             return None
         self.evidence.json(f"debug-response-{request['sequence']:06}", result.model_dump(mode="json"))
+        error = tool_error(tool, result)
         self.event("tool_result", request=request["sequence"], tool=tool,
-                   is_error=bool(result.isError), result=result.model_dump(mode="json"),
-                   hint=f"Inspect the original MCP error, tools {tool} and pending before changing arguments; never blindly replay an unknown request." if result.isError else None)
+                   is_error=error is not None, protocol_is_error=bool(result.isError),
+                   error=error, result=result.model_dump(mode="json"), hint=error["hint"] if error else None)
         return result
 
     async def verify_state(self, *, expected_turn: int | None = None, expected_civilization: str | None = None):

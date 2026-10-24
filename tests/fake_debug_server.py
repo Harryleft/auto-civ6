@@ -121,4 +121,14 @@ async def test_exit():
     return "will exit"
 
 
+@server.mcp.tool(annotations={"readOnlyHint": True})
+async def test_legacy_error():
+    return "Error: ERR:NO_TILES|No valid placement tiles found"
+
+
+@server.mcp.tool(annotations={"readOnlyHint": True})
+async def test_unknown_error():
+    return "ERR:OUTCOME_UNKNOWN|Preserve original request"
+
+
 server.main()

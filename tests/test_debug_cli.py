@@ -289,3 +289,26 @@ def test_offline_can_preview_game_tool_without_sending_it(tmp_path):
     assert not preview['local_policy_allows_execution'] and not preview['would_send']
     assert not any(row['event'] == 'tool_started' for row in rows)
     assert result.returncode == 0 and rows[-1]['data']['tool_calls'] == 0
+
+
+def test_legacy_native_refusal_and_unknown_are_machine_readable_without_replay(tmp_path):
+    status,state,events,engine,_=run_fake(tmp_path,
+        'call test_legacy_error {}\ncall test_unknown_error {}\npending\nquit\n')
+    results=[row for row in events if row['event']=='tool_result']
+    assert [row['error']['code'] for row in results]==['NO_TILES','OUTCOME_UNKNOWN']
+    assert all(row['is_error'] and not row['protocol_is_error'] for row in results)
+    assert 'different eligible city/district' in results[0]['hint']
+    assert 'original arguments' in results[1]['hint']
+    assert results[0]['result']['content'][0]['text']=='Error: ERR:NO_TILES|No valid placement tiles found'
+    assert state['tool_calls']==2 and status=='PASS' and engine['submissions']==0
+
+
+@pytest.mark.parametrize('text,protocol,code', [
+    ('No promotions available',False,None),('A note mentions Error: in context',False,None),
+    ('Error: failed',False,'TOOL_REPORTED_ERROR'),('failure',True,'MCP_TOOL_ERROR')])
+def test_error_detection_only_uses_explicit_failure_boundaries(text,protocol,code):
+    from mcp.types import CallToolResult,TextContent
+    from civ_mcp.devtools.debug import tool_error
+    result=CallToolResult(isError=protocol,content=[TextContent(type='text',text=text)])
+    error=tool_error('get_units',result)
+    assert (error['code'] if error else None)==code
