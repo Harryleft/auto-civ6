@@ -1052,7 +1052,9 @@ async def propose_trade(
     mode: str = "send",
     joint_war_type: int | None = None,
 ) -> str:
-    """Propose a trade deal to another civilization.
+    """Propose or test a trade deal with an AI civilization.
+
+    Human seats are unsupported in both modes; no session or deal is submitted.
 
     Args:
         other_player_id: The player ID (from get_diplomacy output)

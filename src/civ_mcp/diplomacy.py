@@ -345,7 +345,9 @@ class DiplomacyProgress:
             attempt = TradeAttempt(uuid.uuid4().hex, target, preview, [dict(row) for row in offer], [dict(row) for row in request])
             self.trade = attempt
             try:
-                rows = await _named(gs.conn, "DiplomacyActionView", native.build_trade_open(self.nonce, attempt.token, target, ai_only=not preview))
+                # EQUALIZE previews also require an AI response. Human seats
+                # cannot answer that evaluation; reject before opening a session.
+                rows = await _named(gs.conn, "DiplomacyActionView", native.build_trade_open(self.nonce, attempt.token, target, ai_only=True))
                 if any(row.startswith("TRADE|NOT_SUBMITTED|") for row in rows):
                     self.trade = None
                     return "ERR:NOT_SUBMITTED|" + " ".join(rows)

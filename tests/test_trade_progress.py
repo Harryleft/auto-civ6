@@ -701,11 +701,13 @@ def test_inspect_requires_nonempty_valid_native_terms_before_any_evaluation(empt
     assert not state.diplomacy_pending
 
 
-def test_ai_inspect_send_refuses_human_target_without_opening_or_clearing_deal(quick_trade):
+@pytest.mark.parametrize("preview", [False, True])
+def test_ai_trade_refuses_human_target_without_opening_or_clearing_deal(preview, quick_trade):
     conn=TradeConn(); state=GameState(conn)
     conn.setup('''Players[1].IsHuman=function() return true end;
 local deal=DealManager.GetWorkingDeal(DealDirection.OUTGOING);local item=deal:AddItemOfType(1,0);item:SetAmount(777)''')
-    result=asyncio.run(state.propose_trade(1,[{"type":"GOLD","amount":20}],[]))
+    trade = state.test_trade if preview else state.propose_trade
+    result=asyncio.run(trade(1,[{"type":"GOLD","amount":20}],[]))
     assert "NOT_SUBMITTED" in result and "TARGET_NOT_AI" in result
     assert conn.lua.globals().requests==0
     assert conn.lua.eval('working_outgoing[1]:GetAmount()')==777
