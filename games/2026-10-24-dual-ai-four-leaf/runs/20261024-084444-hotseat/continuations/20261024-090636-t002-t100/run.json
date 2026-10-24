@@ -1,0 +1,29 @@
+{
+  "type": "continuation",
+  "parent_run": "games/2026-10-24-dual-ai-four-leaf/runs/20261024-084444-hotseat",
+  "start_checkpoint": "dual_hotseat_20261024_084444_t002",
+  "start_sha256": "c50b732d9cada7e9ea72492c78e3bd049dba472fa3d7b0dfd8f04d710841e97a",
+  "start_turn": 2,
+  "target_turn": 100,
+  "scope": "Codex Sumeria, actual Claude Code Sweden; live single-match endurance",
+  "status": "completed",
+  "timing_scope": "T2 through completed T100; preparation, both CLI controllers, native saves and per-round wall time recorded separately",
+  "current_timeline": 1,
+  "recovery_count": 1,
+  "forward_confirmation_count": 2,
+  "finished_at": 1792824714.208443,
+  "completed_through_turn": 100,
+  "final_native_turn": 101,
+  "final_checkpoint": "dual_endurance_20261024_090636_e1_t101",
+  "final_sha256": "fc46307184504db8e7ca22426a0f0516357021b8055d91eeca6de598e50d84a9",
+  "total_wall_seconds": 20717.576826334,
+  "retained_completed_rounds": 99,
+  "originals_unchanged": true,
+  "live_validation": "Both real CLI controllers completed T100; native Core confirms two human seats; final paused T101",
+  "offline_validation": "457 affected tests passed",
+  "source_commits": [
+    "5cdd7b8",
+    "9bb903b",
+    "d12443d"
+  ]
+}
