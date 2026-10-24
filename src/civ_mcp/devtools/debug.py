@@ -19,8 +19,26 @@ from civ_mcp.devtools.knowledge import check_interpreter
 OFFLINE_TOOLS = {"get_runtime_status", "search_knowledge", "get_knowledge"}
 STATES = {"overview": "get_game_overview", "units": "get_units", "cities": "get_cities",
           "turn": "get_turn_status"}
-HELP = {"commands": ["help", "tools [NAME]", "pending", "state overview|units|cities|turn",
-                     "call TOOL [JSON_OBJECT]", "quit", "quit --abandon"]}
+HELP = {
+    "overview": {"description": "Choose a topic; tool schemas are disclosed by tools NAME.",
+                 "topics": ["tools", "pending", "state", "call", "quit"],
+                 "usage": "help [TOPIC]", "output": "One JSON object per line; prompts use stderr."},
+    "tools": {"usage": "tools [NAME]", "description": "List names, or inspect one tool's inputSchema and annotations.",
+              "examples": ["tools", "tools unit_action"]},
+    "pending": {"usage": "pending", "description": "Read server memory and local transport_unknown without game I/O or clearing pending."},
+    "state": {"usage": "state overview|units|cities|turn", "aliases": STATES,
+              "description": "Query current game state through MCP. These queries are unavailable in --offline mode."},
+    "call": {"usage": "call [--dry-run] TOOL [JSON_OBJECT]",
+             "description": "Validate against tools TOOL inputSchema, then explicitly send once. Use --dry-run before a potentially destructive call.",
+             "dry_run": "Returns a schema-checked plan without sending the target tool or reading game state. Does not check gameplay prerequisites or confirm pending.",
+             "examples": ['call --dry-run unit_action {"unit_id":0,"action":"move","target_x":22,"target_y":9}',
+                          'call get_units {}'],
+             "json_input": "One strict JSON object; default {}. No shell expansion. Feed one command per line through stdin to compose scripts."},
+    "quit": {"usage": "quit [--abandon] [--dry-run]",
+             "description": "Normal quit refuses pending/unknown context. --abandon discards process memory and returns BLOCKED when unresolved.",
+             "dry_run": "Shows whether exit would lose unresolved context; retains the session.",
+             "examples": ["quit --abandon --dry-run", "quit"]},
+}
 
 
 class ObservedRead:
@@ -100,8 +118,15 @@ def strict_json(value: str) -> dict:
     def constant(value):
         raise ValueError(f"Non-JSON number: {value}")
 
+    def number(value):
+        import math
+        result = float(value)
+        if not math.isfinite(result):
+            raise ValueError(f"Non-finite JSON number: {value}")
+        return result
+
     try:
-        result = json.loads(value, object_pairs_hook=pairs, parse_constant=constant)
+        result = json.loads(value, object_pairs_hook=pairs, parse_constant=constant, parse_float=number)
         if not isinstance(result, dict):
             raise ValueError("Arguments must be a JSON object")
         return result
@@ -175,14 +200,34 @@ class DebugSession:
         if "get_runtime_status" not in self.tools:
             raise CommandError("RUNTIME_STATUS_MISSING", "Reload the current server code before debugging")
         value = await self.runtime()
-        self.event("session_ready", runtime=value, offline=self.offline, **HELP)
+        self.event("session_ready", runtime=value, offline=self.offline, help="help [TOPIC]")
 
-    async def call(self, tool: str, arguments: dict):
+    async def call(self, tool: str, arguments: dict, *, dry_run: bool = False):
         if tool not in self.tools:
             raise CommandError("UNKNOWN_TOOL", f"Unknown tool: {tool}; use tools")
+        # Validate before sending even for normal calls, so invalid arguments have
+        # stable field paths and repair instructions rather than opaque RPC text.
+        from jsonschema import Draft202012Validator
+        from referencing import Registry
+        schema = self.tools[tool].inputSchema
+        errors = list(Draft202012Validator(schema, registry=Registry()).iter_errors(arguments))
+        if errors:
+            issues = [{"path": list(error.absolute_path), "rule": error.validator,
+                       "message": error.message} for error in errors]
+            raise CommandError("INVALID_TOOL_ARGUMENT", f"{tool}: {issues[0]['message']}",
+                hint=f"Use tools {tool}, correct arguments at the paths in details.issues, then repeat call --dry-run {tool} JSON_OBJECT.",
+                details={"tool": tool, "issues": issues})
+        readonly = self.tools[tool].annotations and self.tools[tool].annotations.readOnlyHint is True
+        if dry_run:
+            self.event("dry_run", tool=tool, arguments=arguments, schema_valid=True,
+                       potentially_mutating=not bool(readonly), would_send=False,
+                       local_policy_allows_execution=not (self.offline and tool not in OFFLINE_TOOLS)
+                           and not bool((self.transport_unknown or self.identity_lost) and not readonly),
+                       scope="schema_only", pending_checked=False,
+                       hint="Preview checks input schema only. Query current state before using IDs/coordinates; Runtime still enforces pending and game rules.")
+            return
         if self.offline and tool not in OFFLINE_TOOLS:
             raise CommandError("OFFLINE_ONLY", f"{tool} is unavailable in --offline sessions")
-        readonly = self.tools[tool].annotations and self.tools[tool].annotations.readOnlyHint is True
         if (self.transport_unknown or self.identity_lost) and not readonly:
             raise CommandError("TRANSPORT_UNRESOLVED", "An RPC outcome/identity is unknown; only read-only inspection is allowed")
         await self.runtime()
@@ -198,21 +243,28 @@ class DebugSession:
                 self.transport_unknown = unknown
                 self.state["transport_unknown"] = unknown
                 self.evidence.json("transport-unknown", unknown)
-            self.event("tool_outcome_unknown", request=request["sequence"], **unknown)
+            self.event("tool_outcome_unknown", request=request["sequence"], **unknown,
+                       hint="Use pending and read-only inspection; retain this process and do not replay the unknown mutation.")
             return
         self.evidence.json(f"debug-response-{request['sequence']:06}", result.model_dump(mode="json"))
         self.event("tool_result", request=request["sequence"], tool=tool,
-                   is_error=bool(result.isError), result=result.model_dump(mode="json"))
+                   is_error=bool(result.isError), result=result.model_dump(mode="json"),
+                   hint=f"Inspect the original MCP error, tools {tool} and pending before changing arguments; never blindly replay an unknown request." if result.isError else None)
 
-    async def close_request(self, abandon: bool, eof: bool = False) -> bool:
+    async def close_request(self, abandon: bool, eof: bool = False, *, dry_run: bool = False) -> bool:
         try:
             runtime = await self.runtime()
             unresolved = runtime["has_pending"] or bool(self.transport_unknown)
         except Exception as exc:
             unresolved = True
             self.state["close_status_error"] = f"{type(exc).__name__}: {exc}"
+        if dry_run:
+            self.event("dry_run", operation="quit", abandon=abandon, would_exit=abandon or not unresolved,
+                       would_lose_context=unresolved, would_send=False, session_retained=True)
+            return False
         if unresolved and not abandon and not eof:
-            self.event("command_blocked", code="PENDING_ON_EXIT", message="Session retained; inspect pending or explicitly quit --abandon")
+            error = CommandError("PENDING_ON_EXIT", "Session retained; unresolved context prevents normal exit")
+            self.event("command_blocked", **error.as_dict())
             return False
         self.state.update(unresolved_on_exit=unresolved,
                           exit_reason="eof_unresolved" if eof and unresolved else "abandoned" if abandon and unresolved else "eof" if eof else "quit")
@@ -225,8 +277,13 @@ class DebugSession:
         if not parts:
             return False
         head = parts[0]
-        if head == "help" and len(parts) == 1:
-            self.event("help", **HELP)
+        if head in HELP and parts == [head, "--help"]:
+            self.event("help", topic=head, **HELP[head])
+        elif head in {"help", "--help"} and len(parts) <= 2:
+            topic = parts[1] if len(parts) == 2 else "overview"
+            if topic not in HELP:
+                raise CommandError("INVALID_DEBUG_COMMAND", f"Unknown help topic: {topic}")
+            self.event("help", topic=topic, **HELP[topic])
         elif head == "tools" and len(parts) <= 2:
             if len(parts) == 1:
                 self.event("tools", tools=sorted(self.tools))
@@ -239,9 +296,19 @@ class DebugSession:
         elif head == "state" and len(parts) == 2 and parts[1] in STATES:
             await self.call(STATES[parts[1]], {})
         elif head == "call" and len(parts) >= 2:
-            await self.call(parts[1], strict_json(parts[2]) if len(parts) == 3 else {})
-        elif head == "quit" and (len(parts) == 1 or parts[1:] == ["--abandon"]):
-            return await self.close_request(len(parts) == 2)
+            tail = line.strip()[len(head):].strip()
+            dry_run = tail.split(maxsplit=1)[0] == "--dry-run"
+            if dry_run:
+                tail = tail[len("--dry-run"):].strip()
+            call_parts = tail.split(maxsplit=1)
+            if not call_parts:
+                raise CommandError("INVALID_DEBUG_COMMAND", "Missing TOOL after call --dry-run")
+            await self.call(call_parts[0], strict_json(call_parts[1]) if len(call_parts) == 2 else {}, dry_run=dry_run)
+        elif head == "quit":
+            options = line.strip().split()[1:]
+            if len(options) != len(set(options)) or set(options) - {"--abandon", "--dry-run"}:
+                raise CommandError("INVALID_DEBUG_COMMAND", "quit accepts --abandon and --dry-run at most once")
+            return await self.close_request("--abandon" in options, dry_run="--dry-run" in options)
         else:
             raise CommandError("INVALID_DEBUG_COMMAND", "Use help for foreground session commands")
         return False
@@ -283,8 +350,8 @@ async def serve(evidence: Evidence, state: dict, *, offline: bool, timeout: floa
                             if await debug.command(line):
                                 break
                         except Exception as exc:
-                            debug.event("command_blocked", code=exc.code if isinstance(exc, CommandError) else type(exc).__name__,
-                                        message=str(exc))
+                            error = exc if isinstance(exc, CommandError) else CommandError(type(exc).__name__, str(exc))
+                            debug.event("command_blocked", **error.as_dict())
     finally:
         state["mcp_session_closed"] = opened
         state["context_lost"] = state.get("unresolved_on_exit", True)

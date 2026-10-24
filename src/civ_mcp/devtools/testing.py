@@ -63,4 +63,8 @@ def run_tests(evidence: Evidence, domain: str, arguments: list[str], timeout: fl
     state["pytest_exit_code"] = result.returncode
     if result.returncode in {4, 5}:
         raise CommandError("PYTEST_NOT_RUN", f"pytest exit {result.returncode}; inspect pytest.json")
-    return "PASS" if result.returncode == 0 else "FAIL"
+    if result.returncode != 0:
+        raise CommandError("PYTEST_FAILED", f"{domain} tests failed (pytest exit {result.returncode})", "FAIL",
+            hint="Read pytest.json stdout/stderr, fix the reported test failures, then rerun the same domain.",
+            details={"domain": domain, "pytest_exit_code": result.returncode})
+    return "PASS"

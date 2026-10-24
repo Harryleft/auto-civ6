@@ -121,7 +121,7 @@ def test_malformed_commands_and_schema_errors_do_not_replace_session(tmp_path):
         'state wrong\ncall missing {}\ntools unit_action\ncall unit_action {}\npending\nquit\n')
     assert status == "PASS" and engine["submissions"] == 0
     assert len([event for event in events if event.get("code") == "INVALID_JSON"]) == 3
-    assert any(event["event"] == "tool_result" and event["is_error"] for event in events)
+    assert any(event.get("code") == "INVALID_TOOL_ARGUMENT" and event["details"]["issues"] for event in events)
     assert any(event["event"] == "tool_schema" for event in events)
 
 
@@ -244,3 +244,47 @@ def test_terminal_eof_refuses_exit_then_can_confirm_original_request(tmp_path):
         if process.poll() is None:
             process.kill(); process.wait()
         os.close(master)
+
+
+def test_dry_run_validates_without_submitting_or_confirming_pending(tmp_path):
+    preview = MOVE.replace("call ", "call --dry-run ")
+    status, state, events, engine, _ = run_fake(tmp_path,
+        preview + 'pending\n' + MOVE + preview + 'quit --abandon --dry-run\npending\n' + MOVE + 'quit\n')
+    pending = [event['runtime'] for event in events if event['event'] == 'pending']
+    assert [row['has_pending'] for row in pending] == [False, True]
+    assert engine['submissions'] == 1 and engine['remaining_reads'] == 0
+    assert engine['observed'] == []
+    previews = [event for event in events if event['event'] == 'dry_run']
+    assert len(previews) == 3
+    assert all(row['would_send'] is False for row in previews)
+    assert previews[0]['schema_valid'] and previews[0]['potentially_mutating']
+    assert previews[1]['scope'] == 'schema_only' and not previews[1]['pending_checked']
+    assert previews[2]['would_lose_context'] and previews[2]['session_retained']
+    assert status == 'PASS' and state['tool_calls'] == 2
+
+
+def test_discovery_and_field_errors_are_actionable_without_target_rpc(tmp_path):
+    status, state, events, engine, _ = run_fake(tmp_path,
+        'help\ncall --help\nhelp quit\ncall --dry-run unit_action {"unit_id":"bad","action":"move"}\n'
+        'call --dry-run unit_action {"unit_id":1e999}\ncall --dry-run\nquit\n')
+    overview = next(row for row in events if row['event'] == 'help' and row['topic'] == 'overview')
+    assert 'topics' in overview and 'examples' not in overview
+    assert any(row['event'] == 'help' and row.get('examples') for row in events)
+    errors = [row for row in events if row['event'] == 'command_blocked']
+    assert all(row['hint'] for row in errors)
+    schema = next(row for row in errors if row['code'] == 'INVALID_TOOL_ARGUMENT')
+    assert schema['details']['issues'][0]['path'] == ['unit_id']
+    assert any(row['code'] == 'INVALID_JSON' for row in errors)
+    assert engine['submissions'] == 0 and state['tool_calls'] == 0 and status == 'PASS'
+
+
+def test_offline_can_preview_game_tool_without_sending_it(tmp_path):
+    output = tmp_path / 'proof'
+    result = subprocess.run([sys.executable, '-m', 'civ_mcp.cli', 'debug', '--offline', '--output', str(output)],
+        input=MOVE.replace('call ', 'call --dry-run ') + 'pending\nquit\n',
+        cwd=ROOT, capture_output=True, text=True, encoding='utf-8', timeout=30)
+    rows = [json.loads(line) for line in result.stdout.splitlines()]
+    preview = next(row for row in rows if row['event'] == 'dry_run')
+    assert not preview['local_policy_allows_execution'] and not preview['would_send']
+    assert not any(row['event'] == 'tool_started' for row in rows)
+    assert result.returncode == 0 and rows[-1]['data']['tool_calls'] == 0

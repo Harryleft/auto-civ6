@@ -117,6 +117,7 @@ def test_bad_requests_are_json_and_do_not_start_execution(tmp_path, arguments):
 def test_parser_errors_are_json(tmp_path, arguments):
     result, _ = cli(tmp_path, *arguments, code=2)
     assert result["errors"][0]["code"] == "INVALID_ARGUMENT"
+    assert "--help" in result["errors"][0]["hint"]
 
 
 def test_domain_discovery_and_actual_collection_ignore_ambient_pytest_options(tmp_path):
@@ -173,3 +174,45 @@ def test_process_timeout_retains_partial_receipt(tmp_path):
     receipt = json.loads((evidence.path / "slow.json").read_text())
     assert receipt["timeout_seconds"] == .3 and receipt["finished_at"]
     assert "started" in receipt["stdout"]
+
+
+@pytest.mark.parametrize('command,children', [([], ['doctor', 'verify', 'test', 'debug', 'logs']),
+    (['logs'], ['list', 'show', 'timeline']), (['verify'], ['knowledge']), (['debug'], [])])
+def test_help_discloses_one_level_and_supports_json_without_side_effects(tmp_path, command, children):
+    output = tmp_path / 'unused'
+    prefix = [sys.executable, '-m', 'civ_mcp.cli', '--output', str(output)]
+    human = subprocess.run([*prefix, *command, '--help'], cwd=ROOT, capture_output=True, text=True)
+    machine = subprocess.run([*prefix, *command, '--help', '--json'], cwd=ROOT, capture_output=True, text=True)
+    assert human.returncode == machine.returncode == 0
+    assert not human.stderr and not machine.stderr and not output.exists()
+    doc = json.loads(machine.stdout)
+    assert doc['kind'] == 'help' and doc['schema_version'] == 1 and doc['description']
+    assert [row['name'] for row in doc['subcommands']] == children
+    assert doc['notes'] or children
+    if not command:
+        assert '--since' not in human.stdout and 'unit_action' not in machine.stdout
+
+
+def test_log_errors_identify_the_input_to_change(tmp_path):
+    result, _ = cli(tmp_path, 'logs', 'show', '--file', str(tmp_path / 'missing'), code=2)
+    assert result['errors'][0]['code'] == 'LOG_NOT_FOUND'
+    assert '--file' in result['errors'][0]['hint']
+
+
+def test_failed_isolated_pytest_preserves_receipt_and_repair_hint(tmp_path, monkeypatch):
+    from civ_mcp.devtools import knowledge, testing
+    fixture = tmp_path / 'tests'
+    fixture.mkdir()
+    (fixture / 'test_failure.py').write_text('def test_failure():\n    assert 1 == 2\n')
+    monkeypatch.setattr(knowledge, 'check_interpreter', lambda project: None)
+    monkeypatch.setitem(testing.DOMAINS, 'fixture', ('test_failure.py',))
+    evidence = Evidence(tmp_path, ['test', 'fixture'])
+    state = {}
+    with pytest.raises(CommandError) as error:
+        testing.run_tests(evidence, 'fixture', [], 10, state)
+    summary = evidence.finish(error.value.status, state, error.value)
+    assert summary['status'] == 'FAIL' and summary['exit_code'] == 1
+    assert summary['errors'][0]['code'] == 'PYTEST_FAILED'
+    assert 'pytest.json' in summary['errors'][0]['hint']
+    receipt = json.loads((evidence.path / 'pytest.json').read_text())
+    assert 'assert 1 == 2' in receipt['stdout'] and state['pytest_exit_code'] == 1

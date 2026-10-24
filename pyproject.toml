@@ -18,6 +18,8 @@ classifiers = [
 ]
 dependencies = [
     "mcp>=1.20",
+    "jsonschema>=4.22",
+    "referencing>=0.30",
     "pywin32>=311; sys_platform == 'win32'",
 ]
 

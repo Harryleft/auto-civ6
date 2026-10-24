@@ -43,11 +43,37 @@ pytest 透传放在 `--` 后，支持 `-q`、`-v`、`-vv`、`-x`、`-k EXPR`、`
 
 ## JSON 与退出码
 
-一次性命令 stdout 只输出一个 JSON 对象；`debug` 输出逐行 JSON 事件，最后一行是会话摘要。默认即为 JSON，`--json` 可显式标注。`--help` 保留常规命令帮助。终端提示和 Ctrl+C 提示写 stderr；子进程原始 stderr 写入证据。
+一次性命令 stdout 只输出一个 JSON 对象；`debug` 输出逐行 JSON 事件，最后一行是会话摘要。默认即为 JSON，`--json` 可显式标注。`--help` 显示当前层级的用途、参数、示例和结果范围；加 `--json` 返回结构化帮助（`kind=help`），只列直接子命令。help 不查找项目、不创建证据、不启动 MCP。终端提示和 Ctrl+C 提示写 stderr；子进程原始 stderr 写入证据。
 
-运行目录建立后，结果包含 `schema_version=1`、`command`、`run_id`、`mode=offline`、`status`、`exit_code`、起止时间、项目路径、Git 提交及脏状态、`data`、`errors` 和 `evidence`。`game_verification=not_run` 明确实机未测；命令成功只覆盖本命令实际执行的路径。输出及证据文件使用 UTF-8。
+运行目录建立后，结果包含 `schema_version=1`、`command`、`run_id`、`mode=offline`、`status`、`exit_code`、起止时间、项目路径、Git 提交及脏状态、`data`、`errors` 和 `evidence`。`game_verification=not_run` 明确实机未测；命令成功只覆盖本命令实际执行的路径。输出及证据文件使用 UTF-8。错误对象含 `code`、`message`、`hint`、`details`；`hint` 指出应修改的参数或下一项检查，工具 schema 错误的 `details.issues` 给出字段路径、校验规则和原因。
 
 普通 debug 会话使用 `mode=debug`、`game_verification=unverified`，不把用户调试当作实机验收。`debug --offline` 保持 `mode=offline`、`game_verification=not_run`。
+
+## 组合与发现
+
+根 help 只展示命令组；逐层使用 `civ6 logs --help`、`civ6 logs show --help`。机器可用 `civ6 logs show --help --json` 读取同一参数契约。会话内 `help` 返回主题，`help call` 或 `call --help` 展示调用语法，`tools NAME` 才展开该工具的完整 schema。
+
+一次性命令可将 JSON 结果交给 `jq` 等工具；组合脚本应同时检查退出码和 `status`。debug 接收 stdin 中每行一条命令，返回 JSONL；调用参数是原始 JSON 对象，不经过 shell 展开。筛选 `tool_result` 时按 `request` 关联 `tool_started.sequence`，不要把最后的会话 `PASS` 当作每次工具成功。
+
+```sh
+uv run --locked civ6 test --list | jq '.data.domains'
+uv run --locked civ6 logs list | jq '.data.sessions[].session'
+uv run --locked civ6 debug --offline <<'COMMANDS'
+help call
+tools unit_action
+call --dry-run unit_action {"unit_id":0,"action":"move","target_x":22,"target_y":9}
+pending
+quit
+COMMANDS
+```
+
+## 副作用预演
+
+标准选项拼写为 `--dry-run`。可能改变游戏状态的调用先使用会话内 `call --dry-run TOOL JSON_OBJECT`。该入口只校验工具名称、严格 JSON 和真实输入 schema，返回 `event=dry_run`、原参数、`schema_valid=true`、`would_send=false`；未明确标为只读的工具按 `potentially_mutating=true` 展示。预演仍写本地证据。
+
+工具预演不发送目标 RPC、不查询游戏、不确认或清除 pending，也不检查实体是否存在、坐标可达、当前门禁或游戏前提。`scope=schema_only`、`pending_checked=false` 明确此范围；`local_policy_allows_execution` 只表示当前 offline／传输未知限制，不能当作游戏执行许可。可在 `debug --offline` 中预演游戏工具，实际调用仍被拒绝。
+
+`quit --abandon --dry-run` 只读取服务内存，返回 `would_exit`、`would_lose_context` 并保留会话。真正 `quit --abandon` 仍显式丢弃进程上下文；有未决时返回 `BLOCKED`。预演没有自动执行、确认令牌或自动重试；实际执行须明确输入不带 `--dry-run` 的命令。
 
 ## 前台 debug 会话
 
@@ -68,13 +94,13 @@ pending
 quit
 ```
 
-`state` 是对应公开 MCP 查询的别名。`call TOOL JSON_OBJECT` 只调用工具列表中实际存在的入口；省略参数等同 `{}`。JSON 不能有重复键、NaN 或 Infinity。工具参数继续由 MCP 校验，动作确认与门禁仍由现有 Runtime 所有者处理；CLI 不调用内部 setter 或清理未决状态。使用实体 ID 和坐标前须先查询真实状态。
+`state` 是对应公开 MCP 查询的别名。`call TOOL JSON_OBJECT` 只调用工具列表中实际存在的入口；省略参数等同 `{}`。JSON 不能有重复键、NaN 或 Infinity。CLI 按实际发现的 `inputSchema` 在发送前校验参数，MCP 仍执行服务端校验；动作确认与门禁仍由现有 Runtime 所有者处理；CLI 不调用内部 setter 或清理未决状态。使用实体 ID 和坐标前须先查询真实状态。
 
 `pending` 调用 `get_runtime_status`：返回本服务的 UUID、PID、连接标记、动作摘要与动作／推进／外交／议会／保存／替换的未决事实。该工具只读取所有者内存，不查询游戏、确认请求、刷新缓存或清门禁。`connected=false` 不表示世界不存在，`has_pending=false` 不证明别的 MCP 进程没有未决请求。
 
 服务 UUID／PID 标识本次 MCP 生命周期，不是世界身份或测试轮次。每次显式工具调用前也读取同一内存快照核对服务身份，不自动确认任何请求。
 
-`--offline` 只允许 `get_runtime_status`、`search_knowledge`、`get_knowledge`，本地 `help/tools/quit` 也可使用。其他工具在发送前拒绝，不能通过 `state` 或显式 `call` 绕过。离线检查可向会话输入知识查询和 pending，不必运行游戏。
+`--offline` 只允许发送 `get_runtime_status`、`search_knowledge`、`get_knowledge`，本地 `help/tools/quit` 和其他工具的 dry-run 也可使用。其他工具的实际调用在发送前拒绝，不能通过 `state` 或显式 `call` 绕过。离线检查可向会话输入知识查询和 pending，不必运行游戏。
 
 会话异常与退出：
 

@@ -13,8 +13,42 @@ from civ_mcp.devtools.testing import DOMAINS, run_tests
 
 
 class Parser(argparse.ArgumentParser):
+    machine_help = False
+
+    def help_document(self) -> dict:
+        options, subcommands = [], []
+        for action in self._actions:
+            if isinstance(action, argparse._SubParsersAction):
+                subcommands = [{"name": name, "description": child.description,
+                                "help_command": f"{child.prog} --help"}
+                               for name, child in action.choices.items()]
+            else:
+                item = {"names": action.option_strings or [action.dest], "help": action.help,
+                        "required": action.required}
+                if action.choices is not None:
+                    item["choices"] = list(action.choices)
+                if action.default != argparse.SUPPRESS:
+                    item["default"] = action.default
+                options.append(item)
+        return {"schema_version": 1, "kind": "help", "command": self.prog,
+                "usage": self.format_usage().strip(), "description": self.description,
+                "options": options, "subcommands": subcommands, "notes": self.epilog}
+
+    def print_help(self, file=None):
+        if self.machine_help:
+            print(json.dumps(self.help_document(), ensure_ascii=False), file=file or sys.stdout)
+        else:
+            super().print_help(file)
+
+    def configure_help(self, machine: bool):
+        self.machine_help = machine
+        for action in self._actions:
+            if isinstance(action, argparse._SubParsersAction):
+                for child in action.choices.values():
+                    child.configure_help(machine)
+
     def error(self, message):
-        raise CommandError("INVALID_ARGUMENT", message)
+        raise CommandError("INVALID_ARGUMENT", message, hint=f"Run {self.prog} --help and correct the reported argument.")
 
 
 def positive(value: str) -> float:
@@ -34,44 +68,63 @@ def limit(value: str) -> int:
 def common(parser: Parser) -> None:
     parser.add_argument("--project", default=argparse.SUPPRESS, help="Source checkout; discovered from cwd or installed source")
     parser.add_argument("--output", default=argparse.SUPPRESS, help="New evidence directory; never overwrites existing paths")
-    parser.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="JSON output (already the default)")
+    parser.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="JSON results (default); combine with --help for a machine-readable help document")
 
 
 def parser() -> Parser:
-    result = Parser(prog="civ6", description=__doc__)
+    result = Parser(prog="civ6", description=__doc__,
+        epilog="Explore: civ6 COMMAND --help. Results: JSON; debug: line commands on stdin, JSONL on stdout. "
+               "Exit codes: 0 PASS, 1 FAIL, 2 BLOCKED, 130 interrupted. "
+               "Help does not start MCP or create evidence.")
     common(result)
     commands = result.add_subparsers(dest="command", required=True)
-    doctor = commands.add_parser("doctor", help="Check interpreter, knowledge and stdio MCP; no game access")
+    doctor = commands.add_parser("doctor", help="Check local readiness without game access",
+        description="Check interpreter, dependencies, knowledge integrity and real stdio MCP discovery. No game tools are called.",
+        epilog="Example: civ6 doctor --knowledge-dir civ6_knowledge. Missing optional dev dependencies are NOT_RUN.")
     common(doctor)
-    doctor.add_argument("--knowledge-dir")
-    verify = commands.add_parser("verify", help="Verify a real offline user path")
+    doctor.add_argument("--knowledge-dir", help="Complete knowledge package; default PROJECT/civ6_knowledge")
+    verify = commands.add_parser("verify", help="Verify a real offline user path", description="Choose a feature to verify; use civ6 verify FEATURE --help for its contract.")
     common(verify)
     verification = verify.add_subparsers(dest="feature", required=True)
-    knowledge = verification.add_parser("knowledge", help="Compare real CLI and stdio MCP knowledge responses")
+    knowledge = verification.add_parser("knowledge", help="Compare CLI and MCP knowledge responses",
+        description="Validate the knowledge package, query writing/TECH_WRITING through CLI and MCP, and compare results. No game access.",
+        epilog="Example: civ6 verify knowledge --output .scratch/my-new-proof. Input knowledge files remain unchanged.")
     common(knowledge)
-    knowledge.add_argument("--knowledge-dir")
-    test = commands.add_parser("test", help="Run a named selection of isolated tests")
+    knowledge.add_argument("--knowledge-dir", help="Complete knowledge package; default PROJECT/civ6_knowledge")
+    test = commands.add_parser("test", help="Run a named selection of isolated tests",
+        description="Discover domains with --list, then run one registered offline selection.",
+        epilog="Example: civ6 test turns -- -k pending -x. After --: -q/-v/-vv/-x, -k EXPR, -m EXPR, "
+               "--maxfail N, --collect-only, --disable-warnings. Paths, plugins and config overrides are rejected.")
     common(test)
-    test.add_argument("domain", nargs="?", choices=DOMAINS)
+    test.add_argument("domain", nargs="?", choices=DOMAINS, help="One domain; --list shows its exact test files")
     test.add_argument("--list", action="store_true", help="List domain selections without running tests")
-    test.add_argument("--collect-only", action="store_true")
-    test.add_argument("--timeout", type=positive, default=300)
-    debug = commands.add_parser("debug", help="Keep one foreground MCP process; commands arrive on stdin")
+    test.add_argument("--collect-only", action="store_true", help="Collect tests without executing test cases; does not prove they pass")
+    test.add_argument("--timeout", type=positive, default=300, help="Subprocess timeout in seconds; default 300")
+    debug = commands.add_parser("debug", help="Keep one foreground MCP process; commands arrive on stdin",
+        description="One MCP process and pending context for the entire foreground session. Input: one command per line; output: JSONL. Startup reads server memory only.",
+        epilog="Start safely: civ6 debug --offline. In-session discovery: help, help call, tools, tools NAME. "
+               "Preview: call --dry-run TOOL JSON_OBJECT. Quit may refuse while pending. "
+               "No retry, restart or game load occurs automatically.")
     common(debug)
     debug.add_argument("--offline", action="store_true", help="Allow only knowledge tools and in-memory pending inspection")
     debug.add_argument("--timeout", type=positive, default=300, help="Per-RPC timeout; never retries or restarts")
-    logs = commands.add_parser("logs", help="Read existing action logs; never query the game")
+    logs = commands.add_parser("logs", help="Read existing action logs; never query the game", description="Choose list, show or timeline. Reads bounded snapshots of existing JSONL files; no game queries.")
     common(logs)
     log_commands = logs.add_subparsers(dest="view", required=True)
     for view in ("list", "show", "timeline"):
-        log_parser = log_commands.add_parser(view)
+        descriptions = {"list": "List action log sessions from newest file modification time.",
+                        "show": "Read the last matching records in file order.",
+                        "timeline": "Read the newest matching records, sorted by timestamp ascending."}
+        log_parser = log_commands.add_parser(view, help=descriptions[view], description=descriptions[view],
+            epilog="JSON data includes source paths and counts. " + ("Example: civ6 logs list --limit 10." if view == "list" else
+            "Example: civ6 logs " + view + " --file PATH --tool get_units. Filters combine with AND; limits are 1..1000."))
         common(log_parser)
         log_parser.add_argument("--dir", help="Action log directory; default ~/.civ6-mcp/actions")
-        log_parser.add_argument("--limit", type=limit, default=20 if view == "list" else 50)
+        log_parser.add_argument("--limit", type=limit, default=20 if view == "list" else 50, help="Maximum returned items (1..1000); default 20 for list, otherwise 50")
         if view != "list":
-            log_parser.add_argument("session", nargs="?")
+            log_parser.add_argument("session", nargs="?", help="Session ID from logs list; mutually exclusive with --file")
             log_parser.add_argument("--file", help="Read one explicit JSONL file instead of a session ID")
-            log_parser.add_argument("--tool")
+            log_parser.add_argument("--tool", help="Exact MCP tool name filter")
             log_parser.add_argument("--contains", help="Literal substring in result")
             log_parser.add_argument("--since", help="Inclusive ISO-8601 time with timezone")
             log_parser.add_argument("--until", help="Inclusive ISO-8601 time with timezone")
@@ -124,7 +177,9 @@ def main(argv: list[str] | None = None) -> int:
     fallback = {"schema_version": 1, "command": command, "mode": "offline", "game_verification": "not_run",
                 "status": "BLOCKED", "exit_code": 2, "evidence": None, "data": {}, "errors": []}
     try:
-        args = parser().parse_args(left)
+        argument_parser = parser()
+        argument_parser.configure_help("--json" in left)
+        args = argument_parser.parse_args(left)
         project = find_project(getattr(args, "project", None))
         configured = getattr(args, "knowledge_dir", None)
         target = getattr(args, "output", None)
@@ -139,7 +194,7 @@ def main(argv: list[str] | None = None) -> int:
         error = CommandError("INTERRUPTED", "Interrupted; inspect retained evidence before retrying")
         result = evidence.finish("BLOCKED", data, error) if evidence else fallback
         if not evidence:
-            result["errors"] = [{"code": error.code, "message": str(error)}]
+            result["errors"] = [error.as_dict()]
         result["exit_code"] = 130
         if evidence:
             evidence.save()
@@ -150,7 +205,7 @@ def main(argv: list[str] | None = None) -> int:
             result = evidence.finish(error.status, data, error)
         else:
             result = fallback | {"status": error.status, "exit_code": 1 if error.status == "FAIL" else 2,
-                                 "finished_at": now(), "errors": [{"code": error.code, "message": str(error)}]}
+                                 "finished_at": now(), "errors": [error.as_dict()]}
     print(json.dumps(result, ensure_ascii=False, allow_nan=False))
     return result["exit_code"]
 

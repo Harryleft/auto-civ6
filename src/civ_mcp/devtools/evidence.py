@@ -11,10 +11,48 @@ import sys
 from uuid import uuid4
 
 
+ERROR_HINTS = {
+    "INVALID_ARGUMENT": "Read the selected command's --help, then correct the named argument or choose its subcommand.",
+    "PROJECT_NOT_FOUND": "Set --project to a source checkout containing pyproject.toml and src/civ_mcp/server.py.",
+    "INVALID_OUTPUT": "Change --output to a new directory outside the knowledge package.",
+    "EVIDENCE_UNAVAILABLE": "Use --output with a new, writable directory; existing evidence is never overwritten.",
+    "INVALID_PYTEST_ARGUMENT": "Use civ6 test --help for supported options after --; remove extra paths, plugins and config overrides.",
+    "PYTEST_NOT_RUN": "Read pytest.json; fix test selection (-k/-m) or invocation before running again.",
+    "INVALID_TIME": "Set --since/--until to an ISO-8601 timestamp with timezone, for example 2026-10-24T00:00:00+08:00.",
+    "INVALID_TIME_RANGE": "Move --since before or equal to --until.",
+    "LOG_SESSION_INVALID": "Use a session from civ6 logs list, or supply --file PATH to an existing JSONL file.",
+    "LOG_NOT_FOUND": "Check --dir and the session from civ6 logs list, or correct --file PATH.",
+    "LOG_DIRECTORY_INVALID": "Set --dir to a directory containing action JSONL files.",
+    "INVALID_JSON": "Supply one strict JSON object with double-quoted keys; remove duplicate keys and non-finite numbers.",
+    "UNKNOWN_TOOL": "Use tools to discover names, then tools NAME to inspect its input schema.",
+    "OFFLINE_ONLY": "Keep --offline for knowledge/pending inspection; use call --dry-run TOOL JSON to preview other tools without sending them.",
+    "INVALID_DEBUG_COMMAND": "Use help for topics, then help call, help state or help quit for syntax.",
+    "PENDING_ON_EXIT": "Use pending and inspect the original request; quit --abandon explicitly discards context and returns BLOCKED.",
+    "TRANSPORT_UNRESOLVED": "Use pending and read-only inspection in this session. Do not retry mutations or replace the MCP process.",
+    "SESSION_CHANGED": "Stop game commands and inspect retained evidence; a new process cannot confirm the original pending request.",
+    "RUNTIME_STATUS_INVALID": "Check debug-tools.json and the server version; retain this session and do not send mutations.",
+    "RUNTIME_STATUS_MISSING": "Run uv sync --locked in this checkout and start debugging with its current server code.",
+    "MCP_CLOSED": "Inspect debug-stderr.log and retained pending evidence; do not restart and replay an unknown request.",
+    "TIMEOUT": "Inspect the timed-out process receipt before retrying; adjust --timeout only after checking its partial result.",
+    "DEPENDENCY_MISSING": "Run uv sync --locked in the selected project and use uv run --locked civ6.",
+    "CHECKOUT_MISMATCH": "Run uv sync --locked in --project and invoke its civ6 with uv run --locked.",
+    "KNOWLEDGE_MISSING": "Set --knowledge-dir to a complete knowledge package containing manifest.json and query.py.",
+    "VERIFICATION_FAILED": "Inspect the failed check and its CLI/MCP receipts in evidence; fix that source or knowledge package before verifying again.",
+    "TEST_FILE_MISSING": "Restore the missing test file or update DOMAINS in src/civ_mcp/devtools/testing.py.",
+    "PROCESS_UNAVAILABLE": "Inspect the recorded command and OS error; correct the executable path or permissions.",
+    "INTERRUPTED": "Inspect retained evidence and pending state before deciding whether the command can be run again.",
+}
+
+
 class CommandError(Exception):
-    def __init__(self, code: str, message: str, status: str = "BLOCKED"):
+    def __init__(self, code: str, message: str, status: str = "BLOCKED", *, hint: str | None = None, details: dict | None = None):
         super().__init__(message)
         self.code, self.status = code, status
+        self.hint = hint or ERROR_HINTS.get(code, "Inspect the recorded error and evidence; correct the reported cause before retrying.")
+        self.details = details or {}
+
+    def as_dict(self) -> dict:
+        return {"code": self.code, "message": str(self), "hint": self.hint, "details": self.details}
 
 
 def now() -> str:
@@ -115,6 +153,6 @@ class Evidence:
         self.summary.update(status=status, exit_code={"PASS": 0, "FAIL": 1, "BLOCKED": 2}[status],
                             data=data, finished_at=now())
         if error:
-            self.summary["errors"].append({"code": error.code, "message": str(error)})
+            self.summary["errors"].append(error.as_dict())
         self.save()
         return self.summary
