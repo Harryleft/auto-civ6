@@ -4,6 +4,8 @@
 
 ## 调用关系
 
+`civ6 debug` 是前台 stdio MCP 客户端，一次会话保持一个服务进程；终端命令不会重建 GameState。`get_runtime_status` 在工具锁内仅读取服务 UUID／PID 和现有所有者的公开未决事实，不触发查询、确认、缓存刷新或门禁退役。CLI 保存的传输未知只用于阻止不安全续写和退出提示，不替代 Runtime 的动作所有者；进程退出后不提供未决意图恢复。
+
 ```text
 MCP 客户端
   │ stdio JSON-RPC

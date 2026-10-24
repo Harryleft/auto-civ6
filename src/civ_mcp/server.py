@@ -9,6 +9,7 @@ import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Annotated, Any, AsyncIterator, Awaitable, Callable, Optional
+from uuid import uuid4
 
 from mcp.server.fastmcp import Context, FastMCP
 from pydantic import Field
@@ -28,6 +29,7 @@ class AppContext:
     logger: GameLogger
     # 一次工具可能包含检查、执行、回读；整体串行，防止并发工具插入。
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    session_id: str = field(default_factory=lambda: uuid4().hex)
 
 
 @asynccontextmanager
@@ -161,6 +163,33 @@ async def _logged(
 # ---------------------------------------------------------------------------
 # Query tools (read-only)
 # ---------------------------------------------------------------------------
+
+
+@mcp.tool(annotations={"readOnlyHint": True, "idempotentHint": True})
+async def get_runtime_status(ctx: Context) -> str:
+    """Read this MCP process/session and pending-owner facts without game I/O.
+
+    Does not confirm, refresh, clear or persist requests. A disconnected game
+    is not an empty world; these facts describe only this server's memory.
+    """
+    app = ctx.request_context.lifespan_context
+    # Keep this snapshot outside _logged's dispatch: status inspection must
+    # never grow into a confirmation path when domain gates change.
+    async with app.lock:
+        game = app.game
+        pending = {
+            "action": game.pending_action_summary is not None,
+            "turn": game.turn_pending, "diplomacy": game.diplomacy_pending,
+            "congress": game.congress_pending, "save": game.save_pending,
+            "replacement": game.replacement_pending,
+        }
+        return json.dumps({
+            "schema_version": 1, "session_id": app.session_id, "process_id": os.getpid(),
+            "connected": game.conn.is_connected, "pending": pending,
+            "action": {"summary": game.pending_action_summary, "tool": game.pending_action_tool,
+                       "entity": game.pending_action_entity},
+            "has_pending": any(pending.values()), "scope": "server_memory",
+        }, ensure_ascii=False)
 
 
 @mcp.tool(annotations={"readOnlyHint": True, "idempotentHint": True})

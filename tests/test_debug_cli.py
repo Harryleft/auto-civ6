@@ -1,0 +1,246 @@
+"""Foreground-session behavior through real stdio, with no game connection."""
+
+import asyncio
+from io import StringIO
+import json
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+from types import SimpleNamespace
+
+import pytest
+from mcp import StdioServerParameters
+
+from civ_mcp import server
+from civ_mcp.devtools.debug import serve
+from civ_mcp.devtools.evidence import Evidence
+from civ_mcp.game_state import GameState
+from test_action_confirmation import Engine
+
+
+ROOT = Path(__file__).resolve().parents[1]
+MOVE = 'call unit_action {"unit_id":0,"action":"move","target_x":22,"target_y":9}\n'
+
+
+def fake_cli(tmp_path, stdin=subprocess.PIPE):
+    driver = tmp_path / "driver.py"
+    driver.write_text('''
+import sys
+from mcp import StdioServerParameters
+from civ_mcp.devtools import debug
+from civ_mcp.cli import main
+original = debug.serve
+async def injected(*args, **kwargs):
+    server = StdioServerParameters(command=sys.executable,
+        args=[%r, '--receipt', %r], cwd=%r)
+    return await original(*args, **kwargs, server=server)
+debug.serve = injected
+raise SystemExit(main())
+''' % (str(ROOT / 'tests/fake_debug_server.py'), str(tmp_path / 'engine.json'), str(ROOT)))
+    return subprocess.Popen([sys.executable, str(driver), "debug", "--output", str(tmp_path / 'proof')],
+        cwd=ROOT, stdin=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, encoding='utf-8')
+
+
+def run_fake(tmp_path, text, timeout=5):
+    receipt = tmp_path / "engine.json"
+    evidence = Evidence(ROOT, ["debug-test"], str(tmp_path / "evidence"))
+    state, events = {}, []
+    params = StdioServerParameters(command=sys.executable,
+        args=[str(ROOT / "tests/fake_debug_server.py"), "--receipt", str(receipt)], cwd=str(ROOT))
+    status = asyncio.run(serve(evidence, state, offline=False, timeout=timeout,
+                              source=StringIO(text), emit=events.append, server=params))
+    return status, state, events, json.loads(receipt.read_text()), evidence
+
+
+def test_real_pending_owner_survives_queries_and_confirms_without_new_submission(tmp_path):
+    status, state, events, engine, evidence = run_fake(tmp_path,
+        MOVE + 'pending\nstate units\npending\nquit\n' + MOVE + 'pending\nquit\n')
+    pending = [event["runtime"] for event in events if event["event"] == "pending"]
+    assert [value["has_pending"] for value in pending] == [True, True, False]
+    assert len({(value["process_id"], value["session_id"]) for value in pending}) == 1
+    assert engine["process_id"] == pending[0]["process_id"]
+    assert engine["submissions"] == 1 and engine["remaining_reads"] == 0
+    assert engine["observed"] == ["get_units"] and engine["phase"] == "closed"
+    assert any(event.get("code") == "PENDING_ON_EXIT" for event in events)
+    assert status == "PASS" and state["mcp_session_closed"] and not state["unresolved_on_exit"]
+    assert (evidence.path / "debug.jsonl").is_file()
+
+
+@pytest.mark.parametrize("ending,reason", [("quit --abandon\n", "abandoned"), ("", "eof_unresolved")])
+def test_unresolved_exit_is_explicitly_blocked_and_keeps_original_snapshot(tmp_path, ending, reason):
+    status, state, events, engine, _ = run_fake(tmp_path, MOVE + 'pending\n' + ending)
+    assert status == "BLOCKED" and state["exit_reason"] == reason
+    assert state["runtime"]["pending"]["action"] and state["mcp_session_closed"]
+    assert engine["submissions"] == 1 and engine["remaining_reads"] == 1 and engine["has_pending"]
+
+
+def test_timeout_retains_process_and_only_allows_read_only_inspection(tmp_path):
+    status, state, events, engine, evidence = run_fake(tmp_path,
+        'call test_slow {}\npending\nstate units\n' + MOVE + 'quit\nquit --abandon\n', timeout=2)
+    assert status == "BLOCKED" and state["transport_unknown"]["tool"] == "test_slow"
+    assert engine["submissions"] == 1
+    assert any(event.get("code") == "TRANSPORT_UNRESOLVED" for event in events)
+    assert any(event["event"] == "tool_outcome_unknown" for event in events)
+    assert [event["sequence"] for event in events] == list(range(1, len(events) + 1))
+    pending = next(event["runtime"] for event in events if event["event"] == "pending")
+    assert pending["process_id"] == engine["process_id"] and pending["has_pending"]
+    assert (evidence.path / "transport-unknown.json").is_file()
+
+
+def test_later_read_timeout_does_not_replace_original_unknown_intent(tmp_path):
+    status, state, events, engine, evidence = run_fake(tmp_path,
+        'call test_slow {}\ncall test_slow_read {}\npending\nquit --abandon\n', timeout=2)
+    unknowns = [event for event in events if event['event'] == 'tool_outcome_unknown']
+    assert [row['tool'] for row in unknowns] == ['test_slow', 'test_slow_read']
+    assert state['transport_unknown']['tool'] == 'test_slow'
+    assert json.loads((evidence.path / 'transport-unknown.json').read_text())['tool'] == 'test_slow'
+    assert status == 'BLOCKED' and engine['submissions'] == 1
+
+
+def test_identity_change_is_latched_and_new_mutation_is_not_sent(tmp_path):
+    status, state, events, engine, _ = run_fake(tmp_path,
+        'call test_change_session {}\npending\n' + MOVE + 'quit --abandon\n')
+    assert status == "BLOCKED" and engine["submissions"] == 0
+    assert any(event.get("code") == "SESSION_CHANGED" for event in events)
+    assert any(event.get("code") == "TRANSPORT_UNRESOLVED" for event in events)
+
+
+def test_explicit_tool_call_checks_identity_even_without_pending_command(tmp_path):
+    status, state, events, engine, _ = run_fake(tmp_path,
+        'call test_change_session {}\n' + MOVE + 'quit --abandon\n')
+    assert status == "BLOCKED" and engine["submissions"] == 0
+    assert any(event.get("code") == "SESSION_CHANGED" for event in events)
+
+
+def test_malformed_commands_and_schema_errors_do_not_replace_session(tmp_path):
+    status, state, events, engine, _ = run_fake(tmp_path,
+        'call unit_action {"unit_id":0,"unit_id":1}\ncall unit_action []\ncall unit_action {"unit_id":NaN}\n'
+        'state wrong\ncall missing {}\ntools unit_action\ncall unit_action {}\npending\nquit\n')
+    assert status == "PASS" and engine["submissions"] == 0
+    assert len([event for event in events if event.get("code") == "INVALID_JSON"]) == 3
+    assert any(event["event"] == "tool_result" and event["is_error"] for event in events)
+    assert any(event["event"] == "tool_schema" for event in events)
+
+
+def test_runtime_status_is_pure_and_preserves_all_existing_owner_facts():
+    engine = Engine()
+    engine.is_connected = False
+    game = GameState(engine)
+    game._pending_save = True
+    game._pending_load = True
+    ctx = SimpleNamespace(request_context=SimpleNamespace(
+        lifespan_context=server.AppContext(game=game, logger=None)))
+
+    async def read_twice():
+        first = json.loads(await server.get_runtime_status(ctx))
+        second = json.loads(await server.get_runtime_status(ctx))
+        assert first == second
+        assert first["pending"]["save"] and first["pending"]["replacement"]
+        assert first["has_pending"] and not first["connected"]
+
+    asyncio.run(read_twice())
+    assert engine.submissions == [] and engine.reads == [] and game.save_pending and game.replacement_pending
+
+
+def test_real_cli_offline_mode_uses_one_actual_mcp_process_and_refuses_game_tools(tmp_path):
+    output = tmp_path / "cli"
+    result = subprocess.run([sys.executable, "-m", "civ_mcp.cli", "debug", "--offline", "--output", str(output)],
+        input='pending\nstate units\ncall search_knowledge {"query":"写作","limit":1}\npending\nquit\n',
+        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", timeout=30)
+    assert result.returncode == 0, result.stdout + result.stderr
+    records = [json.loads(line) for line in result.stdout.splitlines()]
+    runtime = [record["runtime"] for record in records if record["event"] in {"session_ready", "pending"}]
+    assert len({(value["session_id"], value["process_id"]) for value in runtime}) == 1
+    assert any(record.get("code") == "OFFLINE_ONLY" for record in records)
+    started = [record["tool"] for record in records if record["event"] == "tool_started"]
+    assert started == ["search_knowledge"]
+    assert records[-1]["event"] == "session_closed" and records[-1]["status"] == "PASS"
+    assert json.loads((output / "summary.json").read_text()) == records[-1]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX signal delivery")
+def test_sigint_keeps_foreground_and_child_until_explicit_quit(tmp_path):
+    process = subprocess.Popen([sys.executable, "-m", "civ_mcp.cli", "debug", "--offline", "--output", str(tmp_path / 'proof')],
+        cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8')
+    try:
+        first = json.loads(process.stdout.readline())
+        process.send_signal(signal.SIGINT)
+        process.stdin.write('pending\nquit\n'); process.stdin.flush()
+        stdout, stderr = process.communicate(timeout=20)
+        rows = [json.loads(line) for line in stdout.splitlines()]
+        assert process.returncode == 0 and 'Session retained' in stderr
+        assert next(row["runtime"] for row in rows if row["event"] == "pending")["process_id"] == first["runtime"]["process_id"]
+    finally:
+        if process.poll() is None:
+            process.kill(); process.wait()
+
+
+def test_dead_mcp_exits_without_waiting_for_stdin_and_never_restarts(tmp_path):
+    process = fake_cli(tmp_path)
+    try:
+        first = json.loads(process.stdout.readline())
+        process.stdin.write('call test_exit {}\n'); process.stdin.flush()
+        process.wait(timeout=15)  # stdin deliberately remains open.
+        records = [json.loads(line) for line in process.stdout.read().splitlines()]
+        assert process.returncode == 1
+        assert records[-1]['errors'][0]['code'] == 'MCP_CLOSED'
+        assert records[-1]['data']['context_lost']
+        assert len([row for row in records if row['event'] == 'session_ready']) == 0
+        assert first['event'] == 'session_ready'
+    finally:
+        if process.poll() is None:
+            process.kill(); process.wait()
+        process.stdin.close()
+
+
+@pytest.mark.skipif(sys.platform == 'win32', reason='POSIX signal delivery')
+def test_sigint_during_request_does_not_cancel_or_duplicate_submission(tmp_path):
+    process = fake_cli(tmp_path)
+    try:
+        first = json.loads(process.stdout.readline())
+        process.stdin.write(MOVE); process.stdin.flush()
+        while True:
+            event = json.loads(process.stdout.readline())
+            if event['event'] == 'tool_started':
+                break
+        process.send_signal(signal.SIGINT)
+        process.stdin.write('pending\nquit --abandon\n'); process.stdin.flush()
+        stdout, stderr = process.communicate(timeout=15)
+        rows = [json.loads(line) for line in stdout.splitlines()]
+        engine = json.loads((tmp_path / 'engine.json').read_text())
+        assert process.returncode == 2 and engine['submissions'] == 1
+        assert 'Session retained' in stderr
+        assert next(row['runtime'] for row in rows if row['event'] == 'pending')['process_id'] == first['runtime']['process_id']
+        assert not any(row['event'] == 'tool_outcome_unknown' for row in rows)
+    finally:
+        if process.poll() is None:
+            process.kill(); process.wait()
+
+
+@pytest.mark.skipif(sys.platform == 'win32', reason='POSIX pseudo-terminal')
+def test_terminal_eof_refuses_exit_then_can_confirm_original_request(tmp_path):
+    import pty
+    master, slave = pty.openpty()
+    process = fake_cli(tmp_path, stdin=slave)
+    os.close(slave)
+    try:
+        first = json.loads(process.stdout.readline())
+        os.write(master, MOVE.encode())
+        while json.loads(process.stdout.readline())['event'] != 'tool_result':
+            pass
+        os.write(master, b'\x04')
+        blocked = json.loads(process.stdout.readline())
+        assert blocked['code'] == 'PENDING_ON_EXIT'
+        os.write(master, ('pending\n' + MOVE + 'quit\n').encode())
+        stdout, stderr = process.communicate(timeout=15)
+        rows = [json.loads(line) for line in stdout.splitlines()]
+        assert process.returncode == 0 and 'civ6> ' in stderr
+        assert next(row['runtime'] for row in rows if row['event'] == 'pending')['process_id'] == first['runtime']['process_id']
+        assert json.loads((tmp_path / 'engine.json').read_text())['submissions'] == 1
+    finally:
+        if process.poll() is None:
+            process.kill(); process.wait()
+        os.close(master)

@@ -50,6 +50,7 @@ uv run --locked --no-sync civ6 doctor
 | 修改范围 | 已有离线测试入口 |
 | --- | --- |
 | 知识与 stdio | `tests/test_knowledge_mcp.py`、`tests/test_knowledge_stdio.py` |
+| 前台 debug 会话与纯内存 pending 查询 | `tests/test_debug_cli.py`、`tests/test_server.py`；也可运行 `civ6 test debug` |
 | 动作确认与门禁 | `tests/test_action_confirmation.py`、`tests/test_pending_dispatch.py` |
 | 回合、身份与等待阶段 | `tests/test_end_turn.py`、`tests/test_turn_status.py` |
 | 保存、替换与轮次 | `tests/test_game_lifecycle.py`、`tests/test_checkpoint_run.py` |

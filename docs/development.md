@@ -9,7 +9,7 @@
 | 修改对象 | 主要实现与相关验证 |
 | --- | --- |
 | MCP 参数、工具调度、整体串行和日志 | `server.py`；工具许可分类留在调度端，只消费公共未决事实。 |
-| 离线 CLI、证据、知识冒烟与日志查询 | `cli.py`、`devtools/`；使用 `tests/test_dev_cli.py` 验证命令、失败路径与真实 stdio，保持实机入口独立。 |
+| CLI、前台会话、证据与离线命令 | `cli.py`、`devtools/`；使用 `tests/test_dev_cli.py`、`tests/test_debug_cli.py` 验证命令与 stdio；实机控制只通过现有 MCP。 |
 | 领域准备、查询、完整存档替换 | `game_state.py`；通过真实 GameState／MCP 入口验证。 |
 | 动作锁存、单次提交、回应与证据确认 | `actions.py` 的 ActionLifecycle；各动作保留自身原生见证。 |
 | 推进请求、起始回合和差分基线 | `end_turn.py` 的 TurnProgress；报告读取失败不改变已确认推进。 |

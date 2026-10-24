@@ -1,4 +1,4 @@
-"""Offline Civ6 developer CLI. All command results and evidence use JSON."""
+"""Civ6 developer CLI: offline checks and an explicit foreground MCP session."""
 
 from __future__ import annotations
 
@@ -56,6 +56,10 @@ def parser() -> Parser:
     test.add_argument("--list", action="store_true", help="List domain selections without running tests")
     test.add_argument("--collect-only", action="store_true")
     test.add_argument("--timeout", type=positive, default=300)
+    debug = commands.add_parser("debug", help="Keep one foreground MCP process; commands arrive on stdin")
+    common(debug)
+    debug.add_argument("--offline", action="store_true", help="Allow only knowledge tools and in-memory pending inspection")
+    debug.add_argument("--timeout", type=positive, default=300, help="Per-RPC timeout; never retries or restarts")
     logs = commands.add_parser("logs", help="Read existing action logs; never query the game")
     common(logs)
     log_commands = logs.add_subparsers(dest="view", required=True)
@@ -82,6 +86,9 @@ def execute(args: argparse.Namespace, evidence: Evidence, extra: list[str], data
         root = knowledge_root(evidence, args.knowledge_dir)
         data["knowledge_directory"] = str(root)
         (doctor if args.command == "doctor" else verify)(evidence, root, data)
+    elif args.command == "debug":
+        from civ_mcp.devtools.debug import run_debug
+        return run_debug(evidence, data, offline=args.offline, timeout=args.timeout)
     elif args.command == "test":
         if args.list:
             if args.domain or extra or args.collect_only:

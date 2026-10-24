@@ -36,6 +36,8 @@
 
 在项目目录执行 `uv sync --locked`，然后使用 `uv run --locked civ6 doctor` 检查环境、知识包与 MCP 协议，使用 `uv run --locked civ6 verify knowledge` 验证知识查询。CLI 还提供领域测试和日志查询，统一输出 JSON 并保留证据；不操作真实游戏。完整命令见[离线调试 CLI](docs/cli.md)。
 
+前台调试使用 `uv run --locked civ6 debug`，在同一 MCP 进程中查询状态、查看 pending 和显式调用工具；`debug --offline` 只允许知识查询与服务内存检查。实机操作仍按当前任务授权和存档规则执行，详见[会话说明](docs/cli.md#前台-debug-会话)。
+
 ## 开始使用
 
 连接后，可向模型发送：

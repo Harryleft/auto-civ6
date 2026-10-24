@@ -1625,7 +1625,10 @@ class TestMcpProtocol:
                     assert initialization.serverInfo.name == "Civilization VI"
                     tools = (await session.list_tools()).tools
                     names = {tool.name for tool in tools}
-                    assert len(names) == 84
+                    assert len(names) == 85
+                    runtime_tool = next(tool for tool in tools if tool.name == "get_runtime_status")
+                    assert runtime_tool.annotations.readOnlyHint is True
+                    assert runtime_tool.annotations.idempotentHint is True
                     close_schema = next(tool.inputSchema for tool in tools if tool.name == "close_diplomacy_session")
                     assert close_schema["required"] == ["other_player_id"]
                     defense = next(tool for tool in tools if tool.name == "get_religion_defense")

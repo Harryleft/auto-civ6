@@ -1,6 +1,6 @@
-# 离线调试 CLI
+# 调试 CLI
 
-`civ6` 封装环境诊断、知识验证、领域测试和已有动作日志查询。所有业务命令只执行离线路径，不连接 FireTuner，不启动、加载或操作游戏；`civ-mcp` 仍是游戏 MCP 服务入口。
+`civ6` 提供离线诊断、验证、测试、日志查询，以及前台 `debug` 会话。前四类命令不连接 FireTuner；`debug` 只有收到明确工具调用才可能访问真实游戏。`civ-mcp` 仍是游戏 MCP 服务入口。
 
 ## 安装与调用
 
@@ -12,6 +12,7 @@
 
 ```sh
 uv run --locked civ6 doctor
+uv run --locked civ6 debug --offline
 uv run --locked civ6 verify knowledge
 uv run --locked civ6 test --list
 uv run --locked civ6 test actions
@@ -34,7 +35,7 @@ uv run --locked civ6 logs timeline --file .scratch/action-sample.jsonl --since 2
 | `logs show` | 保留文件顺序，返回最后 N 条匹配记录；按工具、结果子串、起止时间过滤。 |
 | `logs timeline` | 返回时间最新的 N 条匹配记录，并按时间升序排列；不把日志文字解释为提交、确认或门禁状态。 |
 
-领域登记在 `src/civ_mcp/devtools/testing.py`：`knowledge`、`actions`、`turns`、`checkpoints`、`diplomacy`、`connection`。这是定向回归集合，不承诺覆盖该领域所有行为；修改影响范围超出集合时按[开发与验证](development.md)追加直接相关测试。
+领域登记在 `src/civ_mcp/devtools/testing.py`：`debug`、`knowledge`、`actions`、`turns`、`checkpoints`、`diplomacy`、`connection`。`civ6 test debug` 使用真实 stdio 和隔离的引擎替身验证会话，不访问游戏。这是定向回归集合，不承诺覆盖该领域所有行为；修改影响范围超出集合时按[开发与验证](development.md)追加直接相关测试。
 
 pytest 透传放在 `--` 后，支持 `-q`、`-v`、`-vv`、`-x`、`-k EXPR`、`-m EXPR`、`--maxfail N`、`--maxfail=N`、`--collect-only`、`--disable-warnings`。额外路径、插件和配置覆盖会被拒绝。测试子进程不继承 `PYTEST_ADDOPTS`、`PYTEST_PLUGINS`，并关闭第三方插件自动加载，保持登记的离线选择；pytest 与项目 conftest 仍正常加载。
 
@@ -42,9 +43,51 @@ pytest 透传放在 `--` 后，支持 `-q`、`-v`、`-vv`、`-x`、`-k EXPR`、`
 
 ## JSON 与退出码
 
-业务命令 stdout 只输出一个 JSON 对象，默认即为 JSON，`--json` 可显式标注。`--help` 保留常规命令帮助。子进程原始 stdout/stderr 写入证据，不混进 stdout 的结果对象。
+一次性命令 stdout 只输出一个 JSON 对象；`debug` 输出逐行 JSON 事件，最后一行是会话摘要。默认即为 JSON，`--json` 可显式标注。`--help` 保留常规命令帮助。终端提示和 Ctrl+C 提示写 stderr；子进程原始 stderr 写入证据。
 
 运行目录建立后，结果包含 `schema_version=1`、`command`、`run_id`、`mode=offline`、`status`、`exit_code`、起止时间、项目路径、Git 提交及脏状态、`data`、`errors` 和 `evidence`。`game_verification=not_run` 明确实机未测；命令成功只覆盖本命令实际执行的路径。输出及证据文件使用 UTF-8。
+
+普通 debug 会话使用 `mode=debug`、`game_verification=unverified`，不把用户调试当作实机验收。`debug --offline` 保持 `mode=offline`、`game_verification=not_run`。
+
+## 前台 debug 会话
+
+运行 `uv run --locked civ6 debug` 后，整个前台会话只启动一个 MCP 子进程、初始化一次、使用同一个 ClientSession。启动只发现工具并读取服务内存，不自动查询、启动或加载游戏。退出不调用 `kill_game`。该命令不会接管已有 Codex MCP 的进程或未决请求；实机调试前须明确交接唯一控制通道，不能同时由两者控制游戏。
+
+以下是会话内命令，写在终端输入或 stdin 中，不是独立 shell 命令：
+
+```text
+help
+tools unit_action
+pending
+state overview
+state units
+state cities
+state turn
+call get_units {}
+pending
+quit
+```
+
+`state` 是对应公开 MCP 查询的别名。`call TOOL JSON_OBJECT` 只调用工具列表中实际存在的入口；省略参数等同 `{}`。JSON 不能有重复键、NaN 或 Infinity。工具参数继续由 MCP 校验，动作确认与门禁仍由现有 Runtime 所有者处理；CLI 不调用内部 setter 或清理未决状态。使用实体 ID 和坐标前须先查询真实状态。
+
+`pending` 调用 `get_runtime_status`：返回本服务的 UUID、PID、连接标记、动作摘要与动作／推进／外交／议会／保存／替换的未决事实。该工具只读取所有者内存，不查询游戏、确认请求、刷新缓存或清门禁。`connected=false` 不表示世界不存在，`has_pending=false` 不证明别的 MCP 进程没有未决请求。
+
+服务 UUID／PID 标识本次 MCP 生命周期，不是世界身份或测试轮次。每次显式工具调用前也读取同一内存快照核对服务身份，不自动确认任何请求。
+
+`--offline` 只允许 `get_runtime_status`、`search_knowledge`、`get_knowledge`，本地 `help/tools/quit` 也可使用。其他工具在发送前拒绝，不能通过 `state` 或显式 `call` 绕过。离线检查可向会话输入知识查询和 pending，不必运行游戏。
+
+会话异常与退出：
+
+- Runtime 正常返回 `OUTCOME_UNKNOWN` 时，保持同一服务和原请求。先 `pending` 及只读核对，再按[恢复指南](agent-recovery.md)通过原入口确认；CLI 不自动重发。
+- RPC 超时或丢回应时，额外保留本地 `transport_unknown`，后续只允许只读工具。空 pending、缓存刷新和后续读成功都不能清除这个标记；本版不自动恢复该次传输结果，也不重建 MCP 进程。
+- `quit` 会新读 pending；有未决请求、传输未知或无法确认服务身份时拒绝退出，留在原会话。`quit --abandon` 是明确放弃当前进程内上下文的退出入口，仍返回 `BLOCKED`，不退役游戏中的原请求。保留证据后按已授权的检查点恢复流程处理，不能开一个空会话冒充已确认。
+- 交互终端 Ctrl+D 有未决时返回提示；stdin 管道已耗尽时无法继续交互，保存未决快照、返回 `BLOCKED` 后关闭自有 MCP，`data.exit_reason=eof_unresolved`。该结束会丢失进程内上下文，不支持跨进程续接。
+- Ctrl+C 不取消正在执行的 RPC，也不终止 MCP；等待请求返回后继续输入。每个 RPC 默认等待上限 300 秒，可用 `debug --timeout SECONDS` 调整。POSIX 子进程使用 SDK 的独立进程组；Windows 的实际控制台信号行为尚未实测。
+- 服务 UUID／PID 变化会锁存失效并阻止后续变更。stdio 关闭时结束前台等待、保留失败证据；没有进程替换、自动恢复或重放。
+
+`debug.jsonl` 记录命令、调用开始、原始返回、未知结果与退出原因；每条事件有递增序号，`tool_result.request` 对应 `tool_started.sequence`。完整 MCP 返回另存 `debug-response-*.json`。`runtime-status.json` 是最后一次成功读取的内存快照，`transport-unknown.json` 保留首个传输未知的原参数，后续读失败不会覆盖它。`debug-process.json`、`debug-initialize.json`、`debug-tools.json` 保存启动与协议事实。`data.tool_calls` 仅计显式调用和状态别名，不含内部的纯内存状态检查；日志查询的 session 文件名也不等于服务 UUID。
+
+最后的 `event=session_closed` 摘要只判断会话是否正常结束；先前工具调用是否成功，应检查各自 `is_error` 和原始返回。明确放弃或异常关闭时 `data.context_lost=true`；证据文件不是可恢复的意图存储。
 
 | 退出码 | 状态 | 含义 |
 | --- | --- | --- |
