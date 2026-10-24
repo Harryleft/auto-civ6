@@ -21,6 +21,9 @@ def agent(tmp_path, monkeypatch):
         return await fn()
 
     monkeypatch.setattr(module, "original_logged", logged)
+    async def no_blockers(_game, _turn):
+        return None
+    monkeypatch.setattr(module, "_check_blockers", no_blockers)
     return module
 
 
@@ -174,3 +177,147 @@ def test_read_only_queries_do_not_clear_an_uncertain_action(agent):
     result = asyncio.run(agent.guarded_logged(context(Connection()), "get_units", {}, read))
     assert result == "fresh native facts"
     assert json.loads(agent.pending_path().read_text()) == prior
+
+
+def test_native_choice_blocks_end_without_submitting(agent, monkeypatch):
+    async def blocked(_game, _turn):
+        return "Choose research before ending"
+    monkeypatch.setattr(agent, "_check_blockers", blocked)
+    conn = Connection()
+    result = asyncio.run(agent.end_hotseat_turn(context(conn)))
+    assert result == "BLOCKED|Choose research before ending"
+    assert conn.sent == 0
+    assert not agent.pending_path().exists()
+
+
+def test_action_group_stops_after_unknown_receipt(agent, monkeypatch):
+    calls = []
+    async def call(name, arguments, context):
+        calls.append((name, arguments))
+        return "ERR:OUTCOME_UNKNOWN|first action not confirmed"
+    monkeypatch.setattr(agent.server.mcp._tool_manager, "call_tool", call)
+    commands = [{"tool": "unit_action", "arguments": {"unit_id": 10, "action": "fortify"}},
+                {"tool": "set_research", "arguments": {"tech_or_civic": "TECH_MINING"}}]
+    result = asyncio.run(agent.hotseat_actions(json.dumps(commands), context(Connection())))
+    assert "OUTCOME_UNKNOWN" in result
+    assert calls == [("unit_action", commands[0]["arguments"])]
+
+
+def test_action_group_rejects_unsafe_tool_before_any_action(agent, monkeypatch):
+    async def forbidden(*args, **kwargs):
+        pytest.fail("invalid group invoked a tool")
+    monkeypatch.setattr(agent.server.mcp._tool_manager, "call_tool", forbidden)
+    commands = [{"tool": "get_units"}, {"tool": "run_lua", "arguments": {"code": "cheat()"}}]
+    assert asyncio.run(agent.hotseat_actions(json.dumps(commands), context(Connection()))).startswith("REFUSED|")
+
+
+def test_confirmed_begin_survives_bundled_read_failure(agent, monkeypatch):
+    class Beginning(Connection):
+        async def execute_in_named_state(self, name, code):
+            assert name == "PlayerChange"
+            self.sent += 1
+            return ["HS_BEGIN_SENT"]
+    async def unavailable(*args, **kwargs):
+        raise OSError("read failed after confirmed begin")
+    monkeypatch.setattr(agent.server.mcp._tool_manager, "call_tool", unavailable)
+    conn = Beginning()
+    result = asyncio.run(agent.begin_hotseat_turn(context(conn)))
+    assert result.startswith("HS_READY|")
+    assert "read failed" in result and "OUTCOME_UNKNOWN" not in result
+    assert conn.sent == 1
+    assert not agent.pending_path().exists()
+
+
+def test_trade_accept_exit_and_original_confirmation_keep_one_domain_owner(agent, monkeypatch):
+    """An accepted proposal can still own a native dialogue until confirmed closed."""
+    conn = Connection()
+    ctx = context(conn)
+    app = ctx.request_context.lifespan_context
+    game = app.game
+    game.diplomacy_pending = False
+    game.congress_pending = False
+    game.pending_action_entity = None
+    app.lock = asyncio.Lock()
+    class Logger:
+        async def log_tool_call(self, *args):
+            pass
+    app.logger = Logger()
+    monkeypatch.setattr(agent, "original_logged", agent.server._logged)
+    closed, moves = False, []
+    proposal = {"other_player_id": 3, "offer_items": [{"type": "AGREEMENT", "subtype": "OPEN_BORDERS"}],
+                "request_items": [{"type": "AGREEMENT", "subtype": "OPEN_BORDERS"}]}
+    async def propose():
+        if game.diplomacy_pending and closed:
+            game.diplomacy_pending = False
+            return "ACCEPTED|owned proposal and native session closure confirmed"
+        game.diplomacy_pending = True
+        return "ACCEPTED|native acceptance; dialogue still needs EXIT"
+    async def exit_dialogue():
+        nonlocal closed
+        closed = True
+        return "OK:RESPONDED|SESSION_CLOSED"
+    async def move():
+        moves.append("submitted")
+        return "MOVING_TO|18,11"
+    async def scenario():
+        assert (await agent.guarded_logged(ctx, "propose_trade", proposal, propose)).startswith("ACCEPTED|")
+        assert agent.pending_path().exists()
+        assert (await agent.guarded_logged(ctx, "respond_to_diplomacy", {"other_player_id": 3, "response": "EXIT"}, exit_dialogue)).startswith("OK:")
+        assert json.loads(agent.pending_path().read_text())["tool"] == "propose_trade"
+        blocked = await agent.guarded_logged(ctx, "unit_action", {"unit_id": 7, "action": "move"}, move)
+        assert blocked.startswith("BLOCKED|") and moves == []
+        assert json.loads(agent.pending_path().read_text())["tool"] == "propose_trade"
+        assert (await agent.guarded_logged(ctx, "propose_trade", proposal, propose)).startswith("ACCEPTED|")
+        assert not agent.pending_path().exists()
+        assert (await agent.guarded_logged(ctx, "unit_action", {"unit_id": 7, "action": "move"}, move)).startswith("MOVING_TO|")
+    asyncio.run(scenario())
+    assert moves == ["submitted"]
+
+
+def test_unknown_diplomacy_child_preserves_parent_and_never_allows_a_new_choice(agent):
+    ctx = context(Connection())
+    game = ctx.request_context.lifespan_context.game
+    game.diplomacy_pending = False
+    sent = []
+    async def proposal():
+        game.diplomacy_pending = True
+        return "ACCEPTED|dialogue still open"
+    async def response():
+        if not sent:
+            sent.append("EXIT submitted once")
+            raise OSError("reply lost")
+        return "OK:RESPONDED|SESSION_CLOSED"
+    async def forbidden():
+        pytest.fail("an unknown child was replaced by another intent")
+    async def scenario():
+        args = {"other_player_id": 3}
+        await agent.guarded_logged(ctx, "propose_trade", args, proposal)
+        choice = {"other_player_id": 3, "response": "EXIT"}
+        assert "OUTCOME_UNKNOWN" in await agent.guarded_logged(ctx, "respond_to_diplomacy", choice, response)
+        active = json.loads(agent.pending_path().read_text())
+        assert active["tool"] == "respond_to_diplomacy" and active["parent"]["tool"] == "propose_trade"
+        assert "OUTCOME_UNKNOWN" in await agent.guarded_logged(ctx, "propose_trade", args, forbidden)
+        assert "OUTCOME_UNKNOWN" in await agent.guarded_logged(ctx, "respond_to_diplomacy", {**choice, "response": "ACCEPT"}, forbidden)
+        await agent.guarded_logged(ctx, "respond_to_diplomacy", choice, response)
+        assert json.loads(agent.pending_path().read_text())["tool"] == "propose_trade"
+    asyncio.run(scenario())
+    assert sent == ["EXIT submitted once"]
+
+
+def test_votes_native_handoff_retires_only_exact_congress_owner(agent, monkeypatch):
+    from civ_mcp.game_state import GameState
+    from test_congress_hotseat import hotseat_connection
+    conn=hotseat_connection()
+    async def disconnect():
+        pass
+    conn.disconnect=disconnect
+    async def read_phase(_):
+        return ['HS','true',str(conn.lua.eval('Game.GetLocalPlayer()')), '67','false',
+                'true','true','true','719665280','CIVILIZATION_SUMERIA','CIVILIZATION_SWEDEN']
+    monkeypatch.setattr(agent,'phase',read_phase)
+    game=GameState(conn)
+    ctx=SimpleNamespace(request_context=SimpleNamespace(lifespan_context=SimpleNamespace(game=game)))
+    result=asyncio.run(agent.guarded_logged(ctx,'queue_wc_votes',{'votes':'[]'},lambda:game.queue_wc_votes([])))
+    assert result.startswith('HS_HANDOFF|from:0|to:1|turn:67')
+    assert not agent.pending_path().exists() and not game.congress_pending
+    assert conn.operations==[(0,'submit',{})] and conn.actions==['continue']
