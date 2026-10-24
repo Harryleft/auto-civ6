@@ -24,6 +24,10 @@ def agent(tmp_path, monkeypatch):
     async def no_blockers(_game, _turn):
         return None
     monkeypatch.setattr(module, "_check_blockers", no_blockers)
+    async def match_status(conn):
+        return {"terminal": getattr(conn, "terminal", False), "turn": 1, "winner_team": 3,
+                "victory_type": "VICTORY_CULTURE", "winners": [{"id": 3}], "alive": [True, True]}
+    monkeypatch.setattr(module, "match_status", match_status)
     return module
 
 
@@ -321,3 +325,27 @@ def test_votes_native_handoff_retires_only_exact_congress_owner(agent, monkeypat
     assert result.startswith('HS_HANDOFF|from:0|to:1|turn:67')
     assert not agent.pending_path().exists() and not game.congress_pending
     assert conn.operations==[(0,'submit',{})] and conn.actions==['continue']
+
+
+def test_native_terminal_completes_original_end_without_another_submission(agent):
+    class Winning(Connection):
+        async def execute_write(self, code):
+            if 'UI.RequestAction' in code:
+                self.sent+=1;self.terminal=True
+                return ['HS_END_SENT']
+            return await super().execute_write(code)
+    conn=Winning()
+    result=asyncio.run(agent.end_hotseat_turn(context(conn)))
+    assert result.startswith('HS_GAME_OVER|') and conn.sent==1
+    assert not agent.pending_path().exists()
+
+
+def test_native_terminal_refuses_new_mutation_and_preserves_unknown_intent(agent):
+    conn=Connection();conn.terminal=True
+    prior={'tool':'unit_action','session':'old','phase':'submitted','params':{'action':'attack'}}
+    agent.write_pending(prior)
+    async def forbidden():
+        pytest.fail('terminal game received another native action')
+    result=asyncio.run(agent.guarded_logged(context(conn),'unit_action',{'action':'move'},forbidden))
+    assert result.startswith('GAME_OVER|No new action submitted')
+    assert json.loads(agent.pending_path().read_text())==prior and conn.sent==0

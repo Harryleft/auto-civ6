@@ -30,6 +30,67 @@ session_id = uuid.uuid4().hex
 serial = asyncio.Lock()
 
 
+async def match_status(conn) -> dict:
+    """Read official global victory separately from a local player's defeat.
+
+    GameCore survives end screens. Do not infer global victory from scores,
+    the configured turn limit, or one human's elimination.
+    """
+    code = '''
+local ok,team,selector=pcall(Game.GetWinningTeam)
+-- Stock WorldInput.IsGameOver uses GetWinningTeam() ~= nil. The native
+-- active-game result is nil, not an absent/failed query or a winning team.
+assert(ok and (team==nil or (type(team)=="number" and team==math.floor(team))))
+if team==nil then team=-1 end
+local victory="Unknown"
+if team>=0 and selector~=nil then
+ local row=GameInfo.Victories[selector]
+ if row then victory=row.VictoryType end
+end
+-- IsHotseat is UI-only; active operation guards independently verify it via
+-- phase(). Core remains readable when an end screen removes that UI context.
+print("MATCH|"..Game.GetCurrentGameTurn().."|"..Game.GetLocalPlayer().."|"..
+ GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED").."|"..
+ PlayerConfigurations[0]:GetCivilizationTypeName().."|"..PlayerConfigurations[1]:GetCivilizationTypeName().."|"..
+ tostring(Players[0]:IsHuman()).."|"..tostring(Players[1]:IsHuman()).."|"..
+ tostring(Players[0]:IsAlive()).."|"..tostring(Players[1]:IsAlive()).."|"..team.."|"..victory)
+if team>=0 then
+ for id=0,62 do
+  local p=Players[id]
+  if p and p:IsMajor() and p:GetTeam()==team then
+   print("WINNER|"..id.."|"..PlayerConfigurations[id]:GetCivilizationTypeName())
+  end
+ end
+end
+'''
+    deadline = time.monotonic() + 8
+    while True:
+        try:
+            rows = await conn.execute_in_named_state("GameCore_Tuner", code)
+            break
+        except (OSError, TimeoutError):
+            if time.monotonic() >= deadline:
+                raise
+            await asyncio.sleep(.2)
+    facts = [row.split("|") for row in rows if row.startswith("MATCH|")]
+    if len(facts) != 1 or len(facts[0]) != 12:
+        raise ValueError("Native match outcome is incomplete")
+    f = facts[0]
+    if (f[3:8] != ["-1896272000", "CIVILIZATION_SUMERIA", "CIVILIZATION_SWEDEN", "true", "true"]
+            or any(value not in {"true", "false"} for value in f[8:10])):
+        raise ValueError("Unexpected hotseat world or human seats")
+    winners = [{"id": int(v[1]), "civilization": v[2]} for row in rows
+               if row.startswith("WINNER|") for v in [row.split("|")]]
+    return {"turn": int(f[1]), "local": int(f[2]), "alive": [v == "true" for v in f[8:10]],
+            "winner_team": int(f[10]), "victory_type": f[11], "terminal": int(f[10]) >= 0,
+            "winners": winners}
+
+
+def terminal_receipt(status: dict) -> str:
+    return (f"HS_GAME_OVER|turn:{status['turn']}|winner_team:{status['winner_team']}|"
+            f"victory:{status['victory_type']}|winners:" + json.dumps(status['winners'], ensure_ascii=False))
+
+
 def phase_code() -> str:
     return '''
 print("HS|"..tostring(GameConfiguration.IsHotseat()).."|"..tostring(Game.GetLocalPlayer()).."|"..
@@ -119,6 +180,11 @@ async def guarded_logged(ctx: Context, tool_name, params, fn):
             record["timeline"] = json.loads(timeline.read_text())["timeline"] if timeline.exists() else 0
             admitted = False
             try:
+                if not read_only:
+                    outcome = await match_status(app.game.conn)
+                    if outcome["terminal"]:
+                        record["result"] = "GAME_OVER|No new action submitted|" + terminal_receipt(outcome)
+                        return record["result"]
                 if tool_name not in {"search_knowledge", "get_knowledge"}:
                     f = await phase(app.game.conn)
                     record["before"] = f
@@ -152,7 +218,7 @@ async def guarded_logged(ctx: Context, tool_name, params, fn):
                     handoff = await app.game.confirm_hotseat_congress_handoff()
                     if handoff.startswith("HS_HANDOFF|"):
                         result = handoff
-                if tool_name in {"begin_hotseat_turn", "end_hotseat_turn"} and not str(result).startswith(("HS_READY|", "HS_HANDOFF|", "BLOCKED|")):
+                if tool_name in {"begin_hotseat_turn", "end_hotseat_turn"} and not str(result).startswith(("HS_READY|", "HS_HANDOFF|", "HS_GAME_OVER|", "BLOCKED|")):
                     result = "ERR:OUTCOME_UNKNOWN|" + str(result)
                 record["result"] = str(result)
                 domains = pending_domains(app.game)
@@ -240,8 +306,12 @@ print("HS_END_SENT")
 ''')
         deadline = time.monotonic() + 20
         while time.monotonic() < deadline:
+            outcome = await match_status(conn)
+            if outcome["terminal"]:
+                return terminal_receipt(outcome)
             f = await phase(conn)
-            if int(f[2]) != seat and f[7] == "true":
+            if f[7] == "true" and (int(f[2]) != seat or (
+                    int(f[3]) > int(pending["before"][3]) and not outcome["alive"][1-seat])):
                 return f"HS_HANDOFF|from:{seat}|to:{f[2]}|turn:{f[3]}|both_human:true"
             await asyncio.sleep(.2)
         return "ERR:OUTCOME_UNKNOWN|End requested once; native handoff unconfirmed"

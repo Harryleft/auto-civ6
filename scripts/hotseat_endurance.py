@@ -19,7 +19,7 @@ import time
 import uuid
 
 from civ_mcp.connection import GameConnection
-from hotseat_agent import phase
+from hotseat_agent import phase, match_status
 
 ROOT = Path(__file__).resolve().parents[1]
 UV = shutil.which("uv")
@@ -84,6 +84,8 @@ def timing_report(run, finished=None):
               "replayed_agent_seconds": sum(v["seconds"] for v in rows if any(
                   r["to_timeline"] == v.get("timeline", 0) and v["turn"] <= r["failed_turn"] for r in recoveries)),
               "save_seconds": sum(v["finished"] - v["started"] for v in saves), "rounds": rounds}
+    report["previous_stage_seconds"] = starts.get("previous_stage_seconds", 0)
+    report["cumulative_wall_seconds"] = report["previous_stage_seconds"] + report["total_wall_seconds"]
     write(evidence / "timing-summary.json", report)
     return report
 
@@ -91,7 +93,8 @@ def timing_report(run, finished=None):
 async def snapshot(run):
     conn = GameConnection()
     try:
-        f = await phase(conn)
+        outcome = await match_status(conn)
+        f = None if outcome["terminal"] else await phase(conn)
         rows = await conn.execute_write('''
 for id=0,1 do
  local p=Players[id];local pop=0;local units=0
@@ -108,7 +111,8 @@ end
                 stats.append(dict(zip(["seat", "score", "cities", "population", "units", "gold", "science", "culture"], map(float, v[1:]))))
         if len(stats) != 2:
             raise ValueError("Incomplete native statistics: " + repr(rows))
-        return {"time": time.time(), "phase": f, "turn": int(f[3]), "seat": int(f[2]), "players": stats}
+        return {"time": time.time(), "phase": f, "turn": outcome["turn"], "seat": outcome["local"],
+                "players": stats, "match": outcome}
     finally:
         await conn.disconnect()
 
@@ -135,15 +139,17 @@ async def checkpoint(run, facts):
     if source.exists() or dest.exists() or (evidence / (name + ".json")).exists():
         raise RuntimeError("Checkpoint name already preserved; no save submitted")
     started = time.time()
-    write(pending, {"name": name, "started": started, "phase": "possibly_submitted"})
     conn = GameConnection()
     try:
+        if (await match_status(conn))["terminal"]:
+            raise RuntimeError("Native game over; retain the last checkpoint, no save submitted")
         f = await phase(conn)
-        if int(f[3]) != facts["turn"] or int(f[2]) != 0:
+        if int(f[3]) != facts["turn"] or int(f[2]) != facts.get("seat", 0):
             raise RuntimeError("Checkpoint seat/turn changed")
+        write(pending, {"name": name, "started": started, "phase": "possibly_submitted"})
         rows = await conn.execute_write(f'''
 assert(GameConfiguration.IsHotseat() and Players[0]:IsHuman() and Players[1]:IsHuman())
-assert(Game.GetCurrentGameTurn()=={facts['turn']} and Game.GetLocalPlayer()==0)
+assert(Game.GetCurrentGameTurn()=={facts['turn']} and Game.GetLocalPlayer()=={facts.get('seat', 0)})
 assert(__enduranceSave==nil or __enduranceSave.done)
 __enduranceSave={{done=false,name="{name}"}}
 local q=__enduranceSave
@@ -207,6 +213,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run", type=Path, required=True)
     parser.add_argument("--through", type=int, default=100)
+    parser.add_argument("--until-game-over", action="store_true", help="Continue this match until an official native winning team exists")
     args = parser.parse_args()
     run = args.run.resolve()
     evidence = run / "evidence"
@@ -218,26 +225,36 @@ def main():
                  "claude_session": str(uuid.uuid4()), "started": time.time(), "invocations": 0, "last_checkpoint": 2}
     if state.get("inflight"):
         raise RuntimeError("Previous model invocation has not been reconciled")
-    if state.get("status") == "completed" and state["latest"]["turn"] > args.through:
+    if state.get("status") == "completed" and (state.get("terminal") or (not args.until_game_over and state["latest"]["turn"] > args.through)):
         print(json.dumps({"event": "already_completed", "finished": state["finished"], "turn": state["latest"]["turn"]}))
         return
     no_progress = 0
     while True:
-        if (evidence / "shared-pending.json").exists() or (evidence / "coordinator-pending.json").exists():
-            raise RuntimeError("Unresolved request; dispatch stopped for explicit reconciliation")
         facts = locked_snapshot(run)
         append(evidence / "snapshots.jsonl", facts)
         state["latest"] = facts
         write(statepath, state)
         print(json.dumps({"event": "state", **facts}, ensure_ascii=False), flush=True)
-        if facts["seat"] == 0 and (facts["turn"] - state["last_checkpoint"] >= 10 or facts["turn"] > args.through):
+        if facts.get("match", {}).get("terminal"):
+            state.update(status="completed", terminal=facts["match"], finished=time.time())
+            state["pending_request_retained"] = any((evidence / name).exists() for name in ("shared-pending.json", "coordinator-pending.json"))
+            write(evidence / "terminal.json", facts)
+            write(statepath, state)
+            timing_report(run, state["finished"])
+            break
+        if (evidence / "shared-pending.json").exists() or (evidence / "coordinator-pending.json").exists():
+            raise RuntimeError("Unresolved request; dispatch stopped for explicit reconciliation")
+        alive = facts.get("match", {}).get("alive", [True, True])
+        checkpoint_seat = 0 if alive[0] else 1
+        finite_complete = not args.until_game_over and facts["turn"] > args.through
+        if facts["seat"] == checkpoint_seat and (facts["turn"] - state["last_checkpoint"] >= 10 or finite_complete):
             with (evidence / "control.lock").open("a") as lock:
                 fcntl.flock(lock, fcntl.LOCK_EX)
                 saved = asyncio.run(checkpoint(run, facts))
             state["last_checkpoint"] = facts["turn"]
             write(statepath, state)
             print(json.dumps({"event": "checkpoint", "turn": facts["turn"], "seconds": saved["finished"] - saved["started"]}), flush=True)
-        if facts["turn"] > args.through:
+        if finite_complete:
             state["status"] = "completed"
             state["finished"] = time.time()
             write(statepath, state)
@@ -246,6 +263,8 @@ def main():
         seat, turn = facts["seat"], facts["turn"]
         if seat not in (0, 1):
             raise RuntimeError("Unexpected native current seat")
+        if not alive[seat]:
+            raise RuntimeError("Eliminated native current seat needs explicit UI handling; no model dispatched")
         civ = "苏美尔" if seat == 0 else "瑞典"
         prompt = (f"用户授权四叶草神级原生双人热座持续实测，Codex只控制苏美尔，Claude Code只控制瑞典。现在轮到你控制{civ}(player{seat})的T{turn}。"
                   "只使用提供的civ6 MCP：先get_game_overview，再begin_hotseat_turn，依据本回合真实单位/城市/科研状态决策并执行。"
@@ -255,6 +274,11 @@ def main():
                   "工具坐标和ID必须源于真实状态；规则不清楚查知识。禁止shell/文件修改/任意Lua/作弊/automation/玩家切换/退出/重启/读档。"
                   "最后调用end_hotseat_turn，BLOCKED就解决实际阻塞继续；收到HS_HANDOFF后立即回复并结束本次会话响应，不要等待或操作另一席位。"
                   "遇OUTCOME_UNKNOWN保留原意图，只读核对，仍未知则报告停止，绝不能换参数或重新发送绕过。不要写日记。")
+        if args.until_game_over:
+            prompt += ("本次从已确认T101续局，一直运行到原生整局胜负出现。遵循项目六项策略检查：开始读取get_victory_progress，"
+                       "根据当前公开排名、本方获胜里程碑、所有启用路线的对手动向及响应准备时间决定优先事项，"
+                       "不要只维持生产队列等待。周期完整复核六项，在现有会话中简记当前目标、准备缺口和下一具体动作，"
+                       "不建立额外日记。HS_GAME_OVER或GAME_OVER时立即停止游戏动作并报告，不能只凭分数领先宣布胜利。")
         notice = state.get("resume_notice", {})
         if (notice.get("timeline") == state.get("timeline", 0)
                 and notice.get("seat") == seat and notice.get("turn") == turn):
@@ -282,6 +306,8 @@ def main():
         if proc.returncode:
             raise RuntimeError("Agent process failed; inspect its preserved output")
         after = locked_snapshot(run)
+        if after.get("match", {}).get("terminal"):
+            continue
         no_progress = no_progress + 1 if after["phase"][2:4] == facts["phase"][2:4] else 0
         if no_progress >= 2:
             raise RuntimeError("Agent twice returned without native handoff; explicit diagnosis required")

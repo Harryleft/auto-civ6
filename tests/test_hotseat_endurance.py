@@ -15,6 +15,9 @@ def endurance(monkeypatch):
     spec = importlib.util.spec_from_file_location("hotseat_endurance_test", scripts / "hotseat_endurance.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    async def active(_):
+        return {"terminal": False}
+    monkeypatch.setattr(module, "match_status", active)
     return module
 
 
@@ -119,3 +122,36 @@ def test_timing_counts_native_congress_handoff_but_not_unconfirmed_votes(enduran
     receipts[1]['result']='ERR:OUTCOME_UNKNOWN|CONTINUE_REQUESTED'
     (evidence/'agent-tools.jsonl').write_text('\n'.join(map(json.dumps,receipts)))
     assert not endurance.timing_report(tmp_path,finished=230)['rounds'][0]['both_handoffs_confirmed']
+
+
+def test_until_game_over_records_terminal_without_saving_or_clearing_pending(endurance, monkeypatch, tmp_path):
+    evidence=tmp_path/'evidence';evidence.mkdir()
+    (evidence/'controller-state.json').write_text(json.dumps({'status':'prepared','latest':{'turn':101}}))
+    pending={'tool':'unit_action','phase':'submitted','session':'old'}
+    (evidence/'shared-pending.json').write_text(json.dumps(pending))
+    facts={'turn':185,'seat':1,'phase':None,'players':[],
+           'match':{'terminal':True,'winner_team':3,'victory_type':'VICTORY_CULTURE'}}
+    monkeypatch.setattr(endurance,'locked_snapshot',lambda _:facts)
+    monkeypatch.setattr(endurance,'timing_report',lambda *_:None)
+    def forbidden(*_,**__):pytest.fail('terminal game dispatched a model/save')
+    monkeypatch.setattr(endurance,'checkpoint',forbidden)
+    monkeypatch.setattr(endurance.subprocess,'run',forbidden)
+    monkeypatch.setattr(sys,'argv',['hotseat_endurance.py','--run',str(tmp_path),'--until-game-over'])
+    endurance.main()
+    state=json.loads((evidence/'controller-state.json').read_text())
+    assert state['status']=='completed' and state['terminal']['winner_team']==3 and state['pending_request_retained']
+    assert json.loads((evidence/'shared-pending.json').read_text())==pending
+    assert json.loads((evidence/'terminal.json').read_text())==facts
+
+
+def test_terminal_checkpoint_refuses_without_native_save(endurance,monkeypatch,tmp_path):
+    (tmp_path/'evidence').mkdir()
+    class Connection:
+        async def disconnect(self):pass
+        async def execute_write(self,code):pytest.fail('native save entered after terminal')
+    async def terminal(_):return {'terminal':True}
+    monkeypatch.setattr(endurance,'GameConnection',Connection)
+    monkeypatch.setattr(endurance,'match_status',terminal)
+    with pytest.raises(RuntimeError,match='no save submitted'):
+        asyncio.run(endurance.checkpoint(tmp_path,{'turn':185}))
+    assert not (tmp_path/'evidence/coordinator-pending.json').exists()
