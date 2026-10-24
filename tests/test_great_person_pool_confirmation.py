@@ -111,6 +111,77 @@ end
     assert state.pending_action_summary is None
 
 
+def _t181_prophet(conn):
+    conn.lua.execute('''
+points,recruitCost=67,40
+current={{Individual=112,Class=4,Cost=40}}
+GameInfo.GreatPersonIndividuals[112]={Name='John the Baptist'}
+GameInfo.GreatPersonClasses={[4]={GreatPersonClassType='GREAT_PERSON_CLASS_PROPHET',MaxPlayerInstances=1}}
+Players[0].GetGreatPeoplePoints=function()
+ return {GetPointsTotal=function(_,class) assert(class==4);return points end}
+end
+function applyPool(op,p)
+ assert(op==10 and p.individual==112)
+ addGP(3211274,112)
+ current={}
+end
+''')
+
+
+def test_t181_recruited_prophet_with_unchanged_points_confirms_exact_new_individual():
+    conn = GreatPeopleConn(); _t181_prophet(conn)
+    state = GameState(conn); ctx = make_ctx(); app_of(ctx).game = state
+    result = asyncio.run(server.recruit_great_person(ctx, 112))
+    assert result.startswith('RECRUITED|John the Baptist|individual:112|')
+    assert 'gp_points_quote:40|gp_points_net_change:0|unit:3211274' in result
+    assert 'gp_points_cost:' not in result
+    assert conn.lua.eval('points') == 67
+    assert conn.lua.eval('#submissions') == 1
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('change', [
+    'units={}',
+    'units[3211274].individual=113',
+    'addGP(3211275,112)',
+    'current={{Individual=112,Class=4,Cost=40}}',
+    'gp.CanRecruitPerson=function() return nil end',
+    'GameInfo.GreatPersonClasses[4].GreatPersonClassType="GREAT_PERSON_CLASS_SCIENTIST"',
+    'GameInfo.GreatPersonClasses=nil',
+    'GameInfo.GreatPersonClasses[4].MaxPlayerInstances=2',
+    'points=68',
+])
+def test_prophet_unchanged_points_needs_exact_new_unit_and_closed_original_pool(change):
+    conn = GreatPeopleConn(); _t181_prophet(conn)
+    state = GameState(conn)
+    conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.recruit_great_person(112))
+    conn.lua.execute('applyPool(submissions[1].op,submissions[1].params);' + change)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.recruit_great_person(112))
+    assert conn.lua.eval('#submissions') == 1
+    assert state.pending_action_summary is not None
+
+
+def test_preexisting_prophet_does_not_confirm_unchanged_points_recruitment():
+    conn = GreatPeopleConn(); _t181_prophet(conn)
+    conn.lua.execute('addGP(3211274,112)')
+    state = GameState(conn)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.recruit_great_person(112))
+    assert conn.lua.eval('#submissions') == 1
+    assert state.pending_action_summary is not None
+
+
+def test_lost_prophet_reply_retains_original_for_confirmation_without_resubmit():
+    conn = GreatPeopleConn(); _t181_prophet(conn); conn.lose_reply = True
+    state = GameState(conn); ctx = make_ctx(); app_of(ctx).game = state
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(server.recruit_great_person(ctx, 112))
+    assert state.pending_action_summary is not None
+    result = asyncio.run(server.recruit_great_person(ctx, 112))
+    assert 'gp_points_quote:40|gp_points_net_change:0|unit:3211274' in result
+    assert conn.lua.eval('#submissions') == 1
+    assert state.pending_action_summary is None
+
+
 def test_lost_patronage_reply_repeated_public_call_only_confirms_original_person():
     conn = GreatPeopleConn(); state = GameState(conn); ctx = make_ctx(); app_of(ctx).game = state
     conn.lose_reply = True

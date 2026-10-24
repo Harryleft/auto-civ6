@@ -90,13 +90,25 @@ def build_great_person_pool_query(kind: str, individual: int, currency: str, tok
     return _CONTEXT + f'''
 local r=__civmcpGPPool
 local reason="RECEIPT_MISSING_OR_MISMATCHED"
-local ok,unitID=pcall(function()
+local ok,unitID,pointsNetChange=pcall(function()
  assert(type(r)=="table" and r.token=={json.dumps(token)} and r.kind=={json.dumps(kind)}
   and r.individual=={individual} and r.currency=={json.dumps(currency)})
  reason="SCOPE_CHANGED";assert(sameScope(r))
  reason="REQUEST_NOT_RETURNED";assert(r.entered==true and r.returned==true)
  reason="CORE_BUSY_OR_UNKNOWN";assert(UI.IsGameCoreBusy()==false)
- reason="RESOURCE_UNCONFIRMED";assert(math.abs(balance(r.owner,r.currency,r.class)-(r.before-r.cost))<0.01)
+ reason="RESOURCE_UNCONFIRMED"
+ local after=balance(r.owner,r.currency,r.class)
+ local exactCost=math.abs(after-(r.before-r.cost))<0.01
+ if not exactCost then
+  -- T181 native recruitment created the exact Prophet without reducing points.
+  -- Keep other pool payments strict; this one-per-player exception also needs
+  -- a unique new individual and a closed original pool below. Report a quote,
+  -- not a paid cost. Revisit if another native class exhibits this behavior.
+  local class=GameInfo.GreatPersonClasses and GameInfo.GreatPersonClasses[r.class]
+  assert(r.kind=="recruit_great_person" and r.currency=="GP_POINTS"
+   and class and class.GreatPersonClassType=="GREAT_PERSON_CLASS_PROPHET"
+   and class.MaxPlayerInstances==1 and after==r.before)
+ end
  reason="NEW_INDIVIDUAL_UNIT_UNCONFIRMED"
  local found=nil
  for id,unit in pairs(ownedUnits(r.owner)) do
@@ -117,11 +129,19 @@ local ok,unitID=pcall(function()
   return -1
  end
  assert(found~=nil)
+ if not exactCost then
+  reason="ORIGINAL_PROPHET_POOL_UNCONFIRMED"
+  local gp=Game.GetGreatPeople()
+  assert(gp:CanRecruitPerson(r.owner,r.individual)==false)
+  for _,entry in ipairs(gp:GetTimeline()) do assert(entry.Individual~=r.individual) end
+  return found,after-r.before
+ end
  return found
 end)
 if ok then
  print("GP_POOL_CONFIRMED|"..r.token.."|"..r.kind.."|"..r.individual.."|"..r.currency
-  .."|"..r.name.."|"..r.cost.."|unit:"..unitID)
+  .."|"..r.name.."|"..r.cost.."|unit:"..unitID
+  ..(pointsNetChange~=nil and "|points_net_change:"..pointsNetChange or ""))
 else print("GP_POOL_OBSERVED|{token}|"..reason) end
 print("{SENTINEL}")
 '''
@@ -129,9 +149,13 @@ print("{SENTINEL}")
 
 def parse_great_person_pool_confirmation(lines: list[str], token: str, kind: str, individual: int, currency: str) -> str | None:
     rows = [line.split("|") for line in lines if line.startswith("GP_POOL_CONFIRMED|")]
-    if len(rows) == 1 and len(rows[0]) == 8:
+    if len(rows) == 1 and len(rows[0]) in (8, 9):
         row = rows[0]
         if row[1:5] == [token, kind, str(individual), currency]:
+            if len(row) == 9:
+                if kind == "recruit_great_person" and currency == "GP_POINTS" and row[8] == "points_net_change:0":
+                    return f"RECRUITED|{row[5]}|individual:{individual}|gp_points_quote:{row[6]}|gp_points_net_change:0|{row[7]}"
+                return None
             if kind == "reject_great_person":
                 return f"REJECTED|{row[5]}|individual:{individual}|gp_points_cost:{row[6]}"
             if kind == "recruit_great_person":
