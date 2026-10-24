@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from civ_mcp.actions import _action_result
 from civ_mcp.connection import LuaError
-from civ_mcp.lua.congress import build_congress_receipt, build_congress_scope_guard, build_open_world_congress, build_register_wc_voter
+from civ_mcp.lua.congress import build_congress_receipt, build_congress_scope_guard, build_open_world_congress, build_register_wc_voter, build_hotseat_congress_handoff
 
 
 @dataclass
@@ -93,6 +93,29 @@ class CongressProgress:
             return f"{self.unknown()} WC_REQUEST|{state}|stage:{stage}|allocation:{allocation}"
         except (OSError, TimeoutError, LuaError, ValueError):
             return self.unknown()
+
+    async def confirm_hotseat_handoff(self, conn) -> str:
+        """Explicit hotseat owner confirmation, separate from global stage finish.
+
+        Native Congress END TURN hands control to another human in the same
+        stage. Keep normal single-player scope checks strict; only this exact
+        plan's continued latch plus paused human handoff can retire its owner.
+        """
+        q = self.request
+        if q is None:
+            return "NO_CHANGE|No pending Congress request."
+        if q.kind != 'votes':
+            return self.unknown()
+        try:
+            rows = await conn.execute_write(build_hotseat_congress_handoff(q.token, q.world, q.turn))
+            receipts = [row for row in rows if row.startswith('HS_HANDOFF|')]
+            if len(receipts) == 1:
+                self.request = None
+                self.completed = (q, receipts[0])
+                return receipts[0]
+        except (OSError, TimeoutError, LuaError, ValueError):
+            pass
+        return self.unknown()
 
     async def submit(self, conn, kind: str, votes=None, *, allows_world=None) -> str:
         token = uuid.uuid4().hex

@@ -110,6 +110,10 @@ class GameState:
     def congress_pending(self) -> bool:
         return self._congress_progress.pending
 
+    async def confirm_hotseat_congress_handoff(self) -> str:
+        """Confirm the original vote plan's native handoff without voting again."""
+        return await self._congress_progress.confirm_hotseat_handoff(self.conn)
+
     async def congress_gate(self, *, allow_registered_turn: bool = False) -> str | None:
         if not self.congress_pending:
             return None

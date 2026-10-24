@@ -157,6 +157,29 @@ if Game.GetLocalPlayer()~={int(owner)}
 '''
 
 
+def build_hotseat_congress_handoff(token: str, world: tuple[str, str, str], turn: int) -> str:
+    """Read the exact submitted plan's native seat handoff; never cast/resume."""
+    import json
+
+    owner, civ, seed = world
+    return f'''
+local q=__civmcp_wc_request
+local me=Game.GetLocalPlayer()
+if GameConfiguration.IsHotseat() and q and q.token=={json.dumps(token)}
+ and q.owner=={int(owner)} and q.civ=={json.dumps(civ)} and q.seed=={int(seed)}
+ and q.turn=={turn} and q.state=="CONTINUE_REQUESTED" and q.continued==true
+ and GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")==q.seed
+ and PlayerConfigurations[q.owner]:GetCivilizationTypeName()==q.civ
+ and Game.GetCurrentGameTurn()==q.turn and me~=q.owner
+ and (q.stage=="STAGE1" or q.stage=="STAGE2")
+ and Players[q.owner]:IsHuman() and Players[me]:IsHuman()
+ and Players[me]:IsTurnActive() and GameConfiguration.IsPaused() then
+ print("HS_HANDOFF|from:"..q.owner.."|to:"..me.."|turn:"..q.turn.."|both_human:true|via:WORLD_CONGRESS|token:"..q.token)
+end
+print("{SENTINEL}")
+'''
+
+
 def _congress_phase_rows_lua(*, sentinel: bool) -> str:
     ending = f'print("{SENTINEL}")' if sentinel else ""
     return f"""
