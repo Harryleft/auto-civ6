@@ -8,6 +8,39 @@ from types import SimpleNamespace
 import pytest
 
 
+def test_delayed_congress_handoff_only_reads_original_request(agent):
+    class Game:
+        congress_pending = True
+        confirmations = 0
+
+        async def confirm_hotseat_congress_handoff(self):
+            self.confirmations += 1
+            if self.confirmations == 3:
+                self.congress_pending = False
+                return 'HS_HANDOFF|from:1|to:0|turn:218'
+            return 'ERR:OUTCOME_UNKNOWN|Native handoff not ready'
+
+    game = Game()
+    result = asyncio.run(agent.wait_for_congress_handoff(game, timeout=1, interval=0))
+    assert result.startswith('HS_HANDOFF|')
+    assert game.confirmations == 3 and not game.congress_pending
+
+
+def test_congress_confirmation_timeout_preserves_original_gate(agent):
+    class Game:
+        congress_pending = True
+        confirmations = 0
+
+        async def confirm_hotseat_congress_handoff(self):
+            self.confirmations += 1
+            return 'ERR:OUTCOME_UNKNOWN|Original votes remain pending'
+
+    game = Game()
+    result = asyncio.run(agent.wait_for_congress_handoff(game, timeout=0))
+    assert 'OUTCOME_UNKNOWN' in result
+    assert game.confirmations == 1 and game.congress_pending
+
+
 @pytest.fixture
 def agent(tmp_path, monkeypatch):
     spec = importlib.util.spec_from_file_location("hotseat_agent_test", Path(__file__).parents[1] / "scripts/hotseat_agent.py")

@@ -100,6 +100,7 @@ class CongressProgress:
         Native Congress END TURN hands control to another human in the same
         stage. Keep normal single-player scope checks strict; only this exact
         plan's continued latch plus paused human handoff can retire its owner.
+        The last human may also close the session and hand off at the next turn.
         """
         q = self.request
         if q is None:

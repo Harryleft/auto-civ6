@@ -30,6 +30,19 @@ session_id = uuid.uuid4().hex
 serial = asyncio.Lock()
 
 
+async def wait_for_congress_handoff(game, *, timeout=8.0, interval=0.1):
+    """Bounded original-token confirmation while native handoff settles."""
+    deadline = time.monotonic() + timeout
+    while True:
+        result = await game.confirm_hotseat_congress_handoff()
+        if result.startswith("HS_HANDOFF|") or not game.congress_pending:
+            return result
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return result
+        await asyncio.sleep(min(interval, remaining))
+
+
 async def match_status(conn) -> dict:
     """Read official global victory separately from a local player's defeat.
 
@@ -215,7 +228,7 @@ async def guarded_logged(ctx: Context, tool_name, params, fn):
                 if tool_name == "queue_wc_votes" and app.game.congress_pending:
                     # A vote continuation can natively transfer the hotseat in
                     # this very call. Confirm its exact request before dispatch.
-                    handoff = await app.game.confirm_hotseat_congress_handoff()
+                    handoff = await wait_for_congress_handoff(app.game)
                     if handoff.startswith("HS_HANDOFF|"):
                         result = handoff
                 if tool_name in {"begin_hotseat_turn", "end_hotseat_turn"} and not str(result).startswith(("HS_READY|", "HS_HANDOFF|", "HS_GAME_OVER|", "BLOCKED|")):

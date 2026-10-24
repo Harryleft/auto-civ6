@@ -162,19 +162,33 @@ def build_hotseat_congress_handoff(token: str, world: tuple[str, str, str], turn
     import json
 
     owner, civ, seed = world
-    return f'''
+    return _native_stage_lua() + f'''
 local q=__civmcp_wc_request
 local me=Game.GetLocalPlayer()
+local now=Game.GetCurrentGameTurn()
+if q and q.token=={json.dumps(token)} then
+ local seedOK,seed=pcall(function() return GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED") end)
+ local civOK,civ=pcall(function() return PlayerConfigurations[{int(owner)}]:GetCivilizationTypeName() end)
+ if (seedOK and type(seed)=="number" and seed~={int(seed)})
+  or (civOK and type(civ)=="string" and civ~={json.dumps(civ)}) then q.handoff_invalidated=true end
+end
+local finished=false
+if q and now==q.turn+1 then
+ local wc=Game.GetWorldCongress()
+ local session=wc and wc:IsInSession()
+ finished=session==false and congressStage(Game.GetCurrentTurnSegment(),session)=="NONE"
+end
 if GameConfiguration.IsHotseat() and q and q.token=={json.dumps(token)}
+ and not q.handoff_invalidated
  and q.owner=={int(owner)} and q.civ=={json.dumps(civ)} and q.seed=={int(seed)}
  and q.turn=={turn} and q.state=="CONTINUE_REQUESTED" and q.continued==true
  and GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")==q.seed
  and PlayerConfigurations[q.owner]:GetCivilizationTypeName()==q.civ
- and Game.GetCurrentGameTurn()==q.turn and me~=q.owner
+ and (now==q.turn or finished) and me~=q.owner
  and (q.stage=="STAGE1" or q.stage=="STAGE2")
  and Players[q.owner]:IsHuman() and Players[me]:IsHuman()
  and Players[me]:IsTurnActive() and GameConfiguration.IsPaused() then
- print("HS_HANDOFF|from:"..q.owner.."|to:"..me.."|turn:"..q.turn.."|both_human:true|via:WORLD_CONGRESS|token:"..q.token)
+ print("HS_HANDOFF|from:"..q.owner.."|to:"..me.."|turn:"..now.."|both_human:true|via:WORLD_CONGRESS|token:"..q.token..(finished and "|stage_finished:true" or ""))
 end
 print("{SENTINEL}")
 '''
