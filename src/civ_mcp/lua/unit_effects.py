@@ -410,6 +410,11 @@ local ok,detail,target=pcall(function()
  assert(sameEffectEntity(r,city,r.city) and sameScope(r))
   if current==r.pressure then
    print("SPREAD_INGAME_WITNESS|"..r.token.."|"..r.id.."|"..r.owner.."|"..r.religion.."|"..r.city.id.."|"..r.civ.."|"..r.seed.."|"..r.turn)
+   -- A consumed last charge proves execution even when followers do
+   -- not increase. Keep this witness distinct from a measured pressure gain.
+   if unit==nil and r.charges==1 and r.removed==true then
+    print("SPREAD_CONSUMED_WITNESS|"..r.token.."|"..r.id.."|"..r.owner.."|"..r.religion.."|"..r.city.id.."|"..r.civ.."|"..r.seed.."|"..r.turn.."|last_charge_removed")
+   end
    return "charges_remaining:"..remaining,"city:"..r.city.owner..":"..r.city.id.." pressure:unchanged"
   end
   return "charges_remaining:"..remaining,"city:"..r.city.owner..":"..r.city.id.." pressure:"..r.pressure.."->"..current
@@ -448,16 +453,28 @@ def parse_unit_effect_confirmation(lines: list[str], kind: str, unit_id: int, to
             if row[4] == "spread":
                 if "pressure:unchanged" in row[7]:
                     native = [line.split('|') for line in lines if line.startswith('SPREAD_INGAME_WITNESS|')]
-                    core = [line.split('|') for line in lines if line.startswith('SPREAD_CORE_CONFIRMED|')]
-                    if not (len(native) == len(core) == 1 and len(native[0]) == 9 and len(core[0]) == 11
+                    core = [line.split('|') for line in lines if line.startswith(('SPREAD_CORE_CONFIRMED|', 'SPREAD_CORE_UNCHANGED|'))]
+                    if not (len(native) == len(core) == 1 and len(native[0]) == 9
+                            and ((core[0][0] == 'SPREAD_CORE_CONFIRMED' and len(core[0]) == 11)
+                                 or (core[0][0] == 'SPREAD_CORE_UNCHANGED' and len(core[0]) == 12))
                             and native[0][1:] == core[0][1:9] and native[0][1:3] == [token, str(unit_id)]
                             and core[0][4] == row[5] and core[0][9].isdigit() and core[0][10].isdigit()
-                            and int(core[0][10]) > int(core[0][9])
                             and row[7] == f"city:{core[0][3]}:{core[0][5]} pressure:unchanged"
-                            and not any(line.startswith('SPREAD_CORE_OBSERVED|') for line in lines)):
+                            and not any(line.startswith(('SPREAD_CORE_OBSERVED|', 'UNIT_EFFECT_OBSERVED|')) for line in lines)):
                         return None
-                    return (f"RELIGION_SPREAD|unit:{unit_id}|religion:{row[5]}|{row[6]}|{row[7]}"
-                            f"|GameCore followers:{core[0][9]}->{core[0][10]}; UI pressure unchanged.")
+                    before, after = int(core[0][9]), int(core[0][10])
+                    if core[0][0] == 'SPREAD_CORE_CONFIRMED' and after > before:
+                        return (f"RELIGION_SPREAD|unit:{unit_id}|religion:{row[5]}|{row[6]}|{row[7]}"
+                                f"|GameCore followers:{before}->{after}; UI pressure unchanged.")
+                    consumed = [line.split('|') for line in lines if line.startswith('SPREAD_CONSUMED_WITNESS|')]
+                    if (core[0][0] == 'SPREAD_CORE_UNCHANGED' and after == before
+                            and core[0][11] in ('unit_state:absent', 'unit_state:delayed_death')
+                            and row[6] == 'charges_remaining:0' and len(consumed) == 1
+                            and len(consumed[0]) == 10 and consumed[0][1:9] == native[0][1:]
+                            and consumed[0][9] == 'last_charge_removed'):
+                        return (f"RELIGION_SPREAD_EXECUTED|unit:{unit_id}|religion:{row[5]}|{row[6]}|{row[7]}"
+                                f"|GameCore followers:{before}->{after}; last charge and unit consumption confirmed; GameCore {core[0][11]}; pressure effect unmeasured.")
+                    return None
                 return f"RELIGION_SPREAD|unit:{unit_id}|religion:{row[5]}|{row[6]}|{row[7]}|Pressure increase confirmed."
             if row[4] == "prophet":
                 return f"RELIGION_FOUNDING_READY|unit:{unit_id}|individual:{row[5]}|{row[6]}|{row[7]}|Choose religion and beliefs separately."

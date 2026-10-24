@@ -1,4 +1,4 @@
-"""复现界面压力陈旧、GameCore 信徒已变化的真实传播现场。"""
+"""复现压力未变化时的信徒增加和末次传播消耗现场。"""
 
 import asyncio
 
@@ -15,9 +15,15 @@ class CoreFollowersConn(SpreadPressureConn):
     def __init__(self):
         super().__init__()
         self.lua.execute('''
-core=false;coreFollowers=3;afterFollowers=4
+core=false;coreFollowers=3;afterFollowers=4;coreRetainsActor=false;delayedDeath=false
 u.spreads=1
 u.GetReligion=function(self) return {GetReligionType=function() return self.religion end} end
+u.IsDelayedDeath=function() return delayedDeath end
+local ownedUnits=Players[0].GetUnits
+Players[0].GetUnits=function(self)
+ if core and coreRetainsActor then return {FindID=function() return u end} end
+ return ownedUnits(self)
+end
 Players[0].GetCities=function() return {
  Members=function() return ipairs({city}) end,
  FindID=function(_,id) if id==327684 then return city end end} end
@@ -62,12 +68,73 @@ def test_native_t67_final_charge_with_stale_pressure_confirms_core_followers_onl
     assert state.pending_action_summary is None
 
 
+def test_t195_consumed_last_spread_confirms_execution_without_claiming_follower_gain():
+    conn = CoreFollowersConn(); conn.lua.execute('afterFollowers=3')
+    state = GameState(conn)
+    result = asyncio.run(server.unit_action(make_ctx(game=state), 2686987, 'spread_religion'))
+    assert result.startswith('RELIGION_SPREAD_EXECUTED|')
+    assert 'GameCore followers:3->3' in result
+    assert 'last charge and unit consumption confirmed' in result
+    assert 'Pressure increase confirmed' not in result
+    assert 'pressure effect unmeasured' in result
+    assert conn.lua.eval('#submissions') == 1
+    assert state.pending_action_summary is None
+
+
+def test_last_spread_rejects_live_core_actor_despite_ingame_removal():
+    conn = CoreFollowersConn()
+    conn.lua.execute('afterFollowers=3;coreRetainsActor=true')
+    state = GameState(conn)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spread_religion(2686987))
+    assert conn.lua.eval('#submissions') == 1
+    assert state.pending_action_summary is not None
+
+
+def test_t195_delayed_death_core_object_confirms_consumption_without_claiming_absence():
+    conn = CoreFollowersConn()
+    conn.lua.execute('afterFollowers=3;coreRetainsActor=true;delayedDeath=true')
+    state = GameState(conn)
+    result = asyncio.run(state.spread_religion(2686987))
+    assert result.startswith('RELIGION_SPREAD_EXECUTED|')
+    assert 'unit_state:delayed_death' in result
+    assert 'unit_state:absent' not in result
+    assert 'GameCore followers:3->3' in result
+    assert conn.lua.eval('#submissions') == 1
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('change,restore', [
+    ('u.id=123', 'u.id=2686987'), ('u.owner=1', 'u.owner=0'),
+    ('u.religion=13', 'u.religion=12'),
+])
+def test_delayed_death_actor_identity_mismatch_stays_invalid_after_restore(change, restore):
+    conn = CoreFollowersConn()
+    conn.lua.execute('afterFollowers=3;coreRetainsActor=true;delayedDeath=true;deferred=true')
+    state = GameState(conn)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spread_religion(2686987))
+    conn.lua.execute('applySpread();' + change)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spread_religion(2686987))
+    conn.lua.execute(restore)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spread_religion(2686987))
+    assert conn.lua.eval('#submissions') == 1
+
+
+def test_lost_last_spread_reply_confirms_only_original_consumption_without_follower_gain():
+    conn = CoreFollowersConn(); conn.lua.execute('afterFollowers=3'); conn.lose_reply = True
+    state = GameState(conn)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spread_religion(2686987))
+    result = asyncio.run(state.spread_religion(2686987))
+    assert result.startswith('RELIGION_SPREAD_EXECUTED|')
+    assert conn.lua.eval('#submissions') == 1
+    assert state.pending_action_summary is None
+
+
 @pytest.mark.parametrize("setup", [
-    "afterFollowers=3", "afterFollowers=2", "afterFollowers=nil", "afterFollowers='4'",
+    "u.spreads=2;afterFollowers=3", "afterFollowers=2", "afterFollowers=nil", "afterFollowers='4'",
     "Events.UnitOperationStarted.Fire=function() end",
     "Events.UnitRemovedFromMap.Fire=function() end", "fail_request=true",
 ])
-def test_no_actual_follower_effect_or_consumption_witness_stays_pending(setup):
+def test_no_follower_gain_and_missing_consumption_witness_stays_pending(setup):
     conn = CoreFollowersConn()
     state = GameState(conn)
     conn.lua.execute(setup)
@@ -106,7 +173,7 @@ def test_changed_core_city_or_scope_cannot_recover_by_restoring_old_values(chang
 def test_unchanged_core_follower_case_recovers_only_after_real_effect_arrives():
     conn = CoreFollowersConn()
     state = GameState(conn)
-    conn.lua.execute("afterFollowers=3")
+    conn.lua.execute("u.spreads=2;afterFollowers=3")
     assert "OUTCOME_UNKNOWN" in asyncio.run(state.spread_religion(2686987))
     conn.lua.execute("coreFollowers=4")
     assert "GameCore followers:3->4" in asyncio.run(state.spread_religion(2686987))

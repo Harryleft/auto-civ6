@@ -1,4 +1,4 @@
-"""界面压力缓存未刷新时，独立核对原城市的 GameCore 信徒变化。"""
+"""界面压力未变化时，独立核对原城市的 GameCore 信徒读数。"""
 
 import json
 
@@ -43,7 +43,7 @@ def parse_preflight(lines, unit_id, token, owner):
 def build_query(unit_id, token):
     return _LUA_ACTION_SCOPE + f'''
 local r=__civmcpSpreadCore
-local ok,after=pcall(function()
+local ok,after,unitState=pcall(function()
  assert(r and r.token=={json.dumps(token)} and r.id=={unit_id})
  local scoped=sameScope(r)
  local c=Players[r.owner]:GetCities():FindID(r.city)
@@ -62,11 +62,33 @@ local ok,after=pcall(function()
  local after=c:GetReligion():GetNumFollowers(r.religion)
  local finalCity=matchingCity()
  local finalScope=sameScope(r)
- assert(scoped and known and finalCity and scopeIndex(after) and after>r.before and finalScope)
- return after
+ assert(scoped and known and finalCity and scopeIndex(after) and after>=r.before and finalScope)
+ local unitState
+ if after==r.before then
+  -- Unchanged followers are not an effect proof. This alternate receipt only
+  -- supports the independent InGame last-charge/removal witness, and requires
+  -- GameCore can retain a consumed unit with IsDelayedDeath=true (T195).
+  local unit=Players[r.owner]:GetUnits():FindID(r.id)
+  if unit==nil then unitState="absent"
+  else
+   for _,pair in ipairs({{{{"GetID",r.id}},{{"GetOwner",r.owner}}}}) do
+    local value=unit[pair[1]](unit)
+    assert(scopeIndex(value))
+    if value~=pair[2] then r.invalid=true end
+   end
+   local religion=unit:GetReligion():GetReligionType()
+   assert(scopeIndex(religion))
+   if religion~=r.religion then r.invalid=true end
+   assert(not r.invalid and unit:IsDelayedDeath()==true)
+   unitState="delayed_death"
+  end
+  assert(matchingCity() and sameScope(r))
+ end
+ return after,unitState
 end)
 if ok then
- print("SPREAD_CORE_CONFIRMED|"..r.token.."|"..r.id.."|"..r.owner.."|"..r.religion.."|"..r.city.."|"..r.civ.."|"..r.seed.."|"..r.turn.."|"..r.before.."|"..after)
+ local outcome=after>r.before and "SPREAD_CORE_CONFIRMED|" or "SPREAD_CORE_UNCHANGED|"
+ print(outcome..r.token.."|"..r.id.."|"..r.owner.."|"..r.religion.."|"..r.city.."|"..r.civ.."|"..r.seed.."|"..r.turn.."|"..r.before.."|"..after..(unitState and "|unit_state:"..unitState or ""))
 else print("SPREAD_CORE_OBSERVED|{token}") end
 print("{SENTINEL}")
 '''
