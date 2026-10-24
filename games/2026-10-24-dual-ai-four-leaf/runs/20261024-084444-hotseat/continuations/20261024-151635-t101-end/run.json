@@ -6,12 +6,12 @@
   "start_turn": 101,
   "target": "native_game_terminal",
   "scope": "Actual Codex Sumeria and actual Claude Code Sweden, same native hotseat match",
-  "status": "running_after_explicit_terminal_pool_confirmation",
+  "status": "completed",
   "previous_stage_seconds": 20717.576826334,
   "current_timeline": 1,
-  "offline_validation": "756 GP and controller tests passed after T239 fix; prior spy suite 850 and Congress suite 569 passed",
+  "offline_validation": "T240: 212 targeted trade/diplomacy tests passed; compile and diff checks passed. Prior scoped suites retained in report.",
   "recovery_count": 0,
-  "forward_confirmation_count": 7,
+  "forward_confirmation_count": 8,
   "source_commits": [
     "d6b390d",
     "33c8328",
@@ -22,7 +22,8 @@
     "e156ec5",
     "18a28e3",
     "b87df0f",
-    "c24b285"
+    "c24b285",
+    "95a6599"
   ],
   "paused_at": 1792834688.3242536,
   "paused_turn": 136,
@@ -33,13 +34,60 @@
   "cumulative_seconds_until_pause": 29210.364794015884,
   "resumed_at": 1792840385.852362,
   "pause_seconds": 5697.528108358383,
-  "latest_verified_checkpoint": "dual_endurance_20261024_151635_e1_t236",
-  "latest_verified_checkpoint_sha256": "afe33cb209d2710b5f604d9164d6f748ea257b4f53902df26c93f4f780aa84ab",
+  "latest_verified_checkpoint": "dual_endurance_20261024_151635_e1_t266",
+  "latest_verified_checkpoint_sha256": "ca3eef5b979f3bac79d60ea7d3b63211d170563e9ba4e35f1865d20e750566c2",
   "t240_trade_recovery": {
     "source_commit": "95a6599",
     "result": "original unsupported human preview explicitly cancelled; no concluded deal",
     "evidence": "evidence/forward-confirmation240.json",
     "tests_passed": 212,
     "human_outgoing_trade_supported": false
-  }
+  },
+  "finished": 1792875493.98694,
+  "terminal": {
+    "turn": 268,
+    "local": 1,
+    "alive": [
+      true,
+      true
+    ],
+    "winner_team": 2,
+    "victory_type": "VICTORY_TECHNOLOGY",
+    "terminal": true,
+    "winners": [
+      {
+        "id": 2,
+        "civilization": "CIVILIZATION_BRAZIL"
+      }
+    ]
+  },
+  "final_players": [
+    {
+      "seat": 0.0,
+      "score": 562.0,
+      "cities": 4.0,
+      "population": 68.0,
+      "units": 17.0,
+      "gold": 1283.30859375,
+      "science": 190.72265625,
+      "culture": 117.03515625
+    },
+    {
+      "seat": 1.0,
+      "score": 507.0,
+      "cities": 4.0,
+      "population": 47.0,
+      "units": 3.0,
+      "gold": 255.33203125,
+      "science": 85.8515625,
+      "culture": 38.671875
+    }
+  ],
+  "total_wall_seconds": 43600.92254567146,
+  "cumulative_wall_seconds": 64318.49937200546,
+  "pending_request_retained": false,
+  "native_human_snapshot_count": 368,
+  "all_native_human_snapshots_verified": true,
+  "final_audit": "evidence/final-audit.json",
+  "round_timing": "evidence/round-timing.csv"
 }
