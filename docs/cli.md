@@ -111,6 +111,37 @@ pending
 quit
 ```
 
+## 高频操作快捷入口
+
+以下仍是 `civ6 debug` 会话内子命令，复用同一 MCP。先用当前查询确定实体和坐标；所有变更命令支持 `--dry-run`。选择依据与频次口径见[历史操作覆盖检查](acceptance/2026-10-24-cli-frequency.md)。
+
+| 任务 | 会话命令 |
+| --- | --- |
+| 地图与胜利 | `map area X Y [--radius N]`、`victory show` |
+| 单位常用动作 | `unit attack ID X Y`、`unit skip ID`、`unit fortify ID`、`unit heal ID`、`unit improve ID IMPROVEMENT_TYPE`、`unit skip-remaining` |
+| 单位诊断与升级 | `unit path ID X Y`、`unit tasks`、`unit promotions ID`、`unit promote ID PROMOTION_TYPE`、`unit upgrade ID` |
+| 城市 | `city attack ID X Y`、`city district ID DISTRICT_TYPE`、`city focus ID FOCUS`、`city buy ID TYPE NAME [--yield YIELD_TYPE]` |
+| 政策 | `policy show`、`policy set SLOT=POLICY_ID [SLOT=POLICY_ID ...]` |
+| 城邦与总督 | `city-state list`、`city-state envoy PLAYER_ID`、`governor list`、`governor appoint TYPE`、`governor assign TYPE CITY_ID [--owner PLAYER_ID]`、`governor promote TYPE PROMOTION_TYPE` |
+| 议会与通知 | `congress show`、`notifications show` |
+
+地图半径限定 1～4，默认 2，越界参数直接拒绝。`policy set` 接受空格或逗号分隔的显式槽位，`NONE` 表示清空；格式错误或重复槽位在发送前拒绝，未指定槽位保持原值。城市购买的 `TYPE` 为 `UNIT` 或 `BUILDING`，`YIELD_TYPE` 为 `YIELD_GOLD` 或 `YIELD_FAITH`，默认金币；资格及费用仍由引擎判断。治理、使者和升级均可能消耗资源或改变配置，先查询再预演。
+
+`congress show` 不打开投票、不提交票单；`notifications show` 不关闭弹窗或代选外交回应。其余议会／外交操作继续通过 `tools NAME` 与 `call` 显式调用。双 AI 热座的 begin/end 专用席位入口仍由原控制器管理，不能用普通 `turn end` 替代。
+
+```text
+map area 23 20 --radius 1
+unit promotions 1835008
+unit upgrade 1835008 --dry-run
+city district 327684 DISTRICT_COMMERCIAL_HUB
+policy show
+policy set 0=POLICY_CONSCRIPTION 1=POLICY_LIMITANEI --dry-run
+governor list
+congress show
+```
+
+以上实体和坐标仅为参数形式示例，实操须替换为本次查询所得值。
+
 ## 副作用预演
 
 标准选项拼写为 `--dry-run`。可能改变游戏状态的调用先使用会话内 `call --dry-run TOOL JSON_OBJECT`。该入口只校验工具名称、严格 JSON 和真实输入 schema，返回 `event=dry_run`、原参数、`schema_valid=true`、`would_send=false`；未明确标为只读的工具按 `potentially_mutating=true` 展示。预演仍写本地证据。
@@ -158,7 +189,7 @@ quit
 
 `debug.jsonl` 记录命令、调用开始、原始返回、未知结果与退出原因；每条事件有递增序号，`tool_result.request` 对应 `tool_started.sequence`。完整 MCP 返回另存 `debug-response-*.json`。`runtime-status.json` 是最后一次成功读取的内存快照，`transport-unknown.json` 保留首个传输未知的原参数，后续读失败不会覆盖它。`debug-process.json`、`debug-initialize.json`、`debug-tools.json` 保存启动与协议事实。`data.tool_calls` 仅计显式调用和状态别名，不含内部的纯内存状态检查；日志查询的 session 文件名也不等于服务 UUID。
 
-最后的 `event=session_closed` 摘要只判断会话是否正常结束；先前工具调用是否成功，应检查各自 `is_error` 和原始返回。明确放弃或异常关闭时 `data.context_lost=true`；证据文件不是可恢复的意图存储。
+最后的 `event=session_closed` 摘要只判断会话是否正常结束；先前工具调用是否成功，应检查各自 `is_error` 和原始返回。`tool_result.is_error` 识别协议错误及服务显式的 `Error:`／`ERR:` 文本错误边界；`protocol_is_error` 保留原 MCP 标志，`error` 给出错误码、来源和修正建议，`result` 保留未改写回包。原生资格拒绝也应读取并处理；没有错误标志不等同动作已确认，CLI 不由其他展示文案推断成功或释放 pending。明确放弃或异常关闭时 `data.context_lost=true`；证据文件不是可恢复的意图存储。
 
 | 退出码 | 状态 | 含义 |
 | --- | --- | --- |

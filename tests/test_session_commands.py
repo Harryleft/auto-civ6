@@ -50,7 +50,9 @@ def test_nested_help_is_one_level_and_has_no_call():
     with pytest.raises(HelpRequested) as help_request:
         parse_command('unit --help')
     doc = help_request.value.document
-    assert [child['name'] for child in doc['subcommands']] == ['list', 'move', 'action']
+    assert [child['name'] for child in doc['subcommands']] == [
+        'list','move','action','attack','skip','fortify','heal','improve','skip-remaining',
+        'promotions','promote','upgrade','path','tasks']
     assert '--dry-run' not in doc['usage']
     with pytest.raises(HelpRequested) as help_request:
         parse_command('unit move --help')
