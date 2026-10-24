@@ -19,13 +19,13 @@ description: 验证 civ6 项目的知识 CLI、真实 stdio MCP、游戏状态�
 
 ## Launch
 
-从项目根目录执行 `uv sync --locked`，然后使用当前检出的依赖。知识 CLI 是短进程；离线 helper 会按真实入口启动自己的 stdio MCP 子进程，完成后关闭。就绪要求 CLI 的 `validate` 返回 `valid`、MCP 初始化返回 `Civilization VI`，且工具列表包含两项知识查询。
+从项目根目录执行 `uv sync --locked`，然后使用当前检出的依赖。`civ6` 离线 CLI 会按真实入口启动自己的 stdio MCP 子进程，完成后关闭。就绪要求知识 CLI 的 `validate` 返回 `valid`、MCP 初始化返回 `Civilization VI`，且工具列表包含两项知识查询。
 
 ```sh
-uv run --locked --no-sync python .codex/skills/verify-civ6/scripts/verify_knowledge.py
+uv run --locked --no-sync civ6 verify knowledge
 ```
 
-helper 使用当前知识包，默认新建 `.scratch/verify-civ6/<随机轮次>/` 保存证据；`--output` 可指定一个尚不存在的目录。它只调用 `search_knowledge` 和 `get_knowledge`，不调用任何游戏工具。可直接执行有执行权限的 helper，但应使用项目虚拟环境解释器。
+命令使用当前知识包，默认新建 `.scratch/civ6/<run_id>/` 保存证据；`--output` 可指定一个尚不存在的目录。它只调用 `search_knowledge` 和 `get_knowledge`，不调用任何游戏工具。参数、领域测试及日志命令见[离线调试 CLI](../../../docs/cli.md)。
 
 实机路径按[安装与连接](../../../docs/installation.md)和[保存与恢复](../../../docs/agent-recovery.md)启动。复用唯一活动控制客户端；只有任务已授权新开测试及替换现场，才加载指定[受信原始基准](../../../fixtures/saves/README.md)。续测只加载本轮已确认检查点。独立 worktree 不能隔离同一个游戏或 FireTuner 端口。
 
@@ -34,7 +34,7 @@ helper 使用当前知识包，默认新建 `.scratch/verify-civ6/<随机轮次>
 离线检查使用只读入口：
 
 ```sh
-uv run --locked --no-sync python -B civ6_knowledge/query.py validate
+uv run --locked --no-sync civ6 doctor
 ```
 
 缺依赖、包路径错误或知识指纹不符时停止该路径，保留错误原文。修复依赖按 `uv sync --locked`；知识包维护使用已有快照在新目录构建、比较差异后处理，不能用 `capture.py` 自动读取本机来源、刷新指纹掩盖未知差异。
@@ -63,7 +63,7 @@ uv run --locked --no-sync python -B civ6_knowledge/query.py validate
 ## Evidence
 
 - 每个功能记录：功能 ID、代码提交及未提交改动、模式、前置条件、入口、完整参数、原始输出、退出码或工具错误、前后状态、证据路径及结论。修复验收保留相同复现的失败前与通过后结果。
-- CLI helper 自动保存 `cli-*.json`、MCP 初始化与工具列表、`mcp-attempts.json`、各响应、stderr 和 `summary.json`，并核对知识文件未变、临时目录已清理。MCP 的标准本地动作日志仍写入 `~/.civ6-mcp/actions/`；保留这些日志，不清理其他会话的记录。
+- CLI 自动保存 `context.json`、`cli-*.json`、MCP 初始化与工具列表、`mcp-attempts.json`、各响应、stderr 和 `summary.json`，并核对知识文件未变、临时目录已清理。运行结论在顶层 `status`，功能数据在 `data`。MCP 的标准本地动作日志仍写入 `~/.civ6-mcp/actions/`；保留这些日志，不清理其他会话的记录。
 - 实机证据放在本轮 `games/<对局>/runs/<轮次>/evidence/`，报告放 `reports/`。命名与来源按[对局资料](../../../games/README.md)，不覆盖基准、旧记录或已有检查点。
 - 查询要证明返回范围与实体；动作要同时证明单次提交和对应原生确认；保存要证明新鲜非空文件、SHA-256、身份回合和本轮归属。成功文案或截图单独不足以证明这些事实。
 - `PASS` 只授予证据覆盖的功能和入口；`FAIL` 表示已观察到不符合预期；`BLOCKED` 表示前提或能力不足；`NOT_RUN` 表示未执行。列出离线通过、实机通过及未验证项。知识 helper 的 `PASS` 只覆盖知识 CLI 与 MCP。
@@ -76,6 +76,6 @@ helper 用上下文管理器关闭自己创建的 MCP 管道及子进程，并�
 
 ## Helpers
 
-`scripts/verify_knowledge.py` 是一次性离线冒烟入口，没有常驻服务或后台轮询。非零退出时读取输出目录中的错误与 `summary.json`，修复有证据支持的问题后使用新目录重跑。它不修改 Git、游戏配置、存档或全局模型设置。
+`scripts/verify_knowledge.py` 保留为 `civ6 verify knowledge` 的兼容入口，逻辑统一位于项目包。使用 `uv run --locked python .codex/skills/verify-civ6/scripts/verify_knowledge.py` 可调用同一验证。非零退出时读取输出目录中的错误与 `summary.json`，修复有证据支持的问题后使用新目录重跑。它不修改 Git、游戏配置、存档或全局模型设置。
 
 功能入口变化后，先核对本地图与源码，再更新受影响配方并实际跑通；可调用 `$pstack-maintain-verification-skill` 维护地图，实机部分仍按当前任务授权执行。

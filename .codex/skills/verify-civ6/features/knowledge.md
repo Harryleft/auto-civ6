@@ -11,7 +11,7 @@
 
 - CLI：`python3 civ6_knowledge/query.py search 写作 --topic technologies --limit 5`。
 - MCP：`search_knowledge(query="写作", topic="technologies", limit=5)`，再用搜索所得 ID 调用 `get_knowledge`。
-- 完整冒烟：从根目录运行 `uv run --locked --no-sync python .codex/skills/verify-civ6/scripts/verify_knowledge.py`。
+- 完整冒烟：从根目录运行 `uv run --locked --no-sync civ6 verify knowledge`。
 
 ## Driving it with CLI and stdio MCP
 
@@ -20,11 +20,11 @@ Preconditions:
 - 已执行 `uv sync --locked`；解释器加载本次检出的 `src/civ_mcp`。
 - `civ6_knowledge/query.py validate` 返回 `status=valid`，知识包与清单一致。
 
-- **启动与诊断。** 运行 helper；核对 `cli-doctor.json` 的退出码为 0、`mcp-initialize.json` 标识 `Civilization VI`、`mcp-tools.json` 有两个知识工具。
+- **启动与诊断。** 运行完整冒烟；核对 `cli-doctor.json` 的退出码为 0、`mcp-initialize.json` 标识 `Civilization VI`、`mcp-tools.json` 有两个知识工具。
 - **搜索。** 核对 CLI 与 MCP 的结果列表一致，且包含 `TECH_WRITING`；保留两侧原响应。
 - **读取。** 对搜索结果依次调用 `get_knowledge(entry_id="TECH_WRITING", level="summary")`、`rule`、`evidence`；核对同一条目、规则来源存在，并与 CLI 各层结果一致。
 - **范围。** MCP 回应必须保留 `applicability.current_session_verified=false`；静态知识不提供当前游戏操作资格。
-- **收尾。** 退出码为 0，`summary.json` 为 `PASS`，`knowledge_unchanged`、`mcp_session_closed` 和 `scratch_removed` 均为 true；清理后各证据文件仍存在。
+- **收尾。** 退出码为 0，`summary.json` 顶层 `status=PASS`，`data` 中 `knowledge_unchanged`、`mcp_session_closed` 和 `scratch_removed` 均为 true；清理后各证据文件仍存在。
 
 ## Gotchas
 

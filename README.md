@@ -32,6 +32,10 @@
 
 [安装与连接参考](docs/installation.md)
 
+## 离线调试
+
+在项目目录执行 `uv sync --locked`，然后使用 `uv run --locked civ6 doctor` 检查环境、知识包与 MCP 协议，使用 `uv run --locked civ6 verify knowledge` 验证知识查询。CLI 还提供领域测试和日志查询，统一输出 JSON 并保留证据；不操作真实游戏。完整命令见[离线调试 CLI](docs/cli.md)。
+
 ## 开始使用
 
 连接后，可向模型发送：
