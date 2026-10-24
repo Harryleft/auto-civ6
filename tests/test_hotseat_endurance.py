@@ -172,3 +172,18 @@ def test_terminal_snapshot_survives_missing_ingame_context(endurance,monkeypatch
     result=asyncio.run(endurance.snapshot(tmp_path))
     assert result['match']==terminal and result['phase'] is None and len(result['players'])==2
     assert calls==['GameCore_Tuner']
+
+
+def test_timing_excludes_user_pause_from_match_controllers_and_rounds(endurance,tmp_path):
+    evidence=tmp_path/'evidence';evidence.mkdir()
+    (evidence/'timing-start.json').write_text(json.dumps({'tracking_started_at':100,'previous_stage_seconds':30}))
+    row={'seat':0,'turn':136,'started':200,'finished':260,'seconds':60}
+    (evidence/'agent-timing.jsonl').write_text(json.dumps(row)+'\n')
+    pauses=[{'started':210,'finished':250},{'started':220,'finished':240}]
+    (evidence/'pauses.jsonl').write_text('\n'.join(map(json.dumps,pauses))+'\n')
+    result=endurance.timing_report(tmp_path,finished=280)
+    assert result['elapsed_wall_seconds']==180 and result['paused_seconds']==40
+    assert result['total_wall_seconds']==140 and result['play_wall_seconds']==40
+    assert result['preparation_seconds']==100 and result['cumulative_wall_seconds']==170
+    assert result['agent_seconds']['0']==20 and result['rounds'][0]['wall_seconds']==20
+    assert result['rounds'][0]['agents_seconds']==20

@@ -36,6 +36,17 @@ def append(path, value):
         stream.write(json.dumps(value, ensure_ascii=False) + "\n")
 
 
+def active_seconds(start, end, pauses):
+    """Exclude the union of explicit user-pause intervals, clipped to this span."""
+    excluded, cursor = 0, start
+    for pause in sorted(pauses, key=lambda value: value["started"]):
+        left, right = max(start, pause["started"]), min(end, pause["finished"])
+        if right > max(left, cursor):
+            excluded += right - max(left, cursor)
+            cursor = right
+    return max(0, end - start - excluded)
+
+
 def timing_report(run, finished=None):
     """Keep wall time distinct from additive agent/save durations."""
     evidence = run / "evidence"
@@ -51,6 +62,10 @@ def timing_report(run, finished=None):
     savespath = evidence / "checkpoints.jsonl"
     saves = [json.loads(l) for l in savespath.read_text().splitlines()] if savespath.exists() else []
     starts = json.loads((evidence / "timing-start.json").read_text())
+    pause_path = evidence / "pauses.jsonl"
+    pauses = [json.loads(line) for line in pause_path.read_text().splitlines()] if pause_path.exists() else []
+    def duration(value):
+        return active_seconds(value["started"], value["finished"], pauses)
     play_started = min((v["started"] for v in rows), default=now)
     journal = evidence / "agent-tools.jsonl"
     receipts = [json.loads(l) for l in journal.read_text().splitlines()] if journal.exists() else []
@@ -69,21 +84,23 @@ def timing_report(run, finished=None):
                      and int(v.get("before", [None] * 4)[3] or -1) == turn}
         retained = not any(r["from_timeline"] == timeline and turn >= r["checkpoint_turn"] for r in recoveries)
         rounds.append({"turn": turn, "timeline": timeline, "retained_in_current_game": retained,
-                       "agents_seconds": sum(v["seconds"] for v in group),
-                       "wall_seconds": max(v["finished"] for v in group) - min(v["started"] for v in group),
+                       "agents_seconds": sum(duration(v) for v in group),
+                       "wall_seconds": active_seconds(min(v["started"] for v in group), max(v["finished"] for v in group), pauses),
                        "both_handoffs_confirmed": completed == {0, 1}})
     report = {"tracking_started": starts["tracking_started_at"], "play_started": play_started,
-              "measured_at": now, "total_wall_seconds": now - starts["tracking_started_at"],
-              "play_wall_seconds": now - play_started,
-              "preparation_seconds": play_started - starts["tracking_started_at"],
-              "agent_seconds": {str(seat): sum(v["seconds"] for v in rows if v["seat"] == seat) for seat in (0, 1)},
-              "repair_seconds": sum(r["finished"] - r["started"] for r in recoveries + repairs),
+              "measured_at": now, "total_wall_seconds": active_seconds(starts["tracking_started_at"], now, pauses),
+              "play_wall_seconds": active_seconds(play_started, now, pauses),
+              "preparation_seconds": active_seconds(starts["tracking_started_at"], play_started, pauses),
+              "agent_seconds": {str(seat): sum(duration(v) for v in rows if v["seat"] == seat) for seat in (0, 1)},
+              "repair_seconds": sum(duration(r) for r in recoveries + repairs),
               "forward_confirmation_count": len(repairs),
-              "abandoned_agent_seconds": sum(v["seconds"] for v in rows if any(
+              "abandoned_agent_seconds": sum(duration(v) for v in rows if any(
                   r["from_timeline"] == v.get("timeline", 0) and v["turn"] >= r["checkpoint_turn"] for r in recoveries)),
-              "replayed_agent_seconds": sum(v["seconds"] for v in rows if any(
+              "replayed_agent_seconds": sum(duration(v) for v in rows if any(
                   r["to_timeline"] == v.get("timeline", 0) and v["turn"] <= r["failed_turn"] for r in recoveries)),
-              "save_seconds": sum(v["finished"] - v["started"] for v in saves), "rounds": rounds}
+              "save_seconds": sum(duration(v) for v in saves), "rounds": rounds}
+    report["elapsed_wall_seconds"] = now - starts["tracking_started_at"]
+    report["paused_seconds"] = report["elapsed_wall_seconds"] - report["total_wall_seconds"]
     report["previous_stage_seconds"] = starts.get("previous_stage_seconds", 0)
     report["cumulative_wall_seconds"] = report["previous_stage_seconds"] + report["total_wall_seconds"]
     write(evidence / "timing-summary.json", report)
