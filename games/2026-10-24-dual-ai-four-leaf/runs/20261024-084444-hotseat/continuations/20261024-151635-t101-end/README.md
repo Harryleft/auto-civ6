@@ -115,3 +115,12 @@ T236 检查点 `dual_endurance_20261024_151635_e1_t236.Civ6Save` 为 1,004,454 �
 `c24b285` 在原预言家情形外，增加当前类别候选已空的领取确认：必须有唯一的精确新伟人、原 token／范围、原资格关闭、唯一的本类无人物占位，以及已知且未上升的点数；确认末尾再次核对类别仍空。结果分别报告 `gp_points_quote:880|gp_points_net_change:-826`。普通仍有后继候选的类别、赞助和拒绝仍沿用既有资源验证。756 项相关测试通过，涵盖错类／重复占位、后继候选、缺失或重复新单位、资格未关闭及丢回应不重发。
 
 原 token 纯查询确认后显式归档原请求，由实际 Claude Code 原会话继续 T239；无重复领取、回档或资源修改，处理耗时 532.644203 秒计入总耗时。证据：`evidence/t239-engineer-original-readback.json`、`t239-engineer-core-readback.json`、`t239-engineer-confirmation.json`、`forward-confirmation239.json` 和归档原请求。
+
+
+## T240 人类席位交易试探的取消与入口修复
+
+瑞典向苏美尔试探“茶 1 换每回合 8 金、30 回合”，原 token 为 `d9aabbeaf1564640b7f8f32f14301639`。入口对预览放行了人类目标，并发送原生 EQUALIZE；苏美尔人类席位不会自动给出 AI 估价回应，原生 pending=true，工具停在 RESPONSE_WAIT。原提案未接受、未成交，调度保留未知并停止。
+
+核对原世界、T240 瑞典、原会话 1、参与者、原始两项指纹和 sent=true／无 acceptEntered 后，显式调用原生 OnRefuseDeal。游戏人类挂起分支发送 CLOSED 取消原提案并关闭会话；原关闭事件、会话缺席、无排队及无待处理交易、隐藏界面、原生 UI 清理完成及原 token finished 均已回读确认。未重发 EQUALIZE，也未切换席位、回档或修改资源。取消的原请求及操作账本另存，不能把本次取消描述为成功估价。
+
+`95a6599` 将 test_trade 与 propose_trade 都限制为 AI 目标，在打开会话、清理草稿和发送前拒绝人类席位。真实 GameState／Lua 测试先复现预览误放行，再验证两种模式保留已有草稿且零提交；212 项相关测试通过。目前这两个入口不支持双方人类席位之间的主动交易，和内置 AI 的交易保持可用。实际 Claude Code 原会话继续 T240，证据见 `evidence/forward-confirmation240.json`、`trade240-*.json`、操作账本与归档原共享请求。

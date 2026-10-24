@@ -34,5 +34,12 @@
   "resumed_at": 1792840385.852362,
   "pause_seconds": 5697.528108358383,
   "latest_verified_checkpoint": "dual_endurance_20261024_151635_e1_t236",
-  "latest_verified_checkpoint_sha256": "afe33cb209d2710b5f604d9164d6f748ea257b4f53902df26c93f4f780aa84ab"
+  "latest_verified_checkpoint_sha256": "afe33cb209d2710b5f604d9164d6f748ea257b4f53902df26c93f4f780aa84ab",
+  "t240_trade_recovery": {
+    "source_commit": "95a6599",
+    "result": "original unsupported human preview explicitly cancelled; no concluded deal",
+    "evidence": "evidence/forward-confirmation240.json",
+    "tests_passed": 212,
+    "human_outgoing_trade_supported": false
+  }
 }
