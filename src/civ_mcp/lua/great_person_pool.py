@@ -1,5 +1,6 @@
 """Great Person pool requests bind the original individual and resource baseline."""
 import json
+import math
 
 from civ_mcp.lua._helpers import SENTINEL, _LUA_ACTION_SCOPE
 
@@ -99,15 +100,30 @@ local ok,unitID,pointsNetChange=pcall(function()
  reason="RESOURCE_UNCONFIRMED"
  local after=balance(r.owner,r.currency,r.class)
  local exactCost=math.abs(after-(r.before-r.cost))<0.01
+ local requireExhausted=false
+ local function exhaustedClass()
+  local count=0
+  for _,entry in ipairs(Game.GetGreatPeople():GetTimeline()) do
+   if entry.Class==r.class then
+    count=count+1
+    if entry.Individual~=nil then return false end
+   end
+  end
+  return count==1
+ end
  if not exactCost then
-  -- T181 native recruitment created the exact Prophet without reducing points.
-  -- Keep other pool payments strict; this one-per-player exception also needs
-  -- a unique new individual and a closed original pool below. Report a quote,
-  -- not a paid cost. Revisit if another native class exhibits this behavior.
+  -- T181 Prophet and T239 exhausted Engineer pool receipts differ from the
+  -- point quote. Exact new ownership plus a closed native pool below proves
+  -- recruitment; report the quote/net change without claiming the paid cost.
   local class=GameInfo.GreatPersonClasses and GameInfo.GreatPersonClasses[r.class]
-  assert(r.kind=="recruit_great_person" and r.currency=="GP_POINTS"
-   and class and class.GreatPersonClassType=="GREAT_PERSON_CLASS_PROPHET"
-   and class.MaxPlayerInstances==1 and after==r.before)
+  assert(r.kind=="recruit_great_person" and r.currency=="GP_POINTS" and class
+   and type(class.GreatPersonClassType)=="string" and #class.GreatPersonClassType>0)
+  local singleProphet=class.GreatPersonClassType=="GREAT_PERSON_CLASS_PROPHET"
+   and class.MaxPlayerInstances==1 and after==r.before
+  if not singleProphet then
+   requireExhausted=true
+   assert(after<=r.before and exhaustedClass())
+  end
  end
  reason="NEW_INDIVIDUAL_UNIT_UNCONFIRMED"
  local found=nil
@@ -130,10 +146,11 @@ local ok,unitID,pointsNetChange=pcall(function()
  end
  assert(found~=nil)
  if not exactCost then
-  reason="ORIGINAL_PROPHET_POOL_UNCONFIRMED"
+  reason="ORIGINAL_POOL_UNCONFIRMED"
   local gp=Game.GetGreatPeople()
   assert(gp:CanRecruitPerson(r.owner,r.individual)==false)
   for _,entry in ipairs(gp:GetTimeline()) do assert(entry.Individual~=r.individual) end
+  if requireExhausted then assert(exhaustedClass()) end
   return found,after-r.before
  end
  return found
@@ -153,9 +170,16 @@ def parse_great_person_pool_confirmation(lines: list[str], token: str, kind: str
         row = rows[0]
         if row[1:5] == [token, kind, str(individual), currency]:
             if len(row) == 9:
-                if kind == "recruit_great_person" and currency == "GP_POINTS" and row[8] == "points_net_change:0":
-                    return f"RECRUITED|{row[5]}|individual:{individual}|gp_points_quote:{row[6]}|gp_points_net_change:0|{row[7]}"
-                return None
+                if kind != "recruit_great_person" or currency != "GP_POINTS" or not row[8].startswith("points_net_change:"):
+                    return None
+                net_text = row[8].removeprefix("points_net_change:")
+                try:
+                    net = float(net_text)
+                except ValueError:
+                    return None
+                if not math.isfinite(net) or net > 0:
+                    return None
+                return f"RECRUITED|{row[5]}|individual:{individual}|gp_points_quote:{row[6]}|gp_points_net_change:{net_text}|{row[7]}"
             if kind == "reject_great_person":
                 return f"REJECTED|{row[5]}|individual:{individual}|gp_points_cost:{row[6]}"
             if kind == "recruit_great_person":

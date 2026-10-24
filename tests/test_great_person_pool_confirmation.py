@@ -182,6 +182,60 @@ def test_lost_prophet_reply_retains_original_for_confirmation_without_resubmit()
     assert state.pending_action_summary is None
 
 
+def _t239_last_engineer(conn):
+    conn.lua.execute('''
+points,recruitCost=893,880
+current={{Individual=53,Class=2,Cost=880,Claimant=0}}
+GameInfo.GreatPersonIndividuals[53]={Name='Charles Correa'}
+GameInfo.GreatPersonClasses={[2]={GreatPersonClassType='GREAT_PERSON_CLASS_ENGINEER'}}
+Players[0].GetGreatPeoplePoints=function()
+ return {GetPointsTotal=function(_,class) assert(class==2);return points end}
+end
+function applyPool(op,p)
+ assert(op==10 and p.individual==53)
+ points=67;addGP(4325383,53)
+ current={{Class=2,Cost=2147483647}}
+end
+''')
+
+
+def test_t239_last_engineer_receipt_separates_quote_from_observed_point_change():
+    conn=GreatPeopleConn();_t239_last_engineer(conn)
+    state=GameState(conn);ctx=make_ctx();app_of(ctx).game=state
+    result=asyncio.run(server.recruit_great_person(ctx,53))
+    assert result.startswith('RECRUITED|Charles Correa|individual:53|')
+    assert 'gp_points_quote:880|gp_points_net_change:-826|unit:4325383' in result
+    assert 'gp_points_cost:' not in result
+    assert conn.lua.eval('#submissions')==1
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('change', [
+    'units={}', 'units[4325383].individual=54', 'addGP(4325384,53)',
+    'current={}', 'current={{Class=2,Individual=54,Cost=1000}}',
+    'current={{Class=2,Cost=2147483647},{Class=2,Cost=2147483647}}',
+    'current={{Class=3,Cost=2147483647}}',
+    'gp.CanRecruitPerson=function() return true end', 'points=894',
+    'GameInfo.GreatPersonClasses=nil',
+])
+def test_terminal_pool_point_exception_needs_unique_new_individual_and_exact_exhausted_class(change):
+    conn=GreatPeopleConn();_t239_last_engineer(conn);state=GameState(conn)
+    conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.recruit_great_person(53))
+    conn.lua.execute('applyPool(submissions[1].op,submissions[1].params);'+change)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.recruit_great_person(53))
+    assert conn.lua.eval('#submissions')==1
+    assert state.pending_action_summary is not None
+
+
+def test_lost_terminal_pool_reply_only_confirms_original_recruitment():
+    conn=GreatPeopleConn();_t239_last_engineer(conn);conn.lose_reply=True;state=GameState(conn)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.recruit_great_person(53))
+    assert 'gp_points_net_change:-826' in asyncio.run(state.recruit_great_person(53))
+    assert conn.lua.eval('#submissions')==1
+    assert state.pending_action_summary is None
+
+
 def test_lost_patronage_reply_repeated_public_call_only_confirms_original_person():
     conn = GreatPeopleConn(); state = GameState(conn); ctx = make_ctx(); app_of(ctx).game = state
     conn.lose_reply = True
