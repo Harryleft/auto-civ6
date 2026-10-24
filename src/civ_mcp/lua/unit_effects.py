@@ -414,6 +414,8 @@ local ok,detail,target=pcall(function()
    -- not increase. Keep this witness distinct from a measured pressure gain.
    if unit==nil and r.charges==1 and r.removed==true then
     print("SPREAD_CONSUMED_WITNESS|"..r.token.."|"..r.id.."|"..r.owner.."|"..r.religion.."|"..r.city.id.."|"..r.civ.."|"..r.seed.."|"..r.turn.."|last_charge_removed")
+   elseif unit~=nil and remaining>0 then
+    print("SPREAD_CHARGE_WITNESS|"..r.token.."|"..r.id.."|"..r.owner.."|"..r.religion.."|"..r.city.id.."|"..r.civ.."|"..r.seed.."|"..r.turn.."|"..r.charges.."|"..remaining)
    end
    return "charges_remaining:"..remaining,"city:"..r.city.owner..":"..r.city.id.." pressure:unchanged"
   end
@@ -456,7 +458,7 @@ def parse_unit_effect_confirmation(lines: list[str], kind: str, unit_id: int, to
                     core = [line.split('|') for line in lines if line.startswith(('SPREAD_CORE_CONFIRMED|', 'SPREAD_CORE_UNCHANGED|'))]
                     if not (len(native) == len(core) == 1 and len(native[0]) == 9
                             and ((core[0][0] == 'SPREAD_CORE_CONFIRMED' and len(core[0]) == 11)
-                                 or (core[0][0] == 'SPREAD_CORE_UNCHANGED' and len(core[0]) == 12))
+                                 or (core[0][0] == 'SPREAD_CORE_UNCHANGED' and len(core[0]) in (12, 13)))
                             and native[0][1:] == core[0][1:9] and native[0][1:3] == [token, str(unit_id)]
                             and core[0][4] == row[5] and core[0][9].isdigit() and core[0][10].isdigit()
                             and row[7] == f"city:{core[0][3]}:{core[0][5]} pressure:unchanged"
@@ -468,12 +470,24 @@ def parse_unit_effect_confirmation(lines: list[str], kind: str, unit_id: int, to
                                 f"|GameCore followers:{before}->{after}; UI pressure unchanged.")
                     consumed = [line.split('|') for line in lines if line.startswith('SPREAD_CONSUMED_WITNESS|')]
                     if (core[0][0] == 'SPREAD_CORE_UNCHANGED' and after == before
+                            and len(core[0]) == 12
                             and core[0][11] in ('unit_state:absent', 'unit_state:delayed_death')
                             and row[6] == 'charges_remaining:0' and len(consumed) == 1
                             and len(consumed[0]) == 10 and consumed[0][1:9] == native[0][1:]
                             and consumed[0][9] == 'last_charge_removed'):
                         return (f"RELIGION_SPREAD_EXECUTED|unit:{unit_id}|religion:{row[5]}|{row[6]}|{row[7]}"
                                 f"|GameCore followers:{before}->{after}; last charge and unit consumption confirmed; GameCore {core[0][11]}; pressure effect unmeasured.")
+                    charge = [line.split('|') for line in lines if line.startswith('SPREAD_CHARGE_WITNESS|')]
+                    if (core[0][0] == 'SPREAD_CORE_UNCHANGED' and after == before
+                            and len(core[0]) == 13 and core[0][11] == 'unit_state:active'
+                            and len(charge) == 1 and len(charge[0]) == 11
+                            and charge[0][1:9] == native[0][1:]
+                            and charge[0][9].isdigit() and charge[0][10].isdigit()
+                            and int(charge[0][9]) == int(charge[0][10]) + 1
+                            and int(charge[0][10]) > 0
+                            and row[6] == core[0][12] == f'charges_remaining:{charge[0][10]}'):
+                        return (f"RELIGION_SPREAD_EXECUTED|unit:{unit_id}|religion:{row[5]}|{row[6]}|{row[7]}"
+                                f"|GameCore followers:{before}->{after}; spread charge:{charge[0][9]}->{charge[0][10]}; GameCore {core[0][12]}; pressure effect unmeasured.")
                     return None
                 return f"RELIGION_SPREAD|unit:{unit_id}|religion:{row[5]}|{row[6]}|{row[7]}|Pressure increase confirmed."
             if row[4] == "prophet":

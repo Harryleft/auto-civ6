@@ -43,7 +43,7 @@ def parse_preflight(lines, unit_id, token, owner):
 def build_query(unit_id, token):
     return _LUA_ACTION_SCOPE + f'''
 local r=__civmcpSpreadCore
-local ok,after,unitState=pcall(function()
+local ok,after,unitState,charges=pcall(function()
  assert(r and r.token=={json.dumps(token)} and r.id=={unit_id})
  local scoped=sameScope(r)
  local c=Players[r.owner]:GetCities():FindID(r.city)
@@ -63,32 +63,49 @@ local ok,after,unitState=pcall(function()
  local finalCity=matchingCity()
  local finalScope=sameScope(r)
  assert(scoped and known and finalCity and scopeIndex(after) and after>=r.before and finalScope)
- local unitState
+ local unitState,charges
  if after==r.before then
-  -- Unchanged followers are not an effect proof. This alternate receipt only
-  -- supports the independent InGame last-charge/removal witness, and requires
-  -- GameCore can retain a consumed unit with IsDelayedDeath=true (T195).
+  -- Unchanged followers are not a conversion proof. Corroborate the original
+  -- InGame charge witness with Core charges (T196), or consumption (T195).
   local unit=Players[r.owner]:GetUnits():FindID(r.id)
   if unit==nil then unitState="absent"
   else
-   for _,pair in ipairs({{{{"GetID",r.id}},{{"GetOwner",r.owner}}}}) do
-    local value=unit[pair[1]](unit)
-    assert(scopeIndex(value))
-    if value~=pair[2] then r.invalid=true end
+   local known=true
+   local valid,delayed=pcall(function() return unit:IsDelayedDeath() end)
+   if not valid or type(delayed)~="boolean" then known=false end
+   local function fact(getter,expected)
+    local valid,value=pcall(getter)
+    if not valid or not scopeIndex(value) then known=false
+    elseif value~=expected then r.invalid=true end
    end
-   local religion=unit:GetReligion():GetReligionType()
-   assert(scopeIndex(religion))
-   if religion~=r.religion then r.invalid=true end
-   assert(not r.invalid and unit:IsDelayedDeath()==true)
-   unitState="delayed_death"
+   local function matchingActor()
+    for _,pair in ipairs({{{{"GetID",r.id}},{{"GetOwner",r.owner}}}}) do
+     fact(function() return unit[pair[1]](unit) end,pair[2])
+    end
+    fact(function() return unit:GetReligion():GetReligionType() end,r.religion)
+    if valid and delayed==false then
+     fact(function() return unit:GetX() end,r.x)
+     fact(function() return unit:GetY() end,r.y)
+    end
+   end
+   matchingActor()
+   if valid and delayed==false then
+    local readable,value=pcall(function() return unit:GetReligion():GetSpreadCharges() end)
+    if readable and scopeIndex(value) and value>0 then charges=value else known=false end
+   end
+   matchingActor()
+   local finalOK,finalDelayed=pcall(function() return unit:IsDelayedDeath() end)
+   if not finalOK or finalDelayed~=delayed then known=false end
+   assert(known and not r.invalid)
+   unitState=delayed and "delayed_death" or "active"
   end
   assert(matchingCity() and sameScope(r))
  end
- return after,unitState
+ return after,unitState,charges
 end)
 if ok then
  local outcome=after>r.before and "SPREAD_CORE_CONFIRMED|" or "SPREAD_CORE_UNCHANGED|"
- print(outcome..r.token.."|"..r.id.."|"..r.owner.."|"..r.religion.."|"..r.city.."|"..r.civ.."|"..r.seed.."|"..r.turn.."|"..r.before.."|"..after..(unitState and "|unit_state:"..unitState or ""))
+ print(outcome..r.token.."|"..r.id.."|"..r.owner.."|"..r.religion.."|"..r.city.."|"..r.civ.."|"..r.seed.."|"..r.turn.."|"..r.before.."|"..after..(unitState and "|unit_state:"..unitState or "")..(charges and "|charges_remaining:"..charges or ""))
 else print("SPREAD_CORE_OBSERVED|{token}") end
 print("{SENTINEL}")
 '''
