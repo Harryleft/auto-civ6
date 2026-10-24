@@ -12,6 +12,8 @@
 
 开始时原生 T101、苏美尔暂停交接：苏美尔 3 城／21 人口／180 分，瑞典 5 城／33 人口／234 分；双方均存活且无人获胜。原地图瑞典继承的神级开局奖励保留，不能据此作公平模型排名。
 
+Claude Code 的控制入口已实际启动。其消息 `model` 字段为 `k3.1-pro`，汇总 `modelUsage` 标签为 `claude-opus-5[1m]`；后端模型真实身份未独立核验，不把 CLI 品牌作为模型身份依据。
+
 原始证据在本目录 `evidence/`，默认不提交 Git。
 
 ## T117 升级确认修复
@@ -61,3 +63,25 @@ T181 瑞典领取施洗者约翰（individual 112），原 token `9764de78870349
 `ab4f7eb` 仅为原生 `GREAT_PERSON_CLASS_PROPHET` 且 `MaxPlayerInstances=1` 的领取增加这一确认情形：同一世界／回合／所有者、原请求已返回、唯一新增的指定伟人、原候选关闭及点数保持原值，缺一不可。结果报告 `gp_points_quote:40|gp_points_net_change:0`；其他伟人和赞助／拒绝仍保留既有资源验证。742 项相关测试通过，包含实际 Lua 执行、公共 MCP／GameState、丢回应不重发及身份／候选／单位反例。
 
 经原 token 纯查询取得 `RECRUITED|施洗者约翰|individual:112|gp_points_quote:40|gp_points_net_change:0|unit:3211274` 后，显式归档原共享未决记录，继续实际 Claude Code 的同一回合。没有重发领取、回档或修改资源；本次处理 395.030616 秒计入耗时。证据：`evidence/t181-gp-original-readback.json`、`t181-gp-core-readback.json`、`forward-confirmation181.json`、归档原请求和 `repairs.jsonl`。
+
+## T195 末次传播确认修复
+
+T182 修复后额外另存检查点，SHA-256 `6a8d7e3363e219bf1e30970ccec13d0aeeae6b117f681a40aef172a821bfd3b6`。T186 常规检查点 `dual_endurance_20261024_151635_e1_t186.Civ6Save`，924,150 字节，SHA-256 `273efc8ad06e149ccb6295545aa730011440b6e4c044f75f5d2cd8a478f65b02`，原件与副本已核对。T186 苏美尔 4 城／43 人口／363 分，瑞典 6 城／55 人口／388 分，累计活动耗时约 743.51 分钟。两端均出现过数分钟的模型响应等待，原请求保留，随后自然恢复，未据此重启游戏或重发动作。
+
+T190 瑞典创立新教，原生信条为 `BELIEF_WORK_ETHIC`、`BELIEF_STEWARDSHIP`；T192 双方完成新一届世界议会并正常进入 T193，瑞典获得外交胜利点数奖励。T195 苏美尔 4 城／48 人口／407 分，瑞典 6 城／55 人口／425 分，瑞典外交进度 10/20。原生全局仍未判胜。
+
+瑞典 T195 的传教士 `3342346` 在斯德哥尔摩（城市 `65536`，`18,25`）执行末次传播。原 token `f963bbaf7dee4057819418ccfe8017d4` 的操作开始、地图移除事件及 entered／returned 记录完整，次数 `1 → 0`。InGame 已无原单位，原城市和宗教 8 身份一致；GameCore 仍保留相同 ID／所有者／宗教的对象，`IsDelayedDeath=true`，坐标已移出地图。GameCore 信徒数 `3 → 3`，InGame 压力读数未变，GameCore 压力读取不可用。旧确认规则因未读到压力或信徒增加而保留未知，调度停止。
+
+`f48c8f9` 增加单独结果 `RELIGION_SPREAD_EXECUTED`：仅当末次传播的原生事件、原次数、InGame 移除、同一世界／回合／城市／宗教，以及 GameCore 单位消失或原身份的延迟死亡均成立，才能确认操作已执行。结果明确报告信徒数未增加、压力效果未测量；该版对非末次传播、活着的 Core 对象、身份变化、缺失事件或未知读数继续保留未决。838 项直接相关测试通过，包含延迟死亡对象、已观察身份变化不可恢复、丢回应不重发及公共 MCP／GameState 路径。
+
+原 token 纯查询确认后显式归档原共享请求，实际 Claude Code 沿同一会话继续 T195。没有重发传播、回档或修改资源，处理耗时 555.211946 秒计入总耗时。证据：`evidence/t195-spread-original-readback.json`、`t195-core-unit-absence-diagnostic.json`、`t195-spread-delayed-death-confirmation.json`、`forward-confirmation195.json` 及原未决记录。
+
+## T196 非末次传播确认
+
+T196 检查点 `dual_endurance_20261024_151635_e1_t196.Civ6Save`，949,548 字节，SHA-256 `fc54e086d70a001268dc4d326273878b25f28cfe042d85958467f3fb8fb73dbf`，原件与副本已核对。保存时苏美尔 4 城／48 人口／408 分，瑞典 6 城／55 人口／428 分，累计活动计时约 801.86 分钟。
+
+苏美尔本回合传教士 `3080205` 的原 token `b8f08ecf9a0549ac9a7fe339405050fc` 记录操作开始及 returned=true，原次数 `2 → 1`。原单位仍在 `(42,29)`，GameCore 的 `unit:GetReligion():GetSpreadCharges()` 为 1，ID／所有者／位置／宗教均与原请求匹配；原城市 `327683`、宗教 11 的信徒数 `3 → 3`，压力效果未测量。末次消耗确认分支不能覆盖该情形，调度保留未知。
+
+`e156ec5` 增加活着单位的独立次数凭据：原生操作事件与 InGame 原次数精确递减一枚，须与同一 Core 单位当前次数、身份、位置和宗教一致，才能报告 `RELIGION_SPREAD_EXECUTED`。确认前后复核实体；未知字段不能掩盖已读到的身份变化，恢复旧值不能追认已失效凭据。缺失读数、两端次数不一致、无事件或身份变化仍保留未决。845 项直接相关测试通过。
+
+原 token 纯查询确认后，显式归档原请求，实际 Codex 原会话继续 T196；未重发传播、回档或修改资源，处理耗时 453.175952 秒计入总耗时。证据：`evidence/t196-spread-original-readback.json`、`t196-live-charge-confirmation.json`、`forward-confirmation196.json` 与原未决记录。
