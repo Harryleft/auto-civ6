@@ -155,3 +155,20 @@ def test_terminal_checkpoint_refuses_without_native_save(endurance,monkeypatch,t
     with pytest.raises(RuntimeError,match='no save submitted'):
         asyncio.run(endurance.checkpoint(tmp_path,{'turn':185}))
     assert not (tmp_path/'evidence/coordinator-pending.json').exists()
+
+
+def test_terminal_snapshot_survives_missing_ingame_context(endurance,monkeypatch,tmp_path):
+    terminal={'terminal':True,'turn':200,'local':1,'winner_team':3,'victory_type':'VICTORY_CULTURE','alive':[True,True]}
+    async def status(_):return terminal
+    calls=[]
+    class CoreOnly:
+        async def execute_write(self,code):pytest.fail('terminal snapshot depended on missing InGame context')
+        async def execute_in_named_state(self,name,code):
+            calls.append(name)
+            return ['STAT|0|180|3|21|6|10|38|24','STAT|1|234|5|33|7|100|65|27']
+        async def disconnect(self):pass
+    monkeypatch.setattr(endurance,'GameConnection',CoreOnly)
+    monkeypatch.setattr(endurance,'match_status',status)
+    result=asyncio.run(endurance.snapshot(tmp_path))
+    assert result['match']==terminal and result['phase'] is None and len(result['players'])==2
+    assert calls==['GameCore_Tuner']

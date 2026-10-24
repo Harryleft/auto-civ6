@@ -95,7 +95,7 @@ async def snapshot(run):
     try:
         outcome = await match_status(conn)
         f = None if outcome["terminal"] else await phase(conn)
-        rows = await conn.execute_write('''
+        code = '''
 for id=0,1 do
  local p=Players[id];local pop=0;local units=0
  for _,c in p:GetCities():Members() do pop=pop+c:GetPopulation() end
@@ -103,16 +103,30 @@ for id=0,1 do
  print("STAT|"..id.."|"..p:GetScore().."|"..p:GetCities():GetCount().."|"..pop.."|"..units.."|"..
  p:GetTreasury():GetGoldBalance().."|"..p:GetTechs():GetScienceYield().."|"..p:GetCulture():GetCultureYield())
 end
-''')
+'''
+        # A global win is conclusive even if the terminal screen has already
+        # removed InGame. Its statistics are a separate best-effort read.
+        statistics_error = None
+        if outcome["terminal"]:
+            try:
+                rows = await conn.execute_in_named_state("GameCore_Tuner", code)
+            except Exception as exc:
+                rows = []
+                statistics_error = str(exc)
+        else:
+            rows = await conn.execute_write(code)
         stats = []
         for row in rows:
             if row.startswith("STAT|"):
                 v = row.split("|")
                 stats.append(dict(zip(["seat", "score", "cities", "population", "units", "gold", "science", "culture"], map(float, v[1:]))))
-        if len(stats) != 2:
+        if len(stats) != 2 and not outcome["terminal"]:
             raise ValueError("Incomplete native statistics: " + repr(rows))
-        return {"time": time.time(), "phase": f, "turn": outcome["turn"], "seat": outcome["local"],
-                "players": stats, "match": outcome}
+        result = {"time": time.time(), "phase": f, "turn": outcome["turn"], "seat": outcome["local"],
+                  "players": stats, "match": outcome}
+        if statistics_error:
+            result["statistics_error"] = statistics_error
+        return result
     finally:
         await conn.disconnect()
 
