@@ -1,0 +1,16 @@
+{
+  "baseline": "benchmark_gold_tun_1",
+  "source_sha256": "0d25d557e68b0efbd1aed7e66de9b8434f3a9ac9d321291d45cbe9df83fe3abf",
+  "goal": "native hotseat; Codex Sumeria; actual Claude Code Sweden",
+  "status": "first_round_and_reload_passed",
+  "checkpoint": "dual_hotseat_20261024_084444_t002",
+  "final_turn": 2,
+  "current_seat": 0,
+  "both_human": true,
+  "paused_at_native_handoff": true,
+  "original_save_unchanged": true,
+  "steam_executable_unchanged": true,
+  "claude_session_id": "5dd08216-246d-4885-a7be-a75f2b7057e3",
+  "agent_tests_passed": 14,
+  "long_game_verified": false
+}
