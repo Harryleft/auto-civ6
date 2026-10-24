@@ -9,7 +9,8 @@
 | 任务 | 入口 |
 | --- | --- |
 | 安装依赖、配置 FireTuner 或 MCP 客户端 | [安装与连接](installation.md)；[AI 安装提示词](../README.md#安装与启动) |
-| 查询、常规动作和推进回合 | [游戏操作](agent-playbook.md) |
+| 常用 CLI 命令、参数和会话控制 | [CLI 命令手册](cli.md) |
+| 查询、常规动作和推进回合的规则 | [游戏操作](agent-playbook.md) |
 | 议会、国家间交易、外交对话、强制选择和信息弹窗 | [特殊操作指南](agent-special-operations.md) |
 | 每局必看的六项指标、各胜利路线的先行信号与响应准备 | [策略检查清单](agent-checklist.md) |
 | 扩张、胜利路线和对手预警 | [获胜决策](agent-strategy.md) |
@@ -22,7 +23,7 @@
 | 任务 | 入口 |
 | --- | --- |
 | 代码、测试、提交和文档归档 | [开发与验证](development.md) |
-| 离线诊断、领域子命令、前台调试及自动实机只读验收 | [调试 CLI](cli.md) |
+| 离线诊断、领域子命令、前台调试及自动实机只读验收 | [CLI 命令手册](cli.md) |
 | 状态归属、Lua 和通信机制 | [当前架构](architecture.md) |
 
 ## 规格与验收

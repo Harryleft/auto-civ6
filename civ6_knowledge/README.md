@@ -1,12 +1,12 @@
 # Civ6 本机规则知识
 
-十个主题的本机版本资料，通过 MCP 按需查询；目录可独立复制，备用 CLI 只需 Python 3 标准库。
+十个主题的本机版本资料。项目日常查询使用[CLI 命令手册](../docs/cli.md)中的 `knowledge search/show`，底层通过 MCP 按需读取；目录可独立复制，独立维护 CLI 只需 Python 3 标准库。
 
 ## 查询
 
 ### MCP 查询
 
-规则、前置或机制不清楚时，先搜索名称或内部 ID，再按结果 ID 读取。查询无需游戏启动或客户端文件权限。
+在同一个 `civ6 debug` 或 `debug --offline` 会话中执行 `knowledge search`，再用 `knowledge show` 读取；下表保留底层工具合同。规则、前置或机制不清楚时，先搜索名称或内部 ID，再按结果 ID 读取。查询无需游戏启动或客户端文件权限。
 
 服务器默认定位源码仓库中的 `civ6_knowledge`；非源码安装需将完整目录放在服务器所在机器，并设置服务器环境变量 `CIV6_KNOWLEDGE_DIR` 指向该目录。客户端不传入文件路径。新增工具或更改配置后，重新启动 MCP 服务即可，无需重启游戏。
 
@@ -16,8 +16,8 @@
 | `get_knowledge` | `entry_id`：搜索返回的 ID；`level`：默认 `summary`，可选 `rule`、`evidence` |
 
 ```text
-search_knowledge(query="写作", topic="technologies", limit=5)
-get_knowledge(entry_id="TECH_WRITING", level="rule")
+knowledge search 写作 --topic technologies --limit 5
+knowledge show TECH_WRITING --level rule
 ```
 
 搜索不支持整句语义或全文检索。结果包含总数和截断标记；零命中可换用名称、英文或 ID，不能据此判定规则不存在。`summary` 主要用于确认身份；规划与条件判断读取 `rule`，规则冲突或来源不清时再读取 `evidence`。证据中的 `source_refs` 定位来源表与行。
@@ -26,7 +26,7 @@ get_knowledge(entry_id="TECH_WRITING", level="rule")
 
 ### CLI 备用
 
-CLI 用于备用查询与维护。在知识目录执行；从项目根目录先进入 `civ6_knowledge`。
+下列独立 query.py CLI 用于脱离项目的分发查询和知识包维护；项目内常用查询仍走上面的 civ6 会话。在知识目录执行；从项目根目录先进入 `civ6_knowledge`。
 
 ```sh
 python3 query.py search 写作 --topic technologies --limit 5

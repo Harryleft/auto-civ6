@@ -9,8 +9,9 @@
 
 ## How to get to it (user POV)
 
-- CLI：`python3 civ6_knowledge/query.py search 写作 --topic technologies --limit 5`。
-- MCP：`search_knowledge(query="写作", topic="technologies", limit=5)`，再用搜索所得 ID 调用 `get_knowledge`。
+日常调用遵循[CLI 命令手册](../../../../docs/cli.md)。下文 MCP 工具名只表示底层入口；未封装工具用同一 debug 会话的 `tools`／`call` 调用。
+
+- 在 `civ6 debug --offline` 会话执行 `knowledge search 写作 --topic technologies --limit 5`，再用 `knowledge show TECH_WRITING --level rule`；ID 取自本次搜索。
 - 完整冒烟：从根目录运行 `uv run --locked --no-sync civ6 verify knowledge`。
 
 ## Driving it with CLI and stdio MCP

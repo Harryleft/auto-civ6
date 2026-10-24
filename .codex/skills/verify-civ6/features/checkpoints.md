@@ -9,10 +9,12 @@
 
 ## How to get to it (user POV)
 
-- 保存：`save_game(save_name)`。
-- 正常换档：`reload_game_save(save_name)`。
-- 已在主菜单：`load_game_save(save_name)` 或 `load_save_from_menu(save_name)`；索引入口先 `list_saves()` 再 `load_save(save_index)`。
-- 故障后的完整重启：任务已授权时使用 `restart_and_load(save_name)`。
+日常调用遵循[CLI 命令手册](../../../../docs/cli.md)。下文 MCP 工具名只表示底层入口；未封装工具用同一 debug 会话的 `tools`／`call` 调用。
+
+- 保存：`save create NAME --dry-run`，核实独立名称后明确执行 `save create NAME`。
+- 正常换档：`save reload NAME --dry-run`，核实检查点后明确执行 `save reload NAME`。
+- 已在主菜单：`save load NAME`；辅助入口通过同一会话 `call load_save_from_menu` 调用，按 tools 返回的 schema 传参。
+- 故障后的完整重启：任务已授权时在原会话通过 `call --dry-run restart_and_load` 预演，再显式调用；参数取自已确认检查点和真实 schema。
 
 ## Driving it with civ6 MCP
 

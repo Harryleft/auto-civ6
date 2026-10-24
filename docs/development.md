@@ -50,7 +50,7 @@ CLI 保持可组合：业务结果写 stdout 的 JSON／JSONL，终端提示写 
 
 ## 离线验证
 
-日常诊断可用 `uv run --locked civ6 doctor`，知识完整路径可用 `uv run --locked civ6 verify knowledge`。`civ6 test --list` 显示已登记的定向测试，`civ6 logs` 读取现有动作日志。命令统一输出 JSON 并保留运行证据；`verify state` 是明确的实机路径，不属于离线检查。详见[离线调试 CLI](cli.md)。
+常用调用按 [AGENTS 的 CLI 入口规则](../AGENTS.md#调用入口)执行。日常诊断可用 `uv run --locked civ6 doctor`，知识完整路径可用 `uv run --locked civ6 verify knowledge`。`civ6 test --list` 显示已登记的定向测试，`civ6 logs` 读取现有动作日志。命令统一输出 JSON 并保留运行证据；`verify state` 是明确的实机路径，不属于离线检查。详见[CLI 命令手册](cli.md)。
 
 代码修改只运行受影响模块的测试；由改动范围选择文件，例如交易生命周期修改：
 

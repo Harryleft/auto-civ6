@@ -10,7 +10,9 @@
 
 ## How to get to it (user POV)
 
-- 已连接的 `civ6` MCP：`get_game_overview()`、`get_cities()`、`get_units()`。
+日常调用遵循[CLI 命令手册](../../../../docs/cli.md)。下文 MCP 工具名只表示底层入口；未封装工具用同一 debug 会话的 `tools`／`call` 调用。
+
+- 持续 CLI 会话：`state overview`、`city list`、`unit list`。
 - 已授权且已有唯一活动现场：`uv run --locked civ6 verify state --expect-turn TURN --expect-civilization CIVILIZATION_ID` 自动执行有界只读验收；前台会话内可用 `verify state` 复用当前上下文。完整命令及范围见[调试 CLI](../../../../docs/cli.md#自动实机只读验收)。
 - 安装连接入口见[安装与连接](../../../../docs/installation.md)，只有任务要求启动游戏时才进入启动流程。
 

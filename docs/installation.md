@@ -4,7 +4,9 @@
 
 ## 依赖与客户端
 
-需要 Python 3.12+、[uv](https://docs.astral.sh/uv/)、支持 stdio 的 MCP 客户端，以及 Steam 版《文明 VI：风云变幻》。已有项目目录时直接复用；首次下载和安装依赖：
+日常操作入口为[项目 CLI](cli.md)：安装依赖后运行 `uv run --locked civ6 doctor`，连续游戏操作运行 `uv run --locked civ6 debug`。CLI 自行启动底层 MCP，日常使用无需额外启用客户端内置 MCP。下方配置保留给 MCP 协议接入；它与 CLI 不能同时控制一个游戏。
+
+需要 Python 3.12+、[uv](https://docs.astral.sh/uv/) 和 Steam 版《文明 VI：风云变幻》。项目 CLI 内置 stdio MCP 客户端，额外客户端仅用于下方协议接入。已有项目目录时直接复用；首次下载和安装依赖：
 
 ```sh
 git clone https://github.com/Harryleft/auto-civ6.git
@@ -51,9 +53,9 @@ Claude Code 的项目配置参考仓库 [.mcp.json](../.mcp.json)；其他客户
 
 ## 连接验收
 
-1. 游戏未运行时按任务授权使用 `launch_game`；已有游戏时保留现场，先只读核对连接。
+1. 在同一 `civ6 debug` 会话中，游戏未运行时按任务授权使用 `call launch_game {}`；已有游戏时保留现场，先只读核对连接。
 2. 确认 FireTuner 在 `127.0.0.1:4318` 可连接；端口打开只证明连接可用，不证明已加载正确对局。保持单一活动控制客户端。
 3. 主菜单中只加载用户指定存档；尚未指定时先询问。已有对局不为测试连接重新读档。
-4. 调用 `get_game_overview`，核对文明、回合和当前状态，再按需读取城市、单位。安装任务到此完成；推进回合另按用户指令执行。
+4. 在该会话运行 `state overview`（`get_game_overview`），核对文明、回合和当前状态，再按需读取城市、单位。安装任务到此完成；推进回合另按用户指令执行。
 
 缺少 Steam、游戏、权限或客户端重载能力时，报告具体所需操作。离线规则知识查询不需要启动游戏，见[知识 MCP](../civ6_knowledge/README.md#mcp-查询)。

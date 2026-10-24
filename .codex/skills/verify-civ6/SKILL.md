@@ -5,7 +5,7 @@ description: 验证 civ6 项目的知识 CLI、真实 stdio MCP、游戏状态�
 
 # 验证 Civ6 MCP
 
-主操作面是本机 stdio MCP，备用操作面是知识 CLI。先读[功能地图](features/README.md)，只选择本次改动或验收目标涉及的功能。项目边界以 [AGENTS.md](../../../AGENTS.md) 和[开发与验证](../../../docs/development.md)为准。
+主操作面是[项目 CLI](../../../docs/cli.md)，底层为本机 stdio MCP；连续游戏查询与动作保留在同一 debug 会话。先读[功能地图](features/README.md)，只选择本次改动或验收目标涉及的功能。项目边界以 [AGENTS.md](../../../AGENTS.md) 和[开发与验证](../../../docs/development.md)为准。
 
 ## 选择验证范围
 
@@ -25,7 +25,7 @@ description: 验证 civ6 项目的知识 CLI、真实 stdio MCP、游戏状态�
 uv run --locked --no-sync civ6 verify knowledge
 ```
 
-命令使用当前知识包，默认新建 `.scratch/civ6/<run_id>/` 保存证据；`--output` 可指定一个尚不存在的目录。它只调用 `search_knowledge` 和 `get_knowledge`，不调用任何游戏工具。参数、领域测试及日志命令见[离线调试 CLI](../../../docs/cli.md)。
+命令使用当前知识包，默认新建 `.scratch/civ6/<run_id>/` 保存证据；`--output` 可指定一个尚不存在的目录。它只调用 `search_knowledge` 和 `get_knowledge`，不调用任何游戏工具。参数、领域测试及日志命令见[CLI 命令手册](../../../docs/cli.md)。
 
 实机路径按[安装与连接](../../../docs/installation.md)和[保存与恢复](../../../docs/agent-recovery.md)启动。复用唯一活动控制客户端；只有任务已授权新开测试及替换现场，才加载指定[受信原始基准](../../../fixtures/saves/README.md)。续测只加载本轮已确认检查点。独立 worktree 不能隔离同一个游戏或 FireTuner 端口。
 
@@ -39,11 +39,11 @@ uv run --locked --no-sync civ6 doctor
 
 缺依赖、包路径错误或知识指纹不符时停止该路径，保留错误原文。修复依赖按 `uv sync --locked`；知识包维护使用已有快照在新目录构建、比较差异后处理，不能用 `capture.py` 自动读取本机来源、刷新指纹掩盖未知差异。
 
-实机 doctor 先调用 `get_game_overview`，再按配方读取 `get_units`、`get_cities` 或 `get_turn_status`。核对任务要求的世界身份、回合、玩家及就绪状态；端口可连接不能证明加载了正确对局。怀疑连接或状态异常时重做只读诊断，不自动重启或释放门禁。
+实机诊断在原 CLI 会话先用 `state overview`，再按配方用 `unit list`、`city list` 或 `turn status`；无其他控制会话时也可运行 `civ6 verify state` 做独立只读验收。核对任务要求的世界身份、回合、玩家及就绪状态；端口可连接不能证明加载了正确对局。怀疑连接或状态异常时重做只读诊断，不自动重启或释放门禁。
 
 ## Drive
 
-动作必须经过真实 CLI 或公开 MCP 工具；不使用 `run_lua`、内部 setter 或改写未决状态来制造成功。按地图选择具体入口并记录实参。实机动作的实体 ID、地块及目标来自本轮真实查询。
+动作统一通过同一 `civ6 debug` 的命名命令或 `call` 进入公开 MCP 工具；不使用 `run_lua`、内部 setter 或改写未决状态来制造成功。按地图选择具体入口并记录实参。实机动作的实体 ID、地块及目标来自本轮真实查询。
 
 离线回归按影响范围选择，逐项保留命令、输出和退出码；下表不要求一次全跑。
 

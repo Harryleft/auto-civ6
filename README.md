@@ -14,7 +14,7 @@
 
 ## AI 如何玩这局游戏
 
-`civ6-mcp` 通过 stdio 接入 MCP 客户端，通过本机 FireTuner 连接 Civilization VI。
+`civ6` CLI 是日常调用入口，前台 `debug` 会话通过同一个 stdio MCP 进程、本机 FireTuner 连接 Civilization VI。
 
 模型负责策略，游戏引擎执行规则，运行层负责查询、提交动作与确认结果。
 
@@ -27,14 +27,14 @@
 将下面这段提示词复制给 **Codex 或 Claude Code**：
 
 ```text
-请帮我在本机安装并启动 https://github.com/Harryleft/auto-civ6，让我能在当前 Codex 或 Claude Code 中通过 MCP 操作《文明 VI：风云变幻》。先识别操作系统并检查已有环境；如果项目已在本地，复用现有目录。阅读 AGENTS.md 和 docs/installation.md，完成依赖安装、当前客户端的 civ6 MCP 配置、FireTuner 配置及游戏启动，保留其他已有配置和存档。需要重启或换档时遵循 docs/agent-recovery.md，仅加载我指定的存档，未指定时先问我。载入后调用 get_game_overview 验证连接与当前对局，确认后停下，不推进回合。缺少 Steam、游戏或必须由我完成的权限操作时，明确告诉我需要做什么；最后报告实际完成情况和剩余阻碍。
+请帮我在本机安装并启动 https://github.com/Harryleft/auto-civ6，让我能在当前 Codex 或 Claude Code 中通过项目 civ6 CLI 操作《文明 VI：风云变幻》。先识别操作系统并检查已有环境；如果项目已在本地，复用现有目录。阅读 AGENTS.md、docs/cli.md 和 docs/installation.md，完成依赖安装、CLI 与 FireTuner 检查及已授权的游戏启动，保留其他已有配置和存档。需要重启或换档时遵循 docs/agent-recovery.md，仅加载我指定的存档，未指定时先问我。在同一个 civ6 debug 会话中通过 state overview 验证载入后的连接与当前对局，确认后停下，不推进回合。缺少 Steam、游戏或必须由我完成的权限操作时，明确告诉我需要做什么；最后报告实际完成情况和剩余阻碍。
 ```
 
 [安装与连接参考](docs/installation.md)
 
-## 离线调试
+## CLI 使用
 
-在项目目录执行 `uv sync --locked`，然后使用 `uv run --locked civ6 doctor` 检查环境、知识包与 MCP 协议，使用 `uv run --locked civ6 verify knowledge` 验证知识查询。这些入口及领域测试、日志查询统一输出 JSON 并保留离线证据。完整命令见[调试 CLI](docs/cli.md)。
+在项目目录执行 `uv sync --locked`，然后使用 `uv run --locked civ6 doctor` 检查环境、知识包与 MCP 协议，使用 `uv run --locked civ6 verify knowledge` 验证知识查询。这些入口及领域测试、日志查询统一输出 JSON 并保留离线证据。顶层入口、会话控制和 43 个领域子命令统一见[CLI 命令手册](docs/cli.md)。
 
 前台调试使用 `uv run --locked civ6 debug`，在同一 MCP 进程中查询状态、查看 pending、使用领域子命令和显式调用工具；`debug --offline` 只允许知识查询与服务内存检查。已授权的实机只读验收可用 `uv run --locked civ6 verify state`，不会加载存档、执行动作或推进回合。实机操作按当前任务授权和存档规则执行，详见[会话说明](docs/cli.md#前台-debug-会话)。
 

@@ -9,8 +9,10 @@
 
 ## How to get to it (user POV)
 
-- `get_units()`、`get_map_area(center_x, center_y, radius)`、`get_pathing_estimate(unit_id, target_x, target_y)` 获取本次对象和候选。
-- `unit_action(unit_id, action="move", target_x, target_y)` 发出已授权的移动。
+日常调用遵循[CLI 命令手册](../../../../docs/cli.md)。下文 MCP 工具名只表示底层入口；未封装工具用同一 debug 会话的 `tools`／`call` 调用。
+
+- `unit list`、`map area X Y --radius N`、`unit path ID X Y` 获取本次对象和候选。
+- `unit move ID X Y --dry-run` 预演，核实目标后明确执行 `unit move ID X Y`。
 - 其他动作的资格与原生证据按[游戏操作](../../../../docs/agent-playbook.md#动作与回读)选择对应入口。
 
 ## Driving it with civ6 MCP

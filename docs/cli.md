@@ -1,20 +1,29 @@
-# 调试 CLI
+# CLI 命令手册
 
-`civ6` 提供离线诊断、验证、测试、日志查询，以及前台 `debug` 会话。`doctor`、`verify knowledge`、`test` 和 `logs` 不连接 FireTuner；`verify state` 明确访问当前真实游戏，`debug` 在收到查询或工具调用时访问游戏。`civ-mcp` 仍是游戏 MCP 服务入口。
+本页是项目日常调用的唯一命令目录，涵盖顶层命令、会话控制及 43 个领域子命令。`civ6` 提供离线诊断、验证、测试、日志查询，以及前台 `debug` 会话。`doctor`、`verify knowledge`、`test` 和 `logs` 不连接 FireTuner；`verify state` 明确访问当前真实游戏，`debug` 在收到查询或工具调用时访问游戏。`civ-mcp` 仍是游戏 MCP 服务入口。
 
 ## 安装与调用
 
 在源码项目根目录运行 `uv sync --locked`，然后使用 `uv run --locked civ6 ...`。也可使用同一解释器运行 `python -m civ_mcp.cli ...`。CLI 从当前目录向上查找项目，再尝试安装它的源码目录；使用 `--project PATH` 明确指定另一检出。doctor、知识验证及领域测试会拒绝加载了另一检出代码的解释器。
 
+日常操作按以下路径执行：一次性诊断／验证／日志走顶层命令，连续游戏操作先启动一个 `civ6 debug` 并持续使用其 stdin。已有游戏控制会话时，在原会话内执行命令；不要为每个动作重启 CLI，也不要另开内置 MCP 并发控制。未封装的公开工具仍用同一会话的 `tools NAME` 和 `call TOOL JSON_OBJECT` 调用。CLI 缺依赖或报错时按错误建议修复，不绕过 CLI 直接调用内部函数或 Lua。
+
+| 公共参数 | 说明 |
+| --- | --- |
+| `--project PATH` | 指定源码检出；默认从 cwd 向上发现，再尝试安装源码位置。 |
+| `--output PATH` | 新建证据目录；路径必须尚不存在，且不位于知识目录内。 |
+| `--json` | 结果默认已是 JSON；与 `--help` 合用时返回机器可读帮助。 |
+| `--help` | 显示当前层级帮助，不启动 MCP、不操作游戏。 |
+
 默认知识目录是所选项目的 `civ6_knowledge`。doctor 和知识验证可用 `--knowledge-dir PATH` 指定完整知识包；未采集本机游戏来源，不使用 `CIV6_KNOWLEDGE_DIR` 的隐含值选择验证对象。
 
-## 命令
+## 顶层命令
 
 ```sh
 uv run --locked civ6 doctor
 uv run --locked civ6 debug --offline
 uv run --locked civ6 verify knowledge
-uv run --locked civ6 verify state --expect-turn 136 --expect-civilization CIVILIZATION_SWEDEN
+uv run --locked civ6 verify state
 uv run --locked civ6 test --list
 uv run --locked civ6 test actions
 uv run --locked civ6 test knowledge --collect-only
@@ -31,11 +40,25 @@ uv run --locked civ6 logs timeline --file .scratch/action-sample.jsonl --since 2
 | `doctor` | 检查 Python、实际代码目录、运行依赖、开发依赖、知识包完整性、真实 stdio MCP 初始化及工具发现；不调用游戏工具。缺少 pytest 或 lupa 记 `NOT_RUN`，不阻止知识路径。 |
 | `verify knowledge` | 使用当前知识包验证搜索「写作」及 `TECH_WRITING` 的摘要、规则、证据读取；比较 CLI 与真实 MCP 返回，保留静态适用范围，核对知识文件未变。 |
 | `verify state` | 对已运行游戏执行有界只读验收，核对世界身份、玩家／回合、实体数量与范围、同一 MCP 进程和无未决上下文；不启动、加载或推进游戏。 |
+| `debug [--offline] [--timeout SECONDS]` | 启动一个前台 MCP 会话；从 stdin 接收会话命令，持续保留 pending。`--offline` 拒绝真实游戏调用。 |
 | `test --list` | 显示领域与测试文件，不运行测试。 |
-| `test <领域>` | 只执行显式登记的 `tests/` 文件，返回 pytest 原始退出码及证据。`--collect-only` 只验证收集，`data.collection_only=true`，不代表测试用例已通过。 |
+| `test <领域>` | 只执行显式登记的 `tests/` 文件，pytest 原始退出码保留在 data.pytest_exit_code，CLI 自身使用下文统一退出码。`--collect-only` 只验证收集，`data.collection_only=true`，不代表测试用例已通过。 |
 | `logs list` | 列出动作日志文件，按修改时间从新到旧排序；目录尚不存在时返回空列表。 |
 | `logs show` | 保留文件顺序，返回最后 N 条匹配记录；按工具、结果子串、起止时间过滤。 |
 | `logs timeline` | 返回时间最新的 N 条匹配记录，并按时间升序排列；不把日志文字解释为提交、确认或门禁状态。 |
+
+### 顶层选项
+
+| 命令 | 专用参数 |
+| --- | --- |
+| `doctor`、`verify knowledge` | `--knowledge-dir PATH`：完整知识包，默认 PROJECT/civ6_knowledge。 |
+| `verify state` | `--expect-turn TURN`、`--expect-civilization CIVILIZATION_ID` 约束预期现场；`--timeout SECONDS` 为单次 RPC 预算，默认 300 秒。 |
+| `debug` | `--offline` 禁止游戏调用；`--timeout SECONDS` 为单次 RPC 预算，默认 300 秒。 |
+| `test` | DOMAIN 或 `--list`；`--collect-only` 只收集，`--timeout SECONDS` 为测试子进程预算（默认 300 秒）；pytest 选项放在 `--` 后。`--list` 不与领域或收集／运行选项组合。 |
+| `logs list` | `--dir PATH` 指定动作日志目录；`--limit N` 默认 20，范围 1～1000。 |
+| `logs show`、`logs timeline` | SESSION 或 `--file PATH` 二选一；`--dir PATH`、`--limit N`（默认 50）、`--tool NAME`、`--contains TEXT`、`--since TIME`、`--until TIME`。多个过滤条件按 AND 组合，contains 是 result 内的字面子串，时间含时区且边界包含。 |
+
+所有 timeout 必须是有限正数。日志默认目录为 `~/.civ6-mcp/actions/`，查询只读取现有文件，不跟随新日志。
 
 领域登记在 `src/civ_mcp/devtools/testing.py`：`debug`、`knowledge`、`actions`、`turns`、`checkpoints`、`diplomacy`、`connection`。`civ6 test debug` 使用真实 stdio 和隔离的引擎替身验证会话，不访问游戏。这是定向回归集合，不承诺覆盖该领域所有行为；修改影响范围超出集合时按[开发与验证](development.md)追加直接相关测试。
 
@@ -81,66 +104,107 @@ COMMANDS
 
 ## 会话内领域子命令
 
-以下命令在 `civ6 debug` 的 stdin 中运行，全部复用当前会话及既有 Runtime。用 `help unit` 或 `unit --help` 发现直接子命令，再用 `unit move --help` 查看参数、示例和副作用范围。带空格的参数使用引号；参数不经过 shell 展开。
+以下命令输入到已启动的 `civ6 debug` 会话，不是在 shell 中执行 `civ6 unit ...`。带空格的参数加引号，参数不经过 shell 展开。先用 `help`、`help unit`、`unit --help` 逐层发现，再用 `unit move --help` 查看实参。
 
-| 命令组 | 子命令 | 对应工具 |
+表中「变更」命令均先加 `--dry-run` 预演，核实目标后再明确执行原命令；参数仍由真实 MCP schema 和 Runtime 校验。「只读」不等同无确认影响：普通实体查询可能顺带确认原动作；`pending` 仅看内存，`state snapshot` 则遇任一 pending 就拒绝进入游戏 I/O。
+
+### 单位
+
+| 会话命令 | MCP 工具 | 模式 |
 | --- | --- | --- |
-| `unit` | `list`、`move ID X Y`、`action ID ACTION [--x X --y Y] [--improvement TYPE]` | `get_units`、`unit_action` |
-| `city` | `list`、`production ID`、`set-production ID TYPE NAME [--x X --y Y]` | `get_cities`、`get_city_production`、`set_city_production` |
-| `research` | `show`、`set ID [--category CATEGORY]` | `get_tech_civics`、`set_research` |
-| `turn` | `status`、`end` | `get_turn_status`、`end_turn` |
-| `save` | `list`、`create NAME`、`reload NAME`、`load NAME` | `list_saves`、`save_game`、`reload_game_save`、`load_game_save` |
-| `knowledge` | `search QUERY [--topic TOPIC] [--limit N]`、`show ID [--level LEVEL]` | `search_knowledge`、`get_knowledge` |
+| `unit list` | `get_units` | 只读 |
+| `unit move ID X Y` | `unit_action`，action=move | 变更 |
+| `unit action ID ACTION [--x X --y Y] [--improvement TYPE]` | `unit_action` | 变更 |
+| `unit attack ID X Y` | `unit_action`，action=attack | 变更 |
+| `unit skip ID` | `unit_action`，action=skip | 变更 |
+| `unit fortify ID` | `unit_action`，action=fortify | 变更 |
+| `unit heal ID` | `unit_action`，action=heal | 变更 |
+| `unit improve ID IMPROVEMENT_TYPE` | `unit_action`，action=improve | 变更 |
+| `unit skip-remaining` | `skip_remaining_units` | 变更 |
+| `unit promotions ID` | `get_unit_promotions` | 只读 |
+| `unit promote ID PROMOTION_TYPE` | `promote_unit` | 变更 |
+| `unit upgrade ID` | `upgrade_unit` | 变更 |
+| `unit path ID X Y` | `get_pathing_estimate` | 只读 |
+| `unit tasks` | `get_builder_tasks` | 只读 |
 
-`CATEGORY` 为 `tech` 或 `civic`，`LEVEL` 为 `summary`、`rule` 或 `evidence`。所有变更子命令支持末尾 `--dry-run`；参数先转换为对应公开工具的原生字段，再复用同一 schema 校验、offline 限制、进程身份核对、传输未知门禁和证据记录。没有批量动作、自动处理阻塞或透明重试。`call` 仍可访问其余工具，不需要为发现全部工具一次性展开参数。
+`ID` 是本次查询返回的原生单位 ID；坐标、晋升和改良类型取自当前事实。升级消耗金币／资源及行动力；`skip-remaining` 只处理当前就绪单位，保留既有站立指令。其余动作可用 `unit action`，动作名称与条件通过 `tools unit_action` 发现。
 
-`save create` 可能覆盖同名普通存档，必须使用独立名称；`save reload` 丢失保存后现场，`save load` 仅从主菜单加载。原有生命周期工具的文件系统回退当前只扫描 Single 存档，不能据此声明 Hotseat 恢复可用。`turn end` 是普通游戏工具，不替代双 AI 热座轮次的专用席位交接流程。
+### 城市
+
+| 会话命令 | MCP 工具 | 模式 |
+| --- | --- | --- |
+| `city list` | `get_cities` | 只读 |
+| `city production ID` | `get_city_production` | 只读 |
+| `city set-production ID TYPE NAME [--x X --y Y]` | `set_city_production` | 变更 |
+| `city attack ID X Y` | `city_action`，action=attack | 变更 |
+| `city district ID DISTRICT_TYPE` | `get_district_advisor` | 只读 |
+| `city focus ID FOCUS` | `set_city_focus` | 变更 |
+| `city buy ID TYPE NAME [--yield YIELD_TYPE]` | `purchase_item` | 变更 |
+
+生产 `TYPE` 为 `UNIT`、`BUILDING`、`DISTRICT` 或 `PROJECT`，购买仅支持前两者。`YIELD_TYPE` 为 `YIELD_GOLD` 或 `YIELD_FAITH`，默认金币。`FOCUS` 为 `food`、`production`、`gold`、`science`、`culture`、`faith`、`default`，default 清空焦点。`--x` 和 `--y` 须成对提供；候选、费用、人口限制和建造资格仍以当前查询和原生引擎为准。
+
+### 研究、回合与存档
+
+| 会话命令 | MCP 工具 | 模式 |
+| --- | --- | --- |
+| `research show` | `get_tech_civics` | 只读 |
+| `research set ID [--category CATEGORY]` | `set_research` | 变更 |
+| `turn status` | `get_turn_status` | 只读 |
+| `turn end` | `end_turn` | 变更 |
+| `save list` | `list_saves` | 只读 |
+| `save create NAME` | `save_game` | 变更 |
+| `save reload NAME` | `reload_game_save` | 变更 |
+| `save load NAME` | `load_game_save` | 变更 |
+
+`CATEGORY` 为 tech（默认）或 civic，研究 `ID` 为本次候选的原生类型。`save create` 可能覆盖同名普通存档，须使用独立名称；`save reload` 会丢失保存后现场，`save load` 仅从主菜单加载。文件系统存档回退当前只扫描 Single，不能据此声明 Hotseat 恢复可用。`turn end` 不替代双 AI 热座专用席位交接；热座沿用任务指定控制器及轮次记录，不并行另开 CLI 控制它。
+
+### 地图、胜利与知识
+
+| 会话命令 | MCP 工具 | 模式 |
+| --- | --- | --- |
+| `map area X Y [--radius N]` | `get_map_area` | 只读 |
+| `victory show` | `get_victory_progress` | 只读 |
+| `knowledge search QUERY [--topic TOPIC] [--limit N]` | `search_knowledge` | 静态只读 |
+| `knowledge show ID [--level LEVEL]` | `get_knowledge` | 静态只读 |
+
+地图半径默认 2、范围 1～4，越界直接拒绝。知识搜索 limit 默认 5、范围 1～20；LEVEL 为 summary（默认）、rule 或 evidence。静态规则不证明本局资格；迷雾、未知和不存在仍须区分。知识查询也可在 `debug --offline` 内执行。
+
+### 政策、城邦与总督
+
+| 会话命令 | MCP 工具 | 模式 |
+| --- | --- | --- |
+| `policy show` | `get_policies` | 只读 |
+| `policy set SLOT=POLICY_ID [SLOT=POLICY_ID ...]` | `set_policies` | 变更 |
+| `city-state list` | `get_city_states` | 只读 |
+| `city-state envoy PLAYER_ID` | `send_envoy` | 变更 |
+| `governor list` | `get_governors` | 只读 |
+| `governor appoint TYPE` | `appoint_governor` | 变更 |
+| `governor assign TYPE CITY_ID [--owner PLAYER_ID]` | `assign_governor` | 变更 |
+| `governor promote TYPE PROMOTION_TYPE` | `promote_governor` | 变更 |
+
+政策槽位可用空格或逗号分隔，NONE 显式清空，未指定槽位保持原值；格式错误和重复槽位在发送前拒绝。城邦 player ID、总督类型及晋升均先查询；owner 省略时取本地玩家，显式 owner 为 0～63。政策、使者、任命和晋升可能消耗金币、使者或总督头衔，实际资格由引擎决定。
+
+### 议会与通知
+
+| 会话命令 | MCP 工具 | 模式 |
+| --- | --- | --- |
+| `congress show` | `get_world_congress` | 只读 |
+| `notifications show` | `get_notifications` | 只读 |
+
+议会查询不打开投票、不提交票单；通知查询不关闭弹窗或代答外交。未封装的票单、交易、宗教等公开工具按下节 `tools NAME` 与 `call` 执行，保持同一会话。机制及确认条件仍见[游戏操作](agent-playbook.md)、[特殊操作](agent-special-operations.md)和[保存恢复](agent-recovery.md)。
+
+### 最小调用顺序
 
 ```text
 state overview
 unit list
-unit move 851974 27 23 --dry-run
-city production 65536
-research show
-turn status
-save create my_new_checkpoint --dry-run
 knowledge search 写作 --limit 5
 knowledge show TECH_WRITING --level rule
-verify state
 pending
 quit
 ```
 
-## 高频操作快捷入口
-
-以下仍是 `civ6 debug` 会话内子命令，复用同一 MCP。先用当前查询确定实体和坐标；所有变更命令支持 `--dry-run`。选择依据与频次口径见[历史操作覆盖检查](acceptance/2026-10-24-cli-frequency.md)。
-
-| 任务 | 会话命令 |
-| --- | --- |
-| 地图与胜利 | `map area X Y [--radius N]`、`victory show` |
-| 单位常用动作 | `unit attack ID X Y`、`unit skip ID`、`unit fortify ID`、`unit heal ID`、`unit improve ID IMPROVEMENT_TYPE`、`unit skip-remaining` |
-| 单位诊断与升级 | `unit path ID X Y`、`unit tasks`、`unit promotions ID`、`unit promote ID PROMOTION_TYPE`、`unit upgrade ID` |
-| 城市 | `city attack ID X Y`、`city district ID DISTRICT_TYPE`、`city focus ID FOCUS`、`city buy ID TYPE NAME [--yield YIELD_TYPE]` |
-| 政策 | `policy show`、`policy set SLOT=POLICY_ID [SLOT=POLICY_ID ...]` |
-| 城邦与总督 | `city-state list`、`city-state envoy PLAYER_ID`、`governor list`、`governor appoint TYPE`、`governor assign TYPE CITY_ID [--owner PLAYER_ID]`、`governor promote TYPE PROMOTION_TYPE` |
-| 议会与通知 | `congress show`、`notifications show` |
-
-地图半径限定 1～4，默认 2，越界参数直接拒绝。`policy set` 接受空格或逗号分隔的显式槽位，`NONE` 表示清空；格式错误或重复槽位在发送前拒绝，未指定槽位保持原值。城市购买的 `TYPE` 为 `UNIT` 或 `BUILDING`，`YIELD_TYPE` 为 `YIELD_GOLD` 或 `YIELD_FAITH`，默认金币；资格及费用仍由引擎判断。治理、使者和升级均可能消耗资源或改变配置，先查询再预演。
-
-`congress show` 不打开投票、不提交票单；`notifications show` 不关闭弹窗或代选外交回应。其余议会／外交操作继续通过 `tools NAME` 与 `call` 显式调用。双 AI 热座的 begin/end 专用席位入口仍由原控制器管理，不能用普通 `turn end` 替代。
-
-```text
-map area 23 20 --radius 1
-unit promotions 1835008
-unit upgrade 1835008 --dry-run
-city district 327684 DISTRICT_COMMERCIAL_HUB
-policy show
-policy set 0=POLICY_CONSCRIPTION 1=POLICY_LIMITANEI --dry-run
-governor list
-congress show
-```
-
-以上实体和坐标仅为参数形式示例，实操须替换为本次查询所得值。
+所有实体 ID、坐标和选择均取自本次查询；命令表只定义语法。历史频次与 CLI 化选择依据见[覆盖检查](acceptance/2026-10-24-cli-frequency.md)，不作为当前现场参数。
 
 ## 副作用预演
 
@@ -154,21 +218,18 @@ congress show
 
 运行 `uv run --locked civ6 debug` 后，整个前台会话只启动一个 MCP 子进程、初始化一次、使用同一个 ClientSession。启动只发现工具并读取服务内存，不自动查询、启动或加载游戏。退出不调用 `kill_game`。该命令不会接管已有 Codex MCP 的进程或未决请求；实机调试前须明确交接唯一控制通道，不能同时由两者控制游戏。
 
-以下是会话内命令，写在终端输入或 stdin 中，不是独立 shell 命令：
+会话控制命令如下；它们不是独立 shell 子命令：
 
-```text
-help
-tools unit_action
-pending
-state overview
-state units
-state cities
-state turn
-state snapshot
-call get_units {}
-pending
-quit
-```
+| 会话命令 | 行为 |
+| --- | --- |
+| `help [TOPIC]`、`TOPIC --help` | 分层帮助，返回 JSON 事件。 |
+| `tools [NAME]` | 列工具名，或读取一个工具的真实输入 schema。 |
+| `pending` | 读取本 MCP 的内存 pending 与本地 transport_unknown。 |
+| `state overview`、`state units`、`state cities`、`state turn`、`state snapshot` | 概览、单位、城市、回合与结构化快照。 |
+| `verify state` | 在当前会话执行自动实机只读验收。 |
+| `call [--dry-run] TOOL [JSON_OBJECT]` | 未封装工具的统一调用入口；省略 JSON 等同 {}。 |
+| `quit [--abandon] [--dry-run]` | 正常退出、预览退出或显式放弃上下文。 |
+
 
 `state` 是对应公开 MCP 查询的别名，`state snapshot` 返回结构化当前玩家快照。`call TOOL JSON_OBJECT` 只调用工具列表中实际存在的入口；省略参数等同 `{}`。JSON 不能有重复键、NaN 或 Infinity。CLI 按实际发现的 `inputSchema` 在发送前校验参数，MCP 仍执行服务端校验；动作确认与门禁仍由现有 Runtime 所有者处理；CLI 不调用内部 setter 或清理未决状态。使用实体 ID 和坐标前须先查询真实状态。
 

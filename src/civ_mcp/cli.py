@@ -83,7 +83,7 @@ def parser() -> Parser:
         epilog="Example: civ6 doctor --knowledge-dir civ6_knowledge. Missing optional dev dependencies are NOT_RUN.")
     common(doctor)
     doctor.add_argument("--knowledge-dir", help="Complete knowledge package; default PROJECT/civ6_knowledge")
-    verify = commands.add_parser("verify", help="Verify a real offline user path", description="Choose a feature to verify; use civ6 verify FEATURE --help for its contract.")
+    verify = commands.add_parser("verify", help="Verify knowledge offline or inspect a live game", description="Choose a feature to verify; use civ6 verify FEATURE --help for its contract.")
     common(verify)
     verification = verify.add_subparsers(dest="feature", required=True)
     knowledge = verification.add_parser("knowledge", help="Compare CLI and MCP knowledge responses",

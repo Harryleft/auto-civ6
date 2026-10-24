@@ -9,8 +9,10 @@
 
 ## How to get to it (user POV)
 
-- MCP：`get_game_overview()` → `end_turn()` → 按返回调用 `get_turn_status()` 或具体领域工具。
-- 现有真实 stdio 驱动：`uv run --locked python scripts/integration_turns.py --save benchmark_turn_1 --turns 1 --timeout 900`。
+日常调用遵循[CLI 命令手册](../../../../docs/cli.md)。下文 MCP 工具名只表示底层入口；未封装工具用同一 debug 会话的 `tools`／`call` 调用。
+
+- 同一 CLI 会话：`state overview` → `turn end --dry-run` → 明确执行 `turn end` → 按返回用 `turn status` 或具体领域命令。
+- 仅用于指定原始基准专项验收的现有驱动（不是日常回合入口）：`uv run --locked python scripts/integration_turns.py --save benchmark_turn_1 --turns 1 --timeout 900`。
 
 ## Driving it with civ6 MCP
 

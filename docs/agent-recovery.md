@@ -2,6 +2,8 @@
 
 保存、加载、断线、挂起或结果未知时读取本指南。新测试核对[受信原始基准](../fixtures/saves/README.md)及其 JSON 清单；日常动作流程见[游戏操作](agent-playbook.md)，具体交互待办见[特殊操作指南](agent-special-operations.md)。
 
+MCP 工具名保留用于定义确认语义，实际调用走同一 [CLI 会话](cli.md)：普通保存／重载／菜单加载使用 `save create/reload/load`，未封装的恢复工具经 `tools NAME`、`call` 调用。结果未知期间保持原进程，不通过新 CLI 会话绕过 pending。
+
 ## 选择入口
 
 先核对当前任务的授权、是否有未决操作，以及目标检查点的来源。菜单换档与完整重启都会丢失保存后的操作。
