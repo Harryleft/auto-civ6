@@ -781,9 +781,24 @@ end
 """
 
 
+_LUA_ATTACK_VISIBILITY = '''
+local function attackTargetVisibility(owner,x,y)
+    local ok,visible=pcall(function() return PlayersVisibility[owner]:IsVisible(x,y) end)
+    if not ok or type(visible)~="boolean" then return nil end
+    return visible
+end
+'''
+
+
 def build_attack_unit(unit_index: int, target_x: int, target_y: int) -> str:
     return f"""
 {_lua_get_unit(unit_index)}
+{_LUA_ATTACK_VISIBILITY}
+-- Another friendly action can remove sight after the model's last query.
+-- Native Map objects / MOVE_TO eligibility do not prove current visibility.
+local targetVisible=attackTargetVisibility(me,{target_x},{target_y})
+if targetVisible==nil then {_bail("ERR:TARGET_VISIBILITY_UNKNOWN|Current target visibility unavailable; no attack submitted.")} end
+if not targetVisible then {_bail("ERR:TARGET_NOT_VISIBLE|Target is no longer visible; no attack submitted.")} end
 {_LUA_ATTACK_MODE}
 {_LUA_MELEE_ELIGIBILITY}
 local mode, unitInfo, attackRange = classifyUnitAttack(unit)
@@ -982,9 +997,13 @@ def build_combat_estimate_query(unit_index: int, target_x: int, target_y: int) -
     """
     return f"""
 {_lua_get_unit(unit_index)}
+{_LUA_ATTACK_VISIBILITY}
 {_LUA_ATTACK_MODE}
 {_LUA_MELEE_ELIGIBILITY}
 local function preview()
+    local visible=attackTargetVisibility(me,{target_x},{target_y})
+    if visible==nil then return "ESTIMATE_UNKNOWN|current target visibility unavailable" end
+    if not visible then return "ESTIMATE_UNKNOWN|target not visible" end
     if not UI or not UI.IsGameCoreBusy or UI.IsGameCoreBusy() ~= false then
         return "ESTIMATE_UNKNOWN|core busy or state unavailable"
     end

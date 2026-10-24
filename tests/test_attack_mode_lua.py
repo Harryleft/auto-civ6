@@ -121,6 +121,51 @@ def state_for(conn):
     return state
 
 
+@pytest.mark.usefixtures('fast_action_confirmation')
+def test_hidden_target_never_submits_or_previews_attack():
+    conn = AttackConn()
+    # Reproduce a target leaving sight after another friendly unit withdraws.
+    # Native Map data can still expose the object and generic eligibility can
+    # still allow an ATTACK-modified move; neither establishes current sight.
+    conn.lua.execute('''
+unitInfo.RangedCombat=0;PlayersVisibility[0].IsVisible=function() return false end
+UnitManager.RequestOperation=function(_,op,params) record_operation(op,params) end
+''')
+    state = state_for(conn)
+    result = asyncio.run(state.attack_unit(8, 19, 16))
+    assert "TARGET_NOT_VISIBLE" in result
+    assert conn.operations == []
+    assert conn.previews == []
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('visibility', ['nil', 'error("unavailable")'])
+def test_unknown_target_visibility_never_submits_or_reads_defender(visibility):
+    conn = AttackConn()
+    body = f'return {visibility}' if visibility == 'nil' else visibility
+    conn.lua.execute(f'PlayersVisibility[0].IsVisible=function() {body} end;allowed.range=true')
+    state = state_for(conn)
+    result = asyncio.run(state.attack_unit(8, 19, 16))
+    assert "TARGET_VISIBILITY_UNKNOWN" in result
+    assert conn.operations == [] and conn.previews == []
+    assert state.pending_action_summary is None
+
+
+def test_target_leaving_sight_after_preview_is_rechecked_before_submission():
+    conn = AttackConn()
+    conn.lua.execute('''
+allowed.range=true;visibilityReads=0
+PlayersVisibility[0].IsVisible=function()
+ visibilityReads=visibilityReads+1;return visibilityReads==1
+end
+''')
+    state = state_for(conn)
+    result = asyncio.run(state.attack_unit(8, 19, 16))
+    assert "TARGET_NOT_VISIBLE" in result
+    assert conn.previews == ['Ranged'] and conn.operations == []
+    assert state.pending_action_summary is None
+
+
 def test_native_civilian_entry_without_attack_consumption_confirms_once():
     conn = AttackConn()
     conn.lua.execute('''
