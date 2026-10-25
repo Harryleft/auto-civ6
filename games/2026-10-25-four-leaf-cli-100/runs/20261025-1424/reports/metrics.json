@@ -1,0 +1,721 @@
+{
+  "source_commit": "b35d3a2a6d4f5df5395c3aa21f9b34251818493b",
+  "runtime_run_id": "bbf839e8aaaf4339a780605d5a5b5ea1",
+  "cli_session": "8568bd9f82854a57869623cff8c15dda",
+  "command_count": 2650,
+  "dry_run_count": 632,
+  "explicit_tool_call_count": 1997,
+  "unique_tools": 57,
+  "tool_counts": {
+    "get_game_overview": 121,
+    "reload_game_save": 2,
+    "get_units": 120,
+    "get_cities": 121,
+    "get_strategic_map": 1,
+    "get_victory_progress": 111,
+    "get_diplomacy": 112,
+    "search_knowledge": 1,
+    "get_game_snapshot": 2,
+    "get_settle_advisor": 28,
+    "get_map_area": 4,
+    "get_knowledge": 2,
+    "unit_action": 297,
+    "get_city_production": 30,
+    "set_city_production": 28,
+    "get_turn_status": 289,
+    "get_tech_civics": 108,
+    "set_research": 33,
+    "get_notifications": 107,
+    "end_turn": 121,
+    "save_game": 25,
+    "dismiss_popup": 36,
+    "get_policies": 34,
+    "set_policies": 39,
+    "get_empire_resources": 1,
+    "get_trade_routes": 3,
+    "get_governors": 6,
+    "get_city_states": 10,
+    "get_religion_defense": 1,
+    "set_city_focus": 1,
+    "get_builder_tasks": 60,
+    "get_pending_diplomacy": 39,
+    "get_pending_trades": 17,
+    "get_world_congress": 17,
+    "respond_to_diplomacy": 20,
+    "get_public_report": 3,
+    "get_trade_options": 4,
+    "purchase_item": 2,
+    "get_dedications": 4,
+    "choose_dedication": 3,
+    "send_diplomatic_action": 1,
+    "appoint_governor": 1,
+    "assign_governor": 1,
+    "propose_trade": 3,
+    "get_pathing_estimate": 1,
+    "propose_peace": 3,
+    "send_envoy": 6,
+    "upgrade_unit": 1,
+    "promote_governor": 3,
+    "change_government": 1,
+    "queue_wc_votes": 2,
+    "get_district_advisor": 4,
+    "get_unit_formations": 1,
+    "get_trade_destinations": 3,
+    "restart_and_load": 1,
+    "negotiate_incoming_trade": 1,
+    "respond_to_trade": 1
+  },
+  "unit_action_counts": {
+    "found_city": 4,
+    "fortify": 175,
+    "automate": 15,
+    "move": 45,
+    "improve": 16,
+    "attack": 2,
+    "trade_route": 2,
+    "sleep": 38
+  },
+  "confirmed_transition_count": 102,
+  "cumulative_confirmed_steps": 102,
+  "net_turns": 100,
+  "repeated_intervals": [
+    [
+      85,
+      86
+    ],
+    [
+      86,
+      87
+    ]
+  ],
+  "transitions": [
+    {
+      "from": 1,
+      "to": 2,
+      "sequence": 117,
+      "timestamp": "2026-10-25T06:28:42.451728+00:00"
+    },
+    {
+      "from": 2,
+      "to": 3,
+      "sequence": 154,
+      "timestamp": "2026-10-25T06:28:47.040512+00:00"
+    },
+    {
+      "from": 3,
+      "to": 4,
+      "sequence": 191,
+      "timestamp": "2026-10-25T06:28:51.624740+00:00"
+    },
+    {
+      "from": 4,
+      "to": 5,
+      "sequence": 228,
+      "timestamp": "2026-10-25T06:28:56.172528+00:00"
+    },
+    {
+      "from": 5,
+      "to": 6,
+      "sequence": 270,
+      "timestamp": "2026-10-25T06:29:01.254377+00:00"
+    },
+    {
+      "from": 6,
+      "to": 7,
+      "sequence": 307,
+      "timestamp": "2026-10-25T06:29:05.892668+00:00"
+    },
+    {
+      "from": 7,
+      "to": 8,
+      "sequence": 354,
+      "timestamp": "2026-10-25T06:29:11.030199+00:00"
+    },
+    {
+      "from": 8,
+      "to": 9,
+      "sequence": 407,
+      "timestamp": "2026-10-25T06:29:15.916421+00:00"
+    },
+    {
+      "from": 9,
+      "to": 10,
+      "sequence": 449,
+      "timestamp": "2026-10-25T06:29:20.810113+00:00"
+    },
+    {
+      "from": 10,
+      "to": 11,
+      "sequence": 862,
+      "timestamp": "2026-10-25T06:30:52.128682+00:00"
+    },
+    {
+      "from": 11,
+      "to": 12,
+      "sequence": 954,
+      "timestamp": "2026-10-25T06:31:15.299077+00:00"
+    },
+    {
+      "from": 12,
+      "to": 13,
+      "sequence": 1006,
+      "timestamp": "2026-10-25T06:31:20.487721+00:00"
+    },
+    {
+      "from": 13,
+      "to": 14,
+      "sequence": 1048,
+      "timestamp": "2026-10-25T06:31:25.279112+00:00"
+    },
+    {
+      "from": 14,
+      "to": 15,
+      "sequence": 1090,
+      "timestamp": "2026-10-25T06:31:29.996521+00:00"
+    },
+    {
+      "from": 15,
+      "to": 16,
+      "sequence": 1137,
+      "timestamp": "2026-10-25T06:31:35.286994+00:00"
+    },
+    {
+      "from": 16,
+      "to": 17,
+      "sequence": 1189,
+      "timestamp": "2026-10-25T06:31:40.572148+00:00"
+    },
+    {
+      "from": 17,
+      "to": 18,
+      "sequence": 1231,
+      "timestamp": "2026-10-25T06:31:45.290351+00:00"
+    },
+    {
+      "from": 18,
+      "to": 19,
+      "sequence": 1273,
+      "timestamp": "2026-10-25T06:31:50.020877+00:00"
+    },
+    {
+      "from": 19,
+      "to": 20,
+      "sequence": 1315,
+      "timestamp": "2026-10-25T06:31:54.749293+00:00"
+    },
+    {
+      "from": 20,
+      "to": 21,
+      "sequence": 1362,
+      "timestamp": "2026-10-25T06:32:00.115990+00:00"
+    },
+    {
+      "from": 21,
+      "to": 22,
+      "sequence": 1436,
+      "timestamp": "2026-10-25T06:32:22.819174+00:00"
+    },
+    {
+      "from": 22,
+      "to": 23,
+      "sequence": 1488,
+      "timestamp": "2026-10-25T06:32:28.138398+00:00"
+    },
+    {
+      "from": 23,
+      "to": 24,
+      "sequence": 1549,
+      "timestamp": "2026-10-25T06:32:35.782929+00:00"
+    },
+    {
+      "from": 24,
+      "to": 25,
+      "sequence": 1606,
+      "timestamp": "2026-10-25T06:32:41.521678+00:00"
+    },
+    {
+      "from": 25,
+      "to": 26,
+      "sequence": 1653,
+      "timestamp": "2026-10-25T06:32:47.479182+00:00"
+    },
+    {
+      "from": 26,
+      "to": 27,
+      "sequence": 1695,
+      "timestamp": "2026-10-25T06:32:52.700935+00:00"
+    },
+    {
+      "from": 27,
+      "to": 28,
+      "sequence": 1760,
+      "timestamp": "2026-10-25T06:32:58.892473+00:00"
+    },
+    {
+      "from": 28,
+      "to": 29,
+      "sequence": 1797,
+      "timestamp": "2026-10-25T06:33:03.652108+00:00"
+    },
+    {
+      "from": 29,
+      "to": 30,
+      "sequence": 1853,
+      "timestamp": "2026-10-25T06:33:09.035558+00:00"
+    },
+    {
+      "from": 30,
+      "to": 31,
+      "sequence": 1941,
+      "timestamp": "2026-10-25T06:33:45.316456+00:00"
+    },
+    {
+      "from": 31,
+      "to": 32,
+      "sequence": 2029,
+      "timestamp": "2026-10-25T06:34:23.255003+00:00"
+    },
+    {
+      "from": 32,
+      "to": 33,
+      "sequence": 2084,
+      "timestamp": "2026-10-25T06:34:29.110779+00:00"
+    },
+    {
+      "from": 33,
+      "to": 34,
+      "sequence": 2129,
+      "timestamp": "2026-10-25T06:34:34.113693+00:00"
+    },
+    {
+      "from": 34,
+      "to": 35,
+      "sequence": 2174,
+      "timestamp": "2026-10-25T06:34:39.516143+00:00"
+    },
+    {
+      "from": 35,
+      "to": 36,
+      "sequence": 2224,
+      "timestamp": "2026-10-25T06:34:45.092535+00:00"
+    },
+    {
+      "from": 36,
+      "to": 37,
+      "sequence": 2301,
+      "timestamp": "2026-10-25T06:35:34.299433+00:00"
+    },
+    {
+      "from": 37,
+      "to": 38,
+      "sequence": 2462,
+      "timestamp": "2026-10-25T06:37:34.143866+00:00"
+    },
+    {
+      "from": 38,
+      "to": 39,
+      "sequence": 2533,
+      "timestamp": "2026-10-25T06:38:09.050515+00:00"
+    },
+    {
+      "from": 39,
+      "to": 40,
+      "sequence": 2580,
+      "timestamp": "2026-10-25T06:38:22.320300+00:00"
+    },
+    {
+      "from": 40,
+      "to": 41,
+      "sequence": 2622,
+      "timestamp": "2026-10-25T06:38:32.089181+00:00"
+    },
+    {
+      "from": 41,
+      "to": 42,
+      "sequence": 2672,
+      "timestamp": "2026-10-25T06:38:39.842899+00:00"
+    },
+    {
+      "from": 42,
+      "to": 43,
+      "sequence": 2704,
+      "timestamp": "2026-10-25T06:38:44.793880+00:00"
+    },
+    {
+      "from": 43,
+      "to": 44,
+      "sequence": 2744,
+      "timestamp": "2026-10-25T06:38:49.958901+00:00"
+    },
+    {
+      "from": 44,
+      "to": 45,
+      "sequence": 2841,
+      "timestamp": "2026-10-25T06:39:42.840737+00:00"
+    },
+    {
+      "from": 45,
+      "to": 46,
+      "sequence": 2883,
+      "timestamp": "2026-10-25T06:39:48.515628+00:00"
+    },
+    {
+      "from": 46,
+      "to": 47,
+      "sequence": 2930,
+      "timestamp": "2026-10-25T06:39:54.030023+00:00"
+    },
+    {
+      "from": 47,
+      "to": 48,
+      "sequence": 2977,
+      "timestamp": "2026-10-25T06:39:59.508306+00:00"
+    },
+    {
+      "from": 48,
+      "to": 49,
+      "sequence": 3022,
+      "timestamp": "2026-10-25T06:40:05.003740+00:00"
+    },
+    {
+      "from": 49,
+      "to": 50,
+      "sequence": 3059,
+      "timestamp": "2026-10-25T06:40:10.041434+00:00"
+    },
+    {
+      "from": 50,
+      "to": 51,
+      "sequence": 3163,
+      "timestamp": "2026-10-25T06:41:00.123135+00:00"
+    },
+    {
+      "from": 51,
+      "to": 52,
+      "sequence": 3239,
+      "timestamp": "2026-10-25T06:41:11.908575+00:00"
+    },
+    {
+      "from": 52,
+      "to": 53,
+      "sequence": 3286,
+      "timestamp": "2026-10-25T06:41:17.601215+00:00"
+    },
+    {
+      "from": 53,
+      "to": 54,
+      "sequence": 3388,
+      "timestamp": "2026-10-25T06:41:59.362939+00:00"
+    },
+    {
+      "from": 54,
+      "to": 55,
+      "sequence": 3457,
+      "timestamp": "2026-10-25T06:42:06.150440+00:00"
+    },
+    {
+      "from": 55,
+      "to": 56,
+      "sequence": 3504,
+      "timestamp": "2026-10-25T06:42:11.965247+00:00"
+    },
+    {
+      "from": 56,
+      "to": 57,
+      "sequence": 3546,
+      "timestamp": "2026-10-25T06:42:17.086471+00:00"
+    },
+    {
+      "from": 57,
+      "to": 58,
+      "sequence": 3612,
+      "timestamp": "2026-10-25T06:42:23.231044+00:00"
+    },
+    {
+      "from": 58,
+      "to": 59,
+      "sequence": 3705,
+      "timestamp": "2026-10-25T06:42:31.520669+00:00"
+    },
+    {
+      "from": 59,
+      "to": 60,
+      "sequence": 3755,
+      "timestamp": "2026-10-25T06:42:39.523915+00:00"
+    },
+    {
+      "from": 60,
+      "to": 61,
+      "sequence": 3818,
+      "timestamp": "2026-10-25T06:42:47.988038+00:00"
+    },
+    {
+      "from": 61,
+      "to": 62,
+      "sequence": 3878,
+      "timestamp": "2026-10-25T06:42:56.652252+00:00"
+    },
+    {
+      "from": 62,
+      "to": 63,
+      "sequence": 3938,
+      "timestamp": "2026-10-25T06:43:07.380152+00:00"
+    },
+    {
+      "from": 63,
+      "to": 64,
+      "sequence": 4041,
+      "timestamp": "2026-10-25T06:43:49.597721+00:00"
+    },
+    {
+      "from": 64,
+      "to": 65,
+      "sequence": 4096,
+      "timestamp": "2026-10-25T06:44:04.671658+00:00"
+    },
+    {
+      "from": 65,
+      "to": 66,
+      "sequence": 4151,
+      "timestamp": "2026-10-25T06:44:11.104632+00:00"
+    },
+    {
+      "from": 66,
+      "to": 67,
+      "sequence": 4250,
+      "timestamp": "2026-10-25T06:44:40.188217+00:00"
+    },
+    {
+      "from": 67,
+      "to": 68,
+      "sequence": 4302,
+      "timestamp": "2026-10-25T06:44:46.034714+00:00"
+    },
+    {
+      "from": 68,
+      "to": 69,
+      "sequence": 4370,
+      "timestamp": "2026-10-25T06:44:59.336536+00:00"
+    },
+    {
+      "from": 69,
+      "to": 70,
+      "sequence": 4436,
+      "timestamp": "2026-10-25T06:45:07.693276+00:00"
+    },
+    {
+      "from": 70,
+      "to": 71,
+      "sequence": 4488,
+      "timestamp": "2026-10-25T06:45:16.301536+00:00"
+    },
+    {
+      "from": 71,
+      "to": 72,
+      "sequence": 4565,
+      "timestamp": "2026-10-25T06:45:59.449180+00:00"
+    },
+    {
+      "from": 72,
+      "to": 73,
+      "sequence": 4635,
+      "timestamp": "2026-10-25T06:46:08.559300+00:00"
+    },
+    {
+      "from": 73,
+      "to": 74,
+      "sequence": 4696,
+      "timestamp": "2026-10-25T06:46:14.646935+00:00"
+    },
+    {
+      "from": 74,
+      "to": 75,
+      "sequence": 4771,
+      "timestamp": "2026-10-25T06:46:43.416061+00:00"
+    },
+    {
+      "from": 75,
+      "to": 76,
+      "sequence": 4866,
+      "timestamp": "2026-10-25T06:47:47.258202+00:00"
+    },
+    {
+      "from": 76,
+      "to": 77,
+      "sequence": 4924,
+      "timestamp": "2026-10-25T06:47:55.485805+00:00"
+    },
+    {
+      "from": 77,
+      "to": 78,
+      "sequence": 5004,
+      "timestamp": "2026-10-25T06:48:36.430806+00:00"
+    },
+    {
+      "from": 78,
+      "to": 79,
+      "sequence": 5054,
+      "timestamp": "2026-10-25T06:48:42.279910+00:00"
+    },
+    {
+      "from": 79,
+      "to": 80,
+      "sequence": 5114,
+      "timestamp": "2026-10-25T06:48:48.610764+00:00"
+    },
+    {
+      "from": 80,
+      "to": 81,
+      "sequence": 5218,
+      "timestamp": "2026-10-25T06:48:56.943888+00:00"
+    },
+    {
+      "from": 81,
+      "to": 82,
+      "sequence": 5276,
+      "timestamp": "2026-10-25T06:49:03.044025+00:00"
+    },
+    {
+      "from": 82,
+      "to": 83,
+      "sequence": 5334,
+      "timestamp": "2026-10-25T06:49:08.811907+00:00"
+    },
+    {
+      "from": 83,
+      "to": 84,
+      "sequence": 5410,
+      "timestamp": "2026-10-25T06:49:15.110711+00:00"
+    },
+    {
+      "from": 84,
+      "to": 85,
+      "sequence": 5470,
+      "timestamp": "2026-10-25T06:49:21.050178+00:00"
+    },
+    {
+      "from": 85,
+      "to": 86,
+      "sequence": 5571,
+      "timestamp": "2026-10-25T06:50:08.211356+00:00"
+    },
+    {
+      "from": 86,
+      "to": 87,
+      "sequence": 5621,
+      "timestamp": "2026-10-25T06:50:15.819957+00:00"
+    },
+    {
+      "from": 85,
+      "to": 86,
+      "sequence": 5789,
+      "timestamp": "2026-10-25T06:54:12.994672+00:00"
+    },
+    {
+      "from": 86,
+      "to": 87,
+      "sequence": 5839,
+      "timestamp": "2026-10-25T06:54:20.566543+00:00"
+    },
+    {
+      "from": 87,
+      "to": 88,
+      "sequence": 5990,
+      "timestamp": "2026-10-25T06:55:28.458790+00:00"
+    },
+    {
+      "from": 88,
+      "to": 89,
+      "sequence": 6101,
+      "timestamp": "2026-10-25T06:56:58.576776+00:00"
+    },
+    {
+      "from": 89,
+      "to": 90,
+      "sequence": 6190,
+      "timestamp": "2026-10-25T06:57:08.161222+00:00"
+    },
+    {
+      "from": 90,
+      "to": 91,
+      "sequence": 6261,
+      "timestamp": "2026-10-25T06:57:17.902834+00:00"
+    },
+    {
+      "from": 91,
+      "to": 92,
+      "sequence": 6356,
+      "timestamp": "2026-10-25T06:57:27.894246+00:00"
+    },
+    {
+      "from": 92,
+      "to": 93,
+      "sequence": 6419,
+      "timestamp": "2026-10-25T06:57:36.297309+00:00"
+    },
+    {
+      "from": 93,
+      "to": 94,
+      "sequence": 6501,
+      "timestamp": "2026-10-25T06:57:45.579891+00:00"
+    },
+    {
+      "from": 94,
+      "to": 95,
+      "sequence": 6615,
+      "timestamp": "2026-10-25T06:57:54.858915+00:00"
+    },
+    {
+      "from": 95,
+      "to": 96,
+      "sequence": 6740,
+      "timestamp": "2026-10-25T06:58:07.203892+00:00"
+    },
+    {
+      "from": 96,
+      "to": 97,
+      "sequence": 6824,
+      "timestamp": "2026-10-25T06:58:16.126026+00:00"
+    },
+    {
+      "from": 97,
+      "to": 98,
+      "sequence": 6934,
+      "timestamp": "2026-10-25T06:58:25.980401+00:00"
+    },
+    {
+      "from": 98,
+      "to": 99,
+      "sequence": 7023,
+      "timestamp": "2026-10-25T06:58:34.779660+00:00"
+    },
+    {
+      "from": 99,
+      "to": 100,
+      "sequence": 7165,
+      "timestamp": "2026-10-25T06:59:49.220866+00:00"
+    },
+    {
+      "from": 100,
+      "to": 101,
+      "sequence": 7267,
+      "timestamp": "2026-10-25T06:59:59.229483+00:00"
+    }
+  ],
+  "missing_from_turns": [],
+  "error_return_count": 46,
+  "errors_by_tool": {
+    "get_game_overview": 2,
+    "save_game": 4,
+    "set_policies": 32,
+    "propose_peace": 2,
+    "upgrade_unit": 1,
+    "get_trade_destinations": 1,
+    "send_envoy": 2,
+    "unit_action": 2
+  },
+  "cli_transport_unknown_event_count": 0,
+  "raw_outcome_unknown_return_count": 4,
+  "direct_call_commands": 0,
+  "developer_commands": 0
+}

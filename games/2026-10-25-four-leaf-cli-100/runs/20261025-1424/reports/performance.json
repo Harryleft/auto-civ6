@@ -1,0 +1,8 @@
+{
+  "completed_rounds": 102,
+  "median_wall_seconds": 7.591,
+  "p95_wall_seconds": 52.881,
+  "sum_cli_seconds": 829.605,
+  "sum_rpc_seconds": 821.085,
+  "note": "Wall time includes command gaps, model work and recovery; not pure engine time."
+}
