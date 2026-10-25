@@ -435,6 +435,19 @@ class GameState:
         lines = await self.conn.execute_write(lq.build_tech_civics_query())
         return lq.parse_tech_civics_response(lines)
 
+    async def get_public_report(self, section: str, **options) -> dict:
+        """Read UI-equivalent facts without changing views or retiring pending."""
+        from civ_mcp.lua import public_reports
+        try:
+            source = public_reports.build(section, **options)
+        except ValueError as error:
+            return {"status": "error", "data": None, "error": str(error)}
+        try:
+            rows = await self.conn.execute_in_named_state("InGame", source)
+            return public_reports.parse(rows)
+        except (LuaError, OSError, TimeoutError, ValueError) as error:
+            return {"status": "unknown", "data": None, "error": str(error)}
+
     async def get_empire_resources(
         self,
     ) -> tuple[

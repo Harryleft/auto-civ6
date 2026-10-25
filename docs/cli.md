@@ -1,6 +1,6 @@
 # CLI 命令手册
 
-本页是项目日常调用的唯一命令目录，涵盖顶层命令、会话控制及 43 个领域子命令。`civ6` 提供离线诊断、验证、测试、日志查询，以及前台 `debug` 会话。`doctor`、`verify knowledge`、`test` 和 `logs` 不连接 FireTuner；`verify state` 明确访问当前真实游戏，`debug` 在收到查询或工具调用时访问游戏。`civ-mcp` 仍是游戏 MCP 服务入口。
+本页是项目日常调用的唯一命令目录，涵盖顶层命令、会话控制及 76 个领域子命令。`civ6` 提供离线诊断、验证、测试、日志查询，以及前台 `debug` 会话。`doctor`、`verify knowledge`、`test` 和 `logs` 不连接 FireTuner；`verify state` 明确访问当前真实游戏，`debug` 在收到查询或工具调用时访问游戏。`civ-mcp` 仍是游戏 MCP 服务入口。
 
 ## 安装与调用
 
@@ -213,6 +213,45 @@ COMMANDS
 
 议会查询不打开投票、不提交票单；通知查询不关闭弹窗或代答外交。未封装的票单、交易、宗教等公开工具按下节 `tools NAME` 与 `call` 执行，保持同一会话。机制及确认条件仍见[游戏操作](agent-playbook.md)、[特殊操作](agent-special-operations.md)和[保存恢复](agent-recovery.md)。
 
+### 科技、市政和新增领域命令
+
+所有命令均输入到同一个 debug 会话；变更仍需先 `--dry-run`，原生资格和结果确认由 Runtime 负责。
+
+| 命令 | 用途 |
+| --- | --- |
+| `technology status`、`civic status` | 当前科技／市政进度与可选目标；沿用原生实时查询。 |
+| `technology set TYPE`、`civic set TYPE` | 明确选择当前允许的科研／市政目标。 |
+| `technology search [QUERY]`、`civic search [QUERY]` | 在已校验指纹的知识快照中检索中英文名称、ID、说明及解锁内容。 |
+| `government show`、`government list` | 当前政体／政策槽，以及本局已解锁政体、槽位和原生更换资格。 |
+| `government change TYPE` | 明确更换已解锁政体；不代替政策选择。 |
+| `religion show`、`religion pantheon`、`religion beliefs` | 宗教压力／多数派、万神殿加成和宗教信条候选。 |
+| `religion choose-pantheon BELIEF_TYPE` | 选择万神殿加成；需要原生信仰与资格，不是修建一座建筑。 |
+| `great-person list` | 当前伟人、点数进度及金币／信仰赞助费用。 |
+| `great-person recruit ID` | 用本类伟人点数领取。 |
+| `great-person buy ID --currency gold\|faith` | 用明确选择的金币或信仰赞助；未知时原意图只确认，不重复付款。 |
+| `great-person reject ID`、`great-person history [--player ID]` | 明确拒绝，或读取原生往期招募记录。历史未提供的付款方式／金额为 null，不从报价反推。 |
+| `climate show`、`climate history [--since-turn T]` | 原生碳排放、温升、气候变化与全球／已揭示区域事件历史。累计 footprint 不是物理 ppm 浓度。 |
+| `history show [--since-turn T]` | 本方原生历史时刻、回合、时代、时代得分和说明。 |
+| `empire show`、`empire resources`、`empire cities`、`empire gossip` | 每回合产出及余额、资源库存、城市现状、原生可见小道消息。show 包含信仰每回合、外交支持和可派使者。 |
+| `civilization list`、`civilization show PLAYER_ID` | 已相遇文明与领袖身份；show 联合展示其缓存能力规则，未知文明不可查询。 |
+| `civilization abilities TYPE [--level rule]` | 按文明／领袖 ID 读取静态能力；可读静态规则不代表本局已遇到或能力已激活。 |
+| `resources global [--player ID]` | 全球资源界面对应的自有库存和已相遇文明可交易资源；不返回隐藏库存或全图矿藏。 |
+| `era show`、`era dedications` | 当前时代进度／得分／阈值，以及可选时代着力点。 |
+| `ranking show` | 总分及科技、文化、统治、宗教、外交等启用路线的世界进度。 |
+| `map search resource\|luxury\|strategic\|antiquity\|village [--query TEXT]` | 按类型、中文名或内部 ID 定位。非消耗资源限已揭示且本方可识别地块；村庄、古迹和可消耗加成资源要求当前可见。空结果不证明迷雾里不存在。 |
+
+科技／市政搜索支持重复 `--filter`，可选 food／食物、science／科学、production／生产力、culture／文化值、gold／金币、faith／信仰值、housing／住房、unit／单位、improvement／改良设施、wonder／奇观；`--match any|all` 指定并集／交集，`--limit 1..100 --offset N` 分页。例如：
+
+```text
+technology search 写作 --filter 科学
+technology search --filter 食物 --filter 住房 --match all
+civic search --filter 生产力 --filter 单位 --match any --limit 10
+```
+
+匹配依据来自实际解锁关系、已捕获的正收益／住房及 modifier 关联，JSON 返回 `match_evidence` 与静态适用范围；条件、文明专属内容、DLC／模组及当前可研究资格均未由静态检索验证。活跃资格另用 status 读取，不能仅凭过滤结果提交研究。
+
+历史、地图、全球资源、小道消息等列表支持 `--limit 1..200 --offset N`。原生字段不可读取时明确返回 partial／unknown 和 null，不补成零或空列表；CLI 会将显式 JSON 查询错误标记为错误，但仍保留原始完整 JSON。总督和城邦继续使用前述 `governor`、`city-state` 命令。
+
 ### 最小调用顺序
 
 ```text
@@ -257,7 +296,7 @@ quit
 
 服务 UUID／PID 标识本次 MCP 生命周期，不是世界身份或测试轮次。每次显式工具调用前也读取同一内存快照核对服务身份，不自动确认任何请求。
 
-`--offline` 只允许发送 `get_runtime_status`、`search_knowledge`、`get_knowledge`，本地 `help/tools/quit` 和其他工具的 dry-run 也可使用。其他工具的实际调用在发送前拒绝，不能通过 `state` 或显式 `call` 绕过。离线检查可向会话输入知识查询和 pending，不必运行游戏。
+`--offline` 只允许发送 `get_runtime_status`、`search_knowledge`、`search_research`、`get_knowledge`，本地 `help/tools/quit` 和其他工具的 dry-run 也可使用。其他工具的实际调用在发送前拒绝，不能通过 `state` 或显式 `call` 绕过。离线检查可向会话输入知识查询和 pending，不必运行游戏。
 
 会话异常与退出：
 

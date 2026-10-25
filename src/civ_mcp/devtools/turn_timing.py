@@ -122,7 +122,7 @@ class TurnTiming:
             rpc = None
         errors = sum(bool(e.get("is_error")) or e.get("event") == "command_blocked" for e in events)
         unknown = record.get("state") == "outcome_unknown" or any(
-            e.get("event") == "tool_outcome_unknown" or (e.get("error") or {}).get("code") == "OUTCOME_UNKNOWN" for e in events)
+            e.get("event") == "tool_outcome_unknown" or (e.get("error") or {}).get("code") in {"OUTCOME_UNKNOWN", "QUERY_UNCONFIRMED"} for e in events)
         row = {"request_id": request_id, "segment": self.segment, "turn": self.turn,
                "actor": actor, "command": command, "started": start, "finished": end,
                "cli_seconds": duration, "rpc_seconds": rpc, "clock_source": clock,

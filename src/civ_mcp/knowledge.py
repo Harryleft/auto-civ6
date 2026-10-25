@@ -122,3 +122,18 @@ async def get(entry_id: str, level: KnowledgeLevel = 'summary') -> str:
     if level not in LEVELS:
         return _error('unknown knowledge level')
     return await _query(['show', '--level', level, '--', entry_id], entry_id=entry_id, level=level)
+
+
+async def research(kind: str, query: str = "", filters: list[str] | None = None,
+                   match: str = "any", limit: int = 20, offset: int = 0) -> str:
+    from civ_mcp.research_catalog import query as catalog_query
+    try:
+        configured = os.environ.get('CIV6_KNOWLEDGE_DIR')
+        root = Path(configured).expanduser() if configured is not None else DEFAULT_ROOT
+        if not root.is_absolute() or (configured is not None and not configured.strip()):
+            raise ValueError('CIV6_KNOWLEDGE_DIR must be an absolute knowledge directory')
+        result = await asyncio.to_thread(catalog_query, root, kind, query=query,
+                                         filters=filters, match=match, limit=limit, offset=offset)
+        return json.dumps(result | {'applicability': APPLICABILITY}, ensure_ascii=False)
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        return _error(str(error))

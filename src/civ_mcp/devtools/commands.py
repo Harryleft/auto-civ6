@@ -24,6 +24,18 @@ GROUPS = {
     "governor": "Inspect, appoint, assign or promote governors.",
     "congress": "Read World Congress phase, resolutions and voting options.",
     "notifications": "Read current notifications without dismissing them.",
+    "government": "Inspect government/policy slots or explicitly change government.",
+    "religion": "Inspect religion/pantheon beliefs or explicitly choose a pantheon.",
+    "great-person": "Inspect candidates, recruit with points or patronize with gold/faith.",
+    "empire": "Inspect empire yields, resource stocks and city status.",
+    "era": "Inspect current era score, thresholds and dedication choices.",
+    "ranking": "Inspect public score and all enabled victory rankings.",
+    "civilization": "List encountered civilizations or inspect cached civilization/leader rules.",
+    "technology": "Inspect live research, search cached technology unlocks/effects or select research.",
+    "civic": "Inspect live civics, search cached unlocks/effects or select a civic.",
+    "climate": "Read public native climate overview and known event history.",
+    "history": "Read the local civilization's native historical timeline.",
+    "resources": "Read the native global resource panel's public/tradable resources.",
 }
 
 
@@ -71,6 +83,18 @@ def domain_parser(group: str):
 
     def entity(child, name):
         child.add_argument(name, type=int, help="Native ID from this session's current state query")
+
+    def report(name, section, description, *, pagination=True, since=False, player=False):
+        child = command(name, "get_public_report", description)
+        child.set_defaults(section=section)
+        if pagination:
+            child.add_argument("--limit", type=int, default=50)
+            child.add_argument("--offset", type=int, default=0)
+        if since:
+            child.add_argument("--since-turn", dest="since_turn", type=int, default=0)
+        if player:
+            child.add_argument("--player", dest="target_player", type=int, default=-1)
+        return child
 
     if group == "unit":
         command("list", "get_units", "List current units and native IDs.")
@@ -192,6 +216,71 @@ def domain_parser(group: str):
         command("show", "get_world_congress", "Read native stage and choices; never opens voting or submits votes.")
     elif group == "notifications":
         command("show", "get_notifications", "Read notifications; never dismisses popups or chooses responses.")
+    elif group == "government":
+        command("show", "get_policies", "Read current government and policy slots.")
+        report("list", "governments", "Read currently unlocked governments, slots and native change eligibility.")
+        change = command("change", "change_government", "Choose an unlocked government explicitly.", mutation=True)
+        change.add_argument("government_type")
+    elif group == "religion":
+        command("show", "get_religion_defense", "Read religion majority, pressure and visible religious threats.")
+        command("pantheon", "get_pantheon_beliefs", "Read current pantheon, faith threshold and available bonuses.")
+        command("beliefs", "get_religion_beliefs", "Read founded religion and available belief choices.")
+        choose = command("choose-pantheon", "choose_pantheon", "Choose one available pantheon bonus; native eligibility required.", mutation=True)
+        choose.add_argument("belief_type")
+    elif group == "great-person":
+        command("list", "get_great_people", "Read candidates, points and gold/faith patronage costs.")
+        for name, tool in [("recruit", "recruit_great_person"), ("buy", "patronize_great_person"), ("reject", "reject_great_person")]:
+            child = command(name, tool, "Explicitly select one current Great Person; Runtime retains unknown outcomes.", mutation=True)
+            entity(child, "individual_id")
+            if name == "buy":
+                child.add_argument("--currency", choices=("gold", "faith"), default="gold")
+    elif group == "empire":
+        report("show", "empire", "Read per-turn science/culture/faith/gold, favor and available envoys.", pagination=False)
+        command("resources", "get_empire_resources", "Read known resource stocks, accumulation and consumption.")
+        command("cities", "get_cities", "Read owned city status, yields, production and visible needs.")
+    elif group == "era":
+        command("show", "get_game_overview", "Read current era, age, era score and next-era thresholds.")
+        command("dedications", "get_dedications", "Read current selectable dedication bonuses.")
+    elif group == "ranking":
+        command("show", "get_victory_progress", "Read public score, science, culture, domination, religion and diplomacy progress.")
+    elif group == "civilization":
+        command("list", "get_diplomacy", "Read encountered civilizations, leaders and current relationships.")
+        ability = command("abilities", "get_knowledge", "Read a cached civilization/leader rule; current activation remains unverified.")
+        ability.add_argument("entry_id", help="Civilization/leader ID from current civilization list and knowledge search")
+        ability.add_argument("--level", choices=("summary", "rule", "evidence"), default="rule")
+    elif group in {"technology", "civic"}:
+        from civ_mcp.research_catalog import FILTERS, ALIASES
+        command("status", "get_tech_civics", "Read current research, civic progress and available live choices.")
+        select = command("set", "set_research", "Select one currently available research target.", mutation=True)
+        select.add_argument("tech_or_civic")
+        select.set_defaults(category="tech" if group == "technology" else "civic")
+        search = command("search", "search_research", "Search cached names, unlocks and positive effect associations; no live eligibility claim.")
+        search.add_argument("query", nargs="?", default="")
+        search.set_defaults(kind=group)
+        search.add_argument("--filter", dest="filters", choices=tuple(FILTERS)+tuple(ALIASES), action="append", default=None)
+        search.add_argument("--match", choices=("any", "all"), default="any")
+        search.add_argument("--limit", type=int, default=20)
+        search.add_argument("--offset", type=int, default=0)
+    elif group == "climate":
+        report("show", "climate", "Read native carbon footprint and climate; no physical ppm inference.", pagination=False)
+        report("history", "climate-history", "Read global or revealed-location events, as in the native climate UI.", since=True)
+    elif group == "history":
+        report("show", "history", "Read local historic moments, descriptions, turns and era score.", since=True)
+    elif group == "resources":
+        report("global", "world-resources", "Read own stocks and known civilizations' native tradable resources.", player=True)
+    if group == "great-person":
+        report("history", "great-people-history", "Read native past recruitment; currency/payment may be unknown.", player=True)
+    elif group == "empire":
+        report("gossip", "gossip", "Read only native visible gossip about encountered civilizations.", since=True, player=True)
+    elif group == "civilization":
+        show = report("show", "encountered", "Read an encountered civilization/leader with cached ability rules.", pagination=False)
+        entity(show, "target_player")
+        show.set_defaults(include_rules=True)
+    elif group == "map":
+        from civ_mcp.lua.public_reports import MAP_KINDS
+        search = report("search", "map-search", "Locate visible villages and revealed, resource-visible deposits/sites.")
+        search.add_argument("search_kind", choices=sorted(MAP_KINDS))
+        search.add_argument("--query", default="", help="Localized name or native resource type fragment")
     return root
 
 
@@ -218,4 +307,6 @@ def parse_command(line: str) -> Intent:
             slots.add(int(match[1]))
             normalized.append(f"{int(match[1])}={match[2]}")
         values["assignments"] = ",".join(normalized)
+    if tool == "patronize_great_person":
+        values["yield_type"] = "YIELD_" + values.pop("currency").upper()
     return Intent(tool, values, dry_run)

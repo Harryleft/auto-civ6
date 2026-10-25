@@ -19,7 +19,7 @@ from civ_mcp.devtools.knowledge import check_interpreter
 from civ_mcp.devtools.commands import GROUPS, HelpRequested, domain_parser, parse_command
 
 
-OFFLINE_TOOLS = {"get_runtime_status", "search_knowledge", "get_knowledge"}
+OFFLINE_TOOLS = {"get_runtime_status", "search_knowledge", "search_research", "get_knowledge"}
 STATES = {"overview": "get_game_overview", "units": "get_units", "cities": "get_cities",
           "turn": "get_turn_status", "snapshot": "get_game_snapshot"}
 HELP = {
@@ -142,18 +142,31 @@ def tool_error(tool: str, result) -> dict | None:
     """Recognize only the server's explicit error envelopes, never infer success."""
     texts = [item.text for item in result.content if item.type == "text"]
     legacy = next((text for text in texts if text.startswith(("Error:", "ERR:"))), None)
-    if not result.isError and legacy is None:
+    structured = None
+    for text in texts:
+        try:
+            value = json.loads(text)
+            if isinstance(value, dict) and value.get("status") in {"error", "unknown"} and value.get("error"):
+                structured = value
+                break
+        except ValueError:
+            pass
+    if not result.isError and legacy is None and structured is None:
         return None
-    message = legacy or "\n".join(texts) or "MCP reported a tool error without text"
+    message = legacy or (str(structured["error"]) if structured else None) or "\n".join(texts) or "MCP reported a tool error without text"
     match = re.match(r"^(?:Error:\s*)?ERR:([A-Z][A-Z0-9_]*)\b", message)
     code = match[1] if match else "MCP_TOOL_ERROR" if result.isError else "TOOL_REPORTED_ERROR"
+    if structured and structured.get("status") == "unknown":
+        code = "QUERY_UNCONFIRMED" if tool.startswith(("get_", "search_")) else "OUTCOME_UNKNOWN"
     hint = f"Inspect the original error, tools {tool} and pending before correcting arguments; never blindly replay an unknown request."
+    if code == "QUERY_UNCONFIRMED":
+        hint = "Inspect identity, unknown_fields and error; unavailable data is not an empty list or zero."
     if code == "NO_TILES":
         hint = "Use city production CITY_ID and current state to choose a different eligible city/district, then query city district CITY_ID DISTRICT_TYPE. No construction was submitted."
     elif code == "OUTCOME_UNKNOWN":
         hint = "Retain this session; use pending and read-only inspection, then confirm only through the original tool with its original arguments. Do not resubmit a new intent."
     return {"code": code, "message": message, "hint": hint,
-            "details": {"tool": tool, "source": "protocol" if result.isError else "legacy_text"}}
+            "details": {"tool": tool, "source": "protocol" if result.isError else "structured_json" if structured else "legacy_text"}}
 
 
 @contextmanager

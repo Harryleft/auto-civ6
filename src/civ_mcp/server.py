@@ -86,10 +86,10 @@ async def _logged(
             congress_blocked = None
             if (getattr(app.game, 'congress_pending', False) is True
                 and not tool_name.startswith(('get_', 'list_'))
-                and tool_name not in {'open_world_congress', 'queue_wc_votes', 'end_turn', 'dismiss_popup', 'restart_and_load', 'search_knowledge'}):
+                and tool_name not in {'open_world_congress', 'queue_wc_votes', 'end_turn', 'dismiss_popup', 'restart_and_load', 'search_knowledge', 'search_research'}):
                 congress_blocked = await app.game.congress_gate()
             # Only these static readers bypass game-state access and pending gates.
-            if tool_name in {"search_knowledge", "get_knowledge"}:
+            if tool_name in {"search_knowledge", "search_research", "get_knowledge"}:
                 result = await fn()
             elif congress_blocked:
                 result = congress_blocked
@@ -230,6 +230,20 @@ async def search_knowledge(
 
 
 @mcp.tool(annotations={"readOnlyHint": True, "idempotentHint": True})
+async def search_research(ctx: Context, kind: str, query: str = "", filters: Optional[list[str]] = None,
+                          match: str = "any", limit: int = 20, offset: int = 0) -> str:
+    """Search cached technology/civic names, unlocks and positive effect associations.
+
+    kind: technology or civic. Filters: food, science, production, culture,
+    gold, faith, housing, unit, improvement, wonder (Chinese names accepted).
+    match any/all; offset/limit paginate. Returns evidence for matched categories.
+    Static associations do not verify current unlock eligibility or conditions.
+    """
+    params = dict(kind=kind, query=query, filters=filters, match=match, limit=limit, offset=offset)
+    return await _logged(ctx, "search_research", params, lambda: knowledge.research(**params))
+
+
+@mcp.tool(annotations={"readOnlyHint": True, "idempotentHint": True})
 async def get_knowledge(
     ctx: Context,
     entry_id: Annotated[str, Field(min_length=1)],
@@ -249,6 +263,35 @@ async def get_knowledge(
     """
     return await _logged(ctx, "get_knowledge", {"entry_id": entry_id, "level": level},
                          lambda: knowledge.get(entry_id, level))
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_public_report(ctx: Context, section: str, target_player: int = -1,
+                            limit: int = 50, offset: int = 0, since_turn: int = 0,
+                            search_kind: str = "resource", query: str = "", include_rules: bool = False) -> str:
+    """Read JSON public UI reports without opening views or making choices.
+
+    Sections: empire, governments, climate, climate-history, history, great-people-history,
+    gossip, world-resources, encountered, map-search. Map kinds: resource,
+    luxury, strategic, antiquity, village. Foreign identities require contact;
+    map results obey revealed terrain and native resource visibility.
+    include_rules attaches cached abilities for encountered civilizations only.
+    Missing fields are unknown/null; carbon footprint is not ppm concentration.
+    """
+    params = dict(section=section, target_player=target_player, limit=limit, offset=offset,
+                  since_turn=since_turn, search_kind=search_kind, query=query)
+    async def run():
+        result = await _get_game(ctx).get_public_report(**params)
+        if include_rules and section == "encountered" and result.get("data"):
+            for civilization in result["data"].get("civilizations", []):
+                civilization["cached_rules"] = {key: json.loads(await knowledge.get(civilization[key], "rule"))
+                                                  for key in ("civilization", "leader") if civilization.get(key)}
+                for key, rule in civilization["cached_rules"].items():
+                    if rule.get("status") == "error":
+                        result["status"] = "partial"
+                        result.setdefault("unknown_fields", []).append("cached_rules." + civilization[key])
+        return json.dumps(result, ensure_ascii=False)
+    return await _logged(ctx, "get_public_report", params | {"include_rules": include_rules}, run)
 
 
 @mcp.tool(annotations={"readOnlyHint": True})

@@ -1,0 +1,154 @@
+{
+  "schema_version": 1,
+  "scope": "CLI capability audit and implementation; live read-only at retained relay T16",
+  "source_run": "games/2026-10-25-cli-relay/runs/20261025-080620",
+  "baseline": {
+    "path": "fixtures/saves/benchmark_gold_tun_1.Civ6Save",
+    "sha256": "0d25d557e68b0efbd1aed7e66de9b8434f3a9ac9d321291d45cbe9df83fe3abf",
+    "unchanged": true
+  },
+  "named_commands": {
+    "before": 43,
+    "after": 76
+  },
+  "sessions": [
+    {
+      "session": "readonly-cli",
+      "tool_calls": 25,
+      "dry_run_count": 0,
+      "errors": 0,
+      "offline": false,
+      "connected": true,
+      "closed": true,
+      "pending": false,
+      "identity": {
+        "civilization": "sumeria",
+        "seed": -1896272000,
+        "player_id": 0,
+        "turn": 16
+      },
+      "log_sha256": "05a110752f23a486488d6a6254ca684d8e7f94aceb12f3b9f5b39259da90ff9c"
+    },
+    {
+      "session": "readonly-government",
+      "tool_calls": 5,
+      "dry_run_count": 0,
+      "errors": 0,
+      "offline": false,
+      "connected": true,
+      "closed": true,
+      "pending": false,
+      "identity": {
+        "civilization": "sumeria",
+        "seed": -1896272000,
+        "player_id": 0,
+        "turn": 16
+      },
+      "log_sha256": "2465d9b7fee6042233ebf00704ba1f358d13e6b6480ee06b3012f17a4f176f8e"
+    },
+    {
+      "session": "final-readonly",
+      "tool_calls": 12,
+      "dry_run_count": 0,
+      "errors": 0,
+      "offline": false,
+      "connected": true,
+      "closed": true,
+      "pending": false,
+      "identity": {
+        "civilization": "sumeria",
+        "seed": -1896272000,
+        "player_id": 0,
+        "turn": 16
+      },
+      "log_sha256": "3290a79c7812ccc6c4566e852ce5879334d78c618b836b4dfa650b18311247b1"
+    },
+    {
+      "session": "offline-discovery",
+      "tool_calls": 2,
+      "dry_run_count": 8,
+      "errors": 0,
+      "offline": true,
+      "connected": false,
+      "closed": true,
+      "pending": false,
+      "identity": null,
+      "log_sha256": "a2b52c29b6bff7309f7a566d9e4950432f37fa4507c6ce43d1f6f4131cd80945"
+    },
+    {
+      "session": "final-null-readonly",
+      "tool_calls": 5,
+      "dry_run_count": 0,
+      "errors": 0,
+      "offline": false,
+      "connected": true,
+      "closed": true,
+      "pending": false,
+      "identity": {
+        "civilization": "sumeria",
+        "seed": -1896272000,
+        "player_id": 0,
+        "turn": 16
+      },
+      "log_sha256": "f675d1fcea66b45251de028be787ba354d42779657c0290b73fd4a1fd31f91e8"
+    }
+  ],
+  "offline_tests": [
+    {
+      "files": [
+        "test_public_reports.py",
+        "test_cli_capabilities.py",
+        "test_debug_cli.py",
+        "test_dev_cli.py",
+        "test_knowledge_mcp.py",
+        "test_turn_timing.py"
+      ],
+      "passed": 129,
+      "seconds": 49.61
+    },
+    {
+      "files": [
+        "test_great_person_pool_confirmation.py",
+        "test_governor_confirmation.py",
+        "test_governor_target_owner.py",
+        "test_envoy_confirmation.py",
+        "test_policy_lua_execution.py",
+        "test_religion_belief_availability.py"
+      ],
+      "passed": 366,
+      "seconds": 34.56
+    },
+    {
+      "files": [
+        "test_research_eligibility.py",
+        "test_religion_plan_confirmation.py"
+      ],
+      "passed": 134,
+      "seconds": 1.53
+    },
+    {
+      "files": [
+        "test_player_choices.py"
+      ],
+      "passed": 60,
+      "seconds": 0.95
+    },
+    {
+      "files": [
+        "test_public_reports.py"
+      ],
+      "passed": 19,
+      "seconds": 0.12,
+      "repeated_cases": 17,
+      "purpose": "Final missing-value and known-empty distinctions"
+    }
+  ],
+  "limitations": [
+    "Historical great person payment method/amount unknown from native timeline",
+    "Native game carbon footprint does not provide physical ppm concentration",
+    "Cached research filters classify captured associations; current activation/conditions are unverified",
+    "No live mutations or nonempty great person/climate/gossip history were tested",
+    "Global resources match native own stock and met civilization tradable inventory, not hidden world deposits"
+  ],
+  "unique_tests_passed": 691
+}
