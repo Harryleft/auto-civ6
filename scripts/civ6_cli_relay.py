@@ -17,6 +17,8 @@ import sys
 import time
 import uuid
 
+from civ_mcp.devtools.turn_timing import TurnTiming
+
 DONE = {"tool_result", "tool_outcome_unknown", "command_blocked", "dry_run",
         "help", "tools", "tool_schema", "pending", "verification", "session_closing"}
 
@@ -48,6 +50,16 @@ def serve(args):
     args.evidence.mkdir(parents=True, exist_ok=False)
     requests = args.evidence / "requests"
     requests.mkdir()
+    timing = TurnTiming()
+
+    def receipt(path, response):
+        write(path, response)
+        try:
+            timing.observe(response)
+            timing.export(args.evidence)
+        except Exception as error:
+            # Statistics never change the outcome or ownership of a game call.
+            print(json.dumps({"event": "timing_export_failed", "error": str(error)}), flush=True)
     command = ["uv", "run", "--locked", "civ6", "--output",
                str(args.evidence / "cli"), "debug"]
     if args.offline:
@@ -102,7 +114,8 @@ def serve(args):
                                               "error": "Original CLI transport outcome is unresolved",
                                               "original_receipt": transport_unknown}
                     else:
-                        response = request | {"started": time.time(), "state": "possibly_submitted"}
+                        response = request | {"started": time.time(), "started_monotonic": time.monotonic(),
+                                              "state": "possibly_submitted"}
                         write(path, response)
                         try:
                             process.stdin.write(line + "\n")
@@ -112,16 +125,18 @@ def serve(args):
                             # Keep the CLI/MCP owner alive. A framing failure
                             # cannot authorize replacing its pending context.
                             transport_unknown = str(path)
-                            response.update(state="outcome_unknown", error=str(error))
-                            write(path, response)
+                            response.update(state="outcome_unknown", error=str(error), finished=time.time(),
+                                            finished_monotonic=time.monotonic())
+                            receipt(path, response)
                             try:
                                 client.sendall((json.dumps(response) + "\n").encode())
                             except OSError:
                                 pass
                             continue
                         value = events[-1]
-                        response.update(state="response_received", finished=time.time(), events=events)
-                        write(path, response)
+                        response.update(state="response_received", finished=time.time(),
+                                        finished_monotonic=time.monotonic(), events=events)
+                        receipt(path, response)
                         if value.get("event") == "session_closing":
                             # Drain the CLI summary before closing its only input.
                             for tail in process.stdout:

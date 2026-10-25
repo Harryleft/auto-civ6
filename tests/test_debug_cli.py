@@ -68,6 +68,23 @@ def test_real_pending_owner_survives_queries_and_confirms_without_new_submission
     assert any(event.get("code") == "PENDING_ON_EXIT" for event in events)
     assert status == "PASS" and state["mcp_session_closed"] and not state["unresolved_on_exit"]
     assert (evidence.path / "debug.jsonl").is_file()
+    timing = json.loads((evidence.path / "turn-timing.json").read_text())
+    assert timing["command_count"] == sum(event["event"] == "command" for event in events)
+    assert timing["by_actor"]["cli"]["unknown_count"] >= 1
+    assert (evidence.path / "command-timing.json").is_file()
+
+
+def test_timing_export_failure_keeps_pending_owner_and_original_action(tmp_path, monkeypatch, capsys):
+    from civ_mcp.devtools.turn_timing import TurnTiming
+    def fail_export(*args):
+        raise OSError("statistics output unavailable")
+    monkeypatch.setattr(TurnTiming, "export", fail_export)
+    status, state, events, engine, evidence = run_fake(tmp_path,
+        MOVE + 'pending\nstate units\n' + MOVE + 'pending\nquit\n')
+    assert status == "PASS" and engine["submissions"] == 1
+    pending = [event["runtime"]["has_pending"] for event in events if event["event"] == "pending"]
+    assert pending == [True, False] and not state["unresolved_on_exit"]
+    assert 'Timing export failed' in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("ending,reason", [("quit --abandon\n", "abandoned"), ("", "eof_unresolved")])

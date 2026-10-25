@@ -11,6 +11,7 @@ import re
 import signal
 import sys
 import threading
+import time
 from typing import Callable, TextIO
 
 from civ_mcp.devtools.evidence import CommandError, Evidence, now
@@ -181,11 +182,16 @@ class DebugSession:
         self.identity = None
         self.transport_unknown = None
         self.identity_lost = False
+        from civ_mcp.devtools.turn_timing import TurnTiming
+        self.timing = TurnTiming()
+        self.command_events = None
 
     def event(self, event: str, **data) -> dict:
         self.sequence += 1
         value = {"event": event, "sequence": self.sequence, "run_id": self.evidence.summary["run_id"],
                  "timestamp": now(), **data}
+        if self.command_events is not None:
+            self.command_events.append(value)
         with (self.evidence.path / "debug.jsonl").open("a", encoding="utf-8") as stream:
             stream.write(json.dumps(value, ensure_ascii=False, allow_nan=False) + "\n")
         self.emit(value)
@@ -299,6 +305,30 @@ class DebugSession:
                    transport_unknown=self.transport_unknown)
         return True
 
+    async def execute_command(self, line: str) -> bool:
+        """Frame timing around the entire command, including verification RPCs."""
+        started, tick = time.time(), time.monotonic()
+        self.command_events = []
+        first = self.event("command", input=line.rstrip("\r\n"))
+        try:
+            return await self.command(line)
+        except Exception as exc:
+            error = exc if isinstance(exc, CommandError) else CommandError(type(exc).__name__, str(exc))
+            self.event("command_blocked", **error.as_dict())
+            return False
+        finally:
+            events, self.command_events = self.command_events, None
+            try:
+                self.timing.observe({"request_id": f"{first['run_id']}:{first['sequence']}", "actor": "cli",
+                                     "command": line.rstrip("\r\n"), "started": started, "finished": time.time(),
+                                     "started_monotonic": tick, "finished_monotonic": time.monotonic(),
+                                     "state": "response_received", "events": events})
+                self.timing.export(self.evidence.path)
+            except Exception as error:
+                # Never change a game receipt, discard pending, or append an
+                # unframed stdout event because optional statistics failed.
+                print(f"Timing export failed: {error}", file=sys.stderr)
+
     async def command(self, line: str) -> bool:
         parts = line.strip().split(maxsplit=2)
         if not parts:
@@ -388,13 +418,8 @@ async def serve(evidence: Evidence, state: dict, *, offline: bool, timeout: floa
                             if await debug.close_request(False, eof=not source.isatty()):
                                 break
                             continue
-                        debug.event("command", input=line.rstrip("\r\n"))
-                        try:
-                            if await debug.command(line):
-                                break
-                        except Exception as exc:
-                            error = exc if isinstance(exc, CommandError) else CommandError(type(exc).__name__, str(exc))
-                            debug.event("command_blocked", **error.as_dict())
+                        if await debug.execute_command(line):
+                            break
     finally:
         state["mcp_session_closed"] = opened
         state["context_lost"] = state.get("unresolved_on_exit", True)

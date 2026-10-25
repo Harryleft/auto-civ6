@@ -116,7 +116,7 @@ def parser() -> Parser:
     common(debug)
     debug.add_argument("--offline", action="store_true", help="Allow only knowledge tools and in-memory pending inspection")
     debug.add_argument("--timeout", type=positive, default=300, help="Per-RPC timeout; never retries or restarts")
-    logs = commands.add_parser("logs", help="Read existing action logs; never query the game", description="Choose list, show or timeline. Reads bounded snapshots of existing JSONL files; no game queries.")
+    logs = commands.add_parser("logs", help="Read existing action logs; never query the game", description="Choose list, show, timeline or turns. Reads existing evidence; no game queries.")
     common(logs)
     log_commands = logs.add_subparsers(dest="view", required=True)
     for view in ("list", "show", "timeline"):
@@ -136,6 +136,11 @@ def parser() -> Parser:
             log_parser.add_argument("--contains", help="Literal substring in result")
             log_parser.add_argument("--since", help="Inclusive ISO-8601 time with timezone")
             log_parser.add_argument("--until", help="Inclusive ISO-8601 time with timezone")
+    turns = log_commands.add_parser("turns", help="Export per-turn timing from existing CLI relay receipts",
+        description="Read a fixed snapshot of CLI relay requests; export turn and command JSON in this command's evidence directory. No game queries.")
+    common(turns)
+    turns.add_argument("--relay", required=True, help="Existing relay evidence directory containing requests/")
+    turns.add_argument("--actors", nargs="+", help="Only count these actors; default excludes setup, repair, final and offline")
     return result
 
 
@@ -164,6 +169,16 @@ def execute(args: argparse.Namespace, evidence: Evidence, extra: list[str], data
                 raise CommandError("INVALID_ARGUMENT", "Choose a test domain or --list")
             options = ["--collect-only"] if args.collect_only else []
             return run_tests(evidence, args.domain, [*options, *extra], args.timeout, data)
+    elif args.command == "logs" and args.view == "turns":
+        from civ_mcp.devtools.turn_timing import read_relay
+        try:
+            timing = read_relay(Path(args.relay).expanduser().resolve(), args.actors)
+        except (ValueError, OSError) as error:
+            raise CommandError("TIMING_SOURCE_INVALID", str(error)) from error
+        report = timing.export(evidence.path)
+        data.update(report)
+        data["files"] = {key: str(evidence.path / name) for key, name in {
+            "turns_json": "turn-timing.json", "commands_json": "command-timing.json"}.items()}
     else:
         from civ_mcp.devtools.logs import read_logs, sessions
         directory = Path(args.dir).expanduser().resolve() if args.dir else Path.home() / ".civ6-mcp/actions"

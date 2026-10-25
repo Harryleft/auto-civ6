@@ -31,6 +31,7 @@ uv run --locked civ6 test turns --timeout 300 -- -k pending -x
 uv run --locked civ6 logs list --limit 10
 uv run --locked civ6 logs show --file .scratch/action-sample.jsonl --tool get_units
 uv run --locked civ6 logs timeline --file .scratch/action-sample.jsonl --since 2026-10-24T00:00:00+08:00
+uv run --locked civ6 logs turns --relay .scratch/example-relay
 ```
 
 日志示例中的文件是调用方提供的已有动作 JSONL，不由 CLI 自动创建。`logs list` 返回的 `session` 可代替 `--file`；用 `--dir PATH` 指定日志目录。
@@ -46,6 +47,7 @@ uv run --locked civ6 logs timeline --file .scratch/action-sample.jsonl --since 2
 | `logs list` | 列出动作日志文件，按修改时间从新到旧排序；目录尚不存在时返回空列表。 |
 | `logs show` | 保留文件顺序，返回最后 N 条匹配记录；按工具、结果子串、起止时间过滤。 |
 | `logs timeline` | 返回时间最新的 N 条匹配记录，并按时间升序排列；不把日志文字解释为提交、确认或门禁状态。 |
+| `logs turns --relay PATH` | 从已有前台转接器 `requests/` 凭据重建回合耗时，JSON 写入本次 CLI 证据目录；不连接游戏、不修改原始凭据。 |
 
 ### 顶层选项
 
@@ -57,6 +59,7 @@ uv run --locked civ6 logs timeline --file .scratch/action-sample.jsonl --since 2
 | `test` | DOMAIN 或 `--list`；`--collect-only` 只收集，`--timeout SECONDS` 为测试子进程预算（默认 300 秒）；pytest 选项放在 `--` 后。`--list` 不与领域或收集／运行选项组合。 |
 | `logs list` | `--dir PATH` 指定动作日志目录；`--limit N` 默认 20，范围 1～1000。 |
 | `logs show`、`logs timeline` | SESSION 或 `--file PATH` 二选一；`--dir PATH`、`--limit N`（默认 50）、`--tool NAME`、`--contains TEXT`、`--since TIME`、`--until TIME`。多个过滤条件按 AND 组合，contains 是 result 内的字面子串，时间含时区且边界包含。 |
+| `logs turns` | `--relay PATH`：现有转接器证据目录；`--actors NAME ...`：限定参与者，默认排除 setup、repair、final、offline。 |
 
 所有 timeout 必须是有限正数。日志默认目录为 `~/.civ6-mcp/actions/`，查询只读取现有文件，不跟随新日志。
 
@@ -65,6 +68,23 @@ uv run --locked civ6 logs timeline --file .scratch/action-sample.jsonl --since 2
 pytest 透传放在 `--` 后，支持 `-q`、`-v`、`-vv`、`-x`、`-k EXPR`、`-m EXPR`、`--maxfail N`、`--maxfail=N`、`--collect-only`、`--disable-warnings`。额外路径、插件和配置覆盖会被拒绝。测试子进程不继承 `PYTEST_ADDOPTS`、`PYTEST_PLUGINS`，并关闭第三方插件自动加载，保持登记的离线选择；pytest 与项目 conftest 仍正常加载。
 
 日志仅支持当前 `GameLogger` 的 `timestamp/tool/params/result` 行格式。时间过滤必须带时区，边界包含。解析失败行计入 `malformed_lines`，残缺末行标记 `tail_incomplete`；它们不进入结果集。单次查询读取打开文件时已有的字节，不跟随新日志；`source_sha256` 是实际读取字节的指纹。`--limit` 为 1～1000，截断时 `truncated=true`。
+
+## 回合耗时统计
+
+`civ6 debug` 自动在本次证据目录更新 `turn-timing.json` 和 `command-timing.json`，不需要额外开关。记录只消费已有命令与回应，不新增游戏查询、自动推进或后台轮询；统计失败不改变原命令结果和 pending。普通 CLI 标记 actor 为 `cli`；本机前台转接器还会在自己的证据目录按调用者区分 Codex、Claude 等模型。
+
+| 字段 | 含义 |
+| --- | --- |
+| `wall_seconds` | 从上一次确认推进完成，到本回合确认推进完成的跨度；首个观测回合从首条计入命令开始。包含命令间等待。 |
+| `cli_seconds` | 本回合逐条 CLI 命令执行时间之和，包含参数检查、预演和工具等待。 |
+| `rpc_seconds` | 按日志时间戳计算显式 `tool_started` 至对应结果的跨度之和，包含验证内的多项查询；起始事件缺失或时间戳异常则为 JSON null，不补成零。内部纯内存状态检查计入 CLI 时间。 |
+| `gap_seconds` | `wall_seconds - cli_seconds`，包含模型／服务、Shell、人工和交接等待，不能称为纯思考时间。 |
+| `command_count`、`error_count`、`unknown_count` | 命令数、错误／阻塞返回次数、未知返回次数；不等于独立故障或重复提交次数。 |
+| `status`、`clock_source` | `completed` 仅来自原 `end_turn` 已确认的推进回执；停止在当前回合记 `partial`。新记录使用单调时钟，旧记录回填使用墙钟并标记来源。 |
+
+JSON 另按 actor 和命令汇总调用量、累计／最长耗时及错误数；逐命令 JSON 可定位具体参数。普通概览显示更高回合不会补造已完成回合；加载或世界身份变化会切分记录。无法关联的回应、缺失时间和时钟异常保留在 `issues`，不编造零耗时。未结束回合的跨度截至最后一条计入命令，不包含停止测试后的闲置时间。
+
+转接器历史记录可用 `civ6 logs turns --relay PATH` 离线重建；普通 action JSONL 只有单点时间，不能据此还原每次调用耗时。当前完成边界对应普通单人 `end_turn`；热座专用席位交接尚未纳入本项验收。用户暂停若落在命令间隔内会进入 `gap_seconds`，当前没有自动识别或扣除暂停的机制。
 
 ## JSON 与退出码
 

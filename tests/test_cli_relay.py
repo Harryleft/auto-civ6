@@ -48,7 +48,8 @@ def test_unknown_transport_result_remains_the_original_reply():
     assert result[-1] == {"event": "tool_outcome_unknown", "request": 11}
 
 
-def test_framing_failure_retains_owner_and_refuses_next_submission(tmp_path, monkeypatch):
+@pytest.mark.parametrize("statistics_failure", [False, True])
+def test_framing_failure_retains_owner_and_refuses_next_submission(tmp_path, monkeypatch, statistics_failure):
     class Client:
         def __init__(self, command, request_id):
             self.request = json.dumps({"actor": "test", "command": command, "request_id": request_id})
@@ -76,6 +77,10 @@ def test_framing_failure_retains_owner_and_refuses_next_submission(tmp_path, mon
         ]) + '\n'))
     monkeypatch.setattr(relay.subprocess, "Popen", lambda *a, **k: process)
     monkeypatch.setattr(relay.socket, "socket", lambda *a, **k: Listener())
+    if statistics_failure:
+        def broken_statistics(*args):
+            raise KeyError("statistics failure must not replace the original outcome")
+        monkeypatch.setattr(relay.TurnTiming, "observe", broken_statistics)
     with pytest.raises(StopIteration):
         relay.serve(SimpleNamespace(evidence=tmp_path/'evidence', socket=tmp_path/'socket', offline=True))
     assert first.reply["state"] == "outcome_unknown"
