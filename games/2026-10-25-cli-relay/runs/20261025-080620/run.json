@@ -1,0 +1,303 @@
+{
+  "started": 1792886814.166772,
+  "baseline": "benchmark_gold_tun_1.Civ6Save",
+  "sha256": "0d25d557e68b0efbd1aed7e66de9b8434f3a9ac9d321291d45cbe9df83fe3abf",
+  "mode": "single-player CLI handoff",
+  "codex_target_turn": 11,
+  "claude_target_turn": 16,
+  "status": "completed",
+  "cli_session_shared": true,
+  "baseline_live_verified": true,
+  "loaded_seed": -1896272000,
+  "codex_checkpoint": {
+    "name": "cli_20261025_080620_codex_t011",
+    "turn": 11,
+    "size": 586813,
+    "sha256": "07a3a85c5c840a033a8074cb797be4600536096bcf645cfd1b8cc8dbd30362ac",
+    "native_completion": true,
+    "cli_verified": true
+  },
+  "final_turn": 16,
+  "live_game_unchanged_after_readonly_timing_checks": true,
+  "cli_runtime_session_id": "bcd818c24d114e53a30155d6a1bc6ebf",
+  "codex": {
+    "commands": 164,
+    "domain_calls": 111,
+    "named_calls": 109,
+    "fallback_calls": 2,
+    "named_percent": 98.1981981981982,
+    "named_commands_used": [
+      "city list",
+      "city production",
+      "city set-production",
+      "knowledge search",
+      "knowledge show",
+      "map area",
+      "policy set",
+      "policy show",
+      "research set",
+      "research show",
+      "save create",
+      "state overview",
+      "turn end",
+      "turn status",
+      "unit action",
+      "unit list",
+      "unit move",
+      "victory show"
+    ],
+    "tools": {
+      "get_game_overview": 12,
+      "get_units": 13,
+      "get_cities": 10,
+      "get_tech_civics": 3,
+      "get_map_area": 14,
+      "get_victory_progress": 10,
+      "search_knowledge": 2,
+      "get_knowledge": 2,
+      "unit_action": 15,
+      "set_research": 3,
+      "get_city_production": 2,
+      "set_city_production": 2,
+      "get_turn_status": 6,
+      "end_turn": 11,
+      "dismiss_popup": 2,
+      "get_policies": 1,
+      "set_policies": 1,
+      "save_game": 2
+    },
+    "errors": [
+      {
+        "command": "unit move 131073 30 22",
+        "error": {
+          "code": "OUTCOME_UNKNOWN",
+          "message": "ERR:OUTCOME_UNKNOWN|move unit:131073 {'target': (30, 22), 'witness_token': 'cfb0913cf2124517a57bf0495b8c4a12', 'origin': (32, 22)}|confirmation unavailable: |observed:ACTION_IDENTITY|CIVILIZATION_SUMERIA|-1896272000|8|0; POS|31|22|moves:2|movement_moves:2|zoc:false|busy:false|owner:0|id:131073; DIAG|UNKNOWN|tile appears passable - path may be blocked by intermediate tiles; MOVE_WITNESS|cfb0913cf2124517a57bf0495b8c4a12|0|131073|CIVILIZATION_SUMERIA|-1896272000|8|32|22|30|22|false|rawCommand:nil|rawData:nil. Use get_units/get_cities to confirm; do not resubmit. Explicit recovery is available if confirmation remains impossible.",
+          "hint": "Retain this session; use pending and read-only inspection, then confirm only through the original tool with its original arguments. Do not resubmit a new intent.",
+          "details": {
+            "tool": "unit_action",
+            "source": "legacy_text"
+          }
+        }
+      },
+      {
+        "command": "turn end",
+        "error": {
+          "code": "OUTCOME_UNKNOWN",
+          "message": "ERR:OUTCOME_UNKNOWN|move unit:131073 {'target': (30, 22), 'witness_token': 'cfb0913cf2124517a57bf0495b8c4a12', 'origin': (32, 22)}|confirmation unavailable: |observed:ACTION_IDENTITY|CIVILIZATION_SUMERIA|-1896272000|8|0; POS|31|22|moves:2|movement_moves:2|zoc:false|busy:false|owner:0|id:131073; DIAG|UNKNOWN|tile appears passable - path may be blocked by intermediate tiles; MOVE_WITNESS|cfb0913cf2124517a57bf0495b8c4a12|0|131073|CIVILIZATION_SUMERIA|-1896272000|8|32|22|30|22|false|rawCommand:nil|rawData:nil. Use get_units/get_cities to confirm; do not resubmit. Explicit recovery is available if confirmation remains impossible.",
+          "hint": "Retain this session; use pending and read-only inspection, then confirm only through the original tool with its original arguments. Do not resubmit a new intent.",
+          "details": {
+            "tool": "end_turn",
+            "source": "legacy_text"
+          }
+        }
+      },
+      {
+        "command": "save create cli_20261025_080620_codex_t011",
+        "error": {
+          "code": "TOOL_REPORTED_ERROR",
+          "message": "Error: SAVE_POPUP_BLOCKED|TechCivicCompletedPopup; dismiss_popup before saving; no save submitted.",
+          "hint": "Inspect the original error, tools save_game and pending before correcting arguments; never blindly replay an unknown request.",
+          "details": {
+            "tool": "save_game",
+            "source": "legacy_text"
+          }
+        }
+      }
+    ],
+    "turn_advances": [
+      [
+        1,
+        2
+      ],
+      [
+        2,
+        3
+      ],
+      [
+        3,
+        4
+      ],
+      [
+        4,
+        5
+      ],
+      [
+        5,
+        6
+      ],
+      [
+        6,
+        7
+      ],
+      [
+        7,
+        8
+      ],
+      [
+        8,
+        9
+      ],
+      [
+        9,
+        10
+      ],
+      [
+        10,
+        11
+      ]
+    ],
+    "unpreviewed_mutations": [],
+    "checkpoint": {
+      "name": "cli_20261025_080620_codex_t011",
+      "turn": 11,
+      "size": 586813,
+      "sha256": "07a3a85c5c840a033a8074cb797be4600536096bcf645cfd1b8cc8dbd30362ac",
+      "native_completion": true,
+      "cli_verified": true
+    }
+  },
+  "claude": {
+    "commands": 90,
+    "domain_calls": 60,
+    "named_calls": 60,
+    "fallback_calls": 0,
+    "named_percent": 100.0,
+    "named_commands_used": [
+      "city list",
+      "city production",
+      "city set-production",
+      "map area",
+      "research set",
+      "research show",
+      "save create",
+      "state overview",
+      "turn end",
+      "turn status",
+      "unit attack",
+      "unit fortify",
+      "unit list",
+      "unit move",
+      "unit path",
+      "unit skip",
+      "victory show"
+    ],
+    "tools": {
+      "get_game_overview": 4,
+      "get_units": 7,
+      "get_cities": 3,
+      "get_tech_civics": 2,
+      "get_map_area": 8,
+      "get_victory_progress": 1,
+      "set_research": 2,
+      "unit_action": 18,
+      "end_turn": 5,
+      "get_pathing_estimate": 6,
+      "get_city_production": 1,
+      "set_city_production": 1,
+      "get_turn_status": 1,
+      "save_game": 1
+    },
+    "errors": [
+      {
+        "command": "unit attack 131073 29 21",
+        "error": {
+          "code": "TOOL_REPORTED_ERROR",
+          "message": "Error: ATTACK_DEFERRED|Native melee path arrives after this turn; no attack submitted.",
+          "hint": "Inspect the original error, tools unit_action and pending before correcting arguments; never blindly replay an unknown request.",
+          "details": {
+            "tool": "unit_action",
+            "source": "legacy_text"
+          }
+        }
+      },
+      {
+        "command": "unit move 131073 30 22",
+        "error": {
+          "code": "TOOL_REPORTED_ERROR",
+          "message": "Error: NO_PATH|Visible destination has no native movement path; no move submitted.",
+          "hint": "Inspect the original error, tools unit_action and pending before correcting arguments; never blindly replay an unknown request.",
+          "details": {
+            "tool": "unit_action",
+            "source": "legacy_text"
+          }
+        }
+      }
+    ],
+    "turn_advances": [
+      [
+        11,
+        12
+      ],
+      [
+        12,
+        13
+      ],
+      [
+        13,
+        14
+      ],
+      [
+        14,
+        15
+      ],
+      [
+        15,
+        16
+      ]
+    ],
+    "unpreviewed_mutations": [],
+    "checkpoint": {
+      "name": "cli_20261025_080620_claude_t016",
+      "turn": 16,
+      "size": 621570,
+      "sha256": "1c3a429f29d08e9931ce5baa1021a45d137dc0b98fbc08556b451c6b766d2030",
+      "native_completion": true,
+      "cli_verified": true
+    }
+  },
+  "named_command_coverage": {
+    "used": 21,
+    "documented": 43,
+    "keys": [
+      "city list",
+      "city production",
+      "city set-production",
+      "knowledge search",
+      "knowledge show",
+      "map area",
+      "policy set",
+      "policy show",
+      "research set",
+      "research show",
+      "save create",
+      "turn end",
+      "turn status",
+      "unit action",
+      "unit attack",
+      "unit fortify",
+      "unit list",
+      "unit move",
+      "unit path",
+      "unit skip",
+      "victory show"
+    ]
+  },
+  "timing_export": "evidence/timing-json",
+  "source_commit": "ced61e1",
+  "timing_automatic": true,
+  "completed_turns_timed": 15,
+  "partial_turns_timed": 1,
+  "original_save_unchanged": true,
+  "stock_engine_unchanged": true,
+  "scope": "Single-player Sumeria: actual Codex CLI T1-T11, actual Claude Code CLI T11-T16, one persistent civ6 debug session after explicit read-only relay repair",
+  "timing_format": "JSON only",
+  "game_test_finished": 1792887914.991022,
+  "timing_core_verification": "evidence/core-timing-json-readonly",
+  "timing_json_records": {
+    "completed_rounds": 15,
+    "partial_rounds": 1,
+    "commands": 254
+  },
+  "timing_source": "existing confirmed CLI receipts; no new game queries by collector",
+  "timing_source_commit": "653243e"
+}
