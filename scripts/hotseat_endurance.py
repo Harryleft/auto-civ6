@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-"""Foreground coordinator for one authorized native-hotseat match.
+"""Legacy coordinator for the 2026-10-24 dual-model hotseat endurance run.
 
-Models select all game actions. This finite coordinator dispatches the owning
-CLI, records elapsed time, and writes native checkpoints between human turns.
-An unknown shared action or save stops dispatch; nothing is replayed.
+This script still injects a direct stdio MCP server into Codex/Claude and pins
+the models to MCP tools. The current project entrypoint is CLI-only:
+civ6 debug --hotseat-seat N --hotseat-run DIR. Run this script only to
+reproduce the historical experiment, and pass --acknowledge-legacy-mcp.
+
+Foreground coordinator for one authorized native-hotseat match: models select
+all game actions; the coordinator dispatches the owning model, records elapsed
+time, and writes native checkpoints between human turns. An unknown shared
+action or save stops dispatch; nothing is replayed.
 """
 from __future__ import annotations
 
@@ -245,7 +251,11 @@ def main():
     parser.add_argument("--run", type=Path, required=True)
     parser.add_argument("--through", type=int, default=100)
     parser.add_argument("--until-game-over", action="store_true", help="Continue this match until an official native winning team exists")
+    parser.add_argument("--acknowledge-legacy-mcp", action="store_true",
+        help="Required: this legacy coordinator still injects direct MCP; the current entry is civ6 debug --hotseat-seat")
     args = parser.parse_args()
+    if not args.acknowledge_legacy_mcp:
+        parser.error("LEGACY coordinator: it still injects direct MCP into the models; use civ6 debug --hotseat-seat N --hotseat-run DIR instead, or pass --acknowledge-legacy-mcp only to reproduce the 2026-10-24 experiment")
     run = args.run.resolve()
     evidence = run / "evidence"
     statepath = evidence / "controller-state.json"

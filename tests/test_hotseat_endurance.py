@@ -69,7 +69,7 @@ def test_completed_invocation_keeps_original_finish_and_never_saves_again(endura
     def forbidden(*args, **kwargs):
         pytest.fail("completed test performed another game operation")
     monkeypatch.setattr(endurance, "locked_snapshot", forbidden)
-    monkeypatch.setattr(sys, "argv", ["hotseat_endurance.py", "--run", str(tmp_path), "--through", "100"])
+    monkeypatch.setattr(sys, "argv", ["hotseat_endurance.py", "--acknowledge-legacy-mcp", "--run", str(tmp_path), "--through", "100"])
     endurance.main()
     assert json.loads((evidence / "controller-state.json").read_text()) == state
 
@@ -136,7 +136,7 @@ def test_until_game_over_records_terminal_without_saving_or_clearing_pending(end
     def forbidden(*_,**__):pytest.fail('terminal game dispatched a model/save')
     monkeypatch.setattr(endurance,'checkpoint',forbidden)
     monkeypatch.setattr(endurance.subprocess,'run',forbidden)
-    monkeypatch.setattr(sys,'argv',['hotseat_endurance.py','--run',str(tmp_path),'--until-game-over'])
+    monkeypatch.setattr(sys,'argv',['hotseat_endurance.py','--acknowledge-legacy-mcp','--run',str(tmp_path),'--until-game-over'])
     endurance.main()
     state=json.loads((evidence/'controller-state.json').read_text())
     assert state['status']=='completed' and state['terminal']['winner_team']==3 and state['pending_request_retained']
@@ -187,3 +187,9 @@ def test_timing_excludes_user_pause_from_match_controllers_and_rounds(endurance,
     assert result['preparation_seconds']==100 and result['cumulative_wall_seconds']==170
     assert result['agent_seconds']['0']==20 and result['rounds'][0]['wall_seconds']==20
     assert result['rounds'][0]['agents_seconds']==20
+
+
+def test_main_requires_legacy_acknowledgement(endurance, monkeypatch, tmp_path):
+    monkeypatch.setattr(sys, "argv", ["hotseat_endurance.py", "--run", str(tmp_path)])
+    with pytest.raises(SystemExit):
+        endurance.main()
