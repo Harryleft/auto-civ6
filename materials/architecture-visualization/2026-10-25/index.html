@@ -1,0 +1,1656 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>auto-civ6 架构全景（CLI 唯一入口）· 2026-10-25</title>
+<meta name="description" content="AI 只通过 civ6 CLI 操作《文明 VI》：查询、决策、单次提交与确认的工程架构可视化。">
+<style>
+:root{
+  --ink:#131c27; --ink-2:#26313f; --muted:#5a6879; --faint:#8794a5;
+  --line:#e1e7ef; --line-soft:#eef2f7;
+  --bg:#f5f7fa; --card:#ffffff;
+  --blue:#2a62a8; --teal:#177f68; --amber:#a9761c; --purple:#674a9b;
+  --clay:#9a5340; --slate:#54637a; --green:#2f7d4f;
+  --radius:16px;
+  --mono:'SF Mono',Menlo,Consolas,'Roboto Mono',monospace;
+  --sans:'Noto Sans SC','PingFang SC','Hiragino Sans GB','Microsoft YaHei',system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans);
+  font-size:15px; line-height:1.75; -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+a{color:var(--blue); text-decoration:none}
+a:hover{text-decoration:underline}
+code,.mono{font-family:var(--mono); font-size:.88em}
+
+/* ---------- 布局 ---------- */
+.shell{display:grid; grid-template-columns:250px minmax(0,1fr); gap:0; max-width:1560px; margin:0 auto}
+.side{
+  position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto;
+  padding:30px 22px 40px 30px; border-right:1px solid var(--line);
+  background:linear-gradient(180deg,#fbfcfe, #f5f7fa 60%);
+}
+.side::-webkit-scrollbar{width:6px}
+.side::-webkit-scrollbar-thumb{background:#d9e0ea;border-radius:3px}
+.brand{display:flex; align-items:center; gap:10px; margin-bottom:6px}
+.brand-mark{
+  width:34px;height:34px;border-radius:10px; flex:none;
+  background:linear-gradient(145deg,#2a62a8,#177f68);
+  display:grid;place-items:center;color:#fff;font-weight:700;font-size:15px;
+  box-shadow:0 4px 12px rgba(42,98,168,.28);
+}
+.brand-name{font-weight:700;font-size:15.5px;letter-spacing:.2px;line-height:1.25}
+.brand-sub{font-size:11px;color:var(--faint);letter-spacing:.14em;text-transform:uppercase;margin-top:2px}
+.side-meta{font-size:11.5px;color:var(--faint);margin:14px 0 22px; line-height:1.6}
+.side-meta b{color:var(--muted);font-weight:600}
+.nav{display:flex;flex-direction:column;gap:1px;margin-bottom:24px}
+.nav-label{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:0 0 8px 10px;font-weight:600}
+.nav a{
+  display:flex; align-items:baseline; gap:9px; padding:6px 10px; border-radius:8px;
+  color:var(--ink-2); font-size:13.4px; line-height:1.45; border-left:2px solid transparent;
+  text-decoration:none;
+}
+.nav a:hover{background:#eef2f8; text-decoration:none}
+.nav a .num{font-family:var(--mono); font-size:10.5px; color:var(--faint); min-width:16px}
+.nav a.active{background:#fff; color:var(--blue); border-left-color:var(--blue); box-shadow:0 1px 2px rgba(20,30,50,.05)}
+.nav a.active .num{color:var(--blue)}
+.legend{font-size:11.5px;color:var(--muted);line-height:1.9; padding-top:16px; border-top:1px solid var(--line)}
+.legend .k{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:7px;vertical-align:1px}
+
+/* ---------- 主体 ---------- */
+main{padding:0 clamp(20px,4vw,64px) 90px; min-width:0}
+.hero{
+  position:relative; margin:0 auto; max-width:1180px; padding:54px 46px 40px;
+  border-radius:22px; overflow:hidden; color:#eaf0f8;
+  background:
+    radial-gradient(120% 140% at 92% -20%, rgba(23,127,104,.45), transparent 55%),
+    radial-gradient(100% 120% at -10% 120%, rgba(42,98,168,.5), transparent 60%),
+    linear-gradient(160deg,#101822 10%, #182430 60%, #101a24 100%);
+  box-shadow:0 22px 50px -24px rgba(16,26,38,.55);
+}
+.hero::after{
+  content:""; position:absolute; inset:0; pointer-events:none; opacity:.5;
+  background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px);
+  background-size:34px 34px;
+  mask-image:radial-gradient(80% 80% at 70% 20%, #000 20%, transparent 100%);
+}
+.hero>*{position:relative; z-index:1}
+.hero-kicker{font-family:var(--mono); font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:#8fb6d8}
+.hero h1{margin:14px 0 10px; font-size:clamp(28px,3.4vw,42px); line-height:1.24; letter-spacing:.6px; font-weight:700}
+.hero h1 .grad{background:linear-gradient(92deg,#8fd0c0,#a8c8f2 70%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero-lead{max-width:760px; color:#c3cfdd; font-size:15.5px; line-height:1.85}
+.hero-lead code{background:rgba(255,255,255,.09); color:#dbe7f5; padding:1px 5px; border-radius:5px}
+.hero-tags{display:flex; flex-wrap:wrap; gap:8px; margin-top:22px}
+.hero-tags span{
+  font-size:11.5px; color:#c6d4e3; border:1px solid rgba(255,255,255,.16);
+  background:rgba(255,255,255,.05); padding:3px 10px; border-radius:999px; letter-spacing:.02em;
+}
+.stats{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; margin-top:32px;
+  border:1px solid rgba(255,255,255,.12); border-radius:14px; overflow:hidden; background:rgba(255,255,255,.1)}
+.stat{background:rgba(9,17,26,.45); padding:15px 16px 13px}
+.stat b{display:block; font-size:25px; line-height:1.15; font-family:var(--mono); color:#fff; font-weight:600; letter-spacing:-.5px}
+.stat b small{font-size:12px; color:#8fa9c2; margin-left:4px; font-family:var(--sans)}
+.stat span{display:block; font-size:11.5px; color:#93a8bd; margin-top:5px; letter-spacing:.02em}
+.hero-foot{display:flex; flex-wrap:wrap; gap:18px 30px; margin-top:22px; font-size:11.5px; color:#8fa2b6; font-family:var(--mono)}
+.hero-foot b{color:#cfe0ef; font-weight:500}
+
+/* ---------- 章节 ---------- */
+section{max-width:1180px; margin:0 auto; padding-top:64px; scroll-margin-top:16px}
+.sec-head{display:flex; align-items:flex-start; gap:16px; margin-bottom:8px}
+.sec-no{
+  flex:none; width:40px; height:40px; border-radius:12px; display:grid; place-items:center;
+  font-family:var(--mono); font-size:13px; color:var(--blue); background:#eaf1fa;
+  border:1px solid #d3e2f4; font-weight:600; margin-top:2px;
+}
+.sec-kicker{font-family:var(--mono); font-size:10.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--faint)}
+h2{font-size:clamp(21px,2.3vw,26px); margin:3px 0 0; letter-spacing:.3px; line-height:1.35; font-weight:700}
+.lead{color:var(--muted); font-size:14.6px; line-height:1.9; margin:12px 0 0; max-width:900px}
+.lead b{color:var(--ink-2); font-weight:600}
+.figure{
+  margin:26px 0 0; background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+  padding:24px 26px 18px; box-shadow:0 10px 28px -22px rgba(20,32,48,.5);
+}
+.figure svg{display:block; width:100%; height:auto}
+.figcap{display:flex; gap:12px; justify-content:space-between; flex-wrap:wrap; margin-top:14px;
+  padding-top:12px; border-top:1px dashed var(--line); font-size:11.5px; color:var(--faint)}
+.figcap .src{font-family:var(--mono); font-size:10.8px}
+.notes{display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:14px; margin-top:18px}
+.note-card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:15px 17px}
+.note-card h4{margin:0 0 6px; font-size:13.2px; color:var(--ink-2); letter-spacing:.02em}
+.note-card h4::before{content:"▸"; color:var(--blue); margin-right:7px; font-size:11px}
+.note-card p{margin:0; font-size:12.9px; color:var(--muted); line-height:1.78}
+.note-card code{color:var(--ink-2); background:#f1f4f9; padding:0 4px; border-radius:4px}
+.bullets{margin:16px 0 0; padding:0; list-style:none; display:grid; gap:8px}
+.bullets li{position:relative; padding-left:20px; font-size:13.6px; color:var(--muted); line-height:1.85}
+.bullets li::before{content:""; position:absolute; left:3px; top:10px; width:6px; height:6px; border-radius:2px;
+  background:linear-gradient(135deg,var(--blue),var(--teal))}
+.bullets b{color:var(--ink-2); font-weight:600}
+
+/* ---------- 通用小组件 ---------- */
+.grid-2{display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:22px}
+.grid-3{display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-top:22px}
+.tile{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 20px}
+.tile .t{font-size:13.5px; font-weight:600; color:var(--ink-2); margin-bottom:6px}
+.tile .d{font-size:12.9px; color:var(--muted); line-height:1.8}
+.tile .tb{font-family:var(--mono); font-size:10.5px; color:var(--faint); margin-top:9px; letter-spacing:.02em}
+table.matrix{width:100%; border-collapse:collapse; margin-top:20px; background:var(--card);
+  border:1px solid var(--line); border-radius:14px; overflow:hidden; font-size:12.8px}
+table.matrix th{text-align:left; padding:10px 14px; background:#f7f9fc; color:var(--muted);
+  font-weight:600; font-size:11.6px; letter-spacing:.05em; border-bottom:1px solid var(--line)}
+table.matrix td{padding:9px 14px; border-bottom:1px solid var(--line-soft); vertical-align:top; color:var(--ink-2)}
+table.matrix tr:last-child td{border-bottom:none}
+table.matrix td.mono{font-family:var(--mono); font-size:11.6px; color:var(--slate); white-space:nowrap}
+table.matrix td.dim{color:var(--muted)}
+.tag{display:inline-block; font-family:var(--mono); font-size:10.3px; padding:1px 7px; border-radius:6px;
+  background:#eef2f8; color:var(--slate); border:1px solid #dfe6f0; letter-spacing:.02em}
+.tag.blue{background:#e9f1fb;color:var(--blue);border-color:#cfe0f5}
+.tag.teal{background:#e6f4ef;color:var(--teal);border-color:#c3e3d8}
+.tag.amber{background:#fdf4e3;color:var(--amber);border-color:#eed9b0}
+.tag.purple{background:#efeafa;color:var(--purple);border-color:#dbcdec}
+
+/* CLI 命令面 */
+.cmd-groups{display:grid; grid-template-columns:repeat(2,1fr); gap:16px; margin-top:24px}
+.cmd-group{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px}
+.cmd-group h4{margin:0 0 2px; font-size:13.6px; color:var(--ink-2)}
+.cmd-group .gh{font-family:var(--mono); font-size:11px; color:var(--faint); margin-bottom:10px}
+.chips{display:flex; flex-wrap:wrap; gap:6px}
+.chip{font-family:var(--mono); font-size:11px; padding:2.5px 8px; border-radius:6px;
+  background:#f4f7fb; border:1px solid #e3e9f2; color:var(--slate)}
+.chip.core{background:#e9f1fb; border-color:#cfdff4; color:var(--blue); font-weight:600}
+
+/* 验证层级 */
+.pyr{display:flex;flex-direction:column;gap:9px;margin-top:24px}
+.pyr .lv{width:100%; border-radius:12px; border:1px solid var(--line); background:var(--card);
+  display:grid; grid-template-columns:190px 1fr; align-items:center; gap:20px; padding:14px 22px;
+  border-left:3px solid var(--blue)}
+.pyr .lv.l2{border-left-color:var(--teal)}
+.pyr .lv.l3{border-left-color:var(--amber)}
+.pyr .lv.l4{border-left-color:var(--clay)}
+.pyr .lv .n{font-size:13px; font-weight:600; color:var(--ink-2); line-height:1.5}
+.pyr .lv .n small{display:block; font-family:var(--mono); font-size:10.4px; color:var(--faint); font-weight:400; margin-top:3px}
+.pyr .lv .d{font-size:12.7px; color:var(--muted); line-height:1.8}
+.chip b{color:var(--blue); font-weight:600; margin-left:2px}
+.cmd-group p.d{font-size:12.8px; color:var(--muted); line-height:1.8; margin:12px 0 0}
+.closing{margin-top:26px; padding:30px 34px; border-radius:18px; color:#dfe9f3;
+  background:linear-gradient(140deg,#101a24,#1a2a36 65%,#12212b); border:1px solid #223242}
+.closing .q{font-size:clamp(17px,2vw,22px); line-height:1.75; font-weight:600; letter-spacing:.3px}
+.closing .a{margin-top:12px; font-size:12.5px; color:#8ea6bc; font-family:var(--mono); letter-spacing:.04em}
+.closing .q em{font-style:normal; color:#8fd0c0}
+/* 原则 */
+.principles{display:grid; grid-template-columns:repeat(2,1fr); gap:16px; margin-top:24px}
+.principle{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 20px; position:relative; overflow:hidden}
+.principle::before{content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:linear-gradient(180deg,var(--blue),var(--teal))}
+.principle .pno{font-family:var(--mono); font-size:10.5px; color:var(--faint); letter-spacing:.1em}
+.principle h4{margin:2px 0 6px; font-size:13.6px; color:var(--ink-2)}
+.principle p{margin:0; font-size:12.8px; color:var(--muted); line-height:1.8}
+.principle .q{margin-top:8px; font-size:11.8px; color:var(--faint); border-left:2px solid var(--line); padding-left:10px; line-height:1.7}
+
+/* 目录地图 */
+.tree{font-family:var(--mono); font-size:12.2px; line-height:2.0; background:#0f1822; color:#c6d5e4;
+  border-radius:14px; padding:22px 26px; margin-top:22px; overflow-x:auto; border:1px solid #1d2b3a}
+.tree .row{white-space:pre}
+.tree .d{color:#8fb6d8; font-weight:600}
+.tree .c{color:#7c8ea0}
+.tree .hi{color:#8fd0c0}
+.tree .warn{color:#e0b978}
+
+/* 结尾 */
+.foot{max-width:1180px; margin:70px auto 0; padding:26px 0 0; border-top:1px solid var(--line);
+  font-size:12.2px; color:var(--faint); line-height:1.9}
+.foot b{color:var(--muted); font-weight:600}
+.foot .mono{color:var(--muted)}
+.top{position:fixed; right:26px; bottom:26px; width:40px; height:40px; border-radius:12px; display:grid;
+  place-items:center; background:var(--card); border:1px solid var(--line); color:var(--blue);
+  box-shadow:0 8px 20px -12px rgba(20,32,48,.4); opacity:0; pointer-events:none; transition:.25s; font-size:16px}
+.top.on{opacity:1; pointer-events:auto}
+
+/* SVG 交互 */
+.figure svg .n{transition:opacity .18s ease}
+.figure svg.dim .n{opacity:.28}
+.figure svg.dim .n.hot{opacity:1}
+.figure svg .n.hot{filter:drop-shadow(0 4px 10px rgba(30,50,80,.16))}
+
+@media (max-width:1080px){
+  .shell{grid-template-columns:minmax(0,1fr)}
+  .figure{overflow-x:auto}
+  .figure svg{min-width:680px}
+  .figure .figcap{min-width:680px}
+  table.matrix td.mono{white-space:normal}
+  .side{position:static; height:auto; border-right:none; border-bottom:1px solid var(--line); padding:20px}
+  .side .nav{flex-direction:row; flex-wrap:wrap; gap:4px}
+  .nav-label,.legend,.side-meta{display:none}
+  .nav a{border-left:none; border-bottom:2px solid transparent; padding:4px 8px}
+  .nav a.active{border-left:none; border-bottom-color:var(--blue); box-shadow:none; background:transparent}
+  main{padding:0 16px 60px}
+  .hero{padding:34px 24px 28px; border-radius:16px}
+  .stats{grid-template-columns:1fr 1fr}
+  .grid-2,.grid-3,.cmd-groups,.principles{grid-template-columns:1fr}
+  .pyr .lv{grid-template-columns:1fr; gap:4px}
+  .pyr .lv.l2,.pyr .lv.l3,.pyr .lv.l4{width:100%}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="brand">
+      <div class="brand-mark">VI</div>
+      <div>
+        <div class="brand-name">auto-civ6</div>
+        <div class="brand-sub">architecture map</div>
+      </div>
+    </div>
+    <div class="side-meta">
+      版本 <b>1.1.11</b> · 基线 <b>042ea57</b><br>
+      生成于 2026-10-25 · 纯离线静态页
+    </div>
+    <div class="nav-label">阅读路径</div>
+    <nav class="nav"><a href="#overview"><span class="num">01</span>系统全景</a><a href="#layers"><span class="num">02</span>运行时分层</a><a href="#modules"><span class="num">03</span>模块图</a><a href="#action"><span class="num">04</span>动作生命周期</a><a href="#turn"><span class="num">05</span>回合推进</a><a href="#seq"><span class="num">06</span>端到端时序</a><a href="#session"><span class="num">07</span>会话替换与检查点</a><a href="#domains"><span class="num">08</span>领域状态机</a><a href="#cli"><span class="num">09</span>CLI 命令面</a><a href="#validation"><span class="num">10</span>验证体系</a><a href="#repo"><span class="num">11</span>目录地图</a><a href="#principles"><span class="num">12</span>八条设计规则</a></nav>
+    <div class="legend">
+      <span class="k" style="background:#2a62a8"></span>接口与调用面<br>
+      <span class="k" style="background:#177f68"></span>状态与确认所有权<br>
+      <span class="k" style="background:#a9761c"></span>未决 / 门禁 / 未知<br>
+      <span class="k" style="background:#674a9b"></span>领域与 Lua 构造<br>
+      <span class="k" style="background:#54637a"></span>传输、进程与证据<br>
+      <span class="k" style="background:#9a5340"></span>游戏引擎原生层
+    </div>
+  </aside>
+  <main>
+    <header class="hero">
+      <div class="hero-kicker">auto-civ6 · architecture visualization · 2026-10-25</div>
+      <h1>让模型在真实《文明 VI》里<br><span class="grad">查询、决策、单次提交、确认结果</span></h1>
+      <p class="hero-lead">
+        <b>AI 只发现并执行 <code>civ6</code> CLI</b>；MCP 降为 CLI 的内部 stdio 通信实现，客户端不注册、不直连。
+        游戏引擎执行规则，模型负责策略，运行层负责真实查询、单次提交、结果确认和显式生命周期控制。
+        本页从系统全景、运行时分层、动作生命周期、回合推进、会话恢复、领域状态机、CLI 命令面与验证体系展开，
+        图中的每条结论都来自当前工作树的源码与文档。
+      </p>
+      <div class="hero-tags">
+        <span>CLI 唯一入口</span><span>内部 stdio MCP</span><span>FireTuner · TCP 4318</span><span>Python 3.12 · uv locked</span>
+        <span>Lua 5.1 构造 / 解析</span><span>单次提交 · 有界只读确认</span><span>未决请求不得重发</span>
+      </div>
+      <div class="stats"><div class="stat"><b>90<small></small></b><span>基础工具（全部有命名入口）</span></div><div class="stat"><b>142<small></small></b><span>命名子命令（33 组，含热座）</span></div><div class="stat"><b>6<small></small></b><span>类未决门禁（各自独立所有者）</span></div><div class="stat"><b>2,146<small></small></b><span>离线测试函数（132 个文件）</span></div></div>
+      <div class="hero-foot">
+        <span>数据来源 <b>src/ · docs/ · tests/</b></span>
+        <span>客户端注册 <b>无（CLI 唯一入口）</b></span>
+        <span>图形 <b>手写 SVG · 无外部依赖</b></span>
+        <span>实机验证 <b>未运行（本页为只读文档产物）</b></span>
+      </div>
+    </header>
+    <section id="overview">
+  <div class="sec-head">
+    <div class="sec-no">01</div>
+    <div><div class="sec-kicker">System Panorama</div><h2>系统全景：CLI 是唯一操作面，MCP 是内部实现</h2></div>
+  </div>
+  <p class="lead">一次操作的真实链路是：<b>Agent 宿主 → civ6 CLI（唯一操作面）→ 内部 stdio MCP → 运行层 → FireTuner → 游戏引擎</b>，再把回读事实送回模型。客户端不注册 <code>civ6</code> MCP，也不直连内部服务；运行层仍是唯一持有未决状态的地方，知识包、基准存档、对局证据与离线测试只在旁边提供依据与验证。</p>
+  <figure class="figure"><svg viewBox="0 0 1160 908" width="100%" preserveAspectRatio="xMidYMin meet" role="img" xmlns="http://www.w3.org/2000/svg"><defs><marker id="mk-blue" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#2a62a8"/></marker><marker id="mk-teal" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#177f68"/></marker><marker id="mk-amber" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#a9761c"/></marker><marker id="mk-purple" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#674a9b"/></marker><marker id="mk-slate" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#54637a"/></marker><marker id="mk-clay" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#9a5340"/></marker><marker id="mk-green" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#2f7d4f"/></marker><marker id="mk-muted" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#8794a5"/></marker></defs>
+<g class="n">
+<rect x="110.0" y="30.0" width="600.0" height="68.0" rx="13" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.4"/>
+<rect x="124.0" y="30.0" width="572.0" height="3.5" rx="2" fill="#54637a" stroke="none"/>
+<text x="410.0" y="56.0" font-size="15.5" fill="#3b485c" text-anchor="middle" font-weight="600">人类用户 / 任务授权</text>
+<text x="410.0" y="86.5" font-size="12.5" fill="#5b6a7d" text-anchor="middle">自然语言目标 · 指定存档 · 明确的操作授权边界</text>
+</g>
+<path d="M 410.0 98.0 L 410.0 132.0" fill="none" stroke="#54637a" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-slate)"/>
+<rect x="422.0" y="103.0" width="67.0" height="20.0" rx="10.0" fill="#ffffff" stroke="none"/>
+<text x="455.5" y="116.5" font-size="11" fill="#54637a" text-anchor="middle" font-weight="600">任务与授权</text>
+<g class="n">
+<rect x="110.0" y="134.0" width="600.0" height="106.0" rx="14" fill="#e9f1fb" stroke="#b4cdea" stroke-width="1.4"/>
+<rect x="124.0" y="134.0" width="572.0" height="3.5" rx="2" fill="#2a62a8" stroke="none"/>
+<text x="132.0" y="166.0" font-size="16" fill="#1c4a86" text-anchor="start" font-weight="600">Agent 宿主</text>
+<text x="226.0" y="166.0" font-size="11.5" fill="#5b6a7d" text-anchor="start">Codex · Claude Code · Pi</text>
+<rect x="132.0" y="182.0" width="176.0" height="44.0" rx="10" fill="#ffffff" stroke="#b4cdea" stroke-width="1.2"/>
+<text x="144.0" y="200.0" font-size="11.5" fill="#1c4a86" text-anchor="start" font-weight="600">读文档入口</text>
+<text x="144.0" y="216.0" font-size="9.8" fill="#5b6a7d" text-anchor="start">AGENTS.md → 按任务取文档</text>
+<rect x="318.0" y="182.0" width="176.0" height="44.0" rx="10" fill="#ffffff" stroke="#b4cdea" stroke-width="1.2"/>
+<text x="330.0" y="200.0" font-size="11.5" fill="#1c4a86" text-anchor="start" font-weight="600">执行 CLI 命令</text>
+<text x="330.0" y="216.0" font-size="9.8" fill="#5b6a7d" text-anchor="start">civ6 doctor / debug</text>
+<rect x="504.0" y="182.0" width="176.0" height="44.0" rx="10" fill="#ffffff" stroke="#b4cdea" stroke-width="1.2"/>
+<text x="516.0" y="200.0" font-size="11.5" fill="#1c4a86" text-anchor="start" font-weight="600">做策略决策</text>
+<text x="516.0" y="216.0" font-size="9.8" fill="#5b6a7d" text-anchor="start">引擎执行规则，模型只做选择</text>
+</g>
+<path d="M 410.0 240.0 L 410.0 264.0" fill="none" stroke="#2a62a8" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-blue)"/>
+<rect x="422.0" y="239.0" width="155.0" height="20.0" rx="10.0" fill="#ffffff" stroke="none"/>
+<text x="499.5" y="252.5" font-size="11" fill="#2a62a8" text-anchor="middle" font-weight="600">执行 CLI 命令 / 读取 JSONL</text>
+<g class="n">
+<rect x="110.0" y="266.0" width="600.0" height="126.0" rx="14" fill="#e9f1fb" stroke="#b4cdea" stroke-width="1.6"/>
+<rect x="124.0" y="266.0" width="572.0" height="3.5" rx="2" fill="#2a62a8" stroke="none"/>
+<text x="132.0" y="296.0" font-size="17" fill="#1c4a86" text-anchor="start" font-weight="600">civ6 CLI</text>
+<text x="222.0" y="296.0" font-size="11.5" fill="#2a62a8" text-anchor="start" font-weight="600">AI 唯一操作面</text>
+<text x="132.0" y="316.0" font-size="10.5" fill="#5b6a7d" text-anchor="start">顶层 5 命令 · debug 前台会话 · 33 组 / 142 个命名子命令</text>
+<text x="132.0" y="334.0" font-size="10.5" fill="#5b6a7d" text-anchor="start">一个持续会话 = 一个内部 stdio MCP 进程 = 一份 GameState</text>
+<rect x="132.0" y="346.0" width="74.0" height="26.0" rx="8" fill="#ffffff" stroke="#b4cdea" stroke-width="1.1"/>
+<text x="169.0" y="364.0" font-size="10" fill="#2a62a8" text-anchor="middle" font-weight="600" font-family="var(--mono)">doctor</text>
+<rect x="216.0" y="346.0" width="74.0" height="26.0" rx="8" fill="#ffffff" stroke="#b4cdea" stroke-width="1.1"/>
+<text x="253.0" y="364.0" font-size="10" fill="#2a62a8" text-anchor="middle" font-weight="600" font-family="var(--mono)">verify</text>
+<rect x="300.0" y="346.0" width="74.0" height="26.0" rx="8" fill="#ffffff" stroke="#b4cdea" stroke-width="1.1"/>
+<text x="337.0" y="364.0" font-size="10" fill="#2a62a8" text-anchor="middle" font-weight="600" font-family="var(--mono)">test</text>
+<rect x="384.0" y="346.0" width="74.0" height="26.0" rx="8" fill="#ffffff" stroke="#b4cdea" stroke-width="1.1"/>
+<text x="421.0" y="364.0" font-size="10" fill="#2a62a8" text-anchor="middle" font-weight="600" font-family="var(--mono)">debug</text>
+<rect x="468.0" y="346.0" width="74.0" height="26.0" rx="8" fill="#ffffff" stroke="#b4cdea" stroke-width="1.1"/>
+<text x="505.0" y="364.0" font-size="10" fill="#2a62a8" text-anchor="middle" font-weight="600" font-family="var(--mono)">logs</text>
+<text x="580.0" y="364.0" font-size="10" fill="#855a10" text-anchor="start" font-weight="600">客户端不注册 MCP</text>
+</g>
+<path d="M 410.0 392.0 L 410.0 420.0" fill="none" stroke="#2a62a8" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-blue)"/>
+<rect x="422.0" y="393.0" width="216.2" height="20.0" rx="10.0" fill="#ffffff" stroke="none"/>
+<text x="530.1" y="406.5" font-size="11" fill="#2a62a8" text-anchor="middle" font-weight="600">内部 stdio JSON-RPC（CLI 自行拉起）</text>
+<g class="n">
+<rect x="110.0" y="422.0" width="600.0" height="160.0" rx="14" fill="#e6f4ef" stroke="#a5d6c6" stroke-width="1.4"/>
+<rect x="124.0" y="422.0" width="572.0" height="3.5" rx="2" fill="#177f68" stroke="none"/>
+<text x="132.0" y="452.0" font-size="15" fill="#0f6250" text-anchor="start" font-weight="600">Runtime 运行层（内部 stdio MCP · 单进程）</text>
+<text x="132.0" y="470.0" font-size="10.5" fill="#5b6a7d" text-anchor="start">MCP 只是 CLI 的内部通信实现；查询、单次提交、确认与门禁都在这里</text>
+<rect x="128.0" y="486.0" width="180.0" height="38.0" rx="9" fill="#ffffff" stroke="#a5d6c6" stroke-width="1.1"/>
+<text x="138.0" y="502.0" font-size="10.6" fill="#0f6250" text-anchor="start" font-weight="600">server.py</text>
+<text x="138.0" y="516.0" font-size="9.5" fill="#5b6a7d" text-anchor="start">工具面 · 90+3 工具</text>
+<rect x="318.0" y="486.0" width="180.0" height="38.0" rx="9" fill="#ffffff" stroke="#a5d6c6" stroke-width="1.1"/>
+<text x="328.0" y="502.0" font-size="10.6" fill="#0f6250" text-anchor="start" font-weight="600">game_state.py</text>
+<text x="328.0" y="516.0" font-size="9.5" fill="#5b6a7d" text-anchor="start">领域 interface · 缓存</text>
+<rect x="508.0" y="486.0" width="180.0" height="38.0" rx="9" fill="#ffffff" stroke="#a5d6c6" stroke-width="1.1"/>
+<text x="518.0" y="502.0" font-size="10.6" fill="#0f6250" text-anchor="start" font-weight="600">ActionLifecycle</text>
+<text x="518.0" y="516.0" font-size="9.5" fill="#5b6a7d" text-anchor="start">未决动作唯一所有者</text>
+<rect x="128.0" y="530.0" width="180.0" height="38.0" rx="9" fill="#ffffff" stroke="#a5d6c6" stroke-width="1.1"/>
+<text x="138.0" y="546.0" font-size="10.6" fill="#0f6250" text-anchor="start" font-weight="600">TurnProgress</text>
+<text x="138.0" y="560.0" font-size="9.5" fill="#5b6a7d" text-anchor="start">推进请求与基线</text>
+<rect x="318.0" y="530.0" width="180.0" height="38.0" rx="9" fill="#ffffff" stroke="#a5d6c6" stroke-width="1.1"/>
+<text x="328.0" y="546.0" font-size="10.6" fill="#0f6250" text-anchor="start" font-weight="600">Diplomacy / Congress</text>
+<text x="328.0" y="560.0" font-size="9.5" fill="#5b6a7d" text-anchor="start">多阶段会话与票单</text>
+<rect x="508.0" y="530.0" width="180.0" height="38.0" rx="9" fill="#ffffff" stroke="#a5d6c6" stroke-width="1.1"/>
+<text x="518.0" y="546.0" font-size="10.6" fill="#0f6250" text-anchor="start" font-weight="600">lua/</text>
+<text x="518.0" y="560.0" font-size="9.5" fill="#5b6a7d" text-anchor="start">按领域构造与解析</text>
+</g>
+<path d="M 410.0 582.0 L 410.0 610.0" fill="none" stroke="#177f68" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-teal)"/>
+<rect x="422.0" y="583.0" width="137.0" height="20.0" rx="10.0" fill="#ffffff" stroke="none"/>
+<text x="490.5" y="596.5" font-size="11" fill="#177f68" text-anchor="middle" font-weight="600">Lua 请求帧 · 一次一提交</text>
+<g class="n">
+<rect x="110.0" y="612.0" width="600.0" height="80.0" rx="13" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.4"/>
+<rect x="124.0" y="612.0" width="572.0" height="3.5" rx="2" fill="#54637a" stroke="none"/>
+<text x="410.0" y="638.0" font-size="15" fill="#3b485c" text-anchor="middle" font-weight="600">FireTuner 传输 · connection.py / tuner_client.py</text>
+<text x="410.0" y="668.5" font-size="12.5" fill="#5b6a7d" text-anchor="middle">TCP 127.0.0.1:4318 · 单次请求单次响应 · 超时隔离 · 无自动重放</text>
+</g>
+<path d="M 410.0 692.0 L 410.0 720.0" fill="none" stroke="#54637a" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-slate)"/>
+<rect x="422.0" y="693.0" width="82.8" height="20.0" rx="10.0" fill="#ffffff" stroke="none"/>
+<text x="463.4" y="706.5" font-size="11" fill="#54637a" text-anchor="middle" font-weight="600">原生 Lua 调用</text>
+<g class="n">
+<rect x="110.0" y="722.0" width="600.0" height="104.0" rx="14" fill="#fbeeea" stroke="#e0bdb2" stroke-width="1.4"/>
+<rect x="124.0" y="722.0" width="572.0" height="3.5" rx="2" fill="#9a5340" stroke="none"/>
+<text x="132.0" y="754.0" font-size="16" fill="#7a3d2d" text-anchor="start" font-weight="600">Civilization VI 游戏引擎</text>
+<text x="132.0" y="772.0" font-size="10.5" fill="#5b6a7d" text-anchor="start">规则、合法性与真实世界状态由引擎裁决；任何写入都必须经过它</text>
+<rect x="132.0" y="784.0" width="176.0" height="30.0" rx="8" fill="#ffffff" stroke="#e0bdb2" stroke-width="1.1"/>
+<text x="142.0" y="804.0" font-size="9.5" fill="#7a3d2d" text-anchor="start" font-weight="500">GameCore · 玩家 / 城市 / 单位 / 科研</text>
+<rect x="318.0" y="784.0" width="176.0" height="30.0" rx="8" fill="#ffffff" stroke="#e0bdb2" stroke-width="1.1"/>
+<text x="328.0" y="804.0" font-size="9.5" fill="#7a3d2d" text-anchor="start" font-weight="500">InGame · 界面上下文 · 单位与城市</text>
+<rect x="504.0" y="784.0" width="176.0" height="30.0" rx="8" fill="#ffffff" stroke="#e0bdb2" stroke-width="1.1"/>
+<text x="514.0" y="804.0" font-size="9.5" fill="#7a3d2d" text-anchor="start" font-weight="500">FrontEnd · 主菜单 · 读档入口</text>
+</g>
+<path d="M 110.0 774.0 L 54.0 774.0 Q 44.0 774.0 44.0 764.0 L 44.0 197.0 Q 44.0 187.0 54.0 187.0 L 110.0 187.0" fill="none" stroke="#2f7d4f" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="7 6" marker-end="url(#mk-green)"/>
+<text x="30.0" y="384.0" font-size="10.4" fill="#205c38" text-anchor="middle" font-weight="600">回</text>
+<text x="30.0" y="399.0" font-size="10.4" fill="#205c38" text-anchor="middle" font-weight="600">读</text>
+<text x="30.0" y="414.0" font-size="10.4" fill="#205c38" text-anchor="middle" font-weight="600">事</text>
+<text x="30.0" y="429.0" font-size="10.4" fill="#205c38" text-anchor="middle" font-weight="600">实</text>
+<text x="30.0" y="444.0" font-size="10.4" fill="#205c38" text-anchor="middle" font-weight="600">与</text>
+<text x="30.0" y="459.0" font-size="10.4" fill="#205c38" text-anchor="middle" font-weight="600">证</text>
+<text x="30.0" y="474.0" font-size="10.4" fill="#205c38" text-anchor="middle" font-weight="600">据</text>
+<rect x="742.0" y="134.0" width="380.0" height="688.0" rx="16" fill="#f6f8fb" stroke="#c8d2e0" stroke-width="1.3" stroke-dasharray="7 6"/>
+<rect x="756.0" y="123.0" width="134.5" height="22.0" rx="11" fill="#f6f8fb" stroke="#c8d2e0" stroke-width="1.2"/>
+<text x="767.0" y="138.0" font-size="12.5" fill="#54637a" text-anchor="start" font-weight="600">离线资产与验证证据</text>
+<text x="758.0" y="176.0" font-size="10.2" fill="#8794a5" text-anchor="start">运行时不依赖它们做玩法决策；它们界定「依据什么、怎么验证」</text>
+<g class="n">
+<rect x="758.0" y="194.0" width="348.0" height="92.0" rx="13" fill="#e6f4ef" stroke="#a5d6c6" stroke-width="1.4"/>
+<rect x="772.0" y="194.0" width="320.0" height="3.5" rx="2" fill="#177f68" stroke="none"/>
+<text x="932.0" y="220.0" font-size="13.2" fill="#0f6250" text-anchor="middle" font-weight="600">知识包 civ6_knowledge/</text>
+<text x="932.0" y="248.2" font-size="10.2" fill="#5b6a7d" text-anchor="middle">规则、文明、科技树、策略与胜利条件</text>
+<text x="932.0" y="263.7" font-size="10.2" fill="#5b6a7d" text-anchor="middle">schema 校验的离线数据 · 按需查询</text>
+</g>
+<g class="n">
+<rect x="758.0" y="298.0" width="348.0" height="92.0" rx="13" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.4"/>
+<rect x="772.0" y="298.0" width="320.0" height="3.5" rx="2" fill="#54637a" stroke="none"/>
+<text x="932.0" y="324.0" font-size="13.2" fill="#3b485c" text-anchor="middle" font-weight="600">受信基准 fixtures/saves/</text>
+<text x="932.0" y="352.2" font-size="10.2" fill="#5b6a7d" text-anchor="middle">benchmark_turn_1 · gold_tun_1 · gold_v2</text>
+<text x="932.0" y="367.7" font-size="10.2" fill="#5b6a7d" text-anchor="middle">原始基准 + 精确文件指纹，不覆盖</text>
+</g>
+<g class="n">
+<rect x="758.0" y="402.0" width="348.0" height="92.0" rx="13" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.4"/>
+<rect x="772.0" y="402.0" width="320.0" height="3.5" rx="2" fill="#a9761c" stroke="none"/>
+<text x="932.0" y="428.0" font-size="13.2" fill="#855a10" text-anchor="middle" font-weight="600">对局证据 games/</text>
+<text x="932.0" y="456.2" font-size="10.2" fill="#5b6a7d" text-anchor="middle">回合记录 · 检查点 · 报告 · 终局截图</text>
+<text x="932.0" y="471.7" font-size="10.2" fill="#5b6a7d" text-anchor="middle">每轮独立 runs/&lt;日期-轮次&gt;/</text>
+</g>
+<g class="n">
+<rect x="758.0" y="506.0" width="348.0" height="92.0" rx="13" fill="#e9f1fb" stroke="#b4cdea" stroke-width="1.4"/>
+<rect x="772.0" y="506.0" width="320.0" height="3.5" rx="2" fill="#2a62a8" stroke="none"/>
+<text x="932.0" y="532.0" font-size="13.2" fill="#1c4a86" text-anchor="middle" font-weight="600">规格与验收 docs/specs · acceptance</text>
+<text x="932.0" y="560.2" font-size="10.2" fill="#5b6a7d" text-anchor="middle">行为契约、覆盖基线、审查记录</text>
+<text x="932.0" y="575.7" font-size="10.2" fill="#5b6a7d" text-anchor="middle">旧通过记录只对当时版本有效</text>
+</g>
+<g class="n">
+<rect x="758.0" y="610.0" width="348.0" height="92.0" rx="13" fill="#efeafa" stroke="#cbb9e8" stroke-width="1.4"/>
+<rect x="772.0" y="610.0" width="320.0" height="3.5" rx="2" fill="#674a9b" stroke="none"/>
+<text x="932.0" y="636.0" font-size="13.2" fill="#4f3780" text-anchor="middle" font-weight="600">离线测试 tests/</text>
+<text x="932.0" y="664.2" font-size="10.2" fill="#5b6a7d" text-anchor="middle">132 个测试文件 · FakeConn / 内存 Tuner 流</text>
+<text x="932.0" y="679.7" font-size="10.2" fill="#5b6a7d" text-anchor="middle">Lua 5.1 执行真实构造器 · 不连游戏</text>
+</g>
+<rect x="758.0" y="724.0" width="348.0" height="1.0" rx="0" fill="#d8e0ea" stroke="none"/>
+<text x="758.0" y="746.0" font-size="10.0" fill="#8794a5" text-anchor="start">MCP 是内部协议：客户端不注册 civ6 MCP，也不直连。</text>
+<text x="758.0" y="763.0" font-size="10.0" fill="#8794a5" text-anchor="start">call/tools 只作协议兼容诊断；任意 Lua 仅 debug --developer；</text>
+<text x="758.0" y="780.0" font-size="10.0" fill="#8794a5" text-anchor="start">热座实验仅经 debug --hotseat-seat/--hotseat-run。</text>
+<rect x="110.0" y="857.0" width="16.0" height="10.0" rx="3" fill="#e9f1fb" stroke="#b4cdea" stroke-width="1.2"/>
+<text x="132.0" y="866.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">请求 / 调用</text>
+<rect x="217.8" y="857.0" width="16.0" height="10.0" rx="3" fill="#e6f4ef" stroke="#a5d6c6" stroke-width="1.2"/>
+<text x="239.8" y="866.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">确认中的动作</text>
+<rect x="334.8" y="857.0" width="16.0" height="10.0" rx="3" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.2"/>
+<text x="356.8" y="866.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">传输</text>
+<rect x="405.8" y="857.0" width="16.0" height="10.0" rx="3" fill="#fbeeea" stroke="#e0bdb2" stroke-width="1.2"/>
+<text x="427.8" y="866.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">引擎原生层</text>
+<rect x="511.3" y="857.0" width="16.0" height="10.0" rx="3" fill="#e8f5ec" stroke="#aed3ba" stroke-width="1.2"/>
+<text x="533.3" y="866.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">回读证据</text>
+<text x="110.0" y="892.0" font-size="10" fill="#8794a5" text-anchor="start">实线＝控制流与提交；虚线＝只读回读（模型只根据回读事实更新判断）</text>
+</svg><div class="figcap"><span>图 1 · AI 只发现并执行 CLI；CLI 自行拉起内部 MCP。提交向下、事实向上，引擎执行规则、运行层负责确认。</span><span class="src">AGENTS.md#调用入口 · docs/architecture.md#调用关系</span></div></figure><div class="notes"><div class="note-card"><h4>唯一操作面</h4><p>AI 只发现并执行 <code>civ6</code> 命名命令；<code>.mcp.json</code> 默认没有服务注册，Codex / Claude / Pi 都只是终端客户端。MCP 是 CLI 的内部通信实现。</p></div><div class="note-card"><h4>单进程 = 单所有者</h4><p>一个 <code>civ6 debug</code> 会话只拉起一个内部 MCP 进程、一次 initialize、一份 GameState；后续每条命令复用同一进程，终端命令不会重建状态。</p></div><div class="note-card"><h4>内部协议不外露</h4><p><code>call</code> 与 <code>tools</code> 只作同会话协议兼容诊断；任意 Lua 仅 <code>debug --developer</code>；热座实验仅 <code>debug --hotseat-seat/--hotseat-run</code>。</p></div><div class="note-card"><h4>离线资产不参与决策</h4><p>知识按需只读查询，基准与对局证据只读保留；离线测试覆盖运行层，但“离线通过”不等于“实机通过”。</p></div></div>
+</section>
+<section id="layers">
+  <div class="sec-head">
+    <div class="sec-no">02</div>
+    <div><div class="sec-kicker">Runtime Layers</div><h2>运行时分层：七层单向栈，每层一个主职责</h2></div>
+  </div>
+  <p class="lead">从调用面到引擎，每一层只做一类事：CLI 面把命令翻译成内部调用，工具层管参数与串行，状态层管领域准备与阻塞判断，确认层拥有未决请求，Lua 层只构造与解析，传输层只负责一次请求一次响应。<b>lua/、narrate、snapshot 没有向上依赖</b>，因此整张依赖图无环。</p>
+  <figure class="figure"><svg viewBox="0 0 1120 939" width="100%" preserveAspectRatio="xMidYMin meet" role="img" xmlns="http://www.w3.org/2000/svg"><defs><marker id="mk-blue" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#2a62a8"/></marker><marker id="mk-teal" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#177f68"/></marker><marker id="mk-amber" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#a9761c"/></marker><marker id="mk-purple" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#674a9b"/></marker><marker id="mk-slate" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#54637a"/></marker><marker id="mk-clay" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#9a5340"/></marker><marker id="mk-green" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#2f7d4f"/></marker><marker id="mk-muted" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#8794a5"/></marker></defs>
+<g class="n">
+<rect x="66.0" y="34.0" width="634.0" height="95.4" rx="13" fill="#e9f1fb" stroke="#b4cdea" stroke-width="1.4"/>
+<rect x="66.0" y="34.0" width="4.5" height="95.4" rx="2" fill="#2a62a8" stroke="none"/>
+<text x="88.0" y="58.0" font-size="10.5" fill="#2a62a8" text-anchor="start" font-weight="600" font-family="var(--mono)">L0</text>
+<text x="112.0" y="58.0" font-size="15" fill="#1c4a86" text-anchor="start" font-weight="600">调用面</text>
+<rect x="84.0" y="72.0" width="194.0" height="47.4" rx="9" fill="#ffffff" stroke="#b4cdea" stroke-width="1.1"/>
+<text x="94.0" y="89.0" font-size="10.6" fill="#1c4a86" text-anchor="start" font-weight="600">civ6 CLI</text>
+<text x="94.0" y="104.2" font-size="9.5" fill="#5b6a7d" text-anchor="start">唯一操作面 · devtools/</text>
+<rect x="286.0" y="72.0" width="194.0" height="47.4" rx="9" fill="#ffffff" stroke="#b4cdea" stroke-width="1.1"/>
+<text x="296.0" y="89.0" font-size="10.6" fill="#1c4a86" text-anchor="start" font-weight="600">debug 会话</text>
+<text x="296.0" y="104.2" font-size="9.5" fill="#5b6a7d" text-anchor="start">同进程 · stdin→JSONL</text>
+<rect x="488.0" y="72.0" width="194.0" height="47.4" rx="9" fill="#ffffff" stroke="#b4cdea" stroke-width="1.1"/>
+<text x="498.0" y="89.0" font-size="10.6" fill="#1c4a86" text-anchor="start" font-weight="600">命名子命令</text>
+<text x="498.0" y="104.2" font-size="9.5" fill="#5b6a7d" text-anchor="start">33 组 / 142 个</text>
+<text x="716.0" y="58.0" font-size="10.2" fill="#5b6a7d" text-anchor="start">AI 只经由 CLI；CLI 自行启动内部 stdio MCP，客户端不注册</text>
+</g>
+<path d="M 360.0 129.4 L 360.0 149.4" fill="none" stroke="#2a62a8" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-blue)"/>
+<rect x="372.0" y="129.4" width="52.0" height="19.0" rx="9.5" fill="#ffffff" stroke="none"/>
+<text x="398.0" y="142.4" font-size="10" fill="#2a62a8" text-anchor="middle" font-weight="600">工具调用</text>
+<g class="n">
+<rect x="66.0" y="149.4" width="634.0" height="107.6" rx="13" fill="#e9f1fb" stroke="#b4cdea" stroke-width="1.4"/>
+<rect x="66.0" y="149.4" width="4.5" height="107.6" rx="2" fill="#2a62a8" stroke="none"/>
+<text x="88.0" y="173.4" font-size="10.5" fill="#2a62a8" text-anchor="start" font-weight="600" font-family="var(--mono)">L1</text>
+<text x="112.0" y="173.4" font-size="15" fill="#1c4a86" text-anchor="start" font-weight="600">工具接口</text>
+<rect x="84.0" y="187.4" width="194.0" height="59.6" rx="9" fill="#ffffff" stroke="#b4cdea" stroke-width="1.1"/>
+<text x="94.0" y="204.4" font-size="10.6" fill="#1c4a86" text-anchor="start" font-weight="600">server.py · 2,336 行</text>
+<text x="94.0" y="219.6" font-size="9.5" fill="#5b6a7d" text-anchor="start">90 个 @mcp.tool + 3 热座 · 参数校验</text>
+<text x="94.0" y="231.8" font-size="9.5" fill="#5b6a7d" text-anchor="start">· 工具锁</text>
+<rect x="286.0" y="187.4" width="194.0" height="59.6" rx="9" fill="#ffffff" stroke="#b4cdea" stroke-width="1.1"/>
+<text x="296.0" y="204.4" font-size="10.6" fill="#1c4a86" text-anchor="start" font-weight="600">AppContext</text>
+<text x="296.0" y="219.6" font-size="9.5" fill="#5b6a7d" text-anchor="start">持有 GameConnection 与 GameState</text>
+<rect x="488.0" y="187.4" width="194.0" height="59.6" rx="9" fill="#ffffff" stroke="#b4cdea" stroke-width="1.1"/>
+<text x="498.0" y="204.4" font-size="10.6" fill="#1c4a86" text-anchor="start" font-weight="600">narrate.py · 2,034 行</text>
+<text x="498.0" y="219.6" font-size="9.5" fill="#5b6a7d" text-anchor="start">领域事实 → 工具返回文本</text>
+<text x="716.0" y="173.4" font-size="10.2" fill="#5b6a7d" text-anchor="start">许可分类留在调度端，只消费公共未决事实</text>
+</g>
+<path d="M 360.0 257.0 L 360.0 277.0" fill="none" stroke="#2a62a8" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-blue)"/>
+<rect x="372.0" y="257.0" width="85.2" height="19.0" rx="9.5" fill="#ffffff" stroke="none"/>
+<text x="414.6" y="270.0" font-size="10" fill="#2a62a8" text-anchor="middle" font-weight="600">async 领域调用</text>
+<g class="n">
+<rect x="66.0" y="277.0" width="634.0" height="107.6" rx="13" fill="#e6f4ef" stroke="#a5d6c6" stroke-width="1.4"/>
+<rect x="66.0" y="277.0" width="4.5" height="107.6" rx="2" fill="#177f68" stroke="none"/>
+<text x="88.0" y="301.0" font-size="10.5" fill="#177f68" text-anchor="start" font-weight="600" font-family="var(--mono)">L2</text>
+<text x="112.0" y="301.0" font-size="15" fill="#0f6250" text-anchor="start" font-weight="600">状态与编排</text>
+<rect x="84.0" y="315.0" width="194.0" height="59.6" rx="9" fill="#ffffff" stroke="#a5d6c6" stroke-width="1.1"/>
+<text x="94.0" y="332.0" font-size="10.6" fill="#0f6250" text-anchor="start" font-weight="600">GameState · 2,573 行</text>
+<text x="94.0" y="347.2" font-size="9.5" fill="#5b6a7d" text-anchor="start">领域 interface · 查询 · 观察缓存 ·</text>
+<text x="94.0" y="359.4" font-size="9.5" fill="#5b6a7d" text-anchor="start">存档替换</text>
+<rect x="286.0" y="315.0" width="194.0" height="59.6" rx="9" fill="#ffffff" stroke="#a5d6c6" stroke-width="1.1"/>
+<text x="296.0" y="332.0" font-size="10.6" fill="#0f6250" text-anchor="start" font-weight="600">snapshot.py</text>
+<text x="296.0" y="347.2" font-size="9.5" fill="#5b6a7d" text-anchor="start">只读验收快照 ready / blocked /</text>
+<text x="296.0" y="359.4" font-size="9.5" fill="#5b6a7d" text-anchor="start">unknown</text>
+<rect x="488.0" y="315.0" width="194.0" height="59.6" rx="9" fill="#ffffff" stroke="#a5d6c6" stroke-width="1.1"/>
+<text x="498.0" y="332.0" font-size="10.6" fill="#0f6250" text-anchor="start" font-weight="600">knowledge.py</text>
+<text x="498.0" y="347.2" font-size="9.5" fill="#5b6a7d" text-anchor="start">知识查询与静态科研目录</text>
+<text x="716.0" y="301.0" font-size="10.2" fill="#5b6a7d" text-anchor="start">所有领域准备、阻塞判断与身份刷新都从这一个所有者出发</text>
+</g>
+<path d="M 360.0 384.6 L 360.0 404.6" fill="none" stroke="#177f68" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-teal)"/>
+<rect x="372.0" y="384.6" width="52.0" height="19.0" rx="9.5" fill="#ffffff" stroke="none"/>
+<text x="398.0" y="397.6" font-size="10" fill="#177f68" text-anchor="middle" font-weight="600">领域准备</text>
+<g class="n">
+<rect x="66.0" y="404.6" width="634.0" height="146.8" rx="13" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.4"/>
+<rect x="66.0" y="404.6" width="4.5" height="146.8" rx="2" fill="#a9761c" stroke="none"/>
+<text x="88.0" y="428.6" font-size="10.5" fill="#a9761c" text-anchor="start" font-weight="600" font-family="var(--mono)">L3</text>
+<text x="112.0" y="428.6" font-size="15" fill="#855a10" text-anchor="start" font-weight="600">确认所有者</text>
+<rect x="84.0" y="442.6" width="295.0" height="47.4" rx="9" fill="#ffffff" stroke="#e6cb96" stroke-width="1.1"/>
+<text x="94.0" y="459.6" font-size="10.6" fill="#855a10" text-anchor="start" font-weight="600">actions.py</text>
+<text x="94.0" y="474.8" font-size="9.5" fill="#5b6a7d" text-anchor="start">ActionLifecycle：_PendingAction / _ActionScope</text>
+<rect x="387.0" y="442.6" width="295.0" height="47.4" rx="9" fill="#ffffff" stroke="#e6cb96" stroke-width="1.1"/>
+<text x="397.0" y="459.6" font-size="10.6" fill="#855a10" text-anchor="start" font-weight="600">end_turn.py</text>
+<text x="397.0" y="474.8" font-size="9.5" fill="#5b6a7d" text-anchor="start">TurnProgress / TurnStatus / TurnContext</text>
+<rect x="84.0" y="494.0" width="295.0" height="47.4" rx="9" fill="#ffffff" stroke="#e6cb96" stroke-width="1.1"/>
+<text x="94.0" y="511.0" font-size="10.6" fill="#855a10" text-anchor="start" font-weight="600">diplomacy.py</text>
+<text x="94.0" y="526.2" font-size="9.5" fill="#5b6a7d" text-anchor="start">DiplomacyProgress / TradeAttempt / IncomingAttempt</text>
+<rect x="387.0" y="494.0" width="295.0" height="47.4" rx="9" fill="#ffffff" stroke="#e6cb96" stroke-width="1.1"/>
+<text x="397.0" y="511.0" font-size="10.6" fill="#855a10" text-anchor="start" font-weight="600">congress.py</text>
+<text x="397.0" y="526.2" font-size="9.5" fill="#5b6a7d" text-anchor="start">CongressProgress · 原生票单与阶段门禁</text>
+<text x="716.0" y="428.6" font-size="10.2" fill="#5b6a7d" text-anchor="start">「单次提交 → 有界只读确认」的唯一实现位置；未决即门禁</text>
+</g>
+<path d="M 360.0 551.4 L 360.0 571.4" fill="none" stroke="#a9761c" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-amber)"/>
+<rect x="372.0" y="551.4" width="85.6" height="19.0" rx="9.5" fill="#ffffff" stroke="none"/>
+<text x="414.8" y="564.4" font-size="10" fill="#a9761c" text-anchor="middle" font-weight="600">Lua 构造 / 解析</text>
+<g class="n">
+<rect x="66.0" y="571.4" width="634.0" height="107.6" rx="13" fill="#efeafa" stroke="#cbb9e8" stroke-width="1.4"/>
+<rect x="66.0" y="571.4" width="4.5" height="107.6" rx="2" fill="#674a9b" stroke="none"/>
+<text x="88.0" y="595.4" font-size="10.5" fill="#674a9b" text-anchor="start" font-weight="600" font-family="var(--mono)">L4</text>
+<text x="112.0" y="595.4" font-size="15" fill="#4f3780" text-anchor="start" font-weight="600">Lua 构造与解析</text>
+<rect x="84.0" y="609.4" width="194.0" height="59.6" rx="9" fill="#ffffff" stroke="#cbb9e8" stroke-width="1.1"/>
+<text x="94.0" y="626.4" font-size="10.6" fill="#4f3780" text-anchor="start" font-weight="600">lua/ · 48 个模块 · 18,694 行</text>
+<text x="94.0" y="641.6" font-size="9.5" fill="#5b6a7d" text-anchor="start">按游戏领域构造 Lua 语句并解析返回值</text>
+<rect x="286.0" y="609.4" width="194.0" height="59.6" rx="9" fill="#ffffff" stroke="#cbb9e8" stroke-width="1.1"/>
+<text x="296.0" y="626.4" font-size="10.6" fill="#4f3780" text-anchor="start" font-weight="600">_helpers.py</text>
+<text x="296.0" y="641.6" font-size="9.5" fill="#5b6a7d" text-anchor="start">序列化、容错与上下文选择</text>
+<rect x="488.0" y="609.4" width="194.0" height="59.6" rx="9" fill="#ffffff" stroke="#cbb9e8" stroke-width="1.1"/>
+<text x="498.0" y="626.4" font-size="10.6" fill="#4f3780" text-anchor="start" font-weight="600">领域分布</text>
+<text x="498.0" y="641.6" font-size="9.5" fill="#5b6a7d" text-anchor="start">units · cities · trade · congress</text>
+<text x="498.0" y="653.8" font-size="9.5" fill="#5b6a7d" text-anchor="start">· map</text>
+<text x="716.0" y="595.4" font-size="10.2" fill="#5b6a7d" text-anchor="start">纯查询不产生游戏操作；查询与动作共用同一解释</text>
+</g>
+<path d="M 360.0 679.0 L 360.0 699.0" fill="none" stroke="#674a9b" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-purple)"/>
+<rect x="372.0" y="679.0" width="64.4" height="19.0" rx="9.5" fill="#ffffff" stroke="none"/>
+<text x="404.2" y="692.0" font-size="10" fill="#674a9b" text-anchor="middle" font-weight="600">请求 / 响应</text>
+<g class="n">
+<rect x="66.0" y="699.0" width="634.0" height="95.4" rx="13" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.4"/>
+<rect x="66.0" y="699.0" width="4.5" height="95.4" rx="2" fill="#54637a" stroke="none"/>
+<text x="88.0" y="723.0" font-size="10.5" fill="#54637a" text-anchor="start" font-weight="600" font-family="var(--mono)">L5</text>
+<text x="112.0" y="723.0" font-size="15" fill="#3b485c" text-anchor="start" font-weight="600">传输</text>
+<rect x="84.0" y="737.0" width="295.0" height="47.4" rx="9" fill="#ffffff" stroke="#c8d2e0" stroke-width="1.1"/>
+<text x="94.0" y="754.0" font-size="10.6" fill="#3b485c" text-anchor="start" font-weight="600">connection.py</text>
+<text x="94.0" y="769.2" font-size="9.5" fill="#5b6a7d" text-anchor="start">GameConnection：请求关联、上下文发现、错误分类</text>
+<rect x="387.0" y="737.0" width="295.0" height="47.4" rx="9" fill="#ffffff" stroke="#c8d2e0" stroke-width="1.1"/>
+<text x="397.0" y="754.0" font-size="10.6" fill="#3b485c" text-anchor="start" font-weight="600">tuner_client.py</text>
+<text x="397.0" y="769.2" font-size="9.5" fill="#5b6a7d" text-anchor="start">FireTuner 帧、超时与断线</text>
+<text x="716.0" y="723.0" font-size="10.2" fill="#5b6a7d" text-anchor="start">单次执行、完整响应、超时隔离、无重放</text>
+</g>
+<path d="M 360.0 794.4 L 360.0 814.4" fill="none" stroke="#54637a" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-slate)"/>
+<rect x="372.0" y="794.4" width="53.2" height="19.0" rx="9.5" fill="#ffffff" stroke="none"/>
+<text x="398.6" y="807.4" font-size="10" fill="#54637a" text-anchor="middle" font-weight="600">原生 API</text>
+<g class="n">
+<rect x="66.0" y="814.4" width="634.0" height="95.4" rx="13" fill="#fbeeea" stroke="#e0bdb2" stroke-width="1.4"/>
+<rect x="66.0" y="814.4" width="4.5" height="95.4" rx="2" fill="#9a5340" stroke="none"/>
+<text x="88.0" y="838.4" font-size="10.5" fill="#9a5340" text-anchor="start" font-weight="600" font-family="var(--mono)">L6</text>
+<text x="112.0" y="838.4" font-size="15" fill="#7a3d2d" text-anchor="start" font-weight="600">游戏引擎</text>
+<rect x="84.0" y="852.4" width="295.0" height="47.4" rx="9" fill="#ffffff" stroke="#e0bdb2" stroke-width="1.1"/>
+<text x="94.0" y="869.4" font-size="10.6" fill="#7a3d2d" text-anchor="start" font-weight="600">GameCore</text>
+<text x="94.0" y="884.6" font-size="9.5" fill="#5b6a7d" text-anchor="start">玩家 / 城市 / 单位 / 科研 / 议会的真实状态</text>
+<rect x="387.0" y="852.4" width="295.0" height="47.4" rx="9" fill="#ffffff" stroke="#e0bdb2" stroke-width="1.1"/>
+<text x="397.0" y="869.4" font-size="10.6" fill="#7a3d2d" text-anchor="start" font-weight="600">InGame / FrontEnd</text>
+<text x="397.0" y="884.6" font-size="9.5" fill="#5b6a7d" text-anchor="start">界面上下文与主菜单读档</text>
+<text x="716.0" y="838.4" font-size="10.2" fill="#5b6a7d" text-anchor="start">规则裁决与真实状态都在引擎；运行层只读取与提交</text>
+</g>
+<rect x="716.0" y="96.0" width="380.0" height="224.0" rx="16" fill="#ffffff" stroke="#c8d2e0" stroke-width="1.3" stroke-dasharray="7 6"/>
+<rect x="730.0" y="85.0" width="122.0" height="22.0" rx="11" fill="#ffffff" stroke="#c8d2e0" stroke-width="1.2"/>
+<text x="741.0" y="100.0" font-size="12.5" fill="#54637a" text-anchor="start" font-weight="600">分层的三个硬约束</text>
+<text x="736.0" y="134.0" font-size="12" fill="#17222f" text-anchor="start" font-weight="600">· 所有权唯一</text>
+<text x="736.0" y="152.0" font-size="10.8" fill="#5b6a7d" text-anchor="start">每个未决请求只有一个所有者；兼容私有属性只代理同一份状态，不</text>
+<text x="736.0" y="167.0" font-size="10.8" fill="#5b6a7d" text-anchor="start">保留副本。</text>
+<text x="736.0" y="192.0" font-size="12" fill="#17222f" text-anchor="start" font-weight="600">· 门禁共享</text>
+<text x="736.0" y="210.0" font-size="10.8" fill="#5b6a7d" text-anchor="start">保存/加载、外交、推进、议会与普通动作互相阻塞；纯查询与已确</text>
+<text x="736.0" y="225.0" font-size="10.8" fill="#5b6a7d" text-anchor="start">认检查点恢复保留通路。</text>
+<text x="736.0" y="250.0" font-size="12" fill="#17222f" text-anchor="start" font-weight="600">· 失败不追认</text>
+<text x="736.0" y="268.0" font-size="10.8" fill="#5b6a7d" text-anchor="start">丢回应、超时、身份未知一律保留未决；读取旧状态不触发自动重发</text>
+<text x="736.0" y="283.0" font-size="10.8" fill="#5b6a7d" text-anchor="start">。</text>
+<rect x="716.0" y="360.0" width="380.0" height="160.0" rx="16" fill="#ffffff" stroke="#c8d2e0" stroke-width="1.3" stroke-dasharray="7 6"/>
+<rect x="730.0" y="349.0" width="109.5" height="22.0" rx="11" fill="#ffffff" stroke="#c8d2e0" stroke-width="1.2"/>
+<text x="741.0" y="364.0" font-size="12.5" fill="#54637a" text-anchor="start" font-weight="600">代码规模（行）</text>
+<text x="736.0" y="394.0" font-size="10.2" fill="#5b6a7d" text-anchor="start" font-weight="500" font-family="var(--mono)">src/civ_mcp/*.py</text>
+<text x="736.0" y="418.0" font-size="20" fill="#17222f" text-anchor="start" font-weight="600" font-family="var(--mono)">12,284</text>
+<text x="914.0" y="394.0" font-size="10.2" fill="#5b6a7d" text-anchor="start" font-weight="500" font-family="var(--mono)">src/civ_mcp/lua/*.py</text>
+<text x="914.0" y="418.0" font-size="20" fill="#17222f" text-anchor="start" font-weight="600" font-family="var(--mono)">18,694</text>
+<text x="736.0" y="452.0" font-size="10.2" fill="#5b6a7d" text-anchor="start" font-weight="500" font-family="var(--mono)">src/civ_mcp/devtools/</text>
+<text x="736.0" y="476.0" font-size="20" fill="#17222f" text-anchor="start" font-weight="600" font-family="var(--mono)">1,768</text>
+<text x="914.0" y="452.0" font-size="10.2" fill="#5b6a7d" text-anchor="start" font-weight="500" font-family="var(--mono)">tests/</text>
+<text x="914.0" y="476.0" font-size="20" fill="#17222f" text-anchor="start" font-weight="600" font-family="var(--mono)">39,741</text>
+<rect x="716.0" y="560.0" width="380.0" height="180.0" rx="16" fill="#ffffff" stroke="#c8d2e0" stroke-width="1.3" stroke-dasharray="7 6"/>
+<rect x="730.0" y="549.0" width="122.0" height="22.0" rx="11" fill="#ffffff" stroke="#c8d2e0" stroke-width="1.2"/>
+<text x="741.0" y="564.0" font-size="12.5" fill="#54637a" text-anchor="start" font-weight="600">每一层怎么被验证</text>
+<text x="736.0" y="594.0" font-size="10.2" fill="#2a62a8" text-anchor="start" font-weight="600" font-family="var(--mono)">L1–L3</text>
+<text x="776.0" y="594.0" font-size="10.6" fill="#5b6a7d" text-anchor="start">离线 pytest · FakeConn / 内存 Tuner 流</text>
+<text x="736.0" y="628.0" font-size="10.2" fill="#2a62a8" text-anchor="start" font-weight="600" font-family="var(--mono)">L1</text>
+<text x="776.0" y="628.0" font-size="10.6" fill="#5b6a7d" text-anchor="start">civ6 --help --json · 契约与 dry-run</text>
+<text x="736.0" y="662.0" font-size="10.2" fill="#2a62a8" text-anchor="start" font-weight="600" font-family="var(--mono)">L2</text>
+<text x="776.0" y="662.0" font-size="10.6" fill="#5b6a7d" text-anchor="start">civ6 verify state：只读快照验收</text>
+<text x="736.0" y="696.0" font-size="10.2" fill="#2a62a8" text-anchor="start" font-weight="600" font-family="var(--mono)">L5–L6</text>
+<text x="776.0" y="696.0" font-size="10.6" fill="#5b6a7d" text-anchor="start">实机验收：固定基准 + 显式检查点</text>
+<rect x="716.0" y="777.0" width="16.0" height="10.0" rx="3" fill="#e9f1fb" stroke="#b4cdea" stroke-width="1.2"/>
+<text x="738.0" y="786.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">接口</text>
+<rect x="777.0" y="777.0" width="16.0" height="10.0" rx="3" fill="#e6f4ef" stroke="#a5d6c6" stroke-width="1.2"/>
+<text x="799.0" y="786.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">状态</text>
+<rect x="838.0" y="777.0" width="16.0" height="10.0" rx="3" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.2"/>
+<text x="860.0" y="786.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">未决 / 门禁</text>
+<rect x="935.8" y="777.0" width="16.0" height="10.0" rx="3" fill="#efeafa" stroke="#cbb9e8" stroke-width="1.2"/>
+<text x="957.8" y="786.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">Lua</text>
+<rect x="993.1" y="777.0" width="16.0" height="10.0" rx="3" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.2"/>
+<text x="1015.1" y="786.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">传输</text>
+<rect x="1054.1" y="777.0" width="16.0" height="10.0" rx="3" fill="#fbeeea" stroke="#e0bdb2" stroke-width="1.2"/>
+<text x="1076.1" y="786.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">引擎</text>
+<text x="716.0" y="812.0" font-size="10" fill="#8794a5" text-anchor="start">右侧注明每层承担的职责；箭头是调用的主路径。</text>
+</svg><div class="figcap"><span>图 2 · 七层栈与每层的唯一职责；右侧是三条硬约束与各层验证方式。</span><span class="src">src/civ_mcp/{server,game_state,actions,end_turn}.py · lua/ · connection.py</span></div></figure><div class="notes"><div class="note-card"><h4>CLI 只翻译，工具面不做业务</h4><p>CLI 的 142 个命名命令是纯翻译层；<code>server.py</code> 的 90 个工具只负责参数、工具锁、门禁顺序与结果文本，领域准备下沉到 <code>game_state.py</code>，避免同一规则出现两份实现。</p></div><div class="note-card"><h4>确认所有权唯一</h4><p>ActionLifecycle / TurnProgress / DiplomacyProgress / CongressProgress 各持有一类未决；兼容私有属性只代理同一份状态，不保留副本。</p></div><div class="note-card"><h4>失败不追认</h4><p>丢回应、超时、身份未知一律保留未决；读取旧状态不触发自动重发，展示文案不承担完成判断。</p></div></div>
+</section>
+<section id="modules">
+  <div class="sec-head">
+    <div class="sec-no">03</div>
+    <div><div class="sec-kicker">Module Graph</div><h2>模块图：依赖边来自真实 import</h2></div>
+  </div>
+  <p class="lead">这张图不是按目录画的，而是按 <code>src/civ_mcp</code> 里的真实 import 关系画的：<code>server.py</code> 只直接依赖 <code>connection / game_state / logger / snapshot</code>；外交、议会、检查点、进程控制都在 GameState 的对应分支里懒加载，只在需要时进入；客户端只出现在最左侧的终端层，不进入依赖图。</p>
+  <figure class="figure"><svg viewBox="0 0 1180 918" width="100%" preserveAspectRatio="xMidYMin meet" role="img" xmlns="http://www.w3.org/2000/svg"><defs><marker id="mk-blue" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#2a62a8"/></marker><marker id="mk-teal" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#177f68"/></marker><marker id="mk-amber" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#a9761c"/></marker><marker id="mk-purple" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#674a9b"/></marker><marker id="mk-slate" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#54637a"/></marker><marker id="mk-clay" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#9a5340"/></marker><marker id="mk-green" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#2f7d4f"/></marker><marker id="mk-muted" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#8794a5"/></marker></defs>
+<g class="n">
+<rect x="40.0" y="30.0" width="180.0" height="96.0" rx="12" fill="#e9f1fb" stroke="#b4cdea" stroke-width="1.35"/>
+<rect x="40.0" y="30.0" width="4.0" height="96.0" rx="2" fill="#2a62a8" stroke="none"/>
+<text x="54.0" y="51.0" font-size="13.2" fill="#1c4a86" text-anchor="start" font-weight="600">cli.py</text>
+<text x="210.0" y="50.0" font-size="9.6" fill="#2a62a8" text-anchor="end" font-weight="500" font-family="var(--mono)">245 行</text>
+<text x="54.0" y="69.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">5 个顶层命令</text>
+<text x="54.0" y="82.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">单 JSON 信封 + 退出码 0/1/2/130</text>
+</g>
+<g class="n">
+<rect x="240.0" y="30.0" width="270.0" height="96.0" rx="12" fill="#e9f1fb" stroke="#b4cdea" stroke-width="1.35"/>
+<rect x="240.0" y="30.0" width="4.0" height="96.0" rx="2" fill="#2a62a8" stroke="none"/>
+<text x="254.0" y="51.0" font-size="13.2" fill="#1c4a86" text-anchor="start" font-weight="600">devtools/</text>
+<text x="500.0" y="50.0" font-size="9.6" fill="#2a62a8" text-anchor="end" font-weight="500" font-family="var(--mono)">1,768 行</text>
+<text x="254.0" y="69.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">debug · commands · evidence · live</text>
+<text x="254.0" y="82.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">knowledge · logs · testing · turn_timing</text>
+</g>
+<g class="n">
+<rect x="530.0" y="30.0" width="300.0" height="96.0" rx="12" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.35"/>
+<rect x="530.0" y="30.0" width="4.0" height="96.0" rx="2" fill="#54637a" stroke="none"/>
+<text x="544.0" y="51.0" font-size="13.2" fill="#3b485c" text-anchor="start" font-weight="600">scripts/</text>
+<text x="820.0" y="50.0" font-size="9.6" fill="#54637a" text-anchor="end" font-weight="500" font-family="var(--mono)">独立入口</text>
+<text x="544.0" y="69.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">civ6_cli_relay · hotseat_* · integration_turns</text>
+<text x="544.0" y="82.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">经 CLI 或内部控制器驱动，不进运行时 import 图</text>
+</g>
+<g class="n">
+<rect x="860.0" y="30.0" width="280.0" height="96.0" rx="12" fill="#e9f1fb" stroke="#b4cdea" stroke-width="1.35"/>
+<rect x="860.0" y="30.0" width="4.0" height="96.0" rx="2" fill="#2a62a8" stroke="none"/>
+<text x="874.0" y="51.0" font-size="13.2" fill="#1c4a86" text-anchor="start" font-weight="600">客户端接入</text>
+<text x="1130.0" y="50.0" font-size="9.6" fill="#2a62a8" text-anchor="end" font-weight="500" font-family="var(--mono)">CLI 直跑</text>
+<text x="874.0" y="69.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">Codex / Claude / Pi 只执行终端命令</text>
+<text x="874.0" y="82.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">不注册 civ6 MCP；.mcp.json 为空</text>
+</g>
+<g class="n">
+<rect x="40.0" y="170.0" width="180.0" height="130.0" rx="12" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.35"/>
+<rect x="40.0" y="170.0" width="4.0" height="130.0" rx="2" fill="#54637a" stroke="none"/>
+<text x="54.0" y="191.0" font-size="13.2" fill="#3b485c" text-anchor="start" font-weight="600">narrate.py</text>
+<text x="210.0" y="190.0" font-size="9.6" fill="#54637a" text-anchor="end" font-weight="500" font-family="var(--mono)">2,034 行</text>
+<text x="54.0" y="209.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">把领域事实叙述成工具文本</text>
+<text x="54.0" y="222.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">被 game_state / diplomacy /</text>
+<text x="54.0" y="235.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">end_turn 调用</text>
+</g>
+<g class="n">
+<rect x="250.0" y="170.0" width="300.0" height="130.0" rx="12" fill="#e9f1fb" stroke="#b4cdea" stroke-width="1.35"/>
+<rect x="250.0" y="170.0" width="4.0" height="130.0" rx="2" fill="#2a62a8" stroke="none"/>
+<text x="264.0" y="191.0" font-size="13.2" fill="#1c4a86" text-anchor="start" font-weight="600">server.py</text>
+<text x="540.0" y="190.0" font-size="9.6" fill="#2a62a8" text-anchor="end" font-weight="500" font-family="var(--mono)">2,336 行</text>
+<text x="264.0" y="209.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">90 个 @mcp.tool + 3 热座工具</text>
+<text x="264.0" y="222.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">整体工具锁 · 未决闸门 · 日志</text>
+<text x="264.0" y="235.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">lifespan 构造唯一 GameState</text>
+</g>
+<rect x="580.0" y="170.0" width="490.0" height="130.0" rx="16" fill="#ffffff" stroke="#c8d2e0" stroke-width="1.3" stroke-dasharray="7 6"/>
+<rect x="594.0" y="159.0" width="224.0" height="22.0" rx="11" fill="#ffffff" stroke="#c8d2e0" stroke-width="1.2"/>
+<text x="605.0" y="174.0" font-size="12.5" fill="#54637a" text-anchor="start" font-weight="600">server 直接 import 的只读协作者</text>
+<rect x="596.0" y="200.0" width="146.0" height="66.0" rx="9" fill="#e6f4ef" stroke="#a5d6c6" stroke-width="1.1"/>
+<text x="606.0" y="220.0" font-size="10.8" fill="#0f6250" text-anchor="start" font-weight="600">knowledge.py</text>
+<text x="732.0" y="219.0" font-size="9.2" fill="#177f68" text-anchor="end" font-weight="500" font-family="var(--mono)">139 行</text>
+<text x="606.0" y="238.0" font-size="9.4" fill="#5b6a7d" text-anchor="start">知识搜索 / 详情 / 研究目录</text>
+<rect x="752.0" y="200.0" width="146.0" height="66.0" rx="9" fill="#e6f4ef" stroke="#a5d6c6" stroke-width="1.1"/>
+<text x="762.0" y="220.0" font-size="10.8" fill="#0f6250" text-anchor="start" font-weight="600">snapshot.py</text>
+<text x="888.0" y="219.0" font-size="9.2" fill="#177f68" text-anchor="end" font-weight="500" font-family="var(--mono)">58 行</text>
+<text x="762.0" y="238.0" font-size="9.4" fill="#5b6a7d" text-anchor="start">只读验收快照</text>
+<rect x="908.0" y="200.0" width="146.0" height="66.0" rx="9" fill="#e6f4ef" stroke="#a5d6c6" stroke-width="1.1"/>
+<text x="918.0" y="220.0" font-size="10.8" fill="#0f6250" text-anchor="start" font-weight="600">logger.py</text>
+<text x="1044.0" y="219.0" font-size="9.2" fill="#177f68" text-anchor="end" font-weight="500" font-family="var(--mono)">23 行</text>
+<text x="918.0" y="238.0" font-size="9.4" fill="#5b6a7d" text-anchor="start">本地动作日志</text>
+<text x="596.0" y="288.0" font-size="9.4" fill="#8794a5" text-anchor="start">knowledge.py 懒加载 research_catalog（129 行）做静态研究目录查询</text>
+<g class="n">
+<rect x="250.0" y="336.0" width="300.0" height="144.0" rx="12" fill="#e6f4ef" stroke="#a5d6c6" stroke-width="1.35"/>
+<rect x="250.0" y="336.0" width="4.0" height="144.0" rx="2" fill="#177f68" stroke="none"/>
+<text x="264.0" y="357.0" font-size="13.2" fill="#0f6250" text-anchor="start" font-weight="600">game_state.py</text>
+<text x="540.0" y="356.0" font-size="9.6" fill="#177f68" text-anchor="end" font-weight="500" font-family="var(--mono)">2,573 行</text>
+<text x="264.0" y="375.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">领域 interface · 查询 · 观察缓存</text>
+<text x="264.0" y="388.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">完整存档替换 · 阻塞判断 · 身份刷新</text>
+<text x="264.0" y="401.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">持有 actions / end_turn 并懒加载 diplomacy · congress</text>
+</g>
+<rect x="580.0" y="336.0" width="490.0" height="144.0" rx="16" fill="#ffffff" stroke="#c8d2e0" stroke-width="1.3" stroke-dasharray="7 6"/>
+<rect x="594.0" y="325.0" width="251.0" height="22.0" rx="11" fill="#ffffff" stroke="#c8d2e0" stroke-width="1.2"/>
+<text x="605.0" y="340.0" font-size="12.5" fill="#54637a" text-anchor="start" font-weight="600">会话与生命周期（game_state 懒加载）</text>
+<rect x="596.0" y="368.0" width="226.0" height="44.0" rx="9" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.1"/>
+<text x="606.0" y="385.0" font-size="10.6" fill="#855a10" text-anchor="start" font-weight="600">checkpoints.py</text>
+<text x="812.0" y="384.0" font-size="9.0" fill="#a9761c" text-anchor="end" font-weight="500" font-family="var(--mono)">203 行</text>
+<text x="606.0" y="401.0" font-size="9.2" fill="#5b6a7d" text-anchor="start">检查点 · 基准与测试轮次</text>
+<rect x="832.0" y="368.0" width="226.0" height="44.0" rx="9" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.1"/>
+<text x="842.0" y="385.0" font-size="10.6" fill="#855a10" text-anchor="start" font-weight="600">game_lifecycle.py</text>
+<text x="1048.0" y="384.0" font-size="9.0" fill="#a9761c" text-anchor="end" font-weight="500" font-family="var(--mono)">1,017 行</text>
+<text x="842.0" y="401.0" font-size="9.2" fill="#5b6a7d" text-anchor="start">原生菜单 · 加载 · 文件事实</text>
+<rect x="596.0" y="420.0" width="226.0" height="44.0" rx="9" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.1"/>
+<text x="606.0" y="437.0" font-size="10.6" fill="#855a10" text-anchor="start" font-weight="600">game_launcher.py</text>
+<text x="812.0" y="436.0" font-size="9.0" fill="#a9761c" text-anchor="end" font-weight="500" font-family="var(--mono)">593 行</text>
+<text x="606.0" y="453.0" font-size="9.2" fill="#5b6a7d" text-anchor="start">进程启动 / 重启 / kill</text>
+<rect x="832.0" y="420.0" width="226.0" height="44.0" rx="9" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.1"/>
+<text x="842.0" y="437.0" font-size="10.6" fill="#855a10" text-anchor="start" font-weight="600">autosave · platform_paths</text>
+<text x="1048.0" y="436.0" font-size="9.0" fill="#a9761c" text-anchor="end" font-weight="500" font-family="var(--mono)">65 · 50 行</text>
+<text x="842.0" y="453.0" font-size="9.2" fill="#5b6a7d" text-anchor="start">自动存档 · 平台路径</text>
+<g class="n">
+<rect x="40.0" y="520.0" width="166.0" height="94.0" rx="12" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.35"/>
+<rect x="40.0" y="520.0" width="4.0" height="94.0" rx="2" fill="#a9761c" stroke="none"/>
+<text x="54.0" y="541.0" font-size="13.2" fill="#855a10" text-anchor="start" font-weight="600">actions.py</text>
+<text x="196.0" y="540.0" font-size="9.6" fill="#a9761c" text-anchor="end" font-weight="500" font-family="var(--mono)">795 行</text>
+<text x="54.0" y="559.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">ActionLifecycle</text>
+<text x="54.0" y="572.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">_PendingAction /</text>
+<text x="54.0" y="585.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">_ActionScope</text>
+</g>
+<g class="n">
+<rect x="216.0" y="520.0" width="166.0" height="94.0" rx="12" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.35"/>
+<rect x="216.0" y="520.0" width="4.0" height="94.0" rx="2" fill="#a9761c" stroke="none"/>
+<text x="230.0" y="541.0" font-size="13.2" fill="#855a10" text-anchor="start" font-weight="600">end_turn.py</text>
+<text x="372.0" y="540.0" font-size="9.6" fill="#a9761c" text-anchor="end" font-weight="500" font-family="var(--mono)">717 行</text>
+<text x="230.0" y="559.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">TurnProgress · TurnStatus</text>
+<text x="230.0" y="572.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">起始回合与差分基线</text>
+</g>
+<g class="n">
+<rect x="392.0" y="520.0" width="166.0" height="94.0" rx="12" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.35"/>
+<rect x="392.0" y="520.0" width="4.0" height="94.0" rx="2" fill="#a9761c" stroke="none"/>
+<text x="406.0" y="541.0" font-size="13.2" fill="#855a10" text-anchor="start" font-weight="600">diplomacy.py</text>
+<text x="548.0" y="540.0" font-size="9.6" fill="#a9761c" text-anchor="end" font-weight="500" font-family="var(--mono)">626 行</text>
+<text x="406.0" y="559.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">DiplomacyProgress</text>
+<text x="406.0" y="572.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">TradeAttempt / IncomingAtt</text>
+<text x="406.0" y="585.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">empt</text>
+</g>
+<g class="n">
+<rect x="568.0" y="520.0" width="150.0" height="94.0" rx="12" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.35"/>
+<rect x="568.0" y="520.0" width="4.0" height="94.0" rx="2" fill="#a9761c" stroke="none"/>
+<text x="582.0" y="541.0" font-size="13.2" fill="#855a10" text-anchor="start" font-weight="600">congress.py</text>
+<text x="708.0" y="540.0" font-size="9.6" fill="#a9761c" text-anchor="end" font-weight="500" font-family="var(--mono)">162 行</text>
+<text x="582.0" y="559.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">CongressProgress</text>
+<text x="582.0" y="572.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">原生票单与阶段门禁</text>
+</g>
+<rect x="740.0" y="524.0" width="400.0" height="86.0" rx="11" fill="#fbfcfe" stroke="#d8e0ea" stroke-width="1.1" stroke-dasharray="5 5"/>
+<text x="756.0" y="546.0" font-size="11.2" fill="#17222f" text-anchor="start" font-weight="600">普通动作共用一个 ActionLifecycle；</text>
+<text x="756.0" y="563.0" font-size="9.8" fill="#5b6a7d" text-anchor="start">外交 / 议会 / 推进各有专用 Progress 所有者</text>
+<text x="756.0" y="585.0" font-size="9.5" fill="#5b6a7d" text-anchor="start">未决即阻塞保存/加载、外交、推进、议会与普通动作；</text>
+<text x="756.0" y="598.0" font-size="9.5" fill="#5b6a7d" text-anchor="start">纯查询与已确认检查点恢复保留通路。</text>
+<g class="n">
+<rect x="40.0" y="640.0" width="700.0" height="100.0" rx="12" fill="#efeafa" stroke="#cbb9e8" stroke-width="1.35"/>
+<rect x="40.0" y="640.0" width="4.0" height="100.0" rx="2" fill="#674a9b" stroke="none"/>
+<text x="54.0" y="662.0" font-size="13.5" fill="#4f3780" text-anchor="start" font-weight="600">lua/</text>
+<text x="736.0" y="661.0" font-size="9.8" fill="#674a9b" text-anchor="end" font-weight="500" font-family="var(--mono)">48 个模块 · 18,694 行</text>
+<text x="54.0" y="674.0" font-size="9.8" fill="#5b6a7d" text-anchor="start">· units · cities · map（最大三块）</text>
+<text x="394.0" y="674.0" font-size="9.8" fill="#5b6a7d" text-anchor="start">· trade · diplomacy · congress</text>
+<text x="54.0" y="700.0" font-size="9.8" fill="#5b6a7d" text-anchor="start">· religion · espionage · governance</text>
+<text x="394.0" y="700.0" font-size="9.8" fill="#5b6a7d" text-anchor="start">· models · _helpers · public_reports</text>
+</g>
+<text x="760.0" y="660.0" font-size="10" fill="#5b6a7d" text-anchor="start">构造 Lua 语句并解析返回值</text>
+<text x="760.0" y="678.0" font-size="10" fill="#5b6a7d" text-anchor="start">纯查询不产生游戏操作</text>
+<text x="760.0" y="696.0" font-size="10" fill="#5b6a7d" text-anchor="start">按领域一一对应原生 API 可用性</text>
+<g class="n">
+<rect x="40.0" y="770.0" width="200.0" height="80.0" rx="12" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.35"/>
+<rect x="40.0" y="770.0" width="4.0" height="80.0" rx="2" fill="#54637a" stroke="none"/>
+<text x="54.0" y="791.0" font-size="13.2" fill="#3b485c" text-anchor="start" font-weight="600">connection.py</text>
+<text x="230.0" y="790.0" font-size="9.6" fill="#54637a" text-anchor="end" font-weight="500" font-family="var(--mono)">246 行</text>
+<text x="54.0" y="809.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">GameConnection：请求关联</text>
+<text x="54.0" y="822.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">上下文发现 · 错误分类</text>
+</g>
+<g class="n">
+<rect x="270.0" y="770.0" width="190.0" height="80.0" rx="12" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.35"/>
+<rect x="270.0" y="770.0" width="4.0" height="80.0" rx="2" fill="#54637a" stroke="none"/>
+<text x="284.0" y="791.0" font-size="13.2" fill="#3b485c" text-anchor="start" font-weight="600">tuner_client.py</text>
+<text x="450.0" y="790.0" font-size="9.6" fill="#54637a" text-anchor="end" font-weight="500" font-family="var(--mono)">208 行</text>
+<text x="284.0" y="809.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">FireTuner 帧、超时、断线</text>
+<text x="284.0" y="822.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">无自动重放</text>
+</g>
+<g class="n">
+<rect x="500.0" y="770.0" width="340.0" height="80.0" rx="12" fill="#fbeeea" stroke="#e0bdb2" stroke-width="1.35"/>
+<rect x="500.0" y="770.0" width="4.0" height="80.0" rx="2" fill="#9a5340" stroke="none"/>
+<text x="514.0" y="791.0" font-size="13.2" fill="#7a3d2d" text-anchor="start" font-weight="600">Civilization VI</text>
+<text x="830.0" y="790.0" font-size="9.6" fill="#9a5340" text-anchor="end" font-weight="500" font-family="var(--mono)">TCP 4318</text>
+<text x="514.0" y="809.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">GameCore / InGame / FrontEnd</text>
+<text x="514.0" y="822.0" font-size="9.7" fill="#5b6a7d" text-anchor="start">规则与真实状态由引擎裁决</text>
+</g>
+<path d="M 220.0 78.0 L 238.0 78.0" fill="none" stroke="#2a62a8" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-blue)"/>
+<path d="M 375.0 126.0 L 375.0 168.0" fill="none" stroke="#2a62a8" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-blue)"/>
+<rect x="387.0" y="134.5" width="139.7" height="18.5" rx="9.25" fill="#ffffff" stroke="none"/>
+<text x="456.8" y="147.2" font-size="9.5" fill="#2a62a8" text-anchor="middle" font-weight="600">启动并复用同一内部 MCP 进程</text>
+<path d="M 680.0 126.0 L 680.0 148.0 Q 680.0 158.0 670.0 158.0 L 562.0 158.0 Q 556.0 158.0 556.0 164.0 L 556.0 170.0" fill="none" stroke="#54637a" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="6 5" marker-end="url(#mk-slate)"/>
+<text x="690.0" y="152.0" font-size="9.2" fill="#3b485c" text-anchor="start" font-weight="600">经 CLI 或内部控制器驱动，不进入运行时 import 图</text>
+<path d="M 400.0 300.0 L 400.0 334.0" fill="none" stroke="#177f68" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-teal)"/>
+<rect x="412.0" y="306.5" width="97.5" height="18.5" rx="9.25" fill="#ffffff" stroke="none"/>
+<text x="460.8" y="319.2" font-size="9.5" fill="#177f68" text-anchor="middle" font-weight="600">请求进入单一所有者</text>
+<path d="M 550.0 220.0 L 578.0 220.0" fill="none" stroke="#177f68" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="6 5" marker-end="url(#mk-teal)"/>
+<path d="M 550.0 380.0 L 578.0 380.0" fill="none" stroke="#177f68" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="6 5" marker-end="url(#mk-teal)"/>
+<path d="M 400.0 480.0 L 400.0 506.0" fill="none" stroke="#177f68" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 123 506 L 643 506" fill="none" stroke="#177f68" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 123.0 506.0 L 123.0 518.0" fill="none" stroke="#177f68" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-teal)"/>
+<path d="M 299.0 506.0 L 299.0 518.0" fill="none" stroke="#177f68" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-teal)"/>
+<path d="M 475.0 506.0 L 475.0 518.0" fill="none" stroke="#177f68" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-teal)"/>
+<path d="M 643.0 506.0 L 643.0 518.0" fill="none" stroke="#177f68" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-teal)"/>
+<path d="M 123.0 614.0 L 123.0 630.0" fill="none" stroke="#674a9b" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 299.0 614.0 L 299.0 630.0" fill="none" stroke="#674a9b" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 475.0 614.0 L 475.0 630.0" fill="none" stroke="#674a9b" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 643.0 614.0 L 643.0 630.0" fill="none" stroke="#674a9b" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 123 630 L 400 630" fill="none" stroke="#674a9b" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 400.0 630.0 L 400.0 638.0" fill="none" stroke="#674a9b" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-purple)"/>
+<path d="M 140.0 740.0 L 140.0 768.0" fill="none" stroke="#54637a" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-slate)"/>
+<rect x="152.0" y="744.5" width="60.6" height="18.5" rx="9.25" fill="#ffffff" stroke="none"/>
+<text x="182.3" y="757.2" font-size="9.5" fill="#54637a" text-anchor="middle" font-weight="600">Lua 请求帧</text>
+<path d="M 240.0 810.0 L 268.0 810.0" fill="none" stroke="#54637a" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-slate)"/>
+<path d="M 460.0 810.0 L 498.0 810.0" fill="none" stroke="#54637a" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-slate)"/>
+<rect x="40.0" y="869.0" width="16.0" height="10.0" rx="3" fill="#e9f1fb" stroke="#b4cdea" stroke-width="1.2"/>
+<text x="62.0" y="878.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">接口与入口</text>
+<rect x="139.5" y="869.0" width="16.0" height="10.0" rx="3" fill="#e6f4ef" stroke="#a5d6c6" stroke-width="1.2"/>
+<text x="161.5" y="878.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">状态与分派</text>
+<rect x="239.0" y="869.0" width="16.0" height="10.0" rx="3" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.2"/>
+<text x="261.0" y="878.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">确认所有者</text>
+<rect x="338.5" y="869.0" width="16.0" height="10.0" rx="3" fill="#efeafa" stroke="#cbb9e8" stroke-width="1.2"/>
+<text x="360.5" y="878.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">Lua 构造</text>
+<rect x="426.5" y="869.0" width="16.0" height="10.0" rx="3" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.2"/>
+<text x="448.5" y="878.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">传输 / 工具</text>
+<rect x="528.3" y="869.0" width="16.0" height="10.0" rx="3" fill="#fbeeea" stroke="#e0bdb2" stroke-width="1.2"/>
+<text x="550.3" y="878.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">引擎</text>
+<text x="40.0" y="904.0" font-size="9.8" fill="#8794a5" text-anchor="start">实线＝import 与调用；虚线＝跨进程或仅文本协作。LOC 为当前工作树行数（含未提交改动）。</text>
+</svg><div class="figcap"><span>图 3 · 模块依赖与规模：蓝色为入口与接口，绿色为状态，琥珀为确认所有者，紫色为 Lua 构造。</span><span class="src">src/civ_mcp/*.py · 行数来自当前工作树 wc -l</span></div></figure><div class="notes"><div class="note-card"><h4>入口薄、状态厚</h4><p><code>cli.py</code> 与 <code>devtools/</code> 合计约 2k 行，只做参数翻译与证据落盘；约 4.9k 行的 server + game_state 才是行为主体。</p></div><div class="note-card"><h4>Lua 是最大的一块</h4><p><code>lua/</code> 48 个模块、18,694 行，几乎与其余 Python 等量：每个游戏领域都有一份构造器与解析器。</p></div><div class="note-card"><h4>脚本另起进程</h4><p><code>scripts/</code> 下的 relay、热座与验收驱动都不进入运行时 import 图；它们通过 CLI 或 stdio MCP 从外部驱动同一套工具。</p></div></div>
+</section>
+<section id="action">
+  <div class="sec-head">
+    <div class="sec-no">04</div>
+    <div><div class="sec-kicker">Action Lifecycle</div><h2>动作生命周期：单次提交，有界只读确认</h2></div>
+  </div>
+  <p class="lead">所有普通动作都走同一个 <code>ActionLifecycle</code>：提交前用 <code>prepare_scope</code> 绑定 <b>civ / seed / turn / owner</b> 四字段；提交时只发一次，并在 Lua 内做二次 scope 守卫；之后只用只读查询回读证据。证据命中才退役，丢回应则保留原请求。</p>
+  <figure class="figure"><svg viewBox="0 0 1120 606" width="100%" preserveAspectRatio="xMidYMin meet" role="img" xmlns="http://www.w3.org/2000/svg"><defs><marker id="mk-blue" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#2a62a8"/></marker><marker id="mk-teal" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#177f68"/></marker><marker id="mk-amber" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#a9761c"/></marker><marker id="mk-purple" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#674a9b"/></marker><marker id="mk-slate" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#54637a"/></marker><marker id="mk-clay" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#9a5340"/></marker><marker id="mk-green" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#2f7d4f"/></marker><marker id="mk-muted" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#8794a5"/></marker></defs>
+<g class="n">
+<rect x="40.0" y="60.0" width="176.0" height="92.0" rx="12" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.5"/>
+<rect x="52.0" y="60.0" width="152.0" height="3.2" rx="2" fill="#54637a" stroke="none"/>
+<text x="128.0" y="84.0" font-size="9.8" fill="#54637a" text-anchor="middle" font-weight="700" font-family="var(--mono)">S0</text>
+<text x="128.0" y="102.0" font-size="13.4" fill="#3b485c" text-anchor="middle" font-weight="600">无未决</text>
+<text x="128.0" y="120.0" font-size="9.7" fill="#5b6a7d" text-anchor="middle">ActionLifecycle.pending =</text>
+<text x="128.0" y="132.6" font-size="9.7" fill="#5b6a7d" text-anchor="middle">None</text>
+</g>
+<g class="n">
+<rect x="252.0" y="60.0" width="186.0" height="92.0" rx="12" fill="#e9f1fb" stroke="#b4cdea" stroke-width="1.5"/>
+<rect x="264.0" y="60.0" width="162.0" height="3.2" rx="2" fill="#2a62a8" stroke="none"/>
+<text x="345.0" y="84.0" font-size="9.8" fill="#2a62a8" text-anchor="middle" font-weight="700" font-family="var(--mono)">S1</text>
+<text x="345.0" y="102.0" font-size="13.4" fill="#1c4a86" text-anchor="middle" font-weight="600">scope 已准备</text>
+<text x="345.0" y="120.0" font-size="9.7" fill="#5b6a7d" text-anchor="middle">civ / seed / turn / owner</text>
+<text x="345.0" y="132.6" font-size="9.7" fill="#5b6a7d" text-anchor="middle">四字段绑定原世界</text>
+</g>
+<g class="n">
+<rect x="474.0" y="56.0" width="220.0" height="104.0" rx="12" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.5"/>
+<rect x="486.0" y="56.0" width="196.0" height="3.2" rx="2" fill="#a9761c" stroke="none"/>
+<text x="584.0" y="80.0" font-size="9.8" fill="#a9761c" text-anchor="middle" font-weight="700" font-family="var(--mono)">S2</text>
+<text x="584.0" y="98.0" font-size="13.4" fill="#855a10" text-anchor="middle" font-weight="600">已提交 · 待确认</text>
+<text x="584.0" y="116.0" font-size="9.7" fill="#5b6a7d" text-anchor="middle">pending 先赋值，再执行唯一一次提交</text>
+<text x="584.0" y="128.6" font-size="9.7" fill="#5b6a7d" text-anchor="middle">只读 evidence 循环确认</text>
+</g>
+<g class="n">
+<rect x="730.0" y="60.0" width="168.0" height="92.0" rx="12" fill="#e6f4ef" stroke="#a5d6c6" stroke-width="1.5"/>
+<rect x="742.0" y="60.0" width="144.0" height="3.2" rx="2" fill="#177f68" stroke="none"/>
+<text x="814.0" y="84.0" font-size="9.8" fill="#177f68" text-anchor="middle" font-weight="700" font-family="var(--mono)">S3</text>
+<text x="814.0" y="102.0" font-size="13.4" fill="#0f6250" text-anchor="middle" font-weight="600">已确认 / 已退役</text>
+<text x="814.0" y="120.0" font-size="9.7" fill="#5b6a7d" text-anchor="middle">证据命中即清理 pending</text>
+</g>
+<g class="n">
+<rect x="252.0" y="216.0" width="186.0" height="88.0" rx="12" fill="#e8f5ec" stroke="#aed3ba" stroke-width="1.5"/>
+<rect x="264.0" y="216.0" width="162.0" height="3.2" rx="2" fill="#2f7d4f" stroke="none"/>
+<text x="345.0" y="240.0" font-size="9.8" fill="#2f7d4f" text-anchor="middle" font-weight="700" font-family="var(--mono)">S4</text>
+<text x="345.0" y="258.0" font-size="13.4" fill="#205c38" text-anchor="middle" font-weight="600">精确 pre-entry 拒绝</text>
+<text x="345.0" y="276.0" font-size="9.7" fill="#5b6a7d" text-anchor="middle">首行显式拒绝，未进入写入</text>
+<text x="345.0" y="288.6" font-size="9.7" fill="#5b6a7d" text-anchor="middle">唯一允许的提交前退役</text>
+</g>
+<g class="n">
+<rect x="474.0" y="216.0" width="220.0" height="96.0" rx="12" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.5"/>
+<rect x="486.0" y="216.0" width="196.0" height="3.2" rx="2" fill="#a9761c" stroke="none"/>
+<text x="584.0" y="240.0" font-size="9.8" fill="#a9761c" text-anchor="middle" font-weight="700" font-family="var(--mono)">S5</text>
+<text x="584.0" y="258.0" font-size="13.4" fill="#855a10" text-anchor="middle" font-weight="600">结果未知 · 保留</text>
+<text x="584.0" y="276.0" font-size="9.7" fill="#5b6a7d" text-anchor="middle">丢回应 / 超时 / 读失败</text>
+<text x="584.0" y="288.6" font-size="9.7" fill="#5b6a7d" text-anchor="middle">读旧状态不追认、不重发</text>
+</g>
+<g class="n">
+<rect x="730.0" y="210.0" width="210.0" height="100.0" rx="12" fill="#fbeeea" stroke="#e0bdb2" stroke-width="1.5"/>
+<rect x="742.0" y="210.0" width="186.0" height="3.2" rx="2" fill="#9a5340" stroke="none"/>
+<text x="835.0" y="234.0" font-size="9.8" fill="#9a5340" text-anchor="middle" font-weight="700" font-family="var(--mono)">S6</text>
+<text x="835.0" y="252.0" font-size="13.4" fill="#7a3d2d" text-anchor="middle" font-weight="600">scope 失效 · 锁存</text>
+<text x="835.0" y="270.0" font-size="9.7" fill="#5b6a7d" text-anchor="middle">任一字段有效不匹配即置位</text>
+<text x="835.0" y="282.6" font-size="9.7" fill="#5b6a7d" text-anchor="middle">返回原值也不能追认</text>
+</g>
+<path d="M 216.0 106.0 L 250.0 106.0" fill="none" stroke="#2a62a8" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-blue)"/>
+<path d="M 438.0 106.0 L 472.0 106.0" fill="none" stroke="#a9761c" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-amber)"/>
+<path d="M 694.0 106.0 L 728.0 106.0" fill="none" stroke="#177f68" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-teal)"/>
+<circle cx="233.0" cy="106.0" r="9.5" fill="#ffffff" stroke="#2a62a8" stroke-width="1.4"/>
+<text x="233.0" y="110.0" font-size="9.6" fill="#2a62a8" text-anchor="middle" font-weight="700">1</text>
+<circle cx="455.0" cy="106.0" r="9.5" fill="#ffffff" stroke="#a9761c" stroke-width="1.4"/>
+<text x="455.0" y="110.0" font-size="9.6" fill="#a9761c" text-anchor="middle" font-weight="700">2</text>
+<circle cx="711.0" cy="106.0" r="9.5" fill="#ffffff" stroke="#177f68" stroke-width="1.4"/>
+<text x="711.0" y="110.0" font-size="9.6" fill="#177f68" text-anchor="middle" font-weight="700">3</text>
+<path d="M 330.0 152.0 L 330.0 214.0" fill="none" stroke="#2f7d4f" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-green)"/>
+<rect x="338.0" y="172.8" width="48.8" height="18.2" rx="9.1" fill="#ffffff" stroke="none"/>
+<text x="362.4" y="185.4" font-size="9.2" fill="#2f7d4f" text-anchor="middle" font-weight="600">首行拒绝</text>
+<path d="M 584.0 160.0 L 584.0 214.0" fill="none" stroke="#a9761c" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-amber)"/>
+<rect x="592.0" y="174.8" width="48.8" height="18.2" rx="9.1" fill="#ffffff" stroke="none"/>
+<text x="616.4" y="187.4" font-size="9.2" fill="#a9761c" text-anchor="middle" font-weight="600">应答未知</text>
+<path d="M 694.0 152.0 L 710.0 152.0 Q 720.0 152.0 720.0 162.0 L 720.0 208.0" fill="none" stroke="#9a5340" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-clay)"/>
+<rect x="726.0" y="166.8" width="60.9" height="18.2" rx="9.1" fill="#ffffff" stroke="none"/>
+<text x="756.5" y="179.4" font-size="9.2" fill="#9a5340" text-anchor="middle" font-weight="600">scope 变化</text>
+<path d="M 694.0 80.0 L 703.0 80.0 Q 712.0 80.0 712.0 71.0 L 712.0 50.0 Q 712.0 40.0 702.0 40.0 L 591.0 40.0 Q 584.0 40.0 584.0 47.0 L 584.0 54.0" fill="none" stroke="#177f68" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="5 4" marker-end="url(#mk-teal)"/>
+<text x="648.0" y="32.0" font-size="9.4" fill="#0f6250" text-anchor="middle" font-weight="600">同意图重入 → 只确认旧请求，永不双提交</text>
+<path d="M 940.0 260.0 L 962.0 260.0 Q 972.0 260.0 972.0 270.0 L 972.0 292.0" fill="none" stroke="#9a5340" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="5 5" marker-end="url(#mk-clay)"/>
+<text x="982.0" y="256.0" font-size="9.4" fill="#7a3d2d" text-anchor="start" font-weight="600">只有显式会话替换</text>
+<text x="982.0" y="272.0" font-size="9.4" fill="#7a3d2d" text-anchor="start">reset_session 能退役</text>
+<text x="982.0" y="288.0" font-size="9.4" fill="#5b6a7d" text-anchor="start">（并保留替换门禁）</text>
+<rect x="40.0" y="350.0" width="560.0" height="168.0" rx="16" fill="#ffffff" stroke="#c8d2e0" stroke-width="1.3" stroke-dasharray="7 6"/>
+<rect x="54.0" y="339.0" width="263.5" height="22.0" rx="11" fill="#ffffff" stroke="#c8d2e0" stroke-width="1.2"/>
+<text x="65.0" y="354.0" font-size="12.5" fill="#54637a" text-anchor="start" font-weight="600">scope 失效锁存：未知不遮蔽，原值不追认</text>
+<rect x="56.0" y="386.0" width="124.0" height="40.0" rx="8" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.1"/>
+<text x="118.0" y="402.0" font-size="9.8" fill="#3b485c" text-anchor="middle" font-weight="600" font-family="var(--mono)">civilization</text>
+<text x="118.0" y="416.0" font-size="8.8" fill="#5b6a7d" text-anchor="middle">CIVILIZATION_[A-Z0-9_]+</text>
+<rect x="190.0" y="386.0" width="124.0" height="40.0" rx="8" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.1"/>
+<text x="252.0" y="402.0" font-size="9.8" fill="#3b485c" text-anchor="middle" font-weight="600" font-family="var(--mono)">seed</text>
+<text x="252.0" y="416.0" font-size="8.8" fill="#5b6a7d" text-anchor="middle">原生世界种子</text>
+<rect x="324.0" y="386.0" width="124.0" height="40.0" rx="8" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.1"/>
+<text x="386.0" y="402.0" font-size="9.8" fill="#3b485c" text-anchor="middle" font-weight="600" font-family="var(--mono)">turn</text>
+<text x="386.0" y="416.0" font-size="8.8" fill="#5b6a7d" text-anchor="middle">回合 &gt;= 0</text>
+<rect x="458.0" y="386.0" width="124.0" height="40.0" rx="8" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.1"/>
+<text x="520.0" y="402.0" font-size="9.8" fill="#3b485c" text-anchor="middle" font-weight="600" font-family="var(--mono)">owner</text>
+<text x="520.0" y="416.0" font-size="8.8" fill="#5b6a7d" text-anchor="middle">本地玩家 0..63</text>
+<text x="56.0" y="450.0" font-size="9.8" fill="#5b6a7d" text-anchor="start">· 字段为 None 时跳过：未知字段不能遮蔽其他字段的真实变化。</text>
+<text x="56.0" y="465.0" font-size="9.8" fill="#5b6a7d" text-anchor="start">· 校验失败只记 known=False，不置失效；有效且不等才锁存。</text>
+<text x="56.0" y="480.0" font-size="9.8" fill="#5b6a7d" text-anchor="start">· 锁存后没有任何代码路径清除；普通身份刷新只记录观察结果。</text>
+<text x="56.0" y="495.0" font-size="9.8" fill="#5b6a7d" text-anchor="start">· 移动另有原生事件 MOVE_SCOPE_INVALID 可直接置位。</text>
+<rect x="630.0" y="350.0" width="450.0" height="168.0" rx="16" fill="#ffffff" stroke="#e6cb96" stroke-width="1.3" stroke-dasharray="7 6"/>
+<rect x="644.0" y="339.0" width="172.0" height="22.0" rx="11" fill="#ffffff" stroke="#e6cb96" stroke-width="1.2"/>
+<text x="655.0" y="354.0" font-size="12.5" fill="#a9761c" text-anchor="start" font-weight="600">「不重发」由五处共同保证</text>
+<text x="646.0" y="386.0" font-size="9.6" fill="#855a10" text-anchor="start" font-weight="600" font-family="var(--mono)">① submit</text>
+<text x="712.0" y="386.0" font-size="9.6" fill="#5b6a7d" text-anchor="start">pending 先赋值，执行异常也保留所有者</text>
+<text x="646.0" y="412.0" font-size="9.6" fill="#855a10" text-anchor="start" font-weight="600" font-family="var(--mono)">② confirm</text>
+<text x="712.0" y="412.0" font-size="9.6" fill="#5b6a7d" text-anchor="start">只执行 pending.query 的只读读取</text>
+<text x="646.0" y="438.0" font-size="9.6" fill="#855a10" text-anchor="start" font-weight="600" font-family="var(--mono)">③ 并发再入</text>
+<text x="712.0" y="438.0" font-size="9.6" fill="#5b6a7d" text-anchor="start">已有 pending 时只确认或返回 unknown</text>
+<text x="646.0" y="464.0" font-size="9.6" fill="#855a10" text-anchor="start" font-weight="600" font-family="var(--mono)">④ connection</text>
+<text x="712.0" y="464.0" font-size="9.6" fill="#5b6a7d" text-anchor="start">丢回应不自动重放，异常即刻断连</text>
+<text x="646.0" y="490.0" font-size="9.6" fill="#855a10" text-anchor="start" font-weight="600" font-family="var(--mono)">⑤ MCP</text>
+<text x="712.0" y="490.0" font-size="9.6" fill="#5b6a7d" text-anchor="start">捕获错误只返回文本，不重启不重试</text>
+<rect x="40.0" y="543.0" width="16.0" height="10.0" rx="3" fill="#e9f1fb" stroke="#b4cdea" stroke-width="1.2"/>
+<text x="62.0" y="552.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">提交前</text>
+<rect x="114.5" y="543.0" width="16.0" height="10.0" rx="3" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.2"/>
+<text x="136.5" y="552.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">已提交 / 未决</text>
+<rect x="225.8" y="543.0" width="16.0" height="10.0" rx="3" fill="#e6f4ef" stroke="#a5d6c6" stroke-width="1.2"/>
+<text x="247.8" y="552.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">已确认</text>
+<rect x="300.3" y="543.0" width="16.0" height="10.0" rx="3" fill="#e8f5ec" stroke="#aed3ba" stroke-width="1.2"/>
+<text x="322.3" y="552.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">明确拒绝</text>
+<rect x="386.3" y="543.0" width="16.0" height="10.0" rx="3" fill="#fbeeea" stroke="#e0bdb2" stroke-width="1.2"/>
+<text x="408.3" y="552.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">锁存失效</text>
+<text x="40.0" y="566.0" font-size="9.6" fill="#8794a5" text-anchor="start">① prepare_scope：要求恰好 1 行 5 字段的 ACTION_SCOPE；② submit()：唯一一次提交，pending 先赋值；③ 只读 evidence 命中即退役。</text>
+<text x="40.0" y="586.0" font-size="9.6" fill="#8794a5" text-anchor="start">每个动作保留自身原生证据：单位移动的 MOVE_WITNESS、攻击的 pre_hp/fingerprint、建城的 position + 查询串；确认只用有界只读查询。</text>
+</svg><div class="figcap"><span>图 4 · 六态状态机（含“失效锁存”这个只进不出的终态）与 scope 锁存规则。</span><span class="src">src/civ_mcp/actions.py:33-400 · docs/acceptance/2026-10-19-mutation-lifecycle.md</span></div></figure><div class="notes"><div class="note-card"><h4>为什么先赋值 pending</h4><p>提交在写操作前就把 pending 挂到 owner 上：即使执行抛错，也一定有人对这次尝试负责，避免“可能已执行但没人知道”的空档。</p></div><div class="note-card"><h4>未知不遮蔽，原值不追认</h4><p>scope 四个字段独立判断：某字段未知就跳过，不能遮蔽其他字段的真实变化；一旦有效值不匹配就永久置位失效，返回原值也不能解除。</p></div><div class="note-card"><h4>同一动作的唯一出口</h4><p>确认、精确 pre-entry 拒绝、显式会话替换是仅有的三条清除路径；其余一律保留未决。</p></div><div class="note-card"><h4>证据因动作而异</h4><p>移动保留 MOVE_WITNESS，攻击保留 pre_hp / fingerprint，建城保留 position + 查询串；确认只读，绝不调用提交语句。</p></div></div>
+</section>
+<section id="turn">
+  <div class="sec-head">
+    <div class="sec-no">05</div>
+    <div><div class="sec-kicker">Turn Progress</div><h2>回合推进：观测面与请求面共用一套阶段解释</h2></div>
+  </div>
+  <p class="lead">回合推进不是“点一下 Next Turn”：<code>get_turn_status</code> 与 <code>end_turn</code> 共用 <code>read_turn_status</code>、外交/议会/弹窗探针，但只有 <code>end_turn</code> 会建立 pending。确认三条件是：<b>回合增长 + ready + 原世界身份匹配</b>，缺一即保留未决。</p>
+  <figure class="figure"><svg viewBox="0 0 1120 766" width="100%" preserveAspectRatio="xMidYMin meet" role="img" xmlns="http://www.w3.org/2000/svg"><defs><marker id="mk-blue" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#2a62a8"/></marker><marker id="mk-teal" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#177f68"/></marker><marker id="mk-amber" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#a9761c"/></marker><marker id="mk-purple" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#674a9b"/></marker><marker id="mk-slate" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#54637a"/></marker><marker id="mk-clay" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#9a5340"/></marker><marker id="mk-green" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#2f7d4f"/></marker><marker id="mk-muted" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#8794a5"/></marker></defs>
+<text x="40.0" y="44.0" font-size="12.4" fill="#17222f" text-anchor="start" font-weight="600">观测面：TurnStatus.phase（get_turn_status 与 end_turn 共用同一套原生阶段解释）</text>
+<g class="n">
+<rect x="40.0" y="62.0" width="178.0" height="76.0" rx="11" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.35"/>
+<rect x="50.0" y="62.0" width="158.0" height="3.0" rx="2" fill="#54637a" stroke="none"/>
+<text x="129.0" y="84.0" font-size="12.2" fill="#3b485c" text-anchor="middle" font-weight="600">WAITING_FOR_PLAYERS</text>
+<text x="129.0" y="100.0" font-size="9.2" fill="#5b6a7d" text-anchor="middle">本地回合不活动：别人在行动</text>
+<text x="129.0" y="131.0" font-size="8.8" fill="#8794a5" text-anchor="middle">不是死锁</text>
+</g>
+<g class="n">
+<rect x="238.0" y="62.0" width="178.0" height="76.0" rx="11" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.35"/>
+<rect x="248.0" y="62.0" width="158.0" height="3.0" rx="2" fill="#54637a" stroke="none"/>
+<text x="327.0" y="84.0" font-size="12.2" fill="#3b485c" text-anchor="middle" font-weight="600">LOCAL_TURN_STARTING</text>
+<text x="327.0" y="100.0" font-size="9.2" fill="#5b6a7d" text-anchor="middle">活动但 complete=False</text>
+<text x="327.0" y="131.0" font-size="8.8" fill="#8794a5" text-anchor="middle">回合开始处理</text>
+</g>
+<g class="n">
+<rect x="436.0" y="62.0" width="178.0" height="76.0" rx="11" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.35"/>
+<rect x="446.0" y="62.0" width="158.0" height="3.0" rx="2" fill="#54637a" stroke="none"/>
+<text x="525.0" y="84.0" font-size="12.2" fill="#3b485c" text-anchor="middle" font-weight="600">UI_PROCESSING</text>
+<text x="525.0" y="100.0" font-size="9.2" fill="#5b6a7d" text-anchor="middle">活动 + complete + 仍在处理 UI 消息</text>
+<text x="525.0" y="131.0" font-size="8.8" fill="#8794a5" text-anchor="middle">消息未处理完</text>
+</g>
+<g class="n">
+<rect x="634.0" y="62.0" width="196.0" height="76.0" rx="11" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.35"/>
+<rect x="644.0" y="62.0" width="176.0" height="3.0" rx="2" fill="#a9761c" stroke="none"/>
+<text x="732.0" y="84.0" font-size="12.2" fill="#855a10" text-anchor="middle" font-weight="600">LOCAL_ACTION_REQUIRED</text>
+<text x="732.0" y="100.0" font-size="9.2" fill="#5b6a7d" text-anchor="middle">就绪原因是阻塞 / 队列移动 / 单位 /</text>
+<text x="732.0" y="111.8" font-size="9.2" fill="#5b6a7d" text-anchor="middle">城市射击</text>
+<text x="732.0" y="131.0" font-size="8.8" fill="#8794a5" text-anchor="middle">需模型显式决定</text>
+</g>
+<g class="n">
+<rect x="850.0" y="62.0" width="170.0" height="76.0" rx="11" fill="#e6f4ef" stroke="#a5d6c6" stroke-width="1.35"/>
+<rect x="860.0" y="62.0" width="150.0" height="3.0" rx="2" fill="#177f68" stroke="none"/>
+<text x="935.0" y="84.0" font-size="12.2" fill="#0f6250" text-anchor="middle" font-weight="600">LOCAL_READY</text>
+<text x="935.0" y="100.0" font-size="9.2" fill="#5b6a7d" text-anchor="middle">active + complete + ui=False</text>
+<text x="935.0" y="111.8" font-size="9.2" fill="#5b6a7d" text-anchor="middle">readiness=NONE</text>
+<text x="935.0" y="131.0" font-size="8.8" fill="#8794a5" text-anchor="middle">可提交</text>
+</g>
+<g class="n">
+<rect x="40.0" y="168.0" width="178.0" height="62.0" rx="11" fill="#fbeeea" stroke="#e0bdb2" stroke-width="1.35"/>
+<rect x="50.0" y="168.0" width="158.0" height="3.0" rx="2" fill="#9a5340" stroke="none"/>
+<text x="129.0" y="190.0" font-size="12.2" fill="#7a3d2d" text-anchor="middle" font-weight="600">UNKNOWN</text>
+<text x="129.0" y="206.0" font-size="9.2" fill="#5b6a7d" text-anchor="middle">其他组合 / 读取失败</text>
+<text x="129.0" y="223.0" font-size="8.8" fill="#8794a5" text-anchor="middle">保留诊断</text>
+</g>
+<path d="M 129.0 138.0 L 129.0 166.0" fill="none" stroke="#9a5340" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-clay)"/>
+<text x="230.0" y="196.0" font-size="9.4" fill="#8794a5" text-anchor="start">任一字段缺失或读失败 → UNKNOWN；报告不承担完成判断</text>
+<path d="M 218.0 100.0 L 236.0 100.0" fill="none" stroke="#54637a" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-slate)"/>
+<path d="M 416.0 100.0 L 434.0 100.0" fill="none" stroke="#54637a" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-slate)"/>
+<path d="M 614.0 100.0 L 632.0 100.0" fill="none" stroke="#a9761c" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-amber)"/>
+<path d="M 830.0 100.0 L 848.0 100.0" fill="none" stroke="#177f68" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-teal)"/>
+<path d="M 732.0 138.0 L 732.0 150.0 Q 732.0 160.0 722.0 160.0 L 670.0 160.0 Q 660.0 160.0 660.0 150.0 L 660.0 140.0" fill="none" stroke="#a9761c" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="4 4" marker-end="url(#mk-amber)"/>
+<text x="748.0" y="158.0" font-size="9" fill="#8794a5" text-anchor="start">处理完强制选择后回到就绪判断</text>
+<text x="40.0" y="268.0" font-size="12.4" fill="#17222f" text-anchor="start" font-weight="600">请求面：TurnProgress（唯一持有未决推进、原世界身份、起始回合与差分基线）</text>
+<g class="n">
+<rect x="40.0" y="286.0" width="190.0" height="96.0" rx="11" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.35"/>
+<rect x="50.0" y="286.0" width="170.0" height="3.0" rx="2" fill="#54637a" stroke="none"/>
+<text x="135.0" y="308.0" font-size="12.2" fill="#3b485c" text-anchor="middle" font-weight="600">T0 idle</text>
+<text x="135.0" y="324.0" font-size="9.2" fill="#5b6a7d" text-anchor="middle">pending=False</text>
+<text x="135.0" y="335.8" font-size="9.2" fill="#5b6a7d" text-anchor="middle">world / from_turn / baseline = None</text>
+</g>
+<g class="n">
+<rect x="300.0" y="282.0" width="250.0" height="104.0" rx="11" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.35"/>
+<rect x="310.0" y="282.0" width="230.0" height="3.0" rx="2" fill="#a9761c" stroke="none"/>
+<text x="425.0" y="304.0" font-size="12.2" fill="#855a10" text-anchor="middle" font-weight="600">T1 已提交 · 轮询确认</text>
+<text x="425.0" y="320.0" font-size="9.2" fill="#5b6a7d" text-anchor="middle">提交前：终局探针 → 读阶段 → 查阻塞 → 快照</text>
+<text x="425.0" y="331.8" font-size="9.2" fill="#5b6a7d" text-anchor="middle">提交后：≤180s，每 2s 一次只读阶段读取</text>
+</g>
+<g class="n">
+<rect x="622.0" y="286.0" width="190.0" height="96.0" rx="11" fill="#e6f4ef" stroke="#a5d6c6" stroke-width="1.35"/>
+<rect x="632.0" y="286.0" width="170.0" height="3.0" rx="2" fill="#177f68" stroke="none"/>
+<text x="717.0" y="308.0" font-size="12.2" fill="#0f6250" text-anchor="middle" font-weight="600">T2 已确认</text>
+<text x="717.0" y="324.0" font-size="9.2" fill="#5b6a7d" text-anchor="middle">turn_after &gt; from_turn</text>
+<text x="717.0" y="335.8" font-size="9.2" fill="#5b6a7d" text-anchor="middle">且 ready 且 world 匹配</text>
+<text x="717.0" y="347.6" font-size="9.2" fill="#5b6a7d" text-anchor="middle">先 reset() 再报告</text>
+</g>
+<g class="n">
+<rect x="300.0" y="430.0" width="250.0" height="88.0" rx="11" fill="#e8f5ec" stroke="#aed3ba" stroke-width="1.35"/>
+<rect x="310.0" y="430.0" width="230.0" height="3.0" rx="2" fill="#2f7d4f" stroke="none"/>
+<text x="425.0" y="452.0" font-size="12.2" fill="#205c38" text-anchor="middle" font-weight="600">REOPENED_LOCAL</text>
+<text x="425.0" y="468.0" font-size="9.2" fill="#5b6a7d" text-anchor="middle">同回合 + 需本地动作 + 收到原生重开证据</text>
+<text x="425.0" y="479.8" font-size="9.2" fill="#5b6a7d" text-anchor="middle">以退役本次尝试（不重发）</text>
+</g>
+<g class="n">
+<rect x="590.0" y="430.0" width="220.0" height="88.0" rx="11" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.35"/>
+<rect x="600.0" y="430.0" width="200.0" height="3.0" rx="2" fill="#a9761c" stroke="none"/>
+<text x="700.0" y="452.0" font-size="12.2" fill="#855a10" text-anchor="middle" font-weight="600">暂停 · 保留请求</text>
+<text x="700.0" y="468.0" font-size="9.2" fill="#5b6a7d" text-anchor="middle">外交会话 / 议会阶段 / 信息弹窗</text>
+<text x="700.0" y="479.8" font-size="9.2" fill="#5b6a7d" text-anchor="middle">返回处理指引，请求继续挂起</text>
+</g>
+<g class="n">
+<rect x="846.0" y="430.0" width="174.0" height="88.0" rx="11" fill="#fbeeea" stroke="#e0bdb2" stroke-width="1.35"/>
+<rect x="856.0" y="430.0" width="154.0" height="3.0" rx="2" fill="#9a5340" stroke="none"/>
+<text x="933.0" y="452.0" font-size="12.2" fill="#7a3d2d" text-anchor="middle" font-weight="600">UNKNOWN · 保留</text>
+<text x="933.0" y="468.0" font-size="9.2" fill="#5b6a7d" text-anchor="middle">超时 ≠ 读失败</text>
+<text x="933.0" y="479.8" font-size="9.2" fill="#5b6a7d" text-anchor="middle">world 变化 → 锁存失效</text>
+</g>
+<path d="M 230.0 334.0 L 298.0 334.0" fill="none" stroke="#a9761c" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-amber)"/>
+<rect x="242.2" y="309.0" width="43.7" height="18.0" rx="9.0" fill="#ffffff" stroke="none"/>
+<text x="264.0" y="321.5" font-size="9" fill="#a9761c" text-anchor="middle" font-weight="600">提交 ×1</text>
+<path d="M 550.0 334.0 L 620.0 334.0" fill="none" stroke="#177f68" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-teal)"/>
+<rect x="565.5" y="309.0" width="39.0" height="18.0" rx="9.0" fill="#ffffff" stroke="none"/>
+<text x="585.0" y="321.5" font-size="9" fill="#177f68" text-anchor="middle" font-weight="600">三条件</text>
+<path d="M 425.0 386.0 L 425.0 428.0" fill="none" stroke="#2f7d4f" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-green)"/>
+<text x="434.0" y="406.0" font-size="9" fill="#8794a5" text-anchor="start">本地被重开</text>
+<path d="M 550.0 362.0 L 600.0 362.0 Q 610.0 362.0 610.0 372.0 L 610.0 428.0" fill="none" stroke="#a9761c" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-amber)"/>
+<path d="M 720.0 382.0 L 890.0 382.0 Q 900.0 382.0 900.0 392.0 L 900.0 428.0" fill="none" stroke="#9a5340" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="5 4" marker-end="url(#mk-clay)"/>
+<text x="760.0" y="374.0" font-size="9" fill="#8794a5" text-anchor="start">读失败 / 超时 / 身份未知</text>
+<rect x="40.0" y="540.0" width="1040.0" height="178.0" rx="16" fill="#ffffff" stroke="#c8d2e0" stroke-width="1.3" stroke-dasharray="7 6"/>
+<rect x="54.0" y="529.0" width="322.0" height="22.0" rx="11" fill="#ffffff" stroke="#c8d2e0" stroke-width="1.2"/>
+<text x="65.0" y="544.0" font-size="12.5" fill="#54637a" text-anchor="start" font-weight="600">推进前必须由模型显式解决的阻塞（工具不自动选择）</text>
+<rect x="56.0" y="572.0" width="68.3" height="20.6" rx="10.3" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.2"/>
+<text x="90.2" y="585.9" font-size="9.6" fill="#855a10" text-anchor="middle" font-weight="600">外交 / 交易</text>
+<text x="56.0" y="596.0" font-size="9.2" fill="#5b6a7d" text-anchor="start">get_pending_diplomacy → respond_to_diplomacy</text>
+<rect x="396.0" y="572.0" width="56.4" height="20.6" rx="10.3" fill="#efeafa" stroke="#cbb9e8" stroke-width="1.2"/>
+<text x="424.2" y="585.9" font-size="9.6" fill="#4f3780" text-anchor="middle" font-weight="600">世界议会</text>
+<text x="396.0" y="596.0" font-size="9.2" fill="#5b6a7d" text-anchor="start">get_world_congress → open_world_congress / queue_wc_votes</text>
+<rect x="736.0" y="572.0" width="75.6" height="20.6" rx="10.3" fill="#e9f1fb" stroke="#b4cdea" stroke-width="1.2"/>
+<text x="773.8" y="585.9" font-size="9.6" fill="#1c4a86" text-anchor="middle" font-weight="600">原生阻塞通知</text>
+<text x="736.0" y="596.0" font-size="9.2" fill="#5b6a7d" text-anchor="start">set_city_production · set_research · set_policies · unit_action</text>
+<rect x="56.0" y="614.0" width="56.4" height="20.6" rx="10.3" fill="#e9f1fb" stroke="#b4cdea" stroke-width="1.2"/>
+<text x="84.2" y="627.9" font-size="9.6" fill="#1c4a86" text-anchor="middle" font-weight="600">强制选择</text>
+<text x="56.0" y="638.0" font-size="9.2" fill="#5b6a7d" text-anchor="start">choose_dedication · appoint_governor · set_policies</text>
+<rect x="396.0" y="614.0" width="87.5" height="20.6" rx="10.3" fill="#e6f4ef" stroke="#a5d6c6" stroke-width="1.2"/>
+<text x="439.8" y="627.9" font-size="9.6" fill="#0f6250" text-anchor="middle" font-weight="600">单位 / 城市就绪</text>
+<text x="396.0" y="638.0" font-size="9.2" fill="#5b6a7d" text-anchor="start">显式 unit_action / city_action（不自动选命令）</text>
+<rect x="736.0" y="614.0" width="56.4" height="20.6" rx="10.3" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.2"/>
+<text x="764.2" y="627.9" font-size="9.6" fill="#3b485c" text-anchor="middle" font-weight="600">信息弹窗</text>
+<text x="736.0" y="638.0" font-size="9.2" fill="#5b6a7d" text-anchor="start">dismiss_popup</text>
+<rect x="56.0" y="656.0" width="56.4" height="20.6" rx="10.3" fill="#fbeeea" stroke="#e0bdb2" stroke-width="1.2"/>
+<text x="84.2" y="669.9" font-size="9.6" fill="#7a3d2d" text-anchor="middle" font-weight="600">原生终局</text>
+<text x="56.0" y="680.0" font-size="9.2" fill="#5b6a7d" text-anchor="start">GAME OVER：reset() 并返回</text>
+<text x="40.0" y="748.0" font-size="9.8" fill="#8794a5" text-anchor="start">确认三条件：回合增长 + ready（active 且 complete 且 ui=False）+ 原世界身份匹配；缺一即保留未决。</text>
+</svg><div class="figcap"><span>图 5 · 观测面的 6 个原生阶段，请求面的提交/轮询/确认，以及必须由模型显式解决的阻塞出口。</span><span class="src">src/civ_mcp/end_turn.py · lua/{notifications,turn_readiness}.py</span></div></figure><div class="notes"><div class="note-card"><h4>三条件确认</h4><p>turn_after &gt; from_turn、ready（active 且 complete 且 ui=False）、world 匹配，三者同时成立才算推进；任一读失败只影响诊断，不改写已确认事实。</p></div><div class="note-card"><h4>预算不是死锁判据</h4><p>180s 轮询上限只是观察预算；超时返回 WAITING 并保留请求，与真实读取失败分开统计。</p></div><div class="note-card"><h4>阻塞要模型自己解决</h4><p>生产、科研、政策、单位、议会、外交、弹窗等阻塞都映射到具体工具，推进工具只报告不代选。</p></div><div class="note-card"><h4>本地被重开是有效结局</h4><p>收到原生 TURN_REOPENED 证据时按 REOPENED_LOCAL 处理并退役本次尝试，而不是继续等待或重发。</p></div></div>
+</section>
+<section id="seq">
+  <div class="sec-head">
+    <div class="sec-no">06</div>
+    <div><div class="sec-kicker">Wire Sequence</div><h2>端到端时序：一次动作在六个进程角色之间的往返</h2></div>
+  </div>
+  <p class="lead">以命名命令 <code>unit move</code> 为例：模型执行 CLI 命令，CLI 经内部 stdio MCP 把请求送进工具锁、门禁、领域准备、Lua 构造与 FireTuner；回执按 <code>uuid</code> 前缀匹配；确认阶段是另一串只读往返。整条链上只有一个地方能“再次提交”——而代码里没有这样的地方。</p>
+  <figure class="figure"><svg viewBox="0 0 1120 908" width="100%" preserveAspectRatio="xMidYMin meet" role="img" xmlns="http://www.w3.org/2000/svg"><defs><marker id="mk-blue" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#2a62a8"/></marker><marker id="mk-teal" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#177f68"/></marker><marker id="mk-amber" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#a9761c"/></marker><marker id="mk-purple" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#674a9b"/></marker><marker id="mk-slate" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#54637a"/></marker><marker id="mk-clay" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#9a5340"/></marker><marker id="mk-green" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#2f7d4f"/></marker><marker id="mk-muted" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#8794a5"/></marker></defs>
+<rect x="24.0" y="122.0" width="1072.0" height="210.0" rx="14" fill="#fdf7ea" stroke="none"/>
+<rect x="24.0" y="350.0" width="1072.0" height="262.0" rx="14" fill="#eef6f2" stroke="none"/>
+<text x="34.0" y="176.0" font-size="9.4" fill="#855a10" text-anchor="middle" font-weight="600">①</text>
+<text x="34.0" y="189.0" font-size="9.4" fill="#855a10" text-anchor="middle" font-weight="600">单</text>
+<text x="34.0" y="202.0" font-size="9.4" fill="#855a10" text-anchor="middle" font-weight="600">次</text>
+<text x="34.0" y="215.0" font-size="9.4" fill="#855a10" text-anchor="middle" font-weight="600">提</text>
+<text x="34.0" y="228.0" font-size="9.4" fill="#855a10" text-anchor="middle" font-weight="600">交</text>
+<text x="34.0" y="404.0" font-size="9.4" fill="#0f6250" text-anchor="middle" font-weight="600">②</text>
+<text x="34.0" y="417.0" font-size="9.4" fill="#0f6250" text-anchor="middle" font-weight="600">有</text>
+<text x="34.0" y="430.0" font-size="9.4" fill="#0f6250" text-anchor="middle" font-weight="600">界</text>
+<text x="34.0" y="443.0" font-size="9.4" fill="#0f6250" text-anchor="middle" font-weight="600">只</text>
+<text x="34.0" y="456.0" font-size="9.4" fill="#0f6250" text-anchor="middle" font-weight="600">读</text>
+<text x="34.0" y="469.0" font-size="9.4" fill="#0f6250" text-anchor="middle" font-weight="600">确</text>
+<text x="34.0" y="482.0" font-size="9.4" fill="#0f6250" text-anchor="middle" font-weight="600">认</text>
+<g class="n">
+<rect x="22.0" y="44.0" width="156.0" height="56.0" rx="10" fill="#e9f1fb" stroke="#b4cdea" stroke-width="1.3"/>
+<text x="100.0" y="68.0" font-size="11.4" fill="#1c4a86" text-anchor="middle" font-weight="600">Agent + civ6 CLI</text>
+<text x="100.0" y="86.0" font-size="9.2" fill="#5b6a7d" text-anchor="middle">执行命名命令</text>
+</g>
+<path d="M 100 102 L 100 700" fill="none" stroke="#d8e0ea" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="4 5"/>
+<g class="n">
+<rect x="210.0" y="44.0" width="156.0" height="56.0" rx="10" fill="#e9f1fb" stroke="#b4cdea" stroke-width="1.3"/>
+<text x="288.0" y="68.0" font-size="11.4" fill="#1c4a86" text-anchor="middle" font-weight="600">CLI 会话 / server.py</text>
+<text x="288.0" y="86.0" font-size="9.2" fill="#5b6a7d" text-anchor="middle">内部 stdio · 工具面 · 锁</text>
+</g>
+<path d="M 288 102 L 288 700" fill="none" stroke="#d8e0ea" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="4 5"/>
+<g class="n">
+<rect x="422.0" y="44.0" width="156.0" height="56.0" rx="10" fill="#e6f4ef" stroke="#a5d6c6" stroke-width="1.3"/>
+<text x="500.0" y="68.0" font-size="11.4" fill="#0f6250" text-anchor="middle" font-weight="600">GameState + owner</text>
+<text x="500.0" y="86.0" font-size="9.2" fill="#5b6a7d" text-anchor="middle">ActionLifecycle</text>
+</g>
+<path d="M 500 102 L 500 700" fill="none" stroke="#d8e0ea" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="4 5"/>
+<g class="n">
+<rect x="626.0" y="44.0" width="156.0" height="56.0" rx="10" fill="#efeafa" stroke="#cbb9e8" stroke-width="1.3"/>
+<text x="704.0" y="68.0" font-size="11.4" fill="#4f3780" text-anchor="middle" font-weight="600">lua/</text>
+<text x="704.0" y="86.0" font-size="9.2" fill="#5b6a7d" text-anchor="middle">构造 / 解析</text>
+</g>
+<path d="M 704 102 L 704 700" fill="none" stroke="#d8e0ea" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="4 5"/>
+<g class="n">
+<rect x="822.0" y="44.0" width="156.0" height="56.0" rx="10" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.3"/>
+<text x="900.0" y="68.0" font-size="11.4" fill="#3b485c" text-anchor="middle" font-weight="600">connection · FireTuner</text>
+<text x="900.0" y="86.0" font-size="9.2" fill="#5b6a7d" text-anchor="middle">TCP 4318</text>
+</g>
+<path d="M 900 102 L 900 700" fill="none" stroke="#d8e0ea" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="4 5"/>
+<g class="n">
+<rect x="980.0" y="44.0" width="156.0" height="56.0" rx="10" fill="#fbeeea" stroke="#e0bdb2" stroke-width="1.3"/>
+<text x="1058.0" y="68.0" font-size="11.4" fill="#7a3d2d" text-anchor="middle" font-weight="600">Civilization VI</text>
+<text x="1058.0" y="86.0" font-size="9.2" fill="#5b6a7d" text-anchor="middle">引擎裁决</text>
+</g>
+<path d="M 1058 102 L 1058 700" fill="none" stroke="#d8e0ea" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="4 5"/>
+<path d="M 100.0 142.0 L 288.0 142.0" fill="none" stroke="#2a62a8" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-blue)"/>
+<text x="194.0" y="135.0" font-size="9.8" fill="#1c4a86" text-anchor="middle" font-weight="600">unit move / city attack / turn end（stdin 命令）</text>
+<path d="M 288.0 174.0 L 500.0 174.0" fill="none" stroke="#2a62a8" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-blue)"/>
+<text x="394.0" y="167.0" font-size="9.8" fill="#1c4a86" text-anchor="middle" font-weight="600">内部 MCP：工具锁 → 未决门禁 → 分派领域准备</text>
+<path d="M 500.0 196.0 L 658.0 196.0 Q 668.0 196.0 668.0 206.0 L 668.0 210.0 Q 668.0 220.0 658.0 220.0 L 500.0 220.0" fill="none" stroke="#177f68" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-teal)"/>
+<text x="508.0" y="236.0" font-size="9.4" fill="#0f6250" text-anchor="start" font-weight="500">prepare_scope：civ / seed / turn / owner 绑定原世界</text>
+<path d="M 500.0 268.0 L 704.0 268.0" fill="none" stroke="#674a9b" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-purple)"/>
+<text x="602.0" y="261.0" font-size="9.8" fill="#4f3780" text-anchor="middle" font-weight="600">构造提交语句 + witness token</text>
+<path d="M 704.0 300.0 L 900.0 300.0" fill="none" stroke="#54637a" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-slate)"/>
+<text x="802.0" y="293.0" font-size="9.8" fill="#3b485c" text-anchor="middle" font-weight="600">CMD 帧（uuid 前缀包络）</text>
+<path d="M 900.0 332.0 L 1058.0 332.0" fill="none" stroke="#9a5340" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-clay)"/>
+<text x="979.0" y="325.0" font-size="9.8" fill="#7a3d2d" text-anchor="middle" font-weight="600">原生 RequestAction / 查询</text>
+<path d="M 1058.0 384.0 L 500.0 384.0" fill="none" stroke="#9a5340" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-clay)"/>
+<text x="779.0" y="377.0" font-size="9.8" fill="#7a3d2d" text-anchor="middle" font-weight="600">唯一回执：OK / MOVING_TO|… / ERR:</text>
+<path d="M 500.0 406.0 L 690.0 406.0 Q 700.0 406.0 700.0 416.0 L 700.0 420.0 Q 700.0 430.0 690.0 430.0 L 500.0 430.0" fill="none" stroke="#a9761c" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-amber)"/>
+<text x="508.0" y="446.0" font-size="9.4" fill="#855a10" text-anchor="start" font-weight="500">pending 先赋值；解析证据 → 已接受 / 拒绝 / 未知</text>
+<path d="M 500.0 474.0 L 704.0 474.0" fill="none" stroke="#177f68" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-teal)"/>
+<text x="602.0" y="467.0" font-size="9.8" fill="#0f6250" text-anchor="middle" font-weight="600">只读确认查询（0.15s × N，≤5s）</text>
+<path d="M 704.0 506.0 L 900.0 506.0" fill="none" stroke="#54637a" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-slate)"/>
+<text x="802.0" y="499.0" font-size="9.8" fill="#3b485c" text-anchor="middle" font-weight="600">ACTION_IDENTITY + 位置 / 见证查询</text>
+<path d="M 900.0 538.0 L 1058.0 538.0" fill="none" stroke="#9a5340" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-clay)"/>
+<text x="979.0" y="531.0" font-size="9.8" fill="#7a3d2d" text-anchor="middle" font-weight="600">只读 read</text>
+<path d="M 1058.0 570.0 L 500.0 570.0" fill="none" stroke="#9a5340" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-clay)"/>
+<text x="779.0" y="563.0" font-size="9.8" fill="#7a3d2d" text-anchor="middle" font-weight="600">POS / MOVE_WITNESS / ACTION_IDENTITY 行</text>
+<path d="M 500.0 592.0 L 698.0 592.0 Q 708.0 592.0 708.0 602.0 L 708.0 606.0 Q 708.0 616.0 698.0 616.0 L 500.0 616.0" fill="none" stroke="#177f68" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-teal)"/>
+<text x="508.0" y="632.0" font-size="9.4" fill="#0f6250" text-anchor="start" font-weight="500">命中证据 → pending=None；未命中 → 保留 unknown</text>
+<path d="M 500.0 654.0 L 288.0 654.0" fill="none" stroke="#177f68" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-teal)"/>
+<text x="394.0" y="647.0" font-size="9.8" fill="#0f6250" text-anchor="middle" font-weight="600">工具文本：事实 + 回读结果 + 下一步指引</text>
+<path d="M 288.0 682.0 L 100.0 682.0" fill="none" stroke="#2a62a8" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-blue)"/>
+<text x="194.0" y="675.0" font-size="9.8" fill="#1c4a86" text-anchor="middle" font-weight="600">模型据此更新判断，进入下一步</text>
+<rect x="700.0" y="762.0" width="386.0" height="86.0" rx="11" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.3" stroke-dasharray="5 4"/>
+<text x="716.0" y="786.0" font-size="11.4" fill="#855a10" text-anchor="start" font-weight="600">结果未知时：保留原请求，不重发</text>
+<text x="716.0" y="804.0" font-size="9.4" fill="#5b6a7d" text-anchor="start">· 丢回应 / 超时 / 读失败 → unknown，所有者在位；</text>
+<text x="716.0" y="817.0" font-size="9.4" fill="#5b6a7d" text-anchor="start">· 后续同意图调用只确认旧请求，不提交第二次；</text>
+<text x="716.0" y="830.0" font-size="9.4" fill="#5b6a7d" text-anchor="start">· 只有确认、精确 pre-entry 拒绝或显式会话替换能清除。</text>
+<path d="M 708.0 604.0 L 748.0 604.0 Q 758.0 604.0 758.0 614.0 L 758.0 742.0 Q 758.0 748.0 758.0 754.0 L 758.0 760.0" fill="none" stroke="#a9761c" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="5 4" marker-end="url(#mk-amber)"/>
+<text x="24.0" y="890.0" font-size="9.6" fill="#8794a5" text-anchor="start">本图以命名命令 unit move 为例；命令经 CLI 的内部 stdio MCP 进入 Runtime。turn end 的确认循环更长（≤180s / 2s 间隔），但同样是「一次提交 + 只读回读」。</text>
+</svg><div class="figcap"><span>图 6 · 单次提交（①）与有界只读确认（②）；右侧是结果未知时的保留分支。</span><span class="src">src/civ_mcp/{server,game_state,actions,connection}.py · lua/units.py</span></div></figure><div class="notes"><div class="note-card"><h4>消息包络</h4><p>每个请求被包上唯一 uuid，只接收带本请求前缀的行，以 <code>CIVMCP|&lt;uuid&gt;|END</code> 作为完成标记。</p></div><div class="note-card"><h4>确认不提交</h4><p>确认循环只执行 pending 里预先准备好的只读查询；这也是“同意图重入只确认”的实现基础。</p></div><div class="note-card"><h4>未知分支显式存在</h4><p>结果未知不是异常路径，而是正常状态：请求保留、模型获得指引、后续调用只确认旧请求。</p></div></div>
+</section>
+<section id="session">
+  <div class="sec-head">
+    <div class="sec-no">07</div>
+    <div><div class="sec-kicker">Session & Checkpoints</div><h2>会话替换与检查点：三态判定与两条门禁</h2></div>
+  </div>
+  <p class="lead">换档、读档、冷恢复是三类显式替换，共用同一套加载确认。GameState 是唯一替换所有者；<code>replacement_pending</code> / <code>save_pending</code> 在证据链走完前一直保持——而“只有调用前可证明未调用，才允许 not_submitted”是这套状态机的铁律。</p>
+  <figure class="figure"><svg viewBox="0 0 1120 628" width="100%" preserveAspectRatio="xMidYMin meet" role="img" xmlns="http://www.w3.org/2000/svg"><defs><marker id="mk-blue" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#2a62a8"/></marker><marker id="mk-teal" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#177f68"/></marker><marker id="mk-amber" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#a9761c"/></marker><marker id="mk-purple" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#674a9b"/></marker><marker id="mk-slate" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#54637a"/></marker><marker id="mk-clay" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#9a5340"/></marker><marker id="mk-green" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#2f7d4f"/></marker><marker id="mk-muted" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#8794a5"/></marker></defs>
+<text x="40.0" y="44.0" font-size="12.2" fill="#17222f" text-anchor="start" font-weight="600">三个显式入口（普通查询/缓存刷新不会触发任何一条）</text>
+<g class="n">
+<rect x="40.0" y="58.0" width="226.0" height="66.0" rx="11" fill="#e9f1fb" stroke="#b4cdea" stroke-width="1.4"/>
+<rect x="50.0" y="58.0" width="206.0" height="3.0" rx="2" fill="#2a62a8" stroke="none"/>
+<text x="56.0" y="82.0" font-size="12.6" fill="#1c4a86" text-anchor="start" font-weight="600">load_game_save</text>
+<text x="56.0" y="99.0" font-size="9.4" fill="#5b6a7d" text-anchor="start">要求已在原生主菜单</text>
+</g>
+<g class="n">
+<rect x="284.0" y="58.0" width="238.0" height="66.0" rx="11" fill="#e9f1fb" stroke="#b4cdea" stroke-width="1.4"/>
+<rect x="294.0" y="58.0" width="218.0" height="3.0" rx="2" fill="#2a62a8" stroke="none"/>
+<text x="300.0" y="82.0" font-size="12.6" fill="#1c4a86" text-anchor="start" font-weight="600">reload_game_save</text>
+<text x="300.0" y="99.0" font-size="9.4" fill="#5b6a7d" text-anchor="start">菜单路径换档，进程保留</text>
+</g>
+<g class="n">
+<rect x="540.0" y="58.0" width="282.0" height="66.0" rx="11" fill="#e9f1fb" stroke="#b4cdea" stroke-width="1.4"/>
+<rect x="550.0" y="58.0" width="262.0" height="3.0" rx="2" fill="#2a62a8" stroke="none"/>
+<text x="556.0" y="82.0" font-size="12.6" fill="#1c4a86" text-anchor="start" font-weight="600">restart_and_load</text>
+<text x="556.0" y="99.0" font-size="9.4" fill="#5b6a7d" text-anchor="start">冷恢复：断连 → stop_game → start_game</text>
+</g>
+<g class="n">
+<rect x="840.0" y="58.0" width="240.0" height="66.0" rx="11" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.4"/>
+<rect x="850.0" y="58.0" width="220.0" height="3.0" rx="2" fill="#a9761c" stroke="none"/>
+<text x="856.0" y="82.0" font-size="12.6" fill="#855a10" text-anchor="start" font-weight="600">两条门禁</text>
+<text x="856.0" y="99.0" font-size="9.4" fill="#5b6a7d" text-anchor="start">replacement_pending / save_pending</text>
+</g>
+<path d="M 153.0 124.0 L 153.0 131.0 Q 153.0 138.0 160.0 138.0 L 700.0 138.0" fill="none" stroke="#2a62a8" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 403.0 124.0 L 403.0 138.0" fill="none" stroke="#2a62a8" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 681.0 124.0 L 681.0 138.0" fill="none" stroke="#2a62a8" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 700.0 138.0 L 700.0 164.0" fill="none" stroke="#2a62a8" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-blue)"/>
+<text x="712.0" y="154.0" font-size="9.4" fill="#1c4a86" text-anchor="start">共用同一套加载确认</text>
+<g class="n">
+<rect x="40.0" y="166.0" width="196.0" height="88.0" rx="11" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.4"/>
+<rect x="50.0" y="166.0" width="176.0" height="3.0" rx="2" fill="#54637a" stroke="none"/>
+<text x="56.0" y="190.0" font-size="12.6" fill="#3b485c" text-anchor="start" font-weight="600">Idle</text>
+<text x="56.0" y="207.0" font-size="9.4" fill="#5b6a7d" text-anchor="start">无替换、无保存未决</text>
+<text x="56.0" y="219.4" font-size="9.4" fill="#5b6a7d" text-anchor="start">普通查询与缓存刷新在此</text>
+</g>
+<g class="n">
+<rect x="292.0" y="166.0" width="220.0" height="88.0" rx="11" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.4"/>
+<rect x="302.0" y="166.0" width="200.0" height="3.0" rx="2" fill="#a9761c" stroke="none"/>
+<text x="308.0" y="190.0" font-size="12.6" fill="#855a10" text-anchor="start" font-weight="600">门禁置位</text>
+<text x="308.0" y="207.0" font-size="9.4" fill="#5b6a7d" text-anchor="start">replacement_pending = True</text>
+<text x="308.0" y="219.4" font-size="9.4" fill="#5b6a7d" text-anchor="start">保存时另置 save_pending</text>
+</g>
+<g class="n">
+<rect x="566.0" y="160.0" width="258.0" height="100.0" rx="11" fill="#e6f4ef" stroke="#a5d6c6" stroke-width="1.4"/>
+<rect x="576.0" y="160.0" width="238.0" height="3.0" rx="2" fill="#177f68" stroke="none"/>
+<text x="582.0" y="184.0" font-size="12.6" fill="#0f6250" text-anchor="start" font-weight="600">单一所有者：GameState</text>
+<text x="582.0" y="201.0" font-size="9.4" fill="#5b6a7d" text-anchor="start">提交 + 确认循环（最多一次提交）</text>
+<text x="582.0" y="213.4" font-size="9.4" fill="#5b6a7d" text-anchor="start">重连 → 读身份 / 回合 / overview</text>
+<text x="582.0" y="225.8" font-size="9.4" fill="#5b6a7d" text-anchor="start">终读一致 + 检查点复核</text>
+</g>
+<g class="n">
+<rect x="878.0" y="160.0" width="202.0" height="82.0" rx="11" fill="#e6f4ef" stroke="#a5d6c6" stroke-width="1.4"/>
+<rect x="888.0" y="160.0" width="182.0" height="3.0" rx="2" fill="#177f68" stroke="none"/>
+<text x="894.0" y="184.0" font-size="12.6" fill="#0f6250" text-anchor="start" font-weight="600">Confirmed</text>
+<text x="894.0" y="201.0" font-size="9.4" fill="#5b6a7d" text-anchor="start">释放门禁</text>
+<text x="894.0" y="213.4" font-size="9.4" fill="#5b6a7d" text-anchor="start">原始基准名 → 新建测试轮次</text>
+</g>
+<g class="n">
+<rect x="878.0" y="286.0" width="202.0" height="88.0" rx="11" fill="#fbeeea" stroke="#e0bdb2" stroke-width="1.4"/>
+<rect x="888.0" y="286.0" width="182.0" height="3.0" rx="2" fill="#9a5340" stroke="none"/>
+<text x="894.0" y="310.0" font-size="12.6" fill="#7a3d2d" text-anchor="start" font-weight="600">Unknown</text>
+<text x="894.0" y="327.0" font-size="9.4" fill="#5b6a7d" text-anchor="start">已进入原生调用，副作用不可知</text>
+<text x="894.0" y="339.4" font-size="9.4" fill="#5b6a7d" text-anchor="start">保持门禁，提示显式恢复</text>
+</g>
+<g class="n">
+<rect x="292.0" y="286.0" width="220.0" height="100.0" rx="11" fill="#e8f5ec" stroke="#aed3ba" stroke-width="1.4"/>
+<rect x="302.0" y="286.0" width="200.0" height="3.0" rx="2" fill="#2f7d4f" stroke="none"/>
+<text x="308.0" y="310.0" font-size="12.6" fill="#205c38" text-anchor="start" font-weight="600">NotSubmitted</text>
+<text x="308.0" y="327.0" font-size="9.4" fill="#5b6a7d" text-anchor="start">只有调用前可证明未调用才允许</text>
+<text x="308.0" y="339.4" font-size="9.4" fill="#5b6a7d" text-anchor="start">释放门禁，回到 Idle</text>
+</g>
+<path d="M 236.0 210.0 L 290.0 210.0" fill="none" stroke="#a9761c" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-amber)"/>
+<path d="M 512.0 210.0 L 564.0 210.0" fill="none" stroke="#177f68" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-teal)"/>
+<path d="M 824.0 190.0 L 876.0 190.0" fill="none" stroke="#177f68" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-teal)"/>
+<path d="M 824.0 232.0 L 836.0 232.0 Q 846.0 232.0 846.0 242.0 L 846.0 286.0" fill="none" stroke="#9a5340" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-clay)"/>
+<path d="M 690.0 260.0 L 690.0 284.0" fill="none" stroke="#9a5340" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="5 4" marker-end="url(#mk-clay)"/>
+<text x="700.0" y="278.0" font-size="9.2" fill="#5b6a7d" text-anchor="start">pcall 抛错 / 断连 / 无确认行</text>
+<path d="M 566.0 300.0 L 514.0 300.0" fill="none" stroke="#2f7d4f" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-green)"/>
+<text x="540.0" y="320.0" font-size="9.2" fill="#205c38" text-anchor="middle" font-weight="600">not_submitted</text>
+<path d="M 402.0 386.0 L 402.0 391.0 Q 402.0 396.0 397.0 396.0 L 248.0 396.0 Q 238.0 396.0 238.0 386.0 L 238.0 258.0" fill="none" stroke="#2f7d4f" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="5 4" marker-end="url(#mk-green)"/>
+<text x="252.0" y="384.0" font-size="9.2" fill="#205c38" text-anchor="start">释放门禁 → 回到 Idle，不重放已发出的块</text>
+<rect x="40.0" y="402.0" width="520.0" height="178.0" rx="16" fill="#ffffff" stroke="#c8d2e0" stroke-width="1.3" stroke-dasharray="7 6"/>
+<rect x="54.0" y="391.0" width="97.0" height="22.0" rx="11" fill="#ffffff" stroke="#c8d2e0" stroke-width="1.2"/>
+<text x="65.0" y="406.0" font-size="12.5" fill="#54637a" text-anchor="start" font-weight="600">三态判定铁律</text>
+<rect x="54.0" y="426.0" width="69.8" height="20.6" rx="10.3" fill="#e6f4ef" stroke="#a5d6c6" stroke-width="1.2"/>
+<text x="88.9" y="439.9" font-size="9.6" fill="#0f6250" text-anchor="middle" font-weight="600">confirmed</text>
+<text x="54.0" y="458.0" font-size="9.6" fill="#5b6a7d" text-anchor="start">证据链完整：身份 + 回合 + 就绪 → 终读一致 → 检查点复核</text>
+<rect x="54.0" y="480.0" width="58.3" height="20.6" rx="10.3" fill="#fbeeea" stroke="#e0bdb2" stroke-width="1.2"/>
+<text x="83.2" y="493.9" font-size="9.6" fill="#7a3d2d" text-anchor="middle" font-weight="600">unknown</text>
+<text x="54.0" y="512.0" font-size="9.6" fill="#5b6a7d" text-anchor="start">调用已进入：异常 / 取消 / 断线 / 终读不一致 → 永远保持门禁</text>
+<rect x="54.0" y="534.0" width="92.9" height="20.6" rx="10.3" fill="#e8f5ec" stroke="#aed3ba" stroke-width="1.2"/>
+<text x="100.4" y="547.9" font-size="9.6" fill="#205c38" text-anchor="middle" font-weight="600">not_submitted</text>
+<text x="54.0" y="566.0" font-size="9.6" fill="#5b6a7d" text-anchor="start">调用前即可证明未调用：参数、能力、上下文、明确 false</text>
+<rect x="580.0" y="402.0" width="500.0" height="178.0" rx="16" fill="#ffffff" stroke="#c8d2e0" stroke-width="1.3" stroke-dasharray="7 6"/>
+<rect x="594.0" y="391.0" width="252.0" height="22.0" rx="11" fill="#ffffff" stroke="#c8d2e0" stroke-width="1.2"/>
+<text x="605.0" y="406.0" font-size="12.5" fill="#54637a" text-anchor="start" font-weight="600">检查点与测试轮次（checkpoints.py）</text>
+<rect x="596.0" y="424.0" width="152.0" height="38.0" rx="8" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.1"/>
+<text x="606.0" y="438.0" font-size="9.6" fill="#3b485c" text-anchor="start" font-weight="600" font-family="var(--mono)">save_name</text>
+<text x="606.0" y="452.0" font-size="8.8" fill="#5b6a7d" text-anchor="start">精确名称</text>
+<rect x="758.0" y="424.0" width="152.0" height="38.0" rx="8" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.1"/>
+<text x="768.0" y="438.0" font-size="9.6" fill="#3b485c" text-anchor="start" font-weight="600" font-family="var(--mono)">sha256</text>
+<text x="768.0" y="452.0" font-size="8.8" fill="#5b6a7d" text-anchor="start">读取前后 stat 一致</text>
+<rect x="920.0" y="424.0" width="152.0" height="38.0" rx="8" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.1"/>
+<text x="930.0" y="438.0" font-size="9.6" fill="#3b485c" text-anchor="start" font-weight="600" font-family="var(--mono)">civilization</text>
+<text x="930.0" y="452.0" font-size="8.8" fill="#5b6a7d" text-anchor="start">原生 ID</text>
+<rect x="596.0" y="470.0" width="152.0" height="38.0" rx="8" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.1"/>
+<text x="606.0" y="484.0" font-size="9.6" fill="#3b485c" text-anchor="start" font-weight="600" font-family="var(--mono)">seed</text>
+<text x="606.0" y="498.0" font-size="8.8" fill="#5b6a7d" text-anchor="start">世界种子</text>
+<rect x="758.0" y="470.0" width="152.0" height="38.0" rx="8" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.1"/>
+<text x="768.0" y="484.0" font-size="9.6" fill="#3b485c" text-anchor="start" font-weight="600" font-family="var(--mono)">turn</text>
+<text x="768.0" y="498.0" font-size="8.8" fill="#5b6a7d" text-anchor="start">登记回合</text>
+<rect x="920.0" y="470.0" width="152.0" height="38.0" rx="8" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.1"/>
+<text x="930.0" y="484.0" font-size="9.6" fill="#3b485c" text-anchor="start" font-weight="600" font-family="var(--mono)">run_id</text>
+<text x="930.0" y="498.0" font-size="8.8" fill="#5b6a7d" text-anchor="start">本轮标识</text>
+<text x="596.0" y="528.0" font-size="9.4" fill="#5b6a7d" text-anchor="start">· 原始基准按归档指纹受信，不按文件名；只有加载原始基准才轮换 current-run。</text>
+<text x="596.0" y="541.0" font-size="9.4" fill="#5b6a7d" text-anchor="start">· autosave.py 当前已无调用方：自动存档猜测被显式禁用。</text>
+<rect x="40.0" y="599.0" width="16.0" height="10.0" rx="3" fill="#e9f1fb" stroke="#b4cdea" stroke-width="1.2"/>
+<text x="62.0" y="608.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">显式入口</text>
+<rect x="128.0" y="599.0" width="16.0" height="10.0" rx="3" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.2"/>
+<text x="150.0" y="608.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">门禁</text>
+<rect x="193.0" y="599.0" width="16.0" height="10.0" rx="3" fill="#e6f4ef" stroke="#a5d6c6" stroke-width="1.2"/>
+<text x="215.0" y="608.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">完成</text>
+<rect x="258.0" y="599.0" width="16.0" height="10.0" rx="3" fill="#fbeeea" stroke="#e0bdb2" stroke-width="1.2"/>
+<text x="280.0" y="608.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">未知</text>
+<rect x="323.0" y="599.0" width="16.0" height="10.0" rx="3" fill="#e8f5ec" stroke="#aed3ba" stroke-width="1.2"/>
+<text x="345.0" y="608.0" font-size="11.5" fill="#5b6a7d" text-anchor="start" font-weight="500">可证明未提交</text>
+</svg><div class="figcap"><span>图 7 · 三个入口汇聚到同一加载确认；三态判定铁律与检查点记录字段。</span><span class="src">src/civ_mcp/{game_state,game_lifecycle,game_launcher,checkpoints}.py</span></div></figure><div class="notes"><div class="note-card"><h4>进调用后只能 unknown</h4><p>一旦原生调用已进入，任何异常、取消、断线都只能是 unknown 并保持门禁；not_submitted 只用于调用前就能证明未发生的路径。</p></div><div class="note-card"><h4>保存的完成证据</h4><p>原生 SaveComplete + 指纹变化且 size&gt;0 + 复检指纹仍一致，三者都要满足才算保存完成。</p></div><div class="note-card"><h4>检查点绑定轮次</h4><p>名称、sha256、文明、种子、回合、run_id 组合成检查点记录；只有加载原始基准才轮换新的测试轮次。</p></div><div class="note-card"><h4>遗留模块</h4><p><code>autosave.py</code> 已无调用方，自动存档猜测被显式禁用——这条也写进了规格。</p></div></div>
+</section>
+<section id="domains">
+  <div class="sec-head">
+    <div class="sec-no">08</div>
+    <div><div class="sec-kicker">Domain Machines</div><h2>领域状态机：外交交易与议会，各一套专用所有权</h2></div>
+  </div>
+  <p class="lead">外交与交易各有专用 Progress（<code>DiplomacyProgress</code> / <code>IncomingAttempt</code> / <code>TradeAttempt</code>），却共用同一套 observer 与 nonce；世界议会则把<b>原生阶段</b>与<b>本地请求状态</b>拆成两个正交维度，再用三态解释统一查询、打开与投票。</p>
+  <figure class="figure"><svg viewBox="0 0 1120 878" width="100%" preserveAspectRatio="xMidYMin meet" role="img" xmlns="http://www.w3.org/2000/svg"><defs><marker id="mk-blue" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#2a62a8"/></marker><marker id="mk-teal" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#177f68"/></marker><marker id="mk-amber" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#a9761c"/></marker><marker id="mk-purple" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#674a9b"/></marker><marker id="mk-slate" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#54637a"/></marker><marker id="mk-clay" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#9a5340"/></marker><marker id="mk-green" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#2f7d4f"/></marker><marker id="mk-muted" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0.8 1.4 L 8.6 5 L 0.8 8.6 z" fill="#8794a5"/></marker></defs>
+<text x="40.0" y="42.0" font-size="12.4" fill="#17222f" text-anchor="start" font-weight="600">外交与交易：两个专用 Progress 共用一套 observer / nonce</text>
+<g class="n">
+<rect x="40.0" y="56.0" width="1040.0" height="78.0" rx="12" fill="#eef1f6" stroke="#c8d2e0" stroke-width="1.3"/>
+<text x="56.0" y="80.0" font-size="11.6" fill="#3b485c" text-anchor="start" font-weight="600">DiplomacyProgress · 观察器与 nonce（所有确认的地基）</text>
+<text x="56.0" y="100.0" font-size="9.4" fill="#5b6a7d" text-anchor="start">· 每次原生响应必须匹配本请求 nonce；观察器只记录本世界的公开外交事件，不替模型回应。</text>
+<text x="56.0" y="118.0" font-size="9.4" fill="#5b6a7d" text-anchor="start">· 世界身份三元组 player | civ | seed + 整行 fingerprint：完整但不同 → scope_invalid 永久失效；身份缺失 → 仅本次不能确认。</text>
+</g>
+<text x="40.0" y="170.0" font-size="11" fill="#855a10" text-anchor="start" font-weight="600">来约（IncomingAttempt）</text>
+<g class="n">
+<rect x="40.0" y="182.0" width="244.0" height="96.0" rx="11" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.35"/>
+<rect x="50.0" y="182.0" width="224.0" height="3.0" rx="2" fill="#a9761c" stroke="none"/>
+<text x="54.0" y="205.0" font-size="11.8" fill="#855a10" text-anchor="start" font-weight="600">① 打开会话</text>
+<text x="272.0" y="204.0" font-size="8.8" fill="#a9761c" text-anchor="end" font-weight="500" font-family="var(--mono)">OPEN</text>
+<text x="54.0" y="222.0" font-size="9.1" fill="#5b6a7d" text-anchor="start">先空条款打开，确认界面就绪</text>
+<text x="54.0" y="234.0" font-size="9.1" fill="#5b6a7d" text-anchor="start">INSPECT / EQUALIZE + 会话指纹</text>
+</g>
+<g class="n">
+<rect x="304.0" y="182.0" width="244.0" height="96.0" rx="11" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.35"/>
+<rect x="314.0" y="182.0" width="224.0" height="3.0" rx="2" fill="#a9761c" stroke="none"/>
+<text x="318.0" y="205.0" font-size="11.8" fill="#855a10" text-anchor="start" font-weight="600">② 回执匹配</text>
+<text x="536.0" y="204.0" font-size="8.8" fill="#a9761c" text-anchor="end" font-weight="500" font-family="var(--mono)">RECEIPT</text>
+<text x="318.0" y="222.0" font-size="9.1" fill="#5b6a7d" text-anchor="start">INCOMING_RECEIPT / ZERO / SENT</text>
+<text x="318.0" y="234.0" font-size="9.1" fill="#5b6a7d" text-anchor="start">绑定世界 · 会话 · 双向条款</text>
+</g>
+<g class="n">
+<rect x="568.0" y="182.0" width="244.0" height="96.0" rx="11" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.35"/>
+<rect x="578.0" y="182.0" width="224.0" height="3.0" rx="2" fill="#a9761c" stroke="none"/>
+<text x="582.0" y="205.0" font-size="11.8" fill="#855a10" text-anchor="start" font-weight="600">③ 结论</text>
+<text x="800.0" y="204.0" font-size="8.8" fill="#a9761c" text-anchor="end" font-weight="500" font-family="var(--mono)">VERDICT</text>
+<text x="582.0" y="222.0" font-size="9.1" fill="#5b6a7d" text-anchor="start">WILLING / COUNTER_OFFER / REJECTED</text>
+<text x="582.0" y="234.0" font-size="9.1" fill="#5b6a7d" text-anchor="start">拒绝后的相等条款不能冒充谈妥</text>
+</g>
+<g class="n">
+<rect x="832.0" y="182.0" width="248.0" height="96.0" rx="11" fill="#e8f5ec" stroke="#aed3ba" stroke-width="1.35"/>
+<rect x="842.0" y="182.0" width="228.0" height="3.0" rx="2" fill="#2f7d4f" stroke="none"/>
+<text x="846.0" y="205.0" font-size="11.8" fill="#205c38" text-anchor="start" font-weight="600">零提交终结</text>
+<text x="1068.0" y="204.0" font-size="8.8" fill="#2f7d4f" text-anchor="end" font-weight="500" font-family="var(--mono)">ZERO</text>
+<text x="846.0" y="222.0" font-size="9.1" fill="#5b6a7d" text-anchor="start">ZERO 回执 + finish(zero=True)</text>
+<text x="846.0" y="234.0" font-size="9.1" fill="#5b6a7d" text-anchor="start">两者都 CONFIRMED 才可报未提交</text>
+</g>
+<path d="M 284.0 230.0 L 302.0 230.0" fill="none" stroke="#a9761c" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-amber)"/>
+<path d="M 548.0 230.0 L 566.0 230.0" fill="none" stroke="#a9761c" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-amber)"/>
+<path d="M 812.0 230.0 L 830.0 230.0" fill="none" stroke="#2f7d4f" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-green)"/>
+<text x="40.0" y="314.0" font-size="11" fill="#0f6250" text-anchor="start" font-weight="600">我方发约（TradeAttempt · 13 个 phase 压缩）</text>
+<g class="n">
+<rect x="40.0" y="326.0" width="244.0" height="96.0" rx="11" fill="#e6f4ef" stroke="#a5d6c6" stroke-width="1.35"/>
+<rect x="50.0" y="326.0" width="224.0" height="3.0" rx="2" fill="#177f68" stroke="none"/>
+<text x="54.0" y="349.0" font-size="11.8" fill="#0f6250" text-anchor="start" font-weight="600">进入条款</text>
+<text x="54.0" y="366.0" font-size="9.1" fill="#5b6a7d" text-anchor="start">OPEN_ENTERED → TERMS_ENTERED</text>
+<text x="54.0" y="378.0" font-size="9.1" fill="#5b6a7d" text-anchor="start">空条款打开后再发送</text>
+</g>
+<g class="n">
+<rect x="304.0" y="326.0" width="244.0" height="96.0" rx="11" fill="#e6f4ef" stroke="#a5d6c6" stroke-width="1.35"/>
+<rect x="314.0" y="326.0" width="224.0" height="3.0" rx="2" fill="#177f68" stroke="none"/>
+<text x="318.0" y="349.0" font-size="11.8" fill="#0f6250" text-anchor="start" font-weight="600">等待回应</text>
+<text x="318.0" y="366.0" font-size="9.1" fill="#5b6a7d" text-anchor="start">RESPONSE_WAIT → ACCEPT_READY</text>
+<text x="318.0" y="378.0" font-size="9.1" fill="#5b6a7d" text-anchor="start">ACCEPT_WAIT 只认原生资格</text>
+</g>
+<g class="n">
+<rect x="568.0" y="326.0" width="244.0" height="96.0" rx="11" fill="#e6f4ef" stroke="#a5d6c6" stroke-width="1.35"/>
+<rect x="578.0" y="326.0" width="224.0" height="3.0" rx="2" fill="#177f68" stroke="none"/>
+<text x="582.0" y="349.0" font-size="11.8" fill="#0f6250" text-anchor="start" font-weight="600">对话 / 反提案</text>
+<text x="582.0" y="366.0" font-size="9.1" fill="#5b6a7d" text-anchor="start">DIALOGUE / COUNTER</text>
+<text x="582.0" y="378.0" font-size="9.1" fill="#5b6a7d" text-anchor="start">最终接受需资格 + 双向条款相等</text>
+</g>
+<g class="n">
+<rect x="832.0" y="326.0" width="248.0" height="96.0" rx="11" fill="#e6f4ef" stroke="#a5d6c6" stroke-width="1.35"/>
+<rect x="842.0" y="326.0" width="228.0" height="3.0" rx="2" fill="#177f68" stroke="none"/>
+<text x="846.0" y="349.0" font-size="11.8" fill="#0f6250" text-anchor="start" font-weight="600">清理与退役</text>
+<text x="846.0" y="366.0" font-size="9.1" fill="#5b6a7d" text-anchor="start">CLEANUP：结果、会话结束、界面</text>
+<text x="846.0" y="378.0" font-size="9.1" fill="#5b6a7d" text-anchor="start">三者分别确认，丢回应不重发</text>
+</g>
+<path d="M 284.0 374.0 L 302.0 374.0" fill="none" stroke="#177f68" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-teal)"/>
+<path d="M 548.0 374.0 L 566.0 374.0" fill="none" stroke="#177f68" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-teal)"/>
+<path d="M 812.0 374.0 L 830.0 374.0" fill="none" stroke="#177f68" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-teal)"/>
+<rect x="40.0" y="442.0" width="1040.0" height="54.0" rx="11" fill="#fbfcfe" stroke="#d8e0ea" stroke-width="1.1" stroke-dasharray="5 5"/>
+<text x="56.0" y="463.0" font-size="9.6" fill="#5b6a7d" text-anchor="start">未知与取消：只确认原尝试；重新打开会新开会话，不得覆盖原 pending。</text>
+<text x="56.0" y="481.0" font-size="9.6" fill="#5b6a7d" text-anchor="start">身份未知保留未决；返回原身份不能解除已锁存的失效。</text>
+<text x="40.0" y="542.0" font-size="12.4" fill="#17222f" text-anchor="start" font-weight="600">世界议会：原生阶段与本地请求状态是两个正交维度</text>
+<g class="n">
+<rect x="40.0" y="556.0" width="1040.0" height="74.0" rx="12" fill="#efeafa" stroke="#cbb9e8" stroke-width="1.3"/>
+<text x="56.0" y="580.0" font-size="11.4" fill="#4f3780" text-anchor="start" font-weight="600">原生阶段（由引擎给出）</text>
+<text x="56.0" y="602.0" font-size="9.4" fill="#5b6a7d" text-anchor="start" font-family="var(--mono)">TURNSEG_WORLDCONGRESS_1</text>
+<text x="232.0" y="602.0" font-size="9.4" fill="#674a9b" text-anchor="start" font-weight="600" font-family="var(--mono)">→ STAGE1</text>
+<text x="56.0" y="620.0" font-size="8.8" fill="#8794a5" text-anchor="start">只有本轮可投</text>
+<text x="396.0" y="602.0" font-size="9.4" fill="#5b6a7d" text-anchor="start" font-family="var(--mono)">TURNSEG_WORLDCONGRESS_2</text>
+<text x="572.0" y="602.0" font-size="9.4" fill="#674a9b" text-anchor="start" font-weight="600" font-family="var(--mono)">→ STAGE2</text>
+<text x="396.0" y="620.0" font-size="8.8" fill="#8794a5" text-anchor="start">不重投旧决议</text>
+<text x="736.0" y="602.0" font-size="9.4" fill="#5b6a7d" text-anchor="start" font-family="var(--mono)">TURNSEG_RESOLUTION</text>
+<text x="912.0" y="602.0" font-size="9.4" fill="#674a9b" text-anchor="start" font-weight="600" font-family="var(--mono)">→ RESOLUTION / NONE</text>
+<text x="736.0" y="620.0" font-size="8.8" fill="#8794a5" text-anchor="start">阶段结束 ≠ 结果</text>
+</g>
+<g class="n">
+<rect x="40.0" y="660.0" width="330.0" height="110.0" rx="11" fill="#efeafa" stroke="#cbb9e8" stroke-width="1.35"/>
+<rect x="50.0" y="660.0" width="310.0" height="3.0" rx="2" fill="#674a9b" stroke="none"/>
+<text x="54.0" y="683.0" font-size="11.8" fill="#4f3780" text-anchor="start" font-weight="600">本地请求状态</text>
+<text x="54.0" y="700.0" font-size="9.1" fill="#5b6a7d" text-anchor="start">CHOICES / EMPTY / UNKNOWN 由同一 HasChoices 复算</text>
+<text x="54.0" y="712.0" font-size="9.1" fill="#5b6a7d" text-anchor="start">EMPTY 禁开始，只能提交空票计划</text>
+<text x="54.0" y="724.0" font-size="9.1" fill="#5b6a7d" text-anchor="start">REQUESTED 先登记，再发原生事件</text>
+</g>
+<g class="n">
+<rect x="390.0" y="660.0" width="330.0" height="110.0" rx="11" fill="#efeafa" stroke="#cbb9e8" stroke-width="1.35"/>
+<rect x="400.0" y="660.0" width="310.0" height="3.0" rx="2" fill="#674a9b" stroke="none"/>
+<text x="404.0" y="683.0" font-size="11.8" fill="#4f3780" text-anchor="start" font-weight="600">打开议会（仅 CHOICES）</text>
+<text x="404.0" y="700.0" font-size="9.1" fill="#5b6a7d" text-anchor="start">DequeuePopup(Intro) → ShowWorldCongress</text>
+<text x="404.0" y="712.0" font-size="9.1" fill="#5b6a7d" text-anchor="start">无选择或未知提案不走开始路径</text>
+<text x="404.0" y="724.0" font-size="9.1" fill="#5b6a7d" text-anchor="start">丢应答只核对可见状态，不重复事件</text>
+</g>
+<g class="n">
+<rect x="740.0" y="660.0" width="340.0" height="110.0" rx="11" fill="#efeafa" stroke="#cbb9e8" stroke-width="1.35"/>
+<rect x="750.0" y="660.0" width="320.0" height="3.0" rx="2" fill="#674a9b" stroke="none"/>
+<text x="754.0" y="683.0" font-size="11.8" fill="#4f3780" text-anchor="start" font-weight="600">票计划（queue_wc_votes）</text>
+<text x="754.0" y="700.0" font-size="9.1" fill="#5b6a7d" text-anchor="start">每项先预留首票，余量按输入顺序分配</text>
+<text x="754.0" y="712.0" font-size="9.1" fill="#5b6a7d" text-anchor="start">缺票即整体失败；部分完成不重放</text>
+<text x="754.0" y="724.0" font-size="9.1" fill="#5b6a7d" text-anchor="start">分配数只表示请求票单，不代表实付支持</text>
+</g>
+<path d="M 370.0 715.0 L 388.0 715.0" fill="none" stroke="#674a9b" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-purple)"/>
+<path d="M 720.0 715.0 L 738.0 715.0" fill="none" stroke="#674a9b" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#mk-purple)"/>
+<g class="n">
+<rect x="40.0" y="796.0" width="1040.0" height="66.0" rx="12" fill="#fdf4e3" stroke="#e6cb96" stroke-width="1.3"/>
+<text x="56.0" y="820.0" font-size="10.2" fill="#855a10" text-anchor="start" font-weight="600">REGISTERED 特例：只有显式 end_turn 允许最新可信票单放行；confirm 每次先把 state 重置为 UNKNOWN，</text>
+<text x="56.0" y="840.0" font-size="9.6" fill="#5b6a7d" text-anchor="start">不照搬普通动作的严格同回合规则。WC_STAGE_FINISHED 只表示原阶段结束，不表示议会结果。</text>
+</g>
+</svg><div class="figcap"><span>图 8 · 交易的双向状态机与世界议会的双层阶段机；底部是 REGISTERED 的 end_turn 特例。</span><span class="src">src/civ_mcp/{diplomacy,congress}.py · lua/{trade,congress}.py</span></div></figure><div class="notes"><div class="note-card"><h4>身份仲裁是三值逻辑</h4><p>身份完整且不同 → scope_invalid 永久失效；身份缺失 → 仅本次不能确认；返回原身份不能解除已锁存的失效。</p></div><div class="note-card"><h4>零提交也要回执</h4><p>来约的 ZERO 回执必须与 finish(zero=True) 一起 CONFIRMED，才能报告“未提交”；仅凭界面没变化不算。</p></div><div class="note-card"><h4>议会三态同源</h4><p>CHOICES / EMPTY / UNKNOWN 由同一个 HasChoices 复算：无提案时不走开始路径，以免原生 UI 自动提交与显式票计划重复。</p></div><div class="note-card"><h4>REGISTERED 的破例</h4><p>已登记的票单只能由显式 end_turn 放行；confirm 每次先把本地 state 重置为 UNKNOWN，不照搬普通动作的同回合严格规则。</p></div></div>
+</section>
+<section id="cli">
+  <div class="sec-head">
+    <div class="sec-no">09</div>
+    <div><div class="sec-kicker">Command Surface</div><h2>CLI 命令面：5 个顶层命令 + 33 组 / 142 个命名子命令</h2></div>
+  </div>
+  <p class="lead"><code>civ6</code> 是 AI 唯一操作入口，不是游戏服务：顶层 5 个命令 + 前台 <code>debug</code> 会话 + 33 组 / 142 个命名子命令。子命令是纯翻译层：<b>子命令 → Intent(tool, arguments, dry_run)</b>，不持有第二份状态；90 个基础工具全部有命名入口，<code>call</code> 只作协议兼容诊断。</p>
+  <div class="grid-3"><div class="tile"><div class="t">doctor</div><div class="d">解释器、依赖、知识包完整性、内部 stdio MCP 初始化与工具发现</div><div class="tb">离线 · 会起内部子进程但不碰游戏 · 退出码 0 / 1 / 2</div></div><div class="tile"><div class="t">verify knowledge</div><div class="d">CLI 与真实 MCP 逐字段对比知识查询，核对知识文件未变</div><div class="tb">离线 · 退出码 0 / 1 / 2</div></div><div class="tile"><div class="t">verify state</div><div class="d">有界只读实机验收：pending → overview → snapshot → 身份/pending 复核</div><div class="tb">实机 · 只读 · 退出码 0 / 1 / 2</div></div><div class="tile"><div class="t">test</div><div class="d">运行 7 个已登记域中某一域的离线测试；debug 域现含 CLI-only 契约</div><div class="tb">离线 · 退出码 0 / 1 / 2</div></div><div class="tile"><div class="t">debug</div><div class="d">唯一操作会话：一个内部 MCP 进程 + 一份 GameState，stdin 行 → JSONL</div><div class="tb">实机 · 首次真正调用时 · 退出码 0 / 2 / 130</div></div><div class="tile"><div class="t">logs</div><div class="d">只读既有动作日志：list / show / timeline / turns</div><div class="tb">离线 · 退出码 0 / 2</div></div></div>
+<div class="grid-2">
+  <div class="cmd-group">
+    <h4>debug 会话内命令</h4>
+    <div class="gh">一个会话 = 一个内部 MCP 进程 = 一份 GameState</div>
+    <div class="chips"><span class="chip core">help</span><span class="chip core">tools [NAME]</span><span class="chip core">pending</span><span class="chip core">state overview|units|cities|turn|snapshot</span><span class="chip core">verify state</span><span class="chip core">call [--dry-run] TOOL JSON（协议兼容）</span><span class="chip core">developer lua（仅 --developer）</span><span class="chip core">hotseat begin|end|actions（仅热座模式）</span><span class="chip core">quit [--abandon]</span></div>
+    <p class="d" style="margin-top:12px">发送前四道门禁：schema 预校验 → dry-run → offline 白名单（4 个工具）→ transport/identity 未知时只许只读；
+    待决时会话拒绝正常退出（<code>PENDING_ON_EXIT</code>）。普通会话 <code>tools</code> 不公开 <code>run_lua</code>，任意 Lua 需 <code>--developer</code>。</p>
+  </div>
+  <div class="cmd-group">
+    <h4>输出契约</h4>
+    <div class="gh">stdout 业务 JSON / JSONL · stderr 提示 · 证据目录永不覆盖</div>
+    <div class="chips">
+      <span class="chip">schema_version=1</span><span class="chip">run_id</span><span class="chip">command</span>
+      <span class="chip">mode</span><span class="chip">game_verification</span><span class="chip">status</span>
+      <span class="chip">exit_code</span><span class="chip">git commit/dirty</span><span class="chip">data</span><span class="chip">errors</span>
+    </div>
+    <p class="d" style="margin-top:12px">退出码：<b>0 PASS · 1 FAIL · 2 BLOCKED · 130 中断</b>。默认证据目录
+    <code>.scratch/civ6/&lt;run_id&gt;/</code>，含 <code>summary.json</code>、<code>context.json</code>（源码 SHA-256 + git 状态）与逐命令回执。</p>
+  </div>
+</div>
+<div class="cmd-group" style="margin-top:16px">
+  <h4>33 组 / 142 个命名子命令</h4>
+  <div class="gh">90 个基础工具全部有命名入口；普通会话可见 89 个（run_lua 仅 --developer）；另有 3 个热座实验命令</div>
+  <div class="chips"><span class="chip">unit <b>39</b></span><span class="chip">city <b>11</b></span><span class="chip">research <b>2</b></span><span class="chip">turn <b>2</b></span><span class="chip">save <b>6</b></span><span class="chip">knowledge <b>2</b></span><span class="chip">map <b>5</b></span><span class="chip">victory <b>1</b></span><span class="chip">policy <b>2</b></span><span class="chip">city-state <b>2</b></span><span class="chip">governor <b>4</b></span><span class="chip">congress <b>3</b></span><span class="chip">notifications <b>1</b></span><span class="chip">government <b>3</b></span><span class="chip">religion <b>6</b></span><span class="chip">great-person <b>6</b></span><span class="chip">empire <b>4</b></span><span class="chip">era <b>3</b></span><span class="chip">ranking <b>1</b></span><span class="chip">civilization <b>3</b></span><span class="chip">technology <b>3</b></span><span class="chip">civic <b>3</b></span><span class="chip">climate <b>2</b></span><span class="chip">history <b>1</b></span><span class="chip">resources <b>1</b></span><span class="chip">session <b>1</b></span><span class="chip">game <b>4</b></span><span class="chip">diplomacy <b>7</b></span><span class="chip">trade <b>7</b></span><span class="chip">spy <b>2</b></span><span class="chip">popup <b>1</b></span><span class="chip">developer <b>1</b></span><span class="chip">hotseat <b>3</b></span></div>
+</div>
+<div class="grid-3" style="margin-top:16px">
+  <div class="tile"><div class="t">普通会话（默认）</div><div class="d">命名命令 + <code>state</code>/<code>pending</code> 诊断；<code>run_lua</code> 不在工具列表，<code>call run_lua</code> 发送前拒绝；适合所有正常对局。</div><div class="tb">civ6 debug</div></div>
+  <div class="tile"><div class="t">开发诊断</div><div class="d">唯一开放任意 Lua 的模式；<code>developer lua</code> 仍需 <code>--dry-run</code> 预演，正式执行仍受 Runtime 未决门禁约束。</div><div class="tb">civ6 debug --developer</div></div>
+  <div class="tile"><div class="t">热座实验</div><div class="d">复用原双人控制器，使用 <code>hotseat begin/end/actions</code>；不与 <code>--offline/--developer</code> 合用，普通 <code>turn end</code> 不可交接。</div><div class="tb">civ6 debug --hotseat-seat N --hotseat-run DIR</div></div>
+</div>
+<div class="grid-2" style="margin-top:16px">
+  <div class="tile">
+    <div class="t">一次 debug 会话的证据目录（新建且永不覆盖）</div>
+    <div class="d" style="font-family:var(--mono); font-size:11.6px; line-height:1.9; white-space:pre">.scratch/civ6/&lt;run_id&gt;/
+  summary.json          与 stdout 单 JSON 一致
+  context.json          解释器 + 源码 SHA-256 + git 状态
+  debug.jsonl           事件流：command / tool_started / tool_result
+  debug-initialize.json 内部 MCP initialize 回执
+  runtime-status.json   会话身份与六类 pending 事实
+  turn-timing.json      每回合耗时（只由已确认 turn end 划界）</div>
+  </div>
+  <div class="tile">
+    <div class="t">relay：单会话、多客户端的包装层</div>
+    <div class="d"><code>scripts/civ6_cli_relay.py</code> 不替代 CLI：它持有唯一的 <code>civ6 debug</code> 子进程 stdin/stdout，
+    再用本机 socket 把请求转发给多个客户端。一次请求对应一条 CLI 命令，request_id 防重放；结果未知时不替换会话上下文。
+    热座实验走固定席位入口，不使用 relay。</div>
+    <div class="tb">入口：AGENTS.md → docs/cli.md → civ6 debug · 客户端不注册 MCP</div>
+  </div>
+</div>
+</section>
+<section id="validation">
+  <div class="sec-head">
+    <div class="sec-no">10</div>
+    <div><div class="sec-kicker">Verification</div><h2>验证体系：离线通过、实机通过、未验证要分开写</h2></div>
+  </div>
+  <p class="lead">项目把验证分成四层：离线单元与契约、Lua 真实执行、只读实机验收、实机推进与热座实验。每层都有明确的入口与证据目录；<b>旧通过的记录只对当时的受测版本有效</b>，不能替代下一次实测。</p>
+  <div class="pyr"><div class="lv l1"><div class="n">1 运行层单元与契约<small>2,146 个测试函数 / 132 个文件</small></div><div class="d">FakeConn、内存 FireTuner 流、fake_debug_server（真 MCP dispatcher，只换引擎边界）；断言可观察行为，不复刻状态机。</div></div><div class="lv l2"><div class="n">2 CLI 契约与 Lua 执行<small>test_cli_only · lupa · 真 MCP schema</small></div><div class="d">命名命令逐一对照真实工具 schema；在 Lua 5.1 里执行真实的构造器，验证生成的语句与解析器，而不是断言源码字符串。</div></div><div class="lv l3"><div class="n">3 只读实机验收<small>civ6 verify state · get_game_snapshot</small></div><div class="d">9 项检查全通过才给 ready；任何 pending 在 I/O 前拒绝，不推进、不重发、不自动恢复。</div></div><div class="lv l4"><div class="n">4 实机推进与热座<small>integration_turns · debug --hotseat-seat</small></div><div class="d">固定基准 + 显式检查点；热座仅复用既有双人实验；结果未知、挂起或预算耗尽即退出，不自动恢复／重发。</div></div></div>
+<div class="grid-2" style="margin-top:22px"><div class="tile"><div class="t mono">fake_tuner.py</div><div class="d">只替换 5 个传输入口：让真实 GameState / ActionLifecycle 跑在脚本化回放上。</div></div><div class="tile"><div class="t mono">fake_debug_server.py</div><div class="d">用真实 MCP dispatcher 加假引擎边界，验证 CLI 会话协议与门禁顺序。</div></div><div class="tile"><div class="t mono">action_scope_support.py</div><div class="d">构造 scope / 身份 / 见证回执，覆盖锁存与“不追认”路径。</div></div><div class="tile"><div class="t mono">conftest.py</div><div class="d">两个 opt-in fixture：已提交知识快照复用、显式缩短的动作确认等待。</div></div></div>
+<div class="grid-2">
+  <div class="tile">
+    <div class="t">证据链：从规格到对局</div>
+    <div class="d"><b>docs/specs</b>（19 篇规格 + 4 组专题）定义行为契约 → <b>docs/acceptance</b>（24 篇，含
+    <a href="../../docs/acceptance/2026-10-25-cli-only.md">CLI 唯一入口验收</a>）记录离线验收与覆盖口径 →
+    <b>fixtures/saves</b>（3 个实名基准 + SHA-256 / 种子）提供受信起点 →
+    <b>games/&lt;对局&gt;/runs/&lt;轮次&gt;/</b> 保存回合记录、检查点、报告与本地证据。</div>
+    <div class="tb">同一文明与种子 ≠ 同一测试轮次 · 旧通过记录只对当时版本有效</div>
+  </div>
+  <div class="tile">
+    <div class="t">知识包校验</div>
+    <div class="d">知识不是自由文本：<code>query.py validate</code> 做重建比对 + counts + coverage + 指纹；
+    <code>civ6 verify knowledge</code> 用同一知识包分别走 CLI 与真实 MCP，逐字段对比并核对输入文件未变。
+    注意 <code>jsonschema</code> 在仓库里只校验 MCP 工具入参，不用于知识数据。</div>
+    <div class="tb">civ6_knowledge/ · 34 个文件 · 验收记录 400 项通过</div>
+  </div>
+</div>
+</section>
+<section id="repo">
+  <div class="sec-head">
+    <div class="sec-no">11</div>
+    <div><div class="sec-kicker">Repository Map</div><h2>目录地图：代码、知识与证据各自归位</h2></div>
+  </div>
+  <p class="lead">仓库按“可复用的机制 / 跨对局的规格 / 单局的证据”分层：<code>docs/</code> 放跨对局复用的指南与契约，<code>games/</code> 放单局过程与实机证据，<code>materials/</code> 放演示与交付资料。</p>
+  <div class="tree"><div class="row"><span class='d'>src/civ_mcp/</span>  <span class='c'>运行时：server · game_state · 确认所有者 · 传输</span></div><div class="row">  ├─ <span class='hi'>lua/</span>  <span class='c'>48 个领域 Lua 构造器与解析器（18,694 行）</span></div><div class="row">  ├─ <span class='hi'>devtools/</span>  <span class='c'>CLI 命令翻译、debug 会话、证据与耗时统计</span></div><div class="row">  └─ connection.py · tuner_client.py  <span class='c'>FireTuner 传输：TCP 127.0.0.1:4318</span></div><div class="row"><span class='d'>civ6_knowledge/</span>  <span class='c'>离线知识包：规则 / 文明 / 策略 + 校验脚本</span></div><div class="row"><span class='d'>docs/</span>  <span class='c'>指南 · 架构 · CLI 手册 · specs/ · acceptance/</span></div><div class="row"><span class='d'>games/</span>  <span class='c'>每局 runs/&lt;轮次&gt;/：reports · changes · evidence · checkpoints</span></div><div class="row"><span class='d'>fixtures/saves/</span>  <span class='c'>3 个受信原始基准 + 身份与指纹记录</span></div><div class="row"><span class='d'>scripts/</span>  <span class='c'>relay · 热座双 AI · 验收驱动（另起进程）</span></div><div class="row"><span class='d'>tests/</span>  <span class='c'>132 个测试文件 / 2,146 个测试函数 + 测试替身</span></div><div class="row"><span class='d'>.mcp.json · .gemini/settings.json</span>  <span class='c'>空的 mcpServers：客户端不注册 civ6 MCP</span></div><div class="row"><span class='warn'>materials/</span>  <span class='c'>演示、分享与交付资料（含本页）</span></div></div>
+<table class="matrix">
+<tr><th>路径</th><th>职责</th><th>行数</th></tr><tr><td class="mono">src/civ_mcp/server.py</td><td class="dim">90 个 MCP 工具、整体工具锁、门禁顺序、结果文本</td><td class="mono">2,336</td></tr><tr><td class="mono">src/civ_mcp/game_state.py</td><td class="dim">领域 interface、观察缓存、完整存档替换、阻塞判断</td><td class="mono">2,573</td></tr><tr><td class="mono">src/civ_mcp/actions.py</td><td class="dim">ActionLifecycle：单次提交与只读确认</td><td class="mono">795</td></tr><tr><td class="mono">src/civ_mcp/end_turn.py</td><td class="dim">TurnProgress：推进请求、基线、轮询确认</td><td class="mono">717</td></tr><tr><td class="mono">src/civ_mcp/diplomacy.py · congress.py</td><td class="dim">外交交易与议会两套专用 Progress</td><td class="mono">626 · 162</td></tr><tr><td class="mono">src/civ_mcp/lua/</td><td class="dim">按游戏领域构造与解析 Lua</td><td class="mono">18,694</td></tr><tr><td class="mono">src/civ_mcp/devtools/</td><td class="dim">CLI 命令面、debug 会话、证据与 timing</td><td class="mono">1,768</td></tr><tr><td class="mono">scripts/</td><td class="dim">relay、热座控制器、验收驱动（不进入运行时）</td><td class="mono">—</td></tr><tr><td class="mono">tests/</td><td class="dim">离线测试与替身</td><td class="mono">39,741</td></tr>
+</table>
+</section>
+<section id="principles">
+  <div class="sec-head">
+    <div class="sec-no">12</div>
+    <div><div class="sec-kicker">Design Rules</div><h2>八条设计规则：这套系统为什么长这样</h2></div>
+  </div>
+  <p class="lead">把上面所有机制压缩成八条规则。它们不是口号：每一条都能在代码里找到对应的实现位置，也都能在 <code>docs/</code> 里找到对应的验收记录。</p>
+  <div class="principles"><div class="principle"><div class="pno">01 / 08</div><h4>先读真实状态</h4><p>回合、坐标与实体 ID 必须来自真实游戏状态；不可见、未知与不存在要分开对待。</p><div class="q">AGENTS.md · 必读约束</div></div><div class="principle"><div class="pno">02 / 08</div><h4>单次提交</h4><p>一个动作只提交一次；提交前绑定世界身份，提交后只用只读查询确认。</p><div class="q">docs/architecture.md · 动作确认</div></div><div class="principle"><div class="pno">03 / 08</div><h4>未决即门禁</h4><p>保存/加载、外交、推进、议会与普通动作彼此阻塞；身份查询与缓存刷新不能清 pending，只有 reset_session 退役。</p><div class="q">AGENTS.md · 必读约束</div></div><div class="principle"><div class="pno">04 / 08</div><h4>不重发</h4><p>丢回应、超时、身份未知一律保留未决；读取旧状态不触发自动重发。</p><div class="q">connection.py · execute_write</div></div><div class="principle"><div class="pno">05 / 08</div><h4>身份绑定与锁存</h4><p>世界身份不匹配即永久失效；未知字段不遮蔽，返回原值不追认。</p><div class="q">actions.py · _ActionScope</div></div><div class="principle"><div class="pno">06 / 08</div><h4>CLI 唯一操作面</h4><p>AI 只发现并执行 civ6 命名命令；客户端不注册 MCP，call 仅协议兼容诊断，任意 Lua 仅 --developer。</p><div class="q">AGENTS.md · 调用入口</div></div><div class="principle"><div class="pno">07 / 08</div><h4>展示不承担判断</h4><p>原生事实与展示文案分离：ProcessResult / NativeTransition 才是完成判据。</p><div class="q">docs/architecture.md · 会话替换</div></div><div class="principle"><div class="pno">08 / 08</div><h4>离线与实机分开</h4><p>离线检查不碰游戏；只有任务授权才操作实机，并从受信基准开始。</p><div class="q">docs/development.md</div></div></div><div class="closing"><div class="q">“游戏引擎执行规则；模型负责策略；运行层负责真实查询、<em>单次提交</em>、<em>结果确认</em>和显式生命周期控制。”</div><div class="a">— AGENTS.md · 项目定位（本页所有图都在这句话的约束下展开）</div></div>
+</section>
+    <footer class="foot">
+      <b>关于本页</b>：为架构可视化一次性生成的静态页面，反映 2026-10-25「CLI 唯一入口」调整后的结构，不参与游戏操作，也不替代
+      <span class="mono">docs/architecture.md</span> 的正文契约。图形由 <span class="mono">build.py</span> 生成，
+      内容依据当前工作树（基线 <span class="mono">042ea57</span>，含未提交改动）；文中行号指向生成时的源码位置，重构后可能偏移。
+      行为边界与验收口径以 <span class="mono">docs/</span> 中的指南、规格和验收记录为准；旧版通过记录只对当时的受测版本有效。
+      <br><br>
+      <b>配色约定</b>：蓝＝接口与调用面，绿＝状态所有权与已确认路径，琥珀＝未决 / 门禁 / 未知，紫＝领域模块与 Lua 构造，
+      灰蓝＝传输、进程与证据，赭＝游戏引擎原生层。
+    </footer>
+  </main>
+</div>
+<button class="top" aria-label="回到顶部">↑</button>
+<script>
+(function(){
+  const links=[...document.querySelectorAll('.nav a')];
+  const secs=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  const obs=new IntersectionObserver(es=>{
+    es.forEach(e=>{
+      if(e.isIntersecting){
+        links.forEach(a=>a.classList.toggle('active', a.getAttribute('href')==='#'+e.target.id));
+      }
+    });
+  },{rootMargin:'-12% 0px -70% 0px', threshold:[0]});
+  secs.forEach(s=>obs.observe(s));
+
+  const top=document.querySelector('.top');
+  addEventListener('scroll',()=>{top.classList.toggle('on', scrollY>900)},{passive:true});
+  top.addEventListener('click',()=>scrollTo({top:0,behavior:'smooth'}));
+
+  document.querySelectorAll('.figure svg').forEach(svg=>{
+    const nodes=[...svg.querySelectorAll('.n')];
+    if(!nodes.length) return;
+    svg.addEventListener('mouseover',e=>{
+      const g=e.target.closest('.n');
+      if(!g) return;
+      svg.classList.add('dim');
+      nodes.forEach(n=>n.classList.toggle('hot', n===g));
+    });
+    svg.addEventListener('mouseout',e=>{
+      if(e.relatedTarget && svg.contains(e.relatedTarget)) return;
+      svg.classList.remove('dim');
+      nodes.forEach(n=>n.classList.remove('hot'));
+    });
+  });
+
+  document.querySelectorAll('[data-copy]').forEach(el=>{
+    el.style.cursor='pointer';
+    el.title='点击复制';
+    el.addEventListener('click',()=>{
+      navigator.clipboard && navigator.clipboard.writeText(el.dataset.copy);
+    });
+  });
+})();
+</script>
+</body>
+</html>
