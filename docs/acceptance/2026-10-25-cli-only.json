@@ -226,5 +226,14 @@
     "No live gameplay, native hotseat handoff, game restart or save replacement was performed.",
     "The hotseat adapter retains the existing two-human-seat FourLeafClover experiment; arbitrary maps and additional seats are not implemented.",
     "Configuration removal affects new/reloaded client sessions. Internal MCP entrypoint remains available for CLI and isolated protocol tests."
-  ]
+  ],
+  "post_audit_2026_10_25": {
+    "trigger": "follow-up review after commit 042ea57",
+    "findings": [
+      ".gemini/settings.json still registered a direct civ6-mcp server; cleared to an empty map",
+      ".claude/settings.local.json (local, gitignored) still had enableAllProjectMcpServers=true; set to false",
+      "docs/windows.md and docs/specs/2026-10-24-native-hotseat.md still described direct MCP entry; rewritten to CLI",
+      "scripts/hotseat_endurance.py still injects a direct MCP server into the models; marked legacy behind --acknowledge-legacy-mcp"
+    ]
+  }
 }
