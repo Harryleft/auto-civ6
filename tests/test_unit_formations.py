@@ -295,3 +295,11 @@ applyFormation=function(...)apply(...);units[196608].count=0;units[196609].count
     result=asyncio.run(state.change_unit_formation(196608,action,None if action=='unlink'else 196609))
     assert result.startswith('FORMATION_CONFIRMED|'),result
     assert conn.lua.eval('#submissions')==1
+
+
+def test_civilian_no_military_formation_sentinel_still_allows_escort_linking():
+    conn=FormationConn();state=GameState(conn)
+    conn.lua.execute('units[196609].military=-1')
+    value=asyncio.run(state.get_unit_formations(196609))
+    assert value['status']=='ready' and value['data']['military_formation']==-1
+    assert asyncio.run(state.change_unit_formation(196608,'link',196609)).startswith('FORMATION_CONFIRMED|')

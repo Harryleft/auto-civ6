@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "results": {
+    "escort_settler": {
+      "status": "passed",
+      "command": "unit link 131073 65536",
+      "receipt": "evidence/relay-v2/requests/262f80e2-789f-4bdf-8995-d8c646ff9674.json",
+      "note": "T1 same-tile link/unlink; original settler uses military formation -1"
+    },
+    "escort_builder": {
+      "status": "passed",
+      "command": "unit link 196608 262146",
+      "receipt": "evidence/relay-v2/requests/e9ba8335-a4fa-4432-839d-9fb8c26991da.json",
+      "note": "T21 slinger and builder linked; T22 moving slinger moved both, then unlinked"
+    },
+    "upgrade": {
+      "status": "passed",
+      "command": "unit upgrade 196608",
+      "receipt": "evidence/relay-v2/requests/d9926bbc-d599-4cb3-abb9-bca83bf5cafd.json",
+      "note": "40 gold; slinger replaced by archer ID327683"
+    },
+    "pantheon": {
+      "status": "passed",
+      "command": "religion choose-pantheon BELIEF_LADY_OF_THE_REEDS_AND_MARSHES",
+      "receipt": "evidence/relay-v2/requests/fddcbd6b-3891-4409-acc0-7a05434d2c35.json",
+      "note": "Lady of Reeds and Marshes; native faith and yields confirmed"
+    },
+    "governor_promotion": {
+      "status": "passed",
+      "command": "governor promote GOVERNOR_THE_EDUCATOR GOVERNOR_PROMOTION_EDUCATOR_CONNOISSEUR",
+      "receipt": "evidence/relay-v2/requests/f8dc4ca4-7df0-4d29-8ac9-5cf91f88d57b.json",
+      "note": "One title spent; effect established T40"
+    },
+    "government": {
+      "status": "passed",
+      "command": "government change GOVERNMENT_CLASSICAL_REPUBLIC",
+      "receipt": "evidence/relay-v2/requests/fa81b300-5548-4062-a231-78e1be14e2fe.json",
+      "note": "T44 government changed; all four policy slots subsequently confirmed"
+    },
+    "envoy": {
+      "status": "passed",
+      "command": "city-state envoy 9",
+      "receipt": "evidence/relay-v2/requests/e79d621b-8d80-4639-a387-c0d8c21c3be8.json",
+      "note": "T45 and49; native tokens decreased and Fez envoy count increased"
+    },
+    "trade_route": {
+      "status": "passed",
+      "command": "unit trade-route 589828 40 25",
+      "receipt": "evidence/relay-v2/requests/349cd856-320c-40b1-bc15-ab23d6477a2c.json",
+      "note": "Ur to Uruk; subsequent route movement and origin yields observed"
+    },
+    "incoming_trade": {
+      "status": "passed",
+      "command": "call respond_to_trade {\"other_player_id\":1,\"accept\":true}",
+      "receipt": "evidence/relay-v2/requests/e82d9182-df65-4fa7-b0b6-e1e5da44c7ab.json",
+      "note": "4 favor sold for 2 gold/turn for30 turns plus their open borders; native EXIT completed"
+    },
+    "delete": {
+      "status": "passed_checkpoint_branch",
+      "command": "unit delete 458754",
+      "receipt": "evidence/relay-v2/requests/e94e7be4-0b0a-4aae-b910-f12786788ae8.json",
+      "note": "T50 branch only; unit count5 to4; mainT50 reload restored same scout and5units"
+    },
+    "city_state_identity_fix": {
+      "status": "passed",
+      "command": "city-state list",
+      "receipt": "evidence/relay-v2/requests/4a4c50a3-4156-48d1-99d8-6e545835b82e.json",
+      "note": "relay-v3: Hong Kong and Fez only, Free Cities excluded"
+    },
+    "corps": {
+      "status": "refused_not_unlocked",
+      "command": "unit corps 524288 327683",
+      "receipt": "evidence/relay-v2/requests/e27c2f72-be5b-4d05-a78b-957c0ee5c782.json",
+      "note": "Two adjacent archers atT48; no valid native targets, no consumption"
+    },
+    "army": {
+      "status": "refused_not_unlocked",
+      "command": "unit army 524288 327683",
+      "receipt": "evidence/relay-v2/requests/c9c51c4d-15e7-496d-9f07-1920d6a04f3a.json",
+      "note": "No valid native targets, no consumption"
+    },
+    "gp_gold": {
+      "status": "refused_insufficient_qualification",
+      "command": "great-person buy 56 --currency gold",
+      "receipt": "evidence/relay-v2/requests/3ce4cc99-6da9-4da8-98e4-45aa40fd2d62.json",
+      "note": "Only178.2 gold vs800 needed; successful payment remains untested"
+    },
+    "gp_faith": {
+      "status": "refused_insufficient_qualification",
+      "command": "great-person buy 56 --currency faith",
+      "receipt": "evidence/relay-v2/requests/c2237b30-bcee-4215-936d-2db963d3902c.json",
+      "note": "Only1.6 faith vs550 needed; successful payment remains untested"
+    },
+    "gp_recruit": {
+      "status": "refused_insufficient_qualification",
+      "command": "great-person recruit 56",
+      "receipt": "evidence/relay-v2/requests/11fe85e8-4806-44bd-a3dd-3ef50720da3a.json",
+      "note": "0/40 points; successful recruitment remains untested"
+    },
+    "climate_events": {
+      "status": "passed_nonempty",
+      "command": "climate history",
+      "receipt": "evidence/relay-v3/requests/3429592a-ea22-4081-ac2d-9d6ab9a12d92.json",
+      "note": "Turn35 large drought; no industrial climate stage test"
+    },
+    "great_person_history": {
+      "status": "passed_nonempty",
+      "command": "great-person history",
+      "receipt": "evidence/relay-v3/requests/fa4e8569-8ba6-4867-8cd9-3e9b5a9c727f.json",
+      "note": "Recruitment timeline readable; actual payment and historical turn unavailable/null"
+    }
+  },
+  "other_positive_operations": [
+    "found-city",
+    "move and native path query",
+    "cancel-move",
+    "ranged and melee attack",
+    "fortify",
+    "heal with actual HP recovery",
+    "alert atT1",
+    "sleep on builder",
+    "automate scout with actual position changes",
+    "promote warrior and archer",
+    "buy builder and scout",
+    "farm/plantation/ziggurat construction with charge consumption",
+    "production units/buildings/campus",
+    "city focus native flag",
+    "technology/civic selection",
+    "policies",
+    "era dedication",
+    "known civilization abilities",
+    "empire yields/resources/cities",
+    "global resources",
+    "world victory rankings",
+    "map resource searches",
+    "historical timeline",
+    "checkpoint save/reload"
+  ],
+  "limits": [
+    "No successful corps or army merge because native prerequisites were not met byT50.",
+    "Great person buy/recruit only refusal paths tested; later industrial climate and precise CO2 ppm remain unverified/unavailable.",
+    "Religious units, late-era military/effects, repair, pillage, removal and rail/road construction are not positively live-verified in this early run.",
+    "No comparison with Claude performance was requested in this run; only Codex controlled Sumeria.",
+    "Native GetScore changed94 to97 upon reloading mainT50 while the complete category vector stayed identical; preserved raw evidence rather than overwriting the former observation.",
+    "T38 warrior alert and skip were native-refused; legal movement succeeded and next-turn fortify succeeded. Exact native refusal cause remains unresolved.",
+    "Research status briefly showed completed Currency as current after trade-route boost; turn gate requested next tech and T46 fresh state showed Masonry. Do not equate displayed current name with unmet research prerequisite."
+  ]
+}

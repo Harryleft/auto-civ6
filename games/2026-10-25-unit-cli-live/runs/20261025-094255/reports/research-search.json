@@ -1,0 +1,246 @@
+{
+  "schema_version": 1,
+  "scope": "verified static catalog, not live research eligibility",
+  "queries": [
+    {
+      "command": "civic search --filter production --filter unit --match any --limit 4",
+      "status": "found",
+      "total": 30,
+      "filters": [
+        "production",
+        "unit"
+      ],
+      "match": "any",
+      "receipt": "evidence/relay-v2/requests/548dbe22-e9b6-40b5-9fbe-6d3cf372b9e5.json"
+    },
+    {
+      "command": "technology search 写作 --filter 科学",
+      "status": "found",
+      "total": 1,
+      "filters": [
+        "science"
+      ],
+      "match": "any",
+      "receipt": "evidence/relay-v4/requests/db764aa5-2d65-476a-9a72-237c61d02b5e.json"
+    },
+    {
+      "command": "civic search 哲学",
+      "status": "found",
+      "total": 2,
+      "filters": [],
+      "match": "any",
+      "receipt": "evidence/relay-v4/requests/0432cf12-f65f-419b-baa2-add229a00490.json"
+    },
+    {
+      "command": "technology search --filter 食物 --filter 住房 --match all --limit 2",
+      "status": "found",
+      "total": 6,
+      "filters": [
+        "food",
+        "housing"
+      ],
+      "match": "all",
+      "receipt": "evidence/relay-v4/requests/5d82c174-46d8-4949-8c7c-a2c1ca464cc6.json"
+    },
+    {
+      "command": "technology search --filter food --limit 1",
+      "status": "found",
+      "total": 10,
+      "filters": [
+        "food"
+      ],
+      "match": "any",
+      "receipt": "evidence/relay-v4/requests/8a3c26f4-ee74-4d83-8585-1b792c610fe6.json"
+    },
+    {
+      "command": "technology search --filter science --limit 1",
+      "status": "found",
+      "total": 6,
+      "filters": [
+        "science"
+      ],
+      "match": "any",
+      "receipt": "evidence/relay-v4/requests/d5d8b44a-4334-46cf-8a88-66f45d6bf746.json"
+    },
+    {
+      "command": "technology search --filter production --limit 1",
+      "status": "found",
+      "total": 23,
+      "filters": [
+        "production"
+      ],
+      "match": "any",
+      "receipt": "evidence/relay-v4/requests/f35ff568-e811-4024-b6ea-146c693667ea.json"
+    },
+    {
+      "command": "technology search --filter culture --limit 1",
+      "status": "found",
+      "total": 9,
+      "filters": [
+        "culture"
+      ],
+      "match": "any",
+      "receipt": "evidence/relay-v4/requests/28a51b9a-1ec3-4d7c-96ff-52846047c90c.json"
+    },
+    {
+      "command": "technology search --filter gold --limit 1",
+      "status": "found",
+      "total": 15,
+      "filters": [
+        "gold"
+      ],
+      "match": "any",
+      "receipt": "evidence/relay-v4/requests/770df19d-b6a5-42b6-8ece-9fd9da66242a.json"
+    },
+    {
+      "command": "technology search --filter faith --limit 1",
+      "status": "found",
+      "total": 6,
+      "filters": [
+        "faith"
+      ],
+      "match": "any",
+      "receipt": "evidence/relay-v4/requests/667e24bd-af2b-4b52-8dac-aefd4f6f9903.json"
+    },
+    {
+      "command": "technology search --filter housing --limit 1",
+      "status": "found",
+      "total": 14,
+      "filters": [
+        "housing"
+      ],
+      "match": "any",
+      "receipt": "evidence/relay-v4/requests/78878b48-4a1b-4d04-90b6-b277cebcf596.json"
+    },
+    {
+      "command": "technology search --filter unit --limit 1",
+      "status": "found",
+      "total": 45,
+      "filters": [
+        "unit"
+      ],
+      "match": "any",
+      "receipt": "evidence/relay-v4/requests/c8ccd6df-f99e-490b-a442-39e4231b86a2.json"
+    },
+    {
+      "command": "technology search --filter improvement --limit 1",
+      "status": "found",
+      "total": 19,
+      "filters": [
+        "improvement"
+      ],
+      "match": "any",
+      "receipt": "evidence/relay-v4/requests/49c64f9c-88ac-480c-a40f-96d301eee447.json"
+    },
+    {
+      "command": "technology search --filter wonder --limit 1",
+      "status": "found",
+      "total": 24,
+      "filters": [
+        "wonder"
+      ],
+      "match": "any",
+      "receipt": "evidence/relay-v4/requests/047d7d85-a213-4a2e-80a2-b4d9e7d06a5c.json"
+    },
+    {
+      "command": "civic search --filter food --limit 1",
+      "status": "found",
+      "total": 3,
+      "filters": [
+        "food"
+      ],
+      "match": "any",
+      "receipt": "evidence/relay-v4/requests/26d29607-85fc-499d-a804-29e62fd23715.json"
+    },
+    {
+      "command": "civic search --filter science --limit 1",
+      "status": "found",
+      "total": 10,
+      "filters": [
+        "science"
+      ],
+      "match": "any",
+      "receipt": "evidence/relay-v4/requests/1e80a14b-bc89-49b3-aacc-36a55c29415d.json"
+    },
+    {
+      "command": "civic search --filter production --limit 1",
+      "status": "found",
+      "total": 27,
+      "filters": [
+        "production"
+      ],
+      "match": "any",
+      "receipt": "evidence/relay-v4/requests/f1c733b5-fba2-49a5-ae56-88fac6f91d08.json"
+    },
+    {
+      "command": "civic search --filter culture --limit 1",
+      "status": "found",
+      "total": 17,
+      "filters": [
+        "culture"
+      ],
+      "match": "any",
+      "receipt": "evidence/relay-v4/requests/445b90f7-8f5b-4bd4-a6d5-b8f59ccfc672.json"
+    },
+    {
+      "command": "civic search --filter gold --limit 1",
+      "status": "found",
+      "total": 14,
+      "filters": [
+        "gold"
+      ],
+      "match": "any",
+      "receipt": "evidence/relay-v4/requests/87e3d037-d81b-4b73-92f9-5bedeee27a61.json"
+    },
+    {
+      "command": "civic search --filter faith --limit 1",
+      "status": "found",
+      "total": 11,
+      "filters": [
+        "faith"
+      ],
+      "match": "any",
+      "receipt": "evidence/relay-v4/requests/cbf186a7-82ba-47ea-9231-65e215cee35a.json"
+    },
+    {
+      "command": "civic search --filter housing --limit 1",
+      "status": "found",
+      "total": 7,
+      "filters": [
+        "housing"
+      ],
+      "match": "any",
+      "receipt": "evidence/relay-v4/requests/bc478281-ede8-440e-8254-e0ecf0cdda6d.json"
+    },
+    {
+      "command": "civic search --filter unit --limit 1",
+      "status": "found",
+      "total": 8,
+      "filters": [
+        "unit"
+      ],
+      "match": "any",
+      "receipt": "evidence/relay-v4/requests/2140e043-027f-48dd-bbce-5bf1211d8394.json"
+    },
+    {
+      "command": "civic search --filter improvement --limit 1",
+      "status": "found",
+      "total": 7,
+      "filters": [
+        "improvement"
+      ],
+      "match": "any",
+      "receipt": "evidence/relay-v4/requests/11b95039-806e-4dec-a334-d5a303f7067a.json"
+    },
+    {
+      "command": "civic search --filter wonder --limit 1",
+      "status": "found",
+      "total": 12,
+      "filters": [
+        "wonder"
+      ],
+      "match": "any",
+      "receipt": "evidence/relay-v4/requests/74a5bebb-7fc9-4008-8564-ee776737a6e1.json"
+    }
+  ]
+}

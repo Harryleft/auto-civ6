@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "original_baseline_unchanged": true,
+  "main_result": "unitcli_20261025_094255_t050.Civ6Save",
+  "delete_branch_restored_to_main": true,
+  "copies": "evidence/saves/ (ignored, local only)",
+  "files": [
+    {
+      "name": "benchmark_gold_tun_1.Civ6Save",
+      "bytes": 396382,
+      "sha256": "0d25d557e68b0efbd1aed7e66de9b8434f3a9ac9d321291d45cbe9df83fe3abf",
+      "location": "fixtures/saves/benchmark_gold_tun_1.Civ6Save"
+    },
+    {
+      "name": "unitcli_20261025_094255_delete_branch_after.Civ6Save",
+      "bytes": 705680,
+      "sha256": "324444f2e47e86e691c0e394fc04eb06bd9f4440f46d020011c98b1b38b1f931",
+      "location": "~/Library/Application Support/Sid Meier's Civilization VI/Sid Meier's Civilization VI/Saves/Single/unitcli_20261025_094255_delete_branch_after.Civ6Save"
+    },
+    {
+      "name": "unitcli_20261025_094255_delete_branch_before.Civ6Save",
+      "bytes": 706176,
+      "sha256": "1571bff9ee067fc4a7be457d813c91745f36ac3a85099efd60aa2b11a1738cbc",
+      "location": "~/Library/Application Support/Sid Meier's Civilization VI/Sid Meier's Civilization VI/Saves/Single/unitcli_20261025_094255_delete_branch_before.Civ6Save"
+    },
+    {
+      "name": "unitcli_20261025_094255_preserve_t016.Civ6Save",
+      "bytes": 621603,
+      "sha256": "f540fad62a1507f7169d0894fa1bf691d1d847b0f82406e0c562524bf8f7b678",
+      "location": "~/Library/Application Support/Sid Meier's Civilization VI/Sid Meier's Civilization VI/Saves/Single/unitcli_20261025_094255_preserve_t016.Civ6Save"
+    },
+    {
+      "name": "unitcli_20261025_094255_t001_before_form.Civ6Save",
+      "bytes": 396885,
+      "sha256": "123249632fb2a3938b136df5431c27daa46e97ccf25c906427f7598254850a6c",
+      "location": "~/Library/Application Support/Sid Meier's Civilization VI/Sid Meier's Civilization VI/Saves/Single/unitcli_20261025_094255_t001_before_form.Civ6Save"
+    },
+    {
+      "name": "unitcli_20261025_094255_t010.Civ6Save",
+      "bytes": 589207,
+      "sha256": "ddb6c6db229a967f7e87d3fcaa66afc2724abf43ba02eba1592e734093072700",
+      "location": "~/Library/Application Support/Sid Meier's Civilization VI/Sid Meier's Civilization VI/Saves/Single/unitcli_20261025_094255_t010.Civ6Save"
+    },
+    {
+      "name": "unitcli_20261025_094255_t020.Civ6Save",
+      "bytes": 634628,
+      "sha256": "c034887a8788b55986199c4996b3cd3c2e18d7fe59468a3e24b27f42a0492ca6",
+      "location": "~/Library/Application Support/Sid Meier's Civilization VI/Sid Meier's Civilization VI/Saves/Single/unitcli_20261025_094255_t020.Civ6Save"
+    },
+    {
+      "name": "unitcli_20261025_094255_t030.Civ6Save",
+      "bytes": 655043,
+      "sha256": "edb5a601bd348e34ff657fbf89d15a498039eb731b067f827b47deed71fd1c89",
+      "location": "~/Library/Application Support/Sid Meier's Civilization VI/Sid Meier's Civilization VI/Saves/Single/unitcli_20261025_094255_t030.Civ6Save"
+    },
+    {
+      "name": "unitcli_20261025_094255_t040.Civ6Save",
+      "bytes": 681377,
+      "sha256": "3e8b48064b11477f0ced89cb3f1b70f0707b93a4a3994001dc5191a7146b4220",
+      "location": "~/Library/Application Support/Sid Meier's Civilization VI/Sid Meier's Civilization VI/Saves/Single/unitcli_20261025_094255_t040.Civ6Save"
+    },
+    {
+      "name": "unitcli_20261025_094255_t050.Civ6Save",
+      "bytes": 706144,
+      "sha256": "644a89486c1cdd6585061368ee5afa9b2cb922f2fe031a75768a2309602df22a",
+      "location": "~/Library/Application Support/Sid Meier's Civilization VI/Sid Meier's Civilization VI/Saves/Single/unitcli_20261025_094255_t050.Civ6Save"
+    }
+  ]
+}

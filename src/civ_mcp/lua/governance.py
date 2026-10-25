@@ -248,24 +248,30 @@ csTypeMap["LEADER_MINOR_CIV_TRADE"] = "Trade"
 csTypeMap["LEADER_MINOR_CIV_INDUSTRIAL"] = "Industrial"
 for i = 0, 62 do
     if Players[i] and Players[i]:IsAlive() and Players[i]:IsMajor() == false and Players[i]:IsBarbarian() == false and pDiplo:HasMet(i) then
-        local cfg = PlayerConfigurations[i]
-        local name = Locale.Lookup(cfg:GetPlayerName())
-        local leaderType = cfg:GetLeaderTypeName() or ""
-        local csType = "Unknown"
-        local leader = GameInfo.Leaders[leaderType]
-        if leader and leader.InheritFrom then
-            csType = csTypeMap[leader.InheritFrom] or leader.InheritFrom
-        end
+        -- Match CityStates.lua: free cities are non-major/non-barbarian too,
+        -- but only native influence recipients belong in the city-state list.
         local csInfluence = Players[i]:GetInfluence()
-        local envoys = csInfluence:GetTokensReceived(me)
-        local suzID = csInfluence:GetSuzerain() or -1
-        local suzName = "None"
-        if suzID >= 0 and suzID ~= 63 then
-            local sCfg = PlayerConfigurations[suzID]
-            if sCfg then suzName = Locale.Lookup(sCfg:GetCivilizationShortDescription()) end
+        local canReceive = csInfluence:CanReceiveInfluence()
+        assert(type(canReceive) == "boolean", "CITY_STATE_IDENTITY_UNKNOWN")
+        if canReceive then
+            local cfg = PlayerConfigurations[i]
+            local name = Locale.Lookup(cfg:GetPlayerName())
+            local leaderType = cfg:GetLeaderTypeName() or ""
+            local csType = "Unknown"
+            local leader = GameInfo.Leaders[leaderType]
+            if leader and leader.InheritFrom then
+                csType = csTypeMap[leader.InheritFrom] or leader.InheritFrom
+            end
+            local envoys = csInfluence:GetTokensReceived(me)
+            local suzID = csInfluence:GetSuzerain() or -1
+            local suzName = "None"
+            if suzID >= 0 and suzID ~= 63 then
+                local sCfg = PlayerConfigurations[suzID]
+                if sCfg then suzName = Locale.Lookup(sCfg:GetCivilizationShortDescription()) end
+            end
+            local canSend = pInfluence:CanGiveTokensToPlayer(i) and "1" or "0"
+            print("CS|" .. i .. "|" .. name:gsub("|","/") .. "|" .. csType .. "|" .. envoys .. "|" .. suzID .. "|" .. suzName:gsub("|","/") .. "|" .. canSend)
         end
-        local canSend = pInfluence:CanGiveTokensToPlayer(i) and "1" or "0"
-        print("CS|" .. i .. "|" .. name:gsub("|","/") .. "|" .. csType .. "|" .. envoys .. "|" .. suzID .. "|" .. suzName:gsub("|","/") .. "|" .. canSend)
     end
 end
 print("{SENTINEL}")

@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "mode": "live_game_plus_scoped_offline_regression",
+  "baseline_unchanged": true,
+  "target_turn": 50,
+  "confirmed_advances": 49,
+  "final_pending": false,
+  "game_process_restarts": 0,
+  "last_cli_session_closed_normally": true,
+  "offline": {
+    "test_files": [
+      "tests/test_city_state_identity.py",
+      "tests/test_unit_formations.py",
+      "tests/test_envoy_confirmation.py"
+    ],
+    "passed": 127,
+    "seconds": 1.77,
+    "compileall": "PASS",
+    "local_document_links": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "source_sha256": {
+    "src/civ_mcp/lua/governance.py": "c0f5da971689489adbed2c88ac74222777ee2d39783fceff4e351fcc594b9a7d",
+    "src/civ_mcp/lua/unit_formations.py": "9c4eaf591b353f4eec6396951bccd29ffce0bbe134b6a74ca955663250797b01"
+  },
+  "remaining": [
+    "Successful military formation merges and great person payment/recruitment require eligible later-game checkpoint.",
+    "T38 native alert/skip refusal cause unresolved; legal movement and later fortify succeeded.",
+    "Native score and transient completed-tech display differences retained in reports."
+  ]
+}

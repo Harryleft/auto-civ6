@@ -19,10 +19,14 @@ local function ownUnit(owner,id)
  assert(scopeIndex(u:GetID()) and scopeIndex(u:GetX()) and scopeIndex(u:GetY()),"UNIT_OFF_MAP")
  return u
 end
-local function index(v)assert(scopeIndex(v),"NATIVE_VALUE_UNKNOWN");return v end
+local function index(v)assert(scopeIndex(v),"NATIVE_VALUE_UNKNOWN:"..tostring(v));return v end
+local function military(v)
+ -- Civilians may report native -1 (no military formation); soldiers use 0+.
+ assert(scopeInteger(v) and v>=-1,"MILITARY_FORMATION_UNKNOWN:"..tostring(v));return v
+end
 local function facts(u)
  return {id=index(u:GetID()),type=index(u:GetType()),x=index(u:GetX()),y=index(u:GetY()),
-  military=index(u:GetMilitaryFormation()),count=index(u:GetFormationUnitCount())}
+  military=military(u:GetMilitaryFormation()),count=index(u:GetFormationUnitCount())}
 end
 local function frame()
  local owner=Game.GetLocalPlayer()
@@ -119,7 +123,7 @@ def parse_options(lines: list[str]) -> dict:
         unit, = [r.split("|") for r in lines if r.startswith("FORMATION_UNIT|")]
         def unit_fields(row):
             values = dict(zip(("id", "unit_type_index", "x", "y", "military_formation", "escort_unit_count"), map(int, row), strict=True))
-            if any(v < 0 for v in values.values()):
+            if any(v < (-1 if key == "military_formation" else 0) for key, v in values.items()):
                 raise ValueError("Invalid native unit facts")
             return values
         data = unit_fields(unit[1:]) | {"actions": {}}

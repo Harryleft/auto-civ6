@@ -1,0 +1,904 @@
+{
+  "schema_version": 1,
+  "scope": "main game T1 through arrival at T50, 49 confirmed turn advances",
+  "actor": "Codex",
+  "started_at": "2026-10-25T09:46:31.493414+08:00",
+  "arrived_t50_at": "2026-10-25T10:41:17.743682+08:00",
+  "completed_turns": 49,
+  "wall_seconds": 3286.2158535000635,
+  "cli_seconds": 308.47708872822113,
+  "rpc_seconds": 305.102237,
+  "mean_wall_seconds": 67.0656296632666,
+  "median_wall_seconds": 46.08616266702302,
+  "max_wall_seconds": 305.1861812090501,
+  "notes": [
+    "Wall time includes strategy, tool inspection, bug diagnosis/fixes and foreground pauses. It is not pure inference or engine latency.",
+    "CLI and RPC time are nested measurements; do not add them. Gap time cannot identify model-only latency.",
+    "Baseline loading, early formation repair and post-T50 branch/reload/read-only checks are excluded from the 49-turn total.",
+    "Raw JSON/JSONL remains in evidence/relay*/; no CSV was generated."
+  ],
+  "rounds": [
+    {
+      "segment": 1,
+      "turn": 1,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792892791.493414,
+      "finished": 1792892867.085203,
+      "wall_seconds": 75.59126587503124,
+      "cli_seconds": 6.914019918534905,
+      "rpc_seconds": 6.746167000000001,
+      "gap_seconds": 68.67724595649634,
+      "command_count": 30,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 2,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792892867.085203,
+      "finished": 1792892913.1716878,
+      "wall_seconds": 46.08616266702302,
+      "cli_seconds": 4.309926835238002,
+      "rpc_seconds": 4.282553,
+      "gap_seconds": 41.776235831785016,
+      "command_count": 7,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 3,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792892913.1716878,
+      "finished": 1792892934.418336,
+      "wall_seconds": 21.24650120793376,
+      "cli_seconds": 4.539771126001142,
+      "rpc_seconds": 4.505086,
+      "gap_seconds": 16.70673008193262,
+      "command_count": 9,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 4,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792892934.418336,
+      "finished": 1792892977.588903,
+      "wall_seconds": 43.17027008405421,
+      "cli_seconds": 4.890641251113266,
+      "rpc_seconds": 4.854556,
+      "gap_seconds": 38.27962883294094,
+      "command_count": 9,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 5,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792892977.588903,
+      "finished": 1792893000.980717,
+      "wall_seconds": 23.39165350003168,
+      "cli_seconds": 4.371735542081296,
+      "rpc_seconds": 4.341334,
+      "gap_seconds": 19.019917957950383,
+      "command_count": 8,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 6,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792893000.980717,
+      "finished": 1792893034.653648,
+      "wall_seconds": 33.67270299990196,
+      "cli_seconds": 4.4016734577016905,
+      "rpc_seconds": 4.3666160000000005,
+      "gap_seconds": 29.271029542200267,
+      "command_count": 9,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 7,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792893034.653648,
+      "finished": 1792893068.967434,
+      "wall_seconds": 34.313551083090715,
+      "cli_seconds": 4.492431293008849,
+      "rpc_seconds": 4.448979,
+      "gap_seconds": 29.821119790081866,
+      "command_count": 11,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 8,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792893068.967434,
+      "finished": 1792893100.770564,
+      "wall_seconds": 31.802910374943167,
+      "cli_seconds": 7.510642708977684,
+      "rpc_seconds": 7.47379,
+      "gap_seconds": 24.292267665965483,
+      "command_count": 9,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 9,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792893100.770564,
+      "finished": 1792893174.8067799,
+      "wall_seconds": 74.035706417053,
+      "cli_seconds": 7.5014206250198185,
+      "rpc_seconds": 7.4138020000000004,
+      "gap_seconds": 66.53428579203319,
+      "command_count": 17,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 10,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792893174.8067799,
+      "finished": 1792893243.805141,
+      "wall_seconds": 68.99788612499833,
+      "cli_seconds": 5.641978039988317,
+      "rpc_seconds": 5.546767000000001,
+      "gap_seconds": 63.355908085010014,
+      "command_count": 24,
+      "error_count": 2,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 11,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792893243.805141,
+      "finished": 1792893247.636839,
+      "wall_seconds": 3.8316722499439493,
+      "cli_seconds": 3.8165435009868816,
+      "rpc_seconds": 3.799119,
+      "gap_seconds": 0.015128748957067728,
+      "command_count": 5,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 12,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792893247.636839,
+      "finished": 1792893367.870964,
+      "wall_seconds": 120.23329708306119,
+      "cli_seconds": 7.575687457690947,
+      "rpc_seconds": 7.430471000000001,
+      "gap_seconds": 112.65760962537024,
+      "command_count": 41,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 13,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792893367.870964,
+      "finished": 1792893380.884484,
+      "wall_seconds": 13.013430791907012,
+      "cli_seconds": 4.26941083278507,
+      "rpc_seconds": 4.248432,
+      "gap_seconds": 8.744019959121943,
+      "command_count": 6,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 14,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792893380.884484,
+      "finished": 1792893384.7735932,
+      "wall_seconds": 3.8890828751027584,
+      "cli_seconds": 3.873579459148459,
+      "rpc_seconds": 3.861784,
+      "gap_seconds": 0.015503415954299271,
+      "command_count": 4,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 15,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792893384.7735932,
+      "finished": 1792893433.553778,
+      "wall_seconds": 48.779849124955945,
+      "cli_seconds": 4.033451417810284,
+      "rpc_seconds": 4.011851,
+      "gap_seconds": 44.74639770714566,
+      "command_count": 6,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 16,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792893433.553778,
+      "finished": 1792893437.3742201,
+      "wall_seconds": 3.8204154160339385,
+      "cli_seconds": 3.803865874069743,
+      "rpc_seconds": 3.7917750000000003,
+      "gap_seconds": 0.01654954196419567,
+      "command_count": 4,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 17,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792893437.3742201,
+      "finished": 1792893501.0167098,
+      "wall_seconds": 63.642051499919035,
+      "cli_seconds": 4.65571521082893,
+      "rpc_seconds": 4.600556,
+      "gap_seconds": 58.986336289090104,
+      "command_count": 14,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 18,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792893501.0167098,
+      "finished": 1792893570.584436,
+      "wall_seconds": 69.56724766700063,
+      "cli_seconds": 4.132478542625904,
+      "rpc_seconds": 4.032771,
+      "gap_seconds": 65.43476912437472,
+      "command_count": 25,
+      "error_count": 1,
+      "unknown_count": 1,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 19,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792893570.584436,
+      "finished": 1792893596.269409,
+      "wall_seconds": 25.684796791989356,
+      "cli_seconds": 4.710352165973745,
+      "rpc_seconds": 4.670412,
+      "gap_seconds": 20.97444462601561,
+      "command_count": 10,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 20,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792893596.269409,
+      "finished": 1792893622.669384,
+      "wall_seconds": 26.399792625103146,
+      "cli_seconds": 4.746218001120724,
+      "rpc_seconds": 4.707637999999999,
+      "gap_seconds": 21.653574623982422,
+      "command_count": 11,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 21,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792893622.669384,
+      "finished": 1792893724.869487,
+      "wall_seconds": 102.19939983298536,
+      "cli_seconds": 4.965861250995658,
+      "rpc_seconds": 4.884516,
+      "gap_seconds": 97.2335385819897,
+      "command_count": 19,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 22,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792893724.869487,
+      "finished": 1792893766.988873,
+      "wall_seconds": 42.119099291972816,
+      "cli_seconds": 5.953249584767036,
+      "rpc_seconds": 5.863873999999999,
+      "gap_seconds": 36.16584970720578,
+      "command_count": 19,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 23,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792893766.988873,
+      "finished": 1792893803.445747,
+      "wall_seconds": 36.45662483293563,
+      "cli_seconds": 4.456775582046248,
+      "rpc_seconds": 4.410544,
+      "gap_seconds": 31.999849250889383,
+      "command_count": 11,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 24,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792893803.445747,
+      "finished": 1792893834.028579,
+      "wall_seconds": 30.56151716702152,
+      "cli_seconds": 4.362054207827896,
+      "rpc_seconds": 4.333513,
+      "gap_seconds": 26.199462959193625,
+      "command_count": 8,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 25,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792893834.028579,
+      "finished": 1792893941.6041548,
+      "wall_seconds": 107.56278791604564,
+      "cli_seconds": 6.773896628757939,
+      "rpc_seconds": 6.675012000000001,
+      "gap_seconds": 100.7888912872877,
+      "command_count": 25,
+      "error_count": 1,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 26,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792893941.6041548,
+      "finished": 1792893979.836193,
+      "wall_seconds": 38.23159141698852,
+      "cli_seconds": 4.902970246854238,
+      "rpc_seconds": 4.841673,
+      "gap_seconds": 33.328621170134284,
+      "command_count": 13,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 27,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792893979.836193,
+      "finished": 1792894098.737352,
+      "wall_seconds": 118.89979970804416,
+      "cli_seconds": 7.856585085159168,
+      "rpc_seconds": 7.739707000000001,
+      "gap_seconds": 111.04321462288499,
+      "command_count": 27,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 28,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792894098.737352,
+      "finished": 1792894237.171273,
+      "wall_seconds": 138.43232237489428,
+      "cli_seconds": 6.350399458548054,
+      "rpc_seconds": 6.2317,
+      "gap_seconds": 132.08192291634623,
+      "command_count": 25,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 29,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792894237.171273,
+      "finished": 1792894442.023057,
+      "wall_seconds": 204.84944233403075,
+      "cli_seconds": 8.033091624965891,
+      "rpc_seconds": 7.952056000000001,
+      "gap_seconds": 196.81635070906486,
+      "command_count": 22,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 30,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792894442.023057,
+      "finished": 1792894576.210955,
+      "wall_seconds": 134.18636587506626,
+      "cli_seconds": 5.556007254170254,
+      "rpc_seconds": 5.487596,
+      "gap_seconds": 128.630358620896,
+      "command_count": 18,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 31,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792894576.210955,
+      "finished": 1792894639.789087,
+      "wall_seconds": 63.57740562490653,
+      "cli_seconds": 7.25745720800478,
+      "rpc_seconds": 7.209130999999999,
+      "gap_seconds": 56.31994841690175,
+      "command_count": 14,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 32,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792894639.789087,
+      "finished": 1792894719.009463,
+      "wall_seconds": 79.21947095810901,
+      "cli_seconds": 8.377239501918666,
+      "rpc_seconds": 8.306621,
+      "gap_seconds": 70.84223145619035,
+      "command_count": 14,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 33,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792894719.009463,
+      "finished": 1792894940.210187,
+      "wall_seconds": 221.22504820791073,
+      "cli_seconds": 18.92938666814007,
+      "rpc_seconds": 18.818985,
+      "gap_seconds": 202.29566153977066,
+      "command_count": 27,
+      "error_count": 1,
+      "unknown_count": 1,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 34,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792894940.210187,
+      "finished": 1792895115.398232,
+      "wall_seconds": 175.18669829203282,
+      "cli_seconds": 6.12686858093366,
+      "rpc_seconds": 6.049947,
+      "gap_seconds": 169.05982971109916,
+      "command_count": 18,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 35,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792895115.398232,
+      "finished": 1792895322.9516559,
+      "wall_seconds": 207.55182779196184,
+      "cli_seconds": 5.316643712110817,
+      "rpc_seconds": 5.214963,
+      "gap_seconds": 202.23518407985102,
+      "command_count": 29,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 36,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792895322.9516559,
+      "finished": 1792895377.803564,
+      "wall_seconds": 54.85148645809386,
+      "cli_seconds": 6.667944583110511,
+      "rpc_seconds": 6.606795,
+      "gap_seconds": 48.18354187498335,
+      "command_count": 14,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 37,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792895377.803564,
+      "finished": 1792895457.3944588,
+      "wall_seconds": 79.59028983290773,
+      "cli_seconds": 9.47277241689153,
+      "rpc_seconds": 9.443001,
+      "gap_seconds": 70.1175174160162,
+      "command_count": 7,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 38,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792895457.3944588,
+      "finished": 1792895762.582988,
+      "wall_seconds": 305.1861812090501,
+      "cli_seconds": 8.682754204724915,
+      "rpc_seconds": 8.462989,
+      "gap_seconds": 296.5034270043252,
+      "command_count": 58,
+      "error_count": 12,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 39,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792895762.582988,
+      "finished": 1792895812.44841,
+      "wall_seconds": 49.8650387909729,
+      "cli_seconds": 18.463359207031317,
+      "rpc_seconds": 18.359992,
+      "gap_seconds": 31.401679583941586,
+      "command_count": 24,
+      "error_count": 1,
+      "unknown_count": 1,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 40,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792895812.44841,
+      "finished": 1792895869.7126489,
+      "wall_seconds": 57.263798041967675,
+      "cli_seconds": 8.222529294085689,
+      "rpc_seconds": 8.128875,
+      "gap_seconds": 49.041268747881986,
+      "command_count": 20,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 41,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792895869.7126489,
+      "finished": 1792895883.26558,
+      "wall_seconds": 13.552826500032097,
+      "cli_seconds": 4.6992405416676775,
+      "rpc_seconds": 4.656651,
+      "gap_seconds": 8.85358595836442,
+      "command_count": 9,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 42,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792895883.26558,
+      "finished": 1792895892.243993,
+      "wall_seconds": 8.978344417060725,
+      "cli_seconds": 4.374908873811364,
+      "rpc_seconds": 4.315652,
+      "gap_seconds": 4.603435543249361,
+      "command_count": 8,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 43,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792895892.243993,
+      "finished": 1792895905.0215738,
+      "wall_seconds": 12.777482290985063,
+      "cli_seconds": 4.309369875118136,
+      "rpc_seconds": 4.271159,
+      "gap_seconds": 8.468112415866926,
+      "command_count": 8,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 44,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792895905.0215738,
+      "finished": 1792895928.917761,
+      "wall_seconds": 23.896002916968428,
+      "cli_seconds": 3.1975960024865344,
+      "rpc_seconds": 3.113669,
+      "gap_seconds": 20.698406914481893,
+      "command_count": 22,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 45,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792895928.917761,
+      "finished": 1792895970.811671,
+      "wall_seconds": 41.89358812500723,
+      "cli_seconds": 4.410571537679061,
+      "rpc_seconds": 4.2421940000000005,
+      "gap_seconds": 37.483016587328166,
+      "command_count": 26,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 46,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792895970.811671,
+      "finished": 1792895986.6429179,
+      "wall_seconds": 15.831125207943842,
+      "cli_seconds": 4.319243833888322,
+      "rpc_seconds": 4.281677999999999,
+      "gap_seconds": 11.51188137405552,
+      "command_count": 10,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 47,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792895986.6429179,
+      "finished": 1792895995.4050639,
+      "wall_seconds": 8.762079167063348,
+      "cli_seconds": 3.9798645420232788,
+      "rpc_seconds": 3.95416,
+      "gap_seconds": 4.782214625040069,
+      "command_count": 6,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 48,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792895995.4050639,
+      "finished": 1792896053.586787,
+      "wall_seconds": 58.181256207986735,
+      "cli_seconds": 16.940519417985342,
+      "rpc_seconds": 16.845741000000004,
+      "gap_seconds": 41.24073679000139,
+      "command_count": 23,
+      "error_count": 2,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    },
+    {
+      "segment": 1,
+      "turn": 49,
+      "actors": [
+        "Codex"
+      ],
+      "status": "completed",
+      "started": 1792896053.586787,
+      "finished": 1792896077.7436821,
+      "wall_seconds": 24.15670625003986,
+      "cli_seconds": 5.3263845418114215,
+      "rpc_seconds": 5.265384,
+      "gap_seconds": 18.83032170822844,
+      "command_count": 17,
+      "error_count": 0,
+      "unknown_count": 0,
+      "clock_source": "monotonic"
+    }
+  ]
+}
