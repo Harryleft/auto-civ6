@@ -116,6 +116,9 @@ def parser() -> Parser:
     common(debug)
     debug.add_argument("--offline", action="store_true", help="Allow only knowledge tools and in-memory pending inspection")
     debug.add_argument("--timeout", type=positive, default=300, help="Per-RPC timeout; never retries or restarts")
+    debug.add_argument("--developer", action="store_true", help="Explicitly expose arbitrary Lua diagnostics; not for normal gameplay")
+    debug.add_argument("--hotseat-seat", type=int, choices=(0, 1), help="Bind this session to one human seat in the existing two-seat experiment")
+    debug.add_argument("--hotseat-run", type=Path, help="Existing authorized hotseat run with its verified patch manifest; requires --hotseat-seat")
     logs = commands.add_parser("logs", help="Read existing action logs; never query the game", description="Choose list, show, timeline or turns. Reads existing evidence; no game queries.")
     common(logs)
     log_commands = logs.add_subparsers(dest="view", required=True)
@@ -158,7 +161,8 @@ def execute(args: argparse.Namespace, evidence: Evidence, extra: list[str], data
         (doctor if args.command == "doctor" else verify)(evidence, root, data)
     elif args.command == "debug":
         from civ_mcp.devtools.debug import run_debug
-        return run_debug(evidence, data, offline=args.offline, timeout=args.timeout)
+        return run_debug(evidence, data, offline=args.offline, timeout=args.timeout,
+                         developer=args.developer, hotseat_seat=args.hotseat_seat, hotseat_run=args.hotseat_run)
     elif args.command == "test":
         if args.list:
             if args.domain or extra or args.collect_only:

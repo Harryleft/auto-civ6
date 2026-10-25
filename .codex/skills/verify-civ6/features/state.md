@@ -10,7 +10,7 @@
 
 ## How to get to it (user POV)
 
-日常调用遵循[CLI 命令手册](../../../../docs/cli.md)。下文 MCP 工具名只表示底层入口；未封装工具用同一 debug 会话的 `tools`／`call` 调用。
+日常调用遵循[CLI 命令手册](../../../../docs/cli.md)，使用同一 debug 会话的命名命令；MCP 仅由 CLI 在内部管理。
 
 - 持续 CLI 会话：`state overview`、`city list`、`unit list`。
 - 已授权且已有唯一活动现场：`uv run --locked civ6 verify state --expect-turn TURN --expect-civilization CIVILIZATION_ID` 自动执行有界只读验收；前台会话内可用 `verify state` 复用当前上下文。完整命令及范围见[调试 CLI](../../../../docs/cli.md#自动实机只读验收)。
@@ -20,15 +20,15 @@
 
 核对任务要求的现场及控制通道后运行 `verify state`，读取顶层 `status`、`game_verification` 和 `data.verification`。`passed_readonly` 只覆盖结构化快照与会话检查；原始数据、逐项检查和 RPC 保留在证据中。有 pending 时先保留并按原入口确认，自动验收不得用实体查询消费它。读取失败、身份不符或范围未知不授予通过；该命令不加载、保存、推进或重启游戏。
 
-## Driving it with civ6 MCP
+## 通过 CLI 验证
 
 Preconditions:
 
 - 已授权查询真实对局；唯一活动控制客户端；任务指定的世界和轮次可核对。
 
-- **概览。** 调用 `get_game_overview()`，保存完整响应。核对文明、回合及当前状态与任务指定起点或检查点一致；缺少关键身份事实时补充现有只读查询，不猜测。
-- **实体。** 调用 `get_cities()` 和 `get_units()`，保留本次 ID、坐标及数量范围；与同一世界、回合的概览核对。初始尚未建城时可有零城，不能硬编码城市数量。
-- **异常。** 查询失败或字段未知时记录具体缺口；按需调用 `get_turn_status()` 诊断。结果未确认前不把返回缓存当成当前成功证据。
+- **概览。** 调用 `state overview`，保存完整响应。核对文明、回合及当前状态与任务指定起点或检查点一致；缺少关键身份事实时补充现有只读查询，不猜测。
+- **实体。** 调用 `city list` 和 `unit list`，保留本次 ID、坐标及数量范围；与同一世界、回合的概览核对。初始尚未建城时可有零城，不能硬编码城市数量。
+- **异常。** 查询失败或字段未知时记录具体缺口；按需调用 `turn status` 诊断。结果未确认前不把返回缓存当成当前成功证据。
 - **证明。** 两组响应绑定同一任务和观察时点；`state.overview` 与 `state.entities` 分别判定。没有新鲜完整事实就不进入后续动作。
 
 ## Gotchas

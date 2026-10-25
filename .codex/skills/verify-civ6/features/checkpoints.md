@@ -9,24 +9,24 @@
 
 ## How to get to it (user POV)
 
-日常调用遵循[CLI 命令手册](../../../../docs/cli.md)。下文 MCP 工具名只表示底层入口；未封装工具用同一 debug 会话的 `tools`／`call` 调用。
+日常调用遵循[CLI 命令手册](../../../../docs/cli.md)，使用同一 debug 会话的命名命令；MCP 仅由 CLI 在内部管理。
 
 - 保存：`save create NAME --dry-run`，核实独立名称后明确执行 `save create NAME`。
 - 正常换档：`save reload NAME --dry-run`，核实检查点后明确执行 `save reload NAME`。
-- 已在主菜单：`save load NAME`；辅助入口通过同一会话 `call load_save_from_menu` 调用，按 tools 返回的 schema 传参。
-- 故障后的完整重启：任务已授权时在原会话通过 `call --dry-run restart_and_load` 预演，再显式调用；参数取自已确认检查点和真实 schema。
+- 已在主菜单：`save load NAME`；辅助入口为同会话 `save menu-load NAME`。
+- 故障后的完整重启：任务已授权时在原会话通过 `game recover NAME --dry-run` 预演，再显式调用；参数取自已确认检查点和真实 schema。
 
-## Driving it with civ6 MCP
+## 通过 CLI 验证
 
 Preconditions:
 
 - 任务明确允许对应保存或替换现场；具备本轮身份与来源记录。按[保存与恢复](../../../../docs/agent-recovery.md)逐项核对前置条件。
 - 活动回合可保存，且没有阻塞保存的未决动作或推进。保存名称为本轮新名称，已确认不会覆盖任何已有文件、原件或保留成果。
 
-- **保存前。** 记录世界身份、回合和轮次，核对新名称；按 `save_game` 参数传入本轮名称。
+- **保存前。** 记录世界身份、回合和轮次，核对新名称；按 `save create NAME` 参数传入本轮名称。
 - **确认保存。** 保留工具原生完成证据；核对实际文件路径、非空大小、SHA-256、保存前后身份回合和本轮检查点记录。缺少任一项就保留未确认状态。
-- **选择恢复入口。** 正常运行选 `reload_game_save`；已在主菜单选菜单加载；完整重启只用于当前任务明确允许的故障恢复。传入精确已确认检查点名称，或本次列表中的索引。
-- **加载后。** 保存完整加载确认，再调用 `get_game_overview()`、`get_units()`、`get_cities()`；核对目标文件、原世界身份、回合、轮次、本地就绪和完整新快照。普通换档还需证明进程保持，而非隐式重启。
+- **选择恢复入口。** 正常运行选 `save reload NAME`；已在主菜单选菜单加载；完整重启只用于当前任务明确允许的故障恢复。传入精确已确认检查点名称，或本次列表中的索引。
+- **加载后。** 保存完整加载确认，再调用 `state overview`、`unit list`、`city list`；核对目标文件、原世界身份、回合、轮次、本地就绪和完整新快照。普通换档还需证明进程保持，而非隐式重启。
 - **分别报告。** 写明实际走过哪个入口，其他入口记 `NOT_RUN`。离线可选 `tests/test_game_lifecycle.py` 和 `tests/test_checkpoint_run.py`。
 
 ## Gotchas

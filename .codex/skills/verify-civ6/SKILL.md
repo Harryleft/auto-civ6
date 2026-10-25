@@ -5,7 +5,7 @@ description: 验证 civ6 项目的知识 CLI、真实 stdio MCP、游戏状态�
 
 # 验证 Civ6 MCP
 
-主操作面是[项目 CLI](../../../docs/cli.md)，底层为本机 stdio MCP；连续游戏查询与动作保留在同一 debug 会话。先读[功能地图](features/README.md)，只选择本次改动或验收目标涉及的功能。项目边界以 [AGENTS.md](../../../AGENTS.md) 和[开发与验证](../../../docs/development.md)为准。
+AI 的唯一操作面是[项目 CLI](../../../docs/cli.md)，底层为本机 stdio MCP；连续游戏查询与动作保留在同一 debug 会话。先读[功能地图](features/README.md)，只选择本次改动或验收目标涉及的功能。项目边界以 [AGENTS.md](../../../AGENTS.md) 和[开发与验证](../../../docs/development.md)为准。
 
 ## 选择验证范围
 
@@ -43,14 +43,14 @@ uv run --locked --no-sync civ6 doctor
 
 ## Drive
 
-动作统一通过同一 `civ6 debug` 的命名命令或 `call` 进入公开 MCP 工具；不使用 `run_lua`、内部 setter 或改写未决状态来制造成功。按地图选择具体入口并记录实参。实机动作的实体 ID、地块及目标来自本轮真实查询。
+动作统一通过同一 `civ6 debug` 的命名命令进入 Runtime；MCP 是内部协议，不注册到模型客户端。普通会话禁用任意 Lua；不使用内部 setter 或改写未决状态来制造成功。按地图选择具体入口并记录实参。实机动作的实体 ID、地块及目标来自本轮真实查询。
 
 离线回归按影响范围选择，逐项保留命令、输出和退出码；下表不要求一次全跑。
 
 | 修改范围 | 已有离线测试入口 |
 | --- | --- |
 | 知识与 stdio | `tests/test_knowledge_mcp.py`、`tests/test_knowledge_stdio.py` |
-| 前台 debug 会话与纯内存 pending 查询 | `tests/test_debug_cli.py`、`tests/test_server.py`；也可运行 `civ6 test debug` |
+| 前台 debug 会话与纯内存 pending 查询 | `tests/test_debug_cli.py`、`tests/test_cli_only.py`、`tests/test_server.py`；也可运行 `civ6 test debug` |
 | 动作确认与门禁 | `tests/test_action_confirmation.py`、`tests/test_pending_dispatch.py` |
 | 回合、身份与等待阶段 | `tests/test_end_turn.py`、`tests/test_turn_status.py` |
 | 保存、替换与轮次 | `tests/test_game_lifecycle.py`、`tests/test_checkpoint_run.py` |

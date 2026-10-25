@@ -1,6 +1,6 @@
 # 知识查询
 
-无需运行游戏，即可通过知识 CLI 或 MCP 搜索规则并读取摘要、规则和来源证据。
+无需运行游戏，即可通过知识 CLI 搜索规则并读取摘要、规则和来源证据；内部 MCP 由 CLI 管理。
 
 ## Sub-features
 
@@ -9,7 +9,7 @@
 
 ## How to get to it (user POV)
 
-日常调用遵循[CLI 命令手册](../../../../docs/cli.md)。下文 MCP 工具名只表示底层入口；未封装工具用同一 debug 会话的 `tools`／`call` 调用。
+日常调用遵循[CLI 命令手册](../../../../docs/cli.md)，使用同一 debug 会话的命名命令。下文 MCP 名称只表示离线验收的内部协议。
 
 - 在 `civ6 debug --offline` 会话执行 `knowledge search 写作 --topic technologies --limit 5`，再用 `knowledge show TECH_WRITING --level rule`；ID 取自本次搜索。
 - 完整冒烟：从根目录运行 `uv run --locked --no-sync civ6 verify knowledge`。

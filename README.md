@@ -14,7 +14,7 @@
 
 ## AI 如何玩这局游戏
 
-`civ6` CLI 是日常调用入口，前台 `debug` 会话通过同一个 stdio MCP 进程、本机 FireTuner 连接 Civilization VI。
+`civ6` CLI 是 AI 的唯一操作入口。前台 `debug` 会话通过内部 stdio MCP 进程、本机 FireTuner 连接 Civilization VI；Codex、Claude Code、Pi 均使用终端启动 CLI，无需注册 `civ6` MCP。
 
 模型负责策略，游戏引擎执行规则，运行层负责查询、提交动作与确认结果。
 
@@ -34,7 +34,7 @@
 
 ## CLI 使用
 
-在项目目录执行 `uv sync --locked`，然后使用 `uv run --locked civ6 doctor` 检查环境、知识包与 MCP 协议，使用 `uv run --locked civ6 verify knowledge` 验证知识查询。这些入口及领域测试、日志查询统一输出 JSON 并保留离线证据。顶层入口、会话控制和 43 个领域子命令统一见[CLI 命令手册](docs/cli.md)。
+在项目目录执行 `uv sync --locked`，然后使用 `uv run --locked civ6 doctor` 检查环境、知识包与内部协议，使用 `uv run --locked civ6 verify knowledge` 验证知识查询。这些入口及领域测试、日志查询统一输出 JSON 并保留离线证据。顶层入口、会话控制和完整命名命令统一见[CLI 命令手册](docs/cli.md)。
 
 前台调试使用 `uv run --locked civ6 debug`，在同一 MCP 进程中查询状态、查看 pending、使用领域子命令和显式调用工具；`debug --offline` 只允许知识查询与服务内存检查。已授权的实机只读验收可用 `uv run --locked civ6 verify state`，不会加载存档、执行动作或推进回合。实机操作按当前任务授权和存档规则执行，详见[会话说明](docs/cli.md#前台-debug-会话)。
 

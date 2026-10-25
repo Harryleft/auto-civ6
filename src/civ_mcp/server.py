@@ -44,7 +44,7 @@ async def lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
 
 mcp = FastMCP(
     "Civilization VI",
-    instructions="Read real game state before issuing actions. Call get_game_overview first. When rules, prerequisites, unlocks or mechanics are unclear, use search_knowledge to locate names/IDs, then get_knowledge(level='rule'); use evidence for source conflicts. Static knowledge does not verify current action eligibility: check the relevant game tools. Knowledge tools work without a game connection. A lost response may mean an action already ran; verify before retrying. Normal save swaps use reload_game_save; restart_and_load is explicit full-process fault recovery.",
+    instructions="Internal Runtime for civ6 CLI; AI clients use the CLI as their only operation entrypoint. Keep one foreground civ6 debug session and use named commands. Read state overview before actions, knowledge search/show for uncertain rules, and pending for unresolved requests. Static knowledge does not establish current eligibility. A lost response may mean an action already ran; retain the original owner and confirm without replay. Save reload is a normal swap; game recover is explicit full-process checkpoint recovery. Direct MCP registration and arbitrary Lua are not normal gameplay interfaces.",
     lifespan=lifespan,
 )
 

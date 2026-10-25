@@ -4,10 +4,10 @@
 
 ## 调用关系
 
-`civ6 debug` 是前台 stdio MCP 客户端，一次会话保持一个服务进程；终端命令不会重建 GameState。`get_runtime_status` 在工具锁内仅读取服务 UUID／PID 和现有所有者的公开未决事实，不触发查询、确认、缓存刷新或门禁退役。CLI 保存的传输未知只用于阻止不安全续写和退出提示，不替代 Runtime 的动作所有者；进程退出后不提供未决意图恢复。
+AI 只发现并执行 CLI；MCP 保留为内部适配层。`civ6 debug` 是前台 stdio MCP 客户端，一次会话保持一个服务进程；终端命令不会重建 GameState。`get_runtime_status` 在工具锁内仅读取服务 UUID／PID 和现有所有者的公开未决事实，不触发查询、确认、缓存刷新或门禁退役。CLI 保存的传输未知只用于阻止不安全续写和退出提示，不替代 Runtime 的动作所有者；进程退出后不提供未决意图恢复。
 
 ```text
-MCP 客户端
+AI → civ6 CLI（唯一公开操作面）
   │ stdio JSON-RPC
   ▼
 server.py：参数、工具入口、结果文本
@@ -84,6 +84,10 @@ GameState 拥有完整会话替换；`game_launcher.py` 负责原生进程操作
 已登记 REGISTERED 票单可由显式 `end_turn` 触发；只有该入口允许最新可信登记状态保留计划并放行。阶段继续以原生阶段／回合变化确认，不照搬普通动作严格同回合规则。`WC_STAGE_FINISHED` 只表示原阶段结束，分配数只表示请求的票单，不表示实付外交支持或议会结果。
 
 ## CLI 只读验收与领域命令
+
+所有基础工具均有命名 CLI 入口；`call` 保留协议兼容调用，不成为第二套执行逻辑。普通会话不公开或执行 `run_lua`，包括其 `call` 和预演路径；显式 `debug --developer` 才开放 `developer lua`，仍受原 Runtime 未决门禁约束。
+
+`debug --hotseat-seat/--hotseat-run` 启动既有双人实验控制器，使用其原生身份检查、文件锁和交接确认。CLI 额外只读观察共享 pending 文件，退出时同时核对内存和共享门禁，不删除或接管文件。检测到已有共享请求时拒绝新建该轮控制器。此适配不创建补丁、不扩展席位数量或替代原控制器规则。
 
 前台领域子命令在 `devtools/commands.py` 将参数转换为公开 MCP 工具调用，不持有另一份游戏状态或确认逻辑。`verify state` 使用同一前台客户端执行有界只读检查，不自动重启、加载、推进或解决阻塞；一次性入口独立建会话，不能继承其他进程的 pending。
 

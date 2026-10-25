@@ -1,6 +1,6 @@
 # 动作提交与确认
 
-通过公开 MCP 发出一次明确动作，并核对对应原生确认及实际状态；未知时保留原意图。
+通过 CLI 发出一次明确动作，并核对对应原生确认及实际状态；未知时保留原意图。
 
 ## Sub-features
 
@@ -9,21 +9,21 @@
 
 ## How to get to it (user POV)
 
-日常调用遵循[CLI 命令手册](../../../../docs/cli.md)。下文 MCP 工具名只表示底层入口；未封装工具用同一 debug 会话的 `tools`／`call` 调用。
+日常调用遵循[CLI 命令手册](../../../../docs/cli.md)，使用同一 debug 会话的命名命令；MCP 仅由 CLI 在内部管理。
 
 - `unit list`、`map area X Y --radius N`、`unit path ID X Y` 获取本次对象和候选。
 - `unit move ID X Y --dry-run` 预演，核实目标后明确执行 `unit move ID X Y`。
 - 其他动作的资格与原生证据按[游戏操作](../../../../docs/agent-playbook.md#动作与回读)选择对应入口。
 
-## Driving it with civ6 MCP
+## 通过 CLI 验证
 
 Preconditions:
 
 - 状态配方通过，任务允许本次动作，存在可移动单位及已核实目标；没有阻止该动作的未决请求。
 
 - **记录原意图。** 保存本次单位 ID、原坐标、行动状态、目标坐标、世界身份和回合；目标来自本次查询。
-- **提交。** 调用一次 `unit_action`，记录完整实参和原始返回，不批量排队新动作。
-- **回读。** 调用 `get_units()` 核对实际位置。仅在原请求对应确认已完成且本次位置符合预期时，标记 `action.move` 通过；部分移动和最终抵达分别记录。
+- **提交。** 调用一次 `unit move ID X Y`，记录完整实参和原始返回，不批量排队新动作。
+- **回读。** 调用 `unit list` 核对实际位置。仅在原请求对应确认已完成且本次位置符合预期时，标记 `action.move` 通过；部分移动和最终抵达分别记录。
 - **未知。** 若工具返回 `OUTCOME_UNKNOWN`，保留原请求，先只读查询；有确认需要时以完全相同意图进入原工具，仅确认已有请求。不能清门禁、换对象或改目标来重试。
 - **门禁证据。** `action.pending` 优先用隔离测试 `uv run --locked pytest -q tests/test_action_confirmation.py tests/test_pending_dispatch.py` 验证；不要为了故障注入而断开真实游戏或重复写入。未发生真实未知场景时，实机此项记 `NOT_RUN`。
 

@@ -8,7 +8,7 @@
 
 | 任务 | 入口 |
 | --- | --- |
-| 安装依赖、配置 FireTuner 或 MCP 客户端 | [安装与连接](installation.md)；[AI 安装提示词](../README.md#安装与启动) |
+| 安装依赖、配置 FireTuner 或 CLI 客户端 | [安装与连接](installation.md)；[AI 安装提示词](../README.md#安装与启动) |
 | 常用 CLI 命令、参数和会话控制 | [CLI 命令手册](cli.md) |
 | 查询、常规动作和推进回合的规则 | [游戏操作](agent-playbook.md) |
 | 议会、国家间交易、外交对话、强制选择和信息弹窗 | [特殊操作指南](agent-special-operations.md) |

@@ -1,6 +1,6 @@
 # AGENTS
 
-本项目让 AI 模型通过本机 MCP 自动玩 Civilization VI。
+本项目让 AI 模型通过本机 `civ6` CLI 自动玩 Civilization VI。MCP 是 CLI 内部通信实现。
 
 - 游戏引擎执行规则；
 - 模型负责策略；
@@ -17,9 +17,11 @@
 
 ## 调用入口
 
-日常诊断、验证、知识查询、领域测试、日志和常规游戏操作统一使用 [CLI 命令手册](docs/cli.md)。连续游戏操作使用一个持续的 `uv run --locked civ6 debug` 会话：优先命名子命令，未封装的公开工具经同一会话 `tools`／`call` 调用；不绕过 CLI 改用另一个 MCP 客户端。变更先 `--dry-run`，再按当前授权明确执行，保留原 pending 和证据。
+AI 的唯一操作入口是 [CLI](docs/cli.md)，包含游戏、知识、诊断、验证和日志。连续游戏操作使用一个持续的 `uv run --locked civ6 debug` 会话，按 `help` 发现命名命令。`call` 仅用于同会话的协议兼容诊断；普通对局使用命名命令。变更先 `--dry-run`，再按当前授权明确执行，保留原 pending 和证据。
 
-专用热座交接、未登记的定向测试及知识包维护按各自指南执行；普通 CLI 回合和 Single 存档入口不能替代热座控制器。
+客户端不注册 `civ6` MCP；CLI 自行启动内部服务。出现 CLI 错误时按原会话证据修复，不改走直接 MCP、内部 Python 或 Lua。任意 Lua 仅在用户明确授权的 `debug --developer` 诊断会话可用。
+
+既有双人热座实验通过 `debug --hotseat-seat N --hotseat-run DIR` 复用原控制器，使用 `hotseat begin/end`；普通 `turn end` 和 Single 存档入口不能替代席位交接。新地图、更多席位和补丁操作仍按各自指南验证。
 
 ## 按任务读取
 
@@ -38,7 +40,7 @@
 | 开局、续局或推进以获胜为目标的对局 | [每局策略检查清单](docs/agent-checklist.md) |
 | 查询、执行常规动作或推进回合 | [游戏操作](docs/agent-playbook.md) |
 | 开局识别文明／领袖、理解已相遇对手，或制定与调整策略 | [获胜决策](docs/agent-strategy.md) |
-| 文明／领袖能力、专属内容或通用机制不清楚 | [知识 MCP 查询](civ6_knowledge/README.md#mcp-查询) |
+| 文明／领袖能力、专属内容或通用机制不清楚 | [规则知识查询](civ6_knowledge/README.md#mcp-查询) |
 | 保存、换档、结果未知、断线或挂起 | [保存与恢复](docs/agent-recovery.md) |
 | 记录或查阅单局过程、回合验收、复盘和存档证据 | [对局资料](games/README.md) |
 

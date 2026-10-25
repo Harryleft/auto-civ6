@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from datetime import timedelta
 import json
 import os
+from pathlib import Path
 import re
 import signal
 import sys
@@ -187,9 +188,12 @@ def keep_session_on_interrupt():
 
 
 class DebugSession:
-    def __init__(self, client, evidence: Evidence, state: dict, emit: Callable[[dict], None], offline: bool):
+    def __init__(self, client, evidence: Evidence, state: dict, emit: Callable[[dict], None], offline: bool,
+                 *, developer: bool = False, shared_pending_path: Path | None = None):
         self.client, self.evidence, self.state, self.emit = client, evidence, state, emit
         self.offline = offline
+        self.developer = developer
+        self.shared_pending_path = shared_pending_path
         self.sequence = 0
         self.tools = {}
         self.identity = None
@@ -229,6 +233,18 @@ class DebugSession:
             self.identity_lost = True
         if self.identity_lost:
             raise CommandError("SESSION_CHANGED", "Original server identity was lost; do not continue game commands")
+        if self.shared_pending_path is not None:
+            # Experimental hotseat has an additional cross-seat owner on disk.
+            # Inspect it without clearing it or relabelling it as server memory.
+            try:
+                shared = json.loads(self.shared_pending_path.read_text(encoding="utf-8"))
+                if not isinstance(shared, dict) or not shared:
+                    raise ValueError("Expected a nonempty hotseat request")
+            except FileNotFoundError:
+                shared = None
+            except (OSError, ValueError) as exc:
+                raise CommandError("HOTSEAT_PENDING_UNKNOWN", f"Shared pending is unreadable: {exc}") from exc
+            value["shared_pending"] = shared
         self.state["runtime"] = value
         self.evidence.json("runtime-status", value)
         return value
@@ -236,13 +252,19 @@ class DebugSession:
     async def start(self):
         tools = await self.client.list_tools()
         self.evidence.json("debug-tools", tools.model_dump(mode="json"))
-        self.tools = {tool.name: tool for tool in tools.tools}
+        self.tools = {tool.name: tool for tool in tools.tools if self.developer or tool.name != "run_lua"}
         if "get_runtime_status" not in self.tools:
             raise CommandError("RUNTIME_STATUS_MISSING", "Reload the current server code before debugging")
         value = await self.runtime()
         self.event("session_ready", runtime=value, offline=self.offline, help="help [TOPIC]")
 
     async def call(self, tool: str, arguments: dict, *, dry_run: bool = False):
+        if tool == "run_lua" and not self.developer:
+            raise CommandError("DEVELOPER_MODE_REQUIRED", "Arbitrary Lua is unavailable in gameplay sessions",
+                               hint="Use named gameplay commands. Only an explicitly authorized diagnostic session starts with civ6 debug --developer.")
+        if tool in {"begin_hotseat_turn", "end_hotseat_turn", "hotseat_actions"} and tool not in self.tools:
+            raise CommandError("HOTSEAT_MODE_REQUIRED", "Native hotseat commands require the dedicated controller",
+                               hint="Use the authorized existing run with civ6 debug --hotseat-seat N --hotseat-run DIR; normal turn end cannot hand off a human seat.")
         if tool not in self.tools:
             raise CommandError("UNKNOWN_TOOL", f"Unknown tool: {tool}; use tools")
         # Validate before sending even for normal calls, so invalid arguments have
@@ -270,7 +292,10 @@ class DebugSession:
             raise CommandError("OFFLINE_ONLY", f"{tool} is unavailable in --offline sessions")
         if (self.transport_unknown or self.identity_lost) and not readonly:
             raise CommandError("TRANSPORT_UNRESOLVED", "An RPC outcome/identity is unknown; only read-only inspection is allowed")
-        await self.runtime()
+        runtime = await self.runtime()
+        if tool == "get_game_snapshot" and runtime.get("shared_pending"):
+            raise CommandError("VERIFY_PENDING", "A shared hotseat request still owns this run",
+                               hint="Inspect pending and confirm its original intent; a snapshot cannot retire or bypass the shared request.")
         request = self.event("tool_started", tool=tool, arguments=arguments)
         self.state["tool_calls"] += 1
         try:
@@ -300,7 +325,7 @@ class DebugSession:
     async def close_request(self, abandon: bool, eof: bool = False, *, dry_run: bool = False) -> bool:
         try:
             runtime = await self.runtime()
-            unresolved = runtime["has_pending"] or bool(self.transport_unknown)
+            unresolved = runtime["has_pending"] or bool(runtime.get("shared_pending")) or bool(self.transport_unknown)
         except Exception as exc:
             unresolved = True
             self.state["close_status_error"] = f"{type(exc).__name__}: {exc}"
@@ -397,11 +422,12 @@ class DebugSession:
 
 
 async def serve(evidence: Evidence, state: dict, *, offline: bool, timeout: float,
-                source: TextIO | None, emit: Callable[[dict], None], server=None, driver=None) -> str:
+                source: TextIO | None, emit: Callable[[dict], None], server=None, driver=None,
+                developer: bool = False, shared_pending_path: Path | None = None) -> str:
     from mcp import ClientSession
     from mcp.client.stdio import StdioServerParameters, stdio_client
 
-    state.update(tool_calls=0, mcp_session_closed=False, offline=offline)
+    state.update(tool_calls=0, mcp_session_closed=False, offline=offline, developer=developer)
     params = server or StdioServerParameters(command=sys.executable,
         args=["-X", "utf8", "-B", "-m", "civ_mcp"], cwd=str(evidence.project),
         env=dict(os.environ, PYTHONUTF8="1", PYTHONDONTWRITEBYTECODE="1",
@@ -417,7 +443,8 @@ async def serve(evidence: Evidence, state: dict, *, offline: bool, timeout: floa
                 async with ClientSession(ObservedRead(read, closed), write, read_timeout_seconds=timedelta(seconds=timeout)) as client:
                     initialized = await client.initialize()
                     evidence.json("debug-initialize", initialized.model_dump(mode="json"))
-                    debug = DebugSession(client, evidence, state, emit, offline)
+                    debug = DebugSession(client, evidence, state, emit, offline,
+                                         developer=developer, shared_pending_path=shared_pending_path)
                     await debug.start()
                     if driver is not None:
                         status = await driver(debug)
@@ -439,8 +466,34 @@ async def serve(evidence: Evidence, state: dict, *, offline: bool, timeout: floa
     return "BLOCKED" if state["unresolved_on_exit"] else "PASS"
 
 
-def run_debug(evidence: Evidence, state: dict, *, offline: bool, timeout: float) -> str:
+def hotseat_server(project: Path, seat: int, run: Path):
+    """Reuse the existing experiment; never replace it with single-player end_turn."""
+    from mcp import StdioServerParameters
+
+    run = run.expanduser().resolve()
+    if not (run / "evidence/patch-manifest.json").is_file():
+        raise CommandError("HOTSEAT_MANIFEST_REQUIRED", "Hotseat requires its existing verified experimental run",
+                           hint="Choose the authorized two-human-seat run containing evidence/patch-manifest.json; this command does not create or apply patches.")
+    pending = run / "evidence/shared-pending.json"
+    if pending.exists():
+        raise CommandError("HOTSEAT_PENDING_UNKNOWN", "An existing hotseat request still owns this run",
+                           hint="Retain its original CLI/controller and confirm the original request; a new process cannot take ownership.")
+    return StdioServerParameters(command=sys.executable,
+        args=["-X", "utf8", "-B", str(project / "scripts/hotseat_agent.py"), "--seat", str(seat), "--run", str(run)],
+        cwd=str(project), env=dict(os.environ, PYTHONUTF8="1", PYTHONDONTWRITEBYTECODE="1",
+                                  CIV6_KNOWLEDGE_DIR=str(project / "civ6_knowledge"))), pending
+
+
+def run_debug(evidence: Evidence, state: dict, *, offline: bool, timeout: float,
+              developer: bool = False, hotseat_seat: int | None = None, hotseat_run: Path | None = None) -> str:
     check_interpreter(evidence.project)
+    server, shared_pending = None, None
+    if (hotseat_seat is None) != (hotseat_run is None):
+        raise CommandError("INVALID_ARGUMENT", "--hotseat-seat and --hotseat-run must be supplied together")
+    if hotseat_seat is not None:
+        if offline or developer:
+            raise CommandError("INVALID_ARGUMENT", "Hotseat cannot be combined with --offline or --developer")
+        server, shared_pending = hotseat_server(evidence.project, hotseat_seat, hotseat_run)
     evidence.summary.update(mode="offline" if offline else "debug", game_verification="not_run" if offline else "unverified",
                             event="session_closed")
     evidence.save()
@@ -449,7 +502,11 @@ def run_debug(evidence: Evidence, state: dict, *, offline: bool, timeout: float)
         print(json.dumps(value, ensure_ascii=False, allow_nan=False), flush=True)
 
     with keep_session_on_interrupt():
-        return run_session(serve(evidence, state, offline=offline, timeout=timeout, source=sys.stdin, emit=emit))
+        options = {"developer": developer, "shared_pending_path": shared_pending}
+        if server is not None:
+            options["server"] = server
+        return run_session(serve(evidence, state, offline=offline, timeout=timeout, source=sys.stdin, emit=emit,
+                                 **options))
 
 
 def run_session(operation):

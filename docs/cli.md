@@ -1,12 +1,12 @@
 # CLI 命令手册
 
-本页是项目日常调用的唯一命令目录，涵盖顶层命令、会话控制及 101 个领域子命令。`civ6` 提供离线诊断、验证、测试、日志查询，以及前台 `debug` 会话。`doctor`、`verify knowledge`、`test` 和 `logs` 不连接 FireTuner；`verify state` 明确访问当前真实游戏，`debug` 在收到查询或工具调用时访问游戏。`civ-mcp` 仍是游戏 MCP 服务入口。
+本页是 AI 唯一操作入口的命令目录，涵盖顶层命令、会话控制及 142 个命名子命令。90 个基础 MCP 工具均有命名入口，其中任意 Lua 只在显式开发模式开放；另有 3 个既有双人热座实验命令。`doctor`、`verify knowledge`、`test` 和 `logs` 不连接 FireTuner；`verify state` 明确访问当前真实游戏，`debug` 在收到查询或动作时访问游戏。`civ-mcp` 保留为 CLI 内部服务，客户端不直接注册。
 
 ## 安装与调用
 
 在源码项目根目录运行 `uv sync --locked`，然后使用 `uv run --locked civ6 ...`。也可使用同一解释器运行 `python -m civ_mcp.cli ...`。CLI 从当前目录向上查找项目，再尝试安装它的源码目录；使用 `--project PATH` 明确指定另一检出。doctor、知识验证及领域测试会拒绝加载了另一检出代码的解释器。
 
-日常操作按以下路径执行：一次性诊断／验证／日志走顶层命令，连续游戏操作先启动一个 `civ6 debug` 并持续使用其 stdin。已有游戏控制会话时，在原会话内执行命令；不要为每个动作重启 CLI，也不要另开内置 MCP 并发控制。未封装的公开工具仍用同一会话的 `tools NAME` 和 `call TOOL JSON_OBJECT` 调用。CLI 缺依赖或报错时按错误建议修复，不绕过 CLI 直接调用内部函数或 Lua。
+日常操作按以下路径执行：一次性诊断／验证／日志走顶层命令，连续游戏操作先启动一个 `civ6 debug` 并持续使用其 stdin。已有游戏控制会话时，在原会话内执行命名命令；不要为每个动作重启 CLI。`tools NAME` 和 `call TOOL JSON_OBJECT` 只作为同会话协议发现与兼容诊断。CLI 缺依赖或报错时按错误建议修复，不另开 MCP 客户端或直接调用内部函数。
 
 | 公共参数 | 说明 |
 | --- | --- |
@@ -41,7 +41,7 @@ uv run --locked civ6 logs turns --relay .scratch/example-relay
 | `doctor` | 检查 Python、实际代码目录、运行依赖、开发依赖、知识包完整性、真实 stdio MCP 初始化及工具发现；不调用游戏工具。缺少 pytest 或 lupa 记 `NOT_RUN`，不阻止知识路径。 |
 | `verify knowledge` | 使用当前知识包验证搜索「写作」及 `TECH_WRITING` 的摘要、规则、证据读取；比较 CLI 与真实 MCP 返回，保留静态适用范围，核对知识文件未变。 |
 | `verify state` | 对已运行游戏执行有界只读验收，核对世界身份、玩家／回合、实体数量与范围、同一 MCP 进程和无未决上下文；不启动、加载或推进游戏。 |
-| `debug [--offline] [--timeout SECONDS]` | 启动一个前台 MCP 会话；从 stdin 接收会话命令，持续保留 pending。`--offline` 拒绝真实游戏调用。 |
+| `debug [--offline] [--timeout SECONDS]` | 启动一个前台 CLI 会话及其内部 MCP；从 stdin 接收命令，持续保留 pending。`--offline` 拒绝真实游戏调用。开发／热座选项见下文。 |
 | `test --list` | 显示领域与测试文件，不运行测试。 |
 | `test <领域>` | 只执行显式登记的 `tests/` 文件，pytest 原始退出码保留在 data.pytest_exit_code，CLI 自身使用下文统一退出码。`--collect-only` 只验证收集，`data.collection_only=true`，不代表测试用例已通过。 |
 | `logs list` | 列出动作日志文件，按修改时间从新到旧排序；目录尚不存在时返回空列表。 |
@@ -106,7 +106,7 @@ uv run --locked civ6 logs list | jq '.data.sessions[].session'
 uv run --locked civ6 debug --offline <<'COMMANDS'
 help call
 tools unit_action
-call --dry-run unit_action {"unit_id":0,"action":"move","target_x":22,"target_y":9}
+unit move 0 22 9 --dry-run
 pending
 quit
 COMMANDS
@@ -228,7 +228,7 @@ COMMANDS
 | `congress show` | `get_world_congress` | 只读 |
 | `notifications show` | `get_notifications` | 只读 |
 
-议会查询不打开投票、不提交票单；通知查询不关闭弹窗或代答外交。未封装的票单、交易、宗教等公开工具按下节 `tools NAME` 与 `call` 执行，保持同一会话。机制及确认条件仍见[游戏操作](agent-playbook.md)、[特殊操作](agent-special-operations.md)和[保存恢复](agent-recovery.md)。
+议会查询不打开投票、不提交票单；通知查询不关闭弹窗或代答外交。票单、交易、宗教与恢复均使用后文命名命令，保持同一会话。机制及确认条件仍见[游戏操作](agent-playbook.md)、[特殊操作](agent-special-operations.md)和[保存恢复](agent-recovery.md)。
 
 ### 科技、市政和新增领域命令
 
@@ -269,6 +269,44 @@ civic search --filter 生产力 --filter 单位 --match any --limit 10
 
 历史、地图、全球资源、小道消息等列表支持 `--limit 1..200 --offset N`。原生字段不可读取时明确返回 partial／unknown 和 null，不补成零或空列表；CLI 会将显式 JSON 查询错误标记为错误，但仍保留原始完整 JSON。总督和城邦继续使用前述 `governor`、`city-state` 命令。
 
+### 外交、生命周期与完整命名入口
+
+以下命令均在当前 `civ6 debug` 的 stdin 输入。变更先追加 `--dry-run`，确认后显式执行；预演仍只检查 schema。参数详情通过 `COMMAND --help` 逐层发现，ID 和候选均来自当前查询。
+
+| 命令 | 用途 |
+| --- | --- |
+| `session status`、`game snapshot` | 当前服务内存身份／未决事实；结构化当前玩家快照 |
+| `game launch`、`game stop`、`game recover SAVE_NAME` | 显式启动、停止；按已确认检查点完整重启恢复 |
+| `save load-index INDEX`、`save menu-load SAVE_NAME` | 按本次列表索引或明确文件名从原生菜单加载 |
+| `map settle UNIT_ID`、`map settle-global`、`map strategic` | 当前开拓者、全局已知选址及战略地图 |
+| `city wonder CITY_ID WONDER_TYPE`、`city tiles CITY_ID` | 奇观候选与可购买地块 |
+| `city buy-tile CITY_ID X Y`、`city decision CITY_ID ACTION` | 金币买地；明确保留、拒绝、夷平或解放待决城市 |
+| `great-person advisor UNIT_INDEX` | 当前伟人单位的原生激活位置建议 |
+| `era choose INDEX` | 选择 `era dedications` 返回的当前索引 |
+| `religion spread`、`religion found TYPE FOLLOWER_BELIEF FOUNDER_BELIEF` | 可见城市宗教分布；按已选原生信条创立宗教 |
+| `diplomacy list`、`diplomacy pending` | 已相遇文明关系、当前外交语句及合法回应 |
+| `diplomacy respond PLAYER_ID RESPONSE`、`diplomacy close PLAYER_ID` | 明确回应当前选项；取消已核验参与者的会话 |
+| `diplomacy action PLAYER_ID ACTION`、`diplomacy peace PLAYER_ID` | 代表团、友谊、谴责、宣战等原生行动；提议和平 |
+| `diplomacy alliance PLAYER_ID --type RESEARCH` | 按当前资格选择联盟类型 |
+| `trade pending`、`trade options PLAYER_ID` | 来约条款与 fingerprint；当前可交易内容／关系资格 |
+| `trade respond PLAYER_ID --accept` 或 `--reject` | 明确接受／拒绝当前已核验条款；两选一必填 |
+| `trade negotiate PLAYER_ID --fingerprint VALUE [--our-gold N] [--their-gpt N] [--mode inspect\|equalize]` | 编辑已有金币条款并原生试价／询问反提案，不成交 |
+| `trade propose PLAYER_ID [--offer-gold N] [--request-gold-per-turn N] [--mode test\|send]` | 显式交易预览或发送；全部物品选项见 `trade propose --help` |
+| `trade routes`、`trade destinations UNIT_ID` | 商路容量、活动路线、指定商人的合法目的地 |
+| `spy list`、`spy action UNIT_ID ACTION X Y` | 当前间谍；明确任务、目标或逃离路线 |
+| `congress open`、`congress votes 'JSON_ARRAY'` | 显式进入已核实投票阶段；完整票单登记／提交 |
+| `popup dismiss` | 关闭已核实的信息弹窗或结束后残留视图，不代答外交 |
+
+`trade propose` 的 `--offer/request-open-borders` 是明确布尔开关，金币／GPT／外交支持及资源各有独立选项。试价可能进入原生会话，仍按变更预演并确认；`--mode test` 与 `--dry-run` 含义不同。JSON 票单用单引号包住完整数组，例如 `congress votes '[{"hash":42,"option":1,"target":0,"votes":1}]' --dry-run`；标识和选项必须替换为本次查询事实。
+
+### 开发与热座模式
+
+普通会话不在 `tools` 中公开 `run_lua`，通过 `call` 或 `developer lua` 也会在发送前拒绝。用户明确授权诊断后，可在无未决状态下正常关闭原会话，再启动 `civ6 debug --developer`；此时 `developer lua "print(...)" --context gamecore --dry-run` 预演任意 Lua，正式执行仍受 Runtime 门禁保护。开发模式不自动清理未知请求，也不允许从另一个进程接管它。
+
+既有双人热座实验可使用 `civ6 debug --hotseat-seat 0 --hotseat-run DIR`，其中 DIR 是已有、已核验补丁清单的授权轮次。该模式启动原专用控制器，`hotseat begin` 确认本席位 PlayerChange，`hotseat end` 确认原生交接，`hotseat actions 'JSON_ARRAY'` 执行最多 20 个已明确的独立动作。每条仍支持 `--dry-run`；普通 `turn end`、Single 存档操作及任意 Lua 在该控制器不可用。
+
+热座不能与 `--offline`／`--developer` 合用；两个热座选项必须成对。现有共享 pending 会阻止新建该轮会话；活动会话的 `pending` 同时展示纯内存事实与独立的 `shared_pending`。正常退出会同时检查两者，保留原文件，不把空内存当作可以接管。此入口不创建补丁、不启动对局，也没有扩展到任意地图或更多席位；其真实交接验收仍按专用实验范围执行。
+
 ### 最小调用顺序
 
 ```text
@@ -292,7 +330,7 @@ quit
 
 ## 前台 debug 会话
 
-运行 `uv run --locked civ6 debug` 后，整个前台会话只启动一个 MCP 子进程、初始化一次、使用同一个 ClientSession。启动只发现工具并读取服务内存，不自动查询、启动或加载游戏。退出不调用 `kill_game`。该命令不会接管已有 Codex MCP 的进程或未决请求；实机调试前须明确交接唯一控制通道，不能同时由两者控制游戏。
+运行 `uv run --locked civ6 debug` 后，整个前台会话只启动一个 MCP 子进程、初始化一次、使用同一个 ClientSession。启动只发现工具并读取服务内存，不自动查询、启动或加载游戏。退出不调用 `kill_game`。该命令不会接管旧客户端服务的进程或未决请求；旧注册移除后仍须先确认其请求并正常结束原所有者。
 
 会话控制命令如下；它们不是独立 shell 子命令：
 
@@ -303,7 +341,7 @@ quit
 | `pending` | 读取本 MCP 的内存 pending 与本地 transport_unknown。 |
 | `state overview`、`state units`、`state cities`、`state turn`、`state snapshot` | 概览、单位、城市、回合与结构化快照。 |
 | `verify state` | 在当前会话执行自动实机只读验收。 |
-| `call [--dry-run] TOOL [JSON_OBJECT]` | 未封装工具的统一调用入口；省略 JSON 等同 {}。 |
+| `call [--dry-run] TOOL [JSON_OBJECT]` | 同会话协议兼容入口；普通对局使用命名命令，省略 JSON 等同 {}。 |
 | `quit [--abandon] [--dry-run]` | 正常退出、预览退出或显式放弃上下文。 |
 
 

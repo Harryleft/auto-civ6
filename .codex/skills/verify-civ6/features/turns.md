@@ -9,12 +9,12 @@
 
 ## How to get to it (user POV)
 
-日常调用遵循[CLI 命令手册](../../../../docs/cli.md)。下文 MCP 工具名只表示底层入口；未封装工具用同一 debug 会话的 `tools`／`call` 调用。
+日常调用遵循[CLI 命令手册](../../../../docs/cli.md)，使用同一 debug 会话的命名命令；MCP 仅由 CLI 在内部管理。
 
 - 同一 CLI 会话：`state overview` → `turn end --dry-run` → 明确执行 `turn end` → 按返回用 `turn status` 或具体领域命令。
 - 仅用于指定原始基准专项验收的现有驱动（不是日常回合入口）：`uv run --locked python scripts/integration_turns.py --save benchmark_turn_1 --turns 1 --timeout 900`。
 
-## Driving it with civ6 MCP
+## 通过 CLI 验证
 
 Preconditions:
 
@@ -22,9 +22,9 @@ Preconditions:
 - 只有任务指定 `benchmark_turn_1` 且明确允许替换当前现场时，才使用集成驱动。该驱动会加载原件，不能用于保留当前轮次的续测。
 
 - **起点。** 保存概览、世界身份和起始回合 T，确认任务要求的起点。
-- **提交。** 调用 `end_turn()` 一次；返回具体阻塞时按[特殊操作](../../../../docs/agent-special-operations.md)读取候选并作出任务授权内的明确选择。
-- **等待。** 使用 `get_turn_status()` 保存阶段、就绪及累计等待。原推进未决时再次 `end_turn()` 只确认原请求，不发起新的回合意图。
-- **确认。** 工具确认原世界中的后续本地可行动回合，再调用 `get_game_overview()` 回读；记录净推进和实际回合。提前终局另记实际结果，未达到约定推进量不标原目标通过。
+- **提交。** 调用 `turn end` 一次；返回具体阻塞时按[特殊操作](../../../../docs/agent-special-operations.md)读取候选并作出任务授权内的明确选择。
+- **等待。** 使用 `turn status` 保存阶段、就绪及累计等待。原推进未决时再次 `turn end` 只确认原请求，不发起新的回合意图。
+- **确认。** 工具确认原世界中的后续本地可行动回合，再调用 `state overview` 回读；记录净推进和实际回合。提前终局另记实际结果，未达到约定推进量不标原目标通过。
 - **证据。** 保留每次调用、阶段变化和最终概览。离线变更检查可选 `tests/test_end_turn.py`、`tests/test_turn_status.py`；不替代本次实机证据。
 
 ## Gotchas

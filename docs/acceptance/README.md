@@ -4,6 +4,7 @@
 
 | 主题 | 记录 |
 | --- | --- |
+| CLI 唯一入口 | [取消直接注册、完整命名覆盖、开发边界及热座适配](2026-10-25-cli-only.md)、[JSON 明细](2026-10-25-cli-only.json) |
 | 状态变更生命周期 | [全量覆盖与双轴审查](2026-10-19-mutation-lifecycle.md)、[使者试点](2026-10-19-envoy-lifecycle.md) |
 | 状态归属与确认边界 | [架构深化](2026-10-17-architecture-deepening.md)、[回合世界身份](2026-10-18-end-turn-world-scope.md)、[来约零提交与失效锁存](2026-10-19-incoming-p2-boundaries.md) |
 | 知识与决策输入 | [版本知识](2026-10-17-civ6-knowledge.md)、[主题扩展](2026-10-17-knowledge-expansion.md)、[知识 MCP](2026-10-18-knowledge-mcp.md)、[文明特性](2026-10-18-civilization-knowledge.md)、[获胜策略](2026-10-18-win-strategy.md) |

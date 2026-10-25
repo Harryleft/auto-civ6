@@ -18,7 +18,7 @@ async def verify_session(debug, *, expected_turn=None, expected_civilization=Non
               "status": "BLOCKED", "scope": "live_readonly", "errors": []}
     try:
         runtime = await debug.runtime()
-        if runtime["has_pending"] or debug.transport_unknown:
+        if runtime["has_pending"] or runtime.get("shared_pending") or debug.transport_unknown:
             raise CommandError("VERIFY_PENDING", "State verification requires no unresolved requests in this MCP session",
                 hint="Use pending and the original confirmation tool; verification will not confirm or clear the request.")
         # The existing overview endpoint encodes caught exceptions as "Error:"
@@ -52,7 +52,7 @@ async def verify_session(debug, *, expected_turn=None, expected_civilization=Non
                 hint="Check the current game and expected values. Load only the task's verified checkpoint through an explicitly authorized lifecycle command.",
                 details={"observed": identity, "expected_turn": expected_turn, "expected_civilization": expected_civilization})
         after = await debug.runtime()
-        if after["has_pending"] or debug.transport_unknown:
+        if after["has_pending"] or after.get("shared_pending") or debug.transport_unknown:
             raise CommandError("VERIFY_PENDING", "Unresolved context exists after read-only verification",
                 hint="Retain the session and inspect pending; read-only verification cannot release it.")
         result["status"] = "PASS"
