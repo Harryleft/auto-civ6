@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "scope": "unit CLI and native formation lifecycle",
+  "mode": "offline",
+  "command_counts": {
+    "all_before": 76,
+    "all_after": 101,
+    "unit_before": 14,
+    "unit_after": 39
+  },
+  "mcp_tools_after": 90,
+  "live_game_mutations": "not_run",
+  "live_game_queries": "not_run",
+  "offline_tests": [
+    {
+      "files": [
+        "test_unit_formations.py",
+        "test_unit_transforms.py",
+        "test_upgrade_replacement.py",
+        "test_unit_tasks.py",
+        "test_unit_readiness.py",
+        "test_pending_dispatch.py",
+        "test_action_scope.py"
+      ],
+      "passed": 454,
+      "seconds": 5.28,
+      "evidence": ".scratch/unit-cli-20261025/unit-tests-final.txt"
+    },
+    {
+      "domain": "civ6 test debug",
+      "passed": 287,
+      "seconds": 33.0,
+      "evidence": ".scratch/unit-cli-20261025/debug-tests-v2/"
+    }
+  ],
+  "knowledge": "PASS",
+  "previews": 9,
+  "preview_game_calls": 0,
+  "preview_connected": false,
+  "fingerprints": {
+    ".scratch/unit-cli-20261025/debug-tests-v2/summary.json": "73595f895278e3b65268a2517170382c7c1511bfa19af1c283003ce69b49695d",
+    ".scratch/unit-cli-20261025/knowledge/summary.json": "cfbbb718d1f0a37e7a144b470eabab3cf7ebe410205ae4c27a77ef10369d32e9",
+    ".scratch/unit-cli-20261025/offline-previews/summary.json": "2117a7877698da386ec0db3c38271c3936addecb6e939ca26856128e4dadcd3d"
+  },
+  "limitations": [
+    "Actual native formation events and survivor IDs remain unverified in a live game",
+    "New third replacement unit ID cannot confirm a merge; unknown outcome remains pending",
+    "CLI dry-run validates schema only; the native engine decides current eligibility"
+  ],
+  "unique_tests_passed": 741
+}

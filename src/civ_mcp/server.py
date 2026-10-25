@@ -343,6 +343,37 @@ async def get_units(ctx: Context) -> str:
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
+async def get_unit_formations(ctx: Context, unit_id: int) -> str:
+    """Read one owned unit's escort/military formation and native eligible targets.
+
+    Returns JSON link/unlink/corps/army eligibility and exact native target IDs.
+    No selection, movement, formation changes or pending confirmation occurs.
+    Unknown APIs return null rather than ineligible/empty. Query fresh targets
+    before using set_unit_formation; the engine decides military prerequisites.
+    """
+    async def run():
+        return json.dumps(await _get_game(ctx).get_unit_formations(unit_id), ensure_ascii=False)
+    return await _logged(ctx, "get_unit_formations", {"unit_id": unit_id}, run)
+
+
+@mcp.tool()
+async def set_unit_formation(ctx: Context, unit_id: int, action: str,
+                             target_unit_id: Optional[int] = None) -> str:
+    """Explicitly link/unlink escorts or form a corps/army through native commands.
+
+    action: link, unlink, corps, army. link/corps/army require a distinct owned
+    target_unit_id from get_unit_formations. unlink accepts no target. Escort
+    linking preserves units; military merging consumes one unit. Native rules
+    decide availability, type, formation level, distance and civic requirements.
+    Submits once; confirms exact native events plus resulting unit state. Lost
+    responses remain pending; repeat the same complete intent to confirm only.
+    """
+    params = {"unit_id": unit_id, "action": action, "target_unit_id": target_unit_id}
+    return await _logged(ctx, "set_unit_formation", params,
+                         lambda: _get_game(ctx).change_unit_formation(**params))
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
 async def get_spies(ctx: Context) -> str:
     """List all your spy units with position, rank, city, and available missions.
 

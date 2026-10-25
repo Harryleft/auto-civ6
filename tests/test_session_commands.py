@@ -52,7 +52,11 @@ def test_nested_help_is_one_level_and_has_no_call():
     doc = help_request.value.document
     assert [child['name'] for child in doc['subcommands']] == [
         'list','move','action','attack','skip','fortify','heal','improve','skip-remaining',
-        'promotions','promote','upgrade','path','tasks']
+        'promotions','promote','upgrade','path','tasks',
+        'cancel-move','pillage','found-city','repair','remove-improvement','remove-feature',
+        'build-route','automate','alert','sleep','delete','activate','sacrifice-charges',
+        'spread-religion','launch-inquisition','condemn-heretic','remove-heresy',
+        'trade-route','teleport','religious-attack','formations','link','unlink','corps','army']
     assert '--dry-run' not in doc['usage']
     with pytest.raises(HelpRequested) as help_request:
         parse_command('unit move --help')

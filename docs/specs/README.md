@@ -4,6 +4,7 @@
 
 | 主题 | 规格／审计 | 工作项 | 验收 |
 | --- | --- | --- | --- |
+| 单位 CLI 与原生编队 | [实现与边界](2026-10-25-unit-cli.md) | 常用单位命令、护卫编队及军团／集团军 | [离线 JSON 验证](2026-10-25-unit-cli-validation.json)；实机未运行 |
 | CLI 领域能力补齐 | [能力矩阵与阶段](2026-10-25-cli-capabilities/README.md) | 四阶段完成，新增静态筛选与原生只读报告 | [T16 只读验收](../../games/2026-10-25-cli-capabilities/runs/20261025-090147/README.md) |
 | 宗教防御原生接口修复 | [规格与四票](2026-10-20-religion-native-fixes/spec.md) | Q01／M01／C01／P01均resolved | [原局T139–144实机验收](../../games/2026-10-19-gold/runs/2026-10-19-first/religion-native-validation-2026-10-20/acceptance.md) |
 | 宗教防御工具链 | [规格](2026-10-20-religion-defense/spec.md) | [工作项](2026-10-20-religion-defense/map.md) | [离线验收与审查](../acceptance/2026-10-20-religion-defense.md) |

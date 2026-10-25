@@ -1625,7 +1625,12 @@ class TestMcpProtocol:
                     assert initialization.serverInfo.name == "Civilization VI"
                     tools = (await session.list_tools()).tools
                     names = {tool.name for tool in tools}
-                    assert len(names) == 86
+                    assert len(names) == 90
+                    assert {"search_research", "get_public_report", "get_unit_formations", "set_unit_formation"} <= names
+                    formations = next(tool for tool in tools if tool.name == "get_unit_formations")
+                    assert formations.annotations.readOnlyHint is True
+                    formation_schema = next(tool.inputSchema for tool in tools if tool.name == "set_unit_formation")
+                    assert formation_schema["required"] == ["unit_id", "action"]
                     runtime_tool = next(tool for tool in tools if tool.name == "get_runtime_status")
                     assert runtime_tool.annotations.readOnlyHint is True
                     assert runtime_tool.annotations.idempotentHint is True

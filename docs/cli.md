@@ -1,6 +1,6 @@
 # CLI 命令手册
 
-本页是项目日常调用的唯一命令目录，涵盖顶层命令、会话控制及 76 个领域子命令。`civ6` 提供离线诊断、验证、测试、日志查询，以及前台 `debug` 会话。`doctor`、`verify knowledge`、`test` 和 `logs` 不连接 FireTuner；`verify state` 明确访问当前真实游戏，`debug` 在收到查询或工具调用时访问游戏。`civ-mcp` 仍是游戏 MCP 服务入口。
+本页是项目日常调用的唯一命令目录，涵盖顶层命令、会话控制及 101 个领域子命令。`civ6` 提供离线诊断、验证、测试、日志查询，以及前台 `debug` 会话。`doctor`、`verify knowledge`、`test` 和 `logs` 不连接 FireTuner；`verify state` 明确访问当前真实游戏，`debug` 在收到查询或工具调用时访问游戏。`civ-mcp` 仍是游戏 MCP 服务入口。
 
 ## 安装与调用
 
@@ -146,8 +146,25 @@ COMMANDS
 | `unit upgrade ID` | `upgrade_unit` | 变更 |
 | `unit path ID X Y` | `get_pathing_estimate` | 只读 |
 | `unit tasks` | `get_builder_tasks` | 只读 |
+| `unit alert ID` | `unit_action`，action=alert | 变更：警戒，敌人进入视野时自动唤醒 |
+| `unit sleep ID` | `unit_action`，action=sleep | 变更：休眠 |
+| `unit delete ID` | `unit_action`，action=delete | 变更：永久解散单位 |
+| `unit cancel-move ID` | `unit_action`，action=cancel_move | 变更：取消非商路移动队列 |
+| `unit pillage ID` | `unit_action`，action=pillage | 变更：掠夺当前地块一层设施 |
+| `unit found-city ID` | `unit_action`，action=found_city | 变更：建城，消耗开拓者 |
+| `unit formations ID` | `get_unit_formations` | 只读：当前护卫／军事编制及候选目标 |
+| `unit link ID TARGET_ID` | `set_unit_formation`，action=link | 变更：组成护卫编队，保留两个单位 |
+| `unit unlink ID` | `set_unit_formation`，action=unlink | 变更：解除护卫编队 |
+| `unit corps ID TARGET_ID` | `set_unit_formation`，action=corps | 变更：合并军团／舰队，消耗一个单位 |
+| `unit army ID TARGET_ID` | `set_unit_formation`，action=army | 变更：合并集团军／无敌舰队，消耗一个单位 |
 
-`ID` 是本次查询返回的原生单位 ID；坐标、晋升和改良类型取自当前事实。升级消耗金币／资源及行动力；`skip-remaining` 只处理当前就绪单位，保留既有站立指令。其余动作可用 `unit action`，动作名称与条件通过 `tools unit_action` 发现。
+`ID` 是本次查询返回的完整原生单位 ID；坐标、晋升和改良类型取自当前事实。`heal` 是驻扎直至恢复、满血自动唤醒；`fortify` 是驻扎防御。`upgrade` 更换单位兵种，消耗原生要求的金币、资源及行动力；`corps`／`army` 合并军事编制，目标 ID 来自刚读取的 `unit formations ID`。军团资格由引擎检查兵种、当前编制、位置和市政等条件，不按经验等级相同推断；不把“两支同级单位”当作所有合并的通用规则。护卫编队与军事合并是两种不同操作。
+
+其他已有动作也有命名入口：`unit repair/remove-improvement/remove-feature/build-route/automate ID`、`unit activate/sacrifice-charges/spread-religion/launch-inquisition/condemn-heretic/remove-heresy ID`；带目标坐标的入口为 `unit trade-route/teleport/religious-attack ID X Y`。斜线表示分别可用的子命令，不能原样输入。完整参数用 `unit COMMAND --help` 查询；原有 `unit action` 保留。
+
+所有变更支持 `--dry-run`，只核对 schema，不验证当前资源和目标资格。`delete` 永久删除单位，`corps`／`army` 会消耗一个原单位，执行前先预演并读取当前状态。`skip-remaining` 只处理当前就绪单位，保留既有站立指令。编队／合并结果未知时，保留同一会话与完整参数，通过原命令确认；不能再次选择别的单位绕过门禁。只读 `unit formations` 不提交或退役请求。合并后使用回执给出的存活单位 ID，不假设发起单位一定保留。
+
+本轮编队能力已完成隔离原生 Lua／MCP 与离线 CLI 验证，未在真实对局执行合并；实际原生事件顺序、解锁与合并结果仍需具备条件的受信存档验收。实现与证据见 [单位 CLI 说明](specs/2026-10-25-unit-cli.md)。
 
 ### 城市
 

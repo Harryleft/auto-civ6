@@ -810,6 +810,47 @@ class GameState:
         )
         return await self._submit_action(pending, scope, transforms.build_delete(unit_index, token))
 
+    async def get_unit_formations(self, unit_id: int) -> dict:
+        from civ_mcp.lua import unit_formations
+        try:
+            source = unit_formations.build_options(unit_id)
+        except ValueError as error:
+            return {"status": "error", "data": None, "error": str(error)}
+        try:
+            return unit_formations.parse_options(await self.conn.execute_write(source))
+        except (LuaError, OSError, TimeoutError, ValueError) as error:
+            return {"status": "unknown", "data": None, "error": str(error)}
+
+    @_guard_pending_mutation
+    async def change_unit_formation(self, unit_id: int, action: str, target_unit_id: int | None = None) -> str:
+        from civ_mcp.lua import unit_formations
+        entity, intent = ("unit", unit_id), (action, target_unit_id)
+        if self._actions.matches("unit_formation", entity, intent=intent):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        token = uuid.uuid4().hex
+        try:
+            source = unit_formations.build_submit(unit_id, action, target_unit_id, token)
+            query = unit_formations.build_confirmation(unit_id, action, target_unit_id, token)
+        except ValueError as error:
+            return f"Error: INVALID_FORMATION_ARGUMENT|{error}"
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        pending = _PendingAction(
+            "unit_formation", entity, query, context="write", identity=scope.identity,
+            turn=scope.turn, owner=scope.owner, intent=intent,
+            evidence=_ActionEvidence(
+                tool="set_unit_formation", entrypoint="change_unit_formation",
+                accepted=("UNIT_FORMATION_REQUESTED|",), refused="ERR:UNIT_FORMATION_REFUSED|",
+                confirm=lambda rows: unit_formations.parse_confirmation(rows, unit_id, action, token),
+                guidance="Repeat set_unit_formation with the original actor, action and target to confirm only. ",
+            ),
+        )
+        return await self._submit_action(pending, scope, source)
+
     async def _change_unit_tile(self, unit_id: int, kind: str, entrypoint: str, improvement: str = "") -> str:
         from civ_mcp.lua import tile_actions
         entity, intent = ("unit", unit_id), (kind, improvement)

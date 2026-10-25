@@ -132,6 +132,28 @@ def domain_parser(group: str):
                 child.add_argument("target_x", type=int)
                 child.add_argument("target_y", type=int)
         command("tasks", "get_builder_tasks", "Read builder tasks and current improvements.")
+        for name in ("cancel-move", "pillage", "found-city", "repair", "remove-improvement",
+                     "remove-feature", "build-route", "automate", "alert", "sleep", "delete",
+                     "activate", "sacrifice-charges", "spread-religion", "launch-inquisition",
+                     "condemn-heretic", "remove-heresy", "trade-route", "teleport", "religious-attack"):
+            description = ("Permanently disband this unit; native removal must be confirmed." if name == "delete"
+                           else f"Explicitly {name} with one unit through the existing Runtime.")
+            child = command(name, "unit_action", description, mutation=True)
+            entity(child, "unit_id")
+            child.set_defaults(action=name.replace("-", "_"))
+            if name in {"trade-route", "teleport", "religious-attack"}:
+                child.add_argument("target_x", type=int)
+                child.add_argument("target_y", type=int)
+        formations = command("formations", "get_unit_formations", "Read escort/military formation state and native eligible target IDs.")
+        entity(formations, "unit_id")
+        for name in ("link", "unlink", "corps", "army"):
+            description = ("Merge two eligible units into a corps/army; consumes one unit." if name in {"corps", "army"}
+                           else "Link or unlink an escort formation; preserves the units.")
+            child = command(name, "set_unit_formation", description, mutation=True)
+            entity(child, "unit_id")
+            child.set_defaults(action=name)
+            if name != "unlink":
+                entity(child, "target_unit_id")
     elif group == "city":
         command("list", "get_cities", "List current cities and native IDs.")
         production = command("production", "get_city_production", "Read one city's available production items.")
