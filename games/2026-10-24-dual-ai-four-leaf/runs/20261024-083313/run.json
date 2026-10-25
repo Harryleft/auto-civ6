@@ -1,0 +1,14 @@
+{
+  "source": "fixtures/saves/benchmark_gold_tun_1.Civ6Save",
+  "source_sha256": "0d25d557e68b0efbd1aed7e66de9b8434f3a9ac9d321291d45cbe9df83fe3abf",
+  "source_copy": "games/2026-10-24-dual-ai-four-leaf/runs/20261024-083313/evidence/benchmark_gold_tun_1.Civ6Save",
+  "run": "games/2026-10-24-dual-ai-four-leaf/runs/20261024-083313",
+  "claude_session_id": "10aa0e28-b4ef-4d92-93f9-6da7cc61760d",
+  "goal": "Codex Sumeria; actual Claude Code Sweden; original FourLeafClover deity turn 1",
+  "status": "failed_builtin_ai_takeover",
+  "claude_real_action": "unit_action fortify: Sweden unit 131073; GetFortifyTurns=1",
+  "restored_checkpoint": "dual_ai_fourleaf_20261024_083313_t001_before",
+  "source_original_unchanged": true,
+  "game_binary_modified": false,
+  "project_code_modified": false
+}
