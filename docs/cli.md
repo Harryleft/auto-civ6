@@ -1,6 +1,6 @@
 # CLI 命令手册
 
-本页是 AI 唯一操作入口的命令目录，涵盖顶层命令、会话控制及 142 个命名子命令（含 3 个既有双人热座实验命令）。90 个基础 MCP 工具均有命名入口，其中任意 Lua 只在显式开发模式开放。`doctor`、`verify knowledge`、`test` 和 `logs` 不连接 FireTuner；`verify state` 明确访问当前真实游戏，`debug` 在收到查询或动作时访问游戏。`civ-mcp` 保留为 CLI 内部服务，客户端不直接注册。
+本页是 AI 唯一操作入口的命令目录，涵盖顶层命令、会话控制及 143 个命名子命令（含 3 个既有双人热座实验命令）。91 个基础 MCP 工具均有命名入口，其中任意 Lua 只在显式开发模式开放。`doctor`、`verify knowledge`、`test` 和 `logs` 不连接 FireTuner；`verify state` 明确访问当前真实游戏，`debug` 在收到查询或动作时访问游戏。`civ-mcp` 保留为 CLI 内部服务，客户端不直接注册。
 
 ## 安装与调用
 
@@ -21,6 +21,7 @@
 
 ```sh
 uv run --locked civ6 doctor
+uv run --locked civ6 tuner status
 uv run --locked civ6 debug --offline
 uv run --locked civ6 verify knowledge
 uv run --locked civ6 verify state
@@ -39,6 +40,7 @@ uv run --locked civ6 logs turns --relay .scratch/example-relay
 | 命令 | 执行内容与结果范围 |
 | --- | --- |
 | `doctor` | 检查 Python、实际代码目录、运行依赖、开发依赖、知识包完整性、真实 stdio MCP 初始化及工具发现；不调用游戏工具。缺少 pytest 或 lupa 记 `NOT_RUN`，不阻止知识路径。 |
+| `tuner status` | 只读诊断：探测 FireTuner 端口状态，列出端口占用者（`lsof`）和本地 CLI／MCP 进程（`ps`），给出 `occupied`／`available`／`available_with_stale_processes`／`stale_session_likely`／`game_offline` 判定与处置提示；不发送游戏命令、不占用客户端连接。 |
 | `verify knowledge` | 使用当前知识包验证搜索「写作」及 `TECH_WRITING` 的摘要、规则、证据读取；比较 CLI 与真实 MCP 返回，保留静态适用范围，核对知识文件未变。 |
 | `verify state` | 对已运行游戏执行有界只读验收，核对世界身份、玩家／回合、实体数量与范围、同一 MCP 进程和无未决上下文；不启动、加载或推进游戏。 |
 | `debug [--offline] [--timeout SECONDS]` | 启动一个前台 CLI 会话及其内部 MCP；从 stdin 接收命令，持续保留 pending。`--offline` 拒绝真实游戏调用。开发／热座选项见下文。 |
@@ -56,6 +58,7 @@ uv run --locked civ6 logs turns --relay .scratch/example-relay
 | `doctor`、`verify knowledge` | `--knowledge-dir PATH`：完整知识包，默认 PROJECT/civ6_knowledge。 |
 | `verify state` | `--expect-turn TURN`、`--expect-civilization CIVILIZATION_ID` 约束预期现场；`--timeout SECONDS` 为单次 RPC 预算，默认 300 秒。 |
 | `debug` | `--offline` 禁止游戏调用；`--timeout SECONDS` 为单次 RPC 预算，默认 300 秒。 |
+| `tuner status` | 无专用参数；输出固定结构 JSON，证据写入本次 CLI 目录。 |
 | `test` | DOMAIN 或 `--list`；`--collect-only` 只收集，`--timeout SECONDS` 为测试子进程预算（默认 300 秒）；pytest 选项放在 `--` 后。`--list` 不与领域或收集／运行选项组合。 |
 | `logs list` | `--dir PATH` 指定动作日志目录；`--limit N` 默认 20，范围 1～1000。 |
 | `logs show`、`logs timeline` | SESSION 或 `--file PATH` 二选一；`--dir PATH`、`--limit N`（默认 50）、`--tool NAME`、`--contains TEXT`、`--since TIME`、`--until TIME`。多个过滤条件按 AND 组合，contains 是 result 内的字面子串，时间含时区且边界包含。 |
@@ -96,7 +99,7 @@ JSON 另按 actor 和命令汇总调用量、累计／最长耗时及错误数�
 
 ## 组合与发现
 
-根 help 只展示命令组；逐层使用 `civ6 logs --help`、`civ6 logs show --help`。机器可用 `civ6 logs show --help --json` 读取同一参数契约。会话内 `help` 返回主题，`help call` 或 `call --help` 展示调用语法，`tools NAME` 才展开该工具的完整 schema。
+根 help 只展示命令组；逐层使用 `civ6 logs --help`、`civ6 logs show --help`。机器可用 `civ6 logs show --help --json` 读取同一参数契约。会话内 `help` 返回命名主题，`help unit`、`unit --help` 或 `unit move --help` 逐层查看命令及参数。只有协议兼容诊断才使用 `help call` 或 `tools NAME` 查看内部工具 schema。
 
 一次性命令可将 JSON 结果交给 `jq` 等工具；组合脚本应同时检查退出码和 `status`。debug 接收 stdin 中每行一条命令，返回 JSONL；调用参数是原始 JSON 对象，不经过 shell 展开。筛选 `tool_result` 时按 `request` 关联 `tool_started.sequence`，不要把最后的会话 `PASS` 当作每次工具成功。
 
@@ -104,8 +107,8 @@ JSON 另按 actor 和命令汇总调用量、累计／最长耗时及错误数�
 uv run --locked civ6 test --list | jq '.data.domains'
 uv run --locked civ6 logs list | jq '.data.sessions[].session'
 uv run --locked civ6 debug --offline <<'COMMANDS'
-help call
-tools unit_action
+help unit
+unit move --help
 unit move 0 22 9 --dry-run
 pending
 quit
@@ -195,6 +198,8 @@ COMMANDS
 
 `CATEGORY` 为 tech（默认）或 civic，研究 `ID` 为本次候选的原生类型。`save create` 可能覆盖同名普通存档，须使用独立名称；`save reload` 会丢失保存后现场，`save load` 仅从主菜单加载。文件系统存档回退当前只扫描 Single，不能据此声明 Hotseat 恢复可用。`turn end` 不替代双 AI 热座专用席位交接；热座沿用任务指定控制器及轮次记录，不并行另开 CLI 控制它。
 
+`save reload`、`save load` 和 `game recover` 只接受本 CLI 登记过的检查点：`save create` 完成原生确认后登记身份与指纹，原生 `AutoSave_*` 不在登记表中。名字未登记时命令拒绝执行并说明原因，同时列出本轮可用的已登记检查点名称。FireTuner 一次只接受一个客户端连接；连接被拒时先结束其他 `civ6 debug` 会话或残留的 `civ-mcp` 进程再重试。
+
 ### 地图、胜利与知识
 
 | 会话命令 | MCP 工具 | 模式 |
@@ -276,7 +281,7 @@ civic search --filter 生产力 --filter 单位 --match any --limit 10
 | 命令 | 用途 |
 | --- | --- |
 | `session status`、`game snapshot` | 当前服务内存身份／未决事实；结构化当前玩家快照 |
-| `game launch`、`game stop`、`game recover SAVE_NAME` | 显式启动、停止；按已确认检查点完整重启恢复 |
+| `game launch`、`game stop`、`game menu`、`game recover SAVE_NAME` | 显式启动、停止、返回原生主菜单（保留进程、不读档不存档）；按已确认检查点完整重启恢复 |
 | `save load-index INDEX`、`save menu-load SAVE_NAME` | 按本次列表索引或明确文件名从原生菜单加载 |
 | `map settle UNIT_ID`、`map settle-global`、`map strategic` | 当前开拓者、全局已知选址及战略地图 |
 | `city wonder CITY_ID WONDER_TYPE`、`city tiles CITY_ID` | 奇观候选与可购买地块 |
@@ -307,6 +312,8 @@ civic search --filter 生产力 --filter 单位 --match any --limit 10
 
 热座不能与 `--offline`／`--developer` 合用；两个热座选项必须成对。现有共享 pending 会阻止新建该轮会话；活动会话的 `pending` 同时展示纯内存事实与独立的 `shared_pending`。正常退出会同时检查两者，保留原文件，不把空内存当作可以接管。此入口不创建补丁、不启动对局，也没有扩展到任意地图或更多席位；其真实交接验收仍按专用实验范围执行。
 
+`scripts/hotseat_endurance.py` 是 2026-10-24 历史实验的复现器，仍向模型注入直接 MCP，必须显式提供 `--acknowledge-legacy-mcp`。它不属于当前支持的操作入口，不得用于新对局或替代上述 CLI 热座流程。
+
 ### 最小调用顺序
 
 ```text
@@ -322,9 +329,9 @@ quit
 
 ## 副作用预演
 
-标准选项拼写为 `--dry-run`。可能改变游戏状态的调用先使用会话内 `call --dry-run TOOL JSON_OBJECT`。该入口只校验工具名称、严格 JSON 和真实输入 schema，返回 `event=dry_run`、原参数、`schema_valid=true`、`would_send=false`；未明确标为只读的工具按 `potentially_mutating=true` 展示。预演仍写本地证据。
+标准选项拼写为 `--dry-run`。可能改变游戏状态的命名命令直接追加该选项，例如先查询当前单位，再执行 `unit move 0 22 9 --dry-run`。CLI 校验命名参数及其映射后的真实输入 schema，返回 `event=dry_run`、原参数、`schema_valid=true`、`would_send=false`；未明确标为只读的工具按 `potentially_mutating=true` 展示。预演仍写本地证据。协议兼容诊断的 `call --dry-run TOOL JSON_OBJECT` 使用同一预演边界，不是普通对局的操作方式。
 
-工具预演不发送目标 RPC、不查询游戏、不确认或清除 pending，也不检查实体是否存在、坐标可达、当前门禁或游戏前提。`scope=schema_only`、`pending_checked=false` 明确此范围；`local_policy_allows_execution` 只表示当前 offline／传输未知限制，不能当作游戏执行许可。可在 `debug --offline` 中预演游戏工具，实际调用仍被拒绝。
+预演不发送目标 RPC、不查询游戏、不确认或清除 pending，也不检查实体是否存在、坐标可达、当前门禁或游戏前提。`scope=schema_only`、`pending_checked=false` 明确此范围；`local_policy_allows_execution` 只表示当前 offline／传输未知限制，不能当作游戏执行许可。可在 `debug --offline` 中预演游戏命令，实际调用仍被拒绝。
 
 `quit --abandon --dry-run` 只读取服务内存，返回 `would_exit`、`would_lose_context` 并保留会话。真正 `quit --abandon` 仍显式丢弃进程上下文；有未决时返回 `BLOCKED`。预演没有自动执行、确认令牌或自动重试；实际执行须明确输入不带 `--dry-run` 的命令。
 
@@ -357,7 +364,8 @@ quit
 
 - Runtime 正常返回 `OUTCOME_UNKNOWN` 时，保持同一服务和原请求。先 `pending` 及只读核对，再按[恢复指南](agent-recovery.md)通过原入口确认；CLI 不自动重发。
 - RPC 超时或丢回应时，额外保留本地 `transport_unknown`，后续只允许只读工具。空 pending、缓存刷新和后续读成功都不能清除这个标记；本版不自动恢复该次传输结果，也不重建 MCP 进程。
-- `quit` 会新读 pending；有未决请求、传输未知或无法确认服务身份时拒绝退出，留在原会话。`quit --abandon` 是明确放弃当前进程内上下文的退出入口，仍返回 `BLOCKED`，不退役游戏中的原请求。保留证据后按已授权的检查点恢复流程处理，不能开一个空会话冒充已确认。
+- 游戏侧只读工具有有界预算（45 秒）：主菜单、加载中或模态界面阻塞时，工具返回 `ERR:TOOL_TIMEOUT`（未提交、未确认、未重放任何内容），CLI 不再等到 300 秒 RPC 超时并锁存 `transport_unknown`。用 `civ6 tuner status` 区分“游戏不可达／连接被占用／残留会话”，再决定加载或恢复。
+- `quit` 会新读 pending；有未决请求、传输未知或无法确认服务身份时拒绝退出，留在原会话。`quit --abandon` 是明确放弃当前进程内上下文的退出入口，仍返回 `BLOCKED`（`context_lost=true`、`exit_reason=abandoned`），不退役游戏中的原请求；传输未知导致无法确认时，这是 CLI 内的显式收尾路径。保留证据后按已授权的检查点恢复流程处理，不能开一个空会话冒充已确认。
 - 交互终端 Ctrl+D 有未决时返回提示；stdin 管道已耗尽时无法继续交互，保存未决快照、返回 `BLOCKED` 后关闭自有 MCP，`data.exit_reason=eof_unresolved`。该结束会丢失进程内上下文，不支持跨进程续接。
 - Ctrl+C 不取消正在执行的 RPC，也不终止 MCP；等待请求返回后继续输入。每个 RPC 默认等待上限 300 秒，可用 `debug --timeout SECONDS` 调整。POSIX 子进程使用 SDK 的独立进程组；Windows 的实际控制台信号行为尚未实测。
 - 服务 UUID／PID 变化会锁存失效并阻止后续变更。stdio 关闭时结束前台等待、保留失败证据；没有进程替换、自动恢复或重放。

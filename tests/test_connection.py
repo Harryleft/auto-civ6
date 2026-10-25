@@ -95,6 +95,21 @@ class TestConnectFailure:
         with pytest.raises(ConnectionError, match="EnableTuner"):
             run(GameConnection().connect())
 
+    def test_refusal_mentions_the_single_firetuner_client_slot(self, monkeypatch):
+        """A running game can still refuse: one client owns the tuner connection."""
+
+        async def refuse(host, port, timeout=5.0):
+            raise ConnectionRefusedError(61, "Connection refused")
+
+        monkeypatch.setattr(tuner_client, "connect", refuse)
+
+        with pytest.raises(ConnectionError) as caught:
+            run(GameConnection().connect())
+
+        message = str(caught.value)
+        assert "Only one FireTuner client can hold the connection" in message
+        assert "leftover civ-mcp process" in message
+
 
 class TestConnectionLifecycle:
     def test_is_connected_is_false_before_connecting(self):

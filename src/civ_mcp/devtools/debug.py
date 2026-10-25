@@ -24,23 +24,22 @@ OFFLINE_TOOLS = {"get_runtime_status", "search_knowledge", "search_research", "g
 STATES = {"overview": "get_game_overview", "units": "get_units", "cities": "get_cities",
           "turn": "get_turn_status", "snapshot": "get_game_snapshot"}
 HELP = {
-    "overview": {"description": "Choose a topic; tool schemas are disclosed by tools NAME.",
+    "overview": {"description": "Choose a named command topic and use TOPIC --help for its arguments. tools/call are protocol diagnostics only.",
                  "topics": ["tools", "pending", "state", *GROUPS, "verify", "call", "quit"],
                  "usage": "help [TOPIC]", "output": "One JSON object per line; prompts use stderr."},
-    "tools": {"usage": "tools [NAME]", "description": "List names, or inspect one tool's inputSchema and annotations.",
-              "examples": ["tools", "tools unit_action"]},
+    "tools": {"usage": "tools [NAME]", "description": "Protocol diagnostics: list internal names, or inspect one tool's inputSchema and annotations. Normal gameplay uses named commands.",
+              "examples": ["tools", "tools get_runtime_status"]},
     "pending": {"usage": "pending", "description": "Read server memory and local transport_unknown without game I/O or clearing pending."},
     "state": {"usage": "state overview|units|cities|turn|snapshot", "aliases": STATES,
               "description": "Query current game state through MCP. These queries are unavailable in --offline mode."},
     "verify": {"usage": "verify state", "description": "Run a bounded live read-only snapshot check in this same MCP session; no game mutations or retries."},
     "call": {"usage": "call [--dry-run] TOOL [JSON_OBJECT]",
-             "description": "Validate against tools TOOL inputSchema, then explicitly send once. Use --dry-run before a potentially destructive call.",
+             "description": "Protocol compatibility diagnostics only; normal gameplay uses named commands. Validate against tools TOOL inputSchema, then explicitly send once.",
              "dry_run": "Returns a schema-checked plan without sending the target tool or reading game state. Does not check gameplay prerequisites or confirm pending.",
-             "examples": ['call --dry-run unit_action {"unit_id":0,"action":"move","target_x":22,"target_y":9}',
-                          'call get_units {}'],
+             "examples": ['call get_runtime_status {}', 'call --dry-run get_units {}'],
              "json_input": "One strict JSON object; default {}. No shell expansion. Feed one command per line through stdin to compose scripts."},
     "quit": {"usage": "quit [--abandon] [--dry-run]",
-             "description": "Normal quit refuses pending/unknown context. --abandon discards process memory and returns BLOCKED when unresolved.",
+             "description": "Normal quit refuses pending/unknown context. --abandon is the explicit escape: it closes the session, records the lost context and never retires or replays the game-side request.",
              "dry_run": "Shows whether exit would lose unresolved context; retains the session.",
              "examples": ["quit --abandon --dry-run", "quit"]},
 }
@@ -291,7 +290,13 @@ class DebugSession:
         if self.offline and tool not in OFFLINE_TOOLS:
             raise CommandError("OFFLINE_ONLY", f"{tool} is unavailable in --offline sessions")
         if (self.transport_unknown or self.identity_lost) and not readonly:
-            raise CommandError("TRANSPORT_UNRESOLVED", "An RPC outcome/identity is unknown; only read-only inspection is allowed")
+            raise CommandError(
+                "TRANSPORT_UNRESOLVED",
+                "An RPC outcome/identity is unknown; only read-only inspection is allowed",
+                hint="Inspect current state with reads; if the original outcome cannot be confirmed, "
+                     "close this session explicitly with quit --abandon (records the lost context) "
+                     "or keep it for evidence. Never start a second controller for the same game.",
+            )
         runtime = await self.runtime()
         if tool == "get_game_snapshot" and runtime.get("shared_pending"):
             raise CommandError("VERIFY_PENDING", "A shared hotseat request still owns this run",

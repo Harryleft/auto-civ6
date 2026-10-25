@@ -72,6 +72,28 @@ def _result_summary(result: str) -> str:
     return line[:120] + "..." if len(line) > 120 else line
 
 
+READ_TIMEOUT_SECONDS = 45.0
+
+
+def _is_read_tool(tool_name: str) -> bool:
+    """Read tools are bounded so an unresponsive game fails fast instead of hanging."""
+    return tool_name.startswith(("get_", "list_", "search_"))
+
+
+async def _bounded_read(tool_name: str, fn: Callable[[], Awaitable[str]]) -> str:
+    """Cancel a read that exceeds the budget without confirming or replaying it."""
+    try:
+        async with asyncio.timeout(READ_TIMEOUT_SECONDS):
+            return await fn()
+    except TimeoutError:
+        return (
+            f"ERR:TOOL_TIMEOUT|{tool_name} exceeded the {READ_TIMEOUT_SECONDS:.0f}s read budget; "
+            "the read was cancelled without confirming or replaying anything. "
+            "Check that a game is loaded and the UI is not blocked (main menu, load, "
+            "or a modal dialog can stall reads), then retry the query."
+        )
+
+
 async def _logged(
     ctx: Context,
     tool_name: str,
@@ -82,6 +104,12 @@ async def _logged(
     app = ctx.request_context.lifespan_context
     async with app.lock:
         start = time.monotonic()
+
+        async def execute_call() -> str:
+            if _is_read_tool(tool_name):
+                return await _bounded_read(tool_name, fn)
+            return await fn()
+
         try:
             congress_blocked = None
             if (getattr(app.game, 'congress_pending', False) is True
@@ -147,9 +175,9 @@ async def _logged(
                     if app.game.pending_action_entity == entity:
                         result = confirmation
                     else:
-                        result = await fn()
+                        result = await execute_call()
                 else:
-                    result = await fn()
+                    result = await execute_call()
         except (LuaError, ValueError, OSError) as exc:
             result = f"Error: {exc}"
         ms = int((time.monotonic() - start) * 1000)
@@ -2277,6 +2305,12 @@ async def reload_game_save(ctx: Context, save_name: str) -> str:
 async def kill_game(ctx: Context) -> str:
     """Explicitly stop Civ6 and release its FireTuner session."""
     return await _logged(ctx, "kill_game", {}, _get_game(ctx).kill_game)
+
+
+@mcp.tool(annotations={"destructiveHint": True})
+async def return_to_main_menu(ctx: Context) -> str:
+    """Return to the native main menu without loading or saving a game."""
+    return await _logged(ctx, "return_to_main_menu", {}, _get_game(ctx).return_to_main_menu)
 
 
 @mcp.tool(annotations={"destructiveHint": True})

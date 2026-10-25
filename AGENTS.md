@@ -17,11 +17,13 @@
 
 ## 调用入口
 
-AI 的唯一操作入口是 [CLI](docs/cli.md)，包含游戏、知识、诊断、验证和日志。连续游戏操作使用一个持续的 `uv run --locked civ6 debug` 会话，按 `help` 发现命名命令。`call` 仅用于同会话的协议兼容诊断；普通对局使用命名命令。变更先 `--dry-run`，再按当前授权明确执行，保留原 pending 和证据。
+当前支持的 AI 操作统一以 [CLI](docs/cli.md) 为唯一入口，包含游戏、知识、诊断、验证和日志。连续游戏操作使用一个持续的 `uv run --locked civ6 debug` 会话，按 `help` 发现命名命令。`call` 仅用于同会话的协议兼容诊断；普通对局使用命名命令。变更先 `--dry-run`，再按当前授权明确执行，保留原 pending 和证据。
 
 客户端不注册 `civ6` MCP；CLI 自行启动内部服务。出现 CLI 错误时按原会话证据修复，不改走直接 MCP、内部 Python 或 Lua。任意 Lua 仅在用户明确授权的 `debug --developer` 诊断会话可用。
 
 既有双人热座实验通过 `debug --hotseat-seat N --hotseat-run DIR` 复用原控制器，使用 `hotseat begin/end`；普通 `turn end` 和 Single 存档入口不能替代席位交接。新地图、更多席位和补丁操作仍按各自指南验证。
+
+唯一历史例外是 `scripts/hotseat_endurance.py`：它仅为复现 2026-10-24 实验而保留直接 MCP 注入，必须显式 `--acknowledge-legacy-mcp`，不得用于新对局或替代当前 CLI 入口。
 
 ## 按任务读取
 

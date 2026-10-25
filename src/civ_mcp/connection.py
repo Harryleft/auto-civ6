@@ -72,7 +72,11 @@ class GameConnection:
             await self.disconnect()
             raise ConnectionError(
                 f"Cannot connect to Civ 6 at {self.host}:{self.port}: {exc}. "
-                "Make sure Civ 6 is running with EnableTuner enabled."
+                "Make sure Civ 6 is running with EnableTuner enabled. "
+                "Only one FireTuner client can hold the connection: if the game is running, close any other "
+                "civ6 debug session and any leftover civ-mcp process before retrying; a restarted game also "
+                "needs its new tuner connection. At the main menu no game is loaded: use game menu "
+                "and save menu-load with a confirmed checkpoint instead of retrying gameplay reads."
             ) from exc
 
     async def disconnect(self) -> None:

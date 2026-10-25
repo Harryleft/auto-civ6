@@ -182,6 +182,33 @@ def _verified_record(name: str) -> dict | None:
     return None
 
 
+def registered_names() -> list[str]:
+    """Checkpoint names recorded for the current run, earliest turn first.
+
+    Only a hint for error messages: names here still need expected_checkpoint
+    verification before any load; native game autosaves are never recorded.
+    """
+    run_id = _current_run()
+    if not run_id:
+        return []
+    found: list[tuple[int, str]] = []
+    try:
+        paths = sorted(CHECKPOINT_DIR.glob("*.json"))
+    except OSError:
+        return []
+    for path in paths:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(data, dict) or data.get("run_id") != run_id:
+            continue
+        name, turn = data.get("name"), data.get("turn")
+        if isinstance(name, str) and isinstance(turn, int) and data.get("sha256"):
+            found.append((turn, name))
+    return [name for _turn, name in sorted(found)]
+
+
 def expected_checkpoint(name: str) -> tuple[str, int, int] | None:
     """Return verified expected civ/seed/turn, or refuse unknown/stale files."""
     name = name.removesuffix(".Civ6Save")

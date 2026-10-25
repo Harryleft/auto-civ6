@@ -14,6 +14,11 @@ from civ_mcp.narrate import narrate_test_trade
 from civ_mcp.connection import LuaError
 from civ_mcp.lua import trade as native
 
+# A native selection click can emit its follow-up statement a moment later,
+# so confirmation polls briefly instead of judging on the first frame.
+RESPONSE_CONFIRM_SECONDS = 2.0
+RESPONSE_POLL_SECONDS = 0.15
+
 
 class DiplomacyProgress:
     def __init__(self) -> None:
@@ -249,7 +254,15 @@ class DiplomacyProgress:
         if self.scope_invalid:
             return "ERR:OUTCOME_UNKNOWN|Diplomacy belongs to a changed world; explicit recovery required."
         if self.response is not None:
-            return await self.confirm_response(conn)
+            result = await self.confirm_response(conn)
+            if result.startswith("OK:RESPONDED"):
+                # This call never resubmitted anything: it only confirmed the
+                # pending response, so the requested choice was not sent.
+                detail = result.split("|", 1)[1] if "|" in result else "RESPONDED"
+                return (f"OK:CONFIRMED|{detail}; the requested {response.upper()} was NOT submitted "
+                        "— this call only confirmed the pending response. "
+                        "Inspect current native choices and respond again.")
+            return result
         keys, seq = await self.choices(conn, sid, target)
         if keys is None or seq is None:
             return "ERR:OUTCOME_UNKNOWN|Current native diplomacy choices UNKNOWN; no response submitted."
@@ -271,17 +284,24 @@ class DiplomacyProgress:
         if self.scope_invalid:
             return "ERR:OUTCOME_UNKNOWN|Diplomacy belongs to a changed world; explicit recovery required."
         token, sid, target, seq = self.response
-        try:
-            rows = await conn.execute_in_named_state("DiplomacyActionView", native.build_response_query(self.nonce, token, sid, target, seq))
-            if rows == ["DIPLO_RESPONSE|CLOSED"]:
-                self.response = None
-                return "OK:RESPONDED|SESSION_CLOSED"
-            if rows == ["DIPLO_RESPONSE|CONTINUES"]:
-                self.response = None
-                return "OK:RESPONDED|SESSION_CONTINUES; inspect current native choices."
-        except (OSError, TimeoutError, LuaError):
-            pass
-        return "ERR:OUTCOME_UNKNOWN|Native diplomacy response is unconfirmed; no response was resent."
+        deadline = time.monotonic() + RESPONSE_CONFIRM_SECONDS
+        while True:
+            try:
+                rows = await conn.execute_in_named_state(
+                    "DiplomacyActionView", native.build_response_query(self.nonce, token, sid, target, seq))
+                if rows == ["DIPLO_RESPONSE|CLOSED"]:
+                    self.response = None
+                    return "OK:RESPONDED|SESSION_CLOSED"
+                if rows == ["DIPLO_RESPONSE|CONTINUES"]:
+                    self.response = None
+                    return "OK:RESPONDED|SESSION_CONTINUES; inspect current native choices."
+            except (OSError, TimeoutError, LuaError):
+                pass
+            if time.monotonic() >= deadline:
+                break
+            await asyncio.sleep(RESPONSE_POLL_SECONDS)
+        return ("ERR:OUTCOME_UNKNOWN|Native diplomacy response is unconfirmed; "
+                "repeat the same call to confirm it (no response is resent) and read get_pending_diplomacy for current choices.")
 
     def trade_summary(self) -> str:
         if self.scope_invalid:

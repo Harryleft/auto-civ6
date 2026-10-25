@@ -287,6 +287,10 @@ def test_discovery_and_field_errors_are_actionable_without_target_rpc(tmp_path):
         'call --dry-run unit_action {"unit_id":1e999}\ncall --dry-run\nquit\n')
     overview = next(row for row in events if row['event'] == 'help' and row['topic'] == 'overview')
     assert 'topics' in overview and 'examples' not in overview
+    assert 'named command' in overview['description']
+    call_help = next(row for row in events if row['event'] == 'help' and row['topic'] == 'call')
+    assert 'diagnostics only' in call_help['description']
+    assert all('unit_action' not in example for example in call_help['examples'])
     assert any(row['event'] == 'help' and row.get('examples') for row in events)
     errors = [row for row in events if row['event'] == 'command_blocked']
     assert all(row['hint'] for row in errors)

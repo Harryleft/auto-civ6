@@ -176,7 +176,7 @@ def test_process_timeout_retains_partial_receipt(tmp_path):
     assert "started" in receipt["stdout"]
 
 
-@pytest.mark.parametrize('command,children', [([], ['doctor', 'verify', 'test', 'debug', 'logs']),
+@pytest.mark.parametrize('command,children', [([], ['doctor', 'tuner', 'verify', 'test', 'debug', 'logs']),
     (['logs'], ['list', 'show', 'timeline', 'turns']), (['verify'], ['knowledge', 'state']), (['debug'], [])])
 def test_help_discloses_one_level_and_supports_json_without_side_effects(tmp_path, command, children):
     output = tmp_path / 'unused'
@@ -191,6 +191,12 @@ def test_help_discloses_one_level_and_supports_json_without_side_effects(tmp_pat
     assert doc['notes'] or children
     if not command:
         assert '--since' not in human.stdout and 'unit_action' not in machine.stdout
+        assert 'developer CLI' not in doc['description']
+    elif command == ['debug']:
+        assert 'unit move --help' in doc['notes']
+        assert 'appending --dry-run' in doc['notes']
+        assert 'call --dry-run TOOL' not in doc['notes']
+        assert 'Protocol diagnostics only' in doc['notes']
 
 
 def test_log_errors_identify_the_input_to_change(tmp_path):

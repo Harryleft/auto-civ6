@@ -1,4 +1,4 @@
-"""Civ6 developer CLI: offline checks and an explicit foreground MCP session."""
+"""Civilization VI CLI: game operations, offline checks and an internal MCP session."""
 
 from __future__ import annotations
 
@@ -83,6 +83,14 @@ def parser() -> Parser:
         epilog="Example: civ6 doctor --knowledge-dir civ6_knowledge. Missing optional dev dependencies are NOT_RUN.")
     common(doctor)
     doctor.add_argument("--knowledge-dir", help="Complete knowledge package; default PROJECT/civ6_knowledge")
+    tuner = commands.add_parser("tuner", help="Inspect the local FireTuner socket and CLI/MCP processes; no game I/O",
+        description="Read the tuner port state and local civ-mcp/CLI processes that could own the single FireTuner client slot.")
+    common(tuner)
+    tuner_views = tuner.add_subparsers(dest="view", required=True)
+    tuner_status = tuner_views.add_parser("status", help="Report port state, socket owners and stale-session hints",
+        description="Read-only diagnostics; never connects as a game client beyond a TCP probe and never sends a game command.",
+        epilog="Example: civ6 tuner status. Use after a failed or replaced session before retrying a connection.")
+    common(tuner_status)
     verify = commands.add_parser("verify", help="Verify knowledge offline or inspect a live game", description="Choose a feature to verify; use civ6 verify FEATURE --help for its contract.")
     common(verify)
     verification = verify.add_subparsers(dest="feature", required=True)
@@ -108,10 +116,11 @@ def parser() -> Parser:
     test.add_argument("--list", action="store_true", help="List domain selections without running tests")
     test.add_argument("--collect-only", action="store_true", help="Collect tests without executing test cases; does not prove they pass")
     test.add_argument("--timeout", type=positive, default=300, help="Subprocess timeout in seconds; default 300")
-    debug = commands.add_parser("debug", help="Keep one foreground MCP process; commands arrive on stdin",
-        description="One MCP process and pending context for the entire foreground session. Input: one command per line; output: JSONL. Startup reads server memory only.",
-        epilog="Start safely: civ6 debug --offline. In-session discovery: help, help call, tools, tools NAME. "
-               "Preview: call --dry-run TOOL JSON_OBJECT. Quit may refuse while pending. "
+    debug = commands.add_parser("debug", help="Keep one foreground CLI session and its internal MCP process",
+        description="One foreground CLI session owns one internal MCP process and its pending context. Input: one named command per line; output: JSONL. Startup reads server memory only.",
+        epilog="Start safely: civ6 debug --offline. Discover named commands: help, help unit, unit move --help. "
+               "Preview a named command by appending --dry-run. Protocol diagnostics only: help call, tools NAME. "
+               "Quit may refuse while pending. "
                "No retry, restart or game load occurs automatically.")
     common(debug)
     debug.add_argument("--offline", action="store_true", help="Allow only knowledge tools and in-memory pending inspection")
@@ -159,6 +168,9 @@ def execute(args: argparse.Namespace, evidence: Evidence, extra: list[str], data
         root = knowledge_root(evidence, args.knowledge_dir)
         data["knowledge_directory"] = str(root)
         (doctor if args.command == "doctor" else verify)(evidence, root, data)
+    elif args.command == "tuner":
+        from civ_mcp.devtools import tuner
+        tuner.status(evidence, data)
     elif args.command == "debug":
         from civ_mcp.devtools.debug import run_debug
         return run_debug(evidence, data, offline=args.offline, timeout=args.timeout,

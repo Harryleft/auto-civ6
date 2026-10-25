@@ -111,9 +111,9 @@ def domain_parser(group: str):
         move.add_argument("target_x", type=int)
         move.add_argument("target_y", type=int)
         move.set_defaults(action="move")
-        action = command("action", "unit_action", "Issue an action from tools unit_action (including destructive actions).", mutation=True)
+        action = command("action", "unit_action", "Issue one explicit native unit action; prefer a specific unit subcommand when available.", mutation=True)
         entity(action, "unit_id")
-        action.add_argument("action", help="Native action name; inspect tools unit_action for supported actions")
+        action.add_argument("action", help="Native action name; specific unit subcommands cover the common supported actions")
         coordinates(action)
         action.add_argument("--improvement", default=argparse.SUPPRESS, help="Improvement ID for builder actions")
         for name in ("attack", "skip", "fortify", "heal", "improve"):
@@ -334,6 +334,7 @@ def domain_parser(group: str):
     elif group == "game":
         command("snapshot", "get_game_snapshot", "Read a consistent current-player snapshot; refuses any pending.")
         command("launch", "launch_game", "Explicitly launch Civ6; does not choose or load a save.", mutation=True)
+        command("menu", "return_to_main_menu", "Return to the native main menu; keeps the process, never loads or saves.", mutation=True)
         command("stop", "kill_game", "Explicitly stop Civ6; pending lifecycle gates still apply.", mutation=True)
         recovery = command("recover", "restart_and_load", "Explicit fault recovery: restart Civ6 and load a confirmed checkpoint.", mutation=True)
         recovery.add_argument("save_name")

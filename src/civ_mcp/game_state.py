@@ -33,6 +33,25 @@ log = logging.getLogger(__name__)
 
 LOAD_TIMEOUT = 180.0
 
+UNREGISTERED_CHECKPOINT_HINT = (
+    "Native game autosaves (AutoSave_*) are never CLI-registered and cannot be loaded or recovered. "
+    "Only checkpoints created by save create after native completion in this run are usable; "
+    "recovery guidance lists those names."
+)
+
+
+def _unregistered_checkpoint_message(save_name: str, refusal: str) -> str:
+    """Explain an unverified checkpoint name instead of only refusing the action."""
+    from civ_mcp import checkpoints
+
+    names = checkpoints.registered_names()
+    listed = ", ".join(names[-8:]) if names else "none recorded for this run"
+    return (
+        f"Error: UNREGISTERED_CHECKPOINT|{save_name} has no CLI-registered checkpoint record, so its identity "
+        f"cannot be verified; {refusal}. {UNREGISTERED_CHECKPOINT_HINT} "
+        f"Registered checkpoints for this run: {listed}."
+    )
+
 ACTION_CONFIRM_TIMEOUT = 5.0
 ACTION_CONFIRM_INTERVAL = 0.15
 VICTORY_REPORT_TIMEOUT = 5.0
@@ -2429,6 +2448,29 @@ class GameState:
         return result.message
 
     @_guard_pending_mutation
+    async def return_to_main_menu(self) -> str:
+        """Submit one native exit to the main menu; verify it through frontend facts.
+
+        Keeps the process and never loads or saves. A lost confirmation retains
+        the replacement gate, so no gameplay read or action follows it blindly.
+        """
+        from civ_mcp import game_lifecycle
+
+        self._pending_load = True
+        result = await game_lifecycle.return_to_main_menu_result(self.conn)
+        if result.status == "confirmed":
+            self.reset_session()
+            game_lifecycle.clear_save_listing()
+            self._pending_load = False
+            return "MAIN_MENU|Native main menu confirmed; no save or load was submitted."
+        if result.status == "not_submitted":
+            self._pending_load = False
+            return f"Error: {result.message}"
+        self._pending_load = True
+        message = result.message
+        return message if message.startswith("ERR:") else f"ERR:OUTCOME_UNKNOWN|{message}"
+
+    @_guard_pending_mutation
     async def launch_game(self) -> str:
         from civ_mcp import game_launcher
 
@@ -2444,7 +2486,7 @@ class GameState:
         if error:
             return error
         if checkpoints.expected_checkpoint(save_name) is None:
-            return "Error: Checkpoint completion and expected identity are unavailable; no restart performed."
+            return _unregistered_checkpoint_message(save_name, "no restart performed")
         self._pending_load = True
         await self.conn.disconnect()
         stopped = await game_launcher.stop_game()
@@ -2475,7 +2517,7 @@ class GameState:
             return "ERR:OUTCOME_UNKNOWN|An action/save/end-turn is pending; confirm it or use explicit restart_and_load before replacing the session."
         expected = checkpoints.expected_checkpoint(save_name)
         if expected is None:
-            return "Error: Checkpoint completion and expected identity are unavailable; no load sent."
+            return _unregistered_checkpoint_message(save_name, "no load sent")
         saved_score = checkpoints.expected_score(save_name)
         submitted = False
         replacing = recovering
