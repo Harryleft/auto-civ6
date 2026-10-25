@@ -1,0 +1,989 @@
+{
+  "envoy_results": [
+    {
+      "sequence": 473,
+      "message": "ENVOY_SENT|player:9|remaining:0|envoys:4->5"
+    },
+    {
+      "sequence": 1658,
+      "message": "ENVOY_SENT|player:9|remaining:0|envoys:5->6"
+    },
+    {
+      "sequence": 3537,
+      "message": "ENVOY_SENT|player:9|remaining:0|envoys:6->7"
+    },
+    {
+      "sequence": 3921,
+      "message": "ENVOY_SENT|player:9|remaining:1|envoys:7->8"
+    },
+    {
+      "sequence": 4011,
+      "message": "ENVOY_SENT|player:7|remaining:0|envoys:3->4"
+    },
+    {
+      "sequence": 4520,
+      "message": "ENVOY_SENT|player:7|remaining:0|envoys:4->5"
+    },
+    {
+      "sequence": 5539,
+      "message": "ENVOY_SENT|player:7|remaining:1|envoys:5->6"
+    },
+    {
+      "sequence": 5615,
+      "message": "ENVOY_SENT|player:8|remaining:0|envoys:0->1"
+    },
+    {
+      "sequence": 7773,
+      "message": "ENVOY_SENT|player:8|remaining:1|envoys:1->2"
+    },
+    {
+      "sequence": 7849,
+      "message": "ENVOY_SENT|player:8|remaining:0|envoys:2->3"
+    },
+    {
+      "sequence": 10809,
+      "message": "ENVOY_SENT|player:5|remaining:0|envoys:0->1"
+    },
+    {
+      "sequence": 12387,
+      "message": "ENVOY_SENT|player:6|remaining:0|envoys:0->1"
+    },
+    {
+      "sequence": 14596,
+      "message": "ENVOY_SENT|player:5|remaining:1|envoys:1->2"
+    },
+    {
+      "sequence": 14714,
+      "message": "ENVOY_SENT|player:6|remaining:0|envoys:1->2"
+    },
+    {
+      "sequence": 14937,
+      "message": "ENVOY_SENT|player:5|remaining:1|envoys:2->3"
+    },
+    {
+      "sequence": 15055,
+      "message": "ENVOY_SENT|player:6|remaining:0|envoys:2->3"
+    },
+    {
+      "sequence": 16694,
+      "message": "ENVOY_SENT|player:5|remaining:1|envoys:3->4"
+    },
+    {
+      "sequence": 16802,
+      "message": "ENVOY_SENT|player:9|remaining:0|envoys:8->9"
+    }
+  ],
+  "policy_results": [
+    {
+      "sequence": 1621,
+      "message": "POLICIES_SET|Complete original policy plan confirmed."
+    },
+    {
+      "sequence": 2632,
+      "message": "Error: POLICY_PLAN_REFUSED|ERR:POLICY_OBSOLETE|POLICY_ILKUM"
+    },
+    {
+      "sequence": 2719,
+      "message": "Error: POLICY_PLAN_REFUSED|ERR:POLICY_OBSOLETE|POLICY_ILKUM"
+    },
+    {
+      "sequence": 2884,
+      "message": "Error: POLICY_PLAN_REFUSED|ERR:POLICY_OBSOLETE|POLICY_ILKUM"
+    },
+    {
+      "sequence": 3165,
+      "message": "POLICIES_SET|Complete original policy plan confirmed."
+    },
+    {
+      "sequence": 8353,
+      "message": "POLICIES_SET|Complete original policy plan confirmed."
+    },
+    {
+      "sequence": 8916,
+      "message": "POLICIES_SET|Complete original policy plan confirmed."
+    },
+    {
+      "sequence": 13456,
+      "message": "POLICIES_SET|Complete original policy plan confirmed."
+    }
+  ],
+  "source_commit": "6e87e2a1590a045f5291ea08bd514f8b41e3c61e",
+  "runtime_run_id": "bbf839e8aaaf4339a780605d5a5b5ea1",
+  "command_count": 6280,
+  "dry_run_count": 1941,
+  "explicit_tool_call_count": 4315,
+  "unique_tools": 54,
+  "tool_counts": {
+    "get_game_overview": 150,
+    "get_units": 192,
+    "get_cities": 189,
+    "get_city_states": 23,
+    "get_victory_progress": 143,
+    "get_turn_status": 465,
+    "get_diplomacy": 139,
+    "get_tech_civics": 140,
+    "set_research": 38,
+    "get_notifications": 138,
+    "get_builder_tasks": 353,
+    "unit_action": 1504,
+    "get_settle_advisor": 260,
+    "get_governors": 5,
+    "appoint_governor": 2,
+    "assign_governor": 2,
+    "end_turn": 165,
+    "dismiss_popup": 47,
+    "save_game": 30,
+    "send_envoy": 18,
+    "get_pending_diplomacy": 44,
+    "get_pending_trades": 15,
+    "get_world_congress": 22,
+    "respond_to_diplomacy": 18,
+    "upgrade_unit": 3,
+    "city_action": 36,
+    "propose_peace": 7,
+    "get_city_production": 42,
+    "set_city_production": 39,
+    "get_empire_resources": 2,
+    "queue_wc_votes": 5,
+    "get_unit_promotions": 1,
+    "get_policies": 15,
+    "promote_unit": 1,
+    "set_policies": 8,
+    "get_dedications": 4,
+    "choose_dedication": 4,
+    "promote_governor": 2,
+    "get_map_area": 8,
+    "get_district_advisor": 7,
+    "get_public_report": 3,
+    "change_government": 3,
+    "respond_to_trade": 1,
+    "send_diplomatic_action": 1,
+    "get_great_people": 3,
+    "recruit_great_person": 2,
+    "get_gp_advisor": 2,
+    "get_pathing_estimate": 2,
+    "search_knowledge": 2,
+    "get_pantheon_beliefs": 2,
+    "choose_pantheon": 1,
+    "get_trade_options": 2,
+    "propose_trade": 4,
+    "get_game_snapshot": 1
+  },
+  "unit_action_counts": {
+    "move": 59,
+    "sleep": 572,
+    "fortify": 842,
+    "cancel_move": 2,
+    "improve": 11,
+    "attack": 12,
+    "skip": 4,
+    "activate": 2
+  },
+  "confirmed_transition_count": 123,
+  "cumulative_confirmed_steps": 123,
+  "net_turns": 123,
+  "repeated_intervals": [],
+  "transitions": [
+    {
+      "from": 102,
+      "to": 103,
+      "sequence": 205,
+      "timestamp": "2026-10-25T07:55:44.911597+00:00"
+    },
+    {
+      "from": 103,
+      "to": 104,
+      "sequence": 327,
+      "timestamp": "2026-10-25T07:55:56.020631+00:00"
+    },
+    {
+      "from": 104,
+      "to": 105,
+      "sequence": 421,
+      "timestamp": "2026-10-25T07:56:04.677486+00:00"
+    },
+    {
+      "from": 105,
+      "to": 106,
+      "sequence": 557,
+      "timestamp": "2026-10-25T07:57:08.583826+00:00"
+    },
+    {
+      "from": 106,
+      "to": 107,
+      "sequence": 682,
+      "timestamp": "2026-10-25T07:57:55.297444+00:00"
+    },
+    {
+      "from": 107,
+      "to": 108,
+      "sequence": 783,
+      "timestamp": "2026-10-25T07:58:06.656013+00:00"
+    },
+    {
+      "from": 108,
+      "to": 109,
+      "sequence": 926,
+      "timestamp": "2026-10-25T07:59:04.308939+00:00"
+    },
+    {
+      "from": 109,
+      "to": 110,
+      "sequence": 1022,
+      "timestamp": "2026-10-25T07:59:16.128063+00:00"
+    },
+    {
+      "from": 110,
+      "to": 111,
+      "sequence": 1194,
+      "timestamp": "2026-10-25T07:59:30.716395+00:00"
+    },
+    {
+      "from": 111,
+      "to": 112,
+      "sequence": 1298,
+      "timestamp": "2026-10-25T07:59:42.673337+00:00"
+    },
+    {
+      "from": 112,
+      "to": 113,
+      "sequence": 1424,
+      "timestamp": "2026-10-25T07:59:55.017733+00:00"
+    },
+    {
+      "from": 113,
+      "to": 114,
+      "sequence": 1597,
+      "timestamp": "2026-10-25T08:00:59.149165+00:00"
+    },
+    {
+      "from": 114,
+      "to": 115,
+      "sequence": 1770,
+      "timestamp": "2026-10-25T08:01:53.845228+00:00"
+    },
+    {
+      "from": 115,
+      "to": 116,
+      "sequence": 1883,
+      "timestamp": "2026-10-25T08:02:05.328399+00:00"
+    },
+    {
+      "from": 116,
+      "to": 117,
+      "sequence": 1954,
+      "timestamp": "2026-10-25T08:02:13.488292+00:00"
+    },
+    {
+      "from": 117,
+      "to": 118,
+      "sequence": 2027,
+      "timestamp": "2026-10-25T08:02:22.275067+00:00"
+    },
+    {
+      "from": 118,
+      "to": 119,
+      "sequence": 2118,
+      "timestamp": "2026-10-25T08:03:21.901253+00:00"
+    },
+    {
+      "from": 119,
+      "to": 120,
+      "sequence": 2217,
+      "timestamp": "2026-10-25T08:04:33.516500+00:00"
+    },
+    {
+      "from": 120,
+      "to": 121,
+      "sequence": 2280,
+      "timestamp": "2026-10-25T08:04:41.846607+00:00"
+    },
+    {
+      "from": 121,
+      "to": 122,
+      "sequence": 2370,
+      "timestamp": "2026-10-25T08:04:51.539525+00:00"
+    },
+    {
+      "from": 122,
+      "to": 123,
+      "sequence": 2451,
+      "timestamp": "2026-10-25T08:05:02.777414+00:00"
+    },
+    {
+      "from": 123,
+      "to": 124,
+      "sequence": 2524,
+      "timestamp": "2026-10-25T08:05:10.883113+00:00"
+    },
+    {
+      "from": 124,
+      "to": 125,
+      "sequence": 2587,
+      "timestamp": "2026-10-25T08:05:18.974334+00:00"
+    },
+    {
+      "from": 125,
+      "to": 126,
+      "sequence": 2679,
+      "timestamp": "2026-10-25T08:05:28.873259+00:00"
+    },
+    {
+      "from": 126,
+      "to": 127,
+      "sequence": 2771,
+      "timestamp": "2026-10-25T08:05:35.999227+00:00"
+    },
+    {
+      "from": 127,
+      "to": 128,
+      "sequence": 2844,
+      "timestamp": "2026-10-25T08:05:44.014147+00:00"
+    },
+    {
+      "from": 128,
+      "to": 129,
+      "sequence": 2938,
+      "timestamp": "2026-10-25T08:05:52.953606+00:00"
+    },
+    {
+      "from": 129,
+      "to": 130,
+      "sequence": 3085,
+      "timestamp": "2026-10-25T08:06:47.833852+00:00"
+    },
+    {
+      "from": 130,
+      "to": 131,
+      "sequence": 3256,
+      "timestamp": "2026-10-25T08:08:26.252112+00:00"
+    },
+    {
+      "from": 131,
+      "to": 132,
+      "sequence": 3371,
+      "timestamp": "2026-10-25T08:08:36.004440+00:00"
+    },
+    {
+      "from": 132,
+      "to": 133,
+      "sequence": 3495,
+      "timestamp": "2026-10-25T08:09:27.313301+00:00"
+    },
+    {
+      "from": 133,
+      "to": 134,
+      "sequence": 3599,
+      "timestamp": "2026-10-25T08:09:39.084599+00:00"
+    },
+    {
+      "from": 134,
+      "to": 135,
+      "sequence": 3685,
+      "timestamp": "2026-10-25T08:09:47.506832+00:00"
+    },
+    {
+      "from": 135,
+      "to": 136,
+      "sequence": 3795,
+      "timestamp": "2026-10-25T08:09:57.501539+00:00"
+    },
+    {
+      "from": 136,
+      "to": 137,
+      "sequence": 3889,
+      "timestamp": "2026-10-25T08:10:06.256348+00:00"
+    },
+    {
+      "from": 137,
+      "to": 138,
+      "sequence": 4118,
+      "timestamp": "2026-10-25T08:11:44.753189+00:00"
+    },
+    {
+      "from": 138,
+      "to": 139,
+      "sequence": 4250,
+      "timestamp": "2026-10-25T08:12:43.338387+00:00"
+    },
+    {
+      "from": 139,
+      "to": 140,
+      "sequence": 4366,
+      "timestamp": "2026-10-25T08:14:15.335735+00:00"
+    },
+    {
+      "from": 140,
+      "to": 141,
+      "sequence": 4478,
+      "timestamp": "2026-10-25T08:14:29.499079+00:00"
+    },
+    {
+      "from": 141,
+      "to": 142,
+      "sequence": 4617,
+      "timestamp": "2026-10-25T08:14:40.800407+00:00"
+    },
+    {
+      "from": 142,
+      "to": 143,
+      "sequence": 4729,
+      "timestamp": "2026-10-25T08:14:49.906967+00:00"
+    },
+    {
+      "from": 143,
+      "to": 144,
+      "sequence": 4823,
+      "timestamp": "2026-10-25T08:14:58.219629+00:00"
+    },
+    {
+      "from": 144,
+      "to": 145,
+      "sequence": 4917,
+      "timestamp": "2026-10-25T08:15:06.784223+00:00"
+    },
+    {
+      "from": 145,
+      "to": 146,
+      "sequence": 5016,
+      "timestamp": "2026-10-25T08:15:15.889011+00:00"
+    },
+    {
+      "from": 146,
+      "to": 147,
+      "sequence": 5128,
+      "timestamp": "2026-10-25T08:15:24.952347+00:00"
+    },
+    {
+      "from": 147,
+      "to": 148,
+      "sequence": 5222,
+      "timestamp": "2026-10-25T08:15:33.316982+00:00"
+    },
+    {
+      "from": 148,
+      "to": 149,
+      "sequence": 5353,
+      "timestamp": "2026-10-25T08:16:47.933972+00:00"
+    },
+    {
+      "from": 149,
+      "to": 150,
+      "sequence": 5487,
+      "timestamp": "2026-10-25T08:17:48.639393+00:00"
+    },
+    {
+      "from": 150,
+      "to": 151,
+      "sequence": 5626,
+      "timestamp": "2026-10-25T08:18:04.194500+00:00"
+    },
+    {
+      "from": 151,
+      "to": 152,
+      "sequence": 5755,
+      "timestamp": "2026-10-25T08:18:17.730553+00:00"
+    },
+    {
+      "from": 152,
+      "to": 153,
+      "sequence": 5904,
+      "timestamp": "2026-10-25T08:18:34.067654+00:00"
+    },
+    {
+      "from": 153,
+      "to": 154,
+      "sequence": 6031,
+      "timestamp": "2026-10-25T08:18:46.937518+00:00"
+    },
+    {
+      "from": 154,
+      "to": 155,
+      "sequence": 6456,
+      "timestamp": "2026-10-25T08:19:54.538796+00:00"
+    },
+    {
+      "from": 155,
+      "to": 156,
+      "sequence": 6857,
+      "timestamp": "2026-10-25T08:21:27.267094+00:00"
+    },
+    {
+      "from": 156,
+      "to": 157,
+      "sequence": 6976,
+      "timestamp": "2026-10-25T08:21:38.937380+00:00"
+    },
+    {
+      "from": 157,
+      "to": 158,
+      "sequence": 7080,
+      "timestamp": "2026-10-25T08:21:48.267890+00:00"
+    },
+    {
+      "from": 158,
+      "to": 159,
+      "sequence": 7174,
+      "timestamp": "2026-10-25T08:21:57.039350+00:00"
+    },
+    {
+      "from": 159,
+      "to": 160,
+      "sequence": 7276,
+      "timestamp": "2026-10-25T08:22:06.324599+00:00"
+    },
+    {
+      "from": 160,
+      "to": 161,
+      "sequence": 7375,
+      "timestamp": "2026-10-25T08:22:16.170988+00:00"
+    },
+    {
+      "from": 161,
+      "to": 162,
+      "sequence": 7499,
+      "timestamp": "2026-10-25T08:23:24.457313+00:00"
+    },
+    {
+      "from": 162,
+      "to": 163,
+      "sequence": 7622,
+      "timestamp": "2026-10-25T08:24:20.520840+00:00"
+    },
+    {
+      "from": 163,
+      "to": 164,
+      "sequence": 7741,
+      "timestamp": "2026-10-25T08:25:32.887518+00:00"
+    },
+    {
+      "from": 164,
+      "to": 165,
+      "sequence": 7893,
+      "timestamp": "2026-10-25T08:27:14.305313+00:00"
+    },
+    {
+      "from": 165,
+      "to": 166,
+      "sequence": 8017,
+      "timestamp": "2026-10-25T08:27:25.006683+00:00"
+    },
+    {
+      "from": 166,
+      "to": 167,
+      "sequence": 8121,
+      "timestamp": "2026-10-25T08:27:36.839000+00:00"
+    },
+    {
+      "from": 167,
+      "to": 168,
+      "sequence": 8248,
+      "timestamp": "2026-10-25T08:27:47.749060+00:00"
+    },
+    {
+      "from": 168,
+      "to": 169,
+      "sequence": 8364,
+      "timestamp": "2026-10-25T08:27:58.059177+00:00"
+    },
+    {
+      "from": 169,
+      "to": 170,
+      "sequence": 8523,
+      "timestamp": "2026-10-25T08:29:13.282505+00:00"
+    },
+    {
+      "from": 170,
+      "to": 171,
+      "sequence": 8650,
+      "timestamp": "2026-10-25T08:29:25.361671+00:00"
+    },
+    {
+      "from": 171,
+      "to": 172,
+      "sequence": 8764,
+      "timestamp": "2026-10-25T08:29:35.178521+00:00"
+    },
+    {
+      "from": 172,
+      "to": 173,
+      "sequence": 8868,
+      "timestamp": "2026-10-25T08:29:44.635866+00:00"
+    },
+    {
+      "from": 173,
+      "to": 174,
+      "sequence": 8996,
+      "timestamp": "2026-10-25T08:29:59.743999+00:00"
+    },
+    {
+      "from": 174,
+      "to": 175,
+      "sequence": 9111,
+      "timestamp": "2026-10-25T08:30:09.421850+00:00"
+    },
+    {
+      "from": 175,
+      "to": 176,
+      "sequence": 9220,
+      "timestamp": "2026-10-25T08:30:19.592473+00:00"
+    },
+    {
+      "from": 176,
+      "to": 177,
+      "sequence": 9324,
+      "timestamp": "2026-10-25T08:30:28.921113+00:00"
+    },
+    {
+      "from": 177,
+      "to": 178,
+      "sequence": 9461,
+      "timestamp": "2026-10-25T08:30:41.741116+00:00"
+    },
+    {
+      "from": 178,
+      "to": 179,
+      "sequence": 9575,
+      "timestamp": "2026-10-25T08:30:51.702634+00:00"
+    },
+    {
+      "from": 179,
+      "to": 180,
+      "sequence": 9708,
+      "timestamp": "2026-10-25T08:31:04.472210+00:00"
+    },
+    {
+      "from": 180,
+      "to": 181,
+      "sequence": 9833,
+      "timestamp": "2026-10-25T08:31:17.408117+00:00"
+    },
+    {
+      "from": 181,
+      "to": 182,
+      "sequence": 9945,
+      "timestamp": "2026-10-25T08:31:27.056738+00:00"
+    },
+    {
+      "from": 182,
+      "to": 183,
+      "sequence": 10114,
+      "timestamp": "2026-10-25T08:31:42.582604+00:00"
+    },
+    {
+      "from": 183,
+      "to": 184,
+      "sequence": 10231,
+      "timestamp": "2026-10-25T08:31:52.458526+00:00"
+    },
+    {
+      "from": 184,
+      "to": 185,
+      "sequence": 10348,
+      "timestamp": "2026-10-25T08:32:02.281080+00:00"
+    },
+    {
+      "from": 185,
+      "to": 186,
+      "sequence": 10777,
+      "timestamp": "2026-10-25T08:35:41.979839+00:00"
+    },
+    {
+      "from": 186,
+      "to": 187,
+      "sequence": 10913,
+      "timestamp": "2026-10-25T08:35:53.296927+00:00"
+    },
+    {
+      "from": 187,
+      "to": 188,
+      "sequence": 11033,
+      "timestamp": "2026-10-25T08:36:06.038721+00:00"
+    },
+    {
+      "from": 188,
+      "to": 189,
+      "sequence": 11202,
+      "timestamp": "2026-10-25T08:37:59.160280+00:00"
+    },
+    {
+      "from": 189,
+      "to": 190,
+      "sequence": 11322,
+      "timestamp": "2026-10-25T08:38:12.017122+00:00"
+    },
+    {
+      "from": 190,
+      "to": 191,
+      "sequence": 11455,
+      "timestamp": "2026-10-25T08:38:23.698365+00:00"
+    },
+    {
+      "from": 191,
+      "to": 192,
+      "sequence": 11575,
+      "timestamp": "2026-10-25T08:38:34.124851+00:00"
+    },
+    {
+      "from": 192,
+      "to": 193,
+      "sequence": 11695,
+      "timestamp": "2026-10-25T08:38:44.723041+00:00"
+    },
+    {
+      "from": 193,
+      "to": 194,
+      "sequence": 11838,
+      "timestamp": "2026-10-25T08:38:59.282912+00:00"
+    },
+    {
+      "from": 194,
+      "to": 195,
+      "sequence": 11958,
+      "timestamp": "2026-10-25T08:39:09.869056+00:00"
+    },
+    {
+      "from": 195,
+      "to": 196,
+      "sequence": 12083,
+      "timestamp": "2026-10-25T08:39:21.377251+00:00"
+    },
+    {
+      "from": 196,
+      "to": 197,
+      "sequence": 12345,
+      "timestamp": "2026-10-25T08:41:28.550849+00:00"
+    },
+    {
+      "from": 197,
+      "to": 198,
+      "sequence": 12491,
+      "timestamp": "2026-10-25T08:41:40.447692+00:00"
+    },
+    {
+      "from": 198,
+      "to": 199,
+      "sequence": 12619,
+      "timestamp": "2026-10-25T08:41:51.008200+00:00"
+    },
+    {
+      "from": 199,
+      "to": 200,
+      "sequence": 12747,
+      "timestamp": "2026-10-25T08:42:01.689474+00:00"
+    },
+    {
+      "from": 200,
+      "to": 201,
+      "sequence": 12903,
+      "timestamp": "2026-10-25T08:42:16.822021+00:00"
+    },
+    {
+      "from": 201,
+      "to": 202,
+      "sequence": 13031,
+      "timestamp": "2026-10-25T08:42:27.601879+00:00"
+    },
+    {
+      "from": 202,
+      "to": 203,
+      "sequence": 13159,
+      "timestamp": "2026-10-25T08:42:38.431130+00:00"
+    },
+    {
+      "from": 203,
+      "to": 204,
+      "sequence": 13287,
+      "timestamp": "2026-10-25T08:42:49.399707+00:00"
+    },
+    {
+      "from": 204,
+      "to": 205,
+      "sequence": 13600,
+      "timestamp": "2026-10-25T08:45:09.714404+00:00"
+    },
+    {
+      "from": 205,
+      "to": 206,
+      "sequence": 13750,
+      "timestamp": "2026-10-25T08:45:22.868085+00:00"
+    },
+    {
+      "from": 206,
+      "to": 207,
+      "sequence": 14019,
+      "timestamp": "2026-10-25T08:46:51.120925+00:00"
+    },
+    {
+      "from": 207,
+      "to": 208,
+      "sequence": 14157,
+      "timestamp": "2026-10-25T08:47:03.228118+00:00"
+    },
+    {
+      "from": 208,
+      "to": 209,
+      "sequence": 14285,
+      "timestamp": "2026-10-25T08:47:16.524037+00:00"
+    },
+    {
+      "from": 209,
+      "to": 210,
+      "sequence": 14423,
+      "timestamp": "2026-10-25T08:47:28.765774+00:00"
+    },
+    {
+      "from": 210,
+      "to": 211,
+      "sequence": 14564,
+      "timestamp": "2026-10-25T08:47:41.138849+00:00"
+    },
+    {
+      "from": 211,
+      "to": 212,
+      "sequence": 14725,
+      "timestamp": "2026-10-25T08:47:54.426164+00:00"
+    },
+    {
+      "from": 212,
+      "to": 213,
+      "sequence": 14895,
+      "timestamp": "2026-10-25T08:48:08.292064+00:00"
+    },
+    {
+      "from": 213,
+      "to": 214,
+      "sequence": 15088,
+      "timestamp": "2026-10-25T08:50:05.486797+00:00"
+    },
+    {
+      "from": 214,
+      "to": 215,
+      "sequence": 15254,
+      "timestamp": "2026-10-25T08:51:29.496678+00:00"
+    },
+    {
+      "from": 215,
+      "to": 216,
+      "sequence": 15392,
+      "timestamp": "2026-10-25T08:51:44.503166+00:00"
+    },
+    {
+      "from": 216,
+      "to": 217,
+      "sequence": 15520,
+      "timestamp": "2026-10-25T08:51:55.949702+00:00"
+    },
+    {
+      "from": 217,
+      "to": 218,
+      "sequence": 15648,
+      "timestamp": "2026-10-25T08:52:07.252471+00:00"
+    },
+    {
+      "from": 218,
+      "to": 219,
+      "sequence": 15776,
+      "timestamp": "2026-10-25T08:52:18.410083+00:00"
+    },
+    {
+      "from": 219,
+      "to": 220,
+      "sequence": 15904,
+      "timestamp": "2026-10-25T08:52:29.687044+00:00"
+    },
+    {
+      "from": 220,
+      "to": 221,
+      "sequence": 16037,
+      "timestamp": "2026-10-25T08:52:41.846386+00:00"
+    },
+    {
+      "from": 221,
+      "to": 222,
+      "sequence": 16222,
+      "timestamp": "2026-10-25T08:52:57.280794+00:00"
+    },
+    {
+      "from": 222,
+      "to": 223,
+      "sequence": 16363,
+      "timestamp": "2026-10-25T08:53:09.263368+00:00"
+    },
+    {
+      "from": 223,
+      "to": 224,
+      "sequence": 16496,
+      "timestamp": "2026-10-25T08:53:20.739217+00:00"
+    },
+    {
+      "from": 224,
+      "to": 225,
+      "sequence": 16647,
+      "timestamp": "2026-10-25T08:53:33.604494+00:00"
+    }
+  ],
+  "missing_from_turns": [],
+  "error_return_count": 57,
+  "errors_by_tool": {
+    "unit_action": 26,
+    "save_game": 8,
+    "city_action": 12,
+    "propose_peace": 5,
+    "set_policies": 3,
+    "get_district_advisor": 2,
+    "queue_wc_votes": 1
+  },
+  "cli_transport_unknown_event_count": 0,
+  "raw_outcome_unknown_return_count": 1,
+  "direct_call_commands": 0,
+  "developer_commands": 0,
+  "service_session_id": "c2bfcec1bc0f4727b3ff97c0619ab3b4",
+  "cli_run_id": "fc5ae23b2e68487baa39576427d4d157",
+  "start_turn": 102,
+  "end_turn": 225,
+  "termination_reason": "user_stopped_at_t225",
+  "native_terminal_result": null,
+  "recovery_commands": [],
+  "invalid_command_events": [
+    {
+      "event": "command_blocked",
+      "sequence": 1581,
+      "run_id": "fc5ae23b2e68487baa39576427d4d157",
+      "timestamp": "2026-10-25T08:00:30.052371+00:00",
+      "code": "INVALID_DEBUG_ARGUMENT",
+      "message": "argument {global}: invalid choice: 'show' (choose from global)",
+      "hint": "In this debug session run resources --help, then correct the reported argument.",
+      "details": {}
+    },
+    {
+      "event": "command_blocked",
+      "sequence": 7506,
+      "run_id": "fc5ae23b2e68487baa39576427d4d157",
+      "timestamp": "2026-10-25T08:23:33.636879+00:00",
+      "code": "INVALID_DEBUG_COMMAND",
+      "message": "Use help for foreground session commands",
+      "hint": "Use help for named topics, then TOPIC --help for syntax; help call is only for protocol diagnostics.",
+      "details": {}
+    },
+    {
+      "event": "command_blocked",
+      "sequence": 13878,
+      "run_id": "fc5ae23b2e68487baa39576427d4d157",
+      "timestamp": "2026-10-25T08:46:06.555494+00:00",
+      "code": "INVALID_DEBUG_ARGUMENT",
+      "message": "argument {show,pantheon,beliefs,choose-pantheon,found,spread}: invalid choice: 'pantheons' (choose from show, pantheon, beliefs, choose-pantheon, found, spread)",
+      "hint": "In this debug session run religion --help, then correct the reported argument.",
+      "details": {}
+    }
+  ],
+  "cli_exit": {
+    "event": "session_closing",
+    "sequence": 16878,
+    "run_id": "fc5ae23b2e68487baa39576427d4d157",
+    "timestamp": "2026-10-25T09:11:07.733124+00:00",
+    "unresolved": false,
+    "reason": "quit",
+    "transport_unknown": null
+  }
+}

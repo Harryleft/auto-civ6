@@ -1,0 +1,337 @@
+{
+  "observed_turn": 225,
+  "source_commit": "6e87e2a1590a045f5291ea08bd514f8b41e3c61e",
+  "gameplay_controller_stopped": true,
+  "events": {
+    "state overview": {
+      "event": "tool_result",
+      "sequence": 16763,
+      "run_id": "fc5ae23b2e68487baa39576427d4d157",
+      "timestamp": "2026-10-25T08:53:43.654526+00:00",
+      "request": 16762,
+      "tool": "get_game_overview",
+      "is_error": false,
+      "protocol_is_error": false,
+      "error": null,
+      "result": {
+        "meta": null,
+        "content": [
+          {
+            "type": "text",
+            "text": "Turn 225 | 苏美尔 (吉尔伽美什) | Score: 296 | 神\nGold: 1460 (+43/turn) | Income: 80 | Maintenance: -37 (units: 30) | Science: 88.2 | Culture: 34.7 | Faith: 146 | Favor: 32 (+2/turn)\nResearch: 蒸汽动力 | Civic: 歌剧和芭蕾\nCities: 3 | Population: 33 | Units: 16 — 6 骑士, 4 开拓者, 3 建造者, 2 弩手, 1 大商人\nIdentity: civilization_type=CIVILIZATION_SUMERIA | leader_type=LEADER_GILGAMESH\nScore categories (GetCategoryScore, positive-weight): 市政 [CATEGORY_CIVICS]: 84; 帝国 [CATEGORY_EMPIRE]: 84; 伟人 [CATEGORY_GREAT_PEOPLE]: 10; 宗教 [CATEGORY_RELIGION]: 0; 科技 [CATEGORY_TECH]: 80; 奇观 [CATEGORY_WONDER]: 0; 时代得分 [CATEGORY_ERA_SCORE]: 41\nDiagnostic category sum: 299 (differs from official GetScore: 296; native aggregate and category readings are inconsistent).\nExplored: 42% of land (192/449 tiles)\nReligion: NONE — all 3 slots filled (瑞典: 新教, 巴西: 天主教, 加拿大: 伊斯兰教)\nEra: 信息时代 | Current age: Normal\nEra score: 41 | Next-era thresholds (Dark: 34, Golden: 47)\nRankings: 瑞典 1062 > 巴西 971 > 加拿大 948 > 苏美尔 296",
+            "annotations": null,
+            "meta": null
+          }
+        ],
+        "structuredContent": {
+          "result": "Turn 225 | 苏美尔 (吉尔伽美什) | Score: 296 | 神\nGold: 1460 (+43/turn) | Income: 80 | Maintenance: -37 (units: 30) | Science: 88.2 | Culture: 34.7 | Faith: 146 | Favor: 32 (+2/turn)\nResearch: 蒸汽动力 | Civic: 歌剧和芭蕾\nCities: 3 | Population: 33 | Units: 16 — 6 骑士, 4 开拓者, 3 建造者, 2 弩手, 1 大商人\nIdentity: civilization_type=CIVILIZATION_SUMERIA | leader_type=LEADER_GILGAMESH\nScore categories (GetCategoryScore, positive-weight): 市政 [CATEGORY_CIVICS]: 84; 帝国 [CATEGORY_EMPIRE]: 84; 伟人 [CATEGORY_GREAT_PEOPLE]: 10; 宗教 [CATEGORY_RELIGION]: 0; 科技 [CATEGORY_TECH]: 80; 奇观 [CATEGORY_WONDER]: 0; 时代得分 [CATEGORY_ERA_SCORE]: 41\nDiagnostic category sum: 299 (differs from official GetScore: 296; native aggregate and category readings are inconsistent).\nExplored: 42% of land (192/449 tiles)\nReligion: NONE — all 3 slots filled (瑞典: 新教, 巴西: 天主教, 加拿大: 伊斯兰教)\nEra: 信息时代 | Current age: Normal\nEra score: 41 | Next-era thresholds (Dark: 34, Golden: 47)\nRankings: 瑞典 1062 > 巴西 971 > 加拿大 948 > 苏美尔 296"
+        },
+        "isError": false
+      },
+      "hint": null
+    },
+    "unit list": {
+      "event": "tool_result",
+      "sequence": 16792,
+      "run_id": "fc5ae23b2e68487baa39576427d4d157",
+      "timestamp": "2026-10-25T09:00:28.128177+00:00",
+      "request": 16791,
+      "tool": "get_units",
+      "is_error": false,
+      "protocol_is_error": false,
+      "error": null,
+      "result": {
+        "meta": null,
+        "content": [
+          {
+            "type": "text",
+            "text": "16 units:\n  骑士 (UNIT_KNIGHT) at (37,27) — CS:50 moves 4/4 **CAN UPGRADE to UNIT_CUIRASSIER (150g)** [id:1441792, idx:0]\n  建造者 (UNIT_BUILDER) at (38,29) — moves 2/2 charges:1 [id:1638401, idx:1]\n  骑士 (UNIT_KNIGHT) at (40,25) — CS:50 moves 4/4 **CAN UPGRADE to UNIT_CUIRASSIER (150g)** [id:1507330, idx:2]\n  骑士 (UNIT_KNIGHT) at (39,24) — CS:50 moves 4/4 **CAN UPGRADE to UNIT_CUIRASSIER (150g)** [id:1376259, idx:3]\n  开拓者 (UNIT_SETTLER) at (37,27) — moves 2/2 [id:851972, idx:4]\n  建造者 (UNIT_BUILDER) at (40,29) — moves 2/2 charges:2 [id:1769477, idx:5]\n  弩手 (UNIT_CROSSBOWMAN) at (42,29) — CS:30 RS:40 moves 2/2 **CAN UPGRADE to UNIT_FIELD_CANNON (205g)** [id:2031622, idx:6]\n  弩手 (UNIT_CROSSBOWMAN) at (41,28) — CS:30 RS:40 moves 2/2 **CAN UPGRADE to UNIT_FIELD_CANNON (205g)** [id:1572871, idx:7]\n  建造者 (UNIT_BUILDER) at (39,29) — moves 2/2 charges:1 [id:1703944, idx:8]\n  骑士 (UNIT_KNIGHT) at (37,28) — CS:50 moves 4/4 **CAN UPGRADE to UNIT_CUIRASSIER (150g)** [id:1966089, idx:9]\n  骑士 (UNIT_KNIGHT) at (41,25) — CS:50 moves 4/4 **CAN UPGRADE to UNIT_CUIRASSIER (150g)** [id:1835018, idx:10]\n  骑士 (UNIT_KNIGHT) at (36,27) — CS:50 moves 4/4 **CAN UPGRADE to UNIT_CUIRASSIER (150g)** [id:1900555, idx:11]\n  开拓者 (UNIT_SETTLER) at (40,25) — moves 2/2 [id:2097164, idx:12]\n  开拓者 (UNIT_SETTLER) at (37,26) — moves 2/2 [id:2293773, idx:13]\n  开拓者 (UNIT_SETTLER) at (36,28) — moves 2/2 [id:2228238, idx:14]\n  李维·史特劳斯 (UNIT_GREAT_MERCHANT) at (39,25) — moves 4/4 charges:1 [id:2359311, idx:15]",
+            "annotations": null,
+            "meta": null
+          }
+        ],
+        "structuredContent": {
+          "result": "16 units:\n  骑士 (UNIT_KNIGHT) at (37,27) — CS:50 moves 4/4 **CAN UPGRADE to UNIT_CUIRASSIER (150g)** [id:1441792, idx:0]\n  建造者 (UNIT_BUILDER) at (38,29) — moves 2/2 charges:1 [id:1638401, idx:1]\n  骑士 (UNIT_KNIGHT) at (40,25) — CS:50 moves 4/4 **CAN UPGRADE to UNIT_CUIRASSIER (150g)** [id:1507330, idx:2]\n  骑士 (UNIT_KNIGHT) at (39,24) — CS:50 moves 4/4 **CAN UPGRADE to UNIT_CUIRASSIER (150g)** [id:1376259, idx:3]\n  开拓者 (UNIT_SETTLER) at (37,27) — moves 2/2 [id:851972, idx:4]\n  建造者 (UNIT_BUILDER) at (40,29) — moves 2/2 charges:2 [id:1769477, idx:5]\n  弩手 (UNIT_CROSSBOWMAN) at (42,29) — CS:30 RS:40 moves 2/2 **CAN UPGRADE to UNIT_FIELD_CANNON (205g)** [id:2031622, idx:6]\n  弩手 (UNIT_CROSSBOWMAN) at (41,28) — CS:30 RS:40 moves 2/2 **CAN UPGRADE to UNIT_FIELD_CANNON (205g)** [id:1572871, idx:7]\n  建造者 (UNIT_BUILDER) at (39,29) — moves 2/2 charges:1 [id:1703944, idx:8]\n  骑士 (UNIT_KNIGHT) at (37,28) — CS:50 moves 4/4 **CAN UPGRADE to UNIT_CUIRASSIER (150g)** [id:1966089, idx:9]\n  骑士 (UNIT_KNIGHT) at (41,25) — CS:50 moves 4/4 **CAN UPGRADE to UNIT_CUIRASSIER (150g)** [id:1835018, idx:10]\n  骑士 (UNIT_KNIGHT) at (36,27) — CS:50 moves 4/4 **CAN UPGRADE to UNIT_CUIRASSIER (150g)** [id:1900555, idx:11]\n  开拓者 (UNIT_SETTLER) at (40,25) — moves 2/2 [id:2097164, idx:12]\n  开拓者 (UNIT_SETTLER) at (37,26) — moves 2/2 [id:2293773, idx:13]\n  开拓者 (UNIT_SETTLER) at (36,28) — moves 2/2 [id:2228238, idx:14]\n  李维·史特劳斯 (UNIT_GREAT_MERCHANT) at (39,25) — moves 4/4 charges:1 [id:2359311, idx:15]"
+        },
+        "isError": false
+      },
+      "hint": null
+    },
+    "city list": {
+      "event": "tool_result",
+      "sequence": 16769,
+      "run_id": "fc5ae23b2e68487baa39576427d4d157",
+      "timestamp": "2026-10-25T08:58:34.003592+00:00",
+      "request": 16768,
+      "tool": "get_cities",
+      "is_error": false,
+      "protocol_is_error": false,
+      "error": null,
+      "result": {
+        "meta": null,
+        "content": [
+          {
+            "type": "text",
+            "text": "3 cities:\n  乌鲁克 (pop 15) at (40,25) — Food 38 Prod 16 Gold 38 Sci 45 Cul 28 | Housing 18 Amenities 7 | Growth: 3/120 food (18t, +8.0/t) | Building: BUILDING_WORKSHOP (5 turns) | Walls 100/100 Garrison 200/200 Def:64 Gar:KNIGHT [id:65536]\n    !! SLOW GROWTH: 18 turns to next pop — needs farm, granary, or trade route\n    Districts: CAMPUS(39,26) COMMERCIAL_HUB(41,26) GOVERNMENT(39,28) INDUSTRIAL_ZONE(40,27)\n    Buildings: MONUMENT, PALACE, GRANARY, LIBRARY, WALLS, WATER_MILL, MARKET, UNIVERSITY, BANK, GOV_TALL\n    Needs builder: FISH (39,23), CRABS (42,24) (unimproved)\n  乌尔 (pop 11) at (37,27) — Food 33 Prod 12 Gold 9 Sci 22 Cul 5 | Housing 14 Amenities 5 | Growth: 24/84 food (7t, +11.0/t) | Building: BUILDING_BANK (1 turns) | Walls 100/100 Garrison 200/200 Def:62 Gar:KNIGHT [id:196609]\n    >> CAN ATTACK: UNIT_GREAT_ARTIST@36,24(100hp)\n    >> CAN ATTACK: UNIT_MECHANIZED_INFANTRY@39,30(100hp)\n    Districts: CAMPUS(38,26) COMMERCIAL_HUB(37,25)\n    Buildings: MONUMENT, GRANARY, LIBRARY, WALLS, MARKET, UNIVERSITY\n  巴地比拉 (pop 7) at (42,29) — Food 14 Prod 8 Gold 8 Sci 22 Cul 2 | Housing 9 Amenities 4 | Growth: STAGNANT (+0.0 food/t) | Building: BUILDING_BANK (10 turns) | Walls 100/100 Garrison 200/200 Def:47 Gar:CROSSBOWMAN [id:262146]\n    !! STAGNANT: 0 food surplus — needs farm, granary, or trade route\n    Districts: CAMPUS(41,29) COMMERCIAL_HUB(42,30)\n    Buildings: LIBRARY, WALLS, MARKET, UNIVERSITY\n    Needs builder: FISH (42,31) (unimproved)\n\nCity Distances:\n  乌鲁克 <-> 乌尔: 4 tiles\n  乌鲁克 <-> 巴地比拉: 4 tiles\n  乌尔 <-> 巴地比拉: 6 tiles",
+            "annotations": null,
+            "meta": null
+          }
+        ],
+        "structuredContent": {
+          "result": "3 cities:\n  乌鲁克 (pop 15) at (40,25) — Food 38 Prod 16 Gold 38 Sci 45 Cul 28 | Housing 18 Amenities 7 | Growth: 3/120 food (18t, +8.0/t) | Building: BUILDING_WORKSHOP (5 turns) | Walls 100/100 Garrison 200/200 Def:64 Gar:KNIGHT [id:65536]\n    !! SLOW GROWTH: 18 turns to next pop — needs farm, granary, or trade route\n    Districts: CAMPUS(39,26) COMMERCIAL_HUB(41,26) GOVERNMENT(39,28) INDUSTRIAL_ZONE(40,27)\n    Buildings: MONUMENT, PALACE, GRANARY, LIBRARY, WALLS, WATER_MILL, MARKET, UNIVERSITY, BANK, GOV_TALL\n    Needs builder: FISH (39,23), CRABS (42,24) (unimproved)\n  乌尔 (pop 11) at (37,27) — Food 33 Prod 12 Gold 9 Sci 22 Cul 5 | Housing 14 Amenities 5 | Growth: 24/84 food (7t, +11.0/t) | Building: BUILDING_BANK (1 turns) | Walls 100/100 Garrison 200/200 Def:62 Gar:KNIGHT [id:196609]\n    >> CAN ATTACK: UNIT_GREAT_ARTIST@36,24(100hp)\n    >> CAN ATTACK: UNIT_MECHANIZED_INFANTRY@39,30(100hp)\n    Districts: CAMPUS(38,26) COMMERCIAL_HUB(37,25)\n    Buildings: MONUMENT, GRANARY, LIBRARY, WALLS, MARKET, UNIVERSITY\n  巴地比拉 (pop 7) at (42,29) — Food 14 Prod 8 Gold 8 Sci 22 Cul 2 | Housing 9 Amenities 4 | Growth: STAGNANT (+0.0 food/t) | Building: BUILDING_BANK (10 turns) | Walls 100/100 Garrison 200/200 Def:47 Gar:CROSSBOWMAN [id:262146]\n    !! STAGNANT: 0 food surplus — needs farm, granary, or trade route\n    Districts: CAMPUS(41,29) COMMERCIAL_HUB(42,30)\n    Buildings: LIBRARY, WALLS, MARKET, UNIVERSITY\n    Needs builder: FISH (42,31) (unimproved)\n\nCity Distances:\n  乌鲁克 <-> 乌尔: 4 tiles\n  乌鲁克 <-> 巴地比拉: 4 tiles\n  乌尔 <-> 巴地比拉: 6 tiles"
+        },
+        "isError": false
+      },
+      "hint": null
+    },
+    "city-state list": {
+      "event": "tool_result",
+      "sequence": 16781,
+      "run_id": "fc5ae23b2e68487baa39576427d4d157",
+      "timestamp": "2026-10-25T08:58:34.553157+00:00",
+      "request": 16780,
+      "tool": "get_city_states",
+      "is_error": false,
+      "protocol_is_error": false,
+      "error": null,
+      "result": {
+        "meta": null,
+        "content": [
+          {
+            "type": "text",
+            "text": "Envoy tokens available: 1\n\n5 known city-states:\n  南马都尔 (Cultural) — 4 envoys (Suzerain: 瑞典) [can send] [player 5]\n  纳斯卡 (Religious) — 3 envoys (Suzerain: 巴西) [can send] [player 6]\n  香港 (Industrial) — 6 envoys (Suzerain: 巴西) [can send] [player 7]\n  威尼斯 (Trade) — 4 envoys (Suzerain: 巴西) [can send] [player 8]\n  非斯 (Scientific) — 8 envoys [can send] [player 9]\n\nUse send_envoy(player_id) to send an envoy.",
+            "annotations": null,
+            "meta": null
+          }
+        ],
+        "structuredContent": {
+          "result": "Envoy tokens available: 1\n\n5 known city-states:\n  南马都尔 (Cultural) — 4 envoys (Suzerain: 瑞典) [can send] [player 5]\n  纳斯卡 (Religious) — 3 envoys (Suzerain: 巴西) [can send] [player 6]\n  香港 (Industrial) — 6 envoys (Suzerain: 巴西) [can send] [player 7]\n  威尼斯 (Trade) — 4 envoys (Suzerain: 巴西) [can send] [player 8]\n  非斯 (Scientific) — 8 envoys [can send] [player 9]\n\nUse send_envoy(player_id) to send an envoy."
+        },
+        "isError": false
+      },
+      "hint": null
+    },
+    "pending": {
+      "event": "pending",
+      "sequence": 16760,
+      "run_id": "fc5ae23b2e68487baa39576427d4d157",
+      "timestamp": "2026-10-25T08:53:43.442025+00:00",
+      "runtime": {
+        "schema_version": 1,
+        "session_id": "c2bfcec1bc0f4727b3ff97c0619ab3b4",
+        "process_id": 24540,
+        "connected": true,
+        "pending": {
+          "action": false,
+          "turn": false,
+          "diplomacy": false,
+          "congress": false,
+          "save": false,
+          "replacement": false
+        },
+        "action": {
+          "summary": null,
+          "tool": null,
+          "entity": null
+        },
+        "has_pending": false,
+        "scope": "server_memory"
+      },
+      "transport_unknown": null
+    },
+    "governor list": {
+      "event": "tool_result",
+      "sequence": 16789,
+      "run_id": "fc5ae23b2e68487baa39576427d4d157",
+      "timestamp": "2026-10-25T09:00:27.925627+00:00",
+      "request": 16788,
+      "tool": "get_governors",
+      "is_error": false,
+      "protocol_is_error": false,
+      "error": null,
+      "result": {
+        "meta": null,
+        "content": [
+          {
+            "type": "text",
+            "text": "Governor Points: 0 available, 8 spent\n\nAppointed (3):\n  维克多 (GOVERNOR_THE_DEFENDER) — 乌尔 (established)\n    Available promotions:\n      射击孔 (GOVERNOR_PROMOTION_EMBRASURE): 城市每回合获得一次额外的 [ICON_Ranged] 远程攻击机会。此城中生产的所有军事单位若初始未拥有免费升级，则其初始可获得一项免费升级。\n      防空计划 (GOVERNOR_PROMOTION_AIR_DEFENSE_INITIATIVE): 防御飞机和洲际弹道导弹的攻击时，位于城市领土中的防空支援单位+25 [ICON_Strength] 战斗力。\n      军备竞赛倡导者 (GOVERNOR_PROMOTION_EDUCATOR_ARMS_RACE_PROPONENT): 在城市中进行核武器项目时+30% [ICON_Production] 生产力。\n  梁 (GOVERNOR_THE_BUILDER) — 巴地比拉 (established)\n    Available promotions:\n      规划委员 (GOVERNOR_PROMOTION_ZONING_COMMISSIONER): 在城市中修建区域时+20% [ICON_Production] 生产力。\n      水产养殖 (GOVERNOR_PROMOTION_AQUACULTURE): 可建造渔场改良设施。若与海洋资源相邻，则+1 [ICON_Food] 食物、+0.5 [ICON_Housing] 住房。总督“梁”在该城就职时+1 [ICON_PRODUCTION] 生产力。\n      加固材料 (GOVERNOR_PROMOTION_REINFORCED_INFRASTRUCTURE): 环境效应无法对此城市的改良设施、建筑与区域造成伤害。\n      自来水工程 (GOVERNOR_PROMOTION_WATER_WORKS): 此城市的每个社区与水渠区域+2 [ICON_HOUSING] 住房。此城市的每个运河与堤坝+1 [ICON_AMENITIES] 宜居度。\n      公园与休憩 (GOVERNOR_PROMOTION_PARKS_RECREATION): 能够在该城市中建造市立公园。+1 [ICON_Culture] 文化值与+2魅力。若与水域相邻，+1 [ICON_Amenities] 宜居度。若总督“梁”在此城就职，市立公园提供+3 [ICON_CULTURE] 文化值。\n  平伽拉 (GOVERNOR_THE_EDUCATOR) — 乌鲁克 (established)\n    Available promotions:\n      策展人 (GOVERNOR_PROMOTION_MERCHANT_CURATOR): 城市中艺术、音乐和著作巨作提供的 [ICON_Tourism] 旅游业绩+100%。\n      太空计划 (GOVERNOR_PROMOTION_EDUCATOR_SPACE_INITIATIVE): 在城市中进行太空计划项目时+30% [ICON_Production] 生产力。\n\nAvailable to appoint (5):\n  阿玛妮 — 外交官 (GOVERNOR_THE_AMBASSADOR)\n    擅长为文明获得支持，并将其影响力传播到附近的城市。阿玛妮是唯一能被外派到城邦中的总督。\n    Base: 信使 — 可派遣至城邦，效力等同于2名 [ICON_Envoy] 使者。\n    L1: 使者 (GOVERNOR_PROMOTION_AMBASSADOR_EMISSARY) — 9个单元格内其他文明的城市每回合将失去2点忠诚度。\n    L1: 富裕 (GOVERNOR_PROMOTION_AMBASSADOR_AFFLUENCE) — 派遣到城邦后将获得该城邦的奢侈品资源。\n    L2: 本地线人 (GOVERNOR_PROMOTION_LOCAL_INFORMANTS) — 敌方间谍在此城中的行动等级减3。\n    L2: 外国投资者 (GOVERNOR_PROMOTION_AMBASSADOR_FOREIGN_INVESTOR) — 在城邦中就职后将储备该城邦的战略资源。成为宗主国后，获得的战略资源储备将加倍。\n    L3: 幕后主脑 (GOVERNOR_PROMOTION_AMBASSADOR_PUPPETEER) — 派遣到城邦后使当地的 [ICON_Envoy] 使者数量加倍。\n  莫克夏 — 红衣主教 (GOVERNOR_THE_CARDINAL)\n    宗教精神领袖，可增强城市与驻扎此处宗教单位的 [ICON_Religion] 宗教力量。莫克夏是您帝国里的 [ICON_FAITH] 信仰明灯。\n    Base: 大主教 — 此城市对相邻城市释放的宗教压力强度加倍。此城市中每有一座特色区域，则+2 [ICON_Faith] 信仰值。\n    L1: 大审判官 (GOVERNOR_PROMOTION_CARDINAL_GRAND_INQUISITOR) — 在此城的单元格中进行神学战斗时+10 [ICON_Religion] 宗教战斗力。\n    L1: 按手礼 (GOVERNOR_PROMOTION_CARDINAL_LAYING_ON_OF_HANDS) — [ICON_Governor] 总督的所有单位在此城的单元格中1回合即可完全恢复体力。\n    L2: 神之堡垒 (GOVERNOR_PROMOTION_CARDINAL_CITADEL_OF_GOD) — 城市将不会受到来自非 [ICON_Governor] 总督所属文明宗教的压力。建筑修建完成时可获得等同修建所耗生产力25%的 [ICON_FAITH] 信仰值。\n    L3: 主保圣人 (GOVERNOR_PROMOTION_CARDINAL_PATRON_SAINT) — 此城中生产的使徒和武僧首次升级时将额外获得1次升级。\n    L3: 神圣建筑师 (GOVERNOR_PROMOTION_CARDINAL_DIVINE_ARCHITECT) — 城市可使用 [ICON_FAITH] 信仰值购买区域。\n  马格努斯 — 总务官 (GOVERNOR_THE_RESOURCE_MANAGER)\n    马格努斯奋发有为，能够提供所需的宝贵资源。此外，他还善于优化城市中的整体 [ICON_PRODUCTION] 生产力。\n    Base: 破土者 — 城市中格位收获和移除地貌的产出+50%。\n    L1: 盈余物流 (GOVERNOR_PROMOTION_RESOURCE_MANAGER_SURPLUS_LOGISTICS) — 城市的 [ICON_Food] 增长+20%。以此处为终点的 [ICON_TradeRoute] 贸易路线（属于玩家）为起源城市+2 [ICON_Food] 食物。\n    L1: 给养保障 (GOVERNOR_PROMOTION_RESOURCE_MANAGER_EXPEDITION) — 城市中生产的开拓者不计入 [ICON_Citizen] 人口。\n    L2: 实业家 (GOVERNOR_PROMOTION_RESOURCE_MANAGER_INDUSTRIALIST) — 燃煤发电厂、燃油发电厂与核电站中的每项资源所产生的 [ICON_POWER] 电力+1， [ICON_Production] 生产力+2。\n    L2: 黑市商人 (GOVERNOR_PROMOTION_RESOURCE_MANAGER_BLACK_MARKETEER) — 生产单位所需战略资源花费减少80%。\n    L3: 纵向结合 (GOVERNOR_PROMOTION_RESOURCE_MANAGER_VERTICAL_INTEGRATION) — 此城市可从附近所有拥有区域加成的工业区处获得 [ICON_Production] 生产力，而不仅是从首个建成的工业区处获得。\n  瑞娜 — 金融家 (GOVERNOR_THE_MERCHANT)\n    瑞娜精明强干，可增强城市的经济实力，让财政发挥更大的作用。\n    Base: 土地征用 — 城市获得新单元格的速度加快。经过城市的每条外国 [ICON_TradeRoute] 贸易路线每回合产出的 [ICON_Gold] 金币+3。\n    L1: 港务局长 (GOVERNOR_PROMOTION_MERCHANT_HARBORMASTER) — 城市中商业中心和港口的相邻加成加倍。\n    L1: 林业管理 (GOVERNOR_PROMOTION_MERCHANT_FORESTRY_MANAGEMENT) — 每个未改良的地貌可向该城市提供+2 [ICON_Gold] 金币。该城市中与未改良地貌相邻的单元格可获得+1魅力。\n    L2: 税务员 (GOVERNOR_PROMOTION_MERCHANT_TAX_COLLECTOR) — 城市中每位 [ICON_Citizen] 公民每回合可带来2 [ICON_Gold] 金币的收入。\n    L3: 发包人 (GOVERNOR_PROMOTION_MERCHANT_CONTRACTOR) — 城市可使用 [ICON_Gold] 金币购买区域。\n    L3: 再生资源补贴 (GOVERNOR_PROMOTION_MERCHANT_RENEWABLE_ENERGY) — 该城市的所有离岸风力发电厂、太阳能农场、风力发电厂、地热发电厂、水电站坝获得+2点 [ICON_POWER] 电力与+2 [ICON_Gold] 金币。\n  易卜拉欣 — 大维齐尔 (GOVERNOR_IBRAHIM)\n    苏莱曼的维齐尔易卜拉欣是一名专精于军事和外交的总督。除拥有特殊的升级树外，他还能被派遣至其他文明的首都和任意国内城市。他能对军事行动的成败造成影响；同时也是一名老练的外交官，可以增强与友好文明的关系，并缓和与对手的紧张关系。\n    Base: 帕夏 — 城市建造任意军事单位时+20%  [ICON_Production] 生产力。\n    L1: 首席驯鹰师 (GOVERNOR_PROMOTION_HEAD_FALCONER) — 在城市领土中战斗的所有友方单位+5 [ICON_Strength] 战斗力。\n    L1: 塞拉斯克尔 (GOVERNOR_PROMOTION_SERASKER) — 攻击防御性区域时，市中心周围10个单元格内的所有单位+10 [ICON_Strength] 战斗力。\n    L2: 卡斯-奥达-巴什 (GOVERNOR_PROMOTION_KHASS_ODA_BASHI) — 在外国盟友的 [ICON_Capital] 首都就职时，此盟友的同盟点数每回合额外增加0.5。\n    L2: 卡普阿迦 (GOVERNOR_PROMOTION_CAPOU_AGHA) — 在外国 [ICON_Capital] 首都就职时，此文明对您的 [ICON_STAT_GRIEVANCE] 不满每回合多降低1点。\n    L3: 大维齐尔 (GOVERNOR_PROMOTION_GRAND_VISIER) — 在外国 [ICON_Capital] 首都就职时，此文明的任何城市皆无法对您的城市施加忠诚度压力。\n\nUse appoint_governor/assign_governor/promote_governor(governor_type, promotion_type).",
+            "annotations": null,
+            "meta": null
+          }
+        ],
+        "structuredContent": {
+          "result": "Governor Points: 0 available, 8 spent\n\nAppointed (3):\n  维克多 (GOVERNOR_THE_DEFENDER) — 乌尔 (established)\n    Available promotions:\n      射击孔 (GOVERNOR_PROMOTION_EMBRASURE): 城市每回合获得一次额外的 [ICON_Ranged] 远程攻击机会。此城中生产的所有军事单位若初始未拥有免费升级，则其初始可获得一项免费升级。\n      防空计划 (GOVERNOR_PROMOTION_AIR_DEFENSE_INITIATIVE): 防御飞机和洲际弹道导弹的攻击时，位于城市领土中的防空支援单位+25 [ICON_Strength] 战斗力。\n      军备竞赛倡导者 (GOVERNOR_PROMOTION_EDUCATOR_ARMS_RACE_PROPONENT): 在城市中进行核武器项目时+30% [ICON_Production] 生产力。\n  梁 (GOVERNOR_THE_BUILDER) — 巴地比拉 (established)\n    Available promotions:\n      规划委员 (GOVERNOR_PROMOTION_ZONING_COMMISSIONER): 在城市中修建区域时+20% [ICON_Production] 生产力。\n      水产养殖 (GOVERNOR_PROMOTION_AQUACULTURE): 可建造渔场改良设施。若与海洋资源相邻，则+1 [ICON_Food] 食物、+0.5 [ICON_Housing] 住房。总督“梁”在该城就职时+1 [ICON_PRODUCTION] 生产力。\n      加固材料 (GOVERNOR_PROMOTION_REINFORCED_INFRASTRUCTURE): 环境效应无法对此城市的改良设施、建筑与区域造成伤害。\n      自来水工程 (GOVERNOR_PROMOTION_WATER_WORKS): 此城市的每个社区与水渠区域+2 [ICON_HOUSING] 住房。此城市的每个运河与堤坝+1 [ICON_AMENITIES] 宜居度。\n      公园与休憩 (GOVERNOR_PROMOTION_PARKS_RECREATION): 能够在该城市中建造市立公园。+1 [ICON_Culture] 文化值与+2魅力。若与水域相邻，+1 [ICON_Amenities] 宜居度。若总督“梁”在此城就职，市立公园提供+3 [ICON_CULTURE] 文化值。\n  平伽拉 (GOVERNOR_THE_EDUCATOR) — 乌鲁克 (established)\n    Available promotions:\n      策展人 (GOVERNOR_PROMOTION_MERCHANT_CURATOR): 城市中艺术、音乐和著作巨作提供的 [ICON_Tourism] 旅游业绩+100%。\n      太空计划 (GOVERNOR_PROMOTION_EDUCATOR_SPACE_INITIATIVE): 在城市中进行太空计划项目时+30% [ICON_Production] 生产力。\n\nAvailable to appoint (5):\n  阿玛妮 — 外交官 (GOVERNOR_THE_AMBASSADOR)\n    擅长为文明获得支持，并将其影响力传播到附近的城市。阿玛妮是唯一能被外派到城邦中的总督。\n    Base: 信使 — 可派遣至城邦，效力等同于2名 [ICON_Envoy] 使者。\n    L1: 使者 (GOVERNOR_PROMOTION_AMBASSADOR_EMISSARY) — 9个单元格内其他文明的城市每回合将失去2点忠诚度。\n    L1: 富裕 (GOVERNOR_PROMOTION_AMBASSADOR_AFFLUENCE) — 派遣到城邦后将获得该城邦的奢侈品资源。\n    L2: 本地线人 (GOVERNOR_PROMOTION_LOCAL_INFORMANTS) — 敌方间谍在此城中的行动等级减3。\n    L2: 外国投资者 (GOVERNOR_PROMOTION_AMBASSADOR_FOREIGN_INVESTOR) — 在城邦中就职后将储备该城邦的战略资源。成为宗主国后，获得的战略资源储备将加倍。\n    L3: 幕后主脑 (GOVERNOR_PROMOTION_AMBASSADOR_PUPPETEER) — 派遣到城邦后使当地的 [ICON_Envoy] 使者数量加倍。\n  莫克夏 — 红衣主教 (GOVERNOR_THE_CARDINAL)\n    宗教精神领袖，可增强城市与驻扎此处宗教单位的 [ICON_Religion] 宗教力量。莫克夏是您帝国里的 [ICON_FAITH] 信仰明灯。\n    Base: 大主教 — 此城市对相邻城市释放的宗教压力强度加倍。此城市中每有一座特色区域，则+2 [ICON_Faith] 信仰值。\n    L1: 大审判官 (GOVERNOR_PROMOTION_CARDINAL_GRAND_INQUISITOR) — 在此城的单元格中进行神学战斗时+10 [ICON_Religion] 宗教战斗力。\n    L1: 按手礼 (GOVERNOR_PROMOTION_CARDINAL_LAYING_ON_OF_HANDS) — [ICON_Governor] 总督的所有单位在此城的单元格中1回合即可完全恢复体力。\n    L2: 神之堡垒 (GOVERNOR_PROMOTION_CARDINAL_CITADEL_OF_GOD) — 城市将不会受到来自非 [ICON_Governor] 总督所属文明宗教的压力。建筑修建完成时可获得等同修建所耗生产力25%的 [ICON_FAITH] 信仰值。\n    L3: 主保圣人 (GOVERNOR_PROMOTION_CARDINAL_PATRON_SAINT) — 此城中生产的使徒和武僧首次升级时将额外获得1次升级。\n    L3: 神圣建筑师 (GOVERNOR_PROMOTION_CARDINAL_DIVINE_ARCHITECT) — 城市可使用 [ICON_FAITH] 信仰值购买区域。\n  马格努斯 — 总务官 (GOVERNOR_THE_RESOURCE_MANAGER)\n    马格努斯奋发有为，能够提供所需的宝贵资源。此外，他还善于优化城市中的整体 [ICON_PRODUCTION] 生产力。\n    Base: 破土者 — 城市中格位收获和移除地貌的产出+50%。\n    L1: 盈余物流 (GOVERNOR_PROMOTION_RESOURCE_MANAGER_SURPLUS_LOGISTICS) — 城市的 [ICON_Food] 增长+20%。以此处为终点的 [ICON_TradeRoute] 贸易路线（属于玩家）为起源城市+2 [ICON_Food] 食物。\n    L1: 给养保障 (GOVERNOR_PROMOTION_RESOURCE_MANAGER_EXPEDITION) — 城市中生产的开拓者不计入 [ICON_Citizen] 人口。\n    L2: 实业家 (GOVERNOR_PROMOTION_RESOURCE_MANAGER_INDUSTRIALIST) — 燃煤发电厂、燃油发电厂与核电站中的每项资源所产生的 [ICON_POWER] 电力+1， [ICON_Production] 生产力+2。\n    L2: 黑市商人 (GOVERNOR_PROMOTION_RESOURCE_MANAGER_BLACK_MARKETEER) — 生产单位所需战略资源花费减少80%。\n    L3: 纵向结合 (GOVERNOR_PROMOTION_RESOURCE_MANAGER_VERTICAL_INTEGRATION) — 此城市可从附近所有拥有区域加成的工业区处获得 [ICON_Production] 生产力，而不仅是从首个建成的工业区处获得。\n  瑞娜 — 金融家 (GOVERNOR_THE_MERCHANT)\n    瑞娜精明强干，可增强城市的经济实力，让财政发挥更大的作用。\n    Base: 土地征用 — 城市获得新单元格的速度加快。经过城市的每条外国 [ICON_TradeRoute] 贸易路线每回合产出的 [ICON_Gold] 金币+3。\n    L1: 港务局长 (GOVERNOR_PROMOTION_MERCHANT_HARBORMASTER) — 城市中商业中心和港口的相邻加成加倍。\n    L1: 林业管理 (GOVERNOR_PROMOTION_MERCHANT_FORESTRY_MANAGEMENT) — 每个未改良的地貌可向该城市提供+2 [ICON_Gold] 金币。该城市中与未改良地貌相邻的单元格可获得+1魅力。\n    L2: 税务员 (GOVERNOR_PROMOTION_MERCHANT_TAX_COLLECTOR) — 城市中每位 [ICON_Citizen] 公民每回合可带来2 [ICON_Gold] 金币的收入。\n    L3: 发包人 (GOVERNOR_PROMOTION_MERCHANT_CONTRACTOR) — 城市可使用 [ICON_Gold] 金币购买区域。\n    L3: 再生资源补贴 (GOVERNOR_PROMOTION_MERCHANT_RENEWABLE_ENERGY) — 该城市的所有离岸风力发电厂、太阳能农场、风力发电厂、地热发电厂、水电站坝获得+2点 [ICON_POWER] 电力与+2 [ICON_Gold] 金币。\n  易卜拉欣 — 大维齐尔 (GOVERNOR_IBRAHIM)\n    苏莱曼的维齐尔易卜拉欣是一名专精于军事和外交的总督。除拥有特殊的升级树外，他还能被派遣至其他文明的首都和任意国内城市。他能对军事行动的成败造成影响；同时也是一名老练的外交官，可以增强与友好文明的关系，并缓和与对手的紧张关系。\n    Base: 帕夏 — 城市建造任意军事单位时+20%  [ICON_Production] 生产力。\n    L1: 首席驯鹰师 (GOVERNOR_PROMOTION_HEAD_FALCONER) — 在城市领土中战斗的所有友方单位+5 [ICON_Strength] 战斗力。\n    L1: 塞拉斯克尔 (GOVERNOR_PROMOTION_SERASKER) — 攻击防御性区域时，市中心周围10个单元格内的所有单位+10 [ICON_Strength] 战斗力。\n    L2: 卡斯-奥达-巴什 (GOVERNOR_PROMOTION_KHASS_ODA_BASHI) — 在外国盟友的 [ICON_Capital] 首都就职时，此盟友的同盟点数每回合额外增加0.5。\n    L2: 卡普阿迦 (GOVERNOR_PROMOTION_CAPOU_AGHA) — 在外国 [ICON_Capital] 首都就职时，此文明对您的 [ICON_STAT_GRIEVANCE] 不满每回合多降低1点。\n    L3: 大维齐尔 (GOVERNOR_PROMOTION_GRAND_VISIER) — 在外国 [ICON_Capital] 首都就职时，此文明的任何城市皆无法对您的城市施加忠诚度压力。\n\nUse appoint_governor/assign_governor/promote_governor(governor_type, promotion_type)."
+        },
+        "isError": false
+      },
+      "hint": null
+    },
+    "policy show": {
+      "event": "tool_result",
+      "sequence": 16786,
+      "run_id": "fc5ae23b2e68487baa39576427d4d157",
+      "timestamp": "2026-10-25T09:00:27.800524+00:00",
+      "request": 16785,
+      "tool": "get_policies",
+      "is_error": false,
+      "protocol_is_error": false,
+      "error": null,
+      "result": {
+        "meta": null,
+        "content": [
+          {
+            "type": "text",
+            "text": "Government: 商人共和国 (GOVERNMENT_MERCHANT_REPUBLIC)\nPolicy change cost: 80 GOLD; balance: 1459.48\n\n6 policy slots:\n  Slot 0 (Military): 征兵 (POLICY_CONSCRIPTION)\n  Slot 1 (Economic): 自然哲学 (POLICY_NATURAL_PHILOSOPHY)\n  Slot 2 (Economic): 城镇特许状 (POLICY_TOWN_CHARTERS)\n  Slot 3 (Diplomatic): 商人联盟 (POLICY_MERCHANT_CONFEDERATION)\n  Slot 4 (Diplomatic): 魅力型领袖 (POLICY_CHARISMATIC_LEADER)\n  Slot 5 (Wildcard): 民间威望 (POLICY_CIVIL_PRESTIGE)\n\nAvailable policies:\n  Military:\n    纪律 (POLICY_DISCIPLINE): 同蛮族战斗时，+5 [ICON_Strength] 单位战斗力。\n    调查 (POLICY_SURVEY): 侦察单位获得的经验值翻倍。\n    斯巴达教育 (POLICY_AGOGE): 生产远古和古典时代的近战、抗骑兵和远程单位时+50% [ICON_Production] 生产力。\n    海运业 (POLICY_MARITIME_INDUSTRIES): 为远古和古典时代的海军单位+100% [ICON_Production] 生产力。\n    演习 (POLICY_MANEUVER): 为远古和古典时代的重型和轻型骑兵单位+50% [ICON_Production] 生产力。\n    扫荡 (POLICY_RAID): 掠夺和海岸扫荡的收益+50%。\n    经验 (POLICY_VETERANCY): 建造军营、港口和这些区域中的建筑时+30% [ICON_Production] 生产力。\n    棱堡 (POLICY_BASTIONS): 城市 [ICON_Strength] 防御力+6。城市 [ICON_Ranged] 远程攻击力+5。\n    边界 (POLICY_LIMES): 为防御建筑+100% [ICON_Production] 生产力。\n    封建契约 (POLICY_FEUDAL_CONTRACT): 生产远古、古典、中世纪和文艺复兴时代的近战、抗骑兵和远程单位时+50% [ICON_Production] 生产力。\n    侍从 (POLICY_RETAINERS): 拥有驻军单位的城市+1 [ICON_Amenities] 宜居度。\n    职业军队 (POLICY_PROFESSIONAL_ARMY): 所有单位升级所需的 [ICON_Gold] 金币减少50%。\n    工匠 (POLICY_CRAFTSMEN): 100%工业区相邻加成。\n    骑士精神 (POLICY_CHIVALRY): 生产工业及更早时代的重型和轻型骑兵单位时+50% [ICON_Production] 生产力。\n    强征入伍 (POLICY_PRESS_GANGS): 生产工业及更早时代的海军单位时+100% [ICON_Production] 生产力。\n    宗教战争 (POLICY_WARS_OF_RELIGION): 非宗教单位与信奉其他宗教的文明进行战争时，+4 [ICON_Strength] 战斗力。\n    后勤 (POLICY_LOGISTICS): 在友好领土开启回合+1移动力。\n    本土征服 (POLICY_NATIVE_CONQUEST): 击杀先前时代的单位可获得等同于被击杀单位 [ICON_Strength] 战斗力50%的 [ICON_Gold] 金币（标准速度下）。\n    边防军 (POLICY_LIMITANEI): 拥有驻军单位的城市每回合的忠诚度+2。\n    骑士阶级 (POLICY_EQUESTRIAN_ORDERS): 所有改良的 [ICON_RESOURCE_HORSES] 马与 [ICON_RESOURCE_IRON] 铁每回合额外产出1点资源。\n    训练手册 (POLICY_DRILL_MANUALS): 所有改良的 [ICON_RESOURCE_NITER] 硝石与 [ICON_RESOURCE_COAL] 煤每回合额外产出1点资源。\n    贴身随从 (POLICY_RETINUES): 所有单位升级的资源花费减少50%。\n  Economic:\n    君主崇拜 (POLICY_GOD_KING): [ICON_Capital] 首都+1 [ICON_Faith] 信仰值和+1 [ICON_Gold] 金币。\n    城市规划 (POLICY_URBAN_PLANNING): 所有城市+1 [ICON_Production] 生产力。\n    服役 (POLICY_ILKUM): 为生产建造者+30% [ICON_Production] 生产力。\n    商队旅馆 (POLICY_CARAVANSARIES): 所有 [ICON_TradeRoute] 贸易路线+2 [ICON_Gold] 金币。\n    强迫劳役 (POLICY_CORVEE): 为远古和古典奇观+15% [ICON_Production] 生产力。\n    土地测量员 (POLICY_LAND_SURVEYORS): 购买一个单元格的费用降低20%。\n    殖民 (POLICY_COLONIZATION): 为开拓者+50% [ICON_Production] 生产力。\n    楼房 (POLICY_INSULAE): 所有拥有2个区域以上的城市+1 [ICON_Housing] 住房。\n    经文 (POLICY_SCRIPTURE): +100%圣地相邻加成。\n    海军基础设施 (POLICY_NAVAL_INFRASTRUCTURE): +100%港口区域相邻加成。\n    农奴制 (POLICY_SERFDOM): 新训练的建造者获得两点额外劳动力。\n    贸易联盟 (POLICY_TRADE_CONFEDERATION): 从国际 [ICON_TradeRoute] 贸易路线+1 [ICON_Culture] 文化值和+1 [ICON_Science] 科技值。\n    美学 (POLICY_AESTHETICS): +100%剧院广场区相邻加成。\n    古老城区 (POLICY_MEDINA_QUARTER): 所有拥有至少3个独立区域的城市+2 [ICON_Housing] 住房。\n    哥特式建筑 (POLICY_GOTHIC_ARCHITECTURE): 建造远古、古典、中世纪和文艺复兴时代的奇观时+15% [ICON_Production] 生产力。\n    宗教教派 (POLICY_RELIGIOUS_ORDERS): 所有宗教单位在神学战斗中+5 [ICON_Religion] 宗教战斗力。\n    共享教堂 (POLICY_SIMULTANEUM): 圣地中的建筑将产出额外的 [ICON_Faith] 信仰值：如城市 [ICON_CITIZEN] 人口大于等于15点，+50%信仰值；如区域拥有至少+4相邻加成，+50%信仰值。\n    三角贸易 (POLICY_TRIANGULAR_TRADE): 所有 [ICON_TradeRoute] 贸易路线+4 [ICON_Gold] 金币和+1 [ICON_Faith] 信仰值。\n    理性主义 (POLICY_RATIONALISM): 学院中的建筑将产出额外的 [ICON_Science] 科技值：如城市 [ICON_CITIZEN] 人口大于等于15点，+50%科技值；如区域拥有至少+4相邻加成，+50%科技值。\n    自由市场 (POLICY_FREE_MARKET): 商业中心中的建筑将产出额外的 [ICON_Gold] 金币：如城市 [ICON_CITIZEN] 人口大于等于15点，+50%金币；如区域拥有至少+4的相邻加成，+50%金币。\n    自由主义 (POLICY_LIBERALISM): 拥有至少两个独立区域的所有城市+1 [ICON_Amenities] 宜居度。\n  Diplomatic:\n    外交联盟 (POLICY_DIPLOMATIC_LEAGUE): 您向每个城邦派遣的第一个 [ICON_Envoy] 使者会被视为2个 [ICON_Envoy] 使者。\n    殖民地办事处 (POLICY_COLONIAL_OFFICES): 与您最初的 [ICON_Capital] 首都不在同一大陆的城市发展加速15%、每回合提供3点忠诚度。\n    权术主义 (POLICY_MACHIAVELLIANISM): 为间谍+50% [ICON_Production] 生产力。间谍行动时间减少25%。\n    殖民地税收 (POLICY_COLONIAL_TAXES): 与您最初的 [ICON_Capital] 首都不在同一大陆的城市+25% [ICON_Gold] 金币、+10% [ICON_PRODUCTION] 生产力。\n    统治 (POLICY_RAJ): 作为宗主国，从每个下属城邦获得+2 [ICON_Science] 科技值、[ICON_Culture] 文化值、[ICON_Faith] 信仰值和 [ICON_Gold] 金币。通往城邦的 [ICON_TradeRoute] 贸易路线所提供的 [ICON_GOLD] 金币+2。\n    司令部 (POLICY_PRAETORIUM): [ICON_Governor] 总督为其所在城市每回合忠诚度+2。\n    贸易银行 (POLICY_WISSELBANKEN): 您通往盟友城市或旗下城邦的 [ICON_TradeRoute] 贸易路线为双边城市+2 [ICON_Food] 食物、+2 [ICON_Production] 生产力。所有盟友的同盟点数每回合额外增加0.25点。\n  Wildcard:\n    共和传承 (POLICY_GOV_CLASSICAL_REPUBLIC): 拥有区域的所有城市+1 [ICON_Housing] 住房、+1 [ICON_Amenities] 宜居度。\n\nUse set_policies with slot assignments, e.g. '0=POLICY_AGOGE,1=POLICY_URBAN_PLANNING'\nWildcard slots can accept any policy type.",
+            "annotations": null,
+            "meta": null
+          }
+        ],
+        "structuredContent": {
+          "result": "Government: 商人共和国 (GOVERNMENT_MERCHANT_REPUBLIC)\nPolicy change cost: 80 GOLD; balance: 1459.48\n\n6 policy slots:\n  Slot 0 (Military): 征兵 (POLICY_CONSCRIPTION)\n  Slot 1 (Economic): 自然哲学 (POLICY_NATURAL_PHILOSOPHY)\n  Slot 2 (Economic): 城镇特许状 (POLICY_TOWN_CHARTERS)\n  Slot 3 (Diplomatic): 商人联盟 (POLICY_MERCHANT_CONFEDERATION)\n  Slot 4 (Diplomatic): 魅力型领袖 (POLICY_CHARISMATIC_LEADER)\n  Slot 5 (Wildcard): 民间威望 (POLICY_CIVIL_PRESTIGE)\n\nAvailable policies:\n  Military:\n    纪律 (POLICY_DISCIPLINE): 同蛮族战斗时，+5 [ICON_Strength] 单位战斗力。\n    调查 (POLICY_SURVEY): 侦察单位获得的经验值翻倍。\n    斯巴达教育 (POLICY_AGOGE): 生产远古和古典时代的近战、抗骑兵和远程单位时+50% [ICON_Production] 生产力。\n    海运业 (POLICY_MARITIME_INDUSTRIES): 为远古和古典时代的海军单位+100% [ICON_Production] 生产力。\n    演习 (POLICY_MANEUVER): 为远古和古典时代的重型和轻型骑兵单位+50% [ICON_Production] 生产力。\n    扫荡 (POLICY_RAID): 掠夺和海岸扫荡的收益+50%。\n    经验 (POLICY_VETERANCY): 建造军营、港口和这些区域中的建筑时+30% [ICON_Production] 生产力。\n    棱堡 (POLICY_BASTIONS): 城市 [ICON_Strength] 防御力+6。城市 [ICON_Ranged] 远程攻击力+5。\n    边界 (POLICY_LIMES): 为防御建筑+100% [ICON_Production] 生产力。\n    封建契约 (POLICY_FEUDAL_CONTRACT): 生产远古、古典、中世纪和文艺复兴时代的近战、抗骑兵和远程单位时+50% [ICON_Production] 生产力。\n    侍从 (POLICY_RETAINERS): 拥有驻军单位的城市+1 [ICON_Amenities] 宜居度。\n    职业军队 (POLICY_PROFESSIONAL_ARMY): 所有单位升级所需的 [ICON_Gold] 金币减少50%。\n    工匠 (POLICY_CRAFTSMEN): 100%工业区相邻加成。\n    骑士精神 (POLICY_CHIVALRY): 生产工业及更早时代的重型和轻型骑兵单位时+50% [ICON_Production] 生产力。\n    强征入伍 (POLICY_PRESS_GANGS): 生产工业及更早时代的海军单位时+100% [ICON_Production] 生产力。\n    宗教战争 (POLICY_WARS_OF_RELIGION): 非宗教单位与信奉其他宗教的文明进行战争时，+4 [ICON_Strength] 战斗力。\n    后勤 (POLICY_LOGISTICS): 在友好领土开启回合+1移动力。\n    本土征服 (POLICY_NATIVE_CONQUEST): 击杀先前时代的单位可获得等同于被击杀单位 [ICON_Strength] 战斗力50%的 [ICON_Gold] 金币（标准速度下）。\n    边防军 (POLICY_LIMITANEI): 拥有驻军单位的城市每回合的忠诚度+2。\n    骑士阶级 (POLICY_EQUESTRIAN_ORDERS): 所有改良的 [ICON_RESOURCE_HORSES] 马与 [ICON_RESOURCE_IRON] 铁每回合额外产出1点资源。\n    训练手册 (POLICY_DRILL_MANUALS): 所有改良的 [ICON_RESOURCE_NITER] 硝石与 [ICON_RESOURCE_COAL] 煤每回合额外产出1点资源。\n    贴身随从 (POLICY_RETINUES): 所有单位升级的资源花费减少50%。\n  Economic:\n    君主崇拜 (POLICY_GOD_KING): [ICON_Capital] 首都+1 [ICON_Faith] 信仰值和+1 [ICON_Gold] 金币。\n    城市规划 (POLICY_URBAN_PLANNING): 所有城市+1 [ICON_Production] 生产力。\n    服役 (POLICY_ILKUM): 为生产建造者+30% [ICON_Production] 生产力。\n    商队旅馆 (POLICY_CARAVANSARIES): 所有 [ICON_TradeRoute] 贸易路线+2 [ICON_Gold] 金币。\n    强迫劳役 (POLICY_CORVEE): 为远古和古典奇观+15% [ICON_Production] 生产力。\n    土地测量员 (POLICY_LAND_SURVEYORS): 购买一个单元格的费用降低20%。\n    殖民 (POLICY_COLONIZATION): 为开拓者+50% [ICON_Production] 生产力。\n    楼房 (POLICY_INSULAE): 所有拥有2个区域以上的城市+1 [ICON_Housing] 住房。\n    经文 (POLICY_SCRIPTURE): +100%圣地相邻加成。\n    海军基础设施 (POLICY_NAVAL_INFRASTRUCTURE): +100%港口区域相邻加成。\n    农奴制 (POLICY_SERFDOM): 新训练的建造者获得两点额外劳动力。\n    贸易联盟 (POLICY_TRADE_CONFEDERATION): 从国际 [ICON_TradeRoute] 贸易路线+1 [ICON_Culture] 文化值和+1 [ICON_Science] 科技值。\n    美学 (POLICY_AESTHETICS): +100%剧院广场区相邻加成。\n    古老城区 (POLICY_MEDINA_QUARTER): 所有拥有至少3个独立区域的城市+2 [ICON_Housing] 住房。\n    哥特式建筑 (POLICY_GOTHIC_ARCHITECTURE): 建造远古、古典、中世纪和文艺复兴时代的奇观时+15% [ICON_Production] 生产力。\n    宗教教派 (POLICY_RELIGIOUS_ORDERS): 所有宗教单位在神学战斗中+5 [ICON_Religion] 宗教战斗力。\n    共享教堂 (POLICY_SIMULTANEUM): 圣地中的建筑将产出额外的 [ICON_Faith] 信仰值：如城市 [ICON_CITIZEN] 人口大于等于15点，+50%信仰值；如区域拥有至少+4相邻加成，+50%信仰值。\n    三角贸易 (POLICY_TRIANGULAR_TRADE): 所有 [ICON_TradeRoute] 贸易路线+4 [ICON_Gold] 金币和+1 [ICON_Faith] 信仰值。\n    理性主义 (POLICY_RATIONALISM): 学院中的建筑将产出额外的 [ICON_Science] 科技值：如城市 [ICON_CITIZEN] 人口大于等于15点，+50%科技值；如区域拥有至少+4相邻加成，+50%科技值。\n    自由市场 (POLICY_FREE_MARKET): 商业中心中的建筑将产出额外的 [ICON_Gold] 金币：如城市 [ICON_CITIZEN] 人口大于等于15点，+50%金币；如区域拥有至少+4的相邻加成，+50%金币。\n    自由主义 (POLICY_LIBERALISM): 拥有至少两个独立区域的所有城市+1 [ICON_Amenities] 宜居度。\n  Diplomatic:\n    外交联盟 (POLICY_DIPLOMATIC_LEAGUE): 您向每个城邦派遣的第一个 [ICON_Envoy] 使者会被视为2个 [ICON_Envoy] 使者。\n    殖民地办事处 (POLICY_COLONIAL_OFFICES): 与您最初的 [ICON_Capital] 首都不在同一大陆的城市发展加速15%、每回合提供3点忠诚度。\n    权术主义 (POLICY_MACHIAVELLIANISM): 为间谍+50% [ICON_Production] 生产力。间谍行动时间减少25%。\n    殖民地税收 (POLICY_COLONIAL_TAXES): 与您最初的 [ICON_Capital] 首都不在同一大陆的城市+25% [ICON_Gold] 金币、+10% [ICON_PRODUCTION] 生产力。\n    统治 (POLICY_RAJ): 作为宗主国，从每个下属城邦获得+2 [ICON_Science] 科技值、[ICON_Culture] 文化值、[ICON_Faith] 信仰值和 [ICON_Gold] 金币。通往城邦的 [ICON_TradeRoute] 贸易路线所提供的 [ICON_GOLD] 金币+2。\n    司令部 (POLICY_PRAETORIUM): [ICON_Governor] 总督为其所在城市每回合忠诚度+2。\n    贸易银行 (POLICY_WISSELBANKEN): 您通往盟友城市或旗下城邦的 [ICON_TradeRoute] 贸易路线为双边城市+2 [ICON_Food] 食物、+2 [ICON_Production] 生产力。所有盟友的同盟点数每回合额外增加0.25点。\n  Wildcard:\n    共和传承 (POLICY_GOV_CLASSICAL_REPUBLIC): 拥有区域的所有城市+1 [ICON_Housing] 住房、+1 [ICON_Amenities] 宜居度。\n\nUse set_policies with slot assignments, e.g. '0=POLICY_AGOGE,1=POLICY_URBAN_PLANNING'\nWildcard slots can accept any policy type."
+        },
+        "isError": false
+      },
+      "hint": null
+    },
+    "victory show": {
+      "event": "tool_result",
+      "sequence": 16766,
+      "run_id": "fc5ae23b2e68487baa39576427d4d157",
+      "timestamp": "2026-10-25T08:58:33.871843+00:00",
+      "request": 16765,
+      "tool": "get_victory_progress",
+      "is_error": false,
+      "protocol_is_error": false,
+      "error": null,
+      "result": {
+        "meta": null,
+        "content": [
+          {
+            "type": "text",
+            "text": "=== VICTORY PROGRESS ===\nEnabled: Domination, Culture, VICTORY_DEFAULT, Diplomatic, Religious, Score, Science\n\nSCIENCE\n  苏美尔: 0/33.5 VP | 40 techs | 0 spaceports | native progress/turn 0\n  瑞典: 0/33.5 VP | 62 techs | 4 spaceports | native progress/turn 0\n  巴西: 0/33.5 VP | 63 techs | 3 spaceports | native progress/turn 0\n  加拿大: 0/33.5 VP | 60 techs | 2 spaceports | native progress/turn 0\n  发射地球卫星: locked | prerequisite TECH_ROCKETRY (researched=False)\n  启动登月计划: locked | prerequisite TECH_SATELLITES (researched=False)\n  启动火星殖民: locked | prerequisite TECH_NANOTECHNOLOGY (researched=False)\n  启动系外行星探索: locked | prerequisite TECH_SMART_MATERIALS (researched=False)\n\nDOMINATION (original capitals)\n  苏美尔: original capital held\n  瑞典: original capital held\n  巴西: original capital held\n  加拿大: original capital held\n\nCULTURE\n  苏美尔: tourism 4 | domestic tourists 1 | visiting tourists 0/315\n  瑞典: tourism 604 | domestic tourists 287 | visiting tourists 134/315\n  巴西: tourism 319 | domestic tourists 314 | visiting tourists 69/288\n  加拿大: tourism 239 | domestic tourists 270 | visiting tourists 120/315\n  Our tourists from 瑞典: 0 | their domestic tourists: 287\n  Our tourists from 巴西: 0 | their domestic tourists: 314\n  Our tourists from 加拿大: 0 | their domestic tourists: 270\n\nRELIGION (founded 3/3)\n  苏美尔: majority=none | native religion cities 0 (engine statistic; not owned-city count) | founded religion=False\n  瑞典: majority=RELIGION_PROTESTANTISM | native religion cities 9 (engine statistic; not owned-city count) | founded religion=True (新教)\n  巴西: majority=RELIGION_CATHOLICISM | native religion cities 11 (engine statistic; not owned-city count) | founded religion=True (天主教)\n  加拿大: majority=RELIGION_ISLAM | native religion cities 9 (engine statistic; not owned-city count) | founded religion=True (伊斯兰教)\n\nDIPLOMATIC\n  瑞典: 12/20 VP\n  苏美尔: 9/20 VP\n  加拿大: 8/20 VP\n  巴西: 6/20 VP\n\nSCORE AND CIVILIZATION DATA\n  瑞典: score 1062 | 7 cities | science 245.7 | culture 513.1 | gold +265.3 | military 451 | civics 48\n  巴西: score 971 | 8 cities | science 304.4 | culture 255.8 | gold +121.8 | military 291 | civics 46\n  加拿大: score 948 | 7 cities | science 249.8 | culture 310 | gold +519.5 | military 976 | civics 50\n  苏美尔: score 296 | 3 cities | science 88.2 | culture 34.7 | gold +42.7 | military 501 | civics 28\n\nDEMOGRAPHICS\n  Population: rank 4 | ours 33 | best 93 | average 69.5 | worst 33\n  Soldiers: rank 2 | ours 501 | best 976 | average 554.8 | worst 291\n  CropYield: rank 4 | ours 85 | best 212 | average 161.2 | worst 85\n  GNP: rank 4 | ours 42.7 | best 519.5 | average 237.3 | worst 42.7\n  Land: rank 4 | ours 55 | best 237 | average 177.8 | worst 55\n  Goods: rank 4 | ours 35.9 | best 438.3 | average 302 | worst 35.9\n\nVictory risk (heuristic; not a terminal result):\n  瑞典: space race observed | 4 completed spaceport(s) | 0/33.5 VP | completed milestones 1\n  瑞典: diplomatic 12/20 VP (>=50%)\n  巴西: space race observed | 3 completed spaceport(s) | 0/33.5 VP | completed milestones 1\n  加拿大: space race observed | 2 completed spaceport(s) | 0/33.5 VP | completed milestones 2\nInspect get_victory_progress and reassess the victory route; no exact remaining-turn estimate.",
+            "annotations": null,
+            "meta": null
+          }
+        ],
+        "structuredContent": {
+          "result": "=== VICTORY PROGRESS ===\nEnabled: Domination, Culture, VICTORY_DEFAULT, Diplomatic, Religious, Score, Science\n\nSCIENCE\n  苏美尔: 0/33.5 VP | 40 techs | 0 spaceports | native progress/turn 0\n  瑞典: 0/33.5 VP | 62 techs | 4 spaceports | native progress/turn 0\n  巴西: 0/33.5 VP | 63 techs | 3 spaceports | native progress/turn 0\n  加拿大: 0/33.5 VP | 60 techs | 2 spaceports | native progress/turn 0\n  发射地球卫星: locked | prerequisite TECH_ROCKETRY (researched=False)\n  启动登月计划: locked | prerequisite TECH_SATELLITES (researched=False)\n  启动火星殖民: locked | prerequisite TECH_NANOTECHNOLOGY (researched=False)\n  启动系外行星探索: locked | prerequisite TECH_SMART_MATERIALS (researched=False)\n\nDOMINATION (original capitals)\n  苏美尔: original capital held\n  瑞典: original capital held\n  巴西: original capital held\n  加拿大: original capital held\n\nCULTURE\n  苏美尔: tourism 4 | domestic tourists 1 | visiting tourists 0/315\n  瑞典: tourism 604 | domestic tourists 287 | visiting tourists 134/315\n  巴西: tourism 319 | domestic tourists 314 | visiting tourists 69/288\n  加拿大: tourism 239 | domestic tourists 270 | visiting tourists 120/315\n  Our tourists from 瑞典: 0 | their domestic tourists: 287\n  Our tourists from 巴西: 0 | their domestic tourists: 314\n  Our tourists from 加拿大: 0 | their domestic tourists: 270\n\nRELIGION (founded 3/3)\n  苏美尔: majority=none | native religion cities 0 (engine statistic; not owned-city count) | founded religion=False\n  瑞典: majority=RELIGION_PROTESTANTISM | native religion cities 9 (engine statistic; not owned-city count) | founded religion=True (新教)\n  巴西: majority=RELIGION_CATHOLICISM | native religion cities 11 (engine statistic; not owned-city count) | founded religion=True (天主教)\n  加拿大: majority=RELIGION_ISLAM | native religion cities 9 (engine statistic; not owned-city count) | founded religion=True (伊斯兰教)\n\nDIPLOMATIC\n  瑞典: 12/20 VP\n  苏美尔: 9/20 VP\n  加拿大: 8/20 VP\n  巴西: 6/20 VP\n\nSCORE AND CIVILIZATION DATA\n  瑞典: score 1062 | 7 cities | science 245.7 | culture 513.1 | gold +265.3 | military 451 | civics 48\n  巴西: score 971 | 8 cities | science 304.4 | culture 255.8 | gold +121.8 | military 291 | civics 46\n  加拿大: score 948 | 7 cities | science 249.8 | culture 310 | gold +519.5 | military 976 | civics 50\n  苏美尔: score 296 | 3 cities | science 88.2 | culture 34.7 | gold +42.7 | military 501 | civics 28\n\nDEMOGRAPHICS\n  Population: rank 4 | ours 33 | best 93 | average 69.5 | worst 33\n  Soldiers: rank 2 | ours 501 | best 976 | average 554.8 | worst 291\n  CropYield: rank 4 | ours 85 | best 212 | average 161.2 | worst 85\n  GNP: rank 4 | ours 42.7 | best 519.5 | average 237.3 | worst 42.7\n  Land: rank 4 | ours 55 | best 237 | average 177.8 | worst 55\n  Goods: rank 4 | ours 35.9 | best 438.3 | average 302 | worst 35.9\n\nVictory risk (heuristic; not a terminal result):\n  瑞典: space race observed | 4 completed spaceport(s) | 0/33.5 VP | completed milestones 1\n  瑞典: diplomatic 12/20 VP (>=50%)\n  巴西: space race observed | 3 completed spaceport(s) | 0/33.5 VP | completed milestones 1\n  加拿大: space race observed | 2 completed spaceport(s) | 0/33.5 VP | completed milestones 2\nInspect get_victory_progress and reassess the victory route; no exact remaining-turn estimate."
+        },
+        "isError": false
+      },
+      "hint": null
+    }
+  },
+  "government_change_evidence": [
+    {
+      "event": "tool_started",
+      "sequence": 3156,
+      "run_id": "fc5ae23b2e68487baa39576427d4d157",
+      "timestamp": "2026-10-25T08:07:57.226207+00:00",
+      "tool": "change_government",
+      "arguments": {
+        "government_type": "GOVERNMENT_MONARCHY"
+      }
+    },
+    {
+      "event": "tool_result",
+      "sequence": 3157,
+      "run_id": "fc5ae23b2e68487baa39576427d4d157",
+      "timestamp": "2026-10-25T08:07:57.348558+00:00",
+      "request": 3156,
+      "tool": "change_government",
+      "is_error": false,
+      "protocol_is_error": false,
+      "error": null,
+      "result": {
+        "meta": null,
+        "content": [
+          {
+            "type": "text",
+            "text": "GOVERNMENT_CHANGED|GOVERNMENT_MONARCHY",
+            "annotations": null,
+            "meta": null
+          }
+        ],
+        "structuredContent": {
+          "result": "GOVERNMENT_CHANGED|GOVERNMENT_MONARCHY"
+        },
+        "isError": false
+      },
+      "hint": null
+    },
+    {
+      "event": "tool_started",
+      "sequence": 8002,
+      "run_id": "fc5ae23b2e68487baa39576427d4d157",
+      "timestamp": "2026-10-25T08:27:18.477864+00:00",
+      "tool": "change_government",
+      "arguments": {
+        "government_type": "GOVERNMENT_CLASSICAL_REPUBLIC"
+      }
+    },
+    {
+      "event": "tool_result",
+      "sequence": 8003,
+      "run_id": "fc5ae23b2e68487baa39576427d4d157",
+      "timestamp": "2026-10-25T08:27:18.743753+00:00",
+      "request": 8002,
+      "tool": "change_government",
+      "is_error": false,
+      "protocol_is_error": false,
+      "error": null,
+      "result": {
+        "meta": null,
+        "content": [
+          {
+            "type": "text",
+            "text": "GOVERNMENT_CHANGE_STARTED|target:GOVERNMENT_CLASSICAL_REPUBLIC,anarchy_until:168,remaining:3",
+            "annotations": null,
+            "meta": null
+          }
+        ],
+        "structuredContent": {
+          "result": "GOVERNMENT_CHANGE_STARTED|target:GOVERNMENT_CLASSICAL_REPUBLIC,anarchy_until:168,remaining:3"
+        },
+        "isError": false
+      },
+      "hint": null
+    },
+    {
+      "event": "tool_started",
+      "sequence": 13444,
+      "run_id": "fc5ae23b2e68487baa39576427d4d157",
+      "timestamp": "2026-10-25T08:44:24.474427+00:00",
+      "tool": "change_government",
+      "arguments": {
+        "government_type": "GOVERNMENT_MERCHANT_REPUBLIC"
+      }
+    },
+    {
+      "event": "tool_result",
+      "sequence": 13445,
+      "run_id": "fc5ae23b2e68487baa39576427d4d157",
+      "timestamp": "2026-10-25T08:44:24.783306+00:00",
+      "request": 13444,
+      "tool": "change_government",
+      "is_error": false,
+      "protocol_is_error": false,
+      "error": null,
+      "result": {
+        "meta": null,
+        "content": [
+          {
+            "type": "text",
+            "text": "GOVERNMENT_CHANGED|GOVERNMENT_MERCHANT_REPUBLIC",
+            "annotations": null,
+            "meta": null
+          }
+        ],
+        "structuredContent": {
+          "result": "GOVERNMENT_CHANGED|GOVERNMENT_MERCHANT_REPUBLIC"
+        },
+        "isError": false
+      },
+      "hint": null
+    }
+  ]
+}
