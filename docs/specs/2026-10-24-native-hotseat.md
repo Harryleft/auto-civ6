@@ -2,7 +2,7 @@
 
 2026-10-24 实机通过四叶草神级存档的首轮双人操作、原生交接、保存和重载。Codex 控制苏美尔，实际 Claude Code 进程控制瑞典。双方在 InGame 与 GameCore 中均保持人类身份，工具未调用 `SetLocalPlayerAndObserver`。详细证据见[本轮记录](../../games/2026-10-24-dual-ai-four-leaf/runs/20261024-084444-hotseat/README.md)。
 
-这是独立实验入口。默认 `civ-mcp` 的单人生命周期不变，普通 `end_turn` 不用于热座交接。
+这是独立实验入口。默认单人 `civ6 debug` 生命周期不变，普通 `turn end` 不用于热座交接。
 
 ## 版本与补丁
 
@@ -45,20 +45,24 @@ Network.LoadGame(nativeSaveFile, ServerType.SERVER_TYPE_HOTSEAT)
 
 ## 两个模型的入口
 
-[固定席位 MCP](../../scripts/hotseat_agent.py) 复用现有 `server.py`、GameState、GameConnection 和领域动作确认，不另造单位操作实现：
+两个模型都只通过 CLI 进入，各自启动一个绑定席位的会话：
 
 ```sh
-uv run --locked python scripts/hotseat_agent.py --seat 0 --run "$RUN"
-uv run --locked python scripts/hotseat_agent.py --seat 1 --run "$RUN"
+uv run --locked civ6 debug --hotseat-seat 0 --hotseat-run "$RUN"
+uv run --locked civ6 debug --hotseat-seat 1 --hotseat-run "$RUN"
 ```
+
+它复用原[固定席位控制器](../../scripts/hotseat_agent.py)（由 CLI 拉起，内部仍是 stdio 服务），并沿用现有 `server.py`、GameState、GameConnection 和领域动作确认，不另造单位操作实现。`--hotseat-seat` 与 `--hotseat-run` 必须成对，且不能与 `--offline`／`--developer` 合用；该轮必须含已核验补丁清单，发现共享 pending 时拒绝新建会话。会话内用 `hotseat begin`、`hotseat end`、`hotseat actions` 完成本席位操作，普通 `turn end`、Single 存档操作和任意 Lua 在该控制器不可用。
+
+> 2026-10-25 复核：`scripts/hotseat_endurance.py` 是上述实验的旧协调器，仍以直接 MCP 注入方式驱动两个模型，未迁移到 CLI 入口；它现在要求 `--acknowledge-legacy-mcp` 才允许运行，仅用于复现历史实验。
 
 两个入口使用同一运行目录，席位 0 为苏美尔、1 为瑞典。每个工具持有跨进程控制锁，验证原生热座、种子、文明、双方人类身份及当前席位；结束后断开 FireTuner。监听重新开放有短暂延迟，只允许只读预检和确认在限定时间内重连。变更不自动重放。
 
-`begin_hotseat_turn` 调用原生 PlayerChange 的 `OnOk` 一次，分别确认暂停解除和手番可用。`end_hotseat_turn` 提交原生 ENDTURN 一次，以控制交给下一名人类玩家为完成条件；同轮交接不要求全局回合号增加。未确认请求写入共享门禁，其他变更和新服务实例不能越过，普通查询不清除门禁。
+`hotseat begin`（控制器内部 `begin_hotseat_turn`）调用原生 PlayerChange 的 `OnOk` 一次，分别确认暂停解除和手番可用。`hotseat end`（内部 `end_hotseat_turn`）提交原生 ENDTURN 一次，以控制交给下一名人类玩家为完成条件；同轮交接不要求全局回合号增加。未确认请求写入共享门禁，其他变更和新服务实例不能越过，普通查询不清除门禁。
 
 该入口只暴露本次测试需要的查询、合法单位动作、研究与生产，以及热座开始／结束工具；不暴露任意 Lua、玩家切换、游戏退出或重启。单位动作限制为移动、取消移动、驻防、跳过和建城。结果未知时保留门禁，需核对原生事实或显式从本轮已确认检查点恢复。
 
-Codex 使用[stdio 客户端](../../scripts/hotseat_client.py) 发出明确选择的工具调用。Claude Code 的临时 `--mcp-config` 指向同一脚本的 `--seat 1`，保留用户既有全局设置。本轮为独立 Claude Code 会话，只有允许的 MCP 游戏工具可用。
+两个模型都执行 `civ6 debug --hotseat-seat N --hotseat-run "$RUN"`；CLI 内部由固定席位控制器暴露本次实验允许的游戏命令。模型不注册 MCP、不直接连接内部服务；该控制器不暴露任意 Lua、玩家切换、游戏退出或重启。
 
 ## 验证范围
 
