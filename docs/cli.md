@@ -224,7 +224,7 @@ COMMANDS
 | `governor assign TYPE CITY_ID [--owner PLAYER_ID]` | `assign_governor` | 变更 |
 | `governor promote TYPE PROMOTION_TYPE` | `promote_governor` | 变更 |
 
-政策槽位可用空格或逗号分隔，NONE 显式清空，未指定槽位保持原值；格式错误和重复槽位在发送前拒绝。城邦 player ID、总督类型及晋升均先查询；owner 省略时取本地玩家，显式 owner 为 0～63。政策、使者、任命和晋升可能消耗金币、使者或总督头衔，实际资格由引擎决定。
+政策槽位可用空格或逗号分隔，未指定槽位保持原值。首次填槽或切换政体后，一次提供所有空槽；任何变更后的最终方案仍有空槽时，返回 `POLICY_PLAN_INCOMPLETE` 并列出编号，在付款或原生提交前拒绝。`NONE` 保留解析支持，但不能让变更后的方案留下空槽；原已为空且完全不变的方案仅返回 no-op。格式错误和重复槽位在发送前拒绝。城邦 player ID、总督类型及晋升均先查询；owner 省略时取本地玩家，显式 owner 为 0～63。政策、使者、任命和晋升可能消耗金币、使者或总督头衔，实际资格由引擎决定。
 
 ### 议会与通知
 

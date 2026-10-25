@@ -79,7 +79,7 @@ GameInfo.GovernmentSlots = {
     [40]={GovernmentSlotType='SLOT_DIPLOMATIC',AllowsAnyPolicy=0},
     [50]={GovernmentSlotType='SLOT_GREAT_PERSON',AllowsAnyPolicy=0},
 }
-slots = {[0]=3,[1]=4,[2]=1,[3]=-1}
+slots = {[0]=3,[1]=4,[2]=1,[3]=5}
 slotTypes = {[0]=30,[1]=10,[2]=10,[3]=20}
 locked, obsolete, rejected = {}, {}, {}
 numSlots = 4
@@ -181,9 +181,7 @@ def test_explicit_relocation_is_one_complete_submission_and_keeps_untouched_slot
 
 @pytest.mark.parametrize(('initial', 'assignments', 'expected'), [
     ('slots[3]=2', {2: 'POLICY_CIVIL_PRESTIGE', 3: 'POLICY_NATURAL_PHILOSOPHY'}, {0: 3, 1: 4, 2: 2, 3: 1}),
-    ('', {2: 'NONE', 3: 'POLICY_NATURAL_PHILOSOPHY'}, {0: 3, 1: 4, 2: -1, 3: 1}),
-    ('', {2: 'POLICY_NATURAL_PHILOSOPHY'}, {0: 3, 1: 4, 2: 1, 3: -1}),
-    ('', {3: 'NONE'}, {0: 3, 1: 4, 2: 1, 3: -1}),
+    ('', {2: 'POLICY_NATURAL_PHILOSOPHY'}, {0: 3, 1: 4, 2: 1, 3: 5}),
     ('', {3: 'POLICY_GREAT_PERSON'}, {0: 3, 1: 4, 2: 1, 3: 7}),
     ('slotTypes[3]=50', {3: 'POLICY_GREAT_PERSON'}, {0: 3, 1: 4, 2: 1, 3: 7}),
 ])
@@ -193,7 +191,7 @@ def test_swaps_clears_and_retained_cards_produce_one_final_plan(initial, assignm
     result = asyncio.run(GameState(conn).set_policies(assignments))
     assert not result.startswith('Error') and 'WARN' not in result
     assert conn.current_slots() == expected
-    changed = expected != {0: 3, 1: 4, 2: 1, 3: -1}
+    changed = expected != {0: 3, 1: 4, 2: 1, 3: 5}
     assert len(conn.unlocks) == len(conn.submissions) == int(changed)
     if changed:
         assert conn.submissions[0][0] == [0, 1, 2, 3]
@@ -288,7 +286,7 @@ def test_unaffordable_policy_change_has_no_native_submissions():
     ('unlockCost=0;goldBalance=0', {2: 'POLICY_CIVIL_PRESTIGE'}, 0, 1),
     ('unlockCost=0;GlobalParameters=nil', {2: 'POLICY_CIVIL_PRESTIGE'}, 0, 1),
     ('goldBalance=0', {2: 'POLICY_NATURAL_PHILOSOPHY'}, 0, 0),
-    ('unlockCost=nil', {3: 'NONE'}, 0, 0),
+    ('unlockCost=nil', {3: 'POLICY_DIPLOMATIC'}, 0, 0),
     ('goldBalance=140', {2: 'POLICY_CIVIL_PRESTIGE'}, 1, 1),
     ('GlobalParameters.GOVERNMENT_UNLOCK_WITH_FAITH=1;goldBalance=0;faithBalance=140',
      {2: 'POLICY_CIVIL_PRESTIGE'}, 1, 1),
@@ -399,7 +397,7 @@ def test_delayed_unlock_preserves_paid_plan_and_never_replays_payment():
     assert asyncio.run(state.set_policies(plan)).startswith('POLICIES_SET|')
     assert len(conn.unlocks) == len(conn.submissions) == 1
     assert conn.lua.eval('goldBalance') == 860
-    assert conn.current_slots() == {0:3,1:4,2:2,3:-1}
+    assert conn.current_slots() == {0:3,1:4,2:2,3:5}
     assert state.pending_action_summary is None
 
 
@@ -565,7 +563,7 @@ def test_unlock_native_false_without_payment_is_unknown_and_not_a_zero_submissio
 def test_preexisting_complete_plan_remains_noop_without_unlock_eligibility():
     conn = PolicyConn(); state = GameState(conn)
     conn.lua.execute('unlockCost=nil;policyMade=true;GlobalParameters=nil')
-    result = asyncio.run(state.set_policies({0:'POLICY_DISCIPLINE',1:'POLICY_URBAN_PLANNING',2:'POLICY_NATURAL_PHILOSOPHY',3:'none'}))
+    result = asyncio.run(state.set_policies({0:'POLICY_DISCIPLINE',1:'POLICY_URBAN_PLANNING',2:'POLICY_NATURAL_PHILOSOPHY',3:'POLICY_DIPLOMATIC'}))
     assert result.startswith('POLICIES_UNCHANGED|')
     assert conn.unlocks == conn.submissions == []
     assert state.pending_action_summary is None
@@ -591,3 +589,37 @@ def test_paid_plan_can_wait_for_missing_policy_api_without_entering_or_repaying(
     conn.lua.execute('culture.RequestPolicyChanges=savedPolicyRequest')
     assert asyncio.run(state.set_policies(plan)).startswith('POLICIES_SET|')
     assert len(conn.unlocks) == len(conn.submissions) == 1
+
+
+def test_partial_first_policy_plan_cannot_consume_the_free_change():
+    conn = PolicyConn(); state = GameState(conn)
+    conn.lua.execute('numSlots=2;slotTypes={[0]=30,[1]=10};slots={[0]=-1,[1]=-1};unlockCost=0')
+
+    result = asyncio.run(state.set_policies({0: 'POLICY_DISCIPLINE'}))
+
+    assert 'POLICY_PLAN_INCOMPLETE' in result, result
+    assert conn.current_slots() == {0: -1, 1: -1}
+    assert conn.unlocks == conn.submissions == []
+    assert conn.lua.eval('policyMade') is False
+    assert state.pending_action_summary is None
+    assert asyncio.run(state.set_policies({0: 'POLICY_DISCIPLINE', 1: 'POLICY_URBAN_PLANNING'})).startswith('POLICIES_SET|')
+    assert len(conn.submissions) == 1
+
+
+@pytest.mark.parametrize("plan", [{3: "NONE"}, {2: "NONE", 3: "POLICY_NATURAL_PHILOSOPHY"}, {2: "POLICY_CIVIL_PRESTIGE"}])
+def test_empty_final_policy_slots_refuse_before_payment_or_submission(plan):
+    conn = PolicyConn(); state = GameState(conn)
+    if 2 in plan and plan[2] != "NONE": conn.lua.execute("slots[3]=-1")
+    before = conn.current_slots()
+    result = asyncio.run(state.set_policies(plan))
+    assert "POLICY_PLAN_INCOMPLETE" in result, result
+    assert conn.current_slots() == before
+    assert conn.unlocks == conn.submissions == []
+    assert state.pending_action_summary is None
+
+
+def test_unchanged_legacy_empty_slot_is_a_zero_mutation_noop():
+    conn = PolicyConn(); state = GameState(conn)
+    conn.lua.execute("slots[3]=-1;unlockCost=nil;policyMade=true")
+    assert asyncio.run(state.set_policies({3: "NONE"})).startswith("POLICIES_UNCHANGED|")
+    assert conn.unlocks == conn.submissions == []

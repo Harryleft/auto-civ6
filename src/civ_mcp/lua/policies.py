@@ -110,6 +110,16 @@ local changed = false
 for slot = 0, numSlots - 1 do
     if current[slot] ~= final[slot] then changed = true end
 end
+-- GovernmentScreen disables confirmation while any final slot is empty.
+-- Sending such a partial plan can consume the only free change and leave a
+-- FILL_CIVIC_SLOT blocker that cannot be repaired in the same turn.
+if changed then
+ local empty={{}}
+ for slot=0,numSlots-1 do if final[slot]<0 then table.insert(empty,tostring(slot)) end end
+ if #empty>0 then
+  {_fail_lua('"ERR:POLICY_PLAN_INCOMPLETE|Empty final slots: "..table.concat(empty,",")..". Assign all empty slots in one policy set command; no payment or policy submission."')}
+ end
+end
 local r={{token={json.dumps(token)},owner=me,civ=PlayerConfigurations[me]:GetCivilizationTypeName(),
  seed=GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED"),turn=Game.GetCurrentGameTurn(),
  government=government(pCulture:GetCurrentGovernment()),count=numSlots,types=types,

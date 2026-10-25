@@ -232,10 +232,12 @@ print("{SENTINEL}")
 """
 
 
-def build_city_states_query() -> str:
-    """List known city-states with envoy info (InGame context)."""
-    return """
-local me = Game.GetLocalPlayer()
+def build_city_states_query(
+    player_id: int | None = None, eligibility: dict[int, bool] | None = None,
+) -> str:
+    """List met recipients; explicit owner/eligibility selects the core read."""
+    source = """
+local me = {OWNER}
 local pInfluence = Players[me]:GetInfluence()
 local pDiplo = Players[me]:GetDiplomacy()
 print("TOKENS|" .. pInfluence:GetTokensToGive())
@@ -269,13 +271,22 @@ for i = 0, 62 do
                 local sCfg = PlayerConfigurations[suzID]
                 if sCfg then suzName = Locale.Lookup(sCfg:GetCivilizationShortDescription()) end
             end
-            local canSend = pInfluence:CanGiveTokensToPlayer(i) and "1" or "0"
+            local canSend = pInfluence:GetTokensToGive()>0 and {CAN_SEND} and "1" or "0"
             print("CS|" .. i .. "|" .. name:gsub("|","/") .. "|" .. csType .. "|" .. envoys .. "|" .. suzID .. "|" .. suzName:gsub("|","/") .. "|" .. canSend)
         end
     end
 end
 print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
+
+    ui_eligibility = 'pInfluence:CanGiveInfluence()==true and pInfluence:CanGiveTokensToPlayer(i)==true'
+    if player_id is None:
+        return source.replace("{OWNER}", "Game.GetLocalPlayer()").replace("{CAN_SEND}", ui_eligibility)
+    # These eligibility predicates are UI-only. The supplied UI flags are
+    # combined with GameCore's authoritative remaining tokens.
+    flags = ",".join(f"[{target}]={str(allowed).lower()}" for target, allowed in (eligibility or {}).items())
+    source = source.replace("{OWNER}", str(player_id)).replace("{CAN_SEND}", 'nativeCanSend[i]==true')
+    return "local nativeCanSend={" + flags + "}\n" + source
 
 
 def build_unit_upgrade_query(unit_index: int) -> str:

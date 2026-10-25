@@ -1,0 +1,68 @@
+[
+  {
+    "name": "cli100_1424_fixed_t101",
+    "sha256": "691a0f0cae2049450323206ec0840f6c664361f583c696ad3275da9eafb1bb4c",
+    "civilization": "sumeria",
+    "seed": -1896272000,
+    "turn": 101,
+    "run_id": "bbf839e8aaaf4339a780605d5a5b5ea1",
+    "score": {
+      "official": 132,
+      "categories": {
+        "CATEGORY_CIVICS": 39,
+        "CATEGORY_EMPIRE": 38,
+        "CATEGORY_GREAT_PEOPLE": 0,
+        "CATEGORY_RELIGION": 0,
+        "CATEGORY_TECH": 36,
+        "CATEGORY_WONDER": 0,
+        "CATEGORY_ERA_SCORE": 21
+      }
+    },
+    "size_bytes": 839132,
+    "evidence_file": "evidence/saves/cli100_1424_fixed_t101.Civ6Save"
+  },
+  {
+    "name": "cli100_1424_fixed_t102",
+    "sha256": "baba3f88412e196da18469c68c8efecfd6ec602c1ac3b51abe4bb7522a771e48",
+    "civilization": "sumeria",
+    "seed": -1896272000,
+    "turn": 102,
+    "run_id": "bbf839e8aaaf4339a780605d5a5b5ea1",
+    "score": {
+      "official": 134,
+      "categories": {
+        "CATEGORY_CIVICS": 42,
+        "CATEGORY_EMPIRE": 38,
+        "CATEGORY_GREAT_PEOPLE": 0,
+        "CATEGORY_RELIGION": 0,
+        "CATEGORY_TECH": 36,
+        "CATEGORY_WONDER": 0,
+        "CATEGORY_ERA_SCORE": 21
+      }
+    },
+    "size_bytes": 840628,
+    "evidence_file": "evidence/saves/cli100_1424_fixed_t102.Civ6Save"
+  },
+  {
+    "name": "cli100_1424_policy_t11",
+    "sha256": "cde7dbd34558e89b49743ff81f39965071720904acbc5875beaf9817f35ed7c7",
+    "civilization": "sumeria",
+    "seed": -1896272000,
+    "turn": 11,
+    "run_id": "bbf839e8aaaf4339a780605d5a5b5ea1",
+    "score": {
+      "official": 15,
+      "categories": {
+        "CATEGORY_CIVICS": 3,
+        "CATEGORY_EMPIRE": 10,
+        "CATEGORY_GREAT_PEOPLE": 0,
+        "CATEGORY_RELIGION": 0,
+        "CATEGORY_TECH": 2,
+        "CATEGORY_WONDER": 0,
+        "CATEGORY_ERA_SCORE": 0
+      }
+    },
+    "size_bytes": 588490,
+    "evidence_file": "evidence/saves/cli100_1424_policy_t11.Civ6Save"
+  }
+]

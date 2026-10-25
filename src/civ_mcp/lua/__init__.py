@@ -286,7 +286,7 @@ from civ_mcp.lua.victory import (  # noqa: F401
     parse_victory_progress_response,
 )
 
-from civ_mcp.lua.envoys import build_send_envoy, build_envoy_query, parse_envoy_confirmation  # noqa: F401
+from civ_mcp.lua.envoys import build_send_envoy, build_envoy_query, build_envoy_preparation, parse_envoy_preparation, build_envoy_core_query, build_city_states_observation, parse_envoy_confirmation  # noqa: F401
 from civ_mcp.lua.tile_purchase import build_purchase_tile, build_tile_purchase_query, parse_tile_purchase_confirmation  # noqa: F401
 from civ_mcp.lua.contribution import (  # noqa: F401
     build_contribution_preflight, build_sacrifice_builder_charges, build_contribution_query,

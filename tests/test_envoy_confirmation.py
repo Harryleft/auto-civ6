@@ -15,11 +15,16 @@ class EnvoyConn(ReadyConn):
         self.lose_reply = False
         self.lua.execute('''
 tokens, allowed, met, bonus = 3, true, true, 1
+GameConfiguration.GetValue=function() return in_core and core_seed or seed end
 received = {[3]=2,[4]=0}
+Players[0].IsAlive=function() return true end
+Players[0].IsMajor=function() return true end
+GameInfo.Leaders={}
+
 local influence = {
- GetTokensToGive=function() return tokens end,
- CanGiveInfluence=function() return true end,
- CanGiveTokensToPlayer=function() return allowed end,
+ GetTokensToGive=function() return cache_lag and not in_core and uiTokens or tokens end,
+ CanGiveInfluence=function() assert(not in_core,"UI-only eligibility API");return true end,
+ CanGiveTokensToPlayer=function() assert(not in_core,"UI-only eligibility API");return allowed end,
 }
 Players[0].GetInfluence=function() return influence end
 Players[0].GetDiplomacy=function() return {HasMet=function() return met end} end
@@ -27,9 +32,9 @@ for _,id in ipairs({3,4}) do
  local target=id
  Players[target]={IsAlive=function() return true end,IsMajor=function() return false end,
   IsBarbarian=function() return false end,
-  GetInfluence=function() return {CanReceiveInfluence=function() return true end,
-   GetTokensReceived=function(_,owner) assert(owner==0);return received[target] end} end}
- PlayerConfigurations[target]={GetPlayerName=function() return 'Kabul' end,
+  GetInfluence=function() return {CanReceiveInfluence=function() return true end,GetSuzerain=function() return -1 end,
+   GetTokensReceived=function(_,owner) assert(owner==0);return cache_lag and not in_core and uiReceived[target] or received[target] end} end}
+ PlayerConfigurations[target]={GetPlayerName=function() return 'Kabul' end,GetLeaderTypeName=function() return '' end,
   GetCivilizationTypeName=function() return 'CIVILIZATION_CITYSTATE_'..target end}
 end
 Locale={Lookup=function(s) return s end}
@@ -42,6 +47,16 @@ UI.RequestPlayerOperation=function(owner,op,params)
  if fail_request then error('native failure after entry') end
 end
 ''')
+
+    async def execute_read(self, code):
+        ui = self.lua.globals().UI
+        self.lua.globals().UI = None
+        self.lua.execute('in_core=true')
+        try:
+            return await super().execute_write(code)
+        finally:
+            self.lua.execute('in_core=false')
+            self.lua.globals().UI = ui
 
     async def execute_write(self, code):
         before = self.lua.eval('#submissions')
@@ -251,13 +266,91 @@ def test_timeout_before_native_entry_cannot_be_assumed_to_prove_zero_submission(
 def test_readback_failure_keeps_pending_until_transport_recovers():
     class ReadFailureConn(EnvoyConn):
         fail_reads = True
-        async def execute_write(self, code):
+        async def execute_read(self, code):
             if self.fail_reads and 'ENVOY_CONFIRMED|' in code:
                 raise OSError('read failed')
-            return await super().execute_write(code)
+            return await super().execute_read(code)
     conn = ReadFailureConn(); state = GameState(conn)
     assert 'OUTCOME_UNKNOWN' in asyncio.run(state.send_envoy(3))
     assert state.pending_action_kind == 'envoy'
     conn.fail_reads = False
     assert asyncio.run(state.send_envoy(3)).startswith('ENVOY_SENT|player:3')
     assert conn.lua.eval('#submissions') == 1
+
+
+def test_completed_envoy_is_confirmed_when_ingame_influence_cache_stays_stale():
+    conn = EnvoyConn(); state = GameState(conn)
+    conn.lua.execute("cache_lag=true;uiTokens=3;uiReceived={[3]=2,[4]=0}")
+
+    result = asyncio.run(state.send_envoy(3))
+
+    assert result == "ENVOY_SENT|player:3|remaining:2|envoys:2->3", result
+    assert conn.lua.eval("tokens") == 2
+    assert conn.lua.eval("received[3]") == 3
+    assert conn.lua.eval("uiTokens") == 3
+    assert conn.lua.eval("uiReceived[3]") == 2
+    assert conn.lua.eval("#submissions") == 1
+    assert state.pending_action_summary is None
+
+
+def test_city_state_readback_uses_engine_counts_when_ui_cache_is_stale():
+    conn = EnvoyConn(); state = GameState(conn)
+    conn.lua.execute("cache_lag=true;uiTokens=3;uiReceived={[3]=2,[4]=0}")
+    assert asyncio.run(state.send_envoy(3)).startswith("ENVOY_SENT|")
+    status = asyncio.run(state.get_city_states())
+    assert status.tokens_available == 2
+    assert next(city for city in status.city_states if city.player_id == 3).envoys_sent == 3
+    assert conn.lua.eval("#submissions") == 1
+
+
+def test_stale_ui_tokens_cannot_authorize_an_extra_envoy():
+    conn = EnvoyConn(); state = GameState(conn)
+    conn.lua.execute("cache_lag=true;uiTokens=3;uiReceived={[3]=2,[4]=0};tokens=0")
+    assert "NO_ENVOYS" in asyncio.run(state.send_envoy(3))
+    assert conn.lua.eval("#submissions") == 0
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize("change", ['__civmcpEnvoyCore=nil', '__civmcpEnvoyCore.token="other"', '__civmcpEnvoyCore.target=4'])
+def test_missing_or_mismatched_engine_receipt_cannot_confirm(change):
+    conn = EnvoyConn(); state = GameState(conn)
+    conn.lua.execute("deferred=true")
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.send_envoy(3))
+    conn.lua.execute("applyEnvoy(3);" + change)
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.send_envoy(3))
+    assert conn.lua.eval("#submissions") == 1
+    assert state.pending_action_summary is not None
+
+
+def test_engine_scope_mismatch_is_sticky_even_when_ui_scope_stays_unchanged():
+    conn = EnvoyConn(); state = GameState(conn)
+    conn.lua.execute("deferred=true")
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.send_envoy(3))
+    conn.lua.execute("core_seed=99")
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.send_envoy(3))
+    conn.lua.execute("core_seed=nil;applyEnvoy(3)")
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.send_envoy(3))
+    assert conn.lua.eval("#submissions") == 1
+
+
+def test_engine_preparation_read_failure_proves_no_envoy_submission():
+    class UnavailableCore(EnvoyConn):
+        async def execute_read(self, code):
+            raise OSError("engine unavailable")
+    conn = UnavailableCore(); state = GameState(conn)
+    result = asyncio.run(state.send_envoy(3))
+    assert result.startswith("Error: ENVOY_REFUSED|")
+    assert "no envoy request submitted" in result
+    assert conn.lua.eval("#submissions") == 0
+    assert state.pending_action_summary is None
+
+
+def test_city_state_read_does_not_confirm_or_replay_a_pending_envoy():
+    conn = EnvoyConn(); state = GameState(conn)
+    conn.lua.execute("deferred=true")
+    assert "OUTCOME_UNKNOWN" in asyncio.run(state.send_envoy(3))
+    conn.lua.execute("applyEnvoy(3)")
+    assert asyncio.run(state.get_city_states()).tokens_available == 2
+    assert state.pending_action_summary is not None
+    assert conn.lua.eval("#submissions") == 1
+    assert asyncio.run(state.send_envoy(3)).startswith("ENVOY_SENT|")

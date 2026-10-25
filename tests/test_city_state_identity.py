@@ -11,7 +11,7 @@ def native():
     lua.execute('''
 print=capture
 Game={GetLocalPlayer=function()return 0 end}
-local influence={GetTokensToGive=function()return 1 end,CanGiveTokensToPlayer=function()return true end}
+local influence={GetTokensToGive=function()return 1 end,CanGiveInfluence=function()return true end,CanGiveTokensToPlayer=function()return true end}
 local dip={HasMet=function()return true end}
 local recipient={CanReceiveInfluence=function()return true end,GetTokensReceived=function()return 1 end,GetSuzerain=function()return -1 end}
 local free={CanReceiveInfluence=function()return false end,GetTokensReceived=function()error('Must not read excluded free city details')end}

@@ -1369,8 +1369,21 @@ class GameState:
         return await self._submit_action(pending, scope, diplomacy_close.build_close(other_player_id, token))
 
     async def get_city_states(self) -> lq.EnvoyStatus:
-        lua = lq.build_city_states_query()
-        lines = await self.conn.execute_write(lua)
+        # UI influence caches can stay stale after a confirmed envoy. Bind the
+        # engine observation to the local UI identity instead of returning it.
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            raise ValueError(scope)
+        ui_lines = await self.conn.execute_write(lq.build_city_states_query())
+        ui_status = lq.parse_city_states_response(ui_lines)
+        eligibility = {city.player_id: city.can_send_envoy for city in ui_status.city_states}
+        lines = await self.conn.execute_read(lq.build_city_states_observation(
+            scope.owner, scope.civilization, scope.seed, scope.turn, eligibility))
+        if any(line.startswith("ERR:") for line in lines) or sum(line.startswith("TOKENS|") for line in lines) != 1:
+            raise ValueError("City-state engine observation unavailable: " + "; ".join(lines))
+        after = await self._actions.prepare_scope(self._game_identity)
+        if after != scope:
+            raise ValueError("City-state local world/player/turn changed during observation")
         return lq.parse_city_states_response(lines)
 
     @_guard_pending_mutation
@@ -1387,17 +1400,24 @@ class GameState:
         if isinstance(scope, str):
             return scope
         token = uuid.uuid4().hex
+        try:
+            baseline_rows = await self.conn.execute_read(lq.build_envoy_preparation(
+                scope.owner, city_state_player_id, scope.civilization, scope.seed, scope.turn, token))
+            baseline = lq.parse_envoy_preparation(baseline_rows, token, scope.owner, city_state_player_id)
+        except (OSError, TimeoutError, LuaError, ValueError) as error:
+            return f"Error: ENVOY_REFUSED|{error}; no envoy request submitted."
         pending = _PendingAction(
             "envoy", entity, lq.build_envoy_query(city_state_player_id, token),
+            gamecore_query=lq.build_envoy_core_query(city_state_player_id, token),
             context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
             details={"witness_token": token}, intent=(),
             evidence=_ActionEvidence(
                 tool="send_envoy", entrypoint="send_envoy", accepted=("ENVOY_REQUESTED|",), refused="ERR:ENVOY_REFUSED|",
-                confirm=lambda rows: lq.parse_envoy_confirmation(rows, token, scope.owner, city_state_player_id),
+                confirm=lambda rows: lq.parse_envoy_confirmation(rows, token, scope.owner, city_state_player_id, baseline),
                 guidance="Repeat send_envoy for the same player ID to confirm only; use get_city_states to inspect. ",
             ),
         )
-        return await self._submit_action(pending, scope, lq.build_send_envoy(city_state_player_id, token))
+        return await self._submit_action(pending, scope, lq.build_send_envoy(city_state_player_id, token, *baseline))
 
     # ------------------------------------------------------------------
     # Pantheon methods (InGame context)

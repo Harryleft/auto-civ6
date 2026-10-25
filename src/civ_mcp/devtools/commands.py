@@ -241,8 +241,8 @@ def domain_parser(group: str):
         command("show", "get_victory_progress", "Read victory progress; hidden rival facts remain unknown.")
     elif group == "policy":
         command("show", "get_policies", "Read government slots and available policy cards.")
-        assign = command("set", "set_policies", "Assign explicit SLOT=POLICY_ID pairs; NONE clears a slot, omitted slots stay unchanged.", mutation=True)
-        assign.add_argument("assignments", nargs="+", help="Pairs separated by spaces or commas; for example 0=POLICY_AGOGE 1=NONE")
+        assign = command("set", "set_policies", "Assign explicit SLOT=POLICY_ID pairs; a changed plan must fill every final slot. Omitted slots stay unchanged.", mutation=True)
+        assign.add_argument("assignments", nargs="+", help="Pairs separated by spaces or commas; for example 0=POLICY_DISCIPLINE 1=POLICY_URBAN_PLANNING. NONE may not leave an empty changed plan.")
     elif group == "city-state":
         command("list", "get_city_states", "Read known city-states, player IDs, envoys and suzerains.")
         envoy = command("envoy", "send_envoy", "Send one envoy; consumes one available token when confirmed.", mutation=True)
