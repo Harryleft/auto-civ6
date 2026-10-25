@@ -1470,6 +1470,10 @@ async def unit_action(
             IMPROVEMENT_FISHING_BOATS, IMPROVEMENT_LUMBER_MILL
 
     For move/attack: provide target_x and target_y.
+    attack binds a visible hostile city before its garrison. Native city combat
+    confirms exact combat participants and wall/garrison damage or melee capture.
+    Use attack, not move, to assault an enemy city. Unknown results retain the
+    original request; repeat only confirms and never attacks again.
     For cancel_move: explicitly cancel only a verified non-trade movement queue,
     keeping the current position. Then independently choose fortify/heal/skip or
     another strategic action; remaining movement is not a reason to spend it.

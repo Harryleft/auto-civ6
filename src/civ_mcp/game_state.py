@@ -561,19 +561,21 @@ class GameState:
         if isinstance(scope, str):
             return scope
         city_token = uuid.uuid4().hex if entity[0] == "city" else None
+        siege_token = uuid.uuid4().hex if entity[0] == "unit" else None
         pending = _PendingAction(
             "attack", entity,
             lq.build_city_attack_followup(entity[1], target_x, target_y, city_token) if city_token else
-            lq.build_attack_followup_query(target_x, target_y, entity[1]),
+            lq.build_attack_followup_query(target_x, target_y, entity[1], siege_token=siege_token),
             context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"target": (target_x, target_y), "city_witness_token": city_token},
+            details={"target": (target_x, target_y), "city_witness_token": city_token,
+                     "siege_witness_token": siege_token},
             success=f"CITY_RANGE_ATTACK|city:{entity[1]} -> {target_x},{target_y}" if city_token else "",
         )
         build = lq.build_attack_unit if entity[0] == "unit" else lq.build_city_attack
         code = (build(entity[1], target_x, target_y, witness_token=city_token) if city_token else
-                build(entity[1], target_x, target_y))
+                build(entity[1], target_x, target_y, siege_token=siege_token))
         result = await self._submit_action(pending, scope, code)
-        if result.startswith(("RANGE_ATTACK", "MELEE_ATTACK", "AIR_ATTACK", "CITY_RANGE_ATTACK")):
+        if result.startswith(("RANGE_ATTACK", "MELEE_ATTACK", "AIR_ATTACK", "CITY_RANGE_ATTACK", "UNIT_CITY_ATTACK_CONFIRMED")):
             if estimate and (result.startswith("AIR_ATTACK") or estimate.is_ranged != result.startswith("RANGE_ATTACK")):
                 estimate_str = unknown_estimate
             return estimate_str + result

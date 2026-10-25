@@ -288,6 +288,21 @@ end
     return f"""
 {_LUA_ACTION_SCOPE}
 {_lua_get_unit(unit_index)}
+-- An enemy city requires combat evidence, not a displacement witness. Never
+-- turn a normal MOVE_TO into an unconfirmable city assault.
+if CityManager and CityManager.GetCityAt then
+    local visible=pcall(function()
+        if PlayersVisibility[me]:IsVisible({target_x},{target_y})==true then
+            local city=CityManager.GetCityAt({target_x},{target_y})
+            if city and city:GetOwner()~=me and Players[me]:GetDiplomacy():IsAtWarWith(city:GetOwner())==true then
+                error("ENEMY_CITY_MOVE")
+            end
+        end
+    end)
+    if not visible then
+        {_bail("ERR:ENEMY_CITY_MOVE|Enemy city or city eligibility unknown; use unit attack with the same coordinates. No move submitted.")}
+    end
+end
 if unit:GetMovesRemaining() <= 0 then
     {_bail("ERR:NO_MOVES|Unit has no movement points remaining this turn. Use skip or wait until next turn.")}
 end
@@ -790,7 +805,9 @@ end
 '''
 
 
-def build_attack_unit(unit_index: int, target_x: int, target_y: int) -> str:
+def build_attack_unit(unit_index: int, target_x: int, target_y: int, *, siege_token: str | None = None) -> str:
+    from civ_mcp.lua.siege import build_city_attack_branch
+    city_branch = build_city_attack_branch(unit_index, target_x, target_y, siege_token) if siege_token else ""
     return f"""
 {_lua_get_unit(unit_index)}
 {_LUA_ATTACK_VISIBILITY}
@@ -807,6 +824,7 @@ local isRanged = mode == "RANGED" or mode == "BOMBARD"
 local isAir = mode == "AIR"
 local ux, uy = unit:GetX(), unit:GetY()
 local dist = Map.GetPlotDistance(ux, uy, {target_x}, {target_y})
+{city_branch}
 -- Find hostile unit on target tile (prefer military over civilian)
 local enemy = nil
 local enemyName = "unknown"
@@ -903,7 +921,7 @@ print("{SENTINEL}")
 """
 
 
-def build_attack_followup_query(target_x: int, target_y: int, attacker_index: int | None = None) -> str:
+def build_attack_followup_query(target_x: int, target_y: int, attacker_index: int | None = None, *, siege_token: str | None = None) -> str:
     """InGame context: get actual HP of units at target tile after combat.
 
     Also checks for city defenses (walls/garrison) at the target — when
@@ -913,6 +931,9 @@ def build_attack_followup_query(target_x: int, target_y: int, attacker_index: in
     Runs in InGame context because enemy city district APIs
     (GetDistricts, GetMaxDamage) are not available in GameCore.
     """
+    from civ_mcp.lua.siege import build_city_attack_observation
+    siege_probe = (build_city_attack_observation(attacker_index, siege_token)
+                   if attacker_index is not None and siege_token else "")
     attacker_probe = ""
     if attacker_index is not None:
         attacker_probe = f"""
@@ -926,6 +947,7 @@ if attacker then
 else print("ATTACKER|gone") end
 """
     return f"""
+{siege_probe}
 {attacker_probe}
 local coreBusy = "unknown"
 pcall(function() coreBusy = tostring(UI.IsGameCoreBusy()) end)

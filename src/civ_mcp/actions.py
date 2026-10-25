@@ -185,7 +185,7 @@ class ActionLifecycle:
         result = _scoped_action_result(lines)
         accepted = pending.evidence.accepted if pending.evidence is not None else {
             "move": ("MOVING_TO|", "CAPTURE_MOVE|"),
-            "attack": ("RANGE_ATTACK", "MELEE_ATTACK", "AIR_ATTACK", "CITY_RANGE_ATTACK"),
+            "attack": ("RANGE_ATTACK", "MELEE_ATTACK", "AIR_ATTACK", "CITY_RANGE_ATTACK", "UNIT_CITY_ATTACK_REQUESTED|"),
             "found": ("FOUNDED|",),
             "production": ("PRODUCING|",),
             "skip": ("READINESS_REQUESTED|",),
@@ -215,6 +215,8 @@ class ActionLifecycle:
                 if origin:
                     pending.details["origin"] = tuple(map(int, origin.groups()))
             elif pending.kind == "attack":
+                if result.startswith("UNIT_CITY_ATTACK_REQUESTED|"):
+                    pending.details["unit_city_attack"] = True
                 pending.details["pre_hp"] = _extract_pre_hp(result)
                 for name in ("target_owner", "target_id", "attacks_before", "civilian_entry", "origin_x", "origin_y", "moves_before"):
                     match = re.search(rf"\|{name}:(\d+)", result)
@@ -477,6 +479,11 @@ class ActionLifecycle:
             elif any(line.startswith("CONFIRMED|") for line in pending.observed):
                 return pending.success
         if pending.kind == "attack":
+            if pending.details.get("unit_city_attack") or any(
+                    row.startswith(("UNIT_CITY_ATTACK_OBSERVED|", "UNIT_CITY_ATTACK_CONFIRMED|"))
+                    for row in pending.observed):
+                from civ_mcp.lua.siege import parse_city_attack
+                return parse_city_attack(pending.observed, pending.entity[1], pending.details["siege_witness_token"])
             pre_hp = pending.details.get("pre_hp")
             post_hp = None
             target_line = None

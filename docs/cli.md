@@ -163,6 +163,8 @@ COMMANDS
 
 `ID` 是本次查询返回的完整原生单位 ID；坐标、晋升和改良类型取自当前事实。`heal` 是驻扎直至恢复、满血自动唤醒；`fortify` 是驻扎防御。`upgrade` 更换单位兵种，消耗原生要求的金币、资源及行动力；`corps`／`army` 合并军事编制，目标 ID 来自刚读取的 `unit formations ID`。军团资格由引擎检查兵种、当前编制、位置和市政等条件，不按经验等级相同推断；不把“两支同级单位”当作所有合并的通用规则。护卫编队与军事合并是两种不同操作。
 
+攻城使用 `unit attack ID X Y`。可见目标格存在城市时，攻击绑定城市中心区域，优先于城内驻军。原生资格、攻击方式和路径通过核验后，只提交一次；`UNIT_CITY_ATTACK_CONFIRMED` 同时要求匹配的战斗参与者事件和城防／单位伤害，或近战单位进入已归本方的目标城。返回城墙、驻军、归属和攻击单位生命变化。普通 `unit move` 进入已识别的敌城会返回 `ENEMY_CITY_MOVE`，不提交移动。结果未知时保留原请求，以完全相同的攻击命令确认。
+
 其他已有动作也有命名入口：`unit repair/remove-improvement/remove-feature/build-route/automate ID`、`unit activate/sacrifice-charges/spread-religion/launch-inquisition/condemn-heretic/remove-heresy ID`；带目标坐标的入口为 `unit trade-route/teleport/religious-attack ID X Y`。斜线表示分别可用的子命令，不能原样输入。完整参数用 `unit COMMAND --help` 查询；原有 `unit action` 保留。
 
 所有变更支持 `--dry-run`，只核对 schema，不验证当前资源和目标资格。`delete` 永久删除单位，`corps`／`army` 会消耗一个原单位，执行前先预演并读取当前状态。`skip-remaining` 只处理当前就绪单位，保留既有站立指令。编队／合并结果未知时，保留同一会话与完整参数，通过原命令确认；不能再次选择别的单位绕过门禁。只读 `unit formations` 不提交或退役请求。合并后使用回执给出的存活单位 ID，不假设发起单位一定保留。

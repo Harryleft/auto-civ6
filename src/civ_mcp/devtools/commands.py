@@ -117,7 +117,9 @@ def domain_parser(group: str):
         coordinates(action)
         action.add_argument("--improvement", default=argparse.SUPPRESS, help="Improvement ID for builder actions")
         for name in ("attack", "skip", "fortify", "heal", "improve"):
-            child = command(name, "unit_action", f"Explicitly {name} one unit; native eligibility is checked at execution.", mutation=True)
+            description = ("Attack a visible hostile unit or city; city combat confirms defense damage or capture."
+                           if name == "attack" else f"Explicitly {name} one unit; native eligibility is checked at execution.")
+            child = command(name, "unit_action", description, mutation=True)
             entity(child, "unit_id")
             child.set_defaults(action=name)
             if name == "attack":
