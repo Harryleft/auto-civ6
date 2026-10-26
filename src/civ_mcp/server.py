@@ -1461,15 +1461,18 @@ async def unit_action(
 
     Args:
         unit_id: The unit's composite ID (from get_units output)
-        action: One of: move, cancel_move, pillage, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion, launch_inquisition, condemn_heretic, remove_heresy, religious_attack
-        target_x: Target X coordinate (required for move/attack/religious_attack/trade_route/teleport)
-        target_y: Target Y coordinate (required for move/attack/religious_attack/trade_route/teleport)
+        action: One of: move, rebase, cancel_move, pillage, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion, launch_inquisition, condemn_heretic, remove_heresy, religious_attack
+        target_x: Target X coordinate (required for move/rebase/attack/religious_attack/trade_route/teleport)
+        target_y: Target Y coordinate (required for move/rebase/attack/religious_attack/trade_route/teleport)
         improvement: Improvement type for builders (required for improve), e.g.
             IMPROVEMENT_FARM, IMPROVEMENT_MINE, IMPROVEMENT_QUARRY,
             IMPROVEMENT_PLANTATION, IMPROVEMENT_CAMP, IMPROVEMENT_PASTURE,
             IMPROVEMENT_FISHING_BOATS, IMPROVEMENT_LUMBER_MILL
 
     For move/attack: provide target_x and target_y.
+    For rebase: aircraft only; provide target base coordinates. Native operation
+    targets and eligibility decide range, access and capacity, including carriers.
+    Confirms the original aircraft's relocation and movement consumption; unknown never replays.
     attack binds a visible hostile city before its garrison. Native city combat
     confirms exact combat participants and wall/garrison damage or melee capture.
     Use attack, not move, to assault an enemy city. Unknown results retain the
@@ -1525,7 +1528,7 @@ async def unit_action(
         # commands must not change that unit before its outcome is known.
         if (
             getattr(gs, "pending_action_tool", None) != "unit_action"
-            and action.lower() not in {"move", "attack", "found_city", "cancel_move", "pillage", "sacrifice_charges", "delete"}
+            and action.lower() not in {"move", "rebase", "attack", "found_city", "cancel_move", "pillage", "sacrifice_charges", "delete"}
             and (getattr(gs, "pending_action_entity", None) == ("unit", unit_index)
                  or getattr(gs, "pending_action_kind", None) in ("pillage", "contribution"))
         ):
@@ -1538,6 +1541,10 @@ async def unit_action(
                 if target_x is None or target_y is None:
                     return "Error: move requires target_x and target_y"
                 return await gs.move_unit(unit_id, target_x, target_y)
+            case "rebase":
+                if target_x is None or target_y is None:
+                    return "Error: rebase requires target_x and target_y"
+                return await gs.rebase_unit(unit_id, target_x, target_y)
             case "cancel_move":
                 return await gs.cancel_unit_move(unit_id)
             case "pillage":
@@ -1599,7 +1606,7 @@ async def unit_action(
                     return "Error: teleport requires target_x and target_y of the destination city"
                 return await gs.teleport_to_city(unit_id, target_x, target_y)
             case _:
-                return f"Error: Unknown action '{action}'. Valid: move, cancel_move, pillage, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion, launch_inquisition, condemn_heretic, remove_heresy, religious_attack"
+                return f"Error: Unknown action '{action}'. Valid: move, rebase, cancel_move, pillage, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion, launch_inquisition, condemn_heretic, remove_heresy, religious_attack"
 
     result = await _logged(ctx, "unit_action", params, _run)
     return result

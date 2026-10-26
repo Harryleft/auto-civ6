@@ -12,6 +12,7 @@ from test_debug_cli import run_fake
 
 
 CASES = [
+    ('unit rebase 42 3 4 --dry-run','unit_action',{'unit_id':42,'action':'rebase','target_x':3,'target_y':4},True),
     ('unit attack 42 3 4 --dry-run','unit_action',{'unit_id':42,'action':'attack','target_x':3,'target_y':4},True),
     ('unit skip 42 --dry-run','unit_action',{'unit_id':42,'action':'skip'},True),
     ('unit fortify 42 --dry-run','unit_action',{'unit_id':42,'action':'fortify'},True),

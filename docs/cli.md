@@ -137,6 +137,7 @@ COMMANDS
 | --- | --- | --- |
 | `unit list` | `get_units` | 只读 |
 | `unit move ID X Y` | `unit_action`，action=move | 变更 |
+| `unit rebase ID X Y` | `unit_action`，action=rebase | 变更：飞机转场，原生核对基地／航母的范围、准入与容量 |
 | `unit action ID ACTION [--x X --y Y] [--improvement TYPE]` | `unit_action` | 变更 |
 | `unit attack ID X Y` | `unit_action`，action=attack | 变更 |
 | `unit skip ID` | `unit_action`，action=skip | 变更 |
@@ -164,6 +165,8 @@ COMMANDS
 `ID` 是本次查询返回的完整原生单位 ID；坐标、晋升和改良类型取自当前事实。`heal` 是驻扎直至恢复、满血自动唤醒；`fortify` 是驻扎防御。`upgrade` 更换单位兵种，消耗原生要求的金币、资源及行动力；`corps`／`army` 合并军事编制，目标 ID 来自刚读取的 `unit formations ID`。军团资格由引擎检查兵种、当前编制、位置和市政等条件，不按经验等级相同推断；不把“两支同级单位”当作所有合并的通用规则。护卫编队与军事合并是两种不同操作。
 
 攻城使用 `unit attack ID X Y`。可见目标格存在城市时，攻击绑定城市中心区域，优先于城内驻军。原生资格、攻击方式和路径通过核验后，只提交一次；`UNIT_CITY_ATTACK_CONFIRMED` 同时要求匹配的战斗参与者事件和城防／单位伤害，或近战单位进入已归本方的目标城。返回城墙、驻军、归属和攻击单位生命变化。普通 `unit move` 进入已识别的敌城会返回 `ENEMY_CITY_MOVE`，不提交移动。结果未知时保留原请求，以完全相同的攻击命令确认。
+
+飞机使用 `unit rebase ID X Y` 转场，不使用地面 `move`。命令先核对当前原生可转场目标，再提交一次 `REBASE`；只有原飞机到达目标且消耗移动力才确认。结果未知时，以同一单位和目标确认原请求，不重复转场。
 
 其他已有动作也有命名入口：`unit repair/remove-improvement/remove-feature/build-route/automate ID`、`unit activate/sacrifice-charges/spread-religion/launch-inquisition/condemn-heretic/remove-heresy ID`；带目标坐标的入口为 `unit trade-route/teleport/religious-attack ID X Y`。斜线表示分别可用的子命令，不能原样输入。完整参数用 `unit COMMAND --help` 查询；原有 `unit action` 保留。
 

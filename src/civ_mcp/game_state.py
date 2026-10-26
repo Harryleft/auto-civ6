@@ -528,6 +528,35 @@ class GameState:
         return result
 
     @_guard_pending_mutation
+    async def rebase_unit(self, unit_id: int, target_x: int, target_y: int) -> str:
+        from civ_mcp.lua import rebase
+
+        if any(type(value) is not int or value < 0 for value in (unit_id, target_x, target_y)):
+            return "Error: INVALID_REBASE_INTENT|Expected the original unit ID and nonnegative integer base coordinates."
+        entity, intent = ("unit", unit_id), (target_x, target_y)
+        if self._actions.matches("rebase", entity, intent=intent):
+            return await self.confirm_pending_action()
+        blocked = await self._action_gate()
+        if blocked:
+            return blocked
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return scope
+        token = uuid.uuid4().hex
+        pending = _PendingAction(
+            "rebase", entity, rebase.build_rebase_query(unit_id, target_x, target_y, token),
+            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
+            details={"target": intent, "witness_token": token}, intent=intent,
+            evidence=_ActionEvidence(
+                tool="unit_action", entrypoint="rebase_unit", accepted=("REBASE_REQUESTED|",),
+                refused="ERR:REBASE_REFUSED|",
+                confirm=lambda rows: rebase.parse_rebase_confirmation(rows, unit_id, target_x, target_y, token),
+                guidance="Repeat the original unit rebase and destination to confirm only. ",
+            ),
+        )
+        return await self._submit_action(pending, scope, rebase.build_rebase(unit_id, target_x, target_y, token))
+
+    @_guard_pending_mutation
     async def attack_unit(self, unit_index: int, target_x: int, target_y: int) -> str:
         return await self._attack_and_confirm(("unit", unit_index), target_x, target_y)
 
