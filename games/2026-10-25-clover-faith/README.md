@@ -7,3 +7,5 @@
 [T162 攻城修复与实机验收](runs/322c1b85/changes/2026-10-26-city-attack.md)。原始基准和既有 `clover_faith_20261025_t162`、`clover_faith_20261025_t162_hold` 检查点保留。
 
 [T173—T237 续局与征服胜利](runs/322c1b85/reports/2026-10-27-t173-t237-victory.md)记录首都占领、三项 CLI 修复、技术恢复、终局前检查点，以及最后一次攻击仍保留未决确认的原因。
+
+[终局占城确认修复规格](runs/322c1b85/changes/2026-10-27-terminal-capture/spec.md)：用户确认采用隔离领域／Lua 回归及实体查询零重发验证；原终局、旧 CLI owner、未决请求和存档保留。
