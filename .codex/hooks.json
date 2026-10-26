@@ -1,0 +1,32 @@
+{
+  "description": "Civ6 offline workflow context and changed-file quality checks",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "^(startup|resume|clear|compact|fork)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "root=\"$(git rev-parse --show-toplevel)\" && \"$root/.venv/bin/python\" \"$root/scripts/codex_hooks.py\"",
+            "commandWindows": "powershell -NoProfile -Command \"$r = (git rev-parse --show-toplevel); & (Join-Path $r '.venv/Scripts/python.exe') (Join-Path $r 'scripts/codex_hooks.py')\"",
+            "timeout": 20,
+            "statusMessage": "Loading Civ6 workflow and change baseline"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "root=\"$(git rev-parse --show-toplevel)\" && \"$root/.venv/bin/python\" \"$root/scripts/codex_hooks.py\"",
+            "commandWindows": "powershell -NoProfile -Command \"$r = (git rev-parse --show-toplevel); & (Join-Path $r '.venv/Scripts/python.exe') (Join-Path $r 'scripts/codex_hooks.py')\"",
+            "timeout": 30,
+            "statusMessage": "Checking changed Civ6 files"
+          }
+        ]
+      }
+    ]
+  }
+}

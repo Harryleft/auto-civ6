@@ -78,6 +78,8 @@ git diff --check
 
 纯文档修改检查本地链接及锚点、命令与实现、关键约束覆盖和 `git diff --check`；不为排版重跑游戏流程或全量测试。开发依赖和版本以 `pyproject.toml`、`uv.lock` 为准。
 
+Codex 会话的自动化入口见 [Hook 工作流与质量检查](codex-hooks.md)。仓库级 Hook 只做会话基线、变化文件语法与 diff 空白检查，并提供定向测试建议；它的通过结果不能代替本节的行为验证。
+
 `scripts/test_connection.py`、`scripts/test_game_state.py`、`scripts/test_queries.py`、`scripts/integration_turns.py` 会连接真实游戏，不能作为离线检查运行。
 
 ## 实机验收
