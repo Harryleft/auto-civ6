@@ -460,7 +460,7 @@ def test_unknown_overwrite_cannot_reuse_old_record_when_record_removal_fails(sav
     assert run(state.save_game('checkpoint')).startswith('ERR:OUTCOME_UNKNOWN|')
     assert state.save_pending
     assert checkpoints.expected_checkpoint('checkpoint') is None
-    assert run(state.restart_and_load('checkpoint')).startswith('Error: Checkpoint')
+    assert run(state.restart_and_load('checkpoint')).startswith('Error: UNREGISTERED_CHECKPOINT|')
     assert conn.lua.globals().save_requests==2
 
 
