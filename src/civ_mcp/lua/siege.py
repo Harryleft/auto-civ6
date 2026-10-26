@@ -19,6 +19,31 @@ end
 local function siegeSame(a,b)
  return type(a)=="table" and a.type==b.type and a.player==b.player and a.id==b.id
 end
+local function siegeConquest(r)
+ local result,winner,selector=pcall(function() return Game.GetWinningTeam() end)
+ local winnerKnown=result and scopeInteger(winner) and winner>=-1
+ local teamOK,team=pcall(function() return Players[r.owner]:GetTeam() end)
+ local teamKnown=teamOK and scopeIndex(team)
+ local victoryOK,victoryType=pcall(function()
+  assert(result and (scopeInteger(selector) or type(selector)=="string"))
+  return GameInfo.Victories[selector].VictoryType
+ end)
+ local victoryKnown=victoryOK and type(victoryType)=="string" and victoryType:match("^VICTORY_[A-Z0-9_]+$")
+ if r.conquest then
+  if winnerKnown and winner~=r.conquest.winner then r.invalid=true end
+  if teamKnown and team~=r.conquest.team then r.invalid=true end
+  if victoryKnown and (selector~=r.conquest.selector or victoryType~="VICTORY_CONQUEST") then r.invalid=true end
+ end
+ if winnerKnown and winner>=0 then
+  if teamKnown and winner~=team then r.invalid=true end
+  if victoryKnown and victoryType~="VICTORY_CONQUEST" then r.invalid=true end
+ end
+ assert(not r.invalid,"TERMINAL_NOT_OWN_CONQUEST")
+ if winnerKnown and winner<0 then return false end
+ assert(winnerKnown and teamKnown and victoryKnown,"TERMINAL_UNKNOWN")
+ r.conquest={winner=winner,selector=selector,team=team}
+ return true
+end
 local function siegeCity(x,y)
  local city=CityManager.GetCityAt(x,y)
  assert(city and city:GetX()==x and city:GetY()==y,"CITY_UNKNOWN")
@@ -172,7 +197,14 @@ __CONTEXT__
   if __civmcpSiege==r and r.entered and sameScope(r) and owner==r.owner and id==r.actor.id then r.removed=true end
  end
  local armed=pcall(function() for name,handler in pairs(r.handlers) do Events[name].Add(handler) end end)
- local final,reason=pcall(function() assert(armed,"OBSERVER_UNKNOWN");siegeEligible(r,unit) end)
+ local final,reason=pcall(function()
+  assert(armed,"OBSERVER_UNKNOWN")
+  local known,winner=pcall(function() return Game.GetWinningTeam() end)
+  -- Missing terminal APIs must not break ordinary combat, but cannot prove
+  -- that a later victory arose after this request entered the engine.
+  r.activeBefore=known and scopeInteger(winner) and winner==-1
+  siegeEligible(r,unit)
+ end)
  if not final then
   r.closed=true;siegeRetire(r);print("ERR:UNIT_CITY_ATTACK_REFUSED|"..tostring(reason));print("__END__");return
  end
@@ -202,6 +234,7 @@ __CONTEXT__
   local actor=UnitManager.GetUnit(r.owner,r.actor.id%65536)
   if actor then siegeActorIdentity(r,actor) end
   siegeCityIdentity(r)
+  if r.conquest then pcall(siegeConquest,r) end
   assert(not r.invalid,"COMBAT_ID_CHANGED")
   local s=siegeCity(r.x,r.y)
   local a=actor and siegeActor(actor)
@@ -210,19 +243,47 @@ __CONTEXT__
     and siegeSame(a.component,r.actor.component) and not r.removed,"ACTOR_CHANGED")
   else assert(r.removed,"ACTOR_UNKNOWN") end
   local captured=r.melee and a and s.owner==r.owner and a.x==r.x and a.y==r.y
-  if not captured then
+  -- Winning a final coastal capture can stop movement on the adjacent sea
+  -- tile. Only the same witnessed capture and official conquest outcome
+  -- replace arrival evidence; an ordinary owner transition still waits.
+  local terminalCaptured=false
+  if not captured and r.activeBefore and r.melee and a and a.hp>0 and s.owner==r.owner
+   and Map.GetPlotDistance(a.x,a.y,r.x,r.y)==1 then
+   local known,conquest=pcall(siegeConquest,r)
+   siegeActorIdentity(r,actor);siegeCityIdentity(r)
+   assert(not r.invalid,"CAPTURE_ID_CHANGED")
+   if known and conquest then
+    -- Read the official tuple again, then recheck the captured entities.
+    -- A valid conflict is sticky even when another getter is unavailable.
+    known,conquest=pcall(siegeConquest,r)
+    siegeActorIdentity(r,actor);siegeCityIdentity(r)
+    assert(not r.invalid,"CAPTURE_ID_CHANGED")
+    local finalCity=siegeCity(r.x,r.y)
+    if finalCity.owner~=s.owner or finalCity.id~=s.id or not siegeSame(finalCity.center,s.center) then r.invalid=true end
+    assert(not r.invalid,"CAPTURE_ID_CHANGED")
+    local finalActor=siegeActor(actor)
+    if finalActor.owner~=r.actor.owner or finalActor.id~=r.actor.id or finalActor.unitType~=r.actor.unitType
+     or not siegeSame(finalActor.component,r.actor.component) then r.invalid=true end
+    assert(not r.invalid,"CAPTURE_ID_CHANGED")
+    terminalCaptured=known and conquest and not r.removed and finalActor.hp>0
+     and Map.GetPlotDistance(finalActor.x,finalActor.y,r.x,r.y)==1
+    a=finalActor;s=finalCity
+   end
+  end
+  if not captured and not terminalCaptured then
    -- Owner transition can precede the final move into the captured city.
    -- Keep observing that allowed intermediate state; do not latch it invalid.
    assert(not (r.melee and s.owner==r.owner),"CAPTURE_POSITION_UNCONFIRMED")
    if s.owner~=r.city.owner or s.id~=r.city.id or not siegeSame(s.center,r.city.center) then r.invalid=true end
    assert(not r.invalid,"CITY_ID_CHANGED")
   end
-  assert(captured or s.wall<r.city.wall or s.garrison<r.city.garrison
+  assert(captured or terminalCaptured or s.wall<r.city.wall or s.garrison<r.city.garrison
    or a and a.hp<r.actor.hp or r.removed,"CITY_EFFECT_UNCONFIRMED")
   assert(sameScope(r),"FINAL_SCOPE_CHANGED")
   return "target:"..r.city.owner..":"..r.city.id.."|wall:"..r.city.wall.."->"..s.wall
    .."|garrison:"..r.city.garrison.."->"..s.garrison.."|owner:"..r.city.owner.."->"..s.owner
    .."|attacker_hp:"..r.actor.hp.."->"..(a and a.hp or 0)
+   ..(terminalCaptured and "|completion:terminal_conquest" or "")
  end)
  if ok then
   r.closed=true;siegeRetire(r)
@@ -237,11 +298,13 @@ end
 
 def parse_city_attack(lines: list[str], unit_id: int, token: str) -> str | None:
     rows = [row.split('|') for row in lines if row.startswith('UNIT_CITY_ATTACK_CONFIRMED|')]
-    if len(rows) != 1 or len(rows[0]) != 8 or rows[0][1:3] != [token, str(unit_id)]:
+    if len(rows) != 1 or len(rows[0]) not in (8, 9) or rows[0][1:3] != [token, str(unit_id)]:
         return None
     row = rows[0]
     if not (re.fullmatch(r'target:\d+:\d+', row[3])
             and all(re.fullmatch(label + r':\d+->\d+', value)
-                    for label, value in zip(('wall', 'garrison', 'owner', 'attacker_hp'), row[4:]))):
+                    for label, value in zip(('wall', 'garrison', 'owner', 'attacker_hp'), row[4:8]))):
+        return None
+    if len(row) == 9 and row[8] != 'completion:terminal_conquest':
         return None
     return f"UNIT_CITY_ATTACK_CONFIRMED|unit:{unit_id}|" + '|'.join(row[3:])

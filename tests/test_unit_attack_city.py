@@ -50,6 +50,187 @@ end
 ''')
 
 
+def terminal_capture_conn():
+    """Native T237 pattern: a sea capture ends the game before final entry."""
+    conn = SiegeConn()
+    conn.lua.execute('''
+unitInfo.Domain='DOMAIN_SEA';unitInfo.RangedCombat=0;unitInfo.Range=0;wallHP=0;cityHP=0
+winner,selector=-1,-77
+Game.GetWinningTeam=function() return winner,selector end
+GameInfo.Victories={[-77]={VictoryType='VICTORY_CONQUEST'}}
+Players[0].GetTeam=function() return 7 end
+UnitManager.RequestOperation=function(_,op,params)
+ record_operation(op,params);moves=0;attacks=0
+ cityOwner=0;cityID=262144;wallHP=100;cityHP=200;winner=7
+ Events.CombatVisEnd.Fire({[0]={componentType=0,playerID=0,componentID=unit:GetID()},
+  [1]={componentType=2,playerID=2,componentID=7}})
+ if capture_change then capture_change() end
+end
+''')
+    return conn
+
+
+@pytest.mark.usefixtures('fast_action_confirmation')
+def test_conquest_capture_confirms_when_attacker_remains_on_adjacent_sea_tile():
+    conn = terminal_capture_conn()
+    state = state_for(conn)
+    result = asyncio.run(state.attack_unit(8, 19, 16))
+    assert 'UNIT_CITY_ATTACK_CONFIRMED' in result, result
+    assert 'owner:2->0' in result and 'completion:terminal_conquest' in result
+    assert (conn.lua.globals().x, conn.lua.globals().y) == (20, 16)
+    assert len(conn.operations) == 1 and state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('change,restore', [
+    ('winner=2', 'winner=7'),
+    ("GameInfo.Victories[-77].VictoryType='VICTORY_TECHNOLOGY'",
+     "GameInfo.Victories[-77].VictoryType='VICTORY_CONQUEST'"),
+    ('unit.GetType=function() return 99 end', 'unit.GetType=function() return 1 end'),
+    ('cityOwner=3', 'cityOwner=0'),
+])
+@pytest.mark.usefixtures('fast_action_confirmation')
+def test_terminal_capture_latches_conflicts_observed_during_confirmation(change, restore):
+    conn = terminal_capture_conn()
+    conn.lua.execute('''
+Game.GetWinningTeam=function()
+ local value=winner
+ if value>=0 and not changed then changed=true;CHANGE end
+ return value,selector
+end
+'''.replace('CHANGE', change))
+    state = state_for(conn)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.attack_unit(8, 19, 16))
+    conn.lua.execute(restore)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.confirm_pending_action(wait=False))
+    assert len(conn.operations) == 1 and state.pending_action_summary is not None
+
+
+@pytest.mark.parametrize('conflict', ['winner', 'team', 'victory'])
+@pytest.mark.usefixtures('fast_action_confirmation')
+def test_terminal_capture_does_not_hide_known_conflict_behind_an_unknown_getter(conflict):
+    conn = terminal_capture_conn()
+    conn.lua.globals().conflict = conflict
+    conn.lua.execute('''
+reads=0
+Game.GetWinningTeam=function()
+ if winner<0 then return winner,selector end
+ reads=reads+1
+ if reads==1 then return winner,selector end
+ if conflict=='winner' then return 2,selector end
+ if conflict=='team' then error('winner unavailable') end
+ return winner,selector
+end
+Players[0].GetTeam=function()
+ if reads==1 then return 7 end
+ if conflict=='team' then return 9 end
+ if conflict=='victory' then GameInfo.Victories[-77].VictoryType='VICTORY_CULTURE' end
+ return nil
+end
+''')
+    state = state_for(conn)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.attack_unit(8, 19, 16))
+    conn.lua.execute('''
+Game.GetWinningTeam=function() return 7,-77 end
+Players[0].GetTeam=function() return 7 end
+GameInfo.Victories[-77].VictoryType='VICTORY_CONQUEST'
+''')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.confirm_pending_action(wait=False))
+    assert len(conn.operations) == 1 and state.pending_action_summary is not None
+
+
+@pytest.mark.usefixtures('fast_action_confirmation')
+def test_terminal_capture_cannot_use_a_victory_that_precedes_the_attack():
+    conn = terminal_capture_conn()
+    conn.lua.execute('Game.GetWinningTeam=function() return 7,-77 end')
+    state = state_for(conn)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.attack_unit(8, 19, 16))
+    assert len(conn.operations) == 1 and state.pending_action_summary is not None
+
+
+@pytest.mark.usefixtures('fast_action_confirmation')
+def test_terminal_capture_rechecks_actor_after_captured_city_readback():
+    conn = terminal_capture_conn()
+    conn.lua.execute('''
+winnerReads=0
+Game.GetWinningTeam=function()
+ if winner>=0 then winnerReads=winnerReads+1 end
+ return winner,selector
+end
+local damage=center.GetDamage
+center.GetDamage=function(self,kind)
+ if winnerReads>=2 then unit.GetType=function() return 99 end end
+ return damage(self,kind)
+end
+''')
+    state = state_for(conn)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.attack_unit(8, 19, 16))
+    conn.lua.execute('unit.GetType=function() return 1 end')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.confirm_pending_action(wait=False))
+    assert len(conn.operations) == 1 and state.pending_action_summary is not None
+
+
+@pytest.mark.usefixtures('fast_action_confirmation')
+def test_terminal_capture_latches_result_conflict_even_when_city_health_is_unknown():
+    conn = terminal_capture_conn()
+    conn.lua.execute('''
+nativeDamage=center.GetDamage
+Game.GetWinningTeam=function()
+ if winner>=0 then center.GetDamage=function() return nil end end
+ return winner,selector
+end
+''')
+    state = state_for(conn)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.attack_unit(8, 19, 16))
+    conn.lua.execute('winner=2;Game.GetWinningTeam=function() return winner,selector end')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.confirm_pending_action(wait=False))
+    conn.lua.execute('winner=7;center.GetDamage=nativeDamage')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.confirm_pending_action(wait=False))
+    assert len(conn.operations) == 1 and state.pending_action_summary is not None
+
+
+@pytest.mark.parametrize('setup,change', [
+    ('Game.GetWinningTeam=nil', ''),
+    ('Game.GetWinningTeam=function() error("unavailable") end', ''),
+    ('Game.GetWinningTeam=function() return -1,-77 end', ''),
+    ('Game.GetWinningTeam=function() return 9,-77 end', ''),
+    ('Game.GetWinningTeam=function() return "7",-77 end', ''),
+    ('Game.GetWinningTeam=function() return 0/0,-77 end', ''),
+    ('Game.GetWinningTeam=function() return 7,nil end', ''),
+    ('Players[0].GetTeam=function() return nil end', ''),
+    ('Players[0].GetTeam=function() return "7" end', ''),
+    ('GameInfo.Victories={}', ''),
+    ("GameInfo.Victories[-77].VictoryType='VICTORY_TECHNOLOGY'", ''),
+    ("GameInfo.Victories[-77].VictoryType='VICTORY_CULTURE'", ''),
+    ("GameInfo.Victories[-77].VictoryType='VICTORY_RELIGIOUS'", ''),
+    ("GameInfo.Victories[-77].VictoryType='VICTORY_DIPLOMATIC'", ''),
+    ("GameInfo.Victories[-77].VictoryType='VICTORY_SCORE'", ''),
+    ("GameInfo.Victories[-77].VictoryType='unknown'", ''),
+    ('Events.CombatVisEnd.Fire=function() end', ''),
+    ('local fire=Events.CombatVisEnd.Fire;Events.CombatVisEnd.Fire=function(data) data[1].componentID=99;fire(data) end', ''),
+    ('unitInfo.RangedCombat=40;unitInfo.Range=2;wallHP=100;cityHP=200', ''),
+    ('', 'cityOwner=2;cityID=65536;cityHP=0;wallHP=0'),
+    ('', 'distance=2'),
+    ('', 'unit.GetDamage=function() return 100 end'),
+    ('', 'unit.GetType=function() return 99 end'),
+    ('', 'unit.GetID=function() return 1245193 end'),
+    ('', 'unit.GetComponentID=function() return {type=0,player=0,id=99} end'),
+    ('', 'UnitManager.GetUnit=function() return nil end'),
+    ('', 'Game.GetLocalPlayer=function() return 2 end'),
+    ('', 'Game.GetCurrentGameTurn=function() return 114 end'),
+    ('', 'GameConfiguration.GetValue=function() return 99 end'),
+    ('', "PlayerConfigurations[0].GetCivilizationTypeName=function() return 'CIVILIZATION_ROME' end"),
+])
+@pytest.mark.usefixtures('fast_action_confirmation')
+def test_terminal_outcome_does_not_replace_missing_or_conflicting_capture_evidence(setup, change):
+    conn = terminal_capture_conn()
+    conn.lua.execute(setup)
+    conn.lua.execute('capture_change=function() ' + change + ' end')
+    state = state_for(conn)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.attack_unit(8, 19, 16))
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.confirm_pending_action(wait=False))
+    assert len(conn.operations) == 1 and state.pending_action_summary is not None
+
+
 @pytest.mark.usefixtures('fast_action_confirmation')
 def test_adjacent_gdr_captures_defeated_city_with_one_native_melee_operation():
     conn = SiegeConn()
