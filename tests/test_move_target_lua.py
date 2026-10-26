@@ -45,6 +45,28 @@ def run(awaitable):
     return asyncio.run(awaitable)
 
 
+@pytest.mark.parametrize('domain,allowed', [('DOMAIN_AIR', True), ('DOMAIN_LAND', False)])
+def test_ground_unit_can_guard_aircraft_base_but_cannot_stack_ground_units(domain, allowed, short_confirmation):
+    conn = TargetMovementConn()
+    conn.lua.execute('''
+can_target=true
+GameInfo.Units[1].Domain='DOMAIN_LAND'
+GameInfo.Units[2]={UnitType='UNIT_BOMBER',FormationClass='FORMATION_CLASS_AIR',Domain=''' + repr(domain) + '''}
+local other={GetOwner=function() return 0 end,GetType=function() return 2 end}
+Map.GetUnitsAt=function() return {Units=function()
+ local used=false
+ return function() if not used then used=true;return other end end
+end} end
+''')
+    result = run(GameState(conn).move_unit(6, 20, 17))
+    if allowed:
+        assert 'now_at:20,17' in result
+        assert conn.lua.eval('submissions') == 1
+    else:
+        assert result.startswith('Error: STACKING_CONFLICT|')
+        assert conn.lua.eval('submissions') == 0
+
+
 def test_fog_destination_uses_native_ignore_flag_in_the_same_checked_and_submitted_params(short_confirmation):
     conn=TargetMovementConn()
     conn.lua.execute('''

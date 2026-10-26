@@ -365,7 +365,11 @@ if tgtUnits then
         if other:GetOwner() == me then
             local otherInfo = GameInfo.Units[other:GetType()]
             local otherCivilian = (otherInfo and otherInfo.FormationClass == "FORMATION_CLASS_CIVILIAN")
-            if isCivilian == otherCivilian and not religiousMover then
+            -- Based aircraft occupy their own layer. Keep native target and
+            -- path eligibility below; do not block a ground guard here.
+            local separateAirLayer = otherInfo and otherInfo.Domain == "DOMAIN_AIR" and unitInfo
+                and (unitInfo.Domain == "DOMAIN_LAND" or unitInfo.Domain == "DOMAIN_SEA")
+            if isCivilian == otherCivilian and not religiousMover and not separateAirLayer then
                 local otherName = otherInfo and otherInfo.UnitType or "unit"
                 {_bail_lua(f'"ERR:STACKING_CONFLICT|Friendly " .. otherName .. " already on ({target_x},{target_y}). Cannot stack same formation class."')}
             end
