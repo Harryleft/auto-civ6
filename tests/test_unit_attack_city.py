@@ -51,6 +51,43 @@ end
 
 
 @pytest.mark.usefixtures('fast_action_confirmation')
+def test_adjacent_gdr_captures_defeated_city_with_one_native_melee_operation():
+    conn = SiegeConn()
+    conn.lua.execute('''
+unitInfo.UnitType='UNIT_GIANT_DEATH_ROBOT';unitInfo.Combat=130
+unitInfo.RangedCombat=120;unitInfo.Range=3;wallHP=0;cityHP=0
+UnitManager.RequestOperation=function(_,op,params)
+ record_operation(op,params);moves=0;attacks=0
+ if op==UnitOperationTypes.MOVE_TO then x=19;y=16;cityOwner=0;cityID=262144;cityHP=100 end
+ Events.CombatVisEnd.Fire({[0]={componentType=0,playerID=0,componentID=unit:GetID()},
+  [1]={componentType=2,playerID=2,componentID=7}})
+end
+''')
+    state = state_for(conn)
+    result = asyncio.run(state.attack_unit(8, 19, 16))
+    assert 'UNIT_CITY_ATTACK_CONFIRMED' in result and 'owner:2->0' in result, result
+    assert len(conn.operations) == 1 and conn.operations[0][0] == 1
+    assert conn.operations[0][1]['modifiers'] == 7
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('setup', [
+    '',
+    "unitInfo.UnitType='UNIT_GIANT_DEATH_ROBOT';unitInfo.Range=3;distance=2",
+    "unitInfo.Domain='DOMAIN_AIR';unitInfo.Range=3",
+])
+@pytest.mark.usefixtures('fast_action_confirmation')
+def test_ranged_shot_at_defeated_city_is_refused_without_spending_attack(setup):
+    conn = SiegeConn()
+    conn.lua.execute('wallHP=0;cityHP=0;' + setup)
+    state = state_for(conn)
+    result = asyncio.run(state.attack_unit(8, 19, 16))
+    assert 'CITY_ALREADY_DEFEATED' in result, result
+    assert conn.operations == [] and conn.lua.globals().attacks == 1
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.usefixtures('fast_action_confirmation')
 def test_visible_hostile_city_without_military_unit_is_attacked_once():
     conn = SiegeConn()
     result = asyncio.run(state_for(conn).attack_unit(8, 19, 16))
@@ -61,6 +98,7 @@ def test_visible_hostile_city_without_military_unit_is_attacked_once():
 
 
 @pytest.mark.parametrize('setup,operation', [
+    ("unitInfo.UnitType='UNIT_GIANT_DEATH_ROBOT';unitInfo.RangedCombat=120;unitInfo.Range=3", 2),
     ("unitInfo.Domain='DOMAIN_SEA'", 2),
     ('unitInfo.RangedCombat=0;unitInfo.Bombard=55', 2),
     ('unitInfo.RangedCombat=0;unitInfo.Range=0', 1),
@@ -76,6 +114,17 @@ def test_native_city_attack_modes(setup, operation):
     assert 'UNIT_CITY_ATTACK_CONFIRMED' in result, result
     assert len(conn.operations) == 1 and conn.operations[0][0] == operation
     assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('setup', ['allowed[1]=false', 'arrivalTurn=2', 'movedIntoZOC=true'])
+@pytest.mark.usefixtures('fast_action_confirmation')
+def test_gdr_capture_still_requires_native_current_turn_melee_eligibility(setup):
+    conn = SiegeConn()
+    conn.lua.execute("unitInfo.UnitType='UNIT_GIANT_DEATH_ROBOT';wallHP=0;cityHP=0;" + setup)
+    state = state_for(conn)
+    result = asyncio.run(state.attack_unit(8, 19, 16))
+    assert result.startswith('Error:'), result
+    assert conn.operations == [] and state.pending_action_summary is None
 
 
 @pytest.mark.parametrize('setup', [

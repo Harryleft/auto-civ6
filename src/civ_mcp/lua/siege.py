@@ -138,12 +138,17 @@ __CONTEXT__
   r.actor=siegeActor(unit)
   assert(r.actor.id%65536==__UNIT__%65536 and (__UNIT__<65536 or r.actor.id==__UNIT__),"ACTOR_CHANGED")
   r.city=siegeCity(r.x,r.y)
-  r.operation=isAir and UnitOperationTypes.AIR_ATTACK or isRanged and UnitOperationTypes.RANGE_ATTACK or UnitOperationTypes.MOVE_TO
+  -- GDRs have both native melee and ranged combat. A defeated adjacent city
+  -- needs MOVE_TO+ATTACK to capture; another ranged shot only spends the turn.
+  if unitInfo.UnitType=="UNIT_GIANT_DEATH_ROBOT" and r.city.wall==0 and r.city.garrison==0
+   and Map.GetPlotDistance(r.actor.x,r.actor.y,r.x,r.y)==1 then r.melee=true end
+  assert(r.melee or r.city.wall>0 or r.city.garrison>0,"CITY_ALREADY_DEFEATED")
+  r.operation=r.melee and UnitOperationTypes.MOVE_TO or isAir and UnitOperationTypes.AIR_ATTACK or UnitOperationTypes.RANGE_ATTACK
   assert(r.operation~=nil,"OPERATION_UNKNOWN")
   r.params={};r.params[UnitOperationTypes.PARAM_X]=r.x;r.params[UnitOperationTypes.PARAM_Y]=r.y
   if r.melee then r.params[UnitOperationTypes.PARAM_MODIFIERS]=UnitOperationMoveModifiers.ATTACK end
-  if mode=="RANGED" then r.combatType=CombatTypes.RANGED;assert(r.combatType~=nil,"COMBAT_TYPE_UNKNOWN") end
-  if mode=="BOMBARD" then r.combatType=CombatTypes.BOMBARD;assert(r.combatType~=nil,"COMBAT_TYPE_UNKNOWN") end
+  if not r.melee and mode=="RANGED" then r.combatType=CombatTypes.RANGED;assert(r.combatType~=nil,"COMBAT_TYPE_UNKNOWN") end
+  if not r.melee and mode=="BOMBARD" then r.combatType=CombatTypes.BOMBARD;assert(r.combatType~=nil,"COMBAT_TYPE_UNKNOWN") end
   for _,name in ipairs({"CombatVisEnd","UnitRemovedFromMap"}) do
    assert(Events[name] and type(Events[name].Add)=="function" and type(Events[name].Remove)=="function","OBSERVER_UNKNOWN")
   end
