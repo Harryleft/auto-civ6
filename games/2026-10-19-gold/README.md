@@ -2,7 +2,9 @@
 
 完整获胜原局的[互动编年史与年表数据](runs/2026-10-20-windows-full-game-01/chronicle/README.md)已归档；[在线阅读](https://empire-chronicle.dongchao.chatgpt.site)。原始日志、逐回合OODA与三份关键存档沿同一轮次保存，独立巨作测试另行标注。
 
-最新Windows轮次已完成：第243回合原生苏美尔外交胜利（20/20），4城66人口保留，见[终局与香港收益](runs/2026-10-20-windows-full-game-01/reports/final.md)及[原生证据](runs/2026-10-20-windows-full-game-01/reports/terminal-evidence.json)。下方第141回合宗教失败属于较早独立轮次，保留历史结果。
+2026-10-20 Windows轮次已完成：第243回合原生苏美尔外交胜利（20/20），4城66人口保留，见[终局与香港收益](runs/2026-10-20-windows-full-game-01/reports/final.md)及[原生证据](runs/2026-10-20-windows-full-game-01/reports/terminal-evidence.json)。下方第141回合宗教失败属于较早独立轮次，保留历史结果。
+
+2026-10-27 Windows CLI兼容性新轮次在T37出现弹窗结果未知，已从本轮T25检查点完成故障恢复；补丁实机载入和整局仍未完成，见[修复与恢复验收](runs/2026-10-27-windows-cli-full-01/reports/2026-10-28-popup-fix.md)。
 
 用户于 2026-10-19 授权从新建神级存档逐步推进至原生终局；遇到工具阻塞时按 to-spec → implement-spec 修复，保留发生回合和验证证据。
 

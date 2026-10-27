@@ -9,6 +9,7 @@ def pending_facts(game) -> dict[str, bool]:
         "turn": game.turn_pending, "diplomacy": game.diplomacy_pending,
         "congress": game.congress_pending, "save": game.save_pending,
         "replacement": game.replacement_pending,
+        "popup": getattr(game, "popup_pending", False),
     }
 
 

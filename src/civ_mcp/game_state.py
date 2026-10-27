@@ -68,6 +68,8 @@ def _guard_pending_mutation(method):
     @wraps(method)
     async def guarded(self, *args, **kwargs):
         name = method.__name__
+        if self.popup_pending:
+            return self._popup_unknown
         if name == "send_diplomatic_action":
             action = kwargs.get("action", args[1] if len(args) > 1 else None)
             if isinstance(action, str) and action.upper() == "OPEN_BORDERS":
@@ -116,6 +118,7 @@ class GameState:
         """Retire requests after explicit replacement; keep its verification gate."""
         self._clear_world_caches()
         self._pending_save = False
+        self._popup_unknown: str | None = None
         # Replacement survives all cache/identity resets until verified.
         self._actions = ActionLifecycle(self.conn)
         self._turn_progress = TurnProgress()
@@ -129,6 +132,11 @@ class GameState:
     @property
     def congress_pending(self) -> bool:
         return self._congress_progress.pending
+
+    @property
+    def popup_pending(self) -> bool:
+        """弹窗写入未知独立保留，不覆盖被弹窗暂停的原动作。"""
+        return self._popup_unknown is not None
 
     async def confirm_hotseat_congress_handoff(self) -> str:
         """Confirm the original vote plan's native handoff without voting again."""
@@ -236,6 +244,8 @@ class GameState:
                                            interval=ACTION_CONFIRM_INTERVAL)
 
     async def _action_gate(self, entity: tuple[str, int] | None = None) -> str | None:
+        if self.popup_pending:
+            return self._popup_unknown
         blocked = await self.congress_gate()
         if blocked:
             return blocked
@@ -508,6 +518,9 @@ class GameState:
             await self.dismiss_popup()
         except (OSError, TimeoutError, LuaError):
             pass
+        # 清理发生在入口检查之后，也可能留下结果未知的写入。
+        if self.popup_pending:
+            return self._popup_unknown
         scope = await self._actions.prepare_scope(self._game_identity)
         if isinstance(scope, str):
             return scope
@@ -592,6 +605,8 @@ class GameState:
                 await self.dismiss_popup()
             except (OSError, TimeoutError, LuaError):
                 pass
+            if self.popup_pending:
+                return self._popup_unknown
             try:
                 lines = await self.conn.execute_write(lq.build_combat_estimate_query(entity[1], target_x, target_y))
                 estimate = lq.parse_combat_estimate(lines, 0, 0)
@@ -663,6 +678,8 @@ class GameState:
             await self.dismiss_popup()
         except (OSError, TimeoutError, LuaError):
             pass
+        if self.popup_pending:
+            return self._popup_unknown
         scope = await self._actions.prepare_scope(self._game_identity)
         if isinstance(scope, str):
             return scope
@@ -2384,10 +2401,14 @@ class GameState:
                 result += "\n" + diagnostic
         if self._diplomacy_cleanup.pending:
             result += "\ndiplomacy_cleanup: native callback outcome unknown; dismiss_popup only confirms its receipt; no callback or trade will be replayed."
+        if self.popup_pending:
+            result += "\npopup_cleanup: " + self._popup_unknown
         return result
 
     async def end_turn(self) -> str:
         """End the turn with snapshot-diff event detection."""
+        if self.popup_pending:
+            return self._popup_unknown
         if getattr(self, 'congress_pending', False):
             blocked = await self.congress_gate(allow_registered_turn=True)
             if blocked:
@@ -2407,15 +2428,45 @@ class GameState:
 
     async def dismiss_popup(self) -> str:
         """Dismiss any blocking popup or UI overlay."""
-        from civ_mcp.game_lifecycle import dismiss_popup
+        from civ_mcp.game_lifecycle import dismiss_popup_result
 
+        if self.popup_pending:
+            return self._popup_unknown
         if self.replacement_pending or self.save_pending:
             return "ERR:OUTCOME_UNKNOWN|Load or save completion is not confirmed; inspect or recover before dismissal."
         if self._diplomacy_progress.incoming is not None:
             return self._diplomacy_progress.trade_summary()
         if self._diplomacy_progress.trade is not None:
             return await self._diplomacy_progress.explicit_cleanup(self)
-        return await dismiss_popup(self.conn, self._diplomacy_cleanup)
+        if self._diplomacy_cleanup.pending:
+            # 原外交回执可只读确认，不重进通用弹窗批次。
+            cleanup = await self._diplomacy_cleanup.close(self.conn)
+            if cleanup.status == "confirmed":
+                return "Dismissed: DiplomacyActionView (native Close)"
+            return "ERR:OUTCOME_UNKNOWN|" + cleanup.message
+        # 在可能进入原生写入前锁存。旧批次没有逐项回执，不能靠界面消失追认或重发。
+        self._popup_unknown = (
+            "ERR:OUTCOME_UNKNOWN|Popup dismissal completion is unconfirmed; "
+            "the original request is retained and will not be replayed. "
+            "Inspect read-only facts or use explicit protected checkpoint recovery."
+        )
+        try:
+            result = await dismiss_popup_result(self.conn, self._diplomacy_cleanup)
+        except asyncio.CancelledError:
+            if self._diplomacy_cleanup.pending:
+                self._popup_unknown = None
+            raise
+        except (OSError, TimeoutError, LuaError) as exc:
+            self._popup_unknown += f" Original failure: {exc}"
+            return self._popup_unknown
+        if result.status == "unknown":
+            if self._diplomacy_cleanup.pending:
+                self._popup_unknown = None
+                return "ERR:OUTCOME_UNKNOWN|" + result.message
+            self._popup_unknown += f" Original result: {result.message}"
+            return self._popup_unknown
+        self._popup_unknown = None
+        return result.message
 
     async def list_saves(self) -> str:
         """List available save files."""

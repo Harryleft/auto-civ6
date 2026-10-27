@@ -106,6 +106,23 @@ def test_real_pending_owner_survives_queries_and_confirms_without_new_submission
     assert (evidence.path / "command-timing.json").is_file()
 
 
+def test_popup_unknown_survives_stdio_status_blocks_mutation_and_quit(tmp_path):
+    # 此用例验证门禁语义；Windows 替身冷启动实测超过 5 秒，单独给足初始化预算。
+    status, state, events, engine, _ = run_fake(tmp_path,
+        "popup dismiss --dry-run\npopup dismiss\npending\n"
+        "research set TECH_MINING\npopup dismiss\npending\nquit\n",
+        scenario="popup-unknown", timeout=30)
+    pending = [event["runtime"] for event in events if event["event"] == "pending"]
+    assert len(pending) == 2
+    assert all(row["pending"]["popup"] and row["has_pending"] for row in pending)
+    assert len({(row["session_id"], row["process_id"]) for row in pending}) == 1
+    results = [event for event in events if event["event"] == "tool_result"]
+    assert results and all(event["is_error"] for event in results)
+    assert engine["popup_writes"] == 1 and engine["submissions"] == 0
+    assert any(event.get("code") == "PENDING_ON_EXIT" for event in events)
+    assert status == "BLOCKED" and state["unresolved_on_exit"]
+
+
 def test_timing_export_failure_keeps_pending_owner_and_original_action(tmp_path, monkeypatch, capsys):
     from civ_mcp.devtools.turn_timing import TurnTiming
     def fail_export(*args):

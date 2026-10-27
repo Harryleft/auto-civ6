@@ -237,7 +237,7 @@ class DebugSession:
                 or type(value.get("connected")) is not bool
                 or not isinstance(value.get("session_id"), str) or not value["session_id"]
                 or type(value.get("process_id")) is not int or not isinstance(flags, dict)
-                or set(flags) != {"action", "turn", "diplomacy", "congress", "save", "replacement"}
+                or set(flags) != {"action", "turn", "diplomacy", "congress", "save", "replacement", "popup"}
                 or any(type(flag) is not bool for flag in flags.values())
                 or type(value.get("has_pending")) is not bool or value["has_pending"] != any(flags.values())):
             raise CommandError("RUNTIME_STATUS_INVALID", "Server did not return complete pending facts")

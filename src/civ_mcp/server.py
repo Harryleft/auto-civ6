@@ -113,12 +113,19 @@ async def _logged(
         try:
             congress_blocked = None
             if (getattr(app.game, 'congress_pending', False) is True
+                and not getattr(app.game, 'popup_pending', False)
                 and not tool_name.startswith(('get_', 'list_'))
                 and tool_name not in {'open_world_congress', 'queue_wc_votes', 'end_turn', 'dismiss_popup', 'restart_and_load', 'search_knowledge', 'search_research'}):
                 congress_blocked = await app.game.congress_gate()
             # Only these static readers bypass game-state access and pending gates.
             if tool_name in {"search_knowledge", "search_research", "get_knowledge"}:
                 result = await fn()
+            elif (
+                getattr(app.game, "popup_pending", False)
+                and not _is_read_tool(tool_name)
+                and tool_name not in {"dismiss_popup", "restart_and_load"}
+            ):
+                result = "ERR:OUTCOME_UNKNOWN|Popup dismissal is unconfirmed; retain its original request, inspect read-only facts or use explicit protected checkpoint recovery."
             elif congress_blocked:
                 result = congress_blocked
             elif (

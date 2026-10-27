@@ -15,7 +15,7 @@ from test_action_confirmation import Engine, no_dismiss
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--receipt", type=Path, required=True)
-parser.add_argument("--snapshot", choices=("ready", "pending", "changed-turn", "read-error"))
+parser.add_argument("--snapshot", choices=("ready", "pending", "changed-turn", "read-error", "popup-unknown"))
 args = parser.parse_args()
 game_state.ACTION_CONFIRM_TIMEOUT = .05
 game_state.ACTION_CONFIRM_INTERVAL = .001
@@ -25,6 +25,7 @@ engine.is_connected = False
 game = GameState(engine)
 game.dismiss_popup = no_dismiss
 observed = []
+popup_writes = 0
 
 
 async def units(*, on_confirmation=None):
@@ -71,6 +72,15 @@ if args.snapshot:
     game._revealed_tiles = set()
     if args.snapshot == "pending":
         game._pending_save = True
+    if args.snapshot == "popup-unknown":
+        # 只替换引擎边界，保留真实弹窗入口、门禁和 CLI 错误分类。
+        async def lost_popup_reply(source, timeout=5):
+            global popup_writes
+            popup_writes += 1
+            raise TimeoutError("scripted popup write reply lost")
+
+        engine.execute_write = lost_popup_reply
+        game.dismiss_popup = GameState.dismiss_popup.__get__(game, GameState)
 
 
 class Logger:
@@ -82,7 +92,8 @@ def persist(phase):
     path = args.receipt.with_suffix('.tmp')
     path.write_text(json.dumps({"process_id": os.getpid(), "phase": phase,
         "submissions": len(engine.submissions), "remaining_reads": len(engine.reads),
-        "observed": observed, "has_pending": game.pending_action_summary is not None}), encoding='utf-8')
+        "observed": observed, "has_pending": game.pending_action_summary is not None,
+        "popup_writes": popup_writes}), encoding='utf-8')
     path.replace(args.receipt)
 
 

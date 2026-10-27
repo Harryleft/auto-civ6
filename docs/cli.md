@@ -311,6 +311,8 @@ civic search --filter 生产力 --filter 单位 --match any --limit 10
 | `congress open`、`congress votes 'JSON_ARRAY'` | 显式进入已核实投票阶段；完整票单登记／提交 |
 | `popup dismiss` | 关闭已核实的信息弹窗或结束后残留视图，不代答外交 |
 
+`pending` 的 `popup` 字段表示通用弹窗写入批次或信息界面关闭结果未知。此时重复 `popup dismiss` 只返回保留的原请求，不重发关闭；普通变更、推进、保存与退出受门禁保护。旧通用批次没有可追认的逐项原生回执，不能靠界面消失或缓存刷新释放门禁；需要当前任务明确授权的受保护检查点恢复。已有专属回执的外交视图关闭继续沿原外交确认通道处理。
+
 `trade propose` 的 `--offer/request-open-borders` 是明确布尔开关，金币／GPT／外交支持及资源各有独立选项。试价可能进入原生会话，仍按变更预演并确认；`--mode test` 与 `--dry-run` 含义不同。JSON 票单用单引号包住完整数组，例如 `congress votes '[{"hash":42,"option":1,"target":0,"votes":1}]' --dry-run`；标识和选项必须替换为本次查询事实。
 
 ### 开发与热座模式

@@ -88,6 +88,7 @@ class FakeConn:
 
 class FakeGameState:
     save_pending = False
+    popup_pending = False
     _pending_end_turn = GameState._pending_end_turn
     _pending_end_turn_from = GameState._pending_end_turn_from
     turn_pending = GameState.turn_pending

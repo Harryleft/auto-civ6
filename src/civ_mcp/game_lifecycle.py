@@ -219,7 +219,7 @@ print("{lq.SENTINEL}")
 """
 
 
-async def dismiss_popup(conn: GameConnection, diplomacy_cleanup: DiplomacyViewCleanup | None = None) -> str:
+async def dismiss_popup_result(conn: GameConnection, diplomacy_cleanup: DiplomacyViewCleanup | None = None) -> NativeTransition:
     """Explicitly close information overlays through their native callbacks.
 
     State discovery is by exact name, never guessed indexes. A successful
@@ -354,10 +354,14 @@ end
         raise  # dead transport is not "no popups" — surface it
     except Exception as e:
         log.debug("Phase 1 dismiss failed: %s", e)
-        return f"Popup overlay query failed: {e}; outcome unknown."
+        return NativeTransition("unknown", f"Popup dismissal batch incomplete: {e}; outcome unknown.")
 
     if diplomacy_view_present or pending_diplomacy or cleanup.pending:
         cleanup_result = await cleanup.close(conn)
+        if cleanup_result.status == "unknown":
+            # 外交关闭已有专属回执所有者，未确认时不再进入其他弹窗写入阶段。
+            notice = ". Also: diplomacy session active — use respond_to_diplomacy." if pending_diplomacy else ""
+            return NativeTransition("unknown", cleanup_result.message + notice)
 
     unknown = None
     try:
@@ -395,10 +399,13 @@ end
     except (ConnectionError, TimeoutError, LuaError) as exc:
         unknown = f"Information popup close incomplete: {exc}; outcome unknown."
 
+    # 展示文案还可能包含明确未提交的外交关闭或待选晋升，不据文案判定未知。
+    uncertain = unknown is not None
     if cleanup_result is not None and cleanup_result.status == "confirmed":
         dismissed.append("DiplomacyActionView (native Close)")
         pending_diplomacy = False
     elif cleanup_result is not None:
+        uncertain = uncertain or cleanup_result.status == "unknown"
         unknown = (unknown + " " if unknown else "") + cleanup_result.message
 
     if pending_promotion:
@@ -421,18 +428,23 @@ end
             msg += ". Also: diplomacy session active — use respond_to_diplomacy."
         if pending_deal:
             msg += " (incoming trade deal pending — use get_pending_trades)"
-        return msg
+        return NativeTransition("unknown" if uncertain else "confirmed", msg)
     if unknown:
         if pending_diplomacy:
             unknown += ". Also: diplomacy session active — use respond_to_diplomacy."
         if pending_deal:
             unknown += ". Incoming trade deal pending — use get_pending_trades."
-        return unknown
+        return NativeTransition("unknown" if uncertain else "not_submitted", unknown)
     if pending_diplomacy:
-        return "Diplomacy session active — use respond_to_diplomacy to handle it."
+        return NativeTransition("not_submitted", "Diplomacy session active — use respond_to_diplomacy to handle it.")
     if pending_deal:
-        return "No popups to dismiss (incoming trade deal pending — use get_pending_trades)."
-    return "No popups to dismiss."
+        return NativeTransition("not_submitted", "No popups to dismiss (incoming trade deal pending — use get_pending_trades).")
+    return NativeTransition("confirmed", "No popups to dismiss.")
+
+
+async def dismiss_popup(conn: GameConnection, diplomacy_cleanup: DiplomacyViewCleanup | None = None) -> str:
+    """保留原有底层字符串接口；运行层消费结构化状态。"""
+    return (await dismiss_popup_result(conn, diplomacy_cleanup)).message
 
 
 # ------------------------------------------------------------------
