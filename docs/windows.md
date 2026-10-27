@@ -46,6 +46,8 @@ uv run --locked civ6 debug
 
 ## 编码与知识查询
 
+2026-10-27 在 Windows 11 Build 26200、Python 3.12.2、cp936 环境验证：完整路径只含 ASCII 的检出可以运行离线 CLI；中文目录的 editable 安装虽然完成，Python 仍无法导入 `civ_mcp`。原因是 `.pth` 的 UTF-8 路径被解释器按 locale 解码，`PYTHONUTF8=1` 不能修复该读取路径。此组合先使用如 `C:\projects\auto-civ6` 的 ASCII 检出目录；中文参数、日志文件名和证据输出目录已分别通过验证。完整结果及未通过项见 [Windows 11 CLI 验收](acceptance/2026-10-27-windows11-cli.md)。
+
 - 仓库 `.gitattributes` 要求知识目录保持 LF，防止 Windows 的 CRLF 转换破坏指纹校验。已有检出被转换时应恢复为版本库原始字节，不修改清单中的指纹来掩盖差异。
 - 知识 CLI 子进程显式使用 UTF-8，并将输入隔离为 `DEVNULL`，避免继承当前会话的 stdio 管道而超时。
 - 项目元数据和日志文件显式使用 UTF-8；客户端环境仍建议设置 `PYTHONUTF8=1`，确保辅助脚本及控制台中文一致。
@@ -57,5 +59,7 @@ uv run --locked python -m pytest -q tests/test_windows_compatibility.py tests/te
 ```
 
 ## 验证边界
+
+当前 Windows／UU 终端的离线会话已复现：空闲时按 Ctrl+C，打印 `Session retained` 后仍退出；不能将这条提示当作原 owner 仍在的证据。已有真实未决请求的会话不要用该按键做兼容性实验。共享 Unix socket 转接器和既有 macOS 热座控制器也未通过 Windows 验收；普通单人前台 CLI、平台夹具和原生游戏路径分别判定。
 
 离线测试不操作真实游戏。实机测试必须明确选定原始基准，并单独保存结果；当前基准说明见 [受信原始存档](../fixtures/saves/README.md)。Windows 实测报告单独记录实际回合和结果，不把跨平台 CI 配置等同于 Mac 真机验收。

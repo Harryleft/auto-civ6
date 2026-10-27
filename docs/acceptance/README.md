@@ -11,6 +11,7 @@
 | 宗教防御 | [离线观测、清除异教与神学攻击](2026-10-20-religion-defense.md)、[原局检查点实机验收](../../games/2026-10-19-gold/runs/2026-10-19-first/religion-native-validation-2026-10-20/acceptance.md) |
 | CI 测试替身 | [未决调度同步](2026-10-18-ci-pending-dispatch.md) |
 | Windows 兼容 | [编码、路径、进程与分批离线验证](2026-10-20-windows-compatibility.md)、[神级净推进 10 回合](../../games/2026-10-19-gold/runs/2026-10-20-windows-compatibility-t001-t011/reports/windows-compatibility.md) |
+| Windows 11 当前 CLI | [19afac9 真机离线验收：652 通过、21 失败、3 跳过及安装／Ctrl+C 问题](2026-10-27-windows11-cli.md)、[机器可读摘要](2026-10-27-windows11-cli.json) |
 | Windows 稳定性续查 | [旧 MCP 超时与会话清理联动退出](2026-10-20-windows-stability-followup.md)、[第 11→21 回合与断开重连](../../games/2026-10-19-gold/runs/2026-10-20-windows-compatibility-t001-t011/reports/windows-stability-followup.md) |
 | Windows 完整对局复核 | [问题、修复、测试及遗留项汇总](2026-10-21-windows-full-game-review.md)、[第 243 回合原生外交胜利](../../games/2026-10-19-gold/runs/2026-10-20-windows-full-game-01/reports/final.md) |
 | 文化伟人创作 | [普通次数为零的修复、443 项回归与五件巨作实机验收](../../games/2026-10-19-gold/runs/2026-10-20-windows-full-game-01/reports/2026-10-21-great-work-creation.md) |

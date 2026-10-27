@@ -1,0 +1,175 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-27",
+  "status": "FAIL",
+  "tested_commit": "19afac9e679cd73089aa32ecd3f41929ab94cd16",
+  "platform": {
+    "Caption": "Microsoft Windows 11 家庭版 中文版",
+    "Version": "10.0.26200",
+    "BuildNumber": "26200",
+    "OSArchitecture": "64-bit"
+  },
+  "python": "3.12.2",
+  "uv": "uv 0.7.13 (62ed17b23 2025-06-12)",
+  "powershell": "5.1.26100.9711",
+  "system_encoding": "cp936",
+  "test_python_utf8": 1,
+  "game_verification": "not_run",
+  "functional_checks": [
+    {
+      "case": "help-json",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 0.797
+    },
+    {
+      "case": "doctor-default-encoding",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 16.109
+    },
+    {
+      "case": "verify-knowledge",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 16.953
+    },
+    {
+      "case": "test-list",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 1.141
+    },
+    {
+      "case": "debug-offline",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 5.359
+    },
+    {
+      "case": "logs-unicode",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 1.25
+    },
+    {
+      "case": "invalid-timeout",
+      "status": "PASS",
+      "exit_code": 2,
+      "seconds": 0.781
+    }
+  ],
+  "test_suites": [
+    {
+      "name": "debug",
+      "passed": 344,
+      "failed": 4,
+      "skipped": 3,
+      "pytest_seconds": 89.02
+    },
+    {
+      "name": "knowledge",
+      "passed": 26,
+      "failed": 1,
+      "skipped": 0,
+      "pytest_seconds": 23.46
+    },
+    {
+      "name": "connection",
+      "passed": 65,
+      "failed": 0,
+      "skipped": 0,
+      "pytest_seconds": 1.18
+    },
+    {
+      "name": "checkpoints",
+      "passed": 113,
+      "failed": 0,
+      "skipped": 0,
+      "pytest_seconds": 3.6
+    },
+    {
+      "name": "windows-cli-regressions",
+      "passed": 104,
+      "failed": 16,
+      "skipped": 0,
+      "pytest_seconds": 75.62,
+      "files": [
+        "tests/test_windows_compatibility.py",
+        "tests/test_dev_cli.py",
+        "tests/test_cli_capabilities.py",
+        "tests/test_cli_relay.py",
+        "tests/test_game_launcher.py",
+        "tests/test_codex_hooks.py"
+      ]
+    }
+  ],
+  "tests": {
+    "passed": 652,
+    "failed": 21,
+    "skipped": 3,
+    "total": 676
+  },
+  "failure_categories": [
+    {
+      "category": "source_fingerprint_path_separators",
+      "failed_tests": 14,
+      "windows_specific": true
+    },
+    {
+      "category": "unix_socket_relay_unavailable",
+      "failed_tests": 2,
+      "windows_specific": true
+    },
+    {
+      "category": "existing_fcntl_hotseat_controller",
+      "failed_tests": 1,
+      "windows_specific": true
+    },
+    {
+      "category": "tasklist_oem_decoding_in_test",
+      "failed_tests": 1,
+      "windows_specific": true
+    },
+    {
+      "category": "fixture_disconnect_receipt_missing",
+      "failed_tests": 2,
+      "windows_specific": "observed_on_this_machine"
+    },
+    {
+      "category": "fake_units_callback_signature",
+      "failed_tests": 1,
+      "windows_specific": false,
+      "macos_comparison": "reproduced"
+    }
+  ],
+  "additional_manual_failures": [
+    {
+      "case": "unicode_checkout_editable_import",
+      "status": "FAIL",
+      "mechanism": "CPython 3.12.2 site.py reads UTF-8 .pth using cp936 locale; path is not found even with PYTHONUTF8=1",
+      "workaround_verified": "ASCII-only full checkout path"
+    },
+    {
+      "case": "uu_terminal_idle_ctrl_c",
+      "status": "FAIL",
+      "observed": "Session retained message followed by session_closing(reason=quit), with no explicit quit command",
+      "scope": "offline, idle, no pending; active game RPC interruption not tested"
+    }
+  ],
+  "preservation": {
+    "runtime_source_changed": false,
+    "remote_checkout_clean": true,
+    "lock_and_knowledge_unchanged": true,
+    "game_operations_performed": false
+  },
+  "evidence": {
+    "local_ignored_directory": ".scratch/windows11-20261027/final",
+    "manifest_file": "win11-20261027/transfer-manifest.json",
+    "manifest_sha256": "98a2b45feca51b52dc8af046ca9d0589dd0b995a56a9aa124de92cb37ba9d23a",
+    "verified_files": 134,
+    "missing_files": 0,
+    "mismatched_files": 0
+  },
+  "fix_status": "not_fixed; assessment and documentation only"
+}
