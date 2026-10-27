@@ -355,7 +355,8 @@ async def get_units(ctx: Context) -> str:
     gs = _get_game(ctx)
 
     async def _run():
-        units = await gs.get_units()
+        confirmations = []
+        units = await gs.get_units(on_confirmation=confirmations.append)
         try:
             threats = await gs.get_threat_scan()
         except Exception:
@@ -365,7 +366,10 @@ async def get_units(ctx: Context) -> str:
             trade_status = await gs.get_trade_routes()
         except Exception:
             pass
-        return nr.narrate_units(units, threats, trade_status)
+        text = nr.narrate_units(units, threats, trade_status)
+        if confirmations:
+            text += "\n\nAction confirmation: " + confirmations[0]
+        return text
 
     return await _logged(ctx, "get_units", {}, _run)
 
@@ -486,8 +490,12 @@ async def get_cities(ctx: Context) -> str:
     gs = _get_game(ctx)
 
     async def _run():
-        cities, distances = await gs.get_cities()
-        return nr.narrate_cities(cities, distances)
+        confirmations = []
+        cities, distances = await gs.get_cities(on_confirmation=confirmations.append)
+        text = nr.narrate_cities(cities, distances)
+        if confirmations:
+            text += "\n\nAction confirmation: " + confirmations[0]
+        return text
 
     return await _logged(ctx, "get_cities", {}, _run)
 

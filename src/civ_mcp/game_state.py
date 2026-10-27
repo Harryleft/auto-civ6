@@ -10,6 +10,7 @@ import asyncio
 import logging
 import re
 import uuid
+from collections.abc import Callable
 from functools import wraps
 
 from civ_mcp.actions import (
@@ -329,9 +330,16 @@ class GameState:
             log.debug("Game-over check failed in GameCore too", exc_info=True)
             return None
 
-    async def get_units(self) -> list[lq.UnitInfo]:
+    async def get_units(
+        self, *, on_confirmation: Callable[[str], None] | None = None,
+    ) -> list[lq.UnitInfo]:
+        """Read entities; optionally deliver this query's resolved action receipt."""
         if self._pending_action:
-            await self.confirm_pending_action(wait=False)
+            confirmation = await self.confirm_pending_action(wait=False)
+            # The receipt belongs only to this query, not a replayable cache.
+            # An unresolved observation must not be presented as completion.
+            if self._pending_action is None and on_confirmation is not None:
+                on_confirmation(confirmation)
         lines = await self.conn.execute_write(lq.build_units_query())
         return lq.parse_units_response(lines)
 
@@ -425,9 +433,14 @@ class GameState:
         lines = await self.conn.execute_write(lq.build_victory_progress_query())
         return lq.parse_victory_progress_response(lines)
 
-    async def get_cities(self) -> tuple[list[lq.CityInfo], list[str]]:
+    async def get_cities(
+        self, *, on_confirmation: Callable[[str], None] | None = None,
+    ) -> tuple[list[lq.CityInfo], list[str]]:
+        """Read entities; optionally deliver this query's resolved action receipt."""
         if self._pending_action:
-            await self.confirm_pending_action(wait=False)
+            confirmation = await self.confirm_pending_action(wait=False)
+            if self._pending_action is None and on_confirmation is not None:
+                on_confirmation(confirmation)
         lines = await self.conn.execute_write(lq.build_cities_query())
         return lq.parse_cities_response(lines)
 

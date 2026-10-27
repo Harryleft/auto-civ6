@@ -32,7 +32,7 @@ class PendingGame:
         self.actions.append(("skip", unit_index))
         return "SKIPPED"
 
-    async def get_units(self):
+    async def get_units(self, *, on_confirmation=None):
         return []
 
     async def restart_and_load(self, save_name=None):

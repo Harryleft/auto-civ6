@@ -114,6 +114,7 @@ def test_named_entity_query_confirms_delayed_conquest_without_another_attack(
             conn.lua.execute('winner=7')
         await session.execute_command(command)
         await session.execute_command('pending')
+        await session.execute_command(command)
         # A later entity query cannot invoke the attack entrypoint or submit
         # movement, even when it retires the original request.
         assert set(transport.calls[query_start:]) <= {'get_runtime_status', tool}
@@ -125,11 +126,48 @@ def test_named_entity_query_confirms_delayed_conquest_without_another_attack(
     assert len(conn.operations) == 1
     assert (game.pending_action_summary is None) is terminal_arrives
     assert (conn.lua.globals().x, conn.lua.globals().y) == (20, 16)
-    result = next(row for row in events if row.get('tool') == tool
-                  and row['event'] == 'tool_result')
+    results = [row for row in events if row.get('tool') == tool
+               and row['event'] == 'tool_result']
+    assert len(results) == 2
+    result, subsequent = results
     assert not result['is_error'], result
     text = '\n'.join(item['text'] for item in result['result']['content'])
     assert expected in text
+    if terminal_arrives:
+        assert 'Action confirmation: UNIT_CITY_ATTACK_CONFIRMED|' in text
+        assert 'completion:terminal_conquest' in text
+    else:
+        assert 'Action confirmation:' not in text
+        assert 'completion:terminal_conquest' not in text
+    subsequent_text = '\n'.join(item['text'] for item in subsequent['result']['content'])
+    assert not subsequent['is_error'], subsequent
+    assert expected in subsequent_text
+    assert 'Action confirmation:' not in subsequent_text
+    assert 'completion:terminal_conquest' not in subsequent_text
     assert not any(row['event'] in {'command_blocked', 'tool_outcome_unknown'} for row in events)
     # Preserve the actual adjacent position, not an invented final entry.
     assert not (tool == 'get_units' and 'at (19,16)' in text)
+
+
+@pytest.mark.parametrize('query,position', [
+    ('get_units', (20, 16)), ('get_cities', (19, 16)),
+])
+@pytest.mark.usefixtures('fast_action_confirmation')
+def test_default_entity_queries_preserve_their_entity_return_contract(query, position):
+    conn = queryable_capture()
+    game = state_for(conn)
+
+    async def scenario():
+        assert 'OUTCOME_UNKNOWN' in await game.attack_unit(8, 19, 16)
+        conn.lua.execute('winner=7')
+        entities = await getattr(game, query)()
+        if query == 'get_cities':
+            assert isinstance(entities, tuple) and len(entities) == 2
+            entities, distances = entities
+            assert isinstance(distances, list)
+        assert isinstance(entities, list) and len(entities) == 1
+        assert (entities[0].x, entities[0].y) == position
+        assert game.pending_action_summary is None
+
+    asyncio.run(scenario())
+    assert len(conn.operations) == 1
