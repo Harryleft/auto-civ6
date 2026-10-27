@@ -17,6 +17,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
+    "editables>=0.5",
     "mcp>=1.20",
     "jsonschema>=4.22",
     "referencing>=0.30",
@@ -33,6 +34,10 @@ civ6 = "civ_mcp.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/civ_mcp"]
+# Python 3.12 reads .pth files using the Windows locale. An ASCII import line
+# and a UTF-8 Python module map preserve non-ASCII checkout paths without
+# changing PYTHONPATH or weakening the CLI's checkout identity check.
+dev-mode-exact = true
 
 [build-system]
 requires = ["hatchling"]

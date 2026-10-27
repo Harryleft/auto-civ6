@@ -99,7 +99,7 @@ class Evidence:
         self.summary["evidence"] = str(self.path)
         context = {"python": {"executable": sys.executable, "version": sys.version}}
         context["source_sha256"] = {
-            str(path.relative_to(project)): hashlib.sha256(path.read_bytes()).hexdigest()
+            path.relative_to(project).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
             for path in sorted((project / "src/civ_mcp").rglob("*.py"))
         }
         provenance = {}

@@ -2,7 +2,14 @@
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
+import queue
+import subprocess
+import sys
+import threading
+import tempfile
+import uuid
 from types import SimpleNamespace
 
 import pytest
@@ -57,7 +64,7 @@ def test_framing_failure_retains_owner_and_refuses_next_submission(tmp_path, mon
         def __enter__(self): return self
         def __exit__(self, *args): pass
         def settimeout(self, value): pass
-        def makefile(self, mode): return io.StringIO(self.request + "\n")
+        def makefile(self, mode, **kwargs): return io.StringIO(self.request + "\n")
         def sendall(self, data): self.reply = json.loads(data)
 
     first = Client("turn end", "ad1f6590-2ec4-4352-9939-41cf48af5517")
@@ -76,7 +83,10 @@ def test_framing_failure_retains_owner_and_refuses_next_submission(tmp_path, mon
             {"event": "command", "input": "unexpected"},
         ]) + '\n'))
     monkeypatch.setattr(relay.subprocess, "Popen", lambda *a, **k: process)
-    monkeypatch.setattr(relay.socket, "socket", lambda *a, **k: Listener())
+    def listen(path, **kwargs):
+        Path(path).touch()
+        return Listener(), None
+    monkeypatch.setattr(relay, "listen", listen)
     if statistics_failure:
         def broken_statistics(*args):
             raise KeyError("statistics failure must not replace the original outcome")
@@ -89,3 +99,60 @@ def test_framing_failure_retains_owner_and_refuses_next_submission(tmp_path, mon
     assert not process.stdin.closed
     receipt = json.loads(Path(second.reply["original_receipt"]).read_text())
     assert receipt["command"] == "turn end" and receipt["state"] == "outcome_unknown"
+
+
+@pytest.mark.parametrize('tcp', [False, True])
+def test_real_offline_relay_preserves_unicode_identity_and_authentication(tmp_path, tcp):
+    script = Path(__file__).resolve().parents[1] / 'scripts/civ6_cli_relay.py'
+    # AF_UNIX has a much shorter path limit than the pytest temp directory.
+    endpoint = Path(tempfile.gettempdir()) / ('c6-' + uuid.uuid4().hex)
+    proof = tmp_path / 'proof'
+    command = [sys.executable, str(script), 'serve', '--socket', str(endpoint),
+               '--evidence', str(proof), '--offline', *(['--tcp'] if tcp else [])]
+    process = subprocess.Popen(command, cwd=script.parents[1], stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE, text=True, encoding='utf-8', env=dict(os.environ, PYTHONUTF8='1'))
+    ready = queue.Queue()
+    threading.Thread(target=lambda: ready.put(process.stdout.readline()), daemon=True).start()
+    try:
+        line = ready.get(timeout=60)
+        assert line, process.stderr.read()
+        value = json.loads(line)
+        assert value['event'] == 'relay_ready'
+        token = None
+        if endpoint.is_file():
+            token = json.loads(endpoint.read_text(encoding='utf-8'))['token']
+            client, _ = relay.connect(endpoint)
+            with client:
+                client.sendall(b'{"token":"wrong","command":"quit"}\n')
+                rejected = json.loads(client.makefile('r', encoding='utf-8').readline())
+            assert rejected['state'] == 'not_submitted'
+            assert not list((proof / 'requests').glob('*.json'))
+
+        def send(line, request_id=None):
+            call = [sys.executable, str(script), 'send', '--socket', str(endpoint),
+                    '--actor', 'test', '--command', line]
+            if request_id:
+                call += ['--request-id', request_id]
+            result = subprocess.run(call, cwd=script.parents[1], capture_output=True,
+                                    text=True, encoding='utf-8', timeout=60)
+            assert result.returncode == 0, result.stderr
+            if token:
+                assert token not in result.stdout + result.stderr
+            return json.loads(result.stdout)
+
+        identity = 'ad1f6590-2ec4-4352-9939-41cf48af5517'
+        original = send('pending', identity)
+        assert send('pending', identity) == original
+        assert len(list((proof / 'requests').glob('*.json'))) == 1
+        response = send('knowledge search 写作 --topic technologies --limit 1')
+        assert response['state'] == 'response_received'
+        assert '写作' in json.dumps(response, ensure_ascii=False)
+        send('quit')
+        process.communicate(timeout=30)
+        assert process.returncode == 0 and not endpoint.exists()
+        assert json.loads((proof/'cli/summary.json').read_text(encoding='utf-8'))['status'] == 'PASS'
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.communicate(timeout=10)
+        endpoint.unlink(missing_ok=True)

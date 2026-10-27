@@ -27,7 +27,7 @@ game.dismiss_popup = no_dismiss
 observed = []
 
 
-async def units():
+async def units(*, on_confirmation=None):
     observed.append("get_units")
     return []
 
@@ -75,13 +75,19 @@ if args.snapshot:
 
 class Logger:
     async def log_tool_call(self, *arguments):
-        pass
+        persist("running")
+
+
+def persist(phase):
+    path = args.receipt.with_suffix('.tmp')
+    path.write_text(json.dumps({"process_id": os.getpid(), "phase": phase,
+        "submissions": len(engine.submissions), "remaining_reads": len(engine.reads),
+        "observed": observed, "has_pending": game.pending_action_summary is not None}), encoding='utf-8')
+    path.replace(args.receipt)
 
 
 async def disconnect():
-    args.receipt.write_text(json.dumps({"process_id": os.getpid(), "phase": "closed",
-        "submissions": len(engine.submissions), "remaining_reads": len(engine.reads),
-        "observed": observed, "has_pending": game.pending_action_summary is not None}))
+    persist("closed")
 
 
 # Keep the production lifespan and MCP dispatcher; replace only their external
@@ -90,12 +96,15 @@ engine.disconnect = disconnect
 server.GameConnection = lambda: engine
 server.GameState = lambda connection: game
 server.GameLogger = Logger
-args.receipt.write_text(json.dumps({"process_id": os.getpid(), "phase": "started"}))
+persist("started")
 
 
 @server.mcp.tool()
 async def test_slow():
     await game.move_unit(0, 22, 9)
+    # Windows SDK shutdown terminates the process tree without running finally.
+    # Persist the real submitted/observed facts before sleeping, not at shutdown.
+    persist("waiting")
     await asyncio.sleep(10)
     return "returned"
 

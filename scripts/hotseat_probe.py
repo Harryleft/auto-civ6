@@ -9,17 +9,17 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import fcntl
 import hashlib
 import json
 from pathlib import Path
 import time
 
 from civ_mcp.connection import GameConnection
+from civ_mcp.file_lock import acquire
 
 
 async def execute(args) -> dict:
-    code = args.code.read_text() if args.code else None
+    code = args.code.read_text(encoding="utf-8") if args.code else None
     record = {"context": args.context, "operation": args.operation,
               "started": time.time(), "code_sha256": hashlib.sha256((code or "").encode()).hexdigest()}
     operation_file = None
@@ -46,9 +46,9 @@ async def execute(args) -> dict:
         await connection.disconnect()
     record["finished"] = time.time()
     if operation_file:
-        operation_file.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n")
+        operation_file.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     if args.output:
-        args.output.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n")
+        args.output.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return record
 
 
@@ -63,8 +63,16 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if args.timeout <= 0 or args.timeout > 30:
         parser.error("Per-command timeout must be between 0 and 30 seconds")
-    with (args.run / "evidence" / "control.lock").open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+    with (args.run / "evidence" / "control.lock").open("a+b") as lock:
+        deadline = time.monotonic() + 15
+        while True:
+            try:
+                acquire(lock)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError("Original controller still owns the hotseat lock")
+                time.sleep(.1)
         result = asyncio.run(execute(args))
     print(json.dumps(result, ensure_ascii=False, indent=2))
     raise SystemExit(1 if result.get("error") else 0)

@@ -69,8 +69,8 @@ class ObservedRead:
             raise StopAsyncIteration
 
 
-async def next_line(source: TextIO, closed: asyncio.Event) -> str:
-    reading = asyncio.create_task(readline(source))
+async def next_line(source: TextIO, closed: asyncio.Event, interrupted: threading.Event | None = None) -> str:
+    reading = asyncio.create_task(readline(source, interrupted))
     disconnected = asyncio.create_task(closed.wait())
     try:
         done, _ = await asyncio.wait({reading, disconnected}, return_when=asyncio.FIRST_COMPLETED)
@@ -83,7 +83,7 @@ async def next_line(source: TextIO, closed: asyncio.Event) -> str:
         await asyncio.gather(reading, disconnected, return_exceptions=True)
 
 
-async def readline(source: TextIO) -> str:
+async def readline(source: TextIO, interrupted: threading.Event | None = None) -> str:
     # A daemon input reader lets a broken MCP transport unwind while stdin is
     # still open. The default executor would wait for that blocked read at exit.
     loop = asyncio.get_running_loop()
@@ -98,7 +98,21 @@ async def readline(source: TextIO) -> str:
 
     def read():
         try:
-            value, error = source.readline(), None
+            while True:
+                try:
+                    value = source.readline()
+                except InterruptedError:
+                    continue
+                signalled = interrupted is not None and interrupted.is_set()
+                if signalled:
+                    interrupted.clear()
+                # Windows console ^C can return zero bytes instead of raising.
+                # Retry that terminal read; real EOF and piped EOF keep their
+                # original explicit shutdown semantics. Never replace the MCP.
+                if value == "" and source.isatty() and signalled:
+                    continue
+                break
+            error = None
         except Exception as exc:
             value, error = None, exc
         try:
@@ -172,16 +186,18 @@ def tool_error(tool: str, result) -> dict | None:
 @contextmanager
 def keep_session_on_interrupt():
     previous = signal.getsignal(signal.SIGINT)
+    interrupted = threading.Event()
 
     def interrupt(signum, frame):
         # The SDK isolates the child process group on POSIX. Do not cancel an
         # in-flight MCP call or replace its process when the terminal sends ^C.
+        interrupted.set()
         print("\nSession retained; the current request continues. Use pending or quit when it returns.",
               file=sys.stderr, flush=True)
 
     signal.signal(signal.SIGINT, interrupt)
     try:
-        yield
+        yield interrupted
     finally:
         signal.signal(signal.SIGINT, previous)
 
@@ -428,7 +444,8 @@ class DebugSession:
 
 async def serve(evidence: Evidence, state: dict, *, offline: bool, timeout: float,
                 source: TextIO | None, emit: Callable[[dict], None], server=None, driver=None,
-                developer: bool = False, shared_pending_path: Path | None = None) -> str:
+                developer: bool = False, shared_pending_path: Path | None = None,
+                interrupted: threading.Event | None = None) -> str:
     from mcp import ClientSession
     from mcp.client.stdio import StdioServerParameters, stdio_client
 
@@ -458,7 +475,7 @@ async def serve(evidence: Evidence, state: dict, *, offline: bool, timeout: floa
                     while True:
                         if source.isatty():
                             print("civ6> ", file=sys.stderr, end="", flush=True)
-                        line = await next_line(source, closed)
+                        line = await next_line(source, closed, interrupted)
                         if not line:
                             if await debug.close_request(False, eof=not source.isatty()):
                                 break
@@ -506,8 +523,8 @@ def run_debug(evidence: Evidence, state: dict, *, offline: bool, timeout: float,
     def emit(value):
         print(json.dumps(value, ensure_ascii=False, allow_nan=False), flush=True)
 
-    with keep_session_on_interrupt():
-        options = {"developer": developer, "shared_pending_path": shared_pending}
+    with keep_session_on_interrupt() as interrupted:
+        options = {"developer": developer, "shared_pending_path": shared_pending, "interrupted": interrupted}
         if server is not None:
             options["server"] = server
         return run_session(serve(evidence, state, offline=offline, timeout=timeout, source=sys.stdin, emit=emit,

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import fcntl
 import json
 from pathlib import Path
 import time
@@ -17,6 +16,7 @@ import uuid
 
 from mcp.server.fastmcp import Context
 from civ_mcp import server
+from civ_mcp.file_lock import acquire
 from civ_mcp.end_turn import _check_blockers
 
 EXCLUDED = {"run_lua", "end_turn", "save_game", "list_saves", "load_save",
@@ -144,7 +144,7 @@ def pending_path() -> Path:
 def write_pending(record: dict) -> None:
     path = pending_path()
     temp = path.with_suffix(".tmp")
-    temp.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n")
+    temp.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     temp.replace(path)
 
 
@@ -177,11 +177,11 @@ async def guarded_logged(ctx: Context, tool_name, params, fn):
         return "REFUSED|The long test keeps unit decisions with the model; no teleport/automation"
     read_only = tool_name.startswith(("get_", "search_"))
     async with serial:
-        with (run / "evidence" / "control.lock").open("a") as lock:
+        with (run / "evidence" / "control.lock").open("a+b") as lock:
             deadline = time.monotonic() + 15
             while True:
                 try:
-                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    acquire(lock)
                     break
                 except BlockingIOError:
                     if time.monotonic() > deadline:
@@ -190,7 +190,7 @@ async def guarded_logged(ctx: Context, tool_name, params, fn):
             record = {"session": session_id, "seat": seat, "tool": tool_name,
                       "params": params, "time": time.time()}
             timeline = run / "evidence" / "current-timeline.json"
-            record["timeline"] = json.loads(timeline.read_text())["timeline"] if timeline.exists() else 0
+            record["timeline"] = json.loads(timeline.read_text(encoding="utf-8"))["timeline"] if timeline.exists() else 0
             admitted = False
             try:
                 if not read_only:
@@ -207,7 +207,7 @@ async def guarded_logged(ctx: Context, tool_name, params, fn):
                         return "WAIT|Native handoff is paused or seat is inactive"
                 if not read_only:
                     if pending_path().exists():
-                        old = json.loads(pending_path().read_text())
+                        old = json.loads(pending_path().read_text(encoding="utf-8"))
                         if any(old.get(k) != record[k] for k in ("session", "seat")):
                             return "ERR:OUTCOME_UNKNOWN|An earlier shared request remains unresolved; no action sent"
                         if any(old.get(k) != record[k] for k in ("tool", "params")):
@@ -240,7 +240,7 @@ async def guarded_logged(ctx: Context, tool_name, params, fn):
                     if not domains and not unknown:
                         pending_path().unlink(missing_ok=True)
                     else:
-                        active = json.loads(pending_path().read_text())
+                        active = json.loads(pending_path().read_text(encoding="utf-8"))
                         if not unknown and "parent" in active:
                             active = active["parent"] | {"last_child_receipt": str(result)}
                         else:
@@ -262,7 +262,7 @@ async def begin_hotseat_turn(ctx: Context) -> str:
     """Confirm native PlayerChange once; return readiness plus fresh units/cities/research."""
     async def action():
         conn = server._get_game(ctx).conn
-        pending = json.loads(pending_path().read_text())
+        pending = json.loads(pending_path().read_text(encoding="utf-8"))
         if pending["phase"] == "registered":
             pending["phase"] = "submitted"
             write_pending(pending)
@@ -299,7 +299,7 @@ async def end_hotseat_turn(ctx: Context) -> str:
     """End only this bound seat once; confirm native handoff, not a global turn increment."""
     async def action():
         conn = server._get_game(ctx).conn
-        pending = json.loads(pending_path().read_text())
+        pending = json.loads(pending_path().read_text(encoding="utf-8"))
         if pending["phase"] == "registered":
             f = await phase(conn)
             blockers = await _check_blockers(server._get_game(ctx), int(f[3]))

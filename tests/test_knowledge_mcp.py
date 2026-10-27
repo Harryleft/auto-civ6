@@ -267,9 +267,11 @@ def test_cli_timeout_is_bounded_and_reaps_its_child_without_repair_or_retry(monk
         # 虚拟环境启动器与实际解释器可能有不同 PID，额外检查实际 CLI。
         result = subprocess.run(
             ['tasklist', '/FI', f'PID eq {pid}', '/FO', 'CSV', '/NH'],
-            capture_output=True, text=True, check=True,
+            capture_output=True, check=True,
         )
-        assert f'"{pid}"' not in result.stdout
+        # tasklist uses the OEM code page even when Python runs in UTF-8 mode.
+        # The quoted numeric CSV field is ASCII; no localized text is needed.
+        assert f'"{pid}"'.encode('ascii') not in result.stdout
     else:
         with pytest.raises(ProcessLookupError):
             os.kill(pid, 0)

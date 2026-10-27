@@ -8,6 +8,7 @@ from pathlib import Path
 import signal
 import subprocess
 import sys
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -54,6 +55,37 @@ def run_fake(tmp_path, text, timeout=5, scenario=None, **options):
     status = asyncio.run(serve(evidence, state, offline=False, timeout=timeout,
                               source=StringIO(text), emit=events.append, server=params, **options))
     return status, state, events, json.loads(receipt.read_text()), evidence
+
+
+def test_interrupted_terminal_empty_read_retains_the_same_pending_owner(tmp_path):
+    interrupted = threading.Event()
+
+    class Terminal(StringIO):
+        first = True
+
+        def isatty(self):
+            return True
+
+        def readline(self):
+            if self.first:
+                self.first = False
+                interrupted.set()  # Windows ReadConsole can report ^C as an empty read.
+                return ''
+            return super().readline()
+
+    receipt = tmp_path / 'engine.json'
+    evidence = Evidence(ROOT, ['interrupted-input'], str(tmp_path / 'proof'))
+    params = StdioServerParameters(command=sys.executable,
+        args=[str(ROOT / 'tests/fake_debug_server.py'), '--receipt', str(receipt)], cwd=str(ROOT))
+    state, events = {}, []
+    status = asyncio.run(serve(evidence, state, offline=False, timeout=5,
+        source=Terminal(MOVE + 'pending\n' + MOVE + 'pending\nquit\n'), emit=events.append,
+        server=params, interrupted=interrupted))
+    pending = [e['runtime'] for e in events if e['event'] == 'pending']
+    assert [r['has_pending'] for r in pending] == [True, False]
+    assert len({(r['session_id'], r['process_id']) for r in pending}) == 1
+    assert json.loads(receipt.read_text())['submissions'] == 1
+    assert status == 'PASS' and state['exit_reason'] == 'quit'
 
 
 def test_real_pending_owner_survives_queries_and_confirms_without_new_submission(tmp_path):

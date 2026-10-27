@@ -11,6 +11,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import secrets
 import socket
 import subprocess
 import sys
@@ -25,8 +26,58 @@ DONE = {"tool_result", "tool_outcome_unknown", "command_blocked", "dry_run",
 
 def write(path, value):
     temp = path.with_suffix(".tmp")
-    temp.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n")
+    temp.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     temp.replace(path)
+
+
+def listen(path, *, force_tcp=False):
+    """Keep Unix sockets, with authenticated loopback IPC on Windows.
+
+    The endpoint file is exclusive and private. No external interface, stable
+    port, credential persistence outside this run, or unauthenticated caller is
+    introduced by the Windows fallback.
+    """
+    tcp = force_tcp or not hasattr(socket, "AF_UNIX")
+    listener = socket.socket(socket.AF_INET if tcp else socket.AF_UNIX)
+    try:
+        if tcp:
+            listener.bind(("127.0.0.1", 0))
+            token = secrets.token_hex(32)
+            endpoint = {"transport": "tcp", "host": "127.0.0.1",
+                        "port": listener.getsockname()[1], "token": token}
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                json.dump(endpoint, stream)
+        else:
+            listener.bind(str(path))
+            os.chmod(path, 0o600)
+            token = None
+        listener.listen(4)
+        return listener, token
+    except BaseException:
+        listener.close()
+        raise
+
+
+def connect(path):
+    if path.is_file():
+        endpoint = json.loads(path.read_text(encoding="utf-8"))
+        if (endpoint.get("transport") != "tcp" or endpoint.get("host") != "127.0.0.1"
+                or type(endpoint.get("port")) is not int or not 1 <= endpoint["port"] <= 65535
+                or not isinstance(endpoint.get("token"), str) or len(endpoint["token"]) != 64):
+            raise ValueError("Invalid local relay endpoint")
+        client = socket.socket(socket.AF_INET)
+        address, token = ("127.0.0.1", endpoint["port"]), endpoint["token"]
+    else:
+        client = socket.socket(socket.AF_UNIX)
+        address, token = str(path), None
+    try:
+        client.settimeout(380)
+        client.connect(address)
+        return client, token
+    except BaseException:
+        client.close()
+        raise
 
 
 def receive_command(event, command):
@@ -51,6 +102,8 @@ def serve(args):
     requests = args.evidence / "requests"
     requests.mkdir()
     timing = TurnTiming()
+    # Fail before spawning an owner if the endpoint already exists or cannot bind.
+    listener, token = listen(args.socket, force_tcp=getattr(args, "tcp", False))
 
     def receipt(path, response):
         write(path, response)
@@ -64,10 +117,10 @@ def serve(args):
                str(args.evidence / "cli"), "debug"]
     if args.offline:
         command.append("--offline")
-    with (args.evidence / "stderr.log").open("w") as errors:
+    with (args.evidence / "stderr.log").open("w", encoding="utf-8") as errors:
         process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                   stderr=errors, text=True, bufsize=1)
-        with (args.evidence / "stdout.jsonl").open("a") as transcript:
+                                   stderr=errors, text=True, encoding="utf-8", bufsize=1)
+        with (args.evidence / "stdout.jsonl").open("a", encoding="utf-8") as transcript:
             def event():
                 line = process.stdout.readline()
                 if not line:
@@ -81,10 +134,6 @@ def serve(args):
                 if value.get("event") == "session_ready":
                     write(args.evidence / "ready.json", value)
                     break
-            listener = socket.socket(socket.AF_UNIX)
-            listener.bind(str(args.socket))
-            os.chmod(args.socket, 0o600)
-            listener.listen(4)
             print(json.dumps({"event": "relay_ready", "cli_pid": process.pid,
                               "socket": str(args.socket)}), flush=True)
             stopping = False
@@ -94,7 +143,12 @@ def serve(args):
                 with client:
                     client.settimeout(5)
                     try:
-                        request = json.loads(client.makefile("r").readline(131072))
+                        request = json.loads(client.makefile("r", encoding="utf-8").readline(131072))
+                        if not isinstance(request, dict):
+                            raise ValueError("One JSON request object is required")
+                        supplied = request.pop("token", "")
+                        if token is not None and (not isinstance(supplied, str) or not secrets.compare_digest(supplied, token)):
+                            raise ValueError("Relay authentication failed; no command submitted")
                         request_id = request["request_id"]
                         uuid.UUID(request_id)
                         line = request["command"]
@@ -105,7 +159,7 @@ def serve(args):
                         client.sendall((json.dumps({"state": "not_submitted", "error": str(error)}) + "\n").encode())
                         continue
                     if path.exists():
-                        response = json.loads(path.read_text())
+                        response = json.loads(path.read_text(encoding="utf-8"))
                         if any(response.get(k) != request.get(k) for k in ("actor", "command")):
                             client.sendall(b'{"state":"not_submitted","error":"Request ID belongs to different original parameters"}\n')
                             continue
@@ -157,11 +211,12 @@ def send(args):
                "command": args.command}
     # Print the request identity before connecting; no automatic retry on loss.
     print(json.dumps({"request": request}), file=sys.stderr, flush=True)
-    with socket.socket(socket.AF_UNIX) as client:
-        client.settimeout(380)
-        client.connect(str(args.socket))
-        client.sendall((json.dumps(request) + "\n").encode())
-        response = json.loads(client.makefile("r").readline())
+    client, token = connect(args.socket)
+    with client:
+        if token is not None:
+            request["token"] = token
+        client.sendall((json.dumps(request) + "\n").encode("utf-8"))
+        response = json.loads(client.makefile("r", encoding="utf-8").readline())
     print(json.dumps(response, ensure_ascii=False))
 
 
@@ -172,6 +227,7 @@ if __name__ == "__main__":
     owner.add_argument("--socket", type=Path, required=True)
     owner.add_argument("--evidence", type=Path, required=True)
     owner.add_argument("--offline", action="store_true")
+    owner.add_argument("--tcp", action="store_true", help="Use authenticated loopback IPC (automatic without AF_UNIX)")
     caller = commands.add_parser("send")
     caller.add_argument("--socket", type=Path, required=True)
     caller.add_argument("--actor", required=True)
