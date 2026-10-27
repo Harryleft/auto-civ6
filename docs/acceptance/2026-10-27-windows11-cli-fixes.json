@@ -1,0 +1,221 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-27",
+  "status": "PASS",
+  "scope": "Windows 11 native offline CLI and UU idle console interrupts",
+  "tested_commit": "c63c8143ffce69a7b4f0d75af95a9aef1a9a7eec",
+  "baseline_commit": "19afac9e679cd73089aa32ecd3f41929ab94cd16",
+  "baseline_report": "2026-10-27-windows11-cli.json",
+  "platform_version": "Windows 11 10.0.26200 x64",
+  "python": "3.12.2",
+  "system_encoding": "cp936",
+  "checkout": "%USERPROFILE%\\Documents\\Something\\civ6 CLI 修复验收 20261027",
+  "editable_pth": [
+    {
+      "name": "_editable_impl_civ6_mcp.pth",
+      "ascii": true,
+      "text": "import _editable_impl_civ6_mcp"
+    }
+  ],
+  "game_verification": "not_run",
+  "functional_checks": [
+    {
+      "case": "help-json",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 0.813
+    },
+    {
+      "case": "doctor-default-encoding",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 13.687
+    },
+    {
+      "case": "verify-knowledge",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 16.922
+    },
+    {
+      "case": "test-list",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 1.125
+    },
+    {
+      "case": "debug-offline",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 5.265
+    },
+    {
+      "case": "logs-unicode",
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 1.094
+    },
+    {
+      "case": "invalid-timeout",
+      "status": "PASS",
+      "exit_code": 2,
+      "seconds": 0.75
+    }
+  ],
+  "test_suites": [
+    {
+      "name": "debug",
+      "passed": 349,
+      "failed": 0,
+      "skipped": 3,
+      "pytest_seconds": 88.43,
+      "command_seconds": 93.328
+    },
+    {
+      "name": "knowledge",
+      "passed": 27,
+      "failed": 0,
+      "skipped": 0,
+      "pytest_seconds": 23.01,
+      "command_seconds": 26.594
+    },
+    {
+      "name": "connection",
+      "passed": 65,
+      "failed": 0,
+      "skipped": 0,
+      "pytest_seconds": 1.18,
+      "command_seconds": 2.718
+    },
+    {
+      "name": "checkpoints",
+      "passed": 113,
+      "failed": 0,
+      "skipped": 0,
+      "pytest_seconds": 3.73,
+      "command_seconds": 8.907
+    },
+    {
+      "name": "windows-cli-regressions",
+      "passed": 143,
+      "failed": 0,
+      "skipped": 0,
+      "pytest_seconds": 113.78,
+      "command_seconds": 118.485
+    }
+  ],
+  "tests": {
+    "passed": 697,
+    "failed": 0,
+    "skipped": 3,
+    "total": 700,
+    "baseline_failed_tests_resolved": 21,
+    "additional_cases": 24
+  },
+  "interactive_console": {
+    "status": "PASS",
+    "ctrl_c_presses": 2,
+    "commands": [
+      "pending",
+      "pending",
+      "pending",
+      "knowledge search 写作 --topic technologies --limit 1",
+      "quit"
+    ],
+    "process_id": 14536,
+    "session_id": "9e9ab1c5ccde47409b6b2c2eff46a8a7",
+    "identity_reads": 4,
+    "explicit_quit": true,
+    "game_verification": "not_run"
+  },
+  "failure_categories": [
+    {
+      "category": "source_fingerprint_path_separators",
+      "failed_tests": 14,
+      "windows_specific": true,
+      "status_after_fix": "PASS"
+    },
+    {
+      "category": "unix_socket_relay_unavailable",
+      "failed_tests": 2,
+      "windows_specific": true,
+      "status_after_fix": "PASS"
+    },
+    {
+      "category": "existing_fcntl_hotseat_controller",
+      "failed_tests": 1,
+      "windows_specific": true,
+      "status_after_fix": "PASS"
+    },
+    {
+      "category": "tasklist_oem_decoding_in_test",
+      "failed_tests": 1,
+      "windows_specific": true,
+      "status_after_fix": "PASS"
+    },
+    {
+      "category": "fixture_disconnect_receipt_missing",
+      "failed_tests": 2,
+      "windows_specific": "observed_on_this_machine",
+      "status_after_fix": "PASS"
+    },
+    {
+      "category": "fake_units_callback_signature",
+      "failed_tests": 1,
+      "windows_specific": false,
+      "macos_comparison": "reproduced",
+      "status_after_fix": "PASS"
+    }
+  ],
+  "unicode_install": {
+    "status": "PASS",
+    "fresh_sync_locked": true,
+    "doctor_python_utf8_0": "PASS",
+    "ascii_checkout_doctor": "PASS"
+  },
+  "relay": {
+    "status": "PASS",
+    "transport": "authenticated IPv4 loopback TCP",
+    "unique_sessions": 2,
+    "wrong_token_not_submitted": true,
+    "same_request_id_not_replayed": true,
+    "unicode_command": "PASS"
+  },
+  "local_macos": {
+    "passed": 326,
+    "failed": 0,
+    "doctor": "PASS",
+    "verify_knowledge": "PASS",
+    "compileall": "PASS",
+    "diff_check": "PASS"
+  },
+  "preservation": {
+    "windows_checkout_clean": true,
+    "knowledge_and_lock_unchanged": true,
+    "fingerprints": {
+      "before": {
+        "uv.lock": "421a6069fac0418e77cd7aa3c1e775b6446c49eb03ae3f4853ebc57460b919d9",
+        "civ6_knowledge/manifest.json": "a8009179511e55ce4feffd4095da060b6d18f64e405993cdcf030cc746b8a41e",
+        "civ6_knowledge/sources/snapshot.json": "02bba8b29260d6ec4afbd34f738a92ae5503ddeeeea527813fc4599227916d29"
+      },
+      "after": {
+        "uv.lock": "421a6069fac0418e77cd7aa3c1e775b6446c49eb03ae3f4853ebc57460b919d9",
+        "civ6_knowledge/manifest.json": "a8009179511e55ce4feffd4095da060b6d18f64e405993cdcf030cc746b8a41e",
+        "civ6_knowledge/sources/snapshot.json": "02bba8b29260d6ec4afbd34f738a92ae5503ddeeeea527813fc4599227916d29"
+      }
+    },
+    "raw_evidence": ".scratch/windows11-fix-20261027/",
+    "sealed_files": 162,
+    "transfer_missing": 0,
+    "transfer_mismatches": 0,
+    "manifest_sha256": "75ed8ff947bb32fc9a81b3ba2f70274da8e9e4892e10b7ed8e32fa80b8055ccc",
+    "original_game_and_pending": "untouched",
+    "baseline_evidence": "preserved"
+  },
+  "not_run": [
+    "real Windows game and FireTuner",
+    "Windows game RPC interrupts",
+    "native Windows hotseat handoff",
+    "Windows Codex Hook trust and automatic triggers"
+  ]
+}

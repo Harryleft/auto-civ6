@@ -376,7 +376,7 @@ quit
 - 游戏侧只读工具有有界预算（45 秒）：主菜单、加载中或模态界面阻塞时，工具返回 `ERR:TOOL_TIMEOUT`（未提交、未确认、未重放任何内容），CLI 不再等到 300 秒 RPC 超时并锁存 `transport_unknown`。用 `civ6 tuner status` 区分“游戏不可达／连接被占用／残留会话”，再决定加载或恢复。
 - `quit` 会新读 pending；有未决请求、传输未知或无法确认服务身份时拒绝退出，留在原会话。`quit --abandon` 是明确放弃当前进程内上下文的退出入口，仍返回 `BLOCKED`（`context_lost=true`、`exit_reason=abandoned`），不退役游戏中的原请求；传输未知导致无法确认时，这是 CLI 内的显式收尾路径。保留证据后按已授权的检查点恢复流程处理，不能开一个空会话冒充已确认。
 - 交互终端 Ctrl+D 有未决时返回提示；stdin 管道已耗尽时无法继续交互，保存未决快照、返回 `BLOCKED` 后关闭自有 MCP，`data.exit_reason=eof_unresolved`。该结束会丢失进程内上下文，不支持跨进程续接。
-- Ctrl+C 的设计行为是不取消正在执行的 RPC，也不终止 MCP；等待请求返回后继续输入。每个 RPC 默认等待上限 300 秒，可用 `debug --timeout SECONDS` 调整。POSIX 子进程使用 SDK 的独立进程组。Windows 11／Python 3.12.2／UU 终端已复现空闲 Ctrl+C 提示会话保留后仍退出，不能依赖该提示判断 owner 存活；详见 [Windows 11 验收](acceptance/2026-10-27-windows11-cli.md)。实际 Windows 游戏 RPC 中断行为仍未验证。
+- Ctrl+C 的设计行为是不取消正在执行的 RPC，也不终止 MCP；等待请求返回后继续输入。每个 RPC 默认等待上限 300 秒，可用 `debug --timeout SECONDS` 调整。POSIX 子进程使用 SDK 的独立进程组。Windows 终端中断导致的空读会继续读取原输入流；Windows 11／Python 3.12.2／UU 真终端已验证连续两次空闲 Ctrl+C 后保持同一 PID／session ID，继续查询并显式退出，见 [Windows 11 修复复验](acceptance/2026-10-27-windows11-cli-fixes.md)。实际 Windows 游戏 RPC 中断行为仍未验证。
 - 服务 UUID／PID 变化会锁存失效并阻止后续变更。stdio 关闭时结束前台等待、保留失败证据；没有进程替换、自动恢复或重放。
 
 `debug.jsonl` 记录命令、调用开始、原始返回、未知结果与退出原因；每条事件有递增序号，`tool_result.request` 对应 `tool_started.sequence`。完整 MCP 返回另存 `debug-response-*.json`。`runtime-status.json` 是最后一次成功读取的内存快照，`transport-unknown.json` 保留首个传输未知的原参数，后续读失败不会覆盖它。`debug-process.json`、`debug-initialize.json`、`debug-tools.json` 保存启动与协议事实。`data.tool_calls` 仅计显式调用和状态别名，不含内部的纯内存状态检查；日志查询的 session 文件名也不等于服务 UUID。
