@@ -11,6 +11,18 @@ from test_game_state import FakeConn
 OVERVIEW = "41|0|Sumeria|Gilgamesh|29|12|13.2|13.5|20|Wheel|Mysticism|0|1|92"
 
 
+def test_unknown_research_duration_is_not_an_urgent_recommendation():
+    from civ_mcp.lua import TechOption, TechCivicStatus
+    from civ_mcp.narrate import narrate_tech_civics
+    options = [TechOption("Unknown", "TECH_A", 10, 0, -1, False, "", ""),
+               TechOption("Known", "TECH_B", 10, 0, 2, False, "", "")]
+    text = narrate_tech_civics(TechCivicStatus("None", -1, "None", None, options, []))
+    assert "turns unknown" in text and "-1 turns" not in text
+    assert "GRAB THIS" not in text and text.index("Known") < text.index("Unknown")
+    text = narrate_tech_civics(TechCivicStatus("Mining", -1, "None", None, options, []))
+    assert "Researching: Mining (turns unknown)" in text
+
+
 def test_confirmed_turn_reports_missing_unit_without_inventing_a_cause():
     conn = FakeConn([
         ("write", [OVERVIEW]),

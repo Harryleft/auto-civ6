@@ -907,8 +907,9 @@ def narrate_tech_civics(tc: lq.TechCivicStatus) -> str:
     if tc.completed_tech_count > 0 or tc.completed_civic_count > 0:
         completed = f" | Completed: {tc.completed_tech_count} techs, {tc.completed_civic_count} civics"
     if tc.current_research != "None":
+        research_turns = f"{tc.current_research_turns} turns" if tc.current_research_turns >= 0 else "turns unknown"
         lines.append(
-            f"Researching: {tc.current_research} ({tc.current_research_turns} turns){completed}"
+            f"Researching: {tc.current_research} ({research_turns}){completed}"
         )
     else:
         lines.append(f"No technology being researched!{completed}")
@@ -931,15 +932,15 @@ def narrate_tech_civics(tc: lq.TechCivicStatus) -> str:
         lines.append("No civic being progressed!")
     if tc.available_techs:
         lines.append("\nAvailable techs:")
-        for t in sorted(tc.available_techs, key=lambda x: x.turns):
+        for t in sorted(tc.available_techs, key=lambda x: x.turns if x.turns >= 0 else float("inf")):
             boost_str = " BOOSTED" if t.boosted else ""
             boost_desc = f" [Boost: {t.boost_desc}]" if t.boost_desc else ""
             unlocks = f" -> {t.unlocks}" if t.unlocks else ""
             era_str = f" [{t.era.replace('ERA_', '')}]" if t.era else ""
             prereq_str = f" (needs: {t.prereqs})" if t.prereqs else ""
-            flag = " !! GRAB THIS" if t.turns <= 2 else ""
+            turns = f"{t.turns} turns" if t.turns >= 0 else "turns unknown"
             lines.append(
-                f"  {t.name} ({t.tech_type}){era_str} — {t.progress_pct}%, {t.turns} turns{boost_str}{boost_desc}{unlocks}{prereq_str}{flag}"
+                f"  {t.name} ({t.tech_type}){era_str} — {t.progress_pct}%, {turns}{boost_str}{boost_desc}{unlocks}{prereq_str}"
             )
     if tc.available_civics:
         lines.append("\nAvailable civics:")
@@ -951,7 +952,6 @@ def narrate_tech_civics(tc: lq.TechCivicStatus) -> str:
             boost_desc = f" [Boost: {c.boost_desc}]" if c.boost_desc else ""
             era_str = f" [{c.era.replace('ERA_', '')}]" if c.era else ""
             prereq_str = f" (needs: {c.prereqs})" if c.prereqs else ""
-            flag = " !! GRAB THIS" if c.turns is not None and 0 <= c.turns <= 2 else ""
             progress = (
                 f"{c.progress_pct}%" if c.progress_pct is not None else "progress unknown"
             )
@@ -962,7 +962,7 @@ def narrate_tech_civics(tc: lq.TechCivicStatus) -> str:
             if c.turns_source == "remaining_cost_estimate":
                 turns += " (estimate)"
             lines.append(
-                f"  {c.name} ({c.civic_type}){era_str} — {progress}, {turns}{boost_str}{boost_desc}{prereq_str}{flag}"
+                f"  {c.name} ({c.civic_type}){era_str} — {progress}, {turns}{boost_str}{boost_desc}{prereq_str}"
             )
     era_order = [
         "ERA_ANCIENT",

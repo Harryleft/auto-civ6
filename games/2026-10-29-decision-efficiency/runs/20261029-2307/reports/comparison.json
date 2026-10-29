@@ -1,0 +1,164 @@
+{
+  "schema_version": 1,
+  "scope": "same_state_public_cli_read_comparison",
+  "cold_turns": [
+    1,
+    6
+  ],
+  "samples": [
+    {
+      "identity": {
+        "civilization": "sumeria",
+        "seed": -1896272000,
+        "player_id": 0,
+        "turn": 1
+      },
+      "status": "ready",
+      "fact_matches": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "legacy_rpc_seconds": 1.120647,
+      "combined_structured_rpc_seconds": 0.191864,
+      "combined_brief_rpc_seconds": 0.17369,
+      "legacy_tool_result_bytes": 4486,
+      "combined_structured_tool_result_bytes": 7886,
+      "combined_brief_tool_result_bytes": 4098
+    },
+    {
+      "identity": {
+        "civilization": "sumeria",
+        "seed": -1896272000,
+        "player_id": 0,
+        "turn": 2
+      },
+      "status": "ready",
+      "fact_matches": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "legacy_rpc_seconds": 0.487888,
+      "combined_structured_rpc_seconds": 0.218864,
+      "combined_brief_rpc_seconds": 0.17274,
+      "legacy_tool_result_bytes": 4657,
+      "combined_structured_tool_result_bytes": 8166,
+      "combined_brief_tool_result_bytes": 4264
+    },
+    {
+      "identity": {
+        "civilization": "sumeria",
+        "seed": -1896272000,
+        "player_id": 0,
+        "turn": 4
+      },
+      "status": "ready",
+      "fact_matches": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "legacy_rpc_seconds": 0.514358,
+      "combined_structured_rpc_seconds": 0.229057,
+      "combined_brief_rpc_seconds": 0.172039,
+      "legacy_tool_result_bytes": 4740,
+      "combined_structured_tool_result_bytes": 8172,
+      "combined_brief_tool_result_bytes": 4340
+    },
+    {
+      "identity": {
+        "civilization": "sumeria",
+        "seed": -1896272000,
+        "player_id": 0,
+        "turn": 5
+      },
+      "status": "ready",
+      "fact_matches": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "legacy_rpc_seconds": 0.468133,
+      "combined_structured_rpc_seconds": 0.199585,
+      "combined_brief_rpc_seconds": 0.188164,
+      "legacy_tool_result_bytes": 4662,
+      "combined_structured_tool_result_bytes": 8064,
+      "combined_brief_tool_result_bytes": 4349
+    },
+    {
+      "identity": {
+        "civilization": "sumeria",
+        "seed": -1896272000,
+        "player_id": 0,
+        "turn": 6
+      },
+      "status": "ready",
+      "fact_matches": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "legacy_rpc_seconds": 1.087536,
+      "combined_structured_rpc_seconds": 0.187269,
+      "combined_brief_rpc_seconds": 0.169584,
+      "legacy_tool_result_bytes": 4706,
+      "combined_structured_tool_result_bytes": 8114,
+      "combined_brief_tool_result_bytes": 4408
+    },
+    {
+      "identity": {
+        "civilization": "sumeria",
+        "seed": -1896272000,
+        "player_id": 0,
+        "turn": 8
+      },
+      "status": "ready",
+      "fact_matches": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "legacy_rpc_seconds": 0.483172,
+      "combined_structured_rpc_seconds": 0.22613,
+      "combined_brief_rpc_seconds": 0.187817,
+      "legacy_tool_result_bytes": 5176,
+      "combined_structured_tool_result_bytes": 9563,
+      "combined_brief_tool_result_bytes": 4983
+    },
+    {
+      "identity": {
+        "civilization": "sumeria",
+        "seed": -1896272000,
+        "player_id": 0,
+        "turn": 10
+      },
+      "status": "ready",
+      "fact_matches": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "legacy_rpc_seconds": 0.46587,
+      "combined_structured_rpc_seconds": 0.194131,
+      "combined_brief_rpc_seconds": 0.184889,
+      "legacy_tool_result_bytes": 5022,
+      "combined_structured_tool_result_bytes": 9222,
+      "combined_brief_tool_result_bytes": 4696
+    }
+  ]
+}

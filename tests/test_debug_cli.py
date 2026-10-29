@@ -25,6 +25,25 @@ ROOT = Path(__file__).resolve().parents[1]
 MOVE = 'call unit_action {"unit_id":0,"action":"move","target_x":22,"target_y":9}\n'
 
 
+def test_compact_only_removes_exact_duplicate_text_and_preserves_original():
+    from civ_mcp.devtools.debug import compact_result
+    original = dict(content=[dict(type="text", text="facts")], structuredContent={"result": "facts"}, isError=True)
+    value = compact_result(original)
+    assert value == dict(content=original["content"], isError=True)
+    assert "structuredContent" in original
+    for structured in ({"facts": 7}, {"result": "different"}, {"result": "facts", "status": "unknown"}):
+        richer = original | {"structuredContent": structured}
+        assert compact_result(richer) == richer
+
+
+def test_compact_stdout_keeps_full_protocol_evidence_and_error_detection(tmp_path):
+    _, _, events, _, evidence = run_fake(tmp_path, "state overview\nquit\n", scenario="ready", compact=True)
+    event = next(r for r in events if r["event"] == "tool_result")
+    raw = json.loads((evidence.path / f"debug-response-{event['request']:06}.json").read_text())
+    assert raw["content"] == event["result"]["content"]
+    assert "structuredContent" in raw and "structuredContent" not in event["result"]
+
+
 def fake_cli(tmp_path, stdin=subprocess.PIPE):
     driver = tmp_path / "driver.py"
     driver.write_text('''

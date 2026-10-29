@@ -8,7 +8,7 @@ import sys
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import Annotated, Any, AsyncIterator, Awaitable, Callable, Optional
+from typing import Annotated, Any, AsyncIterator, Awaitable, Callable, Literal, Optional
 from uuid import uuid4
 
 from mcp.server.fastmcp import Context, FastMCP
@@ -239,6 +239,33 @@ async def get_game_snapshot(ctx: Context) -> str:
             return json.dumps({"schema_version": 1, "scope": "current_player", "status": "unknown",
                                "error": f"{type(exc).__name__}: {exc}"}, ensure_ascii=False)
     return await _logged(ctx, "get_game_snapshot", {}, read)
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_decision_context(
+    ctx: Context,
+    include: list[Literal["research", "diplomacy", "trade"]] | None = None,
+    city_ids: list[Annotated[int, Field(ge=0, strict=True)]] | None = None,
+    view: Literal["brief", "structured"] = "brief",
+) -> str:
+    """Read decision facts in one bounded InGame request; never select actions.
+
+    Core: overview, owned units/cities, visible threats, public victory progress,
+    notifications, native notification blockers and outcome. Optional research,
+    diplomacy, trade and production for explicitly queried city IDs. Brief keeps
+    existing domain reports; structured exposes parsed data. Both check scope
+    and preserve section failures. Not atomic, no cache, no pending confirmation.
+    Missing optional sections are unqueried, not empty. End-turn still checks its
+    own readiness, diplomacy and congress; no blockers here does not permit it.
+    """
+    async def read():
+        try:
+            result = await _get_game(ctx).get_decision_context(include or (), city_ids or (), view)
+            return json.dumps(result, ensure_ascii=False, allow_nan=False)
+        except (LuaError, OSError, ValueError, TimeoutError) as exc:
+            result = {"schema_version": 1, "status": "unknown", "error": f"{type(exc).__name__}: {exc}"}
+        return json.dumps(result, ensure_ascii=False, allow_nan=False)
+    return await _logged(ctx, "get_decision_context", {"include": include, "city_ids": city_ids, "view": view}, read)
 
 
 @mcp.tool(annotations={"readOnlyHint": True, "idempotentHint": True})

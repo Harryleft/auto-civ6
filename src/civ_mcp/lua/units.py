@@ -1226,7 +1226,7 @@ for pid = 0, 63 do
                         local name = entry and entry.UnitType or "UNKNOWN"
                         local hp = bu:GetMaxDamage() - bu:GetDamage()
                         local brs = entry and entry.RangedCombat or 0
-                        local isCS = Players[pid]:IsMajor() and "0" or "1"
+                        local isCS = (not isMajor and not isBarbarian) and "1" or "0"
                         print("THREAT|" .. pid .. "|" .. ownerName:gsub("|","/") .. "|" .. name .. "|" .. bx .. "," .. by .. "|" .. hp .. "/" .. bu:GetMaxDamage() .. "|CS:" .. bcs .. "|RS:" .. brs .. "|dist:" .. minDist .. "|cs:" .. isCS .. "|uid:" .. bu:GetID())
                         found = true
                     end

@@ -1,0 +1,45 @@
+{
+  "run_id": "480abd7ba35446c4b248a3f6ae977ffd",
+  "checkpoints": [
+    {
+      "name": "decision_20261029_t006_a",
+      "sha256": "96ef83e3b278182e23c2bda3358902ed3dc52e258451d7c3687d108fc3f8c64c",
+      "civilization": "sumeria",
+      "seed": -1896272000,
+      "turn": 6,
+      "run_id": "480abd7ba35446c4b248a3f6ae977ffd",
+      "score": {
+        "official": 8,
+        "categories": {
+          "CATEGORY_CIVICS": 0,
+          "CATEGORY_EMPIRE": 8,
+          "CATEGORY_GREAT_PEOPLE": 0,
+          "CATEGORY_RELIGION": 0,
+          "CATEGORY_TECH": 0,
+          "CATEGORY_WONDER": 0,
+          "CATEGORY_ERA_SCORE": 0
+        }
+      }
+    },
+    {
+      "name": "decision_20261029_t011_480abd7b",
+      "sha256": "a83d0426acd530d908c7a1cbe3ca18ce30e8e171616903a5ed1cd3401fec73af",
+      "civilization": "sumeria",
+      "seed": -1896272000,
+      "turn": 11,
+      "run_id": "480abd7ba35446c4b248a3f6ae977ffd",
+      "score": {
+        "official": 15,
+        "categories": {
+          "CATEGORY_CIVICS": 3,
+          "CATEGORY_EMPIRE": 10,
+          "CATEGORY_GREAT_PEOPLE": 0,
+          "CATEGORY_RELIGION": 0,
+          "CATEGORY_TECH": 2,
+          "CATEGORY_WONDER": 0,
+          "CATEGORY_ERA_SCORE": 0
+        }
+      }
+    }
+  ]
+}

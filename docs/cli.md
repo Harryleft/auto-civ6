@@ -1,6 +1,6 @@
 # CLI 命令手册
 
-本页是 AI 唯一操作入口的命令目录，涵盖顶层命令、会话控制及 143 个命名子命令（含 3 个既有双人热座实验命令）。91 个基础 MCP 工具均有命名入口，其中任意 Lua 只在显式开发模式开放。`doctor`、`verify knowledge`、`test` 和 `logs` 不连接 FireTuner；`verify state` 明确访问当前真实游戏，`debug` 在收到查询或动作时访问游戏。`civ-mcp` 保留为 CLI 内部服务，客户端不直接注册。
+本页是 AI 唯一操作入口的命令目录，涵盖顶层命令、会话控制及 144 个命名子命令（含 3 个既有双人热座实验命令）。92 个基础 MCP 工具均有命名入口，其中任意 Lua 只在显式开发模式开放。`doctor`、`verify knowledge`、`test` 和 `logs` 不连接 FireTuner；`verify state` 明确访问当前真实游戏，`debug` 在收到查询或动作时访问游戏。`civ-mcp` 保留为 CLI 内部服务，客户端不直接注册。
 
 ## 安装与调用
 
@@ -58,6 +58,7 @@ uv run --locked civ6 logs turns --relay .scratch/example-relay
 | `doctor`、`verify knowledge` | `--knowledge-dir PATH`：完整知识包，默认 PROJECT/civ6_knowledge。 |
 | `verify state` | `--expect-turn TURN`、`--expect-civilization CIVILIZATION_ID` 约束预期现场；`--timeout SECONDS` 为单次 RPC 预算，默认 300 秒。 |
 | `debug` | `--offline` 禁止游戏调用；`--timeout SECONDS` 为单次 RPC 预算，默认 300 秒。 |
+| `debug --compact` | stdout 只保留一份文本：当 MCP 的 `structuredContent` 仅含与唯一 text 块完全相同的 `result` 时，省略该重复字段；其他结构化字段、错误和多媒体照常返回。原始完整响应保留在 `debug-response-*.json`。默认输出契约不变。 |
 | `tuner status` | 无专用参数；输出固定结构 JSON，证据写入本次 CLI 目录。 |
 | `test` | DOMAIN 或 `--list`；`--collect-only` 只收集，`--timeout SECONDS` 为测试子进程预算（默认 300 秒）；pytest 选项放在 `--` 后。`--list` 不与领域或收集／运行选项组合。 |
 | `logs list` | `--dir PATH` 指定动作日志目录；`--limit N` 默认 20，范围 1～1000。 |
@@ -114,6 +115,23 @@ pending
 quit
 COMMANDS
 ```
+
+## 决策事实查询
+
+连续决策可使用 `civ6 debug --compact`，在同一会话执行 `state decision` 或 `game decision`。该入口将现有领域 getter 合成一次有界 InGame 请求，返回本方概览、地图内单位、自有城市、当前可见威胁、公开胜利进度、通知、通知阻塞和原生终局。每部分保留原解析器和可见性规则，不生成策略、目标排序或动作。
+
+```text
+state decision
+game decision --include research diplomacy trade
+game decision --city 65536 --include research
+game decision --view structured
+```
+
+`--city` 的 ID 必须来自本次真实查询，示例值不能直接照用。`--include` 只补充明确要求的领域；`--city` 补充指定自有城市的原生生产候选。默认 `--view brief` 复用现有领域报告；`structured` 返回解析后的数据，体积通常更大。未请求的领域不出现在 `sections` 中，不表示其内容为空。地图、规则、资源库存、政策、外交会话及议会详情仍按决策需要通过对应命令补查。
+
+先检查顶层 `status`、`identity`、`checks` 和各 section 的 `status`。读取前后核对文明、种子、玩家和回合，并核对实体数量、城市归属及胜利数据范围。任一未决请求在游戏 I/O 前返回 `blocked`；分项异常、缺少完整回执或范围不一致返回 `unknown`，保留其他已读事实。`ready` 表示本次约定的读取与范围检查通过，字段内原有的未知、不可见和原生统计冲突仍需保留。读取不是引擎原子快照，也不缓存或接管动作确认。
+
+`blockers` 仅为通知阻塞；空列表不证明所有推进前提满足。`turn end` 仍执行原有就绪、外交、议会和单次提交检查。需要诊断等待阶段或确认旧请求时使用 `turn status` 及原入口；`verify state` 继续使用独立的验收快照。
 
 ## 自动实机只读验收
 

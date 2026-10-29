@@ -431,6 +431,10 @@ class GameState:
         lines = await self.conn.execute_read(lq.build_threat_scan_query())
         return lq.parse_threat_scan_response(lines)
 
+    async def get_decision_context(self, include=(), city_ids=(), view="brief") -> dict:
+        from civ_mcp.decision import read_context
+        return await read_context(self, include, city_ids, view)
+
     async def get_pathing_estimate(
         self, unit_index: int, target_x: int, target_y: int
     ) -> lq.PathingEstimate:

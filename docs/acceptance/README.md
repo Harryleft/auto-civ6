@@ -20,6 +20,7 @@
 | CLI 文档与规则收尾 | [完整命令手册、CLI 默认入口及工作区清理预览](2026-10-24-cli-documentation-closeout.md) |
 | 历史高频 CLI | [4,293 次调用统计、27 项新增快捷命令及实机检查](2026-10-24-cli-frequency.md) |
 | CLI 领域化与自动实机验收 | [领域子命令、结构化快照与状态验收](2026-10-24-cli-domains.md) |
+| 决策事实与效率 | [合并读取、重复文本压缩、485 项定向测试与四叶草 T1→T11 对照](../../games/2026-10-29-decision-efficiency/runs/20261029-2307/reports/decision-efficiency.md) |
 | CLI 接口约定 | [组合、dry-run、分层帮助与错误修正](2026-10-24-cli-contract.md) |
 | 前台调试会话 | [同一 MCP 进程、pending 查看、显式调用与退出](2026-10-24-foreground-debug.md) |
 

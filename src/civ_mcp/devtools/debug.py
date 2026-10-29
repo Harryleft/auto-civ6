@@ -22,7 +22,7 @@ from civ_mcp.devtools.commands import GROUPS, HelpRequested, domain_parser, pars
 
 OFFLINE_TOOLS = {"get_runtime_status", "search_knowledge", "search_research", "get_knowledge"}
 STATES = {"overview": "get_game_overview", "units": "get_units", "cities": "get_cities",
-          "turn": "get_turn_status", "snapshot": "get_game_snapshot"}
+          "turn": "get_turn_status", "snapshot": "get_game_snapshot", "decision": "get_decision_context"}
 HELP = {
     "overview": {"description": "Choose a named command topic and use TOPIC --help for its arguments. tools/call are protocol diagnostics only.",
                  "topics": ["tools", "pending", "state", *GROUPS, "verify", "call", "quit"],
@@ -30,7 +30,7 @@ HELP = {
     "tools": {"usage": "tools [NAME]", "description": "Protocol diagnostics: list internal names, or inspect one tool's inputSchema and annotations. Normal gameplay uses named commands.",
               "examples": ["tools", "tools get_runtime_status"]},
     "pending": {"usage": "pending", "description": "Read server memory and local transport_unknown without game I/O or clearing pending."},
-    "state": {"usage": "state overview|units|cities|turn|snapshot", "aliases": STATES,
+    "state": {"usage": "state overview|units|cities|turn|snapshot|decision", "aliases": STATES,
               "description": "Query current game state through MCP. These queries are unavailable in --offline mode."},
     "verify": {"usage": "verify state", "description": "Run a bounded live read-only snapshot check in this same MCP session; no game mutations or retries."},
     "call": {"usage": "call [--dry-run] TOOL [JSON_OBJECT]",
@@ -152,6 +152,15 @@ def strict_json(value: str) -> dict:
         raise CommandError("INVALID_JSON", str(exc)) from exc
 
 
+def compact_result(result: dict) -> dict:
+    """Drop only a provable duplicate; retain structured-only fields and errors."""
+    content = result.get("content", [])
+    if (len(content) == 1 and content[0].get("type") == "text"
+            and result.get("structuredContent") == {"result": content[0].get("text")}):
+        return {key: value for key, value in result.items() if key != "structuredContent"}
+    return result
+
+
 def tool_error(tool: str, result) -> dict | None:
     """Recognize only the server's explicit error envelopes, never infer success."""
     texts = [item.text for item in result.content if item.type == "text"]
@@ -204,10 +213,11 @@ def keep_session_on_interrupt():
 
 class DebugSession:
     def __init__(self, client, evidence: Evidence, state: dict, emit: Callable[[dict], None], offline: bool,
-                 *, developer: bool = False, shared_pending_path: Path | None = None):
+                 *, developer: bool = False, shared_pending_path: Path | None = None, compact: bool = False):
         self.client, self.evidence, self.state, self.emit = client, evidence, state, emit
         self.offline = offline
         self.developer = developer
+        self.compact = compact
         self.shared_pending_path = shared_pending_path
         self.sequence = 0
         self.tools = {}
@@ -271,7 +281,7 @@ class DebugSession:
         if "get_runtime_status" not in self.tools:
             raise CommandError("RUNTIME_STATUS_MISSING", "Reload the current server code before debugging")
         value = await self.runtime()
-        self.event("session_ready", runtime=value, offline=self.offline, help="help [TOPIC]")
+        self.event("session_ready", runtime=value, offline=self.offline, compact=self.compact, help="help [TOPIC]")
 
     async def call(self, tool: str, arguments: dict, *, dry_run: bool = False):
         if tool == "run_lua" and not self.developer:
@@ -314,7 +324,7 @@ class DebugSession:
                      "or keep it for evidence. Never start a second controller for the same game.",
             )
         runtime = await self.runtime()
-        if tool == "get_game_snapshot" and runtime.get("shared_pending"):
+        if tool in {"get_game_snapshot", "get_decision_context"} and runtime.get("shared_pending"):
             raise CommandError("VERIFY_PENDING", "A shared hotseat request still owns this run",
                                hint="Inspect pending and confirm its original intent; a snapshot cannot retire or bypass the shared request.")
         request = self.event("tool_started", tool=tool, arguments=arguments)
@@ -334,9 +344,12 @@ class DebugSession:
             return None
         self.evidence.json(f"debug-response-{request['sequence']:06}", result.model_dump(mode="json"))
         error = tool_error(tool, result)
+        displayed = result.model_dump(mode="json")
+        if self.compact:
+            displayed = compact_result(displayed)
         self.event("tool_result", request=request["sequence"], tool=tool,
                    is_error=error is not None, protocol_is_error=bool(result.isError),
-                   error=error, result=result.model_dump(mode="json"), hint=error["hint"] if error else None)
+                   error=error, result=displayed, hint=error["hint"] if error else None)
         return result
 
     async def verify_state(self, *, expected_turn: int | None = None, expected_civilization: str | None = None):
@@ -444,12 +457,12 @@ class DebugSession:
 
 async def serve(evidence: Evidence, state: dict, *, offline: bool, timeout: float,
                 source: TextIO | None, emit: Callable[[dict], None], server=None, driver=None,
-                developer: bool = False, shared_pending_path: Path | None = None,
+                developer: bool = False, shared_pending_path: Path | None = None, compact: bool = False,
                 interrupted: threading.Event | None = None) -> str:
     from mcp import ClientSession
     from mcp.client.stdio import StdioServerParameters, stdio_client
 
-    state.update(tool_calls=0, mcp_session_closed=False, offline=offline, developer=developer)
+    state.update(tool_calls=0, mcp_session_closed=False, offline=offline, developer=developer, compact=compact)
     params = server or StdioServerParameters(command=sys.executable,
         args=["-X", "utf8", "-B", "-m", "civ_mcp"], cwd=str(evidence.project),
         env=dict(os.environ, PYTHONUTF8="1", PYTHONDONTWRITEBYTECODE="1",
@@ -466,7 +479,7 @@ async def serve(evidence: Evidence, state: dict, *, offline: bool, timeout: floa
                     initialized = await client.initialize()
                     evidence.json("debug-initialize", initialized.model_dump(mode="json"))
                     debug = DebugSession(client, evidence, state, emit, offline,
-                                         developer=developer, shared_pending_path=shared_pending_path)
+                                         developer=developer, shared_pending_path=shared_pending_path, compact=compact)
                     await debug.start()
                     if driver is not None:
                         status = await driver(debug)
@@ -507,7 +520,8 @@ def hotseat_server(project: Path, seat: int, run: Path):
 
 
 def run_debug(evidence: Evidence, state: dict, *, offline: bool, timeout: float,
-              developer: bool = False, hotseat_seat: int | None = None, hotseat_run: Path | None = None) -> str:
+              developer: bool = False, hotseat_seat: int | None = None, hotseat_run: Path | None = None,
+              compact: bool = False) -> str:
     check_interpreter(evidence.project)
     server, shared_pending = None, None
     if (hotseat_seat is None) != (hotseat_run is None):
@@ -524,7 +538,8 @@ def run_debug(evidence: Evidence, state: dict, *, offline: bool, timeout: float,
         print(json.dumps(value, ensure_ascii=False, allow_nan=False), flush=True)
 
     with keep_session_on_interrupt() as interrupted:
-        options = {"developer": developer, "shared_pending_path": shared_pending, "interrupted": interrupted}
+        options = {"developer": developer, "shared_pending_path": shared_pending, "interrupted": interrupted,
+                   "compact": compact}
         if server is not None:
             options["server"] = server
         return run_session(serve(evidence, state, offline=offline, timeout=timeout, source=sys.stdin, emit=emit,

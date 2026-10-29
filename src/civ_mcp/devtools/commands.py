@@ -340,6 +340,11 @@ def domain_parser(group: str):
         command("status", "get_runtime_status", "Read this owner's in-memory pending and process identity; no game access.")
     elif group == "game":
         command("snapshot", "get_game_snapshot", "Read a consistent current-player snapshot; refuses any pending.")
+        decision = command("decision", "get_decision_context", "Read current decision facts in one request; refuses pending and never chooses actions.")
+        decision.add_argument("--include", nargs="+", choices=("research", "diplomacy", "trade"), default=argparse.SUPPRESS)
+        decision.add_argument("--city", dest="city_ids", nargs="+", type=int, default=argparse.SUPPRESS,
+                              help="Native owned city IDs whose production choices to include")
+        decision.add_argument("--view", choices=("brief", "structured"), default=argparse.SUPPRESS)
         command("launch", "launch_game", "Explicitly launch Civ6; does not choose or load a save.", mutation=True)
         command("menu", "return_to_main_menu", "Return to the native main menu; keeps the process, never loads or saves.", mutation=True)
         command("stop", "kill_game", "Explicitly stop Civ6; pending lifecycle gates still apply.", mutation=True)
