@@ -35,6 +35,7 @@ def isolated_launcher(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "platform", "darwin")
     monkeypatch.setattr(time, "sleep", lambda _: None)
     monkeypatch.setattr(gl, "STEAM_PROCESS_LOG", tmp_path / "gameprocess_log.txt")
+    monkeypatch.setattr(gl, "MACOS_STEAM_BUNDLE", tmp_path / "Steam")
     monkeypatch.setattr(gl, "SAVE_DIR", str(tmp_path / "auto"))
     monkeypatch.setattr(gl, "SINGLE_SAVE_DIR", str(tmp_path))
     monkeypatch.setattr(platform_paths, "windows_registry_path", lambda *args: None)
@@ -263,6 +264,30 @@ class TestLaunch:
         monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _cp())
         monkeypatch.setattr(gl, "_wait_for_game_process", lambda timeout: None)
         assert "process not detected" in gl._launch_game_sync()
+
+    def test_macos_url_dispatch_failure_preserves_native_error(self, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "darwin")
+        monkeypatch.setattr(subprocess, "run", lambda *a, **kw: subprocess.CompletedProcess(
+            a[0], 1, stdout=b"", stderr=b"LSOpenURLsWithRole failed: error -600"))
+        monkeypatch.setattr(gl, "_wait_for_game_process", lambda **kw: pytest.fail("dispatch failed"))
+        result = gl._launch_game_sync()
+        assert result.startswith("Error:")
+        assert "-600" in result
+
+    def test_macos_stale_handler_uses_existing_updated_steam_bundle(self, monkeypatch):
+        executable = gl.MACOS_STEAM_BUNDLE / "Contents/MacOS/steam_osx"
+        executable.parent.mkdir(parents=True)
+        executable.touch()
+        calls = []
+        def dispatch(cmd, **kw):
+            calls.append(cmd)
+            return subprocess.CompletedProcess(cmd, 1 if len(calls) == 1 else 0,
+                stdout=b"", stderr=b"failed with error -600")
+        monkeypatch.setattr(subprocess, "run", dispatch)
+        monkeypatch.setattr(subprocess, "Popen", lambda cmd, **kw: calls.append(cmd))
+        assert "FireTuner port is open" in gl._launch_game_sync()
+        assert calls == [["open", "steam://run/289070"],
+                         [str(executable), "-applaunch", "289070"]]
 
     def test_port_failure_explains_macos_launcher_bypass(self, monkeypatch):
         monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _cp())

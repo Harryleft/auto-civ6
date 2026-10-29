@@ -33,6 +33,7 @@ log = logging.getLogger(__name__)
 
 STEAM_APP_ID = "289070"
 STEAM_PROCESS_LOG = Path.home() / "Library/Application Support/Steam/logs/gameprocess_log.txt"
+MACOS_STEAM_BUNDLE = Path.home() / "Library/Application Support/Steam/Steam.AppBundle/Steam"
 STEAM_RELEASE_TIMEOUT = 30.0
 
 # Only ever kill processes matching this exact name pattern — NEVER "steam"
@@ -370,12 +371,23 @@ def _launch_game_sync() -> str:
 
     # Launch via Steam
     if sys.platform == "darwin":
-        subprocess.run(
-            ["open", f"steam://run/{STEAM_APP_ID}"],
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            timeout=10,
-        )
+        options = dict(stdin=subprocess.DEVNULL, capture_output=True, timeout=10)
+        uri = f"steam://run/{STEAM_APP_ID}"
+        dispatch = subprocess.run(["open", uri], **options)
+        # Steam's self-update can leave LaunchServices pointing at its old bundle.
+        # -600 means no process received the URL; retry only this known dispatch failure.
+        stderr = getattr(dispatch, "stderr", b"")
+        detail = stderr.decode("utf-8", errors="replace") if isinstance(stderr, bytes) else stderr
+        steam_executable = MACOS_STEAM_BUNDLE / "Contents/MacOS/steam_osx"
+        if dispatch.returncode and "error -600" in detail and steam_executable.is_file():
+            subprocess.Popen([str(steam_executable), "-applaunch", STEAM_APP_ID],
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+        elif dispatch.returncode:
+            detail = dispatch.stderr
+            if isinstance(detail, bytes):
+                detail = detail.decode("utf-8", errors="replace")
+            return f"Error: Steam URL dispatch failed ({dispatch.returncode}): {detail.strip()}"
     elif sys.platform == "win32":
         # 使用桌面 Shell 代理，Steam 及游戏不归 MCP 客户端进程树管理。
         steam_exe = next((os.path.join(root, "steam.exe") for root in windows_steam_roots()
