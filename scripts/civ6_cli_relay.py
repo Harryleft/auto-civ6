@@ -118,8 +118,11 @@ def serve(args):
     if args.offline:
         command.append("--offline")
     with (args.evidence / "stderr.log").open("w", encoding="utf-8") as errors:
+        # Popen's encoding only configures our pipe wrappers. Pin the child's
+        # redirected stdin too, overriding an inherited Windows cp936 setting.
         process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                   stderr=errors, text=True, encoding="utf-8", bufsize=1)
+                                   stderr=errors, text=True, encoding="utf-8", bufsize=1,
+                                   env=dict(os.environ, PYTHONIOENCODING="utf-8"))
         with (args.evidence / "stdout.jsonl").open("a", encoding="utf-8") as transcript:
             def event():
                 line = process.stdout.readline()

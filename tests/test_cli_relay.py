@@ -102,15 +102,18 @@ def test_framing_failure_retains_owner_and_refuses_next_submission(tmp_path, mon
 
 
 @pytest.mark.parametrize('tcp', [False, True])
-def test_real_offline_relay_preserves_unicode_identity_and_authentication(tmp_path, tcp):
+@pytest.mark.parametrize('inherited_encoding', ['utf-8', 'cp936'])
+def test_real_offline_relay_preserves_unicode_identity_and_authentication(tmp_path, tcp, inherited_encoding):
     script = Path(__file__).resolve().parents[1] / 'scripts/civ6_cli_relay.py'
     # AF_UNIX has a much shorter path limit than the pytest temp directory.
     endpoint = Path(tempfile.gettempdir()) / ('c6-' + uuid.uuid4().hex)
     proof = tmp_path / 'proof'
     command = [sys.executable, str(script), 'serve', '--socket', str(endpoint),
                '--evidence', str(proof), '--offline', *(['--tcp'] if tcp else [])]
+    # Simulate Windows redirected stdin even when running this test on POSIX.
     process = subprocess.Popen(command, cwd=script.parents[1], stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE, text=True, encoding='utf-8', env=dict(os.environ, PYTHONUTF8='1'))
+        stderr=subprocess.PIPE, text=True, encoding='utf-8',
+        env=dict(os.environ, PYTHONUTF8='0', PYTHONIOENCODING=inherited_encoding))
     ready = queue.Queue()
     threading.Thread(target=lambda: ready.put(process.stdout.readline()), daemon=True).start()
     try:
@@ -134,7 +137,8 @@ def test_real_offline_relay_preserves_unicode_identity_and_authentication(tmp_pa
             if request_id:
                 call += ['--request-id', request_id]
             result = subprocess.run(call, cwd=script.parents[1], capture_output=True,
-                                    text=True, encoding='utf-8', timeout=60)
+                                    text=True, encoding='utf-8', timeout=60,
+                                    env=dict(os.environ, PYTHONUTF8='1', PYTHONIOENCODING='utf-8'))
             assert result.returncode == 0, result.stderr
             if token:
                 assert token not in result.stdout + result.stderr
@@ -144,9 +148,16 @@ def test_real_offline_relay_preserves_unicode_identity_and_authentication(tmp_pa
         original = send('pending', identity)
         assert send('pending', identity) == original
         assert len(list((proof / 'requests').glob('*.json'))) == 1
-        response = send('knowledge search 写作 --topic technologies --limit 1')
-        assert response['state'] == 'response_received'
-        assert '写作' in json.dumps(response, ensure_ascii=False)
+        search = 'knowledge search 写作 --topic technologies --limit 1'
+        response = send(search)
+        assert response['state'] == 'response_received', response
+        echoed = next(event['input'] for event in response['events'] if event['event'] == 'command')
+        assert echoed == search
+        started = next(event for event in response['events'] if event['event'] == 'tool_started')
+        assert started['arguments']['query'] == '写作'
+        before = original['events'][-1]['runtime']
+        after = send('pending')['events'][-1]['runtime']
+        assert (after['session_id'], after['process_id']) == (before['session_id'], before['process_id'])
         send('quit')
         process.communicate(timeout=30)
         assert process.returncode == 0 and not endpoint.exists()
