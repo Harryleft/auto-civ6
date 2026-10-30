@@ -538,22 +538,28 @@ async def get_cities(ctx: Context) -> str:
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
-async def get_city_production(ctx: Context, city_id: int) -> str:
-    """List what a city can produce right now.
+async def get_city_production(ctx: Context, city_id: int,
+                              item_type: Literal['UNIT', 'BUILDING'] | None = None,
+                              item_name: str | None = None) -> str:
+    """List production options and native GOLD/FAITH prices, eligibility and refusal reasons.
 
     Args:
         city_id: City ID (from get_cities output)
 
-    Returns available units, buildings, and districts with production costs.
+    Pair item_type and item_name to inspect even a currently unavailable item.
+    A price alone is not purchase eligibility; unknown facts stay unknown.
     Call this when a city finishes building or to decide what to produce next.
     """
     gs = _get_game(ctx)
 
     async def _run():
-        options = await gs.list_city_production(city_id)
+        if item_type is not None or item_name is not None:
+            options = await gs.list_city_production(city_id, item_type, item_name)
+        else:
+            options = await gs.list_city_production(city_id)
         return nr.narrate_city_production(options)
 
-    return await _logged(ctx, "get_city_production", {"city_id": city_id}, _run)
+    return await _logged(ctx, "get_city_production", {"city_id": city_id, "item_type": item_type, "item_name": item_name}, _run)
 
 
 @mcp.tool(annotations={"readOnlyHint": True})

@@ -6,6 +6,7 @@
 
 - `action.move`：从当前单位查询选择可移动单位，明确移动并回读实际位置。
 - `action.pending`：丢回应或未完成时，原入口只确认已有动作，依赖写入保持门禁。
+- `action.purchase_quotes`：金币／信仰报价、资格和拒绝原因；实际扣款、新产物与报价核对。
 
 ## How to get to it (user POV)
 
@@ -28,6 +29,8 @@ Preconditions:
 - **门禁证据。** `action.pending` 优先用隔离测试 `uv run --locked pytest -q tests/test_action_confirmation.py tests/test_pending_dispatch.py` 验证；不要为了故障注入而断开真实游戏或重复写入。未发生真实未知场景时，实机此项记 `NOT_RUN`。
 
 ## Gotchas
+
+购买验收用 `city production ID` 或成对的 `--item-type UNIT|BUILDING --item NAME` 读取当前双币报价；再预演并执行明确货币的 `city buy`。核对报价、对应余额、原生扣款和新产物，另一货币应保持不变。不能购买时保留原因与缺口，不把通用换算价格当作合法币种。份数、政策或状态变化后重新核价；报价不冻结价格或清除未决。离线回归已纳入 `civ6 test actions`。
 
 - `MOVE_DEFERRED` 表示本次未提交；不能标为已抵达，也不反复提交相同意图。
 - 只有位置变化、旧队列或成功文案不足以单独终结未决请求；保留原生确认与回读两种证据。

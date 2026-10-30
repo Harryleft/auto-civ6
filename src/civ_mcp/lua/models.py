@@ -182,15 +182,27 @@ class CityInfo:
 
 
 @dataclass
+class PurchaseQuote:
+    currency: str
+    cost: float | None
+    balance: float | None
+    can_purchase: bool | None
+    visible: bool | None
+    reasons: list[str] = field(default_factory=list)
+
+
+@dataclass
 class ProductionOption:
     category: str  # "UNIT", "BUILDING", "DISTRICT"
     item_name: str  # "UNIT_WARRIOR", "BUILDING_MONUMENT"
-    cost: int  # production cost
+    cost: float  # production cost
     turns: int = 0  # estimated turns to produce
-    gold_cost: int = -1  # gold purchase cost (-1 = not purchasable)
+    gold_cost: float = -1  # Legacy price field; never evidence of purchase eligibility.
     is_repair: bool = False  # True if repairing a pillaged district/building
     repair_x: int | None = None  # district repair X coordinate
     repair_y: int | None = None  # district repair Y coordinate
+    can_produce: bool | None = True
+    purchases: list[PurchaseQuote] = field(default_factory=list)
 
 
 @dataclass

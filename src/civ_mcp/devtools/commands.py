@@ -171,8 +171,11 @@ def domain_parser(group: str):
                 entity(child, "target_unit_id")
     elif group == "city":
         command("list", "get_cities", "List current cities and native IDs.")
-        production = command("production", "get_city_production", "Read one city's available production items.")
+        production = command("production", "get_city_production", "Read production and currency-specific purchase prices, eligibility and reasons.")
         entity(production, "city_id")
+        production.add_argument('--item-type', choices=('UNIT', 'BUILDING'), default=argparse.SUPPRESS)
+        production.add_argument('--item', dest='item_name', default=argparse.SUPPRESS,
+                                help='Inspect this exact item, including currently unavailable items; pair with --item-type')
         production = command("set-production", "set_city_production", "Choose one production item.", mutation=True)
         entity(production, "city_id")
         production.add_argument("item_type", choices=("UNIT", "BUILDING", "DISTRICT", "PROJECT"))

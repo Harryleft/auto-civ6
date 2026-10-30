@@ -1076,8 +1076,13 @@ class GameState:
         )
         return await self._submit_action(pending, scope, lq.build_purchase_item(city_id, item_type, item_name, yield_type, token))
 
-    async def list_city_production(self, city_id: int) -> list[lq.ProductionOption]:
-        lua = lq.build_city_production_query(city_id)
+    async def list_city_production(self, city_id: int, item_type: str | None = None,
+                                    item_name: str | None = None) -> list[lq.ProductionOption]:
+        if (type(city_id) is not int or city_id < 0 or (item_type is None) != (item_name is None)
+                or (item_type is not None and (item_type not in {'UNIT', 'BUILDING'}
+                    or not isinstance(item_name, str) or not re.fullmatch(r'[A-Z][A-Z0-9_]*', item_name)))):
+            raise ValueError('Provide a full city ID; item_type UNIT/BUILDING and item_name must be paired.')
+        lua = lq.build_city_production_query(city_id, item_type, item_name)
         # Must use InGame context — bq:CanProduce() throws "Not Implemented" in GameCore
         lines = await self.conn.execute_write(lua)
         return lq.parse_city_production_response(lines)

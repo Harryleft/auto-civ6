@@ -201,7 +201,7 @@ game decision --view structured
 | 会话命令 | MCP 工具 | 模式 |
 | --- | --- | --- |
 | `city list` | `get_cities` | 只读 |
-| `city production ID` | `get_city_production` | 只读 |
+| `city production ID [--item-type UNIT\|BUILDING --item NAME]` | `get_city_production` | 只读 |
 | `city set-production ID TYPE NAME [--x X --y Y]` | `set_city_production` | 变更 |
 | `city attack ID X Y` | `city_action`，action=attack | 变更 |
 | `city district ID DISTRICT_TYPE` | `get_district_advisor` | 只读 |
@@ -209,6 +209,10 @@ game decision --view structured
 | `city buy ID TYPE NAME [--yield YIELD_TYPE]` | `purchase_item` | 变更 |
 
 生产 `TYPE` 为 `UNIT`、`BUILDING`、`DISTRICT` 或 `PROJECT`，购买仅支持前两者。`YIELD_TYPE` 为 `YIELD_GOLD` 或 `YIELD_FAITH`，默认金币。`FOCUS` 为 `food`、`production`、`gold`、`science`、`culture`、`faith`、`default`，default 清空焦点。`--x` 和 `--y` 须成对提供；候选、费用、人口限制和建造资格仍以当前查询和原生引擎为准。
+
+`city production` 将生产与购买候选合并，分别列出金币／信仰的当前价格、余额、能否购买及拒绝原因。只能购买的宗教单位不再显示生产回合；币种未启用时显示 `CURRENCY_NOT_SUPPORTED`，不展示通用换算价。余额不足显示缺口，缺前置、同类单位占位和容量等保留原生原因；无法核实的价格或资格显示 unknown／unavailable。
+
+要核对未出现在列表中的物品，用 `city production ID --item-type UNIT --item UNIT_APOSTLE`，两个筛选参数成对提供。报价是本次观察，实际 `city buy` 会重新检查价格、资格和余额；成功仍需新产物与精确扣款同时确认。`game decision --city ID` 使用同一报价与展示。
 
 ### 研究、回合与存档
 

@@ -2,9 +2,10 @@
 import json
 
 from civ_mcp.lua._helpers import SENTINEL, _LUA_ACTION_SCOPE
+from civ_mcp.lua.purchase_facts import LUA_PURCHASE_FACTS
 
 
-_CONTEXT = _LUA_ACTION_SCOPE + '''
+_CONTEXT = _LUA_ACTION_SCOPE + LUA_PURCHASE_FACTS + '''
 local function number(value)
  assert(type(value)=="number" and value==value and value~=math.huge and value~=-math.huge,"NUMBER_UNAVAILABLE")
  return value
@@ -35,26 +36,17 @@ local ok,r=pcall(function()
  local city=cityFor(owner,{city_id})
  local item=(kind=="UNIT" and GameInfo.Units or GameInfo.Buildings)[name]
  assert(item,"ITEM_UNAVAILABLE")
- local yieldRow=GameInfo.Yields[currency];assert(yieldRow,"YIELD_UNAVAILABLE")
- local params={{[CityCommandTypes.PARAM_YIELD_TYPE]=yieldRow.Index}}
- local before,formation={{}},nil
+ local before={{}}
  if kind=="UNIT" then
-  formation=MilitaryFormationTypes.STANDARD_MILITARY_FORMATION
-  assert(formation~=nil,"FORMATION_UNAVAILABLE")
-  params[CityCommandTypes.PARAM_UNIT_TYPE]=item.Hash
-  params[CityCommandTypes.PARAM_MILITARY_FORMATION_TYPE]=formation
   for _,unit in Players[owner]:GetUnits():Members() do before[number(unit:GetID())]=true end
  else
   assert(city:GetBuildings():HasBuilding(item.Index)==false,"BUILDING_ALREADY_PRESENT_OR_UNKNOWN")
-  params[CityCommandTypes.PARAM_BUILDING_TYPE]=item.Hash
  end
- -- ProductionPanel passes Hash to purchase/cost and Index to HasBuilding.
- assert(CityManager.CanStartCommand(city,CityCommandTypes.PURCHASE,false,params,true)==true,"CANNOT_PURCHASE")
- local cost
- if kind=="UNIT" then cost=number(city:GetGold():GetPurchaseCost(yieldRow.Index,item.Hash,formation))
- else cost=number(city:GetGold():GetPurchaseCost(yieldRow.Index,item.Hash)) end
- local balance=balanceFor(owner,currency)
- assert(cost>=0 and balance>=cost,"INSUFFICIENT_BALANCE_OR_COST_UNAVAILABLE")
+ -- Re-read the same native facts used by the quote immediately before entry;
+ -- a previously displayed price never authorizes a stale purchase.
+ local quote=purchaseFacts(city,kind,item,currency,false)
+ assert(quote.can_purchase==true,"CANNOT_PURCHASE: "..table.concat(quote.reasons,"; "))
+ local cost,balance,params=quote.cost,quote.balance,quote.params
  assert(type(CityManager.RequestCommand)=="function","COMMAND_UNAVAILABLE")
  return {{token=token,kind=kind,name=name,currency=currency,itemIndex=number(item.Index),itemHash=number(item.Hash),
   owner=owner,city={city_id},x=number(city:GetX()),y=number(city:GetY()),before=before,

@@ -512,15 +512,31 @@ def narrate_city_production(options: list[lq.ProductionOption]) -> str:
     districts = [o for o in options if o.category == "DISTRICT" and not o.is_repair]
     projects = [o for o in options if o.category == "PROJECT"]
     repairs = [o for o in options if o.is_repair]
+    def number(value):
+        return str(value).removesuffix('.0')
 
     def _fmt(o: lq.ProductionOption) -> str:
         t = f", {o.turns} turns" if o.turns > 0 else ""
-        buy = f", buy: {o.gold_cost}g" if o.gold_cost > 0 else ""
+        purchases = []
+        for q in o.purchases:
+            currency = 'gold' if q.currency == 'YIELD_GOLD' else 'faith'
+            price = number(q.cost) if q.cost is not None else 'unavailable'
+            state = {True: 'can buy', False: 'cannot buy', None: 'eligibility unknown'}[q.can_purchase]
+            balance = f"; balance {number(q.balance)}" if q.balance is not None else '; balance unknown'
+            if q.cost is not None and q.balance is not None and q.balance < q.cost:
+                balance += f"; shortfall {number(q.cost-q.balance)}"
+            reasons = '; ' + '; '.join(q.reasons).replace('[NEWLINE]', ' / ').replace('\n', ' / ') if q.reasons else ''
+            purchases.append(f"{currency} {price} [{state}{balance}{reasons}]")
+        if not o.purchases and o.gold_cost >= 0:
+            purchases.append(f"gold {number(o.gold_cost)} [eligibility unknown; legacy price only]")
+        buy = '; ' + '; '.join(purchases) if purchases else ''
+        production = f"production {number(o.cost)}{t}" if o.can_produce is True else (
+            'production unavailable' if o.can_produce is False else 'production eligibility unknown')
         tag = " [REPAIR]" if o.is_repair else ""
         coords = ""
         if o.is_repair and o.repair_x is not None:
             coords = f" at ({o.repair_x},{o.repair_y})"
-        return f"  {o.item_name}{tag}{coords} (cost {o.cost}{t}{buy})"
+        return f"  {o.item_name}{tag}{coords} ({production}{buy})"
 
     lines = []
     if units:

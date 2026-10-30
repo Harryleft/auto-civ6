@@ -124,7 +124,8 @@ def test_domain_discovery_and_actual_collection_ignore_ambient_pytest_options(tm
     import os
     listed, _ = cli(tmp_path, "test", "--list")
     assert listed["data"]["domains"]["actions"] == [
-        "tests/test_action_confirmation.py", "tests/test_pending_dispatch.py"]
+        "tests/test_action_confirmation.py", "tests/test_pending_dispatch.py",
+        "tests/test_item_purchase_confirmation.py", "tests/test_purchase_quotes.py"]
     environment = dict(os.environ, PYTEST_ADDOPTS="scripts/test_queries.py", PYTEST_PLUGINS="absent_plugin")
     collected, output = cli(tmp_path, "test", "knowledge", "--collect-only", "--", "-k", "real_stdio", env=environment)
     assert collected["status"] == "PASS" and collected["data"]["pytest_exit_code"] == 0

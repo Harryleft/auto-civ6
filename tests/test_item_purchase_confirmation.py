@@ -16,9 +16,9 @@ class PurchaseConn(ReadyConn):
         self.lua.execute('''
 gold,faith,cost,allowed=600.5,500.5,100.25,true
 built={};units={}
-GameInfo.Units={UNIT_WARRIOR={Hash=1001,Index=11,UnitType='UNIT_WARRIOR'},
- UNIT_ARCHER={Hash=1002,Index=12,UnitType='UNIT_ARCHER'}}
-GameInfo.Buildings={BUILDING_MONUMENT={Hash=2001,Index=21,BuildingType='BUILDING_MONUMENT'}}
+GameInfo.Units={UNIT_WARRIOR={Hash=1001,Index=11,UnitType='UNIT_WARRIOR',PurchaseYield='YIELD_GOLD'},
+ UNIT_ARCHER={Hash=1002,Index=12,UnitType='UNIT_ARCHER',PurchaseYield='YIELD_GOLD'}}
+GameInfo.Buildings={BUILDING_MONUMENT={Hash=2001,Index=21,BuildingType='BUILDING_MONUMENT',PurchaseYield='YIELD_GOLD'}}
 GameInfo.Yields={YIELD_GOLD={Index=0},YIELD_FAITH={Index=5}}
 MilitaryFormationTypes={STANDARD_MILITARY_FORMATION=0}
 CityCommandTypes={PURCHASE=7,PARAM_UNIT_TYPE='unit',PARAM_BUILDING_TYPE='building',
@@ -28,7 +28,10 @@ city.GetID=function(self) return self.id end
 city.GetOwner=function(self) return self.owner end
 city.GetX=function(self) return self.x end
 city.GetY=function(self) return self.y end
-city.GetGold=function() return {GetPurchaseCost=function(_,yield,hash,formation)
+city.GetGold=function() return {
+ IsUnitFaithPurchaseEnabled=function() return true end,
+ IsBuildingFaithPurchaseEnabled=function() return true end,
+ GetPurchaseCost=function(_,yield,hash,formation)
  assert(yield==0 or yield==5);assert(hash==1001 or hash==1002 or hash==2001)
  if hash==2001 then assert(formation==nil) else assert(formation==0) end
  return cost end} end

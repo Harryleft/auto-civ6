@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import json
+from urllib.parse import unquote
 
 from civ_mcp.lua._helpers import (
     _ITEM_PARAM_MAP,
@@ -14,7 +15,8 @@ from civ_mcp.lua._helpers import (
     _bail_lua,
     _lua_get_city,
 )
-from civ_mcp.lua.models import CityInfo, ProductionOption
+from civ_mcp.lua.models import CityInfo, ProductionOption, PurchaseQuote
+from civ_mcp.lua.purchase_facts import LUA_PURCHASE_FACTS
 
 
 def build_cities_query() -> str:
@@ -361,72 +363,58 @@ end)
 ''' + build_attack_followup_query(target_x, target_y)
 
 
-def build_city_production_query(city_id: int) -> str:
+def build_city_production_query(city_id: int, item_type: str | None = None, item_name: str | None = None) -> str:
     """Returns Lua that lists what the city can produce. Actual production setting
     needs the item type, so this is a two-step process: list, then set."""
     return f"""
 {_lua_get_city(city_id)}
+{LUA_PURCHASE_FACTS}
+if pCity:GetOwner()~=me then print("ERR:CITY_NOT_OWNED");print("{SENTINEL}");return end
 local bq = pCity:GetBuildQueue()
-local goldIdx = GameInfo.Yields["YIELD_GOLD"].Index
-local cityGold = pCity:GetGold()
-local function getGoldCost(hash, isUnit)
-    local ok, cost = pcall(function()
-        if isUnit then
-            return cityGold:GetPurchaseCost(goldIdx, hash, MilitaryFormationTypes.STANDARD_MILITARY_FORMATION)
-        else
-            return cityGold:GetPurchaseCost(goldIdx, hash, -1)
-        end
-    end)
-    if ok and cost and cost > 0 then return math.floor(cost) end
-    return -1
+local filterKind={json.dumps(item_type) if item_type else 'nil'}
+local filterName={json.dumps(item_name) if item_name else 'nil'}
+local productionReadUnknown=false
+local function candidate(kind,item)
+ local name=kind=="UNIT" and item.UnitType or item.BuildingType
+ if filterName and (filterKind~=kind or filterName~=name) then return end
+ if not filterName and kind=="BUILDING" and pCity:GetBuildings():HasBuilding(item.Index) then return end
+ local prodOK,prodVisible=pcall(function() return bq:CanProduce(item.Hash,true) end)
+ if not prodOK or type(prodVisible)~="boolean" then productionReadUnknown=true end
+ local canProduce=nil
+ if prodOK and type(prodVisible)=="boolean" then
+  canProduce=false
+  if prodVisible and item.MustPurchase~=1 and item.MustPurchase~=true then
+   local params={{}}
+   params[kind=="UNIT" and CityOperationTypes.PARAM_UNIT_TYPE or CityOperationTypes.PARAM_BUILDING_TYPE]=item.Hash
+   local ok,value=pcall(CityManager.CanStartOperation,pCity,CityOperationTypes.BUILD,params,true)
+   if ok and type(value)=="boolean" then canProduce=value else canProduce=nil end
+  end
+ end
+ local gold=purchaseFacts(pCity,kind,item,"YIELD_GOLD",true)
+ local faith=purchaseFacts(pCity,kind,item,"YIELD_FAITH",true)
+ if gold.capacity_reached or faith.capacity_reached then
+  canProduce=false
+ end
+ if not filterName and prodVisible~=true and gold.visible~=true and faith.visible~=true then return end
+ local t=0;if canProduce then pcall(function() t=bq:GetTurnsLeft(item.Hash) end) end
+ local cost=item.Cost
+ pcall(function() local value=bq:GetProductionCost(item.Hash);if value>=0 then cost=value end end)
+ print(kind.."|"..name.."|"..cost.."|"..t.."|"..(gold.cost or -1))
+ print("PRODUCIBLE|"..kind.."|"..name.."|"..tostring(canProduce))
+ printPurchase(kind,name,gold);printPurchase(kind,name,faith)
 end
--- Check Trader cap: game silently rejects Traders when count >= route capacity
-local pTrade = Players[me]:GetTrade()
-local traderCount = 0
-for _, u in Players[me]:GetUnits():Members() do
-    if GameInfo.Units[u:GetType()].UnitType == "UNIT_TRADER" then traderCount = traderCount + 1 end
+if filterName then
+ local item=(filterKind=="UNIT" and GameInfo.Units or GameInfo.Buildings)[filterName]
+ if not item then print("ERR:ITEM_UNAVAILABLE");print("{SENTINEL}");return end
+ candidate(filterKind,item)
+else
+ for unit in GameInfo.Units() do candidate("UNIT",unit) end
+ for bldg in GameInfo.Buildings() do candidate("BUILDING",bldg) end
 end
-local routeCap = pTrade:GetOutgoingRouteCapacity()
-local traderCapped = (traderCount >= routeCap)
-print("UNITS:")
-for unit in GameInfo.Units() do
-    if bq:CanProduce(unit.Hash, true) then
-        if unit.UnitType == "UNIT_TRADER" and traderCapped then
-            -- skip: game will silently reject (traders >= route capacity)
-        else
-            -- CanStartOperation catches missing strategic resources that CanProduce misses
-            local unitCheck = {{}}
-            unitCheck[CityOperationTypes.PARAM_UNIT_TYPE] = unit.Hash
-            local canStart = CityManager.CanStartOperation(pCity, CityOperationTypes.BUILD, unitCheck, true)
-            if canStart then
-                local t = bq:GetTurnsLeft(unit.Hash)
-                local gc = getGoldCost(unit.Hash, true)
-                local adjCost = unit.Cost
-                pcall(function() local c = bq:GetProductionCost(unit.Hash); if c > 0 then adjCost = math.floor(c) end end)
-                print("UNIT|" .. unit.UnitType .. "|" .. adjCost .. "|" .. t .. "|" .. gc)
-            end
-        end
-    end
+if not filterName and productionReadUnknown then
+ print("ERR:PRODUCTION_OPTIONS_INCOMPLETE");print("{SENTINEL}");return
 end
-print("BUILDINGS:")
-for bldg in GameInfo.Buildings() do
-    if bq:CanProduce(bldg.Hash, true) then
-        -- CanStartOperation catches pillaged-district prerequisites that CanProduce misses
-        local bldgCheck = {{}}
-        bldgCheck[CityOperationTypes.PARAM_BUILDING_TYPE] = bldg.Hash
-        local canStart = CityManager.CanStartOperation(pCity, CityOperationTypes.BUILD, bldgCheck, true)
-        if canStart then
-            local t = bq:GetTurnsLeft(bldg.Hash)
-            local gc = -1
-            if not bldg.IsWonder then
-                gc = getGoldCost(bldg.Hash, false)
-            end
-            local adjCost = bldg.Cost
-            pcall(function() local c = bq:GetProductionCost(bldg.Hash); if c > 0 then adjCost = math.floor(c) end end)
-            print("BUILDING|" .. bldg.BuildingType .. "|" .. adjCost .. "|" .. t .. "|" .. gc)
-        end
-    end
-end
+if not filterName then
 print("DISTRICTS:")
 for dist in GameInfo.Districts() do
     if bq:CanProduce(dist.Hash, true) then
@@ -478,6 +466,7 @@ for bldg in GameInfo.Buildings() do
             print("BUILDING|" .. bldg.BuildingType .. "|" .. adjCost .. "|" .. t .. "|-1|REPAIR")
         end
     end
+end
 end
 print("{SENTINEL}")
 """
@@ -874,12 +863,30 @@ def parse_cities_response(lines: list[str]) -> tuple[list[CityInfo], list[str]]:
 def parse_city_production_response(lines: list[str]) -> list[ProductionOption]:
     """Parse available production options from build_city_production_query query."""
     options = []
+    indexed = {}
     for line in lines:
+        if line.startswith('ERR:'):
+            raise ValueError(line)
         if line.startswith(
             ("UNITS:", "BUILDINGS:", "DISTRICTS:", "PROJECTS:", "REPAIRS:")
         ):
             continue
         parts = line.split("|")
+        if parts[0] == 'PRODUCIBLE':
+            indexed[(parts[1], parts[2])].can_produce = {'true': True, 'false': False, 'nil': None}[parts[3]]
+            continue
+        if parts[0] == 'PURCHASE':
+            if len(parts) != 9:
+                raise ValueError('Malformed purchase quote')
+            quote = PurchaseQuote(
+                currency=parts[3], cost=float(parts[4]) if parts[4] != 'nil' else None,
+                balance=float(parts[5]) if parts[5] != 'nil' else None,
+                can_purchase={'true': True, 'false': False, 'nil': None}[parts[6]],
+                visible={'true': True, 'false': False, 'nil': None}[parts[7]],
+                reasons=[unquote(value) for value in parts[8].split(';') if value],
+            )
+            indexed[(parts[1], parts[2])].purchases.append(quote)
+            continue
         if len(parts) >= 3 and parts[0] in ("UNIT", "BUILDING", "DISTRICT", "PROJECT"):
             is_repair = len(parts) > 5 and parts[5] == "REPAIR"
             repair_x = None
@@ -892,12 +899,14 @@ def parse_city_production_response(lines: list[str]) -> list[ProductionOption]:
                 ProductionOption(
                     category=parts[0],
                     item_name=parts[1],
-                    cost=int(parts[2]),
+                    cost=float(parts[2]),
                     turns=int(parts[3]) if len(parts) > 3 else 0,
-                    gold_cost=int(parts[4]) if len(parts) > 4 else -1,
+                    gold_cost=float(parts[4]) if len(parts) > 4 else -1,
                     is_repair=is_repair,
                     repair_x=repair_x,
                     repair_y=repair_y,
                 )
             )
+            if not is_repair:
+                indexed[(parts[0], parts[1])] = options[-1]
     return options
