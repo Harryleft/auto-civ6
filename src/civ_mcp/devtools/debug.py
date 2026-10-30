@@ -324,7 +324,7 @@ class DebugSession:
                      "or keep it for evidence. Never start a second controller for the same game.",
             )
         runtime = await self.runtime()
-        if tool in {"get_game_snapshot", "get_decision_context", "get_city_yields"} and runtime.get("shared_pending"):
+        if tool in {"get_game_snapshot", "get_decision_context", "get_city_yields", "get_city_growth"} and runtime.get("shared_pending"):
             raise CommandError("VERIFY_PENDING", "A shared hotseat request still owns this run",
                                hint="Inspect pending and confirm its original intent; a snapshot cannot retire or bypass the shared request.")
         request = self.event("tool_started", tool=tool, arguments=arguments)

@@ -1,0 +1,46 @@
+{
+  "affected": {
+    "command": [
+      "uv",
+      "run",
+      "--locked",
+      "pytest",
+      "-q",
+      "tests/test_city_growth.py",
+      "tests/test_settle_pagination.py",
+      "tests/test_settle_advice_scope.py",
+      "tests/test_resource_plot_facts.py",
+      "tests/test_resource_hint_visibility.py",
+      "tests/test_resource_income_lua.py",
+      "tests/test_public_reports.py",
+      "tests/test_builder_advice_scope.py",
+      "tests/test_game_state.py",
+      "tests/test_server.py"
+    ],
+    "passed": 375,
+    "seconds": 2.51,
+    "exit_code": 0,
+    "log": "evidence/final-verified-tests.log"
+  },
+  "debug": {
+    "status": "PASS",
+    "exit_code": 0,
+    "evidence": "evidence/debug-verified"
+  },
+  "narration_pending": {
+    "command": [
+      "uv",
+      "run",
+      "--locked",
+      "pytest",
+      "-q",
+      "tests/test_narrate.py",
+      "tests/test_fact_narration.py",
+      "tests/test_pending_dispatch.py"
+    ],
+    "passed": 37,
+    "seconds": 0.49,
+    "exit_code": 0,
+    "log": "evidence/narration-pending-tests.log"
+  }
+}

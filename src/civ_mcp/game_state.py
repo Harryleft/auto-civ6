@@ -485,6 +485,10 @@ class GameState:
         lines = await self.conn.execute_write(lq.build_tech_civics_query())
         return lq.parse_tech_civics_response(lines)
 
+    async def get_city_growth(self, city_id=None, view="brief") -> dict:
+        from civ_mcp.city_growth import read_context
+        return await read_context(self, city_id, view)
+
     async def get_public_report(self, section: str, **options) -> dict:
         """Read UI-equivalent facts without changing views or retiring pending."""
         from civ_mcp.lua import public_reports
@@ -505,10 +509,13 @@ class GameState:
         list[lq.OwnedResource],
         list[lq.NearbyResource],
         dict[str, int],
+        bool | None,
     ]:
         # InGame context needed for GetResourceStockpileCap etc.
         lines = await self.conn.execute_write(lq.build_empire_resources_query())
-        return lq.parse_empire_resources_response(lines)
+        markers=[r for r in lines if r.startswith('RESOURCE_SCAN|')]
+        known={'RESOURCE_SCAN|true|true':True,'RESOURCE_SCAN|true|false':False}.get(markers[0]) if len(markers)==1 else None
+        return (*lq.parse_empire_resources_response(lines),known)
 
     # ------------------------------------------------------------------
     # Action methods (run in InGame context for UnitManager access)
@@ -714,10 +721,17 @@ class GameState:
                 return line
         return "No local settlement terrain candidates confirmed within 5 tiles; use map settle-global for a separate revealed-map scan."
 
-    async def get_global_settle_scan(self) -> list[lq.SettleCandidate]:
-        lua = lq.build_global_settle_scan()
+    async def get_global_settle_scan(self, **region) -> list[lq.SettleCandidate]:
+        lua = lq.build_global_settle_scan(**region)
         lines = await self.conn.execute_write(lua)
-        return lq.parse_settle_advisor_response(lines)
+        for line in lines:
+            if line.startswith('ERR:'):
+                raise ValueError(line)
+        candidates=lq.parse_settle_advisor_response(lines)
+        totals=[line.split('|')[1] for line in lines if line.startswith('SETTLE_TOTAL|')]
+        if len(totals)!=1 or not totals[0].isdigit() or int(totals[0])!=len(candidates):
+            raise ValueError('Native settlement scan incomplete; candidate total unknown')
+        return candidates
 
     @_guard_pending_mutation
     async def fortify_unit(self, unit_index: int) -> str:

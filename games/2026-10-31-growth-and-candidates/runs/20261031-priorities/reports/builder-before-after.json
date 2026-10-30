@@ -1,0 +1,49 @@
+{
+  "baseline_commit": "c2aef68007d8efe52768ca5b3a884476b6fb0d51",
+  "source": "same trusted original T200 save; prior-round baseline read, not simultaneous frozen A/B",
+  "before": {
+    "path": "2026-10-30-decision-audit/runs/20261030-cross-domain/evidence/live-verified/debug.jsonl",
+    "sequence": 280,
+    "bytes": 3727,
+    "count": 23
+  },
+  "after": {
+    "path": "evidence/live/debug.jsonl",
+    "sequence": 298,
+    "bytes": 2584,
+    "count": 16
+  },
+  "removed_only_archaeology_sites": true,
+  "removed_coordinates": [
+    [
+      "33",
+      "21"
+    ],
+    [
+      "33",
+      "25"
+    ],
+    [
+      "35",
+      "24"
+    ],
+    [
+      "35",
+      "26"
+    ],
+    [
+      "36",
+      "18"
+    ],
+    [
+      "37",
+      "20"
+    ],
+    [
+      "41",
+      "25"
+    ]
+  ],
+  "remaining_candidates_unchanged": true,
+  "remaining_candidate_lines_identical": true
+}

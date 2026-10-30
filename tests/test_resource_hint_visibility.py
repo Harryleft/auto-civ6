@@ -134,7 +134,7 @@ def test_city_hint_protocol_preserves_complete_coordinates_without_phantom_resou
     assert cities[0].unimproved_resources == ["SILK@1,-2", "SILK@-3,4", "BANANAS@0,2"]
     assert cities[0].pillaged_improvements == ["MINE@-1,-2", "FARM@3,0"]
     text = narrate_cities(cities)
-    assert "Needs builder: SILK (1,-2), SILK (-3,4), BANANAS (0,2)" in text
+    assert "Unimproved owned resources (eligibility unchecked): SILK (1,-2), SILK (-3,4), BANANAS (0,2)" in text
     assert "PILLAGED TILES: MINE (-1,-2), FARM (3,0)" in text
 
 
@@ -155,7 +155,7 @@ plots[-3].GetDistrictType=function() error("native unavailable") end
     cities, _ = asyncio.run(GameState(conn).get_cities())
     assert cities[0].unimproved_resources == ["OIL@1,0", "OIL@2,0"]
     assert cities[0].pillaged_improvements == ["MINE@3,0"]
-    assert "Needs builder: OIL (1,0), OIL (2,0)" in narrate_cities(cities)
+    assert "Unimproved owned resources (eligibility unchecked): OIL (1,0), OIL (2,0)" in narrate_cities(cities)
     assert conn.lua.globals().native_requests == 0
 
 

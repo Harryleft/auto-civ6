@@ -427,7 +427,9 @@ def narrate_cities(
             lines.append("    Resource advice incomplete: native resource visibility unknown.")
         if c.unimproved_resources:
             res_names = [r.replace("@", " (") + ")" for r in c.unimproved_resources]
-            lines.append(f"    Needs builder: {', '.join(res_names)} (unimproved)")
+            lines.append(f"    Unimproved owned resources (eligibility unchecked): {', '.join(res_names)}")
+        if c.archaeology_sites:
+            lines.append(f"    Archaeology sites (not builder tasks): {', '.join(c.archaeology_sites)}")
     if distances:
         lines.append("")
         lines.append("City Distances:")
@@ -676,16 +678,28 @@ def narrate_settle_candidates(candidates: list[lq.SettleCandidate]) -> str:
     return "\n".join(lines)
 
 
+def resource_plot_description(resource) -> str:
+    owner='unknown' if resource.owner_id is None else ('unclaimed' if resource.owner_id==-1 else f'player {resource.owner_id}')
+    state=lambda value:'unknown' if value is None else ('yes' if value else 'no')
+    return (f"owner {owner}; visible now {state(resource.visible_now)}; "
+        f"facility {resource.improvement_type or 'unknown'}; pillaged {state(resource.pillaged)}; "
+        f"work unit {resource.work_unit or 'unknown'} (type hint, eligibility unchecked)")
+
+
 def narrate_empire_resources(
     stockpiles: list[lq.ResourceStockpile],
     owned: list[lq.OwnedResource],
     nearby: list[lq.NearbyResource],
     luxuries: dict[str, int],
+    *, visibility_known: bool | None = None,
 ) -> str:
     if not stockpiles and not owned and not nearby and not luxuries:
-        return "No resources found in or near your empire."
+        return ("No resources found in the completed empire resource scan." if visibility_known is True else
+            "Resource scan incomplete/unknown; no complete resource absence established.")
     _CLASS_PREFIX = {"strategic": "S", "luxury": "L", "bonus": "B"}
     lines = ["Empire Resources:"]
+    if visibility_known is not True:
+        lines.append('Resource visibility/scan completeness unknown; partial observations follow.')
     # Strategic stockpiles
     visible_strats = [s for s in stockpiles]
     if visible_strats:
@@ -715,28 +729,24 @@ def narrate_empire_resources(
         ("strategic", "Strategic Tiles"),
         ("luxury", "Luxury Tiles"),
         ("bonus", "Bonus Tiles"),
+        ("artifact", "Archaeology Sites"),
+        ("unknown", "Other Resource Observations"),
     ]:
         items = [r for r in owned if r.resource_class == cls]
         if not items:
             continue
         lines.append(f"\n{label}:")
         for r in items:
-            if r.improved:
-                lines.append(f"  {r.name} — improved at ({r.x},{r.y})")
-            elif cls in ("luxury", "strategic"):
-                lines.append(
-                    f"  !! {r.name} — UNIMPROVED at ({r.x},{r.y}) — needs builder!"
-                )
-            else:
-                lines.append(f"  {r.name} — UNIMPROVED at ({r.x},{r.y})")
+            lines.append(f"  {r.name} at ({r.x},{r.y}) — " + resource_plot_description(r))
     # Nearby unclaimed
     if nearby:
-        lines.append("\nNearby Unclaimed:")
+        lines.append("\nNearby Resource Observations (ownership shown separately):")
         for r in nearby:
             prefix = _CLASS_PREFIX.get(r.resource_class, "?")
             lines.append(
-                f"  [{prefix}] {r.name} at ({r.x},{r.y}) — {r.distance} tiles from {r.nearest_city}"
+                f"  [{prefix}] {r.name} at ({r.x},{r.y}) — {r.distance} tiles from {r.nearest_city}; " + resource_plot_description(r)
             )
+    lines.append('Facility presence/pillage does not confirm resource supply or yields. Purchase/development eligibility unchecked; fogged foreign plot details stay unknown.')
     return "\n".join(lines)
 
 

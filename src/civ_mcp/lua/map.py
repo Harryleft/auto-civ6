@@ -33,6 +33,7 @@ from civ_mcp.lua.models import (
 )
 
 from civ_mcp.lua.tile_facts import LUA_TILE_PURCHASE_FACTS
+from civ_mcp.lua.resource_facts import LUA_RESOURCE_FACTS
 
 # --- Shared Lua fragments for settle-scan scoring (used by two builders) ---
 
@@ -118,6 +119,7 @@ for i = 1, #candidates do
     print("SETTLE|" .. c.x .. "," .. c.y .. "|" .. c.score .. "|" .. c.f .. "|" .. c.p .. "|" .. c.water .. "|" .. c.def .. "|" .. c.res .. "|" .. (c.loy==nil and "?" or tostring(c.loy)) .. "|" .. tostring(c.known))
 end
 if #candidates == 0 then print("NONE") end
+print("SETTLE_TOTAL|" .. #candidates)
 print("{SENTINEL}")
 """
 
@@ -430,24 +432,28 @@ end
 """
 
 
-def build_global_settle_scan() -> str:
-    """GameCore context: scan all revealed, unowned tiles for settle viability.
-
-    Reuses the same scoring logic and SETTLE| output format as
-    build_settle_advisor_query, but searches the entire revealed map
-    rather than a radius around a settler. Returns all observed candidates.
-    """
+def build_global_settle_scan(center_x=None, center_y=None, radius=None) -> str:
+    """Read all revealed terrain candidates in the explicit scope (InGame)."""
+    region=(center_x,center_y,radius)
+    if any(v is not None for v in region):
+        if any(type(v)is not int for v in region) or not 0<=radius<=20:
+            raise ValueError("center_x, center_y and radius (0..20) must be provided together")
+        guard=f"Map.GetPlotDistance(cx,cy,{center_x},{center_y})<={radius}"
+        validate=f'if Map.GetPlot({center_x},{center_y})==nil then {_bail("ERR:INVALID_CENTER")} end'
+    else:
+        guard='true';validate=''
     return f"""
 local me = Game.GetLocalPlayer()
 local vis = PlayersVisibility[me]
 local pTech = Players[me]:GetTechs()
 local w, h = Map.GetGridSize()
+{validate}
 {_SETTLE_PREAMBLE}
 for y = 0, h - 1 do
     for x = 0, w - 1 do
         local cx, cy = x, y
         local cPlot = Map.GetPlot(cx, cy)
-        if cPlot and vis:IsRevealed(cPlot:GetIndex()) and cPlot:GetOwner()==-1 and not cPlot:IsWater() and not cPlot:IsMountain() then
+        if cPlot and {guard} and vis:IsRevealed(cPlot:GetIndex()) and cPlot:GetOwner()==-1 and not cPlot:IsWater() and not cPlot:IsMountain() then
 {_SETTLE_SCORE_BODY}
         end
     end
@@ -464,14 +470,17 @@ def build_empire_resources_query() -> str:
     NEARBY lines for unclaimed resources within 5 tiles of cities.
     Runs in InGame context for GetResourceStockpileCap/GetResourceAccumulationPerTurn.
     """
-    return """
+    return _LUA_KNOWN_RESOURCE + LUA_RESOURCE_FACTS + """
 local me = Game.GetLocalPlayer()
 local vis = PlayersVisibility[me]
 local pRes = Players[me]:GetResources()
-local classMap = {RESOURCECLASS_STRATEGIC="strategic", RESOURCECLASS_LUXURY="luxury", RESOURCECLASS_BONUS="bonus"}
+local resourceObservationKnown=true
+local classMap = {RESOURCECLASS_STRATEGIC="strategic", RESOURCECLASS_LUXURY="luxury", RESOURCECLASS_BONUS="bonus",RESOURCECLASS_ARTIFACT="artifact"}
 -- Stockpile info for strategic and luxury resources
 for row in GameInfo.Resources() do
-    if pRes:IsResourceVisible(row.Index) then
+    local visibilityOK,visible=pcall(function()return pRes:IsResourceVisible(row.Index)end)
+    if not visibilityOK or type(visible)~='boolean'then resourceObservationKnown=false end
+    if visibilityOK and visible==true then
         local cls = classMap[row.ResourceClassType]
         if cls == "strategic" then
             local amt = pRes:GetResourceAmount(row.Index)
@@ -504,15 +513,16 @@ for x = 0, mapW - 1 do
     for y = 0, mapH - 1 do
         local plot = Map.GetPlot(x, y)
         if plot and plot:GetOwner() == me then
-            local rIdx = plot:GetResourceType()
-            if rIdx >= 0 and pRes:IsResourceVisible(rIdx) then
+            local rIdx = knownResourceIndex(me,plot)
+            if rIdx==nil then resourceObservationKnown=false end
+            if rIdx and rIdx >= 0 then
                 local resEntry = GameInfo.Resources[rIdx]
                 local rName = resEntry.ResourceType:gsub("RESOURCE_", "")
-                local rClass = classMap[resEntry.ResourceClassType] or "bonus"
-                local impIdx = plot:GetImprovementType()
-                local improved = "0"
-                if impIdx >= 0 then improved = "1" end
+                local rClass = classMap[resEntry.ResourceClassType] or "unknown"
+                local facts=resourcePlotFacts(me,plot,resEntry)
+                local improved=facts.improvement_type==nil and '?'or(facts.improvement_type=='NONE'and '0'or '1')
                 print("OWNED|" .. rName .. "|" .. rClass .. "|" .. improved .. "|" .. x .. "," .. y)
+                printResourceFacts('owned',me,plot,resEntry,facts)
                 seen[x .. "," .. y] = true
             end
         end
@@ -527,20 +537,29 @@ for _, city in ipairs(myCities) do
             if not seen[key] then
                 local tPlot = Map.GetPlot(tx, ty)
                 if tPlot and vis:IsRevealed(tPlot:GetIndex()) and tPlot:GetOwner() ~= me then
-                    local rIdx = tPlot:GetResourceType()
-                    if rIdx >= 0 and pRes:IsResourceVisible(rIdx) then
+                    local rIdx = knownResourceIndex(me,tPlot)
+                    if rIdx==nil then resourceObservationKnown=false end
+                    if rIdx and rIdx >= 0 then
                         local resEntry = GameInfo.Resources[rIdx]
+                        local consumable=resEntry.ResourceClassType=='RESOURCECLASS_BONUS'or resourceWorkUnit(resEntry)=='UNIT_ARCHAEOLOGIST'
+                        if not consumable or vis:IsVisible(tPlot:GetIndex())then
                         local rName = resEntry.ResourceType:gsub("RESOURCE_", "")
-                        local rClass = classMap[resEntry.ResourceClassType] or "bonus"
-                        local dist = Map.GetPlotDistance(city.x, city.y, tx, ty)
-                        print("NEARBY|" .. rName .. "|" .. rClass .. "|" .. tx .. "," .. ty .. "|" .. city.name .. "|" .. dist)
-                        seen[key] = true
+                        local rClass = classMap[resEntry.ResourceClassType] or "unknown"
+                        local nearest,dist=nil,math.huge
+                        for _,c in ipairs(myCities)do local d=Map.GetPlotDistance(c.x,c.y,tx,ty);if d<dist then nearest=c;dist=d end end
+                        if dist<=5 then
+                         print("NEARBY|" .. rName .. "|" .. rClass .. "|" .. tx .. "," .. ty .. "|" .. nearest.name .. "|" .. dist)
+                         printResourceFacts('nearby',me,tPlot,resEntry)
+                         seen[key] = true
+                        end
+                        end
                     end
                 end
             end
         end
     end
 end
+print('RESOURCE_SCAN|true|'..tostring(resourceObservationKnown))
 print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
 
@@ -938,6 +957,21 @@ def parse_empire_resources_response(
                     distance=int(parts[5]),
                 )
             )
+    details={}
+    for line in lines:
+        if line.startswith('RESOURCE_DETAIL|'):
+            parts=line.split('|')
+            if len(parts)==8:
+                def boolean(v): return {'true':True,'false':False}.get(v)
+                details[(parts[1],parts[2])]=dict(owner_id=int(parts[3]) if re.fullmatch(r'-?\d+',parts[3]) else None,
+                    visible_now=boolean(parts[4]),improvement_type=None if parts[5]=='?'else parts[5],
+                    pillaged=boolean(parts[6]),work_unit=None if parts[7]=='?'else parts[7])
+    for scope,items in (('owned',owned),('nearby',nearby)):
+        for item in items:
+            detail=details.get((scope,f'{item.x},{item.y}'),{})
+            for key,value in detail.items():setattr(item,key,value)
+            if scope=='owned' and detail:
+                item.improved=None if item.improvement_type is None else item.improvement_type!='NONE'
     return stockpiles, owned, nearby, luxuries
 
 

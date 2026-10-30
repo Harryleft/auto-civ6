@@ -171,6 +171,9 @@ def domain_parser(group: str):
                 entity(child, "target_unit_id")
     elif group == "city":
         command("list", "get_cities", "List current cities and native IDs.")
+        growth = command("growth", "get_city_growth", "Explain native growth turns, housing/amenities and modifier units; no city ID reads all owned cities.")
+        growth.add_argument("city_id", nargs="?", type=int, default=argparse.SUPPRESS)
+        growth.add_argument("--view", choices=("brief", "structured", "evidence"), default=argparse.SUPPRESS)
         yields = command("yields", "get_city_yields", "Read built-district native yields and current Rationalism conditions; no city ID reads all owned cities.")
         yields.add_argument("city_id", nargs="?", type=int, default=argparse.SUPPRESS)
         yields.add_argument("--view", choices=("brief", "structured", "evidence"), default=argparse.SUPPRESS)
@@ -253,7 +256,12 @@ def domain_parser(group: str):
         area.add_argument("--radius", type=int, choices=range(1, 5), default=2)
         settle = command("settle", "get_settle_advisor", "Read settlement candidates for a currently queried settler.")
         entity(settle, "unit_id")
-        command("settle-global", "get_global_settle_advisor", "Read known global settlement candidates.")
+        global_settle=command("settle-global", "get_global_settle_advisor", "Read unranked settlement terrain candidates with explicit pages and optional region.")
+        global_settle.add_argument('--limit',type=int,default=argparse.SUPPRESS)
+        global_settle.add_argument('--offset',type=int,default=argparse.SUPPRESS)
+        global_settle.add_argument('--center-x',type=int,default=argparse.SUPPRESS)
+        global_settle.add_argument('--center-y',type=int,default=argparse.SUPPRESS)
+        global_settle.add_argument('--radius',type=int,default=argparse.SUPPRESS)
         command("strategic", "get_strategic_map", "Read the visible strategic map; hidden information stays unknown.")
     elif group == "victory":
         command("show", "get_victory_progress", "Read victory progress; hidden rival facts remain unknown.")

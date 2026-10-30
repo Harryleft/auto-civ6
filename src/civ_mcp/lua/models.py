@@ -180,6 +180,7 @@ class CityInfo:
     game_identity: tuple[str, int] | None = None
     completed_districts: list[str] | None = None  # native IsComplete, with coordinates
     resource_visibility_known: bool | None = None  # absent in legacy city rows
+    archaeology_sites: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -536,14 +537,19 @@ class OwnedResource:
 
     name: str
     resource_class: str  # "strategic", "luxury", "bonus"
-    improved: bool
+    improved: bool | None
     x: int
     y: int
+    owner_id: int | None = None
+    visible_now: bool | None = None
+    improvement_type: str | None = None
+    pillaged: bool | None = None
+    work_unit: str | None = None
 
 
 @dataclass
 class NearbyResource:
-    """An unclaimed resource near one of the player's cities."""
+    """A revealed resource near a city; ownership may be foreign or unknown."""
 
     name: str
     resource_class: str
@@ -551,6 +557,11 @@ class NearbyResource:
     y: int
     nearest_city: str
     distance: int
+    owner_id: int | None = None
+    visible_now: bool | None = None
+    improvement_type: str | None = None
+    pillaged: bool | None = None
+    work_unit: str | None = None
 
 
 @dataclass

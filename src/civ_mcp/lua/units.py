@@ -1822,7 +1822,8 @@ def build_builder_tasks_query() -> str:
     Uses hardcoded resource mapping and terrain heuristics for improvement recommendations.
     Does NOT use CanStartOperation with remote tiles (corrupts engine state → crash).
     """
-    return _LUA_KNOWN_RESOURCE + _LUA_UNIT_READINESS + """
+    from civ_mcp.lua.resource_facts import LUA_RESOURCE_FACTS
+    return _LUA_KNOWN_RESOURCE + LUA_RESOURCE_FACTS + _LUA_UNIT_READINESS + """
 local me = Game.GetLocalPlayer()
 local pCities = Players[me]:GetCities()
 
@@ -1912,7 +1913,7 @@ for _, city in pCities:Members() do
                     -- Check for unimproved resource tiles
                     elseif resIdx and resIdx >= 0 and impIdx < 0 then
                         local resInfo = GameInfo.Resources[resIdx]
-                        if resInfo then
+                        if resInfo and resourceWorkUnit(resInfo)~='UNIT_ARCHAEOLOGIST'then
                             local resClass = resInfo.ResourceClassType or ""
                             local resName = resInfo.ResourceType:gsub("RESOURCE_", "")
                             local priority = "normal"

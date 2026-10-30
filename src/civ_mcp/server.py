@@ -293,6 +293,27 @@ async def get_city_yields(ctx: Context,
     return await _logged(ctx, "get_city_yields", {"city_id": city_id, "view": view}, read)
 
 
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_city_growth(ctx: Context,
+    city_id: Annotated[int, Field(ge=0, strict=True)] | None = None,
+    view: Literal["brief", "structured", "evidence"] = "brief",
+) -> str:
+    """Read native growth turns and modifiers for current owned cities.
+
+    Separate percent/fraction/multiplier units, food consumption derived from
+    yield minus surplus, and native overall growth from component observations.
+    Evidence adds native six-yield tooltips and advice. Refuses all pending;
+    never changes citizens, policies or priorities. Omit city_id for all cities.
+    """
+    async def read():
+        try:
+            result=await _get_game(ctx).get_city_growth(city_id, view)
+        except (LuaError, OSError, ValueError, KeyError, TimeoutError) as exc:
+            result=dict(schema_version=1,status="unknown",error=f"{type(exc).__name__}: {exc}")
+        return json.dumps(result,ensure_ascii=False,allow_nan=False)
+    return await _logged(ctx,"get_city_growth",{"city_id":city_id,"view":view},read)
+
+
 @mcp.tool(annotations={"readOnlyHint": True, "idempotentHint": True})
 async def search_knowledge(
     ctx: Context,
@@ -661,22 +682,37 @@ async def get_pathing_estimate(
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
-async def get_global_settle_advisor(ctx: Context) -> str:
+async def get_global_settle_advisor(ctx: Context,
+    limit: Annotated[int, Field(ge=1, le=200, strict=True)] = 20,
+    offset: Annotated[int, Field(ge=0, strict=True)] = 0,
+    center_x: Annotated[int, Field(strict=True)] | None = None,
+    center_y: Annotated[int, Field(strict=True)] | None = None,
+    radius: Annotated[int, Field(ge=0, le=20, strict=True)] | None = None,
+) -> str:
     """Read unranked settlement terrain candidates across the revealed map.
 
     Unlike get_settle_advisor (which searches near a specific settler),
-    this scans revealed unowned land and returns all observed candidates.
+    This scans revealed unowned land. Optional center_x/center_y/radius must
+    be supplied together. Pages retain native map order; no scoring or ranking.
+    Reports total/shown/omitted and next_offset; use subsequent pages to recover
+    all candidates in the same scope. A new query observes current state again.
     Use this when deciding WHERE to send a settler, not just where to settle.
     """
     gs = _get_game(ctx)
 
     async def _run():
-        candidates = await gs.get_global_settle_scan()
-        if not candidates:
-            return "No settlement terrain candidates confirmed on revealed map."
-        return nr.narrate_settle_candidates(candidates)
+        region={} if all(v is None for v in (center_x,center_y,radius)) else dict(center_x=center_x,center_y=center_y,radius=radius)
+        candidates = await gs.get_global_settle_scan(**region)
+        page=candidates[offset:offset+limit]
+        total=len(candidates)
+        return json.dumps(dict(schema_version=1,total=total,shown=len(page),offset=offset,limit=limit,
+            omitted=total-len(page),truncated=offset+len(page)<total,
+            next_offset=offset+len(page) if offset+len(page)<total else None,
+            scope=region or 'revealed map',order='map scan order; unranked',
+            report=nr.narrate_settle_candidates(page) if page else 'No candidates in this page; inspect total and offset.'),ensure_ascii=False)
 
-    return await _logged(ctx, "get_global_settle_advisor", {}, _run)
+    params=dict(limit=limit,offset=offset,center_x=center_x,center_y=center_y,radius=radius)
+    return await _logged(ctx, "get_global_settle_advisor", params, _run)
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
@@ -701,14 +737,15 @@ async def get_builder_tasks(ctx: Context) -> str:
 async def get_empire_resources(ctx: Context) -> str:
     """Get a summary of all resources in and near your empire.
 
-    Shows owned resources (improved/unimproved) grouped by type,
-    and unclaimed resources near your cities.
+    Shows owned resources and nearby sightings with separately observed
+    ownership, facility/pillage and work-unit type hints. Fogged foreign
+    dynamic facts stay unknown; no purchase/development guarantee.
     """
     gs = _get_game(ctx)
 
     async def _run():
-        stockpiles, owned, nearby, luxuries = await gs.get_empire_resources()
-        return nr.narrate_empire_resources(stockpiles, owned, nearby, luxuries)
+        stockpiles, owned, nearby, luxuries, known = await gs.get_empire_resources()
+        return nr.narrate_empire_resources(stockpiles, owned, nearby, luxuries, visibility_known=known)
 
     return await _logged(ctx, "get_empire_resources", {}, _run)
 

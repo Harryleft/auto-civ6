@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 
 from civ_mcp.lua._helpers import _LUA_KNOWN_RESOURCE, SENTINEL
+from civ_mcp.lua.resource_facts import LUA_RESOURCE_FACTS
 
 SECTIONS = {"empire", "governments", "climate", "climate-history", "history", "great-people-history",
             "gossip", "world-resources", "encountered", "map-search"}
@@ -222,7 +223,10 @@ for i=0,Map.GetPlotCount()-1 do
     if consumable and not vis:IsVisible(x,y)then match=false end
     local label=Locale.Lookup(row.Name)
     if match and (query==""or label:lower():find(query:lower(),1,true)or row.ResourceType:lower():find(query:lower(),1,true))then
-     add({x=x,y=y,type=row.ResourceType,name=label,class=scalar(row.ResourceClassType),visible_now=vis:IsVisible(x,y),scope="revealed and natively resource-visible"})
+     local facts=resourcePlotFacts(me,plot,row)
+     add({x=x,y=y,type=row.ResourceType,name=label,class=scalar(row.ResourceClassType),visible_now=scalar(facts.visible_now),
+      owner_id=scalar(facts.owner_id),improvement_type=scalar(facts.improvement_type),pillaged=scalar(facts.pillaged),
+      work_unit=scalar(facts.work_unit),scope="Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified"})
     end
    end
   end
@@ -249,7 +253,7 @@ def build(section, *, target_player=-1, limit=50, offset=0, since_turn=0, search
     if not isinstance(query, str) or any(ord(c) < 32 for c in query):
         raise ValueError("query must be text without control characters")
     params = f"local target_player,limit,offset,since_turn={target_player},{limit},{offset},{since_turn}\nlocal search_kind,query={json.dumps(search_kind)},{json.dumps(query, ensure_ascii=False)}\n"
-    return params + HEADER + _LUA_KNOWN_RESOURCE + r'''
+    return params + HEADER + _LUA_KNOWN_RESOURCE + LUA_RESOURCE_FACTS + r'''
 local ok,err=pcall(function()
 if target_player>=0 and not met(target_player)then error("Target civilization has not been encountered")end
 ''' + BODIES[section] + r'''

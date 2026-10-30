@@ -1,0 +1,2436 @@
+{
+  "stages": [
+    {
+      "turn": 50,
+      "growth": {
+        "cities": [
+          {
+            "amenities": 4,
+            "amenities_needed": 4,
+            "city_id": 65536,
+            "derived": {
+              "amenities_balance": 0,
+              "food_consumption": 14,
+              "food_remaining": 30.78125,
+              "growth_food_per_turn": 4,
+              "housing_headroom": 1
+            },
+            "food_stored": 21.21875,
+            "food_surplus": 8,
+            "food_yield": 22,
+            "growth_threshold": 52,
+            "happiness_growth_percent": 0,
+            "happiness_nonfood_yield_percent": 0,
+            "housing": 8,
+            "housing_growth_multiplier": 0.5,
+            "loyalty_growth_multiplier": 1,
+            "name": "乌鲁克",
+            "occupation_growth_multiplier": 0,
+            "occupied": false,
+            "other_growth_fraction": 0,
+            "overall_growth_multiplier": 0.5,
+            "owner": 0,
+            "population": 7,
+            "turns_until_growth": 8,
+            "turns_until_starvation": -1
+          },
+          {
+            "amenities": 1,
+            "amenities_needed": 2,
+            "city_id": 131073,
+            "derived": {
+              "amenities_balance": -1,
+              "food_consumption": 6,
+              "food_remaining": 5.671875,
+              "growth_food_per_turn": 2.5546875,
+              "housing_headroom": 2
+            },
+            "food_stored": 16.328125,
+            "food_surplus": 3,
+            "food_yield": 9,
+            "growth_threshold": 22,
+            "happiness_growth_percent": -15,
+            "happiness_nonfood_yield_percent": -10,
+            "housing": 5,
+            "housing_growth_multiplier": 1,
+            "loyalty_growth_multiplier": 1,
+            "name": "埃利都",
+            "occupation_growth_multiplier": 0,
+            "occupied": false,
+            "other_growth_fraction": 0,
+            "overall_growth_multiplier": 0.8515625,
+            "owner": 0,
+            "population": 3,
+            "turns_until_growth": 3,
+            "turns_until_starvation": -1
+          },
+          {
+            "amenities": 1,
+            "amenities_needed": 1,
+            "city_id": 196610,
+            "derived": {
+              "amenities_balance": 0,
+              "food_consumption": 2,
+              "food_remaining": 4,
+              "growth_food_per_turn": 2,
+              "housing_headroom": 4
+            },
+            "food_stored": 6,
+            "food_surplus": 2,
+            "food_yield": 4,
+            "growth_threshold": 10,
+            "happiness_growth_percent": 0,
+            "happiness_nonfood_yield_percent": 0,
+            "housing": 5,
+            "housing_growth_multiplier": 1,
+            "loyalty_growth_multiplier": 1,
+            "name": "巴地比拉",
+            "occupation_growth_multiplier": 0,
+            "occupied": false,
+            "other_growth_fraction": 0,
+            "overall_growth_multiplier": 1,
+            "owner": 0,
+            "population": 1,
+            "turns_until_growth": 2,
+            "turns_until_starvation": -1
+          }
+        ],
+        "identity": {
+          "civilization": "CIVILIZATION_SUMERIA",
+          "player_id": 0,
+          "seed": -1896272000,
+          "turn": 50
+        },
+        "schema_version": 1,
+        "scope": "current owned cities; one InGame read, not atomic",
+        "status": "ready",
+        "unknown_fields": []
+      },
+      "brief": {
+        "tool": "get_city_growth",
+        "args": {
+          "city_id": 65536,
+          "view": "brief"
+        },
+        "sequence": 43,
+        "bytes": 868,
+        "rpc_seconds": 0.027088,
+        "error": false
+      },
+      "evidence": {
+        "tool": "get_city_growth",
+        "args": {
+          "city_id": 65536,
+          "view": "evidence"
+        },
+        "sequence": 46,
+        "bytes": 2062,
+        "rpc_seconds": 0.035016,
+        "error": false
+      },
+      "full": {
+        "tool": "get_global_settle_advisor",
+        "args": {
+          "limit": 200
+        },
+        "sequence": 52,
+        "bytes": 12581,
+        "rpc_seconds": 0.048543,
+        "error": false
+      },
+      "first_page": {
+        "tool": "get_global_settle_advisor",
+        "args": {},
+        "sequence": 55,
+        "bytes": 3309,
+        "rpc_seconds": 0.062452,
+        "error": false
+      },
+      "region": {
+        "tool": "get_global_settle_advisor",
+        "args": {
+          "center_x": 40,
+          "center_y": 25,
+          "radius": 5,
+          "limit": 200
+        },
+        "sequence": 70,
+        "bytes": 2591,
+        "rpc_seconds": 0.034996,
+        "error": false
+      },
+      "full_count": 83,
+      "page_count": 5,
+      "pages_recover_full": true,
+      "region_count": 12,
+      "all_page_bytes": 14221,
+      "map_search": [
+        {
+          "tool": "get_public_report",
+          "args": {
+            "limit": 200,
+            "offset": 0,
+            "search_kind": "luxury",
+            "query": "",
+            "section": "map-search"
+          },
+          "sequence": 76,
+          "bytes": 3984,
+          "rpc_seconds": 0.040418,
+          "error": false,
+          "result": {
+            "data": {
+              "locations": [
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "NONE",
+                  "name": "玉",
+                  "owner_id": -1,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_JADE",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 19,
+                  "y": 9
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "NONE",
+                  "name": "香料",
+                  "owner_id": 3,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_SPICES",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 22,
+                  "y": 11
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "玉",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_JADE",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 19,
+                  "y": 13
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "香料",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_SPICES",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 24,
+                  "y": 13
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "咖啡",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_COFFEE",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 39,
+                  "y": 13
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "茶叶",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_TEA",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 19,
+                  "y": 25
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "NONE",
+                  "name": "象牙",
+                  "owner_id": 0,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_IVORY",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 34,
+                  "y": 25
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "IMPROVEMENT_PLANTATION",
+                  "name": "柑橘",
+                  "owner_id": 0,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_CITRUS",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 39,
+                  "y": 25
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "NONE",
+                  "name": "象牙",
+                  "owner_id": -1,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_IVORY",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 36,
+                  "y": 27
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "柑橘",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_CITRUS",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 39,
+                  "y": 29
+                }
+              ],
+              "scope": "No fog reveal; huts/consumable sites/bonus resources require current visibility; other resources require revealed terrain and native resource visibility"
+            },
+            "identity": {
+              "civilization": "CIVILIZATION_SUMERIA",
+              "player_id": 0,
+              "seed": -1896272000,
+              "turn": 50
+            },
+            "limit": 200,
+            "offset": 0,
+            "schema_version": 1,
+            "status": "ready",
+            "total": 10,
+            "truncated": false,
+            "unknown_fields": []
+          }
+        },
+        {
+          "tool": "get_public_report",
+          "args": {
+            "limit": 200,
+            "offset": 0,
+            "search_kind": "antiquity",
+            "query": "",
+            "section": "map-search"
+          },
+          "sequence": 79,
+          "bytes": 416,
+          "rpc_seconds": 0.035651,
+          "error": false,
+          "result": {
+            "data": {
+              "locations": [],
+              "scope": "No fog reveal; huts/consumable sites/bonus resources require current visibility; other resources require revealed terrain and native resource visibility"
+            },
+            "identity": {
+              "civilization": "CIVILIZATION_SUMERIA",
+              "player_id": 0,
+              "seed": -1896272000,
+              "turn": 50
+            },
+            "limit": 200,
+            "offset": 0,
+            "schema_version": 1,
+            "status": "ready",
+            "total": 0,
+            "truncated": false,
+            "unknown_fields": []
+          }
+        }
+      ],
+      "fogged_foreign_dynamic_fields_withheld": true,
+      "fogged_foreign_count": 5,
+      "archaeology_not_builder": true,
+      "city_sites": [],
+      "resources": {
+        "tool": "get_empire_resources",
+        "args": {},
+        "sequence": 73,
+        "bytes": 3126,
+        "rpc_seconds": 0.03872,
+        "error": false
+      },
+      "turn_reconciliation": [
+        {
+          "city_id": 65536,
+          "native": 8,
+          "calculated": 8,
+          "matches": true
+        },
+        {
+          "city_id": 131073,
+          "native": 3,
+          "calculated": 3,
+          "matches": true
+        },
+        {
+          "city_id": 196610,
+          "native": 2,
+          "calculated": 2,
+          "matches": true
+        }
+      ],
+      "growth_reading_reduction_percent": 57.9,
+      "first_page_reading_reduction_percent": 73.7
+    },
+    {
+      "turn": 100,
+      "growth": {
+        "cities": [
+          {
+            "amenities": 8,
+            "amenities_needed": 7,
+            "city_id": 65536,
+            "derived": {
+              "amenities_balance": 1,
+              "food_consumption": 26,
+              "food_remaining": 83.79296875,
+              "growth_food_per_turn": 11,
+              "housing_headroom": 6
+            },
+            "food_stored": 18.20703125,
+            "food_surplus": 11,
+            "food_yield": 37,
+            "growth_threshold": 102,
+            "happiness_growth_percent": 0,
+            "happiness_nonfood_yield_percent": 0,
+            "housing": 19,
+            "housing_growth_multiplier": 1,
+            "loyalty_growth_multiplier": 1,
+            "name": "乌鲁克",
+            "occupation_growth_multiplier": 0,
+            "occupied": false,
+            "other_growth_fraction": 0,
+            "overall_growth_multiplier": 1,
+            "owner": 0,
+            "population": 13,
+            "turns_until_growth": 8,
+            "turns_until_starvation": -1
+          },
+          {
+            "amenities": 6,
+            "amenities_needed": 5,
+            "city_id": 131073,
+            "derived": {
+              "amenities_balance": 1,
+              "food_consumption": 20,
+              "food_remaining": 6.7734375,
+              "growth_food_per_turn": 8,
+              "housing_headroom": 2
+            },
+            "food_stored": 69.2265625,
+            "food_surplus": 8,
+            "food_yield": 28,
+            "growth_threshold": 76,
+            "happiness_growth_percent": 0,
+            "happiness_nonfood_yield_percent": 0,
+            "housing": 12,
+            "housing_growth_multiplier": 1,
+            "loyalty_growth_multiplier": 1,
+            "name": "埃利都",
+            "occupation_growth_multiplier": 0,
+            "occupied": false,
+            "other_growth_fraction": 0,
+            "overall_growth_multiplier": 1,
+            "owner": 0,
+            "population": 10,
+            "turns_until_growth": 1,
+            "turns_until_starvation": -1
+          },
+          {
+            "amenities": 6,
+            "amenities_needed": 4,
+            "city_id": 196610,
+            "derived": {
+              "amenities_balance": 2,
+              "food_consumption": 14,
+              "food_remaining": 38.4375,
+              "growth_food_per_turn": 6,
+              "housing_headroom": 4
+            },
+            "food_stored": 13.5625,
+            "food_surplus": 6,
+            "food_yield": 20,
+            "growth_threshold": 52,
+            "happiness_growth_percent": 0,
+            "happiness_nonfood_yield_percent": 0,
+            "housing": 11,
+            "housing_growth_multiplier": 1,
+            "loyalty_growth_multiplier": 1,
+            "name": "巴地比拉",
+            "occupation_growth_multiplier": 0,
+            "occupied": false,
+            "other_growth_fraction": 0,
+            "overall_growth_multiplier": 1,
+            "owner": 0,
+            "population": 7,
+            "turns_until_growth": 7,
+            "turns_until_starvation": -1
+          },
+          {
+            "amenities": 4,
+            "amenities_needed": 2,
+            "city_id": 262147,
+            "derived": {
+              "amenities_balance": 2,
+              "food_consumption": 6,
+              "food_remaining": 5,
+              "growth_food_per_turn": 4,
+              "housing_headroom": 3
+            },
+            "food_stored": 17,
+            "food_surplus": 4,
+            "food_yield": 10,
+            "growth_threshold": 22,
+            "happiness_growth_percent": 0,
+            "happiness_nonfood_yield_percent": 0,
+            "housing": 6,
+            "housing_growth_multiplier": 1,
+            "loyalty_growth_multiplier": 1,
+            "name": "乌尔",
+            "occupation_growth_multiplier": 0,
+            "occupied": false,
+            "other_growth_fraction": 0,
+            "overall_growth_multiplier": 1,
+            "owner": 0,
+            "population": 3,
+            "turns_until_growth": 2,
+            "turns_until_starvation": -1
+          }
+        ],
+        "identity": {
+          "civilization": "CIVILIZATION_SUMERIA",
+          "player_id": 0,
+          "seed": -1896272000,
+          "turn": 100
+        },
+        "schema_version": 1,
+        "scope": "current owned cities; one InGame read, not atomic",
+        "status": "ready",
+        "unknown_fields": []
+      },
+      "brief": {
+        "tool": "get_city_growth",
+        "args": {
+          "city_id": 262147,
+          "view": "brief"
+        },
+        "sequence": 123,
+        "bytes": 856,
+        "rpc_seconds": 0.036847,
+        "error": false
+      },
+      "evidence": {
+        "tool": "get_city_growth",
+        "args": {
+          "city_id": 262147,
+          "view": "evidence"
+        },
+        "sequence": 126,
+        "bytes": 1639,
+        "rpc_seconds": 0.03676,
+        "error": false
+      },
+      "full": {
+        "tool": "get_global_settle_advisor",
+        "args": {
+          "limit": 200
+        },
+        "sequence": 132,
+        "bytes": 10340,
+        "rpc_seconds": 0.050148,
+        "error": false
+      },
+      "first_page": {
+        "tool": "get_global_settle_advisor",
+        "args": {},
+        "sequence": 135,
+        "bytes": 3267,
+        "rpc_seconds": 0.057496,
+        "error": false
+      },
+      "region": {
+        "tool": "get_global_settle_advisor",
+        "args": {
+          "center_x": 37,
+          "center_y": 28,
+          "radius": 5,
+          "limit": 200
+        },
+        "sequence": 147,
+        "bytes": 287,
+        "rpc_seconds": 0.033562,
+        "error": false
+      },
+      "full_count": 67,
+      "page_count": 4,
+      "pages_recover_full": true,
+      "region_count": 0,
+      "all_page_bytes": 11567,
+      "map_search": [
+        {
+          "tool": "get_public_report",
+          "args": {
+            "limit": 200,
+            "offset": 0,
+            "search_kind": "luxury",
+            "query": "",
+            "section": "map-search"
+          },
+          "sequence": 153,
+          "bytes": 4718,
+          "rpc_seconds": 0.030478,
+          "error": false,
+          "result": {
+            "data": {
+              "locations": [
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "NONE",
+                  "name": "玉",
+                  "owner_id": 3,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_JADE",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 19,
+                  "y": 9
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "香料",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_SPICES",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 22,
+                  "y": 11
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "玉",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_JADE",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 19,
+                  "y": 13
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "香料",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_SPICES",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 24,
+                  "y": 13
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "咖啡",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_COFFEE",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 39,
+                  "y": 13
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "茶叶",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_TEA",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 19,
+                  "y": 25
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "皮草",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_FURS",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 24,
+                  "y": 25
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "IMPROVEMENT_CAMP",
+                  "name": "象牙",
+                  "owner_id": 0,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_IVORY",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 34,
+                  "y": 25
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "IMPROVEMENT_PLANTATION",
+                  "name": "柑橘",
+                  "owner_id": 0,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_CITRUS",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 39,
+                  "y": 25
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "皮草",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_FURS",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 22,
+                  "y": 27
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "IMPROVEMENT_CAMP",
+                  "name": "象牙",
+                  "owner_id": 0,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_IVORY",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 36,
+                  "y": 27
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "NONE",
+                  "name": "柑橘",
+                  "owner_id": -1,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_CITRUS",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 39,
+                  "y": 29
+                }
+              ],
+              "scope": "No fog reveal; huts/consumable sites/bonus resources require current visibility; other resources require revealed terrain and native resource visibility"
+            },
+            "identity": {
+              "civilization": "CIVILIZATION_SUMERIA",
+              "player_id": 0,
+              "seed": -1896272000,
+              "turn": 100
+            },
+            "limit": 200,
+            "offset": 0,
+            "schema_version": 1,
+            "status": "ready",
+            "total": 12,
+            "truncated": false,
+            "unknown_fields": []
+          }
+        },
+        {
+          "tool": "get_public_report",
+          "args": {
+            "limit": 200,
+            "offset": 0,
+            "search_kind": "antiquity",
+            "query": "",
+            "section": "map-search"
+          },
+          "sequence": 156,
+          "bytes": 417,
+          "rpc_seconds": 0.03717,
+          "error": false,
+          "result": {
+            "data": {
+              "locations": [],
+              "scope": "No fog reveal; huts/consumable sites/bonus resources require current visibility; other resources require revealed terrain and native resource visibility"
+            },
+            "identity": {
+              "civilization": "CIVILIZATION_SUMERIA",
+              "player_id": 0,
+              "seed": -1896272000,
+              "turn": 100
+            },
+            "limit": 200,
+            "offset": 0,
+            "schema_version": 1,
+            "status": "ready",
+            "total": 0,
+            "truncated": false,
+            "unknown_fields": []
+          }
+        }
+      ],
+      "fogged_foreign_dynamic_fields_withheld": true,
+      "fogged_foreign_count": 7,
+      "archaeology_not_builder": true,
+      "city_sites": [],
+      "resources": {
+        "tool": "get_empire_resources",
+        "args": {},
+        "sequence": 150,
+        "bytes": 4494,
+        "rpc_seconds": 0.040879,
+        "error": false
+      },
+      "turn_reconciliation": [
+        {
+          "city_id": 65536,
+          "native": 8,
+          "calculated": 8,
+          "matches": true
+        },
+        {
+          "city_id": 131073,
+          "native": 1,
+          "calculated": 1,
+          "matches": true
+        },
+        {
+          "city_id": 196610,
+          "native": 7,
+          "calculated": 7,
+          "matches": true
+        },
+        {
+          "city_id": 262147,
+          "native": 2,
+          "calculated": 2,
+          "matches": true
+        }
+      ],
+      "growth_reading_reduction_percent": 47.77,
+      "first_page_reading_reduction_percent": 68.4
+    },
+    {
+      "turn": 150,
+      "growth": {
+        "cities": [
+          {
+            "amenities": 11,
+            "amenities_needed": 9,
+            "city_id": 65536,
+            "derived": {
+              "amenities_balance": 2,
+              "food_consumption": 34,
+              "food_remaining": 1.00390625,
+              "growth_food_per_turn": 16,
+              "housing_headroom": 4
+            },
+            "food_stored": 136.99609375,
+            "food_surplus": 16,
+            "food_yield": 50,
+            "growth_threshold": 138,
+            "happiness_growth_percent": 0,
+            "happiness_nonfood_yield_percent": 0,
+            "housing": 21,
+            "housing_growth_multiplier": 1,
+            "loyalty_growth_multiplier": 1,
+            "name": "乌鲁克",
+            "occupation_growth_multiplier": 0,
+            "occupied": false,
+            "other_growth_fraction": 0,
+            "overall_growth_multiplier": 1,
+            "owner": 0,
+            "population": 17,
+            "turns_until_growth": 1,
+            "turns_until_starvation": -1
+          },
+          {
+            "amenities": 8,
+            "amenities_needed": 6,
+            "city_id": 131073,
+            "derived": {
+              "amenities_balance": 2,
+              "food_consumption": 24,
+              "food_remaining": 1.6328125,
+              "growth_food_per_turn": 5,
+              "housing_headroom": 3
+            },
+            "food_stored": 91.3671875,
+            "food_surplus": 5,
+            "food_yield": 29,
+            "growth_threshold": 93,
+            "happiness_growth_percent": 0,
+            "happiness_nonfood_yield_percent": 0,
+            "housing": 15,
+            "housing_growth_multiplier": 1,
+            "loyalty_growth_multiplier": 1,
+            "name": "埃利都",
+            "occupation_growth_multiplier": 0,
+            "occupied": false,
+            "other_growth_fraction": 0,
+            "overall_growth_multiplier": 1,
+            "owner": 0,
+            "population": 12,
+            "turns_until_growth": 1,
+            "turns_until_starvation": -1
+          },
+          {
+            "amenities": 7,
+            "amenities_needed": 6,
+            "city_id": 196610,
+            "derived": {
+              "amenities_balance": 1,
+              "food_consumption": 22,
+              "food_remaining": 75.109375,
+              "growth_food_per_turn": 4,
+              "housing_headroom": 3
+            },
+            "food_stored": 8.890625,
+            "food_surplus": 4,
+            "food_yield": 26,
+            "growth_threshold": 84,
+            "happiness_growth_percent": 0,
+            "happiness_nonfood_yield_percent": 0,
+            "housing": 14,
+            "housing_growth_multiplier": 1,
+            "loyalty_growth_multiplier": 1,
+            "name": "巴地比拉",
+            "occupation_growth_multiplier": 0,
+            "occupied": false,
+            "other_growth_fraction": 0,
+            "overall_growth_multiplier": 1,
+            "owner": 0,
+            "population": 11,
+            "turns_until_growth": 19,
+            "turns_until_starvation": -1
+          },
+          {
+            "amenities": 7,
+            "amenities_needed": 5,
+            "city_id": 262147,
+            "derived": {
+              "amenities_balance": 2,
+              "food_consumption": 18,
+              "food_remaining": 35.796875,
+              "growth_food_per_turn": 4,
+              "housing_headroom": 1
+            },
+            "food_stored": 32.203125,
+            "food_surplus": 8,
+            "food_yield": 26,
+            "growth_threshold": 68,
+            "happiness_growth_percent": 0,
+            "happiness_nonfood_yield_percent": 0,
+            "housing": 10,
+            "housing_growth_multiplier": 0.5,
+            "loyalty_growth_multiplier": 1,
+            "name": "乌尔",
+            "occupation_growth_multiplier": 0,
+            "occupied": false,
+            "other_growth_fraction": 0,
+            "overall_growth_multiplier": 0.5,
+            "owner": 0,
+            "population": 9,
+            "turns_until_growth": 9,
+            "turns_until_starvation": -1
+          }
+        ],
+        "identity": {
+          "civilization": "CIVILIZATION_SUMERIA",
+          "player_id": 0,
+          "seed": -1896272000,
+          "turn": 150
+        },
+        "schema_version": 1,
+        "scope": "current owned cities; one InGame read, not atomic",
+        "status": "ready",
+        "unknown_fields": []
+      },
+      "brief": {
+        "tool": "get_city_growth",
+        "args": {
+          "city_id": 262147,
+          "view": "brief"
+        },
+        "sequence": 200,
+        "bytes": 869,
+        "rpc_seconds": 0.037301,
+        "error": false
+      },
+      "evidence": {
+        "tool": "get_city_growth",
+        "args": {
+          "city_id": 262147,
+          "view": "evidence"
+        },
+        "sequence": 203,
+        "bytes": 2339,
+        "rpc_seconds": 0.032485,
+        "error": false
+      },
+      "full": {
+        "tool": "get_global_settle_advisor",
+        "args": {
+          "limit": 200
+        },
+        "sequence": 209,
+        "bytes": 3357,
+        "rpc_seconds": 0.041556,
+        "error": false
+      },
+      "first_page": {
+        "tool": "get_global_settle_advisor",
+        "args": {},
+        "sequence": 212,
+        "bytes": 3356,
+        "rpc_seconds": 0.032061,
+        "error": false
+      },
+      "region": {
+        "tool": "get_global_settle_advisor",
+        "args": {
+          "center_x": 37,
+          "center_y": 28,
+          "radius": 5,
+          "limit": 200
+        },
+        "sequence": 215,
+        "bytes": 287,
+        "rpc_seconds": 0.031654,
+        "error": false
+      },
+      "full_count": 18,
+      "page_count": 1,
+      "pages_recover_full": true,
+      "region_count": 0,
+      "all_page_bytes": 3356,
+      "map_search": [
+        {
+          "tool": "get_public_report",
+          "args": {
+            "limit": 200,
+            "offset": 0,
+            "search_kind": "luxury",
+            "query": "",
+            "section": "map-search"
+          },
+          "sequence": 221,
+          "bytes": 8087,
+          "rpc_seconds": 0.035785,
+          "error": false,
+          "result": {
+            "data": {
+              "locations": [
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "IMPROVEMENT_MINE",
+                  "name": "玉",
+                  "owner_id": 3,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_JADE",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 19,
+                  "y": 9
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "IMPROVEMENT_PLANTATION",
+                  "name": "咖啡",
+                  "owner_id": 2,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_COFFEE",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 39,
+                  "y": 9
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "香料",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_SPICES",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 22,
+                  "y": 11
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "IMPROVEMENT_CAMP",
+                  "name": "松露",
+                  "owner_id": 2,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_TRUFFLES",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 36,
+                  "y": 11
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "IMPROVEMENT_MINE",
+                  "name": "玉",
+                  "owner_id": 3,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_JADE",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 19,
+                  "y": 13
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "IMPROVEMENT_PLANTATION",
+                  "name": "香料",
+                  "owner_id": 3,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_SPICES",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 24,
+                  "y": 13
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "IMPROVEMENT_CAMP",
+                  "name": "松露",
+                  "owner_id": 2,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_TRUFFLES",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 34,
+                  "y": 13
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "IMPROVEMENT_PLANTATION",
+                  "name": "咖啡",
+                  "owner_id": 2,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_COFFEE",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 39,
+                  "y": 13
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "珍珠",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_PEARLS",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 14,
+                  "y": 17
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "IMPROVEMENT_FISHING_BOATS",
+                  "name": "珍珠",
+                  "owner_id": 2,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_PEARLS",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 44,
+                  "y": 17
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "珍珠",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_PEARLS",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 14,
+                  "y": 21
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "IMPROVEMENT_FISHING_BOATS",
+                  "name": "珍珠",
+                  "owner_id": 2,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_PEARLS",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 44,
+                  "y": 21
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "茶叶",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_TEA",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 19,
+                  "y": 25
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "皮草",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_FURS",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 24,
+                  "y": 25
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "IMPROVEMENT_CAMP",
+                  "name": "象牙",
+                  "owner_id": 0,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_IVORY",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 34,
+                  "y": 25
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "IMPROVEMENT_PLANTATION",
+                  "name": "柑橘",
+                  "owner_id": 0,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_CITRUS",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 39,
+                  "y": 25
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "皮草",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_FURS",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 22,
+                  "y": 27
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "IMPROVEMENT_CAMP",
+                  "name": "象牙",
+                  "owner_id": 0,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_IVORY",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 36,
+                  "y": 27
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "IMPROVEMENT_PLANTATION",
+                  "name": "柑橘",
+                  "owner_id": 0,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_CITRUS",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 39,
+                  "y": 29
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "鲸鱼",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_WHALES",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 28,
+                  "y": 34
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "鲸鱼",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_WHALES",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 31,
+                  "y": 34
+                }
+              ],
+              "scope": "No fog reveal; huts/consumable sites/bonus resources require current visibility; other resources require revealed terrain and native resource visibility"
+            },
+            "identity": {
+              "civilization": "CIVILIZATION_SUMERIA",
+              "player_id": 0,
+              "seed": -1896272000,
+              "turn": 150
+            },
+            "limit": 200,
+            "offset": 0,
+            "schema_version": 1,
+            "status": "ready",
+            "total": 21,
+            "truncated": false,
+            "unknown_fields": []
+          }
+        },
+        {
+          "tool": "get_public_report",
+          "args": {
+            "limit": 200,
+            "offset": 0,
+            "search_kind": "antiquity",
+            "query": "",
+            "section": "map-search"
+          },
+          "sequence": 224,
+          "bytes": 417,
+          "rpc_seconds": 0.023535,
+          "error": false,
+          "result": {
+            "data": {
+              "locations": [],
+              "scope": "No fog reveal; huts/consumable sites/bonus resources require current visibility; other resources require revealed terrain and native resource visibility"
+            },
+            "identity": {
+              "civilization": "CIVILIZATION_SUMERIA",
+              "player_id": 0,
+              "seed": -1896272000,
+              "turn": 150
+            },
+            "limit": 200,
+            "offset": 0,
+            "schema_version": 1,
+            "status": "ready",
+            "total": 0,
+            "truncated": false,
+            "unknown_fields": []
+          }
+        }
+      ],
+      "fogged_foreign_dynamic_fields_withheld": true,
+      "fogged_foreign_count": 8,
+      "archaeology_not_builder": true,
+      "city_sites": [],
+      "resources": {
+        "tool": "get_empire_resources",
+        "args": {},
+        "sequence": 218,
+        "bytes": 5898,
+        "rpc_seconds": 0.061063,
+        "error": false
+      },
+      "turn_reconciliation": [
+        {
+          "city_id": 65536,
+          "native": 1,
+          "calculated": 1,
+          "matches": true
+        },
+        {
+          "city_id": 131073,
+          "native": 1,
+          "calculated": 1,
+          "matches": true
+        },
+        {
+          "city_id": 196610,
+          "native": 19,
+          "calculated": 19,
+          "matches": true
+        },
+        {
+          "city_id": 262147,
+          "native": 9,
+          "calculated": 9,
+          "matches": true
+        }
+      ],
+      "growth_reading_reduction_percent": 62.85,
+      "first_page_reading_reduction_percent": 0.03
+    },
+    {
+      "turn": 200,
+      "growth": {
+        "cities": [
+          {
+            "amenities": 10,
+            "amenities_needed": 11,
+            "city_id": 65536,
+            "derived": {
+              "amenities_balance": -1,
+              "food_consumption": 42,
+              "food_remaining": 18.12890625,
+              "growth_food_per_turn": 2.953125,
+              "housing_headroom": 0
+            },
+            "food_stored": 158.87109375,
+            "food_surplus": 14,
+            "food_yield": 56,
+            "growth_threshold": 177,
+            "happiness_growth_percent": -15,
+            "happiness_nonfood_yield_percent": -10,
+            "housing": 21,
+            "housing_growth_multiplier": 0.25,
+            "loyalty_growth_multiplier": 1,
+            "name": "乌鲁克",
+            "occupation_growth_multiplier": 0,
+            "occupied": false,
+            "other_growth_fraction": -0.00390625,
+            "overall_growth_multiplier": 0.2109375,
+            "owner": 0,
+            "population": 21,
+            "turns_until_growth": 7,
+            "turns_until_starvation": -1
+          },
+          {
+            "amenities": 6,
+            "amenities_needed": 7,
+            "city_id": 131073,
+            "derived": {
+              "amenities_balance": -1,
+              "food_consumption": 28,
+              "food_remaining": 79.3828125,
+              "growth_food_per_turn": 0,
+              "housing_headroom": 1
+            },
+            "food_stored": 31.6171875,
+            "food_surplus": 0,
+            "food_yield": 28,
+            "growth_threshold": 111,
+            "happiness_growth_percent": -15,
+            "happiness_nonfood_yield_percent": -10,
+            "housing": 15,
+            "housing_growth_multiplier": 0.5,
+            "loyalty_growth_multiplier": 1,
+            "name": "埃利都",
+            "occupation_growth_multiplier": 0,
+            "occupied": false,
+            "other_growth_fraction": -0.00390625,
+            "overall_growth_multiplier": 0.421875,
+            "owner": 0,
+            "population": 14,
+            "turns_until_growth": -1,
+            "turns_until_starvation": -1
+          },
+          {
+            "amenities": 5,
+            "amenities_needed": 6,
+            "city_id": 196610,
+            "derived": {
+              "amenities_balance": -1,
+              "food_consumption": 24,
+              "food_remaining": 22.17578125,
+              "growth_food_per_turn": 2.953125,
+              "housing_headroom": 1
+            },
+            "food_stored": 70.82421875,
+            "food_surplus": 7,
+            "food_yield": 31,
+            "growth_threshold": 93,
+            "happiness_growth_percent": -15,
+            "happiness_nonfood_yield_percent": -10,
+            "housing": 13,
+            "housing_growth_multiplier": 0.5,
+            "loyalty_growth_multiplier": 1,
+            "name": "巴地比拉",
+            "occupation_growth_multiplier": 0,
+            "occupied": false,
+            "other_growth_fraction": -0.00390625,
+            "overall_growth_multiplier": 0.421875,
+            "owner": 0,
+            "population": 12,
+            "turns_until_growth": 8,
+            "turns_until_starvation": -1
+          },
+          {
+            "amenities": 5,
+            "amenities_needed": 6,
+            "city_id": 262147,
+            "derived": {
+              "amenities_balance": -1,
+              "food_consumption": 24,
+              "food_remaining": 68.6171875,
+              "growth_food_per_turn": 1.6875,
+              "housing_headroom": 0
+            },
+            "food_stored": 24.3828125,
+            "food_surplus": 8,
+            "food_yield": 32,
+            "growth_threshold": 93,
+            "happiness_growth_percent": -15,
+            "happiness_nonfood_yield_percent": -10,
+            "housing": 12,
+            "housing_growth_multiplier": 0.25,
+            "loyalty_growth_multiplier": 1,
+            "name": "乌尔",
+            "occupation_growth_multiplier": 0,
+            "occupied": false,
+            "other_growth_fraction": -0.00390625,
+            "overall_growth_multiplier": 0.2109375,
+            "owner": 0,
+            "population": 12,
+            "turns_until_growth": 41,
+            "turns_until_starvation": -1
+          },
+          {
+            "amenities": 1,
+            "amenities_needed": 3,
+            "city_id": 327684,
+            "derived": {
+              "amenities_balance": -2,
+              "food_consumption": 10,
+              "food_remaining": 30.6953125,
+              "growth_food_per_turn": 1.671875,
+              "housing_headroom": 1
+            },
+            "food_stored": 5.3046875,
+            "food_surplus": 4,
+            "food_yield": 14,
+            "growth_threshold": 36,
+            "happiness_growth_percent": -15,
+            "happiness_nonfood_yield_percent": -10,
+            "housing": 6,
+            "housing_growth_multiplier": 0.5,
+            "loyalty_growth_multiplier": 1,
+            "name": "乌普萨拉",
+            "occupation_growth_multiplier": 0,
+            "occupied": false,
+            "other_growth_fraction": -0.01171875,
+            "overall_growth_multiplier": 0.41796875,
+            "owner": 0,
+            "population": 5,
+            "turns_until_growth": 19,
+            "turns_until_starvation": -1
+          }
+        ],
+        "identity": {
+          "civilization": "CIVILIZATION_SUMERIA",
+          "player_id": 0,
+          "seed": -1896272000,
+          "turn": 200
+        },
+        "schema_version": 1,
+        "scope": "current owned cities; one InGame read, not atomic",
+        "status": "ready",
+        "unknown_fields": []
+      },
+      "brief": {
+        "tool": "get_city_growth",
+        "args": {
+          "city_id": 262147,
+          "view": "brief"
+        },
+        "sequence": 268,
+        "bytes": 899,
+        "rpc_seconds": 0.036761,
+        "error": false
+      },
+      "evidence": {
+        "tool": "get_city_growth",
+        "args": {
+          "city_id": 262147,
+          "view": "evidence"
+        },
+        "sequence": 271,
+        "bytes": 2703,
+        "rpc_seconds": 0.038513,
+        "error": false
+      },
+      "full": {
+        "tool": "get_global_settle_advisor",
+        "args": {
+          "limit": 200
+        },
+        "sequence": 280,
+        "bytes": 256,
+        "rpc_seconds": 0.034655,
+        "error": false
+      },
+      "first_page": {
+        "tool": "get_global_settle_advisor",
+        "args": {},
+        "sequence": 283,
+        "bytes": 255,
+        "rpc_seconds": 0.030275,
+        "error": false
+      },
+      "region": {
+        "tool": "get_global_settle_advisor",
+        "args": {
+          "center_x": 37,
+          "center_y": 28,
+          "radius": 5,
+          "limit": 200
+        },
+        "sequence": 286,
+        "bytes": 287,
+        "rpc_seconds": 0.036236,
+        "error": false
+      },
+      "full_count": 0,
+      "page_count": 1,
+      "pages_recover_full": true,
+      "region_count": 0,
+      "all_page_bytes": 255,
+      "map_search": [
+        {
+          "tool": "get_public_report",
+          "args": {
+            "limit": 200,
+            "offset": 0,
+            "search_kind": "luxury",
+            "query": "",
+            "section": "map-search"
+          },
+          "sequence": 292,
+          "bytes": 8741,
+          "rpc_seconds": 0.061283,
+          "error": false,
+          "result": {
+            "data": {
+              "locations": [
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "鲸鱼",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_WHALES",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 28,
+                  "y": 4
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "IMPROVEMENT_MINE",
+                  "name": "玉",
+                  "owner_id": 3,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_JADE",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 19,
+                  "y": 9
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "咖啡",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_COFFEE",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 39,
+                  "y": 9
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "香料",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_SPICES",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 22,
+                  "y": 11
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "松露",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_TRUFFLES",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 36,
+                  "y": 11
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "IMPROVEMENT_MINE",
+                  "name": "玉",
+                  "owner_id": 3,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_JADE",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 19,
+                  "y": 13
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "香料",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_SPICES",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 24,
+                  "y": 13
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "松露",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_TRUFFLES",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 34,
+                  "y": 13
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "IMPROVEMENT_PLANTATION",
+                  "name": "咖啡",
+                  "owner_id": 2,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_COFFEE",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 39,
+                  "y": 13
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "IMPROVEMENT_FISHING_BOATS",
+                  "name": "珍珠",
+                  "owner_id": 3,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_PEARLS",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 14,
+                  "y": 17
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "珍珠",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_PEARLS",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 44,
+                  "y": 17
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "珍珠",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_PEARLS",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 14,
+                  "y": 21
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "珍珠",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_PEARLS",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 44,
+                  "y": 21
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "茶叶",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_TEA",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 19,
+                  "y": 25
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "皮草",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_FURS",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 24,
+                  "y": 25
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "IMPROVEMENT_CAMP",
+                  "name": "象牙",
+                  "owner_id": 0,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_IVORY",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 34,
+                  "y": 25
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "IMPROVEMENT_PLANTATION",
+                  "name": "柑橘",
+                  "owner_id": 0,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_CITRUS",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 39,
+                  "y": 25
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "皮草",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_FURS",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 22,
+                  "y": 27
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "IMPROVEMENT_CAMP",
+                  "name": "象牙",
+                  "owner_id": 0,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_IVORY",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 36,
+                  "y": 27
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": null,
+                  "name": "茶叶",
+                  "owner_id": null,
+                  "pillaged": null,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_TEA",
+                  "visible_now": false,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 19,
+                  "y": 29
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "IMPROVEMENT_PLANTATION",
+                  "name": "柑橘",
+                  "owner_id": 0,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_CITRUS",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 39,
+                  "y": 29
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "IMPROVEMENT_FISHING_BOATS",
+                  "name": "鲸鱼",
+                  "owner_id": 0,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_WHALES",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 28,
+                  "y": 34
+                },
+                {
+                  "class": "RESOURCECLASS_LUXURY",
+                  "improvement_type": "NONE",
+                  "name": "鲸鱼",
+                  "owner_id": -1,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_WHALES",
+                  "visible_now": true,
+                  "work_unit": "UNIT_BUILDER",
+                  "x": 31,
+                  "y": 34
+                }
+              ],
+              "scope": "No fog reveal; huts/consumable sites/bonus resources require current visibility; other resources require revealed terrain and native resource visibility"
+            },
+            "identity": {
+              "civilization": "CIVILIZATION_SUMERIA",
+              "player_id": 0,
+              "seed": -1896272000,
+              "turn": 200
+            },
+            "limit": 200,
+            "offset": 0,
+            "schema_version": 1,
+            "status": "ready",
+            "total": 23,
+            "truncated": false,
+            "unknown_fields": []
+          }
+        },
+        {
+          "tool": "get_public_report",
+          "args": {
+            "limit": 200,
+            "offset": 0,
+            "search_kind": "antiquity",
+            "query": "",
+            "section": "map-search"
+          },
+          "sequence": 295,
+          "bytes": 4573,
+          "rpc_seconds": 0.039163,
+          "error": false,
+          "result": {
+            "data": {
+              "locations": [
+                {
+                  "class": "RESOURCECLASS_ARTIFACT",
+                  "improvement_type": "NONE",
+                  "name": "历史古迹",
+                  "owner_id": 3,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_ANTIQUITY_SITE",
+                  "visible_now": true,
+                  "work_unit": "UNIT_ARCHAEOLOGIST",
+                  "x": 17,
+                  "y": 7
+                },
+                {
+                  "class": "RESOURCECLASS_ARTIFACT",
+                  "improvement_type": "NONE",
+                  "name": "历史古迹",
+                  "owner_id": 2,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_ANTIQUITY_SITE",
+                  "visible_now": true,
+                  "work_unit": "UNIT_ARCHAEOLOGIST",
+                  "x": 33,
+                  "y": 17
+                },
+                {
+                  "class": "RESOURCECLASS_ARTIFACT",
+                  "improvement_type": "NONE",
+                  "name": "历史古迹",
+                  "owner_id": 0,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_ANTIQUITY_SITE",
+                  "visible_now": true,
+                  "work_unit": "UNIT_ARCHAEOLOGIST",
+                  "x": 36,
+                  "y": 18
+                },
+                {
+                  "class": "RESOURCECLASS_ARTIFACT",
+                  "improvement_type": "NONE",
+                  "name": "历史古迹",
+                  "owner_id": 0,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_ANTIQUITY_SITE",
+                  "visible_now": true,
+                  "work_unit": "UNIT_ARCHAEOLOGIST",
+                  "x": 37,
+                  "y": 20
+                },
+                {
+                  "class": "RESOURCECLASS_ARTIFACT",
+                  "improvement_type": "NONE",
+                  "name": "历史古迹",
+                  "owner_id": 0,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_ANTIQUITY_SITE",
+                  "visible_now": true,
+                  "work_unit": "UNIT_ARCHAEOLOGIST",
+                  "x": 33,
+                  "y": 21
+                },
+                {
+                  "class": "RESOURCECLASS_ARTIFACT",
+                  "improvement_type": "NONE",
+                  "name": "历史古迹",
+                  "owner_id": 1,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_ANTIQUITY_SITE",
+                  "visible_now": true,
+                  "work_unit": "UNIT_ARCHAEOLOGIST",
+                  "x": 29,
+                  "y": 22
+                },
+                {
+                  "class": "RESOURCECLASS_ARTIFACT",
+                  "improvement_type": "NONE",
+                  "name": "历史古迹",
+                  "owner_id": 1,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_ANTIQUITY_SITE",
+                  "visible_now": true,
+                  "work_unit": "UNIT_ARCHAEOLOGIST",
+                  "x": 32,
+                  "y": 22
+                },
+                {
+                  "class": "RESOURCECLASS_ARTIFACT",
+                  "improvement_type": "NONE",
+                  "name": "历史古迹",
+                  "owner_id": 0,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_ANTIQUITY_SITE",
+                  "visible_now": true,
+                  "work_unit": "UNIT_ARCHAEOLOGIST",
+                  "x": 35,
+                  "y": 24
+                },
+                {
+                  "class": "RESOURCECLASS_ARTIFACT",
+                  "improvement_type": "NONE",
+                  "name": "历史古迹",
+                  "owner_id": 0,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_ANTIQUITY_SITE",
+                  "visible_now": true,
+                  "work_unit": "UNIT_ARCHAEOLOGIST",
+                  "x": 33,
+                  "y": 25
+                },
+                {
+                  "class": "RESOURCECLASS_ARTIFACT",
+                  "improvement_type": "NONE",
+                  "name": "历史古迹",
+                  "owner_id": 0,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_ANTIQUITY_SITE",
+                  "visible_now": true,
+                  "work_unit": "UNIT_ARCHAEOLOGIST",
+                  "x": 41,
+                  "y": 25
+                },
+                {
+                  "class": "RESOURCECLASS_ARTIFACT",
+                  "improvement_type": "NONE",
+                  "name": "历史古迹",
+                  "owner_id": 0,
+                  "pillaged": false,
+                  "scope": "Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified",
+                  "type": "RESOURCE_ANTIQUITY_SITE",
+                  "visible_now": true,
+                  "work_unit": "UNIT_ARCHAEOLOGIST",
+                  "x": 35,
+                  "y": 26
+                }
+              ],
+              "scope": "No fog reveal; huts/consumable sites/bonus resources require current visibility; other resources require revealed terrain and native resource visibility"
+            },
+            "identity": {
+              "civilization": "CIVILIZATION_SUMERIA",
+              "player_id": 0,
+              "seed": -1896272000,
+              "turn": 200
+            },
+            "limit": 200,
+            "offset": 0,
+            "schema_version": 1,
+            "status": "ready",
+            "total": 11,
+            "truncated": false,
+            "unknown_fields": []
+          }
+        }
+      ],
+      "fogged_foreign_dynamic_fields_withheld": true,
+      "fogged_foreign_count": 13,
+      "archaeology_not_builder": true,
+      "city_sites": [
+        "    Archaeology sites (not builder tasks): ANTIQUITY_SITE@41,25",
+        "    Archaeology sites (not builder tasks): ANTIQUITY_SITE@33,21, ANTIQUITY_SITE@35,24, ANTIQUITY_SITE@33,25, ANTIQUITY_SITE@35,26",
+        "    Archaeology sites (not builder tasks): ANTIQUITY_SITE@36,18, ANTIQUITY_SITE@37,20, ANTIQUITY_SITE@33,21",
+        "    Archaeology sites (not builder tasks): ANTIQUITY_SITE@35,26"
+      ],
+      "resources": {
+        "tool": "get_empire_resources",
+        "args": {},
+        "sequence": 289,
+        "bytes": 9497,
+        "rpc_seconds": 0.05736,
+        "error": false
+      },
+      "turn_reconciliation": [
+        {
+          "city_id": 65536,
+          "native": 7,
+          "calculated": 7,
+          "matches": true
+        },
+        {
+          "city_id": 196610,
+          "native": 8,
+          "calculated": 8,
+          "matches": true
+        },
+        {
+          "city_id": 262147,
+          "native": 41,
+          "calculated": 41,
+          "matches": true
+        },
+        {
+          "city_id": 327684,
+          "native": 19,
+          "calculated": 19,
+          "matches": true
+        }
+      ],
+      "growth_reading_reduction_percent": 66.74,
+      "first_page_reading_reduction_percent": 0.39
+    }
+  ],
+  "sources": [
+    {
+      "name": "clover_faith_20261025_t050",
+      "sha256": "479f0ffbfce89461a09bc7fda78d506a2d6e9f564997c0d948cb6d06bef8241a",
+      "record_sha256": "8dba8d80232630b5c0fa3d19d990430d4e7fe84b3b4aba2a2f535b89250664e3",
+      "unchanged": true
+    },
+    {
+      "name": "clover_faith_20261025_t100",
+      "sha256": "e7d28ab7003baa9e51ebd215ed455d07b4867d9c134b9fffcbd9968a75fca20f",
+      "record_sha256": "5734f943d835bd06a1f08f7f71bb87a1962afb64bca69f07e657c0e28b3d4651",
+      "unchanged": true
+    },
+    {
+      "name": "clover_faith_20261025_t150",
+      "sha256": "1c4c9ee8cc23493b8ee504bf0b0ad82a750cc866a404bd0d5908962a3e5f8968",
+      "record_sha256": "c6d7c926498751c58d6679319106a260c7ab53987bf2acb9514c4789f6e1483e",
+      "unchanged": true
+    },
+    {
+      "name": "clover_faith_resume_t200",
+      "sha256": "a9d5ae1ebd30c2b75740f6d14c6ef9922c89353e96029473f154946482c5f396",
+      "record_sha256": "f374c61c5427f64a6e9af859b961c37eadbfa9bb8b98d663b866b2db34451aaf",
+      "unchanged": true
+    }
+  ],
+  "verified_code_unchanged": true,
+  "checkpoints": [
+    {
+      "name": "growth_t050_start_20261031",
+      "sha256": "9f573a46650247713b1fbf62cf18620b79cfcd7b38808df3c49063b337951be7",
+      "civilization": "sumeria",
+      "seed": -1896272000,
+      "turn": 50,
+      "run_id": "b65cb24a06b54935b1b73c9e0fccde4d",
+      "score": {
+        "official": 121,
+        "categories": {
+          "CATEGORY_CIVICS": 24,
+          "CATEGORY_EMPIRE": 31,
+          "CATEGORY_GREAT_PEOPLE": 5,
+          "CATEGORY_RELIGION": 10,
+          "CATEGORY_TECH": 22,
+          "CATEGORY_WONDER": 0,
+          "CATEGORY_ERA_SCORE": 29
+        }
+      },
+      "file_matches": true,
+      "identity_matches": true,
+      "registry_sha256": "534da52139ebe2ab471cd92ce3aa01a74f40e6625167febb49170337a0f2bfb4"
+    },
+    {
+      "name": "growth_t050_result_20261031",
+      "sha256": "3cc03b825f331b6a7279aadb023eac91c37e3344f1d7f0ed88e83baae8961fc0",
+      "civilization": "sumeria",
+      "seed": -1896272000,
+      "turn": 50,
+      "run_id": "b65cb24a06b54935b1b73c9e0fccde4d",
+      "score": {
+        "official": 121,
+        "categories": {
+          "CATEGORY_CIVICS": 24,
+          "CATEGORY_EMPIRE": 31,
+          "CATEGORY_GREAT_PEOPLE": 5,
+          "CATEGORY_RELIGION": 10,
+          "CATEGORY_TECH": 22,
+          "CATEGORY_WONDER": 0,
+          "CATEGORY_ERA_SCORE": 29
+        }
+      },
+      "file_matches": true,
+      "identity_matches": true,
+      "registry_sha256": "84d136859a44da99e81239b7ea1e80de1c936b8ae97249dcfad0105b8a3ed3fe"
+    },
+    {
+      "name": "growth_t100_start_20261031",
+      "sha256": "752ee3149080f6c7261aaae73e50444b3f86e59e4a4a89473a9f3b1daf9dcc62",
+      "civilization": "sumeria",
+      "seed": -1896272000,
+      "turn": 100,
+      "run_id": "659c4f53693a49fa9ce37a0465494416",
+      "score": {
+        "official": 281,
+        "categories": {
+          "CATEGORY_CIVICS": 60,
+          "CATEGORY_EMPIRE": 85,
+          "CATEGORY_GREAT_PEOPLE": 5,
+          "CATEGORY_RELIGION": 12,
+          "CATEGORY_TECH": 46,
+          "CATEGORY_WONDER": 15,
+          "CATEGORY_ERA_SCORE": 58
+        }
+      },
+      "file_matches": true,
+      "identity_matches": true,
+      "registry_sha256": "6d1754824a36b1f34a57eff8b47c73764e4443e192db8e8ee0053f9c09162466"
+    },
+    {
+      "name": "growth_t100_result_20261031",
+      "sha256": "f9ebe3d35d9ce810b5188d8a77d7dc6e03a62cf8cc446314008173ada1c8e56a",
+      "civilization": "sumeria",
+      "seed": -1896272000,
+      "turn": 100,
+      "run_id": "659c4f53693a49fa9ce37a0465494416",
+      "score": {
+        "official": 281,
+        "categories": {
+          "CATEGORY_CIVICS": 60,
+          "CATEGORY_EMPIRE": 85,
+          "CATEGORY_GREAT_PEOPLE": 5,
+          "CATEGORY_RELIGION": 12,
+          "CATEGORY_TECH": 46,
+          "CATEGORY_WONDER": 15,
+          "CATEGORY_ERA_SCORE": 58
+        }
+      },
+      "file_matches": true,
+      "identity_matches": true,
+      "registry_sha256": "a2d2978972f714bfc6ee6256bf47c487fa52e9e2ced09bf771d2203853dad8c2"
+    },
+    {
+      "name": "growth_t150_start_20261031",
+      "sha256": "1ec98d965458b63fef5bfadd4cf2109ee3f445756a38050070109bb11cc7836b",
+      "civilization": "sumeria",
+      "seed": -1896272000,
+      "turn": 150,
+      "run_id": "1bac258deab4490a877f986b8268f395",
+      "score": {
+        "official": 483,
+        "categories": {
+          "CATEGORY_CIVICS": 93,
+          "CATEGORY_EMPIRE": 140,
+          "CATEGORY_GREAT_PEOPLE": 35,
+          "CATEGORY_RELIGION": 10,
+          "CATEGORY_TECH": 80,
+          "CATEGORY_WONDER": 30,
+          "CATEGORY_ERA_SCORE": 95
+        }
+      },
+      "file_matches": true,
+      "identity_matches": true,
+      "registry_sha256": "7abb9166bc60db90263e96fb6fdc8213ce2b826f81003fb97177d3995c667803"
+    },
+    {
+      "name": "growth_t150_result_20261031",
+      "sha256": "5575c24e534c7c38417d3a7025e4c63725557c4ad11fcedcee1de8ca25505164",
+      "civilization": "sumeria",
+      "seed": -1896272000,
+      "turn": 150,
+      "run_id": "1bac258deab4490a877f986b8268f395",
+      "score": {
+        "official": 483,
+        "categories": {
+          "CATEGORY_CIVICS": 93,
+          "CATEGORY_EMPIRE": 140,
+          "CATEGORY_GREAT_PEOPLE": 35,
+          "CATEGORY_RELIGION": 10,
+          "CATEGORY_TECH": 80,
+          "CATEGORY_WONDER": 30,
+          "CATEGORY_ERA_SCORE": 95
+        }
+      },
+      "file_matches": true,
+      "identity_matches": true,
+      "registry_sha256": "e6142a9db42b8fd76ebd62745f4c21df05ceef1f1cafeb8d692f1085678f6785"
+    },
+    {
+      "name": "growth_t200_start_20261031",
+      "sha256": "158a1555774c552aa07e6eb31747f288fc64913c003d8d1bb5d627362a321d21",
+      "civilization": "sumeria",
+      "seed": -1896272000,
+      "turn": 200,
+      "run_id": "5b25166a53c7429fa01d70fecba471ee",
+      "score": {
+        "official": 614,
+        "categories": {
+          "CATEGORY_CIVICS": 114,
+          "CATEGORY_EMPIRE": 182,
+          "CATEGORY_GREAT_PEOPLE": 50,
+          "CATEGORY_RELIGION": 10,
+          "CATEGORY_TECH": 106,
+          "CATEGORY_WONDER": 30,
+          "CATEGORY_ERA_SCORE": 122
+        }
+      },
+      "file_matches": true,
+      "identity_matches": true,
+      "registry_sha256": "96afb8a9f9516562a956d9a515e64e3a46ed5d15e9d1031d981396fabb983f61"
+    },
+    {
+      "name": "growth_t200_result_20261031",
+      "sha256": "6fefc65daa502ff914c7fcc392d54100bec3a7278fa2a0384a3637b6fce1efc7",
+      "civilization": "sumeria",
+      "seed": -1896272000,
+      "turn": 200,
+      "run_id": "5b25166a53c7429fa01d70fecba471ee",
+      "score": {
+        "official": 614,
+        "categories": {
+          "CATEGORY_CIVICS": 114,
+          "CATEGORY_EMPIRE": 182,
+          "CATEGORY_GREAT_PEOPLE": 50,
+          "CATEGORY_RELIGION": 10,
+          "CATEGORY_TECH": 106,
+          "CATEGORY_WONDER": 30,
+          "CATEGORY_ERA_SCORE": 122
+        }
+      },
+      "file_matches": true,
+      "identity_matches": true,
+      "registry_sha256": "a8d3da2f9c67f001a3d9b5e966c645eb3e4e295875354039301c8ffbde768f48"
+    }
+  ],
+  "tool_errors": [],
+  "tool_calls": 92
+}
