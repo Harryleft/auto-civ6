@@ -12,10 +12,10 @@ from civ_mcp.devtools.evidence import CommandError, Evidence
 
 DOMAINS = {
     "debug": ("test_debug_cli.py", "test_session_commands.py", "test_frequent_commands.py", "test_cli_only.py", "test_server.py", "test_read_timeout.py", "test_return_to_main_menu.py", "test_decision_context.py"),
-    "knowledge": ("test_knowledge_mcp.py", "test_knowledge_stdio.py"),
+    "knowledge": ("test_knowledge_mcp.py", "test_knowledge_stdio.py", "test_knowledge_brief.py"),
     "actions": ("test_action_confirmation.py", "test_pending_dispatch.py"),
     "turns": ("test_end_turn.py", "test_turn_status.py"),
-    "checkpoints": ("test_game_lifecycle.py", "test_checkpoint_run.py", "test_checkpoint_messages.py"),
+    "checkpoints": ("test_game_lifecycle.py", "test_checkpoint_run.py", "test_checkpoint_messages.py", "test_historical_checkpoint.py"),
     "diplomacy": ("test_trade_progress.py", "test_incoming_negotiation.py", "test_diplomacy_response_confirmation.py"),
     "connection": ("test_connection.py", "test_tuner_client.py", "test_tuner_status.py"),
 }

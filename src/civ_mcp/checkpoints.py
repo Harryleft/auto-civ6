@@ -159,7 +159,7 @@ def record_checkpoint(
     return None
 
 
-def _verified_record(name: str) -> dict | None:
+def _verified_record(name: str, *, source_run_id: str | None = None) -> dict | None:
     name = name.removesuffix(".Civ6Save")
     if name in _revoked:
         return None
@@ -167,7 +167,7 @@ def _verified_record(name: str) -> dict | None:
         digest = _digest(name)
         target = CHECKPOINT_DIR / (hashlib.sha256(name.encode()).hexdigest() + ".json")
         data = json.loads(target.read_text(encoding="utf-8"))
-        run_id = _current_run()
+        run_id = source_run_id if source_run_id is not None else _current_run()
         if (
             not isinstance(data, dict)
             or not isinstance(data.get("civilization"), str)
@@ -179,6 +179,42 @@ def _verified_record(name: str) -> dict | None:
             return data
     except (OSError, ValueError, KeyError, TypeError):
         pass
+    return None
+
+
+def archived_checkpoint(name: str, source_run_id: str, expected_sha256: str) -> dict | None:
+    """Explicit historical source; never change normal current-run eligibility."""
+    import re
+    if (not isinstance(source_run_id, str) or not isinstance(expected_sha256, str)
+            or not re.fullmatch(r'[0-9a-f]{32}', source_run_id) or not re.fullmatch(r'[0-9a-f]{64}', expected_sha256)):
+        return None
+    data = _verified_record(name.removesuffix('.Civ6Save'), source_run_id=source_run_id)
+    if data is None or data['sha256'] != expected_sha256:
+        return None
+    origins = [base for base in _BASELINES.values() if base[1][:2] == (data['civilization'], data['seed'])]
+    if len(origins) != 1:
+        return None
+    return data | {'baseline_sha256': origins[0][0], 'score': _validated_score(data.get('score'))}
+
+
+def begin_archived_run(name: str, source_run_id: str, expected_sha256: str) -> str | None:
+    """Called only after full native load confirmation; preserve the source record."""
+    data = archived_checkpoint(name, source_run_id, expected_sha256)
+    if data is None:
+        return 'ERR:OUTCOME_UNKNOWN|Historical source changed during load; new test run not established.'
+    try:
+        CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
+        target = CHECKPOINT_DIR / 'current-run.json'
+        temporary = target.with_suffix('.tmp')
+        value = {'run_id': uuid.uuid4().hex, 'baseline_sha256': data['baseline_sha256'],
+                 'source_checkpoint': {'name': data['name'], 'run_id': source_run_id, 'sha256': expected_sha256,
+                                       'civilization': data['civilization'], 'seed': data['seed'], 'turn': data['turn']}}
+        temporary.write_text(json.dumps(value), encoding='utf-8')
+        temporary.replace(target)
+        _completed.clear()
+        _revoked.clear()
+    except OSError as exc:
+        return f'ERR:OUTCOME_UNKNOWN|Historical load confirmed but new run record failed: {exc}'
     return None
 
 

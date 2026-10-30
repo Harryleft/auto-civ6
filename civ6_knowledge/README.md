@@ -15,14 +15,16 @@
 | 工具 | 参数 |
 | --- | --- |
 | `search_knowledge` | `query`：中英文名称或 ID 子串，忽略大小写；`topic`：可选，见下表；`limit`：默认 5，范围 1～20 |
-| `get_knowledge` | `entry_id`：搜索返回的 ID；`level`：默认 `summary`，可选 `rule`、`evidence` |
+| `get_knowledge` | `entry_id`：搜索返回的 ID；`level`：默认 `summary`，可选 `brief`、`rule`、`evidence` |
 
 ```text
 knowledge search 写作 --topic technologies --limit 5
-knowledge show TECH_WRITING --level rule
+knowledge show TECH_WRITING --level brief
 ```
 
-搜索不支持整句语义或全文检索。结果包含总数和截断标记；零命中可换用名称、英文或 ID，不能据此判定规则不存在。`summary` 主要用于确认身份；规划与条件判断读取 `rule`，规则冲突或来源不清时再读取 `evidence`。证据中的 `source_refs` 定位来源表与行。
+搜索不支持整句语义或全文检索。结果包含总数和截断标记；零命中可换用名称、英文或 ID，不能据此判定规则不存在。`summary` 主要用于确认身份；规划与条件判断先读 `brief`，需要逐行展开时读 `rule`，来源冲突时读 `evidence`。
+
+`brief` 保留完整规则卡，通过来源表分组、父级 ID 和公共字段减少重复。`common_facts`、`common_record` 适用于组内每一行，`by` 字段由分组键提供；行格式为 `[原序号, 来源行, 覆盖字段, 可选记录元数据]`。条件、负值、反向需求、重复记录及未应用边界均保留，不求值、不排序候选、不截断；`Table#row` 对应完整视图的来源表与行。`encoding.card_sha256` 标识完整卡，`profile.sha256` 标识完整资料环境；`evidence` 可展开完整 profile。静态适用边界在精简视图中仍为未验证。
 
 回复附带版本快照与适用边界，不验证当前存档、活动模组或操作资格。规则明确后，用对应游戏工具核对本局候选、费用、地块和进度；无需每回合重复查阅。
 
@@ -33,6 +35,7 @@ knowledge show TECH_WRITING --level rule
 ```sh
 python3 query.py search 写作 --topic technologies --limit 5
 python3 query.py show TECH_WRITING
+python3 query.py show TECH_WRITING --level brief
 python3 query.py show TECH_WRITING --level rule
 python3 query.py show TECH_WRITING --level evidence
 ```

@@ -134,7 +134,7 @@ def verify(evidence: Evidence, root: Path, state: dict) -> None:
                                          "--topic", "technologies", "--limit", "5")}
             require(any(row["id"] == "TECH_WRITING" for row in reference["search"]["results"]),
                     "Search did not return TECH_WRITING")
-            for level in ("summary", "rule", "evidence"):
+            for level in ("summary", "brief", "rule", "evidence"):
                 reference[level] = query(evidence, root, f"cli-{level}", "show", "TECH_WRITING", "--level", level)
                 require(reference[level].get("id") == "TECH_WRITING", f"CLI {level}: wrong entry")
             require(bool(reference["rule"].get("source_refs")), "Rule has no source references")
@@ -156,7 +156,7 @@ def verify(evidence: Evidence, root: Path, state: dict) -> None:
 
                     found = await call("search_knowledge", {"query": "写作", "topic": "technologies", "limit": 5}, "mcp-search")
                     require(found["results"] == reference["search"]["results"], "MCP/CLI search differs")
-                    for level in ("summary", "rule", "evidence"):
+                    for level in ("summary", "brief", "rule", "evidence"):
                         data = await call("get_knowledge", {"entry_id": "TECH_WRITING", "level": level}, f"mcp-{level}")
                         for key, value in reference[level].items():
                             require(data.get(key) == value, f"MCP/CLI {level} differs at {key}")

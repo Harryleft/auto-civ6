@@ -2543,9 +2543,10 @@ class GameState:
         return await self.load_game_save(name)
 
     @_guard_pending_mutation
-    async def load_game_save(self, save_name: str) -> str:
+    async def load_game_save(self, save_name: str, *, source_run_id: str | None = None,
+                             expected_sha256: str | None = None) -> str:
         """Load once from MainMenu and confirm identity, readiness and snapshot."""
-        return await self._replace_save(save_name)
+        return await self._replace_save(save_name, source_run_id=source_run_id, expected_sha256=expected_sha256)
 
     @_guard_pending_mutation
     async def reload_game_save(self, save_name: str) -> str:
@@ -2619,7 +2620,8 @@ class GameState:
         loaded = await self._replace_save(save_name, recovering=True)
         return f"{loaded} | {stopped.message} | {started.message}"
 
-    async def _replace_save(self, save_name: str, *, return_to_menu: bool = False, recovering: bool = False) -> str:
+    async def _replace_save(self, save_name: str, *, return_to_menu: bool = False, recovering: bool = False,
+                            source_run_id: str | None = None, expected_sha256: str | None = None) -> str:
         """同一个连接负责加载与验证；确认窗口内不重复发送加载命令。"""
         from civ_mcp import checkpoints, game_lifecycle
         from civ_mcp.narrate import narrate_score_comparison
@@ -2634,10 +2636,23 @@ class GameState:
             or self.pending_action_entity is not None
         ):
             return "ERR:OUTCOME_UNKNOWN|An action/save/end-turn is pending; confirm it or use explicit restart_and_load before replacing the session."
-        expected = checkpoints.expected_checkpoint(save_name)
+        historical = source_run_id is not None or expected_sha256 is not None
+        if historical and (not source_run_id or not expected_sha256):
+            return 'Error: Historical loading requires both source_run_id and expected_sha256; no load sent.'
+
+        def target_identity():
+            if not historical:
+                return checkpoints.expected_checkpoint(save_name)
+            record = checkpoints.archived_checkpoint(save_name, source_run_id, expected_sha256)
+            return None if record is None else (record['civilization'], record['seed'], record['turn'])
+
+        source_record = checkpoints.archived_checkpoint(save_name, source_run_id, expected_sha256) if historical else None
+        expected = ((source_record['civilization'], source_record['seed'], source_record['turn']) if source_record else None) if historical else target_identity()
         if expected is None:
+            if historical:
+                return 'Error: HISTORICAL_CHECKPOINT_UNVERIFIED|Source run, registered identity or SHA-256 does not match; no load sent. Preserve the source and inspect its original checkpoint record.'
             return _unregistered_checkpoint_message(save_name, "no load sent")
-        saved_score = checkpoints.expected_score(save_name)
+        saved_score = source_record['score'] if historical else checkpoints.expected_score(save_name)
         submitted = False
         replacing = recovering
         try:
@@ -2669,7 +2684,7 @@ class GameState:
                     except (OSError, LuaError, ValueError):
                         pass
                     await asyncio.sleep(2)
-                if checkpoints.expected_checkpoint(save_name) != expected:
+                if target_identity() != expected:
                     prefix = "ERR:OUTCOME_UNKNOWN|" if replacing else "Error: "
                     return prefix + "Checkpoint file changed before load; no load sent."
                 self._pending_load = True
@@ -2702,9 +2717,13 @@ class GameState:
                                 final_turn, final_ready = await read_turn_state(self)
                                 if final_identity != identity or final_turn != ov.turn or final_ready is not True:
                                     raise ValueError("Loaded state changed or became unreadable during snapshot confirmation")
-                                if checkpoints.expected_checkpoint(save_name) != expected:
+                                if target_identity() != expected:
                                     return "ERR:OUTCOME_UNKNOWN|Checkpoint file changed during load; recovery not verified."
-                                if checkpoints.is_original_baseline_name(save_name):
+                                if historical:
+                                    ownership_error = checkpoints.begin_archived_run(save_name, source_run_id, expected_sha256)
+                                    if ownership_error:
+                                        return ownership_error
+                                elif checkpoints.is_original_baseline_name(save_name):
                                     ownership_error = checkpoints.begin_baseline_run(save_name)
                                     if ownership_error:
                                         return ownership_error

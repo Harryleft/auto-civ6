@@ -221,11 +221,13 @@ game decision --view structured
 | `save list` | `list_saves` | 只读 |
 | `save create NAME` | `save_game` | 变更 |
 | `save reload NAME` | `reload_game_save` | 变更 |
-| `save load NAME` | `load_game_save` | 变更 |
+| `save load NAME [--source-run RUN --sha256 SHA]` | `load_game_save` | 变更 |
 
 `CATEGORY` 为 tech（默认）或 civic，研究 `ID` 为本次候选的原生类型。`save create` 可能覆盖同名普通存档，须使用独立名称；`save reload` 会丢失保存后现场，`save load` 仅从主菜单加载。文件系统存档回退当前只扫描 Single，不能据此声明 Hotseat 恢复可用。`turn end` 不替代双 AI 热座专用席位交接；热座沿用任务指定控制器及轮次记录，不并行另开 CLI 控制它。
 
 `save reload`、`save load` 和 `game recover` 只接受本 CLI 登记过的检查点：`save create` 完成原生确认后登记身份与指纹，原生 `AutoSave_*` 不在登记表中。名字未登记时命令拒绝执行并说明原因，同时列出本轮可用的已登记检查点名称。FireTuner 一次只接受一个客户端连接；连接被拒时先结束其他 `civ6 debug` 会话或残留的 `civ-mcp` 进程再重试。
+
+用户授权从历史阶段另开测试时，`save load` 可成对提供 `--source-run` 与 `--sha256`，在完整加载确认后新建独立轮次。原历史检查点保留；默认加载和恢复仍要求当前轮次。来源校验与另存起点要求见[保存与恢复](agent-recovery.md#检查点与测试轮次)。
 
 ### 地图、胜利与知识
 
@@ -236,7 +238,7 @@ game decision --view structured
 | `knowledge search QUERY [--topic TOPIC] [--limit N]` | `search_knowledge` | 静态只读 |
 | `knowledge show ID [--level LEVEL]` | `get_knowledge` | 静态只读 |
 
-地图半径默认 2、范围 1～4，越界直接拒绝。知识搜索 limit 默认 5、范围 1～20；LEVEL 为 summary（默认）、rule 或 evidence。静态规则不证明本局资格；迷雾、未知和不存在仍须区分。知识查询也可在 `debug --offline` 内执行。
+地图半径默认 2、范围 1～4，越界直接拒绝。知识搜索 limit 默认 5、范围 1～20；LEVEL 为 summary（默认）、brief、rule 或 evidence。brief 保留完整规则，合并来源、父级 ID 和公共字段；公共字段作用于组内每行，格式见[知识说明](../civ6_knowledge/README.md#cli-查询与内部协议)。静态规则不证明本局资格；迷雾、未知和不存在仍须区分。知识查询也可在 `debug --offline` 内执行。
 
 ### 政策、城邦与总督
 
@@ -283,7 +285,7 @@ game decision --view structured
 | `history show [--since-turn T]` | 本方原生历史时刻、回合、时代、时代得分和说明。 |
 | `empire show`、`empire resources`、`empire cities`、`empire gossip` | 每回合产出及余额、资源库存、城市现状、原生可见小道消息。show 包含信仰每回合、外交支持和可派使者。 |
 | `civilization list`、`civilization show PLAYER_ID` | 已相遇文明与领袖身份；show 联合展示其缓存能力规则，未知文明不可查询。 |
-| `civilization abilities TYPE [--level rule]` | 按文明／领袖 ID 读取静态能力；可读静态规则不代表本局已遇到或能力已激活。 |
+| `civilization abilities TYPE [--level brief]` | 按文明／领袖 ID 读取静态能力；可读静态规则不代表本局已遇到或能力已激活。 |
 | `resources global [--player ID]` | 全球资源界面对应的自有库存和已相遇文明可交易资源；不返回隐藏库存或全图矿藏。 |
 | `era show`、`era dedications` | 当前时代进度／得分／阈值，以及可选时代着力点。 |
 | `ranking show` | 总分及科技、文化、统治、宗教、外交等启用路线的世界进度。 |

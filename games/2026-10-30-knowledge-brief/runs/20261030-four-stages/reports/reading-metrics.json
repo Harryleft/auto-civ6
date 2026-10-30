@@ -1,0 +1,320 @@
+{
+  "measurement": "Actual get_knowledge text payload UTF-8 bytes; excludes MCP/CLI envelopes, state reads and deliberate full-rule audit overhead. Not model token counts or decision time.",
+  "live_pairs": [
+    {
+      "turn": 50,
+      "id": "TECH_CURRENCY",
+      "brief_request": 44,
+      "rule_request": 53,
+      "brief_utf8_bytes": 10070,
+      "rule_utf8_bytes": 22302,
+      "brief_characters": 9764,
+      "rule_characters": 21996,
+      "reduction_percent": 54.85,
+      "exact_reconstruction": true,
+      "card_sha256": "174b81e33b882f547458823dad1d5d8f473b40ca8401ece60e4d32b850ded0f6"
+    },
+    {
+      "turn": 50,
+      "id": "TECH_THE_WHEEL",
+      "brief_request": 47,
+      "rule_request": 56,
+      "brief_utf8_bytes": 11237,
+      "rule_utf8_bytes": 23430,
+      "brief_characters": 10927,
+      "rule_characters": 23120,
+      "reduction_percent": 52.04,
+      "exact_reconstruction": true,
+      "card_sha256": "a30b8579521dc707959a57970236af33c7b94630da45e7c627ef8ddc802ab128"
+    },
+    {
+      "turn": 50,
+      "id": "UNIT_SUMERIAN_WAR_CART",
+      "brief_request": 50,
+      "rule_request": 59,
+      "brief_utf8_bytes": 5526,
+      "rule_utf8_bytes": 16988,
+      "brief_characters": 5094,
+      "rule_characters": 16556,
+      "reduction_percent": 67.47,
+      "exact_reconstruction": true,
+      "card_sha256": "14a884a73f117b0270f4416e412c37e39d01117eaceac04ce4d85f2d85267f61"
+    },
+    {
+      "turn": 100,
+      "id": "UNIT_APOSTLE",
+      "brief_request": 117,
+      "rule_request": 132,
+      "brief_utf8_bytes": 6388,
+      "rule_utf8_bytes": 18137,
+      "brief_characters": 5824,
+      "rule_characters": 17573,
+      "reduction_percent": 64.78,
+      "exact_reconstruction": true,
+      "card_sha256": "f5077a12749547a7991752bee383e9fa27bf82e9886cc292166bc6f96168ee5a"
+    },
+    {
+      "turn": 100,
+      "id": "UNIT_SWORDSMAN",
+      "brief_request": 120,
+      "rule_request": 135,
+      "brief_utf8_bytes": 5993,
+      "rule_utf8_bytes": 17770,
+      "brief_characters": 5745,
+      "rule_characters": 17522,
+      "reduction_percent": 66.27,
+      "exact_reconstruction": true,
+      "card_sha256": "215b8ec965b61a438e64f1b19ad59ca8a33c4836d785aa4d76f3a23b4ef61a38"
+    },
+    {
+      "turn": 100,
+      "id": "UNIT_BUILDER",
+      "brief_request": 126,
+      "rule_request": 138,
+      "brief_utf8_bytes": 5584,
+      "rule_utf8_bytes": 17056,
+      "brief_characters": 5144,
+      "rule_characters": 16616,
+      "reduction_percent": 67.26,
+      "exact_reconstruction": true,
+      "card_sha256": "5f2fabfcb272ab58757164134b04c2272d0ff57b1e417a8abc08a3e38ae857bb"
+    },
+    {
+      "turn": 150,
+      "id": "UNIT_INQUISITOR",
+      "brief_request": 184,
+      "rule_request": 190,
+      "brief_utf8_bytes": 5893,
+      "rule_utf8_bytes": 17648,
+      "brief_characters": 5553,
+      "rule_characters": 17308,
+      "reduction_percent": 66.61,
+      "exact_reconstruction": true,
+      "card_sha256": "d4bff324f85e455ca3185d72f97190070fd4f63c54a67802df3acd914c403dda"
+    },
+    {
+      "turn": 150,
+      "id": "POLICY_INQUISITION",
+      "brief_request": 187,
+      "rule_request": 193,
+      "brief_utf8_bytes": 6002,
+      "rule_utf8_bytes": 18820,
+      "brief_characters": 5618,
+      "rule_characters": 18436,
+      "reduction_percent": 68.11,
+      "exact_reconstruction": true,
+      "card_sha256": "980c2cb126b15b7f3eb8c15f9f43635b35ef4717fbf3e680b3e54ebfb5d9c635"
+    },
+    {
+      "turn": 200,
+      "id": "POLICY_RATIONALISM",
+      "brief_request": 243,
+      "rule_request": 261,
+      "brief_utf8_bytes": 7617,
+      "rule_utf8_bytes": 20974,
+      "brief_characters": 7357,
+      "rule_characters": 20714,
+      "reduction_percent": 63.68,
+      "exact_reconstruction": true,
+      "card_sha256": "3ca8dda63244f27fecb3f1e11c0a3175c9343432b0f7d46850308fb50f2f034c"
+    },
+    {
+      "turn": 200,
+      "id": "TECH_PLASTICS",
+      "brief_request": 246,
+      "rule_request": 264,
+      "brief_utf8_bytes": 9495,
+      "rule_utf8_bytes": 21632,
+      "brief_characters": 9175,
+      "rule_characters": 21312,
+      "reduction_percent": 56.11,
+      "exact_reconstruction": true,
+      "card_sha256": "57bd316ffad89b5f1da0002519e9a8ee9a2cd2645f3821e001a5ec6268418354"
+    },
+    {
+      "turn": 200,
+      "id": "UNIT_TRADER",
+      "brief_request": 258,
+      "rule_request": 267,
+      "brief_utf8_bytes": 5521,
+      "rule_utf8_bytes": 17032,
+      "brief_characters": 5213,
+      "rule_characters": 16724,
+      "reduction_percent": 67.58,
+      "exact_reconstruction": true,
+      "card_sha256": "6f011dd7946e917844972898db01e7ac2f8cd9e9009d52afe4960ebb2c392de0"
+    }
+  ],
+  "stages": [
+    {
+      "turn": 50,
+      "cards": 3,
+      "brief_utf8_bytes": 26833,
+      "rule_utf8_bytes": 62720,
+      "reduction_percent": 57.22
+    },
+    {
+      "turn": 100,
+      "cards": 3,
+      "brief_utf8_bytes": 17965,
+      "rule_utf8_bytes": 52963,
+      "reduction_percent": 66.08
+    },
+    {
+      "turn": 150,
+      "cards": 2,
+      "brief_utf8_bytes": 11895,
+      "rule_utf8_bytes": 36468,
+      "reduction_percent": 67.38
+    },
+    {
+      "turn": 200,
+      "cards": 3,
+      "brief_utf8_bytes": 22633,
+      "rule_utf8_bytes": 59638,
+      "reduction_percent": 62.05
+    }
+  ],
+  "corpus": {
+    "cards": 1857,
+    "exact_reconstruction": true,
+    "unchanged_rule_files": [
+      "civ6_knowledge/rules/economy.json",
+      "civ6_knowledge/rules/districts.json",
+      "civ6_knowledge/rules/diplomacy.json",
+      "civ6_knowledge/rules/congress.json",
+      "civ6_knowledge/rules/civilizations.json",
+      "civ6_knowledge/rules/resources.json",
+      "civ6_knowledge/rules/victory.json",
+      "civ6_knowledge/rules/civics.json",
+      "civ6_knowledge/rules/combat.json",
+      "civ6_knowledge/rules/technologies.json"
+    ],
+    "snapshot_sha256": "02bba8b29260d6ec4afbd34f738a92ae5503ddeeeea527813fc4599227916d29",
+    "brief_utf8_bytes": 22524678,
+    "rule_utf8_bytes": 54804151,
+    "smaller_card_body_including_encoding_header": 1113,
+    "full_profile_utf8_bytes": 13021,
+    "brief_profile_utf8_bytes": 1115
+  },
+  "source_checkpoints_unchanged": [
+    {
+      "name": "clover_faith_20261025_t050",
+      "sha256": "479f0ffbfce89461a09bc7fda78d506a2d6e9f564997c0d948cb6d06bef8241a",
+      "bytes": 733983,
+      "record": {
+        "name": "clover_faith_20261025_t050",
+        "sha256": "479f0ffbfce89461a09bc7fda78d506a2d6e9f564997c0d948cb6d06bef8241a",
+        "civilization": "sumeria",
+        "seed": -1896272000,
+        "turn": 50,
+        "run_id": "3f9996c1b4734780b0aa1e581bde1fd7"
+      }
+    },
+    {
+      "name": "clover_faith_20261025_t100",
+      "sha256": "e7d28ab7003baa9e51ebd215ed455d07b4867d9c134b9fffcbd9968a75fca20f",
+      "bytes": 832226,
+      "record": {
+        "name": "clover_faith_20261025_t100",
+        "sha256": "e7d28ab7003baa9e51ebd215ed455d07b4867d9c134b9fffcbd9968a75fca20f",
+        "civilization": "sumeria",
+        "seed": -1896272000,
+        "turn": 100,
+        "run_id": "3f9996c1b4734780b0aa1e581bde1fd7"
+      }
+    },
+    {
+      "name": "clover_faith_20261025_t150",
+      "sha256": "1c4c9ee8cc23493b8ee504bf0b0ad82a750cc866a404bd0d5908962a3e5f8968",
+      "bytes": 970756,
+      "record": {
+        "name": "clover_faith_20261025_t150",
+        "sha256": "1c4c9ee8cc23493b8ee504bf0b0ad82a750cc866a404bd0d5908962a3e5f8968",
+        "civilization": "sumeria",
+        "seed": -1896272000,
+        "turn": 150,
+        "run_id": "3f9996c1b4734780b0aa1e581bde1fd7"
+      }
+    },
+    {
+      "name": "clover_faith_resume_t200",
+      "sha256": "a9d5ae1ebd30c2b75740f6d14c6ef9922c89353e96029473f154946482c5f396",
+      "bytes": 1103565,
+      "record": {
+        "name": "clover_faith_resume_t200",
+        "sha256": "a9d5ae1ebd30c2b75740f6d14c6ef9922c89353e96029473f154946482c5f396",
+        "civilization": "sumeria",
+        "seed": -1896272000,
+        "turn": 200,
+        "run_id": "3f9996c1b4734780b0aa1e581bde1fd7"
+      }
+    }
+  ],
+  "new_checkpoints": [
+    {
+      "name": "brief_t050_start_20261030",
+      "sha256": "96787d64e19124650d870598ffd51175ffce69dad0306bcc36f1f99193628d54",
+      "civilization": "sumeria",
+      "seed": -1896272000,
+      "turn": 50,
+      "run_id": "be8d38e4425f4ed2996d9865fb4990d2"
+    },
+    {
+      "name": "brief_t050_result_20261030",
+      "sha256": "19b2c45df38ba8a36d63d08907345a7172f94a261e27b156ea94ef755e821111",
+      "civilization": "sumeria",
+      "seed": -1896272000,
+      "turn": 50,
+      "run_id": "be8d38e4425f4ed2996d9865fb4990d2"
+    },
+    {
+      "name": "brief_t100_start_20261030",
+      "sha256": "2d00434057cb6904a1e48db6b561ee84da68a7c646b8b27f2d8557e61a5cb557",
+      "civilization": "sumeria",
+      "seed": -1896272000,
+      "turn": 100,
+      "run_id": "bb0a74ee29ff4791844081e28d80e4fa"
+    },
+    {
+      "name": "brief_t100_result_20261030",
+      "sha256": "8b45e42eb0727dfb8536ef6b8cae60a0536c7fde1f00536e5bbb941f376a5520",
+      "civilization": "sumeria",
+      "seed": -1896272000,
+      "turn": 100,
+      "run_id": "bb0a74ee29ff4791844081e28d80e4fa"
+    },
+    {
+      "name": "brief_t150_start_20261030",
+      "sha256": "7f32e7630c6dada2be30a766de5f39a52580456bd683e1b84d8b50f402af1394",
+      "civilization": "sumeria",
+      "seed": -1896272000,
+      "turn": 150,
+      "run_id": "80390e71ec5f4e13bec05b99dbb36039"
+    },
+    {
+      "name": "brief_t150_result_20261030",
+      "sha256": "538f34b63ad727ffd62fdef90fc53c88d04436d2afa07cb6fc329eae5fab016d",
+      "civilization": "sumeria",
+      "seed": -1896272000,
+      "turn": 150,
+      "run_id": "80390e71ec5f4e13bec05b99dbb36039"
+    },
+    {
+      "name": "brief_t200_start_20261030",
+      "sha256": "1673ae6a025042994eb9554e13784c138a82d5f757eb8c5fd370aa7991fee308",
+      "civilization": "sumeria",
+      "seed": -1896272000,
+      "turn": 200,
+      "run_id": "a22ca5c246d547ed9625b334c5ce5c45"
+    },
+    {
+      "name": "brief_t200_result_20261030",
+      "sha256": "4a1aec2d00fa4e88390b550bb48360a4e31873df644153576e618a1143fd6b3f",
+      "civilization": "sumeria",
+      "seed": -1896272000,
+      "turn": 200,
+      "run_id": "a22ca5c246d547ed9625b334c5ce5c45"
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 """Read the standalone knowledge CLI without using game state or rebuilding data."""
 
 import asyncio
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -11,7 +12,7 @@ KnowledgeTopic = Literal[
     'civics', 'technologies', 'districts', 'congress', 'economy',
     'resources', 'combat', 'diplomacy', 'victory', 'civilizations',
 ]
-KnowledgeLevel = Literal['summary', 'rule', 'evidence']
+KnowledgeLevel = Literal['summary', 'brief', 'rule', 'evidence']
 TOPICS = KnowledgeTopic.__args__
 LEVELS = KnowledgeLevel.__args__
 QUERY_TIMEOUT = 10.0
@@ -88,14 +89,22 @@ async def _query(arguments: list[str], *, entry_id: str | None = None,
                 raise ValueError('Invalid knowledge search response')
         else:
             fields = {'summary': ('topic', 'names', 'summary'),
+                      'brief': ('topic', 'names', 'summary', 'rule', 'source_refs', 'relations', 'encoding'),
                       'rule': ('topic', 'names', 'summary', 'rule', 'source_refs', 'relations'),
                       'evidence': ('source_refs', 'evidence', 'profile', 'sources')}[level]
             if result.get('id') != entry_id or any(field not in result for field in fields):
                 raise ValueError('Invalid knowledge entry response')
         if (root / 'manifest.json').read_bytes() != raw_manifest:
             raise ValueError('Knowledge manifest changed during query; query again')
+        profile = manifest['profile']
+        if level == 'brief':
+            expected = hashlib.sha256(json.dumps(profile, ensure_ascii=False, sort_keys=True,
+                separators=(',', ':'), allow_nan=False).encode('utf-8')).hexdigest()
+            if result.get('profile', {}).get('sha256') != expected or result['encoding'].get('truncated') is not False:
+                raise ValueError('Invalid brief profile or incomplete rule view')
+            profile = result['profile']
         return json.dumps(result | {
-            'status': result.get('status', 'found'), 'profile': manifest['profile'],
+            'status': result.get('status', 'found'), 'profile': profile,
             'snapshot': {'path': manifest['snapshot'], 'sha256': manifest['snapshot_sha256']},
             'applicability': APPLICABILITY,
         }, ensure_ascii=False)

@@ -223,6 +223,11 @@ def domain_parser(group: str):
         ):
             child = command(name, tool, description, mutation=True)
             child.add_argument("save_name", help="Exact save name; keep baselines and retained checkpoints unchanged")
+            if name == "load":
+                child.add_argument("--source-run", dest="source_run_id", default=argparse.SUPPRESS,
+                                   help="Explicit authorized historical test: original registered run ID; requires --sha256")
+                child.add_argument("--sha256", dest="expected_sha256", default=argparse.SUPPRESS,
+                                   help="Exact historical checkpoint fingerprint; requires --source-run; starts a new test run")
         index = command("load-index", "load_save", "Load a confirmed checkpoint from the latest save listing.", mutation=True)
         index.add_argument("save_index", type=int)
         menu = command("menu-load", "load_save_from_menu", "Load an explicit confirmed checkpoint through native FrontEnd.", mutation=True)
@@ -234,7 +239,7 @@ def domain_parser(group: str):
         search.add_argument("--limit", type=int, default=5, help="Maximum results (1..20); default 5")
         show = command("show", "get_knowledge", "Read one static entry; does not establish game eligibility.")
         show.add_argument("entry_id")
-        show.add_argument("--level", choices=("summary", "rule", "evidence"), default="summary")
+        show.add_argument("--level", choices=("summary", "brief", "rule", "evidence"), default="summary")
     elif group == "map":
         area = command("area", "get_map_area", "Read known terrain; radius is 1..4 without silent clamping.")
         area.add_argument("center_x", type=int)
@@ -315,7 +320,7 @@ def domain_parser(group: str):
         command("list", "get_diplomacy", "Read encountered civilizations, leaders and current relationships.")
         ability = command("abilities", "get_knowledge", "Read a cached civilization/leader rule; current activation remains unverified.")
         ability.add_argument("entry_id", help="Civilization/leader ID from current civilization list and knowledge search")
-        ability.add_argument("--level", choices=("summary", "rule", "evidence"), default="rule")
+        ability.add_argument("--level", choices=("summary", "brief", "rule", "evidence"), default="brief")
     elif group in {"technology", "civic"}:
         from civ_mcp.research_catalog import FILTERS, ALIASES
         command("status", "get_tech_civics", "Read current research, civic progress and available live choices.")

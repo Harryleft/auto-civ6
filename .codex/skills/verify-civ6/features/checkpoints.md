@@ -6,6 +6,7 @@
 
 - `checkpoint.save`：原生保存完成、新鲜非空文件、SHA-256、前后身份回合及轮次一致。
 - `checkpoint.reload`：正常换档、主菜单加载和显式完整恢复三个入口分别验收，不能相互替代。
+- `checkpoint.historical`：用户授权历史阶段测试时，精确原轮次与 SHA-256 校验，确认加载后新建独立轮次；普通恢复资格不放宽。
 
 ## How to get to it (user POV)
 
@@ -14,6 +15,7 @@
 - 保存：`save create NAME --dry-run`，核实独立名称后明确执行 `save create NAME`。
 - 正常换档：`save reload NAME --dry-run`，核实检查点后明确执行 `save reload NAME`。
 - 已在主菜单：`save load NAME`；辅助入口为同会话 `save menu-load NAME`。
+- 历史阶段测试：`save load NAME --source-run RUN --sha256 SHA`，来源参数与另存起点要求见[保存与恢复](../../../../docs/agent-recovery.md#检查点与测试轮次)。
 - 故障后的完整重启：任务已授权时在原会话通过 `game recover NAME --dry-run` 预演，再显式调用；参数取自已确认检查点和真实 schema。
 
 ## 通过 CLI 验证
@@ -28,6 +30,7 @@ Preconditions:
 - **选择恢复入口。** 正常运行选 `save reload NAME`；已在主菜单选菜单加载；完整重启只用于当前任务明确允许的故障恢复。传入精确已确认检查点名称，或本次列表中的索引。
 - **加载后。** 保存完整加载确认，再调用 `state overview`、`unit list`、`city list`；核对目标文件、原世界身份、回合、轮次、本地就绪和完整新快照。普通换档还需证明进程保持，而非隐式重启。
 - **分别报告。** 写明实际走过哪个入口，其他入口记 `NOT_RUN`。离线可选 `tests/test_game_lifecycle.py` 和 `tests/test_checkpoint_run.py`。
+- **历史来源。** 核对原文件和登记未改写，新轮次有来源记录；确认加载后另存独立起点。离线使用 `tests/test_historical_checkpoint.py` 覆盖错误原轮次／指纹、加载未知和未决门禁。
 
 ## Gotchas
 

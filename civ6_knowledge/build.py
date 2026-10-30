@@ -12,7 +12,7 @@ PRIMARY = {'Civics': ('civics', 'CivicType'), 'Technologies': ('technologies', '
 UNLOCKS = {'Units': 'UnitType', 'Buildings': 'BuildingType', 'Districts': 'DistrictType', 'Improvements': 'ImprovementType', 'Projects': 'ProjectType', 'Policies': 'PolicyType', 'Governments': 'GovernmentType', 'Resources': 'ResourceType', 'Routes': 'RouteType'}
 CORE_RELATIONSHIPS = ('TechnologyPrereqs', 'CivicPrereqs', 'Boosts', 'District_Adjacencies', 'Adjacency_YieldChanges')
 OPTIONAL_TABLES = tuple(UNLOCKS) + ('Districts_XP2', 'District_RequiredFeatures', 'District_ValidTerrains', 'DistrictReplaces', 'District_CitizenYieldChanges', 'GovernmentSlots', 'Government_SlotCounts', 'ResolutionEffects', 'CivilizationTraits', 'LeaderTraits', 'CivilopediaPages', 'CivilopediaPageChapterParagraphs', 'GlobalParameters')
-BASE_SUPPORT_FILES = ('README.md', 'NEXT.md', 'capture.py', 'build.py', 'query.py', 'topics/civics.md', 'topics/technologies.md', 'topics/districts.md', 'topics/congress.md')
+BASE_SUPPORT_FILES = ('README.md', 'NEXT.md', 'capture.py', 'build.py', 'query.py', 'brief.py', 'topics/civics.md', 'topics/technologies.md', 'topics/districts.md', 'topics/congress.md')
 
 TOPIC_PRIMARY = {
     'civilizations': {'Civilizations': 'CivilizationType', 'Leaders': 'LeaderType', 'Traits': 'TraitType'},

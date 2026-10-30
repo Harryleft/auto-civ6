@@ -4,7 +4,7 @@
 
 ## Sub-features
 
-- `knowledge.cli`：当前知识包校验，搜索「写作」，读取 `TECH_WRITING` 的三个层级。
+- `knowledge.cli`：当前知识包校验，搜索「写作」，读取 `TECH_WRITING` 的四个层级（summary、brief、rule、evidence）。
 - `knowledge.mcp`：真实 stdio MCP 初始化、工具发现、搜索与分层读取；与 CLI 返回比较。
 
 ## How to get to it (user POV)
@@ -23,7 +23,7 @@ Preconditions:
 
 - **启动与诊断。** 运行完整冒烟；核对 `cli-doctor.json` 的退出码为 0、`mcp-initialize.json` 标识 `Civilization VI`、`mcp-tools.json` 有两个知识工具。
 - **搜索。** 核对 CLI 与 MCP 的结果列表一致，且包含 `TECH_WRITING`；保留两侧原响应。
-- **读取。** 对搜索结果依次调用 `get_knowledge(entry_id="TECH_WRITING", level="summary")`、`rule`、`evidence`；核对同一条目、规则来源存在，并与 CLI 各层结果一致。
+- **读取。** 对搜索结果依次调用 `get_knowledge(entry_id="TECH_WRITING", level="summary")`、`brief`、`rule`、`evidence`；核对同一条目、规则来源存在，并与 CLI 各层结果一致。brief 的公共字段适用于组内每行；精确还原与关键条件检查由定向测试覆盖。
 - **范围。** MCP 回应必须保留 `applicability.current_session_verified=false`；静态知识不提供当前游戏操作资格。
 - **收尾。** 退出码为 0，`summary.json` 顶层 `status=PASS`，`data` 中 `knowledge_unchanged`、`mcp_session_closed` 和 `scratch_removed` 均为 true；清理后各证据文件仍存在。
 

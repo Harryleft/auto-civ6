@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Read offline Civ6 knowledge with explicit summary, rule and evidence levels."""
+"""Read offline Civ6 knowledge with explicit summary, brief, rule and evidence levels."""
 import argparse
 import json
 from pathlib import Path
 import sys
 
 from build import TOPIC_NAMES, VERSION_KEYS, check_snapshot, coverage, digest, generate, support_files
+from brief import compact
 
 
 def read(path):
@@ -101,6 +102,8 @@ def execute(root, args):
         return summary(card)
     if args.level == 'rule':
         return card
+    if args.level == 'brief':
+        return compact(card, manifest['profile'])
     evidence = [{'source_ref': ref, 'facts': snapshot['tables'][ref['table']][ref['row']]} for ref in card['source_refs']]
     if card['topic'] == 'civilizations':
         for entry in evidence:
@@ -136,7 +139,7 @@ def main():
     search.add_argument('--limit', type=positive, default=10)
     show = sub.add_parser('show')
     show.add_argument('ident')
-    show.add_argument('--level', choices=('summary', 'rule', 'evidence'), default='summary')
+    show.add_argument('--level', choices=('summary', 'brief', 'rule', 'evidence'), default='summary')
     sub.add_parser('validate')
     profile = sub.add_parser('check-profile')
     profile.add_argument('expected', type=Path)

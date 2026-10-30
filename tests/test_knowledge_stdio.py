@@ -34,7 +34,7 @@ def test_knowledge_search_and_read_through_real_stdio_without_game(tmp_path):
                 assert data['status'] == 'found', data
                 assert data['results'][0]['id'] == 'TECH_WRITING'
                 # 连续请求仍走同一条协议管道，子进程不能占用客户端输入。
-                for level in ('summary', 'rule', 'evidence'):
+                for level in ('summary', 'brief', 'rule', 'evidence'):
                     result = await session.call_tool('get_knowledge', {
                         'entry_id': 'TECH_WRITING', 'level': level,
                     })

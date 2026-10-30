@@ -313,7 +313,10 @@ async def get_knowledge(
 ) -> str:
     """Read a static knowledge entry ID from search_knowledge as UTF-8 JSON.
 
-    summary gives identity/overview; rule gives prerequisites, conditions and
+    summary gives identity/overview; brief losslessly factors repeated records
+    and source links, with common fields applying to every grouped row and a
+    fingerprinted profile reference (full metadata at evidence). No conditions
+    or records are discarded; rule expands the same facts. rule gives prerequisites, conditions and
     relations; evidence gives source references and facts. Read only the depth
     needed. Profile/snapshot identify static data; current session, active mods
     and action applicability remain unverified. Civilization entries distinguish
@@ -2327,13 +2330,22 @@ async def load_save(ctx: Context, save_index: int) -> str:
 
 
 @mcp.tool(annotations={"destructiveHint": True})
-async def load_game_save(ctx: Context, save_name: str) -> str:
+async def load_game_save(ctx: Context, save_name: str,
+                         source_run_id: Annotated[str, Field(pattern=r'^[0-9a-f]{32}$')] | None = None,
+                         expected_sha256: Annotated[str, Field(pattern=r'^[0-9a-f]{64}$')] | None = None) -> str:
     """Load a named save once through native FrontEnd APIs, from the main menu.
 
     Confirms identity, turn and a fresh complete snapshot. Use reload_game_save
     for a normal in-game swap. No OCR, restart or automatic resend.
+    Explicitly authorized historical testing requires BOTH the archived source
+    run ID and exact SHA-256; validates its original record and file, then starts
+    an independent run only after native load confirmation. Preserve the source
+    and create a new named checkpoint before actions; ordinary loading still
+    rejects other runs. This does not resume or rewrite historical results.
     """
-    return await _logged(ctx, "load_game_save", {"save_name": save_name}, lambda: _get_game(ctx).load_game_save(save_name))
+    options = {key: value for key, value in {'source_run_id': source_run_id, 'expected_sha256': expected_sha256}.items() if value is not None}
+    return await _logged(ctx, "load_game_save", {"save_name": save_name, **options},
+                         lambda: _get_game(ctx).load_game_save(save_name, **options))
 
 
 @mcp.tool(annotations={"destructiveHint": True})

@@ -147,7 +147,7 @@ def test_mcp_schemas_reject_invalid_arguments_and_keep_whitespace_query_as_expli
         tools = {tool.name: tool for tool in (await session.list_tools()).tools}
         topic = tools['search_knowledge'].inputSchema['properties']['topic']['anyOf'][0]['enum']
         assert set(topic) == {'civics', 'technologies', 'districts', 'congress', 'economy', 'resources', 'combat', 'diplomacy', 'victory', 'civilizations'}
-        assert tools['get_knowledge'].inputSchema['properties']['level']['enum'] == ['summary', 'rule', 'evidence']
+        assert tools['get_knowledge'].inputSchema['properties']['level']['enum'] == ['summary', 'brief', 'rule', 'evidence']
         for name, args in [
             ('search_knowledge', {'query': ''}),
             ('search_knowledge', {'query': 'writing', 'topic': 'unknown'}),
