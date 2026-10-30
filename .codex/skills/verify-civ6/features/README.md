@@ -5,7 +5,7 @@
 | 功能 | 配方 | 运行前提 |
 | --- | --- | --- |
 | `knowledge.cli`、`knowledge.mcp` | [知识查询](knowledge.md) | 项目依赖及当前知识包；无需游戏 |
-| `state.overview`、`state.entities`、`state.snapshot`、`state.identity`、`session.pending` | [真实状态](state.md) | 已授权查询的正确对局、唯一控制客户端 |
+| `state.overview`、`state.entities`、`state.city_yields`、`state.snapshot`、`state.identity`、`session.pending` | [真实状态](state.md) | 已授权查询的正确对局、唯一控制客户端 |
 | `action.move`、`action.pending`、`action.purchase_quotes` | [动作与确认](actions.md) | 已授权动作、本次查询所得单位、城市和报价 |
 | `turn.advance`、`turn.wait` | [推进回合](turns.md) | 已授权推进、本地可行动回合 |
 | `checkpoint.save`、`checkpoint.reload` | [保存恢复](checkpoints.md) | 明确的保存／换档授权及本轮归属 |

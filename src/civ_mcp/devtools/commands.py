@@ -171,6 +171,9 @@ def domain_parser(group: str):
                 entity(child, "target_unit_id")
     elif group == "city":
         command("list", "get_cities", "List current cities and native IDs.")
+        yields = command("yields", "get_city_yields", "Read built-district native yields and current Rationalism conditions; no city ID reads all owned cities.")
+        yields.add_argument("city_id", nargs="?", type=int, default=argparse.SUPPRESS)
+        yields.add_argument("--view", choices=("brief", "structured", "evidence"), default=argparse.SUPPRESS)
         production = command("production", "get_city_production", "Read production and currency-specific purchase prices, eligibility and reasons.")
         entity(production, "city_id")
         production.add_argument('--item-type', choices=('UNIT', 'BUILDING'), default=argparse.SUPPRESS)

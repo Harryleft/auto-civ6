@@ -1,0 +1,3311 @@
+{
+  "measurement": "Actual MCP text UTF-8 bytes; old city list + policy show + Rationalism brief versus one city yields. New adds native adjacency absent from old path. Not whole-state equivalence or model time.",
+  "stages": [
+    {
+      "turn": 50,
+      "policy": {
+        "policy_type": "POLICY_RATIONALISM",
+        "unlocked": false,
+        "can_slot": false,
+        "slotted": false
+      },
+      "city_count": 3,
+      "cities": [
+        {
+          "city_id": 65536,
+          "name": "乌鲁克",
+          "population": 7.0,
+          "science": 10.921875,
+          "food_surplus": 8.0,
+          "campus_status": "absent",
+          "campus_buildings": [],
+          "policy_conditions": [
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_ADJACENCY",
+              "observed": null,
+              "plot_observed": null,
+              "threshold": 4.0,
+              "meets_observed_threshold": false,
+              "basis": "plot:GetAdjacencyYield (comparison, not engine state)",
+              "native_conditions_met": null,
+              "native_effect_confirmed": null
+            },
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_POP",
+              "observed": 7.0,
+              "plot_observed": null,
+              "threshold": 15.0,
+              "meets_observed_threshold": false,
+              "basis": "observed population",
+              "native_conditions_met": null,
+              "native_effect_confirmed": null
+            }
+          ],
+          "districts": [
+            {
+              "district_id": 65536,
+              "district_type": "DISTRICT_CITY_CENTER",
+              "x": 40,
+              "y": 25,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 131073,
+              "district_type": "DISTRICT_HOLY_SITE",
+              "x": 40,
+              "y": 26,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 1.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 1.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 1.0
+              }
+            },
+            {
+              "district_id": 458758,
+              "district_type": "DISTRICT_GOVERNMENT",
+              "x": 40,
+              "y": 27,
+              "complete": false,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            }
+          ]
+        },
+        {
+          "city_id": 131073,
+          "name": "埃利都",
+          "population": 3.0,
+          "science": 1.3515625,
+          "food_surplus": 3.0,
+          "campus_status": "absent",
+          "campus_buildings": [],
+          "policy_conditions": [
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_ADJACENCY",
+              "observed": null,
+              "plot_observed": null,
+              "threshold": 4.0,
+              "meets_observed_threshold": false,
+              "basis": "plot:GetAdjacencyYield (comparison, not engine state)",
+              "native_conditions_met": null,
+              "native_effect_confirmed": null
+            },
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_POP",
+              "observed": 3.0,
+              "plot_observed": null,
+              "threshold": 15.0,
+              "meets_observed_threshold": false,
+              "basis": "observed population",
+              "native_conditions_met": null,
+              "native_effect_confirmed": null
+            }
+          ],
+          "districts": [
+            {
+              "district_id": 196610,
+              "district_type": "DISTRICT_CITY_CENTER",
+              "x": 36,
+              "y": 24,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 262147,
+              "district_type": "DISTRICT_HOLY_SITE",
+              "x": 35,
+              "y": 25,
+              "complete": false,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 1.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 1.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 1.0
+              }
+            }
+          ]
+        },
+        {
+          "city_id": 196610,
+          "name": "巴地比拉",
+          "population": 1.0,
+          "science": 0.5,
+          "food_surplus": 2.0,
+          "campus_status": "absent",
+          "campus_buildings": [],
+          "policy_conditions": [
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_ADJACENCY",
+              "observed": null,
+              "plot_observed": null,
+              "threshold": 4.0,
+              "meets_observed_threshold": false,
+              "basis": "plot:GetAdjacencyYield (comparison, not engine state)",
+              "native_conditions_met": null,
+              "native_effect_confirmed": null
+            },
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_POP",
+              "observed": 1.0,
+              "plot_observed": null,
+              "threshold": 15.0,
+              "meets_observed_threshold": false,
+              "basis": "observed population",
+              "native_conditions_met": null,
+              "native_effect_confirmed": null
+            }
+          ],
+          "districts": [
+            {
+              "district_id": 327684,
+              "district_type": "DISTRICT_CITY_CENTER",
+              "x": 35,
+              "y": 20,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 393221,
+              "district_type": "DISTRICT_HOLY_SITE",
+              "x": 35,
+              "y": 19,
+              "complete": false,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            }
+          ]
+        }
+      ],
+      "rule_rows": 22,
+      "current_rule_graph_sha256": "c5bd799b94ef90b72eb84f8c699ea3a3ade28e2c90fca95131cdf9f703573ae0",
+      "old_queries": 3,
+      "new_queries": 1,
+      "old_text_bytes": 10350,
+      "new_text_bytes": 3723,
+      "reduction_percent": 64.03,
+      "old_rpc_seconds": 0.8483630000000001,
+      "new_rpc_seconds": 0.115734,
+      "requests": {
+        "old": {
+          "get_cities": {
+            "request": 51,
+            "text_bytes": 1134,
+            "rpc_seconds": 0.056949
+          },
+          "get_policies": {
+            "request": 54,
+            "text_bytes": 1599,
+            "rpc_seconds": 0.044528
+          },
+          "get_knowledge": {
+            "request": 57,
+            "text_bytes": 7617,
+            "rpc_seconds": 0.746886
+          }
+        },
+        "new": {
+          "request": 60,
+          "text_bytes": 3723,
+          "rpc_seconds": 0.115734
+        },
+        "audit": {
+          "request": 63,
+          "text_bytes": 15332,
+          "rpc_seconds": 0.204491
+        }
+      },
+      "native_adjacent_cells_checked": 42,
+      "distinct_native_readings": [],
+      "net_turns": 0,
+      "internal_native_reads": 1,
+      "native_conditions_complete": null
+    },
+    {
+      "turn": 100,
+      "policy": {
+        "policy_type": "POLICY_RATIONALISM",
+        "unlocked": false,
+        "can_slot": false,
+        "slotted": false
+      },
+      "city_count": 4,
+      "cities": [
+        {
+          "city_id": 65536,
+          "name": "乌鲁克",
+          "population": 13.0,
+          "science": 36.22265625,
+          "food_surplus": 11.0,
+          "campus_status": "complete",
+          "campus_buildings": [
+            {
+              "building_type": "BUILDING_LIBRARY",
+              "district_type": "DISTRICT_CAMPUS",
+              "pillaged": false
+            }
+          ],
+          "policy_conditions": [
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_ADJACENCY",
+              "observed": 2.0,
+              "plot_observed": 2.0,
+              "threshold": 4.0,
+              "meets_observed_threshold": false,
+              "basis": "plot:GetAdjacencyYield (comparison, not engine state)",
+              "native_conditions_met": null,
+              "native_effect_confirmed": null
+            },
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_POP",
+              "observed": 13.0,
+              "plot_observed": null,
+              "threshold": 15.0,
+              "meets_observed_threshold": false,
+              "basis": "observed population",
+              "native_conditions_met": null,
+              "native_effect_confirmed": null
+            }
+          ],
+          "districts": [
+            {
+              "district_id": 65536,
+              "district_type": "DISTRICT_CITY_CENTER",
+              "x": 40,
+              "y": 25,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 131073,
+              "district_type": "DISTRICT_HOLY_SITE",
+              "x": 40,
+              "y": 26,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 6.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 6.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 3.0
+              }
+            },
+            {
+              "district_id": 458758,
+              "district_type": "DISTRICT_GOVERNMENT",
+              "x": 40,
+              "y": 27,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 524295,
+              "district_type": "DISTRICT_CAMPUS",
+              "x": 39,
+              "y": 26,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 2.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 2.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 2.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 655369,
+              "district_type": "DISTRICT_HARBOR",
+              "x": 41,
+              "y": 24,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 3.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 3.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 3.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            }
+          ]
+        },
+        {
+          "city_id": 131073,
+          "name": "埃利都",
+          "population": 10.0,
+          "science": 5.0,
+          "food_surplus": 8.0,
+          "campus_status": "unavailable_or_unknown",
+          "campus_buildings": [],
+          "policy_conditions": [
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_ADJACENCY",
+              "observed": 2.0,
+              "plot_observed": 2.0,
+              "threshold": 4.0,
+              "meets_observed_threshold": false,
+              "basis": "plot:GetAdjacencyYield (comparison, not engine state)",
+              "native_conditions_met": null,
+              "native_effect_confirmed": null
+            },
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_POP",
+              "observed": 10.0,
+              "plot_observed": null,
+              "threshold": 15.0,
+              "meets_observed_threshold": false,
+              "basis": "observed population",
+              "native_conditions_met": null,
+              "native_effect_confirmed": null
+            }
+          ],
+          "districts": [
+            {
+              "district_id": 196610,
+              "district_type": "DISTRICT_CITY_CENTER",
+              "x": 36,
+              "y": 24,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 262147,
+              "district_type": "DISTRICT_HOLY_SITE",
+              "x": 35,
+              "y": 25,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 2.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 2.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 1.0
+              }
+            },
+            {
+              "district_id": 589832,
+              "district_type": "DISTRICT_WONDER",
+              "x": 36,
+              "y": 26,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 917517,
+              "district_type": "DISTRICT_CAMPUS",
+              "x": 35,
+              "y": 22,
+              "complete": false,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 2.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 2.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 2.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            }
+          ]
+        },
+        {
+          "city_id": 196610,
+          "name": "巴地比拉",
+          "population": 7.0,
+          "science": 3.5,
+          "food_surplus": 6.0,
+          "campus_status": "absent",
+          "campus_buildings": [],
+          "policy_conditions": [
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_ADJACENCY",
+              "observed": null,
+              "plot_observed": null,
+              "threshold": 4.0,
+              "meets_observed_threshold": false,
+              "basis": "plot:GetAdjacencyYield (comparison, not engine state)",
+              "native_conditions_met": null,
+              "native_effect_confirmed": null
+            },
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_POP",
+              "observed": 7.0,
+              "plot_observed": null,
+              "threshold": 15.0,
+              "meets_observed_threshold": false,
+              "basis": "observed population",
+              "native_conditions_met": null,
+              "native_effect_confirmed": null
+            }
+          ],
+          "districts": [
+            {
+              "district_id": 327684,
+              "district_type": "DISTRICT_CITY_CENTER",
+              "x": 35,
+              "y": 20,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 393221,
+              "district_type": "DISTRICT_HOLY_SITE",
+              "x": 35,
+              "y": 19,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 2.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 2.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 1.0
+              }
+            },
+            {
+              "district_id": 720906,
+              "district_type": "DISTRICT_COMMERCIAL_HUB",
+              "x": 36,
+              "y": 20,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 3.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 3.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 3.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            }
+          ]
+        },
+        {
+          "city_id": 262147,
+          "name": "乌尔",
+          "population": 3.0,
+          "science": 2.5,
+          "food_surplus": 4.0,
+          "campus_status": "unavailable_or_unknown",
+          "campus_buildings": [],
+          "policy_conditions": [
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_ADJACENCY",
+              "observed": 1.0,
+              "plot_observed": 1.0,
+              "threshold": 4.0,
+              "meets_observed_threshold": false,
+              "basis": "plot:GetAdjacencyYield (comparison, not engine state)",
+              "native_conditions_met": null,
+              "native_effect_confirmed": null
+            },
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_POP",
+              "observed": 3.0,
+              "plot_observed": null,
+              "threshold": 15.0,
+              "meets_observed_threshold": false,
+              "basis": "observed population",
+              "native_conditions_met": null,
+              "native_effect_confirmed": null
+            }
+          ],
+          "districts": [
+            {
+              "district_id": 786443,
+              "district_type": "DISTRICT_CITY_CENTER",
+              "x": 37,
+              "y": 28,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 851980,
+              "district_type": "DISTRICT_CAMPUS",
+              "x": 37,
+              "y": 27,
+              "complete": false,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 1.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 1.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 1.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            }
+          ]
+        }
+      ],
+      "rule_rows": 22,
+      "current_rule_graph_sha256": "c5bd799b94ef90b72eb84f8c699ea3a3ade28e2c90fca95131cdf9f703573ae0",
+      "old_queries": 3,
+      "new_queries": 1,
+      "old_text_bytes": 14465,
+      "new_text_bytes": 4882,
+      "reduction_percent": 66.25,
+      "old_rpc_seconds": 0.868818,
+      "new_rpc_seconds": 0.132617,
+      "requests": {
+        "old": {
+          "get_cities": {
+            "request": 91,
+            "text_bytes": 1740,
+            "rpc_seconds": 0.05354
+          },
+          "get_policies": {
+            "request": 94,
+            "text_bytes": 5108,
+            "rpc_seconds": 0.066379
+          },
+          "get_knowledge": {
+            "request": 97,
+            "text_bytes": 7617,
+            "rpc_seconds": 0.748899
+          }
+        },
+        "new": {
+          "request": 100,
+          "text_bytes": 4882,
+          "rpc_seconds": 0.132617
+        },
+        "audit": {
+          "request": 103,
+          "text_bytes": 21611,
+          "rpc_seconds": 0.205253
+        }
+      },
+      "native_adjacent_cells_checked": 84,
+      "distinct_native_readings": [
+        {
+          "city_id": 65536,
+          "district_id": 131073,
+          "yield": "YIELD_FAITH",
+          "district": 6.0,
+          "plot": 3.0
+        },
+        {
+          "city_id": 131073,
+          "district_id": 262147,
+          "yield": "YIELD_FAITH",
+          "district": 2.0,
+          "plot": 1.0
+        },
+        {
+          "city_id": 196610,
+          "district_id": 393221,
+          "yield": "YIELD_FAITH",
+          "district": 2.0,
+          "plot": 1.0
+        }
+      ],
+      "net_turns": 0,
+      "internal_native_reads": 1,
+      "native_conditions_complete": null
+    },
+    {
+      "turn": 150,
+      "policy": {
+        "policy_type": "POLICY_RATIONALISM",
+        "unlocked": true,
+        "can_slot": false,
+        "slotted": true
+      },
+      "city_count": 4,
+      "cities": [
+        {
+          "city_id": 65536,
+          "name": "乌鲁克",
+          "population": 17.0,
+          "science": 53.47265625,
+          "food_surplus": 16.0,
+          "campus_status": "complete",
+          "campus_buildings": [
+            {
+              "building_type": "BUILDING_LIBRARY",
+              "district_type": "DISTRICT_CAMPUS",
+              "pillaged": false
+            },
+            {
+              "building_type": "BUILDING_UNIVERSITY",
+              "district_type": "DISTRICT_CAMPUS",
+              "pillaged": false
+            }
+          ],
+          "policy_conditions": [
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_ADJACENCY",
+              "observed": 2.0,
+              "plot_observed": 2.0,
+              "threshold": 4.0,
+              "meets_observed_threshold": false,
+              "basis": "plot:GetAdjacencyYield (comparison, not engine state)",
+              "native_conditions_met": false,
+              "native_effect_confirmed": false,
+              "native_requirement_state": "NotMet",
+              "native_modifier_instance": "3126",
+              "native_object_id": "405",
+              "native_requirement_instance": "23030"
+            },
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_POP",
+              "observed": 17.0,
+              "plot_observed": null,
+              "threshold": 15.0,
+              "meets_observed_threshold": true,
+              "basis": "observed population",
+              "native_conditions_met": true,
+              "native_effect_confirmed": true,
+              "native_requirement_state": "Met",
+              "native_modifier_instance": "3127",
+              "native_object_id": "405",
+              "native_requirement_instance": "23034"
+            }
+          ],
+          "districts": [
+            {
+              "district_id": 65536,
+              "district_type": "DISTRICT_CITY_CENTER",
+              "x": 40,
+              "y": 25,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 131073,
+              "district_type": "DISTRICT_HOLY_SITE",
+              "x": 40,
+              "y": 26,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 3.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 3.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 3.0
+              }
+            },
+            {
+              "district_id": 458758,
+              "district_type": "DISTRICT_GOVERNMENT",
+              "x": 40,
+              "y": 27,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 524295,
+              "district_type": "DISTRICT_CAMPUS",
+              "x": 39,
+              "y": 26,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 2.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 2.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 2.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 655369,
+              "district_type": "DISTRICT_HARBOR",
+              "x": 41,
+              "y": 24,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 3.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 3.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 3.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 1048591,
+              "district_type": "DISTRICT_WONDER",
+              "x": 39,
+              "y": 28,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            }
+          ]
+        },
+        {
+          "city_id": 131073,
+          "name": "埃利都",
+          "population": 12.0,
+          "science": 20.0,
+          "food_surplus": 5.0,
+          "campus_status": "complete",
+          "campus_buildings": [
+            {
+              "building_type": "BUILDING_LIBRARY",
+              "district_type": "DISTRICT_CAMPUS",
+              "pillaged": false
+            },
+            {
+              "building_type": "BUILDING_UNIVERSITY",
+              "district_type": "DISTRICT_CAMPUS",
+              "pillaged": false
+            }
+          ],
+          "policy_conditions": [
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_ADJACENCY",
+              "observed": 2.0,
+              "plot_observed": 2.0,
+              "threshold": 4.0,
+              "meets_observed_threshold": false,
+              "basis": "plot:GetAdjacencyYield (comparison, not engine state)",
+              "native_conditions_met": false,
+              "native_effect_confirmed": false,
+              "native_requirement_state": "NotMet",
+              "native_modifier_instance": "3126",
+              "native_object_id": "769",
+              "native_requirement_instance": "23031"
+            },
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_POP",
+              "observed": 12.0,
+              "plot_observed": null,
+              "threshold": 15.0,
+              "meets_observed_threshold": false,
+              "basis": "observed population",
+              "native_conditions_met": false,
+              "native_effect_confirmed": false,
+              "native_requirement_state": "NotMet",
+              "native_modifier_instance": "3127",
+              "native_object_id": "769",
+              "native_requirement_instance": "23035"
+            }
+          ],
+          "districts": [
+            {
+              "district_id": 196610,
+              "district_type": "DISTRICT_CITY_CENTER",
+              "x": 36,
+              "y": 24,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 262147,
+              "district_type": "DISTRICT_HOLY_SITE",
+              "x": 35,
+              "y": 25,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 2.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 2.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 2.0
+              }
+            },
+            {
+              "district_id": 589832,
+              "district_type": "DISTRICT_WONDER",
+              "x": 36,
+              "y": 26,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 917517,
+              "district_type": "DISTRICT_CAMPUS",
+              "x": 35,
+              "y": 22,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 2.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 2.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 2.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 1179665,
+              "district_type": "DISTRICT_INDUSTRIAL_ZONE",
+              "x": 37,
+              "y": 26,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 2.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 2.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 2.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 1245202,
+              "district_type": "DISTRICT_THEATER",
+              "x": 36,
+              "y": 25,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 3.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 3.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 3.0,
+                "YIELD_FAITH": 0.0
+              }
+            }
+          ]
+        },
+        {
+          "city_id": 196610,
+          "name": "巴地比拉",
+          "population": 11.0,
+          "science": 18.5,
+          "food_surplus": 4.0,
+          "campus_status": "complete",
+          "campus_buildings": [
+            {
+              "building_type": "BUILDING_LIBRARY",
+              "district_type": "DISTRICT_CAMPUS",
+              "pillaged": false
+            },
+            {
+              "building_type": "BUILDING_UNIVERSITY",
+              "district_type": "DISTRICT_CAMPUS",
+              "pillaged": false
+            }
+          ],
+          "policy_conditions": [
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_ADJACENCY",
+              "observed": 1.0,
+              "plot_observed": 1.0,
+              "threshold": 4.0,
+              "meets_observed_threshold": false,
+              "basis": "plot:GetAdjacencyYield (comparison, not engine state)",
+              "native_conditions_met": false,
+              "native_effect_confirmed": false,
+              "native_requirement_state": "NotMet",
+              "native_modifier_instance": "3126",
+              "native_object_id": "935",
+              "native_requirement_instance": "23032"
+            },
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_POP",
+              "observed": 11.0,
+              "plot_observed": null,
+              "threshold": 15.0,
+              "meets_observed_threshold": false,
+              "basis": "observed population",
+              "native_conditions_met": false,
+              "native_effect_confirmed": false,
+              "native_requirement_state": "NotMet",
+              "native_modifier_instance": "3127",
+              "native_object_id": "935",
+              "native_requirement_instance": "23036"
+            }
+          ],
+          "districts": [
+            {
+              "district_id": 327684,
+              "district_type": "DISTRICT_CITY_CENTER",
+              "x": 35,
+              "y": 20,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 393221,
+              "district_type": "DISTRICT_HOLY_SITE",
+              "x": 35,
+              "y": 19,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 1.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 1.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 1.0
+              }
+            },
+            {
+              "district_id": 720906,
+              "district_type": "DISTRICT_COMMERCIAL_HUB",
+              "x": 36,
+              "y": 20,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 5.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 5.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 5.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 983054,
+              "district_type": "DISTRICT_CAMPUS",
+              "x": 35,
+              "y": 18,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 1.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 1.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 1.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 1376276,
+              "district_type": "DISTRICT_HARBOR",
+              "x": 36,
+              "y": 21,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            }
+          ]
+        },
+        {
+          "city_id": 262147,
+          "name": "乌尔",
+          "population": 9.0,
+          "science": 22.5,
+          "food_surplus": 8.0,
+          "campus_status": "complete",
+          "campus_buildings": [
+            {
+              "building_type": "BUILDING_LIBRARY",
+              "district_type": "DISTRICT_CAMPUS",
+              "pillaged": false
+            },
+            {
+              "building_type": "BUILDING_UNIVERSITY",
+              "district_type": "DISTRICT_CAMPUS",
+              "pillaged": false
+            }
+          ],
+          "policy_conditions": [
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_ADJACENCY",
+              "observed": 2.0,
+              "plot_observed": 2.0,
+              "threshold": 4.0,
+              "meets_observed_threshold": false,
+              "basis": "plot:GetAdjacencyYield (comparison, not engine state)",
+              "native_conditions_met": false,
+              "native_effect_confirmed": false,
+              "native_requirement_state": "NotMet",
+              "native_modifier_instance": "3126",
+              "native_object_id": "1586",
+              "native_requirement_instance": "23033"
+            },
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_POP",
+              "observed": 9.0,
+              "plot_observed": null,
+              "threshold": 15.0,
+              "meets_observed_threshold": false,
+              "basis": "observed population",
+              "native_conditions_met": false,
+              "native_effect_confirmed": false,
+              "native_requirement_state": "NotMet",
+              "native_modifier_instance": "3127",
+              "native_object_id": "1586",
+              "native_requirement_instance": "23037"
+            }
+          ],
+          "districts": [
+            {
+              "district_id": 786443,
+              "district_type": "DISTRICT_CITY_CENTER",
+              "x": 37,
+              "y": 28,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 851980,
+              "district_type": "DISTRICT_CAMPUS",
+              "x": 37,
+              "y": 27,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 2.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 2.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 2.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 1114128,
+              "district_type": "DISTRICT_HARBOR",
+              "x": 36,
+              "y": 29,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 2.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 2.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 2.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 1310739,
+              "district_type": "DISTRICT_THEATER",
+              "x": 38,
+              "y": 29,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 2.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 2.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 2.0,
+                "YIELD_FAITH": 0.0
+              }
+            }
+          ]
+        }
+      ],
+      "rule_rows": 22,
+      "current_rule_graph_sha256": "c5bd799b94ef90b72eb84f8c699ea3a3ade28e2c90fca95131cdf9f703573ae0",
+      "old_queries": 3,
+      "new_queries": 1,
+      "old_text_bytes": 17377,
+      "new_text_bytes": 6019,
+      "reduction_percent": 65.36,
+      "old_rpc_seconds": 0.83253,
+      "new_rpc_seconds": 0.235687,
+      "requests": {
+        "old": {
+          "get_cities": {
+            "request": 131,
+            "text_bytes": 2235,
+            "rpc_seconds": 0.049123
+          },
+          "get_policies": {
+            "request": 134,
+            "text_bytes": 7525,
+            "rpc_seconds": 0.054134
+          },
+          "get_knowledge": {
+            "request": 137,
+            "text_bytes": 7617,
+            "rpc_seconds": 0.729273
+          }
+        },
+        "new": {
+          "request": 140,
+          "text_bytes": 6019,
+          "rpc_seconds": 0.235687
+        },
+        "audit": {
+          "request": 143,
+          "text_bytes": 33067,
+          "rpc_seconds": 0.254968
+        }
+      },
+      "native_adjacent_cells_checked": 126,
+      "distinct_native_readings": [],
+      "net_turns": 0,
+      "internal_native_reads": 3,
+      "native_conditions_complete": true
+    },
+    {
+      "turn": 200,
+      "policy": {
+        "policy_type": "POLICY_RATIONALISM",
+        "unlocked": true,
+        "can_slot": false,
+        "slotted": true
+      },
+      "city_count": 5,
+      "cities": [
+        {
+          "city_id": 65536,
+          "name": "乌鲁克",
+          "population": 21.0,
+          "science": 76.125,
+          "food_surplus": 14.0,
+          "campus_status": "complete",
+          "campus_buildings": [
+            {
+              "building_type": "BUILDING_LIBRARY",
+              "district_type": "DISTRICT_CAMPUS",
+              "pillaged": false
+            },
+            {
+              "building_type": "BUILDING_UNIVERSITY",
+              "district_type": "DISTRICT_CAMPUS",
+              "pillaged": false
+            },
+            {
+              "building_type": "BUILDING_RESEARCH_LAB",
+              "district_type": "DISTRICT_CAMPUS",
+              "pillaged": false
+            }
+          ],
+          "policy_conditions": [
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_ADJACENCY",
+              "observed": 2.0,
+              "plot_observed": 2.0,
+              "threshold": 4.0,
+              "meets_observed_threshold": false,
+              "basis": "plot:GetAdjacencyYield (comparison, not engine state)",
+              "native_conditions_met": false,
+              "native_effect_confirmed": false,
+              "native_requirement_state": "NotMet",
+              "native_modifier_instance": "4702",
+              "native_object_id": "405",
+              "native_requirement_instance": "23809"
+            },
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_POP",
+              "observed": 21.0,
+              "plot_observed": null,
+              "threshold": 15.0,
+              "meets_observed_threshold": true,
+              "basis": "observed population",
+              "native_conditions_met": true,
+              "native_effect_confirmed": true,
+              "native_requirement_state": "Met",
+              "native_modifier_instance": "4703",
+              "native_object_id": "405",
+              "native_requirement_instance": "23814"
+            }
+          ],
+          "districts": [
+            {
+              "district_id": 65536,
+              "district_type": "DISTRICT_CITY_CENTER",
+              "x": 40,
+              "y": 25,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 131073,
+              "district_type": "DISTRICT_HOLY_SITE",
+              "x": 40,
+              "y": 26,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 3.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 3.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 3.0
+              }
+            },
+            {
+              "district_id": 458758,
+              "district_type": "DISTRICT_GOVERNMENT",
+              "x": 40,
+              "y": 27,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 524295,
+              "district_type": "DISTRICT_CAMPUS",
+              "x": 39,
+              "y": 26,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 4.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 4.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 2.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 655369,
+              "district_type": "DISTRICT_HARBOR",
+              "x": 41,
+              "y": 24,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 3.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 3.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 3.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 1048591,
+              "district_type": "DISTRICT_WONDER",
+              "x": 39,
+              "y": 28,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 2097174,
+              "district_type": "DISTRICT_AERODROME",
+              "x": 39,
+              "y": 24,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            }
+          ]
+        },
+        {
+          "city_id": 131073,
+          "name": "埃利都",
+          "population": 14.0,
+          "science": 31.5,
+          "food_surplus": 0.0,
+          "campus_status": "complete",
+          "campus_buildings": [
+            {
+              "building_type": "BUILDING_LIBRARY",
+              "district_type": "DISTRICT_CAMPUS",
+              "pillaged": false
+            },
+            {
+              "building_type": "BUILDING_UNIVERSITY",
+              "district_type": "DISTRICT_CAMPUS",
+              "pillaged": false
+            },
+            {
+              "building_type": "BUILDING_RESEARCH_LAB",
+              "district_type": "DISTRICT_CAMPUS",
+              "pillaged": false
+            }
+          ],
+          "policy_conditions": [
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_ADJACENCY",
+              "observed": 2.0,
+              "plot_observed": 2.0,
+              "threshold": 4.0,
+              "meets_observed_threshold": false,
+              "basis": "plot:GetAdjacencyYield (comparison, not engine state)",
+              "native_conditions_met": false,
+              "native_effect_confirmed": false,
+              "native_requirement_state": "NotMet",
+              "native_modifier_instance": "4702",
+              "native_object_id": "769",
+              "native_requirement_instance": "23810"
+            },
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_POP",
+              "observed": 14.0,
+              "plot_observed": null,
+              "threshold": 15.0,
+              "meets_observed_threshold": false,
+              "basis": "observed population",
+              "native_conditions_met": false,
+              "native_effect_confirmed": false,
+              "native_requirement_state": "NotMet",
+              "native_modifier_instance": "4703",
+              "native_object_id": "769",
+              "native_requirement_instance": "23815"
+            }
+          ],
+          "districts": [
+            {
+              "district_id": 196610,
+              "district_type": "DISTRICT_CITY_CENTER",
+              "x": 36,
+              "y": 24,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 262147,
+              "district_type": "DISTRICT_HOLY_SITE",
+              "x": 35,
+              "y": 25,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 2.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 2.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 2.0
+              }
+            },
+            {
+              "district_id": 589832,
+              "district_type": "DISTRICT_WONDER",
+              "x": 36,
+              "y": 26,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 917517,
+              "district_type": "DISTRICT_CAMPUS",
+              "x": 35,
+              "y": 22,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 4.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 4.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 2.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 1179665,
+              "district_type": "DISTRICT_INDUSTRIAL_ZONE",
+              "x": 37,
+              "y": 26,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 4.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 4.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 2.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 1245202,
+              "district_type": "DISTRICT_THEATER",
+              "x": 36,
+              "y": 25,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 3.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 3.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 3.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 2031646,
+              "district_type": "DISTRICT_AERODROME",
+              "x": 34,
+              "y": 24,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            }
+          ]
+        },
+        {
+          "city_id": 196610,
+          "name": "巴地比拉",
+          "population": 12.0,
+          "science": 23.40234375,
+          "food_surplus": 7.0,
+          "campus_status": "complete",
+          "campus_buildings": [
+            {
+              "building_type": "BUILDING_LIBRARY",
+              "district_type": "DISTRICT_CAMPUS",
+              "pillaged": false
+            },
+            {
+              "building_type": "BUILDING_UNIVERSITY",
+              "district_type": "DISTRICT_CAMPUS",
+              "pillaged": false
+            },
+            {
+              "building_type": "BUILDING_RESEARCH_LAB",
+              "district_type": "DISTRICT_CAMPUS",
+              "pillaged": false
+            }
+          ],
+          "policy_conditions": [
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_ADJACENCY",
+              "observed": 1.0,
+              "plot_observed": 1.0,
+              "threshold": 4.0,
+              "meets_observed_threshold": false,
+              "basis": "plot:GetAdjacencyYield (comparison, not engine state)",
+              "native_conditions_met": false,
+              "native_effect_confirmed": false,
+              "native_requirement_state": "NotMet",
+              "native_modifier_instance": "4702",
+              "native_object_id": "935",
+              "native_requirement_instance": "23811"
+            },
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_POP",
+              "observed": 12.0,
+              "plot_observed": null,
+              "threshold": 15.0,
+              "meets_observed_threshold": false,
+              "basis": "observed population",
+              "native_conditions_met": false,
+              "native_effect_confirmed": false,
+              "native_requirement_state": "NotMet",
+              "native_modifier_instance": "4703",
+              "native_object_id": "935",
+              "native_requirement_instance": "23816"
+            }
+          ],
+          "districts": [
+            {
+              "district_id": 327684,
+              "district_type": "DISTRICT_CITY_CENTER",
+              "x": 35,
+              "y": 20,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 393221,
+              "district_type": "DISTRICT_HOLY_SITE",
+              "x": 35,
+              "y": 19,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 1.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 1.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 1.0
+              }
+            },
+            {
+              "district_id": 720906,
+              "district_type": "DISTRICT_COMMERCIAL_HUB",
+              "x": 36,
+              "y": 20,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 5.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 5.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 5.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 983054,
+              "district_type": "DISTRICT_CAMPUS",
+              "x": 35,
+              "y": 18,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 2.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 2.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 1.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 1376276,
+              "district_type": "DISTRICT_HARBOR",
+              "x": 36,
+              "y": 21,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            }
+          ]
+        },
+        {
+          "city_id": 262147,
+          "name": "乌尔",
+          "population": 12.0,
+          "science": 32.40234375,
+          "food_surplus": 8.0,
+          "campus_status": "complete",
+          "campus_buildings": [
+            {
+              "building_type": "BUILDING_LIBRARY",
+              "district_type": "DISTRICT_CAMPUS",
+              "pillaged": false
+            },
+            {
+              "building_type": "BUILDING_UNIVERSITY",
+              "district_type": "DISTRICT_CAMPUS",
+              "pillaged": false
+            },
+            {
+              "building_type": "BUILDING_RESEARCH_LAB",
+              "district_type": "DISTRICT_CAMPUS",
+              "pillaged": false
+            }
+          ],
+          "policy_conditions": [
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_ADJACENCY",
+              "observed": 2.0,
+              "plot_observed": 2.0,
+              "threshold": 4.0,
+              "meets_observed_threshold": false,
+              "basis": "plot:GetAdjacencyYield (comparison, not engine state)",
+              "native_conditions_met": false,
+              "native_effect_confirmed": false,
+              "native_requirement_state": "NotMet",
+              "native_modifier_instance": "4702",
+              "native_object_id": "1586",
+              "native_requirement_instance": "23812"
+            },
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_POP",
+              "observed": 12.0,
+              "plot_observed": null,
+              "threshold": 15.0,
+              "meets_observed_threshold": false,
+              "basis": "observed population",
+              "native_conditions_met": false,
+              "native_effect_confirmed": false,
+              "native_requirement_state": "NotMet",
+              "native_modifier_instance": "4703",
+              "native_object_id": "1586",
+              "native_requirement_instance": "23817"
+            }
+          ],
+          "districts": [
+            {
+              "district_id": 786443,
+              "district_type": "DISTRICT_CITY_CENTER",
+              "x": 37,
+              "y": 28,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 851980,
+              "district_type": "DISTRICT_CAMPUS",
+              "x": 37,
+              "y": 27,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 4.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 4.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 2.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 1114128,
+              "district_type": "DISTRICT_HARBOR",
+              "x": 36,
+              "y": 29,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 2.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 2.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 2.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            },
+            {
+              "district_id": 1310739,
+              "district_type": "DISTRICT_THEATER",
+              "x": 38,
+              "y": 29,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 2.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 2.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 2.0,
+                "YIELD_FAITH": 0.0
+              }
+            }
+          ]
+        },
+        {
+          "city_id": 327684,
+          "name": "乌普萨拉",
+          "population": 5.0,
+          "science": 7.65234375,
+          "food_surplus": 4.0,
+          "campus_status": "absent",
+          "campus_buildings": [],
+          "policy_conditions": [
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_ADJACENCY",
+              "observed": null,
+              "plot_observed": null,
+              "threshold": 4.0,
+              "meets_observed_threshold": false,
+              "basis": "plot:GetAdjacencyYield (comparison, not engine state)",
+              "native_conditions_met": false,
+              "native_effect_confirmed": false,
+              "native_requirement_state": "NotMet",
+              "native_modifier_instance": "4702",
+              "native_object_id": "3467",
+              "native_requirement_instance": "23813"
+            },
+            {
+              "modifier_id": "RATIONALISM_BUILDING_YIELDS_HIGH_POP",
+              "observed": 5.0,
+              "plot_observed": null,
+              "threshold": 15.0,
+              "meets_observed_threshold": false,
+              "basis": "observed population",
+              "native_conditions_met": false,
+              "native_effect_confirmed": false,
+              "native_requirement_state": "NotMet",
+              "native_modifier_instance": "4703",
+              "native_object_id": "3467",
+              "native_requirement_instance": "23818"
+            }
+          ],
+          "districts": [
+            {
+              "district_id": 1441813,
+              "district_type": "DISTRICT_CITY_CENTER",
+              "x": 29,
+              "y": 32,
+              "complete": true,
+              "pillaged": false,
+              "adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "yields": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              },
+              "plot_adjacency": {
+                "YIELD_FOOD": 0.0,
+                "YIELD_PRODUCTION": 0.0,
+                "YIELD_GOLD": 0.0,
+                "YIELD_SCIENCE": 0.0,
+                "YIELD_CULTURE": 0.0,
+                "YIELD_FAITH": 0.0
+              }
+            }
+          ]
+        }
+      ],
+      "rule_rows": 22,
+      "current_rule_graph_sha256": "c5bd799b94ef90b72eb84f8c699ea3a3ade28e2c90fca95131cdf9f703573ae0",
+      "old_queries": 3,
+      "new_queries": 1,
+      "old_text_bytes": 20129,
+      "new_text_bytes": 6825,
+      "reduction_percent": 66.09,
+      "old_rpc_seconds": 0.867339,
+      "new_rpc_seconds": 0.234784,
+      "requests": {
+        "old": {
+          "get_cities": {
+            "request": 11,
+            "text_bytes": 3554,
+            "rpc_seconds": 0.052064
+          },
+          "get_policies": {
+            "request": 14,
+            "text_bytes": 8958,
+            "rpc_seconds": 0.076379
+          },
+          "get_knowledge": {
+            "request": 17,
+            "text_bytes": 7617,
+            "rpc_seconds": 0.738896
+          }
+        },
+        "new": {
+          "request": 20,
+          "text_bytes": 6825,
+          "rpc_seconds": 0.234784
+        },
+        "audit": {
+          "request": 23,
+          "text_bytes": 39068,
+          "rpc_seconds": 0.239773
+        }
+      },
+      "native_adjacent_cells_checked": 144,
+      "distinct_native_readings": [
+        {
+          "city_id": 65536,
+          "district_id": 524295,
+          "yield": "YIELD_SCIENCE",
+          "district": 4.0,
+          "plot": 2.0
+        },
+        {
+          "city_id": 131073,
+          "district_id": 917517,
+          "yield": "YIELD_SCIENCE",
+          "district": 4.0,
+          "plot": 2.0
+        },
+        {
+          "city_id": 131073,
+          "district_id": 1179665,
+          "yield": "YIELD_PRODUCTION",
+          "district": 4.0,
+          "plot": 2.0
+        },
+        {
+          "city_id": 196610,
+          "district_id": 983054,
+          "yield": "YIELD_SCIENCE",
+          "district": 2.0,
+          "plot": 1.0
+        },
+        {
+          "city_id": 262147,
+          "district_id": 851980,
+          "yield": "YIELD_SCIENCE",
+          "district": 4.0,
+          "plot": 2.0
+        }
+      ],
+      "net_turns": 0,
+      "internal_native_reads": 3,
+      "native_conditions_complete": true
+    }
+  ],
+  "sources": [
+    {
+      "name": "clover_faith_20261025_t050",
+      "sha256": "479f0ffbfce89461a09bc7fda78d506a2d6e9f564997c0d948cb6d06bef8241a",
+      "record_sha256": "8dba8d80232630b5c0fa3d19d990430d4e7fe84b3b4aba2a2f535b89250664e3",
+      "unchanged": true
+    },
+    {
+      "name": "clover_faith_20261025_t100",
+      "sha256": "e7d28ab7003baa9e51ebd215ed455d07b4867d9c134b9fffcbd9968a75fca20f",
+      "record_sha256": "5734f943d835bd06a1f08f7f71bb87a1962afb64bca69f07e657c0e28b3d4651",
+      "unchanged": true
+    },
+    {
+      "name": "clover_faith_20261025_t150",
+      "sha256": "1c4c9ee8cc23493b8ee504bf0b0ad82a750cc866a404bd0d5908962a3e5f8968",
+      "record_sha256": "c6d7c926498751c58d6679319106a260c7ab53987bf2acb9514c4789f6e1483e",
+      "unchanged": true
+    },
+    {
+      "name": "clover_faith_resume_t200",
+      "sha256": "a9d5ae1ebd30c2b75740f6d14c6ef9922c89353e96029473f154946482c5f396",
+      "record_sha256": "f374c61c5427f64a6e9af859b961c37eadbfa9bb8b98d663b866b2db34451aaf",
+      "unchanged": true
+    }
+  ],
+  "checkpoints": [
+    {
+      "name": "yields_t050_final_start_20261030",
+      "sha256": "c9c248c141d5cda873ac89e92d78f381f206e00cbc9455eb8b6d6667f3001dff",
+      "civilization": "sumeria",
+      "seed": -1896272000,
+      "turn": 50,
+      "run_id": "c3b876687e914e8d967c3a449db7201d",
+      "score": {
+        "official": 121,
+        "categories": {
+          "CATEGORY_CIVICS": 24,
+          "CATEGORY_EMPIRE": 31,
+          "CATEGORY_GREAT_PEOPLE": 5,
+          "CATEGORY_RELIGION": 10,
+          "CATEGORY_TECH": 22,
+          "CATEGORY_WONDER": 0,
+          "CATEGORY_ERA_SCORE": 29
+        }
+      }
+    },
+    {
+      "name": "yields_t050_final_result_20261030",
+      "sha256": "c24d603d5551a1f135b3281e5cf2f531b7a516e24480953cc3f128c15c70668d",
+      "civilization": "sumeria",
+      "seed": -1896272000,
+      "turn": 50,
+      "run_id": "c3b876687e914e8d967c3a449db7201d",
+      "score": {
+        "official": 121,
+        "categories": {
+          "CATEGORY_CIVICS": 24,
+          "CATEGORY_EMPIRE": 31,
+          "CATEGORY_GREAT_PEOPLE": 5,
+          "CATEGORY_RELIGION": 10,
+          "CATEGORY_TECH": 22,
+          "CATEGORY_WONDER": 0,
+          "CATEGORY_ERA_SCORE": 29
+        }
+      }
+    },
+    {
+      "name": "yields_t100_final_start_20261030",
+      "sha256": "63d3554fa009631e5a98eb28a5d4f1208b27865f939c1e311e92bbd163c499aa",
+      "civilization": "sumeria",
+      "seed": -1896272000,
+      "turn": 100,
+      "run_id": "bbf66d29829d48aa9625c62a65e31028",
+      "score": {
+        "official": 281,
+        "categories": {
+          "CATEGORY_CIVICS": 60,
+          "CATEGORY_EMPIRE": 85,
+          "CATEGORY_GREAT_PEOPLE": 5,
+          "CATEGORY_RELIGION": 12,
+          "CATEGORY_TECH": 46,
+          "CATEGORY_WONDER": 15,
+          "CATEGORY_ERA_SCORE": 58
+        }
+      }
+    },
+    {
+      "name": "yields_t100_final_result_20261030",
+      "sha256": "3df2d0b4e1d57d7bc6f24f48f64aa3087b7570d2e2ac729ff69dc7532396b394",
+      "civilization": "sumeria",
+      "seed": -1896272000,
+      "turn": 100,
+      "run_id": "bbf66d29829d48aa9625c62a65e31028",
+      "score": {
+        "official": 281,
+        "categories": {
+          "CATEGORY_CIVICS": 60,
+          "CATEGORY_EMPIRE": 85,
+          "CATEGORY_GREAT_PEOPLE": 5,
+          "CATEGORY_RELIGION": 12,
+          "CATEGORY_TECH": 46,
+          "CATEGORY_WONDER": 15,
+          "CATEGORY_ERA_SCORE": 58
+        }
+      }
+    },
+    {
+      "name": "yields_t150_final_start_20261030",
+      "sha256": "eccb356c86e6df2a55d67fe4947949ddefb55d547dd86fd1770a64692f474a4e",
+      "civilization": "sumeria",
+      "seed": -1896272000,
+      "turn": 150,
+      "run_id": "9ace7d089e794e6a9f1e034538211405",
+      "score": {
+        "official": 483,
+        "categories": {
+          "CATEGORY_CIVICS": 93,
+          "CATEGORY_EMPIRE": 140,
+          "CATEGORY_GREAT_PEOPLE": 35,
+          "CATEGORY_RELIGION": 10,
+          "CATEGORY_TECH": 80,
+          "CATEGORY_WONDER": 30,
+          "CATEGORY_ERA_SCORE": 95
+        }
+      }
+    },
+    {
+      "name": "yields_t150_final_result_20261030",
+      "sha256": "107686bcbbb4ae5047e63ecf3febf6c1dd1bda3422a76a7d46da5bd506fb4c13",
+      "civilization": "sumeria",
+      "seed": -1896272000,
+      "turn": 150,
+      "run_id": "9ace7d089e794e6a9f1e034538211405",
+      "score": {
+        "official": 483,
+        "categories": {
+          "CATEGORY_CIVICS": 93,
+          "CATEGORY_EMPIRE": 140,
+          "CATEGORY_GREAT_PEOPLE": 35,
+          "CATEGORY_RELIGION": 10,
+          "CATEGORY_TECH": 80,
+          "CATEGORY_WONDER": 30,
+          "CATEGORY_ERA_SCORE": 95
+        }
+      }
+    },
+    {
+      "name": "yields_t200_final_start_20261030",
+      "sha256": "e6629c899b099687b5b9a3a2c94d48a235547e41609f39def6d758f8b015a579",
+      "civilization": "sumeria",
+      "seed": -1896272000,
+      "turn": 200,
+      "run_id": "341a23f5be0349488b84df8fe17f98c9",
+      "score": {
+        "official": 614,
+        "categories": {
+          "CATEGORY_CIVICS": 114,
+          "CATEGORY_EMPIRE": 182,
+          "CATEGORY_GREAT_PEOPLE": 50,
+          "CATEGORY_RELIGION": 10,
+          "CATEGORY_TECH": 106,
+          "CATEGORY_WONDER": 30,
+          "CATEGORY_ERA_SCORE": 122
+        }
+      }
+    },
+    {
+      "name": "yields_t200_final_result_20261030",
+      "sha256": "34e1a7f6ae0697b2c50dd1c02ea9a0ca4c1cf76dca1196fa14571cf404dceee0",
+      "civilization": "sumeria",
+      "seed": -1896272000,
+      "turn": 200,
+      "run_id": "341a23f5be0349488b84df8fe17f98c9",
+      "score": {
+        "official": 614,
+        "categories": {
+          "CATEGORY_CIVICS": 114,
+          "CATEGORY_EMPIRE": 182,
+          "CATEGORY_GREAT_PEOPLE": 50,
+          "CATEGORY_RELIGION": 10,
+          "CATEGORY_TECH": 106,
+          "CATEGORY_WONDER": 30,
+          "CATEGORY_ERA_SCORE": 122
+        }
+      }
+    }
+  ],
+  "summary": {
+    "old_text_bytes": 62321,
+    "new_text_bytes": 21449,
+    "reduction_percent": 65.58,
+    "old_queries": 12,
+    "new_queries": 4,
+    "native_adjacent_cells": 396,
+    "distinct_native_readings": 8,
+    "rule_graph_identical_across_stages": true,
+    "native_condition_count": 18,
+    "internal_native_reads": 8,
+    "old_rpc_median_seconds": 0.857851,
+    "new_rpc_median_seconds": 0.1837005
+  }
+}

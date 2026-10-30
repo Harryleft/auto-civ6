@@ -435,6 +435,10 @@ class GameState:
         from civ_mcp.decision import read_context
         return await read_context(self, include, city_ids, view)
 
+    async def get_city_yields(self, city_id=None, view="brief") -> dict:
+        from civ_mcp.city_yields import read_context
+        return await read_context(self, city_id, view)
+
     async def get_pathing_estimate(
         self, unit_index: int, target_x: int, target_y: int
     ) -> lq.PathingEstimate:

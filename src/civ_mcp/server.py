@@ -268,6 +268,31 @@ async def get_decision_context(
     return await _logged(ctx, "get_decision_context", {"include": include, "city_ids": city_ids, "view": view}, read)
 
 
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_city_yields(ctx: Context,
+    city_id: Annotated[int, Field(ge=0, strict=True)] | None = None,
+    view: Literal["brief", "structured", "evidence"] = "brief",
+) -> str:
+    """Read native built-district yields and current Rationalism conditions.
+
+    Omit city_id for all owned cities. Includes unfinished/pillaged districts,
+    policy unlock/slot facts and separate current rule branches. Threshold
+    comparisons are observations, not native modifier confirmation or a net
+    science forecast. Structured retains current GameInfo rules and native
+    observations. Equipped policies also read GameCore requirement instances,
+    exact owned-city component bindings and a final InGame scope witness.
+    District/plot adjacency stay separate. Evidence adds science tooltips.
+    Refuses pending before game I/O; does not select policies or alter cities.
+    """
+    async def read():
+        try:
+            result = await _get_game(ctx).get_city_yields(city_id, view)
+        except (LuaError, OSError, ValueError, KeyError, IndexError, TimeoutError) as exc:
+            result = dict(schema_version=1, status="unknown", error=f"{type(exc).__name__}: {exc}")
+        return json.dumps(result, ensure_ascii=False, allow_nan=False)
+    return await _logged(ctx, "get_city_yields", {"city_id": city_id, "view": view}, read)
+
+
 @mcp.tool(annotations={"readOnlyHint": True, "idempotentHint": True})
 async def search_knowledge(
     ctx: Context,

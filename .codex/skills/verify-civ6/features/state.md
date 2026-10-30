@@ -6,6 +6,7 @@
 
 - `state.overview`：回读当前文明、回合、产出和终局状态。
 - `state.entities`：城市和单位 ID 可对应概览；隐藏、未知与不存在保持区别。
+- `state.city_yields`：已放置区域的原生相邻值、完成／受损、当前理性主义规则与逐城门槛比较。
 - `state.snapshot`、`state.identity`、`session.pending`：结构化快照的世界／玩家／回合、实体范围、服务身份及无未决上下文检查。
 
 ## How to get to it (user POV)
@@ -17,6 +18,8 @@
 - 安装连接入口见[安装与连接](../../../../docs/installation.md)，只有任务要求启动游戏时才进入启动流程。
 
 ## 自动验收
+
+`city yields [ID]` 为按需区域收益查询。先读简报并记录判断，再用 `--view evidence` 核对完整当前规则、六种区域收益、原生地块相邻值和科技 tooltip。逐项区分已完成、未完成、受损、缺席、零与未知；理性主义两条分支独立核对 Amount、目标、RequirementSet、Reverse／Inverse 等标志及当前政策状态。阈值比较是推断；已装备时另核对 GameCore 的修正实例、主体计数及 Met／NotMet，精确绑定城市 ID／所有者／原始名称。只在身份、集合和条件全部一致时确认对应分支，不能称为净收益。定向离线入口为 `tests/test_city_yields.py`，已登记到 `civ6 test debug`；不能以隔离结果代替实机读数。
 
 核对任务要求的现场及控制通道后运行 `verify state`，读取顶层 `status`、`game_verification` 和 `data.verification`。`passed_readonly` 只覆盖结构化快照与会话检查；原始数据、逐项检查和 RPC 保留在证据中。有 pending 时先保留并按原入口确认，自动验收不得用实体查询消费它。读取失败、身份不符或范围未知不授予通过；该命令不加载、保存、推进或重启游戏。
 

@@ -1,6 +1,6 @@
 # CLI 命令手册
 
-本页是 AI 唯一操作入口的命令目录，涵盖顶层命令、会话控制及 144 个命名子命令（含 3 个既有双人热座实验命令）。92 个基础 MCP 工具均有命名入口，其中任意 Lua 只在显式开发模式开放。`doctor`、`verify knowledge`、`test` 和 `logs` 不连接 FireTuner；`verify state` 明确访问当前真实游戏，`debug` 在收到查询或动作时访问游戏。`civ-mcp` 保留为 CLI 内部服务，客户端不直接注册。
+本页是 AI 唯一操作入口的命令目录，涵盖顶层命令、会话控制及 145 个命名子命令（含 3 个既有双人热座实验命令）。93 个基础 MCP 工具均有命名入口，其中任意 Lua 只在显式开发模式开放。`doctor`、`verify knowledge`、`test` 和 `logs` 不连接 FireTuner；`verify state` 明确访问当前真实游戏，`debug` 在收到查询或动作时访问游戏。`civ-mcp` 保留为 CLI 内部服务，客户端不直接注册。
 
 ## 安装与调用
 
@@ -201,6 +201,7 @@ game decision --view structured
 | 会话命令 | MCP 工具 | 模式 |
 | --- | --- | --- |
 | `city list` | `get_cities` | 只读 |
+| `city yields [ID] [--view brief\|structured\|evidence]` | `get_city_yields` | 只读 |
 | `city production ID [--item-type UNIT\|BUILDING --item NAME]` | `get_city_production` | 只读 |
 | `city set-production ID TYPE NAME [--x X --y Y]` | `set_city_production` | 变更 |
 | `city attack ID X Y` | `city_action`，action=attack | 变更 |
@@ -213,6 +214,14 @@ game decision --view structured
 `city production` 将生产与购买候选合并，分别列出金币／信仰的当前价格、余额、能否购买及拒绝原因。只能购买的宗教单位不再显示生产回合；币种未启用时显示 `CURRENCY_NOT_SUPPORTED`，不展示通用换算价。余额不足显示缺口，缺前置、同类单位占位和容量等保留原生原因；无法核实的价格或资格显示 unknown／unavailable。
 
 要核对未出现在列表中的物品，用 `city production ID --item-type UNIT --item UNIT_APOSTLE`，两个筛选参数成对提供。报价是本次观察，实际 `city buy` 会重新检查价格、资格和余额；成功仍需新产物与精确扣款同时确认。`game decision --city ID` 使用同一报价与展示。
+
+`city yields` 一次读取全部自有城市；提供本次查询所得 ID 时只读指定城市。它分别返回已放置区域的原生区域相邻值、地块相邻值与区域产出、完成／受损状态、学院建筑，以及理性主义的解锁／可装槽／已装备状态。未完成区域也可能返回非零相邻值，不能当成已生效产出。缺席、零值、接口未知分别保留。
+
+默认 `brief` 将当前 `GameInfo` 的两条条件链共享展示一次，逐城对照人口与地块相邻门槛；区域相邻值另列，不能把翻倍后的 4 直接当作地块相邻达到 4。政策已装备时，同一命名查询继续读 GameCore 的修正实例、主体集合与 RequirementSet 状态，再回读世界范围。未装备时只需一次 InGame 读取；已装备时为三次原生读取，模型仍只调用一个命令。
+
+`structured` 保留完整当前标量规则行、六种收益、原生条件及实例身份，`evidence` 另读城市科技 tooltip。人口／地块门槛比较是推断，`native condition` 与 `native effect` 来自已绑定自有城市的原生状态，不表示科技净增量。身份绑定要求引擎对象诊断中的精确城市 ID、所有者、当前城市对象及原始名称全部一致；不按城市名称猜测。状态冲突、绑定失败、反向／额外／不支持的条件或原生集合不完整时保留 unknown，完整展开继续可用。
+
+该入口不缓存、不修改政策或城市，任一 pending 在游戏 I/O 前返回 `blocked`；身份／回合变化、实体扫描或原生资料不完整时返回 `unknown`。查询数和读取量应针对同一个决策问题比较，不能用新增事实的完整展开与缺少这些事实的旧报告宣称全量等价。
 
 ### 研究、回合与存档
 

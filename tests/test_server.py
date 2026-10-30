@@ -1626,7 +1626,7 @@ class TestMcpProtocol:
                     assert initialization.serverInfo.name == "Civilization VI"
                     tools = (await session.list_tools()).tools
                     names = {tool.name for tool in tools}
-                    assert len(names) == 92
+                    assert len(names) == 93
                     assert {"search_research", "get_public_report", "get_unit_formations", "set_unit_formation"} <= names
                     formations = next(tool for tool in tools if tool.name == "get_unit_formations")
                     assert formations.annotations.readOnlyHint is True
