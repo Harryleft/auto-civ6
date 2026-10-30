@@ -1,0 +1,3072 @@
+{
+  "source_commit": "b619fe3fd9df59683c2f1e45cff5a621d93a4747",
+  "scope": "All current named MCP tools underlying CLI; mutable tools reviewed only for decision-input/preview contracts, no automated strategy.",
+  "tools": [
+    {
+      "tool": "get_runtime_status",
+      "line": 205,
+      "read_only": true,
+      "description": "Read this MCP process/session and pending-owner facts without game I/O.",
+      "parameters": [],
+      "narrators": [],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 205,
+      "domain": "runtime",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 212,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 158,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 236,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 319,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 327,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 335,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_game_snapshot",
+      "line": 227,
+      "read_only": true,
+      "description": "Read structured current-player identity, overview, units and cities.",
+      "parameters": [],
+      "narrators": [],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 227,
+      "domain": "runtime",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 206,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 62,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_decision_context",
+      "line": 245,
+      "read_only": true,
+      "description": "Read decision facts in one bounded InGame request; never select actions.",
+      "parameters": [
+        "include",
+        "city_ids",
+        "view"
+      ],
+      "narrators": [],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 245,
+      "domain": "runtime",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 209,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 65,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_city_yields",
+      "line": 272,
+      "read_only": true,
+      "description": "Read native built-district yields and current Rationalism conditions.",
+      "parameters": [
+        "city_id",
+        "view"
+      ],
+      "narrators": [],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 272,
+      "domain": "cities",
+      "live_cases": [
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 23,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 26,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 58,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 61,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 117,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 120,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 152,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 155,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 44,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 47,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 23,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 26,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 29,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 32,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 121,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 124,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 127,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 130,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v1/debug.jsonl",
+          "sequence": 33,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v1/debug.jsonl",
+          "sequence": 36,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v1/debug.jsonl",
+          "sequence": 39,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 23,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 26,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 29,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 32,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 87,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 23,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 26,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 58,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 61,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 104,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 107,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 137,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 140,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 188,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 191,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 221,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 224,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 268,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 271,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 304,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 307,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "search_knowledge",
+      "line": 297,
+      "read_only": true,
+      "description": "Search static Civ6 rules by a Chinese/English name or internal ID fragment.",
+      "parameters": [
+        "query",
+        "topic",
+        "limit"
+      ],
+      "narrators": [],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 297,
+      "domain": "knowledge_research",
+      "live_cases": [
+        {
+          "evidence": "live-final-v1/debug.jsonl",
+          "sequence": 23,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "search_research",
+      "line": 320,
+      "read_only": true,
+      "description": "Search cached technology/civic names, unlocks and positive effect associations.",
+      "parameters": [
+        "kind",
+        "query",
+        "filters",
+        "match",
+        "limit",
+        "offset"
+      ],
+      "narrators": [],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 320,
+      "domain": "knowledge_research",
+      "live_cases": [
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 100,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_knowledge",
+      "line": 334,
+      "read_only": true,
+      "description": "Read a static knowledge entry ID from search_knowledge as UTF-8 JSON.",
+      "parameters": [
+        "entry_id",
+        "level"
+      ],
+      "narrators": [],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 334,
+      "domain": "knowledge_research",
+      "live_cases": [
+        {
+          "evidence": "live-final-v1/debug.jsonl",
+          "sequence": 28,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_public_report",
+      "line": 359,
+      "read_only": true,
+      "description": "Read JSON public UI reports without opening views or making choices.",
+      "parameters": [
+        "section",
+        "target_player",
+        "limit",
+        "offset",
+        "since_turn",
+        "search_kind",
+        "query",
+        "include_rules"
+      ],
+      "narrators": [],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 359,
+      "domain": "public_victory_notifications",
+      "live_cases": [
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 53,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 80,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 147,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 177,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 203,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 236,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 239,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 245,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 248,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 251,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 254,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 259,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 68,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 71,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 81,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 163,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 172,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 184,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 194,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 207,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 84,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 53,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 134,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 218,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 301,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_game_overview",
+      "line": 388,
+      "read_only": true,
+      "description": "Get current turn, civilization, yields, research, cities, units and game outcome.",
+      "parameters": [],
+      "narrators": [
+        "narrate_overview"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 388,
+      "domain": "runtime",
+      "live_cases": [
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 9,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 103,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 26,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 155,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 9,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 107,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v1/debug.jsonl",
+          "sequence": 9,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 9,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 81,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 9,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 90,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 174,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 254,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_units",
+      "line": 411,
+      "read_only": true,
+      "description": "List all your units with position, type, movement, and health.",
+      "parameters": [],
+      "narrators": [
+        "narrate_units"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 411,
+      "domain": "units",
+      "live_cases": [
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 15,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 109,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 32,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 15,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 113,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 197,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v1/debug.jsonl",
+          "sequence": 15,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 15,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 15,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 96,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 180,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 260,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_unit_formations",
+      "line": 440,
+      "read_only": true,
+      "description": "Read one owned unit's escort/military formation and native eligible targets.",
+      "parameters": [
+        "unit_id"
+      ],
+      "narrators": [],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 440,
+      "domain": "units",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 221,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "set_unit_formation",
+      "line": 454,
+      "read_only": false,
+      "description": "Explicitly link/unlink escorts or form a corps/army through native commands.",
+      "parameters": [
+        "unit_id",
+        "action",
+        "target_unit_id"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 454,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "get_spies",
+      "line": 471,
+      "read_only": true,
+      "description": "List all your spy units with position, rank, city, and available missions.",
+      "parameters": [],
+      "narrators": [
+        "narrate_spies"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 471,
+      "domain": "diplomacy_spies",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 164,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "spy_action",
+      "line": 493,
+      "read_only": false,
+      "description": "Send a spy to a city, launch a mission, or choose an explicit escape route.",
+      "parameters": [
+        "unit_id",
+        "action",
+        "target_x",
+        "target_y"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 493,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "get_cities",
+      "line": 546,
+      "read_only": true,
+      "description": "List all your cities with yields, population, production, growth, and loyalty.",
+      "parameters": [],
+      "narrators": [
+        "narrate_cities"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 546,
+      "domain": "cities",
+      "live_cases": [
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 12,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 106,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 29,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 12,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 110,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v1/debug.jsonl",
+          "sequence": 12,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 12,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 12,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 93,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 177,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 257,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_city_production",
+      "line": 566,
+      "read_only": true,
+      "description": "List production options and native GOLD/FAITH prices, eligibility and refusal reasons.",
+      "parameters": [
+        "city_id",
+        "item_type",
+        "item_name"
+      ],
+      "narrators": [
+        "narrate_city_production"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 566,
+      "domain": "cities",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 50,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v1/debug.jsonl",
+          "sequence": 42,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 35,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_map_area",
+      "line": 591,
+      "read_only": true,
+      "description": "Get terrain info for tiles around a point.",
+      "parameters": [
+        "center_x",
+        "center_y",
+        "radius"
+      ],
+      "narrators": [
+        "narrate_map"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 591,
+      "domain": "map_candidates",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 76,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 87,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_settle_advisor",
+      "line": 618,
+      "read_only": true,
+      "description": "List observed settlement terrain candidates near a settler unit.",
+      "parameters": [
+        "unit_id"
+      ],
+      "narrators": [],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 618,
+      "domain": "map_candidates",
+      "live_cases": [
+        {
+          "evidence": "live-final-v1/debug.jsonl",
+          "sequence": 63,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_pathing_estimate",
+      "line": 636,
+      "read_only": true,
+      "description": "Estimate how many turns a unit needs to reach a destination.",
+      "parameters": [
+        "unit_id",
+        "target_x",
+        "target_y"
+      ],
+      "narrators": [
+        "narrate_pathing_estimate"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 638,
+      "domain": "units",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 233,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_global_settle_advisor",
+      "line": 664,
+      "read_only": true,
+      "description": "Read unranked settlement terrain candidates across the revealed map.",
+      "parameters": [],
+      "narrators": [
+        "narrate_settle_candidates"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 666,
+      "domain": "map_candidates",
+      "live_cases": [
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 35,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 129,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 70,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 47,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 145,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v1/debug.jsonl",
+          "sequence": 60,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 53,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 35,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 116,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 200,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 283,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_builder_tasks",
+      "line": 683,
+      "read_only": true,
+      "description": "Read improvement hints and native builder readiness.",
+      "parameters": [],
+      "narrators": [
+        "narrate_builder_tasks"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 685,
+      "domain": "map_candidates",
+      "live_cases": [
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 32,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 126,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 112,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 44,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 142,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v1/debug.jsonl",
+          "sequence": 57,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 50,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 32,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 113,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 197,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 280,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_empire_resources",
+      "line": 701,
+      "read_only": true,
+      "description": "Get a summary of all resources in and near your empire.",
+      "parameters": [],
+      "narrators": [
+        "narrate_empire_resources"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 709,
+      "domain": "economy_trade",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 152,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_strategic_map",
+      "line": 717,
+      "read_only": true,
+      "description": "Get fog-of-war boundaries and unclaimed resources across the map.",
+      "parameters": [],
+      "narrators": [
+        "narrate_strategic_map"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 725,
+      "domain": "map_candidates",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 73,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_diplomacy",
+      "line": 734,
+      "read_only": true,
+      "description": "Get diplomatic status with all known civilizations.",
+      "parameters": [],
+      "narrators": [
+        "narrate_diplomacy"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 742,
+      "domain": "diplomacy_spies",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 123,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 242,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_tech_civics",
+      "line": 752,
+      "read_only": true,
+      "description": "Get technology and civic research status.",
+      "parameters": [],
+      "narrators": [
+        "narrate_tech_civics"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 760,
+      "domain": "knowledge_research",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 84,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_pending_trades",
+      "line": 768,
+      "read_only": true,
+      "description": "Read a verified current incoming deal or demand.",
+      "parameters": [],
+      "narrators": [
+        "narrate_pending_deals"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 776,
+      "domain": "economy_trade",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 129,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_policies",
+      "line": 785,
+      "read_only": true,
+      "description": "Read policy slots, native change restrictions and current candidates.",
+      "parameters": [
+        "policy_type"
+      ],
+      "narrators": [
+        "narrate_policies"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 793,
+      "domain": "government",
+      "live_cases": [
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 38,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 41,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 44,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 132,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 135,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 138,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 81,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 200,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 53,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 56,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 59,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 151,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 154,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 157,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v1/debug.jsonl",
+          "sequence": 71,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 62,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 90,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 38,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 41,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 44,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 119,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 122,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 125,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 203,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 206,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 209,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 286,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 289,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 292,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_notifications",
+      "line": 799,
+      "read_only": true,
+      "description": "Get all active game notifications.",
+      "parameters": [],
+      "narrators": [
+        "narrate_notifications"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 807,
+      "domain": "public_victory_notifications",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 161,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_pending_diplomacy",
+      "line": 817,
+      "read_only": true,
+      "description": "Check for pending diplomacy encounters (e.g. first meeting with a civ).",
+      "parameters": [],
+      "narrators": [
+        "narrate_diplomacy_sessions"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 825,
+      "domain": "diplomacy_spies",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 126,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_governors",
+      "line": 839,
+      "read_only": true,
+      "description": "Read native governor appointment/promotion eligibility and assignments.",
+      "parameters": [
+        "include_ineligible"
+      ],
+      "narrators": [
+        "narrate_governors"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 847,
+      "domain": "government",
+      "live_cases": [
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 47,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 50,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 141,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 144,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 191,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 160,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 47,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 50,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 128,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 131,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 212,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 215,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 295,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 298,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "appoint_governor",
+      "line": 855,
+      "read_only": false,
+      "description": "Appoint a new governor.",
+      "parameters": [
+        "governor_type"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 863,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "assign_governor",
+      "line": 873,
+      "read_only": false,
+      "description": "Assign an appointed governor to a city.",
+      "parameters": [
+        "governor_type",
+        "city_id",
+        "target_owner"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 881,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "promote_governor",
+      "line": 898,
+      "read_only": false,
+      "description": "Promote a governor with a new ability.",
+      "parameters": [
+        "governor_type",
+        "promotion_type"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 906,
+      "domain": "mutation_contract",
+      "live_cases": [
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 217,
+          "tool_reported_error": true
+        }
+      ]
+    },
+    {
+      "tool": "get_unit_promotions",
+      "line": 919,
+      "read_only": true,
+      "description": "List available promotions for a unit.",
+      "parameters": [
+        "unit_id"
+      ],
+      "narrators": [
+        "narrate_unit_promotions"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 927,
+      "domain": "units",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 224,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "promote_unit",
+      "line": 938,
+      "read_only": false,
+      "description": "Apply a promotion to a unit.",
+      "parameters": [
+        "unit_id",
+        "promotion_type"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 946,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "get_city_states",
+      "line": 959,
+      "read_only": true,
+      "description": "List known city-states with envoy counts and types.",
+      "parameters": [],
+      "narrators": [
+        "narrate_city_states"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 967,
+      "domain": "government",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 115,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "send_envoy",
+      "line": 976,
+      "read_only": false,
+      "description": "Send an envoy to a city-state.",
+      "parameters": [
+        "player_id"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 984,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "get_pantheon_beliefs",
+      "line": 993,
+      "read_only": true,
+      "description": "Get pantheon status and available beliefs for selection.",
+      "parameters": [],
+      "narrators": [
+        "narrate_pantheon_status"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 1001,
+      "domain": "religion",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 146,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "choose_pantheon",
+      "line": 1009,
+      "read_only": false,
+      "description": "Found a pantheon with the specified belief.",
+      "parameters": [
+        "belief_type"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 1017,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "get_religion_beliefs",
+      "line": 1029,
+      "read_only": true,
+      "description": "Get religion founding status, available religions, and available beliefs.",
+      "parameters": [],
+      "narrators": [
+        "narrate_religion_founding_status"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 1037,
+      "domain": "religion",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 149,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "found_religion",
+      "line": 1046,
+      "read_only": false,
+      "description": "Found a religion with a chosen name, follower belief, and founder belief.",
+      "parameters": [
+        "religion_type",
+        "follower_belief",
+        "founder_belief"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 1054,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "upgrade_unit",
+      "line": 1076,
+      "read_only": false,
+      "description": "Upgrade a unit to its next type (e.g. Slinger -> Archer).",
+      "parameters": [
+        "unit_id"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 1084,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "get_dedications",
+      "line": 1092,
+      "read_only": true,
+      "description": "Get current era age, available dedications, and active ones.",
+      "parameters": [],
+      "narrators": [
+        "narrate_dedications"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 1100,
+      "domain": "congress_era",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 197,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "choose_dedication",
+      "line": 1109,
+      "read_only": false,
+      "description": "Choose a dedication/commemoration for the current era.",
+      "parameters": [
+        "dedication_index"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 1117,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "get_trade_options",
+      "line": 1127,
+      "read_only": true,
+      "description": "See what both sides can trade — like opening the trade screen.",
+      "parameters": [
+        "other_player_id"
+      ],
+      "narrators": [
+        "narrate_deal_options"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 1135,
+      "domain": "economy_trade",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 134,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 230,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "respond_to_trade",
+      "line": 1149,
+      "read_only": false,
+      "description": "Accept/reject a verified incoming offer or the owned current outgoing counter.",
+      "parameters": [
+        "other_player_id",
+        "accept"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 1157,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "negotiate_incoming_trade",
+      "line": 1174,
+      "read_only": false,
+      "description": "Evaluate a current incoming offer without final acceptance or opening a session.",
+      "parameters": [
+        "other_player_id",
+        "expected_fingerprint",
+        "our_gold",
+        "their_gold",
+        "our_gpt",
+        "their_gpt",
+        "mode"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 1182,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "propose_trade",
+      "line": 1208,
+      "read_only": false,
+      "description": "Propose or test a trade deal with an AI civilization.",
+      "parameters": [
+        "other_player_id",
+        "offer_gold",
+        "offer_gold_per_turn",
+        "offer_resources",
+        "offer_favor",
+        "offer_open_borders",
+        "request_gold",
+        "request_gold_per_turn",
+        "request_resources",
+        "request_favor",
+        "request_open_borders",
+        "joint_war_target",
+        "mode",
+        "joint_war_type"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 1216,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "propose_peace",
+      "line": 1319,
+      "read_only": false,
+      "description": "Propose white peace to a civilization you're at war with.",
+      "parameters": [
+        "other_player_id"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 1327,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "set_policies",
+      "line": 1340,
+      "read_only": false,
+      "description": "Set policy cards in government slots.",
+      "parameters": [
+        "assignments"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 1348,
+      "domain": "mutation_contract",
+      "live_cases": [
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 71,
+          "tool_reported_error": true
+        },
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 78,
+          "tool_reported_error": true
+        }
+      ]
+    },
+    {
+      "tool": "respond_to_diplomacy",
+      "line": 1372,
+      "read_only": false,
+      "description": "Respond to a pending diplomacy encounter.",
+      "parameters": [
+        "other_player_id",
+        "response"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 1380,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "close_diplomacy_session",
+      "line": 1395,
+      "read_only": false,
+      "description": "明确放弃一个已核验参与者的现有原生外交会话。",
+      "parameters": [
+        "other_player_id"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 1403,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "send_diplomatic_action",
+      "line": 1410,
+      "read_only": false,
+      "description": "Send a proactive diplomatic action to another civilization.",
+      "parameters": [
+        "other_player_id",
+        "action"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 1418,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "form_alliance",
+      "line": 1446,
+      "read_only": false,
+      "description": "Form an alliance with another civilization.",
+      "parameters": [
+        "other_player_id",
+        "alliance_type"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 1454,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "city_action",
+      "line": 1471,
+      "read_only": false,
+      "description": "Issue a command to a city.",
+      "parameters": [
+        "city_id",
+        "action",
+        "target_x",
+        "target_y"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 1479,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "unit_action",
+      "line": 1520,
+      "read_only": false,
+      "description": "Issue a command to a unit.",
+      "parameters": [
+        "unit_id",
+        "action",
+        "target_x",
+        "target_y",
+        "improvement"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 1528,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "skip_remaining_units",
+      "line": 1684,
+      "read_only": false,
+      "description": "Skip currently ready units through native InGame operations.",
+      "parameters": [],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 1692,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "set_city_production",
+      "line": 1697,
+      "read_only": false,
+      "description": "Set what a city should produce.",
+      "parameters": [
+        "city_id",
+        "item_type",
+        "item_name",
+        "target_x",
+        "target_y"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 1705,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "purchase_item",
+      "line": 1732,
+      "read_only": false,
+      "description": "Purchase a unit or building instantly with gold or faith.",
+      "parameters": [
+        "city_id",
+        "item_type",
+        "item_name",
+        "yield_type"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 1740,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "set_research",
+      "line": 1764,
+      "read_only": false,
+      "description": "Choose a technology or civic to research.",
+      "parameters": [
+        "tech_or_civic",
+        "category"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 1772,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "get_turn_status",
+      "line": 1789,
+      "read_only": true,
+      "description": "Read native turn/UI phases and cumulative wait without clearing pending.",
+      "parameters": [],
+      "narrators": [],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 1797,
+      "domain": "runtime",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 89,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v1/debug.jsonl",
+          "sequence": 74,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "end_turn",
+      "line": 1803,
+      "read_only": false,
+      "description": "Advance once and confirm the next turn. Resolve reported blockers first.",
+      "parameters": [],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 1811,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "get_trade_routes",
+      "line": 1829,
+      "read_only": true,
+      "description": "Get trade route capacity, active routes, and trader status.",
+      "parameters": [],
+      "narrators": [
+        "narrate_trade_routes"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 1837,
+      "domain": "economy_trade",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 194,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_trade_destinations",
+      "line": 1845,
+      "read_only": true,
+      "description": "List valid trade route destinations for a trader unit.",
+      "parameters": [
+        "unit_id"
+      ],
+      "narrators": [
+        "narrate_trade_destinations"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 1853,
+      "domain": "economy_trade",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 137,
+          "tool_reported_error": true
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 227,
+          "tool_reported_error": true
+        }
+      ]
+    },
+    {
+      "tool": "get_district_advisor",
+      "line": 1870,
+      "read_only": true,
+      "description": "Read all native available district plots and native adjacency, unranked.",
+      "parameters": [
+        "city_id",
+        "district_type"
+      ],
+      "narrators": [
+        "narrate_district_advisor"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 1878,
+      "domain": "map_candidates",
+      "live_cases": [
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 64,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 158,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 53,
+          "tool_reported_error": true
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 35,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 133,
+          "tool_reported_error": true
+        },
+        {
+          "evidence": "live-final-v1/debug.jsonl",
+          "sequence": 45,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v1/debug.jsonl",
+          "sequence": 48,
+          "tool_reported_error": true
+        },
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 38,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 64,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 143,
+          "tool_reported_error": true
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 227,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 310,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_wonder_advisor",
+      "line": 1898,
+      "read_only": true,
+      "description": "Show all native available wonder tiles and displaced features.",
+      "parameters": [
+        "city_id",
+        "wonder_name"
+      ],
+      "narrators": [
+        "narrate_wonder_advisor"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 1906,
+      "domain": "map_candidates",
+      "live_cases": [
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 67,
+          "tool_reported_error": true
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 161,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 59,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 38,
+          "tool_reported_error": true
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 136,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v1/debug.jsonl",
+          "sequence": 51,
+          "tool_reported_error": true
+        },
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 41,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 67,
+          "tool_reported_error": true
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 146,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 230,
+          "tool_reported_error": true
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 313,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_purchasable_tiles",
+      "line": 1933,
+      "read_only": true,
+      "description": "List tiles a city can purchase with gold.",
+      "parameters": [
+        "city_id"
+      ],
+      "narrators": [
+        "narrate_purchasable_tiles"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 1942,
+      "domain": "map_candidates",
+      "live_cases": [
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 70,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 164,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 56,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 41,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 84,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 139,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 210,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v1/debug.jsonl",
+          "sequence": 54,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 44,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 47,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 70,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 149,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 233,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 316,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "purchase_tile",
+      "line": 1954,
+      "read_only": false,
+      "description": "Buy a tile for a city with gold.",
+      "parameters": [
+        "city_id",
+        "x",
+        "y"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 1961,
+      "domain": "mutation_contract",
+      "live_cases": [
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 77,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 174,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 78,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 204,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "change_government",
+      "line": 1980,
+      "read_only": false,
+      "description": "Switch to a different government type.",
+      "parameters": [
+        "government_type"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 1987,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "get_great_people",
+      "line": 2004,
+      "read_only": true,
+      "description": "See available Great People and recruitment progress.",
+      "parameters": [],
+      "narrators": [
+        "narrate_great_people"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 2011,
+      "domain": "great_people",
+      "live_cases": [
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 29,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 123,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 62,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 50,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 148,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v1/debug.jsonl",
+          "sequence": 66,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 56,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 29,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 110,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 194,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 274,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_gp_advisor",
+      "line": 2020,
+      "read_only": true,
+      "description": "Read native Great Person activation highlights and current city facts, unranked.",
+      "parameters": [
+        "unit_index"
+      ],
+      "narrators": [
+        "narrate_gp_advisor"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 2027,
+      "domain": "great_people",
+      "live_cases": [
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 167,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 65,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 218,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 59,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 277,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "recruit_great_person",
+      "line": 2044,
+      "read_only": false,
+      "description": "Recruit a Great Person using accumulated GP points.",
+      "parameters": [
+        "individual_id"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 2049,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "patronize_great_person",
+      "line": 2065,
+      "read_only": false,
+      "description": "Buy a Great Person instantly with gold or faith.",
+      "parameters": [
+        "individual_id",
+        "yield_type"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 2070,
+      "domain": "mutation_contract",
+      "live_cases": [
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 181,
+          "tool_reported_error": true
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 191,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "reject_great_person",
+      "line": 2088,
+      "read_only": false,
+      "description": "Pass on the specified Great Person using points from that class.",
+      "parameters": [
+        "individual_id"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 2093,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "get_world_congress",
+      "line": 2113,
+      "read_only": true,
+      "description": "Get World Congress status, active resolutions, and voting options.",
+      "parameters": [],
+      "narrators": [
+        "narrate_world_congress"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 2118,
+      "domain": "congress_era",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 120,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "open_world_congress",
+      "line": 2132,
+      "read_only": false,
+      "description": "Explicitly open native Congress voting, then read get_world_congress.",
+      "parameters": [],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 2137,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "queue_wc_votes",
+      "line": 2147,
+      "read_only": false,
+      "description": "Submit a complete explicit World Congress resolution/proposal plan.",
+      "parameters": [
+        "votes"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 2152,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "get_victory_progress",
+      "line": 2191,
+      "read_only": true,
+      "description": "Get victory condition progress for all civilizations.",
+      "parameters": [],
+      "narrators": [
+        "narrate_victory_progress"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 2196,
+      "domain": "public_victory_notifications",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 158,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_religion_defense",
+      "line": 2218,
+      "read_only": true,
+      "description": "Read owned-city religion pressure stocks/flow, visible religious units,",
+      "parameters": [],
+      "narrators": [],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 2223,
+      "domain": "religion",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 140,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "get_religion_spread",
+      "line": 2234,
+      "read_only": true,
+      "description": "Get per-city religion breakdown across all visible cities.",
+      "parameters": [],
+      "narrators": [
+        "narrate_religion_status"
+      ],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 2239,
+      "domain": "religion",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 143,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "set_city_focus",
+      "line": 2255,
+      "read_only": false,
+      "description": "Set a city's citizen yield priority.",
+      "parameters": [
+        "city_id",
+        "focus"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 2260,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "dismiss_popup",
+      "line": 2281,
+      "read_only": false,
+      "description": "Dismiss any blocking popup in the game UI.",
+      "parameters": [],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 2286,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "run_lua",
+      "line": 2292,
+      "read_only": false,
+      "description": "Run arbitrary Lua code in the game. Advanced escape hatch — prefer built-in tools.",
+      "parameters": [
+        "code",
+        "context"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 2297,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "save_game",
+      "line": 2320,
+      "read_only": false,
+      "description": "Save a confirmed active single-player turn under a local filename.",
+      "parameters": [
+        "save_name"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 2325,
+      "domain": "mutation_contract",
+      "live_cases": [
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 20,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 87,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 114,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 184,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 37,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 264,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 20,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 94,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 118,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 224,
+          "tool_reported_error": true
+        },
+        {
+          "evidence": "live-final-v1/debug.jsonl",
+          "sequence": 20,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v1/debug.jsonl",
+          "sequence": 81,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 20,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 95,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 20,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 77,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 101,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 161,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 185,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 241,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 265,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 324,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "list_saves",
+      "line": 2337,
+      "read_only": true,
+      "description": "List available save files (normal, autosave).",
+      "parameters": [],
+      "narrators": [],
+      "status": "read_boundary_reviewed",
+      "baseline_line": 2342,
+      "domain": "lifecycle",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 215,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "load_save",
+      "line": 2348,
+      "read_only": false,
+      "description": "Load a confirmed checkpoint from the latest displayed listing, once.",
+      "parameters": [
+        "save_index"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 2353,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "load_game_save",
+      "line": 2359,
+      "read_only": false,
+      "description": "Load a named save once through native FrontEnd APIs, from the main menu.",
+      "parameters": [
+        "save_name",
+        "source_run_id",
+        "expected_sha256"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 2364,
+      "domain": "mutation_contract",
+      "live_cases": [
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 6,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 97,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 23,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 6,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 104,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 234,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v1/debug.jsonl",
+          "sequence": 6,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 6,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 6,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 87,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 171,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 251,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "reload_game_save",
+      "line": 2378,
+      "read_only": false,
+      "description": "Normally swap to a verified named checkpoint through the main menu.",
+      "parameters": [
+        "save_name"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 2383,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "kill_game",
+      "line": 2397,
+      "read_only": false,
+      "description": "Explicitly stop Civ6 and release its FireTuner session.",
+      "parameters": [],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 2402,
+      "domain": "mutation_contract",
+      "live_cases": [
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 332,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "return_to_main_menu",
+      "line": 2403,
+      "read_only": false,
+      "description": "Return to the native main menu without loading or saving a game.",
+      "parameters": [],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 2408,
+      "domain": "mutation_contract",
+      "live_cases": [
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 92,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-accepted/debug.jsonl",
+          "sequence": 189,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 271,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 99,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 229,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-complete/debug.jsonl",
+          "sequence": 241,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v1/debug.jsonl",
+          "sequence": 86,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-final-v2/debug.jsonl",
+          "sequence": 102,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 82,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 166,
+          "tool_reported_error": false
+        },
+        {
+          "evidence": "live-verified/debug.jsonl",
+          "sequence": 246,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "launch_game",
+      "line": 2409,
+      "read_only": false,
+      "description": "Launch Civ6 through Steam; load a save explicitly from the main menu.",
+      "parameters": [],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 2414,
+      "domain": "mutation_contract",
+      "live_cases": [
+        {
+          "evidence": "live-audit/debug.jsonl",
+          "sequence": 16,
+          "tool_reported_error": false
+        }
+      ]
+    },
+    {
+      "tool": "load_save_from_menu",
+      "line": 2415,
+      "read_only": false,
+      "description": "Load an explicitly named confirmed checkpoint through native FrontEnd APIs.",
+      "parameters": [
+        "save_name"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 2420,
+      "domain": "mutation_contract",
+      "live_cases": []
+    },
+    {
+      "tool": "restart_and_load",
+      "line": 2424,
+      "read_only": false,
+      "description": "Explicit full-process fault recovery: stop Civ6, launch, then load once.",
+      "parameters": [
+        "save_name"
+      ],
+      "narrators": [],
+      "status": "schema_preview_contract_reviewed_not_all_executed",
+      "baseline_line": 2429,
+      "domain": "mutation_contract",
+      "live_cases": []
+    }
+  ],
+  "review_scope": "Current tool inputs, native sources, scope/completeness, unknown vs empty, precision, eligibility vs advice, ranking/caps, recoverability and read dependencies. Live cases are observations, not blanket PASS for all branches.",
+  "counts": {
+    "all_tools": 93,
+    "read_only": 47,
+    "read_tools_observed": 46
+  }
+}

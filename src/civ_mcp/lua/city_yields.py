@@ -21,6 +21,7 @@ for _,c in Players[me]:GetCities():Members() do
 end
 local function wire(v)
  if v==nil then return '~' end
+ if type(v)=='number' then return string.format('%.17g',v) end
  return tostring(v):gsub('%%','%%25'):gsub('|','%%7C'):gsub('\r','%%0D'):gsub('\n','%%0A')
 end
 local function emit(tag,...)
@@ -86,10 +87,11 @@ local wanted=CITY_ID
 local audit=AUDIT
 local me=Game.GetLocalPlayer()
 local function read(fn) local ok,v=pcall(fn);if ok then return v end end
-local function finite(v) if type(v)=='number' and v==v and math.abs(v)<math.huge then return v end end
+local function finite(v) if type(v)=='number' and v==v and math.abs(v)<math.huge then return v end;return nil end
 local function boolean(v) if type(v)=='boolean' then return v end end
 local function wire(v)
  if v==nil then return '~' end
+ if type(v)=='number' then return string.format('%.17g',v) end
  return tostring(v):gsub('%%','%%25'):gsub('|','%%7C'):gsub('\r','%%0D'):gsub('\n','%%0A')
 end
 local function emit(tag,...)
@@ -125,6 +127,10 @@ local scan,scanError=pcall(function()
    for row in GameInfo.Buildings() do
     if b:HasBuilding(row.Index) then
      emit('CY_BUILDING',id,row.BuildingType,row.PrereqDistrict,boolean(read(function()return b:IsPillaged(row.Index)end)))
+     for _,name in ipairs({'FOOD','PRODUCTION','GOLD','SCIENCE','CULTURE','FAITH'}) do
+      local key='YIELD_'..name
+      emit('CY_BUILDING_YIELD',id,row.BuildingType,key,finite(read(function()return city:GetBuildingYield(row.Index,key)end)))
+     end
     end
    end
    if audit then emit('CY_TOOLTIP',id,read(function()return city:GetYieldToolTip(GameInfo.Yields.YIELD_SCIENCE.Index)end)) end
@@ -217,7 +223,7 @@ print('SENTINEL')
 def parse_response(rows):
     result = {'cities': [], 'policy': {}, 'rules': {}, 'rules_complete': False,
               'scan_complete': False, 'requested_city_found': False, 'errors': [], 'cached_relations': []}
-    cities, districts, completed_rows = {}, {}, set()
+    cities, districts, buildings, completed_rows = {}, {}, {}, set()
     def scalar(v):
         if v == '~':
             return None
@@ -248,7 +254,17 @@ def parse_response(rows):
             d['adjacency'][p[3]], d['yields'][p[3]] = scalar(p[4]), scalar(p[5])
             d.setdefault('plot_adjacency', {})[p[3]] = scalar(p[6])
         elif tag == 'CY_BUILDING':
-            cities[int(p[1])]['buildings'].append(dict(building_type=p[2], district_type=p[3], pillaged=scalar(p[4])))
+            key = (int(p[1]), p[2])
+            if key in buildings:
+                raise ValueError('Duplicate building observation')
+            b = dict(building_type=p[2], district_type=p[3], pillaged=scalar(p[4]), yields={})
+            buildings[key] = b
+            cities[key[0]]['buildings'].append(b)
+        elif tag == 'CY_BUILDING_YIELD':
+            b = buildings[int(p[1]), p[2]]
+            if p[3] in b['yields']:
+                raise ValueError('Duplicate building yield observation')
+            b['yields'][p[3]] = scalar(p[4])
         elif tag == 'CY_TOOLTIP':
             cities[int(p[1])]['science_tooltip'] = None if p[2] == '~' else p[2]
         elif tag == 'CY_POLICY':

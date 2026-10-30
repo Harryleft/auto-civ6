@@ -1241,7 +1241,7 @@ class TestFoundCity:
         gs, _ = _gs(
             [
                 ("write", ["ERR:CANNOT_FOUND|too close to another city"]),
-                ("read", ["SETTLE|11,21|42.5|4|2|river|1|"]),
+                ("write", ["SETTLE|11,21|42.5|4|2|river|1|"]),
             ]
         )
         gs.dismiss_popup = _no_dismiss
@@ -1257,7 +1257,7 @@ class TestFoundCity:
         gs, conn = _gs(
             [
                 ("write", ["ERR:CANNOT_FOUND|blocked"]),
-                ("read", ConnectionError("advisor died")),
+                ("write", ConnectionError("advisor died")),
             ]
         )
         gs.dismiss_popup = _no_dismiss

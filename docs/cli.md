@@ -215,13 +215,23 @@ game decision --view structured
 
 要核对未出现在列表中的物品，用 `city production ID --item-type UNIT --item UNIT_APOSTLE`，两个筛选参数成对提供。报价是本次观察，实际 `city buy` 会重新检查价格、资格和余额；成功仍需新产物与精确扣款同时确认。`game decision --city ID` 使用同一报价与展示。
 
-`city yields` 一次读取全部自有城市；提供本次查询所得 ID 时只读指定城市。它分别返回已放置区域的原生区域相邻值、地块相邻值与区域产出、完成／受损状态、学院建筑，以及理性主义的解锁／可装槽／已装备状态。未完成区域也可能返回非零相邻值，不能当成已生效产出。缺席、零值、接口未知分别保留。
+`city yields` 一次读取全部自有城市；提供本次查询所得 ID 时只读指定城市。它分别返回已放置区域的原生区域相邻值、地块相邻值与区域产出、完成／受损状态、每座建筑的六种原生收益，以及理性主义的解锁／可装槽／已装备状态。未完成区域也可能返回非零相邻值，不能当成已生效产出。缺席、零值、接口未知分别保留。
+
+简报中的 `B1`／`B2` 只是在本次响应内引用完整修正 ID 的别名。逐项相等的地块相邻／区域产出写为 `=district_adj`；有差异或未知值时按原口径保留，完整展开始终可用。学院建筑收益来自当前 `GetBuildingYield`，不能用建筑清单或全城科技乘政策百分比代替。
 
 默认 `brief` 将当前 `GameInfo` 的两条条件链共享展示一次，逐城对照人口与地块相邻门槛；区域相邻值另列，不能把翻倍后的 4 直接当作地块相邻达到 4。政策已装备时，同一命名查询继续读 GameCore 的修正实例、主体集合与 RequirementSet 状态，再回读世界范围。未装备时只需一次 InGame 读取；已装备时为三次原生读取，模型仍只调用一个命令。
 
 `structured` 保留完整当前标量规则行、六种收益、原生条件及实例身份，`evidence` 另读城市科技 tooltip。人口／地块门槛比较是推断，`native condition` 与 `native effect` 来自已绑定自有城市的原生状态，不表示科技净增量。身份绑定要求引擎对象诊断中的精确城市 ID、所有者、当前城市对象及原始名称全部一致；不按城市名称猜测。状态冲突、绑定失败、反向／额外／不支持的条件或原生集合不完整时保留 unknown，完整展开继续可用。
 
 该入口不缓存、不修改政策或城市，任一 pending 在游戏 I/O 前返回 `blocked`；身份／回合变化、实体扫描或原生资料不完整时返回 `unknown`。查询数和读取量应针对同一个决策问题比较，不能用新增事实的完整展开与缺少这些事实的旧报告宣称全量等价。
+
+`city district` 只读取原生 `PLOTS` 中的全部可用落点及地块相邻收益，不使用手写相邻公式或固定 Top-N；保留分数、负值和未知。`city wonder` 同样排除 `BLOCKED_PLOTS` 等其他数组，展示已知资源／设施的占地影响，不按固定权重推荐落点。城市攻击提示要求原生目标标志、当前命令资格、可见与交战关系；没有原生目标不能单独诊断为已开火或视线受阻。
+
+`city tiles` 返回全部原生购地候选，分别列出实际金币报价、余额、当前资格及拒绝原因，包含原生合法的零价候选。报价与执行前检查共享纯事实读取；执行仍重新核对原生候选、资格、归属和精确扣款。
+
+`unit tasks` 保留全部已识别的地形／资源／维修提示，显示原生建造者就绪状态与科技锁定原因。地形／资源映射仍是建议，不证明远处地块可改良；几何距离不等于路径或可达性。查询不调用会破坏引擎状态的远程操作资格接口。
+
+`map settle` 只扫描所请求的本地范围，不再自动另查全球。`map settle-global` 返回已揭示、未占领土地的全部地形候选，不使用固定收益权重或隐藏城市人口估算忠诚度。忠诚度来自原生开拓者警告；没有警告记录表示未知，不补成零。外国城市距离排除只使用当前可见城市；防御地形值只是已揭示丘陵／河流的几何汇总，不是原生战斗加成。这些地形候选尚未通过原生建城资格验证。路径缺失或不一致显示 unknown；未来回合数保留明确的启发式标识。
 
 ### 研究、回合与存档
 
@@ -257,14 +267,18 @@ game decision --view structured
 
 | 会话命令 | MCP 工具 | 模式 |
 | --- | --- | --- |
-| `policy show` | `get_policies` | 只读 |
+| `policy show [--policy POLICY_ID]` | `get_policies` | 只读 |
 | `policy set SLOT=POLICY_ID [SLOT=POLICY_ID ...]` | `set_policies` | 变更 |
 | `city-state list` | `get_city_states` | 只读 |
 | `city-state envoy PLAYER_ID` | `send_envoy` | 变更 |
-| `governor list` | `get_governors` | 只读 |
+| `governor list [--include-ineligible]` | `get_governors` | 只读 |
 | `governor appoint TYPE` | `appoint_governor` | 变更 |
 | `governor assign TYPE CITY_ID [--owner PLAYER_ID]` | `assign_governor` | 变更 |
 | `governor promote TYPE PROMOTION_TYPE` | `promote_governor` | 变更 |
+
+`policy show` 同时检查原生过时状态、当前槽位资格、政策更换成本／余额，以及零费用时是否已经改过政策。默认省略已过时或没有新增槽位的卡片，报告覆盖数量；资格未知的候选继续保留。`--policy` 可核对一张未列出的卡片，区分 `POLICY_LOCKED`、`POLICY_OBSOLETE`、`POLICIES_ALREADY_CHANGED` 和余额不足。一般检查通过不代表某份完整槽位方案一定合法，实际执行仍重新检查。
+
+`governor list` 使用与执行入口相同的 `CanEarnPromotion`／`CanEverAppointGovernor` 及当前任命资格。默认省略原生明确拒绝的选项并报告数量，保留未知资格；`--include-ineligible` 展开未取得的晋升树与未任命总督，逐项标注原生资格。未取得的晋升不再自动表示现在可以晋升；资格为 false 的布尔接口未提供具体原因时，不猜测缺少哪项前置。
 
 政策槽位可用空格或逗号分隔，未指定槽位保持原值。首次填槽或切换政体后，一次提供所有空槽；任何变更后的最终方案仍有空槽时，返回 `POLICY_PLAN_INCOMPLETE` 并列出编号，在付款或原生提交前拒绝。`NONE` 保留解析支持，但不能让变更后的方案留下空槽；原已为空且完全不变的方案仅返回 no-op。格式错误和重复槽位在发送前拒绝。城邦 player ID、总督类型及晋升均先查询；owner 省略时取本地玩家，显式 owner 为 0～63。政策、使者、任命和晋升可能消耗金币、使者或总督头衔，实际资格由引擎决定。
 
@@ -303,6 +317,8 @@ game decision --view structured
 | `era show`、`era dedications` | 当前时代进度／得分／阈值，以及可选时代着力点。 |
 | `ranking show` | 总分及科技、文化、统治、宗教、外交等启用路线的世界进度。 |
 | `map search resource\|luxury\|strategic\|antiquity\|village [--query TEXT]` | 按类型、中文名或内部 ID 定位。非消耗资源限已揭示且本方可识别地块；村庄、古迹和可消耗加成资源要求当前可见。空结果不证明迷雾里不存在。 |
+
+伟人列表使用原生时间线的使用位置、主动效果、被动条件及定义中的次数，分别保留金币／信仰的报价、余额和赞助资格。一个币种接口失败不会覆盖另一个币种；报价不可用、原生不允许与余额不足分别展示。`great-person advisor` 使用 `unit list` 的 `idx`，原生高亮表示可激活地点，不保证单位现在已经就绪，也不表示城市总产出就是激活收益。
 
 科技／市政搜索支持重复 `--filter`，可选 food／食物、science／科学、production／生产力、culture／文化值、gold／金币、faith／信仰值、housing／住房、unit／单位、improvement／改良设施、wonder／奇观；`--match any|all` 指定并集／交集，`--limit 1..100 --offset N` 分页。例如：
 

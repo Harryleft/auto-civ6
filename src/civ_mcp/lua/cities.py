@@ -62,23 +62,46 @@ for i, c in Players[me]:GetCities():Members() do
         end
     end
     local cityTargets = {}
+    local cityTargetsKnown = wallMax == 0
     if wallMax > 0 then
-        local cx, cy = c:GetX(), c:GetY()
-        for dy = -3, 3 do for dx = -3, 3 do
-            local tx, ty = cx + dx, cy + dy
-            local d = Map.GetPlotDistance(cx, cy, tx, ty)
-            if d >= 1 and d <= 3 then
-                local pu = Map.GetUnitsAt(tx, ty)
-                if pu then for other in pu:Units() do
-                    if other:GetOwner() ~= me then
-                        local eInfo = GameInfo.Units[other:GetType()]
-                        local eName = eInfo and eInfo.UnitType or "UNKNOWN"
-                        local eHP = other:GetMaxDamage() - other:GetDamage()
-                        table.insert(cityTargets, eName .. "@" .. tx .. "," .. ty .. "(" .. eHP .. "hp)")
+        local ok = pcall(function()
+            -- Native WorldInput uses paired PLOTS/MODIFIERS, not every nearby
+            -- foreign unit. Eligibility is current; the action checks it again.
+            local result = CityManager.GetCommandTargets(c, CityCommandTypes.RANGE_ATTACK, {})
+            assert(type(result) == "table")
+            local plots = result[CityCommandResults.PLOTS]
+            local modifiers = result[CityCommandResults.MODIFIERS]
+            assert(type(plots) == "table" and type(modifiers) == "table" and #plots == #modifiers)
+            for index, plotIndex in ipairs(plots) do
+                if modifiers[index] == CityCommandResults.MODIFIER_IS_TARGET then
+                    local plot = Map.GetPlotByIndex(plotIndex)
+                    assert(plot and PlayersVisibility[me]:IsVisible(plotIndex) ~= nil)
+                    if PlayersVisibility[me]:IsVisible(plotIndex) then
+                        local tx, ty = plot:GetX(), plot:GetY()
+                        local params = {[CityCommandTypes.PARAM_X]=tx,[CityCommandTypes.PARAM_Y]=ty}
+                        local allowed = CityManager.CanStartCommand(c, CityCommandTypes.RANGE_ATTACK, params)
+                        assert(type(allowed) == "boolean")
+                        if allowed then
+                            local units = Map.GetUnitsAt(tx, ty)
+                            if units then for other in units:Units() do
+                                local atWar = Players[me]:GetDiplomacy():IsAtWarWith(other:GetOwner())
+                                assert(type(atWar) == "boolean")
+                                local visible=PlayersVisibility[me]:IsUnitVisible(other)
+                                assert(type(visible)=="boolean", "UNIT_VISIBILITY_UNKNOWN")
+                                if other:GetOwner() ~= me and atWar and visible then
+                                    local info = GameInfo.Units[other:GetType()]
+                                    local name = info and info.UnitType or "UNKNOWN"
+                                    local hp = other:GetMaxDamage() - other:GetDamage()
+                                    table.insert(cityTargets, name .. "@" .. tx .. "," .. ty .. "(" .. hp .. "hp)")
+                                end
+                            end end
+                        end
                     end
-                end end
+                end
             end
-        end end
+        end)
+        cityTargetsKnown = ok
+        if not ok then cityTargets = {} end
     end
     local pillDistricts = {}
     local distLocs = {}
@@ -163,6 +186,7 @@ for i, c in Players[me]:GetCities():Members() do
         end
     end
     print(c:GetID() .. "|" .. nm .. "|" .. c:GetX() .. "," .. c:GetY() .. "|" .. c:GetPopulation() .. "|" .. string.format("%.1f|%.1f|%.1f|%.1f|%.1f|%.1f", c:GetYield(0), c:GetYield(1), c:GetYield(2), c:GetYield(3), c:GetYield(4), c:GetYield(5)) .. "|" .. string.format("%.1f", g:GetHousing()) .. "|" .. amTotal .. "|" .. g:GetTurnsUntilGrowth() .. "|" .. producing .. "|" .. turnsLeft .. "|" .. defStr .. "|" .. garHP .. "/" .. garMax .. "|" .. wallHP .. "/" .. wallMax .. "|" .. table.concat(cityTargets, ";") .. "|" .. table.concat(pillDistricts, ";") .. "|" .. table.concat(distLocs, ";") .. "|" .. string.format("%.1f|%.1f|%.1f|%d", loy, loyMax, loyPT, loyFlip) .. "|" .. string.format("%.1f|%.1f|%d", g:GetFoodSurplus(), g:GetFood(), g:GetGrowthThreshold()) .. "|" .. table.concat(pillBuildings, ";") .. "|" .. garrisonUnit)
+    print("CITYATTACKS|" .. c:GetID() .. "|" .. tostring(cityTargetsKnown))
     print("CITYRESOURCES|" .. c:GetID() .. "|" .. tostring(resourceVisibilityKnown))
     if #unimproved > 0 or #pillImprov > 0 then
         print("CITYTILES|" .. c:GetID() .. "|" .. table.concat(unimproved, ";") .. "|" .. table.concat(pillImprov, ";"))
@@ -271,35 +295,23 @@ end
 if dist > 2 then
     {_bail_lua('"ERR:OUT_OF_RANGE|Target is " .. dist .. " tiles away (city attack range is 2)"')}
 end
--- Check if target is in the valid target list (covers LOS + already-fired)
-local validTargets = CityManager.GetCommandTargets(pCity, CityCommandTypes.RANGE_ATTACK)
+-- Match native WorldInput's paired arrays. Other numeric results do not
+-- authorize a shot; an empty set cannot diagnose already-fired versus LOS.
+local validTargets = CityManager.GetCommandTargets(pCity, CityCommandTypes.RANGE_ATTACK, {{}})
+local plots = validTargets and validTargets[CityCommandResults.PLOTS]
+local modifiers = validTargets and validTargets[CityCommandResults.MODIFIERS]
+if type(plots) ~= "table" or type(modifiers) ~= "table" or #plots ~= #modifiers then
+    {_bail("ERR:TARGETS_UNKNOWN|Native city ranged targets unavailable; no shot submitted")}
+end
 local targetPlotIdx = {target_y} * Map.GetGridSize() + {target_x}
 local inTargets = false
-if validTargets then
-    for _, tbl in pairs(validTargets) do
-        if type(tbl) == "table" then
-            for _, idx in ipairs(tbl) do
-                if idx == targetPlotIdx then inTargets = true; break end
-            end
-        end
-        if inTargets then break end
-    end
+for i,idx in ipairs(plots) do
+    if idx == targetPlotIdx and modifiers[i] == CityCommandResults.MODIFIER_IS_TARGET then inTargets=true end
 end
 if not inTargets then
-    -- Distinguish already-fired from LOS: if NO targets at all, city already fired
-    local totalTargets = 0
-    if validTargets then
-        for _, tbl in pairs(validTargets) do
-            if type(tbl) == "table" then totalTargets = totalTargets + #tbl end
-        end
-    end
-    if totalTargets == 0 then
-        {_bail("ERR:ALREADY_FIRED|City already attacked this turn")}
-    else
-        {_bail_lua(f'"ERR:NO_LOS|Line of sight to ({target_x},{target_y}) is blocked from (" .. cx .. "," .. cy .. ")"')}
-    end
+    {_bail("ERR:TARGET_NOT_AVAILABLE|Native ranged targets do not allow this tile; cause not reported")}
 end
-local canAttack = CityManager.CanStartCommand(pCity, CityCommandTypes.RANGE_ATTACK, true, params, false)
+local canAttack = CityManager.CanStartCommand(pCity, CityCommandTypes.RANGE_ATTACK, params)
 if not canAttack then
     {_bail("ERR:CANNOT_ATTACK|City cannot attack this target (unknown reason)")}
 end
@@ -762,6 +774,11 @@ def parse_cities_response(lines: list[str]) -> tuple[list[CityInfo], list[str]]:
             p = line.split("|")
             if len(p) >= 4:
                 distances.append(f"{p[1]} <-> {p[2]}: {p[3]} tiles")
+            continue
+        if line.startswith("CITYATTACKS|"):
+            p = line.split("|")
+            if len(p) == 3 and p[1].isdigit() and int(p[1]) in city_by_id:
+                city_by_id[int(p[1])].attack_targets_known = {"true": True, "false": False}.get(p[2])
             continue
         if line.startswith("CITYRESOURCES|"):
             parts = line.split("|")

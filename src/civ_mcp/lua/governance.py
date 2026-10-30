@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import math
+import json
+import re
 
 from civ_mcp.lua._helpers import (
     SENTINEL,
@@ -53,11 +55,17 @@ end
 """
 
 
-def build_policies_query() -> str:
-    """Read current government, policy slots, and available policies (InGame context)."""
+def build_policies_query(policy_type: str | None = None) -> str:
+    """Current policy facts and the existing plan preconditions (InGame)."""
+    if policy_type is not None and not re.fullmatch(r"POLICY_[A-Z0-9_]+", policy_type):
+        raise ValueError("Expected a POLICY_ identifier")
     return """
 local me = Game.GetLocalPlayer()
 local pCulture = Players[me]:GetCulture()
+local wanted={POLICY_FILTER}
+if wanted and not GameInfo.Policies[wanted] then print("ERR:POLICY_NOT_FOUND|"..wanted);print("{SENTINEL}");return end
+local function bool(fn)local ok,v=pcall(fn);if ok and type(v)=="boolean"then return v end;return nil end
+local function field(v)if v==nil then return "?"end;return tostring(v)end
 local govIdx = pCulture:GetCurrentGovernment()
 local govName = "None"
 local govType = "NONE"
@@ -88,33 +96,57 @@ for s = 0, numSlots - 1 do
     end
     print("SLOT|" .. s .. "|" .. slotType .. "|" .. policyType .. "|" .. policyName:gsub("|","/"))
 end
+local changed=bool(function()return pCulture:PolicyChangeMade()end)
+local plan,reason=nil,"OBSERVATION_UNAVAILABLE"
+if policyCost==0 and changed==true then plan=false;reason="POLICIES_ALREADY_CHANGED"
+elseif policyCost and policyCost>0 and policyBalance and policyBalance<policyCost then plan=false;reason="POLICY_UNLOCK_UNAFFORDABLE"
+elseif type(pCulture.RequestPolicyChanges)~="function" then plan=false;reason="POLICY_OPERATION_UNAVAILABLE"
+elseif policyCost==0 and changed==false then plan=true;reason="GENERAL_CHECKS_PASSED"
+elseif policyCost and policyCost>0 and policyBalance and policyBalance>=policyCost and policyCurrency then plan=true;reason="PAID_UNLOCK_REQUIRED" end
+print("POLICY_PLAN|"..field(plan).."|"..reason.."|"..field(changed))
+local eligibleCount,shown,obsoleteCount,unslottable,unknown=0,0,0,0,0
 for policy in GameInfo.Policies() do
-    if pCulture:IsPolicyUnlocked(policy.Hash) then
-        local canSlot = false
-        for s = 0, numSlots - 1 do
-            if pCulture:CanSlotPolicy(policy.Index, s) then
-                canSlot = true
-                break
-            end
+    local unlocked=bool(function()return pCulture:IsPolicyUnlocked(policy.Hash)end)
+    if unlocked==true or unlocked==nil or wanted==policy.PolicyType then
+        if unlocked==true then eligibleCount=eligibleCount+1 end
+        local obsolete=bool(function()return pCulture:IsPolicyObsolete(policy.Hash)end)
+        local slotAllowed=false
+        for slot=0,numSlots-1 do
+            local can=bool(function()return pCulture:CanSlotPolicy(policy.Index,slot)end)
+            if can==true then slotAllowed=true;break elseif can==nil then slotAllowed=nil end
         end
-        if canSlot then
-            local slotType = "SLOT_WILDCARD"
-            if policy.GovernmentSlotType then slotType = policy.GovernmentSlotType end
-            local name = Locale.Lookup(policy.Name)
-            local desc = Locale.Lookup(policy.Description):gsub("|", "/"):gsub("\\n", " ")
-            print("AVAIL|" .. policy.PolicyType .. "|" .. name:gsub("|","/") .. "|" .. desc .. "|" .. slotType)
+        local canUse,why=nil,"OBSERVATION_UNAVAILABLE"
+        if unlocked==false then canUse=false;why="POLICY_LOCKED"
+        elseif obsolete==true then canUse=false;why="POLICY_OBSOLETE"
+        elseif plan==false then canUse=false;why=reason
+        elseif slotAllowed==false then canUse=false;why="NO_CURRENT_ADD_SLOT_OR_ALREADY_SLOTTED"
+        elseif unlocked==true and obsolete==false and slotAllowed==true and plan==true then canUse=true;why="GENERAL_CHECKS_PASSED" end
+        if obsolete==true then obsoleteCount=obsoleteCount+1 end
+        if slotAllowed==false then unslottable=unslottable+1 end
+        if obsolete==nil or unlocked==nil or slotAllowed==nil then unknown=unknown+1 end
+        if wanted==policy.PolicyType or (wanted==nil and obsolete~=true and slotAllowed~=false) then
+            shown=shown+1
+            local slotType=policy.GovernmentSlotType or "SLOT_WILDCARD"
+            local name=Locale.Lookup(policy.Name):gsub("|","/")
+            local desc=Locale.Lookup(policy.Description):gsub("|","/"):gsub("\\n"," ")
+            print("AVAIL|"..policy.PolicyType.."|"..name.."|"..desc.."|"..slotType.."|"..field(obsolete).."|"..field(canUse).."|"..why)
         end
     end
 end
+print("POLICY_COVERAGE|"..eligibleCount.."|"..shown.."|"..obsoleteCount.."|"..unslottable.."|"..unknown)
 print("{SENTINEL}")
-""".replace("{SENTINEL}", SENTINEL).replace("{POLICY_PAYMENT}", _LUA_POLICY_PAYMENT)
+""".replace("{SENTINEL}", SENTINEL).replace("{POLICY_PAYMENT}", _LUA_POLICY_PAYMENT).replace("{POLICY_FILTER}", "nil" if policy_type is None else json.dumps(policy_type))
 
 
-def build_governors_query() -> str:
+def build_governors_query(include_ineligible: bool = False) -> str:
     """Read governor status, appointed governors, and available types (InGame context)."""
     return """
 local me = Game.GetLocalPlayer()
 local pGovs = Players[me]:GetGovernors()
+local expand={EXPAND}
+local omittedPromotions,omittedAppointments=0,0
+local function bool(fn)local ok,v=pcall(fn);if ok and type(v)=="boolean"then return v end;return nil end
+local function field(v)if v==nil then return "?"end;return tostring(v)end
 local pts = pGovs:GetGovernorPoints()
 local spent = pGovs:GetGovernorPointsSpent()
 local canAppoint = pGovs:CanAppoint() and "1" or "0"
@@ -142,11 +174,14 @@ for row in GameInfo.Governors() do
             if promo.GovernorType == row.GovernorType then
                 local promoRow = GameInfo.GovernorPromotions[promo.GovernorPromotion]
                 if promoRow and not g:HasPromotion(promoRow.Hash) then
+                    local allowed=bool(function()return pGovs:CanEarnPromotion(row.Hash,promoRow.Hash)end)
+                    if expand or allowed~=false then
                     local pName = Locale.Lookup(promoRow.Name)
                     local pDesc = Locale.Lookup(promoRow.Description):gsub("|", "/"):gsub("\\n", " ")
                     local lvl = promoRow.Level or 0
                     local col = promoRow.Column or 0
-                    print("GOV_PROMO|" .. row.GovernorType .. "|" .. promoRow.GovernorPromotionType .. "|" .. pName:gsub("|","/") .. "|" .. pDesc .. "|" .. lvl .. "|" .. col)
+                    print("GOV_PROMO|" .. row.GovernorType .. "|" .. promoRow.GovernorPromotionType .. "|" .. pName:gsub("|","/") .. "|" .. pDesc .. "|" .. lvl .. "|" .. col .. "|" .. field(allowed))
+                    else omittedPromotions=omittedPromotions+1 end
                 end
             end
         end
@@ -154,10 +189,15 @@ for row in GameInfo.Governors() do
 end
 for gov in GameInfo.Governors() do
     if gov.TransitionStrength and gov.TransitionStrength > 0 and not appointedTypes[gov.GovernorType] then
+        local ever=bool(function()return pGovs:CanEverAppointGovernor(gov.Hash)end)
+        local now=bool(function()return pGovs:CanAppoint()end)
+        local allowed=nil
+        if ever==false or now==false then allowed=false elseif ever==true and now==true then allowed=true end
+        if expand or allowed~=false then
         local gName = Locale.Lookup(gov.Name)
         local gTitle = Locale.Lookup(gov.Title)
         local gDesc = gov.Description and Locale.Lookup(gov.Description):gsub("|", "/"):gsub("\\n", " ") or ""
-        print("AVAILABLE|" .. gov.GovernorType .. "|" .. gName:gsub("|","/") .. "|" .. gTitle:gsub("|","/") .. "|" .. gDesc)
+        print("AVAILABLE|" .. gov.GovernorType .. "|" .. gName:gsub("|","/") .. "|" .. gTitle:gsub("|","/") .. "|" .. gDesc .. "|" .. field(allowed))
         for promo in GameInfo.GovernorPromotionSets() do
             if promo.GovernorType == gov.GovernorType then
                 local promoRow = GameInfo.GovernorPromotions[promo.GovernorPromotion]
@@ -170,10 +210,12 @@ for gov in GameInfo.Governors() do
                 end
             end
         end
+        else omittedAppointments=omittedAppointments+1 end
     end
 end
+print("GOV_COVERAGE|"..omittedPromotions.."|"..omittedAppointments)
 print("{SENTINEL}")
-""".replace("{SENTINEL}", SENTINEL)
+""".replace("{SENTINEL}", SENTINEL).replace("{EXPAND}", str(include_ineligible).lower())
 
 
 def build_unit_promotions_query(unit_index: int) -> str:
@@ -409,6 +451,9 @@ def parse_policies_response(lines: list[str]) -> GovernmentStatus:
     slots: list[PolicySlot] = []
     available: list[PolicyInfo] = []
     unlock_cost = unlock_currency = unlock_balance = None
+    can_change_now = changed_this_turn = None
+    change_reason = "OBSERVATION_UNAVAILABLE"
+    coverage = {}
 
     for line in lines:
         if line.startswith("POLICY_PAYMENT|"):
@@ -426,6 +471,15 @@ def parse_policies_response(lines: list[str]) -> GovernmentStatus:
                 except ValueError:
                     pass
 
+        elif line.startswith("POLICY_PLAN|"):
+            p = line.split("|")
+            if len(p)==4:
+                can_change_now={"true":True,"false":False}.get(p[1]);change_reason=p[2]
+                changed_this_turn={"true":True,"false":False}.get(p[3])
+        elif line.startswith("POLICY_COVERAGE|"):
+            p=line.split("|")
+            if len(p)==6:
+                coverage=dict(zip(("unlocked","shown","obsolete","no_add_slot","unknown"),map(int,p[1:])))
         elif line.startswith("GOV|"):
             parts = line.split("|")
             if len(parts) >= 4:
@@ -453,6 +507,9 @@ def parse_policies_response(lines: list[str]) -> GovernmentStatus:
                         name=parts[2],
                         description=parts[3],
                         slot_type=parts[4],
+                        obsolete={"true":True,"false":False}.get(parts[5]) if len(parts)>5 else None,
+                        can_use_now={"true":True,"false":False}.get(parts[6]) if len(parts)>6 else None,
+                        reason=parts[7] if len(parts)>7 else "OBSERVATION_UNAVAILABLE",
                     )
                 )
 
@@ -464,11 +521,14 @@ def parse_policies_response(lines: list[str]) -> GovernmentStatus:
         policy_unlock_cost=unlock_cost,
         policy_unlock_currency=unlock_currency,
         policy_unlock_balance=unlock_balance,
+        can_change_now=can_change_now, change_reason=change_reason,
+        changed_this_turn=changed_this_turn, coverage=coverage,
     )
 
 
 def parse_governors_response(lines: list[str]) -> GovernorStatus:
     """Parse STATUS|, APPOINTED|, GOV_PROMO|, AVAILABLE| lines from build_governors_query."""
+    omitted_promotions = omitted_appointments = 0
     pts_avail = 0
     pts_spent = 0
     can_appoint = False
@@ -478,7 +538,10 @@ def parse_governors_response(lines: list[str]) -> GovernorStatus:
     promos_by_gov: dict[str, list[GovernorPromotion]] = {}
 
     for line in lines:
-        if line.startswith("STATUS|"):
+        if line.startswith("GOV_COVERAGE|"):
+            p=line.split("|")
+            if len(p)==3:omitted_promotions,omitted_appointments=map(int,p[1:])
+        elif line.startswith("STATUS|"):
             parts = line.split("|")
             if len(parts) >= 4:
                 pts_total = int(parts[1])
@@ -509,6 +572,7 @@ def parse_governors_response(lines: list[str]) -> GovernorStatus:
                         description=parts[4],
                         level=int(parts[5]) if len(parts) > 5 else 0,
                         column=int(parts[6]) if len(parts) > 6 else 0,
+                        can_earn={"true":True,"false":False}.get(parts[7]) if len(parts)>7 else None,
                     )
                 )
         elif line.startswith("AVAILABLE|"):
@@ -520,6 +584,7 @@ def parse_governors_response(lines: list[str]) -> GovernorStatus:
                         name=parts[2],
                         title=parts[3],
                         description=parts[4] if len(parts) > 4 else "",
+                        can_appoint={"true":True,"false":False}.get(parts[5]) if len(parts)>5 else None,
                     )
                 )
 
@@ -543,6 +608,7 @@ def parse_governors_response(lines: list[str]) -> GovernorStatus:
         can_appoint=can_appoint,
         appointed=appointed,
         available_to_appoint=available,
+        omitted_promotions=omitted_promotions, omitted_appointments=omitted_appointments,
     )
 
 

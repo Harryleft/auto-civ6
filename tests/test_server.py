@@ -865,7 +865,7 @@ class TestGetMapArea:
 
 
 class TestGetSettleAdvisor:
-    def test_composite_id_is_reduced(self):
+    def test_composite_id_is_preserved_for_native_identity_check(self):
         ctx = make_ctx()
         gs = app_of(ctx).game
         gs.script["get_settle_advisor"] = "Settle at (3,4)"
@@ -874,7 +874,7 @@ class TestGetSettleAdvisor:
             return await server.get_settle_advisor(ctx, 2 * 65536 + 5)
 
         assert run(go()) == "Settle at (3,4)"
-        assert gs.last_args("get_settle_advisor") == (5,)
+        assert gs.last_args("get_settle_advisor") == (2 * 65536 + 5,)
 
 
 class TestGetPathingEstimate:

@@ -660,7 +660,7 @@ async def list_saves(conn: GameConnection) -> str:
     lua_result = await _list_saves_lua(conn)
     if lua_result is not None:
         return lua_result
-    return result
+    return result + " Native enumeration unavailable; this is not a complete native save listing."
 
 
 async def _list_saves_lua(conn: GameConnection) -> str | None:
@@ -699,6 +699,8 @@ async def _list_saves_lua(conn: GameConnection) -> str | None:
                 f'else print("PENDING") end; '
                 f'print("{lq.SENTINEL}")'
             )
+            if "EMPTY" in check_lines and not any(row.startswith(("COUNT|", "SAVE|")) for row in check_lines):
+                return "No saves found on filesystem or native enumeration."
             if any(l.startswith("COUNT|") or l == "EMPTY" for l in check_lines):
                 results = [l for l in check_lines if l.startswith("SAVE|")]
                 if not results:
@@ -712,6 +714,11 @@ async def _list_saves_lua(conn: GameConnection) -> str | None:
                     name = parts[2].removesuffix(".Civ6Save")
                     names.append(name)
                     lines_out.append(f"  {index}. {name}")
+                counts = [int(row.partition("|")[2]) for row in check_lines if row.startswith("COUNT|")]
+                if len(counts) != 1 or counts[0] < len(names):
+                    return None
+                if counts[0] > len(names):
+                    lines_out.append(f"Coverage: shown {len(names)} of {counts[0]}; truncated=true; native query omitted older entries.")
                 _filesystem_save_names[:] = names
                 return "\n".join(lines_out)
     except ConnectionError:
@@ -749,6 +756,8 @@ def _list_saves_filesystem() -> str:
         stripped = name.replace(".Civ6Save", "")
         _filesystem_save_names.append(stripped)
         lines.append(f"  {i}. {stripped}")
+    if len(all_saves) > 25:
+        lines.append(f"Coverage: shown 25 of {len(all_saves)}; truncated=true; older files omitted. Use an explicit confirmed name for historical save loading.")
     return "\n".join(lines)
 
 

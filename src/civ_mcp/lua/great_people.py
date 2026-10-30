@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import math
+from urllib.parse import unquote
+
 from civ_mcp.lua._helpers import SENTINEL, _bail, _int, _lua_get_unit
 from civ_mcp.lua.models import GPAdvisorCity, GPAdvisorResult, GreatPersonInfo
 
@@ -14,117 +17,19 @@ local gp = Game.GetGreatPeople()
 if gp == nil then {_bail("ERR:NO_GP_SYSTEM|Great People system not available")} end
 local timeline = gp:GetTimeline()
 if timeline == nil then {_bail("ERR:NO_TIMELINE|No great people timeline")} end
-local function getAbility(ind)
-    if ind.ActionEffectTextOverride and ind.ActionEffectTextOverride ~= "" then
-        local ok, t = pcall(Locale.Lookup, ind.ActionEffectTextOverride)
-        if ok and t and t ~= "" and t ~= ind.ActionEffectTextOverride then return t end
+local function getAbility(entry,ind)
+    -- The native popup consumes timeline text including usage and passive
+    -- conditions. Modifier-name substrings cannot prove those mechanics.
+    local parts={{}}
+    for _,pair in ipairs({{{{"action",entry.ActionNameText}},{{"usage",entry.ActionUsageText}},
+        {{"effect",entry.ActionEffectText}},{{"passive",entry.PassiveEffectText}}}}) do
+        if type(pair[2])=="string" and pair[2]~="" then parts[#parts+1]=pair[1]..": "..pair[2] end
     end
-    local locKey = "LOC_GREATPERSON_" .. string.gsub(ind.GreatPersonIndividualType, "GREAT_PERSON_INDIVIDUAL_", "") .. "_ACTIVE"
-    local ok2, t2 = pcall(Locale.Lookup, locKey)
-    if ok2 and t2 and t2 ~= locKey and t2 ~= "" then return t2 end
-    local parts = {{}}
-    for mod in GameInfo.GreatPersonIndividualActionModifiers() do
-        if mod.GreatPersonIndividualType == ind.GreatPersonIndividualType then
-            local mrow = GameInfo.Modifiers[mod.ModifierId]
-            if mrow then
-                local args = {{}}
-                for arg in GameInfo.ModifierArguments() do
-                    if arg.ModifierId == mod.ModifierId then args[arg.Name] = arg.Value end
-                end
-                local amt = args["Amount"] or ""
-                local yt = args["YieldType"] and string.gsub(args["YieldType"], "YIELD_", "") or ""
-                local mt = mrow.ModifierType
-                local matched = false
-                if string.find(mt, "ADJACENT") and string.find(mt, "YIELD") and amt ~= "" then
-                    local feat = args["FeatureType"] and string.gsub(args["FeatureType"], "FEATURE_", "") or "feature"
-                    table.insert(parts, "+" .. amt .. " " .. yt .. " per adjacent " .. feat .. " tile")
-                    matched = true
-                elseif string.find(mt, "GRANT_YIELD") and amt ~= "" then
-                    table.insert(parts, "+" .. amt .. " " .. yt)
-                    matched = true
-                elseif string.find(mt, "GRANT_PRODUCTION") and amt ~= "" then
-                    table.insert(parts, "+" .. amt .. " production toward current build")
-                    matched = true
-                elseif string.find(mt, "GRANT_INFLUENCE") and amt ~= "" then
-                    table.insert(parts, "+" .. amt .. " envoy tokens")
-                    matched = true
-                elseif string.find(mt, "GRANT_UNIT") then
-                    local ut = args["UnitType"] or ""
-                    if ut ~= "" then
-                        local uRow = GameInfo.Units[ut]
-                        table.insert(parts, "free " .. (uRow and Locale.Lookup(uRow.Name) or ut:gsub("UNIT_", "")))
-                    else
-                        table.insert(parts, "free military unit")
-                    end
-                    matched = true
-                elseif string.find(mt, "RANDOM_TECHNOLOGY_BOOST") then
-                    local era = args["StartEraType"] or args["EraType"] or ""
-                    era = era:gsub("ERA_", "")
-                    if era ~= "" then
-                        table.insert(parts, (amt ~= "" and amt or "1") .. " random eurekas from " .. era .. " era onward")
-                    else
-                        table.insert(parts, (amt ~= "" and amt or "1") .. " random eurekas")
-                    end
-                    matched = true
-                elseif string.find(mt, "GRANT_TECH") then
-                    table.insert(parts, "free tech boost")
-                    matched = true
-                elseif string.find(mt, "GOVERNOR") then
-                    table.insert(parts, "+" .. (amt ~= "" and amt or "1") .. " governor title(s)")
-                    matched = true
-                elseif string.find(mt, "GREAT_WORK") or string.find(mt, "CREATE_GREAT_WORK") then
-                    local gwType = args["GreatWorkType"] or ""
-                    if gwType ~= "" then
-                        table.insert(parts, "creates " .. gwType:gsub("GREATWORK_", ""))
-                    else
-                        table.insert(parts, "creates great work")
-                    end
-                    matched = true
-                elseif string.find(mt, "GRANT_RESOURCE") then
-                    local resType = args["ResourceType"] or ""
-                    table.insert(parts, "+" .. (amt ~= "" and amt or "1") .. " " .. resType:gsub("RESOURCE_", ""))
-                    matched = true
-                elseif string.find(mt, "ADJUST_SCIENCE") and amt ~= "" then
-                    table.insert(parts, "+" .. amt .. " science to adjacent tiles")
-                    matched = true
-                elseif string.find(mt, "ADJUST_CULTURE") and amt ~= "" then
-                    table.insert(parts, "+" .. amt .. " culture to adjacent tiles")
-                    matched = true
-                elseif string.find(mt, "TOURISM") and amt ~= "" then
-                    table.insert(parts, "+" .. amt .. " tourism")
-                    matched = true
-                elseif string.find(mt, "ADJUST_POPULATION") and amt ~= "" then
-                    table.insert(parts, "+" .. amt .. " population in city")
-                    matched = true
-                end
-                if not matched then
-                    local desc = mt:gsub("MODIFIER_PLAYER_", ""):gsub("MODIFIER_", "")
-                    if amt ~= "" then desc = desc .. " (amount=" .. amt .. ")" end
-                    table.insert(parts, desc)
-                end
-            end
-        end
-    end
-    for mod in GameInfo.GreatPersonIndividualBirthModifiers() do
-        if mod.GreatPersonIndividualType == ind.GreatPersonIndividualType then
-            local mrow = GameInfo.Modifiers[mod.ModifierId]
-            if mrow then
-                local mt = mrow.ModifierType
-                if string.find(mt, "COMBAT_STRENGTH") then table.insert(parts, "combat bonus to nearby units (passive)")
-                elseif string.find(mt, "MOVEMENT") then table.insert(parts, "movement bonus to nearby units (passive)")
-                else
-                    table.insert(parts, mt:gsub("MODIFIER_", "") .. " (passive)")
-                end
-            end
-        end
-    end
-    if ind.GreatWorkCollection and type(ind.GreatWorkCollection) == "table" then
-        local n = 0
-        for _ in pairs(ind.GreatWorkCollection) do n = n + 1 end
-        if n > 0 then table.insert(parts, "creates " .. n .. " Great Works") end
-    end
-    if #parts > 0 then return table.concat(parts, ", ") end
-    return ""
+    if ind.ActionCharges~=nil then parts[#parts+1]="definition action charges "..tostring(ind.ActionCharges) end
+    local ok,conditions=pcall(function()return gp:GetEarnConditionsText(me,entry.Individual)end)
+    if ok and type(conditions)=="string" and conditions~="" then parts[#parts+1]="earn conditions: "..conditions end
+    if #parts==0 then parts[1]="Native timeline description unavailable; expand current rules before judging effects" end
+    return table.concat(parts,"; "):gsub('%%','%%25'):gsub('|','%%7C'):gsub('\\r','%%0D'):gsub('\\n','%%0A')
 end
 for _, entry in ipairs(timeline) do
     if entry.Class ~= nil and entry.Individual ~= nil then
@@ -140,23 +45,32 @@ for _, entry in ipairs(timeline) do
             local cfg = PlayerConfigurations[entry.Claimant]
             if cfg then claimant = Locale.Lookup(cfg:GetCivilizationShortDescription()) end
         end
-        local myPoints = 0
-        local threshold = entry.Cost or 0
-        local pGP = Players[me]:GetGreatPeoplePoints()
-        if pGP then
-            myPoints = pGP:GetPointsTotal(entry.Class)
+        local function number(fn)
+            local ok,v=pcall(fn)
+            if ok and type(v)=='number' and v==v and v>=0 and v<2147483647 then return v end
+            return nil
         end
-        local ability = getAbility(indivInfo)
-        local goldCost = 0
-        local faithCost = 0
-        local canRecruit = false
-        pcall(function()
-            goldCost = gp:GetPatronizeCost(me, entry.Individual, 2)
-            faithCost = gp:GetPatronizeCost(me, entry.Individual, 5)
-            canRecruit = gp:CanRecruitPerson(me, entry.Individual)
-        end)
-        local costStr = "gold:" .. goldCost .. ",faith:" .. faithCost .. ",recruit:" .. tostring(canRecruit)
-        print("GP|" .. className .. "|" .. indivName .. "|" .. eraName .. "|" .. threshold .. "|" .. claimant .. "|" .. myPoints .. "|" .. ability .. "|" .. costStr .. "|" .. entry.Individual)
+        local function boolean(fn)
+            local ok,v=pcall(fn)
+            if ok and type(v)=='boolean' then return v end
+            return nil
+        end
+        local function wire(v) if v==nil then return '?' end;if type(v)=='number' then return string.format('%.17g',v) end;return tostring(v) end
+        local myPoints=number(function()return Players[me]:GetGreatPeoplePoints():GetPointsTotal(entry.Class)end)
+        local threshold=number(function()return entry.Cost end)
+        local ability=getAbility(entry,indivInfo)
+        -- Same native enum/getters as GreatPeoplePopup and the action preflight.
+        -- Each currency is independent: one failed API cannot erase the other.
+        local goldCost=number(function()return gp:GetPatronizeCost(me,entry.Individual,YieldTypes.GOLD)end)
+        local faithCost=number(function()return gp:GetPatronizeCost(me,entry.Individual,YieldTypes.FAITH)end)
+        local canRecruit=boolean(function()return gp:CanRecruitPerson(me,entry.Individual)end)
+        local canGold=boolean(function()return gp:CanPatronizePerson(me,entry.Individual,YieldTypes.GOLD)end)
+        local canFaith=boolean(function()return gp:CanPatronizePerson(me,entry.Individual,YieldTypes.FAITH)end)
+        local goldBalance=number(function()return Players[me]:GetTreasury():GetGoldBalance()end)
+        local faithBalance=number(function()return Players[me]:GetReligion():GetFaithBalance()end)
+        local costStr='gold:'..wire(goldCost)..',faith:'..wire(faithCost)..',recruit:'..wire(canRecruit)
+          ..',can_gold:'..wire(canGold)..',can_faith:'..wire(canFaith)..',gold_balance:'..wire(goldBalance)..',faith_balance:'..wire(faithBalance)
+        print("GP|" .. className .. "|" .. indivName .. "|" .. eraName .. "|" .. wire(threshold) .. "|" .. claimant .. "|" .. wire(myPoints) .. "|" .. ability .. "|" .. costStr .. "|" .. entry.Individual)
     end
     end
 end
@@ -171,35 +85,39 @@ def parse_great_people_response(lines: list[str]) -> list[GreatPersonInfo]:
         if line.startswith("GP|"):
             parts = line.split("|")
             if len(parts) >= 7:
-                ability = parts[7] if len(parts) >= 8 else ""
-                gold_cost = 0
-                faith_cost = 0
-                can_recruit = False
+                ability = unquote(parts[7]) if len(parts) >= 8 else ""
+                gold_cost = faith_cost = can_recruit = None
+                values = {}
                 individual_id = 0
                 if len(parts) >= 10:
                     cost_str = parts[8]  # "gold:X,faith:Y,recruit:true/false"
                     for kv in cost_str.split(","):
                         k, _, v = kv.partition(":")
-                        if k == "gold":
-                            gold_cost = _int(v) if v else 0
-                        elif k == "faith":
-                            faith_cost = _int(v) if v else 0
-                        elif k == "recruit":
-                            can_recruit = v == "true"
+                        if k in ('recruit', 'can_gold', 'can_faith'):
+                            values[k] = {'true': True, 'false': False}.get(v)
+                        else:
+                            try:
+                                value = float(v)
+                                values[k] = value if math.isfinite(value) and 0 <= value < 2147483647 else None
+                            except ValueError:
+                                values[k] = None
+                    gold_cost, faith_cost, can_recruit = values.get('gold'), values.get('faith'), values.get('recruit')
                     individual_id = _int(parts[9])
                 results.append(
                     GreatPersonInfo(
                         class_name=parts[1],
                         individual_name=parts[2],
                         era_name=parts[3],
-                        cost=_int(parts[4]),
+                        cost=None if parts[4] == "?" else float(parts[4]),
                         claimant=parts[5],
-                        player_points=_int(parts[6]),
+                        player_points=None if parts[6] == "?" else float(parts[6]),
                         ability=ability,
                         gold_cost=gold_cost,
                         faith_cost=faith_cost,
                         can_recruit=can_recruit,
                         individual_id=individual_id,
+                        can_patronize_gold=values.get("can_gold"), can_patronize_faith=values.get("can_faith"),
+                        gold_balance=values.get("gold_balance"), faith_balance=values.get("faith_balance"),
                     )
                 )
     return results
@@ -216,9 +134,11 @@ def build_gp_advisor_query(unit_index: int) -> str:
 {_lua_get_unit(unit_index)}
 local uInfo = GameInfo.Units[unit:GetType()]
 if not uInfo then {_bail("ERR:UNIT_INFO_NOT_FOUND")} end
-local gpClass = ""
-pcall(function() gpClass = uInfo.GreatPersonClass end)
-if gpClass == "" then {_bail("ERR:NOT_A_GREAT_PERSON")} end
+local gp=unit:GetGreatPerson()
+if not gp then {_bail("ERR:NOT_A_GREAT_PERSON")} end
+local classInfo=GameInfo.GreatPersonClasses[gp:GetClass()]
+local gpClass=classInfo and classInfo.GreatPersonClassType
+if not gpClass then {_bail("ERR:UNKNOWN_GP_CLASS")} end
 local classToDistrict = {{
     GREAT_PERSON_CLASS_SCIENTIST = "DISTRICT_CAMPUS",
     GREAT_PERSON_CLASS_ENGINEER = "DISTRICT_INDUSTRIAL_ZONE",
@@ -244,18 +164,15 @@ local classToYield = {{
 local targetDist = classToDistrict[gpClass]
 if not targetDist then {_bail("ERR:UNKNOWN_GP_CLASS")} end
 local charges = -1
-local gp = unit:GetGreatPerson()
 if gp then pcall(function() charges = gp:GetActionCharges() end) end
 print("GP_INFO|" .. Locale.Lookup(unit:GetName()) .. "|" .. gpClass .. "|" .. targetDist .. "|" .. unit:GetX() .. "|" .. unit:GetY() .. "|" .. charges)
 local validPlotSet = {{}}
-if gp then
-    pcall(function()
-        local plots = gp:GetActivationHighlightPlots()
-        if plots then
-            for _, pIdx in ipairs(plots) do validPlotSet[pIdx] = true end
-        end
-    end)
-end
+local highlightKnown = pcall(function()
+    local plots = gp:GetActivationHighlightPlots()
+    assert(type(plots)=="table")
+    for _,index in ipairs(plots) do assert(type(index)=="number");validPlotSet[index]=true end
+end)
+local citiesKnown=true
 local yieldType = classToYield[gpClass]
 local yieldIdx = -1
 if yieldType then pcall(function() yieldIdx = GameInfo.Yields[yieldType].Index end) end
@@ -263,7 +180,7 @@ local isCultural = gpClass == "GREAT_PERSON_CLASS_WRITER" or gpClass == "GREAT_P
 local targetDistInfo = GameInfo.Districts[targetDist]
 if not targetDistInfo then {_bail("ERR:DISTRICT_NOT_FOUND")} end
 for i, city in Players[me]:GetCities():Members() do
-    pcall(function()
+    local cityOK = pcall(function()
         local districts = city:GetDistricts()
         if districts:HasDistrict(targetDistInfo.Index, true) then
             local dObj = districts:GetDistrict(targetDistInfo.Index)
@@ -271,11 +188,11 @@ for i, city in Players[me]:GetCities():Members() do
                 local dx, dy = dObj:GetX(), dObj:GetY()
                 local pPlot = Map.GetPlot(dx, dy)
                 local plotIdx = pPlot:GetIndex()
-                local canAct = validPlotSet[plotIdx] == true
+                local canAct = highlightKnown and tostring(validPlotSet[plotIdx] == true) or "?"
                 local dist = Map.GetPlotDistance(unit:GetX(), unit:GetY(), dx, dy)
-                local cityYield = 0
+                local cityYield = nil
                 if yieldIdx >= 0 then
-                    pcall(function() cityYield = city:GetYield(yieldIdx) end)
+                    pcall(function() local v=city:GetYield(yieldIdx);if type(v)=="number" and v==v and math.abs(v)<math.huge then cityYield=v end end)
                 end
                 local slotsFree = -1
                 local slotsTotal = -1
@@ -285,16 +202,18 @@ for i, city in Players[me]:GetCities():Members() do
                         local free = 0
                         local total = 0
                         for bld in GameInfo.Buildings() do
-                            if bldgs:HasBuilding(bld.Index) then
-                                for s = 0, 5 do
-                                    local ok2, gwType = pcall(function() return bldgs:GetGreatWorkSlotType(bld.Index, s) end)
-                                    if ok2 and gwType and gwType >= 0 then
-                                        total = total + 1
-                                        local ok3, gw = pcall(function() return bldgs:GetGreatWorkInSlot(bld.Index, s) end)
-                                        if not ok3 or not gw or gw < 0 then
-                                            free = free + 1
-                                        end
-                                    end
+                            local has=bldgs:HasBuilding(bld.Index)
+                            assert(type(has)=="boolean", "BUILDING_PRESENCE_UNKNOWN")
+                            if has then
+                                local count=bldgs:GetNumGreatWorkSlots(bld.Index)
+                                assert(type(count)=="number" and count>=0 and count<math.huge and count==math.floor(count), "GREAT_WORK_SLOT_COUNT_UNKNOWN")
+                                for slot=0,count-1 do
+                                    local typ=bldgs:GetGreatWorkSlotType(bld.Index,slot)
+                                    local work=bldgs:GetGreatWorkInSlot(bld.Index,slot)
+                                    assert(type(typ)=="number" and typ>=0 and typ<math.huge and typ==math.floor(typ), "GREAT_WORK_SLOT_TYPE_UNKNOWN")
+                                    assert(type(work)=="number" and work>=-1 and work<math.huge and work==math.floor(work), "GREAT_WORK_SLOT_UNKNOWN")
+                                    total=total+1
+                                    if work==-1 then free=free+1 end
                                 end
                             end
                         end
@@ -303,11 +222,13 @@ for i, city in Players[me]:GetCities():Members() do
                     end)
                 end
                 local cn = (Locale.Lookup(city:GetName()):gsub("|", "/"))
-                print("GP_CITY|" .. cn .. "|" .. city:GetID() .. "|" .. dx .. "|" .. dy .. "|" .. tostring(canAct) .. "|" .. dist .. "|" .. cityYield .. "|" .. slotsFree .. "|" .. slotsTotal)
+                print("GP_CITY|" .. cn .. "|" .. city:GetID() .. "|" .. dx .. "|" .. dy .. "|" .. canAct .. "|" .. dist .. "|" .. (cityYield==nil and "?" or string.format("%.17g",cityYield)) .. "|" .. slotsFree .. "|" .. slotsTotal)
             end
         end
     end)
+    if not cityOK then citiesKnown=false end
 end
+print("GP_SCAN|"..tostring(citiesKnown))
 print("{sentinel}")
 """
 
@@ -321,6 +242,7 @@ def parse_gp_advisor_response(lines: list[str]) -> GPAdvisorResult | None:
     gp_y = 0
     charges = -1
     cities: list[GPAdvisorCity] = []
+    cities_known = None
 
     for line in lines:
         if line.startswith("GP_INFO|"):
@@ -332,6 +254,8 @@ def parse_gp_advisor_response(lines: list[str]) -> GPAdvisorResult | None:
                 gp_x = int(parts[4])
                 gp_y = int(parts[5])
                 charges = int(parts[6])
+        elif line.startswith("GP_SCAN|"):
+            cities_known = {"true": True, "false": False}.get(line.partition("|")[2])
         elif line.startswith("GP_CITY|"):
             parts = line.split("|")
             if len(parts) >= 10:
@@ -342,9 +266,9 @@ def parse_gp_advisor_response(lines: list[str]) -> GPAdvisorResult | None:
                             city_id=int(parts[2]),
                             district_x=int(parts[3]),
                             district_y=int(parts[4]),
-                            can_activate=parts[5] == "true",
+                            can_activate={"true": True, "false": False}.get(parts[5]),
                             distance=int(parts[6]),
-                            city_yield=_int(parts[7]),
+                            city_yield=None if parts[7] == "?" else float(parts[7]),
                             slots_free=int(parts[8]),
                             slots_total=int(parts[9]),
                         )
@@ -362,4 +286,5 @@ def parse_gp_advisor_response(lines: list[str]) -> GPAdvisorResult | None:
         gp_y=gp_y,
         charges=charges,
         cities=cities,
+        cities_known=cities_known,
     )

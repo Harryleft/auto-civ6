@@ -166,9 +166,10 @@ def brief(data):
     lines = [f"City yields: {data['status']} | {data.get('identity')} | current owned cities",
              'Sources: native district/plot yields; current GameInfo rules; GameCore requirement instances when slotted.',
              f"Rationalism: unlocked {state(p.get('unlocked'))}; can slot {state(p.get('can_slot'))}; slotted {state(p.get('slotted'))}."]
+    branch_names = {m['modifier_id']: f'B{i}' for i,m in enumerate(data['modifiers'],1)}
     for m in data['modifiers']:
         args = m['target']
-        lines.append(f"  {m['modifier_id']}: {number(m['amount_percent'])}% {args.get('YieldType', 'unknown')} from {args.get('DistrictType', 'unknown')} buildings; "
+        lines.append(f"  {branch_names[m['modifier_id']]} = {m['modifier_id']}: {number(m['amount_percent'])}% {args.get('YieldType', 'unknown')} from {args.get('DistrictType', 'unknown')} buildings; "
                      f"comparison {'supported' if m['comparison_supported'] else 'unknown'}; flags {json.dumps(m['flags'], ensure_ascii=False, separators=(',', ':'))}; "
                      f"{json.dumps(m['requirement_set'], ensure_ascii=False, separators=(',', ':'))}; "
                      f"{json.dumps(m['requirements'], ensure_ascii=False, separators=(',', ':'))}")
@@ -179,13 +180,16 @@ def brief(data):
                 continue
             fields = []
             for label, values in [('district_adj', d['adjacency']), ('plot_adj', d['plot_adjacency']), ('yield', d['yields'])]:
-                facts = ','.join(f"{k.removeprefix('YIELD_')}={number(v)}" for k, v in values.items() if v is None or v != 0)
-                fields.append(f"{label} {facts or 'all six yields 0'}")
+                if label != 'district_adj' and values == d['adjacency']:
+                    fields.append(f'{label}=district_adj')
+                else:
+                    facts = ','.join(f"{k.removeprefix('YIELD_')}={number(v)}" for k, v in values.items() if v is None or v != 0)
+                    fields.append(f"{label} {facts or 'all six yields 0'}")
             lines.append(f"  {d['district_type']} [id:{d['district_id']}] ({d['x']},{d['y']}) complete {state(d['complete'])}, pillaged {state(d['pillaged'])}; " + '; '.join(fields))
         if c['campus_buildings']:
-            lines.append('  Campus buildings: ' + ', '.join(f"{b['building_type']} (pillaged {state(b['pillaged'])})" for b in c['campus_buildings']))
+            lines.append('  Campus buildings: ' + ', '.join(f"{b['building_type']} (pillaged {state(b['pillaged'])}; native " + ','.join(f"{k.removeprefix('YIELD_')}={number(v)}" for k,v in b['yields'].items() if v is None or v != 0) + ')'  for b in c['campus_buildings']))
         for cond in c.get('policy_conditions', []):
-            lines.append(f"  {cond['modifier_id']}: observed {number(cond['observed'])} / required {number(cond['threshold'])}; threshold met {state(cond['meets_observed_threshold'])}; native condition {state(cond['native_conditions_met'])}; native effect {state(cond['native_effect_confirmed'])}.")
+            lines.append(f"  {branch_names[cond['modifier_id']]}: observed {number(cond['observed'])} / required {number(cond['threshold'])}; threshold met {state(cond['meets_observed_threshold'])}; native condition {state(cond['native_conditions_met'])}; native effect {state(cond['native_effect_confirmed'])}.")
     lines.append('Threshold comparisons use population/plot adjacency and are inferences; native condition/effect are separate engine observations, never net science gain. Full current rules/receipts and zero yields: --view structured; science tooltips: --view evidence.')
     if not data['rules_complete']:
         lines.append('Current rule graph incomplete; all comparisons unknown.')
@@ -229,7 +233,7 @@ async def read_context(game, city_id=None, view='brief'):
         all(c[k] is not None for k in ('population', 'science', 'food_surplus')) and
         all(d['complete'] is not None and d['pillaged'] is not None and
             all(v is not None for v in (*d['adjacency'].values(), *d['plot_adjacency'].values(), *d['yields'].values())) for d in c['districts']) and
-        all(b['pillaged'] is not None for b in c['buildings']) for c in data['cities'])
+        all(b['pillaged'] is not None and len(b['yields']) == 6 and all(v is not None for v in b['yields'].values()) for b in c['buildings']) for c in data['cities'])
     complete = stable and data['scan_complete'] and data['requested_city_found'] and data['rules_complete'] and data['native_fields_complete'] and bool(data['policy']) and all(v is not None for v in data['policy'].values())
     data['status'] = 'ready' if complete else 'unknown'
     if not stable or not data['scan_complete']:

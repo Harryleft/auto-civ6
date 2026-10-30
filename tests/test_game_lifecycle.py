@@ -381,7 +381,8 @@ class TestListSaves:
             _touch(auto / f"AutoSave_{i:04d}.Civ6Save", 1000 + i)
 
         out = run(gl.list_saves(FakeConn()))
-        assert len(out.splitlines()) == 1 + 25
+        assert len([line for line in out.splitlines() if line.startswith("  ")]) == 25
+        assert "shown 25 of 30; truncated=true" in out
 
     def test_falls_back_to_lua_query_when_disk_is_empty(
         self, save_dirs, monkeypatch
@@ -413,7 +414,7 @@ class TestListSaves:
             return ["EMPTY"]
 
         out = run(gl.list_saves(FakeConn(on_write=on_write)))
-        assert out == "No saves found on filesystem."
+        assert out == "No saves found on filesystem or native enumeration."
 
     def test_lua_query_that_never_completes_times_out_to_filesystem_message(
         self, save_dirs, monkeypatch
@@ -427,7 +428,7 @@ class TestListSaves:
             return ["PENDING"]
 
         out = run(gl.list_saves(FakeConn(on_write=on_write)))
-        assert out == "No saves found on filesystem."
+        assert out == "No saves found on filesystem. Native enumeration unavailable; this is not a complete native save listing."
 
     def test_connection_error_propagates_instead_of_masquerading_as_empty(
         self, save_dirs
@@ -451,7 +452,7 @@ class TestListSaves:
             raise RuntimeError("lua blew up")
 
         out = run(gl.list_saves(FakeConn(on_write=on_write)))
-        assert out == "No saves found on filesystem."
+        assert out == "No saves found on filesystem. Native enumeration unavailable; this is not a complete native save listing."
 
 
 # ---------------------------------------------------------------------------

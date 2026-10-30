@@ -60,6 +60,7 @@ city={GetID=function()return 65536 end,GetOwner=function()return cityOwner end,G
  GetGrowth=function()return{GetFoodSurplus=function()return 0 end}end,
  GetDistricts=function()return{Members=function()return ipairs(campus and {district} or {})end}end,
  GetBuildings=function()return{HasBuilding=function()return campus end,IsPillaged=function()return pillaged end}end,
+ GetBuildingYield=function(_,building,yield)return yield=='YIELD_SCIENCE' and 2 or 0 end,
  GetYieldToolTip=function()return '科技|100%[NEWLINE]来自建筑'end}
 Players={[0]={GetCities=function()return{Members=function()return ipairs({city})end}end,
  GetCulture=function()return{GetNumPolicySlots=function()return 2 end,GetSlotPolicy=function(_,s)return slotted and s==0 and 9 or -1 end,
@@ -319,3 +320,35 @@ def test_unselected_policy_needs_only_one_transport_request():
     conn=NativeConn();conn.lua.execute('slotted=false')
     result,_,_=read(conn,view='structured')
     assert result['status']=='ready' and len(conn.calls)==1 and 'engine' not in result
+
+
+def test_native_building_yields_are_current_values_not_static_or_city_total():
+    conn = NativeConn()
+    conn.lua.execute("city.GetBuildingYield=function(_,building,yield)assert(building==1);return yield=='YIELD_SCIENCE' and 4.5 or 0 end")
+    data, _, _ = read(conn, view='structured')
+    building = data['cities'][0]['campus_buildings'][0]
+    assert building['yields']['YIELD_SCIENCE'] == 4.5
+    assert building['yields']['YIELD_FOOD'] == 0
+    assert data['cities'][0]['science'] == 33.125
+    assert 'SCIENCE=4.5' in read(conn)[0]['report']
+
+
+def test_failed_building_yield_stays_unknown_and_marks_the_report_incomplete():
+    conn = NativeConn()
+    conn.lua.execute("city.GetBuildingYield=function(_,building,yield)if yield=='YIELD_SCIENCE' then error('unavailable')end;return 0 end")
+    data, _, _ = read(conn, view='structured')
+    assert data['cities'][0]['campus_buildings'][0]['yields']['YIELD_SCIENCE'] is None
+    assert data['status'] == 'unknown'
+
+
+def test_brief_aliases_repeated_identifiers_and_identical_yields_without_hiding_differences():
+    conn=NativeConn()
+    text=read(conn)[0]['report']
+    assert text.count('RATIONALISM_BUILDING_YIELDS_HIGH_ADJACENCY')==1
+    assert 'B1 = ' in text and 'B1: observed' in text
+    assert 'plot_adj=district_adj' in text
+    assert 'yield SCIENCE=12.25' in text
+    assert 'Inverse' in text and 'Reverse' in text
+    conn.lua.execute('district.GetAdjacencyYield=function(_,idx)return idx==3 and 7 or 0 end')
+    text=read(conn)[0]['report']
+    assert 'district_adj SCIENCE=7' in text and 'plot_adj SCIENCE=3.5' in text

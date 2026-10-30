@@ -160,6 +160,7 @@ class CityInfo:
     wall_hp: int = 0
     wall_max_hp: int = 0
     attack_targets: list[str] = field(default_factory=list)
+    attack_targets_known: bool | None = None
     pillaged_districts: list[str] = field(default_factory=list)
     pillaged_buildings: list[str] = field(default_factory=list)
     districts: list[str] = field(default_factory=list)
@@ -465,7 +466,7 @@ class CombatEstimate:
 class PathingEstimate:
     """Estimated turns for a unit to reach a destination."""
 
-    turns: int
+    turns: int | None
     total_tiles: int
     reachable_this_turn: int
     waypoints: list[str] = field(default_factory=list)  # ["(x,y)", ...]
@@ -485,9 +486,8 @@ class SettleCandidate:
     defense_score: int = 0
     luxury_count: int = 0
     strategic_count: int = 0
-    loyalty_pressure: float = (
-        0.0  # approx loyalty/turn from population pressure, negative = bad
-    )
+    loyalty_pressure: float | None = None  # Native settler warning, missing is unknown
+    resource_visibility_known: bool | None = None
 
 
 @dataclass
@@ -783,6 +783,9 @@ class PolicyInfo:
     name: str
     description: str
     slot_type: str  # compatible slot type
+    obsolete: bool | None = None
+    can_use_now: bool | None = None
+    reason: str = "OBSERVATION_UNAVAILABLE"
 
 
 @dataclass
@@ -796,6 +799,10 @@ class GovernmentStatus:
     policy_unlock_cost: float | None = None
     policy_unlock_currency: str | None = None
     policy_unlock_balance: float | None = None
+    can_change_now: bool | None = None
+    change_reason: str = "OBSERVATION_UNAVAILABLE"
+    changed_this_turn: bool | None = None
+    coverage: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -810,6 +817,7 @@ class GovernorInfo:
     base_ability_desc: str = ""  # description of the base promotion
     promotions: list["GovernorPromotion"] = field(default_factory=list)
 
+    can_appoint: bool | None = None
 
 @dataclass
 class GovernorPromotion:
@@ -821,6 +829,7 @@ class GovernorPromotion:
     level: int = 0  # 0 = base ability, 1-3 = promotion tiers
     column: int = 0  # position in the promotion tree
 
+    can_earn: bool | None = None
 
 @dataclass
 class AppointedGovernor:
@@ -845,6 +854,8 @@ class GovernorStatus:
     appointed: list[AppointedGovernor] = field(default_factory=list)
     available_to_appoint: list[GovernorInfo] = field(default_factory=list)
 
+    omitted_promotions: int = 0
+    omitted_appointments: int = 0
 
 @dataclass
 class PromotionOption:
@@ -953,8 +964,8 @@ class DistrictPlacement:
 
     x: int
     y: int
-    adjacency: dict[str, int]  # yield_type -> bonus (e.g. {"science": 3})
-    total_adjacency: int
+    adjacency: dict[str, float | None]  # Nonzero native yields and unknowns
+    total_adjacency: float | None
     terrain_desc: str  # e.g. "Plains Hills"
 
 
@@ -981,11 +992,14 @@ class PurchasableTile:
 
     x: int
     y: int
-    cost: int
+    cost: float | None
     terrain: str
     resource: str | None
     resource_class: str | None  # "strategic", "luxury", "bonus"
 
+    balance: float | None = None
+    can_purchase: bool | None = None
+    reason: str = "OBSERVATION_UNAVAILABLE"
 
 @dataclass
 class StaticMapTile:
@@ -1028,14 +1042,18 @@ class GreatPersonInfo:
     class_name: str  # e.g. "Great Scientist"
     individual_name: str  # e.g. "Hypatia"
     era_name: str
-    cost: int  # great person points needed to recruit
+    cost: float | None  # native great person points quote
     claimant: str  # civ name or "Unclaimed"
-    player_points: int  # our points toward this class
+    player_points: float | None  # our observed points toward this class
     ability: str = ""  # activation/passive ability description
-    gold_cost: int = 0  # gold patronize cost
-    faith_cost: int = 0  # faith patronize cost
-    can_recruit: bool = False  # have enough GP points
+    gold_cost: float | None = None
+    faith_cost: float | None = None
+    can_recruit: bool | None = None  # native eligibility, not a point comparison
     individual_id: int = 0  # GameInfo index for recruit/patronize actions
+    can_patronize_gold: bool | None = None
+    can_patronize_faith: bool | None = None
+    gold_balance: float | None = None
+    faith_balance: float | None = None
 
 
 @dataclass
@@ -1046,9 +1064,9 @@ class GPAdvisorCity:
     city_id: int
     district_x: int
     district_y: int
-    can_activate: bool  # GP can activate here right now
+    can_activate: bool | None  # Native activation highlight membership, not readiness
     distance: int  # hex distance from GP's current position
-    city_yield: int = 0  # city's total yield for the relevant type
+    city_yield: float | None = None  # Current city total, not activation benefit
     slots_free: int = -1  # empty great work slots (-1 = N/A)
     slots_total: int = -1  # total great work slots (-1 = N/A)
 
@@ -1064,6 +1082,7 @@ class GPAdvisorResult:
     gp_y: int
     charges: int
     cities: list[GPAdvisorCity]
+    cities_known: bool | None = None
 
 
 @dataclass
@@ -1256,6 +1275,7 @@ class BuilderTask:
     city_name: str
     nearest_builder_id: int = -1
     distance: int = 999
+    eligibility_note: str = "NATIVE_ELIGIBILITY_UNCHECKED"
 
 
 @dataclass
@@ -1266,6 +1286,7 @@ class BuilderInfo:
     y: int
     charges: int
     moves: float
+    ready: bool | None = None
 
 
 @dataclass

@@ -258,7 +258,8 @@ def domain_parser(group: str):
     elif group == "victory":
         command("show", "get_victory_progress", "Read victory progress; hidden rival facts remain unknown.")
     elif group == "policy":
-        command("show", "get_policies", "Read government slots and available policy cards.")
+        policy=command("show", "get_policies", "Read policy change restrictions and current candidates; inspect one unavailable card with --policy.")
+        policy.add_argument("--policy", dest="policy_type", default=argparse.SUPPRESS)
         assign = command("set", "set_policies", "Assign explicit SLOT=POLICY_ID pairs; a changed plan must fill every final slot. Omitted slots stay unchanged.", mutation=True)
         assign.add_argument("assignments", nargs="+", help="Pairs separated by spaces or commas; for example 0=POLICY_DISCIPLINE 1=POLICY_URBAN_PLANNING. NONE may not leave an empty changed plan.")
     elif group == "city-state":
@@ -266,7 +267,8 @@ def domain_parser(group: str):
         envoy = command("envoy", "send_envoy", "Send one envoy; consumes one available token when confirmed.", mutation=True)
         envoy.add_argument("player_id", type=int, help="City-state player ID from city-state list")
     elif group == "governor":
-        command("list", "get_governors", "Read governors, titles, assignments and native options.")
+        governors=command("list", "get_governors", "Read native eligible governor appointments/promotions; expand blocked choices explicitly.")
+        governors.add_argument("--include-ineligible", action="store_true", default=argparse.SUPPRESS)
         for name, tool, description in (
             ("appoint", "appoint_governor", "Appoint one governor; spends an available title."),
             ("assign", "assign_governor", "Reassign one appointed governor to an identified city."),

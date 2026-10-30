@@ -76,12 +76,13 @@ for i, u in Players[id]:GetUnits():Members() do
                 for dx = -rng, rng do
                     local tx, ty = x + dx, y + dy
                     local d = Map.GetPlotDistance(x, y, tx, ty)
-                    if d >= 1 and d <= rng then
+                    if d >= 1 and d <= rng and PlayersVisibility[id]:IsVisible(tx,ty)==true then
                         local plotUnits = Map.GetUnitsAt(tx, ty)
                         if plotUnits then
                             for other in plotUnits:Units() do
                                 local otherOwner = other:GetOwner()
-                                if otherOwner ~= id and (otherOwner == 63 or Players[id]:GetDiplomacy():IsAtWarWith(otherOwner)) then
+                                local okVisible,unitVisible=pcall(function()return PlayersVisibility[id]:IsUnitVisible(other)end)
+                                if okVisible and unitVisible==true and otherOwner ~= id and (otherOwner == 63 or Players[id]:GetDiplomacy():IsAtWarWith(otherOwner)) then
                                     local mode = classifyUnitAttack(u)
                                     local losOK = mode ~= nil
                                     if mode == "MELEE" then
@@ -90,11 +91,11 @@ for i, u in Players[id]:GetUnits():Members() do
                                         mp[UnitOperationTypes.PARAM_Y] = ty
                                         mp[UnitOperationTypes.PARAM_MODIFIERS] = UnitOperationMoveModifiers.ATTACK
                                         losOK = meleeAttackEligibility(u, mp) == nil
-                                    elseif rs > 0 and d > 1 then
+                                    elseif rs > 0 then
                                         local lp = {{}}
                                         lp[UnitOperationTypes.PARAM_X] = tx
                                         lp[UnitOperationTypes.PARAM_Y] = ty
-                                        losOK = UnitManager.CanStartOperation(u, UnitOperationTypes.RANGE_ATTACK, nil, lp)
+                                        losOK = UnitManager.CanStartOperation(u, UnitOperationTypes.RANGE_ATTACK, nil, lp) == true
                                     end
                                     if losOK then
                                         local eInfo = GameInfo.Units[other:GetType()]
@@ -1641,6 +1642,7 @@ if lastPlot:GetX() ~= {target_x} or lastPlot:GetY() ~= {target_y} then
     return
 end
 local reach = UnitManager.GetReachableMovement(unit)
+if type(reach) ~= "table" then {_bail("ERR:REACHABILITY_UNKNOWN|Native reachable movement unavailable")} end
 local reachSet = {{}}
 if reach then
     for _, pIdx in ipairs(reach) do reachSet[pIdx] = true end
@@ -1672,7 +1674,9 @@ print("{SENTINEL}")
 
 def parse_pathing_estimate(lines: list[str]) -> PathingEstimate:
     """Parse PATH| and WAYPOINTS| output."""
-    est = PathingEstimate(turns=0, total_tiles=0, reachable_this_turn=0, waypoints=[])
+    est = PathingEstimate(turns=None, total_tiles=0, reachable_this_turn=0, waypoints=[])
+    if len([r for r in lines if r.startswith("PATH|")]) != 1:
+        return est
     for line in lines:
         if line.startswith("PATH|"):
             parts = line.split("|")
@@ -1682,6 +1686,8 @@ def parse_pathing_estimate(lines: list[str]) -> PathingEstimate:
                 est.reachable_this_turn = int(parts[3])
         elif line.startswith("WAYPOINTS|"):
             est.waypoints = line.split("|", 1)[1].split(";")
+    if est.total_tiles < 0 or est.reachable_this_turn < 0 or est.reachable_this_turn > est.total_tiles or (est.turns == 0 and (est.total_tiles == 0 or est.reachable_this_turn != est.total_tiles)):
+        est.turns = None
     return est
 
 
@@ -1816,7 +1822,7 @@ def build_builder_tasks_query() -> str:
     Uses hardcoded resource mapping and terrain heuristics for improvement recommendations.
     Does NOT use CanStartOperation with remote tiles (corrupts engine state → crash).
     """
-    return _LUA_KNOWN_RESOURCE + """
+    return _LUA_KNOWN_RESOURCE + _LUA_UNIT_READINESS + """
 local me = Game.GetLocalPlayer()
 local pCities = Players[me]:GetCities()
 
@@ -1827,7 +1833,7 @@ for _, u in Players[me]:GetUnits():Members() do
     if entry and entry.UnitType == "UNIT_BUILDER" and u:GetBuildCharges() > 0 then
         local bx, by = u:GetX(), u:GetY()
         if bx ~= -9999 then
-            table.insert(builders, {id=u:GetID(), idx=u:GetID() % 65536, x=bx, y=by, charges=u:GetBuildCharges(), moves=u:GetMovesRemaining()})
+            table.insert(builders, {id=u:GetID(), idx=u:GetID() % 65536, x=bx, y=by, charges=u:GetBuildCharges(), moves=u:GetMovesRemaining(), ready=unitReady(u)})
         end
     end
 end
@@ -1872,7 +1878,6 @@ local resImpMap = {
 local seen = {}
 local normalCount = 0
 local resourceVisibilityKnown = true
-local maxNormal = 20
 for _, city in pCities:Members() do
     local cx, cy = city:GetX(), city:GetY()
     local cityName = Locale.Lookup(city:GetName())
@@ -1943,7 +1948,7 @@ for _, city in pCities:Members() do
                     -- Uses terrain heuristics instead of CanStartOperation (which corrupts
                     -- engine state when called with remote tile coordinates, causing
                     -- EXCEPTION_ACCESS_VIOLATION during end_turn)
-                    elseif impIdx < 0 and (resIdx == nil or resIdx < 0) and normalCount < maxNormal then
+                    elseif impIdx < 0 and (resIdx == nil or resIdx < 0) then
                         local featureIdx = plot:GetFeatureType()
                         local terrIdx = plot:GetTerrainType()
                         local terrInfo = terrIdx >= 0 and GameInfo.Terrains[terrIdx] or nil
@@ -1984,7 +1989,7 @@ print("RESOURCE_VISIBILITY|" .. tostring(resourceVisibilityKnown))
 
 -- Print builder info
 for _, b in ipairs(builders) do
-    print("BUILDER|" .. b.id .. "|" .. b.idx .. "|" .. b.x .. "," .. b.y .. "|" .. b.charges .. "|" .. string.format("%.1f", b.moves))
+    print("BUILDER|" .. b.id .. "|" .. b.idx .. "|" .. b.x .. "," .. b.y .. "|" .. b.charges .. "|" .. string.format("%.1f", b.moves) .. "|" .. (b.ready==nil and "?" or tostring(b.ready)))
 end
 print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
@@ -2012,12 +2017,12 @@ def parse_builder_tasks(
                 if len(xy) != 2:
                     continue
                 imp = parts[3]
-                # Skip tasks where tech prerequisite isn't met
-                if imp.endswith("_LOCKED"):
-                    continue
+                note = "PREREQUISITE_TECH_LOCKED" if imp.endswith("_LOCKED") else "NATIVE_ELIGIBILITY_UNCHECKED"
+                imp = imp.removesuffix("_LOCKED")
                 tasks.append(
                     BuilderTask(
                         priority=parts[1],
+                        eligibility_note=note,
                         x=int(xy[0]),
                         y=int(xy[1]),
                         improvement=imp,
@@ -2043,6 +2048,7 @@ def parse_builder_tasks(
                         y=int(xy[1]),
                         charges=int(parts[4]),
                         moves=float(parts[5]),
+                        ready={"true": True, "false": False}.get(parts[6]) if len(parts)>6 else None,
                     )
                 )
         except (ValueError, IndexError):

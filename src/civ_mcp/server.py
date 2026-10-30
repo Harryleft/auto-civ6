@@ -616,21 +616,19 @@ async def get_map_area(
 
 @mcp.tool(annotations={"readOnlyHint": True})
 async def get_settle_advisor(ctx: Context, unit_id: int) -> str:
-    """List best settle locations near a settler unit.
+    """List observed settlement terrain candidates near a settler unit.
 
     Args:
         unit_id: The settler's composite ID (from get_units output)
 
-    Scores locations by yields, water, defense, and resource value.
-    Returns top 5 candidates sorted by score.
+    Returns all candidates without ranking; native founding eligibility is unverified.
     """
     gs = _get_game(ctx)
-    unit_index = unit_id % 65536
     return await _logged(
         ctx,
         "get_settle_advisor",
         {"unit_id": unit_id},
-        lambda: gs.get_settle_advisor(unit_index),
+        lambda: gs.get_settle_advisor(unit_id),
     )
 
 
@@ -664,10 +662,10 @@ async def get_pathing_estimate(
 
 @mcp.tool(annotations={"readOnlyHint": True})
 async def get_global_settle_advisor(ctx: Context) -> str:
-    """Find the best settle locations across the entire revealed map.
+    """Read unranked settlement terrain candidates across the revealed map.
 
     Unlike get_settle_advisor (which searches near a specific settler),
-    this scans all revealed land for the top 10 settle candidates.
+    this scans revealed unowned land and returns all observed candidates.
     Use this when deciding WHERE to send a settler, not just where to settle.
     """
     gs = _get_game(ctx)
@@ -675,7 +673,7 @@ async def get_global_settle_advisor(ctx: Context) -> str:
     async def _run():
         candidates = await gs.get_global_settle_scan()
         if not candidates:
-            return "No valid settle locations found on revealed map."
+            return "No settlement terrain candidates confirmed on revealed map."
         return nr.narrate_settle_candidates(candidates)
 
     return await _logged(ctx, "get_global_settle_advisor", {}, _run)
@@ -683,18 +681,12 @@ async def get_global_settle_advisor(ctx: Context) -> str:
 
 @mcp.tool(annotations={"readOnlyHint": True})
 async def get_builder_tasks(ctx: Context) -> str:
-    """Get a prioritized task board for all your builders.
+    """Read improvement hints and native builder readiness.
 
-    Scans your territory for tiles needing improvements and matches them
-    with idle builders. Like the builder lens in the UI — shows what to
-    build where and which builder is closest.
-
-    Priority tiers:
-    - URGENT: Pillaged improvements (yield loss), unimproved strategic resources
-    - HIGH: Unimproved luxury/bonus resources
-    - NORMAL: Empty tiles that could benefit from farms/mines/lumber mills
-
-    Call this before issuing builder orders each turn.
+    Returns all observed improvement hints and native builder readiness.
+    Repair/resource/terrain are observations, without fixed priorities. Remote
+    operation checks are unsafe in this installation and are never issued.
+    Geometric nearest builders do not prove reachability or eligibility.
     """
     gs = _get_game(ctx)
 
@@ -790,8 +782,8 @@ async def get_pending_trades(ctx: Context) -> str:
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
-async def get_policies(ctx: Context) -> str:
-    """Get current government, policy slots, and available policies.
+async def get_policies(ctx: Context, policy_type: Annotated[str, Field(pattern=r"^POLICY_[A-Z0-9_]+$")] | None = None) -> str:
+    """Read policy slots, native change restrictions and current candidates.
 
     Shows current government type, each policy slot with its type and current
     policy (if any), and all unlocked policies grouped by compatible slot type.
@@ -799,7 +791,7 @@ async def get_policies(ctx: Context) -> str:
     """
     gs = _get_game(ctx)
     return await _logged(
-        ctx, "get_policies", {}, lambda: _narrate(gs.get_policies, nr.narrate_policies)
+        ctx, "get_policies", {}, lambda: _narrate(gs.get_policies if policy_type is None else lambda: gs.get_policies(policy_type), nr.narrate_policies)
     )
 
 
@@ -844,8 +836,8 @@ async def get_pending_diplomacy(ctx: Context) -> str:
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
-async def get_governors(ctx: Context) -> str:
-    """Get governor status, appointed governors, and available types.
+async def get_governors(ctx: Context, include_ineligible: bool = False) -> str:
+    """Read native governor appointment/promotion eligibility and assignments.
 
     Shows governor points, currently appointed governors with assignments,
     and governors available to appoint. Use appoint_governor to appoint one.
@@ -854,8 +846,8 @@ async def get_governors(ctx: Context) -> str:
     return await _logged(
         ctx,
         "get_governors",
-        {},
-        lambda: _narrate(gs.get_governors, nr.narrate_governors),
+        {} if not include_ineligible else {"include_ineligible":True},
+        lambda: _narrate(gs.get_governors if not include_ineligible else lambda: gs.get_governors(include_ineligible=True), nr.narrate_governors),
     )
 
 
@@ -1876,7 +1868,7 @@ async def get_trade_destinations(ctx: Context, unit_id: int) -> str:
 
 @mcp.tool(annotations={"readOnlyHint": True})
 async def get_district_advisor(ctx: Context, city_id: int, district_type: str) -> str:
-    """Show best tiles to place a district with adjacency bonuses.
+    """Read all native available district plots and native adjacency, unranked.
 
     Args:
         city_id: City ID (from get_cities)
@@ -1904,14 +1896,13 @@ async def get_district_advisor(ctx: Context, city_id: int, district_type: str) -
 
 @mcp.tool(annotations={"readOnlyHint": True})
 async def get_wonder_advisor(ctx: Context, city_id: int, wonder_name: str) -> str:
-    """Show best tiles to place a wonder with displacement cost analysis.
+    """Show all native available wonder tiles and displaced features.
 
     Args:
         city_id: City ID (from get_cities output)
         wonder_name: Wonder building type, e.g. BUILDING_CHICHEN_ITZA, BUILDING_ORSZAGHAZ
 
-    Returns valid placement tiles ranked by displacement cost (lowest = best):
-    tiles with no improvements or resources are preferred over productive tiles.
+    Returns every native available placement tile without a strategy ranking.
     Also shows terrain, feature, river/coastal status, and any resources/improvements
     that would be removed by placing the wonder there.
     Use set_city_production with target_x/target_y to build the wonder.
@@ -1946,12 +1937,14 @@ async def get_purchasable_tiles(ctx: Context, city_id: int) -> str:
         city_id: City ID (from get_cities)
 
     Shows cost, terrain, and resources for each purchasable tile.
-    Tiles with luxury/strategic resources are listed first.
+    All native candidates are returned without a strategy ranking; price and eligibility are separate.
     """
     gs = _get_game(ctx)
 
     async def _run():
         tiles = await gs.get_purchasable_tiles(city_id)
+        if isinstance(tiles, str):
+            return f"Error: {tiles}"
         return nr.narrate_purchasable_tiles(tiles)
 
     return await _logged(ctx, "get_purchasable_tiles", {"city_id": city_id}, _run)
@@ -2025,7 +2018,7 @@ async def get_great_people(ctx: Context) -> str:
 
 @mcp.tool(annotations={"readOnlyHint": True})
 async def get_gp_advisor(ctx: Context, unit_index: int) -> str:
-    """Show best cities to activate a Great Person, ranked by suitability.
+    """Read native Great Person activation highlights and current city facts, unranked.
 
     Args:
         unit_index: The Great Person unit's index (from get_units output).
@@ -2038,6 +2031,8 @@ async def get_gp_advisor(ctx: Context, unit_index: int) -> str:
 
     async def _run():
         result = await gs.get_gp_advisor(unit_index)
+        if isinstance(result, str):
+            return f"Error: {result}"
         if result is None:
             return "Could not get GP advisor info. Is this a Great Person unit?"
         return nr.narrate_gp_advisor(result)

@@ -63,7 +63,7 @@ local function player(value)
         GetDiplomacy=function() return {IsAtWarWith=function() return atPeace~=true end} end}
 end
 Players = {[0]=player(unit),[2]=player(enemy)}
-PlayersVisibility = {[0]={IsVisible=function() return true end}}
+PlayersVisibility = {[0]={IsVisible=function() return true end,IsUnitVisible=function()return true end}}
 Map = {
     GetPlotDistance=function() return distance or 1 end,
     GetPlot=function() return {GetIndex=function() return 1 end} end,
@@ -422,3 +422,19 @@ end
     assert result.startswith('Error: ATTACK_DEFERRED|'), result
     assert conn.operations == [] and state.pending_action_summary is None
     assert (conn.lua.globals().attacks, conn.lua.globals().moves) == (1, 1)
+
+
+@pytest.mark.parametrize('visibility', ['false', 'nil', 'error("visibility unknown")'])
+def test_unit_candidate_board_never_exposes_a_hidden_or_unverified_unit(visibility):
+    conn=CandidateAttackConn()
+    result = visibility if visibility.startswith('error(') else 'return '+visibility
+    conn.lua.execute('PlayersVisibility[0].IsUnitVisible=function() '+result+' end;unitInfo.RangedCombat=0')
+    assert asyncio.run(state_for(conn).get_units())[0].targets==[]
+    assert conn.operations==[]
+
+
+def test_adjacent_ranged_target_still_requires_native_attack_eligibility():
+    conn=CandidateAttackConn()
+    conn.lua.execute('allowed.range=false')
+    assert asyncio.run(state_for(conn).get_units())[0].targets==[]
+    assert conn.operations==[]

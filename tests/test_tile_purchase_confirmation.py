@@ -162,7 +162,7 @@ def test_partial_wrong_target_or_missing_native_evidence_stays_pending(effect):
 
 
 @pytest.mark.parametrize('setup', [
-    'balance=1', 'balance=nil', 'cost=0', 'cost=nil', 'eligible=false',
+    'balance=1', 'balance=nil', 'cost=-1', 'cost=nil', 'eligible=false',
     'city.owner=1', 'city.id=131073', 'plots[11].owner=0', 'plots[11]=nil',
     'busy=true', 'busy=nil', 'CityManager.RequestCommand=nil',
 ])

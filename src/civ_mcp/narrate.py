@@ -277,8 +277,8 @@ def narrate_units(
 
 def narrate_builder_tasks(report: lq.BuilderTaskReport) -> str:
     tasks, builders = report.tasks, report.builders
-    idle = [b for b in builders if b.moves > 0]
-    lines = [f"=== BUILDER TASKS ({len(tasks)} tasks, {len(idle)} idle builders) ==="]
+    ready = [b for b in builders if b.ready is True]
+    lines = [f"=== BUILDER TASKS ({len(tasks)} tasks, {len(ready)} native-ready builders) ==="]
     if report.resource_visibility_known is not True:
         lines.append(
             "Resource advice incomplete: native resource visibility unknown; "
@@ -297,61 +297,28 @@ def narrate_builder_tasks(report: lq.BuilderTaskReport) -> str:
             _append_builder_list(lines, builders)
         return "\n".join(lines)
 
-    # Group by priority
-    by_priority: dict[str, list[lq.BuilderTask]] = {
-        "urgent": [],
-        "high": [],
-        "normal": [],
-    }
+    # Observation order only: repair/resource/terrain are facts, not priorities.
+    lines.append('Terrain/resource mapping is advisory; no remote operation checks. Distances are geometric, not path or reachability.')
     for t in tasks:
-        by_priority.setdefault(t.priority, []).append(t)
-
-    for pri, label in [("urgent", "URGENT"), ("high", "HIGH"), ("normal", "NORMAL")]:
-        group = by_priority.get(pri, [])
-        if not group:
-            continue
-        lines.append("")
-        lines.append(f"{label}:")
-        # Sort by distance so nearest tasks come first
-        for t in sorted(group, key=lambda t: t.distance):
-            if t.resource_class == "pillaged":
-                action = f"repair {t.resource}"
-            else:
-                imp_label = t.improvement.replace("IMPROVEMENT_", "")
-                suffix = ""
-                if t.resource_class == "luxury":
-                    suffix = "+"
-                elif t.resource_class == "strategic":
-                    suffix = "*"
-                res_prefix = f"{t.resource}{suffix} — " if t.resource else ""
-                action = f"{res_prefix}build {imp_label}"
-
-            builder_str = ""
-            if t.nearest_builder_id >= 0:
-                builder_str = f" — nearest builder id:{t.nearest_builder_id}, {t.distance} tile{'s' if t.distance != 1 else ''}"
-            lines.append(
-                f"  ({t.x},{t.y}): {action} [city: {t.city_name}]{builder_str}"
-            )
-
+        if t.resource_class == 'pillaged':
+            action = f'repair {t.resource}'
+        else:
+            imp = t.improvement.removeprefix('IMPROVEMENT_')
+            action = (f'{t.resource} — ' if t.resource else '') + f'build {imp}'
+        builder = ''
+        if t.nearest_builder_id >= 0:
+            builder = f' — nearest builder id:{t.nearest_builder_id}, hex distance {t.distance} (reachability unknown)'
+        lines.append(f'  ({t.x},{t.y}): {action} [city: {t.city_name}]{builder}; {t.eligibility_note}')
     lines.append("")
     _append_builder_list(lines, builders)
     return "\n".join(lines)
 
 
 def _append_builder_list(lines: list[str], builders: list[lq.BuilderInfo]) -> None:
-    idle = [b for b in builders if b.moves > 0]
-    busy = [b for b in builders if b.moves <= 0]
-    lines.append(f"IDLE BUILDERS ({len(idle)}):")
-    for b in idle:
-        lines.append(
-            f"  id:{b.unit_id} at ({b.x},{b.y}) — {b.charges} charges, {b.moves:.0f} moves"
-        )
-    if busy:
-        lines.append(f"BUSY BUILDERS ({len(busy)}):")
-        for b in busy:
-            lines.append(
-                f"  id:{b.unit_id} at ({b.x},{b.y}) — {b.charges} charges (no moves)"
-            )
+    lines.append(f'BUILDERS ({len(builders)}):')
+    for b in builders:
+        ready = {True:'yes',False:'no',None:'unknown'}[b.ready]
+        lines.append(f'  id:{b.unit_id} at ({b.x},{b.y}) — {b.charges} charges, {b.moves:g} moves; native ready {ready}')
 
 
 def narrate_cities(
@@ -419,18 +386,21 @@ def narrate_cities(
             )
         elif c.food_surplus == 0 and c.turns_to_grow <= 0:
             lines.append(
-                "    !! STAGNANT: 0 food surplus — needs farm, granary, or trade route"
+                "    !! STAGNANT: 0 food surplus; cause not established by this query"
             )
         elif c.turns_to_grow > 15:
             lines.append(
-                f"    !! SLOW GROWTH: {c.turns_to_grow} turns to next pop — needs farm, granary, or trade route"
+                f"    !! SLOW GROWTH: {c.turns_to_grow} turns to next pop; inspect food, housing and native growth modifiers"
             )
         if c.currently_building == "CORRUPTED_QUEUE":
             lines.append(
                 "    !! INVALID QUEUE (nonempty, zero item hash; unchanged) — inspect production before choosing a new item"
             )
+        if c.attack_targets_known is False:
+            lines.append("    City ranged targets: unknown (native observation unavailable)")
         for t in c.attack_targets:
-            lines.append(f"    >> CAN ATTACK: {t}")
+            label = "NATIVE RANGED TARGET" if c.attack_targets_known is True else "UNVERIFIED TARGET"
+            lines.append(f"    >> {label}: {t}")
         if c.districts:
             dist_strs = []
             for d in c.districts:
@@ -467,11 +437,13 @@ def narrate_cities(
 
 
 def narrate_pathing_estimate(est: lq.PathingEstimate) -> str:
+    if est.turns is None:
+        return "Path/reachability unknown: native observation missing or inconsistent."
     if est.turns == -2:
         return "Unit has no moves remaining this turn."
     if est.turns < 0:
         return (
-            "Unreachable — no path found. Destination may be in fog, "
+            "No native path to the destination returned. It may be in fog, "
             "behind foreign borders, or blocked by impassable terrain."
         )
     if est.turns == 0:
@@ -480,7 +452,7 @@ def narrate_pathing_estimate(est: lq.PathingEstimate) -> str:
     if est.waypoints and len(est.waypoints) > 2:
         wp_str = f"\n  Path: {est.waypoints[0]} -> ... -> {est.waypoints[-1]}"
     return (
-        f"~{est.turns} turns ({est.total_tiles} tiles total, "
+        f"~{est.turns} turns (heuristic assuming current reachable tiles per turn; terrain and future costs may differ; {est.total_tiles} tiles total, "
         f"{est.reachable_this_turn} reachable this turn){wp_str}"
     )
 
@@ -681,17 +653,15 @@ def narrate_strategic_map(data: lq.StrategicMapData) -> str:
 
 def narrate_settle_candidates(candidates: list[lq.SettleCandidate]) -> str:
     if not candidates:
-        return "No valid settle locations found within 5 tiles."
-    lines = [f"Top {len(candidates)} settle locations:"]
+        return "No settlement terrain candidates confirmed in the requested scope."
+    lines = [f"{len(candidates)} settlement terrain candidates (unranked; native founding eligibility unverified):",
+             "F/P are revealed radius-3 tile totals, not worked-city or net yields; loyalty is the native settler warning, not a full forecast."]
     _WATER = {"fresh": "fresh water", "coast": "coast", "none": "no water"}
     for i, c in enumerate(candidates, 1):
         water = _WATER.get(c.water_type, c.water_type)
-        loy_warn = ""
-        if c.loyalty_pressure < -1:
-            loy_warn = (
-                f" | !! Loyalty: ~{c.loyalty_pressure:+.0f}/turn (enemy pressure)"
-            )
-        header = f"  #{i} ({c.x},{c.y}): Score {c.score:.0f} — F:{c.total_food} P:{c.total_prod} — {water}, defense:{c.defense_score}{loy_warn}"
+        loyalty = 'unknown' if c.loyalty_pressure is None else f'{c.loyalty_pressure:g}'
+        resource_status = '' if c.resource_visibility_known is True else '; resource observations incomplete'
+        header = f"  #{i} ({c.x},{c.y}): F:{c.total_food} P:{c.total_prod} — {water}, revealed defense terrain:{c.defense_score}; native loyalty warning {loyalty}{resource_status}"
         lines.append(header)
         if c.resources:
             # Format: [S] IRON, [L] DIAMONDS, [B] WHEAT
@@ -1222,6 +1192,11 @@ def narrate_policies(gov: lq.GovernmentStatus) -> str:
     else:
         lines.append("Policy change cost: unknown")
 
+    state = {True:"yes",False:"no",None:"unknown"}[gov.can_change_now]
+    lines.append(f"Changed plan allowed by general checks: {state}; {gov.change_reason}. Complete slot plan still requires native validation.")
+    if gov.coverage:
+        lines.append(f"Candidate coverage: {gov.coverage}; excludes obsolete/no-add-slot cards by default. Inspect one with policy show --policy POLICY_ID.")
+
     if gov.slots:
         lines.append(f"\n{len(gov.slots)} policy slots:")
         for s in gov.slots:
@@ -1237,7 +1212,7 @@ def narrate_policies(gov: lq.GovernmentStatus) -> str:
         by_type: dict[str, list[lq.PolicyInfo]] = {}
         for p in gov.available_policies:
             by_type.setdefault(p.slot_type, []).append(p)
-        lines.append("\nAvailable policies:")
+        lines.append("\nPolicy candidates (current change restrictions apply):")
         for slot_type in [
             "SLOT_MILITARY",
             "SLOT_ECONOMIC",
@@ -1249,7 +1224,8 @@ def narrate_policies(gov: lq.GovernmentStatus) -> str:
                 label = slot_type.replace("SLOT_", "").title()
                 lines.append(f"  {label}:")
                 for p in policies:
-                    lines.append(f"    {p.name} ({p.policy_type}): {p.description}")
+                    state = {True:"yes",False:"no",None:"unknown"}[p.can_use_now]
+                    lines.append(f"    {p.name} ({p.policy_type}): {p.description} [can add now {state}; {p.reason}]")
 
     lines.append(
         "\nUse set_policies with slot assignments, e.g. '0=POLICY_AGOGE,1=POLICY_URBAN_PLANNING'"
@@ -1262,6 +1238,7 @@ def narrate_governors(gov: lq.GovernorStatus) -> str:
     lines = [
         f"Governor Points: {gov.points_available} available, {gov.points_spent} spent"
     ]
+    lines.append(f"Native-ineligible choices omitted: {gov.omitted_promotions} promotions, {gov.omitted_appointments} appointments. Full current tree: governor list --include-ineligible.")
     if gov.can_appoint:
         lines.append("** Can appoint a new governor! **")
 
@@ -1280,16 +1257,16 @@ def narrate_governors(gov: lq.GovernorStatus) -> str:
             else:
                 lines.append(f"  {g.name} ({g.governor_type}) — Unassigned")
             if g.available_promotions:
-                lines.append("    Available promotions:")
+                lines.append("    Unacquired promotions with native eligibility:")
                 for p in g.available_promotions:
                     lines.append(
-                        f"      {p.name} ({p.promotion_type}): {p.description}"
+                        f"      {p.name} ({p.promotion_type}): {p.description}; native can earn " + {True:"yes",False:"no",None:"unknown"}[p.can_earn]
                     )
 
     if gov.available_to_appoint:
-        lines.append(f"\nAvailable to appoint ({len(gov.available_to_appoint)}):")
+        lines.append(f"\nUnappointed candidates ({len(gov.available_to_appoint)}):")
         for g in gov.available_to_appoint:
-            lines.append(f"  {g.name} — {g.title} ({g.governor_type})")
+            lines.append(f"  {g.name} — {g.title} ({g.governor_type}); native can appoint " + {True:"yes",False:"no",None:"unknown"}[g.can_appoint])
             if g.description:
                 lines.append(f"    {g.description}")
             if g.base_ability:
@@ -1426,12 +1403,13 @@ def narrate_district_advisor(
 ) -> str:
     if not placements:
         return f"No valid placement tiles for {district_type}."
-    lines = [f"{district_type} placement options ({len(placements)} tiles):"]
+    lines = [f"{district_type} placement options ({len(placements)} native available tiles; unranked):"]
     for i, p in enumerate(placements, 1):
-        adj_parts = [f"{v} {k}" for k, v in p.adjacency.items()]
+        adj_parts = [f"{k} unknown" if v is None else f"{v:g} {k}" for k, v in p.adjacency.items()]
         adj_str = ", ".join(adj_parts) if adj_parts else "no adjacency"
+        total = "unknown" if p.total_adjacency is None else f"{p.total_adjacency:g}"
         lines.append(
-            f"  #{i} ({p.x},{p.y}) Adj: +{p.total_adjacency} ({adj_str}) — {p.terrain_desc}"
+            f"  #{i} ({p.x},{p.y}) Native plot adjacency: {total} ({adj_str}) — {p.terrain_desc}"
         )
     return "\n".join(lines)
 
@@ -1442,7 +1420,7 @@ def narrate_wonder_advisor(
     if not placements:
         return f"No valid placement tiles for {wonder_name} in this city."
     short_name = wonder_name.replace("BUILDING_", "").replace("_", " ").title()
-    lines = [f"{wonder_name} placement options ({len(placements)} tiles):"]
+    lines = [f"{wonder_name} placement options ({len(placements)} native available tiles; unranked):"]
     for i, p in enumerate(placements, 1):
         # Build terrain description
         terrain = p.terrain.replace("TERRAIN_", "").replace("_", " ").lower()
@@ -1466,21 +1444,15 @@ def narrate_wonder_advisor(
         prefix = "!!" if warn_parts else "  "
         lines.append(
             f"{prefix} #{i} ({p.x},{p.y}) {terrain}{feat}{tag_str}"
-            f" — score:{p.displacement_score}{warn_str}"
+            f"{warn_str}"
         )
-    best = placements[0]
-    lines.append(f"\nRecommended: ({best.x},{best.y}) — lowest displacement")
-    lines.append(
-        f'Use: set_city_production(city_id=<id>, item_type="BUILDING",'
-        f' item_name="{wonder_name}", target_x={best.x}, target_y={best.y})'
-    )
     return "\n".join(lines)
 
 
 def narrate_purchasable_tiles(tiles: list[lq.PurchasableTile]) -> str:
     if not tiles:
         return "No purchasable tiles."
-    lines = [f"{len(tiles)} purchasable tiles:"]
+    lines = [f"{len(tiles)} native tile purchase candidates (unranked):"]
     for t in tiles:
         res_str = ""
         if t.resource:
@@ -1488,7 +1460,11 @@ def narrate_purchasable_tiles(tiles: list[lq.PurchasableTile]) -> str:
                 t.resource_class or "", ""
             )
             res_str = f" [{t.resource}{cls_tag}]"
-        lines.append(f"  ({t.x},{t.y}): {t.cost}g — {t.terrain}{res_str}")
+        cost = 'unknown' if t.cost is None else str(t.cost).removesuffix('.0')
+        balance = 'unknown' if t.balance is None else str(t.balance).removesuffix('.0')
+        eligible = {True:'yes',False:'no',None:'unknown'}[t.can_purchase]
+        short = '; short ' + str(t.cost-t.balance).removesuffix('.0') if t.cost is not None and t.balance is not None and t.balance<t.cost else ''
+        lines.append(f"  ({t.x},{t.y}): gold {cost}; balance {balance}; can buy {eligible}; {t.reason}{short} — {t.terrain}{res_str}")
     return "\n".join(lines)
 
 
@@ -1497,19 +1473,27 @@ def narrate_great_people(gp: list[lq.GreatPersonInfo]) -> str:
         return "No Great People in timeline."
     lines = [f"{len(gp)} Great People:"]
     for g in gp:
-        progress = f"{g.player_points}/{g.cost}"
+        number = lambda v: "unknown" if v is None else str(v).removesuffix('.0')
+        progress = f"{number(g.player_points)}/{number(g.cost)}"
         recruit_tag = " [CAN RECRUIT]" if g.can_recruit else ""
         entry = f"  {g.class_name}: {g.individual_name} ({g.era_name}) — {g.claimant} — your points: {progress}{recruit_tag}"
         if g.ability:
             entry += f"\n    Ability: {g.ability}"
-        # Show patronize costs (skip INT_MAX values which mean unavailable)
-        costs = []
-        if 0 < g.gold_cost < 2_000_000_000:
-            costs.append(f"{g.gold_cost}g")
-        if 0 < g.faith_cost < 2_000_000_000:
-            costs.append(f"{g.faith_cost}f")
-        if costs:
-            entry += f"\n    Patronize: {' / '.join(costs)}"
+        def quote(label, cost, balance, eligible):
+            number = lambda v: 'unknown' if v is None else str(v).removesuffix('.0')
+            state = {True: 'yes', False: 'no', None: 'unknown'}[eligible]
+            reason = ''
+            if cost is not None and balance is not None and balance < cost:
+                reason = '; INSUFFICIENT_RESOURCE, short ' + str(cost-balance).removesuffix('.0')
+            elif eligible is False:
+                reason = '; NATIVE_INELIGIBLE (native API gives no detailed reason)'
+            elif cost is None or eligible is None or balance is None:
+                reason = '; OBSERVATION_UNAVAILABLE'
+            return f'{label} {number(cost)}; balance {number(balance)}; can patronize {state}{reason}'
+        entry += '\n    Patronage quote: ' + quote('gold', g.gold_cost, g.gold_balance, g.can_patronize_gold)
+        entry += ' / ' + quote('faith', g.faith_cost, g.faith_balance, g.can_patronize_faith)
+        if g.can_recruit is None:
+            entry += '\n    Recruitment eligibility: unknown'
         entry += f"\n    (individual_id: {g.individual_id})"
         lines.append(entry)
     return "\n".join(lines)
@@ -1523,21 +1507,25 @@ def narrate_gp_advisor(result: lq.GPAdvisorResult) -> str:
         result.gp_class.replace("GREAT_PERSON_CLASS_", "").replace("_", " ").title()
     )
     lines = [
-        f"Best activation cities for {result.gp_name} ({class_short} -> {district_short}):"
+        f"Activation city observations for {result.gp_name} ({class_short} -> {district_short}):"
     ]
     if result.charges > 0:
         lines[0] += f" [{result.charges} charge(s)]"
+    lines.append('Unranked native highlights; current unit readiness and activation effects require separate checks.')
+    if result.cities_known is not True:
+        lines.append('City scan: unknown or incomplete.')
     if not result.cities:
-        lines.append("  No cities with a completed matching district found.")
+        lines.append('  No matching city confirmed in this observation.')
         return "\n".join(lines)
-    # Sort: can_activate first, then by city_yield descending
-    ranked = sorted(result.cities, key=lambda c: (not c.can_activate, -c.city_yield))
-    for i, c in enumerate(ranked, 1):
-        status = "CAN ACTIVATE" if c.can_activate else f"needs move (dist {c.distance})"
-        yield_str = f", yield {c.city_yield}" if c.city_yield > 0 else ""
+    for i, c in enumerate(result.cities, 1):
+        eligible = {True:'yes',False:'no',None:'unknown'}[c.can_activate]
+        status = f'native highlight {eligible}; distance {c.distance}'
+        yield_str = ', current city yield ' + ('unknown' if c.city_yield is None else str(c.city_yield).removesuffix('.0'))
         slots_str = ""
         if c.slots_free >= 0:
             slots_str = f", {c.slots_free}/{c.slots_total} great work slots free"
+        elif result.gp_class in {"GREAT_PERSON_CLASS_WRITER", "GREAT_PERSON_CLASS_ARTIST", "GREAT_PERSON_CLASS_MUSICIAN"}:
+            slots_str = ", great work slots unknown"
         lines.append(
             f"  {i}. {c.city_name} ({c.district_x},{c.district_y}) — {status}{yield_str}{slots_str}"
         )

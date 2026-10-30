@@ -705,23 +705,18 @@ class GameState:
 
     async def get_settle_advisor(self, unit_index: int) -> str:
         lua = lq.build_settle_advisor_query(unit_index)
-        lines = await self.conn.execute_read(lua)
+        lines = await self.conn.execute_write(lua)
         candidates = lq.parse_settle_advisor_response(lines)
         if candidates:
             return narrate_settle_candidates(candidates)
-        # Auto-fallback to global scan when no local candidates
-        try:
-            global_candidates = await self.get_global_settle_scan()
-            if global_candidates:
-                header = "No valid settle locations within 5 tiles. Best sites on revealed map:\n"
-                return header + narrate_settle_candidates(global_candidates[:5])
-        except Exception:
-            log.debug("Global settle fallback failed", exc_info=True)
-        return "No valid settle locations found within 5 tiles or on revealed map."
+        for line in lines:
+            if line.startswith("ERR:"):
+                return line
+        return "No local settlement terrain candidates confirmed within 5 tiles; use map settle-global for a separate revealed-map scan."
 
     async def get_global_settle_scan(self) -> list[lq.SettleCandidate]:
         lua = lq.build_global_settle_scan()
-        lines = await self.conn.execute_read(lua)
+        lines = await self.conn.execute_write(lua)
         return lq.parse_settle_advisor_response(lines)
 
     @_guard_pending_mutation
@@ -1254,9 +1249,12 @@ class GameState:
     # Policy methods (InGame context)
     # ------------------------------------------------------------------
 
-    async def get_policies(self) -> lq.GovernmentStatus:
-        lua = lq.build_policies_query()
+    async def get_policies(self, policy_type: str | None = None) -> lq.GovernmentStatus:
+        lua = lq.build_policies_query(policy_type)
         lines = await self.conn.execute_write(lua)
+        for line in lines:
+            if line.startswith("ERR:"):
+                raise ValueError(line)
         return lq.parse_policies_response(lines)
 
     @_guard_pending_mutation
@@ -1309,8 +1307,8 @@ class GameState:
     # Governor methods (InGame context)
     # ------------------------------------------------------------------
 
-    async def get_governors(self) -> lq.GovernorStatus:
-        lua = lq.build_governors_query()
+    async def get_governors(self, include_ineligible: bool = False) -> lq.GovernorStatus:
+        lua = lq.build_governors_query(include_ineligible)
         lines = await self.conn.execute_write(lua)
         return lq.parse_governors_response(lines)
 
@@ -1655,15 +1653,21 @@ class GameState:
         """Returns placements list, or an error string if placement is impossible."""
         lua = lq.build_wonder_advisor_query(city_id, wonder_name)
         lines = await self.conn.execute_write(lua)
+        for line in lines:
+            if line.startswith("ERR:"):
+                return line
         return lq.parse_wonder_advisor_response(lines)
 
     # ------------------------------------------------------------------
     # Tile purchase methods (InGame context)
     # ------------------------------------------------------------------
 
-    async def get_purchasable_tiles(self, city_id: int) -> list[lq.PurchasableTile]:
+    async def get_purchasable_tiles(self, city_id: int) -> list[lq.PurchasableTile] | str:
         lua = lq.build_purchasable_tiles_query(city_id)
         lines = await self.conn.execute_write(lua)
+        for line in lines:
+            if line.startswith("ERR:"):
+                return line
         return lq.parse_purchasable_tiles_response(lines)
 
     @_guard_pending_mutation
@@ -1707,11 +1711,17 @@ class GameState:
     async def get_great_people(self) -> list[lq.GreatPersonInfo]:
         lua = lq.build_great_people_query()
         lines = await self.conn.execute_write(lua)
+        for line in lines:
+            if line.startswith("ERR:"):
+                raise ValueError(line)
         return lq.parse_great_people_response(lines)
 
-    async def get_gp_advisor(self, unit_index: int) -> lq.GPAdvisorResult | None:
+    async def get_gp_advisor(self, unit_index: int) -> lq.GPAdvisorResult | str | None:
         lua = lq.build_gp_advisor_query(unit_index)
         lines = await self.conn.execute_write(lua)
+        for line in lines:
+            if line.startswith("ERR:"):
+                return line
         return lq.parse_gp_advisor_response(lines)
 
     @_guard_pending_mutation

@@ -157,7 +157,7 @@ local ok,unitID,pointsNetChange=pcall(function()
 end)
 if ok then
  print("GP_POOL_CONFIRMED|"..r.token.."|"..r.kind.."|"..r.individual.."|"..r.currency
-  .."|"..r.name.."|"..r.cost.."|unit:"..unitID
+  .."|"..r.name.."|"..string.format("%.17g",r.cost).."|unit:"..unitID
   ..(pointsNetChange~=nil and "|points_net_change:"..pointsNetChange or ""))
 else print("GP_POOL_OBSERVED|{token}|"..reason) end
 print("{SENTINEL}")

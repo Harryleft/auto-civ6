@@ -2,9 +2,10 @@
 import json
 
 from civ_mcp.lua._helpers import SENTINEL, _LUA_ACTION_SCOPE
+from civ_mcp.lua.tile_facts import LUA_TILE_PURCHASE_FACTS
 
 
-_CONTEXT = _LUA_ACTION_SCOPE + '''
+_CONTEXT = _LUA_ACTION_SCOPE + LUA_TILE_PURCHASE_FACTS + '''
 local function number(value)
  assert(type(value)=="number" and value==value and value~=math.huge and value~=-math.huge,"NUMBER_UNAVAILABLE")
  return value
@@ -36,9 +37,9 @@ local ok,r=pcall(function()
  -- Native PlotInfo.OnClickPurchasePlot uses this exact command and parameter set.
  local params={{[CityCommandTypes.PARAM_PLOT_PURCHASE]=1,[CityCommandTypes.PARAM_X]={x},[CityCommandTypes.PARAM_Y]={y}}}
  assert(CityManager.CanStartCommand(city,CityCommandTypes.PURCHASE,params)==true,"CANNOT_PURCHASE")
- local cost=number(city:GetGold():GetPlotPurchaseCost({x},{y}))
- local balance=number(Players[owner]:GetTreasury():GetGoldBalance())
- assert(cost>0 and balance>=cost,"INSUFFICIENT_GOLD_OR_COST_UNAVAILABLE")
+ local cost,balance,allowed=tilePurchaseQuote(city,owner,plot)
+ assert(cost~=nil and balance~=nil and cost>=0 and balance>=cost,"INSUFFICIENT_GOLD_OR_COST_UNAVAILABLE")
+ assert(allowed==true,"CANNOT_PURCHASE")
  assert(type(CityManager.RequestCommand)=="function" and CityCommandTypes.PURCHASE~=nil
   and CityCommandTypes.PARAM_X~=nil and CityCommandTypes.PARAM_Y~=nil,"COMMAND_UNAVAILABLE")
  return {{token=token,owner=owner,city={city_id},cityX=number(city:GetX()),cityY=number(city:GetY()),
@@ -85,7 +86,7 @@ local ok,balance=pcall(function()
  return balance
 end)
 if ok then
- print("TILE_PURCHASE_CONFIRMED|"..r.token.."|"..r.city.."|"..r.x.."|"..r.y.."|cost:"..r.cost.."|gold:"..r.balance.."->"..balance)
+ print("TILE_PURCHASE_CONFIRMED|"..r.token.."|"..r.city.."|"..r.x.."|"..r.y.."|cost:"..string.format("%.17g",r.cost).."|gold:"..string.format("%.17g",r.balance).."->"..string.format("%.17g",balance))
 else print("TILE_PURCHASE_OBSERVED|{token}|"..reason) end
 print("{SENTINEL}")
 '''
