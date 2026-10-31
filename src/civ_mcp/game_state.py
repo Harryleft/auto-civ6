@@ -489,6 +489,10 @@ class GameState:
         from civ_mcp.city_growth import read_context
         return await read_context(self, city_id, view)
 
+    async def get_city_workforce(self, city_id, view="brief") -> dict:
+        from civ_mcp.city_workforce import read_context
+        return await read_context(self,city_id,view)
+
     async def get_public_report(self, section: str, **options) -> dict:
         """Read UI-equivalent facts without changing views or retiring pending."""
         from civ_mcp.lua import public_reports
@@ -1729,6 +1733,13 @@ class GameState:
             if line.startswith("ERR:"):
                 raise ValueError(line)
         return lq.parse_great_people_response(lines)
+
+    async def get_great_people_report(self, individual_id=None, class_type=None):
+        from civ_mcp.lua.great_people import build_great_people_query, parse_great_people_report
+        lines=await self.conn.execute_write(build_great_people_query(individual_id,class_type))
+        for line in lines:
+            if line.startswith('ERR:'):raise ValueError(line)
+        return parse_great_people_report(lines)
 
     async def get_gp_advisor(self, unit_index: int) -> lq.GPAdvisorResult | str | None:
         lua = lq.build_gp_advisor_query(unit_index)

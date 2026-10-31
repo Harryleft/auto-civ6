@@ -7,7 +7,7 @@ import os
 import sys
 import time
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Annotated, Any, AsyncIterator, Awaitable, Callable, Literal, Optional
 from uuid import uuid4
 
@@ -314,6 +314,26 @@ async def get_city_growth(ctx: Context,
     return await _logged(ctx,"get_city_growth",{"city_id":city_id,"view":view},read)
 
 
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_city_workforce(ctx: Context,
+    city_id: Annotated[int, Field(ge=0, strict=True)],
+    view: Literal["brief", "structured", "evidence"] = "brief",
+) -> str:
+    """Read one owned city's native citizen targets, workers, locks and yields.
+
+    Pairs native MANAGE arrays; reports unknown/incomplete observations instead
+    of assuming all radius-three plots are workable. Refuses pending before I/O.
+    Never assigns citizens or changes city focus. Use current city list IDs.
+    """
+    async def read():
+        try:
+            result=await _get_game(ctx).get_city_workforce(city_id,view)
+        except (LuaError,OSError,ValueError,KeyError,TimeoutError) as exc:
+            result=dict(schema_version=1,status="unknown",error=f"{type(exc).__name__}: {exc}")
+        return json.dumps(result,ensure_ascii=False,allow_nan=False)
+    return await _logged(ctx,"get_city_workforce",{"city_id":city_id,"view":view},read)
+
+
 @mcp.tool(annotations={"readOnlyHint": True, "idempotentHint": True})
 async def search_knowledge(
     ctx: Context,
@@ -379,7 +399,8 @@ async def get_knowledge(
 @mcp.tool(annotations={"readOnlyHint": True})
 async def get_public_report(ctx: Context, section: str, target_player: int = -1,
                             limit: int = 50, offset: int = 0, since_turn: int = 0,
-                            search_kind: str = "resource", query: str = "", include_rules: bool = False) -> str:
+                            search_kind: str = "resource", query: str = "", include_rules: bool = False,
+                            view: Literal['brief','structured'] = 'structured') -> str:
     """Read JSON public UI reports without opening views or making choices.
 
     Sections: empire, governments, climate, climate-history, history, great-people-history,
@@ -392,6 +413,8 @@ async def get_public_report(ctx: Context, section: str, target_player: int = -1,
     params = dict(section=section, target_player=target_player, limit=limit, offset=offset,
                   since_turn=since_turn, search_kind=search_kind, query=query)
     async def run():
+        if view=='brief'and section!='map-search':
+            return json.dumps(dict(status='error',error='brief view is available only for map-search; use structured for other reports'))
         result = await _get_game(ctx).get_public_report(**params)
         if include_rules and section == "encountered" and result.get("data"):
             for civilization in result["data"].get("civilizations", []):
@@ -401,8 +424,11 @@ async def get_public_report(ctx: Context, section: str, target_player: int = -1,
                     if rule.get("status") == "error":
                         result["status"] = "partial"
                         result.setdefault("unknown_fields", []).append("cached_rules." + civilization[key])
-        return json.dumps(result, ensure_ascii=False)
-    return await _logged(ctx, "get_public_report", params | {"include_rules": include_rules}, run)
+        if view=='brief':
+            from civ_mcp.resource_search import brief
+            result=brief(result,search_kind=search_kind,query=query,limit=limit,offset=offset)
+        return json.dumps(result, ensure_ascii=False,allow_nan=False)
+    return await _logged(ctx, "get_public_report", params | {"include_rules": include_rules,"view":view}, run)
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
@@ -586,7 +612,8 @@ async def get_cities(ctx: Context) -> str:
 @mcp.tool(annotations={"readOnlyHint": True})
 async def get_city_production(ctx: Context, city_id: int,
                               item_type: Literal['UNIT', 'BUILDING'] | None = None,
-                              item_name: str | None = None) -> str:
+                              item_name: str | None = None,
+                              view: Literal['brief','structured'] = 'brief') -> str:
     """List production options and native GOLD/FAITH prices, eligibility and refusal reasons.
 
     Args:
@@ -603,9 +630,12 @@ async def get_city_production(ctx: Context, city_id: int,
             options = await gs.list_city_production(city_id, item_type, item_name)
         else:
             options = await gs.list_city_production(city_id)
+        if view=='structured':
+            return json.dumps(dict(schema_version=1,city_id=city_id,options=[asdict(o)for o in options],
+                scope='native current cost/progress/turns; static base cost separate; quotes are observations, not submissions'),ensure_ascii=False,allow_nan=False)
         return nr.narrate_city_production(options)
 
-    return await _logged(ctx, "get_city_production", {"city_id": city_id, "item_type": item_type, "item_name": item_name}, _run)
+    return await _logged(ctx, "get_city_production", {"city_id": city_id, "item_type": item_type, "item_name": item_name,"view":view}, _run)
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
@@ -692,7 +722,8 @@ async def get_global_settle_advisor(ctx: Context,
     """Read unranked settlement terrain candidates across the revealed map.
 
     Unlike get_settle_advisor (which searches near a specific settler),
-    This scans revealed unowned land. Optional center_x/center_y/radius must
+    This scans revealed terrain possibilities; current ownership may be unknown.
+    Optional center_x/center_y/radius must
     be supplied together. Pages retain native map order; no scoring or ranking.
     Reports total/shown/omitted and next_offset; use subsequent pages to recover
     all candidates in the same scope. A new query observes current state again.
@@ -708,7 +739,9 @@ async def get_global_settle_advisor(ctx: Context,
         return json.dumps(dict(schema_version=1,total=total,shown=len(page),offset=offset,limit=limit,
             omitted=total-len(page),truncated=offset+len(page)<total,
             next_offset=offset+len(page) if offset+len(page)<total else None,
-            scope=region or 'revealed map',order='map scan order; unranked',
+            scope=region or 'revealed terrain possibilities; ownership may be unknown',
+            scope_note='Current dynamic yields/resources require visibility; incomplete coverage has observed subtotals, not complete yields.',
+            order='map scan order; unranked',
             report=nr.narrate_settle_candidates(page) if page else 'No candidates in this page; inspect total and offset.'),ensure_ascii=False)
 
     params=dict(limit=limit,offset=offset,center_x=center_x,center_y=center_y,radius=radius)
@@ -2038,7 +2071,10 @@ async def change_government(ctx: Context, government_type: str) -> str:
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
-async def get_great_people(ctx: Context) -> str:
+async def get_great_people(ctx: Context,
+    individual_id: Annotated[int, Field(ge=0,strict=True)] | None = None,
+    class_type: Annotated[str, Field(pattern=r'^GREAT_PERSON_CLASS_[A-Z0-9_]+$')] | None = None,
+) -> str:
     """See available Great People and recruitment progress.
 
     Shows which Great People are available, their recruitment cost,
@@ -2047,10 +2083,10 @@ async def get_great_people(ctx: Context) -> str:
     gs = _get_game(ctx)
 
     async def _run():
-        gp = await gs.get_great_people()
-        return nr.narrate_great_people(gp)
+        report = await gs.get_great_people_report(individual_id,class_type)
+        return nr.narrate_great_people(report.people,report=report)
 
-    return await _logged(ctx, "get_great_people", {}, _run)
+    return await _logged(ctx, "get_great_people", {"individual_id":individual_id,"class_type":class_type}, _run)
 
 
 @mcp.tool(annotations={"readOnlyHint": True})

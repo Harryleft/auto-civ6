@@ -3,59 +3,125 @@
 from __future__ import annotations
 
 import math
+import json
+import re
 from urllib.parse import unquote
 
 from civ_mcp.lua._helpers import SENTINEL, _bail, _int, _lua_get_unit
-from civ_mcp.lua.models import GPAdvisorCity, GPAdvisorResult, GreatPersonInfo
+from civ_mcp.lua.models import GPAdvisorCity, GPAdvisorResult, GreatPersonInfo, GreatPeopleReport
 
 
-def build_great_people_query() -> str:
-    """Get available Great People and recruitment progress (InGame context)."""
+def build_great_people_query(individual_id: int | None = None, class_type: str | None = None) -> str:
+    """Filter the current native timeline before reading per-person details."""
+    if individual_id is not None and (type(individual_id) is not int or individual_id < 0):
+        raise ValueError('individual_id must be a nonnegative integer')
+    if class_type is not None and (not isinstance(class_type, str) or not re.fullmatch(r'GREAT_PERSON_CLASS_[A-Z0-9_]+', class_type)):
+        raise ValueError('class_type must be a GREAT_PERSON_CLASS_ identifier')
     return f"""
 local me = Game.GetLocalPlayer()
+local requestedId = {json.dumps(str(individual_id)) if individual_id is not None else 'nil'}
+local requestedClass = {json.dumps(class_type) if class_type is not None else 'nil'}
 local gp = Game.GetGreatPeople()
 if gp == nil then {_bail("ERR:NO_GP_SYSTEM|Great People system not available")} end
-local timeline = gp:GetTimeline()
-if timeline == nil then {_bail("ERR:NO_TIMELINE|No great people timeline")} end
+local timelineOK,timeline = pcall(function()return gp:GetTimeline()end)
+if not timelineOK or type(timeline)~='table' then {_bail("ERR:NO_TIMELINE|No complete great people timeline")} end
+""" + r'''
+local function escape(value)
+ return tostring(value):gsub('%%','%%25'):gsub('|','%%7C'):gsub('\r','%%0D'):gsub('\n','%%0A')
+end
+local function number(fn)
+ local ok,v=pcall(fn)
+ if ok and type(v)=='number' and v==v and v>=0 and v<2147483647 then return v end
+end
+local function boolean(fn)
+ local ok,v=pcall(fn);if ok and type(v)=='boolean'then return v end
+end
+local function wire(v)
+ if v==nil then return '?'end
+ if type(v)=='number'then return string.format('%.17g',v)end
+ return escape(v)
+end
+local function name(row)
+ local ok,value=pcall(function()return Locale.Lookup(row.Name)end)
+ return ok and type(value)=='string' and value or 'Unknown'
+end
+local function integer(v)return type(v)=='number'and v==v and v>=0 and v<2147483647 and v==math.floor(v)end
+local scanComplete=true
+local reasons={}
+local function incomplete(reason)
+ scanComplete=false
+ if not reasons[reason]then reasons[reason]=true;print('GP_TIMELINE_ERROR|'..reason)end
+end
 local function getAbility(entry,ind)
     -- The native popup consumes timeline text including usage and passive
     -- conditions. Modifier-name substrings cannot prove those mechanics.
-    local parts={{}}
-    for _,pair in ipairs({{{{"action",entry.ActionNameText}},{{"usage",entry.ActionUsageText}},
-        {{"effect",entry.ActionEffectText}},{{"passive",entry.PassiveEffectText}}}}) do
+    local parts={}
+    for _,pair in ipairs({{"action",entry.ActionNameText},{"usage",entry.ActionUsageText},
+        {"effect",entry.ActionEffectText},{"passive",entry.PassiveEffectText}}) do
         if type(pair[2])=="string" and pair[2]~="" then parts[#parts+1]=pair[1]..": "..pair[2] end
     end
     if ind.ActionCharges~=nil then parts[#parts+1]="definition action charges "..tostring(ind.ActionCharges) end
     local ok,conditions=pcall(function()return gp:GetEarnConditionsText(me,entry.Individual)end)
     if ok and type(conditions)=="string" and conditions~="" then parts[#parts+1]="earn conditions: "..conditions end
     if #parts==0 then parts[1]="Native timeline description unavailable; expand current rules before judging effects" end
-    return table.concat(parts,"; "):gsub('%%','%%25'):gsub('|','%%7C'):gsub('\\r','%%0D'):gsub('\\n','%%0A')
+    return table.concat(parts,"; ")
 end
-for _, entry in ipairs(timeline) do
-    if entry.Class ~= nil and entry.Individual ~= nil then
-    local classInfo = GameInfo.GreatPersonClasses[entry.Class]
-    local indivInfo = GameInfo.GreatPersonIndividuals[entry.Individual]
-    if classInfo and indivInfo then
-        local className = Locale.Lookup(classInfo.Name)
-        local indivName = Locale.Lookup(indivInfo.Name)
-        local eraInfo = GameInfo.Eras[entry.Era]
-        local eraName = eraInfo and Locale.Lookup(eraInfo.Name) or "Unknown"
+-- A hole, malformed row or missing definition may hide the requested ID.
+-- Such a scan cannot establish that a filter has no current match.
+local slots={};local nativeTotal=0
+for key in pairs(timeline)do
+ nativeTotal=nativeTotal+1
+ if integer(key)and key>=1 then slots[#slots+1]=key else incomplete('TIMELINE_SHAPE_UNKNOWN')end
+end
+table.sort(slots)
+for index,key in ipairs(slots)do if index~=key then incomplete('TIMELINE_SHAPE_UNKNOWN')end end
+local matched,shown=0,0
+local seen={}
+local exhaustedCount=0
+local exhaustedClasses={}
+for _,key in ipairs(slots)do
+ local entry=timeline[key]
+ if type(entry)~='table'or not integer(entry.Class)then
+  incomplete('ENTRY_IDENTITY_UNKNOWN')
+ elseif entry.Individual==nil and entry.Cost==2147483647 then
+  -- The native popup's noneAvailable row closes this class. It is not a
+  -- person or an unknown identity; never synthesize an individual from DB.
+  local bound,classInfo=pcall(function()return GameInfo.GreatPersonClasses[entry.Class]end)
+  local currentClass=bound and classInfo and classInfo.GreatPersonClassType
+  if type(currentClass)~='string'or not currentClass:match('^GREAT_PERSON_CLASS_[A-Z0-9_]+$')then
+   incomplete('EXHAUSTED_CLASS_BINDING_UNKNOWN')
+  elseif exhaustedClasses[currentClass]then incomplete('DUPLICATE_EXHAUSTED_CLASS')
+  else
+   exhaustedClasses[currentClass]=true;exhaustedCount=exhaustedCount+1
+   print('GP_EXHAUSTED|'..wire(entry.Class)..'|'..wire(currentClass))
+  end
+ elseif not integer(entry.Individual)then
+  incomplete('ENTRY_IDENTITY_UNKNOWN')
+ elseif seen[entry.Individual]then incomplete('DUPLICATE_INDIVIDUAL')
+ else
+  seen[entry.Individual]=true
+  local bound,classInfo,indivInfo=pcall(function()return GameInfo.GreatPersonClasses[entry.Class],GameInfo.GreatPersonIndividuals[entry.Individual]end)
+  if not bound or not classInfo or not indivInfo then incomplete('ENTRY_BINDING_UNKNOWN')
+  else
+   local currentClass=classInfo.GreatPersonClassType
+   local classKnown=type(currentClass)=='string'and currentClass:match('^GREAT_PERSON_CLASS_[A-Z0-9_]+$')~=nil
+   if not classKnown then incomplete('CLASS_TYPE_UNKNOWN')end
+   local classConsistent=indivInfo.GreatPersonClassType==nil or indivInfo.GreatPersonClassType==currentClass
+   local idConsistent=indivInfo.Index==nil or indivInfo.Index==entry.Individual
+   if not classConsistent or not idConsistent then incomplete('ENTRY_BINDING_MISMATCH')
+   elseif (requestedId==nil or requestedId==string.format('%.17g',entry.Individual))and
+       (requestedClass==nil or(classKnown and requestedClass==currentClass))then
+    matched=matched+1
+    local observed=pcall(function()
+        local className=name(classInfo)
+        local indivName=name(indivInfo)
+        local eraInfo=entry.Era~=nil and GameInfo.Eras and GameInfo.Eras[entry.Era]
+        local eraName=eraInfo and name(eraInfo)or 'Unknown'
         local claimant = "Unclaimed"
         if entry.Claimant and entry.Claimant >= 0 then
             local cfg = PlayerConfigurations[entry.Claimant]
             if cfg then claimant = Locale.Lookup(cfg:GetCivilizationShortDescription()) end
         end
-        local function number(fn)
-            local ok,v=pcall(fn)
-            if ok and type(v)=='number' and v==v and v>=0 and v<2147483647 then return v end
-            return nil
-        end
-        local function boolean(fn)
-            local ok,v=pcall(fn)
-            if ok and type(v)=='boolean' then return v end
-            return nil
-        end
-        local function wire(v) if v==nil then return '?' end;if type(v)=='number' then return string.format('%.17g',v) end;return tostring(v) end
         local myPoints=number(function()return Players[me]:GetGreatPeoplePoints():GetPointsTotal(entry.Class)end)
         local threshold=number(function()return entry.Cost end)
         local ability=getAbility(entry,indivInfo)
@@ -70,12 +136,15 @@ for _, entry in ipairs(timeline) do
         local faithBalance=number(function()return Players[me]:GetReligion():GetFaithBalance()end)
         local costStr='gold:'..wire(goldCost)..',faith:'..wire(faithCost)..',recruit:'..wire(canRecruit)
           ..',can_gold:'..wire(canGold)..',can_faith:'..wire(canFaith)..',gold_balance:'..wire(goldBalance)..',faith_balance:'..wire(faithBalance)
-        print("GP|" .. className .. "|" .. indivName .. "|" .. eraName .. "|" .. wire(threshold) .. "|" .. claimant .. "|" .. wire(myPoints) .. "|" .. ability .. "|" .. costStr .. "|" .. entry.Individual)
-    end
-    end
+        print('GP|'..wire(className)..'|'..wire(indivName)..'|'..wire(eraName)..'|'..wire(threshold)..'|'..wire(claimant)..'|'..wire(myPoints)..'|'..wire(ability)..'|'..costStr..'|'..wire(entry.Individual)..'|'..wire(currentClass))
+    end)
+    if observed then shown=shown+1 else incomplete('ENTRY_OBSERVATION_UNKNOWN')end
+   end
+  end
+ end
 end
-print("{SENTINEL}")
-"""
+print('GP_TIMELINE|'..nativeTotal..'|'..matched..'|'..shown..'|'..tostring(scanComplete)..'|'..wire(requestedId)..'|'..wire(requestedClass)..'|'..exhaustedCount)
+''' + f'print("{SENTINEL}")'
 
 
 def parse_great_people_response(lines: list[str]) -> list[GreatPersonInfo]:
@@ -85,6 +154,9 @@ def parse_great_people_response(lines: list[str]) -> list[GreatPersonInfo]:
         if line.startswith("GP|"):
             parts = line.split("|")
             if len(parts) >= 7:
+                # New rows carry native class identity and escaped names;
+                # historical rows escaped only the ability field.
+                text = unquote if len(parts) > 10 else lambda value: value
                 ability = unquote(parts[7]) if len(parts) >= 8 else ""
                 gold_cost = faith_cost = can_recruit = None
                 values = {}
@@ -105,11 +177,11 @@ def parse_great_people_response(lines: list[str]) -> list[GreatPersonInfo]:
                     individual_id = _int(parts[9])
                 results.append(
                     GreatPersonInfo(
-                        class_name=parts[1],
-                        individual_name=parts[2],
-                        era_name=parts[3],
+                        class_name=text(parts[1]),
+                        individual_name=text(parts[2]),
+                        era_name=text(parts[3]),
                         cost=None if parts[4] == "?" else float(parts[4]),
-                        claimant=parts[5],
+                        claimant=text(parts[5]),
                         player_points=None if parts[6] == "?" else float(parts[6]),
                         ability=ability,
                         gold_cost=gold_cost,
@@ -118,9 +190,74 @@ def parse_great_people_response(lines: list[str]) -> list[GreatPersonInfo]:
                         individual_id=individual_id,
                         can_patronize_gold=values.get("can_gold"), can_patronize_faith=values.get("can_faith"),
                         gold_balance=values.get("gold_balance"), faith_balance=values.get("faith_balance"),
+                        class_type=unquote(parts[10]) if len(parts)>10 and parts[10]!='?' else None,
                     )
                 )
     return results
+
+
+def parse_great_people_report(lines: list[str]) -> GreatPeopleReport:
+    """Keep legacy rows readable, but only a complete new scan proves absence."""
+    people=[]
+    errors=[unquote(row.partition('|')[2]) for row in lines if row.startswith('GP_TIMELINE_ERROR|')]
+    markers=[row.split('|') for row in lines if row.startswith('GP_TIMELINE|')]
+    for row in lines:
+        if not row.startswith('GP|'):
+            continue
+        try:
+            parsed=parse_great_people_response([row])
+            if len(parsed)!=1:
+                raise ValueError('candidate row missing')
+            people.extend(parsed)
+            parts=row.split('|')
+            if markers and (len(parts)!=11 or not parts[9].isdigit() or parsed[0].class_type is None):
+                errors.append('CANDIDATE_IDENTITY_INCOMPLETE')
+        except (ValueError, IndexError, OverflowError):
+            errors.append('CANDIDATE_ROW_INVALID')
+    result=GreatPeopleReport(people=people,shown=len(people),errors=errors)
+    for row in lines:
+        if not row.startswith('GP_EXHAUSTED|'):
+            continue
+        parts=row.split('|')
+        class_type=unquote(parts[2]) if len(parts)==3 else ''
+        if len(parts)!=3 or not parts[1].isdigit() or not re.fullmatch(r'GREAT_PERSON_CLASS_[A-Z0-9_]+',class_type):
+            result.errors.append('EXHAUSTED_CLASS_INVALID')
+        elif class_type in result.exhausted_classes:
+            result.errors.append('EXHAUSTED_CLASS_DUPLICATED')
+        else:
+            result.exhausted_classes.append(class_type)
+    if len(markers)!=1 or len(markers[0]) not in (7,8):
+        result.errors.append('TIMELINE_COMPLETENESS_UNKNOWN')
+        return result
+    meta=markers[0]
+    if not all(v.isdigit() for v in meta[1:4]) or meta[4] not in ('true','false'):
+        result.errors.append('TIMELINE_METADATA_INVALID')
+        return result
+    result.native_total,result.matched,native_shown=map(int,meta[1:4])
+    if len(meta)==8 and meta[7].isdigit():
+        result.exhausted_count=int(meta[7])
+    elif len(meta)==8:
+        result.errors.append('TIMELINE_METADATA_INVALID')
+    if result.exhausted_count!=len(result.exhausted_classes):
+        result.errors.append('EXHAUSTED_COUNT_MISMATCH')
+    if meta[5]!='?':
+        if not meta[5].isdigit():
+            result.errors.append('TIMELINE_FILTER_INVALID')
+        else:
+            result.individual_id=int(meta[5])
+    if meta[6]!='?':
+        result.class_type=unquote(meta[6])
+        if not re.fullmatch(r'GREAT_PERSON_CLASS_[A-Z0-9_]+',result.class_type):
+            result.errors.append('TIMELINE_FILTER_INVALID')
+    if not result.native_total>=result.matched+result.exhausted_count or not result.matched>=native_shown or native_shown!=len(people):
+        result.errors.append('TIMELINE_COUNT_MISMATCH')
+    if len({p.individual_id for p in people})!=len(people):
+        result.errors.append('TIMELINE_IDENTITY_DUPLICATED')
+    if any((result.individual_id is not None and p.individual_id!=result.individual_id) or
+           (result.class_type is not None and p.class_type!=result.class_type) for p in people):
+        result.errors.append('TIMELINE_FILTER_MISMATCH')
+    result.scan_complete=meta[4]=='true' and not result.errors
+    return result
 
 
 def build_gp_advisor_query(unit_index: int) -> str:

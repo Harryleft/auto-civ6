@@ -171,6 +171,9 @@ def domain_parser(group: str):
                 entity(child, "target_unit_id")
     elif group == "city":
         command("list", "get_cities", "List current cities and native IDs.")
+        workforce=command("workforce","get_city_workforce","Read native working/locked citizens, plot capacity and yields for one city; no assignments.")
+        entity(workforce,"city_id")
+        workforce.add_argument('--view',choices=('brief','structured','evidence'),default=argparse.SUPPRESS)
         growth = command("growth", "get_city_growth", "Explain native growth turns, housing/amenities and modifier units; no city ID reads all owned cities.")
         growth.add_argument("city_id", nargs="?", type=int, default=argparse.SUPPRESS)
         growth.add_argument("--view", choices=("brief", "structured", "evidence"), default=argparse.SUPPRESS)
@@ -182,6 +185,7 @@ def domain_parser(group: str):
         production.add_argument('--item-type', choices=('UNIT', 'BUILDING'), default=argparse.SUPPRESS)
         production.add_argument('--item', dest='item_name', default=argparse.SUPPRESS,
                                 help='Inspect this exact item, including currently unavailable items; pair with --item-type')
+        production.add_argument('--view',choices=('brief','structured'),default=argparse.SUPPRESS)
         production = command("set-production", "set_city_production", "Choose one production item.", mutation=True)
         entity(production, "city_id")
         production.add_argument("item_type", choices=("UNIT", "BUILDING", "DISTRICT", "PROJECT"))
@@ -313,7 +317,9 @@ def domain_parser(group: str):
             found.add_argument(name)
         command("spread", "get_religion_spread", "Read religion breakdown across currently visible cities.")
     elif group == "great-person":
-        command("list", "get_great_people", "Read candidates, points and gold/faith patronage costs.")
+        gp=command("list", "get_great_people", "Read current Great People; optionally inspect one individual/class with complete timeline coverage.")
+        gp.add_argument('--individual',dest='individual_id',type=int,default=argparse.SUPPRESS)
+        gp.add_argument('--class',dest='class_type',default=argparse.SUPPRESS)
         advisor = command("advisor", "get_gp_advisor", "Read native activation-city suggestions for a Great Person unit.")
         entity(advisor, "unit_index")
         for name, tool in [("recruit", "recruit_great_person"), ("buy", "patronize_great_person"), ("reject", "reject_great_person")]:
@@ -444,6 +450,7 @@ def domain_parser(group: str):
         search = report("search", "map-search", "Locate visible villages and revealed, resource-visible deposits/sites.")
         search.add_argument("search_kind", choices=sorted(MAP_KINDS))
         search.add_argument("--query", default="", help="Localized name or native resource type fragment")
+        search.add_argument('--view',choices=('brief','structured'),default='brief',help='brief shares repeated scope once; structured retains the full native report')
     return root
 
 

@@ -50,7 +50,7 @@ local function who(id)
  if type(id)~="number" or not met(id)then return NULL end
  return Locale.Lookup(PlayerConfigurations[id]:GetCivilizationShortDescription())
 end
-local rows=A();local data={};local total=0
+local rows=A();local data={};local total=0;local mapCountComplete=nil
 local function add(row)
  total=total+1
  if total>offset and #rows<limit then rows[#rows+1]=row end
@@ -208,39 +208,60 @@ end
 data.resources=(resource_players==0 or resources_known)and rows or NULL;data.scope="Global resource UI: own stocks and met civilizations' native tradable resources, not hidden world deposits"
 ''',
     "map-search": r'''
-for i=0,Map.GetPlotCount()-1 do
+mapCountComplete=true
+local function incomplete(label)mapCountComplete=false;missing(label)end
+local function observedBoolean(label,fn)
+ local value=read(label,fn)
+ if type(value)~="boolean"then incomplete(label);return nil end
+ return value
+end
+local function inspectPlot(i)
  local plot=Map.GetPlotByIndex(i);local x,y=plot:GetX(),plot:GetY()
- if vis:IsRevealed(x,y)then
-  local resource=search_kind=="village"and -1 or knownResourceIndex(me,plot)
-  if resource==nil then missing("map.resource_visibility")
+ local path="map.plot."..x..","..y
+ if observedBoolean(path..".revealed",function()return vis:IsRevealed(x,y)end)~=true then return end
+ if search_kind=="village"then
+  -- Unknown visibility cannot establish that a dynamic village is absent.
+  if observedBoolean(path..".visible_now",function()return vis:IsVisible(x,y)end)~=true then return end
+  local index=plot:GetImprovementType()
+  if type(index)~="number"or index~=index or math.abs(index)==math.huge or index~=math.floor(index)then incomplete(path..".improvement_type");return end
+  local row=index>=0 and GameInfo.Improvements[index]
+  if index>=0 and not row then incomplete(path..".improvement_type");return end
+  if row and (row.Goody==true or row.Goody==1)then
+   local label=Locale.Lookup(row.Name)
+   if query==""or label:lower():find(query:lower(),1,true)or row.ImprovementType:lower():find(query:lower(),1,true)then add({x=x,y=y,type=row.ImprovementType,name=label,visible_now=true})end
+  end
+ else
+  local resource=knownResourceIndex(me,plot)
+  if resource==nil then incomplete("map.resource_visibility")
   elseif resource>=0 then
    local row=GameInfo.Resources[resource]
    if row then
     local match=search_kind=="resource"or (search_kind=="luxury"and row.ResourceClassType=="RESOURCECLASS_LUXURY")or
        (search_kind=="strategic"and row.ResourceClassType=="RESOURCECLASS_STRATEGIC")or
        (search_kind=="antiquity"and (row.ResourceType=="RESOURCE_ANTIQUITY_SITE"or row.ResourceType=="RESOURCE_SHIPWRECK"))
-    local consumable=row.ResourceType=="RESOURCE_ANTIQUITY_SITE"or row.ResourceType=="RESOURCE_SHIPWRECK"or row.ResourceClassType=="RESOURCECLASS_BONUS"
-    if consumable and not vis:IsVisible(x,y)then match=false end
+    local consumable=row.ResourceType=="RESOURCE_ANTIQUITY_SITE"or row.ResourceType=="RESOURCE_SHIPWRECK"or row.ResourceClassType=="RESOURCECLASS_BONUS"or row.ResourceClassType=="RESOURCECLASS_ARTIFACT"
     local label=Locale.Lookup(row.Name)
     if match and (query==""or label:lower():find(query:lower(),1,true)or row.ResourceType:lower():find(query:lower(),1,true))then
+     if consumable and observedBoolean(path..".visible_now",function()return vis:IsVisible(x,y)end)~=true then return end
      local facts=resourcePlotFacts(me,plot,row)
+     for _,field in ipairs(facts.unknown_fields)do missing(path..'.'..field)end
      add({x=x,y=y,type=row.ResourceType,name=label,class=scalar(row.ResourceClassType),visible_now=scalar(facts.visible_now),
       owner_id=scalar(facts.owner_id),improvement_type=scalar(facts.improvement_type),pillaged=scalar(facts.pillaged),
-      work_unit=scalar(facts.work_unit),scope="Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified"})
+      work_unit=scalar(facts.work_unit),details_status=facts.details_status,scope="Resource sighting; dynamic ownership/facilities only on owned or currently visible plots; purchase/development eligibility unverified"})
     end
-   end
-  end
-  -- Improvements are dynamic: do not inspect current hidden/fogged huts.
-  if search_kind=="village"and vis:IsVisible(x,y)then
-   local index=plot:GetImprovementType();local row=index>=0 and GameInfo.Improvements[index]
-   if row and (row.Goody==true or row.Goody==1)then
-    local label=Locale.Lookup(row.Name)
-    if query==""or label:lower():find(query:lower(),1,true)or row.ImprovementType:lower():find(query:lower(),1,true)then add({x=x,y=y,type=row.ImprovementType,name=label,visible_now=true})end
-   end
+   else incomplete(path..".resource_type")end
   end
  end
 end
-data.locations=rows;data.scope="No fog reveal; huts/consumable sites/bonus resources require current visibility; other resources require revealed terrain and native resource visibility"
+local plotCount=read("map.plot_count",function()return Map.GetPlotCount()end)
+if type(plotCount)=="number"and plotCount>=0 and plotCount==math.floor(plotCount)then
+ for i=0,plotCount-1 do
+  -- A failed plot must not discard sightings already read or prevent later reads.
+  local ok=pcall(inspectPlot,i)
+  if not ok then incomplete("map.plot."..i..".read")end
+ end
+else incomplete("map.plot_count")end
+data.locations=rows;data.scope="No fog reveal; huts/consumable sites/bonus resources require current visibility; other resources require revealed terrain and native resource visibility. Pagination covers observed matches; incomplete matching counts leave total/truncated unknown"
 ''',
 }
 
@@ -258,12 +279,18 @@ local ok,err=pcall(function()
 if target_player>=0 and not met(target_player)then error("Target civilization has not been encountered")end
 ''' + BODIES[section] + r'''
 end)
-local stable=Game.GetLocalPlayer()==me and Game.GetCurrentGameTurn()==turn and GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")==seed and PlayerConfigurations[me]:GetCivilizationTypeName()==civ
+local knownIdentity=type(me)=='number'and me>=0 and me<=63 and me==math.floor(me)and type(turn)=='number'and turn>=0 and math.abs(turn)<math.huge and turn==math.floor(turn)and type(seed)=='number'and seed==seed and math.abs(seed)<math.huge and seed==math.floor(seed)and type(civ)=='string'and civ:match('^CIVILIZATION_.+')~=nil
+if not knownIdentity then missing('world.identity')end
+local stable=knownIdentity and Game.GetLocalPlayer()==me and Game.GetCurrentGameTurn()==turn and GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")==seed and PlayerConfigurations[me]:GetCivilizationTypeName()==civ
 local result={schema_version=1,status=(ok and stable)and (#unknown==0 and "ready"or "partial")or "unknown",
- identity={player_id=me,turn=turn,seed=seed,civilization=civ},data=(ok and stable)and data or NULL,
+ identity={player_id=scalar(me),turn=scalar(turn),seed=scalar(seed),civilization=scalar(civ)},data=(ok and stable)and data or NULL,
  unknown_fields=unknown,total=total,offset=offset,limit=limit,truncated=total>offset+limit}
+if mapCountComplete~=nil then
+ result.count_complete=mapCountComplete;result.observed_total=total
+ if not mapCountComplete then result.total=NULL;result.truncated=NULL end
+end
 if not ok then result.error=tostring(err)end
-if not stable then result.error="World identity or turn changed during read"end
+if not stable then result.error="World identity incomplete or changed during read"end
 print("PUBLIC_REPORT|"..encode(result))
 ''' + f'print("{SENTINEL}")'
 

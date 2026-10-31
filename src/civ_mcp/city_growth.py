@@ -56,6 +56,36 @@ local ok,err=pcall(function()
     c.derived.growth_food_per_turn=c.food_surplus*c.overall_growth_multiplier
    elseif type(c.food_surplus)=='number'and c.food_surplus<=0 then c.derived.growth_food_per_turn=c.food_surplus end
    if evidence then
+    c.housing_sources={};c.amenity_sources={};c.amenity_losses={}
+    -- These are the installed CitySupport getter groups, not a promise that
+    -- all rules are additive or that the listed components reconcile totals.
+    for _,spec in ipairs({
+     {'water','GetHousingFromWater'},{'buildings','GetHousingFromBuildings'},
+     {'improvements','GetHousingFromImprovements'},{'districts','GetHousingFromDistricts'},
+     {'civics','GetHousingFromCivics'},{'great_people','GetHousingFromGreatPeople'},
+     {'starting_era','GetHousingFromStartingEra'},{'great_works','GetHousingFromGreatWorks'}})do
+     local key,method=spec[1],spec[2]
+     local value=read('city.'..id..'.housing_sources.'..key,function()return g[method](g)end)
+     c.housing_sources[key]=type(value)=='number'and value or missing('city.'..id..'.housing_sources.'..key)
+    end
+    for _,spec in ipairs({
+     {'luxuries','GetAmenitiesFromLuxuries'},{'entertainment','GetAmenitiesFromEntertainment'},
+     {'civics','GetAmenitiesFromCivics'},{'great_people','GetAmenitiesFromGreatPeople'},
+     {'city_states','GetAmenitiesFromCityStates'},{'religion','GetAmenitiesFromReligion'},
+     {'national_parks','GetAmenitiesFromNationalParks'},{'starting_era','GetAmenitiesFromStartingEra'},
+     {'improvements','GetAmenitiesFromImprovements'},{'governors','GetAmenitiesFromGovernors'},
+     {'districts','GetAmenitiesFromDistricts'},{'natural_wonders','GetAmenitiesFromNaturalWonders'},
+     {'traits','GetAmenitiesFromTraits'}})do
+     local key,method=spec[1],spec[2]
+     local value=read('city.'..id..'.amenity_sources.'..key,function()return g[method](g)end)
+     c.amenity_sources[key]=type(value)=='number'and value or missing('city.'..id..'.amenity_sources.'..key)
+    end
+    for _,spec in ipairs({{'war_weariness','GetAmenitiesLostFromWarWeariness'},{'bankruptcy','GetAmenitiesLostFromBankruptcy'}})do
+     local key,method=spec[1],spec[2]
+     local value=read('city.'..id..'.amenity_losses.'..key,function()return g[method](g)end)
+     c.amenity_losses[key]=type(value)=='number'and value or missing('city.'..id..'.amenity_losses.'..key)
+    end
+    c.source_basis='native CitySupport components; housing/amenity units, loss getters retain native sign; no complete additive reconciliation implied'
     c.yield_tooltips={}
     for _,kind in ipairs({'FOOD','PRODUCTION','GOLD','SCIENCE','CULTURE','FAITH'})do
      c.yield_tooltips[kind]=read('city.'..id..'.tooltip.'..kind,function()return city:GetYieldToolTip(GameInfo.Yields['YIELD_'..kind].Index)end)
@@ -93,7 +123,7 @@ def brief(data):
             f"  Native happiness non-food yield adjustment: {num(c['happiness_nonfood_yield_percent'])}% (not the entire city yield modifier)."]
     if data.get('error'):lines.append(data['error'])
     if data.get('unknown_fields'):lines.append('Unknown: '+', '.join(data['unknown_fields']))
-    lines.append('Components are not a universal product; no action recommendation. --view structured retains fields; --view evidence adds six native yield tooltips and advice.')
+    lines.append('Components are not a universal product; no action recommendation. --view structured retains fields; --view evidence adds housing/amenity source components, six native yield tooltips and advice.')
     return '\n'.join(lines)
 
 

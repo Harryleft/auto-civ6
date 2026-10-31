@@ -83,6 +83,7 @@ def test_map_ignores_fog_and_unrevealed_resources_and_huts():
 Players[0].GetResources=function()return{IsResourceVisible=function(_,i)return i~=9 end}end
 Map={GetPlotCount=function()return 4 end,GetPlotByIndex=function(i)return{
  GetX=function()return i end,GetY=function()return 0 end,
+ GetIndex=function()return i end,GetOwner=function()return 1 end,IsImprovementPillaged=function()return false end,
  GetResourceType=function()return i==1 and 9 or 1 end,
  GetImprovementType=function()return 0 end}end}
 GameInfo.Resources={[1]={ResourceType="RESOURCE_TEA",ResourceClassType="RESOURCECLASS_LUXURY",Name="茶"},

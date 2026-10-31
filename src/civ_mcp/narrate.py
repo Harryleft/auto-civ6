@@ -487,10 +487,10 @@ def narrate_city_production(options: list[lq.ProductionOption]) -> str:
     projects = [o for o in options if o.category == "PROJECT"]
     repairs = [o for o in options if o.is_repair]
     def number(value):
-        return str(value).removesuffix('.0')
+        return 'unknown' if value is None else str(value).removesuffix('.0')
 
     def _fmt(o: lq.ProductionOption) -> str:
-        t = f", {o.turns} turns" if o.turns > 0 else ""
+        t = f", {o.turns} turns" if o.turns is not None else ", turns unknown"
         purchases = []
         for q in o.purchases:
             currency = 'gold' if q.currency == 'YIELD_GOLD' else 'faith'
@@ -506,6 +506,10 @@ def narrate_city_production(options: list[lq.ProductionOption]) -> str:
         buy = '; ' + '; '.join(purchases) if purchases else ''
         production = f"production {number(o.cost)}{t}" if o.can_produce is True else (
             'production unavailable' if o.can_produce is False else 'production eligibility unknown')
+        if o.can_produce is True:
+            production+=f", invested {number(o.production_progress)}"
+        if o.base_cost is not None and o.base_cost!=o.cost:
+            production+=f", static base {number(o.base_cost)}"
         tag = " [REPAIR]" if o.is_repair else ""
         coords = ""
         if o.is_repair and o.repair_x is not None:
@@ -656,15 +660,20 @@ def narrate_strategic_map(data: lq.StrategicMapData) -> str:
 def narrate_settle_candidates(candidates: list[lq.SettleCandidate]) -> str:
     if not candidates:
         return "No settlement terrain candidates confirmed in the requested scope."
-    lines = [f"{len(candidates)} settlement terrain candidates (unranked; native founding eligibility unverified):",
-             "F/P are revealed radius-3 tile totals, not worked-city or net yields; loyalty is the native settler warning, not a full forecast."]
+    lines = [f"{len(candidates)} settlement terrain possibilities (unranked; native founding eligibility unverified):",
+             "Current F/P totals cover the revealed radius-3 footprint only when every tile is observed. Fogged dynamic yields/resources stay unknown; subtotals are current observations, not worked-city or net yields. Center ownership may be unknown; loyalty is the native settler warning, not a full forecast."]
     _WATER = {"fresh": "fresh water", "coast": "coast", "none": "no water"}
     for i, c in enumerate(candidates, 1):
         water = _WATER.get(c.water_type, c.water_type)
         loyalty = 'unknown' if c.loyalty_pressure is None else f'{c.loyalty_pressure:g}'
+        number=lambda value:'unknown' if value is None else str(value)
+        owner='unknown' if c.owner_id is None else ('unclaimed' if c.owner_id==-1 else str(c.owner_id))
+        visible='unknown' if c.visible_now is None else ('yes' if c.visible_now else 'no')
         resource_status = '' if c.resource_visibility_known is True else '; resource observations incomplete'
-        header = f"  #{i} ({c.x},{c.y}): F:{c.total_food} P:{c.total_prod} — {water}, revealed defense terrain:{c.defense_score}; native loyalty warning {loyalty}{resource_status}"
+        header = f"  #{i} ({c.x},{c.y}): F:{number(c.total_food)} P:{number(c.total_prod)} — {water}, revealed defense terrain:{c.defense_score}; owner {owner}, visible now {visible}; native loyalty warning {loyalty}{resource_status}"
         lines.append(header)
+        if c.dynamic_tiles_total is not None:
+            lines.append(f"     Current observed subtotal F:{number(c.observed_food_subtotal)} ({c.food_observed_tiles}/{c.dynamic_tiles_total} tiles), P:{number(c.observed_prod_subtotal)} ({c.production_observed_tiles}/{c.dynamic_tiles_total}); resource observations {c.resource_observed_tiles}/{c.dynamic_tiles_total}; visible tiles {c.current_visible_tiles}/{c.dynamic_tiles_total}.")
         if c.resources:
             # Format: [S] IRON, [L] DIAMONDS, [B] WHEAT
             res_parts = []
@@ -1478,12 +1487,38 @@ def narrate_purchasable_tiles(tiles: list[lq.PurchasableTile]) -> str:
     return "\n".join(lines)
 
 
-def narrate_great_people(gp: list[lq.GreatPersonInfo]) -> str:
+def narrate_great_people(gp: list[lq.GreatPersonInfo], *, report=None) -> str:
+    number = lambda v: "unknown" if v is None else str(v).removesuffix('.0')
+    lines=[]
+    if report is not None:
+        complete='yes' if report.scan_complete else 'unknown'
+        lines.append(f"Current Great People timeline: native total {number(report.native_total)}; matched {number(report.matched)}; shown {len(gp)}; scan complete {complete}.")
+        filters=[]
+        if report.individual_id is not None:filters.append(f'individual_id={report.individual_id}')
+        if report.class_type is not None:filters.append(f'class_type={report.class_type}')
+        if filters:lines.append('Filter: '+', '.join(filters)+' (AND; current timeline only).')
+        if report.exhausted_classes:
+            lines.append(f'Exhausted native classes ({report.exhausted_count}): '+', '.join(report.exhausted_classes)+'. No current individual in these classes.')
+        if report.errors:lines.append('Incomplete observation: '+', '.join(report.errors))
     if not gp:
-        return "No Great People in timeline."
-    lines = [f"{len(gp)} Great People:"]
+        if report is None:
+            return "No Great People in timeline."
+        lines.append('No current timeline candidate matches this filter.' if report.scan_complete and (report.individual_id is not None or report.class_type is not None) else
+            ('No current timeline candidates; all observed classes are exhausted.' if report.scan_complete and report.exhausted_count else
+             ('Current timeline is empty.' if report.scan_complete else 'Candidate absence is unknown; no complete timeline result established.')))
+        return '\n'.join(lines)
+    lines.append(f"{len(gp)} Great People:")
+    # Share balances only when every selected row contains the same known
+    # observation. A changing/unknown currency keeps its per-person facts.
+    shared={}
+    if len(gp)>1:
+        for label,attribute in (('gold','gold_balance'),('faith','faith_balance')):
+            values=[getattr(person,attribute) for person in gp]
+            if all(value is not None and value==values[0] for value in values):
+                shared[label]=values[0]
+    if shared:
+        lines.append('Shared balances in this response: '+'; '.join(f'{label} {number(value)}' for label,value in shared.items())+'.')
     for g in gp:
-        number = lambda v: "unknown" if v is None else str(v).removesuffix('.0')
         progress = f"{number(g.player_points)}/{number(g.cost)}"
         recruit_tag = " [CAN RECRUIT]" if g.can_recruit else ""
         entry = f"  {g.class_name}: {g.individual_name} ({g.era_name}) — {g.claimant} — your points: {progress}{recruit_tag}"
@@ -1499,12 +1534,14 @@ def narrate_great_people(gp: list[lq.GreatPersonInfo]) -> str:
                 reason = '; NATIVE_INELIGIBLE (native API gives no detailed reason)'
             elif cost is None or eligible is None or balance is None:
                 reason = '; OBSERVATION_UNAVAILABLE'
-            return f'{label} {number(cost)}; balance {number(balance)}; can patronize {state}{reason}'
+            balance_text='' if label in shared else f'; balance {number(balance)}'
+            return f'{label} {number(cost)}{balance_text}; can patronize {state}{reason}'
         entry += '\n    Patronage quote: ' + quote('gold', g.gold_cost, g.gold_balance, g.can_patronize_gold)
         entry += ' / ' + quote('faith', g.faith_cost, g.faith_balance, g.can_patronize_faith)
         if g.can_recruit is None:
             entry += '\n    Recruitment eligibility: unknown'
-        entry += f"\n    (individual_id: {g.individual_id})"
+        class_text=f'; class_type: {g.class_type}' if g.class_type is not None else ''
+        entry += f"\n    (individual_id: {g.individual_id}{class_text})"
         lines.append(entry)
     return "\n".join(lines)
 

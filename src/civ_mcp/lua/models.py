@@ -197,14 +197,16 @@ class PurchaseQuote:
 class ProductionOption:
     category: str  # "UNIT", "BUILDING", "DISTRICT"
     item_name: str  # "UNIT_WARRIOR", "BUILDING_MONUMENT"
-    cost: float  # production cost
-    turns: int = 0  # estimated turns to produce
+    cost: float | None  # native current production cost, never static fallback
+    turns: int | None = None  # native estimate; zero is valid, None is unknown
     gold_cost: float = -1  # Legacy price field; never evidence of purchase eligibility.
     is_repair: bool = False  # True if repairing a pillaged district/building
     repair_x: int | None = None  # district repair X coordinate
     repair_y: int | None = None  # district repair Y coordinate
     can_produce: bool | None = True
     purchases: list[PurchaseQuote] = field(default_factory=list)
+    base_cost: float | None = None  # static GameInfo cost, a separate scope
+    production_progress: float | None = None  # native invested production
 
 
 @dataclass
@@ -480,15 +482,24 @@ class SettleCandidate:
     x: int
     y: int
     score: float
-    total_food: int
-    total_prod: int
+    total_food: float | None
+    total_prod: float | None
     water_type: str  # "fresh", "coast", "none"
-    resources: list[str]  # classified: ["S:IRON", "L:DIAMONDS", "B:WHEAT"]
+    resources: list[str]  # S=strategic, L=luxury, B=bonus, A=artifact, ?=unknown class
     defense_score: int = 0
     luxury_count: int = 0
     strategic_count: int = 0
     loyalty_pressure: float | None = None  # Native settler warning, missing is unknown
     resource_visibility_known: bool | None = None
+    owner_id: int | None = None  # Current owner, only from a visible center
+    visible_now: bool | None = None
+    dynamic_tiles_total: int | None = None  # Revealed radius-3 footprint
+    current_visible_tiles: int | None = None
+    food_observed_tiles: int | None = None
+    production_observed_tiles: int | None = None
+    resource_observed_tiles: int | None = None
+    observed_food_subtotal: float | None = None
+    observed_prod_subtotal: float | None = None
 
 
 @dataclass
@@ -1065,6 +1076,27 @@ class GreatPersonInfo:
     can_patronize_faith: bool | None = None
     gold_balance: float | None = None
     faith_balance: float | None = None
+    class_type: str | None = None  # native GREAT_PERSON_CLASS_* identity
+
+
+@dataclass
+class GreatPeopleReport:
+    """Current timeline observations and whether absence can be established."""
+
+    people: list[GreatPersonInfo]
+    native_total: int | None = None
+    matched: int | None = None
+    shown: int = 0
+    scan_complete: bool = False
+    individual_id: int | None = None
+    class_type: str | None = None
+    errors: list[str] = field(default_factory=list)
+    exhausted_count: int = 0
+    exhausted_classes: list[str] = field(default_factory=list)
+
+    @property
+    def no_current_match(self) -> bool | None:
+        return self.matched == 0 if self.scan_complete else None
 
 
 @dataclass

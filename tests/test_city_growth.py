@@ -22,6 +22,16 @@ g={GetFoodSurplus=function()return 8 end,GetFood=function()return 24 end,GetGrow
  GetHousingGrowthModifier=function()return .25 end,GetOccupationGrowthModifier=function()return 1 end,
  GetLoyaltyGrowthModifier=function()return 1 end,GetOtherGrowthModifier=function()return 0 end,
  GetOverallGrowthModifier=function()return .2125 end}
+source_reads=0
+for _,name in ipairs({'GetHousingFromWater','GetHousingFromBuildings','GetHousingFromImprovements','GetHousingFromDistricts','GetHousingFromCivics','GetHousingFromGreatPeople','GetHousingFromStartingEra','GetHousingFromGreatWorks',
+ 'GetAmenitiesFromLuxuries','GetAmenitiesFromEntertainment','GetAmenitiesFromCivics','GetAmenitiesFromGreatPeople','GetAmenitiesFromCityStates','GetAmenitiesFromReligion','GetAmenitiesFromNationalParks','GetAmenitiesFromStartingEra','GetAmenitiesFromImprovements','GetAmenitiesFromGovernors','GetAmenitiesFromDistricts','GetAmenitiesFromNaturalWonders','GetAmenitiesFromTraits','GetAmenitiesLostFromWarWeariness','GetAmenitiesLostFromBankruptcy'})do
+ g[name]=function()source_reads=source_reads+1;return 0 end
+end
+g.GetHousingFromWater=function()source_reads=source_reads+1;return 2 end
+g.GetHousingFromBuildings=function()source_reads=source_reads+1;return 10 end
+g.GetHousingFromImprovements=function()source_reads=source_reads+1;return .5 end
+g.GetAmenitiesFromLuxuries=function()source_reads=source_reads+1;return 6 end
+g.GetAmenitiesLostFromWarWeariness=function()source_reads=source_reads+1;return -1 end
 city={GetID=function()return 262147 end,GetOwner=function()return 0 end,GetName=function()return '乌尔|100%\\n本城'end,
  GetGrowth=function()return g end,GetPopulation=function()return 12 end,GetYield=function()return 32 end,IsOccupied=function()return false end,
  GetYieldToolTip=function(_,i)return '来源|'..i..'\\n100%'end,GetHousingAdvice=function()return '住房建议'end,GetAmenityAdvice=function()return '宜居度建议'end}
@@ -75,6 +85,25 @@ def test_evidence_preserves_tooltips_and_brief_has_units_and_all_limiters():
     for token in ('41t','housing x0.25','loyalty x1','occupation x1','happiness -15%','other fraction 0','balance -1'):
         assert token in b['report']
     assert len(json.dumps(b,ensure_ascii=False))<len(json.dumps(e,ensure_ascii=False))
+
+
+def test_source_components_preserve_zero_negative_fraction_and_native_total_separately():
+    conn=GrowthConn();e=read(conn,262147,'evidence');c=e['cities'][0]
+    assert e['status']=='ready' and conn.lua.globals().source_reads==23
+    assert c['housing_sources']==dict(water=2,buildings=10,improvements=.5,districts=0,civics=0,great_people=0,starting_era=0,great_works=0)
+    assert c['housing']==12 and sum(c['housing_sources'].values())==12.5
+    assert c['amenity_sources']['luxuries']==6 and c['amenity_sources']['traits']==0
+    assert c['amenity_losses']==dict(war_weariness=-1,bankruptcy=0)
+
+
+def test_source_getter_missing_is_unknown_only_when_sources_are_requested():
+    conn=GrowthConn('g.GetHousingFromBuildings=nil')
+    default=read(conn,262147,'structured')
+    assert default['status']=='ready' and 'housing_sources'not in default['cities'][0]
+    assert conn.lua.globals().source_reads==0
+    evidence=read(conn,262147,'evidence')
+    assert evidence['status']=='partial' and evidence['cities'][0]['housing_sources']['buildings'] is None
+    assert evidence['cities'][0]['housing_sources']['water']==2
 
 
 def test_scope_mismatch_or_unknown_city_discards_city_facts():

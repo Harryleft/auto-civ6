@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import json
+import math
 from urllib.parse import unquote
 
 from civ_mcp.lua._helpers import (
@@ -391,6 +392,26 @@ local bq = pCity:GetBuildQueue()
 local filterKind={json.dumps(item_type) if item_type else 'nil'}
 local filterName={json.dumps(item_name) if item_name else 'nil'}
 local productionReadUnknown=false
+local function productionNumber(fn,integer)
+ local ok,v=pcall(fn)
+ if ok and type(v)=='number'and v==v and math.abs(v)<math.huge and v>=0 and (not integer or v==math.floor(v))then return v end
+end
+local function productionWire(v)if v==nil then return 'nil'end;return string.format('%.17g',v)end
+local productionPrefix={{UNIT='Unit',BUILDING='Building',DISTRICT='District',PROJECT='Project'}}
+local productionName={{UNIT='UnitType',BUILDING='BuildingType',DISTRICT='DistrictType',PROJECT='ProjectType'}}
+local function printProduction(kind,item,canProduce,goldCost,repair,x,y)
+ local prefix=productionPrefix[kind];local name=item[productionName[kind]]
+ -- These are the Index-based getters used by ProductionPanel/CitySupport.
+ -- A missing current quote is not the static base cost, including repairs.
+ local cost=productionNumber(function()return bq['Get'..prefix..'Cost'](bq,item.Index)end)
+ local progress=productionNumber(function()return bq['Get'..prefix..'Progress'](bq,item.Index)end)
+ local turns=nil
+ if canProduce==true then turns=productionNumber(function()return bq:GetTurnsLeft(name)end,true)end
+ local base=productionNumber(function()return item.Cost end)
+ local suffix=repair and ('|REPAIR'..(x~=nil and ('|'..x..','..y)or ''))or ''
+ print(kind..'|'..name..'|'..productionWire(cost)..'|'..productionWire(turns)..'|'..productionWire(goldCost)..suffix)
+ print('PRODUCTION_FACTS|'..kind..'|'..name..'|'..productionWire(base)..'|'..productionWire(progress))
+end
 local function candidate(kind,item)
  local name=kind=="UNIT" and item.UnitType or item.BuildingType
  if filterName and (filterKind~=kind or filterName~=name) then return end
@@ -413,10 +434,7 @@ local function candidate(kind,item)
   canProduce=false
  end
  if not filterName and prodVisible~=true and gold.visible~=true and faith.visible~=true then return end
- local t=0;if canProduce then pcall(function() t=bq:GetTurnsLeft(item.Hash) end) end
- local cost=item.Cost
- pcall(function() local value=bq:GetProductionCost(item.Hash);if value>=0 then cost=value end end)
- print(kind.."|"..name.."|"..cost.."|"..t.."|"..(gold.cost or -1))
+ printProduction(kind,item,canProduce,gold.cost or -1)
  print("PRODUCIBLE|"..kind.."|"..name.."|"..tostring(canProduce))
  printPurchase(kind,name,gold);printPurchase(kind,name,faith)
 end
@@ -435,19 +453,13 @@ if not filterName then
 print("DISTRICTS:")
 for dist in GameInfo.Districts() do
     if bq:CanProduce(dist.Hash, true) then
-        local t = bq:GetTurnsLeft(dist.Hash)
-        local adjCost = dist.Cost
-        pcall(function() local c = bq:GetProductionCost(dist.Hash); if c > 0 then adjCost = math.floor(c) end end)
-        print("DISTRICT|" .. dist.DistrictType .. "|" .. adjCost .. "|" .. t .. "|-1")
+        printProduction('DISTRICT',dist,true,-1)
     end
 end
 print("PROJECTS:")
 for proj in GameInfo.Projects() do
     if bq:CanProduce(proj.Hash, true) then
-        local t = bq:GetTurnsLeft(proj.Hash)
-        local adjCost = proj.Cost
-        pcall(function() local c = bq:GetProductionCost(proj.Hash); if c > 0 then adjCost = math.floor(c) end end)
-        print("PROJECT|" .. proj.ProjectType .. "|" .. adjCost .. "|" .. t .. "|-1")
+        printProduction('PROJECT',proj,true,-1)
     end
 end
 -- Pillaged districts/buildings that can be repaired via production queue
@@ -463,10 +475,7 @@ for _, d in pCity:GetDistricts():Members() do
             repParams[CityOperationTypes.PARAM_Y] = d:GetY()
             local canRepair = CityManager.CanStartOperation(pCity, CityOperationTypes.BUILD, repParams, true)
             if canRepair then
-                local t = bq:GetTurnsLeft(dInfo.Hash)
-                local adjCost = dInfo.Cost
-                pcall(function() local c = bq:GetProductionCost(dInfo.Hash); if c > 0 then adjCost = math.floor(c) end end)
-                print("DISTRICT|" .. dInfo.DistrictType .. "|" .. adjCost .. "|" .. t .. "|-1|REPAIR|" .. d:GetX() .. "," .. d:GetY())
+                printProduction('DISTRICT',dInfo,true,-1,true,d:GetX(),d:GetY())
             end
         end
     end
@@ -477,10 +486,7 @@ for bldg in GameInfo.Buildings() do
         repCheck[CityOperationTypes.PARAM_BUILDING_TYPE] = bldg.Hash
         local canRepair = CityManager.CanStartOperation(pCity, CityOperationTypes.BUILD, repCheck, true)
         if canRepair then
-            local t = bq:GetTurnsLeft(bldg.Hash)
-            local adjCost = bldg.Cost
-            pcall(function() local c = bq:GetProductionCost(bldg.Hash); if c > 0 then adjCost = math.floor(c) end end)
-            print("BUILDING|" .. bldg.BuildingType .. "|" .. adjCost .. "|" .. t .. "|-1|REPAIR")
+            printProduction('BUILDING',bldg,true,-1,true)
         end
     end
 end
@@ -891,6 +897,11 @@ def parse_city_production_response(lines: list[str]) -> list[ProductionOption]:
     """Parse available production options from build_city_production_query query."""
     options = []
     indexed = {}
+    def number(value):
+        try:
+            result=float(value)
+            return result if math.isfinite(result) and result>=0 else None
+        except (TypeError,ValueError):return None
     for line in lines:
         if line.startswith('ERR:'):
             raise ValueError(line)
@@ -899,6 +910,12 @@ def parse_city_production_response(lines: list[str]) -> list[ProductionOption]:
         ):
             continue
         parts = line.split("|")
+        if parts[0]=='PRODUCTION_FACTS':
+            if len(parts)!=5 or not options or (options[-1].category,options[-1].item_name)!=(parts[1],parts[2]):
+                raise ValueError('Malformed or unbound production facts')
+            options[-1].base_cost=number(parts[3])
+            options[-1].production_progress=number(parts[4])
+            continue
         if parts[0] == 'PRODUCIBLE':
             indexed[(parts[1], parts[2])].can_produce = {'true': True, 'false': False, 'nil': None}[parts[3]]
             continue
@@ -926,8 +943,8 @@ def parse_city_production_response(lines: list[str]) -> list[ProductionOption]:
                 ProductionOption(
                     category=parts[0],
                     item_name=parts[1],
-                    cost=float(parts[2]),
-                    turns=int(parts[3]) if len(parts) > 3 else 0,
+                    cost=number(parts[2]),
+                    turns=int(parts[3]) if len(parts)>3 and re.fullmatch(r'\d+',parts[3]) else None,
                     gold_cost=float(parts[4]) if len(parts) > 4 else -1,
                     is_repair=is_repair,
                     repair_x=repair_x,

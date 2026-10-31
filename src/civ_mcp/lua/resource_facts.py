@@ -7,22 +7,28 @@ local function resourceWorkUnit(row)
 end
 local function resourcePlotFacts(me,plot,row)
  local function read(fn)local ok,v=pcall(fn);if ok then return v end end
+ local unknown={}
+ local function missing(field)unknown[#unknown+1]=field end
  local owner=read(function()return plot:GetOwner()end)
  local visible=read(function()return PlayersVisibility[me]:IsVisible(plot:GetIndex())end)
- if type(visible)~='boolean'then visible=nil end
- local result={visible_now=visible,work_unit=resourceWorkUnit(row)}
+ if type(visible)~='boolean'then visible=nil;missing('visible_now')end
+ local result={visible_now=visible,work_unit=resourceWorkUnit(row),unknown_fields=unknown}
  if owner==me or visible==true then
-  result.owner_id=type(owner)=='number'and owner or nil
+  if type(owner)=='number'and owner==owner and owner>=-1 and owner<=63 and owner==math.floor(owner)then result.owner_id=owner
+  else missing('owner_id')end
   local index=read(function()return plot:GetImprovementType()end)
-  if type(index)=='number'then
+  if type(index)=='number'and index==index and math.abs(index)<math.huge and index==math.floor(index)then
    if index<0 then result.improvement_type='NONE';result.pillaged=false
    else
     local info=read(function()return GameInfo.Improvements[index]end)
     result.improvement_type=info and info.ImprovementType or nil
+    if type(result.improvement_type)~='string'or result.improvement_type==''then result.improvement_type=nil;missing('improvement_type')end
     local pillaged=read(function()return plot:IsImprovementPillaged()end)
-    if type(pillaged)=='boolean'then result.pillaged=pillaged end
+    if type(pillaged)=='boolean'then result.pillaged=pillaged else missing('pillaged')end
    end
-  end
+  else missing('improvement_type');missing('pillaged')end
+  result.details_status=#unknown==0 and 'current'or 'unknown'
+ else result.details_status=visible==false and 'withheld_fog'or 'unknown'
  end
  return result
 end

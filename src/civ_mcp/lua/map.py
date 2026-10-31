@@ -35,7 +35,7 @@ from civ_mcp.lua.models import (
 from civ_mcp.lua.tile_facts import LUA_TILE_PURCHASE_FACTS
 from civ_mcp.lua.resource_facts import LUA_RESOURCE_FACTS
 
-# --- Shared Lua fragments for settle-scan scoring (used by two builders) ---
+# --- Shared terrain observations for local/global settlement queries ---
 
 _SETTLE_PREAMBLE = _LUA_KNOWN_RESOURCE + """
 local allCities = {}
@@ -55,11 +55,26 @@ end
 -- evidence of zero pressure, and this is not a full post-founding forecast.
 local loyaltyWarnings=nil
 pcall(function()local v=Map.GetContinentPlotsLoyalty();if type(v)=="table"then loyaltyWarnings=v end end)
-local classPrefix={RESOURCECLASS_STRATEGIC="S",RESOURCECLASS_LUXURY="L",RESOURCECLASS_BONUS="B"}
+local classPrefix={RESOURCECLASS_STRATEGIC="S",RESOURCECLASS_LUXURY="L",RESOURCECLASS_BONUS="B",RESOURCECLASS_ARTIFACT="A"}
 local candidates={}
+local function currentVisibility(plot)
+ local ok,value=pcall(function()return vis:IsVisible(plot:GetIndex())end)
+ if ok and type(value)=='boolean'then return value end
+end
+local function currentOwner(plot,visible)
+ -- Revealed terrain does not establish its current foreign ownership.
+ -- Do not even ask the dynamic owner getter on a fogged center.
+ if visible~=true then return nil end
+ local ok,value=pcall(function()return plot:GetOwner()end)
+ if ok and type(value)=='number'and value==value and value>=-1 and value<=63 and value==math.floor(value)then return value end
+end
+local function currentYield(plot,kind)
+ local ok,value=pcall(function()return plot:GetYield(kind)end)
+ if ok and type(value)=='number'and value==value and math.abs(value)<math.huge then return value end
+end
 """
 
-# Scoring body — expects cx, cy, cPlot, vis, me, allCities, classPrefix, resVisible in scope.
+# Observation body — expects cx/cy/cPlot, centerVisible/centerOwner and the preamble.
 # Appends to `candidates` table.
 _SETTLE_SCORE_BODY = """
                 local tooClose = false
@@ -67,25 +82,35 @@ _SETTLE_SCORE_BODY = """
                     if Map.GetPlotDistance(cx, cy, city.x, city.y) <= 3 then tooClose = true; break end
                 end
                 if not tooClose then
-                    local totalF, totalP, totalG = 0, 0, 0
+                    local totalF, totalP = 0, 0
+                    local dynamicTiles,visibleTiles,foodTiles,prodTiles,resourceTiles=0,0,0,0,0
                     local resList = {}
-                    local resourcesKnown = true
                     for ry = -3, 3 do
                         for rx = -3, 3 do
                             local tx, ty = cx + rx, cy + ry
                             local tPlot = Map.GetPlot(tx, ty)
                             if tPlot and Map.GetPlotDistance(cx, cy, tx, ty) <= 3 and vis:IsRevealed(tPlot:GetIndex()) then
-                                totalF = totalF + tPlot:GetYield(0)
-                                totalP = totalP + tPlot:GetYield(1)
-                                totalG = totalG + tPlot:GetYield(2)
-                                local rIdx = knownResourceIndex(me,tPlot)
-                                if rIdx==nil then resourcesKnown=false end
-                                if rIdx and rIdx >= 0 then
-                                    local resEntry = GameInfo.Resources[rIdx]
-                                    if resEntry then
-                                        local rName = resEntry.ResourceType:gsub("RESOURCE_", "")
-                                        local prefix = classPrefix[resEntry.ResourceClassType] or "B"
-                                        table.insert(resList, prefix .. ":" .. rName)
+                                dynamicTiles=dynamicTiles+1
+                                -- Current yields include improvements and consumable
+                                -- resources. A revealed-but-fogged tile is not a
+                                -- current observation; retain coverage, not a fake zero.
+                                if currentVisibility(tPlot)==true then
+                                    visibleTiles=visibleTiles+1
+                                    local food=currentYield(tPlot,0);local prod=currentYield(tPlot,1)
+                                    if food~=nil then totalF=totalF+food;foodTiles=foodTiles+1 end
+                                    if prod~=nil then totalP=totalP+prod;prodTiles=prodTiles+1 end
+                                    local ok,rIdx=pcall(function()return knownResourceIndex(me,tPlot)end)
+                                    if ok and rIdx~=nil then
+                                        if rIdx<0 then resourceTiles=resourceTiles+1
+                                        else
+                                            local resEntry=GameInfo.Resources[rIdx]
+                                            if resEntry and type(resEntry.ResourceType)=='string'then
+                                                resourceTiles=resourceTiles+1
+                                                local rName=resEntry.ResourceType:gsub("RESOURCE_", "")
+                                                local prefix=classPrefix[resEntry.ResourceClassType]or "?"
+                                                table.insert(resList,prefix..":"..rName)
+                                            end
+                                        end
                                     end
                                 end
                             end
@@ -107,7 +132,12 @@ _SETTLE_SCORE_BODY = """
                     end
                     local loyalty=loyaltyWarnings and tonumber(loyaltyWarnings[cPlot:GetIndex()])
                     if loyalty and (loyalty~=loyalty or math.abs(loyalty)==math.huge) then loyalty=nil end
-                    table.insert(candidates, {x=cx, y=cy, score=0, f=totalF, p=totalP, water=waterType, def=defScore, res=table.concat(resList, ","), loy=loyalty,known=resourcesKnown})
+                    table.insert(candidates,{x=cx,y=cy,score=0,
+                        f=foodTiles==dynamicTiles and totalF or nil,p=prodTiles==dynamicTiles and totalP or nil,
+                        water=waterType,def=defScore,res=table.concat(resList,","),loy=loyalty,
+                        known=resourceTiles==dynamicTiles,owner=centerOwner,visible=centerVisible,
+                        dynamic=dynamicTiles,current=visibleTiles,foodCount=foodTiles,prodCount=prodTiles,resCount=resourceTiles,
+                        foodSubtotal=foodTiles>0 and totalF or nil,prodSubtotal=prodTiles>0 and totalP or nil})
                 end
 """
 
@@ -116,7 +146,8 @@ def _settle_output(limit: int) -> str:
     return f"""
 for i = 1, #candidates do
     local c = candidates[i]
-    print("SETTLE|" .. c.x .. "," .. c.y .. "|" .. c.score .. "|" .. c.f .. "|" .. c.p .. "|" .. c.water .. "|" .. c.def .. "|" .. c.res .. "|" .. (c.loy==nil and "?" or tostring(c.loy)) .. "|" .. tostring(c.known))
+    local function wire(value)if value==nil then return '?'end;if type(value)=='number'then return string.format('%.17g',value)end;return tostring(value)end
+    print("SETTLE|"..c.x..","..c.y.."|"..c.score.."|"..wire(c.f).."|"..wire(c.p).."|"..c.water.."|"..c.def.."|"..c.res.."|"..wire(c.loy).."|"..wire(c.known).."|"..wire(c.owner).."|"..wire(c.visible).."|"..c.dynamic.."|"..c.current.."|"..c.foodCount.."|"..c.prodCount.."|"..c.resCount.."|"..wire(c.foodSubtotal).."|"..wire(c.prodSubtotal))
 end
 if #candidates == 0 then print("NONE") end
 print("SETTLE_TOTAL|" .. #candidates)
@@ -404,12 +435,7 @@ def parse_verify_city_at(lines: list[str]) -> bool:
 
 
 def build_settle_advisor_query(unit_index: int) -> str:
-    """Scan radius 5 around settler for valid + scored settle candidates.
-
-    Scores by weighted yields, water bonus, defense, and resource value.
-    Resources are classified (S=strategic, L=luxury, B=bonus).
-    Returns all observed terrain candidates, unranked; eligibility is unverified.
-    """
+    """Read visible radius-5 terrain possibilities, unranked and unverified."""
     return f"""
 local me = Game.GetLocalPlayer()
 local unit = UnitManager.GetUnit(me, {unit_index} % 65536)
@@ -423,8 +449,12 @@ for dy = -5, 5 do
     for dx = -5, 5 do
         local cx, cy = sx + dx, sy + dy
         local cPlot = Map.GetPlot(cx, cy)
-        if cPlot and Map.GetPlotDistance(sx,sy,cx,cy)<=5 and vis:IsVisible(cPlot:GetIndex()) and cPlot:GetOwner()==-1 and not cPlot:IsWater() and not cPlot:IsMountain() then
+        if cPlot and Map.GetPlotDistance(sx,sy,cx,cy)<=5 and vis:IsVisible(cPlot:GetIndex()) and not cPlot:IsWater() and not cPlot:IsMountain() then
+            local centerVisible=true
+            local centerOwner=currentOwner(cPlot,centerVisible)
+            if centerOwner==nil or centerOwner==-1 then
 {_SETTLE_SCORE_BODY}
+            end
         end
     end
 end
@@ -433,7 +463,7 @@ end
 
 
 def build_global_settle_scan(center_x=None, center_y=None, radius=None) -> str:
-    """Read all revealed terrain candidates in the explicit scope (InGame)."""
+    """Read revealed terrain possibilities, retaining unknown current owners."""
     region=(center_x,center_y,radius)
     if any(v is not None for v in region):
         if any(type(v)is not int for v in region) or not 0<=radius<=20:
@@ -453,8 +483,12 @@ for y = 0, h - 1 do
     for x = 0, w - 1 do
         local cx, cy = x, y
         local cPlot = Map.GetPlot(cx, cy)
-        if cPlot and {guard} and vis:IsRevealed(cPlot:GetIndex()) and cPlot:GetOwner()==-1 and not cPlot:IsWater() and not cPlot:IsMountain() then
+        if cPlot and {guard} and vis:IsRevealed(cPlot:GetIndex()) and not cPlot:IsWater() and not cPlot:IsMountain() then
+            local centerVisible=currentVisibility(cPlot)
+            local centerOwner=currentOwner(cPlot,centerVisible)
+            if centerOwner==nil or centerOwner==-1 then
 {_SETTLE_SCORE_BODY}
+            end
         end
     end
 end
@@ -833,20 +867,35 @@ def parse_settle_advisor_response(lines: list[str]) -> list[SettleCandidate]:
         resources = [r for r in parts[7].split(",") if r] if parts[7] else []
         lux = sum(1 for r in resources if r.startswith("L:"))
         strat = sum(1 for r in resources if r.startswith("S:"))
+        def number(index):
+            try:
+                value=float(parts[index])
+                return value if math.isfinite(value) else None
+            except (IndexError,ValueError):
+                return None
+        def count(index):
+            value=number(index)
+            return int(value) if value is not None and value>=0 and value.is_integer() else None
+        owner=number(10)
         candidates.append(
             SettleCandidate(
                 x=int(x_str),
                 y=int(y_str),
                 score=float(parts[2]),
-                total_food=int(parts[3]),
-                total_prod=int(parts[4]),
+                total_food=number(3),
+                total_prod=number(4),
                 water_type=parts[5],
                 resources=resources,
                 defense_score=int(parts[6]),
                 luxury_count=lux,
                 strategic_count=strat,
-                loyalty_pressure=float(parts[8]) if len(parts) > 8 and parts[8] != "?" else None,
-                    resource_visibility_known={"true":True,"false":False}.get(parts[9]) if len(parts)>9 else None,
+                loyalty_pressure=number(8),
+                resource_visibility_known={"true":True,"false":False}.get(parts[9]) if len(parts)>9 else None,
+                owner_id=int(owner) if owner is not None and -1<=owner<=63 and owner.is_integer() else None,
+                visible_now={"true":True,"false":False}.get(parts[11]) if len(parts)>11 else None,
+                dynamic_tiles_total=count(12),current_visible_tiles=count(13),
+                food_observed_tiles=count(14),production_observed_tiles=count(15),resource_observed_tiles=count(16),
+                observed_food_subtotal=number(17),observed_prod_subtotal=number(18),
             )
         )
     return candidates
