@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "source_commit": "1ac4de8cad5acaf0a550dd415badc3b6ca47e1ee",
+  "authorization": "User requested identifying the occupying tasks, confirming completion, releasing ownership and archiving the merged worktree while preserving saves and raw evidence.",
+  "root_cause": "Five completed but unarchived historical subagent threads retained worktree attachments. Their cwd pointed to the main checkout and ordinary history listings omitted them. Archiving these completed threads released the app guard.",
+  "discovery": "Read-only local SQLite attachment lookup; supported read_thread completion check; supported set_thread_archived and archive_worktree mutations. No database writes or forced deletion.",
+  "owners": [
+    {
+      "thread_id": "01a18fcb-485f-79f2-aff7-1a6bed5daf98",
+      "agent_path": "/root/clarify_trade_close",
+      "pre_archive_status": "notLoaded",
+      "latest_turn_status": "completed",
+      "latest_turn_id": "01a190cd-0151-7760-9892-c1a48be91a9a",
+      "completed_at_epoch": 1793430968,
+      "final_message_id": "msg_0771670d7cbdafc7016ae595b0e8688191805ed3934e95cb44",
+      "final_text_sha256": "efce66db0f7b802fb9d7793c3a0e79168c99711796110e6ef21f2dbf8ba097aa",
+      "archived": true
+    },
+    {
+      "thread_id": "01a1907b-c3ce-7ea0-a0a7-dc4dc44c595e",
+      "agent_path": "/root/government_facts",
+      "pre_archive_status": "notLoaded",
+      "latest_turn_status": "completed",
+      "latest_turn_id": "01a190f3-26cf-71e0-8e7d-774048ade23e",
+      "completed_at_epoch": 1793433428,
+      "final_message_id": "msg_03a19dc4265d34e8016ae59f4e4bd0819194e4817b2bb9b481",
+      "final_text_sha256": "0e3e8e3d5a9ca0edf77074a77bfc1462fed5bfe819dd60147e4bc4af81ac478c",
+      "archived": true
+    },
+    {
+      "thread_id": "01a19109-b1b1-71c1-8a5c-734c08a17878",
+      "agent_path": "/root/report_closeout",
+      "pre_archive_status": "notLoaded",
+      "latest_turn_status": "completed",
+      "latest_turn_id": "01a19121-a827-7d92-aab6-db51702af6a7",
+      "completed_at_epoch": 1793436298,
+      "final_message_id": "msg_0ed04884040da6e1016ae5aa89788c8191980085d3517ee998",
+      "final_text_sha256": "947ec88b0b914f7043cb25eb92308b57a85b8b50e8e709ac267cae4bd5130a9d",
+      "archived": true
+    },
+    {
+      "thread_id": "01a1914d-843a-7681-8fe0-99151d53bd26",
+      "agent_path": "/root/help_entry_explore",
+      "pre_archive_status": "notLoaded",
+      "latest_turn_status": "completed",
+      "latest_turn_id": "01a19153-4e48-7b13-b8ed-c7f608ee48a9",
+      "completed_at_epoch": 1793439654,
+      "final_message_id": "msg_029699e88d2999fa016ae5b79e8e348191ba4d3ad8b1c63f40",
+      "final_text_sha256": "2540f724b301f9af81c360eef873adbb6cc1bef9c6c55a397daa15e5764be26b",
+      "archived": true
+    },
+    {
+      "thread_id": "01a1914e-afae-7260-9a3c-f37f91fe95b1",
+      "agent_path": "/root/short_help_impl",
+      "pre_archive_status": "notLoaded",
+      "latest_turn_status": "completed",
+      "latest_turn_id": "01a1914e-b025-7840-9f36-a8f2b8eae974",
+      "completed_at_epoch": 1793439674,
+      "final_message_id": "msg_0c83c94efeaa9c6e016ae5b7b56a2881919456b4ba5ad6b1c6",
+      "final_text_sha256": "25b0d753f61142042d42c6896b9076f4bd90b4b6ed57becc91dbb11f8fd8a20e",
+      "archived": true
+    }
+  ],
+  "outcome": {
+    "occupancy_released": true,
+    "worktree_archived": true,
+    "current_chat_archived": false,
+    "saves_and_original_evidence_preserved": true,
+    "pending_items_in_requested_scope": [],
+    "push": "not_run",
+    "game_access": "not_run"
+  },
+  "verification": {
+    "status": "PASS",
+    "source_commit": "1ac4de8cad5acaf0a550dd415badc3b6ca47e1ee",
+    "archived_task_count": 5,
+    "current_chat_preserved": true,
+    "archived_worktree_id": "01a191a1-61e1-7792-a5d8-499b3afc229e",
+    "worktree_directory_removed": true,
+    "remaining_git_worktrees": 1,
+    "retained_branch": {
+      "name": "codex/call-audit-fixes",
+      "head": "ab02f53a8b41200954357556d0f334023e8382c5",
+      "ancestor_of_main": true
+    },
+    "native_saves_unchanged": 42,
+    "protected_regular_files_unchanged": 47477,
+    "protected_symlinks_unchanged": 512,
+    "mirror": {
+      "path": "~/.codex/worktrees/call-audit-fixes/civ6",
+      "head": "ab02f53a8b41200954357556d0f334023e8382c5",
+      "tracked_and_unignored_clean": true,
+      "unique_commits": 0,
+      "mirrored_files_verified": 3693,
+      "mirrored_file_bytes": 47419396,
+      "mirrored_symlinks_verified": 512,
+      "unmirrored_entries": 0
+    },
+    "task_history_readbacks": [
+      {
+        "threadId": "01a18fcb-485f-79f2-aff7-1a6bed5daf98",
+        "latest_turn_status": "completed",
+        "final_message_id": "msg_0771670d7cbdafc7016ae595b0e8688191805ed3934e95cb44",
+        "final_message_unchanged": true
+      },
+      {
+        "threadId": "01a1907b-c3ce-7ea0-a0a7-dc4dc44c595e",
+        "latest_turn_status": "completed",
+        "final_message_id": "msg_03a19dc4265d34e8016ae59f4e4bd0819194e4817b2bb9b481",
+        "final_message_unchanged": true
+      },
+      {
+        "threadId": "01a19109-b1b1-71c1-8a5c-734c08a17878",
+        "latest_turn_status": "completed",
+        "final_message_id": "msg_0ed04884040da6e1016ae5aa89788c8191980085d3517ee998",
+        "final_message_unchanged": true
+      },
+      {
+        "threadId": "01a1914d-843a-7681-8fe0-99151d53bd26",
+        "latest_turn_status": "completed",
+        "final_message_id": "msg_029699e88d2999fa016ae5b79e8e348191ba4d3ad8b1c63f40",
+        "final_message_unchanged": true
+      },
+      {
+        "threadId": "01a1914e-afae-7260-9a3c-f37f91fe95b1",
+        "latest_turn_status": "completed",
+        "final_message_id": "msg_0c83c94efeaa9c6e016ae5b7b56a2881919456b4ba5ad6b1c6",
+        "final_message_unchanged": true
+      }
+    ],
+    "local_links_checked": 53,
+    "game_access": "not_run",
+    "database_writes": false,
+    "forced_removal": false
+  },
+  "evidence_sha256": {
+    ".scratch/worktree-release-20261031/preserve.py": "b01d77f80012d781654078cc6c9caed37f71fa195e2f4cd5f2a2322c48161a92",
+    ".scratch/worktree-release-20261031/preservation-before.json": "e2ef98e12b6e3c70b99a1aec59d1a88a9a0ef8bec55a3cd3576044edbf53de1a",
+    ".scratch/worktree-release-20261031/owner-attachments-before.json": "fa080fa51c424591dca16bf30372fa4165e79d51f61b666ddfa8637450492883",
+    ".scratch/worktree-release-20261031/owners-completed.json": "a329d3866d3e684b342dc21330dfe159d45d2307852747d3914b3b507881758a",
+    ".scratch/worktree-release-20261031/archive-receipts.json": "201cfce48b47af45b7c5f8de4913ee71b8789171b6eb946f54872b08b34e8d66",
+    ".scratch/worktree-release-20261031/history-readbacks.json": "1645e00447cc54c88e0ba029afa0377d56fcd79339baefe18179809fd6fc2471",
+    ".scratch/worktree-release-20261031/artifacts-after.json": "f474ee6ffeae883b4a5ca8526cd9fd414ef28f4aa13b3775600778038ee49db1",
+    ".scratch/worktree-release-20261031/verify_archive.py": "e8df95799db072371e20032d7fc2281a4295d885815fd40b40fabac885b0d9c4",
+    ".scratch/worktree-release-20261031/verification-after.json": "ca865ae19cb4eb7f3e126acd771f6788fcb01f72e052aec8ff09765891a89579"
+  },
+  "changed_document_sha256": {
+    "docs/acceptance/README.md": "9fb49d3693a8b014543dc45f76365291a2c2e65fcf8e6d8c7bf61ef60aa418c8",
+    "docs/acceptance/2026-10-31-knowledge-closeout.md": "f9bdcee0c6a2f46ef96ac8d983d41982a378ba1927fce3cb7cc8a27d92a90ec7"
+  },
+  "previous_stage_reports": "Pre-cleanup and blocked-archive JSON snapshots were retained unchanged; current final outcome is recorded here."
+}
