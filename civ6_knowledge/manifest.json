@@ -731,7 +731,7 @@
   "support_files": {
     "NEXT.md": "a1522fee076436cde445bffb42757f1a567ca6ba15147e492f9ca678cfcc0665",
     "README.md": "5a958913cc78b900679819fdff7ff3ea5d3fef220701cd0d661ce95c070f1aed",
-    "brief.py": "c606cff048cba2a5fd987e23befc7b7934937b04c88a2cc82c0f9b3a3b775418",
+    "brief.py": "d8771aec51da1a46e88065ff3a0b5d6c9a90af145df2bb26f896321dd8c3957e",
     "build.py": "2f7487155eac48d8a3d45ba2b350faf8154d221e48c015a0e73b82ea86f22003",
     "capture.py": "7fe64e2c72027c7cc8d28ad97937904fad0ee42c0d8a4ebc6f566c81e4b48c02",
     "query.py": "8a3f3619d22ed88c10f719d2f803e15c04081f07a0aae7a2e4a15d2d65018cdc",

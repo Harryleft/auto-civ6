@@ -57,6 +57,29 @@ def common_values(rows):
         key in row and fingerprint(row[key]) == fingerprint(value) for row in rows[1:])}
 
 
+def argument_defaults(rows, common):
+    """Factor nullable-text defaults only; exceptions remain row overrides."""
+    if len(rows) < 3:
+        return
+    for key in ('Extra', 'SecondExtra', 'Type'):
+        if key in common or not all(key in row for row in rows):
+            continue
+        values = {}
+        for row in rows:
+            value = row[key]
+            # Unexpected types are retained verbatim, never chosen as defaults.
+            if value is None or type(value) is str:
+                values.setdefault(fingerprint(value), [value, 0])[1] += 1
+        if not values:
+            continue
+        value, count = max(values.values(), key=lambda item: item[1])
+        cost = len(json.dumps({key: value}, ensure_ascii=False, allow_nan=False).encode('utf-8'))
+        # A conservative byte bound: each removed pair saves at least cost-2,
+        # while adding it to common_facts costs at most cost, including framing.
+        if count * (cost - 2) > cost:
+            common[key] = value
+
+
 def group_records(records):
     tables = {}
     for ordinal, record in enumerate(records):
@@ -70,9 +93,12 @@ def group_records(records):
         if not all(isinstance(row.get(parent), str) and row[parent] for row in facts):
             parent = None
         common_facts.pop(parent, None)
+        if table == 'ModifierArguments':
+            argument_defaults(facts, common_facts)
         groups = {}
         for (ordinal, record), meta in zip(entries, metadata):
-            fields = {k: v for k, v in record['facts'].items() if k not in common_facts}
+            fields = {k: v for k, v in record['facts'].items()
+                      if k not in common_facts or fingerprint(v) != fingerprint(common_facts[k])}
             group = fields.pop(parent) if parent else ''
             row = [ordinal, record['source_ref']['row'], fields]
             extra = {k: v for k, v in meta.items() if k not in common_record}
