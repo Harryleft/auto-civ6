@@ -12,11 +12,11 @@
 
 | 待办 | 最终行为与边界 |
 | --- | --- |
-| 市民工作 | `city workforce CITY_ID --view brief|structured|evidence`；按原生键配对地块、市民、容量、锁定数，保留工作状态、当前可见性、本城购地归属、六种收益和六种偏好。独立计数不作大小关系推断，不从地块数量或人口补出「闲置市民」。 |
+| 市民工作 | `city workforce CITY_ID --view brief\|structured\|evidence`；按原生键配对地块、市民、容量、锁定数，保留工作状态、当前可见性、本城购地归属、六种收益和六种偏好。独立计数不作大小关系推断，不从地块数量或人口补出「闲置市民」。 |
 | 增长来源 | `city growth --view evidence` 补 8 项住房、13 项宜居度来源和 2 项损失分项；保留零、原始符号和未知。不强求分项之和等于原生总量；默认视图不增加这些 getter。 |
 | 生产数据 | 按 ProductionPanel 的类型与 Index 读取当前成本、已投入生产力和原生回合；静态 `base_cost` 分列，失败保留未知，合法零不丢失。`city production ... --view structured` 可展开。购买报价／资格继续独立保留。 |
 | 伟人定向读取 | `great-person list --individual ID --class GREAT_PERSON_CLASS_*` 支持 AND 筛选；先完整扫描当前时间线并绑定身份，再读匹配者详情。原生耗尽类别单列，完整扫描后才确认无匹配，相同且已知的余额在响应内共享。 |
-| 资源简报 | `map search KIND --view brief|structured`，CLI 默认 brief，内部 API 默认 structured。共享重复范围，保留每行全部字段、详情状态、计数、未知和精确展开参数。 |
+| 资源简报 | `map search KIND --view brief\|structured`，CLI 默认 brief，内部 API 默认 structured。共享重复范围，保留每行全部字段、详情状态、计数、未知和精确展开参数。 |
 | 选址可见性 | 不可见中心归属保留未知，不以隐藏所有权排除可能位置；动态收益／资源仅取当前可见观测，覆盖不完整时总量未知，小计和观测数另列。考古资源使用 A 类，不归入建造者任务。 |
 | 报告完整性 | 身份缺失不能 ready；地图逐地块隔离失败并保留已知行。匹配总量无法确认时 `count_complete=false`、保留 `observed_total`，`total/truncated=null`；仅设施字段未知不抹去完整地点计数。 |
 | 政策对照 | 正常推进至 T201 后原生允许付费换卡，仅替换槽 6，以本轮检查点恢复 A；没有强改游戏条件或把跨回合变化解释为政策效应。 |
