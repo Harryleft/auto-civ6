@@ -605,7 +605,7 @@ class GameState:
         """Read native current combat simulation without confirming or submitting."""
         import json
         from civ_mcp.snapshot import pending_facts
-        from civ_mcp.lua.combat_preview import parse_binding
+        from civ_mcp.lua.combat_preview import parse_binding, parse_refusal
 
         result = {"status": "unknown", "source": "InGame CombatManager native simulation",
                   "strength_source": "Native COMBAT_STRENGTH + STRENGTH_MODIFIER; no base-unit fallback",
@@ -636,15 +636,23 @@ class GameState:
             if any(pending_facts(self).values()):
                 return response("Pending operation appeared during preview; estimate discarded without confirmation.")
             refused = [row for row in rows if row.startswith("COMBAT_PREVIEW_INELIGIBLE|")]
-            if len(refused) == 1 and len(rows) == 1:
-                result["eligibility"] = "native_current_turn_refused"
-                return response(refused[0])
             binding = parse_binding(rows, token, unit_id, target_x, target_y, scope.owner)
             estimates = [row for row in rows if row.startswith("NATIVE_ESTIMATE|")]
-            estimate = lq.parse_combat_estimate(estimates, 0, 0, allow_fractional=True) if len(estimates) == 1 else None
-            if binding is None or estimate is None or any(row.startswith(("ESTIMATE_UNKNOWN|", "ERR:")) for row in rows):
+            # A receipt is exactly binding+estimate OR binding+refusal. Never
+            # accept a positive result while ignoring conflicting extra rows.
+            if binding is None or len(rows) != 2 or (len(estimates), len(refused)) not in {(1, 0), (0, 1)}:
                 reasons = [row for row in rows if row.startswith(("ESTIMATE_UNKNOWN|", "ERR:"))]
-                return response("; ".join(reasons) or "Native estimate or actor/target binding unavailable or ambiguous.")
+                return response("; ".join(reasons) or "Native preview receipts conflict or binding is unavailable or ambiguous.")
+            if refused:
+                reason = parse_refusal(refused[0], token)
+                if reason is None:
+                    return response("Native refusal identity or reason is unavailable or malformed.")
+                result.update(binding, eligibility="native_current_turn_refused",
+                              scope={"civilization": scope.civilization, "seed": scope.seed, "turn": scope.turn, "owner": scope.owner})
+                return response(reason)
+            estimate = lq.parse_combat_estimate(estimates, 0, 0, allow_fractional=True)
+            if estimate is None or (estimate.attacker_hp, estimate.defender_hp) != (binding["attacker"]["hp"], binding["target"]["hp"]):
+                return response("Native estimate or bound actor/target HP is unavailable or inconsistent.")
             if estimate.is_ranged != (binding["mode"] in {"RANGED", "BOMBARD"}):
                 return response("Native mode and estimate disagree.")
             binding["attacker"].update(type=estimate.attacker_type, hp=estimate.attacker_hp, strength=estimate.attacker_cs)

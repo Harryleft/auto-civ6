@@ -1033,17 +1033,7 @@ def build_combat_estimate_query(unit_index: int, target_x: int, target_y: int, *
     if strict:
         from civ_mcp.lua.combat_preview import binding_context
         binding = binding_context(unit_index, target_x, target_y, preview_scope, preview_token)
-    selection = """local targetCount=0
-        for other in tgtUnits:Units() do
-            local visible=PlayersVisibility[me]:IsUnitVisible(other)
-            if type(visible)~="boolean" then return "ESTIMATE_UNKNOWN|unit visibility unavailable" end
-            if not visible then return "ESTIMATE_UNKNOWN|hidden unit target is not supported" end
-            if other:GetOwner() ~= me then
-                targetCount=targetCount+1
-                if targetCount>1 then return "ESTIMATE_UNKNOWN|ambiguous unit target" end
-                enemy=other
-            end
-        end""" if strict else """for other in tgtUnits:Units() do
+    selection = """-- Original target already bound before eligibility.""" if strict else """for other in tgtUnits:Units() do
             if other:GetOwner() ~= me then
                 local info = GameInfo.Units[other:GetType()]
                 local military = info and (info.Combat or 0) > 0
@@ -1051,18 +1041,26 @@ def build_combat_estimate_query(unit_index: int, target_x: int, target_y: int, *
                 if military then break end
             end
         end"""
-    start = "local blocked=previewStart(unit);if blocked then return blocked end" if strict else ""
+    start = "previewStart(unit)" if strict else ""
+    availability = "    local blocked=previewAvailability(mode);if blocked then return blocked end\n" if strict else ""
     ranged_check = """local eligible=UnitManager.CanStartOperation(unit,UnitOperationTypes.RANGE_ATTACK,nil,params)
         if type(eligible)~="boolean" then return "ESTIMATE_UNKNOWN|native ranged eligibility unavailable" end
-        if not eligible then return "COMBAT_PREVIEW_INELIGIBLE|RANGED_TARGET_UNAVAILABLE" end""" if strict else """if not UnitManager.CanStartOperation(unit, UnitOperationTypes.RANGE_ATTACK, nil, params) then
+        if not eligible then return previewRefusal("RANGED_TARGET_UNAVAILABLE") end""" if strict else """if not UnitManager.CanStartOperation(unit, UnitOperationTypes.RANGE_ATTACK, nil, params) then
             return "ESTIMATE_UNKNOWN|ranged target unavailable"
         end"""
     melee_refusal = """if code then
-            local prefix=code=="ATTACK_PATH_UNKNOWN" and "ESTIMATE_UNKNOWN|" or "COMBAT_PREVIEW_INELIGIBLE|"
-            return prefix .. code .. "|" .. reason
+            if code=="ATTACK_PATH_UNKNOWN" then return "ESTIMATE_UNKNOWN|"..code.."|"..reason end
+            return previewRefusal(code,reason)
         end""" if strict else 'if code then return "ESTIMATE_UNKNOWN|" .. reason end'
     receipt = "previewFinish(mode) .. '\\n'" if strict else "''"
-    scope_check = """local scoped,valid=pcall(sameScope,previewScope)
+    scope_check = """if not ok and tostring(result):match("ambiguous unit target$") then
+ ok=true;result="ESTIMATE_UNKNOWN|ambiguous unit target"
+end
+if ok and type(result)=="string" and result:match("^COMBAT_PREVIEW_INELIGIBLE|") then
+ local bound,receipt=pcall(previewFinish,previewMode)
+ if bound then result=receipt..'\\n'..result else ok=false end
+end
+local scoped,valid=pcall(sameScope,previewScope)
 if not scoped or not valid then
  ok=true;result="ESTIMATE_UNKNOWN|world or turn changed or unavailable"
 end""" if strict else ""
@@ -1091,7 +1089,7 @@ local function preview()
     -- Shipped UnitPanel verifies RANGED/BOMBARD and nil melee. Its air
     -- preview mapping remains unverified; do not guess one.
     if mode == "AIR" then return "ESTIMATE_UNKNOWN|air preview mode unverified" end
-    if unit:GetMovesRemaining() <= 0 then return "ESTIMATE_UNKNOWN|unit has no moves" end
+{availability}    if unit:GetMovesRemaining() <= 0 then return "ESTIMATE_UNKNOWN|unit has no moves" end
     local isRanged = mode == "RANGED" or mode == "BOMBARD"
     local combatType = nil
     if isRanged then
@@ -1106,12 +1104,12 @@ local function preview()
         local code, reason = meleeAttackEligibility(unit, params{", true" if strict else ""})
         {melee_refusal}
     end
-    local enemy = nil
-    local tgtUnits = Map.GetUnitsAt({target_x}, {target_y})
+    local enemy = {"previewEnemy" if strict else "nil"}
+    local tgtUnits = {"nil" if strict else f"Map.GetUnitsAt({target_x}, {target_y})"}
     if tgtUnits then
         {selection}
     end
-    local city = CityManager.GetCityAt({target_x}, {target_y})
+    local city = {"previewCity" if strict else f"CityManager.GetCityAt({target_x}, {target_y})"}
     local defenderID, defenderType, defenderHP, owner
     if city then
         owner = city:GetOwner()
@@ -1135,7 +1133,7 @@ local function preview()
     if owner ~= 63 and not Players[me]:GetDiplomacy():IsAtWarWith(owner) then
         return "ESTIMATE_UNKNOWN|target is not at war"
     end
-    {"previewBind(enemy,city)" if strict else ""}
+    {"previewBind(enemy,city,defenderHP)" if strict else ""}
     local result
     if city then
         result = CombatManager.SimulateAttackInto(unit:GetComponentID(), combatType, {target_x}, {target_y})

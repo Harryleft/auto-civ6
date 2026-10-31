@@ -362,3 +362,148 @@ def test_pending_appearing_during_query_is_preserved_and_estimate_discarded(afte
     assert result['status']=='unknown' and state.save_pending
     assert conn.operations==[] and len(conn.queries)==(1 if after=='scope' else 2)
     assert len(conn.previews)==(0 if after=='scope' else 1)
+
+
+@pytest.mark.parametrize('mode',['MELEE','RANGED'])
+@pytest.mark.parametrize('change',[
+    'unit.GetID=function()return 999 end',
+    'unit.GetOwner=function()return 2 end',
+    'PlayersVisibility[0].IsVisible=function()return nil end',
+    'PlayersVisibility[0].IsVisible=function()return false end',
+])
+def test_native_refusal_requires_final_actor_and_visible_target_binding(mode,change):
+    conn=PreviewConn()
+    if mode=='RANGED':conn.lua.execute('unitInfo.RangedCombat=40')
+    conn.lua.execute('UnitManager.CanStartOperation=function()'+change+';return false end')
+    result,state=preview(conn)
+    assert result['status']=='unknown' and result['eligibility']=='unknown', result
+    assert conn.previews==[] and conn.operations==[] and state.pending_action_summary is None
+
+
+def test_native_success_cannot_be_combined_with_a_refusal_receipt():
+    conn=PreviewConn();execute=conn.execute_write
+    async def conflicted(code):
+        rows=await execute(code)
+        if any(row.startswith('COMBAT_PREVIEW_BINDING|') for row in rows):
+            return rows+['COMBAT_PREVIEW_INELIGIBLE|NO_MOVES']
+        return rows
+    conn.execute_write=conflicted
+    result,state=preview(conn)
+    assert result['status']=='unknown' and result['eligibility']=='unknown', result
+    assert result['estimate'] is None and conn.operations==[] and state.pending_action_summary is None
+
+
+def test_enemy_city_with_garrison_and_civilian_uses_city_component_not_unit_stack():
+    conn=PreviewConn();conn.lua.execute('''
+GameInfo.Districts.DISTRICT_CITY_CENTER={Index=7};DefenseTypes={DISTRICT_GARRISON=0}
+local district={GetType=function()return 7 end,GetComponentID=function()return {player=2,id=9,type=1}end,
+ GetMaxDamage=function()return 200 end,GetDamage=function()return 25 end}
+city={GetOwner=function()return 2 end,GetID=function()return 65539 end,GetX=function()return 19 end,GetY=function()return 16 end,
+ GetDistricts=function()return {Members=function()local done=false;return function()if not done then done=true;return 1,district end end end}end}
+CityManager.GetCityAt=function()return city end
+local civilian={};for k,v in pairs(enemy)do civilian[k]=v end
+civilian.GetID=function()return 999 end;civilian.GetType=function()return 3 end
+GameInfo.Units[3]={UnitType='UNIT_BUILDER',Combat=0}
+Map.GetUnitsAt=function()return {Units=function()
+ local values={enemy,civilian};local i=0;return function()i=i+1;return values[i]end
+end}end
+CombatManager.SimulateAttackInto=function(a,mode,tx,ty)
+ assert(mode==nil and tx==19 and ty==16);record_preview('CityMelee')
+ return {attacker={id=a,strength=42,modifier=1,damage=23},
+  defender={id={player=2,id=9,type=1},strength=40,modifier=2,damage=31}}
+end
+''')
+    before=conn.facts();result,state=preview(conn)
+    assert result['status']=='estimated' and result['target']['kind']=='city', result
+    assert result['target']['id']==65539 and result['target']['hp']==175
+    assert conn.previews==['CityMelee'] and conn.operations==[] and conn.facts()==before
+    assert state.pending_action_summary is None
+
+
+def test_target_hp_changing_on_first_read_cannot_publish_stale_initial_hp():
+    conn=PreviewConn();conn.lua.execute('''
+damageReads=0
+enemy.GetDamage=function()
+ damageReads=damageReads+1
+ if damageReads==1 then enemyHP=51;return 0 end
+ return 100-enemyHP
+end
+''')
+    result,state=preview(conn)
+    assert result['status']=='unknown' and result['estimate'] is None, result
+    assert conn.operations==[] and state.pending_action_summary is None
+
+
+
+@pytest.mark.parametrize('extra',['COMBAT_PREVIEW_INELIGIBLE|NO_MOVES','ESTIMATE_UNKNOWN|changed','UNEXPECTED_RECEIPT'])
+def test_estimate_requires_exact_mutually_exclusive_receipt_set(extra):
+    conn=PreviewConn();execute=conn.execute_write
+    async def altered(code):
+        rows=await execute(code)
+        return rows+[extra] if any(row.startswith('COMBAT_PREVIEW_BINDING|') for row in rows) else rows
+    conn.execute_write=altered
+    result,state=preview(conn)
+    assert result['status']=='unknown' and result['eligibility']=='unknown'
+    assert conn.operations==[] and state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('change',[
+    'enemy.GetID=function()return 999 end',
+    'enemy.GetOwner=function()return 3 end',
+    'enemyHP=51',
+    'PlayersVisibility[0].IsUnitVisible=function()return false end',
+    'PlayersVisibility[0].IsUnitVisible=function()return nil end',
+    'x=99',
+])
+def test_native_refusal_cannot_hide_target_identity_hp_or_unit_visibility_change(change):
+    conn=PreviewConn();conn.lua.execute('UnitManager.CanStartOperation=function()'+change+';return false end')
+    result,state=preview(conn)
+    assert result['status']=='unknown' and result['eligibility']=='unknown'
+    assert conn.operations==[] and conn.previews==[] and state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('tamper',[
+    lambda rows:[row for row in rows if row.startswith('COMBAT_PREVIEW_INELIGIBLE|')],
+    lambda rows:rows+[rows[-1]],
+    lambda rows:[row.replace('COMBAT_PREVIEW_INELIGIBLE|','COMBAT_PREVIEW_INELIGIBLE|wrong') for row in rows],
+    lambda rows:[row.replace('|ATTACK_BLOCKED|','|UNRECOGNIZED|') for row in rows],
+    lambda rows:[row.replace('|1245192|20|16|','|999|20|16|') for row in rows],
+    lambda rows:[row.replace('|unit|2|5111813|19|16|','|unit|2|5111813|99|16|') for row in rows],
+])
+def test_native_refusal_requires_one_matching_binding_and_one_bound_known_reason(tamper):
+    conn=PreviewConn();conn.lua.execute('allowed.move=false');execute=conn.execute_write
+    async def altered(code):
+        rows=await execute(code)
+        lines=[line for row in rows for line in row.splitlines()]
+        return tamper(lines) if any(row.startswith('COMBAT_PREVIEW_INELIGIBLE|') for row in lines) else rows
+    conn.execute_write=altered
+    result,state=preview(conn)
+    assert result['status']=='unknown' and result['eligibility']=='unknown'
+    assert conn.operations==[] and conn.previews==[] and state.pending_action_summary is None
+
+
+def test_unchanged_refused_target_has_final_identity_visibility_hp_and_world_binding():
+    conn=PreviewConn();conn.lua.execute('allowed.move=false');before=conn.facts()
+    result,state=preview(conn)
+    assert result['status']=='unknown' and result['eligibility']=='native_current_turn_refused'
+    assert result['attacker']['id']==1245192 and result['attacker']['hp']==100
+    assert result['target']['id']==5111813 and result['target']['hp']==100
+    assert result['scope']['turn']==113 and 'ATTACK_BLOCKED' in result['reason']
+    assert conn.facts()==before and conn.operations==[] and conn.previews==[] and state.pending_action_summary is None
+
+
+def test_transport_hp_must_match_original_bound_target_hp():
+    conn=PreviewConn();execute=conn.execute_write
+    async def altered(code):
+        rows=await execute(code)
+        changed=[]
+        for row in rows:
+            for line in row.splitlines():
+                if line.startswith('NATIVE_ESTIMATE|'):
+                    fields=line.split('|');fields[7]='51';line='|'.join(fields)
+                changed.append(line)
+        return changed
+    conn.execute_write=altered
+    result,state=preview(conn)
+    assert result['status']=='unknown' and result['estimate'] is None
+    assert conn.operations==[] and state.pending_action_summary is None

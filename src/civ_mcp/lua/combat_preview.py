@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 
 from civ_mcp.lua._helpers import _LUA_ACTION_SCOPE
@@ -12,6 +13,7 @@ def binding_context(unit_id: int, x: int, y: int, scope: tuple, token: str) -> s
     return _LUA_ACTION_SCOPE + f'''
 local previewScope={{civ={json.dumps(civ)},seed={seed},turn={turn},owner={owner}}}
 local previewActorFacts,previewTargetFacts,previewTargetKind
+local previewEnemy,previewCity,previewMode
 local function previewFinite(v)
  return type(v)=="number" and v==v and math.abs(v)<math.huge
 end
@@ -49,6 +51,29 @@ end
 local function previewSame(actual,expected)
  for i=1,#expected do assert(actual[i]==expected[i],"actor or target changed during preview") end
 end
+local function previewFindTarget()
+ -- A visible city owns its combat target; garrison/civilian stacks do not
+ -- compete with the city-center component used by SimulateAttackInto.
+ local city=CityManager.GetCityAt({x},{y})
+ if city then return nil,city end
+ local units=Map.GetUnitsAt({x},{y})
+ assert(units,"hostile target unavailable")
+ local target
+ for other in units:Units() do
+  local visible=PlayersVisibility[{owner}]:IsUnitVisible(other)
+  assert(type(visible)=="boolean","unit visibility unavailable")
+  assert(visible,"hidden unit target is not supported")
+  if other:GetOwner()~={owner} then
+   assert(not target,"ambiguous unit target")
+   target=other
+  end
+ end
+ assert(target,"hostile target unavailable")
+ return target,nil
+end
+local function previewRefusal(code,reason)
+ return "COMBAT_PREVIEW_INELIGIBLE|"..{json.dumps(token)}.."|"..code.."|"..(reason or "")
+end
 local function previewStart(unit)
  assert(sameScope(previewScope),"world or turn changed or unavailable")
  previewActorFacts=previewUnitFacts(unit)
@@ -56,13 +81,24 @@ local function previewStart(unit)
  previewActorFacts[10]=unit:GetMovesRemaining()
  previewActorFacts[11]=unit:GetAttacksRemaining()
  assert(previewFinite(previewActorFacts[10]) and scopeIndex(previewActorFacts[11]),"actor attack availability unknown")
- if previewActorFacts[10]<=0 then return "COMBAT_PREVIEW_INELIGIBLE|NO_MOVES" end
- if previewActorFacts[11]==0 then return "COMBAT_PREVIEW_INELIGIBLE|NO_ATTACKS_REMAINING" end
-end
-local function previewBind(enemy,city)
- previewTargetKind=city and "city" or "unit"
- previewTargetFacts=city and previewCityFacts(city) or previewUnitFacts(enemy)
+ previewEnemy,previewCity=previewFindTarget()
+ previewTargetKind=previewCity and "city" or "unit"
+ previewTargetFacts=previewCity and previewCityFacts(previewCity) or previewUnitFacts(previewEnemy)
  assert(previewTargetFacts[3]=={x} and previewTargetFacts[4]=={y},"target position changed")
+ local targetOwner=previewTargetFacts[1]
+ assert(targetOwner~={owner} and (targetOwner==63 or Players[{owner}]:GetDiplomacy():IsAtWarWith(targetOwner)==true),"target is not at war")
+end
+local function previewAvailability(mode)
+ previewMode=mode
+ if previewActorFacts[10]<=0 then return previewRefusal("NO_MOVES") end
+ if previewActorFacts[11]==0 then return previewRefusal("NO_ATTACKS_REMAINING") end
+end
+local function previewBind(enemy,city,defenderHP)
+ assert((city and "city" or "unit")==previewTargetKind,"target kind changed")
+ previewSame(city and previewCityFacts(city) or previewUnitFacts(enemy),previewTargetFacts)
+ -- The estimate's early HP read must agree with the original binding, not a
+ -- later replacement snapshot. The wire also binds both HP values explicitly.
+ assert(defenderHP==previewTargetFacts[6],"target HP changed before simulation")
 end
 local function previewFinish(mode)
  assert(sameScope(previewScope),"world or turn changed or unavailable")
@@ -100,7 +136,7 @@ local function previewFinish(mode)
  local a,t=previewActorFacts,previewTargetFacts
  return table.concat({{"COMBAT_PREVIEW_BINDING",{json.dumps(token)},mode,
   a[1],a[2],a[3],a[4],a[7],a[8],a[9],previewTargetKind,
-  t[1],t[2],t[3],t[4],t[7],t[8],t[9]}},"|")
+  t[1],t[2],t[3],t[4],t[7],t[8],t[9],a[6],t[6]}},"|")
 end
 '''
 
@@ -110,7 +146,7 @@ def parse_binding(lines: list[str], token: str, unit_id: int, x: int, y: int, ow
     if len(rows) != 1:
         return None
     p = rows[0]
-    if len(p) != 18 or p[1] != token or p[2] not in {'MELEE', 'RANGED', 'BOMBARD'} or p[10] not in {'unit', 'city'}:
+    if len(p) != 20 or p[1] != token or p[2] not in {'MELEE', 'RANGED', 'BOMBARD'} or p[10] not in {'unit', 'city'}:
         return None
     indices = (3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17)
     if any(not re.fullmatch(r'\d+', p[i]) for i in indices):
@@ -122,4 +158,20 @@ def parse_binding(lines: list[str], token: str, unit_id: int, x: int, y: int, ow
     def entity(start: int, component: int) -> dict:
         return {'owner': n[start], 'id': n[start+1], 'x': n[start+2], 'y': n[start+3],
                 'component': {'player': n[component], 'id': n[component+1], 'type': n[component+2]}}
-    return {'mode': p[2], 'attacker': entity(3, 7), 'target': entity(11, 15) | {'kind': p[10]}}
+    try:
+        actor_hp, target_hp = float(p[18]), float(p[19])
+    except ValueError:
+        return None
+    if not all(math.isfinite(hp) and hp > 0 for hp in (actor_hp, target_hp)):
+        return None
+    return {'mode': p[2], 'attacker': entity(3, 7) | {'hp': actor_hp},
+            'target': entity(11, 15) | {'kind': p[10], 'hp': target_hp}}
+
+
+def parse_refusal(line: str, token: str) -> str | None:
+    fields = line.split('|')
+    allowed = {'NO_MOVES', 'NO_ATTACKS_REMAINING', 'RANGED_TARGET_UNAVAILABLE',
+               'ZOC', 'ATTACK_BLOCKED', 'ATTACK_DEFERRED'}
+    if len(fields) != 4 or fields[0] != 'COMBAT_PREVIEW_INELIGIBLE' or fields[1] != token or fields[2] not in allowed:
+        return None
+    return fields[2] + (': ' + fields[3] if fields[3] else '')
