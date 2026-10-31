@@ -1,0 +1,60 @@
+{
+  "scope": "Targeted offline tests for short-help fields, local nested help, unchanged business mapping and pending safety",
+  "runs": [
+    {
+      "command": "uv run --locked pytest -q tests/test_short_help.py tests/test_session_commands.py",
+      "exit_code": 0,
+      "stdout_summary": "43 passed in 8.32s",
+      "passed": 43,
+      "seconds": 8.32
+    },
+    {
+      "command": "uv run --locked pytest -q tests/test_debug_cli.py tests/test_cli_only.py tests/test_frequent_commands.py",
+      "exit_code": 0,
+      "stdout_summary": "137 passed in 43.16s",
+      "passed": 137,
+      "seconds": 43.16
+    },
+    {
+      "command": "uv run --locked pytest -q tests/test_short_help.py -k 'fact_and_refusal_contracts or owned_city_aliases or business_inputs'",
+      "exit_code": 0,
+      "stdout_summary": "9 passed, 3 deselected in 0.41s",
+      "passed": 9,
+      "deselected": 3,
+      "seconds": 0.41,
+      "reason": "Final wording clarification: observed integer differences are real; their causes remain unverified."
+    }
+  ],
+  "checks": [
+    "git diff --check passed",
+    "python3 -m compileall -q selected files passed"
+  ],
+  "evidence_source": "Summaries copied from completed exec_command/write_stdin results; native offline help proof retains full CLI artifacts separately.",
+  "source_files": [
+    {
+      "path": "src/civ_mcp/devtools/commands.py",
+      "bytes": 41485,
+      "sha256": "17487cd627acdc4da4fffd231baeed780097842df7be5f6cc63aace1b30bd9ef"
+    },
+    {
+      "path": "src/civ_mcp/devtools/debug.py",
+      "bytes": 32205,
+      "sha256": "4fde5b22bbf146a70e5bd8b845c7b542f808574c4d469adbf43a2360045ec142"
+    },
+    {
+      "path": "tests/test_short_help.py",
+      "bytes": 4736,
+      "sha256": "a3afaf9ea4f94a28e5894e5b728f0e7219cf29ce2726828543b6b2b274a13f42"
+    }
+  ],
+  "final_map_cli_proof": {
+    "directory": ".scratch/help-refine-20261031/short-help-map-v2-offline",
+    "status": "PASS",
+    "exit_code": 0,
+    "tool_calls": 0,
+    "mcp_session_closed": true,
+    "alias_help_equal": true,
+    "help_events": 2,
+    "debug_jsonl_sha256": "055e98467bc48a6b254123bf5f808448232e6a280bae33ecabe3808105a3520a"
+  }
+}

@@ -1,0 +1,1547 @@
+{
+  "source_commit": "b0d21a3ef9c3c79e43b0fe29a909bc449ed63fb3",
+  "reference_source_commit": "8c373f85ba9034f6ce1d6d9e00a7a1ff4608dd90",
+  "reference_preregistration_sha256": "71710bae7e8362526b38f2841c1a9bc580f3a89aa3cb4325b842972a1de259c5",
+  "allocation": {
+    "r11": "control",
+    "r24": "repository",
+    "r35": "repository",
+    "r46": "repository",
+    "r58": "control"
+  },
+  "allocation_method": "New seeded shuffle, two current-CLI-only controls and three current-repository-access participants; neutral IDs.",
+  "participants": 5,
+  "fresh_context": "Exactly five new collaboration agents, fork_turns=none, same inherited host model, no model override or old-answer feedback.",
+  "cases_sha256": "52940fa4862c775bbb7c45382be481072e78993d0a07daee4c634d3cd2455375",
+  "participant_prompt_sha256": "9812f5fd65793933f808f1e8292b848307589eac31006521fb7fe9841369be56",
+  "gateway_sha256": "64669ba3ad5ebc4416a0425da2925c252083e33e172fd3543c7e21926f31338b",
+  "budget": {
+    "material_operations": 20,
+    "cli_sessions": 2,
+    "cli_commands": 40,
+    "soft_minutes": 12
+  },
+  "rubric": {
+    "C01": [
+      "不以district6代替native3认定条件",
+      "人口和当前规则门槛都需核验",
+      "政策解锁/插槽/生效分别未知",
+      "用city yields及必要rule/evidence窄查，不编造实际增量"
+    ],
+    "C02": [
+      "保留A远期队列并交原turn guard核验",
+      "B明确续走或取消旧队列后另选行为",
+      "skip不是队列清空证明",
+      "NOT_SUBMITTED与原pending确认分开，不盲重试"
+    ],
+    "C03": [
+      "UI关闭不等于原交易收尾",
+      "以原trade propose完整相同参数send确认",
+      "不新提/改参/重复付14",
+      "独立核余额93/通行权/pending清空后再写"
+    ],
+    "C04": [
+      "保留原owner/意图且不重发或换空owner",
+      "先只读辨别自然奇观信息而非外交",
+      "显式popup dismiss先dryrun后原生确认",
+      "原单位读取/原参数仅确认已提交移动后pending核对"
+    ],
+    "C05": [
+      "总开关不等于当前窗口",
+      "拒因为无免费政府窗口",
+      "170政策解锁与换政资格分开",
+      "keep-current ACK与新政府选择不同，不强付费"
+    ],
+    "C06": [
+      "Debater不在真实当前三项中，不能选",
+      "用unit promotions当前集合选其一或明确不晋升",
+      "unknown不等于空或静态9类",
+      "单次promote并回读，不凭XP/MP保证资格"
+    ],
+    "C07": [
+      "道教2/新教1/none1且不从global4推本方4",
+      "默认decision城市段或city list可发现多数改变",
+      "-1none/0有效/unknown未知分开",
+      "压力细查按需且来源冲突不覆盖逐城值"
+    ],
+    "C08": [
+      "按native UNIT_TYPE与同次165展示非静态首跳",
+      "新旧完整ID替换与类型确认且不重发",
+      "实际金币扣165精确核验",
+      "资源13/-11原因未证，不能声称全资源一致"
+    ],
+    "C09": [
+      "用unit combat-preview命名只读入口非实际攻击",
+      "动态native强度/伤害而非基础CS公式",
+      "Runtime guard拒绝不是engine false且unknown不补值",
+      "不保证实际伤害且神学/AIR不支持，前后公开状态/pending核对"
+    ],
+    "C10": [
+      "GameCore map与InGame workforce来源不同",
+      "整数差异未定因且不被小数修复解释",
+      "保留小数及负值",
+      "省略G/S/C/Fa=0，无收益块=unknown，F/P零保留"
+    ],
+    "C11": [
+      "unit spread-religion完整ID可带28 27，不必须进城",
+      "完整可见/唯一目标/邻格和原生资格仍核验",
+      "未决保持原单位及原坐标，不改意图",
+      "压力及次数不等于多数改宗"
+    ],
+    "C12": [
+      "本次不执行live且未来用当前轮登记检查点",
+      "active save reload非菜单save load且原基准不覆盖",
+      "另存证据后恢复原T100不结束T100并核pending",
+      "无通用策略驾驶器，legacy脚本不替代新对局CLI"
+    ]
+  },
+  "points": "12 cases x 4 binary criteria = 48; judge textual outcome not citations alone. No significance or population claim with n=5.",
+  "blindness": "No parent dialogue, assignment labels, rubric or expected answers given. Availability is inferable; same host mandatory instructions and pretrained knowledge cannot be removed. Not OS filesystem isolation or double-blind grading.",
+  "controls": "Same cases, prompt, model inherited, tools/gateway, offline current CLI, and budgets. Only repository material access differs.",
+  "rules": "Only gateway for reading task materials/search/CLI; no other filesystem reads, network/game/internal imports or reading answers/other slots. Only own answer.json may be written. Any violation contaminates that participant.",
+  "reading_primary": "Sum successful material list/read/search rendered UTF-8 bytes excluding direct common TASK/INSTRUCTIONS reads, plus canonical local-help/dry-run/error/pending payload bytes and tool_result text UTF-8 bytes. Remove event/sequence/run_id/timestamp/topic from local payloads; compact ensure_ascii=False JSON. No token or total runtime claim.",
+  "reading_comparison": "Recompute same metric from preserved first-study logs and current logs with the frozen analyze_reading.py. Compare each access arm before/after and concurrent current arms; historical groups are different fresh samples, not matched players or a causal speed test.",
+  "quality_check": "Same 12x4 binary rubric and prior semantic clarification. Compare group means and per-case conditions; separately check C07/C10 target contracts, C05 ACK, C09 preview/pending, C12 save/pending. Generous sensitivity gives C05/C09/C12 full credit to everyone. Do not claim statistical noninferiority from n=5.",
+  "safety_check": "All CLI tool calls must be offline-safe; no native game I/O; every created CLI closed, no unresolved pending, T100 verified save SHA unchanged. No production source/doc changes during participant run.",
+  "concurrency": "First three, then two as slots free; no interim feedback/instruction changes.",
+  "excluded_test_artifacts": [
+    "docs/acceptance/2026-10-31-agent-knowledge-use/README.md",
+    "docs/acceptance/2026-10-31-agent-knowledge-use/answers/p17.json",
+    "docs/acceptance/2026-10-31-agent-knowledge-use/answers/p28.json",
+    "docs/acceptance/2026-10-31-agent-knowledge-use/answers/p36.json",
+    "docs/acceptance/2026-10-31-agent-knowledge-use/answers/p49.json",
+    "docs/acceptance/2026-10-31-agent-knowledge-use/answers/p53.json",
+    "docs/acceptance/2026-10-31-agent-knowledge-use/case-scores.md",
+    "docs/acceptance/2026-10-31-agent-knowledge-use/cases.md",
+    "docs/acceptance/2026-10-31-agent-knowledge-use/participant-prompt.txt",
+    "docs/acceptance/2026-10-31-agent-knowledge-use/preregistration.json",
+    "docs/acceptance/2026-10-31-agent-knowledge-use/results.json",
+    "docs/acceptance/2026-10-31-agent-knowledge-use/scores.json",
+    "docs/acceptance/README.md"
+  ],
+  "exclusion_reason": "Seal previous and current study answers, score keys and reports, plus their acceptance index. First study source predates these artifacts; prevent answer leakage. Other current source materials are unmodified copies.",
+  "repository_inventory": [
+    {
+      "path": ".codex/skills/verify-civ6/SKILL.md",
+      "bytes": 7694,
+      "sha256": "455bfa11fa6da2560323380a97ee3e45680d1f1d84724bcf2bcc53483222e33e"
+    },
+    {
+      "path": ".codex/skills/verify-civ6/agents/openai.yaml",
+      "bytes": 273,
+      "sha256": "3d45daaddcd0cf008795da78288188b27791bc875af5e417a1ea66407b417d3e"
+    },
+    {
+      "path": ".codex/skills/verify-civ6/features/README.md",
+      "bytes": 1956,
+      "sha256": "ad9ce084754e0287f6dafad6beb810b6e2109834978df3d05fa1d2bb0f817ce4"
+    },
+    {
+      "path": ".codex/skills/verify-civ6/features/actions.md",
+      "bytes": 3044,
+      "sha256": "ee4d3348ec9f67f5607d5abe2b51bfd420f3d8fa10eb42e8b8efc90aa7550574"
+    },
+    {
+      "path": ".codex/skills/verify-civ6/features/checkpoints.md",
+      "bytes": 3462,
+      "sha256": "f62e898c8a4b392f7f94f9252ad4abd4db786a8003d9fdb1d3b96c5180f44101"
+    },
+    {
+      "path": ".codex/skills/verify-civ6/features/knowledge.md",
+      "bytes": 2593,
+      "sha256": "95e9450af76c1e248592f6f2551622f153702bbdc1a8262cf3d63c404aab3782"
+    },
+    {
+      "path": ".codex/skills/verify-civ6/features/state.md",
+      "bytes": 3844,
+      "sha256": "ce4770ef244f4f9a21c444406970e6498afd10d1284cc8834a73a01df804a62d"
+    },
+    {
+      "path": ".codex/skills/verify-civ6/features/turns.md",
+      "bytes": 2469,
+      "sha256": "677d81e7420c0e65a661bd8767c0fa4becfa93f890e266844fb7af80da86eb76"
+    },
+    {
+      "path": ".codex/skills/verify-civ6/scripts/verify_knowledge.py",
+      "bytes": 228,
+      "sha256": "2c53d688eeb26fe4673898086a9c2b4f1ed5928808e57b0a670c64888111b9d4"
+    },
+    {
+      "path": "AGENTS.md",
+      "bytes": 5821,
+      "sha256": "48c86653b9b7e16c2b644078623e69a0127ad1a50ed5c2d34a81deafb5997dfc"
+    },
+    {
+      "path": "GLOSSARY.md",
+      "bytes": 7504,
+      "sha256": "4a5a74fbac97ec7eaaa7f341df949f35bc89a20d921fa37163e0aba0ec646b6f"
+    },
+    {
+      "path": "README.md",
+      "bytes": 3231,
+      "sha256": "c847ee57645e97e1fb81933117a4d2fe0e4889927e2af568697bbb483952a984"
+    },
+    {
+      "path": "civ6_knowledge/NEXT.md",
+      "bytes": 636,
+      "sha256": "a1522fee076436cde445bffb42757f1a567ca6ba15147e492f9ca678cfcc0665"
+    },
+    {
+      "path": "civ6_knowledge/README.md",
+      "bytes": 5804,
+      "sha256": "5a958913cc78b900679819fdff7ff3ea5d3fef220701cd0d661ce95c070f1aed"
+    },
+    {
+      "path": "civ6_knowledge/brief.py",
+      "bytes": 6985,
+      "sha256": "d8771aec51da1a46e88065ff3a0b5d6c9a90af145df2bb26f896321dd8c3957e"
+    },
+    {
+      "path": "civ6_knowledge/build.py",
+      "bytes": 52505,
+      "sha256": "2f7487155eac48d8a3d45ba2b350faf8154d221e48c015a0e73b82ea86f22003"
+    },
+    {
+      "path": "civ6_knowledge/capture.py",
+      "bytes": 21393,
+      "sha256": "7fe64e2c72027c7cc8d28ad97937904fad0ee42c0d8a4ebc6f566c81e4b48c02"
+    },
+    {
+      "path": "civ6_knowledge/manifest.json",
+      "bytes": 34669,
+      "sha256": "4ce008acb37f81b2af0957e2ea3c2b4e342f1f606f0478021819fcb1249f152b"
+    },
+    {
+      "path": "civ6_knowledge/query.py",
+      "bytes": 8699,
+      "sha256": "8a3f3619d22ed88c10f719d2f803e15c04081f07a0aae7a2e4a15d2d65018cdc"
+    },
+    {
+      "path": "civ6_knowledge/rules/civics.json",
+      "bytes": 791283,
+      "sha256": "cda39f67e7f06b6990bca4c0a5422238c3053e447cbb2d465ea1e69abe7fb7d3"
+    },
+    {
+      "path": "civ6_knowledge/rules/civilizations.json",
+      "bytes": 42384204,
+      "sha256": "e8cf1f403fe1d0ee57d0f172aafd0c99963871780f1af84a5b67f8458648429d"
+    },
+    {
+      "path": "civ6_knowledge/rules/combat.json",
+      "bytes": 1824918,
+      "sha256": "55a81df543c024dda8833541ae07e12947c593895ee724410da0dd8fe6789a5f"
+    },
+    {
+      "path": "civ6_knowledge/rules/congress.json",
+      "bytes": 217695,
+      "sha256": "8fa798d417e3fa8f39b5cad92a9c8a71421f190cca93f35ae6cfa30d935bd8af"
+    },
+    {
+      "path": "civ6_knowledge/rules/diplomacy.json",
+      "bytes": 338247,
+      "sha256": "3f80a8f659315f27627c8b99ac57def40c8c8d762b9b20485c4ac428dac895d8"
+    },
+    {
+      "path": "civ6_knowledge/rules/districts.json",
+      "bytes": 458092,
+      "sha256": "640fd76dae262d4247109024e6083fef879b5231562ff5c790571e37c0e36803"
+    },
+    {
+      "path": "civ6_knowledge/rules/economy.json",
+      "bytes": 2609289,
+      "sha256": "8b0ecf19206baf0f1282ac821b53cd9ff3bb5f19bb63b4a38a3da1ddf34dd5d1"
+    },
+    {
+      "path": "civ6_knowledge/rules/resources.json",
+      "bytes": 512209,
+      "sha256": "81a96c4c59b8cd26de6ea2ca57f89ca76c22020cb9acecee5ca7ebfb0300a4db"
+    },
+    {
+      "path": "civ6_knowledge/rules/technologies.json",
+      "bytes": 1184064,
+      "sha256": "73c4f3847a3f7776d1eb979b2fadf224b40bf95fb523bd9d23c848423d100364"
+    },
+    {
+      "path": "civ6_knowledge/rules/victory.json",
+      "bytes": 731970,
+      "sha256": "f52868fead92a96f492c05ea968f4ccb465c0f6aeb045b5893f9303d3cbb7985"
+    },
+    {
+      "path": "civ6_knowledge/sources/snapshot.json",
+      "bytes": 31344954,
+      "sha256": "02bba8b29260d6ec4afbd34f738a92ae5503ddeeeea527813fc4599227916d29"
+    },
+    {
+      "path": "civ6_knowledge/topics/civics.md",
+      "bytes": 1217,
+      "sha256": "55dea2e99d9df7f606335c5fd454df79b57d22907cfb7ce2d7d68162a732ff61"
+    },
+    {
+      "path": "civ6_knowledge/topics/civilizations.json",
+      "bytes": 61,
+      "sha256": "5a2af9f4d149f40a4b2a3497fdae2056f08015e28e83cf280d40905de8ba4d2c"
+    },
+    {
+      "path": "civ6_knowledge/topics/civilizations.md",
+      "bytes": 1140,
+      "sha256": "54ea3ce6a00502b3b4f35ee993ca419d6ed135d04d26cc2709909bb65d7af01d"
+    },
+    {
+      "path": "civ6_knowledge/topics/combat.json",
+      "bytes": 14138,
+      "sha256": "bac2bb41c0088e6f9acf2350c907ed918c8c835d848d2bbe7bff8bf0a17572bc"
+    },
+    {
+      "path": "civ6_knowledge/topics/combat.md",
+      "bytes": 2711,
+      "sha256": "2d83533865d70d396b0388a468c5fc1193839aaa758b344c77d41893fd574bc1"
+    },
+    {
+      "path": "civ6_knowledge/topics/congress.md",
+      "bytes": 2024,
+      "sha256": "6dd6a09d6ba7989dd7e254bf387094f317100816ce55c7c276ee99f0588edc6c"
+    },
+    {
+      "path": "civ6_knowledge/topics/diplomacy.json",
+      "bytes": 13942,
+      "sha256": "ec7ede1da23a0f9a58ce9947f4561dfacb98f68d9c798f6b8db639692fd600b5"
+    },
+    {
+      "path": "civ6_knowledge/topics/diplomacy.md",
+      "bytes": 2195,
+      "sha256": "7c6d60f1f25b470801ff751b3b9da5471fad56efad5613bec112568770ab7fc5"
+    },
+    {
+      "path": "civ6_knowledge/topics/districts.md",
+      "bytes": 2092,
+      "sha256": "895c7c367653bb8bcd9906b3ede83debddd6548b07a0bb2f3bd6b5224a358bc3"
+    },
+    {
+      "path": "civ6_knowledge/topics/economy.json",
+      "bytes": 8689,
+      "sha256": "75461e9b8a921dc7e2fb3ab0ddc27db708da57e08aafe7cb12716d6f9b4bc832"
+    },
+    {
+      "path": "civ6_knowledge/topics/economy.md",
+      "bytes": 1545,
+      "sha256": "451c93851a327aa8eba0a5ec96fed68036bd49ca1eadf40f22b990445bb8961a"
+    },
+    {
+      "path": "civ6_knowledge/topics/resources.json",
+      "bytes": 11810,
+      "sha256": "e738dc454abe25e92463cf15dd612997dca3efe3f9937aa0aecbba8384cef941"
+    },
+    {
+      "path": "civ6_knowledge/topics/resources.md",
+      "bytes": 2173,
+      "sha256": "c84d1aabbbdfc2eca5e25ba7e85787951314924b70f33002c8dea08f9b4de5e7"
+    },
+    {
+      "path": "civ6_knowledge/topics/technologies.md",
+      "bytes": 1346,
+      "sha256": "2ca46828e7c42d55d7a6a4cc543eab7bcd8e66e80366208612deea97c3a39623"
+    },
+    {
+      "path": "civ6_knowledge/topics/victory.json",
+      "bytes": 16044,
+      "sha256": "cd77b81f6f7c044ca241183fbb0cbee9b6af611280397c80f1c41f04f38dcb36"
+    },
+    {
+      "path": "civ6_knowledge/topics/victory.md",
+      "bytes": 1745,
+      "sha256": "a8a9d30ebaba4879d03e4670f162b1bd210c0974f5c0b3a2af2fb4db0d71db2e"
+    },
+    {
+      "path": "docs/README.md",
+      "bytes": 3166,
+      "sha256": "8b97eaad45db4ab5724d275fb3031fd57a1d14b24fc5fb0ba4057e6e9b6695a5"
+    },
+    {
+      "path": "docs/acceptance/2026-10-17-architecture-deepening.md",
+      "bytes": 4477,
+      "sha256": "637df65d942276c6635a7f5c9799c0fa9f8c69ad0a65cb1b9cff86f83335dffc"
+    },
+    {
+      "path": "docs/acceptance/2026-10-17-civ6-knowledge.md",
+      "bytes": 4966,
+      "sha256": "58736368eaa23a6f62dbf026451fe7fefae01485af068850afad88629a178398"
+    },
+    {
+      "path": "docs/acceptance/2026-10-17-knowledge-expansion.md",
+      "bytes": 3359,
+      "sha256": "60545514d9177b5af2dd7a3fb70cf34eef7d2bf1fb86474a62e9fd717f00eedc"
+    },
+    {
+      "path": "docs/acceptance/2026-10-18-ci-pending-dispatch.md",
+      "bytes": 818,
+      "sha256": "c71dbd4aa57edac8ff5d99c0f3ef949579983c824dc0bdd4acd7ce3e5ba7ec45"
+    },
+    {
+      "path": "docs/acceptance/2026-10-18-civilization-knowledge.md",
+      "bytes": 6511,
+      "sha256": "1fbf85e720ff2826c25a07c6ec37748fd76e282e3e14fbb1ec4e9a31a669701f"
+    },
+    {
+      "path": "docs/acceptance/2026-10-18-end-turn-world-scope.md",
+      "bytes": 3742,
+      "sha256": "ad747f4ed81698778e29e45075b8e7430e7066de9188f7bce2f8fc294100a1b5"
+    },
+    {
+      "path": "docs/acceptance/2026-10-18-knowledge-mcp.md",
+      "bytes": 4628,
+      "sha256": "bbd38ee2bb960461dace5bfd7589d057f78081c8514df426100b5c0f6dd0d1a7"
+    },
+    {
+      "path": "docs/acceptance/2026-10-18-win-strategy.md",
+      "bytes": 3858,
+      "sha256": "6245a675eb4db766200d799118523e16b3b7c648a3e7be1d3e56c94ac2740336"
+    },
+    {
+      "path": "docs/acceptance/2026-10-19-envoy-lifecycle.md",
+      "bytes": 3198,
+      "sha256": "0c22a518fece388a944c14526d8b8ac46c6db3c7bcc606eb5418b6cce24e4000"
+    },
+    {
+      "path": "docs/acceptance/2026-10-19-incoming-p2-boundaries.md",
+      "bytes": 3472,
+      "sha256": "4e49d365209974bdd45470b288ef19008c1b67854243e78d95ff7d8ad206a065"
+    },
+    {
+      "path": "docs/acceptance/2026-10-19-mutation-lifecycle.md",
+      "bytes": 18681,
+      "sha256": "e2b00cef006307e948b64afdb74b5b7bb34afd1f6a9b066b1f710bcb4fb493f5"
+    },
+    {
+      "path": "docs/acceptance/2026-10-20-religion-defense.md",
+      "bytes": 9717,
+      "sha256": "bfd09722ff908d92b4f9953f1360960b9ad1615bad416784efa55f79c2d33808"
+    },
+    {
+      "path": "docs/acceptance/2026-10-20-test-efficiency-audit.md",
+      "bytes": 11365,
+      "sha256": "e06ec68de3a5a3c83737e4741843da4f3be513f517ce43ab633c8d4cf346cdc7"
+    },
+    {
+      "path": "docs/acceptance/2026-10-20-test-efficiency-optimization.md",
+      "bytes": 4672,
+      "sha256": "8917bef80ed2c9cf96df0d8250d5e3649313b776cf72c19aace3e6efc18ecd5b"
+    },
+    {
+      "path": "docs/acceptance/2026-10-20-test-efficiency-optimization/summary.json",
+      "bytes": 3782,
+      "sha256": "74c12342152ff2090ed428f76d13e2ba2032dbb03a9a31f09cc456e9c6e9016d"
+    },
+    {
+      "path": "docs/acceptance/2026-10-20-test-efficiency/summary.json",
+      "bytes": 9771,
+      "sha256": "6bcc3ad0578f93a6bff4db0237f29996381c785f9a8ec4aaaccc2563a84b4857"
+    },
+    {
+      "path": "docs/acceptance/2026-10-20-windows-compatibility.md",
+      "bytes": 5128,
+      "sha256": "3ee68be74bb8eba0a19e7509340ebbb424570b762cd9f45643abf39bd3fa08c5"
+    },
+    {
+      "path": "docs/acceptance/2026-10-20-windows-stability-followup.md",
+      "bytes": 5710,
+      "sha256": "3a0cd9ad3d875134cfe88a9ad326be5901b488f06dce7809c7c166b03af4cb62"
+    },
+    {
+      "path": "docs/acceptance/2026-10-21-windows-full-game-review.md",
+      "bytes": 9748,
+      "sha256": "695795c2de71f873d38a5b7099f60a3577123aaea05494829ef5c15d34f6ed99"
+    },
+    {
+      "path": "docs/acceptance/2026-10-24-cli-contract.md",
+      "bytes": 2534,
+      "sha256": "88415d37503c83a05b6c4f2aaa04f4c6ffe4db6022e27d170fb62f944c73871f"
+    },
+    {
+      "path": "docs/acceptance/2026-10-24-cli-documentation-closeout.md",
+      "bytes": 5906,
+      "sha256": "4d3f384727abc62dcfe5275caa20f3505ca6dfb5876302f94617d20b6cad9d3b"
+    },
+    {
+      "path": "docs/acceptance/2026-10-24-cli-domains.md",
+      "bytes": 2677,
+      "sha256": "8a95bceabc57b4281ee70b2722574d1852840d5bce07a070498e00d60ed11622"
+    },
+    {
+      "path": "docs/acceptance/2026-10-24-cli-frequency.md",
+      "bytes": 3951,
+      "sha256": "2928e92b1329316819dc4de416ed11c83b65856ce848e753416d8b179926c206"
+    },
+    {
+      "path": "docs/acceptance/2026-10-24-foreground-debug.md",
+      "bytes": 3722,
+      "sha256": "34a41859449ffdeb80d13cba1606cccd33ac89197e976e2f1d521aa890908680"
+    },
+    {
+      "path": "docs/acceptance/2026-10-24-offline-cli.md",
+      "bytes": 2937,
+      "sha256": "6e7c59632dde8621a2d86fb88311e59ba5baf42e1351f697850ebfc7c4600549"
+    },
+    {
+      "path": "docs/acceptance/2026-10-25-cli-only.json",
+      "bytes": 9757,
+      "sha256": "1f018cc206043bed02dd780e7e92b1a80825227486e6d1660ff514baa53c5ff1"
+    },
+    {
+      "path": "docs/acceptance/2026-10-25-cli-only.md",
+      "bytes": 3579,
+      "sha256": "b7b21cf14f67bcedb295f590fb74f7154353daf01d4a47bb5d4f5ed143038338"
+    },
+    {
+      "path": "docs/acceptance/2026-10-27-windows11-cli-fixes.json",
+      "bytes": 5811,
+      "sha256": "d415604b2d4df61a023f13fdb9e83685c21f40bf3ff8934773ad39678450808e"
+    },
+    {
+      "path": "docs/acceptance/2026-10-27-windows11-cli-fixes.md",
+      "bytes": 7178,
+      "sha256": "50207427ac59046e42d7e475f9e06489fe87ad1f7e8d9b86038251efbdfdba3e"
+    },
+    {
+      "path": "docs/acceptance/2026-10-27-windows11-cli.json",
+      "bytes": 4325,
+      "sha256": "f9bda5e3d3803119676f00e353e6cade14a520d5dd011d10f66bd43868f25964"
+    },
+    {
+      "path": "docs/acceptance/2026-10-27-windows11-cli.md",
+      "bytes": 9542,
+      "sha256": "e6071d7e209b2539905699d8b1cb9d0468ff5676d22ae41f3037d203fc41272f"
+    },
+    {
+      "path": "docs/agent-checklist.md",
+      "bytes": 6746,
+      "sha256": "dd4b5013b3ea113824f4b1b184f918b4f23f1b8d1fc5ab24be1f9168d1fbec31"
+    },
+    {
+      "path": "docs/agent-playbook.md",
+      "bytes": 12616,
+      "sha256": "1e57f76bcea00a2a30e256677440e25716d26504f99e5eabb726b758fa64fd4d"
+    },
+    {
+      "path": "docs/agent-recovery.md",
+      "bytes": 6330,
+      "sha256": "36e0aaad7d3b70f68c85a859d90eef47446fec928586802406782f206fe96158"
+    },
+    {
+      "path": "docs/agent-special-operations.md",
+      "bytes": 10973,
+      "sha256": "88d1acf8dda9bc13c19fc39a725ad74cc1b27e6903705c51dce5b9f9d3ebdd4c"
+    },
+    {
+      "path": "docs/agent-strategy.md",
+      "bytes": 5369,
+      "sha256": "31bb4018c9d902a0e8eda5c4dd6e24ee7506f9ff619225c44b277d293777d11b"
+    },
+    {
+      "path": "docs/architecture.md",
+      "bytes": 20696,
+      "sha256": "612f13d0b117f19118191de1937526d5ebfabe57294cf37d74402b514b6be3c3"
+    },
+    {
+      "path": "docs/archive/README.md",
+      "bytes": 679,
+      "sha256": "c82a758c2ca90f2164640535dfe05d22f9ed18c58c5a7eee82737844bb2d525a"
+    },
+    {
+      "path": "docs/archive/agent-vs-agent.md",
+      "bytes": 22799,
+      "sha256": "b1cb70d978e2b0ce53f27743e82fe6787a603fb562f21fd71f6784c5bcffe58e"
+    },
+    {
+      "path": "docs/archive/architecture-diagrams.md",
+      "bytes": 30365,
+      "sha256": "ef3c8454962bb9f0c5ccae9ce27c07fe22ed00e6ea7b6d1a0e11da3b09d3ca03"
+    },
+    {
+      "path": "docs/archive/feature-ideas.md",
+      "bytes": 6303,
+      "sha256": "e14aa4dc86938454af15758f625c1b153f189079b3535bdf606b01cd48b23e7f"
+    },
+    {
+      "path": "docs/archive/observability.md",
+      "bytes": 10802,
+      "sha256": "813b01849b483f4237fa275e27e807140e78b454cbcecca04e94f0c1d620d47d"
+    },
+    {
+      "path": "docs/archive/paper/scenario-spec.md",
+      "bytes": 7262,
+      "sha256": "be90d64e473fd8204dd565918907c557d7d173e92bb18a8d524e133c5959408e"
+    },
+    {
+      "path": "docs/archive/research/game_mcp_design_report.md",
+      "bytes": 9457,
+      "sha256": "608d51e28fc9207efafb63db132d68ea81e6c7b725fc806e192599f935dadf49"
+    },
+    {
+      "path": "docs/archive/research/idea_research.md",
+      "bytes": 20023,
+      "sha256": "49ffb8ffc1b755c708d39bc78c78b5e4a6560797c020bcdbfaf3a14877a9e67f"
+    },
+    {
+      "path": "docs/cli.md",
+      "bytes": 4048,
+      "sha256": "c97f93067663aa51c4f5078e57430a8753b772723c005699c21c634aa3b2b533"
+    },
+    {
+      "path": "docs/cli/call-sequence.md",
+      "bytes": 394,
+      "sha256": "f9cffadb8415b7fe198c691541a4a480f31745b22f3ac37cc48275312d98aad3"
+    },
+    {
+      "path": "docs/cli/cities.md",
+      "bytes": 10812,
+      "sha256": "a21edb50d31cf733be912f0f14d434b220d76a6d9c42513f0594f9fd363edce7"
+    },
+    {
+      "path": "docs/cli/congress.md",
+      "bytes": 552,
+      "sha256": "beb755ba7874f1a29ed82f9026fd4ef6916dde17ccf4439c7c87d67215af52ef"
+    },
+    {
+      "path": "docs/cli/debug.md",
+      "bytes": 6695,
+      "sha256": "ee2dd4472c039b024ac0388668f9cda89644f0d7736892983355eca9b3ed12c6"
+    },
+    {
+      "path": "docs/cli/diplomacy.md",
+      "bytes": 3876,
+      "sha256": "53d83c44b59ce981db5c82e1126b0ea9b8ccf2d02d23e70cbc7090335a8cb1ba"
+    },
+    {
+      "path": "docs/cli/discovery.md",
+      "bytes": 4166,
+      "sha256": "07dc8781d4a8ed90d115e2127e46c2fcf5899118ef81544f131d6c40c5a48819"
+    },
+    {
+      "path": "docs/cli/domains.md",
+      "bytes": 6590,
+      "sha256": "7f5a9f7066596146272f62c89cc768ccda0cdf791042eed5a291987e043bb93b"
+    },
+    {
+      "path": "docs/cli/dry-run.md",
+      "bytes": 1306,
+      "sha256": "43faecc0661bb172ffd1e50f249dd6e42c44afa7cfa7039c543b198ee1d1dce9"
+    },
+    {
+      "path": "docs/cli/evidence.md",
+      "bytes": 1700,
+      "sha256": "fe177a4aff28c9d18c760b135a1b6e712dbe1a5d658469217ef36a09f55c467a"
+    },
+    {
+      "path": "docs/cli/government.md",
+      "bytes": 2251,
+      "sha256": "2834c01b2b5b00ba2b2a5d4010697c4434d657abd6e4a8bd2e335eb6337702b4"
+    },
+    {
+      "path": "docs/cli/map-knowledge.md",
+      "bytes": 1904,
+      "sha256": "9b0533f45a5620f83145d5559916c0124ce6af20487cd3b18e931b3c0dfe3f74"
+    },
+    {
+      "path": "docs/cli/modes.md",
+      "bytes": 1660,
+      "sha256": "6c86ec7534929e4ed26176f309b50d1cc233fc9f590fc4650b5d0e071b7c5512"
+    },
+    {
+      "path": "docs/cli/overview.md",
+      "bytes": 8008,
+      "sha256": "006607a558711204c57302e710c856467b52add1289c243f55fd28607a7e491e"
+    },
+    {
+      "path": "docs/cli/state.md",
+      "bytes": 3636,
+      "sha256": "6529f68363ded52e27960a006145a772be5cf17742fc5d447577b8b169facd90"
+    },
+    {
+      "path": "docs/cli/timing.md",
+      "bytes": 2706,
+      "sha256": "31af439ea409b813a773865ccc3889caf0a063fb40b11a3b619385c220d0edaf"
+    },
+    {
+      "path": "docs/cli/turns-saves.md",
+      "bytes": 2076,
+      "sha256": "69ce6455cbad7bbcc8acefaec30abd40cdd19d2c610fe8f010fec70cb571e45b"
+    },
+    {
+      "path": "docs/cli/units.md",
+      "bytes": 8420,
+      "sha256": "19de428d1a577006a4e6b2d9aa4d71ed3cd64df58b87f636a5de97a1a569b16c"
+    },
+    {
+      "path": "docs/codex-hooks.md",
+      "bytes": 5486,
+      "sha256": "fdd10352e3b3fbaa4ff0a62ada09b1fb8c9380760ba96775bf2a2902abd37a37"
+    },
+    {
+      "path": "docs/development.md",
+      "bytes": 10186,
+      "sha256": "ceb02000b7d2bc7f5a1f118592e47062b14d4cae759564a2e657f49c5e99f46a"
+    },
+    {
+      "path": "docs/installation.md",
+      "bytes": 3917,
+      "sha256": "ff63d6a3a1c25162b0b1ef86a453f76f596fb66daf4b60a2984a755e13f40333"
+    },
+    {
+      "path": "docs/replay-analysis.md",
+      "bytes": 6911,
+      "sha256": "56455ac0bc15f985ca85d36f44f2ce5bd19088172cd5845485a9214bd9d20c1c"
+    },
+    {
+      "path": "docs/research/bypassing_aspyr_launcher.md",
+      "bytes": 10018,
+      "sha256": "5dbed3377960330fd0ab1dacc2cad405c293764d4ec5405f1b189fa5c2606b64"
+    },
+    {
+      "path": "docs/save-file-format.md",
+      "bytes": 12897,
+      "sha256": "0908345e42e0fcdc80d74e2eb8d4a6de67e12d6894233226b73ecdcfb4c5de28"
+    },
+    {
+      "path": "docs/specs/2026-10-17-architecture-deepening-tickets.md",
+      "bytes": 2139,
+      "sha256": "dda69c35de3d899913c636bb57e4a9037dd11b506cfd23a36bff03a76ee35220"
+    },
+    {
+      "path": "docs/specs/2026-10-17-architecture-deepening.md",
+      "bytes": 10132,
+      "sha256": "b94266c031798dcc6f65ed1436a55902162784df8cf8f6b90b1b657ad85d12fa"
+    },
+    {
+      "path": "docs/specs/2026-10-17-civ6-knowledge-tickets.md",
+      "bytes": 1550,
+      "sha256": "89f26df708031cd8f558c1bdac4f013939329ba8330a39418f5342f5bd36780e"
+    },
+    {
+      "path": "docs/specs/2026-10-17-civ6-knowledge.md",
+      "bytes": 7321,
+      "sha256": "71c080106d600509e1809f30141d10c8f597627b8055593992af21c23b55698d"
+    },
+    {
+      "path": "docs/specs/2026-10-17-knowledge-expansion-tickets.md",
+      "bytes": 1739,
+      "sha256": "c542af1fc4f327418b8172df8a50703af9da767c4a71c3bd8c83ad2fc92a7925"
+    },
+    {
+      "path": "docs/specs/2026-10-17-knowledge-expansion.md",
+      "bytes": 6493,
+      "sha256": "a61f592557bb6ce6c6e091cba080ff750827b811f613ffc023de8ccbf5dcb431"
+    },
+    {
+      "path": "docs/specs/2026-10-18-civilization-knowledge-tickets.md",
+      "bytes": 2158,
+      "sha256": "10feffe7fa6baaca6914d79f6bc848d8d2eeabae891abcd5ea2a72a341685ec4"
+    },
+    {
+      "path": "docs/specs/2026-10-18-civilization-knowledge.md",
+      "bytes": 8709,
+      "sha256": "25f6afe3c5de9662ccebc2562ac6002a72a081db48da3b681a00cb3ef943a197"
+    },
+    {
+      "path": "docs/specs/2026-10-18-end-turn-world-scope-tickets.md",
+      "bytes": 1475,
+      "sha256": "5611bf483541721e328fa2176ac44db6a501454dca4074c4ad513d726e0f7adf"
+    },
+    {
+      "path": "docs/specs/2026-10-18-end-turn-world-scope.md",
+      "bytes": 6191,
+      "sha256": "75665d9933eb15f159bed7db1024bf5d16e89efbcf7832888284177229e98858"
+    },
+    {
+      "path": "docs/specs/2026-10-18-knowledge-mcp-tickets.md",
+      "bytes": 1871,
+      "sha256": "786c761d6d1f9ff3ff5d426808954360ef36f49d78372818a143a08635df5e48"
+    },
+    {
+      "path": "docs/specs/2026-10-18-knowledge-mcp.md",
+      "bytes": 7345,
+      "sha256": "26d8d34803f741952bfe7d54a6413a12a65c1444661908135f96c90f86056bab"
+    },
+    {
+      "path": "docs/specs/2026-10-18-win-strategy-tickets.md",
+      "bytes": 1789,
+      "sha256": "8c081a2191300b4818fddaf30eefbff2a999fca1d718d56bfa0fe3d8c9d2b7a6"
+    },
+    {
+      "path": "docs/specs/2026-10-18-win-strategy.md",
+      "bytes": 8613,
+      "sha256": "d8681c6173dbb802d9c581096fb20d75f1c6f78524bfe60840ed1352e9067507"
+    },
+    {
+      "path": "docs/specs/2026-10-19-incoming-p2-boundaries-tickets.md",
+      "bytes": 1151,
+      "sha256": "3b9075b37d2f2775fe2c9cfeeb93c4773735d1382e5d3f3aef614db1d0f437e4"
+    },
+    {
+      "path": "docs/specs/2026-10-19-incoming-p2-boundaries.md",
+      "bytes": 3867,
+      "sha256": "ba0b7e515af7901a89b6278b886c78cfefd83e77251532c664a7a64d32f67088"
+    },
+    {
+      "path": "docs/specs/2026-10-19-mutation-audit.md",
+      "bytes": 19272,
+      "sha256": "3a68dde387aeea75a394a79e48f628dcf9a255885442f7355fb484fdbadbaa7f"
+    },
+    {
+      "path": "docs/specs/2026-10-19-mutation-lifecycle/README.md",
+      "bytes": 688,
+      "sha256": "884514153d178c82a01c61207edd3c1b21a5735fa5afbe323b3d13ce8e67048f"
+    },
+    {
+      "path": "docs/specs/2026-10-19-mutation-lifecycle/issues/01-purchase-tile.md",
+      "bytes": 1972,
+      "sha256": "9b4f4bcb66a1cc021955a46cae5e57ad379df3b7e806f851f9004553daf25bfc"
+    },
+    {
+      "path": "docs/specs/2026-10-19-mutation-lifecycle/issues/02-save-cancellation.md",
+      "bytes": 1866,
+      "sha256": "361f006c4420e831ad5fd21613cc480cd2b3c956ace79a2b183399bacd140371"
+    },
+    {
+      "path": "docs/specs/2026-10-19-mutation-lifecycle/issues/03-purchase-item.md",
+      "bytes": 1904,
+      "sha256": "d66e3782148c6ee7a4518bdc2420d52ddb9a9d082be292bacfc1a677265239ac"
+    },
+    {
+      "path": "docs/specs/2026-10-19-mutation-lifecycle/issues/04-unit-transforms.md",
+      "bytes": 2984,
+      "sha256": "1f83f0d3f2a9fde7b3dc62735f126d574f039f1d345b82b54c65d337f107457a"
+    },
+    {
+      "path": "docs/specs/2026-10-19-mutation-lifecycle/issues/05-governors.md",
+      "bytes": 1799,
+      "sha256": "4b40670e346195085f1091a7b8e2195e562bdc68714c4ad7d1cc6306d9c06330"
+    },
+    {
+      "path": "docs/specs/2026-10-19-mutation-lifecycle/issues/06-choices.md",
+      "bytes": 2633,
+      "sha256": "709fb98db374ea10f3b6a58bc7947c5d636431033cc4b2590a7ccc874b0262e0"
+    },
+    {
+      "path": "docs/specs/2026-10-19-mutation-lifecycle/issues/07-policies.md",
+      "bytes": 2865,
+      "sha256": "a86b886dfd4bf5cfba5077db54f900d8fc41ffc048f63c3db604d7bf43782816"
+    },
+    {
+      "path": "docs/specs/2026-10-19-mutation-lifecycle/issues/08-readiness.md",
+      "bytes": 2633,
+      "sha256": "39294b3f10b08dca1806cab04bbb3bcc85d28434269097aa90d6781c92c4c389"
+    },
+    {
+      "path": "docs/specs/2026-10-19-mutation-lifecycle/issues/09-tile-actions.md",
+      "bytes": 3582,
+      "sha256": "d9efda6aa0051777bd13025ae353a53a2d1f9a059be77acf3951783655ea00d2"
+    },
+    {
+      "path": "docs/specs/2026-10-19-mutation-lifecycle/issues/10-trade-routes.md",
+      "bytes": 1950,
+      "sha256": "d3bcaffeaf5d9d69912a0fadeb844de87ffe219b0ed09b33f85afaad84f6e014"
+    },
+    {
+      "path": "docs/specs/2026-10-19-mutation-lifecycle/issues/11-great-people-pool.md",
+      "bytes": 3245,
+      "sha256": "21ae370dfbe4fde279219804e8442235a0c69c7bf60ab6d6790f03ed86225697"
+    },
+    {
+      "path": "docs/specs/2026-10-19-mutation-lifecycle/issues/12-unit-effects.md",
+      "bytes": 4134,
+      "sha256": "593d674a9f0296d8df034ddd33d3876a45b309b1b0b352c2b767c440b5f1edc3"
+    },
+    {
+      "path": "docs/specs/2026-10-19-mutation-lifecycle/issues/13-city-decisions.md",
+      "bytes": 3801,
+      "sha256": "01c0b08389e4e8e29d0df5e1c7540c432d0eb7d9afc9b57c795ffca2203d16c6"
+    },
+    {
+      "path": "docs/specs/2026-10-19-mutation-lifecycle/issues/14-spy-assignments.md",
+      "bytes": 4302,
+      "sha256": "4cf8890e6e6ed045d641bac4a6d0e09a311234089158a8dc34e92e9cc22c6141"
+    },
+    {
+      "path": "docs/specs/2026-10-19-mutation-lifecycle/issues/15-religion.md",
+      "bytes": 3490,
+      "sha256": "00ca5fd924b19eecc64f62e697562c9104cd25c5acbbc948f4d5f84d19afb365"
+    },
+    {
+      "path": "docs/specs/2026-10-19-mutation-lifecycle/issues/16-relationships.md",
+      "bytes": 4397,
+      "sha256": "e5d93b0afd46f0f5685baab9700f0f4ba032f8de3ce220459e774a1a23cf2e01"
+    },
+    {
+      "path": "docs/specs/2026-10-19-mutation-lifecycle/issues/17-congress.md",
+      "bytes": 3351,
+      "sha256": "28a5f8f9ce48afac3642a0710d25eac4721ed418ef6ac50d47f8048951444cca"
+    },
+    {
+      "path": "docs/specs/2026-10-19-mutation-lifecycle/issues/18-integrate-verify.md",
+      "bytes": 10408,
+      "sha256": "f3a0304b04948a0e96d40a75ee729e3be6e82402e16650330ffbdde4a7d4ade6"
+    },
+    {
+      "path": "docs/specs/2026-10-19-mutation-lifecycle/map.md",
+      "bytes": 9688,
+      "sha256": "7bb87684d1937a0567399e46c27dae6c5e59be3046a0d658ec5037ad7972214d"
+    },
+    {
+      "path": "docs/specs/2026-10-19-mutation-lifecycle/research.md",
+      "bytes": 4413,
+      "sha256": "0a5279a22ada51ad433300cf03184fc1aa76dc092ab2d022a75528a781ff037b"
+    },
+    {
+      "path": "docs/specs/2026-10-19-mutation-lifecycle/spec.md",
+      "bytes": 10781,
+      "sha256": "2c88430e8782861007196dab37e3305fb5e0442271422673949f984572fef646"
+    },
+    {
+      "path": "docs/specs/2026-10-20-religion-defense/issues/01-observation.md",
+      "bytes": 1620,
+      "sha256": "e3df45122e4493b7abe1a1ef150105f99bfdee01135f501315731fb672980402"
+    },
+    {
+      "path": "docs/specs/2026-10-20-religion-defense/issues/02-remove-heresy.md",
+      "bytes": 1387,
+      "sha256": "9cc5a2c7bd993cf305c12a51c3dce6e0845b099f2c262da89472646c2416ae25"
+    },
+    {
+      "path": "docs/specs/2026-10-20-religion-defense/issues/03-theological-combat.md",
+      "bytes": 1421,
+      "sha256": "ef5a2a41fd6cfa2547d798ce997e61a8b8263966079e9859c5f802cdf9411fa9"
+    },
+    {
+      "path": "docs/specs/2026-10-20-religion-defense/issues/04-integrated-validation.md",
+      "bytes": 1461,
+      "sha256": "470873f4c2c392abf5ed63c9395d092339748854c0d0fc0b354b6d76953aac55"
+    },
+    {
+      "path": "docs/specs/2026-10-20-religion-defense/map.md",
+      "bytes": 1084,
+      "sha256": "631720522a474e05fa5e447b7ff082ef63c8ef8e565b8f76724cf74a56619983"
+    },
+    {
+      "path": "docs/specs/2026-10-20-religion-defense/native-contracts.md",
+      "bytes": 12475,
+      "sha256": "da1ebb5b161acb084194d811a6cc7cce66da0d819c9194f67814f6ce77e3371b"
+    },
+    {
+      "path": "docs/specs/2026-10-20-religion-defense/spec.md",
+      "bytes": 10465,
+      "sha256": "fad4acf4e4402c2f20e3d9e35717a095dd99b54ab3052d34cb89cb6a442ad992"
+    },
+    {
+      "path": "docs/specs/2026-10-20-religion-native-fixes/issues/01-utf8-wire.md",
+      "bytes": 1039,
+      "sha256": "e4dbdcfa5f7629ff705d7bb487dad526af4f76455abbcd75390ebd1ac4b6bd30"
+    },
+    {
+      "path": "docs/specs/2026-10-20-religion-native-fixes/issues/02-religious-movement-layer.md",
+      "bytes": 1164,
+      "sha256": "e4e4a39320f54d43465907f13d73991e1a749146789fc9ba0b1f00c7d8371f6e"
+    },
+    {
+      "path": "docs/specs/2026-10-20-religion-native-fixes/issues/03-combat-native-completion.md",
+      "bytes": 1220,
+      "sha256": "9d42b43d39dd682486b923f36a627c9f429f25f53de84ff253be355ab0f25365"
+    },
+    {
+      "path": "docs/specs/2026-10-20-religion-native-fixes/issues/04-purge-self-city.md",
+      "bytes": 1200,
+      "sha256": "9b51a3d83bce5689d85d1e27eeb472e1d2beb58d3f8aa46cbb7941a2097f6c70"
+    },
+    {
+      "path": "docs/specs/2026-10-20-religion-native-fixes/spec.md",
+      "bytes": 9511,
+      "sha256": "37222976b17ed16f8f950ae2a4501ef3ca09e97703586f20abfc1290e9c0cf28"
+    },
+    {
+      "path": "docs/specs/2026-10-24-native-hotseat.md",
+      "bytes": 7281,
+      "sha256": "97f2140bcd27c9b56b9703922fef70fd04d26ab0f5e383885f873c928bed7301"
+    },
+    {
+      "path": "docs/specs/2026-10-25-cli-capabilities/README.md",
+      "bytes": 7125,
+      "sha256": "efbf416b986cbe0579954a8e0ab29ed26763cfdf2ece6405074082a17436db5b"
+    },
+    {
+      "path": "docs/specs/2026-10-25-unit-cli-validation.json",
+      "bytes": 1712,
+      "sha256": "196c2197a2ef23f4c228e8cff893d422ea1df95190b447cb71318a71c8b1613e"
+    },
+    {
+      "path": "docs/specs/2026-10-25-unit-cli.md",
+      "bytes": 5780,
+      "sha256": "671cee7bc5607aea5e2fa6ffbab4e65916657fa2ec594cb30c7a137c12a59ba8"
+    },
+    {
+      "path": "docs/specs/README.md",
+      "bytes": 3255,
+      "sha256": "b60212fd680b9cc5040b078e0d81f0f2e68be8bcd3df1b0ba3bb30880a656b2b"
+    },
+    {
+      "path": "docs/windows.md",
+      "bytes": 5696,
+      "sha256": "664987ca812f56c40b255062efce09d93294ad7c144dbcc9b578ea765ccfa9eb"
+    },
+    {
+      "path": "fixtures/saves/README.md",
+      "bytes": 2281,
+      "sha256": "8aa89d910817c52de129af4b887b8dff5d95027f274abe7278d18e7c2c763458"
+    },
+    {
+      "path": "games/README.md",
+      "bytes": 6611,
+      "sha256": "8f65709c675073172ecbbedda6cffe508fc0c400662c98e618862b713ea71cc6"
+    },
+    {
+      "path": "scripts/civ6_cli_relay.py",
+      "bytes": 11512,
+      "sha256": "c2e948c33e38fa7e628aded1b33acae615ba8f7a7acd93fd96c766e8eb745f69"
+    },
+    {
+      "path": "scripts/codex_hooks.py",
+      "bytes": 9274,
+      "sha256": "b53033ce3926cc4d6055876ed693577370d2c391aa2af88ed669a97ad35707a6"
+    },
+    {
+      "path": "scripts/hotseat_agent.py",
+      "bytes": 19032,
+      "sha256": "20f7d379e8eaad99c17b33354a88479c889d55a6f7e731294f5f90467f6020c8"
+    },
+    {
+      "path": "scripts/hotseat_client.py",
+      "bytes": 1878,
+      "sha256": "17b8b634db13947d2cbef69c22ccf3e70e94dee18e810a5ffb7de092db420f99"
+    },
+    {
+      "path": "scripts/hotseat_endurance.py",
+      "bytes": 20863,
+      "sha256": "2fcd38490088d4771195dab3da27c557495ad2f69697d67b03ebf3bb4598d1b0"
+    },
+    {
+      "path": "scripts/hotseat_probe.py",
+      "bytes": 3437,
+      "sha256": "2b002e0621381106b4d14a8a4bca2e0dbebe4b8bf9bc0445311e92511a84d34f"
+    },
+    {
+      "path": "scripts/hotseat_tuner_patch.py",
+      "bytes": 10363,
+      "sha256": "1fa9e26f47d30ee2e8da400d4ae2088953f4ac9e2e28d3b190e066a11375f163"
+    },
+    {
+      "path": "scripts/install_saves.py",
+      "bytes": 2250,
+      "sha256": "65f482a26348a24597efe4e1c23970b8bb89a9b899a4e08e169c139c451605ee"
+    },
+    {
+      "path": "scripts/integration_turns.py",
+      "bytes": 8568,
+      "sha256": "88940239f9d2df129f661d694851d0df5c38ac681ee8854d87dc946dbf9e82c4"
+    },
+    {
+      "path": "scripts/parse_save.py",
+      "bytes": 21990,
+      "sha256": "5b1e75dd01f5d4b67ce4adab50583c8fb71d3a972f6b4215c385578b88e0e53d"
+    },
+    {
+      "path": "scripts/split_game_log.py",
+      "bytes": 1937,
+      "sha256": "7b3fa51628eaa929634f23a987f2007e2d3a039a8841f7092076f7f868d52010"
+    },
+    {
+      "path": "scripts/test_connection.py",
+      "bytes": 3035,
+      "sha256": "d460a6d77ef6716352db78ad1d9e2cc60f6fb1ff56a45770839039817c28f6fa"
+    },
+    {
+      "path": "scripts/test_game_state.py",
+      "bytes": 1541,
+      "sha256": "ec125e1b1f1b626bba0e691bcfeca048c09dd1a43dcf0976428ef0eb671976ed"
+    },
+    {
+      "path": "scripts/test_queries.py",
+      "bytes": 1855,
+      "sha256": "6a1c698573a9dc62a7fe0f4dbb728e4aa7e195c4d8eced801ad227b06e5bfd84"
+    },
+    {
+      "path": "scripts/verify_hotseat_tuner_patch.py",
+      "bytes": 6413,
+      "sha256": "ac9b2675be5874a926f923fb27d083f990aadda092dd0f63ad2522a0e2cd3ea1"
+    },
+    {
+      "path": "src/civ_mcp/__init__.py",
+      "bytes": 51,
+      "sha256": "66734c705dfdedae9c281f128ddafffdcd2710ce8cf2ff92d41ea6adffe68495"
+    },
+    {
+      "path": "src/civ_mcp/__main__.py",
+      "bytes": 78,
+      "sha256": "5715f009de39b15dfe19a8bbb7e1db607568e9ec8fd6dd64d7cf1d6c46d121b8"
+    },
+    {
+      "path": "src/civ_mcp/actions.py",
+      "bytes": 43888,
+      "sha256": "07016d2411d6ba687fc22a40575656bbebf925d9ca8fd1604306e15cc396bede"
+    },
+    {
+      "path": "src/civ_mcp/autosave.py",
+      "bytes": 1920,
+      "sha256": "179d0008d8f8af20db4dffe1a3294cff32481fd509413b8c81dee6d70a17fd3a"
+    },
+    {
+      "path": "src/civ_mcp/checkpoints.py",
+      "bytes": 11197,
+      "sha256": "bdc5cbfc2b3519d3e6ab214ed1aeffa37799eace322465ea2783d0f7f40e8268"
+    },
+    {
+      "path": "src/civ_mcp/city_growth.py",
+      "bytes": 10225,
+      "sha256": "56201d18a45a6a45599d6d0868620e5cbd1ba4d1290f8c2009bef33536282078"
+    },
+    {
+      "path": "src/civ_mcp/city_workforce.py",
+      "bytes": 11876,
+      "sha256": "8e2a3cb77a30b59276d7960cd04efcf2fe8149f7cd559cc45118035a9f653439"
+    },
+    {
+      "path": "src/civ_mcp/city_yields.py",
+      "bytes": 16695,
+      "sha256": "1cf800b8dcf23ec300f9a0e21b07c94abd49af6b06ebd2733090821e1227adc4"
+    },
+    {
+      "path": "src/civ_mcp/cli.py",
+      "bytes": 16548,
+      "sha256": "528c03d830c64e686da743c5ddbf53873b1d7eb468bd0a86c8bef6af9383144a"
+    },
+    {
+      "path": "src/civ_mcp/congress.py",
+      "bytes": 7727,
+      "sha256": "183e87de69bdae7b38b37d1038ad7f35b470bf1166eb750fd7f52f7687daa224"
+    },
+    {
+      "path": "src/civ_mcp/connection.py",
+      "bytes": 10841,
+      "sha256": "55769435b993e8c54e291fd99ca84ad39f064d971b9bb18fb0d846c07dbfff4b"
+    },
+    {
+      "path": "src/civ_mcp/decision.py",
+      "bytes": 9292,
+      "sha256": "c267f6265ed3808c1a48d24a09a4533b36338e882ce94dbb171c1ca4797a5a39"
+    },
+    {
+      "path": "src/civ_mcp/devtools/__init__.py",
+      "bytes": 75,
+      "sha256": "ebc0e57122d8fdcc2467deeb7320b83dd8fa80a881830834c3f5437c5ed6b6e5"
+    },
+    {
+      "path": "src/civ_mcp/devtools/commands.py",
+      "bytes": 41485,
+      "sha256": "17487cd627acdc4da4fffd231baeed780097842df7be5f6cc63aace1b30bd9ef"
+    },
+    {
+      "path": "src/civ_mcp/devtools/debug.py",
+      "bytes": 32205,
+      "sha256": "4fde5b22bbf146a70e5bd8b845c7b542f808574c4d469adbf43a2360045ec142"
+    },
+    {
+      "path": "src/civ_mcp/devtools/evidence.py",
+      "bytes": 9302,
+      "sha256": "9717eb06900e1443283b4130e48aacd138a61979dacb310103066c1be9c078c7"
+    },
+    {
+      "path": "src/civ_mcp/devtools/knowledge.py",
+      "bytes": 10134,
+      "sha256": "54f776d67301993eddc5355276dddbf00844229df662245460183f875e649b2c"
+    },
+    {
+      "path": "src/civ_mcp/devtools/live.py",
+      "bytes": 5544,
+      "sha256": "0e4f5ed4383acb51189f11705604cfdbebd31e4a78b0aa695ba0b71d3a485bb5"
+    },
+    {
+      "path": "src/civ_mcp/devtools/logs.py",
+      "bytes": 4661,
+      "sha256": "0f40baf372bdd38a4a3286487ebae231d8a3ee0b0a0855b14be790c06af00be3"
+    },
+    {
+      "path": "src/civ_mcp/devtools/testing.py",
+      "bytes": 3914,
+      "sha256": "4a6facddcffc9ee7edbee9027265d14bfab7c9d3624c2001014f445c2ac46b3d"
+    },
+    {
+      "path": "src/civ_mcp/devtools/tuner.py",
+      "bytes": 5605,
+      "sha256": "d386a768183f914c448450b414b7f9d3f905bc97114d959a6882b144fd8a5eab"
+    },
+    {
+      "path": "src/civ_mcp/devtools/turn_timing.py",
+      "bytes": 15267,
+      "sha256": "7942807161af85b01ae1986fd822f47b2f827f99f92ff4310dc223e043868629"
+    },
+    {
+      "path": "src/civ_mcp/diplomacy.py",
+      "bytes": 42107,
+      "sha256": "6e5d7fd4055549fe976b30c48a658ccf5efba1294dc14f34c4dcad9b35daa229"
+    },
+    {
+      "path": "src/civ_mcp/end_turn.py",
+      "bytes": 38116,
+      "sha256": "2edd412b5e8bc3a2965607d267f0aff7195ea9c41985d84af7e72bbde56f9a9d"
+    },
+    {
+      "path": "src/civ_mcp/file_lock.py",
+      "bytes": 959,
+      "sha256": "a9dfd5ca03e18e7e40cba9491f3051ba8be1362b26024b4f042f091b1713b4df"
+    },
+    {
+      "path": "src/civ_mcp/game_launcher.py",
+      "bytes": 21835,
+      "sha256": "cdf78c8501db24d2123a940621ce3e9e22b25c54a07eaa1ab44f181c54aee894"
+    },
+    {
+      "path": "src/civ_mcp/game_lifecycle.py",
+      "bytes": 48819,
+      "sha256": "7a7e47ccdbd08bf5dbbe605fec52bacfa0483bbd6c5bc5e4cd69ac4fa31b7848"
+    },
+    {
+      "path": "src/civ_mcp/game_state.py",
+      "bytes": 150739,
+      "sha256": "d4722e896a78c834ae0c71ec34eeb7a6feaf717eff13f2b5ecaf95e69471e098"
+    },
+    {
+      "path": "src/civ_mcp/knowledge.py",
+      "bytes": 9739,
+      "sha256": "eef54f8d9e74fd7c5c48412aa326ec6db959b0c1d615b773f857bbbcd812b40f"
+    },
+    {
+      "path": "src/civ_mcp/logger.py",
+      "bytes": 832,
+      "sha256": "2e2eff18a68641a1b35a887f4d975ecf86b1e78694fadecd2143990d5c401a14"
+    },
+    {
+      "path": "src/civ_mcp/lua/__init__.py",
+      "bytes": 8979,
+      "sha256": "089dad55d1759ea00853019c022ec0b6d55c389399684b1005408b0b07c594be"
+    },
+    {
+      "path": "src/civ_mcp/lua/_helpers.py",
+      "bytes": 8579,
+      "sha256": "72fda4dc9c0fed4ede785f547a07fa546504757f941001000ef9a6f4bc221b1a"
+    },
+    {
+      "path": "src/civ_mcp/lua/choices.py",
+      "bytes": 9254,
+      "sha256": "630b5a4bfd4db391e56d04fdcd9018752a5bb65c65b4f2c61dd8ef139f382783"
+    },
+    {
+      "path": "src/civ_mcp/lua/cities.py",
+      "bytes": 51184,
+      "sha256": "20ac27a7384724e60ceef5917147a70819edda17ea0026e1109132991f163437"
+    },
+    {
+      "path": "src/civ_mcp/lua/city_decisions.py",
+      "bytes": 6921,
+      "sha256": "87b37e17005250990fd53a9f7d5ee312a3b1cf44892d14e6e734c28c0fbe440d"
+    },
+    {
+      "path": "src/civ_mcp/lua/city_yields.py",
+      "bytes": 14441,
+      "sha256": "2f15874636fa4aa4220724c39bbc2e82d8d112f9f078e5a2f8208e272eead07c"
+    },
+    {
+      "path": "src/civ_mcp/lua/combat_preview.py",
+      "bytes": 8581,
+      "sha256": "5eacc87e6b27dab93e28aee5a37da05957060f5569b21de111a92379fc7405a3"
+    },
+    {
+      "path": "src/civ_mcp/lua/congress.py",
+      "bytes": 41611,
+      "sha256": "bcaf573db36c7367c79fb911d23c2eaf17907820ef56e97da27caaa616487e94"
+    },
+    {
+      "path": "src/civ_mcp/lua/contribution.py",
+      "bytes": 11528,
+      "sha256": "f47ec6ca2cd619a4ab3ab09529cb75ab3c2141b5310da4f3d0a8cb9309d9ce7b"
+    },
+    {
+      "path": "src/civ_mcp/lua/diplomacy.py",
+      "bytes": 59375,
+      "sha256": "b260980d2b57d24f06286420960ea7b2f5f50e18316bf4dc8a688c0dcfbb7267"
+    },
+    {
+      "path": "src/civ_mcp/lua/diplomacy_close.py",
+      "bytes": 4182,
+      "sha256": "43251e7f4d57f4dc3b819336e389ce81b3da5a75a3af954f21381c0bf28a55f4"
+    },
+    {
+      "path": "src/civ_mcp/lua/economy.py",
+      "bytes": 20077,
+      "sha256": "116f29d8b42e0e886b47da79298c1451a7628cfae6954ef9fb2da469dd3fe88b"
+    },
+    {
+      "path": "src/civ_mcp/lua/envoys.py",
+      "bytes": 8548,
+      "sha256": "89dacc4e9dc630b3bba1f3185c2fd7d4d6c2414d3d09ea45ffc0b0c78fae14a2"
+    },
+    {
+      "path": "src/civ_mcp/lua/espionage.py",
+      "bytes": 15677,
+      "sha256": "b9b172d5ecc097f324ea298179268559138c994b6a28ddda3645943ebf607f20"
+    },
+    {
+      "path": "src/civ_mcp/lua/governance.py",
+      "bytes": 28621,
+      "sha256": "0beb53973c624f4954550a3eee422fcca566474053173144a4134500d71fab75"
+    },
+    {
+      "path": "src/civ_mcp/lua/government_conditions.py",
+      "bytes": 1287,
+      "sha256": "fde4afb68f491caa08a62e06ba1cea0800af07ffb2d45db27e7662d15250ce89"
+    },
+    {
+      "path": "src/civ_mcp/lua/governors.py",
+      "bytes": 7782,
+      "sha256": "6b01dbd200cc9f2ec002b9eb533288bd53831c23b95a9d76c23fc9778fe308e6"
+    },
+    {
+      "path": "src/civ_mcp/lua/great_people.py",
+      "bytes": 21915,
+      "sha256": "9ea63c73123a32f9d1619dc09729c553191093d3cf707a46344f211c3867de0d"
+    },
+    {
+      "path": "src/civ_mcp/lua/great_person_pool.py",
+      "bytes": 8332,
+      "sha256": "df94d49903d904de55d440a0b2439ffab116b0cddabfe3223d78cfcac2572bcd"
+    },
+    {
+      "path": "src/civ_mcp/lua/great_works.py",
+      "bytes": 5264,
+      "sha256": "81693ab2ea3532127c4526bd7d87416bbfb39674b3a2e45953197f1738a62628"
+    },
+    {
+      "path": "src/civ_mcp/lua/inquisition.py",
+      "bytes": 3152,
+      "sha256": "4a0b0d705c5d50e0a1216dfa6c8fe1ddcd68c04cc013df440acb0b64ea69bac4"
+    },
+    {
+      "path": "src/civ_mcp/lua/item_purchase.py",
+      "bytes": 5787,
+      "sha256": "c5eeb2e987c2052b2eccc00d63b7091e4a7ac5c081b76024e5f3e17adc681193"
+    },
+    {
+      "path": "src/civ_mcp/lua/map.py",
+      "bytes": 58963,
+      "sha256": "df6f65f897c5e150b5eeb13b3d8994e1055f69660dc8da2a7080e663842dd13d"
+    },
+    {
+      "path": "src/civ_mcp/lua/models.py",
+      "bytes": 40080,
+      "sha256": "13453a0b85c376a16aeee2113db71505f2a56e841059667e982d0b1d1d1a9538"
+    },
+    {
+      "path": "src/civ_mcp/lua/notifications.py",
+      "bytes": 18597,
+      "sha256": "cef72e4f2f7e8d461e1a6cdc89beb54c850f2937ed958a58b8c1ee174c07fd41"
+    },
+    {
+      "path": "src/civ_mcp/lua/overview.py",
+      "bytes": 18878,
+      "sha256": "e330e686665901379a6214816d59107753cec84e4eb7fceb95759e943dae23be"
+    },
+    {
+      "path": "src/civ_mcp/lua/pillage.py",
+      "bytes": 5923,
+      "sha256": "1ae21a0c289f07be86115a88b5773dfb0b838e1b826dd06b075047f64d997248"
+    },
+    {
+      "path": "src/civ_mcp/lua/policies.py",
+      "bytes": 11647,
+      "sha256": "d537aab3d9d1d8c2d9f70007f8ca97662468d42964f8eb61a2090c0ad1669a92"
+    },
+    {
+      "path": "src/civ_mcp/lua/public_reports.py",
+      "bytes": 22366,
+      "sha256": "583efc742e0048567a308b077d8fb1c7da2f871ca839e10ade70481c2bac2406"
+    },
+    {
+      "path": "src/civ_mcp/lua/purchase_facts.py",
+      "bytes": 6349,
+      "sha256": "287de44d7cc7b5d5e2a478da7df0223f0bcb8a38a7abf05e65483721f3ea758f"
+    },
+    {
+      "path": "src/civ_mcp/lua/rebase.py",
+      "bytes": 5145,
+      "sha256": "1cd114b2503eb1f246688124a8594c10818e658a02618babd669a6752f9c332d"
+    },
+    {
+      "path": "src/civ_mcp/lua/relationships.py",
+      "bytes": 11368,
+      "sha256": "23e587e945a6cb52565cc5c21e5b1889ce236ee9535b27a6bb883511e2de09fb"
+    },
+    {
+      "path": "src/civ_mcp/lua/religion.py",
+      "bytes": 11469,
+      "sha256": "ffa2f5d95bca725f3b3b372ce46a90f86bd9e21cc5584fb04920ec740c112a74"
+    },
+    {
+      "path": "src/civ_mcp/lua/religion_defense.py",
+      "bytes": 15296,
+      "sha256": "841db531e1a87ecab10c8fe060a54dcea6cf9803b55b4e27844305ff1d7216ca"
+    },
+    {
+      "path": "src/civ_mcp/lua/religion_plan.py",
+      "bytes": 10644,
+      "sha256": "1e6b1d4de7699e5ca8a7caf61b57d5ef2e63d0232f46327abe5083cf2bdfa2a8"
+    },
+    {
+      "path": "src/civ_mcp/lua/religious_combat.py",
+      "bytes": 13118,
+      "sha256": "166cdf2101a6fee951b981f134ff46a627d6164fad2cb04d9344af99b3a0bd0c"
+    },
+    {
+      "path": "src/civ_mcp/lua/remove_heresy.py",
+      "bytes": 12554,
+      "sha256": "6e5e5f1b431c437adc44617e656f8f4c4ea211aea11b7c37b03842c08d3fc3d9"
+    },
+    {
+      "path": "src/civ_mcp/lua/resource_facts.py",
+      "bytes": 2532,
+      "sha256": "fc0967219f460a1032c077135afc19acd865c7af2faaabc68763db95a35fbd65"
+    },
+    {
+      "path": "src/civ_mcp/lua/siege.py",
+      "bytes": 16180,
+      "sha256": "f0e1b31e89f7a9f75b4f31ca0e6c4afbecbf45f7fd653c38c0bd5fe319c2020e"
+    },
+    {
+      "path": "src/civ_mcp/lua/spread_followers.py",
+      "bytes": 4932,
+      "sha256": "eb0ca6c2492ba7cf946293ffe04a0e385cb9ea62fde3bb7e6d51577815cd1c99"
+    },
+    {
+      "path": "src/civ_mcp/lua/spy_assignments.py",
+      "bytes": 13846,
+      "sha256": "a044523f4631b7cb60ddbb5f707e1d3a34bed5d17d62397177b599e25a801cdf"
+    },
+    {
+      "path": "src/civ_mcp/lua/spy_roster.py",
+      "bytes": 2650,
+      "sha256": "f37228e595a9ca6a342c3974f0a52b2e0027570cd4f6bd87a6993b75333fd47c"
+    },
+    {
+      "path": "src/civ_mcp/lua/tech.py",
+      "bytes": 16635,
+      "sha256": "4acf20f8e02603be3b93133e62463a1ca8955d63179d17df92abafcefaa24b0f"
+    },
+    {
+      "path": "src/civ_mcp/lua/tile_actions.py",
+      "bytes": 10577,
+      "sha256": "ed4ded6dd286b273bec2191c77ba773dc47a53646c7a119cea03b2b09a99c27a"
+    },
+    {
+      "path": "src/civ_mcp/lua/tile_facts.py",
+      "bytes": 1156,
+      "sha256": "fcae154a457a26f1f0eaeea8f9e6750ef74b8852a7a928c41d334d185abc0720"
+    },
+    {
+      "path": "src/civ_mcp/lua/tile_purchase.py",
+      "bytes": 5029,
+      "sha256": "fad4b26efa28cd57276c35c413696dd942cb24b979f06943ca6e1132094d5649"
+    },
+    {
+      "path": "src/civ_mcp/lua/trade.py",
+      "bytes": 49795,
+      "sha256": "b27aaa8ce2e0f6aa820b890d64d5c03efd0cebff98b3f319d27494da06e2d220"
+    },
+    {
+      "path": "src/civ_mcp/lua/trader_actions.py",
+      "bytes": 13949,
+      "sha256": "d3a76700fe2933cf3aa7332dff40c6dcc6760b61858541a3c868ab0fcd842687"
+    },
+    {
+      "path": "src/civ_mcp/lua/turn_readiness.py",
+      "bytes": 8692,
+      "sha256": "1d10f72a66ab57d6a64e32bbb79ac51a2f5346f8018f6ca5d0bfdd72bdcbc0ba"
+    },
+    {
+      "path": "src/civ_mcp/lua/unit_effects.py",
+      "bytes": 33356,
+      "sha256": "34ca7d477aafdd7d98670f4dab63b7c62113f6634b362abbaefa26eb71891400"
+    },
+    {
+      "path": "src/civ_mcp/lua/unit_formations.py",
+      "bytes": 14105,
+      "sha256": "9c4eaf591b353f4eec6396951bccd29ffce0bbe134b6a74ca955663250797b01"
+    },
+    {
+      "path": "src/civ_mcp/lua/unit_promotions.py",
+      "bytes": 13850,
+      "sha256": "8c2cf7cb5d4610982749961f4317048b0fd41a42a3fa79e879754e9f878778d3"
+    },
+    {
+      "path": "src/civ_mcp/lua/unit_tasks.py",
+      "bytes": 7862,
+      "sha256": "ba1c9d8eb7f10870acd91de1ddffff0317d938e01949e1271848fc8facbf7c45"
+    },
+    {
+      "path": "src/civ_mcp/lua/unit_transforms.py",
+      "bytes": 15705,
+      "sha256": "0639f98684c816f5dd316a4297c56e523a0c57eb1560a655d11e3698cc1abbae"
+    },
+    {
+      "path": "src/civ_mcp/lua/units.py",
+      "bytes": 101391,
+      "sha256": "6b74812e27a16027f6e3f5d955deb5d975e7c7c0c6c7a7db0fcd5d717815ade7"
+    },
+    {
+      "path": "src/civ_mcp/lua/victory.py",
+      "bytes": 23794,
+      "sha256": "8141b11ee8a5fda71cc809679c1030608bf6488b597206eb4559c925e7af73db"
+    },
+    {
+      "path": "src/civ_mcp/narrate.py",
+      "bytes": 101294,
+      "sha256": "977cd7bde76203839e0694431ac8883141dd972014048f60d71d7c283f1ed13f"
+    },
+    {
+      "path": "src/civ_mcp/platform_paths.py",
+      "bytes": 2146,
+      "sha256": "fad5065fc506cf43239fd0f48135699ad7857114c56635e695303b689f842903"
+    },
+    {
+      "path": "src/civ_mcp/research_catalog.py",
+      "bytes": 7947,
+      "sha256": "ee96b57e4d41226ccc53ad13014f33201af361361a50f1a759632e4db5ca5c54"
+    },
+    {
+      "path": "src/civ_mcp/resource_search.py",
+      "bytes": 2692,
+      "sha256": "9ad3bceb6ca05feb6b7c1e4e45ac0fe050d2863b549b267bc4e0368bdfbbab70"
+    },
+    {
+      "path": "src/civ_mcp/server.py",
+      "bytes": 109438,
+      "sha256": "a7dd77fe130418bca9566e0d440b7ad42276b76973f5a4358a419958222be900"
+    },
+    {
+      "path": "src/civ_mcp/snapshot.py",
+      "bytes": 3042,
+      "sha256": "40c2b28c11ec1e7f6ac4692baf1dec126fb7f29a77ba89a7229058b779bcb718"
+    },
+    {
+      "path": "src/civ_mcp/tuner_client.py",
+      "bytes": 6541,
+      "sha256": "92dd4081fe275b9a0b7efbbf61d46598ad24654a5aa696c3d0634d960cb7af57"
+    },
+    {
+      "path": "src/civ_mcp/version.py",
+      "bytes": 1745,
+      "sha256": "f770e29de9a18be70ee6f78bb5b636f9ab5a8542483ed2d76f68e8204d2b8f9b"
+    }
+  ],
+  "reading_script_sha256": "b200c71cdb3026801253e629260ccb286f0992f5e6ded687f87ea5b29362d845",
+  "reference_reading_sha256": "4b1e9bc6d90f265822442aa6c78e086a193b01c3649291465dc532c966837fe8"
+}

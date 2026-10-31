@@ -1,0 +1,25 @@
+{
+  "reason": "Frozen reading analyzer assumed every cli_start created debug evidence; r11 legally used top-level --help once. Preserve original analyzer and preregistration. v2 handles no-MCP help-only invocations using separately identified conservative replay bytes; no task, allocation, score or source changed.",
+  "replays": [
+    {
+      "participant": "r11",
+      "cli_output": "cli-evidence/602e5df796dd45b98ec95511c7a62904",
+      "args": [
+        "--help"
+      ],
+      "exit_code": 0,
+      "stdout_bytes": 1363,
+      "stdout_sha256": "ede86d07949761b4e4ca745f0fd21705e6c6d6181748779af3b2f9a2a4183954",
+      "file": "analysis-correction/r11-top-help.stdout.txt",
+      "source_commit": "b0d21a3ef9c3c79e43b0fe29a909bc449ed63fb3",
+      "provenance": "Deterministic replay under frozen source after study; original gateway logged invocation/exit but top-level help deliberately creates no evidence. Original stdout was not retained. Count full replay stdout conservatively; not presented as an original observation."
+    }
+  ],
+  "failure_reproduction": {
+    "expected_exit_code": 1,
+    "stdout": "analysis-correction/v1-reproduced.stdout.txt",
+    "stderr": "analysis-correction/v1-reproduced.stderr.txt",
+    "frozen_analyzer_sha256": "b200c71cdb3026801253e629260ccb286f0992f5e6ded687f87ea5b29362d845",
+    "provenance": "Read-only deterministic failure reproduction after study, not original-time stderr; original frozen analyzer is unchanged."
+  }
+}

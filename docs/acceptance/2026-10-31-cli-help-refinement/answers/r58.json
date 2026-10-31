@@ -1,0 +1,219 @@
+{
+  "cases": [
+    {
+      "id": "C01",
+      "decision": "不能。district=6不能代替plot原生相邻=3。补读当前政策解锁/插槽和城市条件；静态快照为人口15、原生相邻4各对应建筑科技+50%，人口14/原生3均不足，但本局仍需核对。",
+      "commands": [
+        "policy show --policy POLICY_RATIONALISM",
+        "city yields <城ID> --view evidence"
+      ],
+      "boundaries": "静态文本+100%不证明本局全部收益；条件满足也不等于已测实际科技增量。",
+      "sources": [
+        "TASK.md:1-3",
+        "CLI help city yields",
+        "CLI help policy show",
+        "CLI knowledge show POLICY_RATIONALISM --level rule"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "C02",
+      "decision": "保留A的next_turn=2远期队列。B的next_turn=1须单独决定继续或取消重排；取消用cancel-move，skip不能证明清队。NOT_SUBMITTED表示回合尚未提交；回读无当前队列阻塞及其他待办后才推进。",
+      "commands": [
+        "unit list",
+        "unit cancel-move <B> --dry-run（若决定取消）",
+        "unit cancel-move <B>",
+        "unit list",
+        "pending",
+        "turn end --dry-run",
+        "turn end"
+      ],
+      "boundaries": "继续路线也需明确决策与原生回读，不批量skip A。",
+      "sources": [
+        "TASK.md:5-7",
+        "CLI help unit cancel-move",
+        "CLI help turn end"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "C03",
+      "decision": "留在原Runtime收尾；SESSION_CLOSED只关闭会话，尚未确认交易。按pending给出的player=2、send和完全相同原参数调用原trade propose作确认，确认后才移动。",
+      "commands": [
+        "pending",
+        "trade propose 2 --mode send <完全相同原参数>",
+        "state overview",
+        "trade options 2",
+        "pending"
+      ],
+      "boundaries": "不改报价或重建交易；应确认余额仍93、边境条款已生效、交易pending清空，不能再扣14。若已被只读确认清空则不再调用propose。",
+      "sources": [
+        "TASK.md:9-11",
+        "CLI help trade propose",
+        "CLI help pending"
+      ],
+      "confidence": "medium"
+    },
+    {
+      "id": "C04",
+      "decision": "不重发、不换CLI。原会话保留意图，先核对pending/原生状态；确认是信息弹窗后dismiss，再读单位及pending。只在原意图仍pending时用完全相同move走确认路径。",
+      "commands": [
+        "pending",
+        "state turn",
+        "unit list",
+        "pending",
+        "popup dismiss --dry-run",
+        "popup dismiss",
+        "unit list",
+        "pending",
+        "unit move 131073 34 18（仅仍pending时确认）",
+        "pending"
+      ],
+      "boundaries": "transport=null不等于结果确定；只读可能已确认移动，清空后再move是新动作。未决不退出。",
+      "sources": [
+        "TASK.md:13-15",
+        "CLI help unit move",
+        "CLI help unit list",
+        "CLI help popup dismiss"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "C05",
+      "decision": "不应为换政攒170。一般允许与当前窗口不同；目前新政体均拒绝。170是政策付费解锁价，足额也不创造换政窗口。保留当前是继续采用的ACK，选择新政体须can_select_now允许。",
+      "commands": [
+        "government list",
+        "government show",
+        "policy show"
+      ],
+      "boundaries": "不把can_change=true解释为现在可换；将来窗口需重新查询。",
+      "sources": [
+        "TASK.md:17-19",
+        "CLI help government change"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "C06",
+      "decision": "Debater当前不在候选，不提交。按目标在92/95/96中选择或暂缓；用promotions返回的原生type，先dry-run再单次提交并读回晋升。",
+      "commands": [
+        "unit promotions <使徒ID>",
+        "unit promote <使徒ID> <已选原生type> --dry-run",
+        "unit promote <使徒ID> <已选原生type>",
+        "unit promotions <使徒ID>",
+        "pending"
+      ],
+      "boundaries": "UI/current候选不是无条件执行保证；双集合unknown时保留未知，经验和静态9类不能补齐。",
+      "sources": [
+        "TASK.md:21-23",
+        "CLI help unit promotions",
+        "CLI help unit promote"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "C07",
+      "decision": "65536及196610为道教，131073为新教，262147无多数：2/1/1。下回合优先city list按城ID比较多数值，压力细查再用religion show。",
+      "commands": [
+        "city list"
+      ],
+      "boundaries": "-1=无多数，0为有效宗教ID，unknown不能当无宗教；名称未知不抹掉ID。玩家多数-1和统计4不能覆盖完整逐城事实。",
+      "sources": [
+        "TASK.md:25-27",
+        "CLI help city list"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "C08",
+      "decision": "展示当前目标Man-at-Arms/165g，依据原生命令UNIT_TYPE=94。旧单位消失、新1835017类型正确且余额恰减165，已确认替换；不重发。",
+      "commands": [
+        "unit list",
+        "state overview",
+        "pending"
+      ],
+      "boundaries": "resource_quote=13是报价，net_change=-11是净变化，不能说实际只花11或报价错误；须资源前后及修正证据解释差额。旧80g提示无效。",
+      "sources": [
+        "TASK.md:29-31",
+        "CLI help unit upgrade",
+        "CLI help unit list"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "C09",
+      "decision": "ZOC Runtime提前拒绝不证明引擎拒绝。查当前unit combat-preview取得动态强度/双向伤害估计；缺失保持unknown，不能用基础20推精确伤害或试攻击。",
+      "commands": [
+        "unit list",
+        "pending",
+        "unit combat-preview <勇士ID> 34 18",
+        "unit list",
+        "state overview",
+        "pending"
+      ],
+      "boundaries": "比较前后HP/MP/位置、资源、队列及pending；预估非实际伤害/生存保证，不能证明隐藏状态或RNG不变。神学/AIR不支持，dry-run仅schema。",
+      "sources": [
+        "TASK.md:33-35",
+        "CLI help unit combat-preview"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "C10",
+      "decision": "按用途保留双来源：地图地块用GameCore map area，城市工作格用InGame workforce。4.75/2.5/-0.75须原样保留；修截断不解释4/0与5/2整数差异。",
+      "commands": [
+        "map area 41 26 --radius 1",
+        "city workforce <城ID> --view evidence"
+      ],
+      "boundaries": "缓存、政策、修正完整性、数据年龄均未证实。有yield块时F/P零显式，省略G/S/C/Fa为0；无块为unknown。",
+      "sources": [
+        "TASK.md:37-39",
+        "CLI help map area",
+        "CLI help city workforce"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "C11",
+      "decision": "不必先进城；完整邻域只有预期目标，可在相邻格尝试原生资格核验。坐标绑定预期城市，不控制SDK目标。压力增加且次数减一只证明传教执行，未证明改宗。",
+      "commands": [
+        "unit spread-religion <传教士ID> 28 27 --dry-run",
+        "unit spread-religion <传教士ID> 28 27",
+        "unit list",
+        "city list",
+        "religion show",
+        "pending"
+      ],
+      "boundaries": "dry-run不验原生资格；坐标必须成对。未决保持同单位/原坐标，不改参重试；改宗须读多数宗教。",
+      "sources": [
+        "TASK.md:41-43",
+        "CLI help unit spread-religion",
+        "CLI help city list"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "C12",
+      "decision": "现在只审查。未来获授权后用持续CLI：先独立保存登记T100，reload本轮确认T57，复验结果另存，再reload本轮T100；原始四叶草基准及既有检查点不覆盖。",
+      "commands": [
+        "未来：save create <独立T100名> --dry-run；save create <独立T100名>",
+        "save reload <本轮T57> --dry-run；save reload <本轮T57>",
+        "每次载入：state overview；unit list；city list；pending",
+        "复验另存后：save reload <本轮T100> --dry-run；save reload <本轮T100>"
+      ],
+      "boundaries": "载入后核对回合/身份及transport_unknown，勿推进清队。两脚本均不能替代模型逐回合策略；未读取脚本正文，不能证明其当前实现可用，hotseat历史入口也非普通续局许可。",
+      "sources": [
+        "TASK.md:45-47",
+        "AGENTS.md:1-3",
+        "CLI help save reload",
+        "CLI help save create"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "uncertainties": [
+    "无实时原生验证；CLI仅离线help及静态知识。占位ID/type/存档名须将来按真实读回填入。",
+    "材料操作4次（含INSTRUCTIONS/TASK/list/AGENTS），离线会话1次，内命令40次含quit。"
+  ],
+  "protocol_violations": []
+}

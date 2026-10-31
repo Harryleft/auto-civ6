@@ -1,0 +1,168 @@
+{
+  "metric": "rendered material excluding common task/instructions + canonical local help/dry-run/error/pending payloads + tool text bytes; not tokens or full wire traffic",
+  "participants": [
+    {
+      "id": "r11",
+      "arm": "control",
+      "material_operations": 4,
+      "material_rendered_bytes": 7290,
+      "common_task_instruction_bytes": 7046,
+      "support_material_bytes": 244,
+      "canonical_help_bytes": 41846,
+      "tool_text_bytes": 2153,
+      "canonical_local_bytes": 0,
+      "decision_support_bytes": 44243,
+      "repeat_material_line_count": 0,
+      "repeat_material_line_rendered_bytes_excluding_separators": 0,
+      "cli_command_count": 40,
+      "sessions": [
+        {
+          "path": "cli-evidence/602e5df796dd45b98ec95511c7a62904",
+          "kind": "top_level_help",
+          "command_count": 0,
+          "tool_calls": 0,
+          "closed": true,
+          "no_mcp": true,
+          "conservative_replayed_help_bytes": 1363
+        },
+        {
+          "path": "cli-evidence/9cfc2cf7b7254f1c83378a50ade4b723",
+          "closed": true,
+          "offline": true,
+          "command_count": 40,
+          "tool_calls": 1,
+          "errors": 0
+        }
+      ],
+      "access_sha256": "008419a40690dc15121b8842b7cdc22c05ffffcc3ebcc3eada8e72f89a79fe17"
+    },
+    {
+      "id": "r24",
+      "arm": "repository",
+      "material_operations": 19,
+      "material_rendered_bytes": 98250,
+      "common_task_instruction_bytes": 7046,
+      "support_material_bytes": 91204,
+      "canonical_help_bytes": 6562,
+      "tool_text_bytes": 0,
+      "canonical_local_bytes": 0,
+      "decision_support_bytes": 97766,
+      "repeat_material_line_count": 0,
+      "repeat_material_line_rendered_bytes_excluding_separators": 0,
+      "cli_command_count": 7,
+      "sessions": [
+        {
+          "path": "cli-evidence/783bdb72265f42899d89626d7c428a12",
+          "closed": true,
+          "offline": true,
+          "command_count": 0,
+          "tool_calls": 0,
+          "errors": 0
+        },
+        {
+          "path": "cli-evidence/d56307206d094138bd6fa5a3021a2cd2",
+          "closed": true,
+          "offline": true,
+          "command_count": 7,
+          "tool_calls": 0,
+          "errors": 0
+        }
+      ],
+      "access_sha256": "b4df775e8a42c86da1d17a6d8adbf0433a3934b889275e2c78f39d0bf86c9176"
+    },
+    {
+      "id": "r35",
+      "arm": "repository",
+      "material_operations": 20,
+      "material_rendered_bytes": 101396,
+      "common_task_instruction_bytes": 7046,
+      "support_material_bytes": 94350,
+      "canonical_help_bytes": 7770,
+      "tool_text_bytes": 1825,
+      "canonical_local_bytes": 232,
+      "decision_support_bytes": 104177,
+      "repeat_material_line_count": 0,
+      "repeat_material_line_rendered_bytes_excluding_separators": 0,
+      "cli_command_count": 11,
+      "sessions": [
+        {
+          "path": "cli-evidence/5f6f41bd0c7c4067ae19253265b90392",
+          "closed": true,
+          "offline": true,
+          "command_count": 0,
+          "tool_calls": 0,
+          "errors": 0
+        },
+        {
+          "path": "cli-evidence/a0b57c5161a84ae2b0cb75d378233742",
+          "closed": true,
+          "offline": true,
+          "command_count": 11,
+          "tool_calls": 1,
+          "errors": 1
+        }
+      ],
+      "access_sha256": "aa5497cbb8e62790a865cb0e3e9dbca0264b58e503f55c45ecdad388d3321b33"
+    },
+    {
+      "id": "r46",
+      "arm": "repository",
+      "material_operations": 18,
+      "material_rendered_bytes": 94456,
+      "common_task_instruction_bytes": 7046,
+      "support_material_bytes": 87410,
+      "canonical_help_bytes": 10330,
+      "tool_text_bytes": 0,
+      "canonical_local_bytes": 0,
+      "decision_support_bytes": 97740,
+      "repeat_material_line_count": 0,
+      "repeat_material_line_rendered_bytes_excluding_separators": 0,
+      "cli_command_count": 12,
+      "sessions": [
+        {
+          "path": "cli-evidence/fcf2a6c4e73741b881a4e7d7025e2bfb",
+          "closed": true,
+          "offline": true,
+          "command_count": 0,
+          "tool_calls": 0,
+          "errors": 0
+        },
+        {
+          "path": "cli-evidence/e7ff9a52218f4a80a73a0ec9cb096da3",
+          "closed": true,
+          "offline": true,
+          "command_count": 12,
+          "tool_calls": 0,
+          "errors": 0
+        }
+      ],
+      "access_sha256": "44f01541ff5cf06bcaa6b7f2acc8edc8e001731faeb6b517aed00f7437825ea9"
+    },
+    {
+      "id": "r58",
+      "arm": "control",
+      "material_operations": 4,
+      "material_rendered_bytes": 7290,
+      "common_task_instruction_bytes": 7046,
+      "support_material_bytes": 244,
+      "canonical_help_bytes": 39882,
+      "tool_text_bytes": 23126,
+      "canonical_local_bytes": 0,
+      "decision_support_bytes": 63252,
+      "repeat_material_line_count": 0,
+      "repeat_material_line_rendered_bytes_excluding_separators": 0,
+      "cli_command_count": 40,
+      "sessions": [
+        {
+          "path": "cli-evidence/75e481b1ae814eb08b89a4409b730956",
+          "closed": true,
+          "offline": true,
+          "command_count": 40,
+          "tool_calls": 2,
+          "errors": 0
+        }
+      ],
+      "access_sha256": "3fcbd7b62cd6d0c32636bec55ae5fa1cbe5b858ffd330168fd3848333708aa64"
+    }
+  ]
+}

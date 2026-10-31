@@ -1,0 +1,767 @@
+{
+  "stage": "Scores fixed after all five answers closed and before reading retest allocation; citations can imply arm, so grader is not double blind.",
+  "rubric_preregistration_sha256": "f6751290dd8e6f44f3a92b232c86d2b73712bb0d6765e9a0f6149fd50b523766",
+  "interpretation": "Same semantic rubric and original sensitivity: C05/C09/C12 get full credit in generous analysis. C09 AIR omission alone is not penalized. C01 gives no city ID: a supported once-only city-yields domain read is accepted without inventing one, though returning all cities may cost more than a future ID-filtered query. C10 accepts explicit native Plot:GetYield vs InGame workforce plus cross-context unknowns without requiring the literal GameCore token; generic map-source wording alone was insufficient in the first study. These are disclosed judgment calls, not evidence of native execution.",
+  "ratings": [
+    {
+      "id": "r11",
+      "answer_sha256": "0f16034c4dd7334236555e06ac2f71885e309e11a25206d2f6859db2a98e7715",
+      "cases": [
+        {
+          "case": "C01",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C02",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C03",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C04",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C05",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C06",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C07",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C08",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C09",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C10",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C11",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C12",
+          "criteria": [
+            1,
+            1,
+            0,
+            1
+          ],
+          "notes": {
+            "2": "恢复后pending/transport核对明确；但验收结果的另存描述放在T57复验之前，未明确复验结果另存后再恢复。沿用首轮对该完整性条件的严格评分。"
+          }
+        }
+      ],
+      "score": 47,
+      "max_score": 48
+    },
+    {
+      "id": "r24",
+      "answer_sha256": "67b982d09b2c782e667679af030aa8e5eff518f28453be5043598c25a98d1c12",
+      "cases": [
+        {
+          "case": "C01",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C02",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C03",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C04",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C05",
+          "criteria": [
+            1,
+            1,
+            1,
+            0
+          ],
+          "notes": {
+            "3": "区分继续采用和新政体，但未明确保留当前的ACK/确认性质，与首轮相同缺项扣分。"
+          }
+        },
+        {
+          "case": "C06",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C07",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C08",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C09",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C10",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C11",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C12",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        }
+      ],
+      "score": 47,
+      "max_score": 48
+    },
+    {
+      "id": "r35",
+      "answer_sha256": "a719f21bb79d1c068e6073acea7c0c5b2744fd86977bb0571682b3ed83b1dcfe",
+      "cases": [
+        {
+          "case": "C01",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C02",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C03",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C04",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C05",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C06",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C07",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C08",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C09",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C10",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C11",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C12",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        }
+      ],
+      "score": 48,
+      "max_score": 48
+    },
+    {
+      "id": "r46",
+      "answer_sha256": "2377addc88c76bd0f777aaac895db53cd9fdc83758f401f25720b282c7be0bb7",
+      "cases": [
+        {
+          "case": "C01",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C02",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C03",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C04",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C05",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C06",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C07",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C08",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C09",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C10",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C11",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C12",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        }
+      ],
+      "score": 48,
+      "max_score": 48
+    },
+    {
+      "id": "r58",
+      "answer_sha256": "31f712956d197955d95a621cdbeffaf9c8f73ae9fbcdec8e4468b250312c9ca8",
+      "cases": [
+        {
+          "case": "C01",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C02",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C03",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C04",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C05",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C06",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C07",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C08",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C09",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C10",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C11",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        },
+        {
+          "case": "C12",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖四项条件；不按引文数量或逐字复述加分。"
+          }
+        }
+      ],
+      "score": 48,
+      "max_score": 48
+    }
+  ]
+}

@@ -1,0 +1,296 @@
+{
+  "source_commit": "e34034fdc299c7a8fea9b92e033e713f2a6c369a",
+  "source_path": "docs/cli.md",
+  "source_bytes": 65292,
+  "source_lines": 501,
+  "source_sha256": "740021b94ba53bb7fbd6c6ef14f808d0c82209199cae700535c96a672c5dce9e",
+  "all_lines_moved_exactly_once": true,
+  "only_mechanical_transformations": [
+    "relative Markdown links gain one parent",
+    "first heading promoted to level 1",
+    "return-to-index navigation added"
+  ],
+  "pages": [
+    {
+      "path": "docs/cli/overview.md",
+      "old_line_ranges": [
+        [
+          1,
+          75
+        ]
+      ],
+      "old_bytes": 7973,
+      "old_sha256": "9b97338bd8259be508b52d8f22561473159f63740d023ff79b593fea3d6806f2",
+      "moved_bytes": 8008,
+      "moved_sha256": "006607a558711204c57302e710c856467b52add1289c243f55fd28607a7e491e",
+      "current_bytes": 8008,
+      "current_sha256": "006607a558711204c57302e710c856467b52add1289c243f55fd28607a7e491e",
+      "old_lines_preserved_in_order": true
+    },
+    {
+      "path": "docs/cli/timing.md",
+      "old_line_ranges": [
+        [
+          76,
+          92
+        ]
+      ],
+      "old_bytes": 2675,
+      "old_sha256": "a90def60a14edc67069e560e58b5e4ebbd321994485920f12e6b9cef2c1d5d71",
+      "moved_bytes": 2706,
+      "moved_sha256": "31af439ea409b813a773865ccc3889caf0a063fb40b11a3b619385c220d0edaf",
+      "current_bytes": 2706,
+      "current_sha256": "31af439ea409b813a773865ccc3889caf0a063fb40b11a3b619385c220d0edaf",
+      "old_lines_preserved_in_order": true
+    },
+    {
+      "path": "docs/cli/discovery.md",
+      "old_line_ranges": [
+        [
+          93,
+          118
+        ],
+        [
+          146,
+          155
+        ]
+      ],
+      "old_bytes": 3859,
+      "old_sha256": "d3097b004eef9d5ba0fa908634cc50fb80ae7a796cb698d3390a73d90453e234",
+      "moved_bytes": 3890,
+      "moved_sha256": "ae64392bd3ae10a39d80e51b2c34815af1bee3e5ec29a855a12be5f1c9417c37",
+      "current_bytes": 4166,
+      "current_sha256": "07dc8781d4a8ed90d115e2127e46c2fcf5899118ef81544f131d6c40c5a48819",
+      "old_lines_preserved_in_order": true
+    },
+    {
+      "path": "docs/cli/state.md",
+      "old_line_ranges": [
+        [
+          119,
+          145
+        ]
+      ],
+      "old_bytes": 3605,
+      "old_sha256": "306850bc2b01161e15150638e849d77a8abf5d73cf4524923b89e6fe7e2e54e0",
+      "moved_bytes": 3636,
+      "moved_sha256": "6529f68363ded52e27960a006145a772be5cf17742fc5d447577b8b169facd90",
+      "current_bytes": 3636,
+      "current_sha256": "6529f68363ded52e27960a006145a772be5cf17742fc5d447577b8b169facd90",
+      "old_lines_preserved_in_order": true
+    },
+    {
+      "path": "docs/cli/units.md",
+      "old_line_ranges": [
+        [
+          156,
+          211
+        ]
+      ],
+      "old_bytes": 8056,
+      "old_sha256": "f6390122a64b0cbc2d08dbbd960adacf92e6e1609f03298fdaf835e5ca4918c7",
+      "moved_bytes": 8089,
+      "moved_sha256": "e161cfe76c769dd1c85aae84e8b8d022b4ba3c670b9e329e3c5289e569442eb2",
+      "current_bytes": 8420,
+      "current_sha256": "19de428d1a577006a4e6b2d9aa4d71ed3cd64df58b87f636a5de97a1a569b16c",
+      "old_lines_preserved_in_order": true
+    },
+    {
+      "path": "docs/cli/cities.md",
+      "old_line_ranges": [
+        [
+          212,
+          268
+        ]
+      ],
+      "old_bytes": 10782,
+      "old_sha256": "e9cf49fed9c1171bf999a471ca7401deae9c3609bac3c848bb98d0c5045cfa96",
+      "moved_bytes": 10812,
+      "moved_sha256": "a21edb50d31cf733be912f0f14d434b220d76a6d9c42513f0594f9fd363edce7",
+      "current_bytes": 10812,
+      "current_sha256": "a21edb50d31cf733be912f0f14d434b220d76a6d9c42513f0594f9fd363edce7",
+      "old_lines_preserved_in_order": true
+    },
+    {
+      "path": "docs/cli/turns-saves.md",
+      "old_line_ranges": [
+        [
+          269,
+          287
+        ]
+      ],
+      "old_bytes": 1741,
+      "old_sha256": "c6bf70f2b6b1a1140ac25069eb038e78a1b91ed8bc1fe1964118e62f44ed1094",
+      "moved_bytes": 1774,
+      "moved_sha256": "0bed68971429bbacc52644d567a280feb7a32bf4c54ca522f3f392b24d6f332f",
+      "current_bytes": 2076,
+      "current_sha256": "69ce6455cbad7bbcc8acefaec30abd40cdd19d2c610fe8f010fec70cb571e45b",
+      "old_lines_preserved_in_order": true
+    },
+    {
+      "path": "docs/cli/map-knowledge.md",
+      "old_line_ranges": [
+        [
+          288,
+          302
+        ]
+      ],
+      "old_bytes": 1871,
+      "old_sha256": "2fc135f75628b282b8fce335cd3752ee4ba7305f7b4089f996eae53f291fb1e1",
+      "moved_bytes": 1904,
+      "moved_sha256": "9b0533f45a5620f83145d5559916c0124ce6af20487cd3b18e931b3c0dfe3f74",
+      "current_bytes": 1904,
+      "current_sha256": "9b0533f45a5620f83145d5559916c0124ce6af20487cd3b18e931b3c0dfe3f74",
+      "old_lines_preserved_in_order": true
+    },
+    {
+      "path": "docs/cli/government.md",
+      "old_line_ranges": [
+        [
+          303,
+          321
+        ]
+      ],
+      "old_bytes": 2221,
+      "old_sha256": "d0155ad948a43f0c53199fb7f0049aea4192d0121d295c495fdceec7ec92acac",
+      "moved_bytes": 2251,
+      "moved_sha256": "2834c01b2b5b00ba2b2a5d4010697c4434d657abd6e4a8bd2e335eb6337702b4",
+      "current_bytes": 2251,
+      "current_sha256": "2834c01b2b5b00ba2b2a5d4010697c4434d657abd6e4a8bd2e335eb6337702b4",
+      "old_lines_preserved_in_order": true
+    },
+    {
+      "path": "docs/cli/congress.md",
+      "old_line_ranges": [
+        [
+          322,
+          330
+        ]
+      ],
+      "old_bytes": 513,
+      "old_sha256": "1c81ffeda3361bb3d8960568b549b8f062cd3c0709602f20819842003d9f79d1",
+      "moved_bytes": 552,
+      "moved_sha256": "beb755ba7874f1a29ed82f9026fd4ef6916dde17ccf4439c7c87d67215af52ef",
+      "current_bytes": 552,
+      "current_sha256": "beb755ba7874f1a29ed82f9026fd4ef6916dde17ccf4439c7c87d67215af52ef",
+      "old_lines_preserved_in_order": true
+    },
+    {
+      "path": "docs/cli/domains.md",
+      "old_line_ranges": [
+        [
+          331,
+          377
+        ]
+      ],
+      "old_bytes": 6560,
+      "old_sha256": "dc02a6a067cdcee005b1f7f0da8170ef2d5a87dee4e234b3d793c58e43a7c801",
+      "moved_bytes": 6590,
+      "moved_sha256": "7f5a9f7066596146272f62c89cc768ccda0cdf791042eed5a291987e043bb93b",
+      "current_bytes": 6590,
+      "current_sha256": "7f5a9f7066596146272f62c89cc768ccda0cdf791042eed5a291987e043bb93b",
+      "old_lines_preserved_in_order": true
+    },
+    {
+      "path": "docs/cli/diplomacy.md",
+      "old_line_ranges": [
+        [
+          378,
+          409
+        ]
+      ],
+      "old_bytes": 3846,
+      "old_sha256": "a8305f09862aef2abcc33d194185c499ea5c55ae54af98b4e6a84c1f5d1f34a6",
+      "moved_bytes": 3876,
+      "moved_sha256": "53d83c44b59ce981db5c82e1126b0ea9b8ccf2d02d23e70cbc7090335a8cb1ba",
+      "current_bytes": 3876,
+      "current_sha256": "53d83c44b59ce981db5c82e1126b0ea9b8ccf2d02d23e70cbc7090335a8cb1ba",
+      "old_lines_preserved_in_order": true
+    },
+    {
+      "path": "docs/cli/modes.md",
+      "old_line_ranges": [
+        [
+          410,
+          419
+        ]
+      ],
+      "old_bytes": 1630,
+      "old_sha256": "fc76f3f25a2b536b539d87a5bc6b42075a9d1a9f7e827e753939ef576848b3ee",
+      "moved_bytes": 1660,
+      "moved_sha256": "6c86ec7534929e4ed26176f309b50d1cc233fc9f590fc4650b5d0e071b7c5512",
+      "current_bytes": 1660,
+      "current_sha256": "6c86ec7534929e4ed26176f309b50d1cc233fc9f590fc4650b5d0e071b7c5512",
+      "old_lines_preserved_in_order": true
+    },
+    {
+      "path": "docs/cli/call-sequence.md",
+      "old_line_ranges": [
+        [
+          420,
+          432
+        ]
+      ],
+      "old_bytes": 361,
+      "old_sha256": "f0b2feca2af5698a00f836fcc65733c2871d26728bb5b99ef162e7bfad4d4a87",
+      "moved_bytes": 394,
+      "moved_sha256": "f9cffadb8415b7fe198c691541a4a480f31745b22f3ac37cc48275312d98aad3",
+      "current_bytes": 394,
+      "current_sha256": "f9cffadb8415b7fe198c691541a4a480f31745b22f3ac37cc48275312d98aad3",
+      "old_lines_preserved_in_order": true
+    },
+    {
+      "path": "docs/cli/dry-run.md",
+      "old_line_ranges": [
+        [
+          433,
+          440
+        ]
+      ],
+      "old_bytes": 1275,
+      "old_sha256": "1fbd799022920f6c9e725c850ee679a7f18b8767489a334863f8e391c276aa9c",
+      "moved_bytes": 1306,
+      "moved_sha256": "43faecc0661bb172ffd1e50f249dd6e42c44afa7cfa7039c543b198ee1d1dce9",
+      "current_bytes": 1306,
+      "current_sha256": "43faecc0661bb172ffd1e50f249dd6e42c44afa7cfa7039c543b198ee1d1dce9",
+      "old_lines_preserved_in_order": true
+    },
+    {
+      "path": "docs/cli/debug.md",
+      "old_line_ranges": [
+        [
+          441,
+          486
+        ]
+      ],
+      "old_bytes": 6658,
+      "old_sha256": "97022c2641583de1e7ea789eef6767a70314358efa50ae09d2a360e6510b018f",
+      "moved_bytes": 6695,
+      "moved_sha256": "ee2dd4472c039b024ac0388668f9cda89644f0d7736892983355eca9b3ed12c6",
+      "current_bytes": 6695,
+      "current_sha256": "ee2dd4472c039b024ac0388668f9cda89644f0d7736892983355eca9b3ed12c6",
+      "old_lines_preserved_in_order": true
+    },
+    {
+      "path": "docs/cli/evidence.md",
+      "old_line_ranges": [
+        [
+          487,
+          501
+        ]
+      ],
+      "old_bytes": 1666,
+      "old_sha256": "f9957323a90ddf5c4c0d261cc9f36aa18d09f59633b5cdfb7073012b9aa03e79",
+      "moved_bytes": 1700,
+      "moved_sha256": "fe177a4aff28c9d18c760b135a1b6e712dbe1a5d658469217ef36a09f55c467a",
+      "current_bytes": 1700,
+      "current_sha256": "fe177a4aff28c9d18c760b135a1b6e712dbe1a5d658469217ef36a09f55c467a",
+      "old_lines_preserved_in_order": true
+    }
+  ],
+  "index_bytes": 4048,
+  "all_original_anchors_preserved": true,
+  "all_original_lines_preserved_in_order_within_pages": true,
+  "index_sha256": "c97f93067663aa51c4f5078e57430a8753b772723c005699c21c634aa3b2b533",
+  "index_reduction_percent": 93.80015928444526
+}

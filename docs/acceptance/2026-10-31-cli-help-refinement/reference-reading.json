@@ -1,0 +1,150 @@
+{
+  "metric": "rendered material excluding common task/instructions + canonical local help/dry-run/error/pending payloads + tool text bytes; not tokens or full wire traffic",
+  "participants": [
+    {
+      "id": "p17",
+      "arm": "repository",
+      "material_operations": 13,
+      "material_rendered_bytes": 164645,
+      "common_task_instruction_bytes": 7048,
+      "support_material_bytes": 157597,
+      "canonical_help_bytes": 4255,
+      "tool_text_bytes": 2153,
+      "canonical_local_bytes": 0,
+      "decision_support_bytes": 164005,
+      "repeat_material_line_count": 203,
+      "repeat_material_line_rendered_bytes_excluding_separators": 29580,
+      "cli_command_count": 5,
+      "sessions": [
+        {
+          "path": "cli-evidence/9da4851b38234178bd3817f1a7b7f9c6",
+          "closed": true,
+          "offline": true,
+          "command_count": 0,
+          "tool_calls": 0,
+          "errors": 0
+        },
+        {
+          "path": "cli-evidence/b54ed499f12a437ab8c3461701966f26",
+          "closed": true,
+          "offline": true,
+          "command_count": 5,
+          "tool_calls": 1,
+          "errors": 0
+        }
+      ],
+      "access_sha256": "5586d5c39eb34cc83e3a4a6bf66e9579ff6b6487f9f466832af436d20ff238f7"
+    },
+    {
+      "id": "p28",
+      "arm": "control",
+      "material_operations": 4,
+      "material_rendered_bytes": 7292,
+      "common_task_instruction_bytes": 7048,
+      "support_material_bytes": 244,
+      "canonical_help_bytes": 33513,
+      "tool_text_bytes": 23126,
+      "canonical_local_bytes": 0,
+      "decision_support_bytes": 56883,
+      "repeat_material_line_count": 0,
+      "repeat_material_line_rendered_bytes_excluding_separators": 0,
+      "cli_command_count": 36,
+      "sessions": [
+        {
+          "path": "cli-evidence/ea2980b2e6394a5bb53f43485d2f685e",
+          "closed": true,
+          "offline": true,
+          "command_count": 0,
+          "tool_calls": 0,
+          "errors": 0
+        },
+        {
+          "path": "cli-evidence/be688b2506964a2a8cb568c4627cc16b",
+          "closed": true,
+          "offline": true,
+          "command_count": 36,
+          "tool_calls": 2,
+          "errors": 0
+        }
+      ],
+      "access_sha256": "843a2af9933fb93117a41e49117a97718468b1e512dcfb87cd110322ecd4296c"
+    },
+    {
+      "id": "p36",
+      "arm": "repository",
+      "material_operations": 14,
+      "material_rendered_bytes": 166070,
+      "common_task_instruction_bytes": 7048,
+      "support_material_bytes": 159022,
+      "canonical_help_bytes": 0,
+      "tool_text_bytes": 0,
+      "canonical_local_bytes": 0,
+      "decision_support_bytes": 159022,
+      "repeat_material_line_count": 203,
+      "repeat_material_line_rendered_bytes_excluding_separators": 29580,
+      "cli_command_count": 0,
+      "sessions": [],
+      "access_sha256": "fd3b6ec37d55a59d68c0e5dee1558a615f0921a7d3d178196e3772abd1b2151c"
+    },
+    {
+      "id": "p49",
+      "arm": "control",
+      "material_operations": 4,
+      "material_rendered_bytes": 7292,
+      "common_task_instruction_bytes": 7048,
+      "support_material_bytes": 244,
+      "canonical_help_bytes": 35280,
+      "tool_text_bytes": 34768,
+      "canonical_local_bytes": 0,
+      "decision_support_bytes": 70292,
+      "repeat_material_line_count": 0,
+      "repeat_material_line_rendered_bytes_excluding_separators": 0,
+      "cli_command_count": 39,
+      "sessions": [
+        {
+          "path": "cli-evidence/8bb7d1ea1cd14b9797c3648f8110021b",
+          "closed": true,
+          "offline": true,
+          "command_count": 0,
+          "tool_calls": 0,
+          "errors": 0
+        },
+        {
+          "path": "cli-evidence/8d9b2afad2a1467d870753cc89cdf1a8",
+          "closed": true,
+          "offline": true,
+          "command_count": 39,
+          "tool_calls": 2,
+          "errors": 0
+        }
+      ],
+      "access_sha256": "fde2bcf5eee1adace57034e679a84fdd0eb95d2444687e5a84989d984adf94f4"
+    },
+    {
+      "id": "p53",
+      "arm": "repository",
+      "material_operations": 16,
+      "material_rendered_bytes": 169600,
+      "common_task_instruction_bytes": 7048,
+      "support_material_bytes": 162552,
+      "canonical_help_bytes": 4255,
+      "tool_text_bytes": 0,
+      "canonical_local_bytes": 0,
+      "decision_support_bytes": 166807,
+      "repeat_material_line_count": 189,
+      "repeat_material_line_rendered_bytes_excluding_separators": 28734,
+      "cli_command_count": 4,
+      "sessions": [
+        {
+          "path": "cli-evidence/6ca012a0dda047c0be4b2eb4f78cbcd8",
+          "closed": true,
+          "offline": true,
+          "command_count": 4,
+          "tool_calls": 0,
+          "errors": 0
+        }
+      ],
+      "access_sha256": "e7ba39e35cacbea35870096600cba197c4a1b2e4440933e7739d001baf80ac51"
+    }
+  ]
+}
