@@ -190,7 +190,7 @@ def test_lost_spread_submission_reply_can_only_confirm_original_effect():
 def test_pending_spread_blocks_other_mutations_save_and_turn():
     conn = SpreadPressureConn(); state = GameState(conn); conn.lua.execute('deferred=true')
     assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spread_religion(2686987))
-    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spread_religion(2752523))
+    assert 'PENDING_SPREAD_MISMATCH' in asyncio.run(state.spread_religion(2752523))
     assert 'OUTCOME_UNKNOWN' in asyncio.run(state.skip_unit(2686987))
     assert 'OUTCOME_UNKNOWN' in asyncio.run(state.save_game('pending_spread'))
     assert 'OUTCOME_UNKNOWN' in asyncio.run(state.end_turn())

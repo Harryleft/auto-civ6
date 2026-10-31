@@ -36,6 +36,26 @@ local function cityAt(x,y)
  if city then assert(city:GetX()==x and city:GetY()==y,"CITY_POSITION_CHANGED") end
  return city
 end
+local function spreadTargetArraySize(plots,modifiers,reason)
+ assert(type(plots)=="table" and type(modifiers)=="table",reason)
+ local function arraySize(values)
+  local n=0
+  for key in pairs(values) do
+   assert(scopeIndex(key) and key>0,reason)
+   n=n+1
+  end
+  -- Lua 5.1 #/ipairs can stop at holes even when # equals the key count.
+  -- Require actual entries at every index; metatable defaults are not facts.
+  for i=1,n do assert(rawget(values,i)~=nil,reason) end
+  return n
+ end
+ local n=arraySize(plots)
+ assert(n==arraySize(modifiers),reason)
+ for i=1,n do
+  assert(scopeIndex(rawget(plots,i)) and scopeInteger(rawget(modifiers,i)),reason)
+ end
+ return n
+end
 local function spreadTarget(unit,operation)
  -- Bind an actual operated city plot. Adjacent targets come only from native
  -- PLOTS/MODIFIERS, as in WorldInput, never a nearest-city heuristic.
@@ -44,10 +64,10 @@ local function spreadTarget(unit,operation)
  local readable,results=pcall(function()return UnitManager.GetOperationTargets(unit,operation)end)
  assert(readable and type(results)=="table" and UnitOperationResults,"TARGET_UNAVAILABLE")
  local plots,modifiers=results[UnitOperationResults.PLOTS],results[UnitOperationResults.MODIFIERS]
- assert(type(plots)=="table" and type(modifiers)=="table","TARGET_UNAVAILABLE")
- for i,modifier in ipairs(modifiers) do
-  if modifier==UnitOperationResults.MODIFIER_IS_TARGET then
-   local plot=Map.GetPlotByIndex(plots[i])
+ local n=spreadTargetArraySize(plots,modifiers,"TARGET_UNAVAILABLE")
+ for i=1,n do
+  if rawget(modifiers,i)==UnitOperationResults.MODIFIER_IS_TARGET then
+   local plot=Map.GetPlotByIndex(rawget(plots,i))
    assert(plot,"TARGET_UNAVAILABLE")
    local city=cityAt(plot:GetX(),plot:GetY())
    if city then assert(target==nil,"AMBIGUOUS_CITY_TARGET");target=city end
@@ -179,17 +199,11 @@ local function boundSpreadTarget(unit,operation,x,y)
  if readable and type(results)=="table" and UnitOperationResults then
   local nativePlots,nativeModifiers=results[UnitOperationResults.PLOTS],results[UnitOperationResults.MODIFIERS]
   if nativePlots~=nil or nativeModifiers~=nil then
-   assert(type(nativePlots)=="table" and type(nativeModifiers)=="table","TARGET_NATIVE_CONFLICT")
-   local function arraySize(values)
-    local n=0
-    for key in pairs(values) do assert(scopeIndex(key) and key>0,"TARGET_NATIVE_CONFLICT");n=n+1 end
-    assert(n==#values,"TARGET_NATIVE_CONFLICT");return n
-   end
-   assert(arraySize(nativePlots)==arraySize(nativeModifiers),"TARGET_NATIVE_CONFLICT")
+   local n=spreadTargetArraySize(nativePlots,nativeModifiers,"TARGET_NATIVE_CONFLICT")
    local matches=0
-   for i,modifier in ipairs(nativeModifiers) do
-    if modifier==UnitOperationResults.MODIFIER_IS_TARGET then
-     local plot=Map.GetPlotByIndex(nativePlots[i])
+   for i=1,n do
+    if rawget(nativeModifiers,i)==UnitOperationResults.MODIFIER_IS_TARGET then
+     local plot=Map.GetPlotByIndex(rawget(nativePlots,i))
      assert(plot and plot:GetX()==x and plot:GetY()==y,"TARGET_NATIVE_CONFLICT")
      local city=cityAt(x,y)
      assert(city and city:GetID()==target:GetID() and city:GetOwner()==target:GetOwner(),"TARGET_NATIVE_CONFLICT")

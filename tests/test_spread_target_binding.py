@@ -107,8 +107,8 @@ def test_invalid_spread_coordinate_pair_never_submits(x,y):
 def test_pending_explicit_spread_keeps_original_target_and_never_resubmits():
     conn=LocalSpreadConn();state=GameState(conn);conn.lua.execute('targets=nil;deferred=true')
     assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spread_religion(196608,20,17))
-    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spread_religion(196608,19,16))
-    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spread_religion(196608))
+    assert 'PENDING_SPREAD_MISMATCH' in asyncio.run(state.spread_religion(196608,19,16))
+    assert 'PENDING_SPREAD_MISMATCH' in asyncio.run(state.spread_religion(196608))
     conn.lua.execute('applyEffect(32)')
     assert asyncio.run(state.spread_religion(196608,20,17)).startswith('RELIGION_SPREAD|')
     assert conn.lua.eval('#submissions')==1
@@ -163,3 +163,83 @@ u.GetY=function(self)if core then return 28 end;return self.y end
     result=asyncio.run(state.spread_religion(2686987,34,26))
     assert 'CORE_CITY_OR_RELIGION_CHANGED' in result
     assert conn.lua.eval('#submissions')==0 and state.pending_action_summary is None
+
+
+SPARSE_NATIVE_TARGETS = """
+local plots={300,300,999,300};local modifiers={1,0,1,0}
+plots[2]=nil;modifiers[2]=nil;plots[10]=300;modifiers[10]=0
+targets={plots=plots,modifiers=modifiers}
+-- Lua 5.1's length is ambiguous for holes: this defeats count == #table.
+assert(#plots==4 and #modifiers==4)
+"""
+
+
+@pytest.mark.parametrize('explicit',[True,False])
+def test_sparse_native_target_arrays_cannot_hide_a_conflicting_target(explicit):
+    conn=LocalSpreadConn();state=GameState(conn);conn.lua.execute(SPARSE_NATIVE_TARGETS)
+    args=(196608,20,17) if explicit else (196608,)
+    result=asyncio.run(state.spread_religion(*args))
+    submissions=conn.lua.eval('#submissions')
+    assert submissions==0, f'result={result}; submissions={submissions}'
+    assert 'UNIT_EFFECT_REFUSED' in result and state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('args',[(196608,),(196608,19,16),(196609,20,17)])
+def test_completed_pending_spread_rejects_changed_input_before_confirmation(args,monkeypatch):
+    conn=LocalSpreadConn();state=GameState(conn);conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spread_religion(196608,20,17))
+    pending=state._actions.pending
+    conn.lua.execute('applyEffect(32)')
+    async def forbidden_native_read(code):
+        raise AssertionError('Mismatched input must not confirm or submit the original spread')
+    with monkeypatch.context() as patch:
+        patch.setattr(conn,'execute_read',forbidden_native_read)
+        patch.setattr(conn,'execute_write',forbidden_native_read)
+        result=asyncio.run(state.spread_religion(*args))
+    submissions=conn.lua.eval('#submissions')
+    assert submissions==1, f'result={result}; submissions={submissions}'
+    assert result.startswith('ERR:PENDING_SPREAD_MISMATCH|'), result
+    assert state._actions.pending is pending and pending.intent==(20,17)
+    assert pending.confirmed is None
+    assert asyncio.run(state.spread_religion(196608,20,17)).startswith('RELIGION_SPREAD|')
+    assert state.pending_action_summary is None and conn.lua.eval('#submissions')==1
+
+
+@pytest.mark.parametrize('explicit',[True,False])
+@pytest.mark.parametrize('setup',[
+    'targets.plots[2]=300',
+    'targets.modifiers[2]=0',
+    'targets.plots.extra=300;targets.modifiers.extra=0',
+    'targets.plots[0]=300;targets.modifiers[0]=0',
+    'targets.plots[1.5]=300;targets.modifiers[1.5]=0',
+    'targets.plots[1]="300"',
+    'targets.modifiers[1]=true',
+    'targets.modifiers[1]="1"',
+    'targets={plots={300,999},modifiers={1,1}}',
+    'targets.plots[1]=nil;setmetatable(targets.plots,{__index=function()return 300 end})',
+])
+def test_native_target_arrays_refuse_missing_external_mismatched_or_unknown_entries(explicit,setup):
+    conn=LocalSpreadConn();state=GameState(conn);conn.lua.execute(setup)
+    args=(196608,20,17) if explicit else (196608,)
+    assert 'UNIT_EFFECT_REFUSED' in asyncio.run(state.spread_religion(*args))
+    assert conn.lua.eval('#submissions')==0 and state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('explicit',[True,False])
+def test_dense_native_target_arrays_preserve_one_known_target(explicit):
+    conn=LocalSpreadConn();state=GameState(conn)
+    conn.lua.execute('targets={plots={300,999},modifiers={1,0}}')
+    args=(196608,20,17) if explicit else (196608,)
+    assert asyncio.run(state.spread_religion(*args)).startswith('RELIGION_SPREAD|')
+    assert conn.lua.eval('#submissions')==1 and state.pending_action_summary is None
+
+
+def test_completed_implicit_spread_cannot_be_rebound_to_explicit_target():
+    conn=LocalSpreadConn();state=GameState(conn);conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.spread_religion(196608))
+    pending=state._actions.pending
+    conn.lua.execute('applyEffect(32)')
+    assert 'PENDING_SPREAD_MISMATCH' in asyncio.run(state.spread_religion(196608,20,17))
+    assert state._actions.pending is pending and pending.intent==()
+    assert asyncio.run(state.spread_religion(196608)).startswith('RELIGION_SPREAD|')
+    assert conn.lua.eval('#submissions')==1 and state.pending_action_summary is None

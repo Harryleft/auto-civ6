@@ -1851,6 +1851,13 @@ class GameState:
         entity, intent = ("unit", unit_id), target or ()
         if self._actions.matches(kind, entity, intent=intent):
             return await self.confirm_pending_action()
+        pending = self._actions.pending
+        if kind == "spread_religion" and pending is not None and pending.kind == kind:
+            # Reject before a generic gate can confirm the old effect and let
+            # this changed request spend another charge in the same call.
+            return (f"ERR:PENDING_SPREAD_MISMATCH|Existing spread for unit {pending.entity[1]}, "
+                    f"target={pending.intent}; new request not submitted. "
+                    "Repeat the original unit ID and coordinates (or original omission) to confirm only.")
         blocked = await self._action_gate()
         if blocked:
             return blocked
