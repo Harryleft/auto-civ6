@@ -11,7 +11,6 @@ from civ_mcp.lua._helpers import (
     SENTINEL,
     _bail,
     _bail_lua,
-    _int,
     _lua_get_city,
     _lua_get_unit,
 )
@@ -780,7 +779,9 @@ def parse_map_response(lines: list[str]) -> list[TileInfo]:
         if len(parts) > 12 and parts[12] != "0,0,0,0,0,0":
             yield_parts = parts[12].split(",")
             if len(yield_parts) == 6:
-                yields = tuple(_int(y) for y in yield_parts)
+                yields = tuple(float(y) for y in yield_parts)
+                if not all(math.isfinite(y) for y in yields):
+                    raise ValueError("Nonfinite native map yield")
         elif len(parts) > 12 and visibility == "visible":
             # Visible tile with all-zero yields — still valid
             yields = (0, 0, 0, 0, 0, 0)

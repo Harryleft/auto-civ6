@@ -338,6 +338,27 @@ class TestParseMap:
         tiles = parse_map_response([self.PLAINS_TILE])
         assert tiles[0].yields == (2, 1, 0, 0, 0, 0)
 
+    def test_fractional_and_negative_yields_are_not_truncated(self):
+        line=self.PLAINS_TILE.replace("2,1,0,0,0,0", "4.75,2.5,-0.75,0.125,-0.5,0")
+        assert parse_map_response([line])[0].yields == (4.75,2.5,-0.75,0.125,-0.5,0)
+
+    def test_visible_zero_and_fog_unknown_yields_remain_distinct(self):
+        zero=self.PLAINS_TILE.replace("2,1,0,0,0,0", "0,0,0,0,0,0")
+        visible,fog=parse_map_response([zero,zero.replace("visible", "revealed")])
+        assert visible.yields == (0,0,0,0,0,0)
+        assert fog.yields is None
+        assert fog.visibility == "revealed" and fog.owner_id == -1
+
+    def test_missing_yields_are_not_native_zero(self):
+        line="|".join(self.PLAINS_TILE.split("|")[:12])
+        assert parse_map_response([line])[0].yields is None
+
+    @pytest.mark.parametrize("value", ["nan", "inf", "-inf", "?"])
+    def test_invalid_yield_does_not_become_zero(self,value):
+        line=self.PLAINS_TILE.replace("2,1,0,0,0,0", f"{value},1,0,0,0,0")
+        with pytest.raises((ValueError,OverflowError)):
+            parse_map_response([line])
+
     def test_short_line_skipped(self):
         tiles = parse_map_response(["too|few|fields"])
         assert len(tiles) == 0

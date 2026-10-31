@@ -1436,3 +1436,14 @@ class TestSessionReset:
     def test_empty_pending_deals_requires_completion_marker(self):
         gs, _ = _gs([("write", ["CONTEXT|NONE|NO_OPEN_SESSION", "CONTEXT_COMPLETE"])])
         assert run(gs.get_pending_deals()).status == "NONE"
+
+
+def test_map_area_keeps_native_precision_with_one_gamecore_read():
+    line="10,24|TERRAIN_PLAINS|none|none|0|1|0|none|-1|none|visible|1|4.75,2.5,-0.75,0,0,0|none||none|-1|1"
+    fog=line.replace("visible", "revealed").replace("4.75,2.5,-0.75,0,0,0", "0,0,0,0,0,0")
+    conn=FakeConn([("read",[line,fog])]);state=GameState(conn)
+    visible,hidden=run(state.get_map_area(10,24,radius=2))
+    assert visible.yields == (4.75,2.5,-0.75,0,0,0)
+    assert hidden.yields is None and hidden.visibility=="revealed"
+    assert len(conn.calls)==1 and conn.calls[0][0]=="read" and conn.exhausted
+    assert visible.owner_id == hidden.owner_id == -1

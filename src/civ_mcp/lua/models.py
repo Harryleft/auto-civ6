@@ -223,7 +223,7 @@ class TileInfo:
     owner_id: int
     visibility: str = "visible"  # "visible", "revealed", or "unexplored"
     is_fresh_water: bool = False
-    yields: tuple[int, ...] | None = None  # (food, prod, gold, science, culture, faith)
+    yields: tuple[float, ...] | None = None  # (food, prod, gold, science, culture, faith)
     units: list[str] | None = None  # visible foreign units, e.g. ["Barbarian WARRIOR"]
     own_units: list[str] | None = (
         None  # player's own units on this tile, e.g. ["WARRIOR", "BUILDER"]

@@ -543,7 +543,15 @@ def narrate_city_production(options: list[lq.ProductionOption]) -> str:
 def narrate_map(tiles: list[lq.TileInfo]) -> str:
     if not tiles:
         return "No tiles."
-    lines = [f"{len(tiles)} tiles:"]
+    lines = [f"{len(tiles)} tiles:",
+             "Yield source: GameCore_Tuner Plot:GetYield; modifier completeness/native age unverified; "
+             "not interchangeable with InGame city-worked yields. "
+             "Within yield blocks, unlisted G/S/C/Fa=0; no yield block=unknown."]
+
+    def number(value):
+        # Keep the parsed native precision without adding .0 to ordinary integers.
+        return str(int(value)) if value == int(value) else str(value)
+
     for t in tiles:
         parts = [t.terrain.replace("TERRAIN_", "")]
         if t.is_hills:
@@ -576,17 +584,17 @@ def narrate_map(tiles: list[lq.TileInfo]) -> str:
             parts.append(f"[{t.district.replace('DISTRICT_', '')}]")
         if t.yields:
             f, p, g = t.yields[0], t.yields[1], t.yields[2]
-            yield_str = f"F:{f} P:{p}"
-            if g > 0:
-                yield_str += f" G:{g}"
+            yield_str = f"F:{number(f)} P:{number(p)}"
+            if g != 0:
+                yield_str += f" G:{number(g)}"
             # Include science/culture/faith only if non-zero
             for label, val in [
                 ("S", t.yields[3]),
                 ("C", t.yields[4]),
                 ("Fa", t.yields[5]),
             ]:
-                if val > 0:
-                    yield_str += f" {label}:{val}"
+                if val != 0:
+                    yield_str += f" {label}:{number(val)}"
             parts.append(f"{{{yield_str}}}")
         if t.owner_id < 0:
             owner = ""

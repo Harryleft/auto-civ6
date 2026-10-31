@@ -1,7 +1,7 @@
 """Victory output reports game facts without assigning strategic scores."""
 
 from civ_mcp import lua as lq
-from civ_mcp.narrate import narrate_victory_progress
+from civ_mcp.narrate import narrate_map, narrate_victory_progress
 
 
 def player(**changes):
@@ -64,3 +64,31 @@ def test_enabled_victories_control_condition_sections():
 
 def test_empty_victory_data():
     assert narrate_victory_progress(lq.VictoryProgress(players=[])) == "No victory data available."
+
+
+def map_tile(yields, **changes):
+    return lq.TileInfo(**(dict(x=1,y=2,terrain="TERRAIN_PLAINS",feature=None,resource=None,
+                              is_hills=False,is_river=False,is_coastal=False,improvement=None,
+                              owner_id=-1,yields=yields) | changes))
+
+
+def test_map_yields_keep_fractional_and_negative_values():
+    text=narrate_map([map_tile((4.75,2.5,-0.75,0.125,-0.5,0.000000123456789))])
+    assert "{F:4.75 P:2.5 G:-0.75 S:0.125 C:-0.5 Fa:1.23456789e-07}" in text
+
+
+def test_map_integers_and_zeroes_stay_compact_with_explicit_source_boundary():
+    text=narrate_map([map_tile((4.0,2.0,0,0,0,0)),map_tile((0,0,0,0,0,0),x=2)])
+    assert "{F:4 P:2}" in text and "{F:0 P:0}" in text
+    assert "F:4.0" not in text and "G:0" not in text
+    assert text.count("Yield source:")==1
+    for fact in ("GameCore_Tuner Plot:GetYield", "modifier completeness/native age unverified",
+                 "not interchangeable with InGame city-worked yields", "unlisted G/S/C/Fa=0"):
+        assert fact in text
+
+
+def test_map_unknown_fog_and_ownership_are_preserved():
+    text=narrate_map([map_tile(None,visibility="revealed",owner_id=3,owner_name="Canada")])
+    assert "(owned by Canada) [fog]" in text
+    assert "{F:" not in text and "no yield block=unknown" in text
+    assert narrate_map([])=="No tiles."
