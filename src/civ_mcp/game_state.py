@@ -1456,10 +1456,13 @@ class GameState:
     # ------------------------------------------------------------------
 
     async def get_unit_promotions(self, unit_id: int) -> lq.UnitPromotionStatus:
-        unit_index = unit_id % 65536
-        lua = lq.build_unit_promotions_query(unit_index)
-        lines = await self.conn.execute_read(lua)
-        return lq.parse_unit_promotions_response(lines)
+        from civ_mcp.lua import unit_promotions
+        lua = lq.build_unit_promotions_query(unit_id)
+        try:
+            lines = await self.conn.execute_in_named_state("InGame", lua)
+            return lq.parse_unit_promotions_response(lines, unit_id)
+        except (LuaError, OSError, TimeoutError, ValueError) as error:
+            return unit_promotions.unavailable(unit_id, str(error))
 
     @_guard_pending_mutation
     async def promote_unit(self, unit_id: int, promotion_type: str) -> str:

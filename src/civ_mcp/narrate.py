@@ -1311,12 +1311,22 @@ def narrate_governors(gov: lq.GovernorStatus) -> str:
 
 
 def narrate_unit_promotions(status: lq.UnitPromotionStatus) -> str:
-    if not status.promotions:
-        return f"No promotions available for {status.unit_type} (id:{status.unit_id})."
-    lines = [f"Promotions for {status.unit_type} (id:{status.unit_id}):"]
-    for p in status.promotions:
-        lines.append(f"  {p.name} ({p.promotion_type}): {p.description}")
-    lines.append("\nUse promote_unit(unit_id, promotion_type) to apply.")
+    def flag(value):
+        return "unknown" if value is None else "yes" if value else "no"
+
+    if status.status == "unknown":
+        return f"Promotion observation unknown (requested unit id:{status.unit_id}): {status.error or 'native facts unavailable'}."
+    identity = status.identity or {}
+    lines = [f"Native promotions for {status.unit_type} (id:{status.unit_id}, owner:{identity.get('player_id', 'unknown')}, turn:{identity.get('turn', 'unknown')}):",
+             f"  UI check: {flag(status.can_offer_promotions)}; execute command now: {flag(status.can_promote_now)}; core busy: {flag(status.core_busy)}."]
+    for label, values in (("UI candidate indices", status.ui_candidates), ("Current candidate indices", status.current_candidates)):
+        lines.append(f"  {label}: {'unknown' if values is None else ','.join(str(i) for i in values) if values else 'none (known empty)' }.")
+    lines.append(f"  References: moves:{status.moves if status.moves is not None else 'unknown'}; XP:{status.xp if status.xp is not None else 'unknown'}/{status.xp_needed if status.xp_needed is not None else 'unknown'}; owned promotions:{status.promotion_count if status.promotion_count is not None else 'unknown'}.")
+    for p in status.promotions or []:
+        lines.append(f"  {p.name or p.promotion_type} ({p.promotion_type}, index:{p.index}): UI candidate:{flag(p.ui_candidate)}, current candidate:{flag(p.current_candidate)}, owned:{flag(p.has_promotion)}, selectable now:{flag(p.can_select_now)}; {p.description or 'description unknown'}")
+    if status.unknown_fields:
+        lines.append("  Unknown fields: " + ", ".join(status.unknown_fields) + ".")
+    lines.append("InGame native UI/current checks; Runtime pending gates still apply. MP/XP do not establish a refusal reason. Recheck before choosing a currently selectable promotion.")
     return "\n".join(lines)
 
 

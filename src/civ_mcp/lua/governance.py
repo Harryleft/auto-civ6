@@ -8,13 +8,11 @@ import re
 
 from civ_mcp.lua._helpers import (
     SENTINEL,
-    _LUA_XP_THRESHOLD,
     _bail,
     _bail_lua,
     _int,
     _lua_get_city,
     _lua_get_unit,
-    _lua_get_unit_gamecore,
 )
 from civ_mcp.lua.models import (
     AppointedGovernor,
@@ -28,7 +26,6 @@ from civ_mcp.lua.models import (
     GovernorStatus,
     PolicyInfo,
     PolicySlot,
-    PromotionOption,
     UnitPromotionStatus,
 )
 
@@ -218,60 +215,10 @@ print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL).replace("{EXPAND}", str(include_ineligible).lower())
 
 
-def build_unit_promotions_query(unit_index: int) -> str:
-    """List available promotions for a unit (GameCore context)."""
-    return f"""
-{_lua_get_unit_gamecore(unit_index)}
-local x, y = unit:GetX(), unit:GetY()
-if x == -9999 then {_bail("ERR:UNIT_CONSUMED")} end
-local typeIdx = unit:GetType()
-if typeIdx == nil then {_bail("ERR:UNIT_NO_TYPE")} end
-local info = GameInfo.Units[typeIdx]
-local ut = info and info.UnitType or "UNKNOWN"
-local promClass = info and info.PromotionClass or ""
-print("UNIT|" .. {unit_index} .. "|" .. (unit:GetID() % 65536) .. "|" .. ut)
-local exp = unit:GetExperience()
-{_LUA_XP_THRESHOLD}
-print("XP|" .. xp .. "|" .. xpNeeded .. "|" .. xpPromoCount)
-if xp < xpNeeded then
-    print("{SENTINEL}")
-    return
-end
-local prereqMap = {{}}
-for row in GameInfo.UnitPromotionPrereqs() do
-    local pt = row.UnitPromotion
-    if not prereqMap[pt] then prereqMap[pt] = {{}} end
-    table.insert(prereqMap[pt], row.PrereqUnitPromotion)
-end
-for promo in GameInfo.UnitPromotions() do
-    if promo.PromotionClass == promClass then
-        if not exp:HasPromotion(promo.Index) then
-            local prereqs = prereqMap[promo.UnitPromotionType]
-            local prereqMet = true
-            if prereqs and #prereqs > 0 then
-                prereqMet = false
-                for _, reqType in ipairs(prereqs) do
-                    local reqInfo = GameInfo.UnitPromotions[reqType]
-                    if reqInfo and exp:HasPromotion(reqInfo.Index) then
-                        prereqMet = true
-                        break
-                    end
-                end
-            end
-            if prereqMet then
-                local canPromote = false
-                pcall(function() canPromote = exp:CanPromote(promo.Index) end)
-                if canPromote then
-                    local name = Locale.Lookup(promo.Name)
-                    local desc = Locale.Lookup(promo.Description):gsub("|","/"):gsub("\\n"," ")
-                    print("PROMO|" .. promo.UnitPromotionType .. "|" .. name:gsub("|","/") .. "|" .. desc)
-                end
-            end
-        end
-    end
-end
-print("{SENTINEL}")
-"""
+def build_unit_promotions_query(unit_id: int) -> str:
+    """Read both native promotion command checks in InGame, bound to full ID."""
+    from civ_mcp.lua.unit_promotions import build
+    return build(unit_id)
 
 
 def build_city_states_query(
@@ -612,51 +559,10 @@ def parse_governors_response(lines: list[str]) -> GovernorStatus:
     )
 
 
-def parse_unit_promotions_response(lines: list[str]) -> UnitPromotionStatus:
-    """Parse UNIT|, XP|, and PROMO| lines from build_unit_promotions_query."""
-    unit_id = 0
-    unit_index = 0
-    unit_type = "UNKNOWN"
-    promotions: list[PromotionOption] = []
-    xp = 0
-    xp_needed = 0
-    promotion_count = 0
-
-    for line in lines:
-        if line.startswith("ERR:"):
-            raise ValueError(line[4:])
-        if line.startswith("UNIT|"):
-            parts = line.split("|")
-            if len(parts) >= 4:
-                unit_id = int(parts[1])
-                unit_index = int(parts[2])
-                unit_type = parts[3]
-        elif line.startswith("XP|"):
-            parts = line.split("|")
-            if len(parts) >= 4:
-                xp = _int(parts[1])
-                xp_needed = _int(parts[2])
-                promotion_count = int(parts[3])
-        elif line.startswith("PROMO|"):
-            parts = line.split("|")
-            if len(parts) >= 4:
-                promotions.append(
-                    PromotionOption(
-                        promotion_type=parts[1],
-                        name=parts[2],
-                        description=parts[3],
-                    )
-                )
-
-    return UnitPromotionStatus(
-        unit_id=unit_id,
-        unit_index=unit_index,
-        unit_type=unit_type,
-        promotions=promotions,
-        xp=xp,
-        xp_needed=xp_needed,
-        promotion_count=promotion_count,
-    )
+def parse_unit_promotions_response(lines: list[str], unit_id: int | None = None) -> UnitPromotionStatus:
+    """Preserve native candidates, current permission, identity and unknowns."""
+    from civ_mcp.lua.unit_promotions import parse
+    return parse(lines, unit_id)
 
 
 def parse_city_states_response(lines: list[str]) -> EnvoyStatus:

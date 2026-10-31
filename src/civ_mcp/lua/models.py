@@ -881,24 +881,39 @@ class GovernorStatus:
 
 @dataclass
 class PromotionOption:
-    """A promotion available for a unit."""
+    """One native returned promotion, with separate UI/current membership."""
 
     promotion_type: str
-    name: str
-    description: str
+    name: str | None
+    description: str | None
+    index: int | None = None
+    ui_candidate: bool | None = None
+    current_candidate: bool | None = None
+    has_promotion: bool | None = None
+    can_select_now: bool | None = None
 
 
 @dataclass
 class UnitPromotionStatus:
-    """Promotions available for a specific unit."""
+    """InGame native promotion observation; None is unknown, [] is known empty."""
 
     unit_id: int
     unit_index: int
     unit_type: str
-    promotions: list[PromotionOption] = field(default_factory=list)
-    xp: int = 0
-    xp_needed: int = 0
-    promotion_count: int = 0
+    promotions: list[PromotionOption] | None = None
+    xp: float | None = None
+    xp_needed: float | None = None
+    promotion_count: int | None = None
+    status: str = "unknown"
+    identity: dict | None = None
+    can_offer_promotions: bool | None = None
+    can_promote_now: bool | None = None
+    ui_candidates: list[int] | None = None
+    current_candidates: list[int] | None = None
+    moves: float | None = None
+    core_busy: bool | None = None
+    unknown_fields: list[str] = field(default_factory=list)
+    error: str | None = None
 
 
 @dataclass

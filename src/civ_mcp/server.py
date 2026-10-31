@@ -1006,13 +1006,14 @@ async def promote_governor(
 
 @mcp.tool(annotations={"readOnlyHint": True})
 async def get_unit_promotions(ctx: Context, unit_id: int) -> str:
-    """List available promotions for a unit.
+    """Read native UI promotion candidates and current execution eligibility.
 
     Args:
         unit_id: The unit's composite ID (from get_units output)
 
-    Shows promotions filtered by the unit's promotion class.
-    Only units with enough XP will have promotions available.
+    Native UI/current candidate sets are separate; unknown is not an empty set.
+    XP and movement are references, not inferred refusal reasons or filters.
+    No command is submitted and pending operations remain unresolved.
     """
     gs = _get_game(ctx)
 
@@ -1031,7 +1032,8 @@ async def promote_unit(ctx: Context, unit_id: int, promotion_type: str) -> str:
         unit_id: The unit's composite ID (from get_units output)
         promotion_type: e.g. PROMOTION_BATTLECRY, PROMOTION_TORTOISE
 
-    Use get_unit_promotions first to see available options.
+    Use get_unit_promotions first; choose a current native candidate only when
+    its current eligibility is true. Eligibility can change before submission.
     Unknown outcomes retain the original promotion; repeating only confirms.
     Use dismiss_popup for a stale promotion notification after confirmation.
     """
