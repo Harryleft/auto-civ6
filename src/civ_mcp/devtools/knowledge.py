@@ -156,6 +156,17 @@ def verify(evidence: Evidence, root: Path, state: dict) -> None:
 
                     found = await call("search_knowledge", {"query": "写作", "topic": "technologies", "limit": 5}, "mcp-search")
                     require(found["results"] == reference["search"]["results"], "MCP/CLI search differs")
+                    brief = await call("search_knowledge", {"query": "写作", "topic": "technologies",
+                        "limit": 5, "view": "brief"}, "mcp-search-brief")
+                    require({k: v for k, v in brief.items() if k not in {"profile", "profile_reference"}} ==
+                            {k: v for k, v in found.items() if k != "profile"}, "Brief search changed results or coverage")
+                    profile_hash = hashlib.sha256(json.dumps(found["profile"], ensure_ascii=False,
+                        sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")).hexdigest()
+                    require(brief["profile_reference"]["sha256"] == profile_hash, "Brief profile fingerprint differs")
+                    expansion = brief["profile_reference"]["expand"]
+                    require(expansion["tool"] == "search_knowledge", "Brief expansion uses another tool")
+                    expanded = await call(expansion["tool"], expansion["arguments"], "mcp-search-expanded")
+                    require(expanded == found, "Brief evidence expansion differs")
                     for level in ("summary", "brief", "rule", "evidence"):
                         data = await call("get_knowledge", {"entry_id": "TECH_WRITING", "level": level}, f"mcp-{level}")
                         for key, value in reference[level].items():

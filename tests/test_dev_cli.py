@@ -50,7 +50,7 @@ def test_doctor_and_real_knowledge_path_share_the_result_contract(tmp_path):
     assert verified["status"] == "PASS"
     assert data["knowledge_unchanged"] and data["scratch_removed"] and data["mcp_session_closed"]
     calls = json.loads((output / "mcp-attempts.json").read_text())
-    assert [call["tool"] for call in calls] == ["search_knowledge", *["get_knowledge"] * 4]
+    assert [call["tool"] for call in calls] == [*["search_knowledge"] * 3, *["get_knowledge"] * 4]
     for level in ("summary", "brief", "rule", "evidence"):
         result = json.loads((output / f"mcp-{level}.json").read_text())
         payload = json.loads(result["content"][0]["text"])

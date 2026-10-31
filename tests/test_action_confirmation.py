@@ -603,3 +603,50 @@ def test_concurrent_same_production_intent_submits_once(lose_ack):
         assert state.pending_action_summary is None
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize('ordinary', ['0', '2', None])
+@pytest.mark.parametrize('native', ['', '|movement_moves:0|zoc:true', '|movement_moves:2|zoc:false'])
+def test_arrival_receipt_preserves_observed_movement_without_more_io(ordinary, native):
+    moves = f'|moves:{ordinary}' if ordinary is not None else ''
+    engine = Engine(writes=[['OK:MOVING_TO|22,9|from:22,11']],
+                    reads=[[f'POS|22|9{moves}{native}|busy:false']])
+    state = GameState(engine)
+    state.dismiss_popup = no_dismiss
+    result = asyncio.run(state.move_unit(0, 22, 9))
+    assert f'|moves_remaining:{ordinary if ordinary is not None else "unknown"}' in result
+    assert f'|movement_moves_remaining:{native.split("movement_moves:")[1].split("|")[0] if native else "unknown"}' in result
+    assert f'|zoc:{native.rsplit("zoc:",1)[1] if native else "unknown"}' in result
+    assert result.count('|moves_remaining:') == 1
+    assert 'now_at:22,9' in result and 'STOPPED' not in result
+    assert len(engine.submissions) == 1 and not engine.reads
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('native,marker', [
+    ('moves:0|movement_moves:0|zoc:false', 'moves exhausted'),
+    ('moves:1|movement_moves:0|zoc:false', 'native movement exhausted'),
+    ('moves:1|movement_moves:1|zoc:true', 'entered zone of control'),
+])
+def test_stopped_receipt_keeps_all_native_facts_once(native, marker):
+    engine = Engine(writes=[['OK:MOVING_TO|22,9|from:22,11']],
+                    reads=[[f'POS|22|10|{native}|busy:false']])
+    state = GameState(engine)
+    state.dismiss_popup = no_dismiss
+    result = asyncio.run(state.move_unit(0, 22, 9))
+    assert f'STOPPED_MID_PATH ({marker})' in result
+    for key in ('moves_remaining', 'movement_moves_remaining', 'zoc'):
+        assert result.count(f'|{key}:') == 1
+    assert len(engine.submissions) == 1 and not engine.reads
+
+
+def test_lost_move_ack_confirmation_adds_observed_facts_without_replay():
+    engine = Engine(writes=[['OK:MOVING_TO|22,9|from:22,11']],
+                    reads=[ConnectionError('lost'), ['POS|22|9|moves:0|movement_moves:0|zoc:false|busy:false']])
+    state = GameState(engine)
+    state.dismiss_popup = no_dismiss
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.move_unit(0, 22, 9))
+    result = asyncio.run(state.move_unit(0, 22, 9))
+    assert '|moves_remaining:0|movement_moves_remaining:0|zoc:false' in result
+    assert len(engine.submissions) == 1 and not engine.reads
+    assert state.pending_action_summary is None

@@ -152,3 +152,77 @@ def test_logs_turns_cli_is_offline_and_exports_json_only(tmp_path, capsys):
     assert result["data"]["completed_turns"] == 1
     assert (destination/'command-timing.json').is_file()
     assert not list(destination.glob('*.csv'))
+
+
+def decision_anchor(turn=1, seed=7, start=0):
+    data = {'schema_version': 1, 'status': 'ready',
+            'identity': {'civilization': 'sumeria', 'seed': seed, 'player_id': 0, 'turn': turn},
+            'checks': {k: True for k in ('stable_world_turn', 'overview_scope', 'unit_scope', 'city_scope', 'victory_scope')}}
+    return record('state decision', start, start + 1, tool='get_decision_context', text=json.dumps(data))
+
+
+def test_decision_anchor_attributes_native_confirmation_once():
+    value = decision_anchor()
+    payload = value['events'][-1]['result']
+    payload['structuredContent'] = {'result': payload['content'][0]['text']}
+    timing = TurnTiming()
+    timing.observe(value)
+    timing.observe(record('turn end', 2, 3, tool='end_turn', text='Turn 1 -> 2\n'))
+    assert timing.report()['completed_turns'] == 1
+    assert [r['turn'] for r in timing.report()['rounds']] == [1]
+    assert timing.report()['command_count'] == 2
+
+
+@pytest.mark.parametrize('change', ['schema', 'status', 'checks', 'false_check', 'integer_check',
+    'empty_civ', 'bool_seed', 'bool_player', 'bool_turn', 'negative_player', 'negative_turn', 'other_tool', 'error'])
+def test_invalid_decision_anchor_does_not_guess_turn(change):
+    value = decision_anchor()
+    event = value['events'][-1]
+    data = json.loads(event['result']['content'][0]['text'])
+    if change == 'schema': data['schema_version'] = True
+    elif change == 'status': data['status'] = 'unknown'
+    elif change == 'checks': del data['checks']['city_scope']
+    elif change == 'false_check': data['checks']['city_scope'] = False
+    elif change == 'integer_check': data['checks']['city_scope'] = 1
+    elif change == 'empty_civ': data['identity']['civilization'] = ' '
+    elif change.startswith('bool_'): data['identity'][change[5:] if change != 'bool_player' else 'player_id'] = True
+    elif change.startswith('negative_'): data['identity']['player_id' if change == 'negative_player' else 'turn'] = -1
+    elif change == 'other_tool': event['tool'] = 'get_knowledge'
+    elif change == 'error': event['is_error'] = True
+    event['result']['content'][0]['text'] = json.dumps(data)
+    timing = TurnTiming()
+    timing.observe(value)
+    assert timing.turn is None and not timing.report()['rounds']
+
+
+@pytest.mark.parametrize('structured', [False, True])
+def test_conflicting_decision_contents_reject_anchor_and_record_issue(structured):
+    value = decision_anchor()
+    result = value['events'][-1]['result']
+    other = json.loads(result['content'][0]['text'])
+    other['identity']['turn'] = 99
+    if structured: result['structuredContent'] = other
+    else: result['content'].append({'type': 'text', 'text': json.dumps(other)})
+    timing = TurnTiming()
+    timing.observe(value)
+    assert timing.turn is None
+    assert any(i['reason'] == 'decision_anchor_conflict' for i in timing.report()['issues'])
+
+
+def test_decision_world_change_uses_existing_segment_boundary():
+    timing = TurnTiming()
+    timing.observe(decision_anchor())
+    timing.observe(decision_anchor(seed=8, start=2))
+    assert [r['segment'] for r in timing.report()['rounds']] == [1, 2]
+    assert timing.report()['rounds'][0]['status'] == 'world_changed'
+    assert timing.report()['completed_turns'] == 0
+
+
+def test_native_advance_without_anchor_is_explicitly_unattributed():
+    timing = TurnTiming()
+    timing.observe(record('turn end', 1, 2, tool='end_turn', text='Turn 5 -> 6\n'))
+    result = timing.report()
+    assert result['completed_turns'] == 0 and not result['rounds']
+    assert result['unattributed_confirmed_advance'] == [{'request_id': 'codex-1-turn end', 'segment': 1, 'from': 5, 'to': 6}]
+    assert result['quality'] == 'partial'
+    assert timing.turn is None

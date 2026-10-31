@@ -76,9 +76,9 @@ end
 
     async def execute_write(self, code):
         if 'ACTION_' not in code:
-            # The optional popup context is unavailable. GameState must still
-            # execute the action through its normal scope and confirmation.
-            raise ConnectionError("optional popup context unavailable")
+            # This fixture exercises movement witnesses, so explicitly certify
+            # an empty popup scope. A lost popup reply correctly blocks moves.
+            return ["INFORMATION_POPUPS|DONE"] if "INFORMATION_POPUPS" in code else []
         if 'ACTION_IDENTITY|' in code and self.lose_observation:
             self.lose_observation = False
             raise ConnectionError("lost observation")

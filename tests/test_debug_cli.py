@@ -401,3 +401,18 @@ def test_error_detection_only_uses_explicit_failure_boundaries(text,protocol,cod
     result=CallToolResult(isError=protocol,content=[TextContent(type='text',text=text)])
     error=tool_error('get_units',result)
     assert (error['code'] if error else None)==code
+
+
+@pytest.mark.parametrize("compact", [False, True])
+@pytest.mark.parametrize("view", ["brief", "structured"])
+def test_actual_stdio_decision_anchor_survives_display_compaction(tmp_path, compact, view):
+    status, _, events, engine, evidence = run_fake(tmp_path,
+        f"game decision --view {view}\nquit\n", scenario="decision", compact=compact)
+    assert status == "PASS" and engine["submissions"] == 0
+    assert engine["observed"] == ["get_decision_context"]
+    event = next(e for e in events if e["event"] == "tool_result")
+    data = json.loads(event["result"]["content"][0]["text"])
+    assert data["identity"]["turn"] == 12 and data["status"] == "ready"
+    timing = json.loads((evidence.path / "turn-timing.json").read_text())
+    assert timing["rounds"][0]["turn"] == 12
+    assert timing["completed_turns"] == 0 and timing["command_count"] == 2

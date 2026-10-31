@@ -250,6 +250,8 @@ def domain_parser(group: str):
         search.add_argument("query")
         search.add_argument("--topic", default=argparse.SUPPRESS, help="Knowledge topic; validated against the real tool schema")
         search.add_argument("--limit", type=int, default=5, help="Maximum results (1..20); default 5")
+        search.add_argument("--view", choices=("brief", "evidence"), default="brief",
+                            help="brief retains results and references environment catalogs; evidence expands the full profile")
         show = command("show", "get_knowledge", "Read one static entry; does not establish game eligibility.")
         show.add_argument("entry_id")
         show.add_argument("--level", choices=("summary", "brief", "rule", "evidence"), default="summary")

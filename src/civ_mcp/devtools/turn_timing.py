@@ -15,6 +15,49 @@ def number(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
+DECISION_CHECKS = ("stable_world_turn", "overview_scope", "unit_scope", "city_scope", "victory_scope")
+
+
+def valid_identity(identity):
+    return (isinstance(identity, dict) and isinstance(identity.get("civilization"), str)
+            and bool(identity["civilization"].strip())
+            and all(type(identity.get(k)) is int for k in ("seed", "player_id", "turn"))
+            and identity["player_id"] >= 0 and identity["turn"] >= 0)
+
+
+def decision_identity(result):
+    """Accept only the known decision envelope, including MCP's duplicate wrapper.
+
+    All representations must certify the same identity. Content prose and JSON
+    from other tools are deliberately outside this parser.
+    """
+    values = [c.get("text") for c in result.get("content", []) if c.get("type") == "text"]
+    if "structuredContent" in result:
+        structured = result["structuredContent"]
+        if isinstance(structured, dict) and set(structured) == {"result"}:
+            structured = structured["result"]
+        values.append(structured)
+    identities = []
+    for value in values:
+        try:
+            data = json.loads(value) if isinstance(value, str) else value
+        except (ValueError, TypeError):
+            return None, "decision_anchor_invalid"
+        if (not isinstance(data, dict) or type(data.get("schema_version")) is not int
+                or data["schema_version"] != 1 or data.get("status") != "ready"
+                or not isinstance(data.get("checks"), dict)
+                or not all(data["checks"].get(k) is True for k in DECISION_CHECKS)
+                or not valid_identity(data.get("identity"))):
+            return None, "decision_anchor_invalid"
+        identities.append(data["identity"])
+    if not identities:
+        return None, "decision_anchor_invalid"
+    keys = ("civilization", "seed", "player_id", "turn")
+    if len({tuple(value[k] for k in keys) for value in identities}) != 1:
+        return None, "decision_anchor_conflict"
+    return identities[0], None
+
+
 class TurnTiming:
     """One row per observed world turn; only confirmed end-turn closes a row.
 
@@ -34,6 +77,7 @@ class TurnTiming:
         self.rounds = []
         self.commands = []
         self.issues = []
+        self.unattributed_confirmed_advance = []
 
     def reset(self, reason):
         if self.current:
@@ -62,8 +106,7 @@ class TurnTiming:
         for event in events:
             if event.get("event") == "verification" and event.get("status") == "PASS":
                 identity = event.get("identity", {})
-                if (not isinstance(identity.get("civilization"), str)
-                        or any(type(identity.get(k)) is not int for k in ("seed", "player_id", "turn"))):
+                if not valid_identity(identity):
                     self.issues.append({"request_id": request_id, "reason": "identity_incomplete"})
                     continue
                 world = tuple(identity.get(k) for k in ("civilization", "seed", "player_id"))
@@ -71,6 +114,27 @@ class TurnTiming:
                     self.reset("world_changed")
                 self.identity = world
                 observed = identity.get("turn")
+        decision_anchors = []
+        decision_error = None
+        for event in tools:
+            if event.get("tool") == "get_decision_context" and not event.get("is_error"):
+                identity, error = decision_identity(event.get("result", {}))
+                if error:
+                    decision_error = error
+                else:
+                    decision_anchors.append(identity)
+        keys = ("civilization", "seed", "player_id", "turn")
+        if len({tuple(value[k] for k in keys) for value in decision_anchors}) > 1:
+            decision_error = "decision_anchor_conflict"
+        if decision_error:
+            self.issues.append({"request_id": request_id, "reason": decision_error})
+        elif decision_anchors:
+            identity = decision_anchors[0]
+            world = tuple(identity[k] for k in keys[:3])
+            if self.identity and world != self.identity:
+                self.reset("world_changed")
+            self.identity = world
+            observed = identity["turn"]
         overview = re.search(r"^Turn (\d+) \|", text, re.M)
         if overview:
             observed = int(overview[1])
@@ -128,6 +192,18 @@ class TurnTiming:
                "cli_seconds": duration, "rpc_seconds": rpc, "clock_source": clock,
                "error_count": errors, "outcome_unknown": bool(unknown)}
         self.commands.append(row)
+        advances = []
+        for event in tools:
+            if event.get("tool") == "end_turn" and not event.get("is_error"):
+                result = "\n".join(c.get("text", "") for c in event.get("result", {}).get("content", [])
+                                   if c.get("type") == "text")
+                match = re.search(r"^Turn (\d+) -> (\d+)(?:\n|$)", result)
+                if match and int(match[2]) > int(match[1]):
+                    advances.append((int(match[1]), int(match[2])))
+        for before, after in advances:
+            if self.turn is None or before != self.turn:
+                self.unattributed_confirmed_advance.append({"request_id": request_id,
+                    "segment": self.segment, "from": before, "to": after})
         if self.turn is None:
             return
         if self.current is None:
@@ -158,15 +234,13 @@ class TurnTiming:
             self.issues.append({"request_id": request_id, "reason": "overlapping_commands_or_clock_jump"})
         # Only the existing end_turn's confirmed receipt establishes a boundary.
         # A newer overview alone never marks the previous turn completed.
-        for event in tools:
-            if event.get("tool") == "end_turn" and not event.get("is_error"):
-                result = "\n".join(c.get("text", "") for c in event.get("result", {}).get("content", []))
-                match = re.search(r"^Turn (\d+) -> (\d+)(?:\n|$)", result)
-                if match and int(match[1]) == self.turn and int(match[2]) > self.turn:
-                    current["status"] = "completed"
-                    self.turn = int(match[2])
-                    self.boundary = (end, tick_end, current["clock_source"])
-                    self.current = None
+        for before, after in advances:
+            if before == self.turn:
+                current["status"] = "completed"
+                self.turn = after
+                self.boundary = (end, tick_end, current["clock_source"])
+                self.current = None
+                break
 
     def report(self):
         rounds = [{k: v for k, v in row.items() if not k.startswith("_")} for row in self.rounds]
@@ -186,7 +260,8 @@ class TurnTiming:
                 "completed_turns": sum(r["status"] == "completed" for r in rounds),
                 "partial_turns": sum(r["status"] == "partial" for r in rounds),
                 "command_count": len(self.commands), "issues": self.issues,
-                "quality": "partial" if self.issues else "complete_for_observed_commands",
+                "unattributed_confirmed_advance": self.unattributed_confirmed_advance,
+                "quality": "partial" if self.issues or self.unattributed_confirmed_advance else "complete_for_observed_commands",
                 "by_actor": by_actor, "by_command": by_command,
                 "gap_meaning": "Model/provider, shell, human and handoff waits; not pure thinking time",
                 "unknown_duration_meaning": "Time observed until the error; not proof the game operation completed"}

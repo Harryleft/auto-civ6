@@ -6,6 +6,7 @@ completion nor permission to replay; each action keeps its native evidence.
 from __future__ import annotations
 
 import asyncio
+import math
 import re
 import time
 from dataclasses import dataclass, field
@@ -13,6 +14,21 @@ from typing import Callable
 
 from civ_mcp import lua as lq
 from civ_mcp.connection import GameConnection, LuaError
+
+
+def _move_observation_suffix(meta: dict[str, str]) -> str:
+    """Display the existing POS observation; this never grants action eligibility."""
+    def number(key):
+        try:
+            value = float(meta[key])
+            return f"{value:g}" if math.isfinite(value) else "unknown"
+        except (KeyError, ValueError):
+            return "unknown"
+
+    zoc = meta.get("zoc")
+    return (f"|moves_remaining:{number('moves')}"
+            f"|movement_moves_remaining:{number('movement_moves')}"
+            f"|zoc:{zoc if zoc in {'true', 'false'} else 'unknown'}")
 
 
 @dataclass(frozen=True)
@@ -554,6 +570,7 @@ class ActionLifecycle:
                 suffix = f"|now_at:{x},{y}"
                 if origin:
                     suffix += f"|(moved dx:{x-origin[0]:+d} dy:{y-origin[1]:+d})"
+                suffix += _move_observation_suffix(meta)
                 if (x, y) == target and busy == "false":
                     return pending.success + suffix
                 if moves is not None and moves <= 0 and busy == "false":
@@ -568,8 +585,6 @@ class ActionLifecycle:
                 elif meta.get("zoc") == "true":
                     native_stop = "entered zone of control"
                 if origin is not None and (x, y) != origin and busy == "false" and native_stop:
-                    if moves is not None:
-                        suffix += f"|moves_remaining:{moves:g}"
                     return pending.success + suffix + f"|STOPPED_MID_PATH ({native_stop})"
                 queued = [row for row in pending.observed if row.startswith("QUEUED_TARGET|")]
                 # 控制区内再次移动可能原地结束本段；仅凭控制区或队列不能确认。
@@ -587,8 +602,8 @@ class ActionLifecycle:
                 if (interrupted is not None and interrupted == (origin, (x, y))
                         and origin is not None and (x, y) != origin and (x, y) != target
                         and busy == "false" and moves is not None and moves > 0 and not queued):
-                    return (pending.success + suffix + f"|moves_remaining:{moves:g}"
-                            "|PATH_INTERRUPTED (native move cleared)")
+                    return (pending.success + suffix
+                            + "|PATH_INTERRUPTED (native move cleared)")
                 # Completion belongs to the submitted segment. A new path
                 # may backtrack or disappear after units block its route;
                 # its turn labels cannot invalidate the native event.
@@ -598,8 +613,8 @@ class ActionLifecycle:
                         and origin is not None and (x, y) != origin and busy == "false"
                         and moves is not None and moves > 0
                         and queued[0] == f"QUEUED_TARGET|{target[0]}|{target[1]}"):
-                    return (pending.success + suffix + f"|moves_remaining:{moves:g}"
-                            "|STOPPED_MID_PATH (native segment complete)"
+                    return (pending.success + suffix
+                            + "|STOPPED_MID_PATH (native segment complete)"
                             + "|" + "|".join(witness[2]))
                 impassable = any(line.startswith(("DIAG|MOUNTAIN|", "DIAG|IMPASSABLE|")) for line in pending.observed)
                 if (x, y) == origin and busy == "false" and impassable:

@@ -15,7 +15,7 @@ from test_action_confirmation import Engine, no_dismiss
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--receipt", type=Path, required=True)
-parser.add_argument("--snapshot", choices=("ready", "pending", "changed-turn", "read-error", "popup-unknown"))
+parser.add_argument("--snapshot", choices=("ready", "pending", "changed-turn", "read-error", "popup-unknown", "decision"))
 args = parser.parse_args()
 game_state.ACTION_CONFIRM_TIMEOUT = .05
 game_state.ACTION_CONFIRM_INTERVAL = .001
@@ -81,6 +81,19 @@ if args.snapshot:
 
         engine.execute_write = lost_popup_reply
         game.dismiss_popup = GameState.dismiss_popup.__get__(game, GameState)
+
+
+if args.snapshot == "decision":
+    from test_decision_context import response
+    original_write = engine.execute_write
+
+    async def decision_write(code, **kwargs):
+        if "DECISION_BEGIN|" in code:
+            observed.append("get_decision_context")
+            return response()
+        return await original_write(code, **kwargs)
+
+    engine.execute_write = decision_write
 
 
 class Logger:

@@ -340,12 +340,15 @@ async def search_knowledge(
     query: Annotated[str, Field(min_length=1)],
     topic: Optional[knowledge.KnowledgeTopic] = None,
     limit: Annotated[int, Field(ge=1, le=20, strict=True)] = 5,
+    view: knowledge.KnowledgeSearchView = 'evidence',
 ) -> str:
     """Search static Civ6 rules by a Chinese/English name or internal ID fragment.
 
     Matches names/IDs case-insensitively, not semantic text. Optionally filter
     a topic, including civilizations for civilization/leader/trait identities;
-    returns bounded summaries and total/truncated metadata.
+    returns bounded summaries and total/truncated metadata. Brief factors known
+    environment catalogs into a hashed reference with exact evidence expansion;
+    evidence (the API default) retains the complete profile.
     At setup, use the overview's civilization/leader IDs to understand your
     abilities before choosing a route; query newly met opponents by visible IDs.
     Use get_knowledge(level='rule') for prerequisites, unlocks and mechanics;
@@ -353,8 +356,8 @@ async def search_knowledge(
     eligibility or DLC ownership. Installed-definition catalog entries remain
     conditional and unapplied. Available offline and during pending operations.
     """
-    return await _logged(ctx, "search_knowledge", {"query": query, "topic": topic, "limit": limit},
-                         lambda: knowledge.search(query, topic, limit))
+    return await _logged(ctx, "search_knowledge", {"query": query, "topic": topic, "limit": limit, "view": view},
+                         lambda: knowledge.search(query, topic, limit, view))
 
 
 @mcp.tool(annotations={"readOnlyHint": True, "idempotentHint": True})

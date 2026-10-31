@@ -29,7 +29,7 @@ from test_server import make_ctx, make_overview
     ('save create "new independent name" --dry-run', 'save_game', {'save_name':'new independent name'}, True),
     ('save reload checkpoint --dry-run', 'reload_game_save', {'save_name':'checkpoint'}, True),
     ('save load checkpoint --dry-run', 'load_game_save', {'save_name':'checkpoint'}, True),
-    ('knowledge search "writing rules" --limit 2', 'search_knowledge', {'query':'writing rules','limit':2}, False),
+    ('knowledge search "writing rules" --limit 2', 'search_knowledge', {'query':'writing rules','limit':2,'view':'brief'}, False),
     ('knowledge show TECH_WRITING --level rule', 'get_knowledge', {'entry_id':'TECH_WRITING','level':'rule'}, False),
 ])
 def test_typed_arguments_preserve_native_tool_contract(line, tool, arguments, dry_run):

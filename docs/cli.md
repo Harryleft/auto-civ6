@@ -86,7 +86,7 @@ pytest 透传放在 `--` 后，支持 `-q`、`-v`、`-vv`、`-x`、`-k EXPR`、`
 | `command_count`、`error_count`、`unknown_count` | 命令数、错误／阻塞返回次数、未知返回次数；不等于独立故障或重复提交次数。 |
 | `status`、`clock_source` | `completed` 仅来自原 `end_turn` 已确认的推进回执；停止在当前回合记 `partial`。新记录使用单调时钟，旧记录回填使用墙钟并标记来源。 |
 
-JSON 另按 actor 和命令汇总调用量、累计／最长耗时及错误数；逐命令 JSON 可定位具体参数。普通概览显示更高回合不会补造已完成回合；加载或世界身份变化会切分记录。无法关联的回应、缺失时间和时钟异常保留在 `issues`，不编造零耗时。未结束回合的跨度截至最后一条计入命令，不包含停止测试后的闲置时间。
+JSON 另按 actor 和命令汇总调用量、累计／最长耗时及错误数；逐命令 JSON 可定位具体参数。合法的 `get_decision_context` 简报或结构化回应也可作为回合锚点：要求 schema 1、ready、完整通过的范围检查和有效世界身份；多份内容身份冲突时拒绝锚定并记入 `issues`。无合法锚点的原生确认推进保留在 `unattributed_confirmed_advance`（`from`／`to`），质量标记为 partial，不虚构耗时跨度或已完成回合。普通概览显示更高回合不会补造已完成回合；加载或世界身份变化会切分记录。无法关联的回应、缺失时间和时钟异常保留在 `issues`，不编造零耗时。未结束回合的跨度截至最后一条计入命令，不包含停止测试后的闲置时间。
 
 转接器历史记录可用 `civ6 logs turns --relay PATH` 离线重建；普通 action JSONL 只有单点时间，不能据此还原每次调用耗时。当前完成边界对应普通单人 `end_turn`；热座专用席位交接尚未纳入本项验收。用户暂停若落在命令间隔内会进入 `gap_seconds`，当前没有自动识别或扣除暂停的机制。
 
@@ -188,6 +188,8 @@ game decision --view structured
 
 攻城使用 `unit attack ID X Y`。可见目标格存在城市时，攻击绑定城市中心区域，优先于城内驻军。原生资格、攻击方式和路径通过核验后，只提交一次；`UNIT_CITY_ATTACK_CONFIRMED` 同时要求匹配的战斗参与者事件和城防／单位伤害，或近战单位进入已归本方的目标城。返回城墙、驻军、归属和攻击单位生命变化。普通 `unit move` 进入已识别的敌城会返回 `ENEMY_CITY_MOVE`，不提交移动。结果未知时保留原请求，以完全相同的攻击命令确认。
 
+移动确认回执复用原生 POS 观察，在 `now_at` 后保留普通剩余移动力 `moves_remaining`、有效移动力 `movement_moves_remaining` 和 `zoc`，缺失值显示 unknown。普通移动力大于零不单独证明可以继续行动；到达、耗尽、控制区和未决确认的判断仍依据原有原生见证。
+
 飞机使用 `unit rebase ID X Y` 转场，不使用地面 `move`。命令先核对当前原生可转场目标，再提交一次 `REBASE`；只有原飞机到达目标且消耗移动力才确认。结果未知时，以同一单位和目标确认原请求，不重复转场。
 
 其他已有动作也有命名入口：`unit repair/remove-improvement/remove-feature/build-route/automate ID`、`unit activate/sacrifice-charges/spread-religion/launch-inquisition/condemn-heretic/remove-heresy ID`；带目标坐标的入口为 `unit trade-route/teleport/religious-attack ID X Y`。斜线表示分别可用的子命令，不能原样输入。完整参数用 `unit COMMAND --help` 查询；原有 `unit action` 保留。
@@ -276,10 +278,12 @@ game decision --view structured
 | --- | --- | --- |
 | `map area X Y [--radius N]` | `get_map_area` | 只读 |
 | `victory show` | `get_victory_progress` | 只读 |
-| `knowledge search QUERY [--topic TOPIC] [--limit N]` | `search_knowledge` | 静态只读 |
+| `knowledge search QUERY [--topic TOPIC] [--limit N] [--view brief\|evidence]` | `search_knowledge` | 静态只读 |
 | `knowledge show ID [--level LEVEL]` | `get_knowledge` | 静态只读 |
 
 地图半径默认 2、范围 1～4，越界直接拒绝。知识搜索 limit 默认 5、范围 1～20；LEVEL 为 summary（默认）、brief、rule 或 evidence。brief 保留完整规则，合并来源、父级 ID 和公共字段；公共字段作用于组内每行，格式见[知识说明](../civ6_knowledge/README.md#cli-查询与内部协议)。静态规则不证明本局资格；迷雾、未知和不存在仍须区分。知识查询也可在 `debug --offline` 内执行。
+
+`knowledge search` 默认 `--view brief`，搜索结果、计数、截断、覆盖和适用范围均完整保留。已知重复的嵌套环境资料通过 `profile_reference` 引用，包含完整 profile 的 canonical SHA-256、`omitted_fields` 和同一 query／topic／limit 的 `view=evidence` 展开参数；零命中也可展开。profile 的标量、警告及尚未识别的新字段保留。`--view evidence` 返回完整 profile；内部 search API 默认 evidence，以兼容原调用。
 
 ### 政策、城邦与总督
 

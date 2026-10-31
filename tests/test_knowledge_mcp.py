@@ -367,3 +367,54 @@ def test_mcp_civilization_unique_unit_ability_keeps_inactive_grant_and_condition
 
     session_run(monkeypatch, FakeGameState(), scenario)
     assert fingerprints(root) == before
+
+
+@pytest.mark.parametrize('query,limit', [('TECH_', 1), ('writing', 5), ('NO_SUCH_ENTRY', 2)])
+def test_search_brief_preserves_results_and_expands_profile_without_entry_id(monkeypatch, tmp_path, query, limit):
+    from civ_mcp import knowledge
+    from test_knowledge_queries import snapshot
+    data = snapshot()
+    data['profile'].update(configuration_enabled_mods=[{'id': 'conditional', 'active': None}],
+        installed_catalog_gaps=[{'status': 'unknown', 'reason': 'conditional SQL not evaluated'}],
+        configuration_warning='Per-game applicability remains unknown', future_version=0,
+        future_warning=['UNKNOWN', {'conditional': True}], future_metadata={'new': None})
+    root = build(tmp_path, data)
+    monkeypatch.setenv('CIV6_KNOWLEDGE_DIR', str(root))
+    before = fingerprints(root)
+    evidence = json.loads(asyncio.run(knowledge.search(query, 'technologies', limit)))
+    brief = json.loads(asyncio.run(knowledge.search(query, 'technologies', limit, view='brief')))
+    assert brief['status'] == evidence['status']
+    assert {k: v for k, v in brief.items() if k not in ('profile', 'profile_reference')} == {
+        k: v for k, v in evidence.items() if k != 'profile'}
+    assert brief['profile']['future_version'] == 0
+    assert brief['profile']['future_warning'] == ['UNKNOWN', {'conditional': True}]
+    assert brief['profile']['future_metadata'] == {'new': None}
+    assert brief['profile']['configuration_warning'] == evidence['profile']['configuration_warning']
+    reference = brief['profile_reference']
+    canonical = json.dumps(evidence['profile'], ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False)
+    assert reference['sha256'] == hashlib.sha256(canonical.encode('utf-8')).hexdigest()
+    assert set(reference['omitted_fields']) == {'configuration_enabled_mods', 'installed_catalog_gaps'}
+    assert reference['expand']['tool'] == 'search_knowledge'
+    expanded = json.loads(asyncio.run(knowledge.search(**reference['expand']['arguments'])))
+    assert expanded == evidence
+    assert fingerprints(root) == before
+
+
+def test_search_view_schema_and_named_cli_default_are_distinct(monkeypatch, tmp_path):
+    from civ_mcp.devtools.commands import parse_command
+    root = build(tmp_path)
+    monkeypatch.setenv('CIV6_KNOWLEDGE_DIR', str(root))
+    default = parse_command('knowledge search writing')
+    expanded = parse_command('knowledge search writing --view evidence')
+    assert default.arguments['view'] == 'brief'
+    assert expanded.arguments['view'] == 'evidence'
+
+    async def scenario(session):
+        tools = {t.name: t for t in (await session.list_tools()).tools}
+        view = tools['search_knowledge'].inputSchema['properties']['view']
+        assert view['enum'] == ['brief', 'evidence'] and view['default'] == 'evidence'
+        invalid = await session.call_tool('search_knowledge', {'query': 'writing', 'view': 'invalid'})
+        assert invalid.isError
+        brief = await session.call_tool('search_knowledge', default.arguments)
+        assert 'profile_reference' in json.loads(brief.content[0].text)
+    session_run(monkeypatch, FakeGameState(), scenario)

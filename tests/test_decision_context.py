@@ -186,3 +186,16 @@ def test_real_stdio_pending_action_is_not_confirmed_by_decision_reader(tmp_path)
     event = next(r for r in events if r["event"] == "tool_result" and r["tool"] == "get_decision_context")
     value = json.loads(event["result"]["content"][0]["text"])
     assert value["status"] == "blocked" and value["pending"]["action"]
+
+
+@pytest.mark.parametrize('view', ['brief', 'structured'])
+def test_actual_decision_envelope_is_timing_anchor_without_extra_queries(view):
+    from civ_mcp.devtools.turn_timing import TurnTiming
+    from test_turn_timing import record
+    value, _, conn = read(view=view)
+    timing = TurnTiming()
+    timing.observe(record('state decision', 0, 1, tool='get_decision_context', text=json.dumps(value)))
+    timing.observe(record('turn end', 2, 3, tool='end_turn', text='Turn 12 -> 13\n'))
+    assert timing.report()['completed_turns'] == 1
+    assert timing.report()['rounds'][0]['turn'] == 12
+    assert len(conn.calls) == 1

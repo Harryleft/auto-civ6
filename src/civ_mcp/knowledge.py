@@ -13,6 +13,7 @@ KnowledgeTopic = Literal[
     'resources', 'combat', 'diplomacy', 'victory', 'civilizations',
 ]
 KnowledgeLevel = Literal['summary', 'brief', 'rule', 'evidence']
+KnowledgeSearchView = Literal['brief', 'evidence']
 TOPICS = KnowledgeTopic.__args__
 LEVELS = KnowledgeLevel.__args__
 QUERY_TIMEOUT = 10.0
@@ -29,7 +30,8 @@ def _error(message: str) -> str:
 
 
 async def _query(arguments: list[str], *, entry_id: str | None = None,
-                 level: KnowledgeLevel = 'summary', requested_limit: int = 5) -> str:
+                 level: KnowledgeLevel = 'summary', requested_limit: int = 5,
+                 search_view: KnowledgeSearchView = 'evidence', search_arguments: dict | None = None) -> str:
     try:
         configured = os.environ.get('CIV6_KNOWLEDGE_DIR')
         if configured is not None and not configured.strip():
@@ -103,26 +105,56 @@ async def _query(arguments: list[str], *, entry_id: str | None = None,
             if result.get('profile', {}).get('sha256') != expected or result['encoding'].get('truncated') is not False:
                 raise ValueError('Invalid brief profile or incomplete rule view')
             profile = result['profile']
-        return json.dumps(result | {
+        envelope = result | {
             'status': result.get('status', 'found'), 'profile': profile,
             'snapshot': {'path': manifest['snapshot'], 'sha256': manifest['snapshot_sha256']},
             'applicability': APPLICABILITY,
-        }, ensure_ascii=False)
+        }
+        if entry_id is None and search_view == 'brief':
+            envelope = brief_search(envelope, search_arguments)
+        return json.dumps(envelope, ensure_ascii=False)
     except (OSError, ValueError, TypeError, KeyError) as exc:
         return _error(str(exc))
 
 
-async def search(query: str, topic: KnowledgeTopic | None = None, limit: int = 5) -> str:
+# Only these established environment catalogs are factored out. Unknown future
+# profile fields, including structured warnings, remain visible until reviewed.
+SEARCH_PROFILE_DETAILS = frozenset({
+    'configuration_enabled_mods', 'installed_catalog_gaps', 'derived_tables',
+    'language_preference', 'missing_optional_tables',
+})
+
+
+def brief_search(envelope: dict, arguments: dict) -> dict:
+    profile = envelope['profile']
+    omitted = sorted(k for k, value in profile.items()
+                     if k in SEARCH_PROFILE_DETAILS and isinstance(value, (dict, list)))
+    canonical = json.dumps(profile, ensure_ascii=False, sort_keys=True,
+                           separators=(',', ':'), allow_nan=False).encode('utf-8')
+    return envelope | {
+        'profile': {k: v for k, v in profile.items() if k not in omitted},
+        'profile_reference': {
+            'sha256': hashlib.sha256(canonical).hexdigest(), 'omitted_fields': omitted,
+            'expand': {'tool': 'search_knowledge', 'arguments': arguments | {'view': 'evidence'}},
+        },
+    }
+
+
+async def search(query: str, topic: KnowledgeTopic | None = None, limit: int = 5,
+                 view: KnowledgeSearchView = 'evidence') -> str:
     if not isinstance(query, str) or not query.strip():
         return _error('query must be a nonempty name or ID fragment')
     if topic is not None and topic not in TOPICS:
         return _error('unknown knowledge topic')
     if type(limit) is not int or not 1 <= limit <= 20:
         return _error('limit must be an integer from 1 to 20')
+    if view not in KnowledgeSearchView.__args__:
+        return _error('unknown knowledge search view')
     arguments = ['search', '--limit', str(limit)]
     if topic is not None:
         arguments += ['--topic', topic]
-    return await _query([*arguments, '--', query], requested_limit=limit)
+    return await _query([*arguments, '--', query], requested_limit=limit, search_view=view,
+                        search_arguments={'query': query, 'topic': topic, 'limit': limit})
 
 
 async def get(entry_id: str, level: KnowledgeLevel = 'summary') -> str:
