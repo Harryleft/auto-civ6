@@ -317,6 +317,25 @@ local function text(path)
     end)
     return ok and type(value) == "string" and value:gsub("[|\r\n]", " ") or ""
 end
+local function agreementName(item,subType,valueType)
+    local known=DealAgreementTypes or {}
+    if known.OPEN_BORDERS~=nil and subType==known.OPEN_BORDERS then return "Open Borders" end
+    if known.JOINT_WAR~=nil and subType==known.JOINT_WAR then return "Joint War" end
+    if known.ALLIANCE~=nil and subType==known.ALLIANCE then
+        local names={"Research","Cultural","Economic","Military","Religious"}
+        return (names[valueType+1] or "Unknown") .. " Alliance"
+    end
+    local function localized(getKey)
+        local ok,key=pcall(getKey)
+        if not ok or type(key)~="string" or key=="" then return nil end
+        local readable,label=pcall(function() return Locale.Lookup(key) end)
+        if readable and type(label)=="string" and label~="" then return label end
+    end
+    -- Match the installed native deal view; do not infer terms from duration.
+    local label=localized(function() return item:GetSubTypeNameID() end)
+        or localized(function() return GameInfo.DiplomaticActions[subType].Name end)
+    return label or ("Unknown Agreement (subtype:" .. tostring(subType) .. ", value:" .. tostring(valueType) .. ")")
+end
 local dialogue, reason, buttons = "", "", {}
 if context.status == "DIALOGUE" then
     dialogue = text("/InGame/DiplomacyActionView/LeaderResponseText")
@@ -361,13 +380,7 @@ for _, session in ipairs(context.sessions) do
                 local resource = GameInfo.Resources[valueType]
                 itemName=resource and Locale.Lookup(resource.Name) or ("Resource#" .. tostring(valueType))
             elseif itemType == DealItemTypes.AGREEMENTS then
-                typeName="AGREEMENT"; itemName="Agreement"
-                if subType == DealAgreementTypes.OPEN_BORDERS then itemName="Open Borders"
-                elseif subType == DealAgreementTypes.JOINT_WAR then itemName="Joint War"
-                elseif subType == DealAgreementTypes.ALLIANCE then
-                    local names={"Research","Cultural","Economic","Military","Religious"}
-                    itemName=(names[valueType+1] or "Unknown") .. " Alliance"
-                end
+                typeName="AGREEMENT"; itemName=agreementName(item,subType,valueType)
             elseif itemType == DealItemTypes.FAVOR then typeName="FAVOR"; itemName="Diplomatic Favor"
             elseif itemType == DealItemTypes.CITIES then typeName="CITY"; itemName="City"
             elseif itemType == DealItemTypes.GREATWORK then typeName="GREAT_WORK"; itemName="Great Work"
