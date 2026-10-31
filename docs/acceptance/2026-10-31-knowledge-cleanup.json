@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "source_commit": "56b39e15e2af5a66d278e6c067e694842a91741b",
+  "authorization": "User confirmed after the closeout report: remove the old driver and dedicated tests, archive the merged worktree, preserve saves and raw evidence.",
+  "outcome": {
+    "source_cleanup": "completed",
+    "worktree_archive": "blocked_by_active_task",
+    "user_approval_pending": false,
+    "forced_removal": false,
+    "push": "not_run",
+    "game_access": "not_run"
+  },
+  "verification": {
+    "status": "PASS",
+    "deleted_sources": [
+      "scripts/integration_turns.py",
+      "tests/test_integration_driver.py"
+    ],
+    "deleted_bytecode": [
+      {
+        "path": "scripts/__pycache__/integration_turns.cpython-312.pyc",
+        "sha256": "49c58d32d23c270e38189a87e2d4e583d4c6d3f84f19cb50f597b8422785f810"
+      },
+      {
+        "path": "tests/__pycache__/test_integration_driver.cpython-312.pyc",
+        "sha256": "55704eb905fd878de146cf8777ee7c8a3a3909aa9b0793424b159217d9d33d2f"
+      },
+      {
+        "path": "tests/__pycache__/test_integration_driver.cpython-314.pyc",
+        "sha256": "9c4fc5ea7276a46cbab8546eb92a81a143d53b511a24f9ce68fdb8ace5b82249"
+      }
+    ],
+    "tests": {
+      "turn-tests": {
+        "status": "PASS",
+        "passed": 152,
+        "run_id": "f61e9511dd654441ac360cdd0ccb262e",
+        "selected_files": [
+          "tests/test_end_turn.py",
+          "tests/test_turn_status.py"
+        ]
+      },
+      "checkpoint-tests": {
+        "status": "PASS",
+        "passed": 123,
+        "run_id": "a96fce2f7a2c49d4bf8c544cd8d74894",
+        "selected_files": [
+          "tests/test_game_lifecycle.py",
+          "tests/test_checkpoint_run.py",
+          "tests/test_checkpoint_messages.py",
+          "tests/test_historical_checkpoint.py"
+        ]
+      }
+    },
+    "collected_tests": 6674,
+    "collection_exit_code": 0,
+    "all_collected_tests_executed": false,
+    "checked_links": 94,
+    "protected_regular_files_unchanged": 47462,
+    "protected_symlinks_unchanged": 512,
+    "native_saves_unchanged": 42,
+    "worktree_still_present_and_clean": true,
+    "archive_result": {
+      "tool": "mcp__codex_app__archive_worktree",
+      "root": "~/.codex/worktrees/call-audit-fixes/civ6",
+      "user_authorized": true,
+      "isError": true,
+      "message": "Another active task still uses this worktree.",
+      "archived": false,
+      "forced_removal_attempted": false,
+      "inspection": "Current attached worktree identity was read back. Recent thread summaries did not identify the occupying task; current collaboration children are completed. No other task was stopped or edited."
+    },
+    "game_access": "not_run"
+  },
+  "worktree_preservation_before_archive": {
+    "path": "~/.codex/worktrees/call-audit-fixes/civ6",
+    "head": "ab02f53a8b41200954357556d0f334023e8382c5",
+    "tracked_and_unignored_clean": true,
+    "unique_commits": 0,
+    "mirrored_files_verified": 3693,
+    "mirrored_file_bytes": 47419396,
+    "mirrored_symlinks_verified": 512,
+    "unmirrored_entries": 0
+  },
+  "protected_scopes": [
+    "fixtures/saves",
+    "games",
+    ".scratch/knowledge-use-20261031",
+    ".scratch/help-refine-20261031",
+    ".scratch/knowledge-brief-20261030",
+    ".scratch/neat-closeout-20261031"
+  ],
+  "coverage_retained": {
+    "turns": [
+      "tests/test_end_turn.py",
+      "tests/test_turn_status.py"
+    ],
+    "lifecycle_and_checkpoints": [
+      "tests/test_game_lifecycle.py",
+      "tests/test_checkpoint_run.py",
+      "tests/test_checkpoint_messages.py",
+      "tests/test_historical_checkpoint.py"
+    ],
+    "reason": "Deleted tests exercised the retired deterministic driver. Runtime confirmation, unknown outcome and load/checkpoint assertions remain in existing isolated suites; fixed-strategy assertions were not migrated."
+  },
+  "local_evidence_sha256": {
+    ".scratch/neat-cleanup-20261031/preserve.py": "577c1f62b80e064f8d3a4946954c9d77ef036161c30e52aca16141b91baeb80e",
+    ".scratch/neat-cleanup-20261031/preservation-before.json": "e7d95d3610cbe7e0819e3b64b4cb0f274ac70806465abd6d23fcb596c1881d48",
+    ".scratch/neat-cleanup-20261031/archive-result.json": "7802591cf346c394dece1c13de8263a632ba08f3887b2c8bae45586a5205ff69",
+    ".scratch/neat-cleanup-20261031/removed-bytecode.json": "35bfe408f2576af4417e714d6da3b90cd18eb11ee1ffbd6fcda892ec7a736fd8",
+    ".scratch/neat-cleanup-20261031/collection.txt": "41b62b57fe10629a261b47820a4395d5bb3396e84b3e9658b79cb9c4dfff6f91",
+    ".scratch/neat-cleanup-20261031/verify_after.py": "2a1e6085334eb425bad5c4b9ae58fa6e2e51ebdf161f3a3b40783b55f322949e",
+    ".scratch/neat-cleanup-20261031/verification-after.json": "e51aa2ce3323d579b0830d0ff2758b547c37b9b589ee28db488f92e3c43a7323",
+    ".scratch/neat-cleanup-20261031/turn-tests/summary.json": "7371a5f976ae35903b4c8061ebadd3df83f3866619d739d5b019169671087559",
+    ".scratch/neat-cleanup-20261031/turn-tests/pytest.json": "d7f4ff911160e5f6f16be0fe714ea30250ba7b351f733878815f8f4dfb8b79cf",
+    ".scratch/neat-cleanup-20261031/checkpoint-tests/summary.json": "45e10b52b856c3933d359d9ed83c885915eada130a99b02d9950f35709685296",
+    ".scratch/neat-cleanup-20261031/checkpoint-tests/pytest.json": "6aedebac448c48a086b78c479453fd887574048f85117845e84f15ef999fa37d"
+  },
+  "changed_document_sha256": {
+    ".codex/skills/verify-civ6/SKILL.md": "29c681eaa19185c9b3328697e3fc8df7b7b222cae75bf58716dec3ed9becbb72",
+    ".codex/skills/verify-civ6/features/turns.md": "e64be79fdc0c04d0605132c1904dec4122a39ca352259fef77673d89f01888cc",
+    "docs/acceptance/2026-10-31-knowledge-closeout.md": "d2db0b7e6b00d921a7012f06b179c7068f99b68126bfcd70c43960f4d46c7cce",
+    "docs/acceptance/README.md": "6e7dae3806eec00707072c44a7915a5406c547edc6bdb365a30ce14374d2d371",
+    "docs/architecture.md": "12d0f5d9763296b7c1afb77a23a412a58bcad63515dfbaf691754ac380dec2ec",
+    "docs/development.md": "8ada45e3debb49ea580b47380eebb9b342e3e1d65203f0215fa6125b8146ed52"
+  },
+  "historical_evidence": "Existing knowledge-closeout JSON is the original pre-cleanup snapshot; it was retained unchanged. Blind-study material snapshots and the blocked older worktree remain historical inputs, not current operation entries."
+}

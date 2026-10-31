@@ -10,7 +10,7 @@
 | 知识与决策输入 | [版本知识](2026-10-17-civ6-knowledge.md)、[主题扩展](2026-10-17-knowledge-expansion.md)、[知识 MCP](2026-10-18-knowledge-mcp.md)、[文明特性](2026-10-18-civilization-knowledge.md)、[获胜策略](2026-10-18-win-strategy.md) |
 | 智能体知识利用 | [五个独立盲智能体：CLI 对照与仓库资料实验、访问证据及细节覆盖](2026-10-31-agent-knowledge-use/README.md)；离线小样本，不代表实战或总体性能 |
 | CLI 短帮助与按需入口 | [字段与边界、原文迁移、五个新盲智能体复验](2026-10-31-cli-help-refinement/README.md)；统一资料输出下降34.01%，主评分不降，仍保留逐项遗漏与小样本限制 |
-| CLI 知识收尾 | [现役入口、政体与恢复条件、测试登记、六面核对及清理预览](2026-10-31-knowledge-closeout.md)；仅离线验证，清场待确认 |
+| CLI 知识收尾 | [现役入口、测试登记、六面核对及确认清理结果](2026-10-31-knowledge-closeout.md)；旧驱动及专属测试已移除，275 项定向测试通过；worktree 归档被活动任务占用保护阻止 |
 | 宗教防御 | [离线观测、清除异教与神学攻击](2026-10-20-religion-defense.md)、[原局检查点实机验收](../../games/2026-10-19-gold/runs/2026-10-19-first/religion-native-validation-2026-10-20/acceptance.md) |
 | CI 测试替身 | [未决调度同步](2026-10-18-ci-pending-dispatch.md) |
 | Windows 兼容 | [编码、路径、进程与分批离线验证](2026-10-20-windows-compatibility.md)、[神级净推进 10 回合](../../games/2026-10-19-gold/runs/2026-10-20-windows-compatibility-t001-t011/reports/windows-compatibility.md) |

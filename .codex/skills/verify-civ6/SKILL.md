@@ -57,7 +57,7 @@ uv run --locked --no-sync civ6 doctor
 | 外交与来约 | `tests/test_trade_progress.py`、`tests/test_incoming_negotiation.py` |
 | 通信 | `tests/test_connection.py`、`tests/test_tuner_client.py` |
 
-例如动作门禁变更可运行 `uv run --locked pytest -q tests/test_action_confirmation.py tests/test_pending_dispatch.py`。这些测试使用现有隔离夹具；不要把 `scripts/test_connection.py`、`test_game_state.py`、`test_queries.py` 或 `integration_turns.py` 当作离线测试。
+例如动作门禁变更可运行 `uv run --locked pytest -q tests/test_action_confirmation.py tests/test_pending_dispatch.py`。这些测试使用现有隔离夹具；不要把 `scripts/test_connection.py`、`test_game_state.py` 或 `test_queries.py` 当作离线测试。
 
 实机结果未知时记录原意图并停止依赖写入，先做只读核对；原入口只确认已有请求。禁止故障注入到未授权现场，也不以重复调用次数或等待时长判断失败。特殊阻塞按[特殊操作](../../../docs/agent-special-operations.md)处理。
 
