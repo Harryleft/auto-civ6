@@ -228,7 +228,8 @@ def narrate_units(
         promo_flag = " **NEEDS PROMOTION**" if u.needs_promotion else ""
         upgrade_flag = ""
         if u.can_upgrade:
-            upgrade_flag = f" **CAN UPGRADE to {u.upgrade_target} ({u.upgrade_cost}g)**"
+            upgrade_flag = (f" **CAN UPGRADE to {u.upgrade_target} ({u.upgrade_cost}g)**" if u.upgrade_target
+                            else f" **CAN UPGRADE (target unknown; {u.upgrade_cost}g)**")
         moves_disp = (
             f"{int(u.moves_remaining)}/{int(u.max_moves)}"
             if u.moves_remaining == int(u.moves_remaining)

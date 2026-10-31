@@ -122,14 +122,20 @@ for i, u in Players[id]:GetUnits():Members() do
         -- Upgrade info (InGame only: CanStartCommand)
         local canUp, upName, upCost = "0", "", "0"
         local ok1, _ = pcall(function()
-            if UnitManager.CanStartCommand(u, UnitCommandTypes.UPGRADE, nil, true) then
+            local allowed, results = UnitManager.CanStartCommand(u, UnitCommandTypes.UPGRADE, nil, true)
+            if allowed then
                 canUp = "1"
                 local c2 = u:GetUpgradeCost()
                 if c2 then upCost = tostring(c2) end
-                if entry and entry.UpgradeUnitCollection then
-                    for _, row in ipairs(entry.UpgradeUnitCollection) do
-                        if row.UpgradeUnit then upName = row.UpgradeUnit end
-                        break
+                -- Native UI uses the command's current target, which can skip
+                -- static upgrade-tree steps. Missing results stay unknown.
+                local target = type(results) == "table" and UnitCommandResults
+                    and UnitCommandResults.UNIT_TYPE and results[UnitCommandResults.UNIT_TYPE]
+                if type(target) == "number" and target == target and math.abs(target) < math.huge
+                    and target == math.floor(target) then
+                    local info = GameInfo.Units[target]
+                    if info and type(info.UnitType) == "string" and info.UnitType ~= "" and info.UnitType ~= ut then
+                        upName = info.UnitType
                     end
                 end
             end
