@@ -62,7 +62,7 @@ def test_native_preview_modes_preserve_all_engine_and_runtime_state(mode,setup):
     result,state=preview(conn)
     assert result['status']=='estimated' and result['mode']==mode
     assert result['scope']=={'civilization':'CIVILIZATION_SUMERIA','seed':719665280,'turn':113,'owner':0}
-    assert result['eligibility']=='native_current_turn_passed'
+    assert result['eligibility']=='current_turn_preflight_passed'
     assert result['strength_source']=='Native COMBAT_STRENGTH + STRENGTH_MODIFIER; no base-unit fallback'
     assert result['damage_source']=='Native DAMAGE_TO for each side'
     assert 'does not guarantee actual damage' in result['limitations']
@@ -116,21 +116,37 @@ def test_nonpublic_unbound_unsupported_or_peace_target_is_unknown_without_simula
 
 
 @pytest.mark.parametrize('setup,eligibility',[
-    ('moves=0','native_current_turn_refused'),
-    ('attacks=0','native_current_turn_refused'),
-    ('allowed.move=false','native_current_turn_refused'),
-    ('movedIntoZOC=true','native_current_turn_refused'),
-    ('arrivalTurn=2','native_current_turn_refused'),
+    ('moves=0','current_turn_preflight_refused'),
+    ('attacks=0','current_turn_preflight_refused'),
+    ('allowed.move=false','current_turn_preflight_refused'),
+    ('movedIntoZOC=true','current_turn_preflight_refused'),
+    ('arrivalTurn=2','current_turn_preflight_refused'),
     ('UnitManager.CanStartOperation=function()return nil end','unknown'),
     ('UnitManager.GetMoveToPathEx=nil','unknown'),
-    ('unitInfo.RangedCombat=40;allowed.range=false','native_current_turn_refused'),
+    ('unitInfo.RangedCombat=40;allowed.range=false','current_turn_preflight_refused'),
     ('unitInfo.RangedCombat=40;UnitManager.CanStartOperation=function()return nil end','unknown'),
 ])
-def test_native_refusal_and_unavailable_eligibility_are_distinct(setup,eligibility):
+def test_preflight_refusal_and_unavailable_eligibility_are_distinct(setup,eligibility):
     conn=PreviewConn();conn.lua.execute(setup)
     result,state=preview(conn)
     assert result['status']=='unknown' and result['eligibility']==eligibility
     assert conn.operations==[] and conn.previews==[] and state.pending_action_summary is None
+
+
+def test_zoc_preflight_refusal_does_not_claim_native_operation_rejection():
+    conn=PreviewConn()
+    conn.lua.execute('''movedIntoZOC=true; native_can_start_calls=0
+local original=UnitManager.CanStartOperation
+UnitManager.CanStartOperation=function(...)
+ native_can_start_calls=native_can_start_calls+1;return original(...)
+end''')
+    before=conn.facts()
+    result,state=preview(conn)
+    assert conn.lua.globals().native_can_start_calls==0
+    assert result['eligibility']=='current_turn_preflight_refused'
+    assert 'Runtime' in result['eligibility_source']
+    assert conn.operations==[] and conn.previews==[] and conn.facts()==before
+    assert state.pending_action_summary is None
 
 
 @pytest.mark.parametrize('change',[
@@ -485,7 +501,7 @@ def test_native_refusal_requires_one_matching_binding_and_one_bound_known_reason
 def test_unchanged_refused_target_has_final_identity_visibility_hp_and_world_binding():
     conn=PreviewConn();conn.lua.execute('allowed.move=false');before=conn.facts()
     result,state=preview(conn)
-    assert result['status']=='unknown' and result['eligibility']=='native_current_turn_refused'
+    assert result['status']=='unknown' and result['eligibility']=='current_turn_preflight_refused'
     assert result['attacker']['id']==1245192 and result['attacker']['hp']==100
     assert result['target']['id']==5111813 and result['target']['hp']==100
     assert result['scope']['turn']==113 and 'ATTACK_BLOCKED' in result['reason']

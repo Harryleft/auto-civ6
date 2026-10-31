@@ -106,7 +106,7 @@ def domain_parser(group: str):
 
     if group == "unit":
         command("list", "get_units", "List current units and native IDs.")
-        preview = command("combat-preview", "get_combat_preview", "Read native current combat eligibility, strengths and estimated damage; never attack or confirm pending.")
+        preview = command("combat-preview", "get_combat_preview", "Read native strength/damage estimates and Runtime current-turn preflight; never attack or confirm pending.")
         entity(preview, "unit_id")
         preview.add_argument("target_x", type=int)
         preview.add_argument("target_y", type=int)

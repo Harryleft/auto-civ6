@@ -463,7 +463,8 @@ async def get_combat_preview(ctx: Context, unit_id: int, target_x: int, target_y
 
     Supports the existing melee, ranged and bombard simulation mappings only.
     Binds current visible hostile target, actor/component identity and world/turn.
-    Native eligibility and estimated strengths/damage do not guarantee actual
+    Current-turn preflight combines native facts with Runtime constraints; its
+    refusal can precede CanStartOperation. Estimates do not guarantee actual
     damage or next-turn state. Any pending operation blocks this reader without
     game I/O, confirmation, dismissal or cleanup. Use unit combat-preview ID X Y.
     """

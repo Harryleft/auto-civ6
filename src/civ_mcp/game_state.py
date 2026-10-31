@@ -610,7 +610,7 @@ class GameState:
         result = {"status": "unknown", "source": "InGame CombatManager native simulation",
                   "strength_source": "Native COMBAT_STRENGTH + STRENGTH_MODIFIER; no base-unit fallback",
                   "damage_source": "Native DAMAGE_TO for each side",
-                  "eligibility_source": "Native CanStartOperation; melee also requires native current-turn path, movement and ZOC checks",
+                  "eligibility_source": "Runtime current-turn preflight from native movement, ZOC, path and CanStartOperation if reached; refusal alone is not an engine rule",
                   "request": {"unit_id": unit_id, "target_x": target_x, "target_y": target_y},
                   "eligibility": "unknown", "estimate": None,
                   "limitations": "Current native estimate only; does not guarantee actual damage, survival, or next-turn state. No attack submitted."}
@@ -647,7 +647,7 @@ class GameState:
                 reason = parse_refusal(refused[0], token)
                 if reason is None:
                     return response("Native refusal identity or reason is unavailable or malformed.")
-                result.update(binding, eligibility="native_current_turn_refused",
+                result.update(binding, eligibility="current_turn_preflight_refused",
                               scope={"civilization": scope.civilization, "seed": scope.seed, "turn": scope.turn, "owner": scope.owner})
                 return response(reason)
             estimate = lq.parse_combat_estimate(estimates, 0, 0, allow_fractional=True)
@@ -657,7 +657,7 @@ class GameState:
                 return response("Native mode and estimate disagree.")
             binding["attacker"].update(type=estimate.attacker_type, hp=estimate.attacker_hp, strength=estimate.attacker_cs)
             binding["target"].update(type=estimate.defender_type, hp=estimate.defender_hp, strength=estimate.defender_cs)
-            result.update(binding, status="estimated", eligibility="native_current_turn_passed",
+            result.update(binding, status="estimated", eligibility="current_turn_preflight_passed",
                           scope={"civilization": scope.civilization, "seed": scope.seed, "turn": scope.turn, "owner": scope.owner},
                           damage_to_attacker=estimate.est_damage_to_attacker, damage_to_target=estimate.est_damage_to_defender)
             result.pop("estimate")
