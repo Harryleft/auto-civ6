@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "source_commit": "d24d073d9a1ce62c3ebfbef59c21fde3b6105906",
+  "scope": "Local knowledge/governance closeout; no game operation, new blind study, remote write or deletion.",
+  "faces": {
+    "code": "changed-and-verified",
+    "runtime_cli": "verified-current",
+    "runtime_game": "out-of-scope",
+    "docs": "changed-and-verified",
+    "rules": "verified-current",
+    "memory": "out-of-scope",
+    "workspace": "pending"
+  },
+  "cli_inventory": {
+    "named_commands": 149,
+    "command_groups": 33,
+    "base_tools": 96,
+    "package_version": "1.1.11"
+  },
+  "checks": {
+    "doctor": {
+      "status": "PASS",
+      "run_id": "491ad69d4a9848cd9005a37fae958a4a",
+      "knowledge_counts": {
+        "civics": 61,
+        "civilizations": 853,
+        "combat": 311,
+        "congress": 29,
+        "diplomacy": 53,
+        "districts": 28,
+        "economy": 261,
+        "resources": 87,
+        "technologies": 77,
+        "victory": 97
+      },
+      "knowledge_total": 1857
+    },
+    "help": {
+      "status": "PASS",
+      "run_id": "21514bba976a43138ffae52b14212131",
+      "business_tool_calls": 0,
+      "connected_to_game": false,
+      "unresolved_on_exit": false,
+      "mcp_session_closed": true,
+      "note": "Protocol initialization and memory queries occurred; zero business tool calls does not mean zero RPC."
+    },
+    "debug_suite": {
+      "status": "PASS",
+      "run_id": "406685c47c3f47f8a016355e0af22339",
+      "passed": 446,
+      "registered_short_help_cases": 12,
+      "selected_files": [
+        "tests/test_debug_cli.py",
+        "tests/test_short_help.py",
+        "tests/test_session_commands.py",
+        "tests/test_frequent_commands.py",
+        "tests/test_cli_only.py",
+        "tests/test_server.py",
+        "tests/test_read_timeout.py",
+        "tests/test_return_to_main_menu.py",
+        "tests/test_decision_context.py",
+        "tests/test_city_yields.py"
+      ]
+    },
+    "dev_cli_suite": {
+      "status": "PASS",
+      "passed": 25,
+      "receipt_kind": "derived from observed PTY completion"
+    },
+    "read_only_checks": {
+      "status": "PASS",
+      "markdown_files_checked": 14,
+      "local_links_checked": 162,
+      "link_issues": [],
+      "legacy_driver_executable_ast_unchanged": true,
+      "rule_aliases": {
+        "CLAUDE.md": "AGENTS.md",
+        "GEMINI.md": "AGENTS.md"
+      },
+      "save_hashes": [
+        {
+          "path": "fixtures/saves/benchmark_gold_tun_1.Civ6Save",
+          "bytes": 396382,
+          "sha256": "0d25d557e68b0efbd1aed7e66de9b8434f3a9ac9d321291d45cbe9df83fe3abf"
+        },
+        {
+          "path": "~/Library/.../Saves/Single/callaudit_20261031_t100_verified.Civ6Save",
+          "bytes": 855146,
+          "sha256": "7ceb1ee55c00412f2ca3a3b3956fc05b043cb8e8002de98e7882c783f693115c"
+        }
+      ],
+      "city_help_forms_identical": true,
+      "game_access": "not_run"
+    }
+  },
+  "cleanup_preview": {
+    "scope": "Read-only cleanup preview; no archival, deletion, branch removal or occupancy-guard retry.",
+    "worktree": "~/.codex/worktrees/call-audit-fixes/civ6",
+    "branch": "codex/call-audit-fixes",
+    "head": "ab02f53a8b41200954357556d0f334023e8382c5",
+    "tracked_clean": true,
+    "ancestor_of_main": true,
+    "unique_commits": 0,
+    "mirrored_regular_files_checked": 3693,
+    "mirrored_regular_bytes": 47419396,
+    "mirror_issues": [],
+    "unmirrored_regular_files": [],
+    "prior_archive_rejection": "Another active task still uses this worktree.",
+    "prior_rejection_only": true,
+    "current_occupancy_guard": "not tested; archive not authorized in this pre-cleanup stage",
+    "eligible_only_after_review_confirmation_and_tool_guard": true
+  },
+  "pending": [
+    "Remove historical fixed-strategy driver together with its dedicated import tests only after post-report user confirmation. Driver is still executable; only current routing and its module documentation were changed.",
+    "Archive merged worktree only after post-report confirmation and the app occupancy guard; no guard retry this run."
+  ],
+  "protected": [
+    "Original and game saves",
+    "Blind-study inputs, failed attempts, analysis v1/v2 and raw evidence",
+    "Historical stdin relay .scratch/play_gold_v2.py; not classified as a strategy driver",
+    "Nested independent repository and local hotseat patch installation"
+  ],
+  "remote_state": "Not queried or changed; cached refs do not prove remote state.",
+  "changed_input_sha256": {
+    ".codex/skills/verify-civ6/features/turns.md": "d2fdf3a561bf9ca1cd5d8f72de211fbae251c7048262fc8dc1536cc4d3756216",
+    "README.md": "a2a00d1050b45f45fb18f87722194462ecea427fd4bd59944c21b05f23283734",
+    "docs/acceptance/2026-10-31-knowledge-closeout.md": "f46c83b463c0b277e948699c56dceb5e61b757adb7a0b43b260a5fbaefd2066e",
+    "docs/acceptance/README.md": "1e2470c83f6228ed51ac7d3ff0be7472faa3964de482d1119175d09409d7fd80",
+    "docs/architecture.md": "8e91db58e549c4c81acc2d7a931231c689bbfb3571b2e56b49cd53444bcf994b",
+    "docs/cli/debug.md": "8eacb0e5bee86a80e22fd53289d54a6356ff45444c820c6a123f06a7ccc5471e",
+    "docs/cli/domains.md": "1da2369f2b009ab479aedbc25a9e0b0384afcbbe648adb2740ea4fe69c289cb4",
+    "docs/cli/government.md": "96b6b98105d4d802f344a9e567bc40a05307a1056e1c2074f44c5e2d5f50e63c",
+    "docs/cli/overview.md": "18dcd922ac188f8cd471c31101d807136c23035ecc9e16ed51baa0034ea8d4d0",
+    "docs/cli/turns-saves.md": "bac3571c91a333798633212c16a21a33797f81743537a2d821d9d76cfdaee343",
+    "docs/development.md": "49e69de5c04ec8abdc747e886e6d156ffa7685e07650c5b4d8e11a453ea6f739",
+    "scripts/integration_turns.py": "c4335cffd59c9fb9c40b70e57b2bd273f47d9fc27a67926d880962b59edb9263",
+    "src/civ_mcp/devtools/testing.py": "63f283f8d254b5830e6f273beeaaebb3e72731d70d6fc2d030164c145f7b9ac0"
+  },
+  "local_evidence_sha256": {
+    ".scratch/neat-closeout-20261031/inventory-before.txt": "5a24d5e8dabb90b29c48f71b0518a54fc768c12a344696e73ca4dff8dc740279",
+    ".scratch/neat-closeout-20261031/doctor/summary.json": "84fde0cd7637dd192b07fbddd72d87bce91d5bb2e9fd2365b8c97a6b1d14496f",
+    ".scratch/neat-closeout-20261031/doctor/mcp-tools.json": "037459c61b66d49773cd025339652270d151464025036fb287650b676726c54f",
+    ".scratch/neat-closeout-20261031/help-proof/summary.json": "5aa3706dc3ca2a0f3f0fa65395436b8b161d2b72c3ffcb492e6d97a5795a6d18",
+    ".scratch/neat-closeout-20261031/help-proof/debug.jsonl": "6da7e1f3028e53edbcdc6db2e299593aa8051bc5697ae6dbdd0c17f16a901216",
+    ".scratch/neat-closeout-20261031/debug-tests/summary.json": "fe13286bda1ddeada21424136e4de84601f4f8aef911721aa7c6a160d34c6594",
+    ".scratch/neat-closeout-20261031/debug-tests/pytest.json": "343caedc623cb95bcdc3bae12ad7ef97873186b190138d36ca9615f1007a2925",
+    ".scratch/neat-closeout-20261031/dev-cli-result.json": "9f6d7f495d2765926b24a8cc3f94a1b7803f43c4e4b0574f77ff6243e4e0f059",
+    ".scratch/neat-closeout-20261031/checks.json": "fec80482f3fa5db804e98ecaf14f039532102f320a68fd96e27630c57919a39a",
+    ".scratch/neat-closeout-20261031/worktree-preview.json": "5bb9c6ad4a4cc5d50ca34273b96a88745ddd582829fe78f5f64ffd128cbe1135",
+    ".scratch/neat-closeout-20261031/check_closeout.py": "2a93545d1e98a27ce643ec6a5d2c4349986676770e363d0eeb54340affdfd73b"
+  }
+}

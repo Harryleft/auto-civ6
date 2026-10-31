@@ -27,7 +27,7 @@
 | `ranking show` | 总分及科技、文化、统治、宗教、外交等启用路线的世界进度。 |
 | `map search resource\|luxury\|strategic\|antiquity\|village [--query TEXT] [--limit N --offset N] [--view brief\|structured]` | 按类型、中文名或内部 ID 定位，默认 brief。非消耗资源限已揭示且本方可识别地块；村庄、古迹和可消耗加成资源要求当前可见。空结果不证明迷雾里不存在。 |
 
-`government list` 的 `can_change`／`can_change_at_all` 是原生总开关；当前能否选择须读逐目标 `can_select_now`、`refusal_reasons` 与 `change_conditions`，其中包括免费窗口和无政府状态等前提。未知为 null，保留当前政体的确认与更换新政体分开判定；原生资格不代替 Runtime 未决门禁或实际提交确认。付费解锁政策与换政资格分开。
+政体窗口、逐目标资格和保留当前的 ACK 统一见[政体说明](government.md#政体)。
 
 伟人列表使用原生时间线的使用位置、主动效果、被动条件及定义中的次数，分别保留金币／信仰的报价、余额和赞助资格。一个币种接口失败不会覆盖另一个币种；报价不可用、原生不允许与余额不足分别展示。`great-person advisor` 使用 `unit list` 的 `idx`，原生高亮表示可激活地点，不保证单位现在已经就绪，也不表示城市总产出就是激活收益。
 

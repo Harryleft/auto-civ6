@@ -2,7 +2,7 @@
 
 [返回 CLI 索引](../cli.md)
 
-复验前独立保存原现场，过程与结果另存。恢复原检查点完成后，重新读取 `state overview`、`unit list`、`city list`，再用 `pending` 核对所有原请求已确认且 `transport_unknown=null`，才允许后续写入或正常退出；不为清理而额外推进回合。
+复验开始前独立保存原现场；复验结束后先另存过程与结果，再恢复原检查点。恢复完成后，重新读取 `state overview`、`unit list`、`city list`，再用 `pending` 核对所有原请求已确认且 `transport_unknown=null`，才允许后续写入或正常退出；不为清理而额外推进回合。
 
 | 会话命令 | MCP 工具 | 模式 |
 | --- | --- | --- |

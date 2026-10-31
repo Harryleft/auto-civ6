@@ -2,7 +2,7 @@
 
 [返回 CLI 索引](../cli.md)
 
-本页是 AI 唯一操作入口的命令目录，涵盖顶层命令、会话控制及 149 个命名子命令（含 3 个既有双人热座实验命令）。96 个基础 MCP 工具均有命名入口，其中任意 Lua 只在显式开发模式开放。`doctor`、`verify knowledge`、`test` 和 `logs` 不连接 FireTuner；`verify state` 明确访问当前真实游戏，`debug` 在收到查询或动作时访问游戏。`civ-mcp` 保留为 CLI 内部服务，客户端不直接注册。
+本页说明安装、顶层入口和公共参数；会话与领域命令从 [CLI 索引](../cli.md) 按需展开。当前共有 149 个命名子命令（含 3 个既有双人热座实验命令），96 个基础 MCP 工具均有命名入口；任意 Lua 只在显式开发模式开放。`doctor`、`verify knowledge`、`test` 和 `logs` 不连接 FireTuner；`verify state` 明确访问当前真实游戏，普通 `debug` 仅在执行游戏查询或动作时访问游戏，`debug --offline` 拒绝这些调用。`civ-mcp` 保留为 CLI 内部服务，客户端不直接注册。
 
 ## 安装与调用
 

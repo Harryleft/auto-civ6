@@ -1,11 +1,13 @@
-"""Run a bounded, deterministic gameplay check through the actual stdio MCP server.
+"""Historical fixed-strategy driver, pending removal with its import tests.
 
-This script starts/loads and operates the real game only when explicitly run.
-The fixed blocker policy belongs to this test driver, never to the runtime.
-Unknown results, hangs and unsupported blockers abort without replay or recovery.
+Not a supported entry for new live play or acceptance under AGENTS.md. Current
+operations use model-selected named commands in one persistent civ6 CLI session.
+This label does not disable execution: running this file still starts/loads and
+operates the real game through direct MCP. Keep its existing offline import
+tests until removal is approved; their success does not authorize live use.
 
-Usage: uv run python scripts/integration_turns.py --turns 10
-Always starts from benchmark_turn_1. Exit 0 means all turns confirmed.
+Legacy behavior aborts unknown results without replay/recovery and starts from
+benchmark_turn_1. Exit 0 only means the requested fixture turns were confirmed.
 """
 
 from __future__ import annotations

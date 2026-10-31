@@ -86,13 +86,9 @@ Codex 会话的自动化入口见 [Hook 工作流与质量检查](codex-hooks.md
 
 只有任务已授权操作真实游戏时才进入本节。运行前核对[受信原始基准](../fixtures/saves/README.md)和[检查点规则](agent-recovery.md#检查点与测试轮次)，保护存档及已有证据。
 
-`integration_turns.py` 通过 stdio MCP 调用同一工具实现。以下命令会替换当前对局；已有对局时，当前驱动会完整重启并加载原始基准：
+实机验收使用同一个 `uv run --locked civ6 debug` 会话。模型先读取真实状态、选择当时的合法动作，变更先 `--dry-run`，再单次提交并回读；回合推进按[游戏操作](agent-playbook.md#推进回合)及专属阻塞流程处理。检查点续测和菜单换档沿用[保存与恢复](agent-recovery.md)，不使用预编码策略或自动推进脚本代替模型决策。
 
-```bash
-uv run --locked python scripts/integration_turns.py --save benchmark_turn_1 --turns 10 --timeout 900
-```
-
-CLI 默认且仅允许 `benchmark_turn_1`，省略 `--save` 也从原始基准开始。当前驱动使用固定测试策略处理单位、科研文化和生产项；策略只属于测试驱动，不移入 Runtime。结果未知、挂起、不支持的阻塞或预算耗尽时退出，不自动恢复／重发。检查点续测和菜单换档验证通过相应的 CLI 命名命令执行。
+`scripts/integration_turns.py` 是仍被 `tests/test_integration_driver.py` 导入的历史固定策略驱动，不是当前实机验收入口；它直接连接 MCP，仍具备真实加载和推进能力，本轮仅撤下现役运行示例，没有将其运行时禁用。脚本与依赖测试列入待确认移除清单；在处置前不能据文件存在或历史测试通过执行新对局。唯一获准保留的历史直接 MCP 例外仍以 [AGENTS.md](../AGENTS.md) 为准。
 
 完成记录写入所属对局／轮次的 `reports/`，包含使用的存档及来源、实际动作、净推进回合、阻塞与恢复、结果文件及未验证项。旧验收不能替代本次实测；只做离线验证时明确报告未连接游戏。
 

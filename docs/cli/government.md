@@ -2,6 +2,18 @@
 
 [返回 CLI 索引](../cli.md)
 
+## 政体
+
+| 会话命令 | MCP 工具 | 模式 |
+| --- | --- | --- |
+| `government show` | `get_policies` | 只读 |
+| `government list` | `get_public_report`，section=governments | 只读 |
+| `government change TYPE` | `change_government` | 变更 |
+
+`government list` 的 `can_change`／`can_change_at_all` 是原生总开关；当前能否选择须读 `can_change_now`、逐目标 `can_select_now`、`refusal_reasons` 与 `change_conditions`，其中包括免费窗口和无政府状态等前提。未知为 null。保留当前政体的 ACK 是确认继续采用，与选择新政体分开判定；原生资格不代替 Runtime 未决门禁或实际提交确认。付费解锁政策与换政资格分开，足够金币不创建政府更换窗口。
+
+## 政策、城邦和总督命令
+
 | 会话命令 | MCP 工具 | 模式 |
 | --- | --- | --- |
 | `policy show [--policy POLICY_ID]` | `get_policies` | 只读 |

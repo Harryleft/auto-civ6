@@ -36,7 +36,7 @@
 
 在项目目录执行 `uv sync --locked`，然后使用 `uv run --locked civ6 doctor` 检查环境、知识包与内部协议，使用 `uv run --locked civ6 verify knowledge` 验证知识查询。这些入口及领域测试、日志查询统一输出 JSON 并保留离线证据。顶层入口、会话控制和完整命名命令统一见[CLI 命令手册](docs/cli.md)。
 
-前台调试使用 `uv run --locked civ6 debug`，在同一持续会话及内部 MCP 上下文中查询状态、查看 pending、使用命名子命令（`call` 仅作协议兼容诊断）；`debug --offline` 只允许知识查询与服务内存检查。已授权的实机只读验收可用 `uv run --locked civ6 verify state`，不会加载存档、执行动作或推进回合。实机操作按当前任务授权和存档规则执行，详见[会话说明](docs/cli.md#前台-debug-会话)。
+前台调试使用 `uv run --locked civ6 debug`，在同一持续会话及内部 MCP 上下文中查询状态、查看 pending、使用命名子命令（`call` 仅作协议兼容诊断）。已知命令时用 `help city list` 这样的具体帮助，或等价的 `city list --help`，再按返回路径展开相关说明。`debug --offline` 允许知识查询、服务内存检查、本地帮助和 schema-only 预演，不访问游戏。已授权的实机只读验收可用 `uv run --locked civ6 verify state`，不会加载存档、执行动作或推进回合。实机操作按当前任务授权和存档规则执行，详见[会话说明](docs/cli/debug.md)。
 
 ## 开始使用
 

@@ -8,7 +8,7 @@
 
 | 会话命令 | 行为 |
 | --- | --- |
-| `help [TOPIC]`、`TOPIC --help` | 分层帮助，返回 JSON 事件。 |
+| `help [TOPIC [COMMAND]]`、`TOPIC COMMAND --help` | 按组或具体命令读取本地帮助，返回 JSON 事件；不执行目标工具。 |
 | `tools [NAME]` | 列工具名，或读取一个工具的真实输入 schema。 |
 | `pending` | 读取本 MCP 的内存 pending 与本地 transport_unknown。 |
 | `state overview`、`state units`、`state cities`、`state turn`、`state snapshot` | 概览、单位、城市、回合与结构化快照。 |
