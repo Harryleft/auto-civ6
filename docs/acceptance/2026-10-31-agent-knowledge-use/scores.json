@@ -1,0 +1,770 @@
+{
+  "stage": "Manual scoring fixed before reading allocation; citations can imply access arm, so grader is not blinded.",
+  "rubric_sha256": "71710bae7e8362526b38f2841c1a9bc580f3a89aa3cb4325b842972a1de259c5",
+  "interpretation": "Semantic scoring, not exact keywords. C09 theology limit is required; AIR was not asked and omission alone is not penalized. C12 the plan ending at restoration counts as no end100; separate verification save and post-restore pending must be explicit. C05 ACK coverage and C09/C12 completeness are borderline; a generous sensitivity score will award these whole cases to all participants.",
+  "ratings": [
+    {
+      "id": "p17",
+      "answer_sha256": "70dab88444a86be65b24d790d9c2f1efdeb0bf3ca9bafefe0d4f82dd4b141d7a",
+      "cases": [
+        {
+          "case": "C01",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C02",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C03",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C04",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C05",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C06",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C07",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C08",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C09",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C10",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C11",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C12",
+          "criteria": [
+            1,
+            1,
+            0,
+            1
+          ],
+          "notes": {
+            "2": "未明确复验结果另存及恢复后的pending核对。"
+          }
+        }
+      ],
+      "score": 47,
+      "max_score": 48
+    },
+    {
+      "id": "p28",
+      "answer_sha256": "2650b115e24d8575ad93b1a2fb1b432a1b73d30685f5d12d8924e53dc7421f5e",
+      "cases": [
+        {
+          "case": "C01",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C02",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C03",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C04",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C05",
+          "criteria": [
+            1,
+            1,
+            1,
+            0
+          ],
+          "notes": {
+            "3": "只说保留当前无需换政动作，遗漏继续采用的ACK区别。"
+          }
+        },
+        {
+          "case": "C06",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C07",
+          "criteria": [
+            1,
+            0,
+            1,
+            1
+          ],
+          "notes": {
+            "1": "优先religion spread，未发现已有city list/默认decision城市段。"
+          }
+        },
+        {
+          "case": "C08",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C09",
+          "criteria": [
+            1,
+            1,
+            1,
+            0
+          ],
+          "notes": {
+            "3": "未明确当前预估不保证实伤及当前入口不支持神学；未取得字段不能宣称完成验证。"
+          }
+        },
+        {
+          "case": "C10",
+          "criteria": [
+            0,
+            1,
+            1,
+            0
+          ],
+          "notes": {
+            "0": "没有确定GameCore与InGame两个实际来源。",
+            "3": "未取得G/S/C/Fa省略为零、无收益块为unknown的具体契约。"
+          }
+        },
+        {
+          "case": "C11",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C12",
+          "criteria": [
+            1,
+            1,
+            0,
+            1
+          ],
+          "notes": {
+            "2": "保全描述未明确复验结果另存及恢复后的pending核对。"
+          }
+        }
+      ],
+      "score": 42,
+      "max_score": 48
+    },
+    {
+      "id": "p36",
+      "answer_sha256": "0ffbf1a0f112e26a5d2aca7ac241fca9eba2cc26b5c3cfe48afe66e6cc7cd785",
+      "cases": [
+        {
+          "case": "C01",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C02",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C03",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C04",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C05",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C06",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C07",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C08",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C09",
+          "criteria": [
+            1,
+            1,
+            1,
+            0
+          ],
+          "notes": {
+            "3": "前后验证未包含pending，未完整覆盖预注册确认边界。"
+          }
+        },
+        {
+          "case": "C10",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C11",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C12",
+          "criteria": [
+            1,
+            1,
+            0,
+            1
+          ],
+          "notes": {
+            "2": "未明确复验结果另存及恢复后的pending核对。"
+          }
+        }
+      ],
+      "score": 46,
+      "max_score": 48
+    },
+    {
+      "id": "p49",
+      "answer_sha256": "0e0a53c02efc863f11c79648ba9b298774af596bfaa189305f8aee1735f8de03",
+      "cases": [
+        {
+          "case": "C01",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C02",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C03",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C04",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C05",
+          "criteria": [
+            1,
+            1,
+            1,
+            0
+          ],
+          "notes": {
+            "3": "仅区分不切换和换新政体，未说明保留当前的ACK。"
+          }
+        },
+        {
+          "case": "C06",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C07",
+          "criteria": [
+            1,
+            0,
+            1,
+            0
+          ],
+          "notes": {
+            "1": "先读取religion show，遗漏已含逐城宗教的窄查询。",
+            "3": "把religion spread当作压力展开，命令语义不符。"
+          }
+        },
+        {
+          "case": "C08",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C09",
+          "criteria": [
+            1,
+            1,
+            1,
+            0
+          ],
+          "notes": {
+            "3": "未明确当前预估不保证实伤及当前入口不支持神学。"
+          }
+        },
+        {
+          "case": "C10",
+          "criteria": [
+            0,
+            1,
+            1,
+            0
+          ],
+          "notes": {
+            "0": "没有确定GameCore与InGame两个实际来源。",
+            "3": "未取得具体省略字段/无收益块的契约，保留为未知。"
+          }
+        },
+        {
+          "case": "C11",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C12",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        }
+      ],
+      "score": 42,
+      "max_score": 48
+    },
+    {
+      "id": "p53",
+      "answer_sha256": "8210a80575abf126085ff4e0e237676f2a31335c494478a7dd32de4cc1e3ad7d",
+      "cases": [
+        {
+          "case": "C01",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C02",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C03",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C04",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C05",
+          "criteria": [
+            1,
+            1,
+            1,
+            0
+          ],
+          "notes": {
+            "3": "说继续采用，但没有说明其ACK与换政提交的区别。"
+          }
+        },
+        {
+          "case": "C06",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C07",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C08",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C09",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C10",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C11",
+          "criteria": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "notes": {
+            "all": "按语义覆盖该题四项要求；不以引用数量判分。"
+          }
+        },
+        {
+          "case": "C12",
+          "criteria": [
+            1,
+            1,
+            0,
+            1
+          ],
+          "notes": {
+            "2": "虽有另存复验结果，未明确恢复后的pending核对。"
+          }
+        }
+      ],
+      "score": 46,
+      "max_score": 48
+    }
+  ]
+}

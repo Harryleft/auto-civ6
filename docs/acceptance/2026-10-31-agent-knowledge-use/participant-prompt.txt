@@ -1,0 +1,7 @@
+你独立处理一组 Civ6 操作交接问题。不要假设此前对话或以往经验已经验证当前项目事实。你的工作目录：{workspace}。
+
+先通过 `python3 access.py read TASK.md` 读取12题。你可以自行决定是否查阅所提供的其他材料，或调用当前离线CLI，不要求固定读取顺序。所有材料的列表/读取/检索必须分别使用 `python3 access.py list [prefix]`、`python3 access.py read PATH [FIRST LAST]`、`python3 access.py search TEXT [prefix]`（路径相对materials）。CLI只能通过 `python3 access.py cli ARGS...`，可用--help、doctor或debug --offline；debug会话可以使用命名help/知识查询/schema dry-run并正常quit。真实游戏操作未授权，也不允许网页、直接MCP、内部Python/Lua调用。使用exec工具时必须显式workdir为你的工作目录。不得通过其他方式读文件，不读工作目录之外、其他参与者或父代理资料；不向其他代理咨询，不创建子代理，不修改所给材料或access.py。只可另外写本目录answer.json，允许重新读取自己已写的answer.json验证。
+
+总预算：最多20次材料操作（list/read/search，含TASK），最多2个离线CLI会话、合计40个会话内命令；不为凑次数读材料。尽量在12分钟内完成。没有实时游戏可查询：题中事实是假定当时已取得的观察，只需提交正确下一步与验证条件，不把schema-only当原生实测。
+
+交付answer.json：JSON对象，cases数组恰含C01至C12，每项有id、decision（直接结论）、commands（按需给命名命令顺序，不是固定策略脚本）、boundaries（仍不能断言什么）、sources（仅填实际读过且用于本题的文件位置或CLI调用，无来源可空）、confidence（high/medium/low）。另附uncertainties数组及protocol_violations数组，如有超预算/越界请如实记录。各题避免长篇复述，全部中文正文尽量2500字以内。写入并重新读取验证JSON后，向父代理只报完成及answer.json路径，不披露题解给其他人。

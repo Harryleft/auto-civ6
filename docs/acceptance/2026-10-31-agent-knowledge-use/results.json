@@ -1,0 +1,1069 @@
+{
+  "source_commit": "8c373f85ba9034f6ce1d6d9e00a7a1ff4608dd90",
+  "current_commit": "8c373f85ba9034f6ce1d6d9e00a7a1ff4608dd90",
+  "preregistration_sha256": "71710bae7e8362526b38f2841c1a9bc580f3a89aa3cb4325b842972a1de259c5",
+  "scoring_before_unblinding_sha256": "32990ddea24e047ed1639fae8ec3a17f64e577977283c613cea41af15772e14a",
+  "cases_sha256": "52940fa4862c775bbb7c45382be481072e78993d0a07daee4c634d3cd2455375",
+  "participants": [
+    {
+      "id": "p17",
+      "group": "repository",
+      "score": 47,
+      "max_score": 48,
+      "generous_sensitivity_score": 48,
+      "material_operations": 13,
+      "material_output_bytes": 164645,
+      "instruction_and_task_output_bytes": 7048,
+      "actual_read_paths": [
+        "AGENTS.md",
+        "docs/agent-playbook.md",
+        "docs/agent-recovery.md",
+        "docs/agent-special-operations.md",
+        "docs/cli.md",
+        "scripts/integration_turns.py",
+        "src/civ_mcp/lua/unit_transforms.py"
+      ],
+      "actual_reads": [
+        {
+          "path": "INSTRUCTIONS.md",
+          "first": 1,
+          "last": 7,
+          "output_bytes": 2198
+        },
+        {
+          "path": "TASK.md",
+          "first": 1,
+          "last": 47,
+          "output_bytes": 4850
+        },
+        {
+          "path": "docs/cli.md",
+          "first": 1,
+          "last": 501,
+          "output_bytes": 67688
+        },
+        {
+          "path": "docs/agent-playbook.md",
+          "first": 1,
+          "last": 96,
+          "output_bytes": 12990
+        },
+        {
+          "path": "docs/agent-recovery.md",
+          "first": 1,
+          "last": 51,
+          "output_bytes": 6300
+        },
+        {
+          "path": "docs/agent-special-operations.md",
+          "first": 1,
+          "last": 93,
+          "output_bytes": 11335
+        },
+        {
+          "path": "docs/cli.md",
+          "first": 156,
+          "last": 358,
+          "output_bytes": 29782
+        },
+        {
+          "path": "src/civ_mcp/lua/unit_transforms.py",
+          "first": 1,
+          "last": 180,
+          "output_bytes": 8700
+        },
+        {
+          "path": "scripts/integration_turns.py",
+          "first": 1,
+          "last": 100,
+          "output_bytes": 4978
+        },
+        {
+          "path": "AGENTS.md",
+          "first": 1,
+          "last": 70,
+          "output_bytes": 5516
+        }
+      ],
+      "cli_sessions": [
+        {
+          "path": "cli-evidence/9da4851b38234178bd3817f1a7b7f9c6",
+          "command_count": 0,
+          "tool_calls": 0,
+          "tool_text_bytes": 0,
+          "raw_debug_jsonl_bytes": 769,
+          "exit_code": 0,
+          "closed": true,
+          "offline": true,
+          "commands": [],
+          "tools": []
+        },
+        {
+          "path": "cli-evidence/b54ed499f12a437ab8c3461701966f26",
+          "command_count": 5,
+          "tool_calls": 1,
+          "tool_text_bytes": 2153,
+          "raw_debug_jsonl_bytes": 11820,
+          "exit_code": 0,
+          "closed": true,
+          "offline": true,
+          "commands": [
+            "trade propose --help",
+            "unit promote --help",
+            "unit spread-religion --help",
+            "knowledge search 理性主义 --limit 5",
+            "quit"
+          ],
+          "tools": [
+            "search_knowledge"
+          ]
+        }
+      ],
+      "cli_command_count": 5,
+      "cli_tool_text_bytes": 2153,
+      "cli_raw_debug_jsonl_bytes": 12589,
+      "material_and_cli_budget_passed": true,
+      "answer_self_report": [
+        "首次离线CLI因非交互stdin关闭未能输入quit；尝试写入返回stdin is closed。无游戏调用，第二会话正常quit；共2会话、5条会话内命令。"
+      ],
+      "answer_sha256": "70dab88444a86be65b24d790d9c2f1efdeb0bf3ca9bafefe0d4f82dd4b141d7a",
+      "access_log_sha256": "5586d5c39eb34cc83e3a4a6bf66e9579ff6b6487f9f466832af436d20ff238f7"
+    },
+    {
+      "id": "p28",
+      "group": "control",
+      "score": 42,
+      "max_score": 48,
+      "generous_sensitivity_score": 45,
+      "material_operations": 4,
+      "material_output_bytes": 7292,
+      "instruction_and_task_output_bytes": 7048,
+      "actual_read_paths": [
+        "AGENTS.md"
+      ],
+      "actual_reads": [
+        {
+          "path": "INSTRUCTIONS.md",
+          "first": 1,
+          "last": 7,
+          "output_bytes": 2198
+        },
+        {
+          "path": "TASK.md",
+          "first": 1,
+          "last": 47,
+          "output_bytes": 4850
+        },
+        {
+          "path": "AGENTS.md",
+          "first": 1,
+          "last": 3,
+          "output_bytes": 211
+        }
+      ],
+      "cli_sessions": [
+        {
+          "path": "cli-evidence/ea2980b2e6394a5bb53f43485d2f685e",
+          "command_count": 0,
+          "tool_calls": 0,
+          "tool_text_bytes": 0,
+          "raw_debug_jsonl_bytes": 769,
+          "exit_code": 0,
+          "closed": true,
+          "offline": true,
+          "commands": [],
+          "tools": []
+        },
+        {
+          "path": "cli-evidence/be688b2506964a2a8cb568c4627cc16b",
+          "command_count": 36,
+          "tool_calls": 2,
+          "tool_text_bytes": 23126,
+          "raw_debug_jsonl_bytes": 98418,
+          "exit_code": 0,
+          "closed": true,
+          "offline": true,
+          "commands": [
+            "help",
+            "help unit",
+            "help knowledge",
+            "help religion",
+            "help policy",
+            "help government",
+            "help pending",
+            "help trade",
+            "help popup",
+            "help state",
+            "help city",
+            "unit combat-preview --help",
+            "unit promote --help",
+            "unit spread-religion --help",
+            "trade propose --help",
+            "popup dismiss --help",
+            "unit move --help",
+            "help turn",
+            "help session",
+            "help save",
+            "help game",
+            "help map",
+            "religion spread --help",
+            "knowledge search Rationalism",
+            "knowledge show --help",
+            "city yields --help",
+            "policy show --help",
+            "government change --help",
+            "unit promotions --help",
+            "religion show --help",
+            "save reload --help",
+            "knowledge show POLICY_RATIONALISM --level rule",
+            "unit upgrade --help",
+            "unit cancel-move --help",
+            "unit religious-attack --help",
+            "quit"
+          ],
+          "tools": [
+            "search_knowledge",
+            "get_knowledge"
+          ]
+        }
+      ],
+      "cli_command_count": 36,
+      "cli_tool_text_bytes": 23126,
+      "cli_raw_debug_jsonl_bytes": 99187,
+      "material_and_cli_budget_passed": true,
+      "answer_self_report": [],
+      "answer_sha256": "2650b115e24d8575ad93b1a2fb1b432a1b73d30685f5d12d8924e53dc7421f5e",
+      "access_log_sha256": "843a2af9933fb93117a41e49117a97718468b1e512dcfb87cd110322ecd4296c"
+    },
+    {
+      "id": "p36",
+      "group": "repository",
+      "score": 46,
+      "max_score": 48,
+      "generous_sensitivity_score": 48,
+      "material_operations": 14,
+      "material_output_bytes": 166070,
+      "instruction_and_task_output_bytes": 7048,
+      "actual_read_paths": [
+        "AGENTS.md",
+        "docs/agent-playbook.md",
+        "docs/agent-recovery.md",
+        "docs/agent-special-operations.md",
+        "docs/cli.md",
+        "scripts/integration_turns.py",
+        "src/civ_mcp/lua/unit_transforms.py"
+      ],
+      "actual_reads": [
+        {
+          "path": "INSTRUCTIONS.md",
+          "first": 1,
+          "last": 7,
+          "output_bytes": 2198
+        },
+        {
+          "path": "TASK.md",
+          "first": 1,
+          "last": 47,
+          "output_bytes": 4850
+        },
+        {
+          "path": "docs/cli.md",
+          "first": 1,
+          "last": 501,
+          "output_bytes": 67688
+        },
+        {
+          "path": "docs/agent-playbook.md",
+          "first": 1,
+          "last": 96,
+          "output_bytes": 12990
+        },
+        {
+          "path": "docs/agent-recovery.md",
+          "first": 1,
+          "last": 51,
+          "output_bytes": 6300
+        },
+        {
+          "path": "docs/agent-special-operations.md",
+          "first": 1,
+          "last": 93,
+          "output_bytes": 11335
+        },
+        {
+          "path": "docs/cli.md",
+          "first": 156,
+          "last": 358,
+          "output_bytes": 29782
+        },
+        {
+          "path": "AGENTS.md",
+          "first": 1,
+          "last": 75,
+          "output_bytes": 6111
+        },
+        {
+          "path": "src/civ_mcp/lua/unit_transforms.py",
+          "first": 1,
+          "last": 180,
+          "output_bytes": 8700
+        },
+        {
+          "path": "scripts/integration_turns.py",
+          "first": 1,
+          "last": 90,
+          "output_bytes": 4382
+        }
+      ],
+      "cli_sessions": [],
+      "cli_command_count": 0,
+      "cli_tool_text_bytes": 0,
+      "cli_raw_debug_jsonl_bytes": 0,
+      "material_and_cli_budget_passed": true,
+      "answer_self_report": [],
+      "answer_sha256": "0ffbf1a0f112e26a5d2aca7ac241fca9eba2cc26b5c3cfe48afe66e6cc7cd785",
+      "access_log_sha256": "fd3b6ec37d55a59d68c0e5dee1558a615f0921a7d3d178196e3772abd1b2151c"
+    },
+    {
+      "id": "p49",
+      "group": "control",
+      "score": 42,
+      "max_score": 48,
+      "generous_sensitivity_score": 44,
+      "material_operations": 4,
+      "material_output_bytes": 7292,
+      "instruction_and_task_output_bytes": 7048,
+      "actual_read_paths": [
+        "AGENTS.md"
+      ],
+      "actual_reads": [
+        {
+          "path": "INSTRUCTIONS.md",
+          "first": 1,
+          "last": 7,
+          "output_bytes": 2198
+        },
+        {
+          "path": "TASK.md",
+          "first": 1,
+          "last": 47,
+          "output_bytes": 4850
+        },
+        {
+          "path": "AGENTS.md",
+          "first": 1,
+          "last": 3,
+          "output_bytes": 211
+        }
+      ],
+      "cli_sessions": [
+        {
+          "path": "cli-evidence/8bb7d1ea1cd14b9797c3648f8110021b",
+          "command_count": 0,
+          "tool_calls": 0,
+          "tool_text_bytes": 0,
+          "raw_debug_jsonl_bytes": 769,
+          "exit_code": 0,
+          "closed": true,
+          "offline": true,
+          "commands": [],
+          "tools": []
+        },
+        {
+          "path": "cli-evidence/8d9b2afad2a1467d870753cc89cdf1a8",
+          "command_count": 39,
+          "tool_calls": 2,
+          "tool_text_bytes": 34768,
+          "raw_debug_jsonl_bytes": 126492,
+          "exit_code": 0,
+          "closed": true,
+          "offline": true,
+          "commands": [
+            "help",
+            "help knowledge",
+            "help unit",
+            "help pending",
+            "help trade",
+            "help government",
+            "knowledge search --help",
+            "knowledge show --help",
+            "unit combat-preview --help",
+            "unit spread-religion --help",
+            "trade propose --help",
+            "knowledge search Rationalism --view evidence",
+            "help state",
+            "help city",
+            "help religion",
+            "help popup",
+            "help session",
+            "help save",
+            "knowledge show POLICY_RATIONALISM --level rule",
+            "religion show --help",
+            "religion spread --help",
+            "unit list --help",
+            "help policy",
+            "unit move --help",
+            "popup dismiss --help",
+            "help turn",
+            "city yields --help",
+            "policy show --help",
+            "government change --help",
+            "save reload --help",
+            "save menu-load --help",
+            "unit promote --help",
+            "unit promotions --help",
+            "unit upgrade --help",
+            "help map",
+            "help game",
+            "unit cancel-move --help",
+            "unit skip --help",
+            "quit"
+          ],
+          "tools": [
+            "search_knowledge",
+            "get_knowledge"
+          ]
+        }
+      ],
+      "cli_command_count": 39,
+      "cli_tool_text_bytes": 34768,
+      "cli_raw_debug_jsonl_bytes": 127261,
+      "material_and_cli_budget_passed": true,
+      "answer_self_report": [],
+      "answer_sha256": "0e0a53c02efc863f11c79648ba9b298774af596bfaa189305f8aee1735f8de03",
+      "access_log_sha256": "fde2bcf5eee1adace57034e679a84fdd0eb95d2444687e5a84989d984adf94f4"
+    },
+    {
+      "id": "p53",
+      "group": "repository",
+      "score": 46,
+      "max_score": 48,
+      "generous_sensitivity_score": 48,
+      "material_operations": 16,
+      "material_output_bytes": 169600,
+      "instruction_and_task_output_bytes": 7048,
+      "actual_read_paths": [
+        "AGENTS.md",
+        "docs/agent-playbook.md",
+        "docs/agent-recovery.md",
+        "docs/agent-special-operations.md",
+        "docs/cli.md",
+        "scripts/integration_turns.py",
+        "src/civ_mcp/lua/cities.py",
+        "src/civ_mcp/lua/unit_transforms.py"
+      ],
+      "actual_reads": [
+        {
+          "path": "INSTRUCTIONS.md",
+          "first": 1,
+          "last": 7,
+          "output_bytes": 2198
+        },
+        {
+          "path": "TASK.md",
+          "first": 1,
+          "last": 47,
+          "output_bytes": 4850
+        },
+        {
+          "path": "docs/cli.md",
+          "first": 1,
+          "last": 501,
+          "output_bytes": 67688
+        },
+        {
+          "path": "docs/agent-playbook.md",
+          "first": 1,
+          "last": 96,
+          "output_bytes": 12990
+        },
+        {
+          "path": "docs/agent-recovery.md",
+          "first": 1,
+          "last": 51,
+          "output_bytes": 6300
+        },
+        {
+          "path": "docs/agent-special-operations.md",
+          "first": 1,
+          "last": 93,
+          "output_bytes": 11335
+        },
+        {
+          "path": "docs/cli.md",
+          "first": 170,
+          "last": 358,
+          "output_bytes": 28922
+        },
+        {
+          "path": "AGENTS.md",
+          "first": 1,
+          "last": 75,
+          "output_bytes": 6111
+        },
+        {
+          "path": "src/civ_mcp/lua/unit_transforms.py",
+          "first": 1,
+          "last": 200,
+          "output_bytes": 9993
+        },
+        {
+          "path": "scripts/integration_turns.py",
+          "first": 1,
+          "last": 100,
+          "output_bytes": 4978
+        },
+        {
+          "path": "src/civ_mcp/lua/cities.py",
+          "first": 24,
+          "last": 44,
+          "output_bytes": 1057
+        }
+      ],
+      "cli_sessions": [
+        {
+          "path": "cli-evidence/6ca012a0dda047c0be4b2eb4f78cbcd8",
+          "command_count": 4,
+          "tool_calls": 0,
+          "tool_text_bytes": 0,
+          "raw_debug_jsonl_bytes": 6343,
+          "exit_code": 0,
+          "closed": true,
+          "offline": true,
+          "commands": [
+            "trade propose --help",
+            "unit promote --help",
+            "unit spread-religion --help",
+            "quit"
+          ],
+          "tools": []
+        }
+      ],
+      "cli_command_count": 4,
+      "cli_tool_text_bytes": 0,
+      "cli_raw_debug_jsonl_bytes": 6343,
+      "material_and_cli_budget_passed": true,
+      "answer_self_report": [],
+      "answer_sha256": "8210a80575abf126085ff4e0e237676f2a31335c494478a7dd32de4cc1e3ad7d",
+      "access_log_sha256": "e7ba39e35cacbea35870096600cba197c4a1b2e4440933e7739d001baf80ac51"
+    }
+  ],
+  "groups": {
+    "control": {
+      "n": 2,
+      "mean_score": 42,
+      "mean_percent": 87.5,
+      "mean_generous_sensitivity_score": 44.5,
+      "mean_material_operations": 4,
+      "mean_material_output_bytes": 7292,
+      "mean_cli_command_count": 37.5
+    },
+    "repository": {
+      "n": 3,
+      "mean_score": 46.333333333333336,
+      "mean_percent": 96.52777777777779,
+      "mean_generous_sensitivity_score": 48,
+      "mean_material_operations": 14.333333333333334,
+      "mean_material_output_bytes": 166771.66666666666,
+      "mean_cli_command_count": 3
+    }
+  },
+  "primary_difference_points": 4.333333333333336,
+  "primary_difference_percentage_points": 9.027777777777786,
+  "native_game_calls": 0,
+  "t100_verified_checkpoint_unchanged": true,
+  "t100_verified_checkpoint_sha256": "7ceb1ee55c00412f2ca3a3b3956fc05b043cb8e8002de98e7882c783f693115c",
+  "material_copies_unchanged": true,
+  "source_material_files": 268,
+  "source_material_bytes": 85291311,
+  "limitations": [
+    "n=5 same-model pilot; no statistical significance, gameplay/win-rate or total-token/time causal claim.",
+    "Single-blind task assignment; participants can infer document availability. Shared host mandatory context and pretrained knowledge cannot be removed.",
+    "Access is instrumented by instruction and bounded gateway, not an OS filesystem sandbox. Only gateway events are independently evidenced; undisclosed out-of-protocol reads are not excluded by these logs.",
+    "Material output bytes are generated stdout, not proof every byte was visible/read by model; truncation can require re-reading. CLI body and raw JSONL are separate metrics and must not be added as comparable model tokens.",
+    "Manual grader knew project facts; source citations can reveal arm. Frozen rubric and before-unblinding scores mitigate but do not remove grader subjectivity.",
+    "Cases disclose many relevant native facts; correctness on self-contained cases does not prove use of external knowledge."
+  ],
+  "evidence_files": [
+    {
+      "path": "finalize_stats.py",
+      "bytes": 7082,
+      "sha256": "14d3ad79b1929dd71adf5c79aea39e18b5a25b8188edbe64d3d1e58b0c20b7b2"
+    },
+    {
+      "path": "gateway-smoke/access.jsonl",
+      "bytes": 270,
+      "sha256": "932bd4180fe09b1069e14510946df1da68f8bb4586f29fc7175304360d6c10bf"
+    },
+    {
+      "path": "gateway-smoke/access.py",
+      "bytes": 2233,
+      "sha256": "64669ba3ad5ebc4416a0425da2925c252083e33e172fd3543c7e21926f31338b"
+    },
+    {
+      "path": "participant-prompt.txt",
+      "bytes": 2096,
+      "sha256": "9812f5fd65793933f808f1e8292b848307589eac31006521fb7fe9841369be56"
+    },
+    {
+      "path": "participants/p17/access.jsonl",
+      "bytes": 4097,
+      "sha256": "5586d5c39eb34cc83e3a4a6bf66e9579ff6b6487f9f466832af436d20ff238f7"
+    },
+    {
+      "path": "participants/p17/access.py",
+      "bytes": 2233,
+      "sha256": "64669ba3ad5ebc4416a0425da2925c252083e33e172fd3543c7e21926f31338b"
+    },
+    {
+      "path": "participants/p17/answer.json",
+      "bytes": 9765,
+      "sha256": "70dab88444a86be65b24d790d9c2f1efdeb0bf3ca9bafefe0d4f82dd4b141d7a"
+    },
+    {
+      "path": "participants/p17/cases.md",
+      "bytes": 4672,
+      "sha256": "52940fa4862c775bbb7c45382be481072e78993d0a07daee4c634d3cd2455375"
+    },
+    {
+      "path": "participants/p17/cli-evidence/9da4851b38234178bd3817f1a7b7f9c6/context.json",
+      "bytes": 10107,
+      "sha256": "e6fd7debd2a40f64390b3febf2269ef847b8f39eaa4875be8a58d481709d5d3c"
+    },
+    {
+      "path": "participants/p17/cli-evidence/9da4851b38234178bd3817f1a7b7f9c6/debug-initialize.json",
+      "bytes": 1102,
+      "sha256": "b3aafabd996833fef5bf4ea0d09f6700f2794214abca3df8ed44131a07493304"
+    },
+    {
+      "path": "participants/p17/cli-evidence/9da4851b38234178bd3817f1a7b7f9c6/debug-process.json",
+      "bytes": 255,
+      "sha256": "0bfdde8e4dc49339f121781817385f6f428efd690e392b499d2e403d35735760"
+    },
+    {
+      "path": "participants/p17/cli-evidence/9da4851b38234178bd3817f1a7b7f9c6/debug-stderr.log",
+      "bytes": 130,
+      "sha256": "8b19cbba6b28211b9e986cad8d3dd71bc6b5a36acee2604eebd2bd339c1f8cdc"
+    },
+    {
+      "path": "participants/p17/cli-evidence/9da4851b38234178bd3817f1a7b7f9c6/debug-tools.json",
+      "bytes": 142585,
+      "sha256": "037459c61b66d49773cd025339652270d151464025036fb287650b676726c54f"
+    },
+    {
+      "path": "participants/p17/cli-evidence/9da4851b38234178bd3817f1a7b7f9c6/debug.jsonl",
+      "bytes": 769,
+      "sha256": "805a4441707d1272e2f78cf17d863d5ef27335e86f8ba266d6105c85a308e9c2"
+    },
+    {
+      "path": "participants/p17/cli-evidence/9da4851b38234178bd3817f1a7b7f9c6/runtime-status.json",
+      "bytes": 423,
+      "sha256": "539d935ee52f4dff342353049091459efefddcfa9e1edca507b62ecf5e977253"
+    },
+    {
+      "path": "participants/p17/cli-evidence/9da4851b38234178bd3817f1a7b7f9c6/summary.json",
+      "bytes": 1754,
+      "sha256": "181135bcbdbcedf1d7cdeb91e0d26fe9d009ab7bcce9f74ec68c48016a9855ba"
+    },
+    {
+      "path": "participants/p17/cli-evidence/b54ed499f12a437ab8c3461701966f26/command-timing.json",
+      "bytes": 2094,
+      "sha256": "9423633c4027678bdcf901f4cb5ceed11e630a0db4167ec6ee63cb08097b3645"
+    },
+    {
+      "path": "participants/p17/cli-evidence/b54ed499f12a437ab8c3461701966f26/context.json",
+      "bytes": 10107,
+      "sha256": "e6fd7debd2a40f64390b3febf2269ef847b8f39eaa4875be8a58d481709d5d3c"
+    },
+    {
+      "path": "participants/p17/cli-evidence/b54ed499f12a437ab8c3461701966f26/debug-initialize.json",
+      "bytes": 1102,
+      "sha256": "b3aafabd996833fef5bf4ea0d09f6700f2794214abca3df8ed44131a07493304"
+    },
+    {
+      "path": "participants/p17/cli-evidence/b54ed499f12a437ab8c3461701966f26/debug-process.json",
+      "bytes": 255,
+      "sha256": "0bfdde8e4dc49339f121781817385f6f428efd690e392b499d2e403d35735760"
+    },
+    {
+      "path": "participants/p17/cli-evidence/b54ed499f12a437ab8c3461701966f26/debug-response-000009.json",
+      "bytes": 4850,
+      "sha256": "a60972305957561404e158cdf140d13bf821f8871be96550294261366ef6779d"
+    },
+    {
+      "path": "participants/p17/cli-evidence/b54ed499f12a437ab8c3461701966f26/debug-stderr.log",
+      "bytes": 414,
+      "sha256": "2075e289382ab7ef27e586ac8d8f0d2f3b863f7e300e9abcabc7292bc2618b86"
+    },
+    {
+      "path": "participants/p17/cli-evidence/b54ed499f12a437ab8c3461701966f26/debug-tools.json",
+      "bytes": 142585,
+      "sha256": "037459c61b66d49773cd025339652270d151464025036fb287650b676726c54f"
+    },
+    {
+      "path": "participants/p17/cli-evidence/b54ed499f12a437ab8c3461701966f26/debug.jsonl",
+      "bytes": 11820,
+      "sha256": "83c328cc89a9ec348b526ec98f8ac982cae9d494229016a36863fd8d0790a680"
+    },
+    {
+      "path": "participants/p17/cli-evidence/b54ed499f12a437ab8c3461701966f26/runtime-status.json",
+      "bytes": 423,
+      "sha256": "18c45fa25bc5462a9865e586666e0f24ec21fc2743a7b082d312de3c6390df7f"
+    },
+    {
+      "path": "participants/p17/cli-evidence/b54ed499f12a437ab8c3461701966f26/summary.json",
+      "bytes": 1755,
+      "sha256": "4975eb65ec9f66f84d2fbdcdcde5d6d6e6230ba2fe7d5765138a3688d88a8772"
+    },
+    {
+      "path": "participants/p17/cli-evidence/b54ed499f12a437ab8c3461701966f26/turn-timing.json",
+      "bytes": 1761,
+      "sha256": "9e46af06a631d268be92c0f6c5c5414d92f21800db5def613c2d8879a6ee60ef"
+    },
+    {
+      "path": "participants/p28/access.jsonl",
+      "bytes": 1613,
+      "sha256": "843a2af9933fb93117a41e49117a97718468b1e512dcfb87cd110322ecd4296c"
+    },
+    {
+      "path": "participants/p28/access.py",
+      "bytes": 2233,
+      "sha256": "64669ba3ad5ebc4416a0425da2925c252083e33e172fd3543c7e21926f31338b"
+    },
+    {
+      "path": "participants/p28/answer.json",
+      "bytes": 9641,
+      "sha256": "2650b115e24d8575ad93b1a2fb1b432a1b73d30685f5d12d8924e53dc7421f5e"
+    },
+    {
+      "path": "participants/p28/cases.md",
+      "bytes": 4672,
+      "sha256": "52940fa4862c775bbb7c45382be481072e78993d0a07daee4c634d3cd2455375"
+    },
+    {
+      "path": "participants/p28/cli-evidence/be688b2506964a2a8cb568c4627cc16b/command-timing.json",
+      "bytes": 14617,
+      "sha256": "5953ef369bfef03349b44fd13d65d586335af4a975c1b38e0f85fbab17c88198"
+    },
+    {
+      "path": "participants/p28/cli-evidence/be688b2506964a2a8cb568c4627cc16b/context.json",
+      "bytes": 10107,
+      "sha256": "e6fd7debd2a40f64390b3febf2269ef847b8f39eaa4875be8a58d481709d5d3c"
+    },
+    {
+      "path": "participants/p28/cli-evidence/be688b2506964a2a8cb568c4627cc16b/debug-initialize.json",
+      "bytes": 1102,
+      "sha256": "b3aafabd996833fef5bf4ea0d09f6700f2794214abca3df8ed44131a07493304"
+    },
+    {
+      "path": "participants/p28/cli-evidence/be688b2506964a2a8cb568c4627cc16b/debug-process.json",
+      "bytes": 255,
+      "sha256": "0bfdde8e4dc49339f121781817385f6f428efd690e392b499d2e403d35735760"
+    },
+    {
+      "path": "participants/p28/cli-evidence/be688b2506964a2a8cb568c4627cc16b/debug-response-000049.json",
+      "bytes": 4848,
+      "sha256": "0d6a3a59e59480ba95d87be192a40ccecfb4bd8af2aa0713591e3f81ec84da92"
+    },
+    {
+      "path": "participants/p28/cli-evidence/be688b2506964a2a8cb568c4627cc16b/debug-response-000066.json",
+      "bytes": 46074,
+      "sha256": "61a14c399559f2952defa2209e22764668b5863fe57a369b2c11bc7122edda15"
+    },
+    {
+      "path": "participants/p28/cli-evidence/be688b2506964a2a8cb568c4627cc16b/debug-stderr.log",
+      "bytes": 692,
+      "sha256": "0a7d5088a0dce565008a4082eacc752f96f3943134f3c62abd13c86eaf11ee10"
+    },
+    {
+      "path": "participants/p28/cli-evidence/be688b2506964a2a8cb568c4627cc16b/debug-tools.json",
+      "bytes": 142585,
+      "sha256": "037459c61b66d49773cd025339652270d151464025036fb287650b676726c54f"
+    },
+    {
+      "path": "participants/p28/cli-evidence/be688b2506964a2a8cb568c4627cc16b/debug.jsonl",
+      "bytes": 98418,
+      "sha256": "61e873b8135293b91a380179bc9cd6f1e460d3204acf32df9bd975183c404766"
+    },
+    {
+      "path": "participants/p28/cli-evidence/be688b2506964a2a8cb568c4627cc16b/runtime-status.json",
+      "bytes": 423,
+      "sha256": "7a35c347b9b62ea5add264b3a51e2745f925a5ebea3365e9c37bd15df5fc2694"
+    },
+    {
+      "path": "participants/p28/cli-evidence/be688b2506964a2a8cb568c4627cc16b/summary.json",
+      "bytes": 1755,
+      "sha256": "c99c099a895179b4c7b7d4b3e5c1df8313481a6fcd7f4da2356493c7c9656b6f"
+    },
+    {
+      "path": "participants/p28/cli-evidence/be688b2506964a2a8cb568c4627cc16b/turn-timing.json",
+      "bytes": 8167,
+      "sha256": "68f84ead42bce4c923dc70894fb5262bf558132fcbf0883eb641993eff17b7e3"
+    },
+    {
+      "path": "participants/p28/cli-evidence/ea2980b2e6394a5bb53f43485d2f685e/context.json",
+      "bytes": 10107,
+      "sha256": "e6fd7debd2a40f64390b3febf2269ef847b8f39eaa4875be8a58d481709d5d3c"
+    },
+    {
+      "path": "participants/p28/cli-evidence/ea2980b2e6394a5bb53f43485d2f685e/debug-initialize.json",
+      "bytes": 1102,
+      "sha256": "b3aafabd996833fef5bf4ea0d09f6700f2794214abca3df8ed44131a07493304"
+    },
+    {
+      "path": "participants/p28/cli-evidence/ea2980b2e6394a5bb53f43485d2f685e/debug-process.json",
+      "bytes": 255,
+      "sha256": "0bfdde8e4dc49339f121781817385f6f428efd690e392b499d2e403d35735760"
+    },
+    {
+      "path": "participants/p28/cli-evidence/ea2980b2e6394a5bb53f43485d2f685e/debug-stderr.log",
+      "bytes": 130,
+      "sha256": "8b19cbba6b28211b9e986cad8d3dd71bc6b5a36acee2604eebd2bd339c1f8cdc"
+    },
+    {
+      "path": "participants/p28/cli-evidence/ea2980b2e6394a5bb53f43485d2f685e/debug-tools.json",
+      "bytes": 142585,
+      "sha256": "037459c61b66d49773cd025339652270d151464025036fb287650b676726c54f"
+    },
+    {
+      "path": "participants/p28/cli-evidence/ea2980b2e6394a5bb53f43485d2f685e/debug.jsonl",
+      "bytes": 769,
+      "sha256": "0f74b81cb672d6dca6a20a83d216116b71d3af5f1922fb9f1c3e94a64a2d294b"
+    },
+    {
+      "path": "participants/p28/cli-evidence/ea2980b2e6394a5bb53f43485d2f685e/runtime-status.json",
+      "bytes": 423,
+      "sha256": "4fc57376cb974a388b158fe460bd5e78d10fe5f162b7a46602f04c81a87f06ad"
+    },
+    {
+      "path": "participants/p28/cli-evidence/ea2980b2e6394a5bb53f43485d2f685e/summary.json",
+      "bytes": 1754,
+      "sha256": "62cc06cfc227081def7d7c71bc05f9adce47b12a0c684c237bc02c076dc2a0dc"
+    },
+    {
+      "path": "participants/p36/access.jsonl",
+      "bytes": 3688,
+      "sha256": "fd3b6ec37d55a59d68c0e5dee1558a615f0921a7d3d178196e3772abd1b2151c"
+    },
+    {
+      "path": "participants/p36/access.py",
+      "bytes": 2233,
+      "sha256": "64669ba3ad5ebc4416a0425da2925c252083e33e172fd3543c7e21926f31338b"
+    },
+    {
+      "path": "participants/p36/answer.json",
+      "bytes": 8281,
+      "sha256": "0ffbf1a0f112e26a5d2aca7ac241fca9eba2cc26b5c3cfe48afe66e6cc7cd785"
+    },
+    {
+      "path": "participants/p36/cases.md",
+      "bytes": 4672,
+      "sha256": "52940fa4862c775bbb7c45382be481072e78993d0a07daee4c634d3cd2455375"
+    },
+    {
+      "path": "participants/p49/access.jsonl",
+      "bytes": 1613,
+      "sha256": "fde2bcf5eee1adace57034e679a84fdd0eb95d2444687e5a84989d984adf94f4"
+    },
+    {
+      "path": "participants/p49/access.py",
+      "bytes": 2233,
+      "sha256": "64669ba3ad5ebc4416a0425da2925c252083e33e172fd3543c7e21926f31338b"
+    },
+    {
+      "path": "participants/p49/answer.json",
+      "bytes": 9454,
+      "sha256": "0e0a53c02efc863f11c79648ba9b298774af596bfaa189305f8aee1735f8de03"
+    },
+    {
+      "path": "participants/p49/cases.md",
+      "bytes": 4672,
+      "sha256": "52940fa4862c775bbb7c45382be481072e78993d0a07daee4c634d3cd2455375"
+    },
+    {
+      "path": "participants/p49/cli-evidence/8bb7d1ea1cd14b9797c3648f8110021b/context.json",
+      "bytes": 10107,
+      "sha256": "e6fd7debd2a40f64390b3febf2269ef847b8f39eaa4875be8a58d481709d5d3c"
+    },
+    {
+      "path": "participants/p49/cli-evidence/8bb7d1ea1cd14b9797c3648f8110021b/debug-initialize.json",
+      "bytes": 1102,
+      "sha256": "b3aafabd996833fef5bf4ea0d09f6700f2794214abca3df8ed44131a07493304"
+    },
+    {
+      "path": "participants/p49/cli-evidence/8bb7d1ea1cd14b9797c3648f8110021b/debug-process.json",
+      "bytes": 255,
+      "sha256": "0bfdde8e4dc49339f121781817385f6f428efd690e392b499d2e403d35735760"
+    },
+    {
+      "path": "participants/p49/cli-evidence/8bb7d1ea1cd14b9797c3648f8110021b/debug-stderr.log",
+      "bytes": 130,
+      "sha256": "8b19cbba6b28211b9e986cad8d3dd71bc6b5a36acee2604eebd2bd339c1f8cdc"
+    },
+    {
+      "path": "participants/p49/cli-evidence/8bb7d1ea1cd14b9797c3648f8110021b/debug-tools.json",
+      "bytes": 142585,
+      "sha256": "037459c61b66d49773cd025339652270d151464025036fb287650b676726c54f"
+    },
+    {
+      "path": "participants/p49/cli-evidence/8bb7d1ea1cd14b9797c3648f8110021b/debug.jsonl",
+      "bytes": 769,
+      "sha256": "51a579cf29c3da70a9ef5fb13b1cedaad236b3c96a6b345e09a9ce218a26d0dc"
+    },
+    {
+      "path": "participants/p49/cli-evidence/8bb7d1ea1cd14b9797c3648f8110021b/runtime-status.json",
+      "bytes": 423,
+      "sha256": "b06703d6656e6a065410e40f571c7847f4716e4ccdf5ec3f71a21242b50905d9"
+    },
+    {
+      "path": "participants/p49/cli-evidence/8bb7d1ea1cd14b9797c3648f8110021b/summary.json",
+      "bytes": 1754,
+      "sha256": "c8c565b20a04e86faf2a301acf5a18ce849f74c806b31f5cebfc3e853af8adb5"
+    },
+    {
+      "path": "participants/p49/cli-evidence/8d9b2afad2a1467d870753cc89cdf1a8/command-timing.json",
+      "bytes": 15840,
+      "sha256": "ac3e4f5bf7609f1c2a9859fd83b5ee1afcd8da257890fd2aef8ee728401d1513"
+    },
+    {
+      "path": "participants/p49/cli-evidence/8d9b2afad2a1467d870753cc89cdf1a8/context.json",
+      "bytes": 10107,
+      "sha256": "e6fd7debd2a40f64390b3febf2269ef847b8f39eaa4875be8a58d481709d5d3c"
+    },
+    {
+      "path": "participants/p49/cli-evidence/8d9b2afad2a1467d870753cc89cdf1a8/debug-initialize.json",
+      "bytes": 1102,
+      "sha256": "b3aafabd996833fef5bf4ea0d09f6700f2794214abca3df8ed44131a07493304"
+    },
+    {
+      "path": "participants/p49/cli-evidence/8d9b2afad2a1467d870753cc89cdf1a8/debug-process.json",
+      "bytes": 255,
+      "sha256": "0bfdde8e4dc49339f121781817385f6f428efd690e392b499d2e403d35735760"
+    },
+    {
+      "path": "participants/p49/cli-evidence/8d9b2afad2a1467d870753cc89cdf1a8/debug-response-000025.json",
+      "bytes": 30114,
+      "sha256": "64255068dc4390046bb05aca184d9e3304fe5c645f347d0d4ad077575a8b969f"
+    },
+    {
+      "path": "participants/p49/cli-evidence/8d9b2afad2a1467d870753cc89cdf1a8/debug-response-000040.json",
+      "bytes": 46074,
+      "sha256": "61a14c399559f2952defa2209e22764668b5863fe57a369b2c11bc7122edda15"
+    },
+    {
+      "path": "participants/p49/cli-evidence/8d9b2afad2a1467d870753cc89cdf1a8/debug-stderr.log",
+      "bytes": 695,
+      "sha256": "01fc385ed78421169f03429580e713091f94126d559994d324b93ad400d7a5d7"
+    },
+    {
+      "path": "participants/p49/cli-evidence/8d9b2afad2a1467d870753cc89cdf1a8/debug-tools.json",
+      "bytes": 142585,
+      "sha256": "037459c61b66d49773cd025339652270d151464025036fb287650b676726c54f"
+    },
+    {
+      "path": "participants/p49/cli-evidence/8d9b2afad2a1467d870753cc89cdf1a8/debug.jsonl",
+      "bytes": 126492,
+      "sha256": "ab655b27973ac00b9fb0b30b6665d3e6e33931a9b79d09b5eae400e362841771"
+    },
+    {
+      "path": "participants/p49/cli-evidence/8d9b2afad2a1467d870753cc89cdf1a8/runtime-status.json",
+      "bytes": 423,
+      "sha256": "5d78f6959c1bfe447d85b51aa22835f3bb0f54f56eb90852ca7f67ad2fd1a36b"
+    },
+    {
+      "path": "participants/p49/cli-evidence/8d9b2afad2a1467d870753cc89cdf1a8/summary.json",
+      "bytes": 1755,
+      "sha256": "98eb8d6c12a4f24691d2e9e2d0ea017bb97e19293cd16e88d6abee1891b8081a"
+    },
+    {
+      "path": "participants/p49/cli-evidence/8d9b2afad2a1467d870753cc89cdf1a8/turn-timing.json",
+      "bytes": 8568,
+      "sha256": "67c3b62d7a8964653d0f6e5ca5442ae87b11db7325f753b1b677a90e7ee3f58c"
+    },
+    {
+      "path": "participants/p53/access.jsonl",
+      "bytes": 4522,
+      "sha256": "e7ba39e35cacbea35870096600cba197c4a1b2e4440933e7739d001baf80ac51"
+    },
+    {
+      "path": "participants/p53/access.py",
+      "bytes": 2233,
+      "sha256": "64669ba3ad5ebc4416a0425da2925c252083e33e172fd3543c7e21926f31338b"
+    },
+    {
+      "path": "participants/p53/answer.json",
+      "bytes": 9543,
+      "sha256": "8210a80575abf126085ff4e0e237676f2a31335c494478a7dd32de4cc1e3ad7d"
+    },
+    {
+      "path": "participants/p53/cases.md",
+      "bytes": 4672,
+      "sha256": "52940fa4862c775bbb7c45382be481072e78993d0a07daee4c634d3cd2455375"
+    },
+    {
+      "path": "participants/p53/cli-evidence/6ca012a0dda047c0be4b2eb4f78cbcd8/command-timing.json",
+      "bytes": 1664,
+      "sha256": "c52d29fcd37719bb29a270fd03469c41be197220fb4cd1c1c63d63161445a58e"
+    },
+    {
+      "path": "participants/p53/cli-evidence/6ca012a0dda047c0be4b2eb4f78cbcd8/context.json",
+      "bytes": 10107,
+      "sha256": "e6fd7debd2a40f64390b3febf2269ef847b8f39eaa4875be8a58d481709d5d3c"
+    },
+    {
+      "path": "participants/p53/cli-evidence/6ca012a0dda047c0be4b2eb4f78cbcd8/debug-initialize.json",
+      "bytes": 1102,
+      "sha256": "b3aafabd996833fef5bf4ea0d09f6700f2794214abca3df8ed44131a07493304"
+    },
+    {
+      "path": "participants/p53/cli-evidence/6ca012a0dda047c0be4b2eb4f78cbcd8/debug-process.json",
+      "bytes": 255,
+      "sha256": "0bfdde8e4dc49339f121781817385f6f428efd690e392b499d2e403d35735760"
+    },
+    {
+      "path": "participants/p53/cli-evidence/6ca012a0dda047c0be4b2eb4f78cbcd8/debug-stderr.log",
+      "bytes": 130,
+      "sha256": "8b19cbba6b28211b9e986cad8d3dd71bc6b5a36acee2604eebd2bd339c1f8cdc"
+    },
+    {
+      "path": "participants/p53/cli-evidence/6ca012a0dda047c0be4b2eb4f78cbcd8/debug-tools.json",
+      "bytes": 142585,
+      "sha256": "037459c61b66d49773cd025339652270d151464025036fb287650b676726c54f"
+    },
+    {
+      "path": "participants/p53/cli-evidence/6ca012a0dda047c0be4b2eb4f78cbcd8/debug.jsonl",
+      "bytes": 6343,
+      "sha256": "97c3ce81c09d86386b6aea584002da4111758ece90fa587a77d980de495fe8f9"
+    },
+    {
+      "path": "participants/p53/cli-evidence/6ca012a0dda047c0be4b2eb4f78cbcd8/runtime-status.json",
+      "bytes": 423,
+      "sha256": "924b2163528b87af39552e4ea42e6495f9cd1540a59cd902c78caa49085956a8"
+    },
+    {
+      "path": "participants/p53/cli-evidence/6ca012a0dda047c0be4b2eb4f78cbcd8/summary.json",
+      "bytes": 1755,
+      "sha256": "3bfbde38809c2b7e70ded21870df83d8f0021ed1b799d2dbb89e469fca7bfc6d"
+    },
+    {
+      "path": "participants/p53/cli-evidence/6ca012a0dda047c0be4b2eb4f78cbcd8/turn-timing.json",
+      "bytes": 1539,
+      "sha256": "f1ad3c09b762167bdb16d7697ece844638483fbb73355fbcbb66f5f4a98f52aa"
+    },
+    {
+      "path": "prepare.py",
+      "bytes": 12868,
+      "sha256": "d40f138501360b38d9ba7fb2ec74ecd27568812586054bf3e1bdaafefe54d927"
+    },
+    {
+      "path": "preregistration.json",
+      "bytes": 50936,
+      "sha256": "71710bae7e8362526b38f2841c1a9bc580f3a89aa3cb4325b842972a1de259c5"
+    },
+    {
+      "path": "scores-before-unblinding.json",
+      "bytes": 17483,
+      "sha256": "32990ddea24e047ed1639fae8ec3a17f64e577977283c613cea41af15772e14a"
+    }
+  ]
+}

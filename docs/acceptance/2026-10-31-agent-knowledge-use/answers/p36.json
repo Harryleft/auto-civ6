@@ -1,0 +1,188 @@
+{
+  "cases": [
+    {
+      "id": "C01",
+      "decision": "不能认定。最少补读本城city yields，取得当前GameInfo两条条件链、政策解锁/可装槽/已装备与原生condition/effect；分别比较人口14和plot相邻3，district相邻6不能替代。",
+      "commands": [
+        "city yields <本城ID>"
+      ],
+      "boundaries": "门槛未读，不能套旧规则；条件比较不等于实际科技净增量。",
+      "sources": [
+        "docs/cli.md:237-245"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "C02",
+      "decision": "A保留未来队列。B重新决定：继续则明确移动，不继续则取消已核实队列，确认后再选待命/治疗/驻防。原turn end未提交，处理完当回合队列与其他阻塞才新推进。",
+      "commands": [
+        "unit cancel-move <B_ID> --dry-run",
+        "unit cancel-move <B_ID>",
+        "unit list",
+        "turn end --dry-run",
+        "turn end"
+      ],
+      "boundaries": "取消是B不继续时的分支；skip不能证明清队列；A最终仍由推进守卫核验。",
+      "sources": [
+        "docs/agent-playbook.md:24-28,72-88"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "C03",
+      "decision": "原会话按提示原参确认原交易，不再出价；核对成交、会话结束和原生清理分别完成，pending解除后才移动。",
+      "commands": [
+        "diplomacy pending",
+        "trade propose 2 --request-open-borders --mode send",
+        "diplomacy pending",
+        "pending"
+      ],
+      "boundaries": "保持offer为空及原request，不新增offer-gold14；余额应仍93，不能再扣14。SESSION_CLOSED不证明交易清理完成。",
+      "sources": [
+        "docs/agent-special-operations.md:41-65",
+        "docs/cli.md:400-408"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "C04",
+      "decision": "保留原owner。先核实移动pending、世界/单位与信息弹窗；transport null并非传输锁。关闭已核实NaturalWonderPopup后沿完全相同移动入口只确认原请求。",
+      "commands": [
+        "pending",
+        "turn status",
+        "unit list",
+        "popup dismiss --dry-run",
+        "popup dismiss",
+        "unit move 131073 34 18",
+        "pending"
+      ],
+      "boundaries": "不能重发移动或换会话冒充完成；若仍未知或关闭也未知，保留门禁按授权恢复；弹窗消失不等于移动确认。",
+      "sources": [
+        "docs/agent-recovery.md:33-41",
+        "docs/agent-special-operations.md:85-93",
+        "docs/cli.md:460-471"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "C05",
+      "decision": "攒到170不能解决换政窗口。总开关允许不等于现在可换；当前新政体因无免费窗口拒绝。保留当前政体是继续采用的确认，不是换政；政策付费解锁报价属于另一资格。",
+      "commands": [
+        "government list",
+        "policy show"
+      ],
+      "boundaries": "未来换政须重读逐目标can_select_now与条件，不能把政策金币缺口当换政失败原因。",
+      "sources": [
+        "docs/agent-playbook.md:47",
+        "docs/cli.md:316-320,358"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "C06",
+      "decision": "Debater不在当前候选，不能提交；按战略从92/95/96中当前selectable now为真的项选择，或暂缓。",
+      "commands": [
+        "unit promotions <使徒ID>",
+        "unit promote <使徒ID> <本次选定PROMOTION_TYPE> --dry-run",
+        "unit promote <使徒ID> <同一PROMOTION_TYPE>",
+        "unit promotions <使徒ID>"
+      ],
+      "boundaries": "两个集合unknown时保留未知重读，不能用15/15、MP3或静态九类补齐资格。",
+      "sources": [
+        "docs/cli.md:171-172,190"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "C07",
+      "decision": "完整扫描：道教2城65536/196610，新教1城131073，262147无多数宗教。下一回合只查改宗优先city list或已有state decision城市段，逐完整ID比较。",
+      "commands": [
+        "city list"
+      ],
+      "boundaries": "玩家-1与native统计4不表示逐城一致；-1为已知none，0保留合法原生ID并解析名称，unknown为未读到，均不得混同。",
+      "sources": [
+        "docs/cli.md:227",
+        "docs/agent-playbook.md:51-53"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "C08",
+      "decision": "展示本次目标Man-at-Arms(94)、报价165g；替换确认及金币精确减少165支持升级完成，后续用新ID1835017，不重发。",
+      "commands": [
+        "unit list",
+        "pending"
+      ],
+      "boundaries": "核对原单位消失、新单位类型/位置和替换事件链；resource_quote13与库存净变-11分别报告，不能说资源扣了13或11，也不能沿用Swordsman/80g。",
+      "sources": [
+        "docs/cli.md:192",
+        "src/civ_mcp/lua/unit_transforms.py:123-166"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "C09",
+      "decision": "Runtime ZOC提前拒绝不证明引擎禁止。用只读combat-preview取得当前原生动态强度及伤害模拟，检查世界/回合/实体与目标绑定、status及unknown。",
+      "commands": [
+        "unit list",
+        "unit combat-preview <勇士ID> 34 18",
+        "unit list"
+      ],
+      "boundaries": "前后核对HP51、位置和目标HP/存在及无攻击提交；缺模拟保留unknown，不拿基础CS20估伤。预估不保证实伤，当前不支持神学战斗/空袭。",
+      "sources": [
+        "docs/cli.md:196",
+        "docs/agent-playbook.md:39-43"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "C10",
+      "decision": "两口径分别保留：map为GameCore Plot:GetYield，workforce为InGame城市工作地块。城市工作问题优先后者，查完整性与身份；4.75/2.5/-0.75应原精度输出。",
+      "commands": [
+        "map area 41 26 --radius 1",
+        "city workforce <本城ID> --view structured"
+      ],
+      "boundaries": "整数差异原因未证，不能统称政策/缓存，也不能说小数修复已解决。map有收益块时省略G/S/C/Fa为零，无收益块为未取得；workforce零值用structured核对。",
+      "sources": [
+        "docs/cli.md:261-263,299"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "C11",
+      "decision": "无需先进城。完整可见且唯一邻城(28,27)可显式绑定；运行时重核原生资格，先预演再一次提交，确认原操作、次数2→1及该城压力增加。",
+      "commands": [
+        "unit spread-religion <传教士ID> 28 27 --dry-run",
+        "unit spread-religion <传教士ID> 28 27",
+        "religion show"
+      ],
+      "boundaries": "未决时同单位同坐标只确认，不改参或省略坐标；压力3.83203125→206.32421875不证明多数派改变，须逐城多数宗教回读。",
+      "sources": [
+        "docs/cli.md:206",
+        "docs/agent-playbook.md:55,68"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "C12",
+      "decision": "现在仅审查，不操作游戏。未来授权后先以独立名保存/登记T100，再从本轮已确认T57复验，结束恢复本轮T100；响应正常用reload，已在菜单用load，挂起失联才按授权recover。",
+      "commands": [
+        "未来：pending；save create <独立T100名>",
+        "未来：save reload <本轮T57名>",
+        "未来：save reload <本轮T100名>",
+        "每次变更先--dry-run；加载后state overview、unit list、city list"
+      ],
+      "boundaries": "核对指纹/文明/种子/回合/轮次及新快照；原基准用于新测试，会另建轮次。两个脚本均不能替代模型续局：integration含固定策略且直接MCP；hotseat仅历史显式例外。保留既有成果。",
+      "sources": [
+        "AGENTS.md:11-27",
+        "docs/agent-recovery.md:7-31,43-49",
+        "scripts/integration_turns.py:1-8,20-21,71-89"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "uncertainties": [
+    "全部为离线交接判断；没有执行原生实机资格、动作或加载验证。C01当前门槛与C06最终战略选择待实时读取。"
+  ],
+  "protocol_violations": []
+}
