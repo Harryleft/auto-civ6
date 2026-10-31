@@ -1,24 +1,71 @@
 """A lost checkpoint response must not cause a second native save."""
 import asyncio
+import builtins
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 
 import pytest
 
 
-@pytest.fixture
-def endurance(monkeypatch):
+def load_endurance(monkeypatch):
     scripts = Path(__file__).parents[1] / "scripts"
     monkeypatch.syspath_prepend(str(scripts))
     spec = importlib.util.spec_from_file_location("hotseat_endurance_test", scripts / "hotseat_endurance.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture
+def endurance(monkeypatch):
+    module = load_endurance(monkeypatch)
     async def active(_):
         return {"terminal": False}
     monkeypatch.setattr(module, "match_status", active)
     return module
+
+
+def test_missing_unix_locks_allows_import_but_refuses_native_snapshot(monkeypatch, tmp_path):
+    original_import = builtins.__import__
+    def without_fcntl(name, *args, **kwargs):
+        if name == "fcntl":
+            raise ModuleNotFoundError("No module named 'fcntl'", name="fcntl")
+        return original_import(name, *args, **kwargs)
+    monkeypatch.setattr(builtins, "__import__", without_fcntl)
+    module = load_endurance(monkeypatch)
+    def forbidden(*args, **kwargs):
+        pytest.fail("missing lock support allowed a game query")
+    monkeypatch.setattr(module, "snapshot", forbidden)
+    with pytest.raises(RuntimeError, match="requires Unix fcntl locks"):
+        module.locked_snapshot(tmp_path)
+    assert not (tmp_path / "evidence/control.lock").exists()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Historical coordinator uses Unix flock")
+@pytest.mark.parametrize("callback_fails", [False, True])
+def test_snapshot_holds_exclusive_lock_and_releases_after_callback(endurance, monkeypatch, tmp_path, callback_fails):
+    from civ_mcp.file_lock import acquire
+    (tmp_path / "evidence").mkdir()
+    path = tmp_path / "evidence/control.lock"
+    async def snapshot(run):
+        assert run == tmp_path
+        with path.open("a+b") as other:
+            with pytest.raises(BlockingIOError):
+                acquire(other)
+        if callback_fails:
+            raise RuntimeError("snapshot failed")
+        return {"turn": 12}
+    monkeypatch.setattr(endurance, "snapshot", snapshot)
+    if callback_fails:
+        with pytest.raises(RuntimeError, match="snapshot failed"):
+            endurance.locked_snapshot(tmp_path)
+    else:
+        assert endurance.locked_snapshot(tmp_path) == {"turn": 12}
+    with path.open("a+b") as other:
+        acquire(other)
 
 
 def test_lost_save_response_keeps_pending_and_refuses_replay(endurance, monkeypatch, tmp_path):

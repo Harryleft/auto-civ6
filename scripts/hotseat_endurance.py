@@ -10,12 +10,14 @@ Foreground coordinator for one authorized native-hotseat match: models select
 all game actions; the coordinator dispatches the owning model, records elapsed
 time, and writes native checkpoints between human turns. An unknown shared
 action or save stops dispatch; nothing is replayed.
+Report helpers can be imported cross-platform; the historical coordinator's
+native control operations still require Unix file locks.
 """
 from __future__ import annotations
 
 import argparse
 import asyncio
-import fcntl
+from contextlib import contextmanager
 import hashlib
 import json
 from pathlib import Path
@@ -154,9 +156,24 @@ end
         await conn.disconnect()
 
 
-def locked_snapshot(run):
+@contextmanager
+def _legacy_control_lock(run):
+    # Keep the original blocking flock semantics for this historical runner.
+    # Loading a platform lock here leaves pure reports importable on Windows;
+    # unsupported control fails before opening files or querying the game.
+    try:
+        import fcntl
+    except ImportError as exc:
+        raise RuntimeError(
+            "Legacy hotseat control requires Unix fcntl locks; use the current civ6 CLI instead"
+        ) from exc
     with (run / "evidence/control.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
+        yield
+
+
+def locked_snapshot(run):
+    with _legacy_control_lock(run):
         return asyncio.run(snapshot(run))
 
 
@@ -289,8 +306,7 @@ def main():
         checkpoint_seat = 0 if alive[0] else 1
         finite_complete = not args.until_game_over and facts["turn"] > args.through
         if facts["seat"] == checkpoint_seat and (facts["turn"] - state["last_checkpoint"] >= 10 or finite_complete):
-            with (evidence / "control.lock").open("a") as lock:
-                fcntl.flock(lock, fcntl.LOCK_EX)
+            with _legacy_control_lock(run):
                 saved = asyncio.run(checkpoint(run, facts))
             state["last_checkpoint"] = facts["turn"]
             write(statepath, state)

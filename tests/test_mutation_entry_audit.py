@@ -8,7 +8,7 @@ from civ_mcp.game_state import GameState
 from test_server import make_ctx, app_of
 from test_unit_readiness import ReadyConn
 from test_move_target_lua import TargetMovementConn
-from test_attack_mode_lua import AttackConn
+from test_attack_mode_lua import AttackConn, state_for as attack_state
 
 run = asyncio.run
 
@@ -40,7 +40,10 @@ def test_mcp_legacy_unit_mutations_reject_replacement_before_native_request(acti
     conn.lua.execute('unit.GetID=function() return 917510 end')
     if action != 'attack':
         conn.lua.execute('can_target=true; UnitOperationTypes.FOUND_CITY=99')
-    result = run(server.unit_action(context(GameState(conn)), 851974, action, target_x=18, target_y=18))
+    # AttackConn models combat, not popup contexts. Use its existing UI-isolated
+    # state so this test reaches the full-ID guard through the public MCP entry.
+    state = attack_state(conn) if action == 'attack' else GameState(conn)
+    result = run(server.unit_action(context(state), 851974, action, target_x=18, target_y=18))
     assert 'UNIT_ID_CHANGED' in result
     assert (conn.lua.eval('submissions') if action != 'attack' else len(conn.operations)) == 0
 
