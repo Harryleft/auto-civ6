@@ -1,5 +1,6 @@
 """Economic trader operations, bound to full unit and both native city identities."""
 import json
+import math
 
 from civ_mcp.lua._helpers import SENTINEL, _LUA_ACTION_SCOPE
 
@@ -194,7 +195,7 @@ def build_trader_action_query(kind: str, unit_id: int, x: int, y: int, token: st
     return _CONTEXT + f'''
 local r=__civmcpTraderAction
 local reason="RECEIPT_MISSING_OR_MISMATCHED"
-local ok,active,capacity=pcall(function()
+local ok,active,capacity,unit=pcall(function()
  assert(type(r)=="table" and r.token=={json.dumps(token)} and r.kind=={json.dumps(kind)} and r.unit=={unit_id}
   and r.destination.x=={x} and r.destination.y=={y})
  reason="SCOPE_CHANGED";assert(sameScope(r))
@@ -231,8 +232,22 @@ local ok,active,capacity=pcall(function()
  assert(scopeInteger(mode))
  if mode==r.chooser then assert(r.kind=="trade_route" and anotherTraderOwnsChooser(r)) end
  if r.kind=="trade_route" then originalRouteEntities(r) end
- return #routes,capacity
+ return #routes,capacity,unit
 end)
+-- This optional observation is separate from the established economic receipt.
+-- It reads the original unit, never the current chooser/head selection. Getter
+-- failure or changed unit identity only withholds movement; it cannot replay the
+-- operation or undo the primary evidence. Scope is still checked afterwards.
+local moves="?"
+if ok then
+ local known,value=pcall(function()
+  local value=unit:GetMovesRemaining()
+  assert(unit:GetID()==r.unit and unit:GetOwner()==r.owner and unit:GetType()==r.unitType)
+  assert(type(value)=="number" and value==value and value>=0 and value<math.huge)
+  return value
+ end)
+ if known then moves=string.format("%.17g",value) end
+end
 -- Failed/unknown entity or selection reads must not hide a known scope change
 -- caused by a later native getter. Always observe scope after all those reads.
 if type(r)=="table" and r.token=={json.dumps(token)} and not sameScope(r) then
@@ -241,6 +256,7 @@ end
 if ok then
  print("TRADER_CONFIRMED|"..r.token.."|"..r.kind.."|"..r.unit.."|"..r.origin.owner..":"..r.origin.id
   .."->"..r.destination.owner..":"..r.destination.id.."|at:{x},{y}|routes:"..active.."/"..capacity)
+ print("TRADER_POST_MOVES|"..r.token.."|"..r.kind.."|"..r.unit.."|moves:"..moves)
 else print("TRADER_OBSERVED|{token}|"..reason) end
 print("{SENTINEL}")
 '''
@@ -251,7 +267,22 @@ def parse_trader_confirmation(lines: list[str], token: str, kind: str, unit_id: 
     if len(rows)==1 and len(rows[0])==7:
         row=rows[0]
         if row[1:4]==[token,kind,str(unit_id)]:
+            # Keep the original seven-field confirmation compatible. Optional
+            # observations have their own token/kind/full-ID binding; missing,
+            # duplicate or malformed rows only make this extra fact unknown.
+            moves="unknown"
+            post=[line.split("|") for line in lines if line.startswith("TRADER_POST_MOVES")]
+            if (len(post)==1 and len(post[0])==5 and post[0][0]=="TRADER_POST_MOVES"
+                    and post[0][1:4]==[token,kind,str(unit_id)]
+                    and post[0][4].startswith("moves:")):
+                try:
+                    value=float(post[0][4][6:])
+                    if math.isfinite(value) and value>=0:
+                        moves=str(int(value)) if value==int(value) else str(value)
+                except ValueError:
+                    pass
+            suffix=f"|moves_remaining:{moves}|route_eligibility:unchecked"
             if kind=="trade_route":
-                return f"TRADE_ROUTE_STARTED|unit:{unit_id}|{row[4]}|{row[6]}|Route established; future yields not yet earned."
-            return f"TELEPORTED|unit:{unit_id}|{row[4]}|{row[5]}|Trader relocated; no trade route started."
+                return f"TRADE_ROUTE_STARTED|unit:{unit_id}|{row[4]}|{row[6]}|Route established; future yields not yet earned."+suffix
+            return f"TELEPORTED|unit:{unit_id}|{row[4]}|{row[5]}|Trader relocated; no trade route started."+suffix
     return None

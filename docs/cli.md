@@ -194,6 +194,8 @@ game decision --view structured
 
 其他已有动作也有命名入口：`unit repair/remove-improvement/remove-feature/build-route/automate ID`、`unit activate/sacrifice-charges/spread-religion/launch-inquisition/condemn-heretic/remove-heresy ID`；带目标坐标的入口为 `unit trade-route/teleport/religious-attack ID X Y`。斜线表示分别可用的子命令，不能原样输入。完整参数用 `unit COMMAND --help` 查询；原有 `unit action` 保留。
 
+商人迁移／建路确认回执另带原商人的 `moves_remaining` 观测，来自同一确认请求；读取失败、缺失或绑定不符保留 `unknown`，不默认零，也不撤销已成立的原动作确认。`route_eligibility:unchecked` 表示尚未核验下一条商路的完整资格，正移动力不保证可建路，迁移成功也不保证能立即建路。世界／回合范围守卫及原请求仅确认规则保持不变。
+
 所有变更支持 `--dry-run`，只核对 schema，不验证当前资源和目标资格。`delete` 永久删除单位，`corps`／`army` 会消耗一个原单位，执行前先预演并读取当前状态。`skip-remaining` 只处理当前就绪单位，保留既有站立指令。编队／合并结果未知时，保留同一会话与完整参数，通过原命令确认；不能再次选择别的单位绕过门禁。只读 `unit formations` 不提交或退役请求。合并后使用回执给出的存活单位 ID，不假设发起单位一定保留。
 
 本轮编队能力已完成隔离原生 Lua／MCP 与离线 CLI 验证，未在真实对局执行合并；实际原生事件顺序、解锁与合并结果仍需具备条件的受信存档验收。实现与证据见 [单位 CLI 说明](specs/2026-10-25-unit-cli.md)。

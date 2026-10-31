@@ -191,6 +191,91 @@ def test_normal_operation_confirms_exact_route_or_transfer(action,method,x,y,pre
     assert state.pending_action_summary is None
 
 
+@pytest.mark.parametrize('moves',[0,2,1.25])
+def test_transfer_ack_reports_native_post_moves_without_claiming_route_eligibility(moves):
+    conn=TraderConn();state=GameState(conn)
+    conn.lua.execute(f'''nativeApply=applyTrader
+function applyTrader(op,p) nativeApply(op,p);units[196608].moves={moves} end''')
+    result=asyncio.run(state.teleport_to_city(196608,20,20))
+    assert result.startswith('TELEPORTED|')
+    assert f'moves_remaining:{moves}' in result
+    assert 'route_eligibility:unchecked' in result
+    assert state.pending_action_summary is None and conn.lua.eval('#submissions')==1
+    conn.lua.execute('allowed=false')
+    refused=asyncio.run(state.make_trade_route(196608,30,30))
+    assert ('NO_MOVES' if moves==0 else 'CANNOT_START_OPERATION') in refused
+    assert conn.lua.eval('#submissions')==1
+
+
+@pytest.mark.parametrize('getter',[
+    "function() error('moves unavailable') end",'nil','function() return nil end',
+    'function() return "0" end','function() return false end',
+    'function() return math.huge end','function() return 0/0 end','function() return -1 end',
+])
+def test_unknown_post_moves_never_cancels_transfer_confirmation_or_submits_again(getter):
+    conn=TraderConn();state=GameState(conn)
+    conn.lua.execute(f'''nativeApply=applyTrader
+function applyTrader(op,p) nativeApply(op,p);units[196608].GetMovesRemaining={getter} end''')
+    result=asyncio.run(state.teleport_to_city(196608,20,20))
+    assert result.startswith('TELEPORTED|') and 'moves_remaining:unknown' in result
+    assert state.pending_action_summary is None and conn.lua.eval('#submissions')==1
+
+
+@pytest.mark.parametrize('getter',[
+    "function() seed=99;error('moves unavailable') end",'function() turn=42;return 0 end',
+    "function(self) self.GetID=function() seed=99;error('id unavailable') end;return 0 end",
+])
+def test_optional_post_moves_cannot_mask_known_world_or_turn_changes(getter):
+    conn=TraderConn();state=GameState(conn)
+    conn.lua.execute(f'''nativeApply=applyTrader
+function applyTrader(op,p) nativeApply(op,p);units[196608].GetMovesRemaining={getter} end''')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.teleport_to_city(196608,20,20))
+    assert state.pending_action_kind=='teleport' and conn.lua.eval('#submissions')==1
+    conn.lua.execute('seed=719665280;turn=41;units[196608].GetID=function(self)return self.id end;units[196608].GetMovesRemaining=function()return 0 end')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.teleport_to_city(196608,20,20))
+    assert conn.lua.eval('#submissions')==1
+
+
+def test_post_moves_identity_mismatch_is_unknown_without_undoing_established_transfer():
+    conn=TraderConn();state=GameState(conn)
+    conn.lua.execute('''nativeApply=applyTrader
+function applyTrader(op,p)
+ nativeApply(op,p)
+ units[196608].GetMovesRemaining=function(self) self.id=262144;return 0 end
+end''')
+    result=asyncio.run(state.teleport_to_city(196608,20,20))
+    assert result.startswith('TELEPORTED|unit:196608|') and 'moves_remaining:unknown' in result
+    assert state.pending_action_summary is None and conn.lua.eval('#submissions')==1
+
+
+def test_legacy_primary_receipt_and_optional_post_moves_have_separate_validation():
+    from civ_mcp.lua.trader_actions import parse_trader_confirmation
+    main='TRADER_CONFIRMED|token|teleport|196608|0:65537->0:65538|at:20,20|routes:0/2'
+    post='TRADER_POST_MOVES|token|teleport|196608|moves:0'
+    assert 'moves_remaining:unknown' in parse_trader_confirmation([main],'token','teleport',196608)
+    assert 'moves_remaining:0' in parse_trader_confirmation([main,post],'token','teleport',196608)
+    for extra in [[post,post],[post.replace('token','other')],[post.replace('teleport','trade_route')],
+                  [post.replace('196608','262144')],[post+'|extra'],[post.replace('moves:0','moves:nan')],
+                  [post.replace('moves:0','moves:-1')],[post.replace('moves:0','moves:?')],
+                  [post.replace('TRADER_POST_MOVES','TRADER_POST_MOVES_OTHER')]]:
+        result=parse_trader_confirmation([main,*extra],'token','teleport',196608)
+        assert result.startswith('TELEPORTED|') and 'moves_remaining:unknown' in result
+    assert parse_trader_confirmation([main+'|moves:0'],'token','teleport',196608) is None
+    assert parse_trader_confirmation([main.replace('token','other'),post],'token','teleport',196608) is None
+
+
+def test_lost_transfer_reply_and_unknown_post_moves_confirm_once_without_replaying():
+    conn=TraderConn();state=GameState(conn);conn.lose_reply=True
+    conn.lua.execute('''nativeApply=applyTrader
+function applyTrader(op,p)
+ nativeApply(op,p);units[196608].GetMovesRemaining=function()error('unavailable')end
+end''')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.teleport_to_city(196608,20,20))
+    result=asyncio.run(state.teleport_to_city(196608,20,20))
+    assert result.startswith('TELEPORTED|') and 'moves_remaining:unknown' in result
+    assert state.pending_action_summary is None and conn.lua.eval('#submissions')==1
+
+
 @pytest.mark.parametrize('action,x,y,prefix',[
     ('trade_route',30,30,'TRADE_ROUTE_STARTED|'),('teleport',20,20,'TELEPORTED|'),
 ])

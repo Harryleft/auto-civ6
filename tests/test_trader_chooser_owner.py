@@ -60,6 +60,17 @@ def test_t131_completed_original_route_preserves_other_idle_trader_chooser():
     assert state.pending_action_summary is None
 
 
+def test_post_moves_belongs_to_original_trader_not_current_other_chooser():
+    conn=ChooserOwnerConn();state=GameState(conn)
+    conn.lua.execute('''nativeApply=applyTrader
+function applyTrader(op,p) nativeApply(op,p);original.moves=0;other.moves=2 end''')
+    result=asyncio.run(state.make_trade_route(1966090,40,25))
+    assert result.startswith('TRADE_ROUTE_STARTED|unit:1966090|')
+    assert 'moves_remaining:0' in result and 'moves_remaining:2' not in result
+    assert conn.lua.eval('selected.id')==2883596 and conn.lua.eval('#modeChanges')==0
+    assert state.pending_action_summary is None and conn.lua.eval('#submissions')==1
+
+
 def test_delayed_original_route_confirms_only_while_other_trader_chooser_stays_open():
     conn=ChooserOwnerConn();state=GameState(conn);ctx=make_ctx(game=state)
     conn.lua.execute('deferred=true')
