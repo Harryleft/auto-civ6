@@ -1,6 +1,7 @@
 """Foreground-session behavior through real stdio, with no game connection."""
 
 import asyncio
+from datetime import timedelta
 from io import StringIO
 import json
 import os
@@ -10,9 +11,10 @@ import subprocess
 import sys
 import threading
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
-from mcp import StdioServerParameters
+from mcp import ClientSession, StdioServerParameters
 
 from civ_mcp import server
 from civ_mcp.devtools.debug import serve
@@ -64,15 +66,45 @@ raise SystemExit(main())
         text=True, encoding='utf-8')
 
 
-def run_fake(tmp_path, text, timeout=5, scenario=None, **options):
+def run_fake(tmp_path, text, timeout=5, scenario=None, *, startup_delay=0, **options):
     receipt = tmp_path / "engine.json"
     evidence = Evidence(ROOT, ["debug-test"], str(tmp_path / "evidence"))
     state, events = {}, []
+    fixture = ROOT / "tests/fake_debug_server.py"
+    if startup_delay:
+        # The fixed fixture is already installed before delaying its handshake;
+        # it still replaces GameConnection, so no game can be contacted.
+        wrapper = tmp_path / "delayed_debug_server.py"
+        wrapper.write_text(f'''import json,runpy,sys,time
+from pathlib import Path
+sys.path.insert(0,{str(ROOT / "tests")!r})
+from civ_mcp import server
+original=server.main
+def delayed_main():
+    started=time.monotonic()
+    time.sleep({startup_delay!r})
+    Path({str(tmp_path / "startup-delay.json")!r}).write_text(json.dumps({{"elapsed_seconds":time.monotonic()-started}}))
+    original()
+server.main=delayed_main
+runpy.run_path({str(fixture)!r},run_name="__main__")
+''')
+        fixture = wrapper
     params = StdioServerParameters(command=sys.executable,
-        args=[str(ROOT / "tests/fake_debug_server.py"), "--receipt", str(receipt),
+        args=[str(fixture), "--receipt", str(receipt),
               *(["--snapshot", scenario] if scenario else [])], cwd=str(ROOT))
-    status = asyncio.run(serve(evidence, state, offline=False, timeout=timeout,
-                              source=StringIO(text), emit=events.append, server=params, **options))
+    class FixtureSession(ClientSession):
+        async def call_tool(self, name, arguments=None, read_timeout_seconds=None,
+                            progress_callback=None, *, meta=None):
+            return await super().call_tool(name, arguments,
+                read_timeout_seconds=(timedelta(seconds=timeout) if read_timeout_seconds is None else read_timeout_seconds),
+                progress_callback=progress_callback, meta=meta)
+
+    # Bootstrap is setup, not the intentionally short tool RPC under test.
+    # The SDK's public per-call budget preserves that original RPC deadline;
+    # patch only this fixture's session factory, restoring it even on errors.
+    with patch('mcp.ClientSession', FixtureSession):
+        status = asyncio.run(serve(evidence, state, offline=False, timeout=max(30, timeout),
+                                  source=StringIO(text), emit=events.append, server=params, **options))
     return status, state, events, json.loads(receipt.read_text()), evidence
 
 
@@ -184,6 +216,21 @@ def test_later_read_timeout_does_not_replace_original_unknown_intent(tmp_path):
     assert state['transport_unknown']['tool'] == 'test_slow'
     assert json.loads((evidence.path / 'transport-unknown.json').read_text())['tool'] == 'test_slow'
     assert status == 'BLOCKED' and engine['submissions'] == 1
+
+
+def test_delayed_startup_does_not_spend_the_short_business_rpc_timeout(tmp_path):
+    status, state, events, engine, evidence = run_fake(tmp_path,
+        'call test_slow {}\ncall test_slow_read {}\npending\nquit --abandon\n',
+        timeout=2, startup_delay=3)
+    assert json.loads((tmp_path / 'startup-delay.json').read_text())['elapsed_seconds'] > 2
+    assert (evidence.path / 'debug-initialize.json').is_file()
+    unknowns = [event for event in events if event['event'] == 'tool_outcome_unknown']
+    assert [event['tool'] for event in unknowns] == ['test_slow', 'test_slow_read']
+    assert all('Waited 2.0 seconds' in event['error'] for event in unknowns)
+    assert state['transport_unknown']['tool'] == 'test_slow'
+    assert json.loads((evidence.path / 'transport-unknown.json').read_text())['tool'] == 'test_slow'
+    assert engine['submissions'] == 1 and engine['has_pending']
+    assert status == 'BLOCKED' and state['exit_reason'] == 'abandoned' and state['context_lost']
 
 
 def test_identity_change_is_latched_and_new_mutation_is_not_sent(tmp_path):
