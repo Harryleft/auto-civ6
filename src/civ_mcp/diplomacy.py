@@ -291,7 +291,15 @@ class DiplomacyProgress:
                     "DiplomacyActionView", native.build_response_query(self.nonce, token, sid, target, seq))
                 if rows == ["DIPLO_RESPONSE|CLOSED"]:
                     self.response = None
-                    return "OK:RESPONDED|SESSION_CLOSED"
+                    result = "OK:RESPONDED|SESSION_CLOSED"
+                    if self.trade is not None:
+                        mode = "test" if self.trade.preview else "send"
+                        result += (f"\nTRADE_CONFIRMATION_PENDING|player:{self.trade.target}"
+                                   f"|phase:{self.trade.phase}|mode:{mode}"
+                                   f"\nRepeat the original trade propose {self.trade.target} --mode {mode} "
+                                   "with the same offer and request only to confirm; it does not resend. "
+                                   "Native trade cleanup is still pending and gameplay remains blocked.")
+                    return result
                 if rows == ["DIPLO_RESPONSE|CONTINUES"]:
                     self.response = None
                     return "OK:RESPONDED|SESSION_CONTINUES; inspect current native choices."

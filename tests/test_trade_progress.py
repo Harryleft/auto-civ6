@@ -69,7 +69,7 @@ def test_natural_statement_exposes_native_keys_and_exit_only_rejects_positive():
     assert context.sessions[0].choice_keys == ["CHOICE_EXIT"]
     assert "NOT_AVAILABLE" in asyncio.run(state.diplomacy_respond(1, "POSITIVE"))
     assert list(conn.lua.globals().mutations.values()) == []
-    assert "SESSION_CLOSED" in asyncio.run(state.diplomacy_respond(1, "EXIT"))
+    assert asyncio.run(state.diplomacy_respond(1, "EXIT")) == "OK:RESPONDED|SESSION_CLOSED"
     assert list(conn.lua.globals().mutations.values()) == ["close"]
 
 
@@ -245,6 +245,60 @@ def test_original_prepared_copy_confirms_and_new_request_starts_only_after_retir
         assert conn.lua.globals().requests==2
         assert list(conn.lua.globals().sent_actions.values())==[9,1,9,1]
     asyncio.run(scenario())
+
+
+def test_closed_dialogue_reports_retained_trade_confirmation_without_resending(quick_trade):
+    class CountedConn(TradeConn):
+        calls = 0
+        async def execute_in_named_state(self, name, source, timeout=5):
+            self.calls += 1
+            return await super().execute_in_named_state(name, source, timeout)
+
+    async def scenario():
+        conn=CountedConn(); state=GameState(conn)
+        offer=[{"type":"GOLD","amount":14}]
+        request=[{"type":"FAVOR","amount":1}]
+        assert "ACCEPTED|" in await state.propose_trade(1,offer,request)
+        submitted=list(conn.lua.globals().sent_actions.values())
+        assert submitted==[9,1] and conn.lua.globals().requests==1
+        attempt=state._diplomacy_progress.trade
+        result=await state.diplomacy_respond(1,"EXIT")
+        assert result.startswith("OK:RESPONDED|SESSION_CLOSED")
+        assert "TRADE_CONFIRMATION_PENDING|player:1|phase:DIALOGUE|mode:send" in result
+        assert "trade propose 1 --mode send" in result
+        assert "same offer and request" in result and "does not resend" in result
+        assert state._diplomacy_progress.trade is attempt and state.diplomacy_pending
+        assert state._diplomacy_progress.response is None
+        assert list(conn.lua.globals().mutations.values())==["close"]
+        assert list(conn.lua.globals().sent_actions.values())==submitted
+        assert conn.lua.globals().requests==1
+        calls=conn.calls
+        mismatch=await state.propose_trade(1,[{"type":"GOLD","amount":15}],request)
+        assert "PENDING_TRADE_MISMATCH" in mismatch and conn.calls==calls
+        assert "cleanup confirmed" in await state.propose_trade(1,offer,request)
+        assert not state.diplomacy_pending
+        assert list(conn.lua.globals().sent_actions.values())==submitted
+        assert conn.lua.globals().requests==1
+        assert list(conn.lua.globals().mutations.values())==["close"]
+    asyncio.run(scenario())
+
+
+def test_closed_dialogue_hint_uses_the_retained_preview_mode():
+    from civ_mcp.diplomacy import TradeAttempt
+
+    conn=AsyncDiplomacyConn(); state=GameState(conn)
+    asyncio.run(state.get_diplomacy_sessions())
+    conn.setup('native_selections={{Key="CHOICE_EXIT"}}')
+    conn.statement("AI_ACCEPT_DEAL")
+    # Fixed pending-memory fixture: a preview still awaiting native cleanup.
+    attempt=TradeAttempt("retained-preview",1,True,[],[],phase="EXIT_ENTERED",sid=71)
+    state._diplomacy_progress.trade=attempt
+    result=asyncio.run(state.diplomacy_respond(1,"EXIT"))
+    assert "TRADE_CONFIRMATION_PENDING|player:1|phase:EXIT_ENTERED|mode:test" in result
+    assert "trade propose 1 --mode test" in result
+    assert state._diplomacy_progress.trade is attempt and state.diplomacy_pending
+    assert state._diplomacy_progress.response is None
+    assert list(conn.lua.globals().mutations.values())==["close"]
 
 
 def test_mcp_new_trade_cannot_claim_the_previous_receipt_or_release_its_gate(monkeypatch,tmp_path,quick_trade):

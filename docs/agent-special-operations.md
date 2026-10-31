@@ -52,7 +52,7 @@
 1. 用 `diplomacy pending` 核对当前原生选项；仅有退出选项时显式使用 `EXIT`。选项未知时继续读取，不按文本不变推断 goodbye，也不默认发送 POSITIVE／NEGATIVE。
 2. 对当前参与者调用 `diplomacy respond PLAYER_ID RESPONSE`，使用本次原生选项作出明确回应；回应未知时，相同调用只确认原请求。
 3. 返回 `SESSION_CONTINUES` 时重新读取当前选项，继续处理本次会话。对方回复「谢谢」仍可能有 `EXIT`，须完成退出。
-4. 返回 `SESSION_CLOSED` 后用 `diplomacy pending` 核对本次会话已结束；其他新会话作为新待办处理。
+4. 返回 `SESSION_CLOSED` 后用 `diplomacy pending` 核对本次会话已结束；其他新会话作为新待办处理。若回执同时含 `TRADE_CONFIRMATION_PENDING`，原交易尚待收尾；按所示玩家与 test／send 模式，以原 offer／request 重复原 `trade propose` 仅确认，不另开交易、不改参。该确认不重发提案；在原生清理确认前，游戏写入仍受门禁保护。
 
 已核验参与者的会话仍开放、但没有当前语句或界面时，按[保存与恢复的入口选择](agent-recovery.md#选择入口)判断是否显式取消原会话。多个会话分别核对参与者；不能把空选项当作退出选项，也不能用关弹窗代替会话取消。
 
