@@ -10,6 +10,15 @@ from civ_mcp.game_state import GameState
 pytestmark = pytest.mark.usefixtures('fast_action_confirmation')
 
 
+@pytest.fixture(autouse=True)
+def no_crash_dialogs(monkeypatch):
+    """移动测试不检查或关闭本机的真实崩溃窗口。"""
+    async def no_os_dialogs():
+        return []
+
+    monkeypatch.setattr('civ_mcp.game_launcher.dismiss_crash_dialogs', no_os_dialogs)
+
+
 class MovementConn:
     def __init__(self):
         self.lua = LuaRuntime()
@@ -75,10 +84,13 @@ end
 ''')
 
     async def execute_write(self, code):
+        # 明确模拟无弹窗的成功回执，避免连接失败触发弹窗未知门禁。
+        if 'INFORMATION_POPUPS' in code:
+            return ['INFORMATION_POPUPS|DONE']
+        if 'DISMISSED|' in code:
+            return []
         if 'ACTION_' not in code:
-            # The optional popup context is unavailable. GameState must still
-            # execute the action through its normal scope and confirmation.
-            raise ConnectionError("optional popup context unavailable")
+            raise AssertionError("移动夹具收到未支持的 Lua 请求")
         if 'ACTION_IDENTITY|' in code and self.lose_observation:
             self.lose_observation = False
             raise ConnectionError("lost observation")
@@ -91,6 +103,8 @@ def test_native_move_listener_is_armed_before_submission_ignores_foreign_events_
     conn = MovementConn()
     state = GameState(conn)
     assert "OUTCOME_UNKNOWN" in asyncio.run(state.move_unit(6, 18, 18))
+    assert not state.popup_pending
+    assert state.pending_action_summary is not None
     native = conn.lua.globals()
     assert native.submissions == 1 and native.armedAtSubmit
     assert native.listenerCount() == 2
