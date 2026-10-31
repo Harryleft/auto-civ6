@@ -25,7 +25,7 @@ city.GetReligion=function(self) return {
  GetMajorityReligion=function() return self.majority end,
 } end
 UnitManager.CanStartOperation=function(actor,operation,unused,params,check)
- assert(actor==u and operation==32 and unused==nil and params.x==34 and params.y==26 and check==true)
+ assert(actor==u and operation==32 and unused==nil and params==false and check==OperationResultsTypes.NO_TARGETS)
  return u.allowed
 end
 function applySpread()

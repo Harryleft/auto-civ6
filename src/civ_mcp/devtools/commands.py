@@ -159,6 +159,11 @@ def domain_parser(group: str):
             if name in {"trade-route", "teleport", "religious-attack"}:
                 child.add_argument("target_x", type=int)
                 child.add_argument("target_y", type=int)
+            elif name == "spread-religion":
+                child.add_argument("target_x", type=int, nargs="?", default=argparse.SUPPRESS,
+                                   help="Expected visible current/adjacent city X; supply both coordinates")
+                child.add_argument("target_y", type=int, nargs="?", default=argparse.SUPPRESS,
+                                   help="Expected city Y; binds the expectation, not SDK target steering")
         formations = command("formations", "get_unit_formations", "Read escort/military formation state and native eligible target IDs.")
         entity(formations, "unit_id")
         for name in ("link", "unlink", "corps", "army"):

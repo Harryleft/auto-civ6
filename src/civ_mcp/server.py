@@ -1636,7 +1636,9 @@ async def unit_action(
     创作成功须同时确认原单位激活、新巨作创建及匹配作品进入本方原空槽位。
     Other rewards are not measured. Unknown results retain the original request; repeat only confirms.
     For sacrifice_charges: Royal Society contribution — submit once with the full native builder ID, then confirm consumed charges and project progress/completion. Builder must be on its own district with an active matching project. Unknown results retain the gate; repeat only confirms.
-    For spread_religion: consumes one spread charge at the current city or unique native city target.
+    For spread_religion: optional paired target_x/target_y bind an expected visible current/adjacent city.
+    Explicit targets require a complete observable local area and a unique matching city; coordinates do not steer the SDK.
+    Without coordinates, retains the current-city/unique-native-target lookup.
     Confirms pressure growth for that unit's religion in the exact city; majority conversion is not required.
     For remove_heresy: an eligible inquisitor removes foreign pressure from its unique native owned-city target.
     Confirms the original operation, charge consumption and actual accumulated pressure decrease.
@@ -1733,7 +1735,9 @@ async def unit_action(
             case "remove_heresy":
                 return await gs.remove_heresy(unit_id)
             case "spread_religion":
-                return await gs.spread_religion(unit_id)
+                if target_x is None and target_y is None:
+                    return await gs.spread_religion(unit_id)
+                return await gs.spread_religion(unit_id, target_x, target_y)
             case "launch_inquisition":
                 return await gs.launch_inquisition(unit_id)
             case "religious_attack":

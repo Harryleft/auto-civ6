@@ -41,8 +41,8 @@ local function spreadTarget(unit,operation)
  -- PLOTS/MODIFIERS, as in WorldInput, never a nearest-city heuristic.
  local target=cityAt(unit:GetX(),unit:GetY())
  if target then return target end
- local results=UnitManager.GetOperationTargets(unit,operation)
- assert(type(results)=="table","TARGET_UNAVAILABLE")
+ local readable,results=pcall(function()return UnitManager.GetOperationTargets(unit,operation)end)
+ assert(readable and type(results)=="table" and UnitOperationResults,"TARGET_UNAVAILABLE")
  local plots,modifiers=results[UnitOperationResults.PLOTS],results[UnitOperationResults.MODIFIERS]
  assert(type(plots)=="table" and type(modifiers)=="table","TARGET_UNAVAILABLE")
  for i,modifier in ipairs(modifiers) do
@@ -131,9 +131,96 @@ end
 ''' + LUA_GREAT_WORK
 
 
-def build_unit_effect(kind: str, unit_id: int, token: str, *, core_religion: int | None = None, core_followers: tuple | None = None) -> str:
+_SPREAD_TARGET_CONTEXT = '''
+local function boundSpreadTarget(unit,operation,x,y)
+ -- Coordinates bind an expectation; SPREAD has no UI targeting mode/parameters.
+ -- The trusted-scene assumption is that a fully observable current/adjacent
+ -- area with one city constrains the automatic target. This is not an SDK
+ -- target receipt or support for mods/farther ranges. Actual effect confirmation
+ -- must still prove this city's identity/pressure (or owned Core followers).
+ assert(Map and type(Map.GetPlot)=="function" and type(Map.GetAdjacentPlot)=="function","TARGET_AREA_UNAVAILABLE")
+ local ux,uy=unit:GetX(),unit:GetY()
+ local plots={Map.GetPlot(ux,uy)}
+ assert(plots[1],"TARGET_AREA_UNAVAILABLE")
+ assert(plots[1]:GetX()==ux and plots[1]:GetY()==uy,"TARGET_AREA_UNAVAILABLE")
+ for direction=0,5 do
+  local readable,plot=pcall(Map.GetAdjacentPlot,ux,uy,direction)
+  -- Boundary/nil neighbors are outside this deliberately bounded seven-plot
+  -- precondition; do not broaden it by silently skipping missing positions.
+  assert(readable and plot,"TARGET_AREA_UNAVAILABLE")
+  table.insert(plots,plot)
+ end
+ local seen,inArea={},false
+ for _,plot in ipairs(plots) do
+  local px,py,index=plot:GetX(),plot:GetY(),plot:GetIndex()
+  assert(scopeIndex(px) and scopeIndex(py) and scopeIndex(index),"TARGET_AREA_UNAVAILABLE")
+  if seen[index] then assert(seen[index].x==px and seen[index].y==py,"TARGET_AREA_UNAVAILABLE")
+  else seen[index]={x=px,y=py} end
+  if px==x and py==y then inArea=true end
+ end
+ assert(inArea,"TARGET_OUTSIDE_LOCAL_SCOPE")
+ local owner=unit:GetOwner()
+ local vis=PlayersVisibility and PlayersVisibility[owner]
+ assert(vis and type(vis.IsVisible)=="function","TARGET_AREA_NOT_OBSERVABLE")
+ local target
+ for index,position in pairs(seen) do
+  assert(vis:IsVisible(index)==true,"TARGET_AREA_NOT_OBSERVABLE")
+  local city=cityAt(position.x,position.y)
+  if city then
+   assert(target==nil,"AMBIGUOUS_CITY_TARGET")
+   target=city
+  end
+ end
+ assert(target,"TARGET_UNAVAILABLE")
+ assert(target:GetX()==x and target:GetY()==y,"TARGET_MISMATCH")
+ -- A usable native target list may constrain the operation further. Never
+ -- override a conflicting native reading with the local-area assumption.
+ local readable,results=pcall(function() return UnitManager.GetOperationTargets(unit,operation) end)
+ if readable and type(results)=="table" and UnitOperationResults then
+  local nativePlots,nativeModifiers=results[UnitOperationResults.PLOTS],results[UnitOperationResults.MODIFIERS]
+  if nativePlots~=nil or nativeModifiers~=nil then
+   assert(type(nativePlots)=="table" and type(nativeModifiers)=="table","TARGET_NATIVE_CONFLICT")
+   local function arraySize(values)
+    local n=0
+    for key in pairs(values) do assert(scopeIndex(key) and key>0,"TARGET_NATIVE_CONFLICT");n=n+1 end
+    assert(n==#values,"TARGET_NATIVE_CONFLICT");return n
+   end
+   assert(arraySize(nativePlots)==arraySize(nativeModifiers),"TARGET_NATIVE_CONFLICT")
+   local matches=0
+   for i,modifier in ipairs(nativeModifiers) do
+    if modifier==UnitOperationResults.MODIFIER_IS_TARGET then
+     local plot=Map.GetPlotByIndex(nativePlots[i])
+     assert(plot and plot:GetX()==x and plot:GetY()==y,"TARGET_NATIVE_CONFLICT")
+     local city=cityAt(x,y)
+     assert(city and city:GetID()==target:GetID() and city:GetOwner()==target:GetOwner(),"TARGET_NATIVE_CONFLICT")
+     matches=matches+1
+    end
+   end
+   assert(matches==1,"TARGET_NATIVE_CONFLICT")
+  end
+ end
+ return target
+end
+local function spreadTargetRefusal(value)
+ local descriptions={
+  TARGET_UNAVAILABLE="No current city or usable native city target was observed",
+  TARGET_AREA_UNAVAILABLE="Current/adjacent map scope is incomplete or unavailable",
+  TARGET_AREA_NOT_OBSERVABLE="Every current/adjacent plot must be currently visible",
+  TARGET_OUTSIDE_LOCAL_SCOPE="Expected city is outside the current/adjacent area",
+  TARGET_MISMATCH="The unique local city does not match the expected coordinates",
+  TARGET_NATIVE_CONFLICT="Native target data is incomplete, ambiguous or conflicts with the expected city",
+  AMBIGUOUS_CITY_TARGET="More than one city target is possible; no automatic selection is made"}
+ local code=tostring(value):match("([A-Z_]+)$")
+ if descriptions[code] then return code.."|"..descriptions[code].."; no spread submitted.",true end
+ return tostring(value),false
+end
+'''
+
+
+def build_unit_effect(kind: str, unit_id: int, token: str, *, core_religion: int | None = None, core_followers: tuple | None = None, target: tuple | None = None) -> str:
     follower_lua = "nil" if core_followers is None else "{" + ",".join(map(str, core_followers)) + "}"
-    return _CONTEXT + f'''
+    target_lua = "nil" if target is None else "{" + f"x={target[0]},y={target[1]}" + "}"
+    return _CONTEXT + (_SPREAD_TARGET_CONTEXT if kind == 'spread_religion' else '') + f'''
 local ok,r=pcall(function()
  assert(__civmcpUnitEffect==nil or type(__civmcpUnitEffect)=="table","RECEIPT_STORAGE_UNAVAILABLE")
  assert(UI.IsGameCoreBusy()==false,"CORE_BUSY_OR_UNKNOWN")
@@ -177,19 +264,22 @@ local ok,r=pcall(function()
   r.mode="spread";r.religion=count(unit:GetReligionType());r.charges=count(unit:GetSpreadCharges())
   assert(r.religion>0 and r.charges>0,"NO_RELIGION_OR_CHARGES")
   local op=GameInfo.UnitOperations["UNITOPERATION_SPREAD_RELIGION"]
-  assert(op and type(op.Hash)=="number","OPERATION_UNAVAILABLE")
+  assert(op and type(op.Hash)=="number" and op.InterfaceMode==nil,"OPERATION_UNAVAILABLE")
   r.operation=op.Hash
-  local city=spreadTarget(unit,r.operation)
+  r.expectedTarget={target_lua}
+  local city
+  if r.expectedTarget then city=boundSpreadTarget(unit,r.operation,r.expectedTarget.x,r.expectedTarget.y)
+  else city=spreadTarget(unit,r.operation) end
   r.city={{id=count(city:GetID()),owner=count(city:GetOwner()),x=city:GetX(),y=city:GetY()}}
   r.pressure=pressure(city,r.religion)
    r.coreFollowers={follower_lua}
    if r.coreFollowers then
     local f=r.coreFollowers
     assert(r.city.owner==owner and r.city.id==f[1] and r.city.x==f[2] and r.city.y==f[3]
-     and r.religion==f[4],"CORE_CITY_OR_RELIGION_CHANGED")
+     and r.religion==f[4] and r.x==f[6] and r.y==f[7],"CORE_CITY_OR_RELIGION_CHANGED")
    end
-  r.params={{}}
-  r.params[UnitOperationTypes.PARAM_X],r.params[UnitOperationTypes.PARAM_Y]=r.city.x,r.city.y
+  -- UnitPanel's non-mode action submits only (unit, hash), with no city params.
+  r.params=nil
  else
   local gp=unit:GetGreatPerson()
   r.individual=count(gp:GetIndividual());r.class=count(gp:GetClass())
@@ -224,6 +314,9 @@ local ok,r=pcall(function()
   assert(type(UnitManager.RequestOperation)=="function","OPERATION_UNAVAILABLE")
   if r.mode=="inquisition" then
    assert(UnitManager.CanStartOperation(unit,r.operation,nil,r.params)==true,"CANNOT_LAUNCH_INQUISITION")
+  elseif r.mode=="spread" then
+   assert(OperationResultsTypes and scopeInteger(OperationResultsTypes.NO_TARGETS),"OPERATION_RESULTS_UNAVAILABLE")
+   assert(unit:GetMovesRemaining()>0 and UnitManager.CanStartOperation(unit,r.operation,nil,false,OperationResultsTypes.NO_TARGETS)==true,"CANNOT_OPERATE")
   else
    assert(unit:GetMovesRemaining()>0 and UnitManager.CanStartOperation(unit,r.operation,nil,r.params,true)==true,"CANNOT_OPERATE")
   end
@@ -236,7 +329,11 @@ local ok,r=pcall(function()
  end
  return r
 end)
-if not ok then print("ERR:UNIT_EFFECT_REFUSED|"..tostring(r));print("{SENTINEL}");return end
+if not ok then
+ local refusal=tostring(r)
+ if {json.dumps(kind)}=="spread_religion" then refusal=spreadTargetRefusal(r) end
+ print("ERR:UNIT_EFFECT_REFUSED|"..refusal);print("{SENTINEL}");return
+end
 retireEffect(__civmcpUnitEffect)
 __civmcpUnitEffect=r
 -- Keep only scalar identities. Final-charge activation can destroy userdata inside RequestCommand.
@@ -294,18 +391,28 @@ if r.mode=="condemn" or r.mode=="spread" or r.mode=="inquisition" or r.mode=="gr
   if r.mode=="spread" then
    local city=CityManager.GetCityAt(r.city.x,r.city.y)
    assert(city and sameEffectEntity(r,city,r.city) and pressure(city,r.religion)==r.pressure)
+   if r.expectedTarget then
+    local target=boundSpreadTarget(actor,r.operation,r.expectedTarget.x,r.expectedTarget.y)
+    assert(sameEffectEntity(r,target,r.city))
+   end
    assert(sameEffectEntity(r,actor,r) and sameEffectEntity(r,city,r.city))
   end
   assert(sameScope(r))
   return actor
  end)
  if not entryOK then
-  retireEffect(r);print("ERR:UNIT_EFFECT_REFUSED|IDENTITY_OR_SCOPE_CHANGED_OR_UNAVAILABLE");print("{SENTINEL}");return
+  local refusal="IDENTITY_OR_SCOPE_CHANGED_OR_UNAVAILABLE"
+  if r.mode=="spread" then
+   local detail,known=spreadTargetRefusal(actor)
+   refusal=known and detail or (refusal.."; no action submitted.")
+  end
+  retireEffect(r);print("ERR:UNIT_EFFECT_REFUSED|"..refusal);print("{SENTINEL}");return
  end
  resolvedUnit=actor
 end
 r.entered=true
 if r.command then UnitManager.RequestCommand(resolvedUnit or effectUnit(r.owner,r.id),r.command)
+elseif r.mode=="spread" then UnitManager.RequestOperation(resolvedUnit,r.operation)
 else UnitManager.RequestOperation(resolvedUnit or effectUnit(r.owner,r.id),r.operation,r.params) end
 r.returned=true
 print("OK:UNIT_EFFECT_REQUESTED|"..r.kind.."|unit:{unit_id}")

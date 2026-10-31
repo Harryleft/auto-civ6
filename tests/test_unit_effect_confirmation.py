@@ -42,6 +42,7 @@ GameInfo.UnitCommands={UNITCOMMAND_ACTIVATE_GREAT_PERSON={Hash=30}}
 GameInfo.UnitOperations.UNITOPERATION_FOUND_RELIGION={Hash=31}
 GameInfo.UnitOperations.UNITOPERATION_SPREAD_RELIGION={Hash=32}
 UnitOperationTypes={PARAM_X='x',PARAM_Y='y'}
+OperationResultsTypes={NO_TARGETS=0}
 UnitOperationResults={PLOTS='plots',MODIFIERS='modifiers',MODIFIER_IS_TARGET=1}
 Locale={Lookup=function(s) return s end}
 city={id=65539,owner=1,x=20,y=17,pressure=100,majority=2}
@@ -176,8 +177,7 @@ def test_spread_confirms_exact_city_pressure_without_a_majority_change():
     conn = EffectConn('spread'); state = GameState(conn); ctx = make_ctx(); app_of(ctx).game = state
     conn.lua.execute('deferred=true')
     assert 'OUTCOME_UNKNOWN' in asyncio.run(server.unit_action(ctx, 196608, 'spread_religion'))
-    assert conn.lua.eval('submissions[1].params.x') == 20
-    assert conn.lua.eval('submissions[1].params.y') == 17
+    assert conn.lua.eval('submissions[1].params') is None
     conn.lua.execute('applyEffect(32)')
     result = asyncio.run(server.unit_action(ctx, 196608, 'spread_religion'))
     assert result.startswith('RELIGION_SPREAD|unit:196608|religion:4|')
@@ -389,7 +389,7 @@ def test_spread_on_actual_city_plot_does_not_require_guessing_adjacent_targets()
     result = asyncio.run(state.spread_religion(196608))
     assert result.startswith('RELIGION_SPREAD|')
     assert 'city:1:65539 pressure:100->300' in result
-    assert conn.lua.eval('submissions[1].params.x') == 20
+    assert conn.lua.eval('submissions[1].params') is None
 
 
 @pytest.mark.parametrize('setup', [

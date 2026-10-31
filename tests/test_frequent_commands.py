@@ -17,6 +17,8 @@ CASES = [
     ('unit skip 42 --dry-run','unit_action',{'unit_id':42,'action':'skip'},True),
     ('unit fortify 42 --dry-run','unit_action',{'unit_id':42,'action':'fortify'},True),
     ('unit heal 42 --dry-run','unit_action',{'unit_id':42,'action':'heal'},True),
+    ('unit spread-religion 42 --dry-run','unit_action',{'unit_id':42,'action':'spread_religion'},True),
+    ('unit spread-religion 42 3 4 --dry-run','unit_action',{'unit_id':42,'action':'spread_religion','target_x':3,'target_y':4},True),
     ('unit improve 42 IMPROVEMENT_FARM --dry-run','unit_action',{'unit_id':42,'action':'improve','improvement':'IMPROVEMENT_FARM'},True),
     ('unit skip-remaining --dry-run','skip_remaining_units',{},True),
     ('unit promotions 42','get_unit_promotions',{'unit_id':42},False),
@@ -58,7 +60,7 @@ def test_commands_map_to_real_mcp_contract(line, tool, arguments, dry_run):
 
 
 @pytest.mark.parametrize('line', ['map area 2 3 --radius 0','map area 2 3 --radius 5',
-    'unit attack 42 3','unit improve 42','city buy 1 PROJECT PROJECT_TEST',
+    'unit attack 42 3','unit spread-religion 42 3','unit improve 42','city buy 1 PROJECT PROJECT_TEST',
     'city focus 1 wrong','policy set 0=POLICY_A,0=POLICY_B --dry-run',
     'policy set 0=POLICY_A 00=NONE --dry-run','policy set 0=POLICY_A,bad --dry-run',
     'policy set 0=POLICY_A,,1=NONE --dry-run','policy set wrong --dry-run',

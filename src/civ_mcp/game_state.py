@@ -1840,10 +1840,15 @@ class GameState:
     async def activate_great_person(self, unit_index: int) -> str:
         return await self._unit_effect("activate_great_person", unit_index)
 
-    async def _unit_effect(self, kind: str, unit_id: int) -> str:
+    async def _unit_effect(self, kind: str, unit_id: int, target_x: int | None = None, target_y: int | None = None) -> str:
         if type(unit_id) is not int or unit_id < 0:
             return "Error: INVALID_UNIT_ID|Expected the original full unit ID."
-        entity, intent = ("unit", unit_id), ()
+        target = None
+        if target_x is not None or target_y is not None:
+            if kind != "spread_religion" or any(type(v) is not int or v < 0 for v in (target_x, target_y)):
+                return "Error: INVALID_SPREAD_TARGET|Supply both nonnegative integer city coordinates or neither; no action submitted."
+            target = (target_x, target_y)
+        entity, intent = ("unit", unit_id), target or ()
         if self._actions.matches(kind, entity, intent=intent):
             return await self.confirm_pending_action()
         blocked = await self._action_gate()
@@ -1860,7 +1865,7 @@ class GameState:
             from civ_mcp.lua import spread_followers
             try:
                 rows = await self.conn.execute_read(scope.guard(spread_followers.build_preflight(
-                    unit_id, token, scope.owner, scope.civilization, scope.seed, scope.turn)))
+                    unit_id, token, scope.owner, scope.civilization, scope.seed, scope.turn, target=target)))
                 core_followers = spread_followers.parse_preflight(rows, unit_id, token, scope.owner)
                 if core_followers is not None:
                     core_query = spread_followers.build_query(unit_id, token)
@@ -1882,15 +1887,16 @@ class GameState:
         pending = _PendingAction(
             kind, entity, lq.build_unit_effect_query(kind, unit_id, token),
             context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"witness_token": token}, intent=intent, gamecore_query=core_query,
+            details={"witness_token": token, **({"target": target} if target is not None else {})}, intent=intent, gamecore_query=core_query,
             evidence=_ActionEvidence(
                 tool="unit_action", entrypoint=kind, accepted=("UNIT_EFFECT_REQUESTED|",), refused="ERR:UNIT_EFFECT_REFUSED|",
                 confirm=lambda rows: lq.parse_unit_effect_confirmation(rows, kind, unit_id, token),
-                guidance="Repeat the original unit effect to confirm only; rewards beyond reported evidence remain unmeasured. ",
+                guidance=("Repeat the original unit effect" + (" with the same target" if target is not None else "")
+                          + " to confirm only; rewards beyond reported evidence remain unmeasured. "),
             ),
         )
         return await self._submit_action(pending, scope, lq.build_unit_effect(
-            kind, unit_id, token, core_religion=core_religion, core_followers=core_followers))
+            kind, unit_id, token, core_religion=core_religion, core_followers=core_followers, target=target))
 
     @_guard_pending_mutation
     async def remove_heresy(self, unit_index: int) -> str:
@@ -1921,8 +1927,8 @@ class GameState:
         return await self._submit_action(pending, scope, remove_heresy.build_remove_heresy(unit_index, token))
 
     @_guard_pending_mutation
-    async def spread_religion(self, unit_index: int) -> str:
-        return await self._unit_effect("spread_religion", unit_index)
+    async def spread_religion(self, unit_index: int, target_x: int | None = None, target_y: int | None = None) -> str:
+        return await self._unit_effect("spread_religion", unit_index, target_x, target_y)
 
     @_guard_pending_mutation
     async def condemn_heretic(self, unit_index: int) -> str:

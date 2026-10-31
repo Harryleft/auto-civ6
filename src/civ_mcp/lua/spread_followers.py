@@ -5,18 +5,20 @@ import json
 from civ_mcp.lua._helpers import SENTINEL, _LUA_ACTION_SCOPE
 
 
-def build_preflight(unit_id, token, owner, civ, seed, turn):
+def build_preflight(unit_id, token, owner, civ, seed, turn, *, target=None):
+    city_x, city_y = ("r.actorX", "r.actorY") if target is None else target
     return _LUA_ACTION_SCOPE + f'''
 local ok,r=pcall(function()
  local r={{token={json.dumps(token)},id={unit_id},owner={owner},civ={json.dumps(civ)},seed={seed},turn={turn}}}
  assert(sameScope(r))
  local u=Players[r.owner]:GetUnits():FindID(r.id)
  assert(u and u:GetID()==r.id and u:GetOwner()==r.owner)
- r.x=u:GetX();r.y=u:GetY();r.religion=u:GetReligion():GetReligionType()
- assert(scopeIndex(r.x) and scopeIndex(r.y) and scopeIndex(r.religion) and r.religion>0)
+ r.actorX=u:GetX();r.actorY=u:GetY();r.cityX={city_x};r.cityY={city_y};r.religion=u:GetReligion():GetReligionType()
+ assert(scopeIndex(r.actorX) and scopeIndex(r.actorY) and scopeIndex(r.cityX) and scopeIndex(r.cityY)
+  and scopeIndex(r.religion) and r.religion>0)
  local found
  for _,c in Players[r.owner]:GetCities():Members() do
-  if c:GetX()==r.x and c:GetY()==r.y then assert(not found);found=c end
+  if c:GetX()==r.cityX and c:GetY()==r.cityY then assert(not found);found=c end
  end
  assert(found and found:GetOwner()==r.owner)
  r.city=found:GetID();r.before=found:GetReligion():GetNumFollowers(r.religion)
@@ -25,7 +27,7 @@ local ok,r=pcall(function()
 end)
 if ok then
  __civmcpSpreadCore=r
- print("SPREAD_CORE_PREPARED|"..r.token.."|"..r.id.."|"..r.owner.."|"..r.city.."|"..r.x.."|"..r.y.."|"..r.religion.."|"..r.before)
+ print("SPREAD_CORE_PREPARED|"..r.token.."|"..r.id.."|"..r.owner.."|"..r.city.."|"..r.cityX.."|"..r.cityY.."|"..r.religion.."|"..r.before.."|"..r.actorX.."|"..r.actorY)
 else print("SPREAD_CORE_UNAVAILABLE|"..tostring(r)) end
 print("{SENTINEL}")
 '''
@@ -33,7 +35,7 @@ print("{SENTINEL}")
 
 def parse_preflight(lines, unit_id, token, owner):
     rows = [line.split("|") for line in lines if line.startswith("SPREAD_CORE_PREPARED|")]
-    if len(rows) == 1 and len(rows[0]) == 9:
+    if len(rows) == 1 and len(rows[0]) == 11:
         row = rows[0]
         if row[1:4] == [token, str(unit_id), str(owner)] and all(x.isdigit() for x in row[4:]):
             return tuple(int(x) for x in row[4:])
@@ -51,7 +53,7 @@ local ok,after,unitState,charges=pcall(function()
  assert(c)
  local function matchingCity()
   local known=true
-  for _,pair in ipairs({{{{"GetID",r.city}},{{"GetOwner",r.owner}},{{"GetX",r.x}},{{"GetY",r.y}}}}) do
+  for _,pair in ipairs({{{{"GetID",r.city}},{{"GetOwner",r.owner}},{{"GetX",r.cityX}},{{"GetY",r.cityY}}}}) do
    local valid,value=pcall(function() return c[pair[1]](c) end)
    if not valid or not scopeIndex(value) then known=false
    elseif value~=pair[2] then r.invalid=true end
@@ -84,8 +86,8 @@ local ok,after,unitState,charges=pcall(function()
     end
     fact(function() return unit:GetReligion():GetReligionType() end,r.religion)
     if valid and delayed==false then
-     fact(function() return unit:GetX() end,r.x)
-     fact(function() return unit:GetY() end,r.y)
+     fact(function() return unit:GetX() end,r.actorX)
+     fact(function() return unit:GetY() end,r.actorY)
     end
    end
    matchingActor()
