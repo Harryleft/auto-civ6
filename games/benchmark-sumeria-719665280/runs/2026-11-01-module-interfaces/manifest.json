@@ -1,0 +1,199 @@
+{
+  "status": "PASS",
+  "baseline": "benchmark_turn_1",
+  "baseline_sha256": "688b12eddbf1ec6bdb44da4f558d39191e96a6893a538f57ccc531beb5339ffd",
+  "code_base": "f8da63024702ebdba0dce6a381381a1c61829070",
+  "working_tree": "module interface implementation; exact source hashes in evidence/cli/context.json",
+  "cli_run_id": "d86b80cbcdd54263aed357ea28518506",
+  "game_run_id": "00518115e4634afbbcb06abe195ea445",
+  "platform": "macOS",
+  "turns": [
+    1,
+    3
+  ],
+  "tool_calls": 43,
+  "tool_errors": 0,
+  "local_command_errors": 1,
+  "confirmed_actions": [
+    {
+      "sequence": 47,
+      "tool": "unit_action",
+      "outcome": {
+        "version": 1,
+        "kind": "action",
+        "status": "confirmed",
+        "code": null,
+        "data": {
+          "action": "found",
+          "entity": [
+            "unit",
+            65536
+          ]
+        }
+      }
+    },
+    {
+      "sequence": 74,
+      "tool": "set_city_production",
+      "outcome": {
+        "version": 1,
+        "kind": "action",
+        "status": "confirmed",
+        "code": null,
+        "data": {
+          "action": "production",
+          "entity": [
+            "city",
+            65536
+          ]
+        }
+      }
+    },
+    {
+      "sequence": 77,
+      "tool": "set_research",
+      "outcome": {
+        "version": 1,
+        "kind": "action",
+        "status": "confirmed",
+        "code": null,
+        "data": {
+          "action": "set_research",
+          "entity": [
+            "player",
+            0
+          ]
+        }
+      }
+    },
+    {
+      "sequence": 80,
+      "tool": "unit_action",
+      "outcome": {
+        "version": 1,
+        "kind": "action",
+        "status": "confirmed",
+        "code": null,
+        "data": {
+          "action": "move",
+          "entity": [
+            "unit",
+            131073
+          ]
+        }
+      }
+    },
+    {
+      "sequence": 96,
+      "tool": "end_turn",
+      "outcome": {
+        "version": 1,
+        "kind": "action",
+        "status": "confirmed",
+        "code": null,
+        "data": {
+          "from_turn": 1,
+          "to_turn": 2
+        }
+      }
+    },
+    {
+      "sequence": 109,
+      "tool": "unit_action",
+      "outcome": {
+        "version": 1,
+        "kind": "action",
+        "status": "confirmed",
+        "code": null,
+        "data": {
+          "action": "move",
+          "entity": [
+            "unit",
+            131073
+          ]
+        }
+      }
+    },
+    {
+      "sequence": 114,
+      "tool": "skip_remaining_units",
+      "outcome": {
+        "version": 1,
+        "kind": "action",
+        "status": "confirmed",
+        "code": null,
+        "data": {
+          "action": "skip_remaining_units",
+          "completed_units": [
+            131073
+          ],
+          "results": [
+            {
+              "unit_id": 131073,
+              "outcome": {
+                "version": 1,
+                "kind": "action",
+                "status": "confirmed",
+                "code": null,
+                "data": {
+                  "action": "skip",
+                  "entity": [
+                    "unit",
+                    131073
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "sequence": 128,
+      "tool": "end_turn",
+      "outcome": {
+        "version": 1,
+        "kind": "action",
+        "status": "confirmed",
+        "code": null,
+        "data": {
+          "from_turn": 2,
+          "to_turn": 3
+        }
+      }
+    }
+  ],
+  "checkpoint": {
+    "name": "design_20261101_t003",
+    "sha256": "9d240df5ae46485e2057bcc184d24c8d80cc9e4def607ddbd18a11cf0b80658a",
+    "civilization": "sumeria",
+    "seed": 719665280,
+    "turn": 3,
+    "run_id": "00518115e4634afbbcb06abe195ea445",
+    "score": {
+      "official": 12,
+      "categories": {
+        "CATEGORY_CIVICS": 0,
+        "CATEGORY_EMPIRE": 7,
+        "CATEGORY_GREAT_PEOPLE": 0,
+        "CATEGORY_RELIGION": 0,
+        "CATEGORY_TECH": 0,
+        "CATEGORY_WONDER": 0,
+        "CATEGORY_ERA_SCORE": 5
+      }
+    }
+  },
+  "checkpoint_bytes": 595400,
+  "restore_overview_units_cities_equal": true,
+  "final_pending_empty": true,
+  "completed_turns": 2,
+  "timing_quality": "complete_for_observed_commands",
+  "baseline_preserved": true,
+  "not_run": [
+    "Windows native runtime",
+    "combat and unit formations",
+    "diplomacy/congress multistage native actions",
+    "live fault injection and cancellation",
+    "full-game victory"
+  ]
+}

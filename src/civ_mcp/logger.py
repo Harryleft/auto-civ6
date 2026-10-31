@@ -5,6 +5,8 @@ from pathlib import Path
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from civ_mcp.results import ResultText
+
 
 class GameLogger:
     def __init__(self, path: Path | None = None):
@@ -18,6 +20,8 @@ class GameLogger:
             "result": result,
             "duration_ms": duration_ms,
         }
+        if isinstance(result, ResultText):
+            row["outcome"] = result.outcome
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as stream:
             stream.write(json.dumps(row, ensure_ascii=False) + "\n")

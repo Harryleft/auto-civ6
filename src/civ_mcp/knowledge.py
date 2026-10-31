@@ -2,6 +2,7 @@
 
 import asyncio
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -25,6 +26,30 @@ APPLICABILITY = {
 }
 
 
+def read_snapshot(root: Path, *, topics=None):
+    """Load the standalone reader from this checkout, not from the data root.
+
+    The CLI remains independently runnable. This adapter deliberately avoids
+    sys.path changes and loading arbitrary helpers from CIV6_KNOWLEDGE_DIR;
+    that directory's query.py still runs only in the existing bounded child.
+    Data is freshly verified for every call; only the child protocol is trusted
+    for query semantics, so its response is separately checked below.
+    """
+    # Wheels carry the same standalone source as a trusted package resource;
+    # editable checkouts use its source location. Never import from data roots.
+    source = DEFAULT_ROOT / 'reader.py'
+    if not source.is_file():
+        bundled = importlib.util.find_spec('_civ6_knowledge_reader')
+        if bundled is not None and bundled.origin:
+            source = Path(bundled.origin)
+    spec = importlib.util.spec_from_file_location('civ6_knowledge_reader', source)
+    if spec is None or spec.loader is None:
+        raise ValueError('Standalone knowledge reader is unavailable')
+    reader = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(reader)
+    return reader.VerifiedSnapshot(root, topics=topics)
+
+
 def _error(message: str) -> str:
     return json.dumps({'status': 'error', 'error': message, 'applicability': APPLICABILITY}, ensure_ascii=False)
 
@@ -43,18 +68,7 @@ async def _query(arguments: list[str], *, entry_id: str | None = None,
         script = root / 'query.py'
         if not script.is_file():
             raise ValueError('Knowledge query.py is unavailable; configure CIV6_KNOWLEDGE_DIR with a standalone knowledge directory')
-        raw_manifest = (root / 'manifest.json').read_bytes()
-        manifest = json.loads(raw_manifest)
-        if (not isinstance(manifest, dict) or not isinstance(manifest.get('profile'), dict)
-                or manifest.get('snapshot') != 'sources/snapshot.json'
-                or not isinstance(manifest.get('snapshot_sha256'), str)
-                or len(manifest['snapshot_sha256']) != 64):
-            raise ValueError('Invalid knowledge manifest metadata')
-        # The CLI verifies data fingerprints; the envelope must also describe
-        # that source's profile, rather than an inconsistent manifest label.
-        snapshot = json.loads((root / manifest['snapshot']).read_bytes())
-        if not isinstance(snapshot, dict) or snapshot.get('profile') != manifest['profile']:
-            raise ValueError('Knowledge profile differs from source snapshot')
+        source = read_snapshot(root, topics=())
         process = await asyncio.create_subprocess_exec(
             sys.executable, '-X', 'utf8', '-B', str(script), '--root', str(root), *arguments,
             # 知识 CLI 不读取输入，避免继承 MCP 管道并在 Windows 下阻塞。
@@ -96,9 +110,8 @@ async def _query(arguments: list[str], *, entry_id: str | None = None,
                       'evidence': ('source_refs', 'evidence', 'profile', 'sources')}[level]
             if result.get('id') != entry_id or any(field not in result for field in fields):
                 raise ValueError('Invalid knowledge entry response')
-        if (root / 'manifest.json').read_bytes() != raw_manifest:
-            raise ValueError('Knowledge manifest changed during query; query again')
-        profile = manifest['profile']
+        source.verify_unchanged()
+        profile = source.profile
         if level == 'brief':
             expected = hashlib.sha256(json.dumps(profile, ensure_ascii=False, sort_keys=True,
                 separators=(',', ':'), allow_nan=False).encode('utf-8')).hexdigest()
@@ -107,7 +120,7 @@ async def _query(arguments: list[str], *, entry_id: str | None = None,
             profile = result['profile']
         envelope = result | {
             'status': result.get('status', 'found'), 'profile': profile,
-            'snapshot': {'path': manifest['snapshot'], 'sha256': manifest['snapshot_sha256']},
+            'snapshot': source.source_reference,
             'applicability': APPLICABILITY,
         }
         if entry_id is None and search_view == 'brief':

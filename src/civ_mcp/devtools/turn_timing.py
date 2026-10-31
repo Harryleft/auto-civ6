@@ -5,7 +5,7 @@ from datetime import datetime
 import json
 import math
 from pathlib import Path
-import re
+from civ_mcp.results import confirmed_advance, observed_turn, explicit_outcome
 
 OPERATORS = {"setup", "repair", "final", "offline"}
 LOAD_TOOLS = {"load_game_save", "reload_game_save", "load_save_from_menu", "restart_and_load", "load_save"}
@@ -34,7 +34,10 @@ def decision_identity(result):
     values = [c.get("text") for c in result.get("content", []) if c.get("type") == "text"]
     if "structuredContent" in result:
         structured = result["structuredContent"]
-        if isinstance(structured, dict) and set(structured) == {"result"}:
+        outcome = explicit_outcome(result)
+        if outcome is not None:
+            structured = outcome["data"]
+        elif isinstance(structured, dict) and set(structured) == {"result"}:
             structured = structured["result"]
         values.append(structured)
     identities = []
@@ -96,9 +99,6 @@ class TurnTiming:
             self.issues.append({"request_id": request_id, "reason": "reply_frame_mismatch"})
             return
         tools = [e for e in events if e.get("event") == "tool_result"]
-        text = "\n".join(c.get("text", "") for e in tools
-                         if e.get("tool") == "get_game_overview" and not e.get("is_error")
-                         for c in e.get("result", {}).get("content", []) if c.get("type") == "text")
         loading = any(e.get("tool") in LOAD_TOOLS for e in tools)
         if loading:
             self.reset("load_boundary")
@@ -135,9 +135,11 @@ class TurnTiming:
                 self.reset("world_changed")
             self.identity = world
             observed = identity["turn"]
-        overview = re.search(r"^Turn (\d+) \|", text, re.M)
-        if overview:
-            observed = int(overview[1])
+        for event in tools:
+            if event.get("tool") == "get_game_overview" and not event.get("is_error"):
+                overview_turn = observed_turn(event.get("result", {}))
+                if overview_turn is not None:
+                    observed = overview_turn
         if type(observed) is int:
             if self.turn is not None and self.turn != observed:
                 if self.current:
@@ -187,6 +189,7 @@ class TurnTiming:
         errors = sum(bool(e.get("is_error")) or e.get("event") == "command_blocked" for e in events)
         unknown = record.get("state") == "outcome_unknown" or any(
             e.get("event") == "tool_outcome_unknown" or (e.get("error") or {}).get("code") in {"OUTCOME_UNKNOWN", "QUERY_UNCONFIRMED"} for e in events)
+        unknown = unknown or any((explicit_outcome(e.get("result", {})) or {}).get("status") == "unknown" for e in tools)
         row = {"request_id": request_id, "segment": self.segment, "turn": self.turn,
                "actor": actor, "command": command, "started": start, "finished": end,
                "cli_seconds": duration, "rpc_seconds": rpc, "clock_source": clock,
@@ -195,11 +198,9 @@ class TurnTiming:
         advances = []
         for event in tools:
             if event.get("tool") == "end_turn" and not event.get("is_error"):
-                result = "\n".join(c.get("text", "") for c in event.get("result", {}).get("content", [])
-                                   if c.get("type") == "text")
-                match = re.search(r"^Turn (\d+) -> (\d+)(?:\n|$)", result)
-                if match and int(match[2]) > int(match[1]):
-                    advances.append((int(match[1]), int(match[2])))
+                advance = confirmed_advance(event.get("result", {}))
+                if advance is not None:
+                    advances.append(advance)
         for before, after in advances:
             if self.turn is None or before != self.turn:
                 self.unattributed_confirmed_advance.append({"request_id": request_id,

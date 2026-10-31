@@ -2,7 +2,7 @@
 
 [返回 CLI 索引](../cli.md)
 
-以下命令均在当前 `civ6 debug` 的 stdin 输入。变更先追加 `--dry-run`，确认后显式执行；预演仍只检查 schema。参数详情通过 `COMMAND --help` 逐层发现，ID 和候选均来自当前查询。
+以下命令均在当前 `civ6 debug` 的 stdin 输入。变更先追加 `--dry-run`，确认后显式执行；预演只检查 schema 和静态参数组合。参数详情通过 `COMMAND --help` 逐层发现，ID 和候选均来自当前查询。
 
 | 命令 | 用途 |
 | --- | --- |

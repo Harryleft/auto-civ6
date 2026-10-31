@@ -6,46 +6,16 @@ import json
 from civ_mcp.lua._helpers import _LUA_KNOWN_RESOURCE, SENTINEL
 from civ_mcp.lua.government_conditions import LUA_GOVERNMENT_CONDITIONS
 from civ_mcp.lua.resource_facts import LUA_RESOURCE_FACTS
+from civ_mcp.lua.query_support import json_query_header
 
 SECTIONS = {"empire", "governments", "climate", "climate-history", "history", "great-people-history",
             "gossip", "world-resources", "encountered", "map-search"}
 MAP_KINDS = {"resource", "luxury", "strategic", "antiquity", "village"}
 
-HEADER = r'''
-local NULL={__null=true}
-local function A(t) t=t or {};t.__array=true;return t end
-local function escape(s)
- s=s:gsub("\\","\\\\"):gsub('"','\\"'):gsub("\n","\\n"):gsub("\r","\\r"):gsub("\t","\\t")
- return s:gsub("[%z\1-\31]",function(c)return string.format("\\u%04x",string.byte(c))end)
-end
-local function encode(v)
- if v==nil or v==NULL then return "null" end
- local k=type(v)
- if k=="boolean" then return v and "true" or "false" end
- if k=="number" then if v~=v or math.abs(v)==math.huge then return "null" end;return tostring(v) end
- if k=="string" then return '"'..escape(v)..'"' end
- if k~="table" then return "null" end
- local out={}
- if v.__array then for _,x in ipairs(v)do out[#out+1]=encode(x)end;return "["..table.concat(out,",").."]" end
- for key,x in pairs(v)do out[#out+1]=encode(tostring(key))..":"..encode(x)end
- table.sort(out);return "{"..table.concat(out,",").."}"
-end
-local unknown=A();local seenUnknown={}
-local function missing(label)
- if not seenUnknown[label]then unknown[#unknown+1]=label;seenUnknown[label]=true end
- return NULL
-end
-local function read(label,fn)
- local ok,v=pcall(fn)
- if not ok or v==nil or (type(v)=="number" and (v~=v or math.abs(v)==math.huge)) then return missing(label) end
- return v
-end
+HEADER = json_query_header() + r'''
+local dip=p:GetDiplomacy()
 local function scalar(v)return v==nil and NULL or v end
 local function name(row)return row and Locale.Lookup(row.Name) or NULL end
-local me=Game.GetLocalPlayer();local turn=Game.GetCurrentGameTurn()
-local seed=GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")
-local civ=PlayerConfigurations[me]:GetCivilizationTypeName()
-local p=Players[me];local dip=p:GetDiplomacy();local vis=PlayersVisibility[me]
 local function met(id)return id==me or (Players[id] and dip:HasMet(id)==true)end
 local function who(id)
  if type(id)~="number" or not met(id)then return NULL end
@@ -359,9 +329,7 @@ local ok,err=pcall(function()
 if target_player>=0 and not met(target_player)then error("Target civilization has not been encountered")end
 ''' + BODIES[section] + r'''
 end)
-local knownIdentity=type(me)=='number'and me>=0 and me<=63 and me==math.floor(me)and type(turn)=='number'and turn>=0 and math.abs(turn)<math.huge and turn==math.floor(turn)and type(seed)=='number'and seed==seed and math.abs(seed)<math.huge and seed==math.floor(seed)and type(civ)=='string'and civ:match('^CIVILIZATION_.+')~=nil
-if not knownIdentity then missing('world.identity')end
-local stable=knownIdentity and Game.GetLocalPlayer()==me and Game.GetCurrentGameTurn()==turn and GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")==seed and PlayerConfigurations[me]:GetCivilizationTypeName()==civ
+local stable=queryWorldStable()
 local result={schema_version=1,status=(ok and stable)and (#unknown==0 and "ready"or "partial")or "unknown",
  identity={player_id=scalar(me),turn=scalar(turn),seed=scalar(seed),civilization=scalar(civ)},data=(ok and stable)and data or NULL,
  unknown_fields=unknown,total=total,offset=offset,limit=limit,truncated=total>offset+limit}

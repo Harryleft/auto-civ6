@@ -43,7 +43,10 @@ def test_compact_stdout_keeps_full_protocol_evidence_and_error_detection(tmp_pat
     event = next(r for r in events if r["event"] == "tool_result")
     raw = json.loads((evidence.path / f"debug-response-{event['request']:06}.json").read_text())
     assert raw["content"] == event["result"]["content"]
-    assert "structuredContent" in raw and "structuredContent" not in event["result"]
+    # Overview now carries an owner's outcome as well as the legacy text.
+    # Compact display must retain facts that timing/verification consume.
+    assert raw["structuredContent"]["outcome"] == event["result"]["structuredContent"]["outcome"]
+    assert raw["structuredContent"]["outcome"]["data"]["turn"] == 12
 
 
 def fake_cli(tmp_path, stdin=subprocess.PIPE):

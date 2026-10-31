@@ -5,6 +5,7 @@ every component: happiness is a percent, other growth is an additive fraction,
 and occupation/housing/loyalty do not form a universal multiplicative formula.
 """
 from civ_mcp.lua import public_reports
+from civ_mcp.lua.query_support import json_query_header
 from civ_mcp.snapshot import pending_facts
 
 
@@ -12,7 +13,7 @@ def build_query(city_id=None, *, evidence=False):
     if city_id is not None and (type(city_id) is not int or city_id < 0):
         raise ValueError('city_id must be a nonnegative full city ID')
     # Reuse the existing JSON wire encoding; 17 digits preserve engine doubles.
-    header = public_reports.HEADER.replace('return tostring(v) end', "return string.format('%.17g',v) end")
+    header = json_query_header(precise_numbers=True)
     return header + f'\nlocal wanted={city_id if city_id is not None else -1}\nlocal evidence={str(evidence).lower()}\n' + r'''
 local cities=A();local found=false
 local ok,err=pcall(function()
@@ -98,9 +99,7 @@ local ok,err=pcall(function()
  end
 end)
 table.sort(cities,function(a,b)return a.city_id<b.city_id end)
-local knownIdentity=type(me)=='number'and me>=0 and type(turn)=='number'and turn>=0 and type(seed)=='number'and seed==seed and math.abs(seed)<math.huge and type(civ)=='string'and civ:match('^CIVILIZATION_.+')~=nil
-if not knownIdentity then missing('world.identity')end
-local stable=knownIdentity and Game.GetLocalPlayer()==me and Game.GetCurrentGameTurn()==turn and GameConfiguration.GetValue('GAME_SYNC_RANDOM_SEED')==seed and PlayerConfigurations[me]:GetCivilizationTypeName()==civ
+local stable=queryWorldStable()
 local valid=ok and stable and (wanted<0 or found)
 local result={schema_version=1,status=valid and (#unknown==0 and 'ready'or 'partial')or 'unknown',
  identity={player_id=me,turn=turn,seed=seed,civilization=civ},cities=valid and cities or NULL,

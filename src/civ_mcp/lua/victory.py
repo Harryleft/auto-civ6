@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 
+from civ_mcp.observation import Observation
 from civ_mcp.lua._helpers import SENTINEL, _int
 from civ_mcp.lua.models import (
     DemographicEntry,
@@ -491,3 +492,87 @@ def parse_victory_progress_response(lines: list[str]) -> VictoryProgress:
         space_projects=space_projects,
         enabled_victories=enabled_victories,
     )
+
+
+def _valid_victory_row(row: str) -> bool:
+    """Validate current/retained wire shapes before the permissive legacy parser."""
+    fields = row.split("|")
+    tag = fields[0]
+    sizes = {"PLAYER": (14, 18), "SPACE": (4, 4), "CULTURE": (5, 5),
+             "CAPITAL": (3, 3), "RELMAJ": (3, 3), "RELFOUNDED": (3, 3),
+             "RELSLOTS": (3, 3), "SPACEPROJ": (9, 12), "DEMO": (6, 7),
+             "VICTORY_CONTEXT": (3, 3), "VICTORY_ENABLED_KNOWN": (2, 2),
+             "VICTORY_CONTACTS_KNOWN": (2, 2), "DIPLO_REQUIRED": (2, 2),
+             "VFACT": (13, 14), "VICTORY_COMPLETE": (1, 1), "VENABLED": (2, 2)}
+    if tag not in sizes or not sizes[tag][0] <= len(fields) <= sizes[tag][1]:
+        return False
+    numbers, unknown, booleans = (), (), ()
+    if tag == "PLAYER":
+        numbers, unknown, booleans = (1, *range(3, 13), *range(14, len(fields))), (4, 5, 6, 12), (13,)
+    elif tag == "SPACE":
+        numbers = (2,)
+    elif tag == "CULTURE":
+        numbers, unknown, booleans = (2, 3), (2, 3), (4,)
+    elif tag == "CAPITAL":
+        booleans = (2,)
+    elif tag == "RELSLOTS":
+        numbers, unknown = (1, 2), (1,)
+    elif tag == "SPACEPROJ":
+        numbers = (4, 5, 6, *((11,) if len(fields) > 11 else ()))
+        unknown = numbers
+        booleans = (8, *((10,) if len(fields) > 10 else ()))
+    elif tag == "DEMO":
+        numbers = tuple(range(2, len(fields)))
+    elif tag == "VICTORY_CONTEXT":
+        numbers = (1, 2)
+    elif tag in {"VICTORY_ENABLED_KNOWN", "VICTORY_CONTACTS_KNOWN"}:
+        booleans = (1,)
+    elif tag == "DIPLO_REQUIRED":
+        numbers = unknown = (1,)
+    elif tag == "VFACT":
+        numbers, unknown = (1, *range(3, len(fields))), tuple(range(3, len(fields)))
+    boolean_values = {"true", "false", "unknown"} if tag in {"PLAYER", "SPACEPROJ"} else {"true", "false"}
+    if any(fields[i] not in boolean_values for i in booleans):
+        return False
+    # Context/completion flags must themselves be known; unknown values remain
+    # legal only in native optional facts such as project eligibility.
+    if tag in {"VICTORY_ENABLED_KNOWN", "VICTORY_CONTACTS_KNOWN"} and fields[1] == "unknown":
+        return False
+    try:
+        for index in numbers:
+            if index in unknown and fields[index] == "unknown":
+                continue
+            if not math.isfinite(float(fields[index])):
+                return False
+        if tag == "VICTORY_CONTEXT":
+            return int(fields[1]) >= 0 and 0 <= int(fields[2]) <= 63
+        if tag in {"PLAYER", "VFACT"}:
+            return 0 <= int(fields[1]) <= 62
+    except ValueError:
+        return False
+    return True
+
+
+def observe_victory_progress_response(lines: list[str]) -> Observation[VictoryProgress]:
+    valid, problems, singletons = [], [], set()
+    for row in lines:
+        tag = row.split("|", 1)[0]
+        if not _valid_victory_row(row):
+            problems.append(f"Victory response incomplete: malformed {tag} row")
+            continue
+        if tag in {"VICTORY_CONTEXT", "VICTORY_ENABLED_KNOWN", "VICTORY_CONTACTS_KNOWN",
+                   "VICTORY_COMPLETE", "DIPLO_REQUIRED", "RELSLOTS"}:
+            if tag in singletons:
+                problems.append(f"Victory response incomplete: duplicate {tag}")
+            singletons.add(tag)
+        valid.append(row)
+    try:
+        value = parse_victory_progress_response(valid)
+    except (ValueError, TypeError, IndexError) as exc:
+        # Preserve parser exceptions as incompleteness, never manufacture a
+        # completed result from rows it could not interpret.
+        value = parse_victory_progress_response([])
+        problems.append(f"Victory response incomplete: {exc}")
+    if not value.complete:
+        problems.append("Victory response incomplete")
+    return Observation(value, tuple(problems))

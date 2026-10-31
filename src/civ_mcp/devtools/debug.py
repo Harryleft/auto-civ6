@@ -21,7 +21,7 @@ from civ_mcp.devtools.knowledge import check_interpreter
 from civ_mcp.devtools.commands import GROUPS, HelpRequested, domain_parser, parse_command
 
 
-OFFLINE_TOOLS = {"get_runtime_status", "search_knowledge", "search_research", "get_knowledge"}
+from civ_mcp.operations import OFFLINE_TOOLS, OPERATIONS, operation, validate_arguments
 STATES = {"overview": "get_game_overview", "units": "get_units", "cities": "get_cities",
           "turn": "get_turn_status", "snapshot": "get_game_snapshot", "decision": "get_decision_context"}
 HELP = {
@@ -162,35 +162,8 @@ def compact_result(result: dict) -> dict:
     return result
 
 
-def tool_error(tool: str, result) -> dict | None:
-    """Recognize only the server's explicit error envelopes, never infer success."""
-    texts = [item.text for item in result.content if item.type == "text"]
-    legacy = next((text for text in texts if text.startswith(("Error:", "ERR:"))), None)
-    structured = None
-    for text in texts:
-        try:
-            value = json.loads(text)
-            if isinstance(value, dict) and value.get("status") in {"error", "unknown"} and value.get("error"):
-                structured = value
-                break
-        except ValueError:
-            pass
-    if not result.isError and legacy is None and structured is None:
-        return None
-    message = legacy or (str(structured["error"]) if structured else None) or "\n".join(texts) or "MCP reported a tool error without text"
-    match = re.match(r"^(?:Error:\s*)?ERR:([A-Z][A-Z0-9_]*)\b", message)
-    code = match[1] if match else "MCP_TOOL_ERROR" if result.isError else "TOOL_REPORTED_ERROR"
-    if structured and structured.get("status") == "unknown":
-        code = "QUERY_UNCONFIRMED" if tool.startswith(("get_", "search_")) else "OUTCOME_UNKNOWN"
-    hint = f"Inspect the original error, tools {tool} and pending before correcting arguments; never blindly replay an unknown request."
-    if code == "QUERY_UNCONFIRMED":
-        hint = "Inspect identity, unknown_fields and error; unavailable data is not an empty list or zero."
-    if code == "NO_TILES":
-        hint = "Use city production CITY_ID and current state to choose a different eligible city/district, then query city district CITY_ID DISTRICT_TYPE. No construction was submitted."
-    elif code == "OUTCOME_UNKNOWN":
-        hint = "Retain this session; use pending and read-only inspection, then confirm only through the original tool with its original arguments. Do not resubmit a new intent."
-    return {"code": code, "message": message, "hint": hint,
-            "details": {"tool": tool, "source": "protocol" if result.isError else "structured_json" if structured else "legacy_text"}}
+# Compatibility import for callers; interpretation has one owner.
+from civ_mcp.results import result_error as tool_error
 
 
 @contextmanager
@@ -299,20 +272,23 @@ class DebugSession:
         from referencing import Registry
         schema = self.tools[tool].inputSchema
         errors = list(Draft202012Validator(schema, registry=Registry()).iter_errors(arguments))
-        if errors:
-            issues = [{"path": list(error.absolute_path), "rule": error.validator,
-                       "message": error.message} for error in errors]
+        issues = [{"path": list(error.absolute_path), "rule": error.validator,
+                   "message": error.message} for error in errors]
+        if not issues:
+            issues.extend(validate_arguments(tool, arguments))
+        if issues:
             raise CommandError("INVALID_TOOL_ARGUMENT", f"{tool}: {issues[0]['message']}",
                 hint=f"Use tools {tool}, correct arguments at the paths in details.issues, then repeat call --dry-run {tool} JSON_OBJECT.",
                 details={"tool": tool, "issues": issues})
-        readonly = self.tools[tool].annotations and self.tools[tool].annotations.readOnlyHint is True
+        readonly = (operation(tool).readonly if tool in OPERATIONS else
+                    bool(self.tools[tool].annotations and self.tools[tool].annotations.readOnlyHint is True))
         if dry_run:
-            self.event("dry_run", tool=tool, arguments=arguments, schema_valid=True,
+            self.event("dry_run", tool=tool, arguments=arguments, schema_valid=True, static_arguments_valid=True,
                        potentially_mutating=not bool(readonly), would_send=False,
                        local_policy_allows_execution=not (self.offline and tool not in OFFLINE_TOOLS)
                            and not bool((self.transport_unknown or self.identity_lost) and not readonly),
                        scope="schema_only", pending_checked=False,
-                       hint="Preview checks input schema only. Query current state before using IDs/coordinates; Runtime still enforces pending and game rules.")
+                       hint="Preview checks input schema and static argument combinations only. Query current state before using IDs/coordinates; Runtime still enforces pending and game rules.")
             return
         if self.offline and tool not in OFFLINE_TOOLS:
             raise CommandError("OFFLINE_ONLY", f"{tool} is unavailable in --offline sessions")
@@ -325,7 +301,7 @@ class DebugSession:
                      "or keep it for evidence. Never start a second controller for the same game.",
             )
         runtime = await self.runtime()
-        if tool in {"get_game_snapshot", "get_decision_context", "get_city_yields", "get_city_growth", "get_city_workforce", "get_combat_preview"} and runtime.get("shared_pending"):
+        if operation(tool).reject_shared_pending and runtime.get("shared_pending"):
             raise CommandError("VERIFY_PENDING", "A shared hotseat request still owns this run",
                                hint="Inspect pending and confirm its original intent; a snapshot cannot retire or bypass the shared request.")
         request = self.event("tool_started", tool=tool, arguments=arguments)

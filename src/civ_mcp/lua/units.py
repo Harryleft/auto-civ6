@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import math
+
+from civ_mcp.observation import Observation
+
 from civ_mcp.lua._helpers import (
     _LUA_ACTION_SCOPE,
     _LUA_KNOWN_RESOURCE,
@@ -1515,6 +1519,31 @@ def parse_units_response(lines: list[str]) -> list[UnitInfo]:
     return units
 
 
+def observe_units_response(lines: list[str]) -> Observation[list[UnitInfo]]:
+    """Account for every supplied row without converting bad fields to zero.
+
+    The legacy seven-field row remains readable. Optional fields, when present,
+    must have their native types; absent optional legacy fields keep old defaults.
+    """
+    value, problems = [], []
+    for row in lines:
+        fields = row.split("|")
+        try:
+            if not 7 <= len(fields) <= 17:
+                raise ValueError("truncated or unexpected unit fields")
+            if any(fields[i] not in {"0", "1"} for i in (11, 12) if len(fields) > i):
+                raise ValueError("invalid unit boolean")
+            if len(fields) > 14 and not fields[14].isdecimal():
+                raise ValueError("invalid upgrade cost")
+            unit, = parse_units_response([row])
+            if not all(math.isfinite(number) for number in (unit.moves_remaining, unit.max_moves)):
+                raise ValueError("non-finite unit movement")
+            value.append(unit)
+        except (ValueError, TypeError, IndexError) as exc:
+            problems.append(f"Unit rows could not all be parsed: {exc}")
+    return Observation(value, tuple(problems))
+
+
 def parse_threat_scan_response(lines: list[str]) -> list[ThreatInfo]:
     threats: list[ThreatInfo] = []
     for line in lines:
@@ -1577,6 +1606,32 @@ def parse_threat_scan_response(lines: list[str]) -> list[ThreatInfo]:
                 )
             )
     return threats
+
+
+def observe_threat_scan_response(lines: list[str]) -> Observation[list[ThreatInfo]]:
+    """NO_THREATS is exclusive; unreadable fields never become zero-strength."""
+    if lines == ["NO_THREATS"]:
+        return Observation([])
+    value, problems = [], []
+    for row in lines:
+        fields = row.split("|")
+        try:
+            if fields[0] != "THREAT" or len(fields) not in (7, 9, 10, 11):
+                raise ValueError("malformed threat row")
+            first = 4 if len(fields) == 7 else 6
+            if any(not fields[first + i].startswith(prefix) for i, prefix in enumerate(("CS:", "RS:", "dist:"))):
+                raise ValueError("invalid threat numeric field")
+            if len(fields) >= 10 and fields[9] not in {"cs:0", "cs:1"}:
+                raise ValueError("invalid city-state flag")
+            if len(fields) == 11 and not fields[10].startswith("uid:"):
+                raise ValueError("invalid native unit ID")
+            threat, = parse_threat_scan_response([row])
+            value.append(threat)
+        except (ValueError, TypeError, IndexError) as exc:
+            problems.append(f"Visible-threat completeness unknown: {exc}")
+    if not lines:
+        problems.append("Visible-threat completeness unknown")
+    return Observation(value, tuple(problems))
 
 
 def build_fog_neighbor_query(positions: list[tuple[int, int]]) -> str:

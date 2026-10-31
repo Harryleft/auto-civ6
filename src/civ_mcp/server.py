@@ -20,6 +20,8 @@ from civ_mcp.connection import GameConnection, LuaError
 from civ_mcp.game_state import GameState
 from civ_mcp.logger import GameLogger
 from civ_mcp.snapshot import pending_facts, read_snapshot
+from civ_mcp.results import ResultText, query_result, result_tool
+from civ_mcp.operations import operation, tool_annotations, validate_arguments
 
 log = logging.getLogger(__name__)
 
@@ -77,7 +79,7 @@ READ_TIMEOUT_SECONDS = 45.0
 
 def _is_read_tool(tool_name: str) -> bool:
     """Read tools are bounded so an unresponsive game fails fast instead of hanging."""
-    return tool_name.startswith(("get_", "list_", "search_"))
+    return operation(tool_name).bounded_read
 
 
 async def _bounded_read(tool_name: str, fn: Callable[[], Awaitable[str]]) -> str:
@@ -86,11 +88,12 @@ async def _bounded_read(tool_name: str, fn: Callable[[], Awaitable[str]]) -> str
         async with asyncio.timeout(READ_TIMEOUT_SECONDS):
             return await fn()
     except TimeoutError:
-        return (
+        return ResultText(
             f"ERR:TOOL_TIMEOUT|{tool_name} exceeded the {READ_TIMEOUT_SECONDS:.0f}s read budget; "
             "the read was cancelled without confirming or replaying anything. "
             "Check that a game is loaded and the UI is not blocked (main menu, load, "
-            "or a modal dialog can stall reads), then retry the query."
+            "or a modal dialog can stall reads), then retry the query.",
+            kind="query", status="unknown", code="TOOL_TIMEOUT",
         )
 
 
@@ -99,11 +102,13 @@ async def _logged(
     tool_name: str,
     params: dict[str, Any],
     fn: Callable[[], Awaitable[str]],
+    *, validation_error: str | None = None,
 ) -> str:
     """整体串行调用并记录结果；连接异常不会触发重启或重放。"""
     app = ctx.request_context.lifespan_context
     async with app.lock:
         start = time.monotonic()
+        capability = operation(tool_name)
 
         async def execute_call() -> str:
             if _is_read_tool(tool_name):
@@ -112,51 +117,48 @@ async def _logged(
 
         try:
             congress_blocked = None
-            if (getattr(app.game, 'congress_pending', False) is True
+            if (validation_error is None and getattr(app.game, 'congress_pending', False) is True
                 and not getattr(app.game, 'popup_pending', False)
-                and not tool_name.startswith(('get_', 'list_'))
-                and tool_name not in {'open_world_congress', 'queue_wc_votes', 'end_turn', 'dismiss_popup', 'restart_and_load', 'search_knowledge', 'search_research'}):
+                and not capability.allows_pending("congress")):
                 congress_blocked = await app.game.congress_gate()
             # Only these static readers bypass game-state access and pending gates.
-            if tool_name in {"search_knowledge", "search_research", "get_knowledge"}:
+            if validation_error is not None:
+                result = ResultText(validation_error, kind="action", status="not_submitted", code="INVALID_TOOL_ARGUMENT")
+            elif not capability.game_io:
                 result = await fn()
             elif (
                 getattr(app.game, "popup_pending", False)
-                and not _is_read_tool(tool_name)
-                and tool_name not in {"dismiss_popup", "restart_and_load"}
+                and not capability.allows_pending("popup")
             ):
-                result = "ERR:OUTCOME_UNKNOWN|Popup dismissal is unconfirmed; retain its original request, inspect read-only facts or use explicit protected checkpoint recovery."
+                result = ResultText("ERR:OUTCOME_UNKNOWN|Popup dismissal is unconfirmed; retain its original request, inspect read-only facts or use explicit protected checkpoint recovery.", kind="action", status="unknown", code="OUTCOME_UNKNOWN")
             elif congress_blocked:
                 result = congress_blocked
             elif (
                 (app.game.replacement_pending or app.game.save_pending)
-                and not tool_name.startswith(("get_", "list_"))
-                and tool_name != "restart_and_load"
+                and not capability.allows_pending("replacement")
             ):
                 result = (
-                    "ERR:OUTCOME_UNKNOWN|The requested save/load has not been verified. "
+                    ResultText("ERR:OUTCOME_UNKNOWN|The requested save/load has not been verified. "
                     "Read game state or explicitly restart_and_load a verified checkpoint "
-                    "before issuing gameplay actions."
+                    "before issuing gameplay actions.", kind="action", status="unknown", code="OUTCOME_UNKNOWN")
                 )
             elif (
                 app.game.diplomacy_pending
-                and not tool_name.startswith(("get_", "list_"))
-                and tool_name not in {"end_turn", "test_trade", "propose_trade", "negotiate_incoming_trade", "respond_to_trade", "respond_to_diplomacy", "dismiss_popup", "restart_and_load"}
+                and not capability.allows_pending("diplomacy")
             ):
-                result = "ERR:OUTCOME_UNKNOWN|Native diplomacy attempt is pending; confirm the original trade/response or use explicit recovery before gameplay."
+                result = ResultText("ERR:OUTCOME_UNKNOWN|Native diplomacy attempt is pending; confirm the original trade/response or use explicit recovery before gameplay.", kind="action", status="unknown", code="OUTCOME_UNKNOWN")
             elif (
                 app.game.turn_pending
-                and not tool_name.startswith(("get_", "list_"))
-                and tool_name not in {"end_turn", "respond_to_diplomacy", "respond_to_trade", "negotiate_incoming_trade", "queue_wc_votes", "open_world_congress", "dismiss_popup", "restart_and_load"}
+                and not capability.allows_pending("turn")
             ):
                 result = (
-                    "ERR:OUTCOME_UNKNOWN|The submitted end-turn is still pending. "
-                    "Use end_turn to confirm or resolve the reported diplomacy/trade blocker before gameplay actions."
+                    ResultText("ERR:OUTCOME_UNKNOWN|The submitted end-turn is still pending. "
+                    "Use end_turn to confirm or resolve the reported diplomacy/trade blocker before gameplay actions.", kind="action", status="unknown", code="OUTCOME_UNKNOWN")
                 )
             else:
                 entity = getattr(app.game, "pending_action_entity", None)
                 dependent = False
-                if isinstance(entity, tuple) and not tool_name.startswith(("get_", "list_")):
+                if isinstance(entity, tuple) and not capability.readonly:
                     unit_id = params.get("unit_id")
                     city_id = params.get("city_id")
                     dependent = (
@@ -164,7 +166,7 @@ async def _logged(
                         # events. Explicit close preserves its receipt and pending gate.
                         ((getattr(app.game, "pending_action_blocks_mutations", False) is True
                           or getattr(app.game, "pending_action_kind", None) == "contribution")
-                         and tool_name not in {"restart_and_load", "dismiss_popup"})
+                         and not capability.allows_pending("action"))
                         or (entity[0] == "unit" and isinstance(unit_id, int)
                          and (entity[1] == unit_id % 65536
                               or getattr(app.game, "pending_action_kind", None) in ("pillage", "contribution")))
@@ -186,7 +188,8 @@ async def _logged(
                 else:
                     result = await execute_call()
         except (LuaError, ValueError, OSError) as exc:
-            result = f"Error: {exc}"
+            result = ResultText(f"Error: {exc}", kind="query" if capability.readonly else "action",
+                                status="error", code="TOOL_REPORTED_ERROR")
         ms = int((time.monotonic() - start) * 1000)
         log.info("%s(%s) %dms: %s", tool_name, _param_summary(params), ms, _result_summary(result))
         try:
@@ -201,7 +204,7 @@ async def _logged(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool(annotations={"readOnlyHint": True, "idempotentHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_runtime_status"))
 async def get_runtime_status(ctx: Context) -> str:
     """Read this MCP process/session and pending-owner facts without game I/O.
 
@@ -223,7 +226,7 @@ async def get_runtime_status(ctx: Context) -> str:
         }, ensure_ascii=False)
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_game_snapshot"))
 async def get_game_snapshot(ctx: Context) -> str:
     """Read structured current-player identity, overview, units and cities.
 
@@ -234,14 +237,14 @@ async def get_game_snapshot(ctx: Context) -> str:
     """
     async def read():
         try:
-            return json.dumps(await read_snapshot(_get_game(ctx)), ensure_ascii=False, allow_nan=False)
+            return query_result(await read_snapshot(_get_game(ctx)))
         except (LuaError, OSError, ValueError, TimeoutError) as exc:
-            return json.dumps({"schema_version": 1, "scope": "current_player", "status": "unknown",
-                               "error": f"{type(exc).__name__}: {exc}"}, ensure_ascii=False)
+            return query_result({"schema_version": 1, "scope": "current_player", "status": "unknown",
+                               "error": f"{type(exc).__name__}: {exc}"})
     return await _logged(ctx, "get_game_snapshot", {}, read)
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_decision_context"))
 async def get_decision_context(
     ctx: Context,
     include: list[Literal["research", "diplomacy", "trade"]] | None = None,
@@ -261,14 +264,14 @@ async def get_decision_context(
     async def read():
         try:
             result = await _get_game(ctx).get_decision_context(include or (), city_ids or (), view)
-            return json.dumps(result, ensure_ascii=False, allow_nan=False)
+            return query_result(result)
         except (LuaError, OSError, ValueError, TimeoutError) as exc:
             result = {"schema_version": 1, "status": "unknown", "error": f"{type(exc).__name__}: {exc}"}
-        return json.dumps(result, ensure_ascii=False, allow_nan=False)
+        return query_result(result)
     return await _logged(ctx, "get_decision_context", {"include": include, "city_ids": city_ids, "view": view}, read)
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_city_yields"))
 async def get_city_yields(ctx: Context,
     city_id: Annotated[int, Field(ge=0, strict=True)] | None = None,
     view: Literal["brief", "structured", "evidence"] = "brief",
@@ -289,11 +292,11 @@ async def get_city_yields(ctx: Context,
             result = await _get_game(ctx).get_city_yields(city_id, view)
         except (LuaError, OSError, ValueError, KeyError, IndexError, TimeoutError) as exc:
             result = dict(schema_version=1, status="unknown", error=f"{type(exc).__name__}: {exc}")
-        return json.dumps(result, ensure_ascii=False, allow_nan=False)
+        return query_result(result)
     return await _logged(ctx, "get_city_yields", {"city_id": city_id, "view": view}, read)
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_city_growth"))
 async def get_city_growth(ctx: Context,
     city_id: Annotated[int, Field(ge=0, strict=True)] | None = None,
     view: Literal["brief", "structured", "evidence"] = "brief",
@@ -310,11 +313,11 @@ async def get_city_growth(ctx: Context,
             result=await _get_game(ctx).get_city_growth(city_id, view)
         except (LuaError, OSError, ValueError, KeyError, TimeoutError) as exc:
             result=dict(schema_version=1,status="unknown",error=f"{type(exc).__name__}: {exc}")
-        return json.dumps(result,ensure_ascii=False,allow_nan=False)
+        return query_result(result)
     return await _logged(ctx,"get_city_growth",{"city_id":city_id,"view":view},read)
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_city_workforce"))
 async def get_city_workforce(ctx: Context,
     city_id: Annotated[int, Field(ge=0, strict=True)],
     view: Literal["brief", "structured", "evidence"] = "brief",
@@ -330,11 +333,11 @@ async def get_city_workforce(ctx: Context,
             result=await _get_game(ctx).get_city_workforce(city_id,view)
         except (LuaError,OSError,ValueError,KeyError,TimeoutError) as exc:
             result=dict(schema_version=1,status="unknown",error=f"{type(exc).__name__}: {exc}")
-        return json.dumps(result,ensure_ascii=False,allow_nan=False)
+        return query_result(result)
     return await _logged(ctx,"get_city_workforce",{"city_id":city_id,"view":view},read)
 
 
-@mcp.tool(annotations={"readOnlyHint": True, "idempotentHint": True})
+@result_tool(mcp, annotations=tool_annotations("search_knowledge"))
 async def search_knowledge(
     ctx: Context,
     query: Annotated[str, Field(min_length=1)],
@@ -360,7 +363,7 @@ async def search_knowledge(
                          lambda: knowledge.search(query, topic, limit, view))
 
 
-@mcp.tool(annotations={"readOnlyHint": True, "idempotentHint": True})
+@result_tool(mcp, annotations=tool_annotations("search_research"))
 async def search_research(ctx: Context, kind: str, query: str = "", filters: Optional[list[str]] = None,
                           match: str = "any", limit: int = 20, offset: int = 0) -> str:
     """Search cached technology/civic names, unlocks and positive effect associations.
@@ -374,7 +377,7 @@ async def search_research(ctx: Context, kind: str, query: str = "", filters: Opt
     return await _logged(ctx, "search_research", params, lambda: knowledge.research(**params))
 
 
-@mcp.tool(annotations={"readOnlyHint": True, "idempotentHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_knowledge"))
 async def get_knowledge(
     ctx: Context,
     entry_id: Annotated[str, Field(min_length=1)],
@@ -399,7 +402,7 @@ async def get_knowledge(
                          lambda: knowledge.get(entry_id, level))
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_public_report"))
 async def get_public_report(ctx: Context, section: str, target_player: int = -1,
                             limit: int = 50, offset: int = 0, since_turn: int = 0,
                             search_kind: str = "resource", query: str = "", include_rules: bool = False,
@@ -430,11 +433,11 @@ async def get_public_report(ctx: Context, section: str, target_player: int = -1,
         if view=='brief':
             from civ_mcp.resource_search import brief
             result=brief(result,search_kind=search_kind,query=query,limit=limit,offset=offset)
-        return json.dumps(result, ensure_ascii=False,allow_nan=False)
+        return query_result(result)
     return await _logged(ctx, "get_public_report", params | {"include_rules": include_rules,"view":view}, run)
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_game_overview"))
 async def get_game_overview(ctx: Context) -> str:
     """Get current turn, civilization, yields, research, cities, units and game outcome."""
     gs = _get_game(ctx)
@@ -452,12 +455,12 @@ async def get_game_overview(ctx: Context) -> str:
         gameover = await gs.check_game_over()
         if gameover is not None:
             text += f"\n\nGAME OVER: {'DEFEAT' if gameover.is_defeat else 'VICTORY'} — {gameover.winner_name}, {gameover.victory_type}"
-        return text
+        return ResultText(text, kind="query", status="observed", data={"turn": ov.turn})
 
     return await _logged(ctx, "get_game_overview", {}, _run)
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_combat_preview"))
 async def get_combat_preview(ctx: Context, unit_id: int, target_x: int, target_y: int) -> str:
     """Read a native current-turn unit combat estimate without attacking.
 
@@ -474,7 +477,7 @@ async def get_combat_preview(ctx: Context, unit_id: int, target_x: int, target_y
                          lambda: gs.get_combat_preview(unit_id, target_x, target_y))
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_units"))
 async def get_units(ctx: Context) -> str:
     """List all your units with position, type, movement, and health.
 
@@ -503,7 +506,7 @@ async def get_units(ctx: Context) -> str:
     return await _logged(ctx, "get_units", {}, _run)
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_unit_formations"))
 async def get_unit_formations(ctx: Context, unit_id: int) -> str:
     """Read one owned unit's escort/military formation and native eligible targets.
 
@@ -517,7 +520,7 @@ async def get_unit_formations(ctx: Context, unit_id: int) -> str:
     return await _logged(ctx, "get_unit_formations", {"unit_id": unit_id}, run)
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("set_unit_formation"))
 async def set_unit_formation(ctx: Context, unit_id: int, action: str,
                              target_unit_id: Optional[int] = None) -> str:
     """Explicitly link/unlink escorts or form a corps/army through native commands.
@@ -534,7 +537,7 @@ async def set_unit_formation(ctx: Context, unit_id: int, action: str,
                          lambda: _get_game(ctx).change_unit_formation(**params))
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_spies"))
 async def get_spies(ctx: Context) -> str:
     """List all your spy units with position, rank, city, and available missions.
 
@@ -556,7 +559,7 @@ async def get_spies(ctx: Context) -> str:
     return await _logged(ctx, "get_spies", {}, _run)
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("spy_action"))
 async def spy_action(
     ctx: Context,
     unit_id: int,
@@ -609,7 +612,7 @@ async def spy_action(
     return result
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_cities"))
 async def get_cities(ctx: Context) -> str:
     """List all your cities with yields, population, production, growth, and loyalty.
 
@@ -629,7 +632,7 @@ async def get_cities(ctx: Context) -> str:
     return await _logged(ctx, "get_cities", {}, _run)
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_city_production"))
 async def get_city_production(ctx: Context, city_id: int,
                               item_type: Literal['UNIT', 'BUILDING'] | None = None,
                               item_name: str | None = None,
@@ -658,7 +661,7 @@ async def get_city_production(ctx: Context, city_id: int,
     return await _logged(ctx, "get_city_production", {"city_id": city_id, "item_type": item_type, "item_name": item_name,"view":view}, _run)
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_map_area"))
 async def get_map_area(
     ctx: Context, center_x: int, center_y: int, radius: int = 2
 ) -> str:
@@ -685,7 +688,7 @@ async def get_map_area(
     return result
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_settle_advisor"))
 async def get_settle_advisor(ctx: Context, unit_id: int) -> str:
     """List observed settlement terrain candidates near a settler unit.
 
@@ -703,7 +706,7 @@ async def get_settle_advisor(ctx: Context, unit_id: int) -> str:
     )
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_pathing_estimate"))
 async def get_pathing_estimate(
     ctx: Context, unit_id: int, target_x: int, target_y: int
 ) -> str:
@@ -731,7 +734,7 @@ async def get_pathing_estimate(
     )
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_global_settle_advisor"))
 async def get_global_settle_advisor(ctx: Context,
     limit: Annotated[int, Field(ge=1, le=200, strict=True)] = 20,
     offset: Annotated[int, Field(ge=0, strict=True)] = 0,
@@ -768,7 +771,7 @@ async def get_global_settle_advisor(ctx: Context,
     return await _logged(ctx, "get_global_settle_advisor", params, _run)
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_builder_tasks"))
 async def get_builder_tasks(ctx: Context) -> str:
     """Read improvement hints and native builder readiness.
 
@@ -786,7 +789,7 @@ async def get_builder_tasks(ctx: Context) -> str:
     return await _logged(ctx, "get_builder_tasks", {}, _run)
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_empire_resources"))
 async def get_empire_resources(ctx: Context) -> str:
     """Get a summary of all resources in and near your empire.
 
@@ -803,7 +806,7 @@ async def get_empire_resources(ctx: Context) -> str:
     return await _logged(ctx, "get_empire_resources", {}, _run)
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_strategic_map"))
 async def get_strategic_map(ctx: Context) -> str:
     """Get fog-of-war boundaries and unclaimed resources across the map.
 
@@ -820,7 +823,7 @@ async def get_strategic_map(ctx: Context) -> str:
     )
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_diplomacy"))
 async def get_diplomacy(ctx: Context) -> str:
     """Get diplomatic status with all known civilizations.
 
@@ -838,7 +841,7 @@ async def get_diplomacy(ctx: Context) -> str:
     )
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_tech_civics"))
 async def get_tech_civics(ctx: Context) -> str:
     """Get technology and civic research status.
 
@@ -854,7 +857,7 @@ async def get_tech_civics(ctx: Context) -> str:
     )
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_pending_trades"))
 async def get_pending_trades(ctx: Context) -> str:
     """Read a verified current incoming deal or demand.
 
@@ -871,7 +874,7 @@ async def get_pending_trades(ctx: Context) -> str:
     )
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_policies"))
 async def get_policies(ctx: Context, policy_type: Annotated[str, Field(pattern=r"^POLICY_[A-Z0-9_]+$")] | None = None) -> str:
     """Read policy slots, native change restrictions and current candidates.
 
@@ -885,7 +888,7 @@ async def get_policies(ctx: Context, policy_type: Annotated[str, Field(pattern=r
     )
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_notifications"))
 async def get_notifications(ctx: Context) -> str:
     """Get all active game notifications.
 
@@ -903,7 +906,7 @@ async def get_notifications(ctx: Context) -> str:
     )
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_pending_diplomacy"))
 async def get_pending_diplomacy(ctx: Context) -> str:
     """Check for pending diplomacy encounters (e.g. first meeting with a civ).
 
@@ -925,7 +928,7 @@ async def get_pending_diplomacy(ctx: Context) -> str:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_governors"))
 async def get_governors(ctx: Context, include_ineligible: bool = False) -> str:
     """Read native governor appointment/promotion eligibility and assignments.
 
@@ -941,7 +944,7 @@ async def get_governors(ctx: Context, include_ineligible: bool = False) -> str:
     )
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("appoint_governor"))
 async def appoint_governor(ctx: Context, governor_type: str) -> str:
     """Appoint a new governor.
 
@@ -959,7 +962,7 @@ async def appoint_governor(ctx: Context, governor_type: str) -> str:
     )
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("assign_governor"))
 async def assign_governor(
     ctx: Context, governor_type: str, city_id: Annotated[int, Field(ge=0, strict=True)],
     target_owner: Annotated[int, Field(ge=0, le=63, strict=True)] | None = None,
@@ -984,7 +987,7 @@ async def assign_governor(
     )
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("promote_governor"))
 async def promote_governor(
     ctx: Context, governor_type: str, promotion_type: str
 ) -> str:
@@ -1005,7 +1008,7 @@ async def promote_governor(
     )
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_unit_promotions"))
 async def get_unit_promotions(ctx: Context, unit_id: int) -> str:
     """Read native UI promotion candidates and current execution eligibility.
 
@@ -1025,7 +1028,7 @@ async def get_unit_promotions(ctx: Context, unit_id: int) -> str:
     return await _logged(ctx, "get_unit_promotions", {"unit_id": unit_id}, _run)
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("promote_unit"))
 async def promote_unit(ctx: Context, unit_id: int, promotion_type: str) -> str:
     """Apply a promotion to a unit.
 
@@ -1047,7 +1050,7 @@ async def promote_unit(ctx: Context, unit_id: int, promotion_type: str) -> str:
     )
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_city_states"))
 async def get_city_states(ctx: Context) -> str:
     """List known city-states with envoy counts and types.
 
@@ -1064,7 +1067,7 @@ async def get_city_states(ctx: Context) -> str:
     )
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("send_envoy"))
 async def send_envoy(ctx: Context, player_id: int) -> str:
     """Send an envoy to a city-state.
 
@@ -1081,7 +1084,7 @@ async def send_envoy(ctx: Context, player_id: int) -> str:
     )
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_pantheon_beliefs"))
 async def get_pantheon_beliefs(ctx: Context) -> str:
     """Get pantheon status and available beliefs for selection.
 
@@ -1097,7 +1100,7 @@ async def get_pantheon_beliefs(ctx: Context) -> str:
     return await _logged(ctx, "get_pantheon_beliefs", {}, _run)
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("choose_pantheon"))
 async def choose_pantheon(ctx: Context, belief_type: str) -> str:
     """Found a pantheon with the specified belief.
 
@@ -1117,7 +1120,7 @@ async def choose_pantheon(ctx: Context, belief_type: str) -> str:
     )
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_religion_beliefs"))
 async def get_religion_beliefs(ctx: Context) -> str:
     """Get religion founding status, available religions, and available beliefs.
 
@@ -1134,7 +1137,7 @@ async def get_religion_beliefs(ctx: Context) -> str:
     return await _logged(ctx, "get_religion_beliefs", {}, _run)
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("found_religion"))
 async def found_religion(
     ctx: Context, religion_type: str, follower_belief: str, founder_belief: str
 ) -> str:
@@ -1164,7 +1167,7 @@ async def found_religion(
     )
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("upgrade_unit"))
 async def upgrade_unit(ctx: Context, unit_id: int) -> str:
     """Upgrade a unit to its next type (e.g. Slinger -> Archer).
 
@@ -1180,7 +1183,7 @@ async def upgrade_unit(ctx: Context, unit_id: int) -> str:
     )
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_dedications"))
 async def get_dedications(ctx: Context) -> str:
     """Get current era age, available dedications, and active ones.
 
@@ -1197,7 +1200,7 @@ async def get_dedications(ctx: Context) -> str:
     return await _logged(ctx, "get_dedications", {}, _run)
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("choose_dedication"))
 async def choose_dedication(ctx: Context, dedication_index: int) -> str:
     """Choose a dedication/commemoration for the current era.
 
@@ -1215,7 +1218,7 @@ async def choose_dedication(ctx: Context, dedication_index: int) -> str:
     )
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_trade_options"))
 async def get_trade_options(ctx: Context, other_player_id: int) -> str:
     """See what both sides can trade — like opening the trade screen.
 
@@ -1237,7 +1240,7 @@ async def get_trade_options(ctx: Context, other_player_id: int) -> str:
     )
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("respond_to_trade"))
 async def respond_to_trade(ctx: Context, other_player_id: int, accept: bool) -> str:
     """Accept/reject a verified incoming offer or the owned current outgoing counter.
 
@@ -1262,7 +1265,7 @@ async def respond_to_trade(ctx: Context, other_player_id: int, accept: bool) -> 
     )
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("negotiate_incoming_trade"))
 async def negotiate_incoming_trade(
     ctx: Context,
     other_player_id: int,
@@ -1296,7 +1299,7 @@ async def negotiate_incoming_trade(
     )
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("propose_trade"))
 async def propose_trade(
     ctx: Context,
     other_player_id: int,
@@ -1407,7 +1410,7 @@ async def propose_trade(
     )
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("propose_peace"))
 async def propose_peace(ctx: Context, other_player_id: int) -> str:
     """Propose white peace to a civilization you're at war with.
 
@@ -1428,7 +1431,7 @@ async def propose_peace(ctx: Context, other_player_id: int) -> str:
     )
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("set_policies"))
 async def set_policies(ctx: Context, assignments: str) -> str:
     """Set policy cards in government slots.
 
@@ -1460,7 +1463,7 @@ async def set_policies(ctx: Context, assignments: str) -> str:
     return await _logged(ctx, "set_policies", {"assignments": assignments}, _run)
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("respond_to_diplomacy"))
 async def respond_to_diplomacy(
     ctx: Context, other_player_id: int, response: str
 ) -> str:
@@ -1483,7 +1486,7 @@ async def respond_to_diplomacy(
     )
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("close_diplomacy_session"))
 async def close_diplomacy_session(ctx: Context, other_player_id: int) -> str:
     """明确放弃一个已核验参与者的现有原生外交会话。
 
@@ -1498,7 +1501,7 @@ async def close_diplomacy_session(ctx: Context, other_player_id: int) -> str:
     )
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("send_diplomatic_action"))
 async def send_diplomatic_action(
     ctx: Context, other_player_id: int, action: str
 ) -> str:
@@ -1534,7 +1537,7 @@ async def send_diplomatic_action(
     )
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("form_alliance"))
 async def form_alliance(
     ctx: Context, other_player_id: int, alliance_type: str = "MILITARY"
 ) -> str:
@@ -1559,7 +1562,7 @@ async def form_alliance(
     )
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("city_action"))
 async def city_action(
     ctx: Context,
     city_id: int,
@@ -1585,11 +1588,12 @@ async def city_action(
     - 'liberate_founder': Liberate to original founder
     - 'liberate_previous': Liberate to previous owner
     """
+    issues = validate_arguments("city_action", {"action": action, "target_x": target_x, "target_y": target_y})
+    if issues:
+        return ResultText("Error: " + issues[0]["message"], kind="action", status="not_submitted", code="INVALID_TOOL_ARGUMENT")
     gs = _get_game(ctx)
     match action:
         case "attack":
-            if target_x is None or target_y is None:
-                return "Error: attack requires target_x and target_y"
             result = await _logged(
                 ctx,
                 "city_attack",
@@ -1608,7 +1612,7 @@ async def city_action(
             return f"Error: Unknown city action '{action}'. Available: attack, keep, reject, raze, liberate_founder, liberate_previous"
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("unit_action"))
 async def unit_action(
     ctx: Context,
     unit_id: int,
@@ -1675,6 +1679,7 @@ async def unit_action(
     alert = sleep but auto-wake when enemy enters sight range.
     delete = permanently disband the unit.
     """
+    issues = validate_arguments("unit_action", {"action": action, "target_x": target_x, "target_y": target_y, "improvement": improvement})
     gs = _get_game(ctx)
     unit_index = unit_id % 65536
     params: dict[str, Any] = {"unit_id": unit_id, "action": action}
@@ -1700,20 +1705,14 @@ async def unit_action(
                 return confirmation
         match action.lower():
             case "move":
-                if target_x is None or target_y is None:
-                    return "Error: move requires target_x and target_y"
                 return await gs.move_unit(unit_id, target_x, target_y)
             case "rebase":
-                if target_x is None or target_y is None:
-                    return "Error: rebase requires target_x and target_y"
                 return await gs.rebase_unit(unit_id, target_x, target_y)
             case "cancel_move":
                 return await gs.cancel_unit_move(unit_id)
             case "pillage":
                 return await gs.pillage_unit(unit_id)
             case "attack":
-                if target_x is None or target_y is None:
-                    return "Error: attack requires target_x and target_y"
                 return await gs.attack_unit(unit_id, target_x, target_y)
             case "fortify":
                 return await gs.fortify_unit(unit_id)
@@ -1722,8 +1721,6 @@ async def unit_action(
             case "found_city":
                 return await gs.found_city(unit_id)
             case "improve":
-                if not improvement:
-                    return "Error: improve requires improvement name (e.g. IMPROVEMENT_FARM). To repair a pillaged improvement, use action='repair' instead."
                 return await gs.improve_tile(unit_id, improvement)
             case "repair":
                 return await gs.repair_improvement(unit_id)
@@ -1744,8 +1741,6 @@ async def unit_action(
             case "delete":
                 return await gs.delete_unit(unit_id)
             case "trade_route":
-                if target_x is None or target_y is None:
-                    return "Error: trade_route requires target_x and target_y of destination city"
                 return await gs.make_trade_route(unit_id, target_x, target_y)
             case "activate":
                 return await gs.activate_great_person(unit_id)
@@ -1760,23 +1755,20 @@ async def unit_action(
             case "launch_inquisition":
                 return await gs.launch_inquisition(unit_id)
             case "religious_attack":
-                if target_x is None or target_y is None:
-                    return "Error: religious_attack requires target_x and target_y"
                 return await gs.religious_attack(unit_id, target_x, target_y)
             case "condemn_heretic":
                 return await gs.condemn_heretic(unit_id)
             case "teleport":
-                if target_x is None or target_y is None:
-                    return "Error: teleport requires target_x and target_y of the destination city"
                 return await gs.teleport_to_city(unit_id, target_x, target_y)
             case _:
                 return f"Error: Unknown action '{action}'. Valid: move, rebase, cancel_move, pillage, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion, launch_inquisition, condemn_heretic, remove_heresy, religious_attack"
 
-    result = await _logged(ctx, "unit_action", params, _run)
+    result = await _logged(ctx, "unit_action", params, _run,
+                           validation_error="Error: " + issues[0]["message"] if issues else None)
     return result
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("skip_remaining_units"))
 async def skip_remaining_units(ctx: Context) -> str:
     """Skip currently ready units through native InGame operations.
 
@@ -1789,7 +1781,7 @@ async def skip_remaining_units(ctx: Context) -> str:
     )
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("set_city_production"))
 async def set_city_production(
     ctx: Context,
     city_id: int,
@@ -1824,7 +1816,7 @@ async def set_city_production(
     )
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("purchase_item"))
 async def purchase_item(
     ctx: Context,
     city_id: int,
@@ -1856,7 +1848,7 @@ async def purchase_item(
     )
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("set_research"))
 async def set_research(ctx: Context, tech_or_civic: str, category: str = "tech") -> str:
     """Choose a technology or civic to research.
 
@@ -1881,7 +1873,7 @@ async def set_research(ctx: Context, tech_or_civic: str, category: str = "tech")
     )
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_turn_status"))
 async def get_turn_status(ctx: Context) -> str:
     """Read native turn/UI phases and cumulative wait without clearing pending.
 
@@ -1895,7 +1887,7 @@ async def get_turn_status(ctx: Context) -> str:
     return await _logged(ctx, "get_turn_status", {}, _get_game(ctx).get_turn_status)
 
 
-@mcp.tool(annotations={"destructiveHint": True})
+@result_tool(mcp, annotations=tool_annotations("end_turn"))
 async def end_turn(ctx: Context) -> str:
     """Advance once and confirm the next turn. Resolve reported blockers first.
 
@@ -1921,7 +1913,7 @@ async def end_turn(ctx: Context) -> str:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_trade_routes"))
 async def get_trade_routes(ctx: Context) -> str:
     """Get trade route capacity, active routes, and trader status.
 
@@ -1937,7 +1929,7 @@ async def get_trade_routes(ctx: Context) -> str:
     )
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_trade_destinations"))
 async def get_trade_destinations(ctx: Context, unit_id: int) -> str:
     """List valid trade route destinations for a trader unit.
 
@@ -1962,7 +1954,7 @@ async def get_trade_destinations(ctx: Context, unit_id: int) -> str:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_district_advisor"))
 async def get_district_advisor(ctx: Context, city_id: int, district_type: str) -> str:
     """Read all native available district plots and native adjacency, unranked.
 
@@ -1990,7 +1982,7 @@ async def get_district_advisor(ctx: Context, city_id: int, district_type: str) -
     )
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_wonder_advisor"))
 async def get_wonder_advisor(ctx: Context, city_id: int, wonder_name: str) -> str:
     """Show all native available wonder tiles and displaced features.
 
@@ -2025,7 +2017,7 @@ async def get_wonder_advisor(ctx: Context, city_id: int, wonder_name: str) -> st
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_purchasable_tiles"))
 async def get_purchasable_tiles(ctx: Context, city_id: int) -> str:
     """List tiles a city can purchase with gold.
 
@@ -2046,7 +2038,7 @@ async def get_purchasable_tiles(ctx: Context, city_id: int) -> str:
     return await _logged(ctx, "get_purchasable_tiles", {"city_id": city_id}, _run)
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("purchase_tile"))
 async def purchase_tile(ctx: Context, city_id: int, x: int, y: int) -> str:
     """Buy a tile for a city with gold.
 
@@ -2072,7 +2064,7 @@ async def purchase_tile(ctx: Context, city_id: int, x: int, y: int) -> str:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("change_government"))
 async def change_government(ctx: Context, government_type: str) -> str:
     """Switch to a different government type.
 
@@ -2096,7 +2088,7 @@ async def change_government(ctx: Context, government_type: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_great_people"))
 async def get_great_people(ctx: Context,
     individual_id: Annotated[int, Field(ge=0,strict=True)] | None = None,
     class_type: Annotated[str, Field(pattern=r'^GREAT_PERSON_CLASS_[A-Z0-9_]+$')] | None = None,
@@ -2115,7 +2107,7 @@ async def get_great_people(ctx: Context,
     return await _logged(ctx, "get_great_people", {"individual_id":individual_id,"class_type":class_type}, _run)
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_gp_advisor"))
 async def get_gp_advisor(ctx: Context, unit_index: int) -> str:
     """Read native Great Person activation highlights and current city facts, unranked.
 
@@ -2139,7 +2131,7 @@ async def get_gp_advisor(ctx: Context, unit_index: int) -> str:
     return await _logged(ctx, "get_gp_advisor", {"unit": unit_index}, _run)
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("recruit_great_person"))
 async def recruit_great_person(ctx: Context, individual_id: int) -> str:
     """Recruit a Great Person using accumulated GP points.
 
@@ -2160,7 +2152,7 @@ async def recruit_great_person(ctx: Context, individual_id: int) -> str:
     )
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("patronize_great_person"))
 async def patronize_great_person(
     ctx: Context, individual_id: int, yield_type: str = "YIELD_GOLD"
 ) -> str:
@@ -2183,7 +2175,7 @@ async def patronize_great_person(
     )
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("reject_great_person"))
 async def reject_great_person(ctx: Context, individual_id: int) -> str:
     """Pass on the specified Great Person using points from that class.
 
@@ -2208,7 +2200,7 @@ async def reject_great_person(ctx: Context, individual_id: int) -> str:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_world_congress"))
 async def get_world_congress(ctx: Context) -> str:
     """Get World Congress status, active resolutions, and voting options.
 
@@ -2227,7 +2219,7 @@ async def get_world_congress(ctx: Context) -> str:
     return await _logged(ctx, "get_world_congress", {}, _run)
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("open_world_congress"))
 async def open_world_congress(ctx: Context) -> str:
     """Explicitly open native Congress voting, then read get_world_congress.
 
@@ -2242,7 +2234,7 @@ async def open_world_congress(ctx: Context) -> str:
     return await _logged(ctx, "open_world_congress", {}, gs.open_world_congress)
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("queue_wc_votes"))
 async def queue_wc_votes(ctx: Context, votes: str) -> str:
     """Submit a complete explicit World Congress resolution/proposal plan.
 
@@ -2286,7 +2278,7 @@ async def queue_wc_votes(ctx: Context, votes: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_victory_progress"))
 async def get_victory_progress(ctx: Context) -> str:
     """Get victory condition progress for all civilizations.
 
@@ -2313,7 +2305,7 @@ async def get_victory_progress(ctx: Context) -> str:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_religion_defense"))
 async def get_religion_defense(ctx: Context) -> str:
     """Read owned-city religion pressure stocks/flow, visible religious units,
     exact current native condemn qualifications, faith and scoped inquisition facts.
@@ -2329,7 +2321,7 @@ async def get_religion_defense(ctx: Context) -> str:
     return await _logged(ctx, "get_religion_defense", {}, _run)
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("get_religion_spread"))
 async def get_religion_spread(ctx: Context) -> str:
     """Read owned/revealed city religion facts for met major civilizations.
 
@@ -2351,7 +2343,7 @@ async def get_religion_spread(ctx: Context) -> str:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("set_city_focus"))
 async def set_city_focus(ctx: Context, city_id: int, focus: str) -> str:
     """Set a city's citizen yield priority.
 
@@ -2377,7 +2369,7 @@ async def set_city_focus(ctx: Context, city_id: int, focus: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("dismiss_popup"))
 async def dismiss_popup(ctx: Context) -> str:
     """Dismiss any blocking popup in the game UI.
 
@@ -2388,7 +2380,7 @@ async def dismiss_popup(ctx: Context) -> str:
     return await _logged(ctx, "dismiss_popup", {}, gs.dismiss_popup)
 
 
-@mcp.tool(annotations={"destructiveHint": True})
+@result_tool(mcp, annotations=tool_annotations("run_lua"))
 async def run_lua(ctx: Context, code: str, context: str = "gamecore") -> str:
     """Run arbitrary Lua code in the game. Advanced escape hatch — prefer built-in tools.
 
@@ -2416,7 +2408,7 @@ async def run_lua(ctx: Context, code: str, context: str = "gamecore") -> str:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@result_tool(mcp, annotations=tool_annotations("save_game"))
 async def save_game(ctx: Context, save_name: str) -> str:
     """Save a confirmed active single-player turn under a local filename.
 
@@ -2433,7 +2425,7 @@ async def save_game(ctx: Context, save_name: str) -> str:
     )
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@result_tool(mcp, annotations=tool_annotations("list_saves"))
 async def list_saves(ctx: Context) -> str:
     """List available save files (normal, autosave).
 
@@ -2444,7 +2436,7 @@ async def list_saves(ctx: Context) -> str:
     return await _logged(ctx, "list_saves", {}, gs.list_saves)
 
 
-@mcp.tool(annotations={"destructiveHint": True})
+@result_tool(mcp, annotations=tool_annotations("load_save"))
 async def load_save(ctx: Context, save_index: int) -> str:
     """Load a confirmed checkpoint from the latest displayed listing, once.
 
@@ -2455,7 +2447,7 @@ async def load_save(ctx: Context, save_index: int) -> str:
     return await _logged(ctx, "load_save", {"save_index": save_index}, lambda: gs.load_save(save_index))
 
 
-@mcp.tool(annotations={"destructiveHint": True})
+@result_tool(mcp, annotations=tool_annotations("load_game_save"))
 async def load_game_save(ctx: Context, save_name: str,
                          source_run_id: Annotated[str, Field(pattern=r'^[0-9a-f]{32}$')] | None = None,
                          expected_sha256: Annotated[str, Field(pattern=r'^[0-9a-f]{64}$')] | None = None) -> str:
@@ -2474,7 +2466,7 @@ async def load_game_save(ctx: Context, save_name: str,
                          lambda: _get_game(ctx).load_game_save(save_name, **options))
 
 
-@mcp.tool(annotations={"destructiveHint": True})
+@result_tool(mcp, annotations=tool_annotations("reload_game_save"))
 async def reload_game_save(ctx: Context, save_name: str) -> str:
     """Normally swap to a verified named checkpoint through the main menu.
 
@@ -2493,25 +2485,25 @@ async def reload_game_save(ctx: Context, save_name: str) -> str:
 # process itself. Hardcoded to Civ 6 only (no arbitrary system commands).
 
 
-@mcp.tool(annotations={"destructiveHint": True})
+@result_tool(mcp, annotations=tool_annotations("kill_game"))
 async def kill_game(ctx: Context) -> str:
     """Explicitly stop Civ6 and release its FireTuner session."""
     return await _logged(ctx, "kill_game", {}, _get_game(ctx).kill_game)
 
 
-@mcp.tool(annotations={"destructiveHint": True})
+@result_tool(mcp, annotations=tool_annotations("return_to_main_menu"))
 async def return_to_main_menu(ctx: Context) -> str:
     """Return to the native main menu without loading or saving a game."""
     return await _logged(ctx, "return_to_main_menu", {}, _get_game(ctx).return_to_main_menu)
 
 
-@mcp.tool(annotations={"destructiveHint": True})
+@result_tool(mcp, annotations=tool_annotations("launch_game"))
 async def launch_game(ctx: Context) -> str:
     """Launch Civ6 through Steam; load a save explicitly from the main menu."""
     return await _logged(ctx, "launch_game", {}, _get_game(ctx).launch_game)
 
 
-@mcp.tool(annotations={"destructiveHint": True})
+@result_tool(mcp, annotations=tool_annotations("load_save_from_menu"))
 async def load_save_from_menu(ctx: Context, save_name: str | None = None) -> str:
     """Load an explicitly named confirmed checkpoint through native FrontEnd APIs."""
     name = save_name
@@ -2520,7 +2512,7 @@ async def load_save_from_menu(ctx: Context, save_name: str | None = None) -> str
     return await _logged(ctx, "load_save_from_menu", {"save_name": name}, lambda: _get_game(ctx).load_game_save(name))
 
 
-@mcp.tool(annotations={"destructiveHint": True})
+@result_tool(mcp, annotations=tool_annotations("restart_and_load"))
 async def restart_and_load(ctx: Context, save_name: str | None = None) -> str:
     """Explicit full-process fault recovery: stop Civ6, launch, then load once.
 

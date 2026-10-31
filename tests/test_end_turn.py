@@ -421,6 +421,64 @@ def test_unconfirmed_action_prevents_turn_submission(clock):
     assert not gs.conn.requests
 
 
+@pytest.mark.parametrize("case,status,marker,error", [
+    ("action_blocked", "not_submitted", "ERR:OUTCOME_UNKNOWN", True),
+    ("not_ready", "not_submitted", "Cannot end turn", False),
+    ("waiting", "pending", "WAITING:", False),
+    ("diplomacy", "pending", "Turn paused", False),
+    ("popup", "pending", "information popup visible", False),
+    ("lost_response", "unknown", "End-turn result unknown", False),
+    ("world_changed", "unknown", "ERR:OUTCOME_UNKNOWN", True),
+])
+def test_turn_owner_preserves_cli_error_semantics_with_explicit_outcomes(clock, case, status, marker, error):
+    """Known pending interactions and legacy non-error unknowns stay distinct."""
+    from mcp.server.fastmcp import FastMCP
+    from mcp.types import CallToolResult
+    from civ_mcp.results import result_tool, result_error
+
+    gs = FakeGameState()
+    if case == "action_blocked":
+        gs.pending_action_summary = "move unit 123"
+    elif case == "not_ready":
+        gs.conn.ready = False
+    elif case in {"waiting", "diplomacy", "popup"}:
+        gs.conn.advance = False
+        if case == "diplomacy":
+            gs.conn.diplomacy_probe = ["DIPLOMACY|2"]
+        elif case == "popup":
+            gs.conn.information_popups = ["INFORMATION_POPUPS|VISIBLE|HistoricMoments", "INFORMATION_POPUPS|DONE"]
+    else:
+        gs.conn.send_error = ConnectionError("reply lost")
+        if case == "world_changed":
+            assert "result unknown" in play(gs)
+            gs.conn.send_error = None
+            gs.conn.seed += 1
+
+    mcp = FastMCP("turn-outcome")
+
+    @result_tool(mcp)
+    async def advance() -> str:
+        return await gs.end_turn()
+
+    result = asyncio.run(mcp.call_tool("advance", {}))
+    assert marker in result.content[0].text
+    outcome = result.structuredContent["outcome"]
+    assert outcome["status"] == status
+    assert outcome["data"]["pending"] is gs.turn_pending
+    current = result_error("end_turn", result)
+    legacy = result_error("end_turn", CallToolResult(content=result.content))
+    assert (current is not None) is (legacy is not None) is error
+    if error:
+        assert current["code"] == legacy["code"] == "OUTCOME_UNKNOWN"
+    if case == "action_blocked":
+        assert outcome["data"]["blocked_by"] == "action"
+        assert not gs.turn_pending and not gs.conn.requests
+    elif case == "not_ready":
+        assert not gs.turn_pending and not gs.conn.requests
+    else:
+        assert gs.turn_pending and len(gs.conn.requests) == 1
+
+
 def test_confirmed_pending_action_allows_turn_submission(clock):
     gs = FakeGameState()
     gs.pending_action_summary = "move unit 123"

@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 import civ_mcp.narrate as nr
 from civ_mcp import lua as lq
 from civ_mcp.connection import GameConnection, LuaError
+from civ_mcp.results import ResultText
 from civ_mcp.game_lifecycle import visible_information_popups
 from civ_mcp.lua.congress import build_congress_phase_query, parse_congress_phase
 from civ_mcp.lua.turn_readiness import build_turn_readiness_query
@@ -234,7 +235,7 @@ async def read_turn_state(gs: TurnContext) -> tuple[int | None, bool | None]:
     return status.observed_turn, status.ready
 
 
-def _game_over_result(gameover: lq.GameOverStatus) -> str:
+def _game_over_message(gameover: lq.GameOverStatus) -> str:
     victory = gameover.victory_type.replace("VICTORY_", "").replace("_", " ").title()
     if gameover.is_defeat:
         return (
@@ -242,6 +243,12 @@ def _game_over_result(gameover: lq.GameOverStatus) -> str:
             f"{gameover.winner_name} won a {victory} victory."
         )
     return f"GAME OVER — VICTORY! You won a {victory} victory!"
+
+
+def _game_over_result(gameover: lq.GameOverStatus) -> str:
+    return ResultText(_game_over_message(gameover), kind="action", status="confirmed",
+                      data={"terminal": True, "is_defeat": gameover.is_defeat,
+                            "victory_type": gameover.victory_type})
 
 
 async def _check_mid_turn_diplomacy(
@@ -471,9 +478,21 @@ class TurnProgress:
         self._scope_invalid = True
 
     def _scope_error(self) -> str:
-        return ("ERR:OUTCOME_UNKNOWN|Pending end-turn belongs to a changed game. "
+        return self._outcome("ERR:OUTCOME_UNKNOWN|Pending end-turn belongs to a changed game. "
                 "New-world readiness cannot confirm the original request; "
-                "use explicit recovery. No request was resent.")
+                "use explicit recovery. No request was resent.",
+                status="unknown", code="OUTCOME_UNKNOWN")
+
+    def _outcome(self, message: str, *, status: str, code: str | None = None,
+                 **facts) -> ResultText:
+        """The returning branch declares its outcome; pending alone is insufficient.
+
+        Another owner may block an unsubmitted turn, while our own pending can
+        simply be waiting for players or an explicit interaction. Neither prose
+        nor a single pending flag can distinguish these cases.
+        """
+        return ResultText(message, kind="action", status=status, code=code,
+                          data={"pending": self.pending, "from_turn": self.from_turn, **facts})
 
     async def _report_advance(self, gs: TurnContext, before: int, after: int) -> str:
         if self._scope_invalid:
@@ -483,9 +502,11 @@ class TurnProgress:
         previous = self.baseline
         self.reset()
         try:
-            return await gs.report_turn_advance(before, after, previous)
+            message = await gs.report_turn_advance(before, after, previous)
         except (OSError, TimeoutError, LuaError, ValueError):
-            return f"Turn {before} -> {after}\nPost-turn report unavailable; read game state to confirm changes."
+            message = f"Turn {before} -> {after}\nPost-turn report unavailable; read game state to confirm changes."
+        return ResultText(message, kind="action", status="confirmed",
+                          data={"from_turn": before, "to_turn": after})
 
     async def execute(self, gs: TurnContext) -> str:
         """Send at most one request and preserve uncertainty until advancement is seen."""
@@ -495,9 +516,11 @@ class TurnProgress:
         if gs.pending_action_summary:
             confirmation = await gs.confirm_pending_action()
             if gs.pending_action_summary:
-                return (
+                return self._outcome(
                     f"ERR:OUTCOME_UNKNOWN|Cannot end turn while {gs.pending_action_summary}. "
-                    f"{confirmation} Read the affected unit/city before continuing."
+                    f"{confirmation} Read the affected unit/city before continuing.",
+                    status="pending" if self.pending else "not_submitted",
+                    code="OUTCOME_UNKNOWN", blocked_by="action",
                 )
         if not self.pending:
             try:
@@ -508,14 +531,14 @@ class TurnProgress:
                 initial_status = await read_turn_status(gs)
                 turn_before, ready = initial_status.observed_turn, initial_status.ready
                 if initial_status.world is None:
-                    return "Cannot end turn: current turn is unknown or native world identity unavailable. Read game state before retrying."
+                    return self._outcome("Cannot end turn: current turn is unknown or native world identity unavailable. Read game state before retrying.", status="not_submitted")
                 if turn_before is None:
-                    return "Cannot end turn: current turn is unknown. Read game state before retrying."
+                    return self._outcome("Cannot end turn: current turn is unknown. Read game state before retrying.", status="not_submitted")
                 if ready is not True:
-                    return "Cannot end turn: local player is not ready or readiness is unknown. Read game state before retrying."
+                    return self._outcome("Cannot end turn: local player is not ready or readiness is unknown. Read game state before retrying.", status="not_submitted")
                 blocked = await _check_blockers(gs, turn_before)
                 if blocked:
-                    return blocked
+                    return self._outcome(blocked, status="not_submitted")
                 # A missing snapshot limits the report, but must not hide whether
                 # the request was sent. Store the baseline before writing it.
                 try:
@@ -527,10 +550,10 @@ class TurnProgress:
                 current_status = await read_turn_status(gs)
                 current, ready = current_status.observed_turn, current_status.ready
                 if current_status.world != initial_status.world:
-                    return "Cannot end turn: native world identity changed or is unknown; no request was sent."
+                    return self._outcome("Cannot end turn: native world identity changed or is unknown; no request was sent.", status="not_submitted")
                 self.world = initial_status.world
                 if current is None:
-                    return "Cannot end turn: current turn cannot be confirmed. Read game state before retrying."
+                    return self._outcome("Cannot end turn: current turn cannot be confirmed. Read game state before retrying.", status="not_submitted")
                 if current > turn_before:
                     # An external UI request advanced the game during inspection.
                     # Confirm its readiness below without sending another request.
@@ -538,11 +561,11 @@ class TurnProgress:
                     self.from_turn = turn_before
                     self.submitted_at = None  # External submit time was not observed.
                 elif current != turn_before:
-                    return "Cannot end turn: game turn changed during inspection. Read game state before retrying."
+                    return self._outcome("Cannot end turn: game turn changed during inspection. Read game state before retrying.", status="not_submitted")
                 elif ready is not True:
-                    return "Cannot end turn: local player is not ready or readiness is unknown. Read game state before retrying."
+                    return self._outcome("Cannot end turn: local player is not ready or readiness is unknown. Read game state before retrying.", status="not_submitted")
             except (OSError, TimeoutError, LuaError, ValueError) as exc:
-                return f"Cannot confirm end-turn prerequisites: {exc}. Read game state before retrying."
+                return self._outcome(f"Cannot confirm end-turn prerequisites: {exc}. Read game state before retrying.", status="not_submitted")
 
             if not self.pending:
                 self.pending = True
@@ -557,26 +580,26 @@ class TurnProgress:
                         if reason != "ALREADY_SENT":
                             self.reset()
                             details = [row.split("|", 1)[1] for row in receipt if row.startswith("END_TURN_DETAIL|")]
-                            return f"Cannot end turn: NOT_SUBMITTED ({reason}); no end-turn request was sent. Read get_turn_status." + "".join("\n" + detail for detail in details)
+                            return self._outcome(f"Cannot end turn: NOT_SUBMITTED ({reason}); no end-turn request was sent. Read get_turn_status." + "".join("\n" + detail for detail in details), status="not_submitted")
                         # The native UI has already sent complete. Preserve a
                         # monitor; its original submission time is unknown.
                         self.submitted_at = None
                     elif receipt != ["END_TURN|SUBMITTED"]:
-                        return (f"End-turn result unknown (from turn {turn_before}): no authoritative submission receipt. "
-                                "The pending request is preserved; call end_turn only to confirm it.")
+                        return (self._outcome(f"End-turn result unknown (from turn {turn_before}): no authoritative submission receipt. "
+                                "The pending request is preserved; call end_turn only to confirm it.", status="unknown"))
                 except (OSError, TimeoutError, LuaError) as exc:
                     return (
-                        f"End-turn result unknown (from turn {turn_before}): {exc}. "
+                        self._outcome(f"End-turn result unknown (from turn {turn_before}): {exc}. "
                         "The request may have executed. Read game state or call end_turn "
-                        "to confirm; it will not be sent again. Use explicit recovery if needed."
+                        "to confirm; it will not be sent again. Use explicit recovery if needed.", status="unknown")
                     )
         else:
             turn_before = self.from_turn
             if turn_before is None:
-                return "End-turn result unknown: request has no baseline. Read game state or use explicit recovery; no request was resent."
+                return self._outcome("End-turn result unknown: request has no baseline. Read game state or use explicit recovery; no request was resent.", status="unknown")
 
         if self.world is None:
-            return "ERR:OUTCOME_UNKNOWN|Pending end-turn has no original world identity; use explicit recovery. No request was resent."
+            return self._outcome("ERR:OUTCOME_UNKNOWN|Pending end-turn has no original world identity; use explicit recovery. No request was resent.", status="unknown", code="OUTCOME_UNKNOWN")
 
         started = time.monotonic()
         deadline = started + END_TURN_TIMEOUT_SECONDS
@@ -629,9 +652,9 @@ class TurnProgress:
                         break
                     elif turn_after < turn_before:
                         return (
-                            f"End-turn result unknown: turn changed from {turn_before} "
+                            self._outcome(f"End-turn result unknown: turn changed from {turn_before} "
                             f"to {turn_after}. Read game state or use explicit recovery; "
-                            "the pending request was not resent."
+                            "the pending request was not resent.", status="unknown")
                         )
                     if (turn_after == turn_before and status.phase == "LOCAL_ACTION_REQUIRED"
                             and status.has_sent_turn_complete is False):
@@ -645,23 +668,25 @@ class TurnProgress:
                                         and evidence[0][:4] == expected and evidence[0][4].isdigit()):
                                     unit = evidence[0][4]
                                     self.reset()
-                                    return (f"REOPENED_LOCAL|Turn {turn_before} remains active; no turn advanced. "
+                                    return ResultText(f"REOPENED_LOCAL|Turn {turn_before} remains active; no turn advanced. "
                                             f"ENDTURN_BLOCKING_UNITS: unit {unit} is ready. "
-                                            "This attempt is confirmed and retired; choose a unit action, then request end_turn separately.")
+                                            "This attempt is confirmed and retired; choose a unit action, then request end_turn separately.",
+                                            kind="action", status="confirmed", data={"reopened": True,
+                                                "from_turn": turn_before, "to_turn": turn_before})
                             except (OSError, TimeoutError, LuaError, ValueError):
                                 self.read_failures += 1
-                        return ("Turn paused — local action required while native turn completion remains unconfirmed. "
+                        return (self._outcome("Turn paused — local action required while native turn completion remains unconfirmed. "
                                 + self.describe(status)
-                                + "\nThe existing request is preserved and was not resent. Inspect get_turn_status; use explicit recovery if completion cannot be confirmed.")
+                                + "\nThe existing request is preserved and was not resent. Inspect get_turn_status; use explicit recovery if completion cannot be confirmed.", status="pending"))
                     if time.monotonic() >= next_congress_probe:
                         next_congress_probe = time.monotonic() + CONGRESS_PROBE_SECONDS
                         try:
                             congress = await _check_congress_phase(gs, pending=True)
                             if congress:
-                                return congress
+                                return self._outcome(congress, status="pending")
                         except ValueError:
-                            return ("End-turn result unknown: World Congress phase unavailable. "
-                                    "Use get_world_congress; the original request is preserved and was not resent.")
+                            return (self._outcome("End-turn result unknown: World Congress phase unavailable. "
+                                    "Use get_world_congress; the original request is preserved and was not resent.", status="unknown"))
                         except (OSError, TimeoutError, LuaError):
                             reads_failed = True
                             self.read_failures += 1
@@ -672,7 +697,7 @@ class TurnProgress:
                         try:
                             message, _ = await _check_mid_turn_diplomacy(gs, "", turn_before)
                             if message:
-                                return message
+                                return self._outcome(message, status="pending")
                         except (OSError, TimeoutError, LuaError, ValueError):
                             reads_failed = True
                             self.read_failures += 1
@@ -686,12 +711,12 @@ class TurnProgress:
                                 if not diplomacy_checked:
                                     message, _ = await _check_mid_turn_diplomacy(gs, "", turn_before)
                                     if message:
-                                        return message
+                                        return self._outcome(message, status="pending")
                                 return (
-                                    f"Turn paused — information popup visible: {', '.join(popups)} "
+                                    self._outcome(f"Turn paused — information popup visible: {', '.join(popups)} "
                                     f"(requested from turn {turn_before}, last observed turn {turn_after}). "
                                     "Use dismiss_popup to close it explicitly, then call end_turn "
-                                    "to confirm the existing request; it will not be sent again."
+                                    "to confirm the existing request; it will not be sent again.", status="pending")
                                 )
                             if popups is None:
                                 reads_failed = True
@@ -710,8 +735,8 @@ class TurnProgress:
             return await self._report_advance(gs, turn_before, turn_after)
         detail = " Some game queries failed; the current turn cannot be reliably confirmed." if reads_failed else ""
         return (
-            f"WAITING: end-turn result unconfirmed after {END_TURN_TIMEOUT_SECONDS:g}s "
+            self._outcome(f"WAITING: end-turn result unconfirmed after {END_TURN_TIMEOUT_SECONDS:g}s "
             f"(requested from turn {turn_before}, last observed turn {turn_after})."
             f"{detail} {self.describe(self.last_status or TurnStatus())}. Read get_turn_status, inspect diplomacy/popups, or use explicit recovery. "
-            "The pending request is preserved; another end_turn call will only confirm it."
+            "The pending request is preserved; another end_turn call will only confirm it.", status="pending")
         )

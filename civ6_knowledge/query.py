@@ -5,41 +5,13 @@ import json
 from pathlib import Path
 import sys
 
-from build import TOPIC_NAMES, VERSION_KEYS, check_snapshot, coverage, digest, generate, support_files
+from build import coverage, digest, generate, support_files
+from reader import TOPIC_NAMES, VERSION_KEYS, VerifiedSnapshot
 from brief import compact
 
 
 def read(path):
     return json.loads(path.read_text(encoding='utf-8'))
-
-
-def load(root):
-    manifest = read(root / 'manifest.json')
-    if not isinstance(manifest, dict):
-        raise ValueError('manifest must be an object')
-    snapshot_path = root / 'sources/snapshot.json'
-    if manifest.get('schema_version') != 1 or manifest.get('snapshot') != 'sources/snapshot.json':
-        raise ValueError('unsupported manifest')
-    if digest(snapshot_path.read_bytes()) != manifest['snapshot_sha256']:
-        raise ValueError('snapshot fingerprint mismatch')
-    cards = {}
-    documents = {}
-    for topic in manifest['counts']:
-        if topic not in TOPIC_NAMES:
-            raise ValueError('unknown manifest topic: ' + topic)
-        relative = 'rules/' + topic + '.json'
-        data = (root / relative).read_bytes()
-        if digest(data) != manifest['files'][relative]:
-            raise ValueError('rule fingerprint mismatch: ' + relative)
-        doc = json.loads(data)
-        documents[topic] = doc
-        for card in doc['cards']:
-            if card['id'] in cards:
-                raise ValueError('duplicate card ID: ' + card['id'])
-            cards[card['id']] = card
-    snapshot = read(snapshot_path)
-    check_snapshot(snapshot)
-    return manifest, snapshot, documents, cards
 
 
 def summary(card):
@@ -59,7 +31,13 @@ def compare(profile, expected):
 
 
 def execute(root, args):
-    manifest, snapshot, documents, cards = load(root)
+    with VerifiedSnapshot(root) as source:
+        return _execute(source, args)
+
+
+def _execute(source, args):
+    root = source.root
+    manifest, snapshot, documents, cards = source.manifest, source.snapshot, source.documents, source.cards
     if args.profile:
         compare(manifest['profile'], read(args.profile))
     if args.command == 'check-profile':

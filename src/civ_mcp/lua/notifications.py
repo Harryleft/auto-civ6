@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import uuid
 
+from civ_mcp.observation import Observation
 from civ_mcp.lua._helpers import SENTINEL
 from civ_mcp.lua.models import GameNotification
 from civ_mcp.lua.turn_readiness import LUA_TURN_READINESS
@@ -320,6 +321,54 @@ def parse_end_turn_blocking(lines: list[str]) -> list[tuple[str, str]]:
             msg = parts[2] if len(parts) > 2 else ""
             blockers.append((blocking_type, msg))
     return blockers
+
+
+def observe_notifications_response(lines: list[str]) -> Observation[list[GameNotification]]:
+    """Certify the emitted rows, not merely the presence of a TOTAL prefix.
+
+    Native total includes dismissed entries, so only emitted must equal the
+    parsed active rows. A bad row keeps valid neighbours available but unknown.
+    """
+    value, totals, problems = [], [], []
+    for row in lines:
+        parts = row.split("|")
+        try:
+            if parts[0] == "TOTAL":
+                if len(parts) != 3 or not all(part.isdecimal() for part in parts[1:]):
+                    raise ValueError("invalid notification counts")
+                total, emitted = map(int, parts[1:])
+                if emitted > total:
+                    raise ValueError("emitted notifications exceed total")
+                totals.append((total, emitted))
+            elif parts[0] == "NOTIF" and len(parts) in (5, 6) and parts[1]:
+                parsed = parse_notifications_response([row])
+                if len(parsed) != 1:
+                    raise ValueError("unparsed notification")
+                value.extend(parsed)
+            else:
+                raise ValueError("malformed notification row")
+        except (ValueError, TypeError, IndexError) as exc:
+            problems.append(f"Notification completeness unknown: {exc}")
+    if len(totals) != 1 or totals[0][1] != len(value):
+        problems.append("Notification completeness unknown: missing, duplicate or mismatched counts")
+    return Observation(value, tuple(problems))
+
+
+def observe_end_turn_blocking(lines: list[str]) -> Observation[list[tuple[str, str]]]:
+    """NONE is exclusive; malformed or conflicting rows cannot clear blockers."""
+    if lines == ["NONE"]:
+        return Observation([])
+    value, problems, seen = [], [], set()
+    for row in lines:
+        parts = row.split("|")
+        if len(parts) != 3 or parts[0] != "BLOCKING" or not parts[1] or parts[1] in seen:
+            problems.append("Blocker completeness unknown: malformed, duplicate or conflicting row")
+            continue
+        seen.add(parts[1])
+        value.append((parts[1], parts[2]))
+    if not lines:
+        problems.append("Blocker completeness unknown")
+    return Observation(value, tuple(problems))
 
 
 NOTIFICATION_TOOL_MAP: dict[str, str] = {

@@ -11,9 +11,12 @@ import re
 import time
 from dataclasses import dataclass, field
 from typing import Callable
+from collections.abc import Awaitable, Mapping
+from types import MappingProxyType
 
 from civ_mcp import lua as lq
 from civ_mcp.connection import GameConnection, LuaError
+from civ_mcp.results import ResultText
 
 
 def _move_observation_suffix(meta: dict[str, str]) -> str:
@@ -46,6 +49,60 @@ class _ActionEvidence:
     guidance: str
 
 
+@dataclass(frozen=True)
+class ActionIntent:
+    """Facts needed to identify reentry before preparing another native action."""
+    kind: str
+    entity: tuple[str, int] | None
+    intent: tuple | None = None
+    details: Mapping = field(default_factory=dict)
+
+    def __post_init__(self):
+        object.__setattr__(self, "details", MappingProxyType(dict(self.details)))
+
+
+@dataclass(frozen=True)
+class ActionContinuation:
+    """An explicit owner's unstarted native stage; never used by confirm()."""
+    ready: Callable[[list[str]], bool]
+    code: str
+    steps: int
+    label: str
+
+
+@dataclass(frozen=True)
+class ActionPlan:
+    """Domain observations and evidence, without mutable lifecycle state.
+
+    Scope is captured by execute and bound by this owner. Domains supply only
+    their native observation/submission protocols; they cannot initialize or
+    mutate pending observations, confirmation or invalidation flags.
+    """
+    kind: str
+    entity: tuple[str, int]
+    query: str
+    context: str = "read"
+    success: str = ""
+    details: Mapping = field(default_factory=dict)
+    intent: tuple | None = None
+    evidence: _ActionEvidence | None = None
+    submit_context: str = "write"
+    gamecore_query: str | None = None
+    continuation: ActionContinuation | None = None
+
+    def __post_init__(self):
+        object.__setattr__(self, "details", MappingProxyType(dict(self.details)))
+
+
+@dataclass(frozen=True)
+class PendingActionView:
+    kind: str
+    entity: tuple[str, int]
+    owner: int | None
+    intent: tuple | None
+    acknowledged: bool
+
+
 @dataclass
 class _PendingAction:
     kind: str
@@ -67,6 +124,7 @@ class _PendingAction:
     # Inquisition's authoritative flag lives in GameCore while its exact
     # command/removal receipt lives in InGame. None keeps the ordinary path.
     gamecore_query: str | None = None
+    continuation: ActionContinuation | None = None
 
 
 @dataclass(frozen=True)
@@ -166,10 +224,103 @@ def _scoped_action_result(lines: list[str]) -> str:
     return _action_result(lines)
 
 
+def _native_refusal_code(lines: list[str]) -> str | None:
+    """Preserve the native machine code; presentation is never parsed here."""
+    for line in lines:
+        if line.startswith("OK:"):
+            return None
+        if line.startswith("ERR:"):
+            match = re.match(r"^ERR:(?:ERR:)?([A-Z][A-Z0-9_]*)\b", line)
+            return match[1] if match else "TOOL_REPORTED_ERROR"
+    return None
+
+
 class ActionLifecycle:
     def __init__(self, connection: GameConnection):
         self.conn = connection
         self.pending: _PendingAction | None = None
+
+    @property
+    def view(self) -> PendingActionView | None:
+        pending = self.pending
+        return (PendingActionView(pending.kind, pending.entity, pending.owner, pending.intent,
+                                  bool(pending.success)) if pending is not None else None)
+
+    @property
+    def tool(self) -> str | None:
+        pending = self.pending
+        if pending is None:
+            return None
+        if pending.evidence is not None:
+            return pending.evidence.tool
+        if self.entrypoint == "spy_escape":
+            return "spy_action"
+        return "unit_action" if pending.entity[0] == "unit" else self.entrypoint
+
+    async def execute(
+        self, intent: ActionIntent,
+        prepare: Callable[[_ActionScope], Awaitable[tuple[ActionPlan, str] | str]],
+        *, gate: Callable[[], Awaitable[str | None]],
+        known_identity: Callable[[], tuple[str, int] | None], timeout: float, interval: float,
+        preflight: Callable[[], Awaitable[str | None]] | None = None,
+        mismatch: Callable[[PendingActionView], str | None] | None = None,
+        present: Callable[[str], Awaitable[str]] | None = None,
+        scope: _ActionScope | None = None,
+    ) -> str:
+        """Resume the original intent or prepare and submit one new request.
+
+        Domain preflight runs only after reentry and dependency checks. The
+        native scope guard and submit's second check remain necessary because
+        preparation may await and another caller can arrive meanwhile.
+        """
+        if self.matches(intent.kind, intent.entity, intent=intent.intent, **intent.details):
+            pending = self.pending
+            result = await self.confirm(wait=pending.continuation is None, timeout=timeout, interval=interval)
+            return await self._continue(pending, result, timeout=timeout, interval=interval)
+        if mismatch is not None and self.view is not None:
+            blocked = mismatch(self.view)
+            if blocked is not None:
+                return blocked
+        blocked = await gate()
+        if blocked is not None:
+            return blocked
+        if preflight is not None:
+            blocked = await preflight()
+            if blocked is not None:
+                return blocked
+        if scope is None:
+            scope = await self.prepare_scope(known_identity())
+        if isinstance(scope, str):
+            return scope
+        prepared = await prepare(scope)
+        if isinstance(prepared, str):
+            return prepared
+        plan, code = prepared
+        pending = _PendingAction(
+            plan.kind, plan.entity, plan.query, context=plan.context, success=plan.success,
+            identity=scope.identity, turn=scope.turn, owner=scope.owner, details=dict(plan.details),
+            intent=plan.intent, evidence=plan.evidence, submit_context=plan.submit_context,
+            gamecore_query=plan.gamecore_query, continuation=plan.continuation,
+        )
+        result = await self.submit(pending, scope, code, timeout=timeout, interval=interval)
+        result = await self._continue(pending, result, timeout=timeout, interval=interval)
+        return await present(result) if present is not None else result
+
+    async def _continue(self, pending: _PendingAction, result: str, *, timeout: float, interval: float) -> str:
+        continuation = pending.continuation
+        if continuation is None:
+            return result
+        for _ in range(continuation.steps):
+            if self.pending is not pending or pending.details.get("scope_invalid"):
+                return result
+            if not continuation.ready(pending.observed):
+                return result
+            try:
+                await self.conn.execute_write(continuation.code)
+            except (OSError, TimeoutError, LuaError) as exc:
+                return self.unknown(f"{continuation.label} continuation acknowledgement unavailable: {exc}")
+            result = await self.confirm(timeout=timeout, interval=interval)
+        return result
 
     def matches(self, kind: str, entity: tuple[str, int], *, intent: tuple | None = None, **details) -> bool:
         pending = self.pending
@@ -222,7 +373,7 @@ class ActionLifecycle:
                 # data and may itself contain the string OUTCOME_UNKNOWN.
                 if self.pending is pending:
                     self.pending = None
-                return result
+                return ResultText(result, kind="action", status="not_submitted", code=_native_refusal_code(lines))
             result = "Error: OUTCOME_UNKNOWN|Action acknowledgement unavailable"
         if result.startswith(accepted):
             pending.success = result
@@ -246,7 +397,8 @@ class ActionLifecycle:
                 pending.kind == "production" and any("MAYBE:" in line for line in lines)):
             if self.pending is pending:
                 self.pending = None
-            return result
+            return ResultText(result, kind="action", status="not_submitted",
+                              code=_native_refusal_code(lines))
         elif pending.kind in ("attack", "found"):
             reason = "submission acknowledgement missing"
             if pending.kind == "found":
@@ -339,12 +491,15 @@ class ActionLifecycle:
     def unknown(self, reason: str = "confirmation deadline reached") -> str:
         pending = self.pending
         if pending is None:
-            return "CONFIRMED|No pending action"
+            return ResultText("CONFIRMED|No pending action", kind="action", status="confirmed")
         observed = "; ".join(pending.observed) or "no confirmed observation"
         guidance = (pending.evidence.guidance if pending.evidence is not None
                     else "Use get_units/get_cities to confirm; do not resubmit. ")
-        return (f"ERR:OUTCOME_UNKNOWN|{self.summary}|{reason}|observed:{observed}. "
-                f"{guidance}Explicit recovery is available if confirmation remains impossible.")
+        return ResultText(f"ERR:OUTCOME_UNKNOWN|{self.summary}|{reason}|observed:{observed}. "
+                          f"{guidance}Explicit recovery is available if confirmation remains impossible.",
+                          kind="action", status="unknown", code="OUTCOME_UNKNOWN",
+                          data={"action": pending.kind, "entity": list(pending.entity),
+                                "acknowledged": bool(pending.success)})
 
     async def confirm(self, *, wait: bool = True, timeout: float = 5.0, interval: float = 0.15) -> str:
         """Only observe a previously submitted action; never replay its mutation.
@@ -354,7 +509,7 @@ class ActionLifecycle:
         """
         pending = self.pending
         if pending is None:
-            return "CONFIRMED|No pending action"
+            return ResultText("CONFIRMED|No pending action", kind="action", status="confirmed")
         return await self._confirm(pending, wait=wait, timeout=timeout, interval=interval)
 
     async def _confirm(self, pending: _PendingAction, *, wait: bool, timeout: float, interval: float) -> str:
@@ -383,6 +538,8 @@ class ActionLifecycle:
                         pending.observed += core_rows
                     confirmed = self._confirmed_action(pending)
                     if confirmed is not None:
+                        confirmed = ResultText(confirmed, kind="action", status="confirmed",
+                                               data={"action": pending.kind, "entity": list(pending.entity)})
                         pending.confirmed = confirmed
                         if self.pending is pending:
                             self.pending = None

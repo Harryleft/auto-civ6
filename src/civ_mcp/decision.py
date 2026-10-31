@@ -11,25 +11,30 @@ from civ_mcp import lua as lq, narrate as nr
 from civ_mcp.connection import LuaError
 from civ_mcp.lua.notifications import LUA_TURN_WORLD
 from civ_mcp.snapshot import pending_facts
+from civ_mcp.observation import observed
+from civ_mcp.lua.units import observe_units_response, observe_threat_scan_response
+from civ_mcp.lua.notifications import observe_notifications_response, observe_end_turn_blocking
+from civ_mcp.lua.overview import observe_gameover_response
+from civ_mcp.lua.victory import observe_victory_progress_response
 
 OPTIONAL_SECTIONS = ("research", "diplomacy", "trade")
 
 
 def readers(include=(), city_ids=()):
     result = {
-        "overview": (lq.build_overview_query(), lq.parse_overview_response, nr.narrate_overview),
-        "units": (lq.build_units_query(), lq.parse_units_response, nr.narrate_units),
-        "cities": (lq.build_cities_query(), lq.parse_cities_response, lambda v: nr.narrate_cities(*v)),
-        "threats": (lq.build_threat_scan_query(), lq.parse_threat_scan_response, None),
-        "victory": (lq.build_victory_progress_query(), lq.parse_victory_progress_response, nr.narrate_victory_progress),
-        "notifications": (lq.build_notifications_query(), lq.parse_notifications_response, nr.narrate_notifications),
-        "blockers": (lq.build_end_turn_blocking_query(), lq.parse_end_turn_blocking, None),
-        "outcome": (lq.build_gameover_check(), lq.parse_gameover_response, None),
+        "overview": (lq.build_overview_query(), observed(lq.parse_overview_response), nr.narrate_overview),
+        "units": (lq.build_units_query(), observe_units_response, nr.narrate_units),
+        "cities": (lq.build_cities_query(), observed(lq.parse_cities_response), lambda v: nr.narrate_cities(*v)),
+        "threats": (lq.build_threat_scan_query(), observe_threat_scan_response, None),
+        "victory": (lq.build_victory_progress_query(), observe_victory_progress_response, nr.narrate_victory_progress),
+        "notifications": (lq.build_notifications_query(), observe_notifications_response, nr.narrate_notifications),
+        "blockers": (lq.build_end_turn_blocking_query(), observe_end_turn_blocking, None),
+        "outcome": (lq.build_gameover_check(), observe_gameover_response, None),
     }
     optional = {
-        "research": (lq.build_tech_civics_query, lq.parse_tech_civics_response, nr.narrate_tech_civics),
-        "diplomacy": (lq.build_diplomacy_query, lq.parse_diplomacy_response, nr.narrate_diplomacy),
-        "trade": (lq.build_trade_routes_query, lq.parse_trade_routes_response, nr.narrate_trade_routes),
+        "research": (lq.build_tech_civics_query, observed(lq.parse_tech_civics_response), nr.narrate_tech_civics),
+        "diplomacy": (lq.build_diplomacy_query, observed(lq.parse_diplomacy_response), nr.narrate_diplomacy),
+        "trade": (lq.build_trade_routes_query, observed(lq.parse_trade_routes_response), nr.narrate_trade_routes),
     }
     for key in dict.fromkeys(include):
         if key not in optional:
@@ -40,7 +45,7 @@ def readers(include=(), city_ids=()):
         if type(city_id) is not int or city_id < 0:
             raise ValueError("Production city IDs must be nonnegative native integers")
         result[f"production_{city_id}"] = (lq.build_city_production_query(city_id),
-                                          lq.parse_city_production_response, nr.narrate_city_production)
+                                          observed(lq.parse_city_production_response), nr.narrate_city_production)
     return result
 
 
@@ -114,22 +119,7 @@ async def read_context(game, include=(), city_ids=(), view="brief"):
             error = next((r for r in data if r.startswith(("DECISION_ERROR|", "ERR:", "Error:"))), None)
             if error:
                 raise ValueError(error)
-            value = parse(data)
-            if name == "units" and len(value) != len(data):
-                raise ValueError("Unit rows could not all be parsed")
-            if name == "notifications" and not any(r.startswith("TOTAL|") for r in data):
-                raise ValueError("Notification completeness unknown")
-            if name == "threats" and not (data == ["NO_THREATS"] or
-                    data and all(r.startswith("THREAT|") for r in data) and len(value) == len(data)):
-                raise ValueError("Visible-threat completeness unknown")
-            if name == "blockers" and not any(r == "NONE" or r.startswith("BLOCKING|") for r in data):
-                raise ValueError("Blocker completeness unknown")
-            if name == "outcome" and not any(r == "GAME_ACTIVE" or r.startswith("GAME_OVER|") for r in data):
-                raise ValueError("Game outcome unknown")
-            if name == "outcome" and value is None and data != ["GAME_ACTIVE"]:
-                raise ValueError("Game outcome could not be parsed")
-            if name == "victory" and not value.complete:
-                raise ValueError("Victory response incomplete")
+            value = parse(data).require_complete()
             parsed[name] = value
             result["sections"][name] = {"status": "ready"}
         except (ValueError, TypeError, IndexError, KeyError, LuaError) as exc:

@@ -14,12 +14,15 @@ from collections.abc import Callable
 from functools import wraps
 
 from civ_mcp.actions import (
-    ActionLifecycle, _ActionScope, _ActionEvidence, _PendingAction, _action_result, _extract_pre_hp,
+    ActionLifecycle, ActionIntent, ActionPlan, ActionContinuation, _ActionScope, _ActionEvidence, _PendingAction, _action_result, _extract_pre_hp,
     _extract_post_hp, _extract_city_defense, _format_attack_followup, _scope_probe,
 )
 from civ_mcp import lua as lq
 from civ_mcp.lua import religion_defense
+from civ_mcp.lua.units import observe_units_response
 from civ_mcp.connection import GameConnection, LuaError
+from civ_mcp.results import ResultText
+from civ_mcp.operations import operation
 from civ_mcp.end_turn import TurnProgress
 from civ_mcp.narrate import (
     narrate_combat_estimate,
@@ -58,6 +61,13 @@ ACTION_CONFIRM_INTERVAL = 0.15
 VICTORY_REPORT_TIMEOUT = 5.0
 
 
+def _action_presentation(result: str, message: str) -> str:
+    """Preserve an owner's outcome while appending domain observation text."""
+    if isinstance(result, ResultText):
+        return ResultText(message, **{key: result.outcome[key] for key in ("kind", "status", "code", "data")})
+    return message
+
+
 def _guard_pending_mutation(method):
     """Keep direct callers behind the same pending gates as MCP.
 
@@ -76,23 +86,17 @@ def _guard_pending_mutation(method):
                 name = "propose_trade"  # This alias resumes the same trade owner.
         if self.replacement_pending or self.save_pending:
             return "ERR:OUTCOME_UNKNOWN|Load or save completion is not confirmed; inspect or recover before gameplay."
-        if self.diplomacy_pending and name not in {
-            "test_trade", "propose_trade", "negotiate_incoming_trade",
-            "respond_to_deal", "diplomacy_respond",
-        }:
+        if self.diplomacy_pending and not operation(name).allows_pending("diplomacy"):
             return "ERR:OUTCOME_UNKNOWN|Native diplomacy attempt is pending; confirm its original request or use explicit recovery."
-        if self.turn_pending and name not in {
-            "diplomacy_respond", "respond_to_deal", "negotiate_incoming_trade",
-            "open_world_congress", "queue_wc_votes",
-        }:
+        if self.turn_pending and not operation(name).allows_pending("turn"):
             return "ERR:OUTCOME_UNKNOWN|End-turn outcome is pending; confirm end_turn before gameplay."
-        if self.congress_pending and name not in {"open_world_congress", "queue_wc_votes"}:
+        if self.congress_pending and not operation(name).allows_pending("congress"):
             blocked = await self.congress_gate()
             if blocked:
                 return blocked
         # Owners must match the intent before a generic gate can retire it.
         # This applies equally to the original movement/production protocols.
-        if self._actions.pending is not None and self._actions.entrypoint != name:
+        if self._actions.view is not None and self._actions.entrypoint != name:
             blocked = await self._action_gate()
             if blocked:
                 return blocked
@@ -210,8 +214,8 @@ class GameState:
 
     @property
     def pending_action_kind(self) -> str | None:
-        pending = self._actions.pending
-        return pending.kind if pending else None
+        view = self._actions.view
+        return view.kind if view else None
 
     @property
     def pending_action_blocks_mutations(self) -> bool:
@@ -219,17 +223,7 @@ class GameState:
 
     @property
     def pending_action_tool(self) -> str | None:
-        pending = self._actions.pending
-        if pending is None:
-            return None
-        if pending.evidence is not None:
-            return pending.evidence.tool
-        entrypoint = self._actions.entrypoint
-        if entrypoint == "spy_escape":
-            return "spy_action"
-        if pending.entity[0] == "unit":
-            return "unit_action"
-        return entrypoint
+        return self._actions.tool
 
     def _pending_unknown(self, reason: str = "confirmation deadline reached") -> str:
         return self._actions.unknown(reason)
@@ -238,10 +232,11 @@ class GameState:
         return await self._actions.confirm(wait=wait, timeout=ACTION_CONFIRM_TIMEOUT,
                                            interval=ACTION_CONFIRM_INTERVAL)
 
-    async def _submit_action(self, pending, scope, code) -> str:
-        return await self._actions.submit(pending, scope, code,
-                                           timeout=ACTION_CONFIRM_TIMEOUT,
-                                           interval=ACTION_CONFIRM_INTERVAL)
+    async def _execute_action(self, intent, prepare, **domain_options) -> str:
+        return await self._actions.execute(
+            intent, prepare, gate=self._action_gate, known_identity=lambda: self._game_identity,
+            timeout=ACTION_CONFIRM_TIMEOUT, interval=ACTION_CONFIRM_INTERVAL, **domain_options,
+        )
 
     async def _action_gate(self, entity: tuple[str, int] | None = None) -> str | None:
         if self.popup_pending:
@@ -259,12 +254,12 @@ class GameState:
             return "ERR:OUTCOME_UNKNOWN|End-turn outcome is pending; confirm end_turn before gameplay."
         if entity is not None and entity[0] == "unit":
             entity = (entity[0], entity[1] % 65536)
-        pending = self._pending_action
+        pending = self._actions.view
         if pending is not None and (entity is None or entity == self.pending_action_entity
                                     or self.pending_action_blocks_mutations
                                     or pending.kind in ("pillage", "contribution")):
             await self.confirm_pending_action()
-            if self._pending_action is not None:
+            if self._actions.view is not None:
                 return self._pending_unknown("dependent action was not submitted")
         return None
 
@@ -344,14 +339,14 @@ class GameState:
         self, *, on_confirmation: Callable[[str], None] | None = None,
     ) -> list[lq.UnitInfo]:
         """Read entities; optionally deliver this query's resolved action receipt."""
-        if self._pending_action:
+        if self._actions.view is not None:
             confirmation = await self.confirm_pending_action(wait=False)
             # The receipt belongs only to this query, not a replayable cache.
             # An unresolved observation must not be presented as completion.
-            if self._pending_action is None and on_confirmation is not None:
+            if self._actions.view is None and on_confirmation is not None:
                 on_confirmation(confirmation)
         lines = await self.conn.execute_write(lq.build_units_query())
-        return lq.parse_units_response(lines)
+        return observe_units_response(lines).require_complete()
 
     async def get_builder_tasks(
         self,
@@ -371,29 +366,26 @@ class GameState:
         from civ_mcp.lua import spy_assignments
         mission = mission.upper() if isinstance(mission, str) else mission
         entity, intent = ("unit", unit_id), (mission, x, y)
-        if self._actions.matches("spy_assignment", entity, intent=intent):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        if (any(type(v) is not int or v < 0 for v in (unit_id, x, y))
-                or not isinstance(mission, str) or mission not in spy_assignments.OPERATIONS):
-            return "Error: INVALID_SPY_ASSIGNMENT|Expected unit ID, target coordinates and a supported mission"
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        token = uuid.uuid4().hex
-        pending = _PendingAction(
-            "spy_assignment", entity, spy_assignments.build_spy_assignment_query(unit_id, mission, x, y, token),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            intent=intent, evidence=_ActionEvidence(
-                tool="spy_action", entrypoint=entrypoint, accepted=("SPY_ASSIGNMENT_REQUESTED|", "SPY_ASSIGNMENT_NOOP|"),
-                refused="ERR:SPY_ASSIGNMENT_REFUSED|",
-                confirm=lambda rows: spy_assignments.parse_spy_assignment(rows, unit_id, mission, token),
-                guidance="Repeat the original spy assignment to confirm its start only. ",
-            ),
-        )
-        return await self._submit_action(pending, scope, spy_assignments.build_spy_assignment(unit_id, mission, x, y, token))
+        async def preflight():
+            if (any(type(v) is not int or v < 0 for v in (unit_id, x, y))
+                    or not isinstance(mission, str) or mission not in spy_assignments.OPERATIONS):
+                return "Error: INVALID_SPY_ASSIGNMENT|Expected unit ID, target coordinates and a supported mission"
+
+        async def prepare(scope):
+            token = uuid.uuid4().hex
+            plan = ActionPlan(
+                "spy_assignment", entity, spy_assignments.build_spy_assignment_query(unit_id, mission, x, y, token),
+                context="write",
+                intent=intent, evidence=_ActionEvidence(
+                    tool="spy_action", entrypoint=entrypoint, accepted=("SPY_ASSIGNMENT_REQUESTED|", "SPY_ASSIGNMENT_NOOP|"),
+                    refused="ERR:SPY_ASSIGNMENT_REFUSED|",
+                    confirm=lambda rows: spy_assignments.parse_spy_assignment(rows, unit_id, mission, token),
+                    guidance="Repeat the original spy assignment to confirm its start only. ",
+                ),
+            )
+            return plan, spy_assignments.build_spy_assignment(unit_id, mission, x, y, token)
+
+        return await self._execute_action(ActionIntent("spy_assignment", entity, intent=intent), prepare, preflight=preflight)
 
     @_guard_pending_mutation
     async def spy_travel(self, unit_index: int, target_x: int, target_y: int) -> str:
@@ -412,20 +404,15 @@ class GameState:
         route = district_type.strip().upper()
         token = uuid.uuid4().hex
         code = lq.build_spy_escape_route(unit_id, route, witness_token=token)
-        if self._actions.matches("spy_escape", ("unit", unit_id), item=route):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        pending = _PendingAction(
-            "spy_escape", ("unit", unit_id), lq.build_verify_spy_escape(unit_id, route, token),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"item": route, "witness_token": token, "full_id": unit_id},
-        )
-        return await self._submit_action(pending, scope, code)
+        async def prepare(scope):
+            plan = ActionPlan(
+                "spy_escape", ("unit", unit_id), lq.build_verify_spy_escape(unit_id, route, token),
+                context="write",
+                details={"item": route, "witness_token": token, "full_id": unit_id},
+            )
+            return plan, code
+
+        return await self._execute_action(ActionIntent("spy_escape", ("unit", unit_id), details={'item': route}), prepare)
 
     async def get_threat_scan(self) -> list[lq.ThreatInfo]:
         lines = await self.conn.execute_read(lq.build_threat_scan_query())
@@ -455,9 +442,9 @@ class GameState:
         self, *, on_confirmation: Callable[[str], None] | None = None,
     ) -> tuple[list[lq.CityInfo], list[str]]:
         """Read entities; optionally deliver this query's resolved action receipt."""
-        if self._pending_action:
+        if self._actions.view is not None:
             confirmation = await self.confirm_pending_action(wait=False)
-            if self._pending_action is None and on_confirmation is not None:
+            if self._actions.view is None and on_confirmation is not None:
                 on_confirmation(confirmation)
         lines = await self.conn.execute_write(lq.build_cities_query())
         return lq.parse_cities_response(lines)
@@ -528,49 +515,48 @@ class GameState:
     @_guard_pending_mutation
     async def move_unit(self, unit_index: int, target_x: int, target_y: int) -> str:
         details = {"target": (target_x, target_y), "witness_token": uuid.uuid4().hex}
-        if self._actions.matches("move", ("unit", unit_index), target=details["target"]):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        try:
-            await self.dismiss_popup()
-        except (OSError, TimeoutError, LuaError):
-            pass
-        # 清理发生在入口检查之后，也可能留下结果未知的写入。
-        if self.popup_pending:
-            return self._popup_unknown
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        pending = _PendingAction(
-            "move", ("unit", unit_index),
-            lq.build_unit_position_query(
-                unit_index, move_target_x=target_x, move_target_y=target_y,
-                witness_token=details["witness_token"],
-            ),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner, details=details,
-            success=f"MOVING_TO|{target_x},{target_y}",
-        )
-        result = await self._submit_action(pending, scope, lq.build_move_unit(
-            unit_index, target_x, target_y, witness_token=details["witness_token"],
-        ))
-        # 保留探索反馈；集合只用于区分本次新揭示的格子。
-        if self._pending_action is None and "|BLOCKED" not in result and self._revealed_tiles is not None:
+        async def preflight():
             try:
-                position = re.search(r"now_at:(\d+),(\d+)", result)
-                if position:
-                    x, y = map(int, position.groups())
-                    lines = await self.conn.execute_read(lq.build_post_move_visibility_query(x, y))
-                    tiles = lq.parse_post_move_visibility(lines)
-                    newly_revealed = {(tx, ty) for tx, ty, _ in tiles} - self._revealed_tiles
-                    self._revealed_tiles.update((tx, ty) for tx, ty, _ in tiles)
-                    if newly_revealed:
-                        data = [(tx, ty, meta) for tx, ty, meta in tiles if (tx, ty) in newly_revealed]
-                        result += "\n" + narrate_move_discoveries(data, len(newly_revealed))
-            except (OSError, ValueError):
-                log.debug("Post-move visibility unavailable", exc_info=True)
-        return result
+                await self.dismiss_popup()
+            except (OSError, TimeoutError, LuaError):
+                pass
+            # 清理发生在入口检查之后，也可能留下结果未知的写入。
+            if self.popup_pending:
+                return self._popup_unknown
+
+        async def prepare(scope):
+            plan = ActionPlan(
+                "move", ("unit", unit_index),
+                lq.build_unit_position_query(
+                    unit_index, move_target_x=target_x, move_target_y=target_y,
+                    witness_token=details["witness_token"],
+                ),
+                context="write", details=details,
+                success=f"MOVING_TO|{target_x},{target_y}",
+            )
+            return plan, lq.build_move_unit(
+                unit_index, target_x, target_y, witness_token=details["witness_token"],
+            )
+
+        async def present(result):
+            # 保留探索反馈；集合只用于区分本次新揭示的格子。
+            if self._actions.view is None and "|BLOCKED" not in result and self._revealed_tiles is not None:
+                try:
+                    position = re.search(r"now_at:(\d+),(\d+)", result)
+                    if position:
+                        x, y = map(int, position.groups())
+                        lines = await self.conn.execute_read(lq.build_post_move_visibility_query(x, y))
+                        tiles = lq.parse_post_move_visibility(lines)
+                        newly_revealed = {(tx, ty) for tx, ty, _ in tiles} - self._revealed_tiles
+                        self._revealed_tiles.update((tx, ty) for tx, ty, _ in tiles)
+                        if newly_revealed:
+                            data = [(tx, ty, meta) for tx, ty, meta in tiles if (tx, ty) in newly_revealed]
+                            result = _action_presentation(result, result + "\n" + narrate_move_discoveries(data, len(newly_revealed)))
+                except (OSError, ValueError):
+                    log.debug("Post-move visibility unavailable", exc_info=True)
+            return result
+
+        return await self._execute_action(ActionIntent("move", ("unit", unit_index), details={'target': details["target"]}), prepare, preflight=preflight, present=present)
 
     @_guard_pending_mutation
     async def rebase_unit(self, unit_id: int, target_x: int, target_y: int) -> str:
@@ -579,27 +565,22 @@ class GameState:
         if any(type(value) is not int or value < 0 for value in (unit_id, target_x, target_y)):
             return "Error: INVALID_REBASE_INTENT|Expected the original unit ID and nonnegative integer base coordinates."
         entity, intent = ("unit", unit_id), (target_x, target_y)
-        if self._actions.matches("rebase", entity, intent=intent):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        token = uuid.uuid4().hex
-        pending = _PendingAction(
-            "rebase", entity, rebase.build_rebase_query(unit_id, target_x, target_y, token),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"target": intent, "witness_token": token}, intent=intent,
-            evidence=_ActionEvidence(
-                tool="unit_action", entrypoint="rebase_unit", accepted=("REBASE_REQUESTED|",),
-                refused="ERR:REBASE_REFUSED|",
-                confirm=lambda rows: rebase.parse_rebase_confirmation(rows, unit_id, target_x, target_y, token),
-                guidance="Repeat the original unit rebase and destination to confirm only. ",
-            ),
-        )
-        return await self._submit_action(pending, scope, rebase.build_rebase(unit_id, target_x, target_y, token))
+        async def prepare(scope):
+            token = uuid.uuid4().hex
+            plan = ActionPlan(
+                "rebase", entity, rebase.build_rebase_query(unit_id, target_x, target_y, token),
+                context="write",
+                details={"target": intent, "witness_token": token}, intent=intent,
+                evidence=_ActionEvidence(
+                    tool="unit_action", entrypoint="rebase_unit", accepted=("REBASE_REQUESTED|",),
+                    refused="ERR:REBASE_REFUSED|",
+                    confirm=lambda rows: rebase.parse_rebase_confirmation(rows, unit_id, target_x, target_y, token),
+                    guidance="Repeat the original unit rebase and destination to confirm only. ",
+                ),
+            )
+            return plan, rebase.build_rebase(unit_id, target_x, target_y, token)
+
+        return await self._execute_action(ActionIntent("rebase", entity, intent=intent), prepare)
 
     async def get_combat_preview(self, unit_id: int, target_x: int, target_y: int) -> str:
         """Read native current combat simulation without confirming or submitting."""
@@ -674,109 +655,108 @@ class GameState:
         return await self._attack_and_confirm(("city", city_id), target_x, target_y)
 
     async def _attack_and_confirm(self, entity: tuple[str, int], target_x: int, target_y: int) -> str:
-        if self._actions.matches("attack", entity, target=(target_x, target_y)):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
         estimate = None
         estimate_str = ""
         unknown_estimate = "Combat estimate unknown (native preview unavailable; conditional modifiers uncomputed).\n"
-        if entity[0] == "unit":
-            estimate_str = unknown_estimate
+        async def preflight():
+            nonlocal estimate, estimate_str
+            estimate = None
+            estimate_str = ""
+            unknown_estimate = "Combat estimate unknown (native preview unavailable; conditional modifiers uncomputed).\n"
+            if entity[0] == "unit":
+                estimate_str = unknown_estimate
+                try:
+                    await self.dismiss_popup()
+                except (OSError, TimeoutError, LuaError):
+                    pass
+                if self.popup_pending:
+                    return self._popup_unknown
+                try:
+                    lines = await self.conn.execute_write(lq.build_combat_estimate_query(entity[1], target_x, target_y))
+                    estimate = lq.parse_combat_estimate(lines, 0, 0)
+                    if estimate:
+                        estimate_str = narrate_combat_estimate(estimate) + "\n"
+                except (OSError, TimeoutError, LuaError, ValueError):
+                    log.debug("Combat estimate unavailable", exc_info=True)
+
+        async def prepare(scope):
+            city_token = uuid.uuid4().hex if entity[0] == "city" else None
+            siege_token = uuid.uuid4().hex if entity[0] == "unit" else None
+            plan = ActionPlan(
+                "attack", entity,
+                lq.build_city_attack_followup(entity[1], target_x, target_y, city_token) if city_token else
+                lq.build_attack_followup_query(target_x, target_y, entity[1], siege_token=siege_token),
+                context="write",
+                details={"target": (target_x, target_y), "city_witness_token": city_token,
+                         "siege_witness_token": siege_token},
+                success=f"CITY_RANGE_ATTACK|city:{entity[1]} -> {target_x},{target_y}" if city_token else "",
+            )
+            build = lq.build_attack_unit if entity[0] == "unit" else lq.build_city_attack
+            code = (build(entity[1], target_x, target_y, witness_token=city_token) if city_token else
+                    build(entity[1], target_x, target_y, siege_token=siege_token))
+            return plan, code
+
+        async def present(result):
+            nonlocal estimate_str
+            if result.startswith(("RANGE_ATTACK", "MELEE_ATTACK", "AIR_ATTACK", "CITY_RANGE_ATTACK", "UNIT_CITY_ATTACK_CONFIRMED")):
+                if estimate and (result.startswith("AIR_ATTACK") or estimate.is_ranged != result.startswith("RANGE_ATTACK")):
+                    estimate_str = unknown_estimate
+                return _action_presentation(result, estimate_str + result)
+            if "OUTCOME_UNKNOWN" in result and isinstance(result, ResultText) and result.outcome["data"].get("acknowledged") and estimate_str:
+                return _action_presentation(result, result + "\n" + estimate_str)
+            return result
+
+        return await self._execute_action(ActionIntent("attack", entity, details={'target': (target_x, target_y)}), prepare, preflight=preflight, present=present)
+
+    @_guard_pending_mutation
+    async def resolve_city_capture(self, city_id: int, action: str) -> str:
+        from civ_mcp.lua import city_decisions
+        entity, intent = ("city", city_id), (action,)
+        async def preflight():
+            if type(city_id) is not int or city_id < 0 or not isinstance(action, str) or action not in city_decisions.DIRECTIVES:
+                return "Error: INVALID_CITY_DECISION|Expected the pending city ID and a supported decision"
+
+        async def prepare(scope):
+            token = uuid.uuid4().hex
+            plan = ActionPlan(
+                "city_decision", entity, city_decisions.build_city_decision_query(city_id, action, token),
+                context="write",
+                intent=intent, evidence=_ActionEvidence(
+                    tool="resolve_city_capture", entrypoint="resolve_city_capture",
+                    accepted=("CITY_DECISION_REQUESTED|",), refused="ERR:CITY_DECISION_REFUSED|",
+                    confirm=lambda rows: city_decisions.parse_city_decision(rows, city_id, action, token),
+                    guidance="Repeat the same decision for the original city to confirm only. ",
+                ),
+            )
+            return plan, city_decisions.build_city_decision(city_id, action, token)
+
+        return await self._execute_action(ActionIntent("city_decision", entity, intent=intent), prepare, preflight=preflight)
+
+    @_guard_pending_mutation
+    async def found_city(self, unit_index: int) -> str:
+        async def preflight():
             try:
                 await self.dismiss_popup()
             except (OSError, TimeoutError, LuaError):
                 pass
             if self.popup_pending:
                 return self._popup_unknown
-            try:
-                lines = await self.conn.execute_write(lq.build_combat_estimate_query(entity[1], target_x, target_y))
-                estimate = lq.parse_combat_estimate(lines, 0, 0)
-                if estimate:
-                    estimate_str = narrate_combat_estimate(estimate) + "\n"
-            except (OSError, TimeoutError, LuaError, ValueError):
-                log.debug("Combat estimate unavailable", exc_info=True)
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        city_token = uuid.uuid4().hex if entity[0] == "city" else None
-        siege_token = uuid.uuid4().hex if entity[0] == "unit" else None
-        pending = _PendingAction(
-            "attack", entity,
-            lq.build_city_attack_followup(entity[1], target_x, target_y, city_token) if city_token else
-            lq.build_attack_followup_query(target_x, target_y, entity[1], siege_token=siege_token),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"target": (target_x, target_y), "city_witness_token": city_token,
-                     "siege_witness_token": siege_token},
-            success=f"CITY_RANGE_ATTACK|city:{entity[1]} -> {target_x},{target_y}" if city_token else "",
-        )
-        build = lq.build_attack_unit if entity[0] == "unit" else lq.build_city_attack
-        code = (build(entity[1], target_x, target_y, witness_token=city_token) if city_token else
-                build(entity[1], target_x, target_y, siege_token=siege_token))
-        result = await self._submit_action(pending, scope, code)
-        if result.startswith(("RANGE_ATTACK", "MELEE_ATTACK", "AIR_ATTACK", "CITY_RANGE_ATTACK", "UNIT_CITY_ATTACK_CONFIRMED")):
-            if estimate and (result.startswith("AIR_ATTACK") or estimate.is_ranged != result.startswith("RANGE_ATTACK")):
-                estimate_str = unknown_estimate
-            return estimate_str + result
-        if "OUTCOME_UNKNOWN" in result and pending.success and estimate_str:
-            return result + "\n" + estimate_str
-        return result
 
-    @_guard_pending_mutation
-    async def resolve_city_capture(self, city_id: int, action: str) -> str:
-        from civ_mcp.lua import city_decisions
-        entity, intent = ("city", city_id), (action,)
-        if self._actions.matches("city_decision", entity, intent=intent):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        if type(city_id) is not int or city_id < 0 or not isinstance(action, str) or action not in city_decisions.DIRECTIVES:
-            return "Error: INVALID_CITY_DECISION|Expected the pending city ID and a supported decision"
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        token = uuid.uuid4().hex
-        pending = _PendingAction(
-            "city_decision", entity, city_decisions.build_city_decision_query(city_id, action, token),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            intent=intent, evidence=_ActionEvidence(
-                tool="resolve_city_capture", entrypoint="resolve_city_capture",
-                accepted=("CITY_DECISION_REQUESTED|",), refused="ERR:CITY_DECISION_REFUSED|",
-                confirm=lambda rows: city_decisions.parse_city_decision(rows, city_id, action, token),
-                guidance="Repeat the same decision for the original city to confirm only. ",
-            ),
-        )
-        return await self._submit_action(pending, scope, city_decisions.build_city_decision(city_id, action, token))
+        async def prepare(scope):
+            plan = ActionPlan(
+                "found", ("unit", unit_index), lq.build_unit_position_query(unit_index),
+            )
+            return plan, lq.build_found_city(unit_index)
 
-    @_guard_pending_mutation
-    async def found_city(self, unit_index: int) -> str:
-        if self._actions.matches("found", ("unit", unit_index)):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        try:
-            await self.dismiss_popup()
-        except (OSError, TimeoutError, LuaError):
-            pass
-        if self.popup_pending:
-            return self._popup_unknown
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        pending = _PendingAction(
-            "found", ("unit", unit_index), lq.build_unit_position_query(unit_index),
-            identity=scope.identity, turn=scope.turn, owner=scope.owner,
-        )
-        result = await self._submit_action(pending, scope, lq.build_found_city(unit_index))
-        if result.startswith("Error: CANNOT_FOUND"):
-            try:
-                result += "\n\n" + await self.get_settle_advisor(unit_index)
-            except (OSError, TimeoutError, LuaError, ValueError):
-                log.debug("Settle advisor failed", exc_info=True)
-        return result
+        async def present(result):
+            if result.startswith("Error: CANNOT_FOUND"):
+                try:
+                    result = _action_presentation(result, result + "\n\n" + await self.get_settle_advisor(unit_index))
+                except (OSError, TimeoutError, LuaError, ValueError):
+                    log.debug("Settle advisor failed", exc_info=True)
+            return result
+
+        return await self._execute_action(ActionIntent("found", ("unit", unit_index)), prepare, preflight=preflight, present=present)
 
     async def get_settle_advisor(self, unit_index: int) -> str:
         lua = lq.build_settle_advisor_query(unit_index)
@@ -811,71 +791,55 @@ class GameState:
 
     @_guard_pending_mutation
     async def cancel_unit_move(self, unit_index: int) -> str:
-        if self._actions.matches("cancel_move", ("unit", unit_index)):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        token = uuid.uuid4().hex
-        pending = _PendingAction(
-            "cancel_move", ("unit", unit_index), lq.build_cancel_unit_move_query(unit_index, token),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"witness_token": token},
-        )
-        return await self._submit_action(pending, scope, lq.build_cancel_unit_move(unit_index, token))
+        async def prepare(scope):
+            token = uuid.uuid4().hex
+            plan = ActionPlan(
+                "cancel_move", ("unit", unit_index), lq.build_cancel_unit_move_query(unit_index, token),
+                context="write",
+                details={"witness_token": token},
+            )
+            return plan, lq.build_cancel_unit_move(unit_index, token)
+
+        return await self._execute_action(ActionIntent("cancel_move", ("unit", unit_index)), prepare)
 
     @_guard_pending_mutation
     async def pillage_unit(self, unit_id: int) -> str:
-        if self._actions.matches("pillage", ("unit", unit_id)):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        lines = await self.conn.execute_write(lq.build_pillage_preflight(unit_id))
-        rows = [row.split("|") for row in lines if row.startswith("PILLAGE_PREPARED|")]
-        if len(rows) != 1 or len(rows[0]) != 5:
-            return _action_result(lines)
-        _, full_id, x, y, fingerprint = rows[0]
-        if (not all(re.fullmatch(r"\d+", value) for value in (full_id, x, y))
-                or not re.fullmatch(r"[-\d,]+(?:;(?:improvement|district|building):\d+:(?:true|false))+", fingerprint)):
-            return "Error: PILLAGE_TARGET_UNKNOWN|No action submitted."
-        token = uuid.uuid4().hex
-        position = (int(x), int(y))
-        pending = _PendingAction(
-            "pillage", ("unit", unit_id), lq.build_pillage_query(int(full_id), token),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"witness_token": token, "full_id": int(full_id),
-                     "target": position, "fingerprint": fingerprint},
-        )
-        return await self._submit_action(pending, scope, lq.build_pillage_unit(
-            int(full_id), *position, fingerprint, token))
+        async def prepare(scope):
+            lines = await self.conn.execute_write(lq.build_pillage_preflight(unit_id))
+            rows = [row.split("|") for row in lines if row.startswith("PILLAGE_PREPARED|")]
+            if len(rows) != 1 or len(rows[0]) != 5:
+                return _action_result(lines)
+            _, full_id, x, y, fingerprint = rows[0]
+            if (not all(re.fullmatch(r"\d+", value) for value in (full_id, x, y))
+                    or not re.fullmatch(r"[-\d,]+(?:;(?:improvement|district|building):\d+:(?:true|false))+", fingerprint)):
+                return "Error: PILLAGE_TARGET_UNKNOWN|No action submitted."
+            token = uuid.uuid4().hex
+            position = (int(x), int(y))
+            plan = ActionPlan(
+                "pillage", ("unit", unit_id), lq.build_pillage_query(int(full_id), token),
+                context="write",
+                details={"witness_token": token, "full_id": int(full_id),
+                         "target": position, "fingerprint": fingerprint},
+            )
+            return plan, lq.build_pillage_unit(
+                int(full_id), *position, fingerprint, token)
+
+        return await self._execute_action(ActionIntent("pillage", ("unit", unit_id)), prepare)
 
     async def _set_unit_readiness(
         self, unit_index: int, kind: str, *, scope: _ActionScope | None = None,
     ) -> str:
-        if self._actions.matches(kind, ("unit", unit_index)):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        if scope is None:
-            scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        token = uuid.uuid4().hex
-        pending = _PendingAction(
-            kind, ("unit", unit_index), lq.build_unit_readiness_query(unit_index, kind, token),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"witness_token": token},
-        )
-        build = lq.build_skip_unit if kind == "skip" else lq.build_fortify_unit
-        return await self._submit_action(pending, scope, build(unit_index, token))
+        async def prepare(scope):
+            token = uuid.uuid4().hex
+            plan = ActionPlan(
+                kind, ("unit", unit_index), lq.build_unit_readiness_query(unit_index, kind, token),
+                context="write",
+                details={"witness_token": token},
+            )
+            build = lq.build_skip_unit if kind == "skip" else lq.build_fortify_unit
+            return plan, build(unit_index, token)
+
+        return await self._execute_action(ActionIntent(kind, ("unit", unit_index)), prepare, scope=scope)
 
     @_guard_pending_mutation
     async def skip_remaining_units(self) -> str:
@@ -898,39 +862,45 @@ class GameState:
                 raise ValueError("invalid candidate IDs")
         except ValueError:
             return "Error: READINESS_UNKNOWN|Malformed candidate list; no units submitted"
-        results = []
+        results, outcomes, completed = [], [], []
         for unit_id in sorted(candidates):
             result = await self._set_unit_readiness(unit_id, "skip", scope=scope)
             results.append(f"unit:{unit_id}|{result}")
-            if self._pending_action is not None or not result.startswith(("SKIPPED", "NOT_READY", "ALREADY_WAITING")):
-                return "SKIP_BATCH_STOPPED|" + "\n".join(results)
-        return f"SKIPPED|{len(candidates)} candidates checked" + ("\n" + "\n".join(results) if results else "")
+            outcomes.append({"unit_id": unit_id, "outcome": result.outcome if isinstance(result, ResultText) else None})
+            if self._actions.view is not None or not result.startswith(("SKIPPED", "NOT_READY", "ALREADY_WAITING")):
+                # Preserve the historical non-error batch envelope; the nested
+                # owner outcome keeps its precise refusal/unknown machine code.
+                return ResultText("SKIP_BATCH_STOPPED|" + "\n".join(results), kind="action",
+                                  status="unknown" if self._actions.view is not None else "stopped",
+                                  data={"action": "skip_remaining_units", "completed_units": completed,
+                                        "stopped_unit": unit_id, "results": outcomes})
+            completed.append(unit_id)
+        return ResultText(f"SKIPPED|{len(candidates)} candidates checked" + ("\n" + "\n".join(results) if results else ""),
+                          kind="action", status="confirmed",
+                          data={"action": "skip_remaining_units", "completed_units": completed, "results": outcomes})
 
     async def _set_unit_task(self, unit_id: int, kind: str, entrypoint: str) -> str:
         from civ_mcp.lua import unit_tasks
         entity, intent = ("unit", unit_id), (kind,)
-        if self._actions.matches("unit_task", entity, intent=intent):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        if type(unit_id) is not int or unit_id < 0:
-            return "Error: INVALID_UNIT_ID|Expected a nonnegative integer"
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        token = uuid.uuid4().hex
-        pending = _PendingAction(
-            "unit_task", entity, unit_tasks.build_task_query(unit_id, kind, token),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            intent=intent, evidence=_ActionEvidence(
-                tool="unit_action", entrypoint=entrypoint, accepted=("UNIT_TASK_REQUESTED|", "UNIT_TASK_NOOP|"),
-                refused="ERR:UNIT_TASK_REFUSED|",
-                confirm=lambda rows: unit_tasks.parse_task_confirmation(rows, unit_id, kind, token),
-                guidance=f"Repeat {kind} for the original unit to confirm only. ",
-            ),
-        )
-        return await self._submit_action(pending, scope, unit_tasks.build_task(unit_id, kind, token))
+        async def preflight():
+            if type(unit_id) is not int or unit_id < 0:
+                return "Error: INVALID_UNIT_ID|Expected a nonnegative integer"
+
+        async def prepare(scope):
+            token = uuid.uuid4().hex
+            plan = ActionPlan(
+                "unit_task", entity, unit_tasks.build_task_query(unit_id, kind, token),
+                context="write",
+                intent=intent, evidence=_ActionEvidence(
+                    tool="unit_action", entrypoint=entrypoint, accepted=("UNIT_TASK_REQUESTED|", "UNIT_TASK_NOOP|"),
+                    refused="ERR:UNIT_TASK_REFUSED|",
+                    confirm=lambda rows: unit_tasks.parse_task_confirmation(rows, unit_id, kind, token),
+                    guidance=f"Repeat {kind} for the original unit to confirm only. ",
+                ),
+            )
+            return plan, unit_tasks.build_task(unit_id, kind, token)
+
+        return await self._execute_action(ActionIntent("unit_task", entity, intent=intent), prepare, preflight=preflight)
 
     @_guard_pending_mutation
     async def automate_explore(self, unit_index: int) -> str:
@@ -952,28 +922,25 @@ class GameState:
     async def delete_unit(self, unit_index: int) -> str:
         from civ_mcp.lua import unit_transforms as transforms
         entity, intent = ("unit", unit_index), ()
-        if self._actions.matches("delete_unit", entity, intent=intent):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        if type(unit_index) is not int or unit_index < 0:
-            return "Error: INVALID_UNIT_ID|Expected a nonnegative integer"
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        token = uuid.uuid4().hex
-        pending = _PendingAction(
-            "delete_unit", entity, transforms.build_delete_query(unit_index, token),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            intent=intent, evidence=_ActionEvidence(
-                tool="unit_action", entrypoint="delete_unit", accepted=("UNIT_DELETE_REQUESTED|",),
-                refused="ERR:UNIT_DELETE_REFUSED|",
-                confirm=lambda rows: transforms.parse_confirmation(rows, token, unit_index, "DELETED"),
-                guidance="Repeat delete for the original unit to confirm only. ",
-            ),
-        )
-        return await self._submit_action(pending, scope, transforms.build_delete(unit_index, token))
+        async def preflight():
+            if type(unit_index) is not int or unit_index < 0:
+                return "Error: INVALID_UNIT_ID|Expected a nonnegative integer"
+
+        async def prepare(scope):
+            token = uuid.uuid4().hex
+            plan = ActionPlan(
+                "delete_unit", entity, transforms.build_delete_query(unit_index, token),
+                context="write",
+                intent=intent, evidence=_ActionEvidence(
+                    tool="unit_action", entrypoint="delete_unit", accepted=("UNIT_DELETE_REQUESTED|",),
+                    refused="ERR:UNIT_DELETE_REFUSED|",
+                    confirm=lambda rows: transforms.parse_confirmation(rows, token, unit_index, "DELETED"),
+                    guidance="Repeat delete for the original unit to confirm only. ",
+                ),
+            )
+            return plan, transforms.build_delete(unit_index, token)
+
+        return await self._execute_action(ActionIntent("delete_unit", entity, intent=intent), prepare, preflight=preflight)
 
     async def get_unit_formations(self, unit_id: int) -> dict:
         from civ_mcp.lua import unit_formations
@@ -990,57 +957,52 @@ class GameState:
     async def change_unit_formation(self, unit_id: int, action: str, target_unit_id: int | None = None) -> str:
         from civ_mcp.lua import unit_formations
         entity, intent = ("unit", unit_id), (action, target_unit_id)
-        if self._actions.matches("unit_formation", entity, intent=intent):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        token = uuid.uuid4().hex
-        try:
-            source = unit_formations.build_submit(unit_id, action, target_unit_id, token)
-            query = unit_formations.build_confirmation(unit_id, action, target_unit_id, token)
-        except ValueError as error:
-            return f"Error: INVALID_FORMATION_ARGUMENT|{error}"
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        pending = _PendingAction(
-            "unit_formation", entity, query, context="write", identity=scope.identity,
-            turn=scope.turn, owner=scope.owner, intent=intent,
-            evidence=_ActionEvidence(
-                tool="set_unit_formation", entrypoint="change_unit_formation",
-                accepted=("UNIT_FORMATION_REQUESTED|",), refused="ERR:UNIT_FORMATION_REFUSED|",
-                confirm=lambda rows: unit_formations.parse_confirmation(rows, unit_id, action, token),
-                guidance="Repeat set_unit_formation with the original actor, action and target to confirm only. ",
-            ),
-        )
-        return await self._submit_action(pending, scope, source)
+        token = source = query = None
+        async def preflight():
+            nonlocal token, source, query
+            token = uuid.uuid4().hex
+            try:
+                source = unit_formations.build_submit(unit_id, action, target_unit_id, token)
+                query = unit_formations.build_confirmation(unit_id, action, target_unit_id, token)
+            except ValueError as error:
+                return f"Error: INVALID_FORMATION_ARGUMENT|{error}"
+
+        async def prepare(scope):
+            plan = ActionPlan(
+                "unit_formation", entity, query, context="write", intent=intent,
+                evidence=_ActionEvidence(
+                    tool="set_unit_formation", entrypoint="change_unit_formation",
+                    accepted=("UNIT_FORMATION_REQUESTED|",), refused="ERR:UNIT_FORMATION_REFUSED|",
+                    confirm=lambda rows: unit_formations.parse_confirmation(rows, unit_id, action, token),
+                    guidance="Repeat set_unit_formation with the original actor, action and target to confirm only. ",
+                ),
+            )
+            return plan, source
+
+        return await self._execute_action(ActionIntent("unit_formation", entity, intent=intent), prepare, preflight=preflight)
 
     async def _change_unit_tile(self, unit_id: int, kind: str, entrypoint: str, improvement: str = "") -> str:
         from civ_mcp.lua import tile_actions
         entity, intent = ("unit", unit_id), (kind, improvement)
-        if self._actions.matches("tile_action", entity, intent=intent):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        if type(unit_id) is not int or unit_id < 0 or not isinstance(improvement, str):
-            return "Error: INVALID_TILE_ACTION|Expected a unit ID and improvement name"
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        token = uuid.uuid4().hex
-        pending = _PendingAction(
-            "tile_action", entity, tile_actions.build_tile_action_query(unit_id, kind, improvement, token),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            intent=intent, evidence=_ActionEvidence(
-                tool="unit_action", entrypoint=entrypoint, accepted=("TILE_ACTION_REQUESTED|", "TILE_ACTION_NOOP|"),
-                refused="ERR:TILE_ACTION_REFUSED|",
-                confirm=lambda rows: tile_actions.parse_tile_action(rows, unit_id, kind, token),
-                guidance=f"Repeat {kind} with the original unit and parameters to confirm only. ",
-            ),
-        )
-        return await self._submit_action(pending, scope, tile_actions.build_tile_action(unit_id, kind, improvement, token))
+        async def preflight():
+            if type(unit_id) is not int or unit_id < 0 or not isinstance(improvement, str):
+                return "Error: INVALID_TILE_ACTION|Expected a unit ID and improvement name"
+
+        async def prepare(scope):
+            token = uuid.uuid4().hex
+            plan = ActionPlan(
+                "tile_action", entity, tile_actions.build_tile_action_query(unit_id, kind, improvement, token),
+                context="write",
+                intent=intent, evidence=_ActionEvidence(
+                    tool="unit_action", entrypoint=entrypoint, accepted=("TILE_ACTION_REQUESTED|", "TILE_ACTION_NOOP|"),
+                    refused="ERR:TILE_ACTION_REFUSED|",
+                    confirm=lambda rows: tile_actions.parse_tile_action(rows, unit_id, kind, token),
+                    guidance=f"Repeat {kind} with the original unit and parameters to confirm only. ",
+                ),
+            )
+            return plan, tile_actions.build_tile_action(unit_id, kind, improvement, token)
+
+        return await self._execute_action(ActionIntent("tile_action", entity, intent=intent), prepare, preflight=preflight)
 
     @_guard_pending_mutation
     async def improve_tile(self, unit_index: int, improvement_name: str) -> str:
@@ -1062,28 +1024,23 @@ class GameState:
     async def sacrifice_builder_charges(self, unit_id: int) -> str:
         if type(unit_id) is not int or unit_id < 0:
             raise ValueError("A full native builder identity is required")
-        if self._actions.matches("contribution", ("unit", unit_id)):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        lines = await self.conn.execute_write(lq.build_contribution_preflight(unit_id))
-        rows = [row.split("|") for row in lines if row.startswith("CONTRIBUTION_PREPARED|")]
-        if len(rows) != 1 or len(rows[0]) != 2:
-            return _action_result(lines)
-        fingerprint = rows[0][1]
-        if not re.fullmatch(r"[-\d.,]+", fingerprint):
-            return "Error: CONTRIBUTION_TARGET_UNKNOWN|No command submitted."
-        token = uuid.uuid4().hex
-        pending = _PendingAction(
-            "contribution", ("unit", unit_id), lq.build_contribution_query(unit_id, fingerprint, token),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"witness_token": token, "fingerprint": fingerprint},
-        )
-        return await self._submit_action(pending, scope, lq.build_sacrifice_builder_charges(unit_id, fingerprint, token))
+        async def prepare(scope):
+            lines = await self.conn.execute_write(lq.build_contribution_preflight(unit_id))
+            rows = [row.split("|") for row in lines if row.startswith("CONTRIBUTION_PREPARED|")]
+            if len(rows) != 1 or len(rows[0]) != 2:
+                return _action_result(lines)
+            fingerprint = rows[0][1]
+            if not re.fullmatch(r"[-\d.,]+", fingerprint):
+                return "Error: CONTRIBUTION_TARGET_UNKNOWN|No command submitted."
+            token = uuid.uuid4().hex
+            plan = ActionPlan(
+                "contribution", ("unit", unit_id), lq.build_contribution_query(unit_id, fingerprint, token),
+                context="write",
+                details={"witness_token": token, "fingerprint": fingerprint},
+            )
+            return plan, lq.build_sacrifice_builder_charges(unit_id, fingerprint, token)
+
+        return await self._execute_action(ActionIntent("contribution", ("unit", unit_id)), prepare)
 
     @_guard_pending_mutation
     async def build_route(self, unit_index: int) -> str:
@@ -1100,24 +1057,19 @@ class GameState:
     ) -> str:
         target = ((target_x, target_y) if item_type.upper() == "DISTRICT"
                   and target_x is not None and target_y is not None else None)
-        if self._actions.matches("production", ("city", city_id), item=item_name, target=target):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        pending = _PendingAction(
-            "production", ("city", city_id), lq.build_verify_production(city_id, item_name, target),
-            # "write" selects InGame; this confirmation Lua only reads facts.
-            context="write" if target is not None else "read",
-            identity=scope.identity, turn=scope.turn, owner=scope.owner, success=f"PRODUCING|{item_name}",
-            details={"item": item_name, "target": target},
-        )
-        return await self._submit_action(pending, scope, lq.build_produce_item(
-            city_id, item_type, item_name, target_x, target_y,
-        ))
+        async def prepare(scope):
+            plan = ActionPlan(
+                "production", ("city", city_id), lq.build_verify_production(city_id, item_name, target),
+                # "write" selects InGame; this confirmation Lua only reads facts.
+                context="write" if target is not None else "read",
+                 success=f"PRODUCING|{item_name}",
+                details={"item": item_name, "target": target},
+            )
+            return plan, lq.build_produce_item(
+                city_id, item_type, item_name, target_x, target_y,
+            )
+
+        return await self._execute_action(ActionIntent("production", ("city", city_id), details={'item': item_name, 'target': target}), prepare)
 
     @_guard_pending_mutation
     async def purchase_item(
@@ -1135,27 +1087,22 @@ class GameState:
                 or not re.fullmatch(r"[A-Z][A-Z0-9_]*", item_name)):
             return "Error: INVALID_PURCHASE|Only UNIT/BUILDING and YIELD_GOLD/YIELD_FAITH are supported."
         entity, intent = ("city", city_id), (item_type, item_name, yield_type)
-        if self._actions.matches("purchase_item", entity, intent=intent):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        token = uuid.uuid4().hex
-        pending = _PendingAction(
-            "purchase_item", entity, lq.build_item_purchase_query(city_id, item_type, item_name, yield_type, token),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"item": item_name, "currency": yield_type, "witness_token": token}, intent=intent,
-            evidence=_ActionEvidence(
-                tool="purchase_item", entrypoint="purchase_item", accepted=("ITEM_PURCHASE_REQUESTED|",),
-                refused="ERR:ITEM_PURCHASE_REFUSED|",
-                confirm=lambda rows: lq.parse_item_purchase_confirmation(rows, token, city_id, item_name, yield_type),
-                guidance="Repeat purchase_item with the original city, product and currency to confirm only. ",
-            ),
-        )
-        return await self._submit_action(pending, scope, lq.build_purchase_item(city_id, item_type, item_name, yield_type, token))
+        async def prepare(scope):
+            token = uuid.uuid4().hex
+            plan = ActionPlan(
+                "purchase_item", entity, lq.build_item_purchase_query(city_id, item_type, item_name, yield_type, token),
+                context="write",
+                details={"item": item_name, "currency": yield_type, "witness_token": token}, intent=intent,
+                evidence=_ActionEvidence(
+                    tool="purchase_item", entrypoint="purchase_item", accepted=("ITEM_PURCHASE_REQUESTED|",),
+                    refused="ERR:ITEM_PURCHASE_REFUSED|",
+                    confirm=lambda rows: lq.parse_item_purchase_confirmation(rows, token, city_id, item_name, yield_type),
+                    guidance="Repeat purchase_item with the original city, product and currency to confirm only. ",
+                ),
+            )
+            return plan, lq.build_purchase_item(city_id, item_type, item_name, yield_type, token)
+
+        return await self._execute_action(ActionIntent("purchase_item", entity, intent=intent), prepare)
 
     async def list_city_production(self, city_id: int, item_type: str | None = None,
                                     item_name: str | None = None) -> list[lq.ProductionOption]:
@@ -1179,27 +1126,22 @@ class GameState:
     async def _player_choice(self, operation: str, target: str | int) -> str:
         intent = (target,)
         entity = self.pending_action_entity
-        if entity is not None and self._actions.matches(operation, entity, intent=intent):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        token = uuid.uuid4().hex
-        pending = _PendingAction(
-            operation, ("player", scope.owner), lq.build_player_choice_confirmation(operation, target, token),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"target": target}, intent=intent,
-            evidence=_ActionEvidence(
-                tool="set_research" if operation == "set_civic" else operation, entrypoint=operation,
-                accepted=("CHOICE_REQUESTED|",), refused="ERR:CHOICE_REFUSED|",
-                confirm=lambda rows: lq.parse_player_choice_confirmation(rows, operation, target, token),
-                guidance=f"Repeat {operation} with the original target to confirm only. ",
-            ),
-        )
-        return await self._submit_action(pending, scope, lq.build_player_choice(operation, target, token))
+        async def prepare(scope):
+            token = uuid.uuid4().hex
+            plan = ActionPlan(
+                operation, ("player", scope.owner), lq.build_player_choice_confirmation(operation, target, token),
+                context="write",
+                details={"target": target}, intent=intent,
+                evidence=_ActionEvidence(
+                    tool="set_research" if operation == "set_civic" else operation, entrypoint=operation,
+                    accepted=("CHOICE_REQUESTED|",), refused="ERR:CHOICE_REFUSED|",
+                    confirm=lambda rows: lq.parse_player_choice_confirmation(rows, operation, target, token),
+                    guidance=f"Repeat {operation} with the original target to confirm only. ",
+                ),
+            )
+            return plan, lq.build_player_choice(operation, target, token)
+
+        return await self._execute_action(ActionIntent(operation, entity, intent=intent), prepare)
 
     # ------------------------------------------------------------------
     # Diplomacy methods
@@ -1262,27 +1204,22 @@ class GameState:
             return "Error: UNSUPPORTED_DIPLOMATIC_ACTION|" + action
         intent = (target, action)
         entity = ("player", target)
-        if self._actions.matches("relationship", entity, intent=intent):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        token = uuid.uuid4().hex
-        pending = _PendingAction(
-            "relationship", entity, relationships.build_confirmation(target, action, token, scope),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            intent=intent, details={"target": target, "action": action},
-            evidence=_ActionEvidence(
-                tool=entrypoint, entrypoint=entrypoint, accepted=("RELATIONSHIP_REQUESTED|",),
-                refused="ERR:RELATIONSHIP_REFUSED|",
-                confirm=lambda rows: relationships.parse_confirmation(rows, token),
-                guidance=f"Repeat {entrypoint} with the original request to confirm only; get_diplomacy remains readable. ",
-            ),
-        )
-        return await self._submit_action(pending, scope, relationships.build_request(target, action, token))
+        async def prepare(scope):
+            token = uuid.uuid4().hex
+            plan = ActionPlan(
+                "relationship", entity, relationships.build_confirmation(target, action, token, scope),
+                context="write",
+                intent=intent, details={"target": target, "action": action},
+                evidence=_ActionEvidence(
+                    tool=entrypoint, entrypoint=entrypoint, accepted=("RELATIONSHIP_REQUESTED|",),
+                    refused="ERR:RELATIONSHIP_REFUSED|",
+                    confirm=lambda rows: relationships.parse_confirmation(rows, token),
+                    guidance=f"Repeat {entrypoint} with the original request to confirm only; get_diplomacy remains readable. ",
+                ),
+            )
+            return plan, relationships.build_request(target, action, token)
+
+        return await self._execute_action(ActionIntent("relationship", entity, intent=intent), prepare)
 
     # ------------------------------------------------------------------
     # Trade deal methods (InGame context)
@@ -1344,46 +1281,29 @@ class GameState:
         intent = tuple(sorted((slot, "NONE" if policy.upper() == "NONE" else policy)
                               for slot, policy in assignments.items()))
         entity = self.pending_action_entity
-        if entity is not None and self._actions.matches("set_policies", entity, intent=intent):
-            pending = self._actions.pending
-            result = await self.confirm_pending_action(wait=False)
-            return await self._continue_policy_plan(pending, result)
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        token = uuid.uuid4().hex
-        pending = _PendingAction(
-            "set_policies", ("player", scope.owner), lq.build_policy_confirmation(token),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"assignments": intent, "witness_token": token}, intent=intent,
-            evidence=_ActionEvidence(
-                tool="set_policies", entrypoint="set_policies", accepted=("POLICY_PLAN_REQUESTED|",),
-                refused="ERR:POLICY_PLAN_REFUSED|",
-                confirm=lambda rows: lq.parse_policy_confirmation(rows, token),
-                guidance="Repeat set_policies with the original assignments to confirm or continue its unstarted stage. ",
-            ),
-        )
-        # A paid plan first submits only UNLOCK_POLICIES. Its native receipt
-        # retains the complete plan even if this acknowledgement is lost.
-        result = await self._submit_action(pending, scope, lq.build_policy_plan(dict(intent), token))
-        return await self._continue_policy_plan(pending, result)
+        async def prepare(scope):
+            token = uuid.uuid4().hex
+            plan = ActionPlan(
+                "set_policies", ("player", scope.owner), lq.build_policy_confirmation(token),
+                context="write",
+                details={"assignments": intent, "witness_token": token}, intent=intent,
+                evidence=_ActionEvidence(
+                    tool="set_policies", entrypoint="set_policies", accepted=("POLICY_PLAN_REQUESTED|",),
+                    refused="ERR:POLICY_PLAN_REFUSED|",
+                    confirm=lambda rows: lq.parse_policy_confirmation(rows, token),
+                    guidance="Repeat set_policies with the original assignments to confirm or continue its unstarted stage. ",
+                ),
+                continuation=ActionContinuation(
+                    ready=lambda rows: lq.policy_plan_ready(rows, token),
+                    code=lq.build_policy_continuation(token), steps=1, label="policy",
+                ),
+            )
+            # A paid plan first submits only UNLOCK_POLICIES. Its native receipt
+            # retains the complete plan even if this acknowledgement is lost.
+            return plan, lq.build_policy_plan(dict(intent), token)
 
-    async def _continue_policy_plan(self, pending: _PendingAction, result: str) -> str:
-        if self._actions.pending is not pending or pending.details.get("scope_invalid"):
-            return result
-        token = pending.details["witness_token"]
-        if not lq.policy_plan_ready(pending.observed, token):
-            return result
-        # Only the explicit owner may advance this paid, never-entered stage.
-        # Ordinary confirmation and every other mutation gate remain read-only.
-        try:
-            await self.conn.execute_write(lq.build_policy_continuation(token))
-        except (OSError, TimeoutError, LuaError) as exc:
-            return self._pending_unknown(f"policy continuation acknowledgement unavailable: {exc}")
-        return await self.confirm_pending_action()
+        return await self._execute_action(ActionIntent("set_policies", entity, intent=intent), prepare)
+
 
     # ------------------------------------------------------------------
     # Governor methods (InGame context)
@@ -1406,41 +1326,38 @@ class GameState:
                 return "Error: INVALID_CITY_ID|Expected a nonnegative full city ID"
             if target_owner is not None and (type(target_owner) is not int or not 0 <= target_owner <= 63):
                 return "Error: INVALID_TARGET_OWNER|Expected a player ID from 0 to 63"
-            if target_owner is None and self._actions.pending is not None:
-                target_owner = self._actions.pending.owner
+            if target_owner is None and self._actions.view is not None:
+                target_owner = self._actions.view.owner
         intent = (governor_type, promotion_type, city_id, target_owner)
         entity = self.pending_action_entity
-        if entity is not None and self._actions.matches(operation, entity):
-            if self._actions.matches(operation, entity, intent=intent):
-                return await self.confirm_pending_action()
-            if operation == "assign_governor":
+        def mismatch(previous):
+            if previous.kind == operation and operation == "assign_governor":
                 return self._pending_unknown("governor target changed; confirm the original request before a new assignment")
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        if operation == "assign_governor" and target_owner is None:
-            target_owner = scope.owner
-            intent = (governor_type, promotion_type, city_id, target_owner)
-        token = uuid.uuid4().hex
-        options = {"promotion_type": promotion_type, "city_id": city_id, "target_owner": target_owner}
-        pending = _PendingAction(
-            operation, ("player", scope.owner),
-            lq.build_governor_confirmation(operation, governor_type, token, **options),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"governor": governor_type, "promotion": promotion_type, "city": city_id,
-                     "target_owner": target_owner}, intent=intent,
-            evidence=_ActionEvidence(
-                tool=operation, entrypoint=operation, accepted=("GOVERNOR_REQUESTED|",),
-                refused="ERR:GOVERNOR_REFUSED|",
-                confirm=lambda rows: lq.parse_governor_confirmation(rows, operation, governor_type, token),
-                guidance=f"Repeat {operation} with the original governor and target to confirm only. ",
-            ),
-        )
-        return await self._submit_action(pending, scope,
-            lq.build_governor_action(operation, governor_type, token, **options))
+            return None
+
+        async def prepare(scope):
+            nonlocal target_owner, intent
+            if operation == "assign_governor" and target_owner is None:
+                target_owner = scope.owner
+                intent = (governor_type, promotion_type, city_id, target_owner)
+            token = uuid.uuid4().hex
+            options = {"promotion_type": promotion_type, "city_id": city_id, "target_owner": target_owner}
+            plan = ActionPlan(
+                operation, ("player", scope.owner),
+                lq.build_governor_confirmation(operation, governor_type, token, **options),
+                context="write",
+                details={"governor": governor_type, "promotion": promotion_type, "city": city_id,
+                         "target_owner": target_owner}, intent=intent,
+                evidence=_ActionEvidence(
+                    tool=operation, entrypoint=operation, accepted=("GOVERNOR_REQUESTED|",),
+                    refused="ERR:GOVERNOR_REFUSED|",
+                    confirm=lambda rows: lq.parse_governor_confirmation(rows, operation, governor_type, token),
+                    guidance=f"Repeat {operation} with the original governor and target to confirm only. ",
+                ),
+            )
+            return plan, lq.build_governor_action(operation, governor_type, token, **options)
+
+        return await self._execute_action(ActionIntent(operation, entity, intent=intent), prepare, mismatch=mismatch)
 
     @_guard_pending_mutation
     async def assign_governor(self, governor_type: str, city_id: int, target_owner: int | None = None) -> str:
@@ -1468,28 +1385,25 @@ class GameState:
     async def promote_unit(self, unit_id: int, promotion_type: str) -> str:
         from civ_mcp.lua import unit_transforms as transforms
         entity, intent = ("unit", unit_id), (promotion_type,)
-        if self._actions.matches("promote_unit", entity, intent=intent):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        if type(unit_id) is not int or unit_id < 0 or not isinstance(promotion_type, str):
-            return "Error: INVALID_PROMOTION_INTENT|Expected a unit ID and promotion type"
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        token = uuid.uuid4().hex
-        pending = _PendingAction(
-            "promote_unit", entity, transforms.build_promote_query(unit_id, promotion_type, token),
-            context="write", submit_context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            intent=intent, evidence=_ActionEvidence(
-                tool="promote_unit", entrypoint="promote_unit", accepted=("UNIT_PROMOTION_REQUESTED|",),
-                refused="ERR:UNIT_PROMOTION_REFUSED|",
-                confirm=lambda rows: transforms.parse_confirmation(rows, token, unit_id, "PROMOTED"),
-                guidance="Repeat promote_unit with the original promotion to confirm only. ",
-            ),
-        )
-        return await self._submit_action(pending, scope, transforms.build_promote(unit_id, promotion_type, token))
+        async def preflight():
+            if type(unit_id) is not int or unit_id < 0 or not isinstance(promotion_type, str):
+                return "Error: INVALID_PROMOTION_INTENT|Expected a unit ID and promotion type"
+
+        async def prepare(scope):
+            token = uuid.uuid4().hex
+            plan = ActionPlan(
+                "promote_unit", entity, transforms.build_promote_query(unit_id, promotion_type, token),
+                context="write", submit_context="write",
+                intent=intent, evidence=_ActionEvidence(
+                    tool="promote_unit", entrypoint="promote_unit", accepted=("UNIT_PROMOTION_REQUESTED|",),
+                    refused="ERR:UNIT_PROMOTION_REFUSED|",
+                    confirm=lambda rows: transforms.parse_confirmation(rows, token, unit_id, "PROMOTED"),
+                    guidance="Repeat promote_unit with the original promotion to confirm only. ",
+                ),
+            )
+            return plan, transforms.build_promote(unit_id, promotion_type, token)
+
+        return await self._execute_action(ActionIntent("promote_unit", entity, intent=intent), prepare, preflight=preflight)
 
     # ------------------------------------------------------------------
     # City-state / Envoy methods (InGame context)
@@ -1503,27 +1417,22 @@ class GameState:
         if type(other_player_id) is not int or not 0 <= other_player_id <= 62:
             return "Error: INVALID_PLAYER_ID|Expected a verified diplomacy participant."
         entity = ("player", other_player_id)
-        if self._actions.matches("close_diplomacy_session", entity):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        token = uuid.uuid4().hex
-        pending = _PendingAction(
-            "close_diplomacy_session", entity, diplomacy_close.build_query(other_player_id, token),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"witness_token": token}, intent=(),
-            evidence=_ActionEvidence(
-                tool="close_diplomacy_session", entrypoint="close_diplomacy_session",
-                accepted=("DIPLOMACY_CLOSE_REQUESTED|",), refused="ERR:DIPLOMACY_CLOSE_REFUSED|",
-                confirm=lambda rows: diplomacy_close.parse_confirmation(rows, other_player_id, token),
-                guidance="Repeat close_diplomacy_session for the same player to confirm only. ",
-            ),
-        )
-        return await self._submit_action(pending, scope, diplomacy_close.build_close(other_player_id, token))
+        async def prepare(scope):
+            token = uuid.uuid4().hex
+            plan = ActionPlan(
+                "close_diplomacy_session", entity, diplomacy_close.build_query(other_player_id, token),
+                context="write",
+                details={"witness_token": token}, intent=(),
+                evidence=_ActionEvidence(
+                    tool="close_diplomacy_session", entrypoint="close_diplomacy_session",
+                    accepted=("DIPLOMACY_CLOSE_REQUESTED|",), refused="ERR:DIPLOMACY_CLOSE_REFUSED|",
+                    confirm=lambda rows: diplomacy_close.parse_confirmation(rows, other_player_id, token),
+                    guidance="Repeat close_diplomacy_session for the same player to confirm only. ",
+                ),
+            )
+            return plan, diplomacy_close.build_close(other_player_id, token)
+
+        return await self._execute_action(ActionIntent("close_diplomacy_session", entity), prepare)
 
     async def get_city_states(self) -> lq.EnvoyStatus:
         # UI influence caches can stay stale after a confirmed envoy. Bind the
@@ -1548,33 +1457,28 @@ class GameState:
         if type(city_state_player_id) is not int or not 0 <= city_state_player_id <= 62:
             return "Error: INVALID_CITY_STATE|Expected a city-state player ID from get_city_states."
         entity = ("player", city_state_player_id)
-        if self._actions.matches("envoy", entity):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        token = uuid.uuid4().hex
-        try:
-            baseline_rows = await self.conn.execute_read(lq.build_envoy_preparation(
-                scope.owner, city_state_player_id, scope.civilization, scope.seed, scope.turn, token))
-            baseline = lq.parse_envoy_preparation(baseline_rows, token, scope.owner, city_state_player_id)
-        except (OSError, TimeoutError, LuaError, ValueError) as error:
-            return f"Error: ENVOY_REFUSED|{error}; no envoy request submitted."
-        pending = _PendingAction(
-            "envoy", entity, lq.build_envoy_query(city_state_player_id, token),
-            gamecore_query=lq.build_envoy_core_query(city_state_player_id, token),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"witness_token": token}, intent=(),
-            evidence=_ActionEvidence(
-                tool="send_envoy", entrypoint="send_envoy", accepted=("ENVOY_REQUESTED|",), refused="ERR:ENVOY_REFUSED|",
-                confirm=lambda rows: lq.parse_envoy_confirmation(rows, token, scope.owner, city_state_player_id, baseline),
-                guidance="Repeat send_envoy for the same player ID to confirm only; use get_city_states to inspect. ",
-            ),
-        )
-        return await self._submit_action(pending, scope, lq.build_send_envoy(city_state_player_id, token, *baseline))
+        async def prepare(scope):
+            token = uuid.uuid4().hex
+            try:
+                baseline_rows = await self.conn.execute_read(lq.build_envoy_preparation(
+                    scope.owner, city_state_player_id, scope.civilization, scope.seed, scope.turn, token))
+                baseline = lq.parse_envoy_preparation(baseline_rows, token, scope.owner, city_state_player_id)
+            except (OSError, TimeoutError, LuaError, ValueError) as error:
+                return f"Error: ENVOY_REFUSED|{error}; no envoy request submitted."
+            plan = ActionPlan(
+                "envoy", entity, lq.build_envoy_query(city_state_player_id, token),
+                gamecore_query=lq.build_envoy_core_query(city_state_player_id, token),
+                context="write",
+                details={"witness_token": token}, intent=(),
+                evidence=_ActionEvidence(
+                    tool="send_envoy", entrypoint="send_envoy", accepted=("ENVOY_REQUESTED|",), refused="ERR:ENVOY_REFUSED|",
+                    confirm=lambda rows: lq.parse_envoy_confirmation(rows, token, scope.owner, city_state_player_id, baseline),
+                    guidance="Repeat send_envoy for the same player ID to confirm only; use get_city_states to inspect. ",
+                ),
+            )
+            return plan, lq.build_send_envoy(city_state_player_id, token, *baseline)
+
+        return await self._execute_action(ActionIntent("envoy", entity), prepare)
 
     # ------------------------------------------------------------------
     # Pantheon methods (InGame context)
@@ -1589,26 +1493,21 @@ class GameState:
     async def choose_pantheon(self, belief_type: str) -> str:
         kind, intent = "choose_pantheon", (belief_type,)
         entity = self.pending_action_entity
-        if entity is not None and self._actions.matches(kind, entity, intent=intent):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        token = uuid.uuid4().hex
-        pending = _PendingAction(
-            kind, ("player", scope.owner), lq.build_religion_confirmation(token),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"belief": belief_type, "witness_token": token}, intent=intent,
-            evidence=_ActionEvidence(
-                tool=kind, entrypoint=kind, accepted=("RELIGION_PLAN_REQUESTED|",), refused="ERR:RELIGION_PLAN_REFUSED|",
-                confirm=lambda rows: lq.parse_religion_confirmation(rows, kind, token),
-                guidance="Repeat the original pantheon choice to confirm only. ",
-            ),
-        )
-        return await self._submit_action(pending, scope, lq.build_pantheon_plan(belief_type, token))
+        async def prepare(scope):
+            token = uuid.uuid4().hex
+            plan = ActionPlan(
+                kind, ("player", scope.owner), lq.build_religion_confirmation(token),
+                context="write",
+                details={"belief": belief_type, "witness_token": token}, intent=intent,
+                evidence=_ActionEvidence(
+                    tool=kind, entrypoint=kind, accepted=("RELIGION_PLAN_REQUESTED|",), refused="ERR:RELIGION_PLAN_REFUSED|",
+                    confirm=lambda rows: lq.parse_religion_confirmation(rows, kind, token),
+                    guidance="Repeat the original pantheon choice to confirm only. ",
+                ),
+            )
+            return plan, lq.build_pantheon_plan(belief_type, token)
+
+        return await self._execute_action(ActionIntent(kind, entity, intent=intent), prepare)
 
     # ------------------------------------------------------------------
     # Religion founding methods (InGame context)
@@ -1625,45 +1524,26 @@ class GameState:
     ) -> str:
         kind, intent = "found_religion", (religion_type, follower_belief, founder_belief)
         entity = self.pending_action_entity
-        if entity is not None and self._actions.matches(kind, entity, intent=intent):
-            pending = self._actions.pending
-            result = await self.confirm_pending_action(wait=False)
-            return await self._continue_religion_plan(pending, result)
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        token = uuid.uuid4().hex
-        pending = _PendingAction(
-            kind, ("player", scope.owner), lq.build_religion_confirmation(token),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"religion": intent, "witness_token": token}, intent=intent,
-            evidence=_ActionEvidence(
-                tool=kind, entrypoint=kind, accepted=("RELIGION_PLAN_REQUESTED|",), refused="ERR:RELIGION_PLAN_REFUSED|",
-                confirm=lambda rows: lq.parse_religion_confirmation(rows, kind, token),
-                guidance="Repeat found_religion with the original religion and both beliefs to confirm or continue only its unstarted stage. ",
-            ),
-        )
-        result = await self._submit_action(pending, scope, lq.build_religion_plan(*intent, token))
-        return await self._continue_religion_plan(pending, result)
+        async def prepare(scope):
+            token = uuid.uuid4().hex
+            plan = ActionPlan(
+                kind, ("player", scope.owner), lq.build_religion_confirmation(token),
+                context="write",
+                details={"religion": intent, "witness_token": token}, intent=intent,
+                evidence=_ActionEvidence(
+                    tool=kind, entrypoint=kind, accepted=("RELIGION_PLAN_REQUESTED|",), refused="ERR:RELIGION_PLAN_REFUSED|",
+                    confirm=lambda rows: lq.parse_religion_confirmation(rows, kind, token),
+                    guidance="Repeat found_religion with the original religion and both beliefs to confirm or continue only its unstarted stage. ",
+                ),
+                continuation=ActionContinuation(
+                    ready=lambda rows: lq.religion_plan_ready(rows, token),
+                    code=lq.build_religion_continuation(token), steps=2, label="religion",
+                ),
+            )
+            return plan, lq.build_religion_plan(*intent, token)
 
-    async def _continue_religion_plan(self, pending: _PendingAction, result: str) -> str:
-        # Two ADD_BELIEF stages can follow a confirmed FOUND_RELIGION. Queries
-        # and unrelated mutation gates never call this explicit-owner continuation.
-        for _ in range(2):
-            if self._actions.pending is not pending or pending.details.get("scope_invalid"):
-                return result
-            token = pending.details["witness_token"]
-            if not lq.religion_plan_ready(pending.observed, token):
-                return result
-            try:
-                await self.conn.execute_write(lq.build_religion_continuation(token))
-            except (OSError, TimeoutError, LuaError) as exc:
-                return self._pending_unknown(f"religion continuation acknowledgement unavailable: {exc}")
-            result = await self.confirm_pending_action()
-        return result
+        return await self._execute_action(ActionIntent(kind, entity, intent=intent), prepare)
+
 
     # ------------------------------------------------------------------
     # Unit upgrade methods (InGame context)
@@ -1679,28 +1559,25 @@ class GameState:
     async def upgrade_unit(self, unit_id: int) -> str:
         from civ_mcp.lua import unit_transforms as transforms
         entity, intent = ("unit", unit_id), ()
-        if self._actions.matches("upgrade_unit", entity, intent=intent):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        if type(unit_id) is not int or unit_id < 0:
-            return "Error: INVALID_UNIT_ID|Expected a nonnegative integer"
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        token = uuid.uuid4().hex
-        pending = _PendingAction(
-            "upgrade_unit", entity, transforms.build_upgrade_query(unit_id, token),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            intent=intent, evidence=_ActionEvidence(
-                tool="upgrade_unit", entrypoint="upgrade_unit", accepted=("UNIT_UPGRADE_REQUESTED|",),
-                refused="ERR:UNIT_UPGRADE_REFUSED|",
-                confirm=lambda rows: transforms.parse_confirmation(rows, token, unit_id, "UPGRADED"),
-                guidance="Repeat upgrade_unit with the original unit to confirm only. ",
-            ),
-        )
-        return await self._submit_action(pending, scope, transforms.build_upgrade(unit_id, token))
+        async def preflight():
+            if type(unit_id) is not int or unit_id < 0:
+                return "Error: INVALID_UNIT_ID|Expected a nonnegative integer"
+
+        async def prepare(scope):
+            token = uuid.uuid4().hex
+            plan = ActionPlan(
+                "upgrade_unit", entity, transforms.build_upgrade_query(unit_id, token),
+                context="write",
+                intent=intent, evidence=_ActionEvidence(
+                    tool="upgrade_unit", entrypoint="upgrade_unit", accepted=("UNIT_UPGRADE_REQUESTED|",),
+                    refused="ERR:UNIT_UPGRADE_REFUSED|",
+                    confirm=lambda rows: transforms.parse_confirmation(rows, token, unit_id, "UPGRADED"),
+                    guidance="Repeat upgrade_unit with the original unit to confirm only. ",
+                ),
+            )
+            return plan, transforms.build_upgrade(unit_id, token)
+
+        return await self._execute_action(ActionIntent("upgrade_unit", entity, intent=intent), prepare, preflight=preflight)
 
     # ------------------------------------------------------------------
     # Dedications / Commemorations
@@ -1760,26 +1637,21 @@ class GameState:
         if any(type(value) is not int or value < 0 for value in (city_id, x, y)):
             return "Error: INVALID_TILE_PURCHASE|Expected a full city ID and nonnegative integer coordinates."
         entity, intent = ("city", city_id), (x, y)
-        if self._actions.matches("purchase_tile", entity, intent=intent):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        token = uuid.uuid4().hex
-        pending = _PendingAction(
-            "purchase_tile", entity, lq.build_tile_purchase_query(city_id, x, y, token),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"target": (x, y), "witness_token": token}, intent=intent,
-            evidence=_ActionEvidence(
-                tool="purchase_tile", entrypoint="purchase_tile", accepted=("TILE_PURCHASE_REQUESTED|",), refused="ERR:TILE_PURCHASE_REFUSED|",
-                confirm=lambda rows: lq.parse_tile_purchase_confirmation(rows, token, city_id, x, y),
-                guidance="Repeat purchase_tile with the original city and coordinates to confirm only. ",
-            ),
-        )
-        return await self._submit_action(pending, scope, lq.build_purchase_tile(city_id, x, y, token))
+        async def prepare(scope):
+            token = uuid.uuid4().hex
+            plan = ActionPlan(
+                "purchase_tile", entity, lq.build_tile_purchase_query(city_id, x, y, token),
+                context="write",
+                details={"target": (x, y), "witness_token": token}, intent=intent,
+                evidence=_ActionEvidence(
+                    tool="purchase_tile", entrypoint="purchase_tile", accepted=("TILE_PURCHASE_REQUESTED|",), refused="ERR:TILE_PURCHASE_REFUSED|",
+                    confirm=lambda rows: lq.parse_tile_purchase_confirmation(rows, token, city_id, x, y),
+                    guidance="Repeat purchase_tile with the original city and coordinates to confirm only. ",
+                ),
+            )
+            return plan, lq.build_purchase_tile(city_id, x, y, token)
+
+        return await self._execute_action(ActionIntent("purchase_tile", entity, intent=intent), prepare)
 
     # ------------------------------------------------------------------
     # Government change (InGame context)
@@ -1832,26 +1704,21 @@ class GameState:
         if kind == "patronize_great_person" and currency not in {"YIELD_GOLD", "YIELD_FAITH"}:
             return "Error: INVALID_CURRENCY|Expected YIELD_GOLD or YIELD_FAITH."
         entity, intent = ("great_person", individual), (currency,)
-        if self._actions.matches(kind, entity, intent=intent):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        token = uuid.uuid4().hex
-        pending = _PendingAction(
-            kind, entity, lq.build_great_person_pool_query(kind, individual, currency, token),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"currency": currency, "witness_token": token}, intent=intent,
-            evidence=_ActionEvidence(
-                tool=kind, entrypoint=kind, accepted=("GP_POOL_REQUESTED|",), refused="ERR:GP_POOL_REFUSED|",
-                confirm=lambda rows: lq.parse_great_person_pool_confirmation(rows, token, kind, individual, currency),
-                guidance="Repeat the original Great Person action, individual and currency to confirm only. ",
-            ),
-        )
-        return await self._submit_action(pending, scope, lq.build_great_person_pool_action(kind, individual, currency, token))
+        async def prepare(scope):
+            token = uuid.uuid4().hex
+            plan = ActionPlan(
+                kind, entity, lq.build_great_person_pool_query(kind, individual, currency, token),
+                context="write",
+                details={"currency": currency, "witness_token": token}, intent=intent,
+                evidence=_ActionEvidence(
+                    tool=kind, entrypoint=kind, accepted=("GP_POOL_REQUESTED|",), refused="ERR:GP_POOL_REFUSED|",
+                    confirm=lambda rows: lq.parse_great_person_pool_confirmation(rows, token, kind, individual, currency),
+                    guidance="Repeat the original Great Person action, individual and currency to confirm only. ",
+                ),
+            )
+            return plan, lq.build_great_person_pool_action(kind, individual, currency, token)
+
+        return await self._execute_action(ActionIntent(kind, entity, intent=intent), prepare)
 
     async def get_religion_defense(self) -> religion_defense.ReligionDefense:
         """Read current scoped facts without changing any pending owner or UI."""
@@ -1916,61 +1783,56 @@ class GameState:
                 return "Error: INVALID_SPREAD_TARGET|Supply both nonnegative integer city coordinates or neither; no action submitted."
             target = (target_x, target_y)
         entity, intent = ("unit", unit_id), target or ()
-        if self._actions.matches(kind, entity, intent=intent):
-            return await self.confirm_pending_action()
-        pending = self._actions.pending
-        if kind == "spread_religion" and pending is not None and pending.kind == kind:
-            # Reject before a generic gate can confirm the old effect and let
-            # this changed request spend another charge in the same call.
-            return (f"ERR:PENDING_SPREAD_MISMATCH|Existing spread for unit {pending.entity[1]}, "
-                    f"target={pending.intent}; new request not submitted. "
-                    "Repeat the original unit ID and coordinates (or original omission) to confirm only.")
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        token = uuid.uuid4().hex
-        core_religion = None
-        core_followers = None
-        core_query = None
-        if kind == "spread_religion":
-            from civ_mcp.lua import spread_followers
-            try:
-                rows = await self.conn.execute_read(scope.guard(spread_followers.build_preflight(
-                    unit_id, token, scope.owner, scope.civilization, scope.seed, scope.turn, target=target)))
-                core_followers = spread_followers.parse_preflight(rows, unit_id, token, scope.owner)
-                if core_followers is not None:
-                    core_query = spread_followers.build_query(unit_id, token)
-            except (OSError, TimeoutError, LuaError, ValueError):
-                # 独立读数不可用时仍只能依靠既有实际压力增加证明，不能放宽成功条件。
-                pass
-        if kind == "launch_inquisition":
-            from civ_mcp.lua import inquisition
-            try:
-                rows = await self.conn.execute_read(scope.guard(inquisition.build_core_preflight(
-                    unit_id, token, scope.owner, scope.civilization, scope.seed, scope.turn)))
-                core_religion = inquisition.parse_core_preflight(
-                    rows, unit_id, token, scope.owner, scope.civilization, scope.seed, scope.turn)
-                if core_religion is None:
-                    return "Error: UNIT_EFFECT_REFUSED|GAMECORE_PREFLIGHT_UNCONFIRMED|" + "; ".join(rows)
-                core_query = inquisition.build_core_query(unit_id, token, core_religion)
-            except (OSError, TimeoutError, LuaError, ValueError) as exc:
-                return f"Error: UNIT_EFFECT_REFUSED|GAMECORE_PREFLIGHT_UNAVAILABLE|{exc}; no action submitted."
-        pending = _PendingAction(
-            kind, entity, lq.build_unit_effect_query(kind, unit_id, token),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"witness_token": token, **({"target": target} if target is not None else {})}, intent=intent, gamecore_query=core_query,
-            evidence=_ActionEvidence(
-                tool="unit_action", entrypoint=kind, accepted=("UNIT_EFFECT_REQUESTED|",), refused="ERR:UNIT_EFFECT_REFUSED|",
-                confirm=lambda rows: lq.parse_unit_effect_confirmation(rows, kind, unit_id, token),
-                guidance=("Repeat the original unit effect" + (" with the same target" if target is not None else "")
-                          + " to confirm only; rewards beyond reported evidence remain unmeasured. "),
-            ),
-        )
-        return await self._submit_action(pending, scope, lq.build_unit_effect(
-            kind, unit_id, token, core_religion=core_religion, core_followers=core_followers, target=target))
+        def mismatch(previous):
+            if kind == "spread_religion" and previous.kind == kind:
+                return (f"ERR:PENDING_SPREAD_MISMATCH|Existing spread for unit {previous.entity[1]}, "
+                        f"target={previous.intent}; new request not submitted. "
+                        "Repeat the original unit ID and coordinates (or original omission) to confirm only.")
+            return None
+
+        async def prepare(scope):
+            token = uuid.uuid4().hex
+            core_religion = None
+            core_followers = None
+            core_query = None
+            if kind == "spread_religion":
+                from civ_mcp.lua import spread_followers
+                try:
+                    rows = await self.conn.execute_read(scope.guard(spread_followers.build_preflight(
+                        unit_id, token, scope.owner, scope.civilization, scope.seed, scope.turn, target=target)))
+                    core_followers = spread_followers.parse_preflight(rows, unit_id, token, scope.owner)
+                    if core_followers is not None:
+                        core_query = spread_followers.build_query(unit_id, token)
+                except (OSError, TimeoutError, LuaError, ValueError):
+                    # 独立读数不可用时仍只能依靠既有实际压力增加证明，不能放宽成功条件。
+                    pass
+            if kind == "launch_inquisition":
+                from civ_mcp.lua import inquisition
+                try:
+                    rows = await self.conn.execute_read(scope.guard(inquisition.build_core_preflight(
+                        unit_id, token, scope.owner, scope.civilization, scope.seed, scope.turn)))
+                    core_religion = inquisition.parse_core_preflight(
+                        rows, unit_id, token, scope.owner, scope.civilization, scope.seed, scope.turn)
+                    if core_religion is None:
+                        return "Error: UNIT_EFFECT_REFUSED|GAMECORE_PREFLIGHT_UNCONFIRMED|" + "; ".join(rows)
+                    core_query = inquisition.build_core_query(unit_id, token, core_religion)
+                except (OSError, TimeoutError, LuaError, ValueError) as exc:
+                    return f"Error: UNIT_EFFECT_REFUSED|GAMECORE_PREFLIGHT_UNAVAILABLE|{exc}; no action submitted."
+            plan = ActionPlan(
+                kind, entity, lq.build_unit_effect_query(kind, unit_id, token),
+                context="write",
+                details={"witness_token": token, **({"target": target} if target is not None else {})}, intent=intent, gamecore_query=core_query,
+                evidence=_ActionEvidence(
+                    tool="unit_action", entrypoint=kind, accepted=("UNIT_EFFECT_REQUESTED|",), refused="ERR:UNIT_EFFECT_REFUSED|",
+                    confirm=lambda rows: lq.parse_unit_effect_confirmation(rows, kind, unit_id, token),
+                    guidance=("Repeat the original unit effect" + (" with the same target" if target is not None else "")
+                              + " to confirm only; rewards beyond reported evidence remain unmeasured. "),
+                ),
+            )
+            return plan, lq.build_unit_effect(
+                kind, unit_id, token, core_religion=core_religion, core_followers=core_followers, target=target)
+
+        return await self._execute_action(ActionIntent(kind, entity, intent=intent), prepare, mismatch=mismatch)
 
     @_guard_pending_mutation
     async def remove_heresy(self, unit_index: int) -> str:
@@ -1978,27 +1840,22 @@ class GameState:
         if type(unit_index) is not int or unit_index < 0:
             return "Error: INVALID_UNIT_ID|Expected the original full unit ID."
         entity, intent = ("unit", unit_index), ()
-        if self._actions.matches("remove_heresy", entity, intent=intent):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        token = uuid.uuid4().hex
-        pending = _PendingAction(
-            "remove_heresy", entity, remove_heresy.build_remove_heresy_query(unit_index, token),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"witness_token": token}, intent=intent,
-            evidence=_ActionEvidence(
-                tool="unit_action", entrypoint="remove_heresy", accepted=("REMOVE_HERESY_REQUESTED|",),
-                refused="ERR:REMOVE_HERESY_REFUSED|",
-                confirm=lambda rows: remove_heresy.parse_remove_heresy_confirmation(rows, unit_index, token),
-                guidance="Repeat the original remove_heresy action to confirm only; do not spend another charge. ",
-            ),
-        )
-        return await self._submit_action(pending, scope, remove_heresy.build_remove_heresy(unit_index, token))
+        async def prepare(scope):
+            token = uuid.uuid4().hex
+            plan = ActionPlan(
+                "remove_heresy", entity, remove_heresy.build_remove_heresy_query(unit_index, token),
+                context="write",
+                details={"witness_token": token}, intent=intent,
+                evidence=_ActionEvidence(
+                    tool="unit_action", entrypoint="remove_heresy", accepted=("REMOVE_HERESY_REQUESTED|",),
+                    refused="ERR:REMOVE_HERESY_REFUSED|",
+                    confirm=lambda rows: remove_heresy.parse_remove_heresy_confirmation(rows, unit_index, token),
+                    guidance="Repeat the original remove_heresy action to confirm only; do not spend another charge. ",
+                ),
+            )
+            return plan, remove_heresy.build_remove_heresy(unit_index, token)
+
+        return await self._execute_action(ActionIntent("remove_heresy", entity, intent=intent), prepare)
 
     @_guard_pending_mutation
     async def spread_religion(self, unit_index: int, target_x: int | None = None, target_y: int | None = None) -> str:
@@ -2014,27 +1871,22 @@ class GameState:
         if any(type(value) is not int or value < 0 for value in (unit_id, target_x, target_y)):
             return "Error: INVALID_RELIGIOUS_ATTACK|Expected full unit ID and nonnegative integer coordinates."
         kind, entity, intent = "religious_attack", ("unit", unit_id), (target_x, target_y)
-        if self._actions.matches(kind, entity, intent=intent):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        token = uuid.uuid4().hex
-        pending = _PendingAction(
-            kind, entity, religious_combat.build_religious_attack_query(unit_id, token),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"witness_token": token}, intent=intent,
-            evidence=_ActionEvidence(
-                tool="unit_action", entrypoint=kind, accepted=("RELIGIOUS_ATTACK_REQUESTED|",),
-                refused="ERR:RELIGIOUS_ATTACK_REFUSED|",
-                confirm=lambda rows: religious_combat.parse_religious_attack(rows, unit_id, token),
-                guidance="Repeat the same religious_attack to confirm only; no automatic resubmission. ",
-            ),
-        )
-        return await self._submit_action(pending, scope, religious_combat.build_religious_attack(unit_id, target_x, target_y, token))
+        async def prepare(scope):
+            token = uuid.uuid4().hex
+            plan = ActionPlan(
+                kind, entity, religious_combat.build_religious_attack_query(unit_id, token),
+                context="write",
+                details={"witness_token": token}, intent=intent,
+                evidence=_ActionEvidence(
+                    tool="unit_action", entrypoint=kind, accepted=("RELIGIOUS_ATTACK_REQUESTED|",),
+                    refused="ERR:RELIGIOUS_ATTACK_REFUSED|",
+                    confirm=lambda rows: religious_combat.parse_religious_attack(rows, unit_id, token),
+                    guidance="Repeat the same religious_attack to confirm only; no automatic resubmission. ",
+                ),
+            )
+            return plan, religious_combat.build_religious_attack(unit_id, target_x, target_y, token)
+
+        return await self._execute_action(ActionIntent(kind, entity, intent=intent), prepare)
 
     @_guard_pending_mutation
     async def launch_inquisition(self, unit_index: int) -> str:
@@ -2054,26 +1906,21 @@ class GameState:
         if any(type(value) is not int or value < 0 for value in (unit_id, x, y)):
             return "Error: INVALID_TRADER_INTENT|Expected a full trader ID and nonnegative integer city coordinates."
         entity, intent = ("unit", unit_id), (x, y)
-        if self._actions.matches(kind, entity, intent=intent):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        token = uuid.uuid4().hex
-        pending = _PendingAction(
-            kind, entity, lq.build_trader_action_query(kind, unit_id, x, y, token),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"target": (x, y), "witness_token": token}, intent=intent,
-            evidence=_ActionEvidence(
-                tool="unit_action", entrypoint=entrypoint, accepted=("TRADER_REQUESTED|",), refused="ERR:TRADER_REFUSED|",
-                confirm=lambda rows: lq.parse_trader_confirmation(rows, token, kind, unit_id),
-                guidance="Repeat the original trader action and destination to confirm only; inspect get_trade_routes. ",
-            ),
-        )
-        return await self._submit_action(pending, scope, lq.build_trader_action(kind, unit_id, x, y, token))
+        async def prepare(scope):
+            token = uuid.uuid4().hex
+            plan = ActionPlan(
+                kind, entity, lq.build_trader_action_query(kind, unit_id, x, y, token),
+                context="write",
+                details={"target": (x, y), "witness_token": token}, intent=intent,
+                evidence=_ActionEvidence(
+                    tool="unit_action", entrypoint=entrypoint, accepted=("TRADER_REQUESTED|",), refused="ERR:TRADER_REFUSED|",
+                    confirm=lambda rows: lq.parse_trader_confirmation(rows, token, kind, unit_id),
+                    guidance="Repeat the original trader action and destination to confirm only; inspect get_trade_routes. ",
+                ),
+            )
+            return plan, lq.build_trader_action(kind, unit_id, x, y, token)
+
+        return await self._execute_action(ActionIntent(kind, entity, intent=intent), prepare)
 
     # ------------------------------------------------------------------
     # World Congress (InGame context)
@@ -2091,9 +1938,9 @@ class GameState:
         """Explicitly enter a verified nonempty voting UI, never cast votes."""
         if self._pending_load or self._pending_save:
             return "ERR:OUTCOME_UNKNOWN|Load/save must be confirmed before opening Congress."
-        if self._pending_action is not None:
+        if self._actions.view is not None:
             await self.confirm_pending_action()
-            if self._pending_action is not None:
+            if self._actions.view is not None:
                 return self._pending_unknown("Congress was not opened")
         return await self._congress_progress.submit(
             self.conn, 'open', allows_world=self._turn_progress.allows_diplomacy_world)
@@ -2129,35 +1976,30 @@ class GameState:
             name = "YIELD_" + name
         if name != "DEFAULT" and not re.fullmatch(r"YIELD_[A-Z0-9_]+", name):
             return "Error: FOCUS_INVALID|Invalid yield name."
-        if self._actions.matches("city_focus", ("city", city_id), item=name):
-            return await self.confirm_pending_action()
-        blocked = await self._action_gate()
-        if blocked:
-            return blocked
-        scope = await self._actions.prepare_scope(self._game_identity)
-        if isinstance(scope, str):
-            return scope
-        try:
-            rows = await self.conn.execute_write(scope.guard(lq.build_city_yield_focus_query(city_id, name)))
-            facts = {}
-            for key in ("CITY", "CURRENT", "GOAL"):
-                values = [row.split("|", 1)[1] for row in rows if row.startswith("CITY_FOCUS_" + key + "|")]
-                if len(values) != 1:
-                    return "Error: FOCUS_STATE_UNKNOWN|Native city or complete preferences unavailable; no action submitted."
-                facts[key] = values[0]
-        except (OSError, TimeoutError, LuaError):
-            return "Error: FOCUS_STATE_UNKNOWN|Native Citizens read failed; no action submitted."
-        if facts["CURRENT"] == facts["GOAL"]:
-            return f"NO_CHANGE|city:{city_id}|focus:{name}|Native Citizens already match the target."
-        token = uuid.uuid4().hex
-        pending = _PendingAction(
-            "city_focus", ("city", city_id),
-            lq.build_city_yield_focus_query(city_id, name, witness_token=token, expected_city=facts["CITY"], expected_goal=facts["GOAL"]),
-            context="write", identity=scope.identity, turn=scope.turn, owner=scope.owner,
-            details={"item": name, "witness_token": token, "city": facts["CITY"].split(",")[0], "goal": facts["GOAL"]},
-        )
-        code = lq.build_set_yield_focus(city_id, name, expected_city=facts["CITY"], expected_current=facts["CURRENT"], expected_goal=facts["GOAL"], witness_token=token)
-        return await self._submit_action(pending, scope, code)
+        async def prepare(scope):
+            try:
+                rows = await self.conn.execute_write(scope.guard(lq.build_city_yield_focus_query(city_id, name)))
+                facts = {}
+                for key in ("CITY", "CURRENT", "GOAL"):
+                    values = [row.split("|", 1)[1] for row in rows if row.startswith("CITY_FOCUS_" + key + "|")]
+                    if len(values) != 1:
+                        return "Error: FOCUS_STATE_UNKNOWN|Native city or complete preferences unavailable; no action submitted."
+                    facts[key] = values[0]
+            except (OSError, TimeoutError, LuaError):
+                return "Error: FOCUS_STATE_UNKNOWN|Native Citizens read failed; no action submitted."
+            if facts["CURRENT"] == facts["GOAL"]:
+                return f"NO_CHANGE|city:{city_id}|focus:{name}|Native Citizens already match the target."
+            token = uuid.uuid4().hex
+            plan = ActionPlan(
+                "city_focus", ("city", city_id),
+                lq.build_city_yield_focus_query(city_id, name, witness_token=token, expected_city=facts["CITY"], expected_goal=facts["GOAL"]),
+                context="write",
+                details={"item": name, "witness_token": token, "city": facts["CITY"].split(",")[0], "goal": facts["GOAL"]},
+            )
+            code = lq.build_set_yield_focus(city_id, name, expected_city=facts["CITY"], expected_current=facts["CURRENT"], expected_goal=facts["GOAL"], witness_token=token)
+            return plan, code
+
+        return await self._execute_action(ActionIntent("city_focus", ("city", city_id), details={'item': name}), prepare)
 
     # ------------------------------------------------------------------
     # Notifications
@@ -2183,7 +2025,9 @@ class GameState:
         # The unit builder uses InGame-only native operation/command checks,
         # including ranged target checks when a unit has moves remaining.
         unit_lines = await self.conn.execute_write(lq.build_units_query())
-        units = lq.parse_units_response(unit_lines)
+        # A truncated entity cannot become a disappearance in the turn diff.
+        # Optional stockpile failure below may still produce a limited report.
+        units = observe_units_response(unit_lines).require_complete()
 
         city_lines = await self.conn.execute_write(lq.build_cities_query())
         cities, _ = lq.parse_cities_response(city_lines)

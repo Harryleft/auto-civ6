@@ -199,3 +199,18 @@ def test_actual_decision_envelope_is_timing_anchor_without_extra_queries(view):
     assert timing.report()['completed_turns'] == 1
     assert timing.report()['rounds'][0]['turn'] == 12
     assert len(conn.calls) == 1
+
+
+@pytest.mark.parametrize('section,rows', [
+    ('notifications', ['TOTAL|broken', 'NOTIF|truncated']),
+    ('notifications', ['TOTAL|1|1']),
+    ('blockers', ['NONE', 'BLOCKING|CHOOSE_TECH|Choose tech']),
+    ('outcome', ['GAME_OVER|']),
+    ('units', ['65536|0|Warrior|UNIT_WARRIOR|1,2|nan/2|100/100']),
+])
+def test_malformed_completed_section_stays_unknown_through_game_state(section, rows):
+    value, game, conn = read(response({section: rows}), view='structured')
+    assert value['status'] == 'unknown' and value['sections'][section]['status'] == 'unknown'
+    assert 'data' not in value['sections'][section]
+    assert value['sections']['overview']['status'] == 'ready'
+    assert len(conn.calls) == 1 and game._last_snapshot is None

@@ -8,6 +8,7 @@ import shlex
 import re
 
 from civ_mcp.devtools.evidence import CommandError
+from civ_mcp.operations import operation, validate_arguments, UNIT_ACTIONS, CITY_ACTIONS
 
 
 GROUPS = {
@@ -124,7 +125,8 @@ def domain_parser(group: str):
         epilog="Foreground session command; retains the same MCP process. Use help TOPIC COMMAND or TOPIC COMMAND --help; docs/cli.md is the short guide index.")
     commands = root.add_subparsers(required=True)
 
-    def command(name, tool, description, *, mutation=False):
+    def command(name, tool, description):
+        mutation = not operation(tool).readonly
         basic_notes = ("Query current state first. Preview with --dry-run; actual execution sends once through Runtime. "
                        "Unknown outcomes require inspection of pending, never automatic replay." if mutation else
                        "Returns the original MCP result in a JSONL tool_result event.")
@@ -141,6 +143,15 @@ def domain_parser(group: str):
 
     def entity(child, name):
         child.add_argument(name, type=int, help="Native ID from this session's current state query")
+
+    def action_arguments(child, tool, action):
+        spec = (UNIT_ACTIONS if tool == "unit_action" else CITY_ACTIONS)[action]
+        for field in spec.required:
+            child.add_argument(field, **({"type": int} if field.startswith("target_") else {}))
+        if spec.optional_coordinates:
+            for field in ("target_x", "target_y"):
+                child.add_argument(field, type=int, nargs="?", default=argparse.SUPPRESS,
+                                   help="Expected visible city coordinate; supply both coordinates")
 
     def report(name, section, description, *, pagination=True, since=False, player=False):
         child = command(name, "get_public_report", description)
@@ -161,17 +172,15 @@ def domain_parser(group: str):
         preview.add_argument("target_x", type=int)
         preview.add_argument("target_y", type=int)
         preview.add_argument("--dry-run", action="store_true", help="Validate schema only; do not query native eligibility or simulate combat")
-        move = command("move", "unit_action", "Move one unit to a queried coordinate.", mutation=True)
+        move = command("move", "unit_action", "Move one unit to a queried coordinate.")
         entity(move, "unit_id")
-        move.add_argument("target_x", type=int)
-        move.add_argument("target_y", type=int)
+        action_arguments(move, "unit_action", "move")
         move.set_defaults(action="move")
-        rebase = command("rebase", "unit_action", "Rebase one aircraft to a native eligible city, airfield or carrier.", mutation=True)
+        rebase = command("rebase", "unit_action", "Rebase one aircraft to a native eligible city, airfield or carrier.")
         entity(rebase, "unit_id")
-        rebase.add_argument("target_x", type=int)
-        rebase.add_argument("target_y", type=int)
+        action_arguments(rebase, "unit_action", "rebase")
         rebase.set_defaults(action="rebase")
-        action = command("action", "unit_action", "Issue one explicit native unit action; prefer a specific unit subcommand when available.", mutation=True)
+        action = command("action", "unit_action", "Issue one explicit native unit action; prefer a specific unit subcommand when available.")
         entity(action, "unit_id")
         action.add_argument("action", help="Native action name; specific unit subcommands cover the common supported actions")
         coordinates(action)
@@ -179,22 +188,18 @@ def domain_parser(group: str):
         for name in ("attack", "skip", "fortify", "heal", "improve"):
             description = ("Attack a visible hostile unit or city; city combat confirms defense damage or capture."
                            if name == "attack" else f"Explicitly {name} one unit; native eligibility is checked at execution.")
-            child = command(name, "unit_action", description, mutation=True)
+            child = command(name, "unit_action", description)
             entity(child, "unit_id")
             child.set_defaults(action=name)
-            if name == "attack":
-                child.add_argument("target_x", type=int)
-                child.add_argument("target_y", type=int)
-            elif name == "improve":
-                child.add_argument("improvement", help="Native improvement type, for example IMPROVEMENT_FARM")
-        command("skip-remaining", "skip_remaining_units", "Skip current ready units; preserve standing orders and inspect each native outcome.", mutation=True)
-        for name, tool, description, mutation in (
-            ("promotions", "get_unit_promotions", "Read this unit's native promotion options.", False),
-            ("promote", "promote_unit", "Choose one promotion returned by unit promotions.", True),
-            ("upgrade", "upgrade_unit", "Upgrade this unit; costs gold/resources and movement.", True),
-            ("path", "get_pathing_estimate", "Estimate a path to a queried coordinate; does not move the unit.", False),
+            action_arguments(child, "unit_action", name)
+        command("skip-remaining", "skip_remaining_units", "Skip current ready units; preserve standing orders and inspect each native outcome.")
+        for name, tool, description in (
+            ("promotions", "get_unit_promotions", "Read this unit's native promotion options."),
+            ("promote", "promote_unit", "Choose one promotion returned by unit promotions."),
+            ("upgrade", "upgrade_unit", "Upgrade this unit; costs gold/resources and movement."),
+            ("path", "get_pathing_estimate", "Estimate a path to a queried coordinate; does not move the unit."),
         ):
-            child = command(name, tool, description, mutation=mutation)
+            child = command(name, tool, description)
             entity(child, "unit_id")
             if name == "promote":
                 child.add_argument("promotion_type", help="Native promotion type from unit promotions")
@@ -208,23 +213,16 @@ def domain_parser(group: str):
                      "condemn-heretic", "remove-heresy", "trade-route", "teleport", "religious-attack"):
             description = ("Permanently disband this unit; native removal must be confirmed." if name == "delete"
                            else f"Explicitly {name} with one unit through the existing Runtime.")
-            child = command(name, "unit_action", description, mutation=True)
+            child = command(name, "unit_action", description)
             entity(child, "unit_id")
             child.set_defaults(action=name.replace("-", "_"))
-            if name in {"trade-route", "teleport", "religious-attack"}:
-                child.add_argument("target_x", type=int)
-                child.add_argument("target_y", type=int)
-            elif name == "spread-religion":
-                child.add_argument("target_x", type=int, nargs="?", default=argparse.SUPPRESS,
-                                   help="Expected visible current/adjacent city X; supply both coordinates")
-                child.add_argument("target_y", type=int, nargs="?", default=argparse.SUPPRESS,
-                                   help="Expected city Y; binds the expectation, not SDK target steering")
+            action_arguments(child, "unit_action", name.replace("-", "_"))
         formations = command("formations", "get_unit_formations", "Read escort/military formation state and native eligible target IDs.")
         entity(formations, "unit_id")
         for name in ("link", "unlink", "corps", "army"):
             description = ("Merge two eligible units into a corps/army; consumes one unit." if name in {"corps", "army"}
                            else "Link or unlink an escort formation; preserves the units.")
-            child = command(name, "set_unit_formation", description, mutation=True)
+            child = command(name, "set_unit_formation", description)
             entity(child, "unit_id")
             child.set_defaults(action=name)
             if name != "unlink":
@@ -246,26 +244,25 @@ def domain_parser(group: str):
         production.add_argument('--item', dest='item_name', default=argparse.SUPPRESS,
                                 help='Inspect this exact item, including currently unavailable items; pair with --item-type')
         production.add_argument('--view',choices=('brief','structured'),default=argparse.SUPPRESS)
-        production = command("set-production", "set_city_production", "Choose one production item.", mutation=True)
+        production = command("set-production", "set_city_production", "Choose one production item.")
         entity(production, "city_id")
         production.add_argument("item_type", choices=("UNIT", "BUILDING", "DISTRICT", "PROJECT"))
         production.add_argument("item_name", help="Native item ID from city production")
         coordinates(production)
-        attack = command("attack", "city_action", "Fire once at a visible target; requires eligible city defenses.", mutation=True)
+        attack = command("attack", "city_action", "Fire once at a visible target; requires eligible city defenses.")
         entity(attack, "city_id")
-        attack.add_argument("target_x", type=int)
-        attack.add_argument("target_y", type=int)
+        action_arguments(attack, "city_action", "attack")
         attack.set_defaults(action="attack")
-        decision = command("decision", "city_action", "Explicitly keep, reject, raze or liberate a city with a current native decision.", mutation=True)
+        decision = command("decision", "city_action", "Explicitly keep, reject, raze or liberate a city with a current native decision.")
         entity(decision, "city_id")
-        decision.add_argument("action", choices=("keep", "reject", "raze", "liberate_founder", "liberate_previous"))
+        decision.add_argument("action", choices=tuple(name for name in CITY_ACTIONS if name != "attack"))
         district = command("district", "get_district_advisor", "Read native district placement candidates and adjacency.")
         entity(district, "city_id")
         district.add_argument("district_type", help="Native district type, for example DISTRICT_CAMPUS")
-        focus = command("focus", "set_city_focus", "Change citizen yield priority; default clears focus.", mutation=True)
+        focus = command("focus", "set_city_focus", "Change citizen yield priority; default clears focus.")
         entity(focus, "city_id")
         focus.add_argument("focus", choices=("food", "production", "gold", "science", "culture", "faith", "default"))
-        buy = command("buy", "purchase_item", "Purchase an item immediately; spends gold or faith.", mutation=True)
+        buy = command("buy", "purchase_item", "Purchase an item immediately; spends gold or faith.")
         entity(buy, "city_id")
         buy.add_argument("item_type", choices=("UNIT", "BUILDING"))
         buy.add_argument("item_name", help="Native item ID from city production")
@@ -275,18 +272,18 @@ def domain_parser(group: str):
         wonder.add_argument("wonder_name")
         tiles = command("tiles", "get_purchasable_tiles", "Read purchasable tiles and native gold costs.")
         entity(tiles, "city_id")
-        tile = command("buy-tile", "purchase_tile", "Buy a currently purchasable tile with gold.", mutation=True)
+        tile = command("buy-tile", "purchase_tile", "Buy a currently purchasable tile with gold.")
         entity(tile, "city_id")
         tile.add_argument("x", type=int)
         tile.add_argument("y", type=int)
     elif group == "research":
         command("show", "get_tech_civics", "Read available and current technologies/civics.")
-        choose = command("set", "set_research", "Choose a technology or civic.", mutation=True)
+        choose = command("set", "set_research", "Choose a technology or civic.")
         choose.add_argument("tech_or_civic", help="Native technology/civic ID from research show")
         choose.add_argument("--category", choices=("tech", "civic"), default="tech")
     elif group == "turn":
         command("status", "get_turn_status", "Read native turn phase and pending diagnostics.")
-        command("end", "end_turn", "Submit or confirm exactly one turn request; no blocker auto-resolution.", mutation=True)
+        command("end", "end_turn", "Submit or confirm exactly one turn request; no blocker auto-resolution.")
     elif group == "save":
         command("list", "list_saves", "List saves; the filesystem fallback currently scans Single, not Hotseat.")
         for name, tool, description in (
@@ -294,16 +291,16 @@ def domain_parser(group: str):
             ("reload", "reload_game_save", "Return to menu and load a verified save; discards unsaved changes."),
             ("load", "load_game_save", "Load a verified save from the main menu; does not exit an active game."),
         ):
-            child = command(name, tool, description, mutation=True)
+            child = command(name, tool, description)
             child.add_argument("save_name", help="Exact save name; keep baselines and retained checkpoints unchanged")
             if name == "load":
                 child.add_argument("--source-run", dest="source_run_id", default=argparse.SUPPRESS,
                                    help="Explicit authorized historical test: original registered run ID; requires --sha256")
                 child.add_argument("--sha256", dest="expected_sha256", default=argparse.SUPPRESS,
                                    help="Exact historical checkpoint fingerprint; requires --source-run; starts a new test run")
-        index = command("load-index", "load_save", "Load a confirmed checkpoint from the latest save listing.", mutation=True)
+        index = command("load-index", "load_save", "Load a confirmed checkpoint from the latest save listing.")
         index.add_argument("save_index", type=int)
-        menu = command("menu-load", "load_save_from_menu", "Load an explicit confirmed checkpoint through native FrontEnd.", mutation=True)
+        menu = command("menu-load", "load_save_from_menu", "Load an explicit confirmed checkpoint through native FrontEnd.")
         menu.add_argument("save_name")
     elif group == "knowledge":
         search = command("search", "search_knowledge", "Search rules by name or native ID; quote queries containing spaces.")
@@ -334,11 +331,11 @@ def domain_parser(group: str):
     elif group == "policy":
         policy=command("show", "get_policies", "Read policy change restrictions and current candidates; inspect one unavailable card with --policy.")
         policy.add_argument("--policy", dest="policy_type", default=argparse.SUPPRESS)
-        assign = command("set", "set_policies", "Assign explicit SLOT=POLICY_ID pairs; a changed plan must fill every final slot. Omitted slots stay unchanged.", mutation=True)
+        assign = command("set", "set_policies", "Assign explicit SLOT=POLICY_ID pairs; a changed plan must fill every final slot. Omitted slots stay unchanged.")
         assign.add_argument("assignments", nargs="+", help="Pairs separated by spaces or commas; for example 0=POLICY_DISCIPLINE 1=POLICY_URBAN_PLANNING. NONE may not leave an empty changed plan.")
     elif group == "city-state":
         command("list", "get_city_states", "Read known city-states, player IDs, envoys and suzerains.")
-        envoy = command("envoy", "send_envoy", "Send one envoy; consumes one available token when confirmed.", mutation=True)
+        envoy = command("envoy", "send_envoy", "Send one envoy; consumes one available token when confirmed.")
         envoy.add_argument("player_id", type=int, help="City-state player ID from city-state list")
     elif group == "governor":
         governors=command("list", "get_governors", "Read native eligible governor appointments/promotions; expand blocked choices explicitly.")
@@ -348,7 +345,7 @@ def domain_parser(group: str):
             ("assign", "assign_governor", "Reassign one appointed governor to an identified city."),
             ("promote", "promote_governor", "Choose one promotion; spends an available title."),
         ):
-            child = command(name, tool, description, mutation=True)
+            child = command(name, tool, description)
             child.add_argument("governor_type", help="Native governor type from governor list")
             if name == "assign":
                 entity(child, "city_id")
@@ -358,23 +355,23 @@ def domain_parser(group: str):
                 child.add_argument("promotion_type", help="Native governor promotion from governor list")
     elif group == "congress":
         command("show", "get_world_congress", "Read native stage and choices; never opens voting or submits votes.")
-        command("open", "open_world_congress", "Explicitly enter a verified native voting stage.", mutation=True)
-        votes = command("votes", "queue_wc_votes", "Register or submit a complete explicit JSON vote plan; unknown never replays.", mutation=True)
+        command("open", "open_world_congress", "Explicitly enter a verified native voting stage.")
+        votes = command("votes", "queue_wc_votes", "Register or submit a complete explicit JSON vote plan; unknown never replays.")
         votes.add_argument("votes", help="One quoted JSON array; inspect congress show for native identifiers and costs")
     elif group == "notifications":
         command("show", "get_notifications", "Read notifications; never dismisses popups or chooses responses.")
     elif group == "government":
         command("show", "get_policies", "Read current government and policy slots.")
         report("list", "governments", "Read unlocked governments, general permission and current per-target window/refusal reasons.")
-        change = command("change", "change_government", "Choose an unlocked government explicitly.", mutation=True)
+        change = command("change", "change_government", "Choose an unlocked government explicitly.")
         change.add_argument("government_type")
     elif group == "religion":
         command("show", "get_religion_defense", "Read religion majority, pressure and visible religious threats.")
         command("pantheon", "get_pantheon_beliefs", "Read current pantheon, faith threshold and available bonuses.")
         command("beliefs", "get_religion_beliefs", "Read founded religion and available belief choices.")
-        choose = command("choose-pantheon", "choose_pantheon", "Choose one available pantheon bonus; native eligibility required.", mutation=True)
+        choose = command("choose-pantheon", "choose_pantheon", "Choose one available pantheon bonus; native eligibility required.")
         choose.add_argument("belief_type")
-        found = command("found", "found_religion", "Found a religion using explicitly selected native religion and belief IDs.", mutation=True)
+        found = command("found", "found_religion", "Found a religion using explicitly selected native religion and belief IDs.")
         for name in ("religion_type", "follower_belief", "founder_belief"):
             found.add_argument(name)
         command("spread", "get_religion_spread", "Read religion breakdown across currently visible cities.")
@@ -385,7 +382,7 @@ def domain_parser(group: str):
         advisor = command("advisor", "get_gp_advisor", "Read native activation-city suggestions for a Great Person unit.")
         entity(advisor, "unit_index")
         for name, tool in [("recruit", "recruit_great_person"), ("buy", "patronize_great_person"), ("reject", "reject_great_person")]:
-            child = command(name, tool, "Explicitly select one current Great Person; Runtime retains unknown outcomes.", mutation=True)
+            child = command(name, tool, "Explicitly select one current Great Person; Runtime retains unknown outcomes.")
             entity(child, "individual_id")
             if name == "buy":
                 child.add_argument("--currency", choices=("gold", "faith"), default="gold")
@@ -396,7 +393,7 @@ def domain_parser(group: str):
     elif group == "era":
         command("show", "get_game_overview", "Read current era, age, era score and next-era thresholds.")
         command("dedications", "get_dedications", "Read current selectable dedication bonuses.")
-        choose = command("choose", "choose_dedication", "Choose an index returned by era dedications.", mutation=True)
+        choose = command("choose", "choose_dedication", "Choose an index returned by era dedications.")
         choose.add_argument("dedication_index", type=int)
     elif group == "ranking":
         command("show", "get_victory_progress", "Read public score, science, culture, domination, religion and diplomacy progress.")
@@ -408,7 +405,7 @@ def domain_parser(group: str):
     elif group in {"technology", "civic"}:
         from civ_mcp.research_catalog import FILTERS, ALIASES
         command("status", "get_tech_civics", "Read current research, civic progress and available live choices.")
-        select = command("set", "set_research", "Select one currently available research target.", mutation=True)
+        select = command("set", "set_research", "Select one currently available research target.")
         select.add_argument("tech_or_civic")
         select.set_defaults(category="tech" if group == "technology" else "civic")
         search = command("search", "search_research", "Search cached names, unlocks and positive effect associations; no live eligibility claim.")
@@ -434,17 +431,17 @@ def domain_parser(group: str):
         decision.add_argument("--city", dest="city_ids", nargs="+", type=int, default=argparse.SUPPRESS,
                               help="Native owned city IDs whose production choices to include")
         decision.add_argument("--view", choices=("brief", "structured"), default=argparse.SUPPRESS)
-        command("launch", "launch_game", "Explicitly launch Civ6; does not choose or load a save.", mutation=True)
-        command("menu", "return_to_main_menu", "Return to the native main menu; keeps the process, never loads or saves.", mutation=True)
-        command("stop", "kill_game", "Explicitly stop Civ6; pending lifecycle gates still apply.", mutation=True)
-        recovery = command("recover", "restart_and_load", "Explicit fault recovery: restart Civ6 and load a confirmed checkpoint.", mutation=True)
+        command("launch", "launch_game", "Explicitly launch Civ6; does not choose or load a save.")
+        command("menu", "return_to_main_menu", "Return to the native main menu; keeps the process, never loads or saves.")
+        command("stop", "kill_game", "Explicitly stop Civ6; pending lifecycle gates still apply.")
+        recovery = command("recover", "restart_and_load", "Explicit fault recovery: restart Civ6 and load a confirmed checkpoint.")
         recovery.add_argument("save_name")
     elif group == "diplomacy":
         command("list", "get_diplomacy", "Read encountered civilizations and native diplomatic actions.")
         command("pending", "get_pending_diplomacy", "Read current statements and verified response choices.")
         for name, tool in (("respond", "respond_to_diplomacy"), ("close", "close_diplomacy_session"),
                            ("action", "send_diplomatic_action"), ("peace", "propose_peace"), ("alliance", "form_alliance")):
-            child = command(name, tool, "Explicit native diplomacy; inspect current options, then retain any unknown request.", mutation=True)
+            child = command(name, tool, "Explicit native diplomacy; inspect current options, then retain any unknown request.")
             entity(child, "other_player_id")
             if name == "respond":
                 child.add_argument("response", help="Exact current native choice from diplomacy pending")
@@ -459,18 +456,18 @@ def domain_parser(group: str):
         entity(destinations, "unit_id")
         options = command("options", "get_trade_options", "Read native deal/relationship options for an encountered civilization.")
         entity(options, "other_player_id")
-        response = command("respond", "respond_to_trade", "Explicitly accept or reject current verified terms; unknown retains the original terms.", mutation=True)
+        response = command("respond", "respond_to_trade", "Explicitly accept or reject current verified terms; unknown retains the original terms.")
         entity(response, "other_player_id")
         choice = response.add_mutually_exclusive_group(required=True)
         choice.add_argument("--accept", dest="accept", action="store_true")
         choice.add_argument("--reject", dest="accept", action="store_false")
-        negotiate = command("negotiate", "negotiate_incoming_trade", "Evaluate/edit existing incoming gold entries; never concludes a deal.", mutation=True)
+        negotiate = command("negotiate", "negotiate_incoming_trade", "Evaluate/edit existing incoming gold entries; never concludes a deal.")
         entity(negotiate, "other_player_id")
         negotiate.add_argument("--fingerprint", dest="expected_fingerprint", required=True)
         negotiate.add_argument("--mode", choices=("inspect", "equalize"), default="inspect")
         for name in ("our_gold", "their_gold", "our_gpt", "their_gpt"):
             negotiate.add_argument("--" + name.replace("_", "-"), dest=name, type=int, default=argparse.SUPPRESS)
-        propose = command("propose", "propose_trade", "Explicitly preview or send a complete AI-country deal; human seats are unsupported.", mutation=True)
+        propose = command("propose", "propose_trade", "Explicitly preview or send a complete AI-country deal; human seats are unsupported.")
         entity(propose, "other_player_id")
         propose.add_argument("--mode", choices=("test", "send"), default="send")
         for side in ("offer", "request"):
@@ -483,21 +480,21 @@ def domain_parser(group: str):
         propose.add_argument("--joint-war-type", type=int, default=argparse.SUPPRESS)
     elif group == "spy":
         command("list", "get_spies", "Read spies and their current missions.")
-        action = command("action", "spy_action", "Explicitly assign a native spy action and destination.", mutation=True)
+        action = command("action", "spy_action", "Explicitly assign a native spy action and destination.")
         entity(action, "unit_id")
         action.add_argument("action", help="Native mission/action from spy list")
         action.add_argument("target_x", type=int)
         action.add_argument("target_y", type=int)
     elif group == "popup":
-        command("dismiss", "dismiss_popup", "Close verified information or a finished-session view; never chooses diplomatic terms.", mutation=True)
+        command("dismiss", "dismiss_popup", "Close verified information or a finished-session view; never chooses diplomatic terms.")
     elif group == "developer":
-        lua = command("lua", "run_lua", "Run arbitrary diagnostic Lua only in an explicitly enabled developer session.", mutation=True)
+        lua = command("lua", "run_lua", "Run arbitrary diagnostic Lua only in an explicitly enabled developer session.")
         lua.add_argument("code")
         lua.add_argument("--context", choices=("gamecore", "ingame"), default="gamecore")
     elif group == "hotseat":
-        command("begin", "begin_hotseat_turn", "Explicitly confirm the bound native human seat's PlayerChange.", mutation=True)
-        command("end", "end_hotseat_turn", "Submit/confirm native handoff for the bound seat; does not use normal end_turn.", mutation=True)
-        batch = command("actions", "hotseat_actions", "Execute a quoted JSON list of independent explicit actions; inspect every receipt.", mutation=True)
+        command("begin", "begin_hotseat_turn", "Explicitly confirm the bound native human seat's PlayerChange.")
+        command("end", "end_hotseat_turn", "Submit/confirm native handoff for the bound seat; does not use normal end_turn.")
+        batch = command("actions", "hotseat_actions", "Execute a quoted JSON list of independent explicit actions; inspect every receipt.")
         batch.add_argument("actions_json")
     if group == "great-person":
         report("history", "great-people-history", "Read native past recruitment; currency/payment may be unknown.", player=True)
@@ -524,6 +521,11 @@ def parse_command(line: str) -> Intent:
             hint="Close the quoted argument; use double quotes around names with spaces. No shell expansion is performed.") from exc
     values = vars(domain_parser(words[0]).parse_args(words[1:]))
     tool, dry_run = values.pop("tool"), values.pop("dry_run", False)
+    issues = validate_arguments(tool, values)
+    if issues:
+        raise CommandError("INVALID_DEBUG_ARGUMENT", issues[0]["message"],
+                           hint=f"Use {words[0]} COMMAND --help and correct the fields in details.issues.",
+                           details={"tool": tool, "issues": issues})
     if ("target_x" in values) != ("target_y" in values):
         raise CommandError("INVALID_DEBUG_ARGUMENT", "Target coordinates must include both --x and --y",
                            hint=f"Use {words[0]} COMMAND --help and supply both coordinates or neither.")

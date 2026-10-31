@@ -21,13 +21,9 @@ async def verify_session(debug, *, expected_turn=None, expected_civilization=Non
         if runtime["has_pending"] or runtime.get("shared_pending") or debug.transport_unknown:
             raise CommandError("VERIFY_PENDING", "State verification requires no unresolved requests in this MCP session",
                 hint="Use pending and the original confirmation tool; verification will not confirm or clear the request.")
-        # The existing overview endpoint encodes caught exceptions as "Error:"
-        # text even when MCP isError is false. Recognize that failure boundary;
-        # success still requires the structured native snapshot below.
+        from civ_mcp.results import result_error
         overview = await debug.call("get_game_overview", {})
-        legacy_error = overview is not None and any(
-            item.type == "text" and item.text.startswith("Error:") for item in overview.content)
-        if overview is None or overview.isError or legacy_error:
+        if overview is None or result_error("get_game_overview", overview):
             raise CommandError("LIVE_QUERY_FAILED", "Initial overview RPC failed", "FAIL",
                 hint="Inspect the retained tool response and connection; no mutation has been sent.")
         snapshot = await debug.call("get_game_snapshot", {})

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 
+from civ_mcp.observation import Observation
 from civ_mcp.lua._helpers import SENTINEL, _int
 from civ_mcp.lua.models import (
     GameOverStatus,
@@ -276,6 +277,26 @@ def parse_gameover_response(lines: list[str]) -> GameOverStatus | None:
         victory_type=victory_type,
         player_alive=parts[4] == "alive" if len(parts) > 4 else True,
     )
+
+
+def observe_gameover_response(lines: list[str]) -> Observation[GameOverStatus | None]:
+    """Only one complete native outcome row can certify active/terminal state."""
+    if lines == ["GAME_ACTIVE"]:
+        return Observation(None)
+    valid = len(lines) == 1
+    fields = lines[0].split("|") if valid else []
+    valid = (valid and len(fields) in (6, 7) and fields[0] == "GAME_OVER"
+             and fields[1] in {"VICTORY", "DEFEAT"} and bool(fields[2])
+             and bool(fields[3]) and fields[4] in {"alive", "dead"} and bool(fields[5]))
+    if valid and len(fields) == 7:
+        try:
+            winner = int(fields[6])
+            valid = -1 <= winner <= 63
+        except ValueError:
+            valid = False
+    if not valid:
+        return Observation(None, ("Game outcome unknown: missing, malformed or conflicting native outcome",))
+    return Observation(parse_gameover_response(lines))
 
 
 def parse_overview_response(lines: list[str]) -> GameOverview:

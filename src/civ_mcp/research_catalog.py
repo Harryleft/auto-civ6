@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 from collections import defaultdict
-import hashlib
-import json
 from pathlib import Path
 import re
+
+from civ_mcp.knowledge import read_snapshot
 
 FILTERS = {
     "food": "食物", "science": "科学", "production": "生产力", "culture": "文化值",
@@ -112,18 +112,8 @@ def search(snapshot, cards, query="", filters=None, match="any", limit=20, offse
 def query(root: Path, kind: str, **options):
     if kind not in {"technology", "civic"}:
         raise ValueError("kind must be technology or civic")
-    manifest_bytes = (root / "manifest.json").read_bytes()
-    manifest = json.loads(manifest_bytes)
     topic = "technologies" if kind == "technology" else "civics"
-    snapshot = (root / "sources/snapshot.json").read_bytes()
-    data = (root / f"rules/{topic}.json").read_bytes()
-    if hashlib.sha256(snapshot).hexdigest() != manifest["snapshot_sha256"] or hashlib.sha256(data).hexdigest() != manifest["files"][f"rules/{topic}.json"]:
-        raise ValueError("Knowledge snapshot/rule fingerprint mismatch")
-    decoded = json.loads(snapshot)
-    if decoded.get("profile") != manifest.get("profile"):
-        raise ValueError("Knowledge profile differs from source snapshot")
-    result = search(decoded, json.loads(data)["cards"], **options)
-    if (root / "manifest.json").read_bytes() != manifest_bytes:
-        raise ValueError("Knowledge manifest changed during search")
-    return result | {"profile": manifest["profile"], "snapshot_sha256": manifest["snapshot_sha256"],
-                     "current_session_verified": False, "kind": kind}
+    with read_snapshot(root, topics=(topic,)) as source:
+        result = search(source.snapshot, source.documents[topic]["cards"], **options)
+        return result | {"profile": source.profile, "snapshot_sha256": source.source_reference["sha256"],
+                         "current_session_verified": False, "kind": kind}

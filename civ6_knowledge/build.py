@@ -8,11 +8,11 @@ from pathlib import Path
 import shutil
 import sys
 
-PRIMARY = {'Civics': ('civics', 'CivicType'), 'Technologies': ('technologies', 'TechnologyType'), 'Districts': ('districts', 'DistrictType'), 'Resolutions': ('congress', 'ResolutionType'), 'ProposalTypes': ('congress', 'ProposalType'), 'VotingBlockers': ('congress', 'VotingBlockerType')}
+from reader import CORE_RELATIONSHIPS, PRIMARY, TOPIC_NAMES, VERSION_KEYS, check_snapshot
+
 UNLOCKS = {'Units': 'UnitType', 'Buildings': 'BuildingType', 'Districts': 'DistrictType', 'Improvements': 'ImprovementType', 'Projects': 'ProjectType', 'Policies': 'PolicyType', 'Governments': 'GovernmentType', 'Resources': 'ResourceType', 'Routes': 'RouteType'}
-CORE_RELATIONSHIPS = ('TechnologyPrereqs', 'CivicPrereqs', 'Boosts', 'District_Adjacencies', 'Adjacency_YieldChanges')
 OPTIONAL_TABLES = tuple(UNLOCKS) + ('Districts_XP2', 'District_RequiredFeatures', 'District_ValidTerrains', 'DistrictReplaces', 'District_CitizenYieldChanges', 'GovernmentSlots', 'Government_SlotCounts', 'ResolutionEffects', 'CivilizationTraits', 'LeaderTraits', 'CivilopediaPages', 'CivilopediaPageChapterParagraphs', 'GlobalParameters')
-BASE_SUPPORT_FILES = ('README.md', 'NEXT.md', 'capture.py', 'build.py', 'query.py', 'brief.py', 'topics/civics.md', 'topics/technologies.md', 'topics/districts.md', 'topics/congress.md')
+BASE_SUPPORT_FILES = ('README.md', 'NEXT.md', 'capture.py', 'build.py', 'query.py', 'brief.py', 'reader.py', 'topics/civics.md', 'topics/technologies.md', 'topics/districts.md', 'topics/congress.md')
 
 TOPIC_PRIMARY = {
     'civilizations': {'Civilizations': 'CivilizationType', 'Leaders': 'LeaderType', 'Traits': 'TraitType'},
@@ -22,7 +22,6 @@ TOPIC_PRIMARY = {
     'diplomacy': {'DiplomaticActions': 'DiplomaticActionType', 'Alliances': 'AllianceType'},
     'victory': {'Victories': 'VictoryType', 'Religions': 'ReligionType', 'Beliefs': 'BeliefType'},
 }
-TOPIC_NAMES = ('civics', 'technologies', 'districts', 'congress', *TOPIC_PRIMARY)
 ENTITY_RECORDS = {
     'Traits': ('TraitModifiers',),
     'Improvements': ('ImprovementModifiers', 'Improvement_YieldChanges', 'Improvement_ValidResources'),
@@ -546,8 +545,6 @@ def add_mechanisms(topics, cards, tables, curated):
         for data in records:
             cards[data['id']]['relations'] = [{'type': 'curated_context', 'target': target, 'coverage': 'internal' if target in cards else 'external'} for target in data.get('related', [])]
 
-VERSION_KEYS = ('game_version', 'macos_bundle_version', 'macos_bundle_build', 'steam_build_id', 'ruleset')
-
 
 def encoded(value):
     return (json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2) + '\n').encode('utf-8')
@@ -572,34 +569,6 @@ def name_fallbacks(snapshot, tag):
 
 def source_ref(table, index):
     return {'table': table, 'row': index}
-
-
-def check_snapshot(snapshot):
-    if not isinstance(snapshot, dict):
-        raise ValueError('snapshot must be an object')
-    if snapshot.get('schema_version') != 1:
-        raise ValueError('unsupported snapshot schema_version')
-    for key in ('profile', 'tables', 'localization'):
-        if not isinstance(snapshot.get(key), dict):
-            raise ValueError('missing or invalid snapshot field: ' + key)
-    for key, value in snapshot['localization'].items():
-        if not isinstance(value, dict):
-            raise ValueError('invalid localization object: ' + key)
-    for field in ('code_evidence', 'sources'):
-        if not isinstance(snapshot.get(field, []), list) or any(not isinstance(row, dict) for row in snapshot.get(field, [])):
-            raise ValueError('invalid snapshot list: ' + field)
-    for key in VERSION_KEYS:
-        if not snapshot['profile'].get(key):
-            raise ValueError('missing version field: ' + key)
-    for table in PRIMARY:
-        if not isinstance(snapshot['tables'].get(table), list):
-            raise ValueError('missing primary table: ' + table)
-    for table in CORE_RELATIONSHIPS:
-        if not isinstance(snapshot['tables'].get(table), list):
-            raise ValueError('missing core relationship table: ' + table)
-    for table, rows in snapshot['tables'].items():
-        if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
-            raise ValueError('invalid table rows: ' + table)
 
 
 def generate(snapshot, root=None):

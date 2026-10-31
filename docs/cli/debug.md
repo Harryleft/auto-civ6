@@ -17,7 +17,7 @@
 | `quit [--abandon] [--dry-run]` | 正常退出、预览退出或显式放弃上下文。 |
 
 
-`state` 是对应公开 MCP 查询的别名，`state snapshot` 返回结构化当前玩家快照。`call TOOL JSON_OBJECT` 只调用工具列表中实际存在的入口；省略参数等同 `{}`。JSON 不能有重复键、NaN 或 Infinity。CLI 按实际发现的 `inputSchema` 在发送前校验参数，MCP 仍执行服务端校验；动作确认与门禁仍由现有 Runtime 所有者处理；CLI 不调用内部 setter 或清理未决状态。使用实体 ID 和坐标前须先查询真实状态。
+`state` 是对应公开 MCP 查询的别名，`state snapshot` 返回结构化当前玩家快照。`call TOOL JSON_OBJECT` 只调用工具列表中实际存在的入口；省略参数等同 `{}`。JSON 不能有重复键、NaN 或 Infinity。CLI 按实际发现的 `inputSchema` 及共享的静态动作参数组合，在发送前校验参数；MCP 仍执行服务端校验。动作确认与门禁仍由现有 Runtime 所有者处理；CLI 不调用内部 setter 或清理未决状态。使用实体 ID 和坐标前须先查询真实状态。
 
 `pending` 调用 `get_runtime_status`：返回本服务的 UUID、PID、连接标记、动作摘要与动作／推进／外交／议会／保存／替换的未决事实。该工具只读取所有者内存，不查询游戏、确认请求、刷新缓存或清门禁。`connected=false` 不表示世界不存在，`has_pending=false` 不证明别的 MCP 进程没有未决请求。
 
@@ -38,6 +38,8 @@
 `debug.jsonl` 记录命令、调用开始、原始返回、未知结果与退出原因；每条事件有递增序号，`tool_result.request` 对应 `tool_started.sequence`。完整 MCP 返回另存 `debug-response-*.json`。`runtime-status.json` 是最后一次成功读取的内存快照，`transport-unknown.json` 保留首个传输未知的原参数，后续读失败不会覆盖它。`debug-process.json`、`debug-initialize.json`、`debug-tools.json` 保存启动与协议事实。`data.tool_calls` 仅计显式调用和状态别名，不含内部的纯内存状态检查；日志查询的 session 文件名也不等于服务 UUID。
 
 最后的 `event=session_closed` 摘要只判断会话是否正常结束；先前工具调用是否成功，应检查各自 `is_error` 和原始返回。`tool_result.is_error` 识别协议错误及服务显式的 `Error:`／`ERR:` 文本错误边界；`protocol_is_error` 保留原 MCP 标志，`error` 给出错误码、来源和修正建议，`result` 保留未改写回包。原生资格拒绝也应读取并处理；没有错误标志不等同动作已确认，CLI 不由其他展示文案推断成功或释放 pending。明确放弃或异常关闭时 `data.context_lost=true`；证据文件不是可恢复的意图存储。
+
+已迁移工具在 `structuredContent.outcome` 同时给出 `version`、`kind`、`status`、`code` 和 `data`；展示文本保留。状态由原所有者提供，CLI 优先读取明确错误码，旧格式由同一个兼容 Adapter 处理。`unknown` 表示结果或事实未确认，不一定是工具错误；`pending` 表示请求仍在等待。`compact` 不移除这些机器事实。回合统计只消费明确的已确认推进事实；旧日志仍支持原格式。
 
 | 退出码 | 状态 | 含义 |
 | --- | --- | --- |

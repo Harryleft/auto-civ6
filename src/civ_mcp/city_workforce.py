@@ -5,13 +5,14 @@ IsPlotWorked are separate native observations: neither a geometric radius nor
 sum(managed citizens) is substituted for population or free citizens.
 """
 from civ_mcp.lua import public_reports
+from civ_mcp.lua.query_support import json_query_header
 from civ_mcp.snapshot import pending_facts
 
 
 def build_query(city_id, *, evidence=False):
     if type(city_id) is not int or city_id < 0:
         raise ValueError('city_id must be a nonnegative full city ID')
-    header=public_reports.HEADER.replace('return tostring(v) end', "return string.format('%.17g',v) end")
+    header=json_query_header(precise_numbers=True)
     return header+f'\nlocal wanted={city_id}\nlocal evidence={str(evidence).lower()}\n'+r'''
 local cityData=NULL;local plots=NULL;local scanComplete=false
 local purchasedKnown=false;local purchasedIDs=A();local manageKeys=A()
@@ -130,9 +131,7 @@ local ok,err=pcall(function()
  plots=result;scanComplete=true
 end)
 if not scanComplete then missing('manage.targets')end
-local knownIdentity=integer(me)and me>=0 and integer(turn)and turn>=0 and integer(seed)and type(civ)=='string'and civ:match('^CIVILIZATION_.+')~=nil
-if not knownIdentity then missing('world.identity')end
-local stable=knownIdentity and Game.GetLocalPlayer()==me and Game.GetCurrentGameTurn()==turn and GameConfiguration.GetValue('GAME_SYNC_RANDOM_SEED')==seed and PlayerConfigurations[me]:GetCivilizationTypeName()==civ
+local stable=queryWorldStable()
 local valid=ok and stable and scanComplete
 local result={schema_version=1,status=valid and(#unknown==0 and'ready'or'partial')or'unknown',
  identity={civilization=civ,player_id=me,seed=seed,turn=turn},city=stable and cityData or NULL,
