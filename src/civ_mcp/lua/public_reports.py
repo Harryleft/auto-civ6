@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 
 from civ_mcp.lua._helpers import _LUA_KNOWN_RESOURCE, SENTINEL
+from civ_mcp.lua.government_conditions import LUA_GOVERNMENT_CONDITIONS
 from civ_mcp.lua.resource_facts import LUA_RESOURCE_FACTS
 
 SECTIONS = {"empire", "governments", "climate", "climate-history", "history", "great-people-history",
@@ -58,23 +59,102 @@ end
 '''
 
 BODIES = {
-    "governments": r'''
+    "governments": LUA_GOVERNMENT_CONDITIONS + r'''
 local culture=p:GetCulture()
-local current=read("government.current",function()return culture:GetCurrentGovernment()end)
-data.can_change=read("government.can_change",function()return culture:CanChangeGovernmentAtAll()end)
-local governments_known=false;local government_count=0
+local function boolean(label,fn)
+ local value=read(label,fn)
+ if type(value)~="boolean" then return missing(label) end
+ return value
+end
+local function integer(label,fn,minimum)
+ local value=read(label,fn)
+ if type(value)~="number" or value==NULL or value~=math.floor(value) or value<minimum then return missing(label) end
+ return value
+end
+local current=integer("government.current",function()return culture:GetCurrentGovernment()end,-1)
+local busy=boolean("government.core_busy",function()return UI.IsGameCoreBusy()end)
+local conditions={
+ core_idle=scalar(governmentNot(busy)),
+ active_turn=boolean("government.active_turn",function()return p:IsTurnActive()end),
+ strategic_commands_allowed=boolean("government.strategic_commands_allowed",function()return Game.IsAllowStrategicCommands(me)end),
+ can_change_at_all=boolean("government.can_change_at_all",function()return culture:CanChangeGovernmentAtAll()end),
+ government_change_made=boolean("government.government_change_made",function()return culture:GovernmentChangeMade()end),
+ civic_completed_this_turn=boolean("government.civic_completed_this_turn",function()return culture:CivicCompletedThisTurn()end),
+ in_anarchy=boolean("government.in_anarchy",function()return culture:IsInAnarchy()end),
+ consideration_available=type(culture.SetGovernmentChangeConsidered)=="function" and type(culture.GovernmentChangeConsidered)=="function",
+ change_considered=boolean("government.change_considered",function()return culture:GovernmentChangeConsidered()end),
+ request_available=type(culture.RequestChangeGovernment)=="function",
+}
+conditions.initial_selection=current==NULL and NULL or current==-1
+conditions.free_change_window=scalar(governmentFreeChangeWindow(current,conditions.civic_completed_this_turn))
+conditions.turn_allowed=scalar(governmentTurnAllowed(conditions.active_turn,conditions.strategic_commands_allowed))
+conditions.new_change_allowed=scalar(governmentNewChangeAllowed(conditions.can_change_at_all,
+ conditions.government_change_made,conditions.free_change_window))
+local function assessment(same,unlocked,duration,previousEnd)
+ local reasons=A();local unknownCondition=false
+ local function requireFact(value,code)
+  value=governmentBool(value)
+  if value==false then reasons[#reasons+1]=code elseif value==nil then unknownCondition=true end
+ end
+ requireFact(conditions.core_idle,"CORE_BUSY_OR_UNKNOWN")
+ requireFact(conditions.active_turn,"NOT_ACTIVE_TURN")
+ requireFact(conditions.strategic_commands_allowed,"STRATEGIC_COMMANDS_DISABLED")
+ requireFact(conditions.consideration_available,"GOVERNMENT_CONSIDERATION_UNAVAILABLE")
+ requireFact(type(conditions.change_considered)=="boolean" and true or nil,"GOVERNMENT_CONSIDERATION_UNREADABLE")
+ -- Unknown current government cannot distinguish an acknowledgment from a new
+ -- selection. New-selection-only failures must not reject a possible keep.
+ if same==nil then
+  if #reasons>0 then return false,reasons end
+  return NULL,reasons
+ end
+ if same~=true then
+  requireFact(unlocked,"GOVERNMENT_LOCKED")
+  requireFact(conditions.can_change_at_all,"GOVERNMENT_CHANGE_DISABLED")
+  requireFact(governmentNot(conditions.government_change_made),"GOVERNMENT_CHANGE_ALREADY_MADE")
+  requireFact(conditions.free_change_window,"NO_FREE_GOVERNMENT_CHANGE_WINDOW")
+  requireFact(governmentNot(conditions.in_anarchy),"ANARCHY_ALREADY_ACTIVE")
+  requireFact(duration~=NULL and type(duration)=="number" and duration>=0 or nil,"ANARCHY_DURATION_UNAVAILABLE")
+  if type(duration)=="number" and duration>0 then
+   requireFact(type(previousEnd)=="number" and true or nil,"ANARCHY_INTERVAL_UNKNOWN")
+  end
+  requireFact(conditions.request_available,"GOVERNMENT_REQUEST_UNAVAILABLE")
+ end
+ if #reasons>0 then return false,reasons end
+ return unknownCondition and NULL or true,reasons
+end
+-- Legacy can_change is the native general switch, not current target eligibility.
+data.can_change=conditions.can_change_at_all;data.can_change_at_all=conditions.can_change_at_all
+data.change_conditions=conditions;data.current_government=scalar(current)
+data.eligibility_scope="InGame native choice preflight; Runtime pending gates still apply; keep-current acknowledges consideration; paid policy unlock is separate; eligibility is not a submission or completion guarantee"
+local governments_known=false;local government_count=0;local anyChange=false;local changeUnknown=false
+local previousEnd=NULL;local previousEndRead=false
 for row in GameInfo.Governments()do
  government_count=government_count+1
- local unlocked=read("government.unlocked",function()return culture:IsGovernmentUnlocked(row.Hash)end)
+ local unlocked=boolean("government.unlocked."..row.GovernmentType,function()return culture:IsGovernmentUnlocked(row.Hash)end)
  if unlocked~=NULL then governments_known=true end
+ if unlocked==NULL then changeUnknown=true end
  if unlocked==true then
   local slots=A()
   for slot in GameInfo.Government_SlotCounts()do
    if slot.GovernmentType==row.GovernmentType then slots[#slots+1]={type=slot.GovernmentSlotType,count=slot.NumSlots}end
   end
-  add({type=row.GovernmentType,name=name(row),index=row.Index,current=current==NULL and NULL or current==row.Index,slots=slots})
+  local same=current~=NULL and current==row.Index or nil
+  if current~=NULL and current~=row.Index then same=false end
+  local duration=integer("government.anarchy_turns."..row.GovernmentType,function()return culture:GetAnarchyTurns(row.Index)end,0)
+  if same~=true and type(duration)=="number" and duration>0 and not previousEndRead then
+   previousEnd=integer("government.previous_anarchy_end_turn",function()return culture:GetAnarchyEndTurn()end,-math.huge)
+   previousEndRead=true
+  end
+  local selectable,reasons=assessment(same,unlocked,duration,previousEnd)
+  if same~=true then
+   if selectable==true then anyChange=true elseif selectable==NULL then changeUnknown=true end
+  end
+  add({type=row.GovernmentType,name=name(row),index=row.Index,current=scalar(same),slots=slots,
+   can_select_now=selectable,refusal_reasons=reasons,anarchy_turns=duration,
+   previous_anarchy_end_turn=(same~=true and type(duration)=="number" and duration>0)and previousEnd or NULL})
  end
 end
+data.can_change_now=anyChange or (changeUnknown and NULL or false)
 data.governments=(government_count==0 or governments_known)and rows or NULL
 ''',
     "empire": r'''

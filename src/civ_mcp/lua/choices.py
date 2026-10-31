@@ -2,6 +2,7 @@
 import json
 
 from civ_mcp.lua._helpers import SENTINEL
+from civ_mcp.lua.government_conditions import LUA_GOVERNMENT_CONDITIONS
 
 
 _CONTEXT = '''
@@ -54,7 +55,7 @@ def _research(operation: str) -> tuple[str, str]:
 
 
 def _government() -> tuple[str, str]:
-    return '''
+    return LUA_GOVERNMENT_CONDITIONS + '''
  local culture=Players[r.owner]:GetCulture()
  local row=GameInfo.Governments[r.target];assert(row,"GOVERNMENT_NOT_FOUND")
  r.index=integer(row.Index);r.hash=integer(row.Hash)
@@ -64,13 +65,14 @@ def _government() -> tuple[str, str]:
   and type(culture.GovernmentChangeConsidered)=="function","GOVERNMENT_CONSIDERATION_UNAVAILABLE")
  readBool(function() return culture:GovernmentChangeConsidered() end)
  -- Keeping the current government still writes its native acknowledgment.
- assert(readBool(function() return Players[r.owner]:IsTurnActive() end)
-  and readBool(function() return Game.IsAllowStrategicCommands(r.owner) end),"CANNOT_CHANGE_GOVERNMENT")
+ assert(governmentTurnAllowed(readBool(function() return Players[r.owner]:IsTurnActive() end),
+  function() return readBool(function() return Game.IsAllowStrategicCommands(r.owner) end) end),"CANNOT_CHANGE_GOVERNMENT")
  if not r.noop then
   assert(readBool(function() return culture:IsGovernmentUnlocked(r.hash) end),"GOVERNMENT_LOCKED")
-  assert(readBool(function() return culture:CanChangeGovernmentAtAll() end)
-   and not readBool(function() return culture:GovernmentChangeMade() end)
-   and (current==-1 or readBool(function() return culture:CivicCompletedThisTurn() end)),"CANNOT_CHANGE_GOVERNMENT")
+  assert(governmentNewChangeAllowed(readBool(function() return culture:CanChangeGovernmentAtAll() end),
+   function() return readBool(function() return culture:GovernmentChangeMade() end) end,
+   function() return governmentFreeChangeWindow(current,
+    function() return readBool(function() return culture:CivicCompletedThisTurn() end) end) end),"CANNOT_CHANGE_GOVERNMENT")
   assert(not readBool(function() return culture:IsInAnarchy() end),"ANARCHY_ALREADY_ACTIVE")
   r.anarchyTurns=readInt(function() return culture:GetAnarchyTurns(r.index) end)
   assert(r.anarchyTurns>=0,"ANARCHY_DURATION_UNAVAILABLE")
