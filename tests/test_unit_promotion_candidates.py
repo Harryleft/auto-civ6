@@ -253,6 +253,64 @@ def test_invalid_or_duplicate_native_receipts_stay_unknown(tamper):
     assert result.status == "unknown" and result.promotions is None
 
 
+@pytest.mark.parametrize("extra", [
+    "ERR:UNIT_ID_CHANGED",
+    "UNIT|1507332|4|UNIT_APOSTLE",
+    "UNIT|1441796|4|UNIT_APOSTLE",
+    "POS|40|26|moves:4",
+    "unexplained native output",
+    "",
+])
+@pytest.mark.parametrize("prepend", [False, True])
+def test_extra_native_response_frames_cannot_leave_promotion_candidates_ready(extra, prepend):
+    conn = PromotionReadConn()
+    conn.lua.execute(unit_promotions.build(1441796))
+    rows = [r for r in conn.rows if r.startswith("UNIT_PROMOTIONS|")]
+    lines = [extra, *rows] if prepend else [*rows, extra]
+    result = unit_promotions.parse(lines, 1441796)
+    assert result.status == "unknown" and result.promotions is None
+    assert result.can_promote_now is None
+
+
+def test_mixed_error_response_preserves_pending_and_does_not_retry_native_query():
+    conn = PromotionReadConn()
+    execute = conn.execute_in_named_state
+
+    async def mixed(context, source):
+        return [*(await execute(context, source)), "ERR:UNIT_ID_CHANGED"]
+
+    conn.execute_in_named_state = mixed
+    state = GameState(conn)
+    state._pending_end_turn = True
+    result = asyncio.run(state.get_unit_promotions(1441796))
+    assert result.status == "unknown" and result.promotions is None
+    assert state._pending_end_turn is True
+    assert len(conn.queries) == 1 and conn.lua.eval("writes") == 0
+
+
+def test_single_report_accepts_transport_stripped_or_one_trailing_sentinel():
+    from civ_mcp.lua._helpers import SENTINEL
+    conn = PromotionReadConn()
+    conn.lua.execute(unit_promotions.build(1441796))
+    rows = [r for r in conn.rows if r.startswith("UNIT_PROMOTIONS|")]
+    for lines in (rows, [*rows, SENTINEL]):
+        result = unit_promotions.parse(lines, 1441796)
+        assert result.status == "ready" and len(result.promotions) == 3
+        text = narrate.narrate_unit_promotions(result)
+        assert "Execution rechecks current native qualification." in text
+        assert "Recheck before choosing" not in text
+
+
+def test_sentinel_before_report_or_duplicate_sentinels_are_unexplained_frames():
+    from civ_mcp.lua._helpers import SENTINEL
+    conn = PromotionReadConn()
+    conn.lua.execute(unit_promotions.build(1441796))
+    rows = [r for r in conn.rows if r.startswith("UNIT_PROMOTIONS|")]
+    for lines in ([SENTINEL, *rows], [*rows, SENTINEL, SENTINEL]):
+        result = unit_promotions.parse(lines, 1441796)
+        assert result.status == "unknown" and result.promotions is None
+
+
 STDIO_DRIVER = '''
 import json,sys
 from pathlib import Path

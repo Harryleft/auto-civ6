@@ -1326,7 +1326,7 @@ def narrate_unit_promotions(status: lq.UnitPromotionStatus) -> str:
         lines.append(f"  {p.name or p.promotion_type} ({p.promotion_type}, index:{p.index}): UI candidate:{flag(p.ui_candidate)}, current candidate:{flag(p.current_candidate)}, owned:{flag(p.has_promotion)}, selectable now:{flag(p.can_select_now)}; {p.description or 'description unknown'}")
     if status.unknown_fields:
         lines.append("  Unknown fields: " + ", ".join(status.unknown_fields) + ".")
-    lines.append("InGame native UI/current checks; Runtime pending gates still apply. MP/XP do not establish a refusal reason. Recheck before choosing a currently selectable promotion.")
+    lines.append("InGame native UI/current checks; Runtime pending gates still apply. MP/XP do not establish a refusal reason. Execution rechecks current native qualification.")
     return "\n".join(lines)
 
 

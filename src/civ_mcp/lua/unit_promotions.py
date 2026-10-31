@@ -168,10 +168,12 @@ def _object(pairs):
 
 def parse(lines: list[str], unit_id: int | None = None) -> UnitPromotionStatus:
     try:
-        rows = [line.split("|", 1)[1] for line in lines if line.startswith("UNIT_PROMOTIONS|")]
-        if len(rows) != 1:
-            raise ValueError("Expected one native promotion report")
-        value = json.loads(rows[0], object_pairs_hook=_object)
+        # Production transport removes the sentinel; direct Lua fixtures may
+        # retain one trailing sentinel. Every other frame must be explained.
+        frames = lines[:-1] if lines and lines[-1] == SENTINEL else lines
+        if len(frames) != 1 or not isinstance(frames[0], str) or not frames[0].startswith("UNIT_PROMOTIONS|"):
+            raise ValueError("Expected one native promotion report without extra response frames")
+        value = json.loads(frames[0].split("|", 1)[1], object_pairs_hook=_object)
         if type(value) is not dict or type(value.get("schema_version")) is not int or value["schema_version"] != 1:
             raise ValueError("Native promotion report schema unavailable")
         requested = value["requested_unit_id"]
