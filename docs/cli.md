@@ -1,6 +1,6 @@
 # CLI 命令手册
 
-本页是 AI 唯一操作入口的命令目录，涵盖顶层命令、会话控制及 148 个命名子命令（含 3 个既有双人热座实验命令）。95 个基础 MCP 工具均有命名入口，其中任意 Lua 只在显式开发模式开放。`doctor`、`verify knowledge`、`test` 和 `logs` 不连接 FireTuner；`verify state` 明确访问当前真实游戏，`debug` 在收到查询或动作时访问游戏。`civ-mcp` 保留为 CLI 内部服务，客户端不直接注册。
+本页是 AI 唯一操作入口的命令目录，涵盖顶层命令、会话控制及 149 个命名子命令（含 3 个既有双人热座实验命令）。96 个基础 MCP 工具均有命名入口，其中任意 Lua 只在显式开发模式开放。`doctor`、`verify knowledge`、`test` 和 `logs` 不连接 FireTuner；`verify state` 明确访问当前真实游戏，`debug` 在收到查询或动作时访问游戏。`civ-mcp` 保留为 CLI 内部服务，客户端不直接注册。
 
 ## 安装与调用
 
@@ -162,6 +162,7 @@ game decision --view structured
 | `unit rebase ID X Y` | `unit_action`，action=rebase | 变更：飞机转场，原生核对基地／航母的范围、准入与容量 |
 | `unit action ID ACTION [--x X --y Y] [--improvement TYPE]` | `unit_action` | 变更 |
 | `unit attack ID X Y` | `unit_action`，action=attack | 变更 |
+| `unit combat-preview ID X Y` | `get_combat_preview` | 只读 |
 | `unit skip ID` | `unit_action`，action=skip | 变更 |
 | `unit fortify ID` | `unit_action`，action=fortify | 变更 |
 | `unit heal ID` | `unit_action`，action=heal | 变更 |
@@ -186,7 +187,13 @@ game decision --view structured
 
 `ID` 是本次查询返回的完整原生单位 ID；坐标、晋升和改良类型取自当前事实。`heal` 是驻扎直至恢复、满血自动唤醒；`fortify` 是驻扎防御。`upgrade` 更换单位兵种，消耗原生要求的金币、资源及行动力；`corps`／`army` 合并军事编制，目标 ID 来自刚读取的 `unit formations ID`。军团资格由引擎检查兵种、当前编制、位置和市政等条件，不按经验等级相同推断；不把“两支同级单位”当作所有合并的通用规则。护卫编队与军事合并是两种不同操作。
 
+`unit promotions ID` 在同次 InGame 查询中分别读取原生 UI 候选和当前执行检查，展示 `UI candidate`、`current candidate` 与逐项 `selectable now`，不把晋升类别或静态前置树当成本次候选。集合缺失、异常或无法解析时显示 unknown，与已知空集合分开；MP／XP 仅作参考，不能单独解释拒绝原因或过滤原生免费晋升。选择使用当前可选项，执行仍重新核对原生资格并受 Runtime 未决门禁约束。
+
+`unit list` 的升级目标取自同次原生命令返回的 `UNIT_TYPE`，与本次原生升级价格配对；目标无法核实时显示 `target unknown`，不使用静态升级树首跳替代。实际 `unit upgrade` 仍重新检查资格、预算、资源和替换结果；提示未列出不能单独区分不可升级与读取未知。
+
 攻城使用 `unit attack ID X Y`。可见目标格存在城市时，攻击绑定城市中心区域，优先于城内驻军。原生资格、攻击方式和路径通过核验后，只提交一次；`UNIT_CITY_ATTACK_CONFIRMED` 同时要求匹配的战斗参与者事件和城防／单位伤害，或近战单位进入已归本方的目标城。返回城墙、驻军、归属和攻击单位生命变化。普通 `unit move` 进入已识别的敌城会返回 `ENEMY_CITY_MOVE`，不提交移动。结果未知时保留原请求，以完全相同的攻击命令确认。
+
+需要判断交战代价时，可先用 `unit combat-preview ID X Y` 读取原生动态强度、双方估计伤害和 Runtime 当前回合前置检查。该检查结合原生事实与客户端约束，可能在调用 `CanStartOperation` 前拒绝；`current_turn_preflight_refused` 不能单独证明引擎禁止攻击。物理近战、远程和轰击使用各自原生模拟；当前不支持神学战斗或空袭。不支持或缺失时保留 unknown，不用基础战斗力推算。查询绑定当前世界、回合、原单位与公开目标，不提交攻击、关闭界面或确认／释放 pending；存在未决操作时先处理原请求。预估不保证实际伤害、存活或下一回合状态，`--dry-run` 仍只做参数校验。
 
 移动确认回执复用原生 POS 观察，在 `now_at` 后保留普通剩余移动力 `moves_remaining`、有效移动力 `movement_moves_remaining` 和 `zoc`，缺失值显示 unknown。普通移动力大于零不单独证明可以继续行动；到达、耗尽、控制区和未决确认的判断仍依据原有原生见证。
 
@@ -216,6 +223,8 @@ game decision --view structured
 | `city district ID DISTRICT_TYPE` | `get_district_advisor` | 只读 |
 | `city focus ID FOCUS` | `set_city_focus` | 变更 |
 | `city buy ID TYPE NAME [--yield YIELD_TYPE]` | `purchase_item` | 变更 |
+
+`city list` 与 `state decision` 的城市段在原同次 InGame 查询中提供每座本方城市的 `Religion` 多数宗教 ID／原生名称。`-1` 是已知 none，unknown 不能当作没有宗教；名称读取失败也不覆盖已知 ID。该观察绑定本次城市身份，不保证原子快照或其他上下文的新鲜度。玩家多数宗教和全局信教城市数不能替代逐城归属；压力、流入和可见宗教单位仍按需要用 `religion show` 读取。
 
 生产 `TYPE` 为 `UNIT`、`BUILDING`、`DISTRICT` 或 `PROJECT`，购买仅支持前两者。`YIELD_TYPE` 为 `YIELD_GOLD` 或 `YIELD_FAITH`，默认金币。`FOCUS` 为 `food`、`production`、`gold`、`science`、`culture`、`faith`、`default`，default 清空焦点。`--x` 和 `--y` 须成对提供；候选、费用、人口限制和建造资格仍以当前查询和原生引擎为准。
 
@@ -346,6 +355,8 @@ game decision --view structured
 | `ranking show` | 总分及科技、文化、统治、宗教、外交等启用路线的世界进度。 |
 | `map search resource\|luxury\|strategic\|antiquity\|village [--query TEXT] [--limit N --offset N] [--view brief\|structured]` | 按类型、中文名或内部 ID 定位，默认 brief。非消耗资源限已揭示且本方可识别地块；村庄、古迹和可消耗加成资源要求当前可见。空结果不证明迷雾里不存在。 |
 
+`government list` 的 `can_change`／`can_change_at_all` 是原生总开关；当前能否选择须读逐目标 `can_select_now`、`refusal_reasons` 与 `change_conditions`，其中包括免费窗口和无政府状态等前提。未知为 null，保留当前政体的确认与更换新政体分开判定；原生资格不代替 Runtime 未决门禁或实际提交确认。付费解锁政策与换政资格分开。
+
 伟人列表使用原生时间线的使用位置、主动效果、被动条件及定义中的次数，分别保留金币／信仰的报价、余额和赞助资格。一个币种接口失败不会覆盖另一个币种；报价不可用、原生不允许与余额不足分别展示。`great-person advisor` 使用 `unit list` 的 `idx`，原生高亮表示可激活地点，不保证单位现在已经就绪，也不表示城市总产出就是激活收益。
 
 伟人筛选使用原生 `individual_id`（非负整数，0 有效）和 `GREAT_PERSON_CLASS_*` 类型，不能使用翻译后的类别名称。读取完整时间线并绑定身份后，才对匹配者读取能力、点数与报价；结果报告原生总数、匹配数、展示数和扫描完整性。只有完整扫描才能确认当前没有匹配者；缺行、身份绑定失败和不完整读取保留未知。原生耗尽类别单列，不合成候选伟人；不带筛选可恢复完整列表。同一次响应内完全相同且已知的余额只展示一次，变化或未知余额逐项保留。
@@ -378,7 +389,7 @@ civic search --filter 生产力 --filter 单位 --match any --limit 10
 | `city buy-tile CITY_ID X Y`、`city decision CITY_ID ACTION` | 金币买地；明确保留、拒绝、夷平或解放待决城市 |
 | `great-person advisor UNIT_INDEX` | 当前伟人单位的原生激活位置建议 |
 | `era choose INDEX` | 选择 `era dedications` 返回的当前索引 |
-| `religion spread`、`religion found TYPE FOLLOWER_BELIEF FOUNDER_BELIEF` | 可见城市宗教分布；按已选原生信条创立宗教 |
+| `religion spread`、`religion found TYPE FOLLOWER_BELIEF FOUNDER_BELIEF` | 已相遇主要文明中本方或已揭示城市的宗教分布（无城邦／压力，时效未验证）；按已选原生信条创立宗教 |
 | `diplomacy list`、`diplomacy pending` | 已相遇文明关系、当前外交语句及合法回应 |
 | `diplomacy respond PLAYER_ID RESPONSE`、`diplomacy close PLAYER_ID` | 明确回应当前选项；取消已核验参与者的会话 |
 | `diplomacy action PLAYER_ID ACTION`、`diplomacy peace PLAYER_ID` | 代表团、友谊、谴责、宣战等原生行动；提议和平 |

@@ -1,0 +1,1237 @@
+{
+  "schema_version": 1,
+  "scope": "Key raw evidence hashes and links to per-file preservation manifests; raw evidence and saves stay local. No game calls performed by this manifest.",
+  "native_game_run_id": "ff463c39d34a49bbb0f86f2472e79b34",
+  "baseline_source_commit": "c6fc5e08c705367c5ccffeceb38ea6e46e5859ed",
+  "implementation_tip": "ab02f53a8b41200954357556d0f334023e8382c5",
+  "main_game": {
+    "first_turn": 1,
+    "last_turn": 100,
+    "confirmed_advances": 99,
+    "closed_cli_segments": 4,
+    "play_metrics": {
+      "commands": 2456,
+      "categories": {
+        "help": 66,
+        "local_or_incomplete": 25,
+        "mutation_or_lifecycle_call": 891,
+        "read": 619,
+        "schema_dryrun": 855
+      },
+      "text_utf8_bytes": 2074190,
+      "rpc_seconds": 1040.359359,
+      "cli_seconds": 1052.3287967346841,
+      "error_commands": 58,
+      "unknown_commands": 3,
+      "blocked_query_commands": 7,
+      "result_codes": {
+        "ATTACK_DEFERRED": 2,
+        "CANNOT_OPERATE": 1,
+        "CHOICE_REFUSED": 1,
+        "ENDTURN_BLOCKERS": 3,
+        "ENDTURN_NOT_SUBMITTED": 1,
+        "MISSING_COORDS": 1,
+        "MOVE_DEFERRED": 3,
+        "MOVE_LAYER_UNKNOWN": 2,
+        "NOT_READY": 4,
+        "NOT_SUBMITTED": 1,
+        "NO_MOVES": 3,
+        "NO_PATH": 9,
+        "OUTCOME_UNKNOWN": 2,
+        "OUT_OF_RANGE": 1,
+        "PATH_UNKNOWN": 1,
+        "RELIGIOUS_ATTACK_REFUSED": 1,
+        "SAVE_POPUP_BLOCKED": 7,
+        "STACKING_CONFLICT": 1,
+        "TRADE_DESTINATIONS_UNAVAILABLE": 1,
+        "UNIT_EFFECT_REFUSED": 2,
+        "UNIT_PROMOTION_REFUSED": 2,
+        "UNIT_TASK_REFUSED": 2,
+        "UNIT_UPGRADE_REFUSED": 1
+      },
+      "explicit_advances": [
+        {
+          "from_turn": 1,
+          "to_turn": 2,
+          "request": 91,
+          "confirmed_at": "2026-10-31T01:49:55.325759+00:00"
+        },
+        {
+          "from_turn": 2,
+          "to_turn": 3,
+          "request": 113,
+          "confirmed_at": "2026-10-31T01:50:27.891723+00:00"
+        },
+        {
+          "from_turn": 3,
+          "to_turn": 4,
+          "request": 132,
+          "confirmed_at": "2026-10-31T01:51:19.390023+00:00"
+        },
+        {
+          "from_turn": 4,
+          "to_turn": 5,
+          "request": 148,
+          "confirmed_at": "2026-10-31T01:51:58.828221+00:00"
+        },
+        {
+          "from_turn": 5,
+          "to_turn": 6,
+          "request": 164,
+          "confirmed_at": "2026-10-31T01:53:55.705134+00:00"
+        },
+        {
+          "from_turn": 6,
+          "to_turn": 7,
+          "request": 22,
+          "confirmed_at": "2026-10-31T01:55:37.232990+00:00"
+        },
+        {
+          "from_turn": 7,
+          "to_turn": 8,
+          "request": 78,
+          "confirmed_at": "2026-10-31T01:58:02.802508+00:00"
+        },
+        {
+          "from_turn": 8,
+          "to_turn": 9,
+          "request": 141,
+          "confirmed_at": "2026-10-31T02:00:03.995012+00:00"
+        },
+        {
+          "from_turn": 9,
+          "to_turn": 10,
+          "request": 171,
+          "confirmed_at": "2026-10-31T02:01:00.773808+00:00"
+        },
+        {
+          "from_turn": 10,
+          "to_turn": 11,
+          "request": 266,
+          "confirmed_at": "2026-10-31T02:04:00.125085+00:00"
+        },
+        {
+          "from_turn": 11,
+          "to_turn": 12,
+          "request": 306,
+          "confirmed_at": "2026-10-31T02:05:54.813420+00:00"
+        },
+        {
+          "from_turn": 12,
+          "to_turn": 13,
+          "request": 343,
+          "confirmed_at": "2026-10-31T02:07:27.812519+00:00"
+        },
+        {
+          "from_turn": 13,
+          "to_turn": 14,
+          "request": 372,
+          "confirmed_at": "2026-10-31T02:10:01.460506+00:00"
+        },
+        {
+          "from_turn": 14,
+          "to_turn": 15,
+          "request": 399,
+          "confirmed_at": "2026-10-31T02:10:44.467874+00:00"
+        },
+        {
+          "from_turn": 15,
+          "to_turn": 16,
+          "request": 458,
+          "confirmed_at": "2026-10-31T02:12:08.327128+00:00"
+        },
+        {
+          "from_turn": 16,
+          "to_turn": 17,
+          "request": 505,
+          "confirmed_at": "2026-10-31T02:13:32.774257+00:00"
+        },
+        {
+          "from_turn": 17,
+          "to_turn": 18,
+          "request": 558,
+          "confirmed_at": "2026-10-31T02:14:51.550108+00:00"
+        },
+        {
+          "from_turn": 18,
+          "to_turn": 19,
+          "request": 595,
+          "confirmed_at": "2026-10-31T02:15:53.494191+00:00"
+        },
+        {
+          "from_turn": 19,
+          "to_turn": 20,
+          "request": 619,
+          "confirmed_at": "2026-10-31T02:16:42.215225+00:00"
+        },
+        {
+          "from_turn": 20,
+          "to_turn": 21,
+          "request": 668,
+          "confirmed_at": "2026-10-31T02:18:07.948220+00:00"
+        },
+        {
+          "from_turn": 21,
+          "to_turn": 22,
+          "request": 697,
+          "confirmed_at": "2026-10-31T02:18:59.822790+00:00"
+        },
+        {
+          "from_turn": 22,
+          "to_turn": 23,
+          "request": 736,
+          "confirmed_at": "2026-10-31T02:19:55.598125+00:00"
+        },
+        {
+          "from_turn": 23,
+          "to_turn": 24,
+          "request": 765,
+          "confirmed_at": "2026-10-31T02:20:37.805256+00:00"
+        },
+        {
+          "from_turn": 24,
+          "to_turn": 25,
+          "request": 819,
+          "confirmed_at": "2026-10-31T02:22:03.531392+00:00"
+        },
+        {
+          "from_turn": 25,
+          "to_turn": 26,
+          "request": 859,
+          "confirmed_at": "2026-10-31T02:23:24.320953+00:00"
+        },
+        {
+          "from_turn": 26,
+          "to_turn": 27,
+          "request": 890,
+          "confirmed_at": "2026-10-31T02:24:24.693250+00:00"
+        },
+        {
+          "from_turn": 27,
+          "to_turn": 28,
+          "request": 951,
+          "confirmed_at": "2026-10-31T02:26:22.640847+00:00"
+        },
+        {
+          "from_turn": 28,
+          "to_turn": 29,
+          "request": 1108,
+          "confirmed_at": "2026-10-31T02:31:40.945585+00:00"
+        },
+        {
+          "from_turn": 29,
+          "to_turn": 30,
+          "request": 1150,
+          "confirmed_at": "2026-10-31T02:33:07.097498+00:00"
+        },
+        {
+          "from_turn": 30,
+          "to_turn": 31,
+          "request": 1259,
+          "confirmed_at": "2026-10-31T02:37:24.185365+00:00"
+        },
+        {
+          "from_turn": 31,
+          "to_turn": 32,
+          "request": 1299,
+          "confirmed_at": "2026-10-31T02:38:27.074290+00:00"
+        },
+        {
+          "from_turn": 32,
+          "to_turn": 33,
+          "request": 1358,
+          "confirmed_at": "2026-10-31T02:40:51.882334+00:00"
+        },
+        {
+          "from_turn": 33,
+          "to_turn": 34,
+          "request": 1397,
+          "confirmed_at": "2026-10-31T02:42:57.341976+00:00"
+        },
+        {
+          "from_turn": 34,
+          "to_turn": 35,
+          "request": 1485,
+          "confirmed_at": "2026-10-31T02:47:20.610659+00:00"
+        },
+        {
+          "from_turn": 35,
+          "to_turn": 36,
+          "request": 1550,
+          "confirmed_at": "2026-10-31T02:51:45.596022+00:00"
+        },
+        {
+          "from_turn": 36,
+          "to_turn": 37,
+          "request": 1676,
+          "confirmed_at": "2026-10-31T03:01:07.305981+00:00"
+        },
+        {
+          "from_turn": 37,
+          "to_turn": 38,
+          "request": 1740,
+          "confirmed_at": "2026-10-31T03:04:51.520740+00:00"
+        },
+        {
+          "from_turn": 38,
+          "to_turn": 39,
+          "request": 1785,
+          "confirmed_at": "2026-10-31T03:07:20.103035+00:00"
+        },
+        {
+          "from_turn": 39,
+          "to_turn": 40,
+          "request": 1867,
+          "confirmed_at": "2026-10-31T03:11:50.232060+00:00"
+        },
+        {
+          "from_turn": 40,
+          "to_turn": 41,
+          "request": 1932,
+          "confirmed_at": "2026-10-31T03:15:42.808724+00:00"
+        },
+        {
+          "from_turn": 41,
+          "to_turn": 42,
+          "request": 1966,
+          "confirmed_at": "2026-10-31T03:18:54.592102+00:00"
+        },
+        {
+          "from_turn": 42,
+          "to_turn": 43,
+          "request": 2055,
+          "confirmed_at": "2026-10-31T03:25:48.039657+00:00"
+        },
+        {
+          "from_turn": 43,
+          "to_turn": 44,
+          "request": 2192,
+          "confirmed_at": "2026-10-31T03:34:31.752881+00:00"
+        },
+        {
+          "from_turn": 44,
+          "to_turn": 45,
+          "request": 2282,
+          "confirmed_at": "2026-10-31T03:35:40.301648+00:00"
+        },
+        {
+          "from_turn": 45,
+          "to_turn": 46,
+          "request": 2375,
+          "confirmed_at": "2026-10-31T03:37:41.519598+00:00"
+        },
+        {
+          "from_turn": 46,
+          "to_turn": 47,
+          "request": 2540,
+          "confirmed_at": "2026-10-31T03:42:36.859847+00:00"
+        },
+        {
+          "from_turn": 47,
+          "to_turn": 48,
+          "request": 2665,
+          "confirmed_at": "2026-10-31T03:46:45.724781+00:00"
+        },
+        {
+          "from_turn": 48,
+          "to_turn": 49,
+          "request": 2768,
+          "confirmed_at": "2026-10-31T03:49:51.786062+00:00"
+        },
+        {
+          "from_turn": 49,
+          "to_turn": 50,
+          "request": 31,
+          "confirmed_at": "2026-10-31T04:34:28.710589+00:00"
+        },
+        {
+          "from_turn": 50,
+          "to_turn": 51,
+          "request": 118,
+          "confirmed_at": "2026-10-31T04:38:53.613694+00:00"
+        },
+        {
+          "from_turn": 51,
+          "to_turn": 52,
+          "request": 167,
+          "confirmed_at": "2026-10-31T04:40:59.499096+00:00"
+        },
+        {
+          "from_turn": 52,
+          "to_turn": 53,
+          "request": 227,
+          "confirmed_at": "2026-10-31T04:43:57.881105+00:00"
+        },
+        {
+          "from_turn": 53,
+          "to_turn": 54,
+          "request": 308,
+          "confirmed_at": "2026-10-31T04:48:05.924091+00:00"
+        },
+        {
+          "from_turn": 54,
+          "to_turn": 55,
+          "request": 384,
+          "confirmed_at": "2026-10-31T04:53:47.881050+00:00"
+        },
+        {
+          "from_turn": 55,
+          "to_turn": 56,
+          "request": 524,
+          "confirmed_at": "2026-10-31T05:02:21.496629+00:00"
+        },
+        {
+          "from_turn": 56,
+          "to_turn": 57,
+          "request": 583,
+          "confirmed_at": "2026-10-31T05:07:57.225131+00:00"
+        },
+        {
+          "from_turn": 57,
+          "to_turn": 58,
+          "request": 684,
+          "confirmed_at": "2026-10-31T05:24:17.060046+00:00"
+        },
+        {
+          "from_turn": 58,
+          "to_turn": 59,
+          "request": 768,
+          "confirmed_at": "2026-10-31T05:41:32.587902+00:00"
+        },
+        {
+          "from_turn": 59,
+          "to_turn": 60,
+          "request": 848,
+          "confirmed_at": "2026-10-31T05:43:24.783707+00:00"
+        },
+        {
+          "from_turn": 60,
+          "to_turn": 61,
+          "request": 907,
+          "confirmed_at": "2026-10-31T05:44:59.956751+00:00"
+        },
+        {
+          "from_turn": 61,
+          "to_turn": 62,
+          "request": 988,
+          "confirmed_at": "2026-10-31T05:47:14.974584+00:00"
+        },
+        {
+          "from_turn": 62,
+          "to_turn": 63,
+          "request": 1076,
+          "confirmed_at": "2026-10-31T05:49:52.042038+00:00"
+        },
+        {
+          "from_turn": 63,
+          "to_turn": 64,
+          "request": 1173,
+          "confirmed_at": "2026-10-31T05:54:48.757585+00:00"
+        },
+        {
+          "from_turn": 64,
+          "to_turn": 65,
+          "request": 1238,
+          "confirmed_at": "2026-10-31T05:56:56.562837+00:00"
+        },
+        {
+          "from_turn": 65,
+          "to_turn": 66,
+          "request": 1316,
+          "confirmed_at": "2026-10-31T06:00:31.191165+00:00"
+        },
+        {
+          "from_turn": 66,
+          "to_turn": 67,
+          "request": 1355,
+          "confirmed_at": "2026-10-31T06:01:49.410252+00:00"
+        },
+        {
+          "from_turn": 67,
+          "to_turn": 68,
+          "request": 1435,
+          "confirmed_at": "2026-10-31T06:06:05.246713+00:00"
+        },
+        {
+          "from_turn": 68,
+          "to_turn": 69,
+          "request": 1483,
+          "confirmed_at": "2026-10-31T06:08:21.464316+00:00"
+        },
+        {
+          "from_turn": 69,
+          "to_turn": 70,
+          "request": 1514,
+          "confirmed_at": "2026-10-31T06:09:45.350276+00:00"
+        },
+        {
+          "from_turn": 70,
+          "to_turn": 71,
+          "request": 1572,
+          "confirmed_at": "2026-10-31T06:16:51.248207+00:00"
+        },
+        {
+          "from_turn": 71,
+          "to_turn": 72,
+          "request": 1672,
+          "confirmed_at": "2026-10-31T06:23:06.591824+00:00"
+        },
+        {
+          "from_turn": 72,
+          "to_turn": 73,
+          "request": 1769,
+          "confirmed_at": "2026-10-31T06:28:12.148647+00:00"
+        },
+        {
+          "from_turn": 73,
+          "to_turn": 74,
+          "request": 1871,
+          "confirmed_at": "2026-10-31T06:37:18.840169+00:00"
+        },
+        {
+          "from_turn": 74,
+          "to_turn": 75,
+          "request": 1927,
+          "confirmed_at": "2026-10-31T06:42:37.836650+00:00"
+        },
+        {
+          "from_turn": 75,
+          "to_turn": 76,
+          "request": 2019,
+          "confirmed_at": "2026-10-31T06:49:35.850594+00:00"
+        },
+        {
+          "from_turn": 76,
+          "to_turn": 77,
+          "request": 2063,
+          "confirmed_at": "2026-10-31T06:53:39.238208+00:00"
+        },
+        {
+          "from_turn": 77,
+          "to_turn": 78,
+          "request": 2127,
+          "confirmed_at": "2026-10-31T07:04:55.569953+00:00"
+        },
+        {
+          "from_turn": 78,
+          "to_turn": 79,
+          "request": 2185,
+          "confirmed_at": "2026-10-31T07:11:49.911652+00:00"
+        },
+        {
+          "from_turn": 79,
+          "to_turn": 80,
+          "request": 2234,
+          "confirmed_at": "2026-10-31T07:20:33.942707+00:00"
+        },
+        {
+          "from_turn": 80,
+          "to_turn": 81,
+          "request": 2361,
+          "confirmed_at": "2026-10-31T07:33:22.074190+00:00"
+        },
+        {
+          "from_turn": 81,
+          "to_turn": 82,
+          "request": 2433,
+          "confirmed_at": "2026-10-31T07:34:41.388362+00:00"
+        },
+        {
+          "from_turn": 82,
+          "to_turn": 83,
+          "request": 2451,
+          "confirmed_at": "2026-10-31T07:35:19.786334+00:00"
+        },
+        {
+          "from_turn": 83,
+          "to_turn": 84,
+          "request": 2490,
+          "confirmed_at": "2026-10-31T07:37:01.614122+00:00"
+        },
+        {
+          "from_turn": 84,
+          "to_turn": 85,
+          "request": 2516,
+          "confirmed_at": "2026-10-31T07:37:51.189697+00:00"
+        },
+        {
+          "from_turn": 85,
+          "to_turn": 86,
+          "request": 2605,
+          "confirmed_at": "2026-10-31T07:40:30.353382+00:00"
+        },
+        {
+          "from_turn": 86,
+          "to_turn": 87,
+          "request": 2642,
+          "confirmed_at": "2026-10-31T07:41:34.053690+00:00"
+        },
+        {
+          "from_turn": 87,
+          "to_turn": 88,
+          "request": 2671,
+          "confirmed_at": "2026-10-31T07:42:09.124087+00:00"
+        },
+        {
+          "from_turn": 88,
+          "to_turn": 89,
+          "request": 2739,
+          "confirmed_at": "2026-10-31T07:44:40.385055+00:00"
+        },
+        {
+          "from_turn": 89,
+          "to_turn": 90,
+          "request": 2836,
+          "confirmed_at": "2026-10-31T07:47:44.462414+00:00"
+        },
+        {
+          "from_turn": 90,
+          "to_turn": 91,
+          "request": 2894,
+          "confirmed_at": "2026-10-31T07:49:52.564895+00:00"
+        },
+        {
+          "from_turn": 91,
+          "to_turn": 92,
+          "request": 2963,
+          "confirmed_at": "2026-10-31T07:53:24.209212+00:00"
+        },
+        {
+          "from_turn": 92,
+          "to_turn": 93,
+          "request": 53,
+          "confirmed_at": "2026-10-31T08:03:52.331033+00:00"
+        },
+        {
+          "from_turn": 93,
+          "to_turn": 94,
+          "request": 124,
+          "confirmed_at": "2026-10-31T08:06:54.165864+00:00"
+        },
+        {
+          "from_turn": 94,
+          "to_turn": 95,
+          "request": 209,
+          "confirmed_at": "2026-10-31T08:10:54.936027+00:00"
+        },
+        {
+          "from_turn": 95,
+          "to_turn": 96,
+          "request": 261,
+          "confirmed_at": "2026-10-31T08:14:06.475116+00:00"
+        },
+        {
+          "from_turn": 96,
+          "to_turn": 97,
+          "request": 342,
+          "confirmed_at": "2026-10-31T08:17:20.673567+00:00"
+        },
+        {
+          "from_turn": 97,
+          "to_turn": 98,
+          "request": 392,
+          "confirmed_at": "2026-10-31T08:19:49.366599+00:00"
+        },
+        {
+          "from_turn": 98,
+          "to_turn": 99,
+          "request": 440,
+          "confirmed_at": "2026-10-31T08:22:14.455328+00:00"
+        },
+        {
+          "from_turn": 99,
+          "to_turn": 100,
+          "request": 461,
+          "confirmed_at": "2026-10-31T08:23:13.069754+00:00"
+        }
+      ],
+      "explicit_confirmation_mentions": 14
+    },
+    "end100_submitted": false,
+    "restarts_or_loads_during_mainline": 0
+  },
+  "independent_verification": {
+    "closed": true,
+    "confirmed_advances": 4,
+    "branch": "T60 to T64; other check cases did not advance",
+    "totals": {
+      "commands": 151,
+      "categories": {
+        "help": 4,
+        "local_or_incomplete": 9,
+        "mutation_or_lifecycle_call": 45,
+        "read": 52,
+        "schema_dryrun": 41
+      },
+      "text_utf8_bytes": 126436,
+      "rpc_seconds": 173.946831,
+      "cli_seconds": 174.60841316217557,
+      "error_commands": 4,
+      "unknown_commands": 0,
+      "blocked_query_commands": 0,
+      "result_codes": {
+        "ENDTURN_BLOCKERS": 1,
+        "ENDTURN_NOT_SUBMITTED": 1
+      },
+      "explicit_advances": [
+        {
+          "from_turn": 60,
+          "to_turn": 61,
+          "request": 177,
+          "confirmed_at": "2026-10-31T08:33:58.692965+00:00"
+        },
+        {
+          "from_turn": 61,
+          "to_turn": 62,
+          "request": 220,
+          "confirmed_at": "2026-10-31T08:35:19.297147+00:00"
+        },
+        {
+          "from_turn": 62,
+          "to_turn": 63,
+          "request": 292,
+          "confirmed_at": "2026-10-31T08:36:44.965049+00:00"
+        },
+        {
+          "from_turn": 63,
+          "to_turn": 64,
+          "request": 369,
+          "confirmed_at": "2026-10-31T08:38:09.294879+00:00"
+        }
+      ],
+      "explicit_confirmation_mentions": 0
+    },
+    "restored_original_t100": true,
+    "terminal_pending_all_false": true,
+    "transport_unknown": null,
+    "mcp_session_closed": true
+  },
+  "restore_comparison": {
+    "decision_sections_exact_text": {
+      "overview": false,
+      "units": true,
+      "cities": true,
+      "threats": true,
+      "victory": true,
+      "notifications": true,
+      "blockers": true,
+      "outcome": true
+    },
+    "overview_equal_after_sorting_unit_composition_only": true,
+    "identity": true,
+    "checks": true,
+    "exact_empire": true,
+    "queued_move_and_special_pending_lines": true
+  },
+  "restore_difference": "Overview unit-composition order changed among tied counts; count/type multiset equal. All other overview lines and decision sections exact. Observed timing fields excluded from status comparison.",
+  "limitations": "Compared exposed fields only; not binary world, hidden state or RNG equality. Native queued move preserved; Runtime pending all false. No end100.",
+  "source_knowledge_files_checked": 129,
+  "source_knowledge_all_equal_implementation_tip": true,
+  "original_benchmark": {
+    "path": "fixtures/saves/benchmark_gold_tun_1.Civ6Save",
+    "bytes": 396382,
+    "sha256": "0d25d557e68b0efbd1aed7e66de9b8434f3a9ac9d321291d45cbe9df83fe3abf",
+    "unchanged": true
+  },
+  "checkpoints": {
+    "main_game": {
+      "checkpoint_count": 39,
+      "save_bytes": 28290321
+    },
+    "extra_qa": {
+      "checkpoint_count": 3,
+      "save_bytes": 2447792
+    },
+    "total_checkpoints": 42,
+    "total_save_bytes": 30738113,
+    "native_saved_receipts": 42,
+    "not_submitted_save_results": 8,
+    "missing_native_files": 0,
+    "missing_registry_records": 0,
+    "identity_mismatches": 0,
+    "sha256_mismatches": 0,
+    "evidence_conflicts": 0,
+    "new_save_copies": 5,
+    "new_registry_copies": 5,
+    "preserved_existing_save_copies": 37
+  },
+  "worktree_closeout": {
+    "status": "blocked_by_app_active_task_guard",
+    "attempts": 2,
+    "tool": "archive_worktree",
+    "attachment_identity": "~/.codex/worktrees/call-audit-fixes/civ6",
+    "exact_response": {
+      "type": "error",
+      "message": "Another active task still uses this worktree."
+    },
+    "preservation": "All 3693 ordinary evidence files mirrored and SHA/size matched before attempting archive; 512 internal symlinks mapped within preserved trees. Source commits already integrated. No force removal, context takeover or other task changes.",
+    "recorded_at": "2026-10-31T08:44:50.499253+00:00"
+  },
+  "artifacts": [
+    {
+      "path": "changes/analysis-phases.json",
+      "bytes": 1063,
+      "sha256": "10dac3786f36ac0a0efea36a8d73ec90a5bb4ff59fadbe9f14fcf374a4f7f2b5"
+    },
+    {
+      "path": "changes/analyze_calls.py",
+      "bytes": 32051,
+      "sha256": "de0dd492d1c1e18b554b1c54c5a54808002daab4a992ff95fc89f704a3ddcef7"
+    },
+    {
+      "path": "evidence/baseline/command-timing.json",
+      "bytes": 27756,
+      "sha256": "22ed44f573129b6c3ad3d90e58c2d142c3452cac488e2e0a00d4e83e5e6ecda7"
+    },
+    {
+      "path": "evidence/baseline/context.json",
+      "bytes": 9772,
+      "sha256": "62ffd43f5c11b45530f5edd824c6f94f1daab852d6d5cfbb9ac2a3ef0a09f108"
+    },
+    {
+      "path": "evidence/baseline/debug.jsonl",
+      "bytes": 255508,
+      "sha256": "0cb0786d2ba80ace4d2369c32577fcc640676a995dadb48ad5c0f53062bf9430"
+    },
+    {
+      "path": "evidence/baseline/summary.json",
+      "bytes": 1645,
+      "sha256": "775f838350a7233b467f7f376b93e6206f42b04701f7e02eaa60970aaef536d4"
+    },
+    {
+      "path": "evidence/baseline/turn-timing.json",
+      "bytes": 5585,
+      "sha256": "fad9a5d79e0a7863a2f361d0d299b48b5659af2b547c8ff12431b0e8321a26a6"
+    },
+    {
+      "path": "evidence/checkpoints/inventory-final.json",
+      "bytes": 60166,
+      "sha256": "1424edab1efcae03c4eb6fe95d58b467488dc79ea5ec8ec062f153e788a5cc23"
+    },
+    {
+      "path": "evidence/offline-fixes/city-majority-875e083/copied-files.json",
+      "bytes": 131443,
+      "sha256": "cd7d044765db64653eeceea65f3ce5bd70959c69c4152f4f28ac651f07c26e72"
+    },
+    {
+      "path": "evidence/offline-fixes/combat-boundaries-7ece823/copied-files.json",
+      "bytes": 11090,
+      "sha256": "af1ce3ccd08508c9808b31ff4b39b923de47bbd4637618dc12107e661bb60000"
+    },
+    {
+      "path": "evidence/offline-fixes/combat-preview-93270b0/copied-files.json",
+      "bytes": 13642,
+      "sha256": "bff0b22d9aece2cbdc966a662ea3e0e354733efd8894c2e59ed5f3fcf1fccb85"
+    },
+    {
+      "path": "evidence/offline-fixes/fixture-budget-8549772/copied-files.json",
+      "bytes": 243097,
+      "sha256": "01f453c6ef5aea71f182a1a2148d5b6ccf57cdb403367de1ffb0d65cba2fec74"
+    },
+    {
+      "path": "evidence/offline-fixes/government-facts-a24b265/copied-files.json",
+      "bytes": 2610,
+      "sha256": "b9e4f0675473c7885ebd3663337fcae013eed1e4591b152670407118334538f2"
+    },
+    {
+      "path": "evidence/offline-fixes/incoming-names-37eebcd/copied-files.json",
+      "bytes": 1107,
+      "sha256": "b392355a9c70516493ad9cdaff7e61c017bd01b3e1cd164109b55372313aa2e9"
+    },
+    {
+      "path": "evidence/offline-fixes/integration-07f062f/copied-files.json",
+      "bytes": 676,
+      "sha256": "89fe50e670154ca45cb1d3dab8c550dcd779982c5563fbb50bf49fa244ef9d00"
+    },
+    {
+      "path": "evidence/offline-fixes/integration-1a3cb9a/copied-files.json",
+      "bytes": 758,
+      "sha256": "de372a8de60f49a15a7ce769b74ada411a0ae66b40def6dde6a8214db69728a1"
+    },
+    {
+      "path": "evidence/offline-fixes/integration-29ef3b6/copied-files.json",
+      "bytes": 677,
+      "sha256": "2f36b19623c8898a0ccd5145818f49179c1ff825d150250d947c82efbfd00db4"
+    },
+    {
+      "path": "evidence/offline-fixes/integration-ab02f53/context.json",
+      "bytes": 10122,
+      "sha256": "09abc844d8834979b3ddac6495e3575aeb2b87c5d64409cac8a9681480bc4e21"
+    },
+    {
+      "path": "evidence/offline-fixes/integration-ab02f53/copied-files.json",
+      "bytes": 691,
+      "sha256": "fb4ee2380fc5fce09fc621ed832e82f160c92a4b0f2afad1cb59ca492f99b4f4"
+    },
+    {
+      "path": "evidence/offline-fixes/integration-ab02f53/pytest.json",
+      "bytes": 1296,
+      "sha256": "3eb2747d304196bbe377c41a30d2a66e8ac76e30c987c50ad9f778a3090ba7a9"
+    },
+    {
+      "path": "evidence/offline-fixes/integration-ab02f53/summary.json",
+      "bytes": 1403,
+      "sha256": "b5bba538c0e6988586dc8c9da001bd311c96240f3230d103e72f73f2c415e749"
+    },
+    {
+      "path": "evidence/offline-fixes/integration-ab02f53/test-selection.json",
+      "bytes": 545,
+      "sha256": "6165217e626b55ceb93c9c6750945bc8071ccff550714f899dd672ddd1b659a7"
+    },
+    {
+      "path": "evidence/offline-fixes/integration-d5cb53e-help-failure/copied-files.json",
+      "bytes": 948,
+      "sha256": "33f4ac109fe90ec664ef94e435c7e19ac53e922a2e5737f9a914f8e5b07788c9"
+    },
+    {
+      "path": "evidence/offline-fixes/integration-f73c0d1-rerun/copied-files.json",
+      "bytes": 677,
+      "sha256": "5beb60b6c740c4ad22de5e903f8597bfd349aa5ad88182709d06f6d8e0d2a66e"
+    },
+    {
+      "path": "evidence/offline-fixes/integration-f73c0d1-startup-failure/copied-files.json",
+      "bytes": 835,
+      "sha256": "46236a848474f68ac413726554de7ce469dc84edc793ccc09c5ea9eb47ca50c0"
+    },
+    {
+      "path": "evidence/offline-fixes/knowledge-07f062f/copied-files.json",
+      "bytes": 3106,
+      "sha256": "18558552767c65eb43557e83b1fc657ad21f5f845824fa436655f1eb0a8b9949"
+    },
+    {
+      "path": "evidence/offline-fixes/knowledge-29ef3b6/copied-files.json",
+      "bytes": 3107,
+      "sha256": "d84169b5d73798397d2c53971a8ca5b0ada88c1037647acfafdfa6d23f452a34"
+    },
+    {
+      "path": "evidence/offline-fixes/knowledge-ab02f53/cli-brief.json",
+      "bytes": 9630,
+      "sha256": "71900616b9897cfc4da6a9f3e4af2306d81b3bfc704608ffba4f1eda32009dcd"
+    },
+    {
+      "path": "evidence/offline-fixes/knowledge-ab02f53/cli-doctor.json",
+      "bytes": 28400,
+      "sha256": "a0036f72e90a3476c38eb4fbb9bd081e9e7f778be48d2b3f83c27e28fb630757"
+    },
+    {
+      "path": "evidence/offline-fixes/knowledge-ab02f53/cli-evidence.json",
+      "bytes": 247514,
+      "sha256": "5ebb5648dde6766d83e60f9bd665077ff69dcbb0f7f1a0f52224dfc2055ce425"
+    },
+    {
+      "path": "evidence/offline-fixes/knowledge-ab02f53/cli-rule.json",
+      "bytes": 8789,
+      "sha256": "e2a252be5a198a227aa0251e47504e1648e4049f4e26154c01ce9eb964433469"
+    },
+    {
+      "path": "evidence/offline-fixes/knowledge-ab02f53/cli-search.json",
+      "bytes": 1104,
+      "sha256": "ae001989db66dff117efd33c96992b9398c5c5f6cda20b0662ddd1a9f10a9858"
+    },
+    {
+      "path": "evidence/offline-fixes/knowledge-ab02f53/cli-summary.json",
+      "bytes": 947,
+      "sha256": "43a7d372b16086cd9798388996e3bf7ad42121c209adeba17dc599a283d40960"
+    },
+    {
+      "path": "evidence/offline-fixes/knowledge-ab02f53/context.json",
+      "bytes": 10122,
+      "sha256": "09abc844d8834979b3ddac6495e3575aeb2b87c5d64409cac8a9681480bc4e21"
+    },
+    {
+      "path": "evidence/offline-fixes/knowledge-ab02f53/copied-files.json",
+      "bytes": 3121,
+      "sha256": "c140497267b18090024af4327076f9e2b625a26ec24a046fa12b9a126b2a4bec"
+    },
+    {
+      "path": "evidence/offline-fixes/knowledge-ab02f53/mcp-attempts.json",
+      "bytes": 953,
+      "sha256": "cb0fe247100c947d03bd165f65e485f94c1ef011120713095f2d9c1a5f50501e"
+    },
+    {
+      "path": "evidence/offline-fixes/knowledge-ab02f53/mcp-brief.json",
+      "bytes": 18894,
+      "sha256": "2631d1f186f9ac1a2d18b921f63c5007b547998fe21caeac03166e0d756c7789"
+    },
+    {
+      "path": "evidence/offline-fixes/knowledge-ab02f53/mcp-evidence.json",
+      "bytes": 494656,
+      "sha256": "f9b3f6206c6a217e25bf2b85e35349a83e5f779a617488717decef532b746059"
+    },
+    {
+      "path": "evidence/offline-fixes/knowledge-ab02f53/mcp-initialize.json",
+      "bytes": 1102,
+      "sha256": "b3aafabd996833fef5bf4ea0d09f6700f2794214abca3df8ed44131a07493304"
+    },
+    {
+      "path": "evidence/offline-fixes/knowledge-ab02f53/mcp-process.json",
+      "bytes": 468,
+      "sha256": "5103fffafa346c25bc85e40e20db37273f4554802422ba4ef31b95d43e593a35"
+    },
+    {
+      "path": "evidence/offline-fixes/knowledge-ab02f53/mcp-rule.json",
+      "bytes": 45452,
+      "sha256": "92dcd49fd0dca078a3dc4ac6836bfba6de9c645bad1f79da1841822c8f52b741"
+    },
+    {
+      "path": "evidence/offline-fixes/knowledge-ab02f53/mcp-search-brief.json",
+      "bytes": 4728,
+      "sha256": "dad174361cec91ecdc08f636d14ea2ac49e0a0aff759573c0440a93473cc84fd"
+    },
+    {
+      "path": "evidence/offline-fixes/knowledge-ab02f53/mcp-search-expanded.json",
+      "bytes": 29980,
+      "sha256": "7c26b144ee6ccff598429d578f2d16337eb40198e79c4d2c0cc1185423e2652b"
+    },
+    {
+      "path": "evidence/offline-fixes/knowledge-ab02f53/mcp-search.json",
+      "bytes": 29980,
+      "sha256": "7c26b144ee6ccff598429d578f2d16337eb40198e79c4d2c0cc1185423e2652b"
+    },
+    {
+      "path": "evidence/offline-fixes/knowledge-ab02f53/mcp-stderr.log",
+      "bytes": 1683,
+      "sha256": "c3eb7fe1fa8124f501dc634cb65fa9dccdc27a0193fe97c6a26aaa65eebe317a"
+    },
+    {
+      "path": "evidence/offline-fixes/knowledge-ab02f53/mcp-summary.json",
+      "bytes": 29762,
+      "sha256": "e184082fadd0ea20b124a8fc0f9ae53524f224870c687347270b02106a4065ff"
+    },
+    {
+      "path": "evidence/offline-fixes/knowledge-ab02f53/mcp-tools.json",
+      "bytes": 142585,
+      "sha256": "037459c61b66d49773cd025339652270d151464025036fb287650b676726c54f"
+    },
+    {
+      "path": "evidence/offline-fixes/knowledge-ab02f53/summary.json",
+      "bytes": 2518,
+      "sha256": "8cdba14d878020c39b8256d635d9c142cd9e296422af44e43cee0447e27e0137"
+    },
+    {
+      "path": "evidence/offline-fixes/knowledge-d5cb53e/copied-files.json",
+      "bytes": 3218,
+      "sha256": "d52240d8afb7d20689aec71c329ecf06fac9fec4db37e171849a035e5c9bd997"
+    },
+    {
+      "path": "evidence/offline-fixes/knowledge-f73c0d1/copied-files.json",
+      "bytes": 3107,
+      "sha256": "2bf5dcb2651c0923e5ac3fb69c2deec3250db413564cd45d27e796b64905883c"
+    },
+    {
+      "path": "evidence/offline-fixes/preflight-source-29ef3b6/copied-files.json",
+      "bytes": 1125,
+      "sha256": "6725a7ed1e3b9f88096a1afce0f6dd360a522fee519eb22017201fbdf190c8f1"
+    },
+    {
+      "path": "evidence/offline-fixes/promotion-candidates-07f062f/copied-files.json",
+      "bytes": 129308,
+      "sha256": "856229516c51652772b89f4529a571a206952383d6e1022aa5f6756ce47f8e0a"
+    },
+    {
+      "path": "evidence/offline-fixes/promotion-frames-f73c0d1/copied-files.json",
+      "bytes": 125395,
+      "sha256": "001607b0cedc73f41f99b1a9ec5b2d181df26ee896f77da5f19176b71d60b6c0"
+    },
+    {
+      "path": "evidence/offline-fixes/stdio-startup-diagnosis/copied-files.json",
+      "bytes": 9635,
+      "sha256": "91ae9cc7d060ad57ccfdfdfebbf1ae212f21c38a7bbb86ac69248a0c592d366e"
+    },
+    {
+      "path": "evidence/offline-fixes/upgrade-target-ab02f53/copied-files.json",
+      "bytes": 5392,
+      "sha256": "b6a6d21c8722a7b4666f4f47562a11338588caba67562606de23316a1180b875"
+    },
+    {
+      "path": "evidence/play-t006-t100/command-timing.json",
+      "bytes": 456159,
+      "sha256": "1165939787a82b1a54adb3bd1348fc6d652326fee4acf76f726542f0f4a3d157"
+    },
+    {
+      "path": "evidence/play-t006-t100/context.json",
+      "bytes": 9811,
+      "sha256": "1ab7f67814b78b21ed1922a4bbbb6876c21a50fdeacab93c3f0b9b5d3d0d2259"
+    },
+    {
+      "path": "evidence/play-t006-t100/debug.jsonl",
+      "bytes": 1944345,
+      "sha256": "30758ad99d8671e2d36f5c4475eca824deff95302a0755e8bd0cfe23c012738e"
+    },
+    {
+      "path": "evidence/play-t006-t100/summary.json",
+      "bytes": 1663,
+      "sha256": "e97de685489282f47ca99016c456970078ec029ed8fb07c0f6740772048f6070"
+    },
+    {
+      "path": "evidence/play-t006-t100/turn-timing.json",
+      "bytes": 26491,
+      "sha256": "6600c0d8d258bf1a4b88d09f7728ce5592139ff0602ed2858f5d0214531d8180"
+    },
+    {
+      "path": "evidence/play-t049-t100-fixed/command-timing.json",
+      "bytes": 480802,
+      "sha256": "b1a73aa916b32c79d4f7afdfd135a1f0b00726ee3b4d1c80eb5e3b47921cb89d"
+    },
+    {
+      "path": "evidence/play-t049-t100-fixed/context.json",
+      "bytes": 9811,
+      "sha256": "f3a77de9fc6374bebd9f7ffff6a0616434ebcb438373049724d0494d9f93c29c"
+    },
+    {
+      "path": "evidence/play-t049-t100-fixed/debug.jsonl",
+      "bytes": 1630919,
+      "sha256": "84eaac5e931144c38b70ed6e72ef227dd85b9b7a47d67fc814da3da9f6337a85"
+    },
+    {
+      "path": "evidence/play-t049-t100-fixed/summary.json",
+      "bytes": 1681,
+      "sha256": "9da3e1b0546b1198478e37c71235e759baf553939b4c0dd87b63e3ae5c0c47f1"
+    },
+    {
+      "path": "evidence/play-t049-t100-fixed/turn-timing.json",
+      "bytes": 37542,
+      "sha256": "7fc08eaa17bfbc284a5544a757c3e33fcce293cf23eef9331d8eafb527bb40d5"
+    },
+    {
+      "path": "evidence/play-t092-t100-repaired/command-timing.json",
+      "bytes": 76527,
+      "sha256": "150d68dacb4fff59b7b03884a1dd9cfb5b52bb13e72d7ad955d669bf29c6d9e0"
+    },
+    {
+      "path": "evidence/play-t092-t100-repaired/context.json",
+      "bytes": 10250,
+      "sha256": "3d917ec0cafd457cae154163afcca56e14ead30ff5fca1f315b79a03a38b8464"
+    },
+    {
+      "path": "evidence/play-t092-t100-repaired/debug.jsonl",
+      "bytes": 302918,
+      "sha256": "e8f8ca492eaf9793c235a4ef4c8f3c3135ce843436954b45e24c4c21a85209ac"
+    },
+    {
+      "path": "evidence/play-t092-t100-repaired/summary.json",
+      "bytes": 1690,
+      "sha256": "57f44d44f5be4ea39622576139794614be359b10579b22627f5a7488e3f20e02"
+    },
+    {
+      "path": "evidence/play-t092-t100-repaired/turn-timing.json",
+      "bytes": 13323,
+      "sha256": "36e49594c1f24b83704f9f51f68590284357cafd066e30eb49920211ff06e218"
+    },
+    {
+      "path": "evidence/source-freeze-t049-closed.json",
+      "bytes": 13544,
+      "sha256": "68884b26891026efa1060e5c37a7018d531737db0f9d521c03ae3eec76020981"
+    },
+    {
+      "path": "evidence/source-freeze-t092-closed.json",
+      "bytes": 15403,
+      "sha256": "af7c0b52bef6c5f2d7852fcfd2cd5531c030f03769fc52f596ec88d6115a9457"
+    },
+    {
+      "path": "evidence/t049-fixed-deployment.json",
+      "bytes": 13592,
+      "sha256": "166087f51b8d0322a8fec07187a96356d55bc6fb5af01e1e49f93e00e3aa1202"
+    },
+    {
+      "path": "evidence/t049-fixed-native-cases.json",
+      "bytes": 19731,
+      "sha256": "325f73cb34128325650ba7fd297643f29fa38f81076e33d0286e0694a9505627"
+    },
+    {
+      "path": "evidence/t073-trade-tail-native.json",
+      "bytes": 12439,
+      "sha256": "f14739f79e271b82ef63f442980340053673b04ef80cb4b2d43ba8deb4333e45"
+    },
+    {
+      "path": "evidence/t092-fixed-deployment.json",
+      "bytes": 14191,
+      "sha256": "093e2f5f479402a2800f77326841df81b5eb6d35302af7ab52cc6980d03e32bf"
+    },
+    {
+      "path": "evidence/t092-promotion-native-cases.json",
+      "bytes": 14802,
+      "sha256": "d0b2cde880e5e17bee9a054b159eb89321f172f7bce5564cf8950317dbadfef5"
+    },
+    {
+      "path": "evidence/t094-native-boundaries.json",
+      "bytes": 13307,
+      "sha256": "e75164ff9384631a5b9de67cc5794308c3f29d60b0d63a80b22968e1ae588cdc"
+    },
+    {
+      "path": "evidence/t100-main-closed-call-analysis.json",
+      "bytes": 3174192,
+      "sha256": "d3d0a33f2112db099311262e3fb2a4f78d6736b6fe19ece9269a815a9634c0f9"
+    },
+    {
+      "path": "evidence/t100-original-checkpoint.json",
+      "bytes": 2540,
+      "sha256": "2f4c73dde6391a0d5d5787865606c197b1a2ff85db249f0472d14e833b10e3b5"
+    },
+    {
+      "path": "evidence/verification-ab02f53/context.json",
+      "bytes": 10250,
+      "sha256": "3d917ec0cafd457cae154163afcca56e14ead30ff5fca1f315b79a03a38b8464"
+    },
+    {
+      "path": "evidence/verification-ab02f53/debug.jsonl",
+      "bytes": 769,
+      "sha256": "5e9420e0427a39a1e460a373f831f0cd384af44d5be7c861815dc383e7fc7298"
+    },
+    {
+      "path": "evidence/verification-ab02f53/summary.json",
+      "bytes": 1679,
+      "sha256": "b7e1e9d2fd4e876bba7d5b47df0cf7fd864441854f605ac16d67a879b6084ede"
+    },
+    {
+      "path": "evidence/verification-ab02f53-pty/command-timing.json",
+      "bytes": 62635,
+      "sha256": "071b5dbfecaeefd922c1507a4ecedcc82857dd33525595530df5de8b0e24110b"
+    },
+    {
+      "path": "evidence/verification-ab02f53-pty/context.json",
+      "bytes": 10250,
+      "sha256": "3d917ec0cafd457cae154163afcca56e14ead30ff5fca1f315b79a03a38b8464"
+    },
+    {
+      "path": "evidence/verification-ab02f53-pty/debug.jsonl",
+      "bytes": 243946,
+      "sha256": "003d071bdd7533193c8ce82387af38625c9cc86c1f834b74a041de6513eeab49"
+    },
+    {
+      "path": "evidence/verification-ab02f53-pty/summary.json",
+      "bytes": 1692,
+      "sha256": "09b15f56401c63f8357d500b8bf3b35c19c144341458646b7cdb61af843d7276"
+    },
+    {
+      "path": "evidence/verification-ab02f53-pty/turn-timing.json",
+      "bytes": 15699,
+      "sha256": "8c8ad6cf15ccda86aa8e47de781bda163b98b0e2fc91fce8dad59f81488ddffd"
+    },
+    {
+      "path": "evidence/verification-closed-call-analysis.json",
+      "bytes": 205109,
+      "sha256": "855c42cebe75cb799cef28a83f291bab78da591d2d2ff776ed9b6069f6804c40"
+    },
+    {
+      "path": "evidence/verification-native-final.json",
+      "bytes": 26674,
+      "sha256": "6ede75551c3ffc1cffd746558f79d61113053e0aca367c0be0cc6a48cdfe6558"
+    },
+    {
+      "path": "evidence/worktree-closeout.json",
+      "bytes": 588,
+      "sha256": "b1150aaa691cf870b70c697a09f4dbec04834cf050a66189d6958c1a4e7cf366"
+    },
+    {
+      "path": "evidence/worktree-preserved/manifest-20261031T083200264070Z.json",
+      "bytes": 2589382,
+      "sha256": "667ee78236523de6b3e926ba95fabe8394b5e74fb5f72325884cb200376ef18a"
+    },
+    {
+      "path": "reports/checkpoints.json",
+      "bytes": 39002,
+      "sha256": "e68799005fd2582eb6fc827809a163f37e427977166539735fcfbf6224eee904"
+    }
+  ]
+}

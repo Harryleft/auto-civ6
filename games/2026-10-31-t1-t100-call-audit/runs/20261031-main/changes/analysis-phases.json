@@ -1,0 +1,75 @@
+{
+  "baseline": [
+    {
+      "first": 2,
+      "last": 19,
+      "phase": "setup"
+    },
+    {
+      "first": 22,
+      "last": 168,
+      "phase": "play"
+    },
+    {
+      "first": 169,
+      "last": 176,
+      "phase": "handoff"
+    }
+  ],
+  "play": [
+    {
+      "first": 2,
+      "last": 2858,
+      "phase": "play"
+    },
+    {
+      "first": 2859,
+      "last": 2864,
+      "phase": "handoff"
+    }
+  ],
+  "fixed": [
+    {
+      "first": 2,
+      "last": 93,
+      "phase": "play"
+    },
+    {
+      "first": 94,
+      "last": 96,
+      "phase": "verification"
+    },
+    {
+      "first": 97,
+      "last": 1851,
+      "phase": "play"
+    },
+    {
+      "first": 1852,
+      "last": 1854,
+      "phase": "verification"
+    },
+    {
+      "first": 1855,
+      "last": 2964,
+      "phase": "play"
+    },
+    {
+      "first": 2965,
+      "last": 2982,
+      "phase": "handoff"
+    }
+  ],
+  "repaired": [
+    {
+      "first": 2,
+      "last": 462,
+      "phase": "play"
+    },
+    {
+      "first": 463,
+      "last": 479,
+      "phase": "closing"
+    }
+  ]
+}
