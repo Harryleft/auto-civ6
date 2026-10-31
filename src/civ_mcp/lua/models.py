@@ -181,6 +181,9 @@ class CityInfo:
     completed_districts: list[str] | None = None  # native IsComplete, with coordinates
     resource_visibility_known: bool | None = None  # absent in legacy city rows
     archaeology_sites: list[str] = field(default_factory=list)
+    religion_majority_id: int | None = None  # Native -1 is none; None is unknown.
+    religion_majority_name: str | None = None
+    religion_majority_source: str | None = None  # InGame; not Core freshness proof.
 
 
 @dataclass

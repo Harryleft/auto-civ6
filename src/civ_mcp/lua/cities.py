@@ -21,8 +21,31 @@ from civ_mcp.lua.purchase_facts import LUA_PURCHASE_FACTS
 from civ_mcp.lua.resource_facts import LUA_RESOURCE_FACTS
 
 
+_LUA_CITY_MAJORITY = r'''
+-- Both standalone and combined decision readers execute this query in InGame.
+-- Names are native (including custom names), cached only within this query.
+local majorityNames = {}
+local majorityGameRead, majorityGame = false, nil
+local function majorityNameJSON(id)
+    if id == nil or id < 0 then return "null" end
+    if majorityNames[id] then return majorityNames[id] end
+    local encoded = "null"
+    pcall(function()
+        if not majorityGameRead then majorityGameRead = true; majorityGame = Game.GetReligion() end
+        local value = majorityGame:GetName(id)
+        if type(value) == "string" and #value > 0 then
+            value = value:gsub("\\", "\\\\"):gsub('"', '\\"'):gsub("\n", "\\n"):gsub("\r", "\\r"):gsub("\t", "\\t")
+            encoded = '"' .. value:gsub("[%z\1-\31]", function(c) return string.format("\\u%04x", string.byte(c)) end) .. '"'
+        end
+    end)
+    majorityNames[id] = encoded
+    return encoded
+end
+'''
+
+
 def build_cities_query() -> str:
-    return _LUA_KNOWN_RESOURCE + LUA_RESOURCE_FACTS + """
+    return _LUA_KNOWN_RESOURCE + LUA_RESOURCE_FACTS + _LUA_CITY_MAJORITY + """
 local me = Game.GetLocalPlayer()
 local hashName = {}
 for u in GameInfo.Units() do hashName[u.Hash] = u.UnitType end
@@ -212,7 +235,19 @@ for i, c in Players[me]:GetCities():Members() do
         end
         local civ = PlayerConfigurations[me]:GetCivilizationTypeName()
         local seed = GameConfiguration.GetValue("GAME_SYNC_RANDOM_SEED")
-        print("CITYFACTS|" .. c:GetID() .. "|" .. c:GetOwner() .. "|" .. civ .. "|" .. tostring(seed) .. "|" .. table.concat(completed, ";"))
+        local cityId, cityOwner = c:GetID(), c:GetOwner()
+        print("CITYFACTS|" .. cityId .. "|" .. cityOwner .. "|" .. civ .. "|" .. tostring(seed) .. "|" .. table.concat(completed, ";"))
+        local majority = nil
+        -- Never inspect a foreign city returned by an inconsistent collection.
+        if cityOwner == me then
+            pcall(function()
+                local value = c:GetReligion():GetMajorityReligion()
+                if type(value) == "number" and value == value and math.abs(value) < math.huge
+                    and value == math.floor(value) and value >= -1 then majority = value end
+            end)
+        end
+        print("CITYRELIGION|" .. cityId .. "|" .. cityOwner .. "|" .. me .. "|" .. civ .. "|" .. tostring(seed)
+            .. "|" .. (majority == nil and "unknown" or string.format("%.0f", majority)) .. "|" .. majorityNameJSON(majority))
     end)
 end
 for i = 1, #cityCoords do for j = i + 1, #cityCoords do
@@ -775,12 +810,66 @@ def _parse_tile_hints(value: str) -> list[str]:
     return re.findall(r"(?:^|[;,])([A-Z][A-Z0-9_]*@-?\d+,-?\d+)(?=$|[;,])", value)
 
 
+def _attach_city_majorities(lines: list[str], cities: list[CityInfo]) -> None:
+    """Bind only one unambiguous native extension to an existing owned-city row."""
+    records: dict[int, list[list[str]]] = {}
+    facts: dict[int, int] = {}
+    counts: dict[int, int] = {}
+    for city in cities:
+        counts[city.city_id] = counts.get(city.city_id, 0) + 1
+    for line in lines:
+        if line.startswith(("ERR:", "Error:", "DECISION_ERROR|")):
+            return
+        if not line.startswith(("CITYRELIGION|", "CITYFACTS|")):
+            continue
+        parts = line.split("|", 7)
+        if len(parts) < 2 or not parts[1].isdigit():
+            return
+        cid = int(parts[1])
+        if line.startswith("CITYFACTS|"):
+            facts[cid] = facts.get(cid, 0) + 1
+        else:
+            records.setdefault(cid, []).append(parts)
+    if records.keys() - counts.keys():
+        return  # An unexplained city frame cannot certify owned-city religion.
+    for city in cities:
+        entries = records.get(city.city_id, [])
+        if len(entries) != 1 or facts.get(city.city_id) != 1 or counts[city.city_id] != 1:
+            continue
+        parts = entries[0]
+        try:
+            if len(parts) != 8 or any(not re.fullmatch(r"-?\d+", parts[i]) for i in (2, 3, 5)):
+                continue
+            owner, observer, seed = int(parts[2]), int(parts[3]), int(parts[5])
+            identity = (parts[4].removeprefix("CIVILIZATION_").lower(), seed)
+            if (not 0 <= owner <= 63 or owner != observer or owner != city.owner_id
+                    or not parts[4].startswith("CIVILIZATION_") or identity != city.game_identity):
+                continue
+            religion = None
+            if parts[6] != "unknown":
+                if not re.fullmatch(r"-?\d+", parts[6]):
+                    continue
+                religion = int(parts[6])
+                if religion < -1:
+                    continue
+            name = json.loads(parts[7])
+            if name is not None and (type(name) is not str or not name or religion is None or religion < 0):
+                continue
+            city.religion_majority_id = religion
+            city.religion_majority_name = name
+            city.religion_majority_source = "InGame"
+        except (ValueError, TypeError):
+            continue
+
+
 def parse_cities_response(lines: list[str]) -> tuple[list[CityInfo], list[str]]:
     """Returns (cities, distance_lines) where distance_lines are 'A|B|N' strings."""
     cities = []
     distances: list[str] = []
     city_by_id: dict[int, CityInfo] = {}
     for line in lines:
+        if line.startswith("CITYRELIGION|"):
+            continue  # Parsed after all city identity facts; name is JSON text.
         if line.startswith("DIST|"):
             p = line.split("|")
             if len(p) >= 4:
@@ -890,6 +979,7 @@ def parse_cities_response(lines: list[str]) -> tuple[list[CityInfo], list[str]]:
             )
         )
         city_by_id[cities[-1].city_id] = cities[-1]
+    _attach_city_majorities(lines, cities)
     return cities, distances
 
 

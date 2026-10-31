@@ -327,6 +327,8 @@ def narrate_cities(
     if not cities:
         return "No cities."
     lines = [f"{len(cities)} cities:"]
+    if any(c.religion_majority_source == "InGame" for c in cities):
+        lines.append("Religion majority: InGame native getter; GameCore freshness unverified.")
     for c in cities:
         building = (
             c.currently_building
@@ -371,12 +373,17 @@ def narrate_cities(
             growth_str = f"{c.food_stored:.0f}/{c.growth_threshold} food ({c.turns_to_grow}t, {c.food_surplus:+.1f}/t)"
         else:
             growth_str = f"{c.food_stored:.0f}/{c.growth_threshold} food ({c.turns_to_grow}t, {c.food_surplus:+.1f}/t)"
+        religion = "unknown"
+        if c.religion_majority_id == -1:
+            religion = "none (id:-1)"
+        elif c.religion_majority_id is not None:
+            religion = f"{c.religion_majority_name or 'name unknown'} (id:{c.religion_majority_id})"
         lines.append(
             f"  {c.name} (pop {c.population}) at ({c.x},{c.y}) — "
             f"Food {c.food:.0f} Prod {c.production:.0f} Gold {c.gold:.0f} "
             f"Sci {c.science:.0f} Cul {c.culture:.0f} | "
             f"Housing {c.housing:.0f} Amenities {c.amenities} | "
-            f"Growth: {growth_str} | {prod_str}{defense}{loyalty_str} "
+            f"Growth: {growth_str} | {prod_str}{defense}{loyalty_str} | Religion:{religion} "
             f"[id:{c.city_id}]"
         )
         # Growth warnings
