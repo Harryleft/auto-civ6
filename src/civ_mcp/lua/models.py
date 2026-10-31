@@ -455,14 +455,14 @@ class CombatEstimate:
 
     attacker_type: str
     defender_type: str
-    attacker_cs: int
-    defender_cs: int
+    attacker_cs: int | float
+    defender_cs: int | float
     is_ranged: bool
     modifiers: list[str]  # ["fortified +6", "hills +3"]
-    est_damage_to_defender: int
-    est_damage_to_attacker: int  # 0 for ranged
-    defender_hp: int
-    attacker_hp: int
+    est_damage_to_defender: int | float
+    est_damage_to_attacker: int | float  # 0 for ranged
+    defender_hp: int | float
+    attacker_hp: int | float
 
 
 @dataclass

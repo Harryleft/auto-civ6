@@ -601,6 +601,62 @@ class GameState:
         )
         return await self._submit_action(pending, scope, rebase.build_rebase(unit_id, target_x, target_y, token))
 
+    async def get_combat_preview(self, unit_id: int, target_x: int, target_y: int) -> str:
+        """Read native current combat simulation without confirming or submitting."""
+        import json
+        from civ_mcp.snapshot import pending_facts
+        from civ_mcp.lua.combat_preview import parse_binding
+
+        result = {"status": "unknown", "source": "InGame CombatManager native simulation",
+                  "strength_source": "Native COMBAT_STRENGTH + STRENGTH_MODIFIER; no base-unit fallback",
+                  "damage_source": "Native DAMAGE_TO for each side",
+                  "eligibility_source": "Native CanStartOperation; melee also requires native current-turn path, movement and ZOC checks",
+                  "request": {"unit_id": unit_id, "target_x": target_x, "target_y": target_y},
+                  "eligibility": "unknown", "estimate": None,
+                  "limitations": "Current native estimate only; does not guarantee actual damage, survival, or next-turn state. No attack submitted."}
+        def response(reason):
+            return json.dumps(result | {"reason": reason}, ensure_ascii=False, allow_nan=False)
+        pending = pending_facts(self)
+        if any(pending.values()):
+            return response("Pending operation exists; confirm its original request first. Preview did not read, confirm or clear it.")
+        if any(type(v) is not int or v < 0 for v in (unit_id, target_x, target_y)):
+            return response("Expected original full unit ID and nonnegative integer target coordinates.")
+        scope = await self._actions.prepare_scope(self._game_identity)
+        if isinstance(scope, str):
+            return response(scope)
+        # Recheck after the scope read: this reader never retires an owner.
+        if any(pending_facts(self).values()):
+            return response("Pending operation appeared during the scope read; preview not queried.")
+        token = uuid.uuid4().hex
+        try:
+            rows = await self.conn.execute_write(lq.build_combat_estimate_query(
+                unit_id, target_x, target_y,
+                preview_scope=(scope.civilization, scope.seed, scope.turn, scope.owner), preview_token=token))
+            rows = [line for row in rows for line in row.splitlines()]
+            if any(pending_facts(self).values()):
+                return response("Pending operation appeared during preview; estimate discarded without confirmation.")
+            refused = [row for row in rows if row.startswith("COMBAT_PREVIEW_INELIGIBLE|")]
+            if len(refused) == 1 and len(rows) == 1:
+                result["eligibility"] = "native_current_turn_refused"
+                return response(refused[0])
+            binding = parse_binding(rows, token, unit_id, target_x, target_y, scope.owner)
+            estimates = [row for row in rows if row.startswith("NATIVE_ESTIMATE|")]
+            estimate = lq.parse_combat_estimate(estimates, 0, 0, allow_fractional=True) if len(estimates) == 1 else None
+            if binding is None or estimate is None or any(row.startswith(("ESTIMATE_UNKNOWN|", "ERR:")) for row in rows):
+                reasons = [row for row in rows if row.startswith(("ESTIMATE_UNKNOWN|", "ERR:"))]
+                return response("; ".join(reasons) or "Native estimate or actor/target binding unavailable or ambiguous.")
+            if estimate.is_ranged != (binding["mode"] in {"RANGED", "BOMBARD"}):
+                return response("Native mode and estimate disagree.")
+            binding["attacker"].update(type=estimate.attacker_type, hp=estimate.attacker_hp, strength=estimate.attacker_cs)
+            binding["target"].update(type=estimate.defender_type, hp=estimate.defender_hp, strength=estimate.defender_cs)
+            result.update(binding, status="estimated", eligibility="native_current_turn_passed",
+                          scope={"civilization": scope.civilization, "seed": scope.seed, "turn": scope.turn, "owner": scope.owner},
+                          damage_to_attacker=estimate.est_damage_to_attacker, damage_to_target=estimate.est_damage_to_defender)
+            result.pop("estimate")
+            return json.dumps(result, ensure_ascii=False, allow_nan=False)
+        except (OSError, TimeoutError, LuaError, ValueError):
+            return response("Native combat preview unavailable; no substitute strengths or damage calculated.")
+
     @_guard_pending_mutation
     async def attack_unit(self, unit_index: int, target_x: int, target_y: int) -> str:
         return await self._attack_and_confirm(("unit", unit_index), target_x, target_y)

@@ -739,7 +739,7 @@ end
 # before either advertising or submitting a melee attack; never infer it
 # from terrain costs or positive remaining movement alone.
 _LUA_MELEE_ELIGIBILITY = """
-local function meleeAttackEligibility(unit, params)
+local function meleeAttackEligibility(unit, params, strict)
     local ok, code, reason = pcall(function()
         local moves = unit:GetMovesRemaining()
         if type(moves) ~= "number" or moves ~= moves or moves == math.huge then
@@ -749,7 +749,11 @@ local function meleeAttackEligibility(unit, params)
         local zoc = unit:HasMovedIntoZOC()
         if zoc == true then return "ZOC", "Unit entered Zone of Control this turn; no attack submitted." end
         if zoc ~= false then return "ATTACK_PATH_UNKNOWN", "Native Zone of Control status unavailable; no attack submitted." end
-        if UnitManager.CanStartOperation(unit, UnitOperationTypes.MOVE_TO, nil, params) ~= true then
+        local eligible=UnitManager.CanStartOperation(unit, UnitOperationTypes.MOVE_TO, nil, params)
+        if strict and type(eligible)~="boolean" then
+            return "ATTACK_PATH_UNKNOWN", "Native melee eligibility unavailable; no attack submitted."
+        end
+        if eligible ~= true then
             return "ATTACK_BLOCKED", "Native melee target unavailable; no attack submitted."
         end
         if UI.IsGameCoreBusy() ~= false then
@@ -1015,18 +1019,59 @@ def parse_blocked_diagnostic(lines: list[str]) -> str:
     return "unit did not move — impassable terrain, border, or no path"
 
 
-def build_combat_estimate_query(unit_index: int, target_x: int, target_y: int) -> str:
+def build_combat_estimate_query(unit_index: int, target_x: int, target_y: int, *, preview_scope: tuple | None = None, preview_token: str = "") -> str:
     """InGame: native combat preview, without executing an attack.
 
     UnitPanel.lua uses SimulateAttackVersus for an exact unit and
     SimulateAttackInto for a plot. The engine evaluates conditional promotions;
     an unavailable preview must never fall back to summing modifier amounts.
     """
+    # The ordinary attack path keeps its existing selection and receipt.
+    # Only the independent reader requests strict actor/target/world binding.
+    strict = preview_scope is not None
+    binding = ""
+    if strict:
+        from civ_mcp.lua.combat_preview import binding_context
+        binding = binding_context(unit_index, target_x, target_y, preview_scope, preview_token)
+    selection = """local targetCount=0
+        for other in tgtUnits:Units() do
+            local visible=PlayersVisibility[me]:IsUnitVisible(other)
+            if type(visible)~="boolean" then return "ESTIMATE_UNKNOWN|unit visibility unavailable" end
+            if not visible then return "ESTIMATE_UNKNOWN|hidden unit target is not supported" end
+            if other:GetOwner() ~= me then
+                targetCount=targetCount+1
+                if targetCount>1 then return "ESTIMATE_UNKNOWN|ambiguous unit target" end
+                enemy=other
+            end
+        end""" if strict else """for other in tgtUnits:Units() do
+            if other:GetOwner() ~= me then
+                local info = GameInfo.Units[other:GetType()]
+                local military = info and (info.Combat or 0) > 0
+                if military or enemy == nil then enemy = other end
+                if military then break end
+            end
+        end"""
+    start = "local blocked=previewStart(unit);if blocked then return blocked end" if strict else ""
+    ranged_check = """local eligible=UnitManager.CanStartOperation(unit,UnitOperationTypes.RANGE_ATTACK,nil,params)
+        if type(eligible)~="boolean" then return "ESTIMATE_UNKNOWN|native ranged eligibility unavailable" end
+        if not eligible then return "COMBAT_PREVIEW_INELIGIBLE|RANGED_TARGET_UNAVAILABLE" end""" if strict else """if not UnitManager.CanStartOperation(unit, UnitOperationTypes.RANGE_ATTACK, nil, params) then
+            return "ESTIMATE_UNKNOWN|ranged target unavailable"
+        end"""
+    melee_refusal = """if code then
+            local prefix=code=="ATTACK_PATH_UNKNOWN" and "ESTIMATE_UNKNOWN|" or "COMBAT_PREVIEW_INELIGIBLE|"
+            return prefix .. code .. "|" .. reason
+        end""" if strict else 'if code then return "ESTIMATE_UNKNOWN|" .. reason end'
+    receipt = "previewFinish(mode) .. '\\n'" if strict else "''"
+    scope_check = """local scoped,valid=pcall(sameScope,previewScope)
+if not scoped or not valid then
+ ok=true;result="ESTIMATE_UNKNOWN|world or turn changed or unavailable"
+end""" if strict else ""
     return f"""
 {_lua_get_unit(unit_index)}
 {_LUA_ATTACK_VISIBILITY}
 {_LUA_ATTACK_MODE}
 {_LUA_MELEE_ELIGIBILITY}
+{binding}
 local function preview()
     local visible=attackTargetVisibility(me,{target_x},{target_y})
     if visible==nil then return "ESTIMATE_UNKNOWN|current target visibility unavailable" end
@@ -1037,6 +1082,7 @@ local function preview()
     if not CombatManager or not CombatResultParameters then
         return "ESTIMATE_UNKNOWN|native combat preview unavailable"
     end
+    {start}
     local params = {{}}
     params[UnitOperationTypes.PARAM_X] = {target_x}
     params[UnitOperationTypes.PARAM_Y] = {target_y}
@@ -1052,27 +1098,18 @@ local function preview()
         if not range or range <= 0 or Map.GetPlotDistance(unit:GetX(), unit:GetY(), {target_x}, {target_y}) > range then
             return "ESTIMATE_UNKNOWN|ranged target out of known range"
         end
-        if not UnitManager.CanStartOperation(unit, UnitOperationTypes.RANGE_ATTACK, nil, params) then
-            return "ESTIMATE_UNKNOWN|ranged target unavailable"
-        end
+        {ranged_check}
         if mode == "BOMBARD" then combatType = CombatTypes.BOMBARD else combatType = CombatTypes.RANGED end
         if combatType == nil then return "ESTIMATE_UNKNOWN|ranged combat type unavailable" end
     else
         params[UnitOperationTypes.PARAM_MODIFIERS] = UnitOperationMoveModifiers.ATTACK
-        local code, reason = meleeAttackEligibility(unit, params)
-        if code then return "ESTIMATE_UNKNOWN|" .. reason end
+        local code, reason = meleeAttackEligibility(unit, params{", true" if strict else ""})
+        {melee_refusal}
     end
     local enemy = nil
     local tgtUnits = Map.GetUnitsAt({target_x}, {target_y})
     if tgtUnits then
-        for other in tgtUnits:Units() do
-            if other:GetOwner() ~= me then
-                local info = GameInfo.Units[other:GetType()]
-                local military = info and (info.Combat or 0) > 0
-                if military or enemy == nil then enemy = other end
-                if military then break end
-            end
-        end
+        {selection}
     end
     local city = CityManager.GetCityAt({target_x}, {target_y})
     local defenderID, defenderType, defenderHP, owner
@@ -1098,6 +1135,7 @@ local function preview()
     if owner ~= 63 and not Players[me]:GetDiplomacy():IsAtWarWith(owner) then
         return "ESTIMATE_UNKNOWN|target is not at war"
     end
+    {"previewBind(enemy,city)" if strict else ""}
     local result
     if city then
         result = CombatManager.SimulateAttackInto(unit:GetComponentID(), combatType, {target_x}, {target_y})
@@ -1137,17 +1175,19 @@ local function preview()
     end
     local info = GameInfo.Units[unit:GetType()]
     local attackerType = info and info.UnitType or "UNKNOWN"
-    return "NATIVE_ESTIMATE|" .. attackerType .. "|" .. defenderType .. "|" .. attCS .. "|" .. defCS
+    local receipt = {receipt}
+    return receipt .. "NATIVE_ESTIMATE|" .. attackerType .. "|" .. defenderType .. "|" .. attCS .. "|" .. defCS
         .. "|" .. (isRanged and "1" or "0") .. "|" .. attHP .. "|" .. defenderHP .. "|" .. attDamage .. "|" .. defDamage
 end
 local ok, result = pcall(preview)
+{scope_check}
 print(ok and result or "ESTIMATE_UNKNOWN|native preview unavailable")
 print("{SENTINEL}")
 """
 
 
 def parse_combat_estimate(
-    lines: list[str], att_cs: int, def_cs: int
+    lines: list[str], att_cs: int, def_cs: int, *, allow_fractional: bool = False
 ) -> CombatEstimate | None:
     """Read native damage preview; never infer conditional modifiers or damage."""
     for line in lines:
@@ -1158,10 +1198,14 @@ def parse_combat_estimate(
             return None
         try:
             eff_att, eff_def, my_hp, enemy_hp, att_damage, def_damage = (
-                int(p[index]) for index in (3, 4, 6, 7, 8, 9)
+                (float(p[index]) if allow_fractional else int(p[index])) for index in (3, 4, 6, 7, 8, 9)
             )
         except ValueError:
             return None
+        if allow_fractional:
+            import math
+            if not all(math.isfinite(v) for v in (eff_att, eff_def, my_hp, enemy_hp, att_damage, def_damage)):
+                return None
         if my_hp <= 0 or enemy_hp <= 0 or att_damage < 0 or def_damage < 0:
             return None
         return CombatEstimate(

@@ -106,6 +106,11 @@ def domain_parser(group: str):
 
     if group == "unit":
         command("list", "get_units", "List current units and native IDs.")
+        preview = command("combat-preview", "get_combat_preview", "Read native current combat eligibility, strengths and estimated damage; never attack or confirm pending.")
+        entity(preview, "unit_id")
+        preview.add_argument("target_x", type=int)
+        preview.add_argument("target_y", type=int)
+        preview.add_argument("--dry-run", action="store_true", help="Validate schema only; do not query native eligibility or simulate combat")
         move = command("move", "unit_action", "Move one unit to a queried coordinate.", mutation=True)
         entity(move, "unit_id")
         move.add_argument("target_x", type=int)

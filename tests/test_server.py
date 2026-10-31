@@ -1626,8 +1626,11 @@ class TestMcpProtocol:
                     assert initialization.serverInfo.name == "Civilization VI"
                     tools = (await session.list_tools()).tools
                     names = {tool.name for tool in tools}
-                    assert len(names) == 95
-                    assert {"search_research", "get_public_report", "get_unit_formations", "set_unit_formation"} <= names
+                    assert len(names) == 96
+                    assert {"search_research", "get_public_report", "get_unit_formations", "set_unit_formation", "get_combat_preview"} <= names
+                    preview = next(tool for tool in tools if tool.name == "get_combat_preview")
+                    assert preview.annotations.readOnlyHint is True
+                    assert preview.inputSchema["required"] == ["unit_id", "target_x", "target_y"]
                     formations = next(tool for tool in tools if tool.name == "get_unit_formations")
                     assert formations.annotations.readOnlyHint is True
                     formation_schema = next(tool.inputSchema for tool in tools if tool.name == "set_unit_formation")

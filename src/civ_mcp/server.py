@@ -458,6 +458,22 @@ async def get_game_overview(ctx: Context) -> str:
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
+async def get_combat_preview(ctx: Context, unit_id: int, target_x: int, target_y: int) -> str:
+    """Read a native current-turn unit combat estimate without attacking.
+
+    Supports the existing melee, ranged and bombard simulation mappings only.
+    Binds current visible hostile target, actor/component identity and world/turn.
+    Native eligibility and estimated strengths/damage do not guarantee actual
+    damage or next-turn state. Any pending operation blocks this reader without
+    game I/O, confirmation, dismissal or cleanup. Use unit combat-preview ID X Y.
+    """
+    gs = _get_game(ctx)
+    return await _logged(ctx, "get_combat_preview",
+                         {"unit_id": unit_id, "target_x": target_x, "target_y": target_y},
+                         lambda: gs.get_combat_preview(unit_id, target_x, target_y))
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
 async def get_units(ctx: Context) -> str:
     """List all your units with position, type, movement, and health.
 
