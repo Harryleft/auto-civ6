@@ -2328,10 +2328,11 @@ async def get_religion_defense(ctx: Context) -> str:
 
 @mcp.tool(annotations={"readOnlyHint": True})
 async def get_religion_spread(ctx: Context) -> str:
-    """Get per-city religion breakdown across all visible cities.
+    """Read owned/revealed city religion facts for met major civilizations.
 
-    Shows which religion is majority in each city, follower counts,
-    and which religions are closest to religious victory.
+    Shows majority religion, followers and religious victory proximity.
+    Excludes city-states and city pressure. Revealed does not imply current
+    visibility or verified freshness. Missing cities are not proven absent.
     """
     gs = _get_game(ctx)
 

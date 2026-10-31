@@ -196,7 +196,7 @@ def parse_pantheon_status_response(lines: list[str]) -> PantheonStatus:
 
 
 def build_religion_status_query() -> str:
-    """InGame: per-city religion status for all visible cities."""
+    """InGame: owned/revealed city religion status for met major civilizations."""
     return """
 local me = Game.GetLocalPlayer()
 local pVis = PlayersVisibility[me]
