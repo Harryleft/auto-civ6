@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import signal
+import shlex
 import sys
 import threading
 import time
@@ -24,9 +25,9 @@ OFFLINE_TOOLS = {"get_runtime_status", "search_knowledge", "search_research", "g
 STATES = {"overview": "get_game_overview", "units": "get_units", "cities": "get_cities",
           "turn": "get_turn_status", "snapshot": "get_game_snapshot", "decision": "get_decision_context"}
 HELP = {
-    "overview": {"description": "Choose a named command topic and use TOPIC --help for its arguments. tools/call are protocol diagnostics only.",
+    "overview": {"description": "Choose a named command topic; help TOPIC COMMAND or TOPIC COMMAND --help reads its local arguments/boundaries. docs/cli.md is the short guide index. tools/call are protocol diagnostics only.",
                  "topics": ["tools", "pending", "state", *GROUPS, "verify", "call", "quit"],
-                 "usage": "help [TOPIC]", "output": "One JSON object per line; prompts use stderr."},
+                 "usage": "help [TOPIC [COMMAND]]", "output": "One JSON object per line; prompts use stderr."},
     "tools": {"usage": "tools [NAME]", "description": "Protocol diagnostics: list internal names, or inspect one tool's inputSchema and annotations. Normal gameplay uses named commands.",
               "examples": ["tools", "tools get_runtime_status"]},
     "pending": {"usage": "pending", "description": "Read server memory and local transport_unknown without game I/O or clearing pending."},
@@ -281,7 +282,7 @@ class DebugSession:
         if "get_runtime_status" not in self.tools:
             raise CommandError("RUNTIME_STATUS_MISSING", "Reload the current server code before debugging")
         value = await self.runtime()
-        self.event("session_ready", runtime=value, offline=self.offline, compact=self.compact, help="help [TOPIC]")
+        self.event("session_ready", runtime=value, offline=self.offline, compact=self.compact, help="help [TOPIC [COMMAND]]")
 
     async def call(self, tool: str, arguments: dict, *, dry_run: bool = False):
         if tool == "run_lua" and not self.developer:
@@ -417,12 +418,26 @@ class DebugSession:
             await self.verify_state()
         elif head in HELP and parts == [head, "--help"]:
             self.event("help", topic=head, **HELP[head])
-        elif head in {"help", "--help"} and len(parts) <= 2:
-            topic = parts[1] if len(parts) == 2 else "overview"
+        elif head in {"help", "--help"}:
+            try:
+                help_words = shlex.split(line)
+            except ValueError as error:
+                raise CommandError("INVALID_DEBUG_ARGUMENT", str(error),
+                                   hint="Close the quoted help name; for example: help city list.") from error
+            if len(help_words) > 3:
+                raise CommandError("INVALID_DEBUG_COMMAND", "Use help [TOPIC [COMMAND]] without action arguments",
+                                   hint="For example: help city list. Help only inspects local command syntax.")
+            topic = help_words[1] if len(help_words) >= 2 else "overview"
             if topic in GROUPS:
-                self.event("help", topic=topic, **domain_parser(topic).help_document())
+                if len(help_words) == 3:
+                    try:
+                        parse_command(shlex.join([topic, help_words[2], "--help"]))
+                    except HelpRequested as help_request:
+                        self.event("help", topic=topic, **help_request.document)
+                else:
+                    self.event("help", topic=topic, **domain_parser(topic).help_document())
                 return False
-            if topic not in HELP:
+            if topic not in HELP or len(help_words) == 3:
                 raise CommandError("INVALID_DEBUG_COMMAND", f"Unknown help topic: {topic}")
             self.event("help", topic=topic, **HELP[topic])
         elif head == "tools" and len(parts) <= 2:

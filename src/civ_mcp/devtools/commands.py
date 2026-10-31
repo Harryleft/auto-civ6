@@ -12,12 +12,12 @@ from civ_mcp.devtools.evidence import CommandError
 
 GROUPS = {
     "unit": "List units or explicitly issue one unit command.",
-    "city": "Inspect cities/production or explicitly set a production item.",
+    "city": "Inspect owned cities, per-city religion, workforce and production.",
     "research": "Inspect technologies/civics or choose research.",
     "turn": "Inspect or explicitly submit/confirm one end-turn request.",
     "save": "List, create or load saves through existing lifecycle tools.",
     "knowledge": "Search static rules and inspect one entry at a chosen depth.",
-    "map": "Inspect known terrain around a queried coordinate.",
+    "map": "Inspect known terrain and GameCore plot yields; city-worked yields use city workforce.",
     "victory": "Read current victory progress and known rival progress.",
     "policy": "Inspect government slots or explicitly assign policy cards.",
     "city-state": "Inspect known city-states or explicitly send one envoy.",
@@ -47,6 +47,55 @@ GROUPS = {
 }
 
 
+# Help describes existing contracts; it never queries native eligibility or
+# owns another copy of Runtime state. Shared notes keep aliases consistent.
+ENTITY_CONFIRMATION = (
+    "Ordinary unit/city reads may confirm an existing action. Inspect pending afterwards: "
+    "use the exact original action only while it remains pending; after confirmation another action call is a new intent."
+)
+CITY_FACTS = (
+    "Includes each owned city's majority religion ID/name from InGame: -1=none, 0=valid ID, null/unknown=unknown. "
+    "An unknown name does not erase a known ID. GameCore freshness is unverified; player majority/global religion-city statistics do not replace per-city facts. "
+    "For pressure/followers or visible religious threats use religion show."
+)
+GOVERNMENT_WINDOW = (
+    "can_change_at_all is a general switch; can_change_now and each can_select_now/refusal_reasons describe the current window. "
+    "Keep-current ACK confirms continued adoption, separately from choosing a new government. "
+    "Paid policy unlock and its gold cost are separate; enough gold does not create a government-change window."
+)
+RESTORE_CHECKS = (
+    "Normal restores use confirmed registered checkpoints from the current run; preserve the original baseline and retained saves. "
+    "Save verification results separately before restoring. After confirmed loading read state overview, unit list, city list, "
+    "then pending; check transport_unknown too before dependent writes or exit. Do not end another turn just to clear a restored queue."
+)
+SHORT_HELP = {
+    ("city", "list"): f"{CITY_FACTS} {ENTITY_CONFIRMATION} Guide: docs/cli/cities.md.",
+    ("empire", "cities"): f"{CITY_FACTS} {ENTITY_CONFIRMATION} Guide: docs/cli/cities.md.",
+    ("unit", "list"): f"{ENTITY_CONFIRMATION} Guide: docs/cli/units.md.",
+    ("unit", "move"): f"{ENTITY_CONFIRMATION} Guide: docs/cli/units.md; docs/agent-recovery.md.",
+    ("map", "area"): (
+        "Yields are GameCore_Tuner Plot:GetYield, retaining native decimals and negative values. "
+        "InGame city workforce is a different context; causes of integer differences, modifier completeness and native data age are unverified. "
+        "Within a yield block F/P zeros are explicit and omitted G/S/C/Fa=0; no yield block=unknown. "
+        "Guide: docs/cli/map-knowledge.md."
+    ),
+    ("government", "list"): f"{GOVERNMENT_WINDOW} Guide: docs/cli/government.md.",
+    ("government", "change"): f"{GOVERNMENT_WINDOW} Guide: docs/cli/government.md.",
+    ("unit", "combat-preview"): (
+        "Native dynamic strength/damage estimate for physical melee/ranged/bombard only; theology and AIR are unsupported. "
+        "Runtime preflight may refuse before CanStartOperation: refusal is not proof the engine forbids combat. "
+        "Missing data stays unknown; estimates do not guarantee actual damage or survival. No attack or pending confirmation is submitted. "
+        "For a read-only comparison check public HP/MP/positions, resources, queues and pending before/after; hidden state/RNG is not proven unchanged. "
+        "Guide: docs/cli/units.md."
+    ),
+    ("save", "reload"): f"Responsive active-game reload returns through the menu; it discards unsaved changes. {RESTORE_CHECKS} Guide: docs/cli/turns-saves.md; docs/agent-recovery.md.",
+    ("save", "load"): f"Menu-only load does not leave an active game. Explicit --source-run/--sha256 is the authorized historical-test exception and creates a new run. {RESTORE_CHECKS} Guide: docs/cli/turns-saves.md; docs/agent-recovery.md.",
+    ("save", "menu-load"): f"Menu-only confirmed-checkpoint load. {RESTORE_CHECKS} Guide: docs/cli/turns-saves.md; docs/agent-recovery.md.",
+    ("save", "load-index"): f"Index must identify a confirmed checkpoint in the latest save listing. {RESTORE_CHECKS} Guide: docs/cli/turns-saves.md; docs/agent-recovery.md.",
+    ("game", "recover"): f"Only explicit authorized fault recovery restarts the game; a slow turn alone is not authorization. {RESTORE_CHECKS} Guide: docs/agent-recovery.md.",
+}
+
+
 @dataclass(frozen=True)
 class Intent:
     tool: str
@@ -72,14 +121,15 @@ def domain_parser(group: str):
                 hint=f"In this debug session run {self.prog} --help, then correct the reported argument.")
 
     root = SessionParser(prog=group, description=GROUPS[group],
-        epilog="Foreground session command; retains the same MCP process. Use COMMAND --help for details.")
+        epilog="Foreground session command; retains the same MCP process. Use help TOPIC COMMAND or TOPIC COMMAND --help; docs/cli.md is the short guide index.")
     commands = root.add_subparsers(required=True)
 
     def command(name, tool, description, *, mutation=False):
+        basic_notes = ("Query current state first. Preview with --dry-run; actual execution sends once through Runtime. "
+                       "Unknown outcomes require inspection of pending, never automatic replay." if mutation else
+                       "Returns the original MCP result in a JSONL tool_result event.")
         child = commands.add_parser(name, help=description, description=description,
-            epilog=("Query current state first. Preview with --dry-run; actual execution sends once through Runtime. "
-                    "Unknown outcomes require inspection of pending, never automatic replay." if mutation else
-                    "Returns the original MCP result in a JSONL tool_result event."))
+            epilog=" ".join(filter(None, (basic_notes, SHORT_HELP.get((group, name))))))
         child.set_defaults(tool=tool)
         if mutation:
             child.add_argument("--dry-run", action="store_true", help="Validate schema and emit a plan; never send the target tool")
@@ -180,7 +230,7 @@ def domain_parser(group: str):
             if name != "unlink":
                 entity(child, "target_unit_id")
     elif group == "city":
-        command("list", "get_cities", "List current cities and native IDs.")
+        command("list", "get_cities", "Read owned city IDs/status and each city's native majority religion; pressure is separate.")
         workforce=command("workforce","get_city_workforce","Read native working/locked citizens, plot capacity and yields for one city; no assignments.")
         entity(workforce,"city_id")
         workforce.add_argument('--view',choices=('brief','structured','evidence'),default=argparse.SUPPRESS)
@@ -266,7 +316,7 @@ def domain_parser(group: str):
         show.add_argument("entry_id")
         show.add_argument("--level", choices=("summary", "brief", "rule", "evidence"), default="summary")
     elif group == "map":
-        area = command("area", "get_map_area", "Read known terrain; radius is 1..4 without silent clamping.")
+        area = command("area", "get_map_area", "Read known terrain and GameCore plot yields; decimals/unknown stay distinct. Radius 1..4.")
         area.add_argument("center_x", type=int)
         area.add_argument("center_y", type=int)
         area.add_argument("--radius", type=int, choices=range(1, 5), default=2)
@@ -315,7 +365,7 @@ def domain_parser(group: str):
         command("show", "get_notifications", "Read notifications; never dismisses popups or chooses responses.")
     elif group == "government":
         command("show", "get_policies", "Read current government and policy slots.")
-        report("list", "governments", "Read currently unlocked governments, slots and native change eligibility.")
+        report("list", "governments", "Read unlocked governments, general permission and current per-target window/refusal reasons.")
         change = command("change", "change_government", "Choose an unlocked government explicitly.", mutation=True)
         change.add_argument("government_type")
     elif group == "religion":
@@ -342,7 +392,7 @@ def domain_parser(group: str):
     elif group == "empire":
         report("show", "empire", "Read per-turn science/culture/faith/gold, favor and available envoys.", pagination=False)
         command("resources", "get_empire_resources", "Read known resource stocks, accumulation and consumption.")
-        command("cities", "get_cities", "Read owned city status, yields, production and visible needs.")
+        command("cities", "get_cities", "Read owned city status and each city's native majority religion; alias of city list.")
     elif group == "era":
         command("show", "get_game_overview", "Read current era, age, era score and next-era thresholds.")
         command("dedications", "get_dedications", "Read current selectable dedication bonuses.")
