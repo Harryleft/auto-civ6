@@ -22,7 +22,7 @@ from civ_mcp import server, knowledge
     ('empire resources', 'get_empire_resources', {}),
     ('era show', 'get_game_overview', {}),
     ('ranking show', 'get_victory_progress', {}),
-    ('civilization abilities CIVILIZATION_SUMERIA', 'get_knowledge', {'entry_id': 'CIVILIZATION_SUMERIA', 'level': 'rule'}),
+    ('civilization abilities CIVILIZATION_SUMERIA', 'get_knowledge', {'entry_id': 'CIVILIZATION_SUMERIA', 'level': 'brief'}),
     ('technology set TECH_WRITING --dry-run', 'set_research', {'tech_or_civic': 'TECH_WRITING', 'category': 'tech'}),
     ('civic set CIVIC_CRAFTSMANSHIP --dry-run', 'set_research', {'tech_or_civic': 'CIVIC_CRAFTSMANSHIP', 'category': 'civic'}),
 ])

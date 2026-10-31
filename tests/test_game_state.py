@@ -789,6 +789,7 @@ class TestMoveUnit:
         result = run(go())
         assert result == (
             "MOVING_TO|12,20|from:10,20|now_at:12,20|(moved dx:+2 dy:+0)"
+            "|moves_remaining:unknown|movement_moves_remaining:unknown|zoc:unknown"
         )
         assert conn.exhausted
 
