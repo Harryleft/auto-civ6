@@ -51,7 +51,7 @@ def test_nested_help_is_one_level_and_has_no_call():
         parse_command('unit --help')
     doc = help_request.value.document
     assert [child['name'] for child in doc['subcommands']] == [
-        'list','move','rebase','action','attack','skip','fortify','heal','improve','skip-remaining',
+        'list','combat-preview','move','rebase','action','attack','skip','fortify','heal','improve','skip-remaining',
         'promotions','promote','upgrade','path','tasks',
         'cancel-move','pillage','found-city','repair','remove-improvement','remove-feature',
         'build-route','automate','alert','sleep','delete','activate','sacrifice-charges',
