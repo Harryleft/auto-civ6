@@ -4,6 +4,7 @@
 
 | 主题 | 记录 |
 | --- | --- |
+| 模块接口独立审查 | [两项问题修复、517 项定向验证与双轴复审](2026-11-01-module-interfaces-review.md)；[历史 T50／T100／T200 各推进两回合](../../games/benchmark-sumeria-719665280/runs/2026-11-01-independent-review/reports/validation.md) |
 | 模块接口收敛 | [五项设计实施、6772 项离线通过及独立安装验证](2026-11-01-module-interfaces.md)；[苏美尔 T1→T3 动作与检查点实机回归](../../games/benchmark-sumeria-719665280/runs/2026-11-01-module-interfaces/reports/validation.md) |
 | CLI 唯一入口 | [取消直接注册、完整命名覆盖、开发边界及热座适配](2026-10-25-cli-only.md)、[JSON 明细](2026-10-25-cli-only.json) |
 | 状态变更生命周期 | [全量覆盖与双轴审查](2026-10-19-mutation-lifecycle.md)、[使者试点](2026-10-19-envoy-lifecycle.md) |

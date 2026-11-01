@@ -866,8 +866,15 @@ class GameState:
         for unit_id in sorted(candidates):
             result = await self._set_unit_readiness(unit_id, "skip", scope=scope)
             results.append(f"unit:{unit_id}|{result}")
-            outcomes.append({"unit_id": unit_id, "outcome": result.outcome if isinstance(result, ResultText) else None})
-            if self._actions.view is not None or not result.startswith(("SKIPPED", "NOT_READY", "ALREADY_WAITING")):
+            outcome = result.outcome if isinstance(result, ResultText) else None
+            outcomes.append({"unit_id": unit_id, "outcome": outcome})
+            if outcome is not None:
+                complete = (outcome["kind"] == "action" and outcome["code"] is None
+                            and (outcome["status"] == "confirmed" or
+                                 (outcome["status"] == "not_submitted" and outcome["data"].get("noop") is True)))
+            else:
+                complete = result.startswith(("SKIPPED", "NOT_READY", "ALREADY_WAITING"))
+            if self._actions.view is not None or not complete:
                 # Preserve the historical non-error batch envelope; the nested
                 # owner outcome keeps its precise refusal/unknown machine code.
                 return ResultText("SKIP_BATCH_STOPPED|" + "\n".join(results), kind="action",

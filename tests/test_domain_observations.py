@@ -156,3 +156,57 @@ def test_complete_native_notification_rows_keep_summary_and_negative_location():
     notification, = observe_notifications_response([row for row in rows if row != SENTINEL]).require_complete()
     assert notification.summary == '一名未相遇的城邦已被击败。'
     assert (notification.x, notification.y) == (-1, -1)
+
+
+@pytest.mark.parametrize('failure', [
+    'entry.GetMessage=function() error("native read failed") end',
+    'NotificationManager.Find=function() error("native lookup failed") end',
+    'NotificationManager.Find=function() return nil end',
+    'entry.IsDismissed=function() error("dismissal unavailable") end',
+    'entry.IsDismissed=function() return nil end',
+])
+def test_native_notification_entry_failure_cannot_certify_an_empty_list(failure):
+    import asyncio
+    from test_notification_details import NotificationConn
+    from civ_mcp.lua.notifications import build_notifications_query
+    from civ_mcp.lua import SENTINEL
+
+    conn = NotificationConn()
+    conn.lua.execute(failure)
+    rows = asyncio.run(conn.execute_write(build_notifications_query()))
+    observation = observe_notifications_response([row for row in rows if row != SENTINEL])
+    assert observation.value == []
+    assert not observation.complete
+
+
+def test_dismissed_native_notification_is_still_a_known_empty_list():
+    import asyncio
+    from test_notification_details import NotificationConn
+    from civ_mcp.lua.notifications import build_notifications_query
+    from civ_mcp.lua import SENTINEL
+
+    conn = NotificationConn()
+    conn.lua.execute('entry.IsDismissed=function() return true end')
+    rows = asyncio.run(conn.execute_write(build_notifications_query()))
+    assert observe_notifications_response([row for row in rows if row != SENTINEL]).require_complete() == []
+
+
+def test_native_notification_failure_keeps_valid_neighbours_and_legacy_value():
+    import asyncio
+    from test_notification_details import NotificationConn
+    from civ_mcp.lua.notifications import build_notifications_query, parse_notifications_response
+    from civ_mcp.lua import SENTINEL
+
+    conn = NotificationConn()
+    conn.lua.execute('''
+NotificationManager.GetList=function() return {294,295} end
+NotificationManager.Find=function(_, id)
+    if id==295 then error("native lookup failed") end
+    return entry
+end
+''')
+    rows = asyncio.run(conn.execute_write(build_notifications_query()))
+    observation = observe_notifications_response([row for row in rows if row != SENTINEL])
+    assert not observation.complete and len(observation.value) == 1
+    assert observation.value == parse_notifications_response(rows)
+    assert observation.value[0].message == '失败！'

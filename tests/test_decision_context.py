@@ -214,3 +214,19 @@ def test_malformed_completed_section_stays_unknown_through_game_state(section, r
     assert 'data' not in value['sections'][section]
     assert value['sections']['overview']['status'] == 'ready'
     assert len(conn.calls) == 1 and game._last_snapshot is None
+
+
+def test_failed_native_notification_read_is_unknown_in_decision_context():
+    from test_notification_details import NotificationConn
+    from civ_mcp.lua.notifications import build_notifications_query
+    from civ_mcp.lua import SENTINEL
+
+    native = NotificationConn()
+    native.lua.execute('entry.GetMessage=function() error("native read failed") end')
+    rows = asyncio.run(native.execute_write(build_notifications_query()))
+    value, game, conn = read(response({'notifications': [row for row in rows if row != SENTINEL]}))
+    assert value['status'] == 'unknown'
+    assert value['sections']['notifications']['status'] == 'unknown'
+    assert 'data' not in value['sections']['notifications']
+    assert value['sections']['overview']['status'] == 'ready'
+    assert len(conn.calls) == 1 and game._last_snapshot is None

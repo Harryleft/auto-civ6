@@ -109,3 +109,60 @@ def test_skip_batch_keeps_unknown_owner_and_completed_units_in_its_result():
     assert data['completed_units'] == [] and data['stopped_unit'] == 65537
     assert data['results'][0]['outcome']['code'] == 'OUTCOME_UNKNOWN'
     assert conn.lua.eval('#submissions') == 1 and state.pending_action_summary
+
+
+def test_skip_batch_uses_confirmed_outcome_after_display_changes(monkeypatch):
+    from civ_mcp.actions import ActionLifecycle
+    from test_unit_readiness import ReadyConn
+
+    original = ActionLifecycle._confirmed_action
+
+    def translated(self, pending):
+        confirmed = original(self, pending)
+        return '跳过已确认' if confirmed is not None else None
+
+    monkeypatch.setattr(ActionLifecycle, '_confirmed_action', translated)
+    conn = ReadyConn()
+    conn.lua.execute('addUnit(65537,true,0,0)')
+    state = GameState(conn)
+    result = asyncio.run(state.skip_remaining_units())
+    assert result.outcome['status'] == 'confirmed'
+    assert result.outcome['data']['completed_units'] == [65537, 196608]
+    assert conn.lua.eval('#submissions') == 2
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('activity', [1, 3])
+@pytest.mark.parametrize('noise', [False, True])
+def test_skip_batch_preserves_native_noop_after_display_changes(monkeypatch, activity, noise):
+    from test_unit_readiness import ReadyConn
+
+    conn = ReadyConn()
+    conn.lua.execute('addUnit(65537,true,0,0)')
+    execute = conn.execute_write
+
+    async def noisy_receipt(code):
+        rows = await execute(code)
+        if noise and any(row.startswith(('OK:NOT_READY|', 'OK:ALREADY_WAITING|')) for row in rows):
+            rows.insert(0, 'native debug output')
+        return rows
+
+    monkeypatch.setattr(conn, 'execute_write', noisy_receipt)
+    state = GameState(conn)
+    original = state._set_unit_readiness
+
+    async def changes_after_candidate_read(unit_id, kind, **options):
+        if unit_id == 65537:
+            conn.lua.execute(f'units[65537].ready=false; units[65537].activity={activity}')
+        result = await original(unit_id, kind, **options)
+        if result.outcome['status'] == 'not_submitted':
+            result = ResultText('保持已有指令', **{k: result.outcome[k]
+                for k in ('kind', 'status', 'code', 'data')})
+        return result
+
+    monkeypatch.setattr(state, '_set_unit_readiness', changes_after_candidate_read)
+    result = asyncio.run(state.skip_remaining_units())
+    assert result.outcome['status'] == 'confirmed'
+    assert result.outcome['data']['completed_units'] == [65537, 196608]
+    assert conn.lua.eval('#submissions') == 1
+    assert conn.lua.eval('units[65537].activity') == activity

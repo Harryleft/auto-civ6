@@ -248,15 +248,19 @@ local nm = NotificationManager
 local list = nm.GetList(me)
 local total = 0
 local emitted = 0
+local complete = true
 local function notificationText(value)
     return tostring(Locale.Lookup(value or "") or ""):gsub("|", "/"):gsub("[\\r\\n]+", " ")
 end
 if list then
     total = #list
     for _, nID in ipairs(list) do
-        pcall(function()
+        local ok = pcall(function()
             local entry = nm.Find(me, nID)
-            if entry and not entry:IsDismissed() then
+            if not entry then complete = false; return end
+            local dismissed = entry:IsDismissed()
+            if type(dismissed) ~= "boolean" then complete = false; return end
+            if not dismissed then
                 local typeName = entry:GetTypeName() or "UNKNOWN"
                 local msg = notificationText(entry:GetMessage())
                 local summary = ""
@@ -270,8 +274,12 @@ if list then
                 emitted = emitted + 1
             end
         end)
+        if not ok then complete = false end
     end
 end
+-- TOTAL includes dismissed entries; a lower emitted count alone cannot tell
+-- an intentionally omitted entry from a failed native read.
+if not complete then print("NOTIFICATION_READ_INCOMPLETE") end
 print("TOTAL|" .. total .. "|" .. emitted)
 print("{SENTINEL}")
 """.replace("{SENTINEL}", SENTINEL)
@@ -345,6 +353,8 @@ def observe_notifications_response(lines: list[str]) -> Observation[list[GameNot
                 if len(parsed) != 1:
                     raise ValueError("unparsed notification")
                 value.extend(parsed)
+            elif row == "NOTIFICATION_READ_INCOMPLETE":
+                raise ValueError("native notification entry could not be read")
             else:
                 raise ValueError("malformed notification row")
         except (ValueError, TypeError, IndexError) as exc:

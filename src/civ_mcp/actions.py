@@ -397,8 +397,14 @@ class ActionLifecycle:
                 pending.kind == "production" and any("MAYBE:" in line for line in lines)):
             if self.pending is pending:
                 self.pending = None
+            # These native pre-entry receipts preserve an existing activity.
+            # Carry that fact explicitly so batch callers need no display tags.
+            native_status = next((line for line in lines if line.startswith(("OK:", "ERR:"))), "")
+            noop = (pending.kind in {"skip", "fortify"}
+                    and native_status.startswith(("OK:NOT_READY|", "OK:ALREADY_WAITING|")))
             return ResultText(result, kind="action", status="not_submitted",
-                              code=_native_refusal_code(lines))
+                              code=_native_refusal_code(lines),
+                              data={"action": pending.kind, "entity": list(pending.entity), "noop": noop})
         elif pending.kind in ("attack", "found"):
             reason = "submission acknowledgement missing"
             if pending.kind == "found":
