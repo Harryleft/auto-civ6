@@ -15,7 +15,7 @@ T84 多次结束回合被单位待办拦截：列表只展示移动力，无法�
 - 单位查询 Lua 经 GameState 执行、解析、简报、决策上下文及既有回归149项通过；动作确认、未决调度、动作接口及回合状态166项通过。合计315项。
 - 新测试覆盖 true/false、缺失、异常、非布尔值、旧格式与畸形新字段；同一次查询、零原生动作请求；两种决策视图都保留事实。
 - 保存 `speed_20261101_followup_t085`：原生完成及907941字节文件确认，旧 CLI seq2383；全部 pending=false、transport_unknown=null（seq2385）。旧 CLI seq2387 显式正常退出，unresolved=false。
-- 新 CLI 在相同游戏现场读取 T85，文明苏美尔、seed719665280、player0，四城19单位；`game decision` seq3–5 和 `turn status` seq6–8 均见剑客1310731 ready=true。后者同时证明建造者2228243虽 ready=false，仍有当前可推进的移动队列，不能据此跳过队列判断。
+- 新 CLI 在相同游戏现场读取 T85，文明苏美尔、seed719665280、player0，四城19单位；`game decision` seq2–4 和 `turn status` seq5–7 均见剑客1310731 ready=true。后者同时证明建造者2228243虽 ready=false，仍有当前可推进的移动队列，不能据此跳过队列判断。
 - 查询后的全部 pending=false、transport_unknown=null（新CLI seq9）。未重启或重新加载游戏。
 
 旧证据：`evidence/optimized-relay-t056-stack/`；新证据：`evidence/optimized-relay-t085-readiness/`。本次只验证新增事实及现有门禁兼容，不新增两倍速度结论；整体目标继续进行。
