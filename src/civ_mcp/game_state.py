@@ -255,6 +255,11 @@ class GameState:
         if entity is not None and entity[0] == "unit":
             entity = (entity[0], entity[1] % 65536)
         pending = self._actions.view
+        # Archaeology requires an explicit original-intent confirmation. Matching
+        # reentry is handled by ActionLifecycle before this dependency gate; a
+        # different write must not retire an already-observable original receipt.
+        if pending is not None and pending.kind in {"excavate", "choose_artifact"}:
+            return self._pending_unknown("repeat the identical archaeology request or explicitly confirm it; dependent action was not submitted")
         if pending is not None and (entity is None or entity == self.pending_action_entity
                                     or self.pending_action_blocks_mutations
                                     or pending.kind in ("pillage", "contribution")):
@@ -339,7 +344,7 @@ class GameState:
         self, *, on_confirmation: Callable[[str], None] | None = None,
     ) -> list[lq.UnitInfo]:
         """Read entities; optionally deliver this query's resolved action receipt."""
-        if self._actions.view is not None:
+        if self._actions.view is not None and self.pending_action_kind not in {"excavate", "choose_artifact"}:
             confirmation = await self.confirm_pending_action(wait=False)
             # The receipt belongs only to this query, not a replayable cache.
             # An unresolved observation must not be presented as completion.
@@ -442,7 +447,7 @@ class GameState:
         self, *, on_confirmation: Callable[[str], None] | None = None,
     ) -> tuple[list[lq.CityInfo], list[str]]:
         """Read entities; optionally deliver this query's resolved action receipt."""
-        if self._actions.view is not None:
+        if self._actions.view is not None and self.pending_action_kind not in {"excavate", "choose_artifact"}:
             confirmation = await self.confirm_pending_action(wait=False)
             if self._actions.view is None and on_confirmation is not None:
                 on_confirmation(confirmation)
@@ -1776,6 +1781,41 @@ class GameState:
     # ------------------------------------------------------------------
     # Great Person activation (InGame context)
     # ------------------------------------------------------------------
+
+    async def get_artifact_choices(self) -> str:
+        from civ_mcp.lua import archaeology
+        return "\n".join(await self.conn.execute_write(archaeology.build_choices()))
+
+    @_guard_pending_mutation
+    async def excavate_unit(self, unit_id: int) -> str:
+        return await self._archaeology_action("excavate", unit_id)
+
+    @_guard_pending_mutation
+    async def choose_artifact(self, unit_id: int, artifact_index: int, player_id: int) -> str:
+        if type(artifact_index) is not int or artifact_index < 0 or type(player_id) is not int or not 0 <= player_id <= 63:
+            return "Error: INVALID_ARTIFACT_CHOICE|Use the current native artifact index and player ID."
+        return await self._archaeology_action("choose_artifact", unit_id, artifact_index, player_id)
+
+    async def _archaeology_action(self, kind: str, unit_id: int, artifact_index: int = -1, player_id: int = -1) -> str:
+        from civ_mcp.lua import archaeology
+        if type(unit_id) is not int or unit_id < 0:
+            return "Error: INVALID_UNIT_ID|Expected the original full unit ID."
+        entity, intent = ("unit", unit_id), (artifact_index, player_id)
+        async def prepare(scope):
+            token = uuid.uuid4().hex
+            plan = ActionPlan(
+                kind, entity, archaeology.build_confirm(kind, unit_id, token), context="write", intent=intent,
+                details={"witness_token": token},
+                evidence=_ActionEvidence(
+                    tool="unit_action" if kind == "excavate" else "choose_artifact",
+                    entrypoint="excavate_unit" if kind == "excavate" else "choose_artifact",
+                    accepted=("ARCHAEOLOGY_REQUESTED|",), refused="ERR:ARCHAEOLOGY_REFUSED|",
+                    confirm=lambda rows: archaeology.parse_confirmation(rows, kind, unit_id, token),
+                    guidance="Repeat the identical excavation or artifact choice only to confirm; never resubmit an unknown request. ",
+                ),
+            )
+            return plan, archaeology.build_submit(kind, unit_id, token, artifact_index, player_id)
+        return await self._execute_action(ActionIntent(kind, entity, intent=intent), prepare)
 
     @_guard_pending_mutation
     async def activate_great_person(self, unit_index: int) -> str:

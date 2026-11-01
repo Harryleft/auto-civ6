@@ -174,8 +174,19 @@ async def _logged(
                         or tool_name == "run_lua"
                         or (entity[0] == "unit" and tool_name == "skip_remaining_units")
                     )
+                # Archaeology's original entrypoint owns exact-intent matching.
+                # Cross-tool writes cannot use the legacy confirm-then-run path,
+                # even when the lost reply's native result is already observable.
+                archaeology_blocked = (
+                    getattr(app.game, "pending_action_kind", None) in {"excavate", "choose_artifact"}
+                    and not capability.readonly
+                    and not capability.allows_pending("action")
+                    and tool_name != getattr(app.game, "pending_action_tool", None)
+                )
                 # These tracked methods reconcile repeated intents themselves.
-                if dependent and not (
+                if archaeology_blocked:
+                    result = app.game._pending_unknown("repeat the identical archaeology request or explicitly confirm it; new write was not submitted")
+                elif dependent and not (
                     tool_name == getattr(app.game, "pending_action_tool", None)
                     or tool_name == "set_city_production"
                     or (tool_name == "unit_action" and entity[0] == "unit")
@@ -1628,7 +1639,7 @@ async def unit_action(
 
     Args:
         unit_id: The unit's composite ID (from get_units output)
-        action: One of: move, rebase, cancel_move, pillage, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion, launch_inquisition, condemn_heretic, remove_heresy, religious_attack
+        action: One of: move, rebase, cancel_move, pillage, excavate, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion, launch_inquisition, condemn_heretic, remove_heresy, religious_attack
         target_x: Target X coordinate (required for move/rebase/attack/religious_attack/trade_route/teleport)
         target_y: Target Y coordinate (required for move/rebase/attack/religious_attack/trade_route/teleport)
         improvement: Improvement type for builders (required for improve), e.g.
@@ -1651,6 +1662,9 @@ async def unit_action(
     decides whether this is legal. Each call damages one improvement, building
     or district layer. Unknown outcomes remain pending; repeat only confirms
     that attempt. No target coordinates, automatic movement or follow-up.
+    For excavate: an eligible archaeologist excavates its current tile once.
+    Confirms native artifact selection readiness; choose the artifact player separately.
+    Unknown results retain the original request; repeat only confirms.
     For trade_route: provide target_x and target_y of destination city.
     For teleport: provide target_x and target_y of destination city. Traders only, must be idle (not on active route).
     For improve: provide improvement name. Builder must be on the tile.
@@ -1694,6 +1708,9 @@ async def unit_action(
         params["improvement"] = improvement
 
     async def _run():
+        if getattr(gs, "pending_action_kind", None) in {"excavate", "choose_artifact"}:
+            if not (gs.pending_action_kind == "excavate" and action.lower() == "excavate"):
+                return gs._pending_unknown("repeat the identical archaeology request or explicitly confirm it; new unit action was not submitted")
         # Move/attack/founding reconcile their own pending requests. Other
         # commands must not change that unit before its outcome is known.
         if (
@@ -1715,6 +1732,8 @@ async def unit_action(
                 return await gs.cancel_unit_move(unit_id)
             case "pillage":
                 return await gs.pillage_unit(unit_id)
+            case "excavate":
+                return await gs.excavate_unit(unit_id)
             case "attack":
                 return await gs.attack_unit(unit_id, target_x, target_y)
             case "fortify":
@@ -1764,11 +1783,28 @@ async def unit_action(
             case "teleport":
                 return await gs.teleport_to_city(unit_id, target_x, target_y)
             case _:
-                return f"Error: Unknown action '{action}'. Valid: move, rebase, cancel_move, pillage, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion, launch_inquisition, condemn_heretic, remove_heresy, religious_attack"
+                return f"Error: Unknown action '{action}'. Valid: move, rebase, cancel_move, pillage, excavate, attack, fortify, skip, found_city, improve, repair, remove_improvement, remove_feature, build_route, automate, heal, alert, sleep, delete, trade_route, activate, sacrifice_charges, teleport, spread_religion, launch_inquisition, condemn_heretic, remove_heresy, religious_attack"
 
     result = await _logged(ctx, "unit_action", params, _run,
                            validation_error="Error: " + issues[0]["message"] if issues else None)
     return result
+
+
+@result_tool(mcp, annotations=tool_annotations("get_artifact_choices"))
+async def get_artifact_choices(ctx: Context) -> str:
+    """Read the next native artifact choice and exact archaeologist/artifact/player IDs; never chooses or confirms pending."""
+    return await _logged(ctx, "get_artifact_choices", {}, lambda: _get_game(ctx).get_artifact_choices())
+
+
+@result_tool(mcp, annotations=tool_annotations("choose_artifact"))
+async def choose_artifact(ctx: Context, unit_id: int, artifact_index: int, player_id: int) -> str:
+    """Choose one native artifact civilization explicitly. Bind the exact next extracting archaeologist and artifact index.
+
+    Single submit; confirmation requires the original creator event and a new matching artifact in an owned slot.
+    Unknown retains the original choice; repeat identical arguments only to confirm, never to replay.
+    """
+    return await _logged(ctx, "choose_artifact", {"unit_id": unit_id, "artifact_index": artifact_index, "player_id": player_id},
+                         lambda: _get_game(ctx).choose_artifact(unit_id, artifact_index, player_id))
 
 
 @result_tool(mcp, annotations=tool_annotations("skip_remaining_units"))

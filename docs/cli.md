@@ -9,7 +9,7 @@ help city list       # 只读当前命令的字段、边界及文档位置
 city list --help     # 等价入口；不查询游戏
 ```
 
-只读帮助不核验当前实体、资格或 pending；变更仍先 `--dry-run`，结果未知保留原请求。普通实体读取可能确认原动作，先核对已有回执与 pending，再决定是否需要原参数确认。需要什么再读什么，不为单个命令通读下列全部页面。
+只读帮助不核验当前实体、资格或 pending；变更仍先 `--dry-run`，结果未知保留原请求。普通实体读取可能确认原动作；考古发掘和文物选择仍须显式按原参数确认。先核对已有回执与 pending，再决定是否需要原参数确认。需要什么再读什么，不为单个命令通读下列全部页面。
 
 | 当前问题 | 先读短帮助 | 需要展开时 |
 | --- | --- | --- |
@@ -110,3 +110,7 @@ city list --help     # 等价入口；不查询游戏
 ## 证据与清理
 
 [按需读取：证据与清理](cli/evidence.md#证据与清理)
+
+## 考古
+
+`unit excavate UNIT_ID` 发掘一次，`unit artifact-choices` 读取原生待选文物，再用 `unit choose-artifact UNIT_ID ARTIFACT_INDEX PLAYER_ID` 显式选择来源。两种变更先加 `--dry-run` 预演；[确认与收益边界](agent-playbook.md#考古发掘与文物选择)。

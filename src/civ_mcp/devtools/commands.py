@@ -210,7 +210,7 @@ def domain_parser(group: str):
                 child.add_argument("target_x", type=int)
                 child.add_argument("target_y", type=int)
         command("tasks", "get_builder_tasks", "Read builder tasks and current improvements.")
-        for name in ("cancel-move", "pillage", "found-city", "repair", "remove-improvement",
+        for name in ("cancel-move", "pillage", "excavate", "found-city", "repair", "remove-improvement",
                      "remove-feature", "build-route", "automate", "alert", "sleep", "delete",
                      "activate", "sacrifice-charges", "spread-religion", "launch-inquisition",
                      "condemn-heretic", "remove-heresy", "trade-route", "teleport", "religious-attack"):
@@ -220,6 +220,11 @@ def domain_parser(group: str):
             entity(child, "unit_id")
             child.set_defaults(action=name.replace("-", "_"))
             action_arguments(child, "unit_action", name.replace("-", "_"))
+        command("artifact-choices", "get_artifact_choices", "Read the next native artifact choice; no automatic selection or pending confirmation.")
+        artifact = command("choose-artifact", "choose_artifact", "Explicitly choose a player for the exact pending artifact; confirms its new owned slot.")
+        entity(artifact, "unit_id")
+        artifact.add_argument("artifact_index", type=int)
+        artifact.add_argument("player_id", type=int)
         formations = command("formations", "get_unit_formations", "Read escort/military formation state and native eligible target IDs.")
         entity(formations, "unit_id")
         for name in ("link", "unlink", "corps", "army"):
