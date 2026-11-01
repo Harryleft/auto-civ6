@@ -450,23 +450,54 @@ def narrate_cities(
 
 def narrate_pathing_estimate(est: lq.PathingEstimate) -> str:
     if est.turns is None:
-        return "Path/reachability unknown: native observation missing or inconsistent."
-    if est.turns == -2:
-        return "Unit has no moves remaining this turn."
-    if est.turns < 0:
-        return (
+        summary = "Path/reachability unknown: native observation missing or inconsistent."
+    elif est.turns == -2:
+        summary = "Unit has no moves remaining this turn."
+    elif est.turns == -1 and est.source == "native":
+        summary = "No native path returned for the currently visible destination."
+    elif est.turns < 0:
+        summary = (
             "No native path to the destination returned. It may be in fog, "
             "behind foreign borders, or blocked by impassable terrain."
         )
-    wp_str = ""
-    if any(est.waypoints):
-        wp_str = "\n  Path: " + " -> ".join(est.waypoints)
-    if est.turns == 0:
-        return f"Reachable this turn ({est.total_tiles} tiles in path, all within movement range).{wp_str}"
-    return (
-        f"~{est.turns} turns (heuristic assuming current reachable tiles per turn; terrain and future costs may differ; {est.total_tiles} tiles total, "
-        f"{est.reachable_this_turn} reachable this turn){wp_str}"
-    )
+    elif est.source == "native":
+        timing = "current turn" if est.turns == 0 else f"{est.turns} future turn(s)"
+        summary = (
+            f"Native path preview: destination labeled {timing}; "
+            f"{est.reachable_this_turn}/{est.total_tiles} path tiles labeled current turn (includes origin)."
+        )
+    else:
+        summary = (
+            f"Legacy heuristic preview: ~{est.turns} turns; {est.total_tiles} path tiles, "
+            f"{est.reachable_this_turn} in the geometric/reachable set. Actual movement eligibility unknown."
+        )
+    if est.turns is not None and est.turns >= 0 and any(est.waypoints):
+        summary += "\n  Path preview: " + " -> ".join(est.waypoints)
+        if est.path_turns:
+            summary += "\n  Native turn labels (1=current): " + " -> ".join(map(str, est.path_turns))
+    if est.source == "native":
+        def fact(value: object) -> str:
+            if value is None:
+                return "unknown"
+            if isinstance(value, bool):
+                return str(value).lower()
+            return f"{value:g}" if isinstance(value, (int, float)) else str(value)
+
+        summary += (
+            f"\n  Movement facts: moves={fact(est.moves_remaining)}, "
+            f"effective_moves={fact(est.movement_moves_remaining)}, ZOC={fact(est.moved_into_zoc)}, "
+            f"busy={fact(est.game_core_busy)}, target_can_start={fact(est.can_start_target)}, "
+            f"flags={fact(est.move_flags)}."
+        )
+        if est.observation_reason:
+            summary += f"\n  Observation: {est.observation_reason}."
+        summary += "\n  ZOC records entry this turn; it alone does not establish whether this move can execute."
+    if est.source == "native" or (est.turns is not None and est.turns >= 0):
+        summary += (
+            "\n  Preview does not guarantee displacement or route: move submits the destination and flags; "
+            "the engine chooses the executed route. Read back the result."
+        )
+    return summary
 
 
 def narrate_combat_estimate(est: lq.CombatEstimate) -> str:

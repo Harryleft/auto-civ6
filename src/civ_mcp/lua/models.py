@@ -471,12 +471,25 @@ class CombatEstimate:
 
 @dataclass
 class PathingEstimate:
-    """Estimated turns for a unit to reach a destination."""
+    """Read-only preview, with native timing or legacy heuristic provenance.
+
+    Native counts include the origin; reachable_this_turn counts turn-1 labels,
+    not a promise that an operation can move through those tiles.
+    """
 
     turns: int | None
     total_tiles: int
     reachable_this_turn: int
     waypoints: list[str] = field(default_factory=list)  # ["(x,y)", ...]
+    source: str = "legacy_heuristic"
+    path_turns: list[int] = field(default_factory=list)
+    moves_remaining: float | None = None
+    movement_moves_remaining: float | None = None
+    moved_into_zoc: bool | None = None
+    game_core_busy: bool | None = None
+    can_start_target: bool | None = None
+    move_flags: int | None = None
+    observation_reason: str = ""
 
 
 @dataclass

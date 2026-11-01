@@ -1728,83 +1728,184 @@ def diff_threats(
 
 
 def build_pathing_estimate_query(unit_index: int, target_x: int, target_y: int) -> str:
-    """InGame context: estimate turns for a unit to reach a destination.
+    """InGame: read native path timing and movement facts, never submit orders.
 
-    Uses UnitManager.GetMoveToPath for the full path and
-    UnitManager.GetReachableMovement for this-turn reachable tiles.
+    GetMoveToPathEx matches move preflight's path source. MOVE_TO submits
+    coordinates/modifiers, not these preview waypoints.
     """
     return f"""
 {_lua_get_unit(unit_index)}
--- Guard: GetMoveToPath returns degenerate paths for units with 0 moves
-if unit:GetMovesRemaining() <= 0 then
-    print("PATH|-2|0|0")
+local function number(value)
+    return type(value) == "number" and value >= 0 and value < math.huge
+end
+local function integer(value, minimum)
+    return number(value) and value >= minimum and value == math.floor(value)
+end
+local function read(getter, valid)
+    local ok, value = pcall(getter)
+    if ok and valid(value) then return value end
+    return "unknown"
+end
+local function boolean(value) return type(value) == "boolean" end
+local moves = read(function() return unit:GetMovesRemaining() end, number)
+local movement = read(function() return unit:GetMovementMovesRemaining() end, number)
+local zoc = read(function() return unit:HasMovedIntoZOC() end, boolean)
+local busy = read(function() return UI.IsGameCoreBusy() end, boolean)
+local targetOK, targetPlot = pcall(function() return Map.GetPlot({target_x}, {target_y}) end)
+-- Match move target eligibility flags; only an existing war permits ATTACK.
+local flags = "unknown"
+local canTarget = read(function()
+    local fog = UnitOperationMoveModifiers.MOVE_IGNORE_UNEXPLORED_DESTINATION
+    if not integer(fog, 1) or UnitOperationTypes.PARAM_MODIFIERS == nil then return nil end
+    local modifiers = fog
+    local me = Game.GetLocalPlayer()
+    local occupants = Map.GetUnitsAt({target_x}, {target_y})
+    local hostile = false
+    if occupants then
+        for other in occupants:Units() do
+            if other:GetOwner() ~= me then
+                local war = Players[me]:GetDiplomacy():IsAtWarWith(other:GetOwner())
+                if not boolean(war) then return nil end
+                if war then hostile = true end
+            end
+        end
+    end
+    if hostile then
+        local attack = UnitOperationMoveModifiers.ATTACK
+        if not integer(attack, 1) then return nil end
+        modifiers = modifiers + attack
+    end
+    flags = modifiers
+    local params = {{}}
+    params[UnitOperationTypes.PARAM_X] = {target_x}
+    params[UnitOperationTypes.PARAM_Y] = {target_y}
+    params[UnitOperationTypes.PARAM_MODIFIERS] = modifiers
+    return UnitManager.CanStartOperation(unit, UnitOperationTypes.MOVE_TO, nil, params)
+end, boolean)
+print("PATH_STATE|" .. tostring(moves) .. "|" .. tostring(movement) .. "|" .. tostring(zoc)
+    .. "|" .. tostring(busy) .. "|" .. tostring(canTarget) .. "|" .. tostring(flags))
+local function unavailable(reason, turns)
+    print("PATH_NATIVE|" .. tostring(turns or "unknown") .. "|0|0")
+    print("PATH_DETAIL|" .. reason)
     print("WAYPOINTS|")
     print("{SENTINEL}")
-    return
 end
-local targetPlot = Map.GetPlot({target_x}, {target_y})
+if not targetOK then unavailable("Native target plot unavailable") return end
 if not targetPlot then {_bail(f"ERR:INVALID_TARGET|Target ({target_x},{target_y}) is out of bounds")} end
-local path = UnitManager.GetMoveToPath(unit, targetPlot:GetIndex())
-if not path or #path == 0 then
-    print("PATH|-1|0|0")
-    print("WAYPOINTS|")
-    print("{SENTINEL}")
-    return
+if busy ~= false then unavailable("GameCore readiness unknown or busy") return end
+-- Keep interpretation inside the same exception boundary as native lookup:
+-- a missing plot/getter must preserve movement facts and yield unknown.
+local interpreted = pcall(function()
+local path = UnitManager.GetMoveToPathEx(unit, targetPlot:GetIndex())
+if type(path) ~= "table" or type(path.plots) ~= "table" or type(path.turns) ~= "table" then
+    unavailable("Native path unavailable") return
 end
--- Validate path reaches destination (GetMoveToPath returns garbage for unreachable targets)
-local lastPlot = Map.GetPlotByIndex(path[#path])
-if lastPlot:GetX() ~= {target_x} or lastPlot:GetY() ~= {target_y} then
-    print("PATH|-1|" .. #path .. "|0")
-    print("WAYPOINTS|")
-    print("{SENTINEL}")
-    return
+local function length(values)
+    local count = 0
+    for key in pairs(values) do
+        if not integer(key, 1) then return nil end
+        count = count + 1
+    end
+    for i = 1, count do if values[i] == nil then return nil end end
+    return count
 end
-local reach = UnitManager.GetReachableMovement(unit)
-if type(reach) ~= "table" then {_bail("ERR:REACHABILITY_UNKNOWN|Native reachable movement unavailable")} end
-local reachSet = {{}}
-if reach then
-    for _, pIdx in ipairs(reach) do reachSet[pIdx] = true end
+local count = length(path.plots)
+if count == nil or length(path.turns) ~= count then unavailable("Native path arrays inconsistent") return end
+if count == 0 then
+    local visible = read(function() return PlayersVisibility[Game.GetLocalPlayer()]:IsVisible({target_x}, {target_y}) end, boolean)
+    unavailable("Native path empty", visible == true and -1 or nil) return
 end
--- Count how many path tiles are reachable this turn
-local reachCount = 0
-for _, pIdx in ipairs(path) do
-    if reachSet[pIdx] then reachCount = reachCount + 1 end
+local fromX, fromY = unit:GetX(), unit:GetY()
+local waypoints, turns, currentCount = {{}}, {{}}, 0
+for i = 1, count do
+    if not integer(path.plots[i], 0) or not integer(path.turns[i], 1)
+        or (i > 1 and path.turns[i] < path.turns[i-1]) then
+        unavailable("Native path values inconsistent") return
+    end
+    local plot = Map.GetPlotByIndex(path.plots[i])
+    if not plot or (i == 1 and (plot:GetX() ~= fromX or plot:GetY() ~= fromY))
+        or (i == count and (plot:GetX() ~= {target_x} or plot:GetY() ~= {target_y})) then
+        unavailable("Native path endpoints unverified") return
+    end
+    if i == 2 and plot:GetX() == fromX and plot:GetY() == fromY then
+        unavailable("Native first movement step repeats origin") return
+    end
+    waypoints[i] = "(" .. plot:GetX() .. "," .. plot:GetY() .. ")"
+    turns[i] = tostring(path.turns[i])
+    if path.turns[i] == 1 then currentCount = currentCount + 1 end
 end
-local totalTiles = #path
-local tilesPerTurn = math.max(reachCount, 1)
-local turnsNeeded
-if reachCount >= totalTiles then
-    turnsNeeded = 0
-else
-    turnsNeeded = math.ceil((totalTiles - reachCount) / tilesPerTurn)
-end
-print("PATH|" .. turnsNeeded .. "|" .. totalTiles .. "|" .. reachCount)
--- Emit waypoints for context (first tile, last reachable, destination)
-local waypoints = {{}}
-for i, pIdx in ipairs(path) do
-    local plot = Map.GetPlotByIndex(pIdx)
-    waypoints[#waypoints + 1] = "(" .. plot:GetX() .. "," .. plot:GetY() .. ")"
-end
+if path.turns[1] ~= 1 then unavailable("Native path turn origin unverified") return end
+-- WorldInput native turn labels start at 1 and include the origin tile.
+-- Preserve native timing, never extrapolate turns from reachable tile counts.
+print("PATH_NATIVE|" .. (path.turns[count] - 1) .. "|" .. count .. "|" .. currentCount)
+print("PATH_TURNS|" .. table.concat(turns, ";"))
 print("WAYPOINTS|" .. table.concat(waypoints, ";"))
 print("{SENTINEL}")
+end)
+if not interpreted then unavailable("Native path lookup or interpretation unavailable") end
 """
 
 
 def parse_pathing_estimate(lines: list[str]) -> PathingEstimate:
-    """Parse PATH| and WAYPOINTS| output."""
-    est = PathingEstimate(turns=None, total_tiles=0, reachable_this_turn=0, waypoints=[])
-    if len([r for r in lines if r.startswith("PATH|")]) != 1:
+    """Read native previews and retain legacy rows without upgrading trust."""
+    est = PathingEstimate(turns=None, total_tiles=0, reachable_this_turn=0)
+    path_rows = [r for r in lines if r.startswith(("PATH|", "PATH_NATIVE|"))]
+    if len(path_rows) != 1:
         return est
-    for line in lines:
-        if line.startswith("PATH|"):
-            parts = line.split("|")
-            if len(parts) >= 4:
-                est.turns = int(parts[1])
-                est.total_tiles = int(parts[2])
-                est.reachable_this_turn = int(parts[3])
-        elif line.startswith("WAYPOINTS|"):
-            est.waypoints = line.split("|", 1)[1].split(";")
-    if est.total_tiles < 0 or est.reachable_this_turn < 0 or est.reachable_this_turn > est.total_tiles or (est.turns == 0 and (est.total_tiles == 0 or est.reachable_this_turn != est.total_tiles)):
+    est.source = "native" if path_rows[0].startswith("PATH_NATIVE|") else "legacy_heuristic"
+    try:
+        _, turns, total, current = path_rows[0].split("|")
+        est.turns = None if turns == "unknown" else int(turns)
+        est.total_tiles, est.reachable_this_turn = int(total), int(current)
+        waypoint_rows = [r for r in lines if r.startswith("WAYPOINTS|")]
+        if len(waypoint_rows) == 1:
+            est.waypoints = [p for p in waypoint_rows[0].split("|", 1)[1].split(";") if p]
+        if est.source == "native":
+            states = [r for r in lines if r.startswith("PATH_STATE|")]
+            if len(states) != 1:
+                raise ValueError("missing movement facts")
+            _, moves, movement, zoc, busy, target, flags = states[0].split("|")
+
+            def optional_number(value: str) -> float | None:
+                if value == "unknown":
+                    return None
+                number = float(value)
+                if not math.isfinite(number) or number < 0:
+                    raise ValueError("invalid movement number")
+                return number
+
+            def optional_bool(value: str) -> bool | None:
+                if value not in {"true", "false", "unknown"}:
+                    raise ValueError("invalid boolean")
+                return {"true": True, "false": False, "unknown": None}[value]
+
+            est.moves_remaining = optional_number(moves)
+            est.movement_moves_remaining = optional_number(movement)
+            est.moved_into_zoc = optional_bool(zoc)
+            est.game_core_busy = optional_bool(busy)
+            est.can_start_target = optional_bool(target)
+            est.move_flags = None if flags == "unknown" else int(flags)
+            details = [r.split("|", 1)[1] for r in lines if r.startswith("PATH_DETAIL|")]
+            est.observation_reason = details[0] if len(details) == 1 else ""
+            if est.turns is not None and est.turns >= 0:
+                turn_rows = [r for r in lines if r.startswith("PATH_TURNS|")]
+                if len(turn_rows) != 1:
+                    raise ValueError("missing native turns")
+                est.path_turns = [int(t) for t in turn_rows[0].split("|", 1)[1].split(";")]
+                if (est.game_core_busy is not False
+                    or len(est.waypoints) != est.total_tiles
+                    or len(est.path_turns) != est.total_tiles
+                    or not est.path_turns or est.path_turns[0] != 1
+                    or any(t < 1 for t in est.path_turns)
+                    or est.path_turns != sorted(est.path_turns)
+                    or est.path_turns[-1] - 1 != est.turns
+                    or est.path_turns.count(1) != est.reachable_this_turn):
+                    raise ValueError("inconsistent native preview")
+        if (est.total_tiles < 0 or est.reachable_this_turn < 0
+            or est.reachable_this_turn > est.total_tiles
+            or (est.turns == 0 and (est.total_tiles == 0 or est.reachable_this_turn != est.total_tiles))):
+            raise ValueError("inconsistent path counts")
+    except (ValueError, OverflowError):
         est.turns = None
     return est
 
