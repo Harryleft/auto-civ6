@@ -374,6 +374,8 @@ class TechCivicStatus:
 class DiplomacyChoice:
     key: str  # e.g. "CHOICE_POSITIVE", "CHOICE_EXIT"
     text: str  # localized display text
+    tooltip: str | None = None  # native selection description, not inferred effect
+    diplomatic_action_type: str | None = None
 
 
 @dataclass

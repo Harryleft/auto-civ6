@@ -58,7 +58,7 @@ class DiplomacyProgress:
             self.observer_scope = scopes[0]
         return self.observer_ready
 
-    async def choices(self, conn, sid: int, target: int) -> tuple[list[str] | None, int | None]:
+    async def choices(self, conn, sid: int, target: int) -> tuple[list[lq.DiplomacyChoice] | None, int | None]:
         if not await self.ensure_observer(conn):
             return None, None
         try:
@@ -67,7 +67,21 @@ class DiplomacyProgress:
             if len(headers) != 1:
                 return None, None
             seq = int(headers[0].split("|")[2])
-            return [row.split("|", 1)[1] for row in rows if row.startswith("DIPLO_CHOICE|")], seq
+            choices = []
+            seen = set()
+            for row in rows:
+                if not row.startswith("DIPLO_CHOICE|"):
+                    continue
+                fields = row.split("|")[1:]
+                key = fields[0]
+                if len(fields) not in (1, 4) or not re.fullmatch(r"CHOICE_[A-Z0-9_]+", key) or key in seen:
+                    return None, None
+                seen.add(key)
+                # Legacy key-only observations remain legal but have UNKNOWN
+                # meaning; never invent a label from a response's generic key.
+                values = [bytes.fromhex(value).decode("utf-8") for value in fields[1:]] if len(fields) == 4 else ["", "", ""]
+                choices.append(lq.DiplomacyChoice(key, values[0], values[1] or None, values[2] or None))
+            return choices, seq
         except (OSError, TimeoutError, LuaError, ValueError, IndexError):
             return None, None
 
@@ -263,9 +277,10 @@ class DiplomacyProgress:
                         "— this call only confirmed the pending response. "
                         "Inspect current native choices and respond again.")
             return result
-        keys, seq = await self.choices(conn, sid, target)
-        if keys is None or seq is None:
+        choices, seq = await self.choices(conn, sid, target)
+        if choices is None or seq is None:
             return "ERR:OUTCOME_UNKNOWN|Current native diplomacy choices UNKNOWN; no response submitted."
+        keys = [choice.key for choice in choices]
         key = "CHOICE_" + response.upper()
         if key not in keys:
             return f"ERR:NOT_AVAILABLE|{key} is not a current native choice; no response submitted. Choices: {', '.join(keys)}"

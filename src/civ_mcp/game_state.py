@@ -1177,9 +1177,9 @@ class GameState:
         await self._diplomacy_progress.ensure_observer(self.conn)
         context = await self._read_diplomacy_context()
         for session in context.sessions:
-            keys, _ = await self._diplomacy_progress.choices(self.conn, session.session_id, session.other_player_id)
-            session.choice_status = "KNOWN" if keys is not None else "UNKNOWN"
-            session.choices = [lq.DiplomacyChoice(key=key, text=key) for key in keys or []]
+            choices, _ = await self._diplomacy_progress.choices(self.conn, session.session_id, session.other_player_id)
+            session.choice_status = "KNOWN" if choices is not None else "UNKNOWN"
+            session.choices = choices or []
         await self._diplomacy_progress.describe_incoming(self.conn, context)
         return context
 

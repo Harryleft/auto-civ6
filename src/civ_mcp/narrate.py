@@ -950,6 +950,13 @@ def narrate_diplomacy_sessions(context: lq.DiplomacyContext) -> str:
         elif getattr(s, "choice_status", "UNKNOWN") == "KNOWN":
             choices = ", ".join(key.removeprefix("CHOICE_") for key in s.choice_keys)
             lines.append("  Current native choices: " + (choices or "none"))
+            for choice in s.choices:
+                meaning = choice.text or "Meaning UNKNOWN; do not infer an effect from this key."
+                lines.append(f"    {choice.key.removeprefix('CHOICE_')}: {meaning}")
+                if choice.diplomatic_action_type:
+                    lines.append(f"      Native action: {choice.diplomatic_action_type}")
+                if choice.tooltip:
+                    lines.append(f"      Native description: {choice.tooltip}")
         else:
             lines.append("  Current native choices UNKNOWN; no response is authorized by visible text alone.")
     return "\n".join(lines)

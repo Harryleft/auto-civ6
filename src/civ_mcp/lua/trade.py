@@ -145,22 +145,42 @@ local function readChoices()
  local mood=GetStatementMood(k.FromPlayer,k.FromPlayerMood)
  local parsed=handler.ExtractStatement(handler,kind,subtype,k.FromPlayer,mood,k.Initiator)
  handler.RemoveInvalidSelections(parsed,me,target)
- local choices={{}}
+ local choices,descriptions={{}},{{}}
  for _,selection in ipairs(parsed.Selections or {{}}) do
   if type(selection.Key)~="string" or not selection.Key:match("^CHOICE_[A-Z0-9_]+$") then return nil,"SELECTION_UNKNOWN" end
-  if selection.IsDisabled==nil or selection.IsDisabled==false then table.insert(choices,selection.Key) end
+  if selection.IsDisabled==nil or selection.IsDisabled==false then
+   table.insert(choices,selection.Key)
+   descriptions[selection.Key]=selection
+  end
  end
- return choices,record,handler
+ return choices,record,handler,descriptions
 end
 '''
 
 
 def build_choices_query(nonce: str, sid: int, target: int) -> str:
     return _observer(nonce) + _choices(sid, target) + f'''
-local ok,choices,record=pcall(readChoices)
+local ok,choices,record,handler,descriptions=pcall(readChoices)
 if not ok or not choices then print("DIPLO_CHOICES|UNKNOWN"); return end
+-- Labels belong to the current statement, not to the generic POSITIVE/NEGATIVE
+-- key. Hex keeps localized pipes/newlines intact in this line-based protocol.
+local function hex(value)
+ if type(value)~="string" then return "" end
+ return (value:gsub(".",function(c)return string.format("%02x",string.byte(c))end))
+end
+local function localized(value)
+ if type(value)~="string" or value=="" then return nil end
+ local valid,text=pcall(Locale.Lookup,value)
+ if not valid or type(text)~="string" then return nil end
+ if text:match("^LOC_") then return nil end
+ return text
+end
 print("DIPLO_CHOICES|KNOWN|"..record.seq)
-for _,key in ipairs(choices) do print("DIPLO_CHOICE|"..key) end
+for _,key in ipairs(choices) do
+ local selection=descriptions[key]
+ print("DIPLO_CHOICE|"..key.."|"..hex(localized(selection.Text)).."|"..
+  hex(localized(selection.Tooltip or selection.ToolTip)).."|"..hex(selection.DiplomaticActionType))
+end
 print("{SENTINEL}")
 '''
 

@@ -51,7 +51,7 @@
 
 **进入条件：**要求、谴责、承诺、问候或其他外交会话，包括推进时出现的外交暂停。
 
-1. 用 `diplomacy pending` 核对当前原生选项；仅有退出选项时显式使用 `EXIT`。选项未知时继续读取，不按文本不变推断 goodbye，也不默认发送 POSITIVE／NEGATIVE。
+1. 用 `diplomacy pending` 核对当前原生选项及各选项的本地化文案、原生行动类型和可用说明。`POSITIVE`／`NEGATIVE` 只是回应键，不能解释为通用同意／拒绝；例如撤军警告的 `NEGATIVE` 可以是 `DIPLOACTION_DECLARE_SURPRISE_WAR`。按本次原生含义决定，含义未知时先核对，不按键名猜测。仅有退出选项时显式使用 `EXIT`。选项未知时继续读取，不按文本不变推断 goodbye，也不默认发送 POSITIVE／NEGATIVE。
 2. 对当前参与者调用 `diplomacy respond PLAYER_ID RESPONSE`，使用本次原生选项作出明确回应；回应未知时，相同调用只确认原请求。
 3. 返回 `SESSION_CONTINUES` 时重新读取当前选项，继续处理本次会话。对方回复「谢谢」仍可能有 `EXIT`，须完成退出。
 4. 返回 `SESSION_CLOSED` 后用 `diplomacy pending` 核对本次会话已结束；其他新会话作为新待办处理。若回执同时含 `TRADE_CONFIRMATION_PENDING`，原交易尚待收尾；按所示玩家与 test／send 模式，以原 offer／request 重复原 `trade propose` 仅确认，不另开交易、不改参。该确认不重发提案；在原生清理确认前，游戏写入仍受门禁保护。
